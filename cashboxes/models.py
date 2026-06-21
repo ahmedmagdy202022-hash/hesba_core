@@ -85,6 +85,13 @@ class CashboxMovement(models.Model):
         null=True,
         blank=True,
     )
+    customer_payment = models.ForeignKey(
+        "sales.CustomerPayment",
+        on_delete=models.PROTECT,
+        related_name="cashbox_movements",
+        null=True,
+        blank=True,
+    )
     description = models.CharField(max_length=255, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -103,6 +110,7 @@ class CashboxMovement(models.Model):
             models.Index(fields=["purchase_invoice"]),
             models.Index(fields=["sales_invoice"]),
             models.Index(fields=["supplier_payment"]),
+            models.Index(fields=["customer_payment"]),
         ]
         verbose_name = "Cashbox Movement"
         verbose_name_plural = "Cashbox Movements"
