@@ -1,0 +1,1 @@
+"""Cashboxes application package."""
