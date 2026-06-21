@@ -48,6 +48,7 @@ Supplier -> Purchase Invoice -> Inventory by Location -> Sales Invoice -> Custom
 - `068_FOUNDATION_IMPORT_TEST_CASES = OK`
 - `069_FOUNDATION_BASIC_CI = OK`
 - `070_FOUNDATION_IMPORT_MIGRATION_ALIGNMENT = OK`
+- `071_FOUNDATION_CI_MIGRATION_FIXES = OK`
 
 ## First build order
 
