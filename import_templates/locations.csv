@@ -1,0 +1,3 @@
+location_code,name_ar,name_en,description,is_default,is_receiving_location,is_selling_location,active
+LOC_MAIN,Main Location,Main Location,Default location,true,true,true,true
+LOC_STORE,Store Room,Store Room,Back store,false,true,false,true
