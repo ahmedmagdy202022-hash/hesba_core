@@ -197,6 +197,67 @@ class SalesLine(models.Model):
         return f"{self.invoice.invoice_number} / {self.line_number} / {self.item}"
 
 
+class CustomerPaymentStatus(models.TextChoices):
+    POSTED = "posted", "Posted"
+    CANCELLED = "cancelled", "Cancelled"
+
+
+class CustomerPayment(models.Model):
+    """Standalone customer payment.
+
+    Customer payments affect customers and cashboxes only. They must never affect
+    suppliers, purchases, inventory, or item cost.
+    """
+
+    payment_number = models.CharField(max_length=80, unique=True)
+    payment_date = models.DateField()
+    customer = models.ForeignKey(
+        "master_data.Customer",
+        on_delete=models.PROTECT,
+        related_name="customer_payments",
+    )
+    cashbox = models.ForeignKey(
+        "cashboxes.Cashbox",
+        on_delete=models.PROTECT,
+        related_name="customer_payments",
+    )
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    status = models.CharField(
+        max_length=20,
+        choices=CustomerPaymentStatus.choices,
+        default=CustomerPaymentStatus.POSTED,
+    )
+    notes = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="created_customer_payments",
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-payment_date", "-id"]
+        indexes = [
+            models.Index(fields=["payment_number"]),
+            models.Index(fields=["payment_date"]),
+            models.Index(fields=["customer"]),
+            models.Index(fields=["cashbox"]),
+            models.Index(fields=["status"]),
+        ]
+        verbose_name = "Customer Payment"
+        verbose_name_plural = "Customer Payments"
+
+    def clean(self):
+        if self.amount is not None and self.amount <= 0:
+            raise ValidationError({"amount": "Customer payment amount must be greater than zero."})
+
+    def __str__(self):
+        return f"{self.payment_number} - {self.customer}"
+
+
 class CustomerLedgerEntryType(models.TextChoices):
     SALES_DUE = "sales_due", "Sales due"
     CUSTOMER_PAYMENT = "customer_payment", "Customer payment"
@@ -208,8 +269,8 @@ class CustomerLedgerEntryType(models.TextChoices):
 class CustomerLedgerEntry(models.Model):
     """Customer balance movement.
 
-    Sales invoices create customer due only by remaining_due. Paid amounts do not
-    create customer due because they are cashbox movements only.
+    Sales invoices create customer due only by remaining_due. Customer payments
+    decrease customer due and move cashbox by the actual received amount.
     """
 
     customer = models.ForeignKey(
@@ -221,6 +282,13 @@ class CustomerLedgerEntry(models.Model):
     entry_type = models.CharField(max_length=40, choices=CustomerLedgerEntryType.choices)
     sales_invoice = models.ForeignKey(
         SalesInvoice,
+        on_delete=models.PROTECT,
+        related_name="customer_ledger_entries",
+        null=True,
+        blank=True,
+    )
+    customer_payment = models.ForeignKey(
+        CustomerPayment,
         on_delete=models.PROTECT,
         related_name="customer_ledger_entries",
         null=True,
@@ -244,6 +312,7 @@ class CustomerLedgerEntry(models.Model):
             models.Index(fields=["customer", "entry_date"]),
             models.Index(fields=["entry_type"]),
             models.Index(fields=["sales_invoice"]),
+            models.Index(fields=["customer_payment"]),
         ]
         verbose_name = "Customer Ledger Entry"
         verbose_name_plural = "Customer Ledger Entries"
