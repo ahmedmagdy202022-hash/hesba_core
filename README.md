@@ -52,6 +52,7 @@ Supplier -> Purchase Invoice -> Inventory by Location -> Sales Invoice -> Custom
 - `072_FOUNDATION_CI_NOISE_CONTROL = OK`
 - `073_FOUNDATION_LOCAL_CI_CHECK_SCRIPT = OK`
 - `074_FOUNDATION_MIGRATION_STATE_REVIEW = OK`
+- `075_FOUNDATION_SAFE_TEST_RUN_PREP = OK`
 
 ## First build order
 
