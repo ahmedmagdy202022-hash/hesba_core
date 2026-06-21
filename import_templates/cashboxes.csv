@@ -1,0 +1,3 @@
+cashbox_code,name_ar,name_en,opening_balance,currency,is_default,notes,active
+BOX_MAIN,Main Box,Main Box,1000.00,EGP,true,,true
+BOX_SECOND,Second Box,Second Box,0.00,EGP,false,,true
