@@ -43,6 +43,9 @@ class ImportBatchAdmin(admin.ModelAdmin):
     autocomplete_fields = ("created_by",)
     inlines = (ImportRawInline, ImportReviewInline)
 
+    def has_delete_permission(self, request, obj=None):
+        return False
+
 
 @admin.register(ImportRaw)
 class ImportRawAdmin(admin.ModelAdmin):
