@@ -2,9 +2,9 @@ from decimal import Decimal
 
 from django.db.models import Sum
 
-from cashboxes.models import CashboxMovement, CashboxDirection
+from cashboxes.models import Cashbox, CashboxDirection, CashboxMovement
 from inventory.services import get_item_location_stock_quantity
-from master_data.models import Cashbox, Customer, Item, Location, Supplier
+from master_data.models import Customer, Item, Location, Supplier
 from purchases.models import SupplierLedgerEntry
 from sales.models import CustomerLedgerEntry, SalesLine
 
@@ -14,24 +14,18 @@ def _sum(queryset, field_name):
 
 
 def get_supplier_balance(supplier):
-    """Supplier due = opening balance + due increases - due decreases."""
-
     due_increase = _sum(supplier.ledger_entries.all(), "due_increase")
     due_decrease = _sum(supplier.ledger_entries.all(), "due_decrease")
     return (supplier.opening_balance or Decimal("0")) + due_increase - due_decrease
 
 
 def get_customer_balance(customer):
-    """Customer due = opening balance + due increases - due decreases."""
-
     due_increase = _sum(customer.ledger_entries.all(), "due_increase")
     due_decrease = _sum(customer.ledger_entries.all(), "due_decrease")
     return (customer.opening_balance or Decimal("0")) + due_increase - due_decrease
 
 
 def get_cashbox_balance(cashbox):
-    """Cashbox balance = opening balance + actual cash in - actual cash out."""
-
     movements = cashbox.movements.all()
     cash_in = _sum(movements.filter(direction=CashboxDirection.IN), "amount")
     cash_out = _sum(movements.filter(direction=CashboxDirection.OUT), "amount")
@@ -39,17 +33,14 @@ def get_cashbox_balance(cashbox):
 
 
 def get_item_location_stock(item, location):
-    """Read stock from stock movements only."""
-
     return get_item_location_stock_quantity(item, location)
 
 
 def get_profit_summary():
-    """Profit summary from sales lines only: sales - cost of goods sold."""
-
-    total_sales = _sum(SalesLine.objects.all(), "line_total_amount")
-    total_cost = _sum(SalesLine.objects.all(), "line_cost_amount")
-    total_profit = _sum(SalesLine.objects.all(), "line_profit_amount")
+    lines = SalesLine.objects.select_related("invoice").filter(invoice__status="posted")
+    total_sales = _sum(lines, "line_total_amount")
+    total_cost = _sum(lines, "line_cost_amount")
+    total_profit = _sum(lines, "line_profit_amount")
     return {
         "total_sales": total_sales,
         "total_cost": total_cost,
@@ -58,8 +49,6 @@ def get_profit_summary():
 
 
 def get_local_controlled_cycle_snapshot():
-    """Small read-only snapshot used by the first local controlled test."""
-
     supplier = Supplier.objects.get(supplier_code="SUP-001")
     customer = Customer.objects.get(customer_code="CUST-001")
     item = Item.objects.get(item_code="ITEM-001")
