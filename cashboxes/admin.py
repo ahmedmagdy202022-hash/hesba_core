@@ -12,7 +12,21 @@ class CashboxAdmin(admin.ModelAdmin):
 
 @admin.register(CashboxMovement)
 class CashboxMovementAdmin(admin.ModelAdmin):
-    list_display = ("movement_date", "cashbox", "movement_type", "direction", "amount", "purchase_invoice")
-    search_fields = ("cashbox__cashbox_code", "cashbox__name_ar", "purchase_invoice__invoice_number", "description")
+    list_display = (
+        "movement_date",
+        "cashbox",
+        "movement_type",
+        "direction",
+        "amount",
+        "purchase_invoice",
+        "supplier_payment",
+    )
+    search_fields = (
+        "cashbox__cashbox_code",
+        "cashbox__name_ar",
+        "purchase_invoice__invoice_number",
+        "supplier_payment__payment_number",
+        "description",
+    )
     list_filter = ("movement_type", "direction", "movement_date")
-    autocomplete_fields = ("cashbox", "purchase_invoice", "created_by")
+    autocomplete_fields = ("cashbox", "purchase_invoice", "supplier_payment", "created_by")
