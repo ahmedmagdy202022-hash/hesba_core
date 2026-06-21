@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import ClientProfile, FeatureFlag, SupportAccessGrant, SystemSetting
+from .models import ClientProfile, FeatureFlag, SupportAccessGrant, SystemSetting, UsageStatusSnapshot
 
 
 @admin.register(ClientProfile)
@@ -22,6 +22,35 @@ class FeatureFlagAdmin(admin.ModelAdmin):
     list_display = ("code", "name", "enabled", "updated_at")
     search_fields = ("code", "name")
     list_filter = ("enabled",)
+
+
+@admin.register(UsageStatusSnapshot)
+class UsageStatusSnapshotAdmin(admin.ModelAdmin):
+    list_display = (
+        "created_at",
+        "status_level",
+        "total_rows",
+        "active_items_count",
+        "active_customers_count",
+        "active_suppliers_count",
+        "sales_invoices_count",
+        "purchase_invoices_count",
+    )
+    list_filter = ("status_level", "created_at")
+    readonly_fields = (
+        "created_at",
+        "status_level",
+        "total_rows",
+        "active_items_count",
+        "active_customers_count",
+        "active_suppliers_count",
+        "stock_movements_count",
+        "cashbox_movements_count",
+        "sales_invoices_count",
+        "purchase_invoices_count",
+        "warnings",
+        "recommendations",
+    )
 
 
 @admin.register(SupportAccessGrant)
