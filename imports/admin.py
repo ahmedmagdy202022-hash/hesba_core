@@ -1,6 +1,10 @@
-from django.contrib import admin
+from django.contrib import admin, messages
+from django.core.exceptions import ValidationError
 
+from .apply_services import apply_import_batch
 from .models import ImportBatch, ImportRaw, ImportReview
+from .services import approve_import_batch
+from .validators import validate_import_batch
 
 
 class ImportRawInline(admin.TabularInline):
@@ -42,9 +46,59 @@ class ImportBatchAdmin(admin.ModelAdmin):
     list_filter = ("target_type", "status", "go_live_date", "created_at")
     autocomplete_fields = ("created_by",)
     inlines = (ImportRawInline, ImportReviewInline)
+    actions = ("validate_selected_batches", "approve_selected_batches", "apply_selected_batches")
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+    @admin.action(description="Validate selected import batches")
+    def validate_selected_batches(self, request, queryset):
+        success_count = 0
+        for batch in queryset:
+            try:
+                result = validate_import_batch(batch.id)
+            except ValidationError as exc:
+                self.message_user(request, f"{batch.batch_code}: {exc}", level=messages.ERROR)
+                continue
+            success_count += 1
+            self.message_user(
+                request,
+                f"{batch.batch_code}: validated {result['valid']} valid / {result['invalid']} invalid rows.",
+                level=messages.INFO,
+            )
+        if success_count:
+            self.message_user(request, f"Validated {success_count} import batch(es).", level=messages.SUCCESS)
+
+    @admin.action(description="Approve selected import batches")
+    def approve_selected_batches(self, request, queryset):
+        success_count = 0
+        for batch in queryset:
+            try:
+                approve_import_batch(batch.id)
+            except ValidationError as exc:
+                self.message_user(request, f"{batch.batch_code}: {exc}", level=messages.ERROR)
+                continue
+            success_count += 1
+        if success_count:
+            self.message_user(request, f"Approved {success_count} import batch(es).", level=messages.SUCCESS)
+
+    @admin.action(description="Apply selected import batches")
+    def apply_selected_batches(self, request, queryset):
+        success_count = 0
+        for batch in queryset:
+            try:
+                applied_rows = apply_import_batch(batch.id, user=request.user)
+            except ValidationError as exc:
+                self.message_user(request, f"{batch.batch_code}: {exc}", level=messages.ERROR)
+                continue
+            success_count += 1
+            self.message_user(
+                request,
+                f"{batch.batch_code}: applied {len(applied_rows)} row(s) to controlled tables.",
+                level=messages.INFO,
+            )
+        if success_count:
+            self.message_user(request, f"Applied {success_count} import batch(es).", level=messages.SUCCESS)
 
 
 @admin.register(ImportRaw)
