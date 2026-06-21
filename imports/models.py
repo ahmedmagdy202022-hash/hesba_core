@@ -141,5 +141,9 @@ class ImportReview(models.Model):
         verbose_name = "Import Review Row"
         verbose_name_plural = "Import Review Rows"
 
+    def clean(self):
+        if self.raw_row_id and self.batch_id and self.raw_row.batch_id != self.batch_id:
+            raise ValidationError({"raw_row": "Review row must belong to the same batch as the raw row."})
+
     def __str__(self):
         return f"{self.batch.batch_code} / {self.review_status}"
