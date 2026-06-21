@@ -67,6 +67,7 @@ Supplier -> Purchase Invoice -> Inventory by Location -> Sales Invoice -> Custom
 - `087_FOUNDATION_REPORT_SMOKE_SNAPSHOT = OK`
 - `088_FOUNDATION_LOCAL_REPORT_RESULT_REVIEW = OK`
 - `089_FOUNDATION_CONTROLLED_CYCLE_COMMAND = OK`
+- `090_FOUNDATION_FIRST_UI_PREP = OK`
 
 ## First build order
 
