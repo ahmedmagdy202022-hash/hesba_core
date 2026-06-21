@@ -12,6 +12,8 @@ from .models import (
     PurchaseInvoiceStatus,
     SupplierLedgerEntry,
     SupplierLedgerEntryType,
+    SupplierPayment,
+    SupplierPaymentStatus,
 )
 
 
@@ -28,16 +30,7 @@ def _recalculate_affected_items(items_by_id):
 
 @transaction.atomic
 def post_purchase_invoice(invoice_id, user=None):
-    """Post a draft purchase invoice into traceable movements.
-
-    Posting effects:
-    - Supplier ledger increases only by remaining_due.
-    - Cashbox moves out only by paid_now.
-    - Inventory increases by purchase lines into receiving_location.
-    - Item average cost is recalculated from stock movements.
-    - Invoice status becomes posted.
-    - Audit log records the posting.
-    """
+    """Post a draft purchase invoice into traceable movements."""
 
     invoice = (
         PurchaseInvoice.objects.select_for_update()
@@ -130,11 +123,7 @@ def post_purchase_invoice(invoice_id, user=None):
 
 @transaction.atomic
 def cancel_posted_purchase_invoice(invoice_id, user=None, reason=""):
-    """Cancel a posted purchase invoice using traceable reverse movements.
-
-    The invoice is not deleted. The service creates reversing rows then marks the
-    invoice as cancelled. This keeps the transaction traceable.
-    """
+    """Cancel a posted purchase invoice using traceable reverse movements."""
 
     invoice = (
         PurchaseInvoice.objects.select_for_update()
@@ -218,3 +207,123 @@ def cancel_posted_purchase_invoice(invoice_id, user=None, reason=""):
     )
 
     return invoice
+
+
+@transaction.atomic
+def record_supplier_payment(payment_number, payment_date, supplier, cashbox, amount, user=None, notes=""):
+    """Record standalone supplier payment.
+
+    Effects:
+    - Supplier due decreases by payment amount.
+    - Cashbox moves out by payment amount.
+    - No customer, sales, or inventory effect.
+    """
+
+    payment = SupplierPayment.objects.create(
+        payment_number=payment_number,
+        payment_date=payment_date,
+        supplier=supplier,
+        cashbox=cashbox,
+        amount=amount,
+        notes=notes,
+        created_by=user,
+    )
+    payment.full_clean()
+
+    SupplierLedgerEntry.objects.create(
+        supplier=supplier,
+        entry_date=payment_date,
+        entry_type=SupplierLedgerEntryType.SUPPLIER_PAYMENT,
+        supplier_payment=payment,
+        due_increase=Decimal("0"),
+        due_decrease=amount,
+        description=f"Supplier payment {payment_number}",
+        created_by=user,
+    )
+
+    CashboxMovement.objects.create(
+        cashbox=cashbox,
+        movement_date=payment_date,
+        movement_type=CashboxMovementType.SUPPLIER_PAYMENT,
+        direction=CashboxDirection.OUT,
+        amount=amount,
+        supplier_payment=payment,
+        description=f"Supplier payment {payment_number}",
+        created_by=user,
+    )
+
+    AuditLog.objects.create(
+        event_type=AuditEventType.CREATE,
+        actor=user,
+        module="purchases",
+        action="record_supplier_payment",
+        object_type="SupplierPayment",
+        object_id=str(payment.id),
+        after_data={
+            "payment_number": payment.payment_number,
+            "supplier_id": payment.supplier_id,
+            "cashbox_id": payment.cashbox_id,
+            "amount": str(payment.amount),
+            "status": payment.status,
+        },
+    )
+
+    return payment
+
+
+@transaction.atomic
+def cancel_supplier_payment(payment_id, user=None, reason=""):
+    """Cancel a posted supplier payment using reverse rows."""
+
+    payment = (
+        SupplierPayment.objects.select_for_update()
+        .select_related("supplier", "cashbox")
+        .get(pk=payment_id)
+    )
+
+    if payment.status != SupplierPaymentStatus.POSTED:
+        raise ValidationError("Only posted supplier payments can be cancelled.")
+
+    SupplierLedgerEntry.objects.create(
+        supplier=payment.supplier,
+        entry_date=payment.payment_date,
+        entry_type=SupplierLedgerEntryType.ADJUSTMENT,
+        supplier_payment=payment,
+        due_increase=payment.amount,
+        due_decrease=Decimal("0"),
+        description=f"Cancel supplier payment {payment.payment_number}",
+        created_by=user,
+    )
+
+    CashboxMovement.objects.create(
+        cashbox=payment.cashbox,
+        movement_date=payment.payment_date,
+        movement_type=CashboxMovementType.ADJUSTMENT,
+        direction=CashboxDirection.IN,
+        amount=payment.amount,
+        supplier_payment=payment,
+        description=f"Cancel supplier payment {payment.payment_number}",
+        created_by=user,
+    )
+
+    payment.status = SupplierPaymentStatus.CANCELLED
+    payment.save(update_fields=["status", "updated_at"])
+
+    AuditLog.objects.create(
+        event_type=AuditEventType.UPDATE,
+        actor=user,
+        module="purchases",
+        action="cancel_supplier_payment",
+        object_type="SupplierPayment",
+        object_id=str(payment.id),
+        reason=reason,
+        after_data={
+            "payment_number": payment.payment_number,
+            "supplier_id": payment.supplier_id,
+            "cashbox_id": payment.cashbox_id,
+            "amount": str(payment.amount),
+            "status": payment.status,
+        },
+    )
+
+    return payment
