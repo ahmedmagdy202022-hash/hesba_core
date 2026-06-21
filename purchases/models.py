@@ -163,7 +163,9 @@ class PurchaseLine(models.Model):
 
     @property
     def calculated_line_total(self):
-        return (self.quantity * self.unit_purchase_price) - self.line_discount_amount
+        if self.quantity is None or self.unit_purchase_price is None:
+            return None
+        return (self.quantity * self.unit_purchase_price) - (self.line_discount_amount or Decimal("0"))
 
     def clean(self):
         if self.quantity is not None and self.quantity <= 0:
@@ -174,7 +176,9 @@ class PurchaseLine(models.Model):
             raise ValidationError({"line_discount_amount": "Line discount cannot be negative."})
         if self.line_total_amount is not None and self.line_total_amount < 0:
             raise ValidationError({"line_total_amount": "Line total cannot be negative."})
-        if self.line_total_amount != self.calculated_line_total:
+
+        calculated_total = self.calculated_line_total
+        if calculated_total is not None and self.line_total_amount != calculated_total:
             raise ValidationError({"line_total_amount": "Line total must equal quantity × unit price minus discount."})
 
     def __str__(self):
