@@ -40,7 +40,13 @@ class ImportRawAdmin(admin.ModelAdmin):
     search_fields = ("batch__batch_code", "target_model", "target_object_id")
     list_filter = ("row_status", "created_at")
     autocomplete_fields = ("batch",)
-    readonly_fields = ("raw_data", "validation_errors", "created_at")
+    readonly_fields = ("batch", "row_number", "raw_data", "row_status", "validation_errors", "target_model", "target_object_id", "created_at")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(ImportReview)
