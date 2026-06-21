@@ -27,11 +27,9 @@ class SalesPaymentStatus(models.TextChoices):
 class SalesInvoice(models.Model):
     """Sales invoice header.
 
-    Business rule foundation:
-    - Sales invoices affect customers only, never suppliers.
-    - Customer due is based on remaining_due only.
-    - Cashbox will later be affected by paid_now only.
-    - Inventory will later decrease from selling_location through stock movements.
+    Sales invoices affect customers only, never suppliers. Posting logic must
+    create customer ledger, cashbox, and stock movement rows instead of changing
+    balances directly on the invoice.
     """
 
     invoice_number = models.CharField(max_length=80, unique=True)
@@ -133,9 +131,8 @@ class SalesInvoice(models.Model):
 class SalesLine(models.Model):
     """Sales invoice line.
 
-    Multi-line sales invoices start here. Lines do not directly change stock;
-    future posting logic must create traceable stock movements out of the
-    selling_location.
+    Cost and profit fields are filled only by controlled posting logic and must
+    remain hidden from users without cost/profit permissions.
     """
 
     invoice = models.ForeignKey(
@@ -154,6 +151,9 @@ class SalesLine(models.Model):
     unit_sale_price = models.DecimalField(max_digits=14, decimal_places=2)
     line_discount_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     line_total_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    unit_cost = models.DecimalField(max_digits=14, decimal_places=4, default=0)
+    line_cost_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    line_profit_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -184,6 +184,10 @@ class SalesLine(models.Model):
             raise ValidationError({"line_discount_amount": "Line discount cannot be negative."})
         if self.line_total_amount is not None and self.line_total_amount < 0:
             raise ValidationError({"line_total_amount": "Line total cannot be negative."})
+        if self.unit_cost is not None and self.unit_cost < 0:
+            raise ValidationError({"unit_cost": "Unit cost cannot be negative."})
+        if self.line_cost_amount is not None and self.line_cost_amount < 0:
+            raise ValidationError({"line_cost_amount": "Line cost cannot be negative."})
 
         calculated_total = self.calculated_line_total
         if calculated_total is not None and self.line_total_amount != calculated_total:
@@ -191,3 +195,66 @@ class SalesLine(models.Model):
 
     def __str__(self):
         return f"{self.invoice.invoice_number} / {self.line_number} / {self.item}"
+
+
+class CustomerLedgerEntryType(models.TextChoices):
+    SALES_DUE = "sales_due", "Sales due"
+    CUSTOMER_PAYMENT = "customer_payment", "Customer payment"
+    SALES_RETURN = "sales_return", "Sales return"
+    OPENING_BALANCE = "opening_balance", "Opening balance"
+    ADJUSTMENT = "adjustment", "Adjustment"
+
+
+class CustomerLedgerEntry(models.Model):
+    """Customer balance movement.
+
+    Sales invoices create customer due only by remaining_due. Paid amounts do not
+    create customer due because they are cashbox movements only.
+    """
+
+    customer = models.ForeignKey(
+        "master_data.Customer",
+        on_delete=models.PROTECT,
+        related_name="ledger_entries",
+    )
+    entry_date = models.DateField()
+    entry_type = models.CharField(max_length=40, choices=CustomerLedgerEntryType.choices)
+    sales_invoice = models.ForeignKey(
+        SalesInvoice,
+        on_delete=models.PROTECT,
+        related_name="customer_ledger_entries",
+        null=True,
+        blank=True,
+    )
+    due_increase = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    due_decrease = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    description = models.CharField(max_length=255, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="created_customer_ledger_entries",
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-entry_date", "-id"]
+        indexes = [
+            models.Index(fields=["customer", "entry_date"]),
+            models.Index(fields=["entry_type"]),
+            models.Index(fields=["sales_invoice"]),
+        ]
+        verbose_name = "Customer Ledger Entry"
+        verbose_name_plural = "Customer Ledger Entries"
+
+    def clean(self):
+        if self.due_increase is not None and self.due_increase < 0:
+            raise ValidationError({"due_increase": "Due increase cannot be negative."})
+        if self.due_decrease is not None and self.due_decrease < 0:
+            raise ValidationError({"due_decrease": "Due decrease cannot be negative."})
+        if self.due_increase and self.due_decrease:
+            raise ValidationError("Customer ledger entry cannot increase and decrease due at the same time.")
+
+    def __str__(self):
+        return f"{self.customer} / {self.entry_date} / {self.entry_type}"
