@@ -6,7 +6,7 @@ SECRET_KEY = "dev-only-change-before-production"
 DEBUG = True
 ALLOWED_HOSTS = []
 
-INSTALLED_APPS = [
+DJANGO_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -14,6 +14,24 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
 ]
+
+LOCAL_APPS = [
+    "accounts",
+    "permissions",
+    "settings_core",
+    "master_data",
+    "inventory",
+    "purchases",
+    "sales",
+    "cashboxes",
+    "reports",
+    "closing",
+    "audit",
+    "imports",
+    "barcode",
+]
+
+INSTALLED_APPS = DJANGO_APPS + LOCAL_APPS
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
