@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import PurchaseInvoice, PurchaseLine
+from .models import PurchaseInvoice, PurchaseLine, SupplierLedgerEntry
 
 
 class PurchaseLineInline(admin.TabularInline):
@@ -43,3 +43,11 @@ class PurchaseLineAdmin(admin.ModelAdmin):
     search_fields = ("invoice__invoice_number", "item__item_code", "item__item_name")
     list_filter = ("invoice__status",)
     autocomplete_fields = ("invoice", "item")
+
+
+@admin.register(SupplierLedgerEntry)
+class SupplierLedgerEntryAdmin(admin.ModelAdmin):
+    list_display = ("entry_date", "supplier", "entry_type", "due_increase", "due_decrease", "purchase_invoice")
+    search_fields = ("supplier__supplier_code", "supplier__name", "purchase_invoice__invoice_number")
+    list_filter = ("entry_type", "entry_date")
+    autocomplete_fields = ("supplier", "purchase_invoice", "created_by")
