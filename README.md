@@ -41,6 +41,7 @@ Supplier -> Purchase Invoice -> Inventory by Location -> Sales Invoice -> Custom
 - `061_FOUNDATION_POST_CLOSING_ADJUSTMENT_SERVICES = OK`
 - `062_FOUNDATION_USAGE_STATUS = OK`
 - `063_FOUNDATION_IMPORT_BATCHES = OK`
+- `064_FOUNDATION_IMPORT_APPLY_SERVICES = OK`
 
 ## First build order
 
