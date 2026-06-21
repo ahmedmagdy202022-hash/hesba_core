@@ -1,0 +1,3 @@
+category_code,name_ar,name_en,parent_code,active
+CAT_GENERAL,General,General,,true
+CAT_SERVICES,Services,Services,CAT_GENERAL,true
