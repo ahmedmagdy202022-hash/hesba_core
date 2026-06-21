@@ -24,8 +24,8 @@ class Migration(migrations.Migration):
         migrations.AddField(model_name="period", name="reopened_at", field=models.DateTimeField(blank=True, null=True)),
         migrations.AddField(model_name="period", name="reopen_reason", field=models.TextField(blank=True)),
         migrations.AddField(model_name="period", name="notes", field=models.TextField(blank=True)),
-        migrations.AddField(model_name="period", name="created_at", field=models.DateTimeField(auto_now_add=True, null=True)),
-        migrations.AddField(model_name="period", name="updated_at", field=models.DateTimeField(auto_now=True, null=True)),
+        migrations.AddField(model_name="period", name="created_at", field=models.DateTimeField(auto_now_add=True)),
+        migrations.AddField(model_name="period", name="updated_at", field=models.DateTimeField(auto_now=True)),
         migrations.AddField(
             model_name="period",
             name="closed_by",
