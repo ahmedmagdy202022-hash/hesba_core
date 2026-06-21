@@ -21,6 +21,7 @@ class CashboxMovementAdmin(admin.ModelAdmin):
         "purchase_invoice",
         "sales_invoice",
         "supplier_payment",
+        "customer_payment",
     )
     search_fields = (
         "cashbox__cashbox_code",
@@ -28,7 +29,8 @@ class CashboxMovementAdmin(admin.ModelAdmin):
         "purchase_invoice__invoice_number",
         "sales_invoice__invoice_number",
         "supplier_payment__payment_number",
+        "customer_payment__payment_number",
         "description",
     )
     list_filter = ("movement_type", "direction", "movement_date")
-    autocomplete_fields = ("cashbox", "purchase_invoice", "sales_invoice", "supplier_payment", "created_by")
+    autocomplete_fields = ("cashbox", "purchase_invoice", "sales_invoice", "supplier_payment", "customer_payment", "created_by")

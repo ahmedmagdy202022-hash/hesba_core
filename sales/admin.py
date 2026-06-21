@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import CustomerLedgerEntry, SalesInvoice, SalesLine
+from .models import CustomerLedgerEntry, CustomerPayment, SalesInvoice, SalesLine
 
 
 class SalesLineInline(admin.TabularInline):
@@ -45,9 +45,17 @@ class SalesLineAdmin(admin.ModelAdmin):
     autocomplete_fields = ("invoice", "item")
 
 
+@admin.register(CustomerPayment)
+class CustomerPaymentAdmin(admin.ModelAdmin):
+    list_display = ("payment_number", "payment_date", "customer", "cashbox", "amount", "status")
+    search_fields = ("payment_number", "customer__customer_code", "customer__name", "cashbox__cashbox_code")
+    list_filter = ("status", "payment_date", "cashbox")
+    autocomplete_fields = ("customer", "cashbox", "created_by")
+
+
 @admin.register(CustomerLedgerEntry)
 class CustomerLedgerEntryAdmin(admin.ModelAdmin):
-    list_display = ("entry_date", "customer", "entry_type", "due_increase", "due_decrease", "sales_invoice")
-    search_fields = ("customer__customer_code", "customer__name", "sales_invoice__invoice_number")
+    list_display = ("entry_date", "customer", "entry_type", "due_increase", "due_decrease", "sales_invoice", "customer_payment")
+    search_fields = ("customer__customer_code", "customer__name", "sales_invoice__invoice_number", "customer_payment__payment_number")
     list_filter = ("entry_type", "entry_date")
-    autocomplete_fields = ("customer", "sales_invoice", "created_by")
+    autocomplete_fields = ("customer", "sales_invoice", "customer_payment", "created_by")
