@@ -20,7 +20,7 @@ PostgreSQL-first business management core for stores, services, telecom, invento
 
 ## Business cycle
 
-Supplier → Purchase Invoice → Inventory by Location → Sales Invoice → Customer → Cashbox → Reports
+Supplier -> Purchase Invoice -> Inventory by Location -> Sales Invoice -> Customer -> Cashbox -> Reports
 
 ## Current checkpoints
 
@@ -40,6 +40,7 @@ Supplier → Purchase Invoice → Inventory by Location → Sales Invoice → Cu
 - `060_FOUNDATION_PERIOD_RUN_SERVICES = OK`
 - `061_FOUNDATION_POST_CLOSING_ADJUSTMENT_SERVICES = OK`
 - `062_FOUNDATION_USAGE_STATUS = OK`
+- `063_FOUNDATION_IMPORT_BATCHES = OK`
 
 ## First build order
 
