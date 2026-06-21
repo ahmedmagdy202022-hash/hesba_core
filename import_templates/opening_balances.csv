@@ -1,0 +1,4 @@
+entity_type,entity_code,opening_balance
+customer,CUST_CREDIT_001,150.00
+supplier,SUP_002,250.00
+cashbox,BOX_MAIN,1000.00
