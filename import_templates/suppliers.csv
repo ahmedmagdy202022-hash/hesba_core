@@ -1,0 +1,3 @@
+supplier_code,name,phone,whatsapp,email,address,opening_balance,notes,active
+SUP_001,Main Supplier,,,,,0.00,,true
+SUP_002,Second Supplier,,,,,250.00,,true
