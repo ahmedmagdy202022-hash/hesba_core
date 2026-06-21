@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from django.db.models import F, Sum
+from django.db.models import Sum
 
 from .models import StockMovement, StockMovementType
 
@@ -39,23 +39,24 @@ def get_item_stock_quantity(item):
     return in_quantity - out_quantity
 
 
+def _movement_value_total(item, movement_types):
+    total = Decimal("0")
+    movements = StockMovement.objects.filter(
+        item=item,
+        movement_type__in=movement_types,
+    ).values_list("quantity", "unit_cost")
+
+    for quantity, unit_cost in movements:
+        total += quantity * unit_cost
+
+    return total
+
+
 def get_item_stock_value(item):
     """Calculate current item stock value from movement quantity and unit cost."""
 
-    in_value = (
-        StockMovement.objects.filter(item=item, movement_type__in=IN_MOVEMENT_TYPES)
-        .annotate(line_value=F("quantity") * F("unit_cost"))
-        .aggregate(total=Sum("line_value"))
-        .get("total")
-        or Decimal("0")
-    )
-    out_value = (
-        StockMovement.objects.filter(item=item, movement_type__in=OUT_MOVEMENT_TYPES)
-        .annotate(line_value=F("quantity") * F("unit_cost"))
-        .aggregate(total=Sum("line_value"))
-        .get("total")
-        or Decimal("0")
-    )
+    in_value = _movement_value_total(item, IN_MOVEMENT_TYPES)
+    out_value = _movement_value_total(item, OUT_MOVEMENT_TYPES)
     return in_value - out_value
 
 
