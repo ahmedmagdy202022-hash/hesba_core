@@ -7,8 +7,7 @@ class Cashbox(models.Model):
     """Money holder.
 
     Cashbox balances must be calculated from opening balance plus real cashbox
-    movements only. Invoices later affect cashboxes only by the actual paid
-    amount, never by invoice total or remaining due.
+    movements only. Invoices affect cashboxes only by actual paid amounts.
     """
 
     cashbox_code = models.CharField(max_length=80, unique=True)
@@ -34,6 +33,7 @@ class Cashbox(models.Model):
 
 class CashboxMovementType(models.TextChoices):
     PURCHASE_PAYMENT = "purchase_payment", "Purchase payment"
+    SALES_RECEIPT = "sales_receipt", "Sales receipt"
     SUPPLIER_PAYMENT = "supplier_payment", "Supplier payment"
     CUSTOMER_PAYMENT = "customer_payment", "Customer payment"
     DIRECT_IN = "direct_in", "Direct in"
@@ -71,6 +71,13 @@ class CashboxMovement(models.Model):
         null=True,
         blank=True,
     )
+    sales_invoice = models.ForeignKey(
+        "sales.SalesInvoice",
+        on_delete=models.PROTECT,
+        related_name="cashbox_movements",
+        null=True,
+        blank=True,
+    )
     supplier_payment = models.ForeignKey(
         "purchases.SupplierPayment",
         on_delete=models.PROTECT,
@@ -94,6 +101,7 @@ class CashboxMovement(models.Model):
             models.Index(fields=["cashbox", "movement_date"]),
             models.Index(fields=["movement_type"]),
             models.Index(fields=["purchase_invoice"]),
+            models.Index(fields=["sales_invoice"]),
             models.Index(fields=["supplier_payment"]),
         ]
         verbose_name = "Cashbox Movement"
