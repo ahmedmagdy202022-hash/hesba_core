@@ -30,6 +30,7 @@ Supplier → Purchase Invoice → Inventory by Location → Sales Invoice → Cu
 - `050_FOUNDATION_MASTER_DATA_MODELS = OK`
 - `051_FOUNDATION_PURCHASE_INVOICE_MODELS = OK`
 - `052_FOUNDATION_PURCHASE_POSTING = OK`
+- `053_FOUNDATION_PURCHASE_COST_AND_REVERSAL = OK`
 
 ## First build order
 
