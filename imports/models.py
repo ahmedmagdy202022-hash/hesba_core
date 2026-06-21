@@ -6,6 +6,7 @@ from django.db import models
 class ImportTargetType(models.TextChoices):
     ITEMS = "items", "Items"
     CATEGORIES = "categories", "Categories"
+    LOCATIONS = "locations", "Locations"
     STOCK = "stock", "Stock"
     CUSTOMERS = "customers", "Customers"
     SUPPLIERS = "suppliers", "Suppliers"
@@ -40,11 +41,7 @@ class ImportReviewStatus(models.TextChoices):
 
 
 class ImportBatch(models.Model):
-    """Import batch header.
-
-    Import is designed for Go-Live opening data first. Full historical
-    transactions should only be imported if required and reviewed.
-    """
+    """Import batch header."""
 
     batch_code = models.CharField(max_length=80, unique=True)
     target_type = models.CharField(max_length=40, choices=ImportTargetType.choices)
@@ -85,11 +82,7 @@ class ImportBatch(models.Model):
 
 
 class ImportRaw(models.Model):
-    """Raw imported row before approval.
-
-    Raw input stays unchanged. Cleaned/corrected data must be stored separately
-    in review rows or later controlled import logic.
-    """
+    """Source import row before approval."""
 
     batch = models.ForeignKey(ImportBatch, on_delete=models.CASCADE, related_name="raw_rows")
     row_number = models.PositiveIntegerField()
@@ -115,7 +108,7 @@ class ImportRaw(models.Model):
 
 
 class ImportReview(models.Model):
-    """Review/correction row for imported raw data."""
+    """Review/correction row for imported source data."""
 
     batch = models.ForeignKey(ImportBatch, on_delete=models.CASCADE, related_name="review_rows")
     raw_row = models.ForeignKey(ImportRaw, on_delete=models.CASCADE, related_name="reviews", null=True, blank=True)
