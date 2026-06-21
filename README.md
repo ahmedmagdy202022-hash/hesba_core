@@ -49,6 +49,7 @@ Supplier -> Purchase Invoice -> Inventory by Location -> Sales Invoice -> Custom
 - `069_FOUNDATION_BASIC_CI = OK`
 - `070_FOUNDATION_IMPORT_MIGRATION_ALIGNMENT = OK`
 - `071_FOUNDATION_CI_MIGRATION_FIXES = OK`
+- `072_FOUNDATION_CI_NOISE_CONTROL = OK`
 
 ## First build order
 
