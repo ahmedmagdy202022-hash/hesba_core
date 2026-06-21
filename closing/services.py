@@ -6,7 +6,15 @@ from django.utils import timezone
 
 from audit.models import AuditEventType, AuditLog
 from reports.selectors import cashbox_report, customer_report, profit_report, stock_report, supplier_report
-from .models import ClosingRun, ClosingRunStatus, Period, PeriodStatus, PeriodSummary
+from .models import (
+    ClosingRun,
+    ClosingRunStatus,
+    Period,
+    PeriodStatus,
+    PeriodSummary,
+    PostClosingAdjustment,
+    PostClosingAdjustmentStatus,
+)
 
 
 def get_period_for_date(action_date):
@@ -152,3 +160,100 @@ def reopen_period(period_id, user=None, reason=""):
     )
 
     return period
+
+
+@transaction.atomic
+def create_post_closing_adjustment(adjustment_number, related_closed_period, adjustment_date, reason, user=None, notes=""):
+    """Create a correction document related to a closed period.
+
+    This service records the correction document only. The actual accounting,
+    stock, customer, supplier, or cashbox correction must be posted through the
+    current open period by the relevant controlled transaction service.
+    """
+
+    if related_closed_period.status != PeriodStatus.CLOSED:
+        raise ValidationError("Post-closing adjustment must reference a closed period.")
+    ensure_period_is_open(adjustment_date)
+
+    adjustment = PostClosingAdjustment.objects.create(
+        adjustment_number=adjustment_number,
+        related_closed_period=related_closed_period,
+        adjustment_date=adjustment_date,
+        reason=reason,
+        notes=notes,
+        created_by=user,
+    )
+    adjustment.full_clean()
+
+    AuditLog.objects.create(
+        event_type=AuditEventType.ADJUSTMENT,
+        actor=user,
+        module="closing",
+        action="create_post_closing_adjustment",
+        object_type="PostClosingAdjustment",
+        object_id=str(adjustment.id),
+        reason=reason,
+        after_data={
+            "adjustment_number": adjustment.adjustment_number,
+            "related_closed_period_id": adjustment.related_closed_period_id,
+            "status": adjustment.status,
+        },
+    )
+
+    return adjustment
+
+
+@transaction.atomic
+def post_closing_adjustment(adjustment_id, user=None):
+    """Mark a post-closing adjustment as posted with audit trail."""
+
+    adjustment = PostClosingAdjustment.objects.select_for_update().select_related("related_closed_period").get(pk=adjustment_id)
+    if adjustment.status != PostClosingAdjustmentStatus.DRAFT:
+        raise ValidationError("Only draft post-closing adjustments can be posted.")
+    if adjustment.related_closed_period.status != PeriodStatus.CLOSED:
+        raise ValidationError("Related period must be closed.")
+    ensure_period_is_open(adjustment.adjustment_date)
+
+    adjustment.status = PostClosingAdjustmentStatus.POSTED
+    adjustment.save(update_fields=["status", "updated_at"])
+
+    AuditLog.objects.create(
+        event_type=AuditEventType.ADJUSTMENT,
+        actor=user,
+        module="closing",
+        action="post_closing_adjustment",
+        object_type="PostClosingAdjustment",
+        object_id=str(adjustment.id),
+        reason=adjustment.reason,
+        after_data={"adjustment_number": adjustment.adjustment_number, "status": adjustment.status},
+    )
+
+    return adjustment
+
+
+@transaction.atomic
+def cancel_post_closing_adjustment(adjustment_id, user=None, reason=""):
+    """Cancel a posted post-closing adjustment document with audit trail."""
+
+    if not reason:
+        raise ValidationError("Cancel reason is required.")
+
+    adjustment = PostClosingAdjustment.objects.select_for_update().get(pk=adjustment_id)
+    if adjustment.status != PostClosingAdjustmentStatus.POSTED:
+        raise ValidationError("Only posted post-closing adjustments can be cancelled.")
+
+    adjustment.status = PostClosingAdjustmentStatus.CANCELLED
+    adjustment.save(update_fields=["status", "updated_at"])
+
+    AuditLog.objects.create(
+        event_type=AuditEventType.ADJUSTMENT,
+        actor=user,
+        module="closing",
+        action="cancel_post_closing_adjustment",
+        object_type="PostClosingAdjustment",
+        object_id=str(adjustment.id),
+        reason=reason,
+        after_data={"adjustment_number": adjustment.adjustment_number, "status": adjustment.status},
+    )
+
+    return adjustment
