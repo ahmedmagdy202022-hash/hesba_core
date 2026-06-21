@@ -131,3 +131,6 @@ class ImportReviewAdmin(admin.ModelAdmin):
     search_fields = ("batch__batch_code", "notes")
     list_filter = ("review_status", "reviewed_at", "created_at")
     autocomplete_fields = ("batch", "raw_row", "reviewed_by")
+
+    def has_delete_permission(self, request, obj=None):
+        return False
