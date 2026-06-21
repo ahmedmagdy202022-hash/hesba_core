@@ -1,0 +1,3 @@
+username,email,first_name,last_name,display_name,phone,role_code,active,is_support_user,must_change_password
+owner_user,owner@example.com,Owner,User,Owner User,,owner,true,false,true
+cashier_user,cashier@example.com,Cashier,User,Cashier User,,cashier,true,false,true
