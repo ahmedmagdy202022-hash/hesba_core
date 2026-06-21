@@ -5,7 +5,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from audit.models import AuditEventType, AuditLog
-from reports.selectors import cashbox_report, customer_report, profit_report, purchase_report, stock_report, supplier_report
+from reports.selectors import cashbox_report, customer_report, profit_report, stock_report, supplier_report
 from .models import ClosingRun, ClosingRunStatus, Period, PeriodStatus, PeriodSummary
 
 
@@ -41,19 +41,21 @@ def _next_run_number(period):
 
 
 def build_period_summary_payload(period):
-    """Build read-only summary values from reports and movements."""
+    """Build saved summary values from read-only reports and posted documents."""
 
-    sales_total = _decimal_sum(
-        invoice.total_amount for invoice in profit_report(period.start_date, period.end_date) if False
-    )
-    sales_invoices = purchase_report(period.start_date, period.end_date).none()
-    del sales_invoices
-
-    from sales.models import SalesInvoice
     from purchases.models import PurchaseInvoice
+    from sales.models import SalesInvoice
 
-    posted_sales = SalesInvoice.objects.filter(status="posted", invoice_date__gte=period.start_date, invoice_date__lte=period.end_date)
-    posted_purchases = PurchaseInvoice.objects.filter(status="posted", invoice_date__gte=period.start_date, invoice_date__lte=period.end_date)
+    posted_sales = SalesInvoice.objects.filter(
+        status="posted",
+        invoice_date__gte=period.start_date,
+        invoice_date__lte=period.end_date,
+    )
+    posted_purchases = PurchaseInvoice.objects.filter(
+        status="posted",
+        invoice_date__gte=period.start_date,
+        invoice_date__lte=period.end_date,
+    )
 
     sales_total = _decimal_sum(posted_sales.values_list("total_amount", flat=True))
     purchase_total = _decimal_sum(posted_purchases.values_list("total_amount", flat=True))
