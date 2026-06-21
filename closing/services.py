@@ -18,19 +18,15 @@ from .models import (
 
 
 def get_period_for_date(action_date):
-    """Return the period covering a date."""
-
     return Period.objects.filter(start_date__lte=action_date, end_date__gte=action_date).order_by("-start_date").first()
 
 
 def ensure_period_is_open(action_date):
-    """Guard transaction posting against closed periods."""
-
     period = get_period_for_date(action_date)
     if period is None:
         raise ValidationError("No period found for this date.")
-    if period.status == PeriodStatus.CLOSED:
-        raise ValidationError("This period is closed and read-only.")
+    if period.status != PeriodStatus.OPEN:
+        raise ValidationError("Period must be open for posting.")
     return period
 
 
@@ -49,8 +45,6 @@ def _next_run_number(period):
 
 
 def build_period_summary_payload(period):
-    """Build saved summary values from read-only reports and posted documents."""
-
     from purchases.models import PurchaseInvoice
     from sales.models import SalesInvoice
 
@@ -86,8 +80,6 @@ def build_period_summary_payload(period):
 
 @transaction.atomic
 def complete_period_closing(period_id, user=None, reason=""):
-    """Complete a period closing run and save read-only summaries."""
-
     period = Period.objects.select_for_update().get(pk=period_id)
     if period.status == PeriodStatus.CLOSED:
         raise ValidationError("Period is already closed.")
@@ -133,8 +125,6 @@ def complete_period_closing(period_id, user=None, reason=""):
 
 @transaction.atomic
 def reopen_period(period_id, user=None, reason=""):
-    """Reopen a closed period with required reason and audit trail."""
-
     if not reason:
         raise ValidationError("Reopen reason is required.")
 
@@ -164,13 +154,6 @@ def reopen_period(period_id, user=None, reason=""):
 
 @transaction.atomic
 def create_post_closing_adjustment(adjustment_number, related_closed_period, adjustment_date, reason, user=None, notes=""):
-    """Create a correction document related to a closed period.
-
-    This service records the correction document only. The actual accounting,
-    stock, customer, supplier, or cashbox correction must be posted through the
-    current open period by the relevant controlled transaction service.
-    """
-
     if related_closed_period.status != PeriodStatus.CLOSED:
         raise ValidationError("Post-closing adjustment must reference a closed period.")
     ensure_period_is_open(adjustment_date)
@@ -205,8 +188,6 @@ def create_post_closing_adjustment(adjustment_number, related_closed_period, adj
 
 @transaction.atomic
 def post_closing_adjustment(adjustment_id, user=None):
-    """Mark a post-closing adjustment as posted with audit trail."""
-
     adjustment = PostClosingAdjustment.objects.select_for_update().select_related("related_closed_period").get(pk=adjustment_id)
     if adjustment.status != PostClosingAdjustmentStatus.DRAFT:
         raise ValidationError("Only draft post-closing adjustments can be posted.")
@@ -233,8 +214,6 @@ def post_closing_adjustment(adjustment_id, user=None):
 
 @transaction.atomic
 def cancel_post_closing_adjustment(adjustment_id, user=None, reason=""):
-    """Cancel a posted post-closing adjustment document with audit trail."""
-
     if not reason:
         raise ValidationError("Cancel reason is required.")
 
