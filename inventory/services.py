@@ -21,21 +21,26 @@ OUT_MOVEMENT_TYPES = {
 }
 
 
+def _movement_quantity_total(item, movement_types, location=None):
+    qs = StockMovement.objects.filter(item=item, movement_type__in=movement_types)
+    if location is not None:
+        qs = qs.filter(location=location)
+    return qs.aggregate(total=Sum("quantity")).get("total") or Decimal("0")
+
+
 def get_item_stock_quantity(item):
     """Calculate current item stock quantity from stock movements."""
 
-    in_quantity = (
-        StockMovement.objects.filter(item=item, movement_type__in=IN_MOVEMENT_TYPES)
-        .aggregate(total=Sum("quantity"))
-        .get("total")
-        or Decimal("0")
-    )
-    out_quantity = (
-        StockMovement.objects.filter(item=item, movement_type__in=OUT_MOVEMENT_TYPES)
-        .aggregate(total=Sum("quantity"))
-        .get("total")
-        or Decimal("0")
-    )
+    in_quantity = _movement_quantity_total(item, IN_MOVEMENT_TYPES)
+    out_quantity = _movement_quantity_total(item, OUT_MOVEMENT_TYPES)
+    return in_quantity - out_quantity
+
+
+def get_item_location_stock_quantity(item, location):
+    """Calculate item stock quantity in one location from stock movements."""
+
+    in_quantity = _movement_quantity_total(item, IN_MOVEMENT_TYPES, location=location)
+    out_quantity = _movement_quantity_total(item, OUT_MOVEMENT_TYPES, location=location)
     return in_quantity - out_quantity
 
 
