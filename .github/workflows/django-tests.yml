@@ -2,9 +2,7 @@ name: Django Tests
 
 on:
   pull_request:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 jobs:
   django-tests:
