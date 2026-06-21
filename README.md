@@ -44,6 +44,7 @@ Supplier -> Purchase Invoice -> Inventory by Location -> Sales Invoice -> Custom
 - `064_FOUNDATION_IMPORT_APPLY_SERVICES = OK`
 - `065_FOUNDATION_IMPORT_VALIDATORS = OK`
 - `066_FOUNDATION_IMPORT_ADMIN_ACTIONS = OK`
+- `067_FOUNDATION_IMPORT_SAMPLE_TEMPLATES = OK`
 
 ## First build order
 
