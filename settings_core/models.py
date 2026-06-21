@@ -17,6 +17,13 @@ class ClosingFrequency(models.TextChoices):
     ANNUAL = "annual", "Annual"
 
 
+class UsageStatusLevel(models.TextChoices):
+    GREEN = "green", "Green"
+    YELLOW = "yellow", "Yellow"
+    ORANGE = "orange", "Orange"
+    RED = "red", "Red"
+
+
 class ClientProfile(models.Model):
     """Client identity/settings stored inside the client's own database.
 
@@ -94,6 +101,43 @@ class FeatureFlag(models.Model):
 
     def __str__(self):
         return self.code
+
+
+class UsageStatusSnapshot(models.Model):
+    """Saved usage warning snapshot.
+
+    This protects clients from unexpected running costs by showing a simple
+    Green, Yellow, Orange, or Red status before paid upgrades are needed.
+    """
+
+    status_level = models.CharField(
+        max_length=20,
+        choices=UsageStatusLevel.choices,
+        default=UsageStatusLevel.GREEN,
+    )
+    total_rows = models.PositiveIntegerField(default=0)
+    active_items_count = models.PositiveIntegerField(default=0)
+    active_customers_count = models.PositiveIntegerField(default=0)
+    active_suppliers_count = models.PositiveIntegerField(default=0)
+    stock_movements_count = models.PositiveIntegerField(default=0)
+    cashbox_movements_count = models.PositiveIntegerField(default=0)
+    sales_invoices_count = models.PositiveIntegerField(default=0)
+    purchase_invoices_count = models.PositiveIntegerField(default=0)
+    warnings = models.JSONField(default=list, blank=True)
+    recommendations = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["status_level"]),
+            models.Index(fields=["created_at"]),
+        ]
+        verbose_name = "Usage Status Snapshot"
+        verbose_name_plural = "Usage Status Snapshots"
+
+    def __str__(self):
+        return f"{self.status_level} / {self.created_at}"
 
 
 class SupportAccessGrant(models.Model):
