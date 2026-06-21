@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import SalesInvoice, SalesLine
+from .models import CustomerLedgerEntry, SalesInvoice, SalesLine
 
 
 class SalesLineInline(admin.TabularInline):
@@ -43,3 +43,11 @@ class SalesLineAdmin(admin.ModelAdmin):
     search_fields = ("invoice__invoice_number", "item__item_code", "item__item_name")
     list_filter = ("invoice__status",)
     autocomplete_fields = ("invoice", "item")
+
+
+@admin.register(CustomerLedgerEntry)
+class CustomerLedgerEntryAdmin(admin.ModelAdmin):
+    list_display = ("entry_date", "customer", "entry_type", "due_increase", "due_decrease", "sales_invoice")
+    search_fields = ("customer__customer_code", "customer__name", "sales_invoice__invoice_number")
+    list_filter = ("entry_type", "entry_date")
+    autocomplete_fields = ("customer", "sales_invoice", "created_by")
