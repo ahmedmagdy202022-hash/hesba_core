@@ -55,6 +55,7 @@ Supplier -> Purchase Invoice -> Inventory by Location -> Sales Invoice -> Custom
 - `075_FOUNDATION_SAFE_TEST_RUN_PREP = OK`
 - `076_FOUNDATION_LOCAL_TEST_INSTRUCTIONS = OK`
 - `077_FOUNDATION_LOCAL_TEST_RESULT_REVIEW = OK`
+- `078_FOUNDATION_ADMIN_SMOKE_TEST_PLAN = OK`
 
 ## First build order
 
