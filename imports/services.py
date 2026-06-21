@@ -54,6 +54,9 @@ def add_raw_rows(batch_id, rows):
 @transaction.atomic
 def mark_raw_row_validation(raw_row_id, is_valid, errors=None):
     raw_row = ImportRaw.objects.select_for_update().select_related("batch").get(pk=raw_row_id)
+    if raw_row.batch.status in {ImportBatchStatus.APPROVED, ImportBatchStatus.IMPORTED, ImportBatchStatus.CANCELLED}:
+        raise ValidationError("Cannot validate rows after batch approval or completion.")
+
     raw_row.row_status = ImportRowStatus.VALID if is_valid else ImportRowStatus.INVALID
     raw_row.validation_errors = errors or []
     raw_row.save(update_fields=["row_status", "validation_errors"])
@@ -71,8 +74,10 @@ def review_raw_row(raw_row_id, review_status, user=None, corrected_data=None, no
     raw_row = ImportRaw.objects.select_for_update().select_related("batch").get(pk=raw_row_id)
     if review_status not in ImportReviewStatus.values:
         raise ValidationError("Invalid review status.")
+    if raw_row.batch.status in {ImportBatchStatus.IMPORTED, ImportBatchStatus.CANCELLED}:
+        raise ValidationError("Cannot review rows after import completion or cancellation.")
 
-    review = ImportReview.objects.create(
+    return ImportReview.objects.create(
         batch=raw_row.batch,
         raw_row=raw_row,
         review_status=review_status,
@@ -81,7 +86,6 @@ def review_raw_row(raw_row_id, review_status, user=None, corrected_data=None, no
         reviewed_by=user,
         reviewed_at=timezone.now(),
     )
-    return review
 
 
 @transaction.atomic
@@ -91,6 +95,8 @@ def approve_import_batch(batch_id):
         raise ValidationError("Cannot approve import batch while invalid rows exist.")
     if batch.total_rows == 0:
         raise ValidationError("Cannot approve empty import batch.")
+    if batch.valid_rows != batch.total_rows:
+        raise ValidationError("All rows must be valid before approval.")
 
     batch.status = ImportBatchStatus.APPROVED
     batch.save(update_fields=["status", "updated_at"])
@@ -100,6 +106,11 @@ def approve_import_batch(batch_id):
 @transaction.atomic
 def mark_raw_row_imported(raw_row_id, target_model, target_object_id):
     raw_row = ImportRaw.objects.select_for_update().select_related("batch").get(pk=raw_row_id)
+    if raw_row.batch.status != ImportBatchStatus.APPROVED:
+        raise ValidationError("Rows can only be imported from approved batches.")
+    if raw_row.row_status != ImportRowStatus.VALID:
+        raise ValidationError("Only valid rows can be marked as imported.")
+
     raw_row.row_status = ImportRowStatus.IMPORTED
     raw_row.target_model = target_model
     raw_row.target_object_id = str(target_object_id)
