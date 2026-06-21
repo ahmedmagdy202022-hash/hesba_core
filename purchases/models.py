@@ -183,3 +183,66 @@ class PurchaseLine(models.Model):
 
     def __str__(self):
         return f"{self.invoice.invoice_number} / {self.line_number} / {self.item}"
+
+
+class SupplierLedgerEntryType(models.TextChoices):
+    PURCHASE_DUE = "purchase_due", "Purchase due"
+    SUPPLIER_PAYMENT = "supplier_payment", "Supplier payment"
+    PURCHASE_RETURN = "purchase_return", "Purchase return"
+    OPENING_BALANCE = "opening_balance", "Opening balance"
+    ADJUSTMENT = "adjustment", "Adjustment"
+
+
+class SupplierLedgerEntry(models.Model):
+    """Supplier balance movement.
+
+    Purchase invoices create supplier due only by remaining_due. Paid amounts do
+    not create supplier due because they are cashbox movements only.
+    """
+
+    supplier = models.ForeignKey(
+        "master_data.Supplier",
+        on_delete=models.PROTECT,
+        related_name="ledger_entries",
+    )
+    entry_date = models.DateField()
+    entry_type = models.CharField(max_length=40, choices=SupplierLedgerEntryType.choices)
+    purchase_invoice = models.ForeignKey(
+        PurchaseInvoice,
+        on_delete=models.PROTECT,
+        related_name="supplier_ledger_entries",
+        null=True,
+        blank=True,
+    )
+    due_increase = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    due_decrease = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    description = models.CharField(max_length=255, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="created_supplier_ledger_entries",
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-entry_date", "-id"]
+        indexes = [
+            models.Index(fields=["supplier", "entry_date"]),
+            models.Index(fields=["entry_type"]),
+            models.Index(fields=["purchase_invoice"]),
+        ]
+        verbose_name = "Supplier Ledger Entry"
+        verbose_name_plural = "Supplier Ledger Entries"
+
+    def clean(self):
+        if self.due_increase is not None and self.due_increase < 0:
+            raise ValidationError({"due_increase": "Due increase cannot be negative."})
+        if self.due_decrease is not None and self.due_decrease < 0:
+            raise ValidationError({"due_decrease": "Due decrease cannot be negative."})
+        if self.due_increase and self.due_decrease:
+            raise ValidationError("Supplier ledger entry cannot increase and decrease due at the same time.")
+
+    def __str__(self):
+        return f"{self.supplier} / {self.entry_date} / {self.entry_type}"
