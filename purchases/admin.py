@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import PurchaseInvoice, PurchaseLine, SupplierLedgerEntry
+from .models import PurchaseInvoice, PurchaseLine, SupplierLedgerEntry, SupplierPayment
 
 
 class PurchaseLineInline(admin.TabularInline):
@@ -45,9 +45,30 @@ class PurchaseLineAdmin(admin.ModelAdmin):
     autocomplete_fields = ("invoice", "item")
 
 
+@admin.register(SupplierPayment)
+class SupplierPaymentAdmin(admin.ModelAdmin):
+    list_display = ("payment_number", "payment_date", "supplier", "cashbox", "amount", "status")
+    search_fields = ("payment_number", "supplier__supplier_code", "supplier__name", "cashbox__cashbox_code")
+    list_filter = ("status", "payment_date", "cashbox")
+    autocomplete_fields = ("supplier", "cashbox", "created_by")
+
+
 @admin.register(SupplierLedgerEntry)
 class SupplierLedgerEntryAdmin(admin.ModelAdmin):
-    list_display = ("entry_date", "supplier", "entry_type", "due_increase", "due_decrease", "purchase_invoice")
-    search_fields = ("supplier__supplier_code", "supplier__name", "purchase_invoice__invoice_number")
+    list_display = (
+        "entry_date",
+        "supplier",
+        "entry_type",
+        "due_increase",
+        "due_decrease",
+        "purchase_invoice",
+        "supplier_payment",
+    )
+    search_fields = (
+        "supplier__supplier_code",
+        "supplier__name",
+        "purchase_invoice__invoice_number",
+        "supplier_payment__payment_number",
+    )
     list_filter = ("entry_type", "entry_date")
-    autocomplete_fields = ("supplier", "purchase_invoice", "created_by")
+    autocomplete_fields = ("supplier", "purchase_invoice", "supplier_payment", "created_by")
