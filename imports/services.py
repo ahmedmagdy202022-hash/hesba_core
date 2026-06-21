@@ -12,6 +12,23 @@ from .models import (
 )
 
 
+REVIEWABLE_BATCH_STATUSES = {
+    ImportBatchStatus.UPLOADED,
+    ImportBatchStatus.REVIEWING,
+}
+
+
+def refresh_batch_counters(batch):
+    """Recalculate denormalized counters from raw rows."""
+
+    batch.total_rows = batch.raw_rows.count()
+    batch.valid_rows = batch.raw_rows.filter(row_status=ImportRowStatus.VALID).count()
+    batch.invalid_rows = batch.raw_rows.filter(row_status=ImportRowStatus.INVALID).count()
+    batch.imported_rows = batch.raw_rows.filter(row_status=ImportRowStatus.IMPORTED).count()
+    batch.save(update_fields=["total_rows", "valid_rows", "invalid_rows", "imported_rows", "updated_at"])
+    return batch
+
+
 @transaction.atomic
 def create_import_batch(batch_code, target_type, source_file_name="", go_live_date=None, user=None, notes=""):
     batch = ImportBatch.objects.create(
@@ -45,9 +62,9 @@ def add_raw_rows(batch_id, rows):
             )
         )
 
-    batch.total_rows = batch.raw_rows.count()
     batch.status = ImportBatchStatus.UPLOADED
-    batch.save(update_fields=["total_rows", "status", "updated_at"])
+    batch.save(update_fields=["status", "updated_at"])
+    refresh_batch_counters(batch)
     return created_rows
 
 
@@ -62,10 +79,9 @@ def mark_raw_row_validation(raw_row_id, is_valid, errors=None):
     raw_row.save(update_fields=["row_status", "validation_errors"])
 
     batch = raw_row.batch
-    batch.valid_rows = batch.raw_rows.filter(row_status=ImportRowStatus.VALID).count()
-    batch.invalid_rows = batch.raw_rows.filter(row_status=ImportRowStatus.INVALID).count()
     batch.status = ImportBatchStatus.REVIEWING
-    batch.save(update_fields=["valid_rows", "invalid_rows", "status", "updated_at"])
+    batch.save(update_fields=["status", "updated_at"])
+    refresh_batch_counters(batch)
     return raw_row
 
 
@@ -91,8 +107,15 @@ def review_raw_row(raw_row_id, review_status, user=None, corrected_data=None, no
 @transaction.atomic
 def approve_import_batch(batch_id):
     batch = ImportBatch.objects.select_for_update().get(pk=batch_id)
+    if batch.status not in REVIEWABLE_BATCH_STATUSES:
+        raise ValidationError("Only uploaded or reviewing batches can be approved.")
+
+    refresh_batch_counters(batch)
+    pending_rows = batch.raw_rows.filter(row_status=ImportRowStatus.PENDING).count()
     if batch.invalid_rows > 0:
         raise ValidationError("Cannot approve import batch while invalid rows exist.")
+    if pending_rows > 0:
+        raise ValidationError("Cannot approve import batch while pending rows exist.")
     if batch.total_rows == 0:
         raise ValidationError("Cannot approve empty import batch.")
     if batch.valid_rows != batch.total_rows:
@@ -105,6 +128,9 @@ def approve_import_batch(batch_id):
 
 @transaction.atomic
 def mark_raw_row_imported(raw_row_id, target_model, target_object_id):
+    if not target_model or not target_object_id:
+        raise ValidationError("Target model and target object id are required.")
+
     raw_row = ImportRaw.objects.select_for_update().select_related("batch").get(pk=raw_row_id)
     if raw_row.batch.status != ImportBatchStatus.APPROVED:
         raise ValidationError("Rows can only be imported from approved batches.")
@@ -117,8 +143,8 @@ def mark_raw_row_imported(raw_row_id, target_model, target_object_id):
     raw_row.save(update_fields=["row_status", "target_model", "target_object_id"])
 
     batch = raw_row.batch
-    batch.imported_rows = batch.raw_rows.filter(row_status=ImportRowStatus.IMPORTED).count()
+    refresh_batch_counters(batch)
     if batch.imported_rows == batch.total_rows:
         batch.status = ImportBatchStatus.IMPORTED
-    batch.save(update_fields=["imported_rows", "status", "updated_at"])
+        batch.save(update_fields=["status", "updated_at"])
     return raw_row
