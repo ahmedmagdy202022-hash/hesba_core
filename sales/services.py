@@ -10,6 +10,8 @@ from inventory.services import get_item_location_stock_quantity, recalculate_ite
 from .models import (
     CustomerLedgerEntry,
     CustomerLedgerEntryType,
+    CustomerPayment,
+    CustomerPaymentStatus,
     SalesInvoice,
     SalesInvoiceStatus,
     money_round,
@@ -39,16 +41,6 @@ def _validate_stock_available(invoice, lines):
 
 @transaction.atomic
 def post_sales_invoice(invoice_id, user=None):
-    """Post a draft sales invoice into traceable movements.
-
-    Posting effects:
-    - Customer ledger increases only by remaining_due.
-    - Cashbox moves in only by paid_now.
-    - Inventory decreases by sales lines from selling_location.
-    - Cost and profit are saved on sales lines for controlled reporting.
-    - Audit log records the posting.
-    """
-
     invoice = (
         SalesInvoice.objects.select_for_update()
         .select_related("customer", "selling_location", "cashbox")
@@ -151,8 +143,6 @@ def post_sales_invoice(invoice_id, user=None):
 
 @transaction.atomic
 def cancel_posted_sales_invoice(invoice_id, user=None, reason=""):
-    """Cancel a posted sales invoice using traceable reverse movements."""
-
     invoice = (
         SalesInvoice.objects.select_for_update()
         .select_related("customer", "selling_location", "cashbox")
@@ -235,3 +225,123 @@ def cancel_posted_sales_invoice(invoice_id, user=None, reason=""):
     )
 
     return invoice
+
+
+@transaction.atomic
+def record_customer_payment(payment_number, payment_date, customer, cashbox, amount, user=None, notes=""):
+    """Record standalone customer payment.
+
+    Effects:
+    - Customer due decreases by payment amount.
+    - Cashbox moves in by payment amount.
+    - No supplier, purchase, inventory, or cost effect.
+    """
+
+    payment = CustomerPayment.objects.create(
+        payment_number=payment_number,
+        payment_date=payment_date,
+        customer=customer,
+        cashbox=cashbox,
+        amount=amount,
+        notes=notes,
+        created_by=user,
+    )
+    payment.full_clean()
+
+    CustomerLedgerEntry.objects.create(
+        customer=customer,
+        entry_date=payment_date,
+        entry_type=CustomerLedgerEntryType.CUSTOMER_PAYMENT,
+        customer_payment=payment,
+        due_increase=Decimal("0"),
+        due_decrease=amount,
+        description=f"Customer payment {payment_number}",
+        created_by=user,
+    )
+
+    CashboxMovement.objects.create(
+        cashbox=cashbox,
+        movement_date=payment_date,
+        movement_type=CashboxMovementType.CUSTOMER_PAYMENT,
+        direction=CashboxDirection.IN,
+        amount=amount,
+        customer_payment=payment,
+        description=f"Customer payment {payment_number}",
+        created_by=user,
+    )
+
+    AuditLog.objects.create(
+        event_type=AuditEventType.CREATE,
+        actor=user,
+        module="sales",
+        action="record_customer_payment",
+        object_type="CustomerPayment",
+        object_id=str(payment.id),
+        after_data={
+            "payment_number": payment.payment_number,
+            "customer_id": payment.customer_id,
+            "cashbox_id": payment.cashbox_id,
+            "amount": str(payment.amount),
+            "status": payment.status,
+        },
+    )
+
+    return payment
+
+
+@transaction.atomic
+def cancel_customer_payment(payment_id, user=None, reason=""):
+    """Cancel a posted customer payment using reverse rows."""
+
+    payment = (
+        CustomerPayment.objects.select_for_update()
+        .select_related("customer", "cashbox")
+        .get(pk=payment_id)
+    )
+
+    if payment.status != CustomerPaymentStatus.POSTED:
+        raise ValidationError("Only posted customer payments can be cancelled.")
+
+    CustomerLedgerEntry.objects.create(
+        customer=payment.customer,
+        entry_date=payment.payment_date,
+        entry_type=CustomerLedgerEntryType.ADJUSTMENT,
+        customer_payment=payment,
+        due_increase=payment.amount,
+        due_decrease=Decimal("0"),
+        description=f"Cancel customer payment {payment.payment_number}",
+        created_by=user,
+    )
+
+    CashboxMovement.objects.create(
+        cashbox=payment.cashbox,
+        movement_date=payment.payment_date,
+        movement_type=CashboxMovementType.ADJUSTMENT,
+        direction=CashboxDirection.OUT,
+        amount=payment.amount,
+        customer_payment=payment,
+        description=f"Cancel customer payment {payment.payment_number}",
+        created_by=user,
+    )
+
+    payment.status = CustomerPaymentStatus.CANCELLED
+    payment.save(update_fields=["status", "updated_at"])
+
+    AuditLog.objects.create(
+        event_type=AuditEventType.UPDATE,
+        actor=user,
+        module="sales",
+        action="cancel_customer_payment",
+        object_type="CustomerPayment",
+        object_id=str(payment.id),
+        reason=reason,
+        after_data={
+            "payment_number": payment.payment_number,
+            "customer_id": payment.customer_id,
+            "cashbox_id": payment.cashbox_id,
+            "amount": str(payment.amount),
+            "status": payment.status,
+        },
+    )
+
+    return payment
