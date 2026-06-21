@@ -22,6 +22,12 @@ PostgreSQL-first business management core for stores, services, telecom, invento
 
 Supplier → Purchase Invoice → Inventory by Location → Sales Invoice → Customer → Cashbox → Reports
 
+## Current checkpoints
+
+- `047_GITHUB_INITIAL_STRUCTURE_MERGED`
+- `048_FOUNDATION_APPS_SKELETON_READY`
+- `049_FOUNDATION_MODELS_SETTINGS_ROLES_PERMISSIONS` in progress
+
 ## First build order
 
 1. Foundation
