@@ -185,6 +185,67 @@ class PurchaseLine(models.Model):
         return f"{self.invoice.invoice_number} / {self.line_number} / {self.item}"
 
 
+class SupplierPaymentStatus(models.TextChoices):
+    POSTED = "posted", "Posted"
+    CANCELLED = "cancelled", "Cancelled"
+
+
+class SupplierPayment(models.Model):
+    """Standalone supplier payment.
+
+    Supplier payments affect suppliers and cashboxes only. They must never affect
+    customers, sales, or inventory.
+    """
+
+    payment_number = models.CharField(max_length=80, unique=True)
+    payment_date = models.DateField()
+    supplier = models.ForeignKey(
+        "master_data.Supplier",
+        on_delete=models.PROTECT,
+        related_name="supplier_payments",
+    )
+    cashbox = models.ForeignKey(
+        "cashboxes.Cashbox",
+        on_delete=models.PROTECT,
+        related_name="supplier_payments",
+    )
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    status = models.CharField(
+        max_length=20,
+        choices=SupplierPaymentStatus.choices,
+        default=SupplierPaymentStatus.POSTED,
+    )
+    notes = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="created_supplier_payments",
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-payment_date", "-id"]
+        indexes = [
+            models.Index(fields=["payment_number"]),
+            models.Index(fields=["payment_date"]),
+            models.Index(fields=["supplier"]),
+            models.Index(fields=["cashbox"]),
+            models.Index(fields=["status"]),
+        ]
+        verbose_name = "Supplier Payment"
+        verbose_name_plural = "Supplier Payments"
+
+    def clean(self):
+        if self.amount is not None and self.amount <= 0:
+            raise ValidationError({"amount": "Supplier payment amount must be greater than zero."})
+
+    def __str__(self):
+        return f"{self.payment_number} - {self.supplier}"
+
+
 class SupplierLedgerEntryType(models.TextChoices):
     PURCHASE_DUE = "purchase_due", "Purchase due"
     SUPPLIER_PAYMENT = "supplier_payment", "Supplier payment"
@@ -196,8 +257,8 @@ class SupplierLedgerEntryType(models.TextChoices):
 class SupplierLedgerEntry(models.Model):
     """Supplier balance movement.
 
-    Purchase invoices create supplier due only by remaining_due. Paid amounts do
-    not create supplier due because they are cashbox movements only.
+    Purchase invoices create supplier due only by remaining_due. Supplier
+    payments decrease supplier due and move cashbox by the actual paid amount.
     """
 
     supplier = models.ForeignKey(
@@ -209,6 +270,13 @@ class SupplierLedgerEntry(models.Model):
     entry_type = models.CharField(max_length=40, choices=SupplierLedgerEntryType.choices)
     purchase_invoice = models.ForeignKey(
         PurchaseInvoice,
+        on_delete=models.PROTECT,
+        related_name="supplier_ledger_entries",
+        null=True,
+        blank=True,
+    )
+    supplier_payment = models.ForeignKey(
+        SupplierPayment,
         on_delete=models.PROTECT,
         related_name="supplier_ledger_entries",
         null=True,
@@ -232,6 +300,7 @@ class SupplierLedgerEntry(models.Model):
             models.Index(fields=["supplier", "entry_date"]),
             models.Index(fields=["entry_type"]),
             models.Index(fields=["purchase_invoice"]),
+            models.Index(fields=["supplier_payment"]),
         ]
         verbose_name = "Supplier Ledger Entry"
         verbose_name_plural = "Supplier Ledger Entries"
