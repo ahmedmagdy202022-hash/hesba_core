@@ -38,6 +38,7 @@ Supplier → Purchase Invoice → Inventory by Location → Sales Invoice → Cu
 - `058_FOUNDATION_REPORTS_BASE_VIEWS = OK`
 - `059_FOUNDATION_PERIOD_MODELS = OK`
 - `060_FOUNDATION_PERIOD_RUN_SERVICES = OK`
+- `061_FOUNDATION_POST_CLOSING_ADJUSTMENT_SERVICES = OK`
 
 ## First build order
 
