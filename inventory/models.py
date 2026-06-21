@@ -19,9 +19,8 @@ class StockMovement(models.Model):
     """Traceable inventory movement.
 
     Stock reports must calculate inventory by Item + Location from this table.
-    Purchases, sales, returns, transfers, adjustments, and opening stock should
-    create controlled movement rows instead of changing item/location balances
-    directly.
+    Purchases, sales, returns, transfers, adjustments, and opening stock create
+    controlled movement rows instead of changing balances directly.
     """
 
     movement_date = models.DateField()
@@ -52,6 +51,20 @@ class StockMovement(models.Model):
         null=True,
         blank=True,
     )
+    sales_invoice = models.ForeignKey(
+        "sales.SalesInvoice",
+        on_delete=models.PROTECT,
+        related_name="stock_movements",
+        null=True,
+        blank=True,
+    )
+    sales_line = models.ForeignKey(
+        "sales.SalesLine",
+        on_delete=models.PROTECT,
+        related_name="stock_movements",
+        null=True,
+        blank=True,
+    )
     notes = models.TextField(blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -70,6 +83,8 @@ class StockMovement(models.Model):
             models.Index(fields=["movement_type"]),
             models.Index(fields=["purchase_invoice"]),
             models.Index(fields=["purchase_line"]),
+            models.Index(fields=["sales_invoice"]),
+            models.Index(fields=["sales_line"]),
         ]
         verbose_name = "Stock Movement"
         verbose_name_plural = "Stock Movements"
