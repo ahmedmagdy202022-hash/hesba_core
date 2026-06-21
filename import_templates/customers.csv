@@ -1,0 +1,3 @@
+customer_code,name,phone,whatsapp,email,address,opening_balance,credit_limit,notes,active
+CUST_001,Walk In Customer,01000000000,01000000000,customer@example.com,Alexandria,0.00,0.00,,true
+CUST_CREDIT_001,Credit Customer,01000000001,01000000001,credit@example.com,Cairo,150.00,5000.00,Opening balance means customer owes the business,true
