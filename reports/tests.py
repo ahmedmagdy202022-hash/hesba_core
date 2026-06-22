@@ -1,8 +1,8 @@
-from django.test import SimpleTestCase
+from django.test import TestCase
 from django.urls import reverse
 
 
-class FirstUiNavigationMapTests(SimpleTestCase):
+class FirstUiNavigationMapTests(TestCase):
     def test_home_page_renders_first_ui_navigation_map(self):
         response = self.client.get(reverse("home"))
 
