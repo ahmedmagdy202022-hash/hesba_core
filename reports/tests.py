@@ -10,6 +10,7 @@ class FirstUiNavigationMapTests(SimpleTestCase):
         self.assertContains(response, "093_FOUNDATION_FIRST_UI_NAVIGATION_MAP")
         self.assertContains(response, "خريطة تشغيل أول شاشة UI")
         self.assertContains(response, "فتح لوحة Admin")
+        self.assertContains(response, "مشاهدة Dashboard Snapshot")
 
     def test_home_page_keeps_full_business_cycle_visible(self):
         response = self.client.get(reverse("home"))
@@ -33,3 +34,19 @@ class FirstUiNavigationMapTests(SimpleTestCase):
         self.assertContains(response, "المشتريات لا تنشئ مديونية للعملاء")
         self.assertContains(response, "الخزن تتحرك بالمبلغ المدفوع فعليًا فقط")
         self.assertContains(response, "التقارير قراءة فقط")
+
+    def test_dashboard_snapshot_page_renders_read_only_checkpoint(self):
+        response = self.client.get(reverse("dashboard_snapshot"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "094_FOUNDATION_DASHBOARD_SNAPSHOT")
+        self.assertContains(response, "KPIs آمنة لاحقًا")
+        self.assertContains(response, "حالة المخزون")
+        self.assertContains(response, "حالة الخزن")
+
+    def test_dashboard_snapshot_keeps_sensitive_finance_protected(self):
+        response = self.client.get(reverse("dashboard_snapshot"))
+
+        self.assertContains(response, "الربح")
+        self.assertContains(response, "التكلفة")
+        self.assertContains(response, "صلاحيات حقيقية")
