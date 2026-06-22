@@ -38,7 +38,6 @@ class Migration(migrations.Migration):
                 ("quantity", models.DecimalField(decimal_places=3, max_digits=14)),
                 ("unit_cost", models.DecimalField(decimal_places=4, default=0, max_digits=14)),
                 ("notes", models.TextField(blank=True)),
-                ("created_at", models.DateTimeField(auto_now_add=True)),
                 (
                     "created_by",
                     models.ForeignKey(
@@ -91,11 +90,11 @@ class Migration(migrations.Migration):
                 "verbose_name_plural": "Stock Movements",
                 "ordering": ["-movement_date", "-id"],
                 "indexes": [
-                    models.Index(fields=["item", "location"], name="inventory_s_item_id_5e61d0_idx"),
-                    models.Index(fields=["movement_date"], name="inventory_s_movemen_17d3c7_idx"),
-                    models.Index(fields=["movement_type"], name="inventory_s_movemen_34b4d0_idx"),
-                    models.Index(fields=["purchase_invoice"], name="inventory_s_purchase_0ad8b4_idx"),
-                    models.Index(fields=["purchase_line"], name="inventory_s_purchase_81ba9a_idx"),
+                    models.Index(fields=["item", "location"], name="inventory_s_item_id_d147f4_idx"),
+                    models.Index(fields=["movement_date"], name="inventory_s_movemen_25c7cf_idx"),
+                    models.Index(fields=["movement_type"], name="inventory_s_movemen_018f99_idx"),
+                    models.Index(fields=["purchase_invoice"], name="inventory_s_purchas_b67cde_idx"),
+                    models.Index(fields=["purchase_line"], name="inventory_s_purchas_c26556_idx"),
                 ],
             },
         ),
