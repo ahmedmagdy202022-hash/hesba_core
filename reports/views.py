@@ -3,10 +3,33 @@ from django.urls import reverse
 
 
 CHECKPOINT_CODE = "093_FOUNDATION_FIRST_UI_NAVIGATION_MAP"
+DASHBOARD_CHECKPOINT_CODE = "094_FOUNDATION_DASHBOARD_SNAPSHOT"
 
 
 def _admin_changelist(app_label, model_name):
     return reverse(f"admin:{app_label}_{model_name}_changelist")
+
+
+def _business_cycle():
+    return [
+        "Supplier",
+        "Purchase Invoice",
+        "Inventory by Location",
+        "Sales Invoice",
+        "Customer",
+        "Cashbox",
+        "Reports",
+    ]
+
+
+def _protected_rules():
+    return [
+        "المبيعات لا تنشئ مستحقات للموردين.",
+        "المشتريات لا تنشئ مديونية للعملاء.",
+        "الخزن تتحرك بالمبلغ المدفوع فعليًا فقط.",
+        "المخزون يتحرك من خلال حركات مخزون قابلة للتتبع.",
+        "التقارير قراءة فقط وليست مكان إدخال بيانات.",
+    ]
 
 
 def home(request):
@@ -16,16 +39,6 @@ def home(request):
     change balances, create stock movements, or calculate profit. The controlled
     business logic stays in services, reports, and admin-backed data screens.
     """
-
-    business_cycle = [
-        "Supplier",
-        "Purchase Invoice",
-        "Inventory by Location",
-        "Sales Invoice",
-        "Customer",
-        "Cashbox",
-        "Reports",
-    ]
 
     sections = [
         {
@@ -76,22 +89,78 @@ def home(request):
         },
     ]
 
-    protected_rules = [
-        "المبيعات لا تنشئ مستحقات للموردين.",
-        "المشتريات لا تنشئ مديونية للعملاء.",
-        "الخزن تتحرك بالمبلغ المدفوع فعليًا فقط.",
-        "المخزون يتحرك من خلال حركات مخزون قابلة للتتبع.",
-        "التقارير قراءة فقط وليست مكان إدخال بيانات.",
-    ]
-
     return render(
         request,
         "reports/home.html",
         {
             "checkpoint_code": CHECKPOINT_CODE,
-            "business_cycle": business_cycle,
+            "business_cycle": _business_cycle(),
             "sections": sections,
-            "protected_rules": protected_rules,
+            "protected_rules": _protected_rules(),
+            "admin_index_url": reverse("admin:index"),
+            "dashboard_url": reverse("dashboard_snapshot"),
+        },
+    )
+
+
+def dashboard_snapshot(request):
+    """Read-only dashboard snapshot for the first user-facing dashboard step.
+
+    This checkpoint keeps the dashboard static and permission-safe. It does not
+    query operational data yet, so it can render before migrations or seed data
+    are applied in a fresh Codespace. Real KPIs will be connected only after the
+    report views and role permissions are stable.
+    """
+
+    readiness_cards = [
+        {
+            "title": "دورة العمل الأساسية",
+            "value": "جاهزة",
+            "note": "مورد → شراء → مخزون → بيع → عميل → خزنة → تقارير",
+        },
+        {
+            "title": "حالة الإدخال",
+            "value": "Admin مؤقتًا",
+            "note": "لا توجد شاشة Transaction حقيقية حتى الآن.",
+        },
+        {
+            "title": "حالة التقارير",
+            "value": "قراءة فقط",
+            "note": "لا يتم تعديل أي بيانات من التقارير أو الداشبورد.",
+        },
+        {
+            "title": "حماية الأرقام الحساسة",
+            "value": "مؤجلة للصلاحيات",
+            "note": "الربح والتكلفة لن يظهروا قبل تثبيت صلاحيات حقيقية.",
+        },
+    ]
+
+    safe_kpi_placeholders = [
+        "عدد الموردين",
+        "عدد فواتير الشراء",
+        "حالة المخزون حسب الموقع",
+        "عدد فواتير البيع",
+        "عدد العملاء",
+        "حالة الخزن",
+    ]
+
+    next_steps = [
+        "ربط أرقام قراءة فقط من views آمنة بعد تثبيت المايجريشن والبيانات.",
+        "تجهيز صلاحيات عرض التكلفة والربح قبل أي KPI مالي حساس.",
+        "عدم بناء شاشات إدخال جديدة قبل حماية دورة البيع والشراء بالكامل.",
+    ]
+
+    return render(
+        request,
+        "reports/dashboard_snapshot.html",
+        {
+            "checkpoint_code": DASHBOARD_CHECKPOINT_CODE,
+            "business_cycle": _business_cycle(),
+            "readiness_cards": readiness_cards,
+            "safe_kpi_placeholders": safe_kpi_placeholders,
+            "protected_rules": _protected_rules(),
+            "next_steps": next_steps,
+            "home_url": reverse("home"),
             "admin_index_url": reverse("admin:index"),
         },
     )
