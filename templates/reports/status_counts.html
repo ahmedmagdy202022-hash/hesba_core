@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>حِسْبَة Core - Status</title>
+</head>
+<body>
+    <main>
+        <p>{{ checkpoint_code }} = OK</p>
+        <h1>{{ page_title }}</h1>
+        <p>{{ page_description }}</p>
+        <nav>
+            <a href="{{ dashboard_url }}">Dashboard</a> |
+            <a href="{{ reports_url }}">Reports</a> |
+            <a href="{{ status_url }}">Status</a>
+        </nav>
+        {% for section in sections %}
+            <section>
+                <h2>{{ section.title }}</h2>
+                <p>{{ section.description }}</p>
+                <ul>
+                    {% for item in section.items %}
+                        <li><a href="{{ item.url }}">{{ item.label }}</a>: {{ item.note }}</li>
+                    {% endfor %}
+                </ul>
+            </section>
+        {% endfor %}
+        <section>
+            <h2>قواعد الحماية</h2>
+            <ul>
+                {% for rule in protected_rules %}
+                    <li>{{ rule }}</li>
+                {% endfor %}
+            </ul>
+        </section>
+        <p>{{ footer_note }}</p>
+    </main>
+</body>
+</html>
