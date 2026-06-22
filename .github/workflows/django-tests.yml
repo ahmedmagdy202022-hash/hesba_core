@@ -26,7 +26,6 @@ jobs:
         run: python manage.py check
 
       - name: Check migrations are committed
-        continue-on-error: true
         run: python manage.py makemigrations --check --dry-run
 
       - name: Run Django tests
