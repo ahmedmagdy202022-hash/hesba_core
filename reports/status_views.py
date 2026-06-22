@@ -8,7 +8,7 @@ from purchases.models import PurchaseInvoice, PurchaseLine, SupplierPayment
 from sales.models import CustomerPayment, SalesInvoice, SalesLine
 
 
-STATUS_CHECKPOINT_CODE = "103_FOUNDATION_STATUS_COUNTS_TEMPLATE"
+STATUS_CHECKPOINT_CODE = "100_FOUNDATION_EXPANDED_SAFE_STATUS_COUNTS"
 
 
 def _admin(app_label, model_name):
