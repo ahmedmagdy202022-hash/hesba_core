@@ -33,10 +33,10 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name="stockmovement",
-            index=models.Index(fields=["sales_invoice"], name="inventory_s_sales_i_1f6c33_idx"),
+            index=models.Index(fields=["sales_invoice"], name="inventory_s_sales_i_523af4_idx"),
         ),
         migrations.AddIndex(
             model_name="stockmovement",
-            index=models.Index(fields=["sales_line"], name="inventory_s_sales_l_675df7_idx"),
+            index=models.Index(fields=["sales_line"], name="inventory_s_sales_l_56125b_idx"),
         ),
     ]
