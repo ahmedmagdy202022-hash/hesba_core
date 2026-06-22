@@ -101,6 +101,7 @@ def status_counts_report(request):
             "admin_index_url": reverse("admin:index"),
             "dashboard_url": reverse("dashboard_snapshot"),
             "reports_url": reverse("report_hub"),
+            "status_url": reverse("status_counts_report"),
             "footer_note": "هذه الشاشة Status Counts فقط. الهدف قياس وجود البيانات بدون كشف finance حساس.",
         },
     )
