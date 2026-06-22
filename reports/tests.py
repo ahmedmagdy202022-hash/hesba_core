@@ -1,8 +1,8 @@
-from django.test import SimpleTestCase
+from django.test import TestCase
 from django.urls import reverse
 
 
-class FirstUiNavigationMapTests(SimpleTestCase):
+class FirstUiNavigationMapTests(TestCase):
     def test_home_page_renders_first_ui_navigation_map(self):
         response = self.client.get(reverse("home"))
 
@@ -68,3 +68,32 @@ class FirstUiNavigationMapTests(SimpleTestCase):
         self.assertContains(response, "Profit Report")
         self.assertContains(response, "Sales - Cost of Goods Sold")
         self.assertContains(response, "صلاحيات حقيقية")
+
+    def test_status_counts_report_renders_expanded_non_sensitive_counts(self):
+        response = self.client.get(reverse("status_counts_report"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "100_FOUNDATION_EXPANDED_SAFE_STATUS_COUNTS")
+        self.assertContains(response, "Suppliers")
+        self.assertContains(response, "Customers")
+        self.assertContains(response, "Items")
+        self.assertContains(response, "Locations")
+        self.assertContains(response, "Cashboxes")
+        self.assertContains(response, "Purchase Invoices")
+        self.assertContains(response, "Purchase Lines")
+        self.assertContains(response, "Sales Invoices")
+        self.assertContains(response, "Sales Lines")
+        self.assertContains(response, "Supplier Payments")
+        self.assertContains(response, "Customer Payments")
+        self.assertContains(response, "Stock Movements")
+        self.assertContains(response, "Cashbox Movements")
+
+    def test_status_counts_report_does_not_expose_sensitive_finance(self):
+        response = self.client.get(reverse("status_counts_report"))
+
+        self.assertContains(response, "لا يعرض مبالغ أو أرصدة مالية")
+        self.assertContains(response, "لا يعرض تكلفة أو ربح")
+        self.assertContains(response, "No money totals")
+        self.assertContains(response, "No balances")
+        self.assertContains(response, "No cost")
+        self.assertContains(response, "No profit")
