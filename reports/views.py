@@ -4,6 +4,7 @@ from django.urls import reverse
 
 CHECKPOINT_CODE = "093_FOUNDATION_FIRST_UI_NAVIGATION_MAP"
 DASHBOARD_CHECKPOINT_CODE = "094_FOUNDATION_DASHBOARD_SNAPSHOT"
+REPORTS_CHECKPOINT_CODE = "096_FOUNDATION_READ_ONLY_REPORT_HUB"
 
 
 def _admin_changelist(app_label, model_name):
@@ -30,6 +31,16 @@ def _protected_rules():
         "المخزون يتحرك من خلال حركات مخزون قابلة للتتبع.",
         "التقارير قراءة فقط وليست مكان إدخال بيانات.",
     ]
+
+
+def _shared_template_context():
+    return {
+        "business_cycle": _business_cycle(),
+        "protected_rules": _protected_rules(),
+        "admin_index_url": reverse("admin:index"),
+        "dashboard_url": reverse("dashboard_snapshot"),
+        "reports_url": reverse("report_hub"),
+    }
 
 
 def home(request):
@@ -66,7 +77,7 @@ def home(request):
             "description": "أي زيادة أو نقص مخزون لازم يظهر كحركة قابلة للتتبع.",
             "items": [
                 {"label": "حركات المخزون", "url": _admin_changelist("inventory", "stockmovement"), "note": "شراء / بيع / تحويل / تسوية"},
-                {"label": "تقرير المخزون", "url": "#reports", "note": "قراءة فقط من الحركات"},
+                {"label": "تقرير المخزون", "url": reverse("report_hub"), "note": "قراءة فقط من الحركات"},
             ],
         },
         {
@@ -83,27 +94,23 @@ def home(request):
             "description": "الخزنة تتأثر بالمبلغ المدفوع فعليًا فقط، والتقارير قراءة فقط.",
             "items": [
                 {"label": "حركات الخزن", "url": _admin_changelist("cashboxes", "cashboxmovement"), "note": "Cash in / Cash out"},
-                {"label": "تقارير العملاء والموردين", "url": "#reports", "note": "قراءة فقط من القيود"},
-                {"label": "تقرير الربح", "url": "#reports", "note": "Sales - COGS"},
+                {"label": "مركز التقارير", "url": reverse("report_hub"), "note": "قراءة فقط"},
+                {"label": "تقرير الربح", "url": reverse("report_hub"), "note": "Sales - COGS"},
             ],
         },
     ]
 
-    return render(
-        request,
-        "reports/home.html",
+    context = _shared_template_context()
+    context.update(
         {
             "checkpoint_code": CHECKPOINT_CODE,
             "page_title": "خريطة تشغيل أول شاشة UI",
             "page_description": "شاشة بسيطة وآمنة للتنقل داخل حِسْبَة. الهدف منها ترتيب دورة العمل قبل بناء شاشات الإدخال الحقيقية، بدون تغيير أي منطق داتا أو حسابات مالية.",
-            "business_cycle": _business_cycle(),
             "sections": sections,
-            "protected_rules": _protected_rules(),
-            "admin_index_url": reverse("admin:index"),
-            "dashboard_url": reverse("dashboard_snapshot"),
             "footer_note": "هذه الشاشة Navigation Map فقط. الإدخال الفعلي ما زال من Admin لحد ما نثبت أول شاشة Transaction آمنة.",
-        },
+        }
     )
+    return render(request, "reports/home.html", context)
 
 
 def dashboard_snapshot(request):
@@ -119,7 +126,7 @@ def dashboard_snapshot(request):
             "title": "١) حالة دورة العمل",
             "description": "الدورة الأساسية جاهزة كمسار واحد قابل للتوسع.",
             "items": [
-                {"label": "الدورة الكاملة", "url": "#reports", "note": "مورد → شراء → مخزون → بيع → عميل → خزنة → تقارير"},
+                {"label": "الدورة الكاملة", "url": reverse("report_hub"), "note": "مورد → شراء → مخزون → بيع → عميل → خزنة → تقارير"},
                 {"label": "حالة الإدخال", "url": reverse("home"), "note": "Admin مؤقتًا حتى شاشة Transaction آمنة"},
             ],
         },
@@ -127,42 +134,95 @@ def dashboard_snapshot(request):
             "title": "٢) KPIs آمنة لاحقًا",
             "description": "تجهيز أماكن الأرقام بدون عرض ربح أو تكلفة قبل الصلاحيات.",
             "items": [
-                {"label": "عدد الموردين", "url": "#reports", "note": "قراءة فقط"},
-                {"label": "عدد العملاء", "url": "#reports", "note": "قراءة فقط"},
-                {"label": "حالة المخزون", "url": "#reports", "note": "حسب الصنف والموقع"},
-                {"label": "حالة الخزن", "url": "#reports", "note": "بالمدفوع فعليًا فقط"},
+                {"label": "عدد الموردين", "url": reverse("report_hub"), "note": "قراءة فقط"},
+                {"label": "عدد العملاء", "url": reverse("report_hub"), "note": "قراءة فقط"},
+                {"label": "حالة المخزون", "url": reverse("report_hub"), "note": "حسب الصنف والموقع"},
+                {"label": "حالة الخزن", "url": reverse("report_hub"), "note": "بالمدفوع فعليًا فقط"},
             ],
         },
         {
             "title": "٣) حماية الأرقام الحساسة",
             "description": "التكلفة والربح لا يظهروا قبل صلاحيات حقيقية.",
             "items": [
-                {"label": "الربح", "url": "#reports", "note": "Owner فقط لاحقًا"},
-                {"label": "التكلفة", "url": "#reports", "note": "محمية من Cashier"},
+                {"label": "الربح", "url": reverse("report_hub"), "note": "Owner فقط لاحقًا"},
+                {"label": "التكلفة", "url": reverse("report_hub"), "note": "محمية من Cashier"},
             ],
         },
         {
             "title": "٤) الخطوة الجاية",
             "description": "ربط أرقام قراءة فقط بعد ثبات reports/views والمايجريشن.",
             "items": [
-                {"label": "تقارير Read-only", "url": "#reports", "note": "قبل أي شاشة إدخال جديدة"},
-                {"label": "صلاحيات", "url": "#reports", "note": "قبل إظهار finance حساس"},
+                {"label": "تقارير Read-only", "url": reverse("report_hub"), "note": "قبل أي شاشة إدخال جديدة"},
+                {"label": "صلاحيات", "url": reverse("report_hub"), "note": "قبل إظهار finance حساس"},
             ],
         },
     ]
 
-    return render(
-        request,
-        "reports/home.html",
+    context = _shared_template_context()
+    context.update(
         {
             "checkpoint_code": DASHBOARD_CHECKPOINT_CODE,
             "page_title": "Dashboard Snapshot قراءة فقط",
             "page_description": "أول لقطة داشبورد آمنة قبل ربط الأرقام الحقيقية. الهدف تثبيت شكل الملخص من غير إدخال أو تعديل بيانات.",
-            "business_cycle": _business_cycle(),
             "sections": sections,
-            "protected_rules": _protected_rules(),
-            "admin_index_url": reverse("admin:index"),
-            "dashboard_url": reverse("dashboard_snapshot"),
             "footer_note": "هذه الشاشة Read-only Snapshot فقط. الربح والتكلفة وأي بيانات مالية حساسة ستظهر بعد صلاحيات حقيقية.",
-        },
+        }
     )
+    return render(request, "reports/home.html", context)
+
+
+def report_hub(request):
+    """Read-only report hub.
+
+    This checkpoint defines the safe report map before adding live report queries.
+    Reports stay navigation/definition only here: no writes, no balance updates,
+    no invoice posting, and no sensitive cost/profit exposure before permissions.
+    """
+
+    sections = [
+        {
+            "title": "١) تقارير الأطراف",
+            "description": "أرصدة العملاء والموردين تأتي من الفواتير والمدفوعات والمرتجعات فقط.",
+            "items": [
+                {"label": "Customer Report", "url": _admin_changelist("sales", "customerledgerentry"), "note": "مبيعات + مدفوعات عملاء فقط"},
+                {"label": "Supplier Report", "url": _admin_changelist("purchases", "supplierledgerentry"), "note": "مشتريات + مدفوعات موردين فقط"},
+            ],
+        },
+        {
+            "title": "٢) تقارير الفواتير",
+            "description": "الفواتير Header + Lines، والحسابات لا تتغير من التقرير.",
+            "items": [
+                {"label": "Sales Report", "url": _admin_changelist("sales", "salesinvoice"), "note": "مبيعات مدفوعة / جزئية / آجلة"},
+                {"label": "Purchase Report", "url": _admin_changelist("purchases", "purchaseinvoice"), "note": "مشتريات مدفوعة / جزئية / آجلة"},
+            ],
+        },
+        {
+            "title": "٣) تقارير التشغيل",
+            "description": "المخزون والخزن مبنيين على حركات فعلية قابلة للتتبع.",
+            "items": [
+                {"label": "Inventory Report", "url": _admin_changelist("inventory", "stockmovement"), "note": "Item + Location"},
+                {"label": "Cashbox Report", "url": _admin_changelist("cashboxes", "cashboxmovement"), "note": "Paid_Now فقط"},
+            ],
+        },
+        {
+            "title": "٤) تقارير محمية",
+            "description": "الربح والتكلفة والتمويل الحساس لا يظهروا قبل صلاحيات حقيقية.",
+            "items": [
+                {"label": "Profit Report", "url": "#reports", "note": "Sales - Cost of Goods Sold"},
+                {"label": "Usage Status Report", "url": "#reports", "note": "تحكم تكلفة التشغيل"},
+                {"label": "Closed Period Report", "url": "#reports", "note": "مراجعة فقط بعد الإقفال"},
+            ],
+        },
+    ]
+
+    context = _shared_template_context()
+    context.update(
+        {
+            "checkpoint_code": REPORTS_CHECKPOINT_CODE,
+            "page_title": "مركز التقارير قراءة فقط",
+            "page_description": "خريطة آمنة للتقارير قبل ربط الأرقام الحية. التقارير هنا للتصفح والمراجعة فقط، ولا تنشئ فواتير أو أرصدة أو حركات مخزون أو حركات خزنة.",
+            "sections": sections,
+            "footer_note": "هذه الشاشة Report Hub فقط. الربح والتكلفة سيظلوا محميين لحين تطبيق الصلاحيات الحقيقية.",
+        }
+    )
+    return render(request, "reports/home.html", context)
