@@ -24,16 +24,25 @@ jobs:
 
       - name: Generate migration diagnosis
         run: |
-          python manage.py makemigrations --verbosity 3 || true
+          set +e
+          python manage.py makemigrations --check --dry-run > migration-check-output.txt 2>&1
+          echo $? > migration-check-exit-code.txt
+          python manage.py makemigrations --verbosity 3 > makemigrations-output.txt 2>&1
+          echo $? > makemigrations-exit-code.txt
           git status --short > migration-status.txt
           git diff > migration-diff.patch
           find . -path "*/migrations/*.py" -type f | sort > migration-files.txt
+          set -e
 
       - name: Upload migration diagnosis
         uses: actions/upload-artifact@v4
         with:
           name: migration-diagnosis
           path: |
+            migration-check-output.txt
+            migration-check-exit-code.txt
+            makemigrations-output.txt
+            makemigrations-exit-code.txt
             migration-status.txt
             migration-diff.patch
             migration-files.txt
