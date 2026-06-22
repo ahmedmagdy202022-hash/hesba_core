@@ -7,28 +7,39 @@
 
     <style>
         :root {
-            --navy: #062b4f;
-            --teal: #0f7f86;
-            --teal-dark: #0a6170;
-            --cyan: #19c5c9;
-            --bg: #f6fbfc;
-            --card: #ffffff;
-            --text: #142033;
-            --muted: #64748b;
-            --line: #d9e9ed;
-            --shadow: 0 16px 38px rgba(6, 43, 79, .10);
+            --navy: #052643;
+            --navy-2: #08345d;
+            --teal: #0c8a8f;
+            --teal-2: #14b8bd;
+            --gold: #d6a84f;
+            --gold-soft: #fff4d8;
+            --cream: #fbf7ef;
+            --paper: #ffffff;
+            --ink: #142033;
+            --muted: #6b7280;
+            --line: rgba(5, 38, 67, .12);
+            --soft-line: rgba(12, 138, 143, .16);
+            --shadow: 0 22px 55px rgba(5, 38, 67, .14);
+            --soft-shadow: 0 12px 28px rgba(5, 38, 67, .08);
         }
 
         * { box-sizing: border-box; }
 
+        html {
+            min-height: 100%;
+            background: var(--cream);
+        }
+
         body {
+            min-height: 100%;
             margin: 0;
             font-family: Tahoma, Arial, sans-serif;
+            color: var(--ink);
+            line-height: 1.75;
             background:
-                radial-gradient(circle at top left, rgba(25, 197, 201, .13), transparent 32%),
-                linear-gradient(180deg, #ffffff 0%, var(--bg) 100%);
-            color: var(--text);
-            line-height: 1.7;
+                radial-gradient(circle at 12% 8%, rgba(20, 184, 189, .16), transparent 29%),
+                radial-gradient(circle at 88% 18%, rgba(214, 168, 79, .18), transparent 25%),
+                linear-gradient(180deg, #ffffff 0%, #f8fbfb 46%, var(--cream) 100%);
         }
 
         a {
@@ -37,39 +48,70 @@
         }
 
         .page {
-            width: min(1120px, calc(100% - 24px));
+            width: min(1180px, calc(100% - 28px));
             margin: 0 auto;
-            padding: 22px 0 44px;
+            padding: 20px 0 46px;
+        }
+
+        .shell {
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, .72);
+            border-radius: 34px;
+            background:
+                linear-gradient(145deg, rgba(255, 255, 255, .92), rgba(248, 252, 252, .88));
+            box-shadow: var(--shadow);
+        }
+
+        .shell::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background:
+                linear-gradient(90deg, rgba(5, 38, 67, .04) 1px, transparent 1px),
+                linear-gradient(0deg, rgba(5, 38, 67, .035) 1px, transparent 1px);
+            background-size: 42px 42px;
+            mask-image: linear-gradient(180deg, rgba(0,0,0,.32), transparent 64%);
         }
 
         .hero {
             position: relative;
+            isolation: isolate;
             overflow: hidden;
-            background:
-                linear-gradient(135deg, rgba(255,255,255,.98), rgba(238,250,250,.94));
-            border: 1px solid var(--line);
-            border-radius: 30px;
             padding: 28px;
-            box-shadow: var(--shadow);
+            color: #fff;
+            background:
+                radial-gradient(circle at 20% 12%, rgba(20, 184, 189, .34), transparent 34%),
+                linear-gradient(135deg, var(--navy) 0%, var(--navy-2) 52%, #064854 100%);
+            border-radius: 34px 34px 30px 30px;
         }
 
-        .hero::after {
+        .hero::before {
             content: "ح";
             position: absolute;
-            left: 7%;
-            bottom: -54px;
-            color: rgba(15, 127, 134, .08);
-            font-size: 190px;
+            left: 5%;
+            bottom: -92px;
+            z-index: -1;
+            color: rgba(255, 255, 255, .055);
+            font-size: clamp(190px, 28vw, 360px);
             font-weight: 900;
             line-height: 1;
         }
 
-        .hero-inner {
-            position: relative;
-            z-index: 1;
+        .hero::after {
+            content: "";
+            position: absolute;
+            inset: auto 28px 0 28px;
+            height: 4px;
+            border-radius: 999px;
+            background: linear-gradient(90deg, transparent, var(--gold), var(--teal-2), transparent);
+            opacity: .92;
         }
 
         .topbar {
+            position: relative;
+            z-index: 1;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -80,53 +122,125 @@
         .brand {
             display: inline-flex;
             align-items: center;
-            gap: 12px;
-            color: var(--navy);
+            gap: 13px;
             font-weight: 900;
-            font-size: 22px;
         }
 
         .brand-mark {
-            width: 54px;
-            height: 54px;
-            border-radius: 16px;
+            position: relative;
+            width: 58px;
+            height: 58px;
+            border-radius: 20px;
             display: grid;
             place-items: center;
-            background: linear-gradient(145deg, var(--cyan), var(--teal-dark));
             color: #fff;
-            font-size: 31px;
+            font-size: 33px;
             font-weight: 900;
-            box-shadow: 0 10px 24px rgba(15, 127, 134, .22);
+            background:
+                linear-gradient(145deg, rgba(255,255,255,.18), rgba(255,255,255,.04)),
+                linear-gradient(145deg, var(--teal-2), var(--teal));
+            box-shadow: 0 14px 28px rgba(0, 0, 0, .18), inset 0 1px 0 rgba(255,255,255,.28);
+        }
+
+        .brand-mark::after {
+            content: "";
+            position: absolute;
+            inset: -4px;
+            border-radius: 24px;
+            border: 1px solid rgba(214, 168, 79, .46);
+        }
+
+        .brand-title {
+            display: grid;
+            gap: 1px;
+        }
+
+        .brand-title strong {
+            font-size: 23px;
+            line-height: 1.2;
+            letter-spacing: -.3px;
+        }
+
+        .brand-title span {
+            color: rgba(255,255,255,.72);
+            font-size: 13px;
+            font-weight: 700;
         }
 
         .checkpoint {
             direction: ltr;
-            background: #eaf9fa;
-            color: var(--teal-dark);
-            border: 1px solid #c7eef1;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 9px 14px;
+            border: 1px solid rgba(214, 168, 79, .42);
             border-radius: 999px;
-            padding: 8px 14px;
+            background: rgba(255, 255, 255, .08);
+            color: #fff;
+            font-size: 12px;
+            font-weight: 900;
+            backdrop-filter: blur(10px);
+        }
+
+        .checkpoint::before {
+            content: "";
+            width: 9px;
+            height: 9px;
+            border-radius: 999px;
+            background: #42f2d5;
+            box-shadow: 0 0 0 5px rgba(66, 242, 213, .13);
+        }
+
+        .hero-grid {
+            position: relative;
+            z-index: 1;
+            display: grid;
+            grid-template-columns: minmax(0, 1.45fr) minmax(290px, .75fr);
+            gap: 24px;
+            align-items: end;
+            margin-top: 38px;
+        }
+
+        .eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin: 0 0 12px;
+            padding: 7px 12px;
+            border-radius: 999px;
+            background: rgba(214, 168, 79, .16);
+            color: #ffe7a9;
             font-size: 13px;
-            font-weight: 800;
+            font-weight: 900;
+        }
+
+        .eyebrow::before {
+            content: "";
+            width: 24px;
+            height: 2px;
+            border-radius: 999px;
+            background: var(--gold);
         }
 
         h1 {
-            margin: 34px 0 8px;
-            color: var(--navy);
-            font-size: clamp(32px, 5vw, 54px);
-            line-height: 1.2;
+            margin: 0;
+            max-width: 760px;
+            color: #fff;
+            font-size: clamp(36px, 5.3vw, 64px);
+            line-height: 1.14;
+            letter-spacing: -.7px;
         }
 
         .lead {
-            margin: 0;
-            max-width: 760px;
-            color: var(--muted);
+            margin: 14px 0 0;
+            max-width: 780px;
+            color: rgba(255,255,255,.78);
             font-size: 17px;
         }
 
         .actions {
             display: flex;
-            gap: 12px;
+            gap: 11px;
             flex-wrap: wrap;
             margin-top: 24px;
         }
@@ -135,75 +249,216 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            min-height: 44px;
-            border-radius: 15px;
+            min-height: 45px;
+            border-radius: 16px;
             padding: 10px 18px;
             font-weight: 900;
-            border: 1px solid var(--line);
-            background: #fff;
-            color: var(--navy);
+            border: 1px solid rgba(255,255,255,.24);
+            background: rgba(255,255,255,.10);
+            color: #fff;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.12);
         }
 
         .btn.primary {
-            background: linear-gradient(135deg, var(--teal), var(--teal-dark));
+            background: linear-gradient(135deg, var(--gold), #f1cf83);
+            color: var(--navy);
+            border-color: rgba(255,255,255,.35);
+        }
+
+        .status-panel {
+            border: 1px solid rgba(255,255,255,.18);
+            border-radius: 26px;
+            background: rgba(255,255,255,.10);
+            box-shadow: 0 18px 38px rgba(0, 0, 0, .14);
+            backdrop-filter: blur(12px);
+            padding: 18px;
+        }
+
+        .status-panel h2 {
+            margin: 0 0 10px;
+            font-size: 18px;
+        }
+
+        .status-list {
+            display: grid;
+            gap: 9px;
+        }
+
+        .status-line {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            border-radius: 16px;
+            padding: 10px 12px;
+            background: rgba(255,255,255,.10);
+            color: rgba(255,255,255,.82);
+            font-size: 13px;
+            font-weight: 800;
+        }
+
+        .status-line strong {
+            direction: ltr;
             color: #fff;
-            border-color: var(--teal);
         }
 
         .summary {
+            position: relative;
+            z-index: 2;
             display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 14px;
-            margin-top: 22px;
+            margin: -28px 28px 0;
         }
 
         .summary-card {
-            background: rgba(255,255,255,.88);
-            border: 1px solid var(--line);
-            border-radius: 20px;
-            padding: 16px;
-            box-shadow: 0 10px 24px rgba(6, 43, 79, .06);
+            min-height: 122px;
+            padding: 18px;
+            border: 1px solid rgba(255,255,255,.78);
+            border-radius: 24px;
+            background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(255,255,255,.88));
+            box-shadow: var(--soft-shadow);
         }
 
         .summary-card strong {
             display: block;
             color: var(--navy);
-            font-size: 22px;
-            margin-bottom: 2px;
+            font-size: 25px;
+            line-height: 1.15;
+            margin-bottom: 6px;
         }
 
         .summary-card span {
+            display: block;
             color: var(--muted);
             font-size: 14px;
+            font-weight: 700;
+        }
+
+        .summary-card::before {
+            content: "";
+            display: block;
+            width: 38px;
+            height: 4px;
+            margin-bottom: 14px;
+            border-radius: 999px;
+            background: linear-gradient(90deg, var(--teal), var(--gold));
+        }
+
+        .cycle {
+            margin: 22px 28px 0;
+            padding: 14px;
+            border: 1px solid var(--soft-line);
+            border-radius: 24px;
+            background: rgba(255,255,255,.72);
+            box-shadow: 0 10px 22px rgba(5, 38, 67, .055);
+        }
+
+        .cycle-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+            color: var(--navy);
+            font-weight: 900;
+            margin-bottom: 12px;
+        }
+
+        .cycle-title span {
+            color: var(--muted);
+            font-size: 13px;
+            font-weight: 800;
+        }
+
+        .cycle-steps {
+            direction: ltr;
+            display: grid;
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .cycle-steps span {
+            min-height: 42px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            border: 1px solid rgba(5, 38, 67, .10);
+            border-radius: 16px;
+            background: #fff;
+            color: var(--navy);
+            font-size: 12px;
+            font-weight: 900;
+            padding: 7px;
         }
 
         .sections {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 18px;
-            margin-top: 22px;
+            padding: 22px 28px 0;
         }
 
         .panel {
-            background: var(--card);
-            border: 1px solid var(--line);
-            border-radius: 26px;
+            position: relative;
+            overflow: hidden;
+            min-height: 100%;
+            border: 1px solid rgba(255,255,255,.82);
+            border-radius: 28px;
             padding: 20px;
-            box-shadow: 0 12px 30px rgba(6, 43, 79, .07);
+            background: rgba(255,255,255,.84);
+            box-shadow: var(--soft-shadow);
+        }
+
+        .panel::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background: linear-gradient(135deg, rgba(20,184,189,.10), transparent 38%);
+        }
+
+        .panel-head {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 14px;
+            margin-bottom: 15px;
         }
 
         .panel h2 {
             margin: 0 0 4px;
             color: var(--navy);
-            font-size: 24px;
+            font-size: 23px;
+            line-height: 1.25;
         }
 
         .panel p {
-            margin: 0 0 14px;
+            margin: 0;
             color: var(--muted);
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .panel-badge {
+            flex: 0 0 auto;
+            width: 42px;
+            height: 42px;
+            display: grid;
+            place-items: center;
+            border-radius: 16px;
+            color: var(--navy);
+            background: var(--gold-soft);
+            border: 1px solid rgba(214,168,79,.30);
+            font-weight: 900;
         }
 
         .rows {
+            position: relative;
+            z-index: 1;
             display: grid;
             gap: 10px;
         }
@@ -213,35 +468,48 @@
             justify-content: space-between;
             align-items: center;
             gap: 12px;
-            background: #fbfeff;
-            border: 1px solid #e1edf0;
-            border-radius: 17px;
-            padding: 12px 14px;
+            min-height: 55px;
+            border: 1px solid rgba(5, 38, 67, .08);
+            border-radius: 18px;
+            padding: 11px 13px;
+            background: rgba(255,255,255,.92);
         }
 
         .label {
             font-weight: 900;
-            color: var(--text);
+            color: var(--ink);
         }
 
         .value {
             direction: ltr;
-            min-width: 52px;
+            min-width: 58px;
             text-align: center;
             color: #fff;
-            background: linear-gradient(135deg, var(--teal), var(--teal-dark));
+            background: linear-gradient(135deg, var(--teal), var(--navy-2));
             border-radius: 999px;
-            padding: 5px 11px;
+            padding: 6px 12px;
             font-weight: 900;
+            box-shadow: 0 8px 16px rgba(12, 138, 143, .20);
         }
 
         .rules {
-            margin-top: 22px;
-            background: #ffffff;
-            border: 1px solid #cfecef;
-            border-radius: 26px;
-            padding: 20px;
-            box-shadow: 0 12px 30px rgba(6, 43, 79, .06);
+            position: relative;
+            overflow: hidden;
+            margin: 22px 28px 0;
+            border: 1px solid rgba(214,168,79,.24);
+            border-radius: 28px;
+            padding: 22px;
+            background:
+                linear-gradient(135deg, rgba(255,244,216,.86), rgba(255,255,255,.92));
+            box-shadow: var(--soft-shadow);
+        }
+
+        .rules::before {
+            content: "";
+            position: absolute;
+            inset: 0 auto 0 0;
+            width: 6px;
+            background: linear-gradient(180deg, var(--gold), var(--teal));
         }
 
         .rules h2 {
@@ -257,52 +525,90 @@
 
         .rules li {
             margin-bottom: 7px;
+            font-weight: 700;
         }
 
         .note {
+            margin: 18px 28px 24px;
             text-align: center;
             color: var(--muted);
-            margin-top: 18px;
             font-size: 14px;
+            font-weight: 800;
         }
 
-        @media (max-width: 900px) {
-            .summary {
+        @media (max-width: 980px) {
+            .hero-grid {
+                grid-template-columns: 1fr;
+                align-items: start;
+            }
+
+            .summary,
+            .sections {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
             }
 
-            .sections {
-                grid-template-columns: 1fr;
+            .cycle-steps {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                direction: rtl;
             }
         }
 
-        @media (max-width: 560px) {
+        @media (max-width: 620px) {
             .page {
-                width: min(100% - 16px, 1120px);
-                padding-top: 10px;
+                width: min(100% - 14px, 1180px);
+                padding-top: 8px;
+            }
+
+            .shell,
+            .hero {
+                border-radius: 24px;
             }
 
             .hero {
-                border-radius: 22px;
                 padding: 20px;
             }
 
             .checkpoint {
                 width: 100%;
+                justify-content: center;
                 text-align: center;
             }
 
+            .hero-grid {
+                margin-top: 28px;
+            }
+
+            .actions,
             .btn {
                 width: 100%;
             }
 
-            .summary {
+            .summary,
+            .sections {
+                grid-template-columns: 1fr;
+                margin-left: 14px;
+                margin-right: 14px;
+            }
+
+            .sections {
+                padding-left: 14px;
+                padding-right: 14px;
+            }
+
+            .cycle,
+            .rules,
+            .note {
+                margin-left: 14px;
+                margin-right: 14px;
+            }
+
+            .cycle-steps {
                 grid-template-columns: 1fr;
             }
 
             .panel,
             .rules {
-                border-radius: 20px;
+                border-radius: 22px;
                 padding: 16px;
             }
         }
@@ -311,76 +617,115 @@
 
 <body>
     <main class="page">
-        <section class="hero">
-            <div class="hero-inner">
+        <div class="shell">
+            <section class="hero">
                 <div class="topbar">
                     <div class="brand">
                         <span class="brand-mark">ح</span>
-                        <span>حِسْبَة Core</span>
+                        <span class="brand-title">
+                            <strong>حِسْبَة Core</strong>
+                            <span>PostgreSQL-first · Safe foundation</span>
+                        </span>
                     </div>
 
                     <span class="checkpoint">{{ checkpoint_code }} = OK</span>
                 </div>
 
-                <h1>{{ page_title }}</h1>
-                <p class="lead">{{ page_description }}</p>
+                <div class="hero-grid">
+                    <div>
+                        <p class="eyebrow">Status آمن قبل تعميم الهوية</p>
+                        <h1>{{ page_title }}</h1>
+                        <p class="lead">{{ page_description }}</p>
 
-                <div class="actions">
-                    <a class="btn primary" href="{{ status_url }}">Status</a>
-                    <a class="btn" href="{{ dashboard_url }}">Dashboard</a>
-                    <a class="btn" href="{{ reports_url }}">Reports</a>
-                    <a class="btn" href="{{ admin_index_url }}">Admin</a>
+                        <div class="actions" aria-label="Main navigation">
+                            <a class="btn primary" href="{{ status_url }}">Status</a>
+                            <a class="btn" href="{{ dashboard_url }}">Dashboard</a>
+                            <a class="btn" href="{{ reports_url }}">Reports</a>
+                            <a class="btn" href="{{ admin_index_url }}">Admin</a>
+                        </div>
+                    </div>
+
+                    <aside class="status-panel" aria-label="Protected status summary">
+                        <h2>حالة الشاشة</h2>
+                        <div class="status-list">
+                            <div class="status-line"><span>قراءة فقط</span><strong>Read only</strong></div>
+                            <div class="status-line"><span>بدون أرصدة</span><strong>No balances</strong></div>
+                            <div class="status-line"><span>بدون تكلفة</span><strong>No cost</strong></div>
+                            <div class="status-line"><span>بدون ربح</span><strong>No profit</strong></div>
+                        </div>
+                    </aside>
                 </div>
+            </section>
 
-                <div class="summary">
-                    <div class="summary-card">
-                        <strong>Counts</strong>
-                        <span>أعداد تشغيلية فقط</span>
-                    </div>
-                    <div class="summary-card">
-                        <strong>No money</strong>
-                        <span>بدون مبالغ أو أرصدة</span>
-                    </div>
-                    <div class="summary-card">
-                        <strong>No cost</strong>
-                        <span>التكلفة محمية</span>
-                    </div>
-                    <div class="summary-card">
-                        <strong>No profit</strong>
-                        <span>الربح محمي</span>
-                    </div>
+            <section class="summary" aria-label="Safe status principles">
+                <div class="summary-card">
+                    <strong>Counts</strong>
+                    <span>أعداد تشغيلية فقط</span>
                 </div>
-            </div>
-        </section>
+                <div class="summary-card">
+                    <strong>No money</strong>
+                    <span>بدون مبالغ أو أرصدة</span>
+                </div>
+                <div class="summary-card">
+                    <strong>No cost</strong>
+                    <span>التكلفة محمية</span>
+                </div>
+                <div class="summary-card">
+                    <strong>No profit</strong>
+                    <span>الربح محمي</span>
+                </div>
+            </section>
 
-        <section class="sections">
-            {% for section in sections %}
-                <article class="panel">
-                    <h2>{{ section.title }}</h2>
-                    <p>{{ section.description }}</p>
+            <section class="cycle" aria-label="Hesba business cycle">
+                <div class="cycle-title">
+                    <strong>دورة حِسْبَة الأساسية</strong>
+                    <span>كل شاشة لازم تفضل مرتبطة بالدورة الكاملة</span>
+                </div>
+                <div class="cycle-steps">
+                    <span>Supplier</span>
+                    <span>Purchase Invoice</span>
+                    <span>Inventory by Location</span>
+                    <span>Sales Invoice</span>
+                    <span>Customer</span>
+                    <span>Cashbox</span>
+                    <span>Reports</span>
+                </div>
+            </section>
 
-                    <div class="rows">
-                        {% for item in section.items %}
-                            <a class="row" href="{{ item.url }}">
-                                <span class="label">{{ item.label }}</span>
-                                <span class="value">{{ item.note }}</span>
-                            </a>
-                        {% endfor %}
-                    </div>
-                </article>
-            {% endfor %}
-        </section>
+            <section class="sections">
+                {% for section in sections %}
+                    <article class="panel">
+                        <div class="panel-head">
+                            <div>
+                                <h2>{{ section.title }}</h2>
+                                <p>{{ section.description }}</p>
+                            </div>
+                            <span class="panel-badge">{{ forloop.counter }}</span>
+                        </div>
 
-        <section class="rules" id="protected">
-            <h2>قواعد الحماية</h2>
-            <ul>
-                {% for rule in protected_rules %}
-                    <li>{{ rule }}</li>
+                        <div class="rows">
+                            {% for item in section.items %}
+                                <a class="row" href="{{ item.url }}">
+                                    <span class="label">{{ item.label }}</span>
+                                    <span class="value">{{ item.note }}</span>
+                                </a>
+                            {% endfor %}
+                        </div>
+                    </article>
                 {% endfor %}
-            </ul>
-        </section>
+            </section>
 
-        <p class="note">{{ footer_note }}</p>
+            <section class="rules" id="protected">
+                <h2>قواعد الحماية</h2>
+                <ul>
+                    {% for rule in protected_rules %}
+                        <li>{{ rule }}</li>
+                    {% endfor %}
+                </ul>
+            </section>
+
+            <p class="note">{{ footer_note }}</p>
+        </div>
     </main>
 </body>
 </html>
