@@ -10,7 +10,9 @@ class FirstUiNavigationMapTests(TestCase):
         self.assertContains(response, "093_FOUNDATION_FIRST_UI_NAVIGATION_MAP")
         self.assertContains(response, "خريطة تشغيل أول شاشة UI")
         self.assertContains(response, "فتح لوحة Admin")
-        self.assertContains(response, "مشاهدة Dashboard Snapshot")
+        self.assertContains(response, "Dashboard")
+        self.assertContains(response, "Reports")
+        self.assertContains(response, "Status")
 
     def test_home_page_keeps_full_business_cycle_visible(self):
         response = self.client.get(reverse("home"))
@@ -40,9 +42,11 @@ class FirstUiNavigationMapTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "094_FOUNDATION_DASHBOARD_SNAPSHOT")
+        self.assertContains(response, "Dashboard Snapshot قراءة فقط")
         self.assertContains(response, "KPIs آمنة لاحقًا")
         self.assertContains(response, "حالة المخزون")
         self.assertContains(response, "حالة الخزن")
+        self.assertContains(response, "Status")
 
     def test_dashboard_snapshot_keeps_sensitive_finance_protected(self):
         response = self.client.get(reverse("dashboard_snapshot"))
@@ -56,10 +60,12 @@ class FirstUiNavigationMapTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "096_FOUNDATION_READ_ONLY_REPORT_HUB")
+        self.assertContains(response, "مركز التقارير قراءة فقط")
         self.assertContains(response, "Customer Report")
         self.assertContains(response, "Supplier Report")
         self.assertContains(response, "Inventory Report")
         self.assertContains(response, "Cashbox Report")
+        self.assertContains(response, "Status Counts")
 
     def test_report_hub_keeps_reports_read_only_and_profit_protected(self):
         response = self.client.get(reverse("report_hub"))
@@ -74,6 +80,7 @@ class FirstUiNavigationMapTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "100_FOUNDATION_EXPANDED_SAFE_STATUS_COUNTS")
+        self.assertContains(response, "تقرير حالة آمن موسّع")
         self.assertContains(response, "Suppliers")
         self.assertContains(response, "Customers")
         self.assertContains(response, "Items")
@@ -97,3 +104,10 @@ class FirstUiNavigationMapTests(TestCase):
         self.assertContains(response, "No balances")
         self.assertContains(response, "No cost")
         self.assertContains(response, "No profit")
+
+    def test_shared_top_navigation_separates_dashboard_reports_and_status(self):
+        for url_name in ["home", "dashboard_snapshot", "report_hub", "status_counts_report"]:
+            response = self.client.get(reverse(url_name))
+            self.assertContains(response, "Dashboard")
+            self.assertContains(response, "Reports")
+            self.assertContains(response, "Status")

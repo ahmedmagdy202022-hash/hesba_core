@@ -40,6 +40,7 @@ def _shared_template_context():
         "admin_index_url": reverse("admin:index"),
         "dashboard_url": reverse("dashboard_snapshot"),
         "reports_url": reverse("report_hub"),
+        "status_url": reverse("status_counts_report"),
     }
 
 
@@ -94,8 +95,9 @@ def home(request):
             "description": "الخزنة تتأثر بالمبلغ المدفوع فعليًا فقط، والتقارير قراءة فقط.",
             "items": [
                 {"label": "حركات الخزن", "url": _admin_changelist("cashboxes", "cashboxmovement"), "note": "Cash in / Cash out"},
-                {"label": "مركز التقارير", "url": reverse("report_hub"), "note": "قراءة فقط"},
-                {"label": "تقرير الربح", "url": reverse("report_hub"), "note": "Sales - COGS"},
+                {"label": "Dashboard", "url": reverse("dashboard_snapshot"), "note": "ملخص قراءة فقط"},
+                {"label": "Reports", "url": reverse("report_hub"), "note": "مركز التقارير"},
+                {"label": "Status", "url": reverse("status_counts_report"), "note": "أعداد آمنة"},
             ],
         },
     ]
@@ -134,10 +136,10 @@ def dashboard_snapshot(request):
             "title": "٢) KPIs آمنة لاحقًا",
             "description": "تجهيز أماكن الأرقام بدون عرض ربح أو تكلفة قبل الصلاحيات.",
             "items": [
-                {"label": "عدد الموردين", "url": reverse("report_hub"), "note": "قراءة فقط"},
-                {"label": "عدد العملاء", "url": reverse("report_hub"), "note": "قراءة فقط"},
-                {"label": "حالة المخزون", "url": reverse("report_hub"), "note": "حسب الصنف والموقع"},
-                {"label": "حالة الخزن", "url": reverse("report_hub"), "note": "بالمدفوع فعليًا فقط"},
+                {"label": "عدد الموردين", "url": reverse("status_counts_report"), "note": "قراءة فقط"},
+                {"label": "عدد العملاء", "url": reverse("status_counts_report"), "note": "قراءة فقط"},
+                {"label": "حالة المخزون", "url": reverse("status_counts_report"), "note": "حسب الصنف والموقع"},
+                {"label": "حالة الخزن", "url": reverse("status_counts_report"), "note": "بالمدفوع فعليًا فقط"},
             ],
         },
         {
@@ -153,7 +155,7 @@ def dashboard_snapshot(request):
             "description": "ربط أرقام قراءة فقط بعد ثبات reports/views والمايجريشن.",
             "items": [
                 {"label": "تقارير Read-only", "url": reverse("report_hub"), "note": "قبل أي شاشة إدخال جديدة"},
-                {"label": "صلاحيات", "url": reverse("report_hub"), "note": "قبل إظهار finance حساس"},
+                {"label": "تقرير Status", "url": reverse("status_counts_report"), "note": "أعداد فعلية غير حساسة"},
             ],
         },
     ]
@@ -194,6 +196,7 @@ def report_hub(request):
             "items": [
                 {"label": "Sales Report", "url": _admin_changelist("sales", "salesinvoice"), "note": "مبيعات مدفوعة / جزئية / آجلة"},
                 {"label": "Purchase Report", "url": _admin_changelist("purchases", "purchaseinvoice"), "note": "مشتريات مدفوعة / جزئية / آجلة"},
+                {"label": "Status Counts", "url": reverse("status_counts_report"), "note": "أعداد فعلية غير حساسة"},
             ],
         },
         {

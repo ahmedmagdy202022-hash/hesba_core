@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>حِسْبَة Core - خريطة التشغيل</title>
+    <title>حِسْبَة Core - {{ page_title|default:"خريطة التشغيل" }}</title>
     <style>
         :root {
             --navy: #14213d;
@@ -227,16 +227,16 @@
                 <div class="checkpoint">{{ checkpoint_code }} = OK</div>
             </div>
 
-            <h1>خريطة تشغيل أول شاشة UI</h1>
-            <p>
-                شاشة بسيطة وآمنة للتنقل داخل حِسْبَة. الهدف منها ترتيب دورة العمل قبل بناء شاشات الإدخال الحقيقية،
-                بدون تغيير أي منطق داتا أو حسابات مالية.
-            </p>
+            <h1>{{ page_title|default:"خريطة تشغيل أول شاشة UI" }}</h1>
+            <p>{{ page_description|default:"شاشة بسيطة وآمنة للتنقل داخل حِسْبَة. الهدف منها ترتيب دورة العمل قبل بناء شاشات الإدخال الحقيقية، بدون تغيير أي منطق داتا أو حسابات مالية." }}</p>
 
             <div class="hero-actions">
                 <a class="button primary" href="{{ admin_index_url }}">فتح لوحة Admin</a>
-                <a class="button secondary" href="{{ dashboard_url }}">مشاهدة Dashboard Snapshot</a>
-                <a class="button secondary" href="#reports">مراجعة مكان التقارير</a>
+                <a class="button secondary" href="{{ dashboard_url }}">Dashboard</a>
+                <a class="button secondary" href="{{ reports_url }}">Reports</a>
+                {% if status_url %}
+                    <a class="button secondary" href="{{ status_url }}">Status</a>
+                {% endif %}
             </div>
 
             <div class="cycle" aria-label="Business cycle">
@@ -275,9 +275,7 @@
             </ul>
         </section>
 
-        <p class="footer-note">
-            هذه الشاشة Navigation Map فقط. الإدخال الفعلي ما زال من Admin لحد ما نثبت أول شاشة Transaction آمنة.
-        </p>
+        <p class="footer-note">{{ footer_note|default:"هذه الشاشة Navigation Map فقط. الإدخال الفعلي ما زال من Admin لحد ما نثبت أول شاشة Transaction آمنة." }}</p>
     </main>
 </body>
 </html>
