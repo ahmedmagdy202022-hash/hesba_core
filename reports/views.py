@@ -3,10 +3,33 @@ from django.urls import reverse
 
 
 CHECKPOINT_CODE = "093_FOUNDATION_FIRST_UI_NAVIGATION_MAP"
+DASHBOARD_CHECKPOINT_CODE = "094_FOUNDATION_DASHBOARD_SNAPSHOT"
 
 
 def _admin_changelist(app_label, model_name):
     return reverse(f"admin:{app_label}_{model_name}_changelist")
+
+
+def _business_cycle():
+    return [
+        "Supplier",
+        "Purchase Invoice",
+        "Inventory by Location",
+        "Sales Invoice",
+        "Customer",
+        "Cashbox",
+        "Reports",
+    ]
+
+
+def _protected_rules():
+    return [
+        "المبيعات لا تنشئ مستحقات للموردين.",
+        "المشتريات لا تنشئ مديونية للعملاء.",
+        "الخزن تتحرك بالمبلغ المدفوع فعليًا فقط.",
+        "المخزون يتحرك من خلال حركات مخزون قابلة للتتبع.",
+        "التقارير قراءة فقط وليست مكان إدخال بيانات.",
+    ]
 
 
 def home(request):
@@ -16,16 +39,6 @@ def home(request):
     change balances, create stock movements, or calculate profit. The controlled
     business logic stays in services, reports, and admin-backed data screens.
     """
-
-    business_cycle = [
-        "Supplier",
-        "Purchase Invoice",
-        "Inventory by Location",
-        "Sales Invoice",
-        "Customer",
-        "Cashbox",
-        "Reports",
-    ]
 
     sections = [
         {
@@ -76,22 +89,80 @@ def home(request):
         },
     ]
 
-    protected_rules = [
-        "المبيعات لا تنشئ مستحقات للموردين.",
-        "المشتريات لا تنشئ مديونية للعملاء.",
-        "الخزن تتحرك بالمبلغ المدفوع فعليًا فقط.",
-        "المخزون يتحرك من خلال حركات مخزون قابلة للتتبع.",
-        "التقارير قراءة فقط وليست مكان إدخال بيانات.",
+    return render(
+        request,
+        "reports/home.html",
+        {
+            "checkpoint_code": CHECKPOINT_CODE,
+            "page_title": "خريطة تشغيل أول شاشة UI",
+            "page_description": "شاشة بسيطة وآمنة للتنقل داخل حِسْبَة. الهدف منها ترتيب دورة العمل قبل بناء شاشات الإدخال الحقيقية، بدون تغيير أي منطق داتا أو حسابات مالية.",
+            "business_cycle": _business_cycle(),
+            "sections": sections,
+            "protected_rules": _protected_rules(),
+            "admin_index_url": reverse("admin:index"),
+            "dashboard_url": reverse("dashboard_snapshot"),
+            "footer_note": "هذه الشاشة Navigation Map فقط. الإدخال الفعلي ما زال من Admin لحد ما نثبت أول شاشة Transaction آمنة.",
+        },
+    )
+
+
+def dashboard_snapshot(request):
+    """Read-only dashboard snapshot for the first user-facing dashboard step.
+
+    This checkpoint is static and permission-safe. It does not query operational
+    data yet, so it can render before migrations or seed data are applied in a
+    fresh Codespace.
+    """
+
+    sections = [
+        {
+            "title": "١) حالة دورة العمل",
+            "description": "الدورة الأساسية جاهزة كمسار واحد قابل للتوسع.",
+            "items": [
+                {"label": "الدورة الكاملة", "url": "#reports", "note": "مورد → شراء → مخزون → بيع → عميل → خزنة → تقارير"},
+                {"label": "حالة الإدخال", "url": reverse("home"), "note": "Admin مؤقتًا حتى شاشة Transaction آمنة"},
+            ],
+        },
+        {
+            "title": "٢) KPIs آمنة لاحقًا",
+            "description": "تجهيز أماكن الأرقام بدون عرض ربح أو تكلفة قبل الصلاحيات.",
+            "items": [
+                {"label": "عدد الموردين", "url": "#reports", "note": "قراءة فقط"},
+                {"label": "عدد العملاء", "url": "#reports", "note": "قراءة فقط"},
+                {"label": "حالة المخزون", "url": "#reports", "note": "حسب الصنف والموقع"},
+                {"label": "حالة الخزن", "url": "#reports", "note": "بالمدفوع فعليًا فقط"},
+            ],
+        },
+        {
+            "title": "٣) حماية الأرقام الحساسة",
+            "description": "التكلفة والربح لا يظهروا قبل صلاحيات حقيقية.",
+            "items": [
+                {"label": "الربح", "url": "#reports", "note": "Owner فقط لاحقًا"},
+                {"label": "التكلفة", "url": "#reports", "note": "محمية من Cashier"},
+            ],
+        },
+        {
+            "title": "٤) الخطوة الجاية",
+            "description": "ربط أرقام قراءة فقط بعد ثبات reports/views والمايجريشن.",
+            "items": [
+                {"label": "تقارير Read-only", "url": "#reports", "note": "قبل أي شاشة إدخال جديدة"},
+                {"label": "صلاحيات", "url": "#reports", "note": "قبل إظهار finance حساس"},
+            ],
+        },
     ]
 
     return render(
         request,
         "reports/home.html",
         {
-            "checkpoint_code": CHECKPOINT_CODE,
-            "business_cycle": business_cycle,
+            "checkpoint_code": DASHBOARD_CHECKPOINT_CODE,
+            "page_title": "Dashboard Snapshot قراءة فقط",
+            "page_description": "أول لقطة داشبورد آمنة قبل ربط الأرقام الحقيقية. الهدف تثبيت شكل الملخص من غير إدخال أو تعديل بيانات.",
+            "business_cycle": _business_cycle(),
             "sections": sections,
-            "protected_rules": protected_rules,
+            "protected_rules": _protected_rules(),
             "admin_index_url": reverse("admin:index"),
+            "dashboard_url": reverse("dashboard_snapshot"),
+            "footer_note": "هذه الشاشة Read-only Snapshot فقط. الربح والتكلفة وأي بيانات مالية حساسة ستظهر بعد صلاحيات حقيقية.",
         },
     )
