@@ -50,3 +50,21 @@ class FirstUiNavigationMapTests(SimpleTestCase):
         self.assertContains(response, "الربح")
         self.assertContains(response, "التكلفة")
         self.assertContains(response, "صلاحيات حقيقية")
+
+    def test_report_hub_renders_read_only_report_map(self):
+        response = self.client.get(reverse("report_hub"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "096_FOUNDATION_READ_ONLY_REPORT_HUB")
+        self.assertContains(response, "Customer Report")
+        self.assertContains(response, "Supplier Report")
+        self.assertContains(response, "Inventory Report")
+        self.assertContains(response, "Cashbox Report")
+
+    def test_report_hub_keeps_reports_read_only_and_profit_protected(self):
+        response = self.client.get(reverse("report_hub"))
+
+        self.assertContains(response, "التقارير قراءة فقط")
+        self.assertContains(response, "Profit Report")
+        self.assertContains(response, "Sales - Cost of Goods Sold")
+        self.assertContains(response, "صلاحيات حقيقية")
