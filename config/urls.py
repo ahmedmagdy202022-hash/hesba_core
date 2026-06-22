@@ -1,7 +1,8 @@
 from django.contrib import admin as django_admin
 from django.urls import path
 
-from reports.views import dashboard_snapshot, home, report_hub
+from reports.report_hub_views import report_hub
+from reports.views import dashboard_snapshot, home
 
 
 urlpatterns = [
