@@ -1,40 +1,49 @@
-from django.contrib import admin
+from django.contrib import admin, messages
+from django.core.exceptions import ValidationError
 
 from .models import PurchaseInvoice, PurchaseLine, SupplierLedgerEntry, SupplierPayment
+from .services import cancel_posted_purchase_invoice, post_purchase_invoice
 
 
 class PurchaseLineInline(admin.TabularInline):
     model = PurchaseLine
     extra = 0
     autocomplete_fields = ("item",)
-    fields = (
-        "line_number",
-        "item",
-        "description",
-        "quantity",
-        "unit_purchase_price",
-        "line_discount_amount",
-        "line_total_amount",
-    )
+    fields = ("line_number", "item", "description", "quantity", "unit_purchase_price", "line_discount_amount", "line_total_amount")
+
+
+@admin.action(description="Post selected purchase invoices")
+def post_selected_purchase_invoices(modeladmin, request, queryset):
+    done = 0
+    for invoice in queryset:
+        try:
+            post_purchase_invoice(invoice.id, user=request.user)
+            done += 1
+        except ValidationError as exc:
+            messages.error(request, f"{invoice}: {exc}")
+    messages.success(request, f"Posted purchase invoices: {done}")
+
+
+@admin.action(description="Cancel selected posted purchase invoices")
+def cancel_selected_purchase_invoices(modeladmin, request, queryset):
+    done = 0
+    for invoice in queryset:
+        try:
+            cancel_posted_purchase_invoice(invoice.id, user=request.user, reason="Admin action")
+            done += 1
+        except ValidationError as exc:
+            messages.error(request, f"{invoice}: {exc}")
+    messages.success(request, f"Cancelled purchase invoices: {done}")
 
 
 @admin.register(PurchaseInvoice)
 class PurchaseInvoiceAdmin(admin.ModelAdmin):
-    list_display = (
-        "invoice_number",
-        "invoice_date",
-        "supplier",
-        "receiving_location",
-        "status",
-        "payment_status",
-        "total_amount",
-        "paid_now",
-        "remaining_due",
-    )
+    list_display = ("invoice_number", "invoice_date", "supplier", "receiving_location", "status", "payment_status", "total_amount", "paid_now", "remaining_due")
     search_fields = ("invoice_number", "supplier__supplier_code", "supplier__name")
     list_filter = ("status", "payment_status", "invoice_date", "receiving_location")
     autocomplete_fields = ("supplier", "receiving_location", "cashbox", "created_by")
     inlines = (PurchaseLineInline,)
+    actions = (post_selected_purchase_invoices, cancel_selected_purchase_invoices)
 
 
 @admin.register(PurchaseLine)
@@ -55,20 +64,7 @@ class SupplierPaymentAdmin(admin.ModelAdmin):
 
 @admin.register(SupplierLedgerEntry)
 class SupplierLedgerEntryAdmin(admin.ModelAdmin):
-    list_display = (
-        "entry_date",
-        "supplier",
-        "entry_type",
-        "due_increase",
-        "due_decrease",
-        "purchase_invoice",
-        "supplier_payment",
-    )
-    search_fields = (
-        "supplier__supplier_code",
-        "supplier__name",
-        "purchase_invoice__invoice_number",
-        "supplier_payment__payment_number",
-    )
+    list_display = ("entry_date", "supplier", "entry_type", "due_increase", "due_decrease", "purchase_invoice", "supplier_payment")
+    search_fields = ("supplier__supplier_code", "supplier__name", "purchase_invoice__invoice_number", "supplier_payment__payment_number")
     list_filter = ("entry_type", "entry_date")
     autocomplete_fields = ("supplier", "purchase_invoice", "supplier_payment", "created_by")
