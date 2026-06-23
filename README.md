@@ -79,7 +79,11 @@ Supplier -> Purchase Invoice -> Inventory by Location -> Sales Invoice -> Custom
 - `099_FOUNDATION_SAFE_STATUS_COUNTS = OK`
 - `100_FOUNDATION_EXPANDED_SAFE_STATUS_COUNTS = OK`
 - `101_FOUNDATION_CHECKPOINT_REGISTER_AFTER_STATUS_COUNTS = OK`
-- `106_PREMIUM_INVESTOR_ERP_UI = IN_PROGRESS`
+- `106_PREMIUM_INVESTOR_ERP_UI = OK`
+
+## Investor demo UI layer
+
+Checkpoint 106 adds a premium read-only UI shell for dashboard, reports, and status pages. It shows the unified Core, quick actions, activity editions, protected rules, and owner decision paths without changing accounting logic or posting behavior.
 
 ## First build order
 
