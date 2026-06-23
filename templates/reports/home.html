@@ -5,12 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hesba</title>
 <style>
-body{font-family:Tahoma,Arial,sans-serif;background:#fbf6ec;color:#142033;margin:0}.page{max-width:1100px;margin:auto;padding:24px}.hero{background:#05243f;color:white;border-radius:28px;padding:28px}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:18px}.card{background:white;border:1px solid #ddd;border-radius:20px;padding:18px}@media(max-width:700px){.grid{grid-template-columns:1fr}}
+body{font-family:Tahoma,Arial,sans-serif;background:#fbf6ec;color:#142033;margin:0}.page{max-width:1100px;margin:auto;padding:24px}.hero{background:#05243f;color:white;border-radius:28px;padding:28px}.links{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}.links a{color:white;border:1px solid rgba(255,255,255,.35);border-radius:14px;padding:10px 14px;text-decoration:none;font-weight:800}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:18px}.card{background:white;border:1px solid #ddd;border-radius:20px;padding:18px}@media(max-width:700px){.grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <main class="page">
-<section class="hero"><h1>{{ page_title|default:"Hesba ERP" }}</h1><p>{{ page_description|default:"Premium ERP Core" }}</p></section>
+<section class="hero"><h1>{{ page_title|default:"Hesba ERP" }}</h1><p>{{ page_description|default:"Premium ERP Core" }}</p><div class="links"><a href="{{ dashboard_url }}">Dashboard</a><a href="{{ reports_url }}">Reports</a><a href="{{ status_url }}">Status</a><a href="{{ admin_index_url }}">Admin</a></div></section>
 <section class="grid">{% for section in sections %}<article class="card"><h2>{{ section.title }}</h2><p>{{ section.description }}</p></article>{% endfor %}</section>
 </main>
 </body>
