@@ -88,3 +88,42 @@ class ProjectCostEntry(models.Model):
 
     def __str__(self):
         return f"{self.project} / {self.entry_date} / {self.amount}"
+
+
+class ProductRecipe(models.Model):
+    recipe_code = models.CharField(max_length=80, unique=True)
+    finished_item = models.ForeignKey("master_data.Item", on_delete=models.PROTECT, related_name="product_recipes")
+    output_quantity = models.DecimalField(max_digits=14, decimal_places=3, default=1)
+    active = models.BooleanField(default=True)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["recipe_code"]
+
+    def clean(self):
+        if self.output_quantity is not None and self.output_quantity <= 0:
+            raise ValidationError({"output_quantity": "Output quantity must be greater than zero."})
+
+    def __str__(self):
+        return f"{self.recipe_code} - {self.finished_item}"
+
+
+class ProductRecipeLine(models.Model):
+    recipe = models.ForeignKey(ProductRecipe, on_delete=models.CASCADE, related_name="lines")
+    line_number = models.PositiveIntegerField()
+    component_item = models.ForeignKey("master_data.Item", on_delete=models.PROTECT, related_name="recipe_components")
+    quantity = models.DecimalField(max_digits=14, decimal_places=3)
+    scrap_percent = models.DecimalField(max_digits=7, decimal_places=3, default=0)
+
+    class Meta:
+        ordering = ["recipe", "line_number"]
+        constraints = [models.UniqueConstraint(fields=["recipe", "line_number"], name="unique_recipe_line_number")]
+
+    def clean(self):
+        if self.quantity is not None and self.quantity <= 0:
+            raise ValidationError({"quantity": "Quantity must be greater than zero."})
+        if self.scrap_percent is not None and self.scrap_percent < 0:
+            raise ValidationError({"scrap_percent": "Scrap percent cannot be negative."})
+
+    def __str__(self):
+        return f"{self.recipe} / {self.line_number}"
