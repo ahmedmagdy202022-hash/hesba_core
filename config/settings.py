@@ -27,6 +27,7 @@ LOCAL_APPS = [
     "sales",
     "cashboxes",
     "reports",
+    "industries",
     "closing",
     "audit",
     "imports",
@@ -63,12 +64,7 @@ TEMPLATES = [
     }
 ]
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
-    }
-}
+DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": BASE_DIR / "db.sqlite3"}}
 
 LANGUAGE_CODE = "ar"
 TIME_ZONE = "Africa/Cairo"
