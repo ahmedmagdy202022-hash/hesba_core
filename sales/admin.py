@@ -1,40 +1,49 @@
-from django.contrib import admin
+from django.contrib import admin, messages
+from django.core.exceptions import ValidationError
 
 from .models import CustomerLedgerEntry, CustomerPayment, SalesInvoice, SalesLine
+from .services import cancel_posted_sales_invoice, post_sales_invoice
 
 
 class SalesLineInline(admin.TabularInline):
     model = SalesLine
     extra = 0
     autocomplete_fields = ("item",)
-    fields = (
-        "line_number",
-        "item",
-        "description",
-        "quantity",
-        "unit_sale_price",
-        "line_discount_amount",
-        "line_total_amount",
-    )
+    fields = ("line_number", "item", "description", "quantity", "unit_sale_price", "line_discount_amount", "line_total_amount")
+
+
+@admin.action(description="Post selected sales invoices")
+def post_selected_sales_invoices(modeladmin, request, queryset):
+    done = 0
+    for invoice in queryset:
+        try:
+            post_sales_invoice(invoice.id, user=request.user)
+            done += 1
+        except ValidationError as exc:
+            messages.error(request, f"{invoice}: {exc}")
+    messages.success(request, f"Posted sales invoices: {done}")
+
+
+@admin.action(description="Cancel selected posted sales invoices")
+def cancel_selected_sales_invoices(modeladmin, request, queryset):
+    done = 0
+    for invoice in queryset:
+        try:
+            cancel_posted_sales_invoice(invoice.id, user=request.user, reason="Admin action")
+            done += 1
+        except ValidationError as exc:
+            messages.error(request, f"{invoice}: {exc}")
+    messages.success(request, f"Cancelled sales invoices: {done}")
 
 
 @admin.register(SalesInvoice)
 class SalesInvoiceAdmin(admin.ModelAdmin):
-    list_display = (
-        "invoice_number",
-        "invoice_date",
-        "customer",
-        "selling_location",
-        "status",
-        "payment_status",
-        "total_amount",
-        "paid_now",
-        "remaining_due",
-    )
+    list_display = ("invoice_number", "invoice_date", "customer", "selling_location", "status", "payment_status", "total_amount", "paid_now", "remaining_due")
     search_fields = ("invoice_number", "customer__customer_code", "customer__name")
     list_filter = ("status", "payment_status", "invoice_date", "selling_location")
     autocomplete_fields = ("customer", "selling_location", "cashbox", "created_by")
     inlines = (SalesLineInline,)
+    actions = (post_selected_sales_invoices, cancel_selected_sales_invoices)
 
 
 @admin.register(SalesLine)
