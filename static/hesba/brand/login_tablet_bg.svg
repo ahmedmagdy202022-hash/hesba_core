@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
+<rect width="1600" height="1000" fill="#ffffff"/>
+<circle cx="1510" cy="75" r="290" fill="#dff8f7" opacity="0.58"/>
+<circle cx="65" cy="930" r="310" fill="#dff8f7" opacity="0.62"/>
+<path d="M-80 770 C260 600 410 880 740 710 S1120 520 1680 690" fill="none" stroke="#18c9cb" stroke-width="2" opacity="0.16"/>
+<rect x="60" y="80" width="560" height="760" rx="68" fill="#ffffff" opacity="0.12"/>
+<image href="/static/hesba/brand/hesba_launch.svg" x="700" y="70" width="720" height="860" preserveAspectRatio="xMidYMid meet"/>
+</svg>
