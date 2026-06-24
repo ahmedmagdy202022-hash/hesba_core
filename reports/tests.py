@@ -1,5 +1,37 @@
+import json
+
+from django.conf import settings
 from django.test import TestCase
 from django.urls import reverse
+
+
+class LoginAndDeviceShellSmokeTests(TestCase):
+    def test_login_route_returns_200(self):
+        response = self.client.get("/login/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "109_LOGIN_AND_DEVICE_SHELL_STABILIZATION")
+        self.assertContains(response, "تسجيل الدخول")
+        self.assertContains(response, "name=\"language\"")
+
+    def test_root_redirects_to_login(self):
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], reverse("login"))
+
+    def test_existing_safe_routes_still_return_200(self):
+        for path in ["/dashboard/", "/reports/", "/status/"]:
+            with self.subTest(path=path):
+                response = self.client.get(path)
+
+                self.assertEqual(response.status_code, 200)
+
+    def test_manifest_start_url_points_to_login(self):
+        manifest_path = settings.BASE_DIR / "static" / "hesba" / "manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(manifest["start_url"], "/login/")
 
 
 class FirstUiNavigationMapTests(TestCase):
