@@ -15,6 +15,8 @@ class LoginAndDeviceShellSmokeTests(TestCase):
         self.assertContains(response, "hesba/brand/login_web.final.png")
         self.assertContains(response, "hesba/brand/login_tablet.png")
         self.assertContains(response, "hesba/brand/login_mobile.final.png")
+        self.assertNotContains(response, "hesba/brand/login_web.png")
+        self.assertNotContains(response, "hesba/brand/login_mobile.png")
         self.assertNotContains(response, "109_LOGIN_AND_DEVICE_SHELL_STABILIZATION")
         self.assertNotContains(response, "110_RESTORE_APPROVED_LOGIN_DESIGN")
         self.assertNotContains(response, "Desktop ready")
@@ -46,11 +48,13 @@ class LoginAndDeviceShellSmokeTests(TestCase):
             "login_web.final.png",
             "login_mobile.final.png",
             "login_tablet.png",
-            "login_web.png",
-            "login_mobile.png",
         ]:
             with self.subTest(filename=filename):
                 self.assertTrue((brand_dir / filename).is_file())
+
+        for filename in ["login_web.png", "login_mobile.png"]:
+            with self.subTest(filename=filename):
+                self.assertFalse((brand_dir / filename).exists())
 
 
 class FirstUiNavigationMapTests(TestCase):
