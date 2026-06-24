@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>تسجيل الدخول - حسبة</title>
-<link rel="stylesheet" href="{% static 'hesba/css/login.css' %}">
+<link rel="stylesheet" href="{% static 'hesba/css/login.css' %}?v=112">
 </head>
 <body class="login-page" data-lang="ar">
 <main class="login-stage">
@@ -22,6 +22,7 @@
 <form method="post" class="login-form">
 {% csrf_token %}
 <input type="hidden" name="next" value="{{ next }}">
+<input type="hidden" name="hesba_lang" id="hesba_lang" value="ar">
 <div class="field"><label for="id_username" data-i18n="username">اسم المستخدم</label>{{ form.username }}</div>
 <div class="field"><label for="id_password" data-i18n="password">كلمة المرور</label>{{ form.password }}</div>
 <button type="submit" class="login-btn" data-i18n="button">الدخول إلى حسبة</button>
@@ -32,15 +33,25 @@
 <script>
 (function(){
   var params=new URLSearchParams(window.location.search);
-  var lang=params.get('lang')==='en'?'en':'ar';
+  var saved=localStorage.getItem('hesba_lang');
+  var lang=params.get('lang')==='en'?'en':(params.get('lang')==='ar'?'ar':(saved==='en'?'en':'ar'));
   var dict={
     ar:{title:'تسجيل الدخول',subtitle:'استخدم حسابك للدخول حسب الدور والصلاحيات.',username:'اسم المستخدم',password:'كلمة المرور',button:'الدخول إلى حسبة',error:'بيانات الدخول غير صحيحة. راجع اسم المستخدم وكلمة المرور.',userPh:'أدخل اسم المستخدم',passPh:'أدخل كلمة المرور'},
     en:{title:'Login',subtitle:'Use your account according to role and permissions.',username:'Username',password:'Password',button:'Login to Hesba',error:'Invalid username or password.',userPh:'Enter username',passPh:'Enter password'}
   };
+  localStorage.setItem('hesba_lang',lang);
   document.documentElement.lang=lang;
   document.documentElement.dir=lang==='ar'?'rtl':'ltr';
   document.body.dataset.lang=lang;
-  document.querySelectorAll('[data-lang-option]').forEach(function(a){a.classList.toggle('active',a.dataset.langOption===lang)});
+  document.title=lang==='ar'?'تسجيل الدخول - حسبة':'Login - Hesba';
+  var hidden=document.getElementById('hesba_lang');
+  if(hidden)hidden.value=lang;
+  document.querySelectorAll('[data-lang-option]').forEach(function(a){
+    a.classList.toggle('active',a.dataset.langOption===lang);
+    var u=new URL(window.location.href);
+    u.searchParams.set('lang',a.dataset.langOption);
+    a.href=u.pathname+u.search;
+  });
   document.querySelectorAll('[data-i18n]').forEach(function(el){var key=el.dataset.i18n;if(dict[lang][key])el.textContent=dict[lang][key];});
   var user=document.getElementById('id_username');
   var pass=document.getElementById('id_password');
