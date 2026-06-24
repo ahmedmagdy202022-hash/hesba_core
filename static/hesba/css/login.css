@@ -30,9 +30,9 @@ body.login-page{
   position:absolute;
   inset:0;
   z-index:0;
-  background-image:url('/static/hesba/brand/login_web.png');
+  background-image:url('/static/hesba/brand/login_web.png?v=110');
   background-repeat:no-repeat;
-  background-size:contain;
+  background-size:cover;
   background-position:center center;
 }
 
@@ -75,11 +75,11 @@ body.login-page{
 .login-form-wrap{
   position:absolute;
   pointer-events:auto;
-  left:26.5%;
-  top:38.5%;
+  left:30%;
+  top:37.2%;
   transform:translate(-50%,-50%);
-  width:min(340px,27vw);
-  padding:8px 10px;
+  width:min(330px,25.5vw);
+  padding:7px 9px;
   border-radius:0;
   background:transparent;
   backdrop-filter:none;
@@ -92,7 +92,7 @@ body.login-page{
 .login-form-wrap h1{
   margin:0;
   color:var(--navy);
-  font-size:clamp(30px,2.7vw,40px);
+  font-size:clamp(29px,2.45vw,38px);
   line-height:1.12;
   font-weight:900;
   text-align:center;
@@ -100,32 +100,32 @@ body.login-page{
 }
 
 .login-subtitle{
-  margin:7px 0 16px;
+  margin:6px 0 14px;
   color:#536274;
-  font-size:clamp(12px,1vw,14px);
-  line-height:1.65;
+  font-size:clamp(11.5px,.95vw,13px);
+  line-height:1.6;
   text-align:center;
 }
 
-.field{margin:0 0 12px}
+.field{margin:0 0 11px}
 .field label{
   display:block;
-  margin:0 0 6px;
+  margin:0 0 5px;
   color:var(--navy);
   font-weight:900;
-  font-size:12.5px;
+  font-size:12px;
   text-align:center;
 }
 
 .field input{
   width:100%;
-  height:44px;
-  border-radius:17px;
+  height:42px;
+  border-radius:16px;
   border:1.5px solid rgba(22,189,196,.48);
   outline:none;
   background:rgba(255,255,255,.34);
   color:var(--navy);
-  font:700 14px Tahoma,Arial,sans-serif;
+  font:700 13.5px Tahoma,Arial,sans-serif;
   padding:0 16px;
   text-align:center;
   direction:rtl;
@@ -140,13 +140,13 @@ body.login-page{
 
 .login-btn{
   width:100%;
-  height:48px;
+  height:46px;
   border:0;
-  border-radius:18px;
+  border-radius:17px;
   margin-top:1px;
   background:linear-gradient(135deg,var(--gold),var(--gold-2));
   color:#14213a;
-  font:900 16px Tahoma,Arial,sans-serif;
+  font:900 15.5px Tahoma,Arial,sans-serif;
   cursor:pointer;
   box-shadow:0 14px 26px rgba(217,173,80,.20),inset 0 1px 0 rgba(255,255,255,.36);
 }
@@ -170,10 +170,25 @@ body.login-page{
 .login-page[data-lang="en"] .field label{text-align:center}
 .login-page[data-lang="en"] .field input{text-align:center;direction:ltr}
 
+/* DESKTOP / WEB */
+@media(min-width:1181px){
+  .login-bg{
+    background-image:url('/static/hesba/brand/login_web.png?v=110');
+    background-size:cover;
+    background-position:center center;
+  }
+
+  .login-form-wrap{
+    left:30%;
+    top:37.2%;
+    width:min(330px,25.5vw);
+  }
+}
+
 /* TABLET */
 @media(min-width:821px) and (max-width:1180px){
   .login-bg{
-    background-image:url('/static/hesba/brand/login_tablet.png');
+    background-image:url('/static/hesba/brand/login_tablet.png?v=110');
     background-size:contain;
     background-position:center center;
   }
@@ -198,7 +213,7 @@ body.login-page{
   .login-bg{
     position:absolute;
     inset:0;
-    background-image:url('/static/hesba/brand/login_mobile.png');
+    background-image:url('/static/hesba/brand/login_mobile.png?v=110');
     background-size:cover;
     background-position:center top;
   }
