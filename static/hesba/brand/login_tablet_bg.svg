@@ -1,8 +1,40 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
-<rect width="1600" height="1000" fill="#ffffff"/>
-<circle cx="1510" cy="75" r="290" fill="#dff8f7" opacity="0.58"/>
-<circle cx="65" cy="930" r="310" fill="#dff8f7" opacity="0.62"/>
-<path d="M-80 770 C260 600 410 880 740 710 S1120 520 1680 690" fill="none" stroke="#18c9cb" stroke-width="2" opacity="0.16"/>
-<rect x="60" y="80" width="560" height="760" rx="68" fill="#ffffff" opacity="0.12"/>
-<image href="/static/hesba/brand/hesba_launch.svg" x="700" y="70" width="720" height="860" preserveAspectRatio="xMidYMid meet"/>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.62" stop-color="#fbfefd"/>
+      <stop offset="1" stop-color="#f7efe4"/>
+    </linearGradient>
+    <linearGradient id="icon" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#17c9cc"/>
+      <stop offset="1" stop-color="#063f59"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="20" stdDeviation="24" flood-color="#05243f" flood-opacity="0.13"/>
+    </filter>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="24"/>
+    </filter>
+  </defs>
+  <rect width="1600" height="1000" fill="url(#bg)"/>
+  <circle cx="1515" cy="80" r="300" fill="#dff8f7" opacity="0.58"/>
+  <circle cx="70" cy="930" r="340" fill="#dff8f7" opacity="0.62"/>
+  <path d="M-80 760 C260 590 410 870 740 700 S1120 510 1680 680" fill="none" stroke="#18c9cb" stroke-width="2.4" opacity="0.16"/>
+  <path d="M-80 810 C260 640 430 920 760 750 S1140 560 1680 730" fill="none" stroke="#18c9cb" stroke-width="2" opacity="0.10"/>
+  <rect x="80" y="92" width="520" height="760" rx="70" fill="#ffffff" opacity="0.09" filter="url(#soft)"/>
+  <rect x="80" y="92" width="520" height="760" rx="70" fill="#ffffff" opacity="0.04"/>
+  <g transform="translate(1015 125)" filter="url(#shadow)">
+    <rect x="0" y="0" width="260" height="260" rx="58" fill="url(#icon)"/>
+    <text x="130" y="184" text-anchor="middle" font-family="Tahoma, Arial, sans-serif" font-size="190" font-weight="900" fill="#ffffff">ح</text>
+    <rect x="76" y="185" width="15" height="40" rx="5" fill="#0b3150" opacity="0.75"/>
+    <rect x="102" y="162" width="15" height="63" rx="5" fill="#0b3150" opacity="0.75"/>
+    <rect x="128" y="134" width="15" height="91" rx="5" fill="#0b3150" opacity="0.75"/>
+    <path d="M182 182 L218 218 L286 132" fill="none" stroke="#16c6ca" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="1145" y="540" text-anchor="middle" font-family="Tahoma, Arial, sans-serif" font-size="154" font-weight="900" fill="#05243f">حسبة</text>
+  <line x1="875" y1="620" x2="1035" y2="620" stroke="#18c9cb" stroke-width="8" stroke-linecap="round"/>
+  <text x="1145" y="647" text-anchor="middle" font-family="Tahoma, Arial, sans-serif" font-size="86" font-weight="900" letter-spacing="6" fill="#05243f">Hesba</text>
+  <line x1="1258" y1="620" x2="1415" y2="620" stroke="#18c9cb" stroke-width="8" stroke-linecap="round"/>
+  <text x="1145" y="740" text-anchor="middle" font-family="Tahoma, Arial, sans-serif" font-size="44" fill="#05243f">إدارة أسهل... قرارات أوضح</text>
+  <text x="330" y="905" text-anchor="middle" font-family="Tahoma, Arial, sans-serif" font-size="28" font-weight="700" fill="#667085">Developed by Ahmed Magdy</text>
 </svg>
