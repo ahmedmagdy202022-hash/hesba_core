@@ -10,9 +10,15 @@ class LoginAndDeviceShellSmokeTests(TestCase):
         response = self.client.get("/login/")
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "109_LOGIN_AND_DEVICE_SHELL_STABILIZATION")
         self.assertContains(response, "تسجيل الدخول")
         self.assertContains(response, "name=\"language\"")
+        self.assertContains(response, "hesba/brand/login_web.final.png")
+        self.assertContains(response, "hesba/brand/login_tablet.png")
+        self.assertContains(response, "hesba/brand/login_mobile.final.png")
+        self.assertNotContains(response, "109_LOGIN_AND_DEVICE_SHELL_STABILIZATION")
+        self.assertNotContains(response, "110_RESTORE_APPROVED_LOGIN_DESIGN")
+        self.assertNotContains(response, "Desktop ready")
+        self.assertNotContains(response, "PWA ready")
 
     def test_root_redirects_to_login(self):
         response = self.client.get("/")
@@ -21,7 +27,7 @@ class LoginAndDeviceShellSmokeTests(TestCase):
         self.assertEqual(response["Location"], reverse("login"))
 
     def test_existing_safe_routes_still_return_200(self):
-        for path in ["/dashboard/", "/reports/", "/status/"]:
+        for path in ["/dashboard/", "/reports/", "/status/", "/home/"]:
             with self.subTest(path=path):
                 response = self.client.get(path)
 
@@ -32,6 +38,19 @@ class LoginAndDeviceShellSmokeTests(TestCase):
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
         self.assertEqual(manifest["start_url"], "/login/")
+
+    def test_approved_login_brand_assets_are_tracked(self):
+        brand_dir = settings.BASE_DIR / "static" / "hesba" / "brand"
+
+        for filename in [
+            "login_web.final.png",
+            "login_mobile.final.png",
+            "login_tablet.png",
+            "login_web.png",
+            "login_mobile.png",
+        ]:
+            with self.subTest(filename=filename):
+                self.assertTrue((brand_dir / filename).is_file())
 
 
 class FirstUiNavigationMapTests(TestCase):
