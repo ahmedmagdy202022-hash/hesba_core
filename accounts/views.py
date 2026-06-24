@@ -2,11 +2,11 @@ from django.shortcuts import render
 from django.urls import reverse
 
 
-LOGIN_CHECKPOINT_CODE = "109_LOGIN_AND_DEVICE_SHELL_STABILIZATION"
+LOGIN_CHECKPOINT_CODE = "110_RESTORE_APPROVED_LOGIN_DESIGN"
 
 
 def login_shell(request):
-    """Render the responsive login shell for the current device checkpoint.
+    """Render the approved responsive login shell.
 
     This view intentionally performs no authentication or onboarding logic. The
     form routes to the existing safe dashboard until real login handling is added
