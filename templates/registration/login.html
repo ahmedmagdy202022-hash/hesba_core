@@ -7,27 +7,46 @@
 <title>تسجيل الدخول - حسبة</title>
 <link rel="stylesheet" href="{% static 'hesba/css/login.css' %}">
 </head>
-<body class="login-page">
+<body class="login-page" data-lang="ar">
 <main class="login-stage">
 <div class="login-bg" aria-hidden="true"></div>
 <nav class="language-switch" aria-label="اختيار اللغة">
-<a class="active" href="?lang=ar">عربي</a>
-<a href="?lang=en">English</a>
+<a data-lang-option="ar" href="?lang=ar">عربي</a>
+<a data-lang-option="en" href="?lang=en">English</a>
 </nav>
 <section class="login-form-layer">
 <div class="login-form-wrap">
-<h1>تسجيل الدخول</h1>
-<p class="login-subtitle">استخدم حسابك للدخول حسب الدور والصلاحيات.</p>
-{% if form.errors %}<div class="error">بيانات الدخول غير صحيحة. راجع اسم المستخدم وكلمة المرور.</div>{% endif %}
+<h1 data-i18n="title">تسجيل الدخول</h1>
+<p class="login-subtitle" data-i18n="subtitle">استخدم حسابك للدخول حسب الدور والصلاحيات.</p>
+{% if form.errors %}<div class="error" data-i18n="error">بيانات الدخول غير صحيحة. راجع اسم المستخدم وكلمة المرور.</div>{% endif %}
 <form method="post" class="login-form">
 {% csrf_token %}
 <input type="hidden" name="next" value="{{ next }}">
-<div class="field"><label for="id_username">اسم المستخدم</label>{{ form.username }}</div>
-<div class="field"><label for="id_password">كلمة المرور</label>{{ form.password }}</div>
-<button type="submit" class="login-btn">الدخول إلى حسبة</button>
+<div class="field"><label for="id_username" data-i18n="username">اسم المستخدم</label>{{ form.username }}</div>
+<div class="field"><label for="id_password" data-i18n="password">كلمة المرور</label>{{ form.password }}</div>
+<button type="submit" class="login-btn" data-i18n="button">الدخول إلى حسبة</button>
 </form>
 </div>
 </section>
 </main>
+<script>
+(function(){
+  var params=new URLSearchParams(window.location.search);
+  var lang=params.get('lang')==='en'?'en':'ar';
+  var dict={
+    ar:{title:'تسجيل الدخول',subtitle:'استخدم حسابك للدخول حسب الدور والصلاحيات.',username:'اسم المستخدم',password:'كلمة المرور',button:'الدخول إلى حسبة',error:'بيانات الدخول غير صحيحة. راجع اسم المستخدم وكلمة المرور.',userPh:'أدخل اسم المستخدم',passPh:'أدخل كلمة المرور'},
+    en:{title:'Login',subtitle:'Use your account according to role and permissions.',username:'Username',password:'Password',button:'Login to Hesba',error:'Invalid username or password.',userPh:'Enter username',passPh:'Enter password'}
+  };
+  document.documentElement.lang=lang;
+  document.documentElement.dir=lang==='ar'?'rtl':'ltr';
+  document.body.dataset.lang=lang;
+  document.querySelectorAll('[data-lang-option]').forEach(function(a){a.classList.toggle('active',a.dataset.langOption===lang)});
+  document.querySelectorAll('[data-i18n]').forEach(function(el){var key=el.dataset.i18n;if(dict[lang][key])el.textContent=dict[lang][key];});
+  var user=document.getElementById('id_username');
+  var pass=document.getElementById('id_password');
+  if(user)user.setAttribute('placeholder',dict[lang].userPh);
+  if(pass)pass.setAttribute('placeholder',dict[lang].passPh);
+})();
+</script>
 </body>
 </html>
