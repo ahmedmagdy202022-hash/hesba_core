@@ -10,9 +10,10 @@ class LoginAndDeviceShellSmokeTests(TestCase):
         response = self.client.get("/login/")
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "109_LOGIN_AND_DEVICE_SHELL_STABILIZATION")
         self.assertContains(response, "تسجيل الدخول")
-        self.assertContains(response, "name=\"language\"")
+        self.assertContains(response, "الدخول إلى حسبة")
+        self.assertContains(response, "hesba/css/login.css")
+        self.assertContains(response, "data-lang-option")
 
     def test_root_redirects_to_login(self):
         response = self.client.get("/")
