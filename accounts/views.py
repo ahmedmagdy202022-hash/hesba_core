@@ -8,9 +8,9 @@ LOGIN_CHECKPOINT_CODE = "109_LOGIN_AND_DEVICE_SHELL_STABILIZATION"
 def login_shell(request):
     """Render the responsive login shell for the current device checkpoint.
 
-    This view intentionally performs no authentication or setup logic. The form
-    routes to the existing safe dashboard until real login handling is added in a
-    later checkpoint.
+    This view intentionally performs no authentication or onboarding logic. The
+    form routes to the existing safe dashboard until real login handling is added
+    in a later checkpoint.
     """
 
     return render(
