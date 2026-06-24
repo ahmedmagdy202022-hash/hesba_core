@@ -65,7 +65,7 @@
         .language-field {
             position: absolute;
             top: max(22px, env(safe-area-inset-top));
-            inset-inline-end: max(28px, env(safe-area-inset-right));
+            right: max(28px, env(safe-area-inset-right));
             z-index: 3;
             display: inline-flex;
             align-items: center;
@@ -97,8 +97,8 @@
         .login-card {
             position: absolute;
             z-index: 2;
-            inset-block-start: 15vh;
-            inset-inline-start: 8vw;
+            top: 15vh;
+            left: 8vw;
             width: clamp(330px, 27vw, 450px);
             display: grid;
             gap: 16px;
@@ -203,12 +203,12 @@
 
             .language-field {
                 top: max(24px, env(safe-area-inset-top));
-                inset-inline-end: 30px;
+                right: 30px;
             }
 
             .login-card {
-                inset-block-start: 16vh;
-                inset-inline-start: 8vw;
+                top: 16vh;
+                left: 8vw;
                 width: min(39vw, 430px);
                 min-width: 330px;
                 background: rgba(255, 255, 255, .34);
@@ -224,15 +224,16 @@
 
             .language-field {
                 top: max(16px, env(safe-area-inset-top));
-                inset-inline: 18px auto;
+                right: auto;
+                left: 18px;
                 min-height: 40px;
                 padding-inline: 11px;
             }
 
             .login-card {
-                inset-block-start: 30vh;
-                inset-inline: 50% auto;
-                transform: translateX(50%);
+                top: 30vh;
+                left: 50%;
+                transform: translateX(-50%);
                 width: min(86vw, 352px);
                 gap: 12px;
                 padding: 18px;
@@ -258,7 +259,7 @@
 
         @media (max-height: 700px) and (max-width: 640px) {
             .login-card {
-                inset-block-start: 24vh;
+                top: 24vh;
             }
         }
     </style>
