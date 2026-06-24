@@ -4,48 +4,40 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#052643">
+    <meta name="theme-color" content="#f8fcfd">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="Hesba">
     <link rel="manifest" href="{% static 'hesba/manifest.json' %}">
+    <link rel="preload" as="image" href="{% static 'hesba/brand/login_web.final.png' %}" media="(min-width: 1101px)">
+    <link rel="preload" as="image" href="{% static 'hesba/brand/login_tablet.png' %}" media="(min-width: 641px) and (max-width: 1100px)">
+    <link rel="preload" as="image" href="{% static 'hesba/brand/login_mobile.final.png' %}" media="(max-width: 640px)">
     <title>حِسْبَة - تسجيل الدخول</title>
 
     <style>
         :root {
-            --navy: #052643;
-            --navy-2: #0b365d;
-            --teal: #0c8a8f;
-            --teal-soft: #dff7f6;
-            --gold: #d6a84f;
-            --cream: #fbf7ef;
-            --paper: #ffffff;
-            --ink: #142033;
-            --muted: #667085;
-            --line: rgba(5, 38, 67, .14);
-            --shadow: 0 26px 70px rgba(5, 38, 67, .18);
+            --navy: #062b53;
+            --teal: #03b7bd;
+            --teal-dark: #008996;
+            --ink: #082a50;
+            --muted: #5b6b7f;
+            --paper: rgba(255, 255, 255, .48);
+            --paper-strong: rgba(255, 255, 255, .70);
+            --line: rgba(0, 145, 158, .22);
+            --shadow: 0 24px 60px rgba(13, 82, 104, .16);
         }
 
         * { box-sizing: border-box; }
 
-        html {
+        html,
+        body {
             min-height: 100%;
-            background: var(--cream);
         }
 
         body {
-            min-height: 100%;
             margin: 0;
             font-family: Tahoma, Arial, sans-serif;
             color: var(--ink);
-            background:
-                linear-gradient(120deg, rgba(5, 38, 67, .08) 0 1px, transparent 1px 100%),
-                linear-gradient(180deg, #ffffff 0%, #f6fbfa 52%, var(--cream) 100%);
-            background-size: 34px 34px, auto;
-        }
-
-        a {
-            color: inherit;
-            text-decoration: none;
+            background: #f8fcfd;
         }
 
         button,
@@ -54,222 +46,81 @@
             font: inherit;
         }
 
+        a {
+            color: inherit;
+            text-decoration: none;
+        }
+
         .login-page {
-            width: min(1180px, calc(100% - 28px));
+            position: relative;
             min-height: 100vh;
             min-height: 100svh;
-            margin: 0 auto;
-            padding: 22px 0;
-            display: grid;
-            align-items: center;
-        }
-
-        .login-shell {
             overflow: hidden;
-            display: grid;
-            grid-template-columns: minmax(0, 1.18fr) minmax(360px, .82fr);
-            min-height: min(720px, calc(100svh - 44px));
-            border: 1px solid rgba(255,255,255,.82);
-            border-radius: 32px;
-            background: rgba(255,255,255,.90);
-            box-shadow: var(--shadow);
-        }
-
-        .brand-panel {
-            position: relative;
-            padding: 30px;
-            color: #fff;
-            background:
-                linear-gradient(135deg, var(--navy) 0%, var(--navy-2) 54%, #07515a 100%);
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            gap: 34px;
-        }
-
-        .brand-panel::before {
-            content: "";
-            position: absolute;
-            inset: 0;
-            pointer-events: none;
-            background:
-                linear-gradient(90deg, rgba(255,255,255,.055) 1px, transparent 1px),
-                linear-gradient(0deg, rgba(255,255,255,.045) 1px, transparent 1px);
-            background-size: 38px 38px;
-        }
-
-        .topbar,
-        .brand-copy,
-        .safe-strip {
-            position: relative;
-            z-index: 1;
-        }
-
-        .topbar {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 14px;
-            flex-wrap: wrap;
-        }
-
-        .brand {
-            display: inline-flex;
-            align-items: center;
-            gap: 13px;
-            font-weight: 900;
-        }
-
-        .brand img {
-            width: 54px;
-            height: 54px;
-            border-radius: 18px;
-            padding: 9px;
-            background: rgba(255,255,255,.12);
-            border: 1px solid rgba(214,168,79,.38);
-        }
-
-        .brand strong {
-            display: block;
-            font-size: 24px;
-            line-height: 1.1;
-        }
-
-        .brand span {
-            display: block;
-            margin-top: 3px;
-            color: rgba(255,255,255,.72);
-            font-size: 13px;
-            font-weight: 800;
+            background-image: url("{% static 'hesba/brand/login_web.final.png' %}");
+            background-repeat: no-repeat;
+            background-position: center center;
+            background-size: cover;
         }
 
         .language-field {
+            position: absolute;
+            top: max(22px, env(safe-area-inset-top));
+            inset-inline-end: max(28px, env(safe-area-inset-right));
+            z-index: 3;
             display: inline-flex;
             align-items: center;
-            gap: 8px;
+            gap: 9px;
             min-height: 42px;
-            padding: 6px 10px;
-            border: 1px solid rgba(255,255,255,.24);
+            padding: 6px 12px;
+            border: 1px solid rgba(0, 151, 164, .24);
             border-radius: 999px;
-            background: rgba(255,255,255,.10);
-            color: #fff;
+            background: rgba(255, 255, 255, .62);
+            box-shadow: 0 10px 26px rgba(6, 43, 83, .10);
+            backdrop-filter: blur(12px);
         }
 
         .language-field label {
-            color: rgba(255,255,255,.78);
+            color: var(--navy);
             font-size: 12px;
             font-weight: 900;
         }
 
         .language-field select {
-            min-width: 112px;
+            min-width: 108px;
             border: 0;
             outline: 0;
+            color: var(--navy);
             background: transparent;
-            color: #fff;
             font-weight: 900;
-        }
-
-        .language-field option {
-            color: var(--ink);
-        }
-
-        .brand-copy {
-            max-width: 680px;
-        }
-
-        .checkpoint {
-            direction: ltr;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 18px;
-            padding: 8px 12px;
-            border: 1px solid rgba(214,168,79,.42);
-            border-radius: 999px;
-            color: #ffe7a9;
-            background: rgba(214,168,79,.10);
-            font-size: 12px;
-            font-weight: 900;
-        }
-
-        .checkpoint::before {
-            content: "";
-            width: 9px;
-            height: 9px;
-            border-radius: 999px;
-            background: #42f2d5;
-            box-shadow: 0 0 0 5px rgba(66,242,213,.14);
-        }
-
-        h1 {
-            margin: 0;
-            max-width: 720px;
-            color: #fff;
-            font-size: clamp(42px, 6vw, 78px);
-            line-height: 1.05;
-        }
-
-        .lead {
-            margin: 16px 0 0;
-            max-width: 640px;
-            color: rgba(255,255,255,.78);
-            font-size: 17px;
-            line-height: 1.8;
-        }
-
-        .safe-strip {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 10px;
-        }
-
-        .safe-item {
-            min-height: 82px;
-            padding: 13px;
-            border: 1px solid rgba(255,255,255,.18);
-            border-radius: 20px;
-            background: rgba(255,255,255,.10);
-            display: grid;
-            align-content: center;
-            gap: 4px;
-        }
-
-        .safe-item strong {
-            color: #fff;
-            font-size: 15px;
-        }
-
-        .safe-item span {
-            color: rgba(255,255,255,.70);
-            font-size: 12px;
-            font-weight: 800;
-        }
-
-        .form-panel {
-            padding: 30px;
-            display: grid;
-            align-content: center;
-            background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(251,247,239,.88));
         }
 
         .login-card {
-            width: 100%;
+            position: absolute;
+            z-index: 2;
+            inset-block-start: 15vh;
+            inset-inline-start: 8vw;
+            width: clamp(330px, 27vw, 450px);
             display: grid;
-            gap: 18px;
+            gap: 16px;
+            padding: 28px;
+            border: 1px solid rgba(255, 255, 255, .82);
+            border-radius: 30px;
+            background: linear-gradient(180deg, var(--paper-strong), var(--paper));
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(14px);
         }
 
         .form-heading {
             display: grid;
-            gap: 6px;
-            margin-bottom: 4px;
+            gap: 5px;
+            margin-bottom: 2px;
         }
 
-        .form-heading h2 {
+        .form-heading h1 {
             margin: 0;
             color: var(--navy);
             font-size: 30px;
-            line-height: 1.2;
+            line-height: 1.22;
         }
 
         .form-heading p {
@@ -281,7 +132,7 @@
 
         .field {
             display: grid;
-            gap: 8px;
+            gap: 7px;
         }
 
         .field label {
@@ -292,217 +143,161 @@
 
         .field input {
             width: 100%;
-            min-height: 52px;
-            border: 1px solid var(--line);
+            min-height: 50px;
+            border: 1px solid rgba(6, 43, 83, .12);
             border-radius: 16px;
             padding: 12px 14px;
-            color: var(--ink);
-            background: #fff;
             outline: 0;
+            color: var(--ink);
+            background: rgba(255, 255, 255, .88);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.88);
             transition: border-color .15s ease, box-shadow .15s ease;
         }
 
         .field input:focus {
-            border-color: rgba(12,138,143,.52);
-            box-shadow: 0 0 0 4px rgba(12,138,143,.12);
-        }
-
-        .submit-row {
-            display: grid;
-            gap: 11px;
-            margin-top: 4px;
-        }
-
-        .submit-btn,
-        .secondary-link {
-            min-height: 52px;
-            border-radius: 16px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 900;
+            border-color: rgba(3, 183, 189, .56);
+            box-shadow: 0 0 0 4px rgba(3, 183, 189, .14);
         }
 
         .submit-btn {
+            min-height: 52px;
             border: 0;
+            border-radius: 17px;
             color: #fff;
-            background: linear-gradient(135deg, var(--teal), var(--navy-2));
-            box-shadow: 0 14px 28px rgba(12,138,143,.24);
+            background: linear-gradient(135deg, var(--teal), var(--teal-dark));
+            box-shadow: 0 16px 28px rgba(0, 137, 150, .22);
+            font-weight: 900;
             cursor: pointer;
         }
 
-        .secondary-link {
-            border: 1px solid var(--line);
-            color: var(--navy);
-            background: #fff;
-        }
-
-        .quick-links {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 9px;
-            margin-top: 6px;
-        }
-
-        .quick-links a {
+        .safe-link {
             min-height: 44px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            border: 1px solid rgba(5,38,67,.10);
-            border-radius: 14px;
+            border: 1px solid var(--line);
+            border-radius: 15px;
             color: var(--navy);
-            background: rgba(255,255,255,.70);
+            background: rgba(255,255,255,.56);
             font-size: 13px;
             font-weight: 900;
         }
 
-        .device-note {
-            margin: 2px 0 0;
-            color: var(--muted);
-            font-size: 12px;
-            font-weight: 800;
-            text-align: center;
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
         }
 
-        @media (max-width: 980px) {
+        @media (min-width: 641px) and (max-width: 1100px) {
             .login-page {
-                align-items: start;
+                background-image: url("{% static 'hesba/brand/login_tablet.png' %}");
+                background-position: center center;
             }
 
-            .login-shell {
-                grid-template-columns: 1fr;
-                min-height: auto;
+            .language-field {
+                top: max(24px, env(safe-area-inset-top));
+                inset-inline-end: 30px;
             }
 
-            .brand-panel {
-                min-height: 440px;
+            .login-card {
+                inset-block-start: 16vh;
+                inset-inline-start: 8vw;
+                width: min(39vw, 430px);
+                min-width: 330px;
+                background: rgba(255, 255, 255, .34);
+                box-shadow: none;
             }
         }
 
         @media (max-width: 640px) {
             .login-page {
-                width: min(100% - 14px, 1180px);
-                padding: 8px 0;
+                background-image: url("{% static 'hesba/brand/login_mobile.final.png' %}");
+                background-position: center center;
             }
 
-            .login-shell {
+            .language-field {
+                top: max(16px, env(safe-area-inset-top));
+                inset-inline: 18px auto;
+                min-height: 40px;
+                padding-inline: 11px;
+            }
+
+            .login-card {
+                inset-block-start: 30vh;
+                inset-inline: 50% auto;
+                transform: translateX(50%);
+                width: min(86vw, 352px);
+                gap: 12px;
+                padding: 18px;
                 border-radius: 24px;
+                background: rgba(255, 255, 255, .50);
             }
 
-            .brand-panel,
-            .form-panel {
-                padding: 20px;
+            .form-heading h1 {
+                font-size: 24px;
             }
 
-            .brand-panel {
-                min-height: 390px;
-                gap: 26px;
+            .form-heading p,
+            .field label,
+            .safe-link {
+                font-size: 12px;
             }
 
-            .language-field,
-            .checkpoint {
-                width: 100%;
-                justify-content: center;
+            .field input,
+            .submit-btn {
+                min-height: 46px;
             }
+        }
 
-            .language-field select {
-                flex: 1;
-                min-width: 0;
-            }
-
-            .safe-strip,
-            .quick-links {
-                grid-template-columns: 1fr;
-            }
-
-            .safe-item {
-                min-height: 64px;
-            }
-
-            .form-heading h2 {
-                font-size: 26px;
+        @media (max-height: 700px) and (max-width: 640px) {
+            .login-card {
+                inset-block-start: 24vh;
             }
         }
     </style>
 </head>
 <body>
-    <main class="login-page">
-        <section class="login-shell" aria-label="Hesba login">
-            <div class="brand-panel">
-                <div class="topbar">
-                    <div class="brand">
-                        <img src="{% static 'hesba/icons/hesba-icon.svg' %}" alt="" aria-hidden="true">
-                        <span>
-                            <strong>حِسْبَة</strong>
-                            <span>Hesba Core</span>
-                        </span>
-                    </div>
+    <main class="login-page" aria-label="Hesba login">
+        <div class="language-field">
+            <label for="language">اللغة</label>
+            <select id="language" name="language" aria-label="Language selector">
+                {% for language in language_options %}
+                    <option value="{{ language.code }}">{{ language.label }}</option>
+                {% endfor %}
+            </select>
+        </div>
 
-                    <div class="language-field">
-                        <label for="language">اللغة</label>
-                        <select id="language" name="language" aria-label="Language selector">
-                            {% for language in language_options %}
-                                <option value="{{ language.code }}">{{ language.label }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                </div>
-
-                <div class="brand-copy">
-                    <div class="checkpoint">{{ checkpoint_code }}</div>
-                    <h1>تسجيل الدخول</h1>
-                    <p class="lead">واجهة ثابتة لحِسْبَة على الويب والتابلت والموبايل، متصلة بالداشبورد الآمن الحالي.</p>
-                </div>
-
-                <div class="safe-strip" aria-label="Current safe shell">
-                    <div class="safe-item">
-                        <strong>Web</strong>
-                        <span>Desktop ready</span>
-                    </div>
-                    <div class="safe-item">
-                        <strong>Tablet</strong>
-                        <span>Touch ready</span>
-                    </div>
-                    <div class="safe-item">
-                        <strong>Mobile</strong>
-                        <span>PWA ready</span>
-                    </div>
-                </div>
+        <form class="login-card" action="{{ dashboard_url }}" method="get">
+            <div class="form-heading">
+                <h1>تسجيل الدخول</h1>
+                <p>ادخل إلى لوحة حِسْبَة الآمنة.</p>
             </div>
 
-            <div class="form-panel">
-                <form class="login-card" action="{{ dashboard_url }}" method="get">
-                    <div class="form-heading">
-                        <h2>أهلاً بك</h2>
-                        <p>ادخل إلى لوحة حِسْبَة الآمنة.</p>
-                    </div>
-
-                    <div class="field">
-                        <label for="username">اسم المستخدم</label>
-                        <input id="username" name="username" type="text" autocomplete="username" inputmode="text" placeholder="مثال: admin">
-                    </div>
-
-                    <div class="field">
-                        <label for="password">كلمة المرور</label>
-                        <input id="password" name="password" type="password" autocomplete="current-password" placeholder="••••••••">
-                    </div>
-
-                    <div class="submit-row">
-                        <button class="submit-btn" type="submit">دخول إلى Dashboard</button>
-                        <a class="secondary-link" href="{{ home_url }}">فتح الخريطة الآمنة</a>
-                    </div>
-
-                    <nav class="quick-links" aria-label="Safe pages">
-                        <a href="{{ dashboard_url }}">Dashboard</a>
-                        <a href="{{ reports_url }}">Reports</a>
-                        <a href="{{ status_url }}">Status</a>
-                    </nav>
-
-                    <p class="device-note">{{ checkpoint_code }}</p>
-                </form>
+            <div class="field">
+                <label for="username">اسم المستخدم</label>
+                <input id="username" type="text" autocomplete="username" inputmode="text" placeholder="مثال: admin">
             </div>
-        </section>
+
+            <div class="field">
+                <label for="password">كلمة المرور</label>
+                <input id="password" type="password" autocomplete="current-password" placeholder="••••••••">
+            </div>
+
+            <button class="submit-btn" type="submit">دخول إلى Dashboard</button>
+            <a class="safe-link" href="{{ home_url }}">فتح الخريطة الآمنة</a>
+
+            <span class="sr-only">
+                <a href="{{ reports_url }}">Reports</a>
+                <a href="{{ status_url }}">Status</a>
+            </span>
+        </form>
     </main>
 </body>
 </html>
