@@ -94,23 +94,23 @@ button,input{font-family:var(--setup-font)}
 .hero-copy h1{
   margin:0;
   color:var(--setup-navy);
-  font-size:clamp(29px,3.75vw,58px);
+  font-size:clamp(28px,3.2vw,48px);
   line-height:1.18;
   font-weight:900;
   letter-spacing:-.02em;
   text-wrap:balance;
 }
 .hero-copy p{
-  margin:clamp(10px,1.55vw,20px) 0 0;
+  margin:clamp(8px,1.05vw,14px) 0 0;
   color:var(--setup-muted);
-  font-size:clamp(14px,1.45vw,24px);
-  line-height:1.72;
+  font-size:clamp(12px,1.15vw,18px);
+  line-height:1.58;
   font-weight:500;
   max-width:94%;
 }
 .hero-copy .hero-note{
-  margin-top:clamp(12px,1.75vw,24px);
-  line-height:1.74;
+  margin-top:clamp(9px,1.15vw,16px);
+  line-height:1.58;
 }
 
 .hero-actions{
@@ -134,7 +134,7 @@ button,input{font-family:var(--setup-font)}
   border:1px solid rgba(120,151,180,.74);
   cursor:pointer;
   font-weight:900;
-  font-size:clamp(13px,1.45vw,24px);
+  font-size:clamp(12px,1.22vw,20px);
   line-height:1;
   white-space:nowrap;
   padding:0 20px;
@@ -320,8 +320,8 @@ button,input{font-family:var(--setup-font)}
 @media(max-width:1180px){
   .setup-stage{width:min(1120px,calc(100vw - 24px),calc((100svh - 24px) * 1.3333));margin:12px auto}
   .top-controls{gap:8%;width:27%}
-  .hero-copy h1{font-size:clamp(27px,3.5vw,45px)}
-  .hero-copy p{font-size:clamp(12px,1.38vw,18px)}
+  .hero-copy h1{font-size:clamp(26px,3.1vw,42px)}
+  .hero-copy p{font-size:clamp(11px,1.12vw,16px)}
   .activity-pill{gap:6px;padding:0 5px}
 }
 @media(max-width:900px){
