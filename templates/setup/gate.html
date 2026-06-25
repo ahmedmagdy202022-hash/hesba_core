@@ -5,123 +5,27 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>بوابة الإعداد - حسبة</title>
-<link rel="stylesheet" href="{% static 'hesba/css/setup.css' %}?v=113a">
+<link rel="stylesheet" href="{% static 'hesba/css/setup.css' %}?v=113a-bg">
 </head>
-<body class="setup-page" data-lang="ar" data-can-start="{{ can_start_setup|yesno:'true,false' }}">
-<header class="setup-topbar">
-  <a class="setup-brand" href="/setup/" data-preserve-lang>
-    <img src="{% static 'hesba/icons/hesba-icon.svg' %}" alt="Hesba" class="setup-brand-icon">
-    <span class="setup-brand-copy">
-      <strong>حِسْبَة</strong>
-      <small>Hesba</small>
-    </span>
-  </a>
-  <nav class="setup-actions" aria-label="Setup actions">
-    <div class="language-switch" aria-label="اختيار اللغة">
-      <a data-lang-option="ar" href="?lang=ar">عربي</a>
-      <a data-lang-option="en" href="?lang=en">English</a>
-    </div>
-    <a class="logout-link" href="{{ logout_url }}" data-preserve-lang data-i18n="logoutButton">تسجيل الخروج</a>
-  </nav>
-</header>
-
-<main class="setup-shell">
-  <section class="hero-card">
-    <div class="hero-content">
-      <p class="eyebrow" data-i18n="eyebrow">بوابة الإعداد</p>
-      <h1 data-i18n="title">جهّز حِسبة حسب نشاطك</h1>
-      <p class="lead" data-i18n="descriptionOne">قبل الدخول للنظام، نحتاج إعدادًا بسيطًا لتحديد نوع النشاط والموديولات المناسبة لك.</p>
-      <p class="lead secondary" data-i18n="descriptionTwo">حِسبة نظام إدارة متكامل قابل للتخصيص حسب نشاطك، صلاحيات المستخدمين، وطريقة تشغيلك.</p>
-      <div class="cta-row">
-        {% if can_start_setup %}
-        <a class="primary-action" href="{{ start_setup_url }}" data-preserve-lang data-i18n="startButton">ابدأ الإعداد</a>
-        {% else %}
-        <span class="primary-action disabled" aria-disabled="true" data-i18n="startButton">ابدأ الإعداد</span>
-        {% endif %}
-        <a class="secondary-action" href="{{ logout_url }}" data-preserve-lang data-i18n="logoutButton">تسجيل الخروج</a>
-      </div>
-      {% if not can_start_setup %}
-      <div class="permission-note" role="alert">
-        <strong data-i18n="noPermissionTitle">ليس لديك صلاحية إعداد النظام.</strong>
-        <span data-i18n="noPermissionBody">يرجى التواصل مع مالك النظام.</span>
-      </div>
-      {% endif %}
-    </div>
-    <aside class="identity-panel" aria-label="Hesba setup summary">
-      <div class="identity-card">
-        <img src="{% static 'hesba/icons/hesba-icon.svg' %}" alt="Hesba" class="identity-icon">
-        <span class="identity-kicker" data-i18n="identityKicker">خطوات واضحة</span>
-        <strong data-i18n="identityTitle">إعداد واحد قابل للتخصيص</strong>
-        <small data-i18n="identityBody">اختيار النشاط والموديولات قبل الدخول للنظام.</small>
-      </div>
-    </aside>
-  </section>
-
-  <section class="setup-section">
-    <div class="section-heading">
-      <p data-i18n="stepsKicker">خطوات الإعداد</p>
-      <h2 data-i18n="stepsTitle">ابدأ بثقة من خلال ٤ خطوات بسيطة</h2>
-    </div>
-    <div class="steps-grid">
-      <article class="step-card"><span>1</span><h3 data-i18n="stepOneTitle">اختيار النشاط</h3><p data-i18n="stepOneBody">اختر نوع النشاط المناسب لك</p></article>
-      <article class="step-card"><span>2</span><h3 data-i18n="stepTwoTitle">اختيار الموديولات</h3><p data-i18n="stepTwoBody">حدد الموديولات التي تحتاجها</p></article>
-      <article class="step-card"><span>3</span><h3 data-i18n="stepThreeTitle">مراجعة الإعداد</h3><p data-i18n="stepThreeBody">راجع إعداداتك قبل الإنهاء</p></article>
-      <article class="step-card"><span>4</span><h3 data-i18n="stepFourTitle">الدخول للنظام</h3><p data-i18n="stepFourBody">ابدأ استخدام حِسبة بثقة</p></article>
-    </div>
-  </section>
-
-  <section class="setup-section activities-section">
-    <div class="section-heading compact">
-      <p data-i18n="activitiesKicker">الأنشطة المدعومة</p>
-      <h2 data-i18n="activitiesTitle">حِسبة مرنة لأكثر من نشاط</h2>
-    </div>
-    <div class="activities-grid">
-      <span data-i18n="activityCommercial">تجاري</span>
-      <span data-i18n="activityServices">خدمي</span>
-      <span data-i18n="activityManufacturing">تصنيعي</span>
-      <span data-i18n="activityContracting">مقاولات</span>
-      <span data-i18n="activityRestaurants">مطاعم</span>
-      <span data-i18n="activityMedical">طبي</span>
-      <span data-i18n="activityEducation">تعليمي</span>
-      <span data-i18n="activityOther">أخرى</span>
-    </div>
-  </section>
+<body class="setup-page" data-lang="ar">
+<main class="setup-stage" aria-label="Setup Gate">
+  <div class="setup-bg" aria-hidden="true"></div>
+  <div class="setup-masks" aria-hidden="true">
+    <span class="mask mask-logout"></span><span class="mask mask-lang"></span><span class="mask mask-hero-text"></span>
+    <span class="mask mask-step-heading"></span><span class="mask mask-step-text mask-step-1"></span><span class="mask mask-step-text mask-step-2"></span><span class="mask mask-step-text mask-step-3"></span><span class="mask mask-step-text mask-step-4"></span>
+    <span class="mask mask-activity-heading"></span><span class="mask mask-activity mask-activity-1"></span><span class="mask mask-activity mask-activity-2"></span><span class="mask mask-activity mask-activity-3"></span><span class="mask mask-activity mask-activity-4"></span><span class="mask mask-activity mask-activity-5"></span><span class="mask mask-activity mask-activity-6"></span><span class="mask mask-activity mask-activity-7"></span><span class="mask mask-activity mask-activity-8"></span>
+  </div>
+  <nav class="setup-controls" aria-label="Setup actions"><a class="control control-logout" href="{{ logout_url }}" data-preserve-lang data-i18n="logoutButton">تسجيل الخروج</a><div class="control control-lang"><a data-lang-option="ar" href="?lang=ar">العربية</a><a data-lang-option="en" href="?lang=en">English</a></div></nav>
+  <section class="hero-copy"><h1 data-i18n="title">جهّز حِسبة حسب نشاطك</h1><p data-i18n="descriptionOne">قبل الدخول للنظام، نحتاج إعدادًا بسيطًا لتحديد نوع النشاط والموديولات المناسبة لك.</p><p class="desktop-only" data-i18n="descriptionTwo">حِسبة نظام إدارة متكامل قابل للتخصيص حسب نشاطك، صلاحيات المستخدمين، وطريقة تشغيلك.</p>{% if not can_start_setup %}<div class="permission-note" role="alert"><strong data-i18n="noPermissionTitle">ليس لديك صلاحية إعداد النظام.</strong><span data-i18n="noPermissionBody">يرجى التواصل مع مالك النظام.</span></div>{% endif %}</section>
+  <section class="button-layer">{% if can_start_setup %}<a class="ui-button start-button" href="{{ start_setup_url }}" data-preserve-lang data-i18n="startButton">ابدأ الإعداد</a>{% else %}<span class="ui-button start-button disabled" aria-disabled="true" data-i18n="startButton">ابدأ الإعداد</span>{% endif %}<a class="ui-button logout-button" href="{{ logout_url }}" data-preserve-lang data-i18n="logoutButton">تسجيل الخروج</a></section>
+  <section class="steps-layer"><h2 data-i18n="stepsTitle">خطوات الإعداد</h2><article class="step-copy step-copy-1"><h3 data-i18n="stepOneTitle">اختيار النشاط</h3><p data-i18n="stepOneBody">اختر نوع النشاط المناسب لك</p></article><article class="step-copy step-copy-2"><h3 data-i18n="stepTwoTitle">اختيار الموديولات</h3><p data-i18n="stepTwoBody">حدد الموديولات التي تحتاجها</p></article><article class="step-copy step-copy-3"><h3 data-i18n="stepThreeTitle">مراجعة الإعداد</h3><p data-i18n="stepThreeBody">راجع إعداداتك قبل الإنهاء</p></article><article class="step-copy step-copy-4"><h3 data-i18n="stepFourTitle">الدخول للنظام</h3><p data-i18n="stepFourBody">ابدأ استخدام حِسبة بثقة</p></article></section>
+  <section class="activities-layer"><h2 data-i18n="activitiesTitle">الأنشطة المدعومة</h2><span class="activity-copy activity-copy-1" data-i18n="activityCommercial">تجاري</span><span class="activity-copy activity-copy-2" data-i18n="activityServices">خدمي</span><span class="activity-copy activity-copy-3" data-i18n="activityManufacturing">تصنيعي</span><span class="activity-copy activity-copy-4" data-i18n="activityContracting">مقاولات</span><span class="activity-copy activity-copy-5" data-i18n="activityRestaurants">مطاعم</span><span class="activity-copy activity-copy-6" data-i18n="activityMedical">طبي</span><span class="activity-copy activity-copy-7" data-i18n="activityEducation">تعليمي</span><span class="activity-copy activity-copy-8" data-i18n="activityOther">أخرى</span></section>
 </main>
-
 <script>
 (function(){
-  var params = new URLSearchParams(window.location.search);
-  var saved = localStorage.getItem('hesba_lang');
-  var lang = params.get('lang') === 'en' ? 'en' : (params.get('lang') === 'ar' ? 'ar' : (saved === 'en' ? 'en' : 'ar'));
-  var dict = {
-    ar: {
-      title:'جهّز حِسبة حسب نشاطك', eyebrow:'بوابة الإعداد', descriptionOne:'قبل الدخول للنظام، نحتاج إعدادًا بسيطًا لتحديد نوع النشاط والموديولات المناسبة لك.', descriptionTwo:'حِسبة نظام إدارة متكامل قابل للتخصيص حسب نشاطك، صلاحيات المستخدمين، وطريقة تشغيلك.', startButton:'ابدأ الإعداد', logoutButton:'تسجيل الخروج', noPermissionTitle:'ليس لديك صلاحية إعداد النظام.', noPermissionBody:'يرجى التواصل مع مالك النظام.', identityKicker:'خطوات واضحة', identityTitle:'إعداد واحد قابل للتخصيص', identityBody:'اختيار النشاط والموديولات قبل الدخول للنظام.', stepsKicker:'خطوات الإعداد', stepsTitle:'ابدأ بثقة من خلال ٤ خطوات بسيطة', stepOneTitle:'اختيار النشاط', stepOneBody:'اختر نوع النشاط المناسب لك', stepTwoTitle:'اختيار الموديولات', stepTwoBody:'حدد الموديولات التي تحتاجها', stepThreeTitle:'مراجعة الإعداد', stepThreeBody:'راجع إعداداتك قبل الإنهاء', stepFourTitle:'الدخول للنظام', stepFourBody:'ابدأ استخدام حِسبة بثقة', activitiesKicker:'الأنشطة المدعومة', activitiesTitle:'حِسبة مرنة لأكثر من نشاط', activityCommercial:'تجاري', activityServices:'خدمي', activityManufacturing:'تصنيعي', activityContracting:'مقاولات', activityRestaurants:'مطاعم', activityMedical:'طبي', activityEducation:'تعليمي', activityOther:'أخرى'
-    },
-    en: {
-      title:'Set up Hesba for your activity', eyebrow:'Setup Gate', descriptionOne:'Before entering the system, a quick setup is required to choose your activity type and enabled modules.', descriptionTwo:'Hesba is a customizable management system that adapts to your activity, user permissions, and workflow.', startButton:'Start Setup', logoutButton:'Logout', noPermissionTitle:'You do not have permission to set up the system.', noPermissionBody:'Please contact the system owner.', identityKicker:'Clear steps', identityTitle:'One customizable setup', identityBody:'Choose the activity and modules before entering the system.', stepsKicker:'Setup steps', stepsTitle:'Start confidently in 4 simple steps', stepOneTitle:'Choose activity', stepOneBody:'Choose the activity type that fits you', stepTwoTitle:'Choose modules', stepTwoBody:'Select the modules you need', stepThreeTitle:'Review setup', stepThreeBody:'Review your settings before finishing', stepFourTitle:'Enter system', stepFourBody:'Start using Hesba with confidence', activitiesKicker:'Supported activities', activitiesTitle:'Hesba adapts to multiple activities', activityCommercial:'Commercial', activityServices:'Services', activityManufacturing:'Manufacturing', activityContracting:'Contracting', activityRestaurants:'Restaurants', activityMedical:'Medical', activityEducation:'Education', activityOther:'Other'
-    }
-  };
-  localStorage.setItem('hesba_lang', lang);
-  document.documentElement.lang = lang;
-  document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
-  document.body.dataset.lang = lang;
-  document.title = lang === 'ar' ? 'بوابة الإعداد - حسبة' : 'Setup Gate - Hesba';
-  document.querySelectorAll('[data-lang-option]').forEach(function(a){
-    a.classList.toggle('active', a.dataset.langOption === lang);
-    var u = new URL(window.location.href);
-    u.searchParams.set('lang', a.dataset.langOption);
-    a.href = u.pathname + u.search;
-  });
-  document.querySelectorAll('[data-i18n]').forEach(function(el){
-    var key = el.dataset.i18n;
-    if(dict[lang][key]) el.textContent = dict[lang][key];
-  });
-  document.querySelectorAll('[data-preserve-lang]').forEach(function(a){
-    if(!a.getAttribute('href')) return;
-    var u = new URL(a.getAttribute('href'), window.location.origin);
-    u.searchParams.set('lang', lang);
-    a.setAttribute('href', u.pathname + u.search);
-  });
+var params=new URLSearchParams(window.location.search);var saved=localStorage.getItem('hesba_lang');var lang=params.get('lang')==='en'?'en':(params.get('lang')==='ar'?'ar':(saved==='en'?'en':'ar'));
+var dict={ar:{title:'جهّز حِسبة حسب نشاطك',descriptionOne:'قبل الدخول للنظام، نحتاج إعدادًا بسيطًا لتحديد نوع النشاط والموديولات المناسبة لك.',descriptionTwo:'حِسبة نظام إدارة متكامل قابل للتخصيص حسب نشاطك، صلاحيات المستخدمين، وطريقة تشغيلك.',startButton:'ابدأ الإعداد',logoutButton:'تسجيل الخروج',noPermissionTitle:'ليس لديك صلاحية إعداد النظام.',noPermissionBody:'يرجى التواصل مع مالك النظام.',stepsTitle:'خطوات الإعداد',stepOneTitle:'اختيار النشاط',stepOneBody:'اختر نوع النشاط المناسب لك',stepTwoTitle:'اختيار الموديولات',stepTwoBody:'حدد الموديولات التي تحتاجها',stepThreeTitle:'مراجعة الإعداد',stepThreeBody:'راجع إعداداتك قبل الإنهاء',stepFourTitle:'الدخول للنظام',stepFourBody:'ابدأ استخدام حِسبة بثقة',activitiesTitle:'الأنشطة المدعومة',activityCommercial:'تجاري',activityServices:'خدمي',activityManufacturing:'تصنيعي',activityContracting:'مقاولات',activityRestaurants:'مطاعم',activityMedical:'طبي',activityEducation:'تعليمي',activityOther:'أخرى'},en:{title:'Set up Hesba for your activity',descriptionOne:'Before entering the system, a quick setup is required to choose your activity type and enabled modules.',descriptionTwo:'Hesba is a customizable management system that adapts to your activity, user permissions, and workflow.',startButton:'Start Setup',logoutButton:'Logout',noPermissionTitle:'You do not have permission to set up the system.',noPermissionBody:'Please contact the system owner.',stepsTitle:'Setup steps',stepOneTitle:'Choose activity',stepOneBody:'Choose the activity type that fits you',stepTwoTitle:'Choose modules',stepTwoBody:'Select the modules you need',stepThreeTitle:'Review setup',stepThreeBody:'Review your settings before finishing',stepFourTitle:'Enter system',stepFourBody:'Start using Hesba with confidence',activitiesTitle:'Supported activities',activityCommercial:'Commercial',activityServices:'Services',activityManufacturing:'Manufacturing',activityContracting:'Contracting',activityRestaurants:'Restaurants',activityMedical:'Medical',activityEducation:'Education',activityOther:'Other'}};
+localStorage.setItem('hesba_lang',lang);document.documentElement.lang=lang;document.documentElement.dir=lang==='ar'?'rtl':'ltr';document.body.dataset.lang=lang;document.title=lang==='ar'?'بوابة الإعداد - حسبة':'Setup Gate - Hesba';document.querySelectorAll('[data-lang-option]').forEach(function(a){a.classList.toggle('active',a.dataset.langOption===lang);var u=new URL(window.location.href);u.searchParams.set('lang',a.dataset.langOption);a.href=u.pathname+u.search;});document.querySelectorAll('[data-i18n]').forEach(function(el){var key=el.dataset.i18n;if(dict[lang][key])el.textContent=dict[lang][key];});document.querySelectorAll('[data-preserve-lang]').forEach(function(a){if(!a.getAttribute('href'))return;var u=new URL(a.getAttribute('href'),window.location.origin);u.searchParams.set('lang',lang);a.setAttribute('href',u.pathname+u.search);});
 })();
 </script>
 </body>
