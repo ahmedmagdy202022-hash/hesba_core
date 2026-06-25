@@ -1,8 +1,12 @@
 import json
 
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+
+from accounts.models import UserProfile
+from permissions.models import Role, RoleCode
 
 
 class LoginAndDeviceShellSmokeTests(TestCase):
@@ -33,6 +37,45 @@ class LoginAndDeviceShellSmokeTests(TestCase):
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
         self.assertEqual(manifest["start_url"], "/login/")
+
+
+class SetupGateSmokeTests(TestCase):
+    def test_setup_gate_route_returns_approved_gate(self):
+        response = self.client.get("/setup/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "جهّز حِسبة حسب نشاطك")
+        self.assertContains(response, "نظام إدارة متكامل قابل للتخصيص حسب نشاطك")
+        self.assertContains(response, "hesba/css/setup.css")
+        self.assertContains(response, "hesba/icons/hesba-icon.svg")
+        self.assertContains(response, "/setup/activity/")
+        self.assertContains(response, "تسجيل الخروج")
+        self.assertContains(response, "تجاري")
+        self.assertContains(response, "مطاعم")
+        self.assertContains(response, "data-lang-option")
+        self.assertNotContains(response, "ERP System")
+
+    def test_setup_gate_is_english_ready(self):
+        response = self.client.get("/setup/?lang=en")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Set up Hesba for your activity")
+        self.assertContains(response, "Customizable management system")
+        self.assertContains(response, "Start Setup")
+        self.assertContains(response, "Logout")
+
+    def test_authenticated_non_owner_cannot_start_setup(self):
+        user = get_user_model().objects.create_user(username="cashier", password="test-pass")
+        role = Role.objects.create(code=RoleCode.CASHIER, name_ar="كاشير", name_en="Cashier")
+        UserProfile.objects.create(user=user, role=role, display_name="Cashier")
+        self.client.force_login(user)
+
+        response = self.client.get("/setup/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "ليس لديك صلاحية إعداد النظام")
+        self.assertContains(response, "يرجى التواصل مع مالك النظام")
+        self.assertContains(response, "aria-disabled=\"true\"")
 
 
 class FirstUiNavigationMapTests(TestCase):
