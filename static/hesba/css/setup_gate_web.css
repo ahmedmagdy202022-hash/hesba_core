@@ -88,7 +88,7 @@ button,a{touch-action:manipulation}
 .control-pill:focus-visible,.setup-btn:focus-visible{outline:3px solid rgba(5,174,184,.22);outline-offset:3px}
 
 .hero-card{
-  min-height:320px;
+  min-height:310px;
   border:1px solid var(--setup-border);
   border-radius:28px;
   background:linear-gradient(135deg,rgba(255,255,255,.96),rgba(239,251,253,.96));
@@ -97,7 +97,7 @@ button,a{touch-action:manipulation}
   grid-template-columns:minmax(0,1.08fr) minmax(310px,.92fr);
   align-items:center;
   gap:24px;
-  padding:32px 40px;
+  padding:30px 40px;
   overflow:hidden;
 }
 
@@ -173,7 +173,7 @@ button,a{touch-action:manipulation}
 }
 
 .hero-visual{
-  min-height:238px;
+  min-height:228px;
   border-radius:24px;
   border:1px solid rgba(196,230,235,.82);
   background:
@@ -317,7 +317,7 @@ button,a{touch-action:manipulation}
 
 @media(max-width:1180px){
   .setup-shell{width:min(1040px,calc(100% - 36px));margin:0 auto;gap:12px}
-  .hero-card{min-height:314px;padding:30px 32px;grid-template-columns:minmax(0,1fr) minmax(280px,.78fr)}
+  .hero-card{min-height:306px;padding:28px 32px;grid-template-columns:minmax(0,1fr) minmax(280px,.78fr)}
   .hero-copy h1{font-size:34px}
   .hero-copy p{font-size:15px}
   .activity-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
