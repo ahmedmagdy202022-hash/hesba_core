@@ -22,7 +22,7 @@ class LoginAndDeviceShellSmokeTests(TestCase):
         self.assertEqual(response["Location"], reverse("login"))
 
     def test_existing_safe_routes_still_return_200(self):
-        for path in ["/dashboard/", "/reports/", "/status/"]:
+        for path in ["/setup/", "/dashboard/", "/reports/", "/status/"]:
             with self.subTest(path=path):
                 response = self.client.get(path)
 
@@ -33,6 +33,44 @@ class LoginAndDeviceShellSmokeTests(TestCase):
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
         self.assertEqual(manifest["start_url"], "/login/")
+
+
+class SetupGateWebSmokeTests(TestCase):
+    def test_setup_gate_route_renders_approved_web_screen_layer(self):
+        response = self.client.get(reverse("setup_gate"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "بوابة الإعداد - حِسْبَة")
+        self.assertContains(response, "hesba/css/setup_gate_web.css")
+        self.assertContains(response, "setup_gate_web_background_approved.png")
+        self.assertContains(response, "جهّز حِسْبَة حسب نشاطك")
+        self.assertContains(response, "ابدأ الإعداد")
+        self.assertContains(response, "خطوات الإعداد")
+        self.assertContains(response, "الأنشطة المدعومة")
+
+    def test_setup_gate_keeps_text_as_real_translatable_ui(self):
+        response = self.client.get(reverse("setup_gate"))
+
+        required_translation_keys = [
+            "heroTitle",
+            "heroLead",
+            "startSetup",
+            "stepsTitle",
+            "activitiesTitle",
+            "commercial",
+            "service",
+            "manufacturing",
+            "contracting",
+            "restaurant",
+            "medical",
+            "education",
+            "other",
+        ]
+        for key in required_translation_keys:
+            self.assertContains(response, f'data-i18n="{key}"')
+
+        self.assertContains(response, "Set up Hesba for your activity")
+        self.assertContains(response, "Supported activities")
 
 
 class FirstUiNavigationMapTests(TestCase):
