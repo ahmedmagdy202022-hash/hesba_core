@@ -60,7 +60,7 @@ class SetupGateSmokeTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Set up Hesba for your activity")
-        self.assertContains(response, "Customizable management system")
+        self.assertContains(response, "customizable management system")
         self.assertContains(response, "Start Setup")
         self.assertContains(response, "Logout")
 
