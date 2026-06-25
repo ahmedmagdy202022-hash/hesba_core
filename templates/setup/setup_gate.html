@@ -1,0 +1,141 @@
+{% load static %}
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>بوابة الإعداد - حِسْبَة</title>
+<link rel="stylesheet" href="{% static 'hesba/css/setup_gate_web.css' %}?v=115a">
+</head>
+<body class="setup-gate-page" data-lang="ar">
+<main class="setup-stage" aria-label="Setup Gate">
+  <img class="setup-bg" src="{% static 'hesba/setup_gate/setup_gate_web_background_approved.png' %}" alt="" aria-hidden="true">
+
+  <section class="setup-layer" aria-labelledby="setup-title">
+    <div class="top-controls" aria-label="Header controls">
+      <form class="logout-form" method="post" action="{% url 'logout' %}">
+        {% csrf_token %}
+        <button class="top-pill logout-pill" type="submit">
+          <span class="pill-icon" aria-hidden="true">↪</span>
+          <span data-i18n="logout">تسجيل الخروج</span>
+        </button>
+      </form>
+      <button class="top-pill lang-pill" type="button" data-lang-toggle aria-label="تغيير اللغة">
+        <span class="pill-icon" aria-hidden="true">◉</span>
+        <span data-i18n="language">العربية</span>
+        <span class="chevron" aria-hidden="true">▾</span>
+      </button>
+    </div>
+
+    <div class="hero-copy">
+      <h1 id="setup-title" data-i18n="heroTitle">جهّز حِسْبَة حسب نشاطك</h1>
+      <p class="hero-lead" data-i18n="heroLead">قبل الدخول للنظام، نحتاج إعدادًا بسيطًا لتحديد نوع النشاط والموديولات المناسبة لك.</p>
+      <p class="hero-note" data-i18n="heroNote">حِسْبَة نظام إدارة متكامل قابل للتخصيص حسب نشاطك، صلاحيات المستخدمين، وطريقة تشغيلك.</p>
+    </div>
+
+    <div class="hero-actions" aria-label="Setup actions">
+      <a class="setup-btn primary" href="#setup-steps" data-i18n="startSetup">ابدأ الإعداد</a>
+      <form class="secondary-logout-form" method="post" action="{% url 'logout' %}">
+        {% csrf_token %}
+        <button class="setup-btn secondary" type="submit" data-i18n="logout">تسجيل الخروج</button>
+      </form>
+    </div>
+
+    <section class="steps-copy" id="setup-steps" aria-labelledby="steps-title">
+      <h2 id="steps-title" data-i18n="stepsTitle">خطوات الإعداد</h2>
+      <span class="steps-underline" aria-hidden="true"></span>
+      <div class="step-grid">
+        <article class="step-copy-card">
+          <h3 data-i18n="step1Title">اختيار النشاط</h3>
+          <p data-i18n="step1Desc">اختر نوع النشاط المناسب لك</p>
+        </article>
+        <article class="step-copy-card">
+          <h3 data-i18n="step2Title">اختيار الموديولات</h3>
+          <p data-i18n="step2Desc">حدد الموديولات التي تحتاجها</p>
+        </article>
+        <article class="step-copy-card">
+          <h3 data-i18n="step3Title">مراجعة الإعداد</h3>
+          <p data-i18n="step3Desc">راجع إعداداتك قبل الإنهاء</p>
+        </article>
+        <article class="step-copy-card">
+          <h3 data-i18n="step4Title">الدخول للنظام</h3>
+          <p data-i18n="step4Desc">ابدأ استخدام حِسْبَة بثقة</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="activities-copy" aria-labelledby="activities-title">
+      <h2 id="activities-title" data-i18n="activitiesTitle">الأنشطة المدعومة</h2>
+      <span class="activities-underline" aria-hidden="true"></span>
+      <div class="activity-grid">
+        <article class="activity-pill"><img src="{% static 'hesba/setup_gate/icons/activity_commercial_icon.png' %}" alt="" aria-hidden="true"><span data-i18n="commercial">تجاري</span></article>
+        <article class="activity-pill"><img src="{% static 'hesba/setup_gate/icons/activity_service_icon.png' %}" alt="" aria-hidden="true"><span data-i18n="service">خدمي</span></article>
+        <article class="activity-pill"><img src="{% static 'hesba/setup_gate/icons/activity_manufacturing_icon.png' %}" alt="" aria-hidden="true"><span data-i18n="manufacturing">تصنيعي</span></article>
+        <article class="activity-pill"><img src="{% static 'hesba/setup_gate/icons/activity_contracting_icon.png' %}" alt="" aria-hidden="true"><span data-i18n="contracting">مقاولات</span></article>
+        <article class="activity-pill"><img src="{% static 'hesba/setup_gate/icons/activity_restaurant_icon.png' %}" alt="" aria-hidden="true"><span data-i18n="restaurant">مطاعم</span></article>
+        <article class="activity-pill"><img src="{% static 'hesba/setup_gate/icons/activity_medical_icon.png' %}" alt="" aria-hidden="true"><span data-i18n="medical">طبي</span></article>
+        <article class="activity-pill"><img src="{% static 'hesba/setup_gate/icons/activity_education_icon.png' %}" alt="" aria-hidden="true"><span data-i18n="education">تعليمي</span></article>
+        <article class="activity-pill"><img src="{% static 'hesba/setup_gate/icons/activity_other_icon.png' %}" alt="" aria-hidden="true"><span data-i18n="other">أخرى</span></article>
+      </div>
+    </section>
+  </section>
+</main>
+<script>
+(function(){
+  var params = new URLSearchParams(window.location.search);
+  var saved = localStorage.getItem('hesba_lang');
+  var lang = params.get('lang') === 'en' ? 'en' : (params.get('lang') === 'ar' ? 'ar' : (saved === 'en' ? 'en' : 'ar'));
+  var dict = {
+    ar: {
+      title: 'بوابة الإعداد - حِسْبَة',
+      logout: 'تسجيل الخروج', language: 'العربية',
+      heroTitle: 'جهّز حِسْبَة حسب نشاطك',
+      heroLead: 'قبل الدخول للنظام، نحتاج إعدادًا بسيطًا لتحديد نوع النشاط والموديولات المناسبة لك.',
+      heroNote: 'حِسْبَة نظام إدارة متكامل قابل للتخصيص حسب نشاطك، صلاحيات المستخدمين، وطريقة تشغيلك.',
+      startSetup: 'ابدأ الإعداد', stepsTitle: 'خطوات الإعداد',
+      step1Title: 'اختيار النشاط', step1Desc: 'اختر نوع النشاط المناسب لك',
+      step2Title: 'اختيار الموديولات', step2Desc: 'حدد الموديولات التي تحتاجها',
+      step3Title: 'مراجعة الإعداد', step3Desc: 'راجع إعداداتك قبل الإنهاء',
+      step4Title: 'الدخول للنظام', step4Desc: 'ابدأ استخدام حِسْبَة بثقة',
+      activitiesTitle: 'الأنشطة المدعومة', commercial: 'تجاري', service: 'خدمي', manufacturing: 'تصنيعي', contracting: 'مقاولات', restaurant: 'مطاعم', medical: 'طبي', education: 'تعليمي', other: 'أخرى'
+    },
+    en: {
+      title: 'Setup Gate - Hesba',
+      logout: 'Logout', language: 'English',
+      heroTitle: 'Set up Hesba for your activity',
+      heroLead: 'Before entering the system, complete a simple setup to choose your activity type and suitable modules.',
+      heroNote: 'Hesba is a customizable management system for your activity, user permissions, and operating flow.',
+      startSetup: 'Start setup', stepsTitle: 'Setup steps',
+      step1Title: 'Choose activity', step1Desc: 'Select the activity type that fits you',
+      step2Title: 'Choose modules', step2Desc: 'Select the modules you need',
+      step3Title: 'Review setup', step3Desc: 'Review settings before finishing',
+      step4Title: 'Enter system', step4Desc: 'Start using Hesba confidently',
+      activitiesTitle: 'Supported activities', commercial: 'Commercial', service: 'Services', manufacturing: 'Manufacturing', contracting: 'Contracting', restaurant: 'Restaurants', medical: 'Medical', education: 'Education', other: 'Other'
+    }
+  };
+  function applyLanguage(nextLang){
+    lang = nextLang === 'en' ? 'en' : 'ar';
+    localStorage.setItem('hesba_lang', lang);
+    document.documentElement.lang = lang;
+    document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+    document.body.dataset.lang = lang;
+    document.title = dict[lang].title;
+    document.querySelectorAll('[data-i18n]').forEach(function(el){
+      var key = el.dataset.i18n;
+      if (dict[lang][key]) el.textContent = dict[lang][key];
+    });
+    document.querySelectorAll('[data-lang-toggle]').forEach(function(btn){
+      btn.setAttribute('aria-label', lang === 'ar' ? 'تغيير اللغة' : 'Change language');
+    });
+    var url = new URL(window.location.href);
+    url.searchParams.set('lang', lang);
+    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+  }
+  applyLanguage(lang);
+  document.querySelectorAll('[data-lang-toggle]').forEach(function(btn){
+    btn.addEventListener('click', function(){ applyLanguage(lang === 'ar' ? 'en' : 'ar'); });
+  });
+})();
+</script>
+</body>
+</html>
