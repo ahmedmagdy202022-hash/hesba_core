@@ -18,7 +18,7 @@ html,body{margin:0;width:100%;min-height:100%}
 
 body.setup-gate-page{
   min-height:100svh;
-  padding-top:14px;
+  padding-top:8px;
   background:
     radial-gradient(circle at 12% 16%,rgba(5,174,184,.12),transparent 28%),
     linear-gradient(180deg,#f8feff 0%,var(--setup-bg) 100%);
