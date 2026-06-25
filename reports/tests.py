@@ -36,13 +36,22 @@ class LoginAndDeviceShellSmokeTests(TestCase):
 
 
 class SetupGateWebSmokeTests(TestCase):
-    def test_setup_gate_route_renders_approved_web_screen_layer(self):
+    def test_setup_gate_route_renders_component_rebuild(self):
         response = self.client.get(reverse("setup_gate"))
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "بوابة الإعداد - حِسْبَة")
         self.assertContains(response, "hesba/css/setup_gate_web.css")
-        self.assertContains(response, "setup_gate_web_background_approved.png")
+        self.assertContains(response, "setup-shell")
+        self.assertContains(response, "setup-header")
+        self.assertContains(response, "hero-card")
+        self.assertContains(response, "hero-actions")
+        self.assertContains(response, "steps-section")
+        self.assertContains(response, "step-card")
+        self.assertContains(response, "activities-section")
+        self.assertContains(response, "activity-pill")
+        self.assertContains(response, "hesba/setup_gate/icons/activity_commercial_icon.png")
+        self.assertNotContains(response, "setup_gate_web_background_approved.png")
         self.assertContains(response, "جهّز حِسْبَة حسب نشاطك")
         self.assertContains(response, "ابدأ الإعداد")
         self.assertContains(response, "خطوات الإعداد")
@@ -52,6 +61,7 @@ class SetupGateWebSmokeTests(TestCase):
         response = self.client.get(reverse("setup_gate"))
 
         required_translation_keys = [
+            "heroKicker",
             "heroTitle",
             "heroLead",
             "startSetup",
@@ -71,6 +81,18 @@ class SetupGateWebSmokeTests(TestCase):
 
         self.assertContains(response, "Set up Hesba for your activity")
         self.assertContains(response, "Supported activities")
+
+    def test_setup_gate_css_uses_responsive_components_not_overlay_coordinates(self):
+        css_path = settings.BASE_DIR / "static" / "hesba" / "css" / "setup_gate_web.css"
+        css = css_path.read_text(encoding="utf-8")
+
+        self.assertIn(".setup-shell", css)
+        self.assertIn("display:grid", css)
+        self.assertIn("display:flex", css)
+        self.assertIn("max-width", css)
+        self.assertNotIn(".setup-bg", css)
+        self.assertNotIn("position:absolute", css)
+        self.assertNotIn("setup_gate_web_background_approved.png", css)
 
 
 class FirstUiNavigationMapTests(TestCase):
