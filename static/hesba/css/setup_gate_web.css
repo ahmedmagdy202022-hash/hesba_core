@@ -31,7 +31,7 @@ button,a{touch-action:manipulation}
 
 .setup-shell{
   width:min(1180px,calc(100% - 48px));
-  margin:14px auto;
+  margin:14px auto 0;
   display:grid;
   gap:10px;
 }
@@ -315,7 +315,7 @@ button,a{touch-action:manipulation}
 .setup-gate-page[data-lang="en"] .activity-pill{flex-direction:row-reverse}
 
 @media(max-width:1180px){
-  .setup-shell{width:min(1040px,calc(100% - 36px));margin:18px auto;gap:12px}
+  .setup-shell{width:min(1040px,calc(100% - 36px));margin:18px auto 0;gap:12px}
   .hero-card{min-height:314px;padding:30px 32px;grid-template-columns:minmax(0,1fr) minmax(280px,.78fr)}
   .hero-copy h1{font-size:34px}
   .hero-copy p{font-size:15px}
@@ -323,7 +323,7 @@ button,a{touch-action:manipulation}
 }
 
 @media(max-width:900px){
-  .setup-shell{width:min(680px,calc(100% - 28px));margin:16px auto}
+  .setup-shell{width:min(680px,calc(100% - 28px));margin:16px auto 0}
   .setup-header{align-items:flex-start;flex-direction:column}
   .setup-controls{width:100%;justify-content:space-between}
   .hero-card{grid-template-columns:1fr;min-height:auto;padding:28px}
@@ -333,7 +333,7 @@ button,a{touch-action:manipulation}
 }
 
 @media(max-width:560px){
-  .setup-shell{width:calc(100% - 20px);margin:10px auto;gap:12px}
+  .setup-shell{width:calc(100% - 20px);margin:10px auto 0;gap:12px}
   .setup-controls{flex-wrap:wrap;gap:8px}
   .control-pill,.setup-btn{width:100%}
   .logout-form,.secondary-logout-form{width:100%}
