@@ -5,22 +5,47 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>بوابة الإعداد - حِسْبَة</title>
-<link rel="stylesheet" href="{% static 'hesba/css/setup_gate_web.css' %}?v=115a-component">
+<link rel="stylesheet" href="{% static 'hesba/css/setup_gate_web.css' %}?v=115a-visual-refine">
 </head>
 <body class="setup-gate-page" data-lang="ar">
+<svg class="setup-icon-sprite" aria-hidden="true" focusable="false">
+  <symbol id="setup-icon-globe" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="9"></circle>
+    <path d="M3 12h18M12 3c2.35 2.45 3.55 5.45 3.55 9S14.35 18.55 12 21M12 3C9.65 5.45 8.45 8.45 8.45 12S9.65 18.55 12 21"></path>
+  </symbol>
+  <symbol id="setup-icon-logout" viewBox="0 0 24 24">
+    <path d="M9 5H5v14h4"></path>
+    <path d="M13 8l4 4-4 4"></path>
+    <path d="M17 12H8"></path>
+  </symbol>
+  <symbol id="setup-icon-arrow" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="9"></circle>
+    <path d="M13.5 8.5L10 12l3.5 3.5"></path>
+    <path d="M10.5 12H17"></path>
+  </symbol>
+  <symbol id="setup-icon-caret" viewBox="0 0 24 24">
+    <path d="M7 10l5 5 5-5"></path>
+  </symbol>
+</svg>
 <main class="setup-shell" aria-label="Setup Gate">
   <header class="setup-header" aria-label="Setup header">
     <div class="setup-brand">
       <img class="setup-brand-logo" src="{% static 'hesba/setup_gate/assets/setup_gate_logo_approved.png' %}" alt="Hesba" onerror="this.hidden=true">
     </div>
     <div class="setup-controls" aria-label="Header controls">
-      <button class="control-pill language-pill" type="button" data-lang-toggle aria-label="تغيير اللغة">
-        <span data-i18n="language">العربية</span>
-      </button>
       <form class="logout-form" method="post" action="{% url 'logout' %}">
         {% csrf_token %}
-        <button class="control-pill logout-pill" type="submit" data-i18n="logout">تسجيل الخروج</button>
+        <button class="control-pill logout-pill" type="submit">
+          <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#setup-icon-logout"></use></svg>
+          <span data-i18n="logout">تسجيل الخروج</span>
+        </button>
       </form>
+      <span class="control-separator" aria-hidden="true"></span>
+      <button class="control-pill language-pill" type="button" data-lang-toggle aria-label="تغيير اللغة">
+        <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#setup-icon-globe"></use></svg>
+        <span data-i18n="language">العربية</span>
+        <svg class="ui-icon caret-icon" aria-hidden="true" focusable="false"><use href="#setup-icon-caret"></use></svg>
+      </button>
     </div>
   </header>
 
@@ -31,10 +56,16 @@
       <p class="hero-lead" data-i18n="heroLead">قبل الدخول للنظام، نحتاج إعدادًا بسيطًا لتحديد نوع النشاط والموديولات المناسبة لك.</p>
       <p class="hero-note" data-i18n="heroNote">حِسْبَة نظام إدارة متكامل قابل للتخصيص حسب نشاطك، صلاحيات المستخدمين، وطريقة تشغيلك.</p>
       <div class="hero-actions" aria-label="Setup actions">
-        <a class="setup-btn primary" href="#setup-steps" data-i18n="startSetup">ابدأ الإعداد</a>
+        <a class="setup-btn primary" href="#setup-steps">
+          <svg class="btn-icon arrow-icon" aria-hidden="true" focusable="false"><use href="#setup-icon-arrow"></use></svg>
+          <span data-i18n="startSetup">ابدأ الإعداد</span>
+        </a>
         <form class="secondary-logout-form" method="post" action="{% url 'logout' %}">
           {% csrf_token %}
-          <button class="setup-btn secondary" type="submit" data-i18n="logout">تسجيل الخروج</button>
+          <button class="setup-btn secondary" type="submit">
+            <svg class="btn-icon" aria-hidden="true" focusable="false"><use href="#setup-icon-logout"></use></svg>
+            <span data-i18n="logout">تسجيل الخروج</span>
+          </button>
         </form>
       </div>
     </div>
@@ -48,26 +79,54 @@
       <h2 id="steps-title" data-i18n="stepsTitle">خطوات الإعداد</h2>
     </div>
     <div class="step-grid">
-      <article class="step-card">
-        <span class="step-number" aria-hidden="true">01</span>
-        <h3 data-i18n="step1Title">اختيار النشاط</h3>
-        <p data-i18n="step1Desc">اختر نوع النشاط المناسب لك</p>
-      </article>
-      <article class="step-card">
-        <span class="step-number" aria-hidden="true">02</span>
-        <h3 data-i18n="step2Title">اختيار الموديولات</h3>
-        <p data-i18n="step2Desc">حدد الموديولات التي تحتاجها</p>
-      </article>
-      <article class="step-card">
-        <span class="step-number" aria-hidden="true">03</span>
-        <h3 data-i18n="step3Title">مراجعة الإعداد</h3>
-        <p data-i18n="step3Desc">راجع إعداداتك قبل الإنهاء</p>
-      </article>
-      <article class="step-card">
-        <span class="step-number" aria-hidden="true">04</span>
-        <h3 data-i18n="step4Title">الدخول للنظام</h3>
-        <p data-i18n="step4Desc">ابدأ استخدام حِسْبَة بثقة</p>
-      </article>
+      <div class="step-item">
+        <span class="step-badge" aria-hidden="true">1</span>
+        <article class="step-card">
+          <span class="step-icon-wrap" aria-hidden="true">
+            <img class="step-icon" src="{% static 'hesba/setup_gate/assets/setup_gate_step_activity_icon.png' %}" alt="">
+          </span>
+          <div class="step-copy">
+            <h3 data-i18n="step1Title">اختيار النشاط</h3>
+            <p data-i18n="step1Desc">اختر نوع النشاط المناسب لك</p>
+          </div>
+        </article>
+      </div>
+      <div class="step-item">
+        <span class="step-badge" aria-hidden="true">2</span>
+        <article class="step-card">
+          <span class="step-icon-wrap" aria-hidden="true">
+            <img class="step-icon" src="{% static 'hesba/setup_gate/assets/setup_gate_step_modules_icon.png' %}" alt="">
+          </span>
+          <div class="step-copy">
+            <h3 data-i18n="step2Title">اختيار الموديولات</h3>
+            <p data-i18n="step2Desc">حدد الموديولات التي تحتاجها</p>
+          </div>
+        </article>
+      </div>
+      <div class="step-item">
+        <span class="step-badge" aria-hidden="true">3</span>
+        <article class="step-card">
+          <span class="step-icon-wrap" aria-hidden="true">
+            <img class="step-icon" src="{% static 'hesba/setup_gate/assets/setup_gate_step_review_icon.png' %}" alt="">
+          </span>
+          <div class="step-copy">
+            <h3 data-i18n="step3Title">مراجعة الإعداد</h3>
+            <p data-i18n="step3Desc">راجع إعداداتك قبل الإنهاء</p>
+          </div>
+        </article>
+      </div>
+      <div class="step-item">
+        <span class="step-badge" aria-hidden="true">4</span>
+        <article class="step-card">
+          <span class="step-icon-wrap" aria-hidden="true">
+            <img class="step-icon" src="{% static 'hesba/setup_gate/assets/setup_gate_step_system_icon.png' %}" alt="">
+          </span>
+          <div class="step-copy">
+            <h3 data-i18n="step4Title">الدخول للنظام</h3>
+            <p data-i18n="step4Desc">ابدأ استخدام حِسْبَة بثقة</p>
+          </div>
+        </article>
+      </div>
     </div>
   </section>
 
