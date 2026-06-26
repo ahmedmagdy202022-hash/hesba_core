@@ -200,7 +200,8 @@ button, a { touch-action: manipulation; }
 .step-badge {
   position: absolute;
   inset-block-start: 0;
-  inset-inline-end: 16px;
+  inset-inline-start: 16px;
+  inset-inline-end: auto;
   width: 26px;
   height: 26px;
   border-radius: 999px;
@@ -275,7 +276,6 @@ button, a { touch-action: manipulation; }
 .setup-gate-page[data-lang="en"] .hero-kicker { margin-left: 0; margin-right: 0; }
 .setup-gate-page[data-lang="en"] .arrow-icon { transform: rotate(180deg); }
 .setup-gate-page[data-lang="en"] .step-card { text-align: left; }
-.setup-gate-page[data-lang="en"] .step-badge { inset-inline-start: 16px; inset-inline-end: auto; }
 .setup-gate-page[data-lang="en"] .step-item:not(:last-child)::after { content: "›"; }
 .setup-gate-page[data-lang="en"] .activity-pill { flex-direction: row-reverse; }
 
