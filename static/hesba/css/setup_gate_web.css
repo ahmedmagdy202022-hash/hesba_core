@@ -402,7 +402,7 @@ button,a{touch-action:manipulation}
 .setup-gate-page[data-lang="en"] .step-item:not(:last-child)::after{content:"›";justify-self:end;margin-inline-end:-31px}
 .setup-gate-page[data-lang="en"] .activity-pill{flex-direction:row-reverse}
 
-@media(max-width:1420px){
+@media(max-width:1536px){
   body.setup-gate-page{padding:12px 0}
   .setup-shell{width:min(1288px,calc(100% - 44px));padding:18px 30px 14px;gap:10px}
   .setup-header{min-height:56px}
