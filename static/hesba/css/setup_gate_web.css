@@ -63,7 +63,7 @@ button,a{touch-action:manipulation}
 }
 
 .setup-header{
-  min-height:62px;
+  min-height:64px;
   display:flex;
   align-items:center;
   justify-content:space-between;
@@ -74,14 +74,14 @@ button,a{touch-action:manipulation}
   display:flex;
   align-items:center;
   justify-content:flex-start;
-  min-width:232px;
+  min-width:258px;
 }
 
 .setup-brand-logo{
   display:block;
-  width:min(232px,100%);
+  width:min(252px,100%);
   height:auto;
-  max-height:74px;
+  max-height:82px;
   object-fit:contain;
 }
 
@@ -238,6 +238,8 @@ button,a{touch-action:manipulation}
 }
 
 .section-heading{
+  width:max-content;
+  max-width:100%;
   display:flex;
   flex-direction:column;
   align-items:flex-start;
@@ -268,9 +270,10 @@ button,a{touch-action:manipulation}
 }
 
 .step-item{
+  position:relative;
   min-width:0;
   display:grid;
-  grid-template-rows:18px auto;
+  grid-template-rows:15px auto;
 }
 
 .step-item:not(:last-child)::after{
@@ -286,20 +289,19 @@ button,a{touch-action:manipulation}
 }
 
 .step-badge{
-  grid-row:1 / span 2;
-  width:29px;
-  height:29px;
+  position:absolute;
+  inset-block-start:1px;
+  inset-inline-end:14px;
+  width:26px;
+  height:26px;
   border-radius:999px;
   background:var(--setup-teal);
   color:#fff;
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  justify-self:end;
-  align-self:start;
-  margin-inline-end:22px;
   z-index:1;
-  font-size:15px;
+  font-size:13px;
   line-height:1;
   font-weight:900;
   box-shadow:0 6px 14px rgba(2,170,182,.2);
@@ -398,16 +400,16 @@ button,a{touch-action:manipulation}
 .setup-gate-page[data-lang="en"] .hero-kicker{margin-left:0;margin-right:0}
 .setup-gate-page[data-lang="en"] .arrow-icon{transform:rotate(180deg)}
 .setup-gate-page[data-lang="en"] .step-card{text-align:left}
-.setup-gate-page[data-lang="en"] .step-badge{justify-self:start;margin-inline-start:22px;margin-inline-end:0}
+.setup-gate-page[data-lang="en"] .step-badge{inset-inline-start:14px;inset-inline-end:auto}
 .setup-gate-page[data-lang="en"] .step-item:not(:last-child)::after{content:"›";justify-self:end;margin-inline-end:-31px}
 .setup-gate-page[data-lang="en"] .activity-pill{flex-direction:row-reverse}
 
 @media(max-width:1536px){
   body.setup-gate-page{padding:12px 0}
   .setup-shell{width:min(1288px,calc(100% - 44px));padding:18px 30px 14px;gap:10px}
-  .setup-header{min-height:56px}
-  .setup-brand{min-width:212px}
-  .setup-brand-logo{width:212px;max-height:66px}
+  .setup-header{min-height:58px}
+  .setup-brand{min-width:226px}
+  .setup-brand-logo{width:226px;max-height:72px}
   .hero-card{min-height:280px;padding:20px 28px;grid-template-columns:minmax(0,1fr) minmax(350px,.82fr)}
   .hero-copy h1{font-size:36px}
   .hero-copy p{font-size:15px;line-height:1.58;margin-top:10px}
@@ -425,12 +427,13 @@ button,a{touch-action:manipulation}
   .section-heading h2{font-size:20px}
   .section-heading::after{margin-top:8px;width:52px}
   .step-grid{gap:30px}
-  .step-item{grid-template-rows:16px auto}
+  .step-item{grid-template-rows:14px auto}
   .step-card{min-height:94px;padding:13px 15px;gap:13px}
   .step-item:not(:last-child)::after{font-size:32px;margin-inline-end:-26px}
   .step-icon-wrap{width:56px;height:56px}
   .step-icon{width:43px;height:43px}
-  .step-badge{width:27px;height:27px;font-size:14px;margin-inline-end:18px}
+  .step-badge{width:25px;height:25px;font-size:13px;inset-inline-end:12px}
+  .setup-gate-page[data-lang="en"] .step-badge{inset-inline-start:12px;inset-inline-end:auto}
   .step-card h3{font-size:15px}
   .step-card p{font-size:12px;margin-top:6px}
   .activity-grid{gap:12px}
@@ -453,6 +456,7 @@ button,a{touch-action:manipulation}
   .setup-shell{width:min(680px,calc(100% - 24px));padding:18px;gap:12px}
   .setup-header{align-items:flex-start;flex-direction:column}
   .setup-brand{min-width:0}
+  .setup-brand-logo{width:min(226px,100%)}
   .setup-controls{width:100%;justify-content:space-between}
   .control-separator{display:none}
   .hero-card{grid-template-columns:1fr;min-height:auto;padding:22px}
