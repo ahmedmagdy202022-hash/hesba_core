@@ -475,3 +475,41 @@ button,a{touch-action:manipulation}
   .step-card{min-height:96px}
   .activity-grid{grid-template-columns:1fr}
 }
+
+/* Final directional fix for setup step badges and arrows */
+@media (min-width:1181px){
+  .step-badge{
+    inset-inline-start:18px;
+    inset-inline-end:auto;
+    margin:0;
+  }
+
+  .step-item:not(:last-child)::after{
+    inset-inline-end:-24px;
+    inset-inline-start:auto;
+    margin:0;
+    z-index:2;
+  }
+
+  .setup-gate-page[data-lang="ar"] .step-item:not(:last-child)::after{
+    content:"‹";
+  }
+
+  .setup-gate-page[data-lang="en"] .step-item:not(:last-child)::after{
+    content:"›";
+  }
+}
+
+@media (min-width:1181px) and (max-width:1420px){
+  .step-badge{
+    inset-inline-start:14px;
+    inset-inline-end:auto;
+    margin:0;
+  }
+
+  .step-item:not(:last-child)::after{
+    inset-inline-end:-20px;
+    inset-inline-start:auto;
+    margin:0;
+  }
+}
