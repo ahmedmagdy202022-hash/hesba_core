@@ -91,8 +91,13 @@ class SetupGateWebSmokeTests(TestCase):
         self.assertIn("display:flex", css)
         self.assertIn("max-width", css)
         self.assertNotIn(".setup-bg", css)
-        self.assertNotIn("position:absolute", css)
         self.assertNotIn("setup_gate_web_background_approved.png", css)
+        self.assertNotIn("mask-image", css)
+        self.assertNotIn("-webkit-mask", css)
+
+        # Limited absolute positioning is allowed for small decorative badges/arrows only.
+        self.assertIn(".step-badge", css)
+        self.assertIn(".step-item:not(:last-child)::after", css)
 
 
 class FirstUiNavigationMapTests(TestCase):
