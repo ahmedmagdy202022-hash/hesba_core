@@ -476,8 +476,17 @@ button,a{touch-action:manipulation}
   .activity-grid{grid-template-columns:1fr}
 }
 
-/* Final directional fix for setup step badges and arrows */
+
+/* Final robust arrow fix: CSS-drawn arrows, not mirrored text glyphs */
 @media (min-width:1181px){
+  .step-grid{
+    overflow:visible;
+  }
+
+  .step-item{
+    overflow:visible;
+  }
+
   .step-badge{
     inset-inline-start:18px;
     inset-inline-end:auto;
@@ -485,18 +494,37 @@ button,a{touch-action:manipulation}
   }
 
   .step-item:not(:last-child)::after{
-    inset-inline-end:-24px;
-    inset-inline-start:auto;
-    margin:0;
-    z-index:2;
+    content:"" !important;
+    position:absolute;
+    top:calc(18px + 51px);
+    width:13px;
+    height:13px;
+    border:solid rgba(2,170,182,.72);
+    border-width:0 3px 3px 0;
+    font-size:0 !important;
+    line-height:0 !important;
+    color:transparent !important;
+    margin:0 !important;
+    pointer-events:none;
+    z-index:3;
   }
 
-  .setup-gate-page[data-lang="ar"] .step-item:not(:last-child)::after{
-    content:"‹";
-  }
-
+  /* English flow: 1 -> 2 -> 3 -> 4, arrow on the physical right of each card */
   .setup-gate-page[data-lang="en"] .step-item:not(:last-child)::after{
-    content:"›";
+    left:auto !important;
+    right:-25px !important;
+    inset-inline-start:auto !important;
+    inset-inline-end:auto !important;
+    transform:translateY(-50%) rotate(-45deg);
+  }
+
+  /* Arabic flow: 1 -> 2 -> 3 -> 4 visually right-to-left, arrow on the physical left */
+  .setup-gate-page[data-lang="ar"] .step-item:not(:last-child)::after{
+    left:-25px !important;
+    right:auto !important;
+    inset-inline-start:auto !important;
+    inset-inline-end:auto !important;
+    transform:translateY(-50%) rotate(135deg);
   }
 }
 
@@ -507,47 +535,11 @@ button,a{touch-action:manipulation}
     margin:0;
   }
 
-  .step-item:not(:last-child)::after{
-    inset-inline-end:-20px;
-    inset-inline-start:auto;
-    margin:0;
-  }
-}
-
-/* Final directional fix for setup step badges and arrows */
-@media (min-width:1181px){
-  .step-badge{
-    inset-inline-start:18px;
-    inset-inline-end:auto;
-    margin:0;
-  }
-
-  .step-item:not(:last-child)::after{
-    inset-inline-end:-24px;
-    inset-inline-start:auto;
-    margin:0;
-    z-index:2;
+  .setup-gate-page[data-lang="en"] .step-item:not(:last-child)::after{
+    right:-21px !important;
   }
 
   .setup-gate-page[data-lang="ar"] .step-item:not(:last-child)::after{
-    content:"‹";
-  }
-
-  .setup-gate-page[data-lang="en"] .step-item:not(:last-child)::after{
-    content:"›";
-  }
-}
-
-@media (min-width:1181px) and (max-width:1420px){
-  .step-badge{
-    inset-inline-start:14px;
-    inset-inline-end:auto;
-    margin:0;
-  }
-
-  .step-item:not(:last-child)::after{
-    inset-inline-end:-20px;
-    inset-inline-start:auto;
-    margin:0;
+    left:-21px !important;
   }
 }
