@@ -315,3 +315,34 @@ button, a { touch-action: manipulation; }
   .step-card { min-height: 96px; }
   .activity-grid { grid-template-columns: 1fr; }
 }
+
+/* 115A responsive arrow and badge polish */
+.step-badge {
+  inset-inline-start: clamp(10px, 1vw, 16px);
+  inset-inline-end: auto;
+  transform: translateY(-4px);
+}
+
+.setup-gate-page[data-lang="en"] .step-badge {
+  inset-inline-start: clamp(10px, 1vw, 16px);
+  inset-inline-end: auto;
+}
+
+@media (min-width: 1181px) {
+  .step-item:not(:last-child)::after {
+    content: "";
+    width: 12px;
+    height: 12px;
+    border: solid rgba(2, 170, 182, .72);
+    border-width: 0 3px 3px 0;
+    font-size: 0;
+    line-height: 0;
+    inset-inline-end: clamp(-28px, -2vw, -21px);
+    transform: translateY(-50%) rotate(135deg);
+  }
+
+  .setup-gate-page[data-lang="en"] .step-item:not(:last-child)::after {
+    content: "";
+    transform: translateY(-50%) rotate(-45deg);
+  }
+}
