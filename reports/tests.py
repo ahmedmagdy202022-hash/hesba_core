@@ -22,7 +22,7 @@ class LoginAndDeviceShellSmokeTests(TestCase):
         self.assertEqual(response["Location"], reverse("login"))
 
     def test_existing_safe_routes_still_return_200(self):
-        for path in ["/dashboard/", "/reports/", "/status/"]:
+        for path in ["/setup/", "/dashboard/", "/reports/", "/status/"]:
             with self.subTest(path=path):
                 response = self.client.get(path)
 
@@ -33,6 +33,71 @@ class LoginAndDeviceShellSmokeTests(TestCase):
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
         self.assertEqual(manifest["start_url"], "/login/")
+
+
+class SetupGateWebSmokeTests(TestCase):
+    def test_setup_gate_route_renders_component_rebuild(self):
+        response = self.client.get(reverse("setup_gate"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "بوابة الإعداد - حِسْبَة")
+        self.assertContains(response, "hesba/css/setup_gate_web.css")
+        self.assertContains(response, "setup-shell")
+        self.assertContains(response, "setup-header")
+        self.assertContains(response, "hero-card")
+        self.assertContains(response, "hero-actions")
+        self.assertContains(response, "steps-section")
+        self.assertContains(response, "step-card")
+        self.assertContains(response, "activities-section")
+        self.assertContains(response, "activity-pill")
+        self.assertContains(response, "hesba/setup_gate/icons/activity_commercial_icon.png")
+        self.assertNotContains(response, "setup_gate_web_background_approved.png")
+        self.assertContains(response, "جهّز حِسْبَة حسب نشاطك")
+        self.assertContains(response, "ابدأ الإعداد")
+        self.assertContains(response, "خطوات الإعداد")
+        self.assertContains(response, "الأنشطة المدعومة")
+
+    def test_setup_gate_keeps_text_as_real_translatable_ui(self):
+        response = self.client.get(reverse("setup_gate"))
+
+        required_translation_keys = [
+            "heroKicker",
+            "heroTitle",
+            "heroLead",
+            "startSetup",
+            "stepsTitle",
+            "activitiesTitle",
+            "commercial",
+            "service",
+            "manufacturing",
+            "contracting",
+            "restaurant",
+            "medical",
+            "education",
+            "other",
+        ]
+        for key in required_translation_keys:
+            self.assertContains(response, f'data-i18n="{key}"')
+
+        self.assertContains(response, "Set up Hesba for your activity")
+        self.assertContains(response, "Supported activities")
+
+    def test_setup_gate_css_uses_responsive_components_not_overlay_coordinates(self):
+        css_path = settings.BASE_DIR / "static" / "hesba" / "css" / "setup_gate_web.css"
+        css = css_path.read_text(encoding="utf-8")
+
+        self.assertIn(".setup-shell", css)
+        self.assertIn("display:grid", css)
+        self.assertIn("display:flex", css)
+        self.assertIn("max-width", css)
+        self.assertNotIn(".setup-bg", css)
+        self.assertNotIn("setup_gate_web_background_approved.png", css)
+        self.assertNotIn("mask-image", css)
+        self.assertNotIn("-webkit-mask", css)
+
+        # Limited absolute positioning is allowed for small decorative badges/arrows only.
+        self.assertIn(".step-badge", css)
+        self.assertIn(".step-item:not(:last-child)::after", css)
 
 
 class FirstUiNavigationMapTests(TestCase):

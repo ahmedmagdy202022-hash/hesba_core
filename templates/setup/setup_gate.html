@@ -1,0 +1,205 @@
+{% load static %}
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>بوابة الإعداد - حِسْبَة</title>
+<link rel="stylesheet" href="{% static 'hesba/css/setup_gate_web.css' %}?v=115a-visual-refine">
+</head>
+<body class="setup-gate-page" data-lang="ar">
+<svg class="setup-icon-sprite" aria-hidden="true" focusable="false">
+  <symbol id="setup-icon-globe" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="9"></circle>
+    <path d="M3 12h18M12 3c2.35 2.45 3.55 5.45 3.55 9S14.35 18.55 12 21M12 3C9.65 5.45 8.45 8.45 8.45 12S9.65 18.55 12 21"></path>
+  </symbol>
+  <symbol id="setup-icon-logout" viewBox="0 0 24 24">
+    <path d="M9 5H5v14h4"></path>
+    <path d="M13 8l4 4-4 4"></path>
+    <path d="M17 12H8"></path>
+  </symbol>
+  <symbol id="setup-icon-arrow" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="9"></circle>
+    <path d="M13.5 8.5L10 12l3.5 3.5"></path>
+    <path d="M10.5 12H17"></path>
+  </symbol>
+  <symbol id="setup-icon-caret" viewBox="0 0 24 24">
+    <path d="M7 10l5 5 5-5"></path>
+  </symbol>
+</svg>
+<main class="setup-shell" aria-label="Setup Gate">
+  <header class="setup-header" aria-label="Setup header">
+    <div class="setup-brand">
+      <img class="setup-brand-logo" src="{% static 'hesba/setup_gate/assets/setup_gate_logo_approved.png' %}" alt="Hesba" onerror="this.hidden=true">
+    </div>
+    <div class="setup-controls" aria-label="Header controls">
+      <form class="logout-form" method="post" action="{% url 'logout' %}">
+        {% csrf_token %}
+        <button class="control-pill logout-pill" type="submit">
+          <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#setup-icon-logout"></use></svg>
+          <span data-i18n="logout">تسجيل الخروج</span>
+        </button>
+      </form>
+      <span class="control-separator" aria-hidden="true"></span>
+      <button class="control-pill language-pill" type="button" data-lang-toggle aria-label="تغيير اللغة">
+        <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#setup-icon-globe"></use></svg>
+        <span data-i18n="language">العربية</span>
+        <svg class="ui-icon caret-icon" aria-hidden="true" focusable="false"><use href="#setup-icon-caret"></use></svg>
+      </button>
+    </div>
+  </header>
+
+  <section class="hero-card" aria-labelledby="setup-title">
+    <div class="hero-copy">
+      <p class="hero-kicker" data-i18n="heroKicker">بوابة الإعداد</p>
+      <h1 id="setup-title" data-i18n="heroTitle">جهّز حِسْبَة حسب نشاطك</h1>
+      <p class="hero-lead" data-i18n="heroLead">قبل الدخول للنظام، نحتاج إعدادًا بسيطًا لتحديد نوع النشاط والموديولات المناسبة لك.</p>
+      <p class="hero-note" data-i18n="heroNote">حِسْبَة نظام إدارة متكامل قابل للتخصيص حسب نشاطك، صلاحيات المستخدمين، وطريقة تشغيلك.</p>
+      <div class="hero-actions" aria-label="Setup actions">
+        <a class="setup-btn primary" href="#setup-steps">
+          <svg class="btn-icon arrow-icon" aria-hidden="true" focusable="false"><use href="#setup-icon-arrow"></use></svg>
+          <span data-i18n="startSetup">ابدأ الإعداد</span>
+        </a>
+        <form class="secondary-logout-form" method="post" action="{% url 'logout' %}">
+          {% csrf_token %}
+          <button class="setup-btn secondary" type="submit">
+            <svg class="btn-icon" aria-hidden="true" focusable="false"><use href="#setup-icon-logout"></use></svg>
+            <span data-i18n="logout">تسجيل الخروج</span>
+          </button>
+        </form>
+      </div>
+    </div>
+    <div class="hero-visual" aria-hidden="true">
+      <img src="{% static 'hesba/setup_gate/assets/setup_gate_hero_illustration_approved.png' %}" alt="" onerror="this.hidden=true">
+    </div>
+  </section>
+
+  <section class="steps-section" id="setup-steps" aria-labelledby="steps-title">
+    <div class="section-heading">
+      <h2 id="steps-title" data-i18n="stepsTitle">خطوات الإعداد</h2>
+    </div>
+    <div class="step-grid">
+      <div class="step-item">
+        <span class="step-badge" aria-hidden="true">1</span>
+        <article class="step-card">
+          <span class="step-icon-wrap" aria-hidden="true">
+            <img class="step-icon" src="{% static 'hesba/setup_gate/assets/setup_gate_step_activity_icon.png' %}" alt="">
+          </span>
+          <div class="step-copy">
+            <h3 data-i18n="step1Title">اختيار النشاط</h3>
+            <p data-i18n="step1Desc">اختر نوع النشاط المناسب لك</p>
+          </div>
+        </article>
+      </div>
+      <div class="step-item">
+        <span class="step-badge" aria-hidden="true">2</span>
+        <article class="step-card">
+          <span class="step-icon-wrap" aria-hidden="true">
+            <img class="step-icon" src="{% static 'hesba/setup_gate/assets/setup_gate_step_modules_icon.png' %}" alt="">
+          </span>
+          <div class="step-copy">
+            <h3 data-i18n="step2Title">اختيار الموديولات</h3>
+            <p data-i18n="step2Desc">حدد الموديولات التي تحتاجها</p>
+          </div>
+        </article>
+      </div>
+      <div class="step-item">
+        <span class="step-badge" aria-hidden="true">3</span>
+        <article class="step-card">
+          <span class="step-icon-wrap" aria-hidden="true">
+            <img class="step-icon" src="{% static 'hesba/setup_gate/assets/setup_gate_step_review_icon.png' %}" alt="">
+          </span>
+          <div class="step-copy">
+            <h3 data-i18n="step3Title">مراجعة الإعداد</h3>
+            <p data-i18n="step3Desc">راجع إعداداتك قبل الإنهاء</p>
+          </div>
+        </article>
+      </div>
+      <div class="step-item">
+        <span class="step-badge" aria-hidden="true">4</span>
+        <article class="step-card">
+          <span class="step-icon-wrap" aria-hidden="true">
+            <img class="step-icon" src="{% static 'hesba/setup_gate/assets/setup_gate_step_system_icon.png' %}" alt="">
+          </span>
+          <div class="step-copy">
+            <h3 data-i18n="step4Title">الدخول للنظام</h3>
+            <p data-i18n="step4Desc">ابدأ استخدام حِسْبَة بثقة</p>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="activities-section" aria-labelledby="activities-title">
+    <div class="section-heading">
+      <h2 id="activities-title" data-i18n="activitiesTitle">الأنشطة المدعومة</h2>
+    </div>
+    <div class="activity-grid">
+      <article class="activity-pill"><img src="{% static 'hesba/setup_gate/icons/activity_commercial_icon.png' %}" alt="" aria-hidden="true" onerror="this.hidden=true"><span data-i18n="commercial">تجاري</span></article>
+      <article class="activity-pill"><img src="{% static 'hesba/setup_gate/icons/activity_service_icon.png' %}" alt="" aria-hidden="true" onerror="this.hidden=true"><span data-i18n="service">خدمي</span></article>
+      <article class="activity-pill"><img src="{% static 'hesba/setup_gate/icons/activity_manufacturing_icon.png' %}" alt="" aria-hidden="true" onerror="this.hidden=true"><span data-i18n="manufacturing">تصنيعي</span></article>
+      <article class="activity-pill"><img src="{% static 'hesba/setup_gate/icons/activity_contracting_icon.png' %}" alt="" aria-hidden="true" onerror="this.hidden=true"><span data-i18n="contracting">مقاولات</span></article>
+      <article class="activity-pill"><img src="{% static 'hesba/setup_gate/icons/activity_restaurant_icon.png' %}" alt="" aria-hidden="true" onerror="this.hidden=true"><span data-i18n="restaurant">مطاعم</span></article>
+      <article class="activity-pill"><img src="{% static 'hesba/setup_gate/icons/activity_medical_icon.png' %}" alt="" aria-hidden="true" onerror="this.hidden=true"><span data-i18n="medical">طبي</span></article>
+      <article class="activity-pill"><img src="{% static 'hesba/setup_gate/icons/activity_education_icon.png' %}" alt="" aria-hidden="true" onerror="this.hidden=true"><span data-i18n="education">تعليمي</span></article>
+      <article class="activity-pill"><img src="{% static 'hesba/setup_gate/icons/activity_other_icon.png' %}" alt="" aria-hidden="true" onerror="this.hidden=true"><span data-i18n="other">أخرى</span></article>
+    </div>
+  </section>
+</main>
+<script>
+(function(){
+  var params = new URLSearchParams(window.location.search);
+  var saved = localStorage.getItem('hesba_lang');
+  var lang = params.get('lang') === 'en' ? 'en' : (params.get('lang') === 'ar' ? 'ar' : (saved === 'en' ? 'en' : 'ar'));
+  var dict = {
+    ar: {
+      title: 'بوابة الإعداد - حِسْبَة', logout: 'تسجيل الخروج', language: 'العربية', heroKicker: 'بوابة الإعداد',
+      heroTitle: 'جهّز حِسْبَة حسب نشاطك',
+      heroLead: 'قبل الدخول للنظام، نحتاج إعدادًا بسيطًا لتحديد نوع النشاط والموديولات المناسبة لك.',
+      heroNote: 'حِسْبَة نظام إدارة متكامل قابل للتخصيص حسب نشاطك، صلاحيات المستخدمين، وطريقة تشغيلك.',
+      startSetup: 'ابدأ الإعداد', stepsTitle: 'خطوات الإعداد',
+      step1Title: 'اختيار النشاط', step1Desc: 'اختر نوع النشاط المناسب لك',
+      step2Title: 'اختيار الموديولات', step2Desc: 'حدد الموديولات التي تحتاجها',
+      step3Title: 'مراجعة الإعداد', step3Desc: 'راجع إعداداتك قبل الإنهاء',
+      step4Title: 'الدخول للنظام', step4Desc: 'ابدأ استخدام حِسْبَة بثقة',
+      activitiesTitle: 'الأنشطة المدعومة', commercial: 'تجاري', service: 'خدمي', manufacturing: 'تصنيعي', contracting: 'مقاولات', restaurant: 'مطاعم', medical: 'طبي', education: 'تعليمي', other: 'أخرى'
+    },
+    en: {
+      title: 'Setup Gate - Hesba', logout: 'Logout', language: 'English', heroKicker: 'Setup gate',
+      heroTitle: 'Set up Hesba for your activity',
+      heroLead: 'Before entering the system, complete a simple setup to choose your activity type and suitable modules.',
+      heroNote: 'Hesba is a customizable management system for your activity, user permissions, and operating flow.',
+      startSetup: 'Start setup', stepsTitle: 'Setup steps',
+      step1Title: 'Choose activity', step1Desc: 'Select the activity type that fits you',
+      step2Title: 'Choose modules', step2Desc: 'Select the modules you need',
+      step3Title: 'Review setup', step3Desc: 'Review settings before finishing',
+      step4Title: 'Enter system', step4Desc: 'Start using Hesba confidently',
+      activitiesTitle: 'Supported activities', commercial: 'Commercial', service: 'Services', manufacturing: 'Manufacturing', contracting: 'Contracting', restaurant: 'Restaurants', medical: 'Medical', education: 'Education', other: 'Other'
+    }
+  };
+  function applyLanguage(nextLang){
+    lang = nextLang === 'en' ? 'en' : 'ar';
+    localStorage.setItem('hesba_lang', lang);
+    document.documentElement.lang = lang;
+    document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+    document.body.dataset.lang = lang;
+    document.title = dict[lang].title;
+    document.querySelectorAll('[data-i18n]').forEach(function(el){
+      var key = el.dataset.i18n;
+      if (dict[lang][key]) el.textContent = dict[lang][key];
+    });
+    document.querySelectorAll('[data-lang-toggle]').forEach(function(btn){
+      btn.setAttribute('aria-label', lang === 'ar' ? 'تغيير اللغة' : 'Change language');
+    });
+    var url = new URL(window.location.href);
+    url.searchParams.set('lang', lang);
+    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+  }
+  applyLanguage(lang);
+  document.querySelectorAll('[data-lang-toggle]').forEach(function(btn){
+    btn.addEventListener('click', function(){ applyLanguage(lang === 'ar' ? 'en' : 'ar'); });
+  });
+})();
+</script>
+</body>
+</html>
