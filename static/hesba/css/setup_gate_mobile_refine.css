@@ -1,0 +1,153 @@
+@media (max-width:700px){
+  body.setup-gate-page{padding-top:10px;}
+
+  /* Keep the top chrome stable while switching language. The logo and controls
+     no longer swap sides, so the header stops jumping on language change. */
+  .setup-header{
+    height:76px!important;
+    min-height:76px!important;
+    display:grid!important;
+    grid-template-columns:auto 1fr!important;
+    align-items:start!important;
+    column-gap:10px!important;
+    padding:8px 10px 0!important;
+    direction:ltr!important;
+  }
+
+  .setup-controls,
+  .setup-brand{
+    position:static!important;
+    top:auto!important;
+    right:auto!important;
+    left:auto!important;
+    order:initial!important;
+    transform:none!important;
+  }
+
+  .setup-controls{
+    grid-column:1!important;
+    justify-self:start!important;
+    width:auto!important;
+    max-width:190px!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:flex-start!important;
+    gap:8px!important;
+    direction:ltr!important;
+    z-index:2!important;
+  }
+
+  .setup-brand{
+    grid-column:2!important;
+    justify-self:end!important;
+    display:flex!important;
+    align-items:flex-start!important;
+    justify-content:flex-end!important;
+    min-width:0!important;
+    z-index:1!important;
+  }
+
+  .setup-brand-logo{
+    width:min(148px,36vw)!important;
+    max-height:56px!important;
+    object-fit:contain!important;
+    mix-blend-mode:multiply;
+  }
+
+  .language-pill{
+    min-width:122px!important;
+    max-width:142px!important;
+  }
+
+  .logout-pill{
+    width:36px!important;
+    min-width:36px!important;
+  }
+
+  .control-pill{
+    height:35px!important;
+    min-height:35px!important;
+    font-size:12.5px!important;
+  }
+
+  /* Make the screen breathe closer to the approved quiet visual. */
+  .hero-card{padding-top:15px!important;}
+  .hero-visual{height:clamp(150px,43vw,196px)!important;}
+  .hero-visual img{max-width:300px!important;}
+  .hero-copy h1{font-size:clamp(21px,5.55vw,27px)!important;line-height:1.18!important;}
+  .setup-gate-page[data-lang="en"] .hero-copy h1{font-size:clamp(19px,4.8vw,24px)!important;}
+  .hero-lead{font-size:clamp(11.5px,2.8vw,13.5px)!important;line-height:1.5!important;}
+  .setup-btn{height:42px!important;min-height:42px!important;font-size:clamp(14.5px,3.8vw,18px)!important;}
+
+  /* Heading underline: Arabic right, English left, with no visual drift. */
+  .section-heading{align-items:stretch!important;margin-bottom:12px!important;}
+  .setup-gate-page[data-lang="ar"] .section-heading,
+  .setup-gate-page[data-lang="ar"] .section-heading h2{
+    direction:rtl!important;
+    text-align:right!important;
+  }
+  .setup-gate-page[data-lang="en"] .section-heading,
+  .setup-gate-page[data-lang="en"] .section-heading h2{
+    direction:ltr!important;
+    text-align:left!important;
+  }
+  .section-heading::after{width:56px!important;height:4px!important;margin-top:7px!important;}
+  .setup-gate-page[data-lang="ar"] .section-heading::after{
+    margin-right:0!important;
+    margin-left:auto!important;
+    align-self:flex-end!important;
+  }
+  .setup-gate-page[data-lang="en"] .section-heading::after{
+    margin-left:0!important;
+    margin-right:auto!important;
+    align-self:flex-start!important;
+  }
+
+  /* Arrows stay inside the row, mirrored by language, and visually calmer. */
+  .step-item::after,
+  .step-item:not(:last-child)::after{
+    position:absolute!important;
+    top:50%!important;
+    transform:translateY(-50%)!important;
+    font-family:Arial, sans-serif!important;
+    font-size:23px!important;
+    line-height:1!important;
+    color:rgba(2,170,182,.86)!important;
+    z-index:4!important;
+    pointer-events:none!important;
+  }
+  .setup-gate-page[data-lang="ar"] .step-item::after,
+  .setup-gate-page[data-lang="ar"] .step-item:not(:last-child)::after{
+    content:"‹"!important;
+    left:31px!important;
+    right:auto!important;
+  }
+  .setup-gate-page[data-lang="en"] .step-item::after,
+  .setup-gate-page[data-lang="en"] .step-item:not(:last-child)::after{
+    content:"›"!important;
+    right:31px!important;
+    left:auto!important;
+  }
+
+  .step-card{height:62px!important;min-height:62px!important;}
+  .step-badge{width:35px!important;height:35px!important;font-size:16.5px!important;}
+  .step-card h3{font-size:clamp(12.5px,3.35vw,14.5px)!important;}
+  .step-card p{font-size:clamp(9.5px,2.55vw,11.5px)!important;}
+  .activity-pill{height:54px!important;min-height:54px!important;font-size:clamp(9.5px,2.55vw,11.5px)!important;}
+  .setup-gate-page[data-lang="en"] .activity-pill{font-size:clamp(7.8px,2.05vw,9.5px)!important;}
+}
+
+@media (max-width:380px){
+  .setup-header{height:72px!important;min-height:72px!important;grid-template-columns:auto 1fr!important;column-gap:8px!important;padding-inline:8px!important;}
+  .setup-brand-logo{width:min(136px,35vw)!important;max-height:52px!important;}
+  .setup-controls{max-width:162px!important;gap:7px!important;}
+  .language-pill{min-width:112px!important;max-width:126px!important;}
+  .logout-pill{width:34px!important;min-width:34px!important;}
+  .control-pill{height:34px!important;min-height:34px!important;font-size:12px!important;}
+  .hero-visual{height:148px!important;}
+  .hero-visual img{max-width:286px!important;}
+  .setup-gate-page[data-lang="ar"] .step-item::after,
+  .setup-gate-page[data-lang="ar"] .step-item:not(:last-child)::after{left:26px!important;}
+  .setup-gate-page[data-lang="en"] .step-item::after,
+  .setup-gate-page[data-lang="en"] .step-item:not(:last-child)::after{right:26px!important;}
+}
