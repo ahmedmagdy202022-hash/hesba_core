@@ -9,7 +9,7 @@ from reports.views import dashboard_snapshot, home, report_hub
 
 urlpatterns = [
     path("", RedirectView.as_view(pattern_name="login", permanent=False), name="root_redirect"),
-    path("login/", LoginView.as_view(template_name="registration/login.html"), name="login"),
+    path("login/", LoginView.as_view(template_name="registration/login.html", next_page="/setup/"), name="login"),
     path("logout/", LogoutView.as_view(next_page="login"), name="logout"),
     path("setup/", TemplateView.as_view(template_name="setup/setup_gate.html"), name="setup_gate"),
     path("home/", home, name="home"),
