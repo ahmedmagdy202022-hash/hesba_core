@@ -48,7 +48,7 @@
   width:24px !important;
 }
 .activity-selection-page[data-lang=en] .activity-action__plain::before{
-  content:"‹" !important;
+  content:"›" !important;
   font-size:28px !important;
   line-height:1 !important;
   transform:translateY(-1px) !important;
