@@ -1,10 +1,10 @@
-/* 117A final polish overrides: panel decoration, restored cards, English back arrow */
+/* 117A final polish overrides: soft panel decoration, restored cards, English arrows */
 .activity-panel{
   background:
-    repeating-radial-gradient(ellipse at 50% -6%, rgba(5,174,186,.105) 0 1px, transparent 2px 8px),
-    radial-gradient(circle at 92% 10%, rgba(5,174,186,.10), transparent 26%),
-    radial-gradient(circle at 6% 92%, rgba(5,174,186,.075), transparent 24%),
-    linear-gradient(155deg, rgba(255,255,255,.965) 0%, rgba(247,253,255,.955) 58%, rgba(238,250,253,.95) 100%) !important;
+    repeating-radial-gradient(ellipse at 50% -10%, rgba(5,174,186,.026) 0 1px, transparent 2px 14px),
+    radial-gradient(circle at 92% 10%, rgba(5,174,186,.032), transparent 30%),
+    radial-gradient(circle at 7% 94%, rgba(5,174,186,.026), transparent 26%),
+    linear-gradient(155deg, rgba(255,255,255,.982) 0%, rgba(250,254,255,.972) 58%, rgba(244,252,254,.965) 100%) !important;
 }
 .activity-card{
   overflow:visible !important;
@@ -41,23 +41,49 @@
   content:none !important;
   display:none !important;
 }
+.activity-selection-page[data-lang=en] .activity-action__circle::before{
+  content:"→" !important;
+  display:block !important;
+  width:100% !important;
+  text-align:center !important;
+  font-family:Arial,Tahoma,sans-serif !important;
+  font-size:20px !important;
+  line-height:.9 !important;
+  transform:translate(0,-1px) !important;
+}
 .activity-selection-page[data-lang=en] .activity-back{
   flex-direction:row-reverse !important;
+  gap:12px !important;
+}
+.activity-selection-page[data-lang=en] .activity-action__plain{
+  width:28px !important;
 }
 .activity-selection-page[data-lang=en] .activity-action__plain::before{
-  content:"‹" !important;
+  content:"←" !important;
+  font-family:Arial,Tahoma,sans-serif !important;
+  font-size:24px !important;
+  line-height:1 !important;
+  transform:translate(0,-1px) !important;
 }
 @media(max-width:700px){
   .activity-panel{
     background:
-      repeating-radial-gradient(ellipse at 50% -5%, rgba(5,174,186,.095) 0 1px, transparent 2px 7px),
-      radial-gradient(circle at 92% 8%, rgba(5,174,186,.08), transparent 28%),
-      linear-gradient(155deg, rgba(255,255,255,.965) 0%, rgba(247,253,255,.955) 60%, rgba(239,250,253,.95) 100%) !important;
+      repeating-radial-gradient(ellipse at 50% -8%, rgba(5,174,186,.022) 0 1px, transparent 2px 13px),
+      radial-gradient(circle at 92% 8%, rgba(5,174,186,.028), transparent 28%),
+      linear-gradient(155deg, rgba(255,255,255,.982) 0%, rgba(250,254,255,.972) 60%, rgba(246,253,254,.965) 100%) !important;
   }
   .activity-card.is-selected::after{
     top:8px !important;
     inset-inline-start:8px !important;
     width:12px !important;
     height:12px !important;
+  }
+  .activity-selection-page[data-lang=en] .activity-action__circle::before{
+    font-size:17px !important;
+    line-height:.9 !important;
+    transform:translate(0,-1px) !important;
+  }
+  .activity-selection-page[data-lang=en] .activity-action__plain::before{
+    font-size:23px !important;
   }
 }
