@@ -4,7 +4,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = "dev-only-change-before-production"
 DEBUG = True
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", ".app.github.dev"]
 
 DJANGO_APPS = [
     "django.contrib.admin",
@@ -75,3 +75,15 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+
+LOGIN_URL = "/login/"
+LOGIN_REDIRECT_URL = "/setup/"
+LOGOUT_REDIRECT_URL = "/login/"
+
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://*.app.github.dev",
+    "https://localhost:8010",
+    "http://localhost:8010",
+]
