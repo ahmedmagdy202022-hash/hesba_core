@@ -19,7 +19,6 @@
     overflow:visible!important;
   }
 
-  /* Top chrome: visually fixed for both languages; only text changes. */
   .setup-header{
     height:74px!important;
     min-height:74px!important;
@@ -44,15 +43,7 @@
   .control-pill{height:36px!important;min-height:36px!important;border-radius:11px!important;font-size:13px!important;line-height:1!important;background:rgba(255,255,255,.94)!important;}
   .ui-icon{width:17px!important;height:17px!important;}.caret-icon{width:11px!important;height:11px!important;}
 
-  /* Hero: image first, then live overlay copy/buttons, with calmer sizing. */
-  .hero-card{
-    display:grid!important;
-    grid-template-columns:1fr!important;
-    gap:8px!important;
-    padding:14px 14px 17px!important;
-    border-radius:18px!important;
-    overflow:hidden!important;
-  }
+  .hero-card{display:grid!important;grid-template-columns:1fr!important;gap:8px!important;padding:14px 14px 17px!important;border-radius:18px!important;overflow:hidden!important;}
   .hero-visual{order:-1!important;height:clamp(150px,42vw,196px)!important;min-height:0!important;padding:0!important;display:flex!important;align-items:center!important;justify-content:center!important;}
   .hero-visual img{width:100%!important;height:100%!important;max-width:300px!important;object-fit:contain!important;}
   .hero-copy{display:grid!important;grid-template-columns:1fr!important;gap:8px!important;max-width:none!important;text-align:center!important;justify-self:stretch!important;}
@@ -67,7 +58,6 @@
   .setup-gate-page[data-lang="en"] .setup-btn{font-size:clamp(13.5px,3.35vw,16px)!important;}
   .arrow-icon{width:26px!important;height:26px!important;}.btn-icon{width:18px!important;height:18px!important;}
 
-  /* Sections: use the pack/background cards and only position content cleanly. */
   .steps-section,.activities-section{border-radius:18px!important;padding:14px 14px 15px!important;overflow:hidden!important;}
   .section-heading{width:100%!important;display:block!important;margin:0 0 12px!important;padding:0!important;}
   .section-heading h2{width:100%!important;margin:0!important;font-size:clamp(22px,5.75vw,29px)!important;line-height:1.08!important;letter-spacing:-.015em!important;}
@@ -132,4 +122,40 @@
   .setup-gate-page[data-lang="en"] .step-item:after,.setup-gate-page[data-lang="en"] .step-item:not(:last-child):after{right:20px!important;}
   .activity-grid{gap:6px!important;}
   .activity-pill{height:51px!important;min-height:51px!important;}
+}
+
+/* 116K structural override: header row + deterministic chevrons */
+@media (max-width:700px){
+  .setup-header{height:58px!important;min-height:58px!important;padding:8px 12px 0!important;display:flex!important;align-items:flex-start!important;justify-content:space-between!important;gap:12px!important;direction:ltr!important;}
+  .setup-controls{display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:8px!important;width:auto!important;max-width:none!important;flex:0 0 auto!important;}
+  .setup-brand{display:flex!important;align-items:flex-start!important;justify-content:flex-end!important;flex:0 1 auto!important;}
+  .setup-brand-logo{width:clamp(118px,32vw,132px)!important;max-width:clamp(118px,32vw,132px)!important;max-height:46px!important;}
+  .logout-pill{width:36px!important;min-width:36px!important;}
+  .language-pill{width:130px!important;min-width:130px!important;max-width:130px!important;}
+  .step-badge{width:32px!important;height:32px!important;line-height:32px!important;font-size:15px!important;}
+  .step-icon-wrap{width:30px!important;height:30px!important;}
+  .step-icon{width:20px!important;height:20px!important;}
+  .setup-gate-page[data-lang="ar"] .step-card{padding-right:88px!important;padding-left:50px!important;}
+  .setup-gate-page[data-lang="ar"] .step-badge{right:15px!important;}
+  .setup-gate-page[data-lang="ar"] .step-icon-wrap{right:53px!important;}
+  .setup-gate-page[data-lang="en"] .step-card{padding-left:88px!important;padding-right:50px!important;}
+  .setup-gate-page[data-lang="en"] .step-badge{left:15px!important;}
+  .setup-gate-page[data-lang="en"] .step-icon-wrap{left:53px!important;}
+  .step-item:after,.step-item:not(:last-child):after{content:""!important;width:9px!important;height:9px!important;border-style:solid!important;border-color:rgba(2,170,182,.88)!important;border-width:0 2px 2px 0!important;font-size:0!important;color:transparent!important;}
+  .setup-gate-page[data-lang="ar"] .step-item:after,.setup-gate-page[data-lang="ar"] .step-item:not(:last-child):after{left:22px!important;right:auto!important;transform:translateY(-50%) rotate(135deg)!important;}
+  .setup-gate-page[data-lang="en"] .step-item:after,.setup-gate-page[data-lang="en"] .step-item:not(:last-child):after{right:22px!important;left:auto!important;transform:translateY(-50%) rotate(-45deg)!important;}
+}
+@media (max-width:380px){
+  .setup-header{height:56px!important;min-height:56px!important;padding:8px 10px 0!important;gap:8px!important;}
+  .setup-brand-logo{width:clamp(112px,31vw,124px)!important;max-width:clamp(112px,31vw,124px)!important;max-height:42px!important;}
+  .language-pill{width:118px!important;min-width:118px!important;max-width:118px!important;}
+  .logout-pill{width:34px!important;min-width:34px!important;}
+  .setup-gate-page[data-lang="ar"] .step-card{padding-right:82px!important;padding-left:44px!important;}
+  .setup-gate-page[data-lang="en"] .step-card{padding-left:82px!important;padding-right:44px!important;}
+  .step-badge{width:30px!important;height:30px!important;line-height:30px!important;font-size:14px!important;}
+  .step-icon-wrap{width:27px!important;height:27px!important;}
+  .setup-gate-page[data-lang="ar"] .step-icon-wrap{right:48px!important;}
+  .setup-gate-page[data-lang="en"] .step-icon-wrap{left:48px!important;}
+  .setup-gate-page[data-lang="ar"] .step-item:after,.setup-gate-page[data-lang="ar"] .step-item:not(:last-child):after{left:18px!important;}
+  .setup-gate-page[data-lang="en"] .step-item:after,.setup-gate-page[data-lang="en"] .step-item:not(:last-child):after{right:18px!important;}
 }
