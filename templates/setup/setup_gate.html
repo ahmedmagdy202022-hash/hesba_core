@@ -31,7 +31,7 @@
       <h1 id="setup-title" data-i18n="heroTitle">جهّز حِسْبَة حسب نشاطك</h1>
       <p class="hero-lead" data-i18n="heroLead">قبل الدخول للنظام، نحتاج إعدادًا بسيطًا لتحديد نوع النشاط والموديولات المناسبة لك.</p>
       <p class="hero-note" data-i18n="heroNote">حِسْبَة نظام إدارة متكامل قابل للتخصيص حسب نشاطك، صلاحيات المستخدمين، وطريقة تشغيلك.</p>
-      <div class="hero-actions" aria-label="Setup actions"><a class="setup-btn primary" href="#setup-steps"><svg class="btn-icon arrow-icon" aria-hidden="true" focusable="false"><use href="#setup-icon-arrow"></use></svg><span data-i18n="startSetup">ابدأ الإعداد</span></a><form class="secondary-logout-form" method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="setup-btn secondary" type="submit"><svg class="btn-icon" aria-hidden="true" focusable="false"><use href="#setup-icon-logout"></use></svg><span data-i18n="logout">تسجيل الخروج</span></button></form></div>
+      <div class="hero-actions" aria-label="Setup actions"><a class="setup-btn primary" href="/setup/activity/?lang=ar"><svg class="btn-icon arrow-icon" aria-hidden="true" focusable="false"><use href="#setup-icon-arrow"></use></svg><span data-i18n="startSetup">ابدأ الإعداد</span></a><form class="secondary-logout-form" method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="setup-btn secondary" type="submit"><svg class="btn-icon" aria-hidden="true" focusable="false"><use href="#setup-icon-logout"></use></svg><span data-i18n="logout">تسجيل الخروج</span></button></form></div>
     </div>
     <div class="hero-visual" aria-hidden="true"><img src="{% static 'hesba/setup_gate/assets/setup_gate_hero_illustration_approved.png' %}" alt="" onerror="this.hidden=true"></div>
   </section>
