@@ -1,0 +1,63 @@
+/* 117A final polish overrides: panel decoration, restored cards, English back arrow */
+.activity-panel{
+  background:
+    repeating-radial-gradient(ellipse at 50% -6%, rgba(5,174,186,.105) 0 1px, transparent 2px 8px),
+    radial-gradient(circle at 92% 10%, rgba(5,174,186,.10), transparent 26%),
+    radial-gradient(circle at 6% 92%, rgba(5,174,186,.075), transparent 24%),
+    linear-gradient(155deg, rgba(255,255,255,.965) 0%, rgba(247,253,255,.955) 58%, rgba(238,250,253,.95) 100%) !important;
+}
+.activity-card{
+  overflow:visible !important;
+  background:linear-gradient(180deg,#fbfeff 0%,#f4fbfd 100%) !important;
+}
+.activity-card::before,
+.activity-card::after{
+  content:none !important;
+  display:none !important;
+}
+.activity-card.is-active{
+  background:linear-gradient(180deg,#f7feff 0%,#edfafb 100%) !important;
+}
+.activity-card.is-disabled{
+  background:linear-gradient(180deg,#fcfeff 0%,#f6fbfc 100%) !important;
+}
+.activity-card.is-selected{
+  background:linear-gradient(180deg,#f3feff 0%,#e9fbfd 100%) !important;
+}
+.activity-card.is-selected::after{
+  content:"" !important;
+  display:block !important;
+  position:absolute !important;
+  top:12px !important;
+  inset-inline-start:12px !important;
+  width:15px !important;
+  height:15px !important;
+  border-radius:999px !important;
+  background:var(--activity-teal) !important;
+  box-shadow:0 0 0 5px rgba(5,174,186,.10) !important;
+  z-index:2 !important;
+}
+.activity-card.is-selected .activity-card__title::before{
+  content:none !important;
+  display:none !important;
+}
+.activity-selection-page[data-lang=en] .activity-back{
+  flex-direction:row-reverse !important;
+}
+.activity-selection-page[data-lang=en] .activity-action__plain::before{
+  content:"‹" !important;
+}
+@media(max-width:700px){
+  .activity-panel{
+    background:
+      repeating-radial-gradient(ellipse at 50% -5%, rgba(5,174,186,.095) 0 1px, transparent 2px 7px),
+      radial-gradient(circle at 92% 8%, rgba(5,174,186,.08), transparent 28%),
+      linear-gradient(155deg, rgba(255,255,255,.965) 0%, rgba(247,253,255,.955) 60%, rgba(239,250,253,.95) 100%) !important;
+  }
+  .activity-card.is-selected::after{
+    top:8px !important;
+    inset-inline-start:8px !important;
+    width:12px !important;
+    height:12px !important;
+  }
+}
