@@ -1,9 +1,20 @@
-/* 117A final polish overrides: calm panel gradient, restored cards, English back chevron */
+/* 117A final locked overrides: clean panel gradient, restored cards, centered action arrows */
+body.activity-selection-page{
+  background:
+    radial-gradient(circle at 4% 92%, rgba(5,174,186,.11), transparent 24%),
+    radial-gradient(circle at 96% 10%, rgba(5,174,186,.08), transparent 26%),
+    linear-gradient(180deg,#fbfeff 0%,#f1fbfd 52%,#eaf8fb 100%) !important;
+}
+.activity-bg-frame::before,
+.activity-bg-frame::after{
+  content:none !important;
+  display:none !important;
+}
 .activity-panel{
   background:
-    radial-gradient(circle at 88% 6%, rgba(5,174,186,.030), transparent 30%),
-    radial-gradient(circle at 8% 94%, rgba(5,174,186,.024), transparent 28%),
-    linear-gradient(155deg, rgba(255,255,255,.992) 0%, rgba(251,254,255,.982) 58%, rgba(247,253,254,.972) 100%) !important;
+    radial-gradient(circle at 92% 9%, rgba(5,174,186,.070), transparent 34%),
+    radial-gradient(circle at 6% 92%, rgba(5,174,186,.052), transparent 32%),
+    linear-gradient(145deg, rgba(255,255,255,.996) 0%, rgba(251,254,255,.990) 45%, rgba(242,252,254,.984) 100%) !important;
 }
 .activity-card{
   overflow:visible !important;
@@ -40,6 +51,24 @@
   content:none !important;
   display:none !important;
 }
+.activity-action__circle{
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  direction:ltr !important;
+  text-align:center !important;
+  position:relative !important;
+}
+.activity-action__circle::before{
+  display:block !important;
+  position:static !important;
+  width:auto !important;
+  height:auto !important;
+  margin:0 !important;
+  line-height:1 !important;
+  text-align:center !important;
+  transform:translateY(-1px) !important;
+}
 .activity-selection-page[data-lang=en] .activity-back{
   flex-direction:row !important;
   gap:12px !important;
@@ -54,11 +83,16 @@
   transform:translateY(-1px) !important;
 }
 @media(max-width:700px){
+  body.activity-selection-page{
+    background:
+      radial-gradient(circle at 4% 94%, rgba(5,174,186,.10), transparent 25%),
+      linear-gradient(180deg,#fbfeff 0%,#f2fbfd 54%,#eaf8fb 100%) !important;
+  }
   .activity-panel{
     background:
-      radial-gradient(circle at 88% 6%, rgba(5,174,186,.030), transparent 30%),
-      radial-gradient(circle at 8% 94%, rgba(5,174,186,.024), transparent 28%),
-      linear-gradient(155deg, rgba(255,255,255,.992) 0%, rgba(251,254,255,.982) 58%, rgba(247,253,254,.972) 100%) !important;
+      radial-gradient(circle at 90% 8%, rgba(5,174,186,.064), transparent 34%),
+      radial-gradient(circle at 6% 92%, rgba(5,174,186,.048), transparent 31%),
+      linear-gradient(145deg, rgba(255,255,255,.996) 0%, rgba(251,254,255,.990) 45%, rgba(243,252,254,.986) 100%) !important;
   }
   .activity-card.is-selected::after{
     top:8px !important;
@@ -66,12 +100,8 @@
     width:12px !important;
     height:12px !important;
   }
-  .activity-selection-page[data-lang=en] .activity-action__circle::before{
-    display:block !important;
-    width:100% !important;
-    text-align:center !important;
-    line-height:1 !important;
-    transform:translateY(-1px) !important;
+  .activity-action__circle::before{
+    font-size:19px !important;
   }
   .activity-selection-page[data-lang=en] .activity-action__plain::before{
     font-size:24px !important;
