@@ -1,79 +1,16 @@
-/* 117A final polish overrides: calm panel gradient, restored cards, English back chevron */
-.activity-panel{
-  background:
-    radial-gradient(circle at 88% 6%, rgba(5,174,186,.030), transparent 30%),
-    radial-gradient(circle at 8% 94%, rgba(5,174,186,.024), transparent 28%),
-    linear-gradient(155deg, rgba(255,255,255,.992) 0%, rgba(251,254,255,.982) 58%, rgba(247,253,254,.972) 100%) !important;
-}
-.activity-card{
-  overflow:visible !important;
-  background:linear-gradient(180deg,#fbfeff 0%,#f4fbfd 100%) !important;
-}
-.activity-card::before,
-.activity-card::after{
-  content:none !important;
-  display:none !important;
-}
-.activity-card.is-active{
-  background:linear-gradient(180deg,#f7feff 0%,#edfafb 100%) !important;
-}
-.activity-card.is-disabled{
-  background:linear-gradient(180deg,#fcfeff 0%,#f6fbfc 100%) !important;
-}
-.activity-card.is-selected{
-  background:linear-gradient(180deg,#f3feff 0%,#e9fbfd 100%) !important;
-}
-.activity-card.is-selected::after{
-  content:"" !important;
-  display:block !important;
-  position:absolute !important;
-  top:12px !important;
-  inset-inline-start:12px !important;
-  width:15px !important;
-  height:15px !important;
-  border-radius:999px !important;
-  background:var(--activity-teal) !important;
-  box-shadow:0 0 0 5px rgba(5,174,186,.10) !important;
-  z-index:2 !important;
-}
-.activity-card.is-selected .activity-card__title::before{
-  content:none !important;
-  display:none !important;
-}
-.activity-selection-page[data-lang=en] .activity-back{
-  flex-direction:row !important;
-  gap:12px !important;
-}
-.activity-selection-page[data-lang=en] .activity-action__plain{
-  width:24px !important;
-}
-.activity-selection-page[data-lang=en] .activity-action__plain::before{
-  content:"›" !important;
-  font-size:28px !important;
-  line-height:1 !important;
-  transform:translateY(-1px) !important;
-}
-@media(max-width:700px){
-  .activity-panel{
-    background:
-      radial-gradient(circle at 88% 6%, rgba(5,174,186,.030), transparent 30%),
-      radial-gradient(circle at 8% 94%, rgba(5,174,186,.024), transparent 28%),
-      linear-gradient(155deg, rgba(255,255,255,.992) 0%, rgba(251,254,255,.982) 58%, rgba(247,253,254,.972) 100%) !important;
-  }
-  .activity-card.is-selected::after{
-    top:8px !important;
-    inset-inline-start:8px !important;
-    width:12px !important;
-    height:12px !important;
-  }
-  .activity-selection-page[data-lang=en] .activity-action__circle::before{
-    display:block !important;
-    width:100% !important;
-    text-align:center !important;
-    line-height:1 !important;
-    transform:translateY(-1px) !important;
-  }
-  .activity-selection-page[data-lang=en] .activity-action__plain::before{
-    font-size:24px !important;
-  }
-}
+/* 117A recovery visual */
+.activity-bg-frame::before,.activity-bg-frame::after{content:none!important;display:none!important}
+.activity-panel{background:linear-gradient(145deg,rgba(255,255,255,.996) 0%,rgba(251,254,255,.990) 45%,rgba(242,252,254,.984) 100%)!important}
+.activity-card{overflow:visible!important;background:linear-gradient(180deg,#fbfeff 0%,#f4fbfd 100%)!important}
+.activity-card::before,.activity-card::after{content:none!important;display:none!important}
+.activity-card.is-active{background:linear-gradient(180deg,#f7feff 0%,#edfafb 100%)!important}
+.activity-card.is-disabled{background:linear-gradient(180deg,#fcfeff 0%,#f6fbfc 100%)!important}
+.activity-card.is-selected{background:linear-gradient(180deg,#f3feff 0%,#e9fbfd 100%)!important}
+.activity-card.is-selected::after{content:""!important;display:block!important;position:absolute!important;top:12px!important;inset-inline-start:12px!important;width:15px!important;height:15px!important;border-radius:999px!important;background:var(--activity-teal)!important;box-shadow:0 0 0 5px rgba(5,174,186,.10)!important;z-index:2!important}
+.activity-card.is-selected .activity-card__title::before{content:none!important;display:none!important}
+.activity-action__circle{display:inline-flex!important;align-items:center!important;justify-content:center!important;direction:ltr!important;text-align:center!important}
+.activity-action__circle::before{display:block!important;position:static!important;width:auto!important;height:auto!important;margin:0!important;line-height:1!important;text-align:center!important;transform:translateY(-1px)!important}
+.activity-selection-page[data-lang=en] .activity-back{flex-direction:row!important;gap:12px!important}
+.activity-selection-page[data-lang=en] .activity-action__plain{width:24px!important}
+.activity-selection-page[data-lang=en] .activity-action__plain::before{content:"›"!important;font-size:28px!important;line-height:1!important;transform:translateY(-1px)!important}
+@media(max-width:700px){.activity-card.is-selected::after{top:8px!important;inset-inline-start:8px!important;width:12px!important;height:12px!important}.activity-action__circle::before{font-size:19px!important}.activity-selection-page[data-lang=en] .activity-action__plain::before{font-size:24px!important}}
