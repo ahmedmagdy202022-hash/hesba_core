@@ -66,20 +66,38 @@ class CommercialSubActivitySelectionTests(TestCase):
     def test_commercial_subactivity_arabic_content_exists(self):
         response = self.client.get('/setup/activity/commercial/?lang=ar')
 
-        self.assertContains(response, 'اختر نوع النشاط التجاري')
-        self.assertContains(response, 'اختيار نوع النشاط يساعد حِسْبَة في تجهيز الموديولات المناسبة لطريقة البيع والمخزون.')
-        self.assertContains(response, 'محل تجزئة')
-        self.assertContains(response, 'سوبر ماركت / بقالة')
-        self.assertContains(response, 'نشاط تجاري آخر')
+        arabic_labels = [
+            'اختر نوع النشاط التجاري',
+            'اختيار نوع النشاط يساعد حِسْبَة في تجهيز الموديولات المناسبة لطريقة البيع والمخزون.',
+            'محل تجزئة',
+            'سوبر ماركت / بقالة',
+            'ملابس وأحذية',
+            'موبايلات وإلكترونيات',
+            'صيدلية',
+            'جملة / مخزن',
+            'بيع أونلاين',
+            'نشاط تجاري آخر',
+        ]
+        for label in arabic_labels:
+            self.assertContains(response, label)
 
     def test_commercial_subactivity_english_content_exists(self):
         response = self.client.get('/setup/activity/commercial/?lang=en')
 
-        self.assertContains(response, 'Choose commercial activity type')
-        self.assertContains(response, 'Choosing the activity type helps Hesba prepare the right modules for sales and inventory.')
-        self.assertContains(response, 'Retail store')
-        self.assertContains(response, 'Supermarket / Grocery')
-        self.assertContains(response, 'Other commercial')
+        english_labels = [
+            'Choose commercial activity type',
+            'Choosing the activity type helps Hesba prepare the right modules for sales and inventory.',
+            'Retail store',
+            'Supermarket / Grocery',
+            'Clothing & Shoes',
+            'Mobiles & Electronics',
+            'Pharmacy',
+            'Wholesale / Warehouse',
+            'Online selling',
+            'Other commercial',
+        ]
+        for label in english_labels:
+            self.assertContains(response, label)
 
     def test_commercial_subactivity_has_8_selectable_cards(self):
         response = self.client.get(reverse('setup_activity_commercial'))
@@ -94,7 +112,7 @@ class CommercialSubActivitySelectionTests(TestCase):
 
         self.assertContains(response, 'disabled data-next-button')
 
-    def test_card_slugs_exist(self):
+    def test_card_slugs_exist_once_each(self):
         response = self.client.get(reverse('setup_activity_commercial'))
 
         for slug in [
@@ -107,7 +125,19 @@ class CommercialSubActivitySelectionTests(TestCase):
             'online',
             'other',
         ]:
-            self.assertContains(response, f'data-sub-activity="{slug}"')
+            self.assertContains(response, f'data-sub-activity="{slug}"', count=1)
+
+    def test_selection_script_enables_next_and_moves_single_selection(self):
+        response = self.client.get(reverse('setup_activity_commercial'))
+
+        self.assertContains(response, "function clearSelection()")
+        self.assertContains(response, "card.classList.remove('is-selected')")
+        self.assertContains(response, "card.setAttribute('aria-pressed','false')")
+        self.assertContains(response, "card.classList.add('is-selected')")
+        self.assertContains(response, "card.setAttribute('aria-pressed','true')")
+        self.assertContains(response, "selectedSlug=card.dataset.subActivity||''")
+        self.assertContains(response, "next.disabled=false")
+        self.assertContains(response, "next.dataset.href=moduleTarget(selectedSlug)")
 
     def test_back_target_preserves_language(self):
         response = self.client.get('/setup/activity/commercial/?lang=en')
@@ -166,6 +196,16 @@ class CommercialSubActivitySelectionTests(TestCase):
         self.assertIn('activity-stepper', lock)
         self.assertIn('activity-footer', lock)
         self.assertIn('activity-action', lock)
+
+    def test_117b_visual_approval_file_exists(self):
+        approval_path = settings.BASE_DIR / 'docs' / '117B_COMMERCIAL_SUB_ACTIVITY_VISUAL_APPROVAL.md'
+        self.assertTrue(approval_path.exists())
+        approval = approval_path.read_text(encoding='utf-8')
+
+        self.assertIn('VISUAL_APPROVED', approval)
+        self.assertIn('/setup/activity/commercial/', approval)
+        self.assertIn('retail', approval)
+        self.assertIn('other', approval)
 
 
 class ModulesPlaceholderFor117BTests(TestCase):
