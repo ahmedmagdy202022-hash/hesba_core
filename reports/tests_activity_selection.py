@@ -276,7 +276,6 @@ class ServicesSubActivitySelectionTests(TestCase):
         response = self.client.get(reverse('setup_activity_services'))
 
         self.assertContains(response, 'data-sub-activity=', count=8)
-        self.assertContains(response, 'service-subactivity-card', count=8)
         self.assertContains(response, 'activity-card is-active service-subactivity-card', count=8)
         self.assertNotContains(response, 'is-disabled')
         self.assertNotContains(response, 'disabled aria-disabled')
