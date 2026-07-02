@@ -11,10 +11,45 @@
   <main class="activity-subactivity-placeholder__card">
     <h1 data-i18n="title">الموديولات</h1>
     <p data-i18n="message">هذه صفحة مؤقتة آمنة لمسار التنقل فقط. تنفيذ شاشة الموديولات ومنطقها خارج نطاق 117B.</p>
-    <a href="/setup/activity/commercial/?lang=ar" data-back-link data-i18n="back">الرجوع لاختيار نوع النشاط التجاري</a>
+    <a href="/setup/activity/commercial/?lang=ar" data-back-link>الرجوع إلى اختيار نوع النشاط التجاري</a>
   </main>
 <script>
-(function(){var params=new URLSearchParams(window.location.search);var lang=params.get('lang')==='en'?'en':'ar';var dict={ar:{pageTitle:'الموديولات - حِسْبَة',title:'الموديولات',message:'هذه صفحة مؤقتة آمنة لمسار التنقل فقط. تنفيذ شاشة الموديولات ومنطقها خارج نطاق 117B.',back:'الرجوع لاختيار نوع النشاط التجاري'},en:{pageTitle:'Modules - Hesba',title:'Modules',message:'This is a safe placeholder page for navigation only. The modules screen implementation and logic are out of scope for 117B.',back:'Back to commercial activity type selection'}};document.documentElement.lang=lang;document.documentElement.dir=lang==='ar'?'rtl':'ltr';document.body.dataset.lang=lang;document.title=dict[lang].pageTitle;document.querySelectorAll('[data-i18n]').forEach(function(el){var key=el.dataset.i18n;if(dict[lang][key])el.textContent=dict[lang][key];});var back=document.querySelector('[data-back-link]');if(back)back.href='/setup/activity/commercial/?lang='+lang;})();
+(function(){
+  var params=new URLSearchParams(window.location.search);
+  var lang=params.get('lang')==='en'?'en':'ar';
+  var activity=params.get('activity')||'';
+  var dict={
+    ar:{
+      pageTitle:'الموديولات - حِسْبَة',
+      title:'الموديولات',
+      message:'هذه صفحة مؤقتة آمنة لمسار التنقل فقط. تنفيذ شاشة الموديولات ومنطقها خارج نطاق 117B.',
+      commercialBack:'الرجوع إلى اختيار نوع النشاط التجاري',
+      servicesBack:'الرجوع إلى اختيار نوع النشاط الخدمي',
+      fallbackBack:'الرجوع لاختيار النشاط العام'
+    },
+    en:{
+      pageTitle:'Modules - Hesba',
+      title:'Modules',
+      message:'This is a safe placeholder page for navigation only. The modules screen implementation and logic are out of scope for 117B.',
+      commercialBack:'Back to commercial activity type selection',
+      servicesBack:'Back to service activity type selection',
+      fallbackBack:'Back to general activity selection'
+    }
+  };
+  function withLang(path){var url=new URL(path,window.location.origin);url.searchParams.set('lang',lang);return url.pathname+url.search;}
+  function backTarget(){
+    if(activity==='services')return {path:'/setup/activity/services/',label:dict[lang].servicesBack};
+    if(activity==='commercial')return {path:'/setup/activity/commercial/',label:dict[lang].commercialBack};
+    return {path:'/setup/activity/',label:dict[lang].fallbackBack};
+  }
+  document.documentElement.lang=lang;
+  document.documentElement.dir=lang==='ar'?'rtl':'ltr';
+  document.body.dataset.lang=lang;
+  document.title=dict[lang].pageTitle;
+  document.querySelectorAll('[data-i18n]').forEach(function(el){var key=el.dataset.i18n;if(dict[lang][key])el.textContent=dict[lang][key];});
+  var back=document.querySelector('[data-back-link]');
+  if(back){var target=backTarget();back.href=withLang(target.path);back.textContent=target.label;}
+})();
 </script>
 </body>
 </html>
