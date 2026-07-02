@@ -1,0 +1,400 @@
+{% load static %}
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>اختر الموديولات المناسبة - حِسْبَة</title>
+<link rel="stylesheet" href="{% static 'hesba/css/activity_selection.css' %}?v=117a-screen-pack">
+<link rel="stylesheet" href="{% static 'hesba/css/activity_selection_final_overrides.css' %}?v=117a-final-panel-back-arrow">
+<link rel="stylesheet" href="{% static 'hesba/css/activity_modules_selection.css' %}?v=118-modules-selection">
+</head>
+<body class="activity-selection-page modules-selection-page" data-lang="ar">
+<main class="activity-stage" aria-label="Modules Selection">
+  <div class="activity-bg-frame" aria-hidden="true"></div>
+  <section class="activity-ui-layer">
+    <header class="activity-header" aria-label="Setup activity header">
+      <div class="activity-brand">
+        <img class="activity-logo" src="{% static 'hesba/setup_gate/assets/setup_gate_logo_approved.png' %}" alt="Hesba">
+      </div>
+      <div class="activity-controls" aria-label="Header controls">
+        <form class="activity-control-form" method="post" action="{% url 'logout' %}">
+          {% csrf_token %}
+          <button class="activity-control activity-logout" type="submit" aria-label="تسجيل الخروج" data-logout-button>
+            <svg viewBox="0 0 24 24" class="activity-icon" aria-hidden="true">
+              <path d="M9 5H5v14h4M13 8l4 4-4 4M17 12H8"></path>
+            </svg>
+            <span class="activity-logout__text" data-i18n="logout">تسجيل الخروج</span>
+          </button>
+        </form>
+        <button class="activity-control activity-language" type="button" data-lang-toggle aria-label="تغيير اللغة">
+          <svg viewBox="0 0 24 24" class="activity-icon" aria-hidden="true">
+            <circle cx="12" cy="12" r="9"></circle>
+            <path d="M3 12h18M12 3c2.35 2.45 3.55 5.45 3.55 9S14.35 18.55 12 21M12 3C9.65 5.45 8.45 8.45 8.45 12S9.65 18.55 12 21"></path>
+          </svg>
+          <span data-i18n="language">العربية</span>
+          <svg viewBox="0 0 24 24" class="activity-icon activity-caret" aria-hidden="true">
+            <path d="M7 10l5 5 5-5"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <section class="activity-panel" aria-labelledby="activity-title">
+      <nav class="activity-stepper" aria-label="Setup steps">
+        <div class="activity-step"><span class="activity-step__number">1</span><span data-i18n="stepGeneral">النشاط العام</span></div>
+        <div class="activity-step"><span class="activity-step__number">2</span><span data-i18n="stepSub">النشاط الفرعي</span></div>
+        <div class="activity-step is-current"><span class="activity-step__number">3</span><span data-i18n="stepModules">الموديولات</span></div>
+        <div class="activity-step"><span class="activity-step__number">4</span><span data-i18n="stepReview">المراجعة</span></div>
+      </nav>
+
+      <div class="activity-copy modules-copy">
+        <h1 class="activity-title" id="activity-title" data-i18n="title">اختر الموديولات المناسبة</h1>
+        <p class="activity-subtitle" data-i18n="subtitle">جهزنا لك اقتراحًا مبدئيًا حسب نوع نشاطك، ويمكنك تعديله قبل المتابعة.</p>
+      </div>
+
+      <div class="modules-legend" aria-label="Module state legend">
+        <span class="modules-legend__item"><span class="modules-legend__dot modules-legend__dot--required"></span><span data-i18n="required">أساسي</span></span>
+        <span class="modules-legend__item"><span class="modules-legend__dot modules-legend__dot--suggested"></span><span data-i18n="suggested">مقترح</span></span>
+        <span class="modules-legend__item"><span class="modules-legend__dot modules-legend__dot--optional"></span><span data-i18n="optional">اختياري</span></span>
+      </div>
+
+      <div class="modules-grid" role="list" aria-label="Modules">
+        <button class="module-card" type="button" role="listitem" data-module="customers" data-commercial-state="suggested" data-services-state="required" aria-pressed="false">
+          <span class="module-card__top"><span class="module-card__title" data-i18n="customersTitle">العملاء</span><span class="module-card__state" data-state-label>مقترح</span></span>
+          <span class="module-card__description" data-i18n="customersDesc">إدارة أرصدة العملاء وبيانات التواصل.</span>
+          <span class="module-card__meta"><span class="module-card__status" data-status-label>مفعّل</span><span class="module-card__lock" data-lock-label>مقفول</span></span>
+        </button>
+        <button class="module-card" type="button" role="listitem" data-module="suppliers" data-commercial-state="suggested" data-services-state="optional" aria-pressed="false">
+          <span class="module-card__top"><span class="module-card__title" data-i18n="suppliersTitle">الموردون</span><span class="module-card__state" data-state-label>مقترح</span></span>
+          <span class="module-card__description" data-i18n="suppliersDesc">حسابات الموردين والمشتريات عند الحاجة.</span>
+          <span class="module-card__meta"><span class="module-card__status" data-status-label>مفعّل</span><span class="module-card__lock" data-lock-label>مقفول</span></span>
+        </button>
+        <button class="module-card" type="button" role="listitem" data-module="items_services" data-commercial-state="required" data-services-state="required" aria-pressed="false">
+          <span class="module-card__top"><span class="module-card__title" data-i18n="itemsServicesTitle">الأصناف والخدمات</span><span class="module-card__state" data-state-label>أساسي</span></span>
+          <span class="module-card__description" data-i18n="itemsServicesDesc">تعريف الخدمات أو الأصناف التي يتم بيعها.</span>
+          <span class="module-card__meta"><span class="module-card__status" data-status-label>مفعّل</span><span class="module-card__lock" data-lock-label>مقفول</span></span>
+        </button>
+        <button class="module-card" type="button" role="listitem" data-module="sales_operations" data-commercial-state="required" data-services-state="optional" aria-pressed="false">
+          <span class="module-card__top"><span class="module-card__title" data-i18n="salesOperationsTitle">عمليات البيع</span><span class="module-card__state" data-state-label>أساسي</span></span>
+          <span class="module-card__description" data-i18n="salesOperationsDesc">تسجيل البيع والتحصيل والآجل.</span>
+          <span class="module-card__meta"><span class="module-card__status" data-status-label>مفعّل</span><span class="module-card__lock" data-lock-label>مقفول</span></span>
+        </button>
+        <button class="module-card" type="button" role="listitem" data-module="purchases" data-commercial-state="suggested" data-services-state="optional" aria-pressed="false">
+          <span class="module-card__top"><span class="module-card__title" data-i18n="purchasesTitle">المشتريات</span><span class="module-card__state" data-state-label>مقترح</span></span>
+          <span class="module-card__description" data-i18n="purchasesDesc">تسجيل فواتير الشراء وتكلفة الأصناف.</span>
+          <span class="module-card__meta"><span class="module-card__status" data-status-label>مفعّل</span><span class="module-card__lock" data-lock-label>مقفول</span></span>
+        </button>
+        <button class="module-card" type="button" role="listitem" data-module="inventory" data-commercial-state="suggested" data-services-state="optional" aria-pressed="false">
+          <span class="module-card__top"><span class="module-card__title" data-i18n="inventoryTitle">المخزون</span><span class="module-card__state" data-state-label>مقترح</span></span>
+          <span class="module-card__description" data-i18n="inventoryDesc">مناسب للأصناف وقطع الغيار والمستهلكات.</span>
+          <span class="module-card__meta"><span class="module-card__status" data-status-label>مفعّل</span><span class="module-card__lock" data-lock-label>مقفول</span></span>
+        </button>
+        <button class="module-card" type="button" role="listitem" data-module="cashboxes" data-commercial-state="required" data-services-state="required" aria-pressed="false">
+          <span class="module-card__top"><span class="module-card__title" data-i18n="cashboxesTitle">الخزن</span><span class="module-card__state" data-state-label>أساسي</span></span>
+          <span class="module-card__description" data-i18n="cashboxesDesc">متابعة الخزنة والتحويلات والأرصدة.</span>
+          <span class="module-card__meta"><span class="module-card__status" data-status-label>مفعّل</span><span class="module-card__lock" data-lock-label>مقفول</span></span>
+        </button>
+        <button class="module-card" type="button" role="listitem" data-module="expenses" data-commercial-state="suggested" data-services-state="suggested" aria-pressed="false">
+          <span class="module-card__top"><span class="module-card__title" data-i18n="expensesTitle">المصروفات</span><span class="module-card__state" data-state-label>مقترح</span></span>
+          <span class="module-card__description" data-i18n="expensesDesc">تسجيل مصروفات النشاط اليومية.</span>
+          <span class="module-card__meta"><span class="module-card__status" data-status-label>مفعّل</span><span class="module-card__lock" data-lock-label>مقفول</span></span>
+        </button>
+        <button class="module-card" type="button" role="listitem" data-module="reports" data-commercial-state="required" data-services-state="required" aria-pressed="false">
+          <span class="module-card__top"><span class="module-card__title" data-i18n="reportsTitle">التقارير</span><span class="module-card__state" data-state-label>أساسي</span></span>
+          <span class="module-card__description" data-i18n="reportsDesc">تقارير التشغيل والحسابات الأساسية.</span>
+          <span class="module-card__meta"><span class="module-card__status" data-status-label>مفعّل</span><span class="module-card__lock" data-lock-label>مقفول</span></span>
+        </button>
+        <button class="module-card" type="button" role="listitem" data-module="pdf_printing" data-commercial-state="suggested" data-services-state="suggested" aria-pressed="false">
+          <span class="module-card__top"><span class="module-card__title" data-i18n="pdfPrintingTitle">طباعة PDF</span><span class="module-card__state" data-state-label>مقترح</span></span>
+          <span class="module-card__description" data-i18n="pdfPrintingDesc">إيصالات وكشوفات جاهزة للطباعة والمشاركة.</span>
+          <span class="module-card__meta"><span class="module-card__status" data-status-label>مفعّل</span><span class="module-card__lock" data-lock-label>مقفول</span></span>
+        </button>
+        <button class="module-card" type="button" role="listitem" data-module="appointments_visits" data-commercial-state="optional" data-services-state="optional" aria-pressed="false">
+          <span class="module-card__top"><span class="module-card__title" data-i18n="appointmentsVisitsTitle">المواعيد والزيارات</span><span class="module-card__state" data-state-label>اختياري</span></span>
+          <span class="module-card__description" data-i18n="appointmentsVisitsDesc">تنظيم المواعيد أو زيارات العملاء.</span>
+          <span class="module-card__meta"><span class="module-card__status" data-status-label>غير مفعّل</span><span class="module-card__lock" data-lock-label>مقفول</span></span>
+        </button>
+        <button class="module-card" type="button" role="listitem" data-module="employees_technicians" data-commercial-state="optional" data-services-state="optional" aria-pressed="false">
+          <span class="module-card__top"><span class="module-card__title" data-i18n="employeesTechniciansTitle">الموظفون والفنيون</span><span class="module-card__state" data-state-label>اختياري</span></span>
+          <span class="module-card__description" data-i18n="employeesTechniciansDesc">ربط العمليات بفريق العمل عند الحاجة.</span>
+          <span class="module-card__meta"><span class="module-card__status" data-status-label>غير مفعّل</span><span class="module-card__lock" data-lock-label>مقفول</span></span>
+        </button>
+      </div>
+
+      <footer class="activity-footer" aria-label="Modules navigation">
+        <button class="activity-action activity-next" type="button" data-next-button>
+          <span data-i18n="next">التالي: المراجعة</span>
+          <span class="activity-action__circle" aria-hidden="true">←</span>
+        </button>
+        <a class="activity-action activity-back" href="/setup/activity/?lang=ar" data-back-link>
+          <span data-i18n="back">الرجوع لاختيار النشاط العام</span>
+          <span class="activity-action__plain" aria-hidden="true">‹</span>
+        </a>
+      </footer>
+    </section>
+  </section>
+</main>
+
+<script>
+(function(){
+  var params = new URLSearchParams(window.location.search);
+  var saved = localStorage.getItem('hesba_lang');
+  var lang = params.get('lang') === 'en' ? 'en' : (params.get('lang') === 'ar' ? 'ar' : (saved === 'en' ? 'en' : 'ar'));
+  var rawActivity = params.get('activity') || '';
+  var activity = rawActivity === 'services' ? 'services' : (rawActivity === 'commercial' ? 'commercial' : '');
+  var subActivity = params.get('sub_activity') || '';
+  var selectedModules = new Set();
+  var moduleCards = Array.prototype.slice.call(document.querySelectorAll('[data-module]'));
+
+  var dict = {
+    ar: {
+      pageTitle: 'اختر الموديولات المناسبة - حِسْبَة',
+      logout: 'تسجيل الخروج',
+      language: 'العربية',
+      stepGeneral: 'النشاط العام',
+      stepSub: 'النشاط الفرعي',
+      stepModules: 'الموديولات',
+      stepReview: 'المراجعة',
+      title: 'اختر الموديولات المناسبة',
+      subtitle: 'جهزنا لك اقتراحًا مبدئيًا حسب نوع نشاطك، ويمكنك تعديله قبل المتابعة.',
+      required: 'أساسي',
+      suggested: 'مقترح',
+      optional: 'اختياري',
+      locked: 'مقفول',
+      on: 'مفعّل',
+      off: 'غير مفعّل',
+      next: 'التالي: المراجعة',
+      commercialBack: 'الرجوع إلى اختيار نوع النشاط التجاري',
+      servicesBack: 'الرجوع إلى اختيار نوع النشاط الخدمي',
+      fallbackBack: 'الرجوع لاختيار النشاط العام',
+      changeLanguage: 'تغيير اللغة',
+      customersTitle: 'العملاء',
+      customersDesc: 'إدارة أرصدة العملاء وبيانات التواصل.',
+      suppliersTitle: 'الموردون',
+      suppliersDesc: 'حسابات الموردين والمشتريات عند الحاجة.',
+      itemsServicesTitle: 'الأصناف والخدمات',
+      itemsServicesDesc: 'تعريف الخدمات أو الأصناف التي يتم بيعها.',
+      salesOperationsTitle: 'عمليات البيع',
+      salesOperationsDesc: 'تسجيل البيع والتحصيل والآجل.',
+      purchasesTitle: 'المشتريات',
+      purchasesDesc: 'تسجيل فواتير الشراء وتكلفة الأصناف.',
+      inventoryTitle: 'المخزون',
+      inventoryDesc: 'مناسب للأصناف وقطع الغيار والمستهلكات.',
+      cashboxesTitle: 'الخزن',
+      cashboxesDesc: 'متابعة الخزنة والتحويلات والأرصدة.',
+      expensesTitle: 'المصروفات',
+      expensesDesc: 'تسجيل مصروفات النشاط اليومية.',
+      reportsTitle: 'التقارير',
+      reportsDesc: 'تقارير التشغيل والحسابات الأساسية.',
+      pdfPrintingTitle: 'طباعة PDF',
+      pdfPrintingDesc: 'إيصالات وكشوفات جاهزة للطباعة والمشاركة.',
+      appointmentsVisitsTitle: 'المواعيد والزيارات',
+      appointmentsVisitsDesc: 'تنظيم المواعيد أو زيارات العملاء.',
+      employeesTechniciansTitle: 'الموظفون والفنيون',
+      employeesTechniciansDesc: 'ربط العمليات بفريق العمل عند الحاجة.'
+    },
+    en: {
+      pageTitle: 'Choose suitable modules - Hesba',
+      logout: 'Logout',
+      language: 'English',
+      stepGeneral: 'General activity',
+      stepSub: 'Sub activity',
+      stepModules: 'Modules',
+      stepReview: 'Review',
+      title: 'Choose suitable modules',
+      subtitle: 'We prepared an initial suggestion based on your activity type, and you can adjust it before continuing.',
+      required: 'Required',
+      suggested: 'Suggested',
+      optional: 'Optional',
+      locked: 'Locked',
+      on: 'On',
+      off: 'Off',
+      next: 'Next: review',
+      commercialBack: 'Back to commercial activity type selection',
+      servicesBack: 'Back to service activity type selection',
+      fallbackBack: 'Back to general activity selection',
+      changeLanguage: 'Change language',
+      customersTitle: 'Customers',
+      customersDesc: 'Manage customer balances and contact details.',
+      suppliersTitle: 'Suppliers',
+      suppliersDesc: 'Supplier accounts and purchases when needed.',
+      itemsServicesTitle: 'Items & services',
+      itemsServicesDesc: 'Define the services or items you sell.',
+      salesOperationsTitle: 'Sales operations',
+      salesOperationsDesc: 'Record sales, paid amounts, and credit sales.',
+      purchasesTitle: 'Purchases',
+      purchasesDesc: 'Record purchase invoices and item cost.',
+      inventoryTitle: 'Inventory',
+      inventoryDesc: 'Useful for items, spare parts, and consumables.',
+      cashboxesTitle: 'Cashboxes',
+      cashboxesDesc: 'Track cashboxes, transfers, and balances.',
+      expensesTitle: 'Expenses',
+      expensesDesc: 'Record daily business expenses.',
+      reportsTitle: 'Reports',
+      reportsDesc: 'Core operational and account reports.',
+      pdfPrintingTitle: 'PDF printing',
+      pdfPrintingDesc: 'Receipts and statements ready to print or share.',
+      appointmentsVisitsTitle: 'Appointments & visits',
+      appointmentsVisitsDesc: 'Organize appointments or customer visits.',
+      employeesTechniciansTitle: 'Employees & technicians',
+      employeesTechniciansDesc: 'Connect operations to team members when needed.'
+    }
+  };
+
+  function withLang(path){
+    var url = new URL(path, window.location.origin);
+    url.searchParams.set('lang', lang);
+    return url.pathname + url.search;
+  }
+
+  function backHref(){
+    if(activity === 'commercial'){
+      return withLang('/setup/activity/commercial/');
+    }
+    if(activity === 'services'){
+      return withLang('/setup/activity/services/');
+    }
+    return withLang('/setup/activity/');
+  }
+
+  function backLabel(){
+    if(activity === 'commercial'){
+      return dict[lang].commercialBack;
+    }
+    if(activity === 'services'){
+      return dict[lang].servicesBack;
+    }
+    return dict[lang].fallbackBack;
+  }
+
+  function stateForCard(card){
+    return activity === 'services' ? card.dataset.servicesState : card.dataset.commercialState;
+  }
+
+  function requiredCards(){
+    return moduleCards.filter(function(card){return stateForCard(card) === 'required';});
+  }
+
+  function selectedModulesCsv(){
+    requiredCards().forEach(function(card){selectedModules.add(card.dataset.module);});
+    return moduleCards
+      .map(function(card){return card.dataset.module;})
+      .filter(function(slug){return selectedModules.has(slug);})
+      .join(',');
+  }
+
+  function buildNextHref(){
+    var url = new URL('/setup/review/', window.location.origin);
+    url.searchParams.set('lang', lang);
+    url.searchParams.set('activity', rawActivity || 'unknown');
+    url.searchParams.set('sub_activity', subActivity);
+    url.searchParams.set('modules', selectedModulesCsv());
+    return url.pathname + url.search;
+  }
+
+  function resetPresetSelection(){
+    selectedModules.clear();
+    moduleCards.forEach(function(card){
+      var state = stateForCard(card);
+      var slug = card.dataset.module;
+      if(state === 'required' || state === 'suggested'){
+        selectedModules.add(slug);
+      }
+    });
+  }
+
+  function updateCards(){
+    moduleCards.forEach(function(card){
+      var state = stateForCard(card);
+      var selected = selectedModules.has(card.dataset.module) || state === 'required';
+      card.dataset.state = state;
+      card.classList.toggle('is-required', state === 'required');
+      card.classList.toggle('is-suggested', state === 'suggested');
+      card.classList.toggle('is-optional', state === 'optional');
+      card.classList.toggle('is-locked', state === 'required');
+      card.classList.toggle('is-selected', selected);
+      card.setAttribute('aria-pressed', selected ? 'true' : 'false');
+      card.setAttribute('aria-disabled', state === 'required' ? 'true' : 'false');
+      var stateLabel = card.querySelector('[data-state-label]');
+      var statusLabel = card.querySelector('[data-status-label]');
+      var lockLabel = card.querySelector('[data-lock-label]');
+      if(stateLabel){stateLabel.textContent = dict[lang][state];}
+      if(statusLabel){statusLabel.textContent = selected ? dict[lang].on : dict[lang].off;}
+      if(lockLabel){lockLabel.textContent = dict[lang].locked;}
+    });
+    refreshLinks();
+  }
+
+  function refreshLinks(){
+    var back = document.querySelector('[data-back-link]');
+    var next = document.querySelector('[data-next-button]');
+    if(back){
+      back.href = backHref();
+      var backText = back.querySelector('[data-i18n="back"]');
+      if(backText){backText.textContent = backLabel();}
+    }
+    if(next){
+      next.disabled = false;
+      next.dataset.href = buildNextHref();
+    }
+  }
+
+  function applyLanguage(nextLang){
+    lang = nextLang === 'en' ? 'en' : 'ar';
+    localStorage.setItem('hesba_lang', lang);
+    document.documentElement.lang = lang;
+    document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+    document.body.dataset.lang = lang;
+    document.title = dict[lang].pageTitle;
+    document.querySelectorAll('[data-i18n]').forEach(function(el){
+      var key = el.dataset.i18n;
+      if(key === 'back'){
+        el.textContent = backLabel();
+      }else if(dict[lang][key]){
+        el.textContent = dict[lang][key];
+      }
+    });
+    document.querySelectorAll('[data-lang-toggle]').forEach(function(btn){btn.setAttribute('aria-label', dict[lang].changeLanguage);});
+    document.querySelectorAll('[data-logout-button]').forEach(function(btn){btn.setAttribute('aria-label', dict[lang].logout);});
+    var url = new URL(window.location.href);
+    url.searchParams.set('lang', lang);
+    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+    updateCards();
+  }
+
+  moduleCards.forEach(function(card){
+    card.addEventListener('click', function(){
+      var state = stateForCard(card);
+      var slug = card.dataset.module;
+      if(state === 'required'){
+        selectedModules.add(slug);
+        updateCards();
+        return;
+      }
+      if(selectedModules.has(slug)){
+        selectedModules.delete(slug);
+      }else{
+        selectedModules.add(slug);
+      }
+      updateCards();
+    });
+  });
+
+  var nextButton = document.querySelector('[data-next-button]');
+  if(nextButton){
+    nextButton.addEventListener('click', function(){
+      window.location.href = nextButton.dataset.href || buildNextHref();
+    });
+  }
+
+  document.querySelectorAll('[data-lang-toggle]').forEach(function(btn){
+    btn.addEventListener('click', function(){applyLanguage(lang === 'ar' ? 'en' : 'ar');});
+  });
+
+  resetPresetSelection();
+  applyLanguage(lang);
+})();
+</script>
+</body>
+</html>
