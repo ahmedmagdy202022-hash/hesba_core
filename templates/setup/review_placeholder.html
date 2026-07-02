@@ -1,0 +1,59 @@
+{% load static %}
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>مراجعة الإعداد - حِسْبَة</title>
+<link rel="stylesheet" href="{% static 'hesba/css/activity_selection.css' %}?v=117a-screen-pack">
+</head>
+<body class="activity-subactivity-placeholder" data-lang="ar">
+  <main class="activity-subactivity-placeholder__card">
+    <h1 data-i18n="title">مراجعة الإعداد</h1>
+    <p data-i18n="message">هذه صفحة مؤقتة آمنة لمسار مراجعة الإعداد فقط. منطق المراجعة النهائي خارج نطاق 118.</p>
+    <a href="/setup/modules/?lang=ar" data-back-link>الرجوع إلى اختيار الموديولات</a>
+  </main>
+<script>
+(function(){
+  var params = new URLSearchParams(window.location.search);
+  var lang = params.get('lang') === 'en' ? 'en' : 'ar';
+  var activity = params.get('activity') || '';
+  var subActivity = params.get('sub_activity') || '';
+  var dict = {
+    ar: {
+      pageTitle: 'مراجعة الإعداد - حِسْبَة',
+      title: 'مراجعة الإعداد',
+      message: 'هذه صفحة مؤقتة آمنة لمسار مراجعة الإعداد فقط. منطق المراجعة النهائي خارج نطاق 118.',
+      back: 'الرجوع إلى اختيار الموديولات'
+    },
+    en: {
+      pageTitle: 'Setup review - Hesba',
+      title: 'Setup review',
+      message: 'This is a safe placeholder for the setup review route only. Final review logic is out of scope for 118.',
+      back: 'Back to modules selection'
+    }
+  };
+  function modulesHref(){
+    var url = new URL('/setup/modules/', window.location.origin);
+    url.searchParams.set('lang', lang);
+    if(activity){url.searchParams.set('activity', activity);}
+    if(subActivity){url.searchParams.set('sub_activity', subActivity);}
+    return url.pathname + url.search;
+  }
+  document.documentElement.lang = lang;
+  document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+  document.body.dataset.lang = lang;
+  document.title = dict[lang].pageTitle;
+  document.querySelectorAll('[data-i18n]').forEach(function(el){
+    var key = el.dataset.i18n;
+    if(dict[lang][key]){el.textContent = dict[lang][key];}
+  });
+  var back = document.querySelector('[data-back-link]');
+  if(back){
+    back.href = modulesHref();
+    back.textContent = dict[lang].back;
+  }
+})();
+</script>
+</body>
+</html>

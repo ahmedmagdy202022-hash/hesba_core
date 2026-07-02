@@ -63,3 +63,31 @@ Notes:
 - 117C reuses the approved 117A setup shell.
 - No modules business logic is implemented in 117C.
 - Replace `127.0.0.1` with the forwarded Codespaces host when previewing through GitHub Codespaces.
+
+## 118 Modules Selection
+
+Branch: `feature/118-modules-selection`  
+Route: `/setup/modules/`  
+Recommended port: `8010`
+
+Arabic commercial:
+- `http://127.0.0.1:8010/setup/modules/?lang=ar&activity=commercial&sub_activity=retail`
+
+English commercial:
+- `http://127.0.0.1:8010/setup/modules/?lang=en&activity=commercial&sub_activity=retail`
+
+Arabic services:
+- `http://127.0.0.1:8010/setup/modules/?lang=ar&activity=services&sub_activity=general`
+
+English services:
+- `http://127.0.0.1:8010/setup/modules/?lang=en&activity=services&sub_activity=general`
+
+Safe review placeholder target:
+- `http://127.0.0.1:8010/setup/review/?lang=ar&activity=commercial&sub_activity=retail&modules=sales_operations,items_services,cashboxes,reports`
+
+Notes:
+- No PR opened.
+- No merge performed.
+- 118 replaces the old `/setup/modules/` placeholder with the real modules selection screen.
+- 118 reuses the approved 117A setup shell and adds only inner module card/toggle layout.
+- Replace `127.0.0.1` with the forwarded Codespaces host when previewing through GitHub Codespaces.
