@@ -355,4 +355,41 @@ class ModulesPlaceholderFor117BTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Modules')
         self.assertContains(response, 'out of scope for 117B')
-        self.assertContains(response, '/setup/activity/commercial/?lang=')
+        self.assertContains(response, "activity==='commercial'")
+        self.assertContains(response, "path:'/setup/activity/commercial/'")
+
+    def test_modules_placeholder_from_commercial_returns_to_commercial_route(self):
+        response = self.client.get('/setup/modules/?lang=en&activity=commercial&sub_activity=retail')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Back to commercial activity type selection')
+        self.assertContains(response, "commercialBack:'Back to commercial activity type selection'")
+        self.assertContains(response, "path:'/setup/activity/commercial/'")
+        self.assertContains(response, "url.searchParams.set('lang',lang)")
+
+    def test_modules_placeholder_from_services_returns_to_services_route(self):
+        response = self.client.get('/setup/modules/?lang=en&activity=services&sub_activity=general')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Back to service activity type selection')
+        self.assertContains(response, "servicesBack:'Back to service activity type selection'")
+        self.assertContains(response, "activity==='services'")
+        self.assertContains(response, "path:'/setup/activity/services/'")
+        self.assertContains(response, "url.searchParams.set('lang',lang)")
+
+    def test_modules_placeholder_services_arabic_label_exists(self):
+        response = self.client.get('/setup/modules/?lang=ar&activity=services&sub_activity=general')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'الرجوع إلى اختيار نوع النشاط الخدمي')
+        self.assertContains(response, "servicesBack:'الرجوع إلى اختيار نوع النشاط الخدمي'")
+        self.assertContains(response, "path:'/setup/activity/services/'")
+
+    def test_modules_placeholder_unknown_activity_falls_back_to_activity_selection(self):
+        response = self.client.get('/setup/modules/?lang=en&activity=unknown&sub_activity=other')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Back to general activity selection')
+        self.assertContains(response, "fallbackBack:'Back to general activity selection'")
+        self.assertContains(response, "path:'/setup/activity/'")
+        self.assertContains(response, 'return {path:\'/setup/activity/\',label:dict[lang].fallbackBack};')
