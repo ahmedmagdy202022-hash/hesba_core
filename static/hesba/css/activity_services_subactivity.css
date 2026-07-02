@@ -1,0 +1,45 @@
+/* 117C Services Sub-Activity Selection — inner card layout only; 117A shell remains locked. */
+.services-subactivity-page .services-subactivity-grid{
+  width:min(100%,1120px);
+}
+.services-subactivity-page .service-subactivity-card{
+  height:clamp(124px,10.8vw,160px);
+  padding-inline:16px;
+}
+.services-subactivity-page .service-subactivity-card .activity-card__title{
+  max-width:100%;
+  white-space:normal;
+  overflow-wrap:break-word;
+  text-wrap:balance;
+  font-size:clamp(16px,1.42vw,21px);
+  line-height:1.24;
+}
+.services-subactivity-page[data-lang=en] .service-subactivity-card .activity-card__title{
+  font-size:clamp(14px,1.12vw,18px);
+  line-height:1.22;
+}
+.services-subactivity-page .activity-subtitle{
+  max-width:930px;
+}
+@media(max-width:700px){
+  .services-subactivity-page .service-subactivity-card{
+    height:clamp(94px,25vw,108px);
+    padding-inline:9px;
+  }
+  .services-subactivity-page .service-subactivity-card .activity-card__title{
+    font-size:clamp(12.5px,3.85vw,15.8px);
+    line-height:1.18;
+  }
+  .services-subactivity-page[data-lang=en] .service-subactivity-card .activity-card__title{
+    font-size:clamp(10.8px,3.15vw,13.2px);
+    line-height:1.15;
+  }
+}
+@media(max-width:370px){
+  .services-subactivity-page .service-subactivity-card .activity-card__title{
+    font-size:12px;
+  }
+  .services-subactivity-page[data-lang=en] .service-subactivity-card .activity-card__title{
+    font-size:10.4px;
+  }
+}

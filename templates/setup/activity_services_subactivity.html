@@ -1,0 +1,212 @@
+{% load static %}
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>اختيار نوع النشاط الخدمي - حِسْبَة</title>
+<link rel="stylesheet" href="{% static 'hesba/css/activity_selection.css' %}?v=117a-screen-pack">
+<link rel="stylesheet" href="{% static 'hesba/css/activity_selection_final_overrides.css' %}?v=117a-final-panel-back-arrow">
+<link rel="stylesheet" href="{% static 'hesba/css/activity_services_subactivity.css' %}?v=117c-services-subactivity">
+</head>
+<body class="activity-selection-page services-subactivity-page" data-lang="ar">
+<main class="activity-stage" aria-label="Services Sub-Activity Selection">
+  <div class="activity-bg-frame" aria-hidden="true"></div>
+  <section class="activity-ui-layer">
+    <header class="activity-header" aria-label="Setup activity header">
+      <div class="activity-brand">
+        <img class="activity-logo" src="{% static 'hesba/setup_gate/assets/setup_gate_logo_approved.png' %}" alt="Hesba">
+      </div>
+      <div class="activity-controls" aria-label="Header controls">
+        <form class="activity-control-form" method="post" action="{% url 'logout' %}">
+          {% csrf_token %}
+          <button class="activity-control activity-logout" type="submit" aria-label="تسجيل الخروج" data-logout-button>
+            <svg viewBox="0 0 24 24" class="activity-icon" aria-hidden="true">
+              <path d="M9 5H5v14h4M13 8l4 4-4 4M17 12H8"></path>
+            </svg>
+            <span class="activity-logout__text" data-i18n="logout">تسجيل الخروج</span>
+          </button>
+        </form>
+        <button class="activity-control activity-language" type="button" data-lang-toggle aria-label="تغيير اللغة">
+          <svg viewBox="0 0 24 24" class="activity-icon" aria-hidden="true">
+            <circle cx="12" cy="12" r="9"></circle>
+            <path d="M3 12h18M12 3c2.35 2.45 3.55 5.45 3.55 9S14.35 18.55 12 21M12 3C9.65 5.45 8.45 8.45 8.45 12S9.65 18.55 12 21"></path>
+          </svg>
+          <span data-i18n="language">العربية</span>
+          <svg viewBox="0 0 24 24" class="activity-icon activity-caret" aria-hidden="true">
+            <path d="M7 10l5 5 5-5"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <section class="activity-panel" aria-labelledby="activity-title">
+      <nav class="activity-stepper" aria-label="Setup steps">
+        <div class="activity-step"><span class="activity-step__number">1</span><span data-i18n="stepGeneral">النشاط العام</span></div>
+        <div class="activity-step is-current"><span class="activity-step__number">2</span><span data-i18n="stepSub">النشاط الفرعي</span></div>
+        <div class="activity-step"><span class="activity-step__number">3</span><span data-i18n="stepModules">الموديولات</span></div>
+        <div class="activity-step"><span class="activity-step__number">4</span><span data-i18n="stepReview">المراجعة</span></div>
+      </nav>
+
+      <div class="activity-copy">
+        <h1 class="activity-title" id="activity-title" data-i18n="title">اختر نوع النشاط الخدمي</h1>
+        <p class="activity-subtitle" data-i18n="subtitle">اختيار نوع النشاط يساعد حِسْبَة في تجهيز الموديولات المناسبة لطريقة تقديم الخدمة، مع إمكانية إضافة أصناف أو مخزون حسب احتياجك.</p>
+      </div>
+
+      <div class="activity-grid services-subactivity-grid" role="list" aria-label="Service activity types">
+        <button class="activity-card is-active service-subactivity-card" type="button" role="listitem" data-sub-activity="general" aria-pressed="false"><span class="activity-card__title" data-i18n="general">خدمات عامة</span></button>
+        <button class="activity-card is-active service-subactivity-card" type="button" role="listitem" data-sub-activity="maintenance" aria-pressed="false"><span class="activity-card__title" data-i18n="maintenance">صيانة وإصلاح</span></button>
+        <button class="activity-card is-active service-subactivity-card" type="button" role="listitem" data-sub-activity="clinic" aria-pressed="false"><span class="activity-card__title" data-i18n="clinic">عيادة / مركز طبي</span></button>
+        <button class="activity-card is-active service-subactivity-card" type="button" role="listitem" data-sub-activity="beauty" aria-pressed="false"><span class="activity-card__title" data-i18n="beauty">صالون / مركز تجميل</span></button>
+        <button class="activity-card is-active service-subactivity-card" type="button" role="listitem" data-sub-activity="education" aria-pressed="false"><span class="activity-card__title" data-i18n="educationCard">مركز تعليمي / كورسات</span></button>
+        <button class="activity-card is-active service-subactivity-card" type="button" role="listitem" data-sub-activity="professional" aria-pressed="false"><span class="activity-card__title" data-i18n="professional">مكتب مهني</span></button>
+        <button class="activity-card is-active service-subactivity-card" type="button" role="listitem" data-sub-activity="digital_marketing" aria-pressed="false"><span class="activity-card__title" data-i18n="digitalMarketing">تسويق وتصميم وخدمات رقمية</span></button>
+        <button class="activity-card is-active service-subactivity-card" type="button" role="listitem" data-sub-activity="other" aria-pressed="false"><span class="activity-card__title" data-i18n="otherService">نشاط خدمي آخر</span></button>
+      </div>
+
+      <footer class="activity-footer" aria-label="Activity navigation">
+        <button class="activity-action activity-next" type="button" disabled data-next-button>
+          <span data-i18n="next">التالي: الموديولات</span>
+          <span class="activity-action__circle" aria-hidden="true">←</span>
+        </button>
+        <a class="activity-action activity-back" href="/setup/activity/?lang=ar" data-back-link>
+          <span data-i18n="back">الرجوع</span>
+          <span class="activity-action__plain" aria-hidden="true">‹</span>
+        </a>
+      </footer>
+    </section>
+  </section>
+</main>
+
+<script>
+(function(){
+  var params = new URLSearchParams(window.location.search);
+  var saved = localStorage.getItem('hesba_lang');
+  var lang = params.get('lang') === 'en' ? 'en' : (params.get('lang') === 'ar' ? 'ar' : (saved === 'en' ? 'en' : 'ar'));
+  var selectedSubActivity = '';
+
+  var dict = {
+    ar: {
+      pageTitle: 'اختيار نوع النشاط الخدمي - حِسْبَة',
+      logout: 'تسجيل الخروج',
+      language: 'العربية',
+      stepGeneral: 'النشاط العام',
+      stepSub: 'النشاط الفرعي',
+      stepModules: 'الموديولات',
+      stepReview: 'المراجعة',
+      title: 'اختر نوع النشاط الخدمي',
+      subtitle: 'اختيار نوع النشاط يساعد حِسْبَة في تجهيز الموديولات المناسبة لطريقة تقديم الخدمة، مع إمكانية إضافة أصناف أو مخزون حسب احتياجك.',
+      general: 'خدمات عامة',
+      maintenance: 'صيانة وإصلاح',
+      clinic: 'عيادة / مركز طبي',
+      beauty: 'صالون / مركز تجميل',
+      educationCard: 'مركز تعليمي / كورسات',
+      professional: 'مكتب مهني',
+      digitalMarketing: 'تسويق وتصميم وخدمات رقمية',
+      otherService: 'نشاط خدمي آخر',
+      next: 'التالي: الموديولات',
+      back: 'الرجوع',
+      changeLanguage: 'تغيير اللغة'
+    },
+    en: {
+      pageTitle: 'Choose service activity type - Hesba',
+      logout: 'Logout',
+      language: 'English',
+      stepGeneral: 'General activity',
+      stepSub: 'Sub activity',
+      stepModules: 'Modules',
+      stepReview: 'Review',
+      title: 'Choose service activity type',
+      subtitle: 'Choosing the service type helps Hesba prepare the right modules for how you deliver services, with items or inventory added when needed.',
+      general: 'General services',
+      maintenance: 'Maintenance & Repair',
+      clinic: 'Clinic / Medical center',
+      beauty: 'Salon / Beauty center',
+      educationCard: 'Education / Courses Center',
+      professional: 'Professional Office',
+      digitalMarketing: 'Marketing, Design & Digital Services',
+      otherService: 'Other Service Activity',
+      next: 'Next: modules',
+      back: 'Back',
+      changeLanguage: 'Change language'
+    }
+  };
+
+  function withLang(path){
+    var url = new URL(path, window.location.origin);
+    url.searchParams.set('lang', lang);
+    return url.pathname + url.search;
+  }
+
+  function buildNextHref(){
+    var url = new URL('/setup/modules/', window.location.origin);
+    url.searchParams.set('lang', lang);
+    url.searchParams.set('activity', 'services');
+    url.searchParams.set('sub_activity', selectedSubActivity);
+    return url.pathname + url.search;
+  }
+
+  function refreshLinks(){
+    var back = document.querySelector('[data-back-link]');
+    var next = document.querySelector('[data-next-button]');
+    if(back){back.href = withLang('/setup/activity/');}
+    if(next && selectedSubActivity){next.dataset.href = buildNextHref();}
+  }
+
+  function applyLanguage(nextLang){
+    lang = nextLang === 'en' ? 'en' : 'ar';
+    localStorage.setItem('hesba_lang', lang);
+    document.documentElement.lang = lang;
+    document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+    document.body.dataset.lang = lang;
+    document.title = dict[lang].pageTitle;
+    document.querySelectorAll('[data-i18n]').forEach(function(el){
+      var key = el.dataset.i18n;
+      if(dict[lang][key]){el.textContent = dict[lang][key];}
+    });
+    document.querySelectorAll('[data-lang-toggle]').forEach(function(btn){btn.setAttribute('aria-label', dict[lang].changeLanguage);});
+    document.querySelectorAll('[data-logout-button]').forEach(function(btn){btn.setAttribute('aria-label', dict[lang].logout);});
+    var url = new URL(window.location.href);
+    url.searchParams.set('lang', lang);
+    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+    refreshLinks();
+  }
+
+  function clearSelection(){
+    document.querySelectorAll('.service-subactivity-card').forEach(function(card){
+      card.classList.remove('is-selected');
+      card.setAttribute('aria-pressed', 'false');
+    });
+  }
+
+  document.querySelectorAll('.service-subactivity-card').forEach(function(card){
+    card.addEventListener('click', function(){
+      clearSelection();
+      card.classList.add('is-selected');
+      card.setAttribute('aria-pressed', 'true');
+      selectedSubActivity = card.dataset.subActivity || '';
+      var next = document.querySelector('[data-next-button]');
+      if(next){
+        next.disabled = false;
+        next.dataset.href = buildNextHref();
+      }
+    });
+  });
+
+  var nextButton = document.querySelector('[data-next-button]');
+  if(nextButton){
+    nextButton.addEventListener('click', function(){
+      if(nextButton.disabled || !selectedSubActivity){return;}
+      window.location.href = nextButton.dataset.href || buildNextHref();
+    });
+  }
+
+  document.querySelectorAll('[data-lang-toggle]').forEach(function(btn){
+    btn.addEventListener('click', function(){applyLanguage(lang === 'ar' ? 'en' : 'ar');});
+  });
+
+  applyLanguage(lang);
+})();
+</script>
+</body>
+</html>

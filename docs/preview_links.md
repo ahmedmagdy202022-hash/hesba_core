@@ -18,7 +18,7 @@ Placeholder navigation targets for 117A testing only:
 Notes:
 - No PR opened.
 - No merge performed.
-- Service sub-activity page remains a placeholder only and contains no business logic.
+- Service legacy placeholder route remains available at `/setup/activity/service/`.
 
 ## 117B Commercial Sub-Activity Selection
 
@@ -37,7 +37,29 @@ Temporary 117B next target placeholder:
 - `http://127.0.0.1:8010/setup/modules/?lang=en&activity=commercial&sub_activity=retail`
 
 Notes:
-- No PR opened.
-- No merge performed.
+- 117B has been merged into main.
 - `/setup/modules/` is a safe placeholder only; modules business logic is out of scope for 117B.
 - 117B reuses the approved 117A visual shell and does not add or generate background assets.
+
+## 117C Services Sub-Activity Selection
+
+Branch: `feature/117c-services-subactivity-selection`  
+Route: `/setup/activity/services/`  
+Recommended port: `8010`
+
+Arabic:
+- `http://127.0.0.1:8010/setup/activity/services/?lang=ar`
+
+English:
+- `http://127.0.0.1:8010/setup/activity/services/?lang=en`
+
+Temporary 117C next target placeholder:
+- `http://127.0.0.1:8010/setup/modules/?lang=ar&activity=services&sub_activity=general`
+- `http://127.0.0.1:8010/setup/modules/?lang=en&activity=services&sub_activity=general`
+
+Notes:
+- No PR opened.
+- No merge performed.
+- 117C reuses the approved 117A setup shell.
+- No modules business logic is implemented in 117C.
+- Replace `127.0.0.1` with the forwarded Codespaces host when previewing through GitHub Codespaces.
