@@ -1,0 +1,254 @@
+{% load static %}
+<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{{ page_title }}</title>
+<link rel="stylesheet" href="{% static 'hesba/css/activity_selection.css' %}?v=117a-screen-pack">
+<link rel="stylesheet" href="{% static 'hesba/css/activity_selection_final_overrides.css' %}?v=117a-final-panel-back-arrow">
+<link rel="stylesheet" href="{% static 'hesba/css/activity_review_setup.css' %}?v=119-review-setup">
+</head>
+<body class="activity-selection-page review-setup-page" data-lang="{{ lang }}" data-activity="{{ activity }}" data-sub-activity="{{ sub_activity_slug }}" data-modules="{{ modules_param }}">
+<main class="activity-stage" aria-label="Review Setup">
+  <div class="activity-bg-frame" aria-hidden="true"></div>
+  <section class="activity-ui-layer">
+    <header class="activity-header" aria-label="Setup activity header">
+      <div class="activity-brand">
+        <img class="activity-logo" src="{% static 'hesba/setup_gate/assets/setup_gate_logo_approved.png' %}" alt="Hesba">
+      </div>
+      <div class="activity-controls" aria-label="Header controls">
+        <form class="activity-control-form" method="post" action="{% url 'logout' %}">
+          {% csrf_token %}
+          <button class="activity-control activity-logout" type="submit" aria-label="{{ logout }}" data-logout-button>
+            <svg viewBox="0 0 24 24" class="activity-icon" aria-hidden="true"><path d="M9 5H5v14h4M13 8l4 4-4 4M17 12H8"></path></svg>
+            <span class="activity-logout__text" data-i18n="logout">{{ logout }}</span>
+          </button>
+        </form>
+        <button class="activity-control activity-language" type="button" data-lang-toggle aria-label="تغيير اللغة">
+          <svg viewBox="0 0 24 24" class="activity-icon" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3c2.35 2.45 3.55 5.45 3.55 9S14.35 18.55 12 21M12 3C9.65 5.45 8.45 8.45 8.45 12S9.65 18.55 12 21"></path></svg>
+          <span data-i18n="language">{{ language }}</span>
+          <svg viewBox="0 0 24 24" class="activity-icon activity-caret" aria-hidden="true"><path d="M7 10l5 5 5-5"></path></svg>
+        </button>
+      </div>
+    </header>
+
+    <section class="activity-panel" aria-labelledby="activity-title">
+      <nav class="activity-stepper" aria-label="Setup steps">
+        <div class="activity-step"><span class="activity-step__number">1</span><span data-i18n="stepGeneral">{{ step_general }}</span></div>
+        <div class="activity-step"><span class="activity-step__number">2</span><span data-i18n="stepSub">{{ step_sub }}</span></div>
+        <div class="activity-step"><span class="activity-step__number">3</span><span data-i18n="stepModules">{{ step_modules }}</span></div>
+        <div class="activity-step is-current"><span class="activity-step__number">4</span><span data-i18n="stepReview">{{ step_review }}</span></div>
+      </nav>
+
+      <div class="activity-copy review-copy">
+        <h1 class="activity-title" id="activity-title" data-i18n="title">{{ title }}</h1>
+        <p class="activity-subtitle" data-i18n="subtitle">{{ subtitle }}</p>
+      </div>
+
+      <div class="review-summary" aria-label="Setup review summary">
+        <section class="review-card review-card--activity" data-review-section="activity">
+          <h2 class="review-card__title" data-i18n="activitySummary">{{ activity_summary }}</h2>
+          <dl class="review-list">
+            <div class="review-list__row">
+              <dt data-i18n="generalActivity">{{ general_activity }}</dt>
+              <dd data-activity-label data-ar="{{ activity_label_ar }}" data-en="{{ activity_label_en }}">{{ activity_label }}</dd>
+            </div>
+            <div class="review-list__row">
+              <dt data-i18n="subActivity">{{ sub_activity_title }}</dt>
+              <dd data-sub-activity-label data-ar="{{ sub_activity_label_ar }}" data-en="{{ sub_activity_label_en }}">{{ sub_activity_label }}</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section class="review-card review-card--modules" data-review-section="modules">
+          <h2 class="review-card__title" data-i18n="selectedModules">{{ selected_modules_title }}</h2>
+          <div class="review-modules" data-selected-modules>
+            {% for module in selected_modules %}
+            <span class="review-module-pill" data-module="{{ module.slug }}" data-ar="{{ module.label_ar }}" data-en="{{ module.label_en }}">{{ module.label }}</span>
+            {% empty %}
+            <span class="review-module-pill review-module-pill--empty" data-empty-modules data-i18n="emptyModules">{{ empty_modules }}</span>
+            {% endfor %}
+          </div>
+        </section>
+
+        <section class="review-card review-card--note" data-review-section="settings-note">
+          <h2 class="review-card__title" data-i18n="settingsNote">{{ settings_note }}</h2>
+          <p class="review-note" data-i18n="importantNote">{{ important_note }}</p>
+        </section>
+      </div>
+
+      <footer class="activity-footer" aria-label="Review navigation">
+        <a class="activity-action activity-next" href="{{ complete_href }}" data-next-link>
+          <span data-i18n="next">{{ next }}</span>
+          <span class="activity-action__circle" aria-hidden="true">←</span>
+        </a>
+        <a class="activity-action activity-back" href="{{ back_href }}" data-back-link>
+          <span data-i18n="back">{{ back }}</span>
+          <span class="activity-action__plain" aria-hidden="true">‹</span>
+        </a>
+      </footer>
+    </section>
+  </section>
+</main>
+
+<script>
+(function(){
+  var body = document.body;
+  var params = new URLSearchParams(window.location.search);
+  var saved = localStorage.getItem('hesba_lang');
+  var lang = params.get('lang') === 'en' ? 'en' : (params.get('lang') === 'ar' ? 'ar' : (saved === 'en' ? 'en' : 'ar'));
+  var activity = params.get('activity') || body.dataset.activity || '';
+  var subActivity = params.get('sub_activity') || body.dataset.subActivity || '';
+  var modulesParam = params.get('modules') || body.dataset.modules || '';
+
+  var dict = {
+    ar: {
+      pageTitle: 'راجع إعدادات نشاطك - حِسْبَة',
+      logout: 'تسجيل الخروج',
+      language: 'العربية',
+      stepGeneral: 'النشاط العام',
+      stepSub: 'النشاط الفرعي',
+      stepModules: 'الموديولات',
+      stepReview: 'المراجعة',
+      title: 'راجع إعدادات نشاطك',
+      subtitle: 'تأكد من الاختيارات التالية قبل إنهاء إعداد حِسْبَة لنشاطك.',
+      activitySummary: 'ملخص النشاط',
+      generalActivity: 'النشاط العام',
+      subActivity: 'النشاط الفرعي',
+      selectedModules: 'الموديولات المختارة',
+      settingsNote: 'ملاحظة الإعدادات',
+      importantNote: 'يمكنك تعديل الموديولات لاحقًا من الإعدادات، ولن يتم حذف أي بيانات عند تعطيل موديول.',
+      emptyModules: 'لم يتم اختيار موديولات بعد.',
+      back: 'الرجوع إلى اختيار الموديولات',
+      next: 'إنهاء الإعداد',
+      changeLanguage: 'تغيير اللغة'
+    },
+    en: {
+      pageTitle: 'Review your setup - Hesba',
+      logout: 'Logout',
+      language: 'English',
+      stepGeneral: 'General activity',
+      stepSub: 'Sub activity',
+      stepModules: 'Modules',
+      stepReview: 'Review',
+      title: 'Review your setup',
+      subtitle: 'Confirm the following choices before finishing your Hesba setup.',
+      activitySummary: 'Activity summary',
+      generalActivity: 'General activity',
+      subActivity: 'Sub-activity',
+      selectedModules: 'Selected modules',
+      settingsNote: 'Settings note',
+      importantNote: 'You can adjust modules later from Settings. Disabling a module will not delete any existing data.',
+      emptyModules: 'No modules selected yet.',
+      back: 'Back to modules selection',
+      next: 'Finish setup',
+      changeLanguage: 'Change language'
+    }
+  };
+
+  var moduleLabels = {
+    customers: {ar: 'العملاء', en: 'Customers'},
+    suppliers: {ar: 'الموردون', en: 'Suppliers'},
+    items_services: {ar: 'الأصناف والخدمات', en: 'Items & services'},
+    sales_operations: {ar: 'عمليات البيع', en: 'Sales operations'},
+    purchases: {ar: 'المشتريات', en: 'Purchases'},
+    inventory: {ar: 'المخزون', en: 'Inventory'},
+    cashboxes: {ar: 'الخزن', en: 'Cashboxes'},
+    expenses: {ar: 'المصروفات', en: 'Expenses'},
+    reports: {ar: 'التقارير', en: 'Reports'},
+    pdf_printing: {ar: 'طباعة PDF', en: 'PDF printing'},
+    appointments_visits: {ar: 'المواعيد والزيارات', en: 'Appointments & visits'},
+    employees_technicians: {ar: 'الموظفون والفنيون', en: 'Employees & technicians'}
+  };
+
+  var activityLabels = {
+    commercial: {ar: 'نشاط تجاري', en: 'Commercial'},
+    services: {ar: 'نشاط خدمي', en: 'Services'}
+  };
+
+  var subActivityLabels = {
+    commercial: {
+      retail: {ar: 'محل تجزئة', en: 'Retail store'},
+      grocery: {ar: 'سوبر ماركت / بقالة', en: 'Supermarket / Grocery'},
+      fashion: {ar: 'ملابس وأحذية', en: 'Clothing & Shoes'},
+      electronics: {ar: 'موبايلات وإلكترونيات', en: 'Mobiles & Electronics'},
+      pharmacy: {ar: 'صيدلية', en: 'Pharmacy'},
+      wholesale: {ar: 'جملة / مخزن', en: 'Wholesale / Warehouse'},
+      online: {ar: 'بيع أونلاين', en: 'Online selling'},
+      other: {ar: 'نشاط تجاري آخر', en: 'Other commercial'}
+    },
+    services: {
+      general: {ar: 'خدمات عامة', en: 'General services'},
+      maintenance: {ar: 'صيانة وإصلاح', en: 'Maintenance & Repair'},
+      clinic: {ar: 'عيادة / مركز طبي', en: 'Clinic / Medical center'},
+      beauty: {ar: 'صالون / مركز تجميل', en: 'Salon / Beauty center'},
+      education: {ar: 'مركز تعليمي / كورسات', en: 'Education / Courses Center'},
+      professional: {ar: 'مكتب مهني', en: 'Professional Office'},
+      digital_marketing: {ar: 'تسويق وتصميم وخدمات رقمية', en: 'Marketing, Design & Digital Services'},
+      other: {ar: 'نشاط خدمي آخر', en: 'Other Service Activity'}
+    }
+  };
+
+  function labelFrom(map, slug){
+    if(map && map[slug] && map[slug][lang]){return map[slug][lang];}
+    return (slug || '—').replace(/_/g, ' ') || '—';
+  }
+  function modulesHref(){
+    var url = new URL('/setup/modules/', window.location.origin);
+    url.searchParams.set('lang', lang);
+    url.searchParams.set('activity', activity);
+    url.searchParams.set('sub_activity', subActivity);
+    url.searchParams.set('modules', modulesParam);
+    return url.pathname + url.search;
+  }
+  function completeHref(){
+    var url = new URL('/setup/complete/', window.location.origin);
+    url.searchParams.set('lang', lang);
+    return url.pathname + url.search;
+  }
+  function updateSummaryLabels(){
+    var activityLabel = document.querySelector('[data-activity-label]');
+    var subActivityLabel = document.querySelector('[data-sub-activity-label]');
+    if(activityLabel){activityLabel.textContent = labelFrom(activityLabels, activity);}
+    if(subActivityLabel){subActivityLabel.textContent = labelFrom(subActivityLabels[activity] || {}, subActivity);}
+    document.querySelectorAll('.review-module-pill[data-module]').forEach(function(pill){
+      var slug = pill.dataset.module;
+      pill.textContent = labelFrom(moduleLabels, slug);
+    });
+  }
+  function refreshLinks(){
+    var back = document.querySelector('[data-back-link]');
+    var next = document.querySelector('[data-next-link]');
+    if(back){back.href = modulesHref();}
+    if(next){next.href = completeHref();}
+  }
+  function applyLanguage(nextLang){
+    lang = nextLang === 'en' ? 'en' : 'ar';
+    localStorage.setItem('hesba_lang', lang);
+    document.documentElement.lang = lang;
+    document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+    document.body.dataset.lang = lang;
+    document.title = dict[lang].pageTitle;
+    document.querySelectorAll('[data-i18n]').forEach(function(el){
+      var key = el.dataset.i18n;
+      if(dict[lang][key]){el.textContent = dict[lang][key];}
+    });
+    document.querySelectorAll('[data-lang-toggle]').forEach(function(btn){btn.setAttribute('aria-label', dict[lang].changeLanguage);});
+    document.querySelectorAll('[data-logout-button]').forEach(function(btn){btn.setAttribute('aria-label', dict[lang].logout);});
+    updateSummaryLabels();
+    refreshLinks();
+    var url = new URL(window.location.href);
+    url.searchParams.set('lang', lang);
+    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+  }
+
+  document.querySelectorAll('[data-lang-toggle]').forEach(function(btn){
+    btn.addEventListener('click', function(){applyLanguage(lang === 'ar' ? 'en' : 'ar');});
+  });
+
+  applyLanguage(lang);
+})();
+</script>
+</body>
+</html>
