@@ -135,23 +135,39 @@ class FirstUiNavigationMapTests(TestCase):
         self.assertContains(response, "الخزن تتحرك بالمبلغ المدفوع فعليًا فقط")
         self.assertContains(response, "التقارير قراءة فقط")
 
-    def test_dashboard_snapshot_page_renders_read_only_checkpoint(self):
+    def test_dashboard_visual_mock_page_renders_120b_contract_sections(self):
         response = self.client.get(reverse("dashboard_snapshot"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "094_FOUNDATION_DASHBOARD_SNAPSHOT")
-        self.assertContains(response, "Dashboard Snapshot قراءة فقط")
-        self.assertContains(response, "KPIs آمنة لاحقًا")
-        self.assertContains(response, "حالة المخزون")
-        self.assertContains(response, "حالة الخزن")
-        self.assertContains(response, "Status")
+        self.assertContains(response, "120B_DASHBOARD_VISUAL_MOCK")
+        self.assertContains(response, "hesba/css/dashboard_mock.css")
+        self.assertContains(response, "صباح الخير")
+        self.assertContains(response, "Business Health Score")
+        self.assertContains(response, "82%")
+        self.assertContains(response, "مبيعات اليوم")
+        self.assertContains(response, "صافي الربح")
+        self.assertContains(response, "محتاج انتباهك")
+        self.assertContains(response, "عاجل الآن")
+        self.assertContains(response, "قريبًا")
+        self.assertContains(response, "متابعة")
+        self.assertContains(response, "ابدأ من هنا")
+        self.assertContains(response, "مبيعات آخر 7 أيام")
+        self.assertContains(response, "نقدي vs آجل")
+        self.assertContains(response, "أفضل الأصناف / الخدمات")
+        self.assertContains(response, "أعلى العملاء مديونية")
+        self.assertContains(response, "توزيع رصيد الخزن")
+        self.assertContains(response, "معاينة حالة البداية بدون بيانات")
 
-    def test_dashboard_snapshot_keeps_sensitive_finance_protected(self):
+    def test_dashboard_visual_mock_stays_static_and_avoids_settings_noise(self):
         response = self.client.get(reverse("dashboard_snapshot"))
 
-        self.assertContains(response, "الربح")
-        self.assertContains(response, "التكلفة")
-        self.assertContains(response, "صلاحيات حقيقية")
+        self.assertContains(response, "Visual mock فقط")
+        self.assertContains(response, "#mock-placeholder")
+        self.assertNotContains(response, "Module status")
+        self.assertNotContains(response, "enable/disable")
+        self.assertNotContains(response, "module settings")
+        self.assertNotContains(response, "Advanced customization")
+        self.assertNotContains(response, "الإعدادات")
 
     def test_report_hub_renders_read_only_report_map(self):
         response = self.client.get(reverse("report_hub"))
