@@ -5,13 +5,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>لوحة القيادة - حِسْبَة</title>
-<link rel="stylesheet" href="{% static 'hesba/css/dashboard_mock.css' %}?v=120b-hesba-identity-fix">
+<link rel="stylesheet" href="{% static 'hesba/css/dashboard_mock.css' %}?v=120b-assets-v2">
 </head>
-<body class="dashboard-mock-page" data-lang="ar" data-mock-dashboard="120B_DASHBOARD_VISUAL_MOCK_HESBA_IDENTITY_FIX">
+<body class="dashboard-mock-page" data-lang="ar" data-mock-dashboard="120B_DASHBOARD_USE_ASSETS_PACK_V2">
 <main class="dashboard-shell" aria-label="لوحة القيادة">
   <header class="dashboard-header">
     <div class="brand-lockup">
-      <img class="brand-logo" src="{% static 'hesba/setup_gate/assets/setup_gate_logo_approved.png' %}" alt="حِسْبَة" onerror="this.hidden=true">
+      <img class="brand-logo" src="{% static 'hesba/dashboard/assets/brand/hesba_logo_primary.png' %}" alt="حِسْبَة" onerror="this.src='{% static 'hesba/setup_gate/assets/setup_gate_logo_approved.png' %}'">
       <div class="brand-copy">
         <p class="eyebrow" data-i18n="screenKicker">لوحة التشغيل اليومية</p>
         <h1 data-i18n="screenTitle">لوحة القيادة</h1>
@@ -38,9 +38,10 @@
       </div>
     </div>
     <div class="hero-visual-card" aria-hidden="true">
-      <img src="{% static 'hesba/setup_gate/assets/setup_gate_hero_illustration_approved.png' %}" alt="" onerror="this.hidden=true">
+      <img class="hero-asset" src="{% static 'hesba/dashboard/assets/hero/hesba_dashboard_hero_illustration.png' %}" alt="" onerror="this.src='{% static 'hesba/setup_gate/assets/setup_gate_hero_illustration_approved.png' %}'">
       <div class="health-score-card">
-        <span data-i18n="businessHealth">Business Health Score</span>
+        <img src="{% static 'hesba/dashboard/assets/health_score/health_score_ring_stable.png' %}" alt="" aria-hidden="true" onerror="this.hidden=true">
+        <span data-i18n="businessHealth">مؤشر صحة النشاط</span>
         <strong>82%</strong>
         <em data-i18n="healthStable">نشاطك مستقر</em>
       </div>
@@ -56,90 +57,77 @@
       <span class="mock-badge" data-i18n="mockBadge">Mock ثابت للتقييم البصري</span>
     </div>
     <div class="numbers-grid">
-      <article class="number-card primary-number"><img src="{% static 'hesba/setup_gate/assets/setup_gate_step_activity_icon.png' %}" alt="" aria-hidden="true"><span data-i18n="salesToday">مبيعات اليوم</span><strong>48٬750 EGP</strong><small data-i18n="salesTodayNote">+12% عن متوسط الأسبوع</small></article>
-      <article class="number-card"><img src="{% static 'hesba/setup_gate/assets/setup_gate_step_review_icon.png' %}" alt="" aria-hidden="true"><span data-i18n="netProfit">صافي الربح</span><strong>9٬420 EGP</strong><small data-i18n="netProfitNote">رقم تجريبي لصاحب الصلاحية</small></article>
-      <article class="number-card"><img src="{% static 'hesba/setup_gate/assets/setup_gate_step_system_icon.png' %}" alt="" aria-hidden="true"><span data-i18n="cashboxesBalance">رصيد الخزن</span><strong>156٬300 EGP</strong><small data-i18n="cashboxesNote">3 خزن نشطة</small></article>
-      <article class="number-card"><img src="{% static 'hesba/setup_gate/icons/activity_commercial_icon.png' %}" alt="" aria-hidden="true"><span data-i18n="customerDue">المطلوب من العملاء</span><strong>72٬800 EGP</strong><small data-i18n="customerDueNote">5 عملاء يحتاجوا متابعة</small></article>
-      <article class="number-card"><img src="{% static 'hesba/setup_gate/icons/activity_service_icon.png' %}" alt="" aria-hidden="true"><span data-i18n="supplierDue">المطلوب للموردين</span><strong>41٬600 EGP</strong><small data-i18n="supplierDueNote">أقرب استحقاق خلال 3 أيام</small></article>
-      <article class="number-card risk-soft"><img src="{% static 'hesba/setup_gate/assets/setup_gate_step_modules_icon.png' %}" alt="" aria-hidden="true"><span data-i18n="expensesToday">مصروفات اليوم</span><strong>6٬950 EGP</strong><small data-i18n="expensesNote">أعلى من المعتاد</small></article>
+      <article class="number-card primary-number"><img src="{% static 'hesba/dashboard/assets/kpi_icons/today_sales.png' %}" alt="" aria-hidden="true"><span data-i18n="salesToday">مبيعات اليوم</span><strong>48٬750 EGP</strong><small data-i18n="salesTodayNote">+12% عن متوسط الأسبوع</small></article>
+      <article class="number-card"><img src="{% static 'hesba/dashboard/assets/kpi_icons/net_profit.png' %}" alt="" aria-hidden="true"><span data-i18n="netProfit">صافي الربح</span><strong>9٬420 EGP</strong><small data-i18n="netProfitNote">رقم تجريبي لصاحب الصلاحية</small></article>
+      <article class="number-card"><img src="{% static 'hesba/dashboard/assets/kpi_icons/cashbox_balance.png' %}" alt="" aria-hidden="true"><span data-i18n="cashboxesBalance">رصيد الخزن</span><strong>156٬300 EGP</strong><small data-i18n="cashboxesNote">3 خزن نشطة</small></article>
+      <article class="number-card"><img src="{% static 'hesba/dashboard/assets/kpi_icons/due_from_customers.png' %}" alt="" aria-hidden="true"><span data-i18n="customerDue">المطلوب من العملاء</span><strong>72٬800 EGP</strong><small data-i18n="customerDueNote">5 عملاء يحتاجوا متابعة</small></article>
+      <article class="number-card"><img src="{% static 'hesba/dashboard/assets/kpi_icons/due_to_suppliers.png' %}" alt="" aria-hidden="true"><span data-i18n="supplierDue">المطلوب للموردين</span><strong>41٬600 EGP</strong><small data-i18n="supplierDueNote">أقرب استحقاق خلال 3 أيام</small></article>
+      <article class="number-card risk-soft"><img src="{% static 'hesba/dashboard/assets/kpi_icons/today_expenses.png' %}" alt="" aria-hidden="true"><span data-i18n="expensesToday">مصروفات اليوم</span><strong>6٬950 EGP</strong><small data-i18n="expensesNote">أعلى من المعتاد</small></article>
     </div>
   </section>
 
   <section class="dashboard-two-column">
     <section class="section-block attention-block" aria-labelledby="attention-title">
       <div class="section-title-row compact">
-        <div>
-          <p class="section-kicker" data-i18n="attentionKicker">تنبيهات ذكية</p>
-          <h2 id="attention-title" data-i18n="attentionTitle">محتاج انتباهك</h2>
-        </div>
+        <div><p class="section-kicker" data-i18n="attentionKicker">تنبيهات ذكية</p><h2 id="attention-title" data-i18n="attentionTitle">محتاج انتباهك</h2></div>
       </div>
       <div class="alerts-groups">
-        <article class="alert-group urgent"><h3 data-i18n="urgentNow">عاجل الآن</h3><div class="alert-card severity-red"><span class="severity-strip"></span><div><strong data-i18n="overdueCheque">شيك متأخر عن موعده</strong><p data-i18n="overdueChequeDesc">شيك رقم CH-204 لم يتم تحصيله حتى الآن.</p><button type="button" data-i18n="safeAction">عرض التفاصيل</button></div></div><div class="alert-card severity-red"><span class="severity-strip"></span><div><strong data-i18n="customerPaymentToday">دفعة عميل مستحقة اليوم</strong><p data-i18n="customerPaymentTodayDesc">عميل عليه 12٬000 EGP مستحقة اليوم.</p><button type="button" data-i18n="safeAction">عرض التفاصيل</button></div></div><div class="alert-card severity-red"><span class="severity-strip"></span><div><strong data-i18n="negativeStock">رصيد مخزون سالب</strong><p data-i18n="negativeStockDesc">صنف محتاج مراجعة حركة المخزون.</p><button type="button" data-i18n="safeAction">عرض التفاصيل</button></div></div></article>
-        <article class="alert-group soon"><h3 data-i18n="soon">قريبًا</h3><div class="alert-card severity-orange"><span class="severity-strip"></span><div><strong data-i18n="chequeThreeDays">شيك مستحق خلال 3 أيام</strong><p data-i18n="chequeThreeDaysDesc">تابع التحصيل قبل تاريخ الاستحقاق.</p><button type="button" data-i18n="safeAction">عرض التفاصيل</button></div></div><div class="alert-card severity-yellow"><span class="severity-strip"></span><div><strong data-i18n="lowItem">صنف تحت الحد الأدنى</strong><p data-i18n="lowItemDesc">راجع الكمية قبل نفاد الصنف.</p><button type="button" data-i18n="safeAction">عرض التفاصيل</button></div></div></article>
-        <article class="alert-group follow"><h3 data-i18n="followUp">متابعة</h3><div class="alert-card severity-orange"><span class="severity-strip"></span><div><strong data-i18n="lowCashbox">خزنة رصيدها منخفض</strong><p data-i18n="lowCashboxDesc">خزنة الفرع الرئيسي أقل من حد الأمان.</p><button type="button" data-i18n="safeAction">عرض التفاصيل</button></div></div><div class="alert-card severity-orange"><span class="severity-strip"></span><div><strong data-i18n="unusualExpenses">مصروفات اليوم أعلى من المعتاد</strong><p data-i18n="unusualExpensesDesc">قارن المصروفات بباقي أيام الأسبوع.</p><button type="button" data-i18n="safeAction">عرض التفاصيل</button></div></div></article>
+        <article class="alert-group urgent"><h3 data-i18n="urgentNow">عاجل الآن</h3>
+          <div class="alert-card severity-red"><span class="severity-strip"></span><img class="alert-type-icon" src="{% static 'hesba/dashboard/assets/alert_icons/cheque.png' %}" alt="" aria-hidden="true"><div><strong data-i18n="overdueCheque">شيك متأخر عن موعده</strong><p data-i18n="overdueChequeDesc">شيك رقم CH-204 لم يتم تحصيله حتى الآن.</p><button type="button" data-i18n="safeAction">عرض التفاصيل</button></div></div>
+          <div class="alert-card severity-red"><span class="severity-strip"></span><img class="alert-type-icon" src="{% static 'hesba/dashboard/assets/alert_icons/payment.png' %}" alt="" aria-hidden="true"><div><strong data-i18n="customerPaymentToday">دفعة عميل مستحقة اليوم</strong><p data-i18n="customerPaymentTodayDesc">عميل عليه 12٬000 EGP مستحقة اليوم.</p><button type="button" data-i18n="safeAction">عرض التفاصيل</button></div></div>
+          <div class="alert-card severity-red"><span class="severity-strip"></span><img class="alert-type-icon" src="{% static 'hesba/dashboard/assets/alert_icons/negative_stock.png' %}" alt="" aria-hidden="true"><div><strong data-i18n="negativeStock">رصيد مخزون سالب</strong><p data-i18n="negativeStockDesc">صنف محتاج مراجعة حركة المخزون.</p><button type="button" data-i18n="safeAction">عرض التفاصيل</button></div></div>
+        </article>
+        <article class="alert-group soon"><h3 data-i18n="soon">قريبًا</h3>
+          <div class="alert-card severity-orange"><span class="severity-strip"></span><img class="alert-type-icon" src="{% static 'hesba/dashboard/assets/alert_icons/cheque.png' %}" alt="" aria-hidden="true"><div><strong data-i18n="chequeThreeDays">شيك مستحق خلال 3 أيام</strong><p data-i18n="chequeThreeDaysDesc">تابع التحصيل قبل تاريخ الاستحقاق.</p><button type="button" data-i18n="safeAction">عرض التفاصيل</button></div></div>
+          <div class="alert-card severity-yellow"><span class="severity-strip"></span><img class="alert-type-icon" src="{% static 'hesba/dashboard/assets/alert_icons/low_stock.png' %}" alt="" aria-hidden="true"><div><strong data-i18n="lowItem">صنف تحت الحد الأدنى</strong><p data-i18n="lowItemDesc">راجع الكمية قبل نفاد الصنف.</p><button type="button" data-i18n="safeAction">عرض التفاصيل</button></div></div>
+        </article>
+        <article class="alert-group follow"><h3 data-i18n="followUp">متابعة</h3>
+          <div class="alert-card severity-orange"><span class="severity-strip"></span><img class="alert-type-icon" src="{% static 'hesba/dashboard/assets/alert_icons/low_cashbox.png' %}" alt="" aria-hidden="true"><div><strong data-i18n="lowCashbox">خزنة رصيدها منخفض</strong><p data-i18n="lowCashboxDesc">خزنة الفرع الرئيسي أقل من حد الأمان.</p><button type="button" data-i18n="safeAction">عرض التفاصيل</button></div></div>
+          <div class="alert-card severity-blue"><span class="severity-strip"></span><img class="alert-type-icon" src="{% static 'hesba/dashboard/assets/alert_icons/high_expenses.png' %}" alt="" aria-hidden="true"><div><strong data-i18n="unusualExpenses">مصروفات اليوم أعلى من المعتاد</strong><p data-i18n="unusualExpensesDesc">قارن المصروفات بباقي أيام الأسبوع.</p><button type="button" data-i18n="safeAction">عرض التفاصيل</button></div></div>
+        </article>
       </div>
     </section>
 
     <section class="section-block actions-block" aria-labelledby="actions-title">
-      <div class="section-title-row compact">
-        <div>
-          <p class="section-kicker" data-i18n="actionsKicker">اختصارات حِسْبَة</p>
-          <h2 id="actions-title" data-i18n="actionsTitle">ابدأ من هنا</h2>
-        </div>
-      </div>
+      <div class="section-title-row compact"><div><p class="section-kicker" data-i18n="actionsKicker">اختصارات حِسْبَة</p><h2 id="actions-title" data-i18n="actionsTitle">ابدأ من هنا</h2></div></div>
       <div class="actions-grid">
-        <button class="action-card" type="button"><span><img src="{% static 'hesba/setup_gate/assets/setup_gate_step_activity_icon.png' %}" alt=""></span><strong data-i18n="recordTransaction">تسجيل عملية</strong></button>
-        <button class="action-card" type="button"><span><img src="{% static 'hesba/setup_gate/icons/activity_commercial_icon.png' %}" alt=""></span><strong data-i18n="newCustomer">عميل جديد</strong></button>
-        <button class="action-card" type="button"><span><img src="{% static 'hesba/setup_gate/icons/activity_service_icon.png' %}" alt=""></span><strong data-i18n="newSupplier">مورد جديد</strong></button>
-        <button class="action-card" type="button"><span><img src="{% static 'hesba/setup_gate/assets/setup_gate_step_modules_icon.png' %}" alt=""></span><strong data-i18n="newItemService">صنف / خدمة جديدة</strong></button>
-        <button class="action-card" type="button"><span><img src="{% static 'hesba/setup_gate/icons/activity_other_icon.png' %}" alt=""></span><strong data-i18n="newExpense">مصروف جديد</strong></button>
-        <button class="action-card" type="button"><span><img src="{% static 'hesba/setup_gate/assets/setup_gate_step_review_icon.png' %}" alt=""></span><strong data-i18n="collectCustomer">تحصيل من عميل</strong></button>
-        <button class="action-card" type="button"><span><img src="{% static 'hesba/setup_gate/icons/activity_manufacturing_icon.png' %}" alt=""></span><strong data-i18n="paySupplier">سداد لمورد</strong></button>
-        <button class="action-card" type="button"><span><img src="{% static 'hesba/setup_gate/assets/setup_gate_step_system_icon.png' %}" alt=""></span><strong data-i18n="cashboxCount">جرد خزنة</strong></button>
-        <button class="action-card gold-card" type="button"><span><img src="{% static 'hesba/setup_gate/icons/activity_education_icon.png' %}" alt=""></span><strong data-i18n="printReports">طباعة التقارير</strong></button>
+        <button class="action-card legacy-action" type="button"><img src="{% static 'hesba/dashboard/assets/quick_actions_existing/01_register_transaction.png' %}" alt=""><strong data-i18n="recordTransaction">تسجيل عملية</strong></button>
+        <button class="action-card legacy-action" type="button"><img src="{% static 'hesba/dashboard/assets/quick_actions_existing/03_new_customer.png' %}" alt=""><strong data-i18n="newCustomer">عميل جديد</strong></button>
+        <button class="action-card legacy-action" type="button"><img src="{% static 'hesba/dashboard/assets/quick_actions_existing/04_new_supplier.png' %}" alt=""><strong data-i18n="newSupplier">مورد جديد</strong></button>
+        <button class="action-card legacy-action" type="button"><img src="{% static 'hesba/dashboard/assets/quick_actions_existing/05_new_service.png' %}" alt=""><strong data-i18n="newItemService">صنف / خدمة جديدة</strong></button>
+        <button class="action-card" type="button"><span><img src="{% static 'hesba/dashboard/assets/quick_actions_missing/icons/new_expense.png' %}" alt=""></span><strong data-i18n="newExpense">مصروف جديد</strong></button>
+        <button class="action-card" type="button"><span><img src="{% static 'hesba/dashboard/assets/quick_actions_missing/icons/collect_from_customer.png' %}" alt=""></span><strong data-i18n="collectCustomer">تحصيل من عميل</strong></button>
+        <button class="action-card" type="button"><span><img src="{% static 'hesba/dashboard/assets/quick_actions_missing/icons/pay_supplier.png' %}" alt=""></span><strong data-i18n="paySupplier">سداد لمورد</strong></button>
+        <button class="action-card" type="button"><span><img src="{% static 'hesba/dashboard/assets/quick_actions_missing/icons/cashbox_count.png' %}" alt=""></span><strong data-i18n="cashboxCount">جرد خزنة</strong></button>
+        <button class="action-card gold-card legacy-action" type="button"><img src="{% static 'hesba/dashboard/assets/quick_actions_existing/02_print_reports.png' %}" alt=""><strong data-i18n="printReports">طباعة التقارير</strong></button>
       </div>
     </section>
   </section>
 
   <section class="section-block analytics-block" aria-labelledby="analytics-title">
-    <div class="section-title-row">
-      <div>
-        <p class="section-kicker" data-i18n="analyticsKicker">قراءة سريعة بدون زحمة</p>
-        <h2 id="analytics-title" data-i18n="analyticsTitle">تحليلات سريعة</h2>
-      </div>
-    </div>
+    <div class="section-title-row"><div><p class="section-kicker" data-i18n="analyticsKicker">قراءة سريعة بدون زحمة</p><h2 id="analytics-title" data-i18n="analyticsTitle">تحليلات سريعة</h2></div></div>
     <div class="analytics-grid">
-      <article class="analytics-card weekly-sales"><h3 data-i18n="last7Sales">مبيعات آخر 7 أيام</h3><div class="bar-row" style="--h:44%"></div><div class="bar-row" style="--h:68%"></div><div class="bar-row" style="--h:52%"></div><div class="bar-row" style="--h:84%"></div><div class="bar-row" style="--h:63%"></div><div class="bar-row" style="--h:74%"></div><div class="bar-row active" style="--h:92%"></div></article>
-      <article class="analytics-card split-card"><h3 data-i18n="cashVsCredit">نقدي vs آجل</h3><div class="split-line"><span style="--w:67%"></span></div><p><strong>67%</strong> <span data-i18n="cashSales">مبيعات نقدي</span></p><p><strong>33%</strong> <span data-i18n="creditSales">مبيعات آجلة</span></p></article>
+      <article class="analytics-card image-analytics"><h3 data-i18n="last7Sales">مبيعات آخر 7 أيام</h3><img src="{% static 'hesba/dashboard/assets/analytics_components/bar_chart_7_days.png' %}" alt="" aria-hidden="true"></article>
+      <article class="analytics-card image-analytics"><h3 data-i18n="cashVsCredit">نقدي vs آجل</h3><img src="{% static 'hesba/dashboard/assets/analytics_components/donut_cash_credit.png' %}" alt="" aria-hidden="true"><p><strong>67%</strong> <span data-i18n="cashSales">مبيعات نقدي</span></p><p><strong>33%</strong> <span data-i18n="creditSales">مبيعات آجلة</span></p></article>
       <article class="analytics-card list-card"><h3 data-i18n="topItems">أفضل الأصناف / الخدمات</h3><ol><li><span>خدمة ADSL</span><strong>18٬200</strong></li><li><span>باقة شهرية</span><strong>11٬450</strong></li><li><span>كارت شحن</span><strong>8٬900</strong></li></ol></article>
       <article class="analytics-card list-card"><h3 data-i18n="topDebtors">أعلى العملاء مديونية</h3><ol><li><span>عميل تجريبي 01</span><strong>22٬000</strong></li><li><span>عميل تجريبي 02</span><strong>18٬500</strong></li><li><span>عميل تجريبي 03</span><strong>12٬300</strong></li></ol></article>
-      <article class="analytics-card cash-distribution"><h3 data-i18n="cashboxDistribution">توزيع رصيد الخزن</h3><div class="cash-ring"><span>156K</span></div><p data-i18n="cashboxDistributionNote">رئيسية، فرع، عهدة</p></article>
+      <article class="analytics-card image-analytics"><h3 data-i18n="cashboxDistribution">توزيع رصيد الخزن</h3><img src="{% static 'hesba/dashboard/assets/analytics_components/progress_list_bars.png' %}" alt="" aria-hidden="true"><p data-i18n="cashboxDistributionNote">رئيسية، فرع، عهدة</p></article>
     </div>
   </section>
 
   <section class="empty-state-preview" aria-labelledby="empty-title">
-    <div>
-      <p class="section-kicker" data-i18n="emptyKicker">في حالة عدم وجود بيانات</p>
-      <h2 id="empty-title" data-i18n="emptyTitle">ابدأ تشغيل حِسْبَة في 4 خطوات:</h2>
-    </div>
-    <ol>
-      <li data-i18n="emptyStep1">أضف خزنة</li>
-      <li data-i18n="emptyStep2">أضف عميل أو مورد</li>
-      <li data-i18n="emptyStep3">أضف صنف أو خدمة</li>
-      <li data-i18n="emptyStep4">سجل أول عملية</li>
-    </ol>
+    <img src="{% static 'hesba/dashboard/assets/empty_state/hesba_start_4_steps_visual.png' %}" alt="" aria-hidden="true" onerror="this.hidden=true">
+    <div><p class="section-kicker" data-i18n="emptyKicker">في حالة عدم وجود بيانات</p><h2 id="empty-title" data-i18n="emptyTitle">ابدأ تشغيل حِسْبَة في 4 خطوات:</h2></div>
+    <ol><li data-i18n="emptyStep1">أضف خزنة</li><li data-i18n="emptyStep2">أضف عميل أو مورد</li><li data-i18n="emptyStep3">أضف صنف أو خدمة</li><li data-i18n="emptyStep4">سجل أول عملية</li></ol>
   </section>
 
-  <footer class="dashboard-footer-note">
-    <strong>120B_DASHBOARD_VISUAL_MOCK_HESBA_IDENTITY_FIX</strong>
-    <span data-i18n="staticOnly">هذه شاشة Visual Mock ثابتة فقط — لا يوجد ربط بيانات حقيقي، ولا حفظ، ولا حسابات إنتاجية.</span>
-  </footer>
+  <footer class="dashboard-footer-note"><strong>120B_DASHBOARD_USE_ASSETS_PACK_V2</strong><span data-i18n="staticOnly">هذه شاشة Visual Mock ثابتة فقط — لا يوجد ربط بيانات حقيقي، ولا حفظ، ولا حسابات إنتاجية.</span></footer>
 </main>
 <script>
 (function(){
   var params=new URLSearchParams(window.location.search);var saved=localStorage.getItem('hesba_lang');var lang=params.get('lang')==='en'?'en':(params.get('lang')==='ar'?'ar':(saved==='en'?'en':'ar'));
   var dict={
-    ar:{screenKicker:'لوحة التشغيل اليومية',screenTitle:'لوحة القيادة',language:'العربية',todayLabel:'اليوم',userLabel:'المستخدم',userName:'أحمد',dailyPulse:'نبض حِسْبَة اليوم',goodMorning:'صباح الخير، أحمد',stableActivity:'نشاطك اليوم مستقر',alertsNeedFollow:'في 3 تنبيهات تحتاج متابعة',openDay:'فتح اليوم',lastSale:'آخر عملية',safeMode:'الوضع',safeModeValue:'آمن',businessHealth:'Business Health Score',healthStable:'نشاطك مستقر',numbersKicker:'أرقام صاحب النشاط',numbersTitle:'المؤشرات الأساسية',mockBadge:'Mock ثابت للتقييم البصري',salesToday:'مبيعات اليوم',salesTodayNote:'+12% عن متوسط الأسبوع',netProfit:'صافي الربح',netProfitNote:'رقم تجريبي لصاحب الصلاحية',cashboxesBalance:'رصيد الخزن',cashboxesNote:'3 خزن نشطة',customerDue:'المطلوب من العملاء',customerDueNote:'5 عملاء يحتاجوا متابعة',supplierDue:'المطلوب للموردين',supplierDueNote:'أقرب استحقاق خلال 3 أيام',expensesToday:'مصروفات اليوم',expensesNote:'أعلى من المعتاد',attentionKicker:'تنبيهات ذكية',attentionTitle:'محتاج انتباهك',urgentNow:'عاجل الآن',soon:'قريبًا',followUp:'متابعة',overdueCheque:'شيك متأخر عن موعده',overdueChequeDesc:'شيك رقم CH-204 لم يتم تحصيله حتى الآن.',customerPaymentToday:'دفعة عميل مستحقة اليوم',customerPaymentTodayDesc:'عميل عليه 12٬000 EGP مستحقة اليوم.',negativeStock:'رصيد مخزون سالب',negativeStockDesc:'صنف محتاج مراجعة حركة المخزون.',chequeThreeDays:'شيك مستحق خلال 3 أيام',chequeThreeDaysDesc:'تابع التحصيل قبل تاريخ الاستحقاق.',lowItem:'صنف تحت الحد الأدنى',lowItemDesc:'راجع الكمية قبل نفاد الصنف.',lowCashbox:'خزنة رصيدها منخفض',lowCashboxDesc:'خزنة الفرع الرئيسي أقل من حد الأمان.',unusualExpenses:'مصروفات اليوم أعلى من المعتاد',unusualExpensesDesc:'قارن المصروفات بباقي أيام الأسبوع.',safeAction:'عرض التفاصيل',actionsKicker:'اختصارات حِسْبَة',actionsTitle:'ابدأ من هنا',recordTransaction:'تسجيل عملية',newCustomer:'عميل جديد',newSupplier:'مورد جديد',newItemService:'صنف / خدمة جديدة',newExpense:'مصروف جديد',collectCustomer:'تحصيل من عميل',paySupplier:'سداد لمورد',cashboxCount:'جرد خزنة',printReports:'طباعة التقارير',analyticsKicker:'قراءة سريعة بدون زحمة',analyticsTitle:'تحليلات سريعة',last7Sales:'مبيعات آخر 7 أيام',cashVsCredit:'نقدي vs آجل',cashSales:'مبيعات نقدي',creditSales:'مبيعات آجلة',topItems:'أفضل الأصناف / الخدمات',topDebtors:'أعلى العملاء مديونية',cashboxDistribution:'توزيع رصيد الخزن',cashboxDistributionNote:'رئيسية، فرع، عهدة',emptyKicker:'في حالة عدم وجود بيانات',emptyTitle:'ابدأ تشغيل حِسْبَة في 4 خطوات:',emptyStep1:'أضف خزنة',emptyStep2:'أضف عميل أو مورد',emptyStep3:'أضف صنف أو خدمة',emptyStep4:'سجل أول عملية',staticOnly:'هذه شاشة Visual Mock ثابتة فقط — لا يوجد ربط بيانات حقيقي، ولا حفظ، ولا حسابات إنتاجية.'},
+    ar:{screenKicker:'لوحة التشغيل اليومية',screenTitle:'لوحة القيادة',language:'العربية',todayLabel:'اليوم',userLabel:'المستخدم',userName:'أحمد',dailyPulse:'نبض حِسْبَة اليوم',goodMorning:'صباح الخير، أحمد',stableActivity:'نشاطك اليوم مستقر',alertsNeedFollow:'في 3 تنبيهات تحتاج متابعة',openDay:'فتح اليوم',lastSale:'آخر عملية',safeMode:'الوضع',safeModeValue:'آمن',businessHealth:'مؤشر صحة النشاط',healthStable:'نشاطك مستقر',numbersKicker:'أرقام صاحب النشاط',numbersTitle:'المؤشرات الأساسية',mockBadge:'Mock ثابت للتقييم البصري',salesToday:'مبيعات اليوم',salesTodayNote:'+12% عن متوسط الأسبوع',netProfit:'صافي الربح',netProfitNote:'رقم تجريبي لصاحب الصلاحية',cashboxesBalance:'رصيد الخزن',cashboxesNote:'3 خزن نشطة',customerDue:'المطلوب من العملاء',customerDueNote:'5 عملاء يحتاجوا متابعة',supplierDue:'المطلوب للموردين',supplierDueNote:'أقرب استحقاق خلال 3 أيام',expensesToday:'مصروفات اليوم',expensesNote:'أعلى من المعتاد',attentionKicker:'تنبيهات ذكية',attentionTitle:'محتاج انتباهك',urgentNow:'عاجل الآن',soon:'قريبًا',followUp:'متابعة',overdueCheque:'شيك متأخر عن موعده',overdueChequeDesc:'شيك رقم CH-204 لم يتم تحصيله حتى الآن.',customerPaymentToday:'دفعة عميل مستحقة اليوم',customerPaymentTodayDesc:'عميل عليه 12٬000 EGP مستحقة اليوم.',negativeStock:'رصيد مخزون سالب',negativeStockDesc:'صنف محتاج مراجعة حركة المخزون.',chequeThreeDays:'شيك مستحق خلال 3 أيام',chequeThreeDaysDesc:'تابع التحصيل قبل تاريخ الاستحقاق.',lowItem:'صنف تحت الحد الأدنى',lowItemDesc:'راجع الكمية قبل نفاد الصنف.',lowCashbox:'خزنة رصيدها منخفض',lowCashboxDesc:'خزنة الفرع الرئيسي أقل من حد الأمان.',unusualExpenses:'مصروفات اليوم أعلى من المعتاد',unusualExpensesDesc:'قارن المصروفات بباقي أيام الأسبوع.',safeAction:'عرض التفاصيل',actionsKicker:'اختصارات حِسْبَة',actionsTitle:'ابدأ من هنا',recordTransaction:'تسجيل عملية',newCustomer:'عميل جديد',newSupplier:'مورد جديد',newItemService:'صنف / خدمة جديدة',newExpense:'مصروف جديد',collectCustomer:'تحصيل من عميل',paySupplier:'سداد لمورد',cashboxCount:'جرد خزنة',printReports:'طباعة التقارير',analyticsKicker:'قراءة سريعة بدون زحمة',analyticsTitle:'تحليلات سريعة',last7Sales:'مبيعات آخر 7 أيام',cashVsCredit:'نقدي vs آجل',cashSales:'مبيعات نقدي',creditSales:'مبيعات آجلة',topItems:'أفضل الأصناف / الخدمات',topDebtors:'أعلى العملاء مديونية',cashboxDistribution:'توزيع رصيد الخزن',cashboxDistributionNote:'رئيسية، فرع، عهدة',emptyKicker:'في حالة عدم وجود بيانات',emptyTitle:'ابدأ تشغيل حِسْبَة في 4 خطوات:',emptyStep1:'أضف خزنة',emptyStep2:'أضف عميل أو مورد',emptyStep3:'أضف صنف أو خدمة',emptyStep4:'سجل أول عملية',staticOnly:'هذه شاشة Visual Mock ثابتة فقط — لا يوجد ربط بيانات حقيقي، ولا حفظ، ولا حسابات إنتاجية.'},
     en:{screenKicker:'Daily operating board',screenTitle:'Dashboard',language:'English',todayLabel:'Today',userLabel:'User',userName:'Ahmed',dailyPulse:'Hesba daily pulse',goodMorning:'Good morning, Ahmed',stableActivity:'Your business is stable today',alertsNeedFollow:'3 alerts need follow-up',openDay:'Day opened',lastSale:'Last transaction',safeMode:'Mode',safeModeValue:'Safe',businessHealth:'Business Health Score',healthStable:'Business is stable',numbersKicker:'Owner key numbers',numbersTitle:'Core indicators',mockBadge:'Static mock for visual review',salesToday:'Today sales',salesTodayNote:'+12% above weekly average',netProfit:'Net profit',netProfitNote:'Mock owner-permission number',cashboxesBalance:'Cashboxes balance',cashboxesNote:'3 active cashboxes',customerDue:'Due from customers',customerDueNote:'5 customers need follow-up',supplierDue:'Due to suppliers',supplierDueNote:'Nearest due in 3 days',expensesToday:'Today expenses',expensesNote:'Higher than usual',attentionKicker:'Smart alerts',attentionTitle:'Needs your attention',urgentNow:'Urgent now',soon:'Soon',followUp:'Follow-up',overdueCheque:'Overdue cheque',overdueChequeDesc:'Cheque CH-204 has not been collected yet.',customerPaymentToday:'Customer payment due today',customerPaymentTodayDesc:'A customer has 12,000 EGP due today.',negativeStock:'Negative stock balance',negativeStockDesc:'An item needs stock movement review.',chequeThreeDays:'Cheque due in 3 days',chequeThreeDaysDesc:'Follow up collection before due date.',lowItem:'Item below minimum',lowItemDesc:'Review quantity before it runs out.',lowCashbox:'Low cashbox balance',lowCashboxDesc:'Main branch cashbox is below safe limit.',unusualExpenses:'Expenses higher than usual',unusualExpensesDesc:'Compare expenses with the rest of the week.',safeAction:'View details',actionsKicker:'Hesba shortcuts',actionsTitle:'Start from here',recordTransaction:'Record transaction',newCustomer:'New customer',newSupplier:'New supplier',newItemService:'New item / service',newExpense:'New expense',collectCustomer:'Collect from customer',paySupplier:'Pay supplier',cashboxCount:'Cashbox count',printReports:'Print reports',analyticsKicker:'Quick reading without clutter',analyticsTitle:'Quick analytics',last7Sales:'Last 7 days sales',cashVsCredit:'Cash vs credit',cashSales:'Cash sales',creditSales:'Credit sales',topItems:'Top items / services',topDebtors:'Highest customer debts',cashboxDistribution:'Cashbox balance distribution',cashboxDistributionNote:'Main, branch, custody',emptyKicker:'When there is no data',emptyTitle:'Start Hesba in 4 steps:',emptyStep1:'Add a cashbox',emptyStep2:'Add a customer or supplier',emptyStep3:'Add an item or service',emptyStep4:'Record the first transaction',staticOnly:'This is a static Visual Mock only — no real data wiring, no save, and no production calculations.'}
   };
   function applyLanguage(nextLang){lang=nextLang==='en'?'en':'ar';localStorage.setItem('hesba_lang',lang);document.documentElement.lang=lang;document.documentElement.dir=lang==='ar'?'rtl':'ltr';document.body.dataset.lang=lang;document.title=lang==='ar'?'لوحة القيادة - حِسْبَة':'Dashboard - Hesba';document.querySelectorAll('[data-i18n]').forEach(function(el){var key=el.dataset.i18n;if(dict[lang][key])el.textContent=dict[lang][key];});var url=new URL(window.location.href);url.searchParams.set('lang',lang);window.history.replaceState({},'',url.pathname+url.search+url.hash);} 
