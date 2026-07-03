@@ -115,3 +115,19 @@ Notes:
 - `/setup/complete/` is a safe placeholder only; no real setup activation or database save is implemented.
 - 119 reuses the approved 117A setup shell and adds only inner review summary layout.
 - Replace `127.0.0.1` with the forwarded Codespaces host when previewing through GitHub Codespaces.
+
+## 120B Dashboard Visual Mock
+
+Branch: `feature/120b-dashboard-visual-mock`  
+Route: `/dashboard/`  
+Recommended port: `8010`
+
+Arabic commercial visual mock:
+- `http://127.0.0.1:8010/dashboard/`
+
+Notes:
+- No PR opened.
+- No merge performed.
+- Static/mock dashboard only: mock KPIs, mock alerts, mock analytics, and safe placeholder links.
+- No real dashboard data wiring, production calculations, database saves, module status, or settings controls are implemented.
+- Replace `127.0.0.1` with the forwarded Codespaces host when previewing through GitHub Codespaces.
