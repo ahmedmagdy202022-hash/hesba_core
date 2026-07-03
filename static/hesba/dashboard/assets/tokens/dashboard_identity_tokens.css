@@ -1,0 +1,23 @@
+:root {
+  --hesba-navy: #061E3D;
+  --hesba-teal: #008C91;
+  --hesba-teal-2: #10A8AD;
+  --hesba-teal-soft: #DDF6F5;
+  --hesba-gold: #D7A928;
+  --hesba-gold-soft: #FFF4D8;
+  --hesba-offwhite: #F7FBFA;
+  --hesba-card: #FFFFFF;
+  --hesba-red: #E64636;
+  --hesba-orange: #F47B20;
+  --hesba-yellow: #E4B300;
+  --hesba-blue: #2D6CDF;
+  --hesba-green: #159B57;
+  --hesba-border: #BFE8E8;
+  --hesba-shadow-soft: 0 18px 45px rgba(6, 30, 61, .08);
+  --hesba-shadow-card: 0 10px 28px rgba(6, 30, 61, .07);
+  --hesba-radius-xl: 34px;
+  --hesba-radius-lg: 24px;
+  --hesba-radius-md: 18px;
+}
+
+/* Usage rule: text, values, labels, buttons and translations must remain HTML/CSS, not baked into images. */
