@@ -91,3 +91,27 @@ Notes:
 - 118 replaces the old `/setup/modules/` placeholder with the real modules selection screen.
 - 118 reuses the approved 117A setup shell and adds only inner module card/toggle layout.
 - Replace `127.0.0.1` with the forwarded Codespaces host when previewing through GitHub Codespaces.
+
+## 119 Review Setup
+
+Branch: `feature/119-review-setup`  
+Route: `/setup/review/`  
+Recommended port: `8010`
+
+Arabic review:
+- `http://127.0.0.1:8010/setup/review/?lang=ar&activity=commercial&sub_activity=retail&modules=sales_operations,items_services,cashboxes,reports,pdf_printing`
+
+English review:
+- `http://127.0.0.1:8010/setup/review/?lang=en&activity=commercial&sub_activity=retail&modules=sales_operations,items_services,cashboxes,reports,pdf_printing`
+
+Complete placeholder:
+- `http://127.0.0.1:8010/setup/complete/?lang=ar`
+- `http://127.0.0.1:8010/setup/complete/?lang=en`
+
+Notes:
+- No PR opened.
+- No merge performed.
+- 119 replaces the `/setup/review/` placeholder with the real review setup screen.
+- `/setup/complete/` is a safe placeholder only; no real setup activation or database save is implemented.
+- 119 reuses the approved 117A setup shell and adds only inner review summary layout.
+- Replace `127.0.0.1` with the forwarded Codespaces host when previewing through GitHub Codespaces.

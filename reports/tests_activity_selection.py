@@ -123,6 +123,16 @@ class SetupFlowSmokeTests(TestCase):
         self.assertIn('Required  = ON and locked', plan)
         self.assertIn('Services can still use items, inventory, spare parts, consumables, purchases, and suppliers.', plan)
 
+    def test_119_plan_file_exists(self):
+        plan_path = settings.BASE_DIR / 'docs' / '119_REVIEW_SETUP_PLAN.md'
+        self.assertTrue(plan_path.exists())
+        plan = plan_path.read_text(encoding='utf-8')
+
+        self.assertIn('PLANNING_APPROVED', plan)
+        self.assertIn('/setup/review/', plan)
+        self.assertIn('Stepper active step is 4', plan)
+        self.assertIn('Disabling a module must never delete existing data.', plan)
+
 
 class ModulesSelectionScreenTests(TestCase):
     @staticmethod
@@ -281,17 +291,134 @@ class ModulesSelectionScreenTests(TestCase):
         self.assertContains(response, "return withLang('/setup/activity/');")
         self.assertContains(response, "url.searchParams.set('activity', rawActivity || 'unknown');")
 
-    def test_review_placeholder_route_exists_safely(self):
+    def test_review_route_replaces_placeholder_safely(self):
         response = self.client.get('/setup/review/?lang=en&activity=commercial&sub_activity=retail&modules=sales_operations,items_services')
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Setup review')
-        self.assertContains(response, 'safe placeholder')
+        self.assertContains(response, 'Review Setup')
+        self.assertContains(response, 'Review your setup')
         self.assertContains(response, 'Back to modules selection')
-        self.assertContains(response, "new URL('/setup/modules/', window.location.origin)")
+        self.assertContains(response, 'Finish setup')
 
     def test_no_modules_background_or_shell_redesign(self):
         template_path = settings.BASE_DIR / 'templates' / 'setup' / 'modules_selection.html'
+        template = template_path.read_text(encoding='utf-8')
+
+        self.assertIn('activity-stage', template)
+        self.assertIn('activity-bg-frame', template)
+        self.assertIn('activity-ui-layer', template)
+        self.assertIn('activity-panel', template)
+        self.assertIn('activity-stepper', template)
+        self.assertIn('activity-footer', template)
+        self.assertIn('activity-action', template)
+        self.assertIn('setup_gate_logo_approved.png', template)
+        self.assertNotIn('setup_gate_web_background_approved.png', template)
+        self.assertNotIn('background_approved.png', template)
+        self.assertNotIn('image_gen', template)
+        self.assertNotIn('generated background', template.lower())
+
+
+class ReviewSetupScreenTests(TestCase):
+    def test_review_route_renders(self):
+        response = self.client.get('/setup/review/?lang=ar&activity=commercial&sub_activity=retail&modules=sales_operations,items_services,cashboxes,reports')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Review Setup')
+        self.assertContains(response, 'activity-stage')
+        self.assertContains(response, 'activity-bg-frame')
+        self.assertContains(response, 'activity-ui-layer')
+        self.assertContains(response, 'activity-panel')
+        self.assertContains(response, 'activity-stepper')
+        self.assertContains(response, 'activity-step is-current')
+        self.assertContains(response, 'activity-footer')
+        self.assertContains(response, 'activity-action')
+        self.assertContains(response, 'hesba/css/activity_review_setup.css')
+
+    def test_review_arabic_content_exists(self):
+        response = self.client.get('/setup/review/?lang=ar&activity=commercial&sub_activity=retail&modules=sales_operations,items_services,cashboxes,reports')
+
+        arabic_labels = [
+            'راجع إعدادات نشاطك',
+            'تأكد من الاختيارات التالية قبل إنهاء إعداد حِسْبَة لنشاطك.',
+            'ملخص النشاط',
+            'النشاط العام',
+            'النشاط الفرعي',
+            'الموديولات المختارة',
+            'ملاحظة الإعدادات',
+            'يمكنك تعديل الموديولات لاحقًا من الإعدادات، ولن يتم حذف أي بيانات عند تعطيل موديول.',
+            'الرجوع إلى اختيار الموديولات',
+            'إنهاء الإعداد',
+        ]
+        for label in arabic_labels:
+            self.assertContains(response, label)
+
+    def test_review_english_content_exists(self):
+        response = self.client.get('/setup/review/?lang=en&activity=commercial&sub_activity=retail&modules=sales_operations,items_services,cashboxes,reports')
+
+        english_labels = [
+            'Review your setup',
+            'Confirm the following choices before finishing your Hesba setup.',
+            'Activity summary',
+            'General activity',
+            'Sub-activity',
+            'Selected modules',
+            'Settings note',
+            'You can adjust modules later from Settings. Disabling a module will not delete any existing data.',
+            'Back to modules selection',
+            'Finish setup',
+        ]
+        for label in english_labels:
+            self.assertContains(response, label)
+
+    def test_activity_and_sub_activity_are_displayed(self):
+        commercial = self.client.get('/setup/review/?lang=en&activity=commercial&sub_activity=retail&modules=sales_operations')
+        services = self.client.get('/setup/review/?lang=ar&activity=services&sub_activity=general&modules=items_services')
+
+        self.assertContains(commercial, 'Commercial')
+        self.assertContains(commercial, 'Retail store')
+        self.assertContains(services, 'نشاط خدمي')
+        self.assertContains(services, 'خدمات عامة')
+
+    def test_selected_modules_are_displayed_in_current_language(self):
+        english = self.client.get('/setup/review/?lang=en&activity=commercial&sub_activity=retail&modules=sales_operations,items_services,pdf_printing')
+        arabic = self.client.get('/setup/review/?lang=ar&activity=commercial&sub_activity=retail&modules=sales_operations,items_services,pdf_printing')
+
+        self.assertContains(english, 'Sales operations')
+        self.assertContains(english, 'Items &amp; services')
+        self.assertContains(english, 'PDF printing')
+        self.assertContains(arabic, 'عمليات البيع')
+        self.assertContains(arabic, 'الأصناف والخدمات')
+        self.assertContains(arabic, 'طباعة PDF')
+
+    def test_back_target_preserves_lang_activity_sub_activity_and_modules(self):
+        response = self.client.get('/setup/review/?lang=en&activity=commercial&sub_activity=retail&modules=sales_operations,items_services,pdf_printing')
+
+        self.assertContains(
+            response,
+            'href="/setup/modules/?lang=en&amp;activity=commercial&amp;sub_activity=retail&amp;modules=sales_operations,items_services,pdf_printing"',
+        )
+
+    def test_next_target_goes_to_complete_with_lang(self):
+        english = self.client.get('/setup/review/?lang=en&activity=commercial&sub_activity=retail&modules=sales_operations')
+        arabic = self.client.get('/setup/review/?lang=ar&activity=services&sub_activity=general&modules=items_services')
+
+        self.assertContains(english, 'href="/setup/complete/?lang=en"')
+        self.assertContains(arabic, 'href="/setup/complete/?lang=ar"')
+
+    def test_complete_placeholder_renders_safely(self):
+        english = self.client.get('/setup/complete/?lang=en')
+        arabic = self.client.get('/setup/complete/?lang=ar')
+
+        self.assertEqual(english.status_code, 200)
+        self.assertContains(english, 'Setup complete')
+        self.assertContains(english, 'safe placeholder')
+        self.assertContains(english, 'No production setup activation or final database decision has been saved.')
+        self.assertEqual(arabic.status_code, 200)
+        self.assertContains(arabic, 'تم إنهاء الإعداد')
+        self.assertContains(arabic, 'لم يتم تفعيل أي إعدادات إنتاجية أو حفظ أي قرار نهائي في قاعدة البيانات.')
+
+    def test_review_shell_reuses_117a_visual_lock(self):
+        template_path = settings.BASE_DIR / 'templates' / 'setup' / 'review_setup.html'
         template = template_path.read_text(encoding='utf-8')
 
         self.assertIn('activity-stage', template)
