@@ -115,3 +115,21 @@ Notes:
 - `/setup/complete/` is a safe placeholder only; no real setup activation or database save is implemented.
 - 119 reuses the approved 117A setup shell and adds only inner review summary layout.
 - Replace `127.0.0.1` with the forwarded Codespaces host when previewing through GitHub Codespaces.
+
+## 120B Dashboard Visual Mock — Hesba Identity Fix
+
+Branch: `feature/120b-dashboard-identity-fix`  
+Route: `/dashboard/`  
+Recommended port: `8010`
+
+Arabic:
+- `http://127.0.0.1:8010/dashboard/?lang=ar`
+
+English:
+- `http://127.0.0.1:8010/dashboard/?lang=en`
+
+Notes:
+- No PR opened.
+- No merge performed.
+- This is a static visual mock only; no real dashboard data, database save, production calculations, module status, or settings controls are implemented.
+- Replace `127.0.0.1` with the forwarded Codespaces host when previewing through GitHub Codespaces.
