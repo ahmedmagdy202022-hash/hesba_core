@@ -7,7 +7,7 @@ from django.urls import path
 from django.views.generic import RedirectView, TemplateView
 
 from reports.status_views import status_counts_report
-from reports.views import dashboard_snapshot, home, report_hub
+from reports.views import home, report_hub
 
 
 MODULE_LABELS = {
@@ -218,7 +218,7 @@ urlpatterns = [
     path("setup/review/", setup_review, name="setup_review"),
     path("setup/complete/", setup_complete_placeholder, name="setup_complete"),
     path("home/", home, name="home"),
-    path("dashboard/", dashboard_snapshot, name="dashboard_snapshot"),
+    path("dashboard/", TemplateView.as_view(template_name="dashboard/dashboard_mock.html"), name="dashboard_snapshot"),
     path("reports/", report_hub, name="report_hub"),
     path("status/", status_counts_report, name="status_counts_report"),
     path("admin/", django_admin.site.urls),
