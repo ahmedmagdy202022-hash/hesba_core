@@ -1,0 +1,293 @@
+{% load static %}
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>لوحة القيادة - حِسْبَة</title>
+    <link rel="stylesheet" href="{% static 'hesba/css/dashboard_mock.css' %}">
+</head>
+<body>
+    <main class="dashboard-page" data-dashboard-mock="120B_DASHBOARD_VISUAL_MOCK">
+        <nav class="dashboard-nav" aria-label="Dashboard preview navigation">
+            <a class="brand-chip" href="/dashboard/" aria-label="Hesba Dashboard">
+                <span class="brand-mark">ح</span>
+                <span>
+                    <strong>حِسْبَة</strong>
+                    <small>Dashboard</small>
+                </span>
+            </a>
+            <div class="nav-links">
+                <a href="/dashboard/" aria-current="page">Dashboard</a>
+                <a href="/reports/">Reports</a>
+                <a href="/status/">Status</a>
+            </div>
+            <span class="mock-badge">Visual mock فقط</span>
+        </nav>
+
+        <section class="hero-grid" aria-labelledby="today-status-title">
+            <article class="hero-card">
+                <div class="hero-copy">
+                    <span class="section-kicker">لوحة قيادة النشاط التجاري</span>
+                    <h1 id="today-status-title">صباح الخير</h1>
+                    <p class="hero-status">نشاطك اليوم مستقر</p>
+                    <p class="hero-alert-note">في 3 تنبيهات تحتاج متابعة</p>
+                </div>
+                <div class="hero-pulse" aria-hidden="true">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </article>
+
+            <aside class="health-card" aria-label="Business Health Score">
+                <span class="health-label">Business Health Score</span>
+                <div class="health-score" aria-label="82 percent">
+                    <strong>82%</strong>
+                    <span>نشاطك مستقر</span>
+                </div>
+                <p>المبيعات جيدة، الربح مستقر، مع متابعة الشيكات والمخزون.</p>
+            </aside>
+        </section>
+
+        <section class="kpi-section" aria-labelledby="kpi-title">
+            <div class="section-header">
+                <span class="section-kicker">أرقام صاحب النشاط</span>
+                <h2 id="kpi-title">المؤشرات الأساسية اليوم</h2>
+            </div>
+
+            <div class="kpi-grid">
+                <article class="kpi-card">
+                    <span class="kpi-icon">↗</span>
+                    <h3>مبيعات اليوم</h3>
+                    <strong>128٬450 <small>EGP</small></strong>
+                    <p>42 عملية بيع</p>
+                </article>
+                <article class="kpi-card positive">
+                    <span class="kpi-icon">✓</span>
+                    <h3>صافي الربح</h3>
+                    <strong>24٬780 <small>EGP</small></strong>
+                    <p>هامش تقريبي 19.3%</p>
+                </article>
+                <article class="kpi-card">
+                    <span class="kpi-icon">⌁</span>
+                    <h3>رصيد الخزن</h3>
+                    <strong>312٬900 <small>EGP</small></strong>
+                    <p>3 خزن نشطة</p>
+                </article>
+                <article class="kpi-card attention">
+                    <span class="kpi-icon">!</span>
+                    <h3>المطلوب من العملاء</h3>
+                    <strong>186٬300 <small>EGP</small></strong>
+                    <p>8 عملاء عليهم رصيد</p>
+                </article>
+                <article class="kpi-card">
+                    <span class="kpi-icon">↙</span>
+                    <h3>المطلوب للموردين</h3>
+                    <strong>91٬500 <small>EGP</small></strong>
+                    <p>3 موردين مستحقين</p>
+                </article>
+                <article class="kpi-card warning">
+                    <span class="kpi-icon">△</span>
+                    <h3>مصروفات اليوم</h3>
+                    <strong>8٬750 <small>EGP</small></strong>
+                    <p>أعلى من المتوسط</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="workbench-grid">
+            <section class="attention-panel" aria-labelledby="attention-title">
+                <div class="section-header compact">
+                    <span class="section-kicker">Smart alerts</span>
+                    <h2 id="attention-title">محتاج انتباهك</h2>
+                </div>
+
+                <div class="alert-groups">
+                    <article class="alert-group">
+                        <div class="group-title urgent"><span></span> عاجل الآن</div>
+                        <a class="alert-card danger" href="#mock-placeholder">
+                            <span class="severity-dot"></span>
+                            <span class="alert-body">
+                                <strong>شيك متأخر عن موعده</strong>
+                                <small>شيك رقم CH-1045 بقيمة 48٬000 EGP متأخر يومين.</small>
+                            </span>
+                            <em>عرض التفاصيل</em>
+                        </a>
+                        <a class="alert-card danger" href="#mock-placeholder">
+                            <span class="severity-dot"></span>
+                            <span class="alert-body">
+                                <strong>دفعة عميل مستحقة اليوم</strong>
+                                <small>أبو يوسف للتجارة عليه 22٬500 EGP مستحقة اليوم.</small>
+                            </span>
+                            <em>تسجيل تحصيل</em>
+                        </a>
+                        <a class="alert-card danger" href="#mock-placeholder">
+                            <span class="severity-dot"></span>
+                            <span class="alert-body">
+                                <strong>رصيد مخزون سالب</strong>
+                                <small>كابل USB-C سريع: -3 قطع في المخزن الرئيسي.</small>
+                            </span>
+                            <em>فتح الصنف</em>
+                        </a>
+                    </article>
+
+                    <article class="alert-group">
+                        <div class="group-title soon"><span></span> قريبًا</div>
+                        <a class="alert-card orange" href="#mock-placeholder">
+                            <span class="severity-dot"></span>
+                            <span class="alert-body">
+                                <strong>شيك مستحق خلال 3 أيام</strong>
+                                <small>شيك عميل بقيمة 35٬000 EGP يحتاج متابعة قبل الاستحقاق.</small>
+                            </span>
+                            <em>عرض التفاصيل</em>
+                        </a>
+                        <a class="alert-card yellow" href="#mock-placeholder">
+                            <span class="severity-dot"></span>
+                            <span class="alert-body">
+                                <strong>صنف تحت الحد الأدنى</strong>
+                                <small>شاحن 20W متبقي 6 قطع فقط والحد الأدنى 10.</small>
+                            </span>
+                            <em>فتح الصنف</em>
+                        </a>
+                        <a class="alert-card orange" href="#mock-placeholder">
+                            <span class="severity-dot"></span>
+                            <span class="alert-body">
+                                <strong>خزنة رصيدها منخفض</strong>
+                                <small>خزنة الفرع رصيدها 4٬800 EGP فقط.</small>
+                            </span>
+                            <em>فتح الخزنة</em>
+                        </a>
+                    </article>
+
+                    <article class="alert-group">
+                        <div class="group-title follow"><span></span> متابعة</div>
+                        <a class="alert-card blue" href="#mock-placeholder">
+                            <span class="severity-dot"></span>
+                            <span class="alert-body">
+                                <strong>مصروفات اليوم أعلى من المعتاد</strong>
+                                <small>المصروفات أعلى 28% من متوسط آخر أسبوع.</small>
+                            </span>
+                            <em>عرض التفاصيل</em>
+                        </a>
+                        <a class="alert-card green" href="#mock-placeholder">
+                            <span class="severity-dot"></span>
+                            <span class="alert-body">
+                                <strong>نسبة النقدي مطمئنة</strong>
+                                <small>73% من مبيعات اليوم نقدي داخل الخزن.</small>
+                            </span>
+                            <em>عرض التحليل</em>
+                        </a>
+                    </article>
+                </div>
+            </section>
+
+            <section class="quick-actions-panel" aria-labelledby="quick-actions-title">
+                <div class="section-header compact">
+                    <span class="section-kicker">Quick actions</span>
+                    <h2 id="quick-actions-title">ابدأ من هنا</h2>
+                </div>
+                <div class="action-grid">
+                    <a href="#mock-placeholder"><span>＋</span> تسجيل عملية</a>
+                    <a href="#mock-placeholder"><span>👤</span> عميل جديد</a>
+                    <a href="#mock-placeholder"><span>🏷</span> مورد جديد</a>
+                    <a href="#mock-placeholder"><span>▣</span> صنف / خدمة جديدة</a>
+                    <a href="#mock-placeholder"><span>−</span> مصروف جديد</a>
+                    <a href="#mock-placeholder"><span>↓</span> تحصيل من عميل</a>
+                    <a href="#mock-placeholder"><span>↑</span> سداد لمورد</a>
+                    <a href="#mock-placeholder"><span>⌂</span> جرد خزنة</a>
+                </div>
+
+                <article class="owner-note">
+                    <strong>الهدف:</strong>
+                    <span>صاحب النشاط يفتح الشاشة فيفهم الموقف ويبدأ التصرف من نفس المكان.</span>
+                </article>
+            </section>
+        </section>
+
+        <section class="analytics-section" aria-labelledby="analytics-title">
+            <div class="section-header">
+                <span class="section-kicker">Quick analytics</span>
+                <h2 id="analytics-title">تحليلات سريعة ومفهومة</h2>
+            </div>
+
+            <div class="analytics-grid">
+                <article class="analytics-card wide">
+                    <div class="card-head">
+                        <h3>مبيعات آخر 7 أيام</h3>
+                        <span>إجمالي 641٬200 EGP</span>
+                    </div>
+                    <div class="bar-chart" aria-label="Mock 7 day sales bars">
+                        <span style="--h: 54%"><b>س</b></span>
+                        <span style="--h: 72%"><b>ح</b></span>
+                        <span style="--h: 46%"><b>ن</b></span>
+                        <span style="--h: 80%"><b>ث</b></span>
+                        <span style="--h: 64%"><b>ر</b></span>
+                        <span style="--h: 92%"><b>خ</b></span>
+                        <span style="--h: 76%"><b>ج</b></span>
+                    </div>
+                </article>
+
+                <article class="analytics-card split-card">
+                    <div class="card-head">
+                        <h3>نقدي vs آجل</h3>
+                        <span>اليوم</span>
+                    </div>
+                    <div class="donut" aria-label="Cash 73 percent credit 27 percent"><strong>73%</strong><small>نقدي</small></div>
+                    <div class="legend-row"><span class="cash"></span> نقدي 93٬900 EGP</div>
+                    <div class="legend-row"><span class="credit"></span> آجل 34٬550 EGP</div>
+                </article>
+
+                <article class="analytics-card">
+                    <div class="card-head">
+                        <h3>أفضل الأصناف / الخدمات</h3>
+                        <span>حسب المبيعات</span>
+                    </div>
+                    <div class="rank-list">
+                        <div><strong>شاحن 20W</strong><span style="--w: 88%"></span><small>38٬200 EGP</small></div>
+                        <div><strong>كابل USB-C</strong><span style="--w: 71%"></span><small>29٬750 EGP</small></div>
+                        <div><strong>جراب حماية</strong><span style="--w: 52%"></span><small>18٬400 EGP</small></div>
+                    </div>
+                </article>
+
+                <article class="analytics-card">
+                    <div class="card-head">
+                        <h3>أعلى العملاء مديونية</h3>
+                        <span>أولوية متابعة</span>
+                    </div>
+                    <div class="debt-list">
+                        <div><strong>أبو يوسف للتجارة</strong><span>62٬500 EGP</span></div>
+                        <div><strong>النور للموبايلات</strong><span>48٬300 EGP</span></div>
+                        <div><strong>محمد سامي</strong><span>31٬750 EGP</span></div>
+                    </div>
+                </article>
+
+                <article class="analytics-card wide cashboxes-card">
+                    <div class="card-head">
+                        <h3>توزيع رصيد الخزن</h3>
+                        <span>312٬900 EGP</span>
+                    </div>
+                    <div class="cashbox-distribution">
+                        <div class="cashbox-row"><strong>الخزنة الرئيسية</strong><span><i style="--w: 68%"></i></span><em>213٬000 EGP</em></div>
+                        <div class="cashbox-row"><strong>خزنة الفرع</strong><span><i style="--w: 20%"></i></span><em>62٬500 EGP</em></div>
+                        <div class="cashbox-row"><strong>محفظة إلكترونية</strong><span><i style="--w: 12%"></i></span><em>37٬400 EGP</em></div>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <details class="empty-state-preview">
+            <summary>معاينة حالة البداية بدون بيانات</summary>
+            <div class="empty-state-card">
+                <h2>ابدأ تشغيل حِسْبَة في 4 خطوات:</h2>
+                <ol>
+                    <li>أضف خزنة</li>
+                    <li>أضف عميل أو مورد</li>
+                    <li>أضف صنف أو خدمة</li>
+                    <li>سجل أول عملية</li>
+                </ol>
+            </div>
+        </details>
+    </main>
+</body>
+</html>
