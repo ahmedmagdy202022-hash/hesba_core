@@ -135,23 +135,31 @@ class FirstUiNavigationMapTests(TestCase):
         self.assertContains(response, "الخزن تتحرك بالمبلغ المدفوع فعليًا فقط")
         self.assertContains(response, "التقارير قراءة فقط")
 
-    def test_dashboard_snapshot_page_renders_read_only_checkpoint(self):
+    def test_dashboard_snapshot_page_renders_hesba_identity_mock(self):
         response = self.client.get(reverse("dashboard_snapshot"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "094_FOUNDATION_DASHBOARD_SNAPSHOT")
-        self.assertContains(response, "Dashboard Snapshot قراءة فقط")
-        self.assertContains(response, "KPIs آمنة لاحقًا")
-        self.assertContains(response, "حالة المخزون")
-        self.assertContains(response, "حالة الخزن")
-        self.assertContains(response, "Status")
+        self.assertContains(response, "120B_DASHBOARD_VISUAL_MOCK_HESBA_IDENTITY_FIX")
+        self.assertContains(response, "لوحة القيادة")
+        self.assertContains(response, "hesba/css/dashboard_mock.css")
+        self.assertContains(response, "hesba/setup_gate/assets/setup_gate_logo_approved.png")
+        self.assertContains(response, "hesba/setup_gate/assets/setup_gate_hero_illustration_approved.png")
+        self.assertContains(response, "صباح الخير، أحمد")
+        self.assertContains(response, "82%")
+        self.assertContains(response, "محتاج انتباهك")
+        self.assertContains(response, "ابدأ من هنا")
+        self.assertContains(response, "تحليلات سريعة")
 
-    def test_dashboard_snapshot_keeps_sensitive_finance_protected(self):
+    def test_dashboard_snapshot_is_static_visual_only_and_no_module_controls(self):
         response = self.client.get(reverse("dashboard_snapshot"))
 
-        self.assertContains(response, "الربح")
-        self.assertContains(response, "التكلفة")
-        self.assertContains(response, "صلاحيات حقيقية")
+        self.assertContains(response, "هذه شاشة Visual Mock ثابتة فقط")
+        self.assertContains(response, "لا يوجد ربط بيانات حقيقي")
+        self.assertContains(response, "لا حفظ")
+        self.assertNotContains(response, "Module status")
+        self.assertNotContains(response, "module enable")
+        self.assertNotContains(response, "enable/disable")
+        self.assertNotContains(response, "Settings section")
 
     def test_report_hub_renders_read_only_report_map(self):
         response = self.client.get(reverse("report_hub"))
@@ -204,8 +212,13 @@ class FirstUiNavigationMapTests(TestCase):
         self.assertContains(response, "No profit")
 
     def test_shared_top_navigation_separates_dashboard_reports_and_status(self):
-        for url_name in ["home", "dashboard_snapshot", "report_hub", "status_counts_report"]:
+        for url_name in ["home", "report_hub", "status_counts_report"]:
             response = self.client.get(reverse(url_name))
             self.assertContains(response, "Dashboard")
             self.assertContains(response, "Reports")
             self.assertContains(response, "Status")
+
+        dashboard_response = self.client.get(reverse("dashboard_snapshot"))
+        self.assertContains(dashboard_response, "لوحة القيادة")
+        self.assertContains(dashboard_response, "محتاج انتباهك")
+        self.assertContains(dashboard_response, "ابدأ من هنا")
