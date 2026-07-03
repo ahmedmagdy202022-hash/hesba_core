@@ -1,0 +1,130 @@
+{% load static %}
+<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{{ page_title }}</title>
+<link rel="stylesheet" href="{% static 'hesba/css/activity_selection.css' %}?v=117a-screen-pack">
+<link rel="stylesheet" href="{% static 'hesba/css/activity_selection_final_overrides.css' %}?v=117a-final-panel-back-arrow">
+<link rel="stylesheet" href="{% static 'hesba/css/activity_review_setup.css' %}?v=119-review-setup">
+</head>
+<body class="activity-selection-page setup-complete-placeholder-page" data-lang="{{ lang }}">
+<main class="activity-stage" aria-label="Setup complete placeholder">
+  <div class="activity-bg-frame" aria-hidden="true"></div>
+  <section class="activity-ui-layer">
+    <header class="activity-header" aria-label="Setup activity header">
+      <div class="activity-brand">
+        <img class="activity-logo" src="{% static 'hesba/setup_gate/assets/setup_gate_logo_approved.png' %}" alt="Hesba">
+      </div>
+      <div class="activity-controls" aria-label="Header controls">
+        <form class="activity-control-form" method="post" action="{% url 'logout' %}">
+          {% csrf_token %}
+          <button class="activity-control activity-logout" type="submit" aria-label="{{ logout }}" data-logout-button>
+            <svg viewBox="0 0 24 24" class="activity-icon" aria-hidden="true"><path d="M9 5H5v14h4M13 8l4 4-4 4M17 12H8"></path></svg>
+            <span class="activity-logout__text" data-i18n="logout">{{ logout }}</span>
+          </button>
+        </form>
+        <button class="activity-control activity-language" type="button" data-lang-toggle aria-label="تغيير اللغة">
+          <svg viewBox="0 0 24 24" class="activity-icon" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3c2.35 2.45 3.55 5.45 3.55 9S14.35 18.55 12 21M12 3C9.65 5.45 8.45 8.45 8.45 12S9.65 18.55 12 21"></path></svg>
+          <span data-i18n="language">{{ language }}</span>
+          <svg viewBox="0 0 24 24" class="activity-icon activity-caret" aria-hidden="true"><path d="M7 10l5 5 5-5"></path></svg>
+        </button>
+      </div>
+    </header>
+
+    <section class="activity-panel" aria-labelledby="activity-title">
+      <nav class="activity-stepper" aria-label="Setup steps">
+        <div class="activity-step"><span class="activity-step__number">1</span><span data-i18n="stepGeneral">{{ step_general }}</span></div>
+        <div class="activity-step"><span class="activity-step__number">2</span><span data-i18n="stepSub">{{ step_sub }}</span></div>
+        <div class="activity-step"><span class="activity-step__number">3</span><span data-i18n="stepModules">{{ step_modules }}</span></div>
+        <div class="activity-step is-current"><span class="activity-step__number">4</span><span data-i18n="stepReview">{{ step_review }}</span></div>
+      </nav>
+
+      <div class="activity-copy review-copy">
+        <h1 class="activity-title" id="activity-title" data-i18n="title">{{ title }}</h1>
+        <p class="activity-subtitle" data-i18n="subtitle">{{ subtitle }}</p>
+      </div>
+
+      <section class="review-card complete-card" aria-label="Safe setup completion placeholder">
+        <h2 class="review-card__title" data-i18n="title">{{ title }}</h2>
+        <p class="review-note" data-i18n="message">{{ message }}</p>
+      </section>
+
+      <footer class="activity-footer" aria-label="Complete placeholder navigation">
+        <a class="activity-action activity-back complete-back" href="{{ review_href }}" data-back-link>
+          <span data-i18n="back">{{ back }}</span>
+          <span class="activity-action__plain" aria-hidden="true">‹</span>
+        </a>
+      </footer>
+    </section>
+  </section>
+</main>
+
+<script>
+(function(){
+  var params = new URLSearchParams(window.location.search);
+  var saved = localStorage.getItem('hesba_lang');
+  var lang = params.get('lang') === 'en' ? 'en' : (params.get('lang') === 'ar' ? 'ar' : (saved === 'en' ? 'en' : 'ar'));
+  var dict = {
+    ar: {
+      pageTitle: 'اكتمال الإعداد - حِسْبَة',
+      logout: 'تسجيل الخروج',
+      language: 'العربية',
+      stepGeneral: 'النشاط العام',
+      stepSub: 'النشاط الفرعي',
+      stepModules: 'الموديولات',
+      stepReview: 'المراجعة',
+      title: 'تم إنهاء الإعداد',
+      subtitle: 'هذه صفحة مؤقتة آمنة فقط لمسار إنهاء الإعداد.',
+      message: 'لم يتم تفعيل أي إعدادات إنتاجية أو حفظ أي قرار نهائي في قاعدة البيانات.',
+      back: 'الرجوع إلى المراجعة',
+      changeLanguage: 'تغيير اللغة'
+    },
+    en: {
+      pageTitle: 'Setup complete - Hesba',
+      logout: 'Logout',
+      language: 'English',
+      stepGeneral: 'General activity',
+      stepSub: 'Sub activity',
+      stepModules: 'Modules',
+      stepReview: 'Review',
+      title: 'Setup complete',
+      subtitle: 'This is a safe placeholder only for the setup completion route.',
+      message: 'No production setup activation or final database decision has been saved.',
+      back: 'Back to review',
+      changeLanguage: 'Change language'
+    }
+  };
+  function reviewHref(){
+    var url = new URL('/setup/review/', window.location.origin);
+    url.searchParams.set('lang', lang);
+    return url.pathname + url.search;
+  }
+  function applyLanguage(nextLang){
+    lang = nextLang === 'en' ? 'en' : 'ar';
+    localStorage.setItem('hesba_lang', lang);
+    document.documentElement.lang = lang;
+    document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+    document.body.dataset.lang = lang;
+    document.title = dict[lang].pageTitle;
+    document.querySelectorAll('[data-i18n]').forEach(function(el){
+      var key = el.dataset.i18n;
+      if(dict[lang][key]){el.textContent = dict[lang][key];}
+    });
+    document.querySelectorAll('[data-lang-toggle]').forEach(function(btn){btn.setAttribute('aria-label', dict[lang].changeLanguage);});
+    document.querySelectorAll('[data-logout-button]').forEach(function(btn){btn.setAttribute('aria-label', dict[lang].logout);});
+    var back = document.querySelector('[data-back-link]');
+    if(back){back.href = reviewHref();}
+    var url = new URL(window.location.href);
+    url.searchParams.set('lang', lang);
+    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+  }
+  document.querySelectorAll('[data-lang-toggle]').forEach(function(btn){
+    btn.addEventListener('click', function(){applyLanguage(lang === 'ar' ? 'en' : 'ar');});
+  });
+  applyLanguage(lang);
+})();
+</script>
+</body>
+</html>
