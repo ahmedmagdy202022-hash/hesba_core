@@ -1,0 +1,79 @@
+{% load static %}
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>لوحة التحكم - حِسْبَة</title>
+  <link rel="stylesheet" href="{% static 'hesba/css/dashboard_120c.css' %}?v=120c-visual-implementation">
+</head>
+<body class="dashboard-page" data-lang="ar">
+<svg class="dashboard-symbols" aria-hidden="true" focusable="false">
+  <symbol id="dash-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+  <symbol id="dash-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.4 2.6 3.6 5.6 3.6 9S14.4 18.4 12 21M12 3C9.6 5.6 8.4 8.6 8.4 12s1.2 6.4 3.6 9"/></symbol>
+  <symbol id="dash-bell" viewBox="0 0 24 24"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 7h18s-3 0-3-7"/><path d="M10 20a2.4 2.4 0 0 0 4 0"/></symbol>
+  <symbol id="dash-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="dash-calendar" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/></symbol>
+  <symbol id="dash-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 10v6M12 7h.01"/></symbol>
+  <symbol id="dash-arrow" viewBox="0 0 24 24"><path d="M7 17L17 7M9 7h8v8"/></symbol>
+  <symbol id="dash-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.9-4 14.1-4 16 0"/></symbol>
+  <symbol id="dash-wallet" viewBox="0 0 24 24"><path d="M4 7h16v12H4z"/><path d="M17 11h4v4h-4a2 2 0 0 1 0-4zM7 7V5h10v2"/></symbol>
+  <symbol id="dash-truck" viewBox="0 0 24 24"><path d="M3 7h11v10H3zM14 10h4l3 3v4h-7z"/><circle cx="7" cy="18" r="2"/><circle cx="18" cy="18" r="2"/></symbol>
+  <symbol id="dash-file" viewBox="0 0 24 24"><path d="M6 3h9l3 3v15H6z"/><path d="M15 3v5h5M9 12h6M9 16h6"/></symbol>
+  <symbol id="dash-cart" viewBox="0 0 24 24"><path d="M4 5h2l2 10h10l2-7H7"/><circle cx="10" cy="19" r="1.6"/><circle cx="18" cy="19" r="1.6"/></symbol>
+  <symbol id="dash-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="dash-printer" viewBox="0 0 24 24"><path d="M7 8V4h10v4M6 17H4v-7h16v7h-2"/><path d="M7 14h10v6H7z"/></symbol>
+</svg>
+<header class="dashboard-header" aria-label="Dashboard header">
+  <div class="header-tools" aria-label="Dashboard tools">
+    <button class="icon-button menu-button" type="button" aria-label="القائمة" data-i18n-aria="menuAria"><svg><use href="#dash-menu"></use></svg></button>
+    <button class="language-switch" type="button" data-lang-toggle aria-label="تغيير اللغة"><svg><use href="#dash-globe"></use></svg><span data-i18n="language">العربية</span></button>
+    <div class="time-chip"><svg><use href="#dash-clock"></use></svg><span data-time>09:42</span></div>
+    <div class="time-chip date-chip"><svg><use href="#dash-calendar"></use></svg><span data-date>السبت 17 مايو 2025</span></div>
+    <button class="icon-button notification-button" type="button" aria-label="التنبيهات" data-i18n-aria="notificationsAria"><svg><use href="#dash-bell"></use></svg><span class="notification-badge">3</span></button>
+  </div>
+  <h1 class="header-title" data-i18n="dashboardTitle">لوحة التحكم</h1>
+  <div class="brand-user" aria-label="User area">
+    <a class="brand-logo" href="/dashboard/?lang=ar" aria-label="Hesba dashboard" data-dashboard-link><img src="{% static 'hesba/dashboard/approved_hesba_logo_full_horizontal.svg' %}" alt="Hesba"></a>
+    <button class="user-chip" type="button"><span class="user-copy"><strong data-i18n="userName">أحمد محمد</strong><small data-i18n="userRole">صاحب الحساب</small></span><span class="user-avatar" aria-hidden="true">أ</span><span class="user-status" aria-hidden="true"></span></button>
+  </div>
+</header>
+<main class="dashboard-shell" aria-label="Core dashboard">
+  <section class="hero-card" aria-labelledby="hero-title">
+    <div class="hero-illustration" aria-hidden="true">
+      <svg viewBox="0 0 520 260" role="img">
+        <defs><linearGradient id="heroTeal" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#00bfd0"/><stop offset="1" stop-color="#007a95"/></linearGradient><linearGradient id="heroNavy" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#17345f"/><stop offset="1" stop-color="#081d3f"/></linearGradient></defs>
+        <path d="M18 201c88-96 182-48 292-94 67-28 107-62 177-83" fill="none" stroke="#9ee3ea" stroke-width="7" stroke-linecap="round" opacity=".52"/><path d="M455 17l36 5-23 28" fill="none" stroke="#21bcc8" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity=".78"/>
+        <rect x="164" y="48" width="210" height="139" rx="14" fill="url(#heroNavy)"/><rect x="178" y="63" width="182" height="103" rx="8" fill="#f7fbff"/><rect x="192" y="79" width="55" height="8" rx="4" fill="#d7eef2"/><rect x="192" y="102" width="17" height="44" rx="4" fill="#67d6dc"/><rect x="219" y="92" width="17" height="54" rx="4" fill="#12b7c5"/><rect x="246" y="72" width="17" height="74" rx="4" fill="#0b7fa0"/><rect x="284" y="84" width="54" height="54" rx="27" fill="#dceef4"/><path d="M311 111V84a27 27 0 0 1 24 15z" fill="#00a9bb"/><path d="M311 111l24-12a27 27 0 1 1-24-15z" fill="#113a70"/><path d="M214 187h111l16 28H198z" fill="#102d55"/><rect x="183" y="213" width="172" height="12" rx="6" fill="#071d38"/>
+        <rect x="73" y="93" width="81" height="116" rx="12" fill="#17345f"/><rect x="84" y="111" width="59" height="83" rx="7" fill="#f7fbff"/><rect x="104" y="82" width="29" height="22" rx="8" fill="url(#heroTeal)"/><path d="M96 130l8 8 19-22M96 153l8 8 19-22M96 176l8 8 19-22" fill="none" stroke="#09a8b8" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+        <g fill="url(#heroTeal)"><ellipse cx="174" cy="203" rx="25" ry="8"/><rect x="149" y="181" width="50" height="22" rx="9"/><ellipse cx="174" cy="181" rx="25" ry="8"/><rect x="155" y="162" width="38" height="22" rx="8"/><ellipse cx="174" cy="162" rx="19" ry="7"/></g><path d="M407 205c-1-33 14-54 42-76" stroke="#0f8a94" stroke-width="7" stroke-linecap="round" fill="none"/><path d="M411 164c-34-12-31-43 4-58 18 29 17 48-4 58z" fill="#71d8d9"/><path d="M431 151c3-34 30-42 52-16-17 29-34 36-52 16z" fill="#20bac8"/><rect x="394" y="204" width="52" height="15" rx="7" fill="#17345f"/>
+      </svg>
+    </div>
+    <div class="hero-copy"><h2 id="hero-title" data-i18n="heroTitle">صباح الخير، أحمد</h2><p data-i18n="heroLead">أداء أعمالك في تحسن مستمر، استمر بنفس الزخم!</p><div class="hero-meta"><span><svg><use href="#dash-calendar"></use></svg><span data-date-short>17 مايو 2025</span></span><span><svg><use href="#dash-clock"></use></svg><span data-time-copy>09:42</span></span></div><div class="status-pill"><span class="status-dot"></span><span data-i18n="statusPill">أداء ممتاز!</span></div></div>
+    <aside class="health-card" aria-labelledby="health-title"><div class="section-title-row"><h3 id="health-title" data-i18n="healthTitle">مؤشر صحة الأعمال</h3><svg><use href="#dash-info"></use></svg></div><div class="health-body"><ul><li><span>↗</span><em data-i18n="healthSales">المبيعات</em></li><li><span>↗</span><em data-i18n="healthProfit">الربحية</em></li><li><span>↗</span><em data-i18n="healthCash">التدفقات النقدية</em></li><li><span>–</span><em data-i18n="healthSatisfaction">رضا العملاء</em></li></ul><div class="score-ring"><strong>87</strong><small data-i18n="scoreFrom">من 100</small></div></div></aside>
+  </section>
+  <section class="kpi-grid" aria-label="Dashboard KPI cards">
+    <article class="kpi-card"><div class="kpi-icon"><svg><use href="#dash-cart"></use></svg></div><p data-i18n="kpiSales">مبيعات اليوم</p><strong>32,450.00</strong><small data-i18n="currency">ريال سعودي</small><span class="trend positive">↗ <b>18%</b> <em data-i18n="thanYesterday">عن أمس</em></span></article>
+    <article class="kpi-card sensitive-ready"><div class="kpi-icon"><svg><use href="#dash-arrow"></use></svg></div><p data-i18n="kpiProfit">صافي الربح</p><strong>6,250.75</strong><small data-i18n="currency">ريال سعودي</small><span class="trend positive">↗ <b>14%</b> <em data-i18n="thanYesterday">عن أمس</em></span></article>
+    <article class="kpi-card"><div class="kpi-icon"><svg><use href="#dash-wallet"></use></svg></div><p data-i18n="kpiCashbox">رصيد الصندوق</p><strong>78,920.50</strong><small data-i18n="currency">ريال سعودي</small><span class="trend positive">↗ <b>5%</b> <em data-i18n="thanYesterday">عن أمس</em></span></article>
+    <article class="kpi-card"><div class="kpi-icon"><svg><use href="#dash-user"></use></svg></div><p data-i18n="kpiReceivables">مستحقات العملاء</p><strong>56,340.00</strong><small data-i18n="currency">ريال سعودي</small><span class="trend negative">↘ <b>3%</b> <em data-i18n="thanYesterday">عن أمس</em></span></article>
+    <article class="kpi-card"><div class="kpi-icon"><svg><use href="#dash-truck"></use></svg></div><p data-i18n="kpiPayables">مستحقات الموردين</p><strong>34,780.00</strong><small data-i18n="currency">ريال سعودي</small><span class="trend negative">↘ <b>2%</b> <em data-i18n="thanYesterday">عن أمس</em></span></article>
+    <article class="kpi-card"><div class="kpi-icon"><svg><use href="#dash-file"></use></svg></div><p data-i18n="kpiExpenses">مصروفات اليوم</p><strong>4,120.30</strong><small data-i18n="currency">ريال سعودي</small><span class="trend positive">↗ <b>8%</b> <em data-i18n="thanYesterday">عن أمس</em></span></article>
+  </section>
+  <section class="work-grid" aria-label="Alerts and actions">
+    <article class="panel smart-alerts"><div class="section-title-row"><h3 data-i18n="alertsTitle">التنبيهات الذكية</h3><svg><use href="#dash-bell"></use></svg></div><div class="alert-list"><div class="alert-row"><span class="severity danger" data-i18n="urgent">عاجل</span><p data-i18n="alertOne">رصيد الخزنة الرئيسي منخفض، تحديث قبل 35 دقيقة.</p><svg><use href="#dash-bell"></use></svg></div><div class="alert-row"><span class="severity warning" data-i18n="medium">متوسطة</span><p data-i18n="alertTwo">3 فواتير عملاء مستحقة اليوم بقيمة 8,750 ريال.</p><svg><use href="#dash-clock"></use></svg></div><div class="alert-row"><span class="severity info" data-i18n="info">معلومة</span><p data-i18n="alertThree">12 صنفًا على وشك نفاد المخزون، تحقق من المخزون.</p><svg><use href="#dash-info"></use></svg></div></div><a class="panel-link" href="#" data-i18n="viewAlerts">عرض جميع التنبيهات</a></article>
+    <article class="panel quick-actions"><div class="section-title-row"><h3 data-i18n="actionsTitle">إجراءات سريعة</h3><span class="flash">⚡</span></div><div class="action-grid"><a href="#"><svg><use href="#dash-file"></use></svg><span data-i18n="actionInvoice">فاتورة جديدة</span></a><a href="#"><svg><use href="#dash-user"></use></svg><span data-i18n="actionCustomer">إضافة عميل</span></a><a href="#"><svg><use href="#dash-truck"></use></svg><span data-i18n="actionSupplier">مورد جديد</span></a><a href="#"><svg><use href="#dash-plus"></use></svg><span data-i18n="actionRegister">تسجيل عملية</span></a><a href="#"><svg><use href="#dash-wallet"></use></svg><span data-i18n="actionCashbox">حركة خزنة</span></a><a href="#"><svg><use href="#dash-printer"></use></svg><span data-i18n="actionReport">طباعة تقرير</span></a></div></article>
+  </section>
+  <section class="analytics-grid" aria-label="Visual mock analytics">
+    <article class="chart-card chart-sales"><div class="chart-header"><h3 data-i18n="chartSales">اتجاه المبيعات</h3><small data-i18n="lastSeven">آخر 7 أيام</small></div><div class="bar-chart"><i style="--h:45%"></i><i style="--h:62%"></i><i style="--h:78%"></i><i style="--h:70%"></i><i style="--h:52%"></i><i style="--h:72%"></i><i style="--h:92%"></i></div><a href="#" data-i18n="fullReport">عرض التقرير الكامل</a></article>
+    <article class="chart-card"><div class="chart-header"><h3 data-i18n="chartCashCredit">نقدي مقابل آجل</h3></div><div class="donut-block"><div class="donut cash-credit"></div><ul><li><b data-i18n="cash">نقدي</b><span>68%</span></li><li><b data-i18n="credit">آجل</b><span>32%</span></li></ul></div><a href="#" data-i18n="details">عرض التفاصيل</a></article>
+    <article class="chart-card top-list-card"><div class="chart-header"><h3 data-i18n="chartTop">أعلى المنتجات / الخدمات</h3></div><ol class="top-list"><li><span data-i18n="topOne">خدمة تصميم</span><b>12,450</b></li><li><span data-i18n="topTwo">منتج ب</span><b>8,750</b></li><li><span data-i18n="topThree">منتج ج</span><b>6,300</b></li><li><span data-i18n="topFour">خدمة استشارية</span><b>4,895</b></li><li><span data-i18n="topFive">منتج د</span><b>3,250</b></li></ol><a href="#" data-i18n="allProducts">عرض جميع المنتجات</a></article>
+    <article class="chart-card"><div class="chart-header"><h3 data-i18n="chartCustomers">مستحقات العملاء</h3></div><div class="donut-block"><div class="donut receivables"></div><ul><li><b data-i18n="current">جارية</b><span>25,353</span></li><li><b data-i18n="late">متأخرة</b><span>16,002</span></li><li><b data-i18n="ended">منتهية</b><span>14,985</span></li></ul></div><small data-i18n="mockReady">منطقة جاهزة للإخفاء حسب الصلاحيات لاحقًا</small></article>
+    <article class="chart-card"><div class="chart-header"><h3 data-i18n="chartSuppliers">مستحقات الموردين</h3></div><div class="donut-block"><div class="donut payables"></div><ul><li><b data-i18n="invoice">قائمة</b><span>19,129</span></li><li><b data-i18n="late">متأخرة</b><span>8,695</span></li><li><b data-i18n="ended">منتهية</b><span>6,956</span></li></ul></div><small data-i18n="mockOnly">بيانات وهمية للمعاينة فقط</small></article>
+    <article class="chart-card inventory-ready"><div class="chart-header"><h3 data-i18n="chartInventory">المخزون والمصروفات</h3></div><div class="mini-metrics"><span><b data-i18n="lowStock">قرب النفاد</b><strong>12</strong></span><span><b data-i18n="expenses">مصروفات</b><strong>4.1K</strong></span><span class="sensitive-ready"><b data-i18n="inventoryValue">قيمة المخزون</b><strong data-i18n="protectedValue">محمي</strong></span></div><small data-i18n="permissionReady">جاهز لإخفاء التكلفة والهامش وقيمة المخزون حسب الصلاحيات.</small></article>
+  </section>
+  <section class="onboarding-strip" aria-label="Onboarding steps"><div class="rocket" aria-hidden="true">🚀</div><div class="onboarding-copy"><h3 data-i18n="onboardingTitle">ابدأ تجربة حسبة في 4 خطوات</h3><p data-i18n="onboardingLead">قم بإعداد حسابك وربط أعمالك بسهولة.</p></div><div class="onboarding-steps"><span><b>1</b><em data-i18n="stepBusiness">بيانات نشاطك</em></span><span><b>2</b><em data-i18n="stepParties">عملاء وموردين</em></span><span><b>3</b><em data-i18n="stepProducts">منتجات وخدمات</em></span><span><b>4</b><em data-i18n="stepFirst">أول عملية</em></span></div><a class="start-button" href="#" data-i18n="startNow">ابدأ الآن</a></section>
+</main>
+<script src="{% static 'hesba/js/dashboard_120c.js' %}?v=120c-visual-implementation"></script>
+</body>
+</html>
