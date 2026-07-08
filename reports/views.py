@@ -3,7 +3,7 @@ from django.urls import reverse
 
 
 CHECKPOINT_CODE = "093_FOUNDATION_FIRST_UI_NAVIGATION_MAP"
-DASHBOARD_CHECKPOINT_CODE = "094_FOUNDATION_DASHBOARD_SNAPSHOT"
+DASHBOARD_CHECKPOINT_CODE = "DASHBOARD_V3_VISUAL_PREVIEW"
 REPORTS_CHECKPOINT_CODE = "096_FOUNDATION_READ_ONLY_REPORT_HUB"
 
 
@@ -45,12 +45,7 @@ def _shared_template_context():
 
 
 def home(request):
-    """First safe UI navigation map.
-
-    This page is intentionally read/navigation only. It does not post invoices,
-    change balances, create stock movements, or calculate profit. The controlled
-    business logic stays in services, reports, and admin-backed data screens.
-    """
+    """First safe UI navigation map."""
 
     sections = [
         {
@@ -116,70 +111,156 @@ def home(request):
 
 
 def dashboard_snapshot(request):
-    """Read-only dashboard snapshot for the first user-facing dashboard step.
+    """Dashboard v3 visual preview.
 
-    This checkpoint is static and permission-safe. It does not query operational
-    data yet, so it can render before migrations or seed data are applied in a
-    fresh Codespace.
+    Preview-only route: no database queries, no accounting calculations, no writes.
+    All values are static mock values so Ahmed can judge the live visual result.
     """
 
-    sections = [
-        {
-            "title": "١) حالة دورة العمل",
-            "description": "الدورة الأساسية جاهزة كمسار واحد قابل للتوسع.",
-            "items": [
-                {"label": "الدورة الكاملة", "url": reverse("report_hub"), "note": "مورد → شراء → مخزون → بيع → عميل → خزنة → تقارير"},
-                {"label": "حالة الإدخال", "url": reverse("home"), "note": "Admin مؤقتًا حتى شاشة Transaction آمنة"},
-            ],
-        },
-        {
-            "title": "٢) KPIs آمنة لاحقًا",
-            "description": "تجهيز أماكن الأرقام بدون عرض ربح أو تكلفة قبل الصلاحيات.",
-            "items": [
-                {"label": "عدد الموردين", "url": reverse("status_counts_report"), "note": "قراءة فقط"},
-                {"label": "عدد العملاء", "url": reverse("status_counts_report"), "note": "قراءة فقط"},
-                {"label": "حالة المخزون", "url": reverse("status_counts_report"), "note": "حسب الصنف والموقع"},
-                {"label": "حالة الخزن", "url": reverse("status_counts_report"), "note": "بالمدفوع فعليًا فقط"},
-            ],
-        },
-        {
-            "title": "٣) حماية الأرقام الحساسة",
-            "description": "التكلفة والربح لا يظهروا قبل صلاحيات حقيقية.",
-            "items": [
-                {"label": "الربح", "url": reverse("report_hub"), "note": "Owner فقط لاحقًا"},
-                {"label": "التكلفة", "url": reverse("report_hub"), "note": "محمية من Cashier"},
-            ],
-        },
-        {
-            "title": "٤) الخطوة الجاية",
-            "description": "ربط أرقام قراءة فقط بعد ثبات reports/views والمايجريشن.",
-            "items": [
-                {"label": "تقارير Read-only", "url": reverse("report_hub"), "note": "قبل أي شاشة إدخال جديدة"},
-                {"label": "تقرير Status", "url": reverse("status_counts_report"), "note": "أعداد فعلية غير حساسة"},
-            ],
-        },
-    ]
+    lang = "en" if request.GET.get("lang") == "en" else "ar"
+    is_en = lang == "en"
 
-    context = _shared_template_context()
-    context.update(
-        {
-            "checkpoint_code": DASHBOARD_CHECKPOINT_CODE,
-            "page_title": "Dashboard Snapshot قراءة فقط",
-            "page_description": "أول لقطة داشبورد آمنة قبل ربط الأرقام الحقيقية. الهدف تثبيت شكل الملخص من غير إدخال أو تعديل بيانات.",
-            "sections": sections,
-            "footer_note": "هذه الشاشة Read-only Snapshot فقط. الربح والتكلفة وأي بيانات مالية حساسة ستظهر بعد صلاحيات حقيقية.",
+    if is_en:
+        context = {
+            "lang": "en",
+            "dir": "ltr",
+            "other_lang": "ar",
+            "page_title": "Hesba Dashboard v3 Preview",
+            "brand_title": "Hesba",
+            "owner_role": "Business owner",
+            "language_label": "English",
+            "current_time": "09:42",
+            "current_date": "Sat, 17 May 2025",
+            "greeting": "Good morning, Ahmed",
+            "hero_subtitle": "Your business is improving. Keep the same momentum.",
+            "status_chip": "Excellent performance",
+            "out_of_100": "out of 100",
+            "score_items": ["Sales", "Profit", "Customer dues", "Customer satisfaction"],
+            "currency": "SAR",
+            "kpis": [
+                {"label": "Today sales", "value": "32,450.00", "delta": "↑ 18%", "direction": "", "icon": "▮"},
+                {"label": "Net profit", "value": "6,250.75", "delta": "↑ 14%", "direction": "", "icon": "↗"},
+                {"label": "Cashbox balance", "value": "78,920.50", "delta": "↑ 5%", "direction": "", "icon": "▣"},
+                {"label": "Customer dues", "value": "56,340.00", "delta": "↓ 3%", "direction": "down", "icon": "♙"},
+                {"label": "Supplier payables", "value": "34,780.00", "delta": "↓ 2%", "direction": "", "icon": "▰"},
+                {"label": "Today expenses", "value": "4,120.30", "delta": "↑ 8%", "direction": "", "icon": "□"},
+            ],
+            "alerts_title": "Smart alerts",
+            "alerts": [
+                {"title": "Main cashbox balance is low", "note": "Updated 35 minutes ago", "level": "Urgent", "color": "red", "icon": "🔔"},
+                {"title": "3 customer invoices due today", "note": "Total value 8,750", "level": "Medium", "color": "orange", "icon": "⏱"},
+                {"title": "12 items near stock-out", "note": "Check inventory", "level": "Info", "color": "blue", "icon": "ⓘ"},
+            ],
+            "view_all_alerts": "View all alerts",
+            "actions_title": "Quick actions",
+            "actions": [
+                {"label": "New invoice", "icon": "✚"},
+                {"label": "New customer", "icon": "♙"},
+                {"label": "New supplier", "icon": "▰"},
+                {"label": "Add item", "icon": "□"},
+                {"label": "Cash movement", "icon": "▣"},
+                {"label": "Print report", "icon": "▤"},
+            ],
+            "view_all_actions": "View all actions",
+            "sales_trend": "Sales trend (7 days)",
+            "cash_credit": "Cash vs credit",
+            "top_items": "Top products / services",
+            "customer_dues": "Customer dues",
+            "supplier_dues": "Supplier payables",
+            "top_list": [
+                {"name": "Design service", "value": "12,450"},
+                {"name": "Product B", "value": "8,750"},
+                {"name": "Product C", "value": "6,300"},
+                {"name": "Consulting", "value": "4,895"},
+                {"name": "Product D", "value": "3,250"},
+            ],
+            "overdue": "Overdue",
+            "current": "Current",
+            "pending": "Pending",
+            "onboarding_title": "Start your Hesba experience in 4 steps",
+            "onboarding_subtitle": "Set up your account and connect your business easily.",
+            "steps": [
+                {"label": "Business data", "icon": "🏪"},
+                {"label": "Customers & suppliers", "icon": "♙"},
+                {"label": "Items & services", "icon": "◼"},
+                {"label": "First transaction", "icon": "▤"},
+            ],
+            "start_now": "Start now",
         }
-    )
-    return render(request, "reports/home.html", context)
+    else:
+        context = {
+            "lang": "ar",
+            "dir": "rtl",
+            "other_lang": "en",
+            "page_title": "لوحة تحكم حِسْبَة v3",
+            "brand_title": "حِسْبَة",
+            "owner_role": "صاحب الحساب",
+            "language_label": "العربية",
+            "current_time": "09:42",
+            "current_date": "السبت 17 مايو 2025",
+            "greeting": "صباح الخير، أحمد",
+            "hero_subtitle": "أداء أعمالك في تحسن مستمر، استمر بنفس الزخم!",
+            "status_chip": "أداء ممتاز",
+            "out_of_100": "من 100",
+            "score_items": ["المبيعات", "الربحية", "استحقاقات العملاء", "رضا العملاء"],
+            "currency": "ريال سعودي",
+            "kpis": [
+                {"label": "مبيعات اليوم", "value": "32,450.00", "delta": "↑ 18%", "direction": "", "icon": "▮"},
+                {"label": "صافي الربح", "value": "6,250.75", "delta": "↑ 14%", "direction": "", "icon": "↗"},
+                {"label": "رصيد الخزنة", "value": "78,920.50", "delta": "↑ 5%", "direction": "", "icon": "▣"},
+                {"label": "مستحقات العملاء", "value": "56,340.00", "delta": "↓ 3%", "direction": "down", "icon": "♙"},
+                {"label": "مستحقات الموردين", "value": "34,780.00", "delta": "↓ 2%", "direction": "", "icon": "▰"},
+                {"label": "مصروفات اليوم", "value": "4,120.30", "delta": "↑ 8%", "direction": "", "icon": "□"},
+            ],
+            "alerts_title": "التنبيهات الذكية",
+            "alerts": [
+                {"title": "رصيد الخزينة الرئيسي منخفض", "note": "تحديث قبل 35 دقيقة", "level": "عاجل", "color": "red", "icon": "🔔"},
+                {"title": "3 فواتير عملاء مستحقة اليوم", "note": "بقيمة 8,750 ريال", "level": "متوسطة", "color": "orange", "icon": "⏱"},
+                {"title": "12 صنفًا على وشك نفاد المخزون", "note": "تحقق من المخزون", "level": "معلومة", "color": "blue", "icon": "ⓘ"},
+            ],
+            "view_all_alerts": "عرض جميع التنبيهات",
+            "actions_title": "إجراءات سريعة",
+            "actions": [
+                {"label": "فاتورة جديدة", "icon": "✚"},
+                {"label": "عميل جديد", "icon": "♙"},
+                {"label": "مورد جديد", "icon": "▰"},
+                {"label": "إضافة صنف", "icon": "□"},
+                {"label": "حركة خزنة", "icon": "▣"},
+                {"label": "طباعة تقرير", "icon": "▤"},
+            ],
+            "view_all_actions": "عرض كل الإجراءات",
+            "sales_trend": "اتجاه المبيعات (7 أيام)",
+            "cash_credit": "نقدي مقابل آجل",
+            "top_items": "أعلى المنتجات / الخدمات",
+            "customer_dues": "مستحقات العملاء",
+            "supplier_dues": "مستحقات الموردين",
+            "top_list": [
+                {"name": "خدمة تصميم", "value": "12,450"},
+                {"name": "منتج ب", "value": "8,750"},
+                {"name": "منتج ج", "value": "6,300"},
+                {"name": "خدمة استشارية", "value": "4,895"},
+                {"name": "منتج د", "value": "3,250"},
+            ],
+            "overdue": "متأخرة",
+            "current": "جارية",
+            "pending": "لم يحل",
+            "onboarding_title": "ابدأ تجربة حِسْبَة في 4 خطوات",
+            "onboarding_subtitle": "قم بإعداد حسابك وربط أعمالك بسهولة",
+            "steps": [
+                {"label": "بيانات نشاطك", "icon": "🏪"},
+                {"label": "عملاء وموردين", "icon": "♙"},
+                {"label": "منتجات وخدمات", "icon": "◼"},
+                {"label": "أول عملية يومية", "icon": "▤"},
+            ],
+            "start_now": "ابدأ الآن",
+        }
+
+    context["checkpoint_code"] = DASHBOARD_CHECKPOINT_CODE
+    return render(request, "reports/dashboard_v3_preview.html", context)
 
 
 def report_hub(request):
-    """Read-only report hub.
-
-    This checkpoint defines the safe report map before adding live report queries.
-    Reports stay navigation/definition only here: no writes, no balance updates,
-    no invoice posting, and no sensitive cost/profit exposure before permissions.
-    """
+    """Read-only report hub."""
 
     sections = [
         {
