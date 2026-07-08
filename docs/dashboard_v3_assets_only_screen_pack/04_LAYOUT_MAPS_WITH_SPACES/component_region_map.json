@@ -1,0 +1,192 @@
+{
+  "screen": "Dashboard",
+  "route": "/dashboard/",
+  "notes": [
+    "Tablet is landscape only",
+    "Coordinates are normalized ratios for layout planning, not hard CSS absolute positioning."
+  ],
+  "devices": {
+    "web": {
+      "reference_size": {
+        "width": 1600,
+        "height": 900
+      },
+      "grid": "desktop max-width shell",
+      "regions": [
+        {
+          "id": "topbar",
+          "x": 0.015,
+          "y": 0.018,
+          "w": 0.97,
+          "h": 0.067,
+          "contains": "real menu/language/date/time/notification/logo/profile"
+        },
+        {
+          "id": "hero",
+          "x": 0.015,
+          "y": 0.102,
+          "w": 0.97,
+          "h": 0.198,
+          "contains": "hero illustration + greeting + health score"
+        },
+        {
+          "id": "kpi_grid",
+          "x": 0.015,
+          "y": 0.322,
+          "w": 0.97,
+          "h": 0.262,
+          "contains": "6 KPI cards, 3x2"
+        },
+        {
+          "id": "alerts_panel",
+          "x": 0.015,
+          "y": 0.6,
+          "w": 0.48,
+          "h": 0.167,
+          "contains": "smart alerts"
+        },
+        {
+          "id": "quick_actions_panel",
+          "x": 0.505,
+          "y": 0.6,
+          "w": 0.48,
+          "h": 0.167,
+          "contains": "quick actions"
+        },
+        {
+          "id": "analytics_strip",
+          "x": 0.015,
+          "y": 0.783,
+          "w": 0.97,
+          "h": 0.138,
+          "contains": "5 analytics cards"
+        },
+        {
+          "id": "onboarding_strip",
+          "x": 0.015,
+          "y": 0.937,
+          "w": 0.97,
+          "h": 0.056,
+          "contains": "start steps"
+        }
+      ]
+    },
+    "tablet_landscape": {
+      "reference_size": {
+        "width": 1180,
+        "height": 820
+      },
+      "grid": "compressed desktop",
+      "regions": [
+        {
+          "id": "topbar",
+          "x": 0.017,
+          "y": 0.017,
+          "w": 0.966,
+          "h": 0.068
+        },
+        {
+          "id": "hero",
+          "x": 0.017,
+          "y": 0.105,
+          "w": 0.966,
+          "h": 0.2
+        },
+        {
+          "id": "kpi_grid",
+          "x": 0.017,
+          "y": 0.327,
+          "w": 0.966,
+          "h": 0.271
+        },
+        {
+          "id": "alerts_panel",
+          "x": 0.017,
+          "y": 0.617,
+          "w": 0.475,
+          "h": 0.177
+        },
+        {
+          "id": "quick_actions_panel",
+          "x": 0.508,
+          "y": 0.617,
+          "w": 0.475,
+          "h": 0.177
+        },
+        {
+          "id": "analytics_strip",
+          "x": 0.017,
+          "y": 0.812,
+          "w": 0.966,
+          "h": 0.116
+        },
+        {
+          "id": "onboarding_strip",
+          "x": 0.017,
+          "y": 0.944,
+          "w": 0.966,
+          "h": 0.049
+        }
+      ]
+    },
+    "mobile": {
+      "reference_size": {
+        "width": 430,
+        "height": 932
+      },
+      "grid": "mobile stack",
+      "regions": [
+        {
+          "id": "topbar",
+          "x": 0.028,
+          "y": 0.013,
+          "w": 0.944,
+          "h": 0.056
+        },
+        {
+          "id": "hero",
+          "x": 0.028,
+          "y": 0.082,
+          "w": 0.944,
+          "h": 0.109
+        },
+        {
+          "id": "kpi_grid",
+          "x": 0.028,
+          "y": 0.204,
+          "w": 0.944,
+          "h": 0.272,
+          "contains": "6 cards, 2x3"
+        },
+        {
+          "id": "alerts_panel",
+          "x": 0.028,
+          "y": 0.489,
+          "w": 0.456,
+          "h": 0.172
+        },
+        {
+          "id": "quick_actions_panel",
+          "x": 0.516,
+          "y": 0.489,
+          "w": 0.456,
+          "h": 0.172
+        },
+        {
+          "id": "analytics_cards",
+          "x": 0.028,
+          "y": 0.674,
+          "w": 0.944,
+          "h": 0.092
+        },
+        {
+          "id": "onboarding_strip",
+          "x": 0.028,
+          "y": 0.794,
+          "w": 0.944,
+          "h": 0.189
+        }
+      ]
+    }
+  }
+}

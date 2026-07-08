@@ -1,0 +1,155 @@
+{% load static %}
+<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ page_title }}</title>
+    <link rel="stylesheet" href="{% static 'hesba/css/dashboard_v3_assets_only.css' %}">
+</head>
+<body dir="{{ dir }}">
+<main class="dashboard-v3">
+    <header class="dashboard-topbar">
+        <div class="topbar-side start">
+            <span class="menu-button" aria-label="Menu">☰</span>
+            <a class="top-pill" href="?lang={{ other_lang }}">{{ language_label }}</a>
+            <span class="top-pill optional">{{ current_time }}</span>
+            <span class="top-pill optional">{{ current_date }}</span>
+        </div>
+
+        <div class="brand">
+            <img class="brand-logo" src="{% static 'hesba/dashboard_v3/assets/01_brand/hesba_logo_full.png' %}" alt="Hesba">
+        </div>
+
+        <div class="topbar-side end">
+            <img class="top-pill" src="{% static 'hesba/dashboard_v3/assets/05_alert_status_icons/alert_notification_bell.png' %}" alt="{{ alerts_title }}" style="width:46px;padding:8px">
+            <span class="profile-dot"></span>
+        </div>
+    </header>
+
+    <section class="hero-grid">
+        <article class="card hero-asset-card">
+            <img class="hero-asset" src="{% static 'hesba/dashboard_v3/assets/02_hero/dashboard_hero_analytics_scene.png' %}" alt="">
+        </article>
+
+        <article class="welcome-card">
+            <h1>{{ greeting }}</h1>
+            <p>{{ hero_subtitle }}</p>
+            <span class="status-chip">{{ status_chip }}</span>
+        </article>
+
+        <article class="card health-card">
+            <div class="health-ring-wrap">
+                <img class="health-ring" src="{% static 'hesba/dashboard_v3/assets/06_chart_ui_assets/chart_business_health_ring_empty.png' %}" alt="">
+                <div class="health-score">87<small>{{ out_of_100 }}</small></div>
+            </div>
+            <div class="health-list">
+                {% for item in score_items %}
+                    <div>{{ item }} <span>↑</span></div>
+                {% endfor %}
+            </div>
+        </article>
+    </section>
+
+    <section class="kpi-grid">
+        {% for kpi in kpis %}
+        <article class="card kpi-card">
+            <img class="kpi-icon" src="{% static kpi.icon %}" alt="">
+            <div>
+                <div class="kpi-label">{{ kpi.label }}</div>
+                <div class="kpi-value">{{ kpi.value }}</div>
+                <div class="kpi-currency">{{ currency }}</div>
+            </div>
+            <div class="delta {{ kpi.direction }}">{{ kpi.delta }}</div>
+        </article>
+        {% endfor %}
+    </section>
+
+    <section class="middle-grid">
+        <article class="card panel">
+            <div class="panel-head">
+                <h2>{{ alerts_title }}</h2>
+                <img src="{% static 'hesba/dashboard_v3/assets/05_alert_status_icons/alert_notification_bell.png' %}" alt="">
+            </div>
+            <div class="alert-list">
+                {% for alert in alerts %}
+                <div class="alert-row">
+                    <img src="{% static alert.icon %}" alt="">
+                    <div>
+                        <strong>{{ alert.title }}</strong>
+                        <small>{{ alert.note }}</small>
+                    </div>
+                    <span class="badge {{ alert.color }}">{{ alert.level }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            <a class="panel-link" href="#">{{ view_all_alerts }}</a>
+        </article>
+
+        <article class="card panel">
+            <div class="panel-head">
+                <h2>{{ actions_title }}</h2>
+                <img src="{% static 'hesba/dashboard_v3/assets/05_alert_status_icons/alert_lightning_yellow.png' %}" alt="">
+            </div>
+            <div class="action-grid">
+                {% for action in actions %}
+                <a class="action-tile" href="#">
+                    <span>{{ action.label }}</span>
+                    <img src="{% static action.icon %}" alt="">
+                </a>
+                {% endfor %}
+            </div>
+            <a class="panel-link" href="#">{{ view_all_actions }}</a>
+        </article>
+    </section>
+
+    <section class="analytics-grid">
+        <article class="card analytics-card">
+            <h3>{{ sales_trend }}</h3>
+            <img class="analytics-img" src="{% static 'hesba/dashboard_v3/assets/06_chart_ui_assets/chart_bar_motif_teal.png' %}" alt="">
+        </article>
+
+        <article class="card analytics-card">
+            <h3>{{ cash_credit }}</h3>
+            <img class="analytics-img" src="{% static 'hesba/dashboard_v3/assets/06_chart_ui_assets/chart_donut_ring_teal_navy.png' %}" alt="">
+        </article>
+
+        <article class="card analytics-card">
+            <h3>{{ top_items }}</h3>
+            <div class="top-list">
+                {% for item in top_list %}
+                    <div><span>{{ forloop.counter }}. {{ item.name }}</span><strong>{{ item.value }}</strong></div>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="card analytics-card">
+            <h3>{{ customer_dues }}</h3>
+            <img class="analytics-img" src="{% static 'hesba/dashboard_v3/assets/06_chart_ui_assets/ui_list_lines.png' %}" alt="">
+        </article>
+
+        <article class="card analytics-card">
+            <h3>{{ supplier_dues }}</h3>
+            <img class="analytics-img" src="{% static 'hesba/dashboard_v3/assets/06_chart_ui_assets/chart_small_bars_pale.png' %}" alt="">
+        </article>
+    </section>
+
+    <section class="card onboarding-card">
+        <img class="rocket" src="{% static 'hesba/dashboard_v3/assets/07_onboarding/onboarding_rocket.png' %}" alt="">
+        <div class="onboarding-copy">
+            <h2>{{ onboarding_title }}</h2>
+            <p>{{ onboarding_subtitle }}</p>
+            <div class="steps">
+                {% for step in steps %}
+                <div class="step">
+                    <img src="{% static step.icon %}" alt="">
+                    <span>{{ step.label }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        <a class="start-button" href="#">{{ start_now }}</a>
+    </section>
+</main>
+</body>
+</html>

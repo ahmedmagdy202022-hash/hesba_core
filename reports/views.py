@@ -116,62 +116,152 @@ def home(request):
 
 
 def dashboard_snapshot(request):
-    """Read-only dashboard snapshot for the first user-facing dashboard step.
+    """Dashboard v3 assets-only cleanroom preview.
 
-    This checkpoint is static and permission-safe. It does not query operational
-    data yet, so it can render before migrations or seed data are applied in a
-    fresh Codespace.
+    Static visual preview only:
+    - no writes
+    - no database queries
+    - no accounting calculations
+    - real UI text and numbers
+    - image assets loaded only from dashboard_screen_pack_v3_FINAL_SPLIT_ASSETS
     """
 
-    sections = [
-        {
-            "title": "١) حالة دورة العمل",
-            "description": "الدورة الأساسية جاهزة كمسار واحد قابل للتوسع.",
-            "items": [
-                {"label": "الدورة الكاملة", "url": reverse("report_hub"), "note": "مورد → شراء → مخزون → بيع → عميل → خزنة → تقارير"},
-                {"label": "حالة الإدخال", "url": reverse("home"), "note": "Admin مؤقتًا حتى شاشة Transaction آمنة"},
-            ],
-        },
-        {
-            "title": "٢) KPIs آمنة لاحقًا",
-            "description": "تجهيز أماكن الأرقام بدون عرض ربح أو تكلفة قبل الصلاحيات.",
-            "items": [
-                {"label": "عدد الموردين", "url": reverse("status_counts_report"), "note": "قراءة فقط"},
-                {"label": "عدد العملاء", "url": reverse("status_counts_report"), "note": "قراءة فقط"},
-                {"label": "حالة المخزون", "url": reverse("status_counts_report"), "note": "حسب الصنف والموقع"},
-                {"label": "حالة الخزن", "url": reverse("status_counts_report"), "note": "بالمدفوع فعليًا فقط"},
-            ],
-        },
-        {
-            "title": "٣) حماية الأرقام الحساسة",
-            "description": "التكلفة والربح لا يظهروا قبل صلاحيات حقيقية.",
-            "items": [
-                {"label": "الربح", "url": reverse("report_hub"), "note": "Owner فقط لاحقًا"},
-                {"label": "التكلفة", "url": reverse("report_hub"), "note": "محمية من Cashier"},
-            ],
-        },
-        {
-            "title": "٤) الخطوة الجاية",
-            "description": "ربط أرقام قراءة فقط بعد ثبات reports/views والمايجريشن.",
-            "items": [
-                {"label": "تقارير Read-only", "url": reverse("report_hub"), "note": "قبل أي شاشة إدخال جديدة"},
-                {"label": "تقرير Status", "url": reverse("status_counts_report"), "note": "أعداد فعلية غير حساسة"},
-            ],
-        },
-    ]
+    lang = "en" if request.GET.get("lang") == "en" else "ar"
+    is_en = lang == "en"
 
-    context = _shared_template_context()
-    context.update(
-        {
-            "checkpoint_code": DASHBOARD_CHECKPOINT_CODE,
-            "page_title": "Dashboard Snapshot قراءة فقط",
-            "page_description": "أول لقطة داشبورد آمنة قبل ربط الأرقام الحقيقية. الهدف تثبيت شكل الملخص من غير إدخال أو تعديل بيانات.",
-            "sections": sections,
-            "footer_note": "هذه الشاشة Read-only Snapshot فقط. الربح والتكلفة وأي بيانات مالية حساسة ستظهر بعد صلاحيات حقيقية.",
+    if is_en:
+        context = {
+            "lang": "en",
+            "dir": "ltr",
+            "other_lang": "ar",
+            "page_title": "Hesba Dashboard v3 Assets Preview",
+            "language_label": "English",
+            "current_time": "09:42",
+            "current_date": "Sat, 17 May 2025",
+            "greeting": "Good morning, Ahmed",
+            "hero_subtitle": "Your business performance is improving. Keep the same momentum.",
+            "status_chip": "Excellent performance",
+            "out_of_100": "out of 100",
+            "score_items": ["Sales", "Profitability", "Customer dues", "Customer satisfaction"],
+            "currency": "SAR",
+            "alerts_title": "Smart alerts",
+            "actions_title": "Quick actions",
+            "view_all_alerts": "View all alerts",
+            "view_all_actions": "View all actions",
+            "sales_trend": "Sales trend (7 days)",
+            "cash_credit": "Cash vs credit",
+            "top_items": "Top products / services",
+            "customer_dues": "Customer dues",
+            "supplier_dues": "Supplier payables",
+            "overdue": "Overdue",
+            "current": "Current",
+            "pending": "Pending",
+            "onboarding_title": "Start your Hesba experience in 4 steps",
+            "onboarding_subtitle": "Set up your account and connect your business easily.",
+            "start_now": "Start now",
+            "kpis": [
+                {"label": "Today sales", "value": "32,450.00", "delta": "18% ↑", "direction": "", "icon": "hesba/dashboard_v3/assets/03_kpi_icons/kpi_daily_sales.png"},
+                {"label": "Net profit", "value": "6,250.75", "delta": "14% ↑", "direction": "", "icon": "hesba/dashboard_v3/assets/03_kpi_icons/kpi_net_profit.png"},
+                {"label": "Cashbox balance", "value": "78,920.50", "delta": "5% ↑", "direction": "", "icon": "hesba/dashboard_v3/assets/03_kpi_icons/kpi_cashbox_balance.png"},
+                {"label": "Customer dues", "value": "56,340.00", "delta": "3% ↓", "direction": "down", "icon": "hesba/dashboard_v3/assets/03_kpi_icons/kpi_customer_receivables.png"},
+                {"label": "Supplier payables", "value": "34,780.00", "delta": "2% ↓", "direction": "", "icon": "hesba/dashboard_v3/assets/03_kpi_icons/kpi_supplier_payables.png"},
+                {"label": "Today expenses", "value": "4,120.30", "delta": "8% ↑", "direction": "", "icon": "hesba/dashboard_v3/assets/03_kpi_icons/kpi_daily_expenses.png"},
+            ],
+            "alerts": [
+                {"title": "Main cashbox balance is low", "note": "Updated 35 minutes ago", "level": "Urgent", "color": "red", "icon": "hesba/dashboard_v3/assets/05_alert_status_icons/alert_urgent_bell_red.png"},
+                {"title": "3 customer invoices due today", "note": "Total value 8,750", "level": "Medium", "color": "orange", "icon": "hesba/dashboard_v3/assets/05_alert_status_icons/alert_warning_triangle_orange.png"},
+                {"title": "12 items near stock-out", "note": "Check inventory", "level": "Info", "color": "blue", "icon": "hesba/dashboard_v3/assets/05_alert_status_icons/alert_info_bubble_blue.png"},
+            ],
+            "actions": [
+                {"label": "New invoice", "icon": "hesba/dashboard_v3/assets/04_quick_action_icons/action_new_invoice.png"},
+                {"label": "New customer", "icon": "hesba/dashboard_v3/assets/04_quick_action_icons/action_new_customer.png"},
+                {"label": "New supplier", "icon": "hesba/dashboard_v3/assets/04_quick_action_icons/action_new_supplier.png"},
+                {"label": "Add item", "icon": "hesba/dashboard_v3/assets/04_quick_action_icons/action_add_product_service.png"},
+                {"label": "Cash movement", "icon": "hesba/dashboard_v3/assets/04_quick_action_icons/action_cash_movement.png"},
+                {"label": "Print report", "icon": "hesba/dashboard_v3/assets/04_quick_action_icons/action_print_report.png"},
+            ],
+            "top_list": [
+                {"name": "Design service", "value": "12,450"},
+                {"name": "Product B", "value": "8,750"},
+                {"name": "Product C", "value": "6,300"},
+                {"name": "Consulting", "value": "4,895"},
+                {"name": "Product D", "value": "3,250"},
+            ],
+            "steps": [
+                {"label": "Business data", "icon": "hesba/dashboard_v3/assets/04_quick_action_icons/action_register_transaction.png"},
+                {"label": "Customers & suppliers", "icon": "hesba/dashboard_v3/assets/04_quick_action_icons/action_new_customer.png"},
+                {"label": "Items & services", "icon": "hesba/dashboard_v3/assets/04_quick_action_icons/action_add_product_service.png"},
+                {"label": "First transaction", "icon": "hesba/dashboard_v3/assets/04_quick_action_icons/action_new_invoice.png"},
+            ],
         }
-    )
-    return render(request, "reports/home.html", context)
+    else:
+        context = {
+            "lang": "ar",
+            "dir": "rtl",
+            "other_lang": "en",
+            "page_title": "لوحة تحكم حِسْبَة v3",
+            "language_label": "العربية",
+            "current_time": "09:42",
+            "current_date": "السبت 17 مايو 2025",
+            "greeting": "صباح الخير، أحمد",
+            "hero_subtitle": "أداء أعمالك في تحسن مستمر، استمر بنفس الزخم!",
+            "status_chip": "أداء ممتاز",
+            "out_of_100": "من 100",
+            "score_items": ["المبيعات", "الربحية", "استحقاقات العملاء", "رضا العملاء"],
+            "currency": "ريال سعودي",
+            "alerts_title": "التنبيهات الذكية",
+            "actions_title": "إجراءات سريعة",
+            "view_all_alerts": "عرض جميع التنبيهات",
+            "view_all_actions": "عرض كل الإجراءات",
+            "sales_trend": "اتجاه المبيعات (7 أيام)",
+            "cash_credit": "نقدي مقابل آجل",
+            "top_items": "أعلى المنتجات / الخدمات",
+            "customer_dues": "مستحقات العملاء",
+            "supplier_dues": "مستحقات الموردين",
+            "overdue": "متأخرة",
+            "current": "جارية",
+            "pending": "لم يحل",
+            "onboarding_title": "ابدأ تجربة حِسْبَة في 4 خطوات",
+            "onboarding_subtitle": "قم بإعداد حسابك وربط أعمالك بسهولة",
+            "start_now": "ابدأ الآن",
+            "kpis": [
+                {"label": "مبيعات اليوم", "value": "32,450.00", "delta": "18% ↑", "direction": "", "icon": "hesba/dashboard_v3/assets/03_kpi_icons/kpi_daily_sales.png"},
+                {"label": "صافي الربح", "value": "6,250.75", "delta": "14% ↑", "direction": "", "icon": "hesba/dashboard_v3/assets/03_kpi_icons/kpi_net_profit.png"},
+                {"label": "رصيد الخزنة", "value": "78,920.50", "delta": "5% ↑", "direction": "", "icon": "hesba/dashboard_v3/assets/03_kpi_icons/kpi_cashbox_balance.png"},
+                {"label": "مستحقات العملاء", "value": "56,340.00", "delta": "3% ↓", "direction": "down", "icon": "hesba/dashboard_v3/assets/03_kpi_icons/kpi_customer_receivables.png"},
+                {"label": "مستحقات الموردين", "value": "34,780.00", "delta": "2% ↓", "direction": "", "icon": "hesba/dashboard_v3/assets/03_kpi_icons/kpi_supplier_payables.png"},
+                {"label": "مصروفات اليوم", "value": "4,120.30", "delta": "8% ↑", "direction": "", "icon": "hesba/dashboard_v3/assets/03_kpi_icons/kpi_daily_expenses.png"},
+            ],
+            "alerts": [
+                {"title": "رصيد الخزينة الرئيسي منخفض", "note": "تحديث قبل 35 دقيقة", "level": "عاجل", "color": "red", "icon": "hesba/dashboard_v3/assets/05_alert_status_icons/alert_urgent_bell_red.png"},
+                {"title": "3 فواتير عملاء مستحقة اليوم", "note": "بقيمة 8,750 ريال", "level": "متوسطة", "color": "orange", "icon": "hesba/dashboard_v3/assets/05_alert_status_icons/alert_warning_triangle_orange.png"},
+                {"title": "12 صنفًا على وشك نفاد المخزون", "note": "تحقق من المخزون", "level": "معلومة", "color": "blue", "icon": "hesba/dashboard_v3/assets/05_alert_status_icons/alert_info_bubble_blue.png"},
+            ],
+            "actions": [
+                {"label": "فاتورة جديدة", "icon": "hesba/dashboard_v3/assets/04_quick_action_icons/action_new_invoice.png"},
+                {"label": "عميل جديد", "icon": "hesba/dashboard_v3/assets/04_quick_action_icons/action_new_customer.png"},
+                {"label": "مورد جديد", "icon": "hesba/dashboard_v3/assets/04_quick_action_icons/action_new_supplier.png"},
+                {"label": "إضافة صنف", "icon": "hesba/dashboard_v3/assets/04_quick_action_icons/action_add_product_service.png"},
+                {"label": "حركة خزنة", "icon": "hesba/dashboard_v3/assets/04_quick_action_icons/action_cash_movement.png"},
+                {"label": "طباعة تقرير", "icon": "hesba/dashboard_v3/assets/04_quick_action_icons/action_print_report.png"},
+            ],
+            "top_list": [
+                {"name": "خدمة تصميم", "value": "12,450"},
+                {"name": "منتج ب", "value": "8,750"},
+                {"name": "منتج ج", "value": "6,300"},
+                {"name": "خدمة استشارية", "value": "4,895"},
+                {"name": "منتج د", "value": "3,250"},
+            ],
+            "steps": [
+                {"label": "بيانات نشاطك", "icon": "hesba/dashboard_v3/assets/04_quick_action_icons/action_register_transaction.png"},
+                {"label": "عملاء وموردين", "icon": "hesba/dashboard_v3/assets/04_quick_action_icons/action_new_customer.png"},
+                {"label": "منتجات وخدمات", "icon": "hesba/dashboard_v3/assets/04_quick_action_icons/action_add_product_service.png"},
+                {"label": "أول عملية يومية", "icon": "hesba/dashboard_v3/assets/04_quick_action_icons/action_new_invoice.png"},
+            ],
+        }
 
+    context["checkpoint_code"] = "DASHBOARD_V3_ASSETS_ONLY_CLEANROOM"
+    return render(request, "reports/dashboard_v3_assets_only.html", context)
 
 def report_hub(request):
     """Read-only report hub.
