@@ -3,7 +3,7 @@ from django.urls import reverse
 
 
 CHECKPOINT_CODE = "093_FOUNDATION_FIRST_UI_NAVIGATION_MAP"
-DASHBOARD_CHECKPOINT_CODE = "094_FOUNDATION_DASHBOARD_SNAPSHOT"
+DASHBOARD_CHECKPOINT_CODE = "120D_DASHBOARD_LIVE_VISUAL_PREVIEW"
 REPORTS_CHECKPOINT_CODE = "096_FOUNDATION_READ_ONLY_REPORT_HUB"
 
 
@@ -42,6 +42,10 @@ def _shared_template_context():
         "reports_url": reverse("report_hub"),
         "status_url": reverse("status_counts_report"),
     }
+
+
+def _lang(request):
+    return "en" if request.GET.get("lang") == "en" else "ar"
 
 
 def home(request):
@@ -116,61 +120,145 @@ def home(request):
 
 
 def dashboard_snapshot(request):
-    """Read-only dashboard snapshot for the first user-facing dashboard step.
+    """Live visual preview for Dashboard approval.
 
-    This checkpoint is static and permission-safe. It does not query operational
-    data yet, so it can render before migrations or seed data are applied in a
-    fresh Codespace.
+    Preview-only: no writes, no migrations, no accounting calculations, and no
+    sensitive real profit/cost exposure. The UI uses safe sample data so Ahmed can
+    approve the responsive visual direction live before production implementation.
     """
 
-    sections = [
-        {
-            "title": "١) حالة دورة العمل",
-            "description": "الدورة الأساسية جاهزة كمسار واحد قابل للتوسع.",
-            "items": [
-                {"label": "الدورة الكاملة", "url": reverse("report_hub"), "note": "مورد → شراء → مخزون → بيع → عميل → خزنة → تقارير"},
-                {"label": "حالة الإدخال", "url": reverse("home"), "note": "Admin مؤقتًا حتى شاشة Transaction آمنة"},
-            ],
+    lang = _lang(request)
+    is_en = lang == "en"
+    text = {
+        "ar": {
+            "title": "الرئيسية",
+            "subtitle": "نظرة عامة على أداء أعمالك",
+            "owner": "المالك",
+            "welcome": "مرحبًا أحمد",
+            "headline": "أعمالك تسير في الاتجاه الصحيح",
+            "hero_note": "أداء ممتاز هذا الشهر؛ استمرت مبيعاتك في النمو والتحسن.",
+            "live": "مباشر",
+            "updated": "آخر تحديث: منذ 20 ثانية",
+            "currency": "عملة النشاط",
+            "auto": "تحديث تلقائي",
+            "quick": "إجراءات سريعة",
+            "charts": "تحليلات متغيرة",
+            "recent": "آخر العمليات",
+            "insights": "رؤى وتنبيهات ذكية",
+            "show_all": "عرض الكل",
+            "customize": "تخصيص",
+            "menu": "القائمة",
+            "home": "الرئيسية",
+            "sales": "المبيعات",
+            "purchases": "المشتريات",
+            "customers": "العملاء",
+            "suppliers": "الموردون",
+            "inventory": "المخزون",
+            "cashbox": "الصندوق",
+            "reports": "التقارير",
+            "settings": "الإعدادات",
+            "new_invoice": "فاتورة جديدة",
+            "new_customer": "عميل جديد",
+            "new_item": "منتج جديد",
+            "new_service": "خدمة جديدة",
+            "new_expense": "إضافة مصروف",
+            "print_report": "طباعة تقرير",
+            "more": "المزيد",
+            "new_action": "إجراء جديد",
         },
-        {
-            "title": "٢) KPIs آمنة لاحقًا",
-            "description": "تجهيز أماكن الأرقام بدون عرض ربح أو تكلفة قبل الصلاحيات.",
-            "items": [
-                {"label": "عدد الموردين", "url": reverse("status_counts_report"), "note": "قراءة فقط"},
-                {"label": "عدد العملاء", "url": reverse("status_counts_report"), "note": "قراءة فقط"},
-                {"label": "حالة المخزون", "url": reverse("status_counts_report"), "note": "حسب الصنف والموقع"},
-                {"label": "حالة الخزن", "url": reverse("status_counts_report"), "note": "بالمدفوع فعليًا فقط"},
-            ],
+        "en": {
+            "title": "Dashboard",
+            "subtitle": "Overview of your business performance",
+            "owner": "Owner",
+            "welcome": "Hi Ahmed",
+            "headline": "Your business is moving in the right direction",
+            "hero_note": "Strong month so far; sales keep improving steadily.",
+            "live": "Live",
+            "updated": "Updated: 20 seconds ago",
+            "currency": "Activity currency",
+            "auto": "Auto refresh",
+            "quick": "Quick actions",
+            "charts": "Live analytics",
+            "recent": "Recent operations",
+            "insights": "Smart insights & alerts",
+            "show_all": "Show all",
+            "customize": "Customize",
+            "menu": "Menu",
+            "home": "Home",
+            "sales": "Sales",
+            "purchases": "Purchases",
+            "customers": "Customers",
+            "suppliers": "Suppliers",
+            "inventory": "Inventory",
+            "cashbox": "Cashbox",
+            "reports": "Reports",
+            "settings": "Settings",
+            "new_invoice": "New invoice",
+            "new_customer": "New customer",
+            "new_item": "New item",
+            "new_service": "New service",
+            "new_expense": "Add expense",
+            "print_report": "Print report",
+            "more": "More",
+            "new_action": "New action",
         },
-        {
-            "title": "٣) حماية الأرقام الحساسة",
-            "description": "التكلفة والربح لا يظهروا قبل صلاحيات حقيقية.",
-            "items": [
-                {"label": "الربح", "url": reverse("report_hub"), "note": "Owner فقط لاحقًا"},
-                {"label": "التكلفة", "url": reverse("report_hub"), "note": "محمية من Cashier"},
-            ],
-        },
-        {
-            "title": "٤) الخطوة الجاية",
-            "description": "ربط أرقام قراءة فقط بعد ثبات reports/views والمايجريشن.",
-            "items": [
-                {"label": "تقارير Read-only", "url": reverse("report_hub"), "note": "قبل أي شاشة إدخال جديدة"},
-                {"label": "تقرير Status", "url": reverse("status_counts_report"), "note": "أعداد فعلية غير حساسة"},
-            ],
-        },
+    }[lang]
+
+    kpis = [
+        {"label": "إجمالي المبيعات (اليوم)" if not is_en else "Sales today", "value": "156,300", "delta": "+12%", "note": "عن أمس" if not is_en else "vs yesterday", "icon": "bag"},
+        {"label": "إجمالي المبيعات (الشهر)" if not is_en else "Sales this month", "value": "986,540", "delta": "+15%", "note": "عن الشهر الماضي" if not is_en else "vs last month", "icon": "trend"},
+        {"label": "إجمالي المدفوعات" if not is_en else "Total payments", "value": "78,640", "delta": "+8%", "note": "عن الشهر الماضي" if not is_en else "vs last month", "icon": "wallet"},
+        {"label": "إجمالي العملاء" if not is_en else "Total customers", "value": "9,250", "delta": "+6%", "note": "عن الشهر الماضي" if not is_en else "vs last month", "icon": "users"},
+        {"label": "المنتجات المباعة (اليوم)" if not is_en else "Items sold today", "value": "476", "delta": "+9%", "note": "عن أمس" if not is_en else "vs yesterday", "icon": "box"},
+        {"label": "المنتجات المتاحة" if not is_en else "Available items", "value": "78,640", "delta": "+11%", "note": "عن الشهر الماضي" if not is_en else "vs last month", "icon": "cube"},
+        {"label": "إجمالي المصروفات (الشهر)" if not is_en else "Monthly expenses", "value": "32,850", "delta": "+6%", "note": "عن الشهر الماضي" if not is_en else "vs last month", "icon": "coin"},
     ]
 
-    context = _shared_template_context()
-    context.update(
-        {
-            "checkpoint_code": DASHBOARD_CHECKPOINT_CODE,
-            "page_title": "Dashboard Snapshot قراءة فقط",
-            "page_description": "أول لقطة داشبورد آمنة قبل ربط الأرقام الحقيقية. الهدف تثبيت شكل الملخص من غير إدخال أو تعديل بيانات.",
-            "sections": sections,
-            "footer_note": "هذه الشاشة Read-only Snapshot فقط. الربح والتكلفة وأي بيانات مالية حساسة ستظهر بعد صلاحيات حقيقية.",
-        }
-    )
-    return render(request, "reports/home.html", context)
+    hero_metrics = [
+        {"label": "نمو المبيعات (الشهر)" if not is_en else "Monthly sales growth", "value": "+18%", "note": "مقارنة بالشهر الماضي" if not is_en else "vs last month", "icon": "trend"},
+        {"label": "الفواتير المعلقة" if not is_en else "Pending invoices", "value": "23", "note": "فاتورة" if not is_en else "invoices", "icon": "invoice"},
+        {"label": "تنبيهات المخزون" if not is_en else "Inventory alerts", "value": "7", "note": "تنبيهات" if not is_en else "alerts", "icon": "alert"},
+        {"label": "رصيد الخزينة" if not is_en else "Cashbox balance", "value": "986,540", "note": text["currency"], "icon": "wallet"},
+    ]
+
+    quick_actions = [
+        (text["new_invoice"], "invoice"),
+        (text["new_customer"], "users"),
+        (text["new_item"], "cube"),
+        (text["new_service"], "gear"),
+        (text["new_expense"], "wallet"),
+        (text["print_report"], "pdf"),
+    ]
+
+    recent = [
+        ("#INV-1045", "فاتورة بيع" if not is_en else "Sales invoice", "عميل نقدي" if not is_en else "Cash customer", "10:42 ص" if not is_en else "10:42 AM", "3,250", "sale"),
+        ("#PUR-1032", "فاتورة شراء" if not is_en else "Purchase invoice", "مورد الخليج" if not is_en else "Gulf supplier", "10:35 ص" if not is_en else "10:35 AM", "12,000", "purchase"),
+        ("#BIL-1021", "فاتورة شراء" if not is_en else "Bill", "عميل مؤسسة النور" if not is_en else "Al Noor customer", "10:28 ص" if not is_en else "10:28 AM", "8,750", "purchase"),
+        ("#EXP-1001", "مصروفات" if not is_en else "Expense", "مصروفات تشغيلية" if not is_en else "Operating expense", "10:21 ص" if not is_en else "10:21 AM", "350", "expense"),
+        ("#INV-1044", "فاتورة بيع" if not is_en else "Sales invoice", "شركة الإبداع" if not is_en else "Ebdaa company", "10:15 ص" if not is_en else "10:15 AM", "2,950", "sale"),
+    ]
+
+    insights = [
+        ("مخزون منخفض" if not is_en else "Low stock", "12 منتج بحاجة لإعادة طلب" if not is_en else "12 items need reorder", "danger", "alert"),
+        ("فواتير متأخرة" if not is_en else "Late invoices", "18 فاتورة متأخرة" if not is_en else "18 overdue invoices", "warning", "alert"),
+        ("أداء المبيعات" if not is_en else "Sales performance", "+15% عن الشهر الماضي" if not is_en else "+15% vs last month", "info", "trend"),
+        ("منتج مميز" if not is_en else "Top product", "سماعات لاسلكية الأعلى مبيعًا" if not is_en else "Wireless headset is top seller", "success", "check"),
+        ("تحصيل أسرع" if not is_en else "Faster collection", "3 عملاء لديهم مستحقات" if not is_en else "3 customers have dues", "info", "bolt"),
+        ("فرص نمو" if not is_en else "Growth chances", "+16% منتج جديد" if not is_en else "+16% new product", "purple", "star"),
+    ]
+
+    context = {
+        "lang": lang,
+        "dir": "ltr" if is_en else "rtl",
+        "checkpoint_code": DASHBOARD_CHECKPOINT_CODE,
+        "text": text,
+        "hero_metrics": hero_metrics,
+        "kpis": kpis,
+        "quick_actions": quick_actions,
+        "recent": recent,
+        "insights": insights,
+    }
+    return render(request, "reports/dashboard_live_preview.html", context)
 
 
 def report_hub(request):
@@ -200,20 +288,19 @@ def report_hub(request):
             ],
         },
         {
-            "title": "٣) تقارير التشغيل",
-            "description": "المخزون والخزن مبنيين على حركات فعلية قابلة للتتبع.",
+            "title": "٣) تقارير الخزن والمخزون",
+            "description": "الخزنة والمخزون لا يتغيران من التقارير؛ التقارير قراءة فقط.",
             "items": [
-                {"label": "Inventory Report", "url": _admin_changelist("inventory", "stockmovement"), "note": "Item + Location"},
-                {"label": "Cashbox Report", "url": _admin_changelist("cashboxes", "cashboxmovement"), "note": "Paid_Now فقط"},
+                {"label": "Cashbox Movements", "url": _admin_changelist("cashboxes", "cashboxmovement"), "note": "Cash in / out"},
+                {"label": "Stock Movements", "url": _admin_changelist("inventory", "stockmovement"), "note": "كل حركة مخزون قابلة للتتبع"},
             ],
         },
         {
-            "title": "٤) تقارير محمية",
-            "description": "الربح والتكلفة والتمويل الحساس لا يظهروا قبل صلاحيات حقيقية.",
+            "title": "٤) تقارير الربح الحساسة",
+            "description": "الربح يعتمد على تكلفة محمية وصلاحيات، ولا يظهر للكاشير.",
             "items": [
-                {"label": "Profit Report", "url": "#reports", "note": "Sales - Cost of Goods Sold"},
-                {"label": "Usage Status Report", "url": "#reports", "note": "تحكم تكلفة التشغيل"},
-                {"label": "Closed Period Report", "url": "#reports", "note": "مراجعة فقط بعد الإقفال"},
+                {"label": "Profit Report", "url": reverse("report_hub"), "note": "Owner/Manager فقط لاحقًا"},
+                {"label": "Permissions", "url": reverse("admin:index"), "note": "قبل فتح أي تكلفة أو ربح"},
             ],
         },
     ]
@@ -222,10 +309,10 @@ def report_hub(request):
     context.update(
         {
             "checkpoint_code": REPORTS_CHECKPOINT_CODE,
-            "page_title": "مركز التقارير قراءة فقط",
-            "page_description": "خريطة آمنة للتقارير قبل ربط الأرقام الحية. التقارير هنا للتصفح والمراجعة فقط، ولا تنشئ فواتير أو أرصدة أو حركات مخزون أو حركات خزنة.",
+            "page_title": "مركز التقارير Read-only",
+            "page_description": "خريطة تقارير آمنة قبل بناء استعلامات التقارير النهائية. لا توجد أي كتابة أو تعديل أرصدة من هنا.",
             "sections": sections,
-            "footer_note": "هذه الشاشة Report Hub فقط. الربح والتكلفة سيظلوا محميين لحين تطبيق الصلاحيات الحقيقية.",
+            "footer_note": "أي تقرير ربح أو تكلفة سيحتاج صلاحيات واضحة قبل الظهور.",
         }
     )
     return render(request, "reports/home.html", context)
