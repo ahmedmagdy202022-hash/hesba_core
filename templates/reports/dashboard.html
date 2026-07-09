@@ -1,0 +1,69 @@
+{% load static %}
+<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{{ page_title }}</title>
+  <link rel="stylesheet" href="{% static 'hesba/css/dashboard_120d.css' %}?v=120d-approved-pack">
+</head>
+<body class="dashboard-page" data-lang="{{ lang }}" data-currency="{{ activity_currency }}" data-time-locale="{{ time_locale }}">
+<svg class="dashboard-icon-sprite" aria-hidden="true" focusable="false">
+<symbol id="dashboard-icon-sales-today" viewBox="0 0 24 24"><path d="M6 7h12l-1 14H7L6 7Z"/><path d="M9 7a3 3 0 0 1 6 0"/></symbol>
+<symbol id="dashboard-icon-sales-growth" viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 7-9"/><path d="M14 6h6v6"/></symbol>
+<symbol id="dashboard-icon-cashbox" viewBox="0 0 24 24"><path d="M3 7h18v13H3V7Z"/><path d="M18 12h3v4h-3a2 2 0 0 1 0-4Z"/><path d="M6 7V5h12v2"/></symbol>
+<symbol id="dashboard-icon-customers" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+<symbol id="dashboard-icon-suppliers" viewBox="0 0 24 24"><path d="M4 4h16v16H4Z"/><path d="M8 8h8M8 12h8M8 16h5"/></symbol>
+<symbol id="dashboard-icon-items" viewBox="0 0 24 24"><path d="M21 16V8l-9-5-9 5v8l9 5 9-5Z"/><path d="M3.3 7.5L12 12l8.7-4.5"/><path d="M12 22V12"/></symbol>
+<symbol id="dashboard-icon-inventory-alert" viewBox="0 0 24 24"><path d="M21 16V8l-9-5-9 5v8l9 5 9-5Z"/><path d="M3.3 7.5L12 12l8.7-4.5"/><path d="M12 22V12"/><path d="M18 18l4 4"/></symbol>
+<symbol id="dashboard-icon-expenses" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 10a3 3 0 1 1 3 2 3 3 0 1 0 3 2"/></symbol>
+<symbol id="dashboard-icon-invoice" viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6V2Z"/><path d="M15 2v6h5"/><path d="M8 13h8M8 17h8"/></symbol>
+<symbol id="dashboard-icon-reports" viewBox="0 0 24 24"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 16V9"/><path d="M12 16V6"/><path d="M16 16v-4"/></symbol>
+<symbol id="dashboard-icon-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1A2 2 0 1 1 7.1 4l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1A2 2 0 1 1 19.9 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></symbol>
+<symbol id="dashboard-icon-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+<symbol id="dashboard-icon-notification" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></symbol>
+<symbol id="dashboard-icon-calendar" viewBox="0 0 24 24"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/><path d="M12 14v3l2 1"/></symbol>
+<symbol id="dashboard-icon-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.5 6.3L3 16"/><path d="M3 21v-5h5"/><path d="M3 12A9 9 0 0 1 18.5 5.7L21 8"/><path d="M21 3v5h-5"/></symbol>
+<symbol id="dashboard-icon-add" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="dashboard-icon-pdf" viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6V2Z"/><path d="M15 2v6h5"/><path d="M8 15h8M8 18h5"/></symbol>
+<symbol id="dashboard-icon-warning" viewBox="0 0 24 24"><path d="M12 3l10 18H2L12 3Z"/><path d="M12 9v5M12 18h.01"/></symbol>
+<symbol id="dashboard-icon-success" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></symbol>
+<symbol id="dashboard-icon-opportunity" viewBox="0 0 24 24"><path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.2 6.4 20.2 7.5 14 3 9.6l6.2-.9L12 3Z"/></symbol>
+<symbol id="dashboard-icon-fast" viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 10-13h-7V2Z"/></symbol>
+</svg>
+<div class="dashboard-shell">
+  <header class="dashboard-header" aria-label="{{ t.header_label }}">
+    <section class="profile-block" aria-label="{{ t.profile_label }}"><span class="profile-avatar" aria-hidden="true">{{ user_initial }}</span><span class="profile-copy"><strong>{{ user_display_name }}</strong><small>{{ user_role_label }}</small></span></section>
+    <button class="notification-button" type="button" aria-label="{{ t.notifications }}"><svg class="dashboard-icon"><use href="#dashboard-icon-notification"></use></svg><span class="notification-badge">{{ notification_count }}</span></button>
+    <nav class="language-switch" aria-label="{{ t.language }}"><a class="lang-option {% if lang == 'en' %}is-active{% endif %}" href="{{ english_url }}">EN</a><a class="lang-option {% if lang == 'ar' %}is-active{% endif %}" href="{{ arabic_url }}">عربي</a></nav>
+    <section class="date-chip" aria-label="{{ t.date_time }}"><svg class="dashboard-icon"><use href="#dashboard-icon-calendar"></use></svg><span data-dashboard-date>{{ formatted_date }}</span><span class="dot-separator" aria-hidden="true"></span><strong data-dashboard-clock>{{ formatted_time }}</strong></section>
+    <section class="page-heading" aria-label="{{ t.page_heading }}"><small>{{ t.dashboard }}</small><strong>{{ t.page_title_short }}</strong></section>
+    <a class="dashboard-logo" href="{{ dashboard_url }}" aria-label="Hesba"><img src="{% static 'hesba/setup_gate/assets/setup_gate_logo_approved.png' %}" alt="Hesba" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span hidden>حِسبة - Hesba</span></a>
+    <button class="menu-trigger" type="button" data-drawer-open aria-controls="dashboard-drawer" aria-expanded="false" aria-label="{{ t.open_menu }}"><svg class="dashboard-icon"><use href="#dashboard-icon-menu"></use></svg></button>
+  </header>
+  <main class="dashboard-main" aria-label="{{ t.main_label }}">
+    <section class="hero-panel dashboard-card" aria-labelledby="dashboard-hero-title">
+      <img class="dashboard-wave" src="{% static 'hesba/dashboard/assets/dashboard_wave_primary.svg' %}" alt="" aria-hidden="true">
+      <div class="live-status" aria-label="{{ t.live_status }}"><span class="live-dot" aria-hidden="true"></span><strong>{{ t.live }}</strong><small>{{ t.last_updated }} <span data-dashboard-last-updated>{{ formatted_time }}</span></small></div>
+      <div class="hero-copy"><p class="hero-kicker">{{ t.greeting }}</p><h1 id="dashboard-hero-title">{{ t.hero_title }}</h1><p>{{ t.hero_subtitle_prefix }} <strong>{{ t.hero_growth }}</strong> {{ t.hero_subtitle_suffix }}</p><span class="sample-badge">{{ t.sample_badge }}</span></div>
+      <div class="hero-metrics">{% for metric in hero_metrics %}<article class="metric-card hero-metric {{ metric.variant }}"><span class="icon-bubble" aria-hidden="true"><svg class="dashboard-icon"><use href="#dashboard-icon-{{ metric.icon }}"></use></svg></span><span class="metric-copy"><small>{{ metric.label }}</small><strong>{{ metric.value }}</strong><em>{{ metric.note }}</em></span></article>{% endfor %}</div>
+      <div class="hero-refresh-strip"><span><svg class="dashboard-icon"><use href="#dashboard-icon-calendar"></use></svg>{{ formatted_date }}</span><span class="dot-separator" aria-hidden="true"></span><strong data-dashboard-clock>{{ formatted_time }}</strong><button type="button" data-refresh-dashboard><svg class="dashboard-icon"><use href="#dashboard-icon-refresh"></use></svg>{{ t.auto_refresh }}</button></div>
+    </section>
+    <section class="kpi-strip" aria-label="{{ t.kpi_label }}">{% for kpi in kpis %}<article class="metric-card kpi-card {{ kpi.variant }}"><span class="icon-bubble" aria-hidden="true"><svg class="dashboard-icon"><use href="#dashboard-icon-{{ kpi.icon }}"></use></svg></span><span class="metric-copy"><small>{{ kpi.label }}</small><strong>{{ kpi.value }}</strong><em>{{ kpi.note }}</em></span></article>{% endfor %}</section>
+    <section class="quick-actions dashboard-card" aria-labelledby="quick-actions-title"><div class="section-title-row"><h2 id="quick-actions-title">{{ t.quick_actions }}</h2><a href="{{ reports_url }}">{{ t.show_all }}</a></div><div class="quick-action-grid">{% for action in quick_actions %}<a class="quick-action" href="{{ action.url }}" aria-label="{{ action.label }}"><span class="icon-bubble" aria-hidden="true"><svg class="dashboard-icon"><use href="#dashboard-icon-{{ action.icon }}"></use></svg></span><strong>{{ action.label }}</strong></a>{% endfor %}</div></section>
+    <section class="analytics-grid" aria-label="{{ t.analytics }}">
+      <article class="dashboard-card chart-panel line-panel"><div class="section-title-row compact"><h2>{{ t.sales_last_7_days }}</h2><span class="live-pill">{{ t.live }}</span></div><div class="chart-summary"><small>{{ t.total_sales }}</small><strong>{{ chart_total }}</strong><em>{{ t.safe_sample }}</em></div><svg class="line-chart" data-line-chart viewBox="0 0 360 190" role="img" aria-label="{{ t.sales_last_7_days }}"></svg><p class="chart-refresh"><svg class="dashboard-icon"><use href="#dashboard-icon-refresh"></use></svg>{{ t.refresh_note }}</p></article>
+      <article class="dashboard-card chart-panel donut-panel"><div class="section-title-row compact"><h2>{{ t.sales_by_category }}</h2><span class="live-pill">{{ t.live }}</span></div><div class="donut-layout"><div class="donut-chart" data-donut-chart aria-label="{{ t.sales_by_category }}"><span>{{ chart_total }}<small>{{ activity_currency }}</small></span></div><ul class="donut-legend">{% for category in categories %}<li><span class="legend-dot dot-{{ forloop.counter }}"></span><strong>{{ category.label }}</strong><em>{{ category.percent }}</em></li>{% endfor %}</ul></div></article>
+      <article class="dashboard-card chart-panel bar-panel"><div class="section-title-row compact"><h2>{{ t.monthly_sales }}</h2><span class="muted-pill">{{ t.auto }}</span></div><div class="bar-chart" data-bar-chart aria-label="{{ t.monthly_sales }}"></div></article>
+      <article class="dashboard-card recent-panel" aria-labelledby="recent-title"><div class="section-title-row compact"><h2 id="recent-title">{{ t.recent_operations }}</h2><a href="{{ status_url }}">{{ t.show_all }}</a></div><div class="recent-list">{% for operation in recent_operations %}<a class="recent-row" href="{{ operation.url }}"><span class="icon-bubble {{ operation.variant }}" aria-hidden="true"><svg class="dashboard-icon"><use href="#dashboard-icon-{{ operation.icon }}"></use></svg></span><span><strong>{{ operation.code }}</strong><small>{{ operation.label }}</small></span><em>{{ operation.time }}</em></a>{% endfor %}</div></article>
+    </section>
+    <section class="insights-section dashboard-card" aria-labelledby="insights-title"><div class="section-title-row"><h2 id="insights-title">{{ t.smart_insights }}</h2><a href="{{ report_hub_url }}">{{ t.show_all }}</a></div><div class="insight-grid">{% for insight in insights %}<article class="insight-card {{ insight.variant }}"><span class="icon-bubble" aria-hidden="true"><svg class="dashboard-icon"><use href="#dashboard-icon-{{ insight.icon }}"></use></svg></span><strong>{{ insight.title }}</strong><small>{{ insight.note }}</small><a href="{{ insight.url }}">{{ insight.link_label }}</a></article>{% endfor %}</div></section>
+  </main>
+</div>
+<nav class="mobile-bottom-nav" aria-label="{{ t.bottom_nav }}"><a href="#dashboard-drawer" data-drawer-open><svg class="dashboard-icon"><use href="#dashboard-icon-menu"></use></svg><span>{{ t.more }}</span></a><a href="{{ reports_url }}"><svg class="dashboard-icon"><use href="#dashboard-icon-reports"></use></svg><span>{{ t.reports }}</span></a><a class="mobile-fab" href="{{ primary_action_url }}"><svg class="dashboard-icon"><use href="#dashboard-icon-add"></use></svg><span>{{ t.new_action }}</span></a><a href="{{ customers_url }}"><svg class="dashboard-icon"><use href="#dashboard-icon-customers"></use></svg><span>{{ t.customers }}</span></a><a class="is-active" href="{{ dashboard_url }}"><svg class="dashboard-icon"><use href="#dashboard-icon-sales-today"></use></svg><span>{{ t.home }}</span></a></nav>
+<div class="drawer-backdrop" data-drawer-close hidden></div>
+<aside class="dashboard-drawer" id="dashboard-drawer" aria-hidden="true" aria-label="{{ t.drawer_label }}"><header><a class="drawer-logo" href="{{ dashboard_url }}"><img src="{% static 'hesba/setup_gate/assets/setup_gate_logo_approved.png' %}" alt="Hesba" onerror="this.hidden=true"></a><button type="button" data-drawer-close aria-label="{{ t.close_menu }}">×</button></header><section class="drawer-profile"><span class="profile-avatar" aria-hidden="true">{{ user_initial }}</span><strong>{{ user_display_name }}</strong><small>{{ user_role_label }} · {{ t.read_only }}</small></section><nav class="drawer-nav">{% for item in drawer_items %}<a href="{{ item.url }}"><svg class="dashboard-icon"><use href="#dashboard-icon-{{ item.icon }}"></use></svg><span>{{ item.label }}</span></a>{% endfor %}</nav><section class="drawer-language"><strong>{{ t.language }}</strong><div class="language-switch in-drawer"><a class="lang-option {% if lang == 'en' %}is-active{% endif %}" href="{{ english_url }}">EN</a><a class="lang-option {% if lang == 'ar' %}is-active{% endif %}" href="{{ arabic_url }}">عربي</a></div></section></aside>
+<section class="dashboard-contract-notes" aria-label="Implementation safety notes"><h2>{{ checkpoint_code }}</h2><p>Dashboard Snapshot قراءة فقط</p><p>KPIs آمنة لاحقًا</p><p>حالة المخزون</p><p>حالة الخزن</p><p>Status</p><p>الربح والتكلفة محميين لحين صلاحيات حقيقية. No accounting write, no migration, no sales/purchases/inventory/cashbox mutation.</p></section>
+<script src="{% static 'hesba/js/dashboard_120d.js' %}?v=120d-approved-pack" defer></script>
+</body>
+</html>
