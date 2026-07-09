@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 420" fill="none" aria-hidden="true">
+  <defs>
+    <linearGradient id="waveA" x1="0" x2="1200" y1="210" y2="210" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#15BDC7" stop-opacity="0.2"/>
+      <stop offset="0.48" stop-color="#15BDC7" stop-opacity="0.38"/>
+      <stop offset="1" stop-color="#15BDC7" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="waveB" x1="0" x2="1200" y1="210" y2="210" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#063A78" stop-opacity="0.05"/>
+      <stop offset="0.55" stop-color="#15BDC7" stop-opacity="0.24"/>
+      <stop offset="1" stop-color="#15BDC7" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <path d="M0 138C154 30 304 68 471 151C628 229 739 250 903 173C1018 119 1104 105 1200 132" stroke="url(#waveA)" stroke-width="2"/>
+  <path d="M0 164C175 56 320 86 492 169C648 244 760 264 924 187C1042 131 1118 132 1200 158" stroke="url(#waveA)" stroke-width="1.6"/>
+  <path d="M0 189C178 82 336 100 514 186C667 260 787 279 951 200C1063 146 1128 159 1200 184" stroke="url(#waveB)" stroke-width="1.4"/>
+  <path d="M0 214C186 111 350 117 536 204C691 276 809 293 977 214C1081 165 1136 184 1200 210" stroke="url(#waveB)" stroke-width="1.2"/>
+  <path d="M0 238C188 139 365 138 558 221C715 289 832 305 1004 228C1094 188 1146 210 1200 236" stroke="url(#waveA)" stroke-width="1"/>
+  <path d="M0 262C204 160 384 159 586 238C746 301 860 317 1035 242C1115 208 1154 234 1200 260" stroke="url(#waveB)" stroke-width="1"/>
+  <path d="M0 286C221 184 402 181 612 255C774 312 893 329 1068 258C1131 232 1164 258 1200 284" stroke="url(#waveA)" stroke-width="0.8"/>
+  <circle cx="95" cy="102" r="3" fill="#15BDC7" fill-opacity=".26"/>
+  <circle cx="262" cy="74" r="2" fill="#15BDC7" fill-opacity=".24"/>
+  <circle cx="420" cy="114" r="2.5" fill="#15BDC7" fill-opacity=".20"/>
+  <circle cx="553" cy="90" r="2" fill="#15BDC7" fill-opacity=".18"/>
+</svg>
