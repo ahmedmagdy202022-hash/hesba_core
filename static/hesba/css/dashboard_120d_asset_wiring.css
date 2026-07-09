@@ -1,0 +1,24 @@
+/* 120D asset wiring only: approved runtime assets are primary; gradients are fallback layers. */
+body.dashboard-page{
+  background-color:#f4fcfd;
+  background-image:url("../dashboard/backgrounds/dashboard_web_base_background.png"),radial-gradient(circle at 14% 12%,rgba(19,188,194,.16),transparent 32%),radial-gradient(circle at 88% 30%,rgba(46,123,220,.08),transparent 28%),linear-gradient(180deg,#fff 0%,#f4fcfd 100%);
+  background-position:center top,center top,center top,center top;
+  background-size:cover,cover,cover,cover;
+  background-repeat:no-repeat,no-repeat,no-repeat,no-repeat;
+  background-attachment:fixed,fixed,fixed,fixed;
+}
+.dashboard-wave{content:url("../dashboard/waves/dashboard_wave_primary.svg")}
+.dashboard-logo img,.drawer-logo img{content:url("../dashboard/brand/hesba_logo_horizontal.png")}
+@media (max-width:1279px) and (min-width:900px){
+  body.dashboard-page{
+    background-image:url("../dashboard/backgrounds/dashboard_tablet_landscape_base_background.png"),radial-gradient(circle at 14% 12%,rgba(19,188,194,.16),transparent 32%),radial-gradient(circle at 88% 30%,rgba(46,123,220,.08),transparent 28%),linear-gradient(180deg,#fff 0%,#f4fcfd 100%);
+    background-attachment:scroll,scroll,scroll,scroll;
+  }
+}
+@media (max-width:899px){
+  body.dashboard-page{
+    background-image:url("../dashboard/backgrounds/dashboard_mobile_base_background.png"),radial-gradient(circle at 14% 12%,rgba(19,188,194,.16),transparent 32%),radial-gradient(circle at 88% 30%,rgba(46,123,220,.08),transparent 28%),linear-gradient(180deg,#fff 0%,#f4fcfd 100%);
+    background-attachment:scroll,scroll,scroll,scroll;
+    background-position:center top,center top,center top,center top;
+  }
+}
