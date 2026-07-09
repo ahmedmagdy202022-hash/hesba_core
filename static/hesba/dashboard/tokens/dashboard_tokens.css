@@ -1,0 +1,54 @@
+/* 120D Dashboard UI tokens — review pack v1 */
+:root {
+  --hesba-navy: #06275A;
+  --hesba-navy-2: #0B3A76;
+  --hesba-teal: #07B8BD;
+  --hesba-teal-deep: #018A93;
+  --hesba-blue: #246EE9;
+  --hesba-green: #12B84A;
+  --hesba-orange: #FF9F1C;
+  --hesba-red: #FF3F5F;
+  --hesba-purple: #7457FF;
+
+  --dashboard-bg-start: #F8FCFF;
+  --dashboard-bg-mid: #FFFFFF;
+  --dashboard-bg-end: #F5FBFD;
+
+  --card-bg: rgba(255, 255, 255, 0.84);
+  --card-border: rgba(6, 39, 90, 0.10);
+  --card-shadow: 0 14px 34px rgba(6, 39, 90, 0.08);
+  --card-shadow-soft: 0 8px 22px rgba(6, 39, 90, 0.07);
+
+  --radius-xl: 28px;
+  --radius-lg: 22px;
+  --radius-md: 18px;
+  --radius-sm: 14px;
+
+  --space-2xs: 4px;
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 16px;
+  --space-lg: 22px;
+  --space-xl: 32px;
+
+  --font-title: clamp(1.8rem, 3vw, 3rem);
+  --font-card-value: clamp(1.15rem, 1.4vw, 1.6rem);
+}
+
+.dashboard-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--card-shadow);
+  backdrop-filter: blur(20px);
+}
+
+.dashboard-icon-bubble {
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: var(--hesba-teal-deep);
+  background: rgba(7, 184, 189, 0.12);
+}

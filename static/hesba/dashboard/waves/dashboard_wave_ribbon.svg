@@ -1,0 +1,22 @@
+<svg width="1440" height="260" viewBox="0 0 1440 260" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="ribbonA" x1="0" y1="210" x2="1440" y2="70" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#08BCC4" stop-opacity="0.30"/>
+      <stop offset="0.55" stop-color="#08BCC4" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#06275A" stop-opacity="0.04"/>
+    </linearGradient>
+    <linearGradient id="ribbonB" x1="0" y1="230" x2="1440" y2="90" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#08BCC4" stop-opacity="0.44"/>
+      <stop offset="0.58" stop-color="#08BCC4" stop-opacity="0.20"/>
+      <stop offset="1" stop-color="#06275A" stop-opacity="0.05"/>
+    </linearGradient>
+  </defs>
+  <path d="M0 168 C178 117 260 235 430 196 C608 155 675 77 846 118 C1007 157 1135 102 1440 128 V260 H0 V168Z" fill="url(#ribbonA)"/>
+  <path d="M0 205 C176 151 280 230 444 210 C627 188 684 112 870 142 C1038 170 1171 138 1440 95 V260 H0 V205Z" fill="url(#ribbonB)"/>
+  <g stroke="#08BCC4" stroke-opacity="0.22" stroke-width="0.9">
+    <path d="M0 150 C210 90 292 213 483 180 C656 150 720 90 888 114 C1070 140 1190 116 1440 72"/>
+    <path d="M0 162 C210 102 292 225 483 192 C656 162 720 102 888 126 C1070 152 1190 128 1440 84"/>
+    <path d="M0 174 C210 114 292 237 483 204 C656 174 720 114 888 138 C1070 164 1190 140 1440 96"/>
+    <path d="M0 186 C210 126 292 249 483 216 C656 186 720 126 888 150 C1070 176 1190 152 1440 108"/>
+  </g>
+</svg>
