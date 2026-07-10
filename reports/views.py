@@ -116,62 +116,49 @@ def home(request):
 
 
 def dashboard_snapshot(request):
-    """Read-only dashboard snapshot for the first user-facing dashboard step.
+    """Render the static, read-only 120D Header Gate preview only."""
 
-    This checkpoint is static and permission-safe. It does not query operational
-    data yet, so it can render before migrations or seed data are applied in a
-    fresh Codespace.
-    """
-
-    sections = [
-        {
-            "title": "١) حالة دورة العمل",
-            "description": "الدورة الأساسية جاهزة كمسار واحد قابل للتوسع.",
-            "items": [
-                {"label": "الدورة الكاملة", "url": reverse("report_hub"), "note": "مورد → شراء → مخزون → بيع → عميل → خزنة → تقارير"},
-                {"label": "حالة الإدخال", "url": reverse("home"), "note": "Admin مؤقتًا حتى شاشة Transaction آمنة"},
-            ],
+    lang = "en" if request.GET.get("lang") == "en" else "ar"
+    strings = {
+        "ar": {
+            "dashboard_dir": "rtl",
+            "page_title": "لوحة التحكم - حِسْبَة",
+            "header_label": "رأس لوحة التحكم",
+            "account_label": "حساب المستخدم",
+            "notifications_label": "الإشعارات",
+            "language_label": "اللغة",
+            "datetime_label": "التاريخ والوقت",
+            "brand_label": "حِسْبَة",
+            "menu_label": "القائمة",
+            "user_name_web": "أحمد العتيبي",
+            "user_name_compact": "أحمد القيسي",
+            "user_role": "المالك",
+            "date_text": "31 مايو 2025",
+            "time_text": "10:45 ص",
         },
-        {
-            "title": "٢) KPIs آمنة لاحقًا",
-            "description": "تجهيز أماكن الأرقام بدون عرض ربح أو تكلفة قبل الصلاحيات.",
-            "items": [
-                {"label": "عدد الموردين", "url": reverse("status_counts_report"), "note": "قراءة فقط"},
-                {"label": "عدد العملاء", "url": reverse("status_counts_report"), "note": "قراءة فقط"},
-                {"label": "حالة المخزون", "url": reverse("status_counts_report"), "note": "حسب الصنف والموقع"},
-                {"label": "حالة الخزن", "url": reverse("status_counts_report"), "note": "بالمدفوع فعليًا فقط"},
-            ],
+        "en": {
+            "dashboard_dir": "ltr",
+            "page_title": "Dashboard - Hesba",
+            "header_label": "Dashboard header",
+            "account_label": "User account",
+            "notifications_label": "Notifications",
+            "language_label": "Language",
+            "datetime_label": "Date and time",
+            "brand_label": "Hesba",
+            "menu_label": "Menu",
+            "user_name_web": "Ahmed Al-Otaibi",
+            "user_name_compact": "Ahmed Al-Qaisi",
+            "user_role": "Owner",
+            "date_text": "May 31, 2025",
+            "time_text": "10:45 AM",
         },
-        {
-            "title": "٣) حماية الأرقام الحساسة",
-            "description": "التكلفة والربح لا يظهروا قبل صلاحيات حقيقية.",
-            "items": [
-                {"label": "الربح", "url": reverse("report_hub"), "note": "Owner فقط لاحقًا"},
-                {"label": "التكلفة", "url": reverse("report_hub"), "note": "محمية من Cashier"},
-            ],
-        },
-        {
-            "title": "٤) الخطوة الجاية",
-            "description": "ربط أرقام قراءة فقط بعد ثبات reports/views والمايجريشن.",
-            "items": [
-                {"label": "تقارير Read-only", "url": reverse("report_hub"), "note": "قبل أي شاشة إدخال جديدة"},
-                {"label": "تقرير Status", "url": reverse("status_counts_report"), "note": "أعداد فعلية غير حساسة"},
-            ],
-        },
-    ]
-
-    context = _shared_template_context()
-    context.update(
-        {
-            "checkpoint_code": DASHBOARD_CHECKPOINT_CODE,
-            "page_title": "Dashboard Snapshot قراءة فقط",
-            "page_description": "أول لقطة داشبورد آمنة قبل ربط الأرقام الحقيقية. الهدف تثبيت شكل الملخص من غير إدخال أو تعديل بيانات.",
-            "sections": sections,
-            "footer_note": "هذه الشاشة Read-only Snapshot فقط. الربح والتكلفة وأي بيانات مالية حساسة ستظهر بعد صلاحيات حقيقية.",
-        }
-    )
-    return render(request, "reports/home.html", context)
-
+    }
+    context = {
+        "dashboard_lang": lang,
+        "checkpoint_code": DASHBOARD_CHECKPOINT_CODE,
+        **strings[lang],
+    }
+    return render(request, "dashboard/header_gate.html", context)
 
 def report_hub(request):
     """Read-only report hub.
@@ -229,3 +216,4 @@ def report_hub(request):
         }
     )
     return render(request, "reports/home.html", context)
+

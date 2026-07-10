@@ -1,0 +1,7 @@
+:root{
+ --hesba-navy:#062c63; --hesba-navy-2:#0b3d78; --hesba-teal:#18b8be; --hesba-cyan:#77dfe3;
+ --hesba-green:#11b96b; --hesba-orange:#f59e0b; --hesba-red:#ff4d67; --hesba-blue:#2f80ed; --hesba-purple:#7a5af8;
+ --hesba-text:#062c63; --hesba-muted:#6d83a1; --hesba-border:#dce7ef; --hesba-surface:rgba(255,255,255,.96);
+ --hesba-shadow:0 8px 24px rgba(6,44,99,.07); --hesba-radius-xl:24px; --hesba-radius-lg:18px; --hesba-radius-md:14px;
+ --hesba-font-ar:"Cairo","Noto Sans Arabic",sans-serif; --hesba-font-en:"Inter","Noto Sans",sans-serif;
+}

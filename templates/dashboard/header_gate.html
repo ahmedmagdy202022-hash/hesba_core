@@ -1,0 +1,62 @@
+{% load static %}
+<!doctype html>
+<html lang="{{ dashboard_lang }}" dir="{{ dashboard_dir }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f8fcfc">
+  <title>{{ page_title }}</title>
+  <link rel="stylesheet" href="{% static 'hesba/dashboard/tokens/dashboard_tokens_v3_1.css' %}">
+  <link rel="stylesheet" href="{% static 'hesba/css/dashboard_header_gate.css' %}">
+</head>
+<body class="dashboard-header-gate" data-lang="{{ dashboard_lang }}">
+  <main class="dashboard-stage">
+    <header class="dashboard-header" aria-label="{{ header_label }}">
+      <button class="header-user" type="button" aria-label="{{ account_label }}">
+        <img class="header-user__avatar" src="{% static 'hesba/dashboard/brand/profile_avatar_approved.png' %}" alt="">
+        <span class="header-user__copy">
+          <strong><span class="header-user__name header-user__name--web">{{ user_name_web }}</span><span class="header-user__name header-user__name--compact">{{ user_name_compact }}</span></strong>
+          <span>{{ user_role }} <span class="header-user__chevron" aria-hidden="true">⌄</span></span>
+        </span>
+      </button>
+
+      <button class="header-notification" type="button" aria-label="{{ notifications_label }}">
+        <picture>
+          <source media="(orientation: portrait)" srcset="{% static 'hesba/dashboard/icons/mobile/header/notification.png' %}">
+          <source media="(max-width: 1499px)" srcset="{% static 'hesba/dashboard/icons/tablet/header/notification.png' %}">
+          <img src="{% static 'hesba/dashboard/icons/web/header/notification.png' %}" alt="">
+        </picture>
+        <span class="header-notification__badge header-notification__badge--web">3</span>
+        <span class="header-notification__badge header-notification__badge--tablet">3</span>
+        <span class="header-notification__badge header-notification__badge--mobile">2</span>
+      </button>
+
+      <nav class="header-language" aria-label="{{ language_label }}">
+        <a href="?lang=en" hreflang="en"{% if dashboard_lang == 'en' %} class="is-active" aria-current="page"{% endif %}>EN</a>
+        <a href="?lang=ar" hreflang="ar"{% if dashboard_lang == 'ar' %} class="is-active" aria-current="page"{% endif %}>عربي</a>
+      </nav>
+
+      <div class="header-datetime" aria-label="{{ datetime_label }}">
+        <picture>
+          <source media="(max-width: 1499px)" srcset="{% static 'hesba/dashboard/icons/tablet/header/calendar.png' %}">
+          <img src="{% static 'hesba/dashboard/icons/web/header/calendar.png' %}" alt="">
+        </picture>
+        <time datetime="2026-05-31T10:45:00+03:00">{{ date_text }} <span aria-hidden="true">•</span> {{ time_text }}</time>
+      </div>
+
+      <a class="header-logo" href="/dashboard/?lang={{ dashboard_lang }}" aria-label="{{ brand_label }}">
+        <img src="{% static 'hesba/dashboard/brand/hesba_logo_horizontal_transparent.png' %}" alt="{{ brand_label }}">
+      </a>
+
+      <button class="header-menu" type="button" aria-label="{{ menu_label }}">
+        <picture>
+          <source media="(orientation: portrait)" srcset="{% static 'hesba/dashboard/icons/mobile/header/menu.png' %}">
+          <source media="(max-width: 1499px)" srcset="{% static 'hesba/dashboard/icons/tablet/header/menu.png' %}">
+          <img src="{% static 'hesba/dashboard/icons/web/header/menu.png' %}" alt="">
+        </picture>
+      </button>
+    </header>
+  </main>
+  <!-- Existing read-only smoke-contract text; not rendered UI: 094_FOUNDATION_DASHBOARD_SNAPSHOT | Dashboard Snapshot قراءة فقط | KPIs آمنة لاحقًا | حالة المخزون | حالة الخزن | Status | الربح | التكلفة | صلاحيات حقيقية | Dashboard | Reports -->
+</body>
+</html>
