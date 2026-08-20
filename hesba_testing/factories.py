@@ -15,11 +15,12 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 
+from accounts.models import UserProfile
 from cashboxes.models import Cashbox, CashboxDirection, CashboxMovement, CashboxMovementType
 from inventory.models import StockMovement, StockMovementType
 from inventory.services import recalculate_item_average_cost
 from master_data.models import Customer, Item, Location, Supplier
-from permissions.models import Permission, Role, RolePermission
+from permissions.models import Permission, Role, RoleCode, RolePermission
 from purchases.models import PurchaseInvoice, PurchaseInvoiceStatus, PurchaseLine
 from sales.models import SalesInvoice, SalesInvoiceStatus, SalesLine, SalesPaymentStatus, money_round
 
@@ -33,6 +34,34 @@ def make_user(username="service_tester", **kwargs):
         password="service-tests-only",
         **kwargs,
     )
+
+
+def make_user_profile(user=None, role=None, **kwargs):
+    """Link a user to a Hesba role.
+
+    ``permissions.user_has_permission`` reads a user's rights through this row,
+    so a user without one holds no permissions at all no matter which role
+    exists. Tests that exercise gated views need the link, not just the user.
+    """
+
+    defaults = {
+        "user": user if user is not None else make_user(),
+        "role": role,
+        "active": True,
+    }
+    defaults.update(kwargs)
+    return UserProfile.objects.create(**defaults)
+
+
+def make_seeded_role(code=RoleCode.OWNER):
+    """Fetch one of the roles the permission seed migration created.
+
+    Prefer this over ``make_role`` when the test cares about real permissions:
+    the seeded roles carry the permission matrix, while ``make_role`` builds an
+    empty role with a code outside ``RoleCode``.
+    """
+
+    return Role.objects.get(code=code)
 
 
 def make_location(location_code="MAIN", **kwargs):
