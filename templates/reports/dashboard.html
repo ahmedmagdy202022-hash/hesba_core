@@ -4,7 +4,7 @@
 {% block body_class %}dashboard-page{% endblock %}
 
 {% block styles %}
-<link rel="stylesheet" href="{% static 'hesba/css/dashboard.css' %}?v=120d-dashboard-mock">
+<link rel="stylesheet" href="{% static 'hesba/css/dashboard.css' %}?v=120f-live-data">
 {% endblock %}
 
 {% block content %}
@@ -48,22 +48,20 @@
 
     <main class="dash-main">
 
-      {% if is_mock %}
-        <p class="dash-mock-notice" role="note">{{ mock_notice }}</p>
-      {% endif %}
-
       <section class="dash-hero" aria-label="{{ health_title }}">
         <div class="dash-hero__copy">
           <p class="dash-greeting">{{ greeting }}{% if display_name %}{{ name_separator }}{{ display_name }}{% endif %}</p>
-          <p class="dash-hero__note">{{ health_note }}</p>
+          {% if show_health %}<p class="dash-hero__note">{{ health_note }}</p>{% endif %}
           {% if client_name %}<p class="dash-hero__client">{{ client_name }}</p>{% endif %}
         </div>
-        <div class="dash-health" role="img" aria-label="{{ health_title }} {{ health_score }}%">
-          <div class="dash-health__ring" style="--score: {{ health_score }}">
-            <span class="dash-health__value">{{ health_score }}<small>%</small></span>
+        {% if show_health %}
+          <div class="dash-health" role="img" aria-label="{{ health_title }} {{ health_score }}%">
+            <div class="dash-health__ring" style="--score: {{ health_score }}">
+              <span class="dash-health__value">{{ health_score }}<small>%</small></span>
+            </div>
+            <span class="dash-health__label">{{ health_title }}</span>
           </div>
-          <span class="dash-health__label">{{ health_title }}</span>
-        </div>
+        {% endif %}
       </section>
 
       <section class="dash-section" aria-label="{{ kpi_title }}">
@@ -73,10 +71,9 @@
             {% for card in cards %}
               <article class="dash-kpi{% if card.sensitive %} is-sensitive{% endif %}" data-kpi="{{ card.key }}" data-scope="{{ card.scope }}">
                 <span class="dash-kpi__label">{{ card.label }}</span>
-                <span class="dash-kpi__value">
-                  {{ card.value }}{% if not card.is_count and not card.is_level %}<small class="dash-kpi__unit">EGP</small>{% endif %}
+                <span class="dash-kpi__value{% if card.is_zero %} is-zero{% endif %}">
+                  {{ card.value }}{% if card.is_money %}<small class="dash-kpi__unit">EGP</small>{% endif %}
                 </span>
-                {% if card.trend %}<span class="dash-kpi__trend">{{ card.trend }}</span>{% endif %}
               </article>
             {% endfor %}
           </div>
@@ -123,7 +120,11 @@
           <p class="dash-empty-note">{{ onboarding_note }}</p>
           <ol class="dash-steps">
             {% for step in onboarding_steps %}
-              <li class="dash-step"><span class="dash-step__index">{{ forloop.counter }}</span>{{ step }}</li>
+              <li class="dash-step{% if step.done %} is-done{% endif %}">
+                <span class="dash-step__index" aria-hidden="true">{% if step.done %}&#10003;{% else %}{{ forloop.counter }}{% endif %}</span>
+                <span class="dash-step__label">{{ step.label }}</span>
+                {% if step.done %}<span class="dash-step__state">{{ step_done }}</span>{% endif %}
+              </li>
             {% endfor %}
           </ol>
         </section>

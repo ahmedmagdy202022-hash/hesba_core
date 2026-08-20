@@ -1,9 +1,12 @@
 """The daily dashboard.
 
-This is the mock stage docs/120A asks for: the layout and the role-aware
-structure are real, the figures are not. Every card here is chosen by the same
-permission resolver the wired version will use, so replacing MOCK_VALUES with
-calls into reports.selectors is the only change the next stage needs.
+Every figure comes from reports.selectors, which docs/dashboard_kpis.md
+requires: "Dashboard cards must read from report logic only." Which cards
+appear is decided by permission, so the per-role sets in that document fall out
+of the seeded matrix rather than being restated here.
+
+Run seed_demo_business to fill a local database with enough trade for this
+screen to look like a working business.
 """
 
 from django.shortcuts import render
@@ -14,45 +17,26 @@ from permissions.decorators import permitted_codes
 from settings_core.models import ClientProfile
 from settings_core.setup_services import usable_modules
 
+from .dashboard_data import (
+    DashboardFigures,
+    SharedReads,
+    build_alerts,
+    has_any_business_data,
+    health_band,
+    health_score,
+    onboarding_progress,
+)
 from .dashboard_kpis import (
     ALL_KPI_PERMISSIONS,
     COUNT,
+    CURRENCY,
     LEVEL,
     SCOPE_OWN,
     visible_kpis,
 )
 
 
-CHECKPOINT_CODE = "120D_DASHBOARD_MOCK"
-
-#: Placeholder figures. Replaced by reports.selectors in the wiring stage; the
-#: keys are the contract between the two.
-MOCK_VALUES = {
-    "sales_today": "4,820",
-    "invoice_count_today": "17",
-    "purchases_today": "2,150",
-    "profit_today": "1,340",
-    "cashbox_balance": "18,600",
-    "customer_dues": "9,480",
-    "supplier_dues": "6,200",
-    "receipts_today": "3,100",
-    "supplier_payments_today": "1,800",
-    "low_stock_count": "6",
-    "out_of_stock_count": "2",
-    "usage_status": "green",
-}
-
-MOCK_OWN_VALUES = {
-    "sales_today": "1,260",
-    "invoice_count_today": "5",
-}
-
-MOCK_TRENDS = {
-    "sales_today": "+12%",
-    "purchases_today": "-4%",
-    "profit_today": "+8%",
-    "customer_dues": "+3%",
-}
+CHECKPOINT_CODE = "120F_DASHBOARD_LIVE_DATA"
 
 USAGE_LEVEL_LABELS = {
     "green": {"ar": "طبيعي", "en": "Normal"},
@@ -92,17 +76,6 @@ QUICK_ACTIONS = (
     {"key": "close_day", "ar": "إقفال اليوم", "en": "Close the day", "primary": True, "module": None},
 )
 
-MOCK_ALERTS = (
-    {"key": "stock_below_min", "severity": "urgent", "ar": "٣ أصناف تحت الحد الأدنى", "en": "3 items below minimum",
-     "detail_ar": "راجع الأصناف قبل نفاذها.", "detail_en": "Review before they run out.", "amount": ""},
-    {"key": "customer_overdue", "severity": "urgent", "ar": "عميل متأخر في السداد", "en": "Customer payment overdue",
-     "detail_ar": "مديونية متجاوزة الحد المسموح.", "detail_en": "Balance above the agreed limit.", "amount": "2,400"},
-    {"key": "customer_due_soon", "severity": "soon", "ar": "دفعة عميل مستحقة قريبًا", "en": "Customer payment due soon",
-     "detail_ar": "خلال ٣ أيام.", "detail_en": "Within 3 days.", "amount": "900"},
-    {"key": "cashbox_low", "severity": "watch", "ar": "رصيد خزنة منخفض", "en": "Cashbox balance is low",
-     "detail_ar": "الخزنة الفرعية تحت الحد المعتاد.", "detail_en": "Below its usual level.", "amount": "180"},
-)
-
 ONBOARDING_STEPS = (
     {"ar": "أضف خزنة", "en": "Add a cashbox"},
     {"ar": "أضف عميل أو مورد", "en": "Add a customer or supplier"},
@@ -119,15 +92,14 @@ STRINGS = {
         "menu": "القائمة",
         "notifications": "التنبيهات",
         "health_title": "مؤشر النشاط",
-        "health_note": "نشاطك مستقر",
         "kpi_title": "أرقام اليوم",
         "alerts_title": "محتاج انتباهك",
         "alerts_empty": "لا توجد تنبيهات تحتاج متابعة.",
         "actions_title": "ابدأ من هنا",
         "onboarding_title": "ابدأ تشغيل حِسْبَة في ٤ خطوات",
-        "onboarding_note": "لا توجد بيانات بعد. اتبع الخطوات لبدء التشغيل.",
+        "onboarding_note": "اتبع الخطوات لبدء تشغيل نشاطك على حِسْبَة.",
         "no_cards": "لا توجد أرقام متاحة لصلاحياتك الحالية.",
-        "mock_notice": "أرقام هذه الشاشة تجريبية للمراجعة البصرية فقط.",
+        "step_done": "تم",
         "severity_urgent": "عاجل",
         "severity_soon": "قريبًا",
         "severity_watch": "للمتابعة",
@@ -140,15 +112,14 @@ STRINGS = {
         "menu": "Menu",
         "notifications": "Notifications",
         "health_title": "Business health",
-        "health_note": "Your business is steady",
         "kpi_title": "Today's numbers",
         "alerts_title": "Needs your attention",
         "alerts_empty": "Nothing needs following up.",
         "actions_title": "Start here",
         "onboarding_title": "Start using Hesba in 4 steps",
-        "onboarding_note": "No data yet. Follow the steps to get going.",
+        "onboarding_note": "Follow these steps to get your business running on Hesba.",
         "no_cards": "No figures are available for your permissions.",
-        "mock_notice": "The figures on this screen are placeholders for visual review.",
+        "step_done": "Done",
         "severity_urgent": "Urgent",
         "severity_soon": "Soon",
         "severity_watch": "Follow up",
@@ -188,28 +159,32 @@ def _display_name(user):
     return user.get_short_name() or user.get_username()
 
 
-def _build_cards(user, lang):
-    held = permitted_codes(user, ALL_KPI_PERMISSIONS)
+def _format_value(kpi, raw, lang):
+    if kpi.unit == LEVEL:
+        return USAGE_LEVEL_LABELS.get(raw, {}).get(lang, str(raw))
+    if kpi.unit == COUNT:
+        return f"{int(raw):,}"
+    return f"{raw:,.0f}"
+
+
+def _build_cards(user, lang, held, figures):
     cards = []
 
     for kpi, scope in visible_kpis(held):
-        if scope == SCOPE_OWN and kpi.key in MOCK_OWN_VALUES:
-            value = MOCK_OWN_VALUES[kpi.key]
-        else:
-            value = MOCK_VALUES.get(kpi.key, "0")
-
-        if kpi.unit == LEVEL:
-            value = USAGE_LEVEL_LABELS.get(value, {}).get(lang, value)
-
+        raw = figures.value_for(kpi.key, scope)
         cards.append(
             {
                 "key": kpi.key,
                 "label": kpi.label(lang, scope),
-                "value": value,
+                "value": _format_value(kpi, raw, lang),
+                "raw": raw,
                 "unit": kpi.unit,
                 "is_count": kpi.unit == COUNT,
                 "is_level": kpi.unit == LEVEL,
-                "trend": MOCK_TRENDS.get(kpi.key, ""),
+                "is_money": kpi.unit == CURRENCY,
+                # A currency card reading zero is worth saying out loud rather
+                # than leaving the owner to wonder whether it failed to load.
+                "is_zero": kpi.unit != LEVEL and raw == 0,
                 "scope": scope,
                 "sensitive": kpi.sensitive,
             }
@@ -235,7 +210,7 @@ def _quick_actions(lang, modules):
     return actions
 
 
-def _alerts(lang, strings):
+def _alerts(lang, strings, held, today, shared):
     return [
         {
             "key": alert["key"],
@@ -245,7 +220,17 @@ def _alerts(lang, strings):
             "detail": alert["detail_en"] if lang == "en" else alert["detail_ar"],
             "amount": alert["amount"],
         }
-        for alert in MOCK_ALERTS
+        for alert in build_alerts(held, today, shared)
+    ]
+
+
+def _onboarding(lang):
+    """The four starting steps, with the ones already done marked off."""
+
+    done = onboarding_progress()
+    return [
+        {"label": step[lang], "done": is_done}
+        for step, is_done in zip(ONBOARDING_STEPS, done)
     ]
 
 
@@ -261,16 +246,25 @@ def dashboard(request):
     lang = _lang(request)
     strings = STRINGS[lang]
     now = timezone.localtime()
+    today = now.date()
     profile = ClientProfile.get_active()
     modules = set(usable_modules())
 
-    cards = _build_cards(request.user, lang)
+    held = permitted_codes(request.user, ALL_KPI_PERMISSIONS)
+    # One shared read set for the cards, the alerts and the score, so the three
+    # do not each re-run the same stock and party queries.
+    shared = SharedReads()
+    figures = DashboardFigures(request.user, today, shared)
+    cards = _build_cards(request.user, lang, held, figures)
+
+    health = health_score(today, held, shared)
+    band_key, band_words = health_band(health["score"])
+    has_data = has_any_business_data()
 
     context = {
         "checkpoint_code": CHECKPOINT_CODE,
         "lang": lang,
         "dir": "ltr" if lang == "en" else "rtl",
-        "is_mock": True,
         "greeting": _greeting(lang, now),
         "display_name": _display_name(request.user),
         "name_separator": ", " if lang == "en" else "، ",
@@ -278,15 +272,20 @@ def dashboard(request):
         "now_parts": _formatted_now(lang, now),
         "client_name": profile.display_name if profile is not None else "",
         "activity_slug": profile.activity_slug if profile is not None else "",
-        "health_score": 82,
+        "health_score": health["score"],
+        "health_band": band_key,
+        "show_health": health["available"],
+        "health_note": band_words[lang],
+        "health_reasons": health["reasons"],
         "nav_items": _nav(lang, modules),
         "cards": cards,
-        "alerts": _alerts(lang, strings),
+        "alerts": _alerts(lang, strings, held, today, shared),
         "quick_actions": _quick_actions(lang, modules),
-        "onboarding_steps": [step[lang] for step in ONBOARDING_STEPS],
-        # A mock always has figures, so onboarding only shows when the viewer can
-        # see no cards at all. The wired version decides this from real counts.
-        "show_onboarding": not cards,
+        "onboarding_steps": _onboarding(lang),
+        # Guide someone whose installation has seen no trade yet, and anyone who
+        # can see nothing at all. A working business does not need the steps.
+        "show_onboarding": not has_data or not cards,
+        "has_business_data": has_data,
         **strings,
     }
     return render(request, "reports/dashboard.html", context)
