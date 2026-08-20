@@ -242,28 +242,76 @@ class CompletePeriodClosingTests(TestCase):
         with self.assertRaises(ValidationError):
             complete_period_closing(period.pk)
 
-    def test_reclosing_a_reopened_period_currently_fails(self):
-        """KNOWN DEFECT: reopening then closing again always crashes.
-
-        PeriodSummary's unique constraint is on (period, summary_code) even
-        though each row also carries closing_run, so a second run cannot write
-        its summaries and the whole closing rolls back. Both _next_run_number()
-        and reopen_period() exist to support re-closing, so the constraint
-        contradicts the intended design rather than enforcing it.
-
-        This test documents today's behaviour. Invert it when the constraint is
-        fixed to include closing_run.
-        """
+    def test_reclosing_a_reopened_period_creates_a_second_run(self):
         period = make_period()
         complete_period_closing(period.pk)
         reopen_period(period.pk, reason="late invoice")
 
-        with self.assertRaises(IntegrityError):
-            complete_period_closing(period.pk)
+        run = complete_period_closing(period.pk)
 
+        self.assertEqual(run.run_number, 2)
+        self.assertEqual(ClosingRun.objects.count(), 2)
         period.refresh_from_db()
-        self.assertEqual(period.status, PeriodStatus.REOPENED)
-        self.assertEqual(ClosingRun.objects.count(), 1)
+        self.assertEqual(period.status, PeriodStatus.CLOSED)
+
+    def test_each_run_keeps_its_own_summaries(self):
+        period = make_period()
+        first = complete_period_closing(period.pk)
+        reopen_period(period.pk, reason="late invoice")
+        second = complete_period_closing(period.pk)
+
+        self.assertEqual(
+            PeriodSummary.objects.filter(closing_run=first).count(), len(SUMMARY_CODES)
+        )
+        self.assertEqual(
+            PeriodSummary.objects.filter(closing_run=second).count(), len(SUMMARY_CODES)
+        )
+        self.assertEqual(
+            PeriodSummary.objects.filter(period=period).count(), len(SUMMARY_CODES) * 2
+        )
+
+    def test_an_earlier_runs_summaries_are_not_overwritten(self):
+        period = make_period()
+        first = complete_period_closing(period.pk)
+        invoice, _, _, _ = posted_invoice_ready()
+        post_sales_invoice(invoice.pk)
+        reopen_period(period.pk, reason="late invoice")
+        second = complete_period_closing(period.pk)
+
+        def sales_total(run):
+            return PeriodSummary.objects.get(
+                closing_run=run, summary_code="sales_total"
+            ).amount
+
+        self.assertEqual(sales_total(first), Decimal("0"))
+        self.assertEqual(sales_total(second), Decimal("60.00"))
+
+    def test_a_summary_code_is_still_unique_within_one_run(self):
+        period = make_period()
+        run = complete_period_closing(period.pk)
+
+        with self.assertRaises(IntegrityError):
+            PeriodSummary.objects.create(
+                period=period,
+                closing_run=run,
+                summary_code="sales_total",
+                summary_name="Duplicate",
+            )
+
+    def test_a_period_can_be_closed_and_reopened_repeatedly(self):
+        period = make_period()
+
+        for expected_run in (1, 2, 3):
+            if expected_run > 1:
+                reopen_period(period.pk, reason=f"correction {expected_run}")
+            run = complete_period_closing(period.pk)
+
+            self.assertEqual(run.run_number, expected_run)
+
+        self.assertEqual(ClosingRun.objects.count(), 3)
+        self.assertEqual(
+            PeriodSummary.objects.filter(period=period).count(), len(SUMMARY_CODES) * 3
+        )
 
     def test_closing_writes_an_audit_log(self):
         period = make_period()
