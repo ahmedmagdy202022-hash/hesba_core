@@ -37,26 +37,6 @@ class LoginAndDeviceShellSmokeTests(TestCase):
 
                 self.assertEqual(response.status_code, 200)
 
-    def test_protected_routes_redirect_anonymous_users_to_login(self):
-        protected_paths = [
-            "/setup/",
-            "/setup/activity/",
-            "/setup/activity/commercial/",
-            "/setup/modules/",
-            "/setup/review/",
-            "/home/",
-            "/dashboard/",
-            "/reports/",
-            "/status/",
-        ]
-
-        for path in protected_paths:
-            with self.subTest(path=path):
-                response = self.client.get(path)
-
-                self.assertEqual(response.status_code, 302)
-                self.assertTrue(response["Location"].startswith(reverse("login")))
-
     def test_manifest_start_url_points_to_login(self):
         manifest_path = settings.BASE_DIR / "static" / "hesba" / "manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))

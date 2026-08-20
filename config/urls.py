@@ -1,11 +1,12 @@
 from urllib.parse import quote
 
+from django.conf import settings
 from django.contrib import admin as django_admin
 from django.contrib.auth.decorators import login_not_required
 from django.contrib.auth.views import LoginView, LogoutView
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.urls import path
-from django.views.generic import RedirectView, TemplateView
+from django.views.generic import TemplateView
 
 from reports.status_views import status_counts_report
 from reports.views import dashboard_snapshot, home, report_hub
@@ -206,12 +207,16 @@ def setup_complete_placeholder(request):
     return render(request, "setup/setup_complete_placeholder.html", context)
 
 
+@login_not_required
+def root_redirect(request):
+    if request.user.is_authenticated:
+        return redirect(settings.LOGIN_REDIRECT_URL)
+
+    return redirect("login")
+
+
 urlpatterns = [
-    path(
-        "",
-        login_not_required(RedirectView.as_view(pattern_name="login", permanent=False)),
-        name="root_redirect",
-    ),
+    path("", root_redirect, name="root_redirect"),
     path("login/", LoginView.as_view(template_name="registration/login.html", next_page="/setup/"), name="login"),
     path("logout/", LogoutView.as_view(next_page="login"), name="logout"),
     path("setup/", TemplateView.as_view(template_name="setup/setup_gate.html"), name="setup_gate"),
