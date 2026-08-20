@@ -244,3 +244,8 @@
     font-size:10.5px;
   }
 }
+
+/* The review step submits its choices instead of linking onward. The wrapping
+   form must not become a flex item itself, or it would break the locked
+   activity-footer layout in both its row and column modes. */
+.review-setup-page .activity-next-form{display:contents}

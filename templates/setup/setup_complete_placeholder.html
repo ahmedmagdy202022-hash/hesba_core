@@ -46,12 +46,16 @@
         <p class="activity-subtitle" data-i18n="subtitle">{{ subtitle }}</p>
       </div>
 
-      <section class="review-card complete-card" aria-label="Safe setup completion placeholder">
+      <section class="review-card complete-card" aria-label="Setup completion summary">
         <h2 class="review-card__title" data-i18n="title">{{ title }}</h2>
         <p class="review-note" data-i18n="message">{{ message }}</p>
       </section>
 
-      <footer class="activity-footer" aria-label="Complete placeholder navigation">
+      <footer class="activity-footer" aria-label="Complete navigation">
+        <a class="activity-action activity-next" href="{{ dashboard_url }}" data-dashboard-link>
+          <span data-i18n="next">{{ next }}</span>
+          <span class="activity-action__circle" aria-hidden="true">←</span>
+        </a>
         <a class="activity-action activity-back complete-back" href="{{ review_href }}" data-back-link>
           <span data-i18n="back">{{ back }}</span>
           <span class="activity-action__plain" aria-hidden="true">‹</span>
@@ -76,9 +80,10 @@
       stepModules: 'الموديولات',
       stepReview: 'المراجعة',
       title: 'تم إنهاء الإعداد',
-      subtitle: 'هذه صفحة مؤقتة آمنة فقط لمسار إنهاء الإعداد.',
-      message: 'لم يتم تفعيل أي إعدادات إنتاجية أو حفظ أي قرار نهائي في قاعدة البيانات.',
+      subtitle: 'تم حفظ إعدادات نشاطك، وحِسْبَة جاهزة للعمل.',
+      message: 'تم تسجيل النشاط والموديولات المختارة. يمكنك تعديلها لاحقًا من الإعدادات بدون حذف أي بيانات.',
       back: 'الرجوع إلى المراجعة',
+      next: 'الانتقال إلى لوحة القيادة',
       changeLanguage: 'تغيير اللغة'
     },
     en: {
@@ -90,9 +95,10 @@
       stepModules: 'Modules',
       stepReview: 'Review',
       title: 'Setup complete',
-      subtitle: 'This is a safe placeholder only for the setup completion route.',
-      message: 'No production setup activation or final database decision has been saved.',
+      subtitle: 'Your activity settings are saved and Hesba is ready to use.',
+      message: 'Your activity and selected modules are recorded. You can adjust them later from Settings without deleting any data.',
       back: 'Back to review',
+      next: 'Go to the dashboard',
       changeLanguage: 'Change language'
     }
   };
