@@ -1,0 +1,56 @@
+{% load static %}{% comment %}
+Shell for the signed-in application screens.
+
+Every template before this one carried its own <head>, so a change to the header
+or the language switch had to be repeated in each. Screens added from here
+extend this instead.
+
+Note that the stylesheets key off body[data-lang], not [dir]: setting direction
+alone leaves a page unstyled, so the language script below stamps both and must
+not be dropped.
+{% endcomment %}<!doctype html>
+<html lang="{{ lang|default:'ar' }}" dir="{{ dir|default:'rtl' }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{{ page_title }}{% endblock %}</title>
+<link rel="icon" href="{% static 'hesba/icons/hesba-icon.svg' %}">
+{% block styles %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}" data-lang="{{ lang|default:'ar' }}">
+{% block content %}{% endblock %}
+
+<script>
+(function(){
+  var stored = localStorage.getItem('hesba_lang');
+  var params = new URLSearchParams(window.location.search);
+  var requested = params.get('lang');
+  var lang = requested === 'en' ? 'en' : (requested === 'ar' ? 'ar' : (stored === 'en' ? 'en' : 'ar'));
+
+  // The server already rendered one language. Only reload when the remembered
+  // choice disagrees, so the usual case costs nothing.
+  if (!requested && lang !== document.body.dataset.lang) {
+    params.set('lang', lang);
+    window.location.replace(window.location.pathname + '?' + params.toString());
+    return;
+  }
+
+  localStorage.setItem('hesba_lang', lang);
+  document.documentElement.lang = lang;
+  document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+  document.body.dataset.lang = lang;
+
+  document.querySelectorAll('[data-lang-toggle]').forEach(function(button){
+    button.addEventListener('click', function(){
+      var next = lang === 'ar' ? 'en' : 'ar';
+      localStorage.setItem('hesba_lang', next);
+      var url = new URLSearchParams(window.location.search);
+      url.set('lang', next);
+      window.location.assign(window.location.pathname + '?' + url.toString());
+    });
+  });
+})();
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

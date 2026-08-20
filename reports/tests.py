@@ -144,23 +144,8 @@ class FirstUiNavigationMapTests(AuthenticatedTestCase):
         self.assertContains(response, "الخزن تتحرك بالمبلغ المدفوع فعليًا فقط")
         self.assertContains(response, "التقارير قراءة فقط")
 
-    def test_dashboard_snapshot_page_renders_read_only_checkpoint(self):
-        response = self.client.get(reverse("dashboard_snapshot"))
-
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "094_FOUNDATION_DASHBOARD_SNAPSHOT")
-        self.assertContains(response, "Dashboard Snapshot قراءة فقط")
-        self.assertContains(response, "KPIs آمنة لاحقًا")
-        self.assertContains(response, "حالة المخزون")
-        self.assertContains(response, "حالة الخزن")
-        self.assertContains(response, "Status")
-
-    def test_dashboard_snapshot_keeps_sensitive_finance_protected(self):
-        response = self.client.get(reverse("dashboard_snapshot"))
-
-        self.assertContains(response, "الربح")
-        self.assertContains(response, "التكلفة")
-        self.assertContains(response, "صلاحيات حقيقية")
+    # The dashboard is its own screen now rather than another copy of this
+    # navigation map, so it is covered in reports.tests_dashboard.
 
     def test_report_hub_renders_read_only_report_map(self):
         response = self.client.get(reverse("report_hub"))
@@ -213,8 +198,11 @@ class FirstUiNavigationMapTests(AuthenticatedTestCase):
         self.assertContains(response, "No profit")
 
     def test_shared_top_navigation_separates_dashboard_reports_and_status(self):
-        for url_name in ["home", "dashboard_snapshot", "report_hub", "status_counts_report"]:
-            response = self.client.get(reverse(url_name))
-            self.assertContains(response, "Dashboard")
-            self.assertContains(response, "Reports")
-            self.assertContains(response, "Status")
+        # The dashboard carries the Hesba shell and its own Arabic navigation, so
+        # it is excluded here and covered in reports.tests_dashboard.
+        for url_name in ["home", "report_hub", "status_counts_report"]:
+            with self.subTest(route=url_name):
+                response = self.client.get(reverse(url_name))
+                self.assertContains(response, "Dashboard")
+                self.assertContains(response, "Reports")
+                self.assertContains(response, "Status")

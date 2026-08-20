@@ -3,7 +3,6 @@ from django.urls import reverse
 
 
 CHECKPOINT_CODE = "093_FOUNDATION_FIRST_UI_NAVIGATION_MAP"
-DASHBOARD_CHECKPOINT_CODE = "094_FOUNDATION_DASHBOARD_SNAPSHOT"
 REPORTS_CHECKPOINT_CODE = "096_FOUNDATION_READ_ONLY_REPORT_HUB"
 
 
@@ -110,64 +109,6 @@ def home(request):
             "page_description": "شاشة بسيطة وآمنة للتنقل داخل حِسْبَة. الهدف منها ترتيب دورة العمل قبل بناء شاشات الإدخال الحقيقية، بدون تغيير أي منطق داتا أو حسابات مالية.",
             "sections": sections,
             "footer_note": "هذه الشاشة Navigation Map فقط. الإدخال الفعلي ما زال من Admin لحد ما نثبت أول شاشة Transaction آمنة.",
-        }
-    )
-    return render(request, "reports/home.html", context)
-
-
-def dashboard_snapshot(request):
-    """Read-only dashboard snapshot for the first user-facing dashboard step.
-
-    This checkpoint is static and permission-safe. It does not query operational
-    data yet, so it can render before migrations or seed data are applied in a
-    fresh Codespace.
-    """
-
-    sections = [
-        {
-            "title": "١) حالة دورة العمل",
-            "description": "الدورة الأساسية جاهزة كمسار واحد قابل للتوسع.",
-            "items": [
-                {"label": "الدورة الكاملة", "url": reverse("report_hub"), "note": "مورد → شراء → مخزون → بيع → عميل → خزنة → تقارير"},
-                {"label": "حالة الإدخال", "url": reverse("home"), "note": "Admin مؤقتًا حتى شاشة Transaction آمنة"},
-            ],
-        },
-        {
-            "title": "٢) KPIs آمنة لاحقًا",
-            "description": "تجهيز أماكن الأرقام بدون عرض ربح أو تكلفة قبل الصلاحيات.",
-            "items": [
-                {"label": "عدد الموردين", "url": reverse("status_counts_report"), "note": "قراءة فقط"},
-                {"label": "عدد العملاء", "url": reverse("status_counts_report"), "note": "قراءة فقط"},
-                {"label": "حالة المخزون", "url": reverse("status_counts_report"), "note": "حسب الصنف والموقع"},
-                {"label": "حالة الخزن", "url": reverse("status_counts_report"), "note": "بالمدفوع فعليًا فقط"},
-            ],
-        },
-        {
-            "title": "٣) حماية الأرقام الحساسة",
-            "description": "التكلفة والربح لا يظهروا قبل صلاحيات حقيقية.",
-            "items": [
-                {"label": "الربح", "url": reverse("report_hub"), "note": "Owner فقط لاحقًا"},
-                {"label": "التكلفة", "url": reverse("report_hub"), "note": "محمية من Cashier"},
-            ],
-        },
-        {
-            "title": "٤) الخطوة الجاية",
-            "description": "ربط أرقام قراءة فقط بعد ثبات reports/views والمايجريشن.",
-            "items": [
-                {"label": "تقارير Read-only", "url": reverse("report_hub"), "note": "قبل أي شاشة إدخال جديدة"},
-                {"label": "تقرير Status", "url": reverse("status_counts_report"), "note": "أعداد فعلية غير حساسة"},
-            ],
-        },
-    ]
-
-    context = _shared_template_context()
-    context.update(
-        {
-            "checkpoint_code": DASHBOARD_CHECKPOINT_CODE,
-            "page_title": "Dashboard Snapshot قراءة فقط",
-            "page_description": "أول لقطة داشبورد آمنة قبل ربط الأرقام الحقيقية. الهدف تثبيت شكل الملخص من غير إدخال أو تعديل بيانات.",
-            "sections": sections,
-            "footer_note": "هذه الشاشة Read-only Snapshot فقط. الربح والتكلفة وأي بيانات مالية حساسة ستظهر بعد صلاحيات حقيقية.",
         }
     )
     return render(request, "reports/home.html", context)
