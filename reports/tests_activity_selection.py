@@ -2,6 +2,8 @@ from django.conf import settings
 from django.test import TestCase
 from django.urls import reverse
 
+from reports.test_utils import AuthenticatedTestCase
+
 
 MODULE_SLUGS = [
     'customers',
@@ -56,7 +58,7 @@ SERVICES_OPTIONAL_MODULES = [
 ]
 
 
-class SetupFlowSmokeTests(TestCase):
+class SetupFlowSmokeTests(AuthenticatedTestCase):
     def test_117a_activity_selection_still_works(self):
         response = self.client.get('/setup/activity/?lang=ar')
 
@@ -134,7 +136,7 @@ class SetupFlowSmokeTests(TestCase):
         self.assertIn('Disabling a module must never delete existing data.', plan)
 
 
-class ModulesSelectionScreenTests(TestCase):
+class ModulesSelectionScreenTests(AuthenticatedTestCase):
     @staticmethod
     def _module_tag(response, slug):
         html = response.content.decode('utf-8')
@@ -318,7 +320,7 @@ class ModulesSelectionScreenTests(TestCase):
         self.assertNotIn('generated background', template.lower())
 
 
-class ReviewSetupScreenTests(TestCase):
+class ReviewSetupScreenTests(AuthenticatedTestCase):
     def test_review_route_renders(self):
         response = self.client.get('/setup/review/?lang=ar&activity=commercial&sub_activity=retail&modules=sales_operations,items_services,cashboxes,reports')
 

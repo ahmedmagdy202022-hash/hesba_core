@@ -1,6 +1,7 @@
 from urllib.parse import quote
 
 from django.contrib import admin as django_admin
+from django.contrib.auth.decorators import login_not_required
 from django.contrib.auth.views import LoginView, LogoutView
 from django.shortcuts import render
 from django.urls import path
@@ -206,7 +207,11 @@ def setup_complete_placeholder(request):
 
 
 urlpatterns = [
-    path("", RedirectView.as_view(pattern_name="login", permanent=False), name="root_redirect"),
+    path(
+        "",
+        login_not_required(RedirectView.as_view(pattern_name="login", permanent=False)),
+        name="root_redirect",
+    ),
     path("login/", LoginView.as_view(template_name="registration/login.html", next_page="/setup/"), name="login"),
     path("logout/", LogoutView.as_view(next_page="login"), name="logout"),
     path("setup/", TemplateView.as_view(template_name="setup/setup_gate.html"), name="setup_gate"),
