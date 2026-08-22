@@ -1,0 +1,150 @@
+{% extends "base_app.html" %}
+{% load static %}
+
+{% block body_class %}dashboard-page{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{% static 'hesba/css/dashboard.css' %}?v=120f-live-data">
+{% endblock %}
+
+{% block content %}
+<div class="dash-shell">
+
+  <header class="dash-header">
+    <div class="dash-header__lead">
+      <button class="dash-icon-button" type="button" data-menu-toggle aria-label="{{ menu }}" aria-expanded="false">
+        <span class="dash-burger" aria-hidden="true"></span>
+      </button>
+      <img class="dash-logo" src="{% static 'hesba/icons/hesba-icon.svg' %}" alt="Hesba">
+      <h1 class="dash-screen-title">{{ screen_title }}</h1>
+    </div>
+
+    <div class="dash-header__trail">
+      <time class="dash-clock" datetime="{{ now|date:'c' }}">
+        <span class="dash-clock__date">{{ now_parts.date }}</span>
+        <span class="dash-clock__time">{{ now_parts.time }}</span>
+      </time>
+      <button class="dash-icon-button" type="button" aria-label="{{ notifications }}">
+        <span class="dash-bell" aria-hidden="true"></span>
+        {% if alerts %}<span class="dash-bell-dot" aria-hidden="true"></span>{% endif %}
+      </button>
+      <button class="dash-pill" type="button" data-lang-toggle>{{ language }}</button>
+      <span class="dash-pill dash-pill--user">{{ display_name }}</span>
+      <form class="dash-logout" method="post" action="{% url 'logout' %}">
+        {% csrf_token %}
+        <button class="dash-pill" type="submit">{{ logout }}</button>
+      </form>
+    </div>
+  </header>
+
+  <div class="dash-body">
+    <nav class="dash-nav" aria-label="{{ screen_title }}" data-nav>
+      <ul>
+        {% for item in nav_items %}
+          <li><a class="dash-nav__link{% if item.key == 'dashboard' %} is-current{% endif %}" href="{% url item.url_name %}?lang={{ lang }}">{{ item.label }}</a></li>
+        {% endfor %}
+      </ul>
+    </nav>
+
+    <main class="dash-main">
+
+      <section class="dash-hero" aria-label="{{ health_title }}">
+        <div class="dash-hero__copy">
+          <p class="dash-greeting">{{ greeting }}{% if display_name %}{{ name_separator }}{{ display_name }}{% endif %}</p>
+          {% if show_health %}<p class="dash-hero__note">{{ health_note }}</p>{% endif %}
+          {% if client_name %}<p class="dash-hero__client">{{ client_name }}</p>{% endif %}
+        </div>
+        {% if show_health %}
+          <div class="dash-health" role="img" aria-label="{{ health_title }} {{ health_score }}%">
+            <div class="dash-health__ring" style="--score: {{ health_score }}">
+              <span class="dash-health__value">{{ health_score }}<small>%</small></span>
+            </div>
+            <span class="dash-health__label">{{ health_title }}</span>
+          </div>
+        {% endif %}
+      </section>
+
+      <section class="dash-section" aria-label="{{ kpi_title }}">
+        <h2 class="dash-section__title">{{ kpi_title }}</h2>
+        {% if cards %}
+          <div class="dash-kpi-grid">
+            {% for card in cards %}
+              <article class="dash-kpi{% if card.sensitive %} is-sensitive{% endif %}" data-kpi="{{ card.key }}" data-scope="{{ card.scope }}">
+                <span class="dash-kpi__label">{{ card.label }}</span>
+                <span class="dash-kpi__value{% if card.is_zero %} is-zero{% endif %}">
+                  {{ card.value }}{% if card.is_money %}<small class="dash-kpi__unit">EGP</small>{% endif %}
+                </span>
+              </article>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="dash-empty-note">{{ no_cards }}</p>
+        {% endif %}
+      </section>
+
+      <div class="dash-split">
+        <section class="dash-section dash-section--alerts" aria-label="{{ alerts_title }}">
+          <h2 class="dash-section__title">{{ alerts_title }}</h2>
+          {% if alerts %}
+            <ul class="dash-alerts">
+              {% for alert in alerts %}
+                <li class="dash-alert is-{{ alert.severity }}" data-alert="{{ alert.key }}">
+                  <span class="dash-alert__badge">{{ alert.severity_label }}</span>
+                  <span class="dash-alert__body">
+                    <span class="dash-alert__title">{{ alert.title }}</span>
+                    <span class="dash-alert__detail">{{ alert.detail }}</span>
+                  </span>
+                  {% if alert.amount %}<span class="dash-alert__amount">{{ alert.amount }}<small>EGP</small></span>{% endif %}
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="dash-empty-note">{{ alerts_empty }}</p>
+          {% endif %}
+        </section>
+
+        <section class="dash-section dash-section--actions" aria-label="{{ actions_title }}">
+          <h2 class="dash-section__title">{{ actions_title }}</h2>
+          <div class="dash-actions">
+            {% for action in quick_actions %}
+              <a class="dash-action{% if action.primary %} is-primary{% endif %}"
+                 href="{% url 'home' %}?lang={{ lang }}" data-action="{{ action.key }}">{{ action.label }}</a>
+            {% endfor %}
+          </div>
+        </section>
+      </div>
+
+      {% if show_onboarding %}
+        <section class="dash-section dash-onboarding" aria-label="{{ onboarding_title }}">
+          <h2 class="dash-section__title">{{ onboarding_title }}</h2>
+          <p class="dash-empty-note">{{ onboarding_note }}</p>
+          <ol class="dash-steps">
+            {% for step in onboarding_steps %}
+              <li class="dash-step{% if step.done %} is-done{% endif %}">
+                <span class="dash-step__index" aria-hidden="true">{% if step.done %}&#10003;{% else %}{{ forloop.counter }}{% endif %}</span>
+                <span class="dash-step__label">{{ step.label }}</span>
+                {% if step.done %}<span class="dash-step__state">{{ step_done }}</span>{% endif %}
+              </li>
+            {% endfor %}
+          </ol>
+        </section>
+      {% endif %}
+
+    </main>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+  var toggle = document.querySelector('[data-menu-toggle]');
+  var nav = document.querySelector('[data-nav]');
+  if(!toggle || !nav){ return; }
+  toggle.addEventListener('click', function(){
+    var open = nav.classList.toggle('is-open');
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+})();
+</script>
+{% endblock %}

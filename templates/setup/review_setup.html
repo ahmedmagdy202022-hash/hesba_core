@@ -79,10 +79,17 @@
       </div>
 
       <footer class="activity-footer" aria-label="Review navigation">
-        <a class="activity-action activity-next" href="{{ complete_href }}" data-next-link>
-          <span data-i18n="next">{{ next }}</span>
-          <span class="activity-action__circle" aria-hidden="true">←</span>
-        </a>
+        <form class="activity-next-form" method="post" action="{{ complete_url }}" data-next-form>
+          {% csrf_token %}
+          <input type="hidden" name="lang" value="{{ lang }}" data-next-lang>
+          <input type="hidden" name="activity" value="{{ activity }}" data-next-activity>
+          <input type="hidden" name="sub_activity" value="{{ sub_activity_slug }}" data-next-sub-activity>
+          <input type="hidden" name="modules" value="{{ modules_param }}" data-next-modules>
+          <button class="activity-action activity-next" type="submit" data-next-button>
+            <span data-i18n="next">{{ next }}</span>
+            <span class="activity-action__circle" aria-hidden="true">←</span>
+          </button>
+        </form>
         <a class="activity-action activity-back" href="{{ back_href }}" data-back-link>
           <span data-i18n="back">{{ back }}</span>
           <span class="activity-action__plain" aria-hidden="true">‹</span>
@@ -202,11 +209,6 @@
     url.searchParams.set('modules', modulesParam);
     return url.pathname + url.search;
   }
-  function completeHref(){
-    var url = new URL('/setup/complete/', window.location.origin);
-    url.searchParams.set('lang', lang);
-    return url.pathname + url.search;
-  }
   function updateSummaryLabels(){
     var activityLabel = document.querySelector('[data-activity-label]');
     var subActivityLabel = document.querySelector('[data-sub-activity-label]');
@@ -219,9 +221,19 @@
   }
   function refreshLinks(){
     var back = document.querySelector('[data-back-link]');
-    var next = document.querySelector('[data-next-link]');
     if(back){back.href = modulesHref();}
-    if(next){next.href = completeHref();}
+    // The next control posts the reviewed choices instead of navigating, so the
+    // recovered values go into its hidden fields rather than into a href.
+    var field = {
+      '[data-next-lang]': lang,
+      '[data-next-activity]': activity,
+      '[data-next-sub-activity]': subActivity,
+      '[data-next-modules]': modulesParam
+    };
+    Object.keys(field).forEach(function(selector){
+      var input = document.querySelector(selector);
+      if(input){input.value = field[selector];}
+    });
   }
   function applyLanguage(nextLang){
     lang = nextLang === 'en' ? 'en' : 'ar';

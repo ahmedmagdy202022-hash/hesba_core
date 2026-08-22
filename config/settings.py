@@ -79,7 +79,9 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
 LOGIN_URL = "/login/"
-LOGIN_REDIRECT_URL = "/setup/"
+# /start/ decides between setup and the dashboard. Pointing straight at either
+# one is what used to trap a finished installation on its own first-run screen.
+LOGIN_REDIRECT_URL = "/start/"
 LOGOUT_REDIRECT_URL = "/login/"
 
 

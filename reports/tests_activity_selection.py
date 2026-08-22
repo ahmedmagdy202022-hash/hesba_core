@@ -400,24 +400,42 @@ class ReviewSetupScreenTests(AuthenticatedTestCase):
             'href="/setup/modules/?lang=en&amp;activity=commercial&amp;sub_activity=retail&amp;modules=sales_operations,items_services,pdf_printing"',
         )
 
-    def test_next_target_goes_to_complete_with_lang(self):
+    def test_next_submits_the_reviewed_choices(self):
+        """The final step posts its answers now, so there is no onward href.
+
+        It used to be a plain link to a placeholder, which is why nothing the
+        wizard collected was ever saved. Setup persistence is covered in
+        reports.tests_setup_persistence.
+        """
+
         english = self.client.get('/setup/review/?lang=en&activity=commercial&sub_activity=retail&modules=sales_operations')
         arabic = self.client.get('/setup/review/?lang=ar&activity=services&sub_activity=general&modules=items_services')
 
-        self.assertContains(english, 'href="/setup/complete/?lang=en"')
-        self.assertContains(arabic, 'href="/setup/complete/?lang=ar"')
+        for response, lang, activity, sub_activity, modules in (
+            (english, 'en', 'commercial', 'retail', 'sales_operations'),
+            (arabic, 'ar', 'services', 'general', 'items_services'),
+        ):
+            self.assertContains(response, 'method="post" action="/setup/complete/"')
+            self.assertContains(response, 'csrfmiddlewaretoken')
+            self.assertContains(response, f'name="lang" value="{lang}"')
+            self.assertContains(response, f'name="activity" value="{activity}"')
+            self.assertContains(response, f'name="sub_activity" value="{sub_activity}"')
+            self.assertContains(response, f'name="modules" value="{modules}"')
+            self.assertNotContains(response, 'href="/setup/complete/')
 
-    def test_complete_placeholder_renders_safely(self):
-        english = self.client.get('/setup/complete/?lang=en')
-        arabic = self.client.get('/setup/complete/?lang=ar')
+    def test_complete_sends_an_unfinished_setup_back_to_review(self):
+        """Nothing saved means nothing to confirm.
 
-        self.assertEqual(english.status_code, 200)
-        self.assertContains(english, 'Setup complete')
-        self.assertContains(english, 'safe placeholder')
-        self.assertContains(english, 'No production setup activation or final database decision has been saved.')
-        self.assertEqual(arabic.status_code, 200)
-        self.assertContains(arabic, 'تم إنهاء الإعداد')
-        self.assertContains(arabic, 'لم يتم تفعيل أي إعدادات إنتاجية أو حفظ أي قرار نهائي في قاعدة البيانات.')
+        The old placeholder rendered a "Setup complete" page regardless, which is
+        how a visitor could believe setup had finished when it had not.
+        """
+
+        for lang in ('en', 'ar'):
+            response = self.client.get(f'/setup/complete/?lang={lang}')
+
+            self.assertEqual(response.status_code, 302)
+            self.assertTrue(response['Location'].startswith('/setup/review/'))
+            self.assertIn(f'lang={lang}', response['Location'])
 
     def test_review_shell_reuses_117a_visual_lock(self):
         template_path = settings.BASE_DIR / 'templates' / 'setup' / 'review_setup.html'
