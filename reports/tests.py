@@ -1,8 +1,11 @@
 import json
 
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+
+from reports.test_utils import AuthenticatedTestCase
 
 
 class LoginAndDeviceShellSmokeTests(TestCase):
@@ -22,6 +25,12 @@ class LoginAndDeviceShellSmokeTests(TestCase):
         self.assertEqual(response["Location"], reverse("login"))
 
     def test_existing_safe_routes_still_return_200(self):
+        user = get_user_model().objects.create_user(
+            username="safe_routes_tester",
+            password="smoke-tests-only",
+        )
+        self.client.force_login(user)
+
         for path in ["/setup/", "/dashboard/", "/reports/", "/status/"]:
             with self.subTest(path=path):
                 response = self.client.get(path)
@@ -35,7 +44,7 @@ class LoginAndDeviceShellSmokeTests(TestCase):
         self.assertEqual(manifest["start_url"], "/login/")
 
 
-class SetupGateWebSmokeTests(TestCase):
+class SetupGateWebSmokeTests(AuthenticatedTestCase):
     def test_setup_gate_route_renders_component_rebuild(self):
         response = self.client.get(reverse("setup_gate"))
 
@@ -100,7 +109,7 @@ class SetupGateWebSmokeTests(TestCase):
         self.assertIn(".step-item:not(:last-child)::after", css)
 
 
-class FirstUiNavigationMapTests(TestCase):
+class FirstUiNavigationMapTests(AuthenticatedTestCase):
     def test_home_page_renders_first_ui_navigation_map(self):
         response = self.client.get(reverse("home"))
 

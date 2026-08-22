@@ -139,7 +139,12 @@ class PeriodSummary(models.Model):
 
     class Meta:
         ordering = ["period", "summary_code"]
-        constraints = [models.UniqueConstraint(fields=["period", "summary_code"], name="unique_period_summary_code")]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["period", "closing_run", "summary_code"],
+                name="unique_period_run_summary_code",
+            )
+        ]
         indexes = [models.Index(fields=["period", "summary_code"])]
         verbose_name = "Period Summary"
         verbose_name_plural = "Period Summaries"
