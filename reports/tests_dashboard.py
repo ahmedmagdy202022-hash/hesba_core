@@ -20,6 +20,7 @@ from hesba_testing.factories import (
 from permissions.models import RoleCode
 from reports import selectors
 from reports.dashboard_data import (
+    DashboardFigures,
     has_any_business_data,
     health_band,
     health_score,
@@ -776,3 +777,52 @@ class SeedDemoBusinessTests(TestCase):
             self.seed()
 
         self.assertFalse(SalesInvoice.objects.exists())
+
+    def test_it_tops_up_today_so_the_demo_does_not_go_flat(self):
+        """Seeded once, the dashboard has to still work tomorrow.
+
+        Without this the balances survive but every "today" card reads zero the
+        next morning, which is the dead-looking dashboard the seed exists to
+        avoid.
+        """
+
+        from datetime import timedelta
+        from unittest import mock
+
+        from django.utils import timezone as tz
+
+        self.seed()
+        self.client.force_login(self.owner)
+        first_day = next(
+            c for c in self.client.get(DASHBOARD).context["cards"] if c["key"] == "sales_today"
+        )["raw"]
+
+        tomorrow = tz.localdate() + timedelta(days=1)
+        with mock.patch("django.utils.timezone.localdate", lambda *a, **k: tomorrow):
+            self.seed()
+            figures = DashboardFigures(self.owner, tomorrow)
+            self.assertEqual(figures.value_for("sales_today", SCOPE_ALL), first_day)
+
+    def test_the_shortages_survive_the_daily_top_up(self):
+        from datetime import timedelta
+        from unittest import mock
+
+        from django.utils import timezone as tz
+
+        self.seed()
+        before = selectors.stock_alert_counts()
+
+        # Resolve the date before patching, or the replacement calls itself.
+        later = tz.localdate() + timedelta(days=3)
+        with mock.patch("django.utils.timezone.localdate", lambda *a, **k: later):
+            self.seed()
+
+        self.assertEqual(selectors.stock_alert_counts(), before)
+        self.assertGreater(before["out_of_stock"], 0)
+
+    def test_a_same_day_rerun_adds_nothing(self):
+        self.seed()
+        before = SalesInvoice.objects.count()
+        self.seed()
+
+        self.assertEqual(SalesInvoice.objects.count(), before)

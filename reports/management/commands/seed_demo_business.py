@@ -90,21 +90,29 @@ class Command(BaseCommand):
         actor = self._resolve_user(options["username"])
         cashier = self._optional_user(options["cashier_username"])
 
-        if SalesInvoice.objects.filter(invoice_number__startswith="DEMO-SI-").exists():
-            # Posted invoices are protected on purpose — every transaction has to
-            # stay traceable, so nothing here deletes one. Start over by removing
-            # the database file and running migrate again.
-            self._say("Demo business already seeded. Delete the database file to start over.")
-            self._summarise()
-            return
-
         today = timezone.localdate()
         master = self._seed_master_data()
-        self._seed_purchases(master, actor, today)
-        self._seed_sales(master, actor, cashier, today)
-        self._seed_payments(master, actor, today)
 
-        self._say(self.style.SUCCESS("Demo business ready."))
+        # The history is written once. Posted invoices are protected on purpose —
+        # every transaction has to stay traceable — so nothing here rewrites or
+        # deletes one.
+        first_run = not SalesInvoice.objects.filter(invoice_number__startswith="DEMO-SI-").exists()
+        if first_run:
+            self._seed_history(master, actor, today)
+
+        # Today's trade is topped up on every run. Without this the demo goes
+        # flat the day after seeding: the balances stay but every "today" card
+        # reads zero, which is exactly the dead-looking dashboard this is meant
+        # to avoid. Each day's batch buys back what it sells, so stock and the
+        # shortage alerts hold steady however many days it runs.
+        added_today = self._seed_today(master, actor, cashier, today)
+
+        if first_run:
+            self._say(self.style.SUCCESS("Demo business ready."))
+        elif added_today:
+            self._say(self.style.SUCCESS(f"Topped up today's trade ({today})."))
+        else:
+            self._say(f"Today ({today}) already has demo trade. Nothing to add.")
         self._summarise()
 
     # ---- helpers ----
@@ -213,22 +221,30 @@ class Command(BaseCommand):
             "cashboxes": cashboxes,
         }
 
-    # ---- purchases ----
+    # ---- history, written once ----
 
-    def _seed_purchases(self, master, actor, today):
-        """Stock the shelves, deliberately unevenly.
+    #: What each day's batch sells, and therefore what it must buy back.
+    #: (suffix, customer index, ((item index, quantity), ...), paid now).
+    #: Item 5 is deliberately absent: the history sells it to nothing and the
+    #: daily batch never restocks it, so the out-of-stock alert has a standing
+    #: cause however many days this runs.
+    DAILY_SALES = (
+        ("A", 1, ((0, 3),), D("500.00")),
+        ("B", 0, ((2, 8),), D("960.00")),
+    )
 
-        Item 5 is bought in a quantity that later sells out completely, and item
-        4 lands just above its minimum, so the shortage alerts have real causes.
+    def _seed_history(self, master, actor, today):
+        """Stock the shelves and trade for a few weeks, deliberately unevenly.
+
+        Item 4 lands just above its minimum so the low-stock alert has a real
+        cause, and one customer is pushed past their credit limit.
         """
 
-        plan = (
+        purchases = (
             ("DEMO-PI-001", today - timedelta(days=20), 0, ((0, 40), (1, 25), (2, 60)), D("6000.00")),
             ("DEMO-PI-002", today - timedelta(days=12), 1, ((3, 6), (4, 12)), D("0.00")),
-            ("DEMO-PI-003", today, 0, ((0, 10), (2, 20)), D("1500.00")),
         )
-
-        for number, invoice_date, supplier_index, lines, paid_now in plan:
+        for number, invoice_date, supplier_index, lines, paid_now in purchases:
             self._post_purchase(
                 number=number,
                 invoice_date=invoice_date,
@@ -239,6 +255,81 @@ class Command(BaseCommand):
                 paid_now=paid_now,
                 actor=actor,
             )
+
+        sales = (
+            ("DEMO-SI-001", today - timedelta(days=15), 0, ((0, 4), (2, 6)), D("1000.00")),
+            ("DEMO-SI-002", today - timedelta(days=8), 3, ((1, 5), (0, 3)), D("500.00")),
+            # Customer 3 has a 1,500 limit; this leaves them well past it so the
+            # over-limit alert has a real subject.
+            ("DEMO-SI-003", today - timedelta(days=4), 2, ((3, 2), (1, 2)), D("0.00")),
+            # Clears item 5 off the shelf for good.
+            ("DEMO-SI-004", today - timedelta(days=2), 1, ((4, 12),), D("500.00")),
+        )
+        for number, invoice_date, customer_index, lines, paid_now in sales:
+            self._post_sale(
+                number=number,
+                invoice_date=invoice_date,
+                customer=master["customers"][customer_index],
+                location=master["location"],
+                cashbox=master["cashboxes"][0],
+                lines=[(master["items"][i], D(qty)) for i, qty in lines],
+                paid_now=paid_now,
+                actor=actor,
+            )
+
+    # ---- today, topped up on every run ----
+
+    def _seed_today(self, master, actor, cashier, today):
+        """Give today its own trade, so the dashboard is never all zeros.
+
+        Returns False when today already has some, which makes a same-day re-run
+        a no-op rather than a duplicate.
+        """
+
+        stamp = today.strftime("%Y%m%d")
+        if SalesInvoice.objects.filter(invoice_number__startswith=f"DEMO-SI-{stamp}-").exists():
+            return False
+
+        # Buy back exactly what today will sell, so running this on many days in
+        # a row neither drains the shelves nor quietly inflates them.
+        restock = {}
+        for _, _, lines, _ in self.DAILY_SALES:
+            for index, quantity in lines:
+                restock[index] = restock.get(index, 0) + quantity
+
+        restock_lines = [(master["items"][i], D(qty)) for i, qty in sorted(restock.items())]
+        # Pay most of it, leaving a little on account. Derived from the lines
+        # rather than fixed, so changing what the day sells cannot push the
+        # remaining balance negative.
+        restock_total = sum((item.default_purchase_price * qty for item, qty in restock_lines), D("0.00"))
+
+        self._post_purchase(
+            number=f"DEMO-PI-{stamp}",
+            invoice_date=today,
+            supplier=master["suppliers"][0],
+            location=master["location"],
+            cashbox=master["cashboxes"][0],
+            lines=restock_lines,
+            paid_now=(restock_total * D("0.6")).quantize(D("0.01")),
+            actor=actor,
+        )
+
+        # One invoice on the cashier and one on the owner, so a cashier's
+        # self-scoped cards differ visibly from the whole day's total.
+        for suffix, customer_index, lines, paid_now in self.DAILY_SALES:
+            self._post_sale(
+                number=f"DEMO-SI-{stamp}-{suffix}",
+                invoice_date=today,
+                customer=master["customers"][customer_index],
+                location=master["location"],
+                cashbox=master["cashboxes"][0],
+                lines=[(master["items"][i], D(qty)) for i, qty in lines],
+                paid_now=paid_now,
+                actor=(cashier or actor) if suffix == "A" else actor,
+            )
+
+        self._seed_payments(master, actor, today, stamp)
+        return True
 
     def _post_purchase(self, number, invoice_date, supplier, location, cashbox, lines, paid_now, actor):
         subtotal = sum((item.default_purchase_price * qty for item, qty in lines), D("0.00"))
@@ -281,35 +372,6 @@ class Command(BaseCommand):
 
     # ---- sales ----
 
-    def _seed_sales(self, master, actor, cashier, today):
-        """Sell across several days, and put some of today's sales on the cashier.
-
-        A cashier's dashboard is scoped to their own invoices, so without an
-        invoice they created their cards would read zero and look broken.
-        """
-
-        plan = (
-            ("DEMO-SI-001", today - timedelta(days=15), 0, ((0, 4), (2, 6)), D("1000.00"), actor),
-            ("DEMO-SI-002", today - timedelta(days=8), 3, ((1, 5), (0, 3)), D("500.00"), actor),
-            # Customer 3 has a 1,500 limit; this leaves them well past it so the
-            # over-limit alert has a real subject.
-            ("DEMO-SI-003", today - timedelta(days=4), 2, ((3, 2), (1, 2)), D("0.00"), actor),
-            ("DEMO-SI-004", today, 1, ((0, 3), (4, 12)), D("900.00"), cashier or actor),
-            ("DEMO-SI-005", today, 0, ((2, 8),), D("960.00"), actor),
-        )
-
-        for number, invoice_date, customer_index, lines, paid_now, creator in plan:
-            self._post_sale(
-                number=number,
-                invoice_date=invoice_date,
-                customer=master["customers"][customer_index],
-                location=master["location"],
-                cashbox=master["cashboxes"][0],
-                lines=[(master["items"][i], D(qty)) for i, qty in lines],
-                paid_now=paid_now,
-                actor=creator,
-            )
-
     def _post_sale(self, number, invoice_date, customer, location, cashbox, lines, paid_now, actor):
         subtotal = sum((item.default_sale_price * qty for item, qty in lines), D("0.00"))
         invoice = SalesInvoice.objects.create(
@@ -351,12 +413,12 @@ class Command(BaseCommand):
 
     # ---- payments ----
 
-    def _seed_payments(self, master, actor, today):
+    def _seed_payments(self, master, actor, today, stamp):
         cashbox = master["cashboxes"][0]
 
         for number, customer, amount in (
-            ("DEMO-CR-001", master["customers"][0], D("600.00")),
-            ("DEMO-CR-002", master["customers"][3], D("1200.00")),
+            (f"DEMO-CR-{stamp}-A", master["customers"][0], D("600.00")),
+            (f"DEMO-CR-{stamp}-B", master["customers"][3], D("1200.00")),
         ):
             record_customer_payment(
                 payment_number=number,
@@ -369,7 +431,7 @@ class Command(BaseCommand):
             )
 
         record_supplier_payment(
-            payment_number="DEMO-SP-001",
+            payment_number=f"DEMO-SP-{stamp}",
             payment_date=today,
             supplier=master["suppliers"][0],
             cashbox=cashbox,
