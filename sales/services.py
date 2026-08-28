@@ -14,8 +14,88 @@ from .models import (
     CustomerPaymentStatus,
     SalesInvoice,
     SalesInvoiceStatus,
+    SalesLine,
     money_round,
 )
+
+
+@transaction.atomic
+def create_sales_draft(header, lines, user=None):
+    """Create a validated sales draft while leaving posting effects untouched."""
+
+    prepared_lines = []
+    subtotal = Decimal("0")
+    for number, data in enumerate(lines, start=1):
+        line_discount = data.get("line_discount_amount") or Decimal("0")
+        line_total = money_round(
+            (data["quantity"] * data["unit_sale_price"]) - line_discount
+        )
+        if line_total < 0:
+            raise ValidationError("A sales line discount cannot exceed its gross amount.")
+        prepared_lines.append((number, data, line_total))
+        subtotal += line_total
+
+    if not prepared_lines:
+        raise ValidationError("Sales invoice must have at least one line.")
+
+    invoice_discount = header.get("discount_amount") or Decimal("0")
+    tax_amount = header.get("tax_amount") or Decimal("0")
+    paid_now = header.get("paid_now") or Decimal("0")
+    total_amount = money_round(subtotal - invoice_discount + tax_amount)
+    if total_amount < 0:
+        raise ValidationError("Invoice discount cannot make the total negative.")
+
+    invoice = SalesInvoice(
+        invoice_number=header["invoice_number"],
+        invoice_date=header["invoice_date"],
+        customer=header["customer"],
+        selling_location=header["selling_location"],
+        cashbox=header.get("cashbox"),
+        subtotal=money_round(subtotal),
+        discount_amount=invoice_discount,
+        tax_amount=tax_amount,
+        total_amount=total_amount,
+        paid_now=paid_now,
+        remaining_due=money_round(total_amount - paid_now),
+        notes=header.get("notes", ""),
+        created_by=user,
+    )
+    invoice.payment_status = invoice.calculate_payment_status()
+    invoice.full_clean()
+    invoice.save()
+
+    for number, data, line_total in prepared_lines:
+        line = SalesLine(
+            invoice=invoice,
+            line_number=number,
+            item=data["item"],
+            description=data.get("description", ""),
+            quantity=data["quantity"],
+            unit_sale_price=data["unit_sale_price"],
+            line_discount_amount=data.get("line_discount_amount") or Decimal("0"),
+            line_total_amount=line_total,
+        )
+        line.full_clean()
+        line.save()
+
+    AuditLog.objects.create(
+        event_type=AuditEventType.CREATE,
+        actor=user,
+        module="sales",
+        action="create_sales_draft",
+        object_type="SalesInvoice",
+        object_id=str(invoice.id),
+        after_data={
+            "invoice_number": invoice.invoice_number,
+            "status": invoice.status,
+            "customer_id": invoice.customer_id,
+            "line_count": len(prepared_lines),
+            "total_amount": str(invoice.total_amount),
+            "paid_now": str(invoice.paid_now),
+            "remaining_due": str(invoice.remaining_due),
+        },
+    )
+    return invoice
 
 
 def _line_unit_cost(line):

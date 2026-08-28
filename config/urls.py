@@ -27,6 +27,7 @@ urlpatterns = [
     path("master-data/", include("master_data.urls")),
     path("purchases/", include("purchases.urls")),
     path("inventory/", include("inventory.urls")),
+    path("sales/", include("sales.urls")),
     path("reports/", report_hub, name="report_hub"),
     path("status/", status_counts_report, name="status_counts_report"),
     path("admin/", django_admin.site.urls),
