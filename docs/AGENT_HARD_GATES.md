@@ -1,0 +1,1 @@
+# Agent Hard Gates\n\nStatus: ACTIVE LOG\n\nRecord only genuine blockers that require a protected business/product decision. Continue all unaffected work.\n
