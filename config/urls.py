@@ -30,6 +30,7 @@ urlpatterns = [
     path("inventory/", include("inventory.urls")),
     path("sales/", include("sales.urls")),
     path("cashboxes/", include("cashboxes.urls")),
+    path("closing/", include("closing.urls")),
     path("reports/", report_hub, name="report_hub"),
     path("reports/", include("reports.urls")),
     path("status/", status_counts_report, name="status_counts_report"),
