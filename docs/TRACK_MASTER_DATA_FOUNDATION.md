@@ -234,23 +234,29 @@ Before implementation of editing behavior, Functional Contracts must decide:
 
 The Agent must not invent accounting semantics.
 
-## 8. Batch Screen Pack
-Prepare one cohesive batch for all six screens.
+## 8. Functional-first screen contract for this phase
 
-For every screen:
-- Web Visual Approved
-- Tablet Landscape Visual Approved
-- Mobile Visual Approved
-- Production Background where needed
-- Assets Pack references
-- Layout Contract
+Current Ahmed decision: finish the operating cycle before final aesthetic design.
+
+For this Track, prepare only what is necessary to make the screens real and reviewable:
 - Functional Contract
+- content hierarchy
+- fields, tables/cards, filters, actions, states
+- Web / Tablet Landscape / Mobile layout behavior
+- Arabic / English behavior
+- simple Hesba-aligned shell using existing approved colors and typography direction
 
-To reduce Ahmed's time:
-- use one shared shell/design system;
-- present the six screens as one approval set;
-- highlight only meaningful screen-specific differences;
-- avoid asking for micro-approval of each spacing/icon choice.
+Deferred until the later Visual Polish Track:
+- custom illustrations
+- decorative backgrounds
+- final icon family
+- advanced visual styling
+- empty-state artwork
+- aesthetic micro-tuning
+
+Do not block functional implementation because a decorative asset is missing. Prefer text labels and simple CSS/components during this phase.
+
+Do not invent a new logo, palette, or generic SaaS identity.
 
 ## 9. Implementation strategy after batch approval
 Use one track branch from `develop`, for example:
