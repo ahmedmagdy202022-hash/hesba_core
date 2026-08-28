@@ -1,0 +1,32 @@
+{% extends "master_data/base.html" %}
+{% block master_content %}
+<section class="md-title-row">
+  <div>
+    <a class="md-back-link" href="{% url 'master_data:list' entity=entity %}?lang={{ lang }}">← {{ words.back }}</a>
+    <h1>{% if editing %}{{ words.edit }}{% else %}{{ words.new }}{% endif %} — {{ singular }}</h1>
+  </div>
+</section>
+
+{% if opening_balance_locked %}
+  <div class="md-notice">{{ words.opening_locked }}</div>
+{% endif %}
+
+<form class="md-form" method="post" novalidate>
+  {% csrf_token %}
+  {% if form.non_field_errors %}<div class="md-form-errors">{{ form.non_field_errors }}</div>{% endif %}
+  <div class="md-form-grid">
+    {% for field in form %}
+      <div class="md-field {% if field.field.widget.input_type == 'checkbox' %}md-check-field{% endif %}">
+        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+        {{ field }}
+        {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+        {% for error in field.errors %}<div class="md-field-error">{{ error }}</div>{% endfor %}
+      </div>
+    {% endfor %}
+  </div>
+  <div class="md-form-actions">
+    <button class="md-primary" type="submit">{{ words.save }}</button>
+    <a class="md-secondary" href="{% url 'master_data:list' entity=entity %}?lang={{ lang }}">{{ words.cancel }}</a>
+  </div>
+</form>
+{% endblock %}

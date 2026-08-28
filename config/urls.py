@@ -1,6 +1,6 @@
 from django.contrib import admin as django_admin
 from django.contrib.auth.views import LoginView, LogoutView
-from django.urls import path
+from django.urls import include, path
 from django.views.generic import TemplateView
 
 from reports.dashboard_views import dashboard
@@ -24,6 +24,7 @@ urlpatterns = [
     path("setup/complete/", setup_complete, name="setup_complete"),
     path("home/", home, name="home"),
     path("dashboard/", dashboard, name="dashboard_snapshot"),
+    path("master-data/", include("master_data.urls")),
     path("reports/", report_hub, name="report_hub"),
     path("status/", status_counts_report, name="status_counts_report"),
     path("admin/", django_admin.site.urls),
