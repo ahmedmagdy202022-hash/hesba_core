@@ -11,7 +11,18 @@ Future Hesba work must continue from the latest accepted engineering baseline wi
 
 Ahmed should not be asked to approve routine technical micro-steps.
 
-Work is organized into complete Tracks. Each Track is planned as one package, visually approved as a package where practical, then implemented/tested end-to-end by the Agent before Ahmed is asked for a merge decision.
+Work is organized into complete Tracks.
+
+Current Main Control decision (Ahmed, 2026-08-28): **finish the operating cycle functionally first, then perform a separate visual/aesthetic pass after screen contents and workflows are clear.**
+
+Therefore the current phase is FUNCTIONAL-FIRST:
+- define real screen contents and behavior;
+- use a clean, simple Hesba-aligned shell;
+- avoid spending time on decorative images, custom icon polish, hero art, or final visual styling;
+- implement and test the complete operating cycle;
+- only after the cycle is visible end-to-end, perform one coherent Visual Polish Track across the product.
+
+Ahmed should see screens for content/workflow decisions, not be interrupted for cosmetic micro-decisions.
 
 ## 2. Current baseline decision
 The latest accepted engineering work is on `develop`, not `main`.
