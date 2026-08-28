@@ -177,8 +177,10 @@ class MasterDataUiTests(TestCase):
             reverse("master_data:list", kwargs={"entity": "suppliers"}),
             {"q": "Beta", "status": "all"},
         )
-        self.assertContains(response, "INACTIVE-X")
-        self.assertNotContains(response, "ACTIVE-X")
+        self.assertEqual(
+            [row["object"].supplier_code for row in response.context["rows"]],
+            ["INACTIVE-X"],
+        )
 
     def test_stable_alias_routes_resolve_for_dashboard_links(self):
         self.login_as(RoleCode.MANAGER, "manager_aliases")
