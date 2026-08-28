@@ -55,10 +55,10 @@ GREETINGS = (
 NAV_ITEMS = (
     {"key": "dashboard", "ar": "لوحة القيادة", "en": "Dashboard", "url_name": "dashboard_snapshot", "module": None},
     {"key": "operations", "ar": "العمليات", "en": "Operations", "url_name": "home", "module": "sales_operations"},
-    {"key": "customers", "ar": "العملاء", "en": "Customers", "url_name": "home", "module": "customers"},
-    {"key": "suppliers", "ar": "الموردون", "en": "Suppliers", "url_name": "home", "module": "suppliers"},
-    {"key": "items", "ar": "الأصناف والخدمات", "en": "Items & services", "url_name": "home", "module": "items_services"},
-    {"key": "cashboxes", "ar": "الخزائن", "en": "Cashboxes", "url_name": "home", "module": "cashboxes"},
+    {"key": "customers", "ar": "العملاء", "en": "Customers", "url_name": "master_data:customers", "module": "customers"},
+    {"key": "suppliers", "ar": "الموردون", "en": "Suppliers", "url_name": "master_data:suppliers", "module": "suppliers"},
+    {"key": "items", "ar": "الأصناف والخدمات", "en": "Items & services", "url_name": "master_data:items", "module": "items_services"},
+    {"key": "cashboxes", "ar": "الخزائن", "en": "Cashboxes", "url_name": "master_data:cashboxes", "module": "cashboxes"},
     {"key": "reports", "ar": "التقارير", "en": "Reports", "url_name": "report_hub", "module": "reports"},
     {"key": "settings", "ar": "الإعدادات", "en": "Settings", "url_name": "status_counts_report", "module": None},
 )
@@ -66,14 +66,14 @@ NAV_ITEMS = (
 # Read-only shortcuts. business_rules.md keeps dashboards read-only, so these
 # navigate and never post.
 QUICK_ACTIONS = (
-    {"key": "record_sale", "ar": "تسجيل عملية", "en": "Record a sale", "primary": False, "module": "sales_operations"},
-    {"key": "new_customer", "ar": "عميل جديد", "en": "New customer", "primary": False, "module": "customers"},
-    {"key": "new_supplier", "ar": "مورد جديد", "en": "New supplier", "primary": False, "module": "suppliers"},
-    {"key": "new_item", "ar": "صنف / خدمة جديدة", "en": "New item or service", "primary": False, "module": "items_services"},
-    {"key": "collect", "ar": "تحصيل من عميل", "en": "Collect from a customer", "primary": False, "module": "customers"},
-    {"key": "pay_supplier", "ar": "سداد لمورد", "en": "Pay a supplier", "primary": False, "module": "suppliers"},
-    {"key": "print_reports", "ar": "طباعة التقارير", "en": "Print reports", "primary": False, "module": "reports"},
-    {"key": "close_day", "ar": "إقفال اليوم", "en": "Close the day", "primary": True, "module": None},
+    {"key": "record_sale", "ar": "تسجيل عملية", "en": "Record a sale", "primary": False, "module": "sales_operations", "url_name": "home"},
+    {"key": "new_customer", "ar": "عميل جديد", "en": "New customer", "primary": False, "module": "customers", "url_name": "master_data:customer_create"},
+    {"key": "new_supplier", "ar": "مورد جديد", "en": "New supplier", "primary": False, "module": "suppliers", "url_name": "master_data:supplier_create"},
+    {"key": "new_item", "ar": "صنف / خدمة جديدة", "en": "New item or service", "primary": False, "module": "items_services", "url_name": "master_data:item_create"},
+    {"key": "collect", "ar": "تحصيل من عميل", "en": "Collect from a customer", "primary": False, "module": "customers", "url_name": "home"},
+    {"key": "pay_supplier", "ar": "سداد لمورد", "en": "Pay a supplier", "primary": False, "module": "suppliers", "url_name": "home"},
+    {"key": "print_reports", "ar": "طباعة التقارير", "en": "Print reports", "primary": False, "module": "reports", "url_name": "report_hub"},
+    {"key": "close_day", "ar": "إقفال اليوم", "en": "Close the day", "primary": True, "module": None, "url_name": "home"},
 )
 
 ONBOARDING_STEPS = (
@@ -206,7 +206,7 @@ def _quick_actions(lang, modules):
     for action in QUICK_ACTIONS:
         if action["module"] is not None and action["module"] not in modules:
             continue
-        actions.append({"key": action["key"], "label": action[lang], "primary": action["primary"]})
+        actions.append({"key": action["key"], "label": action[lang], "primary": action["primary"], "url_name": action["url_name"]})
     return actions
 
 
