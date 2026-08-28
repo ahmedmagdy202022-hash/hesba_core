@@ -14,6 +14,7 @@ from django.utils import timezone, translation
 from django.utils.formats import date_format
 
 from permissions.decorators import permitted_codes
+from permissions.services import user_has_permission
 from settings_core.models import ClientProfile
 from settings_core.setup_services import usable_modules
 
@@ -67,9 +68,9 @@ NAV_ITEMS = (
 # navigate and never post.
 QUICK_ACTIONS = (
     {"key": "record_sale", "ar": "تسجيل عملية", "en": "Record a sale", "primary": False, "module": "sales_operations", "url_name": "home"},
-    {"key": "new_customer", "ar": "عميل جديد", "en": "New customer", "primary": False, "module": "customers", "url_name": "master_data:customer_create"},
-    {"key": "new_supplier", "ar": "مورد جديد", "en": "New supplier", "primary": False, "module": "suppliers", "url_name": "master_data:supplier_create"},
-    {"key": "new_item", "ar": "صنف / خدمة جديدة", "en": "New item or service", "primary": False, "module": "items_services", "url_name": "master_data:item_create"},
+    {"key": "new_customer", "ar": "عميل جديد", "en": "New customer", "primary": False, "module": "customers", "url_name": "master_data:customer_create", "permission": "master_data.manage_parties"},
+    {"key": "new_supplier", "ar": "مورد جديد", "en": "New supplier", "primary": False, "module": "suppliers", "url_name": "master_data:supplier_create", "permission": "master_data.manage_parties"},
+    {"key": "new_item", "ar": "صنف / خدمة جديدة", "en": "New item or service", "primary": False, "module": "items_services", "url_name": "master_data:item_create", "permission": "master_data.manage_items"},
     {"key": "collect", "ar": "تحصيل من عميل", "en": "Collect from a customer", "primary": False, "module": "customers", "url_name": "home"},
     {"key": "pay_supplier", "ar": "سداد لمورد", "en": "Pay a supplier", "primary": False, "module": "suppliers", "url_name": "home"},
     {"key": "print_reports", "ar": "طباعة التقارير", "en": "Print reports", "primary": False, "module": "reports", "url_name": "report_hub"},
@@ -201,10 +202,13 @@ def _nav(lang, modules):
     return items
 
 
-def _quick_actions(lang, modules):
+def _quick_actions(user, lang, modules):
     actions = []
     for action in QUICK_ACTIONS:
         if action["module"] is not None and action["module"] not in modules:
+            continue
+        permission = action.get("permission")
+        if permission and not user_has_permission(user, permission):
             continue
         actions.append({"key": action["key"], "label": action[lang], "primary": action["primary"], "url_name": action["url_name"]})
     return actions
@@ -280,7 +284,7 @@ def dashboard(request):
         "nav_items": _nav(lang, modules),
         "cards": cards,
         "alerts": _alerts(lang, strings, held, today, shared),
-        "quick_actions": _quick_actions(lang, modules),
+        "quick_actions": _quick_actions(request.user, lang, modules),
         "onboarding_steps": _onboarding(lang),
         # Guide someone whose installation has seen no trade yet, and anyone who
         # can see nothing at all. A working business does not need the steps.
