@@ -55,26 +55,31 @@ GREETINGS = (
 
 NAV_ITEMS = (
     {"key": "dashboard", "ar": "لوحة القيادة", "en": "Dashboard", "url_name": "dashboard_snapshot", "module": None},
-    {"key": "operations", "ar": "العمليات", "en": "Operations", "url_name": "home", "module": "sales_operations"},
+    {"key": "operations", "ar": "عمليات البيع", "en": "Sales operations", "url_name": "sales:list", "module": "sales_operations", "permission": "sales.view_sales_invoices"},
+    {"key": "purchases", "ar": "المشتريات", "en": "Purchases", "url_name": "purchases:list", "module": "purchases", "permission": "purchases.view_purchase_invoices"},
+    {"key": "inventory", "ar": "المخزون", "en": "Inventory", "url_name": "inventory:stock", "module": "inventory", "permission": "inventory.view_stock"},
     {"key": "customers", "ar": "العملاء", "en": "Customers", "url_name": "master_data:customers", "module": "customers"},
     {"key": "suppliers", "ar": "الموردون", "en": "Suppliers", "url_name": "master_data:suppliers", "module": "suppliers"},
     {"key": "items", "ar": "الأصناف والخدمات", "en": "Items & services", "url_name": "master_data:items", "module": "items_services"},
-    {"key": "cashboxes", "ar": "الخزائن", "en": "Cashboxes", "url_name": "master_data:cashboxes", "module": "cashboxes"},
+    {"key": "cashboxes", "ar": "الخزائن", "en": "Cashboxes", "url_name": "cashboxes:list", "module": "cashboxes", "permission": "cashboxes.view_cashboxes"},
     {"key": "reports", "ar": "التقارير", "en": "Reports", "url_name": "report_hub", "module": "reports"},
-    {"key": "settings", "ar": "الإعدادات", "en": "Settings", "url_name": "status_counts_report", "module": None},
+    {"key": "closing", "ar": "إقفال الفترات", "en": "Period closing", "url_name": "closing:list", "module": None, "permission": "closing.run_closing"},
+    {"key": "profile", "ar": "ملفي", "en": "My profile", "url_name": "accounts:profile", "module": None},
+    {"key": "settings", "ar": "الإعدادات", "en": "Settings", "url_name": "settings_core:overview", "module": None, "permission": "settings.view_settings"},
 )
 
 # Read-only shortcuts. business_rules.md keeps dashboards read-only, so these
 # navigate and never post.
 QUICK_ACTIONS = (
-    {"key": "record_sale", "ar": "تسجيل عملية", "en": "Record a sale", "primary": False, "module": "sales_operations", "url_name": "home"},
+    {"key": "record_sale", "ar": "تسجيل عملية بيع", "en": "Record a sale", "primary": False, "module": "sales_operations", "url_name": "sales:create", "permission": "sales.create_sales_invoice"},
+    {"key": "record_purchase", "ar": "تسجيل فاتورة شراء", "en": "Record a purchase", "primary": False, "module": "purchases", "url_name": "purchases:create", "permission": "purchases.create_purchase_invoice"},
     {"key": "new_customer", "ar": "عميل جديد", "en": "New customer", "primary": False, "module": "customers", "url_name": "master_data:customer_create", "permission": "master_data.manage_parties"},
     {"key": "new_supplier", "ar": "مورد جديد", "en": "New supplier", "primary": False, "module": "suppliers", "url_name": "master_data:supplier_create", "permission": "master_data.manage_parties"},
     {"key": "new_item", "ar": "صنف / خدمة جديدة", "en": "New item or service", "primary": False, "module": "items_services", "url_name": "master_data:item_create", "permission": "master_data.manage_items"},
-    {"key": "collect", "ar": "تحصيل من عميل", "en": "Collect from a customer", "primary": False, "module": "customers", "url_name": "home"},
-    {"key": "pay_supplier", "ar": "سداد لمورد", "en": "Pay a supplier", "primary": False, "module": "suppliers", "url_name": "home"},
-    {"key": "print_reports", "ar": "طباعة التقارير", "en": "Print reports", "primary": False, "module": "reports", "url_name": "report_hub"},
-    {"key": "close_day", "ar": "إقفال اليوم", "en": "Close the day", "primary": True, "module": None, "url_name": "home"},
+    {"key": "collect", "ar": "تحصيل من عميل", "en": "Collect from a customer", "primary": False, "module": "customers", "url_name": "sales:payment_create", "permission": "sales.receive_customer_payment"},
+    {"key": "pay_supplier", "ar": "سداد لمورد", "en": "Pay a supplier", "primary": False, "module": "suppliers", "url_name": "purchases:payment_create", "permission": "purchases.pay_supplier"},
+    {"key": "open_reports", "ar": "فتح التقارير", "en": "Open reports", "primary": False, "module": "reports", "url_name": "report_hub"},
+    {"key": "close_day", "ar": "إقفال الفترة", "en": "Close a period", "primary": True, "module": None, "url_name": "closing:list", "permission": "closing.run_closing"},
 )
 
 ONBOARDING_STEPS = (
@@ -193,10 +198,13 @@ def _build_cards(user, lang, held, figures):
     return cards
 
 
-def _nav(lang, modules):
+def _nav(user, lang, modules):
     items = []
     for item in NAV_ITEMS:
         if item["module"] is not None and item["module"] not in modules:
+            continue
+        permission = item.get("permission")
+        if permission and not user_has_permission(user, permission):
             continue
         items.append({"key": item["key"], "label": item[lang], "url_name": item["url_name"]})
     return items
@@ -281,7 +289,7 @@ def dashboard(request):
         "show_health": health["available"],
         "health_note": band_words[lang],
         "health_reasons": health["reasons"],
-        "nav_items": _nav(lang, modules),
+        "nav_items": _nav(request.user, lang, modules),
         "cards": cards,
         "alerts": _alerts(lang, strings, held, today, shared),
         "quick_actions": _quick_actions(request.user, lang, modules),
