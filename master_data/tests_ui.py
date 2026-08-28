@@ -180,6 +180,18 @@ class MasterDataUiTests(TestCase):
         self.assertContains(response, "INACTIVE-X")
         self.assertNotContains(response, "ACTIVE-X")
 
+    def test_stable_alias_routes_resolve_for_dashboard_links(self):
+        self.login_as(RoleCode.MANAGER, "manager_aliases")
+        for name in (
+            "master_data:customers",
+            "master_data:suppliers",
+            "master_data:items",
+            "master_data:locations",
+            "master_data:categories",
+        ):
+            response = self.client.get(reverse(name))
+            self.assertEqual(response.status_code, 200, name)
+
     def test_english_labels_render(self):
         self.login_as(RoleCode.MANAGER, "manager_english")
         response = self.client.get(
