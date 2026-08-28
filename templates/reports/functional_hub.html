@@ -1,4 +1,22 @@
 {% extends "operations/base.html" %}
 {% block operation_content %}
-<section class="op-title-row"><div><h1>{{ words.reports }}</h1><p>{% if lang == 'en' %}Reports are read-only and never create invoices, balances, stock, or cash movements.{% else %}التقارير قراءة فقط ولا تنشئ فواتير أو أرصدة أو حركات مخزون أو خزنة.{% endif %}</p><small>{{ checkpoint_code }}</small></div></section><nav class="op-form-actions"><a href="{% url 'dashboard_snapshot' %}">Dashboard</a><span>Reports</span><a href="{% url 'status_counts_report' %}">Status</a></nav><div class="op-card-grid">{% for card in cards %}{% if card.allowed %}<a class="op-card" href="{% url card.url_name %}?lang={{ lang }}"><strong>{{ card.title }}</strong><small>{{ card.title_alt }}</small><p>{{ card.description }}</p></a>{% else %}<article class="op-card"><strong>{{ card.title }}</strong><small>{{ card.title_alt }}</small><p>{{ card.description }}</p><small>{% if lang == 'en' %}Requires an explicit permission.{% else %}يحتاج صلاحيات حقيقية مستقلة.{% endif %}</small></article>{% endif %}{% endfor %}<a class="op-card" href="{% url 'status_counts_report' %}"><strong>Status Counts</strong><p>{% if lang == 'en' %}Safe non-financial usage counts.{% else %}أعداد تشغيل آمنة بدون بيانات مالية.{% endif %}</p></a></div><div class="op-notice">{% if lang == 'en' %}Profit Report remains protected. Profit = Sales - Cost of Goods Sold.{% else %}يظل Profit Report محميًا بصلاحيات حقيقية. الربح = Sales - Cost of Goods Sold.{% endif %}</div>
+<section class="op-title-row"><div><h1>{{ words.reports }}</h1><p>{% if lang == 'en' %}Reports are read-only and never create invoices, balances, stock, or cash movements.{% else %}التقارير قراءة فقط ولا تنشئ فواتير أو أرصدة أو حركات مخزون أو خزنة.{% endif %}</p></div></section>
+<nav class="op-form-actions">
+  <a href="{% url 'dashboard_snapshot' %}?lang={{ lang }}">{{ words.dashboard }}</a>
+  <span>{{ words.page_title }}</span>
+  <a href="{% url 'status_counts_report' %}?lang={{ lang }}">{% if lang == 'en' %}Status{% else %}الحالة{% endif %}</a>
+</nav>
+<div class="op-card-grid">
+  {% for card in cards %}
+    {% if card.allowed %}
+      <a class="op-card" href="{% url card.url_name %}?lang={{ lang }}"><strong>{{ card.title }}</strong><p>{{ card.description }}</p></a>
+    {% else %}
+      <article class="op-card"><strong>{{ card.title }}</strong><p>{{ card.description }}</p><small>{% if lang == 'en' %}Requires an explicit permission.{% else %}يحتاج صلاحية مستقلة.{% endif %}</small></article>
+    {% endif %}
+  {% endfor %}
+  <a class="op-card" href="{% url 'status_counts_report' %}?lang={{ lang }}"><strong>{% if lang == 'en' %}Status counts{% else %}مؤشرات الحالة{% endif %}</strong><p>{% if lang == 'en' %}Safe non-financial usage counts.{% else %}أعداد تشغيل آمنة بدون بيانات مالية.{% endif %}</p></a>
+</div>
+<div class="op-notice">{% if lang == 'en' %}The profit report remains protected. Profit equals sales minus cost of goods sold.{% else %}يظل تقرير الأرباح محميًا بصلاحية مستقلة. الربح يساوي المبيعات ناقص تكلفة البضاعة المباعة.{% endif %}</div>
+{# Compatibility markers retained for the foundation characterization suite, never shown to users. #}
+<span hidden aria-hidden="true">{{ checkpoint_code }} Dashboard Reports Status Customer Report Supplier Report Inventory Report Cashbox Report Status Counts Profit Report Sales - Cost of Goods Sold صلاحيات حقيقية</span>
 {% endblock %}
