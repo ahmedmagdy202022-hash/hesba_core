@@ -1,9 +1,13 @@
+from decimal import Decimal
+
 from django import forms
 from django.forms import BaseFormSet, formset_factory
 from django.utils import timezone
 
 from cashboxes.models import Cashbox
 from master_data.models import Customer, Item, Location
+
+from .models import CustomerPayment
 
 
 SALES_LABELS = {
@@ -114,3 +118,31 @@ SalesLineFormSet = formset_factory(
     validate_max=True,
 )
 
+
+class CustomerPaymentForm(forms.Form):
+    payment_number = forms.CharField(max_length=80)
+    payment_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    customer = forms.ModelChoiceField(queryset=Customer.objects.none())
+    cashbox = forms.ModelChoiceField(queryset=Cashbox.objects.none())
+    amount = forms.DecimalField(max_digits=14, decimal_places=2, min_value=Decimal("0.01"))
+    notes = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}))
+
+    LABELS = {
+        "ar": {"payment_number": "رقم التحصيل", "payment_date": "تاريخ التحصيل", "customer": "العميل", "cashbox": "الخزنة", "amount": "المبلغ", "notes": "ملاحظات"},
+        "en": {"payment_number": "Collection number", "payment_date": "Collection date", "customer": "Customer", "cashbox": "Cashbox", "amount": "Amount", "notes": "Notes"},
+    }
+
+    def __init__(self, *args, lang="ar", **kwargs):
+        super().__init__(*args, **kwargs)
+        for name, field in self.fields.items():
+            field.label = self.LABELS[lang][name]
+        self.fields["customer"].queryset = Customer.objects.filter(active=True)
+        self.fields["cashbox"].queryset = Cashbox.objects.filter(active=True)
+        if not self.is_bound:
+            self.initial.setdefault("payment_date", timezone.localdate())
+
+    def clean_payment_number(self):
+        number = self.cleaned_data["payment_number"]
+        if CustomerPayment.objects.filter(payment_number=number).exists():
+            raise forms.ValidationError("A customer collection with this number already exists.")
+        return number

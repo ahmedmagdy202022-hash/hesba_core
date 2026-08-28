@@ -6,9 +6,15 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from permissions.decorators import require_permission
 
-from .forms import PurchaseDraftForm, PurchaseLineFormSet
-from .models import PurchaseInvoice
-from .services import cancel_posted_purchase_invoice, create_purchase_draft, post_purchase_invoice
+from .forms import PurchaseDraftForm, PurchaseLineFormSet, SupplierPaymentForm
+from .models import PurchaseInvoice, SupplierPayment
+from .services import (
+    cancel_posted_purchase_invoice,
+    cancel_supplier_payment,
+    create_purchase_draft,
+    post_purchase_invoice,
+    record_supplier_payment,
+)
 
 
 STRINGS = {
@@ -29,6 +35,10 @@ STRINGS = {
         "language": "English",
         "dashboard": "لوحة القيادة",
         "all": "كل الحالات",
+        "payments": "مدفوعات الموردين",
+        "new_payment": "سداد جديد لمورد",
+        "payment_saved": "تم تسجيل سداد المورد.",
+        "payment_cancelled": "تم إلغاء سداد المورد وعكس آثاره.",
     },
     "en": {
         "page_title": "Purchases",
@@ -47,6 +57,10 @@ STRINGS = {
         "language": "العربية",
         "dashboard": "Dashboard",
         "all": "All statuses",
+        "payments": "Supplier payments",
+        "new_payment": "New supplier payment",
+        "payment_saved": "Supplier payment recorded.",
+        "payment_cancelled": "Supplier payment cancelled and reversed.",
     },
 }
 
@@ -156,3 +170,75 @@ def invoice_cancel(request, pk):
         messages.success(request, STRINGS[lang]["cancelled"])
     return redirect(f"/purchases/{pk}/?lang={lang}")
 
+
+@require_permission("purchases.pay_supplier")
+def payment_list(request):
+    queryset = SupplierPayment.objects.select_related("supplier", "cashbox", "created_by")
+    query = request.GET.get("q", "").strip()
+    status = request.GET.get("status", "")
+    if query:
+        queryset = queryset.filter(
+            Q(payment_number__icontains=query) | Q(supplier__name__icontains=query)
+        )
+    if status in {"posted", "cancelled"}:
+        queryset = queryset.filter(status=status)
+    else:
+        status = ""
+    lang = _lang(request)
+    page = Paginator(queryset, 25).get_page(request.GET.get("page"))
+    return render(
+        request,
+        "payments/list.html",
+        _context(
+            request,
+            page=page,
+            query=query,
+            status_filter=status,
+            title=STRINGS[lang]["payments"],
+            new_label=STRINGS[lang]["new_payment"],
+            create_url="purchases:payment_create",
+            cancel_url="purchases:payment_cancel",
+            party_kind="supplier",
+        ),
+    )
+
+
+@require_permission("purchases.pay_supplier")
+def payment_create(request):
+    lang = _lang(request)
+    if request.method == "POST":
+        form = SupplierPaymentForm(request.POST, lang=lang)
+        if form.is_valid():
+            try:
+                record_supplier_payment(user=request.user, **form.cleaned_data)
+            except ValidationError as exc:
+                form.add_error(None, exc)
+            else:
+                messages.success(request, STRINGS[lang]["payment_saved"])
+                return redirect(f"/purchases/payments/?lang={lang}")
+    else:
+        form = SupplierPaymentForm(lang=lang)
+    return render(
+        request,
+        "payments/form.html",
+        _context(
+            request,
+            form=form,
+            title=STRINGS[lang]["new_payment"],
+            back_url="purchases:payments",
+        ),
+    )
+
+
+@require_permission("purchases.pay_supplier")
+def payment_cancel(request, pk):
+    if request.method != "POST":
+        return redirect("purchases:payments")
+    lang = _lang(request)
+    try:
+        cancel_supplier_payment(pk, request.user, request.POST.get("reason", ""))
+    except ValidationError as exc:
+        messages.error(request, "; ".join(exc.messages))
+    else:
+        messages.success(request, STRINGS[lang]["payment_cancelled"])
+    return redirect(f"/purchases/payments/?lang={lang}")
