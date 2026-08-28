@@ -156,3 +156,36 @@ Promotion requires Main Control to:
 2. assign canonical path;
 3. verify no baked translatable/interactive content;
 4. update this manifest to APPROVED_GLOBAL.
+
+
+## G. P0 SVG candidate family — 2026-08-28
+
+Classification: `CANDIDATE_FOR_AHMED_APPROVAL`
+
+Actual separate SVG files now exist on branch `docs/agent-quality-brand-control` under:
+- `static/hesba/global/navigation/`
+- `static/hesba/global/master_data/`
+- `static/hesba/global/actions/`
+- `static/hesba/global/system/`
+- `static/hesba/global/status/`
+
+Candidate files created:
+- navigation: dashboard, master_data, purchases, sales
+- master_data: cashbox, location, supplier, customer, category, item, service
+- actions: add, edit, search, filter
+- system: menu, notification
+- status: success, warning, error, info
+
+Identity tokens used:
+- Navy `#05243F`
+- Teal `#16BDC4`
+- Gold `#D9AD50`
+
+These files are real SVG assets, but they are NOT `APPROVED_GLOBAL` yet.
+
+Ahmed approval of the visual family is required before:
+- completing the rest of P0 in the same style;
+- allowing Agent production use.
+
+Brand binary note:
+Ahmed's original logo/app/launch source files are available to Main Control and were used for exact-reference previewing, but the original binary masters have not yet been copied into canonical GitHub paths. Existing approved repository logos remain screen-specific until canonical source transfer is completed.
