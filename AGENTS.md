@@ -76,24 +76,26 @@ The minimum bar is the disciplined style established by the latest accepted work
 
 Passing code is not enough. A change is acceptable only when the reasoning, tests, scope, and regression safety are strong.
 
-## 6. Screen Pack gate
-No new production screen implementation before the required Screen Pack is approved.
+## 6. Current screen workflow — Functional-First override
 
-Required:
-1. Visual Approved
-2. Production Background
-3. Assets Pack
-4. Layout Contract
-5. Functional Contract when business behavior exists
+Ahmed's latest Main Control decision is to finish the operating cycle functionally before final aesthetic work.
 
-Responsive planning must cover:
-- Web
-- Tablet Landscape
-- Mobile
+For the current cycle-building phase:
+- Functional Contract is mandatory.
+- Layout/interaction behavior for Web, Tablet Landscape, and Mobile is mandatory.
+- Arabic and English are mandatory.
+- Use a simple, clean Hesba-aligned UI with the locked brand colors.
+- Final decorative Visual Approved assets, Production Backgrounds, custom illustrations, and icon-polish are deferred to the later Visual Polish Track unless a specific screen genuinely needs one to function.
 
-Arabic and English are required from the start.
+This is a deliberate Main Control override of the earlier visual-first sequencing for the current operating-cycle build. It does not authorize brand drift.
 
-To reduce interruptions, Main Control should group related screens into one track and seek one batch approval for that track's Screen Packs where practical.
+Do not stop implementation merely because a decorative asset is missing. Use text labels or simple CSS/components and record the deferred visual gap.
+
+Still forbidden:
+- invented logo;
+- invented palette;
+- generic SaaS redesign;
+- changing approved business behavior for visual convenience.
 
 ## 7. Brand and Global Asset lock
 All visual work must comply with:
