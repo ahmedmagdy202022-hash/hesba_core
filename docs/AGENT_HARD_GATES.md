@@ -63,3 +63,13 @@ Record only genuine blockers that require a protected business/product decision.
 - Proposed decision: approve return documents, allocation to invoice lines/payments, costing rules, cash settlement, and period behavior.
 - Required tests after approval: partial/full quantity limits, repeated return protection, stock/cost, party balance, refund/cashbox, tax/discount allocation, and closed periods.
 - Current safe behavior: complete posted-invoice cancellation is exposed explicitly as cancellation; no independent return action is claimed.
+
+## HG-007 — Purchase line fractional-cent rounding is undefined
+
+- Track: 2
+- Reason: `PurchaseLine.line_total_amount` stores two decimal places, but `PurchaseLine.calculated_line_total` and `clean()` require exact unrounded equality for a three-decimal quantity multiplied by a two-decimal unit price.
+- Protected files/behavior: `purchases/models.py`, purchase posting unit cost, average-cost inputs, and supplier invoice totals.
+- Risk: silently rounding only in the UI would make saved lines fail posting validation or could change inventory cost without an approved rounding rule.
+- Proposed decision: approve a single money-rounding rule in the purchase model/service and a policy for allocating fractional-cent residuals.
+- Required tests after approval: fractional quantities, discounts, multi-line residuals, posting, reversal, average cost, and report totals.
+- Current safe behavior: the UI rejects a line whose amount does not resolve exactly to two decimals and explains the constraint; integer and cent-exact quantities remain fully supported.

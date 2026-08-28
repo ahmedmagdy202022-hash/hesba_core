@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -10,11 +10,111 @@ from inventory.services import recalculate_item_average_cost
 from .models import (
     PurchaseInvoice,
     PurchaseInvoiceStatus,
+    PurchaseLine,
     SupplierLedgerEntry,
     SupplierLedgerEntryType,
     SupplierPayment,
     SupplierPaymentStatus,
 )
+
+
+MONEY_QUANT = Decimal("0.01")
+
+
+def _money_round(value):
+    return value.quantize(MONEY_QUANT, rounding=ROUND_HALF_UP)
+
+
+@transaction.atomic
+def create_purchase_draft(header, lines, user=None):
+    """Create a complete, internally consistent draft without posting it.
+
+    Views supply validated input only. Totals, payment state, model validation,
+    persistence, and audit stay here so no template or JavaScript becomes a
+    second accounting implementation.
+    """
+
+    prepared_lines = []
+    subtotal = Decimal("0")
+    for number, data in enumerate(lines, start=1):
+        quantity = data["quantity"]
+        unit_price = data["unit_purchase_price"]
+        line_discount = data.get("line_discount_amount") or Decimal("0")
+        exact_total = (quantity * unit_price) - line_discount
+        line_total = _money_round(exact_total)
+        if line_total < 0:
+            raise ValidationError("A purchase line discount cannot exceed its gross amount.")
+        # PurchaseLine.clean currently requires exact equality while the stored
+        # column has two decimal places. Refuse ambiguous fractional-cent input
+        # instead of silently changing the protected model calculation.
+        if exact_total != line_total:
+            raise ValidationError(
+                "Each purchase line must resolve to an exact two-decimal amount."
+            )
+        prepared_lines.append((number, data, line_total))
+        subtotal += line_total
+
+    if not prepared_lines:
+        raise ValidationError("Purchase invoice must have at least one line.")
+
+    invoice_discount = header.get("discount_amount") or Decimal("0")
+    tax_amount = header.get("tax_amount") or Decimal("0")
+    paid_now = header.get("paid_now") or Decimal("0")
+    total_amount = _money_round(subtotal - invoice_discount + tax_amount)
+    if total_amount < 0:
+        raise ValidationError("Invoice discount cannot make the total negative.")
+
+    invoice = PurchaseInvoice(
+        invoice_number=header["invoice_number"],
+        invoice_date=header["invoice_date"],
+        supplier=header["supplier"],
+        receiving_location=header["receiving_location"],
+        cashbox=header.get("cashbox"),
+        subtotal=_money_round(subtotal),
+        discount_amount=invoice_discount,
+        tax_amount=tax_amount,
+        total_amount=total_amount,
+        paid_now=paid_now,
+        remaining_due=_money_round(total_amount - paid_now),
+        notes=header.get("notes", ""),
+        created_by=user,
+    )
+    invoice.payment_status = invoice.calculate_payment_status()
+    invoice.full_clean()
+    invoice.save()
+
+    for number, data, line_total in prepared_lines:
+        line = PurchaseLine(
+            invoice=invoice,
+            line_number=number,
+            item=data["item"],
+            description=data.get("description", ""),
+            quantity=data["quantity"],
+            unit_purchase_price=data["unit_purchase_price"],
+            line_discount_amount=data.get("line_discount_amount") or Decimal("0"),
+            line_total_amount=line_total,
+        )
+        line.full_clean()
+        line.save()
+
+    AuditLog.objects.create(
+        event_type=AuditEventType.CREATE,
+        actor=user,
+        module="purchases",
+        action="create_purchase_draft",
+        object_type="PurchaseInvoice",
+        object_id=str(invoice.id),
+        after_data={
+            "invoice_number": invoice.invoice_number,
+            "status": invoice.status,
+            "supplier_id": invoice.supplier_id,
+            "line_count": len(prepared_lines),
+            "total_amount": str(invoice.total_amount),
+            "paid_now": str(invoice.paid_now),
+            "remaining_due": str(invoice.remaining_due),
+        },
+    )
+    return invoice
 
 
 def _purchase_line_unit_cost(line):
