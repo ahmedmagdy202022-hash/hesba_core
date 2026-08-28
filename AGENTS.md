@@ -11,7 +11,7 @@ Project: Hesba Core / Hesba Store / حِسبة ستور
 4. HESBA_PROJECT_OPERATING_SYSTEM_115.
 5. HESBA_OPERATING_RULES_113 where it does not conflict.
 6. PostgreSQL Master Source for architecture/business logic.
-7. Approved Screen Pack and Brand Manifest.
+7. Approved Screen Pack, Brand Manifest, and Global Assets Manifest.
 8. Legacy assets only as reference.
 
 ## 2. Baseline rule
@@ -95,8 +95,28 @@ Arabic and English are required from the start.
 
 To reduce interruptions, Main Control should group related screens into one track and seek one batch approval for that track's Screen Packs where practical.
 
-## 7. Brand lock
-All visual work must comply with `docs/HESBA_BRAND_ASSET_MANIFEST.md`.
+## 7. Brand and Global Asset lock
+All visual work must comply with:
+- `docs/HESBA_BRAND_ASSET_MANIFEST.md`
+- `docs/HESBA_GLOBAL_ASSET_PACK_SPEC.md`
+- `docs/HESBA_GLOBAL_ASSETS_MANIFEST.md`
+
+Before using any visual asset:
+1. search the Global Assets Manifest;
+2. verify classification and canonical path;
+3. use only an allowed approved asset for that purpose;
+4. if no approved asset exists, report `ASSET GAP`.
+
+The Agent must not silently:
+- download an icon pack;
+- mix a third-party icon family;
+- generate a replacement logo;
+- repurpose a screen-specific background globally;
+- crop a screenshot into a production asset;
+- create a new decorative illustration just to unblock itself.
+
+Only `APPROVED_GLOBAL` assets may be reused freely across product screens.
+`APPROVED_SCREEN_ONLY` assets stay limited to their approved screen unless Main Control promotes them.
 
 Never:
 - invent a Hesba logo;
@@ -176,10 +196,11 @@ Before PR, where applicable:
 ### Tests
 ### Preview
 ### Risks
+### Asset gaps
 ### Blocked hard gates
 ### Next action
 
 Do not return "waiting for approval" for routine technical work. Only list a blocked hard gate when a real decision is required.
 
 ## 13. One-line rule
-Keep moving through the approved track with minimal interruption; match or exceed the engineering discipline of the latest accepted `develop` work; protect Hesba's identity and business logic; stop only at real hard gates.
+Keep moving through the approved track with minimal interruption; match or exceed the engineering discipline of the latest accepted `develop` work; protect Hesba's identity, global asset library, and business logic; stop only at real hard gates.
