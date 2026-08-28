@@ -108,7 +108,7 @@
           <div class="dash-actions">
             {% for action in quick_actions %}
               <a class="dash-action{% if action.primary %} is-primary{% endif %}"
-                 href="{% url 'home' %}?lang={{ lang }}" data-action="{{ action.key }}">{{ action.label }}</a>
+                 href="{% url action.url_name %}?lang={{ lang }}" data-action="{{ action.key }}">{{ action.label }}</a>
             {% endfor %}
           </div>
         </section>
