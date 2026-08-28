@@ -31,6 +31,8 @@ urlpatterns = [
     path("sales/", include("sales.urls")),
     path("cashboxes/", include("cashboxes.urls")),
     path("closing/", include("closing.urls")),
+    path("profile/", include("accounts.urls")),
+    path("settings/", include("settings_core.urls")),
     path("reports/", report_hub, name="report_hub"),
     path("reports/", include("reports.urls")),
     path("status/", status_counts_report, name="status_counts_report"),
