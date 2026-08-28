@@ -5,7 +5,8 @@ from django.views.generic import TemplateView
 
 from reports.dashboard_views import dashboard
 from reports.status_views import status_counts_report
-from reports.views import home, report_hub
+from reports.functional_views import report_hub
+from reports.views import home
 from settings_core.setup_views import after_login, root_redirect, setup_complete, setup_review
 
 
@@ -30,6 +31,7 @@ urlpatterns = [
     path("sales/", include("sales.urls")),
     path("cashboxes/", include("cashboxes.urls")),
     path("reports/", report_hub, name="report_hub"),
+    path("reports/", include("reports.urls")),
     path("status/", status_counts_report, name="status_counts_report"),
     path("admin/", django_admin.site.urls),
 ]
