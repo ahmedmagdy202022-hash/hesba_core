@@ -10,6 +10,7 @@ from hesba_testing.factories import (
     make_user_profile,
 )
 from permissions.models import RoleCode
+from sales.models import CustomerLedgerEntry, CustomerLedgerEntryType
 
 from .models import Category, Customer, Item, Location, Supplier
 
@@ -107,12 +108,44 @@ class MasterDataUiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("default_purchase_price", response.context["form"].fields)
 
-    def test_opening_balance_cannot_be_changed_from_customer_edit(self):
+    def test_unused_opening_balance_can_be_changed_normally(self):
+        self.login_as(RoleCode.MANAGER, "manager_unused_opening")
+        customer = Customer.objects.create(
+            customer_code="CUS-UNUSED",
+            name="Unused",
+            opening_balance=Decimal("200.00"),
+        )
+        response = self.client.post(
+            reverse("master_data:edit", kwargs={"entity": "customers", "pk": customer.pk}),
+            {
+                "customer_code": "CUS-UNUSED",
+                "name": "Unused",
+                "phone": "",
+                "whatsapp": "",
+                "email": "",
+                "address": "",
+                "opening_balance": "250.00",
+                "credit_limit": "0.00",
+                "notes": "",
+                "active": "on",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        customer.refresh_from_db()
+        self.assertEqual(customer.opening_balance, Decimal("250.00"))
+
+    def test_used_opening_balance_cannot_be_changed_from_customer_edit(self):
         self.login_as(RoleCode.MANAGER, "manager_opening")
         customer = Customer.objects.create(
             customer_code="CUS-LOCK",
             name="Locked",
             opening_balance=Decimal("200.00"),
+        )
+        CustomerLedgerEntry.objects.create(
+            customer=customer,
+            entry_date="2026-01-15",
+            entry_type=CustomerLedgerEntryType.SALES_DUE,
+            due_increase=Decimal("10.00"),
         )
         response = self.client.post(
             reverse(
@@ -159,15 +192,23 @@ class MasterDataUiTests(TestCase):
         parent.refresh_from_db()
         self.assertIsNone(parent.parent)
 
-    def test_cashbox_area_is_view_only_until_management_permission_exists(self):
-        self.login_as(RoleCode.OWNER, "owner_cashbox")
+    def test_manager_can_manage_cashbox_master_data(self):
+        self.login_as(RoleCode.MANAGER, "manager_cashbox")
         make_cashbox(cashbox_code="SAFE-1")
         response = self.client.get(
             reverse("master_data:list", kwargs={"entity": "cashboxes"})
         )
         self.assertEqual(response.status_code, 200)
-        self.assertFalse(response.context["can_manage"])
+        self.assertTrue(response.context["can_manage"])
         self.assertContains(response, "SAFE-1")
+
+    def test_accountant_cannot_manage_cashbox_identity(self):
+        self.login_as(RoleCode.ACCOUNTANT, "accountant_cashbox_identity")
+        cashbox = make_cashbox(cashbox_code="SAFE-2")
+        response = self.client.get(
+            reverse("master_data:edit", kwargs={"entity": "cashboxes", "pk": cashbox.pk})
+        )
+        self.assertEqual(response.status_code, 403)
 
     def test_search_and_status_filter_work(self):
         self.login_as(RoleCode.MANAGER, "manager_search")

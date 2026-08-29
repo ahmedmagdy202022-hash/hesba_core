@@ -1,5 +1,8 @@
 from django import forms
 
+from cashboxes.models import Cashbox, OpeningBalanceTarget
+from cashboxes.services import target_has_operational_use
+
 from .models import Category, Customer, Item, Location, Supplier
 
 
@@ -21,6 +24,8 @@ LABELS = {
         "email": "البريد الإلكتروني",
         "address": "العنوان",
         "opening_balance": "الرصيد الافتتاحي",
+        "cashbox_code": "كود الخزنة",
+        "currency": "العملة",
         "credit_limit": "الحد الائتماني",
         "notes": "ملاحظات",
         "category_code": "كود التصنيف",
@@ -54,6 +59,8 @@ LABELS = {
         "email": "Email",
         "address": "Address",
         "opening_balance": "Opening balance",
+        "cashbox_code": "Cashbox code",
+        "currency": "Currency",
         "credit_limit": "Credit limit",
         "notes": "Notes",
         "category_code": "Category code",
@@ -118,8 +125,9 @@ class SupplierForm(HesbaModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if self.instance.pk:
-            # Correction semantics after operations are not approved yet.
+        if self.instance.pk and target_has_operational_use(
+            OpeningBalanceTarget.SUPPLIER, self.instance
+        ):
             self.fields["opening_balance"].disabled = True
 
 
@@ -141,9 +149,31 @@ class CustomerForm(HesbaModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if self.instance.pk:
-            # Preserve the original financial starting point until a dedicated
-            # audited adjustment flow is approved.
+        if self.instance.pk and target_has_operational_use(
+            OpeningBalanceTarget.CUSTOMER, self.instance
+        ):
+            self.fields["opening_balance"].disabled = True
+
+
+class CashboxForm(HesbaModelForm):
+    class Meta:
+        model = Cashbox
+        fields = (
+            "cashbox_code",
+            "name_ar",
+            "name_en",
+            "opening_balance",
+            "currency",
+            "is_default",
+            "notes",
+            "active",
+        )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk and target_has_operational_use(
+            OpeningBalanceTarget.CASHBOX, self.instance
+        ):
             self.fields["opening_balance"].disabled = True
 
 

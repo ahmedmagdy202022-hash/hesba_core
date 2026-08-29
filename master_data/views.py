@@ -1,15 +1,21 @@
 from django.contrib import messages
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
-from cashboxes.models import Cashbox
+from cashboxes.models import Cashbox, OpeningBalanceTarget
+from cashboxes.forms import OpeningBalanceAdjustmentForm, OpeningBalanceReversalForm
+from cashboxes.services import (
+    cancel_opening_balance_adjustment,
+    create_opening_balance_adjustment,
+    target_has_operational_use,
+)
 from permissions.services import user_has_permission
 
-from .forms import CategoryForm, CustomerForm, ItemForm, LocationForm, SupplierForm
+from .forms import CashboxForm, CategoryForm, CustomerForm, ItemForm, LocationForm, SupplierForm
 from .models import Category, Customer, Item, Location, Supplier
 
 
@@ -39,7 +45,10 @@ STRINGS = {
         "stock_item": "صنف مخزني",
         "service": "خدمة",
         "saved": "تم حفظ البيانات.",
-        "opening_locked": "الرصيد الافتتاحي مقفول بعد إنشاء السجل لحين اعتماد مسار تعديل مالي مستقل.",
+        "opening_locked": "استُخدم السجل تشغيليًا؛ الرصيد الافتتاحي مقفول ويُصحح فقط من مسار التسوية المراجع.",
+        "adjust_opening": "تسوية الرصيد الافتتاحي",
+        "adjustment_saved": "تم تسجيل تسوية الرصيد الافتتاحي.",
+        "adjustment_reversed": "تم عكس تسوية الرصيد الافتتاحي.",
     },
     "en": {
         "page_title": "Master data - Hesba",
@@ -66,7 +75,10 @@ STRINGS = {
         "stock_item": "Stock item",
         "service": "Service",
         "saved": "Saved successfully.",
-        "opening_locked": "Opening balance is locked after creation until a dedicated audited financial-adjustment flow is approved.",
+        "opening_locked": "This record has operational use; its opening balance is locked and can only be corrected through the audited adjustment flow.",
+        "adjust_opening": "Adjust opening balance",
+        "adjustment_saved": "Opening-balance adjustment posted.",
+        "adjustment_reversed": "Opening-balance adjustment reversed.",
     },
 }
 
@@ -124,10 +136,9 @@ ENTITY_CONFIG = {
     },
     "cashboxes": {
         "model": Cashbox,
-        "form": None,
+        "form": CashboxForm,
         "view_permission": "cashboxes.view_cashboxes",
-        # No explicit cashbox-master management permission exists today.
-        "manage_permission": None,
+        "manage_permission": "cashboxes.manage_cashboxes",
         "title": {"ar": "الخزن", "en": "Cashboxes"},
         "singular": {"ar": "خزنة", "en": "Cashbox"},
         "search_fields": ("cashbox_code", "name_ar", "name_en", "currency"),
@@ -137,7 +148,7 @@ ENTITY_CONFIG = {
 
 
 def _lang(request):
-    return "en" if request.GET.get("lang") == "en" else "ar"
+    return "en" if request.GET.get("lang") == "en" or request.POST.get("lang") == "en" else "ar"
 
 
 def _require(user, permission_code):
@@ -400,6 +411,21 @@ def _entity_form(request, entity, config, instance):
     else:
         form = config["form"](**kwargs)
 
+    target_types = {
+        "customers": OpeningBalanceTarget.CUSTOMER,
+        "suppliers": OpeningBalanceTarget.SUPPLIER,
+        "cashboxes": OpeningBalanceTarget.CASHBOX,
+    }
+    target_type = target_types.get(entity)
+    opening_balance_locked = bool(
+        instance is not None
+        and target_type
+        and target_has_operational_use(target_type, instance)
+    )
+    can_adjust_opening = opening_balance_locked and user_has_permission(
+        request.user, "master_data.adjust_opening_balances"
+    )
+
     return render(
         request,
         "master_data/form.html",
@@ -412,9 +438,102 @@ def _entity_form(request, entity, config, instance):
             "singular": config["singular"][lang],
             "form": form,
             "editing": instance is not None,
-            "opening_balance_locked": bool(
-                instance is not None and entity in {"customers", "suppliers"}
-            ),
+            "opening_balance_locked": opening_balance_locked,
+            "can_adjust_opening": can_adjust_opening,
             "page_title": f"{config['singular'][lang]} - {'Hesba' if lang == 'en' else 'حِسبة'}",
         },
+    )
+
+
+def _opening_target(entity, pk):
+    target_map = {
+        "customers": (OpeningBalanceTarget.CUSTOMER, Customer),
+        "suppliers": (OpeningBalanceTarget.SUPPLIER, Supplier),
+        "cashboxes": (OpeningBalanceTarget.CASHBOX, Cashbox),
+    }
+    if entity not in target_map:
+        raise Http404("This entity has no opening balance.")
+    target_type, model = target_map[entity]
+    return target_type, get_object_or_404(model, pk=pk)
+
+
+def opening_balance_adjustment(request, entity, pk):
+    _require(request.user, "master_data.adjust_opening_balances")
+    config = _config(entity)
+    _require(request.user, config["view_permission"])
+    target_type, target = _opening_target(entity, pk)
+    lang = _lang(request)
+    words = STRINGS[lang]
+    if not target_has_operational_use(target_type, target):
+        messages.error(
+            request,
+            "Edit the opening balance directly before operational use."
+            if lang == "en"
+            else "عدّل الرصيد الافتتاحي مباشرة قبل بدء الاستخدام التشغيلي.",
+        )
+        return redirect(
+            f"{reverse('master_data:edit', kwargs={'entity': entity, 'pk': pk})}?lang={lang}"
+        )
+
+    if request.method == "POST" and request.POST.get("action") == "create":
+        form = OpeningBalanceAdjustmentForm(request.POST, lang=lang)
+        if form.is_valid():
+            try:
+                create_opening_balance_adjustment(
+                    target_type=target_type,
+                    target_id=target.pk,
+                    user=request.user,
+                    **form.cleaned_data,
+                )
+            except ValidationError as exc:
+                form.add_error(None, exc)
+            else:
+                messages.success(request, words["adjustment_saved"])
+                return redirect(request.get_full_path())
+    else:
+        form = OpeningBalanceAdjustmentForm(lang=lang)
+
+    adjustments = target.opening_balance_adjustments.select_related(
+        "created_by", "cancelled_by"
+    )
+    return render(
+        request,
+        "master_data/opening_balance_adjustment.html",
+        {
+            "lang": lang,
+            "dir": "ltr" if lang == "en" else "rtl",
+            "words": words,
+            "entity": entity,
+            "target": target,
+            "target_type": target_type,
+            "form": form,
+            "reversal_form": OpeningBalanceReversalForm(lang=lang),
+            "adjustments": adjustments,
+            "page_title": words["adjust_opening"],
+        },
+    )
+
+
+def reverse_opening_balance_adjustment(request, entity, pk, adjustment_id):
+    _require(request.user, "master_data.adjust_opening_balances")
+    target_type, target = _opening_target(entity, pk)
+    adjustment = get_object_or_404(
+        target.opening_balance_adjustments,
+        pk=adjustment_id,
+        target_type=target_type,
+    )
+    lang = _lang(request)
+    if request.method == "POST":
+        form = OpeningBalanceReversalForm(request.POST, lang=lang)
+        if form.is_valid():
+            try:
+                cancel_opening_balance_adjustment(
+                    adjustment.pk, user=request.user, **form.cleaned_data
+                )
+            except ValidationError as exc:
+                messages.error(request, "; ".join(exc.messages))
+            else:
+                messages.success(request, STRINGS[lang]["adjustment_reversed"])
+    return redirect(
+        f"{reverse('master_data:opening_adjustment', kwargs={'entity': entity, 'pk': pk})}?lang={lang}"
     )

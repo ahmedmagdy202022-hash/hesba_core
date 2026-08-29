@@ -84,6 +84,12 @@ def cashbox_list(request):
             rows=rows,
             query=query,
             can_view_finance=can_view_finance,
+            can_adjust_opening=(
+                cashbox.movements.exists()
+                and user_has_permission(
+                    request.user, "master_data.adjust_opening_balances"
+                )
+            ),
         ),
     )
 
@@ -152,4 +158,3 @@ def movement_list(request):
             movement_choices=CashboxMovement._meta.get_field("movement_type").choices,
         ),
     )
-

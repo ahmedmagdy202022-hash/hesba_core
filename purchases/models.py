@@ -282,6 +282,13 @@ class SupplierLedgerEntry(models.Model):
         null=True,
         blank=True,
     )
+    opening_balance_adjustment = models.ForeignKey(
+        "cashboxes.OpeningBalanceAdjustment",
+        on_delete=models.PROTECT,
+        related_name="supplier_ledger_entries",
+        null=True,
+        blank=True,
+    )
     due_increase = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     due_decrease = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     description = models.CharField(max_length=255, blank=True)
@@ -301,6 +308,7 @@ class SupplierLedgerEntry(models.Model):
             models.Index(fields=["entry_type"]),
             models.Index(fields=["purchase_invoice"]),
             models.Index(fields=["supplier_payment"]),
+            models.Index(fields=["opening_balance_adjustment"]),
         ]
         verbose_name = "Supplier Ledger Entry"
         verbose_name_plural = "Supplier Ledger Entries"

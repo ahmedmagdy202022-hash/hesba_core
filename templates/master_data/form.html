@@ -8,7 +8,7 @@
 </section>
 
 {% if opening_balance_locked %}
-  <div class="md-notice">{{ words.opening_locked }}</div>
+  <div class="md-notice">{{ words.opening_locked }} {% if can_adjust_opening %}<a href="{% url 'master_data:opening_adjustment' entity=entity pk=form.instance.pk %}?lang={{ lang }}">{{ words.adjust_opening }}</a>{% endif %}</div>
 {% endif %}
 
 <form class="md-form" method="post" novalidate>

@@ -22,4 +22,14 @@ urlpatterns = [
     path("<str:entity>/", views.entity_list, name="list"),
     path("<str:entity>/new/", views.entity_create, name="create"),
     path("<str:entity>/<int:pk>/edit/", views.entity_edit, name="edit"),
+    path(
+        "<str:entity>/<int:pk>/opening-adjustment/",
+        views.opening_balance_adjustment,
+        name="opening_adjustment",
+    ),
+    path(
+        "<str:entity>/<int:pk>/opening-adjustment/<int:adjustment_id>/reverse/",
+        views.reverse_opening_balance_adjustment,
+        name="reverse_opening_adjustment",
+    ),
 ]
