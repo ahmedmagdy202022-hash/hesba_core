@@ -1,4 +1,4 @@
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
@@ -6,6 +6,7 @@ from django.db.models import Sum
 from django.utils import timezone
 
 from audit.models import AuditEventType, AuditLog
+from config.money import money_round
 from permissions.services import user_has_permission
 
 from .models import (
@@ -13,17 +14,13 @@ from .models import (
     CashboxDirection,
     CashboxMovement,
     CashboxMovementType,
+    CashboxOperation,
+    CashboxOperationStatus,
+    CashboxOperationType,
     FinancialAdjustmentStatus,
     OpeningBalanceAdjustment,
     OpeningBalanceTarget,
 )
-
-
-MONEY_QUANT = Decimal("0.01")
-
-
-def money_round(value):
-    return Decimal(value).quantize(MONEY_QUANT, rounding=ROUND_HALF_UP)
 
 
 def get_cashbox_balance(cashbox):
@@ -197,6 +194,254 @@ def create_opening_balance_adjustment(
         },
     )
     return adjustment
+
+
+def _require_move_cash_permission(user):
+    if not user_has_permission(user, "cashboxes.move_cash"):
+        raise PermissionDenied("Cashbox operations require cashboxes.move_cash.")
+
+
+def _create_cash_operation_movement(
+    operation,
+    movement_date,
+    cashbox,
+    movement_type,
+    direction,
+    user,
+    *,
+    reversal_of=None,
+):
+    movement = CashboxMovement(
+        cashbox=cashbox,
+        movement_date=movement_date,
+        movement_type=movement_type,
+        direction=direction,
+        amount=operation.amount,
+        cashbox_operation=operation,
+        reversal_of=reversal_of,
+        description=f"Cash operation {operation.reference_number}",
+        created_by=user,
+    )
+    movement.full_clean()
+    movement.save()
+    return movement
+
+
+def _audit_cash_operation(operation, user, action, reason):
+    AuditLog.objects.create(
+        event_type=AuditEventType.ADJUSTMENT,
+        actor=user,
+        module="cashboxes",
+        action=action,
+        object_type="CashboxOperation",
+        object_id=str(operation.pk),
+        reason=reason,
+        after_data={
+            "reference_number": operation.reference_number,
+            "operation_type": operation.operation_type,
+            "source_cashbox_id": operation.source_cashbox_id,
+            "destination_cashbox_id": operation.destination_cashbox_id,
+            "amount": str(operation.amount),
+            "status": operation.status,
+        },
+    )
+
+
+@transaction.atomic
+def create_cashbox_operation(
+    reference_number,
+    operation_date,
+    operation_type,
+    amount,
+    reason,
+    user,
+    source_cashbox=None,
+    destination_cashbox=None,
+):
+    """Post direct cash in/out or a linked, atomic cashbox transfer."""
+
+    _require_move_cash_permission(user)
+    _ensure_open_period(operation_date)
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValidationError("Cash operation reason is required.")
+    amount = money_round(amount)
+    if amount <= 0:
+        raise ValidationError("Cash operation amount must be greater than zero.")
+    if operation_type not in CashboxOperationType.values:
+        raise ValidationError("Unknown cash operation type.")
+
+    cashbox_ids = {
+        cashbox.pk for cashbox in (source_cashbox, destination_cashbox) if cashbox is not None
+    }
+    locked = {
+        cashbox.pk: cashbox
+        for cashbox in Cashbox.objects.select_for_update()
+        .filter(pk__in=cashbox_ids, active=True)
+        .order_by("pk")
+    }
+    source = locked.get(getattr(source_cashbox, "pk", None))
+    destination = locked.get(getattr(destination_cashbox, "pk", None))
+    if len(locked) != len(cashbox_ids):
+        raise ValidationError("Cash operations require active cashboxes.")
+    if operation_type in (CashboxOperationType.DIRECT_OUT, CashboxOperationType.TRANSFER):
+        if source is None or get_cashbox_balance(source) < amount:
+            raise ValidationError("The source cashbox cannot become negative.")
+    if operation_type == CashboxOperationType.TRANSFER:
+        if destination is None:
+            raise ValidationError("A destination cashbox is required.")
+        if source.pk == destination.pk:
+            raise ValidationError("Transfer cashboxes must be different.")
+        if source.currency != destination.currency:
+            raise ValidationError("Cashbox transfers require the same currency.")
+
+    operation = CashboxOperation(
+        reference_number=(reference_number or "").strip(),
+        operation_date=operation_date,
+        operation_type=operation_type,
+        source_cashbox=source,
+        destination_cashbox=destination,
+        amount=amount,
+        reason=reason,
+        created_by=user,
+    )
+    operation.full_clean()
+    operation.save()
+    if operation_type == CashboxOperationType.DIRECT_IN:
+        _create_cash_operation_movement(
+            operation,
+            operation_date,
+            destination,
+            CashboxMovementType.DIRECT_IN,
+            CashboxDirection.IN,
+            user,
+        )
+    elif operation_type == CashboxOperationType.DIRECT_OUT:
+        _create_cash_operation_movement(
+            operation,
+            operation_date,
+            source,
+            CashboxMovementType.DIRECT_OUT,
+            CashboxDirection.OUT,
+            user,
+        )
+    else:
+        _create_cash_operation_movement(
+            operation,
+            operation_date,
+            source,
+            CashboxMovementType.TRANSFER_OUT,
+            CashboxDirection.OUT,
+            user,
+        )
+        _create_cash_operation_movement(
+            operation,
+            operation_date,
+            destination,
+            CashboxMovementType.TRANSFER_IN,
+            CashboxDirection.IN,
+            user,
+        )
+    _audit_cash_operation(operation, user, "create_cashbox_operation", reason)
+    return operation
+
+
+@transaction.atomic
+def cancel_cashbox_operation(operation_id, reversal_date, reason, user):
+    """Reverse a cash operation with append-only inverse rows."""
+
+    _require_move_cash_permission(user)
+    _ensure_open_period(reversal_date)
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValidationError("Cash operation reversal reason is required.")
+    operation = (
+        CashboxOperation.objects.select_for_update()
+        .select_related("source_cashbox", "destination_cashbox")
+        .get(pk=operation_id)
+    )
+    if operation.status != CashboxOperationStatus.POSTED:
+        raise ValidationError("Only posted cashbox operations can be reversed.")
+
+    cashbox_ids = {
+        cashbox_id
+        for cashbox_id in (operation.source_cashbox_id, operation.destination_cashbox_id)
+        if cashbox_id is not None
+    }
+    locked = {
+        cashbox.pk: cashbox
+        for cashbox in Cashbox.objects.select_for_update()
+        .filter(pk__in=cashbox_ids)
+        .order_by("pk")
+    }
+    source = locked.get(operation.source_cashbox_id)
+    destination = locked.get(operation.destination_cashbox_id)
+    originals = {
+        movement.movement_type: movement
+        for movement in operation.movements.filter(reversal_of__isnull=True)
+    }
+    if operation.operation_type == CashboxOperationType.DIRECT_IN:
+        if get_cashbox_balance(destination) < operation.amount:
+            raise ValidationError("The cashbox cannot become negative when reversing this cash in.")
+        _create_cash_operation_movement(
+            operation,
+            reversal_date,
+            destination,
+            CashboxMovementType.DIRECT_OUT,
+            CashboxDirection.OUT,
+            user,
+            reversal_of=originals[CashboxMovementType.DIRECT_IN],
+        )
+    elif operation.operation_type == CashboxOperationType.DIRECT_OUT:
+        _create_cash_operation_movement(
+            operation,
+            reversal_date,
+            source,
+            CashboxMovementType.DIRECT_IN,
+            CashboxDirection.IN,
+            user,
+            reversal_of=originals[CashboxMovementType.DIRECT_OUT],
+        )
+    else:
+        if get_cashbox_balance(destination) < operation.amount:
+            raise ValidationError(
+                "The destination cashbox cannot become negative when reversing this transfer."
+            )
+        _create_cash_operation_movement(
+            operation,
+            reversal_date,
+            destination,
+            CashboxMovementType.TRANSFER_OUT,
+            CashboxDirection.OUT,
+            user,
+            reversal_of=originals[CashboxMovementType.TRANSFER_IN],
+        )
+        _create_cash_operation_movement(
+            operation,
+            reversal_date,
+            source,
+            CashboxMovementType.TRANSFER_IN,
+            CashboxDirection.IN,
+            user,
+            reversal_of=originals[CashboxMovementType.TRANSFER_OUT],
+        )
+
+    operation.status = CashboxOperationStatus.CANCELLED
+    operation.cancelled_by = user
+    operation.cancelled_at = timezone.now()
+    operation.cancellation_reason = reason
+    operation.reversal_date = reversal_date
+    operation.save(
+        update_fields=[
+            "status",
+            "cancelled_by",
+            "cancelled_at",
+            "cancellation_reason",
+            "reversal_date",
+        ]
+    )
+    _audit_cash_operation(operation, user, "cancel_cashbox_operation", reason)
+    return operation
 
 
 @transaction.atomic

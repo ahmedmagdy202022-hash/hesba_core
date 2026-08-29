@@ -1,12 +1,16 @@
 from django.core.paginator import Paginator
+from django.contrib import messages
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import Q
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
 
 from permissions.decorators import require_permission
 from permissions.services import user_has_permission
 from reports.selectors import cashbox_report
 
-from .models import Cashbox, CashboxMovement
+from .forms import CashboxOperationForm, CashboxOperationReversalForm
+from .models import Cashbox, CashboxMovement, CashboxOperation
+from .services import cancel_cashbox_operation, create_cashbox_operation
 
 
 STRINGS = {
@@ -22,6 +26,10 @@ STRINGS = {
         "back": "العودة للخزن",
         "finance_hidden": "التفاصيل المالية وحركات الخزنة تحتاج صلاحية عرض مالية مستقلة.",
         "blocked": "الإدخال النقدي المباشر والتحويل بين الخزن غير متاحين حتى اعتماد خدمة الحركة المحمية.",
+        "operations": "حركات النقد المباشرة والتحويلات",
+        "new_operation": "تسجيل حركة نقدية",
+        "saved": "تم ترحيل حركة النقد.",
+        "reversed": "تم عكس حركة النقد.",
     },
     "en": {
         "page_title": "Cashboxes",
@@ -35,12 +43,16 @@ STRINGS = {
         "back": "Back to cashboxes",
         "finance_hidden": "Financial details and cashbox movements require separate finance-view permission.",
         "blocked": "Direct cash movements and transfers remain unavailable until a protected movement service is approved.",
+        "operations": "Direct cash and transfers",
+        "new_operation": "Record cash operation",
+        "saved": "Cash operation posted.",
+        "reversed": "Cash operation reversed.",
     },
 }
 
 
 def _lang(request):
-    return "en" if request.GET.get("lang") == "en" else "ar"
+    return "en" if request.GET.get("lang") == "en" or request.POST.get("lang") == "en" else "ar"
 
 
 def _context(request, **extra):
@@ -84,12 +96,7 @@ def cashbox_list(request):
             rows=rows,
             query=query,
             can_view_finance=can_view_finance,
-            can_adjust_opening=(
-                cashbox.movements.exists()
-                and user_has_permission(
-                    request.user, "master_data.adjust_opening_balances"
-                )
-            ),
+            can_move_cash=user_has_permission(request.user, "cashboxes.move_cash"),
         ),
     )
 
@@ -104,7 +111,8 @@ def cashbox_detail(request, pk):
         rows = cashbox_report(cashbox=cashbox)
         finance = rows[0] if rows else None
         movements = cashbox.movements.select_related(
-            "purchase_invoice", "sales_invoice", "supplier_payment", "customer_payment"
+            "purchase_invoice", "sales_invoice", "supplier_payment", "customer_payment",
+            "cashbox_operation",
         )[:100]
     return render(
         request,
@@ -115,6 +123,11 @@ def cashbox_detail(request, pk):
             finance=finance,
             movements=movements,
             can_view_finance=can_view_finance,
+            can_move_cash=user_has_permission(request.user, "cashboxes.move_cash"),
+            can_adjust_opening=(
+                cashbox.movements.exists()
+                and user_has_permission(request.user, "master_data.adjust_opening_balances")
+            ),
         ),
     )
 
@@ -122,7 +135,8 @@ def cashbox_detail(request, pk):
 @require_permission("cashboxes.view_finance")
 def movement_list(request):
     queryset = CashboxMovement.objects.select_related(
-        "cashbox", "purchase_invoice", "sales_invoice", "supplier_payment", "customer_payment", "created_by"
+        "cashbox", "purchase_invoice", "sales_invoice", "supplier_payment", "customer_payment",
+        "cashbox_operation", "created_by"
     )
     query = request.GET.get("q", "").strip()
     cashbox_id = request.GET.get("cashbox", "").strip()
@@ -134,6 +148,7 @@ def movement_list(request):
             | Q(sales_invoice__invoice_number__icontains=query)
             | Q(supplier_payment__payment_number__icontains=query)
             | Q(customer_payment__payment_number__icontains=query)
+            | Q(cashbox_operation__reference_number__icontains=query)
         )
     if cashbox_id.isdigit():
         queryset = queryset.filter(cashbox_id=cashbox_id)
@@ -158,3 +173,59 @@ def movement_list(request):
             movement_choices=CashboxMovement._meta.get_field("movement_type").choices,
         ),
     )
+
+
+@require_permission("cashboxes.move_cash")
+def operation_list(request):
+    page = Paginator(
+        CashboxOperation.objects.select_related(
+            "source_cashbox", "destination_cashbox", "created_by", "cancelled_by"
+        ),
+        50,
+    ).get_page(request.GET.get("page"))
+    return render(
+        request,
+        "cashboxes/operations.html",
+        _context(
+            request,
+            page=page,
+            reversal_form=CashboxOperationReversalForm(lang=_lang(request)),
+        ),
+    )
+
+
+@require_permission("cashboxes.move_cash")
+def operation_create(request):
+    lang = _lang(request)
+    form = CashboxOperationForm(request.POST or None, lang=lang)
+    if request.method == "POST" and form.is_valid():
+        try:
+            create_cashbox_operation(user=request.user, **form.cleaned_data)
+        except (ValidationError, PermissionDenied) as exc:
+            form.add_error(None, exc)
+        else:
+            messages.success(request, STRINGS[lang]["saved"])
+            return redirect(f"/cashboxes/operations/?lang={lang}")
+    return render(
+        request,
+        "cashboxes/operation_form.html",
+        _context(request, form=form, title=STRINGS[lang]["new_operation"]),
+    )
+
+
+@require_permission("cashboxes.move_cash")
+def operation_cancel(request, pk):
+    if request.method != "POST":
+        return redirect("cashboxes:operations")
+    lang = _lang(request)
+    form = CashboxOperationReversalForm(request.POST, lang=lang)
+    if form.is_valid():
+        try:
+            cancel_cashbox_operation(pk, user=request.user, **form.cleaned_data)
+        except (ValidationError, PermissionDenied) as exc:
+            messages.error(request, "; ".join(getattr(exc, "messages", [str(exc)])))
+        else:
+            messages.success(request, STRINGS[lang]["reversed"])
+    else:
+        messages.error(request, "; ".join(error for errors in form.errors.values() for error in errors))
+    return redirect(f"/cashboxes/operations/?lang={lang}")
