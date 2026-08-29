@@ -306,3 +306,22 @@ class CashboxReportFilterTests(TestCase):
 
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["cashbox_id"], wanted.pk)
+
+    def test_date_filter_carries_prior_movements_into_brought_forward_balance(self):
+        cashbox = make_cashbox(opening_balance=Decimal("100.00"))
+        make_cashbox_movement(
+            cashbox, CashboxDirection.IN, "30.00", movement_date=date(2026, 1, 1)
+        )
+        make_cashbox_movement(
+            cashbox, CashboxDirection.OUT, "10.00", movement_date=date(2026, 1, 2)
+        )
+        make_cashbox_movement(
+            cashbox, CashboxDirection.OUT, "5.00", movement_date=date(2026, 2, 1)
+        )
+
+        row = cashbox_report(cashbox=cashbox, date_from=date(2026, 2, 1))[0]
+
+        self.assertEqual(row["brought_forward"], Decimal("120.00"))
+        self.assertEqual(row["cash_in"], Decimal("0"))
+        self.assertEqual(row["cash_out"], Decimal("5.00"))
+        self.assertEqual(row["balance"], Decimal("115.00"))

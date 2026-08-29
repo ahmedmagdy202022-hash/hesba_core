@@ -166,6 +166,34 @@ class StockMovement(models.Model):
         null=True,
         blank=True,
     )
+    purchase_return = models.ForeignKey(
+        "purchases.PurchaseReturn",
+        on_delete=models.PROTECT,
+        related_name="stock_movements",
+        null=True,
+        blank=True,
+    )
+    purchase_return_line = models.ForeignKey(
+        "purchases.PurchaseReturnLine",
+        on_delete=models.PROTECT,
+        related_name="stock_movements",
+        null=True,
+        blank=True,
+    )
+    sales_return = models.ForeignKey(
+        "sales.SalesReturn",
+        on_delete=models.PROTECT,
+        related_name="stock_movements",
+        null=True,
+        blank=True,
+    )
+    sales_return_line = models.ForeignKey(
+        "sales.SalesReturnLine",
+        on_delete=models.PROTECT,
+        related_name="stock_movements",
+        null=True,
+        blank=True,
+    )
     stock_operation = models.ForeignKey(
         StockOperation,
         on_delete=models.PROTECT,
@@ -202,6 +230,10 @@ class StockMovement(models.Model):
             models.Index(fields=["sales_line"]),
             models.Index(fields=["stock_operation"]),
             models.Index(fields=["reversal_of"]),
+            models.Index(fields=["purchase_return"]),
+            models.Index(fields=["purchase_return_line"]),
+            models.Index(fields=["sales_return"]),
+            models.Index(fields=["sales_return_line"]),
         ]
         verbose_name = "Stock Movement"
         verbose_name_plural = "Stock Movements"

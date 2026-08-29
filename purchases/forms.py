@@ -7,7 +7,7 @@ from django.utils import timezone
 from cashboxes.models import Cashbox
 from master_data.models import Item, Location, Supplier
 
-from .models import SupplierPayment
+from .models import PurchaseLine, PurchaseReturn, SupplierPayment
 
 
 PURCHASE_LABELS = {
@@ -146,3 +146,91 @@ class SupplierPaymentForm(forms.Form):
         if SupplierPayment.objects.filter(payment_number=number).exists():
             raise forms.ValidationError("A supplier payment with this number already exists.")
         return number
+
+
+class PurchaseReturnForm(forms.Form):
+    return_number = forms.CharField(max_length=80)
+    return_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    reason = forms.CharField(widget=forms.Textarea(attrs={"rows": 3}))
+
+    LABELS = {
+        "ar": {"return_number": "رقم المرتجع", "return_date": "تاريخ المرتجع", "reason": "سبب المرتجع"},
+        "en": {"return_number": "Return number", "return_date": "Return date", "reason": "Return reason"},
+    }
+
+    def __init__(self, *args, lang="ar", **kwargs):
+        super().__init__(*args, **kwargs)
+        for name, field in self.fields.items():
+            field.label = self.LABELS[lang][name]
+        if not self.is_bound:
+            self.initial["return_date"] = timezone.localdate()
+
+    def clean_return_number(self):
+        number = self.cleaned_data["return_number"].strip()
+        if PurchaseReturn.objects.filter(return_number=number).exists():
+            raise forms.ValidationError("A purchase return with this number already exists.")
+        return number
+
+
+class PurchaseReturnLineForm(forms.Form):
+    source_line = forms.ModelChoiceField(queryset=PurchaseLine.objects.none(), required=False)
+    quantity = forms.DecimalField(
+        max_digits=14, decimal_places=3, min_value=Decimal("0.001"), required=False
+    )
+
+    LABELS = {
+        "ar": {"source_line": "بند الفاتورة الأصلي", "quantity": "كمية المرتجع"},
+        "en": {"source_line": "Source invoice line", "quantity": "Return quantity"},
+    }
+
+    def __init__(self, *args, invoice=None, lang="ar", **kwargs):
+        super().__init__(*args, **kwargs)
+        for name, field in self.fields.items():
+            field.label = self.LABELS[lang][name]
+        if invoice is not None:
+            self.fields["source_line"].queryset = invoice.lines.select_related("item")
+
+
+class BasePurchaseReturnLineFormSet(BaseFormSet):
+    def clean(self):
+        super().clean()
+        if any(self.errors):
+            return
+        selected = 0
+        for form in self.forms:
+            line = form.cleaned_data.get("source_line")
+            quantity = form.cleaned_data.get("quantity")
+            if line or quantity:
+                selected += 1
+                if not line:
+                    form.add_error("source_line", "Source line is required.")
+                if not quantity:
+                    form.add_error("quantity", "Return quantity is required.")
+        if not selected:
+            raise forms.ValidationError("Add at least one purchase return line.")
+
+
+PurchaseReturnLineFormSet = formset_factory(
+    PurchaseReturnLineForm,
+    formset=BasePurchaseReturnLineFormSet,
+    extra=5,
+    max_num=20,
+    validate_max=True,
+)
+
+
+class PurchaseReturnReversalForm(forms.Form):
+    reversal_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    reason = forms.CharField(widget=forms.Textarea(attrs={"rows": 2}))
+
+    LABELS = {
+        "ar": {"reversal_date": "تاريخ العكس", "reason": "سبب العكس"},
+        "en": {"reversal_date": "Reversal date", "reason": "Reversal reason"},
+    }
+
+    def __init__(self, *args, lang="ar", **kwargs):
+        super().__init__(*args, **kwargs)
+        for name, field in self.fields.items():
+            field.label = self.LABELS[lang][name]
+        if not self.is_bound:
+            self.initial["reversal_date"] = timezone.localdate()

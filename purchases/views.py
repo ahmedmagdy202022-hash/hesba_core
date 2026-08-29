@@ -5,13 +5,23 @@ from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 
 from permissions.decorators import require_permission
+from permissions.services import user_has_permission
 
-from .forms import PurchaseDraftForm, PurchaseLineFormSet, SupplierPaymentForm
-from .models import PurchaseInvoice, SupplierPayment
+from .forms import (
+    PurchaseDraftForm,
+    PurchaseLineFormSet,
+    PurchaseReturnForm,
+    PurchaseReturnLineFormSet,
+    PurchaseReturnReversalForm,
+    SupplierPaymentForm,
+)
+from .models import PurchaseInvoice, PurchaseReturn, SupplierPayment
 from .services import (
     cancel_posted_purchase_invoice,
+    cancel_purchase_return,
     cancel_supplier_payment,
     create_purchase_draft,
+    create_purchase_return,
     post_purchase_invoice,
     record_supplier_payment,
 )
@@ -39,6 +49,9 @@ STRINGS = {
         "new_payment": "سداد جديد لمورد",
         "payment_saved": "تم تسجيل سداد المورد.",
         "payment_cancelled": "تم إلغاء سداد المورد وعكس آثاره.",
+        "new_return": "مرتجع شراء جديد",
+        "return_saved": "تم ترحيل مرتجع الشراء.",
+        "return_reversed": "تم عكس مرتجع الشراء.",
     },
     "en": {
         "page_title": "Purchases",
@@ -61,6 +74,9 @@ STRINGS = {
         "new_payment": "New supplier payment",
         "payment_saved": "Supplier payment recorded.",
         "payment_cancelled": "Supplier payment cancelled and reversed.",
+        "new_return": "New purchase return",
+        "return_saved": "Purchase return posted.",
+        "return_reversed": "Purchase return reversed.",
     },
 }
 
@@ -137,10 +153,19 @@ def invoice_create(request):
 @require_permission("purchases.view_purchase_invoices")
 def invoice_detail(request, pk):
     invoice = get_object_or_404(
-        PurchaseInvoice.objects.select_related("supplier", "receiving_location", "cashbox").prefetch_related("lines__item"),
+        PurchaseInvoice.objects.select_related("supplier", "receiving_location", "cashbox").prefetch_related("lines__item", "returns"),
         pk=pk,
     )
-    return render(request, "purchases/detail.html", _context(request, invoice=invoice))
+    return render(
+        request,
+        "purchases/detail.html",
+        _context(
+            request,
+            invoice=invoice,
+            can_post=user_has_permission(request.user, "purchases.create_purchase_invoice"),
+            can_return=user_has_permission(request.user, "purchases.return_purchase"),
+        ),
+    )
 
 
 @require_permission("purchases.create_purchase_invoice")
@@ -169,6 +194,80 @@ def invoice_cancel(request, pk):
     else:
         messages.success(request, STRINGS[lang]["cancelled"])
     return redirect(f"/purchases/{pk}/?lang={lang}")
+
+
+@require_permission("purchases.return_purchase")
+def return_create(request, pk):
+    invoice = get_object_or_404(
+        PurchaseInvoice.objects.select_related("supplier", "receiving_location", "cashbox").prefetch_related("lines__item"),
+        pk=pk,
+    )
+    lang = _lang(request)
+    form = PurchaseReturnForm(request.POST or None, lang=lang)
+    line_formset = PurchaseReturnLineFormSet(
+        request.POST or None,
+        prefix="lines",
+        form_kwargs={"invoice": invoice, "lang": lang},
+    )
+    if request.method == "POST" and form.is_valid() and line_formset.is_valid():
+        line_data = [
+            row.cleaned_data for row in line_formset.forms if row.cleaned_data.get("source_line")
+        ]
+        try:
+            purchase_return = create_purchase_return(
+                source_invoice_id=invoice.pk,
+                lines=line_data,
+                user=request.user,
+                **form.cleaned_data,
+            )
+        except ValidationError as exc:
+            form.add_error(None, exc)
+        else:
+            messages.success(request, STRINGS[lang]["return_saved"])
+            return redirect(f"/purchases/returns/{purchase_return.pk}/?lang={lang}")
+    return render(
+        request,
+        "purchases/return_form.html",
+        _context(request, invoice=invoice, form=form, line_formset=line_formset),
+    )
+
+
+@require_permission("purchases.view_purchase_invoices")
+def return_detail(request, pk):
+    purchase_return = get_object_or_404(
+        PurchaseReturn.objects.select_related(
+            "source_invoice__supplier", "source_invoice__receiving_location", "source_invoice__cashbox"
+        ).prefetch_related("lines__source_line__item"),
+        pk=pk,
+    )
+    return render(
+        request,
+        "purchases/return_detail.html",
+        _context(
+            request,
+            purchase_return=purchase_return,
+            can_reverse=user_has_permission(request.user, "purchases.return_purchase"),
+            reversal_form=PurchaseReturnReversalForm(lang=_lang(request)),
+        ),
+    )
+
+
+@require_permission("purchases.return_purchase")
+def return_cancel(request, pk):
+    if request.method != "POST":
+        return redirect("purchases:return_detail", pk=pk)
+    lang = _lang(request)
+    form = PurchaseReturnReversalForm(request.POST, lang=lang)
+    if form.is_valid():
+        try:
+            cancel_purchase_return(pk, user=request.user, **form.cleaned_data)
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+        else:
+            messages.success(request, STRINGS[lang]["return_reversed"])
+    else:
+        messages.error(request, "; ".join(error for errors in form.errors.values() for error in errors))
+    return redirect(f"/purchases/returns/{pk}/?lang={lang}")
 
 
 @require_permission("purchases.pay_supplier")

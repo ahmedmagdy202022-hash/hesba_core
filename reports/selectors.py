@@ -19,7 +19,14 @@ from cashboxes.models import Cashbox, CashboxDirection, CashboxMovement
 from inventory.models import StockMovement, StockMovementType
 from master_data.models import Customer, Item, Location, Supplier
 from purchases.models import PurchaseInvoice, SupplierLedgerEntry
-from sales.models import CustomerLedgerEntry, SalesInvoice, SalesLine
+from sales.models import (
+    CustomerLedgerEntry,
+    SalesInvoice,
+    SalesLine,
+    SalesReturn,
+    SalesReturnLine,
+    SalesReturnStatus,
+)
 
 
 STOCK_IN_TYPES = {
@@ -237,6 +244,7 @@ def cashbox_report(cashbox=None, date_from=None, date_to=None):
         movement_window &= Q(movements__movement_date__gte=date_from)
     if date_to:
         movement_window &= Q(movements__movement_date__lte=date_to)
+    prior_window = Q(movements__movement_date__lt=date_from) if date_from else Q(pk__isnull=True)
 
     cashboxes = cashboxes.annotate(
         total_in=_zero_sum(
@@ -244,6 +252,12 @@ def cashbox_report(cashbox=None, date_from=None, date_to=None):
         ),
         total_out=_zero_sum(
             "movements__amount", Q(movements__direction=CashboxDirection.OUT) & movement_window, _MONEY
+        ),
+        prior_in=_zero_sum(
+            "movements__amount", Q(movements__direction=CashboxDirection.IN) & prior_window, _MONEY
+        ),
+        prior_out=_zero_sum(
+            "movements__amount", Q(movements__direction=CashboxDirection.OUT) & prior_window, _MONEY
         ),
     ).order_by("id")
 
@@ -253,9 +267,10 @@ def cashbox_report(cashbox=None, date_from=None, date_to=None):
             "cashbox_code": row.cashbox_code,
             "cashbox_name": row.name_ar,
             "opening_balance": row.opening_balance,
+            "brought_forward": row.opening_balance + row.prior_in - row.prior_out,
             "cash_in": row.total_in,
             "cash_out": row.total_out,
-            "balance": row.opening_balance + row.total_in - row.total_out,
+            "balance": row.opening_balance + row.prior_in - row.prior_out + row.total_in - row.total_out,
         }
         for row in cashboxes
     ]
@@ -305,12 +320,38 @@ def profit_report(date_from=None, date_to=None):
                 "item_id": line.item_id,
                 "item_label": line.item.search_label,
                 "quantity": line.quantity,
-                "sales_amount": line.line_total_amount,
+                "sales_amount": line.line_cost_amount + line.line_profit_amount,
                 "cost_amount": line.line_cost_amount,
                 "profit_amount": line.line_profit_amount,
+                "is_return": False,
             }
         )
-    return rows
+
+    returns = SalesReturnLine.objects.filter(
+        sales_return__status=SalesReturnStatus.POSTED
+    ).select_related("sales_return__source_invoice", "source_line__item")
+    if date_from:
+        returns = returns.filter(sales_return__return_date__gte=date_from)
+    if date_to:
+        returns = returns.filter(sales_return__return_date__lte=date_to)
+    for line in returns.order_by(
+        "-sales_return__return_date", "-sales_return_id", "source_line__line_number"
+    ):
+        rows.append(
+            {
+                "invoice_id": line.sales_return.source_invoice_id,
+                "invoice_number": f"{line.sales_return.return_number} / {line.sales_return.source_invoice.invoice_number}",
+                "invoice_date": line.sales_return.return_date,
+                "item_id": line.source_line.item_id,
+                "item_label": line.source_line.item.search_label,
+                "quantity": -line.quantity,
+                "sales_amount": -line.amount,
+                "cost_amount": -line.cost_amount,
+                "profit_amount": -(line.amount - line.cost_amount),
+                "is_return": True,
+            }
+        )
+    return sorted(rows, key=lambda row: (row["invoice_date"], row["invoice_number"]), reverse=True)
 
 
 def profit_totals(date_from=None, date_to=None):
@@ -318,8 +359,16 @@ def profit_totals(date_from=None, date_to=None):
 
     totals = SalesLine.objects.filter(invoice__status="posted")
     totals = _date_filter(totals, "invoice__invoice_date", date_from, date_to).aggregate(
-        sales=_zero_sum("line_total_amount", None, _MONEY),
+        profit=_zero_sum("line_profit_amount", None, _MONEY),
         cost=_zero_sum("line_cost_amount", None, _MONEY),
     )
+    totals["sales"] = totals["profit"] + totals["cost"]
+    returns = SalesReturn.objects.filter(status=SalesReturnStatus.POSTED)
+    returns = _date_filter(returns, "return_date", date_from, date_to).aggregate(
+        sales=_zero_sum("total_amount", None, _MONEY),
+        cost=_zero_sum("cost_amount", None, _MONEY),
+    )
+    totals["sales"] -= returns["sales"]
+    totals["cost"] -= returns["cost"]
     totals["profit"] = totals["sales"] - totals["cost"]
     return totals

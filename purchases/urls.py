@@ -11,7 +11,10 @@ urlpatterns = [
     path("payments/", views.payment_list, name="payments"),
     path("payments/new/", views.payment_create, name="payment_create"),
     path("payments/<int:pk>/cancel/", views.payment_cancel, name="payment_cancel"),
+    path("returns/<int:pk>/", views.return_detail, name="return_detail"),
+    path("returns/<int:pk>/reverse/", views.return_cancel, name="return_cancel"),
     path("<int:pk>/", views.invoice_detail, name="detail"),
+    path("<int:pk>/returns/new/", views.return_create, name="return_create"),
     path("<int:pk>/post/", views.invoice_post, name="post"),
     path("<int:pk>/cancel/", views.invoice_cancel, name="cancel"),
 ]

@@ -52,4 +52,5 @@ class CustomerPaymentUiTests(TestCase):
         response = self.client.get(reverse("sales:payments"), {"lang": "en"})
         self.assertContains(response, "Customer collections")
         self.assertContains(response, "CP-UI-1")
-
+        self.assertContains(response, 'name="reason" required')
+        self.assertNotContains(response, 'type="hidden" name="reason"')

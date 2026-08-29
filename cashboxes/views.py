@@ -112,7 +112,7 @@ def cashbox_detail(request, pk):
         finance = rows[0] if rows else None
         movements = cashbox.movements.select_related(
             "purchase_invoice", "sales_invoice", "supplier_payment", "customer_payment",
-            "cashbox_operation",
+            "cashbox_operation", "purchase_return", "sales_return",
         )[:100]
     return render(
         request,
@@ -136,7 +136,7 @@ def cashbox_detail(request, pk):
 def movement_list(request):
     queryset = CashboxMovement.objects.select_related(
         "cashbox", "purchase_invoice", "sales_invoice", "supplier_payment", "customer_payment",
-        "cashbox_operation", "created_by"
+        "cashbox_operation", "purchase_return", "sales_return", "created_by"
     )
     query = request.GET.get("q", "").strip()
     cashbox_id = request.GET.get("cashbox", "").strip()
@@ -149,6 +149,8 @@ def movement_list(request):
             | Q(supplier_payment__payment_number__icontains=query)
             | Q(customer_payment__payment_number__icontains=query)
             | Q(cashbox_operation__reference_number__icontains=query)
+            | Q(purchase_return__return_number__icontains=query)
+            | Q(sales_return__return_number__icontains=query)
         )
     if cashbox_id.isdigit():
         queryset = queryset.filter(cashbox_id=cashbox_id)

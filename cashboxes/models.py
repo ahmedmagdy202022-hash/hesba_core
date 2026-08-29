@@ -36,6 +36,8 @@ class CashboxMovementType(models.TextChoices):
     SALES_RECEIPT = "sales_receipt", "Sales receipt"
     SUPPLIER_PAYMENT = "supplier_payment", "Supplier payment"
     CUSTOMER_PAYMENT = "customer_payment", "Customer payment"
+    PURCHASE_RETURN = "purchase_return", "Purchase return refund"
+    SALES_RETURN = "sales_return", "Sales return refund"
     DIRECT_IN = "direct_in", "Direct in"
     DIRECT_OUT = "direct_out", "Direct out"
     TRANSFER_IN = "transfer_in", "Transfer in"
@@ -281,6 +283,20 @@ class CashboxMovement(models.Model):
         null=True,
         blank=True,
     )
+    purchase_return = models.ForeignKey(
+        "purchases.PurchaseReturn",
+        on_delete=models.PROTECT,
+        related_name="cashbox_movements",
+        null=True,
+        blank=True,
+    )
+    sales_return = models.ForeignKey(
+        "sales.SalesReturn",
+        on_delete=models.PROTECT,
+        related_name="cashbox_movements",
+        null=True,
+        blank=True,
+    )
     opening_balance_adjustment = models.ForeignKey(
         OpeningBalanceAdjustment,
         on_delete=models.PROTECT,
@@ -321,6 +337,8 @@ class CashboxMovement(models.Model):
             models.Index(fields=["sales_invoice"]),
             models.Index(fields=["supplier_payment"]),
             models.Index(fields=["customer_payment"]),
+            models.Index(fields=["purchase_return"]),
+            models.Index(fields=["sales_return"]),
             models.Index(fields=["opening_balance_adjustment"]),
             models.Index(fields=["cashbox_operation"]),
             models.Index(fields=["reversal_of"]),

@@ -56,3 +56,9 @@ class SupplierPaymentUiTests(TestCase):
         self.assertEqual(SupplierLedgerEntry.objects.count(), 2)
         self.assertEqual(CashboxMovement.objects.count(), 2)
 
+    def test_payment_history_requires_visible_operator_cancellation_reason(self):
+        self.login_as(RoleCode.ACCOUNTANT, "supplier_payment_reason")
+        self.client.post(reverse("purchases:payment_create"), self.payload())
+        response = self.client.get(reverse("purchases:payments"), {"lang": "en"})
+        self.assertContains(response, 'name="reason" required')
+        self.assertNotContains(response, 'type="hidden" name="reason"')

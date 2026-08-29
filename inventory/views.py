@@ -167,7 +167,8 @@ def item_detail(request, pk):
 @require_permission("inventory.view_stock")
 def movement_list(request):
     queryset = StockMovement.objects.select_related(
-        "item", "location", "created_by", "purchase_invoice", "sales_invoice", "stock_operation"
+        "item", "location", "created_by", "purchase_invoice", "sales_invoice", "stock_operation",
+        "purchase_return", "sales_return"
     )
     query = request.GET.get("q", "").strip()
     movement_type = request.GET.get("type", "").strip()
@@ -177,6 +178,8 @@ def movement_list(request):
             Q(item__item_code__icontains=query)
             | Q(item__item_name__icontains=query)
             | Q(notes__icontains=query)
+            | Q(purchase_return__return_number__icontains=query)
+            | Q(sales_return__return_number__icontains=query)
         )
     valid_types = {value for value, _ in StockMovement._meta.get_field("movement_type").choices}
     if movement_type in valid_types:

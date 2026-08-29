@@ -192,6 +192,105 @@ class SalesLine(models.Model):
         return f"{self.invoice.invoice_number} / {self.line_number} / {self.item}"
 
 
+class SalesReturnStatus(models.TextChoices):
+    POSTED = "posted", "Posted"
+    CANCELLED = "cancelled", "Cancelled"
+
+
+class SalesReturn(models.Model):
+    """Independent sales return linked to one posted source invoice."""
+
+    return_number = models.CharField(max_length=80, unique=True)
+    return_date = models.DateField()
+    source_invoice = models.ForeignKey(
+        SalesInvoice, on_delete=models.PROTECT, related_name="returns"
+    )
+    total_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    cash_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    due_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    cost_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    reason = models.TextField()
+    status = models.CharField(
+        max_length=20,
+        choices=SalesReturnStatus.choices,
+        default=SalesReturnStatus.POSTED,
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="created_sales_returns",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="cancelled_sales_returns",
+        null=True,
+        blank=True,
+    )
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancellation_reason = models.TextField(blank=True)
+    reversal_date = models.DateField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-return_date", "-id"]
+        indexes = [
+            models.Index(fields=["return_number"]),
+            models.Index(fields=["return_date"]),
+            models.Index(fields=["source_invoice", "status"]),
+        ]
+
+    def clean(self):
+        for field_name in ("total_amount", "cash_amount", "due_amount", "cost_amount"):
+            value = getattr(self, field_name)
+            if value is not None and value < 0:
+                raise ValidationError({field_name: "Value cannot be negative."})
+        if self.total_amount != self.cash_amount + self.due_amount:
+            raise ValidationError("Return total must equal cash plus due reversal.")
+        if not (self.reason or "").strip():
+            raise ValidationError({"reason": "Return reason is required."})
+
+    def __str__(self):
+        return self.return_number
+
+
+class SalesReturnLine(models.Model):
+    sales_return = models.ForeignKey(
+        SalesReturn, on_delete=models.PROTECT, related_name="lines"
+    )
+    source_line = models.ForeignKey(
+        SalesLine, on_delete=models.PROTECT, related_name="return_lines"
+    )
+    quantity = models.DecimalField(max_digits=14, decimal_places=3)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    unit_cost = models.DecimalField(max_digits=14, decimal_places=4, default=0)
+    cost_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+
+    class Meta:
+        ordering = ["sales_return", "source_line__line_number"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["sales_return", "source_line"],
+                name="unique_sales_return_source_line",
+            )
+        ]
+        indexes = [models.Index(fields=["source_line"])]
+
+    def clean(self):
+        if self.quantity is not None and self.quantity <= 0:
+            raise ValidationError({"quantity": "Return quantity must be greater than zero."})
+        if self.amount is not None and self.amount < 0:
+            raise ValidationError({"amount": "Return amount cannot be negative."})
+        if self.cost_amount is not None and self.cost_amount < 0:
+            raise ValidationError({"cost_amount": "Return cost cannot be negative."})
+        if self.source_line_id and self.sales_return_id:
+            if self.source_line.invoice_id != self.sales_return.source_invoice_id:
+                raise ValidationError("Return line must belong to the source invoice.")
+
+    def __str__(self):
+        return f"{self.sales_return.return_number} / {self.source_line.line_number}"
+
+
 class CustomerPaymentStatus(models.TextChoices):
     POSTED = "posted", "Posted"
     CANCELLED = "cancelled", "Cancelled"
@@ -296,6 +395,13 @@ class CustomerLedgerEntry(models.Model):
         null=True,
         blank=True,
     )
+    sales_return = models.ForeignKey(
+        SalesReturn,
+        on_delete=models.PROTECT,
+        related_name="customer_ledger_entries",
+        null=True,
+        blank=True,
+    )
     due_increase = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     due_decrease = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     description = models.CharField(max_length=255, blank=True)
@@ -316,6 +422,7 @@ class CustomerLedgerEntry(models.Model):
             models.Index(fields=["sales_invoice"]),
             models.Index(fields=["customer_payment"]),
             models.Index(fields=["opening_balance_adjustment"]),
+            models.Index(fields=["sales_return"]),
         ]
         verbose_name = "Customer Ledger Entry"
         verbose_name_plural = "Customer Ledger Entries"

@@ -365,18 +365,18 @@ class CancelSupplierPaymentTests(TestCase):
         )
 
     def test_status_becomes_cancelled(self):
-        cancelled = cancel_supplier_payment(self.payment.pk)
+        cancelled = cancel_supplier_payment(self.payment.pk, reason="duplicate")
 
         self.assertEqual(cancelled.status, SupplierPaymentStatus.CANCELLED)
 
     def test_cancelling_twice_is_rejected(self):
-        cancel_supplier_payment(self.payment.pk)
+        cancel_supplier_payment(self.payment.pk, reason="duplicate")
 
         with self.assertRaises(ValidationError):
-            cancel_supplier_payment(self.payment.pk)
+            cancel_supplier_payment(self.payment.pk, reason="duplicate")
 
     def test_cancelling_restores_the_supplier_due(self):
-        cancel_supplier_payment(self.payment.pk)
+        cancel_supplier_payment(self.payment.pk, reason="duplicate")
 
         reversal = SupplierLedgerEntry.objects.get(
             entry_type=SupplierLedgerEntryType.ADJUSTMENT
@@ -384,7 +384,7 @@ class CancelSupplierPaymentTests(TestCase):
         self.assertEqual(reversal.due_increase, Decimal("150.00"))
 
     def test_balances_net_to_zero_after_cancelling(self):
-        cancel_supplier_payment(self.payment.pk)
+        cancel_supplier_payment(self.payment.pk, reason="duplicate")
 
         self.assertEqual(get_supplier_balance(self.supplier), Decimal("0"))
         self.assertEqual(get_cashbox_balance(self.cashbox), Decimal("0"))
@@ -394,6 +394,10 @@ class CancelSupplierPaymentTests(TestCase):
 
         log = AuditLog.objects.get(action="cancel_supplier_payment")
         self.assertEqual(log.reason, "duplicate")
+
+    def test_cancelling_requires_an_operator_reason(self):
+        with self.assertRaisesMessage(ValidationError, "reason is required"):
+            cancel_supplier_payment(self.payment.pk, reason="")
 
 
 class CancelPurchaseInvoiceEdgeTests(TestCase):

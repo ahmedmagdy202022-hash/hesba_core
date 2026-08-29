@@ -7,12 +7,21 @@ from django.shortcuts import get_object_or_404, redirect, render
 from permissions.decorators import require_permission
 from permissions.services import user_has_permission
 
-from .forms import CustomerPaymentForm, SalesDraftForm, SalesLineFormSet
-from .models import CustomerPayment, SalesInvoice
+from .forms import (
+    CustomerPaymentForm,
+    SalesDraftForm,
+    SalesLineFormSet,
+    SalesReturnForm,
+    SalesReturnLineFormSet,
+    SalesReturnReversalForm,
+)
+from .models import CustomerPayment, SalesInvoice, SalesReturn
 from .services import (
     cancel_customer_payment,
     cancel_posted_sales_invoice,
+    cancel_sales_return,
     create_sales_draft,
+    create_sales_return,
     post_sales_invoice,
     record_customer_payment,
 )
@@ -41,6 +50,9 @@ STRINGS = {
         "new_collection": "تحصيل جديد من عميل",
         "collection_saved": "تم تسجيل تحصيل العميل.",
         "collection_cancelled": "تم إلغاء تحصيل العميل وعكس آثاره.",
+        "new_return": "مرتجع بيع جديد",
+        "return_saved": "تم ترحيل مرتجع البيع.",
+        "return_reversed": "تم عكس مرتجع البيع.",
     },
     "en": {
         "page_title": "Sales",
@@ -59,11 +71,14 @@ STRINGS = {
         "language": "العربية",
         "dashboard": "Dashboard",
         "all": "All statuses",
-        "cost_warning": "Sales costing uses the currently stored average cost; review HG-003 before profit is release-ready.",
+        "cost_warning": "Sales posting cost is captured from authoritative inventory movements; cached item cost is display-only.",
         "collections": "Customer collections",
         "new_collection": "New customer collection",
         "collection_saved": "Customer collection recorded.",
         "collection_cancelled": "Customer collection cancelled and reversed.",
+        "new_return": "New sales return",
+        "return_saved": "Sales return posted.",
+        "return_reversed": "Sales return reversed.",
     },
 }
 
@@ -126,7 +141,7 @@ def invoice_create(request):
 @require_permission("sales.view_sales_invoices")
 def invoice_detail(request, pk):
     invoice = get_object_or_404(
-        SalesInvoice.objects.select_related("customer", "selling_location", "cashbox").prefetch_related("lines__item"),
+        SalesInvoice.objects.select_related("customer", "selling_location", "cashbox").prefetch_related("lines__item", "returns"),
         pk=pk,
     )
     return render(
@@ -137,6 +152,8 @@ def invoice_detail(request, pk):
             invoice=invoice,
             can_view_cost=user_has_permission(request.user, "inventory.view_cost"),
             can_view_profit=user_has_permission(request.user, "reports.view_profit_report"),
+            can_post=user_has_permission(request.user, "sales.create_sales_invoice"),
+            can_return=user_has_permission(request.user, "sales.return_sale"),
         ),
     )
 
@@ -167,6 +184,80 @@ def invoice_cancel(request, pk):
     else:
         messages.success(request, STRINGS[lang]["cancelled"])
     return redirect(f"/sales/{pk}/?lang={lang}")
+
+
+@require_permission("sales.return_sale")
+def return_create(request, pk):
+    invoice = get_object_or_404(
+        SalesInvoice.objects.select_related("customer", "selling_location", "cashbox").prefetch_related("lines__item"),
+        pk=pk,
+    )
+    lang = _lang(request)
+    form = SalesReturnForm(request.POST or None, lang=lang)
+    line_formset = SalesReturnLineFormSet(
+        request.POST or None,
+        prefix="lines",
+        form_kwargs={"invoice": invoice, "lang": lang},
+    )
+    if request.method == "POST" and form.is_valid() and line_formset.is_valid():
+        line_data = [
+            row.cleaned_data for row in line_formset.forms if row.cleaned_data.get("source_line")
+        ]
+        try:
+            sales_return = create_sales_return(
+                source_invoice_id=invoice.pk,
+                lines=line_data,
+                user=request.user,
+                **form.cleaned_data,
+            )
+        except ValidationError as exc:
+            form.add_error(None, exc)
+        else:
+            messages.success(request, STRINGS[lang]["return_saved"])
+            return redirect(f"/sales/returns/{sales_return.pk}/?lang={lang}")
+    return render(
+        request,
+        "sales/return_form.html",
+        _context(request, invoice=invoice, form=form, line_formset=line_formset),
+    )
+
+
+@require_permission("sales.view_sales_invoices")
+def return_detail(request, pk):
+    sales_return = get_object_or_404(
+        SalesReturn.objects.select_related(
+            "source_invoice__customer", "source_invoice__selling_location", "source_invoice__cashbox"
+        ).prefetch_related("lines__source_line__item"),
+        pk=pk,
+    )
+    return render(
+        request,
+        "sales/return_detail.html",
+        _context(
+            request,
+            sales_return=sales_return,
+            can_reverse=user_has_permission(request.user, "sales.return_sale"),
+            reversal_form=SalesReturnReversalForm(lang=_lang(request)),
+        ),
+    )
+
+
+@require_permission("sales.return_sale")
+def return_cancel(request, pk):
+    if request.method != "POST":
+        return redirect("sales:return_detail", pk=pk)
+    lang = _lang(request)
+    form = SalesReturnReversalForm(request.POST, lang=lang)
+    if form.is_valid():
+        try:
+            cancel_sales_return(pk, user=request.user, **form.cleaned_data)
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+        else:
+            messages.success(request, STRINGS[lang]["return_reversed"])
+    else:
+        messages.error(request, "; ".join(error for errors in form.errors.values() for error in errors))
+    return redirect(f"/sales/returns/{pk}/?lang={lang}")
 
 
 @require_permission("sales.receive_customer_payment")

@@ -85,9 +85,9 @@ class InventoryUiTests(TestCase):
         self.assertEqual(movement.movement_type, StockMovementType.PURCHASE_IN)
         self.assertEqual(movement.quantity, Decimal("5"))
 
-    def test_english_and_safe_blocked_action_notice_render(self):
+    def test_english_and_approved_stock_operation_action_renders(self):
         self.login_as(RoleCode.OWNER, "inventory_english")
         response = self.client.get(reverse("inventory:stock"), {"lang": "en"})
         self.assertContains(response, "Stock by item and location")
-        self.assertContains(response, "Transfers and adjustments remain unavailable")
-        self.assertNotContains(response, "name=\"transfer_stock\"")
+        self.assertContains(response, "Transfers and adjustments")
+        self.assertContains(response, reverse("inventory:operations"))
