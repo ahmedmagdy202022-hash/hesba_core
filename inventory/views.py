@@ -1,13 +1,22 @@
 from django.core.paginator import Paginator
 from django.db.models import Q
-from django.shortcuts import get_object_or_404, render
+from django.contrib import messages
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.shortcuts import get_object_or_404, redirect, render
 
 from master_data.models import Item, Location
-from permissions.decorators import require_permission
+from permissions.decorators import require_any_permission, require_permission
 from permissions.services import user_has_permission
 
-from .models import StockMovement
-from .services import get_item_location_stock_quantity, get_item_stock_quantity
+from .forms import StockAdjustmentForm, StockOperationReversalForm, StockTransferForm
+from .models import StockMovement, StockOperation, StockOperationType
+from .services import (
+    adjust_stock,
+    cancel_stock_operation,
+    get_item_location_stock_quantity,
+    get_item_stock_quantity,
+    transfer_stock,
+)
 
 
 STRINGS = {
@@ -25,7 +34,11 @@ STRINGS = {
         "low": "مخزون منخفض",
         "out": "نفد المخزون",
         "healthy": "متاح",
-        "blocked": "التحويل والتسوية غير متاحين حتى اعتماد خدمات الحركة المحمية.",
+        "operations": "التحويلات والتسويات",
+        "transfer": "تحويل مخزون",
+        "adjustment": "تسوية مخزون",
+        "saved": "تم تسجيل حركة المخزون.",
+        "reversed": "تم عكس حركة المخزون.",
     },
     "en": {
         "page_title": "Inventory",
@@ -41,13 +54,17 @@ STRINGS = {
         "low": "Low stock",
         "out": "Out of stock",
         "healthy": "Available",
-        "blocked": "Transfers and adjustments remain unavailable until protected movement services are approved.",
+        "operations": "Transfers and adjustments",
+        "transfer": "Stock transfer",
+        "adjustment": "Stock adjustment",
+        "saved": "Stock operation posted.",
+        "reversed": "Stock operation reversed.",
     },
 }
 
 
 def _lang(request):
-    return "en" if request.GET.get("lang") == "en" else "ar"
+    return "en" if request.GET.get("lang") == "en" or request.POST.get("lang") == "en" else "ar"
 
 
 def _context(request, **extra):
@@ -113,6 +130,8 @@ def stock_list(request):
             selected_location=selected_location,
             counts=counts,
             can_view_cost=can_view_cost,
+            can_transfer=user_has_permission(request.user, "inventory.transfer_stock"),
+            can_adjust=user_has_permission(request.user, "inventory.adjust_stock"),
         ),
     )
 
@@ -148,7 +167,7 @@ def item_detail(request, pk):
 @require_permission("inventory.view_stock")
 def movement_list(request):
     queryset = StockMovement.objects.select_related(
-        "item", "location", "created_by", "purchase_invoice", "sales_invoice"
+        "item", "location", "created_by", "purchase_invoice", "sales_invoice", "stock_operation"
     )
     query = request.GET.get("q", "").strip()
     movement_type = request.GET.get("type", "").strip()
@@ -183,3 +202,81 @@ def movement_list(request):
             can_view_cost=user_has_permission(request.user, "inventory.view_cost"),
         ),
     )
+
+
+@require_any_permission("inventory.transfer_stock", "inventory.adjust_stock")
+def operation_list(request):
+    operations = StockOperation.objects.select_related(
+        "item", "source_location", "destination_location", "created_by", "cancelled_by"
+    )
+    page = Paginator(operations, 50).get_page(request.GET.get("page"))
+    return render(
+        request,
+        "inventory/operations.html",
+        _context(
+            request,
+            page=page,
+            can_transfer=user_has_permission(request.user, "inventory.transfer_stock"),
+            can_adjust=user_has_permission(request.user, "inventory.adjust_stock"),
+            reversal_form=StockOperationReversalForm(lang=_lang(request)),
+        ),
+    )
+
+
+@require_permission("inventory.transfer_stock")
+def transfer_create(request):
+    lang = _lang(request)
+    form = StockTransferForm(request.POST or None, lang=lang)
+    if request.method == "POST" and form.is_valid():
+        try:
+            transfer_stock(user=request.user, **form.cleaned_data)
+        except ValidationError as exc:
+            form.add_error(None, exc)
+        else:
+            messages.success(request, STRINGS[lang]["saved"])
+            return redirect(f"/inventory/operations/?lang={lang}")
+    return render(
+        request,
+        "inventory/operation_form.html",
+        _context(request, form=form, title=STRINGS[lang]["transfer"]),
+    )
+
+
+@require_permission("inventory.adjust_stock")
+def adjustment_create(request):
+    lang = _lang(request)
+    can_view_cost = user_has_permission(request.user, "inventory.view_cost")
+    form = StockAdjustmentForm(
+        request.POST or None, lang=lang, can_view_cost=can_view_cost
+    )
+    if request.method == "POST" and form.is_valid():
+        try:
+            adjust_stock(user=request.user, **form.cleaned_data)
+        except ValidationError as exc:
+            form.add_error(None, exc)
+        else:
+            messages.success(request, STRINGS[lang]["saved"])
+            return redirect(f"/inventory/operations/?lang={lang}")
+    return render(
+        request,
+        "inventory/operation_form.html",
+        _context(request, form=form, title=STRINGS[lang]["adjustment"]),
+    )
+
+
+@require_any_permission("inventory.transfer_stock", "inventory.adjust_stock")
+def operation_cancel(request, pk):
+    if request.method != "POST":
+        return redirect("inventory:operations")
+    lang = _lang(request)
+    form = StockOperationReversalForm(request.POST, lang=lang)
+    if form.is_valid():
+        try:
+            cancel_stock_operation(pk, user=request.user, **form.cleaned_data)
+        except (ValidationError, PermissionDenied) as exc:
+            messages.error(request, "; ".join(getattr(exc, "messages", [str(exc)])))
+        else:
+            messages.success(request, STRINGS[lang]["reversed"])
+    else:
+        messages.error(request, "; ".join(error for errors in form.errors.values() for error in errors))
+    return redirect(f"/inventory/operations/?lang={lang}")

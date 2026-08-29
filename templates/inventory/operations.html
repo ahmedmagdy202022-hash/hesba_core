@@ -1,0 +1,23 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row">
+  <div><a class="op-back" href="{% url 'inventory:stock' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ words.operations }}</h1></div>
+  <div class="op-form-actions">
+    {% if can_transfer %}<a class="op-primary" href="{% url 'inventory:transfer' %}?lang={{ lang }}">{{ words.transfer }}</a>{% endif %}
+    {% if can_adjust %}<a class="op-secondary" href="{% url 'inventory:adjustment' %}?lang={{ lang }}">{{ words.adjustment }}</a>{% endif %}
+  </div>
+</section>
+<div class="op-table-wrap"><table class="op-table">
+  <thead><tr><th>{% if lang == 'en' %}Reference{% else %}المرجع{% endif %}</th><th>{% if lang == 'en' %}Date{% else %}التاريخ{% endif %}</th><th>{% if lang == 'en' %}Type{% else %}النوع{% endif %}</th><th>{% if lang == 'en' %}Item{% else %}الصنف{% endif %}</th><th>{% if lang == 'en' %}Route / direction{% else %}المسار / الاتجاه{% endif %}</th><th>{% if lang == 'en' %}Quantity{% else %}الكمية{% endif %}</th><th>{% if lang == 'en' %}Status{% else %}الحالة{% endif %}</th><th></th></tr></thead>
+  <tbody>{% for operation in page.object_list %}<tr>
+    <td>{{ operation.reference_number }}</td><td>{{ operation.operation_date }}</td><td>{{ operation.get_operation_type_display }}</td><td>{{ operation.item.search_label }}</td>
+    <td>{% if operation.operation_type == 'transfer' %}{{ operation.source_location }} → {{ operation.destination_location }}{% else %}{{ operation.source_location|default:operation.destination_location }} / {{ operation.get_adjustment_direction_display }}{% endif %}</td>
+    <td>{{ operation.quantity }}</td><td>{{ operation.get_status_display }}</td><td>
+      {% if operation.status == 'posted' %}
+        {% if operation.operation_type == 'transfer' and can_transfer %}{% include "inventory/_operation_reversal_form.html" %}{% endif %}
+        {% if operation.operation_type == 'adjustment' and can_adjust %}{% include "inventory/_operation_reversal_form.html" %}{% endif %}
+      {% endif %}
+    </td>
+  </tr>{% empty %}<tr><td colspan="8" class="op-empty">{{ words.empty }}</td></tr>{% endfor %}</tbody>
+</table></div>
+{% endblock %}

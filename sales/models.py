@@ -1,15 +1,10 @@
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 
-
-MONEY_QUANT = Decimal("0.01")
-
-
-def money_round(value):
-    return value.quantize(MONEY_QUANT, rounding=ROUND_HALF_UP)
+from config.money import money_round
 
 
 class SalesInvoiceStatus(models.TextChoices):

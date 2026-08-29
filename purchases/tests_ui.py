@@ -87,15 +87,16 @@ class PurchaseUiTests(TestCase):
         self.assertFalse(PurchaseInvoice.objects.exists())
         self.assertContains(response, "Cashbox is required")
 
-    def test_fractional_cent_purchase_line_is_rejected_without_rounding_drift(self):
+    def test_fractional_cent_purchase_line_rounds_half_up_per_line(self):
         self.login_as(RoleCode.OWNER, "purchase_fraction")
         payload = self.draft_payload(paid_now="0.00")
         payload["lines-0-quantity"] = "1.001"
         payload["lines-0-unit_purchase_price"] = "1.01"
         response = self.client.post(reverse("purchases:create"), payload)
-        self.assertEqual(response.status_code, 200)
-        self.assertFalse(PurchaseInvoice.objects.exists())
-        self.assertContains(response, "exact two-decimal amount")
+        self.assertEqual(response.status_code, 302)
+        invoice = PurchaseInvoice.objects.get()
+        self.assertEqual(invoice.lines.get().line_total_amount, Decimal("1.01"))
+        self.assertEqual(invoice.subtotal, Decimal("1.01"))
 
     def test_post_route_calls_existing_service_and_creates_all_side_effects(self):
         user = self.login_as(RoleCode.OWNER, "purchase_post")
@@ -141,4 +142,3 @@ class PurchaseUiTests(TestCase):
         response = self.client.get(reverse("purchases:list"), {"lang": "en"})
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Purchase invoices")
-

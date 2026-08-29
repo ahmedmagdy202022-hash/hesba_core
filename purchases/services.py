@@ -1,10 +1,11 @@
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from audit.models import AuditEventType, AuditLog
 from cashboxes.models import CashboxDirection, CashboxMovement, CashboxMovementType
+from config.money import money_round
 from inventory.models import StockMovement, StockMovementType
 from inventory.services import recalculate_item_average_cost
 from .models import (
@@ -16,13 +17,6 @@ from .models import (
     SupplierPayment,
     SupplierPaymentStatus,
 )
-
-
-MONEY_QUANT = Decimal("0.01")
-
-
-def _money_round(value):
-    return value.quantize(MONEY_QUANT, rounding=ROUND_HALF_UP)
 
 
 @transaction.atomic
@@ -41,16 +35,9 @@ def create_purchase_draft(header, lines, user=None):
         unit_price = data["unit_purchase_price"]
         line_discount = data.get("line_discount_amount") or Decimal("0")
         exact_total = (quantity * unit_price) - line_discount
-        line_total = _money_round(exact_total)
+        line_total = money_round(exact_total)
         if line_total < 0:
             raise ValidationError("A purchase line discount cannot exceed its gross amount.")
-        # PurchaseLine.clean currently requires exact equality while the stored
-        # column has two decimal places. Refuse ambiguous fractional-cent input
-        # instead of silently changing the protected model calculation.
-        if exact_total != line_total:
-            raise ValidationError(
-                "Each purchase line must resolve to an exact two-decimal amount."
-            )
         prepared_lines.append((number, data, line_total))
         subtotal += line_total
 
@@ -60,7 +47,7 @@ def create_purchase_draft(header, lines, user=None):
     invoice_discount = header.get("discount_amount") or Decimal("0")
     tax_amount = header.get("tax_amount") or Decimal("0")
     paid_now = header.get("paid_now") or Decimal("0")
-    total_amount = _money_round(subtotal - invoice_discount + tax_amount)
+    total_amount = money_round(subtotal - invoice_discount + tax_amount)
     if total_amount < 0:
         raise ValidationError("Invoice discount cannot make the total negative.")
 
@@ -70,12 +57,12 @@ def create_purchase_draft(header, lines, user=None):
         supplier=header["supplier"],
         receiving_location=header["receiving_location"],
         cashbox=header.get("cashbox"),
-        subtotal=_money_round(subtotal),
+        subtotal=money_round(subtotal),
         discount_amount=invoice_discount,
         tax_amount=tax_amount,
         total_amount=total_amount,
         paid_now=paid_now,
-        remaining_due=_money_round(total_amount - paid_now),
+        remaining_due=money_round(total_amount - paid_now),
         notes=header.get("notes", ""),
         created_by=user,
     )

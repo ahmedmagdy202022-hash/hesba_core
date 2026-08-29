@@ -122,19 +122,19 @@ class SalesUiTests(TestCase):
         self.assertNotContains(response, "Unit cost")
         self.assertNotContains(response, "Profit")
 
-    def test_stale_average_cost_behavior_is_characterized_not_silently_fixed(self):
+    def test_stale_average_cost_is_replaced_by_authoritative_inventory_cost(self):
         self.login_as(RoleCode.OWNER, "sales_stale_cost")
         location = make_location()
         item = make_item(average_cost=Decimal("1.0000"))
         stock_in(item, location, 10, "10.00")
-        # Deliberately do not call recalculate_item_average_cost: this is HG-003.
+        # Deliberately leave the stored cache stale; posting must use movements.
         invoice = make_draft_sales_invoice(location=location)
         add_sales_line(invoice, item, 2, "30.00")
         recalculate_invoice_totals(invoice)
         self.client.post(reverse("sales:post", args=[invoice.pk]))
         line = invoice.lines.get()
-        self.assertEqual(line.unit_cost, Decimal("1.0000"))
-        self.assertEqual(line.line_cost_amount, Decimal("2.00"))
+        self.assertEqual(line.unit_cost, Decimal("10.0000"))
+        self.assertEqual(line.line_cost_amount, Decimal("20.00"))
 
     def test_english_sales_list_renders(self):
         self.login_as(RoleCode.CASHIER, "sales_english")

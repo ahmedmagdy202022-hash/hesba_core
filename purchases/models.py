@@ -4,6 +4,8 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 
+from config.money import money_round
+
 
 class PurchaseInvoiceStatus(models.TextChoices):
     DRAFT = "draft", "Draft"
@@ -165,7 +167,10 @@ class PurchaseLine(models.Model):
     def calculated_line_total(self):
         if self.quantity is None or self.unit_purchase_price is None:
             return None
-        return (self.quantity * self.unit_purchase_price) - (self.line_discount_amount or Decimal("0"))
+        return money_round(
+            (self.quantity * self.unit_purchase_price)
+            - (self.line_discount_amount or Decimal("0"))
+        )
 
     def clean(self):
         if self.quantity is not None and self.quantity <= 0:

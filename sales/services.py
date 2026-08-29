@@ -6,7 +6,11 @@ from django.db import transaction
 from audit.models import AuditEventType, AuditLog
 from cashboxes.models import CashboxDirection, CashboxMovement, CashboxMovementType
 from inventory.models import StockMovement, StockMovementType
-from inventory.services import get_item_location_stock_quantity, recalculate_item_average_cost
+from inventory.services import (
+    get_item_authoritative_average_cost,
+    get_item_location_stock_quantity,
+    recalculate_item_average_cost,
+)
 from .models import (
     CustomerLedgerEntry,
     CustomerLedgerEntryType,
@@ -101,7 +105,7 @@ def create_sales_draft(header, lines, user=None):
 def _line_unit_cost(line):
     if not line.item.is_stock_tracked:
         return Decimal("0")
-    return line.item.average_cost or Decimal("0")
+    return get_item_authoritative_average_cost(line.item)
 
 
 def _line_cost_amount(line, unit_cost):
