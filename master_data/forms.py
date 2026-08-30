@@ -175,6 +175,7 @@ class CashboxForm(HesbaModelForm):
             OpeningBalanceTarget.CASHBOX, self.instance
         ):
             self.fields["opening_balance"].disabled = True
+            self.fields["currency"].disabled = True
 
 
 class CategoryForm(HesbaModelForm):

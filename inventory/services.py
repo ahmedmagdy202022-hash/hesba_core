@@ -180,6 +180,9 @@ def transfer_stock(
     reason="",
 ):
     _require_permission(user, "inventory.transfer_stock")
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValidationError("Stock transfer reason is required.")
     _ensure_open_period(operation_date)
     quantity = Decimal(quantity)
     if quantity <= 0:
@@ -213,7 +216,7 @@ def transfer_stock(
         destination_location=destination,
         quantity=quantity,
         unit_cost=get_item_authoritative_average_cost(locked_item),
-        reason=(reason or "").strip(),
+        reason=reason,
         created_by=user,
     )
     operation.full_clean()

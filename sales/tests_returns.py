@@ -1,13 +1,15 @@
 from datetime import date
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db.models.query import QuerySet
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
 from cashboxes.services import get_cashbox_balance
-from cashboxes.models import CashboxOperationType
+from cashboxes.models import Cashbox, CashboxOperationType
 from cashboxes.services import create_cashbox_operation
 from closing.models import Period, PeriodStatus
 from hesba_testing.factories import (
@@ -20,7 +22,8 @@ from hesba_testing.factories import (
     make_user_profile,
     stock_in,
 )
-from inventory.services import get_item_location_stock_quantity
+from inventory.models import StockAdjustmentDirection
+from inventory.services import adjust_stock, get_item_location_stock_quantity
 from permissions.models import RoleCode
 from reports.selectors import profit_report, profit_totals
 
@@ -106,6 +109,85 @@ class SalesReturnTests(TestCase):
         self.create_return("SR-LIMIT-1", line)
         with self.assertRaisesMessage(ValidationError, "remaining quantity"):
             self.create_return("SR-LIMIT-2", line)
+
+    def test_sales_return_refund_locks_cashbox_before_balance_validation(self):
+        original_select_for_update = QuerySet.select_for_update
+        locked_models = []
+
+        def tracked_select_for_update(queryset, *args, **kwargs):
+            locked_models.append(queryset.model)
+            return original_select_for_update(queryset, *args, **kwargs)
+
+        with patch.object(QuerySet, "select_for_update", tracked_select_for_update):
+            self.create_return("SR-CASHBOX-LOCK", self.invoice.lines.first())
+
+        self.assertIn(Cashbox, locked_models)
+
+    def test_cancellation_stock_guard_aggregates_repeated_item_lines(self):
+        repeated_item = make_item(item_code="RET-S-REPEATED", item_name="Repeated S")
+        stock_in(repeated_item, self.location, 2, "0.25")
+        invoice = create_sales_draft(
+            {
+                "invoice_number": "SI-RETURN-REPEATED",
+                "invoice_date": self.when,
+                "customer": self.customer,
+                "selling_location": self.location,
+                "cashbox": self.cashbox,
+                "paid_now": Decimal("0"),
+            },
+            [
+                {
+                    "item": repeated_item,
+                    "quantity": Decimal("1"),
+                    "unit_sale_price": Decimal("1.00"),
+                },
+                {
+                    "item": repeated_item,
+                    "quantity": Decimal("1"),
+                    "unit_sale_price": Decimal("1.00"),
+                },
+            ],
+            self.owner,
+        )
+        post_sales_invoice(invoice.pk, self.owner)
+        source_lines = list(invoice.lines.order_by("line_number"))
+        sales_return = create_sales_return(
+            return_number="SR-REPEATED-GUARD",
+            return_date=self.when,
+            source_invoice_id=invoice.pk,
+            lines=[
+                {"source_line": source_lines[0], "quantity": Decimal("1")},
+                {"source_line": source_lines[1], "quantity": Decimal("1")},
+            ],
+            reason="Customer returned repeated lines",
+            user=self.owner,
+        )
+        adjust_stock(
+            "ADJ-SALES-RETURN-REPEATED",
+            self.when,
+            repeated_item,
+            self.location,
+            StockAdjustmentDirection.OUT,
+            Decimal("0.5"),
+            "Returned stock partly used",
+            self.owner,
+        )
+
+        with self.assertRaisesMessage(ValidationError, "Not enough returned stock"):
+            cancel_sales_return(
+                sales_return.pk,
+                self.when,
+                "Try reversing repeated lines",
+                self.owner,
+            )
+
+        sales_return.refresh_from_db()
+        self.assertEqual(sales_return.status, SalesReturnStatus.POSTED)
+        self.assertEqual(sales_return.stock_movements.count(), 2)
+        self.assertEqual(
+            get_item_location_stock_quantity(repeated_item, self.location),
+            Decimal("1.5"),
+        )
 
     def test_cancellation_reverses_return_without_deleting_document(self):
         line = self.invoice.lines.first()

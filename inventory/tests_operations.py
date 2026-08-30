@@ -59,6 +59,7 @@ class StockOperationTests(TestCase):
             self.destination,
             Decimal("3"),
             self.keeper,
+            "Restock destination",
         )
         movements = list(operation.movements.order_by("id"))
         self.assertEqual(
@@ -80,6 +81,7 @@ class StockOperationTests(TestCase):
             self.destination,
             Decimal("4"),
             self.owner,
+            "Move stock for branch",
         )
         cancel_stock_operation(
             operation.pk, self.operation_date, "Transfer entered twice", self.owner
@@ -116,6 +118,20 @@ class StockOperationTests(TestCase):
                 self.cashier,
             )
 
+    def test_transfer_requires_reason_at_service_boundary(self):
+        with self.assertRaisesMessage(ValidationError, "transfer reason"):
+            transfer_stock(
+                "TR-NO-REASON",
+                self.operation_date,
+                self.item,
+                self.source,
+                self.destination,
+                Decimal("1"),
+                self.keeper,
+                "   ",
+            )
+        self.assertFalse(self.item.stock_operations.filter(reference_number="TR-NO-REASON").exists())
+
     def test_adjustment_and_reversal_preserve_history(self):
         operation = adjust_stock(
             "ADJ-001",
@@ -150,5 +166,6 @@ class StockOperationTests(TestCase):
                 self.destination,
                 Decimal("1"),
                 self.owner,
+                "Closed-period transfer",
             )
         self.assertFalse(self.item.stock_operations.exists())

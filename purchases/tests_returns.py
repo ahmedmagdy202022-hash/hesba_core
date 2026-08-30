@@ -17,7 +17,8 @@ from hesba_testing.factories import (
     make_user,
     make_user_profile,
 )
-from inventory.services import get_item_location_stock_quantity
+from inventory.models import StockAdjustmentDirection
+from inventory.services import adjust_stock, get_item_location_stock_quantity
 from permissions.models import RoleCode
 
 from .models import PurchaseReturnStatus, SupplierLedgerEntry
@@ -105,6 +106,63 @@ class PurchaseReturnTests(TestCase):
         self.create_return("PR-LIMIT-1", line)
         with self.assertRaisesMessage(ValidationError, "remaining quantity"):
             self.create_return("PR-LIMIT-2", line)
+
+    def test_return_stock_guard_aggregates_repeated_item_lines(self):
+        repeated_item = make_item(item_code="RET-P-REPEATED", item_name="Repeated P")
+        invoice = create_purchase_draft(
+            {
+                "invoice_number": "PI-RETURN-REPEATED",
+                "invoice_date": self.when,
+                "supplier": self.supplier,
+                "receiving_location": self.location,
+                "cashbox": self.cashbox,
+                "paid_now": Decimal("0"),
+            },
+            [
+                {
+                    "item": repeated_item,
+                    "quantity": Decimal("1"),
+                    "unit_purchase_price": Decimal("1.00"),
+                },
+                {
+                    "item": repeated_item,
+                    "quantity": Decimal("1"),
+                    "unit_purchase_price": Decimal("1.00"),
+                },
+            ],
+            self.owner,
+        )
+        post_purchase_invoice(invoice.pk, self.owner)
+        adjust_stock(
+            "ADJ-RETURN-REPEATED",
+            self.when,
+            repeated_item,
+            self.location,
+            StockAdjustmentDirection.OUT,
+            Decimal("0.5"),
+            "Stock used before return",
+            self.owner,
+        )
+
+        lines = list(invoice.lines.order_by("line_number"))
+        with self.assertRaisesMessage(ValidationError, "Not enough stock"):
+            create_purchase_return(
+                return_number="PR-REPEATED-GUARD",
+                return_date=self.when,
+                source_invoice_id=invoice.pk,
+                lines=[
+                    {"source_line": lines[0], "quantity": Decimal("1")},
+                    {"source_line": lines[1], "quantity": Decimal("1")},
+                ],
+                reason="Return both repeated lines",
+                user=self.owner,
+            )
+
+        self.assertFalse(invoice.returns.exists())
+        self.assertEqual(
+            get_item_location_stock_quantity(repeated_item, self.location),
+            Decimal("1.5"),
+        )
 
     def test_cancellation_reverses_stock_due_and_cash_without_deleting(self):
         line = self.invoice.lines.first()

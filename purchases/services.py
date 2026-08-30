@@ -479,14 +479,29 @@ def create_purchase_return(
         .order_by("line_number")
     )
     prepared = _prepare_purchase_return_lines(invoice, source_lines, lines)
+    requested_stock = {}
     for row in prepared:
         line = row["source_line"]
         if line.item.is_stock_tracked:
-            available = get_item_location_stock_quantity(line.item, invoice.receiving_location)
-            if available < row["quantity"]:
-                raise ValidationError(
-                    f"Not enough stock to return item {line.item}. Available: {available}."
-                )
+            key = (line.item_id, invoice.receiving_location_id)
+            aggregate = requested_stock.setdefault(
+                key,
+                {
+                    "item": line.item,
+                    "location": invoice.receiving_location,
+                    "quantity": Decimal("0"),
+                },
+            )
+            aggregate["quantity"] += row["quantity"]
+    for aggregate in requested_stock.values():
+        available = get_item_location_stock_quantity(
+            aggregate["item"], aggregate["location"]
+        )
+        if available < aggregate["quantity"]:
+            raise ValidationError(
+                f"Not enough stock to return item {aggregate['item']}. "
+                f"Available: {available}."
+            )
     total_amount = money_round(sum((row["amount"] for row in prepared), Decimal("0")))
     cash_amount, due_amount = _purchase_return_payment_split(invoice, total_amount)
     purchase_return = PurchaseReturn(

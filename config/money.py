@@ -22,9 +22,13 @@ def allocate_proportionally(total, weights):
 
     rounded_total = money_round(total)
     decimal_weights = [Decimal(weight) for weight in weights]
-    weight_total = sum(decimal_weights, Decimal("0"))
     if not decimal_weights:
         return []
+    if rounded_total < 0:
+        raise ValueError("Proportional allocation requires a nonnegative total.")
+    if any(weight < 0 for weight in decimal_weights):
+        raise ValueError("Proportional allocation weights cannot be negative.")
+    weight_total = sum(decimal_weights, Decimal("0"))
     if weight_total <= 0:
         raise ValueError("Proportional allocation requires a positive total weight.")
 
@@ -34,7 +38,8 @@ def allocate_proportionally(total, weights):
         if index == len(decimal_weights) - 1:
             share = rounded_total - allocated
         else:
-            share = money_round(rounded_total * weight / weight_total)
+            remaining = rounded_total - allocated
+            share = min(money_round(rounded_total * weight / weight_total), remaining)
             allocated += share
         allocations.append(share)
     return allocations

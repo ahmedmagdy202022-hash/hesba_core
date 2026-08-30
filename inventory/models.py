@@ -97,6 +97,8 @@ class StockOperation(models.Model):
         if self.unit_cost is not None and self.unit_cost < 0:
             raise ValidationError({"unit_cost": "Unit cost cannot be negative."})
         if self.operation_type == StockOperationType.TRANSFER:
+            if not (self.reason or "").strip():
+                raise ValidationError({"reason": "Transfer reason is required."})
             if not self.source_location_id or not self.destination_location_id:
                 raise ValidationError("A transfer requires source and destination locations.")
             if self.source_location_id == self.destination_location_id:

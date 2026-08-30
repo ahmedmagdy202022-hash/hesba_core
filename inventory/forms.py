@@ -67,7 +67,7 @@ class StockTransferForm(StockOperationForm):
     source_location = forms.ModelChoiceField(queryset=Location.objects.none())
     destination_location = forms.ModelChoiceField(queryset=Location.objects.none())
     quantity = forms.DecimalField(max_digits=14, decimal_places=3, min_value=Decimal("0.001"))
-    reason = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}))
+    reason = forms.CharField(widget=forms.Textarea(attrs={"rows": 3}))
 
     def clean(self):
         cleaned = super().clean()

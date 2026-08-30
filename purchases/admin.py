@@ -1,6 +1,18 @@
 from django.contrib import admin
 
-from .models import PurchaseInvoice, PurchaseLine, SupplierLedgerEntry, SupplierPayment
+from config.admin import (
+    ParentStatusProtectedAdminMixin,
+    ProtectedStatusAdminMixin,
+    ViewOnlyAdminMixin,
+)
+
+from .models import (
+    PurchaseInvoice,
+    PurchaseInvoiceStatus,
+    PurchaseLine,
+    SupplierLedgerEntry,
+    SupplierPayment,
+)
 
 
 class PurchaseLineInline(admin.TabularInline):
@@ -17,9 +29,21 @@ class PurchaseLineInline(admin.TabularInline):
         "line_total_amount",
     )
 
+    def _draft(self, obj):
+        return obj is not None and obj.status == PurchaseInvoiceStatus.DRAFT
+
+    def has_add_permission(self, request, obj=None):
+        return self._draft(obj) and super().has_add_permission(request, obj)
+
+    def has_change_permission(self, request, obj=None):
+        return self._draft(obj) and super().has_change_permission(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        return self._draft(obj) and super().has_delete_permission(request, obj)
+
 
 @admin.register(PurchaseInvoice)
-class PurchaseInvoiceAdmin(admin.ModelAdmin):
+class PurchaseInvoiceAdmin(ProtectedStatusAdminMixin, admin.ModelAdmin):
     list_display = (
         "invoice_number",
         "invoice_date",
@@ -35,10 +59,19 @@ class PurchaseInvoiceAdmin(admin.ModelAdmin):
     list_filter = ("status", "payment_status", "invoice_date", "receiving_location")
     autocomplete_fields = ("supplier", "receiving_location", "cashbox", "created_by")
     inlines = (PurchaseLineInline,)
+    readonly_fields = (
+        "status",
+        "payment_status",
+        "subtotal",
+        "total_amount",
+        "remaining_due",
+        "created_at",
+        "updated_at",
+    )
 
 
 @admin.register(PurchaseLine)
-class PurchaseLineAdmin(admin.ModelAdmin):
+class PurchaseLineAdmin(ParentStatusProtectedAdminMixin, admin.ModelAdmin):
     list_display = ("invoice", "line_number", "item", "quantity", "unit_purchase_price", "line_total_amount")
     search_fields = ("invoice__invoice_number", "item__item_code", "item__item_name")
     list_filter = ("invoice__status",)
@@ -46,7 +79,7 @@ class PurchaseLineAdmin(admin.ModelAdmin):
 
 
 @admin.register(SupplierPayment)
-class SupplierPaymentAdmin(admin.ModelAdmin):
+class SupplierPaymentAdmin(ViewOnlyAdminMixin, admin.ModelAdmin):
     list_display = ("payment_number", "payment_date", "supplier", "cashbox", "amount", "status")
     search_fields = ("payment_number", "supplier__supplier_code", "supplier__name", "cashbox__cashbox_code")
     list_filter = ("status", "payment_date", "cashbox")
@@ -54,7 +87,7 @@ class SupplierPaymentAdmin(admin.ModelAdmin):
 
 
 @admin.register(SupplierLedgerEntry)
-class SupplierLedgerEntryAdmin(admin.ModelAdmin):
+class SupplierLedgerEntryAdmin(ViewOnlyAdminMixin, admin.ModelAdmin):
     list_display = (
         "entry_date",
         "supplier",

@@ -1,6 +1,18 @@
 from django.contrib import admin
 
-from .models import CustomerLedgerEntry, CustomerPayment, SalesInvoice, SalesLine
+from config.admin import (
+    ParentStatusProtectedAdminMixin,
+    ProtectedStatusAdminMixin,
+    ViewOnlyAdminMixin,
+)
+
+from .models import (
+    CustomerLedgerEntry,
+    CustomerPayment,
+    SalesInvoice,
+    SalesInvoiceStatus,
+    SalesLine,
+)
 
 
 class SalesLineInline(admin.TabularInline):
@@ -17,9 +29,21 @@ class SalesLineInline(admin.TabularInline):
         "line_total_amount",
     )
 
+    def _draft(self, obj):
+        return obj is not None and obj.status == SalesInvoiceStatus.DRAFT
+
+    def has_add_permission(self, request, obj=None):
+        return self._draft(obj) and super().has_add_permission(request, obj)
+
+    def has_change_permission(self, request, obj=None):
+        return self._draft(obj) and super().has_change_permission(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        return self._draft(obj) and super().has_delete_permission(request, obj)
+
 
 @admin.register(SalesInvoice)
-class SalesInvoiceAdmin(admin.ModelAdmin):
+class SalesInvoiceAdmin(ProtectedStatusAdminMixin, admin.ModelAdmin):
     list_display = (
         "invoice_number",
         "invoice_date",
@@ -35,10 +59,19 @@ class SalesInvoiceAdmin(admin.ModelAdmin):
     list_filter = ("status", "payment_status", "invoice_date", "selling_location")
     autocomplete_fields = ("customer", "selling_location", "cashbox", "created_by")
     inlines = (SalesLineInline,)
+    readonly_fields = (
+        "status",
+        "payment_status",
+        "subtotal",
+        "total_amount",
+        "remaining_due",
+        "created_at",
+        "updated_at",
+    )
 
 
 @admin.register(SalesLine)
-class SalesLineAdmin(admin.ModelAdmin):
+class SalesLineAdmin(ParentStatusProtectedAdminMixin, admin.ModelAdmin):
     list_display = ("invoice", "line_number", "item", "quantity", "unit_sale_price", "line_total_amount")
     search_fields = ("invoice__invoice_number", "item__item_code", "item__item_name")
     list_filter = ("invoice__status",)
@@ -46,7 +79,7 @@ class SalesLineAdmin(admin.ModelAdmin):
 
 
 @admin.register(CustomerPayment)
-class CustomerPaymentAdmin(admin.ModelAdmin):
+class CustomerPaymentAdmin(ViewOnlyAdminMixin, admin.ModelAdmin):
     list_display = ("payment_number", "payment_date", "customer", "cashbox", "amount", "status")
     search_fields = ("payment_number", "customer__customer_code", "customer__name", "cashbox__cashbox_code")
     list_filter = ("status", "payment_date", "cashbox")
@@ -54,7 +87,7 @@ class CustomerPaymentAdmin(admin.ModelAdmin):
 
 
 @admin.register(CustomerLedgerEntry)
-class CustomerLedgerEntryAdmin(admin.ModelAdmin):
+class CustomerLedgerEntryAdmin(ViewOnlyAdminMixin, admin.ModelAdmin):
     list_display = ("entry_date", "customer", "entry_type", "due_increase", "due_decrease", "sales_invoice", "customer_payment")
     search_fields = ("customer__customer_code", "customer__name", "sales_invoice__invoice_number", "customer_payment__payment_number")
     list_filter = ("entry_type", "entry_date")

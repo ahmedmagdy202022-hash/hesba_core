@@ -1,6 +1,10 @@
 from django.contrib import admin
 
+from config.admin import ViewOnlyAdminMixin
+
 from .models import Cashbox, CashboxMovement
+from .models import OpeningBalanceTarget
+from .services import target_has_operational_use
 
 
 @admin.register(Cashbox)
@@ -9,9 +13,15 @@ class CashboxAdmin(admin.ModelAdmin):
     search_fields = ("cashbox_code", "name_ar", "name_en")
     list_filter = ("currency", "is_default", "active")
 
+    def get_readonly_fields(self, request, obj=None):
+        fields = list(super().get_readonly_fields(request, obj))
+        if obj and target_has_operational_use(OpeningBalanceTarget.CASHBOX, obj):
+            fields.extend(("opening_balance", "currency"))
+        return tuple(dict.fromkeys(fields))
+
 
 @admin.register(CashboxMovement)
-class CashboxMovementAdmin(admin.ModelAdmin):
+class CashboxMovementAdmin(ViewOnlyAdminMixin, admin.ModelAdmin):
     list_display = (
         "movement_date",
         "cashbox",

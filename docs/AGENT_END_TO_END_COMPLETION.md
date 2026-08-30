@@ -44,11 +44,22 @@ Main Control approved all seven protected business/accounting decisions recorded
 
 All operational screens accept `?lang=ar` or `?lang=en`, render the matching `lang`/`dir`, and retain the language selection during navigation.
 
+## PR #54 final-review remediation
+
+All blocking implementation findings from the final review are resolved:
+
+- protected Admin paths cannot change used opening balances or Cashbox currency, service-owned movement/ledger rows, or posted/cancelled transactions and lines;
+- proportional allocation cannot emit a negative share and still reconciles exactly to the rounded total;
+- repeated source lines for one item/location are aggregated before purchase-return and sales-return-reversal stock validation;
+- sales-return refund validation and posting hold a row lock on the Cashbox;
+- Cashbox currency is frozen after operational use in both the functional form and Admin;
+- stock transfers reject a blank reason at the service boundary, with matching form/model validation.
+
 ## Verification evidence
 
-Final clean verification against source checkpoint `6f7e10a` on the designated branch:
+Final clean verification on the designated branch:
 
-- `python manage.py test --verbosity 1` — **782 tests passed** in **467.603s**.
+- `python manage.py test --verbosity 1` — **793 tests passed** in **577.249s**.
 - `python manage.py check` — no issues.
 - `python manage.py check --deploy` with a complete production-shaped environment — no issues.
 - `python manage.py makemigrations --check --dry-run` — no changes detected.

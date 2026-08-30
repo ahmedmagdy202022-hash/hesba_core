@@ -3,8 +3,10 @@ from decimal import Decimal
 from django.test import TestCase
 from django.urls import reverse
 
+from cashboxes.models import CashboxDirection
 from hesba_testing.factories import (
     make_cashbox,
+    make_cashbox_movement,
     make_seeded_role,
     make_user,
     make_user_profile,
@@ -169,6 +171,38 @@ class MasterDataUiTests(TestCase):
         customer.refresh_from_db()
         self.assertEqual(customer.name, "Locked updated")
         self.assertEqual(customer.opening_balance, Decimal("200.00"))
+
+    def test_used_cashbox_currency_and_opening_balance_cannot_be_changed(self):
+        self.login_as(RoleCode.MANAGER, "manager_used_cashbox")
+        cashbox = make_cashbox(
+            cashbox_code="CASH-LOCK",
+            name_ar="الخزنة المقفلة",
+            opening_balance=Decimal("200.00"),
+            currency="EGP",
+        )
+        make_cashbox_movement(cashbox, CashboxDirection.IN, "10.00")
+
+        response = self.client.post(
+            reverse(
+                "master_data:edit",
+                kwargs={"entity": "cashboxes", "pk": cashbox.pk},
+            ),
+            {
+                "cashbox_code": "CASH-LOCK",
+                "name_ar": "الخزنة بعد التعديل",
+                "name_en": "Updated cashbox",
+                "opening_balance": "9999.00",
+                "currency": "USD",
+                "notes": "",
+                "active": "on",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        cashbox.refresh_from_db()
+        self.assertEqual(cashbox.name_en, "Updated cashbox")
+        self.assertEqual(cashbox.opening_balance, Decimal("200.00"))
+        self.assertEqual(cashbox.currency, "EGP")
 
     def test_category_rejects_cycle_on_edit(self):
         self.login_as(RoleCode.MANAGER, "manager_category")

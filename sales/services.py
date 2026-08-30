@@ -6,7 +6,7 @@ from django.db.models import Sum
 from django.utils import timezone
 
 from audit.models import AuditEventType, AuditLog
-from cashboxes.models import CashboxDirection, CashboxMovement, CashboxMovementType
+from cashboxes.models import Cashbox, CashboxDirection, CashboxMovement, CashboxMovementType
 from cashboxes.services import get_cashbox_balance
 from config.money import allocate_proportionally
 from inventory.models import StockMovement, StockMovementType
@@ -510,8 +510,13 @@ def create_sales_return(
     total_amount = money_round(sum((row["amount"] for row in prepared), Decimal("0")))
     cost_amount = money_round(sum((row["cost_amount"] for row in prepared), Decimal("0")))
     cash_amount, due_amount = _sales_return_payment_split(invoice, total_amount)
-    if cash_amount > 0 and get_cashbox_balance(invoice.cashbox) < cash_amount:
-        raise ValidationError("The cashbox cannot become negative for this sales return refund.")
+    refund_cashbox = None
+    if cash_amount > 0:
+        refund_cashbox = Cashbox.objects.select_for_update().get(pk=invoice.cashbox_id)
+        if get_cashbox_balance(refund_cashbox) < cash_amount:
+            raise ValidationError(
+                "The cashbox cannot become negative for this sales return refund."
+            )
     sales_return = SalesReturn(
         return_number=(return_number or "").strip(),
         return_date=return_date,
@@ -562,7 +567,7 @@ def create_sales_return(
         )
     if cash_amount > 0:
         CashboxMovement.objects.create(
-            cashbox=invoice.cashbox,
+            cashbox=refund_cashbox,
             movement_date=return_date,
             movement_type=CashboxMovementType.SALES_RETURN,
             direction=CashboxDirection.OUT,
@@ -614,14 +619,29 @@ def cancel_sales_return(return_id, reversal_date, reason, user):
     if sales_return.status != SalesReturnStatus.POSTED:
         raise ValidationError("Only posted sales returns can be reversed.")
     invoice = sales_return.source_invoice
+    reversal_stock = {}
     for return_line in sales_return.lines.all():
         item = return_line.source_line.item
         if not item.is_stock_tracked:
             continue
-        available = get_item_location_stock_quantity(item, invoice.selling_location)
-        if available < return_line.quantity:
+        key = (item.pk, invoice.selling_location_id)
+        aggregate = reversal_stock.setdefault(
+            key,
+            {
+                "item": item,
+                "location": invoice.selling_location,
+                "quantity": Decimal("0"),
+            },
+        )
+        aggregate["quantity"] += return_line.quantity
+    for aggregate in reversal_stock.values():
+        available = get_item_location_stock_quantity(
+            aggregate["item"], aggregate["location"]
+        )
+        if available < aggregate["quantity"]:
             raise ValidationError(
-                f"Not enough returned stock to reverse item {item}. Available: {available}."
+                f"Not enough returned stock to reverse item {aggregate['item']}. "
+                f"Available: {available}."
             )
 
     affected_items = {}
