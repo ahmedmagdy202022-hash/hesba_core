@@ -197,12 +197,7 @@ class PostSalesInvoiceEffectTests(TestCase):
         self.assertEqual(line.unit_cost, Decimal("0"))
         self.assertEqual(line.line_cost_amount, Decimal("0"))
 
-    def test_a_stale_average_cost_books_the_whole_sale_as_profit(self):
-        """Cost comes from the stored average_cost, not from the movements.
-
-        If nothing has refreshed it, the sale is recorded at zero cost. This
-        documents current behaviour rather than endorsing it.
-        """
+    def test_a_stale_average_cost_is_ignored_in_favour_of_movements(self):
         location = make_location()
         item = make_item(average_cost=Decimal("0.00"))
         stock_in(item, location, "10", "5.00")  # deliberately not recalculated
@@ -212,8 +207,9 @@ class PostSalesInvoiceEffectTests(TestCase):
         post_sales_invoice(invoice.pk)
 
         line = invoice.lines.get()
-        self.assertEqual(line.unit_cost, Decimal("0"))
-        self.assertEqual(line.line_profit_amount, Decimal("60.00"))
+        self.assertEqual(line.unit_cost, Decimal("5.0000"))
+        self.assertEqual(line.line_cost_amount, Decimal("10.00"))
+        self.assertEqual(line.line_profit_amount, Decimal("50.00"))
 
     def test_stock_leaves_the_selling_location(self):
         invoice, item, location, _ = posted_invoice_ready(stock_quantity=10)
@@ -463,18 +459,18 @@ class CancelCustomerPaymentTests(TestCase):
         )
 
     def test_status_becomes_cancelled(self):
-        cancelled = cancel_customer_payment(self.payment.pk)
+        cancelled = cancel_customer_payment(self.payment.pk, reason="duplicate")
 
         self.assertEqual(cancelled.status, CustomerPaymentStatus.CANCELLED)
 
     def test_cancelling_twice_is_rejected(self):
-        cancel_customer_payment(self.payment.pk)
+        cancel_customer_payment(self.payment.pk, reason="duplicate")
 
         with self.assertRaises(ValidationError):
-            cancel_customer_payment(self.payment.pk)
+            cancel_customer_payment(self.payment.pk, reason="duplicate")
 
     def test_cancelling_restores_the_customer_due(self):
-        cancel_customer_payment(self.payment.pk)
+        cancel_customer_payment(self.payment.pk, reason="duplicate")
 
         reversal = CustomerLedgerEntry.objects.get(
             entry_type=CustomerLedgerEntryType.ADJUSTMENT
@@ -482,7 +478,7 @@ class CancelCustomerPaymentTests(TestCase):
         self.assertEqual(reversal.due_increase, Decimal("100.00"))
 
     def test_cancelling_moves_the_cash_back_out(self):
-        cancel_customer_payment(self.payment.pk)
+        cancel_customer_payment(self.payment.pk, reason="duplicate")
 
         reversal = CashboxMovement.objects.get(direction=CashboxDirection.OUT)
         self.assertEqual(reversal.amount, Decimal("100.00"))
@@ -491,7 +487,7 @@ class CancelCustomerPaymentTests(TestCase):
     def test_balances_net_to_zero_after_cancelling(self):
         from reports.services import get_cashbox_balance, get_customer_balance
 
-        cancel_customer_payment(self.payment.pk)
+        cancel_customer_payment(self.payment.pk, reason="duplicate")
 
         self.assertEqual(get_customer_balance(self.customer), Decimal("0"))
         self.assertEqual(get_cashbox_balance(self.cashbox), Decimal("0"))
@@ -502,6 +498,10 @@ class CancelCustomerPaymentTests(TestCase):
         log = AuditLog.objects.get(action="cancel_customer_payment")
         self.assertEqual(log.reason, "entered twice")
         self.assertEqual(log.after_data["status"], CustomerPaymentStatus.CANCELLED)
+
+    def test_cancelling_requires_an_operator_reason(self):
+        with self.assertRaisesMessage(ValidationError, "reason is required"):
+            cancel_customer_payment(self.payment.pk, reason="")
 
 
 class CancelSalesInvoiceEdgeTests(TestCase):

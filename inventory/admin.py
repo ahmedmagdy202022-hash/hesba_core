@@ -1,10 +1,12 @@
 from django.contrib import admin
 
+from config.admin import ViewOnlyAdminMixin
+
 from .models import StockMovement
 
 
 @admin.register(StockMovement)
-class StockMovementAdmin(admin.ModelAdmin):
+class StockMovementAdmin(ViewOnlyAdminMixin, admin.ModelAdmin):
     list_display = (
         "movement_date",
         "movement_type",

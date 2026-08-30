@@ -1,0 +1,54 @@
+{% extends "master_data/base.html" %}
+{% block master_content %}
+<section class="md-title-row">
+  <div>
+    <a class="md-back-link" href="{% url 'master_data:hub' %}?lang={{ lang }}">← {{ words.back }}</a>
+    <h1>{{ entity_title }}</h1>
+  </div>
+  {% if can_manage %}
+    <a class="md-primary" href="{% url 'master_data:create' entity=entity %}?lang={{ lang }}">+ {{ words.new }}</a>
+  {% endif %}
+</section>
+
+<form class="md-filters" method="get">
+  <input type="hidden" name="lang" value="{{ lang }}">
+  <input type="search" name="q" value="{{ query }}" placeholder="{{ words.search_placeholder }}">
+  <select name="status">
+    <option value="active" {% if status_filter == 'active' %}selected{% endif %}>{{ words.active }}</option>
+    <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>{{ words.inactive }}</option>
+    <option value="all" {% if status_filter == 'all' %}selected{% endif %}>{{ words.all }}</option>
+  </select>
+  <button type="submit">{{ words.search }}</button>
+</form>
+
+<div class="md-table-wrap">
+  <table class="md-table">
+    <thead>
+      <tr>
+        {% for column in columns %}<th>{{ column }}</th>{% endfor %}
+        {% if can_manage %}<th></th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+        <tr>
+          {% for value in row.values %}<td data-label="{{ columns|default:'' }}">{{ value }}</td>{% endfor %}
+          {% if can_manage %}
+            <td class="md-actions"><a href="{% url 'master_data:edit' entity=entity pk=row.object.pk %}?lang={{ lang }}">{{ words.edit }}</a></td>
+          {% endif %}
+        </tr>
+      {% empty %}
+        <tr><td class="md-empty" colspan="12">{{ words.empty }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if page.paginator.num_pages > 1 %}
+<nav class="md-pagination">
+  {% if page.has_previous %}<a href="?lang={{ lang }}&q={{ query|urlencode }}&status={{ status_filter }}&page={{ page.previous_page_number }}">‹</a>{% endif %}
+  <span>{{ page.number }} / {{ page.paginator.num_pages }}</span>
+  {% if page.has_next %}<a href="?lang={{ lang }}&q={{ query|urlencode }}&status={{ status_filter }}&page={{ page.next_page_number }}">›</a>{% endif %}
+</nav>
+{% endif %}
+{% endblock %}

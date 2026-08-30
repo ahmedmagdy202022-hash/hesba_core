@@ -6,7 +6,7 @@ from cashboxes.models import Cashbox, CashboxDirection, CashboxMovement
 from inventory.services import get_item_location_stock_quantity
 from master_data.models import Customer, Item, Location, Supplier
 from purchases.models import SupplierLedgerEntry
-from sales.models import CustomerLedgerEntry, SalesLine
+from sales.models import CustomerLedgerEntry, SalesLine, SalesReturn, SalesReturnStatus
 
 
 def _sum(queryset, field_name):
@@ -38,9 +38,13 @@ def get_item_location_stock(item, location):
 
 def get_profit_summary():
     lines = SalesLine.objects.select_related("invoice").filter(invoice__status="posted")
-    total_sales = _sum(lines, "line_total_amount")
     total_cost = _sum(lines, "line_cost_amount")
     total_profit = _sum(lines, "line_profit_amount")
+    total_sales = total_cost + total_profit
+    returns = SalesReturn.objects.filter(status=SalesReturnStatus.POSTED)
+    total_sales -= _sum(returns, "total_amount")
+    total_cost -= _sum(returns, "cost_amount")
+    total_profit = total_sales - total_cost
     return {
         "total_sales": total_sales,
         "total_cost": total_cost,

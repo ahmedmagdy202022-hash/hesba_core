@@ -1,0 +1,18 @@
+{% extends "master_data/base.html" %}
+{% block master_content %}
+<section class="md-title-row">
+  <div>
+    <h1>{{ words.hub_title }}</h1>
+    <p>{{ words.hub_note }}</p>
+  </div>
+</section>
+<section class="md-area-grid">
+  {% for area in areas %}
+    <a class="md-area-card" href="{% url 'master_data:list' entity=area.key %}?lang={{ lang }}">
+      <strong>{{ area.title }}</strong>
+      <span class="md-count">{{ area.count }}</span>
+      {% if not area.can_manage %}<small>{{ words.readonly }}</small>{% endif %}
+    </a>
+  {% endfor %}
+</section>
+{% endblock %}

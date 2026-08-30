@@ -1,0 +1,22 @@
+{% extends "base_app.html" %}
+{% load static %}
+{% block styles %}<link rel="stylesheet" href="{% static 'hesba/css/operations.css' %}">{% endblock %}
+{% block body_class %}operations-page{% endblock %}
+{% block content %}
+<header class="op-header">
+  <a class="op-brand" href="{% url 'dashboard_snapshot' %}?lang={{ lang }}">حِسبة <span>Hesba</span></a>
+  <nav class="op-nav" aria-label="Main navigation">
+    <a href="{% url 'dashboard_snapshot' %}?lang={{ lang }}">{{ words.dashboard }}</a>
+    <button type="button" data-lang-toggle>{{ words.language }}</button>
+  </nav>
+</header>
+<main class="op-shell">
+  {% if messages %}
+    <div class="op-messages">
+      {% for message in messages %}<div class="op-message op-message-{{ message.tags|default:'info' }}">{{ message }}</div>{% endfor %}
+    </div>
+  {% endif %}
+  {% block operation_content %}{% endblock %}
+</main>
+{% endblock %}
+

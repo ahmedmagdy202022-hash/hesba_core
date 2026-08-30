@@ -151,3 +151,26 @@ class SeededRoleMatrixTests(TestCase):
             with self.subTest(role=role_code):
                 holds = user_has_permission(self.user_with_role(role_code), "cashboxes.view_finance")
                 self.assertEqual(holds, role_code in allowed)
+
+    def test_cashbox_master_management_is_owner_and_manager_only(self):
+        from permissions.services import user_has_permission
+
+        allowed = {RoleCode.OWNER, RoleCode.MANAGER}
+        for role_code in RoleCode.values:
+            with self.subTest(role=role_code):
+                holds = user_has_permission(
+                    self.user_with_role(role_code), "cashboxes.manage_cashboxes"
+                )
+                self.assertEqual(holds, role_code in allowed)
+
+    def test_opening_adjustments_are_owner_and_accountant_only(self):
+        from permissions.services import user_has_permission
+
+        allowed = {RoleCode.OWNER, RoleCode.ACCOUNTANT}
+        for role_code in RoleCode.values:
+            with self.subTest(role=role_code):
+                holds = user_has_permission(
+                    self.user_with_role(role_code),
+                    "master_data.adjust_opening_balances",
+                )
+                self.assertEqual(holds, role_code in allowed)

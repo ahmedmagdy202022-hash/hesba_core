@@ -1,0 +1,23 @@
+{% extends "base_app.html" %}
+{% load static %}
+{% block styles %}
+<link rel="stylesheet" href="{% static 'hesba/css/master_data.css' %}">
+{% endblock %}
+{% block body_class %}master-data-page{% endblock %}
+{% block content %}
+<header class="md-header">
+  <a class="md-brand" href="{% url 'dashboard_snapshot' %}?lang={{ lang }}">حِسبة <span>Hesba</span></a>
+  <nav class="md-header-actions">
+    <a href="{% url 'dashboard_snapshot' %}?lang={{ lang }}">{{ words.dashboard }}</a>
+    <button type="button" data-lang-toggle>{{ words.language }}</button>
+  </nav>
+</header>
+<main class="md-shell">
+  {% if messages %}
+    <div class="md-messages">
+      {% for message in messages %}<div class="md-message">{{ message }}</div>{% endfor %}
+    </div>
+  {% endif %}
+  {% block master_content %}{% endblock %}
+</main>
+{% endblock %}
