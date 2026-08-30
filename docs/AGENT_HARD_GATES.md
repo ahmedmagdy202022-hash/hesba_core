@@ -1,75 +1,89 @@
 # Agent Hard Gates
 
-Status: ACTIVE LOG
+Status: ALL SEVEN GATES RESOLVED
+Decision source: Main Control decision comment on PR #54
+Implemented on: `agent/end-to-end-functional-cycle`
+Resolved: 2026-08-30
 
-Record only genuine blockers that require a protected business/product decision. Continue all unaffected work.
+This log records the seven protected business/accounting decisions raised during the end-to-end functional run. Main Control approved all seven decisions. They are implemented, migrated, and covered by the final verification run. No new Hard Gate remains open.
 
-## HG-001 — Cashbox master-data permission is undefined
+## HG-001 — Cashbox master-data permission
 
-- Track: 1 / 6
-- Reason: the permission matrix contains `cashboxes.view_cashboxes`, `cashboxes.move_cash`, and `cashboxes.view_finance`, but no capability that safely authorizes creating or editing Cashbox master data.
-- Protected files/behavior: `permissions/migrations/0002_seed_foundation_roles_permissions.py`, permission semantics, `cashboxes.Cashbox` opening balances.
-- Risk: reusing `cashboxes.move_cash` would let an operational cash-movement permission alter identity and opening-balance data without an approved audit/accounting policy.
-- Proposed decision: approve and seed a dedicated `cashboxes.manage_cashboxes` permission, including role grants and opening-balance edit rules.
-- Required tests after approval: role matrix, route/service denial, create audit, opening-balance lock after operational use, and financial-field visibility.
-- Current safe behavior: Cashbox master data remains view-only.
+Status: RESOLVED
 
-## HG-002 — Opening-balance correction semantics are undefined
+- Approved decision: add a dedicated `cashboxes.manage_cashboxes` permission. Grant it to Owner and Manager. Accountant retains finance visibility only and does not receive cashbox master-data mutation rights.
+- Implementation: the permission is seeded through `permissions/migrations/0004_seed_approved_financial_permissions.py`; cashbox create/edit routes use the new permission and no longer overload `cashboxes.move_cash`.
+- Safety result: identity/master-data mutation remains separate from cash movement and financial visibility.
+- Verification: role matrix, authorized CRUD, route denial, finance-field visibility, and permission decorator tests passed.
+- Primary checkpoint: `15f3aa9`.
 
-- Track: 1
-- Reason: Customer, Supplier, and Cashbox models allow initial opening balances, but no approved service defines later correction after ledger or cash movements exist.
-- Protected files/behavior: party ledgers, cashbox movements, opening-balance fields, audit behavior.
-- Risk: direct edits would rewrite historical balances without traceable compensating entries.
-- Proposed decision: define whether correction creates dated ledger/cashbox adjustment entries, which period receives them, and who may approve them.
-- Required tests after approval: unused-record correction, used-record correction/rejection, closed-period handling, reversal, audit, and report reconciliation.
-- Current safe behavior: Customer and Supplier opening balances are locked after creation; Cashboxes are view-only.
+## HG-002 — Opening-balance correction semantics
 
-## HG-003 — Sales cost can use a stale stored average cost
+Status: RESOLVED
 
-- Track: 4
-- Reason: `sales.services._line_unit_cost()` reads `Item.average_cost`, while the authoritative value is derived from stock movements and the stored field can be stale if movements were introduced outside the purchase services.
-- Protected files/behavior: `sales/services.py`, `inventory/services.py`, average-cost and profit calculations.
-- Risk: posted sales can preserve an incorrect cost/profit value even though stock quantity validation is correct.
-- Proposed decision: approve either transactional recalculation/locking before sales costing or a stronger invariant that all cost-affecting movements refresh the stored average.
-- Required tests after approval: stale stored cost characterization, multiple locations, concurrent posting, returns/cancellations, zero/negative stock, and profit-report reconciliation.
-- Current safe behavior: no silent cost-logic change; the functional UI will characterize and disclose the existing behavior.
+- Approved decision: an opening balance may be edited directly before operational use. After operational use, correction must be an auditable dated adjustment available to Owner and Accountant, with an append-only reversal rather than deletion or historical rewriting.
+- Implementation: `master_data.adjust_opening_balances` is seeded for Owner and Accountant. Customer, supplier, and cashbox adjustments create linked ledger/cash movements, enforce closed-period rules, record actor/reason, and support dated reversal. Direct editing is limited to unused records.
+- Schema: adjustment and linkage migrations are included in `cashboxes/0008`, `purchases/0005`, and `sales/0008`.
+- Verification: unused and used records, permissions, audit linkage, closed periods, reversal, and report/balance reconciliation passed.
+- Primary checkpoint: `15f3aa9`.
 
-## HG-004 — Stock transfer and adjustment services are missing
+## HG-003 — Authoritative sales cost
 
-- Track: 3
-- Reason: permissions and movement types exist, but `inventory/services.py` has no approved transactional transfer or adjustment command. Only read/recalculation helpers exist.
-- Protected files/behavior: inventory movement/accounting architecture, average-cost behavior, closed-period handling.
-- Risk: creating movement rows directly in views could produce one-sided transfers, bypass validation/audit, or expose/alter cost incorrectly.
-- Proposed decision: approve service contracts for paired transfers and controlled adjustments, including date/period, cost, reason, and audit rules.
-- Required tests after approval: atomic paired directions, quantity and source-stock validation, permissions, cost visibility, closed periods, reversal, and concurrency.
-- Current safe behavior: stock, item detail, and movement history are exposed read-only; transfer/adjustment actions are not offered.
+Status: RESOLVED
 
-## HG-005 — Direct cash in/out and cashbox transfer services are missing
+- Approved decision: posted sales cost comes from the authoritative inventory movement cost. `Item.average_cost` is a maintained cache, not the accounting source of truth.
+- Implementation: inventory services calculate the authoritative moving average from cost-bearing movements; sales posting snapshots that cost transactionally. Cost-affecting inventory operations refresh the item cache without allowing a stale cache value to determine posted cost.
+- Verification: stale-cache regression, multiple locations, sales posting/cancellation, returns, stock validation, and profit-report reconciliation passed.
+- Primary checkpoints: `efdf0cf`, `6f7e10a`.
 
-- Track: 6
-- Reason: `cashboxes.move_cash` and movement types exist, but no service owns direct cash movements or paired cashbox transfers.
-- Protected files/behavior: cashbox movement/accounting, balances, audit, and closed-period rules.
-- Risk: direct model writes from views could create unbalanced transfers, bypass reason/date validation, or mutate a closed period.
-- Proposed decision: approve service contracts for direct in/out and atomic paired transfers, with reason, actor, date/period, and reversal semantics.
-- Required tests after approval: atomic directions, positive amount, insufficient-balance policy, permissions, closed periods, reversal, audit, and report reconciliation.
-- Current safe behavior: cashbox balances (permission-gated) and movement history are read-only.
+## HG-004 — Stock transfer and adjustment services
 
-## HG-006 — Independent purchase/sales return semantics are not modeled
+Status: RESOLVED
 
-- Track: 2 / 4
-- Reason: existing services support complete invoice cancellation/reversal, but there are no return header/line models or services for independent or partial returns.
-- Protected files/behavior: purchase/sales posting, ledgers, stock, cashbox, cost/profit, and return accounting.
-- Risk: presenting cancellation as a general return, or assembling partial reversal rows in views, would misstate business history.
-- Proposed decision: approve return documents, allocation to invoice lines/payments, costing rules, cash settlement, and period behavior.
-- Required tests after approval: partial/full quantity limits, repeated return protection, stock/cost, party balance, refund/cashbox, tax/discount allocation, and closed periods.
-- Current safe behavior: complete posted-invoice cancellation is exposed explicitly as cancellation; no independent return action is claimed.
+- Approved decision: provide transactional stock transfer and adjustment services with linked movements, a required reason, explicit permissions, closed-period enforcement, and append-only reversal.
+- Implementation: `inventory.services` owns atomic paired transfers, positive/negative adjustments, authoritative cost handling, source-stock validation, audit metadata, and reversal. Views only call these services.
+- Schema: `inventory/migrations/0004_stockmovement_reversal_of_stockoperation_and_more.py` adds operation and reversal linkage.
+- Verification: atomic paired directions, insufficient stock, quantity and reason validation, permission denial, cost visibility, closed periods, cache refresh, reversal, UI actions, and responsive behavior passed.
+- Primary checkpoint: `efdf0cf`.
 
-## HG-007 — Purchase line fractional-cent rounding is undefined
+## HG-005 — Direct cash operations and cashbox transfers
 
-- Track: 2
-- Reason: `PurchaseLine.line_total_amount` stores two decimal places, but `PurchaseLine.calculated_line_total` and `clean()` require exact unrounded equality for a three-decimal quantity multiplied by a two-decimal unit price.
-- Protected files/behavior: `purchases/models.py`, purchase posting unit cost, average-cost inputs, and supplier invoice totals.
-- Risk: silently rounding only in the UI would make saved lines fail posting validation or could change inventory cost without an approved rounding rule.
-- Proposed decision: approve a single money-rounding rule in the purchase model/service and a policy for allocating fractional-cent residuals.
-- Required tests after approval: fractional quantities, discounts, multi-line residuals, posting, reversal, average cost, and report totals.
-- Current safe behavior: the UI rejects a line whose amount does not resolve exactly to two decimals and explains the constraint; integer and cent-exact quantities remain fully supported.
+Status: RESOLVED
+
+- Approved decision: support direct cash in, direct cash out, and cashbox transfer through atomic services. Transfers create linked movements, require a reason, require matching currency, prohibit an overdrawn source, and reverse by appending linked movements.
+- Implementation: `cashboxes.services` owns operation creation/cancellation, balance locking, validation, audit metadata, and closed-period enforcement. The UI is gated by `cashboxes.move_cash`.
+- Schema: `cashboxes/migrations/0009_cashboxmovement_reversal_of_cashboxoperation_and_more.py` adds operation and reversal linkage.
+- Verification: all operation types, atomic directions, same-currency and positive-amount rules, nonnegative source balance, permissions, closed periods, audit, reversal, cashbox report reconciliation, and bilingual responsive UI passed.
+- Primary checkpoint: `2b86940`.
+
+## HG-006 — Independent purchase and sales returns
+
+Status: RESOLVED
+
+- Approved decision: model independent return documents linked to the source invoice. Support partial and full quantities within remaining-return caps, reverse stock/party/cash effects, and cancel a return through an append-only reversal.
+- Implementation: purchase and sales return headers/lines, services, routes, forms, detail screens, movement/ledger/cash links, settlement handling, costing, and cancellation are implemented. Existing full invoice cancellation remains a separate operation.
+- Schema: return models and links are added by `purchases/0006`, `sales/0009`, `inventory/0005`–`0006`, and `cashboxes/0010`–`0011`.
+- Verification: partial/full/repeated-return limits, source linkage, stock and authoritative cost, supplier/customer ledger effects, cash refunds, permission denial, closed periods, cancellation reversal, reports, Arabic/English, and responsive layouts passed.
+- Primary checkpoint: `6f7e10a`.
+
+## HG-007 — Money rounding and residual allocation
+
+Status: RESOLVED
+
+- Approved decision: use `ROUND_HALF_UP` to two decimal places per line, calculate invoice totals from rounded lines, allocate invoice-level amounts proportionally, and assign the residual to the last allocation so the parts reconcile exactly.
+- Implementation: `config/money.py` centralizes money/cost rounding and deterministic proportional allocation. Purchase and sales posting and return services use the shared policy.
+- Verification: fractional quantities, half-cent boundaries, discounts, multi-line residuals, exact invoice reconciliation, posting, reversal, returns, average cost, and reports passed.
+- Primary checkpoints: `efdf0cf`, `6f7e10a`.
+
+## Final gate verification
+
+- Full Django suite: 782 tests passed in 467.603 seconds.
+- Django system check: no issues.
+- Production-shaped deployment check: no issues.
+- Migration drift check: no changes detected.
+- Existing database migration check: current.
+- Fresh empty-database migration: all migrations applied successfully; follow-up migration check was current.
+- Static collection dry run: all 174 assets resolved.
+- Arabic/English and desktop, tablet-landscape, and mobile verification: passed with no page-level overflow or browser console errors on the sampled affected routes.
+
+No unresolved business or accounting decision was discovered while implementing or verifying these approvals.
