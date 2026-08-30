@@ -48,7 +48,7 @@ All operational screens accept `?lang=ar` or `?lang=en`, render the matching `la
 
 All blocking implementation findings from the final review are resolved:
 
-- protected Admin paths cannot change used opening balances or Cashbox currency, service-owned movement/ledger rows, or posted/cancelled transactions and lines;
+- protected Admin paths cannot change used opening balances or Cashbox currency, service-owned movement/ledger rows, or any purchase/sales invoice or line; draft transaction creation/editing is exclusive to the service-backed functional UI;
 - proportional allocation cannot emit a negative share and still reconciles exactly to the rounded total;
 - repeated source lines for one item/location are aggregated before purchase-return and sales-return-reversal stock validation;
 - sales-return refund validation and posting hold a row lock on the Cashbox;
@@ -59,7 +59,7 @@ All blocking implementation findings from the final review are resolved:
 
 Final clean verification on the designated branch:
 
-- `python manage.py test --verbosity 1` — **793 tests passed** in **577.249s**.
+- `python manage.py test --verbosity 1` — **794 tests passed** in **576.477s**.
 - `python manage.py check` — no issues.
 - `python manage.py check --deploy` with a complete production-shaped environment — no issues.
 - `python manage.py makemigrations --check --dry-run` — no changes detected.

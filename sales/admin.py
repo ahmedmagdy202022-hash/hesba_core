@@ -1,21 +1,16 @@
 from django.contrib import admin
 
-from config.admin import (
-    ParentStatusProtectedAdminMixin,
-    ProtectedStatusAdminMixin,
-    ViewOnlyAdminMixin,
-)
+from config.admin import ViewOnlyAdminMixin
 
 from .models import (
     CustomerLedgerEntry,
     CustomerPayment,
     SalesInvoice,
-    SalesInvoiceStatus,
     SalesLine,
 )
 
 
-class SalesLineInline(admin.TabularInline):
+class SalesLineInline(ViewOnlyAdminMixin, admin.TabularInline):
     model = SalesLine
     extra = 0
     autocomplete_fields = ("item",)
@@ -29,21 +24,9 @@ class SalesLineInline(admin.TabularInline):
         "line_total_amount",
     )
 
-    def _draft(self, obj):
-        return obj is not None and obj.status == SalesInvoiceStatus.DRAFT
-
-    def has_add_permission(self, request, obj=None):
-        return self._draft(obj) and super().has_add_permission(request, obj)
-
-    def has_change_permission(self, request, obj=None):
-        return self._draft(obj) and super().has_change_permission(request, obj)
-
-    def has_delete_permission(self, request, obj=None):
-        return self._draft(obj) and super().has_delete_permission(request, obj)
-
 
 @admin.register(SalesInvoice)
-class SalesInvoiceAdmin(ProtectedStatusAdminMixin, admin.ModelAdmin):
+class SalesInvoiceAdmin(ViewOnlyAdminMixin, admin.ModelAdmin):
     list_display = (
         "invoice_number",
         "invoice_date",
@@ -71,7 +54,7 @@ class SalesInvoiceAdmin(ProtectedStatusAdminMixin, admin.ModelAdmin):
 
 
 @admin.register(SalesLine)
-class SalesLineAdmin(ParentStatusProtectedAdminMixin, admin.ModelAdmin):
+class SalesLineAdmin(ViewOnlyAdminMixin, admin.ModelAdmin):
     list_display = ("invoice", "line_number", "item", "quantity", "unit_sale_price", "line_total_amount")
     search_fields = ("invoice__invoice_number", "item__item_code", "item__item_name")
     list_filter = ("invoice__status",)

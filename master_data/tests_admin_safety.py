@@ -248,3 +248,58 @@ class ProtectedAdminTests(TestCase):
                 )
                 self.assertEqual(self.client.get(change_url).status_code, 200)
                 self.assertEqual(self.client.post(change_url, {}).status_code, 403)
+
+    def test_draft_invoices_and_lines_are_view_only_in_admin(self):
+        item = make_item(item_code="ADMIN-DRAFT-ITEM")
+        location = make_location(location_code="ADMIN-DRAFT-LOCATION")
+        cashbox = make_cashbox(cashbox_code="ADMIN-DRAFT-CASHBOX")
+        purchase_invoice = make_draft_purchase_invoice(
+            supplier=make_supplier(supplier_code="ADMIN-DRAFT-SUPPLIER"),
+            location=location,
+            cashbox=cashbox,
+            invoice_number="ADMIN-DRAFT-PI",
+        )
+        purchase_line = add_purchase_line(purchase_invoice, item, 2, "3.00")
+        sales_invoice = make_draft_sales_invoice(
+            customer=make_customer(customer_code="ADMIN-DRAFT-CUSTOMER"),
+            location=location,
+            cashbox=cashbox,
+            invoice_number="ADMIN-DRAFT-SI",
+        )
+        sales_line = add_sales_line(sales_invoice, item, 2, "4.00")
+
+        for obj in (purchase_invoice, purchase_line, sales_invoice, sales_line):
+            model_admin = admin.site._registry[type(obj)]
+            add_url = reverse(
+                f"admin:{obj._meta.app_label}_{obj._meta.model_name}_add"
+            )
+            change_url = reverse(
+                f"admin:{obj._meta.app_label}_{obj._meta.model_name}_change",
+                args=[obj.pk],
+            )
+            with self.subTest(model=obj._meta.label):
+                self.assertFalse(model_admin.has_add_permission(self.request))
+                self.assertFalse(model_admin.has_change_permission(self.request, obj))
+                self.assertFalse(model_admin.has_delete_permission(self.request, obj))
+                self.assertNotIn("delete_selected", model_admin.get_actions(self.request))
+                self.assertEqual(self.client.get(add_url).status_code, 403)
+                self.assertEqual(self.client.post(add_url, {}).status_code, 403)
+                self.assertEqual(self.client.get(change_url).status_code, 200)
+                self.assertEqual(self.client.post(change_url, {}).status_code, 403)
+
+        for invoice in (purchase_invoice, sales_invoice):
+            invoice_admin = admin.site._registry[type(invoice)]
+            inline = invoice_admin.get_inline_instances(self.request, invoice)[0]
+            with self.subTest(inline=type(inline).__name__):
+                self.assertFalse(inline.has_add_permission(self.request, invoice))
+                self.assertFalse(inline.has_change_permission(self.request, invoice))
+                self.assertFalse(inline.has_delete_permission(self.request, invoice))
+
+        purchase_invoice.refresh_from_db()
+        sales_invoice.refresh_from_db()
+        purchase_line.refresh_from_db()
+        sales_line.refresh_from_db()
+        self.assertEqual(purchase_invoice.total_amount, Decimal("6.00"))
+        self.assertEqual(sales_invoice.total_amount, Decimal("8.00"))
+        self.assertEqual(purchase_line.quantity, Decimal("2.000"))
+        self.assertEqual(sales_line.quantity, Decimal("2.000"))

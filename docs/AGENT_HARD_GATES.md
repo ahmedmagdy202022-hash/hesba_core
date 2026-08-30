@@ -77,7 +77,7 @@ Status: RESOLVED
 
 ## Final gate verification
 
-- Full Django suite: 793 tests passed in 577.249 seconds.
+- Full Django suite: 794 tests passed in 576.477 seconds.
 - Django system check: no issues.
 - Production-shaped deployment check: no issues.
 - Migration drift check: no changes detected.
@@ -90,13 +90,13 @@ Status: RESOLVED
 
 The final blocking implementation review did not introduce a new business/accounting decision. The following defects were corrected under the already-approved service and audit rules:
 
-- Django Admin now freezes used Customer, Supplier, and Cashbox opening balances; used Cashbox currency is also immutable. Stock/cash movements and party ledger entries are view-only, and posted/cancelled transactions and their lines cannot be changed or bulk-deleted through Admin.
+- Django Admin now freezes used Customer, Supplier, and Cashbox opening balances; used Cashbox currency is also immutable. Stock/cash movements, party ledger entries, purchase/sales invoices, and purchase/sales lines are view-only. Draft creation/editing remains exclusively in the service-backed functional UI, and no transaction can be changed or bulk-deleted through Admin.
 - Proportional allocations reject negative inputs and cap intermediate rounded shares so every allocation is nonnegative while the exact rounded total is preserved.
 - Purchase-return stock validation and sales-return cancellation validation aggregate quantities by item/location before checking availability.
 - Sales-return cash refunds lock the Cashbox row before balance validation and movement creation.
 - The Cashbox master-data form freezes currency after operational use.
 - Stock transfers require a nonblank reason in the form, service, and model validation path.
 
-Regression coverage for every item above is included in the final 793-test run. No migration was required and the model-drift check remains clean.
+Regression coverage for every item above is included in the final 794-test run. No migration was required and the model-drift check remains clean.
 
 No unresolved business or accounting decision was discovered while implementing or verifying these approvals.

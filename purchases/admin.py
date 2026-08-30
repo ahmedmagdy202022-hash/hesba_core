@@ -1,21 +1,16 @@
 from django.contrib import admin
 
-from config.admin import (
-    ParentStatusProtectedAdminMixin,
-    ProtectedStatusAdminMixin,
-    ViewOnlyAdminMixin,
-)
+from config.admin import ViewOnlyAdminMixin
 
 from .models import (
     PurchaseInvoice,
-    PurchaseInvoiceStatus,
     PurchaseLine,
     SupplierLedgerEntry,
     SupplierPayment,
 )
 
 
-class PurchaseLineInline(admin.TabularInline):
+class PurchaseLineInline(ViewOnlyAdminMixin, admin.TabularInline):
     model = PurchaseLine
     extra = 0
     autocomplete_fields = ("item",)
@@ -29,21 +24,9 @@ class PurchaseLineInline(admin.TabularInline):
         "line_total_amount",
     )
 
-    def _draft(self, obj):
-        return obj is not None and obj.status == PurchaseInvoiceStatus.DRAFT
-
-    def has_add_permission(self, request, obj=None):
-        return self._draft(obj) and super().has_add_permission(request, obj)
-
-    def has_change_permission(self, request, obj=None):
-        return self._draft(obj) and super().has_change_permission(request, obj)
-
-    def has_delete_permission(self, request, obj=None):
-        return self._draft(obj) and super().has_delete_permission(request, obj)
-
 
 @admin.register(PurchaseInvoice)
-class PurchaseInvoiceAdmin(ProtectedStatusAdminMixin, admin.ModelAdmin):
+class PurchaseInvoiceAdmin(ViewOnlyAdminMixin, admin.ModelAdmin):
     list_display = (
         "invoice_number",
         "invoice_date",
@@ -71,7 +54,7 @@ class PurchaseInvoiceAdmin(ProtectedStatusAdminMixin, admin.ModelAdmin):
 
 
 @admin.register(PurchaseLine)
-class PurchaseLineAdmin(ParentStatusProtectedAdminMixin, admin.ModelAdmin):
+class PurchaseLineAdmin(ViewOnlyAdminMixin, admin.ModelAdmin):
     list_display = ("invoice", "line_number", "item", "quantity", "unit_purchase_price", "line_total_amount")
     search_fields = ("invoice__invoice_number", "item__item_code", "item__item_name")
     list_filter = ("invoice__status",)
