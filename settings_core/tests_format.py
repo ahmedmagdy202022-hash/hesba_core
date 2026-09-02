@@ -208,6 +208,64 @@ class ReturnTypeTests(SimpleTestCase):
                 self.assertIs(type(rendered), str)
 
 
+class NegativeZeroTests(SimpleTestCase):
+    """A value that rounds away to nothing must not carry a minus sign.
+
+    Decimal("-0.001") quantized to two places is Decimal("-0.00"), which
+    formats as "-0.00" and reads to a bookkeeper as a real negative amount.
+    The sign is dropped only once the value is genuinely zero, so the tests
+    below pair every suppressed sign with a genuine negative that keeps its.
+    """
+
+    def test_money_rounding_to_zero_from_below_has_no_sign(self):
+        self.assertEqual(money(Decimal("-0.001")), "0.00")
+        self.assertEqual(money(Decimal("-0.004")), "0.00")
+        self.assertEqual(money(Decimal("-0.00")), "0.00")
+
+    def test_qty_rounding_to_zero_from_below_has_no_sign(self):
+        self.assertEqual(qty(Decimal("-0.0001")), "0")
+        self.assertEqual(qty(Decimal("-0.0004")), "0")
+
+    def test_unit_cost_rounding_to_zero_from_below_has_no_sign(self):
+        self.assertEqual(unit_cost(Decimal("-0.00001")), "0.00")
+
+    def test_money_keeps_the_sign_on_a_genuine_negative(self):
+        self.assertEqual(money(Decimal("-0.01")), "-0.01")
+        self.assertEqual(money(Decimal("-1234.50")), "-1,234.50")
+
+    def test_qty_keeps_the_sign_on_a_genuine_negative(self):
+        self.assertEqual(qty(Decimal("-0.001")), "-0.001")
+        self.assertEqual(qty(Decimal("-8")), "-8")
+
+    def test_unit_cost_keeps_the_sign_on_a_genuine_negative(self):
+        """-0.0001 is representable at cost scale, so it stays negative.
+
+        The task card predicted "-0.00" here. That would round a real value
+        away and drop its sign in one step, which is the opposite of what
+        unit_cost exists to do: four decimals of cost precision are the point.
+        """
+
+        self.assertEqual(unit_cost(Decimal("-0.0001")), "-0.0001")
+
+    def test_positive_zero_is_unaffected(self):
+        self.assertEqual(money(Decimal("0.001")), "0.00")
+        self.assertEqual(qty(Decimal("0.0001")), "0")
+        self.assertEqual(unit_cost(Decimal("0.00001")), "0.00")
+
+    def test_no_rendered_zero_carries_a_minus(self):
+        """Values small enough to round away at every scale, including cost's.
+
+        -0.0001 is deliberately absent: it is zero to money and qty but a real
+        value to unit_cost, and is covered on its own above.
+        """
+
+        for value in ("-0", "-0.0", "-0.00", "-0.000001", "-0.0000001"):
+            with self.subTest(value=value):
+                self.assertNotIn("-", money(value))
+                self.assertNotIn("-", qty(value))
+                self.assertNotIn("-", unit_cost(value))
+
+
 class CurrencyCodeTagTests(TestCase):
     def test_returns_the_active_profiles_currency(self):
         ClientProfile.objects.create(

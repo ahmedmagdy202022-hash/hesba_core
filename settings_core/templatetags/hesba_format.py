@@ -81,12 +81,18 @@ def _quantized(value, quantum):
     if number is None:
         return None
     try:
-        return number.quantize(quantum, rounding=ROUND_HALF_UP)
+        number = number.quantize(quantum, rounding=ROUND_HALF_UP)
     except InvalidOperation:
         # A magnitude beyond the decimal context's precision. Nothing in the
         # schema reaches this (max_digits tops out at 16), but a filter must
         # not raise.
         return None
+
+    # A tiny negative that rounds away leaves Decimal("-0.00"), which formats
+    # as "-0.00" and reads as a real negative amount. Only the sign is dropped,
+    # and only once the value is genuinely zero — Decimal("-0.00") == 0 is
+    # True, so anything that survives this check is a number worth a minus.
+    return abs(number) if number == 0 else number
 
 
 def _split(text):
