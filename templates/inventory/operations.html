@@ -1,4 +1,5 @@
 {% extends "operations/base.html" %}
+{% load hesba_format %}
 {% block operation_content %}
 <section class="op-title-row">
   <div><a class="op-back" href="{% url 'inventory:stock' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ words.operations }}</h1></div>
@@ -12,7 +13,7 @@
   <tbody>{% for operation in page.object_list %}<tr>
     <td>{{ operation.reference_number }}</td><td>{{ operation.operation_date }}</td><td>{{ operation.get_operation_type_display }}</td><td>{{ operation.item.search_label }}</td>
     <td>{% if operation.operation_type == 'transfer' %}{{ operation.source_location }} → {{ operation.destination_location }}{% else %}{{ operation.source_location|default:operation.destination_location }} / {{ operation.get_adjustment_direction_display }}{% endif %}</td>
-    <td>{{ operation.quantity }}</td><td>{{ operation.get_status_display }}</td><td>
+    <td>{{ operation.quantity|qty }}</td><td>{{ operation.get_status_display }}</td><td>
       {% if operation.status == 'posted' %}
         {% if operation.operation_type == 'transfer' and can_transfer %}{% include "inventory/_operation_reversal_form.html" %}{% endif %}
         {% if operation.operation_type == 'adjustment' and can_adjust %}{% include "inventory/_operation_reversal_form.html" %}{% endif %}
