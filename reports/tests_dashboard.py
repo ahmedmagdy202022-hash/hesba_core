@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from django.core.management import call_command
-from django.test import TestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -21,18 +21,24 @@ from permissions.models import RoleCode
 from reports import selectors
 from reports.dashboard_data import (
     DashboardFigures,
+    build_alerts,
     has_any_business_data,
     health_band,
     health_score,
     onboarding_progress,
 )
 from reports.dashboard_kpis import (
+    COUNT,
+    CURRENCY,
     DASHBOARD_KPIS,
+    LEVEL,
     SCOPE_ALL,
     SCOPE_OWN,
     SENSITIVE_KPI_KEYS,
+    Kpi,
     visible_kpis,
 )
+from reports.dashboard_views import _format_value
 from sales.models import SalesInvoice, SalesPaymentStatus
 from sales.services import post_sales_invoice
 from settings_core.models import ClientProfile
@@ -826,3 +832,137 @@ class SeedDemoBusinessTests(TestCase):
         self.seed()
 
         self.assertEqual(SalesInvoice.objects.count(), before)
+
+
+class _StubShared:
+    """Stands in for SharedReads so alert formatting can be asserted directly.
+
+    build_alerts only ever asks these four questions, and driving it with fixed
+    answers keeps the assertions about the rendered string rather than about
+    how a balance came to exist.
+    """
+
+    def __init__(self, credit_limits=None, over_limit=None, cashboxes=None, stock=None):
+        self._credit_limits = credit_limits or {}
+        self._over_limit = over_limit or []
+        self._cashboxes = cashboxes or []
+        self._stock = stock or {"low_stock": 0, "out_of_stock": 0}
+
+    def credit_limits(self):
+        return self._credit_limits
+
+    def customers_over_limit(self):
+        return self._over_limit
+
+    def cashboxes(self):
+        return self._cashboxes
+
+    def stock_alerts(self):
+        return self._stock
+
+
+class DashboardMoneyPrecisionTests(SimpleTestCase):
+    """Money on the dashboard must match what is stored, to the piastre.
+
+    The screen used to render every currency figure with zero decimals, so a
+    stored 1234.56 appeared as "1,235" — more than the business actually had,
+    with nothing marking it as rounded.
+    """
+
+    def _money_kpi(self):
+        return Kpi(key="sales_today", label_ar="مبيعات", label_en="Sales", permission="p", unit=CURRENCY)
+
+    def _count_kpi(self):
+        return Kpi(key="invoice_count_today", label_ar="عدد", label_en="Count", permission="p", unit=COUNT)
+
+    def test_money_kpi_keeps_its_fractional_part(self):
+        self.assertEqual(_format_value(self._money_kpi(), D("1234.56"), "en"), "1,234.56")
+
+    def test_money_kpi_shows_two_decimals_on_a_whole_amount(self):
+        self.assertEqual(_format_value(self._money_kpi(), D("1234.00"), "en"), "1,234.00")
+
+    def test_money_kpi_never_rounds_to_whole_units(self):
+        """The exact defect: 1234.56 must not be shown as more than it is."""
+
+        rendered = _format_value(self._money_kpi(), D("1234.56"), "en")
+        self.assertNotEqual(rendered, "1,235")
+        self.assertIn(".56", rendered)
+
+    def test_money_kpi_ignores_the_incoming_exponent(self):
+        wide = _format_value(self._money_kpi(), D("5260.0000"), "en")
+        narrow = _format_value(self._money_kpi(), D("5260"), "en")
+        self.assertEqual(wide, narrow)
+        self.assertEqual(wide, "5,260.00")
+
+    def test_count_kpi_stays_a_plain_integer(self):
+        rendered = _format_value(self._count_kpi(), 1234, "en")
+        self.assertEqual(rendered, "1,234")
+        self.assertNotIn(".", rendered)
+
+    def test_level_kpi_is_unchanged(self):
+        kpi = Kpi(key="usage_status", label_ar="الحالة", label_en="Status", permission="p", unit=LEVEL)
+        self.assertEqual(_format_value(kpi, "green", "en"), "Normal")
+        self.assertEqual(_format_value(kpi, "green", "ar"), "طبيعي")
+
+    def test_missing_money_renders_an_em_dash_and_does_not_raise(self):
+        self.assertEqual(_format_value(self._money_kpi(), None, "en"), "—")
+
+
+class DashboardAlertMoneyTests(SimpleTestCase):
+    """Alert figures, including the credit limit quoted inside the sentence."""
+
+    def _customer_alert(self, balance, limit):
+        shared = _StubShared(
+            credit_limits={7: limit},
+            over_limit=[{"customer_id": 7, "customer_name": "عميل", "balance": balance}],
+        )
+        alerts = build_alerts({"reports.view_customer_report"}, timezone.localdate(), shared=shared)
+        self.assertEqual(len(alerts), 1)
+        return alerts[0]
+
+    def test_customer_alert_amount_keeps_two_decimals(self):
+        alert = self._customer_alert(D("8750.25"), D("5000.00"))
+        self.assertEqual(alert["amount"], "8,750.25")
+
+    def test_quoted_credit_limit_is_exact_in_both_languages(self):
+        """A rounded threshold can claim a line was crossed that was not."""
+
+        alert = self._customer_alert(D("13000.00"), D("12390.50"))
+        self.assertIn("12,390.50", alert["detail_ar"])
+        self.assertIn("12,390.50", alert["detail_en"])
+        self.assertNotIn("12,391", alert["detail_ar"])
+        self.assertNotIn("12,391", alert["detail_en"])
+
+    def test_quoted_credit_limit_keeps_the_surrounding_wording(self):
+        alert = self._customer_alert(D("13000.00"), D("12390.50"))
+        self.assertEqual(alert["detail_ar"], "الحد المسموح 12,390.50.")
+        self.assertEqual(alert["detail_en"], "Limit is 12,390.50.")
+
+    def test_negative_cashbox_alert_amount_keeps_two_decimals(self):
+        shared = _StubShared(
+            cashboxes=[{"cashbox_id": 3, "cashbox_name": "الخزنة", "balance": D("-120.75")}]
+        )
+        alerts = build_alerts({"cashboxes.view_finance"}, timezone.localdate(), shared=shared)
+
+        self.assertEqual(alerts[0]["key"], "cashbox_negative_3")
+        self.assertEqual(alerts[0]["amount"], "-120.75")
+
+    def test_low_cashbox_alert_amount_keeps_two_decimals(self):
+        shared = _StubShared(
+            cashboxes=[{"cashbox_id": 4, "cashbox_name": "الخزنة", "balance": D("120.25")}]
+        )
+        alerts = build_alerts({"cashboxes.view_finance"}, timezone.localdate(), shared=shared)
+
+        self.assertEqual(alerts[0]["key"], "cashbox_low_4")
+        self.assertEqual(alerts[0]["amount"], "120.25")
+
+    def test_stock_alerts_still_carry_no_amount(self):
+        """An empty amount must stay empty, so the template hides the badge."""
+
+        shared = _StubShared(stock={"low_stock": 2, "out_of_stock": 1})
+        alerts = build_alerts({"reports.view_inventory_report"}, timezone.localdate(), shared=shared)
+
+        self.assertEqual(len(alerts), 2)
+        for alert in alerts:
+            with self.subTest(key=alert["key"]):
+                self.assertEqual(alert["amount"], "")

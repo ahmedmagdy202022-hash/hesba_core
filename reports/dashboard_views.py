@@ -17,6 +17,7 @@ from permissions.decorators import permitted_codes
 from permissions.services import user_has_permission
 from settings_core.models import ClientProfile
 from settings_core.setup_services import usable_modules
+from settings_core.templatetags.hesba_format import money as display_money
 
 from .dashboard_data import (
     DashboardFigures,
@@ -166,11 +167,17 @@ def _display_name(user):
 
 
 def _format_value(kpi, raw, lang):
+    # Branch order is load-bearing: int() below raises on a level label, and
+    # only the currency branch may fall through to the shared money filter.
     if kpi.unit == LEVEL:
         return USAGE_LEVEL_LABELS.get(raw, {}).get(lang, str(raw))
     if kpi.unit == COUNT:
         return f"{int(raw):,}"
-    return f"{raw:,.0f}"
+    # Money keeps its piastres. Rendering 1234.56 as "1,235" showed the owner
+    # more than was stored, with nothing to say it had been rounded. The shared
+    # filter is used rather than a second formatter here so the dashboard can
+    # never drift from the rest of the application.
+    return display_money(raw)
 
 
 def _build_cards(user, lang, held, figures):

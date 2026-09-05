@@ -19,6 +19,7 @@ from master_data.models import Customer, Item, Supplier
 from purchases.models import PurchaseInvoice, PurchaseInvoiceStatus, SupplierPayment, SupplierPaymentStatus
 from sales.models import CustomerPayment, CustomerPaymentStatus, SalesInvoice, SalesInvoiceStatus
 from settings_core.services import collect_usage_metrics, evaluate_usage_status
+from settings_core.templatetags.hesba_format import money as display_money
 
 from . import selectors
 from .dashboard_kpis import SCOPE_OWN
@@ -259,9 +260,11 @@ def build_alerts(held_permissions, today, shared=None):
                     "severity": "urgent",
                     "ar": f"{row['customer_name']} تجاوز حد المديونية",
                     "en": f"{row['customer_name']} is over the credit limit",
-                    "detail_ar": f"الحد المسموح {limit:,.0f}.",
-                    "detail_en": f"Limit is {limit:,.0f}.",
-                    "amount": f"{row['balance']:,.0f}",
+                    # The quoted limit is exact: a rounded threshold can claim a
+                    # customer passed a line they are still inside.
+                    "detail_ar": f"الحد المسموح {display_money(limit)}.",
+                    "detail_en": f"Limit is {display_money(limit)}.",
+                    "amount": display_money(row["balance"]),
                 }
             )
 
@@ -276,7 +279,7 @@ def build_alerts(held_permissions, today, shared=None):
                         "en": f"{row['cashbox_name']} has a negative balance",
                         "detail_ar": "راجع الحركات المسجلة على الخزنة.",
                         "detail_en": "Review the movements recorded on it.",
-                        "amount": f"{row['balance']:,.0f}",
+                        "amount": display_money(row["balance"]),
                     }
                 )
             elif row["balance"] < CASHBOX_LOW_THRESHOLD:
@@ -288,7 +291,7 @@ def build_alerts(held_permissions, today, shared=None):
                         "en": f"{row['cashbox_name']} balance is low",
                         "detail_ar": "أقل من الحد المعتاد للتشغيل.",
                         "detail_en": "Below the usual working level.",
-                        "amount": f"{row['balance']:,.0f}",
+                        "amount": display_money(row["balance"]),
                     }
                 )
 
