@@ -69,7 +69,10 @@ class InventoryUiTests(TestCase):
         )
         self.assertTrue(response.context["can_view_cost"])
         self.assertContains(response, "Average cost")
-        self.assertContains(response, "12,3456")
+        # Was "12,3456": a bare render followed LANGUAGE_CODE="ar" and printed
+        # the decimal as a comma. The shared cost filter fixes the separator
+        # while keeping the stored four decimals.
+        self.assertContains(response, "12.3456")
 
     def test_movement_filter_preserves_direction_and_quantity(self):
         self.login_as(RoleCode.STOCK_KEEPER, "inventory_movement")
