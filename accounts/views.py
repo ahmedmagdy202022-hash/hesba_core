@@ -1,5 +1,6 @@
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 
 
 LOGIN_CHECKPOINT_CODE = "109_LOGIN_AND_DEVICE_SHELL_STABILIZATION"
@@ -53,6 +54,23 @@ def csrf_failure(request, reason=""):
     return render(
         request,
         "accounts/csrf_failure.html",
-        {"logout_retry": False, "reload_url": request.path},
+        {"logout_retry": False, "reload_url": _reload_url(request)},
         status=403,
     )
+
+
+def _reload_url(request):
+    """The page the rejected form was on, so a reload keeps its context.
+
+    The failing request is usually a POST whose target means little as a GET:
+    reloading /setup/complete/ would drop the choices that lived only in the
+    review page's query string. The same-site Referer is that page. Anything
+    else falls back to the request path.
+    """
+
+    referer = request.META.get("HTTP_REFERER", "")
+    if referer and url_has_allowed_host_and_scheme(
+        referer, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        return referer
+    return request.path

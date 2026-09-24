@@ -107,3 +107,31 @@ class LogoutCsrfTests(TestCase):
         response = self.client.get(reverse("logout"))
         self.assertEqual(response.status_code, 405)
         self.assertIn("_auth_user_id", self.client.session)
+
+    def test_expired_page_reloads_the_page_the_form_came_from(self):
+        # A stale setup-review form posts to /setup/complete/; reloading that
+        # target as a GET would lose the choices held in the review URL.
+        stale = self.token_from(reverse("login"))
+        self.log_in()
+        review = "http://testserver/setup/review/?activity=commercial&modules=sales&lang=en"
+        response = self.client.post(
+            reverse("setup_complete"), {"csrfmiddlewaretoken": stale}, HTTP_REFERER=review
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertContains(
+            response,
+            'href="http://testserver/setup/review/?activity=commercial&amp;modules=sales&amp;lang=en"',
+            status_code=403,
+        )
+
+    def test_expired_page_ignores_a_foreign_referer(self):
+        stale = self.token_from(reverse("login"))
+        self.log_in()
+        response = self.client.post(
+            reverse("setup_complete"),
+            {"csrfmiddlewaretoken": stale},
+            HTTP_REFERER="https://evil.example/phish",
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertNotContains(response, "evil.example", status_code=403)
+        self.assertContains(response, f'href="{reverse("setup_complete")}"', status_code=403)
