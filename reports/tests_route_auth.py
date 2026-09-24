@@ -15,6 +15,9 @@ PUBLIC_ROUTE_NAMES = frozenset(
     {
         "root_redirect",  # bare redirect to /login/, exposes nothing
         "login",
+        # POST-only and CSRF-protected; signing out exposes nothing. Gating it
+        # sent a signed-out visitor to /login/?next=/logout/ and then to a 405.
+        "logout",
     }
 )
 

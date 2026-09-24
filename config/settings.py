@@ -116,6 +116,9 @@ LOGIN_URL = "/login/"
 # one is what used to trap a finished installation on its own first-run screen.
 LOGIN_REDIRECT_URL = "/start/"
 LOGOUT_REDIRECT_URL = "/login/"
+# A stale token (usually a tab rendered before the last login) gets a readable
+# Arabic/English page instead of Django's raw 403.
+CSRF_FAILURE_VIEW = "accounts.views.csrf_failure"
 
 
 CSRF_TRUSTED_ORIGINS = config(
