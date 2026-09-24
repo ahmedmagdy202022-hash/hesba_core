@@ -126,3 +126,34 @@ class ArabicScreensTests(TestCase):
         response = self.client.get(reverse("inventory:adjustment"))
         self.assertContains(response, "زيادة")
         self.assertNoEnglish(response, ">Increase<", ">Decrease<")
+
+    def test_report_filters_are_arabic(self):
+        self.login_as()
+        for url in (reverse("reports:sales"), reverse("reports:purchases")):
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertContains(response, "كل الحالات")
+                self.assertContains(response, "مسودة")
+                self.assertNoEnglish(response, "All statuses", ">Draft<", ">Posted<", ">Cancelled<")
+        response = self.client.get(reverse("reports:cashboxes"))
+        self.assertContains(response, "كل الخزن")
+        self.assertNoEnglish(response, "All cashboxes")
+
+    def test_report_filters_stay_english_in_english(self):
+        self.login_as()
+        response = self.client.get(reverse("reports:sales"), {"lang": "en", "status": "posted"})
+        self.assertContains(response, "All statuses")
+        self.assertContains(response, '<option value="posted" selected>Posted</option>')
+
+
+class HardcodedOptionGuardTests(SimpleTestCase):
+    def test_no_template_hardcodes_an_english_option_label(self):
+        # An <option> with literal English text shows English on Arabic screens;
+        # labels belong in the view's words or in localized_choices.
+        root = pathlib.Path(settings.BASE_DIR) / "templates"
+        offenders = [
+            f"{path.relative_to(root)}: {match}"
+            for path in root.rglob("*.html")
+            for match in re.findall(r"<option[^>]*>[A-Za-z][A-Za-z ]+</option>", path.read_text())
+        ]
+        self.assertEqual(offenders, [])

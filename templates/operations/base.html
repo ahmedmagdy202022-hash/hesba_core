@@ -5,7 +5,7 @@
 {% block content %}
 <header class="op-header">
   <a class="op-brand" href="{% url 'dashboard_snapshot' %}?lang={{ lang }}">حِسبة <span>Hesba</span></a>
-  <nav class="op-nav" aria-label="Main navigation">
+  <nav class="op-nav" aria-label="{% if lang == 'en' %}Main navigation{% else %}التنقل الرئيسي{% endif %}">
     <a href="{% url 'dashboard_snapshot' %}?lang={{ lang }}">{{ words.dashboard }}</a>
     <button type="button" data-lang-toggle>{{ words.language }}</button>
   </nav>
