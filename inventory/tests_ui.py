@@ -69,7 +69,9 @@ class InventoryUiTests(TestCase):
         )
         self.assertTrue(response.context["can_view_cost"])
         self.assertContains(response, "Average cost")
-        self.assertContains(response, "12,3456")
+        # Four-decimal cost through the shared unit_cost filter, not the
+        # Arabic-locale decimal comma a bare render used to produce.
+        self.assertContains(response, "12.3456")
 
     def test_movement_filter_preserves_direction_and_quantity(self):
         self.login_as(RoleCode.STOCK_KEEPER, "inventory_movement")
