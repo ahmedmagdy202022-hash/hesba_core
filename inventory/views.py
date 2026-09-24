@@ -7,6 +7,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from master_data.models import Item, Location
 from permissions.decorators import require_any_permission, require_permission
 from permissions.services import user_has_permission
+from settings_core.display_labels import localized_choices
 
 from .forms import StockAdjustmentForm, StockOperationReversalForm, StockTransferForm
 from .models import StockMovement, StockOperation, StockOperationType
@@ -199,7 +200,7 @@ def movement_list(request):
             page=page,
             query=query,
             movement_type=movement_type,
-            movement_choices=StockMovement._meta.get_field("movement_type").choices,
+            movement_choices=localized_choices(StockMovement, "movement_type", _lang(request)),
             location_id=location_id,
             locations=Location.objects.filter(active=True),
             can_view_cost=user_has_permission(request.user, "inventory.view_cost"),

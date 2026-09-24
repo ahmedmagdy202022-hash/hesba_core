@@ -4,6 +4,7 @@ from django import forms
 from django.utils import timezone
 
 from master_data.models import Item, Location
+from settings_core.display_labels import localized_choices
 
 from .models import StockAdjustmentDirection, StockOperation
 
@@ -43,6 +44,10 @@ class StockOperationForm(forms.Form):
         super().__init__(*args, **kwargs)
         for name, field in self.fields.items():
             field.label = LABELS[lang][name]
+        if "direction" in self.fields:
+            self.fields["direction"].choices = localized_choices(
+                StockOperation, "adjustment_direction", lang
+            )
         if "item" in self.fields:
             self.fields["item"].queryset = Item.objects.filter(
                 active=True, is_stock_tracked=True

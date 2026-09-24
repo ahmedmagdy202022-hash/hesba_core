@@ -7,6 +7,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from permissions.decorators import require_permission
 from permissions.services import user_has_permission
 from reports.selectors import cashbox_report
+from settings_core.display_labels import localized_choices
 
 from .forms import CashboxOperationForm, CashboxOperationReversalForm
 from .models import Cashbox, CashboxMovement, CashboxOperation
@@ -172,7 +173,7 @@ def movement_list(request):
             cashbox_id=cashbox_id,
             movement_type=movement_type,
             cashboxes=Cashbox.objects.filter(active=True),
-            movement_choices=CashboxMovement._meta.get_field("movement_type").choices,
+            movement_choices=localized_choices(CashboxMovement, "movement_type", _lang(request)),
         ),
     )
 
