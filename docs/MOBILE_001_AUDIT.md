@@ -12,7 +12,10 @@ Audited: `develop` @ `7a262a3`, 2026-09-24
 
 - Headless Chromium through Playwright. Signed in as the seeded `owner` (sees every screen and cost column).
 - Database: fresh SQLite with `seed_demo_users` and `seed_demo_business --username owner`, so every list has real rows.
-- **57 screens**: every named, parameterless route, plus a real sales invoice, purchase invoice, item card, cashbox and customer edit form.
+- **57 paths**, listed exactly in `docs/mobile_001/urls.json`: every named, parameterless route, plus a real sales invoice, purchase invoice, item card, cashbox and customer edit form. The ids are the ones `seed_demo_business` creates on a fresh database.
+  - 55 of them are screens.
+  - `/` and `/start/` are redirect-only routes and land on `/dashboard/` by design.
+  - No load ended on the login page.
 - **3 modes** give 171 page loads:
   - mobile 390×844 in Arabic
   - mobile 390×844 in English
@@ -138,8 +141,10 @@ python manage.py seed_demo_users --password '<choose one>'
 python manage.py seed_demo_business --username owner
 python manage.py runserver 127.0.0.1:8020
 
-# 2. write the paths to visit into $S/urls.json, then:
+# 2. copy docs/mobile_001/urls.json to $S/urls.json (the exact audited manifest), then:
 npm i playwright-core   # in a scratch folder
 NODE_PATH=<scratch>/node_modules S=<outdir> AUDIT_PASS='<password>' \
   CHROME=<path to chromium> node scripts/mobile_audit.js
 ```
+
+The script stops when the login fails, rather than auditing the login page. It lists every redirected path, records screenshot failures as errors, and exits non-zero when any load errored or returned something other than 200.

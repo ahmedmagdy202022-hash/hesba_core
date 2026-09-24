@@ -11,6 +11,7 @@
 // and full-page screenshots to $S/mobile_shots/.
 const { chromium } = require('playwright-core');
 const fs = require('fs');
+fs.mkdirSync((process.env.S || '.') + '/mobile_shots', { recursive: true });
 const S = process.env.S, BASE = process.env.BASE || 'http://127.0.0.1:8020', urls = JSON.parse(fs.readFileSync(S + '/urls.json'));
 const modes = [
   { key: 'mobile_ar', w: 390, h: 844, lang: 'ar', touch: true },
@@ -26,6 +27,9 @@ const modes = [
     await p.goto(BASE + '/login/');
     await p.fill('#id_username', process.env.AUDIT_USER || 'owner'); await p.fill('#id_password', process.env.AUDIT_PASS || '');
     await Promise.all([p.waitForNavigation(), p.click('button[type=submit]')]);
+    // A wrong password re-renders the login page with a 200; auditing it would
+    // report every screen as passing. Stop instead.
+    if (new URL(p.url()).pathname === '/login/') throw new Error('Login failed for AUDIT_USER; nothing was audited.');
     for (const u of urls) {
       const errors = [];
       const onErr = e => errors.push(String(e.message || e).slice(0, 160));
@@ -77,13 +81,21 @@ const modes = [
         };
       });
       const name = `${m.key}__${u.replace(/\//g, '_').replace(/^_|_$/g, '') || 'root'}.png`;
-      if (m.key !== 'mobile_en') await p.screenshot({ path: `${S}/mobile_shots/${name}`, fullPage: true }).catch(() => {});
-      results.push({ mode: m.key, url: u, status, errors, shot: name, ...data });
+      if (m.key !== 'mobile_en') await p.screenshot({ path: `${S}/mobile_shots/${name}`, fullPage: true }).catch(e => errors.push('SCREENSHOT ' + e.message.slice(0, 100)));
+      // A redirect means this row audited a different screen; a bounce to the
+      // login page means it audited nothing. Both are recorded, never passed.
+      const redirected = data.finalPath.replace(/\/$/, '') !== u.split('?')[0].replace(/\/$/, '');
+      if (data.finalPath === '/login/') errors.push('BOUNCED TO LOGIN');
+      results.push({ mode: m.key, url: u, status, redirected, errors, shot: name, ...data });
       p.off('pageerror', onErr); p.off('console', onCon);
     }
     await ctx.close();
   }
   fs.writeFileSync(S + '/audit.json', JSON.stringify(results, null, 1));
   await b.close();
-  console.log('done', results.length);
+  const bad = results.filter(r => r.errors.length || r.status !== 200);
+  const moved = results.filter(r => r.redirected);
+  console.log(`done ${results.length} loads; ${bad.length} with errors or non-200; ${moved.length} redirected:`);
+  for (const r of moved) console.log(`  ${r.mode} ${r.url} -> ${r.finalPath}`);
+  if (bad.length) process.exitCode = 1;
 })();
