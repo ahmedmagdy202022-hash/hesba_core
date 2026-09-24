@@ -72,7 +72,7 @@
               <article class="dash-kpi{% if card.sensitive %} is-sensitive{% endif %}" data-kpi="{{ card.key }}" data-scope="{{ card.scope }}">
                 <span class="dash-kpi__label">{{ card.label }}</span>
                 <span class="dash-kpi__value{% if card.is_zero %} is-zero{% endif %}">
-                  {{ card.value }}{% if card.is_money %}<small class="dash-kpi__unit">EGP</small>{% endif %}
+                  {{ card.value }}{% if card.is_money and currency %}<small class="dash-kpi__unit">{{ currency }}</small>{% endif %}
                 </span>
               </article>
             {% endfor %}
@@ -94,7 +94,7 @@
                     <span class="dash-alert__title">{{ alert.title }}</span>
                     <span class="dash-alert__detail">{{ alert.detail }}</span>
                   </span>
-                  {% if alert.amount %}<span class="dash-alert__amount">{{ alert.amount }}<small>EGP</small></span>{% endif %}
+                  {% if alert.amount %}<span class="dash-alert__amount">{{ alert.amount }}{% if currency %}<small>{{ currency }}</small>{% endif %}</span>{% endif %}
                 </li>
               {% endfor %}
             </ul>
