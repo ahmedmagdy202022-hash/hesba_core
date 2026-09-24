@@ -1,8 +1,8 @@
 # Hesba Agent — End-to-End Operating Rules
 
-Status: ACTIVE FOR THIS BRANCH
-Branch: `agent/end-to-end-functional-cycle`
-Baseline lineage: `develop` + current Master Data work
+Status: The end-to-end run on `agent/end-to-end-functional-cycle` is COMPLETE and merged to `develop` via PR #54 (`c77c7e5`).
+Current task board and work rules: `docs/HESBA_ROADMAP.md`. Where this file and the roadmap disagree on branching, the roadmap wins.
+The engineering benchmark and protected-logic rules below remain in force.
 
 ## Mission
 Complete Hesba functionally end-to-end with minimal interruption.
@@ -70,22 +70,20 @@ If a protected change is genuinely required:
 A Hard Gate must not stop the whole run.
 
 ## Known Hard Gates / risks
-1. There is currently no dedicated `cashboxes.manage_cashboxes` permission.
-   Do not misuse `cashboxes.move_cash` for Cashbox master-data editing.
-2. Customer/Supplier/Cashbox opening-balance correction after operational use has no approved accounting semantics.
-   Initial creation may follow existing model behavior; do not invent later correction behavior.
-3. Sales cost has a known stale-`average_cost` risk.
-   Do not silently fix it while building UI. Record/review before Sales is declared release-ready.
+All seven Hard Gates from the end-to-end run are RESOLVED; see `docs/AGENT_HARD_GATES.md`. In particular:
+1. `cashboxes.manage_cashboxes` now exists (HG-001). Cashbox master-data editing uses it, not `cashboxes.move_cash`.
+2. Opening-balance correction after operational use is an auditable dated adjustment with append-only reversal (HG-002).
+3. Posted sales cost comes from authoritative inventory movement cost; `Item.average_cost` is a display cache (HG-003).
+Record any new protected-logic question in `docs/AGENT_HARD_GATES.md` as before.
 
 ## Branch discipline
-Work only on:
-`agent/end-to-end-functional-cycle`
+Historical (end-to-end run): all work went on `agent/end-to-end-functional-cycle` as one PR (#54, merged).
 
-Use scoped commits/checkpoints.
-Do not create a new branch for every screen.
-Do not merge to `develop` or `main`.
-
-At the end, prepare one final PR to `develop` for Main Control review.
+Current rule, from `docs/HESBA_ROADMAP.md`:
+- one branch per task, cut from an up-to-date `develop`;
+- never commit to `develop` or `main`;
+- never merge without Ahmed's explicit approval;
+- one PR per task to `develop` for Main Control review.
 
 ## Continuous execution rule
 After completing one Track:

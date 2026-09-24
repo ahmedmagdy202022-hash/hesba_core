@@ -24,6 +24,9 @@ Supplier -> Purchase Invoice -> Inventory by Location -> Sales Invoice -> Custom
 
 ## Current checkpoints
 
+The live project status and task board is `docs/HESBA_ROADMAP.md`. The list
+below is the historical foundation checkpoint log.
+
 - `047_GITHUB_INITIAL_STRUCTURE_MERGED`
 - `048_FOUNDATION_APPS_SKELETON_READY`
 - `049_FOUNDATION_MODELS_SETTINGS_ROLES_PERMISSIONS = OK`

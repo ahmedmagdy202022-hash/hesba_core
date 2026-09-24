@@ -1,6 +1,6 @@
 # AGENT END-TO-END FUNCTIONAL RUN
 
-Status: EXECUTE NOW
+Status: COMPLETED — historical record. The run was merged to `develop` via PR #54 (`c77c7e5`); see `docs/AGENT_END_TO_END_COMPLETION.md`. Current work is tracked in `docs/HESBA_ROADMAP.md`.
 Owner: Main Control
 Execution branch: `agent/end-to-end-functional-cycle`
 

@@ -1,11 +1,12 @@
 # Hesba End-to-End Functional Run — Completion Report
 
-Status: COMPLETE FOR REVIEW  
+Status: COMPLETE — MERGED  
 Issue: GitHub #53 — `AGENT — Complete Hesba functional cycle end-to-end`  
 Branch: `agent/end-to-end-functional-cycle`  
 Review target: `develop`  
 Completed: 2026-08-30
-Merge status: NOT MERGED — Main Control review is required.
+Merge status: MERGED to `develop` via PR #54 (merge commit `c77c7e5`, 2026-08-30).
+Current project status: `docs/HESBA_ROADMAP.md`.
 
 ## Outcome
 
@@ -117,5 +118,5 @@ The repository intentionally does not contain the real production hostname, Post
 ## Review notes
 
 - Compare and review this branch only against `develop`.
-- PR #54 is prepared for Main Control review. This branch has not been merged to `develop` or `main`.
+- PR #54 was reviewed by Main Control and merged to `develop` (`c77c7e5`). It was not merged to `main`.
 - Decorative illustration, custom icon polish, hero artwork, production backgrounds, and cosmetic micro-tuning remain in the later Visual Polish phase by design.
