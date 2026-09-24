@@ -2,7 +2,7 @@
 
 Status: ALL SEVEN GATES RESOLVED
 Decision source: Main Control decision comment on PR #54
-Implemented on: `agent/end-to-end-functional-cycle`
+Implemented on: `agent/end-to-end-functional-cycle`, merged to `develop` via PR #54 (`c77c7e5`)
 Resolved: 2026-08-30
 
 This log records the seven protected business/accounting decisions raised during the end-to-end functional run. Main Control approved all seven decisions. They are implemented, migrated, and covered by the final verification run. No new Hard Gate remains open.
