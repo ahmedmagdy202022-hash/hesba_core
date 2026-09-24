@@ -21,8 +21,8 @@ from .selectors import (
 
 
 STRINGS = {
-    "ar": {"page_title": "التقارير", "dashboard": "لوحة القيادة", "language": "English", "reports": "مركز التقارير قراءة فقط", "search": "تطبيق الفلاتر", "empty": "لا توجد نتائج مطابقة.", "back": "العودة للتقارير"},
-    "en": {"page_title": "Reports", "dashboard": "Dashboard", "language": "العربية", "reports": "Read-only report center", "search": "Apply filters", "empty": "No matching results.", "back": "Back to reports"},
+    "ar": {"page_title": "التقارير", "dashboard": "لوحة القيادة", "language": "English", "reports": "مركز التقارير قراءة فقط", "search": "تطبيق الفلاتر", "empty": "لا توجد نتائج مطابقة.", "back": "العودة للتقارير", "all_statuses": "كل الحالات", "all_cashboxes": "كل الخزن"},
+    "en": {"page_title": "Reports", "dashboard": "Dashboard", "language": "العربية", "reports": "Read-only report center", "search": "Apply filters", "empty": "No matching results.", "back": "Back to reports", "all_statuses": "All statuses", "all_cashboxes": "All cashboxes"},
 }
 
 REPORT_CARDS = (

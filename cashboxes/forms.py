@@ -3,6 +3,8 @@ from decimal import Decimal
 from django import forms
 from django.utils import timezone
 
+from settings_core.display_labels import localized_choices
+
 from .models import Cashbox, CashboxOperation, CashboxOperationType
 
 
@@ -98,6 +100,9 @@ class CashboxOperationForm(forms.Form):
         self.fields["destination_cashbox"].queryset = cashboxes
         for name, field in self.fields.items():
             field.label = self.LABELS[lang][name]
+        self.fields["operation_type"].choices = localized_choices(
+            CashboxOperation, "operation_type", lang
+        )
         if not self.is_bound:
             self.initial["operation_date"] = timezone.localdate()
 
