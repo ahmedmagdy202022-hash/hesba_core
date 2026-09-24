@@ -14,6 +14,7 @@ from cashboxes.services import (
     target_has_operational_use,
 )
 from permissions.services import user_has_permission
+from settings_core.templatetags.hesba_format import money as display_money
 
 from .forms import CashboxForm, CategoryForm, CustomerForm, ItemForm, LocationForm, SupplierForm
 from .models import Category, Customer, Item, Location, Supplier
@@ -198,7 +199,7 @@ def _rows(entity, objects, lang, words, can_view_cost):
                 obj.customer_code,
                 obj.name,
                 obj.phone or "—",
-                f"{obj.credit_limit:,.2f}",
+                display_money(obj.credit_limit),
                 words["active"] if obj.active else words["inactive"],
             ]
         elif entity == "categories":
@@ -215,10 +216,10 @@ def _rows(entity, objects, lang, words, can_view_cost):
                 _localized_name(obj.category, lang) if obj.category else "—",
                 obj.unit,
                 words["stock_item"] if obj.is_stock_tracked else words["service"],
-                f"{obj.default_sale_price:,.2f}",
+                display_money(obj.default_sale_price),
             ]
             if can_view_cost:
-                values.append(f"{obj.default_purchase_price:,.2f}")
+                values.append(display_money(obj.default_purchase_price))
             values.append(words["active"] if obj.active else words["inactive"])
         else:
             values = [
