@@ -73,6 +73,8 @@
 
   /* Elevation */
   --hs-shadow-sm:0 1px 2px rgba(11,31,58,.06);
+  /* Channels for translucent washes and shadows: rgba(var(--hs-teal-rgb), .2) */
+  --hs-teal-rgb:2,174,183; --hs-teal-deep-rgb:2,86,116; --hs-navy-rgb:9,40,81; --hs-white-rgb:255,255,255; --hs-line-rgb:227,232,238;
   --hs-teal-glow:rgba(2,174,183,.2);
   --hs-scrim:rgb(9 40 81 / 45%);
   --hs-shadow-md:0 8px 24px rgba(11,31,58,.08);

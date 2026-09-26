@@ -22,7 +22,7 @@
   min-width:0;
   border:1.5px solid var(--activity-border);
   border-radius:18px;
-  background:linear-gradient(180deg,#fbfeff 0%,#f5fbfd 100%);
+  background:linear-gradient(180deg,var(--hs-surface) 0%,var(--hs-surface) 100%);
   box-shadow:var(--activity-soft-shadow);
   color:var(--activity-navy);
   padding:clamp(15px,1.35vw,20px);
@@ -31,8 +31,8 @@
 
 .review-card--note{
   grid-column:1 / -1;
-  background:linear-gradient(180deg,#f6feff 0%,#ecfafd 100%);
-  border-color:rgba(5,174,186,.24);
+  background:linear-gradient(180deg,var(--hs-surface) 0%,var(--hs-teal-wash) 100%);
+  border-color:rgba(var(--hs-teal-rgb),.24);
 }
 
 .review-card__title{
@@ -40,7 +40,7 @@
   color:var(--activity-navy);
   font-size:clamp(15px,1.25vw,19px);
   line-height:1.25;
-  font-weight:900;
+  font-weight:700;
 }
 
 .review-list{
@@ -56,15 +56,15 @@
   gap:10px;
   padding:10px 12px;
   border-radius:13px;
-  background:rgba(255,255,255,.82);
-  border:1px solid rgba(225,236,241,.86);
+  background:rgba(var(--hs-white-rgb),.82);
+  border:1px solid rgba(var(--hs-line-rgb),.86);
 }
 
 .review-list dt{
   color:var(--activity-muted);
   font-size:12.5px;
   line-height:1.3;
-  font-weight:900;
+  font-weight:700;
 }
 
 .review-list dd{
@@ -72,7 +72,7 @@
   color:var(--activity-navy);
   font-size:clamp(14px,1.05vw,17px);
   line-height:1.3;
-  font-weight:900;
+  font-weight:700;
   overflow-wrap:break-word;
 }
 
@@ -89,18 +89,18 @@
   justify-content:center;
   padding:8px 12px;
   border-radius:999px;
-  border:1px solid rgba(5,174,186,.22);
-  background:rgba(5,174,186,.10);
+  border:1px solid rgba(var(--hs-teal-rgb),.22);
+  background:rgba(var(--hs-teal-rgb),.10);
   color:var(--activity-teal-deep);
   font-size:13px;
   line-height:1.15;
-  font-weight:900;
-  box-shadow:0 7px 16px rgba(7,31,70,.035);
+  font-weight:700;
+  box-shadow:0 7px 16px rgba(var(--hs-navy-rgb),.035);
 }
 
 .review-module-pill--empty{
   color:var(--activity-muted);
-  background:rgba(255,255,255,.82);
+  background:rgba(var(--hs-white-rgb),.82);
   border-color:var(--activity-border);
 }
 
@@ -109,7 +109,7 @@
   color:var(--activity-navy);
   font-size:clamp(13.5px,1.05vw,16px);
   line-height:1.65;
-  font-weight:800;
+  font-weight:700;
 }
 
 .complete-card{
