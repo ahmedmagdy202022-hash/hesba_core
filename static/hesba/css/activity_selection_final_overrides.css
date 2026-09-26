@@ -1,13 +1,13 @@
 /* 117A final polish overrides: calm panel gradient, restored cards, English back chevron */
 .activity-panel{
   background:
-    radial-gradient(circle at 88% 6%, rgba(5,174,186,.030), transparent 30%),
-    radial-gradient(circle at 8% 94%, rgba(5,174,186,.024), transparent 28%),
-    linear-gradient(155deg, rgba(255,255,255,.992) 0%, rgba(251,254,255,.982) 58%, rgba(247,253,254,.972) 100%) !important;
+    radial-gradient(circle at 88% 6%, rgba(var(--hs-teal-rgb),.030), transparent 30%),
+    radial-gradient(circle at 8% 94%, rgba(var(--hs-teal-rgb),.024), transparent 28%),
+    linear-gradient(155deg, rgba(var(--hs-white-rgb),.992) 0%, rgba(var(--hs-white-rgb),.982) 58%, rgba(var(--hs-white-rgb),.972) 100%) !important;
 }
 .activity-card{
   overflow:visible !important;
-  background:linear-gradient(180deg,#fbfeff 0%,#f4fbfd 100%) !important;
+  background:linear-gradient(180deg,var(--hs-surface) 0%,var(--hs-teal-wash) 100%) !important;
 }
 .activity-card::before,
 .activity-card::after{
@@ -15,13 +15,13 @@
   display:none !important;
 }
 .activity-card.is-active{
-  background:linear-gradient(180deg,#f7feff 0%,#edfafb 100%) !important;
+  background:linear-gradient(180deg,var(--hs-surface) 0%,var(--hs-teal-wash) 100%) !important;
 }
 .activity-card.is-disabled{
-  background:linear-gradient(180deg,#fcfeff 0%,#f6fbfc 100%) !important;
+  background:linear-gradient(180deg,var(--hs-surface) 0%,var(--hs-surface) 100%) !important;
 }
 .activity-card.is-selected{
-  background:linear-gradient(180deg,#f3feff 0%,#e9fbfd 100%) !important;
+  background:linear-gradient(180deg,var(--hs-surface) 0%,var(--hs-teal-wash) 100%) !important;
 }
 .activity-card.is-selected::after{
   content:"" !important;
@@ -33,7 +33,7 @@
   height:15px !important;
   border-radius:999px !important;
   background:var(--activity-teal) !important;
-  box-shadow:0 0 0 5px rgba(5,174,186,.10) !important;
+  box-shadow:0 0 0 5px rgba(var(--hs-teal-rgb),.10) !important;
   z-index:2 !important;
 }
 .activity-card.is-selected .activity-card__title::before{
@@ -73,9 +73,9 @@
 @media(max-width:700px){
   .activity-panel{
     background:
-      radial-gradient(circle at 88% 6%, rgba(5,174,186,.030), transparent 30%),
-      radial-gradient(circle at 8% 94%, rgba(5,174,186,.024), transparent 28%),
-      linear-gradient(155deg, rgba(255,255,255,.992) 0%, rgba(251,254,255,.982) 58%, rgba(247,253,254,.972) 100%) !important;
+      radial-gradient(circle at 88% 6%, rgba(var(--hs-teal-rgb),.030), transparent 30%),
+      radial-gradient(circle at 8% 94%, rgba(var(--hs-teal-rgb),.024), transparent 28%),
+      linear-gradient(155deg, rgba(var(--hs-white-rgb),.992) 0%, rgba(var(--hs-white-rgb),.982) 58%, rgba(var(--hs-white-rgb),.972) 100%) !important;
   }
   .activity-card.is-selected::after{
     top:8px !important;

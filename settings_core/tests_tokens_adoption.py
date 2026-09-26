@@ -92,3 +92,46 @@ class RemainingSheetsAdoptionTests(TestCase):
         body = self.client.get(reverse("login")).content.decode()
         self.assertIn("hesba/css/tokens.css", body)
         self.assertLess(body.index("hesba/css/tokens.css"), body.index("hesba/css/login.css"))
+
+
+SETUP_SHEETS = (
+    "hesba/css/activity_selection.css",
+    "hesba/css/activity_selection_final_overrides.css",
+    "hesba/css/activity_modules_selection.css",
+    "hesba/css/activity_review_setup.css",
+    "hesba/css/setup_gate_web.css",
+    "hesba/css/setup_gate_pack.css",
+    "hesba/css/setup_gate_mobile_refine.css",
+)
+
+
+class SetupSheetsAdoptionTests(TestCase):
+    """SETUP-001 (roadmap D3.2): the setup wizard reads the same tokens."""
+
+    def test_no_colour_literals(self):
+        for sheet in SETUP_SHEETS:
+            with self.subTest(sheet=sheet):
+                css = read_static(sheet)
+                self.assertEqual(re.findall(r"#[0-9a-fA-F]{3,8}\b", css), [])
+                # Translucent colours go through the channel tokens.
+                self.assertEqual(re.findall(r"rgba?\(\s*\d", css), [])
+                self.assertNotRegex(css, r"font-weight:\s*[89]00")
+
+    def test_every_token_used_is_defined(self):
+        defined = set(re.findall(r"(--hs-[\w-]+)\s*:", read_static("hesba/css/tokens.css")))
+        for sheet in SETUP_SHEETS:
+            with self.subTest(sheet=sheet):
+                used = set(re.findall(r"var\((--hs-[\w-]+)", read_static(sheet)))
+                self.assertEqual(sorted(used - defined), [])
+
+    def test_every_setup_page_loads_the_tokens_first(self):
+        import pathlib
+
+        from django.conf import settings
+
+        for template in sorted((pathlib.Path(settings.BASE_DIR) / "templates/setup").glob("*.html")):
+            with self.subTest(template=template.name):
+                html = template.read_text(encoding="utf-8")
+                self.assertIn("hesba/css/tokens.css", html)
+                first_sheet = html.index("stylesheet")
+                self.assertIn("tokens.css", html[first_sheet:first_sheet + 120])
