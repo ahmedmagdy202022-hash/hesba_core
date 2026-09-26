@@ -98,7 +98,7 @@ ENTITY_CONFIG = {
     "suppliers": {
         "model": Supplier,
         "form": SupplierForm,
-        "view_permission": "master_data.view_master_data",
+        "view_permission": "master_data.view_suppliers",
         "manage_permission": "master_data.manage_parties",
         "title": {"ar": "الموردون", "en": "Suppliers"},
         "singular": {"ar": "مورد", "en": "Supplier"},
