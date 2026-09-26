@@ -1,3 +1,4 @@
+import re
 from decimal import Decimal
 
 from django.test import TestCase
@@ -93,5 +94,8 @@ class FunctionalReportUiTests(TestCase):
             with self.subTest(name=name):
                 response = self.client.get(reverse(name), {"lang": "en"})
                 self.assertEqual(response.status_code, 200)
-                self.assertNotContains(response, 'method="post"')
+                # The shell's logout button is the one POST form a report page
+                # may carry; nothing on the report itself may post.
+                post_forms = re.findall(r"<form[^>]*method=\"post\"[^>]*>", response.content.decode())
+                self.assertEqual([form for form in post_forms if f'action="{reverse("logout")}"' not in form], [])
 

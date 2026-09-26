@@ -1,0 +1,39 @@
+{% load static hesba_shell %}{% comment %}
+The signed-in shell: sidebar on desktop and tablet landscape, a top bar with a
+drawer below 1024px, and a tab bar on phones. Sections come from
+reports.navigation, so this shows exactly what the dashboard offers the same
+user. Styles: hesba/css/shell.css. Behaviour: hesba/js/shell.js.
+{% endcomment %}{% app_shell as shell %}
+<a class="hs-skip" href="#hs-main">{{ shell.words.skip }}</a>
+<header class="hs-topbar">
+  <button class="hs-icon-button" type="button" data-shell-open aria-controls="hs-sidebar" aria-expanded="false" aria-label="{{ shell.words.menu }}"><span class="hs-burger" aria-hidden="true"></span></button>
+  <a class="hs-topbar__brand" href="{% url 'dashboard_snapshot' %}?lang={{ lang }}"><img src="{% static 'hesba/brand/hesba-mark.png' %}" alt="{{ shell.words.home }}" width="34" height="36"></a>
+  <button class="hs-chip" type="button" data-lang-toggle>{{ shell.words.language }}</button>
+</header>
+<aside class="hs-sidebar" id="hs-sidebar" data-shell-nav>
+  <div class="hs-sidebar__head">
+    <a class="hs-sidebar__brand" href="{% url 'dashboard_snapshot' %}?lang={{ lang }}"><img src="{% static 'hesba/brand/hesba-logo-reversed.png' %}" alt="{{ shell.words.home }}" width="160" height="56"></a>
+    <button class="hs-icon-button hs-sidebar__close" type="button" data-shell-close aria-label="{{ shell.words.close_menu }}"><span aria-hidden="true">&times;</span></button>
+  </div>
+  <nav class="hs-nav" aria-label="{{ shell.words.main_nav }}">
+    <ul>
+      {% for item in shell.items %}
+        <li><a class="hs-nav__link{% if item.current %} is-current{% endif %}" href="{{ item.url }}?lang={{ lang }}"{% if item.current %} aria-current="page"{% endif %}>{{ item.label }}</a></li>
+      {% endfor %}
+    </ul>
+  </nav>
+  <div class="hs-sidebar__foot">
+    <span class="hs-sidebar__user">{{ shell.user_name }}</span>
+    <div class="hs-sidebar__actions">
+      <button class="hs-chip hs-chip--on-navy" type="button" data-lang-toggle>{{ shell.words.language }}</button>
+      <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="hs-chip hs-chip--on-navy" type="submit">{{ shell.words.logout }}</button></form>
+    </div>
+  </div>
+</aside>
+<div class="hs-backdrop" data-shell-close hidden></div>
+<nav class="hs-tabbar" aria-label="{{ shell.words.main_nav }}">
+  {% for tab in shell.tabs %}
+    <a class="hs-tab{% if tab.current %} is-current{% endif %}" href="{{ tab.url }}?lang={{ lang }}"{% if tab.current %} aria-current="page"{% endif %}>{{ tab.label }}</a>
+  {% endfor %}
+  <button class="hs-tab{% if shell.more_current %} is-current{% endif %}" type="button" data-shell-open aria-controls="hs-sidebar" aria-expanded="false">{{ shell.words.more }}</button>
+</nav>
