@@ -1,0 +1,130 @@
+/* BARCODE-001: scan-to-line, auto price and a live total on the invoice forms.
+ *
+ * A barcode scanner types the code and presses Enter. The scan box finds the
+ * item by barcode (or item code), adds 1 to its line if it is already on the
+ * invoice, or fills the next empty line, adding a line when all are used.
+ * The live total is a convenience only: the server recalculates and validates
+ * every figure when the draft is saved.
+ */
+(function () {
+  'use strict';
+  var form = document.querySelector('[data-invoice-form]');
+  if (!form) { return; }
+  var catalogNode = document.getElementById('hs-item-catalog');
+  var catalog = catalogNode ? JSON.parse(catalogNode.textContent) : [];
+  var priceField = form.getAttribute('data-price-field');
+  var words = JSON.parse(form.getAttribute('data-words') || '{}');
+  var byId = {}, byCode = {};
+  catalog.forEach(function (item) {
+    byId[String(item.id)] = item;
+    if (item.barcode) { byCode[item.barcode.toLowerCase()] = item; }
+    if (item.code) { byCode[item.code.toLowerCase()] = byCode[item.code.toLowerCase()] || item; }
+  });
+
+  var total = form.querySelector('input[name="lines-TOTAL_FORMS"]');
+  var max = form.querySelector('input[name="lines-MAX_NUM_FORMS"]');
+  var linesBox = form.querySelector('.op-lines');
+  var scan = form.querySelector('[data-scan-input]');
+  var status = form.querySelector('[data-scan-status]');
+  var liveTotal = form.querySelector('[data-live-total]');
+
+  function field(index, name) { return form.querySelector('[name="lines-' + index + '-' + name + '"]'); }
+  function count() { return parseInt(total.value, 10) || 0; }
+  function num(input) { var v = parseFloat((input && input.value || '').replace(',', '.')); return isNaN(v) ? 0 : v; }
+
+  function addLine() {
+    var n = count();
+    var limit = parseInt(max && max.value, 10) || 20;
+    if (n >= limit) { return -1; }
+    var last = linesBox.querySelector('.op-line:last-of-type');
+    var clone = last.cloneNode(true);
+    var from = n - 1;
+    clone.querySelectorAll('[name], [id], [for]').forEach(function (el) {
+      ['name', 'id', 'for'].forEach(function (attr) {
+        var value = el.getAttribute(attr);
+        if (value) { el.setAttribute(attr, value.replace('lines-' + from + '-', 'lines-' + n + '-').replace('id_lines-' + from + '-', 'id_lines-' + n + '-')); }
+      });
+      if (el.tagName === 'SELECT') { el.selectedIndex = 0; }
+      else if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') { el.value = el.name && /line_discount_amount$/.test(el.name) ? '0' : ''; }
+    });
+    clone.querySelectorAll('.op-field-error').forEach(function (el) { el.remove(); });
+    var legend = clone.querySelector('legend');
+    if (legend) { legend.textContent = String(n + 1); }
+    linesBox.appendChild(clone);
+    total.value = String(n + 1);
+    return n;
+  }
+
+  function fillPrice(index, force) {
+    var select = field(index, 'item');
+    var price = field(index, priceField);
+    var item = select && byId[select.value];
+    if (item && price && item.price !== undefined && (force || !price.value)) { price.value = item.price; }
+  }
+
+  function recalc() {
+    if (!liveTotal) { return; }
+    var sum = 0;
+    for (var i = 0; i < count(); i += 1) {
+      var select = field(i, 'item');
+      if (!select || !select.value) { continue; }
+      sum += num(field(i, 'quantity')) * num(field(i, priceField)) - num(field(i, 'line_discount_amount'));
+    }
+    liveTotal.textContent = sum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function say(text, isError) {
+    if (!status) { return; }
+    status.textContent = text;
+    status.classList.toggle('is-error', !!isError);
+  }
+
+  function addItem(item) {
+    var target = -1;
+    for (var i = 0; i < count(); i += 1) {
+      var select = field(i, 'item');
+      if (select && select.value === String(item.id)) {
+        var qty = field(i, 'quantity');
+        qty.value = String(num(qty) + 1);
+        target = i;
+        break;
+      }
+    }
+    if (target < 0) {
+      for (var j = 0; j < count(); j += 1) {
+        var empty = field(j, 'item');
+        if (empty && !empty.value) { target = j; break; }
+      }
+      if (target < 0) { target = addLine(); }
+      if (target < 0) { say(words.full || 'No more lines.', true); return; }
+      field(target, 'item').value = String(item.id);
+      field(target, 'quantity').value = '1';
+      fillPrice(target, true);
+    }
+    say((words.added || 'Added: ') + item.label + ' × ' + field(target, 'quantity').value, false);
+    recalc();
+  }
+
+  if (scan) {
+    scan.addEventListener('keydown', function (event) {
+      if (event.key !== 'Enter') { return; }
+      event.preventDefault();
+      var code = scan.value.trim().toLowerCase();
+      scan.value = '';
+      if (!code) { return; }
+      var item = byCode[code];
+      if (item) { addItem(item); } else { say((words.not_found || 'Not found: ') + code, true); }
+      scan.focus();
+    });
+  }
+
+  form.addEventListener('change', function (event) {
+    var match = /^lines-(\d+)-item$/.exec(event.target.name || '');
+    if (match) { fillPrice(parseInt(match[1], 10), false); }
+    recalc();
+  });
+  form.addEventListener('input', recalc);
+  var addButton = form.querySelector('[data-add-line]');
+  if (addButton) { addButton.addEventListener('click', function () { if (addLine() < 0) { say(words.full || 'No more lines.', true); } }); }
+  recalc();
+})();

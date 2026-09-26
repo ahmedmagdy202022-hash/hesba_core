@@ -26,3 +26,7 @@ body a:focus-visible,body button:focus-visible,body input:focus-visible,body sel
   .md-table{min-width:0}
   .md-table th,.md-table td{padding:12px 8px}
 }
+
+/* BARCODE-001: a second action beside "New". */
+.md-title-actions{display:flex;flex-wrap:wrap;gap:10px}
+@media(max-width:600px){.md-title-actions{display:grid}}

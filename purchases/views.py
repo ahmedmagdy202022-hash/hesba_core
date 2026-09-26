@@ -4,6 +4,7 @@ from django.core.paginator import Paginator
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 
+from barcode.services import item_catalog, scan_words
 from permissions.decorators import require_permission
 from permissions.services import user_has_permission
 
@@ -146,7 +147,7 @@ def invoice_create(request):
     return render(
         request,
         "purchases/form.html",
-        _context(request, form=form, line_formset=line_formset),
+        _context(request, form=form, line_formset=line_formset, item_catalog=item_catalog(sale_prices=False, purchase_prices=True), scan_words=scan_words(lang)),
     )
 
 

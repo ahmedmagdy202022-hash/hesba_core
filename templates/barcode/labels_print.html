@@ -1,0 +1,16 @@
+{% load static hesba_format %}<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ page_title }}</title>
+{% include "partials/brand_icons.html" %}
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
+<link rel="stylesheet" href="{% static 'hesba/css/labels.css' %}?v=barcode-001">
+</head>
+<body class="lb-body lb-{{ layout }}">
+<nav class="lb-toolbar"><a class="lb-button" href="{{ back_url }}">← {{ words.back }}</a><button class="lb-button lb-button--primary" type="button" data-print>{{ words.print }}</button><p>{{ words.pdf_hint }}</p></nav>
+<main class="lb-sheet">{% for label in labels %}<div class="lb-label"><p class="lb-name">{{ label.item.item_name }}{% if label.item.size %} · {{ label.item.size }}{% endif %}{% if label.item.color %} · {{ label.item.color }}{% endif %}</p>{% if show_price %}<p class="lb-price">{{ label.item.default_sale_price|money }} <small>{{ currency }}</small></p>{% endif %}<div class="lb-code">{{ label.svg }}</div></div>{% endfor %}</main>
+<script>document.querySelector('[data-print]').addEventListener('click', function(){ window.print(); });</script>
+</body>
+</html>

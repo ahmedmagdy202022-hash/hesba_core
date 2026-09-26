@@ -41,3 +41,14 @@ body a:focus-visible,body button:focus-visible,body input:focus-visible,body sel
 @media(max-width:1280px){.op-expense-filters{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:1000px){.op-expense-filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:700px){.op-expense-filters,.op-expense-summary{grid-template-columns:1fr}.op-expense-breakdown li{grid-template-columns:1fr auto}.op-expense-bar{grid-column:1 / -1;grid-row:2}}
+/* BARCODE-001: label picking and the scan box on invoice forms. */
+.op-copies{width:90px;min-height:40px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-sm);padding:0 10px;font:inherit}
+.op-label-options{display:flex;flex-wrap:wrap;align-items:flex-end;gap:16px;margin-top:14px}
+.op-check{display:flex;align-items:center;gap:8px;min-height:44px}
+.op-muted{color:var(--op-muted)}
+.op-scan{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 14px;padding:12px 14px;border:1px solid var(--hs-teal);border-radius:var(--hs-radius-md);background:var(--hs-teal-wash)}
+.op-scan label{font-weight:700;color:var(--op-navy)}
+.op-scan input{flex:1 1 240px;min-height:48px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-sm);padding:0 12px;font:inherit;font-size:16px;background:var(--hs-surface)}
+.op-scan output{flex-basis:100%;font-size:13px;color:var(--op-muted)}
+.op-scan output.is-error{color:var(--op-danger)}
+.op-live-total{display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding:14px 16px;border-radius:var(--hs-radius-md);background:var(--op-navy);color:var(--hs-surface);font-size:18px;font-weight:700}
