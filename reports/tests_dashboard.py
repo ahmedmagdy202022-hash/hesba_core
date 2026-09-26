@@ -5,9 +5,11 @@ from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
+from cashboxes.models import CashboxDirection
 from hesba_testing.factories import (
     add_sales_line,
     make_cashbox,
+    make_cashbox_movement,
     make_customer,
     make_item,
     make_location,
@@ -966,3 +968,31 @@ class DashboardAlertMoneyTests(SimpleTestCase):
         for alert in alerts:
             with self.subTest(key=alert["key"]):
                 self.assertEqual(alert["amount"], "")
+
+
+class DashboardCurrencyTests(TestCase):
+    """The unit beside money is the installation's currency, never a literal."""
+
+    def setUp(self):
+        self.profile = prepared_client()
+        self.owner = sign_in_as(self, RoleCode.OWNER, "currency_owner")
+
+    def test_money_cards_carry_the_configured_currency(self):
+        ClientProfile.objects.filter(pk=self.profile.pk).update(default_currency="SAR")
+        response = self.client.get(DASHBOARD)
+        self.assertContains(response, '<small class="dash-kpi__unit">SAR</small>')
+        self.assertNotContains(response, "EGP")
+
+    def test_alert_amounts_carry_the_configured_currency(self):
+        ClientProfile.objects.filter(pk=self.profile.pk).update(default_currency="SAR")
+        make_cashbox_movement(make_cashbox(), CashboxDirection.OUT, "50.00")
+        response = self.client.get(DASHBOARD)
+        self.assertContains(response, "50.00<small>SAR</small>")
+        self.assertNotContains(response, "EGP")
+
+    def test_no_unit_is_invented_when_no_currency_is_set(self):
+        ClientProfile.objects.filter(pk=self.profile.pk).update(default_currency="")
+        response = self.client.get(DASHBOARD)
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "dash-kpi__unit")
+        self.assertNotContains(response, "EGP")

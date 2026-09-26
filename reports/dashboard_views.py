@@ -252,6 +252,9 @@ def dashboard(request):
         "now_parts": _formatted_now(lang, now),
         "client_name": profile.display_name if profile is not None else "",
         "activity_slug": profile.activity_slug if profile is not None else "",
+        # The installation's own currency, not a hard-coded "EGP". Empty before
+        # bootstrap, in which case the template shows no unit at all.
+        "currency": profile.default_currency if profile is not None else "",
         "health_score": health["score"],
         "health_band": band_key,
         "show_health": health["available"],
