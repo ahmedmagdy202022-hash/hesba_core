@@ -32,7 +32,7 @@
     <tbody>
       {% for row in rows %}
         <tr>
-          {% for value in row.values %}<td data-label="{{ columns|default:'' }}">{{ value }}</td>{% endfor %}
+          {% for value in row.values %}<td>{{ value }}</td>{% endfor %}
           {% if can_manage %}
             <td class="md-actions"><a href="{% url 'master_data:edit' entity=entity pk=row.object.pk %}?lang={{ lang }}">{{ words.edit }}</a></td>
           {% endif %}
