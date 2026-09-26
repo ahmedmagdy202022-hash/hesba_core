@@ -33,6 +33,7 @@ REPORT_CARDS = (
     ("reports:customers", "reports.view_customer_report", "Customer Report", "تقرير العملاء", "Balances and customer statement entries", "أرصدة وحركات كشف حساب العملاء"),
     ("reports:suppliers", "reports.view_supplier_report", "Supplier Report", "تقرير الموردين", "Balances and supplier statement entries", "أرصدة وحركات كشف حساب الموردين"),
     ("reports:cashboxes", "reports.view_cashbox_report", "Cashbox Report", "تقرير الخزن", "Opening balance and real cash movements", "الرصيد الافتتاحي وحركات النقد الفعلية"),
+    ("reports:aging", "reports.view_customer_report", "Aging and collections", "أعمار الديون والتحصيل", "Who owes what and since when, with WhatsApp reminders", "مين عليه فلوس ومن إمتى، مع تذكير واتساب"),
     ("reports:profit", "reports.view_profit_report", "Profit Report", "تقرير الأرباح", "Sales - Cost of Goods Sold", "المبيعات - تكلفة البضاعة المباعة"),
 )
 

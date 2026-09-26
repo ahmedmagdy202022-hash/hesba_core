@@ -94,3 +94,11 @@ body a:focus-visible,body button:focus-visible,body input:focus-visible,body sel
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 @media(max-width:900px){.pos{grid-template-columns:minmax(0,1fr)}.pos-side{position:static}}
 @media(max-width:700px){.pos-scan,.pos-two{grid-template-columns:minmax(0,1fr)}.pos-scan input{min-width:0}}
+/* DUE-001: aging buckets and collections. */
+.op-aging-summary{grid-template-columns:repeat(6,minmax(0,1fr))}
+.op-aging-overdue strong{color:var(--op-danger)}
+.op-terms-form{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;margin-bottom:16px;padding:14px}
+.op-terms-form input{max-width:140px}
+.op-whatsapp{min-height:36px;padding:0 12px;font-size:13px}
+@media(max-width:1000px){.op-aging-summary{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:700px){.op-aging-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
