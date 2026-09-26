@@ -41,14 +41,13 @@
 
 .dash-shell{max-width:1680px;margin:0 auto;padding:16px 24px 40px;display:flex;flex-direction:column;gap:18px}
 
-/* ---------- header ---------- */
+/* ---------- header (navigation, language and logout live in the app shell) ---------- */
 .dash-header{
   background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
   box-shadow:var(--shadow);padding:12px 18px;
   display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
 }
 .dash-header__lead,.dash-header__trail{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.dash-logo{width:34px;height:34px;object-fit:contain}
 .dash-screen-title{margin:0;font-size:clamp(16px,2vw,20px);color:var(--navy);font-weight:700}
 
 .dash-icon-button{
@@ -56,13 +55,6 @@
   background:var(--surface-soft);cursor:pointer;position:relative;
   display:flex;align-items:center;justify-content:center;
 }
-.dash-burger,.dash-burger::before,.dash-burger::after{
-  display:block;width:16px;height:2px;background:var(--navy);border-radius:2px;
-}
-.dash-burger{position:relative}
-.dash-burger::before,.dash-burger::after{content:"";position:absolute;left:0}
-.dash-burger::before{top:-5px}
-.dash-burger::after{top:5px}
 .dash-bell{
   display:block;width:13px;height:13px;border:2px solid var(--navy);
   border-radius:50% 50% 4px 4px;border-bottom-width:3px;
@@ -75,26 +67,6 @@
 .dash-clock{display:flex;flex-direction:column;line-height:1.25;font-size:12px;color:var(--muted)}
 .dash-clock__time{color:var(--navy);font-weight:700;font-size:13px}
 
-.dash-pill{
-  border:1px solid var(--border);background:var(--surface-soft);color:var(--navy-soft);
-  border-radius:999px;padding:8px 14px;font-size:12.5px;cursor:pointer;white-space:nowrap;
-}
-.dash-pill--user{cursor:default;background:var(--teal-wash);border-color:var(--border-strong);font-weight:700}
-.dash-logout{margin:0}
-
-/* ---------- body + nav ---------- */
-.dash-body{display:grid;grid-template-columns:240px minmax(0,1fr);gap:18px;align-items:start}
-.dash-nav{
-  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-  box-shadow:var(--shadow);padding:14px 12px;position:sticky;top:16px;
-}
-.dash-nav ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
-.dash-nav__link{
-  display:block;padding:11px 14px;border-radius:var(--radius-sm);
-  font-size:13.5px;color:var(--navy-soft);
-}
-.dash-nav__link:hover{background:var(--surface-soft)}
-.dash-nav__link.is-current{background:var(--teal-wash);color:var(--teal-deep);font-weight:700}
 
 .dash-main{display:flex;flex-direction:column;gap:18px;min-width:0}
 
@@ -209,10 +181,6 @@
 /* ---------- tablet ---------- */
 @media(max-width:1199px){
   .dash-shell{padding:14px 18px 32px}
-  .dash-body{grid-template-columns:minmax(0,1fr)}
-  .dash-nav{position:static;order:-1}
-  .dash-nav ul{flex-direction:row;flex-wrap:wrap}
-  .dash-nav__link{padding:9px 12px;font-size:12.5px}
   .dash-kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
   .dash-hero{min-height:150px}
   .dash-steps{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -225,9 +193,6 @@
   .dash-header__lead,.dash-header__trail{gap:8px}
   .dash-screen-title{font-size:15px}
   .dash-clock{flex-direction:row;gap:6px;align-items:baseline;width:100%;order:5}
-  .dash-nav{display:none;border-radius:18px}
-  .dash-nav.is-open{display:block}
-  .dash-nav ul{flex-direction:column}
   .dash-hero{padding:16px;min-height:0;flex-direction:column;align-items:flex-start;gap:16px}
   .dash-health{align-self:center}
   .dash-health__ring{width:100px;height:100px}

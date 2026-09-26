@@ -19,3 +19,10 @@ body.master-data-page{margin:0;min-height:100vh;background:var(--md-bg);color:va
 /* B+ adoption (TOKENS-002): headings in the display face; interactive focus ring. */
 .md-title-row h1,.md-form h2,.md-title-row h2{font-family:var(--hs-font-head);font-weight:700;line-height:var(--hs-leading-tight)}
 body a:focus-visible,body button:focus-visible,body input:focus-visible,body select:focus-visible,body textarea:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
+
+/* SHELL-002: see operations.css; the same compact table band inside the app shell. */
+@media (min-width: 1024px) and (max-width: 1439px){
+  .md-shell{width:calc(100% - 32px)}
+  .md-table{min-width:0}
+  .md-table th,.md-table td{padding:12px 8px}
+}

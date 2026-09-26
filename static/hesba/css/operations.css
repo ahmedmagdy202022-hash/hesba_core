@@ -6,3 +6,11 @@ body a:focus-visible,body button:focus-visible,body input:focus-visible,body sel
 
 /* SHELL-001: with the sidebar the content column is narrower, so long codes and e-mails must wrap instead of widening the page. */
 .op-card-grid>*{min-width:0;overflow-wrap:anywhere}
+
+/* SHELL-002: with the sidebar, tablet-landscape and laptop widths leave less room for tables.
+   Tighter cells and no fixed minimum let ordinary lists fit; very wide ledgers still scroll in their frame. */
+@media (min-width: 1024px) and (max-width: 1439px){
+  .op-shell{width:calc(100% - 32px)}
+  .op-table{min-width:0}
+  .op-table th,.op-table td{padding:12px 8px}
+}

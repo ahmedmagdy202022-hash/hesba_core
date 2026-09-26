@@ -3,6 +3,7 @@
    from tokens.css. */
 
 .hs-app{display:grid;grid-template-columns:264px minmax(0,1fr);min-height:100vh}
+@media (max-width: 1279px){.hs-app{grid-template-columns:236px minmax(0,1fr)}}
 .hs-main{min-width:0}
 #hs-main:focus{outline:0}
 
@@ -36,6 +37,14 @@
 .hs-burger::before{top:-6px}
 .hs-burger::after{top:6px}
 .hs-chip:focus-visible,.hs-icon-button:focus-visible,.hs-nav__link:focus-visible,.hs-tab:focus-visible,.hs-skip:focus-visible,.hs-sidebar__brand:focus-visible,.hs-topbar__brand:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
+
+/* Short landscape screens (1024x768 tablets): keep logout on screen without scrolling the sidebar. */
+@media (min-width: 1024px) and (max-height: 860px){
+  .hs-sidebar{padding-block:var(--hs-space-4);gap:var(--hs-space-3)}
+  .hs-nav__link{min-height:40px}
+  .hs-sidebar__foot{gap:var(--hs-space-2);padding-top:var(--hs-space-3)}
+  .hs-sidebar__actions .hs-chip{min-height:36px;padding:0 var(--hs-space-3)}
+}
 
 /* Top bar and tab bar exist only below the sidebar breakpoint. */
 .hs-topbar,.hs-tabbar{display:none}

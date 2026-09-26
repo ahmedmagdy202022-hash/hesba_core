@@ -80,9 +80,6 @@ STRINGS = {
     "ar": {
         "page_title": "لوحة القيادة - حِسْبَة",
         "screen_title": "لوحة القيادة",
-        "logout": "تسجيل الخروج",
-        "language": "العربية",
-        "menu": "القائمة",
         "notifications": "التنبيهات",
         "health_title": "مؤشر النشاط",
         "kpi_title": "أرقام اليوم",
@@ -100,9 +97,6 @@ STRINGS = {
     "en": {
         "page_title": "Dashboard - Hesba",
         "screen_title": "Dashboard",
-        "logout": "Logout",
-        "language": "English",
-        "menu": "Menu",
         "notifications": "Notifications",
         "health_title": "Business health",
         "kpi_title": "Today's numbers",
@@ -263,6 +257,8 @@ def dashboard(request):
         "show_health": health["available"],
         "health_note": band_words[lang],
         "health_reasons": health["reasons"],
+        # The app shell draws the navigation from the same list; it stays in
+        # the context so the section set can be asserted without parsing HTML.
         "nav_items": nav_items(request.user, lang, modules),
         "cards": cards,
         "alerts": _alerts(lang, strings, held, today, shared),
