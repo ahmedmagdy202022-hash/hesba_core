@@ -4,38 +4,40 @@
    Direction is driven by body[data-lang], matching the setup screens. */
 
 .dashboard-page{
-  --navy:#071f46;
-  --navy-soft:#102f5b;
-  --teal:#02aab6;
-  --teal-deep:#038a9a;
-  --teal-wash:#edf9fb;
-  --gold:#d9ad50;
-  --muted:#60718a;
-  --surface:#ffffff;
-  --surface-soft:#f8fdfe;
-  --border:#d8edf2;
-  --border-strong:#cfe7ee;
-  --risk:#c0392b;
-  --due-soon:#d97b25;
-  --watch:#c9a227;
-  --safe:#1c7a4f;
-  --radius:22px;
-  --radius-sm:14px;
-  --shadow:0 10px 24px rgba(7,31,70,.055);
-  --shadow-lift:0 20px 46px rgba(7,31,70,.11);
-  --font:Tahoma,Arial,sans-serif;
+  /* Local names kept so the rules below read as before; values come from tokens.css (TOKENS-003). */
+  --navy:var(--hs-navy);
+  --navy-soft:var(--hs-ink);
+  --teal:var(--hs-teal);
+  --teal-deep:var(--hs-teal-deep);
+  --teal-wash:var(--hs-teal-wash);
+  --gold:var(--hs-gold);
+  --muted:var(--hs-muted);
+  --surface:var(--hs-surface);
+  --surface-soft:var(--hs-ground);
+  --border:var(--hs-line);
+  --border-strong:var(--hs-line-strong);
+  --risk:var(--hs-danger);
+  --due-soon:var(--hs-caution);
+  --watch:var(--hs-warning);
+  --safe:var(--hs-success);
+  --radius:var(--hs-radius-xl);
+  --radius-sm:var(--hs-radius-lg);
+  --shadow:var(--hs-shadow-md);
+  --shadow-lift:var(--hs-shadow-lg);
+  --font:var(--hs-font-body);
 
   margin:0;
-  background:var(--teal-wash);
+  background:var(--hs-ground);
   color:var(--navy);
   font-family:var(--font);
+  line-height:var(--hs-leading);
   min-height:100vh;
 }
 
 .dashboard-page *{box-sizing:border-box}
 .dashboard-page button{font-family:inherit}
 .dashboard-page a{text-decoration:none;color:inherit}
-.dashboard-page :focus-visible{outline:2px solid var(--teal-deep);outline-offset:2px;border-radius:6px}
+.dashboard-page :focus-visible{outline:0;box-shadow:var(--hs-focus-ring);border-radius:6px}
 
 .dash-shell{max-width:1680px;margin:0 auto;padding:16px 24px 40px;display:flex;flex-direction:column;gap:18px}
 
@@ -98,7 +100,7 @@
 
 /* ---------- hero ---------- */
 .dash-hero{
-  background:linear-gradient(135deg,#f4fdff 0%,#e8f7fa 58%,#ddf1f6 100%);
+  background:linear-gradient(135deg,var(--hs-surface) 0%,var(--hs-teal-wash) 100%);
   border:1px solid var(--border-strong);border-radius:var(--radius);
   box-shadow:var(--shadow-lift);padding:22px 26px;min-height:180px;
   display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap;
@@ -113,10 +115,10 @@
   --score:0;
   width:118px;height:118px;border-radius:50%;
   background:
-    conic-gradient(var(--teal) calc(var(--score) * 1%), #dbeef2 0),
+    conic-gradient(var(--teal) calc(var(--score) * 1%), var(--hs-line) 0),
     var(--surface);
   display:flex;align-items:center;justify-content:center;position:relative;
-  box-shadow:inset 0 0 0 1px rgba(7,31,70,.05);
+  box-shadow:inset 0 0 0 1px var(--hs-line);
 }
 .dash-health__ring::after{
   content:"";position:absolute;inset:12px;border-radius:50%;background:var(--surface);
@@ -139,7 +141,7 @@
   background:var(--surface-soft);border:1px solid var(--border);border-radius:var(--radius-sm);
   padding:14px;display:flex;flex-direction:column;gap:6px;min-width:0;
 }
-.dash-kpi.is-sensitive{border-color:#e6d6ad;background:#fffdf7}
+.dash-kpi.is-sensitive{border-color:var(--hs-warning-line);background:var(--hs-gold-wash)}
 .dash-kpi__label{font-size:12px;color:var(--muted);line-height:1.35}
 .dash-kpi__value{
   font-size:clamp(19px,2.1vw,25px);font-weight:700;color:var(--navy);
@@ -165,9 +167,9 @@
   font-size:10.5px;font-weight:700;padding:4px 9px;border-radius:999px;white-space:nowrap;
   background:var(--surface);border:1px solid var(--border);color:var(--navy-soft);
 }
-.dash-alert.is-urgent .dash-alert__badge{color:var(--risk);border-color:#eccac5}
-.dash-alert.is-soon .dash-alert__badge{color:var(--due-soon);border-color:#eedcc4}
-.dash-alert.is-watch .dash-alert__badge{color:var(--watch);border-color:#eae1bd}
+.dash-alert.is-urgent .dash-alert__badge{color:var(--risk);border-color:var(--hs-danger-line)}
+.dash-alert.is-soon .dash-alert__badge{color:var(--due-soon);border-color:var(--hs-caution-line)}
+.dash-alert.is-watch .dash-alert__badge{color:var(--watch);border-color:var(--hs-warning-line)}
 .dash-alert__body{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
 .dash-alert__title{font-size:13.5px;font-weight:700;color:var(--navy)}
 .dash-alert__detail{font-size:12px;color:var(--muted)}
@@ -182,9 +184,9 @@
 }
 .dash-action:hover{border-color:var(--border-strong);background:var(--teal-wash)}
 .dash-action.is-primary{
-  grid-column:1 / -1;color:#fff;border-color:transparent;
-  background:linear-gradient(180deg,#07abb8,#006f91);
-  box-shadow:0 12px 22px rgba(5,174,186,.22);
+  grid-column:1 / -1;color:var(--hs-on-teal);border-color:transparent;
+  background:var(--hs-teal);
+  box-shadow:var(--hs-shadow-fab);
 }
 
 /* ---------- onboarding ---------- */
@@ -200,8 +202,8 @@
   background:var(--teal-wash);color:var(--teal-deep);font-weight:700;font-size:12px;
 }
 .dash-step__label{flex:1;min-width:0}
-.dash-step.is-done{border-color:#c8e2d2;background:#f4fbf7}
-.dash-step.is-done .dash-step__index{background:#dcf0e5;color:var(--safe)}
+.dash-step.is-done{border-color:var(--hs-success-line);background:var(--hs-success-wash)}
+.dash-step.is-done .dash-step__index{background:var(--hs-surface);color:var(--safe)}
 .dash-step__state{font-size:11px;font-weight:700;color:var(--safe);flex:none}
 
 /* ---------- tablet ---------- */
@@ -244,3 +246,6 @@
 @media(prefers-reduced-motion:reduce){
   .dashboard-page *{transition:none!important;animation:none!important}
 }
+
+/* B+ adoption (TOKENS-003): titles in the display face. */
+.dash-screen-title,.dash-greeting,.dash-section__title{font-family:var(--hs-font-head);line-height:var(--hs-leading-tight)}
