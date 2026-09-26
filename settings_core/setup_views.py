@@ -134,6 +134,7 @@ def setup_review(request):
             "label": catalog.module_label(slug, lang),
         }
         for slug in catalog.parse_module_slugs(modules_param)
+        if slug not in catalog.MODULES_WITHOUT_BACKEND
     ]
 
     context = {
