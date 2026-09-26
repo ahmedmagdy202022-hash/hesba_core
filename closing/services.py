@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
@@ -7,6 +8,7 @@ from django.utils import timezone
 from audit.models import AuditEventType, AuditLog
 from reports.selectors import cashbox_report, customer_report, profit_report, stock_report, supplier_report
 from .models import (
+    ClosingFrequency,
     ClosingRun,
     ClosingRunStatus,
     Period,
@@ -21,10 +23,82 @@ def get_period_for_date(action_date):
     return Period.objects.filter(start_date__lte=action_date, end_date__gte=action_date).order_by("-start_date").first()
 
 
+MONTH_NAMES_AR = (
+    "يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",
+    "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر",
+)
+
+
+def _month_bounds(action_date):
+    first = action_date.replace(day=1)
+    next_first = (first.replace(year=first.year + 1, month=1) if first.month == 12 else first.replace(month=first.month + 1))
+    return first, next_first - timedelta(days=1)
+
+
+@transaction.atomic
+def provision_period_for(action_date, user=None):
+    """Open the calendar-month period that covers ``action_date`` (HG-010).
+
+    A shop should never have to create accounting periods by hand before it can
+    record cash. When no period covers a date, this opens one for that calendar
+    month, trimmed so it never overlaps an existing period.
+
+    It refuses a date on or before the end of the latest closed period (those
+    books are shut, and a new period there would reopen them by the back door)
+    and a date after the current month (a future period is opened on purpose).
+    Returns the period covering the date (existing or new).
+    """
+
+    existing = get_period_for_date(action_date)
+    if existing is not None:
+        return existing
+    if action_date > _month_bounds(timezone.localdate())[1]:
+        raise ValidationError("No period found for this date, and future months are not opened automatically.")
+    last_closed = Period.objects.filter(status=PeriodStatus.CLOSED).order_by("-end_date").first()
+    if last_closed is not None and action_date <= last_closed.end_date:
+        raise ValidationError("This date falls inside closed books; no new period can be opened there.")
+
+    start, end = _month_bounds(action_date)
+    before = Period.objects.filter(end_date__gte=start, end_date__lt=action_date).order_by("-end_date").first()
+    after = Period.objects.filter(start_date__lte=end, start_date__gt=action_date).order_by("start_date").first()
+    if before is not None:
+        start = before.end_date + timedelta(days=1)
+    if after is not None:
+        end = after.start_date - timedelta(days=1)
+
+    code = f"{action_date:%Y-%m}"
+    suffix = 1
+    while Period.objects.filter(period_code=code).exists():
+        suffix += 1
+        code = f"{action_date:%Y-%m}-{suffix}"
+    period = Period(
+        period_code=code,
+        name=f"{MONTH_NAMES_AR[action_date.month - 1]} {action_date.year} / {action_date:%B %Y}",
+        frequency=ClosingFrequency.MONTHLY,
+        start_date=start,
+        end_date=end,
+        status=PeriodStatus.OPEN,
+        notes="Opened automatically for the first entry dated in this month.",
+    )
+    period.full_clean()
+    period.save()
+    AuditLog.objects.create(
+        event_type=AuditEventType.CREATE,
+        actor=user if user is not None and getattr(user, "is_authenticated", False) else None,
+        module="closing",
+        action="auto_open_period",
+        object_type="Period",
+        object_id=str(period.id),
+        reason=f"First entry dated {action_date.isoformat()}",
+        after_data={"period_code": period.period_code, "start_date": start.isoformat(), "end_date": end.isoformat(), "status": period.status},
+    )
+    return period
+
+
 def ensure_period_is_open(action_date):
     period = get_period_for_date(action_date)
     if period is None:
-        raise ValidationError("No period found for this date.")
+        period = provision_period_for(action_date)
     if period.status != PeriodStatus.OPEN:
         raise ValidationError("Period must be open for posting.")
     return period

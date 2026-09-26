@@ -101,6 +101,12 @@ def complete_setup(profile, activity, sub_activity, modules_raw, user=None):
 
     _write_module_flags(chosen)
 
+    # HG-010: the installation is ready to record from today, so its first
+    # accounting period is open before the first entry.
+    from closing.services import provision_period_for
+
+    provision_period_for(timezone.localdate(), user=user if user is not None and user.is_authenticated else None)
+
     AuditLog.objects.create(
         event_type=AuditEventType.UPDATE,
         actor=user if user is not None and user.is_authenticated else None,
