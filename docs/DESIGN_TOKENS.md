@@ -18,15 +18,23 @@ Source file: `static/hesba/css/tokens.css`. Roadmap item: 1.6 `TOKENS-001`.
 ## Scales
 | Group | Tokens |
 |---|---|
-| Colour | `--hs-navy`, `--hs-teal`, `--hs-on-teal`, `--hs-teal-deep`, `--hs-gold*`, neutrals, and status pairs (`--hs-success` / `-wash` and so on) |
+| Colour | `--hs-navy`, `--hs-teal`, `--hs-on-teal`, `--hs-teal-deep`, `--hs-gold*`, neutrals, and status pairs (`--hs-success` / `-wash` / `-line` and so on). Alerts use three severities: `--hs-danger` (urgent), `--hs-caution` (due soon) and `--hs-warning` (watch) |
 | Text | `--hs-text-xs` 12 → `--hs-text-num` 30 |
 | Space | `--hs-space-1` 4px … `--hs-space-12` 48px (4px grid) |
 | Radius | `sm` 8, `md` 12, `lg` 14, `xl` 20, `pill` |
 | Controls | `--hs-control-height` 44px (minimum touch target), `-lg` 48px |
-| Elevation | `--hs-shadow-sm`, `-md`, `-fab`, `--hs-focus-ring` |
+| Elevation | `--hs-shadow-sm`, `-md`, `-lg`, `-fab`, `--hs-scrim` (behind drawers), `--hs-focus-ring` |
 
 ## Palette reconciliation
 The roadmap palette (Teal `#02AEB7`, Navy `#092851`) is the source. The older values in `AGENTS.md` and the current stylesheets (`#05243F`, `#16BDC4`, `#D9AD50`) are superseded as each stylesheet moves onto tokens.
+
+## Adoption
+| Stylesheet | Task |
+|---|---|
+| `operations.css`, `master_data.css` | TOKENS-002 |
+| `shell.css`, `table_cards.css` | SHELL-001, MOBILE-002 |
+| `dashboard.css`, `login.css` | TOKENS-003 |
+| Setup screens (`setup_gate_*`, `activity_*`) | Not yet: they carry their own approved visuals (roadmap D3.2) |
 
 ## Logo usage (until the SVG source arrives)
 - On light backgrounds: the full logo with its outer white removed.
