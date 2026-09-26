@@ -1,10 +1,10 @@
 {% extends "base_app.html" %}
-{% load static %}
+{% load static hesba_format %}
 
 {% block body_class %}dashboard-page{% endblock %}
 
 {% block styles %}
-<link rel="stylesheet" href="{% static 'hesba/css/dashboard.css' %}?v=shell-002">
+<link rel="stylesheet" href="{% static 'hesba/css/dashboard.css' %}?v=dash-002">
 <link rel="stylesheet" href="{% static 'hesba/css/shell.css' %}">
 {% endblock %}
 
@@ -33,21 +33,66 @@
 
   <main class="dash-main" id="hs-main" tabindex="-1">
 
-      <section class="dash-hero" aria-label="{{ health_title }}">
+      <section class="dash-hero" aria-label="{{ greeting }}">
         <div class="dash-hero__copy">
           <p class="dash-greeting">{{ greeting }}{% if display_name %}{{ name_separator }}{{ display_name }}{% endif %}</p>
-          {% if show_health %}<p class="dash-hero__note">{{ health_note }}</p>{% endif %}
           {% if client_name %}<p class="dash-hero__client">{{ client_name }}</p>{% endif %}
         </div>
-        {% if show_health %}
-          <div class="dash-health" role="img" aria-label="{{ health_title }} {{ health_score }}%">
-            <div class="dash-health__ring" style="--score: {{ health_score }}">
-              <span class="dash-health__value">{{ health_score }}<small>%</small></span>
-            </div>
-            <span class="dash-health__label">{{ health_title }}</span>
-          </div>
+        {% if analytics.available %}
+        <nav class="dash-periods" aria-label="{{ analytics_title }}">
+          {% for key, label in periods %}<a class="dash-period{% if analytics.period == key %} is-current{% endif %}" href="?lang={{ lang }}&period={{ key }}"{% if analytics.period == key %} aria-current="true"{% endif %}>{{ label }}</a>{% endfor %}
+        </nav>
         {% endif %}
       </section>
+
+      {% if analytics.available %}
+      <section class="dash-section dash-analytics" aria-label="{{ analytics_title }}" data-period="{{ analytics.period }}">
+        <h2 class="dash-section__title">{{ analytics_title }} <small class="dash-range">{{ analytics.start|date:"Y-m-d" }} → {{ analytics.end|date:"Y-m-d" }}</small></h2>
+        <div class="dash-metrics">
+          {% for m in analytics.metrics %}
+          <article class="dash-metric" data-metric="{{ m.key }}">
+            <span class="dash-metric__label">{{ m.label }}</span>
+            <span class="dash-metric__value">{{ m.value|money }}{% if currency %}<small>{{ currency }}</small>{% endif %}</span>
+            {% if m.delta is not None %}<span class="dash-delta {% if m.good %}is-good{% elif m.good is False %}is-bad{% endif %}" title="{{ vs_previous }}"><span aria-hidden="true">{% if m.trend == 'up' %}▲{% elif m.trend == 'down' %}▼{% else %}■{% endif %}</span> {{ m.delta|floatformat:0 }}% <small>{{ vs_previous }}</small></span>{% endif %}
+            {% if m.margin is not None and m.key == 'gross_profit' %}<span class="dash-metric__sub">{{ margin }} {{ m.margin|floatformat:1 }}%</span>{% endif %}
+            {% if m.overdue %}<span class="dash-metric__sub is-bad">{{ overdue_word }} {{ m.overdue|money }}</span>{% endif %}
+            {% if m.count is not None and m.key == 'avg_invoice' %}<span class="dash-metric__sub">{{ m.count }} {{ invoices_word }}</span>{% endif %}
+            <details class="dash-how"><summary>{{ how_label }}</summary><p>{{ m.how }}</p></details>
+          </article>
+          {% endfor %}
+        </div>
+
+        <div class="dash-charts">
+          <figure class="dash-chart" aria-labelledby="daily-title">
+            <figcaption id="daily-title" class="dash-chart__title">{{ daily_title }}
+              <span class="dash-legend"><span class="dash-key dash-key--now" aria-hidden="true"></span>{{ daily_legend_now }} <span class="dash-key dash-key--prev" aria-hidden="true"></span>{{ daily_legend_prev }}</span>
+            </figcaption>
+            {% if analytics.daily.empty %}<p class="dash-empty-note">{{ no_sales_chart }}</p>{% else %}
+            <svg class="dash-bars" dir="ltr" viewBox="0 0 {{ analytics.daily.width }} {{ analytics.daily.height }}" role="img" aria-label="{{ daily_title }}">
+              {% for g in analytics.daily.grid %}<line class="dash-grid" x1="{{ analytics.daily.left }}" x2="{{ analytics.daily.width }}" y1="{{ g.y }}" y2="{{ g.y }}"/><text class="dash-axis" x="{{ analytics.daily.label_x }}" y="{{ g.y }}" dy="4" text-anchor="end">{{ g.text }}</text>{% endfor %}
+              {% for b in analytics.daily.bars %}<g class="dash-bar" tabindex="0"><rect class="dash-bar__hit" x="{{ b.hit_x }}" y="0" width="{{ b.hit_w }}" height="{{ analytics.daily.height }}"/>{% if b.path %}<path class="dash-bar__mark" d="{{ b.path }}"/>{% endif %}<title>{{ b.day|date:"Y-m-d" }}: {{ b.value|money }}{% if b.previous is not None %} · {{ daily_legend_prev }}: {{ b.previous|money }}{% endif %}</title></g>{% endfor %}
+              {% if analytics.daily.previous_points %}<polyline class="dash-prev-line" points="{{ analytics.daily.previous_points }}"/>{% endif %}
+              {% for t in analytics.daily.ticks %}<text class="dash-axis" x="{{ t.x }}" y="{{ analytics.daily.tick_y }}" text-anchor="middle">{{ t.label|date:"d/m" }}</text>{% endfor %}
+            </svg>
+            <p class="dash-chart__note">{{ best_day }}: {{ analytics.daily.best.day|date:"Y-m-d" }} · {{ analytics.daily.best.value|money }}</p>
+            <details class="dash-table-view"><summary>{{ table_view }}</summary><table><thead><tr><th>{{ date_col }}</th><th>{{ value_col }}</th><th>{{ daily_legend_prev }}</th></tr></thead><tbody>{% for b in analytics.daily.bars %}<tr><td>{{ b.day|date:"Y-m-d" }}</td><td>{{ b.value|money }}</td><td>{% if b.previous is not None %}{{ b.previous|money }}{% else %}—{% endif %}</td></tr>{% endfor %}</tbody></table></details>
+            {% endif %}
+          </figure>
+
+          <figure class="dash-chart" aria-labelledby="hours-title">
+            <figcaption id="hours-title" class="dash-chart__title">{{ hours_title }}</figcaption>
+            <div class="dash-hours" role="list">{% for c in analytics.hours.cells %}<div class="dash-hour lvl-{{ c.level }}" role="listitem" title="{{ c.hour }}:00 · {{ c.count }} {{ invoices_word }}"><span class="dash-hour__count">{{ c.count }}</span><span class="dash-hour__label">{{ c.hour }}</span></div>{% endfor %}</div>
+            {% if analytics.hours.peak is not None %}<p class="dash-chart__note">{{ hours_peak }}: {{ analytics.hours.peak }}:00</p>{% endif %}
+          </figure>
+        </div>
+
+        <div class="dash-lists">
+          {% if analytics.top %}<section class="dash-list"><h3>{% if analytics.top_by_profit %}{{ top_title_profit }}{% else %}{{ top_title_sales }}{% endif %}</h3><ol>{% for row in analytics.top %}<li><span class="dash-list__name">{{ row.name }}</span><span class="dash-list__value">{% if analytics.top_by_profit %}{{ row.profit|money }}{% else %}{{ row.sales|money }}{% endif %}</span></li>{% endfor %}</ol></section>{% endif %}
+          {% if analytics.stock.running_out %}<section class="dash-list is-warning"><h3>{{ running_title }}</h3><p class="dash-list__note">{{ running_note }}</p><ol>{% for row in analytics.stock.running_out %}<li><span class="dash-list__name">{{ row.name }}</span><span class="dash-list__value">{{ row.cover_days|floatformat:1 }} {{ days_word }}</span></li>{% endfor %}</ol></section>{% endif %}
+          {% if analytics.stock.slow %}<section class="dash-list"><h3>{{ slow_title }} <small>{{ analytics.stock.slow_value|money }}</small></h3><p class="dash-list__note">{{ slow_note }}</p><ol>{% for row in analytics.stock.slow %}<li><span class="dash-list__name">{{ row.name }}</span><span class="dash-list__value">{{ row.value|money }} · {% if row.idle_days is None %}{{ never_sold }}{% else %}{{ row.idle_days }} {{ days_word }}{% endif %}</span></li>{% endfor %}</ol></section>{% endif %}
+        </div>
+      </section>
+      {% endif %}
 
       <section class="dash-section" aria-label="{{ kpi_title }}">
         <h2 class="dash-section__title">{{ kpi_title }}</h2>

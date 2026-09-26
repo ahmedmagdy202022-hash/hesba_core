@@ -25,8 +25,6 @@ from reports.dashboard_data import (
     DashboardFigures,
     build_alerts,
     has_any_business_data,
-    health_band,
-    health_score,
     onboarding_progress,
 )
 from reports.dashboard_kpis import (
@@ -336,110 +334,6 @@ class StockAlertSelectorTests(TestCase):
         self.assertEqual(selectors.stock_alert_counts()["out_of_stock"], 0)
 
 
-class HealthScoreTests(TestCase):
-    ALL = frozenset(
-        {
-            "reports.view_inventory_report",
-            "cashboxes.view_finance",
-            "reports.view_customer_report",
-            "reports.view_sales_report",
-            "reports.view_profit_report",
-        }
-    )
-
-    def test_a_quiet_day_with_no_problems_still_loses_the_no_sales_penalty(self):
-        result = health_score(timezone.localdate(), self.ALL)
-
-        self.assertIn("no_sales_today", result["reasons"])
-        self.assertLess(result["score"], 100)
-
-    def test_a_shortage_lowers_the_score(self):
-        item = make_item(min_stock=D("5"))
-        make_location()
-        stock_in(item, make_location(), "0", unit_cost="1.00")
-
-        result = health_score(timezone.localdate(), self.ALL)
-
-        self.assertIn("out_of_stock", result["reasons"])
-
-    def test_only_risks_the_viewer_may_see_are_priced_in(self):
-        """A score built on figures the viewer cannot open reads as arbitrary."""
-
-        make_item(min_stock=D("5"))
-        make_location()
-
-        held = frozenset(
-            {
-                "reports.view_inventory_report",
-                "reports.view_customer_report",
-                "reports.view_sales_report",
-            }
-        )
-        partial = health_score(timezone.localdate(), held)
-
-        self.assertIn("out_of_stock", partial["reasons"])
-        self.assertNotIn("negative_cashbox", partial["reasons"])
-        self.assertNotIn("loss_today", partial["reasons"])
-        self.assertTrue(partial["available"])
-
-    def test_it_is_unavailable_when_the_viewer_can_see_nothing(self):
-        result = health_score(timezone.localdate(), frozenset())
-
-        self.assertFalse(result["available"])
-        self.assertEqual(result["reasons"], [])
-
-    def test_one_visible_input_is_not_enough_to_score_a_business(self):
-        """Otherwise a cashier reads 100% while stock is out."""
-
-        make_item(min_stock=D("5"))
-        make_location()
-
-        single = health_score(timezone.localdate(), frozenset({"reports.view_sales_report"}))
-
-        self.assertEqual(single["inputs_seen"], 1)
-        self.assertFalse(single["available"])
-
-    def test_the_score_never_leaves_its_range(self):
-        for held in (frozenset(), self.ALL):
-            with self.subTest(held=len(held)):
-                score = health_score(timezone.localdate(), held)["score"]
-                self.assertGreaterEqual(score, 0)
-                self.assertLessEqual(score, 100)
-
-    def test_bands_read_the_score_in_words(self):
-        self.assertEqual(health_band(95)[0], "steady")
-        self.assertEqual(health_band(60)[0], "watch")
-        self.assertEqual(health_band(20)[0], "risk")
-
-    def test_the_ring_is_hidden_from_a_viewer_with_no_inputs(self):
-        user = make_user(username="ringless")
-        self.client.force_login(user)
-
-        response = self.client.get(DASHBOARD)
-
-        self.assertFalse(response.context["show_health"])
-        self.assertNotContains(response, "dash-health__ring")
-
-    def test_a_stock_keeper_gets_no_ring_because_they_see_one_input(self):
-        sign_in_as(self, RoleCode.STOCK_KEEPER, "ring_keeper")
-        response = self.client.get(DASHBOARD)
-
-        self.assertFalse(response.context["show_health"])
-
-    def test_a_cashier_gets_no_ring_either(self):
-        sign_in_as(self, RoleCode.CASHIER, "ring_cashier")
-
-        self.assertFalse(self.client.get(DASHBOARD).context["show_health"])
-
-    def test_a_manager_does_get_a_ring(self):
-        sign_in_as(self, RoleCode.MANAGER, "ring_manager")
-        response = self.client.get(DASHBOARD)
-
-        self.assertTrue(response.context["show_health"])
-        # A manager cannot see profit, so a loss must never move their score.
-        self.assertNotIn("loss_today", response.context["health_reasons"])
-
-
 class DashboardAlertTests(TestCase):
     def test_a_shortage_raises_an_alert_for_whoever_may_see_stock(self):
         make_item(min_stock=D("5"))
@@ -735,14 +629,6 @@ class SeedDemoBusinessTests(TestCase):
         keys = {a["key"] for a in self.client.get(DASHBOARD).context["alerts"]}
 
         self.assertTrue(any(k.startswith("customer_over_limit_") for k in keys))
-
-    def test_the_health_score_reflects_the_planted_problems(self):
-        self.seed()
-
-        result = health_score(timezone.localdate(), HealthScoreTests.ALL)
-
-        self.assertLess(result["score"], 100)
-        self.assertIn("out_of_stock", result["reasons"])
 
     def test_running_it_twice_does_not_double_the_business(self):
         self.seed()

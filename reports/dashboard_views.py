@@ -14,6 +14,8 @@ from django.utils import timezone, translation
 from django.utils.formats import date_format
 
 from permissions.decorators import permitted_codes
+
+from .analytics import PERIODS, build_analytics
 from permissions.services import user_has_permission
 from settings_core.models import ClientProfile
 from settings_core.setup_services import usable_modules
@@ -24,8 +26,6 @@ from .dashboard_data import (
     SharedReads,
     build_alerts,
     has_any_business_data,
-    health_band,
-    health_score,
     onboarding_progress,
 )
 from .dashboard_kpis import (
@@ -81,7 +81,30 @@ STRINGS = {
         "page_title": "لوحة القيادة - حِسْبَة",
         "screen_title": "لوحة القيادة",
         "notifications": "التنبيهات",
-        "health_title": "مؤشر النشاط",
+        "analytics_title": "أداء النشاط",
+        "how_label": "اتحسب إزاي؟",
+        "vs_previous": "عن الفترة اللي قبلها",
+        "daily_title": "المبيعات يوم بيوم",
+        "daily_legend_now": "الفترة دي",
+        "daily_legend_prev": "الفترة اللي قبلها",
+        "best_day": "أعلى يوم",
+        "hours_title": "ساعات الذروة (آخر 30 يوم)",
+        "hours_peak": "أكتر ساعة بيع",
+        "invoices_word": "فاتورة",
+        "top_title_profit": "أكتر الأصناف ربحًا",
+        "top_title_sales": "أكتر الأصناف مبيعًا",
+        "slow_title": "بضاعة راكدة",
+        "slow_note": "أصناف في المخزن ما اتباعتش من 60 يوم أو أكتر — فلوس نايمة على الرف.",
+        "running_title": "هتخلص قريب",
+        "running_note": "بمعدل بيعها في آخر 30 يوم، الكمية دي تكفي أسبوع أو أقل.",
+        "days_word": "يوم",
+        "never_sold": "ما اتباعش",
+        "margin": "هامش",
+        "overdue_word": "منه متأخر",
+        "no_sales_chart": "مفيش مبيعات في الفترة دي لسه.",
+        "table_view": "عرض كجدول",
+        "date_col": "اليوم",
+        "value_col": "المبيعات",
         "kpi_title": "أرقام اليوم",
         "alerts_title": "محتاج انتباهك",
         "alerts_empty": "لا توجد تنبيهات تحتاج متابعة.",
@@ -98,7 +121,30 @@ STRINGS = {
         "page_title": "Dashboard - Hesba",
         "screen_title": "Dashboard",
         "notifications": "Notifications",
-        "health_title": "Business health",
+        "analytics_title": "Business performance",
+        "how_label": "How is this calculated?",
+        "vs_previous": "vs the previous period",
+        "daily_title": "Sales by day",
+        "daily_legend_now": "This period",
+        "daily_legend_prev": "Previous period",
+        "best_day": "Best day",
+        "hours_title": "Peak hours (last 30 days)",
+        "hours_peak": "Busiest hour",
+        "invoices_word": "invoices",
+        "top_title_profit": "Most profitable items",
+        "top_title_sales": "Best-selling items",
+        "slow_title": "Slow stock",
+        "slow_note": "Items on the shelf with no sale for 60 days or more: money tied up.",
+        "running_title": "Running out",
+        "running_note": "At the last 30 days' rate, this stock lasts a week or less.",
+        "days_word": "days",
+        "never_sold": "never sold",
+        "margin": "margin",
+        "overdue_word": "overdue",
+        "no_sales_chart": "No sales in this period yet.",
+        "table_view": "Show as table",
+        "date_col": "Day",
+        "value_col": "Sales",
         "kpi_title": "Today's numbers",
         "alerts_title": "Needs your attention",
         "alerts_empty": "Nothing needs following up.",
@@ -237,8 +283,8 @@ def dashboard(request):
     figures = DashboardFigures(request.user, today, shared)
     cards = _build_cards(request.user, lang, held, figures)
 
-    health = health_score(today, held, shared)
-    band_key, band_words = health_band(health["score"])
+    period = request.GET.get("period", "month")
+    analytics = build_analytics(permitted_codes(request.user, ANALYTICS_PERMISSIONS), period, today, lang)
     has_data = has_any_business_data()
 
     context = {
@@ -255,11 +301,9 @@ def dashboard(request):
         # The installation's own currency, not a hard-coded "EGP". Empty before
         # bootstrap, in which case the template shows no unit at all.
         "currency": profile.default_currency if profile is not None else "",
-        "health_score": health["score"],
-        "health_band": band_key,
-        "show_health": health["available"],
-        "health_note": band_words[lang],
-        "health_reasons": health["reasons"],
+        # DASH-002: explained analytics replace the old penalty-based score.
+        "analytics": analytics,
+        "periods": [(key, PERIOD_LABELS[lang][key]) for key in PERIODS],
         # The app shell draws the navigation from the same list; it stays in
         # the context so the section set can be asserted without parsing HTML.
         "nav_items": nav_items(request.user, lang, modules),
@@ -274,3 +318,20 @@ def dashboard(request):
         **strings,
     }
     return render(request, "reports/dashboard.html", context)
+
+
+ANALYTICS_PERMISSIONS = (
+    "reports.view_sales_report",
+    "reports.view_all_sales_report",
+    "reports.view_profit_report",
+    "reports.view_customer_report",
+    "reports.view_supplier_report",
+    "cashboxes.view_finance",
+    "cashboxes.view_expenses",
+    "inventory.view_cost",
+)
+
+PERIOD_LABELS = {
+    "ar": {"today": "النهارده", "7d": "آخر 7 أيام", "month": "الشهر ده", "30d": "آخر 30 يوم"},
+    "en": {"today": "Today", "7d": "Last 7 days", "month": "This month", "30d": "Last 30 days"},
+}

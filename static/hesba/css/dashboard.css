@@ -82,23 +82,6 @@
 .dash-hero__note{margin:0;font-size:14.5px;color:var(--navy-soft)}
 .dash-hero__client{margin:0;font-size:12.5px;color:var(--muted)}
 
-.dash-health{display:flex;flex-direction:column;align-items:center;gap:8px;flex:none}
-.dash-health__ring{
-  --score:0;
-  width:118px;height:118px;border-radius:50%;
-  background:
-    conic-gradient(var(--teal) calc(var(--score) * 1%), var(--hs-line) 0),
-    var(--surface);
-  display:flex;align-items:center;justify-content:center;position:relative;
-  box-shadow:inset 0 0 0 1px var(--hs-line);
-}
-.dash-health__ring::after{
-  content:"";position:absolute;inset:12px;border-radius:50%;background:var(--surface);
-}
-.dash-health__value{position:relative;z-index:1;font-size:26px;font-weight:700;color:var(--navy)}
-.dash-health__value small{font-size:13px;color:var(--muted)}
-.dash-health__label{font-size:12.5px;color:var(--muted)}
-
 /* ---------- sections ---------- */
 .dash-section{
   background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
@@ -214,3 +197,62 @@
 
 /* B+ adoption (TOKENS-003): titles in the display face. */
 .dash-screen-title,.dash-greeting,.dash-section__title{font-family:var(--hs-font-head);line-height:var(--hs-leading-tight)}
+
+/* ---------- DASH-002 analytics ---------- */
+.dash-periods{display:flex;flex-wrap:wrap;gap:6px;padding:4px;border:1px solid var(--border);border-radius:var(--hs-radius-pill);background:var(--surface)}
+.dash-period{min-height:36px;display:inline-flex;align-items:center;padding:0 14px;border-radius:var(--hs-radius-pill);color:var(--navy);font-weight:600;font-size:13px;text-decoration:none}
+.dash-period.is-current{background:var(--navy);color:var(--hs-surface)}
+.dash-period:focus-visible{outline:none;box-shadow:var(--hs-focus-ring)}
+.dash-range{font-family:var(--hs-font-body);font-weight:400;font-size:12px;color:var(--muted)}
+.dash-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.dash-metric{display:flex;flex-direction:column;gap:4px;padding:14px;border:1px solid var(--border);border-radius:var(--hs-radius-lg);background:var(--surface);min-width:0}
+.dash-metric__label{font-size:13px;color:var(--muted)}
+.dash-metric__value{font-family:var(--hs-font-head);font-size:22px;font-weight:700;color:var(--navy);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.dash-metric__value small{margin-inline-start:4px;font-family:var(--hs-font-body);font-size:12px;font-weight:400;color:var(--muted)}
+.dash-metric__sub{font-size:12.5px;color:var(--navy-soft)}
+.dash-metric__sub.is-bad{color:var(--risk)}
+.dash-delta{font-size:12.5px;font-weight:700;color:var(--muted)}
+.dash-delta small{font-weight:400}
+.dash-delta.is-good{color:var(--hs-success)}
+.dash-delta.is-bad{color:var(--risk)}
+.dash-how{margin-top:auto;font-size:12px;color:var(--muted)}
+.dash-how summary{cursor:pointer;color:var(--teal-deep);font-weight:600;min-height:28px;display:flex;align-items:center}
+.dash-how summary:focus-visible{outline:none;box-shadow:var(--hs-focus-ring)}
+.dash-how p{margin:4px 0 0;line-height:1.6}
+.dash-charts{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:12px}
+.dash-chart{margin:0;padding:14px;border:1px solid var(--border);border-radius:var(--hs-radius-lg);min-width:0}
+.dash-chart__title{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;margin-bottom:8px;font-weight:700;color:var(--navy)}
+.dash-chart__note{margin:6px 0 0;font-size:12.5px;color:var(--muted)}
+.dash-legend{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:400;color:var(--muted)}
+.dash-key{display:inline-block;width:12px;height:12px;border-radius:3px}
+.dash-key--now{background:var(--hs-chart-1)}
+.dash-key--prev{height:2px;background:var(--hs-chart-muted);border-radius:0}
+.dash-bars{width:100%;height:auto;display:block;direction:ltr}
+.dash-grid{stroke:var(--hs-chart-grid);stroke-width:1}
+.dash-axis{fill:var(--muted);font-size:11px;font-family:var(--hs-font-body)}
+.dash-bar__hit{fill:transparent}
+.dash-bar__mark{fill:var(--hs-chart-1)}
+.dash-bar:hover .dash-bar__mark,.dash-bar:focus .dash-bar__mark{fill:var(--teal-deep)}
+.dash-bar:focus{outline:none}
+.dash-prev-line{fill:none;stroke:var(--hs-chart-muted);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.dash-table-view{margin-top:8px;font-size:12.5px}
+.dash-table-view summary{cursor:pointer;color:var(--teal-deep);font-weight:600}
+.dash-table-view table{width:100%;border-collapse:collapse;margin-top:6px}
+.dash-table-view th,.dash-table-view td{padding:6px;border-bottom:1px solid var(--border);text-align:start}
+.dash-hours{display:grid;grid-template-columns:repeat(auto-fill,minmax(38px,1fr));gap:2px}
+.dash-hour{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:52px;border-radius:var(--hs-radius-sm);background:var(--hs-heat-0);color:var(--navy)}
+.dash-hour.lvl-1{background:var(--hs-heat-1)}.dash-hour.lvl-2{background:var(--hs-heat-2)}.dash-hour.lvl-3{background:var(--hs-heat-3)}.dash-hour.lvl-4{background:var(--hs-heat-4)}
+.dash-hour__count{font-weight:700;font-size:13px}
+.dash-hour__label{font-size:11px}
+.dash-lists{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.dash-list{padding:14px;border:1px solid var(--border);border-radius:var(--hs-radius-lg);min-width:0}
+.dash-list.is-warning{border-color:var(--hs-warning-line);background:var(--hs-warning-wash)}
+.dash-list h3{margin:0 0 6px;font-size:15px;color:var(--navy)}
+.dash-list h3 small{font-weight:400;color:var(--muted)}
+.dash-list__note{margin:0 0 8px;font-size:12px;color:var(--muted)}
+.dash-list ol{margin:0;padding:0;list-style:none;display:grid;gap:6px}
+.dash-list li{display:flex;justify-content:space-between;gap:10px;font-size:13.5px}
+.dash-list__name{overflow-wrap:anywhere}
+.dash-list__value{font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums}
+@media (max-width:1100px){.dash-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.dash-charts,.dash-lists{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:560px){.dash-metrics{grid-template-columns:minmax(0,1fr)}.dash-axis{font-size:13px}}

@@ -76,6 +76,10 @@
   /* Channels for translucent washes and shadows: rgba(var(--hs-teal-rgb), .2) */
   --hs-teal-rgb:2,174,183; --hs-teal-deep-rgb:2,86,116; --hs-navy-rgb:9,40,81; --hs-white-rgb:255,255,255; --hs-line-rgb:227,232,238;
   --hs-teal-glow:rgba(2,174,183,.2);
+  /* DASH-002 chart colors. --hs-chart-1 passes the dataviz validator on white
+     (lightness band, chroma, CVD, 3:1 contrast); heat steps are its tints, light->dark. */
+  --hs-chart-1:#00929C; --hs-chart-muted:#98A2B3; --hs-chart-grid:#E3E8EE;
+  --hs-heat-0:#F2F4F7; --hs-heat-1:#D9EFF0; --hs-heat-2:#A6D5D8; --hs-heat-3:#66BEC4; --hs-heat-4:#1A9DA6;
   --hs-scrim:rgb(9 40 81 / 45%);
   --hs-shadow-md:0 8px 24px rgba(11,31,58,.08);
   --hs-shadow-lg:0 20px 46px rgba(11,31,58,.11);
