@@ -35,7 +35,9 @@ class ModuleSettingsTests(TestCase):
         states = {row["slug"]: row["state"] for row in response.context["rows"]}
         self.assertEqual(states["purchases"], "on")
         self.assertEqual(states["sales_operations"], "required")
-        self.assertEqual(states["expenses"], "soon")
+        self.assertEqual(states["appointments_visits"], "soon")
+        # EXP-001: expenses has a backend now, so it switches like any module.
+        self.assertEqual(states["expenses"], "off")
         self.assertContains(response, 'data-module="purchases" data-state="on"')
 
     def test_switching_off_and_on_keeps_the_data(self):
@@ -61,11 +63,11 @@ class ModuleSettingsTests(TestCase):
         sign_in(self)
         self.post("sales_operations", False)
         self.assertIn("sales_operations", enabled_modules())
-        self.post("expenses", True)
-        self.assertNotIn("expenses", enabled_modules())
+        self.post("appointments_visits", True)
+        self.assertNotIn("appointments_visits", enabled_modules())
         page = self.client.get(MODULES)
         self.assertNotContains(page, 'name="module" value="sales_operations"')
-        self.assertNotContains(page, 'name="module" value="expenses"')
+        self.assertNotContains(page, 'name="module" value="appointments_visits"')
 
     def test_manager_can_view_but_not_change(self):
         sign_in(self, RoleCode.MANAGER, "modules_manager")

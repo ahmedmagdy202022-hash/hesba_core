@@ -182,7 +182,7 @@ def movement_list(request):
 def operation_list(request):
     page = Paginator(
         CashboxOperation.objects.select_related(
-            "source_cashbox", "destination_cashbox", "created_by", "cancelled_by"
+            "source_cashbox", "destination_cashbox", "created_by", "cancelled_by", "expense"
         ),
         50,
     ).get_page(request.GET.get("page"))
@@ -222,6 +222,11 @@ def operation_cancel(request, pk):
         return redirect("cashboxes:operations")
     lang = _lang(request)
     form = CashboxOperationReversalForm(request.POST, lang=lang)
+    if hasattr(get_object_or_404(CashboxOperation, pk=pk), "expense"):
+        # EXP-001: an expense's cash-out is cancelled from the expenses screen,
+        # so the expense and its cash movement can never disagree.
+        messages.error(request, "هذه الحركة تابعة لمصروف؛ ألغِها من شاشة المصروفات." if lang == "ar" else "This operation belongs to an expense; cancel it from the expenses screen.")
+        return redirect(f"/cashboxes/operations/?lang={lang}")
     if form.is_valid():
         try:
             cancel_cashbox_operation(pk, user=request.user, **form.cleaned_data)

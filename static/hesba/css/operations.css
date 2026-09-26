@@ -28,3 +28,16 @@ body a:focus-visible,body button:focus-visible,body input:focus-visible,body sel
 .op-module__state{margin:0;font-weight:600}
 .op-module form{margin:0}
 .op-module button{min-height:var(--hs-control-height);padding:0 var(--hs-space-4);border-radius:var(--hs-radius-md);font:inherit;font-weight:600;cursor:pointer}
+/* EXP-001: expenses filters, summary and per-category bars. */
+.op-expense-filters{grid-template-columns:minmax(180px,1fr) auto auto 170px 170px auto}
+.op-inline-label{display:flex;align-items:center;gap:6px;color:var(--op-muted);font-size:13px}
+.op-expense-summary{grid-template-columns:repeat(3,minmax(0,1fr))}
+.op-expense-breakdown{margin-bottom:18px;padding:16px 18px;border:1px solid var(--op-border);border-radius:14px;background:var(--hs-surface)}
+.op-expense-breakdown h2{margin:0 0 12px;font-size:16px;color:var(--op-navy)}
+.op-expense-breakdown ul{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.op-expense-breakdown li{display:grid;grid-template-columns:minmax(120px,200px) 1fr auto;align-items:center;gap:12px}
+.op-expense-bar{position:relative;height:10px;overflow:hidden;border-radius:var(--hs-radius-sm);background:var(--hs-line)}
+.op-expense-bar::before{content:"";position:absolute;inset-block:0;inset-inline-start:0;width:var(--share);background:var(--hs-teal)}
+@media(max-width:1280px){.op-expense-filters{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:1000px){.op-expense-filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.op-expense-filters,.op-expense-summary{grid-template-columns:1fr}.op-expense-breakdown li{grid-template-columns:1fr auto}.op-expense-bar{grid-column:1 / -1;grid-row:2}}
