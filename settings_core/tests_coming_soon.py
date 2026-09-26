@@ -37,6 +37,6 @@ class ComingSoonWizardTests(AuthenticatedTestCase):
         self.assertContains(response, "if(state === 'soon'){return;}")
 
     def test_review_step_leaves_them_out(self):
-        response = self.client.get(reverse("setup_review"), {"activity": "commercial", "sub_activity": "retail", "modules": "customers,pdf_printing"})
+        response = self.client.get(reverse("setup_review"), {"activity": "commercial", "sub_activity": "retail", "modules": "customers,employees_technicians"})
         slugs = [row["slug"] for row in response.context["selected_modules"]]
         self.assertEqual(slugs, ["customers"])

@@ -1,0 +1,95 @@
+{% load static hesba_format %}<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ page_title }}</title>
+{% include "partials/brand_icons.html" %}
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
+<link rel="stylesheet" href="{% static 'hesba/css/print.css' %}?v=print-001">
+</head>
+<body class="pr-body pr-{{ format }}" data-format="{{ format }}">
+<nav class="pr-toolbar" aria-label="{{ words.print }}">
+  <a class="pr-button pr-button--ghost" href="{{ back_url }}">← {{ words.back }}</a>
+  <div class="pr-toolbar__formats" role="group">
+    <a class="pr-button{% if format == 'a4' %} is-current{% endif %}" href="?lang={{ lang }}&format=a4"{% if format == 'a4' %} aria-current="true"{% endif %}>{{ words.a4 }}</a>
+    <a class="pr-button{% if format == 'receipt' %} is-current{% endif %}" href="?lang={{ lang }}&format=receipt"{% if format == 'receipt' %} aria-current="true"{% endif %}>{{ words.receipt }}</a>
+  </div>
+  <button class="pr-button pr-button--primary" type="button" data-print>{{ words.print }}</button>
+  <p class="pr-toolbar__hint">{{ words.pdf_hint }}</p>
+</nav>
+
+<article class="pr-sheet" data-kind="{{ doc.kind }}">
+  {% if doc.watermark %}<div class="pr-watermark pr-watermark--status" aria-hidden="true">{{ doc.watermark }}</div>{% else %}<img class="pr-watermark pr-watermark--mark" src="{% static 'hesba/brand/hesba-mark.png' %}" alt="" aria-hidden="true">{% endif %}
+
+  <header class="pr-head">
+    <div class="pr-company">
+      <h1 class="pr-company__name">{{ company.name }}</h1>
+      {% if company.legal_name and company.legal_name != company.name %}<p>{{ company.legal_name }}</p>{% endif %}
+      {% if company.address %}<p>{{ company.address|linebreaksbr }}</p>{% endif %}
+      {% if company.phone %}<p>{{ words.phone }}: <bdi>{{ company.phone }}</bdi></p>{% endif %}
+      {% if company.tax_number or company.commercial_register %}<p>{% if company.tax_number %}{{ words.tax_number }}: <bdi>{{ company.tax_number }}</bdi>{% endif %}{% if company.tax_number and company.commercial_register %} · {% endif %}{% if company.commercial_register %}{{ words.cr }}: <bdi>{{ company.commercial_register }}</bdi>{% endif %}</p>{% endif %}
+    </div>
+    <div class="pr-doc">
+      <h2 class="pr-doc__title">{{ doc.title }}</h2>
+      <dl class="pr-meta">
+        <div><dt>{{ words.number }}</dt><dd><bdi>{{ doc.number }}</bdi></dd></div>
+        <div><dt>{{ words.date }}</dt><dd>{{ doc.date|date:"Y-m-d" }}</dd></div>
+        {% if doc.reference %}<div><dt>{{ doc.reference.0 }}</dt><dd><bdi>{{ doc.reference.1 }}</bdi></dd></div>{% endif %}
+        {% if doc.status != 'posted' %}<div><dt>{{ words.status }}</dt><dd>{{ doc.status_label }}</dd></div>{% endif %}
+      </dl>
+    </div>
+  </header>
+
+  <section class="pr-party">
+    <span class="pr-party__label">{{ doc.party_label }}</span>
+    <strong class="pr-party__name">{{ doc.party.name }}</strong>
+    {% if doc.party.phone %}<span><bdi>{{ doc.party.phone }}</bdi></span>{% endif %}
+    {% if doc.party.address and format == 'a4' %}<span>{{ doc.party.address }}</span>{% endif %}
+  </section>
+
+  {% if doc.voucher %}
+  <section class="pr-voucher">
+    <div class="pr-voucher__amount"><span>{{ words.amount }}</span><strong data-print-total>{{ doc.grand_total|money }} <small>{{ company.currency }}</small></strong></div>
+    {% if doc.cashbox %}<p>{{ words.cashbox }}: {{ doc.cashbox.name_ar }}</p>{% endif %}
+  </section>
+  {% else %}
+  <table class="pr-lines">
+    <thead><tr><th class="pr-col-no">#</th><th>{{ words.item }}</th><th class="pr-num">{{ words.qty }}</th><th class="pr-num">{{ words.price }}</th>{% if doc.has_discounts %}<th class="pr-num">{{ words.discount }}</th>{% endif %}<th class="pr-num">{{ words.total }}</th></tr></thead>
+    <tbody>{% for line in doc.lines %}<tr><td class="pr-col-no">{{ forloop.counter }}</td><td class="pr-item">{{ line.label }}</td><td class="pr-num">{{ line.quantity|qty }}</td><td class="pr-num">{{ line.unit_price|money }}</td>{% if doc.has_discounts %}<td class="pr-num">{{ line.discount|money }}</td>{% endif %}<td class="pr-num">{{ line.total|money }}</td></tr>{% endfor %}</tbody>
+  </table>
+
+  <section class="pr-totals">
+    <dl>
+      {% for label, value in doc.totals %}<div><dt>{{ label }}</dt><dd>{{ value|money }}</dd></div>{% endfor %}
+      <div class="pr-totals__grand"><dt>{{ words.grand_total }}</dt><dd data-print-total>{{ doc.grand_total|money }} <small>{{ company.currency }}</small></dd></div>
+      {% if doc.kind == 'sales_invoice' or doc.kind == 'purchase_invoice' %}
+      <div><dt>{{ words.paid }}</dt><dd>{{ doc.paid|money }}</dd></div>
+      {% if doc.remaining %}<div class="pr-totals__due"><dt>{{ words.remaining }}</dt><dd>{{ doc.remaining|money }}</dd></div>{% endif %}
+      {% else %}
+      {% if doc.refund_cash %}<div><dt>{{ words.refund_cash }}</dt><dd>{{ doc.refund_cash|money }}</dd></div>{% endif %}
+      {% if doc.refund_due %}<div><dt>{{ words.refund_due }}</dt><dd>{{ doc.refund_due|money }}</dd></div>{% endif %}
+      {% endif %}
+    </dl>
+  </section>
+  {% endif %}
+
+  <p class="pr-words"><span>{{ words.words }}:</span> {{ doc.amount_words }}</p>
+  {% if doc.notes %}<p class="pr-notes"><span>{% firstof doc.notes_label words.notes %}:</span> {{ doc.notes }}</p>{% endif %}
+
+  {% if format == 'a4' %}
+  <section class="pr-signatures"><div>{{ words.signature_receiver }}</div><div>{{ words.signature_cashier }}</div></section>
+  {% endif %}
+
+  <footer class="pr-foot">
+    {% if doc.kind == 'sales_invoice' or doc.kind == 'sales_return' %}<p class="pr-foot__note">{% if company.footer_note %}{{ company.footer_note|linebreaksbr }}{% else %}{{ words.thanks }}{% endif %}</p>{% endif %}
+    <p class="pr-foot__meta">{{ words.printed_by }} {{ printed_by }} · {% now "Y-m-d H:i" %}</p>
+    <p class="pr-foot__brand"><img src="{% static 'hesba/brand/hesba-logo.png' %}" alt="Hesba"></p>
+  </footer>
+</article>
+<script>
+document.querySelector('[data-print]').addEventListener('click', function(){ window.print(); });
+if (new URLSearchParams(window.location.search).get('autoprint') === '1') { window.addEventListener('load', function(){ window.print(); }); }
+</script>
+</body>
+</html>
