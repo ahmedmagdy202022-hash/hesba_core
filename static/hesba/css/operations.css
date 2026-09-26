@@ -13,8 +13,14 @@ body a:focus-visible,body button:focus-visible,body input:focus-visible,body sel
   .op-shell{width:calc(100% - 32px)}
   .op-table{min-width:0}
   .op-table th,.op-table td{padding:12px 8px}
+  /* LIST-001: long names and references wrap; dates and amounts stay on one line. */
+  .op-table td.op-cell-text{white-space:normal;min-width:120px}
+  .op-table td.op-cell-actions form{display:flex;flex-direction:column;align-items:stretch;gap:6px}
+  .op-table td.op-cell-actions input{width:150px;min-width:0}
 }
 
+/* LIST-001: the inline cancel-reason field matches the other inputs. */
+.op-table td.op-cell-actions input{min-height:36px;padding:0 10px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-sm);background:var(--hs-surface);color:var(--hs-ink);font:inherit}
 /* SETTINGS-001: module switches. State is shown in words and in the edge colour. */
 .op-module{display:flex;flex-direction:column;gap:var(--hs-space-2);border-inline-start:4px solid var(--hs-line)}
 .op-module.is-on,.op-module.is-required{border-inline-start-color:var(--hs-teal)}
