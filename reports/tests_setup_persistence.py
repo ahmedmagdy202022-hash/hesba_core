@@ -117,11 +117,11 @@ class CompleteSetupServiceTests(TestCase):
         self.assertIn("inventory", enabled)
 
     def test_usable_modules_hides_the_ones_with_no_backend(self):
-        complete_setup(self.profile, "commercial", "retail", "customers,appointments_visits,pdf_printing")
+        complete_setup(self.profile, "commercial", "retail", "customers,appointments_visits,employees_technicians")
 
         self.assertIn("customers", usable_modules())
         self.assertNotIn("appointments_visits", usable_modules())
-        self.assertNotIn("pdf_printing", usable_modules())
+        self.assertNotIn("employees_technicians", usable_modules())
 
     def test_it_refuses_an_unknown_activity(self):
         with self.assertRaises(ValueError):

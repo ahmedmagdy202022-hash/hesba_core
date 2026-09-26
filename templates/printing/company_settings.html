@@ -1,0 +1,9 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'settings_core:overview' %}?lang={{ lang }}">← {% if lang == 'en' %}Back to settings{% else %}العودة للإعدادات{% endif %}</a><h1>{{ words.company_title }}</h1><p>{{ words.company_intro }}</p></div></section>
+<form class="op-form" method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+<div class="op-form-grid"><div class="op-field"><label>{{ words.company_name }}</label><input value="{{ company.name }}" disabled></div>
+{% for field in fields %}<div class="op-field"><label for="f-{{ forloop.counter }}">{{ field.label }}</label>{% if field.multiline %}<textarea id="f-{{ forloop.counter }}" name="{{ field.key }}" rows="3"{% if not can_manage %} disabled{% endif %}>{{ field.value }}</textarea>{% else %}<input id="f-{{ forloop.counter }}" name="{{ field.key }}" value="{{ field.value }}"{% if not can_manage %} disabled{% endif %}>{% endif %}</div>{% endfor %}</div>
+{% if can_manage %}<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div>{% endif %}
+</form>
+{% endblock %}

@@ -654,11 +654,11 @@ class DashboardModuleAwarenessTests(TestCase):
         self.assertIn("new_customer", keys)
 
     def test_a_module_with_no_backend_never_reaches_the_navigation(self):
-        prepared_client(modules="customers,pdf_printing,appointments_visits,cashboxes,reports,items_services")
+        prepared_client(modules="customers,employees_technicians,appointments_visits,cashboxes,reports,items_services")
 
         keys = {i["key"] for i in self.client.get(DASHBOARD).context["nav_items"]}
 
-        self.assertNotIn("pdf_printing", keys)
+        self.assertNotIn("employees_technicians", keys)
         self.assertNotIn("appointments_visits", keys)
 
     def test_it_names_the_client_once_setup_has_run(self):
