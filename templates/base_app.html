@@ -14,7 +14,7 @@ not be dropped.
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}{{ page_title }}{% endblock %}</title>
-<link rel="icon" href="{% static 'hesba/icons/hesba-icon.svg' %}">
+{% include "partials/brand_icons.html" %}
 <link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
 {% block styles %}{% endblock %}
 </head>

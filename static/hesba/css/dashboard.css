@@ -46,7 +46,7 @@
   display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
 }
 .dash-header__lead,.dash-header__trail{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.dash-logo{width:34px;height:34px}
+.dash-logo{width:34px;height:34px;object-fit:contain}
 .dash-screen-title{margin:0;font-size:clamp(16px,2vw,20px);color:var(--navy);font-weight:700}
 
 .dash-icon-button{
