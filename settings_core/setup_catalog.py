@@ -172,10 +172,13 @@ def parse_module_slugs(raw):
 def clean_module_slugs(activity, raw):
     """Normalise a submitted module list into what will actually be stored.
 
-    Unknown slugs are dropped and required modules are added back, so a hand-made
-    or stale request cannot switch off something the activity depends on. The
-    result follows the wizard's own declaration order.
+    Unknown slugs and modules with no backend yet are dropped and required
+    modules are added back, so a hand-made or stale request cannot switch off
+    something the activity depends on. The result follows the wizard's own
+    declaration order.
     """
 
     chosen = set(parse_module_slugs(raw)) | set(required_modules(activity))
-    return tuple(slug for slug in MODULE_SLUGS if slug in chosen)
+    # CATALOG-003: a module with no backend cannot be switched on yet; storing it
+    # would show "on" for something with no screens behind it.
+    return tuple(slug for slug in MODULE_SLUGS if slug in chosen and slug not in MODULES_WITHOUT_BACKEND)

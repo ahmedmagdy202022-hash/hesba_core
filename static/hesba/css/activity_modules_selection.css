@@ -283,3 +283,6 @@
     display:none;
   }
 }
+
+/* CATALOG-003: modules with no backend yet are shown but cannot be picked. */
+.modules-selection-page .module-card.is-soon{opacity:.6;cursor:not-allowed}
