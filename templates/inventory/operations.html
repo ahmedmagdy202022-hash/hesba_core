@@ -7,6 +7,7 @@
   <div class="op-form-actions">
     {% if can_transfer %}<a class="op-primary" href="{% url 'inventory:transfer' %}?lang={{ lang }}">{{ words.transfer }}</a>{% endif %}
     {% if can_adjust %}<a class="op-secondary" href="{% url 'inventory:adjustment' %}?lang={{ lang }}">{{ words.adjustment }}</a>{% endif %}
+    {% if can_adjust %}<a class="op-secondary" href="{% url 'inventory:stocktake' %}?lang={{ lang }}">{% if lang == 'en' %}Stock count{% else %}جرد المخزون{% endif %}</a>{% endif %}
   </div>
 </section>
 <div class="op-table-wrap"><table class="op-table">
