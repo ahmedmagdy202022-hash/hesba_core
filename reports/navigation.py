@@ -20,6 +20,7 @@ NAV_ITEMS = (
     {"key": "suppliers", "ar": "الموردون", "en": "Suppliers", "url_name": "master_data:suppliers", "module": "suppliers", "permission": "master_data.view_suppliers"},
     {"key": "items", "ar": "الأصناف والخدمات", "en": "Items & services", "url_name": "master_data:items", "module": "items_services"},
     {"key": "cashboxes", "ar": "الخزائن", "en": "Cashboxes", "url_name": "cashboxes:list", "module": "cashboxes", "permission": "cashboxes.view_cashboxes"},
+    {"key": "expenses", "ar": "المصروفات", "en": "Expenses", "url_name": "expenses:list", "module": "expenses", "permission": "cashboxes.view_expenses"},
     {"key": "reports", "ar": "التقارير", "en": "Reports", "url_name": "report_hub", "module": "reports"},
     {"key": "closing", "ar": "إقفال الفترات", "en": "Period closing", "url_name": "closing:list", "module": None, "permission": "closing.run_closing"},
     {"key": "profile", "ar": "ملفي", "en": "My profile", "url_name": "accounts:profile", "module": None},
@@ -39,6 +40,7 @@ TAB_LABELS = {
     "customers": {"ar": "العملاء", "en": "Customers"},
     "items": {"ar": "الأصناف", "en": "Items"},
     "cashboxes": {"ar": "الخزائن", "en": "Cash"},
+    "expenses": {"ar": "المصروفات", "en": "Expenses"},
     "reports": {"ar": "التقارير", "en": "Reports"},
 }
 

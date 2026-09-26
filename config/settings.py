@@ -40,6 +40,7 @@ LOCAL_APPS = [
     "audit",
     "imports",
     "barcode",
+    "expenses",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + LOCAL_APPS
