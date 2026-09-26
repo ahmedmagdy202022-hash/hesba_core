@@ -14,3 +14,11 @@ body a:focus-visible,body button:focus-visible,body input:focus-visible,body sel
   .op-table{min-width:0}
   .op-table th,.op-table td{padding:12px 8px}
 }
+
+/* SETTINGS-001: module switches. State is shown in words and in the edge colour. */
+.op-module{display:flex;flex-direction:column;gap:var(--hs-space-2);border-inline-start:4px solid var(--hs-line)}
+.op-module.is-on,.op-module.is-required{border-inline-start-color:var(--hs-teal)}
+.op-module.is-soon{opacity:.72}
+.op-module__state{margin:0;font-weight:600}
+.op-module form{margin:0}
+.op-module button{min-height:var(--hs-control-height);padding:0 var(--hs-space-4);border-radius:var(--hs-radius-md);font:inherit;font-weight:600;cursor:pointer}
