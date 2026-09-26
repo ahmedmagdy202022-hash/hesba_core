@@ -52,6 +52,9 @@ SHELL_WORDS = {
         "logout": "تسجيل الخروج",
         "language": "English",
         "home": "حِسبة — لوحة القيادة",
+        "collapse": "طي القائمة",
+        "expand": "توسيع القائمة",
+        "language_short": "EN",
     },
     "en": {
         "main_nav": "Main navigation",
@@ -62,6 +65,9 @@ SHELL_WORDS = {
         "logout": "Log out",
         "language": "العربية",
         "home": "Hesba — Dashboard",
+        "collapse": "Collapse menu",
+        "expand": "Expand menu",
+        "language_short": "ع",
     },
 }
 
