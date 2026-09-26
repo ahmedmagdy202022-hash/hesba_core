@@ -15,6 +15,7 @@ not be dropped.
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}{{ page_title }}{% endblock %}</title>
 <link rel="icon" href="{% static 'hesba/icons/hesba-icon.svg' %}">
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
 {% block styles %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}" data-lang="{{ lang|default:'ar' }}">
