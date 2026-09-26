@@ -73,6 +73,7 @@
 
   /* Elevation */
   --hs-shadow-sm:0 1px 2px rgba(11,31,58,.06);
+  --hs-teal-glow:rgba(2,174,183,.2);
   --hs-scrim:rgb(9 40 81 / 45%);
   --hs-shadow-md:0 8px 24px rgba(11,31,58,.08);
   --hs-shadow-lg:0 20px 46px rgba(11,31,58,.11);
