@@ -36,6 +36,7 @@ from .dashboard_kpis import (
     SCOPE_OWN,
     visible_kpis,
 )
+from .navigation import display_name, nav_items
 
 
 CHECKPOINT_CODE = "120F_DASHBOARD_LIVE_DATA"
@@ -52,21 +53,6 @@ GREETINGS = (
     (12, 17, {"ar": "نهارك سعيد", "en": "Good afternoon"}),
     (17, 24, {"ar": "مساء الخير", "en": "Good evening"}),
     (0, 5, {"ar": "أهلًا", "en": "Hello"}),
-)
-
-NAV_ITEMS = (
-    {"key": "dashboard", "ar": "لوحة القيادة", "en": "Dashboard", "url_name": "dashboard_snapshot", "module": None},
-    {"key": "operations", "ar": "عمليات البيع", "en": "Sales operations", "url_name": "sales:list", "module": "sales_operations", "permission": "sales.view_sales_invoices"},
-    {"key": "purchases", "ar": "المشتريات", "en": "Purchases", "url_name": "purchases:list", "module": "purchases", "permission": "purchases.view_purchase_invoices"},
-    {"key": "inventory", "ar": "المخزون", "en": "Inventory", "url_name": "inventory:stock", "module": "inventory", "permission": "inventory.view_stock"},
-    {"key": "customers", "ar": "العملاء", "en": "Customers", "url_name": "master_data:customers", "module": "customers"},
-    {"key": "suppliers", "ar": "الموردون", "en": "Suppliers", "url_name": "master_data:suppliers", "module": "suppliers"},
-    {"key": "items", "ar": "الأصناف والخدمات", "en": "Items & services", "url_name": "master_data:items", "module": "items_services"},
-    {"key": "cashboxes", "ar": "الخزائن", "en": "Cashboxes", "url_name": "cashboxes:list", "module": "cashboxes", "permission": "cashboxes.view_cashboxes"},
-    {"key": "reports", "ar": "التقارير", "en": "Reports", "url_name": "report_hub", "module": "reports"},
-    {"key": "closing", "ar": "إقفال الفترات", "en": "Period closing", "url_name": "closing:list", "module": None, "permission": "closing.run_closing"},
-    {"key": "profile", "ar": "ملفي", "en": "My profile", "url_name": "accounts:profile", "module": None},
-    {"key": "settings", "ar": "الإعدادات", "en": "Settings", "url_name": "settings_core:overview", "module": None, "permission": "settings.view_settings"},
 )
 
 # Read-only shortcuts. business_rules.md keeps dashboards read-only, so these
@@ -159,13 +145,6 @@ def _formatted_now(lang, now):
         }
 
 
-def _display_name(user):
-    profile = getattr(user, "hesba_profile", None)
-    if profile is not None and profile.display_name:
-        return profile.display_name
-    return user.get_short_name() or user.get_username()
-
-
 def _format_value(kpi, raw, lang):
     # Branch order is load-bearing: int() below raises on a level label, and
     # only the currency branch may fall through to the shared money filter.
@@ -203,18 +182,6 @@ def _build_cards(user, lang, held, figures):
             }
         )
     return cards
-
-
-def _nav(user, lang, modules):
-    items = []
-    for item in NAV_ITEMS:
-        if item["module"] is not None and item["module"] not in modules:
-            continue
-        permission = item.get("permission")
-        if permission and not user_has_permission(user, permission):
-            continue
-        items.append({"key": item["key"], "label": item[lang], "url_name": item["url_name"]})
-    return items
 
 
 def _quick_actions(user, lang, modules):
@@ -285,7 +252,7 @@ def dashboard(request):
         "lang": lang,
         "dir": "ltr" if lang == "en" else "rtl",
         "greeting": _greeting(lang, now),
-        "display_name": _display_name(request.user),
+        "display_name": display_name(request.user),
         "name_separator": ", " if lang == "en" else "، ",
         "now": now,
         "now_parts": _formatted_now(lang, now),
@@ -296,7 +263,7 @@ def dashboard(request):
         "show_health": health["available"],
         "health_note": band_words[lang],
         "health_reasons": health["reasons"],
-        "nav_items": _nav(request.user, lang, modules),
+        "nav_items": nav_items(request.user, lang, modules),
         "cards": cards,
         "alerts": _alerts(lang, strings, held, today, shared),
         "quick_actions": _quick_actions(request.user, lang, modules),
