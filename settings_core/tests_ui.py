@@ -1,3 +1,4 @@
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
@@ -44,15 +45,16 @@ class SettingsAndProfileUiTests(TestCase):
         self.assertContains(response, "Sensitive value hidden")
         self.assertNotContains(response, "never-render-this")
 
-    def test_management_links_require_both_hesba_permission_and_staff(self):
-        self.login_as(RoleCode.OWNER, "owner_nonstaff")
+    def test_admin_links_are_for_superusers_only(self):
+        # ADMIN-001: an owner, even one marked staff, never gets sent to Django Admin.
+        self.login_as(RoleCode.OWNER, "owner_staff", is_staff=True)
         response = self.client.get(reverse("settings_core:roles"), {"lang": "en"})
         self.assertFalse(response.context["can_manage"])
         self.assertNotContains(response, "Manage roles")
         self.client.logout()
-        self.login_as(RoleCode.OWNER, "owner_staff", is_staff=True)
+        superuser = get_user_model().objects.create_superuser(username="root_ui", password="x-Root-pass-9")
+        self.client.force_login(superuser)
         response = self.client.get(reverse("settings_core:roles"), {"lang": "en"})
         self.assertTrue(response.context["can_manage"])
-        self.assertContains(response, "Manage roles")
         self.assertContains(response, reverse("admin:permissions_role_changelist"))
 

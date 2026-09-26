@@ -53,6 +53,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.auth.middleware.LoginRequiredMiddleware",
+    "accounts.middleware.ForcePasswordChangeMiddleware",
     "settings_core.module_gate.ModuleGateMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -105,6 +106,15 @@ else:
         "DATABASE_BACKEND must be either 'sqlite' or 'postgresql'."
     )
 
+# USERS-001: passwords set from the users screen and the password page are
+# checked here; there were no rules before.
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 8}},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+]
+
 LANGUAGE_CODE = "ar"
 TIME_ZONE = "Africa/Cairo"
 USE_I18N = True
@@ -116,6 +126,12 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
 LOGIN_URL = "/login/"
+
+# ADMIN-001: Django Admin is a developer tool. It is open to superusers only
+# (see config/urls.py), and its address can be moved off the default.
+ADMIN_URL = config("ADMIN_URL", default="admin/")
+if not ADMIN_URL.endswith("/"):
+    ADMIN_URL += "/"
 # /start/ decides between setup and the dashboard. Pointing straight at either
 # one is what used to trap a finished installation on its own first-run screen.
 LOGIN_REDIRECT_URL = "/start/"

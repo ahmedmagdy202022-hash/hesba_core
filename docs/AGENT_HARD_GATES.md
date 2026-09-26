@@ -139,6 +139,35 @@ Status: RESOLVED (part of the commercial-readiness mandate, 2026-09-26)
 - Risk: an installation that deliberately posted into closed months must now reopen the month, or record a post-closing adjustment in the open period.
 - Verification: `closing/tests_period_lock.py` covers sale post and cancel, purchase post and cancel, customer payment record and cancel, and supplier payment record and cancel, each refused in a closed month with no cash, stock or ledger row written, plus a reopened month accepting the late invoice.
 
+## HG-012 — Staff accounts in Hesba; Django Admin for superusers only (USERS-001 / ADMIN-001)
+
+Status: RESOLVED (part of the commercial-readiness mandate, 2026-09-26)
+
+- Problem:
+  - Adding a cashier needed Django Admin, a developer screen with English table names.
+  - Any staff user could reach it and edit ledgers and settings directly.
+  - There were no password rules.
+- Decision:
+  - **Users screen** at `/settings/users/`, needing `permissions.manage_roles` (Owner). It lists, creates, edits (role, active, name, phone) and resets passwords. Every account it creates is a plain user, never staff or superuser.
+  - **Guards**: nobody can disable their own account or change their own role, and the last active Owner cannot be demoted or disabled, even by a superuser. The Support role is not assignable from the screen.
+  - **Temporary passwords**: new accounts and resets set `must_change_password`. `accounts.middleware.ForcePasswordChangeMiddleware` then sends the user to `/profile/password/` before any other page; logout stays reachable, and `next` is checked against the host.
+  - **Password rules**: Django's standard validators (similarity, minimum length 8, common passwords, numeric-only) are now configured in `AUTH_PASSWORD_VALIDATORS`.
+  - **Django Admin**: `admin.site.has_permission` now allows superusers only; before, any staff user got in. The "Manage in Admin" links show to superusers only, and the admin path can be moved with the `ADMIN_URL` setting.
+- Unchanged: `permissions.services.user_has_permission`, roles and their permissions, seeded data.
+- Tests changed on purpose: `settings_core/tests_ui.py` pinned "staff owner sees the Admin links". It now pins that a staff owner does not, and a superuser does.
+- Every change is audited as `permission_change` (`create_user`, `update_user`, `reset_password`); passwords are never written to the log.
+- Verification: `accounts/tests_users.py`:
+  - plain account created, audited, must change password, role permission works;
+  - weak, duplicate (case-insensitive) and Support accounts refused;
+  - self-lockout and last-owner guards;
+  - a disabled user cannot sign in;
+  - reset;
+  - the screens, with the Arabic error;
+  - only the Owner manages users; superusers hidden;
+  - forced change flow, off-site `next` ignored, logout reachable;
+  - a staff owner is sent away from Admin while a superuser gets in;
+  - the Admin path comes from settings.
+
 ## Final gate verification
 
 - Full Django suite: 794 tests passed in 576.477 seconds.
