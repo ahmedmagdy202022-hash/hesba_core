@@ -151,6 +151,7 @@ def post_purchase_invoice(invoice_id, user=None):
 
     if invoice.status != PurchaseInvoiceStatus.DRAFT:
         raise ValidationError("Only draft purchase invoices can be posted.")
+    _ensure_posting_period(invoice.invoice_date)  # HG-011: closed months stay closed.
 
     invoice.full_clean()
     lines = list(invoice.lines.all())
@@ -238,6 +239,7 @@ def cancel_posted_purchase_invoice(invoice_id, user=None, reason=""):
 
     if invoice.status != PurchaseInvoiceStatus.POSTED:
         raise ValidationError("Only posted purchase invoices can be cancelled.")
+    _ensure_posting_period(invoice.invoice_date)  # HG-011: closed months stay closed.
     if invoice.returns.filter(status=PurchaseReturnStatus.POSTED).exists():
         raise ValidationError(
             "A purchase invoice with posted return documents cannot be cancelled."
@@ -315,6 +317,7 @@ def cancel_posted_purchase_invoice(invoice_id, user=None, reason=""):
 
 @transaction.atomic
 def record_supplier_payment(payment_number, payment_date, supplier, cashbox, amount, user=None, notes=""):
+    _ensure_posting_period(payment_date)  # HG-011: closed months stay closed.
     payment = SupplierPayment.objects.create(
         payment_number=payment_number,
         payment_date=payment_date,
@@ -364,6 +367,12 @@ def record_supplier_payment(payment_number, payment_date, supplier, cashbox, amo
         },
     )
     return payment
+
+
+def _ensure_posting_period(action_date):
+    from closing.services import ensure_period_is_open
+
+    return ensure_period_is_open(action_date)
 
 
 def _ensure_return_period(action_date):
@@ -692,6 +701,7 @@ def cancel_supplier_payment(payment_id, user=None, reason=""):
 
     if payment.status != SupplierPaymentStatus.POSTED:
         raise ValidationError("Only posted supplier payments can be cancelled.")
+    _ensure_posting_period(payment.payment_date)  # HG-011: closed months stay closed.
 
     SupplierLedgerEntry.objects.create(
         supplier=payment.supplier,

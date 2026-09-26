@@ -142,6 +142,7 @@ def post_sales_invoice(invoice_id, user=None):
 
     if invoice.status != SalesInvoiceStatus.DRAFT:
         raise ValidationError("Only draft sales invoices can be posted.")
+    _ensure_posting_period(invoice.invoice_date)  # HG-011: closed months stay closed.
 
     invoice.full_clean()
 
@@ -249,6 +250,7 @@ def cancel_posted_sales_invoice(invoice_id, user=None, reason=""):
 
     if invoice.status != SalesInvoiceStatus.POSTED:
         raise ValidationError("Only posted sales invoices can be cancelled.")
+    _ensure_posting_period(invoice.invoice_date)  # HG-011: closed months stay closed.
     if invoice.returns.filter(status=SalesReturnStatus.POSTED).exists():
         raise ValidationError(
             "A sales invoice with posted return documents cannot be cancelled."
@@ -338,6 +340,7 @@ def record_customer_payment(payment_number, payment_date, customer, cashbox, amo
     - No supplier, purchase, inventory, or cost effect.
     """
 
+    _ensure_posting_period(payment_date)  # HG-011: closed months stay closed.
     payment = CustomerPayment.objects.create(
         payment_number=payment_number,
         payment_date=payment_date,
@@ -388,6 +391,12 @@ def record_customer_payment(payment_number, payment_date, customer, cashbox, amo
     )
 
     return payment
+
+
+def _ensure_posting_period(action_date):
+    from closing.services import ensure_period_is_open
+
+    return ensure_period_is_open(action_date)
 
 
 def _ensure_return_period(action_date):
@@ -733,6 +742,7 @@ def cancel_customer_payment(payment_id, user=None, reason=""):
 
     if payment.status != CustomerPaymentStatus.POSTED:
         raise ValidationError("Only posted customer payments can be cancelled.")
+    _ensure_posting_period(payment.payment_date)  # HG-011: closed months stay closed.
 
     CustomerLedgerEntry.objects.create(
         customer=payment.customer,

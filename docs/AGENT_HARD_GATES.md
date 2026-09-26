@@ -124,15 +124,20 @@ Status: RESOLVED (part of the commercial-readiness mandate, 2026-09-26)
   - future months refused;
   - setup opening the month;
   - the screen for the owner, a malformed month, and cashier 403.
-- Observation, not changed: a **reopened** period still refuses postings (`status != open`). Whether reopening should allow corrections is a product decision for Ahmed.
+- Observation at the time: a **reopened** period still refused postings (`status != open`). This was resolved in HG-011: a reopened period now takes corrections.
 
-## HG-011 — Invoices and payments ignore closed periods (open)
+## HG-011 — Invoices and payments respect closed periods (PERIOD-002)
 
-Status: OPEN, fix proposed as PERIOD-002
+Status: RESOLVED (part of the commercial-readiness mandate, 2026-09-26)
 
-- Finding: `post_sales_invoice`, `cancel_posted_sales_invoice`, `post_purchase_invoice`, `cancel_posted_purchase_invoice`, and customer and supplier payments and their cancellations never call `ensure_period_is_open`. Only returns, cash operations, stock operations and adjustments do. A backdated invoice or payment can therefore be posted into a month that has already been closed, which silently changes the figures the closing run saved.
-- Proposed fix: check the invoice date, payment date or cancellation date against `ensure_period_is_open` in those services, the same way returns already do, with tests for each path. With HG-010 in place this no longer blocks a fresh install.
-- Risk of the fix: an installation that deliberately posts into closed months loses that ability; it has to reopen (see the HG-010 observation) or use a post-closing adjustment.
+- Finding: `post_sales_invoice`, `cancel_posted_sales_invoice`, `post_purchase_invoice`, `cancel_posted_purchase_invoice`, `record_customer_payment`, `cancel_customer_payment`, `record_supplier_payment` and `cancel_supplier_payment` never called `ensure_period_is_open`; only returns, cash operations, stock operations and adjustments did. A backdated invoice or payment could be posted into a closed month and silently change the figures its closing run had saved.
+- Fix: each of those eight services now checks its document date, the same way returns already did. Invoice cancellation writes its reversing rows on the invoice date, so it checks that date. The check runs before any row is written, and the refusal leaves nothing behind.
+- Reopened periods: `ensure_period_is_open` now accepts **open or reopened**. Reopening is owner-only, needs a reason and is audited, and it exists to correct a period, so it takes entries until the period is closed again. Before, a reopened period refused everything, which left no legitimate way to enter a late invoice.
+- Tests updated on purpose:
+  - `closing/tests_services.py` pinned "a reopened period is rejected"; it now pins that a reopened period takes corrections.
+  - The re-closing test posted its late invoice into a *closed* period, which was the bug itself; it now reopens first, then posts.
+- Risk: an installation that deliberately posted into closed months must now reopen the month, or record a post-closing adjustment in the open period.
+- Verification: `closing/tests_period_lock.py` covers sale post and cancel, purchase post and cancel, customer payment record and cancel, and supplier payment record and cancel, each refused in a closed month with no cash, stock or ledger row written, plus a reopened month accepting the late invoice.
 
 ## Final gate verification
 
