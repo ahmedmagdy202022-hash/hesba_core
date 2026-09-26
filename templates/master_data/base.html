@@ -1,4 +1,5 @@
 {% extends "base_app.html" %}
+{% load hesba_labels %}
 {% load static %}
 {% block styles %}
 <link rel="stylesheet" href="{% static 'hesba/css/master_data.css' %}">
@@ -12,7 +13,7 @@
 <main class="md-shell" id="hs-main" tabindex="-1">
   {% if messages %}
     <div class="md-messages">
-      {% for message in messages %}<div class="md-message">{{ message }}</div>{% endfor %}
+      {% for message in messages %}<div class="md-message">{{ message|ui:lang }}</div>{% endfor %}
     </div>
   {% endif %}
   {% block master_content %}{% endblock %}

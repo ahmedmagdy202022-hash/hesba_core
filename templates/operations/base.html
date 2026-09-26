@@ -1,4 +1,5 @@
 {% extends "base_app.html" %}
+{% load hesba_labels %}
 {% load static %}
 {% block styles %}<link rel="stylesheet" href="{% static 'hesba/css/operations.css' %}">
 <link rel="stylesheet" href="{% static 'hesba/css/shell.css' %}">{% endblock %}
@@ -10,7 +11,7 @@
 <main class="op-shell" id="hs-main" tabindex="-1">
   {% if messages %}
     <div class="op-messages">
-      {% for message in messages %}<div class="op-message op-message-{{ message.tags|default:'info' }}">{{ message }}</div>{% endfor %}
+      {% for message in messages %}<div class="op-message op-message-{{ message.tags|default:'info' }}">{{ message|ui:lang }}</div>{% endfor %}
     </div>
   {% endif %}
   {% block operation_content %}{% endblock %}
