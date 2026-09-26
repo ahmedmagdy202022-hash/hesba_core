@@ -49,6 +49,7 @@
   --hs-warning:#7A5A12; --hs-warning-wash:#FFF3D6;
   --hs-danger:#9E2A21;  --hs-danger-wash:#FDECEA; --hs-danger-solid:#B42318;
   --hs-info:#2459A0;    --hs-info-wash:#E8EFF9;
+  --hs-warning-line:#F2D58E; --hs-danger-line:#F4C7C3; --hs-neutral-wash:#EEF2F6;
 
   /* Type */
   --hs-font-body:'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif;
