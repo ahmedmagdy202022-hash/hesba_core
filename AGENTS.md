@@ -31,11 +31,16 @@ Defer until the final Visual Polish phase:
 - production backgrounds;
 - cosmetic micro-tuning.
 
-Use the existing Hesba identity only:
-- Navy #05243F
-- Teal #16BDC4
-- Gold #D9AD50
-- Off-white #F6FBFB
+Use the existing Hesba identity only. The palette is the one approved in
+`docs/HESBA_ROADMAP.md` ("قرارات معتمدة — مرجع ثابت"), implemented as the
+`--hs-*` tokens in `static/hesba/css/tokens.css` (see `docs/DESIGN_TOKENS.md`):
+- Navy #092851 (the real logo's navy): structure, sidebar, headings
+- Teal #02AEB7: primary actions, with navy text on top
+- Gold as an accent only: #8A6A1F for text on light, #F2D58E on navy
+- Ground #F6F8FA, surfaces white
+Take colours from the tokens; do not type new colour literals into stylesheets.
+The earlier values (#05243F, #16BDC4, #D9AD50, #F6FBFB) are superseded; the
+last two survive only inside the approved login artwork until roadmap D3.1.
 Do not invent or redraw the Hesba logo.
 
 ## Engineering benchmark
