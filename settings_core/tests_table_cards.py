@@ -59,3 +59,31 @@ class TableCardWiringTests(TestCase):
         make_customer()
         response = self.client.get(reverse("master_data:customers"))
         self.assertNotContains(response, "data-label=\"[")
+
+
+class WideLedgerFitTests(TestCase):
+    """LIST-001: long text wraps beside the sidebar; dates and amounts do not."""
+
+    def setUp(self):
+        user = make_user(username="ledger_owner")
+        make_user_profile(user=user, role=make_seeded_role(RoleCode.OWNER))
+        self.client.force_login(user)
+
+    def test_ledgers_mark_their_wrapping_cells(self):
+        for name in ("cashboxes:movements", "inventory:movements", "sales:payments", "purchases:payments"):
+            with self.subTest(route=name):
+                self.assertEqual(self.client.get(reverse(name)).status_code, 200)
+        root = pathlib.Path(settings.BASE_DIR) / "templates"
+        for template in ("cashboxes/movements.html", "inventory/movements.html", "payments/list.html"):
+            with self.subTest(template=template):
+                self.assertIn('class="op-cell-text"', (root / template).read_text(encoding="utf-8"))
+        self.assertIn('class="op-cell-actions"', (root / "payments/list.html").read_text(encoding="utf-8"))
+
+    def test_wrapping_only_applies_in_the_compact_band(self):
+        with open(finders.find("hesba/css/operations.css"), encoding="utf-8") as handle:
+            css = handle.read()
+        band_start = css.index("@media (min-width: 1024px) and (max-width: 1439px)")
+        rule = css.index(".op-table td.op-cell-text{white-space:normal")
+        self.assertGreater(rule, band_start)
+        # The rule sits inside that media block, before it closes.
+        self.assertNotIn("\n}", css[band_start:rule])
