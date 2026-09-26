@@ -13,9 +13,17 @@ from permissions.models import RoleCode
 
 
 BRAND_FILES = (
-    "favicon.ico", "favicon-16.png", "favicon-32.png", "apple-touch-icon.png", "icon-192.png",
+    "favicon.ico", "favicon-16.png", "favicon-32.png", "apple-touch-icon.png", "icon-192.png", "icon-512.png",
     "hesba-logo.png", "hesba-logo-reversed.png", "hesba-mark.png",
 )
+
+
+def png_size(path):
+    # Width and height sit in the IHDR chunk right after the 8-byte signature.
+    with open(path, "rb") as handle:
+        header = handle.read(24)
+    assert header[:8] == b"\x89PNG\r\n\x1a\n", path
+    return f"{int.from_bytes(header[16:20], 'big')}x{int.from_bytes(header[20:24], 'big')}"
 
 
 class BrandAssetTests(TestCase):
@@ -40,7 +48,15 @@ class BrandAssetTests(TestCase):
         self.assertEqual(manifest["start_url"], "/login/")
         for icon in manifest["icons"]:
             with self.subTest(icon=icon["src"]):
-                self.assertIsNotNone(finders.find(icon["src"].removeprefix("/static/")))
+                path = finders.find(icon["src"].removeprefix("/static/"))
+                self.assertIsNotNone(path)
+                self.assertEqual(png_size(path), icon["sizes"])
+
+    def test_manifest_meets_the_install_icon_sizes(self):
+        # Chromium only offers "Install app" with both a 192px and a 512px icon.
+        manifest = json.loads((pathlib.Path(settings.BASE_DIR) / "static/hesba/manifest.json").read_text(encoding="utf-8"))
+        sizes = {icon["sizes"] for icon in manifest["icons"]}
+        self.assertTrue({"192x192", "512x512"} <= sizes)
 
     def test_login_and_signed_in_pages_carry_the_favicon(self):
         self.assertContains(self.client.get(reverse("login")), "hesba/brand/favicon.ico")
