@@ -120,3 +120,68 @@ def complete_setup(profile, activity, sub_activity, modules_raw, user=None):
     )
 
     return profile
+
+
+class ModuleChangeRefused(ValueError):
+    """A module switch that the catalog does not allow."""
+
+
+def module_settings_rows(profile, lang="ar"):
+    """Every catalog module with the state the settings screen shows for it."""
+
+    enabled = set(enabled_modules())
+    required = set(catalog.required_modules(profile.activity_slug)) if profile else set()
+    rows = []
+    for slug in catalog.MODULE_SLUGS:
+        if slug in catalog.MODULES_WITHOUT_BACKEND:
+            state = "soon"
+        elif slug in required:
+            state = "required"
+        else:
+            state = "on" if slug in enabled else "off"
+        rows.append({"slug": slug, "label": catalog.module_label(slug, lang), "state": state, "enabled": slug in enabled})
+    return rows
+
+
+@transaction.atomic
+def set_module_enabled(profile, slug, enabled, user=None):
+    """Switch one module on or off after setup (SETTINGS-001).
+
+    Switching off never deletes data: it only flips the module's feature flag,
+    which hides the module and closes its screens (see module_gate). Switching it
+    back on brings everything back as it was.
+    """
+
+    if profile is None or not profile.setup_is_complete:
+        raise ModuleChangeRefused("Finish setup before changing modules.")
+    if slug not in catalog.MODULE_SLUGS:
+        raise ModuleChangeRefused(f"Unknown module: {slug!r}")
+    if slug in catalog.MODULES_WITHOUT_BACKEND:
+        raise ModuleChangeRefused(f"{slug} is not available yet.")
+    if not enabled and slug in catalog.required_modules(profile.activity_slug):
+        raise ModuleChangeRefused(f"{slug} is required for this activity.")
+
+    code = module_flag_code(slug)
+    was_enabled = module_is_enabled(slug)
+    if was_enabled == enabled:
+        return False
+    FeatureFlag.objects.update_or_create(
+        code=code,
+        defaults={
+            "name": catalog.module_label(slug, "en"),
+            "description": catalog.module_label(slug, "ar"),
+            "enabled": enabled,
+        },
+    )
+    AuditLog.objects.create(
+        event_type=AuditEventType.UPDATE,
+        actor=user if user is not None and user.is_authenticated else None,
+        module="settings",
+        action="enable_module" if enabled else "disable_module",
+        object_type="settings_core.FeatureFlag",
+        object_id=code,
+        before_data={"enabled": was_enabled},
+        after_data={"enabled": enabled},
+        reason="Module switched from the settings screen.",
+    )
+    return True

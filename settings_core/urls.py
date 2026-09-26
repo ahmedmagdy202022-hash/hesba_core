@@ -8,5 +8,7 @@ app_name = "settings_core"
 urlpatterns = [
     path("", operational_views.settings_overview, name="overview"),
     path("roles/", operational_views.role_list, name="roles"),
+    path("modules/", operational_views.module_settings, name="modules"),
+    path("currency/", operational_views.currency_settings, name="currency"),
 ]
 

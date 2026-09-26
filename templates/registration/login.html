@@ -7,30 +7,40 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>تسجيل الدخول - حسبة</title>
 <link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
-<link rel="stylesheet" href="{% static 'hesba/css/login.css' %}?v=113-tokens">
+<link rel="stylesheet" href="{% static 'hesba/css/login.css' %}?v=login-001">
 </head>
 <body class="login-page" data-lang="ar">
-<main class="login-stage">
-<div class="login-bg" aria-hidden="true"></div>
-<nav class="language-switch" aria-label="اختيار اللغة">
-<a data-lang-option="ar" href="?lang=ar">عربي</a>
-<a data-lang-option="en" href="?lang=en">English</a>
-</nav>
-<section class="login-form-layer">
-<div class="login-form-wrap">
-<h1 data-i18n="title">تسجيل الدخول</h1>
-<p class="login-subtitle" data-i18n="subtitle">استخدم حسابك للدخول حسب الدور والصلاحيات.</p>
-{% if form.errors %}<div class="error" data-i18n="error">بيانات الدخول غير صحيحة. راجع اسم المستخدم وكلمة المرور.</div>{% endif %}
-<form method="post" class="login-form">
-{% csrf_token %}
-<input type="hidden" name="next" value="{{ next }}">
-<input type="hidden" name="hesba_lang" id="hesba_lang" value="ar">
-<div class="field"><label for="id_username" data-i18n="username">اسم المستخدم</label>{{ form.username }}</div>
-<div class="field"><label for="id_password" data-i18n="password">كلمة المرور</label>{{ form.password }}</div>
-<button type="submit" class="login-btn" data-i18n="button">الدخول إلى حسبة</button>
-</form>
-</div>
-</section>
+<main class="login-shell">
+  <section class="login-brand" aria-label="حِسبة">
+    <img class="login-brand__logo" src="{% static 'hesba/brand/hesba-logo-reversed.png' %}" alt="حِسبة — Hesba" width="642" height="225">
+    <p class="login-brand__tagline" data-i18n="tagline">إدارة أسهل… قرارات أوضح</p>
+    <ul class="login-brand__points">
+      <li data-i18n="point1">البيع والمشتريات والمخزون والخزن في مكان واحد.</li>
+      <li data-i18n="point2">شغّال من الكمبيوتر والتابلت والموبايل.</li>
+      <li data-i18n="point3">كل مستخدم يشوف اللي يخصه بس.</li>
+    </ul>
+    <p class="login-brand__credit">Developed by <strong>Ahmed Magdy</strong></p>
+  </section>
+  <section class="login-panel">
+    <nav class="language-switch" aria-label="اختيار اللغة">
+      <a data-lang-option="ar" href="?lang=ar">عربي</a>
+      <a data-lang-option="en" href="?lang=en">English</a>
+    </nav>
+    <div class="login-form-wrap">
+      <h1 data-i18n="title">تسجيل الدخول</h1>
+      <p class="login-subtitle" data-i18n="subtitle">استخدم حسابك للدخول حسب الدور والصلاحيات.</p>
+      {% if form.errors %}<div class="error" role="alert" data-i18n="error">بيانات الدخول غير صحيحة. راجع اسم المستخدم وكلمة المرور.</div>{% endif %}
+      <form method="post" class="login-form">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ next }}">
+        <input type="hidden" name="hesba_lang" id="hesba_lang" value="ar">
+        <div class="field"><label for="id_username" data-i18n="username">اسم المستخدم</label>{{ form.username }}</div>
+        <div class="field"><label for="id_password" data-i18n="password">كلمة المرور</label>{{ form.password }}</div>
+        <button type="submit" class="login-btn" data-i18n="button">الدخول إلى حسبة</button>
+      </form>
+    </div>
+    <p class="login-panel__credit">Developed by <strong>Ahmed Magdy</strong></p>
+  </section>
 </main>
 <script>
 (function(){
@@ -38,14 +48,14 @@
   var saved=localStorage.getItem('hesba_lang');
   var lang=params.get('lang')==='en'?'en':(params.get('lang')==='ar'?'ar':(saved==='en'?'en':'ar'));
   var dict={
-    ar:{title:'تسجيل الدخول',subtitle:'استخدم حسابك للدخول حسب الدور والصلاحيات.',username:'اسم المستخدم',password:'كلمة المرور',button:'الدخول إلى حسبة',error:'بيانات الدخول غير صحيحة. راجع اسم المستخدم وكلمة المرور.',userPh:'أدخل اسم المستخدم',passPh:'أدخل كلمة المرور'},
-    en:{title:'Login',subtitle:'Use your account according to role and permissions.',username:'Username',password:'Password',button:'Login to Hesba',error:'Invalid username or password.',userPh:'Enter username',passPh:'Enter password'}
+    ar:{title:'تسجيل الدخول',tagline:'إدارة أسهل… قرارات أوضح',point1:'البيع والمشتريات والمخزون والخزن في مكان واحد.',point2:'شغّال من الكمبيوتر والتابلت والموبايل.',point3:'كل مستخدم يشوف اللي يخصه بس.',subtitle:'استخدم حسابك للدخول حسب الدور والصلاحيات.',username:'اسم المستخدم',password:'كلمة المرور',button:'الدخول إلى حسبة',error:'بيانات الدخول غير صحيحة. راجع اسم المستخدم وكلمة المرور.',userPh:'أدخل اسم المستخدم',passPh:'أدخل كلمة المرور'},
+    en:{title:'Sign in',tagline:'Easier management, clearer decisions',point1:'Sales, purchases, stock and cash in one place.',point2:'Works on desktop, tablet and phone.',point3:'Every user sees only what is theirs.',subtitle:'Use your account according to role and permissions.',username:'Username',password:'Password',button:'Sign in to Hesba',error:'Invalid username or password.',userPh:'Enter username',passPh:'Enter password'}
   };
   localStorage.setItem('hesba_lang',lang);
   document.documentElement.lang=lang;
   document.documentElement.dir=lang==='ar'?'rtl':'ltr';
   document.body.dataset.lang=lang;
-  document.title=lang==='ar'?'تسجيل الدخول - حسبة':'Login - Hesba';
+  document.title=lang==='ar'?'تسجيل الدخول - حسبة':'Sign in - Hesba';
   var hidden=document.getElementById('hesba_lang');
   if(hidden)hidden.value=lang;
   document.querySelectorAll('[data-lang-option]').forEach(function(a){
