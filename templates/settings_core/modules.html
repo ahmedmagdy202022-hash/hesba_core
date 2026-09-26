@@ -1,0 +1,22 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row">
+  <div><a class="op-back" href="{% url 'settings_core:overview' %}?lang={{ lang }}">{{ words.back }}</a><h1>{{ words.modules }}</h1><p>{{ words.modules_lead }}</p></div>
+</section>
+{% if not setup_complete %}<p class="op-message op-message-info">{{ words.setup_first }}</p>{% elif not can_manage %}<p class="op-message op-message-info">{{ words.view_only }}</p>{% endif %}
+<div class="op-card-grid op-modules">
+  {% for row in rows %}
+    <article class="op-card op-module is-{{ row.state }}" data-module="{{ row.slug }}" data-state="{{ row.state }}">
+      <strong>{{ row.label }}</strong>
+      <p class="op-module__state">{% if row.state == "on" %}{{ words.state_on }}{% elif row.state == "off" %}{{ words.state_off }}{% elif row.state == "required" %}{{ words.state_required }}{% else %}{{ words.state_soon }}{% endif %}</p>
+      {% if can_manage and setup_complete and row.state == "on" or can_manage and setup_complete and row.state == "off" %}
+        <form method="post" action="{% url 'settings_core:modules' %}?lang={{ lang }}">{% csrf_token %}
+          <input type="hidden" name="module" value="{{ row.slug }}">
+          <input type="hidden" name="enabled" value="{% if row.state == 'on' %}0{% else %}1{% endif %}">
+          <button class="{% if row.state == 'on' %}op-secondary{% else %}op-primary{% endif %}" type="submit">{% if row.state == "on" %}{{ words.turn_off }}{% else %}{{ words.turn_on }}{% endif %}</button>
+        </form>
+      {% endif %}
+    </article>
+  {% endfor %}
+</div>
+{% endblock %}

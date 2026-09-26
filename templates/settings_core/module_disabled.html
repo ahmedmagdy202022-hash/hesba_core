@@ -5,7 +5,7 @@
   <p>{{ words.body }}</p>
   {% if not can_open_settings %}<p>{{ words.owner_hint }}</p>{% endif %}
   <div class="op-form-actions">
-    {% if can_open_settings %}<a class="op-primary" href="{% url 'settings_core:overview' %}?lang={{ lang }}">{{ words.settings }}</a>{% endif %}
+    {% if can_open_settings %}<a class="op-primary" href="{% url 'settings_core:modules' %}?lang={{ lang }}">{{ words.settings }}</a>{% endif %}
     <a class="op-secondary" href="{% url 'dashboard_snapshot' %}?lang={{ lang }}">{{ words.back }}</a>
   </div>
 </section>
