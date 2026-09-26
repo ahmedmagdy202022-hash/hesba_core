@@ -1,6 +1,6 @@
 # Agent Hard Gates
 
-Status: ALL SEVEN GATES RESOLVED
+Status: ALL GATES RESOLVED (HG-001–HG-007 from the end-to-end run; HG-008 approved 2026-09-26)
 Decision source: Main Control decision comment on PR #54
 Implemented on: `agent/end-to-end-functional-cycle`, merged to `develop` via PR #54 (`c77c7e5`)
 Resolved: 2026-08-30
@@ -74,6 +74,16 @@ Status: RESOLVED
 - Implementation: `config/money.py` centralizes money/cost rounding and deterministic proportional allocation. Purchase and sales posting and return services use the shared policy.
 - Verification: fractional quantities, half-cent boundaries, discounts, multi-line residuals, exact invoice reconciliation, posting, reversal, returns, average cost, and reports passed.
 - Primary checkpoints: `efdf0cf`, `6f7e10a`.
+
+## HG-008 — Separate supplier visibility from shared master data
+
+Status: RESOLVED (approved by Ahmed on 2026-09-26: «موافق على ترشيحاتك»)
+
+- Question (roadmap Q1): the cashier could see suppliers, including their balances. Customers, suppliers, items and locations all opened with the single `master_data.view_master_data` permission.
+- Approved decision: give suppliers their own view permission. The cashier, who sells and collects, does not get it. Every other role that saw suppliers keeps seeing them.
+- Implementation: `permissions/migrations/0005_seed_view_suppliers_permission.py` seeds `master_data.view_suppliers` for Owner, Manager, Stock Keeper, Accountant and Support. The suppliers entry in `master_data/views.py` `ENTITY_CONFIG` uses it (list, hub card and opening-balance screens follow the config), and the Suppliers navigation item in `reports/navigation.py` requires it. `master_data.view_master_data` is unchanged.
+- Risk: an installation whose roles were edited by hand keeps its edits; only the seeded roles receive the new permission. A custom role that needs suppliers must be granted `master_data.view_suppliers` in Admin.
+- Verification: `permissions/tests_view_suppliers.py` covers the role matrix, cashier refusal on both supplier routes, cashier access to customers and items, the navigation and hub, and continued access for Stock Keeper and Accountant.
 
 ## Final gate verification
 
