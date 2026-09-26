@@ -1,0 +1,22 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row">
+  <div><a class="op-back" href="{% url 'settings_core:overview' %}?lang={{ lang }}">{{ words.back }}</a><h1>{{ words.currency }}</h1><p>{{ words.currency_lead }}</p></div>
+</section>
+{% if profile is None %}
+  <p class="op-message op-message-info">{{ words.no_profile }}</p>
+{% else %}
+  <section class="op-form" data-currency="{{ profile.default_currency }}"{% if locked %} data-currency-locked{% endif %}>
+    {% if locked %}<p class="op-message op-message-info">{{ words.currency_locked }}</p>{% elif not can_change %}<p class="op-message op-message-info">{{ words.view_only }}</p>{% endif %}
+    <form method="post" action="{% url 'settings_core:currency' %}?lang={{ lang }}">{% csrf_token %}
+      <div class="op-field">
+        <label for="id_currency">{{ words.currency_field }}</label>
+        <select id="id_currency" name="currency"{% if not can_change %} disabled{% endif %}>
+          {% for code, label in choices %}<option value="{{ code }}"{% if code == profile.default_currency %} selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      {% if can_change %}<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div>{% endif %}
+    </form>
+  </section>
+{% endif %}
+{% endblock %}

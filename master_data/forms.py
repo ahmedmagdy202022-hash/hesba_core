@@ -2,6 +2,7 @@ from django import forms
 
 from cashboxes.models import Cashbox, OpeningBalanceTarget
 from cashboxes.services import target_has_operational_use
+from settings_core.models import ClientProfile
 
 from .models import Category, Customer, Item, Location, Supplier
 
@@ -171,6 +172,11 @@ class CashboxForm(HesbaModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        if not self.instance.pk:
+            # SETTINGS-002: a new cashbox starts in the company currency.
+            profile = ClientProfile.get_active()
+            if profile is not None:
+                self.fields["currency"].initial = profile.default_currency
         if self.instance.pk and target_has_operational_use(
             OpeningBalanceTarget.CASHBOX, self.instance
         ):
