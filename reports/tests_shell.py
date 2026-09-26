@@ -201,3 +201,36 @@ class ShellStylesheetTests(SimpleTestCase):
                     css = handle.read()
                 band = css[css.index("@media (min-width: 1024px) and (max-width: 1439px)"):]
                 self.assertIn(table + "{min-width:0}", band)
+
+
+class SidebarRailTests(TestCase):
+    """SHELL-003: the sidebar folds to an icon rail from 1024px up."""
+
+    def test_every_section_has_an_icon(self):
+        import pathlib
+
+        from django.conf import settings
+
+        from reports.navigation import NAV_ITEMS
+
+        icons = (pathlib.Path(settings.BASE_DIR) / "templates/partials/shell_icons.html").read_text(encoding="utf-8")
+        for item in NAV_ITEMS:
+            with self.subTest(key=item["key"]):
+                self.assertIn(f'id="hs-i-{item["key"]}"', icons)
+
+    def test_shell_ships_the_toggle_and_icons(self):
+        prepared_client()
+        signed_in(self, RoleCode.OWNER, "rail_owner")
+        response = self.client.get(reverse("sales:list"))
+        self.assertContains(response, "data-rail-toggle")
+        self.assertContains(response, 'href="#hs-i-operations"')
+        self.assertContains(response, 'class="hs-nav__label"')
+        # Labels stay in the page for screen readers and tooltips when folded.
+        self.assertContains(response, 'title="عمليات البيع"')
+
+    def test_rail_rules_only_apply_beside_the_sidebar(self):
+        with open(finders.find("hesba/css/shell.css"), encoding="utf-8") as handle:
+            css = handle.read()
+        rail = css[css.index("/* Icons and the rail (SHELL-003) */"):]
+        self.assertIn("@media (min-width: 1024px){", rail)
+        self.assertIn("body.hs-rail .hs-app{grid-template-columns:80px minmax(0,1fr)}", rail)

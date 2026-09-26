@@ -3,7 +3,7 @@ The signed-in shell: sidebar on desktop and tablet landscape, a top bar with a
 drawer below 1024px, and a tab bar on phones. Sections come from
 reports.navigation, so this shows exactly what the dashboard offers the same
 user. Styles: hesba/css/shell.css. Behaviour: hesba/js/shell.js.
-{% endcomment %}{% app_shell as shell %}
+{% endcomment %}{% app_shell as shell %}{% include "partials/shell_icons.html" %}
 <a class="hs-skip" href="#hs-main">{{ shell.words.skip }}</a>
 <header class="hs-topbar">
   <button class="hs-icon-button" type="button" data-shell-open aria-controls="hs-sidebar" aria-expanded="false" aria-label="{{ shell.words.menu }}"><span class="hs-burger" aria-hidden="true"></span></button>
@@ -11,22 +11,29 @@ user. Styles: hesba/css/shell.css. Behaviour: hesba/js/shell.js.
   <button class="hs-chip" type="button" data-lang-toggle>{{ shell.words.language }}</button>
 </header>
 <aside class="hs-sidebar" id="hs-sidebar" data-shell-nav>
+  <script>
+    /* Decide rail or full sidebar before first paint (SHELL-003): the saved
+       choice wins; otherwise the rail is the default on 1024-1279px. */
+    (function(){var s=null;try{s=localStorage.getItem('hesba_sidebar');}catch(e){}
+    var w=window.innerWidth,rail=s?s==='rail':(w>=1024&&w<1280);document.body.classList.toggle('hs-rail',rail);})();
+  </script>
   <div class="hs-sidebar__head">
-    <a class="hs-sidebar__brand" href="{% url 'dashboard_snapshot' %}?lang={{ lang }}"><img src="{% static 'hesba/brand/hesba-logo-reversed.png' %}" alt="{{ shell.words.home }}" width="160" height="56"></a>
+    <a class="hs-sidebar__brand" href="{% url 'dashboard_snapshot' %}?lang={{ lang }}"><img class="hs-sidebar__lockup" src="{% static 'hesba/brand/hesba-logo-reversed.png' %}" alt="{{ shell.words.home }}" width="160" height="56"><img class="hs-sidebar__mark" src="{% static 'hesba/brand/hesba-mark.png' %}" alt="{{ shell.words.home }}" width="38" height="40"></a>
+    <button class="hs-rail-toggle" type="button" data-rail-toggle aria-controls="hs-sidebar" aria-expanded="true" aria-label="{{ shell.words.collapse }}" title="{{ shell.words.collapse }}" data-label-collapse="{{ shell.words.collapse }}" data-label-expand="{{ shell.words.expand }}"><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-rail"></use></svg></button>
     <button class="hs-icon-button hs-sidebar__close" type="button" data-shell-close aria-label="{{ shell.words.close_menu }}"><span aria-hidden="true">&times;</span></button>
   </div>
   <nav class="hs-nav" aria-label="{{ shell.words.main_nav }}">
     <ul>
       {% for item in shell.items %}
-        <li><a class="hs-nav__link{% if item.current %} is-current{% endif %}" href="{{ item.url }}?lang={{ lang }}"{% if item.current %} aria-current="page"{% endif %}>{{ item.label }}</a></li>
+        <li><a class="hs-nav__link{% if item.current %} is-current{% endif %}" href="{{ item.url }}?lang={{ lang }}" title="{{ item.label }}"{% if item.current %} aria-current="page"{% endif %}><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-{{ item.key }}"></use></svg><span class="hs-nav__label">{{ item.label }}</span></a></li>
       {% endfor %}
     </ul>
   </nav>
   <div class="hs-sidebar__foot">
     <span class="hs-sidebar__user">{{ shell.user_name }}</span>
     <div class="hs-sidebar__actions">
-      <button class="hs-chip hs-chip--on-navy" type="button" data-lang-toggle>{{ shell.words.language }}</button>
-      <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="hs-chip hs-chip--on-navy" type="submit">{{ shell.words.logout }}</button></form>
+      <button class="hs-chip hs-chip--on-navy" type="button" data-lang-toggle title="{{ shell.words.language }}"><span class="hs-chip__long">{{ shell.words.language }}</span><span class="hs-chip__short" aria-hidden="true">{{ shell.words.language_short }}</span></button>
+      <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="hs-chip hs-chip--on-navy" type="submit" title="{{ shell.words.logout }}"><svg class="hs-icon hs-chip__short" aria-hidden="true"><use href="#hs-i-logout"></use></svg><span class="hs-chip__long">{{ shell.words.logout }}</span></button></form>
     </div>
   </div>
 </aside>
