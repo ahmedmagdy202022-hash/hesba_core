@@ -101,6 +101,38 @@ Status: RESOLVED (Ahmed asked for the commercial activity to be finished end to 
 - Setup and Settings: `expenses` leaves `MODULES_WITHOUT_BACKEND`, becomes a normal switchable module, and is gated by `ModuleGateMiddleware` at `/expenses/`.
 - Risk: expenses record in the cashbox currency. The single-currency rule (SETTINGS-002) keeps that equal to the company currency.
 - Verification: `expenses/tests.py` covers the role matrix; the cash-out and inverse rows with explicit balances; the negative-cash refusal with nothing written; rounding; sequential numbers; audit rows; window totals that ignore cancelled expenses; the screens in Arabic and English; manager read-only; cashier refusal; the module gate; category management; the cashbox screen refusing to reverse an expense; and gross/expense/net figures on the profit report.
+## HG-010 — Accounting periods open themselves (PERIOD-001)
+
+Status: RESOLVED (part of the commercial-readiness mandate, 2026-09-26)
+
+- Problem: `closing.services.ensure_period_is_open` refused any date with no period ("No period found for this date."), and no screen could create a period; only Django Admin could. On a fresh install, cash operations, returns, stock adjustments, opening-balance corrections and expenses were therefore all refused until someone created a period by hand.
+- Decision: `provision_period_for(date)` opens the **calendar-month** period for a date when none covers it, and `ensure_period_is_open` calls it before deciding. Rules:
+  - it never overlaps an existing period; the month is trimmed to the gap around the date;
+  - it refuses a date on or before the end of the latest **closed** period, so closed books cannot be reopened by the back door;
+  - it refuses a month after the current one; a future period is opened on purpose;
+  - each automatic period is audited (`closing` / `auto_open_period`);
+  - completing setup opens the current month;
+  - the periods screen gets "Open a month" (`closing.run_closing` only), for months up to the current one.
+- Unchanged: the closed-period refusal, closing runs and summaries, reopening, post-closing adjustments, and every caller of `ensure_period_is_open`.
+- Tests updated on purpose: `closing/tests_services.py` pinned the old "missing period is rejected" behaviour. It now pins the new one: a past or current month is opened, and a future month is still rejected.
+- Verification: `closing/tests_auto_periods.py`:
+  - a cash operation on an empty install;
+  - opened once per month;
+  - December bounds;
+  - trimming between two existing periods;
+  - refusal inside and before closed books;
+  - future months refused;
+  - setup opening the month;
+  - the screen for the owner, a malformed month, and cashier 403.
+- Observation, not changed: a **reopened** period still refuses postings (`status != open`). Whether reopening should allow corrections is a product decision for Ahmed.
+
+## HG-011 — Invoices and payments ignore closed periods (open)
+
+Status: OPEN, fix proposed as PERIOD-002
+
+- Finding: `post_sales_invoice`, `cancel_posted_sales_invoice`, `post_purchase_invoice`, `cancel_posted_purchase_invoice`, and customer and supplier payments and their cancellations never call `ensure_period_is_open`. Only returns, cash operations, stock operations and adjustments do. A backdated invoice or payment can therefore be posted into a month that has already been closed, which silently changes the figures the closing run saved.
+- Proposed fix: check the invoice date, payment date or cancellation date against `ensure_period_is_open` in those services, the same way returns already do, with tests for each path. With HG-010 in place this no longer blocks a fresh install.
+- Risk of the fix: an installation that deliberately posts into closed months loses that ability; it has to reopen (see the HG-010 observation) or use a post-closing adjustment.
 
 ## Final gate verification
 
