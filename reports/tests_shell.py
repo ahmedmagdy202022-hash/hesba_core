@@ -91,6 +91,34 @@ class ShellRenderingTests(TestCase):
         self.assertNotContains(response, "التنقل الرئيسي")
 
 
+class DashboardInShellTests(TestCase):
+    """SHELL-002: the landing page uses the same shell as every other screen."""
+
+    def setUp(self):
+        prepared_client()
+        signed_in(self, RoleCode.OWNER, "dash_shell_owner")
+
+    def test_dashboard_carries_the_shell_and_is_current(self):
+        response = self.client.get(reverse("dashboard_snapshot"))
+        self.assertContains(response, 'class="hs-sidebar"')
+        self.assertContains(response, 'class="hs-tabbar"')
+        self.assertContains(response, "hesba/js/shell.js")
+        current = re.findall(r'<a class="hs-nav__link is-current" href="([^"?]+)', response.content.decode())
+        self.assertEqual(current, [reverse("dashboard_snapshot")])
+
+    def test_the_old_dashboard_navigation_is_gone(self):
+        response = self.client.get(reverse("dashboard_snapshot"))
+        for fragment in ("dash-nav", "data-menu-toggle", "dash-logout", "dash-pill"):
+            with self.subTest(fragment=fragment):
+                self.assertNotContains(response, fragment)
+        # One logout, in the shell.
+        self.assertEqual(response.content.decode().count(f'action="{reverse("logout")}"'), 1)
+
+    def test_dashboard_sections_match_its_own_list(self):
+        response = self.client.get(reverse("dashboard_snapshot"))
+        self.assertEqual(sidebar_links(response), [reverse(item["url_name"]) for item in response.context["nav_items"]])
+
+
 class ShellPermissionTests(TestCase):
     def test_sections_without_the_permission_are_hidden(self):
         prepared_client()
@@ -163,3 +191,13 @@ class ShellStylesheetTests(SimpleTestCase):
             css = handle.read()
         self.assertIn("@media (max-width: 1023px)", css)
         self.assertIn("@media (max-width: 700px)", css)
+
+    def test_tables_fit_beside_the_sidebar_on_tablet_landscape(self):
+        # At 1024px the sidebar leaves ~740px; a fixed 760px table minimum made
+        # every ordinary list scroll sideways inside its frame.
+        for sheet, table in (("hesba/css/operations.css", ".op-table"), ("hesba/css/master_data.css", ".md-table")):
+            with self.subTest(sheet=sheet):
+                with open(finders.find(sheet), encoding="utf-8") as handle:
+                    css = handle.read()
+                band = css[css.index("@media (min-width: 1024px) and (max-width: 1439px)"):]
+                self.assertIn(table + "{min-width:0}", band)
