@@ -1,0 +1,76 @@
+/*
+ * Hesba design tokens: the single source for colour, type, spacing, radius
+ * and elevation. Direction "B+" (navy structure, teal action, a touch of
+ * gold), approved by Ahmed on 2026-09-25; see docs/DESIGN_TOKENS.md.
+ *
+ * Add-only: defining a token changes nothing on screen. Stylesheets adopt
+ * these variables one at a time (TOKENS-002 onward), so every visual change
+ * stays reviewable on its own.
+ *
+ * Fonts are self-hosted (SIL OFL 1.1, licences beside the files) so the app
+ * renders the same offline and never calls a third-party font CDN.
+ */
+@font-face{font-family:'IBM Plex Sans Arabic';font-style:normal;font-weight:400;font-display:swap;src:url('../fonts/ibm-plex-sans-arabic/ibm-plex-sans-arabic-arabic-400-normal.woff2') format('woff2');unicode-range:U+0600-06FF,U+0750-077F,U+0870-088E,U+0890-0891,U+0897-08E1,U+08E3-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FE74,U+FE76-FEFC}
+@font-face{font-family:'IBM Plex Sans Arabic';font-style:normal;font-weight:400;font-display:swap;src:url('../fonts/ibm-plex-sans-arabic/ibm-plex-sans-arabic-latin-400-normal.woff2') format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'IBM Plex Sans Arabic';font-style:normal;font-weight:500;font-display:swap;src:url('../fonts/ibm-plex-sans-arabic/ibm-plex-sans-arabic-arabic-500-normal.woff2') format('woff2');unicode-range:U+0600-06FF,U+0750-077F,U+0870-088E,U+0890-0891,U+0897-08E1,U+08E3-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FE74,U+FE76-FEFC}
+@font-face{font-family:'IBM Plex Sans Arabic';font-style:normal;font-weight:500;font-display:swap;src:url('../fonts/ibm-plex-sans-arabic/ibm-plex-sans-arabic-latin-500-normal.woff2') format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'IBM Plex Sans Arabic';font-style:normal;font-weight:600;font-display:swap;src:url('../fonts/ibm-plex-sans-arabic/ibm-plex-sans-arabic-arabic-600-normal.woff2') format('woff2');unicode-range:U+0600-06FF,U+0750-077F,U+0870-088E,U+0890-0891,U+0897-08E1,U+08E3-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FE74,U+FE76-FEFC}
+@font-face{font-family:'IBM Plex Sans Arabic';font-style:normal;font-weight:600;font-display:swap;src:url('../fonts/ibm-plex-sans-arabic/ibm-plex-sans-arabic-latin-600-normal.woff2') format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'IBM Plex Sans Arabic';font-style:normal;font-weight:700;font-display:swap;src:url('../fonts/ibm-plex-sans-arabic/ibm-plex-sans-arabic-arabic-700-normal.woff2') format('woff2');unicode-range:U+0600-06FF,U+0750-077F,U+0870-088E,U+0890-0891,U+0897-08E1,U+08E3-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FE74,U+FE76-FEFC}
+@font-face{font-family:'IBM Plex Sans Arabic';font-style:normal;font-weight:700;font-display:swap;src:url('../fonts/ibm-plex-sans-arabic/ibm-plex-sans-arabic-latin-700-normal.woff2') format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'Noto Kufi Arabic';font-style:normal;font-weight:600;font-display:swap;src:url('../fonts/noto-kufi-arabic/noto-kufi-arabic-arabic-600-normal.woff2') format('woff2');unicode-range:U+0600-06FF,U+0750-077F,U+0870-088E,U+0890-0891,U+0897-08E1,U+08E3-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FE74,U+FE76-FEFC}
+@font-face{font-family:'Noto Kufi Arabic';font-style:normal;font-weight:600;font-display:swap;src:url('../fonts/noto-kufi-arabic/noto-kufi-arabic-latin-600-normal.woff2') format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'Noto Kufi Arabic';font-style:normal;font-weight:700;font-display:swap;src:url('../fonts/noto-kufi-arabic/noto-kufi-arabic-arabic-700-normal.woff2') format('woff2');unicode-range:U+0600-06FF,U+0750-077F,U+0870-088E,U+0890-0891,U+0897-08E1,U+08E3-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FE74,U+FE76-FEFC}
+@font-face{font-family:'Noto Kufi Arabic';font-style:normal;font-weight:700;font-display:swap;src:url('../fonts/noto-kufi-arabic/noto-kufi-arabic-latin-700-normal.woff2') format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+
+:root{
+  /* Brand */
+  --hs-navy:#092851;          /* structure: sidebar, headers */
+  --hs-navy-raised:#14386B;   /* active item on navy */
+  --hs-teal:#02AEB7;          /* primary action fill */
+  --hs-on-teal:#092851;       /* text on teal (4.5:1+) */
+  --hs-teal-deep:#025674;     /* links and teal text on light */
+  --hs-teal-wash:#E3F5F6;
+  --hs-gold:#8A6A1F;          /* gold text on light */
+  --hs-gold-bright:#F2D58E;   /* gold on navy */
+  --hs-gold-wash:#FFF3D6;
+
+  /* Neutrals */
+  --hs-ground:#F6F8FA;        /* page background */
+  --hs-surface:#FFFFFF;       /* cards, tables, inputs */
+  --hs-ink:#0B1F3A;           /* body text */
+  --hs-muted:#475467;         /* secondary text (4.5:1+ on white) */
+  --hs-on-navy-muted:#C3CCDA;
+  --hs-line:#E3E8EE;
+  --hs-line-strong:#CBD5E1;
+
+  /* Status (foreground on its own wash) */
+  --hs-success:#17602F; --hs-success-wash:#E6F4EA;
+  --hs-warning:#7A5A12; --hs-warning-wash:#FFF3D6;
+  --hs-danger:#9E2A21;  --hs-danger-wash:#FDECEA; --hs-danger-solid:#B42318;
+  --hs-info:#2459A0;    --hs-info-wash:#E8EFF9;
+
+  /* Type */
+  --hs-font-body:'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif;
+  --hs-font-head:'Noto Kufi Arabic','IBM Plex Sans Arabic',Tahoma,Arial,sans-serif;
+  --hs-text-xs:12px; --hs-text-sm:13px; --hs-text-md:14px; --hs-text-base:15px;
+  --hs-text-lg:18px; --hs-text-xl:22px; --hs-text-2xl:28px; --hs-text-num:30px;
+  --hs-leading:1.65;          /* Arabic body needs the extra line height */
+  --hs-leading-tight:1.3;
+  --hs-weight-regular:400; --hs-weight-medium:500; --hs-weight-semibold:600; --hs-weight-bold:700;
+
+  /* Space (4px grid) */
+  --hs-space-1:4px; --hs-space-2:8px; --hs-space-3:12px; --hs-space-4:16px; --hs-space-5:20px;
+  --hs-space-6:24px; --hs-space-7:28px; --hs-space-8:32px; --hs-space-10:40px; --hs-space-12:48px;
+
+  /* Shape */
+  --hs-radius-sm:8px; --hs-radius-md:12px; --hs-radius-lg:14px; --hs-radius-xl:20px; --hs-radius-pill:999px;
+  --hs-control-height:44px;   /* minimum touch target */
+  --hs-control-height-lg:48px;
+
+  /* Elevation */
+  --hs-shadow-sm:0 1px 2px rgba(11,31,58,.06);
+  --hs-shadow-md:0 8px 24px rgba(11,31,58,.08);
+  --hs-shadow-fab:0 10px 24px rgba(9,40,81,.25);
+  --hs-focus-ring:0 0 0 3px rgba(2,174,183,.35);
+}
