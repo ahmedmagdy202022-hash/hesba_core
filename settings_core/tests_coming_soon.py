@@ -11,7 +11,7 @@ from settings_core.setup_services import complete_setup, enabled_modules
 
 class ComingSoonCatalogTests(TestCase):
     def test_clean_module_slugs_drops_modules_without_backend(self):
-        cleaned = catalog.clean_module_slugs("commercial", "customers,expenses,pdf_printing,appointments_visits")
+        cleaned = catalog.clean_module_slugs("commercial", "customers,pdf_printing,appointments_visits,employees_technicians")
         self.assertIn("customers", cleaned)
         for slug in catalog.MODULES_WITHOUT_BACKEND:
             with self.subTest(module=slug):
@@ -19,13 +19,13 @@ class ComingSoonCatalogTests(TestCase):
 
     def test_setup_never_stores_them_as_enabled(self):
         profile = ClientProfile.objects.create(client_code="SOON", legal_name="Soon Co", display_name="Soon")
-        complete_setup(profile, "services", "clinic", "customers,expenses,employees_technicians")
-        self.assertNotIn("expenses", enabled_modules())
+        complete_setup(profile, "services", "clinic", "customers,appointments_visits,employees_technicians")
+        self.assertNotIn("appointments_visits", enabled_modules())
         self.assertNotIn("employees_technicians", enabled_modules())
 
 
 class ComingSoonWizardTests(AuthenticatedTestCase):
-    def test_modules_step_marks_the_four_cards(self):
+    def test_modules_step_marks_the_unavailable_cards(self):
         response = self.client.get(reverse("setup_modules"), {"activity": "commercial", "sub_activity": "retail"})
         body = response.content.decode()
         self.assertEqual(body.count('data-soon="true"'), len(catalog.MODULES_WITHOUT_BACKEND))
@@ -37,6 +37,6 @@ class ComingSoonWizardTests(AuthenticatedTestCase):
         self.assertContains(response, "if(state === 'soon'){return;}")
 
     def test_review_step_leaves_them_out(self):
-        response = self.client.get(reverse("setup_review"), {"activity": "commercial", "sub_activity": "retail", "modules": "customers,expenses"})
+        response = self.client.get(reverse("setup_review"), {"activity": "commercial", "sub_activity": "retail", "modules": "customers,pdf_printing"})
         slugs = [row["slug"] for row in response.context["selected_modules"]]
         self.assertEqual(slugs, ["customers"])

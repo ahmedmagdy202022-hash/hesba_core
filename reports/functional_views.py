@@ -4,6 +4,7 @@ from django.core.paginator import Paginator
 from django.shortcuts import render
 
 from cashboxes.models import Cashbox
+from expenses.services import expense_total
 from master_data.models import Customer, Location, Supplier
 from permissions.decorators import require_permission
 from permissions.services import user_has_permission
@@ -141,4 +142,10 @@ def profit_report_view(request):
     date_to, date_to_raw = _date_filter(request, "date_to")
     rows = profit_report(date_from, date_to)
     totals = profit_totals(date_from, date_to)
-    return render(request, "reports/profit.html", _context(request, title="Profit Report" if _lang(request) == "en" else "تقرير الأرباح", rows=rows, totals=totals, date_from=date_from_raw, date_to=date_to_raw))
+    # EXP-001: gross profit stays exactly what profit_totals computes; expenses
+    # are a separate line under it, shown to whoever may read expenses.
+    show_expenses = user_has_permission(request.user, "cashboxes.view_expenses")
+    if show_expenses:
+        totals["expenses"] = expense_total(date_from, date_to)
+        totals["net_profit"] = totals["profit"] - totals["expenses"]
+    return render(request, "reports/profit.html", _context(request, title="Profit Report" if _lang(request) == "en" else "تقرير الأرباح", rows=rows, totals=totals, show_expenses=show_expenses, date_from=date_from_raw, date_to=date_to_raw))

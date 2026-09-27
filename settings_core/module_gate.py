@@ -12,7 +12,7 @@ Rules:
   reports after a module is switched off, and the report pages only read.
 - The gate only applies once setup is complete. Before that there are no
   module choices to honour, and the setup flow itself must stay reachable.
-- A module with no backend yet (expenses, appointments) has no screens to
+- A module with no backend yet (appointments, employees) has no screens to
   close, so it never appears here.
 """
 
@@ -32,6 +32,7 @@ MODULE_ROUTES = (
     ("/purchases/", "purchases"),
     ("/inventory/", "inventory"),
     ("/cashboxes/", "cashboxes"),
+    ("/expenses/", "expenses"),
     ("/master-data/customers/", "customers"),
     ("/master-data/suppliers/", "suppliers"),
     ("/master-data/items/", "items_services"),
