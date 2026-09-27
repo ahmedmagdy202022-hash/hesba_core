@@ -46,6 +46,7 @@ LOCAL_APPS = [
     "einvoice",
     "units",
     "batches",
+    "variants",
     "printing",
 ]
 

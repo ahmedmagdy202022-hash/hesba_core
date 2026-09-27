@@ -1,0 +1,20 @@
+{% extends "operations/base.html" %}
+{% load hesba_format l10n %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'variants:index' %}?lang={{ lang }}">← {{ words.back }}</a><h1><bdi>{{ group.code }}</bdi> · {{ group.name }}</h1><p>{{ words.sale_price }} {{ group.default_sale_price|money }} · {{ words.purchase_price }} {{ group.default_purchase_price|money }}</p></div></section>
+<h2>{{ words.stock_grid }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-variant-grid><thead><tr><th>{{ words.size }}</th>{% for color in grid.colors %}<th>{{ color|default:words.none }}</th>{% endfor %}<th>{{ words.total }}</th></tr></thead><tbody>
+{% for row in grid.rows %}<tr><th scope="row">{{ row.size|default:words.none }}</th>{% for cell in row.cells %}<td>{% if cell %}<a href="{% url 'inventory:item_detail' cell.item.pk %}?lang={{ lang }}" data-variant-cell="{{ cell.item.item_code }}"><strong>{{ cell.stock|qty }}</strong></a><br><small class="op-muted"><bdi>{{ cell.item.item_code }}</bdi>{% if cell.item.barcode %}<br><bdi>{{ cell.item.barcode }}</bdi>{% endif %}<br>{{ cell.item.default_sale_price|money }}{% if not cell.item.active %} · ✕{% endif %}</small>{% else %}—{% endif %}</td>{% endfor %}<td><strong>{{ row.total|qty }}</strong></td></tr>{% endfor %}
+<tr><th scope="row">{{ words.total }}</th>{% for total in grid.color_totals %}<td><strong>{{ total|qty }}</strong></td>{% endfor %}<td><strong data-variant-total>{{ grid.total|qty }}</strong></td></tr>
+</tbody></table></div>
+{% if can_manage %}
+<form class="op-form" method="post" data-extend-model>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="extend"><h2>{{ words.extend }}</h2><div class="op-form-grid">
+<div class="op-field"><label for="x-sizes">{{ words.sizes }}</label><input id="x-sizes" name="sizes" placeholder="{{ words.sizes_hint }}"></div>
+<div class="op-field"><label for="x-colors">{{ words.colors }}</label><input id="x-colors" name="colors" placeholder="{{ words.colors_hint }}"></div>
+</div><label class="op-check"><input type="checkbox" name="barcodes" value="1" checked> {{ words.barcodes }}</label><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.add }}</button></div></form>
+<form class="op-form" method="post" data-price-model>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="prices"><h2>{{ words.prices }}</h2><div class="op-form-grid">
+<div class="op-field"><label for="p-sale">{{ words.sale_price }}</label><input id="p-sale" name="sale_price" inputmode="decimal" placeholder="{{ group.default_sale_price|unlocalize }}"></div>
+<div class="op-field"><label for="p-purchase">{{ words.purchase_price }}</label><input id="p-purchase" name="purchase_price" inputmode="decimal" placeholder="{{ group.default_purchase_price|unlocalize }}"></div>
+</div><div class="op-form-actions"><button class="op-secondary" type="submit">{{ words.apply }}</button></div></form>
+{% else %}<p class="op-muted">{{ words.view_only }}</p>{% endif %}
+{% endblock %}
