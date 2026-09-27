@@ -88,6 +88,8 @@ CAPABILITIES = {
         "ar": "ضريبة القيمة المضافة على الأصناف", "en": "VAT on items",
         "about_ar": "نسبة ضريبة لكل صنف (14٪ أو معفى)، تتحسب تلقائيًا في الفاتورة والكاشير، وتقرير ضريبة المبيعات.",
         "about_en": "A tax rate per item (14% or exempt), charged automatically on invoices and at the till, with a sales VAT report.",
+        "note_ar": "الأفضل تشغّلها أو تقفلها من أول الشهر: الفواتير اللي اتعملت قبل التغيير بتفضل بالضريبة اللي اتحسبت وقتها، فالإقرار بتاع الشهر يبقى مخلوط.",
+        "note_en": "Best switched on or off at the start of a month: invoices made before the change keep the tax they were charged, so that month's VAT return would be mixed.",
         "available": True, "paths": ("/taxes/",),
     },
     "e_invoice": {
@@ -244,5 +246,6 @@ def settings_rows(profile, lang="ar"):
             "about": entry[f"about_{lang}"],
             "state": state,
             "suggested": preset_state(activity, sub_activity, slug) == SUGGESTED,
+            "note": entry.get(f"note_{lang}", ""),
         })
     return rows

@@ -5,6 +5,7 @@ from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 
 from barcode.services import item_catalog, scan_words
+from taxes.services import create_purchase_draft_with_tax, rates_by_item, vat_enabled
 from permissions.decorators import require_permission
 from permissions.services import user_has_permission
 
@@ -21,7 +22,6 @@ from .services import (
     cancel_posted_purchase_invoice,
     cancel_purchase_return,
     cancel_supplier_payment,
-    create_purchase_draft,
     create_purchase_return,
     post_purchase_invoice,
     record_supplier_payment,
@@ -127,6 +127,8 @@ def invoice_create(request):
     lang = _lang(request)
     if request.method == "POST":
         form = PurchaseDraftForm(request.POST, lang=lang)
+        if vat_enabled():
+            del form.fields["tax_amount"]  # TAX-002: input VAT per line from item rates
         line_formset = PurchaseLineFormSet(request.POST, prefix="lines", form_kwargs={"lang": lang})
         if form.is_valid() and line_formset.is_valid():
             line_data = [
@@ -135,7 +137,7 @@ def invoice_create(request):
                 if row.cleaned_data.get("item") is not None
             ]
             try:
-                invoice = create_purchase_draft(form.cleaned_data, line_data, request.user)
+                invoice = create_purchase_draft_with_tax(form.cleaned_data, line_data, request.user)
             except ValidationError as exc:
                 form.add_error(None, exc)
             else:
@@ -143,11 +145,13 @@ def invoice_create(request):
                 return redirect(f"/purchases/{invoice.pk}/?lang={lang}")
     else:
         form = PurchaseDraftForm(lang=lang)
+        if vat_enabled():
+            del form.fields["tax_amount"]
         line_formset = PurchaseLineFormSet(prefix="lines", form_kwargs={"lang": lang})
     return render(
         request,
         "purchases/form.html",
-        _context(request, form=form, line_formset=line_formset, item_catalog=item_catalog(sale_prices=False, purchase_prices=True), scan_words=scan_words(lang)),
+        _context(request, form=form, line_formset=line_formset, item_catalog=item_catalog(sale_prices=False, purchase_prices=True), scan_words=scan_words(lang), tax_rates=rates_by_item()),
     )
 
 

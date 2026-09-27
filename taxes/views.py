@@ -18,7 +18,7 @@ from permissions.decorators import require_permission
 from permissions.services import user_has_permission
 
 from .models import ItemTaxRate, TaxRate
-from .services import default_rate, vat_report
+from .services import default_rate, vat_return
 
 
 VIEW_PERMISSION = "master_data.view_master_data"
@@ -32,20 +32,20 @@ WORDS = {
         "intro": "الأسعار بتتكتب قبل الضريبة، والضريبة بتتحسب لكل سطر حسب نسبة الصنف. الصنف اللي مالوش نسبة بياخد النسبة الافتراضية. خصم الفاتورة بيتطبق بعد الضريبة.",
         "rates": "النسب", "code": "الكود", "name": "الاسم", "rate": "النسبة (%)", "eta": "كود المنظومة", "default": "افتراضية", "active": "مفعّلة",
         "save": "حفظ", "add": "إضافة نسبة", "items": "نسبة كل صنف", "item": "الصنف", "use_default": "الافتراضية", "search": "بحث بالكود أو الاسم", "filter": "بحث",
-        "saved": "اتحفظ.", "bad": "بيانات النسبة مش صحيحة.", "report": "تقرير ضريبة المبيعات", "view_only": "تقدر تشوف بس؛ التعديل لمسؤول الأصناف.",
+        "saved": "اتحفظ.", "bad": "بيانات النسبة مش صحيحة.", "report": "إقرار ضريبة القيمة المضافة", "output_title": "ضريبة المبيعات (المخرجات)", "input_title": "ضريبة المشتريات (المدخلات)", "payable": "الصافي المستحق للمصلحة", "credit": "رصيد لصالحك يترحّل", "view_only": "تقدر تشوف بس؛ التعديل لمسؤول الأصناف.",
         "prev": "السابق", "next": "التالي", "from": "من", "to": "إلى", "show": "عرض", "taxable": "قيمة المبيعات الخاضعة", "tax": "الضريبة المحصّلة",
-        "returned": "ضريبة مرتجعات", "net": "صافي الضريبة المستحقة", "untracked": "ضريبة مكتوبة يدويًا على فواتير قديمة", "empty": "مفيش مبيعات بضريبة في الفترة دي.",
-        "report_intro": "ضريبة المخرجات على المبيعات المرحّلة ناقص الضريبة اللي رجعت في المرتجعات. ضريبة المشتريات (المدخلات) لسه مش متحسبة هنا.",
+        "returned": "ضريبة مرتجعات", "net": "صافي الضريبة المستحقة", "untracked": "ضريبة مكتوبة يدويًا على فواتير قديمة", "empty": "مفيش حركات بضريبة في الفترة دي.",
+        "report_intro": "ضريبة المبيعات المرحّلة ناقص ضريبة مرتجعاتها، ناقص ضريبة المشتريات المرحّلة بعد مرتجعاتها. الرقم ده اللي بيتحط في الإقرار الشهري؛ راجعه مع محاسبك.",
     },
     "en": {
         "page_title": "VAT", "title": "Value-added tax",
         "intro": "Prices are entered before tax, and tax is charged per line at the item's rate. An item without its own rate uses the default rate. The invoice discount applies after tax.",
         "rates": "Rates", "code": "Code", "name": "Name", "rate": "Rate (%)", "eta": "ETA code", "default": "Default", "active": "Active",
         "save": "Save", "add": "Add a rate", "items": "Rate per item", "item": "Item", "use_default": "Default", "search": "Search code or name", "filter": "Search",
-        "saved": "Saved.", "bad": "The rate details are not valid.", "report": "Sales VAT report", "view_only": "You can view; editing is for item managers.",
+        "saved": "Saved.", "bad": "The rate details are not valid.", "report": "VAT return", "output_title": "Sales VAT (output)", "input_title": "Purchase VAT (input)", "payable": "Net payable to the authority", "credit": "Credit carried forward", "view_only": "You can view; editing is for item managers.",
         "prev": "Previous", "next": "Next", "from": "From", "to": "To", "show": "Show", "taxable": "Taxable sales", "tax": "Tax charged",
-        "returned": "Tax on returns", "net": "Net tax due", "untracked": "Tax typed by hand on older invoices", "empty": "No taxed sales in this period.",
-        "report_intro": "Output tax on posted sales minus the tax given back on returns. Purchase (input) tax is not counted here yet.",
+        "returned": "Tax on returns", "net": "Net tax due", "untracked": "Tax typed by hand on older invoices", "empty": "Nothing taxed in this period.",
+        "report_intro": "Output tax on posted sales net of their returns, minus input tax on posted purchases net of their returns. This is the figure for the monthly return; check it with your accountant.",
     },
 }
 
@@ -144,4 +144,5 @@ def tax_report(request):
     today = timezone.localdate()
     date_from = _date(request.GET.get("date_from"), today.replace(day=1))
     date_to = _date(request.GET.get("date_to"), today)
-    return render(request, "taxes/report.html", _context(request, report=vat_report(date_from, date_to), date_from=date_from.isoformat(), date_to=date_to.isoformat(), page_title=WORDS[_lang(request)]["report"]))
+    result = vat_return(date_from, date_to)
+    return render(request, "taxes/report.html", _context(request, report=result["output"], incoming=result["input"], payable=result["payable"], date_from=date_from.isoformat(), date_to=date_to.isoformat(), page_title=WORDS[_lang(request)]["report"]))

@@ -255,6 +255,35 @@ Status: RESOLVED (approved by Ahmed as the first e-invoicing step, 2026-09-27)
   - POS charges tax and change is correct;
   - screens and permissions.
 
+## HG-016 — Purchase (input) VAT is recoverable, not stock cost (TAX-002)
+
+Status: RESOLVED (approved by Ahmed, 2026-09-27: "the right thing, done the best way")
+
+- Problem:
+  - Purchase posting spread `invoice.total_amount`, including `tax_amount`, into inventory cost (`_purchase_line_allocations`).
+  - For a VAT-registered shop that tax is recovered from the authority, so stock cost, average cost, cost of goods sold and profit were all overstated. The VAT return also had no input side.
+- Protected changes, `purchases/services.py` only:
+  1. `_purchase_line_allocations`: each line's share of the total is weighted by `line_total + input_tax`, and its **cost = share − input tax**. Posting and the unit-cost fallback both use this.
+  2. `_purchase_source_allocations` uses the same weights, so a purchase return's refund includes its tax.
+  3. `_prepare_purchase_return_lines` adds each return line's tax share; a full return takes back the remainder. `create_purchase_return` records it in `PurchaseReturnLineTax`.
+  4. The stock out-movement stays at the line's (now net) unit cost.
+- **Which invoices count the tax as recoverable:** only lines drafted with VAT on (`PurchaseLineTax` rows).
+  - An invoice without tax, or one with a hand-typed header tax (a shop that is not registered), allocates **exactly as before**, with the tax in cost.
+  - The whole pre-existing suite passes unchanged, and `test_without_vat_a_typed_header_tax_stays_in_cost_as_before` pins it (570 ÷ 10 = 57.0000).
+- New tables in the `taxes` app: `PurchaseLineTax` and `PurchaseReturnLineTax`. The purchases models are unaltered.
+- Rates: the item's own rate (`ItemTaxRate`) or the default, the same as on sales.
+- Screens:
+  - the purchase form hides the manual tax field when VAT is on and uses `create_purchase_draft_with_tax`; its live total includes VAT;
+  - `/taxes/report/` is now the **VAT return**: output (sales net of returns) − input (purchases net of returns) = payable, or a credit to carry forward.
+- Verification: 7 new tests in `taxes/tests.py`, covering:
+  - an invoice of 670 including 70 tax gives stock of 600 (A at 50.0000, B at 25.0000);
+  - a 10 discount after tax gives cost 590 with the tax still 70;
+  - not registered: the header tax stays in cost;
+  - returning 2 gives a refund of 114.00 with 14.00 tax taken back, and stock value 400;
+  - a full return in two steps takes back exactly 70;
+  - a sale of 5 costs 250 with profit 250, output 70 − input 70 = 0 payable;
+  - the purchase form.
+
 ## Final gate verification
 
 - Full Django suite: 794 tests passed in 576.477 seconds.

@@ -9,6 +9,7 @@
     <article class="op-card op-module is-{{ row.state }}" data-capability="{{ row.slug }}" data-state="{{ row.state }}">
       <strong>{{ row.label }}</strong>{% if row.suggested %} <span class="op-status op-status-posted">{{ words.suggested }}</span>{% endif %}
       <p>{{ row.about }}</p>
+      {% if row.note %}<p class="op-message op-message-warning" role="note" data-capability-note>⚠️ {{ row.note }}</p>{% endif %}
       <p class="op-module__state">{% if row.state == "on" %}{{ words.state_on }}{% elif row.state == "off" %}{{ words.state_off }}{% else %}{{ words.state_soon }}{% endif %}</p>
       {% if can_manage and setup_complete and row.state != "soon" %}
         <form method="post" action="{% url 'settings_core:capabilities' %}?lang={{ lang }}">{% csrf_token %}

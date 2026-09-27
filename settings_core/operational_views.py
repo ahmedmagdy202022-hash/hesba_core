@@ -137,6 +137,9 @@ def capability_settings(request):
             if changed:
                 key = "cap_saved_on" if enabled else "cap_saved_off"
                 messages.success(request, words[key].format(capability=caps.label(slug, lang)))
+                note = caps.CAPABILITIES[slug].get(f"note_{lang}")
+                if note:
+                    messages.warning(request, note)
         return redirect(f"{reverse('settings_core:capabilities')}?lang={lang}")
     return render(
         request,

@@ -135,3 +135,17 @@ class CapabilitySettingsTests(TestCase):
         sign_in(self, RoleCode.CASHIER, "caps_cashier")
         self.assertIn(self.client.post(CAPS, {"capability": "pos", "enabled": "0"}).status_code, (403,))
         self.assertTrue(caps.capability_enabled("pos"))
+
+
+class VatSwitchWarningTests(TestCase):
+    def test_vat_card_and_switch_warn_about_mid_month_changes(self):
+        prepared_client()
+        sign_in(self, username="caps_vat_owner")
+        page = self.client.get(CAPS)
+        self.assertContains(page, "من أول الشهر")
+        self.assertContains(page, "data-capability-note", count=1)  # only the VAT card
+        switched = self.client.post(CAPS, {"capability": "vat", "enabled": "1"}, follow=True)
+        self.assertTrue(caps.capability_enabled("vat"))
+        self.assertIn("الإقرار بتاع الشهر يبقى مخلوط", [str(m) for m in switched.context["messages"]][-1])
+        english = self.client.get(CAPS, {"lang": "en"})
+        self.assertContains(english, "start of a month")
