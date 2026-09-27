@@ -44,7 +44,7 @@ def _context(request, **extra):
 
 @require_permission("settings.view_settings")
 def settings_overview(request):
-    can_manage = user_has_permission(request.user, "settings.manage_settings") and request.user.is_staff
+    can_manage = user_has_permission(request.user, "settings.manage_settings") and request.user.is_superuser
     return render(
         request,
         "settings_core/overview.html",
@@ -61,7 +61,7 @@ def settings_overview(request):
 
 @require_permission("settings.view_settings")
 def role_list(request):
-    can_manage = user_has_permission(request.user, "permissions.manage_roles") and request.user.is_staff
+    can_manage = user_has_permission(request.user, "permissions.manage_roles") and request.user.is_superuser
     roles = Role.objects.filter(active=True).prefetch_related("rolepermission_set__permission")
     return render(
         request,

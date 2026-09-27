@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib import admin as django_admin
 from django.contrib.auth.decorators import login_not_required
 from django.contrib.auth.views import LoginView, LogoutView
@@ -43,5 +44,14 @@ urlpatterns = [
     path("reports/", report_hub, name="report_hub"),
     path("reports/", include("reports.urls")),
     path("status/", status_counts_report, name="status_counts_report"),
-    path("admin/", django_admin.site.urls),
+    path(settings.ADMIN_URL, django_admin.site.urls),
 ]
+
+
+def _superuser_only(request):
+    """ADMIN-001: shop owners and staff never reach Django Admin; only a superuser does."""
+
+    return request.user.is_active and request.user.is_superuser
+
+
+django_admin.site.has_permission = _superuser_only
