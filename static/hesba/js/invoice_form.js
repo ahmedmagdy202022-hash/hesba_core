@@ -49,6 +49,47 @@
   var taxNode = document.getElementById('hs-tax-rates');
   var taxRates = taxNode ? JSON.parse(taxNode.textContent) : null;
 
+  // UNITS-001: bigger units per item (carton, box...), with their own price and barcode.
+  var unitsNode = document.getElementById('hs-units');
+  var units = unitsNode ? JSON.parse(unitsNode.textContent) : null;
+  var unitByCode = {};
+  if (units) {
+    Object.keys(units).forEach(function (itemId) {
+      units[itemId].forEach(function (unit) {
+        unit.itemId = itemId;
+        if (unit.barcode) { unitByCode[unit.barcode.toLowerCase()] = unit; }
+      });
+    });
+  }
+  var isEn = document.documentElement.lang === 'en';
+
+  function unitOf(index) {
+    var select = field(index, 'unit');
+    var item = field(index, 'item');
+    if (!units || !select || !select.value || !item) { return null; }
+    return (units[item.value] || []).filter(function (unit) { return String(unit.id) === select.value; })[0] || null;
+  }
+
+  function fillUnits(index) {
+    var select = field(index, 'unit');
+    var item = field(index, 'item');
+    if (!units || !select || !item) { return; }
+    var keep = select.value;
+    var baseLabel = select.options.length ? select.options[0].textContent : '';
+    select.innerHTML = '';
+    var base = document.createElement('option');
+    base.value = ''; base.textContent = baseLabel;
+    select.appendChild(base);
+    (units[item.value] || []).forEach(function (unit) {
+      var option = document.createElement('option');
+      option.value = String(unit.id);
+      option.textContent = (isEn ? unit.name_en : unit.name_ar) + ' (' + parseFloat(unit.factor) + ')';
+      select.appendChild(option);
+    });
+    select.value = keep;
+    if (select.value !== keep) { select.value = ''; }
+  }
+
   var total = form.querySelector('input[name="lines-TOTAL_FORMS"]');
   var max = form.querySelector('input[name="lines-MAX_NUM_FORMS"]');
   var linesBox = form.querySelector('.op-lines');
@@ -88,7 +129,8 @@
     var price = field(index, priceField);
     var item = select && byId[select.value];
     if (item && price && item.price !== undefined && (force || !price.value)) {
-      price.value = priceFor(item);
+      var unit = unitOf(index);
+      price.value = unit ? unit.price : priceFor(item);
       price.setAttribute('data-auto', price.value);
     }
   }
@@ -113,11 +155,13 @@
     status.classList.toggle('is-error', !!isError);
   }
 
-  function addItem(item) {
+  function addItem(item, unit) {
     var target = -1;
+    var unitId = unit ? String(unit.id) : '';
     for (var i = 0; i < count(); i += 1) {
       var select = field(i, 'item');
-      if (select && select.value === String(item.id)) {
+      var unitSelect = field(i, 'unit');
+      if (select && select.value === String(item.id) && (!unitSelect || unitSelect.value === unitId)) {
         var qty = field(i, 'quantity');
         qty.value = String(num(qty) + 1);
         target = i;
@@ -132,6 +176,8 @@
       if (target < 0) { target = addLine(); }
       if (target < 0) { say(words.full || 'No more lines.', true); return; }
       field(target, 'item').value = String(item.id);
+      fillUnits(target);
+      if (field(target, 'unit')) { field(target, 'unit').value = unitId; }
       field(target, 'quantity').value = '1';
       fillPrice(target, true);
     }
@@ -146,8 +192,9 @@
       var code = scan.value.trim().toLowerCase();
       scan.value = '';
       if (!code) { return; }
-      var item = byCode[code];
-      if (item) { addItem(item); } else { say((words.not_found || 'Not found: ') + code, true); }
+      var unitHit = unitByCode[code];
+      var item = unitHit ? byId[unitHit.itemId] : byCode[code];
+      if (item) { addItem(item, unitHit || null); } else { say((words.not_found || 'Not found: ') + code, true); }
       scan.focus();
     });
   }
@@ -162,12 +209,15 @@
       showList();
     }
     var match = /^lines-(\d+)-item$/.exec(event.target.name || '');
-    if (match) { fillPrice(parseInt(match[1], 10), false); }
+    if (match) { fillUnits(parseInt(match[1], 10)); fillPrice(parseInt(match[1], 10), false); }
+    var unitMatch = /^lines-(\d+)-unit$/.exec(event.target.name || '');
+    if (unitMatch) { fillPrice(parseInt(unitMatch[1], 10), true); }
     recalc();
   });
   form.addEventListener('input', recalc);
   var addButton = form.querySelector('[data-add-line]');
   if (addButton) { addButton.addEventListener('click', function () { if (addLine() < 0) { say(words.full || 'No more lines.', true); } }); }
+  for (var u = 0; u < count(); u += 1) { fillUnits(u); }
   showList();
   recalc();
 })();

@@ -20,6 +20,7 @@ from django.utils import timezone
 from barcode.services import item_catalog
 from pricing.services import price_book
 from taxes.services import compute_lines, create_sales_draft_with_tax, rates_by_item, vat_enabled
+from units.services import units_catalog
 from cashboxes.models import Cashbox
 from config.money import money_round
 from master_data.models import Customer, Item, Location
@@ -161,16 +162,29 @@ def parse_cart(post):
         price = _decimal(post.get(f"price_{index}"), 2)
         if quantity is None or price is None or quantity <= 0 or price < 0:
             raise ValidationError("err_line")
-        rows.append((item_id, quantity, price))
+        rows.append((item_id, quantity, price, post.get(f"unit_{index}", "")))
     if not rows:
         raise ValidationError("err_empty")
     items = {str(item.pk): item for item in Item.objects.filter(pk__in=[row[0] for row in rows if row[0].isdigit()], active=True)}
+    from units.models import ItemUnit
+    from units.services import convert_line, units_enabled
+
+    unit_ids = [row[3] for row in rows if row[3].isdigit()]
+    units = {str(unit.pk): unit for unit in ItemUnit.objects.filter(pk__in=unit_ids, active=True)} if unit_ids and units_enabled() else {}
     lines = []
-    for item_id, quantity, price in rows:
+    for item_id, quantity, price, unit_id in rows:
         item = items.get(item_id)
         if item is None:
             raise ValidationError("err_item")
-        lines.append({"item": item, "quantity": quantity, "unit_sale_price": price, "line_discount_amount": Decimal("0"), "description": ""})
+        line = {"item": item, "quantity": quantity, "unit_sale_price": price, "line_discount_amount": Decimal("0"), "description": ""}
+        unit = units.get(unit_id)
+        if unit_id and unit is None and units_enabled():
+            raise ValidationError("err_item")
+        if unit is not None:
+            if unit.item_id != item.pk:
+                raise ValidationError("err_item")
+            line = convert_line(dict(line, unit=unit), "unit_sale_price")  # UNITS-001: stored in base units
+        lines.append(line)
     return lines
 
 
@@ -184,7 +198,8 @@ def _next_number(today):
 def checkout(*, lines, customer, location, cashbox, discount, tendered, user):
     """Create and post the sale. Returns (invoice, change)."""
 
-    subtotal = money_round(sum((line["quantity"] * line["unit_sale_price"] for line in lines), Decimal("0")))
+    # UNITS-001: a line entered in a bigger unit carries a few piastres of discount.
+    subtotal = money_round(sum((money_round(line["quantity"] * line["unit_sale_price"] - (line.get("line_discount_amount") or 0)) for line in lines), Decimal("0")))
     discount = money_round(discount or 0)
     if discount < 0 or discount > subtotal:
         raise ValidationError("err_discount")
@@ -242,9 +257,13 @@ def _clean_cart(raw):
         if not isinstance(row, dict):
             continue
         item_id = str(row.get("id", ""))
+        unit_id = str(row.get("unit", "") or "")
         qty, price = _decimal(row.get("qty", ""), 3), _decimal(row.get("price", ""), 2)
         if item_id.isdigit() and qty is not None and price is not None:
-            clean.append({"id": int(item_id), "qty": str(qty), "price": str(price)})
+            row_back = {"id": int(item_id), "qty": str(qty), "price": str(price)}
+            if unit_id.isdigit():
+                row_back["unit"] = int(unit_id)
+            clean.append(row_back)
     return clean[:MAX_LINES]
 
 
@@ -308,6 +327,7 @@ def pos(request):
             "catalog": item_catalog(sale_prices=True),
             "price_book": price_book(),
             "tax_rates": rates_by_item(),
+            "units": units_catalog(),
             "customers": Customer.objects.filter(active=True).order_by("name"),
             "walk_in": customer_default,
             "locations": locations,

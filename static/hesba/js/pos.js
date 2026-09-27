@@ -37,11 +37,27 @@
   function say(text, bad) { status.textContent = text; status.classList.toggle('is-error', !!bad); }
   function el(tag, attrs, text) { var node = document.createElement(tag); Object.keys(attrs || {}).forEach(function (k) { node.setAttribute(k, attrs[k]); }); if (text !== undefined) { node.textContent = text; } return node; }
 
-  function add(item, qty, price) {
-    var line = cart.filter(function (row) { return row.id === item.id; })[0];
+  // UNITS-001: a carton's barcode adds a carton line at the carton price.
+  var unitsNode = document.getElementById('hs-units');
+  var units = unitsNode ? JSON.parse(unitsNode.textContent) : {};
+  var unitByCode = {}, unitById = {};
+  Object.keys(units || {}).forEach(function (itemId) {
+    units[itemId].forEach(function (unit) {
+      unit.itemId = itemId;
+      unitById[String(unit.id)] = unit;
+      if (unit.barcode) { unitByCode[unit.barcode.toLowerCase()] = unit; }
+    });
+  });
+  var isEn = document.documentElement.lang === 'en';
+  function unitLabel(item, unit) { return unit ? item.label + ' — ' + (isEn ? unit.name_en : unit.name_ar) : item.label; }
+
+  function add(item, qty, price, unit) {
+    var unitId = unit ? unit.id : null;
+    var line = cart.filter(function (row) { return row.id === item.id && (row.unit || null) === unitId; })[0];
     if (line) { line.qty = num(line.qty) + (qty || 1); }
-    else { var auto = priceFor(item); cart.push({ id: item.id, label: item.label, qty: qty || 1, price: price !== undefined ? price : auto, auto: price !== undefined ? null : auto }); }
-    say((words.added || '') + item.label, false);
+    else if (unit) { cart.push({ id: item.id, unit: unit.id, label: unitLabel(item, unit), qty: qty || 1, price: price !== undefined ? price : num(unit.price), auto: null }); }
+    else { var auto = priceFor(item); cart.push({ id: item.id, unit: null, label: item.label, qty: qty || 1, price: price !== undefined ? price : auto, auto: price !== undefined ? null : auto }); }
+    say((words.added || '') + unitLabel(item, unit), false);
     render();
   }
 
@@ -141,8 +157,9 @@
     var code = scan.value.trim().toLowerCase();
     scan.value = '';
     if (!code) { return; }
-    var item = byCode[code];
-    if (item) { add(item); } else { say((words.not_found || '') + code, true); }
+    var unitHit = unitByCode[code];
+    var item = unitHit ? byId[unitHit.itemId] : byCode[code];
+    if (item) { add(item, undefined, undefined, unitHit || null); } else { say((words.not_found || '') + code, true); }
   });
   search.addEventListener('change', function () {
     var item = byLabel[search.value];
@@ -163,16 +180,20 @@
     form.querySelector('[data-print-flag]').value = submitter && submitter.getAttribute('data-pos-pay') === 'print' ? '1' : '0';
     form.querySelectorAll('input[data-cart-field]').forEach(function (node) { node.remove(); });
     cart.forEach(function (row, index) {
-      [['item_' + index, row.id], ['qty_' + index, row.qty], ['price_' + index, row.price]].forEach(function (pair) {
+      [['item_' + index, row.id], ['qty_' + index, row.qty], ['price_' + index, row.price], ['unit_' + index, row.unit || '']].forEach(function (pair) {
         var input = el('input', { type: 'hidden', name: pair[0], value: String(pair[1]), 'data-cart-field': '1' });
         form.appendChild(input);
       });
     });
     form.querySelector('[data-line-count]').value = String(cart.length);
-    form.querySelector('[data-cart-json]').value = JSON.stringify(cart.map(function (row) { return { id: row.id, qty: row.qty, price: row.price }; }));
+    form.querySelector('[data-cart-json]').value = JSON.stringify(cart.map(function (row) { return { id: row.id, qty: row.qty, price: row.price, unit: row.unit || null }; }));
   });
 
-  restored.forEach(function (row) { var item = byId[String(row.id)]; if (item) { cart.push({ id: item.id, label: item.label, qty: row.qty, price: row.price }); } });
+  restored.forEach(function (row) {
+    var item = byId[String(row.id)];
+    var unit = row.unit ? unitById[String(row.unit)] : null;
+    if (item) { cart.push({ id: item.id, unit: unit ? unit.id : null, label: unitLabel(item, unit), qty: row.qty, price: row.price }); }
+  });
   render();
   scan.focus();
 })();

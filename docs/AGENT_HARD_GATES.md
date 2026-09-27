@@ -306,6 +306,22 @@ Status: RESOLVED (phase 2 of e-invoicing approved by Ahmed, 2026-09-27)
 - The person-buyer threshold defaults to EGP 50,000 and is editable. The owner should confirm the current value with the authority.
 - Verification: `einvoice/tests.py` (8 tests), including exact line and total figures (262.30), the problems listed in Arabic and English, the person threshold, draft and currency checks, the screens with audit, and permissions and the capability gate.
 
+## HG-018 — Units of measure stored in base units (UNITS-001)
+
+Status: RESOLVED (approved by Ahmed, 2026-09-27: "موافق ابداً")
+
+- New `units` app with **one new table**: `ItemUnit`. It holds the item, the Arabic and English names, a `factor` (≥ 1.001, 3 decimals), its own barcode and optional sale and purchase prices. With no price set, the base price × factor is used.
+- `Item`, the posted line models, stock movements, average cost, ledgers and reports are **not changed**. A line entered in a bigger unit is converted *before* the draft is created (`units.services.convert_line`), so every posted figure stays in the base unit:
+  - `base_qty = qty × factor` (must be a whole number of thousandths);
+  - `base_price = ceil_to_piastre(qty × price / base_qty)`;
+  - `line_discount_amount += base_qty × base_price − qty × price`, so the line total is **exactly** qty × price − discount, the figure the customer or supplier agreed on;
+  - the line description records what was entered (for example «Juice — 5 كرتونة × 100.00"), so the detail page and the printout show the carton line. Printing uses the description in place of the item name, which is why the name is kept in it.
+- Where it applies: the sales and purchase draft forms (an optional «الوحدة» column, shown only when the `units` capability is on) and the POS. At the POS, scanning a unit barcode adds that unit.
+- One small POS fix was needed for this: the checkout subtotal now subtracts each line's `line_discount_amount`. POS lines never had one before, so existing behaviour is unchanged.
+- Returns work on the stored base-unit lines, so a returned carton is returned as its pieces at the stored base price. That is the same money, split per piece.
+- Risk: the per-piece sale price shown in reports is the rounded-up base price (8.34 for 100/12), and the piastres are in the line discount. Totals, revenue, stock and cost are exact.
+- Verification: `units/tests.py` (13 tests). They cover the conversion math (5 × 12 at 100 → 60 @ 8.34, discount 0.40, total 500.00), purchase cost per piece (2 boxes of 24 at 250 → 48 pieces costing 500.00), stock moved in pieces on posting, the POS unit line, rejection of a foreign unit in the form and at the till, the management screen with audit, validation, permissions and the capability gate.
+
 ## Final gate verification
 
 - Full Django suite: 794 tests passed in 576.477 seconds.

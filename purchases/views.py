@@ -6,6 +6,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from barcode.services import item_catalog, scan_words
 from taxes.services import create_purchase_draft_with_tax, rates_by_item, vat_enabled
+from units.services import convert_lines, units_catalog
 from permissions.decorators import require_permission
 from permissions.services import user_has_permission
 
@@ -137,6 +138,7 @@ def invoice_create(request):
                 if row.cleaned_data.get("item") is not None
             ]
             try:
+                line_data = convert_lines(line_data, "unit_purchase_price", lang)  # UNITS-001
                 invoice = create_purchase_draft_with_tax(form.cleaned_data, line_data, request.user)
             except ValidationError as exc:
                 form.add_error(None, exc)
@@ -151,7 +153,7 @@ def invoice_create(request):
     return render(
         request,
         "purchases/form.html",
-        _context(request, form=form, line_formset=line_formset, item_catalog=item_catalog(sale_prices=False, purchase_prices=True), scan_words=scan_words(lang), tax_rates=rates_by_item()),
+        _context(request, form=form, line_formset=line_formset, item_catalog=item_catalog(sale_prices=False, purchase_prices=True), scan_words=scan_words(lang), tax_rates=rates_by_item(), units=units_catalog(purchase=True)),
     )
 
 
