@@ -65,6 +65,11 @@ class SharedReads:
     def stock_alerts(self):
         return self._get("stock_alerts", selectors.stock_alert_counts)
 
+    def overdue_instalments(self, today):
+        from installments.services import overdue_summary  # INSTAL-001
+
+        return self._get("overdue_instalments", lambda: overdue_summary(today))
+
     def expiring_batches(self, today):
         from batches.services import expiry_alerts  # BATCH-001
 
@@ -297,6 +302,21 @@ def build_alerts(held_permissions, today, shared=None):
                     "detail_ar": f"الحد المسموح {display_money(limit)}.",
                     "detail_en": f"Limit is {display_money(limit)}.",
                     "amount": display_money(row["balance"]),
+                }
+            )
+
+        # INSTAL-001: instalments past their due date and still open.
+        late = shared.overdue_instalments(today)
+        if late["count"]:
+            alerts.append(
+                {
+                    "key": "instalments_overdue",
+                    "severity": "urgent",
+                    "ar": f"{late['count']} قسط متأخر على {late['plans']} عميل",
+                    "en": f"{late['count']} overdue instalment(s) on {late['plans']} plan(s)",
+                    "detail_ar": "راجع شاشة التقسيط وابعت تذكير.",
+                    "detail_en": "See the instalments screen and send a reminder.",
+                    "amount": display_money(late["amount"]),
                 }
             )
 

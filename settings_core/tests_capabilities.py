@@ -34,10 +34,10 @@ class CatalogTests(SimpleTestCase):
 
     def test_only_shipped_capabilities_are_ticked_or_accepted(self):
         self.assertEqual(caps.default_selection("commercial", "pharmacy"), ("pos", "barcode", "units", "batches_expiry"))
-        self.assertEqual(caps.parse("pos, installments, bogus,barcode"), ("pos", "barcode"))
+        self.assertEqual(caps.parse("pos, fixed_assets, bogus,barcode"), ("pos", "barcode"))
         self.assertTrue(caps.is_available("pos"))
         self.assertTrue(caps.is_available("units"))
-        self.assertFalse(caps.is_available("installments"))
+        self.assertFalse(caps.is_available("fixed_assets"))
 
     def test_every_capability_is_described_in_both_languages(self):
         for slug, entry in caps.CAPABILITIES.items():
@@ -57,7 +57,7 @@ class SetupChoiceTests(TestCase):
         complete_setup(self.profile(), "commercial", "wholesale", "")
         self.assertEqual(caps.enabled_capabilities(), ("barcode", "price_lists", "units", "vat", "e_invoice"))
         self.assertFalse(FeatureFlag.objects.get(code="capability.pos").enabled)
-        self.assertFalse(FeatureFlag.objects.filter(code="capability.installments").exists())  # not shipped yet
+        self.assertFalse(FeatureFlag.objects.filter(code="capability.fixed_assets").exists())  # not shipped yet
 
     def test_setup_stores_what_the_owner_ticked(self):
         complete_setup(self.profile(), "commercial", "retail", "", capabilities_raw="barcode")
@@ -119,7 +119,7 @@ class CapabilitySettingsTests(TestCase):
         sign_in(self)
         page = self.client.get(CAPS)
         states = {row["slug"]: row["state"] for row in page.context["rows"]}
-        self.assertEqual((states["pos"], states["barcode"], states["price_lists"], states["installments"]), ("on", "on", "off", "soon"))
+        self.assertEqual((states["pos"], states["barcode"], states["price_lists"], states["fixed_assets"]), ("on", "on", "off", "soon"))
         self.assertContains(page, "مقترح لنشاطك")
         self.assertContains(self.client.get(reverse("settings_core:overview")), CAPS)
 
@@ -129,8 +129,8 @@ class CapabilitySettingsTests(TestCase):
         self.assertFalse(caps.capability_enabled("barcode"))
         log = AuditLog.objects.filter(action="disable_capability").latest("pk")
         self.assertEqual((log.actor, log.object_id), (user, "capability.barcode"))
-        self.client.post(CAPS, {"capability": "installments", "enabled": "1"})
-        self.assertFalse(FeatureFlag.objects.filter(code="capability.installments").exists())
+        self.client.post(CAPS, {"capability": "fixed_assets", "enabled": "1"})
+        self.assertFalse(FeatureFlag.objects.filter(code="capability.fixed_assets").exists())
 
     def test_only_settings_managers_switch(self):
         sign_in(self, RoleCode.CASHIER, "caps_cashier")

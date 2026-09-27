@@ -1,0 +1,11 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'sales:list' %}?lang={{ lang }}">← {% if lang == 'en' %}Sales{% else %}المبيعات{% endif %}</a><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div></section>
+<form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><select name="overdue" aria-label="{{ words.filter }}"><option value="">{{ words.all }}</option><option value="1"{% if only_overdue %} selected{% endif %}>{{ words.only_overdue }}</option></select><button type="submit">{{ words.filter }}</button></form>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.customer }}</th><th>{{ words.invoice }}</th><th>{{ words.financed }}</th><th>{{ words.paid }}</th><th>{{ words.remaining }}</th><th>{{ words.next_due }}</th><th>{{ words.overdue }}</th><th></th></tr></thead><tbody>
+{% for row in page.object_list %}<tr data-plan-row="{{ row.plan.pk }}"><td class="op-cell-text">{{ row.plan.customer.name }}</td><td><bdi>{{ row.plan.invoice.invoice_number }}</bdi></td><td>{{ row.plan.financed_amount|money }}</td><td>{{ row.info.paid|money }}</td><td>{{ row.info.remaining|money }}</td><td>{% if row.info.next_due %}<bdi>{{ row.info.next_due.due_date|date:"Y-m-d" }}</bdi> · {{ row.info.next_open|money }}{% else %}—{% endif %}</td><td>{% if row.info.overdue %}<span class="op-status op-status-cancelled">{{ row.info.overdue|money }}</span>{% else %}—{% endif %}</td><td><a href="{% url 'installments:detail' row.plan.pk %}?lang={{ lang }}">{{ words.open }}</a></td></tr>
+{% empty %}<tr><td colspan="8" class="op-empty">{{ words.empty }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if page.has_other_pages %}<p class="op-form-actions">{% if page.has_previous %}<a class="op-secondary" href="?lang={{ lang }}&overdue={% if only_overdue %}1{% endif %}&page={{ page.previous_page_number }}">{{ words.prev }}</a>{% endif %}<span class="op-muted">{{ page.number }} / {{ page.paginator.num_pages }}</span>{% if page.has_next %}<a class="op-secondary" href="?lang={{ lang }}&overdue={% if only_overdue %}1{% endif %}&page={{ page.next_page_number }}">{{ words.next }}</a>{% endif %}</p>{% endif %}
+{% endblock %}
