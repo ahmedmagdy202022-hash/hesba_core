@@ -29,3 +29,14 @@ def localized_choices(context, model_label, field_name):
     """{% localized_choices "sales.salesinvoice" "status" as statuses %}"""
 
     return _localized_choices(model_label, field_name, _lang(context))
+
+
+@register.filter(name="ui")
+def ui_message(value, lang="ar"):
+    """I18N-001: a service message (or a list of them) in the screen's language."""
+
+    from settings_core.ui_messages import translate
+
+    if isinstance(value, (list, tuple)) or hasattr(value, "as_data"):
+        return " ".join(translate(item, lang) for item in value)
+    return translate(value, lang)
