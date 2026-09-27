@@ -6,7 +6,7 @@ business: suppliers stocked, items sold, customers part-paid, cash moved. Every
 row goes through the posting services, so what the screen shows is genuinely
 derived from movements and ledger entries — the same path a real day takes.
 
-It also plants three deliberate problems so the alerts and the health score have
+It also plants three deliberate problems so the alerts have
 something true to report: an item sold out, an item under its minimum, and a
 customer past their credit limit.
 """
@@ -447,7 +447,6 @@ class Command(BaseCommand):
             return
 
         from reports import selectors
-        from reports.dashboard_data import HEALTH_INPUT_PERMISSIONS, health_score
 
         today = timezone.localdate()
         totals = selectors.profit_totals(date_from=today, date_to=today)
@@ -465,7 +464,3 @@ class Command(BaseCommand):
         self.stdout.write(f"  Supplier dues      {supplier_dues:>12,.2f}")
         self.stdout.write(f"  Out of stock       {stock['out_of_stock']:>12}")
         self.stdout.write(f"  Below minimum      {stock['low_stock']:>12}")
-        # The score is permission-scoped on screen. Here it is shown in full,
-        # because whoever ran this wants to know what the owner will see.
-        owner_view = frozenset(HEALTH_INPUT_PERMISSIONS.values())
-        self.stdout.write(f"  Health score       {health_score(today, owner_view)['score']:>12}")
