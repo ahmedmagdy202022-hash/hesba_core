@@ -42,6 +42,7 @@ LOCAL_APPS = [
     "barcode",
     "expenses",
     "pricing",
+    "taxes",
     "printing",
 ]
 

@@ -210,6 +210,51 @@ Status: RESOLVED (commercial-capabilities plan approved by Ahmed, 2026-09-27)
 - Every change to a list, its prices or its customers is written to the audit log.
 - Verification: `pricing/tests.py`.
 
+## HG-015 — VAT per sales line; revenue net of tax (TAX-001)
+
+Status: RESOLVED (approved by Ahmed as the first e-invoicing step, 2026-09-27)
+
+- Problem found:
+  - Sales posting spread `invoice.total_amount`, **including** `tax_amount`, across the lines as revenue. Any tax typed on an invoice was therefore counted as sales and profit.
+  - Returns used the same split.
+  - Item-level VAT could not be correct without changing this.
+- Protected changes, `sales/services.py` only:
+  1. `post_sales_invoice`: each line's share of the total is weighted by `line_total + line_tax`, and `line_profit = share - line_tax - cost`.
+  2. `_sales_source_allocations` uses the same weights. `_prepare_sales_return_lines` adds the tax share of each returned quantity; a full return gives back the remainder, so the tax returned sums exactly. `create_sales_return` stores that share in `SalesReturnLineTax`. The refund amount, the cash/due split, stock and cost are computed as before.
+  3. **When tax is 0 both are arithmetically identical to before.** The whole pre-existing suite passes unchanged.
+- Report calculations, all switched to net of tax:
+  - `profit_report` return rows, `profit_totals` and `get_profit_summary` subtract the tax given back on returns;
+  - analytics `net_sales` and the daily chart use `total_amount - tax_amount` and returns net of their tax;
+  - unchanged on purpose: the dashboard "sales today" card and the closing snapshot `sales_total` stay gross invoice totals, which is what was invoiced and collected.
+- Behaviour change on older data: an invoice whose tax was typed on the header (no line tax rows) now also keeps that tax out of revenue and profit. It is spread over the lines by their totals. This fixes the old defect; test `test_a_tax_typed_on_the_header_is_kept_out_of_revenue`.
+- New tables (the `taxes` app); `SalesInvoice`, `SalesLine` and `SalesReturn` are unaltered:
+  - `TaxRate`, seeded with VAT14 = 14% (T1/V009, default) and EXEMPT = 0% (T1/V003). The ETA codes are to be verified against the authority's current list before e-invoicing.
+  - `ItemTaxRate`, one per item; no row means the default rate.
+  - `SalesLineTax` and `SalesReturnLineTax`.
+- Charging rules:
+  - prices are entered before tax;
+  - tax per line = (qty × price − line discount) × rate, rounded to the piastre;
+  - the invoice discount applies after tax;
+  - total = Σ lines + tax − discount, the existing formula.
+  - All of this is behind the new `vat` capability, which wholesale suggests. With `vat` off, nothing is charged.
+- Where the tax is applied:
+  - the sales invoice form hides the manual tax field and uses `create_sales_draft_with_tax`;
+  - POS totals include the tax, so a walk-in pays the full amount;
+  - the live totals in both screens show tax per line;
+  - VAT report at `/taxes/report/`, and rate settings at `/taxes/` (view needs `master_data.view_master_data`, edit needs `manage_items`).
+- **Not included — next Hard Gates:**
+  - Purchase (input) VAT. `purchases/services._purchase_line_allocations` puts `invoice.total_amount`, **including tax**, into inventory cost. That is right for a shop not registered for VAT and wrong for one that is, because the tax is recoverable. The proposed fix is to allocate `total − tax` into cost when `vat` is on, and to record input tax per line the same way. That touches purchase posting and average cost.
+  - Tax-inclusive shelf prices.
+- Verification: `taxes/tests.py`, 12 tests, covering:
+  - exact tax per line; rounding; capability off;
+  - revenue 240 and profit 90 on an invoice of 268 including 28 tax and a 10 discount;
+  - refund 109.90 with 14.00 tax returned, and VAT net 14.00;
+  - a full return in two steps gives back exactly the tax;
+  - an untaxed invoice posts exactly as before;
+  - header-typed tax is kept out of revenue;
+  - POS charges tax and change is correct;
+  - screens and permissions.
+
 ## Final gate verification
 
 - Full Django suite: 794 tests passed in 576.477 seconds.

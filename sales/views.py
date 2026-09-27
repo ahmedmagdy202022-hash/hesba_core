@@ -6,6 +6,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from barcode.services import item_catalog, scan_words
 from pricing.services import price_book
+from taxes.services import create_sales_draft_with_tax, rates_by_item, vat_enabled
 from permissions.decorators import require_permission
 from permissions.services import user_has_permission
 
@@ -124,11 +125,13 @@ def invoice_create(request):
     lang = _lang(request)
     if request.method == "POST":
         form = SalesDraftForm(request.POST, lang=lang)
+        if vat_enabled():
+            del form.fields["tax_amount"]  # TAX-001: charged per line from item rates
         line_formset = SalesLineFormSet(request.POST, prefix="lines", form_kwargs={"lang": lang})
         if form.is_valid() and line_formset.is_valid():
             line_data = [row.cleaned_data for row in line_formset.forms if row.cleaned_data.get("item") is not None]
             try:
-                invoice = create_sales_draft(form.cleaned_data, line_data, request.user)
+                invoice = create_sales_draft_with_tax(form.cleaned_data, line_data, request.user)
             except ValidationError as exc:
                 form.add_error(None, exc)
             else:
@@ -136,8 +139,10 @@ def invoice_create(request):
                 return redirect(f"/sales/{invoice.pk}/?lang={lang}")
     else:
         form = SalesDraftForm(lang=lang)
+        if vat_enabled():
+            del form.fields["tax_amount"]
         line_formset = SalesLineFormSet(prefix="lines", form_kwargs={"lang": lang})
-    return render(request, "sales/form.html", _context(request, form=form, line_formset=line_formset, item_catalog=item_catalog(sale_prices=True, purchase_prices=False), scan_words=scan_words(lang), price_book=price_book()))
+    return render(request, "sales/form.html", _context(request, form=form, line_formset=line_formset, item_catalog=item_catalog(sale_prices=True, purchase_prices=False), scan_words=scan_words(lang), price_book=price_book(), tax_rates=rates_by_item()))
 
 
 @require_permission("sales.view_sales_invoices")

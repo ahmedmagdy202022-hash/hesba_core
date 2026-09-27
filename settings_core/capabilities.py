@@ -84,6 +84,12 @@ CAPABILITIES = {
         "about_en": "An instalment schedule per customer, due dates and collection reminders.",
         "available": False, "paths": (),
     },
+    "vat": {
+        "ar": "ضريبة القيمة المضافة على الأصناف", "en": "VAT on items",
+        "about_ar": "نسبة ضريبة لكل صنف (14٪ أو معفى)، تتحسب تلقائيًا في الفاتورة والكاشير، وتقرير ضريبة المبيعات.",
+        "about_en": "A tax rate per item (14% or exempt), charged automatically on invoices and at the till, with a sales VAT report.",
+        "available": True, "paths": ("/taxes/",),
+    },
     "e_invoice": {
         "ar": "الفاتورة الإلكترونية (مصلحة الضرائب)", "en": "E-invoicing (Egyptian Tax Authority)",
         "about_ar": "ضريبة على مستوى الصنف، وإرسال الفواتير لمنظومة الفاتورة والإيصال الإلكتروني.",
@@ -107,7 +113,7 @@ PRESETS = {
     "fashion": {"pos": SUGGESTED, "barcode": SUGGESTED, "variants": SUGGESTED},
     "electronics": {"pos": SUGGESTED, "barcode": SUGGESTED, "serials": SUGGESTED, "installments": SUGGESTED},
     "pharmacy": {"pos": SUGGESTED, "barcode": SUGGESTED, "batches_expiry": SUGGESTED, "units": SUGGESTED},
-    "wholesale": {"barcode": SUGGESTED, "price_lists": SUGGESTED, "units": SUGGESTED, "e_invoice": SUGGESTED},
+    "wholesale": {"barcode": SUGGESTED, "price_lists": SUGGESTED, "units": SUGGESTED, "vat": SUGGESTED, "e_invoice": SUGGESTED},
     "online": {"barcode": SUGGESTED, "variants": SUGGESTED},
     "other": {"pos": SUGGESTED, "barcode": SUGGESTED},
 }

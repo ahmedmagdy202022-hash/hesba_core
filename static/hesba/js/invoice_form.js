@@ -46,6 +46,9 @@
     listNote.textContent = list ? (listNote.getAttribute('data-prefix') || '') + (document.documentElement.lang === 'en' ? list.name_en : list.name_ar) : '';
   }
 
+  var taxNode = document.getElementById('hs-tax-rates');
+  var taxRates = taxNode ? JSON.parse(taxNode.textContent) : null;
+
   var total = form.querySelector('input[name="lines-TOTAL_FORMS"]');
   var max = form.querySelector('input[name="lines-MAX_NUM_FORMS"]');
   var linesBox = form.querySelector('.op-lines');
@@ -96,7 +99,10 @@
     for (var i = 0; i < count(); i += 1) {
       var select = field(i, 'item');
       if (!select || !select.value) { continue; }
-      sum += num(field(i, 'quantity')) * num(field(i, priceField)) - num(field(i, 'line_discount_amount'));
+      var net = num(field(i, 'quantity')) * num(field(i, priceField)) - num(field(i, 'line_discount_amount'));
+      sum += net;
+      // TAX-001: VAT at the item's rate, rounded per line like the server.
+      if (taxRates) { sum += Math.round(Math.round(net * 100) / 100 * num({ value: taxRates[select.value] || '0' }) + 1e-9) / 100; }
     }
     liveTotal.textContent = sum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }

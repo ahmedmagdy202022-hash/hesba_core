@@ -19,6 +19,9 @@ from inventory.models import StockMovement
 from master_data.models import Item
 from sales.models import SalesInvoice, SalesInvoiceStatus, SalesLine, SalesReturn, SalesReturnStatus
 
+from taxes.models import SalesReturnLineTax
+from taxes.services import returns_tax
+
 from .selectors import STOCK_IN_TYPES, STOCK_OUT_TYPES, cashbox_report, profit_totals, supplier_report
 
 
@@ -54,9 +57,11 @@ def change(current, previous):
 
 
 def _sales(start, end):
+    # HG-015: sales are counted net of VAT; refunds net of the tax they gave back.
     posted = SalesInvoice.objects.filter(status=SalesInvoiceStatus.POSTED, invoice_date__gte=start, invoice_date__lte=end)
-    totals = posted.aggregate(total=Sum("total_amount"), count=Count("id"))
-    returns = SalesReturn.objects.filter(status=SalesReturnStatus.POSTED, return_date__gte=start, return_date__lte=end).aggregate(total=Sum("total_amount"))["total"] or ZERO
+    totals = posted.aggregate(total=Sum(F("total_amount") - F("tax_amount")), count=Count("id"))
+    return_qs = SalesReturn.objects.filter(status=SalesReturnStatus.POSTED, return_date__gte=start, return_date__lte=end)
+    returns = (return_qs.aggregate(total=Sum("total_amount"))["total"] or ZERO) - returns_tax(return_qs)
     gross = totals["total"] or ZERO
     return {"net": money_round(gross - returns), "count": totals["count"] or 0, "returns": money_round(returns), "gross": money_round(gross)}
 
@@ -65,12 +70,18 @@ def daily_sales(start, end):
     """[(date, net sales)] for every day in the window, zero-filled."""
 
     by_day = defaultdict(Decimal)
-    rows = SalesInvoice.objects.filter(status=SalesInvoiceStatus.POSTED, invoice_date__gte=start, invoice_date__lte=end).values("invoice_date").annotate(total=Sum("total_amount"))
+    rows = SalesInvoice.objects.filter(status=SalesInvoiceStatus.POSTED, invoice_date__gte=start, invoice_date__lte=end).values("invoice_date").annotate(total=Sum(F("total_amount") - F("tax_amount")))
     for row in rows:
         by_day[row["invoice_date"]] += row["total"] or ZERO
     returns = SalesReturn.objects.filter(status=SalesReturnStatus.POSTED, return_date__gte=start, return_date__lte=end).values("return_date").annotate(total=Sum("total_amount"))
     for row in returns:
         by_day[row["return_date"]] -= row["total"] or ZERO
+    returned_tax = SalesReturnLineTax.objects.filter(
+        return_line__sales_return__status=SalesReturnStatus.POSTED,
+        return_line__sales_return__return_date__gte=start, return_line__sales_return__return_date__lte=end,
+    ).values("return_line__sales_return__return_date").annotate(total=Sum("tax_amount"))
+    for row in returned_tax:
+        by_day[row["return_line__sales_return__return_date"]] += row["total"] or ZERO
     days = []
     day = start
     while day <= end:

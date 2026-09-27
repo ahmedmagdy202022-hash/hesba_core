@@ -179,7 +179,13 @@ def post_sales_invoice(invoice_id, user=None):
             created_by=user,
         )
 
-    financial_weights = [line.line_total_amount for line in lines]
+    # HG-015: each line's share of the total is weighted by what it charges
+    # including its tax, and revenue is that share minus the tax. With no tax
+    # this is exactly the previous allocation.
+    from taxes.services import line_taxes
+
+    taxes = line_taxes(invoice, lines)
+    financial_weights = [line.line_total_amount + taxes[line.pk] for line in lines]
     if sum(financial_weights, Decimal("0")) <= 0:
         financial_weights = [Decimal("1") for _ in lines]
     financial_allocations = allocate_proportionally(invoice.total_amount, financial_weights)
@@ -188,7 +194,7 @@ def post_sales_invoice(invoice_id, user=None):
     for line, financial_amount in zip(lines, financial_allocations):
         unit_cost = _line_unit_cost(line)
         line_cost = _line_cost_amount(line, unit_cost)
-        line_profit = money_round(financial_amount - line_cost)
+        line_profit = money_round(financial_amount - taxes[line.pk] - line_cost)
 
         line.unit_cost = unit_cost
         line.line_cost_amount = line_cost
@@ -410,8 +416,10 @@ def _require_sales_return_permission(user):
         raise PermissionDenied("Sales returns require sales.return_sale.")
 
 
-def _sales_source_allocations(invoice, source_lines):
-    weights = [line.line_total_amount for line in source_lines]
+def _sales_source_allocations(invoice, source_lines, taxes=None):
+    # HG-015: weighted like posting, by what each line charges including tax.
+    taxes = taxes or {}
+    weights = [line.line_total_amount + taxes.get(line.pk, Decimal("0")) for line in source_lines]
     if sum(weights, Decimal("0")) <= 0:
         weights = [Decimal("1") for _ in source_lines]
     allocations = allocate_proportionally(invoice.total_amount, weights)
@@ -419,8 +427,11 @@ def _sales_source_allocations(invoice, source_lines):
 
 
 def _prepare_sales_return_lines(invoice, source_lines, requested_lines):
+    from taxes.services import line_taxes, return_tax_share
+
     by_id = {line.pk: line for line in source_lines}
-    allocations = _sales_source_allocations(invoice, source_lines)
+    taxes = line_taxes(invoice, source_lines)
+    allocations = _sales_source_allocations(invoice, source_lines, taxes)
     prepared = []
     seen = set()
     for requested in requested_lines:
@@ -460,6 +471,8 @@ def _prepare_sales_return_lines(invoice, source_lines, requested_lines):
                 "amount": amount,
                 "unit_cost": line.unit_cost,
                 "cost_amount": cost_amount,
+                # HG-015: the refund above includes this much tax.
+                "tax_amount": return_tax_share(line, taxes[line.pk], quantity, cumulative_quantity),
             }
         )
     if not prepared:
@@ -540,11 +553,17 @@ def create_sales_return(
     sales_return.full_clean()
     sales_return.save()
 
+    from taxes.services import record_return_taxes
+
     affected_items = {}
+    returned_taxes = []
     for row in prepared:
+        row = dict(row)
+        tax_amount = row.pop("tax_amount", Decimal("0"))
         return_line = SalesReturnLine(sales_return=sales_return, **row)
         return_line.full_clean()
         return_line.save()
+        returned_taxes.append((return_line, tax_amount))
         item = row["source_line"].item
         if not item.is_stock_tracked:
             continue
@@ -585,6 +604,7 @@ def create_sales_return(
             description=f"Sales return {sales_return.return_number}",
             created_by=user,
         )
+    record_return_taxes(returned_taxes)
     for item in affected_items.values():
         recalculate_item_average_cost(item)
     AuditLog.objects.create(

@@ -1,0 +1,12 @@
+{% extends "operations/base.html" %}
+{% load hesba_format l10n %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'report_hub' %}?lang={{ lang }}">← {% if lang == 'en' %}Reports{% else %}التقارير{% endif %}</a><h1>{{ words.report }}</h1><p>{{ words.report_intro }}</p></div></section>
+<form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><label class="op-inline-label">{{ words.from }}<input type="date" name="date_from" value="{{ date_from }}"></label><label class="op-inline-label">{{ words.to }}<input type="date" name="date_to" value="{{ date_to }}"></label><button type="submit">{{ words.show }}</button></form>
+<section class="op-summary-grid"><article><small>{{ words.net }}</small><strong data-vat-net>{{ report.net_tax|money }}</strong></article></section>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.rate }}</th><th>{{ words.taxable }}</th><th>{{ words.tax }}</th><th>{{ words.returned }}</th><th>{{ words.net }}</th></tr></thead><tbody>
+{% for row in report.rows %}<tr><td><bdi dir="ltr">{{ row.rate|unlocalize }}%</bdi></td><td>{{ row.taxable|money }}</td><td>{{ row.tax|money }}</td><td>{{ row.returned_tax|money }}</td><td><strong>{{ row.net_tax|money }}</strong></td></tr>
+{% empty %}<tr><td colspan="5">{{ words.empty }}</td></tr>{% endfor %}
+{% if report.untracked_header_tax %}<tr><td colspan="4">{{ words.untracked }}</td><td>{{ report.untracked_header_tax|money }}</td></tr>{% endif %}
+</tbody></table></div>
+{% endblock %}
