@@ -365,6 +365,37 @@ Status: RESOLVED (covered by Ahmed's standing go-ahead of 2026-09-27: «كمّل
 - Not included: deleting a combination (deactivate it from the item screen as usual), and per-variant price lists beyond what price lists already do per item.
 - Verification: `variants/tests.py` (8 tests). They cover parsing, the six items with codes, barcodes, prices and audit, code collisions and refusals, extend adding only the missing combinations, model pricing, the stock grid totals, the screens, a variant sold at the POS by barcode, permissions and the gate.
 
+## HG-021 — Serial / IMEI numbers and warranty as a tracking layer (SERIAL-001)
+
+Status: RESOLVED (covered by Ahmed's standing go-ahead of 2026-09-27: «كمّل كل اللي ناقص»)
+
+- New `serials` app with **four new tables**:
+  - `SerialSetting`: whether an item is tracked, and its warranty in months;
+  - `SerialNumber`: the item, the serial, and the purchase line it came on or "registered by hand";
+  - `SerialSale`: serial ↔ sales line;
+  - `SerialReturn`: serial ↔ sales return line.
+- **Posting, stock, cost, ledgers and reports are not changed.** A serial's state is read from the documents that carry it:
+  - pending: on a purchase draft;
+  - in stock: posted purchase or registered, and every posted sale of it has a posted return;
+  - sold;
+  - void: its purchase was cancelled;
+  - retired: by hand, with a reason.
+  So cancelling a purchase, a sale or a return needs no clean-up.
+- Entry points, active only when the `serials` capability is on:
+  - **Purchase and sales forms** get a «السيريال / IMEI» field per line. For a tracked item the count must equal the quantity, and the quantity must be whole. Serials are refused if duplicated, already recorded, not in stock for that item, or entered on an untracked item. The sales line description records "S/N: …", so the printout shows it.
+  - **Posting a sales draft** re-checks that its serials are still in stock. This is a view-level guard in `sales.views.invoice_post`; the posting service is untouched.
+  - **POS:** scanning a serial / IMEI adds that exact unit on its own line, with the quantity locked at 1. Scanning a tracked item's own barcode asks for the serial, and the server refuses a tracked line without one. The one POS code change is `attach_sale_serials` between draft and post, inside the existing transaction.
+- Screens, all audited:
+  - `/serials/`: lookup (a single hit opens the detail page), units in stock by item, and registration of serials for units already on hand;
+  - `/serials/<id>/`: history covering the purchase (supplier, invoice, date), sales (customer, invoice, date) and returns, plus the warranty ("valid until" / "ended on", counted from the last sale); from here you can record the serial back from a posted sales return of its invoice, or retire it;
+  - `/serials/items/`: which items are tracked, and their warranty months.
+- Permissions: viewing needs `inventory.view_stock`, register / return / retire need `inventory.adjust_stock`, and item settings need `master_data.manage_items`.
+- Known limits:
+  - The sales return form does not ask for the serial. The serial is recorded back from its own screen against a posted return, capped at the returned quantity.
+  - A purchase return does not free a specific serial; retire it with the reason "returned to supplier".
+  - Serials are not location-bound.
+- Verification: `serials/tests.py` (11 tests). They cover parsing and month arithmetic, purchase pending/posted/void and re-use after cancel, refusals, a form sale with warranty and the detail page, double-sale refusal and cancel restoring stock, the draft-post guard, the POS serial sale and catalog, return back into stock and resale, the screens with audit, permissions and the gate.
+
 ## Final gate verification
 
 - Full Django suite: 794 tests passed in 576.477 seconds.

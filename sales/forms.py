@@ -95,6 +95,14 @@ class SalesLineInputForm(forms.Form):
                 queryset=ItemUnit.objects.filter(active=True), required=False,
                 label="Unit" if lang == "en" else "الوحدة", empty_label="Base unit" if lang == "en" else "الوحدة الأساسية",
             )
+        # SERIAL-001: serial / IMEI numbers of the units on this line.
+        from serials.services import serials_enabled
+
+        if serials_enabled():
+            self.fields["serials"] = forms.CharField(
+                max_length=20000, required=False, label="Serial / IMEI numbers" if lang == "en" else "السيريال / IMEI",
+                widget=forms.TextInput(attrs={"placeholder": "Comma separated" if lang == "en" else "افصل بينهم بفاصلة", "autocomplete": "off"}),
+            )
 
 
 class BaseSalesLineFormSet(BaseFormSet):

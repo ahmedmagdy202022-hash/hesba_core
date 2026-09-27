@@ -76,7 +76,7 @@ CAPABILITIES = {
         "ar": "السيريال / IMEI والضمان", "en": "Serial / IMEI & warranty",
         "about_ar": "تتبّع كل قطعة برقمها من الشراء للبيع، وفترة الضمان.",
         "about_en": "Track every unit by its number from purchase to sale, with its warranty.",
-        "available": False, "paths": (),
+        "available": True, "paths": ("/serials/",),
     },
     "installments": {
         "ar": "البيع بالتقسيط", "en": "Instalment sales",

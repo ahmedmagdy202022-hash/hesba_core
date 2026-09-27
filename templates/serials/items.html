@@ -1,0 +1,13 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'serials:index' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ words.settings }}</h1></div></section>
+<form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><input type="search" name="q" value="{{ q }}" placeholder="{{ words.search }}" aria-label="{{ words.search }}"><button type="submit">{{ words.find }}</button></form>
+{% if not can_manage %}<p class="op-muted">{{ words.view_only }}</p>{% endif %}
+<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="q" value="{{ q }}"><input type="hidden" name="page" value="{{ page.number }}">
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.item }}</th><th>{{ words.tracked }}</th><th>{{ words.warranty_months }}</th></tr></thead><tbody>
+{% for row in rows %}<tr><td class="op-cell-text"><input type="hidden" name="shown_{{ row.item.pk }}" value="1"><bdi>{{ row.item.item_code }}</bdi><br><small class="op-muted">{{ row.item.item_name }}</small></td><td><input type="checkbox" name="tracked_{{ row.item.pk }}" value="1" aria-label="{{ words.tracked }}"{% if row.setting.tracked %} checked{% endif %}{% if not can_manage %} disabled{% endif %}></td><td><input name="months_{{ row.item.pk }}" inputmode="numeric" size="4" value="{{ row.setting.warranty_months|default:0 }}" aria-label="{{ words.warranty_months }}"{% if not can_manage %} disabled{% endif %}></td></tr>
+{% empty %}<tr><td colspan="3" class="op-empty">—</td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_manage %}<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div>{% endif %}</form>
+{% if page.has_other_pages %}<p class="op-form-actions">{% if page.has_previous %}<a class="op-secondary" href="?lang={{ lang }}&q={{ q|urlencode }}&page={{ page.previous_page_number }}">{{ words.prev }}</a>{% endif %}<span class="op-muted">{{ page.number }} / {{ page.paginator.num_pages }}</span>{% if page.has_next %}<a class="op-secondary" href="?lang={{ lang }}&q={{ q|urlencode }}&page={{ page.next_page_number }}">{{ words.next }}</a>{% endif %}</p>{% endif %}
+{% endblock %}

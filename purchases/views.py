@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from barcode.services import item_catalog, scan_words
 from taxes.services import create_purchase_draft_with_tax, rates_by_item, vat_enabled
 from batches.services import attach_purchase_batches
+from serials.services import attach_purchase_serials, prepare_purchase_serials
 from units.services import convert_lines, units_catalog
 from permissions.decorators import require_permission
 from permissions.services import user_has_permission
@@ -141,9 +142,11 @@ def invoice_create(request):
             ]
             try:
                 line_data = convert_lines(line_data, "unit_purchase_price", lang)  # UNITS-001
+                line_data = prepare_purchase_serials(line_data, lang)  # SERIAL-001
                 with transaction.atomic():
                     invoice = create_purchase_draft_with_tax(form.cleaned_data, line_data, request.user)
                     attach_purchase_batches(invoice, line_data, request.user)  # BATCH-001
+                    attach_purchase_serials(invoice, line_data, request.user)
             except ValidationError as exc:
                 form.add_error(None, exc)
             else:

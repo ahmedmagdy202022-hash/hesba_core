@@ -49,9 +49,25 @@
     });
   });
   var isEn = document.documentElement.lang === 'en';
+  // SERIAL-001: scanning a serial / IMEI adds that exact unit; tracked items need one.
+  var serialsNode = document.getElementById('hs-serials');
+  var serialData = serialsNode ? JSON.parse(serialsNode.textContent) : { tracked: [], serials: {} };
+  var tracked = {}, bySerial = {};
+  serialData.tracked.forEach(function (id) { tracked[String(id)] = true; });
+  Object.keys(serialData.serials).forEach(function (serial) { bySerial[serial.toLowerCase()] = { serial: serial, itemId: String(serialData.serials[serial]) }; });
+  function addSerial(hit) {
+    var item = byId[hit.itemId];
+    if (!item) { return false; }
+    if (cart.some(function (row) { return row.serial === hit.serial; })) { say((words.serial_twice || '') + hit.serial, true); return true; }
+    cart.push({ id: item.id, unit: null, serial: hit.serial, label: item.label + ' — S/N ' + hit.serial, qty: 1, price: priceFor(item), auto: null });
+    say((words.added || '') + item.label + ' — ' + hit.serial, false);
+    render();
+    return true;
+  }
   function unitLabel(item, unit) { return unit ? item.label + ' — ' + (isEn ? unit.name_en : unit.name_ar) : item.label; }
 
   function add(item, qty, price, unit) {
+    if (tracked[String(item.id)]) { say((words.scan_serial || '') + item.label, true); return; }
     var unitId = unit ? unit.id : null;
     var line = cart.filter(function (row) { return row.id === item.id && (row.unit || null) === unitId; })[0];
     if (line) { line.qty = num(line.qty) + (qty || 1); }
@@ -77,6 +93,7 @@
       var minus = el('button', { type: 'button', 'class': 'pos-step', 'data-step': '-1', 'aria-label': '−' }, '−');
       var qty = el('input', { inputmode: 'decimal', 'data-field': 'qty', value: String(row.qty), 'aria-label': 'qty' });
       var plus = el('button', { type: 'button', 'class': 'pos-step', 'data-step': '1', 'aria-label': '+' }, '+');
+      if (row.serial) { qty.readOnly = true; minus.disabled = true; plus.disabled = true; }
       qtyCell.appendChild(minus); qtyCell.appendChild(qty); qtyCell.appendChild(plus);
       tr.appendChild(qtyTd);
       var priceCell = el('td');
@@ -127,7 +144,7 @@
     var index = parseInt(tr.getAttribute('data-line'), 10);
     if (event.target.hasAttribute('data-remove')) { cart.splice(index, 1); render(); scan.focus(); return; }
     var step = event.target.getAttribute('data-step');
-    if (step) {
+    if (step && !cart[index].serial) {
       cart[index].qty = Math.max(0, num(cart[index].qty) + parseInt(step, 10));
       if (!cart[index].qty) { cart.splice(index, 1); }
       render();
@@ -157,6 +174,7 @@
     var code = scan.value.trim().toLowerCase();
     scan.value = '';
     if (!code) { return; }
+    if (bySerial[code] && addSerial(bySerial[code])) { return; }
     var unitHit = unitByCode[code];
     var item = unitHit ? byId[unitHit.itemId] : byCode[code];
     if (item) { add(item, undefined, undefined, unitHit || null); } else { say((words.not_found || '') + code, true); }
@@ -180,19 +198,20 @@
     form.querySelector('[data-print-flag]').value = submitter && submitter.getAttribute('data-pos-pay') === 'print' ? '1' : '0';
     form.querySelectorAll('input[data-cart-field]').forEach(function (node) { node.remove(); });
     cart.forEach(function (row, index) {
-      [['item_' + index, row.id], ['qty_' + index, row.qty], ['price_' + index, row.price], ['unit_' + index, row.unit || '']].forEach(function (pair) {
+      [['item_' + index, row.id], ['qty_' + index, row.qty], ['price_' + index, row.price], ['unit_' + index, row.unit || ''], ['serial_' + index, row.serial || '']].forEach(function (pair) {
         var input = el('input', { type: 'hidden', name: pair[0], value: String(pair[1]), 'data-cart-field': '1' });
         form.appendChild(input);
       });
     });
     form.querySelector('[data-line-count]').value = String(cart.length);
-    form.querySelector('[data-cart-json]').value = JSON.stringify(cart.map(function (row) { return { id: row.id, qty: row.qty, price: row.price, unit: row.unit || null }; }));
+    form.querySelector('[data-cart-json]').value = JSON.stringify(cart.map(function (row) { return { id: row.id, qty: row.qty, price: row.price, unit: row.unit || null, serial: row.serial || null }; }));
   });
 
   restored.forEach(function (row) {
     var item = byId[String(row.id)];
     var unit = row.unit ? unitById[String(row.unit)] : null;
-    if (item) { cart.push({ id: item.id, unit: unit ? unit.id : null, label: unitLabel(item, unit), qty: row.qty, price: row.price }); }
+    if (item && row.serial) { cart.push({ id: item.id, unit: null, serial: row.serial, label: item.label + ' — S/N ' + row.serial, qty: 1, price: row.price }); }
+    else if (item) { cart.push({ id: item.id, unit: unit ? unit.id : null, label: unitLabel(item, unit), qty: row.qty, price: row.price }); }
   });
   render();
   scan.focus();
