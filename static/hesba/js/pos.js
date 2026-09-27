@@ -75,9 +75,21 @@
     totals();
   }
 
+  // TAX-001: VAT per line at the item's rate, rounded per line like the server.
+  var ratesNode = document.getElementById('hs-tax-rates');
+  var rates = ratesNode ? JSON.parse(ratesNode.textContent) : null;
+  function lineTax(row) {
+    if (!rates) { return 0; }
+    var net = Math.round(num(row.qty) * num(row.price) * 100) / 100;
+    return Math.round(net * num(rates[String(row.id)]) + 1e-9) / 100;
+  }
+
   function totals() {
     var subtotal = cart.reduce(function (sum, row) { return sum + num(row.qty) * num(row.price); }, 0);
-    var total = Math.max(0, subtotal - num(discount.value));
+    var tax = cart.reduce(function (sum, row) { return sum + lineTax(row); }, 0);
+    var taxCell = form.querySelector('[data-pos-tax]');
+    if (taxCell) { taxCell.textContent = money(tax); }
+    var total = Math.max(0, subtotal - num(discount.value) + tax);
     if (!tenderedTouched) { tendered.value = total ? total.toFixed(2) : ''; }
     var paid = num(tendered.value);
     form.querySelector('[data-pos-subtotal]').textContent = money(subtotal);

@@ -14,6 +14,6 @@
   <div class="op-notice">{% if lang == 'en' %}Totals and remaining due are calculated and validated on the server when the draft is saved.{% else %}يتم حساب الإجماليات والمتبقي والتحقق منها على الخادم عند حفظ المسودة.{% endif %}</div>
   <div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save_draft }}</button><a class="op-secondary" href="{% url 'purchases:list' %}?lang={{ lang }}">{{ words.back }}</a></div>
 </form>
-{{ item_catalog|json_script:"hs-item-catalog" }}<script src="{% static 'hesba/js/invoice_form.js' %}?v=price-001" defer></script>
+{{ item_catalog|json_script:"hs-item-catalog" }}<script src="{% static 'hesba/js/invoice_form.js' %}?v=tax-001" defer></script>
 {% endblock %}
 

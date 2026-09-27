@@ -42,7 +42,9 @@ def get_profit_summary():
     total_profit = _sum(lines, "line_profit_amount")
     total_sales = total_cost + total_profit
     returns = SalesReturn.objects.filter(status=SalesReturnStatus.POSTED)
-    total_sales -= _sum(returns, "total_amount")
+    from taxes.services import returns_tax
+
+    total_sales -= _sum(returns, "total_amount") - returns_tax(returns)  # HG-015
     total_cost -= _sum(returns, "cost_amount")
     total_profit = total_sales - total_cost
     return {

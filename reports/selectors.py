@@ -329,7 +329,7 @@ def profit_report(date_from=None, date_to=None):
 
     returns = SalesReturnLine.objects.filter(
         sales_return__status=SalesReturnStatus.POSTED
-    ).select_related("sales_return__source_invoice", "source_line__item")
+    ).select_related("sales_return__source_invoice", "source_line__item", "tax")
     if date_from:
         returns = returns.filter(sales_return__return_date__gte=date_from)
     if date_to:
@@ -345,13 +345,19 @@ def profit_report(date_from=None, date_to=None):
                 "item_id": line.source_line.item_id,
                 "item_label": line.source_line.item.search_label,
                 "quantity": -line.quantity,
-                "sales_amount": -line.amount,
+                # HG-015: the refund includes tax given back; revenue does not.
+                "sales_amount": -(line.amount - _return_line_tax(line)),
                 "cost_amount": -line.cost_amount,
-                "profit_amount": -(line.amount - line.cost_amount),
+                "profit_amount": -(line.amount - _return_line_tax(line) - line.cost_amount),
                 "is_return": True,
             }
         )
     return sorted(rows, key=lambda row: (row["invoice_date"], row["invoice_number"]), reverse=True)
+
+
+def _return_line_tax(line):
+    tax = getattr(line, "tax", None) if hasattr(line, "tax") else None
+    return tax.tax_amount if tax is not None else Decimal("0")
 
 
 def profit_totals(date_from=None, date_to=None):
@@ -364,10 +370,15 @@ def profit_totals(date_from=None, date_to=None):
     )
     totals["sales"] = totals["profit"] + totals["cost"]
     returns = SalesReturn.objects.filter(status=SalesReturnStatus.POSTED)
-    returns = _date_filter(returns, "return_date", date_from, date_to).aggregate(
+    returns = _date_filter(returns, "return_date", date_from, date_to)
+    from taxes.services import returns_tax
+
+    returned_tax = returns_tax(returns)  # HG-015: refunds include tax; revenue does not
+    returns = returns.aggregate(
         sales=_zero_sum("total_amount", None, _MONEY),
         cost=_zero_sum("cost_amount", None, _MONEY),
     )
+    returns["sales"] -= returned_tax
     totals["sales"] -= returns["sales"]
     totals["cost"] -= returns["cost"]
     totals["profit"] = totals["sales"] - totals["cost"]

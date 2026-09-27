@@ -19,6 +19,7 @@ from django.utils import timezone
 
 from barcode.services import item_catalog
 from pricing.services import price_book
+from taxes.services import compute_lines, create_sales_draft_with_tax, rates_by_item, vat_enabled
 from cashboxes.models import Cashbox
 from config.money import money_round
 from master_data.models import Customer, Item, Location
@@ -187,7 +188,9 @@ def checkout(*, lines, customer, location, cashbox, discount, tendered, user):
     discount = money_round(discount or 0)
     if discount < 0 or discount > subtotal:
         raise ValidationError("err_discount")
-    total = money_round(subtotal - discount)
+    # TAX-001: VAT per line from item rates; the invoice discount comes after tax.
+    tax = money_round(sum((line_tax for *_, line_tax in compute_lines(lines)), Decimal("0"))) if vat_enabled() else Decimal("0.00")
+    total = money_round(subtotal - discount + tax)
     tendered = money_round(tendered or 0)
     paid_now = min(tendered, total)
     if paid_now < total and customer.customer_code == WALK_IN_CODE:
@@ -197,7 +200,7 @@ def checkout(*, lines, customer, location, cashbox, discount, tendered, user):
     for _attempt in range(5):
         try:
             with transaction.atomic():
-                invoice = create_sales_draft(
+                invoice = create_sales_draft_with_tax(
                     {
                         "invoice_number": _next_number(today),
                         "invoice_date": today,
@@ -304,6 +307,7 @@ def pos(request):
             "section": "sales",
             "catalog": item_catalog(sale_prices=True),
             "price_book": price_book(),
+            "tax_rates": rates_by_item(),
             "customers": Customer.objects.filter(active=True).order_by("name"),
             "walk_in": customer_default,
             "locations": locations,

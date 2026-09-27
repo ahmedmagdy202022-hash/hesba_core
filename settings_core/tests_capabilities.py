@@ -54,7 +54,7 @@ class SetupChoiceTests(TestCase):
 
     def test_setup_applies_the_preset_when_nothing_is_sent(self):
         complete_setup(self.profile(), "commercial", "wholesale", "")
-        self.assertEqual(caps.enabled_capabilities(), ("barcode", "price_lists"))
+        self.assertEqual(caps.enabled_capabilities(), ("barcode", "price_lists", "vat"))
         self.assertFalse(FeatureFlag.objects.get(code="capability.pos").enabled)
         self.assertFalse(FeatureFlag.objects.filter(code="capability.units").exists())  # not shipped yet
 

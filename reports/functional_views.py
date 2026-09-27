@@ -8,6 +8,7 @@ from expenses.services import expense_total
 from master_data.models import Customer, Location, Supplier
 from permissions.decorators import require_permission
 from permissions.services import user_has_permission
+from settings_core.capabilities import capability_enabled
 
 from .selectors import (
     cashbox_report,
@@ -34,6 +35,7 @@ REPORT_CARDS = (
     ("reports:suppliers", "reports.view_supplier_report", "Supplier Report", "تقرير الموردين", "Balances and supplier statement entries", "أرصدة وحركات كشف حساب الموردين"),
     ("reports:cashboxes", "reports.view_cashbox_report", "Cashbox Report", "تقرير الخزن", "Opening balance and real cash movements", "الرصيد الافتتاحي وحركات النقد الفعلية"),
     ("reports:aging", "reports.view_customer_report", "Aging and collections", "أعمار الديون والتحصيل", "Who owes what and since when, with WhatsApp reminders", "مين عليه فلوس ومن إمتى، مع تذكير واتساب"),
+    ("taxes:report", "reports.view_sales_report", "Sales VAT", "ضريبة المبيعات", "VAT charged on sales net of returns, by rate", "ضريبة القيمة المضافة على المبيعات بعد المرتجعات، لكل نسبة"),
     ("reports:profit", "reports.view_profit_report", "Profit Report", "تقرير الأرباح", "Sales - Cost of Goods Sold", "المبيعات - تكلفة البضاعة المباعة"),
 )
 
@@ -64,6 +66,7 @@ def report_hub(request):
     cards = [
         {"url_name": url_name, "allowed": user_has_permission(request.user, permission), "title": title_en if lang == "en" else title_ar, "title_alt": title_ar if lang == "en" else title_en, "description": description_en if lang == "en" else description_ar}
         for url_name, permission, title_en, title_ar, description_en, description_ar in REPORT_CARDS
+        if url_name != "taxes:report" or capability_enabled("vat")  # TAX-001
     ]
     return render(request, "reports/functional_hub.html", _context(request, cards=cards, checkpoint_code="096_FOUNDATION_READ_ONLY_REPORT_HUB"))
 

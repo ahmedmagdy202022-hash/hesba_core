@@ -1,0 +1,30 @@
+{% extends "operations/base.html" %}
+{% load l10n %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'master_data:items' %}?lang={{ lang }}">← {% if lang == 'en' %}Items{% else %}الأصناف{% endif %}</a><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div><div class="op-form-actions"><a class="op-secondary" href="{% url 'taxes:report' %}?lang={{ lang }}">{{ words.report }}</a></div></section>
+{% if not can_manage %}<p class="op-message op-message-info">{{ words.view_only }}</p>{% endif %}
+<h2>{{ words.rates }}</h2>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.code }}</th><th>{{ words.name }}</th><th>{{ words.rate }}</th><th>{{ words.eta }}</th><th>{{ words.default }}</th><th>{{ words.active }}</th>{% if can_manage %}<th></th>{% endif %}</tr></thead><tbody>
+{% for r in rates %}<tr>
+<td>{% if can_manage %}<input form="rate-{{ r.pk }}" name="code" value="{{ r.code }}" maxlength="20" aria-label="{{ words.code }}">{% else %}<bdi>{{ r.code }}</bdi>{% endif %}</td>
+<td>{% if can_manage %}<input form="rate-{{ r.pk }}" name="name_ar" value="{{ r.name_ar }}" maxlength="120" aria-label="{{ words.name }}">{% else %}{{ r.name_ar }}{% endif %}</td>
+<td>{% if can_manage %}<input form="rate-{{ r.pk }}" class="stk-count" name="rate" value="{{ r.rate|unlocalize }}" inputmode="decimal" aria-label="{{ words.rate }}">{% else %}{{ r.rate|unlocalize }}%{% endif %}</td>
+<td>{% if can_manage %}<input form="rate-{{ r.pk }}" class="stk-count" name="eta_subtype" value="{{ r.eta_subtype }}" maxlength="8" aria-label="{{ words.eta }}">{% else %}<bdi>{{ r.eta_type }} {{ r.eta_subtype }}</bdi>{% endif %}</td>
+<td>{% if can_manage %}<input form="rate-{{ r.pk }}" type="checkbox" name="is_default" value="1"{% if r.is_default %} checked{% endif %} aria-label="{{ words.default }}">{% elif r.is_default %}✓{% endif %}</td>
+<td>{% if can_manage %}<select form="rate-{{ r.pk }}" name="active" aria-label="{{ words.active }}"><option value="1"{% if r.active %} selected{% endif %}>✓</option><option value="0"{% if not r.active %} selected{% endif %}>✗</option></select>{% elif r.active %}✓{% endif %}</td>
+{% if can_manage %}<td><button form="rate-{{ r.pk }}" class="op-secondary" type="submit">{{ words.save }}</button></td>{% endif %}</tr>{% endfor %}
+</tbody></table></div>
+{% if can_manage %}{% for r in rates %}<form id="rate-{{ r.pk }}" method="post" hidden>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="rate"><input type="hidden" name="rate_id" value="{{ r.pk }}"></form>{% endfor %}{% endif %}
+{% if can_manage %}<form class="op-form" method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="rate"><div class="op-form-grid"><div class="op-field"><label for="nr-code">{{ words.code }}</label><input id="nr-code" name="code" maxlength="20" required placeholder="VAT5"></div><div class="op-field"><label for="nr-name">{{ words.name }}</label><input id="nr-name" name="name_ar" maxlength="120" required></div><div class="op-field"><label for="nr-rate">{{ words.rate }}</label><input id="nr-rate" name="rate" inputmode="decimal" required></div><div class="op-field"><label for="nr-eta">{{ words.eta }}</label><input id="nr-eta" name="eta_subtype" maxlength="8" placeholder="V009"></div></div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.add }}</button></div></form>{% endif %}
+
+<h2>{{ words.items }}</h2>
+<form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><input type="search" name="q" value="{{ q }}" placeholder="{{ words.search }}" aria-label="{{ words.search }}"><button type="submit">{{ words.filter }}</button></form>
+<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="items"><input type="hidden" name="q" value="{{ q }}"><input type="hidden" name="page" value="{{ page.number }}">
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.item }}</th><th>{{ words.rate }}</th></tr></thead><tbody>
+{% for row in rows %}<tr><td class="op-cell-text"><bdi>{{ row.item.item_code }}</bdi><br><small class="op-muted">{{ row.item.item_name }}</small></td><td>{% if can_manage %}<input type="hidden" name="shown_{{ row.item.pk }}" value="1"><select name="rate_{{ row.item.pk }}" aria-label="{{ words.rate }} {{ row.item.item_code }}"><option value="">{{ words.use_default }}{% if default %} — {{ default.label }}{% endif %}</option>{% for r in active_rates %}<option value="{{ r.pk }}"{% if r.pk == row.rate_id %} selected{% endif %}>{{ r.label }}</option>{% endfor %}</select>{% else %}{% for r in active_rates %}{% if r.pk == row.rate_id %}{{ r.label }}{% endif %}{% endfor %}{% if not row.rate_id %}{{ words.use_default }}{% endif %}{% endif %}</td></tr>
+{% empty %}<tr><td colspan="2">—</td></tr>{% endfor %}
+</tbody></table></div>
+{% if page.has_other_pages %}<p class="op-form-actions">{% if page.has_previous %}<a class="op-secondary" href="?lang={{ lang }}&q={{ q|urlencode }}&page={{ page.previous_page_number }}">{{ words.prev }}</a>{% endif %}<span class="op-muted">{{ page.number }} / {{ page.paginator.num_pages }}</span>{% if page.has_next %}<a class="op-secondary" href="?lang={{ lang }}&q={{ q|urlencode }}&page={{ page.next_page_number }}">{{ words.next }}</a>{% endif %}</p>{% endif %}
+{% if can_manage and rows %}<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div>{% endif %}
+</form>
+{% endblock %}
