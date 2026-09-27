@@ -5,9 +5,14 @@
     <a class="md-back-link" href="{% url 'master_data:hub' %}?lang={{ lang }}">← {{ words.back }}</a>
     <h1>{{ entity_title }}</h1>
   </div>
+  <div class="md-title-actions">
+  {% if entity == 'items' and perms_print_labels %}
+    <a class="md-secondary" href="{% url 'barcode:labels' %}?lang={{ lang }}">{% if lang == 'en' %}Barcode labels{% else %}ملصقات الباركود{% endif %}</a>
+  {% endif %}
   {% if can_manage %}
     <a class="md-primary" href="{% url 'master_data:create' entity=entity %}?lang={{ lang }}">+ {{ words.new }}</a>
   {% endif %}
+  </div>
 </section>
 
 <form class="md-filters" method="get">

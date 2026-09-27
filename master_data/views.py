@@ -374,6 +374,7 @@ def entity_list(request, entity):
             "query": query,
             "status_filter": status,
             "can_manage": can_manage,
+            "perms_print_labels": user_has_permission(request.user, "barcode.print_labels"),
             "page_title": f"{config['title'][lang]} - {'Hesba' if lang == 'en' else 'حِسبة'}",
         },
     )
