@@ -20,6 +20,7 @@ from django.utils import timezone
 from barcode.services import item_catalog
 from pricing.services import price_book
 from taxes.services import compute_lines, create_sales_draft_with_tax, rates_by_item, vat_enabled
+from serials.services import attach_sale_serials, pos_serial_catalog, prepare_sale_serials
 from units.services import units_catalog
 from cashboxes.models import Cashbox
 from config.money import money_round
@@ -74,6 +75,8 @@ WORDS = {
         "err_walk_in_credit": "البيع الآجل محتاج عميل باسمه؛ اختار العميل أو خد المبلغ كامل.",
         "err_discount": "الخصم أكبر من المجموع.",
         "err_setup": "لازم يكون فيه مخزن بيع وخزنة نشطين قبل البيع.",
+        "scan_serial": "الصنف ده بيتباع بالسيريال؛ امسح السيريال / IMEI بتاع القطعة: ",
+        "serial_twice": "السيريال ده في السلة بالفعل: ",
         "not_found": "مفيش صنف بالكود ده: ",
         "added": "اتضاف: ",
         "back": "فواتير البيع",
@@ -117,6 +120,8 @@ WORDS = {
         "err_walk_in_credit": "A credit sale needs a named customer; pick the customer or take the full amount.",
         "err_discount": "The discount is larger than the subtotal.",
         "err_setup": "A selling location and an active cashbox are needed before selling.",
+        "scan_serial": "This item is sold by serial; scan the unit's serial / IMEI: ",
+        "serial_twice": "That serial is already in the cart: ",
         "not_found": "No item with this code: ",
         "added": "Added: ",
         "back": "Sales invoices",
@@ -162,7 +167,7 @@ def parse_cart(post):
         price = _decimal(post.get(f"price_{index}"), 2)
         if quantity is None or price is None or quantity <= 0 or price < 0:
             raise ValidationError("err_line")
-        rows.append((item_id, quantity, price, post.get(f"unit_{index}", "")))
+        rows.append((item_id, quantity, price, post.get(f"unit_{index}", ""), post.get(f"serial_{index}", "")))
     if not rows:
         raise ValidationError("err_empty")
     items = {str(item.pk): item for item in Item.objects.filter(pk__in=[row[0] for row in rows if row[0].isdigit()], active=True)}
@@ -172,7 +177,7 @@ def parse_cart(post):
     unit_ids = [row[3] for row in rows if row[3].isdigit()]
     units = {str(unit.pk): unit for unit in ItemUnit.objects.filter(pk__in=unit_ids, active=True)} if unit_ids and units_enabled() else {}
     lines = []
-    for item_id, quantity, price, unit_id in rows:
+    for item_id, quantity, price, unit_id, serial in rows:
         item = items.get(item_id)
         if item is None:
             raise ValidationError("err_item")
@@ -184,6 +189,8 @@ def parse_cart(post):
             if unit.item_id != item.pk:
                 raise ValidationError("err_item")
             line = convert_line(dict(line, unit=unit), "unit_sale_price")  # UNITS-001: stored in base units
+        if serial:
+            line["serials"] = serial  # SERIAL-001: checked against stock by prepare_sale_serials
         lines.append(line)
     return lines
 
@@ -230,6 +237,7 @@ def checkout(*, lines, customer, location, cashbox, discount, tendered, user):
                     lines,
                     user,
                 )
+                attach_sale_serials(invoice, lines)  # SERIAL-001
                 post_sales_invoice(invoice.pk, user)
             invoice.refresh_from_db()
             return invoice, change
@@ -263,6 +271,9 @@ def _clean_cart(raw):
             row_back = {"id": int(item_id), "qty": str(qty), "price": str(price)}
             if unit_id.isdigit():
                 row_back["unit"] = int(unit_id)
+            serial = str(row.get("serial", "") or "")[:80]
+            if serial:
+                row_back["serial"] = serial
             clean.append(row_back)
     return clean[:MAX_LINES]
 
@@ -290,7 +301,7 @@ def pos(request):
     if request.method == "POST":
         selected = {key: request.POST.get(key, "") for key in selected}
         try:
-            lines = parse_cart(request.POST)
+            lines = prepare_sale_serials(parse_cart(request.POST), lang)
             location = locations.filter(pk=selected["location"]).first() if selected["location"].isdigit() else None
             cashbox = cashboxes.filter(pk=selected["cashbox"]).first() if selected["cashbox"].isdigit() else None
             if location is None or cashbox is None:
@@ -328,6 +339,7 @@ def pos(request):
             "price_book": price_book(),
             "tax_rates": rates_by_item(),
             "units": units_catalog(),
+            "serial_catalog": pos_serial_catalog(),
             "customers": Customer.objects.filter(active=True).order_by("name"),
             "walk_in": customer_default,
             "locations": locations,
@@ -336,6 +348,6 @@ def pos(request):
             "cart_back": cart_back,
             "summary": today_summary(request.user),
             "last_invoice": SalesInvoice.objects.filter(pk=last, created_by=request.user).first() if last.isdigit() else None,
-            "js_words": json.dumps({key: words[key] for key in ("not_found", "added", "remove", "empty_cart")}, ensure_ascii=False),
+            "js_words": json.dumps({key: words[key] for key in ("not_found", "added", "remove", "empty_cart", "scan_serial", "serial_twice")}, ensure_ascii=False),
         },
     )

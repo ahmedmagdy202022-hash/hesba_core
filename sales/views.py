@@ -1,12 +1,14 @@
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 
 from barcode.services import item_catalog, scan_words
 from pricing.services import price_book
 from taxes.services import create_sales_draft_with_tax, rates_by_item, vat_enabled
+from serials.services import attach_sale_serials, check_invoice_serials, prepare_sale_serials
 from units.services import convert_lines, units_catalog
 from permissions.decorators import require_permission
 from permissions.services import user_has_permission
@@ -132,7 +134,10 @@ def invoice_create(request):
             line_data = [row.cleaned_data for row in line_formset.forms if row.cleaned_data.get("item") is not None]
             try:
                 line_data = convert_lines(line_data, "unit_sale_price", lang)  # UNITS-001
-                invoice = create_sales_draft_with_tax(form.cleaned_data, line_data, request.user)
+                line_data = prepare_sale_serials(line_data, lang)  # SERIAL-001
+                with transaction.atomic():
+                    invoice = create_sales_draft_with_tax(form.cleaned_data, line_data, request.user)
+                    attach_sale_serials(invoice, line_data)
             except ValidationError as exc:
                 form.add_error(None, exc)
             else:
@@ -172,7 +177,9 @@ def invoice_post(request, pk):
         return redirect("sales:detail", pk=pk)
     lang = _lang(request)
     try:
-        post_sales_invoice(pk, request.user)
+        with transaction.atomic():
+            check_invoice_serials(get_object_or_404(SalesInvoice, pk=pk), lang)  # SERIAL-001: still in stock?
+            post_sales_invoice(pk, request.user)
     except ValidationError as exc:
         messages.error(request, "; ".join(exc.messages))
     else:
