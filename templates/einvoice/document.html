@@ -1,0 +1,6 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'sales:detail' invoice.pk %}?lang={{ lang }}">← {{ words.back_invoice }}</a><h1>{{ words.doc }} · <bdi>{{ invoice.invoice_number }}</bdi></h1><p>{{ words.intro }}</p></div><div class="op-form-actions"><a class="op-primary" href="?lang={{ lang }}&format=json">{{ words.download }}</a></div></section>
+{% if problems %}<div class="op-message" role="alert" data-einvoice-problems><strong>{{ words.problems }}</strong><ul>{% for problem in problems %}<li>{{ problem }}</li>{% endfor %}</ul></div>{% else %}<p class="op-message op-message-success" data-einvoice-ready>✓ {{ words.ready }}</p>{% endif %}
+<pre class="op-table-wrap" dir="ltr" style="padding:16px;white-space:pre-wrap;font-size:12.5px" data-einvoice-json>{{ document_text }}</pre>
+{% endblock %}

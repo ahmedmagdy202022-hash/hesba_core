@@ -1,0 +1,17 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'einvoice:issuer' %}?lang={{ lang }}">← {{ words.title }}</a><h1>{{ words.items }}</h1><p>{{ words.items_hint }}</p></div>{% include "einvoice/_nav.html" %}</section>
+{% if not can_manage %}<p class="op-message op-message-info">{{ words.view_only }}</p>{% endif %}
+<form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><input type="search" name="q" value="{{ q }}" placeholder="{{ words.search }}" aria-label="{{ words.search }}"><button type="submit">{{ words.filter }}</button></form>
+<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="q" value="{{ q }}"><input type="hidden" name="page" value="{{ page.number }}">
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.item }}</th><th>{{ words.code_type }}</th><th>{{ words.code }}</th><th>{{ words.unit }}</th></tr></thead><tbody>
+{% for row in rows %}<tr><td class="op-cell-text"><bdi>{{ row.item.item_code }}</bdi><br><small class="op-muted">{{ row.item.item_name }}</small></td>
+<td>{% if can_manage %}<input type="hidden" name="shown_{{ row.item.pk }}" value="1"><select name="type_{{ row.item.pk }}" aria-label="{{ words.code_type }}">{% for value, label in code_types %}<option value="{{ value }}"{% if row.code.code_type == value %} selected{% endif %}>{{ value }}</option>{% endfor %}</select>{% else %}{{ row.code.code_type|default:"—" }}{% endif %}</td>
+<td>{% if can_manage %}<input name="code_{{ row.item.pk }}" value="{{ row.code.code|default:'' }}" maxlength="100" aria-label="{{ words.code }} {{ row.item.item_code }}" placeholder="{% if row.item.barcode %}{{ row.item.barcode }}{% endif %}">{% else %}<bdi>{{ row.code.code|default:"—" }}</bdi>{% endif %}</td>
+<td>{% if can_manage %}<input class="stk-count" name="unit_{{ row.item.pk }}" value="{{ row.code.unit_type|default:'EA' }}" maxlength="10" aria-label="{{ words.unit }}">{% else %}{{ row.code.unit_type|default:"EA" }}{% endif %}</td></tr>
+{% empty %}<tr><td colspan="4">—</td></tr>{% endfor %}
+</tbody></table></div>
+{% if page.has_other_pages %}<p class="op-form-actions">{% if page.has_previous %}<a class="op-secondary" href="?lang={{ lang }}&q={{ q|urlencode }}&page={{ page.previous_page_number }}">{{ words.prev }}</a>{% endif %}<span class="op-muted">{{ page.number }} / {{ page.paginator.num_pages }}</span>{% if page.has_next %}<a class="op-secondary" href="?lang={{ lang }}&q={{ q|urlencode }}&page={{ page.next_page_number }}">{{ words.next }}</a>{% endif %}</p>{% endif %}
+{% if can_manage and rows %}<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div>{% endif %}
+</form>
+{% endblock %}

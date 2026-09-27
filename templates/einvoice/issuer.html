@@ -1,0 +1,11 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'settings_core:overview' %}?lang={{ lang }}">← {% if lang == 'en' %}Settings{% else %}الإعدادات{% endif %}</a><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div>{% include "einvoice/_nav.html" %}</section>
+{% if not can_manage %}<p class="op-message op-message-info">{{ words.view_only }}</p>{% endif %}
+<h2>{{ words.issuer }}</h2>
+<p>{{ words.tax_number }}: <strong><bdi>{{ company.tax_number|default:"—" }}</bdi></strong> · <a href="{% url 'settings_core:company' %}?lang={{ lang }}">{{ words.edit_company }}</a></p>
+<form class="op-form" method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+<div class="op-form-grid">{% for field in fields %}<div class="op-field"><label for="f-{{ forloop.counter }}">{{ field.label }}</label><input id="f-{{ forloop.counter }}" name="{{ field.key }}" value="{{ field.value }}"{% if not can_manage %} disabled{% endif %}>{% if field.key == 'einvoice.person_id_threshold' %}<small class="op-muted">{{ words.threshold_hint }}</small>{% endif %}</div>{% endfor %}</div>
+{% if can_manage %}<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div>{% endif %}
+</form>
+{% endblock %}

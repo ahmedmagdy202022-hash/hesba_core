@@ -284,6 +284,28 @@ Status: RESOLVED (approved by Ahmed, 2026-09-27: "the right thing, done the best
   - a sale of 5 costs 250 with profit 250, output 70 − input 70 = 0 payable;
   - the purchase form.
 
+## HG-017 — E-invoice data as new tables (EINV-001)
+
+Status: RESOLVED (phase 2 of e-invoicing approved by Ahmed, 2026-09-27)
+
+- New `einvoice` app with **two new tables only**:
+  - `ReceiverProfile`: a customer's receiver type (B/P/F), tax or national ID, and structured address;
+  - `ItemCode`: an item's EGS or GS1 code and unit type.
+- `Customer` and `Item` are not altered.
+- The issuer's details (activity code, branch, address, person-ID threshold) are stored as `SystemSetting` rows. The tax number is the existing `company.tax_number`.
+- **No posting, stock, ledger or report logic is touched.** `einvoice.services.build_document` only *reads* a posted invoice and its `SalesLineTax` rows. It builds the ETA document (type `i`, version 1.0) and lists the problems that would get it rejected. It also re-checks that the document's `totalAmount` equals `SalesInvoice.total_amount`.
+- Mapping, checked against sdk.invoicing.eta.gov.eg (Sept 2026):
+  - salesTotal = qty × price; discount = the line discount; netTotal = salesTotal − discount;
+  - T1 = netTotal × rate (V009 = general sales, V003 = exempt); line total = netTotal + T1;
+  - Hesba's invoice discount → `extraDiscountAmount`;
+  - totalAmount = Σ line totals − extraDiscountAmount.
+- Not included:
+  - signing (CAdES-BES) and submission (phase 3, which needs the owner's portal credentials and e-signature);
+  - credit notes for returns;
+  - non-EGP invoices.
+- The person-buyer threshold defaults to EGP 50,000 and is editable. The owner should confirm the current value with the authority.
+- Verification: `einvoice/tests.py` (8 tests), including exact line and total figures (262.30), the problems listed in Arabic and English, the person threshold, draft and currency checks, the screens with audit, and permissions and the capability gate.
+
 ## Final gate verification
 
 - Full Django suite: 794 tests passed in 576.477 seconds.

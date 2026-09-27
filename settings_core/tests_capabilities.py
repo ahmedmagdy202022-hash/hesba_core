@@ -36,7 +36,7 @@ class CatalogTests(SimpleTestCase):
         self.assertEqual(caps.default_selection("commercial", "pharmacy"), ("pos", "barcode"))
         self.assertEqual(caps.parse("pos, variants, bogus,barcode"), ("pos", "barcode"))
         self.assertTrue(caps.is_available("pos"))
-        self.assertFalse(caps.is_available("e_invoice"))
+        self.assertFalse(caps.is_available("units"))
 
     def test_every_capability_is_described_in_both_languages(self):
         for slug, entry in caps.CAPABILITIES.items():
@@ -54,7 +54,7 @@ class SetupChoiceTests(TestCase):
 
     def test_setup_applies_the_preset_when_nothing_is_sent(self):
         complete_setup(self.profile(), "commercial", "wholesale", "")
-        self.assertEqual(caps.enabled_capabilities(), ("barcode", "price_lists", "vat"))
+        self.assertEqual(caps.enabled_capabilities(), ("barcode", "price_lists", "vat", "e_invoice"))
         self.assertFalse(FeatureFlag.objects.get(code="capability.pos").enabled)
         self.assertFalse(FeatureFlag.objects.filter(code="capability.units").exists())  # not shipped yet
 
@@ -128,8 +128,8 @@ class CapabilitySettingsTests(TestCase):
         self.assertFalse(caps.capability_enabled("barcode"))
         log = AuditLog.objects.filter(action="disable_capability").latest("pk")
         self.assertEqual((log.actor, log.object_id), (user, "capability.barcode"))
-        self.client.post(CAPS, {"capability": "e_invoice", "enabled": "1"})
-        self.assertFalse(FeatureFlag.objects.filter(code="capability.e_invoice").exists())
+        self.client.post(CAPS, {"capability": "units", "enabled": "1"})
+        self.assertFalse(FeatureFlag.objects.filter(code="capability.units").exists())
 
     def test_only_settings_managers_switch(self):
         sign_in(self, RoleCode.CASHIER, "caps_cashier")

@@ -1,0 +1,17 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'einvoice:issuer' %}?lang={{ lang }}">← {{ words.title }}</a><h1>{{ words.customers }}</h1><p>{{ words.customers_hint }}</p></div>{% include "einvoice/_nav.html" %}</section>
+{% if not can_manage %}<p class="op-message op-message-info">{{ words.view_only }}</p>{% endif %}
+<form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><input type="search" name="q" value="{{ q }}" placeholder="{{ words.search }}" aria-label="{{ words.search }}"><button type="submit">{{ words.filter }}</button></form>
+<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="q" value="{{ q }}"><input type="hidden" name="page" value="{{ page.number }}">
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.customer }}</th><th>{{ words.type }}</th><th>{{ words.tax_id }}</th><th>{{ words.governate }}</th><th>{{ words.city }}</th><th>{{ words.street }}</th><th>{{ words.building }}</th></tr></thead><tbody>
+{% for row in rows %}{% with c=row.customer p=row.profile %}<tr><td class="op-cell-text"><strong>{{ c.name }}</strong><br><small class="op-muted"><bdi>{{ c.customer_code }}</bdi></small></td>
+{% if can_manage %}<td><input type="hidden" name="shown_{{ c.pk }}" value="1"><select name="type_{{ c.pk }}" aria-label="{{ words.type }}">{% for value, label in receiver_types %}<option value="{{ value }}"{% if p.receiver_type == value or not p and value == 'P' %} selected{% endif %}>{{ value }}</option>{% endfor %}</select></td>
+<td><input name="tax_id_{{ c.pk }}" value="{{ p.tax_id|default:'' }}" maxlength="30" aria-label="{{ words.tax_id }}"></td><td><input name="governate_{{ c.pk }}" value="{{ p.governate|default:'' }}" aria-label="{{ words.governate }}"></td><td><input name="region_city_{{ c.pk }}" value="{{ p.region_city|default:'' }}" aria-label="{{ words.city }}"></td><td><input name="street_{{ c.pk }}" value="{{ p.street|default:'' }}" aria-label="{{ words.street }}"></td><td><input class="stk-count" name="building_number_{{ c.pk }}" value="{{ p.building_number|default:'' }}" aria-label="{{ words.building }}"></td>
+{% else %}<td>{{ p.receiver_type|default:"P" }}</td><td><bdi>{{ p.tax_id|default:"—" }}</bdi></td><td>{{ p.governate|default:"—" }}</td><td>{{ p.region_city|default:"—" }}</td><td>{{ p.street|default:"—" }}</td><td>{{ p.building_number|default:"—" }}</td>{% endif %}</tr>{% endwith %}
+{% empty %}<tr><td colspan="7">—</td></tr>{% endfor %}
+</tbody></table></div>
+{% if page.has_other_pages %}<p class="op-form-actions">{% if page.has_previous %}<a class="op-secondary" href="?lang={{ lang }}&q={{ q|urlencode }}&page={{ page.previous_page_number }}">{{ words.prev }}</a>{% endif %}<span class="op-muted">{{ page.number }} / {{ page.paginator.num_pages }}</span>{% if page.has_next %}<a class="op-secondary" href="?lang={{ lang }}&q={{ q|urlencode }}&page={{ page.next_page_number }}">{{ words.next }}</a>{% endif %}</p>{% endif %}
+{% if can_manage and rows %}<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div>{% endif %}
+</form>
+{% endblock %}
