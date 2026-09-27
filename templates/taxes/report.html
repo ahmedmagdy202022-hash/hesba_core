@@ -3,10 +3,16 @@
 {% block operation_content %}
 <section class="op-title-row"><div><a class="op-back" href="{% url 'report_hub' %}?lang={{ lang }}">← {% if lang == 'en' %}Reports{% else %}التقارير{% endif %}</a><h1>{{ words.report }}</h1><p>{{ words.report_intro }}</p></div></section>
 <form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><label class="op-inline-label">{{ words.from }}<input type="date" name="date_from" value="{{ date_from }}"></label><label class="op-inline-label">{{ words.to }}<input type="date" name="date_to" value="{{ date_to }}"></label><button type="submit">{{ words.show }}</button></form>
-<section class="op-summary-grid"><article><small>{{ words.net }}</small><strong data-vat-net>{{ report.net_tax|money }}</strong></article></section>
+<section class="op-summary-grid"><article><small>{{ words.output_title }}</small><strong data-vat-net>{{ report.net_tax|money }}</strong></article><article><small>{{ words.input_title }}</small><strong data-vat-input>{{ incoming.net_tax|money }}</strong></article><article><small>{% if payable < 0 %}{{ words.credit }}{% else %}{{ words.payable }}{% endif %}</small><strong data-vat-payable><bdi dir="ltr">{{ payable|money }}</bdi></strong></article></section>
+<h2>{{ words.output_title }}</h2>
 <div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.rate }}</th><th>{{ words.taxable }}</th><th>{{ words.tax }}</th><th>{{ words.returned }}</th><th>{{ words.net }}</th></tr></thead><tbody>
 {% for row in report.rows %}<tr><td><bdi dir="ltr">{{ row.rate|unlocalize }}%</bdi></td><td>{{ row.taxable|money }}</td><td>{{ row.tax|money }}</td><td>{{ row.returned_tax|money }}</td><td><strong>{{ row.net_tax|money }}</strong></td></tr>
 {% empty %}<tr><td colspan="5">{{ words.empty }}</td></tr>{% endfor %}
 {% if report.untracked_header_tax %}<tr><td colspan="4">{{ words.untracked }}</td><td>{{ report.untracked_header_tax|money }}</td></tr>{% endif %}
+</tbody></table></div>
+<h2>{{ words.input_title }}</h2>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.rate }}</th><th>{% if lang == 'en' %}Taxable purchases{% else %}قيمة المشتريات الخاضعة{% endif %}</th><th>{% if lang == 'en' %}Tax paid{% else %}الضريبة المدفوعة{% endif %}</th><th>{{ words.returned }}</th><th>{{ words.net }}</th></tr></thead><tbody>
+{% for row in incoming.rows %}<tr><td><bdi dir="ltr">{{ row.rate|unlocalize }}%</bdi></td><td>{{ row.taxable|money }}</td><td>{{ row.tax|money }}</td><td>{{ row.returned_tax|money }}</td><td><strong>{{ row.net_tax|money }}</strong></td></tr>
+{% empty %}<tr><td colspan="5">{{ words.empty }}</td></tr>{% endfor %}
 </tbody></table></div>
 {% endblock %}

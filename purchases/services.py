@@ -112,11 +112,23 @@ def create_purchase_draft(header, lines, user=None):
 
 
 def _purchase_line_allocations(invoice, lines):
-    weights = [line.line_total_amount for line in lines]
+    """What each line cost the shop: its share of the total, minus recoverable VAT.
+
+    HG-016: a line drafted with VAT carries a PurchaseLineTax row; that input
+    tax is recovered from the tax authority, so it is weighed into the line's
+    share and then taken out of its cost. Without tax rows (no VAT, or a tax
+    typed on the header by a shop that is not registered) this is exactly the
+    previous allocation.
+    """
+
+    from taxes.services import purchase_line_taxes
+
+    taxes = purchase_line_taxes(lines)
+    weights = [line.line_total_amount + taxes[line.pk] for line in lines]
     if sum(weights, Decimal("0")) <= 0:
         weights = [Decimal("1") for _ in lines]
     return {
-        line.pk: amount
+        line.pk: amount - taxes[line.pk]
         for line, amount in zip(lines, allocate_proportionally(invoice.total_amount, weights))
     }
 
@@ -386,8 +398,10 @@ def _require_purchase_return_permission(user):
         raise PermissionDenied("Purchase returns require purchases.return_purchase.")
 
 
-def _purchase_source_allocations(invoice, source_lines):
-    weights = [line.line_total_amount for line in source_lines]
+def _purchase_source_allocations(invoice, source_lines, taxes=None):
+    # HG-016: weighted like posting, by what each line charged including tax.
+    taxes = taxes or {}
+    weights = [line.line_total_amount + taxes.get(line.pk, Decimal("0")) for line in source_lines]
     if sum(weights, Decimal("0")) <= 0:
         weights = [Decimal("1") for _ in source_lines]
     allocations = allocate_proportionally(invoice.total_amount, weights)
@@ -395,8 +409,11 @@ def _purchase_source_allocations(invoice, source_lines):
 
 
 def _prepare_purchase_return_lines(invoice, source_lines, requested_lines):
+    from taxes.services import purchase_line_taxes, purchase_return_tax_share
+
     by_id = {line.pk: line for line in source_lines}
-    allocations = _purchase_source_allocations(invoice, source_lines)
+    taxes = purchase_line_taxes(source_lines)
+    allocations = _purchase_source_allocations(invoice, source_lines, taxes)
     prepared = []
     seen = set()
     for requested in requested_lines:
@@ -432,6 +449,8 @@ def _prepare_purchase_return_lines(invoice, source_lines, requested_lines):
                 "quantity": quantity,
                 "amount": amount,
                 "unit_cost": _purchase_line_unit_cost(line),
+                # HG-016: the refund above includes this much recoverable tax.
+                "tax_amount": purchase_return_tax_share(line, taxes[line.pk], quantity, cumulative_quantity),
             }
         )
     if not prepared:
@@ -526,11 +545,17 @@ def create_purchase_return(
     purchase_return.full_clean()
     purchase_return.save()
 
+    from taxes.services import record_purchase_return_taxes
+
     affected_items = {}
+    returned_taxes = []
     for row in prepared:
+        row = dict(row)
+        tax_amount = row.pop("tax_amount", Decimal("0"))
         return_line = PurchaseReturnLine(purchase_return=purchase_return, **row)
         return_line.full_clean()
         return_line.save()
+        returned_taxes.append((return_line, tax_amount))
         item = row["source_line"].item
         if not item.is_stock_tracked:
             continue
@@ -571,6 +596,7 @@ def create_purchase_return(
             description=f"Purchase return {purchase_return.return_number}",
             created_by=user,
         )
+    record_purchase_return_taxes(returned_taxes)
     _recalculate_affected_items(affected_items)
     AuditLog.objects.create(
         event_type=AuditEventType.CREATE,

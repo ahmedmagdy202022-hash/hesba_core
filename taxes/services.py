@@ -24,7 +24,7 @@ from django.db.models import Sum
 from config.money import allocate_proportionally, money_round
 from settings_core.capabilities import capability_enabled
 
-from .models import ItemTaxRate, SalesLineTax, SalesReturnLineTax, TaxRate
+from .models import ItemTaxRate, PurchaseLineTax, PurchaseReturnLineTax, SalesLineTax, SalesReturnLineTax, TaxRate
 
 
 ZERO = Decimal("0.00")
@@ -59,7 +59,7 @@ def rates_by_item():
     return {str(pk): str(links[pk]) if pk in links else default_value for pk in Item.objects.filter(active=True).values_list("pk", flat=True)}
 
 
-def compute_lines(lines):
+def compute_lines(lines, price_key="unit_sale_price"):
     """Per requested line: (tax_rate, rate, taxable, tax), in order."""
 
     rates = {}
@@ -70,7 +70,7 @@ def compute_lines(lines):
             rates[item.pk] = rate_for(item)
         tax_rate = rates[item.pk]
         rate = tax_rate.rate if tax_rate is not None else ZERO
-        taxable = money_round(data["quantity"] * data["unit_sale_price"] - (data.get("line_discount_amount") or ZERO))
+        taxable = money_round(data["quantity"] * data[price_key] - (data.get("line_discount_amount") or ZERO))
         result.append((tax_rate, rate, taxable, money_round(taxable * rate / HUNDRED)))
     return result
 
@@ -173,3 +173,91 @@ def vat_report(date_from, date_to):
         "untracked_header_tax": untracked_net,
         "net_tax": money_round(sum((row["net_tax"] for row in result), ZERO) + untracked_net),
     }
+
+
+# --- TAX-002: purchases (input VAT) -------------------------------------------
+#
+# A shop charging VAT recovers the VAT its suppliers charge, so that tax is not
+# part of what the goods cost it. Purchase lines drafted with VAT on carry a
+# PurchaseLineTax row; posting takes that tax out of the stock cost. A tax typed
+# by hand on a purchase header (no rows) stays in cost exactly as before: that
+# is the right treatment for a shop that is not VAT-registered.
+
+
+@transaction.atomic
+def create_purchase_draft_with_tax(header, lines, user=None):
+    """``create_purchase_draft`` with input VAT filled in when the shop charges VAT."""
+
+    from purchases.services import create_purchase_draft
+
+    if not vat_enabled():
+        return create_purchase_draft(header, lines, user)
+    taxes = compute_lines(lines, price_key="unit_purchase_price")
+    header = dict(header, tax_amount=money_round(sum((tax for *_, tax in taxes), ZERO)))
+    invoice = create_purchase_draft(header, lines, user)
+    for line, (tax_rate, rate, taxable, tax) in zip(invoice.lines.order_by("line_number"), taxes):
+        PurchaseLineTax.objects.create(line=line, tax_rate=tax_rate, rate=rate, taxable_amount=taxable, tax_amount=tax)
+    return invoice
+
+
+def purchase_line_taxes(lines):
+    """{line.pk: recoverable tax}; zero for lines without a tax row."""
+
+    rows = dict(PurchaseLineTax.objects.filter(line__in=lines).values_list("line_id", "tax_amount"))
+    return {line.pk: rows.get(line.pk, ZERO) for line in lines}
+
+
+def purchase_return_tax_share(line, line_tax, quantity, cumulative_quantity):
+    if not line_tax:
+        return ZERO
+    if cumulative_quantity == line.quantity:
+        prior = PurchaseReturnLineTax.objects.filter(
+            return_line__source_line=line, return_line__purchase_return__status="posted"
+        ).aggregate(total=Sum("tax_amount"))["total"] or ZERO
+        return money_round(line_tax - prior)
+    return money_round(line_tax * quantity / line.quantity)
+
+
+def record_purchase_return_taxes(return_lines_with_tax):
+    for return_line, tax in return_lines_with_tax:
+        if tax:
+            PurchaseReturnLineTax.objects.create(return_line=return_line, tax_amount=tax)
+
+
+def input_vat(date_from, date_to):
+    """Recoverable VAT on posted purchases in the window, net of purchase returns, by rate."""
+
+    from purchases.models import PurchaseInvoice, PurchaseReturn
+
+    invoices = PurchaseInvoice.objects.filter(status="posted", invoice_date__gte=date_from, invoice_date__lte=date_to)
+    returns = PurchaseReturn.objects.filter(status="posted", return_date__gte=date_from, return_date__lte=date_to)
+    rows = defaultdict(lambda: {"taxable": ZERO, "tax": ZERO, "returned_taxable": ZERO, "returned_tax": ZERO})
+    for rate, taxable, tax in PurchaseLineTax.objects.filter(line__invoice__in=invoices).values_list("rate", "taxable_amount", "tax_amount"):
+        rows[rate]["taxable"] += taxable
+        rows[rate]["tax"] += tax
+    for rate, tax, line_taxable, line_quantity, quantity in PurchaseReturnLineTax.objects.filter(return_line__purchase_return__in=returns).values_list(
+        "return_line__source_line__tax__rate", "tax_amount", "return_line__source_line__tax__taxable_amount",
+        "return_line__source_line__quantity", "return_line__quantity",
+    ):
+        rows[rate]["returned_tax"] += tax
+        if line_taxable is not None and line_quantity:
+            rows[rate]["returned_taxable"] += money_round(line_taxable * quantity / line_quantity)
+    result = []
+    for rate in sorted((key for key in rows if key is not None), reverse=True):
+        row = rows[rate]
+        result.append({
+            "rate": rate,
+            "taxable": money_round(row["taxable"] - row["returned_taxable"]),
+            "tax": money_round(row["tax"]),
+            "returned_tax": money_round(row["returned_tax"]),
+            "net_tax": money_round(row["tax"] - row["returned_tax"]),
+        })
+    return {"rows": result, "net_tax": money_round(sum((row["net_tax"] for row in result), ZERO))}
+
+
+def vat_return(date_from, date_to):
+    """Output VAT − input VAT for the window: what the shop owes (or can carry forward)."""
+
+    output = vat_report(date_from, date_to)
+    incoming = input_vat(date_from, date_to)
+    return {"output": output, "input": incoming, "payable": money_round(output["net_tax"] - incoming["net_tax"])}

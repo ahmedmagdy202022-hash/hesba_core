@@ -35,7 +35,7 @@ REPORT_CARDS = (
     ("reports:suppliers", "reports.view_supplier_report", "Supplier Report", "تقرير الموردين", "Balances and supplier statement entries", "أرصدة وحركات كشف حساب الموردين"),
     ("reports:cashboxes", "reports.view_cashbox_report", "Cashbox Report", "تقرير الخزن", "Opening balance and real cash movements", "الرصيد الافتتاحي وحركات النقد الفعلية"),
     ("reports:aging", "reports.view_customer_report", "Aging and collections", "أعمار الديون والتحصيل", "Who owes what and since when, with WhatsApp reminders", "مين عليه فلوس ومن إمتى، مع تذكير واتساب"),
-    ("taxes:report", "reports.view_sales_report", "Sales VAT", "ضريبة المبيعات", "VAT charged on sales net of returns, by rate", "ضريبة القيمة المضافة على المبيعات بعد المرتجعات، لكل نسبة"),
+    ("taxes:report", "reports.view_sales_report", "VAT return", "إقرار ضريبة القيمة المضافة", "Sales VAT minus purchase VAT, net of returns", "ضريبة المبيعات ناقص ضريبة المشتريات بعد المرتجعات"),
     ("reports:profit", "reports.view_profit_report", "Profit Report", "تقرير الأرباح", "Sales - Cost of Goods Sold", "المبيعات - تكلفة البضاعة المباعة"),
 )
 

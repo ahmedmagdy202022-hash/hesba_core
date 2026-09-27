@@ -62,3 +62,20 @@ class SalesReturnLineTax(models.Model):
 
     return_line = models.OneToOneField("sales.SalesReturnLine", on_delete=models.CASCADE, related_name="tax")
     tax_amount = models.DecimalField(max_digits=14, decimal_places=2)
+
+
+class PurchaseLineTax(models.Model):
+    """TAX-002: input VAT on one purchase line, recoverable, kept out of cost."""
+
+    line = models.OneToOneField("purchases.PurchaseLine", on_delete=models.CASCADE, related_name="tax")
+    tax_rate = models.ForeignKey(TaxRate, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    rate = models.DecimalField(max_digits=5, decimal_places=2)
+    taxable_amount = models.DecimalField(max_digits=14, decimal_places=2)
+    tax_amount = models.DecimalField(max_digits=14, decimal_places=2)
+
+
+class PurchaseReturnLineTax(models.Model):
+    """TAX-002: the input VAT a purchase return takes back from the supplier."""
+
+    return_line = models.OneToOneField("purchases.PurchaseReturnLine", on_delete=models.CASCADE, related_name="tax")
+    tax_amount = models.DecimalField(max_digits=14, decimal_places=2)
