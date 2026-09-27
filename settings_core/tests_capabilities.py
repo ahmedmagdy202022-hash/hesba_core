@@ -33,7 +33,7 @@ class CatalogTests(SimpleTestCase):
         self.assertEqual(caps.suggested("services", "clinic"), ())
 
     def test_only_shipped_capabilities_are_ticked_or_accepted(self):
-        self.assertEqual(caps.default_selection("commercial", "pharmacy"), ("pos", "barcode", "units"))
+        self.assertEqual(caps.default_selection("commercial", "pharmacy"), ("pos", "barcode", "units", "batches_expiry"))
         self.assertEqual(caps.parse("pos, variants, bogus,barcode"), ("pos", "barcode"))
         self.assertTrue(caps.is_available("pos"))
         self.assertTrue(caps.is_available("units"))
@@ -73,7 +73,7 @@ class ReviewStepTests(TestCase):
         rows = {row["slug"]: row for row in page.context["capability_rows"]}
         self.assertTrue(rows["pos"]["checked"])
         self.assertTrue(rows["batches_expiry"]["suggested"])
-        self.assertFalse(rows["batches_expiry"]["checked"])  # suggested, not shipped yet
+        self.assertTrue(rows["batches_expiry"]["checked"])
         self.assertFalse(rows["variants"]["suggested"])
         self.assertContains(page, "قدرات مقترحة لنشاطك")
         self.assertContains(page, 'value="pos" form="setup-complete-form" checked')
