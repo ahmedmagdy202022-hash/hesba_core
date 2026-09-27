@@ -131,11 +131,12 @@ class EnsurePeriodIsOpenTests(TestCase):
         with self.assertRaises(ValidationError):
             ensure_period_is_open(date(2026, 1, 15))
 
-    def test_a_reopened_period_is_rejected(self):
-        make_period(status=PeriodStatus.REOPENED, reopen_reason="correction")
+    def test_a_reopened_period_takes_corrections(self):
+        # HG-011: reopening (owner-only, with a reason, audited) exists to correct
+        # the period, so it accepts entries until it is closed again.
+        period = make_period(status=PeriodStatus.REOPENED, reopen_reason="correction")
 
-        with self.assertRaises(ValidationError):
-            ensure_period_is_open(date(2026, 1, 15))
+        self.assertEqual(ensure_period_is_open(date(2026, 1, 15)), period)
 
 
 class BuildPeriodSummaryPayloadTests(TestCase):
@@ -280,9 +281,10 @@ class CompletePeriodClosingTests(TestCase):
     def test_an_earlier_runs_summaries_are_not_overwritten(self):
         period = make_period()
         first = complete_period_closing(period.pk)
+        # HG-011: a late invoice goes in by reopening the period first.
+        reopen_period(period.pk, reason="late invoice")
         invoice, _, _, _ = posted_invoice_ready()
         post_sales_invoice(invoice.pk)
-        reopen_period(period.pk, reason="late invoice")
         second = complete_period_closing(period.pk)
 
         def sales_total(run):

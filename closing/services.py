@@ -99,7 +99,9 @@ def ensure_period_is_open(action_date):
     period = get_period_for_date(action_date)
     if period is None:
         period = provision_period_for(action_date)
-    if period.status != PeriodStatus.OPEN:
+    # HG-011: reopening exists to correct a period, so a reopened period takes
+    # entries like an open one until it is closed again.
+    if period.status not in (PeriodStatus.OPEN, PeriodStatus.REOPENED):
         raise ValidationError("Period must be open for posting.")
     return period
 
