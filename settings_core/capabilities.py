@@ -82,7 +82,7 @@ CAPABILITIES = {
         "ar": "البيع بالتقسيط", "en": "Instalment sales",
         "about_ar": "جدول أقساط للعميل، ومواعيد استحقاق، وتذكير بالتحصيل.",
         "about_en": "An instalment schedule per customer, due dates and collection reminders.",
-        "available": False, "paths": (),
+        "available": True, "paths": ("/instalments/",),
     },
     "vat": {
         "ar": "ضريبة القيمة المضافة على الأصناف", "en": "VAT on items",

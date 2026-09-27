@@ -48,6 +48,7 @@ LOCAL_APPS = [
     "batches",
     "variants",
     "serials",
+    "installments",
     "printing",
 ]
 

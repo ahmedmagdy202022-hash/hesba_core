@@ -725,7 +725,7 @@ class SeedDemoBusinessTests(TestCase):
 class _StubShared:
     """Stands in for SharedReads so alert formatting can be asserted directly.
 
-    build_alerts only ever asks these five questions, and driving it with fixed
+    build_alerts only ever asks these six questions, and driving it with fixed
     answers keeps the assertions about the rendered string rather than about
     how a balance came to exist.
     """
@@ -750,6 +750,9 @@ class _StubShared:
 
     def expiring_batches(self, today):
         return {"expired": [], "soon": []}
+
+    def overdue_instalments(self, today):
+        return {"count": 0, "amount": D("0.00"), "plans": 0}
 
 
 class DashboardMoneyPrecisionTests(SimpleTestCase):

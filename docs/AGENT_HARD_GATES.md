@@ -396,6 +396,27 @@ Status: RESOLVED (covered by Ahmed's standing go-ahead of 2026-09-27: «كمّل
   - Serials are not location-bound.
 - Verification: `serials/tests.py` (11 tests). They cover parsing and month arithmetic, purchase pending/posted/void and re-use after cancel, refusals, a form sale with warranty and the detail page, double-sale refusal and cancel restoring stock, the draft-post guard, the POS serial sale and catalog, return back into stock and resale, the screens with audit, permissions and the gate.
 
+## HG-022 — Instalment plans over posted credit sales (INSTAL-001)
+
+Status: RESOLVED (covered by Ahmed's standing go-ahead of 2026-09-27: «كمّل كل اللي ناقص»)
+
+- New `installments` app with **three new tables**:
+  - `InstalmentPlan`: one per posted sales invoice, holding the financed amount (the invoice's `remaining_due`), the count and the first due date;
+  - `Instalment`: the number, the due date and the amount; equal to the piastre, the last one taking the rounding, due monthly;
+  - `InstalmentPayment`: plan ↔ `CustomerPayment`.
+- **The debt is the existing credit sale.** The customer ledger already holds it, and nothing about the invoice, the ledger or aging is changed.
+  - **A collection is an ordinary customer payment** made through the protected `record_customer_payment` service as-is. That service moves the cashbox, lowers the customer's due and writes its own audit; the plan only links it.
+  - Cancelling that payment from the collections screen stops it counting.
+- Settlement is **oldest instalment first**. Linked posted payments, plus the `due_amount` of posted sales returns on the invoice, settle the instalments in date order, and each shows paid / partly paid / overdue / due today / upcoming. A cancelled invoice stops the plan.
+- No interest or instalment mark-up is computed. The shop sells at its instalment price, just as it would type any price on the invoice. Charging interest would change invoice totals and would need its own Hard Gate.
+- Screens and alerts:
+  - the sales detail page links to «تقسيط الباقي» or to the plan;
+  - `/instalments/` lists the plans, with an overdue filter;
+  - the plan page shows the schedule, a collect form (cashbox and date), a WhatsApp reminder for the next instalment, and a cancel button for a plan with no collections;
+  - the dashboard shows an urgent alert with the count and amount of overdue instalments.
+- Permissions: viewing needs `sales.view_sales_invoices`, creating or cancelling a plan needs `sales.create_sales_invoice`, and collecting needs `sales.receive_customer_payment`.
+- Verification: `installments/tests.py` (9 tests). They cover split and month arithmetic, the plan schedule and the one-plan rule, refusals, oldest-first settlement with cash and ledger effects, the over-collection refusal, a cancelled payment no longer counting, full settlement, return credit, the cancelled-invoice stop, the dashboard alert, the plan-cancel rule, the capability switch, the screens with the WhatsApp link, and permissions and the gate.
+
 ## Final gate verification
 
 - Full Django suite: 794 tests passed in 576.477 seconds.

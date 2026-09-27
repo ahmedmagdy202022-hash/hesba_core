@@ -1,0 +1,15 @@
+{% extends "operations/base.html" %}
+{% load hesba_format l10n %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'sales:detail' invoice.pk %}?lang={{ lang }}">← <bdi>{{ invoice.invoice_number }}</bdi></a><h1>{{ words.new }}</h1><p>{{ invoice.customer.name }} · {{ words.remaining }} {{ invoice.remaining_due|money }}</p></div></section>
+<form class="op-form" method="post" data-new-plan>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><div class="op-form-grid">
+<div class="op-field"><label for="i-count">{{ words.count }}</label><input id="i-count" name="count" type="number" min="1" max="60" value="{{ count }}" required></div>
+<div class="op-field"><label for="i-first">{{ words.first_due }}</label><input id="i-first" name="first_due_date" type="date" value="{{ default_first|date:'Y-m-d' }}" required></div>
+<div class="op-field"><label for="i-notes">{{ words.notes }}</label><input id="i-notes" name="notes" maxlength="255"></div>
+<div class="op-field"><span class="op-muted">{{ words.preview }}</span><strong data-plan-preview data-total="{{ invoice.remaining_due|unlocalize }}">{{ preview|money }}</strong></div>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.create }}</button></div></form>
+<script>
+(function(){var count=document.getElementById('i-count'),out=document.querySelector('[data-plan-preview]');var total=parseFloat(out.getAttribute('data-total'))||0;
+count.addEventListener('input',function(){var n=parseInt(count.value,10);if(n>0){out.textContent=(Math.floor(total/n*100)/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}});})();
+</script>
+{% endblock %}
