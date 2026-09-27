@@ -43,6 +43,7 @@ LOCAL_APPS = [
     "expenses",
     "pricing",
     "taxes",
+    "einvoice",
     "printing",
 ]
 

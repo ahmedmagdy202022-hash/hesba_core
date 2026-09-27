@@ -43,6 +43,7 @@ urlpatterns = [
     path("barcode/", include("barcode.urls")),
     path("pricing/", include("pricing.urls")),
     path("taxes/", include("taxes.urls")),
+    path("einvoice/", include("einvoice.urls")),
     path("imports/", include("imports.urls")),
     path("closing/", include("closing.urls")),
     path("profile/", include("accounts.urls")),

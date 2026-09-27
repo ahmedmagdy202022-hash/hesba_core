@@ -94,9 +94,9 @@ CAPABILITIES = {
     },
     "e_invoice": {
         "ar": "الفاتورة الإلكترونية (مصلحة الضرائب)", "en": "E-invoicing (Egyptian Tax Authority)",
-        "about_ar": "ضريبة على مستوى الصنف، وإرسال الفواتير لمنظومة الفاتورة والإيصال الإلكتروني.",
-        "about_en": "Item-level tax, and sending invoices and receipts to the ETA e-invoice / e-receipt system.",
-        "available": False, "paths": (),
+        "about_ar": "بيانات الشركة والعملاء وأكواد الأصناف، وملف كل فاتورة بصيغة المنظومة مع فحص الناقص. التوقيع والإرسال مرحلة جاية.",
+        "about_en": "Company, customer and item-code data, and each invoice's document in the portal format with a check of what is missing. Signing and sending come next.",
+        "available": True, "paths": ("/einvoice/",),
     },
     "fixed_assets": {
         "ar": "الأصول الثابتة والإهلاك", "en": "Fixed assets & depreciation",
