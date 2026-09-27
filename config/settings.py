@@ -48,6 +48,8 @@ INSTALLED_APPS = DJANGO_APPS + LOCAL_APPS
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # OPS-001: serves collected static files in production without a separate web server.
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -123,6 +125,30 @@ STATIC_URL = "/static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / config("STATIC_ROOT", default="staticfiles")
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# OPS-001: hashed, compressed static files once DEBUG is off (run collectstatic
+# on deploy). Development and the test suite keep the plain storage.
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
+        if DEBUG
+        else "whitenoise.storage.CompressedManifestStaticFilesStorage"
+    },
+}
+
+# OPS-001: nightly backups (manage.py backup_data) land here; keep the last N.
+BACKUP_DIR = Path(config("BACKUP_DIR", default=str(BASE_DIR / "backups")))
+BACKUP_KEEP = config("BACKUP_KEEP", default=14, cast=int)
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    # The level sits on the handler: records propagated up from "django.*"
+    # skip the root logger's own level check.
+    "handlers": {"console": {"class": "logging.StreamHandler", "level": config("LOG_LEVEL", default="ERROR" if DEBUG else "WARNING")}},
+    "root": {"handlers": ["console"], "level": "DEBUG"},
+}
 
 
 LOGIN_URL = "/login/"

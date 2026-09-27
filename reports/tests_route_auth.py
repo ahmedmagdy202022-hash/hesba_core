@@ -18,6 +18,8 @@ PUBLIC_ROUTE_NAMES = frozenset(
         # POST-only and CSRF-protected; signing out exposes nothing. Gating it
         # sent a signed-out visitor to /login/?next=/logout/ and then to a 405.
         "logout",
+        # OPS-001 liveness probe: answers {"status": "ok"} and nothing else.
+        "healthz",
     }
 )
 

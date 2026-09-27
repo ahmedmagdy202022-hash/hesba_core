@@ -5,6 +5,8 @@ from django.contrib.auth.views import LoginView, LogoutView
 from django.urls import include, path
 from django.views.generic import TemplateView
 
+from config.health import healthz
+
 from reports.dashboard_views import dashboard
 from reports.status_views import status_counts_report
 from reports.functional_views import report_hub
@@ -14,6 +16,7 @@ from settings_core.setup_views import after_login, root_redirect, setup_complete
 
 urlpatterns = [
     path("", root_redirect, name="root_redirect"),
+    path("healthz/", healthz, name="healthz"),
     path("login/", LoginView.as_view(template_name="registration/login.html", next_page="/start/"), name="login"),
     # Logout must not itself require a login: a signed-out user posting from a
     # stale page was bounced to /login/?next=/logout/ and, after signing back

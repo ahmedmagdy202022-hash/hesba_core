@@ -219,3 +219,7 @@ __marimo__/
 
 # Claude Code
 .claude/
+
+# OPS-001 backups
+backups/
+staticfiles/
