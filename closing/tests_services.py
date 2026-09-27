@@ -109,9 +109,16 @@ class GetPeriodForDateTests(TestCase):
 
 
 class EnsurePeriodIsOpenTests(TestCase):
-    def test_missing_period_is_rejected(self):
+    def test_missing_period_opens_its_calendar_month(self):
+        # HG-010: before, a missing period refused every cash entry on a fresh install.
+        period = ensure_period_is_open(date(2026, 1, 15))
+
+        self.assertEqual((period.start_date, period.end_date), (date(2026, 1, 1), date(2026, 1, 31)))
+        self.assertEqual((period.period_code, period.status, period.frequency), ("2026-01", "open", "monthly"))
+
+    def test_missing_period_in_a_future_month_is_rejected(self):
         with self.assertRaises(ValidationError):
-            ensure_period_is_open(date(2026, 1, 15))
+            ensure_period_is_open(date(2099, 1, 15))
 
     def test_an_open_period_is_returned(self):
         period = make_period()
@@ -405,8 +412,9 @@ class CreatePostClosingAdjustmentTests(TestCase):
             self.create(related_closed_period=self.open_period)
 
     def test_an_adjustment_date_in_no_period_is_rejected(self):
+        # A future month is never opened automatically (HG-010).
         with self.assertRaises(ValidationError):
-            self.create(adjustment_date=date(2027, 6, 1))
+            self.create(adjustment_date=date(2099, 6, 1))
 
     def test_an_adjustment_date_in_a_closed_period_is_rejected(self):
         with self.assertRaises(ValidationError):
