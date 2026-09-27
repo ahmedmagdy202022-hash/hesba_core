@@ -21,6 +21,31 @@
     if (item.code) { byCode[item.code.toLowerCase()] = byCode[item.code.toLowerCase()] || item; }
   });
 
+  // PRICE-001: the customer's price list, when the shop uses price lists.
+  var bookNode = document.getElementById('hs-price-book');
+  var book = bookNode ? JSON.parse(bookNode.textContent) : null;
+  var customerSelect = form.querySelector('select[name="customer"]');
+  var listNote = document.querySelector('[data-price-list-note]');
+
+  function customerList() {
+    if (!book || !customerSelect) { return null; }
+    var listId = book.customers[customerSelect.value];
+    return listId ? book.lists[listId] : null;
+  }
+
+  function priceFor(item) {
+    var list = customerList();
+    var own = list && list.prices[String(item.id)];
+    return own !== undefined && own !== null ? own : item.price;
+  }
+
+  function showList() {
+    if (!listNote) { return; }
+    var list = customerList();
+    listNote.hidden = !list;
+    listNote.textContent = list ? (listNote.getAttribute('data-prefix') || '') + (document.documentElement.lang === 'en' ? list.name_en : list.name_ar) : '';
+  }
+
   var total = form.querySelector('input[name="lines-TOTAL_FORMS"]');
   var max = form.querySelector('input[name="lines-MAX_NUM_FORMS"]');
   var linesBox = form.querySelector('.op-lines');
@@ -59,7 +84,10 @@
     var select = field(index, 'item');
     var price = field(index, priceField);
     var item = select && byId[select.value];
-    if (item && price && item.price !== undefined && (force || !price.value)) { price.value = item.price; }
+    if (item && price && item.price !== undefined && (force || !price.value)) {
+      price.value = priceFor(item);
+      price.setAttribute('data-auto', price.value);
+    }
   }
 
   function recalc() {
@@ -119,6 +147,14 @@
   }
 
   form.addEventListener('change', function (event) {
+    if (event.target === customerSelect) {
+      // Re-price only lines still on an automatic price; typed prices stay.
+      for (var i = 0; i < count(); i += 1) {
+        var price = field(i, priceField);
+        if (price && (!price.value || price.value === price.getAttribute('data-auto'))) { fillPrice(i, true); }
+      }
+      showList();
+    }
     var match = /^lines-(\d+)-item$/.exec(event.target.name || '');
     if (match) { fillPrice(parseInt(match[1], 10), false); }
     recalc();
@@ -126,5 +162,6 @@
   form.addEventListener('input', recalc);
   var addButton = form.querySelector('[data-add-line]');
   if (addButton) { addButton.addEventListener('click', function () { if (addLine() < 0) { say(words.full || 'No more lines.', true); } }); }
+  showList();
   recalc();
 })();

@@ -194,6 +194,22 @@ Status: RESOLVED (part of the commercial-readiness mandate, 2026-09-27)
   - template download, with an unknown name or path traversal returning 404;
   - owner only.
 
+## HG-014 — Price lists as new tables (PRICE-001)
+
+Status: RESOLVED (commercial-capabilities plan approved by Ahmed, 2026-09-27)
+
+- Why a schema change: wholesale and special-customer prices need somewhere to live. `Item` has one `default_sale_price` and `Customer` has no price field.
+- Decision: a new `pricing` app with **three new tables only**:
+  - `PriceList`: code, Arabic/English name, `adjust_percent` applied to the retail price, active;
+  - `PriceListItem`: an explicit price per item per list, unique;
+  - `CustomerPriceList`: one list per customer.
+  `Item` and `Customer` are not altered. Removing the app leaves every other table as it was.
+- What a price list changes: **only the price the sales invoice form and the POS suggest**. The cashier can still type any price, and posting reads the invoice line exactly as before. Protected sales posting, cost, stock, ledgers and report calculations are untouched.
+- Resolution: the customer's active list names the item → that price; otherwise retail × (100 + adjust%) ÷ 100, rounded to 2 decimal places; otherwise retail. When the `price_lists` capability is off, it is always retail.
+- Permissions: viewing uses `master_data.view_master_data` and editing uses `master_data.manage_items`. No new permission rows.
+- Every change to a list, its prices or its customers is written to the audit log.
+- Verification: `pricing/tests.py`.
+
 ## Final gate verification
 
 - Full Django suite: 794 tests passed in 576.477 seconds.

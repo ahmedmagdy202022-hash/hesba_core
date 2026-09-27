@@ -16,6 +16,6 @@
   <section class="pos-today"><h2>{{ words.today }}</h2><dl><div><dt>{{ words.count }}</dt><dd>{{ summary.count }}</dd></div><div><dt>{{ words.sold_total }}</dt><dd>{{ summary.total|money }}</dd></div><div><dt>{{ words.cash_in }}</dt><dd>{{ summary.cash|money }}</dd></div><div><dt>{{ words.credit_total }}</dt><dd>{{ summary.credit|money }}</dd></div></dl></section>
 </aside>
 </form>
-{{ catalog|json_script:"hs-item-catalog" }}{{ cart_back|json_script:"pos-cart-back" }}
-<script src="{% static 'hesba/js/pos.js' %}?v=pos-001" defer></script>
+{% if price_book %}{{ price_book|json_script:"hs-price-book" }}{% endif %}{{ catalog|json_script:"hs-item-catalog" }}{{ cart_back|json_script:"pos-cart-back" }}
+<script src="{% static 'hesba/js/pos.js' %}?v=price-001-pos-001" defer></script>
 {% endblock %}

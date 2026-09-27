@@ -54,9 +54,9 @@ class SetupChoiceTests(TestCase):
 
     def test_setup_applies_the_preset_when_nothing_is_sent(self):
         complete_setup(self.profile(), "commercial", "wholesale", "")
-        self.assertEqual(caps.enabled_capabilities(), ("barcode",))
+        self.assertEqual(caps.enabled_capabilities(), ("barcode", "price_lists"))
         self.assertFalse(FeatureFlag.objects.get(code="capability.pos").enabled)
-        self.assertFalse(FeatureFlag.objects.filter(code="capability.price_lists").exists())  # not shipped yet
+        self.assertFalse(FeatureFlag.objects.filter(code="capability.units").exists())  # not shipped yet
 
     def test_setup_stores_what_the_owner_ticked(self):
         complete_setup(self.profile(), "commercial", "retail", "", capabilities_raw="barcode")
@@ -118,7 +118,7 @@ class CapabilitySettingsTests(TestCase):
         sign_in(self)
         page = self.client.get(CAPS)
         states = {row["slug"]: row["state"] for row in page.context["rows"]}
-        self.assertEqual((states["pos"], states["barcode"], states["price_lists"]), ("on", "on", "soon"))
+        self.assertEqual((states["pos"], states["barcode"], states["price_lists"], states["units"]), ("on", "on", "off", "soon"))
         self.assertContains(page, "مقترح لنشاطك")
         self.assertContains(self.client.get(reverse("settings_core:overview")), CAPS)
 
