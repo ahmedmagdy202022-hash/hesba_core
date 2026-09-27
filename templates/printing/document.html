@@ -90,6 +90,7 @@
 <script>
 document.querySelector('[data-print]').addEventListener('click', function(){ window.print(); });
 if (new URLSearchParams(window.location.search).get('autoprint') === '1') { window.addEventListener('load', function(){ window.print(); }); }
+{% if return_after_print %}window.addEventListener('afterprint', function(){ window.location.href = '{{ back_url|escapejs }}'; });{% endif %}
 </script>
 </body>
 </html>

@@ -1,5 +1,6 @@
 from django.urls import path
 
+from . import pos as pos_views
 from . import views
 
 
@@ -8,6 +9,7 @@ app_name = "sales"
 urlpatterns = [
     path("", views.invoice_list, name="list"),
     path("new/", views.invoice_create, name="create"),
+    path("pos/", pos_views.pos, name="pos"),
     path("collections/", views.payment_list, name="payments"),
     path("collections/new/", views.payment_create, name="payment_create"),
     path("collections/<int:pk>/cancel/", views.payment_cancel, name="payment_cancel"),

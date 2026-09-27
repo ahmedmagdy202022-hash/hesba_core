@@ -52,3 +52,45 @@ body a:focus-visible,body button:focus-visible,body input:focus-visible,body sel
 .op-scan output{flex-basis:100%;font-size:13px;color:var(--op-muted)}
 .op-scan output.is-error{color:var(--op-danger)}
 .op-live-total{display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding:14px 16px;border-radius:var(--hs-radius-md);background:var(--op-navy);color:var(--hs-surface);font-size:18px;font-weight:700}
+/* POS-001: cashier screen. Cart on one side, money on the other; one column on phones. */
+.pos{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:18px;align-items:start}
+@media(max-width:1280px){.pos{grid-template-columns:minmax(0,1fr) 320px;gap:14px}.pos-table input{width:72px}.pos-qty input{width:56px}}
+.pos-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:12px}
+.pos-head h1{margin:0;color:var(--op-navy);font-size:26px}
+.pos-scan{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;margin-bottom:14px;padding:14px;border:1px solid var(--hs-teal);border-radius:var(--hs-radius-md);background:var(--hs-teal-wash)}
+.pos-scan label{grid-column:1 / -1;font-weight:700;color:var(--op-navy)}
+.pos-scan input{min-width:0;min-height:52px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-sm);padding:0 12px;font:inherit;font-size:17px;background:var(--hs-surface)}
+.pos-scan output{grid-column:1 / -1;font-size:13px;color:var(--op-muted);min-height:1.2em}
+.pos-scan output.is-error{color:var(--op-danger)}
+.pos-table{min-width:0}
+.pos-table td{white-space:normal;vertical-align:middle}
+.pos-table input{width:96px;min-height:40px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-sm);padding:0 8px;font:inherit;text-align:center}
+.pos-qty{display:flex;align-items:center;gap:6px}
+.pos-qty input{width:72px}
+.pos-step,.pos-remove{min-width:40px;min-height:40px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-sm);background:var(--hs-surface);color:var(--op-navy);font:inherit;font-size:18px;font-weight:700;cursor:pointer}
+.pos-remove{color:var(--op-danger)}
+.pos-line-total{font-weight:700;white-space:nowrap}
+.pos-side{position:sticky;top:16px;display:flex;flex-direction:column;gap:12px;padding:16px;border:1px solid var(--op-border);border-radius:var(--hs-radius-lg);background:var(--hs-surface)}
+.pos-two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.pos-two select{min-width:0}
+.pos-totals{margin:0;display:grid;gap:6px}
+.pos-totals div{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.pos-totals div[hidden]{display:none}
+.pos-totals dt{color:var(--op-muted)}
+.pos-totals dd{margin:0;font-weight:700;font-variant-numeric:tabular-nums}
+.pos-totals input{width:130px;min-height:44px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-sm);padding:0 10px;font:inherit;font-size:17px;text-align:end}
+.pos-grand{padding:10px 12px;border-radius:var(--hs-radius-md);background:var(--op-navy)}
+.pos-grand dt,.pos-grand dd{color:var(--hs-surface);font-size:22px}
+.pos-change dd{color:var(--hs-success);font-size:20px}
+.pos-credit dd{color:var(--op-danger)}
+.pos-actions{display:grid;gap:8px}
+.pos-pay{min-height:56px;font-size:18px}
+.pos-today{border-top:1px solid var(--op-border);padding-top:10px}
+.pos-today h2{margin:0 0 6px;font-size:14px;color:var(--op-navy)}
+.pos-today dl{margin:0;display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.pos-today dl div{display:flex;flex-direction:column;padding:8px;border-radius:var(--hs-radius-sm);background:var(--hs-ground)}
+.pos-today dt{font-size:12px;color:var(--op-muted)}
+.pos-today dd{margin:0;font-weight:700}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media(max-width:900px){.pos{grid-template-columns:minmax(0,1fr)}.pos-side{position:static}}
+@media(max-width:700px){.pos-scan,.pos-two{grid-template-columns:minmax(0,1fr)}.pos-scan input{min-width:0}}
