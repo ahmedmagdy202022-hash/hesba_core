@@ -21,6 +21,7 @@ from django.shortcuts import render
 from permissions.services import user_has_permission
 
 from . import setup_catalog as catalog
+from .capabilities import closed_capability, label as capability_label
 from .models import ClientProfile
 from .setup_services import enabled_modules
 
@@ -85,10 +86,10 @@ def closed_module(path):
     return None if slug in enabled_modules() else slug
 
 
-def module_disabled_response(request, slug):
+def module_disabled_response(request, slug, capability=False):
     lang = "en" if request.GET.get("lang") == "en" else "ar"
     words = WORDS[lang]
-    module = catalog.module_label(slug, lang)
+    module = capability_label(slug, lang) if capability else catalog.module_label(slug, lang)
     context = {
         "lang": lang,
         "dir": "ltr" if lang == "en" else "rtl",
@@ -114,6 +115,10 @@ class ModuleGateMiddleware:
         if not getattr(request, "user", None) or not request.user.is_authenticated:
             return None
         slug = closed_module(request.path)
-        if slug is None:
-            return None
-        return module_disabled_response(request, slug)
+        if slug is not None:
+            return module_disabled_response(request, slug)
+        # CAP-001: a switched-off capability closes its own screens the same way.
+        capability = closed_capability(request.path)
+        if capability is not None:
+            return module_disabled_response(request, capability, capability=True)
+        return None

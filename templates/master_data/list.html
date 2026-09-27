@@ -1,4 +1,5 @@
 {% extends "master_data/base.html" %}
+{% load hesba_capabilities %}
 {% block master_content %}
 <section class="md-title-row">
   <div>
@@ -7,7 +8,7 @@
   </div>
   <div class="md-title-actions">
   {% if entity == 'items' and perms_print_labels %}
-    <a class="md-secondary" href="{% url 'barcode:labels' %}?lang={{ lang }}">{% if lang == 'en' %}Barcode labels{% else %}ملصقات الباركود{% endif %}</a>
+    {% capability_on 'barcode' as barcode_on %}{% if barcode_on %}<a class="md-secondary" href="{% url 'barcode:labels' %}?lang={{ lang }}">{% if lang == 'en' %}Barcode labels{% else %}ملصقات الباركود{% endif %}</a>{% endif %}
   {% endif %}
   {% if can_manage %}
     <a class="md-primary" href="{% url 'master_data:create' entity=entity %}?lang={{ lang }}">+ {{ words.new }}</a>

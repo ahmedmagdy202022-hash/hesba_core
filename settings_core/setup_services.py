@@ -66,8 +66,11 @@ def _write_module_flags(chosen):
 
 
 @transaction.atomic
-def complete_setup(profile, activity, sub_activity, modules_raw, user=None):
+def complete_setup(profile, activity, sub_activity, modules_raw, user=None, capabilities_raw=None):
     """Record the setup decision and mark the installation ready.
+
+    ``capabilities_raw`` is the review step's comma-separated capability list
+    (CAP-001); ``None`` applies the sub-activity's suggestions.
 
     ``modules_raw`` is the wizard's comma-separated list. It is normalised through
     the catalog, so unknown slugs are dropped and required modules are added back
@@ -100,6 +103,9 @@ def complete_setup(profile, activity, sub_activity, modules_raw, user=None):
     profile.save()
 
     _write_module_flags(chosen)
+    from .capabilities import apply_setup_choice
+
+    chosen_capabilities = apply_setup_choice(activity, sub_activity, capabilities_raw)
 
     # HG-010: the installation is ready to record from today, so its first
     # accounting period is open before the first entry.
@@ -120,6 +126,7 @@ def complete_setup(profile, activity, sub_activity, modules_raw, user=None):
             "sub_activity_slug": sub_activity,
             "activity_type": profile.activity_type,
             "modules": list(chosen),
+            "capabilities": list(chosen_capabilities),
             "setup_completed_at": profile.setup_completed_at.isoformat(),
         },
         reason="Initial setup completed from the setup wizard.",
