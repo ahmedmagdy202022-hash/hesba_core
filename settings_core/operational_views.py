@@ -9,6 +9,7 @@ from permissions.services import user_has_permission
 
 from .models import ClientProfile, FeatureFlag, SystemSetting
 from .setup_services import ModuleChangeRefused, module_settings_rows, set_module_enabled
+from . import capabilities as caps
 from . import setup_catalog as catalog
 from .currency import CurrencyChangeRefused, change_company_currency, currency_choices, has_financial_records
 
@@ -20,14 +21,18 @@ STRINGS = {
            "turn_on": "تفعيل", "turn_off": "قفل", "view_only": "تقدر تشوف الموديولات بس؛ التغيير لصاحب الحساب.",
            "setup_first": "كمّل الإعداد الأول قبل ما تغيّر الموديولات.", "saved_on": "اتفعّل موديول «{module}».", "saved_off": "اتقفل موديول «{module}». بياناته محفوظة.", "refused": "التغيير ده مش مسموح: الموديول أساسي لنشاطك أو لسه مش متاح.",
            "currency": "العملة", "currency_lead": "حسبة بتستخدم عملة واحدة للشركة، وبتظهر جنب كل مبلغ.", "currency_field": "عملة الشركة", "save": "حفظ",
-           "currency_locked": "العملة مقفولة لأن فيه مبالغ متسجلة بيها بالفعل (فواتير أو حركات خزنة أو أرصدة افتتاحية). حسبة مابتحوّلش المبالغ بين العملات، فتغييرها دلوقتي هيغيّر معنى الأرقام.", "currency_saved": "العملة اتغيرت لـ {code}.", "no_profile": "لسه مفيش بيانات شركة. كمّل الإعداد الأول."},
+           "currency_locked": "العملة مقفولة لأن فيه مبالغ متسجلة بيها بالفعل (فواتير أو حركات خزنة أو أرصدة افتتاحية). حسبة مابتحوّلش المبالغ بين العملات، فتغييرها دلوقتي هيغيّر معنى الأرقام.", "currency_saved": "العملة اتغيرت لـ {code}.", "no_profile": "لسه مفيش بيانات شركة. كمّل الإعداد الأول.",
+           "capabilities": "قدرات النشاط", "capabilities_lead": "طرق شغل بيحتاجها بعض الأنشطة بس. اللي عليه «مقترح» مناسب لنشاطك، وتقدر تشغّل أو تقفل أي حاجة في أي وقت من غير ما بيانات تتمسح.",
+           "suggested": "مقترح لنشاطك", "cap_saved_on": "اتفعّلت «{capability}».", "cap_saved_off": "اتقفلت «{capability}». بياناتها محفوظة.", "cap_refused": "التغيير ده مش مسموح: القدرة لسه مش متاحة."},
     "en": {"page_title": "Settings", "dashboard": "Dashboard", "language": "العربية", "settings": "Operational settings", "roles": "Roles and permissions", "back": "Back to settings", "hidden": "Sensitive value hidden",
            "modules": "Modules", "modules_lead": "Switch any module on or off. Switching off only hides the module and closes its screens; its data is kept as it is.",
            "state_on": "On", "state_off": "Off", "state_required": "Required for your activity", "state_soon": "Coming soon",
            "turn_on": "Switch on", "turn_off": "Switch off", "view_only": "You can view modules; changing them is for the account owner.",
            "setup_first": "Finish setup before changing modules.", "saved_on": "The “{module}” module is on.", "saved_off": "The “{module}” module is off. Its data is kept.", "refused": "That change is not allowed: the module is required for your activity or not available yet.",
            "currency": "Currency", "currency_lead": "Hesba uses one currency for the company, shown beside every amount.", "currency_field": "Company currency", "save": "Save",
-           "currency_locked": "The currency is locked because amounts are already recorded in it (invoices, cash movements or opening balances). Hesba does not convert amounts between currencies, so changing it now would change what the figures mean.", "currency_saved": "The currency is now {code}.", "no_profile": "There is no company profile yet. Finish setup first."},
+           "currency_locked": "The currency is locked because amounts are already recorded in it (invoices, cash movements or opening balances). Hesba does not convert amounts between currencies, so changing it now would change what the figures mean.", "currency_saved": "The currency is now {code}.", "no_profile": "There is no company profile yet. Finish setup first.",
+           "capabilities": "Business capabilities", "capabilities_lead": "Ways of working that only some businesses need. Those marked “Suggested” suit your activity; switch anything on or off at any time without losing data.",
+           "suggested": "Suggested for you", "cap_saved_on": "“{capability}” is on.", "cap_saved_off": "“{capability}” is off. Its data is kept.", "cap_refused": "That change is not allowed: the capability is not available yet."},
 }
 
 
@@ -105,6 +110,40 @@ def module_settings(request):
         _context(
             request,
             rows=module_settings_rows(profile, lang) if profile is not None else [],
+            setup_complete=profile is not None and profile.setup_is_complete,
+            can_manage=can_manage,
+        ),
+    )
+
+
+@require_permission("settings.view_settings")
+def capability_settings(request):
+    """CAP-001: switch business capabilities on and off after setup."""
+
+    profile = ClientProfile.get_active()
+    lang = _lang(request)
+    words = STRINGS[lang]
+    can_manage = user_has_permission(request.user, "settings.manage_settings")
+    if request.method == "POST":
+        if not can_manage:
+            raise PermissionDenied("Changing capabilities needs settings.manage_settings.")
+        slug = request.POST.get("capability", "")
+        enabled = request.POST.get("enabled") == "1"
+        try:
+            changed = caps.set_capability_enabled(profile, slug, enabled, user=request.user)
+        except caps.CapabilityChangeRefused:
+            messages.error(request, words["setup_first"] if profile is None or not profile.setup_is_complete else words["cap_refused"])
+        else:
+            if changed:
+                key = "cap_saved_on" if enabled else "cap_saved_off"
+                messages.success(request, words[key].format(capability=caps.label(slug, lang)))
+        return redirect(f"{reverse('settings_core:capabilities')}?lang={lang}")
+    return render(
+        request,
+        "settings_core/capabilities.html",
+        _context(
+            request,
+            rows=caps.settings_rows(profile, lang),
             setup_complete=profile is not None and profile.setup_is_complete,
             can_manage=can_manage,
         ),

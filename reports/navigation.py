@@ -9,12 +9,13 @@ enforces its own permission.
 from django.urls import reverse
 
 from permissions.services import user_has_permission
+from settings_core.capabilities import capability_enabled
 
 
 NAV_ITEMS = (
     {"key": "dashboard", "ar": "لوحة القيادة", "en": "Dashboard", "url_name": "dashboard_snapshot", "module": None},
     {"key": "operations", "ar": "عمليات البيع", "en": "Sales operations", "url_name": "sales:list", "module": "sales_operations", "permission": "sales.view_sales_invoices"},
-    {"key": "pos", "ar": "الكاشير", "en": "Point of sale", "url_name": "sales:pos", "module": "sales_operations", "permission": "sales.create_sales_invoice"},
+    {"key": "pos", "ar": "الكاشير", "en": "Point of sale", "url_name": "sales:pos", "module": "sales_operations", "capability": "pos", "permission": "sales.create_sales_invoice"},
     {"key": "purchases", "ar": "المشتريات", "en": "Purchases", "url_name": "purchases:list", "module": "purchases", "permission": "purchases.view_purchase_invoices"},
     {"key": "inventory", "ar": "المخزون", "en": "Inventory", "url_name": "inventory:stock", "module": "inventory", "permission": "inventory.view_stock"},
     {"key": "customers", "ar": "العملاء", "en": "Customers", "url_name": "master_data:customers", "module": "customers"},
@@ -80,6 +81,8 @@ def nav_items(user, lang, modules):
     items = []
     for item in NAV_ITEMS:
         if item["module"] is not None and item["module"] not in modules:
+            continue
+        if item.get("capability") and not capability_enabled(item["capability"]):
             continue
         permission = item.get("permission")
         if permission and not user_has_permission(user, permission):

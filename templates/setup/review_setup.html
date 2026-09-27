@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
 <link rel="stylesheet" href="{% static 'hesba/css/activity_selection.css' %}?v=117a-screen-pack">
 <link rel="stylesheet" href="{% static 'hesba/css/activity_selection_final_overrides.css' %}?v=117a-final-panel-back-arrow">
-<link rel="stylesheet" href="{% static 'hesba/css/activity_review_setup.css' %}?v=119-review-setup">
+<link rel="stylesheet" href="{% static 'hesba/css/activity_review_setup.css' %}?v=cap-001">
 </head>
 <body class="activity-selection-page review-setup-page" data-lang="{{ lang }}" data-activity="{{ activity }}" data-sub-activity="{{ sub_activity_slug }}" data-modules="{{ modules_param }}">
 <main class="activity-stage" aria-label="Review Setup">
@@ -74,6 +74,21 @@
           </div>
         </section>
 
+        <section class="review-card review-card--capabilities" data-review-section="capabilities">
+          <h2 class="review-card__title">{{ capabilities_title }}</h2>
+          <p class="review-note">{{ capabilities_lead }}</p>
+          <ul class="review-capabilities">
+            {% for cap in capability_rows %}
+            <li class="review-capability{% if not cap.available %} is-soon{% endif %}" data-capability="{{ cap.slug }}">
+              <label>
+                <input type="checkbox" name="capability" value="{{ cap.slug }}" form="setup-complete-form"{% if cap.checked %} checked{% endif %}{% if not cap.available %} disabled{% endif %}>
+                <span><strong>{{ cap.label }}</strong>{% if cap.suggested %} <em class="review-badge">{{ suggested_badge }}</em>{% endif %}{% if not cap.available %} <em class="review-badge review-badge--soon">{{ soon_badge }}</em>{% endif %}<br><small>{{ cap.about }}</small></span>
+              </label>
+            </li>
+            {% endfor %}
+          </ul>
+        </section>
+
         <section class="review-card review-card--note" data-review-section="settings-note">
           <h2 class="review-card__title" data-i18n="settingsNote">{{ settings_note }}</h2>
           <p class="review-note" data-i18n="importantNote">{{ important_note }}</p>
@@ -81,12 +96,13 @@
       </div>
 
       <footer class="activity-footer" aria-label="Review navigation">
-        <form class="activity-next-form" method="post" action="{{ complete_url }}" data-next-form>
+        <form class="activity-next-form" id="setup-complete-form" method="post" action="{{ complete_url }}" data-next-form>
           {% csrf_token %}
           <input type="hidden" name="lang" value="{{ lang }}" data-next-lang>
           <input type="hidden" name="activity" value="{{ activity }}" data-next-activity>
           <input type="hidden" name="sub_activity" value="{{ sub_activity_slug }}" data-next-sub-activity>
           <input type="hidden" name="modules" value="{{ modules_param }}" data-next-modules>
+          <input type="hidden" name="capabilities_sent" value="1">
           <button class="activity-action activity-next" type="submit" data-next-button>
             <span data-i18n="next">{{ next }}</span>
             <span class="activity-action__circle" aria-hidden="true">←</span>

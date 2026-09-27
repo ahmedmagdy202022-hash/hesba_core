@@ -62,6 +62,10 @@ REVIEW_STRINGS = {
         "selected_modules_title": "الموديولات المختارة",
         "settings_note": "ملاحظة الإعدادات",
         "important_note": "يمكنك تعديل الموديولات لاحقًا من الإعدادات، ولن يتم حذف أي بيانات عند تعطيل موديول.",
+        "capabilities_title": "قدرات مقترحة لنشاطك",
+        "capabilities_lead": "علّمنا على اللي بيناسب نشاطك. تقدر تغيّرها بعدين من الإعدادات.",
+        "suggested_badge": "مقترح",
+        "soon_badge": "قريبًا",
         "empty_modules": "لم يتم اختيار موديولات بعد.",
         "back": "الرجوع إلى اختيار الموديولات",
         "next": "إنهاء الإعداد",
@@ -82,6 +86,10 @@ REVIEW_STRINGS = {
         "selected_modules_title": "Selected modules",
         "settings_note": "Settings note",
         "important_note": "You can adjust modules later from Settings. Disabling a module will not delete any existing data.",
+        "capabilities_title": "Capabilities suggested for your business",
+        "capabilities_lead": "We ticked what suits your activity. You can change it later from Settings.",
+        "suggested_badge": "Suggested",
+        "soon_badge": "Coming soon",
         "empty_modules": "No modules selected yet.",
         "back": "Back to modules selection",
         "next": "Finish setup",
@@ -121,6 +129,26 @@ COMPLETE_STRINGS = {
 }
 
 
+def _capability_rows(activity, sub_activity, lang):
+    """CAP-001: the review step's capability list, suggestions ticked."""
+
+    from . import capabilities
+
+    rows = []
+    for slug in capabilities.CAPABILITY_SLUGS:
+        entry = capabilities.CAPABILITIES[slug]
+        is_suggested = capabilities.preset_state(activity, sub_activity, slug) == capabilities.SUGGESTED
+        rows.append({
+            "slug": slug,
+            "label": entry[lang],
+            "about": entry[f"about_{lang}"],
+            "available": entry["available"],
+            "suggested": is_suggested,
+            "checked": entry["available"] and is_suggested,
+        })
+    return rows
+
+
 def setup_review(request):
     lang = _lang(request)
     activity = request.GET.get("activity", "")
@@ -152,6 +180,7 @@ def setup_review(request):
         "sub_activity_label_en": catalog.sub_activity_label(activity, sub_activity, "en"),
         "back_href": _setup_modules_href(lang, activity, sub_activity, modules_param),
         "complete_url": reverse("setup_complete"),
+        "capability_rows": _capability_rows(activity, sub_activity, lang),
         **REVIEW_STRINGS[lang],
     }
     return render(request, "setup/review_setup.html", context)
@@ -207,6 +236,7 @@ def _save_setup(request, lang):
             sub_activity=sub_activity,
             modules_raw=modules_param,
             user=request.user,
+            capabilities_raw=",".join(request.POST.getlist("capability")) if request.POST.get("capabilities_sent") else None,
         )
     except ValueError:
         # An unrecognised activity or sub-activity means the wizard was skipped
