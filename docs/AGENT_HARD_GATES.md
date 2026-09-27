@@ -417,6 +417,27 @@ Status: RESOLVED (covered by Ahmed's standing go-ahead of 2026-09-27: «كمّل
 - Permissions: viewing needs `sales.view_sales_invoices`, creating or cancelling a plan needs `sales.create_sales_invoice`, and collecting needs `sales.receive_customer_payment`.
 - Verification: `installments/tests.py` (9 tests). They cover split and month arithmetic, the plan schedule and the one-plan rule, refusals, oldest-first settlement with cash and ledger effects, the over-collection refusal, a cancelled payment no longer counting, full settlement, return credit, the cancelled-invoice stop, the dashboard alert, the plan-cancel rule, the capability switch, the screens with the WhatsApp link, and permissions and the gate.
 
+## HG-023 — Fixed assets with computed straight-line depreciation (ASSET-001)
+
+Status: RESOLVED (covered by Ahmed's standing go-ahead of 2026-09-27: «كمّل كل اللي ناقص»; depreciation was discussed and kept optional)
+
+- New `fixed_assets` app with **one new table**: `FixedAsset`. It holds the code, name, category, in-service date, cost, salvage value, useful life in months, status, and the disposal date and proceeds.
+- **Depreciation is computed, not posted.** Hesba has no general ledger. Straight line: (cost − salvage) / months, to the piastre, with the last month taking the rounding. It runs as a full month from the month in service, and each month is charged on its first day. Nothing is charged in the month of disposal or after it. The disposal result is proceeds − book value on the disposal date.
+- **Cash only moves through existing services.**
+  - Paying for an asset uses `create_cashbox_operation(DIRECT_OUT)`, which keeps its own period, permission and negative-balance checks.
+  - Sale proceeds use `DIRECT_IN`.
+  - Cancelling an asset entered by mistake reverses its payment with `cancel_cashbox_operation`.
+  - An asset already owned can be registered with no payment.
+- **Profit report:** `profit_totals` and the gross/net lines are unchanged. The view adds lines after net profit, in the same way EXP-001 added expenses: "الإهلاك", "نتيجة بيع أصول" (only when non-zero) and "صافي الربح بعد الإهلاك". They appear only when the capability is on, to viewers who may see expenses. Period summaries in closing are not touched.
+- The fields that drive the figures cannot be edited after creation; a wrong asset is cancelled (audited) and entered again. Registering an asset with an old in-service date does change the live profit report for those past months. It does not change stored closing summaries.
+- Screens:
+  - `/assets/`: the register, with totals, this month's depreciation, a new-asset form and life hints;
+  - `/assets/<id>/`: the full monthly schedule, disposal (with an optional cashbox) and cancel;
+  - linked from the expenses screen.
+  - Viewing needs `cashboxes.view_expenses`; recording needs `cashboxes.record_expenses`, and moving cash also needs `cashboxes.move_cash`.
+- Every roadmap capability is now available. The capability tests keep the "listed but not available yet" path covered with a patched test-only capability.
+- Verification: `fixed_assets/tests.py` (8 tests). They cover the month amounts and rounding, the full-month convention, accumulated and book value, report windows charged on the 1st, the salvage floor, disposal stopping depreciation with the gain/loss and cash in, payment from a cashbox with a negative-balance refusal, cancel reversing the payment, refusals, the profit report line and its capability switch, the screens, and permissions and the gate.
+
 ## Final gate verification
 
 - Full Django suite: 794 tests passed in 576.477 seconds.

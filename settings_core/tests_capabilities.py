@@ -1,5 +1,7 @@
 """CAP-001: capabilities suggested per activity, chosen at setup, switchable later."""
 
+from unittest.mock import patch
+
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
@@ -14,6 +16,15 @@ from settings_core.setup_services import complete_setup, usable_modules
 
 
 CAPS = reverse("settings_core:capabilities")
+
+# Every capability on the roadmap has shipped; a test-only one keeps the
+# "listed but not available yet" path covered.
+FUTURE = {"ar": "قدرة جاية", "en": "Coming capability", "about_ar": "لسه.", "about_en": "Not yet.", "available": False, "paths": ()}
+
+
+def with_future_capability(test):
+    test = patch.object(caps, "CAPABILITY_SLUGS", caps.CAPABILITY_SLUGS + ("future_cap",))(test)
+    return patch.dict(caps.CAPABILITIES, {"future_cap": FUTURE})(test)
 
 
 def sign_in(test, role_code=RoleCode.OWNER, username="caps_owner"):
@@ -32,12 +43,12 @@ class CatalogTests(SimpleTestCase):
         self.assertNotIn("pos", caps.suggested("commercial", "wholesale"))
         self.assertEqual(caps.suggested("services", "clinic"), ())
 
+    @with_future_capability
     def test_only_shipped_capabilities_are_ticked_or_accepted(self):
         self.assertEqual(caps.default_selection("commercial", "pharmacy"), ("pos", "barcode", "units", "batches_expiry"))
-        self.assertEqual(caps.parse("pos, fixed_assets, bogus,barcode"), ("pos", "barcode"))
-        self.assertTrue(caps.is_available("pos"))
-        self.assertTrue(caps.is_available("units"))
-        self.assertFalse(caps.is_available("fixed_assets"))
+        self.assertEqual(caps.parse("pos, future_cap, bogus,barcode, fixed_assets"), ("pos", "barcode", "fixed_assets"))
+        self.assertTrue(all(caps.is_available(slug) for slug in caps.CAPABILITY_SLUGS if slug != "future_cap"))
+        self.assertFalse(caps.is_available("future_cap"))
 
     def test_every_capability_is_described_in_both_languages(self):
         for slug, entry in caps.CAPABILITIES.items():
@@ -53,11 +64,13 @@ class SetupChoiceTests(TestCase):
     def test_installation_from_before_capabilities_keeps_its_screens(self):
         self.assertEqual(caps.enabled_capabilities(), ("pos", "barcode"))
 
+    @with_future_capability
     def test_setup_applies_the_preset_when_nothing_is_sent(self):
         complete_setup(self.profile(), "commercial", "wholesale", "")
         self.assertEqual(caps.enabled_capabilities(), ("barcode", "price_lists", "units", "vat", "e_invoice"))
         self.assertFalse(FeatureFlag.objects.get(code="capability.pos").enabled)
-        self.assertFalse(FeatureFlag.objects.filter(code="capability.fixed_assets").exists())  # not shipped yet
+        self.assertFalse(FeatureFlag.objects.get(code="capability.fixed_assets").enabled)  # optional for wholesale
+        self.assertFalse(FeatureFlag.objects.filter(code="capability.future_cap").exists())  # not shipped yet
 
     def test_setup_stores_what_the_owner_ticked(self):
         complete_setup(self.profile(), "commercial", "retail", "", capabilities_raw="barcode")
@@ -67,6 +80,7 @@ class SetupChoiceTests(TestCase):
 
 
 class ReviewStepTests(TestCase):
+    @with_future_capability
     def test_review_ticks_the_suggestions_and_shows_what_is_coming(self):
         sign_in(self)
         page = self.client.get(reverse("setup_review"), {"activity": "commercial", "sub_activity": "pharmacy", "modules": "inventory"})
@@ -115,22 +129,24 @@ class CapabilitySettingsTests(TestCase):
     def setUp(self):
         prepared_client()  # retail: pos and barcode on
 
+    @with_future_capability
     def test_owner_sees_state_suggestion_and_coming_soon(self):
         sign_in(self)
         page = self.client.get(CAPS)
         states = {row["slug"]: row["state"] for row in page.context["rows"]}
-        self.assertEqual((states["pos"], states["barcode"], states["price_lists"], states["fixed_assets"]), ("on", "on", "off", "soon"))
+        self.assertEqual((states["pos"], states["barcode"], states["price_lists"], states["fixed_assets"], states["future_cap"]), ("on", "on", "off", "off", "soon"))
         self.assertContains(page, "مقترح لنشاطك")
         self.assertContains(self.client.get(reverse("settings_core:overview")), CAPS)
 
+    @with_future_capability
     def test_switch_is_audited_and_unshipped_ones_are_refused(self):
         user = sign_in(self)
         self.client.post(CAPS, {"capability": "barcode", "enabled": "0"})
         self.assertFalse(caps.capability_enabled("barcode"))
         log = AuditLog.objects.filter(action="disable_capability").latest("pk")
         self.assertEqual((log.actor, log.object_id), (user, "capability.barcode"))
-        self.client.post(CAPS, {"capability": "fixed_assets", "enabled": "1"})
-        self.assertFalse(FeatureFlag.objects.filter(code="capability.fixed_assets").exists())
+        self.client.post(CAPS, {"capability": "future_cap", "enabled": "1"})
+        self.assertFalse(FeatureFlag.objects.filter(code="capability.future_cap").exists())
 
     def test_only_settings_managers_switch(self):
         sign_in(self, RoleCode.CASHIER, "caps_cashier")

@@ -102,7 +102,7 @@ CAPABILITIES = {
         "ar": "الأصول الثابتة والإهلاك", "en": "Fixed assets & depreciation",
         "about_ar": "سجل للأصول (عربيات، أجهزة، ديكور) وإهلاك شهري يدخل في صافي الربح.",
         "about_en": "An asset register (vehicles, equipment, fit-out) with monthly depreciation in net profit.",
-        "available": False, "paths": (),
+        "available": True, "paths": ("/assets/",),
     },
 }
 CAPABILITY_SLUGS = tuple(CAPABILITIES)

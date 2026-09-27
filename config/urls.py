@@ -49,6 +49,7 @@ urlpatterns = [
     path("variants/", include("variants.urls")),
     path("serials/", include("serials.urls")),
     path("instalments/", include("installments.urls")),
+    path("assets/", include("fixed_assets.urls")),
     path("imports/", include("imports.urls")),
     path("closing/", include("closing.urls")),
     path("profile/", include("accounts.urls")),
