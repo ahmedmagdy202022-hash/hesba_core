@@ -322,6 +322,29 @@ Status: RESOLVED (approved by Ahmed, 2026-09-27: "موافق ابداً")
 - Risk: the per-piece sale price shown in reports is the rounded-up base price (8.34 for 100/12), and the piastres are in the line discount. Totals, revenue, stock and cost are exact.
 - Verification: `units/tests.py` (13 tests). They cover the conversion math (5 × 12 at 100 → 60 @ 8.34, discount 0.40, total 500.00), purchase cost per piece (2 boxes of 24 at 250 → 48 pieces costing 500.00), stock moved in pieces on posting, the POS unit line, rejection of a foreign unit in the form and at the till, the management screen with audit, validation, permissions and the capability gate.
 
+## HG-019 — Batches & expiry as a tracking layer over stock (BATCH-001)
+
+Status: RESOLVED (covered by Ahmed's standing go-ahead of 2026-09-27: «كمّل كل اللي ناقص»)
+
+- New `batches` app with **one new table**: `Batch`. It holds the item, the receiving location, the batch number, the expiry date, the received quantity and the received date, plus either the purchase line it came on or "registered by hand".
+- **Stock movements, average cost, posting, returns, ledgers and reports are not changed.**
+  - A batch typed on a purchase line (new optional fields «رقم التشغيلة» / «تاريخ الصلاحية», shown only when the capability is on) is stored next to the draft.
+  - It counts only once that invoice is posted, and it stops counting if the invoice is cancelled.
+- **What is left of each batch is derived, not booked.**
+  - The item's real on-hand quantity (all locations, from stock movements) is shared out to its batches with the latest expiry first. Put another way, the batch that expires first is taken to have been sold first (FEFO); a batch without a date counts as expiring last.
+  - So batch figures can never disagree with stock: sales, the POS, returns, counts and cancellations all flow through automatically.
+  - On-hand stock that no batch covers is shown as "no batch", so old stock can be registered from the screen.
+- Screens and alerts:
+  - `/batches/` shows expired / soon / fine / no-date batches, with a warning window of 30/60/90/180 days, a search box, the option to show finished batches, registration of batches for stock already on hand, and removal of a hand-registered batch. Everything is audited; managing needs `inventory.adjust_stock`.
+  - The dashboard shows two alerts: expired batches still in stock (urgent) and batches expiring within 60 days (soon).
+  - The stock page and the purchase detail page link to or show the batch.
+- Known limits, documented for the owner:
+  - The cashier doesn't pick a batch at sale time. FEFO is assumed, which is the normal pharmacy and grocery practice.
+  - The derivation is per item, not per location: stock moved between locations keeps its batches, and a batch's location is where it was received.
+  - A supplier return reduces on-hand, and FEFO then treats the earliest-expiring stock as the part returned.
+  - Exact per-batch sale traceability (for recalls) would need a batch chosen on each sales line. That is a later option and would itself be a Hard Gate on sales posting.
+- Verification: `batches/tests.py` (8 tests). They cover the FEFO split after sales, undated batches and uncovered stock, expired/soon alerts including the dashboard and the capability switch, the purchase form batch counting only once posted and disappearing on cancel, the purchase detail, the screen register/validation/retire with audit, permissions and the gate.
+
 ## Final gate verification
 
 - Full Django suite: 794 tests passed in 576.477 seconds.

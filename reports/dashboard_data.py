@@ -65,6 +65,11 @@ class SharedReads:
     def stock_alerts(self):
         return self._get("stock_alerts", selectors.stock_alert_counts)
 
+    def expiring_batches(self, today):
+        from batches.services import expiry_alerts  # BATCH-001
+
+        return self._get("expiring_batches", lambda: expiry_alerts(today))
+
     def customers(self):
         return self._get("customers", selectors.customer_report)
 
@@ -246,6 +251,33 @@ def build_alerts(held_permissions, today, shared=None):
                     "en": f"{counts['low_stock']} item(s) below minimum",
                     "detail_ar": "راجع الأصناف قبل نفاذها.",
                     "detail_en": "Review before they run out.",
+                    "amount": "",
+                }
+            )
+
+        # BATCH-001: batches still on hand that expired or expire soon.
+        expiring = shared.expiring_batches(today)
+        if expiring["expired"]:
+            alerts.append(
+                {
+                    "key": "batches_expired",
+                    "severity": "urgent",
+                    "ar": f"{len(expiring['expired'])} تشغيلة منتهية الصلاحية لسه في المخزون",
+                    "en": f"{len(expiring['expired'])} expired batch(es) still in stock",
+                    "detail_ar": "شيلها من الرف وراجع شاشة التشغيلات.",
+                    "detail_en": "Take them off the shelf; see the batches screen.",
+                    "amount": "",
+                }
+            )
+        if expiring["soon"]:
+            alerts.append(
+                {
+                    "key": "batches_expiring",
+                    "severity": "soon",
+                    "ar": f"{len(expiring['soon'])} تشغيلة صلاحيتها قربت تخلص",
+                    "en": f"{len(expiring['soon'])} batch(es) expiring soon",
+                    "detail_ar": "بيعها الأول أو رجّعها للمورد.",
+                    "detail_en": "Sell them first or return them to the supplier.",
                     "amount": "",
                 }
             )

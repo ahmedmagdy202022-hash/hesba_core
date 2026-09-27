@@ -95,6 +95,13 @@ class PurchaseLineInputForm(forms.Form):
                 queryset=ItemUnit.objects.filter(active=True), required=False,
                 label="Unit" if lang == "en" else "الوحدة", empty_label="Base unit" if lang == "en" else "الوحدة الأساسية",
             )
+        # BATCH-001: batch number and expiry date of what is received.
+        from batches.services import batches_enabled
+
+        if batches_enabled():
+            self.fields["batch_no"] = forms.CharField(max_length=60, required=False, label="Batch no." if lang == "en" else "رقم التشغيلة")
+            self.fields["expiry_date"] = forms.DateField(required=False, label="Expiry date" if lang == "en" else "تاريخ الصلاحية",
+                                                         widget=forms.DateInput(attrs={"type": "date"}))
 
 
 class BasePurchaseLineFormSet(BaseFormSet):

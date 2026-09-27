@@ -70,7 +70,7 @@ CAPABILITIES = {
         "ar": "التشغيلات وتاريخ الصلاحية", "en": "Batches & expiry dates",
         "about_ar": "متابعة كل تشغيلة وتاريخ انتهائها، وتنبيه قبل الانتهاء.",
         "about_en": "Track each batch and its expiry date, with alerts before it expires.",
-        "available": False, "paths": (),
+        "available": True, "paths": ("/batches/",),
     },
     "serials": {
         "ar": "السيريال / IMEI والضمان", "en": "Serial / IMEI & warranty",

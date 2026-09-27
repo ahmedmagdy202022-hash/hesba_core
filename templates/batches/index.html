@@ -1,0 +1,30 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'inventory:stock' %}?lang={{ lang }}">← {% if lang == 'en' %}Stock{% else %}المخزون{% endif %}</a><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div></section>
+<section class="op-summary-grid"><article data-batch-expired><small>{{ words.summary_expired }}</small><strong>{{ counts.expired }}</strong></article><article data-batch-soon><small>{{ words.summary_soon }} ({{ warn_days }} {{ words.days }})</small><strong>{{ counts.soon }}</strong></article></section>
+<form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}">
+<input type="search" name="q" value="{{ q }}" placeholder="{{ words.search }}" aria-label="{{ words.search }}">
+<select name="state" aria-label="{{ words.state }}"><option value="">{{ words.all }}</option><option value="expired"{% if state_filter == 'expired' %} selected{% endif %}>{{ words.expired }}</option><option value="soon"{% if state_filter == 'soon' %} selected{% endif %}>{{ words.soon }}</option><option value="ok"{% if state_filter == 'ok' %} selected{% endif %}>{{ words.ok }}</option><option value="none"{% if state_filter == 'none' %} selected{% endif %}>{{ words.none }}</option></select>
+<select name="days" aria-label="{{ words.within }}">{% for days in warn_choices %}<option value="{{ days }}"{% if days == warn_days %} selected{% endif %}>{{ words.within }} {{ days }} {{ words.days }}</option>{% endfor %}</select>
+<label class="op-check"><input type="checkbox" name="all" value="1"{% if not on_hand_only %} checked{% endif %}> {% if lang == 'en' %}Include finished batches{% else %}اعرض التشغيلات اللي خلصت{% endif %}</label>
+<button type="submit">{{ words.filter }}</button></form>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.item }}</th><th>{{ words.batch_no }}</th><th>{{ words.expiry }}</th><th>{{ words.state }}</th><th>{{ words.remaining }}</th><th>{{ words.received_qty }}</th><th>{{ words.received }}</th><th>{{ words.location }}</th>{% if can_manage %}<th></th>{% endif %}</tr></thead><tbody>
+{% for row in page.object_list %}<tr data-batch-row="{{ row.state }}"><td class="op-cell-text"><bdi>{{ row.batch.item.item_code }}</bdi><br><small class="op-muted">{{ row.batch.item.item_name }}</small></td><td><bdi>{{ row.batch.batch_no|default:"—" }}</bdi></td><td>{% if row.batch.expiry_date %}<bdi>{{ row.batch.expiry_date|date:"Y-m-d" }}</bdi>{% else %}—{% endif %}</td>
+<td><span class="op-status op-status-{% if row.state == 'expired' %}cancelled{% elif row.state == 'soon' %}draft{% else %}posted{% endif %}">{% if row.state == 'expired' %}{{ words.expired }}{% elif row.state == 'soon' %}{{ words.soon }}{% elif row.state == 'ok' %}{{ words.ok }}{% else %}{{ words.none }}{% endif %}</span></td>
+<td>{{ row.remaining|qty }}</td><td>{{ row.batch.quantity|qty }}</td><td><bdi>{{ row.batch.received_on|date:"Y-m-d" }}</bdi><br><small class="op-muted">{% if row.batch.purchase_line_id %}{{ words.from_purchase }}{% else %}{{ words.manual }}{% endif %}</small></td><td>{{ row.batch.location.location_code }}</td>
+{% if can_manage %}<td>{% if not row.batch.purchase_line_id %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><button class="op-secondary" type="submit" name="retire" value="{{ row.batch.pk }}">{{ words.retire }}</button></form>{% endif %}</td>{% endif %}</tr>
+{% empty %}<tr><td colspan="9" class="op-empty">{{ words.empty }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if page.has_other_pages %}<p class="op-form-actions">{% if page.has_previous %}<a class="op-secondary" href="?lang={{ lang }}&q={{ q|urlencode }}&state={{ state_filter }}&days={{ warn_days }}&page={{ page.previous_page_number }}">{{ words.prev }}</a>{% endif %}<span class="op-muted">{{ page.number }} / {{ page.paginator.num_pages }}</span>{% if page.has_next %}<a class="op-secondary" href="?lang={{ lang }}&q={{ q|urlencode }}&state={{ state_filter }}&days={{ warn_days }}&page={{ page.next_page_number }}">{{ words.next }}</a>{% endif %}</p>{% endif %}
+{% if uncovered %}<section class="op-card" data-uncovered><h2>{{ words.uncovered }}</h2><p class="op-muted">{{ words.uncovered_hint }}</p><ul>{% for row in uncovered %}<li><bdi>{{ row.item.item_code }}</bdi> · {{ row.item.item_name }} — {{ row.quantity|qty }}</li>{% endfor %}</ul></section>{% endif %}
+{% if can_manage %}<form class="op-form" method="post" data-register-batch>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><h2>{{ words.register }}</h2><div class="op-form-grid">
+<div class="op-field"><label for="b-item">{{ words.item_code }}</label><input id="b-item" name="item_code" required></div>
+<div class="op-field"><label for="b-no">{{ words.batch_no }}</label><input id="b-no" name="batch_no" maxlength="60"></div>
+<div class="op-field"><label for="b-exp">{{ words.expiry }}</label><input id="b-exp" name="expiry_date" type="date"></div>
+<div class="op-field"><label for="b-qty">{{ words.quantity }}</label><input id="b-qty" name="quantity" inputmode="decimal" required></div>
+<div class="op-field"><label for="b-rec">{{ words.received }}</label><input id="b-rec" name="received_on" type="date" value="{{ today|date:'Y-m-d' }}"></div>
+<div class="op-field"><label for="b-loc">{{ words.location }}</label><select id="b-loc" name="location">{% for location in locations %}<option value="{{ location.pk }}"{% if location.is_default %} selected{% endif %}>{{ location }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="b-note">{{ words.note }}</label><input id="b-note" name="note" maxlength="255"></div>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form>{% endif %}
+{% endblock %}
