@@ -345,6 +345,26 @@ Status: RESOLVED (covered by Ahmed's standing go-ahead of 2026-09-27: «كمّل
   - Exact per-batch sale traceability (for recalls) would need a batch chosen on each sales line. That is a later option and would itself be a Hard Gate on sales posting.
 - Verification: `batches/tests.py` (8 tests). They cover the FEFO split after sales, undated batches and uncovered stock, expired/soon alerts including the dashboard and the capability switch, the purchase form batch counting only once posted and disappearing on cancel, the purchase detail, the screen register/validation/retire with audit, permissions and the gate.
 
+## HG-020 — Sizes & colours as ordinary items grouped by model (VARIANT-001)
+
+Status: RESOLVED (covered by Ahmed's standing go-ahead of 2026-09-27: «كمّل كل اللي ناقص»)
+
+- New `variants` app with **two new tables**:
+  - `VariantGroup`: the model's code, name, category, unit, default prices, and ordered sizes and colours;
+  - `Variant`: links the group, the size and the colour to one `Item`, unique per combination.
+- **Each size × colour is an ordinary `master_data.Item`.** It gets its own code (`MODEL-SIZE-COLOUR`, suffixed on collision), an optional shop-internal EAN-13 barcode, its own stock and average cost, and the existing `size`/`color` fields filled in. So sales, the POS, purchases, returns, stock, costing and every report treat it like any other item. **No protected logic is touched and `Item` is not altered.**
+- Services, all audited:
+  - create a model with all its combinations (capped at 400);
+  - add sizes or colours, which creates only the missing combinations;
+  - set one sale and/or purchase price for the whole model;
+  - a stock grid by size × colour with row and column totals, read from stock movements.
+- Screens:
+  - `/variants/` (list and new model) and `/variants/<model>/` (grid, extend, price), linked from the items list;
+  - managing needs `master_data.manage_items`;
+  - the `variants` capability is suggested for fashion and online.
+- Not included: deleting a combination (deactivate it from the item screen as usual), and per-variant price lists beyond what price lists already do per item.
+- Verification: `variants/tests.py` (8 tests). They cover parsing, the six items with codes, barcodes, prices and audit, code collisions and refusals, extend adding only the missing combinations, model pricing, the stock grid totals, the screens, a variant sold at the POS by barcode, permissions and the gate.
+
 ## Final gate verification
 
 - Full Django suite: 794 tests passed in 576.477 seconds.

@@ -46,6 +46,7 @@ urlpatterns = [
     path("einvoice/", include("einvoice.urls")),
     path("units/", include("units.urls")),
     path("batches/", include("batches.urls")),
+    path("variants/", include("variants.urls")),
     path("imports/", include("imports.urls")),
     path("closing/", include("closing.urls")),
     path("profile/", include("accounts.urls")),

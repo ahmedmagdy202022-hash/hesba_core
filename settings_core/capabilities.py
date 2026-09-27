@@ -64,7 +64,7 @@ CAPABILITIES = {
         "ar": "المقاسات والألوان", "en": "Sizes & colours",
         "about_ar": "صنف واحد بمقاسات وألوان، وكل واحد له مخزونه وباركوده.",
         "about_en": "One item in several sizes and colours, each with its own stock and barcode.",
-        "available": False, "paths": (),
+        "available": True, "paths": ("/variants/",),
     },
     "batches_expiry": {
         "ar": "التشغيلات وتاريخ الصلاحية", "en": "Batches & expiry dates",
