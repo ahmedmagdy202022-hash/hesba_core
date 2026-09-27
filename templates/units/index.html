@@ -1,0 +1,10 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'master_data:items' %}?lang={{ lang }}">← {% if lang == 'en' %}Items{% else %}الأصناف{% endif %}</a><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div></section>
+<form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><input type="search" name="q" value="{{ q }}" placeholder="{{ words.search }}" aria-label="{{ words.search }}"><button type="submit">{{ words.filter }}</button></form>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.item }}</th><th>{{ words.base }}</th><th>{{ words.count }}</th><th></th></tr></thead><tbody>
+{% for item in page.object_list %}<tr><td class="op-cell-text"><bdi>{{ item.item_code }}</bdi><br><small class="op-muted">{{ item.item_name }}</small></td><td>{{ item.unit }}</td><td>{{ item.unit_count }}</td><td><a href="{% url 'units:item' item.pk %}?lang={{ lang }}">{{ words.edit }}</a></td></tr>
+{% empty %}<tr><td colspan="4">—</td></tr>{% endfor %}
+</tbody></table></div>
+{% if page.has_other_pages %}<p class="op-form-actions">{% if page.has_previous %}<a class="op-secondary" href="?lang={{ lang }}&q={{ q|urlencode }}&page={{ page.previous_page_number }}">{{ words.prev }}</a>{% endif %}<span class="op-muted">{{ page.number }} / {{ page.paginator.num_pages }}</span>{% if page.has_next %}<a class="op-secondary" href="?lang={{ lang }}&q={{ q|urlencode }}&page={{ page.next_page_number }}">{{ words.next }}</a>{% endif %}</p>{% endif %}
+{% endblock %}

@@ -86,6 +86,15 @@ class SalesLineInputForm(forms.Form):
         for name, field in self.fields.items():
             field.label = labels[name]
         self.fields["item"].queryset = Item.objects.filter(active=True)
+        # UNITS-001: optional bigger unit (carton, box...) when the shop uses units.
+        from units.models import ItemUnit
+        from units.services import units_enabled
+
+        if units_enabled():
+            self.fields["unit"] = forms.ModelChoiceField(
+                queryset=ItemUnit.objects.filter(active=True), required=False,
+                label="Unit" if lang == "en" else "الوحدة", empty_label="Base unit" if lang == "en" else "الوحدة الأساسية",
+            )
 
 
 class BaseSalesLineFormSet(BaseFormSet):

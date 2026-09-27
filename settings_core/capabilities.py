@@ -58,7 +58,7 @@ CAPABILITIES = {
         "ar": "وحدات القياس", "en": "Units of measure",
         "about_ar": "بيع وشراء بالكرتونة أو العلبة أو القطعة مع تحويل تلقائي.",
         "about_en": "Buy and sell by carton, box or piece with automatic conversion.",
-        "available": False, "paths": (),
+        "available": True, "paths": ("/units/",),
     },
     "variants": {
         "ar": "المقاسات والألوان", "en": "Sizes & colours",
