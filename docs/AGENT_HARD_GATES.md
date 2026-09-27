@@ -168,6 +168,32 @@ Status: RESOLVED (part of the commercial-readiness mandate, 2026-09-26)
   - a staff owner is sent away from Admin while a superuser gets in;
   - the Admin path comes from settings.
 
+## HG-013 — Import screen guards (IMPORT-001)
+
+Status: RESOLVED (part of the commercial-readiness mandate, 2026-09-27)
+
+- Problem: the existing import pipeline (`imports/services.py`, `validators.py`, `apply_services.py`) had no screen. It also had three gaps a screen would expose:
+  - importing customers, suppliers, cashboxes or opening balances **overwrote `opening_balance` even after the record had been used**. That bypasses HG-002, which requires a dated, auditable adjustment after use.
+  - importing opening stock twice **duplicated the stock**.
+  - opening stock could be dated inside **closed books**.
+- Decision: `imports/screen_services.py` wraps the pipeline without changing it, and marks such rows invalid with an Arabic reason:
+  - a changed opening balance on a record with operational use (`cashboxes.services.target_has_operational_use`); an unchanged balance still passes;
+  - opening stock for an item and location that already has an `opening_stock` movement, or that repeats inside the same file;
+  - opening stock dated in a closed period (`ensure_period_is_open`).
+- **All or nothing**: a batch imports only when every row is valid, in one transaction.
+- After an opening-stock import, each item's `average_cost` display cache is refreshed from the movements (HG-003).
+- Users are not importable from the screen; they go through Settings → Users (HG-012).
+- New dependency: `openpyxl` (pure Python) for `.xlsx`. CSV is accepted as UTF-8 or Windows Arabic (cp1256), with comma, semicolon or tab separators.
+- Unchanged: `imports/services.py`, `validators.py`, `apply_services.py`, and the import models.
+- Verification: `imports/tests_screen.py`:
+  - CSV and xlsx imports; cp1256 with semicolons;
+  - one bad row blocks the file;
+  - the used-balance guard, including the unchanged-balance pass;
+  - opening stock once, no in-file duplicates, no closed books, average cost refreshed;
+  - wrong type and empty file; users not offered;
+  - template download, with an unknown name or path traversal returning 404;
+  - owner only.
+
 ## Final gate verification
 
 - Full Django suite: 794 tests passed in 576.477 seconds.

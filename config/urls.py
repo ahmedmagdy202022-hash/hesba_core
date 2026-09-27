@@ -38,6 +38,7 @@ urlpatterns = [
     path("expenses/", include("expenses.urls")),
     path("print/", include("printing.urls")),
     path("barcode/", include("barcode.urls")),
+    path("imports/", include("imports.urls")),
     path("closing/", include("closing.urls")),
     path("profile/", include("accounts.urls")),
     path("settings/", include("settings_core.urls")),
