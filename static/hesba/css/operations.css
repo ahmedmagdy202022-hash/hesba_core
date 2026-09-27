@@ -102,3 +102,13 @@ body a:focus-visible,body button:focus-visible,body input:focus-visible,body sel
 .op-whatsapp{min-height:36px;padding:0 12px;font-size:13px}
 @media(max-width:1000px){.op-aging-summary{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:700px){.op-aging-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* STOCKTAKE-001: count sheet */
+.stk-count{width:7rem;max-width:100%;text-align:center}
+.stk-print-only{display:none}
+@media print{
+  .stk-noprint,.op-messages{display:none !important}
+  .stk-print-only{display:block}
+  .stk-sheet .op-form-actions{display:none !important}
+  .stk-count{border:0;border-bottom:1px solid currentColor;border-radius:0;background:none}
+}
