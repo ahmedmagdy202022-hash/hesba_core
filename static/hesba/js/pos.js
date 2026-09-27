@@ -23,6 +23,14 @@
   var tendered = form.querySelector('[data-pos-tendered]');
   var customer = form.querySelector('[data-pos-customer]');
   var tenderedTouched = false;
+  // PRICE-001: price from the chosen customer's list, when the shop uses them.
+  var bookNode = document.getElementById('hs-price-book');
+  var book = bookNode ? JSON.parse(bookNode.textContent) : null;
+  function priceFor(item) {
+    var listId = book && book.customers[customer.value];
+    var own = listId && book.lists[listId].prices[String(item.id)];
+    return num(own !== undefined && own !== null && own !== '' ? own : item.price);
+  }
 
   function num(value) { var n = parseFloat(String(value || '').replace(',', '.')); return isNaN(n) ? 0 : n; }
   function money(n) { return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
@@ -32,7 +40,7 @@
   function add(item, qty, price) {
     var line = cart.filter(function (row) { return row.id === item.id; })[0];
     if (line) { line.qty = num(line.qty) + (qty || 1); }
-    else { cart.push({ id: item.id, label: item.label, qty: qty || 1, price: price !== undefined ? price : num(item.price) }); }
+    else { var auto = priceFor(item); cart.push({ id: item.id, label: item.label, qty: qty || 1, price: price !== undefined ? price : auto, auto: price !== undefined ? null : auto }); }
     say((words.added || '') + item.label, false);
     render();
   }
@@ -103,6 +111,14 @@
     if (!tr || !field) { return; }
     cart[parseInt(tr.getAttribute('data-line'), 10)][field] = event.target.value;
     totals();
+  });
+  customer.addEventListener('change', function () {
+    // Re-price lines still on an automatic price; typed prices stay.
+    cart.forEach(function (row) {
+      var item = byId[String(row.id)];
+      if (item && row.auto !== null && row.auto !== undefined && num(row.price) === num(row.auto)) { row.price = priceFor(item); row.auto = row.price; }
+    });
+    render();
   });
   discount.addEventListener('input', totals);
   tendered.addEventListener('input', function () { tenderedTouched = tendered.value !== ''; totals(); });

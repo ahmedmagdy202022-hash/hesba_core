@@ -1,0 +1,21 @@
+{% extends "operations/base.html" %}
+{% load l10n %}{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'master_data:items' %}?lang={{ lang }}">← {% if lang == 'en' %}Items{% else %}الأصناف{% endif %}</a><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div></section>
+{% if not can_manage %}<p class="op-message op-message-info">{{ words.view_only }}</p>{% endif %}
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.code }}</th><th>{{ words.name_ar }}</th><th>{{ words.adjust }}</th><th>{{ words.items_count }}</th><th>{{ words.customers_count }}</th><th></th></tr></thead><tbody>
+{% for pl in lists %}<tr><td><bdi>{{ pl.code }}</bdi></td><td class="op-cell-text"><a href="{% url 'pricing:detail' pl.pk %}?lang={{ lang }}"><strong>{{ pl.label }}</strong></a>{% if lang == 'en' %}<br><small class="op-muted">{{ pl.name_ar }}</small>{% endif %}</td><td><bdi dir="ltr">{% if pl.adjust_percent > 0 %}+{% endif %}{{ pl.adjust_percent|unlocalize }}%</bdi></td><td>{{ pl.item_count }}</td><td>{{ pl.customer_count }}</td><td>{% if pl.active %}<span class="op-status op-status-posted">{{ words.active }}</span>{% else %}<span class="op-status op-status-cancelled">{{ words.inactive }}</span>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="6">{{ words.empty }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_manage %}
+<h2>{{ words.new }}</h2>
+<form class="op-form" method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="active" value="1">
+<div class="op-form-grid">
+<div class="op-field"><label for="pl-code">{{ words.code }}</label><input id="pl-code" name="code" value="{{ header.code }}" maxlength="40" required placeholder="WHOLESALE"></div>
+<div class="op-field"><label for="pl-name-ar">{{ words.name_ar }}</label><input id="pl-name-ar" name="name_ar" value="{{ header.name_ar }}" maxlength="120" required placeholder="{% if lang == 'en' %}e.g. جملة{% else %}مثال: جملة{% endif %}"></div>
+<div class="op-field"><label for="pl-name-en">{{ words.name_en }}</label><input id="pl-name-en" name="name_en" value="{{ header.name_en }}" maxlength="120"></div>
+<div class="op-field"><label for="pl-adjust">{{ words.adjust }}</label><input id="pl-adjust" name="adjust_percent" value="{{ header.adjust_percent }}" inputmode="decimal"><small class="op-muted">{{ words.adjust_hint }}</small></div>
+</div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div>
+</form>
+{% endif %}
+{% endblock %}

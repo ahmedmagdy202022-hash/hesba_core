@@ -7,6 +7,7 @@
     <h1>{{ entity_title }}</h1>
   </div>
   <div class="md-title-actions">
+  {% if entity == 'items' %}{% capability_on 'price_lists' as prices_on %}{% if prices_on %}<a class="md-secondary" href="{% url 'pricing:list' %}?lang={{ lang }}">{% if lang == 'en' %}Price lists{% else %}قوائم الأسعار{% endif %}</a>{% endif %}{% endif %}
   {% if entity == 'items' and perms_print_labels %}
     {% capability_on 'barcode' as barcode_on %}{% if barcode_on %}<a class="md-secondary" href="{% url 'barcode:labels' %}?lang={{ lang }}">{% if lang == 'en' %}Barcode labels{% else %}ملصقات الباركود{% endif %}</a>{% endif %}
   {% endif %}

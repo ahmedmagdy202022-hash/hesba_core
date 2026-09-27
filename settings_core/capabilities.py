@@ -16,8 +16,9 @@ them so setup can show what is coming, but they cannot be switched on and have
 no screens yet.
 
 Storage: one ``FeatureFlag`` row per capability, ``capability.<slug>``. An
-installation made before capabilities existed has no rows; there the shipped
-capabilities count as on, so upgrading never hides a screen someone uses.
+installation made before capabilities existed has no rows; there the ones it
+already had (``legacy_on``) count as on, so upgrading never hides a screen
+someone uses, and newer ones stay off until switched on.
 """
 
 from django.db import transaction
@@ -39,19 +40,19 @@ CAPABILITIES = {
         "ar": "الكاشير السريع", "en": "Quick till (POS)",
         "about_ar": "شاشة بيع سريعة بالباركود، وحساب الباقي، وإيصال 80mm.",
         "about_en": "A fast sales screen with barcode scanning, change due and an 80mm receipt.",
-        "available": True, "paths": ("/sales/pos/",),
+        "available": True, "legacy_on": True, "paths": ("/sales/pos/",),
     },
     "barcode": {
         "ar": "الباركود والملصقات", "en": "Barcodes & labels",
         "about_ar": "توليد باركود للأصناف وطباعة ملصقات الأسعار.",
         "about_en": "Generate item barcodes and print price labels.",
-        "available": True, "paths": ("/barcode/",),
+        "available": True, "legacy_on": True, "paths": ("/barcode/",),
     },
     "price_lists": {
         "ar": "قوائم الأسعار (قطاعي / جملة)", "en": "Price lists (retail / wholesale)",
         "about_ar": "أكتر من سعر للصنف، وسعر خاص لكل عميل أو فئة عملاء.",
         "about_en": "More than one price per item, and special prices per customer or customer group.",
-        "available": False, "paths": (),
+        "available": True, "paths": ("/pricing/",),
     },
     "units": {
         "ar": "وحدات القياس", "en": "Units of measure",
@@ -154,7 +155,9 @@ def enabled_capabilities():
     rows = dict(FeatureFlag.objects.filter(code__startswith=FLAG_PREFIX).values_list("code", "enabled"))
     return tuple(
         slug for slug in CAPABILITY_SLUGS
-        if is_available(slug) and rows.get(flag_code(slug), True)  # no row yet: shipped = on
+        # No row yet: an installation from before CAP-001, where the
+        # capabilities it already had (legacy_on) stay on and new ones stay off.
+        if is_available(slug) and rows.get(flag_code(slug), bool(CAPABILITIES[slug].get("legacy_on")))
     )
 
 

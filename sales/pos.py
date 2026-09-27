@@ -18,6 +18,7 @@ from django.shortcuts import redirect, render
 from django.utils import timezone
 
 from barcode.services import item_catalog
+from pricing.services import price_book
 from cashboxes.models import Cashbox
 from config.money import money_round
 from master_data.models import Customer, Item, Location
@@ -302,6 +303,7 @@ def pos(request):
             "page_title": words["page_title"],
             "section": "sales",
             "catalog": item_catalog(sale_prices=True),
+            "price_book": price_book(),
             "customers": Customer.objects.filter(active=True).order_by("name"),
             "walk_in": customer_default,
             "locations": locations,

@@ -5,6 +5,7 @@ from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 
 from barcode.services import item_catalog, scan_words
+from pricing.services import price_book
 from permissions.decorators import require_permission
 from permissions.services import user_has_permission
 
@@ -136,7 +137,7 @@ def invoice_create(request):
     else:
         form = SalesDraftForm(lang=lang)
         line_formset = SalesLineFormSet(prefix="lines", form_kwargs={"lang": lang})
-    return render(request, "sales/form.html", _context(request, form=form, line_formset=line_formset, item_catalog=item_catalog(sale_prices=True, purchase_prices=False), scan_words=scan_words(lang)))
+    return render(request, "sales/form.html", _context(request, form=form, line_formset=line_formset, item_catalog=item_catalog(sale_prices=True, purchase_prices=False), scan_words=scan_words(lang), price_book=price_book()))
 
 
 @require_permission("sales.view_sales_invoices")

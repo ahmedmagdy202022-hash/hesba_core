@@ -1,0 +1,36 @@
+{% extends "operations/base.html" %}
+{% load hesba_format l10n %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'pricing:list' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ price_list.label }}</h1><p><bdi>{{ price_list.code }}</bdi> · <bdi dir="ltr">{% if price_list.adjust_percent > 0 %}+{% endif %}{{ price_list.adjust_percent|unlocalize }}%</bdi> · {% if price_list.active %}{{ words.active }}{% else %}{{ words.inactive }}{% endif %}</p></div></section>
+{% if can_manage %}
+<form class="op-form" method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="header">
+<div class="op-form-grid">
+<div class="op-field"><label for="pl-code">{{ words.code }}</label><input id="pl-code" name="code" value="{{ price_list.code }}" maxlength="40" required></div>
+<div class="op-field"><label for="pl-name-ar">{{ words.name_ar }}</label><input id="pl-name-ar" name="name_ar" value="{{ price_list.name_ar }}" maxlength="120" required></div>
+<div class="op-field"><label for="pl-name-en">{{ words.name_en }}</label><input id="pl-name-en" name="name_en" value="{{ price_list.name_en }}" maxlength="120"></div>
+<div class="op-field"><label for="pl-adjust">{{ words.adjust }}</label><input id="pl-adjust" name="adjust_percent" value="{{ price_list.adjust_percent|unlocalize }}" inputmode="decimal"><small class="op-muted">{{ words.adjust_hint }}</small></div>
+<div class="op-field"><label for="pl-active">{{ words.active }}</label><select id="pl-active" name="active"><option value="1"{% if price_list.active %} selected{% endif %}>{{ words.active }}</option><option value="0"{% if not price_list.active %} selected{% endif %}>{{ words.inactive }}</option></select></div>
+</div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div>
+</form>
+{% endif %}
+
+<h2>{{ words.prices }}</h2>
+<p class="op-muted">{{ words.prices_hint }}</p>
+<form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><input type="search" name="q" value="{{ q }}" placeholder="{{ words.search }}" aria-label="{{ words.search }}"><button type="submit">{{ words.filter }}</button></form>
+<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="prices"><input type="hidden" name="q" value="{{ q }}"><input type="hidden" name="page" value="{{ page.number }}">
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.item }}</th><th>{{ words.retail }}</th><th>{{ words.list_price }}</th><th>{{ words.effective }}</th></tr></thead><tbody>
+{% for row in rows %}<tr><td class="op-cell-text"><bdi>{{ row.item.item_code }}</bdi><br><small class="op-muted">{{ row.item.item_name }}</small></td><td>{{ row.item.default_sale_price|money }}</td><td>{% if can_manage %}<input type="hidden" name="shown_{{ row.item.pk }}" value="1"><input class="stk-count" type="text" inputmode="decimal" name="price_{{ row.item.pk }}" value="{% if row.explicit is not None %}{{ row.explicit|unlocalize }}{% endif %}" placeholder="{{ row.effective|unlocalize }}" aria-label="{{ words.list_price }} {{ row.item.item_code }}" autocomplete="off">{% elif row.explicit is not None %}{{ row.explicit|money }}{% else %}—{% endif %}</td><td><strong>{{ row.effective|money }}</strong></td></tr>
+{% empty %}<tr><td colspan="4">—</td></tr>{% endfor %}
+</tbody></table></div>
+{% if page.has_other_pages %}<p class="op-form-actions">{% if page.has_previous %}<a class="op-secondary" href="?lang={{ lang }}&q={{ q|urlencode }}&page={{ page.previous_page_number }}">{{ words.prev }}</a>{% endif %}<span class="op-muted">{{ page.number }} / {{ page.paginator.num_pages }}</span>{% if page.has_next %}<a class="op-secondary" href="?lang={{ lang }}&q={{ q|urlencode }}&page={{ page.next_page_number }}">{{ words.next }}</a>{% endif %}</p>{% endif %}
+{% if can_manage and rows %}<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div>{% endif %}
+</form>
+
+<h2>{{ words.customers }}</h2>
+<p class="op-muted">{{ words.customers_hint }}</p>
+<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="customers">
+<div class="op-card-grid pl-customers">{% for row in customers %}<label class="op-card pl-customer"><input type="checkbox" name="customer" value="{{ row.customer.pk }}"{% if row.on %} checked{% endif %}{% if not can_manage %} disabled{% endif %}> <span><strong>{{ row.customer.name }}</strong><br><small class="op-muted"><bdi>{{ row.customer.customer_code }}</bdi>{% if row.other %} · {{ row.other }}{% endif %}</small></span></label>{% empty %}<p class="op-muted">—</p>{% endfor %}</div>
+{% if can_manage and customers %}<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div>{% endif %}
+</form>
+{% endblock %}
