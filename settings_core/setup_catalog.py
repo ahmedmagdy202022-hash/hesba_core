@@ -112,7 +112,7 @@ MODULE_PRESETS = {
 #: Modules the wizard offers but Hesba cannot serve yet: no model, no service,
 #: no screen. The dashboard uses this to avoid advertising empty sections.
 MODULES_WITHOUT_BACKEND = frozenset(
-    {"pdf_printing", "appointments_visits", "employees_technicians"}
+    {"appointments_visits", "employees_technicians"}
 )
 
 

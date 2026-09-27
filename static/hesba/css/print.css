@@ -1,0 +1,105 @@
+/* PRINT-001: printable documents. A4 page and 80 mm thermal receipt, from tokens only. */
+*{box-sizing:border-box}
+body.pr-body{margin:0;background:var(--hs-ground);color:var(--hs-ink);font-family:var(--hs-font-body);font-size:13px;line-height:1.55}
+
+/* Screen toolbar, never printed. */
+.pr-toolbar{position:sticky;top:0;z-index:2;display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:12px 16px;background:var(--hs-surface);border-bottom:1px solid var(--hs-line)}
+.pr-toolbar__formats{display:flex;gap:6px}
+.pr-toolbar__hint{flex-basis:100%;margin:0;color:var(--hs-muted);font-size:12px}
+.pr-button{display:inline-flex;align-items:center;min-height:40px;padding:0 14px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-md);background:var(--hs-surface);color:var(--hs-navy);font:inherit;font-weight:600;text-decoration:none;cursor:pointer}
+.pr-button.is-current{border-color:var(--hs-teal-deep);background:var(--hs-teal-wash)}
+.pr-button--primary{border:0;background:var(--hs-teal);color:var(--hs-on-teal);margin-inline-start:auto}
+.pr-button--ghost{border-color:transparent}
+.pr-button:focus-visible{outline:none;box-shadow:var(--hs-focus-ring)}
+
+/* The sheet. */
+.pr-sheet{position:relative;overflow:hidden;margin:20px auto 40px;background:var(--hs-surface);box-shadow:var(--hs-shadow-md)}
+.pr-a4 .pr-sheet{width:210mm;min-height:297mm;padding:16mm 15mm 14mm}
+.pr-receipt .pr-sheet{width:80mm;padding:5mm 4mm;font-size:11.5px}
+.pr-sheet > *:not(.pr-watermark){position:relative;z-index:1}
+
+.pr-watermark{position:absolute;inset:0;margin:auto;pointer-events:none;z-index:0}
+.pr-watermark--mark{width:55%;height:auto;opacity:.05;top:0;bottom:0}
+.pr-watermark--status{display:flex;align-items:center;justify-content:center;transform:rotate(-24deg);color:var(--hs-danger);opacity:.13;font-family:var(--hs-font-head);font-weight:700;font-size:110px;letter-spacing:.04em}
+.pr-receipt .pr-watermark--status{font-size:44px}
+.pr-receipt .pr-watermark--mark{display:none}
+
+.pr-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding-bottom:12px;border-bottom:2px solid var(--hs-navy)}
+.pr-company__name{margin:0 0 4px;font-family:var(--hs-font-head);font-size:22px;color:var(--hs-navy)}
+.pr-company p{margin:0;color:var(--hs-muted)}
+.pr-doc{text-align:end}
+.pr-doc__title{margin:0 0 6px;font-family:var(--hs-font-head);font-size:20px;color:var(--hs-teal-deep)}
+.pr-meta{margin:0;display:grid;gap:2px}
+.pr-meta div{display:flex;gap:8px;justify-content:flex-end}
+.pr-meta dt{color:var(--hs-muted)}
+.pr-meta dd{margin:0;font-weight:600}
+
+.pr-party{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline;margin:12px 0;padding:10px 12px;border:1px solid var(--hs-line);border-radius:var(--hs-radius-sm);background:var(--hs-ground)}
+.pr-party__label{color:var(--hs-muted)}
+.pr-party__name{font-size:15px;color:var(--hs-navy)}
+
+.pr-lines{width:100%;border-collapse:collapse;margin-top:6px}
+.pr-lines th,.pr-lines td{padding:7px 6px;text-align:start;border-bottom:1px solid var(--hs-line)}
+.pr-lines th{background:var(--hs-navy);color:var(--hs-surface);font-weight:600;font-size:12px}
+.pr-lines .pr-num{text-align:end;white-space:nowrap;font-variant-numeric:tabular-nums}
+.pr-lines .pr-col-no{width:28px;color:var(--hs-muted)}
+.pr-lines .pr-item{overflow-wrap:anywhere}
+
+.pr-totals{display:flex;justify-content:flex-end;margin-top:10px}
+.pr-totals dl{margin:0;min-width:48%;display:grid;gap:2px}
+.pr-totals dl div{display:flex;justify-content:space-between;gap:16px;padding:4px 6px}
+.pr-totals dt{color:var(--hs-muted)}
+.pr-totals dd{margin:0;font-weight:600;font-variant-numeric:tabular-nums}
+.pr-totals__grand{border-block:2px solid var(--hs-navy);font-size:16px}
+.pr-totals__grand dt,.pr-totals__grand dd{color:var(--hs-navy);font-weight:700}
+.pr-totals__due dd{color:var(--hs-danger)}
+
+.pr-voucher{margin:14px 0;padding:14px;border:2px solid var(--hs-navy);border-radius:var(--hs-radius-md)}
+.pr-voucher__amount{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.pr-voucher__amount strong{font-size:24px;color:var(--hs-navy);font-variant-numeric:tabular-nums}
+.pr-voucher p{margin:8px 0 0;color:var(--hs-muted)}
+
+.pr-words{margin:12px 0 0;padding:8px 10px;border-inline-start:3px solid var(--hs-gold);background:var(--hs-ground)}
+.pr-words span,.pr-notes span{color:var(--hs-muted)}
+.pr-notes{margin:8px 0 0}
+
+.pr-signatures{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:40px}
+.pr-signatures div{padding-top:30px;border-top:1px dashed var(--hs-line-strong);text-align:center;color:var(--hs-muted)}
+
+.pr-foot{margin-top:24px;padding-top:10px;border-top:1px solid var(--hs-line);text-align:center;color:var(--hs-muted);font-size:11px}
+.pr-foot p{margin:2px 0}
+.pr-foot__note{color:var(--hs-ink);font-size:12px}
+.pr-foot__brand img{height:18px;width:auto;opacity:.8}
+
+/* Receipt: one narrow column, no boxes that waste thermal paper. */
+.pr-receipt .pr-head{flex-direction:column;align-items:center;text-align:center;gap:6px}
+.pr-receipt .pr-doc{text-align:center}
+.pr-receipt .pr-meta div{justify-content:center}
+.pr-receipt .pr-company__name{font-size:17px}
+.pr-receipt .pr-doc__title{font-size:15px}
+.pr-receipt .pr-party{background:none;border-style:dashed;padding:6px}
+.pr-receipt .pr-lines th{background:none;color:var(--hs-ink);border-bottom:1px dashed var(--hs-ink)}
+.pr-receipt .pr-lines th,.pr-receipt .pr-lines td{padding:4px 2px}
+.pr-receipt .pr-col-no{display:none}
+.pr-receipt .pr-totals dl{min-width:100%}
+.pr-receipt .pr-voucher__amount strong{font-size:18px}
+
+@media (max-width:840px){
+  .pr-a4 .pr-sheet{width:auto;min-height:0;margin:12px;padding:16px}
+  .pr-a4 .pr-head{flex-direction:column}
+  .pr-a4 .pr-doc{text-align:start}
+  .pr-a4 .pr-meta div{justify-content:flex-start}
+  .pr-a4 .pr-totals dl{min-width:100%}
+}
+
+@page{size:A4;margin:0}
+@media print{
+  body.pr-body{background:var(--hs-surface)}
+  .pr-toolbar{display:none}
+  .pr-sheet{margin:0;box-shadow:none}
+  .pr-a4 .pr-sheet{width:auto;min-height:0}
+  .pr-lines tr{break-inside:avoid}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+@page receipt{size:80mm auto;margin:0}
+.pr-receipt .pr-sheet{page:receipt}

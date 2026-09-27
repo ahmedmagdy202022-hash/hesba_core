@@ -33,6 +33,7 @@ MODULE_ROUTES = (
     ("/inventory/", "inventory"),
     ("/cashboxes/", "cashboxes"),
     ("/expenses/", "expenses"),
+    ("/print/", "pdf_printing"),
     ("/master-data/customers/", "customers"),
     ("/master-data/suppliers/", "suppliers"),
     ("/master-data/items/", "items_services"),
