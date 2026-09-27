@@ -152,4 +152,12 @@ def profit_report_view(request):
     if show_expenses:
         totals["expenses"] = expense_total(date_from, date_to)
         totals["net_profit"] = totals["profit"] - totals["expenses"]
+        # ASSET-001: depreciation and asset-sale results are their own lines
+        # under net profit; nothing above them changes.
+        from fixed_assets.services import assets_enabled, depreciation_between, disposal_results_between
+
+        if assets_enabled():
+            totals["depreciation"] = depreciation_between(date_from, date_to)
+            totals["asset_disposals"] = disposal_results_between(date_from, date_to)
+            totals["net_after_depreciation"] = totals["net_profit"] - totals["depreciation"] + totals["asset_disposals"]
     return render(request, "reports/profit.html", _context(request, title="Profit Report" if _lang(request) == "en" else "تقرير الأرباح", rows=rows, totals=totals, show_expenses=show_expenses, date_from=date_from_raw, date_to=date_to_raw))

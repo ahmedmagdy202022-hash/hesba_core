@@ -1,0 +1,20 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'expenses:list' %}?lang={{ lang }}">← {% if lang == 'en' %}Expenses{% else %}المصروفات{% endif %}</a><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div></section>
+<section class="op-summary-grid"><article><small>{{ words.cost }}</small><strong>{{ totals.cost|money }}</strong></article><article><small>{{ words.accumulated }}</small><strong>{{ totals.accumulated|money }}</strong></article><article><small>{{ words.book }}</small><strong data-assets-book>{{ totals.book|money }}</strong></article><article><small>{{ words.this_month }}</small><strong data-assets-month>{{ this_month|money }}</strong></article></section>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.code }}</th><th>{{ words.name }}</th><th>{{ words.category }}</th><th>{{ words.in_service }}</th><th>{{ words.cost }}</th><th>{{ words.accumulated }}</th><th>{{ words.book }}</th><th>{{ words.status }}</th><th></th></tr></thead><tbody>
+{% for row in rows %}<tr data-asset-row="{{ row.asset.code }}"><td><bdi>{{ row.asset.code }}</bdi></td><td class="op-cell-text">{{ row.asset.name }}</td><td>{{ row.category }}</td><td><bdi>{{ row.asset.in_service_on|date:"Y-m-d" }}</bdi></td><td>{{ row.asset.cost|money }}</td><td>{{ row.accumulated|money }}</td><td>{{ row.book|money }}</td><td>{{ row.status }}</td><td><a href="{% url 'fixed_assets:detail' row.asset.pk %}?lang={{ lang }}">{{ words.open }}</a></td></tr>
+{% empty %}<tr><td colspan="9" class="op-empty">{{ words.empty }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_manage %}<form class="op-form" method="post" data-new-asset>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><h2>{{ words.new }}</h2><div class="op-form-grid">
+<div class="op-field"><label for="a-name">{{ words.name }}</label><input id="a-name" name="name" maxlength="255" required></div>
+<div class="op-field"><label for="a-cat">{{ words.category }}</label><select id="a-cat" name="category">{% for value, label in categories %}<option value="{{ value }}"{% if value == 'equipment' %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="a-date">{{ words.in_service }}</label><input id="a-date" name="in_service_on" type="date" value="{{ today|date:'Y-m-d' }}" required></div>
+<div class="op-field"><label for="a-cost">{{ words.cost }}</label><input id="a-cost" name="cost" inputmode="decimal" required></div>
+<div class="op-field"><label for="a-salvage">{{ words.salvage }}</label><input id="a-salvage" name="salvage_value" inputmode="decimal" value="0"></div>
+<div class="op-field"><label for="a-months">{{ words.months }}</label><input id="a-months" name="useful_months" type="number" min="1" max="600" value="60" required><small class="op-muted">{{ words.life_hint }}</small></div>
+<div class="op-field"><label for="a-cash">{{ words.paid_from }}</label><select id="a-cash" name="cashbox"><option value="">{{ words.not_paid }}</option>{% for cashbox in cashboxes %}<option value="{{ cashbox.pk }}">{{ cashbox }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="a-notes">{{ words.notes }}</label><input id="a-notes" name="notes" maxlength="255"></div>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form>{% else %}<p class="op-muted">{{ words.view_only }}</p>{% endif %}
+{% endblock %}

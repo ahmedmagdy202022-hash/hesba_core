@@ -1,0 +1,18 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'fixed_assets:list' %}?lang={{ lang }}">← {{ words.back }}</a><h1><bdi>{{ asset.code }}</bdi> · {{ asset.name }}</h1><p>{{ category }} · {{ words.in_service }} <bdi>{{ asset.in_service_on|date:"Y-m-d" }}</bdi> · {{ asset.useful_months }} {% if lang == 'en' %}months{% else %}شهر{% endif %}</p></div><div class="op-form-actions"><span class="op-status op-status-{% if asset.status == 'active' %}posted{% elif asset.status == 'disposed' %}draft{% else %}cancelled{% endif %}" data-asset-status="{{ asset.status }}">{{ status }}</span></div></section>
+<section class="op-summary-grid"><article><small>{{ words.cost }}</small><strong>{{ asset.cost|money }}</strong></article><article><small>{{ words.salvage }}</small><strong>{{ asset.salvage_value|money }}</strong></article><article><small>{{ words.accumulated }}</small><strong data-asset-accumulated>{{ accumulated|money }}</strong></article><article><small>{{ words.book }}</small><strong data-asset-book>{{ book|money }}</strong></article>{% if result is not None %}<article><small>{{ words.result }}</small><strong data-asset-result>{{ result|money }}</strong></article>{% endif %}</section>
+<h2>{{ words.schedule }}</h2>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.month }}</th><th>{{ words.amount }}</th><th>{{ words.accumulated }}</th><th>{{ words.book }}</th><th></th></tr></thead><tbody>
+{% for row in rows %}<tr data-dep-row="{% if row.charged %}charged{% else %}future{% endif %}"><td><bdi>{{ row.month|date:"Y-m" }}</bdi></td><td>{{ row.amount|money }}</td><td>{{ row.accumulated|money }}</td><td>{{ row.book_value|money }}</td><td>{% if row.charged %}{{ words.charged }}{% else %}<span class="op-muted">{{ words.future }}</span>{% endif %}</td></tr>{% empty %}<tr><td colspan="5" class="op-empty">—</td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_manage and asset.status == 'active' %}
+<form class="op-form" method="post" data-dispose>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="dispose"><h2>{{ words.dispose }}</h2><div class="op-form-grid">
+<div class="op-field"><label for="d-date">{{ words.disposed_on }}</label><input id="d-date" name="disposed_on" type="date" value="{{ today|date:'Y-m-d' }}" required></div>
+<div class="op-field"><label for="d-proceeds">{{ words.proceeds }}</label><input id="d-proceeds" name="proceeds" inputmode="decimal" value="0"></div>
+<div class="op-field"><label for="d-cash">{{ words.into }}</label><select id="d-cash" name="cashbox"><option value="">{{ words.none }}</option>{% for cashbox in cashboxes %}<option value="{{ cashbox.pk }}">{{ cashbox }}</option>{% endfor %}</select></div>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.dispose }}</button></div></form>
+<form class="op-form" method="post" data-cancel-asset>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="cancel"><h2>{{ words.cancel }}</h2><div class="op-form-grid"><div class="op-field"><label for="c-reason">{{ words.reason }}</label><input id="c-reason" name="reason" required maxlength="255"></div></div><div class="op-form-actions"><button class="op-danger" type="submit">{{ words.cancel }}</button></div></form>
+{% endif %}
+{% endblock %}
