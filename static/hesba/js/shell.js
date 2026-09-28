@@ -70,5 +70,17 @@
     function done(){ button.textContent = document.documentElement.lang === 'en' ? 'Copied' : 'اتنسخ'; setTimeout(function(){ button.textContent = label; }, 1800); }
     if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(url).then(done, function(){ window.prompt('', url); }); }
     else { window.prompt('', url); }
+/* SEARCH-001: "/" or Ctrl/Cmd+K jumps to search from any screen. */
+(function(){
+  document.addEventListener('keydown', function(event){
+    var target = event.target, typing = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
+    var combo = (event.key === 'k' || event.key === 'K') && (event.ctrlKey || event.metaKey);
+    if (!combo && (event.key !== '/' || typing)) { return; }
+    var box = document.querySelector('[data-search-input]') || document.querySelector('[data-shell-search]');
+    var visible = box && box.offsetParent !== null && box.getBoundingClientRect().width > 40;
+    event.preventDefault();
+    if (visible) { box.focus(); box.select(); return; }
+    var link = document.querySelector('[data-search-link]');
+    window.location.assign(link ? link.getAttribute('href') : '/search/');
   });
 })();

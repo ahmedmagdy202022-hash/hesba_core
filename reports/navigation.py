@@ -60,6 +60,8 @@ SHELL_WORDS = {
         "collapse": "طي القائمة",
         "expand": "توسيع القائمة",
         "language_short": "EN",
+        "search": "بحث",
+        "search_placeholder": "بحث… ( / )",
     },
     "en": {
         "main_nav": "Main navigation",
@@ -73,6 +75,8 @@ SHELL_WORDS = {
         "collapse": "Collapse menu",
         "expand": "Expand menu",
         "language_short": "ع",
+        "search": "Search",
+        "search_placeholder": "Search… ( / )",
     },
 }
 
