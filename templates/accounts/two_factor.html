@@ -1,7 +1,6 @@
 {% extends "operations/base.html" %}
 {% block operation_content %}
 <section class="op-title-row"><div><a class="op-back" href="{% url 'accounts:profile' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div><span class="op-status {% if device %}op-status-posted{% else %}op-status-draft{% endif %}" data-two-factor-state="{% if device %}on{% else %}off{% endif %}">{% if device %}{{ words.on }}{% else %}{{ words.off }}{% endif %}</span></section>
-{% if messages %}{% for message in messages %}<div class="op-message op-message-success" role="status">{{ message }}</div>{% endfor %}{% endif %}
 {% if error %}<div class="op-message op-message-error" role="alert" data-two-factor-error>{{ error }}</div>{% endif %}
 {% if codes %}
 <section class="op-form" data-recovery-codes><h2>{{ words.codes_title }}</h2><p class="op-muted">{{ words.codes_help }}</p>

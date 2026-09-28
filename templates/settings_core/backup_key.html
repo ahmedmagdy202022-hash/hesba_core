@@ -1,7 +1,6 @@
 {% extends "operations/base.html" %}
 {% block operation_content %}
 <section class="op-title-row"><div><a class="op-back" href="{{ back_url }}">← {{ words.back }}</a><h1>{{ words.title }}</h1><p>{{ words.lead }}</p></div><span class="op-status {% if fingerprint %}op-status-posted{% else %}op-status-draft{% endif %}" data-backup-encrypted="{% if fingerprint %}yes{% else %}no{% endif %}">{% if fingerprint %}{{ words.on }}{% else %}{{ words.off }}{% endif %}</span></section>
-{% if messages %}{% for message in messages %}<div class="op-message op-message-success" role="status">{{ message }}</div>{% endfor %}{% endif %}
 {% if error %}<div class="op-message op-message-error" role="alert" data-backup-error>{{ error }}</div>{% endif %}
 {% if private_text %}
 <section class="op-form" data-private-key-once><h2>{{ words.key_title }}</h2><p class="op-message op-message-error">{{ words.key_help }}</p>
@@ -10,10 +9,14 @@
 {% else %}
 {% if fingerprint %}<section class="op-summary-grid"><article><small>{{ words.fingerprint }}</small><strong dir="ltr" data-key-fingerprint>{{ fingerprint }}</strong></article><article><small>{{ words.since }}</small><strong>{{ since|date:"Y-m-d" }}</strong></article></section>{% endif %}
 {% if can_manage %}
-<form class="op-form" method="post" autocomplete="off" data-create-backup-key>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+<form class="op-form" method="post" autocomplete="off" data-create-backup-key>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="create_key">
 {% if fingerprint %}<p class="op-message">{{ words.replace_warning }}</p>{% endif %}
 <div class="op-form-grid"><div class="op-field"><label for="id_password">{{ words.password }}</label><input id="id_password" name="password" type="password" autocomplete="current-password" required></div></div>
 <div class="op-form-actions"><button class="{% if fingerprint %}op-secondary{% else %}op-primary{% endif %}" type="submit">{% if fingerprint %}{{ words.replace }}{% else %}{{ words.create }}{% endif %}</button></div></form>
 {% else %}<p class="op-message">{{ words.view_only }}</p>{% endif %}
+<section class="op-form" data-backup-drive="{% if drive.connected %}on{% else %}off{% endif %}"><h2>{{ words.drive }} <span class="op-status {% if drive.connected %}op-status-posted{% else %}op-status-draft{% endif %}">{% if drive.connected %}{{ words.drive_on }}{% else %}{{ words.drive_off }}{% endif %}</span></h2><p class="op-muted">{{ words.drive_lead }}</p>
+{% if drive.connected %}<div class="op-summary-grid"><article><small>{{ words.last_upload }}</small><strong dir="ltr" data-drive-last-upload>{{ drive.last_upload|default:words.never }}</strong></article>{% if drive.last_error %}<article><small>{{ words.last_error }}</small><strong class="op-field-error" data-drive-last-error>{{ drive.last_error|truncatechars:120 }}</strong></article>{% endif %}</div>{% endif %}
+{% if can_manage %}{% if not drive.configured %}<p class="op-message">{{ words.drive_unavailable }}</p>{% elif not fingerprint %}<p class="op-message">{{ words.drive_needs_key }}</p>{% else %}<div class="op-form-actions">{% if drive.connected %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="backup_now"><button class="op-primary" type="submit" data-backup-now>{{ words.backup_now }}</button></form><form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="drive_disconnect"><button class="op-secondary" type="submit" data-drive-disconnect>{{ words.drive_disconnect }}</button></form>{% else %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="drive_connect"><button class="op-primary" type="submit" data-drive-connect>{{ words.drive_connect }}</button></form>{% endif %}</div>{% endif %}{% endif %}
+</section>
 {% endif %}
 {% endblock %}
