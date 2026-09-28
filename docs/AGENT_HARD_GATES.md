@@ -438,6 +438,17 @@ Status: RESOLVED (covered by Ahmed's standing go-ahead of 2026-09-27: «كمّل
 - Every roadmap capability is now available. The capability tests keep the "listed but not available yet" path covered with a patched test-only capability.
 - Verification: `fixed_assets/tests.py` (8 tests). They cover the month amounts and rounding, the full-month convention, accumulated and book value, report windows charged on the 1st, the salvage floor, disposal stopping depreciation with the gain/loss and cash in, payment from a cashbox with a negative-balance refusal, cancel reversing the payment, refusals, the profit report line and its capability switch, the screens, and permissions and the gate.
 
+## HG-024 — Cashier shifts: computed expected cash, difference posted on purpose (SHIFT-001)
+
+Status: RESOLVED (Ahmed's standing go-ahead of 2026-09-28 to build and merge what can be done safely)
+
+- New `shifts` app with **one new table**: `Shift`. It holds the cashier, the cashbox, the float counted at opening, open/closed status, the expected and counted cash, the difference, a summary snapshot and notes. At most one open shift per cashier (DB constraint).
+- **Expected cash is computed, never typed:** float + the cashier's own cash movements on that cashbox between opening and closing. That covers POS and invoice cash sales, refunds, collections, supplier payments and direct cash in/out. Other users' movements are not counted. A posted shift difference (reference `SHIFT-<id>-DIFF`) is never counted in anyone's shift.
+- **Closing only records.** The cashbox is not touched. A manager with `cashboxes.move_cash` may then post the difference through the existing `create_cashbox_operation` (DIRECT_OUT for a shortage, DIRECT_IN for an overage), once per shift. That service keeps its own period, permission and negative-balance checks. No posting, stock, ledger or report logic is changed.
+- Selling is never blocked by a missing shift. The till shows «افتح وردية» or «وردية من …» linking to `/shifts/`.
+- Permissions: using shifts needs `sales.create_sales_invoice`. Other cashiers' shifts need `cashboxes.view_finance`, and posting a difference needs `cashboxes.move_cash`.
+- Verification: `shifts/tests.py` (4 tests). They cover the expected cash from POS sales and a collection with another user's movement excluded, closing with a shortage, the one-open rule and refusals, the manager posting a shortage and an overage exactly once with the cashier refused, the difference excluded from the manager's own open shift, privacy, the POS banner and English.
+
 ## Final gate verification
 
 - Full Django suite: 794 tests passed in 576.477 seconds.
