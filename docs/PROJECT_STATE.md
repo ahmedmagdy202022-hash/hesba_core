@@ -1,6 +1,6 @@
 # Hesba — the actual state of the project (DOC-002)
 
-**Last updated:** 28 September 2026 · `develop` after PR #126
+**Last updated:** 29 September 2026 · `develop` after PR #133
 
 > `docs/HESBA_ROADMAP.md` is Main Control's task board and has fallen behind: many
 > items it lists as ⏳ are done. This file records **what actually exists today on
@@ -66,7 +66,17 @@
 | Tests stable across midnight | #125 |
 | Render blueprint + Arabic go-live guide (`docs/GO_LIVE.md`) | #126 |
 
-Every protected-logic decision is recorded in `docs/AGENT_HARD_GATES.md` (HG-001 to HG-028).
+### Every activity open in the setup wizard (29 September)
+| What | PR |
+|---|---|
+| Employees and technicians (commission, linked login) | #128 |
+| Appointments and visits: agenda, no double booking for an employee, WhatsApp reminder, billing through sales, employee performance | #129 |
+| Restaurants and cafés: tables, dine-in/takeaway/delivery orders, kitchen ticket, bill through the POS checkout itself | #130 |
+| Medical, education and "other" activities, with their sub-activities and presets | #131 |
+| Contracting: projects, progress bills, materials issued to site, linked expenses, project profit (HG-029) | #132 |
+| Manufacturing: recipes (BOM) and production runs that take out materials and bring in the product at their cost (HG-030) | #133 |
+
+Every protected-logic decision is recorded in `docs/AGENT_HARD_GATES.md` (HG-001 to HG-030; HG-029 and HG-030 are open proposals that block nothing).
 
 ---
 
@@ -81,12 +91,15 @@ Every protected-logic decision is recorded in `docs/AGENT_HARD_GATES.md` (HG-001
 7. **2FA extras:** a QR image, and a setting that makes 2FA mandatory for the owner role.
 8. **Design track D:** fonts, components, empty states.
 9. **Cleanup:** about 80 old branches on GitHub.
+10. **Restaurants, round two:** item modifiers (sizes and add-ons), deducting ingredients by recipe on sale (needs a Hard Gate), split bill, service charge, kitchen display.
+11. **Education:** student groups and monthly fees (subscriptions). Today it runs on customers, appointments and invoices.
+12. **Dedicated movement types** for "issued to project" and "production" (HG-029, HG-030), so the inventory report tells them apart from shrinkage.
 
 ---
 
 ## 3. Parked ideas (from Ahmed; no work on them now)
 
-### 🍽️ Restaurants and cafés (Ahmed's note, 28 Sep 2026)
+### 🍽️ Restaurants and cafés (Ahmed's note, 28 Sep 2026) — round one done in #130
 Needs a different experience and a different look from the shop POS, and must not slow down the current work. Expected items when we start:
 - a table screen (open / occupied / bill requested) and taking orders per table;
 - menu items with **modifiers** (sizes, add-ons, "no onion"), and recipes that deduct ingredients from stock (recipe / BOM);
@@ -98,6 +111,6 @@ The right start: a separate activity `restaurant` in the setup wizard with its o
 ### Other ideas from the report
 - ~~A morning summary on WhatsApp~~ → done as the daily summary (#115); **sending it automatically** each morning needs a WhatsApp Business API account.
 - A customer self-service page (statement and instalments) + an InstaPay or wallet payment reference.
-- A POS that keeps working when the internet drops (a queue that syncs when it comes back).
+- ~~A POS that keeps working when the internet drops~~ → done (#124).
 - Simple loyalty points.
 - AI: supplier invoice photo → purchase draft, and "Ask Hesba" (read-only). AI only suggests; it never posts.
