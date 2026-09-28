@@ -57,6 +57,7 @@ LOCAL_APPS = [
     "staff",
     "appointments",
     "restaurant",
+    "projects",
     "printing",
 ]
 

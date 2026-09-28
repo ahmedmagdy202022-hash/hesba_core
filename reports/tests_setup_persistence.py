@@ -22,10 +22,10 @@ def make_profile(**kwargs):
 
 
 class SetupCatalogTests(TestCase):
-    def test_it_knows_the_thirteen_modules_in_wizard_order(self):
-        self.assertEqual(len(catalog.MODULE_SLUGS), 13)  # RESTO-001 added tables_orders
+    def test_it_knows_the_fourteen_modules_in_wizard_order(self):
+        self.assertEqual(len(catalog.MODULE_SLUGS), 14)  # RESTO-001 added tables_orders, CONTRACT-001 projects
         self.assertEqual(catalog.MODULE_SLUGS[0], "customers")
-        self.assertEqual(catalog.MODULE_SLUGS[-1], "tables_orders")
+        self.assertEqual(catalog.MODULE_SLUGS[-1], "projects")
 
     def test_presets_match_the_documented_counts(self):
         for activity, required, suggested in (

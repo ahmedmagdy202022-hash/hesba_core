@@ -9,7 +9,7 @@ from settings_core import setup_catalog as catalog
 from settings_core.models import ActivityType, ClientProfile
 from settings_core.setup_services import complete_setup
 
-NEW = (catalog.MEDICAL, catalog.EDUCATION, catalog.OTHER)
+NEW = (catalog.MEDICAL, catalog.EDUCATION, catalog.OTHER, catalog.CONTRACTING)
 
 
 class ActivityWizardTests(TestCase):
@@ -23,7 +23,7 @@ class ActivityWizardTests(TestCase):
         for activity in NEW + (catalog.RESTAURANTS,):
             with self.subTest(activity=activity):
                 self.assertIn(f'data-activity="{activity}" data-next="/setup/activity/{activity}/"', page)
-        for locked in ("manufacturing", "contracting"):
+        for locked in ("manufacturing",):
             self.assertIn(f'data-activity="{locked}" disabled', page)
 
     def test_the_step_lists_the_catalog_and_hands_on_the_activity(self):
@@ -55,7 +55,8 @@ class ActivityPresetTests(TestCase):
     def test_saving_maps_each_activity_and_locks_its_required_modules(self):
         for activity, kind, must in ((catalog.MEDICAL, ActivityType.SERVICES, {"appointments_visits", "sales_operations"}),
                                      (catalog.EDUCATION, ActivityType.SERVICES, {"customers", "sales_operations"}),
-                                     (catalog.OTHER, ActivityType.MIXED, {"items_services", "sales_operations"})):
+                                     (catalog.OTHER, ActivityType.MIXED, {"items_services", "sales_operations"}),
+                                     (catalog.CONTRACTING, ActivityType.CONTRACTING, {"customers", "projects"})):
             with self.subTest(activity=activity):
                 ClientProfile.objects.all().delete()
                 profile = ClientProfile.objects.create(client_code="DEMO", legal_name="Demo", display_name="Demo")

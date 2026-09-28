@@ -1,0 +1,10 @@
+<div class="op-form-grid">
+<div class="op-field"><label for="pj-name">{{ words.name }}</label><input id="pj-name" name="name" value="{{ form.name|default:'' }}" required maxlength="255"></div>
+<div class="op-field"><label for="pj-customer">{{ words.customer }}</label><select id="pj-customer" name="customer" required><option value="">—</option>{% for customer in customers %}<option value="{{ customer.pk }}"{% if form.customer == customer.pk|stringformat:"s" %} selected{% endif %}>{{ customer.name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="pj-value">{{ words.contract }}</label><input id="pj-value" name="contract_value" value="{{ form.contract_value|default:''|stringformat:'s' }}" inputmode="decimal" dir="ltr"></div>
+<div class="op-field"><label for="pj-site">{{ words.site }}</label><input id="pj-site" name="site" value="{{ form.site|default:'' }}" maxlength="255"></div>
+<div class="op-field"><label for="pj-start">{{ words.start }}</label><input id="pj-start" type="date" name="start_date" value="{{ form.start_date|default:'' }}"></div>
+<div class="op-field"><label for="pj-end">{{ words.end }}</label><input id="pj-end" type="date" name="end_date" value="{{ form.end_date|default:'' }}"></div>
+<div class="op-field"><label for="pj-status">{{ words.status }}</label><select id="pj-status" name="status">{% for value, label in statuses %}<option value="{{ value }}"{% if form.status == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="pj-notes">{{ words.notes }}</label><input id="pj-notes" name="notes" value="{{ form.notes|default:'' }}" maxlength="255"></div>
+</div>
