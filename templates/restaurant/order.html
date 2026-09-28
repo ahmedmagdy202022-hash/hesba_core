@@ -1,0 +1,54 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/restaurant.css' %}?v=resto-001">{% endblock %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'restaurant:board' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{% if order.table %}{{ words.table }} {{ order.table.name }}{% else %}{{ kind_label }}{% endif %}</h1><p><span dir="ltr">{{ order.number }}</span> · {{ kind_label }}{% if order.customer %} · {{ order.customer.name }}{% endif %}{% if order.address %} · {{ order.address }}{% endif %}{% if order.phone %} · <span dir="ltr">{{ order.phone }}</span>{% endif %}</p>{% if is_open and can_take %}<a class="op-secondary rs-jump" href="#menu">{{ words.menu }} ↓</a>{% endif %}</div><span class="op-status op-status-{% if order.status == 'paid' %}posted{% elif order.status == 'cancelled' %}cancelled{% else %}open{% endif %}" data-order-status="{{ order.status }}">{{ status_label }}</span></section>
+<div class="rs-order">
+{% if is_open and can_take %}
+<section class="rs-panel" id="menu" aria-labelledby="rs-menu-title" data-menu>
+  <h2 id="rs-menu-title">{{ words.menu }}</h2>
+  <input class="rs-search" type="search" placeholder="{{ words.search }}" aria-label="{{ words.search }}" data-menu-search>
+  {% if categories %}<div class="rs-cats" role="group" aria-label="{{ words.menu }}"><button type="button" aria-pressed="true" data-menu-cat="">{{ words.all }}</button>{% for category in categories %}<button type="button" aria-pressed="false" data-menu-cat="{{ category.pk }}">{% if lang == 'en' and category.name_en %}{{ category.name_en }}{% else %}{{ category.name_ar }}{% endif %}</button>{% endfor %}</div>{% endif %}
+  <div class="rs-menu">
+  {% for item in items %}<form method="post" data-dish="{{ item.item_code }}" data-cat="{{ item.category_id|default:'' }}" data-name="{{ item.item_name|lower }} {{ item.item_code|lower }}">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="add"><input type="hidden" name="item" value="{{ item.pk }}"><button class="rs-dish" type="submit"><span>{{ item.item_name }}</span><small>{{ item.default_sale_price|money }}</small></button></form>
+  {% empty %}<p class="op-muted">{{ words.no_items }}</p>{% endfor %}
+  </div>
+</section>
+{% endif %}
+<section class="rs-panel rs-bill" aria-labelledby="rs-lines-title">
+  <h2 id="rs-lines-title">{% if order.table %}{{ words.table }} {{ order.table.name }}{% else %}{{ order.number }}{% endif %}</h2>
+  <ul class="rs-lines">
+  {% for line in lines %}
+    <li class="rs-line{% if line.voided %} rs-line--void{% endif %}" data-order-line="{{ line.item.item_code }}" data-line-state="{% if line.voided %}void{% elif line.ticket_id %}sent{% else %}new{% endif %}">
+      <span class="rs-line__name">{{ line.quantity|qty }} × {{ line.item.item_name }} {% if line.voided %}<span class="rs-tag">{{ words.voided }}</span>{% elif line.ticket_id %}<span class="rs-tag">{{ words.sent }}</span>{% else %}<span class="rs-tag rs-tag--new">{{ words.new }}</span>{% endif %}</span>
+      <span class="rs-line__amount">{{ line.amount|money }}</span>
+      {% if line.note %}<span class="rs-line__note">{{ line.note }}</span>{% endif %}
+      {% if is_open and can_take and not line.voided %}<span class="rs-line__tools">
+        {% if not line.ticket_id %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="qty"><input type="hidden" name="line" value="{{ line.pk }}"><input name="quantity" value="{{ line.quantity|qty }}" inputmode="decimal" aria-label="{{ words.qty }}"><input name="note" value="{{ line.note }}" placeholder="{{ words.note }}" aria-label="{{ words.note }}"><button type="submit">{{ words.save }}</button></form>{% endif %}
+        <form method="post"{% if line.ticket_id %} data-confirm="{{ words.void_confirm }}"{% endif %}>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="void"><input type="hidden" name="line" value="{{ line.pk }}"><button type="submit" data-line-void>{% if line.ticket_id %}{{ words.void }}{% else %}{{ words.remove }}{% endif %}</button></form>
+      </span>{% endif %}
+    </li>
+  {% empty %}<li class="op-muted">{{ words.empty }}</li>{% endfor %}
+  </ul>
+  <p class="rs-total"><span>{{ words.total }}</span><span data-order-total>{{ total|money }}</span></p>
+  {% if order.invoice %}<p>{{ words.invoice }}: <a href="{% url 'sales:detail' order.invoice.pk %}?lang={{ lang }}" data-order-invoice>{{ order.invoice.invoice_number }}</a></p>{% endif %}
+  {% if is_open and can_take %}
+  <div class="rs-actions">
+    {% if pending %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="send"><button class="op-primary" type="submit" data-send-kitchen>{{ words.send }}</button></form>{% endif %}
+    {% if lines %}<form method="post" data-pay-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="pay"><h2>{{ words.pay }}</h2>
+      <div class="rs-row"><label>{{ words.cashbox }}<select name="cashbox">{% for box in cashboxes %}<option value="{{ box.pk }}"{% if default_cashbox and box.pk == default_cashbox.pk %} selected{% endif %}>{% if lang == "en" and box.name_en %}{{ box.name_en }}{% else %}{{ box.name_ar }}{% endif %}</option>{% endfor %}</select></label>
+      <label>{{ words.customer }}<select name="customer"><option value="">{% if order.customer %}{{ order.customer.name }}{% else %}{{ words.walk_in }}{% endif %}</option>{% for customer in customers %}{% if customer.pk != order.customer_id %}<option value="{{ customer.pk }}">{{ customer.name }}</option>{% endif %}{% endfor %}</select></label></div>
+      <div class="rs-row"><label>{{ words.discount }}<input name="discount" value="0" inputmode="decimal" dir="ltr"></label><label>{{ words.tendered }}<input name="tendered" value="{{ total|stringformat:"s" }}" inputmode="decimal" dir="ltr" data-tendered></label></div>
+      <label class="rs-check"><input type="checkbox" name="print" value="1" checked> {{ words.print }}</label>
+      <button class="op-primary" type="submit" data-pay>{{ words.pay_btn }}</button></form>{% endif %}
+    <details class="rs-more"><summary>{{ words.move }} / {{ words.cancel }}</summary>
+      {% if order.kind == 'dine_in' and free_tables %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="move"><label>{{ words.move }}<select name="table">{% for table in free_tables %}<option value="{{ table.pk }}">{{ table.name }}</option>{% endfor %}</select></label><button class="op-secondary" type="submit" data-move>{{ words.move }}</button></form>{% endif %}
+      <form method="post" data-confirm="{{ words.cancel_confirm }}">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="cancel"><label>{{ words.reason }}<input name="reason"></label><button class="op-danger" type="submit" data-cancel-order>{{ words.cancel }}</button></form>
+    </details>
+  </div>
+  {% endif %}
+  {% if tickets %}<h2>{{ words.tickets }}</h2><p class="op-form-actions">{% for ticket in tickets %}<a class="op-secondary" href="{% url 'restaurant:ticket' ticket.pk %}?lang={{ lang }}" data-ticket="{{ ticket.sequence }}">{{ words.ticket }} {{ ticket.sequence }} · <span dir="ltr">{{ ticket.sent_at|time:"H:i" }}</span></a>{% endfor %}</p>{% endif %}
+</section>
+</div>
+<script src="{% static 'hesba/js/restaurant.js' %}?v=resto-001" defer></script>
+{% endblock %}

@@ -1,0 +1,20 @@
+{% extends "operations/base.html" %}
+{% load static %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'restaurant:board' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ words.tables_title }}</h1></div></section>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.name }}</th><th>{{ words.area }}</th><th>{{ words.seats }}</th><th>{{ words.sort }}</th><th>{{ words.active }}</th>{% if can_tables %}<th></th>{% endif %}</tr></thead><tbody>
+{% for table in rows %}<tr data-table-row="{{ table.name }}"><td>{{ table.name }}</td><td>{{ table.area|default:'—' }}</td><td>{{ table.seats }}</td><td>{{ table.sort_order }}</td><td>{% if table.active %}✓{% else %}—{% endif %}</td>{% if can_tables %}<td><a href="?lang={{ lang }}&edit={{ table.pk }}">{{ words.edit }}</a></td>{% endif %}</tr>
+{% empty %}<tr><td colspan="6" class="op-empty">{{ words.no_tables }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_tables %}<form class="op-form" method="post" data-table-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">{% if editing %}<input type="hidden" name="pk" value="{{ editing.pk }}">{% endif %}
+<h2>{% if editing %}{{ words.edit }} · {{ editing.name }}{% else %}{{ words.new_table }}{% endif %}</h2>
+{% if error %}<div class="op-message op-message-error" role="alert" data-table-error>{{ error }}</div>{% endif %}
+<div class="op-form-grid">
+<div class="op-field"><label for="tb-name">{{ words.name }}</label><input id="tb-name" name="name" value="{{ form.name|default:'' }}" required maxlength="40"></div>
+<div class="op-field"><label for="tb-area">{{ words.area }}</label><input id="tb-area" name="area" value="{{ form.area|default:'' }}" maxlength="60"></div>
+<div class="op-field"><label for="tb-seats">{{ words.seats }}</label><input id="tb-seats" name="seats" value="{{ form.seats|default:'4' }}" inputmode="numeric"></div>
+<div class="op-field"><label for="tb-sort">{{ words.sort }}</label><input id="tb-sort" name="sort_order" value="{{ form.sort_order|default:'0' }}" inputmode="numeric"></div>
+<label class="op-field"><span><input type="checkbox" name="active"{% if form.active %} checked{% endif %}> {{ words.active }}</span></label>
+</div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button>{% if editing %}<a class="op-secondary" href="?lang={{ lang }}">{{ words.new_table }}</a>{% endif %}</div></form>{% endif %}
+{% endblock %}
