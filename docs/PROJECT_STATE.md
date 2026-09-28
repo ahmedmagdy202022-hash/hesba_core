@@ -1,6 +1,6 @@
 # Hesba — the actual state of the project (DOC-002)
 
-**Last updated:** 28 September 2026 · `develop` after PR #112
+**Last updated:** 28 September 2026 · `develop` after PR #118
 
 > `docs/HESBA_ROADMAP.md` is Main Control's task board and has fallen behind: many
 > items it lists as ⏳ are done. This file records **what actually exists today on
@@ -49,22 +49,25 @@
 | Search across the whole app (`/` or Ctrl+K) | #110 |
 | Sending invoices and statements on WhatsApp via a secure link | #111 |
 | Purchase suggestions ("buy soon") → pre-filled purchase draft | #112 |
+| Label templates by size (A4 at 21/24/40, rolls 38×25 to 50×30) + choosing fields + print offset | #114 |
+| Owner's daily summary (`/reports/daily/`) + sending it on WhatsApp | #115 |
+| Company details frozen on each posted invoice (a reprint shows the details from its own date) | #116 |
+| POS: find a customer by phone, or add one from the till | #117 |
+| Two-step sign-in (2FA) with an authenticator app + recovery codes | #118 |
 
-Every protected-logic decision is recorded in `docs/AGENT_HARD_GATES.md` (HG-001 to HG-024).
+Every protected-logic decision is recorded in `docs/AGENT_HARD_GATES.md` (HG-001 to HG-025).
 
 ---
 
 ## 2. Still missing, in order of importance
 
 1. **Scheduled off-site backups.** The commands exist; running them on a schedule to an external store is an operations decision (where, and at what cost).
-2. **Two-step sign-in (2FA) for the owner.**
-3. **Snapshot of company details on each posted invoice**, so reprinting an old invoice shows the details from its own date. Needs a new table.
-4. **Server-generated PDF**, for sending by email. Today PDF means "Save as PDF" from the browser.
-5. **E-invoice phase 3** (signing and submission) + credit notes for returns + the e-receipt for the POS. Waiting for the first real client with an account and a signature.
-6. **Choosing a batch or serial number on the sales return form itself.** Today it's done from the batch and serial screens.
-7. **Label templates by size** (38×25, 50×30, A4 at 21/40 labels) with a choice of fields.
-8. **Design track D:** fonts, components, empty states (only partly done).
-9. **Cleanup:** about 80 old branches on GitHub.
+2. **Server-generated PDF**, for sending by email. Today PDF means "Save as PDF" from the browser.
+3. **E-invoice phase 3** (signing and submission) + credit notes for returns + the e-receipt for the POS. Waiting for the first real client with an account and a signature.
+4. **Choosing a batch or serial number on the sales return form itself.** Today it's done from the batch and serial screens. This touches return posting, so it needs a Hard Gate first.
+5. **2FA extras:** a QR image on the setup screen (needs a QR library), and a setting that makes 2FA mandatory for the owner role.
+6. **Design track D:** fonts, components, empty states (only partly done).
+7. **Cleanup:** about 80 old branches on GitHub.
 
 ---
 
@@ -80,7 +83,7 @@ Needs a different experience and a different look from the shop POS, and must no
 The right start: a separate activity `restaurant` in the setup wizard with its own capabilities, on top of the same sales and inventory engine, without duplicating the accounting.
 
 ### Other ideas from the report
-- A morning summary on WhatsApp for the owner (yesterday's sales, the cash, late payers, what expires soon).
+- ~~A morning summary on WhatsApp~~ → done as the daily summary (#115); **sending it automatically** each morning needs a WhatsApp Business API account.
 - A customer self-service page (statement and instalments) + an InstaPay or wallet payment reference.
 - A POS that keeps working when the internet drops (a queue that syncs when it comes back).
 - Simple loyalty points.
