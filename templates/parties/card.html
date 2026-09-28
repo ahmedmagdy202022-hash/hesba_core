@@ -1,5 +1,5 @@
 {% extends "operations/base.html" %}
-{% load hesba_format %}
+{% load hesba_format hesba_print %}
 {% block operation_content %}
 <section class="op-title-row"><div><a class="op-back" href="{% if kind == 'customer' %}{% url 'master_data:customers' %}{% else %}{% url 'master_data:suppliers' %}{% endif %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ party.name }}</h1><p><bdi>{{ code }}</bdi>{% if party.phone %} · <bdi>{{ party.phone }}</bdi>{% endif %}{% if party.address %} · {{ party.address }}{% endif %}</p></div>
 <div class="op-form-actions">{% if party.phone %}<a class="op-secondary" href="tel:{{ party.phone }}">{{ words.call }}</a>{% endif %}{% if reminder %}<a class="op-secondary" href="{{ reminder }}" target="_blank" rel="noopener" data-party-whatsapp>{{ words.whatsapp }}</a>{% endif %}
@@ -14,7 +14,7 @@
 </section>
 <h2>{{ words.statement }}</h2>
 <form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><input type="date" name="from" value="{{ date_from|date:'Y-m-d' }}" aria-label="{{ words.from }}"><input type="date" name="to" value="{{ date_to|date:'Y-m-d' }}" aria-label="{{ words.to }}"><button type="submit">{{ words.show }}</button></form>
-<p class="op-form-actions"><a class="op-secondary" href="{% url 'parties:statement' kind party.pk %}?lang={{ lang }}{% if date_from %}&from={{ date_from|date:'Y-m-d' }}{% endif %}{% if date_to %}&to={{ date_to|date:'Y-m-d' }}{% endif %}" data-party-print>{{ words.print }}</a></p>
+<p class="op-form-actions">{% if kind == 'customer' %}{% share_links 'customer_statement' party party as share %}<a class="op-secondary" href="{{ share.whatsapp }}" target="_blank" rel="noopener" data-share-statement>{% if lang == 'en' %}Send statement on WhatsApp{% else %}ابعت الكشف واتساب{% endif %}</a><button class="op-secondary" type="button" data-copy-link="{{ share.url }}">{% if lang == 'en' %}Copy link{% else %}نسخ الرابط{% endif %}</button>{% endif %}<a class="op-secondary" href="{% url 'parties:statement' kind party.pk %}?lang={{ lang }}{% if date_from %}&from={{ date_from|date:'Y-m-d' }}{% endif %}{% if date_to %}&to={{ date_to|date:'Y-m-d' }}{% endif %}" data-party-print>{{ words.print }}</a></p>
 <div class="op-table-wrap"><table class="op-table" data-statement><thead><tr><th>{{ words.date }}</th><th>{{ words.type }}</th><th>{{ words.ref }}</th><th>{{ words.debit }}</th><th>{{ words.credit }}</th><th>{{ words.running }}</th></tr></thead><tbody>
 <tr><td colspan="5"><strong>{{ words.opening }}</strong></td><td><strong data-statement-opening>{{ data.opening|money }}</strong></td></tr>
 {% for row in data.rows %}<tr><td><bdi>{{ row.entry.entry_date|date:"Y-m-d" }}</bdi></td><td class="op-cell-text">{{ row.type_label }}</td><td>{% if row.reference.url_name %}<a href="{% url row.reference.url_name row.reference.pk %}?lang={{ lang }}"><bdi>{{ row.reference.number }}</bdi></a>{% else %}<bdi>{{ row.reference.number|default:"" }}</bdi>{% endif %}</td><td>{% if row.increase %}{{ row.increase|money }}{% endif %}</td><td>{% if row.decrease %}{{ row.decrease|money }}{% endif %}</td><td>{{ row.balance|money }}</td></tr>

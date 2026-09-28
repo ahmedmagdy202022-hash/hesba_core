@@ -162,7 +162,7 @@ def _watermark(status, words):
     return ""
 
 
-def _render(request, doc, back_url):
+def _render(request, doc, back_url, public=False):
     lang = _lang(request)
     words = WORDS[lang]
     company = company_details()
@@ -183,6 +183,7 @@ def _render(request, doc, back_url):
             "return_after_print": request.GET.get("next") == "pos" and request.GET.get("autoprint") == "1",
             "page_title": f"{doc['title']} {doc['number']}",
             "printed_by": getattr(request.user, "get_full_name", lambda: "")() or request.user.get_username(),
+            "public": public,
         },
     )
 
@@ -372,3 +373,46 @@ def company_settings(request):
             "can_manage": can_manage,
         },
     )
+
+
+def shared_document(request, token):
+    """SHARE-001: the public, read-only page behind a shared link."""
+
+    from django.http import Http404
+
+    from .share import read_token
+
+    found = read_token(token)
+    if found is None:
+        return render(request, "printing/share_expired.html", {"lang": _lang(request), "dir": "ltr" if _lang(request) == "en" else "rtl"}, status=404)
+    kind, pk = found
+    lang = _lang(request)
+    if kind == "sales_invoice":
+        invoice = get_object_or_404(SalesInvoice.objects.select_related("customer", "cashbox"), pk=pk)
+        doc = _invoice_doc(invoice, "sales_invoice", lang, "customer", "unit_sale_price")
+    elif kind == "sales_return":
+        from sales.models import SalesReturn
+
+        doc = _return_doc(get_object_or_404(SalesReturn, pk=pk), "sales_return", lang, "customer", "sales")
+    elif kind == "customer_payment":
+        from sales.models import CustomerPayment
+
+        doc = _voucher_doc(get_object_or_404(CustomerPayment, pk=pk), "customer_payment", lang, "customer")
+    elif kind == "customer_statement":
+        from master_data.models import Customer
+        from parties.services import statement
+        from parties.views import WORDS as PARTY_WORDS
+
+        customer = get_object_or_404(Customer, pk=pk)
+        data = statement("customer", customer)
+        for row in data["rows"]:
+            row["type_label"] = PARTY_WORDS[lang]["types"].get(row["entry"].entry_type, row["entry"].entry_type)
+        return render(request, "parties/statement_print.html", {
+            "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": PARTY_WORDS[lang], "kind": "customer", "party": customer,
+            "code": customer.customer_code, "data": data, "date_from": None, "date_to": None, "company": company_details(), "printed_by": "", "public": True,
+        })
+    else:
+        raise Http404
+    response = _render(request, doc, "", public=True)
+    response["X-Robots-Tag"] = "noindex, nofollow"
+    return response

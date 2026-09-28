@@ -12,6 +12,7 @@ from reports.status_views import status_counts_report
 from reports.functional_views import report_hub
 from reports.views import home
 from accounts.login_guard import GuardedLoginView
+from printing import views as printing_views
 from settings_core.setup_views import after_login, root_redirect, setup_complete, setup_review
 
 
@@ -23,6 +24,8 @@ urlpatterns = [
     # stale page was bounced to /login/?next=/logout/ and, after signing back
     # in, landed on a GET of this POST-only view (405).
     path("logout/", login_not_required(LogoutView.as_view(next_page="login")), name="logout"),
+    # SHARE-001: signed, expiring, read-only document links for customers (no account).
+    path("share/<str:token>/", login_not_required(printing_views.shared_document), name="share_document"),
     path("start/", after_login, name="after_login"),
     path("setup/", TemplateView.as_view(template_name="setup/setup_gate.html"), name="setup_gate"),
     path("setup/activity/", TemplateView.as_view(template_name="setup/activity_selection.html"), name="setup_activity"),
