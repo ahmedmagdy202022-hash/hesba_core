@@ -3,7 +3,7 @@ from django.urls import path
 from accounts import two_factor_views, user_views
 from printing.views import company_settings
 
-from . import operational_views
+from . import backup_views, operational_views
 
 
 app_name = "settings_core"
@@ -15,6 +15,7 @@ urlpatterns = [
     path("capabilities/", operational_views.capability_settings, name="capabilities"),
     path("currency/", operational_views.currency_settings, name="currency"),
     path("company/", company_settings, name="company"),
+    path("backups/", backup_views.backup_key, name="backup_key"),
     path("users/", user_views.user_list, name="users"),
     path("users/new/", user_views.user_create, name="user_create"),
     path("users/<int:pk>/", user_views.user_edit, name="user_edit"),
