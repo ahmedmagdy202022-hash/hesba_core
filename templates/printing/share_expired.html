@@ -1,0 +1,8 @@
+{% load static %}<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex">
+<title>{% if lang == 'en' %}Link expired{% else %}الرابط انتهى{% endif %}</title>
+{% include "partials/brand_icons.html" %}<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}"><link rel="stylesheet" href="{% static 'hesba/css/print.css' %}?v=print-002">
+</head>
+<body class="pr-body pr-a4"><article class="pr-sheet" data-share-expired><h1 class="pr-company__name">{% if lang == 'en' %}This link is no longer valid{% else %}الرابط ده مبقاش شغال{% endif %}</h1>
+<p>{% if lang == 'en' %}It may have expired. Ask the shop to send it again.{% else %}ممكن تكون مدته خلصت. اطلب من المحل يبعته تاني.{% endif %}</p></article></body></html>
