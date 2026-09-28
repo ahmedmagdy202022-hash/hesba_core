@@ -10,7 +10,7 @@
 </head>
 <body class="pr-body pr-a4" data-format="a4">
 <nav class="pr-toolbar" aria-label="{{ words.print }}">
-  <a class="pr-button pr-button--ghost" href="{% url 'parties:card' kind party.pk %}?lang={{ lang }}{% if date_from %}&from={{ date_from|date:'Y-m-d' }}{% endif %}{% if date_to %}&to={{ date_to|date:'Y-m-d' }}{% endif %}">← {{ words.back }}</a>
+  {% if not public %}<a class="pr-button pr-button--ghost" href="{% url 'parties:card' kind party.pk %}?lang={{ lang }}{% if date_from %}&from={{ date_from|date:'Y-m-d' }}{% endif %}{% if date_to %}&to={{ date_to|date:'Y-m-d' }}{% endif %}">← {{ words.back }}</a>{% endif %}
   <button class="pr-button pr-button--primary" type="button" data-print>{{ words.print }}</button>
 </nav>
 <article class="pr-sheet" data-kind="statement">
@@ -43,7 +43,7 @@
     </tbody>
   </table>
   <section class="pr-totals"><dl><div class="pr-totals__grand"><dt>{{ words.closing }}</dt><dd data-statement-closing>{{ data.closing|money }} <small>{{ company.currency }}</small></dd></div></dl></section>
-  <footer class="pr-foot"><p class="pr-foot__meta">{{ words.printed }} · {{ printed_by }} · {% now "Y-m-d H:i" %}</p></footer>
+  <footer class="pr-foot">{% if not public %}<p class="pr-foot__meta">{{ words.printed }} · {{ printed_by }} · {% now "Y-m-d H:i" %}</p>{% endif %}</footer>
 </article>
 <script>document.querySelector('[data-print]').addEventListener('click', function(){ window.print(); });</script>
 </body>

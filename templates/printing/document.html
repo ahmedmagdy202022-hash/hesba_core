@@ -10,7 +10,7 @@
 </head>
 <body class="pr-body pr-{{ format }}" data-format="{{ format }}">
 <nav class="pr-toolbar" aria-label="{{ words.print }}">
-  <a class="pr-button pr-button--ghost" href="{{ back_url }}">← {{ words.back }}</a>
+  {% if not public %}<a class="pr-button pr-button--ghost" href="{{ back_url }}">← {{ words.back }}</a>{% endif %}
   <div class="pr-toolbar__formats" role="group">
     <a class="pr-button{% if format == 'a4' %} is-current{% endif %}" href="?lang={{ lang }}&format=a4"{% if format == 'a4' %} aria-current="true"{% endif %}>{{ words.a4 }}</a>
     <a class="pr-button{% if format == 'receipt' %} is-current{% endif %}" href="?lang={{ lang }}&format=receipt"{% if format == 'receipt' %} aria-current="true"{% endif %}>{{ words.receipt }}</a>
@@ -84,7 +84,7 @@
 
   <footer class="pr-foot">
     {% if doc.kind == 'sales_invoice' or doc.kind == 'sales_return' %}<p class="pr-foot__note">{% if company.footer_note %}{{ company.footer_note|linebreaksbr }}{% else %}{{ words.thanks }}{% endif %}</p>{% endif %}
-    <p class="pr-foot__meta">{{ words.printed_by }} {{ printed_by }} · {% now "Y-m-d H:i" %}</p>
+    {% if not public %}<p class="pr-foot__meta">{{ words.printed_by }} {{ printed_by }} · {% now "Y-m-d H:i" %}</p>{% endif %}
     {% if company.show_hesba_brand %}<p class="pr-foot__brand" data-hesba-brand><img src="{% static 'hesba/brand/hesba-logo.png' %}" alt="Hesba"></p>{% endif %}
   </footer>
 </article>

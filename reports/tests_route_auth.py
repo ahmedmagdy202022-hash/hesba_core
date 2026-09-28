@@ -133,3 +133,17 @@ class AuthenticatedRouteAccessTests(AuthenticatedTestCase):
                 response = self.client.get(path)
 
                 self.assertNotEqual(response.status_code, 500)
+
+
+class ParameterisedPublicRouteTests(TestCase):
+    """SHARE-001: the only public route with a parameter, covered explicitly.
+
+    /share/<token>/ opens without an account but only with a signed, expiring
+    token (printing.share); anything else gets the plain "link expired" page.
+    """
+
+    def test_share_link_is_public_but_a_bad_token_shows_nothing(self):
+        response = self.client.get(reverse("share_document", args=["not-a-token"]))
+        self.assertFalse(is_login_redirect(response))
+        self.assertEqual(response.status_code, 404)
+        self.assertContains(response, "data-share-expired", status_code=404)

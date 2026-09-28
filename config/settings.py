@@ -195,6 +195,8 @@ SESSION_SAVE_EVERY_REQUEST = True
 LOGIN_MAX_FAILURES = config("LOGIN_MAX_FAILURES", default=5, cast=int)
 LOGIN_MAX_FAILURES_PER_IP = config("LOGIN_MAX_FAILURES_PER_IP", default=20, cast=int)
 LOGIN_LOCK_MINUTES = config("LOGIN_LOCK_MINUTES", default=15, cast=int)
+# SHARE-001: how long a shared document link keeps working.
+SHARE_LINK_DAYS = config("SHARE_LINK_DAYS", default=60, cast=int)
 CSRF_COOKIE_SECURE = config("CSRF_COOKIE_SECURE", default=not DEBUG, cast=bool)
 SECURE_HSTS_SECONDS = config(
     "SECURE_HSTS_SECONDS", default=0 if DEBUG else 31536000, cast=int
