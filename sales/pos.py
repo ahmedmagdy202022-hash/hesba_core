@@ -21,6 +21,7 @@ from barcode.services import item_catalog
 from pricing.services import price_book
 from taxes.services import compute_lines, create_sales_draft_with_tax, rates_by_item, vat_enabled
 from serials.services import attach_sale_serials, pos_serial_catalog, prepare_sale_serials
+from shifts.services import open_shift_for
 from units.services import units_catalog
 from cashboxes.models import Cashbox
 from config.money import money_round
@@ -339,6 +340,7 @@ def pos(request):
             "price_book": price_book(),
             "tax_rates": rates_by_item(),
             "units": units_catalog(),
+            "open_shift": open_shift_for(request.user),
             "serial_catalog": pos_serial_catalog(),
             "customers": Customer.objects.filter(active=True).order_by("name"),
             "walk_in": customer_default,

@@ -1,0 +1,16 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'shifts:mine' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ words.report }}</h1><p>{{ shift.cashier.get_username }} · {{ shift.cashbox.name_ar }} · <bdi>{{ shift.opened_at|date:"Y-m-d H:i" }}</bdi>{% if shift.closed_at %} → <bdi>{{ shift.closed_at|date:"H:i" }}</bdi>{% endif %}</p></div><div class="op-form-actions"><button class="op-secondary" type="button" onclick="window.print()">{{ words.print }}</button></div></section>
+<div class="op-table-wrap"><table class="op-table" data-shift-report><tbody>
+<tr><td>{{ words.float_label }}</td><td>{{ shift.opening_float|money }}</td></tr>
+{% for label, value in rows %}<tr><td>{{ label }}</td><td>{{ value|money }}</td></tr>{% endfor %}
+<tr><td><strong>{{ words.expected }}</strong></td><td><strong>{{ shift.expected_cash|money }}</strong></td></tr>
+<tr><td><strong>{{ words.counted }}</strong></td><td><strong>{{ shift.counted_cash|money }}</strong></td></tr>
+<tr><td><strong>{{ words.difference }}</strong></td><td><strong data-shift-difference>{{ shift.difference|money }}</strong> — {% if shift.difference < 0 %}{{ words.shortage }}{% elif shift.difference > 0 %}{{ words.overage }}{% else %}{{ words.exact }}{% endif %}</td></tr>
+<tr><td>{{ words.invoices }}</td><td>{{ shift.summary.invoices }}</td></tr>
+</tbody></table></div>
+{% if shift.notes %}<p>{{ words.notes }}: {{ shift.notes }}</p>{% endif %}
+{% if shift.difference_operation %}<p class="op-muted" data-shift-posted>{{ words.posted_ref }} <bdi>{{ shift.difference_operation.reference_number }}</bdi></p>
+{% elif can_post and shift.difference %}<form method="post" class="op-form-actions">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><button class="op-primary" type="submit">{{ words.post }}</button></form>{% endif %}
+{% endblock %}
