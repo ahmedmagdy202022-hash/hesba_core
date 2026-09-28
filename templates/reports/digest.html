@@ -1,0 +1,30 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'report_hub' %}?lang={{ lang }}">← {% if lang == 'en' %}Reports{% else %}التقارير{% endif %}</a><h1>{% if lang == 'en' %}Daily summary{% else %}ملخص اليوم{% endif %} · <bdi>{{ day|date:"Y-m-d" }}</bdi></h1></div>
+<div class="op-form-actions"><a class="op-secondary" href="?lang={{ lang }}&date={{ prev|date:'Y-m-d' }}">‹ {% if lang == 'en' %}Previous day{% else %}اليوم اللي قبله{% endif %}</a>{% if next %}<a class="op-secondary" href="?lang={{ lang }}&date={{ next|date:'Y-m-d' }}">{% if lang == 'en' %}Next day{% else %}اليوم اللي بعده{% endif %} ›</a>{% endif %}<a class="op-primary" href="{{ whatsapp }}" target="_blank" rel="noopener" data-digest-whatsapp>{% if lang == 'en' %}Send on WhatsApp{% else %}ابعته واتساب{% endif %}</a></div></section>
+{% if data.sales %}<h2>{% if lang == 'en' %}Sales{% else %}المبيعات{% endif %}</h2><section class="op-summary-grid" data-digest-sales>
+<article><small>{% if lang == 'en' %}Total{% else %}الإجمالي{% endif %}</small><strong>{{ data.sales.total|money }}</strong></article>
+<article><small>{% if lang == 'en' %}Invoices{% else %}الفواتير{% endif %}</small><strong>{{ data.sales.count }}</strong></article>
+<article><small>{% if lang == 'en' %}Cash{% else %}نقدي{% endif %}</small><strong>{{ data.sales.cash|money }}</strong></article>
+<article><small>{% if lang == 'en' %}Credit{% else %}آجل{% endif %}</small><strong>{{ data.sales.credit|money }}</strong></article>
+<article><small>{% if lang == 'en' %}Returns{% else %}المرتجعات{% endif %}</small><strong>{{ data.sales.returns|money }}</strong></article></section>
+{% if data.sales.top %}<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{% if lang == 'en' %}Best sellers{% else %}الأكثر مبيعًا{% endif %}</th><th>{% if lang == 'en' %}Qty{% else %}الكمية{% endif %}</th><th>{% if lang == 'en' %}Amount{% else %}المبلغ{% endif %}</th></tr></thead><tbody>{% for row in data.sales.top %}<tr><td class="op-cell-text">{{ row.item__item_name }}</td><td>{{ row.qty|qty }}</td><td>{{ row.amount|money }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}{% endif %}
+{% if data.profit %}<h2>{% if lang == 'en' %}Profit{% else %}الربح{% endif %}</h2><section class="op-summary-grid" data-digest-profit>
+<article><small>{% if lang == 'en' %}Gross profit{% else %}مجمل الربح{% endif %}</small><strong>{{ data.profit.gross|money }}</strong></article>
+{% if data.profit.expenses is not None %}<article><small>{% if lang == 'en' %}Expenses{% else %}المصروفات{% endif %}</small><strong>{{ data.profit.expenses|money }}</strong></article><article><small>{% if lang == 'en' %}Net{% else %}الصافي{% endif %}</small><strong>{{ data.profit.net|money }}</strong></article>{% endif %}</section>{% endif %}
+{% if data.cash %}<h2>{% if lang == 'en' %}Cash{% else %}الخزن{% endif %}</h2><div class="op-table-wrap"><table class="op-table" data-digest-cash><thead><tr><th>{% if lang == 'en' %}Cashbox{% else %}الخزنة{% endif %}</th><th>{% if lang == 'en' %}In{% else %}داخل{% endif %}</th><th>{% if lang == 'en' %}Out{% else %}خارج{% endif %}</th><th>{% if lang == 'en' %}Balance{% else %}الرصيد{% endif %}</th></tr></thead><tbody>
+{% for row in data.cash.rows %}<tr><td class="op-cell-text">{{ row.cashbox_name }}</td><td>{{ row.cash_in|money }}</td><td>{{ row.cash_out|money }}</td><td>{{ row.balance|money }}</td></tr>{% endfor %}
+<tr><td><strong>{% if lang == 'en' %}Total{% else %}الإجمالي{% endif %}</strong></td><td><strong>{{ data.cash.in|money }}</strong></td><td><strong>{{ data.cash.out|money }}</strong></td><td><strong>{{ data.cash.balance|money }}</strong></td></tr></tbody></table></div>{% endif %}
+{% if data.customers %}<h2>{% if lang == 'en' %}Customers{% else %}العملاء{% endif %}</h2><section class="op-summary-grid" data-digest-customers>
+<article><small>{% if lang == 'en' %}Collected{% else %}التحصيلات{% endif %}</small><strong>{{ data.customers.collected|money }}</strong></article>
+<article><small>{% if lang == 'en' %}Owed by customers{% else %}مستحق على العملاء{% endif %}</small><strong>{{ data.customers.owed|money }}</strong></article>
+<article><small>{% if lang == 'en' %}Overdue{% else %}متأخر{% endif %}</small><strong>{{ data.customers.overdue|money }}</strong></article>
+{% if data.customers.instalments.count %}<article><small>{% if lang == 'en' %}Overdue instalments{% else %}أقساط متأخرة{% endif %}</small><strong>{{ data.customers.instalments.count }}</strong></article>{% endif %}</section>{% endif %}
+{% if data.stock %}<h2>{% if lang == 'en' %}Stock{% else %}المخزون{% endif %}</h2><section class="op-summary-grid" data-digest-stock>
+<article><small>{% if lang == 'en' %}Out of stock{% else %}خلصان{% endif %}</small><strong>{{ data.stock.out }}</strong></article>
+<article><small>{% if lang == 'en' %}Below minimum{% else %}تحت الحد الأدنى{% endif %}</small><strong>{{ data.stock.low }}</strong></article>
+{% if data.stock.expired is not None %}<article><small>{% if lang == 'en' %}Expired batches{% else %}تشغيلات منتهية{% endif %}</small><strong>{{ data.stock.expired }}</strong></article><article><small>{% if lang == 'en' %}Expiring soon{% else %}قربت تنتهي{% endif %}</small><strong>{{ data.stock.expiring }}</strong></article>{% endif %}</section>{% endif %}
+{% if data.shifts %}<h2>{% if lang == 'en' %}Shift differences{% else %}فروق الورديات{% endif %}</h2><ul data-digest-shifts>{% for shift in data.shifts %}<li>{{ shift.cashier }}: {{ shift.difference|money }}</li>{% endfor %}</ul>{% endif %}
+<details class="op-card"><summary>{% if lang == 'en' %}Message text{% else %}نص الرسالة{% endif %}</summary><pre style="white-space:pre-wrap;font:inherit" data-digest-text>{{ text }}</pre></details>
+{% endblock %}

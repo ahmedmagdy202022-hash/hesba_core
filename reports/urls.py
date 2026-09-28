@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import aging_views, functional_views
+from . import aging_views, digest_views, functional_views
 
 
 app_name = "reports"
@@ -14,5 +14,6 @@ urlpatterns = [
     path("cashboxes/", functional_views.cashbox_report_view, name="cashboxes"),
     path("profit/", functional_views.profit_report_view, name="profit"),
     path("aging/", aging_views.aging_report, name="aging"),
+    path("daily/", digest_views.daily_summary, name="daily"),
 ]
 
