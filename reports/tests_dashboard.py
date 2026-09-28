@@ -586,6 +586,11 @@ class DashboardRouteTests(TestCase):
 class SeedDemoBusinessTests(TestCase):
     """The seed exists so a local dashboard has something real to show."""
 
+    def setUp(self):
+        from .tests_digest import freeze_today
+
+        freeze_today(self, timezone.localdate())
+
     def seed(self, **kwargs):
         options = {"verbosity": 0}
         options.update(kwargs)
