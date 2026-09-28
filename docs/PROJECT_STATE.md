@@ -1,6 +1,6 @@
 # Hesba — the actual state of the project (DOC-002)
 
-**Last updated:** 28 September 2026 · `develop` after PR #118
+**Last updated:** 28 September 2026 · `develop` after PR #126
 
 > `docs/HESBA_ROADMAP.md` is Main Control's task board and has fallen behind: many
 > items it lists as ⏳ are done. This file records **what actually exists today on
@@ -55,19 +55,32 @@
 | POS: find a customer by phone, or add one from the till | #117 |
 | Two-step sign-in (2FA) with an authenticator app + recovery codes | #118 |
 
-Every protected-logic decision is recorded in `docs/AGENT_HARD_GATES.md` (HG-001 to HG-025).
+### Client-owned deployment (28–29 September)
+| Feature | PR |
+|---|---|
+| Backups encrypted to the owner's key (only the owner can open them) | #120 |
+| Runs on PostgreSQL (client-owned Supabase) + CI on PostgreSQL; fixed row locks that stopped posting on PostgreSQL, overselling of the last unit, and the month-opening race (HG-026, HG-027) | #121 |
+| Nightly encrypted backup to the client's own Google Drive (`drive.file` only) | #122 |
+| Real database size vs the plan limit + dashboard warning + safe cleanup | #123 |
+| The till keeps selling offline and syncs each sale once (HG-028) | #124 |
+| Tests stable across midnight | #125 |
+| Render blueprint + Arabic go-live guide (`docs/GO_LIVE.md`) | #126 |
+
+Every protected-logic decision is recorded in `docs/AGENT_HARD_GATES.md` (HG-001 to HG-028).
 
 ---
 
 ## 2. Still missing, in order of importance
 
-1. **Scheduled off-site backups.** The commands exist; running them on a schedule to an external store is an operations decision (where, and at what cost).
-2. **Server-generated PDF**, for sending by email. Today PDF means "Save as PDF" from the browser.
-3. **E-invoice phase 3** (signing and submission) + credit notes for returns + the e-receipt for the POS. Waiting for the first real client with an account and a signature.
-4. **Choosing a batch or serial number on the sales return form itself.** Today it's done from the batch and serial screens. This touches return posting, so it needs a Hard Gate first.
-5. **2FA extras:** a QR image on the setup screen (needs a QR library), and a setting that makes 2FA mandatory for the owner role.
-6. **Design track D:** fonts, components, empty states (only partly done).
-7. **Cleanup:** about 80 old branches on GitHub.
+1. **The first real client:** follow `docs/GO_LIVE.md` (Supabase owned by the client, Render, Drive, cron-job.org).
+2. **Google OAuth app for Hesba:** one-time setup in the Google Cloud console, set to "In production" (`docs/BACKUP_DRIVE_SETUP.md`).
+3. **Server-generated PDF**, for sending by email. Today PDF means "Save as PDF" from the browser.
+4. **E-invoice phase 3** (signing and submission) + credit notes for returns + the e-receipt for the POS. Waiting for the first real client with an account and a signature.
+5. **The offline till opening from scratch without internet** (a service worker). Today the page has to be open before the connection drops.
+6. **Choosing a batch or serial number on the sales return form itself.** This touches return posting, so it needs a Hard Gate first.
+7. **2FA extras:** a QR image, and a setting that makes 2FA mandatory for the owner role.
+8. **Design track D:** fonts, components, empty states.
+9. **Cleanup:** about 80 old branches on GitHub.
 
 ---
 
