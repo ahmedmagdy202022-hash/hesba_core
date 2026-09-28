@@ -1,5 +1,9 @@
 """SETTINGS-001: the owner switches modules from Settings, with audit and no data loss."""
 
+from unittest import mock
+
+from settings_core import setup_catalog as catalog
+
 from django.test import TestCase
 from django.urls import reverse
 
@@ -28,6 +32,7 @@ class ModuleSettingsTests(TestCase):
     def post(self, module, enabled):
         return self.client.post(MODULES, {"module": module, "enabled": "1" if enabled else "0"})
 
+    @mock.patch.object(catalog, "MODULES_WITHOUT_BACKEND", frozenset({"appointments_visits"}))  # APPT-001: every module has a backend now; keep testing the mechanism
     def test_owner_sees_every_module_with_its_state(self):
         sign_in(self)
         response = self.client.get(MODULES)
@@ -59,6 +64,7 @@ class ModuleSettingsTests(TestCase):
         self.assertEqual(log.object_id, "module.purchases")
         self.assertEqual((log.before_data, log.after_data), ({"enabled": True}, {"enabled": False}))
 
+    @mock.patch.object(catalog, "MODULES_WITHOUT_BACKEND", frozenset({"appointments_visits"}))  # APPT-001: every module has a backend now; keep testing the mechanism
     def test_required_and_unavailable_modules_cannot_change(self):
         sign_in(self)
         self.post("sales_operations", False)

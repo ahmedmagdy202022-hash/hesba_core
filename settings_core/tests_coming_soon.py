@@ -1,5 +1,7 @@
 """CATALOG-003: modules with no backend are shown as coming soon, never switched on."""
 
+from unittest import mock
+
 from django.test import TestCase
 from django.urls import reverse
 
@@ -17,6 +19,7 @@ class ComingSoonCatalogTests(TestCase):
             with self.subTest(module=slug):
                 self.assertNotIn(slug, cleaned)
 
+    @mock.patch.object(catalog, "MODULES_WITHOUT_BACKEND", frozenset({"appointments_visits"}))  # APPT-001: every module has a backend now; keep testing the mechanism
     def test_setup_never_stores_them_as_enabled(self):
         profile = ClientProfile.objects.create(client_code="SOON", legal_name="Soon Co", display_name="Soon")
         complete_setup(profile, "services", "clinic", "customers,appointments_visits,employees_technicians")
@@ -36,6 +39,7 @@ class ComingSoonWizardTests(AuthenticatedTestCase):
         self.assertContains(response, "soon: 'قريبًا'")
         self.assertContains(response, "if(state === 'soon'){return;}")
 
+    @mock.patch.object(catalog, "MODULES_WITHOUT_BACKEND", frozenset({"appointments_visits"}))  # APPT-001: every module has a backend now; keep testing the mechanism
     def test_review_step_leaves_them_out(self):
         response = self.client.get(reverse("setup_review"), {"activity": "commercial", "sub_activity": "retail", "modules": "customers,appointments_visits"})
         slugs = [row["slug"] for row in response.context["selected_modules"]]

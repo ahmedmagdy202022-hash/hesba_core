@@ -111,9 +111,7 @@ MODULE_PRESETS = {
 
 #: Modules the wizard offers but Hesba cannot serve yet: no model, no service,
 #: no screen. The dashboard uses this to avoid advertising empty sections.
-MODULES_WITHOUT_BACKEND = frozenset(
-    {"appointments_visits"}
-)
+MODULES_WITHOUT_BACKEND = frozenset()
 
 
 def fallback_label(slug):
