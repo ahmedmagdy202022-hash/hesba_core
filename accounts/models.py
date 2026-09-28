@@ -34,3 +34,14 @@ class UserProfile(models.Model):
 
     def __str__(self):
         return self.display_name or self.user.get_username()
+
+
+class LoginFailure(models.Model):
+    """SEC-001: one failed sign-in, kept to slow down password guessing."""
+
+    username = models.CharField(max_length=150, db_index=True)
+    ip_address = models.CharField(max_length=64, blank=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]

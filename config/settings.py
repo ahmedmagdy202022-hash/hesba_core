@@ -186,6 +186,13 @@ CSRF_TRUSTED_ORIGINS = config(
 # configurable for platforms that terminate TLS at a trusted reverse proxy.
 SECURE_SSL_REDIRECT = config("SECURE_SSL_REDIRECT", default=not DEBUG, cast=bool)
 SESSION_COOKIE_SECURE = config("SESSION_COOKIE_SECURE", default=not DEBUG, cast=bool)
+# SEC-001: a session left idle for SESSION_IDLE_HOURS signs out; every request
+# pushes the expiry forward, so an active cashier is never thrown out mid-shift.
+SESSION_COOKIE_AGE = config("SESSION_IDLE_HOURS", default=10, cast=int) * 3600
+SESSION_SAVE_EVERY_REQUEST = True
+LOGIN_MAX_FAILURES = config("LOGIN_MAX_FAILURES", default=5, cast=int)
+LOGIN_MAX_FAILURES_PER_IP = config("LOGIN_MAX_FAILURES_PER_IP", default=20, cast=int)
+LOGIN_LOCK_MINUTES = config("LOGIN_LOCK_MINUTES", default=15, cast=int)
 CSRF_COOKIE_SECURE = config("CSRF_COOKIE_SECURE", default=not DEBUG, cast=bool)
 SECURE_HSTS_SECONDS = config(
     "SECURE_HSTS_SECONDS", default=0 if DEBUG else 31536000, cast=int

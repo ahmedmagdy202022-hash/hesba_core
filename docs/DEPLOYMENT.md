@@ -15,6 +15,8 @@ Copy `.env.example` to `.env` on the server and fill it in. Never commit `.env`.
 | `ADMIN_URL` | a private path for the Django admin (superusers only); not `admin/` |
 | `BACKUP_DIR`, `BACKUP_KEEP` | where nightly backups go, and how many to keep (default 14) |
 | `LOG_LEVEL` | `WARNING` by default; logs go to stdout |
+| `SESSION_IDLE_HOURS` | idle sign-out (default 10 h; each request extends it) |
+| `LOGIN_MAX_FAILURES`, `LOGIN_MAX_FAILURES_PER_IP`, `LOGIN_LOCK_MINUTES` | sign-in lock after wrong passwords (defaults 5 per user, 20 per address, 15 min) |
 
 ## 2. Install and release
 ```bash
