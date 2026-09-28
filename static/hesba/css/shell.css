@@ -95,3 +95,11 @@
   .hs-app{display:block}
   .hs-main{padding-bottom:0}
 }
+
+/* SEARCH-001: search box at the top of the sidebar; an icon on the phone top bar and in the rail. */
+.hs-search{position:relative;margin:4px 12px 10px;display:flex;align-items:center}
+.hs-search .hs-icon{position:absolute;inset-inline-start:10px;width:16px;height:16px;opacity:.7;pointer-events:none;stroke:currentColor}
+.hs-search input[type=search]{width:100%;min-height:38px;border-radius:10px;border:1px solid var(--hs-navy-raised);background:var(--hs-navy-raised);color:var(--hs-surface);padding:0 12px 0 34px;padding-inline-start:34px;font:inherit;font-size:13px}
+.hs-search input::placeholder{color:var(--hs-on-navy-muted)}
+.hs-topbar__search{margin-inline-start:auto}
+@media(min-width:1024px){.hs-topbar__search{display:none}body.hs-rail .hs-search input[type=search]{padding:0;width:38px;color:transparent;cursor:pointer}body.hs-rail .hs-search input::placeholder{color:transparent}body.hs-rail .hs-search .hs-icon{inset-inline-start:11px}}

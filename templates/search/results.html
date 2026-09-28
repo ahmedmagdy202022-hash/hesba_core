@@ -1,0 +1,9 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p class="op-muted">{{ words.hint }}</p></div></section>
+<form class="op-filters" method="get" role="search"><input type="hidden" name="lang" value="{{ lang }}"><input type="search" name="q" value="{{ q }}" placeholder="{{ words.placeholder }}" aria-label="{{ words.title }}" autofocus data-search-input><button type="submit">{{ words.button }}</button></form>
+{% if q|length < 2 %}{% if q %}<p class="op-muted">{{ words.short }}</p>{% endif %}
+{% elif groups %}{% for group in groups %}<section class="search-group" data-search-group="{{ group.key }}"><h2>{{ group.title }}</h2>
+<div class="op-table-wrap"><table class="op-table"><tbody>{% for row in group.rows %}<tr><td class="op-cell-text"><a href="{{ row.url }}?lang={{ lang }}"><bdi>{{ row.label }}</bdi></a></td><td class="op-cell-text op-muted"><bdi>{{ row.meta }}</bdi></td></tr>{% endfor %}</tbody></table></div></section>{% endfor %}
+{% else %}<div class="op-notice" data-search-empty>{{ none }}</div>{% endif %}
+{% endblock %}

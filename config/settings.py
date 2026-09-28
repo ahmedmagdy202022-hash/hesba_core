@@ -51,6 +51,7 @@ LOCAL_APPS = [
     "installments",
     "fixed_assets",
     "parties",
+    "search",
     "printing",
 ]
 
