@@ -2,7 +2,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from audit.models import AuditEventType, AuditLog
@@ -81,7 +81,16 @@ def provision_period_for(action_date, user=None):
         notes="Opened automatically for the first entry dated in this month.",
     )
     period.full_clean()
-    period.save()
+    try:
+        # HG-027: two first entries of a month posted at the same moment both try to
+        # open it; the loser takes the winner's period instead of failing the posting.
+        with transaction.atomic():
+            period.save()
+    except IntegrityError:
+        existing = get_period_for_date(action_date)
+        if existing is None:
+            raise
+        return existing
     AuditLog.objects.create(
         event_type=AuditEventType.CREATE,
         actor=user if user is not None and getattr(user, "is_authenticated", False) else None,

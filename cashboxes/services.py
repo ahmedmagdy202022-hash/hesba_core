@@ -356,7 +356,7 @@ def cancel_cashbox_operation(operation_id, reversal_date, reason, user):
     if not reason:
         raise ValidationError("Cash operation reversal reason is required.")
     operation = (
-        CashboxOperation.objects.select_for_update()
+        CashboxOperation.objects.select_for_update(of=("self",))
         .select_related("source_cashbox", "destination_cashbox")
         .get(pk=operation_id)
     )
@@ -458,7 +458,7 @@ def cancel_opening_balance_adjustment(
     _ensure_open_period(reversal_date)
 
     adjustment = (
-        OpeningBalanceAdjustment.objects.select_for_update()
+        OpeningBalanceAdjustment.objects.select_for_update(of=("self",))
         .select_related("customer", "supplier", "cashbox")
         .get(pk=adjustment_id)
     )

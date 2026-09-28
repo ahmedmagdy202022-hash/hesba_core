@@ -10,7 +10,7 @@ from cashboxes.models import CashboxDirection, CashboxMovement, CashboxMovementT
 from cashboxes.services import get_cashbox_balance
 from config.money import allocate_proportionally, cost_round, money_round
 from inventory.models import StockMovement, StockMovementType
-from inventory.services import get_item_location_stock_quantity, recalculate_item_average_cost
+from inventory.services import get_item_location_stock_quantity, lock_items_for_stock_check, recalculate_item_average_cost
 from permissions.services import user_has_permission
 from .models import (
     PurchaseInvoice,
@@ -155,7 +155,7 @@ def _recalculate_affected_items(items_by_id):
 @transaction.atomic
 def post_purchase_invoice(invoice_id, user=None):
     invoice = (
-        PurchaseInvoice.objects.select_for_update()
+        PurchaseInvoice.objects.select_for_update(of=("self",))
         .select_related("supplier", "receiving_location", "cashbox")
         .prefetch_related("lines__item")
         .get(pk=invoice_id)
@@ -243,7 +243,7 @@ def post_purchase_invoice(invoice_id, user=None):
 @transaction.atomic
 def cancel_posted_purchase_invoice(invoice_id, user=None, reason=""):
     invoice = (
-        PurchaseInvoice.objects.select_for_update()
+        PurchaseInvoice.objects.select_for_update(of=("self",))
         .select_related("supplier", "receiving_location", "cashbox")
         .prefetch_related("lines__item")
         .get(pk=invoice_id)
@@ -494,7 +494,7 @@ def create_purchase_return(
     if not reason:
         raise ValidationError("Purchase return reason is required.")
     invoice = (
-        PurchaseInvoice.objects.select_for_update()
+        PurchaseInvoice.objects.select_for_update(of=("self",))
         .select_related("supplier", "receiving_location", "cashbox")
         .get(pk=source_invoice_id)
     )
@@ -521,6 +521,7 @@ def create_purchase_return(
                 },
             )
             aggregate["quantity"] += row["quantity"]
+    lock_items_for_stock_check(aggregate["item"].pk for aggregate in requested_stock.values())
     for aggregate in requested_stock.values():
         available = get_item_location_stock_quantity(
             aggregate["item"], aggregate["location"]
@@ -626,7 +627,7 @@ def cancel_purchase_return(return_id, reversal_date, reason, user):
     if not reason:
         raise ValidationError("Purchase return reversal reason is required.")
     purchase_return = (
-        PurchaseReturn.objects.select_for_update()
+        PurchaseReturn.objects.select_for_update(of=("self",))
         .select_related(
             "source_invoice__supplier",
             "source_invoice__receiving_location",
