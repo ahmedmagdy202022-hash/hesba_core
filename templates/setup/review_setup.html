@@ -240,8 +240,8 @@
   function updateSummaryLabels(){
     var activityLabel = document.querySelector('[data-activity-label]');
     var subActivityLabel = document.querySelector('[data-sub-activity-label]');
-    if(activityLabel){activityLabel.textContent = labelFrom(activityLabels, activity);}
-    if(subActivityLabel){subActivityLabel.textContent = labelFrom(subActivityLabels[activity] || {}, subActivity);}
+    if(activityLabel){activityLabel.textContent = activityLabel.dataset[lang] || labelFrom(activityLabels, activity);}
+    if(subActivityLabel){subActivityLabel.textContent = subActivityLabel.dataset[lang] || labelFrom(subActivityLabels[activity] || {}, subActivity);}
     document.querySelectorAll('.review-module-pill[data-module]').forEach(function(pill){
       var slug = pill.dataset.module;
       pill.textContent = labelFrom(moduleLabels, slug);

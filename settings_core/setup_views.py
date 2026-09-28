@@ -267,3 +267,39 @@ def root_redirect(request):
         return redirect("after_login")
 
     return redirect("login")
+
+
+#: ACT-002: the wording of the sub-activity step for activities that share one template.
+SUB_STEP_COPY = {
+    catalog.MEDICAL: {
+        "ar": {"title": "اختر نوع النشاط الطبي", "subtitle": "اختيار النوع يساعد حِسْبَة في تجهيز المواعيد والكشوفات والفواتير."},
+        "en": {"title": "Choose the medical activity type", "subtitle": "Choosing the type helps Hesba prepare appointments, visits and billing."},
+    },
+    catalog.EDUCATION: {
+        "ar": {"title": "اختر نوع النشاط التعليمي", "subtitle": "اختيار النوع يساعد حِسْبَة في تجهيز الطلبة والمواعيد والمصاريف."},
+        "en": {"title": "Choose the education activity type", "subtitle": "Choosing the type helps Hesba prepare students, sessions and fees."},
+    },
+    catalog.OTHER: {
+        "ar": {"title": "اختر شكل نشاطك", "subtitle": "لو نشاطك مش في القايمة، اختار الأقرب؛ وتقدر تغيّر الموديولات بعدين من الإعدادات."},
+        "en": {"title": "Choose the shape of your activity", "subtitle": "If your activity is not listed, pick the closest; you can change the modules later in settings."},
+    },
+}
+SUB_STEP_COMMON = {
+    "ar": {"logout": "تسجيل الخروج", "language": "العربية", "stepGeneral": "النشاط العام", "stepSub": "النشاط الفرعي", "stepModules": "الموديولات",
+           "stepReview": "المراجعة", "next": "التالي: اختيار الموديولات", "back": "الرجوع لاختيار النشاط العام", "changeLanguage": "تغيير اللغة"},
+    "en": {"logout": "Logout", "language": "English", "stepGeneral": "General activity", "stepSub": "Sub activity", "stepModules": "Modules",
+           "stepReview": "Review", "next": "Next: choose modules", "back": "Back to general activity", "changeLanguage": "Change language"},
+}
+
+
+def sub_activity_step(request, activity):
+    """The sub-activity cards for an activity, straight from the catalog."""
+
+    copy = {}
+    for lang in ("ar", "en"):
+        words = dict(SUB_STEP_COMMON[lang], **SUB_STEP_COPY[activity][lang])
+        words["pageTitle"] = f"{words['title']} - {'حِسْبَة' if lang == 'ar' else 'Hesba'}"
+        words.update({slug: labels[lang] for slug, labels in catalog.SUB_ACTIVITY_LABELS[activity].items()})
+        copy[lang] = words
+    subs = [{"slug": slug, "ar": labels["ar"]} for slug, labels in catalog.SUB_ACTIVITY_LABELS[activity].items()]
+    return render(request, "setup/activity_generic_subactivity.html", {"activity": activity, "subs": subs, "copy": copy})
