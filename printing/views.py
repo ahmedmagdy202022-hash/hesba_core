@@ -166,6 +166,12 @@ def _render(request, doc, back_url, public=False):
     lang = _lang(request)
     words = WORDS[lang]
     company = company_details()
+    # PRINT-003: a posted document shows the company details of the day it was posted.
+    from .snapshots import snapshot_for
+
+    frozen = snapshot_for(doc.get("kind"), doc.get("object_pk")) if doc.get("object_pk") else None
+    if frozen:
+        company = dict(company, **frozen)
     doc.setdefault("watermark", _watermark(doc.get("status"), words))
     if "words_amount" in doc:
         doc["amount_words"] = amount_in_words(doc["words_amount"], company["currency"], lang)
@@ -208,6 +214,7 @@ def _invoice_doc(invoice, kind, lang, party_kind, price_field):
     party = invoice.customer if party_kind == "customer" else invoice.supplier
     return {
         "kind": kind,
+        "object_pk": invoice.pk,
         "title": words[kind],
         "number": invoice.invoice_number,
         "date": invoice.invoice_date,
@@ -243,6 +250,7 @@ def _return_doc(document, kind, lang, party_kind, invoice_url):
     party = source.customer if party_kind == "customer" else source.supplier
     return {
         "kind": kind,
+        "object_pk": document.pk,
         "title": words[kind],
         "number": document.return_number,
         "date": document.return_date,
@@ -268,6 +276,7 @@ def _voucher_doc(payment, kind, lang, party_kind):
     party = payment.customer if party_kind == "customer" else payment.supplier
     return {
         "kind": kind,
+        "object_pk": payment.pk,
         "voucher": True,
         "title": words[kind],
         "number": payment.payment_number,
