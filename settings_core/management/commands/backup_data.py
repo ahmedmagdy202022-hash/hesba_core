@@ -7,6 +7,11 @@ of the database file with SQLite's own online-backup API.
 
 Run it daily (cron / a scheduled task):  python manage.py backup_data
 Restore:  python manage.py migrate && python manage.py loaddata <file>.json.gz
+
+BACKUP-002: once the owner has created a backup key (Settings -> Backups),
+every backup is written encrypted to that key as ``hesba-<stamp>.hesba-backup``
+and nothing readable is left beside it; ``decrypt_backup`` with the owner's
+private key turns it back into the ``.json.gz`` fixture for loaddata.
 """
 
 import gzip
@@ -18,6 +23,8 @@ from django.conf import settings
 from django.core.management import BaseCommand, call_command
 from django.db import connection
 from django.utils import timezone
+
+from settings_core.backup_crypto import SUFFIX, configured_public_key, encrypt
 
 
 EXCLUDE = ("contenttypes", "auth.permission", "sessions", "admin.logentry")
@@ -37,6 +44,13 @@ class Command(BaseCommand):
         stamp = timezone.localtime().strftime("%Y%m%d-%H%M%S")
         buffer = io.StringIO()
         call_command("dumpdata", exclude=list(EXCLUDE), natural_foreign=True, natural_primary=True, indent=None, stdout=buffer)
+        public_key = configured_public_key()
+        if public_key is not None:
+            encrypted = target / f"hesba-{stamp}{SUFFIX}"
+            encrypted.write_bytes(encrypt(gzip.compress(buffer.getvalue().encode("utf-8")), public_key))
+            self._rotate(target, keep)
+            self.stdout.write(f"{encrypted} ({encrypted.stat().st_size:,} bytes, encrypted)")
+            return
         fixture = target / f"hesba-{stamp}.json.gz"
         with gzip.open(fixture, "wt", encoding="utf-8") as handle:
             handle.write(buffer.getvalue())
@@ -53,7 +67,7 @@ class Command(BaseCommand):
             self.stdout.write(f"{path} ({path.stat().st_size:,} bytes)")
 
     def _rotate(self, target, keep):
-        for pattern in ("hesba-*.json.gz", "hesba-*.sqlite3"):
+        for pattern in ("hesba-*.json.gz", "hesba-*.sqlite3", f"hesba-*{SUFFIX}"):
             files = sorted(target.glob(pattern))
             for old in files[:-keep] if keep > 0 else []:
                 old.unlink()
