@@ -50,6 +50,7 @@ LOCAL_APPS = [
     "serials",
     "installments",
     "fixed_assets",
+    "parties",
     "printing",
 ]
 

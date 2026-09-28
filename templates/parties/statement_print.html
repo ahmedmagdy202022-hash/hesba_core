@@ -1,0 +1,50 @@
+{% load static hesba_format %}<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ words.statement }} · {{ party.name }}</title>
+{% include "partials/brand_icons.html" %}
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
+<link rel="stylesheet" href="{% static 'hesba/css/print.css' %}?v=print-002">
+</head>
+<body class="pr-body pr-a4" data-format="a4">
+<nav class="pr-toolbar" aria-label="{{ words.print }}">
+  <a class="pr-button pr-button--ghost" href="{% url 'parties:card' kind party.pk %}?lang={{ lang }}{% if date_from %}&from={{ date_from|date:'Y-m-d' }}{% endif %}{% if date_to %}&to={{ date_to|date:'Y-m-d' }}{% endif %}">← {{ words.back }}</a>
+  <button class="pr-button pr-button--primary" type="button" data-print>{{ words.print }}</button>
+</nav>
+<article class="pr-sheet" data-kind="statement">
+  <header class="pr-head">
+    <div class="pr-company">
+      {% if company.logo %}<img class="pr-company__logo" src="{{ company.logo }}" alt="{{ company.name }}">{% endif %}
+      <h1 class="pr-company__name">{{ company.name }}</h1>
+      {% if company.address %}<p>{{ company.address|linebreaksbr }}</p>{% endif %}
+      {% if company.phone %}<p>{{ words.phone }}: <bdi>{{ company.phone }}</bdi></p>{% endif %}
+    </div>
+    <div class="pr-doc">
+      <h2 class="pr-doc__title">{{ words.statement }}</h2>
+      <dl class="pr-meta">
+        <div><dt>{{ words.period }}</dt><dd>{% if date_from %}<bdi>{{ date_from|date:"Y-m-d" }}</bdi>{% else %}{{ words.all_time }}{% endif %} → {% if date_to %}<bdi>{{ date_to|date:"Y-m-d" }}</bdi>{% else %}<bdi>{% now "Y-m-d" %}</bdi>{% endif %}</dd></div>
+      </dl>
+    </div>
+  </header>
+  <section class="pr-party">
+    <span class="pr-party__label">{% if kind == 'customer' %}{{ words.customer }}{% else %}{{ words.supplier }}{% endif %}</span>
+    <strong class="pr-party__name">{{ party.name }}</strong> <span><bdi>{{ code }}</bdi></span>
+    {% if party.phone %}<span><bdi>{{ party.phone }}</bdi></span>{% endif %}
+  </section>
+  <table class="pr-lines" data-statement>
+    <thead><tr><th>{{ words.date }}</th><th>{{ words.type }}</th><th>{{ words.ref }}</th><th class="pr-num">{{ words.debit }}</th><th class="pr-num">{{ words.credit }}</th><th class="pr-num">{{ words.running }}</th></tr></thead>
+    <tbody>
+      <tr><td colspan="5"><strong>{{ words.opening }}</strong></td><td class="pr-num"><strong>{{ data.opening|money }}</strong></td></tr>
+      {% for row in data.rows %}<tr><td><bdi>{{ row.entry.entry_date|date:"Y-m-d" }}</bdi></td><td>{{ row.type_label }}</td><td><bdi>{{ row.reference.number|default:"" }}</bdi></td><td class="pr-num">{% if row.increase %}{{ row.increase|money }}{% endif %}</td><td class="pr-num">{% if row.decrease %}{{ row.decrease|money }}{% endif %}</td><td class="pr-num">{{ row.balance|money }}</td></tr>
+      {% empty %}<tr><td colspan="6">{{ words.empty }}</td></tr>{% endfor %}
+      <tr><td colspan="3"><strong>{{ words.totals }}</strong></td><td class="pr-num"><strong>{{ data.increase|money }}</strong></td><td class="pr-num"><strong>{{ data.decrease|money }}</strong></td><td></td></tr>
+    </tbody>
+  </table>
+  <section class="pr-totals"><dl><div class="pr-totals__grand"><dt>{{ words.closing }}</dt><dd data-statement-closing>{{ data.closing|money }} <small>{{ company.currency }}</small></dd></div></dl></section>
+  <footer class="pr-foot"><p class="pr-foot__meta">{{ words.printed }} · {{ printed_by }} · {% now "Y-m-d H:i" %}</p></footer>
+</article>
+<script>document.querySelector('[data-print]').addEventListener('click', function(){ window.print(); });</script>
+</body>
+</html>
