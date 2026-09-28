@@ -449,6 +449,15 @@ Status: RESOLVED (Ahmed's standing go-ahead of 2026-09-28 to build and merge wha
 - Permissions: using shifts needs `sales.create_sales_invoice`. Other cashiers' shifts need `cashboxes.view_finance`, and posting a difference needs `cashboxes.move_cash`.
 - Verification: `shifts/tests.py` (4 tests). They cover the expected cash from POS sales and a collection with another user's movement excluded, closing with a shortage, the one-open rule and refusals, the manager posting a shortage and an overage exactly once with the cashier refused, the difference excluded from the manager's own open shift, privacy, the POS banner and English.
 
+## HG-025 — Company details frozen on each posted document (PRINT-003)
+
+Status: RESOLVED (Ahmed's standing go-ahead of 2026-09-28)
+
+- New table `printing.DocumentCompanySnapshot`: one row per posted document (kind + id) with the legal company details: name, legal name, currency, phone, address, tax number, commercial register, footer note. Unique per document, never updated.
+- It is taken by a `post_save` receiver in the printing app when a sales or purchase invoice, a sales or purchase return, or a customer or supplier payment is saved with status `posted`. `get_or_create` makes it idempotent. **The posting services themselves are not edited**; the receiver only inserts one row inside the same transaction.
+- Printing uses the snapshot for posted documents. Drafts and documents posted before this change keep following the current details, which is exactly the old behaviour. The logo is deliberately not copied: it isn't a legal detail, and a copy would repeat hundreds of kilobytes per document.
+- Verification: `printing/tests_snapshot.py` (2 tests). An old invoice keeps the old address and tax number after they change, while a new one gets the new details. Drafts follow the current details, and payments are frozen too. The full suite passes with the receiver active on every posting.
+
 ## Final gate verification
 
 - Full Django suite: 794 tests passed in 576.477 seconds.
