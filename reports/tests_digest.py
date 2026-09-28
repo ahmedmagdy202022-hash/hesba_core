@@ -24,6 +24,22 @@ TODAY = timezone.localdate()
 YESTERDAY = TODAY - timedelta(days=1)
 
 
+def freeze_today(case, day):
+    """TEST-001: pin timezone.localdate() to ``day`` for one test, so a run that
+    crosses midnight (Cairo time) cannot move "today" halfway through."""
+
+    from unittest import mock
+
+    real = timezone.localdate
+
+    def pinned(value=None, timezone=None):
+        return day if value is None else real(value, timezone)
+
+    patcher = mock.patch("django.utils.timezone.localdate", side_effect=pinned)
+    patcher.start()
+    case.addCleanup(patcher.stop)
+
+
 def person(role_code, username):
     user = make_user(username=username)
     make_user_profile(user=user, role=make_seeded_role(role_code))
@@ -32,6 +48,7 @@ def person(role_code, username):
 
 class DigestTests(TestCase):
     def setUp(self):
+        freeze_today(self, TODAY)
         prepared_client()
         Period.objects.create(period_code="D", name="d", start_date=TODAY - timedelta(days=30), end_date=TODAY + timedelta(days=5))
         self.owner = person(RoleCode.OWNER, "digest_owner")
