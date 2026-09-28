@@ -6,6 +6,7 @@ from django.urls import include, path
 from django.views.generic import TemplateView
 
 from config.health import healthz
+from config.nightly import nightly
 
 from reports.dashboard_views import dashboard
 from reports.status_views import status_counts_report
@@ -19,6 +20,8 @@ from settings_core.setup_views import after_login, root_redirect, setup_complete
 urlpatterns = [
     path("", root_redirect, name="root_redirect"),
     path("healthz/", healthz, name="healthz"),
+    # BACKUP-003: token-guarded daily backup trigger for hosts without cron.
+    path("ops/nightly/", nightly, name="ops_nightly"),
     path("login/", GuardedLoginView.as_view(template_name="registration/login.html", next_page="/start/"), name="login"),
     # SEC-002: the authenticator-app code after the password, for users who switched it on.
     path("login/verify/", login_verify, name="login_verify"),

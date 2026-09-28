@@ -20,6 +20,9 @@ PUBLIC_ROUTE_NAMES = frozenset(
         "logout",
         # OPS-001 liveness probe: answers {"status": "ok"} and nothing else.
         "healthz",
+        # BACKUP-003: 404 unless the caller holds NIGHTLY_TOKEN; answers only
+        # {"status": ...} and never returns data. Called by an external scheduler.
+        "ops_nightly",
     }
 )
 
