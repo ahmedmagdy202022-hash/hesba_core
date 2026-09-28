@@ -45,3 +45,18 @@ class LoginFailure(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+
+class TwoFactor(models.Model):
+    """SEC-002: a confirmed authenticator-app secret for one user (TOTP, RFC 6238)."""
+
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="two_factor")
+    secret = models.CharField(max_length=64)
+    # The last 30-second step accepted, so one code cannot be used twice.
+    last_step = models.BigIntegerField(default=0)
+    # SHA-256 of each unused recovery code; a used code is removed.
+    recovery_hashes = models.JSONField(default=list, blank=True)
+    enabled_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Two-factor sign-in"

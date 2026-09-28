@@ -1,0 +1,39 @@
+{% load static %}
+<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+{% include "partials/brand_icons.html" %}
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{{ words.page }}</title>
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
+<link rel="stylesheet" href="{% static 'hesba/css/login.css' %}?v=login-001">
+</head>
+<body class="login-page" data-lang="{{ lang }}">
+<main class="login-shell">
+  <section class="login-brand" aria-label="حِسبة">
+    <img class="login-brand__logo" src="{% static 'hesba/brand/hesba-logo-reversed.png' %}" alt="حِسبة — Hesba" width="642" height="225">
+  </section>
+  <section class="login-panel">
+    <div class="login-form-wrap" data-two-factor-step>
+      <h1>{{ words.title }}</h1>
+      {% if state == "locked" %}
+      <div class="error" role="alert" data-login-locked>{{ locked_text }}</div>
+      <p class="login-subtitle"><a href="{% url 'login' %}?lang={{ lang }}">{{ words.back }}</a></p>
+      {% else %}
+      <p class="login-subtitle">{{ words.intro }}</p>
+      {% if state == "wrong" %}<div class="error" role="alert" data-code-wrong>{{ words.wrong }}</div>{% endif %}
+      <form method="post" class="login-form" autocomplete="off">
+        {% csrf_token %}
+        <input type="hidden" name="lang" value="{{ lang }}">
+        <div class="field"><label for="id_code">{{ words.code }}</label><input id="id_code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="12" required autofocus dir="ltr" placeholder="123456"></div>
+        <button type="submit" class="login-btn">{{ words.button }}</button>
+      </form>
+      <p class="login-subtitle">{{ words.recovery }}</p>
+      <p class="login-subtitle"><a href="{% url 'login' %}?lang={{ lang }}">{{ words.back }}</a></p>
+      {% endif %}
+    </div>
+  </section>
+</main>
+</body>
+</html>

@@ -10,6 +10,7 @@ from permissions.decorators import require_permission
 from permissions.models import Role
 
 from .models import UserProfile
+from .two_factor import device_for
 from .user_services import MANAGE_PERMISSION, assignable_roles, create_user_account, reset_user_password, update_user_account
 
 
@@ -187,7 +188,7 @@ def user_edit(request, pk):
         else:
             messages.success(request, WORDS[lang]["updated"])
             return redirect(f"/settings/users/?lang={lang}")
-    return render(request, "accounts/users/form.html", _context(request, form=form, reset_form=reset_form, edited=user, title=user.username))
+    return render(request, "accounts/users/form.html", _context(request, form=form, reset_form=reset_form, edited=user, edited_two_factor=device_for(user), title=user.username))
 
 
 class PasswordResetForm(forms.Form):
