@@ -188,7 +188,10 @@ class DashboardFigures:
     # ---- usage ----
 
     def _usage_status(self, scope):
-        return evaluate_usage_status(sum(collect_usage_metrics().values()))
+        # USAGE-002: the worse of the row-count level and the real database size.
+        from settings_core.storage import database_size_bytes, level_for, limit_bytes, worse
+
+        return worse(evaluate_usage_status(sum(collect_usage_metrics().values())), level_for(database_size_bytes(), limit_bytes()))
 
 
 def has_any_business_data():
