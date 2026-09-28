@@ -29,7 +29,7 @@
     <div class="login-form-wrap">
       <h1 data-i18n="title">تسجيل الدخول</h1>
       <p class="login-subtitle" data-i18n="subtitle">استخدم حسابك للدخول حسب الدور والصلاحيات.</p>
-      {% if form.errors %}<div class="error" role="alert" data-i18n="error">بيانات الدخول غير صحيحة. راجع اسم المستخدم وكلمة المرور.</div>{% endif %}
+      {% if login_locked %}<div class="error" role="alert" data-i18n="locked" data-login-locked>محاولات دخول غلط كتير. استنى {{ lock_minutes }} دقيقة وجرّب تاني، أو كلّم صاحب الحساب يغيّر كلمة المرور.</div>{% elif form.errors %}<div class="error" role="alert" data-i18n="error">بيانات الدخول غير صحيحة. راجع اسم المستخدم وكلمة المرور.</div>{% endif %}
       <form method="post" class="login-form">
         {% csrf_token %}
         <input type="hidden" name="next" value="{{ next }}">
@@ -48,8 +48,8 @@
   var saved=localStorage.getItem('hesba_lang');
   var lang=params.get('lang')==='en'?'en':(params.get('lang')==='ar'?'ar':(saved==='en'?'en':'ar'));
   var dict={
-    ar:{title:'تسجيل الدخول',tagline:'إدارة أسهل… قرارات أوضح',point1:'البيع والمشتريات والمخزون والخزن في مكان واحد.',point2:'شغّال من الكمبيوتر والتابلت والموبايل.',point3:'كل مستخدم يشوف اللي يخصه بس.',subtitle:'استخدم حسابك للدخول حسب الدور والصلاحيات.',username:'اسم المستخدم',password:'كلمة المرور',button:'الدخول إلى حسبة',error:'بيانات الدخول غير صحيحة. راجع اسم المستخدم وكلمة المرور.',userPh:'أدخل اسم المستخدم',passPh:'أدخل كلمة المرور'},
-    en:{title:'Sign in',tagline:'Easier management, clearer decisions',point1:'Sales, purchases, stock and cash in one place.',point2:'Works on desktop, tablet and phone.',point3:'Every user sees only what is theirs.',subtitle:'Use your account according to role and permissions.',username:'Username',password:'Password',button:'Sign in to Hesba',error:'Invalid username or password.',userPh:'Enter username',passPh:'Enter password'}
+    ar:{title:'تسجيل الدخول',tagline:'إدارة أسهل… قرارات أوضح',point1:'البيع والمشتريات والمخزون والخزن في مكان واحد.',point2:'شغّال من الكمبيوتر والتابلت والموبايل.',point3:'كل مستخدم يشوف اللي يخصه بس.',subtitle:'استخدم حسابك للدخول حسب الدور والصلاحيات.',username:'اسم المستخدم',password:'كلمة المرور',button:'الدخول إلى حسبة',error:'بيانات الدخول غير صحيحة. راجع اسم المستخدم وكلمة المرور.',locked:'محاولات دخول غلط كتير. استنى {{ lock_minutes }} دقيقة وجرّب تاني، أو كلّم صاحب الحساب يغيّر كلمة المرور.',userPh:'أدخل اسم المستخدم',passPh:'أدخل كلمة المرور'},
+    en:{title:'Sign in',tagline:'Easier management, clearer decisions',point1:'Sales, purchases, stock and cash in one place.',point2:'Works on desktop, tablet and phone.',point3:'Every user sees only what is theirs.',subtitle:'Use your account according to role and permissions.',username:'Username',password:'Password',button:'Sign in to Hesba',error:'Invalid username or password.',locked:'Too many wrong attempts. Wait {{ lock_minutes }} minutes and try again, or ask the account owner to reset the password.',userPh:'Enter username',passPh:'Enter password'}
   };
   localStorage.setItem('hesba_lang',lang);
   document.documentElement.lang=lang;

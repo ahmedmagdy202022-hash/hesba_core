@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.contrib import admin as django_admin
 from django.contrib.auth.decorators import login_not_required
-from django.contrib.auth.views import LoginView, LogoutView
+from django.contrib.auth.views import LogoutView
 from django.urls import include, path
 from django.views.generic import TemplateView
 
@@ -11,13 +11,14 @@ from reports.dashboard_views import dashboard
 from reports.status_views import status_counts_report
 from reports.functional_views import report_hub
 from reports.views import home
+from accounts.login_guard import GuardedLoginView
 from settings_core.setup_views import after_login, root_redirect, setup_complete, setup_review
 
 
 urlpatterns = [
     path("", root_redirect, name="root_redirect"),
     path("healthz/", healthz, name="healthz"),
-    path("login/", LoginView.as_view(template_name="registration/login.html", next_page="/start/"), name="login"),
+    path("login/", GuardedLoginView.as_view(template_name="registration/login.html", next_page="/start/"), name="login"),
     # Logout must not itself require a login: a signed-out user posting from a
     # stale page was bounced to /login/?next=/logout/ and, after signing back
     # in, landed on a GET of this POST-only view (405).
