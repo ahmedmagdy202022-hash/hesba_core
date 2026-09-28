@@ -196,6 +196,9 @@ SESSION_SAVE_EVERY_REQUEST = True
 LOGIN_MAX_FAILURES = config("LOGIN_MAX_FAILURES", default=5, cast=int)
 LOGIN_MAX_FAILURES_PER_IP = config("LOGIN_MAX_FAILURES_PER_IP", default=20, cast=int)
 LOGIN_LOCK_MINUTES = config("LOGIN_LOCK_MINUTES", default=15, cast=int)
+# SEC-002: how long, in seconds, the password step waits for the authenticator code.
+TWO_FACTOR_PENDING_SECONDS = config("TWO_FACTOR_PENDING_SECONDS", default=300, cast=int)
+TWO_FACTOR_ISSUER = "Hesba"
 # SHARE-001: how long a shared document link keeps working.
 SHARE_LINK_DAYS = config("SHARE_LINK_DAYS", default=60, cast=int)
 CSRF_COOKIE_SECURE = config("CSRF_COOKIE_SECURE", default=not DEBUG, cast=bool)

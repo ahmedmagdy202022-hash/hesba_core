@@ -1,0 +1,19 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'accounts:profile' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div><span class="op-status {% if device %}op-status-posted{% else %}op-status-draft{% endif %}" data-two-factor-state="{% if device %}on{% else %}off{% endif %}">{% if device %}{{ words.on }}{% else %}{{ words.off }}{% endif %}</span></section>
+{% if messages %}{% for message in messages %}<div class="op-message op-message-success" role="status">{{ message }}</div>{% endfor %}{% endif %}
+{% if error %}<div class="op-message op-message-error" role="alert" data-two-factor-error>{{ error }}</div>{% endif %}
+{% if codes %}
+<section class="op-form" data-recovery-codes><h2>{{ words.codes_title }}</h2><p class="op-muted">{{ words.codes_help }}</p>
+<ol class="hs-recovery-codes" dir="ltr">{% for code in codes %}<li><code>{{ code }}</code></li>{% endfor %}</ol>
+<div class="op-form-actions"><button class="op-secondary" type="button" data-copy-link="{{ codes|join:' ' }}">{{ words.copy }}</button><a class="op-primary" href="{% url 'accounts:two_factor' %}?lang={{ lang }}">{{ words.done }}</a></div></section>
+{% elif device %}
+<section class="op-summary-grid"><article><small>{{ words.since }}</small><strong>{{ device.enabled_at|date:"Y-m-d" }}</strong></article><article><small>{{ words.codes_left }}</small><strong data-codes-left>{{ codes_left }}</strong></article></section>
+<form class="op-form" method="post" autocomplete="off">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="new_codes"><h2>{{ words.new_codes }}</h2><p class="op-muted">{{ words.new_codes_help }}</p><div class="op-form-grid"><div class="op-field"><label for="id_new_code">{{ words.code }}</label><input id="id_new_code" name="code" inputmode="numeric" autocomplete="one-time-code" dir="ltr" required></div></div><div class="op-form-actions"><button class="op-secondary" type="submit">{{ words.new_codes }}</button></div></form>
+<form class="op-form" method="post" autocomplete="off">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="disable"><h2>{{ words.disable }}</h2><p class="op-muted">{{ words.disable_help }}</p><div class="op-form-grid"><div class="op-field"><label for="id_password">{{ words.password }}</label><input id="id_password" name="password" type="password" autocomplete="current-password" required></div><div class="op-field"><label for="id_off_code">{{ words.code }}</label><input id="id_off_code" name="code" inputmode="numeric" autocomplete="one-time-code" dir="ltr" required></div></div><div class="op-form-actions"><button class="op-danger" type="submit" data-two-factor-disable>{{ words.disable }}</button></div></form>
+{% else %}
+<form class="op-form" method="post" autocomplete="off" data-two-factor-setup>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="enable">
+<ol class="hs-steps"><li>{{ words.step1 }}</li><li>{{ words.step2 }}<p class="hs-setup-key" dir="ltr" data-setup-key><code>{{ secret_grouped }}</code></p><p class="op-form-actions"><button class="op-secondary" type="button" data-copy-link="{{ secret }}">{{ words.copy }}</button><a class="op-secondary" href="{{ otpauth }}">{{ words.open_app }}</a></p></li><li>{{ words.step3 }}<div class="op-form-grid"><div class="op-field"><label for="id_code">{{ words.code }}</label><input id="id_code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" dir="ltr" required></div></div></li></ol>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.enable }}</button></div></form>
+{% endif %}
+{% endblock %}
