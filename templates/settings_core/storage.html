@@ -1,0 +1,15 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{{ back_url }}">← {{ words.back }}</a><h1>{{ words.title }}</h1><p>{{ words.lead }}</p></div></section>
+{% if info.used is None %}<p class="op-message">{{ words.no_size }}</p>{% else %}
+<section class="op-form hs-storage hs-storage--{{ info.level }}" data-storage-level="{{ info.level }}">
+<p class="hs-storage__figure"><strong dir="ltr" data-storage-used>{{ info.used_mb }} MB</strong> <span>{{ words.of }}</span> <span dir="ltr">{{ info.limit_mb }} MB</span> <span class="op-status op-status-{% if info.level == 'green' %}posted{% elif info.level == 'red' %}cancelled{% else %}draft{% endif %}" dir="ltr">{{ info.percent }}%</span></p>
+{% load l10n %}<div class="hs-storage__bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ info.percent|unlocalize }}"><span style="width: {% if info.percent > 100 %}100{% else %}{{ info.percent|unlocalize }}{% endif %}%"></span></div>
+<p data-storage-message>{{ message }}</p>
+<p class="op-muted" data-storage-left><strong>{{ words.left }}:</strong> {{ left_text }}</p>
+<p class="op-muted">{{ words.advice }}</p>
+</section>
+{% if tables %}<h2>{{ words.biggest }}</h2><div class="op-table-wrap"><table class="op-table" style="min-width:0"><tbody>{% for name, size in tables %}<tr data-storage-table><td>{{ name }}</td><td dir="ltr">{{ size }} MB</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+{% endif %}
+{% if can_manage %}<form class="op-form" method="post" data-storage-clean>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><p class="op-muted">{{ words.clean_help }}</p><div class="op-form-actions"><button class="op-secondary" type="submit">{{ words.clean }}</button></div></form>{% endif %}
+{% endblock %}
