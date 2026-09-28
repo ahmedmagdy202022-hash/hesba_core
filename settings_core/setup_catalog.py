@@ -13,6 +13,9 @@ from .models import ActivityType
 COMMERCIAL = "commercial"
 SERVICES = "services"
 RESTAURANTS = "restaurants"
+MEDICAL = "medical"
+EDUCATION = "education"
+OTHER = "other"
 
 REQUIRED = "required"
 SUGGESTED = "suggested"
@@ -26,6 +29,9 @@ ACTIVITY_LABELS = {
     COMMERCIAL: {"ar": "نشاط تجاري", "en": "Commercial"},
     SERVICES: {"ar": "نشاط خدمي", "en": "Services"},
     RESTAURANTS: {"ar": "مطاعم وكافيهات", "en": "Restaurants & cafés"},
+    MEDICAL: {"ar": "نشاط طبي", "en": "Medical"},
+    EDUCATION: {"ar": "نشاط تعليمي", "en": "Education"},
+    OTHER: {"ar": "نشاط آخر", "en": "Other activity"},
 }
 
 #: Which ``ClientProfile.activity_type`` each wizard activity maps onto. The two
@@ -37,6 +43,10 @@ ACTIVITY_TYPE_BY_SLUG = {
     # RESTO-001: a restaurant sells from stock like a shop; the wizard slug kept
     # on the profile tells the two apart, so no new choice (and no migration).
     RESTAURANTS: ActivityType.STORE,
+    # ACT-002: clinics and schools sell services; "other" can be both.
+    MEDICAL: ActivityType.SERVICES,
+    EDUCATION: ActivityType.SERVICES,
+    OTHER: ActivityType.MIXED,
 }
 
 SUB_ACTIVITY_LABELS = {
@@ -67,6 +77,28 @@ SUB_ACTIVITY_LABELS = {
         "bakery": {"ar": "مخبز / حلواني", "en": "Bakery / Sweets"},
         "cloud_kitchen": {"ar": "مطبخ أونلاين / دليفري", "en": "Cloud kitchen / Delivery"},
         "other": {"ar": "نشاط أكل ومشروبات آخر", "en": "Other food & drinks"},
+    },
+    MEDICAL: {
+        "clinic": {"ar": "عيادة", "en": "Clinic"},
+        "dental": {"ar": "عيادة أسنان", "en": "Dental clinic"},
+        "medical_center": {"ar": "مركز طبي / بولي كلينك", "en": "Medical center / Polyclinic"},
+        "lab": {"ar": "معمل تحاليل / أشعة", "en": "Lab / Radiology"},
+        "physio": {"ar": "علاج طبيعي", "en": "Physiotherapy"},
+        "vet": {"ar": "عيادة بيطري", "en": "Veterinary clinic"},
+        "other": {"ar": "نشاط طبي آخر", "en": "Other medical"},
+    },
+    EDUCATION: {
+        "tutoring_center": {"ar": "سنتر دروس", "en": "Tutoring center"},
+        "training": {"ar": "كورسات وتدريب", "en": "Courses & training"},
+        "languages": {"ar": "مركز لغات", "en": "Language center"},
+        "nursery": {"ar": "حضانة", "en": "Nursery"},
+        "private_tutor": {"ar": "مدرس خصوصي", "en": "Private tutor"},
+        "other": {"ar": "نشاط تعليمي آخر", "en": "Other education"},
+    },
+    OTHER: {
+        "mixed": {"ar": "بيع وخدمات مع بعض", "en": "Selling and services together"},
+        "general": {"ar": "نشاط عام", "en": "General activity"},
+        "other": {"ar": "حاجة تانية", "en": "Something else"},
     },
 }
 
@@ -135,6 +167,52 @@ MODULE_PRESETS = {
         "appointments_visits": OPTIONAL,
         "employees_technicians": SUGGESTED,
         "tables_orders": REQUIRED,
+    },
+    # ACT-002: a visit is billed through sales, so a clinic needs sales operations.
+    MEDICAL: {
+        "customers": REQUIRED,
+        "suppliers": OPTIONAL,
+        "items_services": REQUIRED,
+        "sales_operations": REQUIRED,
+        "purchases": OPTIONAL,
+        "inventory": OPTIONAL,
+        "cashboxes": REQUIRED,
+        "expenses": SUGGESTED,
+        "reports": REQUIRED,
+        "pdf_printing": SUGGESTED,
+        "appointments_visits": REQUIRED,
+        "employees_technicians": SUGGESTED,
+        "tables_orders": OPTIONAL,
+    },
+    EDUCATION: {
+        "customers": REQUIRED,
+        "suppliers": OPTIONAL,
+        "items_services": REQUIRED,
+        "sales_operations": REQUIRED,
+        "purchases": OPTIONAL,
+        "inventory": OPTIONAL,
+        "cashboxes": REQUIRED,
+        "expenses": SUGGESTED,
+        "reports": REQUIRED,
+        "pdf_printing": SUGGESTED,
+        "appointments_visits": SUGGESTED,
+        "employees_technicians": SUGGESTED,
+        "tables_orders": OPTIONAL,
+    },
+    OTHER: {
+        "customers": SUGGESTED,
+        "suppliers": SUGGESTED,
+        "items_services": REQUIRED,
+        "sales_operations": REQUIRED,
+        "purchases": SUGGESTED,
+        "inventory": SUGGESTED,
+        "cashboxes": REQUIRED,
+        "expenses": SUGGESTED,
+        "reports": REQUIRED,
+        "pdf_printing": SUGGESTED,
+        "appointments_visits": OPTIONAL,
+        "employees_technicians": OPTIONAL,
+        "tables_orders": OPTIONAL,
     },
 }
 

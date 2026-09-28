@@ -14,7 +14,7 @@ from reports.functional_views import report_hub
 from reports.views import home
 from accounts.login_guard import GuardedLoginView, login_verify
 from printing import views as printing_views
-from settings_core.setup_views import after_login, root_redirect, setup_complete, setup_review
+from settings_core.setup_views import after_login, root_redirect, setup_complete, setup_review, sub_activity_step
 
 
 urlpatterns = [
@@ -36,6 +36,10 @@ urlpatterns = [
     path("setup/activity/", TemplateView.as_view(template_name="setup/activity_selection.html"), name="setup_activity"),
     path("setup/activity/commercial/", TemplateView.as_view(template_name="setup/activity_commercial_subactivity.html"), name="setup_activity_commercial"),
     path("setup/activity/restaurants/", TemplateView.as_view(template_name="setup/activity_restaurants_subactivity.html"), name="setup_activity_restaurants"),
+    # ACT-002: these share one catalog-driven sub-activity step.
+    path("setup/activity/medical/", sub_activity_step, {"activity": "medical"}, name="setup_activity_medical"),
+    path("setup/activity/education/", sub_activity_step, {"activity": "education"}, name="setup_activity_education"),
+    path("setup/activity/other/", sub_activity_step, {"activity": "other"}, name="setup_activity_other"),
     path("setup/activity/services/", TemplateView.as_view(template_name="setup/activity_services_subactivity.html"), name="setup_activity_services"),
     path("setup/activity/service/", TemplateView.as_view(template_name="setup/activity_subactivity_placeholder.html"), name="setup_activity_service"),
     path("setup/modules/", TemplateView.as_view(template_name="setup/modules_selection.html"), name="setup_modules"),
