@@ -1,0 +1,7 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'staff:list' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ employee.name }}</h1><p dir="ltr">{{ employee.code }}{% if employee.title %} · {{ employee.title }}{% endif %}</p></div></section>
+{% block employee_extra %}{% endblock %}
+{% if can_manage %}<form class="op-form" method="post" data-employee-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">{% if error %}<div class="op-message op-message-error" role="alert" data-employee-error>{{ error }}</div>{% endif %}{% include "staff/_form.html" %}<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form>
+{% else %}<p class="op-message">{{ words.view_only }}</p>{% endif %}
+{% endblock %}

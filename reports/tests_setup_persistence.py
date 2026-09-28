@@ -121,7 +121,7 @@ class CompleteSetupServiceTests(TestCase):
 
         self.assertIn("customers", usable_modules())
         self.assertNotIn("appointments_visits", usable_modules())
-        self.assertNotIn("employees_technicians", usable_modules())
+        self.assertIn("employees_technicians", usable_modules())  # STAFF-001: it has a backend now
 
     def test_it_refuses_an_unknown_activity(self):
         with self.assertRaises(ValueError):
