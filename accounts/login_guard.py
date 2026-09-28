@@ -133,7 +133,7 @@ def login_verify(request):
 
     pending, user = _pending(request)
     if pending is None:
-        return redirect("login")
+        return redirect(settings.LOGIN_REDIRECT_URL if request.user.is_authenticated else "login")
     lang = "en" if (request.POST.get("lang") or request.GET.get("lang") or pending.get("lang")) == "en" else "ar"
     words = VERIFY_WORDS[lang]
     username, ip = user.get_username(), client_ip(request)

@@ -121,6 +121,8 @@ class TwoFactorFlowTests(TestCase):
             self.assertRedirects(self.client.post(VERIFY, {"code": now_code(secret)}), LOGIN, fetch_redirect_response=False)
         self.assertNotIn("_auth_user_id", self.client.session)
         self.assertRedirects(self.client.get(VERIFY), LOGIN, fetch_redirect_response=False)
+        self.client.force_login(self.user)
+        self.assertRedirects(self.client.get(VERIFY), "/start/", fetch_redirect_response=False)  # already signed in
 
     def test_english_and_users_without_the_app_sign_in_as_before(self):
         other = make_user(username="tf_plain")
