@@ -1,8 +1,9 @@
 {% extends "operations/base.html" %}
 {% load static hesba_format hesba_print %}
 {% block operation_content %}{% printing_enabled as can_print %}
-<form class="pos" method="post" data-pos data-words="{{ js_words }}" novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="line_count" value="0" data-line-count><input type="hidden" name="cart_json" value="" data-cart-json><input type="hidden" name="print" value="0" data-print-flag>
+<form class="pos" method="post" data-pos data-words="{{ js_words }}" data-sync-url="{% url 'sales:pos_sync' %}" data-pos-user="{{ request.user.pk }}" novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="line_count" value="0" data-line-count><input type="hidden" name="cart_json" value="" data-cart-json><input type="hidden" name="print" value="0" data-print-flag>
 <section class="pos-main">
+  <div class="pos-offline" data-pos-offline role="status" aria-live="polite" hidden></div>
   <header class="pos-head"><h1>{{ words.title }}</h1><a class="op-secondary" href="{% url 'shifts:mine' %}?lang={{ lang }}" data-pos-shift>{% if open_shift %}{% if lang == 'en' %}Shift since {{ open_shift.opened_at|date:"H:i" }} · close{% else %}وردية من {{ open_shift.opened_at|date:"H:i" }} · قفل{% endif %}{% else %}{% if lang == 'en' %}Open shift{% else %}افتح وردية{% endif %}{% endif %}</a><a class="op-back" href="{% url 'sales:list' %}?lang={{ lang }}">{{ words.back }} →</a></header>
   {% if last_invoice %}<div class="op-message op-message-success pos-last">{{ last_invoice.invoice_number }} · {{ last_invoice.total_amount|money }}{% if can_print %} · <a href="{% url 'printing:sales_invoice' last_invoice.pk %}?lang={{ lang }}&format=receipt&next=pos" target="_blank" rel="noopener">{{ words.receipt }}</a>{% endif %}</div>{% endif %}
   <div class="pos-scan"><label for="pos-scan">{{ words.scan }}</label><input id="pos-scan" type="search" autocomplete="off" inputmode="search" autofocus data-pos-scan placeholder="{{ words.scan_hint }}"><input type="search" list="pos-items" autocomplete="off" data-pos-search placeholder="{{ words.search }}" aria-label="{{ words.search }}"><datalist id="pos-items">{% for item in catalog %}<option value="{{ item.label }}"></option>{% endfor %}</datalist><output data-pos-status aria-live="polite"></output></div>
@@ -21,4 +22,5 @@
 </form>
 {% if price_book %}{{ price_book|json_script:"hs-price-book" }}{% endif %}{% if tax_rates %}{{ tax_rates|json_script:"hs-tax-rates" }}{% endif %}{% if units %}{{ units|json_script:"hs-units" }}{% endif %}{{ customer_directory|json_script:"hs-customers" }}{% if serial_catalog %}{{ serial_catalog|json_script:"hs-serials" }}{% endif %}{{ catalog|json_script:"hs-item-catalog" }}{{ cart_back|json_script:"pos-cart-back" }}
 <script src="{% static 'hesba/js/pos.js' %}?v=pos-002" defer></script>
+<script src="{% static 'hesba/js/pos_offline.js' %}?v=pos-003" defer></script>
 {% endblock %}
