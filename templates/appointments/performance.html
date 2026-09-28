@@ -1,0 +1,9 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'appointments:agenda' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ words.performance }}</h1><p>{{ words.perf_note }}</p></div></section>
+<form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><input type="date" name="from" value="{{ date_from|date:'Y-m-d' }}" aria-label="{{ words.from }}"><input type="date" name="to" value="{{ date_to|date:'Y-m-d' }}" aria-label="{{ words.to }}"><button type="submit">{{ words.show }}</button></form>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.employee }}</th><th>{{ words.done }}</th><th>{{ words.sales }}</th><th>{{ words.rate }}</th><th>{{ words.commission }}</th></tr></thead><tbody>
+{% for row in rows %}<tr data-performance-row="{{ row.employee.code }}"><td>{{ row.employee.name }}</td><td>{{ row.done }}</td><td data-performance-sales>{{ row.sales|money }}</td><td dir="ltr">{{ row.employee.commission_percent }}%</td><td data-performance-commission>{{ row.commission|money }}</td></tr>{% empty %}<tr><td colspan="5" class="op-empty">—</td></tr>{% endfor %}
+</tbody><tfoot><tr><th></th><th>{{ totals.done }}</th><th>{{ totals.sales|money }}</th><th></th><th>{{ totals.commission|money }}</th></tr></tfoot></table></div>
+{% endblock %}

@@ -1,0 +1,12 @@
+{% load l10n %}<div class="op-form-grid">
+<div class="op-field"><label for="id_day">{{ words.day }}</label><input id="id_day" name="day" type="date" value="{{ form.day }}" required></div>
+<div class="op-field"><label for="id_time">{{ words.time }}</label><input id="id_time" name="time" type="time" value="{{ form.time }}" required></div>
+<div class="op-field"><label for="id_customer">{{ words.customer }}</label><select id="id_customer" name="customer" required><option value="">—</option>{% for customer in customers %}<option value="{{ customer.pk }}"{% if form.customer == customer.pk|stringformat:"s" %} selected{% endif %}>{{ customer.name }}{% if customer.phone %} — {{ customer.phone }}{% endif %}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="id_service">{{ words.service }}</label><select id="id_service" name="service"><option value="">{{ words.none }}</option>{% for item in services %}<option value="{{ item.pk }}" data-price="{{ item.default_sale_price|unlocalize }}"{% if form.service == item.pk|stringformat:"s" %} selected{% endif %}>{{ item.item_name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="id_employee">{{ words.employee }}</label><select id="id_employee" name="employee"><option value="">{{ words.none }}</option>{% for person in employees %}<option value="{{ person.pk }}"{% if form.employee == person.pk|stringformat:"s" %} selected{% endif %}>{{ person.name }}{% if person.title %} — {{ person.title }}{% endif %}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="id_price">{{ words.price }}</label><input id="id_price" name="price" inputmode="decimal" dir="ltr" value="{{ form.price|default:''|unlocalize }}"></div>
+<div class="op-field"><label for="id_minutes">{{ words.minutes }}</label><input id="id_minutes" name="duration_minutes" type="number" min="5" max="720" step="5" value="{{ form.duration_minutes|default:30|unlocalize }}"></div>
+<div class="op-field"><label for="id_kind">{{ words.kind }}</label><select id="id_kind" name="kind">{% for value, label in kinds %}<option value="{{ value }}"{% if form.kind == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="id_address">{{ words.address }}</label><input id="id_address" name="address" maxlength="255" value="{{ form.address|default:'' }}"></div>
+<div class="op-field"><label for="id_notes">{{ words.notes }}</label><input id="id_notes" name="notes" maxlength="255" value="{{ form.notes|default:'' }}"></div>
+</div>

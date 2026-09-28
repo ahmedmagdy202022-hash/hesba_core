@@ -1,0 +1,15 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div>{% if can_report %}<a class="op-secondary" href="{% url 'appointments:performance' %}?lang={{ lang }}">{{ words.performance }}</a>{% endif %}</section>
+<form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><input type="date" name="day" value="{{ day|date:'Y-m-d' }}" aria-label="{{ words.day }}"><select name="employee" aria-label="{{ words.employee }}"><option value="">{{ words.all }}</option>{% for person in employees %}<option value="{{ person.pk }}"{% if employee.pk == person.pk %} selected{% endif %}>{{ person.name }}</option>{% endfor %}</select><button type="submit">{{ words.day }}</button></form>
+<p class="op-form-actions"><a class="op-secondary" href="?lang={{ lang }}&day={{ prev_day|date:'Y-m-d' }}{% if employee %}&employee={{ employee.pk }}{% endif %}">← {{ words.prev }}</a><a class="op-secondary" href="?lang={{ lang }}&day={{ today|date:'Y-m-d' }}">{{ words.today }}</a><a class="op-secondary" href="?lang={{ lang }}&day={{ next_day|date:'Y-m-d' }}{% if employee %}&employee={{ employee.pk }}{% endif %}">{{ words.next }} →</a></p>
+<h2 data-agenda-day="{{ day|date:'Y-m-d' }}">{{ day|date:"l Y-m-d" }}</h2>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.time }}</th><th>{{ words.customer }}</th><th>{{ words.service }}</th><th>{{ words.employee }}</th><th>{{ words.price }}</th><th>{{ words.status }}</th></tr></thead><tbody>
+{% for row in rows %}{% with appointment=row.appointment %}<tr data-appointment-row="{{ appointment.number }}"><td dir="ltr"><a href="{% url 'appointments:detail' appointment.pk %}?lang={{ lang }}">{{ appointment.starts_at|time:"H:i" }}–{{ appointment.ends_at|time:"H:i" }}</a></td><td>{{ appointment.customer.name }}{% if appointment.kind == 'visit' %} · <small>{{ appointment.address }}</small>{% endif %}</td><td>{{ appointment.service.item_name|default:'—' }}</td><td>{{ appointment.employee.name|default:'—' }}</td><td>{{ appointment.price|money }}</td><td><span class="op-status op-status-{% if appointment.status == 'done' %}posted{% elif appointment.status == 'cancelled' or appointment.status == 'no_show' %}cancelled{% else %}draft{% endif %}">{{ row.status_label }}</span></td></tr>{% endwith %}
+{% empty %}<tr><td colspan="6" class="op-empty">{{ words.empty }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_book %}<form class="op-form" method="post" data-appointment-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><h2>{{ words.new }}</h2>{% if error %}<div class="op-message op-message-error" role="alert" data-appointment-error>{{ error }}</div>{% endif %}{% include "appointments/_form.html" %}<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.book }}</button></div></form>
+{% else %}<p class="op-message">{{ words.view_only }}</p>{% endif %}
+<script src="{% static 'hesba/js/appointments.js' %}?v=appt-001" defer></script>
+{% endblock %}

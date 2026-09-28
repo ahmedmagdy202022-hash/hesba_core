@@ -1,3 +1,4 @@
+from unittest import mock
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
@@ -116,6 +117,7 @@ class CompleteSetupServiceTests(TestCase):
         self.assertIn("customers", enabled)
         self.assertIn("inventory", enabled)
 
+    @mock.patch.object(catalog, "MODULES_WITHOUT_BACKEND", frozenset({"appointments_visits"}))  # APPT-001: every module has a backend now; keep testing the mechanism
     def test_usable_modules_hides_the_ones_with_no_backend(self):
         complete_setup(self.profile, "commercial", "retail", "customers,appointments_visits,employees_technicians")
 
