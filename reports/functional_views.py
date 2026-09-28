@@ -28,6 +28,7 @@ STRINGS = {
 }
 
 REPORT_CARDS = (
+    ("reports:daily", "reports.view_sales_report", "Daily summary", "ملخص اليوم", "Yesterday's sales, cash, collections and alerts on one page — send it on WhatsApp", "مبيعات وخزن وتحصيلات وتنبيهات امبارح في صفحة واحدة — وابعتها واتساب"),
     ("reports:sales", "reports.view_sales_report", "Sales Report", "تقرير المبيعات", "Posted, draft, and cancelled sales invoices", "فواتير البيع المرحلة والمسودة والملغاة"),
     ("reports:purchases", "reports.view_purchase_report", "Purchase Report", "تقرير المشتريات", "Purchase invoice history and due context", "سجل فواتير الشراء والمتبقي"),
     ("reports:inventory", "reports.view_inventory_report", "Inventory Report", "تقرير المخزون", "Stock by item and active location", "المخزون حسب الصنف والموقع"),
