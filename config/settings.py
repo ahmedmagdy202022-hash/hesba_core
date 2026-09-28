@@ -53,6 +53,7 @@ LOCAL_APPS = [
     "shifts",
     "parties",
     "search",
+    "offline_pos",
     "printing",
 ]
 
@@ -178,6 +179,8 @@ STORAGES = {
 # OPS-001: nightly backups (manage.py backup_data) land here; keep the last N.
 BACKUP_DIR = Path(config("BACKUP_DIR", default=str(BASE_DIR / "backups")))
 BACKUP_KEEP = config("BACKUP_KEEP", default=14, cast=int)
+# POS-003: an offline sale older than this is refused at sync (enter it by hand).
+POS_OFFLINE_MAX_DAYS = config("POS_OFFLINE_MAX_DAYS", default=7, cast=int)
 # USAGE-002: the client's database plan limit (Supabase free plan: 500 MB).
 DATABASE_SIZE_LIMIT_MB = config("DATABASE_SIZE_LIMIT_MB", default=500, cast=int)
 # BACKUP-003: the nightly encrypted backup goes to the client's own Google Drive.
