@@ -1,0 +1,19 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{{ back_url }}">← {{ words.back }}</a><h1>{{ words.title }}</h1><p>{{ words.lead }}</p></div><span class="op-status {% if fingerprint %}op-status-posted{% else %}op-status-draft{% endif %}" data-backup-encrypted="{% if fingerprint %}yes{% else %}no{% endif %}">{% if fingerprint %}{{ words.on }}{% else %}{{ words.off }}{% endif %}</span></section>
+{% if messages %}{% for message in messages %}<div class="op-message op-message-success" role="status">{{ message }}</div>{% endfor %}{% endif %}
+{% if error %}<div class="op-message op-message-error" role="alert" data-backup-error>{{ error }}</div>{% endif %}
+{% if private_text %}
+<section class="op-form" data-private-key-once><h2>{{ words.key_title }}</h2><p class="op-message op-message-error">{{ words.key_help }}</p>
+<p class="hs-setup-key" dir="ltr"><code data-private-key>{{ private_text }}</code></p>
+<div class="op-form-actions"><a class="op-primary" download="hesba-backup-key-{{ fingerprint|cut:':' }}.txt" href="data:text/plain;charset=utf-8,{{ private_text|urlencode }}" data-key-download>{{ words.download }}</a><button class="op-secondary" type="button" data-copy-link="{{ private_text }}">{{ words.copy }}</button><a class="op-secondary" href="{{ request.path }}?lang={{ lang }}">{{ words.saved }}</a></div></section>
+{% else %}
+{% if fingerprint %}<section class="op-summary-grid"><article><small>{{ words.fingerprint }}</small><strong dir="ltr" data-key-fingerprint>{{ fingerprint }}</strong></article><article><small>{{ words.since }}</small><strong>{{ since|date:"Y-m-d" }}</strong></article></section>{% endif %}
+{% if can_manage %}
+<form class="op-form" method="post" autocomplete="off" data-create-backup-key>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+{% if fingerprint %}<p class="op-message">{{ words.replace_warning }}</p>{% endif %}
+<div class="op-form-grid"><div class="op-field"><label for="id_password">{{ words.password }}</label><input id="id_password" name="password" type="password" autocomplete="current-password" required></div></div>
+<div class="op-form-actions"><button class="{% if fingerprint %}op-secondary{% else %}op-primary{% endif %}" type="submit">{% if fingerprint %}{{ words.replace }}{% else %}{{ words.create }}{% endif %}</button></div></form>
+{% else %}<p class="op-message">{{ words.view_only }}</p>{% endif %}
+{% endif %}
+{% endblock %}
