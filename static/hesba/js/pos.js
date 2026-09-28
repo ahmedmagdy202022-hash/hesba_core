@@ -32,6 +32,55 @@
     return num(own !== undefined && own !== null && own !== '' ? own : item.price);
   }
 
+  // POS-002: find the customer by phone or name; add a new one without leaving the till.
+  var directoryNode = document.getElementById('hs-customers');
+  var directory = directoryNode ? JSON.parse(directoryNode.textContent) : [];
+  var finder = form.querySelector('[data-pos-customer-find]');
+  var finderList = document.getElementById('pos-customer-list');
+  var finderHint = form.querySelector('[data-pos-customer-hint]');
+  var adder = form.querySelector('[data-pos-customer-add]');
+  function digitsOf(text) { return String(text || '').replace(/[^0-9٠-٩]/g, '').replace(/[٠-٩]/g, function (d) { return String(d.charCodeAt(0) - 1632); }); }
+  function pickCustomer(id, name) {
+    if (!customer.querySelector('option[value="' + id + '"]')) { var option = document.createElement('option'); option.value = String(id); option.textContent = name; customer.appendChild(option); }
+    customer.value = String(id);
+    customer.dispatchEvent(new Event('change'));
+    if (finderHint) { finderHint.hidden = false; finderHint.textContent = (isEnLang() ? 'Customer: ' : 'العميل: ') + name; }
+    if (adder) { adder.hidden = true; }
+  }
+  function isEnLang() { return document.documentElement.lang === 'en'; }
+  if (finder) {
+    finder.addEventListener('input', function () {
+      var query = finder.value.trim(), phone = digitsOf(query), lower = query.toLowerCase();
+      finderList.textContent = '';
+      if (query.length < 2) { if (adder) { adder.hidden = true; } if (finderHint) { finderHint.hidden = true; } return; }
+      var hits = directory.filter(function (row) { return (phone.length >= 3 && row.phone.indexOf(phone) !== -1) || row.name.toLowerCase().indexOf(lower) !== -1; }).slice(0, 8);
+      hits.forEach(function (row) { var option = document.createElement('option'); option.value = row.name + (row.phone ? ' — ' + row.phone : ''); finderList.appendChild(option); });
+      var exact = hits.filter(function (row) { return (phone.length >= 7 && row.phone === phone) || finder.value === row.name + (row.phone ? ' — ' + row.phone : ''); })[0];
+      if (exact) { pickCustomer(exact.id, exact.name); return; }
+      if (finderHint) { finderHint.hidden = false; finderHint.textContent = hits.length ? '' : (isEnLang() ? 'No customer found.' : 'مفيش عميل بالبيانات دي.'); }
+      if (adder) { adder.hidden = hits.length > 0; }
+    });
+  }
+  if (adder) {
+    adder.querySelector('[data-new-customer-save]').addEventListener('click', function (event) {
+      var button = event.currentTarget, nameInput = adder.querySelector('[data-new-customer-name]');
+      var query = finder.value.trim(), phone = digitsOf(query);
+      var payload = { name: nameInput.value.trim() || (phone.length >= 7 ? '' : query), phone: phone.length >= 7 ? phone : '' };
+      if (!payload.name) { nameInput.focus(); return; }
+      button.disabled = true;
+      fetch(button.getAttribute('data-url'), { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': form.querySelector('[name=csrfmiddlewaretoken]').value }, body: JSON.stringify(payload), credentials: 'same-origin' })
+        .then(function (response) { return response.json(); })
+        .then(function (data) {
+          button.disabled = false;
+          if (!data.ok) { finderHint.hidden = false; finderHint.textContent = isEnLang() ? 'Could not add the customer.' : 'مقدرناش نضيف العميل؛ راجع الاسم والتليفون.'; return; }
+          directory.push({ id: data.id, name: data.name, phone: data.phone });
+          nameInput.value = ''; finder.value = '';
+          pickCustomer(data.id, data.name);
+        })
+        .catch(function () { button.disabled = false; });
+    });
+  }
+
   function num(value) { var n = parseFloat(String(value || '').replace(',', '.')); return isNaN(n) ? 0 : n; }
   function money(n) { return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
   function say(text, bad) { status.textContent = text; status.classList.toggle('is-error', !!bad); }
