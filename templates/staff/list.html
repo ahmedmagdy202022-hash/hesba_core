@@ -1,0 +1,10 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div></section>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.code }}</th><th>{{ words.name }}</th><th>{{ words.title_field }}</th><th>{{ words.phone }}</th><th>{{ words.commission }}</th><th>{{ words.status }}</th></tr></thead><tbody>
+{% for employee in employees %}<tr data-employee-row="{{ employee.code }}"><td><a href="{% url 'staff:detail' employee.pk %}?lang={{ lang }}">{{ employee.code }}</a></td><td>{{ employee.name }}</td><td>{{ employee.title|default:'—' }}</td><td dir="ltr">{{ employee.phone|default:'—' }}</td><td dir="ltr">{{ employee.commission_percent }}%</td><td><span class="op-status {% if employee.active %}op-status-posted{% else %}op-status-cancelled{% endif %}">{% if employee.active %}{{ words.on }}{% else %}{{ words.off }}{% endif %}</span></td></tr>
+{% empty %}<tr><td colspan="6" class="op-empty">{{ words.empty }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_manage %}<form class="op-form" method="post" data-employee-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><h2>{{ words.new }}</h2>{% if error %}<div class="op-message op-message-error" role="alert" data-employee-error>{{ error }}</div>{% endif %}{% include "staff/_form.html" %}<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form>
+{% else %}<p class="op-message">{{ words.view_only }}</p>{% endif %}
+{% endblock %}

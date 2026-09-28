@@ -21,7 +21,7 @@ class ComingSoonCatalogTests(TestCase):
         profile = ClientProfile.objects.create(client_code="SOON", legal_name="Soon Co", display_name="Soon")
         complete_setup(profile, "services", "clinic", "customers,appointments_visits,employees_technicians")
         self.assertNotIn("appointments_visits", enabled_modules())
-        self.assertNotIn("employees_technicians", enabled_modules())
+        self.assertIn("employees_technicians", enabled_modules())  # STAFF-001: it has a backend now
 
 
 class ComingSoonWizardTests(AuthenticatedTestCase):
@@ -37,6 +37,6 @@ class ComingSoonWizardTests(AuthenticatedTestCase):
         self.assertContains(response, "if(state === 'soon'){return;}")
 
     def test_review_step_leaves_them_out(self):
-        response = self.client.get(reverse("setup_review"), {"activity": "commercial", "sub_activity": "retail", "modules": "customers,employees_technicians"})
+        response = self.client.get(reverse("setup_review"), {"activity": "commercial", "sub_activity": "retail", "modules": "customers,appointments_visits"})
         slugs = [row["slug"] for row in response.context["selected_modules"]]
         self.assertEqual(slugs, ["customers"])

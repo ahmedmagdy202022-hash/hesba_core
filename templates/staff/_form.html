@@ -1,0 +1,9 @@
+{% load l10n %}<div class="op-form-grid">
+<div class="op-field"><label for="id_name">{{ words.name }}</label><input id="id_name" name="name" value="{{ form.name|default:'' }}" maxlength="255" required></div>
+<div class="op-field"><label for="id_title">{{ words.title_field }}</label><input id="id_title" name="title" value="{{ form.title|default:'' }}" maxlength="120" placeholder="{{ words.title_hint }}"></div>
+<div class="op-field"><label for="id_phone">{{ words.phone }}</label><input id="id_phone" name="phone" value="{{ form.phone|default:'' }}" inputmode="tel" dir="ltr"></div>
+<div class="op-field"><label for="id_commission">{{ words.commission }}</label><input id="id_commission" name="commission_percent" value="{{ form.commission_percent|default:'0'|unlocalize }}" inputmode="decimal" dir="ltr"><small class="op-muted">{{ words.commission_hint }}</small></div>
+<div class="op-field"><label for="id_user">{{ words.user }}</label><select id="id_user" name="user"><option value="">{{ words.none }}</option>{% for account in users %}<option value="{{ account.pk }}"{% if form.user == account.pk|stringformat:"s" %} selected{% endif %}>{{ account.get_username }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="id_notes">{{ words.notes }}</label><input id="id_notes" name="notes" value="{{ form.notes|default:'' }}" maxlength="255"></div>
+<label class="op-check"><input type="checkbox" name="active" value="1"{% if form.active %} checked{% endif %}> {{ words.active }}</label>
+</div>

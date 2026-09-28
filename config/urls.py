@@ -64,6 +64,8 @@ urlpatterns = [
     path("search/", include("search.urls")),
     path("imports/", include("imports.urls")),
     path("closing/", include("closing.urls")),
+    # STAFF-001: employees & technicians.
+    path("staff/", include("staff.urls")),
     path("profile/", include("accounts.urls")),
     path("settings/", include("settings_core.urls")),
     path("reports/", report_hub, name="report_hub"),
