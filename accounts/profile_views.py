@@ -1,5 +1,7 @@
 from django.shortcuts import render
 
+from .two_factor import device_for
+
 
 STRINGS = {
     "ar": {"page_title": "الملف الشخصي", "dashboard": "لوحة القيادة", "language": "English", "profile": "ملفي الشخصي", "role": "الدور", "permissions": "صلاحياتي", "none": "لا توجد صلاحيات تشغيل مرتبطة بهذا المستخدم."},
@@ -27,6 +29,7 @@ def profile(request):
             "user_profile": user_profile,
             "role": role,
             "role_permissions": permissions,
+            "two_factor_on": device_for(request.user) is not None,
         },
     )
 

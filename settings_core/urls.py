@@ -1,6 +1,6 @@
 from django.urls import path
 
-from accounts import user_views
+from accounts import two_factor_views, user_views
 from printing.views import company_settings
 
 from . import operational_views
@@ -19,5 +19,6 @@ urlpatterns = [
     path("users/new/", user_views.user_create, name="user_create"),
     path("users/<int:pk>/", user_views.user_edit, name="user_edit"),
     path("users/<int:pk>/password/", user_views.user_reset_password, name="user_reset_password"),
+    path("users/<int:pk>/two-factor/reset/", two_factor_views.user_reset_two_factor, name="user_reset_two_factor"),
 ]
 
