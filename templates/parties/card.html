@@ -1,0 +1,33 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% if kind == 'customer' %}{% url 'master_data:customers' %}{% else %}{% url 'master_data:suppliers' %}{% endif %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ party.name }}</h1><p><bdi>{{ code }}</bdi>{% if party.phone %} · <bdi>{{ party.phone }}</bdi>{% endif %}{% if party.address %} · {{ party.address }}{% endif %}</p></div>
+<div class="op-form-actions">{% if party.phone %}<a class="op-secondary" href="tel:{{ party.phone }}">{{ words.call }}</a>{% endif %}{% if reminder %}<a class="op-secondary" href="{{ reminder }}" target="_blank" rel="noopener" data-party-whatsapp>{{ words.whatsapp }}</a>{% endif %}
+{% if kind == 'customer' %}{% if can_sell %}<a class="op-secondary" href="{% url 'sales:create' %}?lang={{ lang }}&customer={{ party.pk }}" data-party-new-invoice>{{ words.new_invoice }}</a>{% endif %}{% if can_collect %}<a class="op-primary" href="{% url 'sales:payment_create' %}?lang={{ lang }}&customer={{ party.pk }}" data-party-collect>{{ words.collect }}</a>{% endif %}
+{% else %}{% if can_buy %}<a class="op-secondary" href="{% url 'purchases:create' %}?lang={{ lang }}&supplier={{ party.pk }}">{{ words.new_invoice }}</a>{% endif %}{% if can_pay %}<a class="op-primary" href="{% url 'purchases:payment_create' %}?lang={{ lang }}&supplier={{ party.pk }}">{{ words.pay }}</a>{% endif %}{% endif %}</div></section>
+<section class="op-summary-grid">
+<article data-party-balance><small>{% if info.balance >= 0 %}{% if kind == 'customer' %}{{ words.balance_customer }}{% else %}{{ words.balance_supplier }}{% endif %}{% else %}{% if kind == 'customer' %}{{ words.credit_customer }}{% else %}{{ words.credit_supplier }}{% endif %}{% endif %}</small><strong>{{ info.balance|money }}</strong></article>
+<article><small>{% if kind == 'customer' %}{{ words.year_total }}{% else %}{{ words.year_total_supplier }}{% endif %}</small><strong>{{ info.year_total|money }}</strong></article>
+<article><small>{{ words.invoices }}</small><strong>{{ info.invoice_count }}</strong></article>
+<article><small>{{ words.last_invoice }}</small><strong>{% if info.last_invoice %}<bdi>{{ info.last_invoice.invoice_date|date:"Y-m-d" }}</bdi>{% else %}{{ words.none }}{% endif %}</strong></article>
+<article><small>{{ words.last_payment }}</small><strong>{% if info.last_payment %}<bdi>{{ info.last_payment.payment_date|date:"Y-m-d" }}</bdi>{% else %}{{ words.none }}{% endif %}</strong></article>
+</section>
+<h2>{{ words.statement }}</h2>
+<form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><input type="date" name="from" value="{{ date_from|date:'Y-m-d' }}" aria-label="{{ words.from }}"><input type="date" name="to" value="{{ date_to|date:'Y-m-d' }}" aria-label="{{ words.to }}"><button type="submit">{{ words.show }}</button></form>
+<p class="op-form-actions"><a class="op-secondary" href="{% url 'parties:statement' kind party.pk %}?lang={{ lang }}{% if date_from %}&from={{ date_from|date:'Y-m-d' }}{% endif %}{% if date_to %}&to={{ date_to|date:'Y-m-d' }}{% endif %}" data-party-print>{{ words.print }}</a></p>
+<div class="op-table-wrap"><table class="op-table" data-statement><thead><tr><th>{{ words.date }}</th><th>{{ words.type }}</th><th>{{ words.ref }}</th><th>{{ words.debit }}</th><th>{{ words.credit }}</th><th>{{ words.running }}</th></tr></thead><tbody>
+<tr><td colspan="5"><strong>{{ words.opening }}</strong></td><td><strong data-statement-opening>{{ data.opening|money }}</strong></td></tr>
+{% for row in data.rows %}<tr><td><bdi>{{ row.entry.entry_date|date:"Y-m-d" }}</bdi></td><td class="op-cell-text">{{ row.type_label }}</td><td>{% if row.reference.url_name %}<a href="{% url row.reference.url_name row.reference.pk %}?lang={{ lang }}"><bdi>{{ row.reference.number }}</bdi></a>{% else %}<bdi>{{ row.reference.number|default:"" }}</bdi>{% endif %}</td><td>{% if row.increase %}{{ row.increase|money }}{% endif %}</td><td>{% if row.decrease %}{{ row.decrease|money }}{% endif %}</td><td>{{ row.balance|money }}</td></tr>
+{% empty %}<tr><td colspan="6" class="op-empty">{{ words.empty }}</td></tr>{% endfor %}
+<tr><td colspan="3"><strong>{{ words.totals }}</strong></td><td><strong>{{ data.increase|money }}</strong></td><td><strong>{{ data.decrease|money }}</strong></td><td><strong data-statement-closing>{{ data.closing|money }}</strong></td></tr>
+</tbody></table></div>
+<p class="op-muted">{{ words.note }}</p>
+<h2>{{ words.recent_invoices }}</h2>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.number }}</th><th>{{ words.date }}</th><th>{{ words.total }}</th><th>{{ words.remaining }}</th></tr></thead><tbody>
+{% for invoice in info.recent_invoices %}<tr><td><a href="{% if kind == 'customer' %}{% url 'sales:detail' invoice.pk %}{% else %}{% url 'purchases:detail' invoice.pk %}{% endif %}?lang={{ lang }}"><bdi>{{ invoice.invoice_number }}</bdi></a></td><td><bdi>{{ invoice.invoice_date|date:"Y-m-d" }}</bdi></td><td>{{ invoice.total_amount|money }}</td><td>{{ invoice.remaining_due|money }}</td></tr>{% empty %}<tr><td colspan="4" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+<h2>{{ words.recent_payments }}</h2>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.number }}</th><th>{{ words.date }}</th><th>{{ words.amount }}</th></tr></thead><tbody>
+{% for payment in info.recent_payments %}<tr><td><bdi>{{ payment.payment_number }}</bdi></td><td><bdi>{{ payment.payment_date|date:"Y-m-d" }}</bdi></td><td>{{ payment.amount|money }}</td></tr>{% empty %}<tr><td colspan="3" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

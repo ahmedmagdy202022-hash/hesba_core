@@ -52,6 +52,7 @@ urlpatterns = [
     path("instalments/", include("installments.urls")),
     path("assets/", include("fixed_assets.urls")),
     path("shifts/", include("shifts.urls")),
+    path("parties/", include("parties.urls")),
     path("imports/", include("imports.urls")),
     path("closing/", include("closing.urls")),
     path("profile/", include("accounts.urls")),

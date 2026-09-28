@@ -92,6 +92,13 @@ def _lang(request):
     return "en" if request.GET.get("lang") == "en" or request.POST.get("lang") == "en" else "ar"
 
 
+def _party_initial(request, field):
+    """PARTY-001: "New invoice" / "Collect" from a party card pre-selects that party."""
+
+    value = request.GET.get(field) or ""
+    return {field: value} if value.isdigit() else None
+
+
 def _context(request, **extra):
     lang = _lang(request)
     context = {
@@ -144,7 +151,7 @@ def invoice_create(request):
                 messages.success(request, STRINGS[lang]["saved"])
                 return redirect(f"/sales/{invoice.pk}/?lang={lang}")
     else:
-        form = SalesDraftForm(lang=lang)
+        form = SalesDraftForm(lang=lang, initial=_party_initial(request, "customer"))
         if vat_enabled():
             del form.fields["tax_amount"]
         line_formset = SalesLineFormSet(prefix="lines", form_kwargs={"lang": lang})
@@ -321,7 +328,7 @@ def payment_create(request):
                 messages.success(request, STRINGS[lang]["collection_saved"])
                 return redirect(f"/sales/collections/?lang={lang}")
     else:
-        form = CustomerPaymentForm(lang=lang)
+        form = CustomerPaymentForm(lang=lang, initial=_party_initial(request, "customer"))
     return render(
         request,
         "payments/form.html",
