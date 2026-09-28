@@ -180,6 +180,15 @@ BACKUP_DIR = Path(config("BACKUP_DIR", default=str(BASE_DIR / "backups")))
 BACKUP_KEEP = config("BACKUP_KEEP", default=14, cast=int)
 # USAGE-002: the client's database plan limit (Supabase free plan: 500 MB).
 DATABASE_SIZE_LIMIT_MB = config("DATABASE_SIZE_LIMIT_MB", default=500, cast=int)
+# BACKUP-003: the nightly encrypted backup goes to the client's own Google Drive.
+# The OAuth client belongs to the Hesba app (Google Cloud console, "Web application",
+# publishing status "In production", scope drive.file only); see docs/BACKUP_DRIVE_SETUP.md.
+GOOGLE_OAUTH_CLIENT_ID = config("GOOGLE_OAUTH_CLIENT_ID", default="")
+GOOGLE_OAUTH_CLIENT_SECRET = config("GOOGLE_OAUTH_CLIENT_SECRET", default="")
+BACKUP_DRIVE_KEEP = config("BACKUP_DRIVE_KEEP", default=30, cast=int)
+# Secret for /ops/nightly/, called once a day by an external scheduler on hosts without cron.
+# Empty disables the endpoint.
+NIGHTLY_TOKEN = config("NIGHTLY_TOKEN", default="")
 
 LOGGING = {
     "version": 1,
