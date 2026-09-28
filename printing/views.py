@@ -15,7 +15,7 @@ from sales.models import CustomerPayment, SalesInvoice, SalesReturn
 from settings_core.display_labels import choice_label
 
 from .amount_words import amount_in_words
-from .company import FIELDS, company_details, save_company_details
+from .company import FIELDS, MAX_LOGO_BYTES, company_details, save_company_details
 
 
 WORDS = {
@@ -73,6 +73,9 @@ WORDS = {
         "unchanged": "مفيش تغيير.",
         "company_name": "اسم الشركة",
         "preview": "معاينة",
+        "logo_title": "لوجو الشركة", "logo_hint": "بيظهر في رأس الفاتورة والإيصال. PNG أو JPG أو WebP، أقل من 300 كيلوبايت، والأفضل خلفية شفافة.",
+        "logo_upload": "رفع اللوجو", "logo_remove": "شيل اللوجو", "logo_missing": "اختار صورة اللوجو الأول.", "logo_none": "مفيش لوجو لسه؛ اسم الشركة بيتكتب مكانه.",
+        "brand_label": "اعرض علامة «حسبة» الصغيرة أسفل المستندات", "brand_save": "حفظ",
     },
     "en": {
         "print": "Print",
@@ -128,6 +131,9 @@ WORDS = {
         "unchanged": "Nothing changed.",
         "company_name": "Company name",
         "preview": "Preview",
+        "logo_title": "Company logo", "logo_hint": "Printed at the top of invoices and receipts. PNG, JPG or WebP under 300 KB; a transparent background looks best.",
+        "logo_upload": "Upload logo", "logo_remove": "Remove logo", "logo_missing": "Choose the logo image first.", "logo_none": "No logo yet; the company name is printed instead.",
+        "brand_label": "Show the small Hesba mark at the foot of documents", "brand_save": "Save",
     },
 }
 
@@ -323,8 +329,30 @@ def company_settings(request):
             from django.core.exceptions import PermissionDenied
 
             raise PermissionDenied("Changing company details needs settings.manage_settings.")
-        changed = save_company_details({key: request.POST.get(key, "") for key, *_ in FIELDS}, request.user)
-        messages.success(request, words["saved"] if changed else words["unchanged"])
+        from django.core.exceptions import ValidationError
+
+        from .company import remove_logo, save_logo, set_hesba_brand
+
+        action = request.POST.get("action", "details")
+        if action == "logo":
+            upload = request.FILES.get("logo")
+            try:
+                if upload is None:
+                    raise ValidationError(words["logo_missing"])
+                save_logo(upload.read(MAX_LOGO_BYTES + 1), request.user, lang)
+            except ValidationError as exc:
+                messages.error(request, " ".join(exc.messages))
+            else:
+                messages.success(request, words["saved"])
+        elif action == "remove_logo":
+            remove_logo(request.user)
+            messages.success(request, words["saved"])
+        elif action == "brand":
+            set_hesba_brand(request.POST.get("show_hesba_brand") == "1", request.user)
+            messages.success(request, words["saved"])
+        else:
+            changed = save_company_details({key: request.POST.get(key, "") for key, *_ in FIELDS}, request.user)
+            messages.success(request, words["saved"] if changed else words["unchanged"])
         return redirect(f"/settings/company/?lang={lang}")
     current = dict(zip((key for key, *_ in FIELDS), (details["phone"], details["address"], details["tax_number"], details["commercial_register"], details["footer_note"])))
     fields = [
