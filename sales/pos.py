@@ -22,11 +22,13 @@ from pricing.services import price_book
 from taxes.services import compute_lines, create_sales_draft_with_tax, rates_by_item, vat_enabled
 from serials.services import attach_sale_serials, pos_serial_catalog, prepare_sale_serials
 from shifts.services import open_shift_for
+from .pos_customers import customer_directory
 from units.services import units_catalog
 from cashboxes.models import Cashbox
 from config.money import money_round
 from master_data.models import Customer, Item, Location
 from permissions.decorators import require_permission
+from permissions.services import user_has_permission
 from settings_core.module_gate import closed_module
 
 from .models import SalesInvoice
@@ -343,6 +345,8 @@ def pos(request):
             "open_shift": open_shift_for(request.user),
             "serial_catalog": pos_serial_catalog(),
             "customers": Customer.objects.filter(active=True).order_by("name"),
+            "customer_directory": customer_directory(),  # POS-002
+            "can_add_customer": user_has_permission(request.user, "master_data.manage_parties"),
             "walk_in": customer_default,
             "locations": locations,
             "cashboxes": cashboxes,
