@@ -13,6 +13,7 @@ from inventory.models import StockMovement, StockMovementType
 from inventory.services import (
     get_item_authoritative_average_cost,
     get_item_location_stock_quantity,
+    lock_items_for_stock_check,
     recalculate_item_average_cost,
 )
 from permissions.services import user_has_permission
@@ -121,6 +122,7 @@ def _line_cost_amount(line, unit_cost):
 
 
 def _validate_stock_available(invoice, lines):
+    lock_items_for_stock_check(line.item_id for line in lines if line.item.is_stock_tracked)
     for line in lines:
         if not line.item.is_stock_tracked:
             continue
@@ -134,7 +136,7 @@ def _validate_stock_available(invoice, lines):
 @transaction.atomic
 def post_sales_invoice(invoice_id, user=None):
     invoice = (
-        SalesInvoice.objects.select_for_update()
+        SalesInvoice.objects.select_for_update(of=("self",))
         .select_related("customer", "selling_location", "cashbox")
         .prefetch_related("lines__item")
         .get(pk=invoice_id)
@@ -248,7 +250,7 @@ def post_sales_invoice(invoice_id, user=None):
 @transaction.atomic
 def cancel_posted_sales_invoice(invoice_id, user=None, reason=""):
     invoice = (
-        SalesInvoice.objects.select_for_update()
+        SalesInvoice.objects.select_for_update(of=("self",))
         .select_related("customer", "selling_location", "cashbox")
         .prefetch_related("lines__item")
         .get(pk=invoice_id)
@@ -516,7 +518,7 @@ def create_sales_return(
     if not reason:
         raise ValidationError("Sales return reason is required.")
     invoice = (
-        SalesInvoice.objects.select_for_update()
+        SalesInvoice.objects.select_for_update(of=("self",))
         .select_related("customer", "selling_location", "cashbox")
         .get(pk=source_invoice_id)
     )
@@ -636,7 +638,7 @@ def cancel_sales_return(return_id, reversal_date, reason, user):
     if not reason:
         raise ValidationError("Sales return reversal reason is required.")
     sales_return = (
-        SalesReturn.objects.select_for_update()
+        SalesReturn.objects.select_for_update(of=("self",))
         .select_related(
             "source_invoice__customer",
             "source_invoice__selling_location",
@@ -663,6 +665,7 @@ def cancel_sales_return(return_id, reversal_date, reason, user):
             },
         )
         aggregate["quantity"] += return_line.quantity
+    lock_items_for_stock_check(aggregate["item"].pk for aggregate in reversal_stock.values())
     for aggregate in reversal_stock.values():
         available = get_item_location_stock_quantity(
             aggregate["item"], aggregate["location"]

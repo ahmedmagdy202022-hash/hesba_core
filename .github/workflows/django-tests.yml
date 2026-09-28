@@ -30,3 +30,46 @@ jobs:
 
       - name: Run Django tests
         run: python manage.py test
+
+  # DEPLOY-001: production runs on PostgreSQL (Supabase), and SQLite silently
+  # ignores row locks (select_for_update), so the suite also runs on the real engine.
+  django-tests-postgres:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: hesba
+          POSTGRES_USER: hesba
+          POSTGRES_PASSWORD: hesba-ci-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hesba"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://hesba:hesba-ci-only@localhost:5432/hesba
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Django system checks
+        run: python manage.py check
+
+      - name: Run Django tests on PostgreSQL
+        run: python manage.py test --parallel 4 --noinput

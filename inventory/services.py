@@ -325,7 +325,7 @@ def cancel_stock_operation(operation_id, reversal_date, reason, user):
         raise ValidationError("Stock operation reversal reason is required.")
     _ensure_open_period(reversal_date)
     operation = (
-        StockOperation.objects.select_for_update()
+        StockOperation.objects.select_for_update(of=("self",))
         .select_related("item", "source_location", "destination_location")
         .get(pk=operation_id)
     )
@@ -415,3 +415,19 @@ def cancel_stock_operation(operation_id, reversal_date, reason, user):
     )
     _audit_operation(operation, user, "cancel_stock_operation", reason)
     return operation
+
+
+def lock_items_for_stock_check(item_ids):
+    """HG-027: lock the items (in pk order) before reading their stock to take some out.
+
+    The stock transfer and adjustment services already lock the item row first;
+    sales posting and the stock-out side of returns now do the same, so two
+    documents cannot both pass the availability check for the last unit. The
+    fixed pk order keeps concurrent callers from deadlocking each other.
+    """
+
+    from master_data.models import Item
+
+    ids = sorted({pk for pk in item_ids if pk is not None})
+    if ids:
+        list(Item.objects.select_for_update().filter(pk__in=ids).order_by("pk").values_list("pk", flat=True))
