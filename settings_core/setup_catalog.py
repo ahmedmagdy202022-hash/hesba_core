@@ -16,6 +16,7 @@ RESTAURANTS = "restaurants"
 MEDICAL = "medical"
 EDUCATION = "education"
 OTHER = "other"
+CONTRACTING = "contracting"
 
 REQUIRED = "required"
 SUGGESTED = "suggested"
@@ -32,6 +33,7 @@ ACTIVITY_LABELS = {
     MEDICAL: {"ar": "نشاط طبي", "en": "Medical"},
     EDUCATION: {"ar": "نشاط تعليمي", "en": "Education"},
     OTHER: {"ar": "نشاط آخر", "en": "Other activity"},
+    CONTRACTING: {"ar": "مقاولات", "en": "Contracting"},
 }
 
 #: Which ``ClientProfile.activity_type`` each wizard activity maps onto. The two
@@ -47,6 +49,7 @@ ACTIVITY_TYPE_BY_SLUG = {
     MEDICAL: ActivityType.SERVICES,
     EDUCATION: ActivityType.SERVICES,
     OTHER: ActivityType.MIXED,
+    CONTRACTING: ActivityType.CONTRACTING,
 }
 
 SUB_ACTIVITY_LABELS = {
@@ -100,6 +103,14 @@ SUB_ACTIVITY_LABELS = {
         "general": {"ar": "نشاط عام", "en": "General activity"},
         "other": {"ar": "حاجة تانية", "en": "Something else"},
     },
+    CONTRACTING: {
+        "general": {"ar": "مقاولات عامة / مباني", "en": "General building"},
+        "finishing": {"ar": "تشطيبات وديكور", "en": "Finishing & interiors"},
+        "electromechanical": {"ar": "كهروميكانيك (كهرباء، سباكة، تكييف)", "en": "MEP (electrical, plumbing, HVAC)"},
+        "infrastructure": {"ar": "طرق وبنية تحتية", "en": "Roads & infrastructure"},
+        "maintenance_contracts": {"ar": "عقود صيانة", "en": "Maintenance contracts"},
+        "other": {"ar": "مقاولات أخرى", "en": "Other contracting"},
+    },
 }
 
 #: Declaration order matters: it is the order the wizard renders module cards in,
@@ -118,6 +129,7 @@ MODULE_LABELS = {
     "appointments_visits": {"ar": "المواعيد والزيارات", "en": "Appointments & visits"},
     "employees_technicians": {"ar": "الموظفون والفنيون", "en": "Employees & technicians"},
     "tables_orders": {"ar": "الطاولات والطلبات", "en": "Tables & orders"},
+    "projects": {"ar": "المشاريع", "en": "Projects"},
 }
 
 MODULE_SLUGS = tuple(MODULE_LABELS)
@@ -213,6 +225,23 @@ MODULE_PRESETS = {
         "appointments_visits": OPTIONAL,
         "employees_technicians": OPTIONAL,
         "tables_orders": OPTIONAL,
+    },
+    # CONTRACT-001: a contractor lives on projects; materials and costs come from stock and expenses.
+    CONTRACTING: {
+        "customers": REQUIRED,
+        "suppliers": SUGGESTED,
+        "items_services": REQUIRED,
+        "sales_operations": REQUIRED,
+        "purchases": SUGGESTED,
+        "inventory": SUGGESTED,
+        "cashboxes": REQUIRED,
+        "expenses": SUGGESTED,
+        "reports": REQUIRED,
+        "pdf_printing": SUGGESTED,
+        "appointments_visits": OPTIONAL,
+        "employees_technicians": SUGGESTED,
+        "tables_orders": OPTIONAL,
+        "projects": REQUIRED,
     },
 }
 

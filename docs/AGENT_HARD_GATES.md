@@ -486,6 +486,15 @@ Status: RESOLVED (Ahmed's go-ahead of 2026-09-28: "work to the end without stopp
 - **Protected logic touched:** `sales/pos.py` `checkout` takes an optional `sale_date` and `notes`. A live sale passes neither and behaves exactly as before. Posting, stock, cash and ledger services are unchanged.
 - **Verification:** `offline_pos/tests.py` (5 tests): posted like a live sale with the offline date, stock, cash and number; once only for a repeated key; refusals leave nothing; date, key and permission checks; the till carries the hooks. The browser was run with the network really cut (Playwright `setOffline`): two sales queued, both posted once when the network came back, and the next online sale posted normally.
 
+## HG-029 — Materials for a project leave stock as an adjustment out (CONTRACT-001)
+
+Status: OPEN (a proposal only; nothing is blocked)
+
+- **What was built without touching protected logic:** issuing materials to a project calls the inventory engine's own `adjust_stock(..., direction="out")`. The engine applies its own `inventory.adjust_stock` permission, open-period check, stock sufficiency check under a row lock, and authoritative average cost. The project records which `StockOperation` belongs to it (`projects.ProjectIssue`, one-to-one). Project cost = quantity × that operation's unit cost, counting posted operations only. Cancelling the operation from the inventory screen returns the stock and drops it from the project's cost.
+- **Question for Main Control:** inventory reports list these rows as *adjustment out*, next to shrinkage and breakage. A contractor may want "issued to project" as its own movement type, so the inventory report can tell site consumption from losses.
+- **Proposed fix (needs approval, protected):** add `StockMovementType.PROJECT_ISSUE` plus a matching operation type. The inventory, report and closing code paths that sum `ADJUSTMENT_OUT` today would need to learn the new type, and each would need tests pinning stock quantity, stock value and average cost before and after.
+- **Risk if left as is:** reporting labels only. Quantities, values, average cost and the project figures are correct either way.
+
 ## Final gate verification
 
 - Full Django suite: 794 tests passed in 576.477 seconds.
