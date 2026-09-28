@@ -12,6 +12,7 @@ from .models import ActivityType
 
 COMMERCIAL = "commercial"
 SERVICES = "services"
+RESTAURANTS = "restaurants"
 
 REQUIRED = "required"
 SUGGESTED = "suggested"
@@ -24,6 +25,7 @@ DEFAULT_MODULE_STATE = OPTIONAL
 ACTIVITY_LABELS = {
     COMMERCIAL: {"ar": "نشاط تجاري", "en": "Commercial"},
     SERVICES: {"ar": "نشاط خدمي", "en": "Services"},
+    RESTAURANTS: {"ar": "مطاعم وكافيهات", "en": "Restaurants & cafés"},
 }
 
 #: Which ``ClientProfile.activity_type`` each wizard activity maps onto. The two
@@ -32,6 +34,9 @@ ACTIVITY_LABELS = {
 ACTIVITY_TYPE_BY_SLUG = {
     COMMERCIAL: ActivityType.STORE,
     SERVICES: ActivityType.SERVICES,
+    # RESTO-001: a restaurant sells from stock like a shop; the wizard slug kept
+    # on the profile tells the two apart, so no new choice (and no migration).
+    RESTAURANTS: ActivityType.STORE,
 }
 
 SUB_ACTIVITY_LABELS = {
@@ -55,6 +60,14 @@ SUB_ACTIVITY_LABELS = {
         "digital_marketing": {"ar": "تسويق وتصميم وخدمات رقمية", "en": "Marketing, Design & Digital Services"},
         "other": {"ar": "نشاط خدمي آخر", "en": "Other Service Activity"},
     },
+    RESTAURANTS: {
+        "restaurant": {"ar": "مطعم", "en": "Restaurant"},
+        "cafe": {"ar": "كافيه / كوفي شوب", "en": "Café / Coffee shop"},
+        "fast_food": {"ar": "وجبات سريعة", "en": "Fast food"},
+        "bakery": {"ar": "مخبز / حلواني", "en": "Bakery / Sweets"},
+        "cloud_kitchen": {"ar": "مطبخ أونلاين / دليفري", "en": "Cloud kitchen / Delivery"},
+        "other": {"ar": "نشاط أكل ومشروبات آخر", "en": "Other food & drinks"},
+    },
 }
 
 #: Declaration order matters: it is the order the wizard renders module cards in,
@@ -72,6 +85,7 @@ MODULE_LABELS = {
     "pdf_printing": {"ar": "طباعة PDF", "en": "PDF printing"},
     "appointments_visits": {"ar": "المواعيد والزيارات", "en": "Appointments & visits"},
     "employees_technicians": {"ar": "الموظفون والفنيون", "en": "Employees & technicians"},
+    "tables_orders": {"ar": "الطاولات والطلبات", "en": "Tables & orders"},
 }
 
 MODULE_SLUGS = tuple(MODULE_LABELS)
@@ -106,6 +120,21 @@ MODULE_PRESETS = {
         "pdf_printing": SUGGESTED,
         "appointments_visits": OPTIONAL,
         "employees_technicians": OPTIONAL,
+    },
+    RESTAURANTS: {
+        "customers": OPTIONAL,
+        "suppliers": SUGGESTED,
+        "items_services": REQUIRED,
+        "sales_operations": REQUIRED,
+        "purchases": SUGGESTED,
+        "inventory": SUGGESTED,
+        "cashboxes": REQUIRED,
+        "expenses": SUGGESTED,
+        "reports": REQUIRED,
+        "pdf_printing": OPTIONAL,
+        "appointments_visits": OPTIONAL,
+        "employees_technicians": SUGGESTED,
+        "tables_orders": REQUIRED,
     },
 }
 

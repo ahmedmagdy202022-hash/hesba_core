@@ -30,6 +30,8 @@ AR_LABELS = {
         "booked": "محجوز", "confirmed": "مؤكَّد", "arrived": "جاري", "done": "خلص", "cancelled": "ملغى", "no_show": "مجاش",
     },
     ("appointments.appointment", "kind"): {"appointment": "في المحل", "visit": "زيارة عند العميل"},
+    ("restaurant.order", "status"): {"open": "مفتوح", "paid": "اتدفع", "cancelled": "ملغي"},
+    ("restaurant.order", "kind"): {"dine_in": "صالة", "takeaway": "تيك أواي", "delivery": "دليفري"},
     ("sales.salesinvoice", "status"): DOCUMENT_STATUS,
     ("sales.salesinvoice", "payment_status"): PAYMENT_STATUS,
     ("sales.salesreturn", "status"): DOCUMENT_STATUS,

@@ -1,0 +1,33 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/restaurant.css' %}?v=resto-001">{% endblock %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div>{% if can_tables %}<a class="op-secondary" href="{% url 'restaurant:tables' %}?lang={{ lang }}">{{ words.tables_title }}</a>{% endif %}</section>
+{% if tables %}
+<div class="rs-tables" role="list">
+{% for row in tables %}{% with table=row.table order=row.order %}
+{% if order %}<a class="rs-table rs-table--busy" role="listitem" href="{% url 'restaurant:order' order.pk %}?lang={{ lang }}" data-table="{{ table.name }}" data-table-state="busy"><strong>{{ table.name }}</strong><small>{{ words.busy }} · {{ row.minutes }} {{ words.minutes }}{% if order.waiter %} · {{ order.waiter.name }}{% endif %}</small><span class="rs-table__total">{{ order.total|money }}</span></a>
+{% elif can_take %}<form method="post" role="listitem">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="kind" value="dine_in"><input type="hidden" name="table" value="{{ table.pk }}"><button class="rs-table rs-table--free" type="submit" data-table="{{ table.name }}" data-table-state="free"><strong>{{ table.name }}</strong><small>{{ words.free }} · {{ table.seats }} {{ words.seats }}{% if table.area %} · {{ table.area }}{% endif %}</small><span class="rs-table__total">{{ words.open }} +</span></button></form>
+{% else %}<div class="rs-table rs-table--free" role="listitem" data-table="{{ table.name }}" data-table-state="free"><strong>{{ table.name }}</strong><small>{{ words.free }}</small></div>{% endif %}
+{% endwith %}{% endfor %}
+</div>
+{% else %}<p class="op-message">{{ words.no_tables }}{% if can_tables %} <a href="{% url 'restaurant:tables' %}?lang={{ lang }}">{{ words.add_tables }}</a>{% endif %}</p>{% endif %}
+<h2>{{ words.others }}</h2>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>#</th><th>{{ words.kind }}</th><th>{{ words.customer }}</th><th>{{ words.opened }}</th><th>{{ words.total }}</th></tr></thead><tbody>
+{% for row in others %}<tr data-open-order="{{ row.order.number }}"><td dir="ltr"><a href="{% url 'restaurant:order' row.order.pk %}?lang={{ lang }}">{{ row.order.number }}</a></td><td>{{ row.kind_label }}</td><td>{{ row.order.customer.name|default:'—' }}{% if row.order.address %} · <small>{{ row.order.address }}</small>{% endif %}</td><td dir="ltr">{{ row.order.opened_at|time:"H:i" }}</td><td>{{ row.order.total|money }}</td></tr>
+{% empty %}<tr><td colspan="5" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_take %}
+<div class="rs-quick">
+<form class="op-form" method="post" data-new-order="takeaway">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="kind" value="takeaway"><h2>{{ words.new_takeaway }}</h2>
+<div class="op-field"><label for="tk-customer">{{ words.customer }}</label><select id="tk-customer" name="customer"><option value="">{{ words.walk_in }}</option>{% for customer in customers %}<option value="{{ customer.pk }}">{{ customer.name }}</option>{% endfor %}</select></div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.new_takeaway }}</button></div></form>
+<form class="op-form" method="post" data-new-order="delivery">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="kind" value="delivery"><h2>{{ words.new_delivery }}</h2>
+<div class="op-form-grid"><div class="op-field"><label for="dl-customer">{{ words.customer }}</label><select id="dl-customer" name="customer"><option value="">{{ words.walk_in }}</option>{% for customer in customers %}<option value="{{ customer.pk }}">{{ customer.name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="dl-phone">{{ words.phone }}</label><input id="dl-phone" name="phone" inputmode="tel" dir="ltr"></div>
+<div class="op-field"><label for="dl-address">{{ words.address }}</label><input id="dl-address" name="address"></div>
+{% if waiters %}<div class="op-field"><label for="dl-waiter">{{ words.waiter }}</label><select id="dl-waiter" name="waiter"><option value="">—</option>{% for person in waiters %}<option value="{{ person.pk }}">{{ person.name }}</option>{% endfor %}</select></div>{% endif %}</div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.new_delivery }}</button></div></form>
+</div>
+{% else %}<p class="op-message">{{ words.view_only }}</p>{% endif %}
+{% endblock %}

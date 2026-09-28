@@ -1,0 +1,47 @@
+/* RESTO-001: tables board, order screen and menu. Identity tokens only. */
+.rs-tables{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:24px}
+.rs-table{display:flex;flex-direction:column;gap:6px;min-height:118px;padding:14px;border:2px solid var(--hs-line);border-radius:16px;background:var(--hs-surface);color:var(--hs-navy);text-decoration:none;font:inherit;text-align:start;cursor:pointer;width:100%}
+.rs-table strong{font-size:22px}
+.rs-table small{color:var(--hs-muted)}
+.rs-table--free{border-style:dashed}
+.rs-table--busy{border-color:var(--hs-gold);background:var(--hs-warning-wash)}
+.rs-table__total{font-weight:700;margin-top:auto}
+.rs-table form{display:contents}
+.rs-quick{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:18px}
+.rs-order{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(320px,1fr);gap:18px;align-items:start}
+.rs-panel{background:var(--hs-surface);border:1px solid var(--hs-line);border-radius:16px;padding:16px}
+.rs-panel h2{margin:0 0 12px;color:var(--hs-navy);font-size:19px}
+.rs-cats{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.rs-cats button{min-height:40px;border:1px solid var(--hs-line);border-radius:20px;background:var(--hs-surface);padding:0 14px;font:inherit;color:var(--hs-navy);cursor:pointer}
+.rs-cats button[aria-pressed="true"]{background:var(--hs-navy);color:#fff;border-color:var(--hs-navy)}
+.rs-search{width:100%;min-height:44px;border:1px solid var(--hs-line-strong);border-radius:10px;padding:0 12px;font:inherit}
+.rs-menu{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+.rs-menu form{margin:0}
+.rs-dish{width:100%;min-height:78px;display:flex;flex-direction:column;justify-content:space-between;gap:4px;padding:10px 12px;border:1px solid var(--hs-line);border-radius:12px;background:var(--hs-ground);color:var(--hs-navy);font:inherit;text-align:start;cursor:pointer}
+.rs-dish:hover,.rs-dish:focus-visible{border-color:var(--hs-teal)}
+.rs-dish span{font-weight:700;line-height:1.3}
+.rs-dish small{color:var(--hs-muted)}
+.rs-lines{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.rs-line{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 10px;padding:10px 0;border-bottom:1px solid var(--hs-line)}
+.rs-line__name{font-weight:700;color:var(--hs-navy)}
+.rs-line__note{grid-column:1/-1;color:var(--hs-muted);font-size:13px}
+.rs-line__tools{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.rs-line__tools form{display:flex;gap:6px;align-items:center;margin:0}
+.rs-line__tools input{width:74px;min-height:38px;border:1px solid var(--hs-line-strong);border-radius:8px;padding:0 8px;font:inherit}
+.rs-line__tools input[name=note]{width:150px}
+.rs-line__tools button{min-height:38px;border:1px solid var(--hs-line);border-radius:8px;background:var(--hs-surface);padding:0 10px;font:inherit;cursor:pointer;color:var(--hs-navy)}
+.rs-line--void .rs-line__name,.rs-line--void .rs-line__amount{text-decoration:line-through;color:var(--hs-muted)}
+.rs-tag{display:inline-flex;border-radius:10px;padding:2px 8px;font-size:12px;font-weight:700;background:var(--hs-neutral-wash)}
+.rs-tag--new{background:var(--hs-teal-wash);color:var(--hs-navy)}
+.rs-total{display:flex;justify-content:space-between;font-size:22px;font-weight:800;color:var(--hs-navy);margin:14px 0}
+.rs-actions{display:grid;gap:10px}
+.rs-actions form{display:grid;gap:8px;margin:0}
+.rs-actions label{display:grid;gap:4px;font-weight:700;color:var(--hs-navy);font-size:14px}
+.rs-actions input,.rs-actions select{min-height:44px;border:1px solid var(--hs-line-strong);border-radius:10px;padding:0 12px;font:inherit;background:var(--hs-surface)}
+.rs-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.rs-check{display:flex!important;align-items:center;gap:8px;font-weight:400!important}
+.rs-check input{min-height:auto}
+.rs-jump{display:none;margin-top:10px}
+details.rs-more summary{cursor:pointer;font-weight:700;color:var(--hs-navy);padding:8px 0}
+@media(max-width:1000px){.rs-order{grid-template-columns:1fr}.rs-order .rs-bill{order:-1}.rs-jump{display:inline-flex}}
+@media(max-width:700px){.rs-quick{grid-template-columns:1fr}.rs-tables{grid-template-columns:repeat(2,minmax(0,1fr))}.rs-menu{grid-template-columns:repeat(2,minmax(0,1fr))}}

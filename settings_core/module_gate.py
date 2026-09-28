@@ -42,6 +42,7 @@ MODULE_ROUTES = (
     ("/master-data/cashboxes/", "cashboxes"),
     ("/staff/", "employees_technicians"),
     ("/appointments/", "appointments_visits"),
+    ("/restaurant/", "tables_orders"),
 )
 
 WORDS = {

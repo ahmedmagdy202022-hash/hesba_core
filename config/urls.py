@@ -35,6 +35,7 @@ urlpatterns = [
     path("setup/", TemplateView.as_view(template_name="setup/setup_gate.html"), name="setup_gate"),
     path("setup/activity/", TemplateView.as_view(template_name="setup/activity_selection.html"), name="setup_activity"),
     path("setup/activity/commercial/", TemplateView.as_view(template_name="setup/activity_commercial_subactivity.html"), name="setup_activity_commercial"),
+    path("setup/activity/restaurants/", TemplateView.as_view(template_name="setup/activity_restaurants_subactivity.html"), name="setup_activity_restaurants"),
     path("setup/activity/services/", TemplateView.as_view(template_name="setup/activity_services_subactivity.html"), name="setup_activity_services"),
     path("setup/activity/service/", TemplateView.as_view(template_name="setup/activity_subactivity_placeholder.html"), name="setup_activity_service"),
     path("setup/modules/", TemplateView.as_view(template_name="setup/modules_selection.html"), name="setup_modules"),
@@ -68,6 +69,8 @@ urlpatterns = [
     path("staff/", include("staff.urls")),
     # APPT-001: appointments & visits.
     path("appointments/", include("appointments.urls")),
+    # RESTO-001: tables, orders and the kitchen ticket.
+    path("restaurant/", include("restaurant.urls")),
     path("profile/", include("accounts.urls")),
     path("settings/", include("settings_core.urls")),
     path("reports/", report_hub, name="report_hub"),

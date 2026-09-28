@@ -22,15 +22,16 @@ def make_profile(**kwargs):
 
 
 class SetupCatalogTests(TestCase):
-    def test_it_knows_the_twelve_modules_in_wizard_order(self):
-        self.assertEqual(len(catalog.MODULE_SLUGS), 12)
+    def test_it_knows_the_thirteen_modules_in_wizard_order(self):
+        self.assertEqual(len(catalog.MODULE_SLUGS), 13)  # RESTO-001 added tables_orders
         self.assertEqual(catalog.MODULE_SLUGS[0], "customers")
-        self.assertEqual(catalog.MODULE_SLUGS[-1], "employees_technicians")
+        self.assertEqual(catalog.MODULE_SLUGS[-1], "tables_orders")
 
     def test_presets_match_the_documented_counts(self):
         for activity, required, suggested in (
             (catalog.COMMERCIAL, 4, 6),
             (catalog.SERVICES, 4, 2),
+            (catalog.RESTAURANTS, 5, 5),
         ):
             with self.subTest(activity=activity):
                 self.assertEqual(len(catalog.required_modules(activity)), required)
