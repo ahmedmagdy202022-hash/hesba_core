@@ -22,10 +22,10 @@ def make_profile(**kwargs):
 
 
 class SetupCatalogTests(TestCase):
-    def test_it_knows_the_fourteen_modules_in_wizard_order(self):
-        self.assertEqual(len(catalog.MODULE_SLUGS), 14)  # RESTO-001 added tables_orders, CONTRACT-001 projects
+    def test_it_knows_the_fifteen_modules_in_wizard_order(self):
+        self.assertEqual(len(catalog.MODULE_SLUGS), 15)  # RESTO-001 tables_orders, CONTRACT-001 projects, MFG-001 manufacturing
         self.assertEqual(catalog.MODULE_SLUGS[0], "customers")
-        self.assertEqual(catalog.MODULE_SLUGS[-1], "projects")
+        self.assertEqual(catalog.MODULE_SLUGS[-1], "manufacturing")
 
     def test_presets_match_the_documented_counts(self):
         for activity, required, suggested in (
@@ -48,7 +48,8 @@ class SetupCatalogTests(TestCase):
 
     def test_it_validates_activities_and_sub_activities(self):
         self.assertTrue(catalog.is_valid_activity("commercial"))
-        self.assertFalse(catalog.is_valid_activity("manufacturing"))
+        self.assertTrue(catalog.is_valid_activity("manufacturing"))  # MFG-001
+        self.assertFalse(catalog.is_valid_activity("mining"))
         self.assertTrue(catalog.is_valid_sub_activity("commercial", "retail"))
         self.assertFalse(catalog.is_valid_sub_activity("services", "retail"))
 

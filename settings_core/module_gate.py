@@ -44,6 +44,7 @@ MODULE_ROUTES = (
     ("/appointments/", "appointments_visits"),
     ("/restaurant/", "tables_orders"),
     ("/projects/", "projects"),
+    ("/manufacturing/", "manufacturing"),
 )
 
 WORDS = {

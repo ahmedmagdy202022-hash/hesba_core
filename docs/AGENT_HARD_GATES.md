@@ -495,6 +495,16 @@ Status: OPEN (a proposal only; nothing is blocked)
 - **Proposed fix (needs approval, protected):** add `StockMovementType.PROJECT_ISSUE` plus a matching operation type. The inventory, report and closing code paths that sum `ADJUSTMENT_OUT` today would need to learn the new type, and each would need tests pinning stock quantity, stock value and average cost before and after.
 - **Risk if left as is:** reporting labels only. Quantities, values, average cost and the project figures are correct either way.
 
+## HG-030 — Production runs move stock through adjustments (MFG-001)
+
+Status: OPEN (a proposal only; nothing is blocked)
+
+- **What was built without touching protected logic:** a production run goes through the inventory engine's own `adjust_stock`. For each component (locked in pk order) it adjusts out at the authoritative average cost. It then adjusts the product in at `cost_round(consumed cost / units made)`. The engine applies its own permission, period and stock checks, and setting that cost needs `inventory.view_cost`. The whole run is one transaction, so a short component leaves nothing behind.
+- **Cancelling** goes through `cancel_stock_operation`, product first. The engine refuses when the product has already been sold, and then every component returns.
+- **Known effect:** unit cost is rounded to four decimals, so units × unit cost can differ from the consumed total by a fraction of a piastre. The run keeps the exact consumed total.
+- **Question for Main Control:** as in HG-029, inventory reports show these rows as adjustments. Two dedicated movement types, `PRODUCTION_OUT` and `PRODUCTION_IN`, would tell production apart from shrinkage. That change is protected (movement types, report sums, closing) and needs approval plus quantity/value/average-cost regression tests.
+- **Deferred:** labour and overhead absorbed into product cost; scrap and yield loss; multi-level recipes (a sub-assembly is simply produced first).
+
 ## Final gate verification
 
 - Full Django suite: 794 tests passed in 576.477 seconds.

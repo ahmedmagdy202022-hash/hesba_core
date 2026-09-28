@@ -283,6 +283,10 @@ SUB_STEP_COPY = {
         "ar": {"title": "اختر نوع المقاولات", "subtitle": "اختيار النوع يساعد حِسْبَة في تجهيز المشاريع والمستخلصات والخامات."},
         "en": {"title": "Choose the contracting type", "subtitle": "Choosing the type helps Hesba prepare projects, progress bills and materials."},
     },
+    catalog.MANUFACTURING: {
+        "ar": {"title": "اختر نوع التصنيع", "subtitle": "اختيار النوع يساعد حِسْبَة في تجهيز الوصفات والخامات والتشغيلات."},
+        "en": {"title": "Choose the manufacturing type", "subtitle": "Choosing the type helps Hesba prepare recipes, materials and production runs."},
+    },
     catalog.OTHER: {
         "ar": {"title": "اختر شكل نشاطك", "subtitle": "لو نشاطك مش في القايمة، اختار الأقرب؛ وتقدر تغيّر الموديولات بعدين من الإعدادات."},
         "en": {"title": "Choose the shape of your activity", "subtitle": "If your activity is not listed, pick the closest; you can change the modules later in settings."},

@@ -41,6 +41,7 @@ urlpatterns = [
     path("setup/activity/education/", sub_activity_step, {"activity": "education"}, name="setup_activity_education"),
     path("setup/activity/other/", sub_activity_step, {"activity": "other"}, name="setup_activity_other"),
     path("setup/activity/contracting/", sub_activity_step, {"activity": "contracting"}, name="setup_activity_contracting"),
+    path("setup/activity/manufacturing/", sub_activity_step, {"activity": "manufacturing"}, name="setup_activity_manufacturing"),
     path("setup/activity/services/", TemplateView.as_view(template_name="setup/activity_services_subactivity.html"), name="setup_activity_services"),
     path("setup/activity/service/", TemplateView.as_view(template_name="setup/activity_subactivity_placeholder.html"), name="setup_activity_service"),
     path("setup/modules/", TemplateView.as_view(template_name="setup/modules_selection.html"), name="setup_modules"),
@@ -78,6 +79,8 @@ urlpatterns = [
     path("restaurant/", include("restaurant.urls")),
     # CONTRACT-001: projects for contractors.
     path("projects/", include("projects.urls")),
+    # MFG-001: recipes and production runs.
+    path("manufacturing/", include("manufacturing.urls")),
     path("profile/", include("accounts.urls")),
     path("settings/", include("settings_core.urls")),
     path("reports/", report_hub, name="report_hub"),
