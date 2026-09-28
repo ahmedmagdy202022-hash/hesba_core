@@ -1,0 +1,33 @@
+# DEPLOY-002: one Hesba client on Render's free web service, with the
+# client's own Supabase database (docs/SUPABASE_SETUP.md, docs/GO_LIVE.md).
+services:
+  - type: web
+    name: hesba-client
+    runtime: python
+    plan: free
+    region: frankfurt
+    buildCommand: ./build.sh
+    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 60 --access-logfile -
+    healthCheckPath: /healthz/
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: DEBUG
+        value: "False"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: TRUST_PROXY_SSL_HEADER
+        value: "True"
+      # Filled in by hand for each client (never committed):
+      - key: DATABASE_URL          # the client's Supabase Session pooler URL, user hesba_app
+        sync: false
+      - key: ALLOWED_HOSTS         # e.g. hesba-client.onrender.com
+        sync: false
+      - key: CSRF_TRUSTED_ORIGINS  # e.g. https://hesba-client.onrender.com
+        sync: false
+      - key: NIGHTLY_TOKEN
+        generateValue: true
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
+        sync: false
