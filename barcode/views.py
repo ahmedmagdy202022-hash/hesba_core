@@ -9,6 +9,8 @@ from permissions.decorators import require_permission
 from permissions.services import user_has_permission
 
 from .services import assign_missing_barcodes
+from .label_templates import FIELDS, offset, spec
+from .label_templates import choices as label_choices
 from .symbology import barcode_svg
 
 
@@ -38,6 +40,8 @@ WORDS = {
         "nothing_selected": "اختار صنف واحد على الأقل وحط عدد الملصقات.",
         "back": "رجوع",
         "pdf_hint": "لحفظها PDF اختار «حفظ كـ PDF» من نافذة الطباعة.",
+        "template": "مقاس الملصق", "fields": "على الملصق", "show_name": "اسم الصنف", "show_code": "كود الصنف", "show_shop": "اسم المحل",
+        "offset": "ضبط الطابعة (مم)", "offset_x": "يمين/شمال", "offset_y": "فوق/تحت", "offset_hint": "لو الطباعة مزحزحة، زوّد أو قلّل مليمترات لحد ما تيجي في النص.",
     },
     "en": {
         "page_title": "Barcode labels",
@@ -64,6 +68,8 @@ WORDS = {
         "nothing_selected": "Pick at least one item and a number of labels.",
         "back": "Back",
         "pdf_hint": "To save it as a PDF, choose “Save as PDF” in the print dialog.",
+        "template": "Label size", "fields": "On the label", "show_name": "Item name", "show_code": "Item code", "show_shop": "Shop name",
+        "offset": "Printer adjustment (mm)", "offset_x": "Sideways", "offset_y": "Up/down", "offset_hint": "If the print lands off-centre, nudge it a few millimetres.",
     },
 }
 
@@ -75,6 +81,12 @@ def _currency():
 
     profile = ClientProfile.get_active()
     return (profile.default_currency if profile else "") or "EGP"
+
+
+def _shop_name():
+    from printing.company import company_details
+
+    return company_details()["name"]
 
 
 def _lang(request):
@@ -105,6 +117,7 @@ def labels(request):
             missing=(missing := Item.objects.filter(active=True, barcode="").count()),
             missing_text=WORDS[_lang(request)]["missing_count"].format(count=missing),
             can_generate=user_has_permission(request.user, "master_data.manage_items"),
+            templates=label_choices(_lang(request)),
         ),
     )
 
@@ -134,8 +147,12 @@ def labels_print(request):
     if not wanted:
         messages.error(request, WORDS[lang]["nothing_selected"])
         return redirect(f"/barcode/labels/?lang={lang}")
-    layout = "roll" if request.GET.get("layout") == "roll" else "a4"
+    template = spec(request.GET.get("template") or request.GET.get("layout"))
+    layout = template["kind"]
     show_price = request.GET.get("show_price", "1") == "1"
+    # LABEL-002: which lines go on the label; name and price stay on unless unticked.
+    shown = {field: request.GET.get(f"show_{field}", "1" if field in ("name", "price") else "0") == "1" for field in FIELDS}
+    shown["price"] = show_price
     labels_out = []
     for item in Item.objects.filter(pk__in=wanted, active=True).order_by("item_code"):
         code = item.barcode or item.item_code
@@ -147,5 +164,6 @@ def labels_print(request):
     return render(
         request,
         "barcode/labels_print.html",
-        _context(request, labels=labels_out, layout=layout, show_price=show_price, currency=_currency(), back_url=f"/barcode/labels/?lang={lang}"),
+        _context(request, labels=labels_out, layout=layout, show_price=show_price, currency=_currency(), back_url=f"/barcode/labels/?lang={lang}",
+                 template=template, shown=shown, shop_name=_shop_name(), offset_x=offset(request.GET.get("offset_x")), offset_y=offset(request.GET.get("offset_y"))),
     )
