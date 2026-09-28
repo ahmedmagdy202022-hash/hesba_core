@@ -6,7 +6,7 @@
 <title>{{ page_title }}</title>
 {% include "partials/brand_icons.html" %}
 <link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
-<link rel="stylesheet" href="{% static 'hesba/css/print.css' %}?v=print-001">
+<link rel="stylesheet" href="{% static 'hesba/css/print.css' %}?v=print-002">
 </head>
 <body class="pr-body pr-{{ format }}" data-format="{{ format }}">
 <nav class="pr-toolbar" aria-label="{{ words.print }}">
@@ -20,10 +20,11 @@
 </nav>
 
 <article class="pr-sheet" data-kind="{{ doc.kind }}">
-  {% if doc.watermark %}<div class="pr-watermark pr-watermark--status" aria-hidden="true">{{ doc.watermark }}</div>{% else %}<img class="pr-watermark pr-watermark--mark" src="{% static 'hesba/brand/hesba-mark.png' %}" alt="" aria-hidden="true">{% endif %}
+  {% if doc.watermark %}<div class="pr-watermark pr-watermark--status" aria-hidden="true">{{ doc.watermark }}</div>{% elif company.logo %}<img class="pr-watermark pr-watermark--mark" src="{{ company.logo }}" alt="" aria-hidden="true">{% else %}<img class="pr-watermark pr-watermark--mark" src="{% static 'hesba/brand/hesba-mark.png' %}" alt="" aria-hidden="true">{% endif %}
 
   <header class="pr-head">
     <div class="pr-company">
+      {% if company.logo %}<img class="pr-company__logo" src="{{ company.logo }}" alt="{{ company.name }}" data-company-logo>{% endif %}
       <h1 class="pr-company__name">{{ company.name }}</h1>
       {% if company.legal_name and company.legal_name != company.name %}<p>{{ company.legal_name }}</p>{% endif %}
       {% if company.address %}<p>{{ company.address|linebreaksbr }}</p>{% endif %}
@@ -84,7 +85,7 @@
   <footer class="pr-foot">
     {% if doc.kind == 'sales_invoice' or doc.kind == 'sales_return' %}<p class="pr-foot__note">{% if company.footer_note %}{{ company.footer_note|linebreaksbr }}{% else %}{{ words.thanks }}{% endif %}</p>{% endif %}
     <p class="pr-foot__meta">{{ words.printed_by }} {{ printed_by }} · {% now "Y-m-d H:i" %}</p>
-    <p class="pr-foot__brand"><img src="{% static 'hesba/brand/hesba-logo.png' %}" alt="Hesba"></p>
+    {% if company.show_hesba_brand %}<p class="pr-foot__brand" data-hesba-brand><img src="{% static 'hesba/brand/hesba-logo.png' %}" alt="Hesba"></p>{% endif %}
   </footer>
 </article>
 <script>
