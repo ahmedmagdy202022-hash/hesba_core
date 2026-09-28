@@ -126,7 +126,9 @@ def disposal_results_between(date_from=None, date_to=None):
 
 def _next_code():
     last = FixedAsset.objects.select_for_update().order_by("-id").first()
-    sequence = (last.id if last else 0) + 1
+    # DEPLOY-001: count, not the row id — PostgreSQL ids skip after a rolled-back
+    # attempt, and a gap in document numbers reads as a missing document.
+    sequence = FixedAsset.objects.count() + 1 if last else 1
     code = f"FA-{sequence:05d}"
     while FixedAsset.objects.filter(code=code).exists():
         sequence += 1

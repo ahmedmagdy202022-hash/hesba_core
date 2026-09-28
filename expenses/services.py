@@ -30,7 +30,9 @@ def _require_record_permission(user):
 
 def _next_expense_number():
     last = Expense.objects.select_for_update().order_by("-id").first()
-    sequence = (last.id if last else 0) + 1
+    # DEPLOY-001: count, not the row id — PostgreSQL ids skip after a rolled-back
+    # attempt, and a gap in document numbers reads as a missing document.
+    sequence = Expense.objects.count() + 1 if last else 1
     number = f"EXP-{sequence:06d}"
     while Expense.objects.filter(expense_number=number).exists():
         sequence += 1

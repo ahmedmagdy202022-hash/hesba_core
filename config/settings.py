@@ -93,7 +93,33 @@ TEMPLATES = [
 ]
 
 DATABASE_BACKEND = config("DATABASE_BACKEND", default="sqlite").strip().lower()
-if DATABASE_BACKEND == "sqlite":
+# DEPLOY-001: one connection string, pasted as the provider shows it
+# (e.g. Supabase -> Connect -> Session pooler). It wins over the POSTGRES_* parts.
+DATABASE_URL = config("DATABASE_URL", default="").strip()
+if DATABASE_URL:
+    from urllib.parse import parse_qs, unquote, urlsplit
+
+    _url = urlsplit(DATABASE_URL)
+    if _url.scheme not in {"postgres", "postgresql"}:
+        raise ImproperlyConfigured("DATABASE_URL must start with postgresql://")
+    _query = {key: values[-1] for key, values in parse_qs(_url.query).items()}
+    _local = (_url.hostname or "") in {"localhost", "127.0.0.1", "::1"}
+    DATABASE_BACKEND = "postgresql"
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": unquote(_url.path.lstrip("/")) or "postgres",
+            "USER": unquote(_url.username or ""),
+            "PASSWORD": unquote(_url.password or ""),
+            "HOST": _url.hostname or "",
+            "PORT": str(_url.port or 5432),
+            "CONN_MAX_AGE": config("DATABASE_CONN_MAX_AGE", default=60, cast=int),
+            "CONN_HEALTH_CHECKS": True,
+            # A remote database is always reached over TLS unless the URL says otherwise.
+            "OPTIONS": {"sslmode": _query.get("sslmode", "prefer" if _local else "require")},
+        }
+    }
+elif DATABASE_BACKEND == "sqlite":
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",

@@ -458,6 +458,24 @@ Status: RESOLVED (Ahmed's standing go-ahead of 2026-09-28)
 - Printing uses the snapshot for posted documents. Drafts and documents posted before this change keep following the current details, which is exactly the old behaviour. The logo is deliberately not copied: it isn't a legal detail, and a copy would repeat hundreds of kilobytes per document.
 - Verification: `printing/tests_snapshot.py` (2 tests). An old invoice keeps the old address and tax number after they change, while a new one gets the new details. Drafts follow the current details, and payments are frozen too. The full suite passes with the receiver active on every posting.
 
+## HG-026 — Row locks that work on PostgreSQL (DEPLOY-001)
+
+Status: RESOLVED (Ahmed's go-ahead of 2026-09-28 for the client-owned Supabase deployment)
+
+- **Defect found by running the suite on PostgreSQL for the first time:** 202 of 1255 tests errored with `FOR UPDATE cannot be applied to the nullable side of an outer join`. SQLite ignores `select_for_update()`, so CI never saw it. On PostgreSQL the affected services **could not run at all**: posting, cancelling or returning a sales or purchase invoice (`cashbox` is nullable); reversing a sales or purchase return; cancelling a cash operation (`source_cashbox` and `destination_cashbox` are nullable); reversing an opening-balance adjustment; and cancelling a stock operation (`source_location` and `destination_location` are nullable).
+- **Fix:** at exactly those 11 call sites, `select_for_update()` becomes `select_for_update(of=("self",))`, which locks the document row itself. It is the same row every concurrent caller competes for, so the serialisation they rely on is unchanged. The joined rows (customer, location, cashbox) were never lockable on PostgreSQL through these queries, and every cashbox balance check still takes its own cashbox lock. No business rule, amount, movement or ledger entry changes, and SQLite behaves exactly as before.
+- **Left untouched on purpose:** call sites whose joins are all non-nullable already worked on PostgreSQL, and keep their original lock: instalment plans, sales and purchase lines on returns, expenses, import rows, post-closing adjustments, and customer and supplier payments.
+- **Second defect (not protected logic):** expense numbers (`EXP-…`) and fixed-asset codes (`FA-…`) were built from the row id. PostgreSQL does not reuse ids after a rolled-back attempt, such as a refused expense, so numbering would skip (EXP-000001, EXP-000007…) and read as missing documents. They now count existing rows, with the existing uniqueness loop kept.
+- **Verification:** the full suite on PostgreSQL 16 locally, and in CI through the new `django-tests-postgres` job, with the SQLite job unchanged.
+
+## HG-027 — Two cashiers, one last unit; two first entries of a month (DEPLOY-001)
+
+Status: RESOLVED (same go-ahead as HG-026)
+
+- **Race 1, overselling:** sales posting checked stock without locking anything the other poster also locks, since each invoice locks only its own row. Two invoices for the last unit, posted at the same moment, **both passed the check and stock went to -1**. The transfer and adjustment services already lock the `Item` row before reading stock; sales posting, the stock-out side of purchase returns and the reversal of sales returns now do the same, through `inventory.services.lock_items_for_stock_check`, which locks in pk order so concurrent callers cannot deadlock each other. The check itself, the quantities and the movements are unchanged.
+- **Race 2, a crash at the start of a month:** the first entry of a month opens its period automatically (HG-010). Two such entries at the same moment both inserted the period, and the second **failed with `IntegrityError`**, a raw error page. The insert now runs in a savepoint; the caller that loses takes the period the winner just opened. Which periods exist and their dates are unchanged.
+- **Verification:** `sales/tests_concurrency.py` runs on PostgreSQL only, since SQLite lets one writer in at a time and cannot race. It uses two real threads and a widened read window. Both races were **reproduced with the fixes removed** (`['posted', 'posted']`, and an `IntegrityError`) and pass with them.
+
 ## Final gate verification
 
 - Full Django suite: 794 tests passed in 576.477 seconds.
