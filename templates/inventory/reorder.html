@@ -1,0 +1,16 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'inventory:stock' %}?lang={{ lang }}">← {% if lang == 'en' %}Stock{% else %}المخزون{% endif %}</a><h1>{% if lang == 'en' %}Buy soon{% else %}محتاج يتطلب{% endif %}</h1>
+<p>{% if lang == 'en' %}Items at or below their minimum, or that will run out within the target days at the recent sales pace. Quantities are suggestions: review them on the purchase draft.{% else %}أصناف وصلت للحد الأدنى أو هتخلص قبل عدد الأيام المطلوب على حسب سرعة البيع الأخيرة. الكميات اقتراح، وتراجعها في مسودة فاتورة الشراء.{% endif %}</p></div></section>
+<form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}">
+<select name="window" aria-label="window">{% for days in windows %}<option value="{{ days }}"{% if days == window %} selected{% endif %}>{% if lang == 'en' %}Sales pace of the last {{ days }} days{% else %}سرعة البيع آخر {{ days }} يوم{% endif %}</option>{% endfor %}</select>
+<select name="target" aria-label="target">{% for days in targets %}<option value="{{ days }}"{% if days == target %} selected{% endif %}>{% if lang == 'en' %}Cover {{ days }} days{% else %}يكفي {{ days }} يوم{% endif %}</option>{% endfor %}</select>
+<button type="submit">{% if lang == 'en' %}Show{% else %}عرض{% endif %}</button></form>
+{% for group in groups %}<section data-reorder-group><h2>{% if group.supplier %}{{ group.supplier.name }}{% elif lang == 'en' %}No previous supplier{% else %}من غير مورد سابق{% endif %}</h2>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{% if lang == 'en' %}Item{% else %}الصنف{% endif %}</th><th>{% if lang == 'en' %}On hand{% else %}الموجود{% endif %}</th><th>{% if lang == 'en' %}Minimum{% else %}الحد الأدنى{% endif %}</th><th>{% if lang == 'en' %}Sold per day{% else %}بيع يومي{% endif %}</th><th>{% if lang == 'en' %}Days left{% else %}يكفي كام يوم{% endif %}</th><th>{% if lang == 'en' %}Suggested{% else %}المقترح{% endif %}</th>{% if can_view_cost %}<th>{% if lang == 'en' %}Last price{% else %}آخر سعر شراء{% endif %}</th>{% endif %}</tr></thead><tbody>
+{% for row in group.rows %}<tr data-reorder-row="{{ row.item.item_code }}"><td class="op-cell-text"><a href="{% url 'inventory:item_detail' row.item.pk %}?lang={{ lang }}"><bdi>{{ row.item.item_code }}</bdi></a><br><small class="op-muted">{{ row.item.item_name }}</small></td><td>{% if row.urgent %}<span class="op-status op-status-cancelled">{{ row.on_hand|qty }}</span>{% else %}{{ row.on_hand|qty }}{% endif %}</td><td>{{ row.item.min_stock|qty }}</td><td>{{ row.daily|qty }}</td><td>{% if row.cover is not None %}{{ row.cover|qty }}{% else %}—{% endif %}</td><td><strong>{{ row.suggested|qty }}</strong></td>{% if can_view_cost %}<td>{{ row.last_price|money }}</td>{% endif %}</tr>{% endfor %}
+</tbody></table></div>
+{% if group.draft_url %}<p class="op-form-actions"><a class="op-primary" href="{{ group.draft_url }}" data-reorder-draft>{% if lang == 'en' %}Open a purchase draft with these{% else %}افتح مسودة فاتورة شراء بالأصناف دي{% endif %}</a></p>{% endif %}</section>
+{% empty %}<div class="op-message op-message-success" data-reorder-empty>{% if lang == 'en' %}Nothing needs buying for now.{% else %}مفيش حاجة محتاجة تتطلب دلوقتي.{% endif %}</div>{% endfor %}
+{% endblock %}
