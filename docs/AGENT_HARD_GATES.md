@@ -476,6 +476,16 @@ Status: RESOLVED (same go-ahead as HG-026)
 - **Race 2, a crash at the start of a month:** the first entry of a month opens its period automatically (HG-010). Two such entries at the same moment both inserted the period, and the second **failed with `IntegrityError`**, a raw error page. The insert now runs in a savepoint; the caller that loses takes the period the winner just opened. Which periods exist and their dates are unchanged.
 - **Verification:** `sales/tests_concurrency.py` runs on PostgreSQL only, since SQLite lets one writer in at a time and cannot race. It uses two real threads and a widened read window. Both races were **reproduced with the fixes removed** (`['posted', 'posted']`, and an `IntegrityError`) and pass with them.
 
+## HG-028 — Sales rung up offline, posted once when the till syncs (POS-003)
+
+Status: RESOLVED (Ahmed's go-ahead of 2026-09-28: "work to the end without stopping")
+
+- **The need:** the till must keep selling when the internet drops, without a sale being lost or posted twice.
+- **Device side** (`static/hesba/js/pos_offline.js`): while `/healthz/` answers, the till posts exactly as before. When it does not, the sale is kept in the browser with a UUID made at that moment and the time it was rung up, and the cart is cleared. Queued sales are sent one by one when the server answers again. The page warns before being closed or reloaded while sales wait. **Known limit:** the page has to be open already; a till that loads the page while offline has nothing to load, since there is no service worker.
+- **Server side** (`offline_pos`, a new table `OfflineSale` with a unique `sale_key`): each sale goes through **the same `checkout` path as a live POS sale** (the same parser, serial checks, prices, tax, stock lock, cashbox and ledger), dated the day it was rung up. The key is written in the same transaction, so a retry (even with a changed body) returns the invoice it already made, and two copies arriving together post once (the unique key plus `IntegrityError` fallback). A sale the server cannot post (stock gone, closed period, walk-in on credit, older than `POS_OFFLINE_MAX_DAYS` = 7, dated in the future) is **refused with the reason in the till's language**, keeps nothing, and stays on the device as "refused" until the cashier removes it.
+- **Protected logic touched:** `sales/pos.py` `checkout` takes an optional `sale_date` and `notes`. A live sale passes neither and behaves exactly as before. Posting, stock, cash and ledger services are unchanged.
+- **Verification:** `offline_pos/tests.py` (5 tests): posted like a live sale with the offline date, stock, cash and number; once only for a repeated key; refusals leave nothing; date, key and permission checks; the till carries the hooks. The browser was run with the network really cut (Playwright `setOffline`): two sales queued, both posted once when the network came back, and the next online sale posted normally.
+
 ## Final gate verification
 
 - Full Django suite: 794 tests passed in 576.477 seconds.

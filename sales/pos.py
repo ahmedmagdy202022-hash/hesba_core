@@ -205,8 +205,12 @@ def _next_number(today):
     return f"{prefix}{sequence:04d}"
 
 
-def checkout(*, lines, customer, location, cashbox, discount, tendered, user):
-    """Create and post the sale. Returns (invoice, change)."""
+def checkout(*, lines, customer, location, cashbox, discount, tendered, user, sale_date=None, notes="POS"):
+    """Create and post the sale. Returns (invoice, change).
+
+    POS-003: an offline sale passes the day it was rung up as ``sale_date``;
+    posting then applies that day's period rules like any other entry.
+    """
 
     # UNITS-001: a line entered in a bigger unit carries a few piastres of discount.
     subtotal = money_round(sum((money_round(line["quantity"] * line["unit_sale_price"] - (line.get("line_discount_amount") or 0)) for line in lines), Decimal("0")))
@@ -221,7 +225,7 @@ def checkout(*, lines, customer, location, cashbox, discount, tendered, user):
     if paid_now < total and customer.customer_code == WALK_IN_CODE:
         raise ValidationError("err_walk_in_credit")
     change = money_round(tendered - total) if tendered > total else Decimal("0.00")
-    today = timezone.localdate()
+    today = sale_date or timezone.localdate()
     for _attempt in range(5):
         try:
             with transaction.atomic():
@@ -235,7 +239,7 @@ def checkout(*, lines, customer, location, cashbox, discount, tendered, user):
                         "discount_amount": discount,
                         "tax_amount": Decimal("0"),
                         "paid_now": paid_now,
-                        "notes": "POS",
+                        "notes": notes,
                     },
                     lines,
                     user,
