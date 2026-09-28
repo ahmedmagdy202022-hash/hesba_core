@@ -8,6 +8,7 @@ user. Styles: hesba/css/shell.css. Behaviour: hesba/js/shell.js.
 <header class="hs-topbar">
   <button class="hs-icon-button" type="button" data-shell-open aria-controls="hs-sidebar" aria-expanded="false" aria-label="{{ shell.words.menu }}"><span class="hs-burger" aria-hidden="true"></span></button>
   <a class="hs-topbar__brand" href="{% url 'dashboard_snapshot' %}?lang={{ lang }}"><img src="{% static 'hesba/brand/hesba-mark.png' %}" alt="{{ shell.words.home }}" width="34" height="36"></a>
+  <a class="hs-icon-button hs-topbar__search" href="{% url 'search:results' %}?lang={{ lang }}" aria-label="{{ shell.words.search }}" data-search-link><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-search"></use></svg></a>
   <button class="hs-chip" type="button" data-lang-toggle>{{ shell.words.language }}</button>
 </header>
 <aside class="hs-sidebar" id="hs-sidebar" data-shell-nav>
@@ -22,6 +23,7 @@ user. Styles: hesba/css/shell.css. Behaviour: hesba/js/shell.js.
     <button class="hs-rail-toggle" type="button" data-rail-toggle aria-controls="hs-sidebar" aria-expanded="true" aria-label="{{ shell.words.collapse }}" title="{{ shell.words.collapse }}" data-label-collapse="{{ shell.words.collapse }}" data-label-expand="{{ shell.words.expand }}"><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-rail"></use></svg></button>
     <button class="hs-icon-button hs-sidebar__close" type="button" data-shell-close aria-label="{{ shell.words.close_menu }}"><span aria-hidden="true">&times;</span></button>
   </div>
+  <form class="hs-search" method="get" action="{% url 'search:results' %}" role="search"><input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="go" value="1"><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-search"></use></svg><input type="search" name="q" placeholder="{{ shell.words.search_placeholder }}" aria-label="{{ shell.words.search }}" data-shell-search></form>
   <nav class="hs-nav" aria-label="{{ shell.words.main_nav }}">
     <ul>
       {% for item in shell.items %}
