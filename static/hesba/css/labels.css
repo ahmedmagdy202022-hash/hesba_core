@@ -1,4 +1,4 @@
-/* BARCODE-001: label sheets. A4 = 3 x 8 labels of 70 x 37 mm; roll = one 50 x 25 mm label per page. */
+/* BARCODE-001 / LABEL-002: label sheets. The size comes from the chosen template as --lb-* variables set by the print page. */
 *{box-sizing:border-box}
 body.lb-body{margin:0;background:var(--hs-ground);color:var(--hs-ink);font-family:var(--hs-font-body)}
 .lb-toolbar{position:sticky;top:0;display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 16px;background:var(--hs-surface);border-bottom:1px solid var(--hs-line)}
@@ -10,20 +10,22 @@ body.lb-body{margin:0;background:var(--hs-ground);color:var(--hs-ink);font-famil
 .lb-name{margin:0;font-size:10pt;font-weight:600;line-height:1.2;max-height:2.4em;overflow:hidden}
 .lb-price{margin:1mm 0;font-size:11pt;font-weight:700;color:var(--hs-navy)}
 .lb-price small{font-size:7pt;font-weight:400}
-.lb-code svg{display:block;max-width:100%;height:auto}
+/* Text lines keep their height; the barcode takes what is left, so nothing is ever squeezed out. */
+.lb-label>p{flex-shrink:0}
+.lb-code{flex:1 1 0;min-height:0;width:100%;display:flex;align-items:center;justify-content:center}
+.lb-code svg{display:block;max-width:var(--lb-code-w,100%);max-height:100%;width:auto;height:100%}
+.lb-shop,.lb-itemcode{margin:0;font-size:7pt;color:var(--hs-muted);line-height:1.1}
+[data-label-small] .lb-name{font-size:6.5pt}[data-label-small] .lb-price{font-size:7.5pt;margin:0}
 
-.lb-a4 .lb-sheet{width:210mm;margin:16px auto;padding:13mm 0 0;display:grid;grid-template-columns:repeat(3,70mm);grid-auto-rows:37mm;background:var(--hs-surface)}
+.lb-a4 .lb-sheet{width:210mm;margin:16px auto;padding:var(--lb-top,0.5mm) 0 0;display:grid;justify-content:center;grid-template-columns:repeat(var(--lb-cols,3),var(--lb-w,70mm));grid-auto-rows:var(--lb-h,37mm);background:var(--hs-surface);transform:translate(var(--lb-dx,0),var(--lb-dy,0))}
 .lb-a4 .lb-label{padding:2mm 3mm;outline:1px dashed var(--hs-line)}
-.lb-a4 .lb-code svg{width:58mm}
 
 .lb-roll .lb-sheet{display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px}
-.lb-roll .lb-label{width:50mm;height:25mm;padding:1mm 2mm;outline:1px dashed var(--hs-line)}
+.lb-roll .lb-label{width:var(--lb-w,50mm);height:var(--lb-h,25mm);padding:1mm 2mm;outline:1px dashed var(--hs-line);transform:translate(var(--lb-dx,0),var(--lb-dy,0))}
 .lb-roll .lb-name{font-size:7pt}
 .lb-roll .lb-price{margin:0;font-size:8pt}
-.lb-roll .lb-code svg{width:44mm}
 
 @page{size:A4;margin:0}
-@page roll{size:50mm 25mm;margin:0}
 .lb-roll .lb-label{page:roll}
 @media print{
   body.lb-body{background:var(--hs-surface)}
