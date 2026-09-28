@@ -1,4 +1,4 @@
-{% load static hesba_format %}<!doctype html>
+{% load static hesba_format l10n %}<!doctype html>
 <html lang="{{ lang }}" dir="{{ dir }}">
 <head>
 <meta charset="utf-8">
@@ -6,11 +6,16 @@
 <title>{{ page_title }}</title>
 {% include "partials/brand_icons.html" %}
 <link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
-<link rel="stylesheet" href="{% static 'hesba/css/labels.css' %}?v=barcode-001">
+<link rel="stylesheet" href="{% static 'hesba/css/labels.css' %}?v=label-002">
+<style>
+/* LABEL-002: the chosen label size, set per print. */
+{% localize off %}:root{--lb-w:{{ template.width }}mm;--lb-h:{{ template.height }}mm;--lb-cols:{{ template.columns }};--lb-top:{{ template.top }}mm;--lb-code-w:{{ template.barcode_width }}mm;--lb-dx:{{ offset_x }}mm;--lb-dy:{{ offset_y }}mm}
+@page roll{size:{{ template.width }}mm {{ template.height }}mm;margin:0}{% endlocalize %}
+</style>
 </head>
-<body class="lb-body lb-{{ layout }}">
+<body class="lb-body lb-{{ layout }}" data-label-template="{{ template.key }}"{% if template.small %} data-label-small{% endif %}>
 <nav class="lb-toolbar"><a class="lb-button" href="{{ back_url }}">← {{ words.back }}</a><button class="lb-button lb-button--primary" type="button" data-print>{{ words.print }}</button><p>{{ words.pdf_hint }}</p></nav>
-<main class="lb-sheet">{% for label in labels %}<div class="lb-label"><p class="lb-name">{{ label.item.item_name }}{% if label.item.size %} · {{ label.item.size }}{% endif %}{% if label.item.color %} · {{ label.item.color }}{% endif %}</p>{% if show_price %}<p class="lb-price">{{ label.item.default_sale_price|money }} <small>{{ currency }}</small></p>{% endif %}<div class="lb-code">{{ label.svg }}</div></div>{% endfor %}</main>
+<main class="lb-sheet">{% for label in labels %}<div class="lb-label">{% if shown.shop %}<p class="lb-shop" data-label-shop>{{ shop_name }}</p>{% endif %}{% if shown.name %}<p class="lb-name">{{ label.item.item_name }}{% if label.item.size %} · {{ label.item.size }}{% endif %}{% if label.item.color %} · {{ label.item.color }}{% endif %}</p>{% endif %}{% if shown.price %}<p class="lb-price">{{ label.item.default_sale_price|money }} <small>{{ currency }}</small></p>{% endif %}<div class="lb-code">{{ label.svg }}</div>{% if shown.code %}<p class="lb-itemcode" data-label-code><bdi>{{ label.item.item_code }}</bdi></p>{% endif %}</div>{% endfor %}</main>
 <script>document.querySelector('[data-print]').addEventListener('click', function(){ window.print(); });</script>
 </body>
 </html>
