@@ -97,6 +97,29 @@ def _party_initial(request, field):
     return {field: value} if value.isdigit() else None
 
 
+def _reorder_initial(request):
+    """REORDER-001: lines suggested by the "buy soon" screen, for the owner to review."""
+
+    from decimal import Decimal, InvalidOperation
+
+    from master_data.models import Item
+
+    items = request.GET.getlist("reorder_item")[:15]
+    quantities, prices = request.GET.getlist("reorder_qty"), request.GET.getlist("reorder_price")
+    found = {str(item.pk): item for item in Item.objects.filter(pk__in=[pk for pk in items if pk.isdigit()], active=True)}
+    lines = []
+    for index, pk in enumerate(items):
+        item = found.get(pk)
+        try:
+            quantity = Decimal(quantities[index])
+            price = Decimal(prices[index])
+        except (IndexError, InvalidOperation):
+            continue
+        if item is not None and quantity > 0 and price >= 0:
+            lines.append({"item": item.pk, "quantity": quantity, "unit_purchase_price": price, "line_discount_amount": Decimal("0")})
+    return lines or None
+
+
 def _context(request, **extra):
     lang = _lang(request)
     context = {
@@ -163,7 +186,7 @@ def invoice_create(request):
         form = PurchaseDraftForm(lang=lang, initial=_party_initial(request, "supplier"))
         if vat_enabled():
             del form.fields["tax_amount"]
-        line_formset = PurchaseLineFormSet(prefix="lines", form_kwargs={"lang": lang})
+        line_formset = PurchaseLineFormSet(prefix="lines", form_kwargs={"lang": lang}, initial=_reorder_initial(request))
     return render(
         request,
         "purchases/form.html",
