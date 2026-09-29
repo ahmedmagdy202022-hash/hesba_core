@@ -17,6 +17,7 @@ MEDICAL = "medical"
 EDUCATION = "education"
 OTHER = "other"
 CONTRACTING = "contracting"
+MANUFACTURING = "manufacturing"
 
 REQUIRED = "required"
 SUGGESTED = "suggested"
@@ -34,6 +35,7 @@ ACTIVITY_LABELS = {
     EDUCATION: {"ar": "نشاط تعليمي", "en": "Education"},
     OTHER: {"ar": "نشاط آخر", "en": "Other activity"},
     CONTRACTING: {"ar": "مقاولات", "en": "Contracting"},
+    MANUFACTURING: {"ar": "نشاط تصنيعي", "en": "Manufacturing"},
 }
 
 #: Which ``ClientProfile.activity_type`` each wizard activity maps onto. The two
@@ -50,6 +52,8 @@ ACTIVITY_TYPE_BY_SLUG = {
     EDUCATION: ActivityType.SERVICES,
     OTHER: ActivityType.MIXED,
     CONTRACTING: ActivityType.CONTRACTING,
+    # MFG-001: a workshop makes, stocks and sells products, like a shop does.
+    MANUFACTURING: ActivityType.STORE,
 }
 
 SUB_ACTIVITY_LABELS = {
@@ -111,6 +115,15 @@ SUB_ACTIVITY_LABELS = {
         "maintenance_contracts": {"ar": "عقود صيانة", "en": "Maintenance contracts"},
         "other": {"ar": "مقاولات أخرى", "en": "Other contracting"},
     },
+    MANUFACTURING: {
+        "food": {"ar": "أغذية وحلويات", "en": "Food & sweets"},
+        "garments": {"ar": "ملابس ومفروشات", "en": "Garments & textiles"},
+        "furniture": {"ar": "أثاث ونجارة", "en": "Furniture & carpentry"},
+        "printing": {"ar": "طباعة وتغليف", "en": "Printing & packaging"},
+        "chemicals": {"ar": "منظفات وكيماويات", "en": "Detergents & chemicals"},
+        "workshop": {"ar": "ورشة / حرفة", "en": "Workshop / Craft"},
+        "other": {"ar": "تصنيع آخر", "en": "Other manufacturing"},
+    },
 }
 
 #: Declaration order matters: it is the order the wizard renders module cards in,
@@ -130,6 +143,7 @@ MODULE_LABELS = {
     "employees_technicians": {"ar": "الموظفون والفنيون", "en": "Employees & technicians"},
     "tables_orders": {"ar": "الطاولات والطلبات", "en": "Tables & orders"},
     "projects": {"ar": "المشاريع", "en": "Projects"},
+    "manufacturing": {"ar": "التصنيع", "en": "Manufacturing"},
 }
 
 MODULE_SLUGS = tuple(MODULE_LABELS)
@@ -242,6 +256,23 @@ MODULE_PRESETS = {
         "employees_technicians": SUGGESTED,
         "tables_orders": OPTIONAL,
         "projects": REQUIRED,
+    },
+    MANUFACTURING: {
+        "customers": SUGGESTED,
+        "suppliers": SUGGESTED,
+        "items_services": REQUIRED,
+        "sales_operations": REQUIRED,
+        "purchases": REQUIRED,
+        "inventory": REQUIRED,
+        "cashboxes": REQUIRED,
+        "expenses": SUGGESTED,
+        "reports": REQUIRED,
+        "pdf_printing": SUGGESTED,
+        "appointments_visits": OPTIONAL,
+        "employees_technicians": SUGGESTED,
+        "tables_orders": OPTIONAL,
+        "projects": OPTIONAL,
+        "manufacturing": REQUIRED,
     },
 }
 

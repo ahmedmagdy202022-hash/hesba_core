@@ -39,6 +39,7 @@ COMMERCIAL_OPTIONAL_MODULES = [
     'employees_technicians',
     'tables_orders',
     'projects',
+    'manufacturing',
 ]
 
 SERVICES_REQUIRED_MODULES = [
@@ -59,6 +60,7 @@ SERVICES_OPTIONAL_MODULES = [
     'employees_technicians',
     'tables_orders',
     'projects',
+    'manufacturing',
 ]
 
 
@@ -212,7 +214,7 @@ class ModulesSelectionScreenTests(AuthenticatedTestCase):
     def test_all_module_slugs_exist_once_each(self):
         response = self.client.get(reverse('setup_modules'))
 
-        self.assertContains(response, 'class="module-card"', count=14)
+        self.assertContains(response, 'class="module-card"', count=15)
         for slug in MODULE_SLUGS:
             self.assertContains(response, f'data-module="{slug}"', count=1)
 
@@ -221,7 +223,7 @@ class ModulesSelectionScreenTests(AuthenticatedTestCase):
 
         self.assertContains(response, 'data-commercial-state="required"', count=4)
         self.assertContains(response, 'data-commercial-state="suggested"', count=6)
-        self.assertContains(response, 'data-commercial-state="optional"', count=4)
+        self.assertContains(response, 'data-commercial-state="optional"', count=5)
         for slug in COMMERCIAL_REQUIRED_MODULES:
             self.assertModuleState(response, slug, 'commercial', 'required')
         for slug in COMMERCIAL_SUGGESTED_MODULES:
@@ -234,7 +236,7 @@ class ModulesSelectionScreenTests(AuthenticatedTestCase):
 
         self.assertContains(response, 'data-services-state="required"', count=4)
         self.assertContains(response, 'data-services-state="suggested"', count=2)
-        self.assertContains(response, 'data-services-state="optional"', count=7)
+        self.assertContains(response, 'data-services-state="optional"', count=8)
         for slug in SERVICES_REQUIRED_MODULES:
             self.assertModuleState(response, slug, 'services', 'required')
         for slug in SERVICES_SUGGESTED_MODULES:
@@ -262,8 +264,8 @@ class ModulesSelectionScreenTests(AuthenticatedTestCase):
     def test_optional_modules_start_unselected_and_are_toggleable(self):
         response = self.client.get(reverse('setup_modules'))
 
-        self.assertContains(response, 'data-commercial-state="optional"', count=4)
-        self.assertContains(response, 'data-services-state="optional"', count=7)
+        self.assertContains(response, 'data-commercial-state="optional"', count=5)
+        self.assertContains(response, 'data-services-state="optional"', count=8)
         self.assertContains(response, 'selectedModules.delete(slug);')
         self.assertContains(response, 'selectedModules.add(slug);')
         self.assertContains(response, "card.classList.toggle('is-optional', state === 'optional');")

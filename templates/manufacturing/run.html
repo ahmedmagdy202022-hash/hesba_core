@@ -1,0 +1,12 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'manufacturing:recipe' run.recipe.pk %}?lang={{ lang }}">← {{ run.recipe.product.item_name }}</a><h1 dir="ltr">{{ run.number }}</h1><p>{{ run.run_date|date:"Y-m-d" }} · {{ run.location }}</p></div><span class="op-status op-status-{{ run.status }}" data-run-status="{{ run.status }}">{{ status_label }}</span></section>
+{% if error %}<div class="op-message op-message-error" role="alert" data-run-error>{{ error }}</div>{% endif %}
+<section class="op-summary-grid"><article><small>{{ words.made }}</small><strong>{{ run.output_quantity|qty }}</strong><small>{{ run.recipe.product.item_name }}</small></article><article><small>{{ words.batches }}</small><strong>{{ run.batches|qty }}</strong></article>{% if can_cost %}<article><small>{{ words.total_cost }}</small><strong data-run-cost>{{ run.total_cost|money }}</strong></article><article><small>{{ words.unit_cost }}</small><strong>{{ run.output_operation.unit_cost|unit_cost }}</strong></article>{% endif %}</section>
+<h2>{{ words.consumed }}</h2>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>#</th><th>{{ words.component }}</th><th>{{ words.qty }}</th>{% if can_cost %}<th>{{ words.unit_cost }}</th>{% endif %}<th>{{ words.status }}</th></tr></thead><tbody>
+{% for op in consumed %}<tr data-consumed="{{ op.item.item_code }}"><td dir="ltr">{{ op.reference_number }}</td><td>{{ op.item.item_name }}</td><td>{{ op.quantity|qty }}</td>{% if can_cost %}<td>{{ op.unit_cost|unit_cost }}</td>{% endif %}<td>{% if op.status == 'posted' %}✓{% else %}—{% endif %}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if run.status == 'cancelled' %}<p class="op-muted">{{ words.reason }}: {{ run.cancellation_reason }}</p>{% elif can_produce %}<form class="op-form" method="post" data-cancel-run>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><h2>{{ words.cancel }}</h2><p class="op-muted">{{ words.cancel_note }}</p><div class="op-field"><label for="cr-r">{{ words.reason }}</label><input id="cr-r" name="reason" maxlength="255" required></div><div class="op-form-actions"><button class="op-danger" type="submit">{{ words.cancel }}</button></div></form>{% endif %}
+{% endblock %}

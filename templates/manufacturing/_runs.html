@@ -1,0 +1,5 @@
+{% load hesba_format %}
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.number }}</th><th>{{ words.date }}</th><th>{{ words.product }}</th><th>{{ words.batches }}</th><th>{{ words.will_make }}</th>{% if can_cost %}<th>{{ words.total_cost }}</th>{% endif %}<th>{{ words.status }}</th></tr></thead><tbody>
+{% for row in runs %}{% with run=row.run %}<tr data-run-row="{{ run.number }}"><td dir="ltr"><a href="{% url 'manufacturing:run' run.pk %}?lang={{ lang }}">{{ run.number }}</a></td><td dir="ltr">{{ run.run_date|date:"Y-m-d" }}</td><td>{{ run.recipe.product.item_name }}</td><td>{{ run.batches|qty }}</td><td>{{ run.output_quantity|qty }}</td>{% if can_cost %}<td>{{ run.total_cost|money }}</td>{% endif %}<td><span class="op-status op-status-{{ run.status }}">{{ row.status_label }}</span></td></tr>{% endwith %}
+{% empty %}<tr><td colspan="7" class="op-empty">{{ words.no_runs }}</td></tr>{% endfor %}
+</tbody></table></div>

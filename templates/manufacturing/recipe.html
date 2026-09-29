@@ -1,0 +1,18 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'manufacturing:home' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ recipe.product.item_name }}</h1><p><span dir="ltr">{{ recipe.code }}</span>{% if recipe.name %} · {{ recipe.name }}{% endif %} · {{ words.output }}: {{ recipe.output_quantity|qty }}</p></div></section>
+{% if error %}<div class="op-message op-message-error" role="alert" data-recipe-error>{{ error }}</div>{% endif %}
+<h2>{{ words.plan }}</h2>
+<form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><input name="batches" value="{{ batches }}" inputmode="decimal" dir="ltr" aria-label="{{ words.batches }}"><select name="location" aria-label="{{ words.location }}">{% for loc in locations %}<option value="{{ loc.pk }}"{% if location and loc.pk == location.pk %} selected{% endif %}>{{ loc }}</option>{% endfor %}</select><button type="submit">{{ words.check }}</button></form>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.component }}</th><th>{{ words.need }}</th><th>{{ words.have }}</th>{% if can_cost %}<th>{{ words.unit_cost }}</th><th>{{ words.cost }}</th>{% endif %}</tr></thead><tbody>
+{% for row in plan.rows %}<tr data-plan-row="{{ row.line.component.item_code }}"{% if row.short %} data-short{% endif %}><td>{{ row.line.component.item_name }}</td><td>{{ row.need|qty }}</td><td>{{ row.have|qty }}{% if row.short %} <span class="op-status op-status-cancelled">{{ words.short }}</span>{% endif %}</td>{% if can_cost %}<td>{{ row.unit_cost|unit_cost }}</td><td>{{ row.cost|money }}</td>{% endif %}</tr>{% endfor %}
+</tbody></table></div>
+<section class="op-summary-grid"><article><small>{{ words.will_make }}</small><strong data-plan-output>{{ plan.output|qty }}</strong></article><article><small>{{ words.possible }}</small><strong data-plan-possible>{{ plan.possible_batches|qty }}</strong></article>{% if can_cost %}<article><small>{{ words.total_cost }}</small><strong data-plan-cost>{{ plan.cost|money }}</strong></article><article><small>{{ words.unit_cost }}</small><strong>{{ plan.unit_cost|unit_cost }}</strong></article>{% endif %}</section>
+{% if can_produce and recipe.active %}{% if can_cost %}<form class="op-form" method="post" data-produce-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="produce"><input type="hidden" name="location" value="{{ location.pk }}"><h2>{{ words.produce }}</h2>
+<div class="op-form-grid"><div class="op-field"><label for="pr-b">{{ words.batches }}</label><input id="pr-b" name="batches" value="{{ batches }}" inputmode="decimal" dir="ltr"></div><div class="op-field"><label for="pr-d">{{ words.date }}</label><input id="pr-d" type="date" name="run_date"></div><div class="op-field"><label for="pr-n">{{ words.notes }}</label><input id="pr-n" name="notes" maxlength="255"></div></div>
+<div class="op-form-actions"><button class="op-primary" type="submit" data-produce>{{ words.produce }}</button></div></form>{% else %}<p class="op-message">{{ words.cost_needed }}</p>{% endif %}{% endif %}
+<h2>{{ words.runs }}</h2>
+{% include "manufacturing/_runs.html" %}
+{% if can_recipes %}<form class="op-form" method="post" data-recipe-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="edit"><h2>{{ words.edit }}</h2>{% include "manufacturing/_recipe_form.html" %}<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form>{% endif %}
+{% endblock %}
