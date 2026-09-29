@@ -21,6 +21,6 @@
 </aside>
 </form>
 {% if price_book %}{{ price_book|json_script:"hs-price-book" }}{% endif %}{% if tax_rates %}{{ tax_rates|json_script:"hs-tax-rates" }}{% endif %}{% if units %}{{ units|json_script:"hs-units" }}{% endif %}{{ customer_directory|json_script:"hs-customers" }}{% if serial_catalog %}{{ serial_catalog|json_script:"hs-serials" }}{% endif %}{{ catalog|json_script:"hs-item-catalog" }}{{ cart_back|json_script:"pos-cart-back" }}
-<script src="{% static 'hesba/js/pos.js' %}?v=pos-002" defer></script>
+<script src="{% static 'hesba/js/pos.js' %}?v=pos-002" defer></script><script src="{% static 'hesba/js/camera_scan.js' %}?v=cam-001" data-zxing="{% static 'hesba/vendor/zxing/zxing-0.23.0.min.js' %}" defer></script>
 <script src="{% static 'hesba/js/pos_offline.js' %}?v=pos-003" defer></script>
 {% endblock %}
