@@ -2,6 +2,7 @@
 {% block operation_content %}
 <section class="op-title-row"><div><a class="op-back" href="{% url 'settings_core:overview' %}?lang={{ lang }}">← {% if lang == 'en' %}Back to settings{% else %}العودة للإعدادات{% endif %}</a><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div></section>
 <div class="op-notice">{{ words.order }}</div>
+<p class="op-message op-message-success" data-any-file>{{ words.any_file }}</p>
 <form class="op-form" method="post" enctype="multipart/form-data">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><div class="op-form-grid"><div class="op-field"><label for="imp-type">{{ words.type }}</label><select id="imp-type" name="target_type">{% for type in types %}<option value="{{ type.code }}">{{ type.label }}</option>{% endfor %}</select></div><div class="op-field"><label for="imp-file">{{ words.file }}</label><input id="imp-file" type="file" name="file" accept=".xlsx,.csv" required></div><div class="op-field"><label for="imp-date">{{ words.go_live }}</label><input id="imp-date" type="date" name="go_live_date"></div></div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.upload }}</button></div></form>
 <h2>{{ words.template }}</h2>
 <div class="op-card-grid">{% for type in types %}<a class="op-card" href="{% url 'imports:template' type.file %}"><strong>{{ type.label }}</strong><p>{{ words.download }} · {{ type.file }}</p></a>{% endfor %}</div>
