@@ -1,0 +1,17 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'imports:home' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ words.map_title }} · {{ type_label }}</h1><p>{{ batch.source_file_name }} · {{ batch.total_rows }} {{ words.rows }}</p></div></section>
+<p class="op-muted">{{ words.map_intro }}</p>
+{% if stock_hint %}<div class="op-notice" data-stock-hint>{{ words.stock_hint }}</div>{% endif %}
+<form class="op-form" method="post" data-column-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.column }}</th><th>{{ words.samples }}</th><th>{{ words.means }}</th></tr></thead><tbody>
+{% for row in rows %}<tr data-column="{{ row.header }}"><td><strong>{{ row.header }}</strong>{% if row.recognised %}<br><small class="op-muted">✓ {{ words.recognised }}</small>{% endif %}</td><td><small>{{ row.samples|join:" · "|default:"—" }}</small></td>
+<td><select name="col_{{ row.index }}" aria-label="{{ row.header }}" data-column-choice="{{ row.header }}"><option value="">{{ words.ignore }}</option>{% for field in fields %}<option value="{{ field.key }}"{% if row.chosen == field.key %} selected{% endif %}>{{ field.label }}{% if field.required %} ({{ words.required }}){% endif %}</option>{% endfor %}</select></td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_auto_code %}<p><label><input type="checkbox" name="auto_code"{% if auto_code %} checked{% endif %} data-auto-code> {{ words.auto_code }}</label></p>{% endif %}
+{% if missing %}<div class="op-message op-message-error" role="alert" data-mapping-missing>{{ missing }}</div>{% endif %}
+<h2>{{ words.preview }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-preview><thead><tr>{% for head in preview_head %}<th>{{ head }}</th>{% endfor %}</tr></thead><tbody>{% for values in preview_rows %}<tr>{% for value in values %}<td>{{ value|default:"—" }}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div>
+<div class="op-form-actions"><button class="op-secondary" type="submit" name="action" value="preview">{{ words.show_preview }}</button><button class="op-primary" type="submit" name="action" value="confirm" data-confirm-columns{% if missing %} disabled{% endif %}>{{ words.confirm }}</button></div>
+</form>
+{% endblock %}
