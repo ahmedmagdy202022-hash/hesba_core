@@ -198,6 +198,20 @@ BACKUP_DRIVE_KEEP = config("BACKUP_DRIVE_KEEP", default=30, cast=int)
 # Empty disables the endpoint.
 NIGHTLY_TOKEN = config("NIGHTLY_TOKEN", default="")
 
+# DIGEST-002: the daily follow-up email. Any SMTP provider works (Gmail with an
+# app password, Brevo, Resend, Zoho...). Empty EMAIL_HOST means "not set up":
+# the settings screen says so and nothing is sent.
+EMAIL_HOST = config("EMAIL_HOST", default="")
+EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
+EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
+EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
+EMAIL_USE_SSL = config("EMAIL_USE_SSL", default=False, cast=bool)
+EMAIL_TIMEOUT = 20
+DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default=EMAIL_HOST_USER or "hesba@localhost")
+# The address the app is reached at, for links inside emails (e.g. https://shop.onrender.com).
+PUBLIC_BASE_URL = config("PUBLIC_BASE_URL", default="").rstrip("/")
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,

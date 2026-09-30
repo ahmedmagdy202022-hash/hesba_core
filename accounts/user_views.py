@@ -23,6 +23,7 @@ WORDS = {
         "username": "اسم الدخول",
         "display_name": "الاسم",
         "phone": "الموبايل",
+        "email": "الإيميل (للإيميل اليومي)",
         "role": "الدور",
         "active": "نشط",
         "status": "الحالة",
@@ -61,6 +62,7 @@ WORDS = {
         "username": "Username",
         "display_name": "Name",
         "phone": "Mobile",
+        "email": "Email (for the daily email)",
         "role": "Role",
         "active": "Active",
         "status": "Status",
@@ -113,6 +115,7 @@ class UserForm(forms.Form):
     username = forms.CharField(max_length=150)
     display_name = forms.CharField(max_length=255, required=False)
     phone = forms.CharField(max_length=50, required=False)
+    email = forms.EmailField(required=False)
     role = forms.ModelChoiceField(queryset=Role.objects.none())
     password = forms.CharField(widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "new-password"}))
     active = forms.BooleanField(required=False, initial=True)
@@ -160,7 +163,7 @@ def user_create(request):
     if request.method == "POST" and form.is_valid():
         data = form.cleaned_data
         try:
-            user = create_user_account(username=data["username"], password=data["password"], role=data["role"], actor=request.user, display_name=data["display_name"], phone=data["phone"])
+            user = create_user_account(username=data["username"], password=data["password"], role=data["role"], actor=request.user, display_name=data["display_name"], phone=data["phone"], email=data["email"])
         except ValidationError as exc:
             for message in _error_messages(exc, lang):
                 form.add_error(None, message)
@@ -175,13 +178,13 @@ def user_edit(request, pk):
     lang = _lang(request)
     user = get_object_or_404(get_user_model(), pk=pk, is_superuser=False)
     profile = getattr(user, "hesba_profile", None) or UserProfile(user=user)
-    initial = {"username": user.username, "display_name": profile.display_name, "phone": profile.phone, "role": profile.role_id, "active": user.is_active and profile.active}
+    initial = {"username": user.username, "display_name": profile.display_name, "phone": profile.phone, "email": user.email, "role": profile.role_id, "active": user.is_active and profile.active}
     form = UserForm(request.POST or None, lang=lang, editing=True, initial=initial)
     reset_form = PasswordResetForm(lang=lang)
     if request.method == "POST" and form.is_valid():
         data = form.cleaned_data
         try:
-            update_user_account(user, actor=request.user, role=data["role"], active=data["active"], display_name=data["display_name"], phone=data["phone"])
+            update_user_account(user, actor=request.user, role=data["role"], active=data["active"], display_name=data["display_name"], phone=data["phone"], email=data["email"])
         except ValidationError as exc:
             for message in _error_messages(exc, lang):
                 form.add_error(None, message)

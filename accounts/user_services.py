@@ -29,6 +29,7 @@ def _snapshot(user):
         "username": user.username,
         "display_name": profile.display_name if profile else "",
         "phone": profile.phone if profile else "",
+        "email": user.email,  # DIGEST-002: where the daily email goes
         "role": profile.role.code if profile and profile.role else None,
         "active": bool(user.is_active and (profile.active if profile else False)),
     }
@@ -63,7 +64,7 @@ def _validate_password(password, user=None):
 
 
 @transaction.atomic
-def create_user_account(*, username, password, role, actor, display_name="", phone=""):
+def create_user_account(*, username, password, role, actor, display_name="", phone="", email=""):
     User = get_user_model()
     username = (username or "").strip()
     if not username:
@@ -74,7 +75,7 @@ def create_user_account(*, username, password, role, actor, display_name="", pho
         raise ValidationError("role_invalid")
     candidate = User(username=username)
     _validate_password(password, candidate)
-    user = User.objects.create_user(username=username, password=password, is_staff=False, is_superuser=False)
+    user = User.objects.create_user(username=username, password=password, email=(email or "").strip().lower(), is_staff=False, is_superuser=False)
     UserProfile.objects.create(
         user=user,
         role=role,
@@ -89,7 +90,7 @@ def create_user_account(*, username, password, role, actor, display_name="", pho
 
 
 @transaction.atomic
-def update_user_account(user, *, actor, role, active, display_name="", phone=""):
+def update_user_account(user, *, actor, role, active, display_name="", phone="", email=None):
     profile = UserProfile.objects.select_for_update().filter(user=user).first()
     if profile is None:
         profile = UserProfile.objects.create(user=user, role=role, active=True)
@@ -110,6 +111,9 @@ def update_user_account(user, *, actor, role, active, display_name="", phone="")
     if user.is_active != active:
         user.is_active = active
         user.save(update_fields=["is_active"])
+    if email is not None and user.email != email.strip().lower():
+        user.email = email.strip().lower()
+        user.save(update_fields=["email"])
     after = _snapshot(user)
     if after != before:
         _audit(actor, user, "update_user", before, after)

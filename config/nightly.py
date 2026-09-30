@@ -29,3 +29,19 @@ def nightly(request):
     except DriveError:
         return JsonResponse({"status": "failed"}, status=503)
     return JsonResponse({"status": report["status"]})
+
+
+@csrf_exempt
+@never_cache
+@login_not_required
+def digest(request):
+    """DIGEST-002: called every hour; sends each daily email that is due, once."""
+
+    expected = getattr(settings, "NIGHTLY_TOKEN", "")
+    given = request.headers.get("X-Hesba-Token") or request.GET.get("token") or ""
+    if not expected or not hmac.compare_digest(given.encode(), expected.encode()):
+        raise Http404()
+    from settings_core.daily_email import run_due
+
+    report = run_due()
+    return JsonResponse({"status": report["status"], "sent": {slot: result["sent"] for slot, result in report["slots"].items()}})

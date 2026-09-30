@@ -1,0 +1,48 @@
+{% load hesba_format %}{% with w=data.words d=data.digest %}<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{{ data.title }}</title></head>
+<body style="margin:0;padding:0;background:#F6FBFB;font-family:Tahoma,Arial,sans-serif;color:#0B1F3A;direction:{{ dir }}">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F6FBFB"><tr><td align="center" style="padding:16px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:620px;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #D7E6E8">
+<tr><td style="background:#05243F;color:#ffffff;padding:18px 20px;text-align:{% if lang == 'en' %}left{% else %}right{% endif %}">
+  <div style="font-size:13px;color:#16BDC4;font-weight:bold">{{ company.name }}</div>
+  <div style="font-size:22px;font-weight:bold;margin-top:4px" data-email-title>{{ data.title }}</div>
+  <div style="font-size:13px;opacity:.85;margin-top:4px">{{ data.today|date:"l Y-m-d" }}</div>
+</td></tr>
+
+<tr><td style="padding:18px 20px 6px;text-align:{% if lang == 'en' %}left{% else %}right{% endif %}">
+  <h2 style="margin:0 0 10px;font-size:17px;color:#05243F">{% if lang == 'en' %}To follow up{% else %}المطلوب متابعته{% endif %}</h2>
+  {% for item in data.todo %}
+  <div style="border:1px solid #D7E6E8;border-radius:10px;padding:10px 12px;margin-bottom:8px" data-todo="{{ item.key }}">
+    <div style="font-weight:bold;color:#05243F">{{ item.title }}: {{ item.count }}{% if item.amount %} — {{ item.amount|money }} {{ company.currency }}{% endif %}</div>
+    {% if item.lines %}<div style="font-size:13px;color:#51606F;margin-top:4px">{% for line in item.lines %}• {{ line }}<br>{% endfor %}{% if item.count > item.lines|length %}…{% endif %}</div>{% endif %}
+    {% if item.link %}<a href="{{ item.link }}" style="display:inline-block;margin-top:6px;color:#0E8C92;font-size:13px;font-weight:bold">{% if lang == 'en' %}Open{% else %}افتح{% endif %} ←</a>{% endif %}
+  </div>
+  {% empty %}<p style="color:#51606F" data-todo-empty>{{ w.nothing_todo }}</p>{% endfor %}
+</td></tr>
+
+<tr><td style="padding:6px 20px;text-align:{% if lang == 'en' %}left{% else %}right{% endif %}">
+  <h2 style="margin:8px 0 10px;font-size:17px;color:#05243F">{% if data.slot == 'morning' %}{% if lang == 'en' %}Yesterday{% else %}اللي حصل امبارح{% endif %}{% else %}{% if lang == 'en' %}Today{% else %}اللي حصل النهارده{% endif %}{% endif %} <span style="font-size:13px;color:#51606F;font-weight:normal">({{ data.covered|date:"Y-m-d" }})</span></h2>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px">
+  {% if d.sales %}<tr data-figure="sales"><td style="padding:6px 0;color:#51606F">{% if lang == 'en' %}Sales{% else %}المبيعات{% endif %} ({{ d.sales.count }})</td><td style="padding:6px 0;font-weight:bold;text-align:{% if lang == 'en' %}right{% else %}left{% endif %}">{{ d.sales.total|money }}</td></tr>
+  <tr><td style="padding:2px 0 6px;color:#51606F;font-size:12px">{% if lang == 'en' %}cash / credit{% else %}نقدي / آجل{% endif %}</td><td style="padding:2px 0 6px;font-size:12px;text-align:{% if lang == 'en' %}right{% else %}left{% endif %}">{{ d.sales.cash|money }} / {{ d.sales.credit|money }}</td></tr>
+  {% if d.sales.returns %}<tr><td style="padding:6px 0;color:#51606F">{% if lang == 'en' %}Returns{% else %}المرتجعات{% endif %}</td><td style="padding:6px 0;text-align:{% if lang == 'en' %}right{% else %}left{% endif %}">{{ d.sales.returns|money }}</td></tr>{% endif %}{% endif %}
+  {% if d.profit %}<tr data-figure="profit"><td style="padding:6px 0;color:#51606F">{% if lang == 'en' %}Gross profit{% else %}مجمل الربح{% endif %}</td><td style="padding:6px 0;font-weight:bold;text-align:{% if lang == 'en' %}right{% else %}left{% endif %}">{{ d.profit.gross|money }}</td></tr>
+  {% if d.profit.net is not None %}<tr><td style="padding:6px 0;color:#51606F">{% if lang == 'en' %}Net after expenses{% else %}الصافي بعد المصروفات{% endif %}</td><td style="padding:6px 0;text-align:{% if lang == 'en' %}right{% else %}left{% endif %}">{{ d.profit.net|money }}</td></tr>{% endif %}{% endif %}
+  {% if d.customers %}<tr data-figure="collected"><td style="padding:6px 0;color:#51606F">{% if lang == 'en' %}Collected from customers{% else %}اتحصّل من العملاء{% endif %}</td><td style="padding:6px 0;text-align:{% if lang == 'en' %}right{% else %}left{% endif %}">{{ d.customers.collected|money }}</td></tr>{% endif %}
+  {% if d.cash %}<tr data-figure="cash"><td style="padding:6px 0;color:#51606F">{% if lang == 'en' %}Cash in / out · balance{% else %}الخزن داخل / خارج · الرصيد{% endif %}</td><td style="padding:6px 0;text-align:{% if lang == 'en' %}right{% else %}left{% endif %}">{{ d.cash.in|money }} / {{ d.cash.out|money }} · <b>{{ d.cash.balance|money }}</b></td></tr>{% endif %}
+  </table>
+  {% if not d.sales and not d.profit and not d.cash and not d.customers %}<p style="color:#51606F">{% if lang == 'en' %}No figures for your permissions.{% else %}مفيش أرقام في حدود صلاحياتك.{% endif %}</p>{% endif %}
+  {% if summary_link %}<a href="{{ summary_link }}" style="display:inline-block;margin-top:6px;color:#0E8C92;font-size:13px;font-weight:bold">{% if lang == 'en' %}Full daily summary{% else %}الملخص كامل{% endif %} ←</a>{% endif %}
+</td></tr>
+
+<tr><td style="padding:10px 20px 18px;text-align:{% if lang == 'en' %}left{% else %}right{% endif %}">
+  <h2 style="margin:8px 0 10px;font-size:17px;color:#05243F">{% if lang == 'en' %}Key events{% else %}أهم الأحداث{% endif %}</h2>
+  {% for event in data.events %}<div style="border-inline-start:4px solid #D9AD50;padding:6px 10px;margin-bottom:6px;background:#FBF6EA;border-radius:6px" data-event="{{ event.key }}"><b>{{ event.title }}: {{ event.count }}</b>{% if event.lines %}<div style="font-size:13px;color:#51606F">{% for line in event.lines %}• {{ line }}<br>{% endfor %}</div>{% endif %}</div>
+  {% empty %}<p style="color:#51606F" data-events-empty>{{ w.nothing_events }}</p>{% endfor %}
+</td></tr>
+
+<tr><td style="background:#F6FBFB;padding:12px 20px;font-size:12px;color:#51606F;text-align:center">
+  {% if lang == 'en' %}Sent by Hesba to {{ user.email }}. Figures follow your own permissions.{% else %}مبعوت من حِسبة لـ {{ user.email }}. الأرقام على حسب صلاحياتك.{% endif %}
+  {% if settings_link %}<br><a href="{{ settings_link }}" style="color:#0E8C92">{% if lang == 'en' %}Change the daily email{% else %}غيّر مواعيد الإيميل أو وقّفه{% endif %}</a>{% endif %}
+</td></tr>
+</table></td></tr></table></body></html>{% endwith %}
