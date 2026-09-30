@@ -16,6 +16,10 @@ ALLOWED_HOSTS = config(
     default="localhost,127.0.0.1,.app.github.dev",
     cast=Csv(),
 )
+# DEMO-001: Render publishes the service's own hostname; accept it without a manual setting.
+RENDER_EXTERNAL_HOSTNAME = config("RENDER_EXTERNAL_HOSTNAME", default="").strip()
+if RENDER_EXTERNAL_HOSTNAME and RENDER_EXTERNAL_HOSTNAME not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
 DJANGO_APPS = [
     "django.contrib.admin",
@@ -93,6 +97,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "config.demo.demo_context",
             ],
         },
     },
@@ -243,6 +248,14 @@ CSRF_TRUSTED_ORIGINS = config(
     default="https://*.app.github.dev,https://localhost:8010,http://localhost:8010",
     cast=Csv(),
 )
+if RENDER_EXTERNAL_HOSTNAME and f"https://{RENDER_EXTERNAL_HOSTNAME}" not in CSRF_TRUSTED_ORIGINS:
+    CSRF_TRUSTED_ORIGINS.append(f"https://{RENDER_EXTERNAL_HOSTNAME}")
+
+# DEMO-001: a throw-away showcase install. The start script fills an empty
+# database with sample business and the login page shows the demo logins.
+# Never set this on a client's database.
+DEMO_MODE = config("DEMO_MODE", default=False, cast=bool)
+DEMO_PASSWORD = config("DEMO_PASSWORD", default="Demo-pass-1")
 
 # Secure defaults activate automatically in production and remain independently
 # configurable for platforms that terminate TLS at a trusted reverse proxy.
