@@ -878,18 +878,23 @@ class DashboardCurrencyTests(TestCase):
         ClientProfile.objects.filter(pk=self.profile.pk).update(default_currency="SAR")
         response = self.client.get(DASHBOARD)
         self.assertContains(response, '<small class="dash-kpi__unit">SAR</small>')
-        self.assertNotContains(response, "EGP")
+        self.assertNoCurrencyWord(response, "EGP")
 
     def test_alert_amounts_carry_the_configured_currency(self):
         ClientProfile.objects.filter(pk=self.profile.pk).update(default_currency="SAR")
         make_cashbox_movement(make_cashbox(), CashboxDirection.OUT, "50.00")
         response = self.client.get(DASHBOARD)
         self.assertContains(response, "50.00<small>SAR</small>")
-        self.assertNotContains(response, "EGP")
+        self.assertNoCurrencyWord(response, "EGP")
+
+    def assertNoCurrencyWord(self, response, code):
+        # A bare assertNotContains matched the random CSRF token once
+        # ("...DaEGPntj..."); a currency code only counts as a whole word.
+        self.assertNotRegex(response.content.decode(), rf"(?<![A-Za-z0-9]){code}(?![A-Za-z0-9])")
 
     def test_no_unit_is_invented_when_no_currency_is_set(self):
         ClientProfile.objects.filter(pk=self.profile.pk).update(default_currency="")
         response = self.client.get(DASHBOARD)
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "dash-kpi__unit")
-        self.assertNotContains(response, "EGP")
+        self.assertNoCurrencyWord(response, "EGP")
