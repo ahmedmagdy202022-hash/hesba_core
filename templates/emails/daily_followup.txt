@@ -1,0 +1,21 @@
+{% load hesba_format %}{% autoescape off %}{% with w=data.words d=data.digest %}{{ company.name }} — {{ data.title }} — {{ data.today|date:"Y-m-d" }}
+
+{% if lang == 'en' %}TO FOLLOW UP{% else %}المطلوب متابعته{% endif %}
+{% for item in data.todo %}- {{ item.title }}: {{ item.count }}{% if item.amount %} — {{ item.amount|money }} {{ company.currency }}{% endif %}
+{% for line in item.lines %}    • {{ line }}
+{% endfor %}{% if item.link %}    {{ item.link }}
+{% endif %}{% empty %}{{ w.nothing_todo }}
+{% endfor %}
+{% if data.slot == 'morning' %}{% if lang == 'en' %}YESTERDAY{% else %}اللي حصل امبارح{% endif %}{% else %}{% if lang == 'en' %}TODAY{% else %}اللي حصل النهارده{% endif %}{% endif %} ({{ data.covered|date:"Y-m-d" }})
+{% if d.sales %}- {% if lang == 'en' %}Sales{% else %}المبيعات{% endif %}: {{ d.sales.total|money }} ({{ d.sales.count }}) — {% if lang == 'en' %}cash{% else %}نقدي{% endif %} {{ d.sales.cash|money }}، {% if lang == 'en' %}credit{% else %}آجل{% endif %} {{ d.sales.credit|money }}
+{% endif %}{% if d.profit %}- {% if lang == 'en' %}Gross profit{% else %}مجمل الربح{% endif %}: {{ d.profit.gross|money }}
+{% endif %}{% if d.customers %}- {% if lang == 'en' %}Collected{% else %}التحصيلات{% endif %}: {{ d.customers.collected|money }}
+{% endif %}{% if d.cash %}- {% if lang == 'en' %}Cash balance{% else %}رصيد الخزن{% endif %}: {{ d.cash.balance|money }}
+{% endif %}
+{% if lang == 'en' %}KEY EVENTS{% else %}أهم الأحداث{% endif %}
+{% for event in data.events %}- {{ event.title }}: {{ event.count }}
+{% for line in event.lines %}    • {{ line }}
+{% endfor %}{% empty %}{{ w.nothing_events }}
+{% endfor %}{% if settings_link %}
+{{ settings_link }}{% endif %}
+{% endwith %}{% endautoescape %}

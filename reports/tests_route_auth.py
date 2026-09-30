@@ -23,6 +23,7 @@ PUBLIC_ROUTE_NAMES = frozenset(
         # BACKUP-003: 404 unless the caller holds NIGHTLY_TOKEN; answers only
         # {"status": ...} and never returns data. Called by an external scheduler.
         "ops_nightly",
+        "ops_digest",  # DIGEST-002: same token guard as ops_nightly; 404 without it
     }
 )
 

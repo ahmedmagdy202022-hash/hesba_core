@@ -3,7 +3,7 @@ from django.urls import path
 from accounts import two_factor_views, user_views
 from printing.views import company_settings
 
-from . import backup_views, operational_views, storage_views
+from . import backup_views, daily_email_views, operational_views, storage_views
 
 
 app_name = "settings_core"
@@ -17,6 +17,7 @@ urlpatterns = [
     path("company/", company_settings, name="company"),
     path("backups/", backup_views.backup_key, name="backup_key"),
     path("storage/", storage_views.storage_status, name="storage"),
+    path("daily-email/", daily_email_views.daily_email_settings, name="daily_email"),
     path("backups/drive/callback/", backup_views.drive_callback, name="backup_drive_callback"),
     path("users/", user_views.user_list, name="users"),
     path("users/new/", user_views.user_create, name="user_create"),

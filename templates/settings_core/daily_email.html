@@ -1,0 +1,20 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'settings_core:overview' %}?lang={{ lang }}">← {% if lang == 'en' %}Back to settings{% else %}العودة للإعدادات{% endif %}</a><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div></section>
+{% if not ready %}<div class="op-message op-message-error" role="alert" data-email-not-ready>{{ words.not_ready }}</div>{% endif %}
+<section class="op-summary-grid">{% for slot, label in slots %}<article data-last="{{ slot }}"><small>{{ words.last }} · {{ label|truncatewords:1 }}</small><strong dir="ltr">{% for key, value in conf.last.items %}{% if key == slot %}{{ value|default:words.never }}{% endif %}{% endfor %}</strong></article>{% endfor %}
+<article data-next-send><small>{{ words.next }}</small><strong dir="ltr">{% if upcoming %}{{ upcoming.0|date:"Y-m-d H:i" }}{% else %}—{% endif %}</strong></article></section>
+{% if not conf.slots %}<p class="op-message" data-email-off>{{ words.off }}</p>{% endif %}
+{% if can_manage %}
+<form class="op-form" method="post" data-daily-email-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+<h2>{{ words.when }}</h2>
+{% for slot, label in slots %}<div class="op-form-grid" data-slot-row="{{ slot }}"><label class="op-field"><span><input type="checkbox" name="slots" value="{{ slot }}"{% if slot in conf.slots %} checked{% endif %}> {{ label }}</span></label>
+<div class="op-field"><label for="h-{{ slot }}">{{ words.hour }}</label><select id="h-{{ slot }}" name="{{ slot }}_hour">{% for h in hours %}<option value="{{ h }}"{% for key, value in conf.hours.items %}{% if key == slot and value == h %} selected{% endif %}{% endfor %}>{{ h|stringformat:"02d" }}:00</option>{% endfor %}</select></div></div>{% endfor %}
+<h2>{{ words.to }}</h2><p class="op-muted">{{ words.each_sees }}</p>
+{% for row in users %}<p><label data-recipient="{{ row.user.username }}"><input type="checkbox" name="recipients" value="{{ row.user.pk }}"{% if row.user.pk in conf.recipients %} checked{% endif %}{% if not row.has_email %} disabled{% endif %}> <strong>{{ row.user.get_full_name|default:row.user.username }}</strong> <span dir="ltr">{{ row.user.email|default:"" }}</span>{% if not row.has_email %} <small class="op-muted">— {{ words.no_email }}</small>{% endif %}</label></p>{% endfor %}
+<div class="op-field"><label for="e-lang">{{ words.lang }}</label><select id="e-lang" name="email_lang"><option value="ar"{% if conf.lang == 'ar' %} selected{% endif %}>{{ words.lang_ar }}</option><option value="en"{% if conf.lang == 'en' %} selected{% endif %}>{{ words.lang_en }}</option></select></div>
+<div class="op-form-actions"><button class="op-primary" type="submit" name="action" value="save">{{ words.save }}</button></div>
+</form>
+<form class="op-form-actions" method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="test"><select name="slot" aria-label="{{ words.when }}">{% for slot, label in slots %}<option value="{{ slot }}">{{ label|truncatewords:1 }}</option>{% endfor %}</select><button class="op-secondary" type="submit" data-send-test{% if not ready %} disabled{% endif %}>{{ words.test }}</button></form>
+{% else %}<p class="op-message">{{ words.view_only }}</p>{% endif %}
+{% endblock %}

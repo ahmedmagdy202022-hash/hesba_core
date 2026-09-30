@@ -31,3 +31,16 @@ services:
         sync: false
       - key: GOOGLE_OAUTH_CLIENT_SECRET
         sync: false
+      # DIGEST-002: the daily follow-up email (any SMTP provider; see docs/DAILY_EMAIL_SETUP.md)
+      - key: EMAIL_HOST
+        sync: false
+      - key: EMAIL_PORT
+        value: "587"
+      - key: EMAIL_HOST_USER
+        sync: false
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+      - key: DEFAULT_FROM_EMAIL
+        sync: false
+      - key: PUBLIC_BASE_URL       # e.g. https://hesba-client.onrender.com (links inside the email)
+        sync: false
