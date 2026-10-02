@@ -222,7 +222,9 @@ class DashboardRealFigureTests(TestCase):
         sign_in_as(self, RoleCode.CASHIER, "figure_cashier")
         body = self.client.get(DASHBOARD).content.decode()
 
-        self.assertNotIn("180", body)
+        # A whole number only: the bare substring also matched the random CSRF
+        # token and the clock's microseconds ("...21.301807...").
+        self.assertNotRegex(body, r"(?<![0-9A-Za-z])180(?![0-9A-Za-z])")
         self.assertNotIn("صافي الربح", body)
 
     def test_the_owner_does_see_the_profit_figure(self):
