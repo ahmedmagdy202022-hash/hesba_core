@@ -74,26 +74,7 @@
           </div>
           {% endif %}
         </div>
-        <div class="dash-hero__art" aria-hidden="true">
-          <svg viewBox="0 0 320 200" class="dash-hero__svg">
-            <defs>
-              <linearGradient id="dh-bar" x1="0" y1="0" x2="0" y2="1"><stop class="dh-stop-teal" offset="0"/><stop class="dh-stop-teal" offset="1" stop-opacity=".35"/></linearGradient>
-            </defs>
-            <circle class="dh-teal" cx="250" cy="40" r="70" opacity=".12"/>
-            <circle class="dh-gold" cx="60" cy="176" r="50" opacity=".12"/>
-            <rect class="dh-card" x="40" y="30" width="230" height="140" rx="18"/>
-            <path class="dh-base" d="M60 150H250"/>
-            <rect class="dh-b dh-b1" x="72" y="112" width="22" height="38" rx="5" fill="url(#dh-bar)"/>
-            <rect class="dh-b dh-b2" x="108" y="94" width="22" height="56" rx="5" fill="url(#dh-bar)"/>
-            <rect class="dh-b dh-b3" x="144" y="104" width="22" height="46" rx="5" fill="url(#dh-bar)"/>
-            <rect class="dh-b dh-b4" x="181" y="76" width="22" height="74" rx="5" fill="url(#dh-bar)"/>
-            <rect class="dh-b dh-b5 dh-teal" x="216" y="58" width="22" height="92" rx="5"/>
-            <path class="dh-line" d="M83 100 L119 82 L155 92 L191 62 L227 44"/>
-            <circle class="dh-gold" cx="227" cy="44" r="6"/><circle class="dh-gold dh-pulse" cx="227" cy="44" r="11" opacity=".25"/>
-            <g class="dh-coin"><circle class="dh-gold" cx="282" cy="140" r="20"/><circle class="dh-coin__ring" cx="282" cy="140" r="14"/></g>
-            <g class="dh-coin dh-coin--2"><circle class="dh-gold-bright" cx="300" cy="104" r="12"/></g>
-          </svg>
-        </div>
+        <div class="dash-hero__art"><img class="dash-hero__img" src="{% static 'hesba/img/dashboard-hero.svg' %}?v=hero-2" alt="" width="480" height="300" decoding="async"></div>
       </section>
 
       {% if analytics.available %}

@@ -1,0 +1,24 @@
+{% extends "operations/base.html" %}
+{% load static %}
+{% block operation_content %}
+<link rel="stylesheet" href="{% static 'hesba/css/label_designer.css' %}?v=label-003">
+<section class="op-title-row"><div><a class="op-back" href="{% url 'barcode:labels' %}?lang={{ lang }}">← {{ words.title }}</a><h1>{{ words.designs }}</h1><p>{{ words.designs_intro }}</p></div>{% if can_design %}<div class="op-form-actions"><a class="op-primary" href="{% url 'barcode:design_new' %}?lang={{ lang }}" data-new-design>+ {{ words.new_design }}</a></div>{% endif %}</section>
+<h2 class="ld-heading">{{ words.my_designs }}</h2>
+{% if mine %}
+<ul class="ld-cards">
+  {% for row in mine %}
+  <li class="ld-card" data-design="{{ row.design.id }}">
+    <strong>{{ row.design.name }}</strong>
+    <span class="ld-card__meta">{{ row.summary }}</span>
+    <span class="ld-card__actions">
+      <a class="op-secondary" href="{% url 'barcode:labels' %}?lang={{ lang }}&template=d{{ row.design.id }}">{{ words.use }}</a>
+      {% if can_design %}<a class="op-secondary" href="{% url 'barcode:design_edit' row.design.id %}?lang={{ lang }}">{{ words.edit }}</a>
+      <form method="post" action="{% url 'barcode:design_delete' row.design.id %}" onsubmit="return confirm('{{ words.confirm_delete|escapejs }}')">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><button class="op-secondary ld-delete" type="submit">{{ words.delete }}</button></form>{% endif %}
+    </span>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}<p class="op-muted">{{ words.no_designs }}</p>{% endif %}
+<h2 class="ld-heading">{{ words.built_in }}</h2>
+<ul class="ld-cards ld-cards--plain">{% for t in built_in %}<li class="ld-card"><strong>{{ t.label }}</strong><span class="ld-card__actions"><a class="op-secondary" href="{% url 'barcode:labels' %}?lang={{ lang }}&template={{ t.key }}">{{ words.use }}</a></span></li>{% endfor %}</ul>
+{% endblock %}

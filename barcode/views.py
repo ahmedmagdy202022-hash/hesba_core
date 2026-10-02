@@ -8,10 +8,15 @@ from master_data.models import Item
 from permissions.decorators import require_permission
 from permissions.services import user_has_permission
 
+import json
+
+from django.http import Http404
+
+from . import designs as label_designs
 from .services import assign_missing_barcodes
-from .label_templates import FIELDS, offset, spec
+from .label_templates import FIELDS, TEMPLATES, offset, spec
 from .label_templates import choices as label_choices
-from .symbology import barcode_svg
+from .symbology import barcode_modules, barcode_svg
 
 
 WORDS = {
@@ -42,6 +47,16 @@ WORDS = {
         "pdf_hint": "لحفظها PDF اختار «حفظ كـ PDF» من نافذة الطباعة.",
         "template": "مقاس الملصق", "fields": "على الملصق", "show_name": "اسم الصنف", "show_code": "كود الصنف", "show_shop": "اسم المحل",
         "offset": "ضبط الطابعة (مم)", "offset_x": "يمين/شمال", "offset_y": "فوق/تحت", "offset_hint": "لو الطباعة مزحزحة، زوّد أو قلّل مليمترات لحد ما تيجي في النص.",
+        "pdf": "تنزيل PDF", "pdf_working": "بيتجهز…", "pdf_failed": "معرفناش نعمل الملف على الجهاز ده. جرّب «حفظ كـ PDF» من نافذة الطباعة.",
+        "designs": "تصميمات الملصقات", "new_design": "تصميم جديد", "designs_intro": "اعمل مقاس ملصق على قد الورق أو الرول اللي عندك: العرض والطول، وعدد الملصقات في ورقة A4، والهوامش والمسافات، وحجم الكلام.",
+        "built_in": "المقاسات الجاهزة", "my_designs": "تصميماتي", "no_designs": "لسه معملتش تصميم.", "edit": "تعديل", "delete": "حذف", "use": "استخدم",
+        "design_name": "اسم التصميم", "kind": "نوع الورق", "kind_roll": "رول (ملصق في كل صفحة)", "kind_a4": "ورقة A4 (شبكة ملصقات)",
+        "size": "مقاس الملصق (مم)", "width": "العرض", "height": "الطول", "sheet": "ترتيب الورقة", "columns": "أعمدة", "rows": "صفوف",
+        "top": "هامش فوق", "side": "هامش جانبي", "gap_x": "مسافة بين الأعمدة", "gap_y": "مسافة بين الصفوف",
+        "text": "الكلام", "name_pt": "اسم الصنف (pt)", "price_pt": "السعر (pt)", "small_pt": "السطور الصغيرة (pt)", "barcode_pct": "الباركود (% من طول الملصق)",
+        "barcode_text": "اطبع الأرقام تحت الباركود", "defaults": "يظهر على الملصق", "preview": "معاينة", "save": "حفظ التصميم", "cancel": "إلغاء",
+        "saved": "اتحفظ التصميم.", "deleted": "اتحذف التصميم.", "sheet_fit": "الورقة: {used_w} × {used_h} مم من 210 × 297", "per_sheet": "{count} ملصق في الورقة",
+        "sample_name": "قميص قطن مقاس L", "confirm_delete": "تحذف التصميم ده؟",
     },
     "en": {
         "page_title": "Barcode labels",
@@ -70,6 +85,16 @@ WORDS = {
         "pdf_hint": "To save it as a PDF, choose “Save as PDF” in the print dialog.",
         "template": "Label size", "fields": "On the label", "show_name": "Item name", "show_code": "Item code", "show_shop": "Shop name",
         "offset": "Printer adjustment (mm)", "offset_x": "Sideways", "offset_y": "Up/down", "offset_hint": "If the print lands off-centre, nudge it a few millimetres.",
+        "pdf": "Download PDF", "pdf_working": "Preparing…", "pdf_failed": "This device could not build the file. Use “Save as PDF” in the print dialog instead.",
+        "designs": "Label designs", "new_design": "New design", "designs_intro": "Make a label to fit the paper or roll you have: width and height, how many on an A4 sheet, margins and gaps, and text sizes.",
+        "built_in": "Ready-made sizes", "my_designs": "My designs", "no_designs": "No designs yet.", "edit": "Edit", "delete": "Delete", "use": "Use",
+        "design_name": "Design name", "kind": "Paper", "kind_roll": "Roll (one label per page)", "kind_a4": "A4 sheet (grid of labels)",
+        "size": "Label size (mm)", "width": "Width", "height": "Height", "sheet": "Sheet layout", "columns": "Columns", "rows": "Rows",
+        "top": "Top margin", "side": "Side margin", "gap_x": "Gap between columns", "gap_y": "Gap between rows",
+        "text": "Text", "name_pt": "Item name (pt)", "price_pt": "Price (pt)", "small_pt": "Small lines (pt)", "barcode_pct": "Barcode (% of label height)",
+        "barcode_text": "Print the digits under the barcode", "defaults": "Shown on the label", "preview": "Preview", "save": "Save design", "cancel": "Cancel",
+        "saved": "Design saved.", "deleted": "Design deleted.", "sheet_fit": "Sheet: {used_w} × {used_h} mm of 210 × 297", "per_sheet": "{count} labels per sheet",
+        "sample_name": "Cotton shirt size L", "confirm_delete": "Delete this design?",
     },
 }
 
@@ -117,7 +142,9 @@ def labels(request):
             missing=(missing := Item.objects.filter(active=True, barcode="").count()),
             missing_text=WORDS[_lang(request)]["missing_count"].format(count=missing),
             can_generate=user_has_permission(request.user, "master_data.manage_items"),
-            templates=label_choices(_lang(request)),
+            templates=[(key, label, json.dumps(spec(key)["defaults"])) for key, label in label_choices(_lang(request))],
+            can_design=user_has_permission(request.user, "master_data.manage_items"),
+            selected_template=request.GET.get("template", ""),
         ),
     )
 
@@ -153,17 +180,68 @@ def labels_print(request):
     # LABEL-002: which lines go on the label; name and price stay on unless unticked.
     shown = {field: request.GET.get(f"show_{field}", "1" if field in ("name", "price") else "0") == "1" for field in FIELDS}
     shown["price"] = show_price
-    labels_out = []
+    labels_out, pdf_labels = [], []
+    currency = _currency()
+    from settings_core.templatetags.hesba_format import money
+
     for item in Item.objects.filter(pk__in=wanted, active=True).order_by("item_code"):
         code = item.barcode or item.item_code
-        svg = mark_safe(barcode_svg(code, module_width=2, height=50))
+        svg = mark_safe(barcode_svg(code, module_width=2, height=50, show_text=template["barcode_text"]))
+        kind, modules = barcode_modules(code)
+        name = item.item_name + (f" · {item.size}" if item.size else "") + (f" · {item.color}" if item.color else "")
+        entry = {"name": name, "price": f"{money(item.default_sale_price)} {currency}", "code": item.item_code, "text": code,
+                 "modules": modules, "quiet": 11 if kind == "ean13" else 10}
         for _ in range(wanted[item.pk]):
             labels_out.append({"item": item, "svg": svg})
+            pdf_labels.append(entry)
             if len(labels_out) >= MAX_LABELS:
                 break
     return render(
         request,
         "barcode/labels_print.html",
-        _context(request, labels=labels_out, layout=layout, show_price=show_price, currency=_currency(), back_url=f"/barcode/labels/?lang={lang}",
+        _context(request, labels=labels_out, layout=layout, show_price=show_price, currency=currency, back_url=f"/barcode/labels/?lang={lang}",
+                 pdf_data={"spec": {k: template[k] for k in ("kind", "width", "height", "columns", "rows", "top", "side", "gap_x", "gap_y", "barcode_width",
+                                                             "name_pt", "price_pt", "small_pt", "barcode_pct", "barcode_text", "key")},
+                           "labels": pdf_labels, "shown": shown, "shop": _shop_name(), "rtl": lang != "en",
+                           "offset": [offset(request.GET.get("offset_x")), offset(request.GET.get("offset_y"))],
+                           "file": f"labels-{template['key']}.pdf"},
                  template=template, shown=shown, shop_name=_shop_name(), offset_x=offset(request.GET.get("offset_x")), offset_y=offset(request.GET.get("offset_y"))),
     )
+
+
+# ---- LABEL-003: label designs ----
+
+@require_permission("barcode.print_labels")
+def designs(request):
+    lang = _lang(request)
+    built_in = [{"key": key, "label": value[7] if lang == "en" else value[6]} for key, value in TEMPLATES.items()]
+    mine = [{"design": d, "summary": label_designs.summary(d, lang)} for d in label_designs.all_designs()]
+    return render(request, "barcode/designs.html", _context(request, built_in=built_in, mine=mine,
+                                                             can_design=user_has_permission(request.user, "master_data.manage_items")))
+
+
+@require_permission("master_data.manage_items")
+def design_edit(request, pk=None):
+    lang = _lang(request)
+    words = WORDS[lang]
+    existing = label_designs.get(pk) if pk is not None else None
+    if pk is not None and existing is None:
+        raise Http404("No such label design.")
+    errors = []
+    design = dict(existing) if existing else label_designs.blank()
+    if request.method == "POST":
+        design, errors = label_designs.clean(request.POST, lang)
+        if not errors:
+            saved = label_designs.save(design, request.user, design_id=pk)
+            messages.success(request, words["saved"])
+            return redirect(f"/barcode/labels/?lang={lang}&template=d{saved['id']}")
+    return render(request, "barcode/design_form.html", _context(request, design=design, errors=errors, editing=existing is not None,
+                                                                 limits=label_designs.NUMBERS, shop_name=_shop_name()))
+
+
+@require_permission("master_data.manage_items")
+def design_delete(request, pk):
+    lang = _lang(request)
+    if request.method == "POST" and label_designs.delete(pk, request.user):
+        messages.success(request, WORDS[lang]["deleted"])
+    return redirect(f"/barcode/designs/?lang={lang}")

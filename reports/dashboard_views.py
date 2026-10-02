@@ -58,7 +58,7 @@ GREETINGS = (
 # Read-only shortcuts. business_rules.md keeps dashboards read-only, so these
 # navigate and never post.
 QUICK_ACTIONS = (
-    {"key": "record_sale", "ar": "تسجيل عملية بيع", "en": "Record a sale", "primary": False, "module": "sales_operations", "url_name": "sales:create", "permission": "sales.create_sales_invoice"},
+    {"key": "record_sale", "ar": "تسجيل عملية بيع", "en": "Record a sale", "primary": True, "module": "sales_operations", "url_name": "sales:create", "permission": "sales.create_sales_invoice"},
     {"key": "record_purchase", "ar": "تسجيل فاتورة شراء", "en": "Record a purchase", "primary": False, "module": "purchases", "url_name": "purchases:create", "permission": "purchases.create_purchase_invoice"},
     {"key": "new_customer", "ar": "عميل جديد", "en": "New customer", "primary": False, "module": "customers", "url_name": "master_data:customer_create", "permission": "master_data.manage_parties"},
     {"key": "new_supplier", "ar": "مورد جديد", "en": "New supplier", "primary": False, "module": "suppliers", "url_name": "master_data:supplier_create", "permission": "master_data.manage_parties"},
@@ -66,7 +66,7 @@ QUICK_ACTIONS = (
     {"key": "collect", "ar": "تحصيل من عميل", "en": "Collect from a customer", "primary": False, "module": "customers", "url_name": "sales:payment_create", "permission": "sales.receive_customer_payment"},
     {"key": "pay_supplier", "ar": "سداد لمورد", "en": "Pay a supplier", "primary": False, "module": "suppliers", "url_name": "purchases:payment_create", "permission": "purchases.pay_supplier"},
     {"key": "open_reports", "ar": "فتح التقارير", "en": "Open reports", "primary": False, "module": "reports", "url_name": "report_hub"},
-    {"key": "close_day", "ar": "إقفال الشهر المحاسبي", "en": "Close the accounting month", "primary": True, "module": None, "url_name": "closing:list", "permission": "closing.run_closing"},
+    {"key": "close_day", "ar": "إقفال الشهر المحاسبي", "en": "Close the accounting month", "primary": False, "module": None, "url_name": "closing:list", "permission": "closing.run_closing"},
 )
 
 # DEMO-FEEDBACK: "close a period" did not say which period. It is the accounting

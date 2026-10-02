@@ -17,7 +17,7 @@ body.lb-body{margin:0;background:var(--hs-ground);color:var(--hs-ink);font-famil
 .lb-shop,.lb-itemcode{margin:0;font-size:7pt;color:var(--hs-muted);line-height:1.1}
 [data-label-small] .lb-name{font-size:6.5pt}[data-label-small] .lb-price{font-size:7.5pt;margin:0}
 
-.lb-a4 .lb-sheet{width:210mm;margin:16px auto;padding:var(--lb-top,0.5mm) 0 0;display:grid;justify-content:center;grid-template-columns:repeat(var(--lb-cols,3),var(--lb-w,70mm));grid-auto-rows:var(--lb-h,37mm);background:var(--hs-surface);transform:translate(var(--lb-dx,0),var(--lb-dy,0))}
+.lb-a4 .lb-sheet{width:210mm;margin:16px auto;padding:var(--lb-top,0.5mm) 0 0;display:grid;justify-content:center;grid-template-columns:repeat(var(--lb-cols,3),var(--lb-w,70mm));grid-auto-rows:var(--lb-h,37mm);column-gap:var(--lb-gap-x,0);row-gap:var(--lb-gap-y,0);background:var(--hs-surface);transform:translate(var(--lb-dx,0),var(--lb-dy,0))}
 .lb-a4 .lb-label{padding:2mm 3mm;outline:1px dashed var(--hs-line)}
 
 .lb-roll .lb-sheet{display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px}

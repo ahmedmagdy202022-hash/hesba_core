@@ -133,6 +133,9 @@ def stock_list(request):
             can_view_cost=can_view_cost,
             can_transfer=user_has_permission(request.user, "inventory.transfer_stock"),
             can_adjust=user_has_permission(request.user, "inventory.adjust_stock"),
+            # DEMO-FEEDBACK: warehouses were only reachable by typing the URL.
+            can_view_locations=user_has_permission(request.user, "master_data.view_master_data"),
+            can_add_location=user_has_permission(request.user, "master_data.manage_locations"),
         ),
     )
 

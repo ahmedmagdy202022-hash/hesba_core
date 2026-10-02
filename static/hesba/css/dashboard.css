@@ -75,7 +75,7 @@
   position:relative;overflow:hidden;
   background:linear-gradient(120deg,var(--hs-navy) 0%,var(--hs-navy-raised) 58%,var(--hs-teal-deep) 100%);
   border-radius:var(--radius);box-shadow:var(--shadow-lift);padding:26px 30px;min-height:200px;color:var(--hs-surface);
-  display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,340px);align-items:center;gap:24px;
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(240px,420px);align-items:center;gap:24px;
 }
 .dash-hero__copy{display:flex;flex-direction:column;gap:8px;min-width:0}
 .dash-greeting{margin:0;font-size:clamp(22px,3vw,32px);font-weight:700;color:var(--hs-surface)}
@@ -89,24 +89,7 @@
 .dash-hero__delta.is-good{color:var(--hs-success-line)}
 .dash-hero__delta.is-bad{color:var(--hs-danger-line)}
 .dash-hero__art{min-width:0;justify-self:end;width:100%}
-.dash-hero__svg{display:block;width:100%;height:auto;max-height:200px}
-.dh-teal{fill:var(--hs-teal)}
-.dh-gold{fill:var(--hs-gold-bright)}
-.dh-gold-bright{fill:var(--hs-gold-wash)}
-.dh-stop-teal{stop-color:var(--hs-teal)}
-.dh-card{fill:var(--hs-navy);fill-opacity:.55;stroke:var(--hs-surface);stroke-opacity:.18}
-.dh-base{stroke:var(--hs-surface);stroke-opacity:.25}
-.dh-line{fill:none;stroke:var(--hs-gold-bright);stroke-width:3;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:240;stroke-dashoffset:0;animation:dh-draw 1.6s ease-out both .3s}
-.dh-coin__ring{fill:none;stroke:var(--hs-navy);stroke-opacity:.35;stroke-width:2}
-.dh-b{transform-box:fill-box;transform-origin:50% 100%;animation:dh-grow .9s cubic-bezier(.2,.8,.2,1) both}
-.dh-b2{animation-delay:.08s}.dh-b3{animation-delay:.16s}.dh-b4{animation-delay:.24s}.dh-b5{animation-delay:.32s}
-.dh-pulse{transform-box:fill-box;transform-origin:center;animation:dh-pulse 2.4s ease-in-out infinite}
-.dh-coin{animation:dh-float 4s ease-in-out infinite}
-.dh-coin--2{animation-delay:-2s}
-@keyframes dh-grow{from{transform:scaleY(0)}to{transform:scaleY(1)}}
-@keyframes dh-draw{from{stroke-dashoffset:240}to{stroke-dashoffset:0}}
-@keyframes dh-pulse{0%,100%{transform:scale(1);opacity:.25}50%{transform:scale(1.6);opacity:0}}
-@keyframes dh-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.dash-hero__img{display:block;width:100%;height:auto;max-height:240px;object-fit:contain}
 
 /* ---------- sections ---------- */
 .dash-section{
