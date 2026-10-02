@@ -66,8 +66,32 @@ QUICK_ACTIONS = (
     {"key": "collect", "ar": "تحصيل من عميل", "en": "Collect from a customer", "primary": False, "module": "customers", "url_name": "sales:payment_create", "permission": "sales.receive_customer_payment"},
     {"key": "pay_supplier", "ar": "سداد لمورد", "en": "Pay a supplier", "primary": False, "module": "suppliers", "url_name": "purchases:payment_create", "permission": "purchases.pay_supplier"},
     {"key": "open_reports", "ar": "فتح التقارير", "en": "Open reports", "primary": False, "module": "reports", "url_name": "report_hub"},
-    {"key": "close_day", "ar": "إقفال الفترة", "en": "Close a period", "primary": True, "module": None, "url_name": "closing:list", "permission": "closing.run_closing"},
+    {"key": "close_day", "ar": "إقفال الشهر المحاسبي", "en": "Close the accounting month", "primary": True, "module": None, "url_name": "closing:list", "permission": "closing.run_closing"},
 )
+
+# DEMO-FEEDBACK: "close a period" did not say which period. It is the accounting
+# month (closing app): once closed, nothing dated in it can be posted or changed.
+CLOSE_HINT = {
+    "ar": "بيقفل الشهر بعد ما تراجعه، فمحدش يقدر يسجّل أو يعدّل حاجة بتاريخ جوّاه. إقفال اليوم للكاشير من «الورديات».",
+    "en": "Locks a month once you have reviewed it, so nothing dated in it can be recorded or changed. The cashier's end of day is under Shifts.",
+}
+
+
+def _alert_path(key):
+    """Where an alert leads, so the bell and the list are links, not dead text."""
+
+    if key in ("out_of_stock", "low_stock"):
+        return "/reports/inventory/"
+    if key.startswith("batches_"):
+        return "/batches/"
+    if key.startswith("customer_over_limit_"):
+        return f"/parties/customer/{key.rsplit('_', 1)[1]}/"
+    if key == "instalments_overdue":
+        return "/instalments/"
+    if key.startswith(("cashbox_negative_", "cashbox_low_")):
+        return f"/cashboxes/{key.rsplit('_', 1)[1]}/"
+    return ""
+
 
 ONBOARDING_STEPS = (
     {"ar": "أضف خزنة", "en": "Add a cashbox"},
@@ -116,6 +140,26 @@ STRINGS = {
         "severity_urgent": "عاجل",
         "severity_soon": "قريبًا",
         "severity_watch": "للمتابعة",
+        "language": "English",
+        "bell_empty": "مفيش تنبيهات دلوقتي.",
+        "bell_all": "كل التنبيهات",
+        "insights_title": "تحليلات",
+        "tab_sales": "المبيعات",
+        "tab_profit": "الربح",
+        "tab_weekdays": "أيام الأسبوع",
+        "tab_hours": "ساعات الذروة",
+        "profit_daily_title": "مجمل الربح يوم بيوم",
+        "weekdays_title": "متوسط البيع حسب يوم الأسبوع (آخر 4 أسابيع)",
+        "weekdays_best": "أقوى يوم",
+        "split_title": "اتدفع ولا آجل؟",
+        "split_paid": "اتدفع وقت البيع",
+        "split_credit": "آجل على العملاء",
+        "split_note": "من فواتير البيع المرحّلة في الفترة.",
+        "split_empty": "مفيش فواتير بيع في الفترة دي.",
+        "pause": "إيقاف التقليب",
+        "play": "تشغيل التقليب",
+        "prev_range": "من {start} لـ {end}",
+        "hero_headline": "صافي مبيعات {period}",
     },
     "en": {
         "page_title": "Dashboard - Hesba",
@@ -156,6 +200,26 @@ STRINGS = {
         "severity_urgent": "Urgent",
         "severity_soon": "Soon",
         "severity_watch": "Follow up",
+        "language": "العربية",
+        "bell_empty": "Nothing needs attention right now.",
+        "bell_all": "All alerts",
+        "insights_title": "Insights",
+        "tab_sales": "Sales",
+        "tab_profit": "Profit",
+        "tab_weekdays": "Weekdays",
+        "tab_hours": "Peak hours",
+        "profit_daily_title": "Gross profit by day",
+        "weekdays_title": "Average sales by weekday (last 4 weeks)",
+        "weekdays_best": "Strongest day",
+        "split_title": "Paid or on credit?",
+        "split_paid": "Paid at the till",
+        "split_credit": "On customer credit",
+        "split_note": "From posted sales invoices in the period.",
+        "split_empty": "No sales invoices in this period.",
+        "pause": "Pause rotation",
+        "play": "Resume rotation",
+        "prev_range": "{start} to {end}",
+        "hero_headline": "Net sales · {period}",
     },
 }
 
@@ -232,7 +296,8 @@ def _quick_actions(user, lang, modules):
         permission = action.get("permission")
         if permission and not user_has_permission(user, permission):
             continue
-        actions.append({"key": action["key"], "label": action[lang], "primary": action["primary"], "url_name": action["url_name"]})
+        actions.append({"key": action["key"], "label": action[lang], "primary": action["primary"], "url_name": action["url_name"],
+                        "hint": CLOSE_HINT[lang] if action["key"] == "close_day" else ""})
     return actions
 
 
@@ -245,6 +310,7 @@ def _alerts(lang, strings, held, today, shared):
             "title": alert[lang],
             "detail": alert["detail_en"] if lang == "en" else alert["detail_ar"],
             "amount": alert["amount"],
+            "path": _alert_path(alert["key"]),
         }
         for alert in build_alerts(held, today, shared)
     ]
@@ -286,6 +352,11 @@ def dashboard(request):
     period = request.GET.get("period", "month")
     analytics = build_analytics(permitted_codes(request.user, ANALYTICS_PERMISSIONS), period, today, lang)
     has_data = has_any_business_data()
+    period_label = PERIOD_LABELS[lang].get(analytics["period"], "")
+    previous_range = (analytics.get("daily") or {}).get("previous_range")
+    headline = None
+    if analytics.get("available") and analytics["metrics"]:
+        headline = analytics["metrics"][0]
 
     context = {
         "checkpoint_code": CHECKPOINT_CODE,
@@ -304,6 +375,9 @@ def dashboard(request):
         # DASH-002: explained analytics replace the old penalty-based score.
         "analytics": analytics,
         "periods": [(key, PERIOD_LABELS[lang][key]) for key in PERIODS],
+        "hero_headline_text": strings["hero_headline"].format(period=period_label),
+        "headline": headline,
+        "previous_range_text": strings["prev_range"].format(start=previous_range[0].strftime("%d/%m"), end=previous_range[1].strftime("%d/%m")) if previous_range else "",
         # The app shell draws the navigation from the same list; it stays in
         # the context so the section set can be asserted without parsing HTML.
         "nav_items": nav_items(request.user, lang, modules),

@@ -79,6 +79,8 @@
   /* DASH-002 chart colors. --hs-chart-1 passes the dataviz validator on white
      (lightness band, chroma, CVD, 3:1 contrast); heat steps are its tints, light->dark. */
   --hs-chart-1:#00929C; --hs-chart-muted:#98A2B3; --hs-chart-grid:#E3E8EE;
+  /* DEMO-FEEDBACK: second categorical slot (paid vs credit). Validated with --hs-chart-1: CVD ΔE 15.5, 3:1+ on white. */
+  --hs-chart-2:#B7791F;
   --hs-heat-0:#F2F4F7; --hs-heat-1:#D9EFF0; --hs-heat-2:#A6D5D8; --hs-heat-3:#66BEC4; --hs-heat-4:#1A9DA6;
   --hs-scrim:rgb(9 40 81 / 45%);
   --hs-shadow-md:0 8px 24px rgba(11,31,58,.08);

@@ -90,6 +90,52 @@ def daily_sales(start, end):
     return days
 
 
+def daily_profit(start, end):
+    """[(date, gross profit)] for every day, by the same formula as profit_totals.
+
+    Per day: line profit on posted invoices, less what posted returns took back
+    (refund net of its tax, minus the stock cost that came back).
+    """
+
+    by_day = defaultdict(Decimal)
+    lines = SalesLine.objects.filter(invoice__status=SalesInvoiceStatus.POSTED, invoice__invoice_date__gte=start, invoice__invoice_date__lte=end)
+    for row in lines.values("invoice__invoice_date").annotate(total=Sum("line_profit_amount")):
+        by_day[row["invoice__invoice_date"]] += row["total"] or ZERO
+    returns = SalesReturn.objects.filter(status=SalesReturnStatus.POSTED, return_date__gte=start, return_date__lte=end)
+    for row in returns.values("return_date").annotate(total=Sum("total_amount"), cost=Sum("cost_amount")):
+        by_day[row["return_date"]] -= (row["total"] or ZERO) - (row["cost"] or ZERO)
+    returned_tax = SalesReturnLineTax.objects.filter(
+        return_line__sales_return__status=SalesReturnStatus.POSTED,
+        return_line__sales_return__return_date__gte=start, return_line__sales_return__return_date__lte=end,
+    ).values("return_line__sales_return__return_date").annotate(total=Sum("tax_amount"))
+    for row in returned_tax:
+        by_day[row["return_line__sales_return__return_date"]] += row["total"] or ZERO
+    days, day = [], start
+    while day <= end:
+        days.append((day, money_round(by_day.get(day, ZERO))))
+        day += timedelta(days=1)
+    return days
+
+
+def payment_split(start, end):
+    """How posted sales in the window were settled at the till: paid now vs on account."""
+
+    totals = SalesInvoice.objects.filter(status=SalesInvoiceStatus.POSTED, invoice_date__gte=start, invoice_date__lte=end).aggregate(
+        paid=Sum("paid_now"), credit=Sum("remaining_due"))
+    return {"paid": money_round(totals["paid"] or ZERO), "credit": money_round(totals["credit"] or ZERO)}
+
+
+def weekday_pattern(today, weeks=4):
+    """Average net sales per weekday over the last ``weeks`` whole weeks, Saturday first."""
+
+    start = today - timedelta(days=7 * weeks - 1)
+    sums = defaultdict(Decimal)
+    for day, value in daily_sales(start, today):
+        sums[day.weekday()] += value
+    order = (5, 6, 0, 1, 2, 3, 4)  # Saturday .. Friday, the Egyptian working week
+    return [(weekday, money_round(sums[weekday] / weeks)) for weekday in order]
+
+
 def hourly_sales(start, end):
     """Invoice count per hour of day (local time) in the window."""
 
@@ -226,6 +272,16 @@ def build_analytics(held, period_key, today=None, lang="ar"):
     days = daily_sales(start, end) if period_key != "today" else daily_sales(today - timedelta(days=6), today)
     previous_days = daily_sales(prev_start, prev_end) if period_key != "today" else daily_sales(today - timedelta(days=13), today - timedelta(days=7))
     out["daily"] = _chart(days, previous_days)
+    out["daily"]["previous_range"] = (previous_days[0][0], previous_days[-1][0]) if previous_days else None
+    out["spark"] = {"net_sales": _spark([value for _, value in days])}
+    if can("reports.view_profit_report"):
+        profit_window = (start, end) if period_key != "today" else (today - timedelta(days=6), today)
+        profit_days = daily_profit(*profit_window)
+        out["profit_daily"] = _chart(profit_days, [])
+        out["spark"]["gross_profit"] = _spark([value for _, value in profit_days])
+    out["weekdays"] = _weekday_chart(weekday_pattern(today), lang)
+    split = payment_split(start, end)
+    out["split"] = _donut(split["paid"], split["credit"])
     out["hours"] = _hours(hourly_sales(today - timedelta(days=29), today))
     out["top"] = top_items(start, end, by="profit" if can("reports.view_profit_report") else "sales")
     out["top_by_profit"] = can("reports.view_profit_report")
@@ -264,14 +320,66 @@ def _chart(days, previous_days):
             "day": day, "value": value, "previous": previous[index] if index < len(previous) else None,
             "cx": _n(x + bar_w / 2),
         })
-    points = " ".join(
-        f"{round(left + slot * i + slot / 2, 1)},{round(8 + plot_h - float(v / ceiling) * plot_h, 1)}" for i, v in enumerate(previous)
-    )
+    prev_xy = [(left + slot * i + slot / 2, 8 + plot_h - float(v / ceiling) * plot_h) for i, v in enumerate(previous)]
+    points = " ".join(f"{round(x, 1)},{round(y, 1)}" for x, y in prev_xy)
+    # Dots only where the previous period actually sold, so the line reads as data, not decoration.
+    prev_dots = [{"x": _n(x), "y": _n(y)} for (x, y), v in zip(prev_xy, previous) if v > 0]
     grid = [{"y": _n(8 + plot_h - plot_h * i / 4), "label": step * i, "text": _short(step * i)} for i in range(5)]
     label_every = max(1, len(days) // 6)
     ticks = [{"x": bar["cx"], "label": bar["day"]} for i, bar in enumerate(bars) if i % label_every == 0]
     best = max(bars, key=lambda bar: bar["value"])
-    return {"bars": bars, "previous_points": points, "grid": grid, "ticks": ticks, "width": width, "height": height, "left": left, "label_x": left - 6, "tick_y": height - 6, "best": best, "empty": False}
+    return {"bars": bars, "previous_points": points, "prev_dots": prev_dots, "grid": grid, "ticks": ticks, "width": width, "height": height, "left": left, "label_x": left - 6, "tick_y": height - 6, "best": best, "empty": False}
+
+
+def _spark(values, width=120, height=32):
+    """A tiny trend line for a metric card: points only, no axis."""
+
+    if len(values) < 2 or not any(values):
+        return ""
+    low, high = min(values + [ZERO]), max(values)
+    span = float(high - low) or 1.0
+    step = width / (len(values) - 1)
+    return " ".join(f"{_n(step * i)},{_n(2 + (height - 4) * (1 - float(v - low) / span))}" for i, v in enumerate(values))
+
+
+WEEKDAY_WORDS = {
+    "ar": {5: "السبت", 6: "الأحد", 0: "الاتنين", 1: "التلات", 2: "الأربع", 3: "الخميس", 4: "الجمعة"},
+    "en": {5: "Sat", 6: "Sun", 0: "Mon", 1: "Tue", 2: "Wed", 3: "Thu", 4: "Fri"},
+}
+
+
+def _weekday_chart(rows, lang):
+    """Horizontal bars, one per weekday, widths relative to the best day."""
+
+    top = max((value for _, value in rows), default=ZERO)
+    if top <= 0:
+        return {"rows": [], "empty": True}
+    words = WEEKDAY_WORDS["en" if lang == "en" else "ar"]
+    best = max(rows, key=lambda row: row[1])[0]
+    return {"empty": False, "rows": [
+        {"weekday": weekday, "label": words[weekday], "value": value, "pct": _n(float(value / top) * 100), "best": weekday == best}
+        for weekday, value in rows
+    ]}
+
+
+def _donut(paid, credit, radius=52):
+    """Two arcs on one ring (stroke-dasharray), with a 2px gap between them."""
+
+    total = paid + credit
+    if total <= 0:
+        return {"empty": True}
+    circumference = 2 * 3.141592653589793 * radius
+    paid_len = float(paid / total) * circumference
+    credit_len = circumference - paid_len
+    gap = 2 if paid and credit else 0
+    return {
+        "empty": False, "paid": paid, "credit": credit, "total": money_round(total),
+        "paid_pct": round(float(paid / total) * 100), "credit_pct": 100 - round(float(paid / total) * 100),
+        "r": radius, "c": _n(circumference),
+        "paid_dash": f"{_n(max(paid_len - gap, 0))} {_n(circumference)}",
+        "credit_dash": f"{_n(max(credit_len - gap, 0))} {_n(circumference)}",
+        "credit_offset": _n(-paid_len),
+    }
 
 
 def _n(value):
