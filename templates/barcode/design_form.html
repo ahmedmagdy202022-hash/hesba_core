@@ -1,0 +1,59 @@
+{% extends "operations/base.html" %}
+{% load static l10n %}
+{% block operation_content %}
+<link rel="stylesheet" href="{% static 'hesba/css/label_designer.css' %}?v=label-003">
+<section class="op-title-row"><div><a class="op-back" href="{% url 'barcode:designs' %}?lang={{ lang }}">← {{ words.designs }}</a><h1>{% if editing %}{{ design.name }}{% else %}{{ words.new_design }}{% endif %}</h1></div></section>
+{% if errors %}<div class="op-message op-message-error" role="alert" data-design-errors>{% for e in errors %}<p>{{ e }}</p>{% endfor %}</div>{% endif %}
+{% localize off %}
+<div class="ld-layout">
+<form class="op-form ld-form" method="post" data-designer>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+  <div class="op-field"><label for="ld-name">{{ words.design_name }}</label><input id="ld-name" name="name" value="{{ design.name }}" maxlength="60" required></div>
+  <fieldset class="ld-group"><legend>{{ words.kind }}</legend>
+    <label class="op-check"><input type="radio" name="kind" value="roll"{% if design.kind != 'a4' %} checked{% endif %}> {{ words.kind_roll }}</label>
+    <label class="op-check"><input type="radio" name="kind" value="a4"{% if design.kind == 'a4' %} checked{% endif %}> {{ words.kind_a4 }}</label>
+  </fieldset>
+  <fieldset class="ld-group"><legend>{{ words.size }}</legend><div class="ld-row">
+    <div class="op-field"><label for="ld-width">{{ words.width }}</label><input id="ld-width" name="width" type="number" step="0.5" min="15" max="200" value="{{ design.width }}" inputmode="decimal"></div>
+    <div class="op-field"><label for="ld-height">{{ words.height }}</label><input id="ld-height" name="height" type="number" step="0.5" min="10" max="150" value="{{ design.height }}" inputmode="decimal"></div>
+  </div></fieldset>
+  <fieldset class="ld-group" data-a4-only><legend>{{ words.sheet }}</legend><div class="ld-row ld-row--3">
+    <div class="op-field"><label for="ld-columns">{{ words.columns }}</label><input id="ld-columns" name="columns" type="number" min="1" max="8" value="{{ design.columns }}" inputmode="numeric"></div>
+    <div class="op-field"><label for="ld-rows">{{ words.rows }}</label><input id="ld-rows" name="rows" type="number" min="1" max="30" value="{{ design.rows }}" inputmode="numeric"></div>
+    <div class="op-field"><label for="ld-top">{{ words.top }}</label><input id="ld-top" name="top" type="number" step="0.5" min="0" max="40" value="{{ design.top }}" inputmode="decimal"></div>
+    <div class="op-field"><label for="ld-side">{{ words.side }}</label><input id="ld-side" name="side" type="number" step="0.5" min="0" max="40" value="{{ design.side }}" inputmode="decimal"></div>
+    <div class="op-field"><label for="ld-gap_x">{{ words.gap_x }}</label><input id="ld-gap_x" name="gap_x" type="number" step="0.5" min="0" max="15" value="{{ design.gap_x }}" inputmode="decimal"></div>
+    <div class="op-field"><label for="ld-gap_y">{{ words.gap_y }}</label><input id="ld-gap_y" name="gap_y" type="number" step="0.5" min="0" max="15" value="{{ design.gap_y }}" inputmode="decimal"></div>
+  </div><p class="ld-fit" data-fit data-template-fit="{{ words.sheet_fit }}" data-template-count="{{ words.per_sheet }}"></p></fieldset>
+  <fieldset class="ld-group"><legend>{{ words.text }}</legend><div class="ld-row ld-row--3">
+    <div class="op-field"><label for="ld-name_pt">{{ words.name_pt }}</label><input id="ld-name_pt" name="name_pt" type="number" step="0.5" min="5" max="20" value="{{ design.name_pt }}" inputmode="decimal"></div>
+    <div class="op-field"><label for="ld-price_pt">{{ words.price_pt }}</label><input id="ld-price_pt" name="price_pt" type="number" step="0.5" min="5" max="28" value="{{ design.price_pt }}" inputmode="decimal"></div>
+    <div class="op-field"><label for="ld-small_pt">{{ words.small_pt }}</label><input id="ld-small_pt" name="small_pt" type="number" step="0.5" min="4" max="12" value="{{ design.small_pt }}" inputmode="decimal"></div>
+    <div class="op-field"><label for="ld-barcode_pct">{{ words.barcode_pct }}</label><input id="ld-barcode_pct" name="barcode_pct" type="number" min="25" max="80" value="{{ design.barcode_pct }}" inputmode="numeric"></div>
+  </div></fieldset>
+  <fieldset class="ld-group"><legend>{{ words.defaults }}</legend>
+    <label class="op-check"><input type="checkbox" name="show_shop" value="1"{% if design.show_shop %} checked{% endif %}> {{ words.show_shop }}</label>
+    <label class="op-check"><input type="checkbox" name="show_name" value="1"{% if design.show_name %} checked{% endif %}> {{ words.show_name }}</label>
+    <label class="op-check"><input type="checkbox" name="show_price" value="1"{% if design.show_price %} checked{% endif %}> {{ words.show_price }}</label>
+    <label class="op-check"><input type="checkbox" name="show_code" value="1"{% if design.show_code %} checked{% endif %}> {{ words.show_code }}</label>
+    <label class="op-check"><input type="checkbox" name="barcode_text" value="1"{% if design.barcode_text %} checked{% endif %}> {{ words.barcode_text }}</label>
+  </fieldset>
+  <div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button><a class="op-secondary" href="{% url 'barcode:designs' %}?lang={{ lang }}">{{ words.cancel }}</a></div>
+</form>
+<aside class="ld-preview" aria-label="{{ words.preview }}">
+  <h2>{{ words.preview }}</h2>
+  <div class="ld-stage" data-stage>
+    <div class="ld-sheet" data-sheet hidden></div>
+    <div class="ld-label" data-label-preview>
+      <p class="ld-shop" data-p="show_shop">{{ shop_name }}</p>
+      <p class="ld-name" data-p="show_name">{{ words.sample_name }}</p>
+      <p class="ld-price" data-p="show_price" dir="ltr">249.00 <small>EGP</small></p>
+      <div class="ld-bars" data-bars><span class="ld-bars__lines"></span><span class="ld-bars__digits" data-p="barcode_text">2000000000015</span></div>
+      <p class="ld-code" data-p="show_code">SHIRT-L</p>
+    </div>
+  </div>
+  <p class="op-muted ld-scale" data-scale dir="ltr"></p>
+</aside>
+</div>
+{% endlocalize %}
+<script src="{% static 'hesba/js/label_designer.js' %}?v=label-003" defer></script>
+{% endblock %}

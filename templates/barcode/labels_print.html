@@ -9,13 +9,19 @@
 <link rel="stylesheet" href="{% static 'hesba/css/labels.css' %}?v=label-002">
 <style>
 /* LABEL-002: the chosen label size, set per print. */
-{% localize off %}:root{--lb-w:{{ template.width }}mm;--lb-h:{{ template.height }}mm;--lb-cols:{{ template.columns }};--lb-top:{{ template.top }}mm;--lb-code-w:{{ template.barcode_width }}mm;--lb-dx:{{ offset_x }}mm;--lb-dy:{{ offset_y }}mm}
-@page roll{size:{{ template.width }}mm {{ template.height }}mm;margin:0}{% endlocalize %}
+{% localize off %}:root{--lb-w:{{ template.width }}mm;--lb-h:{{ template.height }}mm;--lb-cols:{{ template.columns }};--lb-top:{{ template.top }}mm;--lb-code-w:{{ template.barcode_width }}mm;--lb-dx:{{ offset_x }}mm;--lb-dy:{{ offset_y }}mm;--lb-gap-x:{{ template.gap_x }}mm;--lb-gap-y:{{ template.gap_y }}mm}
+@page roll{size:{{ template.width }}mm {{ template.height }}mm;margin:0}
+{% if template.custom %}/* LABEL-003: a shop-made design sets its own text sizes and sheet margins. */
+.lb-label .lb-name{font-size:{{ template.name_pt }}pt}.lb-label .lb-price{font-size:{{ template.price_pt }}pt;margin:.5mm 0}.lb-label .lb-shop,.lb-label .lb-itemcode{font-size:{{ template.small_pt }}pt}
+.lb-label .lb-code{flex:0 0 {{ template.barcode_pct }}%}
+{% if template.kind == 'a4' %}.lb-a4 .lb-sheet{justify-content:start;padding:{{ template.top }}mm {{ template.side }}mm 0}{% endif %}{% endif %}{% endlocalize %}
 </style>
 </head>
 <body class="lb-body lb-{{ layout }}" data-label-template="{{ template.key }}"{% if template.small %} data-label-small{% endif %}>
-<nav class="lb-toolbar"><a class="lb-button" href="{{ back_url }}">← {{ words.back }}</a><button class="lb-button lb-button--primary" type="button" data-print>{{ words.print }}</button><p>{{ words.pdf_hint }}</p></nav>
-<main class="lb-sheet">{% for label in labels %}<div class="lb-label">{% if shown.shop %}<p class="lb-shop" data-label-shop>{{ shop_name }}</p>{% endif %}{% if shown.name %}<p class="lb-name">{{ label.item.item_name }}{% if label.item.size %} · {{ label.item.size }}{% endif %}{% if label.item.color %} · {{ label.item.color }}{% endif %}</p>{% endif %}{% if shown.price %}<p class="lb-price">{{ label.item.default_sale_price|money }} <small>{{ currency }}</small></p>{% endif %}<div class="lb-code">{{ label.svg }}</div>{% if shown.code %}<p class="lb-itemcode" data-label-code><bdi>{{ label.item.item_code }}</bdi></p>{% endif %}</div>{% endfor %}</main>
+<nav class="lb-toolbar"><a class="lb-button" href="{{ back_url }}">← {{ words.back }}</a><button class="lb-button" type="button" data-label-pdf data-label-working="{{ words.pdf_working }}" data-label-failed="{{ words.pdf_failed }}">{{ words.pdf }}</button><button class="lb-button lb-button--primary" type="button" data-print>{{ words.print }}</button><p data-pdf-status>{{ words.pdf_hint }}</p></nav>
+<main class="lb-sheet">{% for label in labels %}<div class="lb-label">{% if shown.shop %}<p class="lb-shop" data-label-shop>{{ shop_name }}</p>{% endif %}{% if shown.name %}<p class="lb-name">{{ label.item.item_name }}{% if label.item.size %} · {{ label.item.size }}{% endif %}{% if label.item.color %} · {{ label.item.color }}{% endif %}</p>{% endif %}{% if shown.price %}<p class="lb-price" dir="ltr">{{ label.item.default_sale_price|money }} <small>{{ currency }}</small></p>{% endif %}<div class="lb-code">{{ label.svg }}</div>{% if shown.code %}<p class="lb-itemcode" data-label-code><bdi>{{ label.item.item_code }}</bdi></p>{% endif %}</div>{% endfor %}</main>
+{{ pdf_data|json_script:"label-pdf-data" }}
 <script>document.querySelector('[data-print]').addEventListener('click', function(){ window.print(); });</script>
+<script src="{% static 'hesba/js/label_pdf.js' %}?v=label-003" defer></script>
 </body>
 </html>
