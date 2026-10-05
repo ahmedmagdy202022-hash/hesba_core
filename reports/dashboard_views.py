@@ -36,6 +36,7 @@ from .dashboard_kpis import (
     SCOPE_OWN,
     visible_kpis,
 )
+from .activity_panel import build_activity_panel
 from .navigation import display_name, nav_items
 
 
@@ -317,14 +318,27 @@ def _build_cards(user, lang, held, figures):
     return cards
 
 
+# ACT-PROFILE-002: the action an activity does all day leads its quick actions.
+ACTIVITY_ACTIONS = {
+    "restaurants": {"key": "open_tables", "section": "restaurant", "url_name": "restaurant:board", "ar": "الطاولات والطلبات", "en": "Tables & orders"},
+    "medical": {"key": "bookings", "section": "appointments", "url_name": "appointments:agenda", "ar": "الحجوزات وكشوفات النهارده", "en": "Today's bookings"},
+    "education": {"key": "bookings", "section": "appointments", "url_name": "appointments:agenda", "ar": "حصص ومواعيد النهارده", "en": "Today's classes"},
+    "services": {"key": "bookings", "section": "appointments", "url_name": "appointments:agenda", "ar": "مواعيد النهارده", "en": "Today's appointments"},
+    "manufacturing": {"key": "produce", "section": "manufacturing", "url_name": "manufacturing:home", "ar": "تشغيلة إنتاج", "en": "Production run"},
+    "contracting": {"key": "projects", "section": "projects", "url_name": "projects:list", "ar": "المشاريع", "en": "Projects"},
+}
+
 QUICK_ACTION_TERMS = {"record_sale": "record_sale", "new_customer": "new_customer", "new_supplier": "new_supplier", "new_item": "new_item", "collect": "collect"}
 
 
-def _quick_actions(user, lang, modules):
+def _quick_actions(user, lang, modules, activity="", sections=frozenset()):
     from settings_core.vocabulary import active_vocabulary, term
 
     words = active_vocabulary()
     actions = []
+    lead = ACTIVITY_ACTIONS.get(activity)
+    if lead and lead["section"] in sections:
+        actions.append({"key": lead["key"], "label": lead[lang], "primary": True, "url_name": lead["url_name"], "hint": ""})
     for action in QUICK_ACTIONS:
         if action["module"] is not None and action["module"] not in modules:
             continue
@@ -332,7 +346,7 @@ def _quick_actions(user, lang, modules):
         if permission and not user_has_permission(user, permission):
             continue
         label = term(QUICK_ACTION_TERMS[action["key"]], lang, words) if action["key"] in QUICK_ACTION_TERMS else action[lang]
-        actions.append({"key": action["key"], "label": label, "primary": action["primary"], "url_name": action["url_name"],
+        actions.append({"key": action["key"], "label": label, "primary": action["primary"] and not actions, "url_name": action["url_name"],
                         "hint": CLOSE_HINT[lang] if action["key"] == "close_day" else ""})
     return actions
 
@@ -362,6 +376,18 @@ def _onboarding(lang):
     ]
 
 
+def _demo_activities(user, lang, profile):
+    from django.conf import settings
+
+    if not getattr(settings, "DEMO_MODE", False) or not user_has_permission(user, "settings.view_settings"):
+        return None
+    from config.demo import demo_activity_choices
+
+    current = f"{profile.activity_slug}:{profile.sub_activity_slug}" if profile else ""
+    return {"choices": demo_activity_choices(lang), "current": current,
+            "label": "Try another activity" if lang == "en" else "جرّب نشاط تاني"}
+
+
 def dashboard(request):
     """Render whatever this viewer is allowed to see, which may be nothing.
 
@@ -385,6 +411,8 @@ def dashboard(request):
     figures = DashboardFigures(request.user, today, shared)
     cards = _build_cards(request.user, lang, held, figures)
 
+    activity = profile.activity_slug if profile is not None else ""
+    sections = {item["key"] for item in nav_items(request.user, lang, modules)}
     period = request.GET.get("period", "month")
     analytics = build_analytics(permitted_codes(request.user, ANALYTICS_PERMISSIONS), period, today, lang)
     has_data = has_any_business_data()
@@ -422,7 +450,9 @@ def dashboard(request):
         "nav_items": nav_items(request.user, lang, modules),
         "cards": cards,
         "alerts": _alerts(lang, strings, held, today, shared),
-        "quick_actions": _quick_actions(request.user, lang, modules),
+        "quick_actions": _quick_actions(request.user, lang, modules, activity, sections),
+        "activity_panel": build_activity_panel(activity, sections, lang, today),
+        "demo_activities": _demo_activities(request.user, lang, profile),
         "onboarding_steps": _onboarding(lang),
         # Guide someone whose installation has seen no trade yet, and anyone who
         # can see nothing at all. A working business does not need the steps.

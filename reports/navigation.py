@@ -14,7 +14,31 @@ from settings_core.vocabulary import active_vocabulary, term
 
 # ACT-PROFILE-001: sections whose name follows the activity's own words.
 NAV_TERMS = {"operations": "operations", "customers": "customers", "suppliers": "suppliers", "items": "items", "staff": "staff", "appointments": "appointments"}
-TAB_TERMS = {"operations": "operations_short", "customers": "customers", "items": "items_short"}
+TAB_TERMS = {"operations": "operations_short", "customers": "customers", "items": "items_short", "appointments": "appointments"}
+
+# ACT-PROFILE-002: the section an activity works from comes right after the
+# dashboard, in the sidebar and on the phone tab bar.
+ACTIVITY_LEAD = {
+    "restaurants": ("restaurant", "pos"),
+    "medical": ("appointments",),
+    "education": ("appointments",),
+    "services": ("appointments",),
+    "manufacturing": ("manufacturing",),
+    "contracting": ("projects",),
+}
+
+
+def _activity():
+    from settings_core.models import ClientProfile
+
+    profile = ClientProfile.get_active()
+    return (profile.activity_slug or "") if profile is not None else ""
+
+
+def _lead_first(keys, activity):
+    lead = [key for key in ACTIVITY_LEAD.get(activity, ()) if key in keys]
+    head = [key for key in keys if key == "dashboard"]
+    return head + lead + [key for key in keys if key not in lead and key != "dashboard"]
 
 
 NAV_ITEMS = (
@@ -56,6 +80,9 @@ TAB_LABELS = {
     "cashboxes": {"ar": "الخزائن", "en": "Cash"},
     "expenses": {"ar": "المصروفات", "en": "Expenses"},
     "reports": {"ar": "التقارير", "en": "Reports"},
+    "restaurant": {"ar": "الطاولات", "en": "Tables"},
+    "manufacturing": {"ar": "التصنيع", "en": "Production"},
+    "projects": {"ar": "المشاريع", "en": "Projects"},
 }
 
 SHELL_WORDS = {
@@ -105,7 +132,9 @@ def nav_items(user, lang, modules):
             continue
         label = term(NAV_TERMS[item["key"]], lang, words) if item["key"] in NAV_TERMS else item[lang]
         items.append({"key": item["key"], "label": label, "url_name": item["url_name"]})
-    return items
+    order = _lead_first([item["key"] for item in items], _activity())
+    position = {key: index for index, key in enumerate(order)}
+    return sorted(items, key=lambda item: position[item["key"]])
 
 
 def current_key(items, path):
@@ -138,8 +167,10 @@ def app_shell(user, lang, modules, path):
 
     by_key = {item["key"]: item for item in items}
     words = active_vocabulary()
+    lead = [key for key in ACTIVITY_LEAD.get(_activity(), ()) if key in by_key][:1]
+    priority = ["dashboard"] + lead + [key for key in TAB_PRIORITY if key not in lead and key != "dashboard"]
     tabs = [dict(by_key[key], label=term(TAB_TERMS[key], lang, words) if key in TAB_TERMS else TAB_LABELS[key][lang])
-            for key in TAB_PRIORITY if key in by_key][:TAB_COUNT]
+            for key in priority if key in by_key][:TAB_COUNT]
     tab_keys = {tab["key"] for tab in tabs}
     return {
         "items": items,

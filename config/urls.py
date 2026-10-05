@@ -3,6 +3,8 @@ from django.contrib import admin as django_admin
 from django.contrib.auth.decorators import login_not_required
 from django.contrib.auth.views import LogoutView
 from django.urls import include, path
+
+from config import demo as demo_views
 from django.views.generic import TemplateView
 
 from config.health import healthz
@@ -50,6 +52,7 @@ urlpatterns = [
     path("setup/complete/", setup_complete, name="setup_complete"),
     path("home/", home, name="home"),
     path("dashboard/", dashboard, name="dashboard_snapshot"),
+    path("demo/activity/", demo_views.switch_activity, name="demo_activity"),
     path("master-data/", include("master_data.urls")),
     path("purchases/", include("purchases.urls")),
     path("inventory/", include("inventory.urls")),

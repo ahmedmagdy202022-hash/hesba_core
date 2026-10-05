@@ -446,3 +446,18 @@ a.dash-alert__title:hover{color:var(--teal-deep);text-decoration:underline}
   .dash-tab{flex:1}
   .dash-hbars li{grid-template-columns:52px minmax(0,1fr) auto;gap:8px}
 }
+
+/* ---------- ACT-PROFILE-002: the activity's own panel ---------- */
+.dash-activity__open{font-size:13px;font-weight:700;color:var(--teal-deep)}
+.dash-activity__tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.dash-atile{container-type:inline-size;display:flex;flex-direction:column;gap:4px;min-width:0;padding:14px 16px;border:1px solid var(--border);border-radius:var(--hs-radius-lg);background:var(--surface-soft);border-inline-start:4px solid var(--border-strong)}
+.dash-atile.is-lead{background:var(--teal-wash);border-inline-start-color:var(--hs-teal)}
+.dash-atile.is-good{border-inline-start-color:var(--hs-success)}
+.dash-atile.is-bad{border-inline-start-color:var(--risk);background:var(--hs-danger-wash)}
+.dash-atile__label{font-size:12.5px;color:var(--muted)}
+.dash-atile__value{font-family:var(--hs-font-head);font-size:clamp(16px,12cqi,24px);font-weight:700;color:var(--navy);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.dash-atile__value small{margin-inline-start:4px;font-family:var(--hs-font-body);font-size:11px;font-weight:400;color:var(--muted)}
+.dash-atile__sub{font-size:12px;color:var(--navy-soft);line-height:1.5}
+.dash-demo{display:flex;align-items:center;gap:6px;padding:4px 6px 4px 10px;border:1px dashed var(--hs-gold);border-radius:12px;background:var(--hs-gold-wash)}
+.dash-demo__label{font-size:12px;font-weight:700;color:var(--hs-gold)}
+.dash-demo select{min-height:32px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--navy);font:inherit;font-size:12.5px}
