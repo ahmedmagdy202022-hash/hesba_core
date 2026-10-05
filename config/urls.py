@@ -53,6 +53,8 @@ urlpatterns = [
     path("home/", home, name="home"),
     path("dashboard/", dashboard, name="dashboard_snapshot"),
     path("demo/activity/", demo_views.switch_activity, name="demo_activity"),
+    path("demo/sample/", demo_views.sample, name="demo_sample"),
+    path("demo/restart/", login_not_required(demo_views.restart), name="demo_restart"),
     path("master-data/", include("master_data.urls")),
     path("purchases/", include("purchases.urls")),
     path("inventory/", include("inventory.urls")),
