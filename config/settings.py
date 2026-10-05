@@ -246,7 +246,7 @@ CSRF_FAILURE_VIEW = "accounts.views.csrf_failure"
 
 CSRF_TRUSTED_ORIGINS = config(
     "CSRF_TRUSTED_ORIGINS",
-    default="https://*.app.github.dev,https://localhost:8010,http://localhost:8010",
+    default="https://*.app.github.dev,https://localhost:8000,http://localhost:8000,https://localhost:8010,http://localhost:8010",
     cast=Csv(),
 )
 if RENDER_EXTERNAL_HOSTNAME and f"https://{RENDER_EXTERNAL_HOSTNAME}" not in CSRF_TRUSTED_ORIGINS:
