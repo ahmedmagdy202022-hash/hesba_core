@@ -292,12 +292,15 @@ def _format_value(kpi, raw, lang):
 def _build_cards(user, lang, held, figures):
     cards = []
 
+    from settings_core.vocabulary import term
+
     for kpi, scope in visible_kpis(held):
         raw = figures.value_for(kpi.key, scope)
         cards.append(
             {
                 "key": kpi.key,
-                "label": kpi.label(lang, scope),
+                # ACT-PROFILE-001: a clinic owes nothing to "customers"; its patients do.
+                "label": term("customer_dues", lang) if kpi.key == "customer_dues" else kpi.label(lang, scope),
                 "value": _format_value(kpi, raw, lang),
                 "raw": raw,
                 "unit": kpi.unit,
@@ -314,7 +317,13 @@ def _build_cards(user, lang, held, figures):
     return cards
 
 
+QUICK_ACTION_TERMS = {"record_sale": "record_sale", "new_customer": "new_customer", "new_supplier": "new_supplier", "new_item": "new_item", "collect": "collect"}
+
+
 def _quick_actions(user, lang, modules):
+    from settings_core.vocabulary import active_vocabulary, term
+
+    words = active_vocabulary()
     actions = []
     for action in QUICK_ACTIONS:
         if action["module"] is not None and action["module"] not in modules:
@@ -322,7 +331,8 @@ def _quick_actions(user, lang, modules):
         permission = action.get("permission")
         if permission and not user_has_permission(user, permission):
             continue
-        actions.append({"key": action["key"], "label": action[lang], "primary": action["primary"], "url_name": action["url_name"],
+        label = term(QUICK_ACTION_TERMS[action["key"]], lang, words) if action["key"] in QUICK_ACTION_TERMS else action[lang]
+        actions.append({"key": action["key"], "label": label, "primary": action["primary"], "url_name": action["url_name"],
                         "hint": CLOSE_HINT[lang] if action["key"] == "close_day" else ""})
     return actions
 

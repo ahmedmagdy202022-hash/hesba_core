@@ -157,9 +157,24 @@ def _require(user, permission_code):
         raise PermissionDenied(f"This screen needs {permission_code}.")
 
 
+ENTITY_TERMS = {"customers": ("customers", "customer"), "suppliers": ("suppliers", "supplier"), "items": ("items", "item")}
+
+
+def _titled(entity, config):
+    """ACT-PROFILE-001: a clinic's customers list is called «المرضى»."""
+
+    if entity not in ENTITY_TERMS:
+        return config
+    from settings_core.vocabulary import active_vocabulary
+
+    words = active_vocabulary()
+    plural, singular = ENTITY_TERMS[entity]
+    return dict(config, title=words[plural], singular=words[singular])
+
+
 def _config(entity):
     try:
-        return ENTITY_CONFIG[entity]
+        return _titled(entity, ENTITY_CONFIG[entity])
     except KeyError as exc:
         raise Http404("Unknown master-data area.") from exc
 
@@ -292,7 +307,8 @@ def master_data_hub(request):
     lang = _lang(request)
     words = STRINGS[lang]
     visible = []
-    for key, config in ENTITY_CONFIG.items():
+    for key in ENTITY_CONFIG:
+        config = _config(key)
         if not user_has_permission(request.user, config["view_permission"]):
             continue
         visible.append(
