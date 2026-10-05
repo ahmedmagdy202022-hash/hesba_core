@@ -34,6 +34,7 @@
         <span class="dash-clock__date">{{ now_parts.date }}</span>
         <span class="dash-clock__time">{{ now_parts.time }}</span>
       </time>
+      {% if demo_activities %}<form class="dash-demo" method="post" action="{% url 'demo_activity' %}" data-demo-activity>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><label class="dash-demo__label" for="demo-activity">{{ demo_activities.label }}</label><select id="demo-activity" name="activity" onchange="this.form.submit()">{% for value, label in demo_activities.choices %}<option value="{{ value }}"{% if value == demo_activities.current %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></form>{% endif %}
       <button class="dash-lang" type="button" data-lang-toggle data-dash-lang>{{ language }}</button>
       <div class="dash-bell-wrap" data-bell>
         <button class="dash-icon-button" type="button" aria-label="{{ notifications }}{% if alerts %} ({{ alerts|length }}){% endif %}" aria-expanded="false" aria-controls="dash-bell-panel" data-bell-toggle>
@@ -103,6 +104,21 @@
           {% endif %}
         </div>
       </section>
+
+      {% if activity_panel %}
+      <section class="dash-section dash-activity dash-activity--{{ activity_panel.kind }}" aria-label="{{ activity_panel.title }}" data-activity-panel="{{ activity_panel.kind }}">
+        <div class="dash-section__head"><h2 class="dash-section__title">{{ activity_panel.title }}</h2><a class="dash-activity__open" href="{{ activity_panel.link }}?lang={{ lang }}">{{ activity_panel.open }} ←</a></div>
+        <div class="dash-activity__tiles">
+          {% for t in activity_panel.tiles %}
+          <article class="dash-atile{% if t.tone %} is-{{ t.tone }}{% endif %}" data-tile="{{ t.key }}">
+            <span class="dash-atile__label">{{ t.label }}</span>
+            <span class="dash-atile__value">{% if t.kind == 'money' %}{{ t.value|money }}{% if currency %}<small>{{ currency }}</small>{% endif %}{% else %}{{ t.value }}{% endif %}</span>
+            {% if t.sub %}<span class="dash-atile__sub">{{ t.sub }}</span>{% endif %}
+          </article>
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
 
       {% if analytics.available %}
       <section class="dash-section dash-analytics" aria-label="{{ analytics_title }}" data-period="{{ analytics.period }}">
