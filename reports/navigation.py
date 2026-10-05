@@ -10,6 +10,11 @@ from django.urls import reverse
 
 from permissions.services import user_has_permission
 from settings_core.capabilities import capability_enabled
+from settings_core.vocabulary import active_vocabulary, term
+
+# ACT-PROFILE-001: sections whose name follows the activity's own words.
+NAV_TERMS = {"operations": "operations", "customers": "customers", "suppliers": "suppliers", "items": "items", "staff": "staff", "appointments": "appointments"}
+TAB_TERMS = {"operations": "operations_short", "customers": "customers", "items": "items_short"}
 
 
 NAV_ITEMS = (
@@ -87,6 +92,7 @@ SHELL_WORDS = {
 
 
 def nav_items(user, lang, modules):
+    words = active_vocabulary()
     items = []
     for item in NAV_ITEMS:
         if item["module"] is not None and item["module"] not in modules:
@@ -96,7 +102,8 @@ def nav_items(user, lang, modules):
         permission = item.get("permission")
         if permission and not user_has_permission(user, permission):
             continue
-        items.append({"key": item["key"], "label": item[lang], "url_name": item["url_name"]})
+        label = term(NAV_TERMS[item["key"]], lang, words) if item["key"] in NAV_TERMS else item[lang]
+        items.append({"key": item["key"], "label": label, "url_name": item["url_name"]})
     return items
 
 
@@ -129,7 +136,9 @@ def app_shell(user, lang, modules, path):
         item["current"] = item["key"] == current
 
     by_key = {item["key"]: item for item in items}
-    tabs = [dict(by_key[key], label=TAB_LABELS[key][lang]) for key in TAB_PRIORITY if key in by_key][:TAB_COUNT]
+    words = active_vocabulary()
+    tabs = [dict(by_key[key], label=term(TAB_TERMS[key], lang, words) if key in TAB_TERMS else TAB_LABELS[key][lang])
+            for key in TAB_PRIORITY if key in by_key][:TAB_COUNT]
     tab_keys = {tab["key"] for tab in tabs}
     return {
         "items": items,
