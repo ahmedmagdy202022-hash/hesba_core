@@ -505,6 +505,39 @@ Status: OPEN (a proposal only; nothing is blocked)
 - **Question for Main Control:** as in HG-029, inventory reports show these rows as adjustments. Two dedicated movement types, `PRODUCTION_OUT` and `PRODUCTION_IN`, would tell production apart from shrinkage. That change is protected (movement types, report sums, closing) and needs approval plus quantity/value/average-cost regression tests.
 - **Deferred:** labour and overhead absorbed into product cost; scrap and yield loss; multi-level recipes (a sub-assembly is simply produced first).
 
+## HG-031 — Entities: locations, cashboxes, users and documents get an entity (ENT-001)
+
+Status: APPROVED IN PRINCIPLE by Ahmed (2026-10-05). Implemented as its own PR; see `docs/ERP_FOUNDATION_DESIGN.md` §1.
+
+- **Change:** new `Entity` model. `Location` and `Cashbox` get a required FK, set by a data migration to a seeded "main entity". Documents read their entity from their location or cashbox (no new column on posted documents in this step). Users get allowed entities plus a default.
+- **Protected surface:** models, schema and migrations.
+- **Risk:** low. A single-entity install behaves exactly as today.
+- **Tests:** the full existing suite must stay green without edits. Migration test on a populated database. Group-stock visibility checked against permissions (quantities shown; cost only with `inventory.view_cost`).
+
+## HG-032 — General ledger projected from posted documents (GL-002)
+
+Status: APPROVED IN PRINCIPLE (2026-10-05). Design: `docs/ERP_FOUNDATION_DESIGN.md` §2.
+
+- **Change:** journal entries are generated from posted documents by a read-only projector, keyed by (source type, source id). They are rebuildable, and a cancelled document produces a reversing entry. Posting services are **not** modified; the projector runs after commit and nightly.
+- **Protected surface:** reads sales and purchase posting, inventory movement cost, cashbox and party ledgers. Writes none of them.
+- **Gate before the ledger becomes authoritative:** reconciliation tests to the piastre. AR = customer report, AP = supplier report, each cash account = cashbox report, inventory = stock valuation, revenue and COGS = profit report. Every entry balances.
+
+## HG-033 — Average cost per entity (ENT-003)
+
+Status: APPROVED IN PRINCIPLE (2026-10-05). Scheduled after ENT-001 and GL-002 are stable.
+
+- **Change:** the authoritative average cost (HG-003) is computed per item within an entity's locations instead of per item overall. Transfers between entities move stock at the sender's cost (same legal person), or through paired internal invoices at a transfer price (separate legal persons).
+- **Protected surface:** inventory movement cost and average-cost logic, sales COGS.
+- **Tests:** for a single-entity install, quantity, value and average cost are identical before and after on the month-acceptance fixture. Multi-entity fixtures pin cost per entity, transfer at cost, and the consolidated elimination.
+
+## HG-034 — Entity-scoped permissions (ENT-002)
+
+Status: APPROVED IN PRINCIPLE (2026-10-05).
+
+- **Change:** a user acts only within their allowed entities. Lists, reports and posting refuse other entities. Owner and group manager see "whole group".
+- **Protected surface:** the permission core.
+- **Tests:** per-role × per-entity matrix covering read, create and post, and a cross-entity URL tampering test for every document type.
+
 ## Final gate verification
 
 - Full Django suite: 794 tests passed in 576.477 seconds.
