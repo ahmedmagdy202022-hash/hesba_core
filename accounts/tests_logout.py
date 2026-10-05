@@ -135,3 +135,17 @@ class LogoutCsrfTests(TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertNotContains(response, "evil.example", status_code=403)
         self.assertContains(response, f'href="{reverse("setup_complete")}"', status_code=403)
+
+
+class CodespacesOriginTests(TestCase):
+    """GitHub Codespaces forwards a sign-in POST with Origin https://localhost:<port>;
+    the default dev port 8000 must be trusted or the login form is refused."""
+
+    def test_login_from_a_codespaces_forwarded_port_8000(self):
+        make_user_profile(user=make_user(username="cs_owner"), role=make_seeded_role(RoleCode.OWNER))
+        client = Client(enforce_csrf_checks=True)
+        page = client.get(reverse("login"), HTTP_HOST="demo-8000.app.github.dev")
+        token = re.search(r'name="csrfmiddlewaretoken" value="([^"]+)"', page.content.decode()).group(1)
+        response = client.post(reverse("login"), {"username": "cs_owner", "password": "service-tests-only", "csrfmiddlewaretoken": token},
+                               HTTP_HOST="demo-8000.app.github.dev", HTTP_ORIGIN="https://localhost:8000", secure=True)
+        self.assertEqual(response.status_code, 302)
