@@ -19,6 +19,8 @@ class Cashbox(models.Model):
     active = models.BooleanField(default=True)
     notes = models.TextField(blank=True)
     import_batch_id = models.CharField(max_length=120, blank=True)
+    # ENT-001 (HG-031): the entity whose money this cashbox holds.
+    entity = models.ForeignKey("entities.Entity", on_delete=models.PROTECT, null=True, blank=True, related_name="cashboxes")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -29,6 +31,15 @@ class Cashbox(models.Model):
 
     def __str__(self):
         return f"{self.cashbox_code} - {self.name_ar}"
+
+    def save(self, *args, **kwargs):
+        # ENT-001: a record made without an entity belongs to the main one, so
+        # every caller written before entities existed keeps working unchanged.
+        if self.entity_id is None:
+            from entities.services import main_entity
+
+            self.entity = main_entity()
+        super().save(*args, **kwargs)
 
 
 class CashboxMovementType(models.TextChoices):

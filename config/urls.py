@@ -72,6 +72,7 @@ urlpatterns = [
     path("search/", include("search.urls")),
     path("imports/", include("imports.urls")),
     path("closing/", include("closing.urls")),
+    path("entities/", include("entities.urls")),
     # STAFF-001: employees & technicians.
     path("staff/", include("staff.urls")),
     # APPT-001: appointments & visits.

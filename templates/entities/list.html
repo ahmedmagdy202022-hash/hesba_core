@@ -1,0 +1,8 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'settings_core:overview' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div><div class="op-form-actions"><a class="op-secondary" href="{% url 'entities:where' %}?lang={{ lang }}" data-where-link>{{ words.where_link }}</a>{% if can_manage %}<a class="op-primary" href="{% url 'entities:new' %}?lang={{ lang }}" data-new-entity>+ {{ words.new }}</a>{% endif %}</div></section>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.code }}</th><th>{{ words.name_ar }}</th><th>{{ words.kind }}</th><th>{{ words.locations }}</th><th>{{ words.cashboxes }}</th><th></th></tr></thead><tbody>
+{% for row in rows %}<tr data-entity="{{ row.entity.code }}"><td><bdi>{{ row.entity.code }}</bdi>{% if row.entity.is_main %} <span class="op-status op-status-posted">{{ words.main }}</span>{% endif %}{% if not row.entity.active %} <span class="op-status op-status-cancelled">✕</span>{% endif %}</td><td>{{ row.entity.name_ar }}{% if row.entity.name_en %} <small class="op-muted">{{ row.entity.name_en }}</small>{% endif %}</td><td>{% if row.entity.kind == 'company' %}{{ words.kind_company }}{% else %}{{ words.kind_branch }}{% endif %}</td><td>{{ row.locations }}</td><td>{{ row.cashboxes }}</td><td>{% if can_manage %}<a href="{% url 'entities:edit' row.entity.pk %}?lang={{ lang }}">{{ words.edit }}</a>{% endif %}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if rows|length < 2 %}<p class="op-muted">{{ words.empty }}</p>{% endif %}
+{% endblock %}

@@ -513,6 +513,13 @@ Status: APPROVED IN PRINCIPLE by Ahmed (2026-10-05). Implemented as its own PR; 
 - **Protected surface:** models, schema and migrations.
 - **Risk:** low. A single-entity install behaves exactly as today.
 - **Tests:** the full existing suite must stay green without edits. Migration test on a populated database. Group-stock visibility checked against permissions (quantities shown; cost only with `inventory.view_cost`).
+- **Implemented (ENT-001):**
+  - new app `entities` with `Entity` (one `is_main`, enforced by a partial unique constraint) and `EntityMembership` (recorded, enforced later by HG-034);
+  - nullable `entity` FK on `master_data.Location` and `cashboxes.Cashbox`, with data migrations that bind existing rows to the seeded main entity;
+  - `save()` fills the main entity when none is given, so no existing caller changed.
+  - Posting, stock movement, cost and ledgers are untouched.
+  - New permission `inventory.view_group_stock`: every role with `inventory.view_stock`, plus the cashier, so a sale can learn the factory has it. Quantities only; value needs `inventory.view_cost`.
+  - The full suite passes unchanged.
 
 ## HG-032 — General ledger projected from posted documents (GL-002)
 

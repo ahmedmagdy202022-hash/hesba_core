@@ -12,6 +12,8 @@ class Location(models.Model):
     is_receiving_location = models.BooleanField(default=True)
     is_selling_location = models.BooleanField(default=True)
     active = models.BooleanField(default=True)
+    # ENT-001 (HG-031): the entity whose stock and books this location belongs to.
+    entity = models.ForeignKey("entities.Entity", on_delete=models.PROTECT, null=True, blank=True, related_name="locations")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -22,6 +24,15 @@ class Location(models.Model):
 
     def __str__(self):
         return f"{self.location_code} - {self.name_ar}"
+
+    def save(self, *args, **kwargs):
+        # ENT-001: a record made without an entity belongs to the main one, so
+        # every caller written before entities existed keeps working unchanged.
+        if self.entity_id is None:
+            from entities.services import main_entity
+
+            self.entity = main_entity()
+        super().save(*args, **kwargs)
 
 
 class Category(models.Model):
