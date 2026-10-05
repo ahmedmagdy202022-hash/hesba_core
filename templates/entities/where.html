@@ -1,0 +1,17 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.where_title }}</h1><p>{{ words.where_intro }}</p></div></section>
+<form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><input type="search" name="q" value="{{ query }}" placeholder="{{ words.search }}" aria-label="{{ words.search }}" autofocus><button type="submit">{{ words.find }}</button></form>
+{% for row in rows %}
+<section class="op-detail-meta" data-where-item="{{ row.item.item_code }}">
+  <h2 style="margin:0 0 8px">{{ row.item.item_name }} <small class="op-muted"><bdi>{{ row.item.item_code }}</bdi></small> · {{ words.total }}: <strong data-where-total>{{ row.total|qty }}</strong>{% if can_cost %} · {{ row.value|money }}{% endif %}</h2>
+  {% if row.places %}
+  <div class="op-table-wrap"><table class="op-table"><thead><tr>{% if multi %}<th>{{ words.entity }}</th>{% endif %}<th>{{ words.location }}</th><th>{{ words.quantity }}</th>{% if can_cost %}<th>{{ words.value }}</th>{% endif %}</tr></thead><tbody>
+  {% for p in row.places %}<tr data-where-place="{{ p.location.location_code }}">{% if multi %}<td>{% if lang == 'en' %}{{ p.entity.name_en|default:p.entity.name_ar }}{% else %}{{ p.entity.name_ar }}{% endif %}</td>{% endif %}<td>{% if lang == 'en' %}{{ p.location.name_en|default:p.location.name_ar }}{% else %}{{ p.location.name_ar }}{% endif %}</td><td>{{ p.quantity|qty }}</td>{% if can_cost %}<td>{{ p.value|money }}</td>{% endif %}</tr>{% endfor %}
+  </tbody></table></div>
+  {% else %}<p class="op-muted">{{ words.nowhere }}</p>{% endif %}
+</section>
+{% empty %}<p class="op-empty">{{ words.no_items }}</p>{% endfor %}
+{% if page.paginator.num_pages > 1 %}<nav class="op-pagination">{% if page.has_previous %}<a href="?lang={{ lang }}&q={{ query|urlencode }}&page={{ page.previous_page_number }}">‹</a>{% endif %}<span>{{ page.number }} / {{ page.paginator.num_pages }}</span>{% if page.has_next %}<a href="?lang={{ lang }}&q={{ query|urlencode }}&page={{ page.next_page_number }}">›</a>{% endif %}</nav>{% endif %}
+{% endblock %}

@@ -10,6 +10,7 @@ from .models import Category, Customer, Item, Location, Supplier
 LABELS = {
     "ar": {
         "location_code": "كود الموقع / المخزن",
+        "entity": "الكيان / الفرع",
         "name_ar": "الاسم بالعربية",
         "name_en": "الاسم بالإنجليزية",
         "description": "الوصف",
@@ -45,6 +46,7 @@ LABELS = {
     },
     "en": {
         "location_code": "Location code",
+        "entity": "Entity / branch",
         "name_ar": "Arabic name",
         "name_en": "English name",
         "description": "Description",
@@ -94,19 +96,43 @@ class HesbaModelForm(forms.ModelForm):
                 field.widget.attrs.setdefault("autocomplete", "off")
 
 
-class LocationForm(HesbaModelForm):
+class _EntityField:
+    """ENT-001: pick the entity a store or cashbox belongs to (only shown once
+    the group has more than one)."""
+
+    def _entity_field(self):
+        from entities.services import entities, is_multi_entity, main_entity
+
+        field = self.fields.get("entity")
+        if field is None:
+            return
+        field.queryset = entities()
+        field.required = False
+        field.empty_label = None
+        if not self.instance.pk:
+            field.initial = main_entity().pk
+        if not is_multi_entity():
+            field.widget = forms.HiddenInput()
+
+
+class LocationForm(_EntityField, HesbaModelForm):
     class Meta:
         model = Location
         fields = (
             "location_code",
             "name_ar",
             "name_en",
+            "entity",
             "description",
             "is_default",
             "is_receiving_location",
             "is_selling_location",
             "active",
         )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._entity_field()
 
 
 class SupplierForm(HesbaModelForm):
@@ -156,13 +182,14 @@ class CustomerForm(HesbaModelForm):
             self.fields["opening_balance"].disabled = True
 
 
-class CashboxForm(HesbaModelForm):
+class CashboxForm(_EntityField, HesbaModelForm):
     class Meta:
         model = Cashbox
         fields = (
             "cashbox_code",
             "name_ar",
             "name_en",
+            "entity",
             "opening_balance",
             "currency",
             "is_default",
@@ -172,6 +199,7 @@ class CashboxForm(HesbaModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._entity_field()
         if not self.instance.pk:
             # SETTINGS-002: a new cashbox starts in the company currency.
             profile = ClientProfile.get_active()
