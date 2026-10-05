@@ -62,19 +62,46 @@
 
   <main class="dash-main" id="hs-main" tabindex="-1">
 
-      <section class="dash-hero" aria-label="{{ greeting }}">
+      <section class="dash-hero is-{{ day_part }}" aria-label="{{ greeting }}">
+        <div class="dash-hero__fx" aria-hidden="true"><span class="dash-hero__glow dash-hero__glow--a"></span><span class="dash-hero__glow dash-hero__glow--b"></span><span class="dash-hero__glow dash-hero__glow--c"></span><span class="dash-hero__grid"></span></div>
         <div class="dash-hero__copy">
-          <p class="dash-greeting">{{ greeting }}{% if display_name %}{{ name_separator }}{{ display_name }}{% endif %}</p>
-          {% if client_name %}<p class="dash-hero__client">{{ client_name }}</p>{% endif %}
-          {% if headline %}
-          <div class="dash-hero__stat" data-hero-stat>
-            <span class="dash-hero__stat-label">{{ hero_headline_text }}</span>
-            <span class="dash-hero__stat-value">{{ headline.value|money }}{% if currency %}<small>{{ currency }}</small>{% endif %}</span>
-            {% if headline.delta is not None %}<span class="dash-hero__delta {% if headline.good %}is-good{% elif headline.good is False %}is-bad{% endif %}"><span aria-hidden="true">{% if headline.trend == 'up' %}▲{% elif headline.trend == 'down' %}▼{% else %}■{% endif %}</span> {{ headline.delta|floatformat:0 }}% {{ vs_previous }}</span>{% endif %}
+          <p class="dash-hero__eyebrow"><span class="dash-hero__sky" aria-hidden="true">{% if day_part == 'morning' or day_part == 'afternoon' %}<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"/></svg>{% else %}<svg viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg>{% endif %}</span>{{ now_parts.date }}<span class="dash-hero__live"><span aria-hidden="true"></span>{{ hero_live }}</span></p>
+          <p class="dash-greeting">{{ greeting }}{% if display_name %}{{ name_separator }}<span class="dash-greeting__name">{{ display_name }}</span>{% endif %}</p>
+          <p class="dash-hero__line">{{ hero_line }}{% if client_name %} <span class="dash-hero__client">{{ client_name }}</span>{% endif %}</p>
+          <div class="dash-hero__pills">
+            {% if headline %}
+            <div class="dash-hstat dash-hstat--lead dash-hero__stat" data-hero-stat>
+              <span class="dash-hstat__label">{{ hero_headline_text }}</span>
+              <span class="dash-hstat__value">{{ headline.value|money }}{% if currency %}<small>{{ currency }}</small>{% endif %}</span>
+              {% if headline.delta is not None %}<span class="dash-hstat__delta {% if headline.good %}is-good{% elif headline.good is False %}is-bad{% endif %}"><span aria-hidden="true">{% if headline.trend == 'up' %}▲{% elif headline.trend == 'down' %}▼{% else %}■{% endif %}</span> {{ headline.delta|floatformat:0 }}% {{ vs_previous }}</span>{% endif %}
+            </div>
+            {% endif %}
+            {% with c=hero_cards.sales_today %}{% if c %}<div class="dash-hstat"><span class="dash-hstat__label">{{ c.label }}</span><span class="dash-hstat__value">{{ c.value }}{% if currency %}<small>{{ currency }}</small>{% endif %}</span>{% with n=hero_cards.invoice_count_today %}{% if n %}<span class="dash-hstat__sub">{{ n.value }} {{ hero_invoices }}</span>{% endif %}{% endwith %}</div>{% endif %}{% endwith %}
+            {% with c=hero_cards.cashbox_balance %}{% if c %}<div class="dash-hstat"><span class="dash-hstat__label">{{ c.label }}</span><span class="dash-hstat__value">{{ c.value }}{% if currency %}<small>{{ currency }}</small>{% endif %}</span></div>{% endif %}{% endwith %}
+          </div>
+        </div>
+        <div class="dash-hero__art">
+          {% if analytics.available and analytics.hero.line %}
+          <div class="dash-glass dash-glass--trend">
+            <p class="dash-glass__title">{{ hero_trend }} <small>{{ hero_headline_text }}</small></p>
+            <svg class="dash-glass__chart" viewBox="0 0 {{ analytics.hero.width }} {{ analytics.hero.height }}" preserveAspectRatio="none" aria-hidden="true">
+              <defs><linearGradient id="dh-area" x1="0" y1="0" x2="0" y2="1"><stop class="dh-stop" offset="0"/><stop class="dh-stop dh-stop--end" offset="1"/></linearGradient></defs>
+              <path class="dash-glass__area" d="{{ analytics.hero.area }}" fill="url(#dh-area)"/>
+              <path class="dash-glass__line" d="{{ analytics.hero.line }}"/>
+              {% if analytics.hero.last %}<circle class="dash-glass__dot" cx="{{ analytics.hero.last.0 }}" cy="{{ analytics.hero.last.1 }}" r="4"/>{% endif %}
+            </svg>
+          </div>
+          {% if analytics.hero.pct is not None %}
+          <div class="dash-glass dash-glass--ring">
+            <svg viewBox="0 0 76 76" aria-hidden="true"><circle class="dash-ring__track" cx="38" cy="38" r="30"/><circle class="dash-ring__value" cx="38" cy="38" r="30" stroke-dasharray="{{ analytics.hero.ring }}" transform="rotate(-90 38 38)"/></svg>
+            <span class="dash-ring__pct">{{ analytics.hero.pct }}%</span>
+            <span class="dash-ring__label">{{ hero_today }}<br>{{ hero_vs_avg }}</span>
           </div>
           {% endif %}
+          {% else %}
+          <img class="dash-hero__img" src="{% static 'hesba/img/dashboard-hero.svg' %}?v=hero-2" alt="" width="480" height="300" decoding="async">
+          {% endif %}
         </div>
-        <div class="dash-hero__art"><img class="dash-hero__img" src="{% static 'hesba/img/dashboard-hero.svg' %}?v=hero-2" alt="" width="480" height="300" decoding="async"></div>
       </section>
 
       {% if analytics.available %}

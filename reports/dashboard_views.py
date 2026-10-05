@@ -160,6 +160,14 @@ STRINGS = {
         "play": "تشغيل التقليب",
         "prev_range": "من {start} لـ {end}",
         "hero_headline": "صافي مبيعات {period}",
+        "hero_live": "شغّال دلوقتي",
+        "hero_trend": "اتجاه المبيعات",
+        "hero_today": "مبيعات النهارده",
+        "hero_vs_avg": "من متوسط يومك",
+        "hero_avg": "متوسط اليوم",
+        "hero_invoices": "فاتورة النهارده",
+        "hero_cash": "في الخزن",
+        "hero_lines": {"morning": "يوم جديد وفرصة جديدة. خلّينا نبدأ.", "afternoon": "نص اليوم عدّى، شوف وصلت لفين.", "evening": "قرّبنا نقفل اليوم، دي الصورة كاملة.", "night": "سهران؟ الأرقام كلها قدامك."},
     },
     "en": {
         "page_title": "Dashboard - Hesba",
@@ -220,12 +228,30 @@ STRINGS = {
         "play": "Resume rotation",
         "prev_range": "{start} to {end}",
         "hero_headline": "Net sales · {period}",
+        "hero_live": "Live now",
+        "hero_trend": "Sales trend",
+        "hero_today": "Sales today",
+        "hero_vs_avg": "of your average day",
+        "hero_avg": "Average day",
+        "hero_invoices": "invoices today",
+        "hero_cash": "Cash on hand",
+        "hero_lines": {"morning": "A new day, a fresh start. Let's go.", "afternoon": "Halfway through the day: here's where you are.", "evening": "Nearly closing time: here's the full picture.", "night": "Working late? Everything is right here."},
     },
 }
 
 
 def _lang(request):
     return "en" if request.GET.get("lang") == "en" else "ar"
+
+
+def _day_part(now):
+    if 5 <= now.hour < 12:
+        return "morning"
+    if 12 <= now.hour < 17:
+        return "afternoon"
+    if 17 <= now.hour < 24:
+        return "evening"
+    return "night"
 
 
 def _greeting(lang, now):
@@ -376,6 +402,9 @@ def dashboard(request):
         "analytics": analytics,
         "periods": [(key, PERIOD_LABELS[lang][key]) for key in PERIODS],
         "hero_headline_text": strings["hero_headline"].format(period=period_label),
+        "day_part": _day_part(now),
+        "hero_line": strings["hero_lines"][_day_part(now)],
+        "hero_cards": {card["key"]: card for card in cards if card["key"] in ("sales_today", "invoice_count_today", "cashbox_balance")},
         "headline": headline,
         "previous_range_text": strings["prev_range"].format(start=previous_range[0].strftime("%d/%m"), end=previous_range[1].strftime("%d/%m")) if previous_range else "",
         # The app shell draws the navigation from the same list; it stays in

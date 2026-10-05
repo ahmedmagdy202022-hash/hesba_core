@@ -274,6 +274,7 @@ def build_analytics(held, period_key, today=None, lang="ar"):
     out["daily"] = _chart(days, previous_days)
     out["daily"]["previous_range"] = (previous_days[0][0], previous_days[-1][0]) if previous_days else None
     out["spark"] = {"net_sales": _spark([value for _, value in days])}
+    out["hero"] = _hero(days, today)
     if can("reports.view_profit_report"):
         profit_window = (start, end) if period_key != "today" else (today - timedelta(days=6), today)
         profit_days = daily_profit(*profit_window)
@@ -340,6 +341,50 @@ def _spark(values, width=120, height=32):
     span = float(high - low) or 1.0
     step = width / (len(values) - 1)
     return " ".join(f"{_n(step * i)},{_n(2 + (height - 4) * (1 - float(v - low) / span))}" for i, v in enumerate(values))
+
+
+def _smooth(points):
+    """A Catmull-Rom curve through the points, as SVG cubic segments, so the
+    banner's trend reads as a flowing line rather than a saw blade."""
+
+    if len(points) < 2:
+        return ""
+    d = [f"M{_n(points[0][0])},{_n(points[0][1])}"]
+    for i in range(len(points) - 1):
+        p0 = points[i - 1] if i else points[i]
+        p1, p2 = points[i], points[i + 1]
+        p3 = points[i + 2] if i + 2 < len(points) else p2
+        c1 = (p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6)
+        c2 = (p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6)
+        d.append(f"C{_n(c1[0])},{_n(c1[1])} {_n(c2[0])},{_n(c2[1])} {_n(p2[0])},{_n(p2[1])}")
+    return " ".join(d)
+
+
+def _hero(days, today, width=300, height=96):
+    """The welcome banner's live card: the period's trend (a 3-day rolling
+    average, smoothed) and today's sales against the average day before it."""
+
+    values = [value for _, value in days]
+    rolling = [sum(values[max(0, i - 2): i + 1], ZERO) / len(values[max(0, i - 2): i + 1]) for i in range(len(values))]
+    line, area, last = "", "", None
+    if len(rolling) >= 2 and any(rolling):
+        top = max(rolling) or Decimal(1)
+        step = width / (len(rolling) - 1)
+        points = [(step * i, 6 + (height - 12) * (1 - float(v / top))) for i, v in enumerate(rolling)]
+        line = _smooth(points)
+        area = f"{line} L{_n(width)},{_n(height)} L0,{_n(height)} Z"
+        last = (_n(points[-1][0]), _n(points[-1][1]))
+    earlier = [value for day, value in days if day < today]
+    average = sum(earlier, ZERO) / len(earlier) if earlier else ZERO
+    today_value = next((value for day, value in days if day == today), ZERO)
+    pct = round(float(today_value / average) * 100) if average > 0 else None
+    circumference = 2 * 3.141592653589793 * 30
+    ring = min(pct, 100) / 100 * circumference if pct is not None else 0
+    return {
+        "line": line, "area": area, "width": width, "height": height, "last": last,
+        "today": money_round(today_value), "average": money_round(average), "pct": pct,
+        "ring": f"{_n(ring)} {_n(circumference)}",
+    }
 
 
 WEEKDAY_WORDS = {

@@ -94,10 +94,17 @@ class ScreenTests(FeedbackSetup):
 
     def test_period_switch_sits_in_the_analytics_section(self):
         body = self.client.get(reverse("dashboard_snapshot")).content.decode()
-        hero = body[body.index('<section class="dash-hero"'): body.index("</section>", body.index('<section class="dash-hero"'))]
+        start = body.index('<section class="dash-hero')
+        hero = body[start: body.index("</section>", start)]
         self.assertNotIn("dash-periods", hero)
         self.assertIn("dash-hero__art", hero)
         self.assertIn("data-hero-stat", hero)
+        # v3 welcome: the shop's own trend and today's figures, a sky for the hour.
+        self.assertRegex(hero, r'class="dash-hero is-(morning|afternoon|evening|night)"')
+        self.assertIn("dash-glass--trend", hero)
+        self.assertIn('<path class="dash-glass__line" d="M', hero)
+        self.assertIn("dash-glass--ring", hero)  # today sold vs the average day
+        self.assertIn("مبيعات اليوم", hero)  # the pill reuses the card's own label
         self.assertIn('class="dash-section__head"', body)
 
     def test_closing_says_which_period(self):
