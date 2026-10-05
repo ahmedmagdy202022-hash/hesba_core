@@ -332,14 +332,32 @@ class Projector:
 
     # ---- writing ----
 
+    def document_entities(self):
+        """A sale or purchase belongs to the entity of its store, whichever
+        cashbox took the money: {(source_type, source_id): entity_id}."""
+
+        from purchases.models import PurchaseInvoice, PurchaseReturn
+        from sales.models import SalesInvoice, SalesReturn
+
+        owners = {}
+        for source_type, model, path in (("sales_invoice", SalesInvoice, "selling_location__entity_id"),
+                                         ("sales_return", SalesReturn, "source_invoice__selling_location__entity_id"),
+                                         ("purchase_invoice", PurchaseInvoice, "receiving_location__entity_id"),
+                                         ("purchase_return", PurchaseReturn, "source_invoice__receiving_location__entity_id")):
+            wanted = {key[1] for key in self.groups if key[0] == source_type}
+            if wanted:
+                owners.update({(source_type, pk): entity for pk, entity in model.objects.filter(pk__in=wanted).values_list("pk", path) if entity})
+        return owners
+
     def rebuild(self):
         self.collect()
+        owners = self.document_entities()
         entries = []
         for key in sorted(self.groups, key=lambda k: (k[2], k[0], k[1])):
             g = self.groups[key]
             if not g.lines:
                 continue
-            g.entity_id = g.entity_id or self.main_id
+            g.entity_id = owners.get((key[0], key[1])) or g.entity_id or self.main_id
             self.place(g)
             self.balance_entities(g)
             entries.append(g)

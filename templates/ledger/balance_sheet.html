@@ -1,0 +1,15 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+{% include "ledger/_subnav.html" %}
+<section class="op-title-row"><div><h1>{{ words.tab_balance }}{% if entity %} — {% if lang == 'en' and entity.name_en %}{{ entity.name_en }}{% else %}{{ entity.name_ar }}{% endif %}{% endif %}</h1><p>{{ words.balance_intro }}</p></div></section>
+<form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><label class="op-inline-label">{{ words.as_of }}<input type="date" name="to" value="{{ as_of|date:'Y-m-d' }}"></label>{% if entities|length > 1 %}<label class="op-inline-label">{{ words.entity }}<select name="entity"><option value="">{{ words.all_entities }}</option>{% for e in entities %}<option value="{{ e.pk }}"{% if entity and entity.pk == e.pk %} selected{% endif %}>{% if lang == 'en' and e.name_en %}{{ e.name_en }}{% else %}{{ e.name_ar }}{% endif %}</option>{% endfor %}</select></label>{% endif %}<button type="submit">{{ words.show }}</button></form>
+{% include "ledger/_statement_actions.html" %}
+<p data-balanced="{{ data.balanced|yesno:'1,0' }}"><span class="op-status {% if data.balanced %}op-status-posted{% else %}op-status-cancelled{% endif %}">{% if data.balanced %}✓ {{ words.sheet_balanced }}{% else %}⚠ {{ words.sheet_unbalanced }}{% endif %}</span></p>
+<div class="op-statement-sides">{% for side in sides %}<div class="op-table-wrap"><table class="op-table" data-side="{{ side.key }}"><tbody>
+{% for block in side.blocks %}<tr class="op-section-row"><td colspan="2">{{ block.label }}</td></tr>
+{% for line in block.lines %}<tr><td class="op-indent">{% if line.account %}<a href="{% url 'ledger:account_ledger' line.account.pk %}?lang={{ lang }}&to={{ as_of|date:'Y-m-d' }}{% if entity %}&entity={{ entity.pk }}{% endif %}"><bdi>{{ line.account.code }}</bdi></a> {% endif %}{{ line.name }}</td><td class="op-num">{{ line.amount|money }}</td></tr>{% endfor %}
+<tr><td>{{ block.label }}</td><td class="op-num"><strong>{{ block.total|money }}</strong></td></tr>{% endfor %}
+<tr class="op-total-row"><td>{{ side.total_label }}</td><td class="op-num" data-total="{{ side.key }}">{{ side.total|money }}</td></tr>
+</tbody></table></div>{% endfor %}</div>
+{% endblock %}
