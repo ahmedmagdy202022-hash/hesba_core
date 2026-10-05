@@ -136,3 +136,10 @@ body a:focus-visible,body button:focus-visible,body input:focus-visible,body sel
 .hs-cam__torch{background:#fff;color:var(--hs-navy)}
 .hs-cam__torch[aria-pressed="true"]{background:var(--hs-gold)}
 html.hs-cam-open,html.hs-cam-open body{overflow:hidden}
+.op-subnav{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 14px;border-bottom:1px solid var(--op-border)}
+.op-subnav a{padding:8px 14px;border-radius:var(--hs-radius-sm) var(--hs-radius-sm) 0 0;color:var(--op-muted);font-weight:700;text-decoration:none;border-bottom:3px solid transparent}
+.op-subnav a[aria-current="page"]{color:var(--op-navy);border-bottom-color:var(--hs-teal);background:var(--hs-teal-wash)}
+.op-num{text-align:right;direction:ltr;white-space:nowrap;font-variant-numeric:tabular-nums}
+[dir="rtl"] .op-num{text-align:left}
+.op-total-row td{font-weight:700;border-top:2px solid var(--hs-line-strong)}
+.op-entry-head td{background:var(--hs-teal-wash);font-weight:700}

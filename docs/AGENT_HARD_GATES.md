@@ -529,6 +529,13 @@ Status: APPROVED IN PRINCIPLE (2026-10-05). Design: `docs/ERP_FOUNDATION_DESIGN.
 - **Protected surface:** reads sales and purchase posting, inventory movement cost, cashbox and party ledgers. Writes none of them.
 - **Gate before the ledger becomes authoritative:** reconciliation tests to the piastre. AR = customer report, AP = supplier report, each cash account = cashbox report, inventory = stock valuation, revenue and COGS = profit report. Every entry balances.
 
+**Implementation (GL-002, 2026-10-05):**
+- `ledger/projector.py` builds every entry from the sub-ledger rows themselves: `CustomerLedgerEntry`, `SupplierLedgerEntry`, `CashboxMovement`, `StockMovement`, the party and cashbox opening balances, and fixed-asset depreciation. Lines are grouped by (source type, source id, date), so a cancellation is its own reversing entry on the reversal date. No posting service was touched.
+- **Freshness:** freshness is checked on read, not after commit or overnight. Each ledger screen compares a fingerprint of its sources (row counts, max ids, opening balances, asset states, the month, the chart size) with the one stored in `SystemSetting ledger.fingerprint`, and rebuilds when they differ. This adds no hook into the posting path.
+- **Placing the remainder:** VAT is split out by ratio. Then sales, COGS (= the stock value issued), returns, purchases, expense categories (through `ExpenseAccount`), asset purchase and disposal, stock count gain and loss, production WIP and project issues each go to their own account. A line the projector cannot place goes to the new **1199 Suspense** account, never silently to equity. When one document spans two entities, intercompany lines balance it within each entity.
+- **New core accounts:** 1199 Suspense (`suspense`) and 4203 Gain or loss on asset disposal (`asset_disposal`).
+- **Gate evidence:** `ledger/tests_journal.py` runs on the month-acceptance fixture. Every entry balances, suspense is 0, and AR, AP, cash, inventory, net sales and COGS match the existing reports to the piastre, including after a cancellation. The same reconciliation is a screen (`/accounting/reconciliation/`), so any client can check it on their own data. The ledger stays **read-only and secondary**; reports keep using their own selectors until FS-001 is reviewed.
+
 ## HG-033 — Average cost per entity (ENT-003)
 
 Status: APPROVED IN PRINCIPLE (2026-10-05). Scheduled after ENT-001 and GL-002 are stable.
