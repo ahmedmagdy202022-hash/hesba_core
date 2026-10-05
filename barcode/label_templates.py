@@ -21,20 +21,50 @@ FIELDS = ("name", "price", "code", "shop")
 MAX_OFFSET_MM = 5
 
 
+def _design(key):
+    """LABEL-003: a shop-made design, keyed "d<id>"."""
+
+    if isinstance(key, str) and key.startswith("d") and key[1:].isdigit():
+        from .designs import get
+
+        return get(key[1:])
+    return None
+
+
 def resolve(key):
+    if _design(key) is not None:
+        return key
     key = LEGACY.get(key, key)
     return key if key in TEMPLATES else DEFAULT
 
 
 def spec(key):
+    design = _design(key)
+    if design is not None:
+        width, height = design["width"], design["height"]
+        return {
+            "key": key, "kind": design["kind"], "width": width, "height": height, "columns": design["columns"], "rows": design["rows"],
+            "top": design["top"], "side": design["side"], "gap_x": design["gap_x"], "gap_y": design["gap_y"],
+            "barcode_width": round(max(width - 4, 8), 1), "small": False, "custom": True, "name": design["name"],
+            "name_pt": design["name_pt"], "price_pt": design["price_pt"], "small_pt": design["small_pt"],
+            "barcode_pct": design["barcode_pct"], "barcode_text": design["barcode_text"],
+            "defaults": {flag: design[flag] for flag in ("show_name", "show_price", "show_code", "show_shop")},
+        }
     kind, width, height, columns, rows, top, ar, en = TEMPLATES[resolve(key)]
     small = height <= 25 or width <= 40
     return {"key": resolve(key), "kind": kind, "width": width, "height": height, "columns": columns, "rows": rows, "top": top,
-            "barcode_width": round(width - (4 if kind == "roll" else 12), 1), "small": small}
+            "side": None, "gap_x": 0, "gap_y": 0, "barcode_width": round(width - (4 if kind == "roll" else 12), 1), "small": small, "custom": False,
+            # Text sizes the PDF uses for built-ins, matching labels.css.
+            "name_pt": 6.5 if small else (7 if kind == "roll" else 10), "price_pt": 7.5 if small else (8 if kind == "roll" else 11),
+            "small_pt": 7, "barcode_pct": 0, "barcode_text": True,
+            "defaults": {"show_name": True, "show_price": True, "show_code": False, "show_shop": False}}
 
 
 def choices(lang):
-    return [(key, value[7] if lang == "en" else value[6]) for key, value in TEMPLATES.items()]
+    from .designs import all_designs, summary
+
+    built_in = [(key, value[7] if lang == "en" else value[6]) for key, value in TEMPLATES.items()]
+    return built_in + [(f"d{design['id']}", f"★ {design['name']} — {summary(design, lang)}") for design in all_designs()]
 
 
 def offset(raw):

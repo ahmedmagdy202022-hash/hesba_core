@@ -6,6 +6,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from restaurant.models import DiningTable
 from sales.models import SalesInvoice
@@ -23,10 +24,16 @@ class DemoTests(TestCase):
         call_command("prepare_demo", stdout=StringIO())
         self.assertTrue(SalesInvoice.objects.filter(status="posted").exists())
         self.assertEqual(DiningTable.objects.count(), 6)
+        # DEMO-FEEDBACK: a month of history, at shop hours rather than all "now".
+        past = SalesInvoice.objects.filter(invoice_date__lt=timezone.localdate())
+        self.assertGreaterEqual(past.count(), 20)
+        self.assertGreater(len({timezone.localtime(i.created_at).hour for i in past}), 5)
+        invoices = SalesInvoice.objects.count()
         out = StringIO()
         call_command("prepare_demo", stdout=out)
         self.assertIn("already present", out.getvalue())
         self.assertEqual(DiningTable.objects.count(), 6)
+        self.assertEqual(SalesInvoice.objects.count(), invoices)  # today was already topped up
         self.assertTrue(self.client.login(username="cashier", password="Demo-pass-1"))
         self.assertContains(self.client.get(reverse("login")), "data-demo-login")
 
