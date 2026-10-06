@@ -1,7 +1,7 @@
 {% extends "operations/base.html" %}
 {% load hesba_format %}
 {% block operation_content %}
-<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div></section>
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div><div class="op-form-actions"><a class="op-primary" href="{% url 'manufacturing:orders' %}?lang={{ lang }}" data-orders-link>{% if lang == 'en' %}Production orders{% else %}أوامر الإنتاج{% endif %}</a></div></section>
 <h2>{{ words.recipes }}</h2>
 <div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.code }}</th><th>{{ words.product }}</th><th>{{ words.output }}</th><th>{{ words.components }}</th><th>{{ words.active }}</th></tr></thead><tbody>
 {% for recipe in recipes %}<tr data-recipe-row="{{ recipe.code }}"><td dir="ltr"><a href="{% url 'manufacturing:recipe' recipe.pk %}?lang={{ lang }}">{{ recipe.code }}</a></td><td>{{ recipe.product.item_name }}{% if recipe.name %} · <small>{{ recipe.name }}</small>{% endif %}</td><td>{{ recipe.output_quantity|qty }}</td><td>{{ recipe.lines.all|length }}</td><td>{% if recipe.active %}✓{% else %}—{% endif %}</td></tr>

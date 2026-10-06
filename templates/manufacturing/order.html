@@ -1,0 +1,24 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'manufacturing:orders' %}?lang={{ lang }}">← {{ words.back }}</a><h1><bdi>{{ order.number }}</bdi></h1><p>{{ order.recipe.product.item_name }} × {{ order.quantity|qty }} · {{ order.location.name_ar }}{% if order.customer %} · {{ words.for }} {{ order.customer.name }}{% endif %}{% if order.due_date %} · {{ words.due }} <bdi>{{ order.due_date|date:"Y-m-d" }}</bdi>{% endif %}</p></div><span class="op-status {% if order.status == 'done' %}op-status-posted{% elif order.status == 'cancelled' %}op-status-cancelled{% else %}op-status-draft{% endif %}" data-order-status="{{ order.status }}">{{ status_label }}</span></section>
+{% if error %}<div class="op-message op-message-error" role="alert" data-order-error>{{ error }}</div>{% endif %}
+{% if late %}<div class="op-message op-message-error" role="alert">⚠ {{ words.late }}</div>{% endif %}
+<ol class="mfg-steps" data-stages>{% for s in stages %}<li class="is-{{ s.state }}" data-stage="{{ s.key }}">{{ s.label }}</li>{% endfor %}</ol>
+{% if open and can_produce %}<div class="op-form">{% if ready %}<p>{{ words.all_done }}</p>{% if short %}<p class="op-message op-message-error">{{ words.materials_short }}</p>{% endif %}<form method="post" data-finish>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="finish"><button class="op-primary" type="submit">{{ words.finish }}</button></form>
+{% else %}<form method="post" class="mfg-advance" data-advance>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="advance"><h2>{{ current_label }}</h2><div class="op-form-grid">
+<div class="op-field"><label for="good">{{ words.good }}</label><input id="good" name="good" inputmode="decimal" dir="ltr" placeholder="{{ order.quantity|qty }}"></div>
+<div class="op-field"><label for="defect">{{ words.defect }}</label><input id="defect" name="defect" inputmode="decimal" dir="ltr" placeholder="0"></div>
+<div class="op-field"><label for="note">{{ words.notes }}</label><input id="note" name="note"></div></div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.advance }}</button></div></form>{% endif %}
+<details class="mfg-cancel"><summary>{{ words.cancel }}</summary><form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="cancel"><div class="op-field"><label for="reason">{{ words.reason }}</label><input id="reason" name="reason"></div><div class="op-form-actions"><button class="op-danger" type="submit">{{ words.cancel }}</button></div></form></details></div>{% endif %}
+{% if can_cost %}<section class="op-summary-grid mfg-cost" data-cost-card><article><small>{{ words.material }}</small><strong>{{ cost.material|money }}</strong></article><article><small>{{ words.labor }}</small><strong>{{ cost.labor|money }}</strong></article><article><small>{{ words.overhead }}</small><strong>{{ cost.overhead|money }}</strong></article><article><small>{{ words.total }}</small><strong>{{ cost.total|money }}</strong></article><article><small>{{ words.per_unit }}</small><strong data-cost-per-unit>{{ cost.per_unit|unit_cost }}</strong></article><article><small>{{ words.material_unit }}</small><strong>{{ cost.material_per_unit|unit_cost }}</strong></article></section>
+<p class="op-muted">{% if cost.estimate %}{{ words.estimate }}{% else %}{{ words.posted_note }}{% endif %}</p>{% endif %}
+{% if order.run %}<p><a class="op-secondary" href="{% url 'manufacturing:run' order.run.pk %}?lang={{ lang }}" data-order-run>{{ words.run }} <bdi>{{ order.run.number }}</bdi></a></p>{% endif %}
+<h2>{{ words.history }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-stage-history><thead><tr><th>{{ words.stage }}</th><th>{{ words.good }}</th><th>{{ words.defect }}</th><th>{{ words.by }}</th><th>{{ words.notes }}</th></tr></thead><tbody>
+{% for row in logs %}<tr><td>{{ row.label }}</td><td>{{ row.log.good_quantity|qty }}</td><td>{{ row.log.defect_quantity|qty }}</td><td>{{ row.log.done_by.get_username }} · <bdi>{{ row.log.done_at|date:"Y-m-d H:i" }}</bdi></td><td>{{ row.log.note }}</td></tr>
+{% empty %}<tr><td colspan="5" class="op-empty">—</td></tr>{% endfor %}
+</tbody></table></div>
+{% if quality.defects %}<p data-quality>{{ words.defects }}: {{ quality.defects|qty }} · {{ words.rate }}: {{ quality.rate }}%</p>{% endif %}
+{% endblock %}

@@ -136,3 +136,19 @@ body a:focus-visible,body button:focus-visible,body input:focus-visible,body sel
 .hs-cam__torch{background:#fff;color:var(--hs-navy)}
 .hs-cam__torch[aria-pressed="true"]{background:var(--hs-gold)}
 html.hs-cam-open,html.hs-cam-open body{overflow:hidden}
+/* MFG-002: the production board and an order's stages. */
+.mfg-board{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(200px,1fr);gap:12px;overflow-x:auto;padding-bottom:8px;margin-bottom:18px}
+.mfg-col{background:var(--hs-ground);border:1px solid var(--op-border);border-radius:14px;padding:10px;min-height:120px}
+.mfg-col h2{margin:0 0 8px;font-size:15px;color:var(--op-navy);display:flex;justify-content:space-between;align-items:center}
+.mfg-card{display:flex;flex-direction:column;gap:3px;margin-bottom:8px;padding:10px;border:1px solid var(--op-border);border-inline-start:4px solid var(--hs-teal);border-radius:10px;background:var(--hs-surface);color:var(--op-text);text-decoration:none}
+.mfg-card.is-late{border-inline-start-color:var(--op-danger)}
+.mfg-card small{color:var(--op-muted)}
+.mfg-late{color:var(--op-danger)!important;font-weight:700}
+.mfg-empty{text-align:center}
+.mfg-steps{display:flex;flex-wrap:wrap;gap:6px;list-style:none;padding:0;margin:0 0 16px}
+.mfg-steps li{padding:8px 14px;border-radius:20px;background:var(--hs-neutral-wash);color:var(--op-muted);font-weight:700}
+.mfg-steps li.is-done{background:var(--hs-success-wash);color:var(--hs-success)}
+.mfg-steps li.is-current{background:var(--hs-teal);color:var(--hs-on-teal)}
+.mfg-cancel{margin-top:12px}
+.mfg-cancel summary{cursor:pointer;color:var(--op-danger)}
+.mfg-cost{margin-top:16px}

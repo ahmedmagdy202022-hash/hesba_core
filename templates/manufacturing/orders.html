@@ -1,0 +1,24 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div><div class="op-form-actions"><a class="op-secondary" href="{% url 'manufacturing:home' %}?lang={{ lang }}">{{ words.recipes_link }}</a></div></section>
+{% if late_count %}<div class="op-message op-message-error" role="alert" data-late-orders>⚠ {{ words.late }}: {{ late_count }}</div>{% endif %}
+<div class="mfg-board" data-production-board>{% for column in columns %}<section class="mfg-col" data-column="{{ column.key }}"><h2>{{ column.label }} <span class="op-status">{{ column.orders|length }}</span></h2>
+{% for o in column.orders %}<a class="mfg-card{% if o.late %} is-late{% endif %}" href="{% url 'manufacturing:order' o.pk %}?lang={{ lang }}" data-order="{{ o.number }}"><strong><bdi>{{ o.number }}</bdi></strong><span>{{ o.recipe.product.item_name }} × {{ o.quantity|qty }}</span>{% if o.customer %}<small>{{ words.for }} {{ o.customer.name }}</small>{% endif %}{% if o.due_date %}<small{% if o.late %} class="mfg-late"{% endif %}>{% if o.late %}⚠ {{ words.late }} · {% endif %}<bdi>{{ o.due_date|date:"Y-m-d" }}</bdi></small>{% endif %}</a>
+{% empty %}<p class="op-muted mfg-empty">—</p>{% endfor %}</section>{% endfor %}</div>
+{% if recent %}<h2>{{ words.done }}</h2><div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.number }}</th><th>{{ words.product }}</th><th>{{ words.quantity }}</th><th>{{ words.stage }}</th><th>{{ words.run }}</th></tr></thead><tbody>
+{% for row in recent %}<tr><td><a href="{% url 'manufacturing:order' row.order.pk %}?lang={{ lang }}"><bdi>{{ row.order.number }}</bdi></a></td><td>{{ row.order.recipe.product.item_name }}</td><td>{{ row.order.quantity|qty }}</td><td><span class="op-status {% if row.order.status == 'done' %}op-status-posted{% else %}op-status-cancelled{% endif %}">{{ row.label }}</span></td><td>{% if row.order.run %}<a href="{% url 'manufacturing:run' row.order.run.pk %}?lang={{ lang }}"><bdi>{{ row.order.run.number }}</bdi></a>{% endif %}</td></tr>{% endfor %}
+</tbody></table></div>{% endif %}
+{% if can_produce %}<form class="op-form" method="post" data-order-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><h2>{{ words.new }}</h2>
+{% if error %}<div class="op-message op-message-error" role="alert" data-order-error>{{ error }}</div>{% endif %}
+{% if recipes %}<div class="op-form-grid">
+<div class="op-field"><label for="recipe">{{ words.recipe }}</label><select id="recipe" name="recipe">{% for r in recipes %}<option value="{{ r.pk }}"{% if post.recipe == r.pk|stringformat:'s' %} selected{% endif %}>{{ r.product.item_name }} ({{ r.code }})</option>{% endfor %}</select></div>
+<div class="op-field"><label for="quantity">{{ words.quantity }}</label><input id="quantity" name="quantity" inputmode="decimal" dir="ltr" value="{{ post.quantity }}"></div>
+<div class="op-field"><label for="location">{{ words.location }}</label><select id="location" name="location">{% for l in locations %}<option value="{{ l.pk }}"{% if l.pk == default_location.pk %} selected{% endif %}>{{ l.name_ar }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="due">{{ words.due }}</label><input id="due" type="date" name="due_date" value="{{ post.due_date }}"></div>
+<div class="op-field"><label for="customer">{{ words.customer }}</label><select id="customer" name="customer"><option value="">—</option>{% for c in customers %}<option value="{{ c.pk }}">{{ c.name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="labor">{{ words.labor }}</label><input id="labor" name="labor_cost" inputmode="decimal" dir="ltr" value="{{ post.labor_cost }}"></div>
+<div class="op-field"><label for="overhead">{{ words.overhead }}</label><input id="overhead" name="overhead_cost" inputmode="decimal" dir="ltr" value="{{ post.overhead_cost }}"></div>
+<div class="op-field"><label for="notes">{{ words.notes }}</label><input id="notes" name="notes" value="{{ post.notes }}"></div>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div>{% else %}<p class="op-muted">{{ words.no_recipes }}</p>{% endif %}</form>{% endif %}
+{% endblock %}

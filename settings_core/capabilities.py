@@ -134,7 +134,23 @@ def is_available(slug):
     return bool(CAPABILITIES.get(slug, {}).get("available"))
 
 
+#: MFG-002: factories by kind. Garments come in sizes and colours; food and
+#: chemicals carry batches with expiry dates; furniture and printing sell by
+#: piece with barcodes. VAT stays a choice made at setup.
+MANUFACTURING_PRESETS = {
+    "garments": {"variants": SUGGESTED, "barcode": SUGGESTED, "units": SUGGESTED, "price_lists": SUGGESTED},
+    "food": {"batches_expiry": SUGGESTED, "units": SUGGESTED, "barcode": SUGGESTED, "price_lists": SUGGESTED},
+    "chemicals": {"batches_expiry": SUGGESTED, "units": SUGGESTED, "price_lists": SUGGESTED},
+    "furniture": {"barcode": SUGGESTED, "price_lists": SUGGESTED},
+    "printing": {"units": SUGGESTED, "price_lists": SUGGESTED},
+    "workshop": {"barcode": SUGGESTED},
+    "other": {"units": SUGGESTED, "price_lists": SUGGESTED},
+}
+
+
 def preset_state(activity, sub_activity, slug):
+    if activity == catalog.MANUFACTURING:
+        return MANUFACTURING_PRESETS.get(sub_activity, {}).get(slug, OPTIONAL)
     if activity != catalog.COMMERCIAL:
         return OPTIONAL
     return PRESETS.get(sub_activity, {}).get(slug, OPTIONAL)
