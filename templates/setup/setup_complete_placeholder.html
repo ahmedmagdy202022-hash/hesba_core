@@ -51,6 +51,7 @@
       <section class="review-card complete-card" aria-label="Setup completion summary">
         <h2 class="review-card__title" data-i18n="title">{{ title }}</h2>
         <p class="review-note" data-i18n="message">{{ message }}</p>
+        {% if demo_mode %}<form method="post" action="{% url 'demo_sample' %}" data-demo-sample style="margin-top:14px">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><p class="review-note">{% if lang == 'en' %}Demo: start empty and enter your own data, or fill it with a month of sample trade.{% else %}تجربة: تقدر تبدأ فاضي وتدخّل بياناتك بنفسك، أو تملاها بشهر بيانات تجريبية جاهزة.{% endif %}</p><button type="submit" class="activity-action activity-back" style="cursor:pointer">{% if lang == 'en' %}Fill with sample data{% else %}املاها ببيانات تجريبية{% endif %}</button></form>{% endif %}
       </section>
 
       <footer class="activity-footer" aria-label="Complete navigation">
