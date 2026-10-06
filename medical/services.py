@@ -17,10 +17,11 @@ WRITE = "medical.write_records"
 
 
 def is_medical_install():
-    from settings_core.models import ClientProfile
+    """A medical installation, or (ENT-002) working in a medical entity of a group."""
 
-    profile = ClientProfile.get_active()
-    return profile is not None and profile.activity_slug == "medical"
+    from entities.current import effective_activity
+
+    return effective_activity()[0] == "medical"
 
 
 def _is_doctor(user):

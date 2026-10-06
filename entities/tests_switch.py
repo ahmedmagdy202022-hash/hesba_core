@@ -74,3 +74,18 @@ class EntitySwitcherTests(TestCase):
         self.assertNotContains(self.client.get("/dashboard/?lang=ar"), "data-entity-bar")
         response = self.client.post(reverse("entities:switch"), {"entity": "", "next": "https://evil.example/"})
         self.assertEqual(response["Location"], "/dashboard/")
+
+
+class MedicalEntityInAGroupTests(TestCase):
+    def test_a_clinic_entity_gets_patient_files_while_working_in_it(self):
+        from hesba_testing.factories import make_customer
+
+        prepared_client("commercial", "retail", ALL + ",appointments_visits")
+        owner = person(RoleCode.OWNER, "med_group_owner")
+        clinic = services.save_entity({"code": "CLN", "name_ar": "العيادة", "activity_slug": "medical", "sub_activity_slug": "clinic"}, owner)
+        patient = make_customer(customer_code="P-1", name="مريض")
+        self.client.force_login(owner)
+        self.assertEqual(self.client.get(reverse("medical:patients")).status_code, 404)
+        self.client.post(reverse("entities:switch"), {"entity": clinic.pk, "next": "/dashboard/"})
+        self.assertIn(reverse("medical:patients"), sidebar_links(self.client.get("/dashboard/?lang=ar")))
+        self.assertEqual(self.client.get(reverse("medical:file", args=[patient.pk])).status_code, 200)
