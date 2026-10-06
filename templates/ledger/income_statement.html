@@ -1,0 +1,15 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+{% include "ledger/_subnav.html" %}
+<section class="op-title-row"><div><h1>{{ words.tab_income }}{% if entity %} — {% if lang == 'en' and entity.name_en %}{{ entity.name_en }}{% else %}{{ entity.name_ar }}{% endif %}{% endif %}</h1><p>{{ words.income_intro }}</p></div></section>
+{% include "ledger/_filters.html" %}
+{% include "ledger/_statement_actions.html" %}
+<div class="op-table-wrap"><table class="op-table" data-income><thead><tr><th></th>{% for header in headers %}<th class="op-num">{{ header }}</th>{% endfor %}</tr>
+<tr><th></th>{% for w in windows %}<th class="op-num"><small><bdi>{{ w.0|date:"Y-m-d" }} → {{ w.1|date:"Y-m-d" }}</bdi></small></th>{% endfor %}</tr></thead><tbody>
+{% for block in blocks %}{% if block.kind == 'section' %}<tr class="op-section-row"><td colspan="{{ headers|length|add:1 }}">{{ block.label }}</td></tr>
+{% for line in block.lines %}<tr><td class="op-indent"><a href="{% url 'ledger:account_ledger' line.account.pk %}?lang={{ lang }}&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}{% if entity %}&entity={{ entity.pk }}{% endif %}"><bdi>{{ line.account.code }}</bdi></a> {{ line.name }}</td>{% for value in line.values %}<td class="op-num">{{ value|money }}</td>{% endfor %}</tr>{% endfor %}
+<tr><td>{{ block.label }}</td>{% for value in block.values %}<td class="op-num"><strong>{{ value|money }}</strong></td>{% endfor %}</tr>
+{% else %}<tr class="op-total-row" data-total="{{ block.key }}"><td>{% if block.key == 'net_profit' and block.values.0 < 0 %}{{ words.net_loss }}{% else %}{{ block.label }}{% endif %}</td>{% for value in block.values %}<td class="op-num"{% if forloop.first and block.key == 'net_profit' %} data-net-profit{% endif %}>{{ value|money }}</td>{% endfor %}</tr>{% endif %}{% endfor %}
+</tbody></table></div>
+{% endblock %}

@@ -1,0 +1,1 @@
+<nav class="op-subnav" aria-label="{{ words.tab_accounts }}">{% for key, url_name in ledger_tabs %}<a href="{% url url_name %}?lang={{ lang }}"{% if tab == key %} aria-current="page"{% endif %}>{% for k, label in tab_labels %}{% if k == key %}{{ label }}{% endif %}{% endfor %}</a>{% endfor %}</nav>
