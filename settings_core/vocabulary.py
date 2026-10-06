@@ -178,12 +178,11 @@ def vocabulary(activity, sub_activity):
 
 
 def active_vocabulary():
-    from .models import ClientProfile
+    # ENT-002: the words of the entity being worked in, else the installation's.
+    from entities.current import effective_activity
 
-    profile = ClientProfile.get_active()
-    if profile is None:
-        return vocabulary("", "")
-    return vocabulary(profile.activity_slug or "", profile.sub_activity_slug or "")
+    activity, sub_activity = effective_activity()
+    return vocabulary(activity or "", sub_activity or "")
 
 
 def terms(lang, table=None):

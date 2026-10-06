@@ -9,4 +9,5 @@ urlpatterns = [
     path("new/", views.entity_edit, name="new"),
     path("<int:pk>/", views.entity_edit, name="edit"),
     path("stock/", views.where_is, name="where"),
+    path("switch/", views.switch, name="switch"),
 ]

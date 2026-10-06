@@ -31,10 +31,23 @@ ACTIVITY_LEAD = {
 
 
 def _activity():
-    from settings_core.models import ClientProfile
+    from entities.current import effective_activity
 
-    profile = ClientProfile.get_active()
-    return (profile.activity_slug or "") if profile is not None else ""
+    return effective_activity()[0] or ""
+
+
+#: ENT-002: sections that belong to one activity. While working in an entity
+#: that has its own activity, the others' sections step aside (the whole-group
+#: view keeps every enabled section).
+ACTIVITY_OWNED = {"manufacturing": "manufacturing", "projects": "contracting", "restaurant": "restaurants"}
+
+
+def _hidden_for_entity(key):
+    from entities.current import current_entity
+
+    entity = current_entity()
+    owner = ACTIVITY_OWNED.get(key)
+    return bool(owner and entity is not None and entity.activity_slug and entity.activity_slug != owner)
 
 
 def _lead_first(keys, activity):
@@ -129,6 +142,8 @@ def nav_items(user, lang, modules):
     items = []
     for item in NAV_ITEMS:
         if item["module"] is not None and item["module"] not in modules:
+            continue
+        if _hidden_for_entity(item["key"]):
             continue
         if item.get("capability") and not capability_enabled(item["capability"]):
             continue
