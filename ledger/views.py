@@ -149,8 +149,14 @@ def _date(value):
 def _filters(request):
     from entities.models import Entity
 
+    from entities.current import current_entity
+
     entities = list(Entity.objects.filter(active=True).order_by("-is_main", "code"))
-    entity = next((e for e in entities if str(e.pk) == request.GET.get("entity", "")), None)
+    if "entity" in request.GET:
+        entity = next((e for e in entities if str(e.pk) == request.GET.get("entity", "")), None)
+    else:
+        # ENT-002: the books open on the entity being worked in.
+        entity = current_entity()
     return {"date_from": _date(request.GET.get("from")), "date_to": _date(request.GET.get("to")), "entity": entity, "entities": entities}
 
 

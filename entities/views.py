@@ -110,3 +110,23 @@ def where_is(request):
         rows.append({"item": item, "places": places, "total": total, "value": sum((p.get("value", 0) for p in places), 0)})
     return render(request, "entities/where.html", _context(request, rows=rows, page=page, query=query, can_cost=can_cost,
                                                            multi=services.is_multi_entity(), page_title=WORDS[_lang(request)]["where_title"]))
+
+
+def switch(request):
+    """ENT-002: work in one entity, or in the whole group."""
+
+    from django.utils.http import url_has_allowed_host_and_scheme
+
+    from .current import SESSION_KEY, allowed_entities
+
+    target = request.POST.get("next") or "/dashboard/"
+    if not url_has_allowed_host_and_scheme(target, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
+        target = "/dashboard/"
+    if request.method == "POST":
+        raw = request.POST.get("entity", "")
+        allowed = {str(e.pk): e for e in allowed_entities(request.user)}
+        if raw in allowed:
+            request.session[SESSION_KEY] = allowed[raw].pk
+        elif raw == "" and len(allowed) == len(allowed_entities(None)):
+            request.session.pop(SESSION_KEY, None)
+    return redirect(target)

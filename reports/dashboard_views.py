@@ -411,7 +411,9 @@ def dashboard(request):
     figures = DashboardFigures(request.user, today, shared)
     cards = _build_cards(request.user, lang, held, figures)
 
-    activity = profile.activity_slug if profile is not None else ""
+    from entities.current import effective_activity
+
+    activity = effective_activity()[0] or ""
     sections = {item["key"] for item in nav_items(request.user, lang, modules)}
     period = request.GET.get("period", "month")
     analytics = build_analytics(permitted_codes(request.user, ANALYTICS_PERMISSIONS), period, today, lang)
@@ -432,7 +434,7 @@ def dashboard(request):
         "now": now,
         "now_parts": _formatted_now(lang, now),
         "client_name": profile.display_name if profile is not None else "",
-        "activity_slug": profile.activity_slug if profile is not None else "",
+        "activity_slug": activity,
         # The installation's own currency, not a hard-coded "EGP". Empty before
         # bootstrap, in which case the template shows no unit at all.
         "currency": profile.default_currency if profile is not None else "",
