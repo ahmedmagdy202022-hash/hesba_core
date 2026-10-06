@@ -77,6 +77,12 @@ def _statement_context(request, kind, party):
     return data, date_from, date_to
 
 
+def _medical_file(user):
+    from medical.services import shows_files
+
+    return shows_files(user)
+
+
 def party_card(request, kind, pk):
     party = _party(request, kind, pk)
     lang = _lang(request)
@@ -93,6 +99,7 @@ def party_card(request, kind, pk):
         "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": words, "page_title": party.name, "section": "customers" if kind == "customer" else "suppliers",
         "kind": kind, "party": party, "code": code, "info": info, "data": data, "date_from": date_from, "date_to": date_to, "reminder": reminder,
         "can_sell": user_has_permission(request.user, "sales.create_sales_invoice"), "can_collect": user_has_permission(request.user, "sales.receive_customer_payment"),
+        "medical_file": kind == "customer" and _medical_file(request.user),
         "can_buy": user_has_permission(request.user, "purchases.create_purchase_invoice"), "can_pay": user_has_permission(request.user, "purchases.pay_supplier"),
     })
 

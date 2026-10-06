@@ -74,6 +74,7 @@ urlpatterns = [
     path("assets/", include("fixed_assets.urls")),
     path("shifts/", include("shifts.urls")),
     path("parties/", include("parties.urls")),
+    path("medical/", include("medical.urls")),
     path("search/", include("search.urls")),
     path("imports/", include("imports.urls")),
     path("closing/", include("closing.urls")),
