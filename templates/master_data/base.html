@@ -11,6 +11,7 @@
 {% include "partials/app_shell.html" %}
 <div class="hs-main">
 <main class="md-shell" id="hs-main" tabindex="-1">
+{% include "partials/entity_bar.html" %}
   {% if messages %}
     <div class="md-messages">
       {% for message in messages %}<div class="md-message">{{ message|ui:lang }}</div>{% endfor %}

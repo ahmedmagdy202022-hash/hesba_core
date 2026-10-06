@@ -81,6 +81,8 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.LoginRequiredMiddleware",
     "accounts.middleware.ForcePasswordChangeMiddleware",
     "settings_core.module_gate.ModuleGateMiddleware",
+    # ENT-002: which entity the signed-in user is working in (menu, words, books).
+    "entities.current.CurrentEntityMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "config.middleware.NoStoreHtmlMiddleware",

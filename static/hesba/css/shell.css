@@ -105,3 +105,10 @@
 .hs-search input::placeholder{color:var(--hs-on-navy-muted)}
 .hs-topbar__search{margin-inline-start:auto}
 @media(min-width:1024px){.hs-topbar__search{display:none}body.hs-rail .hs-search input[type=search]{padding:0;width:38px;color:transparent;cursor:pointer}body.hs-rail .hs-search input::placeholder{color:transparent}body.hs-rail .hs-search .hs-icon{inset-inline-start:11px}}
+/* ENT-002: the entity bar — which entity this screen is working in. */
+.hs-entities{display:flex;align-items:center;gap:6px;overflow-x:auto;margin:0 0 14px;padding:6px;border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);background:var(--hs-surface)}
+.hs-entities form{margin:0;flex:0 0 auto}
+.hs-entities__label{flex:0 0 auto;padding:0 6px;font-size:13px;color:var(--hs-muted)}
+.hs-entities__tab{min-height:36px;padding:0 14px;border:0;border-radius:999px;background:transparent;color:var(--hs-ink);font:inherit;font-weight:600;white-space:nowrap;cursor:pointer}
+.hs-entities__tab:hover{background:var(--hs-teal-wash)}
+.hs-entities__tab.is-current{background:var(--hs-navy);color:var(--hs-surface)}

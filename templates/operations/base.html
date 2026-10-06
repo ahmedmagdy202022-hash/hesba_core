@@ -9,6 +9,7 @@
 {% include "partials/app_shell.html" %}
 <div class="hs-main">
 <main class="op-shell" id="hs-main" tabindex="-1">
+{% include "partials/entity_bar.html" %}
   {% if messages %}
     <div class="op-messages">
       {% for message in messages %}<div class="op-message op-message-{{ message.tags|default:'info' }}">{{ message|ui:lang }}</div>{% endfor %}
