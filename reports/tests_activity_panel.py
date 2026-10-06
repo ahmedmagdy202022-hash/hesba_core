@@ -64,7 +64,9 @@ class ClinicPanelTests(PanelSetup):
         patient = make_customer(customer_code="P-1", name="منى")
         now = timezone.localtime()
         later = now + timedelta(hours=2) if now.hour < 21 else now + timedelta(minutes=30)
-        for status, when in ((AppointmentStatus.DONE, now - timedelta(hours=1)), (AppointmentStatus.NO_SHOW, now - timedelta(hours=1)),
+        # Earlier today, even in the first hour after midnight (an hour back would be yesterday).
+        earlier = max(now - timedelta(hours=1), now.replace(hour=0, minute=0, second=1, microsecond=0))
+        for status, when in ((AppointmentStatus.DONE, earlier), (AppointmentStatus.NO_SHOW, earlier),
                              (AppointmentStatus.BOOKED, later)):
             Appointment.objects.create(number=f"AP-{status}", customer=patient, starts_at=when, status=status, created_by=self.owner)
         response = self.page()

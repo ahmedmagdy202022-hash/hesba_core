@@ -47,6 +47,7 @@ NAV_ITEMS = (
     {"key": "pos", "ar": "الكاشير", "en": "Point of sale", "url_name": "sales:pos", "module": "sales_operations", "capability": "pos", "permission": "sales.create_sales_invoice"},
     {"key": "purchases", "ar": "المشتريات", "en": "Purchases", "url_name": "purchases:list", "module": "purchases", "permission": "purchases.view_purchase_invoices"},
     {"key": "inventory", "ar": "المخزون", "en": "Inventory", "url_name": "inventory:stock", "module": "inventory", "permission": "inventory.view_stock"},
+    {"key": "warehouses", "ar": "المخازن", "en": "Warehouses", "url_name": "master_data:locations", "module": "inventory", "permission": "inventory.view_stock"},
     {"key": "customers", "ar": "العملاء", "en": "Customers", "url_name": "master_data:customers", "module": "customers"},
     {"key": "suppliers", "ar": "الموردون", "en": "Suppliers", "url_name": "master_data:suppliers", "module": "suppliers", "permission": "master_data.view_suppliers"},
     {"key": "items", "ar": "الأصناف والخدمات", "en": "Items & services", "url_name": "master_data:items", "module": "items_services"},

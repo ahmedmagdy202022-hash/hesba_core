@@ -1,0 +1,10 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+{% include "ledger/_subnav.html" %}
+<section class="op-title-row"><div><h1>{{ words.tab_recon }}</h1><p>{{ words.recon_intro }}</p></div></section>
+<p data-recon-ok="{{ data.ok|yesno:'1,0' }}"><span class="op-status {% if data.ok %}op-status-posted{% else %}op-status-cancelled{% endif %}">{% if data.ok %}✓ {{ words.ok }}{% else %}⚠ {{ words.not_ok }}{% endif %}</span></p>
+<div class="op-table-wrap"><table class="op-table" data-recon><thead><tr><th>{{ words.check }}</th><th class="op-num">{{ words.ledger_figure }}</th><th class="op-num">{{ words.report_figure }}</th><th class="op-num">{{ words.difference }}</th></tr></thead><tbody>
+{% for row in rows %}<tr data-check="{{ row.key }}"><td>{{ row.label }}</td><td class="op-num">{{ row.ledger|money }}</td><td class="op-num">{{ row.report|money }}</td><td class="op-num">{% if row.difference %}<strong class="op-danger">{{ row.difference|money }}</strong>{% else %}✓{% endif %}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

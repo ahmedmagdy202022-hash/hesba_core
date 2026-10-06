@@ -1,0 +1,13 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+{% include "ledger/_subnav.html" %}
+<section class="op-title-row"><div><h1>{{ words.tab_trial }}</h1><p>{{ words.trial_intro }}</p></div></section>
+{% include "ledger/_filters.html" %}
+<p data-balanced="{{ data.balanced|yesno:'1,0' }}"><span class="op-status {% if data.balanced %}op-status-posted{% else %}op-status-cancelled{% endif %}">{% if data.balanced %}✓ {{ words.balanced }}{% else %}⚠ {{ words.unbalanced }}{% endif %}</span></p>
+<div class="op-table-wrap"><table class="op-table" data-trial><thead><tr><th>{{ words.code }}</th><th>{{ words.name }}</th><th class="op-num">{{ words.opening }}</th><th class="op-num">{{ words.debit }}</th><th class="op-num">{{ words.credit }}</th><th class="op-num">{{ words.closing }}</th></tr></thead><tbody>
+{% for row in data.rows %}<tr data-account="{{ row.account.code }}"><td><bdi>{% if row.account.is_postable %}<a href="{% url 'ledger:account_ledger' row.account.pk %}?lang={{ lang }}{% if date_from %}&from={{ date_from|date:'Y-m-d' }}{% endif %}{% if date_to %}&to={{ date_to|date:'Y-m-d' }}{% endif %}{% if entity %}&entity={{ entity.pk }}{% endif %}">{{ row.account.code }}</a>{% else %}{{ row.account.code }}{% endif %}</bdi></td><td>{% if not row.account.is_postable %}<strong>{% endif %}{% if lang == 'en' and row.account.name_en %}{{ row.account.name_en }}{% else %}{{ row.account.name_ar }}{% endif %}{% if not row.account.is_postable %}</strong>{% endif %}</td><td class="op-num">{{ row.opening|money }}</td><td class="op-num">{{ row.debit|money }}</td><td class="op-num">{{ row.credit|money }}</td><td class="op-num">{{ row.closing|money }}</td></tr>
+{% empty %}<tr><td colspan="6" class="op-muted">{{ words.empty }}</td></tr>{% endfor %}
+<tr class="op-total-row"><td colspan="3">{{ words.total }}</td><td class="op-num" data-total-debit>{{ data.totals.debit|money }}</td><td class="op-num" data-total-credit>{{ data.totals.credit|money }}</td><td></td></tr>
+</tbody></table></div>
+{% endblock %}
