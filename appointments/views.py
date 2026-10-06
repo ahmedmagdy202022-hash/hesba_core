@@ -122,6 +122,12 @@ def agenda(request):
     ))
 
 
+def _medical_file(user):
+    from medical.services import shows_files
+
+    return shows_files(user)
+
+
 @require_permission(VIEW)
 def detail(request, pk):
     lang = _lang(request)
@@ -160,7 +166,7 @@ def detail(request, pk):
     editable = appointment.status not in (AppointmentStatus.DONE, AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW) and not appointment.invoice_id
     return render(request, "appointments/detail.html", _base(
         request, appointment=appointment, local=local, status_label=choice_label(appointment, "status", lang), reminder=reminder, actions=actions,
-        form=form, editable=editable, error=error, can_bill=appointment.status in (AppointmentStatus.ARRIVED, AppointmentStatus.DONE) and not appointment.invoice_id,
+        form=form, editable=editable, error=error, medical_file=_medical_file(request.user), can_bill=appointment.status in (AppointmentStatus.ARRIVED, AppointmentStatus.DONE) and not appointment.invoice_id,
         **_choices(lang),
     ))
 

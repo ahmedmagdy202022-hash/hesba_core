@@ -1,0 +1,37 @@
+{% extends "operations/base.html" %}
+{% load l10n %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'medical:patients' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ patient.name }}</h1><p><bdi>{{ file.file_number }}</bdi>{% if age is not None %} · {{ age }} {{ words.years }}{% endif %}{% if file.gender %} · {% if file.gender == 'male' %}{{ words.male }}{% else %}{{ words.female }}{% endif %}{% endif %}{% if file.blood_type %} · {{ words.blood }} <bdi>{{ file.blood_type }}</bdi>{% endif %}{% if patient.phone %} · <bdi>{{ patient.phone }}</bdi>{% endif %}</p></div>
+<div class="op-form-actions">{% if can_write %}<a class="op-primary" href="{% url 'medical:visit_new' patient.pk %}?lang={{ lang }}" data-new-visit>{{ words.new_visit }}</a>{% endif %}<a class="op-secondary" href="{% url 'parties:card' 'customer' patient.pk %}?lang={{ lang }}">{{ words.account }}</a></div></section>
+{% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
+{% if file.allergies %}<div class="op-message op-message-error" role="alert" data-allergy-alert><strong>⚠ {{ words.allergy_alert }}:</strong> {{ file.allergies|linebreaksbr }}</div>{% endif %}
+<section class="op-summary-grid med-summary">
+<article><small>{{ words.chronic }}</small><strong>{{ file.chronic_conditions|default:'—'|linebreaksbr }}</strong></article>
+<article><small>{{ words.medications }}</small><strong>{{ file.current_medications|default:'—'|linebreaksbr }}</strong></article>
+<article><small>{{ words.emergency }}</small><strong>{{ file.emergency_contact|default:'—' }}</strong></article>
+<article><small>{{ words.last_visit }}</small><strong><bdi>{% if visits %}{{ visits.0.visit_date|date:"Y-m-d" }}{% else %}—{% endif %}</bdi></strong></article>
+</section>
+{% if upcoming %}<section class="op-detail-meta"><h2>{{ words.upcoming }}</h2>{% for a in upcoming %}<p><a href="{% url 'appointments:detail' a.pk %}?lang={{ lang }}"><bdi>{{ a.starts_at|date:"Y-m-d H:i" }}</bdi></a>{% if a.employee %} · {{ a.employee.name }}{% endif %}</p>{% endfor %}</section>{% endif %}
+<h2 class="med-heading">{{ words.visits }}</h2>
+{% for v in visits %}<article class="op-detail-meta med-visit" data-visit="{{ v.pk }}">
+<header class="med-visit__head"><strong><bdi>{{ v.visit_date|date:"Y-m-d" }}</bdi></strong>{% if v.doctor %} · {{ words.doctor }}: {{ v.doctor.name }}{% endif %}{% if v.follow_up_date %} · <span class="op-status {% if v.follow_up_date <= today %}op-status-draft{% else %}op-status-open{% endif %}">{{ words.follow_up }} <bdi>{{ v.follow_up_date|date:"Y-m-d" }}</bdi></span>{% endif %}
+<span class="med-visit__actions"><a href="{% url 'medical:prescription' v.pk %}?lang={{ lang }}" target="_blank" rel="noopener" data-print-rx>{{ words.print }}</a>{% if can_write %} · <a href="{% url 'medical:visit_edit' v.pk %}?lang={{ lang }}">{{ words.edit }}</a>{% endif %}</span></header>
+{% if v.complaint %}<p><b>{{ words.complaint }}:</b> {{ v.complaint|linebreaksbr }}</p>{% endif %}
+{% if v.blood_pressure or v.pulse or v.temperature or v.weight %}<p class="op-muted"><b>{{ words.vitals }}:</b>{% if v.blood_pressure %} {{ words.bp }} <bdi>{{ v.blood_pressure }}</bdi>{% endif %}{% if v.pulse %} · {{ words.pulse }} {{ v.pulse }}{% endif %}{% if v.temperature %} · {{ words.temp }} {{ v.temperature|unlocalize }}°{% endif %}{% if v.weight %} · {{ words.weight }} {{ v.weight|unlocalize }}{% endif %}{% if v.height %} · {{ words.height }} {{ v.height|unlocalize }}{% endif %}</p>{% endif %}
+{% if v.examination %}<p><b>{{ words.examination }}:</b> {{ v.examination|linebreaksbr }}</p>{% endif %}
+{% if v.diagnosis %}<p><b>{{ words.diagnosis }}:</b> {{ v.diagnosis|linebreaksbr }}</p>{% endif %}
+{% if v.treatment %}<p><b>{{ words.treatment }}:</b> {{ v.treatment|linebreaksbr }}</p>{% endif %}
+</article>{% empty %}<p class="op-muted">{{ words.no_visits }}</p>{% endfor %}
+<details class="op-form med-profile"{% if error %} open{% endif %}><summary><h2>{{ words.edit_profile }}</h2></summary>
+{% if can_write %}<form method="post" data-patient-profile>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><div class="op-form-grid">
+<div class="op-field"><label for="dob">{{ words.dob }}</label><input id="dob" type="date" name="date_of_birth" value="{{ file.date_of_birth|date:'Y-m-d' }}"></div>
+<div class="op-field"><label for="gender">{{ words.gender }}</label><select id="gender" name="gender"><option value="">{{ words.choose }}</option><option value="male"{% if file.gender == 'male' %} selected{% endif %}>{{ words.male }}</option><option value="female"{% if file.gender == 'female' %} selected{% endif %}>{{ words.female }}</option></select></div>
+<div class="op-field"><label for="blood">{{ words.blood }}</label><select id="blood" name="blood_type"><option value="">{{ words.choose }}</option>{% for b in bloods %}<option value="{{ b }}"{% if file.blood_type == b %} selected{% endif %}>{{ b }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="emergency">{{ words.emergency }}</label><input id="emergency" name="emergency_contact" value="{{ file.emergency_contact }}"></div>
+<div class="op-field"><label for="allergies">{{ words.allergies }}</label><textarea id="allergies" name="allergies">{{ file.allergies }}</textarea></div>
+<div class="op-field"><label for="chronic">{{ words.chronic }}</label><textarea id="chronic" name="chronic_conditions">{{ file.chronic_conditions }}</textarea></div>
+<div class="op-field"><label for="meds">{{ words.medications }}</label><textarea id="meds" name="current_medications">{{ file.current_medications }}</textarea></div>
+<div class="op-field"><label for="notes">{{ words.notes }}</label><textarea id="notes" name="notes">{{ file.notes }}</textarea></div>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form>{% endif %}
+</details>
+{% endblock %}

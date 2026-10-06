@@ -1,0 +1,9 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div></section>
+<form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><input type="search" name="q" value="{{ query }}" placeholder="{{ words.search }}" aria-label="{{ words.search }}"><button type="submit">{{ words.find }}</button></form>
+<div class="op-table-wrap"><table class="op-table" data-patients><thead><tr><th>{{ words.file_no }}</th><th>{{ words.patient }}</th><th>{{ words.phone }}</th><th>{{ words.age }}</th><th>{{ words.last_visit }}</th><th></th></tr></thead><tbody>
+{% for row in rows %}<tr data-patient="{{ row.pk }}"><td><bdi>{{ row.file_number|default:'—' }}</bdi></td><td class="op-cell-text">{{ row.name }}</td><td><bdi>{{ row.phone|default:'—' }}</bdi></td><td>{% if row.age is not None %}{{ row.age }} {{ words.years }}{% else %}—{% endif %}</td><td><bdi>{{ row.last|date:"Y-m-d"|default:'—' }}</bdi></td><td><a href="{% url 'medical:file' row.pk %}?lang={{ lang }}">{{ words.open }}</a></td></tr>
+{% empty %}<tr><td colspan="6" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

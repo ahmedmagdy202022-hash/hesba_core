@@ -7,8 +7,10 @@ enforces its own permission.
 """
 
 from django.urls import reverse
+from django.utils.module_loading import import_string
 
 from permissions.services import user_has_permission
+
 from settings_core.capabilities import capability_enabled
 from settings_core.vocabulary import active_vocabulary, term
 
@@ -20,7 +22,7 @@ TAB_TERMS = {"operations": "operations_short", "customers": "customers", "items"
 # dashboard, in the sidebar and on the phone tab bar.
 ACTIVITY_LEAD = {
     "restaurants": ("restaurant", "pos"),
-    "medical": ("appointments",),
+    "medical": ("appointments", "medical"),
     "education": ("appointments",),
     "services": ("appointments",),
     "manufacturing": ("manufacturing",),
@@ -55,6 +57,7 @@ NAV_ITEMS = (
     {"key": "manufacturing", "ar": "التصنيع", "en": "Manufacturing", "url_name": "manufacturing:home", "module": "manufacturing", "permission": "inventory.view_stock"},
     {"key": "projects", "ar": "المشاريع", "en": "Projects", "url_name": "projects:list", "module": "projects", "permission": "sales.view_sales_invoices"},
     {"key": "restaurant", "ar": "الطاولات", "en": "Tables", "url_name": "restaurant:board", "module": "tables_orders", "permission": "sales.view_sales_invoices"},
+    {"key": "medical", "ar": "الملفات الطبية", "en": "Patient files", "url_name": "medical:patients", "module": "customers", "activity": "medical", "allow": "medical.services.can_view"},
     {"key": "appointments", "ar": "المواعيد", "en": "Appointments", "url_name": "appointments:agenda", "module": "appointments_visits", "permission": "sales.view_sales_invoices"},
     {"key": "staff", "ar": "الموظفون", "en": "Employees", "url_name": "staff:list", "module": "employees_technicians", "permission": "master_data.view_master_data"},
     {"key": "expenses", "ar": "المصروفات", "en": "Expenses", "url_name": "expenses:list", "module": "expenses", "permission": "cashboxes.view_expenses"},
@@ -84,6 +87,7 @@ TAB_LABELS = {
     "restaurant": {"ar": "الطاولات", "en": "Tables"},
     "manufacturing": {"ar": "التصنيع", "en": "Production"},
     "projects": {"ar": "المشاريع", "en": "Projects"},
+    "medical": {"ar": "الملفات", "en": "Files"},
 }
 
 SHELL_WORDS = {
@@ -130,6 +134,10 @@ def nav_items(user, lang, modules):
             continue
         permission = item.get("permission")
         if permission and not user_has_permission(user, permission):
+            continue
+        if item.get("activity") and item["activity"] != _activity():
+            continue
+        if item.get("allow") and not import_string(item["allow"])(user):
             continue
         label = term(NAV_TERMS[item["key"]], lang, words) if item["key"] in NAV_TERMS else item[lang]
         items.append({"key": item["key"], "label": label, "url_name": item["url_name"]})

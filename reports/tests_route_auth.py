@@ -24,6 +24,9 @@ PUBLIC_ROUTE_NAMES = frozenset(
         # {"status": ...} and never returns data. Called by an external scheduler.
         "ops_nightly",
         "ops_digest",  # DIGEST-002: same token guard as ops_nightly; 404 without it
+        # DEMO-RESTART: offered on the demo login page. 404 unless DEMO_MODE, POST
+        # only and CSRF-protected; a demo's logins and password are public anyway.
+        "demo_restart",
     }
 )
 
