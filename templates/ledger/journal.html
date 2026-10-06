@@ -1,0 +1,13 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+{% include "ledger/_subnav.html" %}
+<section class="op-title-row"><div><h1>{{ words.tab_journal }}</h1><p>{{ words.journal_intro }}</p></div></section>
+{% include "ledger/_filters.html" %}
+{% if rows %}<div class="op-table-wrap"><table class="op-table" data-journal><thead><tr><th>{{ words.date }}</th><th>{{ words.code }}</th><th>{{ words.name }}</th><th class="op-num">{{ words.debit }}</th><th class="op-num">{{ words.credit }}</th></tr></thead><tbody>
+{% for row in rows %}<tr class="op-entry-head" data-entry="{{ row.entry.pk }}"><td><bdi>{{ row.entry.entry_date|date:"Y-m-d" }}</bdi></td><td colspan="4"><bdi>{{ row.entry.reference }}</bdi>{% if row.entry.memo %} — {{ row.entry.memo }}{% endif %}</td></tr>
+{% for line in row.lines %}<tr><td></td><td><bdi><a href="{% url 'ledger:account_ledger' line.account.pk %}?lang={{ lang }}">{{ line.account.code }}</a></bdi></td><td>{% if lang == 'en' and line.account.name_en %}{{ line.account.name_en }}{% else %}{{ line.account.name_ar }}{% endif %}{% if entities|length > 1 %} <small class="op-muted">{{ line.entity.code }}</small>{% endif %}</td><td class="op-num">{% if line.debit %}{{ line.debit|money }}{% endif %}</td><td class="op-num">{% if line.credit %}{{ line.credit|money }}{% endif %}</td></tr>{% endfor %}{% endfor %}
+</tbody></table></div>
+{% if has_more %}<p><a href="?lang={{ lang }}&page={{ page|add:1 }}{% if date_from %}&from={{ date_from|date:'Y-m-d' }}{% endif %}{% if date_to %}&to={{ date_to|date:'Y-m-d' }}{% endif %}{% if entity %}&entity={{ entity.pk }}{% endif %}">{{ words.more }} ←</a></p>{% endif %}
+{% else %}<p class="op-muted">{{ words.empty }}</p>{% endif %}
+{% endblock %}
