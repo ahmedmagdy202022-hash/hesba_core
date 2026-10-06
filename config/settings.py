@@ -66,6 +66,7 @@ LOCAL_APPS = [
     "printing",
     "entities",
     "ledger",
+    "medical",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + LOCAL_APPS

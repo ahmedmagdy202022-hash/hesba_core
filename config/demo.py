@@ -39,6 +39,63 @@ def switch_activity(request):
         raise PermissionDenied("Owner only.")
     activity, _, sub = (request.POST.get("activity") or "").partition(":")
     if (activity, sub) in DEMO_ACTIVITIES:
-        ClientProfile.objects.filter(is_active=True).update(activity_slug=activity, sub_activity_slug=sub)
+        # NAV-ACT: switch the modules and capabilities too, exactly as the setup
+        # wizard would for this activity, so the menu shows what it would use.
+        from settings_core import setup_catalog as catalog
+        from settings_core.setup_services import complete_setup
+
+        profile = ClientProfile.get_active()
+        complete_setup(profile, activity, sub, ",".join(catalog.default_modules(activity)), user=request.user)
     lang = "en" if request.POST.get("lang") == "en" else "ar"
+    return redirect(f"/dashboard/?lang={lang}")
+
+
+def restart(request):
+    """POST from the login page or the demo bar: start the showcase over."""
+
+    from django.contrib.auth import login
+    from django.http import Http404
+    from django.shortcuts import redirect
+
+    from .demo_restart import restart_demo
+
+    if not getattr(settings, "DEMO_MODE", False):
+        raise Http404("Demo only.")
+    lang = "en" if request.POST.get("lang") == "en" else "ar"
+    if request.method != "POST":
+        return redirect(f"/login/?lang={lang}")
+    owner = restart_demo()
+    login(request, owner, backend="django.contrib.auth.backends.ModelBackend")
+    return redirect(f"/setup/activity/?lang={lang}")
+
+
+def sample(request):
+    """After choosing the activity on a restarted demo: a month of sample trade."""
+
+    from django.core.exceptions import PermissionDenied
+    from django.http import Http404
+    from django.shortcuts import redirect
+
+    from permissions.services import user_has_permission
+
+    if not getattr(settings, "DEMO_MODE", False):
+        raise Http404("Demo only.")
+    lang = "en" if request.POST.get("lang") == "en" else "ar"
+    if request.method != "POST":
+        return redirect(f"/dashboard/?lang={lang}")
+    if not user_has_permission(request.user, "settings.view_settings"):
+        raise PermissionDenied("Owner only.")
+    from django.core.management import call_command
+    from django.core.management.base import CommandError
+
+    from settings_core.management.commands.prepare_demo import Command as Prepare
+
+    prepare = Prepare()
+    try:
+        prepare._history()
+        call_command("seed_demo_business", username="owner", force=True, verbosity=0)
+        prepare._spread_sale_times()
+        prepare._extras()
+    except CommandError:
+        pass
     return redirect(f"/dashboard/?lang={lang}")

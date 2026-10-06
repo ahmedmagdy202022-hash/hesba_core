@@ -1,0 +1,27 @@
+{% extends "operations/base.html" %}
+{% load l10n %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'medical:file' patient.pk %}?lang={{ lang }}">← {{ patient.name }}</a><h1>{% if visit %}{{ words.edit }} — {{ words.visit }}{% else %}{{ words.new_visit|cut:'+ ' }}{% endif %}</h1>{% if appointment %}<p>{{ words.from_appointment }} <bdi>{{ appointment.number }}</bdi></p>{% endif %}</div></section>
+{% if error %}<div class="op-message op-message-error" role="alert" data-visit-error>{{ error }}</div>{% endif %}
+<form class="op-form" method="post" data-visit-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">{% if appointment %}<input type="hidden" name="appointment" value="{{ appointment.pk }}">{% endif %}
+<div class="op-form-grid">
+<div class="op-field"><label for="visit_date">{{ words.date }}</label><input id="visit_date" type="date" name="visit_date" value="{% if post.visit_date %}{{ post.visit_date }}{% else %}{{ default_date|date:'Y-m-d' }}{% endif %}"></div>
+<div class="op-field"><label for="doctor">{{ words.doctor }}</label><select id="doctor" name="doctor"><option value="">—</option>{% for d in doctors %}<option value="{{ d.pk }}"{% if d.pk == default_doctor %} selected{% endif %}>{{ d.name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="complaint">{{ words.complaint }}</label><textarea id="complaint" name="complaint">{% if post %}{{ post.complaint }}{% else %}{{ visit.complaint }}{% endif %}</textarea></div>
+<div class="op-field"><label for="examination">{{ words.examination }}</label><textarea id="examination" name="examination">{% if post %}{{ post.examination }}{% else %}{{ visit.examination }}{% endif %}</textarea></div>
+</div>
+<h2>{{ words.vitals }}</h2>
+<div class="op-form-grid med-vitals">
+<div class="op-field"><label for="bp">{{ words.bp }}</label><input id="bp" name="blood_pressure" inputmode="numeric" placeholder="120/80" dir="ltr" value="{% if post %}{{ post.blood_pressure }}{% else %}{{ visit.blood_pressure }}{% endif %}"></div>
+<div class="op-field"><label for="pulse">{{ words.pulse }}</label><input id="pulse" name="pulse" inputmode="numeric" dir="ltr" value="{% if post %}{{ post.pulse }}{% else %}{{ visit.pulse|default_if_none:'' }}{% endif %}"></div>
+<div class="op-field"><label for="temp">{{ words.temp }}</label><input id="temp" name="temperature" inputmode="decimal" dir="ltr" value="{% if post %}{{ post.temperature }}{% else %}{{ visit.temperature|default_if_none:''|unlocalize }}{% endif %}"></div>
+<div class="op-field"><label for="weight">{{ words.weight }}</label><input id="weight" name="weight" inputmode="decimal" dir="ltr" value="{% if post %}{{ post.weight }}{% else %}{{ visit.weight|default_if_none:''|unlocalize }}{% endif %}"></div>
+<div class="op-field"><label for="height">{{ words.height }}</label><input id="height" name="height" inputmode="decimal" dir="ltr" value="{% if post %}{{ post.height }}{% else %}{{ visit.height|default_if_none:''|unlocalize }}{% endif %}"></div>
+</div>
+<div class="op-form-grid">
+<div class="op-field"><label for="diagnosis">{{ words.diagnosis }}</label><textarea id="diagnosis" name="diagnosis">{% if post %}{{ post.diagnosis }}{% else %}{{ visit.diagnosis }}{% endif %}</textarea></div>
+<div class="op-field"><label for="treatment">{{ words.treatment }}</label><textarea id="treatment" name="treatment" rows="5">{% if post %}{{ post.treatment }}{% else %}{{ visit.treatment }}{% endif %}</textarea></div>
+<div class="op-field"><label for="follow">{{ words.follow_up }}</label><input id="follow" type="date" name="follow_up_date" value="{% if post %}{{ post.follow_up_date }}{% else %}{{ visit.follow_up_date|date:'Y-m-d' }}{% endif %}"></div>
+</div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form>
+{% endblock %}
