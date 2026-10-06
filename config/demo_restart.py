@@ -41,6 +41,11 @@ def restart_demo():
         raise RuntimeError("restart_demo only runs on a demo install.")
     from django.contrib.auth import get_user_model
 
+    if connection.vendor == "postgresql" and connection.in_atomic_block:
+        # PostgreSQL refuses TRUNCATE while deferred foreign-key checks are
+        # pending in the open transaction; settle them first.
+        with connection.cursor() as cursor:
+            cursor.execute("SET CONSTRAINTS ALL IMMEDIATE")
     call_command("flush", interactive=False, verbosity=0)
     with transaction.atomic():
         replay_seed_migrations()
