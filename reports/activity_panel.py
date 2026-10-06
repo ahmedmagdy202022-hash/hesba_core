@@ -38,7 +38,7 @@ WORDS = {
         "avg_order": "متوسط الطلب النهارده",
         "today_total": "مواعيد النهارده", "waiting": "لسه جايين / جوّه", "done_today": "خلصت", "no_show_today": "ماجوش",
         "no_show_rate": "نسبة اللي ماجوش (30 يوم)", "next": "الموعد الجاي", "none_next": "مفيش مواعيد تانية النهارده",
-        "runs": "تشغيلات", "units": "وحدات اتنتجت", "prod_cost": "تكلفة الإنتاج", "short_recipes": "وصفات ناقصها خامات",
+        "runs": "تشغيلات", "units": "وحدات اتنتجت", "prod_cost": "تكلفة الإنتاج", "short_recipes": "وصفات ناقصها خامات", "open_orders_mfg": "أوامر إنتاج شغالة", "late_orders": "متأخر عن ميعاده", "late_none": "مفيش تأخير",
         "short_none": "كل الوصفات خاماتها كفاية لتشغيلة", "short_list": "ناقصها خامات:",
         "active_projects": "مشاريع شغالة", "contract_total": "قيمة العقود", "billed_pct": "اتفوتر من العقود", "losing": "مشاريع خسرانة",
         "project_dues": "مستحقات على المشاريع", "open": "افتح", "of": "من",
@@ -49,7 +49,7 @@ WORDS = {
         "avg_order": "Average order today",
         "today_total": "Bookings today", "waiting": "Still to come / in", "done_today": "Done", "no_show_today": "No-shows",
         "no_show_rate": "No-show rate (30 days)", "next": "Next booking", "none_next": "No more bookings today",
-        "runs": "Runs", "units": "Units produced", "prod_cost": "Production cost", "short_recipes": "Recipes short of materials",
+        "runs": "Runs", "units": "Units produced", "prod_cost": "Production cost", "short_recipes": "Recipes short of materials", "open_orders_mfg": "Open production orders", "late_orders": "past their due date", "late_none": "nothing late",
         "short_none": "Every recipe has materials for a batch", "short_list": "Short:",
         "active_projects": "Active projects", "contract_total": "Contract value", "billed_pct": "Billed of contracts", "losing": "Projects losing money",
         "project_dues": "Owed on projects", "open": "Open", "of": "of",
@@ -120,8 +120,14 @@ def _production(words, today):
         if location is not None and plan(recipe, Decimal("1"), location)["possible_batches"] < 1:
             short.append(recipe.product.item_name)
     units = totals["units"] or ZERO
+    from manufacturing.models import OrderStatus, ProductionOrder
+
+    open_orders = ProductionOrder.objects.filter(status__in=(OrderStatus.PLANNED, OrderStatus.IN_PROGRESS))
+    late = open_orders.filter(due_date__lt=today).count()
     return [
-        _tile("runs", words["runs"], totals["n"] or 0, tone="lead"),
+        _tile("open_orders_mfg", words["open_orders_mfg"], open_orders.count(), tone="bad" if late else "lead",
+              sub=f"{late} {words['late_orders']}" if late else words["late_none"]),
+        _tile("runs", words["runs"], totals["n"] or 0),
         _tile("units", words["units"], f"{units.normalize():f}" if units else "0", "text"),
         _tile("prod_cost", words["prod_cost"], money_round(totals["cost"] or ZERO), "money"),
         _tile("short_recipes", words["short_recipes"], len(short), tone="bad" if short else "good",
