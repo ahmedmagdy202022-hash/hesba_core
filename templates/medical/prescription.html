@@ -1,0 +1,19 @@
+{% load static %}<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{{ words.rx }} — {{ visit.patient.name }}</title>
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}"><link rel="stylesheet" href="{% static 'hesba/css/print.css' %}?v=print-002">
+<style>.rx{max-width:720px;margin:24px auto;padding:28px;background:var(--hs-surface);border:1px solid var(--hs-line);border-radius:14px;font-family:var(--hs-font-body);color:var(--hs-ink)}.rx header{display:flex;justify-content:space-between;gap:16px;border-bottom:2px solid var(--hs-teal);padding-bottom:12px}.rx h1{margin:0;font-family:var(--hs-font-head);color:var(--hs-navy);font-size:22px}.rx .meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 18px;margin:16px 0}.rx .big{font-size:40px;font-family:serif;color:var(--hs-teal-deep)}.rx .body{min-height:260px;white-space:pre-wrap;font-size:17px;line-height:1.9}.rx footer{display:flex;justify-content:space-between;margin-top:30px;padding-top:12px;border-top:1px solid var(--hs-line)}.rx .alert{color:var(--hs-danger-solid);font-weight:700}@media print{.no-print{display:none}.rx{border:0;margin:0}}</style></head>
+<body style="background:var(--hs-ground)">
+<p class="no-print" style="text-align:center"><button type="button" data-print style="min-height:44px;padding:0 18px;border:0;border-radius:10px;background:var(--hs-teal);color:var(--hs-on-teal);font-weight:700">{{ words.print }}</button></p>
+<main class="rx" data-prescription>
+<header><div><h1>{{ company.name }}</h1>{% if company.phone %}<div><bdi>{{ company.phone }}</bdi></div>{% endif %}{% if company.address %}<div>{{ company.address }}</div>{% endif %}</div>{% if company.logo %}<img src="{{ company.logo }}" alt="" style="max-height:64px">{% endif %}</header>
+<section class="meta"><div><b>{{ words.patient }}:</b> {{ visit.patient.name }}</div><div><b>{{ words.date }}:</b> <bdi>{{ visit.visit_date|date:"Y-m-d" }}</bdi></div>
+<div><b>{{ words.file_no }}:</b> <bdi>{{ file.file_number }}</bdi></div><div>{% if age is not None %}<b>{{ words.age }}:</b> {{ age }} {{ words.years }}{% endif %}</div>
+{% if visit.doctor %}<div><b>{{ words.doctor }}:</b> {{ visit.doctor.name }}</div>{% endif %}{% if file.allergies %}<div class="alert">⚠ {{ words.allergies }}: {{ file.allergies }}</div>{% endif %}</section>
+{% if visit.diagnosis %}<p><b>{{ words.diagnosis }}:</b> {{ visit.diagnosis }}</p>{% endif %}
+<div class="big" aria-hidden="true">℞</div>
+<div class="body">{{ visit.treatment }}</div>
+<footer><div>{% if visit.follow_up_date %}<b>{{ words.follow_up }}:</b> <bdi>{{ visit.follow_up_date|date:"Y-m-d" }}</bdi>{% endif %}</div><div>{{ words.clinic_signature }}: ____________</div></footer>
+</main>
+<script>document.querySelector('[data-print]').addEventListener('click', function(){ window.print(); });</script>
+</body></html>
