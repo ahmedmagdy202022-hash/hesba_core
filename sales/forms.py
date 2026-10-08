@@ -5,10 +5,11 @@ from django.forms import BaseFormSet, formset_factory
 from django.utils import timezone
 
 from cashboxes.models import Cashbox
+from config.numbering import AutoNumbered
 from master_data.models import Customer, Item, Location
 from staff.models import Employee
 
-from .models import CustomerPayment, SalesLine, SalesReturn
+from .models import CustomerPayment, SalesInvoice, SalesLine, SalesReturn
 from entities import scope as entity_scope
 
 
@@ -50,7 +51,8 @@ SALES_LABELS = {
 }
 
 
-class SalesDraftForm(forms.Form):
+class SalesDraftForm(AutoNumbered, forms.Form):
+    auto_number = ("invoice_number", SalesInvoice, "invoice_number", "SI-")  # AUTONUM
     invoice_number = forms.CharField(max_length=80)
     invoice_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
     customer = forms.ModelChoiceField(queryset=Customer.objects.none())
@@ -83,6 +85,14 @@ class SalesDraftForm(forms.Form):
         self.fields["cashbox"].queryset = entity_scope.cashboxes(Cashbox.objects).filter(active=True)
         if not self.is_bound:
             self.initial.setdefault("invoice_date", timezone.localdate())
+        self.offer_auto_number(lang)
+
+    def clean_invoice_number(self):
+        # A taken number was a server error (unique constraint); now it is a field message.
+        number = (self.cleaned_data.get("invoice_number") or "").strip()
+        if number and SalesInvoice.objects.filter(invoice_number=number).exists():
+            raise forms.ValidationError("A sales invoice with this number already exists.")
+        return number
 
 
 class SalesLineInputForm(forms.Form):
@@ -150,7 +160,8 @@ SalesLineFormSet = formset_factory(
 )
 
 
-class CustomerPaymentForm(forms.Form):
+class CustomerPaymentForm(AutoNumbered, forms.Form):
+    auto_number = ("payment_number", CustomerPayment, "payment_number", "CP-")  # AUTONUM
     payment_number = forms.CharField(max_length=80)
     payment_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
     customer = forms.ModelChoiceField(queryset=Customer.objects.none())
@@ -171,15 +182,17 @@ class CustomerPaymentForm(forms.Form):
         self.fields["cashbox"].queryset = entity_scope.cashboxes(Cashbox.objects).filter(active=True)
         if not self.is_bound:
             self.initial.setdefault("payment_date", timezone.localdate())
+        self.offer_auto_number(lang)
 
     def clean_payment_number(self):
-        number = self.cleaned_data["payment_number"]
-        if CustomerPayment.objects.filter(payment_number=number).exists():
+        number = (self.cleaned_data["payment_number"] or "").strip()
+        if number and CustomerPayment.objects.filter(payment_number=number).exists():
             raise forms.ValidationError("A customer collection with this number already exists.")
         return number
 
 
-class SalesReturnForm(forms.Form):
+class SalesReturnForm(AutoNumbered, forms.Form):
+    auto_number = ("return_number", SalesReturn, "return_number", "SR-")  # AUTONUM
     return_number = forms.CharField(max_length=80)
     return_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
     reason = forms.CharField(widget=forms.Textarea(attrs={"rows": 3}))
@@ -195,10 +208,11 @@ class SalesReturnForm(forms.Form):
             field.label = self.LABELS[lang][name]
         if not self.is_bound:
             self.initial["return_date"] = timezone.localdate()
+        self.offer_auto_number(lang)
 
     def clean_return_number(self):
         number = self.cleaned_data["return_number"].strip()
-        if SalesReturn.objects.filter(return_number=number).exists():
+        if number and SalesReturn.objects.filter(return_number=number).exists():
             raise forms.ValidationError("A sales return with this number already exists.")
         return number
 

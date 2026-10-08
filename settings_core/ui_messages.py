@@ -20,6 +20,7 @@ EXACT = {
     "A purchase return must contain at least one line.": "مرتجع الشراء لازم يكون فيه سطر واحد على الأقل.",
     "A purchase return with this number already exists.": "فيه مرتجع شراء بنفس الرقم.",
     "A sales invoice with posted return documents cannot be cancelled.": "فاتورة البيع دي عليها مرتجعات مرحّلة، فمينفعش تتلغي.",
+    "A sales invoice with this number already exists.": "فيه فاتورة بيع بنفس الرقم ده. سيبه فاضي وهيتعمل رقم جديد لوحده.",
     "A sales line discount cannot exceed its gross amount.": "خصم السطر أكبر من قيمته.",
     "A sales return must contain at least one line.": "مرتجع البيع لازم يكون فيه سطر واحد على الأقل.",
     "A sales return with this number already exists.": "فيه مرتجع بيع بنفس الرقم.",

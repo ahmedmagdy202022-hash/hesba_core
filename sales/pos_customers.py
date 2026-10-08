@@ -26,10 +26,9 @@ def customer_directory():
 
 
 def _next_code():
-    number = Customer.objects.count() + 1
-    while Customer.objects.filter(customer_code=f"C-{number:05d}").exists():
-        number += 1
-    return f"C-{number:05d}"
+    from config.numbering import next_in_series
+
+    return next_in_series(Customer, "customer_code", "C-")  # AUTONUM: the same series as the customer form
 
 
 @transaction.atomic
