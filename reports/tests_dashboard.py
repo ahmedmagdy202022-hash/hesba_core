@@ -607,8 +607,13 @@ class SeedDemoBusinessTests(TestCase):
     def test_its_customers_have_reps_so_the_rep_report_has_figures(self):
         from datetime import date
 
+        from settings_core.models import FeatureFlag
+        from settings_core.setup_services import module_flag_code
+
         from .reps import rep_performance
 
+        # Reps are only named on invoices of a business using the employees module (FEEDBACK-R1).
+        FeatureFlag.objects.update_or_create(code=module_flag_code("employees_technicians"), defaults={"enabled": True})
         self.seed()
         rows, totals = rep_performance(date(2000, 1, 1), timezone.localdate())
         names = {row["rep"].name for row in rows if row["rep"] and row["net_sales"] > 0}

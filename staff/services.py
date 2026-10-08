@@ -21,15 +21,21 @@ _DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
 STAFF_MODULE = "employees_technicians"
 
 
+def reps_in_use():
+    """FEEDBACK-R1: does this business use reps (the employees module is on)?"""
+
+    from settings_core.setup_services import module_is_enabled
+
+    return module_is_enabled(STAFF_MODULE)
+
+
 def reps_offered():
     """FEEDBACK-R1: employees to pick as a customer's rep or an invoice's seller.
 
     Only when the employees module is switched on: a pharmacy that never chose
     it must not be asked for a rep, even if sample data put people in."""
 
-    from settings_core.setup_services import module_is_enabled
-
-    if not module_is_enabled(STAFF_MODULE):
+    if not reps_in_use():
         return Employee.objects.none()
     return Employee.objects.filter(active=True)
 

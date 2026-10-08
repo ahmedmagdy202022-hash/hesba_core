@@ -26,6 +26,7 @@ from purchases.models import PurchaseInvoice, PurchaseLine, PurchasePaymentStatu
 from purchases.services import post_purchase_invoice, record_supplier_payment
 from sales.models import SalesInvoice, SalesLine, SalesPaymentStatus
 from sales.services import post_sales_invoice, record_customer_payment
+from staff.services import reps_in_use
 
 
 D = Decimal
@@ -395,7 +396,7 @@ class Command(BaseCommand):
             paid_now=paid_now,
             remaining_due=subtotal - paid_now,
             payment_status=self._sales_payment_status(subtotal, paid_now),
-            salesperson=customer.sales_rep,
+            salesperson=customer.sales_rep if reps_in_use() else None,  # FEEDBACK-R1
             created_by=actor,
             notes="Demo business seed",
         )

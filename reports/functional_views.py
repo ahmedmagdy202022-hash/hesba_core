@@ -65,14 +65,18 @@ def _date_filter(request, name):
 
 
 def report_hub(request):
-    from settings_core.setup_services import module_is_enabled
+    from sales.models import SalesInvoice
+    from staff.services import reps_in_use
 
     lang = _lang(request)
+    # FEEDBACK-R1: the rep report is offered while reps are used, and stays
+    # for a business that used them before switching employees off (GATE-001).
+    reps_shown = reps_in_use() or SalesInvoice.objects.exclude(salesperson=None).exists()
     cards = [
         {"url_name": url_name, "allowed": user_has_permission(request.user, permission), "title": title_en if lang == "en" else title_ar, "title_alt": title_ar if lang == "en" else title_en, "description": description_en if lang == "en" else description_ar}
         for url_name, permission, title_en, title_ar, description_en, description_ar in REPORT_CARDS
         if url_name != "taxes:report" or capability_enabled("vat")  # TAX-001
-        if url_name != "reports:reps" or module_is_enabled("employees_technicians")  # FEEDBACK-R1
+        if url_name != "reports:reps" or reps_shown  # FEEDBACK-R1
     ]
     return render(request, "reports/functional_hub.html", _context(request, cards=cards, checkpoint_code="096_FOUNDATION_READ_ONLY_REPORT_HUB"))
 

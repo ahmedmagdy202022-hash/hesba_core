@@ -39,16 +39,25 @@ def default_salesperson(customer, user):
     Nobody while the employees module is off (FEEDBACK-R1), so an invoice
     never names a rep the business does not use."""
 
-    from staff.services import STAFF_MODULE
-    from settings_core.setup_services import module_is_enabled
+    from staff.services import reps_in_use
 
-    if not module_is_enabled(STAFF_MODULE):
+    if not reps_in_use():
         return None
     rep = getattr(customer, "sales_rep", None)
     if rep is not None and rep.active:
         return rep
     employee = getattr(user, "employee", None) if user is not None else None
     return employee if employee is not None and employee.active else None
+
+
+def _salesperson(header, user):
+    """FEEDBACK-R1: the one rule for every invoice: no rep while the business does not use reps."""
+
+    from staff.services import reps_in_use
+
+    if not reps_in_use():
+        return None
+    return header.get("salesperson") or default_salesperson(header["customer"], user)
 
 
 def create_sales_draft(header, lines, user=None):
@@ -89,7 +98,7 @@ def create_sales_draft(header, lines, user=None):
         paid_now=paid_now,
         remaining_due=money_round(total_amount - paid_now),
         notes=header.get("notes", ""),
-        salesperson=header.get("salesperson") or default_salesperson(header["customer"], user),
+        salesperson=_salesperson(header, user),
         created_by=user,
     )
     invoice.payment_status = invoice.calculate_payment_status()

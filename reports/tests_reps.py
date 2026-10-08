@@ -135,7 +135,27 @@ class RepsNeedTheEmployeesModuleTests(TestCase):
         self.client.force_login(self.owner)
         self.assertNotContains(self.client.get(reverse("master_data:customer_create")), 'name="sales_rep"')
         self.assertNotContains(self.client.get(reverse("report_hub")), reverse("reports:reps"))
-        self.assertEqual(self.client.get(reverse("reports:reps")).status_code, 403)
+        # Reports stay open (GATE-001): it only reads, and has nothing to show.
+        self.assertEqual(self.client.get(reverse("reports:reps")).status_code, 200)
+
+    def test_an_explicit_rep_is_ignored_and_history_keeps_the_report(self):
+        from hesba_testing.factories import make_cashbox, make_item, make_location, stock_in
+        from staff.models import Employee
+
+        employee = Employee.objects.get()
+        location = make_location(location_code="L-NR", is_selling_location=True)
+        item = make_item(item_code="IT-NR")
+        stock_in(item, location, 5, "10.00")
+        invoice = create_sales_draft(
+            {"invoice_number": "NR-1", "invoice_date": timezone.localdate(), "customer": make_customer(customer_code="C-NR"),
+             "selling_location": location, "cashbox": make_cashbox(cashbox_code="C-NR"), "paid_now": D("0"), "salesperson": employee},
+            [{"item": item, "quantity": D("1"), "unit_sale_price": D("20")}], self.owner,
+        )
+        self.assertIsNone(invoice.salesperson)
+        # A business that used reps before switching employees off still finds the report.
+        SalesInvoice.objects.filter(pk=invoice.pk).update(salesperson=employee)
+        self.client.force_login(self.owner)
+        self.assertContains(self.client.get(reverse("report_hub")), reverse("reports:reps"))
 
     def test_invoices_name_no_rep(self):
         from sales.services import default_salesperson

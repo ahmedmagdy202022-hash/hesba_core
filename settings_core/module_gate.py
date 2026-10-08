@@ -41,7 +41,6 @@ MODULE_ROUTES = (
     ("/master-data/categories/", "items_services"),
     ("/master-data/cashboxes/", "cashboxes"),
     ("/staff/", "employees_technicians"),
-    ("/reports/reps/", "employees_technicians"),
     ("/appointments/", "appointments_visits"),
     ("/restaurant/", "tables_orders"),
     ("/projects/", "projects"),
