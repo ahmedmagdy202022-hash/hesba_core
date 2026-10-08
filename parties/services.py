@@ -12,6 +12,7 @@ from decimal import Decimal
 from django.db.models import Max, Sum
 
 from config.money import money_round
+from entities import scope as entity_scope
 from master_data.models import Customer, Supplier
 from purchases.models import PurchaseInvoice, SupplierLedgerEntry, SupplierPayment
 from sales.models import CustomerLedgerEntry, CustomerPayment, SalesInvoice
@@ -35,7 +36,15 @@ KINDS = {
 
 def _entries(kind, party):
     spec = KINDS[kind]
-    return spec["entry"].objects.filter(**{spec["fk"]: party})
+    # HG-034: inside an entity, only the rows its documents wrote.
+    here = entity_scope.customer_entries_q() if kind == "customer" else entity_scope.supplier_entries_q()
+    return spec["entry"].objects.filter(here, **{spec["fk"]: party})
+
+
+def _opening(party):
+    """Party opening balances belong to the main entity."""
+
+    return party.opening_balance if entity_scope.includes_openings() else ZERO
 
 
 def _totals(queryset):
@@ -48,7 +57,7 @@ def balance(kind, party, as_of=None):
     if as_of is not None:
         entries = entries.filter(entry_date__lte=as_of)
     inc, dec = _totals(entries)
-    return money_round(party.opening_balance + inc - dec)
+    return money_round(_opening(party) + inc - dec)
 
 
 def _reference(entry, kind):
@@ -66,7 +75,7 @@ def statement(kind, party, date_from=None, date_to=None):
     entries = _entries(kind, party).select_related(*[field for field, *_ in spec["refs"]]).order_by("entry_date", "id")
     before = entries.filter(entry_date__lt=date_from) if date_from else entries.none()
     inc_before, dec_before = _totals(before)
-    opening = money_round(party.opening_balance + inc_before - dec_before)
+    opening = money_round(_opening(party) + inc_before - dec_before)
     window = entries
     if date_from:
         window = window.filter(entry_date__gte=date_from)
@@ -86,11 +95,11 @@ def card(kind, party, today=None):
 
     today = today or date.today()
     if kind == "customer":
-        documents = SalesInvoice.objects.filter(customer=party, status="posted")
-        payments = CustomerPayment.objects.filter(customer=party, status="posted")
+        documents = entity_scope.scope(SalesInvoice.objects, entity_scope.SALES_INVOICE).filter(customer=party, status="posted")
+        payments = entity_scope.scope(CustomerPayment.objects, entity_scope.CUSTOMER_PAYMENT).filter(customer=party, status="posted")
     else:
-        documents = PurchaseInvoice.objects.filter(supplier=party, status="posted")
-        payments = SupplierPayment.objects.filter(supplier=party, status="posted")
+        documents = entity_scope.scope(PurchaseInvoice.objects, entity_scope.PURCHASE_INVOICE).filter(supplier=party, status="posted")
+        payments = entity_scope.scope(SupplierPayment.objects, entity_scope.SUPPLIER_PAYMENT).filter(supplier=party, status="posted")
     year = documents.filter(invoice_date__year=today.year).aggregate(total=Sum("total_amount"))["total"] or ZERO
     return {
         "balance": balance(kind, party),

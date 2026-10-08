@@ -141,8 +141,10 @@ def vat_report(date_from, date_to):
 
     from sales.models import SalesInvoice, SalesReturn
 
-    invoices = SalesInvoice.objects.filter(status="posted", invoice_date__gte=date_from, invoice_date__lte=date_to)
-    returns = SalesReturn.objects.filter(status="posted", return_date__gte=date_from, return_date__lte=date_to)
+    from entities import scope as entity_scope
+
+    invoices = entity_scope.scope(SalesInvoice.objects, entity_scope.SALES_INVOICE).filter(status="posted", invoice_date__gte=date_from, invoice_date__lte=date_to)
+    returns = entity_scope.scope(SalesReturn.objects, entity_scope.SALES_RETURN).filter(status="posted", return_date__gte=date_from, return_date__lte=date_to)
     rows = defaultdict(lambda: {"taxable": ZERO, "tax": ZERO, "returned_taxable": ZERO, "returned_tax": ZERO})
     for rate, taxable, tax in SalesLineTax.objects.filter(line__invoice__in=invoices).values_list("rate", "taxable_amount", "tax_amount"):
         rows[rate]["taxable"] += taxable
@@ -229,8 +231,10 @@ def input_vat(date_from, date_to):
 
     from purchases.models import PurchaseInvoice, PurchaseReturn
 
-    invoices = PurchaseInvoice.objects.filter(status="posted", invoice_date__gte=date_from, invoice_date__lte=date_to)
-    returns = PurchaseReturn.objects.filter(status="posted", return_date__gte=date_from, return_date__lte=date_to)
+    from entities import scope as entity_scope
+
+    invoices = entity_scope.scope(PurchaseInvoice.objects, entity_scope.PURCHASE_INVOICE).filter(status="posted", invoice_date__gte=date_from, invoice_date__lte=date_to)
+    returns = entity_scope.scope(PurchaseReturn.objects, entity_scope.PURCHASE_RETURN).filter(status="posted", return_date__gte=date_from, return_date__lte=date_to)
     rows = defaultdict(lambda: {"taxable": ZERO, "tax": ZERO, "returned_taxable": ZERO, "returned_tax": ZERO})
     for rate, taxable, tax in PurchaseLineTax.objects.filter(line__invoice__in=invoices).values_list("rate", "taxable_amount", "tax_amount"):
         rows[rate]["taxable"] += taxable

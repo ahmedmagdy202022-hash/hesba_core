@@ -20,6 +20,7 @@ from .selectors import (
     stock_report,
     supplier_report,
 )
+from entities import scope as entity_scope
 
 
 STRINGS = {
@@ -102,9 +103,9 @@ def inventory_report_view(request):
     location = None
     location_id = request.GET.get("location", "")
     if location_id.isdigit():
-        location = Location.objects.filter(pk=location_id, active=True).first()
+        location = entity_scope.locations(Location.objects).filter(pk=location_id, active=True).first()
     rows = stock_report(location)
-    return render(request, "reports/inventory.html", _context(request, title="Inventory Report" if _lang(request) == "en" else "تقرير المخزون", rows=rows, locations=Location.objects.filter(active=True), selected_location=location, can_view_cost=user_has_permission(request.user, "inventory.view_cost")))
+    return render(request, "reports/inventory.html", _context(request, title="Inventory Report" if _lang(request) == "en" else "تقرير المخزون", rows=rows, locations=entity_scope.locations(Location.objects).filter(active=True), selected_location=location, can_view_cost=user_has_permission(request.user, "inventory.view_cost")))
 
 
 def _party_context(request, party_kind):
@@ -114,9 +115,9 @@ def _party_context(request, party_kind):
     if party_id.isdigit():
         selected = model.objects.filter(pk=party_id, active=True).first()
     rows = customer_report(selected) if party_kind == "customer" else supplier_report(selected)
-    entries = selected.ledger_entries.select_related("sales_invoice", "customer_payment") if selected and party_kind == "customer" else None
+    entries = selected.ledger_entries.filter(entity_scope.customer_entries_q()).select_related("sales_invoice", "customer_payment") if selected and party_kind == "customer" else None
     if selected and party_kind == "supplier":
-        entries = selected.ledger_entries.select_related("purchase_invoice", "supplier_payment")
+        entries = selected.ledger_entries.filter(entity_scope.supplier_entries_q()).select_related("purchase_invoice", "supplier_payment")
     return {"rows": rows, "parties": model.objects.filter(active=True), "selected": selected, "entries": entries, "party_kind": party_kind}
 
 
@@ -135,10 +136,10 @@ def cashbox_report_view(request):
     selected = None
     cashbox_id = request.GET.get("cashbox", "")
     if cashbox_id.isdigit():
-        selected = Cashbox.objects.filter(pk=cashbox_id, active=True).first()
+        selected = entity_scope.cashboxes(Cashbox.objects).filter(pk=cashbox_id, active=True).first()
     date_from, date_from_raw = _date_filter(request, "date_from")
     date_to, date_to_raw = _date_filter(request, "date_to")
-    return render(request, "reports/cashboxes.html", _context(request, title="Cashbox Report" if _lang(request) == "en" else "تقرير الخزن", rows=cashbox_report(selected, date_from, date_to), cashboxes=Cashbox.objects.filter(active=True), selected=selected, date_from=date_from_raw, date_to=date_to_raw))
+    return render(request, "reports/cashboxes.html", _context(request, title="Cashbox Report" if _lang(request) == "en" else "تقرير الخزن", rows=cashbox_report(selected, date_from, date_to), cashboxes=entity_scope.cashboxes(Cashbox.objects).filter(active=True), selected=selected, date_from=date_from_raw, date_to=date_to_raw))
 
 
 @require_permission("reports.view_profit_report")

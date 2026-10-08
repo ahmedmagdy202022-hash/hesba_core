@@ -16,6 +16,7 @@ from permissions.services import user_has_permission
 
 from .models import Batch
 from .services import DEFAULT_WARN_DAYS, batch_positions, expiry_state, register_batch, retire_batch
+from entities import scope as entity_scope
 
 
 WARN_CHOICES = (30, 60, 90, 180)
@@ -74,7 +75,7 @@ def _register(request, words):
     batch_no = (request.POST.get("batch_no") or "").strip()
     if not batch_no and expiry is None:
         raise ValidationError(words["need_one"])
-    location = Location.objects.filter(active=True, pk=request.POST.get("location") or 0).first() or Location.objects.filter(active=True, is_default=True).first() or Location.objects.filter(active=True).first()
+    location = entity_scope.locations(Location.objects).filter(active=True, pk=request.POST.get("location") or 0).first() or entity_scope.locations(Location.objects).filter(active=True, is_default=True).first() or entity_scope.locations(Location.objects).filter(active=True).first()
     return register_batch(item=item, location=location, batch_no=batch_no, expiry_date=expiry, quantity=quantity.quantize(Decimal("0.001")),
                           received_on=received, user=request.user, note=request.POST.get("note", "")[:255])
 
@@ -131,6 +132,6 @@ def batch_index(request):
         "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": words, "page_title": words["page_title"], "section": "inventory",
         "page": page, "counts": counts, "uncovered": uncovered_items, "can_manage": can_manage, "warn_days": warn_days, "warn_choices": WARN_CHOICES,
         "state_filter": state_filter, "on_hand_only": on_hand_only, "q": request.GET.get("q", ""), "today": today,
-        "locations": Location.objects.filter(active=True).order_by("location_code"),
+        "locations": entity_scope.locations(Location.objects).filter(active=True).order_by("location_code"),
     }
     return render(request, "batches/index.html", context)

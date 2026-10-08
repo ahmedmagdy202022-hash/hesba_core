@@ -11,6 +11,7 @@ from taxes.services import create_sales_draft_with_tax, rates_by_item, vat_enabl
 from serials.services import attach_sale_serials, check_invoice_serials, prepare_sale_serials
 from units.services import convert_lines, units_catalog
 from permissions.decorators import require_permission
+from entities import scope as entity_scope
 from permissions.services import user_has_permission
 
 from .forms import (
@@ -114,7 +115,7 @@ def _context(request, **extra):
 
 @require_permission("sales.view_sales_invoices")
 def invoice_list(request):
-    queryset = SalesInvoice.objects.select_related("customer", "selling_location", "cashbox")
+    queryset = entity_scope.scope(SalesInvoice.objects.select_related("customer", "selling_location", "cashbox"), entity_scope.SALES_INVOICE)
     query = request.GET.get("q", "").strip()
     status = request.GET.get("status", "")
     if query:
@@ -161,7 +162,7 @@ def invoice_create(request):
 @require_permission("sales.view_sales_invoices")
 def invoice_detail(request, pk):
     invoice = get_object_or_404(
-        SalesInvoice.objects.select_related("customer", "selling_location", "cashbox").prefetch_related("lines__item", "returns"),
+        entity_scope.scope(SalesInvoice.objects.select_related("customer", "selling_location", "cashbox").prefetch_related("lines__item", "returns"), entity_scope.SALES_INVOICE),
         pk=pk,
     )
     return render(
@@ -185,7 +186,7 @@ def invoice_post(request, pk):
     lang = _lang(request)
     try:
         with transaction.atomic():
-            check_invoice_serials(get_object_or_404(SalesInvoice, pk=pk), lang)  # SERIAL-001: still in stock?
+            check_invoice_serials(entity_scope.get_or_404(SalesInvoice, entity_scope.SALES_INVOICE, pk=pk), lang)  # SERIAL-001: still in stock?
             post_sales_invoice(pk, request.user)
     except ValidationError as exc:
         messages.error(request, "; ".join(exc.messages))
@@ -199,6 +200,7 @@ def invoice_cancel(request, pk):
     if request.method != "POST":
         return redirect("sales:detail", pk=pk)
     lang = _lang(request)
+    entity_scope.get_or_404(SalesInvoice, entity_scope.SALES_INVOICE, pk=pk)
     try:
         cancel_posted_sales_invoice(pk, request.user, request.POST.get("reason", ""))
     except ValidationError as exc:
@@ -211,7 +213,7 @@ def invoice_cancel(request, pk):
 @require_permission("sales.return_sale")
 def return_create(request, pk):
     invoice = get_object_or_404(
-        SalesInvoice.objects.select_related("customer", "selling_location", "cashbox").prefetch_related("lines__item"),
+        entity_scope.scope(SalesInvoice.objects.select_related("customer", "selling_location", "cashbox").prefetch_related("lines__item"), entity_scope.SALES_INVOICE),
         pk=pk,
     )
     lang = _lang(request)
@@ -249,7 +251,7 @@ def return_detail(request, pk):
     sales_return = get_object_or_404(
         SalesReturn.objects.select_related(
             "source_invoice__customer", "source_invoice__selling_location", "source_invoice__cashbox"
-        ).prefetch_related("lines__source_line__item"),
+        ).prefetch_related("lines__source_line__item").filter(entity_scope.q(entity_scope.SALES_RETURN)),
         pk=pk,
     )
     return render(
@@ -269,6 +271,7 @@ def return_cancel(request, pk):
     if request.method != "POST":
         return redirect("sales:return_detail", pk=pk)
     lang = _lang(request)
+    entity_scope.get_or_404(SalesReturn, entity_scope.SALES_RETURN, pk=pk)
     form = SalesReturnReversalForm(request.POST, lang=lang)
     if form.is_valid():
         try:
@@ -284,7 +287,7 @@ def return_cancel(request, pk):
 
 @require_permission("sales.receive_customer_payment")
 def payment_list(request):
-    queryset = CustomerPayment.objects.select_related("customer", "cashbox", "created_by")
+    queryset = entity_scope.scope(CustomerPayment.objects.select_related("customer", "cashbox", "created_by"), entity_scope.CUSTOMER_PAYMENT)
     query = request.GET.get("q", "").strip()
     status = request.GET.get("status", "")
     if query:
@@ -346,6 +349,7 @@ def payment_cancel(request, pk):
     if request.method != "POST":
         return redirect("sales:payments")
     lang = _lang(request)
+    entity_scope.get_or_404(CustomerPayment, entity_scope.CUSTOMER_PAYMENT, pk=pk)
     try:
         cancel_customer_payment(pk, request.user, request.POST.get("reason", ""))
     except ValidationError as exc:

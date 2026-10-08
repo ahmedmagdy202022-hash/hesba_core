@@ -15,6 +15,7 @@ from django.db.models.functions import ExtractHour, TruncDate
 from django.utils import timezone
 
 from config.money import money_round
+from entities import scope as entity_scope
 from inventory.models import StockMovement
 from master_data.models import Item
 from sales.models import SalesInvoice, SalesInvoiceStatus, SalesLine, SalesReturn, SalesReturnStatus
@@ -58,9 +59,9 @@ def change(current, previous):
 
 def _sales(start, end):
     # HG-015: sales are counted net of VAT; refunds net of the tax they gave back.
-    posted = SalesInvoice.objects.filter(status=SalesInvoiceStatus.POSTED, invoice_date__gte=start, invoice_date__lte=end)
+    posted = entity_scope.scope(SalesInvoice.objects, entity_scope.SALES_INVOICE).filter(status=SalesInvoiceStatus.POSTED, invoice_date__gte=start, invoice_date__lte=end)
     totals = posted.aggregate(total=Sum(F("total_amount") - F("tax_amount")), count=Count("id"))
-    return_qs = SalesReturn.objects.filter(status=SalesReturnStatus.POSTED, return_date__gte=start, return_date__lte=end)
+    return_qs = entity_scope.scope(SalesReturn.objects, entity_scope.SALES_RETURN).filter(status=SalesReturnStatus.POSTED, return_date__gte=start, return_date__lte=end)
     returns = (return_qs.aggregate(total=Sum("total_amount"))["total"] or ZERO) - returns_tax(return_qs)
     gross = totals["total"] or ZERO
     return {"net": money_round(gross - returns), "count": totals["count"] or 0, "returns": money_round(returns), "gross": money_round(gross)}
@@ -70,13 +71,14 @@ def daily_sales(start, end):
     """[(date, net sales)] for every day in the window, zero-filled."""
 
     by_day = defaultdict(Decimal)
-    rows = SalesInvoice.objects.filter(status=SalesInvoiceStatus.POSTED, invoice_date__gte=start, invoice_date__lte=end).values("invoice_date").annotate(total=Sum(F("total_amount") - F("tax_amount")))
+    rows = entity_scope.scope(SalesInvoice.objects, entity_scope.SALES_INVOICE).filter(status=SalesInvoiceStatus.POSTED, invoice_date__gte=start, invoice_date__lte=end).values("invoice_date").annotate(total=Sum(F("total_amount") - F("tax_amount")))
     for row in rows:
         by_day[row["invoice_date"]] += row["total"] or ZERO
-    returns = SalesReturn.objects.filter(status=SalesReturnStatus.POSTED, return_date__gte=start, return_date__lte=end).values("return_date").annotate(total=Sum("total_amount"))
+    returns = entity_scope.scope(SalesReturn.objects, entity_scope.SALES_RETURN).filter(status=SalesReturnStatus.POSTED, return_date__gte=start, return_date__lte=end).values("return_date").annotate(total=Sum("total_amount"))
     for row in returns:
         by_day[row["return_date"]] -= row["total"] or ZERO
     returned_tax = SalesReturnLineTax.objects.filter(
+        entity_scope.q(entity_scope.SALES_RETURN, "return_line__sales_return__"),
         return_line__sales_return__status=SalesReturnStatus.POSTED,
         return_line__sales_return__return_date__gte=start, return_line__sales_return__return_date__lte=end,
     ).values("return_line__sales_return__return_date").annotate(total=Sum("tax_amount"))
@@ -98,13 +100,14 @@ def daily_profit(start, end):
     """
 
     by_day = defaultdict(Decimal)
-    lines = SalesLine.objects.filter(invoice__status=SalesInvoiceStatus.POSTED, invoice__invoice_date__gte=start, invoice__invoice_date__lte=end)
+    lines = SalesLine.objects.filter(entity_scope.q(entity_scope.SALES_INVOICE, "invoice__"), invoice__status=SalesInvoiceStatus.POSTED, invoice__invoice_date__gte=start, invoice__invoice_date__lte=end)
     for row in lines.values("invoice__invoice_date").annotate(total=Sum("line_profit_amount")):
         by_day[row["invoice__invoice_date"]] += row["total"] or ZERO
-    returns = SalesReturn.objects.filter(status=SalesReturnStatus.POSTED, return_date__gte=start, return_date__lte=end)
+    returns = entity_scope.scope(SalesReturn.objects, entity_scope.SALES_RETURN).filter(status=SalesReturnStatus.POSTED, return_date__gte=start, return_date__lte=end)
     for row in returns.values("return_date").annotate(total=Sum("total_amount"), cost=Sum("cost_amount")):
         by_day[row["return_date"]] -= (row["total"] or ZERO) - (row["cost"] or ZERO)
     returned_tax = SalesReturnLineTax.objects.filter(
+        entity_scope.q(entity_scope.SALES_RETURN, "return_line__sales_return__"),
         return_line__sales_return__status=SalesReturnStatus.POSTED,
         return_line__sales_return__return_date__gte=start, return_line__sales_return__return_date__lte=end,
     ).values("return_line__sales_return__return_date").annotate(total=Sum("tax_amount"))
@@ -120,7 +123,7 @@ def daily_profit(start, end):
 def payment_split(start, end):
     """How posted sales in the window were settled at the till: paid now vs on account."""
 
-    totals = SalesInvoice.objects.filter(status=SalesInvoiceStatus.POSTED, invoice_date__gte=start, invoice_date__lte=end).aggregate(
+    totals = entity_scope.scope(SalesInvoice.objects, entity_scope.SALES_INVOICE).filter(status=SalesInvoiceStatus.POSTED, invoice_date__gte=start, invoice_date__lte=end).aggregate(
         paid=Sum("paid_now"), credit=Sum("remaining_due"))
     return {"paid": money_round(totals["paid"] or ZERO), "credit": money_round(totals["credit"] or ZERO)}
 
@@ -140,7 +143,7 @@ def hourly_sales(start, end):
     """Invoice count per hour of day (local time) in the window."""
 
     counts = dict(
-        SalesInvoice.objects.filter(status=SalesInvoiceStatus.POSTED, invoice_date__gte=start, invoice_date__lte=end)
+        entity_scope.scope(SalesInvoice.objects, entity_scope.SALES_INVOICE).filter(status=SalesInvoiceStatus.POSTED, invoice_date__gte=start, invoice_date__lte=end)
         .annotate(hour=ExtractHour("created_at", tzinfo=timezone.get_current_timezone()))
         .values("hour")
         .annotate(n=Count("id"))
@@ -150,7 +153,7 @@ def hourly_sales(start, end):
 
 
 def top_items(start, end, limit=5, by="sales"):
-    lines = SalesLine.objects.filter(invoice__status=SalesInvoiceStatus.POSTED, invoice__invoice_date__gte=start, invoice__invoice_date__lte=end)
+    lines = SalesLine.objects.filter(entity_scope.q(entity_scope.SALES_INVOICE, "invoice__"), invoice__status=SalesInvoiceStatus.POSTED, invoice__invoice_date__gte=start, invoice__invoice_date__lte=end)
     rows = (
         lines.values("item_id", "item__item_code", "item__item_name")
         .annotate(sales=Sum("line_total_amount"), profit=Sum("line_profit_amount"), quantity=Sum("quantity"))
@@ -163,7 +166,7 @@ def top_items(start, end, limit=5, by="sales"):
 
 
 def _stock_by_item():
-    totals = StockMovement.objects.filter(item__active=True, item__is_stock_tracked=True).values("item_id").annotate(
+    totals = entity_scope.scope(StockMovement.objects, entity_scope.STOCK_MOVEMENT).filter(item__active=True, item__is_stock_tracked=True).values("item_id").annotate(
         in_qty=Sum("quantity", filter=Q(movement_type__in=STOCK_IN_TYPES)),
         out_qty=Sum("quantity", filter=Q(movement_type__in=STOCK_OUT_TYPES)),
     )
@@ -178,11 +181,11 @@ def stock_health(today, limit=5):
         return {"slow": [], "slow_value": ZERO, "slow_count": 0, "running_out": []}
     items = {item.pk: item for item in Item.objects.filter(pk__in=on_hand)}
     last_sale = dict(
-        SalesLine.objects.filter(invoice__status=SalesInvoiceStatus.POSTED, item_id__in=on_hand).values("item_id").annotate(last=Max("invoice__invoice_date")).values_list("item_id", "last")
+        SalesLine.objects.filter(entity_scope.q(entity_scope.SALES_INVOICE, "invoice__"), invoice__status=SalesInvoiceStatus.POSTED, item_id__in=on_hand).values("item_id").annotate(last=Max("invoice__invoice_date")).values_list("item_id", "last")
     )
     window_start = today - timedelta(days=29)
     sold_30 = dict(
-        SalesLine.objects.filter(invoice__status=SalesInvoiceStatus.POSTED, item_id__in=on_hand, invoice__invoice_date__gte=window_start, invoice__invoice_date__lte=today)
+        SalesLine.objects.filter(entity_scope.q(entity_scope.SALES_INVOICE, "invoice__"), invoice__status=SalesInvoiceStatus.POSTED, item_id__in=on_hand, invoice__invoice_date__gte=window_start, invoice__invoice_date__lte=today)
         .values("item_id").annotate(q=Sum("quantity")).values_list("item_id", "q")
     )
     slow, running_out = [], []

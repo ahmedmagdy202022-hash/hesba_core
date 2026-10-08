@@ -18,6 +18,7 @@ from .services import (
     get_item_stock_quantity,
     transfer_stock,
 )
+from entities import scope as entity_scope
 
 
 STRINGS = {
@@ -91,7 +92,7 @@ def _stock_state(quantity, minimum):
 
 @require_permission("inventory.view_stock")
 def stock_list(request):
-    locations = Location.objects.filter(active=True)
+    locations = entity_scope.locations(Location.objects).filter(active=True)
     selected_location = None
     location_id = request.GET.get("location", "").strip()
     if location_id.isdigit():
@@ -144,7 +145,7 @@ def stock_list(request):
 @require_permission("inventory.view_stock")
 def item_detail(request, pk):
     item = get_object_or_404(Item, pk=pk, active=True, is_stock_tracked=True)
-    locations = Location.objects.filter(active=True)
+    locations = entity_scope.locations(Location.objects).filter(active=True)
     location_rows = []
     for location in locations:
         quantity = get_item_location_stock_quantity(item, location)
@@ -155,7 +156,7 @@ def item_detail(request, pk):
                 "state": _stock_state(quantity, item.min_stock),
             }
         )
-    movements = item.stock_movements.select_related("location").all()[:100]
+    movements = entity_scope.scope(item.stock_movements.select_related("location"), entity_scope.STOCK_MOVEMENT)[:100]
     return render(
         request,
         "inventory/item_detail.html",
@@ -171,10 +172,10 @@ def item_detail(request, pk):
 
 @require_permission("inventory.view_stock")
 def movement_list(request):
-    queryset = StockMovement.objects.select_related(
+    queryset = entity_scope.scope(StockMovement.objects.select_related(
         "item", "location", "created_by", "purchase_invoice", "sales_invoice", "stock_operation",
         "purchase_return", "sales_return"
-    )
+    ), entity_scope.STOCK_MOVEMENT)
     query = request.GET.get("q", "").strip()
     movement_type = request.GET.get("type", "").strip()
     location_id = request.GET.get("location", "").strip()
@@ -206,7 +207,7 @@ def movement_list(request):
             movement_type=movement_type,
             movement_choices=localized_choices(StockMovement, "movement_type", _lang(request)),
             location_id=location_id,
-            locations=Location.objects.filter(active=True),
+            locations=entity_scope.locations(Location.objects).filter(active=True),
             can_view_cost=user_has_permission(request.user, "inventory.view_cost"),
         ),
     )
@@ -214,9 +215,9 @@ def movement_list(request):
 
 @require_any_permission("inventory.transfer_stock", "inventory.adjust_stock")
 def operation_list(request):
-    operations = StockOperation.objects.select_related(
+    operations = entity_scope.scope(StockOperation.objects.select_related(
         "item", "source_location", "destination_location", "created_by", "cancelled_by"
-    )
+    ), entity_scope.STOCK_OPERATION).distinct()
     page = Paginator(operations, 50).get_page(request.GET.get("page"))
     return render(
         request,
@@ -277,6 +278,7 @@ def operation_cancel(request, pk):
     if request.method != "POST":
         return redirect("inventory:operations")
     lang = _lang(request)
+    entity_scope.get_or_404(StockOperation.objects.distinct(), entity_scope.STOCK_OPERATION, pk=pk)
     form = StockOperationReversalForm(request.POST, lang=lang)
     if form.is_valid():
         try:

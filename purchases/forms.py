@@ -8,6 +8,7 @@ from cashboxes.models import Cashbox
 from master_data.models import Item, Location, Supplier
 
 from .models import PurchaseLine, PurchaseReturn, SupplierPayment
+from entities import scope as entity_scope
 
 
 PURCHASE_LABELS = {
@@ -63,10 +64,10 @@ class PurchaseDraftForm(forms.Form):
         for name, field in self.fields.items():
             field.label = labels[name]
         self.fields["supplier"].queryset = Supplier.objects.filter(active=True)
-        self.fields["receiving_location"].queryset = Location.objects.filter(
+        self.fields["receiving_location"].queryset = entity_scope.locations(Location.objects).filter(
             active=True, is_receiving_location=True
         )
-        self.fields["cashbox"].queryset = Cashbox.objects.filter(active=True)
+        self.fields["cashbox"].queryset = entity_scope.cashboxes(Cashbox.objects).filter(active=True)
         if not self.is_bound:
             self.initial.setdefault("invoice_date", timezone.localdate())
 
@@ -161,7 +162,7 @@ class SupplierPaymentForm(forms.Form):
         for name, field in self.fields.items():
             field.label = self.LABELS[lang][name]
         self.fields["supplier"].queryset = Supplier.objects.filter(active=True)
-        self.fields["cashbox"].queryset = Cashbox.objects.filter(active=True)
+        self.fields["cashbox"].queryset = entity_scope.cashboxes(Cashbox.objects).filter(active=True)
         if not self.is_bound:
             self.initial.setdefault("payment_date", timezone.localdate())
 

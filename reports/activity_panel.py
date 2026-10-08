@@ -14,6 +14,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from config.money import money_round
+from entities import scope as entity_scope
 
 ZERO = Decimal("0")
 
@@ -69,7 +70,7 @@ def _kitchen(words, today):
         v=Sum(ExpressionWrapper(F("quantity") * F("unit_price"), output_field=DecimalField(max_digits=18, decimal_places=4))))["v"] or ZERO
     tables = DiningTable.objects.filter(active=True).count()
     busy = open_orders.exclude(table=None).values("table").distinct().count()
-    paid = Order.objects.filter(status=OrderStatus.PAID, closed_at__date=today, invoice__status="posted")
+    paid = entity_scope.scope(Order.objects, "invoice__" + entity_scope.SALES_INVOICE).filter(status=OrderStatus.PAID, closed_at__date=today, invoice__status="posted")
     paid_count = paid.count()
     paid_total = paid.aggregate(t=Sum("invoice__total_amount"))["t"] or ZERO
     return [
@@ -112,9 +113,9 @@ def _production(words, today):
     from manufacturing.services import plan
     from master_data.models import Location
 
-    runs = ProductionRun.objects.filter(status=RunStatus.POSTED, run_date__gte=today.replace(day=1), run_date__lte=today)
+    runs = entity_scope.scope(ProductionRun.objects, "location__entity").filter(status=RunStatus.POSTED, run_date__gte=today.replace(day=1), run_date__lte=today)
     totals = runs.aggregate(n=Count("id"), units=Sum("output_quantity"), cost=Sum("total_cost"))
-    location = Location.objects.filter(active=True, is_default=True).first() or Location.objects.filter(active=True).first()
+    location = entity_scope.locations(Location.objects).filter(active=True, is_default=True).first() or entity_scope.locations(Location.objects).filter(active=True).first()
     short = []
     for recipe in Recipe.objects.filter(active=True).select_related("product")[:30]:
         if location is not None and plan(recipe, Decimal("1"), location)["possible_batches"] < 1:
@@ -122,7 +123,7 @@ def _production(words, today):
     units = totals["units"] or ZERO
     from manufacturing.models import OrderStatus, ProductionOrder
 
-    open_orders = ProductionOrder.objects.filter(status__in=(OrderStatus.PLANNED, OrderStatus.IN_PROGRESS))
+    open_orders = entity_scope.scope(ProductionOrder.objects, "location__entity").filter(status__in=(OrderStatus.PLANNED, OrderStatus.IN_PROGRESS))
     late = open_orders.filter(due_date__lt=today).count()
     return [
         _tile("open_orders_mfg", words["open_orders_mfg"], open_orders.count(), tone="bad" if late else "lead",

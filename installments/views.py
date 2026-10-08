@@ -20,6 +20,7 @@ from sales.models import SalesInvoice
 
 from .models import InstalmentPlan, PlanStatus
 from .services import add_months, cancel_plan, collect, create_plan, is_active, schedule, split
+from entities import scope as entity_scope
 
 
 WORDS = {
@@ -70,7 +71,7 @@ def plan_list(request):
     today = timezone.localdate()
     only_overdue = request.GET.get("overdue") == "1"
     rows = []
-    for plan in InstalmentPlan.objects.filter(status=PlanStatus.ACTIVE, invoice__status="posted").select_related("invoice", "customer").prefetch_related("instalments"):
+    for plan in entity_scope.scope(InstalmentPlan.objects, "invoice__" + entity_scope.SALES_INVOICE).filter(status=PlanStatus.ACTIVE, invoice__status="posted").select_related("invoice", "customer").prefetch_related("instalments"):
         info = schedule(plan, today)
         if info["done"] or (only_overdue and not info["overdue"]):
             continue
@@ -84,7 +85,7 @@ def plan_list(request):
 def plan_create(request, invoice_pk):
     lang = _lang(request)
     words = WORDS[lang]
-    invoice = get_object_or_404(SalesInvoice.objects.select_related("customer"), pk=invoice_pk)
+    invoice = get_object_or_404(entity_scope.scope(SalesInvoice.objects.select_related("customer"), entity_scope.SALES_INVOICE), pk=invoice_pk)
     existing = InstalmentPlan.objects.filter(invoice=invoice).first()
     if existing:
         return redirect(f"{reverse('installments:detail', args=[existing.pk])}?lang={lang}")
@@ -111,7 +112,7 @@ def plan_create(request, invoice_pk):
 def plan_detail(request, pk):
     lang = _lang(request)
     words = WORDS[lang]
-    plan = get_object_or_404(InstalmentPlan.objects.select_related("invoice", "customer"), pk=pk)
+    plan = get_object_or_404(entity_scope.scope(InstalmentPlan.objects.select_related("invoice", "customer"), "invoice__" + entity_scope.SALES_INVOICE), pk=pk)
     today = timezone.localdate()
     if request.method == "POST":
         action = request.POST.get("action")
@@ -124,7 +125,7 @@ def plan_detail(request, pk):
             else:
                 if not user_has_permission(request.user, "sales.receive_customer_payment"):
                     raise PermissionDenied("Collecting needs sales.receive_customer_payment.")
-                cashbox = Cashbox.objects.filter(active=True, pk=request.POST.get("cashbox") or 0).first()
+                cashbox = entity_scope.cashboxes(Cashbox.objects).filter(active=True, pk=request.POST.get("cashbox") or 0).first()
                 try:
                     amount = Decimal((request.POST.get("amount") or "").replace(",", "."))
                     when = date.fromisoformat(request.POST.get("payment_date") or "") if request.POST.get("payment_date") else today
@@ -146,7 +147,7 @@ def plan_detail(request, pk):
         text = words["reminder"].format(name=plan.customer.name, company=company_details()["name"], invoice=plan.invoice.invoice_number,
                                         amount=f"{info['next_open']:,.2f}", date=info["next_due"].due_date.isoformat())
         reminder = f"https://wa.me/{number}?text={quote(text)}"
-    cashboxes = Cashbox.objects.filter(active=True)
+    cashboxes = entity_scope.cashboxes(Cashbox.objects).filter(active=True)
     default_cashbox = cashboxes.filter(is_default=True).first() or cashboxes.first()
     return render(request, "installments/detail.html", _context(request, plan=plan, info=info, active=is_active(plan), reminder=reminder, cashboxes=cashboxes,
                                                                default_cashbox=default_cashbox, today=today))

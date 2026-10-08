@@ -14,6 +14,7 @@ from decimal import Decimal
 from django.db.models import Sum
 
 from cashboxes.models import Cashbox
+from entities import scope as entity_scope
 from inventory.models import StockMovement
 from master_data.models import Customer, Item, Supplier
 from purchases.models import PurchaseInvoice, PurchaseInvoiceStatus, SupplierPayment, SupplierPaymentStatus
@@ -164,7 +165,7 @@ class DashboardFigures:
         return _positive_total(selectors.supplier_report())
 
     def _receipts_today(self, scope):
-        payments = CustomerPayment.objects.filter(
+        payments = entity_scope.scope(CustomerPayment.objects, entity_scope.CUSTOMER_PAYMENT).filter(
             payment_date=self.today, status=CustomerPaymentStatus.POSTED
         )
         if scope == SCOPE_OWN:
@@ -172,7 +173,7 @@ class DashboardFigures:
         return _money(payments.aggregate(total=Sum("amount"))["total"])
 
     def _supplier_payments_today(self, scope):
-        payments = SupplierPayment.objects.filter(
+        payments = entity_scope.scope(SupplierPayment.objects, entity_scope.SUPPLIER_PAYMENT).filter(
             payment_date=self.today, status=SupplierPaymentStatus.POSTED
         )
         return _money(payments.aggregate(total=Sum("amount"))["total"])

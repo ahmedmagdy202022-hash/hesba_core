@@ -552,6 +552,37 @@ Status: APPROVED IN PRINCIPLE (2026-10-05).
 - **Protected surface:** the permission core.
 - **Tests:** per-role × per-entity matrix covering read, create and post, and a cross-entity URL tampering test for every document type.
 
+**Implementation (HG-034, 2026-10-08):**
+- **One rule, one place.** The entity being worked in (ENT-002's `current_entity()`) is the data scope. `entities/scope.py` says where each document finds its entity, then every list, document page, print, action, form choice, report and dashboard figure narrows its queryset with it:
+  - a sale or purchase by its store (as the ledger does, FS-001);
+  - a return by its source invoice's store;
+  - a collection, supplier payment, expense or cash movement by its cashbox;
+  - a stock movement by its location;
+  - a transfer (cash or stock) by either side.
+- **Pre-entity records.** Records with no entity belong to the main entity.
+- **Who is restricted.** A user with `EntityMembership` rows who is not the owner (or a superuser) can never choose the whole group, and their screens open on their default entity. The owner sees the whole group, or one entity after choosing it from the bar. A single-entity install has no current entity, so nothing changes there; the full suite runs unchanged.
+- **Out of scope = not found.** Another entity's invoice, return, payment, cashbox, store, expense, stock operation, production run or order, and every print of them, answers **404** (the same answer as a document that does not exist). Post, cancel and reverse check the scope *before* calling the service. Form choices only offer the entity's stores and cashboxes, so a tampered POST fails form validation. A new store or cashbox made inside an entity belongs to it.
+- **Figures.** These are per entity, and add up to the group:
+  - stock, cashbox, sales, purchase and profit reports, VAT in and out, aging, the dashboard cards and the activity panel;
+  - customer and supplier balances use the entity of the document that wrote each ledger row (invoice, return or payment), exactly as `ledger/projector.py` does. Party opening balances belong to the main entity.
+- **Books.** `/accounting/*` validates `?entity=` against the user's allowed entities. A restricted user cannot ask for the consolidated books or for another entity's.
+- **Not changed:**
+  - posting, stock movement, cost and the ledgers;
+  - permission codes and their checks (`require_permission` still decides *what* a role may do; the scope decides *where*);
+  - the group "where is it" stock view (ENT-001), which stays group-wide by design.
+- **Known edges:**
+  - Shared public links (SHARE-001) carry their own token and are not entity-scoped.
+  - Credit-limit alerts compare a customer's balance *in the current entity* with their single credit limit.
+  - Parties, items and categories are shared across the group.
+- **Tests:** `entities/tests_scope.py` covers:
+  - lists per entity;
+  - 404 on reading, printing and acting on the other entity's documents, with the documents left unchanged;
+  - form choices and tampered POSTs;
+  - a new cashbox filed under the branch;
+  - customer balance, profit and dashboard per entity summing to the group;
+  - the books refusing a restricted user's request for another entity or the consolidation;
+  - every seeded role inside the branch never reaching the main shop's sale.
+
 ## Final gate verification
 
 - Full Django suite: 794 tests passed in 576.477 seconds.

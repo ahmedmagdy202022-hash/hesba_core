@@ -12,6 +12,7 @@ from settings_core.display_labels import localized_choices
 from .forms import CashboxOperationForm, CashboxOperationReversalForm
 from .models import Cashbox, CashboxMovement, CashboxOperation
 from .services import cancel_cashbox_operation, create_cashbox_operation
+from entities import scope as entity_scope
 
 
 STRINGS = {
@@ -72,7 +73,7 @@ def _context(request, **extra):
 @require_permission("cashboxes.view_cashboxes")
 def cashbox_list(request):
     query = request.GET.get("q", "").strip()
-    queryset = Cashbox.objects.filter(active=True)
+    queryset = entity_scope.cashboxes(Cashbox.objects).filter(active=True)
     if query:
         queryset = queryset.filter(
             Q(cashbox_code__icontains=query)
@@ -104,7 +105,7 @@ def cashbox_list(request):
 
 @require_permission("cashboxes.view_cashboxes")
 def cashbox_detail(request, pk):
-    cashbox = get_object_or_404(Cashbox, pk=pk, active=True)
+    cashbox = get_object_or_404(entity_scope.cashboxes(Cashbox.objects), pk=pk, active=True)
     can_view_finance = user_has_permission(request.user, "cashboxes.view_finance")
     finance = None
     movements = None
@@ -135,10 +136,10 @@ def cashbox_detail(request, pk):
 
 @require_permission("cashboxes.view_finance")
 def movement_list(request):
-    queryset = CashboxMovement.objects.select_related(
+    queryset = entity_scope.scope(CashboxMovement.objects.select_related(
         "cashbox", "purchase_invoice", "sales_invoice", "supplier_payment", "customer_payment",
         "cashbox_operation", "purchase_return", "sales_return", "created_by"
-    )
+    ), entity_scope.CASHBOX_MOVEMENT)
     query = request.GET.get("q", "").strip()
     cashbox_id = request.GET.get("cashbox", "").strip()
     movement_type = request.GET.get("type", "").strip()
@@ -172,7 +173,7 @@ def movement_list(request):
             query=query,
             cashbox_id=cashbox_id,
             movement_type=movement_type,
-            cashboxes=Cashbox.objects.filter(active=True),
+            cashboxes=entity_scope.cashboxes(Cashbox.objects).filter(active=True),
             movement_choices=localized_choices(CashboxMovement, "movement_type", _lang(request)),
         ),
     )
@@ -181,9 +182,9 @@ def movement_list(request):
 @require_permission("cashboxes.move_cash")
 def operation_list(request):
     page = Paginator(
-        CashboxOperation.objects.select_related(
+        entity_scope.scope(CashboxOperation.objects.select_related(
             "source_cashbox", "destination_cashbox", "created_by", "cancelled_by", "expense"
-        ),
+        ), entity_scope.CASHBOX_OPERATION).distinct(),
         50,
     ).get_page(request.GET.get("page"))
     return render(
@@ -222,7 +223,7 @@ def operation_cancel(request, pk):
         return redirect("cashboxes:operations")
     lang = _lang(request)
     form = CashboxOperationReversalForm(request.POST, lang=lang)
-    if hasattr(get_object_or_404(CashboxOperation, pk=pk), "expense"):
+    if hasattr(entity_scope.get_or_404(CashboxOperation, entity_scope.CASHBOX_OPERATION, pk=pk), "expense"):
         # EXP-001: an expense's cash-out is cancelled from the expenses screen,
         # so the expense and its cash movement can never disagree.
         messages.error(request, "هذه الحركة تابعة لمصروف؛ ألغِها من شاشة المصروفات." if lang == "ar" else "This operation belongs to an expense; cancel it from the expenses screen.")

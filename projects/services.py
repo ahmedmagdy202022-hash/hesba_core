@@ -28,6 +28,7 @@ from audit.models import AuditEventType, AuditLog
 from config.money import money_round
 
 from .models import Project, ProjectExpense, ProjectInvoice, ProjectIssue, ProjectStatus
+from entities import scope as entity_scope
 
 
 BILLING_ITEM_CODE = "PRJ-BILL"
@@ -133,7 +134,7 @@ def bill_progress(project, user, *, amount, description, item=None, lang="ar"):
     if not description:
         raise ValidationError(words["description"])
     item = item or billing_item()
-    location = Location.objects.filter(active=True, is_selling_location=True).order_by("-is_default", "pk").first()
+    location = entity_scope.locations(Location.objects).filter(active=True, is_selling_location=True).order_by("-is_default", "pk").first()
     if location is None:
         raise ValidationError(words["setup"])
     sequence = project.invoices.count() + 1

@@ -149,15 +149,21 @@ def _date(value):
 def _filters(request):
     from entities.models import Entity
 
-    from entities.current import current_entity
+    from entities.current import allowed_entities, current_entity
 
-    entities = list(Entity.objects.filter(active=True).order_by("-is_main", "code"))
+    every = list(Entity.objects.filter(active=True).order_by("-is_main", "code"))
+    entities = allowed_entities(request.user)
+    restricted = len(entities) < len(every)
     if "entity" in request.GET:
         entity = next((e for e in entities if str(e.pk) == request.GET.get("entity", "")), None)
     else:
         # ENT-002: the books open on the entity being worked in.
         entity = current_entity()
-    return {"date_from": _date(request.GET.get("from")), "date_to": _date(request.GET.get("to")), "entity": entity, "entities": entities}
+    if entity is None and restricted:
+        # HG-034: someone who belongs to some entities only never sees the
+        # consolidated books, and cannot ask for another entity's.
+        entity = current_entity() or entities[0]
+    return {"date_from": _date(request.GET.get("from")), "date_to": _date(request.GET.get("to")), "entity": entity, "entities": entities, "group_wide": not restricted}
 
 
 LEDGER_TABS = (("accounts", "ledger:accounts"), ("journal", "ledger:journal"), ("trial", "ledger:trial_balance"),

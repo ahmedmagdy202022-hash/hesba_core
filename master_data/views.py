@@ -13,6 +13,7 @@ from cashboxes.services import (
     create_opening_balance_adjustment,
     target_has_operational_use,
 )
+from entities import scope as entity_scope
 from permissions.services import user_has_permission
 from settings_core.templatetags.hesba_format import money as display_money
 
@@ -315,7 +316,7 @@ def master_data_hub(request):
             {
                 "key": key,
                 "title": config["title"][lang],
-                "count": config["model"].objects.filter(active=True).count(),
+                "count": _scoped_rows(config).filter(active=True).count(),
                 "can_manage": bool(
                     config["manage_permission"]
                     and user_has_permission(request.user, config["manage_permission"])
@@ -337,13 +338,21 @@ def master_data_hub(request):
     )
 
 
+def _scoped_rows(config):
+    """HG-034: locations and cashboxes are listed and edited inside the entity being worked in."""
+
+    if config["model"] in (Location, Cashbox):
+        return entity_scope.scope(config["model"].objects.all(), entity_scope.LOCATION)
+    return config["model"].objects.all()
+
+
 def entity_list(request, entity):
     config = _config(entity)
     _require(request.user, config["view_permission"])
 
     lang = _lang(request)
     words = STRINGS[lang]
-    queryset = config["model"].objects.all()
+    queryset = _scoped_rows(config)
     if config["select_related"]:
         queryset = queryset.select_related(*config["select_related"])
 
@@ -409,7 +418,7 @@ def entity_edit(request, entity, pk):
     if not config["manage_permission"] or config["form"] is None:
         raise PermissionDenied("This master-data area is currently view-only.")
     _require(request.user, config["manage_permission"])
-    instance = get_object_or_404(config["model"], pk=pk)
+    instance = get_object_or_404(_scoped_rows(config), pk=pk)
     return _entity_form(request, entity, config, instance)
 
 
@@ -472,7 +481,8 @@ def _opening_target(entity, pk):
     if entity not in target_map:
         raise Http404("This entity has no opening balance.")
     target_type, model = target_map[entity]
-    return target_type, get_object_or_404(model, pk=pk)
+    rows = entity_scope.cashboxes(model.objects) if model is Cashbox else model.objects
+    return target_type, get_object_or_404(rows, pk=pk)
 
 
 def opening_balance_adjustment(request, entity, pk):

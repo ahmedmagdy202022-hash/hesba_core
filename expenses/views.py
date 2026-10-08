@@ -15,6 +15,7 @@ from permissions.services import user_has_permission
 from .forms import ExpenseCancelForm, ExpenseCategoryForm, ExpenseForm
 from .models import Expense, ExpenseCategory
 from .services import RECORD_PERMISSION, VIEW_PERMISSION, cancel_expense, record_expense
+from entities import scope as entity_scope
 
 
 STRINGS = {
@@ -143,7 +144,7 @@ def expense_list(request):
     cashbox_id = request.GET.get("cashbox", "").strip()
     date_from, date_to = _date(date_from_raw), _date(date_to_raw)
 
-    queryset = Expense.objects.select_related("category", "cashbox", "cashbox_operation", "created_by")
+    queryset = entity_scope.scope(Expense.objects.select_related("category", "cashbox", "cashbox_operation", "created_by"), entity_scope.EXPENSE)
     if query:
         queryset = queryset.filter(
             Q(expense_number__icontains=query) | Q(description__icontains=query) | Q(payee__icontains=query)
@@ -186,7 +187,7 @@ def expense_list(request):
             category_id=category_id,
             cashbox_id=cashbox_id,
             categories=ExpenseCategory.objects.all(),
-            cashboxes=Cashbox.objects.filter(active=True),
+            cashboxes=entity_scope.cashboxes(Cashbox.objects).filter(active=True),
             total=total,
             posted_count=posted.count(),
             by_category=by_category,
@@ -216,7 +217,7 @@ def expense_cancel(request, pk):
     lang = _lang(request)
     if request.method != "POST":
         return redirect(f"/expenses/?lang={lang}")
-    get_object_or_404(Expense, pk=pk)
+    entity_scope.get_or_404(Expense, entity_scope.EXPENSE, pk=pk)
     form = ExpenseCancelForm(request.POST)
     if form.is_valid():
         try:

@@ -2,8 +2,12 @@
 
 Chosen from the entity bar and kept in the session; empty means the whole
 group. The menu, the activity words, the dashboard's activity panel and the
-accounting screens follow it. It is a working context, not a permission:
-which entities a user may *act* in is HG-034 and comes later.
+accounting screens follow it.
+
+HG-034: it is also the data scope. While an entity is chosen, documents,
+lists, reports, the dashboard and new documents are that entity's only
+(entities/scope.py). A user who belongs to some entities only (an
+EntityMembership) can never leave them; owners always may.
 """
 
 from contextvars import ContextVar
@@ -19,11 +23,21 @@ def allowed_entities(user):
     from .models import Entity
 
     active = Entity.objects.filter(active=True).order_by("-is_main", "code")
-    if getattr(user, "is_authenticated", False):
+    if getattr(user, "is_authenticated", False) and not is_group_wide(user):
         member_of = list(active.filter(memberships__user=user))
         if member_of:
             return member_of
     return list(active)
+
+
+def is_group_wide(user):
+    """Owners (and superusers) always see the whole group, memberships or not."""
+
+    if getattr(user, "is_superuser", False):
+        return True
+    profile = getattr(user, "hesba_profile", None)
+    role = getattr(profile, "role", None) if profile is not None else None
+    return getattr(role, "code", "") == "owner"
 
 
 def resolve(request):

@@ -11,6 +11,7 @@ from django.urls import reverse
 
 from audit.models import AuditEventType, AuditLog
 from master_data.models import Customer, Item
+from entities import scope as entity_scope
 from permissions.decorators import require_permission
 from permissions.services import user_has_permission
 from printing.company import company_details
@@ -160,7 +161,7 @@ def customer_data(request):
 @require_permission("sales.view_sales_invoices")
 def sales_document(request, pk):
     lang = _lang(request)
-    invoice = get_object_or_404(SalesInvoice.objects.select_related("customer"), pk=pk)
+    invoice = get_object_or_404(entity_scope.scope(SalesInvoice.objects.select_related("customer"), entity_scope.SALES_INVOICE), pk=pk)
     document, problems = build_document(invoice, lang)
     text = document_json(document)
     if request.GET.get("format") == "json":
