@@ -1,0 +1,20 @@
+/* DEMO-FEEDBACK: Ahmed's inbox of testers' notes. Tokens only. */
+body.fb-inbox{margin:0;background:var(--hs-ground);color:var(--hs-ink);font-family:var(--hs-font-body);line-height:var(--hs-leading)}
+.fb-inbox__head{display:flex;align-items:center;gap:var(--hs-space-5);padding:var(--hs-space-5) clamp(16px,4vw,48px);background:var(--hs-navy);color:var(--hs-surface)}
+.fb-inbox__head img{width:120px;height:auto}
+.fb-inbox__head h1{margin:0;font-family:var(--hs-font-head);font-weight:700;font-size:var(--hs-text-xl);color:var(--hs-gold-bright)}
+.fb-inbox__head p{margin:4px 0 0;color:var(--hs-on-navy-muted)}
+.fb-inbox__main{display:grid;gap:var(--hs-space-3);max-width:960px;margin:0 auto;padding:var(--hs-space-6) 16px}
+.fb-inbox__filters{display:flex;flex-wrap:wrap;gap:var(--hs-space-2);align-items:center}
+.fb-inbox__filters input[type="search"]{flex:1 1 220px;min-height:42px;padding:0 12px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-md);font:inherit}
+.fb-inbox__filters button,.fb-inbox__filters a{display:inline-flex;align-items:center;min-height:42px;padding:0 16px;border-radius:var(--hs-radius-md);font:inherit;font-weight:700;text-decoration:none;cursor:pointer}
+.fb-inbox__filters button{border:0;background:var(--hs-teal);color:var(--hs-on-teal)}
+.fb-inbox__filters a{border:1px solid var(--hs-line-strong);background:var(--hs-surface);color:var(--hs-navy)}
+.fb-note{display:grid;gap:var(--hs-space-2);padding:var(--hs-space-4) var(--hs-space-5);border:1px solid var(--hs-line);border-radius:var(--hs-radius-lg);background:var(--hs-surface);box-shadow:var(--hs-shadow-sm)}
+.fb-note header{display:flex;flex-wrap:wrap;align-items:center;gap:var(--hs-space-2);color:var(--hs-muted);font-size:var(--hs-text-sm)}
+.fb-note__mood{font-size:22px}
+.fb-chip{padding:2px 10px;border-radius:var(--hs-radius-pill);background:var(--hs-teal-wash);color:var(--hs-teal-deep);font-size:var(--hs-text-xs);font-weight:700}
+.fb-chip--muted{background:var(--hs-neutral-wash);color:var(--hs-muted)}
+.fb-note__text{margin:0;color:var(--hs-ink);font-size:var(--hs-text-md);line-height:1.8;white-space:normal;overflow-wrap:anywhere}
+.fb-note footer{color:var(--hs-muted);font-size:var(--hs-text-xs);overflow-wrap:anywhere}
+.fb-inbox__empty{padding:var(--hs-space-8);text-align:center;color:var(--hs-muted)}

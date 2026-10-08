@@ -1,0 +1,36 @@
+{% load static %}{% if demo_mode %}{# DEMO-FEEDBACK: the tester's note, from any page. #}
+<link rel="stylesheet" href="{% static 'hesba/css/demo_feedback.css' %}?v=demo-feedback-3">
+<button class="hs-feedback-fab" type="button" data-feedback-open aria-haspopup="dialog">
+  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H8l-4 4z"></path><path d="M8 9h8M8 12.5h5"></path></svg>
+  <span class="t-ar">ملاحظاتك</span><span class="t-en">Feedback</span>
+</button>
+<dialog class="hs-feedback" data-feedback-dialog aria-labelledby="hs-feedback-title">
+  <form class="hs-feedback__form" method="post" action="{% url 'feedback:send' %}" data-feedback-form>
+    {% csrf_token %}
+    <header class="hs-feedback__head">
+      <h2 id="hs-feedback-title"><span class="t-ar">قولّنا رأيك</span><span class="t-en">Tell us what you think</span></h2>
+      <button class="hs-feedback__close" type="button" data-feedback-close aria-label="إغلاق / Close">×</button>
+    </header>
+    <p class="hs-feedback__lead"><span class="t-ar">أي حاجة: حاجة مش واضحة، غلط، فكرة، أو حاجة عجبتك. هنعرف لوحدنا إنت كنت في أنهي صفحة.</span><span class="t-en">Anything: something unclear, a bug, an idea or something you liked. We note the page you were on.</span></p>
+    <fieldset class="hs-feedback__moods">
+      <legend><span class="t-ar">انطباعك</span><span class="t-en">Overall</span></legend>
+      <label><input type="radio" name="mood" value="great"><span>😍</span></label>
+      <label><input type="radio" name="mood" value="good"><span>🙂</span></label>
+      <label><input type="radio" name="mood" value="meh"><span>😐</span></label>
+      <label><input type="radio" name="mood" value="bad"><span>🙁</span></label>
+    </fieldset>
+    <label class="hs-feedback__field"><span class="t-ar">ملاحظتك</span><span class="t-en">Your note</span>
+      <textarea name="message" rows="5" maxlength="2000" required data-feedback-message></textarea></label>
+    <label class="hs-feedback__field"><span class="t-ar">اسمك أو رقمك (اختياري، لو حابب نرجعلك)</span><span class="t-en">Name or phone (optional, if you'd like a reply)</span>
+      <input type="text" name="contact" maxlength="120" autocomplete="off"></label>
+    <input type="hidden" name="path" data-feedback-path>
+    <input type="hidden" name="viewport" data-feedback-viewport>
+    <input type="hidden" name="lang" data-feedback-lang>
+    <p class="hs-feedback__status" data-feedback-status role="status" aria-live="polite"></p>
+    <footer class="hs-feedback__actions">
+      <button class="hs-feedback__send" type="submit" data-feedback-send><span class="t-ar">ابعت</span><span class="t-en">Send</span></button>
+    </footer>
+  </form>
+</dialog>
+<script src="{% static 'hesba/js/demo_feedback.js' %}?v=demo-feedback-3" defer></script>
+{% endif %}

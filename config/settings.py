@@ -67,6 +67,7 @@ LOCAL_APPS = [
     "entities",
     "ledger",
     "medical",
+    "feedback",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + LOCAL_APPS
@@ -75,6 +76,9 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     # OPS-001: serves collected static files in production without a separate web server.
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    # DEMO-SANDBOX: on a showcase install, each visitor works in a private copy
+    # of the demo database. A no-op everywhere else; must run before sessions.
+    "config.demo_sandbox.DemoSandboxMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -161,6 +165,34 @@ else:
     raise ImproperlyConfigured(
         "DATABASE_BACKEND must be either 'sqlite' or 'postgresql'."
     )
+
+# DEMO-FEEDBACK: testers' notes live outside every demo copy, in their own
+# database. FEEDBACK_DATABASE_URL (PostgreSQL, e.g. a free Supabase project)
+# keeps them across restarts; otherwise a local SQLite file.
+FEEDBACK_DATABASE_URL = config("FEEDBACK_DATABASE_URL", default="").strip()
+if FEEDBACK_DATABASE_URL:
+    from urllib.parse import parse_qs as _fb_qs, unquote as _fb_unquote, urlsplit as _fb_split
+
+    _fb = _fb_split(FEEDBACK_DATABASE_URL)
+    if _fb.scheme not in {"postgres", "postgresql"}:
+        raise ImproperlyConfigured("FEEDBACK_DATABASE_URL must start with postgresql://")
+    _fb_query = {key: values[-1] for key, values in _fb_qs(_fb.query).items()}
+    DATABASES["feedback"] = {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": _fb_unquote(_fb.path.lstrip("/")) or "postgres",
+        "USER": _fb_unquote(_fb.username or ""),
+        "PASSWORD": _fb_unquote(_fb.password or ""),
+        "HOST": _fb.hostname or "",
+        "PORT": str(_fb.port or 5432),
+        "CONN_HEALTH_CHECKS": True,
+        "OPTIONS": {"sslmode": _fb_query.get("sslmode", "require")},
+    }
+else:
+    DATABASES["feedback"] = {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": config("FEEDBACK_SQLITE_PATH", default=str(BASE_DIR / "feedback.sqlite3")),
+    }
+DATABASE_ROUTERS = ["feedback.router.FeedbackRouter"]
 
 # USERS-001: passwords set from the users screen and the password page are
 # checked here; there were no rules before.
@@ -261,6 +293,15 @@ if RENDER_EXTERNAL_HOSTNAME and f"https://{RENDER_EXTERNAL_HOSTNAME}" not in CSR
 # Never set this on a client's database.
 DEMO_MODE = config("DEMO_MODE", default=False, cast=bool)
 DEMO_PASSWORD = config("DEMO_PASSWORD", default="Demo-pass-1")
+# DEMO-SANDBOX: each visitor of a showcase gets a private copy of the demo
+# database (SQLite only), so testers never see or reset each other's work.
+DEMO_SANDBOXES = config("DEMO_SANDBOXES", default=False, cast=bool)
+DEMO_SANDBOX_DIR = config("DEMO_SANDBOX_DIR", default="")
+DEMO_SANDBOX_TTL_DAYS = config("DEMO_SANDBOX_TTL_DAYS", default=10, cast=int)
+DEMO_SANDBOX_MAX = config("DEMO_SANDBOX_MAX", default=200, cast=int)
+# DEMO-FEEDBACK: the inbox of testers' notes opens only with this key.
+FEEDBACK_VIEW_TOKEN = config("FEEDBACK_VIEW_TOKEN", default="")
+FEEDBACK_NOTIFY_EMAIL = config("FEEDBACK_NOTIFY_EMAIL", default="")
 
 # Secure defaults activate automatically in production and remain independently
 # configurable for platforms that terminate TLS at a trusted reverse proxy.
@@ -274,7 +315,7 @@ LOGIN_MAX_FAILURES = config("LOGIN_MAX_FAILURES", default=5, cast=int)
 LOGIN_MAX_FAILURES_PER_IP = config("LOGIN_MAX_FAILURES_PER_IP", default=20, cast=int)
 LOGIN_LOCK_MINUTES = config("LOGIN_LOCK_MINUTES", default=15, cast=int)
 # SEC-002: how long, in seconds, the password step waits for the authenticator code.
-TWO_FACTOR_PENDING_SECONDS = config("TWO_FACTOR_PENDING_SECONDS", default=300, cast=int)
+TWO_FACTOR_PENDING_SECONDS = config("TWO_FACTOR_PENDING_SECONDS", default=200, cast=int)
 TWO_FACTOR_ISSUER = "Hesba"
 # SHARE-001: how long a shared document link keeps working.
 SHARE_LINK_DAYS = config("SHARE_LINK_DAYS", default=60, cast=int)

@@ -223,3 +223,6 @@ __marimo__/
 # OPS-001 backups
 backups/
 staticfiles/
+feedback.sqlite3
+feedback.sqlite3-journal
+hesba_sandboxes/

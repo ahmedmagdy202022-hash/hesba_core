@@ -6,7 +6,9 @@ from django.conf import settings
 def demo_context(request):
     if not getattr(settings, "DEMO_MODE", False):
         return {}
-    return {"demo_mode": True, "demo_password": settings.DEMO_PASSWORD}
+    from .demo_sandbox import enabled
+
+    return {"demo_mode": True, "demo_password": settings.DEMO_PASSWORD, "demo_sandboxes": enabled()}
 
 
 # ACT-PROFILE-002: on a showcase install the owner can flip the activity to see

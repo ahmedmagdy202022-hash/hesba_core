@@ -1,0 +1,41 @@
+{% load static %}<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>ملاحظات المجرّبين - حِسبة</title>
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
+<link rel="stylesheet" href="{% static 'hesba/css/demo_feedback_inbox.css' %}?v=demo-feedback-1">
+</head>
+<body class="fb-inbox">
+<header class="fb-inbox__head">
+  <img src="{% static 'hesba/brand/hesba-logo-reversed.png' %}" alt="حِسبة" width="642" height="225">
+  <div><h1>ملاحظات المجرّبين</h1><p>{{ total }} ملاحظة من {{ testers }} مجرّب</p></div>
+</header>
+<main class="fb-inbox__main">
+  <form class="fb-inbox__filters" method="get">
+    <input type="hidden" name="key" value="{{ key }}">
+    <input type="search" name="q" value="{{ query }}" placeholder="دوّر في الملاحظات">
+    <button type="submit">بحث</button>
+    <a href="?key={{ key|urlencode }}&format=csv{% if query %}&q={{ query|urlencode }}{% endif %}">تنزيل CSV</a>
+  </form>
+  {% for note in notes %}
+  <article class="fb-note" data-feedback-note>
+    <header>
+      <span class="fb-note__mood">{% if note.mood == 'great' %}😍{% elif note.mood == 'good' %}🙂{% elif note.mood == 'meh' %}😐{% elif note.mood == 'bad' %}🙁{% else %}·{% endif %}</span>
+      <time datetime="{{ note.created_at|date:'c' }}">{{ note.created_at|date:"Y-m-d H:i" }}</time>
+      {% if note.activity %}<span class="fb-chip">{{ note.activity }}{% if note.sub_activity %} / {{ note.sub_activity }}{% endif %}</span>{% endif %}
+      {% if note.role %}<span class="fb-chip">{{ note.role }}</span>{% endif %}
+      {% if note.viewport %}<span class="fb-chip" dir="ltr">{{ note.viewport }}</span>{% endif %}
+      <span class="fb-chip fb-chip--muted" dir="ltr" title="tester">#{{ note.sandbox|slice:":6" }}</span>
+    </header>
+    <p class="fb-note__text">{{ note.message|linebreaksbr }}</p>
+    <footer><bdi dir="ltr">{{ note.path }}</bdi>{% if note.contact %} · <strong>{{ note.contact }}</strong>{% endif %}</footer>
+  </article>
+  {% empty %}
+  <p class="fb-inbox__empty">لسه مفيش ملاحظات.</p>
+  {% endfor %}
+</main>
+</body>
+</html>
