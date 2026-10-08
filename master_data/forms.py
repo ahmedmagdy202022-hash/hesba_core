@@ -2,6 +2,7 @@ from django import forms
 
 from cashboxes.models import Cashbox, OpeningBalanceTarget
 from cashboxes.services import target_has_operational_use
+from config.numbering import AutoNumbered
 from settings_core.models import ClientProfile
 
 from .models import Category, Customer, Item, Location, Supplier
@@ -88,6 +89,7 @@ LABELS = {
 class HesbaModelForm(forms.ModelForm):
     def __init__(self, *args, lang="ar", **kwargs):
         super().__init__(*args, **kwargs)
+        self.lang = "en" if lang == "en" else "ar"
         words = LABELS["en" if lang == "en" else "ar"]
         for name, field in self.fields.items():
             if name in words:
@@ -146,7 +148,9 @@ class LocationForm(_EntityField, HesbaModelForm):
         self._entity_field()
 
 
-class SupplierForm(HesbaModelForm):
+class SupplierForm(AutoNumbered, HesbaModelForm):
+    auto_number = ("supplier_code", Supplier, "supplier_code", "S-")  # AUTONUM
+
     class Meta:
         model = Supplier
         fields = (
@@ -163,13 +167,16 @@ class SupplierForm(HesbaModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.offer_auto_number(self.lang)
         if self.instance.pk and target_has_operational_use(
             OpeningBalanceTarget.SUPPLIER, self.instance
         ):
             self.fields["opening_balance"].disabled = True
 
 
-class CustomerForm(HesbaModelForm):
+class CustomerForm(AutoNumbered, HesbaModelForm):
+    auto_number = ("customer_code", Customer, "customer_code", "C-")  # AUTONUM
+
     class Meta:
         model = Customer
         fields = (
@@ -188,6 +195,7 @@ class CustomerForm(HesbaModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.offer_auto_number(self.lang)
         # PERF-001: the rep who looks after this customer, once the employees
         # module is on and has people in it (FEEDBACK-R1).
         from staff.models import Employee
@@ -258,7 +266,9 @@ class CategoryForm(HesbaModelForm):
         return parent
 
 
-class ItemForm(HesbaModelForm):
+class ItemForm(AutoNumbered, HesbaModelForm):
+    auto_number = ("item_code", Item, "item_code", "IT-")  # AUTONUM
+
     class Meta:
         model = Item
         fields = (
@@ -278,5 +288,6 @@ class ItemForm(HesbaModelForm):
 
     def __init__(self, *args, can_view_cost=False, **kwargs):
         super().__init__(*args, **kwargs)
+        self.offer_auto_number(self.lang)
         if not can_view_cost:
             self.fields.pop("default_purchase_price", None)

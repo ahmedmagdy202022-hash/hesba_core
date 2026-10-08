@@ -143,9 +143,12 @@ def invoice_create(request):
             try:
                 line_data = convert_lines(line_data, "unit_sale_price", lang)  # UNITS-001
                 line_data = prepare_sale_serials(line_data, lang)  # SERIAL-001
-                with transaction.atomic():
+                def create():
                     invoice = create_sales_draft_with_tax(form.cleaned_data, line_data, request.user)
                     attach_sale_serials(invoice, line_data)
+                    return invoice
+
+                invoice = form.create_with_fresh_number(create)  # AUTONUM: atomic, retried on a taken number
             except ValidationError as exc:
                 form.add_error(None, exc)
             else:
@@ -228,12 +231,12 @@ def return_create(request, pk):
             row.cleaned_data for row in line_formset.forms if row.cleaned_data.get("source_line")
         ]
         try:
-            sales_return = create_sales_return(
+            sales_return = form.create_with_fresh_number(lambda: create_sales_return(  # AUTONUM
                 source_invoice_id=invoice.pk,
                 lines=line_data,
                 user=request.user,
                 **form.cleaned_data,
-            )
+            ))
         except ValidationError as exc:
             form.add_error(None, exc)
         else:
@@ -324,7 +327,7 @@ def payment_create(request):
         form = CustomerPaymentForm(request.POST, lang=lang)
         if form.is_valid():
             try:
-                record_customer_payment(user=request.user, **form.cleaned_data)
+                form.create_with_fresh_number(lambda: record_customer_payment(user=request.user, **form.cleaned_data))
             except ValidationError as exc:
                 form.add_error(None, exc)
             else:
