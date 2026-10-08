@@ -1,0 +1,15 @@
+{
+  // DEMO-002: open a Codespace on this repo and the demo shop starts by itself.
+  // The browser opens on port 8000; sign in as owner / Demo-pass-1.
+  "name": "Hesba demo",
+  "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
+  "postCreateCommand": "pip install --user -r requirements.txt",
+  "postAttachCommand": "./start_codespace_demo.sh",
+  "forwardPorts": [8000],
+  "portsAttributes": {
+    "8000": {"label": "Hesba demo", "onAutoForward": "openBrowser"}
+  },
+  "customizations": {
+    "codespaces": {"openFiles": ["docs/DEMO_CODESPACE.md"]}
+  }
+}
