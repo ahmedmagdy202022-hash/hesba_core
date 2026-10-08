@@ -12,6 +12,8 @@ export DEMO_SANDBOXES="${DEMO_SANDBOXES:-True}"
 
 python manage.py migrate --noinput
 python manage.py prepare_demo
+# What "start over" copies (DEMO-FAST); already built by build.sh on Render.
+python manage.py prepare_demo_fresh
 python manage.py migrate --database feedback --noinput
 # Threads, so one tester's slow page never holds up another's.
 exec gunicorn config.wsgi:application --bind 0.0.0.0:"${PORT:-8000}" --workers 2 --threads 4 --worker-class gthread --timeout 90 --access-logfile -

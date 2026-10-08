@@ -66,7 +66,13 @@ def restart(request):
     lang = "en" if request.POST.get("lang") == "en" else "ar"
     if request.method != "POST":
         return redirect(f"/login/?lang={lang}")
-    owner = restart_demo()
+    if getattr(request, "demo_fresh_copy", False):
+        # DEMO-FAST: the visitor is already on a copy of the emptied demo.
+        from django.contrib.auth import get_user_model
+
+        owner = get_user_model().objects.get(username="owner")
+    else:
+        owner = restart_demo()
     login(request, owner, backend="django.contrib.auth.backends.ModelBackend")
     return redirect(f"/setup/activity/?lang={lang}")
 
