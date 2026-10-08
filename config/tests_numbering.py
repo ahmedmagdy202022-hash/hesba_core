@@ -118,3 +118,39 @@ class SalesFormTests(TestCase):
         self.assertTrue(ret.is_valid(), ret.errors)
         self.assertEqual(ret.cleaned_data["return_number"], "SR-00001")
         self.assertEqual(D("5"), payment.cleaned_data["amount"])
+
+
+class TwoSavesAtOnceTests(TestCase):
+    """The number shown is taken by someone else before this save lands: the next one is used."""
+
+    def test_a_customer_saved_after_its_code_was_taken(self):
+        form = CustomerForm({"customer_code": "", "name": "الأول", "opening_balance": "0", "credit_limit": "0"}, lang="ar")
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data["customer_code"], "C-00001")
+        make_customer(customer_code="C-00001", name="سبقه")
+        self.assertEqual(form.save().customer_code, "C-00002")
+
+    def test_an_invoice_number_taken_meanwhile(self):
+        prepared_client()
+        owner = make_user(username="race_owner")
+        customer = make_customer(customer_code="C-R")
+        location = make_location(location_code="L-R", is_selling_location=True)
+        header = {"invoice_number": "", "invoice_date": timezone.localdate().isoformat(), "customer": customer.pk,
+                  "selling_location": location.pk, "discount_amount": "0", "tax_amount": "0", "paid_now": "0"}
+        form = SalesDraftForm(header, lang="ar")
+        self.assertTrue(form.is_valid(), form.errors)
+        SalesInvoice.objects.create(invoice_number=form.cleaned_data["invoice_number"], invoice_date=timezone.localdate(),
+                                    customer=customer, selling_location=location, created_by=owner)
+        invoice = form.create_with_fresh_number(lambda: SalesInvoice.objects.create(
+            invoice_number=form.cleaned_data["invoice_number"], invoice_date=timezone.localdate(),
+            customer=customer, selling_location=location, created_by=owner))
+        self.assertEqual(invoice.invoice_number, "SI-00002")
+
+    def test_a_typed_number_that_clashes_is_not_renumbered(self):
+        from django.db import IntegrityError
+
+        form = CustomerForm({"customer_code": "MINE", "name": "عميل", "opening_balance": "0", "credit_limit": "0"}, lang="ar")
+        self.assertTrue(form.is_valid(), form.errors)
+        make_customer(customer_code="MINE")
+        with self.assertRaises(IntegrityError):
+            form.save()
