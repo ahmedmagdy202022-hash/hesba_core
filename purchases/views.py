@@ -11,6 +11,7 @@ from batches.services import attach_purchase_batches
 from serials.services import attach_purchase_serials, prepare_purchase_serials
 from units.services import convert_lines, units_catalog
 from permissions.decorators import require_permission
+from entities import scope as entity_scope
 from permissions.services import user_has_permission
 
 from .forms import (
@@ -135,9 +136,9 @@ def _context(request, **extra):
 
 @require_permission("purchases.view_purchase_invoices")
 def invoice_list(request):
-    queryset = PurchaseInvoice.objects.select_related(
+    queryset = entity_scope.scope(PurchaseInvoice.objects.select_related(
         "supplier", "receiving_location", "cashbox"
-    )
+    ), entity_scope.PURCHASE_INVOICE)
     query = request.GET.get("q", "").strip()
     status = request.GET.get("status", "")
     if query:
@@ -197,7 +198,7 @@ def invoice_create(request):
 @require_permission("purchases.view_purchase_invoices")
 def invoice_detail(request, pk):
     invoice = get_object_or_404(
-        PurchaseInvoice.objects.select_related("supplier", "receiving_location", "cashbox").prefetch_related("lines__item", "returns"),
+        entity_scope.scope(PurchaseInvoice.objects.select_related("supplier", "receiving_location", "cashbox").prefetch_related("lines__item", "returns"), entity_scope.PURCHASE_INVOICE),
         pk=pk,
     )
     return render(
@@ -217,6 +218,7 @@ def invoice_post(request, pk):
     if request.method != "POST":
         return redirect("purchases:detail", pk=pk)
     lang = _lang(request)
+    entity_scope.get_or_404(PurchaseInvoice, entity_scope.PURCHASE_INVOICE, pk=pk)
     try:
         post_purchase_invoice(pk, request.user)
     except ValidationError as exc:
@@ -231,6 +233,7 @@ def invoice_cancel(request, pk):
     if request.method != "POST":
         return redirect("purchases:detail", pk=pk)
     lang = _lang(request)
+    entity_scope.get_or_404(PurchaseInvoice, entity_scope.PURCHASE_INVOICE, pk=pk)
     try:
         cancel_posted_purchase_invoice(pk, request.user, request.POST.get("reason", ""))
     except ValidationError as exc:
@@ -243,7 +246,7 @@ def invoice_cancel(request, pk):
 @require_permission("purchases.return_purchase")
 def return_create(request, pk):
     invoice = get_object_or_404(
-        PurchaseInvoice.objects.select_related("supplier", "receiving_location", "cashbox").prefetch_related("lines__item"),
+        entity_scope.scope(PurchaseInvoice.objects.select_related("supplier", "receiving_location", "cashbox").prefetch_related("lines__item"), entity_scope.PURCHASE_INVOICE),
         pk=pk,
     )
     lang = _lang(request)
@@ -281,7 +284,7 @@ def return_detail(request, pk):
     purchase_return = get_object_or_404(
         PurchaseReturn.objects.select_related(
             "source_invoice__supplier", "source_invoice__receiving_location", "source_invoice__cashbox"
-        ).prefetch_related("lines__source_line__item"),
+        ).prefetch_related("lines__source_line__item").filter(entity_scope.q(entity_scope.PURCHASE_RETURN)),
         pk=pk,
     )
     return render(
@@ -301,6 +304,7 @@ def return_cancel(request, pk):
     if request.method != "POST":
         return redirect("purchases:return_detail", pk=pk)
     lang = _lang(request)
+    entity_scope.get_or_404(PurchaseReturn, entity_scope.PURCHASE_RETURN, pk=pk)
     form = PurchaseReturnReversalForm(request.POST, lang=lang)
     if form.is_valid():
         try:
@@ -316,7 +320,7 @@ def return_cancel(request, pk):
 
 @require_permission("purchases.pay_supplier")
 def payment_list(request):
-    queryset = SupplierPayment.objects.select_related("supplier", "cashbox", "created_by")
+    queryset = entity_scope.scope(SupplierPayment.objects.select_related("supplier", "cashbox", "created_by"), entity_scope.SUPPLIER_PAYMENT)
     query = request.GET.get("q", "").strip()
     status = request.GET.get("status", "")
     if query:
@@ -378,6 +382,7 @@ def payment_cancel(request, pk):
     if request.method != "POST":
         return redirect("purchases:payments")
     lang = _lang(request)
+    entity_scope.get_or_404(SupplierPayment, entity_scope.SUPPLIER_PAYMENT, pk=pk)
     try:
         cancel_supplier_payment(pk, request.user, request.POST.get("reason", ""))
     except ValidationError as exc:

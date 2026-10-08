@@ -13,6 +13,7 @@ from decimal import Decimal
 from urllib.parse import quote
 
 from config.money import money_round
+from entities import scope as entity_scope
 from master_data.models import Customer, Supplier
 from purchases.models import SupplierLedgerEntry
 from sales.models import CustomerLedgerEntry
@@ -80,10 +81,10 @@ def aging_rows(kind="customers", as_of=None):
     terms = credit_days()
     if kind == "suppliers":
         parties = Supplier.objects.filter(active=True)
-        entries = SupplierLedgerEntry.objects.filter(entry_date__lte=as_of, supplier__active=True).values_list("supplier_id", "entry_date", "due_increase", "due_decrease")
+        entries = SupplierLedgerEntry.objects.filter(entity_scope.supplier_entries_q(), entry_date__lte=as_of, supplier__active=True).values_list("supplier_id", "entry_date", "due_increase", "due_decrease")
     else:
         parties = Customer.objects.filter(active=True)
-        entries = CustomerLedgerEntry.objects.filter(entry_date__lte=as_of, customer__active=True).values_list("customer_id", "entry_date", "due_increase", "due_decrease")
+        entries = CustomerLedgerEntry.objects.filter(entity_scope.customer_entries_q(), entry_date__lte=as_of, customer__active=True).values_list("customer_id", "entry_date", "due_increase", "due_decrease")
     increases, decreases, last_decrease = defaultdict(list), defaultdict(Decimal), {}
     for party_id, day, inc, dec in entries:
         if inc:
@@ -92,10 +93,11 @@ def aging_rows(kind="customers", as_of=None):
             decreases[party_id] += dec
             last_decrease[party_id] = max(day, last_decrease.get(party_id, day))
 
+    openings = entity_scope.includes_openings()  # HG-034: opening balances sit in the main entity
     rows = []
     for party in parties:
         opening_date = party.created_at.date() if party.created_at else as_of
-        pieces, left_credit = _fifo(party.opening_balance, min(opening_date, as_of), increases.get(party.pk, []), decreases.get(party.pk, Decimal("0")))
+        pieces, left_credit = _fifo(party.opening_balance if openings else ZERO, min(opening_date, as_of), increases.get(party.pk, []), decreases.get(party.pk, Decimal("0")))
         buckets = {key: ZERO for key, *_ in BUCKETS}
         overdue = ZERO
         for day, amount in pieces:

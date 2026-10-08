@@ -26,6 +26,7 @@ from audit.models import AuditEventType, AuditLog
 from config.money import money_round
 
 from .models import HOLDS_TIME, Appointment, AppointmentKind, AppointmentStatus
+from entities import scope as entity_scope
 
 
 MIN_MINUTES, MAX_MINUTES = 5, 12 * 60
@@ -179,7 +180,7 @@ def bill(appointment, user, lang="ar"):
         raise ValidationError(words["not_done"])
     if appointment.service is None:
         raise ValidationError(words["no_service"])
-    location = Location.objects.filter(active=True, is_selling_location=True).order_by("-is_default", "pk").first()
+    location = entity_scope.locations(Location.objects).filter(active=True, is_selling_location=True).order_by("-is_default", "pk").first()
     if location is None:
         raise ValidationError(words["setup"])
     invoice = create_sales_draft_with_tax(

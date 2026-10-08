@@ -17,6 +17,7 @@ from settings_core.display_labels import choice_label
 
 from . import services
 from .models import Project, ProjectExpense, ProjectInvoice, ProjectStatus
+from entities import scope as entity_scope
 
 
 VIEW, MANAGE, PROFIT, ISSUE = "sales.view_sales_invoices", "sales.create_sales_invoice", "reports.view_profit_report", "inventory.adjust_stock"
@@ -172,10 +173,10 @@ def project_detail(request, pk):
         invoices=[{"link": link, "status_label": choice_label(link.invoice, "status", lang)} for link in invoices],
         issues=project.issues.select_related("operation", "operation__item", "operation__source_location"),
         expense_links=project.expenses.select_related("expense", "expense__category", "expense__cashbox_operation"),
-        free_invoices=SalesInvoice.objects.filter(customer=project.customer).exclude(status="cancelled").exclude(pk__in=linked_ids).order_by("-invoice_date")[:50],
-        free_expenses=Expense.objects.filter(expense_date__gte=since, cashbox_operation__status="posted", project_link__isnull=True).order_by("-expense_date")[:50],
+        free_invoices=entity_scope.scope(SalesInvoice.objects, entity_scope.SALES_INVOICE).filter(customer=project.customer).exclude(status="cancelled").exclude(pk__in=linked_ids).order_by("-invoice_date")[:50],
+        free_expenses=entity_scope.scope(Expense.objects, entity_scope.EXPENSE).filter(expense_date__gte=since, cashbox_operation__status="posted", project_link__isnull=True).order_by("-expense_date")[:50],
         services_list=Item.objects.filter(active=True, is_stock_tracked=False).exclude(item_code=services.BILLING_ITEM_CODE).order_by("item_name"),
-        stock_items=Item.objects.filter(active=True, is_stock_tracked=True).order_by("item_name"), locations=Location.objects.filter(active=True),
+        stock_items=Item.objects.filter(active=True, is_stock_tracked=True).order_by("item_name"), locations=entity_scope.locations(Location.objects).filter(active=True),
         customers=Customer.objects.filter(active=True).order_by("name"),
         form={"name": project.name, "customer": str(project.customer_id), "site": project.site, "contract_value": project.contract_value,
               "start_date": project.start_date.isoformat() if project.start_date else "", "end_date": project.end_date.isoformat() if project.end_date else "",

@@ -7,6 +7,7 @@ from master_data.models import Item, Location
 from settings_core.display_labels import localized_choices
 
 from .models import StockAdjustmentDirection, StockOperation
+from entities import scope as entity_scope
 
 
 LABELS = {
@@ -54,7 +55,7 @@ class StockOperationForm(forms.Form):
             )
         for name in ("source_location", "destination_location", "location"):
             if name in self.fields:
-                self.fields[name].queryset = Location.objects.filter(active=True)
+                self.fields[name].queryset = entity_scope.locations(Location.objects).filter(active=True)
         if not self.is_bound and "operation_date" in self.fields:
             self.initial["operation_date"] = timezone.localdate()
 

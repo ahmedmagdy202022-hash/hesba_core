@@ -106,13 +106,22 @@ class _EntityField:
         field = self.fields.get("entity")
         if field is None:
             return
-        field.queryset = entities()
+        from entities.current import current_entity
+
+        working_in = current_entity()
+        # HG-034: inside an entity, a new store or cashbox belongs to it.
+        field.queryset = entities().filter(pk=working_in.pk) if working_in else entities()
         field.required = False
         field.empty_label = None
         if not self.instance.pk:
-            field.initial = main_entity().pk
+            field.initial = (working_in or main_entity()).pk
         if not is_multi_entity():
             field.widget = forms.HiddenInput()
+
+    def clean_entity(self):
+        from entities.current import current_entity
+
+        return self.cleaned_data.get("entity") or current_entity()
 
 
 class LocationForm(_EntityField, HesbaModelForm):

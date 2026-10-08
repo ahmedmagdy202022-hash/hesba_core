@@ -33,6 +33,7 @@ from settings_core.module_gate import closed_module
 
 from .models import SalesInvoice
 from .services import create_sales_draft, post_sales_invoice
+from entities import scope as entity_scope
 
 
 WALK_IN_CODE = "WALK-IN"
@@ -296,8 +297,8 @@ def _error_text(exc, words):
 def pos(request):
     lang = _lang(request)
     words = WORDS[lang]
-    locations = Location.objects.filter(active=True, is_selling_location=True)
-    cashboxes = Cashbox.objects.filter(active=True)
+    locations = entity_scope.locations(Location.objects).filter(active=True, is_selling_location=True)
+    cashboxes = entity_scope.cashboxes(Cashbox.objects).filter(active=True)
     customer_default = walk_in_customer()
     cart_back = "[]"  # raw JSON from the form; cleaned before it is rendered
     selected = {
@@ -357,7 +358,7 @@ def pos(request):
             "selected": selected,
             "cart_back": cart_back,
             "summary": today_summary(request.user),
-            "last_invoice": SalesInvoice.objects.filter(pk=last, created_by=request.user).first() if last.isdigit() else None,
+            "last_invoice": entity_scope.scope(SalesInvoice.objects, entity_scope.SALES_INVOICE).filter(pk=last, created_by=request.user).first() if last.isdigit() else None,
             "js_words": json.dumps({key: words[key] for key in ("not_found", "added", "remove", "empty_cart", "scan_serial", "serial_twice")}, ensure_ascii=False),
         },
     )

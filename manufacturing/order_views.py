@@ -17,6 +17,7 @@ from . import orders
 from .models import OrderStatus, ProductionOrder, Recipe
 from .stages import current_stages
 from .views import COST, PRODUCE, VIEW, _lang, _pick
+from entities import scope as entity_scope
 
 WORDS = {
     "ar": {"title": "أوامر الإنتاج", "intro": "كل أمر إنتاج بيمشي على مراحل المصنع لحد ما يخلص؛ أول ما يخلص، الخامات بتطلع من المخزن والمنتج بيدخل بتكلفته.",
@@ -80,7 +81,7 @@ def board(request):
             messages.success(request, words["created"])
             return redirect(f"{reverse('manufacturing:order', args=[order.pk])}?lang={lang}")
     today = timezone.localdate()
-    active = list(ProductionOrder.objects.filter(status__in=(OrderStatus.PLANNED, OrderStatus.IN_PROGRESS))
+    active = list(entity_scope.scope(ProductionOrder.objects, "location__entity").filter(status__in=(OrderStatus.PLANNED, OrderStatus.IN_PROGRESS))
                   .select_related("recipe__product", "customer").order_by("due_date", "pk"))
     stage_list = [list(s) for s in current_stages()]
     columns = [{"key": "planned", "label": words["planned"], "orders": []}]
@@ -96,8 +97,8 @@ def board(request):
         else:
             key = order.stages[order.stage_index][0]
             index.setdefault(key, index["planned"])["orders"].append(order)
-    recent = ProductionOrder.objects.filter(status__in=(OrderStatus.DONE, OrderStatus.CANCELLED)).select_related("recipe__product", "run")[:15]
-    locations = Location.objects.filter(active=True)
+    recent = entity_scope.scope(ProductionOrder.objects, "location__entity").filter(status__in=(OrderStatus.DONE, OrderStatus.CANCELLED)).select_related("recipe__product", "run")[:15]
+    locations = entity_scope.locations(Location.objects).filter(active=True)
     return render(request, "manufacturing/orders.html", _ctx(
         request, columns=columns, recent=[{"order": o, "label": choice_label(o, "status", lang)} for o in recent], error=error, post=request.POST,
         recipes=Recipe.objects.filter(active=True).select_related("product"), locations=locations,
@@ -110,7 +111,7 @@ def board(request):
 def order_detail(request, pk):
     lang = _lang(request)
     words = WORDS[lang]
-    order = get_object_or_404(ProductionOrder.objects.select_related("recipe__product", "location", "customer", "run"), pk=pk)
+    order = get_object_or_404(entity_scope.scope(ProductionOrder.objects, "location__entity").select_related("recipe__product", "location", "customer", "run"), pk=pk)
     error = ""
     if request.method == "POST":
         if not user_has_permission(request.user, PRODUCE):

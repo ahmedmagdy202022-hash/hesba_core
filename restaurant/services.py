@@ -26,6 +26,7 @@ from audit.models import AuditEventType, AuditLog
 from config.money import money_round
 
 from .models import DiningTable, KitchenTicket, Order, OrderKind, OrderLine, OrderStatus
+from entities import scope as entity_scope
 
 
 MAX_QUANTITY = Decimal("999")
@@ -261,7 +262,7 @@ def pay(order, user, *, cashbox, discount=Decimal("0"), tendered=Decimal("0"), c
     lines = [line for line in order.lines.select_related("item").filter(voided=False)]
     if not lines:
         raise ValidationError(words["empty"])
-    location = Location.objects.filter(active=True, is_selling_location=True).order_by("-is_default", "pk").first()
+    location = entity_scope.locations(Location.objects).filter(active=True, is_selling_location=True).order_by("-is_default", "pk").first()
     if location is None or cashbox is None:
         raise ValidationError(words["setup"])
     customer = customer or order.customer or walk_in_customer()

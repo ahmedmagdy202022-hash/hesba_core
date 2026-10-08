@@ -16,6 +16,7 @@ from django.db.models import DecimalField, F, Q, Sum, Value
 from django.db.models.functions import Coalesce
 
 from cashboxes.models import Cashbox, CashboxDirection, CashboxMovement
+from entities import scope as entity_scope
 from inventory.models import StockMovement, StockMovementType
 from master_data.models import Customer, Item, Location, Supplier
 from purchases.models import PurchaseInvoice, SupplierLedgerEntry
@@ -81,7 +82,7 @@ def stock_report(location=None):
     the question is which items have run out.
     """
 
-    locations = Location.objects.filter(active=True)
+    locations = entity_scope.locations(Location.objects).filter(active=True)
     if location is not None:
         locations = locations.filter(pk=location.pk)
 
@@ -131,7 +132,7 @@ def stock_levels_by_item():
     is concerned, and dropping them would understate the shortage.
     """
 
-    location_ids = list(Location.objects.filter(active=True).values_list("id", flat=True))
+    location_ids = list(entity_scope.locations(Location.objects).filter(active=True).values_list("id", flat=True))
     items = Item.objects.filter(active=True, is_stock_tracked=True)
 
     on_hand = {}
@@ -187,9 +188,13 @@ def customer_report(customer=None):
     if customer is not None:
         customers = customers.filter(pk=customer.pk)
 
+    # HG-034: inside an entity, only the rows its documents wrote count;
+    # opening balances belong to the main entity.
+    rows_here = entity_scope.customer_entries_q("ledger_entries__") or None
+    openings = entity_scope.includes_openings()
     customers = customers.annotate(
-        total_due_increase=_zero_sum("ledger_entries__due_increase", None, _MONEY),
-        total_due_decrease=_zero_sum("ledger_entries__due_decrease", None, _MONEY),
+        total_due_increase=_zero_sum("ledger_entries__due_increase", rows_here, _MONEY),
+        total_due_decrease=_zero_sum("ledger_entries__due_decrease", rows_here, _MONEY),
     ).order_by("id")
 
     return [
@@ -197,10 +202,10 @@ def customer_report(customer=None):
             "customer_id": row.id,
             "customer_code": row.customer_code,
             "customer_name": row.name,
-            "opening_balance": row.opening_balance,
+            "opening_balance": row.opening_balance if openings else ZERO,
             "due_increase": row.total_due_increase,
             "due_decrease": row.total_due_decrease,
-            "balance": row.opening_balance + row.total_due_increase - row.total_due_decrease,
+            "balance": (row.opening_balance if openings else ZERO) + row.total_due_increase - row.total_due_decrease,
         }
         for row in customers
     ]
@@ -213,9 +218,11 @@ def supplier_report(supplier=None):
     if supplier is not None:
         suppliers = suppliers.filter(pk=supplier.pk)
 
+    rows_here = entity_scope.supplier_entries_q("ledger_entries__") or None
+    openings = entity_scope.includes_openings()
     suppliers = suppliers.annotate(
-        total_due_increase=_zero_sum("ledger_entries__due_increase", None, _MONEY),
-        total_due_decrease=_zero_sum("ledger_entries__due_decrease", None, _MONEY),
+        total_due_increase=_zero_sum("ledger_entries__due_increase", rows_here, _MONEY),
+        total_due_decrease=_zero_sum("ledger_entries__due_decrease", rows_here, _MONEY),
     ).order_by("id")
 
     return [
@@ -223,10 +230,10 @@ def supplier_report(supplier=None):
             "supplier_id": row.id,
             "supplier_code": row.supplier_code,
             "supplier_name": row.name,
-            "opening_balance": row.opening_balance,
+            "opening_balance": row.opening_balance if openings else ZERO,
             "due_increase": row.total_due_increase,
             "due_decrease": row.total_due_decrease,
-            "balance": row.opening_balance + row.total_due_increase - row.total_due_decrease,
+            "balance": (row.opening_balance if openings else ZERO) + row.total_due_increase - row.total_due_decrease,
         }
         for row in suppliers
     ]
@@ -235,7 +242,7 @@ def supplier_report(supplier=None):
 def cashbox_report(cashbox=None, date_from=None, date_to=None):
     """Read-only cashbox balance from actual CashboxMovement rows."""
 
-    cashboxes = Cashbox.objects.filter(active=True)
+    cashboxes = entity_scope.cashboxes(Cashbox.objects).filter(active=True)
     if cashbox is not None:
         cashboxes = cashboxes.filter(pk=cashbox.pk)
 
@@ -284,7 +291,7 @@ def sales_report(date_from=None, date_to=None, status=None):
     built from drafts would contradict profit_report, which posts-only already.
     """
 
-    qs = SalesInvoice.objects.select_related("customer", "selling_location", "cashbox")
+    qs = entity_scope.scope(SalesInvoice.objects.select_related("customer", "selling_location", "cashbox"), entity_scope.SALES_INVOICE)
     qs = _date_filter(qs, "invoice_date", date_from, date_to)
     if status is not None:
         qs = qs.filter(status=status)
@@ -294,7 +301,7 @@ def sales_report(date_from=None, date_to=None, status=None):
 def purchase_report(date_from=None, date_to=None, status=None):
     """Purchase invoices, newest first. See sales_report on ``status``."""
 
-    qs = PurchaseInvoice.objects.select_related("supplier", "receiving_location", "cashbox")
+    qs = entity_scope.scope(PurchaseInvoice.objects.select_related("supplier", "receiving_location", "cashbox"), entity_scope.PURCHASE_INVOICE)
     qs = _date_filter(qs, "invoice_date", date_from, date_to)
     if status is not None:
         qs = qs.filter(status=status)
@@ -304,7 +311,7 @@ def purchase_report(date_from=None, date_to=None, status=None):
 def profit_report(date_from=None, date_to=None):
     """Read-only profit rows. Profit equals sales minus cost."""
 
-    lines = SalesLine.objects.filter(invoice__status="posted").select_related("invoice", "item")
+    lines = SalesLine.objects.filter(entity_scope.q(entity_scope.SALES_INVOICE, "invoice__"), invoice__status="posted").select_related("invoice", "item")
     if date_from:
         lines = lines.filter(invoice__invoice_date__gte=date_from)
     if date_to:
@@ -328,7 +335,7 @@ def profit_report(date_from=None, date_to=None):
         )
 
     returns = SalesReturnLine.objects.filter(
-        sales_return__status=SalesReturnStatus.POSTED
+        entity_scope.q(entity_scope.SALES_RETURN, "sales_return__"), sales_return__status=SalesReturnStatus.POSTED
     ).select_related("sales_return__source_invoice", "source_line__item", "tax")
     if date_from:
         returns = returns.filter(sales_return__return_date__gte=date_from)
@@ -363,13 +370,13 @@ def _return_line_tax(line):
 def profit_totals(date_from=None, date_to=None):
     """Sales, cost and profit for a window, aggregated in the database."""
 
-    totals = SalesLine.objects.filter(invoice__status="posted")
+    totals = SalesLine.objects.filter(entity_scope.q(entity_scope.SALES_INVOICE, "invoice__"), invoice__status="posted")
     totals = _date_filter(totals, "invoice__invoice_date", date_from, date_to).aggregate(
         profit=_zero_sum("line_profit_amount", None, _MONEY),
         cost=_zero_sum("line_cost_amount", None, _MONEY),
     )
     totals["sales"] = totals["profit"] + totals["cost"]
-    returns = SalesReturn.objects.filter(status=SalesReturnStatus.POSTED)
+    returns = entity_scope.scope(SalesReturn.objects, entity_scope.SALES_RETURN).filter(status=SalesReturnStatus.POSTED)
     returns = _date_filter(returns, "return_date", date_from, date_to)
     from taxes.services import returns_tax
 

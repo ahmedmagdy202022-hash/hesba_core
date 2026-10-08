@@ -13,6 +13,7 @@ from permissions.services import user_has_permission
 from settings_core.ui_messages import translate
 
 from .stocktake import SHEET_LIMIT, count_sheet, parse_counts, post_stock_count, sheet_items, variance_totals, variances
+from entities import scope as entity_scope
 
 
 WORDS = {
@@ -103,7 +104,7 @@ def stocktake(request):
     lang = _lang(request)
     words = WORDS[lang]
     data = request.POST if request.method == "POST" else request.GET
-    locations = list(Location.objects.filter(active=True).order_by("-is_default", "location_code"))
+    locations = list(entity_scope.locations(Location.objects).filter(active=True).order_by("-is_default", "location_code"))
     location = next((loc for loc in locations if str(loc.pk) == data.get("location")), locations[0] if locations else None)
     query = (data.get("q") or "").strip()
     count_date = _date(data.get("count_date"))

@@ -27,6 +27,7 @@ from sales.pos import WORDS, _decimal, _error_text, checkout, parse_cart, walk_i
 from serials.services import prepare_sale_serials
 
 from .models import OfflineSale
+from entities import scope as entity_scope
 
 
 def max_age_days():
@@ -106,8 +107,8 @@ def sync_sale(request):
         return _answer("refused", error=refusals["old"].format(days=max_age_days()))
     try:
         lines = prepare_sale_serials(parse_cart(_cart_post(payload)), lang)
-        location = Location.objects.filter(pk=str(payload.get("location", "")), active=True, is_selling_location=True).first() if str(payload.get("location", "")).isdigit() else None
-        cashbox = Cashbox.objects.filter(pk=str(payload.get("cashbox", "")), active=True).first() if str(payload.get("cashbox", "")).isdigit() else None
+        location = entity_scope.for_user(Location.objects, entity_scope.LOCATION, request.user).filter(pk=str(payload.get("location", "")), active=True, is_selling_location=True).first() if str(payload.get("location", "")).isdigit() else None
+        cashbox = entity_scope.for_user(Cashbox.objects, entity_scope.CASHBOX, request.user).filter(pk=str(payload.get("cashbox", "")), active=True).first() if str(payload.get("cashbox", "")).isdigit() else None
         if location is None or cashbox is None:
             return _answer("refused", error=refusals["setup"])
         customer_id = str(payload.get("customer", ""))

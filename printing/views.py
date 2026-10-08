@@ -9,6 +9,7 @@ from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect, render
 
 from permissions.decorators import require_permission
+from entities import scope as entity_scope
 from permissions.services import user_has_permission
 from purchases.models import PurchaseInvoice, PurchaseReturn, SupplierPayment
 from sales.models import CustomerPayment, SalesInvoice, SalesReturn
@@ -294,37 +295,37 @@ def _voucher_doc(payment, kind, lang, party_kind):
 
 @require_permission("sales.view_sales_invoices")
 def sales_invoice(request, pk):
-    invoice = get_object_or_404(SalesInvoice.objects.select_related("customer", "cashbox"), pk=pk)
+    invoice = get_object_or_404(entity_scope.scope(SalesInvoice.objects.select_related("customer", "cashbox"), entity_scope.SALES_INVOICE), pk=pk)
     return _render(request, _invoice_doc(invoice, "sales_invoice", _lang(request), "customer", "unit_sale_price"), f"/sales/{pk}/")
 
 
 @require_permission("purchases.view_purchase_invoices")
 def purchase_invoice(request, pk):
-    invoice = get_object_or_404(PurchaseInvoice.objects.select_related("supplier", "cashbox"), pk=pk)
+    invoice = get_object_or_404(entity_scope.scope(PurchaseInvoice.objects.select_related("supplier", "cashbox"), entity_scope.PURCHASE_INVOICE), pk=pk)
     return _render(request, _invoice_doc(invoice, "purchase_invoice", _lang(request), "supplier", "unit_purchase_price"), f"/purchases/{pk}/")
 
 
 @require_permission("sales.view_sales_invoices")
 def sales_return(request, pk):
-    document = get_object_or_404(SalesReturn.objects.select_related("source_invoice__customer"), pk=pk)
+    document = get_object_or_404(entity_scope.scope(SalesReturn.objects.select_related("source_invoice__customer"), entity_scope.SALES_RETURN), pk=pk)
     return _render(request, _return_doc(document, "sales_return", _lang(request), "customer", "sales"), f"/sales/returns/{pk}/")
 
 
 @require_permission("purchases.view_purchase_invoices")
 def purchase_return(request, pk):
-    document = get_object_or_404(PurchaseReturn.objects.select_related("source_invoice__supplier"), pk=pk)
+    document = get_object_or_404(entity_scope.scope(PurchaseReturn.objects.select_related("source_invoice__supplier"), entity_scope.PURCHASE_RETURN), pk=pk)
     return _render(request, _return_doc(document, "purchase_return", _lang(request), "supplier", "purchases"), f"/purchases/returns/{pk}/")
 
 
 @require_permission("sales.receive_customer_payment")
 def customer_payment(request, pk):
-    payment = get_object_or_404(CustomerPayment.objects.select_related("customer", "cashbox"), pk=pk)
+    payment = get_object_or_404(entity_scope.scope(CustomerPayment.objects.select_related("customer", "cashbox"), entity_scope.CUSTOMER_PAYMENT), pk=pk)
     return _render(request, _voucher_doc(payment, "customer_payment", _lang(request), "customer"), "/sales/collections/")
 
 
 @require_permission("purchases.pay_supplier")
 def supplier_payment(request, pk):
-    payment = get_object_or_404(SupplierPayment.objects.select_related("supplier", "cashbox"), pk=pk)
+    payment = get_object_or_404(entity_scope.scope(SupplierPayment.objects.select_related("supplier", "cashbox"), entity_scope.SUPPLIER_PAYMENT), pk=pk)
     return _render(request, _voucher_doc(payment, "supplier_payment", _lang(request), "supplier"), "/purchases/payments/")
 
 

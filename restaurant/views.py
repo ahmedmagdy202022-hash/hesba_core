@@ -20,6 +20,7 @@ from staff.models import Employee
 
 from . import services
 from .models import DiningTable, KitchenTicket, Order, OrderKind, OrderLine, OrderStatus
+from entities import scope as entity_scope
 
 
 VIEW, TAKE, TABLES = "sales.view_sales_invoices", "sales.create_sales_invoice", "master_data.manage_items"
@@ -192,7 +193,7 @@ def order_detail(request, pk):
         return redirect(_order_url(order, lang) + ("#menu" if action == "add" else ""))
     items, categories = _menu()
     lines = list(order.lines.select_related("item", "ticket"))
-    cashboxes = Cashbox.objects.filter(active=True)
+    cashboxes = entity_scope.cashboxes(Cashbox.objects).filter(active=True)
     shift = open_shift_for(request.user)
     free_tables = DiningTable.objects.filter(active=True).exclude(orders__status=OrderStatus.OPEN)
     return render(request, "restaurant/order.html", _base(

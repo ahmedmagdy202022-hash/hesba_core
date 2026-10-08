@@ -16,6 +16,7 @@ from settings_core.templatetags.hesba_format import qty as fmt_qty
 
 from . import services
 from .models import ProductionRun, Recipe
+from entities import scope as entity_scope
 
 
 VIEW, RECIPES, PRODUCE, COST = "inventory.view_stock", "master_data.manage_items", "inventory.adjust_stock", "inventory.view_cost"
@@ -109,7 +110,7 @@ def home(request):
         else:
             messages.success(request, words["saved"])
             return redirect(f"{reverse('manufacturing:recipe', args=[recipe.pk])}?lang={lang}")
-    runs = ProductionRun.objects.select_related("recipe", "recipe__product", "location")[:30]
+    runs = entity_scope.scope(ProductionRun.objects.select_related("recipe", "recipe__product", "location"), "location__entity")[:30]
     return render(request, "manufacturing/home.html", _base(
         request, recipes=Recipe.objects.select_related("product").prefetch_related("lines"), items=_stock_items(), form=form, rows=rows, error=error,
         runs=[{"run": run, "status_label": choice_label(run, "status", lang)} for run in runs],
@@ -122,7 +123,7 @@ def recipe_detail(request, pk):
     words = WORDS[lang]
     recipe = get_object_or_404(Recipe.objects.select_related("product"), pk=pk)
     error = ""
-    locations = Location.objects.filter(active=True)
+    locations = entity_scope.locations(Location.objects).filter(active=True)
     location = _pick(Location, request.GET.get("location") or request.POST.get("location"), active=True) or locations.filter(is_default=True).first() or locations.first()
     batches = services._decimal(request.GET.get("batches") or request.POST.get("batches") or "1") or Decimal("1")
     if request.method == "POST":
@@ -165,7 +166,7 @@ def recipe_detail(request, pk):
 def run_detail(request, pk):
     lang = _lang(request)
     words = WORDS[lang]
-    run = get_object_or_404(ProductionRun.objects.select_related("recipe", "recipe__product", "location", "output_operation"), pk=pk)
+    run = get_object_or_404(entity_scope.scope(ProductionRun.objects, "location__entity").select_related("recipe", "recipe__product", "location", "output_operation"), pk=pk)
     error = ""
     if request.method == "POST":
         if not user_has_permission(request.user, PRODUCE):

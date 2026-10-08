@@ -16,6 +16,7 @@ from permissions.services import user_has_permission
 
 from .models import AssetCategory, AssetStatus, FixedAsset
 from .services import accumulated, book_value, cancel_asset, depreciation_between, dispose_asset, disposal_result, month_start, register_asset, schedule
+from entities import scope as entity_scope
 
 
 MANAGE = "cashboxes.record_expenses"
@@ -95,7 +96,7 @@ def asset_list(request):
             except (ValueError, InvalidOperation, ValidationError):
                 raise ValidationError(words["bad"])
             category = request.POST.get("category") if request.POST.get("category") in AssetCategory.values else AssetCategory.OTHER
-            cashbox = Cashbox.objects.filter(active=True, pk=request.POST.get("cashbox") or 0).first()
+            cashbox = entity_scope.cashboxes(Cashbox.objects).filter(active=True, pk=request.POST.get("cashbox") or 0).first()
             asset = register_asset(name=request.POST.get("name", ""), category=category, in_service_on=in_service, cost=cost, salvage_value=salvage,
                                    useful_months=months, user=request.user, cashbox=cashbox, notes=request.POST.get("notes", ""), lang=lang)
         except ValidationError as exc:
@@ -116,7 +117,7 @@ def asset_list(request):
             totals["book"] += row["book"]
     this_month = depreciation_between(month_start(today), today)
     return render(request, "fixed_assets/list.html", _context(request, rows=rows, totals={k: money_round(v) for k, v in totals.items()}, this_month=this_month,
-                                                             categories=list(labels.items()), cashboxes=Cashbox.objects.filter(active=True), today=today, life_hint=LIFE_HINT))
+                                                             categories=list(labels.items()), cashboxes=entity_scope.cashboxes(Cashbox.objects).filter(active=True), today=today, life_hint=LIFE_HINT))
 
 
 @require_permission("cashboxes.view_expenses")
@@ -138,7 +139,7 @@ def asset_detail(request, pk):
                     proceeds = _money(request.POST.get("proceeds"), required=False)
                 except (ValueError, InvalidOperation):
                     raise ValidationError(words["bad"])
-                cashbox = Cashbox.objects.filter(active=True, pk=request.POST.get("cashbox") or 0).first()
+                cashbox = entity_scope.cashboxes(Cashbox.objects).filter(active=True, pk=request.POST.get("cashbox") or 0).first()
                 dispose_asset(asset, disposed_on=when, proceeds=proceeds, user=request.user, cashbox=cashbox, lang=lang)
                 messages.success(request, words["disposed"])
         except ValidationError as exc:
@@ -146,5 +147,5 @@ def asset_detail(request, pk):
         return redirect(f"{reverse('fixed_assets:detail', args=[asset.pk])}?lang={lang}")
     return render(request, "fixed_assets/detail.html", _context(
         request, asset=asset, category=_labels(lang)[asset.category], status=_status_label(asset, lang), rows=schedule(asset, today),
-        accumulated=accumulated(asset, today), book=book_value(asset, today), result=disposal_result(asset), cashboxes=Cashbox.objects.filter(active=True), today=today,
+        accumulated=accumulated(asset, today), book=book_value(asset, today), result=disposal_result(asset), cashboxes=entity_scope.cashboxes(Cashbox.objects).filter(active=True), today=today,
     ))

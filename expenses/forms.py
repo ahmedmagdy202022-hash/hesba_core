@@ -6,6 +6,7 @@ from django.utils import timezone
 from cashboxes.models import Cashbox
 
 from .models import ExpenseCategory
+from entities import scope as entity_scope
 
 
 class ExpenseForm(forms.Form):
@@ -40,7 +41,7 @@ class ExpenseForm(forms.Form):
         categories = ExpenseCategory.objects.filter(active=True)
         self.fields["category"].queryset = categories
         self.fields["category"].label_from_instance = lambda category: category.label(lang)
-        cashboxes = Cashbox.objects.filter(active=True)
+        cashboxes = entity_scope.cashboxes(Cashbox.objects).filter(active=True)
         self.fields["cashbox"].queryset = cashboxes
         for name, field in self.fields.items():
             field.label = self.LABELS[lang][name]

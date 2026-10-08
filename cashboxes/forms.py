@@ -6,6 +6,7 @@ from django.utils import timezone
 from settings_core.display_labels import localized_choices
 
 from .models import Cashbox, CashboxOperation, CashboxOperationType
+from entities import scope as entity_scope
 
 
 class OpeningBalanceAdjustmentForm(forms.Form):
@@ -95,7 +96,7 @@ class CashboxOperationForm(forms.Form):
 
     def __init__(self, *args, lang="ar", **kwargs):
         super().__init__(*args, **kwargs)
-        cashboxes = Cashbox.objects.filter(active=True)
+        cashboxes = entity_scope.cashboxes(Cashbox.objects).filter(active=True)
         self.fields["source_cashbox"].queryset = cashboxes
         self.fields["destination_cashbox"].queryset = cashboxes
         for name, field in self.fields.items():

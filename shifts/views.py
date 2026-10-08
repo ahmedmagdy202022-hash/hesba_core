@@ -15,6 +15,7 @@ from permissions.services import user_has_permission
 
 from .models import Shift
 from .services import close_shift, open_shift, open_shift_for, post_difference, summary
+from entities import scope as entity_scope
 
 
 WORDS = {
@@ -66,7 +67,7 @@ def my_shift(request):
     if request.method == "POST":
         try:
             if request.POST.get("action") == "open":
-                cashbox = Cashbox.objects.filter(active=True, pk=request.POST.get("cashbox") or 0).first()
+                cashbox = entity_scope.cashboxes(Cashbox.objects).filter(active=True, pk=request.POST.get("cashbox") or 0).first()
                 if cashbox is None:
                     raise ValidationError(words["bad"])
                 open_shift(request.user, cashbox, _amount(request.POST.get("opening_float"), words), lang)
@@ -84,7 +85,7 @@ def my_shift(request):
     if not can_all:
         history = history.filter(cashier=request.user)
     page = Paginator(history, 25).get_page(request.GET.get("page"))
-    cashboxes = Cashbox.objects.filter(active=True)
+    cashboxes = entity_scope.cashboxes(Cashbox.objects).filter(active=True)
     return render(request, "shifts/mine.html", {
         "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": words, "page_title": words["page_title"], "section": "pos",
         "current": current, "live": live, "live_rows": _rows(live, words) if live else [], "live_expected": Decimal(live["expected"]) if live else None,
