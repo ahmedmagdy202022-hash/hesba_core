@@ -24,7 +24,10 @@ class Command(BaseCommand):
             raise CommandError("prepare_demo_fresh only runs with DEMO_MODE=True.")
         database = settings.DATABASES["default"]
         if not database["ENGINE"].endswith("sqlite3"):
-            raise CommandError("prepare_demo_fresh needs the SQLite demo database.")
+            # Private copies (and so this shortcut) are SQLite only; a demo on
+            # PostgreSQL keeps starting over the slow way.
+            self.stdout.write("Not a SQLite demo; nothing to build.")
+            return
         from config.demo_restart import restart_demo
         from config.demo_sandbox import _use, copy_database, fresh_template
 

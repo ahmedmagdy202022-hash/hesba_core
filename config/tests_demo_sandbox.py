@@ -259,11 +259,16 @@ class EndToEndTests(SimpleTestCase):
 
 
 class PrepareFreshCommandTests(SimpleTestCase):
-    def test_only_on_a_sqlite_showcase(self):
+    def test_refused_off_a_showcase_and_skipped_on_postgresql(self):
+        from io import StringIO
+
         from django.core.management import CommandError, call_command
 
         with self.assertRaisesMessage(CommandError, "DEMO_MODE"):
             call_command("prepare_demo_fresh")
+        # A PostgreSQL demo's build must not fail on it (build.sh runs it on every showcase).
         postgres = {**settings.DATABASES, "default": {**settings.DATABASES["default"], "ENGINE": "django.db.backends.postgresql"}}
-        with override_settings(DEMO_MODE=True, DATABASES=postgres), self.assertRaisesMessage(CommandError, "SQLite"):
-            call_command("prepare_demo_fresh")
+        out = StringIO()
+        with override_settings(DEMO_MODE=True, DATABASES=postgres):
+            call_command("prepare_demo_fresh", "--force", stdout=out)
+        self.assertIn("nothing to build", out.getvalue())
