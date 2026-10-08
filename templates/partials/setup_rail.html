@@ -2,12 +2,15 @@
 <aside class="setup-rail" data-setup-step="{{ step }}" aria-label="Hesba setup">
   <div class="setup-rail__top">
     <img class="setup-rail__logo" src="{% static 'hesba/brand/hesba-logo-reversed.png' %}" alt="حِسبة — Hesba" width="642" height="225">
-    <span class="setup-rail__count">{% if step == 5 %}<span class="t-ar">الإعداد اكتمل</span><span class="t-en">Setup complete</span>{% else %}<span class="t-ar">خطوة {{ step }} من 4</span><span class="t-en">Step {{ step }} of 4</span>{% endif %}</span>
+    <span class="setup-rail__count">{% if step == 0 %}<span class="t-ar">قبل ما نبدأ</span><span class="t-en">Before we start</span>{% elif step == 5 %}<span class="t-ar">الإعداد اكتمل</span><span class="t-en">Setup complete</span>{% else %}<span class="t-ar">خطوة {{ step }} من 4</span><span class="t-en">Step {{ step }} of 4</span>{% endif %}</span>
   </div>
   <div class="setup-rail__progress" aria-hidden="true"><span></span></div>
   <div class="setup-rail__body">
     <p class="setup-rail__kicker"><span class="t-ar">إعداد حِسبة</span><span class="t-en">Setting up Hesba</span></p>
-    {% if step == 1 %}
+    {% if step == 0 %}
+    <h2 class="setup-rail__headline"><span class="t-ar">جهّز حِسبة في ٤ خطوات</span><span class="t-en">Set Hesba up in four steps</span></h2>
+    <p class="setup-rail__lead"><span class="t-ar">دقيقتين وتكون جاهز: نختار نشاطك، ونشغّل الموديولات اللي محتاجها، ونراجع مع بعض قبل ما تبدأ.</span><span class="t-en">Two minutes and you are ready: pick your activity, switch on the modules you need, and review together before you start.</span></p>
+    {% elif step == 1 %}
     <h2 class="setup-rail__headline"><span class="t-ar">نبدأ بنوع شغلك</span><span class="t-en">Start with your kind of business</span></h2>
     <p class="setup-rail__lead"><span class="t-ar">على حسب نشاطك هنجهّزلك القوائم والكلمات والتقارير المناسبة، من غير ما تضيّع وقت في حاجات مش بتاعتك.</span><span class="t-en">Your activity decides the menus, the words and the reports you get, so nothing you don't need gets in the way.</span></p>
     {% elif step == 2 %}
