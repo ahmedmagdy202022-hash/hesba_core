@@ -1,0 +1,6 @@
+/* FEEDBACK-R1: every screen shows which fields must be filled in. A field the
+   form needs carries `required` (Django adds it; the hand-written forms set it),
+   so its label gets a star and the form one line saying what the star means. */
+:is(.op-field,.md-field):has(> :is(input,select,textarea)[required]:not([type=hidden])) > label::after{content:" *";color:var(--hs-danger);font-weight:700}
+form:has(:is(.op-field,.md-field) > :is(input,select,textarea)[required]:not([type=hidden]))::before{content:"الخانات اللي عليها * لازم تتملا، والباقي اختياري.";display:block;margin:0 0 14px;color:var(--hs-muted);font-size:var(--hs-text-sm)}
+body[data-lang="en"] form:has(:is(.op-field,.md-field) > :is(input,select,textarea)[required]:not([type=hidden]))::before{content:"Fields marked * are required; the rest are optional."}

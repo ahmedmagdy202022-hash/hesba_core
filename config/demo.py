@@ -95,15 +95,25 @@ def sample(request):
         raise PermissionDenied("Owner only.")
     from django.core.management import call_command
     from django.core.management.base import CommandError
+    from django.db import DatabaseError, transaction
 
+    from sales.models import SalesInvoice
     from settings_core.management.commands.prepare_demo import Command as Prepare
 
-    prepare = Prepare()
-    try:
-        prepare._history()
-        call_command("seed_demo_business", username="owner", force=True, verbosity=0)
-        prepare._spread_sale_times()
-        prepare._extras()
-    except CommandError:
-        pass
+    # FEEDBACK-R1: a second press (double click, or back and press again) must
+    # not try to add the same month twice; that failed on duplicate numbers.
+    if not SalesInvoice.objects.filter(status="posted").exists():
+        prepare = Prepare()
+        try:
+            with transaction.atomic():
+                prepare._history()
+                call_command("seed_demo_business", username="owner", force=True, verbosity=0)
+                prepare._spread_sale_times()
+                prepare._extras()
+        except CommandError:
+            pass
+        except DatabaseError:
+            # Two presses at once: the other one is filling it in; this one
+            # rolled back whole, so nothing is half-written.
+            pass
     return redirect(f"/dashboard/?lang={lang}")

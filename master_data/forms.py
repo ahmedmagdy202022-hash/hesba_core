@@ -188,11 +188,13 @@ class CustomerForm(HesbaModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # PERF-001: the rep who looks after this customer (only once employees exist).
+        # PERF-001: the rep who looks after this customer, once the employees
+        # module is on and has people in it (FEEDBACK-R1).
         from staff.models import Employee
+        from staff.services import reps_offered
 
-        reps = Employee.objects.filter(active=True)
-        if self.instance.pk and self.instance.sales_rep_id:
+        reps = reps_offered()
+        if reps.exists() and self.instance.pk and self.instance.sales_rep_id:
             reps = Employee.objects.filter(pk=self.instance.sales_rep_id) | reps
         if reps.exists():
             self.fields["sales_rep"].queryset = reps

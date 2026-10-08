@@ -37,7 +37,8 @@ class Command(BaseCommand):
         from settings_core.setup_services import complete_setup
 
         profile = ClientProfile.get_active()
-        complete_setup(profile, "commercial", "retail", ",".join(catalog.default_modules("commercial")))
+        # The ready-made shop also shows employees and reps (FEEDBACK-R1 ties reps to that module).
+        complete_setup(profile, "commercial", "retail", ",".join(catalog.default_modules("commercial") + ("employees_technicians",)))
         call_command("seed_demo_users", password=password, force=True, verbosity=0)
         self._history()
         call_command("seed_demo_business", username="owner", force=True, verbosity=0)
