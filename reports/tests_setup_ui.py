@@ -32,3 +32,12 @@ class SetupRailTests(AuthenticatedTestCase):
         self.assertContains(response, 'class="activity-card__hint"', count=8)
         self.assertContains(response, "محلات، سوبر ماركت، صيدليات وجملة")
         self.assertContains(response, "Garments, food, furniture, workshops")
+
+    def test_the_gate_opens_with_the_rail_before_step_one(self):
+        response = self.client.get("/setup/?lang=ar")
+        self.assertContains(response, 'class="setup-rail" data-setup-step="0"', count=1)
+        self.assertContains(response, "قبل ما نبدأ")
+        self.assertContains(response, "Before we start")
+        self.assertNotContains(response, 'class="is-current"')
+        self.assertNotContains(response, 'class="is-done"')
+        self.assertContains(response, "data-setup-start")

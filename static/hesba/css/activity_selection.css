@@ -56,6 +56,7 @@ body[data-lang="en"] .t-ar{display:none}
 }
 .setup-rail__progress{height:6px;border-radius:var(--hs-radius-pill);background:rgba(var(--hs-white-rgb),.12);overflow:hidden}
 .setup-rail__progress span{display:block;height:100%;width:25%;border-radius:inherit;background:linear-gradient(90deg,var(--hs-teal),var(--hs-gold-bright));transition:width .4s ease}
+[data-setup-step="0"] .setup-rail__progress span{width:4%}
 [data-setup-step="2"] .setup-rail__progress span{width:50%}
 [data-setup-step="3"] .setup-rail__progress span{width:75%}
 [data-setup-step="4"] .setup-rail__progress span,

@@ -7,11 +7,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>بوابة الإعداد - حِسْبَة</title>
 <link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
-<link rel="stylesheet" href="{% static 'hesba/css/setup_gate_web.css' %}?v=115a-visual-refine">
+<link rel="stylesheet" href="{% static 'hesba/css/activity_selection.css' %}?v=setup-ui">
+<link rel="stylesheet" href="{% static 'hesba/css/setup_gate_web.css' %}?v=setup-ui">
 <link rel="stylesheet" href="{% static 'hesba/css/setup_gate_pack.css' %}?v=116d-mobile-safe-frame">
 <link rel="stylesheet" href="{% static 'hesba/css/setup_gate_mobile_refine.css' %}?v=116j-background-first">
 </head>
-<body class="setup-gate-page" data-lang="ar">
+<body class="activity-selection-page setup-gate-page" data-lang="ar">
 <svg class="setup-icon-sprite" aria-hidden="true" focusable="false">
   <symbol id="setup-icon-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3c2.35 2.45 3.55 5.45 3.55 9S14.35 18.55 12 21M12 3C9.65 5.45 8.45 8.45 8.45 12S9.65 18.55 12 21"></path></symbol>
   <symbol id="setup-icon-logout" viewBox="0 0 24 24"><path d="M9 5H5v14h4"></path><path d="M13 8l4 4-4 4"></path><path d="M17 12H8"></path></symbol>
@@ -19,6 +20,7 @@
   <symbol id="setup-icon-caret" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5"></path></symbol>
 </svg>
 <main class="setup-shell" aria-label="Setup Gate">
+  {% include "partials/setup_rail.html" with step=0 %}
   <header class="setup-header" aria-label="Setup header">
     <div class="setup-brand"><img class="setup-brand-logo" src="{% static 'hesba/setup_gate/assets/setup_gate_logo_approved.png' %}" alt="Hesba" onerror="this.hidden=true"></div>
     <div class="setup-controls" aria-label="Header controls">
