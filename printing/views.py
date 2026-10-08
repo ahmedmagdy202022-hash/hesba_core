@@ -230,6 +230,7 @@ def _invoice_doc(invoice, kind, lang, party_kind, price_field):
         "paid": invoice.paid_now,
         "remaining": invoice.remaining_due,
         "cashbox": invoice.cashbox,
+        "salesperson": getattr(invoice, "salesperson", None),  # PERF-001
         "notes": invoice.notes,
         "words_amount": invoice.total_amount,
     }

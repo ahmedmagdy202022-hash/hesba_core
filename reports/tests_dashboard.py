@@ -604,6 +604,17 @@ class SeedDemoBusinessTests(TestCase):
         self.owner = make_user(username="seed_owner", is_superuser=True)
         make_user_profile(user=self.owner, role=make_seeded_role(RoleCode.OWNER))
 
+    def test_its_customers_have_reps_so_the_rep_report_has_figures(self):
+        from datetime import date
+
+        from .reps import rep_performance
+
+        self.seed()
+        rows, totals = rep_performance(date(2000, 1, 1), timezone.localdate())
+        names = {row["rep"].name for row in rows if row["rep"] and row["net_sales"] > 0}
+        self.assertEqual(names, {"سمير المندوب", "هالة المندوبة"})
+        self.assertGreater(totals["commission"], 0)
+
     def test_it_posts_real_trade_rather_than_writing_figures(self):
         self.seed()
 

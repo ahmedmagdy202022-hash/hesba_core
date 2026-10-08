@@ -47,6 +47,7 @@
     <strong class="pr-party__name">{{ doc.party.name }}</strong>
     {% if doc.party.phone %}<span><bdi>{{ doc.party.phone }}</bdi></span>{% endif %}
     {% if doc.party.address and format == 'a4' %}<span>{{ doc.party.address }}</span>{% endif %}
+    {% if doc.salesperson %}<span>{% if lang == 'en' %}Salesperson{% else %}المندوب{% endif %}: {{ doc.salesperson.name }}</span>{% endif %}
   </section>
 
   {% if doc.voucher %}

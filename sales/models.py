@@ -63,6 +63,15 @@ class SalesInvoice(models.Model):
     paid_now = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     remaining_due = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     notes = models.TextField(blank=True)
+    # PERF-001 (HG-035): who made the sale, for the sales-rep performance report.
+    # Reporting only: posting, stock, cost and ledgers never read it.
+    salesperson = models.ForeignKey(
+        "staff.Employee",
+        on_delete=models.SET_NULL,
+        related_name="sales_invoices",
+        null=True,
+        blank=True,
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,

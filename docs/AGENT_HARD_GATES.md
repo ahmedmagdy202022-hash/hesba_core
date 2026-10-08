@@ -583,6 +583,29 @@ Status: APPROVED IN PRINCIPLE (2026-10-05).
   - the books refusing a restricted user's request for another entity or the consolidation;
   - every seeded role inside the branch never reaching the main shop's sale.
 
+## HG-035 — Salesperson on the sales invoice, rep on the customer (PERF-001)
+
+Status: IMPLEMENTED (2026-10-08), requested by Ahmed: groups with distributors and sales reps need per-rep performance.
+
+- **Change:**
+  - Two nullable foreign keys to `staff.Employee`, both with `SET_NULL`:
+    - `SalesInvoice.salesperson` (migration `sales/0010`);
+    - `Customer.sales_rep` (migration `master_data/0003`).
+  - `create_sales_draft` fills `salesperson` from the header. Failing that, it uses the customer's active rep, and then the active employee linked to the selling user. Otherwise it stays empty. One rule covers every path: the invoice form, POS, offline sync, restaurant, appointments and projects.
+- **Protected surface:** models and schema, plus a single added field in draft creation. Posting, stock movement, cost, cashbox, party ledgers and the general ledger never read the field. Existing invoices keep `NULL` and appear as "No rep".
+- **Report:** `/reports/reps/` (`reports.view_all_sales_report`; the profit column also needs `reports.view_profit_report`), scoped to the current entity (HG-034). For each rep it shows:
+  - net sales before VAT and after returns, returns, gross profit, invoice count and average invoice;
+  - collected: cash taken on their invoices plus payments from the customers they look after;
+  - credit sold, and commission at `commission_percent` of net sales;
+  - explained alerts: high returns (≥ 10 %), low collection (< 50 %), customers but no sales.
+
+  An "unassigned" row keeps the totals equal to the profit report's sales and profit for the window. A test pins this to the piastre.
+- **Tests:** `reports/tests_reps.py` covers:
+  - who gets the sale (rep, then seller, then nobody, an explicit choice overriding, and an inactive rep being skipped);
+  - figures, commission and alerts, with totals equal to `profit_totals`;
+  - screen permissions and the profit column;
+  - the form, the invoice detail and the print.
+
 ## Final gate verification
 
 - Full Django suite: 794 tests passed in 576.477 seconds.
