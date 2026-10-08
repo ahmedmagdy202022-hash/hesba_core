@@ -66,6 +66,23 @@ class DemoRestartTests(TestCase):
         self.assertEqual(ClientProfile.get_active().activity_slug, "medical")
         self.assertEqual(self.client.get("/dashboard/?lang=ar").status_code, 200)
 
+    def test_pressing_sample_data_twice_adds_it_once(self):
+        # FEEDBACK-R1: the second press used to fail on duplicate invoice numbers.
+        from sales.models import SalesInvoice
+        from settings_core import setup_catalog as catalog
+        from settings_core.setup_services import complete_setup
+
+        self.client.post(reverse("demo_restart"), {"lang": "ar"})
+        complete_setup(ClientProfile.get_active(), "commercial", "pharmacy", ",".join(catalog.default_modules("commercial")))
+        self.assertContains(self.client.get(reverse("setup_complete")), "data-busy=")
+        first = self.client.post(reverse("demo_sample"), {"lang": "ar"})
+        invoices = SalesInvoice.objects.count()
+        self.assertGreater(invoices, 0)
+        second = self.client.post(reverse("demo_sample"), {"lang": "ar"})
+        self.assertRedirects(first, "/dashboard/?lang=ar", fetch_redirect_response=False)
+        self.assertRedirects(second, "/dashboard/?lang=ar", fetch_redirect_response=False)
+        self.assertEqual(SalesInvoice.objects.count(), invoices)
+
 
 class DemoRestartOffTests(TestCase):
     def test_a_real_install_cannot_be_wiped(self):

@@ -34,8 +34,16 @@ from .models import (
 
 @transaction.atomic
 def default_salesperson(customer, user):
-    """PERF-001: the customer's rep, else the employee linked to whoever is selling."""
+    """PERF-001: the customer's rep, else the employee linked to whoever is selling.
 
+    Nobody while the employees module is off (FEEDBACK-R1), so an invoice
+    never names a rep the business does not use."""
+
+    from staff.services import STAFF_MODULE
+    from settings_core.setup_services import module_is_enabled
+
+    if not module_is_enabled(STAFF_MODULE):
+        return None
     rep = getattr(customer, "sales_rep", None)
     if rep is not None and rep.active:
         return rep

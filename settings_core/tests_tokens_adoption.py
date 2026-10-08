@@ -135,3 +135,24 @@ class SetupSheetsAdoptionTests(TestCase):
                 self.assertIn("hesba/css/tokens.css", html)
                 first_sheet = html.index("stylesheet")
                 self.assertIn("tokens.css", html[first_sheet:first_sheet + 120])
+
+
+class RequiredFieldMarksTests(TestCase):
+    """FEEDBACK-R1: every app page shows which fields must be filled in."""
+
+    def test_the_sheet_is_on_every_app_page_and_reads_the_tokens(self):
+        from django.template.loader import get_template
+
+        self.assertIn("hesba/css/form_required.css", get_template("base_app.html").template.source)
+        css = read_static("hesba/css/form_required.css")
+        self.assertEqual(re.findall(r"#[0-9a-fA-F]{3,8}\b|rgba?\(", css), [])
+        defined = set(re.findall(r"(--hs-[\w-]+)\s*:", read_static("hesba/css/tokens.css")))
+        self.assertEqual(sorted(set(re.findall(r"var\((--hs-[\w-]+)", css)) - defined), [])
+        self.assertIn("[required]", css)
+
+    def test_required_fields_carry_the_attribute_the_marks_key_off(self):
+        from master_data.forms import CustomerForm
+
+        html = str(CustomerForm()["name"])
+        self.assertIn("required", html)
+        self.assertNotIn("required", str(CustomerForm()["phone"]))

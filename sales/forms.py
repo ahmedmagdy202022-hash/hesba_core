@@ -69,7 +69,9 @@ class SalesDraftForm(forms.Form):
         for name, field in self.fields.items():
             field.label = labels[name]
         self.fields["customer"].queryset = Customer.objects.filter(active=True)
-        reps = Employee.objects.filter(active=True)
+        from staff.services import reps_offered
+
+        reps = reps_offered()  # FEEDBACK-R1: only with the employees module on
         if reps.exists():
             self.fields["salesperson"].queryset = reps
             self.fields["salesperson"].empty_label = "تلقائي: مندوب العميل أو أنت" if lang == "ar" else "Automatic: the customer's rep, or you"
