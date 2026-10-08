@@ -13,6 +13,10 @@ PORT=8000
 export DEMO_MODE=True
 export DEBUG=True
 export SQLITE_PATH=/tmp/hesba_demo.sqlite3
+# DEMO-SANDBOX: every visitor gets a private copy of this demo.
+export DEMO_SANDBOXES="${DEMO_SANDBOXES:-True}"
+export DEMO_SANDBOX_DIR="${DEMO_SANDBOX_DIR:-/tmp/hesba_sandboxes}"
+export FEEDBACK_SQLITE_PATH="${FEEDBACK_SQLITE_PATH:-/tmp/hesba_feedback.sqlite3}"
 
 if python - "$PORT" <<'PY'
 import socket, sys
@@ -28,6 +32,7 @@ fi
 rm -f "$SQLITE_PATH"
 python manage.py migrate --noinput -v0
 python manage.py prepare_demo
+python manage.py migrate --database feedback --noinput -v0
 echo
 echo "Hesba demo: open the 'Ports' tab, port $PORT (it opens by itself). Sign in as owner / Demo-pass-1."
 echo

@@ -1,0 +1,54 @@
+/* DEMO-FEEDBACK: the floating "feedback" button and its dialog. Tokens only. */
+body[data-lang="ar"] .hs-feedback .t-en, body[data-lang="ar"] .hs-feedback-fab .t-en,
+body[data-lang="en"] .hs-feedback .t-ar, body[data-lang="en"] .hs-feedback-fab .t-ar,
+body[data-lang="ar"] .login-demo .t-en, body[data-lang="en"] .login-demo .t-ar{display:none}
+
+.hs-feedback-fab{
+  position:fixed;z-index:60;inset-inline-start:18px;bottom:calc(18px + env(safe-area-inset-bottom));
+  display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 16px 0 12px;border:0;border-radius:var(--hs-radius-pill);
+  background:var(--hs-navy);color:var(--hs-gold-bright);font:inherit;font-family:var(--hs-font-body);font-size:var(--hs-text-sm);font-weight:700;
+  box-shadow:var(--hs-shadow-fab);cursor:pointer;
+}
+[dir="rtl"] .hs-feedback-fab{padding:0 12px 0 16px}
+.hs-feedback-fab:hover{background:var(--hs-navy-raised)}
+.hs-feedback-fab:focus-visible{outline:none;box-shadow:var(--hs-focus-ring)}
+.hs-feedback-fab svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+/* Clear of the setup wizard's action bar and the phone tab bar. */
+body.activity-selection-page .hs-feedback-fab{bottom:calc(100px + env(safe-area-inset-bottom))}
+/* The login footer credit sits in the bottom corner of the brand panel. */
+body.login-page .hs-feedback-fab{bottom:calc(64px + env(safe-area-inset-bottom))}
+@media (max-width:760px){
+  .hs-feedback-fab{bottom:calc(84px + env(safe-area-inset-bottom));height:40px}
+  body.activity-selection-page .hs-feedback-fab{bottom:calc(92px + env(safe-area-inset-bottom))}
+}
+
+.hs-feedback{
+  width:min(480px,calc(100vw - 24px));max-height:calc(100dvh - 24px);padding:0;border:0;border-radius:var(--hs-radius-xl);
+  background:var(--hs-surface);color:var(--hs-ink);box-shadow:var(--hs-shadow-lg);font-family:var(--hs-font-body);
+}
+.hs-feedback::backdrop{background:var(--hs-scrim)}
+.hs-feedback__form{display:grid;gap:var(--hs-space-4);padding:var(--hs-space-6)}
+.hs-feedback__head{display:flex;align-items:center;justify-content:space-between;gap:var(--hs-space-3)}
+.hs-feedback__head h2{margin:0;font-family:var(--hs-font-head);font-weight:700;font-size:var(--hs-text-lg);color:var(--hs-navy)}
+.hs-feedback__close{width:36px;height:36px;border:1px solid var(--hs-line);border-radius:50%;background:var(--hs-surface);color:var(--hs-navy);font-size:20px;line-height:1;cursor:pointer}
+.hs-feedback__lead{margin:0;color:var(--hs-muted);font-size:var(--hs-text-sm);line-height:1.8}
+.hs-feedback__moods{display:flex;flex-wrap:wrap;gap:var(--hs-space-2);margin:0;padding:0;border:0}
+.hs-feedback__moods legend{float:inline-start;width:100%;margin-bottom:6px;padding:0;color:var(--hs-navy);font-size:var(--hs-text-sm);font-weight:600}
+.hs-feedback__moods label{position:relative;cursor:pointer}
+.hs-feedback__moods input{position:absolute;opacity:0;inset:0}
+.hs-feedback__moods label > span{display:grid;place-items:center;width:52px;height:46px;border:1px solid var(--hs-line);border-radius:var(--hs-radius-lg);font-size:24px;background:var(--hs-surface);transition:border-color .15s ease,background .15s ease}
+.hs-feedback__moods input:checked + span{border-color:var(--hs-teal);background:var(--hs-teal-wash);box-shadow:0 0 0 1px var(--hs-teal)}
+.hs-feedback__moods input:focus-visible + span{box-shadow:var(--hs-focus-ring)}
+.hs-feedback__field{display:grid;gap:6px;color:var(--hs-navy);font-size:var(--hs-text-sm);font-weight:600}
+.hs-feedback__field textarea,.hs-feedback__field input{
+  width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-md);
+  background:var(--hs-surface);color:var(--hs-ink);font:inherit;font-weight:400;font-size:var(--hs-text-base);resize:vertical;
+}
+.hs-feedback__field textarea:focus,.hs-feedback__field input:focus{outline:none;border-color:var(--hs-teal);box-shadow:var(--hs-focus-ring)}
+.hs-feedback__status{margin:0;min-height:1.4em;font-size:var(--hs-text-sm);color:var(--hs-muted)}
+.hs-feedback__status.is-ok{color:var(--hs-success)}
+.hs-feedback__status.is-error{color:var(--hs-danger)}
+.hs-feedback__actions{display:flex;justify-content:flex-end}
+.hs-feedback__send{min-width:140px;min-height:48px;border:0;border-radius:var(--hs-radius-lg);background:var(--hs-teal);color:var(--hs-on-teal);font:inherit;font-weight:700;cursor:pointer}
+.hs-feedback__send:disabled{opacity:.6;cursor:progress}
+@media print{.hs-feedback-fab,.hs-feedback{display:none!important}}

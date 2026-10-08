@@ -11,6 +11,7 @@ from collections import Counter
 
 from django.apps import apps
 from django.core.management import BaseCommand, CommandError
+from django.db import router
 
 from settings_core.backup_crypto import BackupKeyError, decrypt, load_private
 
@@ -50,6 +51,9 @@ class Command(BaseCommand):
         for model in apps.get_models():
             label = model._meta.label_lower
             if label.split(".")[0] in EXCLUDE or label in EXCLUDE or not model._meta.managed or model._meta.proxy:
+                continue
+            # Only what lives in the client's database, as dumpdata saw it (not the demo's feedback notes).
+            if not router.allow_migrate_model("default", model):
                 continue
             live = model._default_manager.count()
             if counts.get(label, 0) != live:
