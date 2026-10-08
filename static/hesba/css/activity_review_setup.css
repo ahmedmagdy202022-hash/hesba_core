@@ -1,261 +1,74 @@
-/* 119 Review Setup — inner review summary layout only; 117A setup shell remains locked. */
-.review-setup-page .activity-panel,
-.setup-complete-placeholder-page .activity-panel{
-  grid-template-rows:auto auto minmax(0,1fr) auto;
-}
+/* SETUP-UI (2026-10-08): review and done steps — summary cards, feature
+ * switches and a clear finish. Tokens only. */
 
-.review-setup-page .review-copy,
-.setup-complete-placeholder-page .review-copy{
-  max-width:900px;
-}
-
-.review-summary{
-  width:min(100%,1040px);
-  margin:clamp(20px,2vw,28px) auto 0;
-  display:grid;
-  grid-template-columns:1fr 1.2fr;
-  gap:14px;
-  min-height:0;
-}
-
+.review-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--hs-space-4)}
 .review-card{
-  min-width:0;
-  border:1.5px solid var(--activity-border);
-  border-radius:18px;
-  background:linear-gradient(180deg,var(--hs-surface) 0%,var(--hs-surface) 100%);
-  box-shadow:var(--activity-soft-shadow);
-  color:var(--activity-navy);
-  padding:clamp(15px,1.35vw,20px);
-  text-align:inherit;
+  display:grid;gap:var(--hs-space-3);align-content:start;padding:var(--hs-space-5);
+  border:1px solid var(--hs-line);border-radius:var(--hs-radius-xl);background:var(--hs-surface);box-shadow:var(--hs-shadow-sm);
 }
+.review-card--capabilities,.review-card--note{grid-column:1 / -1}
+.review-card__title{margin:0;font-family:var(--hs-font-head);font-weight:700;font-size:var(--hs-text-md);color:var(--hs-navy)}
+.review-note{margin:0;color:var(--hs-muted);font-size:var(--hs-text-sm);line-height:1.8}
 
-.review-card--note{
-  grid-column:1 / -1;
-  background:linear-gradient(180deg,var(--hs-surface) 0%,var(--hs-teal-wash) 100%);
-  border-color:rgba(var(--hs-teal-rgb),.24);
-}
+.review-list{margin:0;display:grid;gap:var(--hs-space-2)}
+.review-list__row{display:flex;align-items:center;justify-content:space-between;gap:var(--hs-space-3);padding:12px 14px;border-radius:var(--hs-radius-md);background:var(--hs-ground)}
+.review-list dt{color:var(--hs-muted);font-size:var(--hs-text-sm);font-weight:600}
+.review-list dd{margin:0;color:var(--hs-navy);font-weight:700;text-align:end}
 
-.review-card__title{
-  margin:0 0 12px;
-  color:var(--activity-navy);
-  font-size:clamp(15px,1.25vw,19px);
-  line-height:1.25;
-  font-weight:700;
-}
-
-.review-list{
-  margin:0;
-  display:grid;
-  gap:10px;
-}
-
-.review-list__row{
-  display:grid;
-  grid-template-columns:minmax(110px,.78fr) minmax(0,1fr);
-  align-items:center;
-  gap:10px;
-  padding:10px 12px;
-  border-radius:13px;
-  background:rgba(var(--hs-white-rgb),.82);
-  border:1px solid rgba(var(--hs-line-rgb),.86);
-}
-
-.review-list dt{
-  color:var(--activity-muted);
-  font-size:12.5px;
-  line-height:1.3;
-  font-weight:700;
-}
-
-.review-list dd{
-  margin:0;
-  color:var(--activity-navy);
-  font-size:clamp(14px,1.05vw,17px);
-  line-height:1.3;
-  font-weight:700;
-  overflow-wrap:break-word;
-}
-
-.review-modules{
-  display:flex;
-  flex-wrap:wrap;
-  gap:9px;
-}
-
+.review-modules{display:flex;flex-wrap:wrap;gap:var(--hs-space-2)}
 .review-module-pill{
-  min-height:34px;
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  padding:8px 12px;
-  border-radius:999px;
-  border:1px solid rgba(var(--hs-teal-rgb),.22);
-  background:rgba(var(--hs-teal-rgb),.10);
-  color:var(--activity-teal-deep);
-  font-size:13px;
-  line-height:1.15;
-  font-weight:700;
-  box-shadow:0 7px 16px rgba(var(--hs-navy-rgb),.035);
+  display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:var(--hs-radius-pill);
+  background:var(--hs-teal-wash);color:var(--hs-teal-deep);font-size:var(--hs-text-sm);font-weight:600;
 }
+.review-module-pill::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--hs-teal)}
+.review-module-pill--empty{background:var(--hs-neutral-wash);color:var(--hs-muted)}
+.review-module-pill--empty::before{display:none}
 
-.review-module-pill--empty{
-  color:var(--activity-muted);
-  background:rgba(var(--hs-white-rgb),.82);
-  border-color:var(--activity-border);
+.review-capabilities{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:var(--hs-space-3)}
+.review-capability label{
+  display:flex;align-items:flex-start;gap:var(--hs-space-3);height:100%;padding:14px;cursor:pointer;
+  border:1px solid var(--hs-line);border-radius:var(--hs-radius-lg);background:var(--hs-surface);
+  transition:border-color .15s ease,background .15s ease;
 }
-
-.review-note{
-  margin:0;
-  color:var(--activity-navy);
-  font-size:clamp(13.5px,1.05vw,16px);
-  line-height:1.65;
-  font-weight:700;
+.review-capability label:hover{border-color:rgba(var(--hs-teal-rgb),.55)}
+.review-capability label:has(input:checked){border-color:rgba(var(--hs-teal-rgb),.7);background:linear-gradient(180deg,var(--hs-teal-wash),var(--hs-surface) 70%)}
+.review-capability input{flex:0 0 auto;width:20px;height:20px;margin:2px 0 0;accent-color:var(--hs-teal);cursor:pointer}
+.review-capability strong{color:var(--hs-navy);font-size:var(--hs-text-sm)}
+.review-capability small{display:block;margin-top:4px;color:var(--hs-muted);font-size:var(--hs-text-xs);line-height:1.7}
+.review-capability.is-soon label{cursor:not-allowed;opacity:.65}
+.review-badge{
+  display:inline-block;margin-inline-start:6px;padding:1px 8px;border-radius:var(--hs-radius-pill);
+  background:var(--hs-teal-wash);color:var(--hs-teal-deep);font-size:var(--hs-text-xs);font-style:normal;font-weight:700;vertical-align:middle;
 }
+.review-badge--soon{background:var(--hs-gold-wash);color:var(--hs-gold)}
+.review-card--note{background:linear-gradient(90deg,var(--hs-gold-wash),var(--hs-surface) 70%);border-color:var(--hs-warning-line)}
 
-.complete-card{
-  width:min(100%,760px);
-  margin:clamp(22px,2.2vw,34px) auto 0;
-  text-align:center;
+/* Done */
+.setup-complete-placeholder-page .complete-card{
+  justify-items:start;padding:var(--hs-space-7);
+  background:radial-gradient(120% 120% at 100% 0%,var(--hs-teal-wash),var(--hs-surface) 55%);
 }
-
-.setup-complete-placeholder-page .activity-footer{
-  justify-content:center;
+.setup-complete-placeholder-page .complete-card::before{
+  content:"";width:64px;height:64px;border-radius:50%;
+  background:var(--hs-teal) no-repeat center/30px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 8.5l3.2 3L13 4.5'/%3E%3C/svg%3E");
+  box-shadow:0 0 0 10px rgba(var(--hs-teal-rgb),.12);
 }
-
-.setup-complete-placeholder-page .complete-back{
-  min-width:min(100%,280px);
-  justify-content:center;
+.setup-complete-placeholder-page .complete-card .review-card__title{font-size:var(--hs-text-xl)}
+.complete-sample{
+  display:grid;gap:var(--hs-space-3);width:100%;margin-top:var(--hs-space-2);padding:var(--hs-space-5);
+  border-radius:var(--hs-radius-lg);background:var(--hs-navy);color:var(--hs-surface);
 }
-
-.review-setup-page[data-lang=en] .review-card,
-.setup-complete-placeholder-page[data-lang=en] .review-card{
-  text-align:left;
+.complete-sample .review-note{color:var(--hs-on-navy-muted)}
+.complete-sample__title{margin:0;color:var(--hs-gold-bright);font-family:var(--hs-font-head);font-weight:700;font-size:var(--hs-text-md)}
+.complete-sample .complete-sample__button{
+  justify-self:start;border:0;background:var(--hs-gold-bright);color:var(--hs-navy);min-height:48px;
 }
+.complete-sample .complete-sample__button:hover{background:var(--hs-surface)}
 
-.review-setup-page[data-lang=ar] .review-card,
-.setup-complete-placeholder-page[data-lang=ar] .review-card{
-  text-align:right;
+@media (max-width:760px){
+  .review-summary{grid-template-columns:minmax(0,1fr);gap:var(--hs-space-3)}
+  .review-card{padding:var(--hs-space-4);border-radius:var(--hs-radius-lg)}
+  .review-capabilities{grid-template-columns:minmax(0,1fr)}
+  .setup-complete-placeholder-page .complete-card{padding:var(--hs-space-5)}
+  .complete-sample .complete-sample__button{justify-self:stretch}
 }
-
-@media (max-width:1400px) and (min-width:701px){
-  .review-summary{
-    width:min(100%,980px);
-    gap:12px;
-    margin-top:18px;
-  }
-  .review-card{
-    border-radius:16px;
-    padding:14px;
-  }
-  .review-card__title{
-    margin-bottom:10px;
-    font-size:clamp(14px,1.1vw,17px);
-  }
-  .review-list__row{
-    padding:9px 10px;
-  }
-  .review-note{
-    line-height:1.5;
-  }
-}
-
-@media (min-width:701px) and (max-height:780px){
-  .review-summary{
-    margin-top:14px;
-    gap:10px;
-  }
-  .review-card{
-    padding:12px;
-  }
-  .review-card__title{
-    margin-bottom:8px;
-  }
-  .review-list{
-    gap:8px;
-  }
-  .review-list__row{
-    padding:8px 10px;
-  }
-  .review-module-pill{
-    min-height:30px;
-    padding:6px 10px;
-    font-size:12px;
-  }
-  .review-note{
-    font-size:13px;
-    line-height:1.42;
-  }
-}
-
-@media(max-width:700px){
-  .review-setup-page .activity-panel,
-  .setup-complete-placeholder-page .activity-panel{
-    grid-template-rows:auto auto auto auto;
-  }
-  .review-summary{
-    width:100%;
-    grid-template-columns:1fr;
-    gap:10px;
-    margin-top:16px;
-  }
-  .review-card{
-    border-radius:15px;
-    padding:13px;
-  }
-  .review-card__title{
-    margin-bottom:9px;
-    font-size:clamp(13.5px,3.8vw,16px);
-  }
-  .review-list__row{
-    grid-template-columns:1fr;
-    align-items:start;
-    gap:4px;
-    padding:9px 10px;
-  }
-  .review-list dt{
-    font-size:11.5px;
-  }
-  .review-list dd{
-    font-size:clamp(13px,3.8vw,15px);
-  }
-  .review-modules{
-    gap:7px;
-  }
-  .review-module-pill{
-    min-height:30px;
-    padding:7px 9px;
-    font-size:clamp(11px,3.15vw,12.5px);
-  }
-  .review-note{
-    font-size:clamp(12px,3.3vw,14px);
-    line-height:1.5;
-  }
-  .complete-card{
-    margin-top:18px;
-  }
-}
-
-@media(max-width:370px){
-  .review-card{
-    padding:11px;
-  }
-  .review-module-pill{
-    padding:6px 8px;
-    font-size:10.5px;
-  }
-}
-
-/* The review step submits its choices instead of linking onward. The wrapping
-   form must not become a flex item itself, or it would break the locked
-   activity-footer layout in both its row and column modes. */
-.review-setup-page .activity-next-form{display:contents}
-
-/* CAP-001: capability choices on the review step */
-.review-card--capabilities{grid-column:1 / -1}
-.review-capabilities{list-style:none;margin:10px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:8px}
-.review-capability label{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--activity-border);border-radius:14px;background:rgba(var(--hs-white-rgb),.82);cursor:pointer;color:var(--activity-navy);font-size:13.5px;line-height:1.45}
-.review-capability input{margin-top:3px;accent-color:var(--activity-teal-deep);flex:none;width:18px;height:18px}
-.review-capability small{color:var(--activity-muted);font-weight:500}
-.review-capability.is-soon label{cursor:default;opacity:.72}
-.review-badge{font-style:normal;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:rgba(var(--hs-teal-rgb),.12);color:var(--activity-teal-deep);white-space:nowrap}
-.review-badge--soon{background:rgba(var(--hs-navy-rgb),.07);color:var(--activity-muted)}
