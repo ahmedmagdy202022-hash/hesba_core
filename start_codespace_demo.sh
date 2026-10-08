@@ -32,6 +32,7 @@ fi
 rm -f "$SQLITE_PATH"
 python manage.py migrate --noinput -v0
 python manage.py prepare_demo
+python manage.py prepare_demo_fresh --force -v0
 python manage.py migrate --database feedback --noinput -v0
 echo
 echo "Hesba demo: open the 'Ports' tab, port $PORT (it opens by itself). Sign in as owner / Demo-pass-1."

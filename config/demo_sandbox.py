@@ -12,6 +12,11 @@ DEMO_SANDBOX_MAX are kept (the least recently used go first). One address may
 start at most NEW_PER_HOUR copies an hour, so a script hammering the login
 form cannot push real testers' copies out. A client's real install never sets
 DEMO_SANDBOXES, and then this middleware does nothing.
+
+Starting over (DEMO-FAST) swaps the visitor onto a copy of a second template,
+the demo already emptied back to choosing the activity (``prepare_demo_fresh``
+builds it once). Copying a file takes a moment; emptying a database on the
+showcase's small server took minutes and timed out.
 """
 
 import os
@@ -34,6 +39,7 @@ _SAFE = {"GET", "HEAD", "OPTIONS"}
 # A note can be sent without a copy of one's own; it is stored elsewhere.
 _NO_COPY_NEEDED = ("/demo/feedback/",)
 NEW_PER_HOUR = 20
+RESTART_PATH = "/demo/restart/"
 
 
 def enabled():
@@ -63,24 +69,25 @@ class Sandboxes:
     def template_read_only(self):
         return f"file:{self.template}?mode=ro"
 
-    def create(self):
-        """A fresh copy of the template; SQLite's backup API keeps it consistent."""
+    @property
+    def fresh(self):
+        return fresh_template(self.template)
+
+    def has_fresh(self):
+        return self.fresh.is_file()
+
+    def create(self, fresh=False):
+        """A new copy of the template (or of the emptied one, to start over)."""
 
         self.prune()
         sandbox_id = secrets.token_urlsafe(24)
-        target = self.path(sandbox_id)
-        partial = target.with_suffix(".partial")
-        source = sqlite3.connect(self.template_read_only(), uri=True)
-        try:
-            copy = sqlite3.connect(partial)
-            try:
-                source.backup(copy)
-            finally:
-                copy.close()
-        finally:
-            source.close()
-        os.replace(partial, target)
+        copy_database(self.fresh if fresh else self.template, self.path(sandbox_id))
         return sandbox_id
+
+    def remove(self, sandbox_id):
+        if self.exists(sandbox_id):
+            self.path(sandbox_id).unlink(missing_ok=True)
+            Path(f"{self.path(sandbox_id)}-journal").unlink(missing_ok=True)
 
     def prune(self, now=None):
         now = now or time.time()
@@ -99,6 +106,30 @@ class Sandboxes:
             entry.unlink(missing_ok=True)
             Path(f"{entry}-journal").unlink(missing_ok=True)
         return len(stale)
+
+
+def fresh_template(template):
+    """Where the emptied demo lives, next to the template."""
+
+    template = Path(template)
+    return template.with_name(f"{template.stem}.fresh{template.suffix}")
+
+
+def copy_database(source, target):
+    """Copy a SQLite database consistently (backup API), appearing all at once."""
+
+    target = Path(target)
+    partial = target.with_suffix(".partial")
+    reader = sqlite3.connect(f"file:{source}?mode=ro", uri=True)
+    try:
+        writer = sqlite3.connect(partial)
+        try:
+            reader.backup(writer)
+        finally:
+            writer.close()
+    finally:
+        reader.close()
+    os.replace(partial, target)
 
 
 class _NewCopyLimit:
@@ -169,7 +200,17 @@ class DemoSandboxMiddleware:
         if not self.sandboxes.exists(sandbox_id):
             sandbox_id = None
         created = None
-        if sandbox_id is None and request.method not in _SAFE and not request.path.startswith(_NO_COPY_NEEDED):
+        if request.method == "POST" and request.path == RESTART_PATH and self.sandboxes.has_fresh():
+            # Starting over: a copy of the emptied demo replaces theirs.
+            if sandbox_id is None and not self.new_copies.allow(client_address(request)):
+                _use(self.sandboxes.template_read_only())
+                return HttpResponse(TOO_MANY, status=429)
+            if sandbox_id is not None:
+                _use(self.sandboxes.template_read_only())
+                self.sandboxes.remove(sandbox_id)
+            sandbox_id = created = self.sandboxes.create(fresh=True)
+            request.demo_fresh_copy = True
+        elif sandbox_id is None and request.method not in _SAFE and not request.path.startswith(_NO_COPY_NEEDED):
             # Signing in or starting over: this visitor needs their own copy.
             if not self.new_copies.allow(client_address(request)):
                 _use(self.sandboxes.template_read_only())

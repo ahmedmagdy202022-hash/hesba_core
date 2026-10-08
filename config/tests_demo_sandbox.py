@@ -89,6 +89,34 @@ class SandboxesTests(SimpleTestCase):
         self.assertTrue(fresh.exists())
 
 
+class FreshTemplateTests(SimpleTestCase):
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.template = make_template(folder.name)
+        self.boxes = Sandboxes(self.template, Path(folder.name) / "boxes")
+
+    def test_starting_over_copies_the_emptied_demo(self):
+        from .demo_sandbox import copy_database, fresh_template
+
+        self.assertEqual(fresh_template(self.template).name, "template.fresh.sqlite3")
+        self.assertFalse(self.boxes.has_fresh())
+        copy_database(self.template, self.boxes.fresh)
+        with sqlite3.connect(self.boxes.fresh) as db:
+            db.execute("delete from note")
+            db.execute("insert into note values ('emptied')")
+        self.assertTrue(self.boxes.has_fresh())
+        self.assertEqual(rows(self.boxes.path(self.boxes.create(fresh=True))), ["emptied"])
+        self.assertEqual(rows(self.boxes.path(self.boxes.create())), ["from the template"])
+
+    def test_remove_only_touches_a_real_copy(self):
+        sandbox = self.boxes.create()
+        self.boxes.remove("../template")
+        self.assertTrue(self.template.exists())
+        self.boxes.remove(sandbox)
+        self.assertFalse(self.boxes.exists(sandbox))
+
+
 class NewCopyLimitTests(SimpleTestCase):
     def test_one_address_is_held_back_others_are_not(self):
         limit = _NewCopyLimit(limit=2, window=3600)
@@ -138,6 +166,7 @@ from django.test.utils import setup_test_environment
 setup_test_environment()
 call_command("migrate", verbosity=0, interactive=False)
 call_command("prepare_demo", verbosity=0)
+call_command("prepare_demo_fresh", verbosity=0)
 call_command("migrate", database="feedback", verbosity=0, interactive=False)
 template, boxes = os.environ["SQLITE_PATH"], os.environ["DEMO_SANDBOX_DIR"]
 digest = lambda: hashlib.sha256(open(template, "rb").read()).hexdigest()
@@ -162,8 +191,18 @@ out["a_dashboard_after_b"] = a.get("/dashboard/", follow=False).status_code
 a_id = a.cookies["hesba_sandbox"].value.split(":")[0]
 b_id = b.cookies["hesba_sandbox"].value.split(":")[0]
 out["invoices"] = [invoices(a_id), invoices(b_id)]
-a.post("/demo/restart/", {"lang": "ar"})
-out["after_a_restart"] = [invoices(a_id), b.get("/setup/activity/?lang=ar").status_code, len(copies())]
+import time
+started = time.time()
+again = a.post("/demo/restart/", {"lang": "ar"})
+seconds = time.time() - started
+new_a = a.cookies["hesba_sandbox"].value.split(":")[0]
+out["after_a_restart"] = [again.status_code, new_a != a_id, os.path.exists(os.path.join(boxes, a_id + ".sqlite3")),
+                          invoices(new_a), a.get("/setup/activity/?lang=ar").status_code,
+                          b.get("/setup/activity/?lang=ar").status_code, len(copies())]
+out["restart_seconds"] = seconds
+with sqlite3.connect(os.path.join(boxes, new_a + ".sqlite3")) as db:
+    out["fresh_owner_and_setup"] = [db.execute("select count(*) from auth_user where username='owner'").fetchone()[0],
+                                    db.execute("select setup_completed_at is not null from settings_core_clientprofile where is_active").fetchone()[0]]
 c.cookies["hesba_sandbox"] = "forged-value-that-is-not-signed"
 out["forged"] = [c.get("/login/").status_code, len(copies())]
 note = c.post("/demo/feedback/send/", {"message": "الزرار مش واضح", "lang": "ar", "path": "/login/"})
@@ -207,11 +246,29 @@ class EndToEndTests(SimpleTestCase):
         a_invoices, b_invoices = out["invoices"]
         self.assertGreater(a_invoices, 0)
         self.assertEqual(b_invoices, 0)
-        # A starting over empties only A's copy; B carries on.
-        self.assertEqual(out["after_a_restart"], [0, 200, 2])
+        # A starting over swaps A onto a copy of the emptied demo, at once; B carries on.
+        self.assertEqual(out["after_a_restart"], [302, True, False, 0, 200, 200, 2])
+        self.assertLess(out["restart_seconds"], 3)
+        self.assertEqual(out["fresh_owner_and_setup"], [1, 0])
         # A forged cookie is ignored, and a note needs no copy of its own.
         self.assertEqual(out["forged"], [200, 2])
         self.assertEqual(out["anon_note"], [200, 2])
         self.assertEqual(out["b_note"], 200)
         self.assertEqual(out["notes"], [[False, "الزرار مش واضح"], [True, "اختيار النشاط سهل"]])
         self.assertTrue(out["template_unchanged"])
+
+
+class PrepareFreshCommandTests(SimpleTestCase):
+    def test_refused_off_a_showcase_and_skipped_on_postgresql(self):
+        from io import StringIO
+
+        from django.core.management import CommandError, call_command
+
+        with self.assertRaisesMessage(CommandError, "DEMO_MODE"):
+            call_command("prepare_demo_fresh")
+        # A PostgreSQL demo's build must not fail on it (build.sh runs it on every showcase).
+        postgres = {**settings.DATABASES, "default": {**settings.DATABASES["default"], "ENGINE": "django.db.backends.postgresql"}}
+        out = StringIO()
+        with override_settings(DEMO_MODE=True, DATABASES=postgres):
+            call_command("prepare_demo_fresh", "--force", stdout=out)
+        self.assertIn("nothing to build", out.getvalue())
