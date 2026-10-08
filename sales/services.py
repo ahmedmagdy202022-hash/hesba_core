@@ -33,6 +33,16 @@ from .models import (
 
 
 @transaction.atomic
+def default_salesperson(customer, user):
+    """PERF-001: the customer's rep, else the employee linked to whoever is selling."""
+
+    rep = getattr(customer, "sales_rep", None)
+    if rep is not None and rep.active:
+        return rep
+    employee = getattr(user, "employee", None) if user is not None else None
+    return employee if employee is not None and employee.active else None
+
+
 def create_sales_draft(header, lines, user=None):
     """Create a validated sales draft while leaving posting effects untouched."""
 
@@ -71,6 +81,7 @@ def create_sales_draft(header, lines, user=None):
         paid_now=paid_now,
         remaining_due=money_round(total_amount - paid_now),
         notes=header.get("notes", ""),
+        salesperson=header.get("salesperson") or default_salesperson(header["customer"], user),
         created_by=user,
     )
     invoice.payment_status = invoice.calculate_payment_status()

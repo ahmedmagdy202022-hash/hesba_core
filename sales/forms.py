@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from cashboxes.models import Cashbox
 from master_data.models import Customer, Item, Location
+from staff.models import Employee
 
 from .models import CustomerPayment, SalesLine, SalesReturn
 from entities import scope as entity_scope
@@ -22,6 +23,7 @@ SALES_LABELS = {
         "tax_amount": "ضريبة الفاتورة",
         "paid_now": "المحصّل الآن",
         "notes": "ملاحظات",
+        "salesperson": "المندوب / البائع",
         "item": "الصنف / الخدمة",
         "description": "الوصف",
         "quantity": "الكمية",
@@ -38,6 +40,7 @@ SALES_LABELS = {
         "tax_amount": "Invoice tax",
         "paid_now": "Collected now",
         "notes": "Notes",
+        "salesperson": "Salesperson / rep",
         "item": "Item / service",
         "description": "Description",
         "quantity": "Quantity",
@@ -57,6 +60,8 @@ class SalesDraftForm(forms.Form):
     tax_amount = forms.DecimalField(max_digits=14, decimal_places=2, min_value=0, initial=0)
     paid_now = forms.DecimalField(max_digits=14, decimal_places=2, min_value=0, initial=0)
     notes = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}))
+    # PERF-001: left empty, the customer's rep or the seller's own employee is used.
+    salesperson = forms.ModelChoiceField(queryset=Employee.objects.none(), required=False)
 
     def __init__(self, *args, lang="ar", **kwargs):
         super().__init__(*args, **kwargs)
@@ -64,6 +69,12 @@ class SalesDraftForm(forms.Form):
         for name, field in self.fields.items():
             field.label = labels[name]
         self.fields["customer"].queryset = Customer.objects.filter(active=True)
+        reps = Employee.objects.filter(active=True)
+        if reps.exists():
+            self.fields["salesperson"].queryset = reps
+            self.fields["salesperson"].empty_label = "تلقائي: مندوب العميل أو أنت" if lang == "ar" else "Automatic: the customer's rep, or you"
+        else:
+            del self.fields["salesperson"]
         self.fields["selling_location"].queryset = entity_scope.locations(Location.objects).filter(
             active=True, is_selling_location=True
         )

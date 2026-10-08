@@ -29,6 +29,7 @@ LABELS = {
         "cashbox_code": "كود الخزنة",
         "currency": "العملة",
         "credit_limit": "الحد الائتماني",
+        "sales_rep": "المندوب المسؤول",
         "notes": "ملاحظات",
         "category_code": "كود التصنيف",
         "parent": "التصنيف الأب",
@@ -65,6 +66,7 @@ LABELS = {
         "cashbox_code": "Cashbox code",
         "currency": "Currency",
         "credit_limit": "Credit limit",
+        "sales_rep": "Sales rep",
         "notes": "Notes",
         "category_code": "Category code",
         "parent": "Parent category",
@@ -179,12 +181,23 @@ class CustomerForm(HesbaModelForm):
             "address",
             "opening_balance",
             "credit_limit",
+            "sales_rep",
             "notes",
             "active",
         )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # PERF-001: the rep who looks after this customer (only once employees exist).
+        from staff.models import Employee
+
+        reps = Employee.objects.filter(active=True)
+        if self.instance.pk and self.instance.sales_rep_id:
+            reps = Employee.objects.filter(pk=self.instance.sales_rep_id) | reps
+        if reps.exists():
+            self.fields["sales_rep"].queryset = reps
+        else:
+            del self.fields["sales_rep"]
         if self.instance.pk and target_has_operational_use(
             OpeningBalanceTarget.CUSTOMER, self.instance
         ):

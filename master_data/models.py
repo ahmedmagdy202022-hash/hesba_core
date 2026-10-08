@@ -118,6 +118,14 @@ class Customer(models.Model):
     address = models.TextField(blank=True)
     opening_balance = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     credit_limit = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    # PERF-001 (HG-035): the rep or distributor who looks after this customer.
+    sales_rep = models.ForeignKey(
+        "staff.Employee",
+        on_delete=models.SET_NULL,
+        related_name="customers",
+        null=True,
+        blank=True,
+    )
     notes = models.TextField(blank=True)
     active = models.BooleanField(default=True)
     import_batch_id = models.CharField(max_length=120, blank=True)

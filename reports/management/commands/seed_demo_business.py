@@ -174,8 +174,15 @@ class Command(BaseCommand):
             )
             items.append(item)
 
+        from staff.models import Employee
+
+        # PERF-001: two sales reps share the customers, so the rep report has something to show.
+        reps = [
+            Employee.objects.update_or_create(code=code, defaults={"name": name, "title": "مندوب مبيعات", "commission_percent": rate, "active": True})[0]
+            for code, name, rate in (("DEMO-REP-1", "سمير المندوب", D("3.00")), ("DEMO-REP-2", "هالة المندوبة", D("2.50")))
+        ]
         customers = []
-        for code, name, phone, limit in CUSTOMERS:
+        for index, (code, name, phone, limit) in enumerate(CUSTOMERS):
             customer, _ = Customer.objects.update_or_create(
                 customer_code=code,
                 defaults={
@@ -183,6 +190,7 @@ class Command(BaseCommand):
                     "phone": phone,
                     "whatsapp": phone,
                     "credit_limit": limit,
+                    "sales_rep": reps[index % len(reps)],
                     "active": True,
                     "import_batch_id": "DEMO-BUSINESS",
                 },
@@ -387,6 +395,7 @@ class Command(BaseCommand):
             paid_now=paid_now,
             remaining_due=subtotal - paid_now,
             payment_status=self._sales_payment_status(subtotal, paid_now),
+            salesperson=customer.sales_rep,
             created_by=actor,
             notes="Demo business seed",
         )
