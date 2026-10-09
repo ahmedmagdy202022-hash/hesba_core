@@ -1,0 +1,5 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'manufacturing:home' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ words.new }}</h1><p>{% if lang == 'en' %}What one batch takes, and how much it makes.{% else %}الدفعة الواحدة بتاخد إيه، وبتطلّع كام.{% endif %}</p></div></section>
+<form class="op-form" method="post" data-recipe-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">{% if error %}<div class="op-message op-message-error" role="alert" data-recipe-error>{{ error }}</div>{% endif %}{% include "manufacturing/_recipe_form.html" %}<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form>
+{% endblock %}
