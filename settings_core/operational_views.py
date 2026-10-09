@@ -7,7 +7,7 @@ from permissions.decorators import require_permission
 from permissions.models import Role
 from permissions.services import user_has_permission
 
-from .models import ClientProfile, FeatureFlag, SystemSetting
+from .models import ClientProfile, SystemSetting
 from .setup_services import ModuleChangeRefused, module_settings_rows, set_module_enabled
 from . import capabilities as caps
 from . import setup_catalog as catalog
@@ -47,6 +47,56 @@ def _context(request, **extra):
     return context
 
 
+def lang_of(request):
+    return "en" if (request.GET.get("lang") or request.POST.get("lang")) == "en" else "ar"
+
+
+#: R2: the screen each feature opens on (a capability's paths are the prefixes
+#: it owns, not always a page of their own).
+FEATURE_LANDING = {
+    "pos": "sales:pos", "barcode": "barcode:labels", "price_lists": "pricing:list", "units": "units:index",
+    "variants": "variants:index", "batches_expiry": "batches:index", "serials": "serials:index",
+    "installments": "installments:list", "vat": "taxes:settings", "e_invoice": "einvoice:issuer", "fixed_assets": "fixed_assets:list",
+}
+
+
+def _opens_for(user, url):
+    """The landing page's own permission gate, read from its view, applied to ``user``."""
+
+    from django.urls import resolve
+
+    view = resolve(url.split("?")[0]).func
+    needed = getattr(view, "required_permission", None)
+    if needed:
+        return user_has_permission(user, needed)
+    any_of = getattr(view, "required_permissions", ())
+    return not any_of or any(user_has_permission(user, code) for code in any_of)
+
+
+def _features(lang, user):
+    """R2: each optional feature in plain words: on or off, and where it lives once on.
+
+    The Open link is left out when the viewer could not open that screen."""
+
+    from .capabilities import CAPABILITIES, enabled_capabilities
+
+    on = set(enabled_capabilities())
+    rows = []
+    for slug, info in CAPABILITIES.items():
+        if not info.get("available"):
+            continue
+        name = FEATURE_LANDING.get(slug)
+        url = reverse(name) if name else ""
+        rows.append({
+            "slug": slug,
+            "label": info["en" if lang == "en" else "ar"],
+            "about": info.get("about_en" if lang == "en" else "about_ar", ""),
+            "on": slug in on,
+            "url": url if url and _opens_for(user, url) else "",
+        })
+    return rows
+
+
 @require_permission("settings.view_settings")
 def settings_overview(request):
     can_manage = user_has_permission(request.user, "settings.manage_settings") and request.user.is_superuser
@@ -57,7 +107,7 @@ def settings_overview(request):
             request,
             client=ClientProfile.get_active(),
             settings=SystemSetting.objects.filter(active=True),
-            feature_flags=FeatureFlag.objects.all(),
+            features=_features(lang_of(request), request.user),
             can_manage=can_manage,
             admin_settings_url=reverse("admin:settings_core_clientprofile_changelist") if can_manage else "",
         ),

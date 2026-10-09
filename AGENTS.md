@@ -3,6 +3,7 @@
 Status: The end-to-end run on `agent/end-to-end-functional-cycle` is COMPLETE and merged to `develop` via PR #54 (`c77c7e5`).
 Current task board and work rules: `docs/HESBA_ROADMAP.md`. Where this file and the roadmap disagree on branching, the roadmap wins.
 What is actually built today, and the parked ideas (restaurants/cafés and others): `docs/PROJECT_STATE.md`.
+Round 2 (Ahmed's demo feedback, approved 9 Oct 2026): `docs/R2_PRODUCT_PLAN.md` sets the order of the R2 work; the roadmap's work rules still apply.
 The engineering benchmark and protected-logic rules below remain in force.
 
 ## Mission

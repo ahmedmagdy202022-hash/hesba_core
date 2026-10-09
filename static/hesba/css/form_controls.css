@@ -1,0 +1,16 @@
+/* R2: a dropdown looks like a dropdown. The browser's own arrow is tiny (and
+   on some phones barely visible), so every single-choice <select> on an app
+   page gets one clear chevron at its far end, drawn from the tokens. */
+select:not([multiple]):not([size]){
+  -webkit-appearance:none;appearance:none;
+  background-color:var(--hs-surface);
+  background-image:linear-gradient(45deg,transparent 50%,var(--hs-muted) 50%),linear-gradient(135deg,var(--hs-muted) 50%,transparent 50%);
+  background-position:calc(100% - 18px) 50%,calc(100% - 12px) 50%;
+  background-size:6px 6px,6px 6px;
+  background-repeat:no-repeat;
+  padding-inline-end:36px;
+  cursor:pointer;
+}
+[dir="rtl"] select:not([multiple]):not([size]){background-position:12px 50%,18px 50%}
+select:not([multiple]):not([size]):disabled{cursor:not-allowed;opacity:.7}
+@media print{select{background-image:none}}

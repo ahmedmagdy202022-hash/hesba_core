@@ -154,7 +154,7 @@ class BaseSalesLineFormSet(BaseFormSet):
 SalesLineFormSet = formset_factory(
     SalesLineInputForm,
     formset=BaseSalesLineFormSet,
-    extra=5,
+    extra=1,  # R2: one line to start; "+ سطر جديد" adds more
     max_num=20,
     validate_max=True,
 )
