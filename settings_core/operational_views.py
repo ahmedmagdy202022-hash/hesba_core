@@ -97,17 +97,49 @@ def _features(lang, user):
     return rows
 
 
+MONTHS = {
+    "ar": ("يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"),
+    "en": ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"),
+}
+
+
+def _plain_profile(client, lang):
+    """R2-10: the company's settings in words an owner reads, not field values."""
+
+    if client is None:
+        return None
+    from . import setup_catalog as catalog
+    from .setup_services import enabled_modules
+
+    month = client.fiscal_year_start_month or 1
+    zones = {"Africa/Cairo": ("القاهرة", "Cairo")}
+    zone = zones.get(client.timezone)
+    return {
+        "activity": catalog.activity_label(client.activity_slug, lang) if client.activity_slug else "",
+        "sub_activity": catalog.sub_activity_label(client.activity_slug, client.sub_activity_slug, lang) if client.sub_activity_slug else "",
+        "language": {"ar": "العربية", "en": "English"}.get(client.default_language, client.default_language),
+        "timezone": (zone[1] if lang == "en" else zone[0]) if zone else client.timezone,
+        "fiscal_start": MONTHS["en" if lang == "en" else "ar"][(month - 1) % 12],
+        "modules_on": len(enabled_modules()), "modules_total": len(catalog.MODULE_SLUGS),
+    }
+
+
 @require_permission("settings.view_settings")
 def settings_overview(request):
     can_manage = user_has_permission(request.user, "settings.manage_settings") and request.user.is_superuser
+    lang = lang_of(request)
+    client = ClientProfile.get_active()
+    features = _features(lang, request.user)
     return render(
         request,
         "settings_core/overview.html",
         _context(
             request,
-            client=ClientProfile.get_active(),
+            client=client,
+            plain=_plain_profile(client, lang),
+            features_on=sum(1 for feature in features if feature["on"]),
             settings=SystemSetting.objects.filter(active=True),
-            features=_features(lang_of(request), request.user),
+            features=features,
             can_manage=can_manage,
             admin_settings_url=reverse("admin:settings_core_clientprofile_changelist") if can_manage else "",
         ),
