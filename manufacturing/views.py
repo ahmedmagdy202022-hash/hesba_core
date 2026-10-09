@@ -91,30 +91,99 @@ def _rows(pairs):
     return pairs + [("", "")] * (LINE_ROWS - len(pairs))
 
 
+def _save_new_recipe(request, lang):
+    """POST of the new-recipe form: the saved recipe, or (error, form, rows) to show again."""
+
+    if not user_has_permission(request.user, RECIPES):
+        raise PermissionDenied("Recipes need master_data.manage_items.")
+    data, lines = _recipe_post(request)
+    try:
+        return services.save_recipe(data, lines, request.user, lang=lang), None
+    except ValidationError as exc:
+        rows = _rows([(request.POST.get(f"component_{i}", ""), request.POST.get(f"qty_{i}", "")) for i in range(LINE_ROWS)])
+        return None, (" ".join(exc.messages), request.POST, rows)
+
+
+def _overview(request, lang):
+    """R2-9: the production control board: what is being made, what is short, what each product costs."""
+
+    from datetime import timedelta
+
+    from django.db.models import Count, Sum
+    from django.utils import timezone
+
+    from inventory.services import get_item_stock_quantity
+
+    from .models import OrderStatus, ProductionOrder
+
+    today = timezone.localdate()
+    can_cost = user_has_permission(request.user, COST)
+    open_orders = list(entity_scope.scope(ProductionOrder.objects, "location__entity")
+                       .filter(status__in=(OrderStatus.PLANNED, OrderStatus.IN_PROGRESS))
+                       .select_related("recipe__product", "customer", "location").order_by("due_date", "pk"))
+    shortages = {}
+    for order in open_orders:
+        total = len(order.stages) or 1
+        order.progress = int(min(order.stage_index, total) * 100 / total)
+        order.stage_label = (order.stages[order.stage_index][2 if lang == "en" else 1] if order.status == OrderStatus.IN_PROGRESS and order.stage_index < len(order.stages)
+                             else "")
+        order.late = bool(order.due_date and order.due_date < today)
+        batches = (order.quantity / order.recipe.output_quantity) if order.recipe.output_quantity else Decimal("0")
+        # Every open order together, per material and warehouse: two orders
+        # that each fit can still be short side by side.
+        for row in services.plan(order.recipe, batches, order.location)["rows"]:
+            item = row["line"].component
+            entry = shortages.setdefault((item.pk, order.location_id), {"item": item, "location": order.location, "need": Decimal("0"), "have": row["have"], "orders": []})
+            entry["need"] += row["need"]
+            entry["orders"].append(order.number)
+    for entry in shortages.values():
+        entry["missing"] = max(entry["need"] - entry["have"], Decimal("0"))
+    shortages = {key: entry for key, entry in shortages.items() if entry["missing"] > 0}
+    runs30 = entity_scope.scope(ProductionRun.objects, "location__entity").filter(status="posted", run_date__gte=today - timedelta(days=29))
+    made = runs30.aggregate(units=Sum("output_quantity"), cost=Sum("total_cost"), count=Count("id"))
+    products = []
+    for recipe in Recipe.objects.filter(active=True).select_related("product").prefetch_related("lines__component"):
+        row = {"recipe": recipe, "stock": get_item_stock_quantity(recipe.product), "price": recipe.product.default_sale_price}
+        if can_cost:
+            card = services.plan(recipe, Decimal("1"), None)
+            row["unit_cost"] = card["unit_cost"]
+            row["margin"] = round(float((row["price"] - card["unit_cost"]) / row["price"] * 100)) if row["price"] else None
+        products.append(row)
+    runs = entity_scope.scope(ProductionRun.objects.select_related("recipe", "recipe__product", "location"), "location__entity")[:10]
+    return {
+        "open_orders": open_orders, "planned_count": sum(1 for o in open_orders if o.status == OrderStatus.PLANNED),
+        "running_count": sum(1 for o in open_orders if o.status == OrderStatus.IN_PROGRESS), "late_count": sum(1 for o in open_orders if o.late),
+        "shortages": sorted(shortages.values(), key=lambda e: -e["missing"]), "made": made, "products": products,
+        "runs": [{"run": run, "status_label": choice_label(run, "status", lang)} for run in runs],
+    }
+
+
 @require_permission(VIEW)
 def home(request):
     lang = _lang(request)
-    words = WORDS[lang]
-    error = ""
-    form = {"output_quantity": "1", "active": True}
-    rows = _rows([])
-    if request.method == "POST":
-        if not user_has_permission(request.user, RECIPES):
-            raise PermissionDenied("Recipes need master_data.manage_items.")
-        data, lines = _recipe_post(request)
-        try:
-            recipe = services.save_recipe(data, lines, request.user, lang=lang)
-        except ValidationError as exc:
-            error, form = " ".join(exc.messages), request.POST
-            rows = _rows([(request.POST.get(f"component_{i}", ""), request.POST.get(f"qty_{i}", "")) for i in range(LINE_ROWS)])
-        else:
-            messages.success(request, words["saved"])
+    if request.method == "POST":  # the recipe form used to live here; still accepted
+        recipe, failed = _save_new_recipe(request, lang)
+        if recipe:
+            messages.success(request, WORDS[lang]["saved"])
             return redirect(f"{reverse('manufacturing:recipe', args=[recipe.pk])}?lang={lang}")
-    runs = entity_scope.scope(ProductionRun.objects.select_related("recipe", "recipe__product", "location"), "location__entity")[:30]
-    return render(request, "manufacturing/home.html", _base(
-        request, recipes=Recipe.objects.select_related("product").prefetch_related("lines"), items=_stock_items(), form=form, rows=rows, error=error,
-        runs=[{"run": run, "status_label": choice_label(run, "status", lang)} for run in runs],
-    ))
+        error, form, rows = failed
+        return render(request, "manufacturing/recipe_new.html", _base(request, items=_stock_items(), form=form, rows=rows, error=error))
+    return render(request, "manufacturing/home.html", _base(request, **_overview(request, lang)))
+
+
+@require_permission(VIEW)
+def recipe_new(request):
+    lang = _lang(request)
+    if not user_has_permission(request.user, RECIPES):
+        raise PermissionDenied("Recipes need master_data.manage_items.")
+    error, form, rows = "", {"output_quantity": "1", "active": True}, _rows([])
+    if request.method == "POST":
+        recipe, failed = _save_new_recipe(request, lang)
+        if recipe:
+            messages.success(request, WORDS[lang]["saved"])
+            return redirect(f"{reverse('manufacturing:recipe', args=[recipe.pk])}?lang={lang}")
+        error, form, rows = failed
+    return render(request, "manufacturing/recipe_new.html", _base(request, items=_stock_items(), form=form, rows=rows, error=error))
 
 
 @require_permission(VIEW)

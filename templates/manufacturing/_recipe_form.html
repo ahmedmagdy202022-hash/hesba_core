@@ -6,7 +6,9 @@
 <label class="op-field"><span><input type="checkbox" name="active"{% if form.active %} checked{% endif %}> {{ words.active }}</span></label>
 </div>
 <h2>{{ words.components }}</h2><p class="op-muted">{{ words.stock_only }}</p>
-<div class="op-form-grid" data-recipe-lines>
-{% for component, qty in rows %}<div class="op-field"><label for="rc-c{{ forloop.counter0 }}">{{ words.component }} {{ forloop.counter }}</label><select id="rc-c{{ forloop.counter0 }}" name="component_{{ forloop.counter0 }}"><option value="">—</option>{% for item in items %}<option value="{{ item.pk }}"{% if component|stringformat:"s" == item.pk|stringformat:"s" %} selected{% endif %}>{{ item.item_code }} · {{ item.item_name }}</option>{% endfor %}</select></div>
-<div class="op-field"><label for="rc-q{{ forloop.counter0 }}">{{ words.qty }}</label><input id="rc-q{{ forloop.counter0 }}" name="qty_{{ forloop.counter0 }}" value="{{ qty|stringformat:'s' }}" inputmode="decimal" dir="ltr"></div>{% endfor %}
+<div data-recipe-lines>
+{% for component, qty in rows %}<div class="op-form-grid" data-recipe-line{% if forloop.counter > 3 and not component %} hidden{% endif %}><div class="op-field"><label for="rc-c{{ forloop.counter0 }}">{{ words.component }} {{ forloop.counter }}</label><select id="rc-c{{ forloop.counter0 }}" name="component_{{ forloop.counter0 }}"><option value="">—</option>{% for item in items %}<option value="{{ item.pk }}"{% if component|stringformat:"s" == item.pk|stringformat:"s" %} selected{% endif %}>{{ item.item_code }} · {{ item.item_name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="rc-q{{ forloop.counter0 }}">{{ words.qty }}</label><input id="rc-q{{ forloop.counter0 }}" name="qty_{{ forloop.counter0 }}" value="{{ qty|stringformat:'s' }}" inputmode="decimal" dir="ltr"></div></div>{% endfor %}
 </div>
+<div class="op-form-actions"><button class="op-secondary" type="button" data-add-component>+ {% if lang == 'en' %}Add a component{% else %}مكوّن كمان{% endif %}</button></div>
+<script>(function(){var b=document.querySelector('[data-add-component]');if(!b){return;}b.addEventListener('click',function(){var next=document.querySelector('[data-recipe-line][hidden]');if(next){next.hidden=false;var s=next.querySelector('select');if(s){s.focus();}}if(!document.querySelector('[data-recipe-line][hidden]')){b.hidden=true;}});})();</script>

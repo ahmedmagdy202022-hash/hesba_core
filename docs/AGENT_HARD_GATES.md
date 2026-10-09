@@ -606,6 +606,23 @@ Status: IMPLEMENTED (2026-10-08), requested by Ahmed: groups with distributors a
   - screen permissions and the profit column;
   - the form, the invoice detail and the print.
 
+## HG-036 — Manufacturing restructure: work in progress, labour and overhead in product cost, scrap (R2-9)
+
+Status: OPEN (proposal; needs Ahmed / Main Control approval). Everything that does not need it is done.
+
+- **Asked for:** Ahmed's round-2 feedback said manufacturing is "very bad" and needs restructuring (R2 plan, part 3).
+- **Done without touching protected logic:**
+  - the manufacturing home is now a control board: orders on the floor with their stage and progress, materials short for all open orders together (per material and warehouse), each product's material cost per unit against its sale price, and the latest runs;
+  - recipes have their own page, with three component lines and "+ component".
+
+  Everything still goes through `services.plan`, `orders.*` and `services.produce` as before.
+- **Needs this gate** (each item touches stock movement, cost or the ledger):
+  1. **Work in progress.** Issue materials to a WIP location when an order starts, and move finished units to the finished-goods warehouse on completion. This needs either transfers in the order flow, or new `PRODUCTION_OUT`/`PRODUCTION_IN` movement types (see HG-030). Either way it changes stock reports and closing.
+  2. **Labour and overhead in product cost.** Today the finished product enters stock at material cost only; `labor_cost`/`overhead_cost` on the order appear on its cost card but not in inventory value. Absorbing them changes average cost (HG-003) and needs a ledger counter-entry (e.g. "applied labour / overhead"), which touches GL-002 projection.
+  3. **Scrap and yield.** The stage log already records defects. Writing them off as a stock adjustment out (or a lower output) changes stock quantity, cost per good unit and the ledger.
+- **Proposed tests if approved:** quantity, value and average-cost regressions per scenario; a trial balance that still balances; stock reports per warehouse before and after WIP; cancellation reversing every leg.
+- **Risk if left as is:** low. Product cost is materials only (understated by labour and overhead), and defects stay as a quality figure without moving stock.
+
 ## Final gate verification
 
 - Full Django suite: 794 tests passed in 576.477 seconds.

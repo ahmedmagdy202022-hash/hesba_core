@@ -1,13 +1,36 @@
 {% extends "operations/base.html" %}
 {% load hesba_format %}
 {% block operation_content %}
-<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div><div class="op-form-actions"><a class="op-primary" href="{% url 'manufacturing:orders' %}?lang={{ lang }}" data-orders-link>{% if lang == 'en' %}Production orders{% else %}أوامر الإنتاج{% endif %}</a></div></section>
-<h2>{{ words.recipes }}</h2>
-<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.code }}</th><th>{{ words.product }}</th><th>{{ words.output }}</th><th>{{ words.components }}</th><th>{{ words.active }}</th></tr></thead><tbody>
-{% for recipe in recipes %}<tr data-recipe-row="{{ recipe.code }}"><td dir="ltr"><a href="{% url 'manufacturing:recipe' recipe.pk %}?lang={{ lang }}">{{ recipe.code }}</a></td><td>{{ recipe.product.item_name }}{% if recipe.name %} · <small>{{ recipe.name }}</small>{% endif %}</td><td>{{ recipe.output_quantity|qty }}</td><td>{{ recipe.lines.all|length }}</td><td>{% if recipe.active %}✓{% else %}—{% endif %}</td></tr>
-{% empty %}<tr><td colspan="5" class="op-empty">{{ words.empty }}</td></tr>{% endfor %}
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{% if lang == 'en' %}What is being made now, which materials are short, and what each product costs to make.{% else %}بيتصنع إيه دلوقتي، ناقص خامات إيه، وكل منتج بيتكلف كام.{% endif %}</p></div>
+<div class="op-form-actions"><a class="op-primary" href="{% url 'manufacturing:orders' %}?lang={{ lang }}" data-orders-link>{% if lang == 'en' %}Production orders{% else %}أوامر الإنتاج{% endif %}</a>{% if can_recipes %}<a class="op-secondary" href="{% url 'manufacturing:recipe_new' %}?lang={{ lang }}" data-new-recipe>+ {{ words.new }}</a>{% endif %}</div></section>
+
+<section class="op-summary-grid" data-mfg-tiles>
+  <article><small>{% if lang == 'en' %}Orders on the floor{% else %}أوامر في التشغيل{% endif %}</small><strong>{{ running_count }}</strong></article>
+  <article><small>{% if lang == 'en' %}Planned, not started{% else %}مخطط ولسه مبدأش{% endif %}</small><strong>{{ planned_count }}</strong></article>
+  <article><small>{% if lang == 'en' %}Late orders{% else %}أوامر متأخرة{% endif %}</small><strong{% if late_count %} style="color:var(--hs-danger)"{% endif %}>{{ late_count }}</strong></article>
+  <article><small>{% if lang == 'en' %}Materials short{% else %}خامات ناقصة{% endif %}</small><strong{% if shortages %} style="color:var(--hs-danger)"{% endif %} data-short-count>{{ shortages|length }}</strong></article>
+  <article><small>{% if lang == 'en' %}Made in 30 days{% else %}اتصنع في 30 يوم{% endif %}</small><strong>{{ made.units|default:0|qty }}</strong><small>{{ made.count|default:0 }} {% if lang == 'en' %}runs{% else %}تشغيلة{% endif %}</small></article>
+  {% if can_cost %}<article><small>{% if lang == 'en' %}Material cost (30 days){% else %}تكلفة الخامات (30 يوم){% endif %}</small><strong>{{ made.cost|default:0|money }}</strong></article>{% endif %}
+</section>
+
+<h2>{% if lang == 'en' %}On the floor{% else %}الشغل اللي ماشي{% endif %}</h2>
+<div class="op-table-wrap"><table class="op-table" data-open-orders><thead><tr><th>{% if lang == 'en' %}Order{% else %}الأمر{% endif %}</th><th>{{ words.product }}</th><th>{{ words.qty }}</th><th>{% if lang == 'en' %}Stage{% else %}المرحلة{% endif %}</th><th>{% if lang == 'en' %}Progress{% else %}الإنجاز{% endif %}</th><th>{% if lang == 'en' %}Due{% else %}التسليم{% endif %}</th></tr></thead><tbody>
+{% for order in open_orders %}<tr><td dir="ltr"><a href="{% url 'manufacturing:order' order.pk %}?lang={{ lang }}">{{ order.number }}</a></td><td>{{ order.recipe.product.item_name }}{% if order.customer %} · <small>{{ order.customer.name }}</small>{% endif %}</td><td>{{ order.quantity|qty }}</td><td>{% if order.stage_label %}{{ order.stage_label }}{% else %}<span class="op-status op-status-draft">{% if lang == 'en' %}planned{% else %}مخطط{% endif %}</span>{% endif %}</td><td><span style="display:inline-block;width:6rem;height:10px;border-radius:5px;background:var(--hs-neutral-wash);overflow:hidden;vertical-align:middle"><span style="display:block;height:100%;width:{{ order.progress }}%;background:var(--hs-chart-1)"></span></span> {{ order.progress }}%</td><td dir="ltr">{% if order.due_date %}{{ order.due_date|date:"Y-m-d" }}{% if order.late %} <span class="op-status op-status-cancelled">{% if lang == 'en' %}late{% else %}متأخر{% endif %}</span>{% endif %}{% endif %}</td></tr>
+{% empty %}<tr><td colspan="6" class="op-empty">{% if lang == 'en' %}Nothing on the floor. Open a production order to start.{% else %}مفيش شغل ماشي. افتح أمر إنتاج عشان تبدأ.{% endif %}</td></tr>{% endfor %}
 </tbody></table></div>
-<h2>{{ words.runs }}</h2>
+
+<h2>{% if lang == 'en' %}Materials for the open orders{% else %}الخامات المطلوبة للأوامر المفتوحة{% endif %}</h2>
+{% if shortages %}<div class="op-table-wrap"><table class="op-table" data-shortages><thead><tr><th>{{ words.component }}</th><th>{{ words.need }}</th><th>{{ words.have }}</th><th>{{ words.short }}</th><th>{% if lang == 'en' %}For{% else %}لأوامر{% endif %}</th></tr></thead><tbody>
+{% for row in shortages %}<tr><td>{{ row.item.item_name }}</td><td>{{ row.need|qty }} {{ row.item.unit }}</td><td>{{ row.have|qty }}</td><td><b style="color:var(--hs-danger)">{{ row.missing|qty }}</b></td><td dir="ltr">{{ row.orders|join:", " }}</td></tr>{% endfor %}
+</tbody></table></div><p class="op-muted"><a href="{% url 'purchases:create' %}?lang={{ lang }}">{% if lang == 'en' %}Buy the missing materials{% else %}اشتري الخامات الناقصة{% endif %} ←</a></p>
+{% else %}<p class="op-notice op-message-success">{% if lang == 'en' %}The materials on hand cover every open order.{% else %}الخامات الموجودة مكفية كل الأوامر المفتوحة.{% endif %}</p>{% endif %}
+
+<h2>{% if lang == 'en' %}Products and what they cost{% else %}المنتجات وتكلفتها{% endif %}</h2>
+<div class="op-table-wrap"><table class="op-table" data-products><thead><tr><th>{{ words.product }}</th><th>{% if lang == 'en' %}In stock{% else %}في المخزن{% endif %}</th>{% if can_cost %}<th>{% if lang == 'en' %}Materials per unit{% else %}خامات الوحدة{% endif %}</th>{% endif %}<th>{% if lang == 'en' %}Sale price{% else %}سعر البيع{% endif %}</th>{% if can_cost %}<th>{% if lang == 'en' %}Margin{% else %}الهامش{% endif %}</th>{% endif %}<th></th></tr></thead><tbody>
+{% for row in products %}<tr data-product-row="{{ row.recipe.code }}"><td>{{ row.recipe.product.item_name }} <small dir="ltr">{{ row.recipe.code }}</small></td><td>{{ row.stock|qty }}</td>{% if can_cost %}<td>{{ row.unit_cost|money }}</td>{% endif %}<td>{{ row.price|money }}</td>{% if can_cost %}<td>{% if row.margin is not None %}{{ row.margin }}%{% endif %}</td>{% endif %}<td><a href="{% url 'manufacturing:recipe' row.recipe.pk %}?lang={{ lang }}">{% if lang == 'en' %}Recipe & run{% else %}الوصفة والتشغيل{% endif %}</a></td></tr>
+{% empty %}<tr><td colspan="6" class="op-empty">{{ words.empty }}</td></tr>{% endfor %}
+</tbody></table></div>
+
+<h2>{% if lang == 'en' %}Latest runs{% else %}آخر التشغيلات{% endif %}</h2>
 {% include "manufacturing/_runs.html" %}
-{% if can_recipes %}<form class="op-form" method="post" data-recipe-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><h2>{{ words.new }}</h2>{% if error %}<div class="op-message op-message-error" role="alert" data-recipe-error>{{ error }}</div>{% endif %}{% include "manufacturing/_recipe_form.html" %}<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form>{% endif %}
 {% endblock %}
