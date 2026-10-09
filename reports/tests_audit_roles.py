@@ -135,3 +135,22 @@ class StockKeeperHomeTests(TestCase):
         cashier = person(RoleCode.CASHIER, "audit_home_cashier")
         self.client.force_login(cashier)
         self.assertNotIn("transfers_to_send", {a["key"] for a in self.client.get("/dashboard/?lang=ar").context["alerts"]})
+
+
+class CustomRoleNavTests(TestCase):
+    def test_an_audience_item_also_needs_the_page_permission(self):
+        from hesba_testing.factories import grant, make_role
+        from permissions.models import Permission
+        from settings_core.capabilities import _write
+
+        prepared_client("commercial", "retail", ",".join(catalog.default_modules("commercial")))
+        _write("vat", True)
+        role = make_role(code="AUD-CUSTOM")
+        for code in ("settings.view_settings", "sales.view_sales_invoices"):
+            grant(role, Permission.objects.get(code=code))
+        user = make_user(username="audit_custom")
+        make_user_profile(user=user, role=role)
+        self.client.force_login(user)
+        keys = {item["key"] for item in self.client.get("/dashboard/?lang=ar").context["nav_items"]}
+        self.assertNotIn("taxes", keys)       # tax settings need master_data.view_master_data too
+        self.assertNotIn("customers", keys)   # so does the customer list

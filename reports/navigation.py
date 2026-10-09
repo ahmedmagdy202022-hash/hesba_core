@@ -64,7 +64,8 @@ NAV_ITEMS = (
     {"key": "inventory", "ar": "المخزون", "en": "Inventory", "url_name": "inventory:stock", "module": "inventory", "permission": "inventory.view_stock"},
     {"key": "warehouses", "ar": "المخازن", "en": "Warehouses", "url_name": "inventory:warehouses", "module": "inventory", "permission": "inventory.view_stock",
      "also": ("/master-data/locations/",)},  # R2-7: the warehouses hub; adding or editing one is still master data
-    {"key": "customers", "ar": "العملاء", "en": "Customers", "url_name": "master_data:customers", "module": "customers", "allow": "reports.navigation.sees_customers"},
+    {"key": "customers", "ar": "العملاء", "en": "Customers", "url_name": "master_data:customers", "module": "customers", "permission": "master_data.view_master_data",
+     "allow": "reports.navigation.sees_customers"},
     {"key": "suppliers", "ar": "الموردون", "en": "Suppliers", "url_name": "master_data:suppliers", "module": "suppliers", "permission": "master_data.view_suppliers"},
     {"key": "items", "ar": "الأصناف والخدمات", "en": "Items & services", "url_name": "master_data:items", "module": "items_services"},
     {"key": "cashboxes", "ar": "الخزائن", "en": "Cashboxes", "url_name": "cashboxes:list", "module": "cashboxes", "permission": "cashboxes.view_cashboxes"},
@@ -76,7 +77,8 @@ NAV_ITEMS = (
     {"key": "staff", "ar": "الموظفون", "en": "Employees", "url_name": "staff:list", "module": "employees_technicians", "allow": "reports.navigation.sees_staff"},
     {"key": "expenses", "ar": "المصروفات", "en": "Expenses", "url_name": "expenses:list", "module": "expenses", "permission": "cashboxes.view_expenses"},
     # R2: features switched on in Settings -> Features get their own place in the menu.
-    {"key": "taxes", "ar": "الضرائب", "en": "Taxes", "url_name": "taxes:settings", "module": None, "capability": "vat", "allow": "reports.navigation.sees_staff"},
+    {"key": "taxes", "ar": "الضرائب", "en": "Taxes", "url_name": "taxes:settings", "module": None, "capability": "vat", "permission": "master_data.view_master_data",
+     "allow": "reports.navigation.sees_staff"},
     {"key": "einvoice", "ar": "الفاتورة الإلكترونية", "en": "E-invoicing", "url_name": "einvoice:issuer", "module": None, "capability": "e_invoice", "permission": "settings.view_settings"},
     {"key": "assets", "ar": "الأصول والإهلاك", "en": "Assets & depreciation", "url_name": "fixed_assets:list", "module": None, "capability": "fixed_assets", "permission": "cashboxes.view_expenses"},
     {"key": "reports", "ar": "التقارير", "en": "Reports", "url_name": "report_hub", "module": "reports"},
