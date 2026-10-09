@@ -6,10 +6,10 @@
 <div class="op-form-grid">
 {% if not account.is_system %}
 <div class="op-field"><label for="a-parent">{{ words.parent }}</label><select id="a-parent" name="parent">{% for g in groups %}<option value="{{ g.pk }}"{% if account.parent_id == g.pk or selected_parent == g.pk|stringformat:"s" %} selected{% endif %}>{{ g.code }} · {{ g.name_ar }}</option>{% endfor %}</select></div>
-<div class="op-field"><label for="a-code">{{ words.code }}</label><input id="a-code" name="code" inputmode="numeric" required value="{{ post.code|default:account.code|default:'' }}"></div>
+<div class="op-field"><label for="a-code">{{ words.code }}</label><input id="a-code" name="code" inputmode="numeric" required value="{% firstof post.code account.code '' %}"></div>
 {% endif %}
-<div class="op-field"><label for="a-ar">{{ words.name_ar }}</label><input id="a-ar" name="name_ar" required value="{{ post.name_ar|default:account.name_ar|default:'' }}"></div>
-<div class="op-field"><label for="a-en">{{ words.name_en }}</label><input id="a-en" name="name_en" value="{{ post.name_en|default:account.name_en|default:'' }}"></div>
+<div class="op-field"><label for="a-ar">{{ words.name_ar }}</label><input id="a-ar" name="name_ar" required value="{% firstof post.name_ar account.name_ar '' %}"></div>
+<div class="op-field"><label for="a-en">{{ words.name_en }}</label><input id="a-en" name="name_en" value="{% firstof post.name_en account.name_en '' %}"></div>
 {% if not account.is_system %}
 <div class="op-field"><label class="op-check"><input type="checkbox" name="is_group" value="1"{% if account and not account.is_postable %} checked{% endif %}> {{ words.is_group }}</label></div>
 <div class="op-field"><label class="op-check"><input type="checkbox" name="active"{% if not account or account.active %} checked{% endif %}> {{ words.active }}</label></div>
