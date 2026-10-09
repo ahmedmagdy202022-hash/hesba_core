@@ -24,7 +24,7 @@ transfer or adjustment the engine already knows.
 from decimal import Decimal, InvalidOperation
 
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from audit.models import AuditEventType, AuditLog
@@ -126,7 +126,7 @@ def level_rows(location, candidates):
     """Every level of ``location`` with what it holds, the refill it needs,
     and the warehouse (among ``candidates``) with the most to spare."""
 
-    levels = list(LocationStockLevel.objects.filter(location=location).select_related("item"))
+    levels = list(LocationStockLevel.objects.filter(location=location, item__active=True).select_related("item"))
     if not levels:
         return []
     candidates = [place for place in candidates if place.pk != location.pk]
@@ -156,7 +156,7 @@ def below_counts(locations):
     """{location_id: items at or below their minimum there}."""
 
     locations = list(locations)
-    levels = list(LocationStockLevel.objects.filter(location__in=locations, min_quantity__gt=0))
+    levels = list(LocationStockLevel.objects.filter(location__in=locations, min_quantity__gt=0, item__active=True))
     held = _on_hand({lv.item_id for lv in levels}, [place.pk for place in locations])
     counts = {}
     for level in levels:
@@ -208,8 +208,15 @@ def create_request(source, destination, lines, user, note="", lang="ar"):
         clean.append((item, quantity))
     if not clean:
         raise ValidationError(words["lines"])
-    request = TransferRequest.objects.create(number=_next_number(timezone.localdate()), source=source, destination=destination,
-                                             note=(note or "").strip()[:255], requested_by=user)
+    for attempt in range(5):  # two requests made at once can pick the same number: take the next one
+        try:
+            with transaction.atomic():
+                request = TransferRequest.objects.create(number=_next_number(timezone.localdate()), source=source, destination=destination,
+                                                         note=(note or "").strip()[:255], requested_by=user)
+            break
+        except IntegrityError:
+            if attempt == 4:
+                raise
     TransferRequestLine.objects.bulk_create([TransferRequestLine(request=request, item=item, requested_quantity=qty) for item, qty in clean])
     _audit(request, user, "request_transfer", {"number": request.number, "from": source.location_code, "to": destination.location_code,
                                                 "lines": [[item.item_code, str(qty)] for item, qty in clean]}, AuditEventType.CREATE)

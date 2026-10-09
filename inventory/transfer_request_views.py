@@ -42,12 +42,23 @@ def _item(items, value):
     return next((item for item in items if str(item.pk) == str(value or "")), None)
 
 
+def _may_cancel(item, user, can_transfer):
+    """Before sending, the requester may withdraw it. Once sent, cancelling
+    returns goods from transit, which is a transfer: transfer users only."""
+
+    if item.status == TransferRequestStatus.REQUESTED:
+        return can_transfer or item.requested_by_id == user.pk
+    return item.status == TransferRequestStatus.SENT and can_transfer
+
+
 @require_permission("inventory.view_stock")
 def levels(request, pk):
     lang = _lang(request)
     location = get_object_or_404(entity_scope.locations(Location.objects), pk=pk)
     can_edit = user_has_permission(request.user, "master_data.manage_locations")
-    items = _stock_items()
+    # An item made inactive after its level was set stays here, so the level can be removed.
+    configured = LocationStockLevel.objects.filter(location=location).values_list("item_id", flat=True)
+    items = list(Item.objects.filter(is_stock_tracked=True).filter(Q(active=True) | Q(pk__in=configured)).order_by("item_code"))
     error = ""
     if request.method == "POST":
         if not can_edit:
@@ -128,8 +139,8 @@ def request_detail(request, pk):
         action = request.POST.get("action")
         if action in ("send", "receive") and not can_transfer:
             raise PermissionDenied("Sending and receiving need inventory.transfer_stock.")
-        if action == "cancel" and not (can_transfer or item.requested_by_id == request.user.pk):
-            raise PermissionDenied("Only the requester or a transfer user may cancel.")
+        if action == "cancel" and not _may_cancel(item, request.user, can_transfer):
+            raise PermissionDenied("Before sending, the requester or a transfer user may cancel; after sending, only a transfer user.")
         quantities = {key.split("_", 1)[1]: value for key, value in request.POST.items() if key.startswith("qty_")}
         try:
             if action == "send":
@@ -152,5 +163,5 @@ def request_detail(request, pk):
     lines = list(item.lines.select_related("item"))
     return render(request, "inventory/transfer_request.html", _context(
         request, item=item, lines=lines, status_label=choice_label(item, "status", lang), error=error, can_transfer=can_transfer,
-        can_cancel=item.status in (TransferRequestStatus.REQUESTED, TransferRequestStatus.SENT) and (can_transfer or item.requested_by_id == request.user.pk),
+        can_cancel=_may_cancel(item, request.user, can_transfer),
         section="warehouses"))

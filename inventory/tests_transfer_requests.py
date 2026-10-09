@@ -201,3 +201,45 @@ class RequestFlowTests(RequestData):
         response = browser.post(reverse("inventory:transfer_request", args=[request.pk]), {"action": "send"})
         self.assertIn(response.status_code, (302, 403))
         self.assertEqual(self.at(self.main), D("40"))
+
+
+class ReviewFollowUpTests(RequestData):
+    """Codex review on #176."""
+
+    def test_a_requester_can_withdraw_before_sending_but_not_after(self):
+        role = make_role(code="TR-ASK")
+        grant(role, Permission.objects.get(code="inventory.view_stock"))
+        asker = make_user(username="tr_asker")
+        make_user_profile(user=asker, role=role)
+        browser = Client()
+        browser.force_login(asker)
+        first = tr.create_request(self.main, self.branch, [(self.item, "3")], asker)
+        url = reverse("inventory:transfer_request", args=[first.pk])
+        self.assertContains(browser.get(url), "data-request-cancel")
+        self.assertEqual(browser.post(url, {"action": "cancel", "reason": "غلط"}).status_code, 302)
+        second = tr.create_request(self.main, self.branch, [(self.item, "3")], asker)
+        tr.send(second, self.keeper)
+        url = reverse("inventory:transfer_request", args=[second.pk])
+        self.assertNotContains(browser.get(url), "data-request-cancel")
+        self.assertEqual(browser.post(url, {"action": "cancel", "reason": "x"}).status_code, 403)
+        self.assertEqual(self.at(self.main), D("37"))
+
+    def test_an_inactive_item_keeps_its_level_editable_and_stops_warning(self):
+        tr.save_levels(self.branch, [(self.item, "5", "20")], self.owner)
+        self.item.active = False
+        self.item.save(update_fields=["active"])
+        self.assertEqual(tr.below_counts([self.branch]), {})
+        self.assertEqual(tr.level_rows(self.branch, [self.main]), [])
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("inventory:warehouse_levels", args=[self.branch.pk]))
+        self.assertContains(page, 'data-level-row="TR-ITEM"')
+        self.client.post(reverse("inventory:warehouse_levels", args=[self.branch.pk]), {"item_0": str(self.item.pk), "min_0": "", "max_0": ""})
+        self.assertFalse(LocationStockLevel.objects.exists())
+
+    def test_a_taken_number_moves_to_the_next(self):
+        from unittest import mock
+
+        first = tr.create_request(self.main, self.branch, [(self.item, "1")], self.keeper)
+        with mock.patch.object(tr, "_next_number", side_effect=[first.number, first.number[:-3] + "002"]):
+            second = tr.create_request(self.main, self.branch, [(self.item, "1")], self.keeper)
+        self.assertEqual(second.number, first.number[:-3] + "002")
