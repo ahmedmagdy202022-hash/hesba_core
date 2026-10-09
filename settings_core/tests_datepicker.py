@@ -44,6 +44,7 @@ class DatePickerTests(TestCase):
     def test_copied_lines_and_required_stars_are_handled(self):
         root = settings.BASE_DIR / "static" / "hesba"
         script = (root / "js" / "datepicker.js").read_text(encoding="utf-8")
-        self.assertIn("function revive(wrap)", script)  # a row copied by "+ line" gets a working picker
+        self.assertIn("function revive(wrap)", script)
+        self.assertIn("'aria-invalid'", script)  # a date Django marked invalid stays announced as invalid  # a row copied by "+ line" gets a working picker
         css = (root / "css" / "form_required.css").read_text(encoding="utf-8")
         self.assertIn(".hs-date > [required]", css)  # a required date keeps its star

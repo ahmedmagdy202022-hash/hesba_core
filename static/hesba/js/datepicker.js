@@ -81,7 +81,7 @@
     this.text.setAttribute('autocomplete', 'off');
     this.text.setAttribute('dir', 'ltr');
     this.text.placeholder = words().placeholder;
-    ['aria-label', 'aria-describedby', 'title', 'form'].forEach(function (name) {
+    ['aria-label', 'aria-describedby', 'aria-invalid', 'title', 'form'].forEach(function (name) {  // aria-invalid: Django's error state
       if (native.hasAttribute(name)) self.text.setAttribute(name, native.getAttribute(name));
     });
     this.text.required = native.required;
@@ -139,6 +139,7 @@
     this.native.value = date ? iso(date) : '';
     this.text.value = date ? shown(date) : '';
     this.text.setCustomValidity('');
+    if (date) this.text.removeAttribute('aria-invalid');
     if (before !== this.native.value) {
       this.native.dispatchEvent(new Event('input', { bubbles: true }));
       this.native.dispatchEvent(new Event('change', { bubbles: true }));
@@ -149,9 +150,9 @@
   Picker.prototype.commitTyped = function () {
     var date = parse(this.text.value);
     if (date === '') { this.set(null); return true; }
-    if (!date) { this.native.value = ''; this.text.setCustomValidity(words().invalid); return false; }
+    if (!date) { this.native.value = ''; this.text.setCustomValidity(words().invalid); this.text.setAttribute('aria-invalid', 'true'); return false; }
     var outside = this.bounds(date);
-    if (outside) { this.native.value = ''; this.text.setCustomValidity(outside); return false; }
+    if (outside) { this.native.value = ''; this.text.setCustomValidity(outside); this.text.setAttribute('aria-invalid', 'true'); return false; }
     this.set(date);
     return true;
   };
