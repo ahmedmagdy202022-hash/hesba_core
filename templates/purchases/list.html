@@ -4,7 +4,7 @@
 {% block operation_content %}
 <section class="op-title-row">
   <div><h1>{{ words.invoices }}</h1><p>{% if lang == 'en' %}Draft, post, review, and safely reverse purchase invoices.{% else %}أنشئ مسودات المشتريات ورحّلها وراجعها واعكسها بأمان.{% endif %}</p></div>
-  <a class="op-primary" href="{% url 'purchases:create' %}?lang={{ lang }}">+ {{ words.new }}</a>
+  {% if can_create %}<a class="op-primary" href="{% url 'purchases:create' %}?lang={{ lang }}">+ {{ words.new }}</a>{% endif %}
 </section>
 <form class="op-filters" method="get">
   <input type="hidden" name="lang" value="{{ lang }}">

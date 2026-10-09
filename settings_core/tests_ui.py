@@ -27,7 +27,9 @@ class SettingsAndProfileUiTests(TestCase):
         self.login_as(RoleCode.CASHIER, "cashier_profile")
         response = self.client.get(reverse("accounts:profile"), {"lang": "en"})
         self.assertContains(response, "Cashier")
-        self.assertContains(response, "sales.create_sales_invoice")
+        # AUDIT-1: permissions are named in words, never as codes.
+        self.assertContains(response, "Create sales invoice")
+        self.assertNotContains(response, "sales.create_sales_invoice")
         self.assertNotContains(response, "inventory.view_cost")
 
     def test_cashier_cannot_view_operational_settings(self):
@@ -41,6 +43,12 @@ class SettingsAndProfileUiTests(TestCase):
         SystemSetting.objects.create(key="secret.setting", value="never-render-this", is_sensitive=True, active=True)
         response = self.client.get(reverse("settings_core:overview"), {"lang": "en"})
         self.assertContains(response, "Hesba Store")
+        # AUDIT-1: the technical settings table is for support (superusers) only.
+        self.assertNotContains(response, "public.setting")
+        self.assertNotContains(response, "never-render-this")
+        self.client.logout()
+        self.client.force_login(get_user_model().objects.create_superuser(username="settings_root", password="x-Root-pass-9"))
+        response = self.client.get(reverse("settings_core:overview"), {"lang": "en"})
         self.assertContains(response, "visible")
         self.assertContains(response, "Sensitive value hidden")
         self.assertNotContains(response, "never-render-this")
@@ -50,7 +58,8 @@ class SettingsAndProfileUiTests(TestCase):
         self.login_as(RoleCode.OWNER, "owner_staff", is_staff=True)
         response = self.client.get(reverse("settings_core:roles"), {"lang": "en"})
         self.assertFalse(response.context["can_manage"])
-        self.assertNotContains(response, "Manage roles")
+        # AUDIT-1: the page names each permission in words ("Manage roles" may be one); no Admin link.
+        self.assertNotContains(response, reverse("admin:permissions_role_changelist"))
         self.client.logout()
         superuser = get_user_model().objects.create_superuser(username="root_ui", password="x-Root-pass-9")
         self.client.force_login(superuser)

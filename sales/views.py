@@ -102,12 +102,25 @@ def _party_initial(request, field):
     return {field: value} if value.isdigit() else None
 
 
+def _activity_invoices(lang):
+    """AUDIT-3: the sales list is titled in the activity's own words ("Orders &
+    bills" in a restaurant); a shop keeps "Sales invoices"."""
+
+    from settings_core.vocabulary import BASE, term
+
+    words = term("operations", lang)
+    return {"invoices": words} if words != BASE["operations"][lang] else {}
+
+
 def _context(request, **extra):
+    from settings_core.vocabulary import term
+
     lang = _lang(request)
     context = {
         "lang": lang,
         "dir": "ltr" if lang == "en" else "rtl",
-        "words": STRINGS[lang],
+        # AUDIT-3: "new order" in a restaurant, "new visit bill" in a clinic...
+        "words": dict(STRINGS[lang], new=term("new_sale", lang), **_activity_invoices(lang)),
         "section": "sales",
         "page_title": STRINGS[lang]["page_title"],
     }
@@ -129,7 +142,8 @@ def invoice_list(request):
     else:
         status = ""
     page = Paginator(queryset, 25).get_page(request.GET.get("page"))
-    return render(request, "sales/list.html", _context(request, page=page, query=query, status_filter=status))
+    return render(request, "sales/list.html", _context(request, page=page, query=query, status_filter=status,
+                                                      can_create=user_has_permission(request.user, "sales.create_sales_invoice")))
 
 
 @require_permission("sales.create_sales_invoice")
@@ -159,7 +173,15 @@ def invoice_create(request):
                     _post_now(request, invoice.pk, lang)
                 return redirect(f"/sales/{invoice.pk}/?lang={lang}")
     else:
-        form = SalesDraftForm(lang=lang, initial=_party_initial(request, "customer"))
+        initial = _party_initial(request, "customer") or {}
+        if not initial.get("customer"):
+            from settings_core.setup_services import enabled_modules
+
+            if "customers" not in enabled_modules():  # AUDIT-3: a restaurant sells to walk-ins
+                from .pos import walk_in_customer
+
+                initial["customer"] = walk_in_customer().pk
+        form = SalesDraftForm(lang=lang, initial=initial)
         if vat_enabled():
             del form.fields["tax_amount"]
         line_formset = SalesLineFormSet(prefix="lines", form_kwargs={"lang": lang})

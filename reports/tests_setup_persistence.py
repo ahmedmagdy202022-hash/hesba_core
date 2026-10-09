@@ -30,15 +30,16 @@ class SetupCatalogTests(TestCase):
     def test_presets_match_the_documented_counts(self):
         for activity, required, suggested in (
             (catalog.COMMERCIAL, 4, 6),
-            (catalog.SERVICES, 4, 2),
+            (catalog.SERVICES, 5, 2),  # AUDIT-2: sales operations is required, so a services business can invoice
             (catalog.RESTAURANTS, 5, 5),
         ):
             with self.subTest(activity=activity):
                 self.assertEqual(len(catalog.required_modules(activity)), required)
                 self.assertEqual(len(catalog.default_modules(activity)), required + suggested)
 
-    def test_sales_operations_is_not_preset_for_a_services_install(self):
-        self.assertEqual(catalog.preset_state(catalog.SERVICES, "sales_operations"), catalog.OPTIONAL)
+    def test_sales_operations_is_required_for_a_services_install(self):
+        # AUDIT-2 reverses the earlier choice: without it a services business could not issue an invoice.
+        self.assertEqual(catalog.preset_state(catalog.SERVICES, "sales_operations"), catalog.REQUIRED)
         self.assertEqual(catalog.preset_state(catalog.COMMERCIAL, "sales_operations"), catalog.REQUIRED)
 
     def test_every_activity_offers_eight_sub_activities(self):

@@ -6,7 +6,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
-from permissions.decorators import require_permission
+from permissions.decorators import require_any_permission, require_permission
 from permissions.services import user_has_permission
 
 from .models import Employee
@@ -14,6 +14,8 @@ from .services import save_employee
 
 
 VIEW, MANAGE = "master_data.view_master_data", "master_data.manage_parties"
+# AUDIT-2: the staff list is for the owner, the manager and the accountant.
+from reports.navigation import STAFF_AUDIENCE  # noqa: E402
 WORDS = {
     "ar": {
         "page_title": "الموظفون", "title": "الموظفون والفنيون", "intro": "الفنيين والدكاترة والمصففين والمدرسين اللي بيشتغلوا مع العملاء. تقدر تربط الموظف بالمواعيد وتشوف أداءه وعمولته.",
@@ -49,7 +51,7 @@ def _post_data(request):
     return {key: request.POST.get(key, "") for key in ("name", "title", "phone", "commission_percent", "user", "notes")} | {"active": request.POST.get("active") == "1"}
 
 
-@require_permission(VIEW)
+@require_any_permission(*STAFF_AUDIENCE)
 def employee_list(request):
     lang = _lang(request)
     form, error = {"active": True}, ""
@@ -67,7 +69,7 @@ def employee_list(request):
     return render(request, "staff/list.html", _context(request, employees=Employee.objects.select_related("user"), form=form, error=error))
 
 
-@require_permission(VIEW)
+@require_any_permission(*STAFF_AUDIENCE)
 def employee_detail(request, pk):
     lang = _lang(request)
     employee = get_object_or_404(Employee, pk=pk)

@@ -91,7 +91,11 @@ def _choices(lang):
 
 def _base(request, **extra):
     lang = _lang(request)
-    context = {"lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": WORDS[lang], "page_title": WORDS[lang]["page_title"],
+    from settings_core.vocabulary import term
+
+    title = term("appointments", lang)  # AUDIT-3: "الحجوزات" in a clinic, "الحصص والمواعيد" in a school
+    words = dict(WORDS[lang], title=title, page_title=title)
+    context = {"lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": words, "page_title": title,
                "can_book": user_has_permission(request.user, BOOK), "can_report": user_has_permission(request.user, REPORT)}
     context.update(extra)
     return context

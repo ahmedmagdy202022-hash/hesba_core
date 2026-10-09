@@ -64,7 +64,8 @@ NAV_ITEMS = (
     {"key": "inventory", "ar": "المخزون", "en": "Inventory", "url_name": "inventory:stock", "module": "inventory", "permission": "inventory.view_stock"},
     {"key": "warehouses", "ar": "المخازن", "en": "Warehouses", "url_name": "inventory:warehouses", "module": "inventory", "permission": "inventory.view_stock",
      "also": ("/master-data/locations/",)},  # R2-7: the warehouses hub; adding or editing one is still master data
-    {"key": "customers", "ar": "العملاء", "en": "Customers", "url_name": "master_data:customers", "module": "customers"},
+    {"key": "customers", "ar": "العملاء", "en": "Customers", "url_name": "master_data:customers", "module": "customers", "permission": "master_data.view_master_data",
+     "allow": "reports.navigation.sees_customers"},
     {"key": "suppliers", "ar": "الموردون", "en": "Suppliers", "url_name": "master_data:suppliers", "module": "suppliers", "permission": "master_data.view_suppliers"},
     {"key": "items", "ar": "الأصناف والخدمات", "en": "Items & services", "url_name": "master_data:items", "module": "items_services"},
     {"key": "cashboxes", "ar": "الخزائن", "en": "Cashboxes", "url_name": "cashboxes:list", "module": "cashboxes", "permission": "cashboxes.view_cashboxes"},
@@ -73,10 +74,11 @@ NAV_ITEMS = (
     {"key": "restaurant", "ar": "الطاولات", "en": "Tables", "url_name": "restaurant:board", "module": "tables_orders", "permission": "sales.view_sales_invoices"},
     {"key": "medical", "ar": "الملفات الطبية", "en": "Patient files", "url_name": "medical:patients", "module": "customers", "activity": "medical", "allow": "medical.services.can_view"},
     {"key": "appointments", "ar": "المواعيد", "en": "Appointments", "url_name": "appointments:agenda", "module": "appointments_visits", "permission": "sales.view_sales_invoices"},
-    {"key": "staff", "ar": "الموظفون", "en": "Employees", "url_name": "staff:list", "module": "employees_technicians", "permission": "master_data.view_master_data"},
+    {"key": "staff", "ar": "الموظفون", "en": "Employees", "url_name": "staff:list", "module": "employees_technicians", "allow": "reports.navigation.sees_staff"},
     {"key": "expenses", "ar": "المصروفات", "en": "Expenses", "url_name": "expenses:list", "module": "expenses", "permission": "cashboxes.view_expenses"},
     # R2: features switched on in Settings -> Features get their own place in the menu.
-    {"key": "taxes", "ar": "الضرائب", "en": "Taxes", "url_name": "taxes:settings", "module": None, "capability": "vat", "permission": "master_data.view_master_data"},
+    {"key": "taxes", "ar": "الضرائب", "en": "Taxes", "url_name": "taxes:settings", "module": None, "capability": "vat", "permission": "master_data.view_master_data",
+     "allow": "reports.navigation.sees_staff"},
     {"key": "einvoice", "ar": "الفاتورة الإلكترونية", "en": "E-invoicing", "url_name": "einvoice:issuer", "module": None, "capability": "e_invoice", "permission": "settings.view_settings"},
     {"key": "assets", "ar": "الأصول والإهلاك", "en": "Assets & depreciation", "url_name": "fixed_assets:list", "module": None, "capability": "fixed_assets", "permission": "cashboxes.view_expenses"},
     {"key": "reports", "ar": "التقارير", "en": "Reports", "url_name": "report_hub", "module": "reports"},
@@ -140,6 +142,22 @@ SHELL_WORDS = {
         "search_placeholder": "Search… ( / )",
     },
 }
+
+
+#: AUDIT-2: who works with customers (patients, students...) and who sees the
+#: staff list. A stock keeper never needs the customer list, and in a clinic or
+#: a school that list is patients and students; a cashier or stock keeper never
+#: needs the staff list. The same office audience sees the tax settings.
+CUSTOMER_AUDIENCE = ("sales.view_sales_invoices", "sales.receive_customer_payment", "reports.view_customer_report")
+STAFF_AUDIENCE = ("settings.view_settings", "accounting.view_ledger")
+
+
+def sees_customers(user):
+    return any(user_has_permission(user, code) for code in CUSTOMER_AUDIENCE)
+
+
+def sees_staff(user):
+    return any(user_has_permission(user, code) for code in STAFF_AUDIENCE)
 
 
 def nav_items(user, lang, modules):

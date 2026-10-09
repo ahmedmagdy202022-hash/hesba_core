@@ -92,8 +92,23 @@ CONTROL_WORDS = {
            "vat_out": "ضريبة المبيعات", "payable": "فواتير الشراء الآجلة والسداد", "sales": "فواتير البيع", "sales_returns": "مرتجعات البيع",
            "cogs": "تكلفة البيع", "depreciation": "الإهلاك", "accumulated_depreciation": "الإهلاك", "fixed_assets": "الأصول الثابتة",
            "opening_equity": "الأرصدة الافتتاحية", "stock_gain": "زيادة الجرد", "stock_loss": "عجز الجرد", "instalments": "التقسيط",
-           "intercompany": "التحويل بين الكيانات", "general_expense": "المصروفات اللي ملهاش حساب"},
-    "en": {},
+           "intercompany": "التحويل بين الكيانات", "general_expense": "المصروفات اللي ملهاش حساب",
+           # AUDIT-1: every control key has a name, so no internal key shows on screen.
+           "capital": "رأس المال", "owner_drawings": "مسحوبات صاحب الشغل", "retained_earnings": "الأرباح المحتجزة",
+           "customer_advances": "دفعات مقدمة من العملاء", "sales_discount": "خصم المبيعات", "other_income": "إيرادات أخرى",
+           "asset_disposal": "بيع أو استبعاد أصل", "suspense": "حساب معلّق (لازم يبقى صفر)", "raw_materials": "حركات الخامات",
+           "wip": "إنتاج تحت التشغيل", "finished_goods": "حركات المنتج التام", "production_cost": "تكلفة الإنتاج المحمّلة",
+           "project_wip": "أعمال تحت التنفيذ", "project_cost": "تكلفة المشاريع"},
+    "en": {"cash": "Cashboxes", "bank": "Banks", "receivable": "Credit sales and collections", "inventory": "Stock movements",
+           "vat_in": "Purchase VAT", "vat_out": "Sales VAT", "payable": "Credit purchases and payments", "sales": "Sales invoices",
+           "sales_returns": "Sales returns", "cogs": "Cost of sales", "depreciation": "Depreciation", "accumulated_depreciation": "Depreciation",
+           "fixed_assets": "Fixed assets", "opening_equity": "Opening balances", "stock_gain": "Stock count gains", "stock_loss": "Stock count losses",
+           "instalments": "Instalments", "intercompany": "Between entities", "general_expense": "Uncategorised expenses",
+           "capital": "Capital", "owner_drawings": "Owner drawings", "retained_earnings": "Retained earnings",
+           "customer_advances": "Customer advances", "sales_discount": "Sales discount", "other_income": "Other income",
+           "asset_disposal": "Asset disposal", "suspense": "Suspense (should be zero)", "raw_materials": "Raw material movements",
+           "wip": "Work in progress", "finished_goods": "Finished goods movements", "production_cost": "Absorbed production cost",
+           "project_wip": "Work in progress on projects", "project_cost": "Project costs"},
 }
 
 

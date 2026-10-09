@@ -332,6 +332,9 @@ QUICK_ACTION_TERMS = {"record_sale": "record_sale", "new_customer": "new_custome
 
 
 def _quick_actions(user, lang, modules, activity="", sections=frozenset()):
+    from django.urls import reverse
+
+    from settings_core.module_gate import closed_module
     from settings_core.vocabulary import active_vocabulary, term
 
     words = active_vocabulary()
@@ -344,6 +347,8 @@ def _quick_actions(user, lang, modules, activity="", sections=frozenset()):
             continue
         permission = action.get("permission")
         if permission and not user_has_permission(user, permission):
+            continue
+        if closed_module(reverse(action["url_name"])) is not None:  # AUDIT-1: never a button into a switched-off module
             continue
         label = term(QUICK_ACTION_TERMS[action["key"]], lang, words) if action["key"] in QUICK_ACTION_TERMS else action[lang]
         actions.append({"key": action["key"], "label": label, "primary": action["primary"] and not actions, "url_name": action["url_name"],
@@ -364,6 +369,28 @@ def _alerts(lang, strings, held, today, shared):
         }
         for alert in build_alerts(held, today, shared)
     ]
+
+
+def _transfer_alerts(user, lang, strings, modules):
+    """AUDIT-2: a stock keeper's day starts with the transfers waiting on them."""
+
+    if "inventory" not in modules or not user_has_permission(user, "inventory.transfer_stock"):
+        return []
+    from entities import scope as entity_scope
+    from inventory.transfer_requests import waiting_counts
+    from master_data.models import Location
+
+    counts = waiting_counts(entity_scope.locations(Location.objects))
+    rows = []
+    for key, severity, ar, en, detail_ar, detail_en in (
+        ("to_send", "soon", "طلب تحويل مستني تبعته", "transfer request(s) waiting for you to send", "مخزن تاني طالب بضاعة من عندك.", "Another warehouse asked you for stock."),
+        ("to_receive", "urgent", "تحويل في الطريق مستني تستلمه", "transfer(s) on the way for you to receive", "البضاعة اتبعتت؛ أكّد اللي وصل.", "The goods were sent; confirm what arrived."),
+    ):
+        if counts[key]:
+            rows.append({"key": f"transfers_{key}", "severity": severity, "severity_label": strings[f"severity_{severity}"],
+                         "title": f"{counts[key]} {en}" if lang == "en" else f"{counts[key]} {ar}",
+                         "detail": detail_en if lang == "en" else detail_ar, "amount": "", "path": "/inventory/warehouses/requests/"})
+    return rows
 
 
 def _onboarding(lang):
@@ -451,14 +478,16 @@ def dashboard(request):
         # the context so the section set can be asserted without parsing HTML.
         "nav_items": nav_items(request.user, lang, modules),
         "cards": cards,
-        "alerts": _alerts(lang, strings, held, today, shared),
+        "alerts": _alerts(lang, strings, held, today, shared) + _transfer_alerts(request.user, lang, strings, modules),
         "quick_actions": _quick_actions(request.user, lang, modules, activity, sections),
         "activity_panel": build_activity_panel(activity, sections, lang, today),
         "demo_activities": _demo_activities(request.user, lang, profile),
         "onboarding_steps": _onboarding(lang),
         # Guide someone whose installation has seen no trade yet, and anyone who
         # can see nothing at all. A working business does not need the steps.
-        "show_onboarding": not has_data or not cards,
+        # AUDIT-2: the setup steps are the owner's job; a cashier or a stock
+        # keeper with no figure cards sees their quick actions instead.
+        "show_onboarding": user_has_permission(request.user, "settings.manage_settings") and (not has_data or not cards),
         "has_business_data": has_data,
         **strings,
     }

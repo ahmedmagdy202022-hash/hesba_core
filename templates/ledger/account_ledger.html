@@ -1,12 +1,12 @@
 {% extends "operations/base.html" %}
-{% load hesba_format %}
+{% load hesba_labels hesba_format %}
 {% block operation_content %}
 {% include "ledger/_subnav.html" %}
 <section class="op-title-row"><div><h1><bdi>{{ account.code }}</bdi> — {% if lang == 'en' and account.name_en %}{{ account.name_en }}{% else %}{{ account.name_ar }}{% endif %}</h1><p>{{ words.ledger_intro }}</p></div></section>
 {% include "ledger/_filters.html" %}
 <div class="op-table-wrap"><table class="op-table" data-account-ledger><thead><tr><th>{{ words.date }}</th><th>{{ words.reference }}</th><th>{{ words.memo }}</th><th class="op-num">{{ words.debit }}</th><th class="op-num">{{ words.credit }}</th><th class="op-num">{{ words.balance }}</th></tr></thead><tbody>
 {% if date_from %}<tr><td></td><td colspan="4">{{ words.brought_forward }}</td><td class="op-num">{{ opening|money }}</td></tr>{% endif %}
-{% for row in rows %}<tr><td><bdi>{{ row.line.entry.entry_date|date:"Y-m-d" }}</bdi></td><td><bdi>{{ row.line.entry.reference }}</bdi></td><td>{{ row.line.entry.memo }}{% if row.line.customer %} · {{ row.line.customer.name }}{% elif row.line.supplier %} · {{ row.line.supplier.name }}{% elif row.line.cashbox %} · {{ row.line.cashbox.name }}{% endif %}</td><td class="op-num">{% if row.line.debit %}{{ row.line.debit|money }}{% endif %}</td><td class="op-num">{% if row.line.credit %}{{ row.line.credit|money }}{% endif %}</td><td class="op-num">{{ row.balance|money }}</td></tr>
+{% for row in rows %}<tr><td><bdi>{{ row.line.entry.entry_date|date:"Y-m-d" }}</bdi></td><td><bdi>{% entry_ref row.line.entry.reference %}</bdi></td><td>{{ row.line.entry.memo }}{% if row.line.customer %} · {{ row.line.customer.name }}{% elif row.line.supplier %} · {{ row.line.supplier.name }}{% elif row.line.cashbox %} · {{ row.line.cashbox.name }}{% endif %}</td><td class="op-num">{% if row.line.debit %}{{ row.line.debit|money }}{% endif %}</td><td class="op-num">{% if row.line.credit %}{{ row.line.credit|money }}{% endif %}</td><td class="op-num">{{ row.balance|money }}</td></tr>
 {% empty %}<tr><td colspan="6" class="op-muted">{{ words.empty }}</td></tr>{% endfor %}
 <tr class="op-total-row"><td colspan="5">{{ words.closing }}</td><td class="op-num" data-closing>{{ closing|money }}</td></tr>
 </tbody></table></div>

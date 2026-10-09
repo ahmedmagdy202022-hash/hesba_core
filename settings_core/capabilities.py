@@ -148,9 +148,90 @@ MANUFACTURING_PRESETS = {
 }
 
 
+#: AUDIT-3: the other activities get their own suggestions too ("*" applies to
+#: every sub-activity of the activity, a sub-activity entry adds to it).
+ACTIVITY_PRESETS = {
+    catalog.RESTAURANTS: {
+        "*": {"units": SUGGESTED},
+        "cafe": {"pos": SUGGESTED, "variants": SUGGESTED},
+        "fast_food": {"pos": SUGGESTED},
+        "bakery": {"pos": SUGGESTED, "barcode": SUGGESTED, "batches_expiry": SUGGESTED},
+        "cloud_kitchen": {"pos": SUGGESTED},
+    },
+    catalog.MEDICAL: {
+        "dental": {"installments": SUGGESTED},
+        "medical_center": {"fixed_assets": SUGGESTED, "batches_expiry": SUGGESTED},
+        "lab": {"batches_expiry": SUGGESTED, "fixed_assets": SUGGESTED},
+        "vet": {"batches_expiry": SUGGESTED, "pos": SUGGESTED},
+    },
+    catalog.EDUCATION: {
+        "*": {"installments": SUGGESTED},
+    },
+    # VAT and e-invoicing change what a bill adds up to, so they stay the
+    # owner's own choice (not every contractor or office is VAT-registered).
+    catalog.CONTRACTING: {
+        "*": {"units": SUGGESTED, "fixed_assets": SUGGESTED},
+    },
+    catalog.SERVICES: {
+        "maintenance": {"serials": SUGGESTED},
+        "beauty": {"pos": SUGGESTED},
+    },
+    catalog.OTHER: {
+        "*": {"pos": SUGGESTED, "barcode": SUGGESTED},
+    },
+}
+
+#: AUDIT-3: capabilities that make no sense for an activity are not offered to
+#: it at all (a builder never needs a quick till or sizes and colours). One that
+#: is already on still shows in Settings, so it can be switched off.
+NOT_FOR = {
+    catalog.CONTRACTING: {"pos", "barcode", "variants", "serials", "batches_expiry", "installments", "price_lists"},
+    catalog.EDUCATION: {"pos", "barcode", "variants", "serials", "batches_expiry", "units"},
+    catalog.MEDICAL: {"variants", "serials"},
+    catalog.RESTAURANTS: {"serials", "installments"},
+    catalog.SERVICES: {"variants", "batches_expiry"},
+}
+
+#: Wording that fits the activity, where the general wording does not.
+ABOUT_FOR = {
+    (catalog.CONTRACTING, "units"): ("الكميات بالمتر والمتر المربع والمكعب والطن والشيكارة، مع تحويل تلقائي.",
+                                     "Quantities in metres, m², m³, tonnes and bags, with automatic conversion."),
+    (catalog.CONTRACTING, "fixed_assets"): ("سجل المعدات والعربيات والسقالات، وإهلاكها الشهري يدخل في صافي الربح.",
+                                            "A register of equipment, vehicles and scaffolding, with monthly depreciation in net profit."),
+    (catalog.EDUCATION, "installments"): ("مصروفات الطالب على أقساط بمواعيد استحقاق وتذكير بالتحصيل.",
+                                          "Student fees in instalments with due dates and collection reminders."),
+    (catalog.MEDICAL, "installments"): ("خطة علاج على أقساط (زي تقويم الأسنان) بمواعيد استحقاق.",
+                                        "A treatment plan paid in instalments (orthodontics, say) with due dates."),
+    (catalog.RESTAURANTS, "units"): ("شراء الخامات بالكيلو والكرتونة وصرفها بالجرام والقطعة.",
+                                     "Buy ingredients by the kilo or carton and use them by the gram or piece."),
+    (catalog.RESTAURANTS, "variants"): ("أحجام المشروب (صغير، وسط، كبير) كل واحد بسعره.",
+                                        "Drink sizes (small, medium, large), each at its own price."),
+    (catalog.SERVICES, "serials"): ("رقم كل جهاز داخل للصيانة وضمانه، من الاستلام للتسليم.",
+                                    "Each device in for repair by its serial number and warranty, from intake to hand-back."),
+}
+
+
+def fits(activity, slug):
+    """Whether ``slug`` is offered to this activity at all."""
+
+    return slug not in NOT_FOR.get(activity, set())
+
+
+def about(activity, slug, lang="ar"):
+    override = ABOUT_FOR.get((activity, slug))
+    if override:
+        return override[1] if lang == "en" else override[0]
+    return CAPABILITIES[slug][f"about_{lang}"]
+
+
 def preset_state(activity, sub_activity, slug):
+    if not fits(activity, slug):
+        return OPTIONAL
     if activity == catalog.MANUFACTURING:
         return MANUFACTURING_PRESETS.get(sub_activity, {}).get(slug, OPTIONAL)
+    if activity in ACTIVITY_PRESETS:
+        presets = ACTIVITY_PRESETS[activity]
+        return presets.get(sub_activity, {}).get(slug) or presets.get("*", {}).get(slug, OPTIONAL)
     if activity != catalog.COMMERCIAL:
         return OPTIONAL
     return PRESETS.get(sub_activity, {}).get(slug, OPTIONAL)
@@ -255,11 +336,13 @@ def settings_rows(profile, lang="ar"):
     rows = []
     for slug in CAPABILITY_SLUGS:
         entry = CAPABILITIES[slug]
+        if not fits(activity, slug) and slug not in enabled:
+            continue
         state = "soon" if not entry["available"] else ("on" if slug in enabled else "off")
         rows.append({
             "slug": slug,
             "label": entry[lang],
-            "about": entry[f"about_{lang}"],
+            "about": about(activity, slug, lang),
             "state": state,
             "suggested": preset_state(activity, sub_activity, slug) == SUGGESTED,
             "note": entry.get(f"note_{lang}", ""),

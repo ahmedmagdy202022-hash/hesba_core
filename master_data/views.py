@@ -308,10 +308,19 @@ def master_data_hub(request):
     lang = _lang(request)
     words = STRINGS[lang]
     visible = []
+    from settings_core.module_gate import closed_module
+
     for key in ENTITY_CONFIG:
         config = _config(key)
         if not user_has_permission(request.user, config["view_permission"]):
             continue
+        if closed_module(f"/master-data/{key}/") is not None:  # AUDIT-1: a switched-off module's list is not offered
+            continue
+        if key == "customers":
+            from reports.navigation import sees_customers
+
+            if not sees_customers(request.user):
+                continue
         visible.append(
             {
                 "key": key,
@@ -349,6 +358,11 @@ def _scoped_rows(config):
 def entity_list(request, entity):
     config = _config(entity)
     _require(request.user, config["view_permission"])
+    if entity == "customers":
+        from reports.navigation import sees_customers
+
+        if not sees_customers(request.user):  # AUDIT-2: patients and students stay with the people who serve them
+            raise PermissionDenied("The customer list is for sales, collection and customer-report users.")
 
     lang = _lang(request)
     words = STRINGS[lang]
@@ -400,6 +414,9 @@ def entity_list(request, entity):
             "status_filter": status,
             "can_manage": can_manage,
             "perms_print_labels": user_has_permission(request.user, "barcode.print_labels"),
+            # AUDIT-1: the account link shows only to those the card opens for.
+            "can_party_card": user_has_permission(request.user, {"customers": "reports.view_customer_report",
+                                                                  "suppliers": "reports.view_supplier_report"}.get(entity, "")) if entity in ("customers", "suppliers") else False,
             "page_title": f"{config['title'][lang]} - {'Hesba' if lang == 'en' else 'حِسبة'}",
         },
     )

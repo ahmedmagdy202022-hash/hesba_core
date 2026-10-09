@@ -1,7 +1,7 @@
 {% extends "operations/base.html" %}
-{% load l10n %}
+{% load hesba_labels l10n %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'master_data:items' %}?lang={{ lang }}">← {% if lang == 'en' %}Items{% else %}الأصناف{% endif %}</a><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div><div class="op-form-actions"><a class="op-secondary" href="{% url 'taxes:report' %}?lang={{ lang }}">{{ words.report }}</a></div></section>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'master_data:items' %}?lang={{ lang }}">← {% if lang == 'en' %}Items{% else %}الأصناف{% endif %}</a><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div><div class="op-form-actions">{% url 'taxes:report' as tax_report_url %}{% link_ok tax_report_url as tax_report_ok %}{% if tax_report_ok %}<a class="op-secondary" href="{% url 'taxes:report' %}?lang={{ lang }}">{{ words.report }}</a>{% endif %}</div></section>
 {% if not can_manage %}<p class="op-message op-message-info">{{ words.view_only }}</p>{% endif %}
 <h2>{{ words.rates }}</h2>
 <div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.code }}</th><th>{{ words.name }}</th><th>{{ words.rate }}</th><th>{{ words.eta }}</th><th>{{ words.default }}</th><th>{{ words.active }}</th>{% if can_manage %}<th></th>{% endif %}</tr></thead><tbody>

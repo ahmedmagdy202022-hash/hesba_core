@@ -70,6 +70,9 @@ class SalesDraftForm(AutoNumbered, forms.Form):
         labels = SALES_LABELS[lang]
         for name, field in self.fields.items():
             field.label = labels[name]
+        from settings_core.vocabulary import term
+
+        self.fields["customer"].label = term("the_customer", lang)  # AUDIT-3: the patient, the student...
         self.fields["customer"].queryset = Customer.objects.filter(active=True)
         from staff.services import reps_offered
 

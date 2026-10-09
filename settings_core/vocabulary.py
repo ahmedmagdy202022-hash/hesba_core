@@ -30,6 +30,7 @@ BASE = {
     "operations": {"ar": "عمليات البيع", "en": "Sales operations"},
     "operations_short": {"ar": "البيع", "en": "Sales"},
     "record_sale": {"ar": "تسجيل عملية بيع", "en": "Record a sale"},
+    "new_sale": {"ar": "فاتورة بيع جديدة", "en": "New sales invoice"},
     "staff": {"ar": "الموظفون", "en": "Employees"},
     "appointments": {"ar": "المواعيد", "en": "Appointments"},
 }
@@ -50,6 +51,7 @@ ACTIVITY = {
         "operations": {"ar": "الكشوفات والفواتير", "en": "Visits & bills"},
         "operations_short": {"ar": "الكشوفات", "en": "Visits"},
         "record_sale": {"ar": "تسجيل كشف", "en": "Record a visit"},
+        "new_sale": {"ar": "كشف / فاتورة جديدة", "en": "New visit bill"},
         "staff": {"ar": "الأطباء والطاقم", "en": "Doctors & staff"},
         "appointments": {"ar": "الحجوزات", "en": "Bookings"},
     },
@@ -67,6 +69,7 @@ ACTIVITY = {
         "operations": {"ar": "الاشتراكات والمصروفات", "en": "Enrolments & fees"},
         "operations_short": {"ar": "الاشتراكات", "en": "Fees"},
         "record_sale": {"ar": "تسجيل اشتراك", "en": "Record an enrolment"},
+        "new_sale": {"ar": "اشتراك جديد", "en": "New enrolment"},
         "staff": {"ar": "المدرّسون", "en": "Teachers"},
         "appointments": {"ar": "الحصص والمواعيد", "en": "Classes"},
     },
@@ -78,6 +81,7 @@ ACTIVITY = {
         "operations": {"ar": "الطلبات والفواتير", "en": "Orders & bills"},
         "operations_short": {"ar": "الطلبات", "en": "Orders"},
         "record_sale": {"ar": "تسجيل طلب", "en": "Record an order"},
+        "new_sale": {"ar": "طلب جديد", "en": "New order"},
         "staff": {"ar": "الطاقم", "en": "Crew"},
     },
     "manufacturing": {
@@ -105,6 +109,7 @@ ACTIVITY = {
         "operations": {"ar": "المستخلصات والفواتير", "en": "Progress bills & invoices"},
         "operations_short": {"ar": "المستخلصات", "en": "Bills"},
         "record_sale": {"ar": "تسجيل مستخلص / فاتورة", "en": "Record a bill"},
+        "new_sale": {"ar": "مستخلص / فاتورة جديدة", "en": "New progress bill or invoice"},
         "staff": {"ar": "المهندسون والعمال", "en": "Engineers & crew"},
     },
     "services": {
@@ -115,6 +120,7 @@ ACTIVITY = {
         "operations": {"ar": "الفواتير", "en": "Invoices"},
         "operations_short": {"ar": "الفواتير", "en": "Invoices"},
         "record_sale": {"ar": "تسجيل فاتورة خدمة", "en": "Record a service invoice"},
+        "new_sale": {"ar": "فاتورة خدمة جديدة", "en": "New service invoice"},
         "staff": {"ar": "الفنيون والموظفون", "en": "Technicians & staff"},
     },
 }
