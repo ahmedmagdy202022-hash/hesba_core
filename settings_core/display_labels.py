@@ -74,6 +74,7 @@ AR_LABELS = {
     },
     ("inventory.stockoperation", "adjustment_direction"): {"in": "زيادة", "out": "نقص"},
     ("inventory.stockoperation", "status"): DOCUMENT_STATUS,
+    ("inventory.transferrequest", "status"): {"requested": "مطلوب", "sent": "في الطريق", "received": "اتستلم", "cancelled": "ملغي"},
     ("cashboxes.cashboxmovement", "movement_type"): {
         "purchase_payment": "سداد مشتريات",
         "sales_receipt": "تحصيل مبيعات",
