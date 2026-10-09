@@ -43,6 +43,7 @@ MESSAGES = {
         "withdraw_blocked": "الفاتورة دي مربوطة بحاجة تانية ومينفعش تتسحب.", "release_more": "المبلغ أكبر من ضمان الأعمال المحتجز ({held}).",
         "bill_link": "دي فاتورة مستخلص مقاول باطن؛ اسحبها من شاشة مقاولي الباطن.",
         "reversed": "الإفراج ده اتلغى بالفعل.", "date": "التاريخ مش صحيح.",
+        "entity": "مستخلصات مقاول الباطن ده بتتعمل من كيان تاني؛ اشتغل من الكيان ده.",
     },
     "en": {
         "supplier": "Choose the subcontractor (a supplier).", "scope": "Describe the work given.", "value": "Invalid value.", "rate": "The rate must be between 0 and 100.",
@@ -52,6 +53,7 @@ MESSAGES = {
         "withdraw_blocked": "This invoice is linked to something else and cannot be withdrawn.", "release_more": "The amount is more than the retention held ({held}).",
         "bill_link": "This is a subcontractor bill; withdraw it from the subcontractors screen.",
         "reversed": "This release is already reversed.", "date": "Invalid date.",
+        "entity": "This subcontractor's bills are made from another entity; work in that entity.",
     },
 }
 
@@ -139,9 +141,18 @@ def bill_subcontract(subcontract, user, *, amount, description, bill_date=None, 
     label = (description or "").strip()[:255]
     if not label:
         raise ValidationError(words["description"])
-    location = entity_scope.locations(Location.objects).filter(active=True, is_receiving_location=True).order_by("-is_default", "pk").first()
+    from .contract import entity_locations, entity_of
+
+    subcontract = Subcontract.objects.select_for_update().select_related("project", "supplier").get(pk=subcontract.pk)
+    locations = entity_scope.locations(Location.objects).filter(active=True, is_receiving_location=True)
+    first = live_bills(subcontract).select_related("invoice__receiving_location").order_by("number").first()
+    established = entity_of(first.invoice.receiving_location) if first else None
+    if established is not None:
+        # One entity per subcontract: the retention held from it stays in one place.
+        locations = entity_locations(locations, established)
+    location = locations.order_by("-is_default", "pk").first()
     if location is None:
-        raise ValidationError(words["setup"])
+        raise ValidationError(words["entity"] if established is not None else words["setup"])
     number = (subcontract.bills.order_by("-number").values_list("number", flat=True).first() or 0) + 1
     sequence = SubcontractBill.objects.filter(subcontract__project=project).count() + 1
     invoice_number = f"SC-{project.code}-{sequence:02d}"
@@ -186,22 +197,26 @@ def withdraw_bill(bill, user, lang="ar"):
 
 def return_share(amount, invoice, purchase_return):
     """The part of a bill's retention (or gross) a purchase return takes back,
-    the same share the general ledger uses."""
+    allocated cumulatively like a certificate's (contract.return_shares); the
+    general ledger uses the same figure."""
 
-    total = Decimal(invoice.total_amount)
-    if total <= 0 or not amount:
-        return ZERO
-    return money_round(Decimal(amount) * Decimal(purchase_return.total_amount) / total)
+    from .contract import return_shares
+
+    return return_shares(amount, invoice).get(purchase_return.pk, ZERO)
 
 
 def effective_bill(bill):
     """(gross, retention) of a subcontractor bill after its posted purchase returns."""
 
-    gross, retention = Decimal(bill.gross), Decimal(bill.retention_amount)
-    for purchase_return in bill.invoice.returns.filter(status="posted"):
-        gross -= return_share(bill.gross, bill.invoice, purchase_return)
-        retention -= return_share(bill.retention_amount, bill.invoice, purchase_return)
-    return money_round(max(gross, ZERO)), money_round(max(retention, ZERO))
+    from .contract import return_shares
+
+    posted = set(bill.invoice.returns.filter(status="posted").values_list("pk", flat=True))
+
+    def left(amount):
+        taken = sum((share for pk, share in return_shares(amount, bill.invoice).items() if pk in posted), ZERO)
+        return money_round(max(Decimal(amount) - taken, ZERO))
+
+    return left(bill.gross), left(bill.retention_amount)
 
 
 def bill_net_payable(bill):
@@ -224,6 +239,7 @@ def ensure_consistent(subcontract, lang="en"):
     """HG-038: refuse a cancellation, return or reversal that would leave
     released retention above what is held (called inside that change)."""
 
+    subcontract = Subcontract.objects.select_for_update().get(pk=subcontract.pk)  # the lock releases take
     if subcontract_retention_held(subcontract) < 0:
         raise ValidationError(CONSISTENCY[lang])
 

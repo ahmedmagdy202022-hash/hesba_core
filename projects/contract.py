@@ -66,7 +66,7 @@ MESSAGES = {
         "release_more": "المبلغ أكبر من ضمان الأعمال المحتجز ({held}).", "cashbox": "اختار الخزنة.", "other_customer": "التحصيل ده لعميل تاني.",
         "payment_linked": "التحصيل ده مربوط بمشروع بالفعل.", "payment_status": "اربط التحصيلات المرحّلة بس.", "date": "التاريخ مش صحيح.",
         "advance_used": "المستخلصات خصمت من الدفعة المقدمة دي بالفعل، فمينفعش يتفك ربطها.",
-        "reversed": "الإفراج ده اتلغى بالفعل.",
+        "reversed": "الإفراج ده اتلغى بالفعل.", "entity": "مستخلصات المشروع ده بتتعمل من كيان تاني؛ اشتغل من الكيان ده عشان ضمان الأعمال والدفعة المقدمة يفضلوا في مكان واحد.",
     },
     "en": {
         "rate": "The rate must be between 0 and 100.", "description": "Describe the item.", "qty": "The quantity must be above zero.", "price": "Invalid rate.",
@@ -78,7 +78,7 @@ MESSAGES = {
         "release_more": "The amount is more than the retention held ({held}).", "cashbox": "Choose the cashbox.", "other_customer": "This collection is for another customer.",
         "payment_linked": "This collection is already linked to a project.", "payment_status": "Only posted collections can be linked.", "date": "Invalid date.",
         "advance_used": "Certificates already recovered this advance, so it cannot be unlinked.",
-        "reversed": "This release is already reversed.",
+        "reversed": "This release is already reversed.", "entity": "This project's certificates are billed from another entity; work in that entity so its retention and advance stay in one place.",
     },
 }
 
@@ -157,26 +157,45 @@ def certified_quantity(boq_line):
     return billed - returned
 
 
-def return_share(amount, invoice, sales_return):
-    """The part of a certificate deduction a sales return takes back: the same
-    share of the deduction as the return is of the invoice. The general ledger
-    uses this same figure, so the project and the books always agree."""
+def return_shares(amount, invoice):
+    """{return id: the part of ``amount`` (a certificate's gross, retention or
+    recovery) that return takes back}, for every return of the invoice.
 
-    total = Decimal(invoice.total_amount)
+    Posted returns are allocated on the cumulative returned total, in date
+    order, so their shares always add up to exactly the returned share of the
+    amount (a full return takes back all of it, never a cent more or less).
+    A cancelled return keeps its own share, which its cancellation reverses.
+    The general ledger books these same figures, so the project and the books
+    agree."""
+
+    total, amount = Decimal(invoice.total_amount), Decimal(amount or 0)
     if total <= 0 or not amount:
-        return ZERO
-    return money_round(Decimal(amount) * Decimal(sales_return.total_amount) / total)
+        return {}
+    shares, cumulative, taken = {}, ZERO, ZERO
+    for row in invoice.returns.order_by("return_date", "pk"):
+        if row.status == "posted":
+            cumulative += Decimal(row.total_amount)
+            upto = money_round(amount * min(cumulative, total) / total)
+            shares[row.pk], taken = upto - taken, upto
+        else:
+            shares[row.pk] = money_round(amount * Decimal(row.total_amount) / total)
+    return shares
+
+
+def return_share(amount, invoice, sales_return):
+    return return_shares(amount, invoice).get(sales_return.pk, ZERO)
 
 
 def effective(certificate):
     """(gross, retention, recovery) of a certificate after its posted returns."""
 
-    gross, retention, recovery = Decimal(certificate.gross), Decimal(certificate.retention_amount), Decimal(certificate.recovery_amount)
-    for sales_return in certificate.invoice.returns.filter(status="posted"):
-        gross -= return_share(certificate.gross, certificate.invoice, sales_return)
-        retention -= return_share(certificate.retention_amount, certificate.invoice, sales_return)
-        recovery -= return_share(certificate.recovery_amount, certificate.invoice, sales_return)
-    return money_round(max(gross, ZERO)), money_round(max(retention, ZERO)), money_round(max(recovery, ZERO))
+    posted = set(certificate.invoice.returns.filter(status="posted").values_list("pk", flat=True))
+
+    def left(amount):
+        taken = sum((share for pk, share in return_shares(amount, certificate.invoice).items() if pk in posted), ZERO)
+        return money_round(max(Decimal(amount) - taken, ZERO))
+
+    return left(certificate.gross), left(certificate.retention_amount), left(certificate.recovery_amount)
 
 
 def line_amount(line):
@@ -370,9 +389,14 @@ def create_certificate(project, user, *, quantities=None, amount=None, descripti
             raise ValidationError(words["lump_description"])
         invoice_lines = [{"item": item or services.billing_item(), "quantity": Decimal("1"), "unit_sale_price": gross, "line_discount_amount": ZERO,
                           "description": label}]
-    location = entity_scope.locations(Location.objects).filter(active=True, is_selling_location=True).order_by("-is_default", "pk").first()
+    locations = entity_scope.locations(Location.objects).filter(active=True, is_selling_location=True)
+    established = project_entity(project)
+    if established is not None:
+        # One entity per project: its retention and advances are held in one place.
+        locations = entity_locations(locations, established)
+    location = locations.order_by("-is_default", "pk").first()
     if location is None:
-        raise ValidationError(services.MESSAGES[lang]["setup"])
+        raise ValidationError(words["entity"] if established is not None else services.MESSAGES[lang]["setup"])
     number = _next_number(project)
     invoice_number = f"PB-{project.code}-{number:02d}"
     sequence = number
@@ -422,6 +446,29 @@ def withdraw_certificate(project, certificate, user, lang="ar"):
     _audit(project, user, "withdraw_certificate", details, AuditEventType.DELETE)
 
 
+def entity_of(location):
+    from entities.services import main_entity
+
+    return (location.entity_id if location else None) or main_entity().pk
+
+
+def entity_locations(locations, entity_id):
+    from django.db.models import Q
+
+    from entities.services import main_entity
+
+    if entity_id == main_entity().pk:
+        return locations.filter(Q(entity_id=entity_id) | Q(entity__isnull=True))
+    return locations.filter(entity_id=entity_id)
+
+
+def project_entity(project):
+    """The entity a project's live certificates are billed from (None before the first)."""
+
+    first = live_certificates(project).select_related("invoice__selling_location").order_by("number").first()
+    return entity_of(first.invoice.selling_location) if first else None
+
+
 def net_payable(certificate):
     return money_round(Decimal(certificate.invoice.total_amount) - certificate.retention_amount - certificate.recovery_amount)
 
@@ -454,17 +501,25 @@ def ensure_consistent(project, lang="en"):
     recovering more advance than was received. Called inside the change's own
     transaction, so a refusal undoes it."""
 
+    # The same lock as certificates and releases take, so these never race them.
+    project = Project.objects.select_for_update().get(pk=project.pk)
     if retention_held(project) < 0:
         raise ValidationError(CONSISTENCY[lang]["retention"])
     if advance_recovered(project) > advance_received(project):
         raise ValidationError(CONSISTENCY[lang]["advance"])
+    for line in project.boq.all():
+        latest = CertificateLine.objects.filter(boq_line=line).exclude(certificate__invoice__status="cancelled").order_by("-certificate__number").first()
+        if latest is not None and certified_quantity(line) > latest.previous_quantity + latest.quantity:
+            raise ValidationError(CONSISTENCY[lang]["quantity"])
 
 
 CONSISTENCY = {
     "en": {"retention": "This would leave more retention released than is held on the project; reverse the release first.",
-           "advance": "Certificates on this project already recovered this advance; cancel or return those certificates first."},
+           "advance": "Certificates on this project already recovered this advance; cancel or return those certificates first.",
+           "quantity": "A later certificate already billed the quantity this return gave back; cancel or return that certificate first."},
     "ar": {"retention": "كده الإفراج عن ضمان الأعمال هيبقى أكبر من المحتجز في المشروع؛ ألغِ الإفراج الأول.",
-           "advance": "مستخلصات المشروع خصمت من الدفعة المقدمة دي بالفعل؛ ألغِ المستخلصات دي أو اعملها مرتجع الأول."},
+           "advance": "مستخلصات المشروع خصمت من الدفعة المقدمة دي بالفعل؛ ألغِ المستخلصات دي أو اعملها مرتجع الأول.",
+           "quantity": "مستخلص بعده فوتر الكمية اللي المرتجع ده رجّعها؛ ألغِ المستخلص ده أو اعمله مرتجع الأول."},
 }
 
 

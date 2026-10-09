@@ -174,7 +174,8 @@ class Projector:
         self._project_purchases = set(ProjectPurchase.objects.values_list("invoice_id", flat=True))
         if self.acc.has("retention_receivable"):
             for release in RetentionRelease.objects.select_related("project"):
-                first = Certificate.objects.filter(project=release.project_id).select_related("invoice__selling_location").first()
+                certificates = Certificate.objects.filter(project=release.project_id).select_related("invoice__selling_location").order_by("number")
+                first = certificates.exclude(invoice__status="cancelled").first() or certificates.first()  # one entity per project
                 entity = (first.invoice.selling_location.entity_id if first else None) or self.main_id
                 # A reversed release keeps its entry and gets the opposite one on its reversal date.
                 for day, sign in ((release.release_date, 1), (release.reversed_on, -1)):
@@ -185,7 +186,8 @@ class Projector:
                     g.add(self.acc["retention_receivable"], -sign * Decimal(release.amount), entity)
         if self.acc.has("retention_payable"):
             for release in SubcontractRelease.objects.select_related("subcontract"):
-                first = release.subcontract.bills.select_related("invoice__receiving_location").first()
+                bills = release.subcontract.bills.select_related("invoice__receiving_location").order_by("number")
+                first = bills.exclude(invoice__status="cancelled").first() or bills.first()  # one entity per subcontract
                 entity = (first.invoice.receiving_location.entity_id if first else None) or self.main_id
                 for day, sign in ((release.release_date, 1), (release.reversed_on, -1)):
                     if day is None:

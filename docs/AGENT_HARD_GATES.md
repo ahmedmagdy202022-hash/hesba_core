@@ -739,6 +739,11 @@ Status: APPROVED — Ahmed approved on 9 Oct 2026 ("خلص كله"), after the a
 
     It refuses (and so undoes) any change that would leave a project with more retention released than held, or more advance recovered than received. Documents of no project pass untouched; nothing else in those services changes.
   - **Entity scope:** project screens resolve submitted cashboxes, collections and purchase invoices through `entities.scope`.
+  - **Second review:**
+    - return shares are allocated on the cumulative returned total, so partial returns add up to exactly the whole deduction;
+    - a return cannot be cancelled once a later certificate billed the quantity it gave back;
+    - the guard takes the project's (or subcontract's) row lock, like certificates and releases;
+    - a project's certificates and a subcontract's bills stay in one entity, so retention and advances (and their releases) are held in one place.
 - **Known limits:**
   - the customer's aging still shows the whole balance, retention included; the project screen shows what is due now;
   - advances paid to subcontractors are not tracked separately: a supplier payment before the bill nets on the supplier's account as today.

@@ -479,3 +479,51 @@ class SubcontractReturnTests(ContractSetup):
         self.assertEqual(costs.subcontract_figures(subcontract)["retention_held"], D("0.00"))
         self.assertEqual((gl("retention_payable"), gl("payable")), (D("0.00"), D("0.00")))
         ledger_ok(self)
+
+
+class ReviewRoundTwoTests(ContractSetup):
+    """Codex's second review on #179."""
+
+    def test_a_return_cannot_be_cancelled_once_its_quantity_was_billed_again(self):
+        from sales.models import SalesReturn
+        from sales.services import cancel_sales_return, create_sales_return
+
+        first = self.certify(concrete="40")
+        post_sales_invoice(first.invoice_id, self.owner)
+        create_sales_return("SR-Q1", TODAY, first.invoice_id, [{"source_line": first.invoice.lines.get(), "quantity": D("10")}], "x", self.owner)
+        again = self.certify(concrete="40")  # bills the 10 the return gave back
+        self.assertEqual((again.lines.get().previous_quantity, again.lines.get().quantity), (D("30.000"), D("10.000")))
+        returned = SalesReturn.objects.get(return_number="SR-Q1")
+        with self.assertRaisesMessage(ValidationError, "already billed the quantity"):
+            cancel_sales_return(returned.pk, TODAY, "غلط", self.owner)
+        self.assertEqual(SalesReturn.objects.get(pk=returned.pk).status, "posted")
+        self.assertEqual(contract.certified_quantity(self.concrete), D("40.000"))
+
+    def test_partial_returns_take_back_exactly_the_whole_retention(self):
+        from sales.services import create_sales_return
+
+        small = services.save_project({"name": "بند صغير", "customer": self.customer}, self.owner)
+        line = contract.save_boq_line(small, self.owner, {"description": "x", "quantity": "3", "rate": "1"})
+        contract.save_terms(small, self.owner, retention_rate="0.5", advance_recovery_rate="0")
+        certificate = contract.create_certificate(small, self.owner, quantities={line.pk: "3"})
+        self.assertEqual(certificate.retention_amount, D("0.02"))
+        post_sales_invoice(certificate.invoice_id, self.owner)
+        sales_line = certificate.invoice.lines.get()
+        for n in range(3):
+            create_sales_return(f"SR-R{n}", TODAY, certificate.invoice_id, [{"source_line": sales_line, "quantity": D("1")}], "x", self.owner)
+        self.assertEqual(contract.effective(certificate), (D("0.00"), D("0.00"), D("0.00")))
+        self.assertEqual(gl("retention_receivable"), D("0.00"))
+        ledger_ok(self)
+
+    def test_a_project_is_billed_from_one_entity(self):
+        from entities.current import working_in
+        from entities.models import Entity
+
+        post_sales_invoice(self.certify(concrete="10").invoice_id, self.owner)
+        branch = Entity.objects.create(code="E2", name_ar="فرع تاني")
+        make_location(location_code="E2-LOC", entity=branch)
+        with working_in(branch), self.assertRaisesMessage(ValidationError, "من كيان تاني"):
+            self.certify(concrete="20")
+        release = contract.release_retention(self.project, self.owner, amount="500")
+        self.assertTrue(release.pk)
+        ledger_ok(self)
