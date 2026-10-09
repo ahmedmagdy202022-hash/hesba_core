@@ -182,3 +182,4 @@ html.hs-cam-open,html.hs-cam-open body{overflow:hidden}
 @media print{.op-subnav,.op-filters,.op-statement-actions{display:none!important}.op-table-wrap{border:0;overflow:visible}.op-table{min-width:0}}
 @media(max-width:700px){.op-subnav{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin}.op-subnav a{white-space:nowrap;flex:0 0 auto}}
 [data-recipe-line][hidden]{display:none}[data-recipe-form] input[type=checkbox]{width:auto;min-height:0;inline-size:auto}
+.op-subnav__sep{align-self:center;color:var(--op-muted);padding:0 4px}.op-subnav__label{align-self:center;color:var(--op-muted);font-weight:600}

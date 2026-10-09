@@ -10,6 +10,7 @@ lists, reports, the dashboard and new documents are that entity's only
 EntityMembership) can never leave them; owners always may.
 """
 
+from contextlib import contextmanager
 from contextvars import ContextVar
 
 SESSION_KEY = "hesba_entity"
@@ -61,6 +62,17 @@ def _default_for(user, allowed):
 
     default = EntityMembership.objects.filter(user=user, is_default=True, entity__in=allowed).select_related("entity").first()
     return default.entity if default else allowed[0]
+
+
+@contextmanager
+def working_in(entity):
+    """Read as if ``entity`` were the one being worked in (None: the whole group)."""
+
+    token = _current.set(entity)
+    try:
+        yield
+    finally:
+        _current.reset(token)
 
 
 def current_entity():

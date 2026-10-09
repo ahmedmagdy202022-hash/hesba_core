@@ -39,7 +39,7 @@ WORDS = {
            "add_depreciation": "يُضاف: الإهلاك (مصروف من غير فلوس)", "less_disposal": "يُخصم: أرباح بيع أصول (فلوسها في الاستثمار)",
            "disposal_proceeds": "أرباح بيع أصول", "net_change": "صافي التغيّر في النقدية", "cash_opening": "النقدية أول المدة",
            "cash_closing": "النقدية آخر المدة", "flow_ok": "متطابقة مع رصيد الخزن والبنوك", "flow_bad": "مش متطابقة — راجع المطابقة",
-           "change_in": "التغيّر في", "tab_trial": "ميزان المراجعة", "tab_recon": "المطابقة",
+           "change_in": "التغيّر في", "tab_trial": "ميزان المراجعة", "tab_recon": "المطابقة", "tab_summary": "الحسابات ببساطة", "accountant_tabs": "للمحاسب",
            "journal_intro": "كل مستند مترحّل بيظهر هنا كقيد مزدوج متوازن، متولّد تلقائيًا من دفاتر العملاء والموردين والخزن والمخزون.",
            "trial_intro": "رصيد كل حساب أول المدة وحركته في الفترة ورصيده آخر المدة. لو المدين مساوي الدائن يبقى الدفاتر متوازنة.",
            "recon_intro": "كل حساب رقابي قصاد التقرير اللي بيملك الرقم. أي فرق معناه مستند محتاج مراجعة.",
@@ -72,7 +72,7 @@ WORDS = {
            "add_depreciation": "Add: depreciation (a non-cash expense)", "less_disposal": "Less: gain on asset sales (its cash is under investing)",
            "disposal_proceeds": "Gain on asset sales", "net_change": "Net change in cash", "cash_opening": "Cash at the start",
            "cash_closing": "Cash at the end", "flow_ok": "Agrees with the cashbox and bank balances", "flow_bad": "Does not agree — check the reconciliation",
-           "change_in": "Change in", "tab_trial": "Trial balance", "tab_recon": "Reconciliation",
+           "change_in": "Change in", "tab_trial": "Trial balance", "tab_recon": "Reconciliation", "tab_summary": "Accounts made simple", "accountant_tabs": "For the accountant",
            "journal_intro": "Every posted document appears here as a balanced double entry, built automatically from the customer, supplier, cash and stock ledgers.",
            "trial_intro": "Each account's opening balance, movement in the period and closing balance. Equal debits and credits mean the books balance.",
            "recon_intro": "Each control account against the report that owns the figure. Any difference names a document to review.",
@@ -168,13 +168,17 @@ def _filters(request):
 
 # R2: what an owner reads first (did I make money, what do I own and owe,
 # where did the cash go), then the accountant's tools.
-LEDGER_TABS = (("income", "ledger:income_statement"), ("balance", "ledger:balance_sheet"), ("cash", "ledger:cash_flow"),
+LEDGER_TABS = (("summary", "ledger:summary"), ("income", "ledger:income_statement"), ("balance", "ledger:balance_sheet"), ("cash", "ledger:cash_flow"),
                ("accounts", "ledger:accounts"), ("journal", "ledger:journal"), ("trial", "ledger:trial_balance"),
                ("recon", "ledger:reconciliation"))
 
 
+#: R2-8: the owner's tabs; the rest are the accountant's tools, shown apart.
+OWNER_TABS = ("summary", "income", "balance", "cash")
+
+
 def _tabs(lang):
-    return {"ledger_tabs": LEDGER_TABS, "tab_labels": [(key, WORDS[lang][f"tab_{key}"]) for key, _ in LEDGER_TABS]}
+    return {"ledger_tabs": LEDGER_TABS, "owner_tabs": OWNER_TABS, "tab_labels": [(key, WORDS[lang][f"tab_{key}"]) for key, _ in LEDGER_TABS]}
 
 
 def _base(request, lang, tab, **extra):
@@ -376,3 +380,55 @@ def cash_flow(request):
         rows += [[words["net_change"], data["net_change"]], [words["cash_opening"], data["cash_opening"]], [words["cash_closing"], data["cash_closing"]]]
         return _csv(f"cash-flow-{f['date_from']}-{f['date_to']}.csv", rows)
     return render(request, "ledger/cash_flow.html", _base(request, lang, "cash", data=data, blocks=blocks, **f))
+
+
+SUMMARY_WORDS = {
+    "ar": {
+        "intro": "أربع أسئلة صاحب الشغل بيسألها، بالأرقام اللي في دفاترك. التفاصيل في الشاشات اللي بعدها، والقيود وميزان المراجعة للمحاسب.",
+        "profit_q": "كسبت كام الشهر ده؟", "profit_a": "صافي الربح من {start} لحد النهارده.", "sales": "المبيعات", "cost": "تكلفة البضاعة", "expenses": "المصروفات", "other": "مكاسب وخسائر تانية (جرد، بيع أصول...)",
+        "loss": "الشهر ده لسه خسارة: اللي اتصرف واتكلّف أكتر من اللي دخل.",
+        "cash_q": "الفلوس فين؟", "cash_a": "اللي في الخزن والبنوك دلوقتي.", "cash_change": "اتغيّرت الشهر ده بـ",
+        "owed_q": "مين عليه فلوس ليك؟", "owed_a": "العملاء اللي لسه عليهم فلوس.", "nobody_owes": "مفيش حد عليه فلوس.",
+        "owe_q": "إنت عليك فلوس لمين؟", "owe_a": "الموردين اللي لسه ليهم فلوس.", "owe_nobody": "مفيش عليك فلوس لحد.",
+        "details": "التفاصيل", "all": "الكل", "accountant": "للمحاسب: دليل الحسابات، القيود اليومية، ميزان المراجعة والمطابقة.",
+    },
+    "en": {
+        "intro": "The four questions an owner asks, answered from your own books. The details are in the next screens; entries and the trial balance are for the accountant.",
+        "profit_q": "What did I make this month?", "profit_a": "Net profit from {start} to today.", "sales": "Sales", "cost": "Cost of goods", "expenses": "Expenses", "other": "Other gains and losses (stock counts, asset sales...)",
+        "loss": "This month is a loss so far: what was spent and used up is above what came in.",
+        "cash_q": "Where is the money?", "cash_a": "What is in the cashboxes and banks now.", "cash_change": "Changed this month by",
+        "owed_q": "Who owes me?", "owed_a": "Customers who still owe you.", "nobody_owes": "Nobody owes you anything.",
+        "owe_q": "Whom do I owe?", "owe_a": "Suppliers you still owe.", "owe_nobody": "You owe nobody.",
+        "details": "Details", "all": "All", "accountant": "For the accountant: chart of accounts, journal entries, trial balance and reconciliation.",
+    },
+}
+
+
+@require_permission("accounting.view_ledger")
+def summary(request):
+    """R2-8: the books in four plain answers, for the owner."""
+
+    from permissions.services import user_has_permission
+    from reports.selectors import customer_report, supplier_report
+
+    lang = _lang(request)
+    f = _window(_filters(request))
+    income = statements.income_statement(f["date_from"], f["date_to"], f["entity"], compare=False)
+    cash = statements.cash_flow(f["date_from"], f["date_to"], f["entity"], refresh=False)
+    from entities.current import working_in
+
+    owed = owe = None
+    # The party balances follow the entity the page shows, as the statements do.
+    with working_in(f["entity"]):
+        if user_has_permission(request.user, "reports.view_customer_report"):
+            rows = sorted((r for r in customer_report() if r["balance"] > 0), key=lambda r: -r["balance"])
+            owed = {"total": sum((r["balance"] for r in rows), ZERO), "rows": rows[:5], "count": len(rows)}
+        if user_has_permission(request.user, "reports.view_supplier_report"):
+            rows = sorted((r for r in supplier_report() if r["balance"] > 0), key=lambda r: -r["balance"])
+            owe = {"total": sum((r["balance"] for r in rows), ZERO), "rows": rows[:5], "count": len(rows)}
+    sections = income["sections"]
+    simple = dict(SUMMARY_WORDS[lang], profit_a=SUMMARY_WORDS[lang]["profit_a"].format(start=f["date_from"].isoformat()))
+    return render(request, "ledger/summary.html", _base(
+        request, lang, "summary", simple=simple, income=income, cash=cash, owed=owed, owe=owe,
+        sales=sections["revenue"]["total"], cost=sections["cost_of_sales"]["total"],
+        expenses=sections["operating_expenses"]["total"], other=sections["other_income"]["total"], **f))
