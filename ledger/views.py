@@ -23,7 +23,7 @@ WORDS = {
            "code": "الكود", "name": "الحساب", "type": "النوع", "control": "بيتسجل عليه تلقائيًا", "new": "حساب جديد", "edit": "تعديل",
            "parent": "تحت حساب", "name_ar": "الاسم بالعربي", "name_en": "الاسم بالإنجليزي", "is_group": "مجموعة (مبيتسجلش عليها قيود مباشرة)",
            "active": "نشط", "save": "حفظ", "saved": "اتحفظ الحساب.", "back": "رجوع", "group": "مجموعة", "system": "أساسي",
-           "tab_accounts": "دليل الحسابات", "tab_journal": "اليومية العامة", "tab_income": "قائمة الدخل", "tab_balance": "الميزانية", "tab_cash": "التدفقات النقدية",
+           "tab_accounts": "دليل الحسابات", "tab_journal": "اليومية العامة", "tab_income": "الأرباح والخسائر", "tab_balance": "المركز المالي (الميزانية)", "tab_cash": "حركة الفلوس (التدفقات)",
            "income_intro": "الإيرادات ناقص تكلفة البيع والمصروفات، مع مقارنة بالفترة اللي قبلها وبنفس الفترة السنة اللي فاتت.",
            "balance_intro": "اللي تملكه المنشأة (الأصول) قصاد اللي عليها (الخصوم) وحق أصحابها (حقوق الملكية) في تاريخ معيّن.",
            "cash_intro": "منين جت الفلوس وراحت فين: من النشاط، ومن الاستثمار في الأصول، ومن التمويل. والمحصّلة لازم تساوي التغيّر في الخزن والبنوك.",
@@ -56,7 +56,7 @@ WORDS = {
            "code": "Code", "name": "Account", "type": "Type", "control": "Posted automatically", "new": "New account", "edit": "Edit",
            "parent": "Under", "name_ar": "Arabic name", "name_en": "English name", "is_group": "Group (takes no entries directly)",
            "active": "Active", "save": "Save", "saved": "Account saved.", "back": "Back", "group": "Group", "system": "Core",
-           "tab_accounts": "Chart of accounts", "tab_journal": "General journal", "tab_income": "Income statement", "tab_balance": "Balance sheet", "tab_cash": "Cash flow",
+           "tab_accounts": "Chart of accounts", "tab_journal": "General journal", "tab_income": "Profit & loss", "tab_balance": "Balance sheet", "tab_cash": "Cash flow",
            "income_intro": "Revenue less cost of sales and expenses, compared with the previous period and the same period last year.",
            "balance_intro": "What the business owns (assets) against what it owes (liabilities) and its owners' share (equity) on a date.",
            "cash_intro": "Where cash came from and went: operations, investment in assets, and financing. The total equals the change in cash and bank.",
@@ -166,8 +166,10 @@ def _filters(request):
     return {"date_from": _date(request.GET.get("from")), "date_to": _date(request.GET.get("to")), "entity": entity, "entities": entities, "group_wide": not restricted}
 
 
-LEDGER_TABS = (("accounts", "ledger:accounts"), ("journal", "ledger:journal"), ("trial", "ledger:trial_balance"),
-               ("income", "ledger:income_statement"), ("balance", "ledger:balance_sheet"), ("cash", "ledger:cash_flow"),
+# R2: what an owner reads first (did I make money, what do I own and owe,
+# where did the cash go), then the accountant's tools.
+LEDGER_TABS = (("income", "ledger:income_statement"), ("balance", "ledger:balance_sheet"), ("cash", "ledger:cash_flow"),
+               ("accounts", "ledger:accounts"), ("journal", "ledger:journal"), ("trial", "ledger:trial_balance"),
                ("recon", "ledger:reconciliation"))
 
 
