@@ -138,7 +138,7 @@ class BasePurchaseLineFormSet(BaseFormSet):
 PurchaseLineFormSet = formset_factory(
     PurchaseLineInputForm,
     formset=BasePurchaseLineFormSet,
-    extra=5,
+    extra=1,  # R2: one line to start; "+ سطر جديد" adds more
     max_num=20,
     validate_max=True,
 )

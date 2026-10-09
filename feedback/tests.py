@@ -165,3 +165,68 @@ class StylesheetTests(TestCase):
                 self.assertEqual(re.findall(r"rgba?\(\s*\d", css), [])
                 self.assertNotRegex(css, r"font-weight:\s*[89]00")
                 self.assertEqual(sorted(set(re.findall(r"var\((--hs-[\w-]+)", css)) - defined), [])
+
+
+@override_settings(DEMO_MODE=True, FEEDBACK_VIEW_TOKEN=KEY)
+class NeverLostTests(TestCase):
+    """R2: a note reaches the server log, even when the feedback database is down."""
+
+    databases = {"default", "feedback"}
+
+    def test_every_note_is_in_the_log(self):
+        with self.assertLogs("hesba.feedback", level="WARNING") as logged:
+            self.client.post(reverse("feedback:send"), {"message": "الزرار ده مش واضح", "lang": "ar", "path": "/sales/new/"})
+        self.assertIn("الزرار ده مش واضح", logged.output[0])
+        self.assertIn("/sales/new/", logged.output[0])
+        self.assertTrue(Feedback.objects.exists())
+
+    def test_a_down_database_still_thanks_the_tester_and_logs_the_note(self):
+        from django.db import OperationalError
+
+        with mock.patch.object(Feedback, "save", side_effect=OperationalError("down")), \
+                mock.patch("feedback.views.Feedback.objects") as objects, \
+                self.assertLogs("hesba.feedback", level="WARNING") as logged:
+            objects.filter.side_effect = OperationalError("down")
+            response = self.client.post(reverse("feedback:send"), {"message": "ملاحظة وقت العطل", "lang": "ar"})
+        self.assertEqual(response.json(), {"ok": True})
+        self.assertIn("ملاحظة وقت العطل", "\n".join(logged.output))
+        self.assertIn("only copy", "\n".join(logged.output))
+
+
+    def test_the_hourly_limit_holds_while_the_database_is_down(self):
+        from django.core.cache import cache
+        from django.db import OperationalError
+
+        from . import views
+
+        cache.delete("feedback-rate:anonymous")
+        with mock.patch.object(Feedback, "save", side_effect=OperationalError("down")), \
+                mock.patch("feedback.views.Feedback.objects") as objects, \
+                mock.patch.object(views, "MAX_ANONYMOUS_PER_HOUR", 2), \
+                self.assertLogs("hesba.feedback", level="WARNING"):
+            objects.filter.side_effect = OperationalError("down")
+            codes = [self.client.post(reverse("feedback:send"), {"message": f"ملاحظة {n}", "lang": "ar"}).status_code for n in range(3)]
+        self.assertEqual(codes, [200, 200, 429])
+        cache.delete("feedback-rate:anonymous")
+
+    def test_notes_reach_the_console_whatever_the_app_log_level(self):
+        import logging
+
+        from django.conf import settings
+
+        logger = logging.getLogger("hesba.feedback")
+        self.assertFalse(logger.propagate)
+        self.assertTrue(logger.handlers and all(handler.level <= logging.WARNING for handler in logger.handlers))
+        self.assertIn("feedback_console", settings.LOGGING["loggers"]["hesba.feedback"]["handlers"])
+
+
+class ShowcaseWarningsTests(TestCase):
+    def test_a_showcase_without_the_key_or_a_kept_database_is_warned(self):
+        from .checks import feedback_is_readable_and_kept
+
+        with override_settings(DEMO_MODE=True, FEEDBACK_VIEW_TOKEN="", FEEDBACK_DATABASE_URL=""):
+            self.assertEqual([w.id for w in feedback_is_readable_and_kept()], ["feedback.W001", "feedback.W002"])
+        with override_settings(DEMO_MODE=True, FEEDBACK_VIEW_TOKEN=KEY, FEEDBACK_DATABASE_URL="postgresql://x"):
+            self.assertEqual(feedback_is_readable_and_kept(), [])
+        with override_settings(DEMO_MODE=False, FEEDBACK_VIEW_TOKEN=""):
+            self.assertEqual(feedback_is_readable_and_kept(), [])
