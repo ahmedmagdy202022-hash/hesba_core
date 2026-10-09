@@ -110,7 +110,10 @@ def _context(request, project, tab, **extra):
     from .services import OPEN
 
     lang = _lang(request)
-    context = _base(request, project=project, tab=tab, cwords=WORDS[lang], position=contract.position(project), is_open=project.status in OPEN,
+    # The header's owner and contract figures are sales-side: a purchases-only user (on the subcontractors tab) does not see them.
+    can_view_sales = user_has_permission(request.user, VIEW)
+    context = _base(request, project=project, tab=tab, cwords=WORDS[lang], position=contract.position(project) if can_view_sales else None,
+                    can_view_sales=can_view_sales, is_open=project.status in OPEN,
                     can_collect=user_has_permission(request.user, COLLECT), can_buy=user_has_permission(request.user, BUY),
                     can_view_purchases=user_has_permission(request.user, BUY_VIEW))
     context["page_title"] = f"{project.name} — {WORDS[lang]['tab_' + tab]}"

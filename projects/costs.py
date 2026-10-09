@@ -88,13 +88,7 @@ def _rate(value, words):
 def subcontract_item():
     """The service line a subcontractor bill uses."""
 
-    from master_data.models import Item
-
-    item, _ = Item.objects.get_or_create(
-        item_code=SUBCONTRACT_ITEM_CODE,
-        defaults={"item_name": "أعمال مقاول باطن", "is_stock_tracked": False, "default_sale_price": 0},
-    )
-    return item
+    return services.service_item(SUBCONTRACT_ITEM_CODE, "أعمال مقاول باطن")
 
 
 # ---- subcontracts ----

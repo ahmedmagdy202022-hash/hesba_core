@@ -600,9 +600,17 @@ class ReviewRoundFourTests(ContractSetup):
 
         from closing.models import Period, PeriodStatus
 
+        from closing.services import get_period_for_date
+
         end = TODAY.replace(day=1) - timedelta(days=1)
-        Period.objects.create(period_code="CLOSED-4", name="closed", start_date=end.replace(day=1), end_date=end,
-                              status=PeriodStatus.CLOSED, closed_at=timezone.now())
+        period = get_period_for_date(end)  # posting there already opened it: close that one, never add a second
+        if period is None:
+            Period.objects.create(period_code="CLOSED-4", name="closed", start_date=end.replace(day=1), end_date=end,
+                                  status=PeriodStatus.CLOSED, closed_at=timezone.now())
+        else:
+            Period.objects.filter(pk=period.pk).update(status=PeriodStatus.CLOSED, closed_at=timezone.now())
+        self.assertIsNotNone(get_period_for_date(end))
+        self.assertEqual(get_period_for_date(end).status, PeriodStatus.CLOSED)
         return end
 
     def test_another_entity_cannot_change_or_see_the_projects_money(self):
@@ -729,4 +737,60 @@ class ReviewRoundFourTests(ContractSetup):
         with self.assertRaisesMessage(ValidationError, "أكبر من ضمان الأعمال المحتجز (0"):
             costs.release_subcontract_retention(self.subcontract, self.owner, amount="100", release_date=TODAY - timedelta(days=1))
         costs.release_subcontract_retention(self.subcontract, self.owner, amount="500", release_date=TODAY)
+        ledger_ok(self)
+
+
+class ReviewRoundFiveTests(ContractSetup):
+    """Codex's fifth review on #179."""
+
+    def test_a_backdated_certificate_recovers_only_advances_received_by_its_date(self):
+        from datetime import timedelta
+
+        if TODAY.day < 3:
+            self.skipTest("needs two earlier days in the same month")
+        contract.receive_payment(self.project, self.owner, kind=ProjectPaymentKind.ADVANCE, cashbox=self.cashbox, amount="30000")  # today
+        early = contract.create_certificate(self.project, self.owner, quantities={self.concrete.pk: "10"}, certificate_date=TODAY - timedelta(days=2))
+        self.assertEqual(early.recovery_amount, D("0.00"))  # nothing was received by then
+        post_sales_invoice(early.invoice_id, self.owner)
+        later = self.certify(concrete="20")
+        self.assertEqual(later.recovery_amount, D("1000.00"))
+        post_sales_invoice(later.invoice_id, self.owner)
+        self.assertGreaterEqual(contract.lowest_held(contract.advance_events(self.project)), 0)
+        ledger_ok(self)
+
+    def test_an_advance_cannot_be_unlinked_when_an_earlier_certificate_needs_it(self):
+        from sales.services import record_customer_payment
+
+        old = record_customer_payment("CP-A1", TODAY, self.customer, self.cashbox, D("1000"), self.owner)
+        first = contract.link_payment(self.project, old, self.owner, kind=ProjectPaymentKind.ADVANCE)
+        post_sales_invoice(self.certify(concrete="10").invoice_id, self.owner)  # recovers 1000
+        contract.receive_payment(self.project, self.owner, kind=ProjectPaymentKind.ADVANCE, cashbox=self.cashbox, amount="5000")
+        contract.unlink_payment(self.project, first, self.owner)  # today's later advance still covers it on the same date
+        self.assertFalse(self.project.payments.filter(pk=first.pk).exists())
+
+    def test_the_subcontractors_tab_shows_no_sales_figures_to_a_purchases_only_user(self):
+        from permissions.services import user_has_permission
+
+        clerk = person(RoleCode.STOCK_KEEPER, "c2_keeper")  # sees purchases, not sales
+        self.assertTrue(user_has_permission(clerk, "purchases.view_purchase_invoices"))
+        self.assertFalse(user_has_permission(clerk, "sales.view_sales_invoices"))
+        self.client.force_login(clerk)
+        page = self.client.get(reverse("projects:subcontracts", args=[self.project.pk]) + "?lang=ar")
+        self.assertEqual(page.status_code, 200)
+        self.assertNotContains(page, "data-contract-position")
+        self.assertNotContains(page, self.customer.name)
+
+    def test_a_stock_item_holding_the_reserved_code_is_never_billed(self):
+        make_item(item_code="PRJ-SUB", item_name="صنف مخزني", is_stock_tracked=True)
+        make_item(item_code="PRJ-BILL", item_name="صنف مخزني 2", is_stock_tracked=True)
+        subcontract = costs.save_subcontract(self.project, self.owner, {"supplier": make_supplier(supplier_code="S-5", name="مقاول"), "scope": "x",
+                                                                        "value": "1000", "retention_rate": "0"})
+        bill = costs.bill_subcontract(subcontract, self.owner, amount="1000", description="x")
+        self.assertEqual(bill.invoice.lines.get().item.item_code, "PRJ-SUB-2")
+        self.assertFalse(bill.invoice.lines.get().item.is_stock_tracked)
+        certificate = self.certify(concrete="1")
+        self.assertEqual(certificate.invoice.lines.get().item.item_code, "PRJ-BILL-2")
+        post_purchase_invoice(bill.invoice_id, self.owner)
+        post_sales_invoice(certificate.invoice_id, self.owner)
+        self.assertEqual(gl("project_cost"), D("1000.00"))
         ledger_ok(self)

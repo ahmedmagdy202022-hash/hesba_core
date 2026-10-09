@@ -117,16 +117,30 @@ def _open(project, words):
     return project
 
 
-def billing_item():
-    """The service line a progress bill uses unless another service is chosen."""
+def service_item(code, name):
+    """A reserved service line, never a stock item: the item with ``code`` when
+    it is an active non-stock service, else the first such ``code-2``,
+    ``code-3``… (made when missing). A catalog item that took the code and
+    tracks stock is left alone, so a bill never moves stock or books its value
+    to inventory."""
 
     from master_data.models import Item
 
-    item, _ = Item.objects.get_or_create(
-        item_code=BILLING_ITEM_CODE,
-        defaults={"item_name": "مستخلص أعمال", "is_stock_tracked": False, "default_sale_price": 0},
-    )
-    return item
+    candidate, number = code, 1
+    while True:
+        item = Item.objects.filter(item_code=candidate).first()
+        if item is None:
+            return Item.objects.create(item_code=candidate, item_name=name, is_stock_tracked=False, default_sale_price=0)
+        if item.active and not item.is_stock_tracked:
+            return item
+        number += 1
+        candidate = f"{code}-{number}"
+
+
+def billing_item():
+    """The service line a progress bill uses unless another service is chosen."""
+
+    return service_item(BILLING_ITEM_CODE, "مستخلص أعمال")
 
 
 @transaction.atomic

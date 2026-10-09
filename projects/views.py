@@ -178,7 +178,7 @@ def project_detail(request, pk):
         expense_links=project.expenses.select_related("expense", "expense__category", "expense__cashbox_operation"),
         free_invoices=entity_scope.scope(SalesInvoice.objects, entity_scope.SALES_INVOICE).filter(customer=project.customer).exclude(status="cancelled").exclude(pk__in=linked_ids).order_by("-invoice_date")[:50],
         free_expenses=entity_scope.scope(Expense.objects, entity_scope.EXPENSE).filter(expense_date__gte=since, cashbox_operation__status="posted", project_link__isnull=True).order_by("-expense_date")[:50],
-        services_list=Item.objects.filter(active=True, is_stock_tracked=False).exclude(item_code=services.BILLING_ITEM_CODE).order_by("item_name"),
+        services_list=Item.objects.filter(active=True, is_stock_tracked=False).exclude(item_code__startswith=services.BILLING_ITEM_CODE).order_by("item_name"),
         stock_items=Item.objects.filter(active=True, is_stock_tracked=True).order_by("item_name"), locations=entity_scope.locations(Location.objects).filter(active=True),
         customers=Customer.objects.filter(active=True).order_by("name"),
         form={"name": project.name, "customer": str(project.customer_id), "site": project.site, "contract_value": project.contract_value,

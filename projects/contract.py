@@ -365,7 +365,8 @@ def unlink_payment(project, link, user, lang="ar"):
     _in_scope(link.payment.cashbox, words)
     if link.kind == ProjectPaymentKind.ADVANCE:
         ensure_period_is_open(link.payment.payment_date)  # the same entry moves back
-    if link.kind == ProjectPaymentKind.ADVANCE and advance_received(project) - Decimal(link.payment.amount) < advance_recovered(project):
+    if link.kind == ProjectPaymentKind.ADVANCE and (advance_received(project) - Decimal(link.payment.amount) < advance_recovered(project)
+                                                    or lowest_held(advance_events(project, leave_out=link.pk)) < 0):
         raise ValidationError(words["advance_used"])
     _audit(project, user, "unlink_project_payment", {"payment": link.payment.payment_number, "kind": link.kind})
     link.delete()
@@ -443,8 +444,10 @@ def create_certificate(project, user, *, quantities=None, amount=None, descripti
         sequence += 1
         invoice_number = f"PB-{project.code}-{sequence:02d}"
     retention = money_round(gross * Decimal(project.retention_rate) / HUNDRED)
-    recovery = min(money_round(gross * Decimal(project.advance_recovery_rate) / HUNDRED), advance_left(project))
     day = certificate_date or timezone.localdate()
+    # Only what was received by the certificate's date, and stays unclaimed on every date after it.
+    available = min(advance_left(project), max(lowest_held(advance_events(project), day), ZERO))
+    recovery = min(money_round(gross * Decimal(project.advance_recovery_rate) / HUNDRED), available)
     title = f"مستخلص رقم {number}" + (f" — {label}" if label else "")
     invoice = create_sales_draft_with_tax(
         {"invoice_number": invoice_number, "invoice_date": day, "customer": project.customer, "selling_location": location, "cashbox": None,
@@ -626,6 +629,20 @@ def lowest_held(events, day=None):
     return money_round(min(candidates)) if candidates else ZERO
 
 
+def advance_events(project, leave_out=None):
+    """[(date, change)] of the advance not yet recovered: each posted advance on
+    its payment date; each live certificate's recovery off on its invoice's
+    date (drafts too, so two certificates never claim the same money), and
+    back with its returns' shares on their dates."""
+
+    events = [(link.payment.payment_date, Decimal(link.payment.amount))
+              for link in _posted_payments(project, ProjectPaymentKind.ADVANCE).select_related("payment").exclude(pk=leave_out)]
+    certificates = live_certificates(project).select_related("invoice")
+    events += [(day, -change) for day, change in held_events([(c.invoice, c.recovery_amount) for c in certificates if c.invoice.status == "posted"], [])]
+    events += [(c.invoice.invoice_date, -Decimal(c.recovery_amount)) for c in certificates if c.invoice.status == "draft" and c.recovery_amount]
+    return events
+
+
 def retention_events(project):
     certificates = project.certificates.select_related("invoice")
     return held_events([(c.invoice, c.retention_amount) for c in certificates], project.retention_releases.all())
@@ -641,7 +658,7 @@ def ensure_consistent(project, lang="en"):
     project = Project.objects.select_for_update().get(pk=project.pk)
     if lowest_held(retention_events(project)) < 0:  # on any date, not only today
         raise ValidationError(CONSISTENCY[lang]["retention"])
-    if advance_recovered(project) > advance_received(project):
+    if advance_recovered(project) > advance_received(project) or lowest_held(advance_events(project)) < 0:  # on any date
         raise ValidationError(CONSISTENCY[lang]["advance"])
     for line in project.boq.all():
         latest = CertificateLine.objects.filter(boq_line=line).exclude(certificate__invoice__status="cancelled").order_by("-certificate__number").first()
