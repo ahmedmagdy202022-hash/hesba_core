@@ -5,6 +5,9 @@
  * invoice, or fills the next empty line, adding a line when all are used.
  * The live total is a convenience only: the server recalculates and validates
  * every figure when the draft is saved.
+ *
+ * R2-6: each line shows its own total, a line can be cleared, and the summary
+ * beside the lines follows the invoice discount, tax and amount paid.
  */
 (function () {
   'use strict';
@@ -117,7 +120,9 @@
       else if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') { el.value = el.name && /line_discount_amount$/.test(el.name) ? '0' : ''; }
     });
     clone.querySelectorAll('.op-field-error').forEach(function (el) { el.remove(); });
-    var legend = clone.querySelector('legend');
+    clone.classList.remove('has-error');
+    clone.querySelectorAll('details').forEach(function (el) { el.open = false; });
+    var legend = clone.querySelector('legend, [data-line-no]');
     if (legend) { legend.textContent = String(n + 1); }
     linesBox.appendChild(clone);
     total.value = String(n + 1);
@@ -135,19 +140,62 @@
     }
   }
 
+  function cents(value) { return (value < 0 ? -1 : 1) * Math.round(Math.abs(value) * 100 + 1e-9) / 100; }
+  function money(value) { return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function header(name) { return form.querySelector('[name="' + name + '"]'); }
+  var sumTotal = form.querySelector('[data-sum-total]');
+  var sumRemaining = form.querySelector('[data-sum-remaining]');
+
+  function lineRow(index) {
+    var select = field(index, 'item');
+    return select ? select.closest('.op-line') : null;
+  }
+
+  function invoiceTotal(lines) {
+    return Math.max(lines - num(header('discount_amount')) + num(header('tax_amount')), 0);
+  }
+
   function recalc() {
     if (!liveTotal) { return; }
     var sum = 0;
     for (var i = 0; i < count(); i += 1) {
       var select = field(i, 'item');
-      if (!select || !select.value) { continue; }
-      var net = num(field(i, 'quantity')) * num(field(i, priceField)) - num(field(i, 'line_discount_amount'));
-      sum += net;
+      var row = lineRow(i);
+      var cell = row && row.querySelector('[data-line-total]');
+      if (!select || !select.value) { if (cell) { cell.textContent = '0.00'; } continue; }
+      // Each line rounded to cents (half up) before summing, like the server.
+      var net = cents(num(field(i, 'quantity')) * num(field(i, priceField)) - num(field(i, 'line_discount_amount')));
+      var line = net;
       // TAX-001: VAT at the item's rate, rounded per line like the server.
-      if (taxRates) { sum += Math.round(Math.round(net * 100) / 100 * num({ value: taxRates[select.value] || '0' }) + 1e-9) / 100; }
+      if (taxRates) { line += Math.round(net * num({ value: taxRates[select.value] || '0' }) + 1e-9) / 100; }
+      sum += line;
+      if (cell) { cell.textContent = money(line); }
     }
-    liveTotal.textContent = sum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    liveTotal.textContent = money(sum);
+    var totalValue = invoiceTotal(sum);
+    if (sumTotal) { sumTotal.textContent = money(totalValue); }
+    if (sumRemaining) { sumRemaining.textContent = money(Math.max(totalValue - num(header('paid_now')), 0)); }
   }
+
+  form.addEventListener('click', function (event) {
+    var clear = event.target.closest('[data-clear-line]');
+    if (clear) {
+      var row = clear.closest('.op-line');
+      row.querySelectorAll('input, select, textarea').forEach(function (el) {
+        if (el.tagName === 'SELECT') { el.selectedIndex = 0; }
+        else { el.value = /line_discount_amount$/.test(el.name || '') ? '0' : ''; }
+      });
+      recalc();
+      return;
+    }
+    if (event.target.closest('[data-pay-all]')) {
+      var paid = header('paid_now');
+      var lines = 0;
+      recalc();
+      lines = num({ value: (liveTotal.textContent || '0').replace(/,/g, '') });
+      if (paid) { paid.value = invoiceTotal(lines).toFixed(2); paid.dispatchEvent(new Event('input', { bubbles: true })); }
+    }
+  });
 
   function say(text, isError) {
     if (!status) { return; }

@@ -1,0 +1,56 @@
+/* R2-6: the invoice form. Who/when/where on one row, the lines as a table to
+   type straight into, and a summary that stays beside them. */
+.inv-form{padding:18px}
+.inv-layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:start}
+.inv-main{min-width:0}
+.inv-head{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.inv-head .inv-wide{grid-column:1/-1}
+.inv-more,.inv-line-more{margin-top:10px}
+.inv-more>summary,.inv-line-more>summary{cursor:pointer;color:var(--op-teal);font-weight:700;font-size:14px;padding:6px 0}
+.inv-more>summary small,.inv-line-more>summary{font-weight:500;color:var(--op-muted)}
+.inv-more .inv-head{margin-top:8px}
+.inv-form .op-scan{margin:16px 0 10px}
+
+/* Lines: one row each; the head row names the columns once. */
+.inv-lines{border:1px solid var(--op-border);border-radius:var(--hs-radius-md,14px);overflow:hidden}
+.inv-row{display:grid;grid-template-columns:2.2rem minmax(11rem,3fr) repeat(var(--inv-cols,3),minmax(5.5rem,1fr)) 6.5rem 2.4rem;gap:8px;align-items:center;padding:8px 10px}
+.inv-lines-head{background:var(--hs-ground);color:var(--op-muted);font-size:13px;font-weight:700}
+.op-lines{display:block}
+.inv-form .op-line{display:block;border:0;border-top:1px solid var(--hs-line);border-radius:0;padding:0}
+.inv-form .op-line:first-child{border-top:0}
+.inv-form .op-line.has-error{background:var(--hs-danger-wash)}
+.inv-line-more{margin:-4px 10px 6px;padding-inline-start:2.6rem}
+.inv-line-more>summary{font-size:12px;padding:2px 0}
+.inv-line-more[open]{margin-bottom:10px}
+.inv-cell{gap:4px}
+.inv-cell>label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.inv-cell input,.inv-cell select{min-height:40px;padding:6px 10px}
+.inv-no{color:var(--op-teal);font-weight:700;text-align:center}
+.inv-line-total{font-weight:700;color:var(--op-navy);text-align:end;font-variant-numeric:tabular-nums}
+.inv-clear{width:2.2rem;height:2.2rem;border:1px solid var(--op-border);border-radius:10px;background:var(--hs-surface);color:var(--op-muted);cursor:pointer}
+.inv-clear:hover,.inv-clear:focus-visible{color:var(--op-danger);border-color:var(--hs-danger-line)}
+.inv-add{margin-top:12px}
+
+/* Summary: stays in view while the lines scroll. */
+.inv-summary{position:sticky;top:16px;display:flex;flex-direction:column;gap:12px;padding:16px;border:1px solid var(--op-border);border-radius:var(--hs-radius-md,14px);background:var(--hs-ground)}
+.inv-summary h2{margin:0;font-size:18px;color:var(--op-navy)}
+.inv-sum-row{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.inv-sum-row strong{font-variant-numeric:tabular-nums;color:var(--op-navy)}
+.inv-sum-total{padding:12px;border-radius:var(--hs-radius-sm,10px);background:var(--op-navy);color:var(--hs-surface);font-size:18px}
+.inv-sum-total strong{color:var(--hs-surface);font-size:20px}
+.inv-sum-due strong{color:var(--hs-warning);font-size:18px}
+.inv-pay-all{align-self:flex-start;margin-top:-6px;border:0;background:none;color:var(--op-teal);font:inherit;font-weight:700;font-size:13px;cursor:pointer;padding:0;text-decoration:underline}
+.inv-sum-note{margin:0;font-size:12px;color:var(--op-muted)}
+.inv-actions{display:grid;gap:8px}
+.inv-actions .op-primary,.inv-actions .op-secondary{width:100%}
+.inv-actions .inv-post{order:-1}
+
+@media(max-width:1100px){.inv-layout{grid-template-columns:1fr}.inv-summary{position:static}}
+@media(max-width:760px){
+  .inv-lines-head{display:none}
+  .inv-row{grid-template-columns:repeat(2,minmax(0,1fr));padding:12px}
+  .inv-row .inv-no{grid-column:1/-1;text-align:start}
+  .inv-row [data-col="item"]{grid-column:1/-1}
+  .inv-cell>label{position:static;width:auto;height:auto;clip:auto;font-size:13px}
+  .inv-line-total{text-align:start}
+}
