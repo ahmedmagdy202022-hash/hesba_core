@@ -48,3 +48,9 @@ class DatePickerTests(TestCase):
         self.assertIn("'aria-invalid'", script)  # a date Django marked invalid stays announced as invalid  # a row copied by "+ line" gets a working picker
         css = (root / "css" / "form_required.css").read_text(encoding="utf-8")
         self.assertIn(".hs-date > [required]", css)  # a required date keeps its star
+
+    def test_changing_the_month_or_year_keeps_the_keyboard_in_the_calendar(self):
+        script = (settings.BASE_DIR / "static" / "hesba" / "js" / "datepicker.js").read_text(encoding="utf-8")
+        self.assertIn("self.jump(year, +e.target.value, '.hs-date__month')", script)
+        self.assertIn("self.jump(+e.target.value, month, '.hs-date__year')", script)
+        self.assertIn("if (again) again.focus();", script)  # the rebuilt select takes the focus back

@@ -237,8 +237,8 @@
     this.pop.querySelectorAll('.hs-date__nav').forEach(function (b) {
       b.addEventListener('click', function () { self.move(0, +b.dataset.step); });
     });
-    this.pop.querySelector('.hs-date__month').addEventListener('change', function (e) { self.jump(year, +e.target.value); });
-    this.pop.querySelector('.hs-date__year').addEventListener('change', function (e) { self.jump(+e.target.value, month); });
+    this.pop.querySelector('.hs-date__month').addEventListener('change', function (e) { self.jump(year, +e.target.value, '.hs-date__month'); });
+    this.pop.querySelector('.hs-date__year').addEventListener('change', function (e) { self.jump(+e.target.value, month, '.hs-date__year'); });
     this.pop.querySelectorAll('.hs-date__day').forEach(function (b) {
       b.addEventListener('click', function () { self.pick(fromIso(b.dataset.date)); });
     });
@@ -252,10 +252,13 @@
     }
   };
 
-  Picker.prototype.jump = function (year, month) {
+  Picker.prototype.jump = function (year, month, control) {
     var last = new Date(year, month + 1, 0).getDate();
     this.cursor = new Date(year, month, Math.min(this.cursor.getDate(), last));
     this.render(false);
+    // The rebuild replaced the select being used: keep the keyboard on its replacement.
+    var again = control && this.pop.querySelector(control);
+    if (again) again.focus();
   };
 
   Picker.prototype.move = function (days, months) {
