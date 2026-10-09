@@ -326,3 +326,12 @@ def cancel(request, user, reason, lang="ar"):
     request.save(update_fields=["status", "cancelled_by", "cancelled_at", "cancel_reason"])
     _audit(request, user, "cancel_transfer_request", {"reason": reason})
     return request
+
+
+def waiting_counts(locations):
+    """AUDIT-2: requests waiting on these warehouses: to send, and to receive."""
+
+    locations = list(locations)
+    waiting = TransferRequest.objects.filter(status__in=(TransferRequestStatus.REQUESTED, TransferRequestStatus.SENT))
+    return {"to_send": waiting.filter(status=TransferRequestStatus.REQUESTED, source__in=locations).count(),
+            "to_receive": waiting.filter(status=TransferRequestStatus.SENT, destination__in=locations).count()}

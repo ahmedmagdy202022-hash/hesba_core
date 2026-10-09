@@ -371,6 +371,28 @@ def _alerts(lang, strings, held, today, shared):
     ]
 
 
+def _transfer_alerts(user, lang, strings, modules):
+    """AUDIT-2: a stock keeper's day starts with the transfers waiting on them."""
+
+    if "inventory" not in modules or not user_has_permission(user, "inventory.transfer_stock"):
+        return []
+    from entities import scope as entity_scope
+    from inventory.transfer_requests import waiting_counts
+    from master_data.models import Location
+
+    counts = waiting_counts(entity_scope.locations(Location.objects))
+    rows = []
+    for key, severity, ar, en, detail_ar, detail_en in (
+        ("to_send", "soon", "طلب تحويل مستني تبعته", "transfer request(s) waiting for you to send", "مخزن تاني طالب بضاعة من عندك.", "Another warehouse asked you for stock."),
+        ("to_receive", "urgent", "تحويل في الطريق مستني تستلمه", "transfer(s) on the way for you to receive", "البضاعة اتبعتت؛ أكّد اللي وصل.", "The goods were sent; confirm what arrived."),
+    ):
+        if counts[key]:
+            rows.append({"key": f"transfers_{key}", "severity": severity, "severity_label": strings[f"severity_{severity}"],
+                         "title": f"{counts[key]} {en}" if lang == "en" else f"{counts[key]} {ar}",
+                         "detail": detail_en if lang == "en" else detail_ar, "amount": "", "path": "/inventory/warehouses/requests/"})
+    return rows
+
+
 def _onboarding(lang):
     """The four starting steps, with the ones already done marked off."""
 
@@ -456,7 +478,7 @@ def dashboard(request):
         # the context so the section set can be asserted without parsing HTML.
         "nav_items": nav_items(request.user, lang, modules),
         "cards": cards,
-        "alerts": _alerts(lang, strings, held, today, shared),
+        "alerts": _alerts(lang, strings, held, today, shared) + _transfer_alerts(request.user, lang, strings, modules),
         "quick_actions": _quick_actions(request.user, lang, modules, activity, sections),
         "activity_panel": build_activity_panel(activity, sections, lang, today),
         "demo_activities": _demo_activities(request.user, lang, profile),

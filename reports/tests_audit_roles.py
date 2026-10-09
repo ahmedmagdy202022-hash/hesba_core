@@ -108,3 +108,30 @@ class StoredTextInArabicTests(TestCase):
                 self.assertEqual(template.render(Context({"lang": "ar", "text": text, "ref": ref})), expected)
         self.assertEqual(template.render(Context({"lang": "en", "text": "Sales invoice SI-1 paid now", "ref": "opening_cashbox-3"})),
                          "Sales invoice SI-1 paid now|Opening balance — cashbox #3")
+
+
+class StockKeeperHomeTests(TestCase):
+    def test_the_transfers_waiting_on_a_keeper_lead_their_alerts(self):
+        from django.utils import timezone
+
+        from hesba_testing.factories import make_item, make_location
+        from inventory import transfer_requests as tr
+        from inventory.models import StockAdjustmentDirection
+        from inventory.services import adjust_stock
+
+        prepared_client("commercial", "retail", ",".join(catalog.default_modules("commercial")))
+        keeper = person(RoleCode.STOCK_KEEPER, "audit_home_keeper")
+        main = make_location(location_code="AUD-MAIN", is_default=True)
+        branch = make_location(location_code="AUD-BR")
+        item = make_item(item_code="AUD-IT", is_stock_tracked=True)
+        owner = person(RoleCode.OWNER, "audit_home_owner")
+        adjust_stock("AUD-IN", timezone.localdate(), item, main, StockAdjustmentDirection.IN, 10, "opening", owner, unit_cost=5)
+        tr.create_request(main, branch, [(item, "2")], keeper)
+        self.client.force_login(keeper)
+        page = self.client.get("/dashboard/?lang=ar")
+        keys = {alert["key"] for alert in page.context["alerts"]}
+        self.assertIn("transfers_to_send", keys)
+        self.assertContains(page, "طلب تحويل مستني تبعته")
+        cashier = person(RoleCode.CASHIER, "audit_home_cashier")
+        self.client.force_login(cashier)
+        self.assertNotIn("transfers_to_send", {a["key"] for a in self.client.get("/dashboard/?lang=ar").context["alerts"]})
