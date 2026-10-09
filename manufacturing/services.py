@@ -15,6 +15,17 @@ Rules, stated once:
   product has already been sold), then every component, again through the
   engine's ``cancel_stock_operation``;
 * no stock, cost or accounting rule is changed here (see HG-030).
+
+HG-036 (approved) adds three things on top, still only through the engine:
+
+* work in progress: a production order issues its materials when it starts
+  (``issue``); they leave stock then and their value waits in work in
+  progress until the order finishes, when ``produce`` uses those same
+  operations instead of consuming again;
+* labour and overhead (``conversion_cost``) go into the product's stock cost,
+  so its average cost and the cost of each later sale include them;
+* scrap: units that failed a stage never enter stock; the good units carry the
+  whole cost (normal loss), and the run records how many were scrapped.
 """
 
 from decimal import Decimal, InvalidOperation
@@ -37,6 +48,9 @@ MESSAGES = {
         "qty": "كمية «{item}» لازم أكبر من صفر.", "twice": "«{item}» متكرر؛ اجمع كميته في سطر واحد.", "inactive": "الوصفة دي متوقفة.",
         "batches": "عدد الدفعات لازم أكبر من صفر.", "location": "اختار المخزن.", "short": "«{item}» مش كفاية: محتاج {need} والموجود {have}.",
         "cancelled": "التشغيلة دي اتلغت بالفعل.", "reason": "اكتب سبب الإلغاء.",
+        "reversed": "الخامات المصروفة للأمر ده اترجعت من شاشة المخزون؛ ألغِ الأمر وافتح أمر جديد.",
+        "on_floor": "في أمر إنتاج شغال في المصنع بالوصفة دي وخاماته اتصرفت؛ خلّصه أو ألغيه الأول قبل ما تعدّل الوصفة.",
+        "no_good": "مفيش ولا وحدة سليمة تدخل المخزن؛ لو الكمية كلها باظت ألغِ الأمر أو سجّل الهالك كتسوية.",
     },
     "en": {
         "product": "Choose the product.", "product_stock": "The product must be a stock-tracked item.", "output": "The output per batch must be above zero.",
@@ -44,6 +58,9 @@ MESSAGES = {
         "qty": "The quantity of “{item}” must be above zero.", "twice": "“{item}” is listed twice; put its quantity on one line.", "inactive": "This recipe is inactive.",
         "batches": "The number of batches must be above zero.", "location": "Choose the location.", "short": "Not enough “{item}”: {need} needed, {have} available.",
         "cancelled": "This run is already cancelled.", "reason": "Enter the reason for cancelling.",
+        "reversed": "The materials issued for this order were reversed from the inventory screen; cancel the order and open a new one.",
+        "on_floor": "An order on the floor was issued from this recipe; finish or cancel it before changing the recipe.",
+        "no_good": "No good units are left to put into stock; if the whole lot was lost, cancel the order or record the loss as an adjustment.",
     },
 }
 
@@ -73,6 +90,9 @@ def save_recipe(data, lines, user, recipe=None, lang="ar"):
     """Create or replace a recipe. ``lines`` is [(component item, quantity per batch)]."""
 
     words = MESSAGES[lang]
+    if recipe is not None and recipe.orders.filter(status="in_progress", issues__isnull=False).exists():
+        # HG-036: an order on the floor was issued from this recipe; its finish must use the same one.
+        raise ValidationError(words["on_floor"])
     product = data.get("product")
     if product is None:
         raise ValidationError(words["product"])
@@ -134,12 +154,27 @@ def plan(recipe, batches, location):
             "possible_batches": max(possible or Decimal("0"), Decimal("0"))}
 
 
-@transaction.atomic
-def produce(recipe, user, *, batches, location, run_date=None, notes="", lang="ar"):
-    from inventory.models import StockAdjustmentDirection
-    from inventory.services import adjust_stock, get_item_location_stock_quantity, lock_items_for_stock_check
+def _check_stock(lines, batches, location, words):
+    from inventory.services import get_item_location_stock_quantity, lock_items_for_stock_check
 
-    words = MESSAGES[lang]
+    lock_items_for_stock_check([line.component_id for line in lines])
+    for line in lines:  # one clear message before anything moves
+        need = (line.quantity * batches).quantize(Decimal("0.001"))
+        have = get_item_location_stock_quantity(line.component, location)
+        if have < need:
+            raise ValidationError(words["short"].format(item=line.component.item_name, need=fmt_qty(need), have=fmt_qty(have)))
+
+
+def _consume(lines, batches, location, prefix, reason, run_date, user):
+    from inventory.models import StockAdjustmentDirection
+    from inventory.services import adjust_stock
+
+    return [adjust_stock(f"{prefix}{index:02d}", run_date, line.component, location, StockAdjustmentDirection.OUT,
+                         (line.quantity * batches).quantize(Decimal("0.001")), reason, user)
+            for index, line in enumerate(lines, start=1)]
+
+
+def _checked(recipe, batches, location, words):
     recipe = Recipe.objects.select_for_update().select_related("product").get(pk=recipe.pk)
     if not recipe.active:
         raise ValidationError(words["inactive"])
@@ -148,29 +183,54 @@ def produce(recipe, user, *, batches, location, run_date=None, notes="", lang="a
         raise ValidationError(words["batches"])
     if location is None:
         raise ValidationError(words["location"])
+    return recipe, batches, list(recipe.lines.select_related("component").order_by("component_id"))
+
+
+@transaction.atomic
+def issue(recipe, user, *, batches, location, reference, issue_date=None, lang="ar"):
+    """HG-036: issue a batch's materials to the floor (work in progress)."""
+
+    words = MESSAGES[lang]
+    recipe, batches, lines = _checked(recipe, batches, location, words)
+    _check_stock(lines, batches, location, words)
+    reason = f"صرف خامات {reference} / Materials issued {reference}"
+    return _consume(lines, batches, location, f"{reference}-I", reason, issue_date or timezone.localdate(), user)
+
+
+@transaction.atomic
+def produce(recipe, user, *, batches, location, run_date=None, notes="", lang="ar", conversion_cost=Decimal("0"), scrap=Decimal("0"), issued=None):
+    """Post a run. ``issued`` are the operations an order already issued at
+    its start; without them the components are consumed now, as before."""
+
+    from inventory.models import StockAdjustmentDirection
+    from inventory.services import adjust_stock
+
+    words = MESSAGES[lang]
+    recipe, batches, lines = _checked(recipe, batches, location, words)
     run_date = run_date or timezone.localdate()
-    lines = list(recipe.lines.select_related("component").order_by("component_id"))
-    lock_items_for_stock_check([line.component_id for line in lines])
-    for line in lines:  # one clear message before anything moves
-        need = (line.quantity * batches).quantize(Decimal("0.001"))
-        have = get_item_location_stock_quantity(line.component, location)
-        if have < need:
-            raise ValidationError(words["short"].format(item=line.component.item_name, need=fmt_qty(need), have=fmt_qty(have)))
+    conversion_cost = money_round(Decimal(conversion_cost or 0))
+    scrap = (Decimal(scrap or 0)).quantize(Decimal("0.001"))
+    output = (recipe.output_quantity * batches).quantize(Decimal("0.001")) - scrap
+    if output <= 0:
+        raise ValidationError(words["no_good"])
     number = _next(ProductionRun, "number", f"MO-{run_date:%Y%m%d}-", 3)
     reason = f"تصنيع {number} / Production {number}"
-    consumed, total = [], Decimal("0")
-    for index, line in enumerate(lines, start=1):
-        operation = adjust_stock(f"{number}-C{index:02d}", run_date, line.component, location, StockAdjustmentDirection.OUT,
-                                 (line.quantity * batches).quantize(Decimal("0.001")), reason, user)
-        consumed.append(operation)
-        total += operation.quantity * operation.unit_cost
-    output = (recipe.output_quantity * batches).quantize(Decimal("0.001"))
+    if issued is None:
+        _check_stock(lines, batches, location, words)
+        consumed = _consume(lines, batches, location, f"{number}-C", reason, run_date, user)
+    else:
+        consumed = list(issued)
+        if any(operation.status != "posted" for operation in consumed):
+            raise ValidationError(words["reversed"])
+    total = sum((operation.quantity * operation.unit_cost for operation in consumed), Decimal("0"))
     produced = adjust_stock(f"{number}-OUT", run_date, recipe.product, location, StockAdjustmentDirection.IN, output, reason, user,
-                            unit_cost=cost_round(total / output))
+                            unit_cost=cost_round((total + conversion_cost) / output))
     run = ProductionRun.objects.create(number=number, recipe=recipe, batches=batches, location=location, run_date=run_date, output_quantity=output,
-                                       total_cost=money_round(total), output_operation=produced, notes=(notes or "").strip()[:255], created_by=user)
+                                       total_cost=money_round(total), conversion_cost=conversion_cost, scrap_quantity=scrap,
+                                       output_operation=produced, notes=(notes or "").strip()[:255], created_by=user)
     ProductionConsumption.objects.bulk_create([ProductionConsumption(run=run, operation=operation) for operation in consumed])
-    _audit(run, user, "produce", {"recipe": recipe.code, "batches": str(batches), "output": str(output), "cost": str(run.total_cost)}, AuditEventType.CREATE)
+    _audit(run, user, "produce", {"recipe": recipe.code, "batches": str(batches), "output": str(output), "cost": str(run.total_cost),
+                                  "conversion": str(conversion_cost), "scrap": str(scrap), "from_wip": issued is not None}, AuditEventType.CREATE)
     return run
 
 

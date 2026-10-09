@@ -303,7 +303,18 @@ class Projector:
         remainder = -g.balance()
         if not remainder:
             return
-        if hasattr(op, "production_consumption") or hasattr(op, "production_output"):
+        if hasattr(op, "production_output") and op.production_output.conversion_cost:
+            # HG-036: the product came in at materials + labour + overhead. The
+            # materials clear work in progress; labour and overhead are credited
+            # to absorbed production cost (they were already spent as expenses).
+            wip = self.acc["wip"] if self.acc.has("wip") else self.acc["cogs"]
+            absorbed = self.acc["production_cost"] if self.acc.has("production_cost") else wip
+            conversion = min(op.production_output.conversion_cost, abs(remainder))
+            conversion = conversion if remainder > 0 else -conversion
+            g.add(absorbed, conversion, g.entity_id)
+            g.add(wip, remainder - conversion, g.entity_id)
+            return
+        if hasattr(op, "production_consumption") or hasattr(op, "production_output") or hasattr(op, "order_issue"):
             account = self.acc["wip"] if self.acc.has("wip") else self.acc["cogs"]
         elif hasattr(op, "project_issue"):
             account = self.acc["project_cost"] if self.acc.has("project_cost") else self.acc["cogs"]

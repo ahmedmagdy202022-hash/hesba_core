@@ -22,9 +22,13 @@ class ControlBoardTests(MfgSetup):
         self.assertEqual((page.context["running_count"], page.context["planned_count"]), (1, 1))
         short = {row["item"].item_code: row for row in page.context["shortages"]}  # both orders together
         self.assertEqual(set(short), {"RM-FLOUR", "RM-SUGAR", "PK-BOX"})
-        self.assertEqual(short["RM-FLOUR"]["need"], D("64.000"))   # 4 for the small order + 60
+        # HG-036: the small order took its 4 kg when it started (work in progress),
+        # so only the big one still needs flour: 60 against the 46 left.
+        self.assertEqual(short["RM-FLOUR"]["need"], D("60.000"))
         self.assertEqual(short["RM-FLOUR"]["missing"], D("14.000"))
-        self.assertEqual(len(short["RM-FLOUR"]["orders"]), 2)
+        self.assertEqual(len(short["RM-FLOUR"]["orders"]), 1)
+        self.assertEqual(page.context["wip_value"], D("190.00"))   # 2 batches x 95 on the floor
+        self.assertContains(page, "data-wip-value")
         product = page.context["products"][0]
         self.assertEqual(product["unit_cost"], D("9.5000"))        # 95 a batch of 10
         self.assertEqual(product["margin"], 92)                    # (120 - 9.5) / 120

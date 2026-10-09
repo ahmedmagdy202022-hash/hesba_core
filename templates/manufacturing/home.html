@@ -10,7 +10,8 @@
   <article><small>{% if lang == 'en' %}Late orders{% else %}أوامر متأخرة{% endif %}</small><strong{% if late_count %} style="color:var(--hs-danger)"{% endif %}>{{ late_count }}</strong></article>
   <article><small>{% if lang == 'en' %}Materials short{% else %}خامات ناقصة{% endif %}</small><strong{% if shortages %} style="color:var(--hs-danger)"{% endif %} data-short-count>{{ shortages|length }}</strong></article>
   <article><small>{% if lang == 'en' %}Made in 30 days{% else %}اتصنع في 30 يوم{% endif %}</small><strong>{{ made.units|default:0|qty }}</strong><small>{{ made.count|default:0 }} {% if lang == 'en' %}runs{% else %}تشغيلة{% endif %}</small></article>
-  {% if can_cost %}<article><small>{% if lang == 'en' %}Material cost (30 days){% else %}تكلفة الخامات (30 يوم){% endif %}</small><strong>{{ made.cost|default:0|money }}</strong></article>{% endif %}
+  {% if can_cost %}<article><small>{% if lang == 'en' %}Production cost (30 days){% else %}تكلفة الإنتاج (30 يوم){% endif %}</small><strong>{{ made.cost|default:0|money }}</strong></article>
+  <article data-wip-value><small>{% if lang == 'en' %}Work in progress{% else %}إنتاج تحت التشغيل{% endif %}</small><strong>{{ wip_value|money }}</strong><small>{{ wip_orders }} {% if lang == 'en' %}orders on the floor{% else %}أمر في المصنع{% endif %}</small></article>{% endif %}
 </section>
 
 <h2>{% if lang == 'en' %}On the floor{% else %}الشغل اللي ماشي{% endif %}</h2>

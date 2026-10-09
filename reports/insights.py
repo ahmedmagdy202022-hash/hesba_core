@@ -176,7 +176,7 @@ def _production(start, end):
 
     runs = (entity_scope.scope(ProductionRun.objects, "location__entity").filter(run_date__gte=start, run_date__lte=end, status="posted")
             .values("recipe__product__item_name", "recipe__product__default_sale_price")
-            .annotate(output=Sum("output_quantity"), cost=Sum("total_cost"), runs=Count("id")).order_by("-cost"))
+            .annotate(output=Sum("output_quantity"), cost=Sum(F("total_cost") + F("conversion_cost")), runs=Count("id")).order_by("-cost"))
     rows = []
     for row in runs:
         output = row["output"] or ZERO
