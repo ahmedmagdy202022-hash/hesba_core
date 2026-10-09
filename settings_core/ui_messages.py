@@ -11,6 +11,13 @@ import re
 
 
 EXACT = {
+    # HG-038: a project's contract figures stay possible.
+    "This would leave more retention released than is held on the project; reverse the release first.":
+        "كده الإفراج عن ضمان الأعمال هيبقى أكبر من المحتجز في المشروع؛ ألغِ الإفراج الأول.",
+    "Certificates on this project already recovered this advance; cancel or return those certificates first.":
+        "مستخلصات المشروع خصمت من الدفعة المقدمة دي بالفعل؛ ألغِ المستخلصات دي أو اعملها مرتجع الأول.",
+    "This would leave more subcontractor retention released than is held; reverse the release first.":
+        "كده الإفراج عن ضمان أعمال مقاول الباطن هيبقى أكبر من المحتجز؛ ألغِ الإفراج الأول.",
     "A cancellation reason is required.": "اكتب سبب الإلغاء.",
     "A cash operation with this reference already exists.": "فيه حركة نقدية بنفس رقم المرجع ده.",
     "A customer collection with this number already exists.": "فيه تحصيل بنفس الرقم ده.",

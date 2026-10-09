@@ -66,6 +66,7 @@ MESSAGES = {
         "release_more": "المبلغ أكبر من ضمان الأعمال المحتجز ({held}).", "cashbox": "اختار الخزنة.", "other_customer": "التحصيل ده لعميل تاني.",
         "payment_linked": "التحصيل ده مربوط بمشروع بالفعل.", "payment_status": "اربط التحصيلات المرحّلة بس.", "date": "التاريخ مش صحيح.",
         "advance_used": "المستخلصات خصمت من الدفعة المقدمة دي بالفعل، فمينفعش يتفك ربطها.",
+        "reversed": "الإفراج ده اتلغى بالفعل.",
     },
     "en": {
         "rate": "The rate must be between 0 and 100.", "description": "Describe the item.", "qty": "The quantity must be above zero.", "price": "Invalid rate.",
@@ -77,6 +78,7 @@ MESSAGES = {
         "release_more": "The amount is more than the retention held ({held}).", "cashbox": "Choose the cashbox.", "other_customer": "This collection is for another customer.",
         "payment_linked": "This collection is already linked to a project.", "payment_status": "Only posted collections can be linked.", "date": "Invalid date.",
         "advance_used": "Certificates already recovered this advance, so it cannot be unlinked.",
+        "reversed": "This release is already reversed.",
     },
 }
 
@@ -143,10 +145,38 @@ def live_certificates(project):
 
 
 def certified_quantity(boq_line):
-    """What live certificates (draft or posted) already billed on this item."""
+    """What live certificates (draft or posted) billed on this item, less what
+    posted sales returns took back from those invoice lines."""
 
-    return CertificateLine.objects.filter(boq_line=boq_line).exclude(certificate__invoice__status="cancelled").aggregate(
+    from sales.models import SalesReturnLine
+
+    lines = CertificateLine.objects.filter(boq_line=boq_line).exclude(certificate__invoice__status="cancelled")
+    billed = lines.aggregate(total=Sum("quantity"))["total"] or ZERO
+    returned = SalesReturnLine.objects.filter(source_line__certificate_line__in=lines, sales_return__status="posted").aggregate(
         total=Sum("quantity"))["total"] or ZERO
+    return billed - returned
+
+
+def return_share(amount, invoice, sales_return):
+    """The part of a certificate deduction a sales return takes back: the same
+    share of the deduction as the return is of the invoice. The general ledger
+    uses this same figure, so the project and the books always agree."""
+
+    total = Decimal(invoice.total_amount)
+    if total <= 0 or not amount:
+        return ZERO
+    return money_round(Decimal(amount) * Decimal(sales_return.total_amount) / total)
+
+
+def effective(certificate):
+    """(gross, retention, recovery) of a certificate after its posted returns."""
+
+    gross, retention, recovery = Decimal(certificate.gross), Decimal(certificate.retention_amount), Decimal(certificate.recovery_amount)
+    for sales_return in certificate.invoice.returns.filter(status="posted"):
+        gross -= return_share(certificate.gross, certificate.invoice, sales_return)
+        retention -= return_share(certificate.retention_amount, certificate.invoice, sales_return)
+        recovery -= return_share(certificate.recovery_amount, certificate.invoice, sales_return)
+    return money_round(max(gross, ZERO)), money_round(max(retention, ZERO)), money_round(max(recovery, ZERO))
 
 
 def line_amount(line):
@@ -218,10 +248,10 @@ def advance_received(project):
 
 
 def advance_recovered(project, posted_only=False):
-    certificates = live_certificates(project)
+    certificates = live_certificates(project).select_related("invoice")
     if posted_only:
         certificates = certificates.filter(invoice__status="posted")
-    return money_round(certificates.aggregate(total=Sum("recovery_amount"))["total"] or ZERO)
+    return money_round(sum((effective(c)[2] for c in certificates), ZERO))
 
 
 def advance_left(project):
@@ -361,8 +391,10 @@ def create_certificate(project, user, *, quantities=None, amount=None, descripti
     certificate = Certificate.objects.create(project=project, number=number, certificate_date=day, invoice=invoice, gross=gross,
                                              retention_rate=project.retention_rate, retention_amount=retention, recovery_amount=recovery,
                                              notes=(notes or label)[:255], created_by=user)
-    CertificateLine.objects.bulk_create([CertificateLine(certificate=certificate, boq_line=line, previous_quantity=previous, quantity=done,
-                                                         rate=line.rate, amount=value) for line, previous, done, value in rows])
+    invoice_lines = list(invoice.lines.order_by("line_number"))  # one invoice line per certified item, in order
+    CertificateLine.objects.bulk_create([CertificateLine(certificate=certificate, boq_line=line, sales_line=sales_line, previous_quantity=previous,
+                                                         quantity=done, rate=line.rate, amount=value)
+                                         for (line, previous, done, value), sales_line in zip(rows, invoice_lines)])
     ProjectInvoice.objects.create(project=project, invoice=invoice, label=title[:120], created_by=user)
     _audit(project, user, "create_certificate", {"certificate": number, "invoice": invoice_number, "gross": str(gross),
                                                  "retention": str(retention), "recovery": str(recovery)}, AuditEventType.CREATE)
@@ -408,22 +440,69 @@ def certificate_rows(certificate):
 # ---- retention ----
 
 def retention_held(project):
-    held = live_certificates(project).filter(invoice__status="posted").aggregate(total=Sum("retention_amount"))["total"] or ZERO
-    released = project.retention_releases.aggregate(total=Sum("amount"))["total"] or ZERO
-    return money_round(held - released)
+    held = sum((effective(c)[1] for c in live_certificates(project).filter(invoice__status="posted").select_related("invoice")), ZERO)
+    return money_round(held - retention_released(project))
+
+
+def retention_released(project):
+    return money_round(project.retention_releases.filter(reversed_on__isnull=True).aggregate(total=Sum("amount"))["total"] or ZERO)
+
+
+def ensure_consistent(project, lang="en"):
+    """HG-038: refuse any change (a cancellation, a return, a reversal) that
+    would leave retention released beyond what is held, or certificates
+    recovering more advance than was received. Called inside the change's own
+    transaction, so a refusal undoes it."""
+
+    if retention_held(project) < 0:
+        raise ValidationError(CONSISTENCY[lang]["retention"])
+    if advance_recovered(project) > advance_received(project):
+        raise ValidationError(CONSISTENCY[lang]["advance"])
+
+
+CONSISTENCY = {
+    "en": {"retention": "This would leave more retention released than is held on the project; reverse the release first.",
+           "advance": "Certificates on this project already recovered this advance; cancel or return those certificates first."},
+    "ar": {"retention": "كده الإفراج عن ضمان الأعمال هيبقى أكبر من المحتجز في المشروع؛ ألغِ الإفراج الأول.",
+           "advance": "مستخلصات المشروع خصمت من الدفعة المقدمة دي بالفعل؛ ألغِ المستخلصات دي أو اعملها مرتجع الأول."},
+}
 
 
 @transaction.atomic
 def release_retention(project, user, *, amount, release_date=None, notes="", lang="ar"):
+    from closing.services import ensure_period_is_open
+
     words = MESSAGES[lang]
     project = Project.objects.select_for_update().get(pk=project.pk)
     amount = _money(amount, words)
+    day = release_date or timezone.localdate()
+    ensure_period_is_open(day)  # the release is a dated ledger entry: closed months stay closed
     held = retention_held(project)
     if amount > held:
         raise ValidationError(words["release_more"].format(held=held))
-    release = RetentionRelease.objects.create(project=project, release_date=release_date or timezone.localdate(), amount=amount,
-                                              notes=(notes or "").strip()[:255], created_by=user)
+    release = RetentionRelease.objects.create(project=project, release_date=day, amount=amount, notes=(notes or "").strip()[:255], created_by=user)
     _audit(project, user, "release_retention", {"amount": str(amount), "date": str(release.release_date)})
+    return release
+
+
+@transaction.atomic
+def reverse_release(project, release, user, *, reversal_date=None, lang="ar"):
+    """Undo a release on a date (append-only: the release stays, marked reversed)."""
+
+    from closing.services import ensure_period_is_open
+
+    words = MESSAGES[lang]
+    project = Project.objects.select_for_update().get(pk=project.pk)
+    release = RetentionRelease.objects.select_for_update().get(pk=release.pk, project=project)
+    if release.reversed_on:
+        raise ValidationError(words["reversed"])
+    day = reversal_date or timezone.localdate()
+    if day < release.release_date:
+        raise ValidationError(words["date"])
+    ensure_period_is_open(day)
+    release.reversed_on, release.reversed_by = day, user
+    release.save(update_fields=["reversed_on", "reversed_by"])
+    _audit(project, user, "reverse_retention_release", {"release": release.pk, "amount": str(release.amount), "date": str(day)})
     return release
 
 
@@ -440,11 +519,11 @@ def position(project):
         invoice = link.invoice
         returned = SalesReturn.objects.filter(source_invoice=invoice, status="posted").aggregate(total=Sum("due_amount"))["total"] or ZERO
         added += Decimal(invoice.remaining_due) - returned
-    posted = live_certificates(project).filter(invoice__status="posted")
-    gross = money_round(posted.aggregate(total=Sum("gross"))["total"] or ZERO)
-    retention = money_round(posted.aggregate(total=Sum("retention_amount"))["total"] or ZERO)
-    released = money_round(project.retention_releases.aggregate(total=Sum("amount"))["total"] or ZERO)
-    recovered = advance_recovered(project, posted_only=True)
+    figures = [effective(c) for c in live_certificates(project).filter(invoice__status="posted").select_related("invoice")]
+    gross = money_round(sum((f[0] for f in figures), ZERO))
+    retention = money_round(sum((f[1] for f in figures), ZERO))
+    released = retention_released(project)
+    recovered = money_round(sum((f[2] for f in figures), ZERO))
     collections = money_round(_posted_payments(project, ProjectPaymentKind.COLLECTION).aggregate(total=Sum("payment__amount"))["total"] or ZERO)
     received = advance_received(project)
     contract = contract_value(project)

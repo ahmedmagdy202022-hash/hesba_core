@@ -42,6 +42,7 @@ MESSAGES = {
         "cancelled": "الفاتورة دي ملغية.", "not_draft": "المستخلص ده اترحّل؛ لو فيه غلط اعمل مرتجع أو إلغاء من شاشة المشتريات.",
         "withdraw_blocked": "الفاتورة دي مربوطة بحاجة تانية ومينفعش تتسحب.", "release_more": "المبلغ أكبر من ضمان الأعمال المحتجز ({held}).",
         "bill_link": "دي فاتورة مستخلص مقاول باطن؛ اسحبها من شاشة مقاولي الباطن.",
+        "reversed": "الإفراج ده اتلغى بالفعل.", "date": "التاريخ مش صحيح.",
     },
     "en": {
         "supplier": "Choose the subcontractor (a supplier).", "scope": "Describe the work given.", "value": "Invalid value.", "rate": "The rate must be between 0 and 100.",
@@ -50,6 +51,7 @@ MESSAGES = {
         "cancelled": "This invoice is cancelled.", "not_draft": "This bill is posted; correct it with a return or a cancellation on the purchases screen.",
         "withdraw_blocked": "This invoice is linked to something else and cannot be withdrawn.", "release_more": "The amount is more than the retention held ({held}).",
         "bill_link": "This is a subcontractor bill; withdraw it from the subcontractors screen.",
+        "reversed": "This release is already reversed.", "date": "Invalid date.",
     },
 }
 
@@ -182,33 +184,89 @@ def withdraw_bill(bill, user, lang="ar"):
     _audit(project, user, "withdraw_subcontract_bill", details, AuditEventType.DELETE)
 
 
+def return_share(amount, invoice, purchase_return):
+    """The part of a bill's retention (or gross) a purchase return takes back,
+    the same share the general ledger uses."""
+
+    total = Decimal(invoice.total_amount)
+    if total <= 0 or not amount:
+        return ZERO
+    return money_round(Decimal(amount) * Decimal(purchase_return.total_amount) / total)
+
+
+def effective_bill(bill):
+    """(gross, retention) of a subcontractor bill after its posted purchase returns."""
+
+    gross, retention = Decimal(bill.gross), Decimal(bill.retention_amount)
+    for purchase_return in bill.invoice.returns.filter(status="posted"):
+        gross -= return_share(bill.gross, bill.invoice, purchase_return)
+        retention -= return_share(bill.retention_amount, bill.invoice, purchase_return)
+    return money_round(max(gross, ZERO)), money_round(max(retention, ZERO))
+
+
 def bill_net_payable(bill):
     return money_round(Decimal(bill.invoice.total_amount) - bill.retention_amount)
 
 
 def subcontract_retention_held(subcontract):
-    held = live_bills(subcontract).filter(invoice__status="posted").aggregate(total=Sum("retention_amount"))["total"] or ZERO
-    released = subcontract.releases.aggregate(total=Sum("amount"))["total"] or ZERO
+    held = sum((effective_bill(b)[1] for b in live_bills(subcontract).filter(invoice__status="posted").select_related("invoice")), ZERO)
+    released = subcontract.releases.filter(reversed_on__isnull=True).aggregate(total=Sum("amount"))["total"] or ZERO
     return money_round(held - released)
+
+
+CONSISTENCY = {
+    "en": "This would leave more subcontractor retention released than is held; reverse the release first.",
+    "ar": "كده الإفراج عن ضمان أعمال مقاول الباطن هيبقى أكبر من المحتجز؛ ألغِ الإفراج الأول.",
+}
+
+
+def ensure_consistent(subcontract, lang="en"):
+    """HG-038: refuse a cancellation, return or reversal that would leave
+    released retention above what is held (called inside that change)."""
+
+    if subcontract_retention_held(subcontract) < 0:
+        raise ValidationError(CONSISTENCY[lang])
 
 
 @transaction.atomic
 def release_subcontract_retention(subcontract, user, *, amount, release_date=None, notes="", lang="ar"):
+    from closing.services import ensure_period_is_open
+
     words = MESSAGES[lang]
     subcontract = Subcontract.objects.select_for_update().select_related("project").get(pk=subcontract.pk)
     amount = _money(amount, words)
+    day = release_date or timezone.localdate()
+    ensure_period_is_open(day)  # a dated ledger entry: closed months stay closed
     held = subcontract_retention_held(subcontract)
     if amount > held:
         raise ValidationError(words["release_more"].format(held=held))
-    release = SubcontractRelease.objects.create(subcontract=subcontract, release_date=release_date or timezone.localdate(), amount=amount,
+    release = SubcontractRelease.objects.create(subcontract=subcontract, release_date=day, amount=amount,
                                                 notes=(notes or "").strip()[:255], created_by=user)
     _audit(subcontract.project, user, "release_subcontract_retention", {"subcontract": subcontract.pk, "amount": str(amount)})
     return release
 
 
+@transaction.atomic
+def reverse_subcontract_release(release, user, *, reversal_date=None, lang="ar"):
+    from closing.services import ensure_period_is_open
+
+    words = MESSAGES[lang]
+    release = SubcontractRelease.objects.select_for_update().select_related("subcontract__project").get(pk=release.pk)
+    if release.reversed_on:
+        raise ValidationError(words["reversed"])
+    day = reversal_date or timezone.localdate()
+    if day < release.release_date:
+        raise ValidationError(words["date"])
+    ensure_period_is_open(day)
+    release.reversed_on, release.reversed_by = day, user
+    release.save(update_fields=["reversed_on", "reversed_by"])
+    _audit(release.subcontract.project, user, "reverse_subcontract_release", {"release": release.pk, "amount": str(release.amount), "date": str(day)})
+    return release
+
+
 def subcontract_figures(subcontract):
-    posted = live_bills(subcontract).filter(invoice__status="posted")
-    billed = money_round(posted.aggregate(total=Sum("gross"))["total"] or ZERO)
+    posted = live_bills(subcontract).filter(invoice__status="posted").select_related("invoice")
+    billed = money_round(sum((effective_bill(b)[0] for b in posted), ZERO))
     value = Decimal(subcontract.value)
     return {"value": value, "billed": billed, "remaining": money_round(max(value - billed, ZERO)), "over": money_round(max(billed - value, ZERO)),
             "retention_held": subcontract_retention_held(subcontract),

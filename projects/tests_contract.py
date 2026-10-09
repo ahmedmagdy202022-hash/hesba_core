@@ -363,3 +363,119 @@ class ContractScreenTests(ContractSetup):
         self.client.force_login(cashier)
         tabs = self.client.get(self.url("detail"))
         self.assertNotContains(tabs, self.url("budget"))  # no profit report: no budget tab
+
+
+class ReviewFindingsTests(ContractSetup):
+    """Codex review on #179: returns, cancellations and releases keep the contract figures possible."""
+
+    def setUp(self):
+        super().setUp()
+        self.advance = contract.receive_payment(self.project, self.owner, kind=ProjectPaymentKind.ADVANCE, cashbox=self.cashbox, amount="30000")
+
+    def test_a_full_sales_return_gives_back_quantities_retention_and_recovery(self):
+        from sales.services import create_sales_return
+
+        first = self.certify(concrete="40")
+        post_sales_invoice(first.invoice_id, self.owner)
+        line = first.invoice.lines.get()
+        create_sales_return("SR-C1", TODAY, first.invoice_id, [{"source_line": line, "quantity": D("40")}], "خطأ في الكميات", self.owner)
+        self.assertEqual(contract.certified_quantity(self.concrete), D("0"))
+        self.assertEqual(contract.effective(first), (D("0.00"), D("0.00"), D("0.00")))
+        figures = contract.position(self.project)
+        self.assertEqual((figures["due_now"], figures["retention_held"], figures["recovered"]), (D("0.00"), D("0.00"), D("0.00")))
+        for control in ("retention_receivable", "sales"):
+            self.assertEqual(gl(control) + (gl("sales_returns") if control == "sales" else D("0")), D("0.00"), control)
+        self.assertEqual(gl("customer_advances"), D("-30000.00"))
+        ledger_ok(self)
+        # The quantity is free again.
+        self.assertEqual(self.certify(concrete="40").lines.get().previous_quantity, D("0.000"))
+
+    def test_a_partial_return_takes_back_its_share(self):
+        from sales.services import create_sales_return
+
+        first = self.certify(concrete="40")  # 40000, retention 2000, recovery 4000
+        post_sales_invoice(first.invoice_id, self.owner)
+        create_sales_return("SR-C2", TODAY, first.invoice_id, [{"source_line": first.invoice.lines.get(), "quantity": D("10")}], "x", self.owner)
+        self.assertEqual(contract.certified_quantity(self.concrete), D("30.000"))
+        self.assertEqual(contract.effective(first), (D("30000.00"), D("1500.00"), D("3000.00")))
+        self.assertEqual(gl("retention_receivable"), D("1500.00"))
+        self.assertEqual(gl("customer_advances"), D("-27000.00"))
+        ledger_ok(self)
+
+    def test_an_advance_a_certificate_recovered_cannot_be_cancelled(self):
+        from sales.services import cancel_customer_payment
+
+        post_sales_invoice(self.certify(concrete="40").invoice_id, self.owner)  # recovers 4000
+        with self.assertRaisesMessage(ValidationError, "already recovered this advance"):
+            cancel_customer_payment(self.advance.pk, self.owner, reason="غلط")
+        self.advance.refresh_from_db()
+        self.assertEqual(self.advance.status, "posted")
+        # A second advance covering the recovery can go.
+        extra = contract.receive_payment(self.project, self.owner, kind=ProjectPaymentKind.ADVANCE, cashbox=self.cashbox, amount="5000")
+        cancel_customer_payment(extra.pk, self.owner, reason="مكررة")
+        ledger_ok(self)
+
+    def test_a_released_certificate_cannot_be_cancelled_until_the_release_is_reversed(self):
+        first = self.certify(concrete="40")
+        post_sales_invoice(first.invoice_id, self.owner)
+        release = contract.release_retention(self.project, self.owner, amount="2000")
+        with self.assertRaisesMessage(ValidationError, "more retention released than is held"):
+            cancel_posted_sales_invoice(first.invoice_id, self.owner, reason="x")
+        self.assertEqual(SalesInvoice.objects.get(pk=first.invoice_id).status, "posted")
+        contract.reverse_release(self.project, release, self.owner)
+        with self.assertRaisesMessage(ValidationError, "اتلغى بالفعل"):
+            contract.reverse_release(self.project, release, self.owner)
+        cancel_posted_sales_invoice(first.invoice_id, self.owner, reason="x")
+        self.assertEqual(contract.position(self.project)["retention_held"], D("0.00"))
+        self.assertEqual(gl("retention_receivable"), D("0.00"))
+        ledger_ok(self)
+
+    def test_releases_respect_closed_months(self):
+        from datetime import timedelta
+
+        from closing.models import Period, PeriodStatus
+
+        post_sales_invoice(self.certify(concrete="40").invoice_id, self.owner)
+        start = (TODAY.replace(day=1) - timedelta(days=1)).replace(day=1)
+        Period.objects.create(period_code="CLOSED-1", name="closed", start_date=start, end_date=TODAY.replace(day=1) - timedelta(days=1),
+                              status=PeriodStatus.CLOSED, closed_at=timezone.now())
+        with self.assertRaisesMessage(ValidationError, "Period must be open"):
+            contract.release_retention(self.project, self.owner, amount="100", release_date=start)
+
+    def test_screens_only_use_this_entitys_cashboxes_and_payments(self):
+        from entities.current import SESSION_KEY
+        from entities.models import Entity
+        from entities.services import main_entity
+
+        other = Entity.objects.create(code="E2", name_ar="شركة تانية")
+        foreign = make_cashbox(cashbox_code="FAR", entity=other)
+        self.client.force_login(self.owner)
+        session = self.client.session
+        session[SESSION_KEY] = main_entity().pk  # working in the main entity
+        session.save()
+        url = reverse("projects:payments", args=[self.project.pk])
+        self.client.post(url, {"action": "receive", "kind": "collection", "cashbox": str(foreign.pk), "amount": "100"})
+        self.assertFalse(self.project.payments.filter(payment__cashbox=foreign).exists())
+
+
+class SubcontractReturnTests(ContractSetup):
+    def test_a_purchase_return_takes_back_its_share_of_retention(self):
+        from purchases.services import create_purchase_return
+
+        supplier = make_supplier(supplier_code="S-R", name="مقاول")
+        subcontract = costs.save_subcontract(self.project, self.owner, {"supplier": supplier, "scope": "x", "value": "50000", "retention_rate": "10"})
+        bill = costs.bill_subcontract(subcontract, self.owner, amount="20000", description="1")
+        post_purchase_invoice(bill.invoice_id, self.owner)
+        create_purchase_return("PR-S1", TODAY, bill.invoice_id, [{"source_line": bill.invoice.lines.get(), "quantity": D("0.5")}], "نص الأعمال", self.owner)
+        self.assertEqual(costs.effective_bill(bill), (D("10000.00"), D("1000.00")))
+        self.assertEqual(costs.subcontract_figures(subcontract)["retention_held"], D("1000.00"))
+        self.assertEqual(gl("retention_payable"), D("-1000.00"))
+        ledger_ok(self)
+        release = costs.release_subcontract_retention(subcontract, self.owner, amount="1000")
+        with self.assertRaisesMessage(ValidationError, "subcontractor retention released"):
+            create_purchase_return("PR-S2", TODAY, bill.invoice_id, [{"source_line": bill.invoice.lines.get(), "quantity": D("0.5")}], "الباقي", self.owner)
+        costs.reverse_subcontract_release(release, self.owner)
+        create_purchase_return("PR-S2", TODAY, bill.invoice_id, [{"source_line": bill.invoice.lines.get(), "quantity": D("0.5")}], "الباقي", self.owner)
+        self.assertEqual(costs.subcontract_figures(subcontract)["retention_held"], D("0.00"))
+        self.assertEqual((gl("retention_payable"), gl("payable")), (D("0.00"), D("0.00")))
+        ledger_ok(self)

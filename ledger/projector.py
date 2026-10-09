@@ -176,16 +176,23 @@ class Projector:
             for release in RetentionRelease.objects.select_related("project"):
                 first = Certificate.objects.filter(project=release.project_id).select_related("invoice__selling_location").first()
                 entity = (first.invoice.selling_location.entity_id if first else None) or self.main_id
-                g = self.group("retention_release", release.pk, release.release_date)
-                g.add(self.acc["receivable"], release.amount, entity, customer_id=release.project.customer_id)
-                g.add(self.acc["retention_receivable"], -Decimal(release.amount), entity)
+                # A reversed release keeps its entry and gets the opposite one on its reversal date.
+                for day, sign in ((release.release_date, 1), (release.reversed_on, -1)):
+                    if day is None:
+                        continue
+                    g = self.group("retention_release", release.pk, day)
+                    g.add(self.acc["receivable"], sign * Decimal(release.amount), entity, customer_id=release.project.customer_id)
+                    g.add(self.acc["retention_receivable"], -sign * Decimal(release.amount), entity)
         if self.acc.has("retention_payable"):
             for release in SubcontractRelease.objects.select_related("subcontract"):
                 first = release.subcontract.bills.select_related("invoice__receiving_location").first()
                 entity = (first.invoice.receiving_location.entity_id if first else None) or self.main_id
-                g = self.group("subcontract_release", release.pk, release.release_date)
-                g.add(self.acc["retention_payable"], release.amount, entity)
-                g.add(self.acc["payable"], -Decimal(release.amount), entity, supplier_id=release.subcontract.supplier_id)
+                for day, sign in ((release.release_date, 1), (release.reversed_on, -1)):
+                    if day is None:
+                        continue
+                    g = self.group("subcontract_release", release.pk, day)
+                    g.add(self.acc["retention_payable"], sign * Decimal(release.amount), entity)
+                    g.add(self.acc["payable"], -sign * Decimal(release.amount), entity, supplier_id=release.subcontract.supplier_id)
 
     @staticmethod
     def _party(g, key):
@@ -313,6 +320,24 @@ class Projector:
         g.add(self.acc["vat_out"], -tax, g.entity_id)
         g.add(self.acc["sales_returns"], -(g.money - tax), g.entity_id)
         g.add(self.acc["cogs"], -g.stock, g.entity_id)
+        if ret.source_invoice_id in self._certificates and g.money:
+            # HG-038: a return on a certificate takes back the same share of its
+            # retention and recovery (projects.contract.return_share), so the
+            # project and the books agree. Its cancellation entry reverses it.
+            from projects.contract import return_share
+
+            invoice = ret.source_invoice
+            retention, recovery = self._certificates[ret.source_invoice_id]
+            sign = 1 if g.money < 0 else -1
+            customer = self._party(g, "customer_id") or invoice.customer_id
+            share = return_share(retention, invoice, ret)
+            if share and self.acc.has("retention_receivable"):
+                g.add(self.acc["retention_receivable"], -sign * share, g.entity_id)
+                g.add(self.acc["receivable"], sign * share, g.entity_id, customer_id=customer)
+            share = return_share(recovery, invoice, ret)
+            if share and self.acc.has("customer_advances"):
+                g.add(self.acc["customer_advances"], -sign * share, g.entity_id)
+                g.add(self.acc["receivable"], sign * share, g.entity_id, customer_id=customer)
 
     def _place_purchase_invoice(self, g):
         from purchases.models import PurchaseInvoice
@@ -345,6 +370,15 @@ class Projector:
         tax = self._split_tax(g.money, returned_tax, ret.total_amount)
         g.add(self.acc["vat_in"], -tax, g.entity_id)
         g.add(self._service_cost(ret.source_invoice_id), -(g.money - tax) - g.stock, g.entity_id)
+        retention = self._sub_bills.get(ret.source_invoice_id)
+        if retention and g.money and self.acc.has("retention_payable"):
+            # HG-038: the returned share of a subcontractor bill's retention.
+            from projects.costs import return_share
+
+            share = return_share(retention, ret.source_invoice, ret)
+            sign = 1 if g.money > 0 else -1
+            g.add(self.acc["payable"], -sign * share, g.entity_id, supplier_id=self._party(g, "supplier_id") or ret.source_invoice.supplier_id)
+            g.add(self.acc["retention_payable"], sign * share, g.entity_id)
 
     def _place_opening_balance_adjustment(self, g):
         g.add(self.acc["opening_equity"], -g.balance(), g.entity_id)
@@ -509,7 +543,8 @@ def _contracts_fingerprint():
 
     from projects.models import Certificate, ProjectPayment, ProjectPurchase, RetentionRelease, SubcontractBill, SubcontractRelease
 
-    parts = [";".join(f"{p}{k}" for p, k in ProjectPayment.objects.order_by("pk").values_list("payment_id", "kind"))]
+    parts = [";".join(f"{p}{k}" for p, k in ProjectPayment.objects.order_by("pk").values_list("payment_id", "kind")),
+             str(RetentionRelease.objects.filter(reversed_on__isnull=False).count() + SubcontractRelease.objects.filter(reversed_on__isnull=False).count())]
     for model in (Certificate, SubcontractBill, ProjectPurchase, RetentionRelease, SubcontractRelease):
         agg = model.objects.aggregate(n=Max("pk"))
         parts.append(f"{model.objects.count()}:{agg['n'] or 0}")

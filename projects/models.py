@@ -141,6 +141,8 @@ class Certificate(models.Model):
 class CertificateLine(models.Model):
     certificate = models.ForeignKey(Certificate, on_delete=models.CASCADE, related_name="lines")
     boq_line = models.ForeignKey(BoqLine, on_delete=models.PROTECT, related_name="certificate_lines")
+    # The invoice line it was billed on, so a sales return on that line gives the quantity back.
+    sales_line = models.OneToOneField("sales.SalesLine", on_delete=models.PROTECT, related_name="certificate_line")
     previous_quantity = models.DecimalField(max_digits=14, decimal_places=3)
     quantity = models.DecimalField(max_digits=14, decimal_places=3)
     rate = models.DecimalField(max_digits=14, decimal_places=2)
@@ -176,6 +178,9 @@ class RetentionRelease(models.Model):
     release_date = models.DateField()
     amount = models.DecimalField(max_digits=14, decimal_places=2)
     notes = models.CharField(max_length=255, blank=True)
+    # Append-only: a release is never edited or deleted, only reversed on a date.
+    reversed_on = models.DateField(null=True, blank=True)
+    reversed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+")
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -238,6 +243,9 @@ class SubcontractRelease(models.Model):
     release_date = models.DateField()
     amount = models.DecimalField(max_digits=14, decimal_places=2)
     notes = models.CharField(max_length=255, blank=True)
+    # Append-only: a release is never edited or deleted, only reversed on a date.
+    reversed_on = models.DateField(null=True, blank=True)
+    reversed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+")
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
 

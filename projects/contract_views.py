@@ -20,7 +20,9 @@ from settings_core.display_labels import choice_label, localized_choices
 from settings_core.ui_messages import translate
 
 from . import contract, costs
-from .models import BudgetLine, Certificate, CostHeading, Project, ProjectPayment, ProjectPaymentKind, ProjectPurchase, Subcontract, SubcontractBill
+from .models import (
+    BudgetLine, Certificate, CostHeading, Project, ProjectPayment, ProjectPurchase, RetentionRelease, Subcontract, SubcontractBill, SubcontractRelease,
+)
 from .views import MANAGE, PROFIT, VIEW, _base, _date, _lang, _pick
 from entities import scope as entity_scope
 
@@ -50,7 +52,7 @@ WORDS = {
         "payments_intro": "التحصيلات من صاحب المشروع بتتسجل كتحصيل عادي على حسابه وبتتعلّم للمشروع ده. الدفعة المقدمة بتتخصم من المستخلصات.",
         "receive": "استلام من صاحب المشروع", "kind": "النوع", "cashbox": "الخزنة", "receive_btn": "سجّل الاستلام", "received": "اتسجل {number}.",
         "link_payment": "اربط تحصيل متسجل", "link": "اربط", "unlink": "فك الربط", "linked": "اتربط.", "unlinked": "اتفك الربط.",
-        "retention_title": "ضمان الأعمال", "release": "إفراج عن ضمان الأعمال", "release_btn": "سجّل الإفراج", "released": "اتسجل الإفراج.",
+        "retention_title": "ضمان الأعمال", "release": "إفراج عن ضمان الأعمال", "release_btn": "سجّل الإفراج", "released": "اتسجل الإفراج.", "reverse_release": "إلغاء الإفراج", "release_reversed": "اتلغى الإفراج.", "reversed_on": "اتلغى في",
         "release_hint": "عند الاستلام: الإفراج بينقل المبلغ من المحتجز لمستحق على صاحب المشروع، والتحصيل نفسه بيتسجل بعد كده عادي.",
         "notes": "ملاحظات", "held_total": "المحتجز", "released_total": "اتفرج عنه",
         "subcontracts_intro": "الأعمال المسندة لمقاولي الباطن (من الموردين). كل مستخلص مقاول باطن بيعمل فاتورة شراء مسودة، وبنحجز منه ضمان الأعمال.",
@@ -85,7 +87,7 @@ WORDS = {
         "payments_intro": "Money from the owner is an ordinary collection on their account, marked for this project. The advance is recovered from certificates.",
         "receive": "Receive from the owner", "kind": "Kind", "cashbox": "Cashbox", "receive_btn": "Record it", "received": "{number} recorded.",
         "link_payment": "Link a recorded collection", "link": "Link", "unlink": "Unlink", "linked": "Linked.", "unlinked": "Unlinked.",
-        "retention_title": "Retention", "release": "Release retention", "release_btn": "Record the release", "released": "Release recorded.",
+        "retention_title": "Retention", "release": "Release retention", "release_btn": "Record the release", "released": "Release recorded.", "reverse_release": "Reverse the release", "release_reversed": "Release reversed.", "reversed_on": "Reversed on",
         "release_hint": "At handover: a release moves the amount from held to due from the owner; the collection itself is recorded as usual afterwards.",
         "notes": "Notes", "held_total": "Held", "released_total": "Released",
         "subcontracts_intro": "Work given to subcontractors (suppliers). Each subcontractor bill makes a draft purchase invoice, and we hold retention from it.",
@@ -122,6 +124,13 @@ def _back(project, name, lang, **kwargs):
 
 def _error(exc, lang):
     return translate(" ".join(exc.messages), lang)
+
+
+def _scoped(queryset, raw):
+    """A posted id, looked up only among what this entity may use."""
+
+    raw = str(raw or "")
+    return queryset.filter(pk=raw).first() if raw.isdigit() else None
 
 
 def _need(request, code):
@@ -265,12 +274,13 @@ def payments(request, pk):
             if action == "receive":
                 _need(request, COLLECT)
                 payment = contract.receive_payment(project, request.user, kind=request.POST.get("kind"),
-                                                   cashbox=_pick(Cashbox, request.POST.get("cashbox"), active=True), amount=request.POST.get("amount"),
+                                                   cashbox=_scoped(entity_scope.cashboxes(Cashbox.objects).filter(active=True), request.POST.get("cashbox")),
+                                                   amount=request.POST.get("amount"),
                                                    payment_date=_date(request.POST.get("payment_date")), lang=lang)
                 messages.success(request, words["received"].format(number=payment.payment_number))
             elif action == "link":
                 _need(request, COLLECT)
-                payment = _pick(CustomerPayment, request.POST.get("payment"))
+                payment = _scoped(entity_scope.scope(CustomerPayment.objects, entity_scope.CUSTOMER_PAYMENT), request.POST.get("payment"))
                 if payment is None:
                     raise ValidationError(contract.MESSAGES[lang]["payment_status"])
                 contract.link_payment(project, payment, request.user, kind=request.POST.get("kind"), lang=lang)
@@ -287,6 +297,13 @@ def payments(request, pk):
                 contract.release_retention(project, request.user, amount=request.POST.get("amount"), release_date=_date(request.POST.get("release_date")),
                                            notes=request.POST.get("notes", ""), lang=lang)
                 messages.success(request, words["released"])
+            elif action == "reverse_release":
+                _need(request, MANAGE)
+                release = _pick(RetentionRelease, request.POST.get("release"), project=project)
+                if release is None:
+                    raise Http404
+                contract.reverse_release(project, release, request.user, lang=lang)
+                messages.success(request, words["release_reversed"])
             else:
                 raise Http404
         except ValidationError as exc:
@@ -337,6 +354,12 @@ def subcontracts(request, pk):
                     costs.release_subcontract_retention(subcontract, request.user, amount=request.POST.get("amount"),
                                                         release_date=_date(request.POST.get("release_date")), notes=request.POST.get("notes", ""), lang=lang)
                     messages.success(request, words["released"])
+            elif action == "reverse_release":
+                release = _pick(SubcontractRelease, request.POST.get("release"), subcontract__project=project)
+                if release is None:
+                    raise Http404
+                costs.reverse_subcontract_release(release, request.user, lang=lang)
+                messages.success(request, words["release_reversed"])
             elif action == "withdraw":
                 bill = _pick(SubcontractBill, request.POST.get("bill"), subcontract__project=project)
                 if bill is None:
@@ -344,7 +367,7 @@ def subcontracts(request, pk):
                 costs.withdraw_bill(bill, request.user, lang)
                 messages.success(request, words["withdrawn"])
             elif action == "link_purchase":
-                invoice = _pick(PurchaseInvoice, request.POST.get("invoice"))
+                invoice = _scoped(entity_scope.scope(PurchaseInvoice.objects, entity_scope.PURCHASE_INVOICE), request.POST.get("invoice"))
                 if invoice is None:
                     raise ValidationError(costs.MESSAGES[lang]["cancelled"])
                 costs.link_purchase(project, invoice, request.user, heading=request.POST.get("heading"), lang=lang)

@@ -26,9 +26,9 @@
 <article><small>{{ cwords.held_total }}</small><strong data-position="retention_held_2">{{ position.retention_held|money }}</strong></article>
 <article><small>{{ cwords.released_total }}</small><strong>{{ position.released|money }}</strong></article>
 </section>
-<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ cwords.date }}</th><th>{{ cwords.amount }}</th><th>{{ cwords.notes }}</th></tr></thead><tbody>
-{% for release in releases %}<tr data-retention-release><td dir="ltr">{{ release.release_date|date:"Y-m-d" }}</td><td>{{ release.amount|money }}</td><td>{{ release.notes }}</td></tr>
-{% empty %}<tr><td colspan="3" class="op-empty">{{ cwords.none }}</td></tr>{% endfor %}
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ cwords.date }}</th><th>{{ cwords.amount }}</th><th>{{ cwords.notes }}</th><th>{{ cwords.status }}</th></tr></thead><tbody>
+{% for release in releases %}<tr data-retention-release><td dir="ltr">{{ release.release_date|date:"Y-m-d" }}</td><td>{{ release.amount|money }}</td><td>{{ release.notes }}</td><td>{% if release.reversed_on %}{{ cwords.reversed_on }} <span dir="ltr">{{ release.reversed_on|date:"Y-m-d" }}</span>{% elif can_manage %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="reverse_release"><input type="hidden" name="release" value="{{ release.pk }}"><button class="op-secondary" type="submit">{{ cwords.reverse_release }}</button></form>{% else %}✓{% endif %}</td></tr>
+{% empty %}<tr><td colspan="4" class="op-empty">{{ cwords.none }}</td></tr>{% endfor %}
 </tbody></table></div>
 {% if can_manage and position.retention_held %}
 <form class="op-form" method="post" data-release-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="release"><h2>{{ cwords.release }}</h2><p class="op-muted">{{ cwords.release_hint }}</p>

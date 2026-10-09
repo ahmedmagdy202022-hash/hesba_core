@@ -729,6 +729,16 @@ Status: APPROVED — Ahmed approved on 9 Oct 2026 ("خلص كله"), after the a
   - advances: `sales.receive_customer_payment`;
   - subcontracts and their bills: `purchases.create_purchase_invoice`;
   - figures that show cost or profit: `reports.view_profit_report`.
+- **Returns, cancellations and releases (review of #179):**
+  - **Sales return on a certificate:** gives back that invoice line's quantity to the bill of quantities. It also takes back the same share of the certificate's gross, retention and recovery as the return is of the invoice total (`projects.contract.return_share`). The projector books exactly that share in the return's entry and reverses it in the return's cancellation entry.
+  - **Purchase return on a subcontractor bill:** does the same for its retention (`projects.costs.return_share`).
+  - **Releases:** append-only. A release is never edited or deleted; it can be reversed on a date (`reversed_on`), which posts the opposite entry. A release or reversal dated in a closed month is refused (`ensure_period_is_open`).
+  - **One guard line in the engines:** `projects.guards` is called at the end of these services, inside their own transaction:
+    - sales: `cancel_posted_sales_invoice`, `create_sales_return`, `cancel_sales_return`, `cancel_customer_payment`;
+    - purchases: `cancel_posted_purchase_invoice`, `create_purchase_return`, `cancel_purchase_return`.
+
+    It refuses (and so undoes) any change that would leave a project with more retention released than held, or more advance recovered than received. Documents of no project pass untouched; nothing else in those services changes.
+  - **Entity scope:** project screens resolve submitted cashboxes, collections and purchase invoices through `entities.scope`.
 - **Known limits:**
   - the customer's aging still shows the whole balance, retention included; the project screen shows what is due now;
   - advances paid to subcontractors are not tracked separately: a supplier payment before the bill nets on the supplier's account as today.
