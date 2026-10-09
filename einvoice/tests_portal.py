@@ -19,17 +19,23 @@ ENV = {"ETA_ENVIRONMENT": "preprod", "ETA_CLIENT_ID": "cid", "ETA_CLIENT_SECRET"
 class FakePortal:
     """Answers like the authority and the signer, and remembers what it was sent."""
 
-    def __init__(self, accept=True, valid=True, signer_ok=True):
-        self.accept, self.valid, self.signer_ok, self.calls = accept, valid, signer_ok, []
+    def __init__(self, accept=True, valid=True, signer_ok=True, refuse_http=None):
+        self.accept, self.valid, self.signer_ok, self.refuse_http, self.calls = accept, valid, signer_ok, refuse_http, []
 
     def __call__(self, method, url, *, body=None, form=None, headers=None):
         self.calls.append((method, url, body, form, headers))
         if url.endswith("/sign"):
             return (200, {"signature": "MIIB-signature"}) if self.signer_ok else (500, {})
         if url == "https://id.preprod.eta.gov.eg/connect/token":
+            import base64
+
+            if headers.get("Authorization") != "Basic " + base64.b64encode(b"cid:secret").decode() or "client_secret" in (form or {}):
+                return 401, {"error": "invalid_client"}
             return 200, {"access_token": "T", "expires_in": 3600}
         if url == "https://api.preprod.invoicing.eta.gov.eg/api/v1.0/documentsubmissions/":
             internal = body["documents"][0]["internalID"]
+            if self.refuse_http:
+                return self.refuse_http, {"error": {"message": "Bad structure", "details": [{"propertyPath": "issuer.id", "message": "Required"}]}}
             if self.accept:
                 return 202, {"submissionUUID": "S1", "acceptedDocuments": [{"uuid": "U1", "longId": "L1", "internalId": internal}], "rejectedDocuments": []}
             return 202, {"submissionUUID": "S1", "acceptedDocuments": [],
@@ -190,3 +196,29 @@ class EnvironmentTests(DocumentSetup):
                 submission = send_invoice(posted, self.owner, "en")
         self.assertEqual((submission.environment, submission.status), ("prod", "submitted"))
         self.assertIn("https://api.invoicing.eta.gov.eg/api/v1.0/documentsubmissions/", calls)
+
+
+@mock.patch.dict(os.environ, ENV)
+class RefusalAndLinkTests(DocumentSetup):
+    def setUp(self):
+        super().setUp()
+        portal._TOKEN.update(value="", expires=0.0, key="")
+        self.complete_data()
+        self.posted = self.invoice()
+
+    def test_an_http_refusal_is_kept_with_the_authoritys_answer(self):
+        with mock.patch.object(portal, "_http", FakePortal(refuse_http=400)):
+            submission = send_invoice(self.posted, self.owner, "en")
+        self.assertEqual(submission.status, "rejected")
+        self.assertIn("issuer.id Required", submission.message)
+        self.assertEqual(submission.response["http_status"], 400)
+        self.assertTrue(AuditLog.objects.filter(action="eta_send", object_id=str(submission.pk)).exists())
+
+    def test_the_public_link_follows_the_authority(self):
+        from .services import public_url
+
+        with mock.patch.object(portal, "_http", FakePortal()):
+            submission = refresh_submission(send_invoice(self.posted, self.owner, "en"), self.owner, "en")
+        self.assertEqual(public_url(submission), "https://preprod.invoicing.eta.gov.eg/documents/U1/share/L1")
+        submission.response = {"publicUrl": "https://preprod.invoicing.eta.gov.eg/documents/U1/share/OTHER"}
+        self.assertEqual(public_url(submission), "https://preprod.invoicing.eta.gov.eg/documents/U1/share/OTHER")

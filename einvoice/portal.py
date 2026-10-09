@@ -21,6 +21,7 @@ Three pieces, each replaceable in tests:
 Network calls go through ``_http`` only, which is what the tests replace.
 """
 
+import base64
 import json
 import time
 import urllib.error
@@ -143,9 +144,10 @@ def token(force=False):
     key = f"{values['environment']}:{values['client_id']}"
     if not force and _TOKEN["value"] and _TOKEN["key"] == key and _TOKEN["expires"] > time.time() + 60:
         return _TOKEN["value"]
-    status, payload = _http("POST", _urls()["identity"] + "/connect/token", form={
-        "grant_type": "client_credentials", "client_id": values["client_id"], "client_secret": values["client_secret"], "scope": "InvoicingAPI",
-    })
+    # The SDK's login contract: the client id and secret as HTTP Basic (RFC 2617), grant type and scope in the body.
+    basic = base64.b64encode(f"{values['client_id']}:{values['client_secret']}".encode()).decode()
+    status, payload = _http("POST", _urls()["identity"] + "/connect/token", form={"grant_type": "client_credentials", "scope": "InvoicingAPI"},
+                            headers={"Authorization": f"Basic {basic}"})
     if status != 200 or not payload.get("access_token"):
         raise PortalError("login refused", status, payload)
     _TOKEN.update(value=payload["access_token"], expires=time.time() + int(payload.get("expires_in", 3600)), key=key)

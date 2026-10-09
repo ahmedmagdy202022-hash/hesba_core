@@ -265,7 +265,15 @@ def send_invoice(invoice, user, lang="ar"):
         signed = portal.sign(document)
         answer = portal.submit([signed])
     except portal.PortalError as exc:
-        raise ValidationError(_portal_error(exc, words))
+        if exc.message != "submission refused":
+            raise ValidationError(_portal_error(exc, words))  # nothing reached the authority
+        # The authority answered with a refusal (400, 403, 422…): kept, with its exact answer, like any sending.
+        submission = Submission.objects.create(
+            invoice=invoice, environment=portal.settings()["environment"], submitted_by=user, status=SubmissionStatus.REJECTED,
+            message=portal.error_text(exc.payload) or f"HTTP {exc.status}", response={"http_status": exc.status, "body": exc.payload},
+        )
+        _audit_send(submission, user, "eta_send")
+        return submission
     accepted = next((row for row in answer.get("acceptedDocuments") or [] if row.get("internalId") == invoice.invoice_number), None)
     rejected = next((row for row in answer.get("rejectedDocuments") or [] if row.get("internalId") == invoice.invoice_number), None)
     submission = Submission.objects.create(
@@ -332,5 +340,8 @@ def public_url(submission):
 
     if not (submission and submission.uuid and submission.long_id):
         return ""
+    given = (submission.response or {}).get("publicUrl") if isinstance(submission.response, dict) else ""
+    if given:
+        return given  # the authority's own link, when its answer carries one
     base = "https://preprod.invoicing.eta.gov.eg" if submission.environment == "preprod" else "https://invoicing.eta.gov.eg"
-    return f"{base}/print/documents/{submission.uuid}/share/{submission.long_id}"
+    return f"{base}/documents/{submission.uuid}/share/{submission.long_id}"
