@@ -39,8 +39,10 @@ class DailyEmailSetup(TestCase):
         self.location = make_location(location_code="MAIN", is_default=True)
         make_item(item_code="OUT-1", item_name="زيت", is_stock_tracked=True)  # no stock: out of stock
         SalesInvoice.objects.create(invoice_number="SI-DRAFT-1", invoice_date=TODAY, customer=make_customer(), selling_location=self.location, created_by=self.owner)
-        AuditLog.objects.create(event_type=AuditEventType.UPDATE, actor=self.owner, module="sales", action="cancel_posted_sales_invoice",
-                                object_type="sales.SalesInvoice", object_id="1", before_data={}, after_data={})
+        log = AuditLog.objects.create(event_type=AuditEventType.UPDATE, actor=self.owner, module="sales", action="cancel_posted_sales_invoice",
+                                      object_type="sales.SalesInvoice", object_id="1", before_data={}, after_data={})
+        # Pinned to noon of TODAY: a run that crosses midnight would otherwise date it tomorrow.
+        AuditLog.objects.filter(pk=log.pk).update(created_at=at(12))
 
 
 class ContentTests(DailyEmailSetup):
