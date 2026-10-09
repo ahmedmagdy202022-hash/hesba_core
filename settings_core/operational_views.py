@@ -97,17 +97,68 @@ def _features(lang, user):
     return rows
 
 
+MONTHS = {
+    "ar": ("يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"),
+    "en": ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"),
+}
+
+
+GROUP_LINKS = {
+    "company": "settings_core:company", "entities": "entities:list", "currency": "settings_core:currency",
+    "modules": "settings_core:modules", "capabilities": "settings_core:capabilities",
+    "users": "settings_core:users", "roles": "settings_core:roles",
+    "taxes": "taxes:settings", "einvoice": "einvoice:issuer",
+    "backups": "settings_core:backup_key", "storage": "settings_core:storage", "imports": "imports:home",
+    "daily_email": "settings_core:daily_email",
+}
+
+
+def _group_links(user):
+    """{key: True} for each grouped settings link whose page ``user`` may open."""
+
+    return {key: _opens_for(user, reverse(name)) for key, name in GROUP_LINKS.items()}
+
+
+def _plain_profile(client, lang):
+    """R2-10: the company's settings in words an owner reads, not field values."""
+
+    if client is None:
+        return None
+    from . import setup_catalog as catalog
+    from .setup_services import enabled_modules
+
+    month = client.fiscal_year_start_month
+    zones = {"Africa/Cairo": ("القاهرة", "Cairo")}
+    zone = zones.get(client.timezone)
+    return {
+        "activity": catalog.activity_label(client.activity_slug, lang) if client.activity_slug else "",
+        "sub_activity": catalog.sub_activity_label(client.activity_slug, client.sub_activity_slug, lang) if client.sub_activity_slug else "",
+        "language": {"ar": "العربية", "en": "English"}.get(client.default_language, client.default_language),
+        "timezone": (zone[1] if lang == "en" else zone[0]) if zone else client.timezone,
+        # A month outside 1-12 (the field has no validator) is shown as stored, flagged, never wrapped.
+        "fiscal_start": MONTHS["en" if lang == "en" else "ar"][month - 1] if month in range(1, 13) else "",
+        "fiscal_bad": "" if month in range(1, 13) else str(month),
+        "modules_on": len(enabled_modules()), "modules_total": len(catalog.MODULE_SLUGS),
+    }
+
+
 @require_permission("settings.view_settings")
 def settings_overview(request):
     can_manage = user_has_permission(request.user, "settings.manage_settings") and request.user.is_superuser
+    lang = lang_of(request)
+    client = ClientProfile.get_active()
+    features = _features(lang, request.user)
     return render(
         request,
         "settings_core/overview.html",
         _context(
             request,
-            client=ClientProfile.get_active(),
+            client=client,
+            plain=_plain_profile(client, lang),
+            opens=_group_links(request.user),
+            features_on=sum(1 for feature in features if feature["on"]),
             settings=SystemSetting.objects.filter(active=True),
-            features=_features(lang_of(request), request.user),
+            features=features,
             can_manage=can_manage,
             admin_settings_url=reverse("admin:settings_core_clientprofile_changelist") if can_manage else "",
         ),

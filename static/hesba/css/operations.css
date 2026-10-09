@@ -183,3 +183,4 @@ html.hs-cam-open,html.hs-cam-open body{overflow:hidden}
 @media(max-width:700px){.op-subnav{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin}.op-subnav a{white-space:nowrap;flex:0 0 auto}}
 [data-recipe-line][hidden]{display:none}[data-recipe-form] input[type=checkbox]{width:auto;min-height:0;inline-size:auto}
 .op-subnav__sep{align-self:center;color:var(--op-muted);padding:0 4px}.op-subnav__label{align-self:center;color:var(--op-muted);font-weight:600}
+.set-company{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:18px}.set-company p{margin:4px 0}.set-groups .op-card p{line-height:1.9}.set-links{display:flex;flex-direction:column;align-items:flex-start;gap:2px}
