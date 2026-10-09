@@ -6,7 +6,8 @@
 .hs-date .hs-date__open:hover,.hs-date .hs-date__open[aria-expanded="true"]{color:var(--hs-teal-deep);background:var(--hs-teal-wash)}
 .hs-date .hs-date__open:focus-visible{outline:none;box-shadow:var(--hs-focus-ring)}
 .hs-date .hs-date__open:disabled{opacity:.5;cursor:not-allowed}
-.hs-date .hs-date__pop{position:absolute;z-index:60;top:calc(100% + 6px);inset-inline-end:0;width:296px;max-width:calc(100vw - 16px);padding:12px;background:var(--hs-surface);border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);box-shadow:var(--hs-shadow-lg);color:var(--hs-ink);font-size:var(--hs-text-sm)}
+/* Fixed, placed by script from the field's rectangle: a scrolling table or invoice-lines box never clips it. */
+.hs-date .hs-date__pop{position:fixed;z-index:60;top:0;left:0;width:296px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);overflow:auto;padding:12px;background:var(--hs-surface);border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);box-shadow:var(--hs-shadow-lg);color:var(--hs-ink);font-size:var(--hs-text-sm)}
 .hs-date .hs-date__head{display:flex;align-items:center;gap:6px;margin-bottom:8px}
 .hs-date .hs-date__head select{background-color:var(--hs-surface);flex:1 1 auto;min-width:0;min-height:36px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-sm);padding-block:0;padding-inline-start:8px;font:inherit;color:var(--hs-ink)}
 .hs-date .hs-date__year{flex:0 0 84px!important}

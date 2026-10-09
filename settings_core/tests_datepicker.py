@@ -54,3 +54,11 @@ class DatePickerTests(TestCase):
         self.assertIn("self.jump(year, +e.target.value, '.hs-date__month')", script)
         self.assertIn("self.jump(+e.target.value, month, '.hs-date__year')", script)
         self.assertIn("if (again) again.focus();", script)  # the rebuilt select takes the focus back
+
+    def test_the_calendar_is_never_clipped_by_a_scrolling_box(self):
+        root = settings.BASE_DIR / "static" / "hesba"
+        css = (root / "css" / "datepicker.css").read_text(encoding="utf-8")
+        self.assertIn(".hs-date .hs-date__pop{position:fixed;", css)  # escapes .inv-lines / .op-table-wrap overflow
+        script = (root / "js" / "datepicker.js").read_text(encoding="utf-8")
+        self.assertIn("this.wrap.getBoundingClientRect()", script)
+        self.assertIn("window.addEventListener('scroll'", script)  # follows the field when a box scrolls

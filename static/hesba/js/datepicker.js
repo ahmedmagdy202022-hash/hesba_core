@@ -186,13 +186,18 @@
   };
 
   Picker.prototype.place = function () {
-    var pop = this.pop;
-    pop.style.transform = '';
-    var rect = pop.getBoundingClientRect();
-    var gutter = 8, shift = 0;
-    if (rect.right > window.innerWidth - gutter) shift = window.innerWidth - gutter - rect.right;
-    if (rect.left + shift < gutter) shift = gutter - rect.left;
-    if (shift) pop.style.transform = 'translateX(' + shift + 'px)';
+    // The popup is position:fixed, so no overflow:auto ancestor (a scrolling
+    // table, the invoice lines) clips it. It sits under the field, aligned to
+    // its inline end, kept on screen, and opens upward when there is no room below.
+    var pop = this.pop, field = this.wrap.getBoundingClientRect(), gutter = 8, gap = 6;
+    var width = pop.offsetWidth, height = pop.offsetHeight;
+    var rtl = getComputedStyle(this.wrap).direction === 'rtl';
+    var left = rtl ? field.left : field.right - width;
+    left = Math.max(gutter, Math.min(left, window.innerWidth - gutter - width));
+    var top = field.bottom + gap;
+    if (top + height > window.innerHeight - gutter && field.top - gap - height >= gutter) top = field.top - gap - height;
+    pop.style.left = left + 'px';
+    pop.style.top = Math.max(gutter, top) + 'px';
   };
 
   Picker.prototype.render = function (focusDay) {
@@ -328,6 +333,8 @@
     if (openPicker && e.target.isConnected && !openPicker.wrap.contains(e.target)) openPicker.close(false);
   });
   window.addEventListener('resize', function () { if (openPicker) openPicker.place(); });
+  // Any scroll (the page or a box inside it) moves the field: follow it.
+  window.addEventListener('scroll', function () { if (openPicker && openPicker.pop) openPicker.place(); }, true);
 
   function start() {
     upgrade(document);
