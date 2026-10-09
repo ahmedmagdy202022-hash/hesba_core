@@ -38,7 +38,8 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16
+        # The official image through AWS's public mirror: Docker Hub rate-limits anonymous pulls from shared runners.
+        image: public.ecr.aws/docker/library/postgres:16
         env:
           POSTGRES_DB: hesba
           POSTGRES_USER: hesba
