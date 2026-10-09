@@ -97,10 +97,14 @@ def _http(method, url, *, body=None, form=None, headers=None):
 def serialize(value, name=None):
     """The authority's canonical text of a document, which is what gets signed.
 
-    A simple value is written in double quotes. Each property of an object is
-    its name in capitals, in quotes, then its serialized value. An array writes
-    its name once, then each element preceded by the array's name again.
-    Numbers keep the text they have in the JSON sent.
+    A simple value is written exactly as it appears in the JSON sent, in
+    double quotes: a string keeps its JSON escaping (``15\\" screen``), as
+    the authority takes "all property values without any processing, just like
+    those are in the input document". Each property of an object is its name in
+    capitals, in quotes, then its serialized value. An array writes its name
+    once, then each element preceded by the array's name again. Numbers keep
+    the text they have in the JSON sent (``_http`` writes it with the same
+    ``json.dumps``).
     """
 
     if isinstance(value, dict):
@@ -114,7 +118,7 @@ def serialize(value, name=None):
                 out.append(upper + serialize(item))
         return "".join(out)
     if isinstance(value, str):
-        return f'"{value}"'
+        return json.dumps(value, ensure_ascii=False)  # quoted and escaped exactly as _http sends it
     return f'"{json.dumps(value)}"'
 
 

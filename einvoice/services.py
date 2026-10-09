@@ -16,7 +16,7 @@ worded for the shop owner, so the data can be completed before sending.
 """
 
 import json
-from datetime import datetime, time, timezone as dt_timezone
+from datetime import datetime, time, timedelta, timezone as dt_timezone
 from decimal import Decimal
 
 from django.db import transaction
@@ -241,10 +241,24 @@ def _audit_send(submission, user, action):
                                         "environment": submission.environment})
 
 
+STALE_SENDING = timedelta(minutes=10)
+
+
 def send_invoice(invoice, user, lang="ar"):
-    """Sign and send one posted sales invoice. Returns the Submission (rejected ones too)."""
+    """Sign and send one posted sales invoice. Returns the Submission (rejected ones too).
+
+    The invoice is claimed first: under its row lock a ``sending`` row is
+    written and committed, so a second click (or a second user) while the
+    signer or the portal is slow is refused instead of sending it twice. The
+    portal is called outside any transaction, and the claim then becomes the
+    sending's record. A claim left by a server that died mid-call stops
+    blocking after ``STALE_SENDING``; the authority itself refuses a document
+    it already holds, so sending again cannot make a duplicate.
+    """
 
     from django.core.exceptions import ValidationError
+
+    from sales.models import SalesInvoice
 
     from . import portal
     from .models import Submission, SubmissionStatus
@@ -253,37 +267,46 @@ def send_invoice(invoice, user, lang="ar"):
     names = portal.missing()
     if names:
         raise ValidationError(words["setup"].format(names=", ".join(names)))
-    latest = current_submission(invoice)
-    if latest and latest.status == SubmissionStatus.VALID:
-        raise ValidationError(words["already"])
-    if latest and latest.status == SubmissionStatus.SUBMITTED:
-        raise ValidationError(words["pending"])
     document, problems = build_document(invoice, lang)
     if problems:
         raise ValidationError(words["problems"])
+    environment = portal.settings()["environment"]
+    with transaction.atomic():
+        SalesInvoice.objects.select_for_update().get(pk=invoice.pk)
+        latest = current_submission(invoice)
+        if latest and latest.status == SubmissionStatus.SENDING and latest.submitted_at < timezone.now() - STALE_SENDING:
+            latest.status, latest.message = SubmissionStatus.REJECTED, "no answer recorded"
+            latest.save(update_fields=["status", "message"])
+        elif latest and latest.status in (SubmissionStatus.VALID, SubmissionStatus.CANCEL_REQUESTED):
+            raise ValidationError(words["already"])
+        elif latest and latest.status in (SubmissionStatus.SUBMITTED, SubmissionStatus.SENDING):
+            raise ValidationError(words["pending"])
+        claim = Submission.objects.create(invoice=invoice, environment=environment, submitted_by=user, status=SubmissionStatus.SENDING)
     try:
         signed = portal.sign(document)
         answer = portal.submit([signed])
     except portal.PortalError as exc:
         if exc.message != "submission refused":
-            raise ValidationError(_portal_error(exc, words))  # nothing reached the authority
+            claim.delete()  # nothing reached the authority
+            raise ValidationError(_portal_error(exc, words))
         # The authority answered with a refusal (400, 403, 422…): kept, with its exact answer, like any sending.
-        submission = Submission.objects.create(
-            invoice=invoice, environment=portal.settings()["environment"], submitted_by=user, status=SubmissionStatus.REJECTED,
-            message=portal.error_text(exc.payload) or f"HTTP {exc.status}", response={"http_status": exc.status, "body": exc.payload},
-        )
-        _audit_send(submission, user, "eta_send")
-        return submission
+        claim.status, claim.message = SubmissionStatus.REJECTED, portal.error_text(exc.payload) or f"HTTP {exc.status}"
+        claim.response = {"http_status": exc.status, "body": exc.payload}
+        claim.save(update_fields=["status", "message", "response"])
+        _audit_send(claim, user, "eta_send")
+        return claim
+    except Exception:
+        claim.delete()
+        raise
     accepted = next((row for row in answer.get("acceptedDocuments") or [] if row.get("internalId") == invoice.invoice_number), None)
     rejected = next((row for row in answer.get("rejectedDocuments") or [] if row.get("internalId") == invoice.invoice_number), None)
-    submission = Submission.objects.create(
-        invoice=invoice, environment=portal.settings()["environment"], submitted_by=user, submission_id=str(answer.get("submissionUUID") or ""),
-        status=SubmissionStatus.SUBMITTED if accepted else SubmissionStatus.REJECTED,
-        uuid=(accepted or {}).get("uuid", ""), long_id=(accepted or {}).get("longId", ""),
-        message="" if accepted else portal.error_text(rejected or answer), response=answer,
-    )
-    _audit_send(submission, user, "eta_send")
-    return submission
+    claim.submission_id = str(answer.get("submissionUUID") or "")
+    claim.status = SubmissionStatus.SUBMITTED if accepted else SubmissionStatus.REJECTED
+    claim.uuid, claim.long_id = (accepted or {}).get("uuid", ""), (accepted or {}).get("longId", "")
+    claim.message, claim.response = ("" if accepted else portal.error_text(rejected or answer)), answer
+    claim.save(update_fields=["submission_id", "status", "uuid", "long_id", "message", "response"])
+    _audit_send(claim, user, "eta_send")
+    return claim
 
 
 def refresh_submission(submission, user, lang="ar"):
@@ -293,6 +316,8 @@ def refresh_submission(submission, user, lang="ar"):
 
     from . import portal
 
+    from .models import SubmissionStatus
+
     words = SEND_WORDS[lang]
     if not submission.uuid:
         return submission
@@ -301,6 +326,12 @@ def refresh_submission(submission, user, lang="ar"):
     except portal.PortalError as exc:
         raise ValidationError(_portal_error(exc, words))
     status = STATUS_FROM_PORTAL.get(str(answer.get("status", "")).lower(), submission.status)
+    if submission.status == SubmissionStatus.CANCEL_REQUESTED and status == SubmissionStatus.VALID:
+        requested, declined = answer.get("cancelRequestDate"), answer.get("declineCancelRequestDate")
+        if not declined or (requested and str(requested) > str(declined)):
+            status = SubmissionStatus.CANCEL_REQUESTED  # the receiver has not answered this cancellation yet
+    if status == SubmissionStatus.CANCELLED and not submission.cancelled_at:
+        submission.cancelled_at = timezone.now()
     steps = ((answer.get("validationResults") or {}).get("validationSteps") or [])
     reasons = [portal.error_text(step.get("error") or {}) for step in steps if str(step.get("status", "")).lower() == "invalid"]
     submission.status = status
@@ -308,7 +339,7 @@ def refresh_submission(submission, user, lang="ar"):
     submission.message = " · ".join(r for r in reasons if r)[:1000]
     submission.response = answer
     submission.checked_at = timezone.now()
-    submission.save(update_fields=["status", "long_id", "message", "response", "checked_at"])
+    submission.save(update_fields=["status", "long_id", "message", "response", "checked_at", "cancelled_at"])
     _audit_send(submission, user, "eta_refresh")
     return submission
 
@@ -329,8 +360,10 @@ def cancel_submission(submission, user, reason, lang="ar"):
         portal.cancel(submission.uuid, reason)
     except portal.PortalError as exc:
         raise ValidationError(_portal_error(exc, words))
-    submission.status, submission.cancelled_at, submission.cancel_reason = SubmissionStatus.CANCELLED, timezone.now(), reason
-    submission.save(update_fields=["status", "cancelled_at", "cancel_reason"])
+    # A request, not the end: the receiver of a B2B invoice may decline it within
+    # the authority's window. "Refresh" reads the outcome (cancelled, or valid again).
+    submission.status, submission.cancel_reason = SubmissionStatus.CANCEL_REQUESTED, reason
+    submission.save(update_fields=["status", "cancel_reason"])
     _audit_send(submission, user, "eta_cancel")
     return submission
 

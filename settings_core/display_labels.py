@@ -33,7 +33,7 @@ AR_LABELS = {
     ("restaurant.order", "status"): {"open": "مفتوح", "paid": "اتدفع", "cancelled": "ملغي"},
     ("manufacturing.productionrun", "status"): {"posted": "مرحّلة", "cancelled": "ملغية"},
     ("manufacturing.productionorder", "status"): {"planned": "لسه مبدأش", "in_progress": "شغال", "done": "خلص", "cancelled": "ملغي"},
-    ("einvoice.submission", "status"): {"submitted": "اتبعتت — بتتراجع", "valid": "مقبولة", "invalid": "مرفوضة بعد المراجعة", "rejected": "مرفوضة", "cancelled": "ملغاة"},
+    ("einvoice.submission", "status"): {"sending": "بتتبعت دلوقتي", "cancel_requested": "طلب إلغاء — مستني المنظومة", "submitted": "اتبعتت — بتتراجع", "valid": "مقبولة", "invalid": "مرفوضة بعد المراجعة", "rejected": "مرفوضة", "cancelled": "ملغاة"},
     ("projects.project", "status"): {"planned": "لسه مبدأش", "active": "شغال", "on_hold": "متوقف", "done": "خلص", "cancelled": "ملغي"},
     ("restaurant.order", "kind"): {"dine_in": "صالة", "takeaway": "تيك أواي", "delivery": "دليفري"},
     ("sales.salesinvoice", "status"): DOCUMENT_STATUS,

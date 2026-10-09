@@ -19,12 +19,15 @@ ENV = {"ETA_ENVIRONMENT": "preprod", "ETA_CLIENT_ID": "cid", "ETA_CLIENT_SECRET"
 class FakePortal:
     """Answers like the authority and the signer, and remembers what it was sent."""
 
-    def __init__(self, accept=True, valid=True, signer_ok=True, refuse_http=None):
+    def __init__(self, accept=True, valid=True, signer_ok=True, refuse_http=None, details=None, on_sign=None):
         self.accept, self.valid, self.signer_ok, self.refuse_http, self.calls = accept, valid, signer_ok, refuse_http, []
+        self.details, self.on_sign = details, on_sign  # a fixed details answer; a hook run while "signing"
 
     def __call__(self, method, url, *, body=None, form=None, headers=None):
         self.calls.append((method, url, body, form, headers))
         if url.endswith("/sign"):
+            if self.on_sign:
+                self.on_sign()
             return (200, {"signature": "MIIB-signature"}) if self.signer_ok else (500, {})
         if url == "https://id.preprod.eta.gov.eg/connect/token":
             import base64
@@ -41,6 +44,8 @@ class FakePortal:
             return 202, {"submissionUUID": "S1", "acceptedDocuments": [],
                          "rejectedDocuments": [{"internalId": internal, "error": {"message": "Validation Error", "details": [{"propertyPath": "receiver.id", "message": "Invalid TIN"}]}}]}
         if url == "https://api.preprod.invoicing.eta.gov.eg/api/v1.0/documents/U1/details":
+            if self.details is not None:
+                return 200, self.details
             if self.valid:
                 return 200, {"status": "Valid", "longId": "L1", "validationResults": {"status": "Valid", "validationSteps": []}}
             return 200, {"status": "Invalid", "validationResults": {"validationSteps": [{"status": "Invalid", "error": {"message": "Total mismatch"}}]}}
@@ -80,7 +85,7 @@ class PortalTests(DocumentSetup):
             with self.assertRaisesMessage(ValidationError, "already sent and accepted"):
                 send_invoice(self.posted, self.owner, "en")
             cancel_submission(submission, self.owner, "مرتجع كامل", "ar")
-        self.assertEqual(Submission.objects.get().status, "cancelled")
+        self.assertEqual(Submission.objects.get().status, "cancel_requested")  # until the authority confirms it
         self.assertEqual(AuditLog.objects.filter(module="einvoice", action__startswith="eta_").count(), 3)
         self.posted.refresh_from_db()
         self.assertEqual(self.posted.status, "posted")  # the invoice itself is never touched
@@ -222,3 +227,77 @@ class RefusalAndLinkTests(DocumentSetup):
         self.assertEqual(public_url(submission), "https://preprod.invoicing.eta.gov.eg/documents/U1/share/L1")
         submission.response = {"publicUrl": "https://preprod.invoicing.eta.gov.eg/documents/U1/share/OTHER"}
         self.assertEqual(public_url(submission), "https://preprod.invoicing.eta.gov.eg/documents/U1/share/OTHER")
+
+
+@mock.patch.dict(os.environ, ENV)
+class ReviewThreeTests(DocumentSetup):
+    """Codex's third review on #181: exact signed text, one sending at a time, cancellation as a request."""
+
+    def setUp(self):
+        super().setUp()
+        portal._TOKEN.update(value="", expires=0.0, key="")
+        self.complete_data()
+        self.posted = self.invoice()
+
+    def test_a_string_is_signed_exactly_as_the_json_sends_it(self):
+        import json
+
+        value = '15" screen \\ قطعة'
+        self.assertEqual(portal.serialize({"description": value}), '"DESCRIPTION"' + json.dumps(value, ensure_ascii=False))
+        self.assertIn(portal.serialize({"description": value})[len('"DESCRIPTION"'):], json.dumps({"description": value}, ensure_ascii=False))
+        self.assertEqual(portal.serialize({"description": '15" screen'}), '"DESCRIPTION""15\\" screen"')
+
+    def test_a_second_send_while_the_first_is_on_its_way_is_refused(self):
+        seen = []
+
+        def again():
+            if not seen:
+                seen.append(True)
+                with self.assertRaisesMessage(ValidationError, "still checking"):
+                    send_invoice(self.posted, self.owner, "en")
+
+        fake = FakePortal(on_sign=again)
+        with mock.patch.object(portal, "_http", fake):
+            submission = send_invoice(self.posted, self.owner, "en")
+        self.assertEqual(seen, [True])
+        self.assertEqual((Submission.objects.count(), submission.status), (1, "submitted"))
+        self.assertEqual(sum(1 for call in fake.calls if call[1].endswith("/documentsubmissions/")), 1)
+
+    def test_a_claim_left_by_a_dead_server_stops_blocking(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        stale = Submission.objects.create(invoice=self.posted, environment="preprod", submitted_by=self.owner, status="sending")
+        with mock.patch.object(portal, "_http", FakePortal()), self.assertRaisesMessage(ValidationError, "still checking"):
+            send_invoice(self.posted, self.owner, "en")
+        Submission.objects.filter(pk=stale.pk).update(submitted_at=timezone.now() - timedelta(minutes=11))
+        with mock.patch.object(portal, "_http", FakePortal()):
+            fresh = send_invoice(self.posted, self.owner, "en")
+        self.assertEqual(fresh.status, "submitted")
+        self.assertEqual(Submission.objects.get(pk=stale.pk).status, "rejected")
+
+    def test_a_cancellation_waits_for_the_authority(self):
+        with mock.patch.object(portal, "_http", FakePortal()):
+            submission = refresh_submission(send_invoice(self.posted, self.owner, "en"), self.owner, "en")
+            cancel_submission(submission, self.owner, "مرتجع كامل", "ar")
+            self.assertEqual(submission.status, "cancel_requested")
+            with self.assertRaisesMessage(ValidationError, "already sent and accepted"):
+                send_invoice(self.posted, self.owner, "en")  # no second invoice while the cancellation may be declined
+        waiting = {"status": "Valid", "longId": "L1", "cancelRequestDate": "2026-10-09T21:00:00Z", "validationResults": {"validationSteps": []}}
+        with mock.patch.object(portal, "_http", FakePortal(details=waiting)):
+            self.assertEqual(refresh_submission(submission, self.owner, "en").status, "cancel_requested")
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("einvoice:sales_document", args=[self.posted.pk]) + "?lang=ar")
+        self.assertContains(page, 'data-eta-status="cancel_requested"')
+        self.assertContains(page, "data-eta-refresh")
+        self.assertNotContains(page, "data-eta-send")
+        declined = dict(waiting, declineCancelRequestDate="2026-10-10T08:00:00Z")
+        with mock.patch.object(portal, "_http", FakePortal(details=declined)):
+            self.assertEqual(refresh_submission(submission, self.owner, "en").status, "valid")  # the receiver declined: still valid
+        with mock.patch.object(portal, "_http", FakePortal()):
+            cancel_submission(submission, self.owner, "مرتجع كامل", "ar")
+        with mock.patch.object(portal, "_http", FakePortal(details={"status": "Cancelled", "longId": "L1"})):
+            done = refresh_submission(submission, self.owner, "en")
+        self.assertEqual(done.status, "cancelled")
+        self.assertIsNotNone(Submission.objects.get(pk=done.pk).cancelled_at)

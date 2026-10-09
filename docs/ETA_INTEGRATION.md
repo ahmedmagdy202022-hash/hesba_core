@@ -33,6 +33,8 @@ After setting them, **Settings → E-invoicing → Test the connection** checks 
 On a posted sales invoice, open **E-invoice**. Once the data is complete, press **Sign and send**. Then:
 - **Sent — being checked:** the portal accepted the submission and validates it in the background. Press **Refresh the status** after a minute.
 - **Valid:** a link to the invoice's public page on the portal appears. A valid invoice can be **cancelled on the portal** with a reason, within the authority's allowed period.
+- **Cancellation requested:** cancelling sends a request. For an invoice to a business, the receiver may decline it within the authority's window. Press **Refresh the status** to see the outcome: **Cancelled**, or **Valid** again if the receiver declined. The invoice cannot be sent again while a cancellation is pending.
+- **Sending now:** shown while a sending is on its way. A second press (or a second user) is refused until the authority answers.
 - **Rejected / Invalid:** the authority's reason is shown. Correct the data and send again; every sending is kept as history.
 
 Sending never changes the invoice, its posting or any balance. The sending, the status checks and the cancellation are written to the audit log.
@@ -50,7 +52,7 @@ Content-Type: application/json
 ```
 
 The canonical text follows the authority's serialization rule (ETA SDK, "Document serialization"):
-- a simple value is written in double quotes;
+- a simple value is written exactly as it appears in the JSON sent, in double quotes: a string keeps its JSON escaping (a `"` inside a description is signed as `\"`, exactly as sent);
 - an object property is its name in capitals, in quotes, followed by its value;
 - an array writes its name once, then each element preceded by the name again.
 

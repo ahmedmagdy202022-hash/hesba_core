@@ -44,10 +44,12 @@ class ItemCode(models.Model):
 
 
 class SubmissionStatus(models.TextChoices):
+    SENDING = "sending", "Sending"
     SUBMITTED = "submitted", "Submitted"
     VALID = "valid", "Valid"
     INVALID = "invalid", "Invalid"
     REJECTED = "rejected", "Rejected"
+    CANCEL_REQUESTED = "cancel_requested", "Cancellation requested"
     CANCELLED = "cancelled", "Cancelled"
 
 

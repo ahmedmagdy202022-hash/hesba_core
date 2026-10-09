@@ -31,10 +31,12 @@ class Migration(migrations.Migration):
                     "status",
                     models.CharField(
                         choices=[
+                            ("sending", "Sending"),
                             ("submitted", "Submitted"),
                             ("valid", "Valid"),
                             ("invalid", "Invalid"),
                             ("rejected", "Rejected"),
+                            ("cancel_requested", "Cancellation requested"),
                             ("cancelled", "Cancelled"),
                         ],
                         max_length=20,

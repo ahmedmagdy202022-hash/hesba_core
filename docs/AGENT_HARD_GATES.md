@@ -697,14 +697,17 @@ Status: APPROVED — Ahmed on 9 Oct 2026 ("خلص كله"), the third open decis
   - **Sending and reading back:** Hesba then submits, reads the status and cancels through the authority's API (`einvoice.portal`).
 - **Rules:**
   - only a posted invoice with complete data is sent;
-  - an invoice that is valid or still being checked is not sent twice;
+  - an invoice that is valid, still being checked, or being sent right now is not sent twice: the invoice is claimed under its row lock with a `sending` row before the signer or portal is called. A claim left by a server that died mid-call stops blocking after 10 minutes, and the authority itself refuses a document it already holds;
+  - a cancellation is a request (`cancel_requested`) until the authority's details say `cancelled`. The receiver may decline it, and the invoice is then valid again. Nothing can be sent again while a cancellation is pending;
+  - the signed text keeps each string's JSON escaping, exactly as it is sent;
   - a rejected or invalid sending is kept as history and the invoice can be sent again;
   - only a valid invoice can be cancelled, with a reason;
   - every send, status check and cancellation is in the audit log;
   - sending and cancelling need `sales.create_sales_invoice`; testing the connection needs `settings.manage_settings`.
 - **Tests (`einvoice/tests_portal.py`):** run against a fake portal and signer, with no network:
-  - the serialization rule;
-  - sign → submit → status → cancel, with the exact headers;
+  - the serialization rule, escaping included;
+  - sign → submit → status → cancellation request → cancelled or declined, with the exact headers;
+  - a second send while the first is on its way, and a stale claim;
   - rejection with the authority's reason, then sending again;
   - invalid after checking;
   - signer down or settings missing: nothing is sent;

@@ -37,11 +37,11 @@ WORDS = {
         "threshold_hint": "راجع الحد الحالي مع المصلحة أو محاسبك؛ القيمة الافتراضية 50,000 جنيه.",
         "portal": "الإرسال للمنظومة", "send": "وقّع وابعت للمنظومة", "refresh": "حدّث الحالة من المنظومة", "cancel": "إلغاء على المنظومة", "cancel_reason": "سبب الإلغاء",
         "sent": "اتبعتت الفاتورة؛ المنظومة بتراجعها، حدّث الحالة بعد دقيقة.", "sent_rejected": "المنظومة رفضت الفاتورة: {reason}", "refreshed": "اتحدثت الحالة.",
-        "cancelled": "اتلغت الفاتورة على المنظومة.", "not_sent": "الفاتورة دي لسه متبعتتش.", "env_preprod": "بيئة التجربة (preprod)", "env_prod": "بيئة الإنتاج",
+        "cancelled": "اتبعت طلب الإلغاء للمنظومة؛ حدّث الحالة بعد شوية عشان تشوف النتيجة.", "not_sent": "الفاتورة دي لسه متبعتتش.", "env_preprod": "بيئة التجربة (preprod)", "env_prod": "بيئة الإنتاج",
         "not_set": "الربط مع المنظومة لسه متظبطش على السيرفر. ناقص:", "setup_hint": "الخطوات في docs/ETA_INTEGRATION.md: حساب على بوابة المنظومة، Client ID و Secret للنظام، وتوكن التوقيع مع برنامج التوقيع.",
         "status": "الحالة", "uuid": "رقم المستند في المنظومة", "submitted_at": "اتبعتت", "checked_at": "آخر مراجعة", "public": "صفحة الفاتورة على المنظومة",
         "history": "إرسالات سابقة", "connection": "الربط مع المنظومة", "check": "اختبار الاتصال", "connection_ok": "الاتصال شغال: الدخول للمنظومة وجهاز التوقيع تمام.",
-        "connection_bad": "الاتصال فيه مشكلة: {problems}", "connection_ready": "الإعدادات موجودة على السيرفر.", "st_submitted": "اتبعتت — بتتراجع", "st_valid": "مقبولة", "st_invalid": "مرفوضة بعد المراجعة", "st_rejected": "مرفوضة", "st_cancelled": "ملغاة",
+        "connection_bad": "الاتصال فيه مشكلة: {problems}", "connection_ready": "الإعدادات موجودة على السيرفر.", "st_submitted": "اتبعتت — بتتراجع", "st_valid": "مقبولة", "st_invalid": "مرفوضة بعد المراجعة", "st_rejected": "مرفوضة", "st_cancelled": "ملغاة", "st_sending": "بتتبعت دلوقتي", "st_cancel_requested": "طلب إلغاء — مستني رد المستلم والمنظومة؛ دوس تحديث الحالة",
     },
     "en": {
         "page_title": "E-invoicing", "title": "E-invoicing",
@@ -56,11 +56,11 @@ WORDS = {
         "threshold_hint": "Confirm the current threshold with the authority or your accountant; the default is EGP 50,000.",
         "portal": "Sending to the portal", "send": "Sign and send", "refresh": "Refresh the status", "cancel": "Cancel on the portal", "cancel_reason": "Cancellation reason",
         "sent": "Sent; the portal is checking it. Refresh the status in a minute.", "sent_rejected": "The portal rejected the invoice: {reason}", "refreshed": "Status refreshed.",
-        "cancelled": "Cancelled on the portal.", "not_sent": "This invoice has not been sent yet.", "env_preprod": "Pre-production (preprod)", "env_prod": "Production",
+        "cancelled": "The cancellation request was sent; refresh the status shortly to see the outcome.", "not_sent": "This invoice has not been sent yet.", "env_preprod": "Pre-production (preprod)", "env_prod": "Production",
         "not_set": "The portal connection is not set up on the server yet. Missing:", "setup_hint": "The steps are in docs/ETA_INTEGRATION.md: a portal account, the system's client ID and secret, and the signing token with its signer.",
         "status": "Status", "uuid": "Portal document ID", "submitted_at": "Sent", "checked_at": "Last checked", "public": "The invoice on the portal",
         "history": "Earlier sendings", "connection": "Portal connection", "check": "Test the connection", "connection_ok": "The connection works: portal login and signer are fine.",
-        "connection_bad": "The connection has a problem: {problems}", "connection_ready": "The settings are on the server.", "st_submitted": "Sent — being checked", "st_valid": "Valid", "st_invalid": "Invalid after checking", "st_rejected": "Rejected", "st_cancelled": "Cancelled",
+        "connection_bad": "The connection has a problem: {problems}", "connection_ready": "The settings are on the server.", "st_submitted": "Sent — being checked", "st_valid": "Valid", "st_invalid": "Invalid after checking", "st_rejected": "Rejected", "st_cancelled": "Cancelled", "st_sending": "Sending now", "st_cancel_requested": "Cancellation requested — waiting for the receiver and the portal; use refresh",
     },
 }
 
