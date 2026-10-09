@@ -608,7 +608,7 @@ Status: IMPLEMENTED (2026-10-08), requested by Ahmed: groups with distributors a
 
 ## HG-036 — Manufacturing restructure: work in progress, labour and overhead in product cost, scrap (R2-9)
 
-Status: OPEN (proposal; needs Ahmed / Main Control approval). Everything that does not need it is done.
+Status: RESOLVED — approved by Ahmed on 9 Oct 2026 ("موافق تعمل كل حاجة صح") and implemented in branch `claude/hg036-mfg-costing`. The original proposal is kept below; what was built follows it under "Implemented".
 
 - **Asked for:** Ahmed's round-2 feedback said manufacturing is "very bad" and needs restructuring (R2 plan, part 3).
 - **Done without touching protected logic:**
@@ -622,6 +622,22 @@ Status: OPEN (proposal; needs Ahmed / Main Control approval). Everything that do
   3. **Scrap and yield.** The stage log already records defects. Writing them off as a stock adjustment out (or a lower output) changes stock quantity, cost per good unit and the ledger.
 - **Proposed tests if approved:** quantity, value and average-cost regressions per scenario; a trial balance that still balances; stock reports per warehouse before and after WIP; cancellation reversing every leg.
 - **Risk if left as is:** low. Product cost is materials only (understated by labour and overhead), and defects stay as a quality figure without moving stock.
+- **Implemented (approved):**
+  - **Files:** `manufacturing/models.py` (+ migration `0003_wip_conversion_scrap`), `manufacturing/services.py`, `manufacturing/orders.py`, `ledger/projector.py`, the manufacturing board/order/run templates, and `reports/insights.py`, `reports/activity_panel.py` (run cost now includes conversion).
+  - **Schema:** `ProductionRun.conversion_cost` (labour + overhead absorbed) and `ProductionRun.scrap_quantity`, both defaulting to 0 so every existing run keeps its meaning. `total_cost` still means materials consumed. New `OrderMaterialIssue(order, operation)` links an order to the stock operations that issued its materials.
+  - **Work in progress:** the first stage of an order calls `services.issue`, which adjusts each component out through `adjust_stock` (same permission, period and stock-lock rules). Short materials now stop the start, not the finish. Finishing calls `services.produce(..., issued=...)`, which uses those same operations as the run's consumption instead of consuming again. Cancelling an order on the floor reverses every issue through `cancel_stock_operation`. Orders started before this change have no issues and consume at the finish as before.
+    - No new movement types: the issued value leaves the stock report when it is issued and sits in the work-in-progress account (`wip`, 110502 on the manufacturing chart; COGS where a chart has none).
+  - **Labour and overhead:** the product is adjusted in at `cost_round((materials + labour + overhead) / good units)`, so its authoritative average cost, and with it each later sale's cost (HG-003), includes conversion cost.
+    - In GL-002 the output operation credits work in progress with the material part and **absorbed production cost** (`production_cost`, 5102) with the conversion part. The labour and overhead themselves were already booked as expenses when paid.
+  - **Scrap:** good units = order quantity − all stage defects, capped at the fewest good units any stage recorded. Only good units enter stock; they carry the whole cost (normal loss), and the run records `scrap_quantity`. A lot with no good units cannot be finished.
+  - **Not changed:** inventory movement types, stock report sums, average-cost formula, closing logic, plain production runs (no conversion, no scrap).
+  - **Tests (`manufacturing/tests_hg036.py` + updated order/board tests):**
+    - stock quantities after start, finish and both cancellations;
+    - WIP balance 190 while on the floor and 0 after;
+    - finished goods 290; absorbed cost −100;
+    - average cost 14.5 (and 15.2632 with one scrapped unit);
+    - trial balance balanced and reconciliation clean in every scenario;
+    - an order started before HG-036 still consumes at the finish.
 
 ## Final gate verification
 

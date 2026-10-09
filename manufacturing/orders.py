@@ -1,11 +1,19 @@
 """MFG-002: production orders followed stage by stage.
 
-An order is a plan until it is finished: no stock moves while it is on the
-floor. Finishing posts one ordinary production run (``services.produce``) for
-the order's quantity, so materials, cost and the product's average cost go
-through exactly the path MFG-001 already proves. Labour and overhead entered
-on the order give the full cost per unit on its cost card; stock keeps the
-material cost (HG-003), so they are shown, not posted.
+HG-036 (approved):
+
+* starting an order (its first stage) issues the materials to the floor: they
+  leave stock then, through the inventory engine, and their value waits in
+  work in progress. Short materials stop the start, not the finish;
+* finishing posts one ordinary production run (``services.produce``) from
+  those issued materials, with labour and overhead absorbed into the
+  product's stock cost;
+* units recorded as defective at any stage are scrap: only the good units
+  enter stock, and they carry the whole cost;
+* cancelling an order on the floor returns every issued material.
+
+Orders started before HG-036 have no issued materials; they consume at finish
+as before.
 """
 
 from decimal import Decimal
@@ -18,7 +26,7 @@ from audit.models import AuditEventType, AuditLog
 from config.money import cost_round, money_round
 
 from . import services
-from .models import OrderStageLog, OrderStatus, ProductionOrder
+from .models import OrderMaterialIssue, OrderStageLog, OrderStatus, ProductionOrder
 from .stages import current_stages
 
 MESSAGES = {
@@ -70,6 +78,26 @@ def create_order(data, user, lang="ar"):
     return order
 
 
+def _batches(order):
+    return (order.quantity / order.recipe.output_quantity).quantize(Decimal("0.001"))
+
+
+def good_units(order):
+    """Units that passed every stage: the order less every defect, and never
+    more than the fewest good units any stage recorded."""
+
+    logs = list(order.stage_logs.all())
+    defects = sum((log.defect_quantity for log in logs), Decimal("0"))
+    good = order.quantity - defects
+    if logs:
+        good = min(good, min(log.good_quantity for log in logs))
+    return max(good, Decimal("0"))
+
+
+def issued_value(order):
+    return money_round(sum((issue.operation.quantity * issue.operation.unit_cost for issue in order.issues.select_related("operation")), Decimal("0")))
+
+
 def _locked(order):
     return ProductionOrder.objects.select_for_update().select_related("recipe").get(pk=order.pk)
 
@@ -90,6 +118,8 @@ def advance(order, user, *, good=None, defect=None, note="", lang="ar"):
         raise ValidationError(words["defect"])
     if order.status == OrderStatus.PLANNED:
         order.status, order.started_at = OrderStatus.IN_PROGRESS, timezone.now()
+        operations = services.issue(order.recipe, user, batches=_batches(order), location=order.location, reference=order.number, lang=lang)
+        OrderMaterialIssue.objects.bulk_create([OrderMaterialIssue(order=order, operation=operation) for operation in operations])
     stage = order.stages[order.stage_index]
     OrderStageLog.objects.create(order=order, stage_key=stage[0], good_quantity=good_qty, defect_quantity=defect_qty, note=(note or "")[:255], done_by=user)
     order.stage_index += 1
@@ -108,9 +138,12 @@ def finish(order, user, lang="ar"):
         raise ValidationError(words["state"])
     if order.stage_index < len(order.stages):
         raise ValidationError(words["not_last"])
-    batches = (order.quantity / order.recipe.output_quantity).quantize(Decimal("0.001"))
-    run = services.produce(order.recipe, user, batches=batches, location=order.location,
-                           notes=f"{order.number}{' · ' + order.notes if order.notes else ''}"[:255], lang=lang)
+    issued = [issue.operation for issue in order.issues.select_related("operation")]
+    planned = (order.recipe.output_quantity * _batches(order)).quantize(Decimal("0.001"))
+    run = services.produce(order.recipe, user, batches=_batches(order), location=order.location,
+                           notes=f"{order.number}{' · ' + order.notes if order.notes else ''}"[:255], lang=lang,
+                           conversion_cost=order.labor_cost + order.overhead_cost, scrap=max(planned - good_units(order), Decimal("0")),
+                           issued=issued or None)
     order.run, order.status, order.finished_at = run, OrderStatus.DONE, timezone.now()
     order.save(update_fields=["run", "status", "finished_at"])
     _audit(order, user, "finish_production_order", {"run": run.number, "output": str(run.output_quantity), "material_cost": str(run.total_cost)})
@@ -127,6 +160,10 @@ def cancel(order, user, reason, lang="ar"):
         raise ValidationError(words["state"])
     if not (reason or "").strip():
         raise ValidationError(words["reason"])
+    from inventory.services import cancel_stock_operation
+
+    for issue in order.issues.all():  # the materials come back from the floor
+        cancel_stock_operation(issue.operation_id, timezone.localdate(), f"{order.number}: {reason.strip()}"[:255], user)
     order.status = OrderStatus.CANCELLED
     order.notes = f"{order.notes} · {reason.strip()}"[:255] if order.notes else reason.strip()[:255]
     order.save(update_fields=["status", "notes"])
@@ -135,20 +172,25 @@ def cancel(order, user, reason, lang="ar"):
 
 
 def cost_card(order):
-    """Materials (posted cost once finished, today's averages before), plus
-    labour and overhead, per order and per unit."""
+    """Materials (posted once finished, as issued while on the floor, today's
+    averages before it starts), plus labour and overhead, per order and per
+    good unit."""
 
     if order.run_id:
         material, output = order.run.total_cost, order.run.output_quantity
+        stage = "posted"
+    elif order.issues.exists():
+        material, output, stage = issued_value(order), good_units(order), "issued"
     else:
-        batches = (order.quantity / order.recipe.output_quantity) if order.recipe.output_quantity else Decimal("0")
-        estimate = services.plan(order.recipe, batches, order.location)
-        material, output = estimate["cost"], estimate["output"]
+        estimate = services.plan(order.recipe, _batches(order) if order.recipe.output_quantity else Decimal("0"), order.location)
+        material, output, stage = estimate["cost"], estimate["output"], "estimate"
     total = money_round(material + order.labor_cost + order.overhead_cost)
     per_unit = cost_round(total / output) if output else Decimal("0")
     material_unit = cost_round(material / output) if output else Decimal("0")
+    absorbed = bool(order.run_id and order.run.conversion_cost)
     return {"material": money_round(material), "labor": order.labor_cost, "overhead": order.overhead_cost, "total": total,
-            "output": output, "per_unit": per_unit, "material_per_unit": material_unit, "estimate": not order.run_id}
+            "output": output, "per_unit": per_unit, "material_per_unit": material_unit, "estimate": stage == "estimate",
+            "stage": stage, "absorbed": absorbed, "scrap": order.run.scrap_quantity if order.run_id else order.quantity - good_units(order)}
 
 
 def quality(order):
