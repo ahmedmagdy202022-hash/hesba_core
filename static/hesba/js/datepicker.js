@@ -93,6 +93,7 @@
 
     this.wrap = document.createElement('span');
     this.wrap.className = 'hs-date';
+    this.wrap.hsPicker = this;  // a cloned wrapper (a copied invoice line) has no picker: see revive()
     native.parentNode.insertBefore(this.wrap, native);
     this.wrap.appendChild(this.text);
     this.button = document.createElement('button');
@@ -292,8 +293,27 @@
     }
   };
 
+  /* A row copied with cloneNode (invoice_form.js "+ line") carries the
+     picker's markup but none of its listeners. Put the original date input
+     back, with the copy's (renumbered) id, name and required, and upgrade it
+     like any other. */
+  function revive(wrap) {
+    var hidden = wrap.querySelector('input[data-hs-date]'), text = wrap.querySelector('.hs-date__text');
+    if (!hidden || !text) return;
+    hidden.type = 'date';
+    hidden.removeAttribute('data-hs-date');
+    hidden.id = text.id;
+    hidden.required = text.required;
+    hidden.disabled = text.disabled;
+    wrap.parentNode.insertBefore(hidden, wrap);
+    wrap.remove();
+  }
+
   function upgrade(root) {
-    (root.querySelectorAll ? root : document).querySelectorAll('input[type="date"]:not([data-hs-date])').forEach(function (input) {
+    var scope = root.querySelectorAll ? root : document;
+    if (scope.classList && scope.classList.contains('hs-date') && !scope.hsPicker) revive(scope);
+    scope.querySelectorAll('.hs-date').forEach(function (wrap) { if (!wrap.hsPicker) revive(wrap); });
+    scope.querySelectorAll('input[type="date"]:not([data-hs-date])').forEach(function (input) {
       if (input.closest('[data-native-date]')) return;
       input.hsPicker = new Picker(input);
     });

@@ -40,3 +40,10 @@ class DatePickerTests(TestCase):
             self.assertIn(word, script)
         css = (root / "css" / "datepicker.css").read_text(encoding="utf-8")
         self.assertIsNone(re.search(r"#[0-9a-fA-F]{3,8}\b|rgb\(", css), "colours come from the tokens")
+
+    def test_copied_lines_and_required_stars_are_handled(self):
+        root = settings.BASE_DIR / "static" / "hesba"
+        script = (root / "js" / "datepicker.js").read_text(encoding="utf-8")
+        self.assertIn("function revive(wrap)", script)  # a row copied by "+ line" gets a working picker
+        css = (root / "css" / "form_required.css").read_text(encoding="utf-8")
+        self.assertIn(".hs-date > [required]", css)  # a required date keeps its star
