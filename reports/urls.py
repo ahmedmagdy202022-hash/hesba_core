@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import aging_views, digest_views, functional_views, reps_views
+from . import aging_views, digest_views, functional_views, insights_views, reps_views
 
 
 app_name = "reports"
@@ -16,5 +16,6 @@ urlpatterns = [
     path("aging/", aging_views.aging_report, name="aging"),
     path("reps/", reps_views.rep_report, name="reps"),
     path("daily/", digest_views.daily_summary, name="daily"),
+    path("insights/", insights_views.insights_report, name="insights"),
 ]
 
