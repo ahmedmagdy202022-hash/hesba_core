@@ -142,3 +142,31 @@ class PurchaseUiTests(TestCase):
         response = self.client.get(reverse("purchases:list"), {"lang": "en"})
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Purchase invoices")
+
+
+class PurchaseSaveAndPostTests(TestCase):
+    """R2-6: the purchase screen shares the compact layout and "save and post"."""
+
+    def test_save_and_post(self):
+        from django.utils import timezone
+
+        from hesba_testing.factories import make_item, make_location, make_seeded_role, make_supplier, make_user, make_user_profile
+        from reports.tests_dashboard import prepared_client
+
+        prepared_client()
+        owner = make_user(username="pinv_owner")
+        make_user_profile(user=owner, role=make_seeded_role(RoleCode.OWNER))
+        supplier = make_supplier(supplier_code="S-INV")
+        location = make_location(location_code="L-PINV", is_receiving_location=True)
+        item = make_item(item_code="IT-PINV")
+        self.client.force_login(owner)
+        page = self.client.get(reverse("purchases:create") + "?lang=ar")
+        self.assertContains(page, "data-save-post")
+        self.assertContains(page, "الباقي للمورد")
+        self.client.post(reverse("purchases:create") + "?lang=ar", {
+            "lang": "ar", "then": "post", "invoice_number": "PI-R2-1", "invoice_date": timezone.localdate().isoformat(), "supplier": supplier.pk,
+            "receiving_location": location.pk, "discount_amount": "0", "tax_amount": "0", "paid_now": "0",
+            "lines-TOTAL_FORMS": "1", "lines-INITIAL_FORMS": "0", "lines-0-item": item.pk, "lines-0-quantity": "4", "lines-0-unit_purchase_price": "25"})
+        invoice = PurchaseInvoice.objects.get(invoice_number="PI-R2-1")
+        self.assertEqual((invoice.status, invoice.total_amount), ("posted", Decimal("100.00")))
+        self.assertEqual(StockMovement.objects.filter(item=item).count(), 1)

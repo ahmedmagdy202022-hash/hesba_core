@@ -182,6 +182,8 @@ def invoice_create(request):
                 form.add_error(None, exc)
             else:
                 messages.success(request, STRINGS[lang]["saved"])
+                if request.POST.get("then") == "post":  # R2-6: "save and post" in one press
+                    _post_now(request, invoice.pk, lang)
                 return redirect(f"/purchases/{invoice.pk}/?lang={lang}")
     else:
         form = PurchaseDraftForm(lang=lang, initial=_party_initial(request, "supplier"))
@@ -191,7 +193,7 @@ def invoice_create(request):
     return render(
         request,
         "purchases/form.html",
-        _context(request, form=form, line_formset=line_formset, item_catalog=item_catalog(sale_prices=False, purchase_prices=True), scan_words=scan_words(lang), tax_rates=rates_by_item(), units=units_catalog(purchase=True)),
+        _context(request, form=form, line_formset=line_formset, can_post=True, item_catalog=item_catalog(sale_prices=False, purchase_prices=True), scan_words=scan_words(lang), tax_rates=rates_by_item(), units=units_catalog(purchase=True)),
     )
 
 
@@ -219,13 +221,17 @@ def invoice_post(request, pk):
         return redirect("purchases:detail", pk=pk)
     lang = _lang(request)
     entity_scope.get_or_404(PurchaseInvoice, entity_scope.PURCHASE_INVOICE, pk=pk)
+    _post_now(request, pk, lang)
+    return redirect(f"/purchases/{pk}/?lang={lang}")
+
+
+def _post_now(request, pk, lang):
     try:
         post_purchase_invoice(pk, request.user)
     except ValidationError as exc:
         messages.error(request, "; ".join(exc.messages))
     else:
         messages.success(request, STRINGS[lang]["posted"])
-    return redirect(f"/purchases/{pk}/?lang={lang}")
 
 
 @require_permission("purchases.return_purchase")
