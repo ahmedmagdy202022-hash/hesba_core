@@ -66,7 +66,7 @@ MESSAGES = {
         "release_more": "المبلغ أكبر من ضمان الأعمال المحتجز ({held}).", "cashbox": "اختار الخزنة.", "other_customer": "التحصيل ده لعميل تاني.",
         "payment_linked": "التحصيل ده مربوط بمشروع بالفعل.", "payment_status": "اربط التحصيلات المرحّلة بس.", "date": "التاريخ مش صحيح.",
         "advance_used": "المستخلصات خصمت من الدفعة المقدمة دي بالفعل، فمينفعش يتفك ربطها.",
-        "reversed": "الإفراج ده اتلغى بالفعل.", "entity": "مستخلصات المشروع ده بتتعمل من كيان تاني؛ اشتغل من الكيان ده عشان ضمان الأعمال والدفعة المقدمة يفضلوا في مكان واحد.",
+        "reversed": "الإفراج ده اتلغى بالفعل.", "instalment": "التحصيل ده قسط على خطة تقسيط؛ مينفعش يتربط بمشروع.", "entity": "مستخلصات المشروع ده بتتعمل من كيان تاني؛ اشتغل من الكيان ده عشان ضمان الأعمال والدفعة المقدمة يفضلوا في مكان واحد.",
     },
     "en": {
         "rate": "The rate must be between 0 and 100.", "description": "Describe the item.", "qty": "The quantity must be above zero.", "price": "Invalid rate.",
@@ -78,7 +78,7 @@ MESSAGES = {
         "release_more": "The amount is more than the retention held ({held}).", "cashbox": "Choose the cashbox.", "other_customer": "This collection is for another customer.",
         "payment_linked": "This collection is already linked to a project.", "payment_status": "Only posted collections can be linked.", "date": "Invalid date.",
         "advance_used": "Certificates already recovered this advance, so it cannot be unlinked.",
-        "reversed": "This release is already reversed.", "entity": "This project's certificates are billed from another entity; work in that entity so its retention and advance stay in one place.",
+        "reversed": "This release is already reversed.", "instalment": "This collection pays an instalment plan; it cannot be linked to a project.", "entity": "This project's certificates are billed from another entity; work in that entity so its retention and advance stay in one place.",
     },
 }
 
@@ -292,6 +292,7 @@ def receive_payment(project, user, *, kind, cashbox, amount, payment_date=None, 
     project = _locked(project, lang)
     if cashbox is None:
         raise ValidationError(words["cashbox"])
+    _same_entity(project, cashbox, words)  # the project's money stays in one entity
     amount = _money(amount, words)
     kind = kind if kind in ProjectPaymentKind.values else ProjectPaymentKind.COLLECTION
     label = "دفعة مقدمة" if kind == ProjectPaymentKind.ADVANCE else "تحصيل مستخلصات"
@@ -314,6 +315,9 @@ def link_payment(project, payment, user, *, kind, lang="ar"):
         raise ValidationError(words["payment_status"])
     if ProjectPayment.objects.filter(payment=payment).exists():
         raise ValidationError(words["payment_linked"])
+    if hasattr(payment, "instalment_link"):
+        raise ValidationError(words["instalment"])  # it already settles an instalment plan
+    _same_entity(project, payment.cashbox, words)
     kind = kind if kind in ProjectPaymentKind.values else ProjectPaymentKind.COLLECTION
     link = ProjectPayment.objects.create(project=project, payment=payment, kind=kind, created_by=user)
     _audit(project, user, "link_project_payment", {"payment": payment.payment_number, "kind": kind})
@@ -463,10 +467,26 @@ def entity_locations(locations, entity_id):
 
 
 def project_entity(project):
-    """The entity a project's live certificates are billed from (None before the first)."""
+    """The one entity a project's money lives in: that of its first live
+    certificate, else of its first linked payment (None before either)."""
 
     first = live_certificates(project).select_related("invoice__selling_location").order_by("number").first()
-    return entity_of(first.invoice.selling_location) if first else None
+    if first is not None:
+        return entity_of(first.invoice.selling_location)
+    payment = project.payments.select_related("payment__cashbox").order_by("pk").first()
+    if payment is not None:
+        from entities.services import main_entity
+
+        return payment.payment.cashbox.entity_id or main_entity().pk
+    return None
+
+
+def _same_entity(project, cashbox, words):
+    from entities.services import main_entity
+
+    established = project_entity(project)
+    if established is not None and (cashbox.entity_id or main_entity().pk) != established:
+        raise ValidationError(words["entity"])
 
 
 def net_payable(certificate):

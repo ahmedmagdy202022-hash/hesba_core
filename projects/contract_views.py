@@ -204,20 +204,29 @@ def certificates(request, pk):
             messages.success(request, words["certificate_made"].format(number=certificate.number, invoice=certificate.invoice.invoice_number))
             return _back(project, "projects:certificate", lang, number=certificate.number)
     rows = [{"certificate": c, "net": contract.net_payable(c), "status_label": choice_label(c.invoice, "status", lang)}
-            for c in project.certificates.select_related("invoice")]
+            for c in _certificates(project).select_related("invoice")]
     boq_rows = []
     for line in project.boq.all():
         previous = contract.certified_quantity(line)
         boq_rows.append({"line": line, "previous": previous, "value": posted.get(f"q_{line.pk}", "")})
-    draft = contract.live_certificates(project).filter(invoice__status="draft").first()
+    draft = entity_scope.scope(contract.live_certificates(project), CERTIFICATE_SCOPE).filter(invoice__status="draft").first()
     return render(request, "projects/certificates.html", _context(
         request, project, "certificates", rows=rows, boq_rows=boq_rows, draft=draft, error=error, posted=posted,
         today=timezone.localdate().isoformat(),
     ))
 
 
+CERTIFICATE_SCOPE = "invoice__" + entity_scope.SALES_INVOICE
+
+
+def _certificates(project):
+    """The project's certificates this entity may see (their invoices' own scope)."""
+
+    return entity_scope.scope(project.certificates.all(), CERTIFICATE_SCOPE)
+
+
 def _certificate(project, number):
-    return get_object_or_404(Certificate.objects.select_related("invoice", "invoice__customer"), project=project, number=number)
+    return get_object_or_404(_certificates(project).select_related("invoice", "invoice__customer"), number=number)
 
 
 @require_permission(VIEW)
@@ -310,13 +319,14 @@ def payments(request, pk):
             error = _error(exc, lang)
         else:
             return _back(project, "projects:payments", lang)
-    links = project.payments.select_related("payment", "payment__cashbox")
+    links = entity_scope.scope(project.payments.select_related("payment", "payment__cashbox"), "payment__" + entity_scope.CUSTOMER_PAYMENT)
     return render(request, "projects/payments.html", _context(
         request, project, "payments", error=error, today=timezone.localdate().isoformat(),
         links=[{"link": link, "kind_label": choice_label(link, "kind", lang), "status_label": choice_label(link.payment, "status", lang)} for link in links],
         kinds=localized_choices(ProjectPayment, "kind", lang),
         cashboxes=entity_scope.cashboxes(Cashbox.objects).filter(active=True),
-        free_payments=entity_scope.scope(CustomerPayment.objects, entity_scope.CUSTOMER_PAYMENT).filter(customer=project.customer, status="posted", project_payment__isnull=True).order_by("-payment_date")[:50],
+        free_payments=entity_scope.scope(CustomerPayment.objects, entity_scope.CUSTOMER_PAYMENT).filter(
+            customer=project.customer, status="posted", project_payment__isnull=True, instalment_link__isnull=True).order_by("-payment_date")[:50],
         releases=project.retention_releases.all(),
     ))
 
@@ -387,7 +397,7 @@ def subcontracts(request, pk):
     subs = []
     for subcontract in project.subcontracts.select_related("supplier"):
         bills = [{"bill": bill, "net": costs.bill_net_payable(bill), "status_label": choice_label(bill.invoice, "status", lang)}
-                 for bill in subcontract.bills.select_related("invoice")]
+                 for bill in entity_scope.scope(subcontract.bills.select_related("invoice"), "invoice__" + entity_scope.PURCHASE_INVOICE)]
         subs.append({"subcontract": subcontract, "figures": costs.subcontract_figures(subcontract), "bills": bills, "releases": subcontract.releases.all()})
     others = [{"link": link, "heading_label": choice_label(link, "heading", lang), "net": costs.net_purchase(link.invoice),
                "status_label": choice_label(link.invoice, "status", lang)}

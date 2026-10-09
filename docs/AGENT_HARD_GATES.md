@@ -744,6 +744,11 @@ Status: APPROVED — Ahmed approved on 9 Oct 2026 ("خلص كله"), after the a
     - a return cannot be cancelled once a later certificate billed the quantity it gave back;
     - the guard takes the project's (or subcontract's) row lock, like certificates and releases;
     - a project's certificates and a subcontract's bills stay in one entity, so retention and advances (and their releases) are held in one place.
+  - **Third review:**
+    - a project's payments join it in the same entity: the entity of its first certificate, or else of its first payment;
+    - an instalment-plan collection cannot be linked as an advance;
+    - the project's owner cannot change once it has invoices, payments, certificates or releases;
+    - certificate, payment and subcontractor-bill lists, and the certificate page and print, are scoped to the working entity.
 - **Known limits:**
   - the customer's aging still shows the whole balance, retention included; the project screen shows what is due now;
   - advances paid to subcontractors are not tracked separately: a supplier payment before the bill nets on the supplier's account as today.

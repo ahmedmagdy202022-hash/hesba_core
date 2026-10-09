@@ -43,13 +43,13 @@ MESSAGES = {
         "name": "اكتب اسم المشروع.", "customer": "اختار العميل.", "value": "قيمة العقد مش صحيحة.", "dates": "تاريخ النهاية قبل البداية.",
         "closed": "المشروع ده خلص أو اتلغى.", "amount": "المبلغ لازم أكبر من صفر.", "description": "اكتب وصف المستخلص.", "setup": "لازم يكون فيه مخزن بيع نشط.",
         "other_customer": "الفاتورة دي لعميل تاني.", "linked": "ده مربوط بمشروع بالفعل.", "not_posted": "اربط الفواتير أو المصروفات المرحّلة بس.",
-        "qty": "الكمية لازم أكبر من صفر.", "item": "اختار الصنف.", "location": "اختار المخزن.", "stock_item": "الصنف ده مش متتبع في المخزون.",
+        "qty": "الكمية لازم أكبر من صفر.", "item": "اختار الصنف.", "customer_locked": "المشروع عليه فواتير أو تحصيلات؛ مينفعش يتغير صاحبه.", "location": "اختار المخزن.", "stock_item": "الصنف ده مش متتبع في المخزون.",
     },
     "en": {
         "name": "Enter the project name.", "customer": "Choose the customer.", "value": "Invalid contract value.", "dates": "The end date is before the start.",
         "closed": "This project is done or cancelled.", "amount": "The amount must be above zero.", "description": "Describe the progress bill.", "setup": "An active selling location is needed.",
         "other_customer": "This invoice is for another customer.", "linked": "This is already linked to a project.", "not_posted": "Only posted invoices or expenses can be linked.",
-        "qty": "The quantity must be above zero.", "item": "Choose the item.", "location": "Choose the location.", "stock_item": "This item is not stock-tracked.",
+        "qty": "The quantity must be above zero.", "item": "Choose the item.", "customer_locked": "The project has invoices or payments; its owner cannot change.", "location": "Choose the location.", "stock_item": "This item is not stock-tracked.",
     },
 }
 
@@ -96,6 +96,10 @@ def save_project(data, user, project=None, lang="ar"):
     created = project is None
     if not created:
         project = Project.objects.select_for_update().get(pk=project.pk)
+        # CONTRACT-002: invoices, payments and retention belong to the owner they were made for.
+        if values["customer"].pk != project.customer_id and (project.invoices.exists() or project.payments.exists()
+                                                              or project.certificates.exists() or project.retention_releases.exists()):
+            raise ValidationError(words["customer_locked"])
     before = {} if created else {key: str(getattr(project, key)) for key in values}
     project = project or Project(code=_next_code(), created_by=user)
     for key, value in values.items():

@@ -527,3 +527,53 @@ class ReviewRoundTwoTests(ContractSetup):
         release = contract.release_retention(self.project, self.owner, amount="500")
         self.assertTrue(release.pk)
         ledger_ok(self)
+
+
+class ReviewRoundThreeTests(ContractSetup):
+    """Codex's third review on #179."""
+
+    def test_the_owner_cannot_change_once_money_exists(self):
+        contract.receive_payment(self.project, self.owner, kind=ProjectPaymentKind.ADVANCE, cashbox=self.cashbox, amount="1000")
+        other = make_customer(customer_code="C-NEW", name="مالك تاني")
+        with self.assertRaisesMessage(ValidationError, "مينفعش يتغير صاحبه"):
+            services.save_project({"name": self.project.name, "customer": other}, self.owner, self.project)
+        fresh = services.save_project({"name": "مشروع فاضي", "customer": self.customer}, self.owner)
+        services.save_project({"name": fresh.name, "customer": other}, self.owner, fresh)  # nothing on it yet: fine
+
+    def test_an_instalment_collection_is_never_a_project_advance(self):
+        from installments.models import InstalmentPayment
+        from installments.services import create_plan
+        from sales.services import record_customer_payment
+
+        from settings_core.capabilities import _write
+
+        _write("installments", True)
+        invoice = services.bill_progress(services.save_project({"name": "x", "customer": self.customer}, self.owner),
+                                         self.owner, amount="900", description="x")
+        post_sales_invoice(invoice.pk, self.owner)
+        from datetime import timedelta
+
+        plan = create_plan(SalesInvoice.objects.get(pk=invoice.pk), 3, TODAY + timedelta(days=30), self.owner)
+        payment = record_customer_payment("CP-I1", TODAY, self.customer, self.cashbox, D("300"), self.owner)
+        InstalmentPayment.objects.create(plan=plan, payment=payment)
+        with self.assertRaisesMessage(ValidationError, "قسط على خطة تقسيط"):
+            contract.link_payment(self.project, payment, self.owner, kind=ProjectPaymentKind.ADVANCE)
+
+    def test_the_projects_money_stays_in_its_entity_and_others_do_not_see_its_certificates(self):
+        from entities.current import working_in
+        from entities.models import Entity
+
+        contract.receive_payment(self.project, self.owner, kind=ProjectPaymentKind.ADVANCE, cashbox=self.cashbox, amount="1000")
+        branch = Entity.objects.create(code="E3", name_ar="فرع")
+        far_box = make_cashbox(cashbox_code="E3-BOX", entity=branch)
+        make_location(location_code="E3-LOC", entity=branch)
+        with self.assertRaisesMessage(ValidationError, "من كيان تاني"):
+            contract.receive_payment(self.project, self.owner, kind=ProjectPaymentKind.ADVANCE, cashbox=far_box, amount="500")
+        with working_in(branch), self.assertRaisesMessage(ValidationError, "من كيان تاني"):
+            self.certify(concrete="5")  # the advance already placed the project in the main entity
+        certificate = self.certify(concrete="5")
+        from projects.contract_views import _certificates
+
+        with working_in(branch):
+            self.assertFalse(_certificates(self.project).exists())
+        self.assertEqual(list(_certificates(self.project)), [certificate])
