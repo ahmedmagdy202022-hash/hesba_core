@@ -7,6 +7,7 @@ import logging
 from datetime import timedelta
 
 from django.conf import settings
+from django.core.cache import cache
 from django.contrib.auth.decorators import login_not_required
 from django.core.mail import send_mail
 from django.db import DatabaseError
@@ -58,6 +59,17 @@ def _sandbox_of(request):
     return getattr(request, "demo_sandbox", None) or ""
 
 
+def _recent_in_memory(request, sandbox):
+    """Notes in the last hour from this tester (or all visitors), counted in the cache."""
+
+    key = f"feedback-rate:{sandbox or 'anonymous'}"
+    cache.add(key, 0, 3600)
+    try:
+        return cache.incr(key) - 1
+    except ValueError:  # expired between the two calls
+        return 0
+
+
 @login_not_required
 @require_POST
 def send(request):
@@ -70,7 +82,9 @@ def send(request):
     try:
         recent = Feedback.objects.filter(sandbox=sandbox, created_at__gte=timezone.now() - timedelta(hours=1)).count()
     except DatabaseError:
-        recent = 0  # the feedback database is down; the note still reaches the log below
+        # The feedback database is down; the note still reaches the log below.
+        # This server's own memory keeps the hourly limit meanwhile.
+        recent = _recent_in_memory(request, sandbox)
     if recent >= (MAX_PER_HOUR if sandbox else MAX_ANONYMOUS_PER_HOUR):
         return JsonResponse({"ok": False, "error": "Thanks! That is plenty for this hour." if lang == "en" else "شكرًا! كده كفاية الساعة دي، كمّل بعدين."}, status=429)
     mood = request.POST.get("mood", "")

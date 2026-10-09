@@ -193,6 +193,33 @@ class NeverLostTests(TestCase):
         self.assertIn("only copy", "\n".join(logged.output))
 
 
+    def test_the_hourly_limit_holds_while_the_database_is_down(self):
+        from django.core.cache import cache
+        from django.db import OperationalError
+
+        from . import views
+
+        cache.delete("feedback-rate:anonymous")
+        with mock.patch.object(Feedback, "save", side_effect=OperationalError("down")), \
+                mock.patch("feedback.views.Feedback.objects") as objects, \
+                mock.patch.object(views, "MAX_ANONYMOUS_PER_HOUR", 2), \
+                self.assertLogs("hesba.feedback", level="WARNING"):
+            objects.filter.side_effect = OperationalError("down")
+            codes = [self.client.post(reverse("feedback:send"), {"message": f"ملاحظة {n}", "lang": "ar"}).status_code for n in range(3)]
+        self.assertEqual(codes, [200, 200, 429])
+        cache.delete("feedback-rate:anonymous")
+
+    def test_notes_reach_the_console_whatever_the_app_log_level(self):
+        import logging
+
+        from django.conf import settings
+
+        logger = logging.getLogger("hesba.feedback")
+        self.assertFalse(logger.propagate)
+        self.assertTrue(logger.handlers and all(handler.level <= logging.WARNING for handler in logger.handlers))
+        self.assertIn("feedback_console", settings.LOGGING["loggers"]["hesba.feedback"]["handlers"])
+
+
 class ShowcaseWarningsTests(TestCase):
     def test_a_showcase_without_the_key_or_a_kept_database_is_warned(self):
         from .checks import feedback_is_readable_and_kept
