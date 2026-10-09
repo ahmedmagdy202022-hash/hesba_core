@@ -36,6 +36,7 @@ advance − collections. The owner's account itself (the customer ledger) is
 untouched: retention and advances are only split out of it for reading.
 """
 
+from collections import defaultdict
 from decimal import Decimal, InvalidOperation
 
 from django.core.exceptions import ValidationError
@@ -118,9 +119,20 @@ def _money(value, words, key="amount"):
 
 
 def _locked(project, lang):
-    """The project row, locked, and refused when it is done or cancelled."""
+    """The project row, locked, and refused when it is done or cancelled or
+    when its money lives in another entity than the one being worked in."""
 
-    return services._open(project, services.MESSAGES[lang])
+    project = services._open(project, services.MESSAGES[lang])
+    _reach(project, MESSAGES[lang])
+    return project
+
+
+def _held(project, lang):
+    """The project row, locked, for a change to money it already holds."""
+
+    project = Project.objects.select_for_update().get(pk=project.pk)
+    _reach(project, MESSAGES[lang])
+    return project
 
 
 # ---- terms ----
@@ -128,7 +140,7 @@ def _locked(project, lang):
 @transaction.atomic
 def save_terms(project, user, *, retention_rate, advance_recovery_rate, lang="ar"):
     words = MESSAGES[lang]
-    project = Project.objects.select_for_update().get(pk=project.pk)
+    project = _held(project, lang)
     retention, recovery = _rate(retention_rate, words), _rate(advance_recovery_rate, words)
     before = {"retention_rate": str(project.retention_rate), "advance_recovery_rate": str(project.advance_recovery_rate)}
     project.retention_rate, project.advance_recovery_rate = retention, recovery
@@ -161,24 +173,34 @@ def return_shares(amount, invoice):
     """{return id: the part of ``amount`` (a certificate's gross, retention or
     recovery) that return takes back}, for every return of the invoice.
 
-    Posted returns are allocated on the cumulative returned total, in date
-    order, so their shares always add up to exactly the returned share of the
-    amount (a full return takes back all of it, never a cent more or less).
-    A cancelled return keeps its own share, which its cancellation reverses.
+    Each return's share is fixed when it is made and never moves afterwards:
+    the returns are replayed in the order they were made and cancelled, and a
+    new return takes the returned share of the amount on the total returned by
+    then (it and the returns still standing), less what those already took. So
+    the standing returns always add up to exactly the returned share of the
+    amount (a full return takes back all of it, never a cent more or less),
+    and cancelling a return reverses its own share without moving the others'.
     The general ledger books these same figures, so the project and the books
     agree."""
 
     total, amount = Decimal(invoice.total_amount), Decimal(amount or 0)
     if total <= 0 or not amount:
         return {}
-    shares, cumulative, taken = {}, ZERO, ZERO
-    for row in invoice.returns.order_by("return_date", "pk"):
-        if row.status == "posted":
-            cumulative += Decimal(row.total_amount)
-            upto = money_round(amount * min(cumulative, total) / total)
-            shares[row.pk], taken = upto - taken, upto
-        else:
-            shares[row.pk] = money_round(amount * Decimal(row.total_amount) / total)
+    events = []
+    for row in invoice.returns.all():
+        made = row.created_at
+        events.append((made, 0, row.pk, row, True))
+        if row.status != "posted":
+            events.append((row.cancelled_at or made, 1, row.pk, row, False))
+    shares, standing = {}, {}
+    for *_, row, made in sorted(events, key=lambda event: event[:3]):
+        if not made:
+            standing.pop(row.pk, None)
+            continue
+        returned = sum((Decimal(other.total_amount) for other in standing.values()), Decimal(row.total_amount))
+        taken = sum((shares[pk] for pk in standing), ZERO)
+        shares[row.pk] = money_round(amount * min(returned, total) / total) - taken
+        standing[row.pk] = row
     return shares
 
 
@@ -307,8 +329,10 @@ def receive_payment(project, user, *, kind, cashbox, amount, payment_date=None, 
 
 @transaction.atomic
 def link_payment(project, payment, user, *, kind, lang="ar"):
+    from closing.services import ensure_period_is_open
+
     words = MESSAGES[lang]
-    project = Project.objects.select_for_update().get(pk=project.pk)
+    project = _held(project, lang)
     if payment.customer_id != project.customer_id:
         raise ValidationError(words["other_customer"])
     if payment.status != "posted":
@@ -318,7 +342,12 @@ def link_payment(project, payment, user, *, kind, lang="ar"):
     if hasattr(payment, "instalment_link"):
         raise ValidationError(words["instalment"])  # it already settles an instalment plan
     _same_entity(project, payment.cashbox, words)
+    _in_scope(payment.cashbox, words)
     kind = kind if kind in ProjectPaymentKind.values else ProjectPaymentKind.COLLECTION
+    if kind == ProjectPaymentKind.ADVANCE:
+        # An advance moves the payment's journal entry from receivable to
+        # customer advances on its own date: a closed month stays closed.
+        ensure_period_is_open(payment.payment_date)
     link = ProjectPayment.objects.create(project=project, payment=payment, kind=kind, created_by=user)
     _audit(project, user, "link_project_payment", {"payment": payment.payment_number, "kind": kind})
     return link
@@ -328,8 +357,14 @@ def link_payment(project, payment, user, *, kind, lang="ar"):
 def unlink_payment(project, link, user, lang="ar"):
     """Take a payment off the project. An advance a certificate already recovered stays."""
 
+    from closing.services import ensure_period_is_open
+
     words = MESSAGES[lang]
-    project = Project.objects.select_for_update().get(pk=project.pk)
+    project = _held(project, lang)
+    link = ProjectPayment.objects.select_related("payment__cashbox").get(pk=link.pk, project=project)
+    _in_scope(link.payment.cashbox, words)
+    if link.kind == ProjectPaymentKind.ADVANCE:
+        ensure_period_is_open(link.payment.payment_date)  # the same entry moves back
     if link.kind == ProjectPaymentKind.ADVANCE and advance_received(project) - Decimal(link.payment.amount) < advance_recovered(project):
         raise ValidationError(words["advance_used"])
     _audit(project, user, "unlink_project_payment", {"payment": link.payment.payment_number, "kind": link.kind})
@@ -434,7 +469,7 @@ def withdraw_certificate(project, certificate, user, lang="ar"):
     """Delete a draft certificate and its draft invoice (a draft has no ledger, stock or cash rows)."""
 
     words = MESSAGES[lang]
-    project = Project.objects.select_for_update().get(pk=project.pk)
+    project = _held(project, lang)
     certificate = Certificate.objects.select_related("invoice").select_for_update(of=("self",)).get(pk=certificate.pk, project=project)
     invoice = certificate.invoice
     if invoice.status != "draft":
@@ -489,6 +524,35 @@ def _same_entity(project, cashbox, words):
         raise ValidationError(words["entity"])
 
 
+def in_reach(project):
+    """Whether the entity being worked in holds this project's money: always
+    for the whole group, and for an entity only when the project's money is
+    there (or it has none yet)."""
+
+    from entities.current import current_entity
+
+    chosen = current_entity()
+    if chosen is None:
+        return True
+    established = project_entity(project)
+    return established is None or established == chosen.pk
+
+
+def _reach(project, words):
+    if not in_reach(project):
+        raise ValidationError(words["entity"])
+
+
+def _in_scope(cashbox, words):
+    """A payment's cashbox must belong to the entity being worked in."""
+
+    from cashboxes.models import Cashbox
+    from entities import scope as entity_scope
+
+    if not entity_scope.cashboxes(Cashbox.objects.filter(pk=cashbox.pk)).exists():
+        raise ValidationError(words["entity"])
+
+
 def net_payable(certificate):
     return money_round(Decimal(certificate.invoice.total_amount) - certificate.retention_amount - certificate.recovery_amount)
 
@@ -515,6 +579,58 @@ def retention_released(project):
     return money_round(project.retention_releases.filter(reversed_on__isnull=True).aggregate(total=Sum("amount"))["total"] or ZERO)
 
 
+def held_events(documents, releases):
+    """[(date, change)] of the retention a set of documents holds: each posted
+    document's retention on its date, each return's share off on its date (and
+    back on the date it was cancelled), each release off on its date (and back
+    when it was reversed). A cancelled document is reversed on its own date,
+    so it never held anything. These are the general ledger's own dates."""
+
+    events = []
+    for invoice, amount in documents:
+        if invoice.status != "posted" or not amount:
+            continue
+        events.append((invoice.invoice_date, Decimal(amount)))
+        shares = return_shares(amount, invoice)
+        for row in invoice.returns.all():
+            share = shares.get(row.pk, ZERO)
+            if not share:
+                continue
+            events.append((row.return_date, -share))
+            if row.status != "posted":
+                events.append((row.reversal_date or row.return_date, share))
+    for release in releases:
+        events.append((release.release_date, -Decimal(release.amount)))
+        if release.reversed_on:
+            events.append((release.reversed_on, Decimal(release.amount)))
+    return events
+
+
+def lowest_held(events, day=None):
+    """The lowest balance of ``events`` on ``day`` and every date after it (on
+    any date when ``day`` is None): what a release dated ``day`` may take."""
+
+    changes = defaultdict(lambda: ZERO)
+    for when, change in events:
+        changes[when] += change
+    running, before, lowest = ZERO, ZERO, None
+    for when in sorted(changes):
+        running += changes[when]
+        if day is not None and when < day:
+            before = running
+            continue
+        lowest = running if lowest is None else min(lowest, running)
+    candidates = [] if lowest is None else [lowest]
+    if day is not None and day not in changes:
+        candidates.append(before)  # the balance on the day itself
+    return money_round(min(candidates)) if candidates else ZERO
+
+
+def retention_events(project):
+    certificates = project.certificates.select_related("invoice")
+    return held_events([(c.invoice, c.retention_amount) for c in certificates], project.retention_releases.all())
+
+
 def ensure_consistent(project, lang="en"):
     """HG-038: refuse any change (a cancellation, a return, a reversal) that
     would leave retention released beyond what is held, or certificates
@@ -523,7 +639,7 @@ def ensure_consistent(project, lang="en"):
 
     # The same lock as certificates and releases take, so these never race them.
     project = Project.objects.select_for_update().get(pk=project.pk)
-    if retention_held(project) < 0:
+    if lowest_held(retention_events(project)) < 0:  # on any date, not only today
         raise ValidationError(CONSISTENCY[lang]["retention"])
     if advance_recovered(project) > advance_received(project):
         raise ValidationError(CONSISTENCY[lang]["advance"])
@@ -548,11 +664,13 @@ def release_retention(project, user, *, amount, release_date=None, notes="", lan
     from closing.services import ensure_period_is_open
 
     words = MESSAGES[lang]
-    project = Project.objects.select_for_update().get(pk=project.pk)
+    project = _held(project, lang)
     amount = _money(amount, words)
     day = release_date or timezone.localdate()
     ensure_period_is_open(day)  # the release is a dated ledger entry: closed months stay closed
-    held = retention_held(project)
+    # What is held on that date and stays held on every date after it: a
+    # release never runs ahead of the certificates (and returns) that fund it.
+    held = max(lowest_held(retention_events(project), day), ZERO)
     if amount > held:
         raise ValidationError(words["release_more"].format(held=held))
     release = RetentionRelease.objects.create(project=project, release_date=day, amount=amount, notes=(notes or "").strip()[:255], created_by=user)
@@ -567,7 +685,7 @@ def reverse_release(project, release, user, *, reversal_date=None, lang="ar"):
     from closing.services import ensure_period_is_open
 
     words = MESSAGES[lang]
-    project = Project.objects.select_for_update().get(pk=project.pk)
+    project = _held(project, lang)
     release = RetentionRelease.objects.select_for_update().get(pk=release.pk, project=project)
     if release.reversed_on:
         raise ValidationError(words["reversed"])
@@ -584,23 +702,29 @@ def reverse_release(project, release, user, *, reversal_date=None, lang="ar"):
 # ---- what the owner owes on this project ----
 
 def position(project):
-    """The owner's side of the contract, from posted documents only."""
+    """The owner's side of the contract, from posted documents only, as the
+    entity being worked in sees it: its own invoices, certificates and
+    payments (all of them for the whole group). Releases live in the
+    project's entity, so another entity sees none."""
 
+    from entities import scope as entity_scope
     from sales.models import SalesReturn
 
-    links = project.invoices.select_related("invoice").filter(invoice__status="posted")
+    links = entity_scope.scope(project.invoices.select_related("invoice").filter(invoice__status="posted"), "invoice__" + entity_scope.SALES_INVOICE)
     added = ZERO
     for link in links:
         invoice = link.invoice
         returned = SalesReturn.objects.filter(source_invoice=invoice, status="posted").aggregate(total=Sum("due_amount"))["total"] or ZERO
         added += Decimal(invoice.remaining_due) - returned
-    figures = [effective(c) for c in live_certificates(project).filter(invoice__status="posted").select_related("invoice")]
+    certificates = entity_scope.scope(live_certificates(project).filter(invoice__status="posted"), "invoice__" + entity_scope.SALES_INVOICE)
+    figures = [effective(c) for c in certificates.select_related("invoice")]
     gross = money_round(sum((f[0] for f in figures), ZERO))
     retention = money_round(sum((f[1] for f in figures), ZERO))
-    released = retention_released(project)
+    released = retention_released(project) if in_reach(project) else ZERO
     recovered = money_round(sum((f[2] for f in figures), ZERO))
-    collections = money_round(_posted_payments(project, ProjectPaymentKind.COLLECTION).aggregate(total=Sum("payment__amount"))["total"] or ZERO)
-    received = advance_received(project)
+    payments = entity_scope.scope(project.payments.filter(payment__status="posted"), "payment__" + entity_scope.CUSTOMER_PAYMENT)
+    collections = money_round(payments.filter(kind=ProjectPaymentKind.COLLECTION).aggregate(total=Sum("payment__amount"))["total"] or ZERO)
+    received = money_round(payments.filter(kind=ProjectPaymentKind.ADVANCE).aggregate(total=Sum("payment__amount"))["total"] or ZERO)
     contract = contract_value(project)
     return {
         "contract": contract, "certified": gross, "certified_progress": int(min(gross / contract * 100, Decimal("999"))) if contract > 0 else 0,

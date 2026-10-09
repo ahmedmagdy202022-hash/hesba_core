@@ -577,3 +577,156 @@ class ReviewRoundThreeTests(ContractSetup):
         with working_in(branch):
             self.assertFalse(_certificates(self.project).exists())
         self.assertEqual(list(_certificates(self.project)), [certificate])
+
+
+class ReviewRoundFourTests(ContractSetup):
+    """Codex's fourth review on #179: entity reach, closed months, stable return shares, dated releases."""
+
+    def setUp(self):
+        super().setUp()
+        self.subcontract = costs.save_subcontract(self.project, self.owner, {"supplier": make_supplier(supplier_code="S-SUB", name="مقاول باطن"),
+                                                                             "scope": "أعمال المباني", "value": "60000", "retention_rate": "10"})
+
+    def branch(self):
+        from entities.models import Entity
+
+        branch = Entity.objects.create(code="E4", name_ar="فرع رابع")
+        make_location(location_code="E4-LOC", entity=branch)
+        make_cashbox(cashbox_code="E4-BOX", entity=branch)
+        return branch
+
+    def close_last_month(self):
+        from datetime import timedelta
+
+        from closing.models import Period, PeriodStatus
+
+        end = TODAY.replace(day=1) - timedelta(days=1)
+        Period.objects.create(period_code="CLOSED-4", name="closed", start_date=end.replace(day=1), end_date=end,
+                              status=PeriodStatus.CLOSED, closed_at=timezone.now())
+        return end
+
+    def test_another_entity_cannot_change_or_see_the_projects_money(self):
+        from entities.current import working_in
+
+        advance = contract.receive_payment(self.project, self.owner, kind=ProjectPaymentKind.ADVANCE, cashbox=self.cashbox, amount="10000")
+        post_sales_invoice(self.certify(concrete="10").invoice_id, self.owner)  # 10000: retention 500, recovery 1000
+        release = contract.release_retention(self.project, self.owner, amount="100")
+        bill = costs.bill_subcontract(self.subcontract, self.owner, amount="5000", description="x")
+        post_purchase_invoice(bill.invoice_id, self.owner)
+        draft = costs.bill_subcontract(self.subcontract, self.owner, amount="1000", description="y")
+        sub_release = costs.release_subcontract_retention(self.subcontract, self.owner, amount="100")
+        branch = self.branch()
+        link = self.project.payments.get(payment=advance)
+        with working_in(branch):
+            for attempt in (lambda: contract.unlink_payment(self.project, link, self.owner),
+                            lambda: contract.release_retention(self.project, self.owner, amount="50"),
+                            lambda: contract.reverse_release(self.project, release, self.owner),
+                            lambda: contract.save_terms(self.project, self.owner, retention_rate="0", advance_recovery_rate="0"),
+                            lambda: costs.withdraw_bill(draft, self.owner),
+                            lambda: costs.release_subcontract_retention(self.subcontract, self.owner, amount="50"),
+                            lambda: costs.reverse_subcontract_release(sub_release, self.owner),
+                            lambda: costs.unlink_purchase(self.project, self.project.purchases.get(invoice=draft.invoice), self.owner)):
+                with self.assertRaises(ValidationError):
+                    attempt()
+            # What it sees of the project carries none of the main entity's money.
+            seen = contract.position(self.project)
+            self.assertEqual({key: seen[key] for key in ("certified", "retention_held", "released", "advance", "recovered", "collections", "due_now")},
+                             dict.fromkeys(("certified", "retention_held", "released", "advance", "recovered", "collections", "due_now"), D("0")))
+            figures = costs.subcontract_figures(self.subcontract)
+            self.assertEqual((figures["billed"], figures["retention_held"], figures["drafts"]), (D("0"), D("0"), D("0")))
+            self.assertEqual((services.summary(self.project)["billed"], services.summary(self.project)["purchases"]), (D("0"), D("0")))
+            self.assertEqual(costs.actual_by_heading(self.project), {})
+        self.assertTrue(self.project.payments.filter(pk=link.pk).exists())
+        self.assertFalse(release.__class__.objects.get(pk=release.pk).reversed_on)
+        here = contract.position(self.project)
+        self.assertEqual((here["certified"], here["retention_held"], here["advance"]), (D("10000.00"), D("400.00"), D("10000.00")))
+        self.assertEqual(costs.subcontract_figures(self.subcontract)["billed"], D("5000.00"))
+
+    def test_the_screen_refuses_to_unlink_another_entitys_payment(self):
+        from entities.current import SESSION_KEY
+
+        advance = contract.receive_payment(self.project, self.owner, kind=ProjectPaymentKind.COLLECTION, cashbox=self.cashbox, amount="700")
+        link = self.project.payments.get(payment=advance)
+        branch = self.branch()
+        self.client.force_login(self.owner)
+        session = self.client.session
+        session[SESSION_KEY] = branch.pk
+        session.save()
+        response = self.client.post(reverse("projects:payments", args=[self.project.pk]), {"action": "unlink", "link": str(link.pk)})
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(self.project.payments.filter(pk=link.pk).exists())
+
+    def test_tagging_an_old_payment_as_an_advance_respects_closed_months(self):
+        from sales.services import record_customer_payment
+
+        old_day = TODAY.replace(day=1) - timezone.timedelta(days=3)
+        old = record_customer_payment("CP-OLD", old_day, self.customer, self.cashbox, D("2000"), self.owner)
+        kept = record_customer_payment("CP-OLD2", old_day, self.customer, self.cashbox, D("500"), self.owner)
+        advance = contract.link_payment(self.project, kept, self.owner, kind=ProjectPaymentKind.ADVANCE)
+        self.close_last_month()
+        with self.assertRaisesMessage(ValidationError, "Period must be open"):
+            contract.link_payment(self.project, old, self.owner, kind=ProjectPaymentKind.ADVANCE)
+        with self.assertRaisesMessage(ValidationError, "Period must be open"):
+            contract.unlink_payment(self.project, advance, self.owner)
+        contract.link_payment(self.project, old, self.owner, kind=ProjectPaymentKind.COLLECTION)  # a collection moves nothing in the books
+
+    def test_linking_an_old_service_purchase_respects_closed_months(self):
+        rental = make_item(item_code="RENT4", item_name="إيجار معدات", is_stock_tracked=False)
+        supplier = make_supplier(supplier_code="S-4", name="معدات")
+        old_day = TODAY.replace(day=1) - timezone.timedelta(days=3)
+        invoices = []
+        for number in ("PI-OLD", "PI-OLD2"):
+            invoice = create_purchase_draft({"invoice_number": number, "invoice_date": old_day, "supplier": supplier, "receiving_location": self.store},
+                                            [{"item": rental, "quantity": D("1"), "unit_purchase_price": D("800")}], self.owner)
+            post_purchase_invoice(invoice.pk, self.owner)
+            invoices.append(PurchaseInvoice.objects.get(pk=invoice.pk))
+        link = costs.link_purchase(self.project, invoices[1], self.owner)
+        self.close_last_month()
+        with self.assertRaisesMessage(ValidationError, "Period must be open"):
+            costs.link_purchase(self.project, invoices[0], self.owner)
+        with self.assertRaisesMessage(ValidationError, "Period must be open"):
+            costs.unlink_purchase(self.project, link, self.owner)
+
+    def test_cancelling_a_return_keeps_every_other_returns_share(self):
+        from sales.models import SalesReturn
+        from sales.services import cancel_sales_return, create_sales_return
+
+        small = services.save_project({"name": "بند صغير", "customer": self.customer}, self.owner)
+        line = contract.save_boq_line(small, self.owner, {"description": "x", "quantity": "3", "rate": "1"})
+        contract.save_terms(small, self.owner, retention_rate="0.5", advance_recovery_rate="0")
+        certificate = contract.create_certificate(small, self.owner, quantities={line.pk: "3"})
+        post_sales_invoice(certificate.invoice_id, self.owner)
+        invoice = SalesInvoice.objects.get(pk=certificate.invoice_id)
+        sales_line = invoice.lines.get()
+        returns = []
+        for n in range(3):
+            create_sales_return(f"SR-S{n}", TODAY, invoice.pk, [{"source_line": sales_line, "quantity": D("1")}], "x", self.owner)
+            returns.append(SalesReturn.objects.get(return_number=f"SR-S{n}"))
+        before = contract.return_shares(D("0.02"), invoice)
+        self.assertEqual([before[r.pk] for r in returns], [D("0.01"), D("0.00"), D("0.01")])
+        ensure_fresh()
+        cancel_sales_return(returns[0].pk, TODAY, "غلط", self.owner)
+        self.assertEqual(contract.return_shares(D("0.02"), invoice), before)  # nobody else's share moved
+        self.assertEqual(contract.effective(certificate)[1], D("0.01"))
+        self.assertEqual(gl("retention_receivable"), D("0.01"))
+        create_sales_return("SR-S3", TODAY, invoice.pk, [{"source_line": sales_line, "quantity": D("1")}], "x", self.owner)
+        self.assertEqual(contract.effective(certificate)[1], D("0.00"))  # the whole invoice is back: all its retention too
+        self.assertEqual(gl("retention_receivable"), D("0.00"))
+        ledger_ok(self)
+
+    def test_a_release_needs_the_retention_held_on_its_own_date(self):
+        from datetime import timedelta
+
+        if TODAY.day == 1:
+            self.skipTest("needs an earlier day in the same month")
+        certificate = contract.create_certificate(self.project, self.owner, quantities={self.concrete.pk: "10"}, certificate_date=TODAY)
+        post_sales_invoice(certificate.invoice_id, self.owner)  # retention 500 held from today
+        with self.assertRaisesMessage(ValidationError, "أكبر من ضمان الأعمال المحتجز (0"):
+            contract.release_retention(self.project, self.owner, amount="100", release_date=TODAY - timedelta(days=1))
+        contract.release_retention(self.project, self.owner, amount="500", release_date=TODAY)
+        bill = costs.bill_subcontract(self.subcontract, self.owner, amount="5000", description="x", bill_date=TODAY)
+        post_purchase_invoice(bill.invoice_id, self.owner)
+        with self.assertRaisesMessage(ValidationError, "أكبر من ضمان الأعمال المحتجز (0"):
+            costs.release_subcontract_retention(self.subcontract, self.owner, amount="100", release_date=TODAY - timedelta(days=1))
+        costs.release_subcontract_retention(self.subcontract, self.owner, amount="500", release_date=TODAY)
+        ledger_ok(self)

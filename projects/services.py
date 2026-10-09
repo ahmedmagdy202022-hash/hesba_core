@@ -223,16 +223,18 @@ def summary(project):
     from cashboxes.models import CashboxOperationStatus
     from inventory.models import StockOperationStatus
 
-    posted = [link.invoice for link in project.invoices.select_related("invoice").filter(invoice__status="posted")]
+    # As the entity being worked in sees it (HG-034): its own documents only.
+    invoices = entity_scope.scope(project.invoices.select_related("invoice"), "invoice__" + entity_scope.SALES_INVOICE)
+    posted = [link.invoice for link in invoices.filter(invoice__status="posted")]
     billed = money_round(sum((net_sales(invoice) for invoice in posted), Decimal("0")))
     invoiced = money_round(sum((Decimal(invoice.total_amount) for invoice in posted), Decimal("0")))
     due = money_round(sum((Decimal(invoice.remaining_due) for invoice in posted), Decimal("0")))
-    drafts = project.invoices.filter(invoice__status="draft").aggregate(total=Sum("invoice__total_amount"))["total"] or Decimal("0")
-    materials = money_round(sum(
-        (issue.operation.quantity * issue.operation.unit_cost for issue in project.issues.select_related("operation").filter(operation__status=StockOperationStatus.POSTED)),
-        Decimal("0"),
-    ))
-    expenses = money_round(project.expenses.filter(expense__cashbox_operation__status=CashboxOperationStatus.POSTED).aggregate(total=Sum("expense__amount"))["total"] or 0)
+    drafts = invoices.filter(invoice__status="draft").aggregate(total=Sum("invoice__total_amount"))["total"] or Decimal("0")
+    issues = entity_scope.scope(project.issues.select_related("operation").filter(operation__status=StockOperationStatus.POSTED),
+                                tuple("operation__" + path for path in entity_scope.STOCK_OPERATION))
+    materials = money_round(sum((issue.operation.quantity * issue.operation.unit_cost for issue in issues), Decimal("0")))
+    expenses = entity_scope.scope(project.expenses.filter(expense__cashbox_operation__status=CashboxOperationStatus.POSTED), "expense__" + entity_scope.EXPENSE)
+    expenses = money_round(expenses.aggregate(total=Sum("expense__amount"))["total"] or 0)
     from .contract import contract_value
     from .costs import purchases_cost
 

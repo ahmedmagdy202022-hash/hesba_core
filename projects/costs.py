@@ -181,6 +181,7 @@ def withdraw_bill(bill, user, lang="ar"):
     words = MESSAGES[lang]
     bill = SubcontractBill.objects.select_related("invoice", "subcontract__project").select_for_update(of=("self",)).get(pk=bill.pk)
     invoice = bill.invoice
+    _visible(invoice, words)
     if invoice.status != "draft":
         raise ValidationError(words["not_draft"])
     project = bill.subcontract.project
@@ -223,6 +224,38 @@ def bill_net_payable(bill):
     return money_round(Decimal(bill.invoice.total_amount) - bill.retention_amount)
 
 
+def subcontract_entity(subcontract):
+    """The one entity a subcontract's bills (and the retention held from them) live in."""
+
+    from .contract import entity_of
+
+    bills = subcontract.bills.select_related("invoice__receiving_location").order_by("number")
+    first = bills.exclude(invoice__status="cancelled").first() or bills.first()
+    return entity_of(first.invoice.receiving_location) if first else None
+
+
+def in_reach(subcontract):
+    from entities.current import current_entity
+
+    chosen = current_entity()
+    if chosen is None:
+        return True
+    established = subcontract_entity(subcontract)
+    return established is None or established == chosen.pk
+
+
+def _reach(subcontract, words):
+    if not in_reach(subcontract):
+        raise ValidationError(words["entity"])
+
+
+def retention_events(subcontract):
+    from .contract import held_events
+
+    bills = subcontract.bills.select_related("invoice")
+    return held_events([(b.invoice, b.retention_amount) for b in bills], subcontract.releases.all())
+
+
 def subcontract_retention_held(subcontract):
     held = sum((effective_bill(b)[1] for b in live_bills(subcontract).filter(invoice__status="posted").select_related("invoice")), ZERO)
     released = subcontract.releases.filter(reversed_on__isnull=True).aggregate(total=Sum("amount"))["total"] or ZERO
@@ -239,8 +272,10 @@ def ensure_consistent(subcontract, lang="en"):
     """HG-038: refuse a cancellation, return or reversal that would leave
     released retention above what is held (called inside that change)."""
 
+    from .contract import lowest_held
+
     subcontract = Subcontract.objects.select_for_update().get(pk=subcontract.pk)  # the lock releases take
-    if subcontract_retention_held(subcontract) < 0:
+    if lowest_held(retention_events(subcontract)) < 0:  # on any date, not only today
         raise ValidationError(CONSISTENCY[lang])
 
 
@@ -249,11 +284,14 @@ def release_subcontract_retention(subcontract, user, *, amount, release_date=Non
     from closing.services import ensure_period_is_open
 
     words = MESSAGES[lang]
+    from .contract import lowest_held
+
     subcontract = Subcontract.objects.select_for_update().select_related("project").get(pk=subcontract.pk)
+    _reach(subcontract, words)
     amount = _money(amount, words)
     day = release_date or timezone.localdate()
     ensure_period_is_open(day)  # a dated ledger entry: closed months stay closed
-    held = subcontract_retention_held(subcontract)
+    held = max(lowest_held(retention_events(subcontract), day), ZERO)  # held on that date and every date after
     if amount > held:
         raise ValidationError(words["release_more"].format(held=held))
     release = SubcontractRelease.objects.create(subcontract=subcontract, release_date=day, amount=amount,
@@ -268,6 +306,8 @@ def reverse_subcontract_release(release, user, *, reversal_date=None, lang="ar")
 
     words = MESSAGES[lang]
     release = SubcontractRelease.objects.select_for_update().select_related("subcontract__project").get(pk=release.pk)
+    Subcontract.objects.select_for_update().get(pk=release.subcontract_id)
+    _reach(release.subcontract, words)
     if release.reversed_on:
         raise ValidationError(words["reversed"])
     day = reversal_date or timezone.localdate()
@@ -280,13 +320,31 @@ def reverse_subcontract_release(release, user, *, reversal_date=None, lang="ar")
     return release
 
 
+def _here(queryset, prefix="invoice__"):
+    """Only what the entity being worked in may see (everything for the whole group)."""
+
+    from entities import scope as entity_scope
+
+    return entity_scope.scope(queryset, prefix + entity_scope.PURCHASE_INVOICE)
+
+
+def _visible(invoice, words):
+    from purchases.models import PurchaseInvoice
+
+    if not _here(PurchaseInvoice.objects.filter(pk=invoice.pk), "").exists():
+        raise ValidationError(words["entity"])
+
+
 def subcontract_figures(subcontract):
-    posted = live_bills(subcontract).filter(invoice__status="posted").select_related("invoice")
+    """A subcontract's figures as the entity being worked in sees them."""
+
+    bills = _here(live_bills(subcontract))
+    posted = bills.filter(invoice__status="posted").select_related("invoice")
     billed = money_round(sum((effective_bill(b)[0] for b in posted), ZERO))
     value = Decimal(subcontract.value)
     return {"value": value, "billed": billed, "remaining": money_round(max(value - billed, ZERO)), "over": money_round(max(billed - value, ZERO)),
-            "retention_held": subcontract_retention_held(subcontract),
-            "drafts": money_round(live_bills(subcontract).filter(invoice__status="draft").aggregate(total=Sum("gross"))["total"] or ZERO)}
+            "retention_held": subcontract_retention_held(subcontract) if in_reach(subcontract) else ZERO,
+            "drafts": money_round(bills.filter(invoice__status="draft").aggregate(total=Sum("gross"))["total"] or ZERO)}
 
 
 # ---- other service purchases ----
@@ -301,6 +359,8 @@ def link_purchase(project, invoice, user, *, heading=CostHeading.OTHER, lang="ar
         raise ValidationError(words["linked"])
     if invoice.lines.filter(item__is_stock_tracked=True).exists():
         raise ValidationError(words["stock_lines"])
+    _visible(invoice, words)
+    _period(invoice)
     heading = heading if heading in CostHeading.values else CostHeading.OTHER
     link = ProjectPurchase.objects.create(project=project, invoice=invoice, heading=heading, created_by=user)
     _audit(project, user, "link_project_purchase", {"invoice": invoice.invoice_number, "heading": heading})
@@ -310,10 +370,29 @@ def link_purchase(project, invoice, user, *, heading=CostHeading.OTHER, lang="ar
 @transaction.atomic
 def unlink_purchase(project, link, user, lang="ar"):
     words = MESSAGES[lang]
+    project = Project.objects.select_for_update().get(pk=project.pk)
+    link = ProjectPurchase.objects.select_related("invoice").get(pk=link.pk, project=project)
     if hasattr(link.invoice, "subcontract_bill"):
         raise ValidationError(words["bill_link"])
+    _visible(link.invoice, words)
+    _period(link.invoice)
     _audit(project, user, "unlink_project_purchase", {"invoice": link.invoice.invoice_number})
     link.delete()
+
+
+def _period(invoice):
+    """Linking a service purchase moves its posted expense into project cost
+    on the invoice's own date (and its returns' dates): closed months stay closed."""
+
+    from closing.services import ensure_period_is_open
+
+    if invoice.status == "draft":
+        return  # nothing is in the books yet
+    ensure_period_is_open(invoice.invoice_date)
+    for day in invoice.returns.values_list("return_date", flat=True):
+        ensure_period_is_open(day)
+    for day in invoice.returns.exclude(reversal_date__isnull=True).values_list("reversal_date", flat=True):
+        ensure_period_is_open(day)
 
 
 def net_purchase(invoice):
@@ -334,18 +413,24 @@ def actual_by_heading(project):
     from cashboxes.models import CashboxOperationStatus
     from inventory.models import StockOperationStatus
 
+    from entities import scope as entity_scope
+
     actual = defaultdict(lambda: ZERO)
-    for issue in project.issues.select_related("operation").filter(operation__status=StockOperationStatus.POSTED):
+    issues = entity_scope.scope(project.issues.select_related("operation").filter(operation__status=StockOperationStatus.POSTED),
+                                tuple("operation__" + path for path in entity_scope.STOCK_OPERATION))
+    for issue in issues:
         actual[CostHeading.MATERIALS] += money_round(issue.operation.quantity * issue.operation.unit_cost)
-    for link in project.expenses.select_related("expense").filter(expense__cashbox_operation__status=CashboxOperationStatus.POSTED):
+    expenses = entity_scope.scope(project.expenses.select_related("expense").filter(expense__cashbox_operation__status=CashboxOperationStatus.POSTED),
+                                  "expense__" + entity_scope.EXPENSE)
+    for link in expenses:
         actual[link.heading] += Decimal(link.expense.amount)
-    for link in project.purchases.select_related("invoice"):
+    for link in _here(project.purchases.select_related("invoice")):
         actual[link.heading] += net_purchase(link.invoice)
     return {heading: money_round(value) for heading, value in actual.items()}
 
 
 def purchases_cost(project):
-    return money_round(sum((net_purchase(link.invoice) for link in project.purchases.select_related("invoice")), ZERO))
+    return money_round(sum((net_purchase(link.invoice) for link in _here(project.purchases.select_related("invoice"))), ZERO))
 
 
 @transaction.atomic

@@ -296,7 +296,8 @@ def payments(request, pk):
                 messages.success(request, words["linked"])
             elif action == "unlink":
                 _need(request, COLLECT)
-                link = _pick(ProjectPayment, request.POST.get("link"), project=project)
+                link = _scoped(entity_scope.scope(ProjectPayment.objects.filter(project=project), "payment__" + entity_scope.CUSTOMER_PAYMENT),
+                               request.POST.get("link"))
                 if link is None:
                     raise Http404
                 contract.unlink_payment(project, link, request.user, lang)
@@ -327,7 +328,7 @@ def payments(request, pk):
         cashboxes=entity_scope.cashboxes(Cashbox.objects).filter(active=True),
         free_payments=entity_scope.scope(CustomerPayment.objects, entity_scope.CUSTOMER_PAYMENT).filter(
             customer=project.customer, status="posted", project_payment__isnull=True, instalment_link__isnull=True).order_by("-payment_date")[:50],
-        releases=project.retention_releases.all(),
+        releases=project.retention_releases.all() if contract.in_reach(project) else [],
     ))
 
 
@@ -371,7 +372,7 @@ def subcontracts(request, pk):
                 costs.reverse_subcontract_release(release, request.user, lang=lang)
                 messages.success(request, words["release_reversed"])
             elif action == "withdraw":
-                bill = _pick(SubcontractBill, request.POST.get("bill"), subcontract__project=project)
+                bill = _scoped(costs._here(SubcontractBill.objects.filter(subcontract__project=project)), request.POST.get("bill"))
                 if bill is None:
                     raise Http404
                 costs.withdraw_bill(bill, request.user, lang)
@@ -383,7 +384,7 @@ def subcontracts(request, pk):
                 costs.link_purchase(project, invoice, request.user, heading=request.POST.get("heading"), lang=lang)
                 messages.success(request, words["linked"])
             elif action == "unlink_purchase":
-                link = _pick(ProjectPurchase, request.POST.get("link"), project=project)
+                link = _scoped(costs._here(ProjectPurchase.objects.filter(project=project)), request.POST.get("link"))
                 if link is None:
                     raise Http404
                 costs.unlink_purchase(project, link, request.user, lang)
@@ -397,11 +398,12 @@ def subcontracts(request, pk):
     subs = []
     for subcontract in project.subcontracts.select_related("supplier"):
         bills = [{"bill": bill, "net": costs.bill_net_payable(bill), "status_label": choice_label(bill.invoice, "status", lang)}
-                 for bill in entity_scope.scope(subcontract.bills.select_related("invoice"), "invoice__" + entity_scope.PURCHASE_INVOICE)]
-        subs.append({"subcontract": subcontract, "figures": costs.subcontract_figures(subcontract), "bills": bills, "releases": subcontract.releases.all()})
+                 for bill in costs._here(subcontract.bills.select_related("invoice"))]
+        subs.append({"subcontract": subcontract, "figures": costs.subcontract_figures(subcontract), "bills": bills,
+                     "releases": subcontract.releases.all() if costs.in_reach(subcontract) else []})
     others = [{"link": link, "heading_label": choice_label(link, "heading", lang), "net": costs.net_purchase(link.invoice),
                "status_label": choice_label(link.invoice, "status", lang)}
-              for link in project.purchases.select_related("invoice", "invoice__supplier").filter(invoice__subcontract_bill__isnull=True)]
+              for link in costs._here(project.purchases.select_related("invoice", "invoice__supplier").filter(invoice__subcontract_bill__isnull=True))]
     free = entity_scope.scope(PurchaseInvoice.objects, entity_scope.PURCHASE_INVOICE).exclude(status="cancelled").filter(project_purchase__isnull=True).exclude(lines__item__is_stock_tracked=True).distinct().order_by("-invoice_date")[:50]
     return render(request, "projects/subcontracts.html", _context(
         request, project, "subcontracts", subs=subs, others=others, free_purchases=free, error=error, today=timezone.localdate().isoformat(),

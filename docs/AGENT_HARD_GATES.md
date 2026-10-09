@@ -749,6 +749,12 @@ Status: APPROVED — Ahmed approved on 9 Oct 2026 ("خلص كله"), after the a
     - an instalment-plan collection cannot be linked as an advance;
     - the project's owner cannot change once it has invoices, payments, certificates or releases;
     - certificate, payment and subcontractor-bill lists, and the certificate page and print, are scoped to the working entity.
+  - **Fourth review:**
+    - **Entity reach.** A project's money (terms, bill of quantities, certificates, payment links, releases and reversals) can change only from the entity it lives in, or from the whole group. The same holds for a subcontract's bills and releases and for linked service purchases. Every submitted id is resolved through `entities.scope`, and the services check it again.
+    - **Scoped figures.** The contract figures (`contract.position`), the project summary, the subcontract figures and the cost by heading are computed from the working entity's own documents. Another entity sees none of this project's money.
+    - **Closed months.** Linking or unlinking an advance moves that payment's journal entry between receivable and customer advances on the payment's own date, so it is refused when that month is closed. Linking or unlinking a posted service purchase moves its expense into or out of project cost on the invoice's date (and its returns' dates), so it is refused the same way. A collection link changes nothing in the books, so it is not restricted.
+    - **Stable return shares.** Returns are replayed in the order they were made and cancelled. A new return takes the returned share on the total still standing, less what those returns already took. Each share is fixed when the return is made, and cancelling a return reverses exactly its own share: no other return's entry moves.
+    - **Dated releases.** A release may take only what is held on its date and stays held on every later date: posted documents on their dates, returns on theirs, earlier releases and reversals (`contract.lowest_held`). The consistency guard checks the same balance on every date, not only today.
 - **Known limits:**
   - the customer's aging still shows the whole balance, retention included; the project screen shows what is due now;
   - advances paid to subcontractors are not tracked separately: a supplier payment before the bill nets on the supplier's account as today.
