@@ -47,6 +47,19 @@ class SimpleBooksTests(TestCase):
         self.assertContains(page, "مورد ليه فلوس")
         self.assertContains(page, "data-accountant-tab")  # journal, trial balance... still one click away
         self.assertContains(self.client.get(reverse("ledger:summary") + "?lang=en"), "Where is the money?")
+        # The opening stock entered as a count gain: other income, shown so the parts add up to the net profit.
+        context = page.context
+        self.assertEqual(context["sales"] - context["cost"] - context["expenses"] + context["other"], context["income"]["net_profit"])
+        self.assertContains(page, "مكاسب وخسائر تانية")
+
+    def test_party_balances_follow_the_requested_entity(self):
+        from entities.models import Entity
+
+        branch = Entity.objects.create(code="GL-BR", name_ar="فرع", active=True)
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("ledger:summary") + f"?lang=ar&entity={branch.pk}")
+        self.assertEqual(page.context["entity"], branch)
+        self.assertEqual(page.context["owed"]["total"], 0)  # the sale belongs to the main entity
 
     def test_a_cashier_does_not_see_the_books(self):
         cashier = make_user(username="gl_simple_cashier")

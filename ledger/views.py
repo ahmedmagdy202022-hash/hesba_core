@@ -385,8 +385,8 @@ def cash_flow(request):
 SUMMARY_WORDS = {
     "ar": {
         "intro": "أربع أسئلة صاحب الشغل بيسألها، بالأرقام اللي في دفاترك. التفاصيل في الشاشات اللي بعدها، والقيود وميزان المراجعة للمحاسب.",
-        "profit_q": "كسبت كام الشهر ده؟", "profit_a": "صافي الربح من {start} لحد النهارده.", "sales": "المبيعات", "cost": "تكلفة البضاعة", "expenses": "المصروفات",
-        "loss": "الشهر ده لسه خسارة: المصروفات والتكلفة أكتر من المبيعات.",
+        "profit_q": "كسبت كام الشهر ده؟", "profit_a": "صافي الربح من {start} لحد النهارده.", "sales": "المبيعات", "cost": "تكلفة البضاعة", "expenses": "المصروفات", "other": "مكاسب وخسائر تانية (جرد، بيع أصول...)",
+        "loss": "الشهر ده لسه خسارة: اللي اتصرف واتكلّف أكتر من اللي دخل.",
         "cash_q": "الفلوس فين؟", "cash_a": "اللي في الخزن والبنوك دلوقتي.", "cash_change": "اتغيّرت الشهر ده بـ",
         "owed_q": "مين عليه فلوس ليك؟", "owed_a": "العملاء اللي لسه عليهم فلوس.", "nobody_owes": "مفيش حد عليه فلوس.",
         "owe_q": "إنت عليك فلوس لمين؟", "owe_a": "الموردين اللي لسه ليهم فلوس.", "owe_nobody": "مفيش عليك فلوس لحد.",
@@ -394,8 +394,8 @@ SUMMARY_WORDS = {
     },
     "en": {
         "intro": "The four questions an owner asks, answered from your own books. The details are in the next screens; entries and the trial balance are for the accountant.",
-        "profit_q": "What did I make this month?", "profit_a": "Net profit from {start} to today.", "sales": "Sales", "cost": "Cost of goods", "expenses": "Expenses",
-        "loss": "This month is a loss so far: costs and expenses are above sales.",
+        "profit_q": "What did I make this month?", "profit_a": "Net profit from {start} to today.", "sales": "Sales", "cost": "Cost of goods", "expenses": "Expenses", "other": "Other gains and losses (stock counts, asset sales...)",
+        "loss": "This month is a loss so far: what was spent and used up is above what came in.",
         "cash_q": "Where is the money?", "cash_a": "What is in the cashboxes and banks now.", "cash_change": "Changed this month by",
         "owed_q": "Who owes me?", "owed_a": "Customers who still owe you.", "nobody_owes": "Nobody owes you anything.",
         "owe_q": "Whom do I owe?", "owe_a": "Suppliers you still owe.", "owe_nobody": "You owe nobody.",
@@ -415,16 +415,20 @@ def summary(request):
     f = _window(_filters(request))
     income = statements.income_statement(f["date_from"], f["date_to"], f["entity"], compare=False)
     cash = statements.cash_flow(f["date_from"], f["date_to"], f["entity"], refresh=False)
+    from entities.current import working_in
+
     owed = owe = None
-    if user_has_permission(request.user, "reports.view_customer_report"):
-        rows = sorted((r for r in customer_report() if r["balance"] > 0), key=lambda r: -r["balance"])
-        owed = {"total": sum((r["balance"] for r in rows), ZERO), "rows": rows[:5], "count": len(rows)}
-    if user_has_permission(request.user, "reports.view_supplier_report"):
-        rows = sorted((r for r in supplier_report() if r["balance"] > 0), key=lambda r: -r["balance"])
-        owe = {"total": sum((r["balance"] for r in rows), ZERO), "rows": rows[:5], "count": len(rows)}
+    # The party balances follow the entity the page shows, as the statements do.
+    with working_in(f["entity"]):
+        if user_has_permission(request.user, "reports.view_customer_report"):
+            rows = sorted((r for r in customer_report() if r["balance"] > 0), key=lambda r: -r["balance"])
+            owed = {"total": sum((r["balance"] for r in rows), ZERO), "rows": rows[:5], "count": len(rows)}
+        if user_has_permission(request.user, "reports.view_supplier_report"):
+            rows = sorted((r for r in supplier_report() if r["balance"] > 0), key=lambda r: -r["balance"])
+            owe = {"total": sum((r["balance"] for r in rows), ZERO), "rows": rows[:5], "count": len(rows)}
     sections = income["sections"]
     simple = dict(SUMMARY_WORDS[lang], profit_a=SUMMARY_WORDS[lang]["profit_a"].format(start=f["date_from"].isoformat()))
     return render(request, "ledger/summary.html", _base(
         request, lang, "summary", simple=simple, income=income, cash=cash, owed=owed, owe=owe,
         sales=sections["revenue"]["total"], cost=sections["cost_of_sales"]["total"],
-        expenses=sections["operating_expenses"]["total"], **f))
+        expenses=sections["operating_expenses"]["total"], other=sections["other_income"]["total"], **f))
