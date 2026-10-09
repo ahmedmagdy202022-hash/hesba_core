@@ -56,3 +56,49 @@ class ControlBoardTests(MfgSetup):
         cashier = person(RoleCode.CASHIER, "mfg_board_cashier")
         self.client.force_login(cashier)
         self.assertEqual(self.client.get(reverse("manufacturing:recipe_new")).status_code, 403)
+
+
+class ControlBoardScaleTests(MfgSetup):
+    """Codex on #173: bulk reads, entity-scoped stock, inactive recipes, warehouses on shortages."""
+
+    def test_queries_do_not_grow_with_orders(self):
+        for n in range(3):
+            orders.create_order({"recipe": self.recipe, "location": self.plant, "quantity": "300"}, self.owner)
+        self.client.force_login(self.owner)
+        self.client.get(reverse("manufacturing:home"))  # warm caches (profile, flags)
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        with CaptureQueriesContext(connection) as few:
+            self.client.get(reverse("manufacturing:home"))
+        for n in range(10):
+            orders.create_order({"recipe": self.recipe, "location": self.plant, "quantity": "30"}, self.owner)
+        with CaptureQueriesContext(connection) as many:
+            page = self.client.get(reverse("manufacturing:home"))
+        self.assertEqual(len(few), len(many))
+        self.assertEqual(len(page.context["open_orders"]), 13)
+
+    def test_inactive_recipes_stay_listed_and_shortages_name_the_warehouse(self):
+        Recipe.objects.filter(pk=self.recipe.pk).update(active=False)
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("manufacturing:home") + "?lang=ar")
+        self.assertContains(page, "data-inactive")
+        self.assertContains(page, reverse("manufacturing:recipe", args=[self.recipe.pk]))
+
+    def test_product_stock_stays_inside_the_entity(self):
+        from entities.current import working_in
+        from entities.models import Entity
+
+        from .views import _overview
+
+        branch = Entity.objects.create(code="MFG-BR", name_ar="فرع", active=True)
+        request = self.client.request().wsgi_request
+        request.user = self.owner
+        from manufacturing.tests import stock_in
+
+        stock_in(self.cake, self.plant, 7, "10.00")
+        with working_in(branch):
+            data = _overview(request, "ar")
+        self.assertEqual(data["products"][0]["stock"], 0)  # the plant belongs to the main entity
+        with working_in(None):
+            self.assertEqual(_overview(request, "ar")["products"][0]["stock"], 7)

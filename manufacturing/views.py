@@ -105,14 +105,20 @@ def _save_new_recipe(request, lang):
 
 
 def _overview(request, lang):
-    """R2-9: the production control board: what is being made, what is short, what each product costs."""
+    """R2-9: the production control board: what is being made, what is short, what each product costs.
 
+    Reads in bulk: one stock aggregate for every material and product, and one
+    movement read for average costs, whatever the number of orders."""
+
+    from collections import defaultdict
     from datetime import timedelta
 
     from django.db.models import Count, Sum
     from django.utils import timezone
 
-    from inventory.services import get_item_stock_quantity
+    from inventory.models import StockMovement
+    from inventory.services import IN_MOVEMENT_TYPES, OUT_MOVEMENT_TYPES
+    from inventory.warehouses import _costs
 
     from .models import OrderStatus, ProductionOrder
 
@@ -120,7 +126,20 @@ def _overview(request, lang):
     can_cost = user_has_permission(request.user, COST)
     open_orders = list(entity_scope.scope(ProductionOrder.objects, "location__entity")
                        .filter(status__in=(OrderStatus.PLANNED, OrderStatus.IN_PROGRESS))
-                       .select_related("recipe__product", "customer", "location").order_by("due_date", "pk"))
+                       .select_related("recipe__product", "customer", "location").prefetch_related("recipe__lines__component").order_by("due_date", "pk"))
+    recipes = list(Recipe.objects.select_related("product").prefetch_related("lines__component").order_by("-active", "code"))
+    item_ids = {line.component_id for recipe in recipes for line in recipe.lines.all()}
+    item_ids |= {line.component_id for order in open_orders for line in order.recipe.lines.all()}
+    item_ids |= {recipe.product_id for recipe in recipes}
+    # On hand per (item, location), within the entity being worked in.
+    held, per_item = defaultdict(lambda: Decimal("0")), defaultdict(lambda: Decimal("0"))
+    rows = (entity_scope.scope(StockMovement.objects, entity_scope.STOCK_MOVEMENT).filter(item_id__in=item_ids)
+            .values("item_id", "location_id", "movement_type").annotate(total=Sum("quantity")))
+    for row in rows:
+        sign = 1 if row["movement_type"] in IN_MOVEMENT_TYPES else -1 if row["movement_type"] in OUT_MOVEMENT_TYPES else 0
+        held[(row["item_id"], row["location_id"])] += sign * (row["total"] or Decimal("0"))
+        per_item[row["item_id"]] += sign * (row["total"] or Decimal("0"))
+
     shortages = {}
     for order in open_orders:
         total = len(order.stages) or 1
@@ -131,29 +150,33 @@ def _overview(request, lang):
         batches = (order.quantity / order.recipe.output_quantity) if order.recipe.output_quantity else Decimal("0")
         # Every open order together, per material and warehouse: two orders
         # that each fit can still be short side by side.
-        for row in services.plan(order.recipe, batches, order.location)["rows"]:
-            item = row["line"].component
-            entry = shortages.setdefault((item.pk, order.location_id), {"item": item, "location": order.location, "need": Decimal("0"), "have": row["have"], "orders": []})
-            entry["need"] += row["need"]
+        for line in order.recipe.lines.all():
+            key = (line.component_id, order.location_id)
+            entry = shortages.setdefault(key, {"item": line.component, "location": order.location, "need": Decimal("0"), "have": held[key], "orders": []})
+            entry["need"] += (line.quantity * batches).quantize(Decimal("0.001"))
             entry["orders"].append(order.number)
     for entry in shortages.values():
         entry["missing"] = max(entry["need"] - entry["have"], Decimal("0"))
-    shortages = {key: entry for key, entry in shortages.items() if entry["missing"] > 0}
+    shortages = [entry for entry in shortages.values() if entry["missing"] > 0]
+
     runs30 = entity_scope.scope(ProductionRun.objects, "location__entity").filter(status="posted", run_date__gte=today - timedelta(days=29))
     made = runs30.aggregate(units=Sum("output_quantity"), cost=Sum("total_cost"), count=Count("id"))
+    costs = _costs(item_ids) if can_cost else {}
     products = []
-    for recipe in Recipe.objects.filter(active=True).select_related("product").prefetch_related("lines__component"):
-        row = {"recipe": recipe, "stock": get_item_stock_quantity(recipe.product), "price": recipe.product.default_sale_price}
+    for recipe in recipes:
+        row = {"recipe": recipe, "stock": per_item[recipe.product_id], "price": recipe.product.default_sale_price}
         if can_cost:
-            card = services.plan(recipe, Decimal("1"), None)
-            row["unit_cost"] = card["unit_cost"]
-            row["margin"] = round(float((row["price"] - card["unit_cost"]) / row["price"] * 100)) if row["price"] else None
+            from config.money import cost_round
+
+            batch = sum((line.quantity * costs.get(line.component_id, Decimal("0")) for line in recipe.lines.all()), Decimal("0"))
+            row["unit_cost"] = cost_round(batch / recipe.output_quantity) if recipe.output_quantity else Decimal("0")
+            row["margin"] = round(float((row["price"] - row["unit_cost"]) / row["price"] * 100)) if row["price"] else None
         products.append(row)
     runs = entity_scope.scope(ProductionRun.objects.select_related("recipe", "recipe__product", "location"), "location__entity")[:10]
     return {
         "open_orders": open_orders, "planned_count": sum(1 for o in open_orders if o.status == OrderStatus.PLANNED),
         "running_count": sum(1 for o in open_orders if o.status == OrderStatus.IN_PROGRESS), "late_count": sum(1 for o in open_orders if o.late),
-        "shortages": sorted(shortages.values(), key=lambda e: -e["missing"]), "made": made, "products": products,
+        "shortages": sorted(shortages, key=lambda e: -e["missing"]), "made": made, "products": products,
         "runs": [{"run": run, "status_label": choice_label(run, "status", lang)} for run in runs],
     }
 
