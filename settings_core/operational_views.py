@@ -7,7 +7,7 @@ from permissions.decorators import require_permission
 from permissions.models import Role
 from permissions.services import user_has_permission
 
-from .models import ClientProfile, FeatureFlag, SystemSetting
+from .models import ClientProfile, SystemSetting
 from .setup_services import ModuleChangeRefused, module_settings_rows, set_module_enabled
 from . import capabilities as caps
 from . import setup_catalog as catalog
@@ -47,6 +47,31 @@ def _context(request, **extra):
     return context
 
 
+def lang_of(request):
+    return "en" if (request.GET.get("lang") or request.POST.get("lang")) == "en" else "ar"
+
+
+def _features(lang):
+    """R2: each optional feature in plain words: on or off, and where it lives once on."""
+
+    from .capabilities import CAPABILITIES, enabled_capabilities
+
+    on = set(enabled_capabilities())
+    rows = []
+    for slug, info in CAPABILITIES.items():
+        if not info.get("available"):
+            continue
+        paths = info.get("paths") or ()
+        rows.append({
+            "slug": slug,
+            "label": info["en" if lang == "en" else "ar"],
+            "about": info.get("about_en" if lang == "en" else "about_ar", ""),
+            "on": slug in on,
+            "url": paths[0] if paths else "",
+        })
+    return rows
+
+
 @require_permission("settings.view_settings")
 def settings_overview(request):
     can_manage = user_has_permission(request.user, "settings.manage_settings") and request.user.is_superuser
@@ -57,7 +82,7 @@ def settings_overview(request):
             request,
             client=ClientProfile.get_active(),
             settings=SystemSetting.objects.filter(active=True),
-            feature_flags=FeatureFlag.objects.all(),
+            features=_features(lang_of(request)),
             can_manage=can_manage,
             admin_settings_url=reverse("admin:settings_core_clientprofile_changelist") if can_manage else "",
         ),
