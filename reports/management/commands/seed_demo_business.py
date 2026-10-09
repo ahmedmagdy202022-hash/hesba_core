@@ -229,17 +229,20 @@ class Command(BaseCommand):
         cash_scale = max(self._ratio(catalog, STOCKING, "buy"), sales_scale)
         cashboxes = []
         for code, name_ar, name_en, opening, is_default in CASHBOXES:
+            values = {
+                "name_ar": name_ar,
+                "name_en": name_en,
+                "currency": "EGP",
+                "is_default": is_default,
+                "active": True,
+                "import_batch_id": "DEMO-BUSINESS",
+            }
+            # The opening balance is set once: rewriting it after cash has moved
+            # would change the balance without a movement (HG-002).
             cashbox, _ = Cashbox.objects.update_or_create(
                 cashbox_code=code,
-                defaults={
-                    "name_ar": name_ar,
-                    "name_en": name_en,
-                    "opening_balance": max(self._round(opening * cash_scale, 100), D("300.00")),
-                    "currency": "EGP",
-                    "is_default": is_default,
-                    "active": True,
-                    "import_batch_id": "DEMO-BUSINESS",
-                },
+                defaults=values,
+                create_defaults={**values, "opening_balance": max(self._round(opening * cash_scale, 100), D("300.00"))},
             )
             cashboxes.append(cashbox)
 

@@ -169,3 +169,12 @@ class BaseBusinessUnchangedTests(TestCase):
         self.assertEqual(Customer.objects.get(customer_code="DEMO-CUST-03").credit_limit, 1500)
         self.assertEqual(PurchaseInvoice.objects.get(invoice_number="DEMO-PI-001").paid_now, 6000)
         self.assertFalse(Item.objects.filter(item_code__startswith="DEMO-RAW-").exists())
+
+    def test_a_rerun_never_rewrites_a_used_cashbox_opening(self):
+        from hesba_testing.factories import make_user
+
+        make_user(username="rerun_owner", is_superuser=True)
+        call_command("seed_demo_business", verbosity=0, stdout=StringIO())
+        Cashbox.objects.filter(cashbox_code="DEMO-CASH-01").update(opening_balance=7777)
+        call_command("seed_demo_business", verbosity=0, stdout=StringIO())
+        self.assertEqual(Cashbox.objects.get(cashbox_code="DEMO-CASH-01").opening_balance, 7777)
