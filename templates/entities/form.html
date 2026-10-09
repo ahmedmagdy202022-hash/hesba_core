@@ -4,12 +4,12 @@
 {% if error %}<div class="op-message op-message-error" role="alert" data-entity-error>{{ error }}</div>{% endif %}
 <form class="op-form" method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
 <div class="op-form-grid">
-<div class="op-field"><label for="e-code">{{ words.code }}</label><input id="e-code" name="code" maxlength="20" required value="{{ post.code|default:entity.code|default:'' }}"></div>
-<div class="op-field"><label for="e-prefix">{{ words.prefix }}</label><input id="e-prefix" name="document_prefix" maxlength="10" value="{{ post.document_prefix|default:entity.document_prefix|default:'' }}"></div>
-<div class="op-field"><label for="e-ar">{{ words.name_ar }}</label><input id="e-ar" name="name_ar" required value="{{ post.name_ar|default:entity.name_ar|default:'' }}"></div>
-<div class="op-field"><label for="e-en">{{ words.name_en }}</label><input id="e-en" name="name_en" value="{{ post.name_en|default:entity.name_en|default:'' }}"></div>
+<div class="op-field"><label for="e-code">{{ words.code }}</label><input id="e-code" name="code" maxlength="20" required value="{% firstof post.code entity.code '' %}"></div>
+<div class="op-field"><label for="e-prefix">{{ words.prefix }}</label><input id="e-prefix" name="document_prefix" maxlength="10" value="{% firstof post.document_prefix entity.document_prefix '' %}"></div>
+<div class="op-field"><label for="e-ar">{{ words.name_ar }}</label><input id="e-ar" name="name_ar" required value="{% firstof post.name_ar entity.name_ar '' %}"></div>
+<div class="op-field"><label for="e-en">{{ words.name_en }}</label><input id="e-en" name="name_en" value="{% firstof post.name_en entity.name_en '' %}"></div>
 <div class="op-field"><label for="e-kind">{{ words.kind }}</label><select id="e-kind" name="kind">{% for value, label in kinds %}<option value="{{ value }}"{% if entity.kind == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
-<div class="op-field"><label for="e-tax">{{ words.tax }}</label><input id="e-tax" name="tax_registration_number" value="{{ post.tax_registration_number|default:entity.tax_registration_number|default:'' }}"></div>
+<div class="op-field"><label for="e-tax">{{ words.tax }}</label><input id="e-tax" name="tax_registration_number" value="{% firstof post.tax_registration_number entity.tax_registration_number '' %}"></div>
 <div class="op-field"><label for="e-act">{{ words.activity }}</label><select id="e-act" name="activity"><option value="">{{ words.same_activity }}</option>{% for value, label in activities %}<option value="{{ value }}"{% if value == current_activity %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
 <div class="op-field"><label class="op-check"><input type="checkbox" name="active"{% if not entity or entity.active %} checked{% endif %}> {{ words.active }}</label></div>
 </div>
