@@ -43,6 +43,7 @@
 .inv-sum-note{margin:0;font-size:12px;color:var(--op-muted)}
 .inv-actions{display:grid;gap:8px}
 .inv-actions .op-primary,.inv-actions .op-secondary{width:100%}
+.inv-actions .inv-post{order:-1}
 
 @media(max-width:1100px){.inv-layout{grid-template-columns:1fr}.inv-summary{position:static}}
 @media(max-width:760px){

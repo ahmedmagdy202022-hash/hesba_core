@@ -36,8 +36,9 @@ price_field, list_url, party ("customer" / "supplier"), can_post and tax_rates.
   <div class="inv-sum-row inv-sum-due"><span>{% if party == 'supplier' %}{% if lang == 'en' %}Still owed to the supplier{% else %}الباقي للمورد{% endif %}{% elif lang == 'en' %}Left on the customer{% else %}الباقي على العميل{% endif %}</span><strong data-sum-remaining>0.00</strong></div>
   <p class="inv-sum-note">{% if lang == 'en' %}A preview: the server recalculates every figure{% if party == 'customer' %} and checks stock{% endif %} when saving.{% else %}الأرقام دي معاينة: السيستم بيحسبها من جديد{% if party == 'customer' %} ويتأكد من المخزون{% endif %} وقت الحفظ.{% endif %}</p>
   <div class="inv-actions">
-    {% if can_post %}<button class="op-primary" type="submit" name="then" value="post" data-save-post>{% if lang == 'en' %}Save and post{% else %}حفظ وترحيل{% endif %}</button>{% endif %}
-    <button class="{% if can_post %}op-secondary{% else %}op-primary{% endif %}" type="submit">{{ words.save_draft }}</button>
+    {# The draft button comes first: Enter in a field submits with the first button, and that must never post. #}
+    <button class="{% if can_post %}op-secondary{% else %}op-primary{% endif %}" type="submit" data-save-draft>{{ words.save_draft }}</button>
+    {% if can_post %}<button class="op-primary inv-post" type="submit" name="then" value="post" data-save-post>{% if lang == 'en' %}Save and post{% else %}حفظ وترحيل{% endif %}</button>{% endif %}
     <a class="op-secondary" href="{{ list_url }}?lang={{ lang }}">{{ words.back }}</a>
   </div>
 </aside>

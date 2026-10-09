@@ -2,10 +2,10 @@
 {% load hesba_labels %}
 {% load static %}
 {% block styles %}{{ block.super }}
-<link rel="stylesheet" href="{% static 'hesba/css/invoice_form.css' %}?v=inv-1">{% endblock %}
+<link rel="stylesheet" href="{% static 'hesba/css/invoice_form.css' %}?v=inv-2">{% endblock %}
 {% block operation_content %}
 <section class="op-title-row"><div><a class="op-back" href="{% url 'sales:list' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ words.new }}</h1></div></section>
 {% url 'sales:list' as list_url %}{% include "operations/_invoice_form.html" with price_field="unit_sale_price" party="customer" %}
-{% if price_book %}<p class="op-muted" data-price-list-note data-prefix="{% if lang == 'en' %}Price list: {% else %}قائمة الأسعار: {% endif %}" hidden></p>{{ price_book|json_script:"hs-price-book" }}{% endif %}{% if tax_rates %}{{ tax_rates|json_script:"hs-tax-rates" }}{% endif %}{% if units %}{{ units|json_script:"hs-units" }}{% endif %}{{ item_catalog|json_script:"hs-item-catalog" }}<script src="{% static 'hesba/js/invoice_form.js' %}?v=inv-1" defer></script><script src="{% static 'hesba/js/camera_scan.js' %}?v=cam-001" data-zxing="{% static 'hesba/vendor/zxing/zxing-0.23.0.min.js' %}" defer></script>
+{% if price_book %}<p class="op-muted" data-price-list-note data-prefix="{% if lang == 'en' %}Price list: {% else %}قائمة الأسعار: {% endif %}" hidden></p>{{ price_book|json_script:"hs-price-book" }}{% endif %}{% if tax_rates %}{{ tax_rates|json_script:"hs-tax-rates" }}{% endif %}{% if units %}{{ units|json_script:"hs-units" }}{% endif %}{{ item_catalog|json_script:"hs-item-catalog" }}<script src="{% static 'hesba/js/invoice_form.js' %}?v=inv-2" defer></script><script src="{% static 'hesba/js/camera_scan.js' %}?v=cam-001" data-zxing="{% static 'hesba/vendor/zxing/zxing-0.23.0.min.js' %}" defer></script>
 {% endblock %}
 

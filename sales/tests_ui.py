@@ -207,3 +207,23 @@ class InvoiceRedesignTests(TestCase):
         self.assertEqual(invoice.status, "draft")
         page = self.client.get(response["Location"])
         self.assertContains(page, "لا يوجد مخزون كافٍ")
+
+
+class InvoiceRedesignSafetyTests(InvoiceRedesignTests):
+    """Codex on #169: Enter must never post, and a bad e-invoice setting must not break the page."""
+
+    def test_the_draft_button_comes_first(self):
+        self.client.force_login(self.owner)
+        html = self.client.get(reverse("sales:create") + "?lang=ar").content.decode()
+        self.assertLess(html.index("data-save-draft"), html.index("data-save-post"))
+
+    def test_a_malformed_einvoice_setting_does_not_break_the_invoice_page(self):
+        from settings_core import capabilities
+
+        self.post(then="post")
+        invoice = SalesInvoice.objects.get(customer=self.customer)
+        with mock.patch.object(capabilities, "capability_enabled", return_value=True), \
+                mock.patch("einvoice.services.build_document", side_effect=ArithmeticError("bad threshold")), \
+                self.assertLogs("hesba.einvoice", level="ERROR"):
+            page = self.client.get(reverse("sales:detail", args=[invoice.pk]) + "?lang=ar")
+        self.assertEqual(page.status_code, 200)

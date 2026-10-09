@@ -1,3 +1,5 @@
+import logging
+
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
@@ -193,7 +195,11 @@ def _einvoice_problems(invoice, lang):
 
     if invoice.status != "posted" or not capability_enabled("e_invoice"):
         return None
-    return len(build_document(invoice, lang)[1])
+    try:
+        return len(build_document(invoice, lang)[1])
+    except Exception:  # a badge only: a malformed e-invoice setting must not break the invoice page
+        logging.getLogger("hesba.einvoice").exception("E-invoice readiness failed for %s", invoice.invoice_number)
+        return None
 
 
 def _post_now(request, pk, lang):

@@ -140,6 +140,7 @@
     }
   }
 
+  function cents(value) { return (value < 0 ? -1 : 1) * Math.round(Math.abs(value) * 100 + 1e-9) / 100; }
   function money(value) { return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
   function header(name) { return form.querySelector('[name="' + name + '"]'); }
   var sumTotal = form.querySelector('[data-sum-total]');
@@ -162,10 +163,11 @@
       var row = lineRow(i);
       var cell = row && row.querySelector('[data-line-total]');
       if (!select || !select.value) { if (cell) { cell.textContent = '0.00'; } continue; }
-      var net = num(field(i, 'quantity')) * num(field(i, priceField)) - num(field(i, 'line_discount_amount'));
+      // Each line rounded to cents (half up) before summing, like the server.
+      var net = cents(num(field(i, 'quantity')) * num(field(i, priceField)) - num(field(i, 'line_discount_amount')));
       var line = net;
       // TAX-001: VAT at the item's rate, rounded per line like the server.
-      if (taxRates) { line += Math.round(Math.round(net * 100) / 100 * num({ value: taxRates[select.value] || '0' }) + 1e-9) / 100; }
+      if (taxRates) { line += Math.round(net * num({ value: taxRates[select.value] || '0' }) + 1e-9) / 100; }
       sum += line;
       if (cell) { cell.textContent = money(line); }
     }
