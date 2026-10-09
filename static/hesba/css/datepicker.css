@@ -1,0 +1,29 @@
+/* DATE-001: the date picker (static/hesba/js/datepicker.js). Colours from the tokens. */
+.hs-date{position:relative;display:block;width:100%}
+.hs-date .hs-date__text{width:100%;padding-inline-end:44px!important}
+[dir="rtl"] .hs-date .hs-date__text{text-align:right}
+.hs-date .hs-date__open{position:absolute;inset-block:0;inset-inline-end:4px;margin:auto 0;width:36px;height:36px;display:grid;place-items:center;border:0;border-radius:var(--hs-radius-sm);background:transparent;color:var(--hs-muted);cursor:pointer}
+.hs-date .hs-date__open:hover,.hs-date .hs-date__open[aria-expanded="true"]{color:var(--hs-teal-deep);background:var(--hs-teal-wash)}
+.hs-date .hs-date__open:focus-visible{outline:none;box-shadow:var(--hs-focus-ring)}
+.hs-date .hs-date__open:disabled{opacity:.5;cursor:not-allowed}
+.hs-date .hs-date__pop{position:absolute;z-index:60;top:calc(100% + 6px);inset-inline-end:0;width:296px;max-width:calc(100vw - 16px);padding:12px;background:var(--hs-surface);border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);box-shadow:var(--hs-shadow-lg);color:var(--hs-ink);font-size:var(--hs-text-sm)}
+.hs-date .hs-date__head{display:flex;align-items:center;gap:6px;margin-bottom:8px}
+.hs-date .hs-date__head select{background-color:var(--hs-surface);flex:1 1 auto;min-width:0;min-height:36px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-sm);padding-block:0;padding-inline-start:8px;font:inherit;color:var(--hs-ink)}
+.hs-date .hs-date__year{flex:0 0 84px!important}
+.hs-date .hs-date__nav{flex:0 0 36px;height:36px;border:1px solid var(--hs-line);border-radius:var(--hs-radius-sm);background:var(--hs-surface);color:var(--hs-navy);font-size:20px;line-height:1;cursor:pointer}
+[dir="rtl"] .hs-date .hs-date__nav{transform:scaleX(-1)}
+.hs-date .hs-date__grid{width:100%;border-collapse:collapse;table-layout:fixed}
+.hs-date .hs-date__grid th{padding:4px 0;font-size:var(--hs-text-xs);font-weight:var(--hs-weight-semibold);color:var(--hs-muted);text-align:center}
+.hs-date .hs-date__grid td{padding:1px;text-align:center}
+.hs-date .hs-date__day{width:100%;aspect-ratio:1;max-height:38px;border:0;border-radius:var(--hs-radius-sm);background:transparent;color:var(--hs-ink);font:inherit;font-variant-numeric:tabular-nums;cursor:pointer}
+.hs-date .hs-date__day:hover{background:var(--hs-teal-wash)}
+.hs-date .hs-date__day:focus-visible{outline:none;box-shadow:var(--hs-focus-ring)}
+.hs-date .hs-date__day.is-out{color:var(--hs-muted);opacity:.6}
+.hs-date .hs-date__day.is-today{font-weight:var(--hs-weight-bold);box-shadow:inset 0 0 0 1px var(--hs-teal)}
+.hs-date .hs-date__day.is-selected{background:var(--hs-teal);color:var(--hs-on-teal);font-weight:var(--hs-weight-bold)}
+.hs-date .hs-date__day:disabled{opacity:.3;cursor:not-allowed;background:transparent}
+.hs-date .hs-date__foot{display:flex;justify-content:space-between;gap:8px;margin-top:8px}
+.hs-date .hs-date__foot button{min-height:34px;padding:0 12px;border:1px solid var(--hs-line);border-radius:var(--hs-radius-sm);background:var(--hs-surface);color:var(--hs-navy);font:inherit;font-weight:var(--hs-weight-semibold);cursor:pointer}
+.hs-date .hs-date__today{border-color:var(--hs-teal)!important;color:var(--hs-teal-deep)!important}
+.hs-date .hs-date__foot button:disabled{opacity:.5;cursor:not-allowed}
+@media print{.hs-date__open,.hs-date__pop{display:none!important}}
