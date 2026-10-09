@@ -60,3 +60,31 @@ class FindableTests(TestCase):
         statement = self.client.get(reverse("ledger:income_statement") + "?lang=ar")
         self.assertEqual(statement.status_code, 200)
         self.assertContains(statement, "الأرباح والخسائر")
+
+    def test_every_open_link_lands_on_a_working_screen(self):
+        for slug in caps.CAPABILITIES:
+            switch(slug, True)
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("settings_core:overview") + "?lang=ar")
+        from settings_core.operational_views import _features
+
+        rows = _features("ar", self.owner)
+        self.assertTrue(all(row["url"] for row in rows))
+        for row in rows:
+            self.assertContains(page, f'href="{row["url"]}?lang=ar"')
+            self.assertEqual(self.client.get(row["url"] + "?lang=ar").status_code, 200, row["slug"])
+        self.assertIn(reverse("barcode:labels"), [row["url"] for row in rows])  # not the bare /barcode/ prefix
+
+    def test_no_open_link_the_viewer_cannot_open(self):
+        from settings_core.operational_views import _features
+
+        switch("fixed_assets", True)
+        support = make_user(username="findable_support")
+        make_user_profile(user=support, role=make_seeded_role(RoleCode.SUPPORT))
+        rows = {row["slug"]: row for row in _features("ar", support)}
+        self.assertTrue(rows["fixed_assets"]["on"])
+        self.assertEqual(rows["fixed_assets"]["url"], "")
+        self.client.force_login(support)
+        page = self.client.get(reverse("settings_core:overview") + "?lang=ar")
+        if page.status_code == 200:
+            self.assertNotContains(page, 'href="/assets/?lang=ar"')
