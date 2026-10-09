@@ -16,7 +16,9 @@ from .services import adjust_stock, transfer_stock
 from . import warehouses
 
 
-class WarehousesHubTests(TestCase):
+class WarehouseData(TestCase):
+    """Main holds 7 fast (moved today) and 4 slow (in 90 days ago); the branch got 3 fast."""
+
     @classmethod
     def setUpTestData(cls):
         prepared_client()
@@ -33,6 +35,9 @@ class WarehousesHubTests(TestCase):
         adjust_stock("WH-IN-1", old, cls.fast, cls.main, StockAdjustmentDirection.IN, D("10"), "opening", cls.owner, unit_cost=D("20"))
         adjust_stock("WH-IN-2", old, cls.slow, cls.main, StockAdjustmentDirection.IN, D("4"), "opening", cls.owner, unit_cost=D("50"))
         transfer_stock("WH-TR-1", today, cls.fast, cls.main, cls.branch, D("3"), cls.owner, reason="to the branch")
+
+
+class WarehousesHubTests(WarehouseData):
 
     def test_each_warehouse_holds_what_its_movements_say(self):
         cards = {card["location"].location_code: card for card in warehouses.summaries([self.main, self.branch], timezone.localdate(), with_value=True)}
@@ -76,3 +81,30 @@ class WarehousesHubTests(TestCase):
         self.client.force_login(self.owner)
         page = self.client.get(reverse("inventory:transfer") + f"?from={self.branch.pk}&lang=ar")
         self.assertContains(page, f'<option value="{self.branch.pk}" selected>')
+
+
+class WarehouseFiguresTests(WarehouseData):
+    """Codex on #170: costs in one read, English categories, new stock is not slow."""
+
+    def test_costs_match_the_service_in_one_query(self):
+        from .services import get_item_authoritative_average_cost
+
+        with self.assertNumQueries(2):
+            costs = warehouses._costs([self.fast.pk, self.slow.pk])
+        self.assertEqual(costs[self.fast.pk], get_item_authoritative_average_cost(self.fast))
+        self.assertEqual(costs[self.slow.pk], get_item_authoritative_average_cost(self.slow))
+
+    def test_stock_received_today_is_not_slow(self):
+        fresh = make_item(item_code="WH-NEW", item_name="صنف جديد")
+        adjust_stock("WH-IN-3", timezone.localdate(), fresh, self.main, StockAdjustmentDirection.IN, D("2"), "new", self.owner, unit_cost=D("5"))
+        rows = {row["item"].item_code: row for row in warehouses.detail(self.main, timezone.localdate())["rows"]}
+        self.assertFalse(rows["WH-NEW"]["slow"])
+        self.assertTrue(rows["WH-SLOW"]["slow"])
+
+    def test_categories_in_english(self):
+        from master_data.models import Category
+
+        category = Category.objects.create(category_code="WH-CAT", name_ar="منظفات", name_en="Detergents")
+        type(self.fast).objects.filter(pk=self.fast.pk).update(category=category)
+        names = [c["name"] for c in warehouses.detail(self.main, timezone.localdate(), with_value=True, lang="en")["categories"]]
+        self.assertIn("Detergents", names)

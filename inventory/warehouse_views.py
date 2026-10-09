@@ -9,7 +9,7 @@ from permissions.decorators import require_permission
 from permissions.services import user_has_permission
 
 from . import warehouses
-from .views import _context
+from .views import _context, _lang
 
 
 def _flags(user):
@@ -34,6 +34,6 @@ def warehouse_list(request):
 def warehouse_detail(request, pk):
     flags = _flags(request.user)
     location = get_object_or_404(entity_scope.locations(Location.objects), pk=pk)
-    data = warehouses.detail(location, timezone.localdate(), with_value=flags["can_view_cost"])
+    data = warehouses.detail(location, timezone.localdate(), with_value=flags["can_view_cost"], lang=_lang(request))
     return render(request, "inventory/warehouse_detail.html", _context(
         request, location=location, slow_days=warehouses.SLOW_DAYS, section="warehouses", **data, **flags))

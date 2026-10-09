@@ -10,12 +10,12 @@ from collections import defaultdict
 from datetime import timedelta
 from decimal import Decimal
 
-from django.db.models import Count, Max, Sum
+from django.db.models import Count, Max, Min, Sum
 
 from master_data.models import Item
 
 from .models import StockMovement
-from .services import IN_MOVEMENT_TYPES, OUT_MOVEMENT_TYPES, get_item_authoritative_average_cost
+from .services import IN_MOVEMENT_TYPES, OUT_MOVEMENT_TYPES
 
 
 ZERO = Decimal("0")
@@ -39,7 +39,29 @@ def on_hand(locations):
 
 
 def _costs(item_ids):
-    return {item.pk: get_item_authoritative_average_cost(item) for item in Item.objects.filter(pk__in=item_ids)}
+    """{item_id: authoritative average cost}, for many items in one read.
+
+    The same formula as ``get_item_authoritative_average_cost`` (movement value
+    over movement quantity, every location, cost-rounded), summed in Python
+    from one query instead of four queries per item."""
+
+    from config.money import cost_round
+
+    item_ids = set(item_ids)
+    if not item_ids:
+        return {}
+    tracked = set(Item.objects.filter(pk__in=item_ids, is_stock_tracked=True).values_list("pk", flat=True))
+    quantity, value = defaultdict(lambda: ZERO), defaultdict(lambda: ZERO)
+    rows = StockMovement.objects.filter(item_id__in=tracked).values_list("item_id", "movement_type", "quantity", "unit_cost")
+    for item_id, kind, qty, unit_cost in rows.iterator():
+        if kind in IN_MOVEMENT_TYPES:
+            quantity[item_id] += qty
+            value[item_id] += qty * unit_cost
+        elif kind in OUT_MOVEMENT_TYPES:
+            quantity[item_id] -= qty
+            value[item_id] -= qty * unit_cost
+    return {item_id: cost_round(value[item_id] / quantity[item_id]) if item_id in tracked and quantity[item_id] > 0 else ZERO
+            for item_id in item_ids}
 
 
 def summaries(locations, today, with_value=False):
@@ -68,7 +90,7 @@ def summaries(locations, today, with_value=False):
     return cards
 
 
-def detail(location, today, with_value=False):
+def detail(location, today, with_value=False, lang="ar"):
     """What one warehouse holds, its slow movers and what changed lately."""
 
     quantities = {item: qty for (_, item), qty in on_hand([location]).items() if qty > 0}
@@ -76,6 +98,9 @@ def detail(location, today, with_value=False):
     costs = _costs(quantities) if with_value else {}
     last_out = {row["item_id"]: row["last"] for row in StockMovement.objects.filter(
         location=location, movement_type__in=OUT_MOVEMENT_TYPES).values("item_id").annotate(last=Max("movement_date"))}
+    # Stock that never left is slow only once it has sat here SLOW_DAYS.
+    first_in = {row["item_id"]: row["first"] for row in StockMovement.objects.filter(
+        location=location, movement_type__in=IN_MOVEMENT_TYPES).values("item_id").annotate(first=Min("movement_date"))}
     rows = []
     for item_id, qty in quantities.items():
         item = items[item_id]
@@ -85,12 +110,13 @@ def detail(location, today, with_value=False):
             "item": item, "quantity": qty, "unit_cost": cost if with_value else None,
             "value": (qty * cost).quantize(Decimal("0.01")) if with_value else None,
             "last_out": last, "idle_days": (today - last).days if last else None,
-            "slow": last is None or (today - last).days >= SLOW_DAYS,
+            "slow": (today - (last or first_in.get(item_id) or today)).days >= SLOW_DAYS,
         })
     rows.sort(key=lambda row: (-(row["value"] or ZERO), -row["quantity"], row["item"].item_code))
     categories = defaultdict(lambda: {"items": 0, "value": ZERO})
     for row in rows:
-        name = row["item"].category.name_ar if row["item"].category_id else ""
+        category = row["item"].category
+        name = ((category.name_en if lang == "en" else "") or category.name_ar) if category else ""
         categories[name]["items"] += 1
         categories[name]["value"] += row["value"] or ZERO
     movements = (StockMovement.objects.filter(location=location).select_related("item")
