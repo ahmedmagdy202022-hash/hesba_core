@@ -262,6 +262,10 @@ LOGGING = {
     "handlers": {"console": {"class": "logging.StreamHandler", "level": config("LOG_LEVEL", default="ERROR" if DEBUG else "WARNING")}},
     "root": {"handlers": ["console"], "level": "DEBUG"},
 }
+# R2: demo feedback notes are logged as a backup copy (Render -> Logs); they
+# must reach the console whatever LOG_LEVEL the rest of the app uses.
+LOGGING["handlers"]["feedback_console"] = {"class": "logging.StreamHandler", "level": "INFO"}
+LOGGING["loggers"] = {"hesba.feedback": {"handlers": ["feedback_console"], "level": "INFO", "propagate": False}}
 
 
 LOGIN_URL = "/login/"
