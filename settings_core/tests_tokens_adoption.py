@@ -156,3 +156,28 @@ class RequiredFieldMarksTests(TestCase):
         html = str(CustomerForm()["name"])
         self.assertIn("required", html)
         self.assertNotIn("required", str(CustomerForm()["phone"]))
+
+
+class DropdownLooksTests(TestCase):
+    """R2: every single-choice dropdown shows a clear arrow, drawn from the tokens."""
+
+    def test_the_sheet_is_on_every_app_page_and_reads_the_tokens(self):
+        from django.template.loader import get_template
+
+        self.assertIn("hesba/css/form_controls.css", get_template("base_app.html").template.source)
+        css = read_static("hesba/css/form_controls.css")
+        self.assertEqual(re.findall(r"#[0-9a-fA-F]{3,8}\b|rgba?\(", css), [])
+        self.assertIn("appearance:none", css)
+        self.assertIn('[dir="rtl"]', css)
+
+
+class OneInvoiceLineTests(SimpleTestCase):
+    """R2: a new invoice starts with one line; "+ سطر جديد" adds the rest."""
+
+    def test_one_line_to_start(self):
+        from purchases.forms import PurchaseLineFormSet
+        from sales.forms import SalesLineFormSet
+
+        self.assertEqual(SalesLineFormSet.extra, 1)
+        self.assertEqual(PurchaseLineFormSet.extra, 1)
+        self.assertEqual(SalesLineFormSet.max_num, 20)

@@ -2,11 +2,15 @@
 
 import csv
 import hmac
+import json
+import logging
 from datetime import timedelta
 
 from django.conf import settings
+from django.core.cache import cache
 from django.contrib.auth.decorators import login_not_required
 from django.core.mail import send_mail
+from django.db import DatabaseError
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
@@ -14,6 +18,8 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 
 from .models import Feedback
+
+log = logging.getLogger("hesba.feedback")
 
 MAX_PER_HOUR = 20            # per tester
 MAX_ANONYMOUS_PER_HOUR = 60  # all notes from visitors without a demo copy, together
@@ -53,6 +59,17 @@ def _sandbox_of(request):
     return getattr(request, "demo_sandbox", None) or ""
 
 
+def _recent_in_memory(request, sandbox):
+    """Notes in the last hour from this tester (or all visitors), counted in the cache."""
+
+    key = f"feedback-rate:{sandbox or 'anonymous'}"
+    cache.add(key, 0, 3600)
+    try:
+        return cache.incr(key) - 1
+    except ValueError:  # expired between the two calls
+        return 0
+
+
 @login_not_required
 @require_POST
 def send(request):
@@ -62,12 +79,17 @@ def send(request):
     if len(message) < 3:
         return JsonResponse({"ok": False, "error": "Write a few words first." if lang == "en" else "اكتب ملاحظتك الأول."}, status=400)
     sandbox = _sandbox_of(request)
-    recent = Feedback.objects.filter(sandbox=sandbox, created_at__gte=timezone.now() - timedelta(hours=1)).count()
+    try:
+        recent = Feedback.objects.filter(sandbox=sandbox, created_at__gte=timezone.now() - timedelta(hours=1)).count()
+    except DatabaseError:
+        # The feedback database is down; the note still reaches the log below.
+        # This server's own memory keeps the hourly limit meanwhile.
+        recent = _recent_in_memory(request, sandbox)
     if recent >= (MAX_PER_HOUR if sandbox else MAX_ANONYMOUS_PER_HOUR):
         return JsonResponse({"ok": False, "error": "Thanks! That is plenty for this hour." if lang == "en" else "شكرًا! كده كفاية الساعة دي، كمّل بعدين."}, status=429)
     mood = request.POST.get("mood", "")
     activity, sub_activity, role = _context_of(request)
-    note = Feedback.objects.create(
+    note = Feedback(
         message=message,
         mood=mood if mood in dict(Feedback.MOODS) else "",
         contact=_clip(request.POST.get("contact"), "contact"),
@@ -80,6 +102,16 @@ def send(request):
         viewport=_clip(request.POST.get("viewport"), "viewport"),
         user_agent=_clip(request.META.get("HTTP_USER_AGENT", ""), "user_agent"),
     )
+    # R2: every note also goes to the server log (Render -> Logs), so a missing
+    # inbox key or a lost database can never lose what a tester wrote again.
+    log.warning("FEEDBACK %s", json.dumps({
+        "message": note.message, "mood": note.mood, "contact": note.contact, "page": note.path, "activity": note.activity,
+        "sub_activity": note.sub_activity, "role": note.role, "lang": note.lang, "viewport": note.viewport, "tester": note.sandbox[:8],
+    }, ensure_ascii=False))
+    try:
+        note.save()
+    except DatabaseError:
+        log.error("FEEDBACK not stored: the feedback database is unreachable; the note above is the only copy.")
     notify = getattr(settings, "FEEDBACK_NOTIFY_EMAIL", "")
     if notify and getattr(settings, "EMAIL_HOST", ""):
         send_mail(
