@@ -74,7 +74,8 @@ RENAME = {
     "medical": {"4101": ("إيراد الكشوفات والخدمات الطبية", "Medical services revenue")},
     "education": {"4101": ("إيراد الاشتراكات والمصروفات الدراسية", "Tuition and fees revenue"), "1103": ("الطلاب (مصروفات مستحقة)", "Students (fees receivable)")},
     "restaurants": {"4101": ("إيراد المطعم", "Restaurant revenue"), "5101": ("تكلفة الأكل والمشروبات", "Food & beverage cost")},
-    "contracting": {"4101": ("إيراد المستخلصات", "Progress billing revenue"), "1103": ("أصحاب المشاريع", "Project owners (receivable)")},
+    "contracting": {"4101": ("إيراد المستخلصات", "Progress billing revenue"), "1103": ("أصحاب المشاريع", "Project owners (receivable)"),
+                    "2105": ("دفعات مقدمة من أصحاب المشاريع", "Advances from project owners")},
 }
 ADD = {
     "manufacturing": (
@@ -86,6 +87,9 @@ ADD = {
     "contracting": (
         ("1110", "أعمال تحت التنفيذ", "Work in progress on projects", A, "project_wip", True, False),
         ("5103", "تكلفة المشاريع", "Project costs", X, "project_cost", True, False),
+        # CONTRACT-002 (HG-038): retention held on both sides of the contract.
+        ("1111", "محتجزات ضمان أعمال لدى أصحاب المشاريع", "Retention receivable", A, "retention_receivable", True, False),
+        ("2106", "محتجزات ضمان أعمال لمقاولي الباطن", "Retention payable", L, "retention_payable", True, False),
     ),
 }
 

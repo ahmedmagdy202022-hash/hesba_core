@@ -1,0 +1,42 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+{% include "projects/_head.html" %}
+<p class="op-muted">{{ cwords.subcontracts_intro }}</p>
+{% for row in subs %}{% with sub=row.subcontract f=row.figures %}
+<section class="op-card" data-subcontract="{{ sub.pk }}">
+<h2>{{ sub.supplier.name }} — {{ sub.scope }}</h2>
+<section class="op-summary-grid">
+<article><small>{{ cwords.value }}</small><strong>{{ f.value|money }}</strong></article>
+<article><small>{{ cwords.billed }}</small><strong data-sub-billed>{{ f.billed|money }}</strong></article>
+<article><small>{{ cwords.remaining }}</small><strong>{{ f.remaining|money }}</strong></article>
+<article><small>{{ cwords.retention_held }} ({{ sub.retention_rate|stringformat:'s' }}%)</small><strong data-sub-retention>{{ f.retention_held|money }}</strong></article>
+</section>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ cwords.number }}</th><th>{{ cwords.invoice }}</th><th>{{ cwords.date }}</th><th>{{ cwords.description }}</th><th>{{ cwords.gross }}</th><th>{{ cwords.retention }}</th><th>{{ cwords.net }}</th><th>{{ cwords.status }}</th>{% if can_buy %}<th></th>{% endif %}</tr></thead><tbody>
+{% for b in row.bills %}{% with bill=b.bill %}<tr data-sub-bill="{{ bill.invoice.invoice_number }}"><td>{{ bill.number }}</td><td dir="ltr"><a href="{% url 'purchases:detail' bill.invoice.pk %}?lang={{ lang }}">{{ bill.invoice.invoice_number }}</a></td><td dir="ltr">{{ bill.bill_date|date:"Y-m-d" }}</td><td>{{ bill.description }}</td><td>{{ bill.gross|money }}</td><td>{{ bill.retention_amount|money }}</td><td>{{ b.net|money }}</td><td><span class="op-status op-status-{{ bill.invoice.status }}">{{ b.status_label }}</span></td>{% if can_buy %}<td>{% if bill.invoice.status == 'draft' %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="withdraw"><input type="hidden" name="bill" value="{{ bill.pk }}"><button class="op-secondary" type="submit">{{ cwords.withdraw }}</button></form>{% endif %}</td>{% endif %}</tr>{% endwith %}
+{% empty %}<tr><td colspan="9" class="op-empty">{{ cwords.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_buy and is_open %}<form class="op-form" method="post" data-sub-bill-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="bill"><input type="hidden" name="subcontract" value="{{ sub.pk }}"><h3>{{ cwords.bill }}</h3>
+<div class="op-form-grid"><div class="op-field"><label for="sb-a-{{ sub.pk }}">{{ cwords.gross }}</label><input id="sb-a-{{ sub.pk }}" name="amount" inputmode="decimal" dir="ltr" required></div>
+<div class="op-field"><label for="sb-d-{{ sub.pk }}">{{ cwords.description }}</label><input id="sb-d-{{ sub.pk }}" name="description" maxlength="255" required></div>
+<div class="op-field"><label for="sb-t-{{ sub.pk }}">{{ cwords.date }}</label><input id="sb-t-{{ sub.pk }}" type="date" name="bill_date" value="{{ today }}"></div></div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ cwords.bill_btn }}</button></div></form>{% endif %}
+{% if can_buy and f.retention_held %}<form class="op-filters" method="post" data-sub-release-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="release"><input type="hidden" name="subcontract" value="{{ sub.pk }}"><input name="amount" value="{{ f.retention_held|stringformat:'s' }}" inputmode="decimal" dir="ltr" aria-label="{{ cwords.amount }}"><input type="date" name="release_date" value="{{ today }}" aria-label="{{ cwords.date }}"><button class="op-secondary" type="submit">{{ cwords.release }}</button></form>{% endif %}
+</section>
+{% endwith %}{% empty %}<p class="op-empty">{{ cwords.none }}</p>{% endfor %}
+{% if can_buy and is_open %}
+<form class="op-form" method="post" data-subcontract-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="new"><h2>{{ cwords.new_subcontract }}</h2>
+<div class="op-form-grid"><div class="op-field"><label for="sc-sup">{{ cwords.supplier }}</label><select id="sc-sup" name="supplier" required><option value="">—</option>{% for supplier in suppliers %}<option value="{{ supplier.pk }}">{{ supplier.name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="sc-scope">{{ cwords.scope }}</label><input id="sc-scope" name="scope" maxlength="255" required></div>
+<div class="op-field"><label for="sc-value">{{ cwords.value }}</label><input id="sc-value" name="value" inputmode="decimal" dir="ltr"></div>
+<div class="op-field"><label for="sc-ret">{{ cwords.retention_rate }}</label><input id="sc-ret" name="retention_rate" value="0" inputmode="decimal" dir="ltr"></div></div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ cwords.save }}</button></div></form>
+{% endif %}
+
+<h2>{{ cwords.other_purchases }}</h2><p class="op-muted">{{ cwords.purchases_hint }}</p>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ cwords.invoice }}</th><th>{{ cwords.vendor }}</th><th>{{ cwords.date }}</th><th>{{ cwords.heading }}</th><th>{{ cwords.amount }}</th><th>{{ cwords.status }}</th>{% if can_buy %}<th></th>{% endif %}</tr></thead><tbody>
+{% for row in others %}{% with invoice=row.link.invoice %}<tr data-project-purchase="{{ invoice.invoice_number }}"><td dir="ltr"><a href="{% url 'purchases:detail' invoice.pk %}?lang={{ lang }}">{{ invoice.invoice_number }}</a></td><td>{{ invoice.supplier.name }}</td><td dir="ltr">{{ invoice.invoice_date|date:"Y-m-d" }}</td><td>{{ row.heading_label }}</td><td>{{ row.net|money }}</td><td>{{ row.status_label }}</td>{% if can_buy %}<td><form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="unlink_purchase"><input type="hidden" name="link" value="{{ row.link.pk }}"><button class="op-secondary" type="submit">{{ cwords.unlink }}</button></form></td>{% endif %}</tr>{% endwith %}
+{% empty %}<tr><td colspan="7" class="op-empty">{{ cwords.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_buy and free_purchases %}<form class="op-filters" method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="link_purchase"><select name="invoice" aria-label="{{ cwords.link_purchase }}">{% for invoice in free_purchases %}<option value="{{ invoice.pk }}">{{ invoice.invoice_number }} · {{ invoice.supplier.name }} · {{ invoice.total_amount|money }}</option>{% endfor %}</select><select name="heading" aria-label="{{ cwords.heading }}">{% for value, label in headings %}<option value="{{ value }}"{% if value == 'equipment' %} selected{% endif %}>{{ label }}</option>{% endfor %}</select><button class="op-secondary" type="submit">{{ cwords.link_purchase }}</button></form>{% endif %}
+{% endblock %}

@@ -1,0 +1,60 @@
+{% load static hesba_format %}<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% if lang == 'en' %}Certificate {{ certificate.number }}{% else %}مستخلص رقم {{ certificate.number }}{% endif %} — {{ project.name }}</title>
+{% include "partials/brand_icons.html" %}
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
+<link rel="stylesheet" href="{% static 'hesba/css/print.css' %}?v=print-003">
+</head>
+<body class="pr-body pr-a4" data-format="a4">
+{% with invoice=certificate.invoice %}
+<nav class="pr-toolbar" aria-label="{% if lang == 'en' %}Print{% else %}طباعة{% endif %}">
+  <a class="pr-button pr-button--ghost" href="{% url 'projects:certificate' project.pk certificate.number %}?lang={{ lang }}">← {% if lang == 'en' %}Back{% else %}رجوع{% endif %}</a>
+  <button class="pr-button pr-button--primary" type="button" data-print>{% if lang == 'en' %}Print{% else %}اطبع{% endif %}</button>
+  <p class="pr-toolbar__hint">{% if lang == 'en' %}To save a PDF, choose "Save as PDF" in the print window.{% else %}عشان تحفظه PDF اختار "حفظ كـ PDF" من شاشة الطباعة.{% endif %}</p>
+</nav>
+<article class="pr-sheet" data-kind="progress_certificate">
+  {% if invoice.status != 'posted' %}<div class="pr-watermark pr-watermark--status" aria-hidden="true">{{ status_label }}</div>{% endif %}
+  <header class="pr-head">
+    <div class="pr-company">
+      {% if company.logo %}<img class="pr-company__logo" src="{{ company.logo }}" alt="{{ company.name }}">{% endif %}
+      <h1 class="pr-company__name">{{ company.name }}</h1>
+      {% if company.address %}<p>{{ company.address|linebreaksbr }}</p>{% endif %}
+      {% if company.tax_number %}<p>{% if lang == 'en' %}Tax no.{% else %}رقم التسجيل الضريبي{% endif %}: <bdi>{{ company.tax_number }}</bdi></p>{% endif %}
+    </div>
+    <div class="pr-doc">
+      <h2 class="pr-doc__title">{% if lang == 'en' %}Progress certificate{% else %}مستخلص أعمال{% endif %} #{{ certificate.number }}</h2>
+      <dl class="pr-meta">
+        <div><dt>{% if lang == 'en' %}Date{% else %}التاريخ{% endif %}</dt><dd>{{ certificate.certificate_date|date:"Y-m-d" }}</dd></div>
+        <div><dt>{% if lang == 'en' %}Invoice{% else %}الفاتورة{% endif %}</dt><dd><bdi>{{ invoice.invoice_number }}</bdi></dd></div>
+        <div><dt>{% if lang == 'en' %}Project{% else %}المشروع{% endif %}</dt><dd><bdi>{{ project.code }}</bdi> — {{ project.name }}</dd></div>
+      </dl>
+    </div>
+  </header>
+  <section class="pr-party"><span class="pr-party__label">{% if lang == 'en' %}Project owner{% else %}صاحب المشروع{% endif %}</span><strong class="pr-party__name">{{ project.customer.name }}</strong>{% if project.site %}<span>{{ project.site }}</span>{% endif %}</section>
+  {% if lines %}
+  <table class="pr-lines" data-print-lines>
+    <thead><tr><th>{{ cwords.code }}</th><th>{{ cwords.description }}</th><th>{{ cwords.unit }}</th><th class="pr-num">{{ cwords.rate }}</th><th class="pr-num">{{ cwords.previous }}</th><th class="pr-num">{{ cwords.current }}</th><th class="pr-num">{{ cwords.cumulative }}</th><th class="pr-num">{{ cwords.current_value }}</th><th class="pr-num">{{ cwords.cumulative_value }}</th></tr></thead>
+    <tbody>{% for row in lines %}<tr><td>{{ row.boq.code|default:row.boq.line_number }}</td><td class="pr-item">{{ row.boq.description }}</td><td><bdi>{{ row.boq.unit }}</bdi></td><td class="pr-num">{{ row.line.rate|money }}</td><td class="pr-num">{{ row.line.previous_quantity|qty }}</td><td class="pr-num">{{ row.line.quantity|qty }}</td><td class="pr-num">{{ row.cumulative|qty }}</td><td class="pr-num">{{ row.line.amount|money }}</td><td class="pr-num">{{ row.cumulative_value|money }}</td></tr>{% endfor %}</tbody>
+  </table>
+  {% else %}<p class="pr-notes">{{ certificate.notes }}</p>{% endif %}
+  <section class="pr-totals">
+    <dl>
+      <div><dt>{{ cwords.gross }}</dt><dd>{{ certificate.gross|money }}</dd></div>
+      {% if invoice.tax_amount %}<div><dt>{{ cwords.tax }}</dt><dd>{{ invoice.tax_amount|money }}</dd></div>{% endif %}
+      <div><dt>{{ cwords.invoice_total }}</dt><dd>{{ invoice.total_amount|money }}</dd></div>
+      <div><dt>{{ cwords.retention }} ({{ certificate.retention_rate|stringformat:'s' }}%)</dt><dd>− {{ certificate.retention_amount|money }}</dd></div>
+      {% if certificate.recovery_amount %}<div><dt>{{ cwords.recovery }}</dt><dd>− {{ certificate.recovery_amount|money }}</dd></div>{% endif %}
+      <div class="pr-totals__grand"><dt>{{ cwords.net }}</dt><dd data-print-total>{{ net|money }} <small>{{ company.currency }}</small></dd></div>
+    </dl>
+  </section>
+  {% if net_words %}<p class="pr-words"><span>{% if lang == 'en' %}In words{% else %}المبلغ بالحروف{% endif %}:</span> {{ net_words }}</p>{% endif %}
+  <section class="pr-signatures pr-signatures--3"><div>{% if lang == 'en' %}Site engineer{% else %}مهندس الموقع{% endif %}</div><div>{% if lang == 'en' %}Consultant / owner{% else %}الاستشاري / المالك{% endif %}</div><div>{% if lang == 'en' %}Contractor{% else %}المقاول{% endif %}</div></section>
+  <footer class="pr-foot"><p class="pr-foot__meta">{% now "Y-m-d H:i" %}</p>{% if company.show_hesba_brand %}<p class="pr-foot__brand"><img src="{% static 'hesba/brand/hesba-logo.png' %}" alt="Hesba"></p>{% endif %}</footer>
+</article>
+{% endwith %}
+<script>document.querySelector('[data-print]').addEventListener('click', function(){ window.print(); });</script>
+</body>
+</html>

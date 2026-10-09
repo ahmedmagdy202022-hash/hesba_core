@@ -34,6 +34,11 @@ AR_LABELS = {
     ("manufacturing.productionrun", "status"): {"posted": "مرحّلة", "cancelled": "ملغية"},
     ("manufacturing.productionorder", "status"): {"planned": "لسه مبدأش", "in_progress": "شغال", "done": "خلص", "cancelled": "ملغي"},
     ("projects.project", "status"): {"planned": "لسه مبدأش", "active": "شغال", "on_hold": "متوقف", "done": "خلص", "cancelled": "ملغي"},
+    # CONTRACT-002: cost headings and project payments.
+    ("projects.budgetline", "heading"): {"materials": "خامات", "subcontract": "مقاولو باطن", "labour": "عمالة", "equipment": "معدات", "other": "أخرى"},
+    ("projects.projectexpense", "heading"): {"materials": "خامات", "subcontract": "مقاولو باطن", "labour": "عمالة", "equipment": "معدات", "other": "أخرى"},
+    ("projects.projectpurchase", "heading"): {"materials": "خامات", "subcontract": "مقاولو باطن", "labour": "عمالة", "equipment": "معدات", "other": "أخرى"},
+    ("projects.projectpayment", "kind"): {"advance": "دفعة مقدمة", "collection": "تحصيل"},
     ("restaurant.order", "kind"): {"dine_in": "صالة", "takeaway": "تيك أواي", "delivery": "دليفري"},
     ("sales.salesinvoice", "status"): DOCUMENT_STATUS,
     ("sales.salesinvoice", "payment_status"): PAYMENT_STATUS,

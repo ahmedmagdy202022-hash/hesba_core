@@ -685,6 +685,65 @@ Status: RESOLVED — approved by Ahmed on 9 Oct 2026 ("موافق تعمل كل 
   - the screens and who may act.
 - **Known effect:** the goods-in-transit location shows in location pickers (stock list, manual transfer, count). The warehouses hub shows it only while something is on the way.
 
+## HG-038 — Contracting phase 2: bill of quantities, progress certificates, retention, advances, subcontractors, budget (CONTRACT-002)
+
+Status: APPROVED — Ahmed approved on 9 Oct 2026 ("خلص كله"), after the audit report listed this as an open decision; the first demo feedback item also asked for it ("قدرات نشاط المقاولات محتاج تعديل كبير يمشي مع طبيعة النشاط"). Implemented in branch `claude/contract-002`.
+
+- **Why a gate:**
+  - it adds schema (models and a migration in `projects`);
+  - retention and advances change where customer and supplier balances appear in the projected general ledger (GL-002 / HG-032);
+  - a project's cost now also reads purchase invoices.
+- **What does not change:**
+  - sales and purchase posting, cancellation and returns;
+  - customer and supplier ledger rows and the party balances and statements built from them;
+  - cashbox movements;
+  - stock movement and average cost;
+  - report figures outside the projects screens and the general ledger.
+
+  Every certificate is an ordinary draft sales invoice made through `create_sales_draft_with_tax`, and every subcontractor bill an ordinary draft purchase invoice through `create_purchase_draft_with_tax`. Both are posted, collected or paid, returned and cancelled from their own screens exactly as today. An advance is an ordinary customer payment (`record_customer_payment`).
+- **Schema (`projects` only):**
+  - `Project.retention_rate` and `Project.advance_recovery_rate`, both defaulting to 0;
+  - `ProjectExpense.heading`, defaulting to "other", so every existing link keeps its meaning;
+  - new `BoqLine`, `Certificate` + `CertificateLine`, `ProjectAdvance`, `RetentionRelease`, `Subcontract`, `SubcontractBill`, `SubcontractRelease`, `ProjectPurchase`, `BudgetLine`.
+- **Contract arithmetic (on top of the invoice, never inside it):**
+  - **gross:** the certificate's gross is the work done since the last certificate, from the bill of quantities (cumulative quantity to date − quantity already certified, × rate) or a lump sum. The invoice carries the gross, so revenue and VAT are the full work value;
+  - **retention** = gross × the project's retention rate;
+  - **advance recovered** = gross × the recovery rate, capped by the advance not yet recovered;
+  - **net payable now** = the invoice total − retention − recovery.
+
+  A certificate whose invoice is cancelled stops counting. Only one certificate may be a draft at a time, so the quantities to date stay in order. A draft certificate can be withdrawn, which deletes its draft invoice: drafts have no ledger, stock or cash rows.
+- **General ledger (`ledger/projector.py`, `ledger/chart.py`, `ledger/reports.py`):**
+  - an advance payment credits **customer advances** (2105, already in the chart) instead of receivable;
+  - a posted certificate moves its recovery from customer advances to receivable, and its retention from receivable to **retention receivable** (new 1111 on the contracting chart). The same lines reverse in the cancellation entry;
+  - a retention release moves it back to receivable;
+  - subcontractor bills mirror this with **retention payable** (new 2106);
+  - a service purchase linked to a project books to **project costs** (5103) instead of other general expenses.
+
+  The customer reconciliation check now compares receivable + retention receivable + customer advances with the customers' balances (and payable + retention payable with the suppliers'). Those sums equal the party ledgers by construction. On a chart without these accounts (any other activity), the lines stay in receivable and payable as before.
+- **Cost and budget:**
+  - a project's cost is materials issued + linked expenses + linked service purchases (posted, before tax, after posted returns);
+  - a purchase invoice with stock lines cannot be linked: those goods go to the site through "issue from stock", so they are never counted twice;
+  - each cost reads against a budget per heading (materials, subcontractors, labour, equipment, other).
+- **Permissions (existing codes only):**
+  - certificates, retention and the bill of quantities: `sales.create_sales_invoice`;
+  - advances: `sales.receive_customer_payment`;
+  - subcontracts and their bills: `purchases.create_purchase_invoice`;
+  - figures that show cost or profit: `reports.view_profit_report`.
+- **Known limits:**
+  - the customer's aging still shows the whole balance, retention included; the project screen shows what is due now;
+  - advances paid to subcontractors are not tracked separately: a supplier payment before the bill nets on the supplier's account as today.
+- **Tests:** `projects/tests_contract.py`:
+  - certificate quantities, gross, retention, recovery and net per scenario;
+  - the advance cap;
+  - a cancelled certificate releasing its quantities;
+  - one draft at a time and withdrawing it;
+  - retention release;
+  - subcontractor bill and release;
+  - the purchase-link rule;
+  - budget against actual;
+  - trial balance balanced and reconciliation clean, with the exact amounts in receivable, retention receivable, customer advances, payable, retention payable and project costs;
+  - the screens and who may act.
+
 ## Final gate verification
 
 - Full Django suite: 794 tests passed in 576.477 seconds.

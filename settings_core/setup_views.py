@@ -129,6 +129,25 @@ COMPLETE_STRINGS = {
 }
 
 
+#: CONTRACT-002: what the activity's own module does, shown on the review step.
+ACTIVITY_FEATURES = {
+    catalog.CONTRACTING: {
+        "ar": ("المقايسة: بنود الأعمال بالكمية والفئة، وإجماليها هو قيمة العقد.",
+               "المستخلصات بالكميات المنفذة حتى تاريخه (السابق والحالي والإجمالي)، وطباعة المستخلص.",
+               "ضمان الأعمال بيتحجز من كل مستخلص لحد الاستلام، والإفراج عنه بعدها.",
+               "الدفعة المقدمة من صاحب المشروع، وبتتخصم من كل مستخلص بنسبة متفق عليها.",
+               "مقاولو الباطن: إسناد الأعمال، مستخلصاتهم كفواتير شراء، وضمان الأعمال المحتجز منهم.",
+               "موازنة كل مشروع (خامات، مقاولو باطن، عمالة، معدات) قصاد التكلفة الفعلية."),
+        "en": ("Bill of quantities: each item by quantity and rate; its total is the contract value.",
+               "Progress certificates by quantity done to date (previous, current, cumulative), printable.",
+               "Retention held from each certificate until handover, then released.",
+               "The owner's advance, recovered from each certificate at the agreed rate.",
+               "Subcontractors: work given, their bills as purchase invoices, the retention held from them.",
+               "Each project's budget (materials, subcontractors, labour, equipment) against actual cost."),
+    },
+}
+
+
 def _capability_rows(activity, sub_activity, lang):
     """CAP-001: the review step's capability list, suggestions ticked."""
 
@@ -183,6 +202,7 @@ def setup_review(request):
         "back_href": _setup_modules_href(lang, activity, sub_activity, modules_param),
         "complete_url": reverse("setup_complete"),
         "capability_rows": _capability_rows(activity, sub_activity, lang),
+        "activity_features": ACTIVITY_FEATURES.get(activity, {}).get(lang, ()) if "projects" in modules_param.split(",") else (),
         **REVIEW_STRINGS[lang],
     }
     return render(request, "setup/review_setup.html", context)

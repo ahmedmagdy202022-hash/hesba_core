@@ -135,6 +135,20 @@ class SampleBusinessPerActivityTests(TestCase):
         project = Project.objects.get(name__startswith="عمارة")
         self.assertTrue(project.issues.exists())
         self.assertTrue(project.invoices.filter(invoice__status="posted").exists())
+        # CONTRACT-002: a bill of quantities, an advance, a posted and a draft certificate, a subcontractor, a budget.
+        from ledger.reports import reconciliation
+        from projects import contract
+
+        self.assertEqual(project.boq.count(), 5)
+        self.assertEqual(list(project.certificates.values_list("invoice__status", flat=True)), ["posted", "draft"])
+        figures = contract.position(project)
+        self.assertGreater(figures["retention_held"], 0)
+        self.assertGreater(figures["recovered"], 0)
+        self.assertEqual(figures["due_now"], 0)  # the first certificate's net payable was collected
+        self.assertTrue(project.subcontracts.get().bills.filter(invoice__status="posted").exists())
+        self.assertEqual(project.budget.count(), 4)
+        result = reconciliation()
+        self.assertTrue(result["balanced"] and result["ok"], result["rows"])
 
     def test_a_factory_makes_its_goods_from_materials(self):
         from manufacturing.models import ProductionOrder, ProductionRun, Recipe

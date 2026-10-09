@@ -77,6 +77,8 @@
 
         <section class="review-card review-card--capabilities" data-review-section="capabilities">
           <h2 class="review-card__title">{{ capabilities_title }}</h2>
+          {% if activity_features %}<p class="review-note"><strong>{% if lang == 'en' %}Included with Projects{% else %}موجود في موديول المشاريع{% endif %}</strong></p>
+          <ul class="review-features" data-activity-features>{% for feature in activity_features %}<li>{{ feature }}</li>{% endfor %}</ul>{% endif %}
           <p class="review-note">{{ capabilities_lead }}</p>
           <ul class="review-capabilities">
             {% for cap in capability_rows %}

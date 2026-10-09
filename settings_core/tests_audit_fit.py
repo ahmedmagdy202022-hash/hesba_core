@@ -44,3 +44,15 @@ class CapabilityFitTests(TestCase):
         self.client.force_login(owner)
         page = self.client.get(reverse("settings_core:overview") + "?lang=ar")
         self.assertNotContains(page, 'data-feature="variants"')
+
+
+class ContractingReviewTests(TestCase):
+    def test_the_review_step_says_what_projects_do_for_a_contractor(self):
+        user = make_user(username="review_owner")
+        make_user_profile(user=user, role=make_seeded_role(RoleCode.OWNER))
+        self.client.force_login(user)
+        page = self.client.get("/setup/review/", {"lang": "ar", "activity": "contracting", "sub_activity": "general",
+                                                "modules": "customers,suppliers,items_services,sales_operations,purchases,projects"})
+        self.assertContains(page, "data-activity-features")
+        self.assertContains(page, "المستخلصات بالكميات المنفذة")
+        self.assertContains(page, "ضمان الأعمال")

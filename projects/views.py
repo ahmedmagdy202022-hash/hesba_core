@@ -13,7 +13,7 @@ from master_data.models import Customer, Item, Location
 from permissions.decorators import require_permission
 from permissions.services import user_has_permission
 from sales.models import SalesInvoice
-from settings_core.display_labels import choice_label
+from settings_core.display_labels import choice_label, localized_choices
 
 from . import services
 from .models import Project, ProjectExpense, ProjectInvoice, ProjectStatus
@@ -112,7 +112,10 @@ def project_list(request):
     rows = Project.objects.select_related("customer")
     if status in ProjectStatus.values:
         rows = rows.filter(status=status)
-    rows = [{"project": project, "status_label": choice_label(project, "status", lang), "figures": services.summary(project)} for project in rows[:200]]
+    from .contract import position
+
+    rows = [{"project": project, "status_label": choice_label(project, "status", lang), "figures": services.summary(project), "position": position(project)}
+            for project in rows[:200]]
     return render(request, "projects/list.html", _base(request, rows=rows, status=status, form=form, error=error,
                                                         customers=Customer.objects.filter(active=True).order_by("name")))
 
@@ -145,7 +148,7 @@ def project_detail(request, pk):
                 expense = _pick(Expense, request.POST.get("expense"))
                 if expense is None:
                     raise ValidationError(services.MESSAGES[lang]["not_posted"])
-                services.link_expense(project, expense, request.user, lang)
+                services.link_expense(project, expense, request.user, lang, heading=request.POST.get("heading"))
                 messages.success(request, words["linked"])
             elif action in ("unlink_invoice", "unlink_expense"):
                 model = ProjectInvoice if action == "unlink_invoice" else ProjectExpense
@@ -183,4 +186,9 @@ def project_detail(request, pk):
               "notes": project.notes, "status": project.status},
         is_open=project.status in services.OPEN,
     )
+    from .contract import position
+    from .contract_views import WORDS as CONTRACT_WORDS
+
+    context.update(tab="overview", cwords=CONTRACT_WORDS[lang], position=position(project),
+                   expense_headings=localized_choices(ProjectExpense, "heading", lang))
     return render(request, "projects/detail.html", context)

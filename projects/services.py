@@ -14,7 +14,12 @@ Rules, stated once:
   at most one project;
 * the figures only read posted documents: billed is before tax and after
   posted returns, collected is what the posted invoices no longer owe, cost is
-  posted materials plus posted expenses. Nothing here moves money or stock.
+  posted materials plus posted expenses plus linked service purchases
+  (CONTRACT-002). Nothing here moves money or stock.
+
+CONTRACT-002 (HG-038) adds the bill of quantities, progress certificates,
+retention and advances (``contract.py``) and subcontractors, service
+purchases and the budget (``costs.py``).
 """
 
 from decimal import Decimal, InvalidOperation
@@ -122,38 +127,15 @@ def billing_item():
 
 @transaction.atomic
 def bill_progress(project, user, *, amount, description, item=None, lang="ar"):
-    """A draft sales invoice for part of the contract. Returns the invoice."""
+    """A lump-sum progress certificate (no bill of quantities). Returns its draft invoice.
 
-    from master_data.models import Location
-    from taxes.services import create_sales_draft_with_tax
+    CONTRACT-002: it is a certificate like any other, so the project's
+    retention and advance recovery apply to it too.
+    """
 
-    words = MESSAGES[lang]
-    project = _open(project, words)
-    amount = _amount(amount, words, "amount", allow_zero=False)
-    description = (description or "").strip()[:255]
-    if not description:
-        raise ValidationError(words["description"])
-    item = item or billing_item()
-    location = entity_scope.locations(Location.objects).filter(active=True, is_selling_location=True).order_by("-is_default", "pk").first()
-    if location is None:
-        raise ValidationError(words["setup"])
-    sequence = project.invoices.count() + 1
-    number = f"PB-{project.code}-{sequence:02d}"
-    from sales.models import SalesInvoice
+    from .contract import create_certificate
 
-    while SalesInvoice.objects.filter(invoice_number=number).exists():
-        sequence += 1
-        number = f"PB-{project.code}-{sequence:02d}"
-    invoice = create_sales_draft_with_tax(
-        {"invoice_number": number, "invoice_date": timezone.localdate(), "customer": project.customer, "selling_location": location,
-         "cashbox": None, "discount_amount": Decimal("0"), "tax_amount": Decimal("0"), "paid_now": Decimal("0"),
-         "notes": f"Project {project.code}: {description}"[:255]},
-        [{"item": item, "quantity": Decimal("1"), "unit_sale_price": amount, "line_discount_amount": Decimal("0"), "description": description}],
-        user,
-    )
-    ProjectInvoice.objects.create(project=project, invoice=invoice, label=description[:120], created_by=user)
-    _audit(project, user, "bill_project", {"invoice": number, "amount": str(amount)})
-    return invoice
+    return create_certificate(project, user, amount=amount, description=description, item=item, lang=lang).invoice
 
 
 @transaction.atomic
@@ -172,7 +154,7 @@ def link_invoice(project, invoice, user, lang="ar"):
 
 
 @transaction.atomic
-def link_expense(project, expense, user, lang="ar"):
+def link_expense(project, expense, user, lang="ar", heading=None):
     from cashboxes.models import CashboxOperationStatus
 
     words = MESSAGES[lang]
@@ -181,7 +163,10 @@ def link_expense(project, expense, user, lang="ar"):
         raise ValidationError(words["not_posted"])
     if ProjectExpense.objects.filter(expense=expense).exists():
         raise ValidationError(words["linked"])
-    link = ProjectExpense.objects.create(project=project, expense=expense, created_by=user)
+    from .models import CostHeading
+
+    heading = heading if heading in CostHeading.values else CostHeading.OTHER  # CONTRACT-002: the budget heading
+    link = ProjectExpense.objects.create(project=project, expense=expense, heading=heading, created_by=user)
     _audit(project, user, "link_project_expense", {"expense": expense.expense_number, "amount": str(expense.amount)})
     return link
 
@@ -244,12 +229,16 @@ def summary(project):
         Decimal("0"),
     ))
     expenses = money_round(project.expenses.filter(expense__cashbox_operation__status=CashboxOperationStatus.POSTED).aggregate(total=Sum("expense__amount"))["total"] or 0)
-    cost = money_round(materials + expenses)
-    contract = Decimal(project.contract_value)
+    from .contract import contract_value
+    from .costs import purchases_cost
+
+    purchases = purchases_cost(project)  # CONTRACT-002: subcontractor bills and other service purchases
+    cost = money_round(materials + expenses + purchases)
+    contract = contract_value(project)
     return {
         "contract": contract, "billed": billed, "invoiced": invoiced, "collected": money_round(invoiced - due), "due": due, "drafts": money_round(drafts),
         "remaining": money_round(max(contract - billed, Decimal("0"))), "over": money_round(max(billed - contract, Decimal("0"))),
         "progress": int(min(billed / contract * 100, Decimal("999"))) if contract > 0 else 0,
-        "materials": materials, "expenses": expenses, "cost": cost, "profit": money_round(billed - cost),
+        "materials": materials, "expenses": expenses, "purchases": purchases, "cost": cost, "profit": money_round(billed - cost),
         "margin": int((billed - cost) / billed * 100) if billed > 0 else 0,
     }
