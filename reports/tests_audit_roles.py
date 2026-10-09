@@ -154,3 +154,20 @@ class CustomRoleNavTests(TestCase):
         keys = {item["key"] for item in self.client.get("/dashboard/?lang=ar").context["nav_items"]}
         self.assertNotIn("taxes", keys)       # tax settings need master_data.view_master_data too
         self.assertNotIn("customers", keys)   # so does the customer list
+
+
+class BackLinkTests(TestCase):
+    def test_batches_and_serials_go_home_when_stock_is_switched_off(self):
+        from settings_core.capabilities import _write
+
+        modules = [m for m in catalog.default_modules("medical") if m != "inventory"]
+        prepared_client("medical", "lab", ",".join(modules))
+        _write("batches_expiry", True)
+        _write("serials", True)
+        self.client.force_login(person(RoleCode.OWNER, "audit_back_owner"))
+        for url in (reverse("batches:index"), reverse("serials:index")):
+            with self.subTest(url=url):
+                page = self.client.get(url + "?lang=ar")
+                self.assertEqual(page.status_code, 200)
+                self.assertNotContains(page, 'href="' + reverse("inventory:stock") + "?")
+                self.assertContains(page, "← الرئيسية")

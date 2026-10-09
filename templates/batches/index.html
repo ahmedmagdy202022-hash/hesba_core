@@ -1,7 +1,7 @@
 {% extends "operations/base.html" %}
-{% load hesba_format %}
+{% load hesba_format hesba_labels %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'inventory:stock' %}?lang={{ lang }}">← {% if lang == 'en' %}Stock{% else %}المخزون{% endif %}</a><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div></section>
+<section class="op-title-row"><div>{% url 'inventory:stock' as stock_url %}{% link_ok stock_url as stock_ok %}{% if stock_ok %}<a class="op-back" href="{{ stock_url }}?lang={{ lang }}">← {% if lang == 'en' %}Stock{% else %}المخزون{% endif %}</a>{% else %}<a class="op-back" href="{% url 'dashboard_snapshot' %}?lang={{ lang }}">← {% if lang == 'en' %}Home{% else %}الرئيسية{% endif %}</a>{% endif %}<h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div></section>
 <section class="op-summary-grid"><article data-batch-expired><small>{{ words.summary_expired }}</small><strong>{{ counts.expired }}</strong></article><article data-batch-soon><small>{{ words.summary_soon }} ({{ warn_days }} {{ words.days }})</small><strong>{{ counts.soon }}</strong></article></section>
 <form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}">
 <input type="search" name="q" value="{{ q }}" placeholder="{{ words.search }}" aria-label="{{ words.search }}">

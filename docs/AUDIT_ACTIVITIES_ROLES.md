@@ -39,6 +39,12 @@ Asked for by Ahmed after the first demo feedback, before testers see the demo:
 
 After the fixes, a second crawl of 10 representative sub-activities found **no** closed-door links and **no** internal words.
 
+A final crawl of all 51 sub-activities on the fixed code opened 22,118 pages and submitted 7,422 forms. It found:
+- no server errors and no internal words;
+- one closed-door link: "← Stock" on the batches and serials pages, in a lab, a medical centre, a vet and a repair shop, where those capabilities are suggested but the stock module is off.
+
+That link now goes to Home when stock is closed.
+
 ## Roles: what each one sees (after the fixes)
 
 | Role | Sees | Does not see |
