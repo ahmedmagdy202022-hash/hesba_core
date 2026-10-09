@@ -45,6 +45,7 @@ COMMERCIAL_OPTIONAL_MODULES = [
 SERVICES_REQUIRED_MODULES = [
     'items_services',
     'customers',
+    'sales_operations',
     'cashboxes',
     'reports',
 ]
@@ -234,7 +235,7 @@ class ModulesSelectionScreenTests(AuthenticatedTestCase):
     def test_services_preset_required_suggested_optional_modules_exist(self):
         response = self.client.get('/setup/modules/?lang=ar&activity=services&sub_activity=general')
 
-        self.assertContains(response, 'data-services-state="required"', count=4)
+        self.assertContains(response, 'data-services-state="required"', count=5)  # AUDIT-2: sales operations too, so a services business can invoice
         self.assertContains(response, 'data-services-state="suggested"', count=2)
         self.assertContains(response, 'data-services-state="optional"', count=8)
         for slug in SERVICES_REQUIRED_MODULES:

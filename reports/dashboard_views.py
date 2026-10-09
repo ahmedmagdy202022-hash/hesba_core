@@ -332,6 +332,9 @@ QUICK_ACTION_TERMS = {"record_sale": "record_sale", "new_customer": "new_custome
 
 
 def _quick_actions(user, lang, modules, activity="", sections=frozenset()):
+    from django.urls import reverse
+
+    from settings_core.module_gate import closed_module
     from settings_core.vocabulary import active_vocabulary, term
 
     words = active_vocabulary()
@@ -344,6 +347,8 @@ def _quick_actions(user, lang, modules, activity="", sections=frozenset()):
             continue
         permission = action.get("permission")
         if permission and not user_has_permission(user, permission):
+            continue
+        if closed_module(reverse(action["url_name"])) is not None:  # AUDIT-1: never a button into a switched-off module
             continue
         label = term(QUICK_ACTION_TERMS[action["key"]], lang, words) if action["key"] in QUICK_ACTION_TERMS else action[lang]
         actions.append({"key": action["key"], "label": label, "primary": action["primary"] and not actions, "url_name": action["url_name"],
@@ -458,7 +463,9 @@ def dashboard(request):
         "onboarding_steps": _onboarding(lang),
         # Guide someone whose installation has seen no trade yet, and anyone who
         # can see nothing at all. A working business does not need the steps.
-        "show_onboarding": not has_data or not cards,
+        # AUDIT-2: the setup steps are the owner's job; a cashier or a stock
+        # keeper with no figure cards sees their quick actions instead.
+        "show_onboarding": user_has_permission(request.user, "settings.manage_settings") and (not has_data or not cards),
         "has_business_data": has_data,
         **strings,
     }

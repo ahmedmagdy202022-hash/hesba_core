@@ -78,19 +78,23 @@ def _features(lang, user):
 
     The Open link is left out when the viewer could not open that screen."""
 
-    from .capabilities import CAPABILITIES, enabled_capabilities
+    from .capabilities import CAPABILITIES, about, enabled_capabilities, fits
 
     on = set(enabled_capabilities())
+    profile = ClientProfile.get_active()
+    activity = profile.activity_slug if profile else ""
     rows = []
     for slug, info in CAPABILITIES.items():
         if not info.get("available"):
+            continue
+        if not fits(activity, slug) and slug not in on:  # AUDIT-3
             continue
         name = FEATURE_LANDING.get(slug)
         url = reverse(name) if name else ""
         rows.append({
             "slug": slug,
             "label": info["en" if lang == "en" else "ar"],
-            "about": info.get("about_en" if lang == "en" else "about_ar", ""),
+            "about": about(activity, slug, lang),
             "on": slug in on,
             "url": url if url and _opens_for(user, url) else "",
         })
@@ -165,10 +169,45 @@ def settings_overview(request):
     )
 
 
+#: AUDIT-1: the roles screen speaks in sections and plain names, never in permission codes.
+PERMISSION_SECTIONS = {
+    "sales": ("المبيعات", "Sales"), "purchases": ("المشتريات", "Purchases"), "inventory": ("المخزون", "Inventory"),
+    "master_data": ("البيانات الأساسية", "Master data"), "cashboxes": ("الخزائن والمصروفات", "Cash and expenses"),
+    "reports": ("التقارير", "Reports"), "accounting": ("الحسابات العامة", "Accounting"), "closing": ("إقفال الفترات", "Period closing"),
+    "settings": ("الإعدادات", "Settings"), "permissions": ("الصلاحيات", "Permissions"), "audit": ("سجل المراجعة", "Audit log"),
+    "imports": ("الاستيراد", "Imports"), "medical": ("الملفات الطبية", "Medical records"), "barcode": ("الباركود", "Barcodes"),
+}
+ROLE_ABOUT = {
+    "owner": ("كل حاجة: الأرقام والإعدادات والصلاحيات والإقفال.", "Everything: figures, settings, permissions and closing."),
+    "manager": ("الشغل اليومي كله: بيع وشراء ومخزون وتقارير، من غير الإقفال والصلاحيات.", "All the daily work: selling, buying, stock and reports, without closing and permissions."),
+    "accountant": ("الحسابات والتحصيل والدفع والمصروفات والتقارير المالية.", "Accounts, collections, payments, expenses and financial reports."),
+    "cashier": ("البيع والتحصيل من العملاء وخزنة اليوم.", "Selling, collecting from customers and the day's cashbox."),
+    "stock_keeper": ("المخزون والمخازن والاستلام من الموردين.", "Stock, warehouses and receiving from suppliers."),
+    "support": ("الدعم الفني: يشوف الإعدادات من غير ما يغيّر في الأرقام.", "Technical support: sees settings without touching the figures."),
+}
+
+
+def _role_sections(role, lang):
+    sections = {}
+    for grant in role.rolepermission_set.all():
+        permission = grant.permission
+        if not (grant.allow and permission.active):
+            continue
+        ar, en = PERMISSION_SECTIONS.get(permission.module, (permission.module, permission.module))
+        name = (permission.name_en or permission.name_ar) if lang == "en" else permission.name_ar
+        sections.setdefault(en if lang == "en" else ar, []).append(name)
+    return [{"name": name, "items": sorted(items)} for name, items in sections.items()]
+
+
 @require_permission("settings.view_settings")
 def role_list(request):
     can_manage = user_has_permission(request.user, "permissions.manage_roles") and request.user.is_superuser
-    roles = Role.objects.filter(active=True).prefetch_related("rolepermission_set__permission")
+    lang = lang_of(request)
+    roles = list(Role.objects.filter(active=True).prefetch_related("rolepermission_set__permission"))
+    for role in roles:
+        role.sections = _role_sections(role, lang)
+        about = ROLE_ABOUT.get(role.code)
+        role.about = (about[1] if lang == "en" else about[0]) if about else ""
     return render(
         request,
         "settings_core/roles.html",

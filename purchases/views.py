@@ -153,7 +153,8 @@ def invoice_list(request):
     return render(
         request,
         "purchases/list.html",
-        _context(request, page=page, query=query, status_filter=status),
+        _context(request, page=page, query=query, status_filter=status,
+                 can_create=user_has_permission(request.user, "purchases.create_purchase_invoice")),
     )
 
 

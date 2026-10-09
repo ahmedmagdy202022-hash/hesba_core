@@ -95,12 +95,20 @@ def party_card(request, kind, pk):
         text = words["reminder"].format(name=party.name, company=company_details()["name"], amount=f"{display_money(info['balance'])} {company_details()['currency']}")
         reminder = f"https://wa.me/{number}?text={quote(text)}"
     code = getattr(party, f"{kind}_code")
+    from settings_core.module_gate import closed_module
+
+    sales_on, purchases_on = closed_module("/sales/") is None, closed_module("/purchases/") is None
     return render(request, "parties/card.html", {
         "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": words, "page_title": party.name, "section": "customers" if kind == "customer" else "suppliers",
         "kind": kind, "party": party, "code": code, "info": info, "data": data, "date_from": date_from, "date_to": date_to, "reminder": reminder,
-        "can_sell": user_has_permission(request.user, "sales.create_sales_invoice"), "can_collect": user_has_permission(request.user, "sales.receive_customer_payment"),
+        # AUDIT-1: an action shows only when its screen opens: permission and module both.
+        "can_sell": sales_on and user_has_permission(request.user, "sales.create_sales_invoice"),
+        "can_collect": sales_on and user_has_permission(request.user, "sales.receive_customer_payment"),
         "medical_file": kind == "customer" and _medical_file(request.user),
-        "can_buy": user_has_permission(request.user, "purchases.create_purchase_invoice"), "can_pay": user_has_permission(request.user, "purchases.pay_supplier"),
+        "can_buy": purchases_on and user_has_permission(request.user, "purchases.create_purchase_invoice"),
+        "can_pay": purchases_on and user_has_permission(request.user, "purchases.pay_supplier"),
+        "docs_open": (sales_on and user_has_permission(request.user, "sales.view_sales_invoices")) if kind == "customer"
+        else (purchases_on and user_has_permission(request.user, "purchases.view_purchase_invoices")),
     })
 
 

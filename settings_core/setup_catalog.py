@@ -148,9 +148,10 @@ MODULE_LABELS = {
 
 MODULE_SLUGS = tuple(MODULE_LABELS)
 
-#: Per-activity starting states, from docs/118_MODULES_SELECTION_PLAN.md. A
-#: services install deliberately has no entry for ``sales_operations``, so it
-#: falls through to DEFAULT_MODULE_STATE — the wizard's own markup does the same.
+#: Per-activity starting states, from docs/118_MODULES_SELECTION_PLAN.md.
+#: AUDIT-2: services now require ``sales_operations`` too; without it a
+#: services business had no way to issue an invoice (medical and education,
+#: also services, already required it).
 MODULE_PRESETS = {
     COMMERCIAL: {
         "customers": SUGGESTED,
@@ -170,6 +171,7 @@ MODULE_PRESETS = {
         "customers": REQUIRED,
         "suppliers": OPTIONAL,
         "items_services": REQUIRED,
+        "sales_operations": REQUIRED,
         "purchases": OPTIONAL,
         "inventory": OPTIONAL,
         "cashboxes": REQUIRED,

@@ -137,11 +137,13 @@ def _capability_rows(activity, sub_activity, lang):
     rows = []
     for slug in capabilities.CAPABILITY_SLUGS:
         entry = capabilities.CAPABILITIES[slug]
+        if not capabilities.fits(activity, slug):  # AUDIT-3: only what fits the activity
+            continue
         is_suggested = capabilities.preset_state(activity, sub_activity, slug) == capabilities.SUGGESTED
         rows.append({
             "slug": slug,
             "label": entry[lang],
-            "about": entry[f"about_{lang}"],
+            "about": capabilities.about(activity, slug, lang),
             "available": entry["available"],
             "suggested": is_suggested,
             "checked": entry["available"] and is_suggested,
