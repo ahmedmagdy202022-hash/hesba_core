@@ -12,7 +12,8 @@ from collections import defaultdict
 from datetime import timedelta
 from decimal import Decimal
 
-from django.db.models import Count, F, Sum
+from django.db.models import Count, DecimalField, F, Sum, Value
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from config.money import money_round
@@ -68,6 +69,31 @@ def _posted_lines(start, end):
     )
 
 
+def _net(start, end, keys, **filters):
+    """{key values: {"value": net sales, "quantity": net quantity}} grouped by ``keys``
+    (SalesLine lookups): posted invoice lines in the window, less what posted
+    returns in the window gave back (refund net of its tax), like ``_sales``."""
+
+    from sales.models import SalesReturnLine, SalesReturnStatus
+
+    rows = defaultdict(lambda: {"value": ZERO, "quantity": ZERO})
+    for row in _posted_lines(start, end).filter(**filters).values(*keys).annotate(value=Sum("line_total_amount"), quantity=Sum("quantity")):
+        entry = rows[tuple(row[k] for k in keys)]
+        entry["value"] += row["value"] or ZERO
+        entry["quantity"] += row["quantity"] or ZERO
+    back = SalesReturnLine.objects.filter(
+        entity_scope.q(entity_scope.SALES_RETURN, "sales_return__"), sales_return__status=SalesReturnStatus.POSTED,
+        sales_return__return_date__gte=start, sales_return__return_date__lte=end,
+        **{f"source_line__{k}": v for k, v in filters.items()},
+    )
+    net = F("amount") - Coalesce(F("tax__tax_amount"), Value(ZERO), output_field=DecimalField())
+    for row in back.values(*[f"source_line__{k}" for k in keys]).annotate(value=Sum(net, output_field=DecimalField()), quantity=Sum("quantity")):
+        entry = rows[tuple(row[f"source_line__{k}"] for k in keys)]
+        entry["value"] -= row["value"] or ZERO
+        entry["quantity"] -= row["quantity"] or ZERO
+    return rows
+
+
 def _bars(rows, value_key="value", limit=6):
     """Horizontal bars, widths relative to the largest; ``rows`` already sorted."""
 
@@ -79,14 +105,14 @@ def _bars(rows, value_key="value", limit=6):
 
 
 def by_category(start, end, lang):
-    rows = (_posted_lines(start, end).values("item__category__name_ar", "item__category__name_en")
-            .annotate(value=Sum("line_total_amount")).order_by("-value"))
-    total = sum((row["value"] or ZERO for row in rows), ZERO)
+    grouped = _net(start, end, ("item__category__name_ar", "item__category__name_en"))
+    total = sum((entry["value"] for entry in grouped.values()), ZERO)
     out = []
-    for row in rows:
-        name = (row["item__category__name_en"] if lang == "en" else None) or row["item__category__name_ar"] or ("Uncategorised" if lang == "en" else "بدون تصنيف")
-        value = money_round(row["value"] or ZERO)
+    for (name_ar, name_en), entry in grouped.items():
+        name = (name_en if lang == "en" else None) or name_ar or ("Uncategorised" if lang == "en" else "بدون تصنيف")
+        value = money_round(entry["value"])
         out.append({"label": name, "value": value, "share": round(float(value / total) * 100) if total else 0})
+    out.sort(key=lambda row: -row["value"])
     return _bars(out)
 
 
@@ -98,8 +124,7 @@ def top_customers(start, end, limit=5):
 
 
 def item_sales(start, end):
-    return {row["item_id"]: (row["item__item_name"], row["value"] or ZERO)
-            for row in _posted_lines(start, end).values("item_id", "item__item_name").annotate(value=Sum("line_total_amount"))}
+    return {item_id: (name, entry["value"]) for (item_id, name), entry in _net(start, end, ("item_id", "item__item_name")).items()}
 
 
 def driver(now, before):
@@ -119,20 +144,19 @@ def driver(now, before):
 # --- per activity ------------------------------------------------------------
 
 def _restaurant(start, end):
-    dishes = (_posted_lines(start, end).values("item__item_name").annotate(value=Sum("quantity"), sales=Sum("line_total_amount")).order_by("-value"))
-    return {"kind": "dishes", "rows": _bars([{"label": row["item__item_name"], "value": row["value"] or ZERO, "sales": money_round(row["sales"] or ZERO)} for row in dishes])}
+    dishes = sorted(_net(start, end, ("item__item_name",)).items(), key=lambda pair: -pair[1]["quantity"])
+    return {"kind": "dishes", "rows": _bars([{"label": name, "value": entry["quantity"], "sales": money_round(entry["value"])} for (name,), entry in dishes])}
 
 
 def _people(start, end):
     from appointments.services import performance
 
     rows = sorted(performance(start, end), key=lambda row: -row["sales"])
-    services = (_posted_lines(start, end).filter(item__is_stock_tracked=False).values("item__item_name")
-                .annotate(value=Sum("line_total_amount"), count=Sum("quantity")).order_by("-value"))
+    services = sorted(_net(start, end, ("item__item_name",), item__is_stock_tracked=False).items(), key=lambda pair: -pair[1]["value"])
     return {
         "kind": "people",
         "people": _bars([{"label": row["employee"].name, "value": row["sales"], "done": row["done"], "commission": row["commission"]} for row in rows]),
-        "services": _bars([{"label": row["item__item_name"], "value": money_round(row["value"] or ZERO), "count": row["count"]} for row in services]),
+        "services": _bars([{"label": name, "value": money_round(entry["value"]), "count": entry["quantity"]} for (name,), entry in services]),
     }
 
 
@@ -150,7 +174,7 @@ def _projects():
 def _production(start, end):
     from manufacturing.models import ProductionRun
 
-    runs = (ProductionRun.objects.filter(run_date__gte=start, run_date__lte=end, status="posted")
+    runs = (entity_scope.scope(ProductionRun.objects, "location__entity").filter(run_date__gte=start, run_date__lte=end, status="posted")
             .values("recipe__product__item_name", "recipe__product__default_sale_price")
             .annotate(output=Sum("output_quantity"), cost=Sum("total_cost"), runs=Count("id")).order_by("-cost"))
     rows = []
@@ -257,4 +281,6 @@ def build_insights(user, lang="ar", today=None):
         "slow_bars": _bars([{"label": row["name"], "value": row["value"]} for row in stock["slow"]]) if stock else [],
         "activity": activity, "sub_activity": sub_activity,
         "section": activity_section(activity, start, today, today),
+        # Project cost and profit follow the profit permission, production cost the cost one.
+        "can_profit": can("reports.view_profit_report"), "can_cost": can("inventory.view_cost"),
     }

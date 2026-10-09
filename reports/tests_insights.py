@@ -77,3 +77,35 @@ class InsightsTests(TestCase):
         self.client.logout()
         self.assertTrue(self.client.login(username="cashier", password="Demo-pass-1"))
         self.assertEqual(self.client.get(reverse("reports:insights")).status_code, 403)
+
+    def test_costs_stay_with_the_cost_and_profit_permissions(self):
+        self.fill("manufacturing", "garments")
+        self.assertTrue(self.client.login(username="manager", password="Demo-pass-1"))
+        page = self.client.get(reverse("reports:insights") + "?lang=ar")
+        self.assertEqual(page.status_code, 200)  # a manager reads the report...
+        self.assertFalse(page.context["data"]["can_cost"])  # ...without production cost
+        self.assertEqual(page.context["data"]["section"]["kind"], "production")
+        self.assertNotContains(page, "تكلفة الخامات")
+        self.assertNotContains(page, "81.00")
+
+    def test_a_returned_sale_leaves_the_breakdowns(self):
+        from django.utils import timezone
+
+        from sales.models import SalesInvoice
+        from sales.services import create_sales_return
+
+        self.fill("commercial", "retail")
+        before = self.page().context["data"]
+        invoice = SalesInvoice.objects.filter(status="posted", invoice_number__startswith="DEMO-SI-").order_by("-invoice_date").first()
+        line = invoice.lines.first()
+        create_sales_return("R2-RET-1", timezone.localdate(), invoice.pk, [{"source_line": line.pk, "quantity": line.quantity}], "رجّعه", self.owner_user())
+        after = self.page().context["data"]
+        returned = before["now"]["net"] - after["now"]["net"]
+        self.assertGreater(returned, 0)
+        # The category chart drops by what the headline dropped by (one category, no tax in the sample).
+        self.assertEqual(before["categories"][0]["value"] - after["categories"][0]["value"], returned)
+
+    def owner_user(self):
+        from django.contrib.auth import get_user_model
+
+        return get_user_model().objects.get(username="owner")
