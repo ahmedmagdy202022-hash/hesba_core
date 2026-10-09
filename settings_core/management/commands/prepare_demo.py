@@ -18,6 +18,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.core.management import call_command
+from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
@@ -188,7 +189,10 @@ class Command(BaseCommand):
                                          "customer": master["customers"][3] if n == 0 else None, "due_date": today + timedelta(days=5 + n * 3),
                                          "labor_cost": "500", "overhead_cost": "200"}, owner)
             for _ in range(2 - n):  # two stages in, one stage in, not started
-                orders.advance(order, owner)
+                try:  # HG-036: starting issues the materials; a short one stays planned (a real shortage on the board)
+                    orders.advance(order, owner)
+                except ValidationError:
+                    break
 
     def _batches(self, master, owner):
         from batches.services import register_batch, stock_on_hand

@@ -114,7 +114,7 @@ def _production(words, today):
     from master_data.models import Location
 
     runs = entity_scope.scope(ProductionRun.objects, "location__entity").filter(status=RunStatus.POSTED, run_date__gte=today.replace(day=1), run_date__lte=today)
-    totals = runs.aggregate(n=Count("id"), units=Sum("output_quantity"), cost=Sum("total_cost"))
+    totals = runs.aggregate(n=Count("id"), units=Sum("output_quantity"), cost=Sum(F("total_cost") + F("conversion_cost")))
     location = entity_scope.locations(Location.objects).filter(active=True, is_default=True).first() or entity_scope.locations(Location.objects).filter(active=True).first()
     short = []
     for recipe in Recipe.objects.filter(active=True).select_related("product")[:30]:

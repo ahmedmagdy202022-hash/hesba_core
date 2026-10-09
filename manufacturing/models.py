@@ -45,7 +45,11 @@ class ProductionRun(models.Model):
     location = models.ForeignKey("master_data.Location", on_delete=models.PROTECT, related_name="production_runs")
     run_date = models.DateField()
     output_quantity = models.DecimalField(max_digits=14, decimal_places=3)
-    total_cost = models.DecimalField(max_digits=14, decimal_places=2)
+    total_cost = models.DecimalField(max_digits=14, decimal_places=2)  # materials consumed
+    # HG-036: labour and overhead absorbed into the product's stock value, and
+    # the units that failed a stage (scrap) — made, but never put into stock.
+    conversion_cost = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    scrap_quantity = models.DecimalField(max_digits=14, decimal_places=3, default=0)
     output_operation = models.OneToOneField("inventory.StockOperation", on_delete=models.PROTECT, related_name="production_output")
     status = models.CharField(max_length=20, choices=RunStatus.choices, default=RunStatus.POSTED)
     notes = models.CharField(max_length=255, blank=True)
@@ -64,6 +68,17 @@ class ProductionRun(models.Model):
 class ProductionConsumption(models.Model):
     run = models.ForeignKey(ProductionRun, on_delete=models.CASCADE, related_name="consumptions")
     operation = models.OneToOneField("inventory.StockOperation", on_delete=models.PROTECT, related_name="production_consumption")
+
+    class Meta:
+        ordering = ["pk"]
+
+
+class OrderMaterialIssue(models.Model):
+    """HG-036: a component issued to the floor when an order starts. Its value
+    sits in work in progress until the order finishes (or is cancelled)."""
+
+    order = models.ForeignKey("ProductionOrder", on_delete=models.CASCADE, related_name="issues")
+    operation = models.OneToOneField("inventory.StockOperation", on_delete=models.PROTECT, related_name="order_issue")
 
     class Meta:
         ordering = ["pk"]

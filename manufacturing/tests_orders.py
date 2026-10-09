@@ -23,11 +23,12 @@ class ProductionOrderTests(MfgSetup):
         order = self.open()
         self.assertEqual([s[0] for s in order.stages], ["prep", "cooking", "cooling", "packing"])
         self.assertEqual(order.status, OrderStatus.PLANNED)
-        # Nothing moves in stock while the order is on the floor.
+        # HG-036: starting the order issues its materials to work in progress.
         orders.advance(order, self.owner)
         order.refresh_from_db()
         self.assertEqual((order.status, order.stage_index), (OrderStatus.IN_PROGRESS, 1))
-        self.assertEqual(get_item_location_stock_quantity(self.flour, self.plant), D("50"))
+        self.assertEqual(get_item_location_stock_quantity(self.flour, self.plant), D("46"))
+        self.assertEqual(orders.cost_card(order)["stage"], "issued")
         with self.assertRaises(ValidationError):
             orders.finish(order, self.owner)
         orders.advance(order, self.owner, good="19", defect="1", note="كيكة اتحرقت")
@@ -36,17 +37,19 @@ class ProductionOrderTests(MfgSetup):
         with self.assertRaises(ValidationError):
             orders.advance(order, self.owner)
         card = orders.cost_card(order)
-        self.assertTrue(card["estimate"])
-        self.assertEqual(card["material"], D("190.00"))   # 2 batches x 95
+        self.assertFalse(card["estimate"])
+        self.assertEqual(card["material"], D("190.00"))   # 2 batches x 95, as issued
         orders.finish(order, self.owner)
         order.refresh_from_db()
         self.assertEqual(order.status, OrderStatus.DONE)
-        self.assertEqual(order.run.output_quantity, D("20.000"))
-        self.assertEqual(get_item_location_stock_quantity(self.cake, self.plant), D("20"))
-        self.assertEqual(get_item_location_stock_quantity(self.flour, self.plant), D("46"))
+        # The burnt cake is scrap: 19 good cakes go into stock and carry the whole cost.
+        self.assertEqual((order.run.output_quantity, order.run.scrap_quantity), (D("19.000"), D("1.000")))
+        self.assertEqual(get_item_location_stock_quantity(self.cake, self.plant), D("19"))
+        self.assertEqual(get_item_location_stock_quantity(self.flour, self.plant), D("46"))   # not taken twice
         card = orders.cost_card(order)
         self.assertFalse(card["estimate"])
-        self.assertEqual((card["material"], card["total"], card["per_unit"]), (D("190.00"), D("290.00"), D("14.5000")))
+        self.assertTrue(card["absorbed"])
+        self.assertEqual((card["material"], card["total"], card["per_unit"]), (D("190.00"), D("290.00"), D("15.2632")))
         self.assertEqual(orders.quality(order), {"defects": D("1"), "rate": D("5.0")})
         with self.assertRaises(ValidationError):
             orders.cancel(order, self.owner, "x")
@@ -68,15 +71,14 @@ class ProductionOrderTests(MfgSetup):
         with self.assertRaises(ValidationError):
             orders.advance(order, self.owner)
 
-    def test_short_materials_stop_the_finish_not_the_floor(self):
+    def test_short_materials_stop_the_start(self):
         order = self.open(quantity="1000")   # needs 200 kg flour; only 50 on hand
-        for _ in order.stages:
+        with self.assertRaisesMessage(ValidationError, "دقيق"):
             orders.advance(order, self.owner)
-        with self.assertRaises(ValidationError):
-            orders.finish(order, self.owner)
         order.refresh_from_db()
-        self.assertEqual(order.status, OrderStatus.IN_PROGRESS)
-        self.assertIsNone(order.run)
+        self.assertEqual((order.status, order.stage_index), (OrderStatus.PLANNED, 0))
+        self.assertFalse(order.issues.exists())
+        self.assertEqual(get_item_location_stock_quantity(self.flour, self.plant), D("50"))   # nothing moved
 
     def test_garment_factories_get_garment_stages(self):
         self.profile.sub_activity_slug = "garments"

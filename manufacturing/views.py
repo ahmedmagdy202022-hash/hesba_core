@@ -113,7 +113,7 @@ def _overview(request, lang):
     from collections import defaultdict
     from datetime import timedelta
 
-    from django.db.models import Count, Sum
+    from django.db.models import F, Count, Sum
     from django.utils import timezone
 
     from inventory.models import StockMovement
@@ -140,6 +140,12 @@ def _overview(request, lang):
         held[(row["item_id"], row["location_id"])] += sign * (row["total"] or Decimal("0"))
         per_item[row["item_id"]] += sign * (row["total"] or Decimal("0"))
 
+    # HG-036: an order on the floor already has its materials (work in progress).
+    from .models import OrderMaterialIssue
+
+    issues = list(OrderMaterialIssue.objects.filter(order__in=open_orders).select_related("operation"))
+    issued_orders = {issue.order_id for issue in issues}
+    wip_value = sum((issue.operation.quantity * issue.operation.unit_cost for issue in issues), Decimal("0")) if can_cost else None
     shortages = {}
     for order in open_orders:
         total = len(order.stages) or 1
@@ -150,7 +156,7 @@ def _overview(request, lang):
         batches = (order.quantity / order.recipe.output_quantity) if order.recipe.output_quantity else Decimal("0")
         # Every open order together, per material and warehouse: two orders
         # that each fit can still be short side by side.
-        for line in order.recipe.lines.all():
+        for line in (() if order.pk in issued_orders else order.recipe.lines.all()):
             key = (line.component_id, order.location_id)
             entry = shortages.setdefault(key, {"item": line.component, "location": order.location, "need": Decimal("0"), "have": held[key], "orders": []})
             entry["need"] += (line.quantity * batches).quantize(Decimal("0.001"))
@@ -160,7 +166,7 @@ def _overview(request, lang):
     shortages = [entry for entry in shortages.values() if entry["missing"] > 0]
 
     runs30 = entity_scope.scope(ProductionRun.objects, "location__entity").filter(status="posted", run_date__gte=today - timedelta(days=29))
-    made = runs30.aggregate(units=Sum("output_quantity"), cost=Sum("total_cost"), count=Count("id"))
+    made = runs30.aggregate(units=Sum("output_quantity"), cost=Sum(F("total_cost") + F("conversion_cost")), count=Count("id"))
     costs = _costs(item_ids) if can_cost else {}
     products = []
     for recipe in recipes:
@@ -177,6 +183,7 @@ def _overview(request, lang):
         "open_orders": open_orders, "planned_count": sum(1 for o in open_orders if o.status == OrderStatus.PLANNED),
         "running_count": sum(1 for o in open_orders if o.status == OrderStatus.IN_PROGRESS), "late_count": sum(1 for o in open_orders if o.late),
         "shortages": sorted(shortages, key=lambda e: -e["missing"]), "made": made, "products": products,
+        "wip_value": wip_value, "wip_orders": len(issued_orders),
         "runs": [{"run": run, "status_label": choice_label(run, "status", lang)} for run in runs],
     }
 
