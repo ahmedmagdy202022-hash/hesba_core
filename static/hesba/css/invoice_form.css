@@ -12,8 +12,11 @@
 .inv-form .op-scan{margin:16px 0 10px}
 
 /* Lines: one row each; the head row names the columns once. */
-.inv-lines{border:1px solid var(--op-border);border-radius:var(--hs-radius-md,14px);overflow:hidden}
-.inv-row{display:grid;grid-template-columns:2.2rem minmax(11rem,3fr) repeat(var(--inv-cols,3),minmax(5.5rem,1fr)) 6.5rem 2.4rem;gap:8px;align-items:center;padding:8px 10px}
+/* AUDIT-4: with a unit column the row used to outgrow the space beside the
+   summary and its total was clipped; narrower minimums fit 1366px, and a
+   still-narrower screen scrolls the lines instead of cutting them. */
+.inv-lines{border:1px solid var(--op-border);border-radius:var(--hs-radius-md,14px);overflow-x:auto}
+.inv-row{display:grid;grid-template-columns:2rem minmax(9rem,3fr) repeat(var(--inv-cols,3),minmax(4.25rem,1fr)) 5.75rem 2.4rem;gap:8px;align-items:center;padding:8px 10px;min-width:min-content}
 .inv-lines-head{background:var(--hs-ground);color:var(--op-muted);font-size:13px;font-weight:700}
 .op-lines{display:block}
 .inv-form .op-line{display:block;border:0;border-top:1px solid var(--hs-line);border-radius:0;padding:0}
