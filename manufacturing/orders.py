@@ -26,6 +26,8 @@ from audit.models import AuditEventType, AuditLog
 from config.money import cost_round, money_round
 
 from . import services
+from inventory.models import StockOperationStatus
+
 from .models import OrderMaterialIssue, OrderStageLog, OrderStatus, ProductionOrder
 from .stages import current_stages
 
@@ -33,11 +35,13 @@ MESSAGES = {
     "ar": {"recipe": "اختار الوصفة (المنتج).", "quantity": "الكمية لازم تكون رقم أكبر من صفر.", "location": "اختار مكان الإنتاج.",
            "inactive": "الوصفة دي متوقفة.", "money": "تكلفة العمالة والمصاريف لازم تكون رقم مش سالب.", "state": "الأمر ده مش في المرحلة دي.",
            "good": "الكمية السليمة لازم تكون رقم بين صفر وكمية الأمر.", "defect": "الكمية المعيبة لازم تكون رقم مش سالب.",
-           "not_last": "لسه في مراحل متخلصتش.", "reason": "اكتب سبب الإلغاء.", "done": "الأمر خلص ومينفعش يتلغي؛ ألغِ التشغيلة نفسها لو محتاج."},
+           "not_last": "لسه في مراحل متخلصتش.", "yield": "السليم والمعيب مع بعض مينفعش يزيدوا عن {units} وحدة داخلة المرحلة دي.",
+           "reversed": "خامات الأمر ده اترجعت من شاشة المخزون؛ ألغِ الأمر وافتح أمر جديد.", "reason": "اكتب سبب الإلغاء.", "done": "الأمر خلص ومينفعش يتلغي؛ ألغِ التشغيلة نفسها لو محتاج."},
     "en": {"recipe": "Choose the recipe (product).", "quantity": "Quantity must be a number above zero.", "location": "Choose where it is made.",
            "inactive": "This recipe is inactive.", "money": "Labour and overhead must be numbers, not negative.", "state": "The order is not at that step.",
            "good": "Good quantity must be between zero and the order quantity.", "defect": "Defect quantity cannot be negative.",
-           "not_last": "There are stages still to finish.", "reason": "Write the reason for cancelling.", "done": "A finished order cannot be cancelled; cancel its run instead."},
+           "not_last": "There are stages still to finish.", "yield": "Good and defective together cannot be more than the {units} units entering this stage.",
+           "reversed": "This order's materials were reversed from the inventory screen; cancel the order and open a new one.", "reason": "Write the reason for cancelling.", "done": "A finished order cannot be cancelled; cancel its run instead."},
 }
 
 
@@ -110,12 +114,17 @@ def advance(order, user, *, good=None, defect=None, note="", lang="ar"):
     order = _locked(order)
     if order.status not in (OrderStatus.PLANNED, OrderStatus.IN_PROGRESS) or order.stage_index >= len(order.stages):
         raise ValidationError(words["state"])
-    good_qty = order.quantity if good in (None, "") else services._decimal(good)
-    if good_qty is None or good_qty < 0 or good_qty > order.quantity:
-        raise ValidationError(words["good"])
     defect_qty = Decimal("0") if defect in (None, "") else services._decimal(defect)
     if defect_qty is None or defect_qty < 0:
         raise ValidationError(words["defect"])
+    # A stage works on the units that passed the stages before it: good and
+    # defective together cannot be more than that.
+    units_in = good_units(order)
+    good_qty = max(units_in - defect_qty, Decimal("0")) if good in (None, "") else services._decimal(good)
+    if good_qty is None or good_qty < 0 or good_qty > order.quantity:
+        raise ValidationError(words["good"])
+    if good_qty + defect_qty > units_in:
+        raise ValidationError(words["yield"].format(units=services.fmt_qty(units_in)))
     if order.status == OrderStatus.PLANNED:
         order.status, order.started_at = OrderStatus.IN_PROGRESS, timezone.now()
         operations = services.issue(order.recipe, user, batches=_batches(order), location=order.location, reference=order.number, lang=lang)
@@ -139,6 +148,8 @@ def finish(order, user, lang="ar"):
     if order.stage_index < len(order.stages):
         raise ValidationError(words["not_last"])
     issued = [issue.operation for issue in order.issues.select_related("operation")]
+    if any(operation.status != StockOperationStatus.POSTED for operation in issued):
+        raise ValidationError(words["reversed"])
     planned = (order.recipe.output_quantity * _batches(order)).quantize(Decimal("0.001"))
     run = services.produce(order.recipe, user, batches=_batches(order), location=order.location,
                            notes=f"{order.number}{' · ' + order.notes if order.notes else ''}"[:255], lang=lang,
@@ -162,7 +173,7 @@ def cancel(order, user, reason, lang="ar"):
         raise ValidationError(words["reason"])
     from inventory.services import cancel_stock_operation
 
-    for issue in order.issues.all():  # the materials come back from the floor
+    for issue in order.issues.filter(operation__status=StockOperationStatus.POSTED):  # the materials come back from the floor
         cancel_stock_operation(issue.operation_id, timezone.localdate(), f"{order.number}: {reason.strip()}"[:255], user)
     order.status = OrderStatus.CANCELLED
     order.notes = f"{order.notes} · {reason.strip()}"[:255] if order.notes else reason.strip()[:255]

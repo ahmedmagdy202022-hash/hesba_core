@@ -48,6 +48,8 @@ MESSAGES = {
         "qty": "كمية «{item}» لازم أكبر من صفر.", "twice": "«{item}» متكرر؛ اجمع كميته في سطر واحد.", "inactive": "الوصفة دي متوقفة.",
         "batches": "عدد الدفعات لازم أكبر من صفر.", "location": "اختار المخزن.", "short": "«{item}» مش كفاية: محتاج {need} والموجود {have}.",
         "cancelled": "التشغيلة دي اتلغت بالفعل.", "reason": "اكتب سبب الإلغاء.",
+        "reversed": "الخامات المصروفة للأمر ده اترجعت من شاشة المخزون؛ ألغِ الأمر وافتح أمر جديد.",
+        "on_floor": "في أمر إنتاج شغال في المصنع بالوصفة دي وخاماته اتصرفت؛ خلّصه أو ألغيه الأول قبل ما تعدّل الوصفة.",
         "no_good": "مفيش ولا وحدة سليمة تدخل المخزن؛ لو الكمية كلها باظت ألغِ الأمر أو سجّل الهالك كتسوية.",
     },
     "en": {
@@ -56,6 +58,8 @@ MESSAGES = {
         "qty": "The quantity of “{item}” must be above zero.", "twice": "“{item}” is listed twice; put its quantity on one line.", "inactive": "This recipe is inactive.",
         "batches": "The number of batches must be above zero.", "location": "Choose the location.", "short": "Not enough “{item}”: {need} needed, {have} available.",
         "cancelled": "This run is already cancelled.", "reason": "Enter the reason for cancelling.",
+        "reversed": "The materials issued for this order were reversed from the inventory screen; cancel the order and open a new one.",
+        "on_floor": "An order on the floor was issued from this recipe; finish or cancel it before changing the recipe.",
         "no_good": "No good units are left to put into stock; if the whole lot was lost, cancel the order or record the loss as an adjustment.",
     },
 }
@@ -86,6 +90,9 @@ def save_recipe(data, lines, user, recipe=None, lang="ar"):
     """Create or replace a recipe. ``lines`` is [(component item, quantity per batch)]."""
 
     words = MESSAGES[lang]
+    if recipe is not None and recipe.orders.filter(status="in_progress", issues__isnull=False).exists():
+        # HG-036: an order on the floor was issued from this recipe; its finish must use the same one.
+        raise ValidationError(words["on_floor"])
     product = data.get("product")
     if product is None:
         raise ValidationError(words["product"])
@@ -213,6 +220,8 @@ def produce(recipe, user, *, batches, location, run_date=None, notes="", lang="a
         consumed = _consume(lines, batches, location, f"{number}-C", reason, run_date, user)
     else:
         consumed = list(issued)
+        if any(operation.status != "posted" for operation in consumed):
+            raise ValidationError(words["reversed"])
     total = sum((operation.quantity * operation.unit_cost for operation in consumed), Decimal("0"))
     produced = adjust_stock(f"{number}-OUT", run_date, recipe.product, location, StockAdjustmentDirection.IN, output, reason, user,
                             unit_cost=cost_round((total + conversion_cost) / output))

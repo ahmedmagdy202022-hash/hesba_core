@@ -126,3 +126,48 @@ class WorkInProgressTests(MfgSetup):
         run = services.produce(self.recipe, self.owner, batches="1", location=self.plant)
         self.assertEqual((run.output_quantity, run.total_cost, run.conversion_cost), (D("10.000"), D("95.00"), D("0.00")))
         self.assertEqual(run.output_operation.unit_cost, D("9.5000"))
+
+
+class FloorGuardTests(WorkInProgressTests):
+    """Codex review on #175: what may not happen while materials are on the floor."""
+
+    test_materials_leave_stock_at_the_start_and_wait_in_wip = None
+    test_labour_and_overhead_go_into_the_products_stock_cost = None
+    test_scrap_never_enters_stock_and_good_units_carry_the_cost = None
+    test_a_lot_with_no_good_units_cannot_finish = None
+    test_cancelling_an_order_on_the_floor_returns_every_material = None
+    test_cancelling_the_run_reverses_every_leg = None
+    test_an_order_started_before_hg036_consumes_at_the_finish = None
+    test_a_plain_run_is_unchanged = None
+
+    def test_an_issue_reversed_elsewhere_stops_the_finish_and_not_the_cancel(self):
+        from inventory.services import cancel_stock_operation
+
+        order = self.open()
+        self.walk(order)
+        first = order.issues.select_related("operation").first().operation
+        cancel_stock_operation(first.pk, first.operation_date, "رجعت من شاشة المخزون", self.owner)
+        with self.assertRaisesMessage(ValidationError, "اترجعت"):
+            orders.finish(order, self.owner)
+        self.assertEqual(get_item_location_stock_quantity(self.cake, self.plant), D("0"))
+        orders.cancel(order, self.owner, "خامات رجعت")      # the other two come back; the reversed one is not reversed twice
+        self.assertEqual(self.stock(), (D("50"), D("20"), D("100"), D("0")))
+
+    def test_the_recipe_is_frozen_while_its_materials_are_on_the_floor(self):
+        order = self.open()
+        orders.advance(order, self.owner)
+        with self.assertRaisesMessage(ValidationError, "في المصنع"):
+            services.save_recipe({"product": self.cake, "output_quantity": "5"}, [(self.flour, "2")], self.owner, recipe=self.recipe)
+        orders.cancel(order, self.owner, "x")
+        services.save_recipe({"product": self.cake, "output_quantity": "5"}, [(self.flour, "2")], self.owner, recipe=self.recipe)
+
+    def test_a_stage_cannot_report_more_units_than_reach_it(self):
+        order = self.open()
+        for good, defect in (("20", "20"), ("15", "6"), ("0", "21")):
+            with self.subTest(good=good, defect=defect), self.assertRaisesMessage(ValidationError, "20"):
+                orders.advance(order, self.owner, good=good, defect=defect)
+        orders.advance(order, self.owner, good="18", defect="2")
+        with self.assertRaisesMessage(ValidationError, "18"):
+            orders.advance(order, self.owner, good="18", defect="1")
+        orders.advance(order, self.owner, defect="1")       # good defaults to what is left: 17
+        self.assertEqual(orders.good_units(order), D("17"))
