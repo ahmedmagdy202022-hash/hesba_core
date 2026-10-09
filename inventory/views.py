@@ -235,7 +235,9 @@ def operation_list(request):
 @require_permission("inventory.transfer_stock")
 def transfer_create(request):
     lang = _lang(request)
-    form = StockTransferForm(request.POST or None, lang=lang)
+    start = request.GET.get("from", "")
+    # R2-7: "transfer from here" on a warehouse page names the source.
+    form = StockTransferForm(request.POST or None, lang=lang, initial={"source_location": start} if start.isdigit() else None)
     if request.method == "POST" and form.is_valid():
         try:
             transfer_stock(user=request.user, **form.cleaned_data)

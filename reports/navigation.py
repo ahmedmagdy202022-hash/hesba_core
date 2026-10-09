@@ -62,7 +62,8 @@ NAV_ITEMS = (
     {"key": "pos", "ar": "الكاشير", "en": "Point of sale", "url_name": "sales:pos", "module": "sales_operations", "capability": "pos", "permission": "sales.create_sales_invoice"},
     {"key": "purchases", "ar": "المشتريات", "en": "Purchases", "url_name": "purchases:list", "module": "purchases", "permission": "purchases.view_purchase_invoices"},
     {"key": "inventory", "ar": "المخزون", "en": "Inventory", "url_name": "inventory:stock", "module": "inventory", "permission": "inventory.view_stock"},
-    {"key": "warehouses", "ar": "المخازن", "en": "Warehouses", "url_name": "master_data:locations", "module": "inventory", "permission": "inventory.view_stock"},
+    {"key": "warehouses", "ar": "المخازن", "en": "Warehouses", "url_name": "inventory:warehouses", "module": "inventory", "permission": "inventory.view_stock",
+     "also": ("/master-data/locations/",)},  # R2-7: the warehouses hub; adding or editing one is still master data
     {"key": "customers", "ar": "العملاء", "en": "Customers", "url_name": "master_data:customers", "module": "customers"},
     {"key": "suppliers", "ar": "الموردون", "en": "Suppliers", "url_name": "master_data:suppliers", "module": "suppliers", "permission": "master_data.view_suppliers"},
     {"key": "items", "ar": "الأصناف والخدمات", "en": "Items & services", "url_name": "master_data:items", "module": "items_services"},
@@ -159,7 +160,7 @@ def nav_items(user, lang, modules):
         if item.get("allow") and not import_string(item["allow"])(user):
             continue
         label = term(NAV_TERMS[item["key"]], lang, words) if item["key"] in NAV_TERMS else item[lang]
-        items.append({"key": item["key"], "label": label, "url_name": item["url_name"]})
+        items.append({"key": item["key"], "label": label, "url_name": item["url_name"], "also": item.get("also", ())})
     order = _lead_first([item["key"] for item in items], _activity())
     position = {key: index for index, key in enumerate(order)}
     return sorted(items, key=lambda item: position[item["key"]])
@@ -174,9 +175,9 @@ def current_key(items, path):
 
     best, best_len = None, 0
     for item in items:
-        prefix = item["url"]
-        if path.startswith(prefix) and len(prefix) > best_len:
-            best, best_len = item["key"], len(prefix)
+        for prefix in (item["url"], *item.get("also", ())):
+            if path.startswith(prefix) and len(prefix) > best_len:
+                best, best_len = item["key"], len(prefix)
     return best
 
 
