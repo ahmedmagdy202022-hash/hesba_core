@@ -14,7 +14,9 @@ Three pieces, each replaceable in tests:
   ``POST {ETA_SIGNER_URL}`` with ``{"serialized": "..."}`` and a bearer
   ``ETA_SIGNER_TOKEN``, answering ``{"signature": "<base64 CMS>"}``.
 * **The API:** a client-credentials token, then submit, read the details of
-  a document and cancel it (ETA SDK v1.0, sdk.invoicing.eta.gov.eg).
+  a document and cancel it (ETA SDK v1.0, sdk.invoicing.eta.gov.eg:
+  ``POST /api/v1.0/documentsubmissions/``, ``GET /api/v1.0/documents/{uuid}/details``,
+  ``PUT /api/v1.0/documents/state/{uuid}/state``).
 
 Network calls go through ``_http`` only, which is what the tests replace.
 """
@@ -158,21 +160,21 @@ def _api(method, path, body=None):
 
 
 def submit(documents):
-    status, payload = _api("POST", "/api/v1/documentsubmissions", {"documents": documents})
+    status, payload = _api("POST", "/api/v1.0/documentsubmissions/", {"documents": documents})
     if status not in (200, 202):
         raise PortalError("submission refused", status, payload)
     return payload
 
 
 def details(uuid):
-    status, payload = _api("GET", f"/api/v1/documents/{urllib.parse.quote(uuid)}/details")
+    status, payload = _api("GET", f"/api/v1.0/documents/{urllib.parse.quote(uuid)}/details")
     if status != 200:
         raise PortalError("details refused", status, payload)
     return payload
 
 
 def cancel(uuid, reason):
-    status, payload = _api("PUT", f"/api/v1/documents/state/{urllib.parse.quote(uuid)}/state", {"status": "cancelled", "reason": reason})
+    status, payload = _api("PUT", f"/api/v1.0/documents/state/{urllib.parse.quote(uuid)}/state", {"status": "cancelled", "reason": reason})
     if status != 200:
         raise PortalError("cancel refused", status, payload)
     return payload

@@ -212,9 +212,13 @@ SEND_WORDS = {
 
 
 def current_submission(invoice):
+    """The latest sending in the environment the server now talks to (moving
+    from preprod to prod starts a fresh history)."""
+
+    from . import portal
     from .models import Submission
 
-    return Submission.objects.filter(invoice=invoice).first()
+    return Submission.objects.filter(invoice=invoice, environment=portal.settings()["environment"]).first()
 
 
 def _portal_error(exc, words):
@@ -265,7 +269,7 @@ def send_invoice(invoice, user, lang="ar"):
     accepted = next((row for row in answer.get("acceptedDocuments") or [] if row.get("internalId") == invoice.invoice_number), None)
     rejected = next((row for row in answer.get("rejectedDocuments") or [] if row.get("internalId") == invoice.invoice_number), None)
     submission = Submission.objects.create(
-        invoice=invoice, environment=portal.settings()["environment"], submitted_by=user, submission_id=str(answer.get("submissionId") or ""),
+        invoice=invoice, environment=portal.settings()["environment"], submitted_by=user, submission_id=str(answer.get("submissionUUID") or ""),
         status=SubmissionStatus.SUBMITTED if accepted else SubmissionStatus.REJECTED,
         uuid=(accepted or {}).get("uuid", ""), long_id=(accepted or {}).get("longId", ""),
         message="" if accepted else portal.error_text(rejected or answer), response=answer,

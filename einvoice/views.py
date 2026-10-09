@@ -243,5 +243,5 @@ def sales_document(request, pk):
     submission = current_submission(invoice)
     return render(request, "einvoice/document.html", _context(
         request, invoice=invoice, problems=problems, document_text=text, section="sales", can_send=can_send, missing=_missing(lang),
-        environment=portal.settings()["environment"], submission=submission, history=invoice.eta_submissions.all()[1:6], public_url=public_url(submission),
+        environment=portal.settings()["environment"], submission=submission, history=invoice.eta_submissions.exclude(pk=getattr(submission, "pk", None))[:5], public_url=public_url(submission),
     ))

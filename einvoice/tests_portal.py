@@ -26,19 +26,19 @@ class FakePortal:
         self.calls.append((method, url, body, form, headers))
         if url.endswith("/sign"):
             return (200, {"signature": "MIIB-signature"}) if self.signer_ok else (500, {})
-        if url.endswith("/connect/token"):
+        if url == "https://id.preprod.eta.gov.eg/connect/token":
             return 200, {"access_token": "T", "expires_in": 3600}
-        if url.endswith("/documentsubmissions"):
+        if url == "https://api.preprod.invoicing.eta.gov.eg/api/v1.0/documentsubmissions/":
             internal = body["documents"][0]["internalID"]
             if self.accept:
-                return 202, {"submissionId": "S1", "acceptedDocuments": [{"uuid": "U1", "longId": "L1", "internalId": internal}], "rejectedDocuments": []}
-            return 202, {"submissionId": "S1", "acceptedDocuments": [],
+                return 202, {"submissionUUID": "S1", "acceptedDocuments": [{"uuid": "U1", "longId": "L1", "internalId": internal}], "rejectedDocuments": []}
+            return 202, {"submissionUUID": "S1", "acceptedDocuments": [],
                          "rejectedDocuments": [{"internalId": internal, "error": {"message": "Validation Error", "details": [{"propertyPath": "receiver.id", "message": "Invalid TIN"}]}}]}
-        if "/details" in url:
+        if url == "https://api.preprod.invoicing.eta.gov.eg/api/v1.0/documents/U1/details":
             if self.valid:
                 return 200, {"status": "Valid", "longId": "L1", "validationResults": {"status": "Valid", "validationSteps": []}}
             return 200, {"status": "Invalid", "validationResults": {"validationSteps": [{"status": "Invalid", "error": {"message": "Total mismatch"}}]}}
-        if "/state" in url:
+        if url == "https://api.preprod.invoicing.eta.gov.eg/api/v1.0/documents/state/U1/state" and method == "PUT" and body.get("status") == "cancelled":
             return 200, {}
         return 404, {}
 
@@ -59,8 +59,8 @@ class PortalTests(DocumentSetup):
         fake = FakePortal()
         with mock.patch.object(portal, "_http", fake):
             submission = send_invoice(self.posted, self.owner, "en")
-            self.assertEqual((submission.status, submission.uuid, submission.environment), ("submitted", "U1", "preprod"))
-            sent = next(call for call in fake.calls if call[1].endswith("/documentsubmissions"))
+            self.assertEqual((submission.status, submission.uuid, submission.environment, submission.submission_id), ("submitted", "U1", "preprod", "S1"))
+            sent = next(call for call in fake.calls if call[1].endswith("/documentsubmissions/"))
             document = sent[2]["documents"][0]
             self.assertEqual(document["signatures"], [{"signatureType": "I", "value": "MIIB-signature"}])
             signed_text = next(call for call in fake.calls if call[1].endswith("/sign"))[2]["serialized"]
@@ -96,7 +96,7 @@ class PortalTests(DocumentSetup):
     def test_signer_down_or_missing_setup_send_nothing(self):
         with mock.patch.object(portal, "_http", FakePortal(signer_ok=False)) as fake, self.assertRaisesMessage(ValidationError, "جهاز التوقيع"):
             send_invoice(self.posted, self.owner, "ar")
-        self.assertFalse(any(call[1].endswith("/documentsubmissions") for call in fake.calls))
+        self.assertFalse(any(call[1].endswith("/documentsubmissions/") for call in fake.calls))
         with mock.patch.dict(os.environ, {"ETA_CLIENT_SECRET": ""}), self.assertRaisesMessage(ValidationError, "ETA_CLIENT_SECRET"):
             send_invoice(self.posted, self.owner, "ar")
         self.assertFalse(Submission.objects.exists())
@@ -164,3 +164,29 @@ class ConnectionScreenTests(DocumentSetup):
         self.assertContains(page, "الاتصال شغال")
         with mock.patch.dict(os.environ, {"ETA_SIGNER_URL": ""}):
             self.assertContains(self.client.get(url + "?lang=ar"), "عنوان برنامج التوقيع")
+
+
+@mock.patch.dict(os.environ, ENV)
+class EnvironmentTests(DocumentSetup):
+    def test_moving_to_production_starts_a_fresh_history(self):
+        portal._TOKEN.update(value="", expires=0.0, key="")
+        self.complete_data()
+        posted = self.invoice()
+        with mock.patch.object(portal, "_http", FakePortal()):
+            refresh_submission(send_invoice(posted, self.owner, "en"), self.owner, "en")  # valid on preprod
+        with mock.patch.dict(os.environ, {"ETA_ENVIRONMENT": "prod"}):
+            from .services import current_submission
+
+            self.assertIsNone(current_submission(posted))
+            prod = FakePortal()
+            calls = []
+
+            def live(method, url, **kwargs):
+                calls.append(url)
+                return prod(method, url.replace("https://api.invoicing.eta.gov.eg", "https://api.preprod.invoicing.eta.gov.eg")
+                            .replace("https://id.eta.gov.eg", "https://id.preprod.eta.gov.eg"), **kwargs)
+
+            with mock.patch.object(portal, "_http", live):
+                submission = send_invoice(posted, self.owner, "en")
+        self.assertEqual((submission.environment, submission.status), ("prod", "submitted"))
+        self.assertIn("https://api.invoicing.eta.gov.eg/api/v1.0/documentsubmissions/", calls)
