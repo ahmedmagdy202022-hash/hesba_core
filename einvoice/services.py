@@ -194,3 +194,139 @@ def build_document(invoice, lang="ar"):
 
 def document_json(document):
     return json.dumps({"documents": [document]}, ensure_ascii=False, indent=2)
+
+
+# ---- ETA-002: signing and sending (portal.py does the talking) ----
+
+STATUS_FROM_PORTAL = {"valid": "valid", "invalid": "invalid", "rejected": "rejected", "cancelled": "cancelled", "submitted": "submitted"}
+SEND_WORDS = {
+    "ar": {"problems": "البيانات لسه ناقصة؛ كمّلها الأول.", "already": "الفاتورة دي اتبعتت واتقبلت بالفعل.", "pending": "الفاتورة دي اتبعتت ولسه المنظومة بتراجعها.",
+           "setup": "الربط مع المنظومة لسه متظبطش على السيرفر ({names}).", "signer": "جهاز التوقيع مش بيرد أو رفض التوقيع؛ اتأكد إن التوكن متركّب والبرنامج شغال.",
+           "login": "المنظومة رفضت الدخول؛ راجع Client ID و Client Secret.", "unreachable": "مش قادرين نوصل للمنظومة دلوقتي؛ جرّب كمان شوية.",
+           "refused": "المنظومة رفضت الفاتورة: {reason}", "reason": "اكتب سبب الإلغاء.", "not_valid": "الإلغاء للفواتير المقبولة بس."},
+    "en": {"problems": "The data is still incomplete; complete it first.", "already": "This invoice was already sent and accepted.", "pending": "This invoice was sent and the portal is still checking it.",
+           "setup": "The portal connection is not set up on the server yet ({names}).", "signer": "The signer did not answer or refused; check the token is plugged in and the signer is running.",
+           "login": "The portal refused the login; check the client ID and secret.", "unreachable": "The portal cannot be reached right now; try again shortly.",
+           "refused": "The portal rejected the invoice: {reason}", "reason": "Enter a cancellation reason.", "not_valid": "Only accepted invoices can be cancelled."},
+}
+
+
+def current_submission(invoice):
+    from .models import Submission
+
+    return Submission.objects.filter(invoice=invoice).first()
+
+
+def _portal_error(exc, words):
+    from . import portal
+
+    text = exc.message or ""
+    if text.startswith("unreachable"):
+        return words["unreachable"]
+    if text in ("no signer", "signer refused"):
+        return words["signer"]
+    if text == "login refused":
+        return words["login"]
+    return words["refused"].format(reason=portal.error_text(exc.payload) or exc.status or text)
+
+
+def _audit_send(submission, user, action):
+    AuditLog.objects.create(event_type=AuditEventType.CREATE if action == "eta_send" else AuditEventType.UPDATE, actor=user, module="einvoice",
+                            action=action, object_type="einvoice.Submission", object_id=str(submission.pk),
+                            after_data={"invoice": submission.invoice.invoice_number, "status": submission.status, "uuid": submission.uuid,
+                                        "environment": submission.environment})
+
+
+def send_invoice(invoice, user, lang="ar"):
+    """Sign and send one posted sales invoice. Returns the Submission (rejected ones too)."""
+
+    from django.core.exceptions import ValidationError
+
+    from . import portal
+    from .models import Submission, SubmissionStatus
+
+    words = SEND_WORDS[lang]
+    names = portal.missing()
+    if names:
+        raise ValidationError(words["setup"].format(names=", ".join(names)))
+    latest = current_submission(invoice)
+    if latest and latest.status == SubmissionStatus.VALID:
+        raise ValidationError(words["already"])
+    if latest and latest.status == SubmissionStatus.SUBMITTED:
+        raise ValidationError(words["pending"])
+    document, problems = build_document(invoice, lang)
+    if problems:
+        raise ValidationError(words["problems"])
+    try:
+        signed = portal.sign(document)
+        answer = portal.submit([signed])
+    except portal.PortalError as exc:
+        raise ValidationError(_portal_error(exc, words))
+    accepted = next((row for row in answer.get("acceptedDocuments") or [] if row.get("internalId") == invoice.invoice_number), None)
+    rejected = next((row for row in answer.get("rejectedDocuments") or [] if row.get("internalId") == invoice.invoice_number), None)
+    submission = Submission.objects.create(
+        invoice=invoice, environment=portal.settings()["environment"], submitted_by=user, submission_id=str(answer.get("submissionId") or ""),
+        status=SubmissionStatus.SUBMITTED if accepted else SubmissionStatus.REJECTED,
+        uuid=(accepted or {}).get("uuid", ""), long_id=(accepted or {}).get("longId", ""),
+        message="" if accepted else portal.error_text(rejected or answer), response=answer,
+    )
+    _audit_send(submission, user, "eta_send")
+    return submission
+
+
+def refresh_submission(submission, user, lang="ar"):
+    """Read the document's status from the authority (it validates after accepting the submission)."""
+
+    from django.core.exceptions import ValidationError
+
+    from . import portal
+
+    words = SEND_WORDS[lang]
+    if not submission.uuid:
+        return submission
+    try:
+        answer = portal.details(submission.uuid)
+    except portal.PortalError as exc:
+        raise ValidationError(_portal_error(exc, words))
+    status = STATUS_FROM_PORTAL.get(str(answer.get("status", "")).lower(), submission.status)
+    steps = ((answer.get("validationResults") or {}).get("validationSteps") or [])
+    reasons = [portal.error_text(step.get("error") or {}) for step in steps if str(step.get("status", "")).lower() == "invalid"]
+    submission.status = status
+    submission.long_id = answer.get("longId") or submission.long_id
+    submission.message = " · ".join(r for r in reasons if r)[:1000]
+    submission.response = answer
+    submission.checked_at = timezone.now()
+    submission.save(update_fields=["status", "long_id", "message", "response", "checked_at"])
+    _audit_send(submission, user, "eta_refresh")
+    return submission
+
+
+def cancel_submission(submission, user, reason, lang="ar"):
+    from django.core.exceptions import ValidationError
+
+    from . import portal
+    from .models import SubmissionStatus
+
+    words = SEND_WORDS[lang]
+    reason = (reason or "").strip()[:255]
+    if not reason:
+        raise ValidationError(words["reason"])
+    if submission.status != SubmissionStatus.VALID:
+        raise ValidationError(words["not_valid"])
+    try:
+        portal.cancel(submission.uuid, reason)
+    except portal.PortalError as exc:
+        raise ValidationError(_portal_error(exc, words))
+    submission.status, submission.cancelled_at, submission.cancel_reason = SubmissionStatus.CANCELLED, timezone.now(), reason
+    submission.save(update_fields=["status", "cancelled_at", "cancel_reason"])
+    _audit_send(submission, user, "eta_cancel")
+    return submission
+
+
+def public_url(submission):
+    """The authority's public page for an accepted document (also what its QR code points to)."""
+
+    if not (submission and submission.uuid and submission.long_id):
+        return ""
+    base = "https://preprod.invoicing.eta.gov.eg" if submission.environment == "preprod" else "https://invoicing.eta.gov.eg"
+    return f"{base}/print/documents/{submission.uuid}/share/{submission.long_id}"

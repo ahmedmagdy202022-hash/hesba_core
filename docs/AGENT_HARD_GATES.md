@@ -685,6 +685,34 @@ Status: RESOLVED — approved by Ahmed on 9 Oct 2026 ("موافق تعمل كل 
   - the screens and who may act.
 - **Known effect:** the goods-in-transit location shows in location pickers (stock list, manual transfer, count). The warehouses hub shows it only while something is on the way.
 
+## HG-039 — Signing and sending e-invoices to the Tax Authority (ETA-002)
+
+Status: APPROVED — Ahmed on 9 Oct 2026 ("خلص كله"), the third open decision in the audit report. Implemented in branch `claude/eta-002-submission`.
+
+- **Why a gate:** a new table (`einvoice.Submission`, migration `0002_eta_submissions`), and Hesba starts talking to an outside system on the client's behalf.
+- **What does not change:** sales invoices, posting, returns and every balance. Sending only reads a posted invoice through the EINV-001 document builder.
+- **How it works:**
+  - **Configuration:** comes only from the deployment's environment (`ETA_ENVIRONMENT`, `ETA_CLIENT_ID`, `ETA_CLIENT_SECRET`, `ETA_SIGNER_URL`, `ETA_SIGNER_TOKEN`). No secret is stored in the database or shown on a screen.
+  - **Signing:** the document is serialized by the authority's rule (`einvoice.portal.serialize`). The client's own signer, next to their e-signature token, returns the CAdES-BES signature.
+  - **Sending and reading back:** Hesba then submits, reads the status and cancels through the authority's API (`einvoice.portal`).
+- **Rules:**
+  - only a posted invoice with complete data is sent;
+  - an invoice that is valid or still being checked is not sent twice;
+  - a rejected or invalid sending is kept as history and the invoice can be sent again;
+  - only a valid invoice can be cancelled, with a reason;
+  - every send, status check and cancellation is in the audit log;
+  - sending and cancelling need `sales.create_sales_invoice`; testing the connection needs `settings.manage_settings`.
+- **Tests (`einvoice/tests_portal.py`):** run against a fake portal and signer, with no network:
+  - the serialization rule;
+  - sign → submit → status → cancel, with the exact headers;
+  - rejection with the authority's reason, then sending again;
+  - invalid after checking;
+  - signer down or settings missing: nothing is sent;
+  - incomplete data is never sent;
+  - the screens, and who may send;
+  - the connection check.
+- **Needs from Ahmed / the client to go live:** the portal account, the ERP client ID and secret, the signing token and a signer (docs/ETA_INTEGRATION.md).
+
 ## Final gate verification
 
 - Full Django suite: 794 tests passed in 576.477 seconds.
