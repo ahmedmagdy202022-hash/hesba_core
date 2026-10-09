@@ -248,3 +248,70 @@ class StockMovement(models.Model):
 
     def __str__(self):
         return f"{self.movement_date} / {self.movement_type} / {self.item} / {self.location}"
+
+
+class LocationStockLevel(models.Model):
+    """HG-037: the minimum and maximum one warehouse should hold of an item.
+
+    The item-wide ``Item.min_stock`` still drives purchase suggestions; these
+    say when a single warehouse needs refilling from another one."""
+
+    location = models.ForeignKey("master_data.Location", on_delete=models.CASCADE, related_name="stock_levels")
+    item = models.ForeignKey("master_data.Item", on_delete=models.CASCADE, related_name="location_levels")
+    min_quantity = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    max_quantity = models.DecimalField(max_digits=14, decimal_places=3, default=0, help_text="0 = no ceiling.")
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["location_id", "item_id"]
+        constraints = [models.UniqueConstraint(fields=["location", "item"], name="inv_one_level_per_location_item")]
+
+
+class TransferRequestStatus(models.TextChoices):
+    REQUESTED = "requested", "Requested"
+    SENT = "sent", "Sent"
+    RECEIVED = "received", "Received"
+    CANCELLED = "cancelled", "Cancelled"
+
+
+class TransferRequest(models.Model):
+    """HG-037: one warehouse asks another for stock. Nothing moves until the
+    source sends it (to goods in transit), and it reaches the destination only
+    when received there."""
+
+    number = models.CharField(max_length=30, unique=True)
+    source = models.ForeignKey("master_data.Location", on_delete=models.PROTECT, related_name="transfer_requests_out")
+    destination = models.ForeignKey("master_data.Location", on_delete=models.PROTECT, related_name="transfer_requests_in")
+    status = models.CharField(max_length=20, choices=TransferRequestStatus.choices, default=TransferRequestStatus.REQUESTED, db_index=True)
+    note = models.CharField(max_length=255, blank=True)
+    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    requested_at = models.DateTimeField(auto_now_add=True)
+    sent_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    sent_at = models.DateTimeField(null=True, blank=True)
+    received_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    received_at = models.DateTimeField(null=True, blank=True)
+    cancelled_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancel_reason = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["-requested_at", "-pk"]
+
+    def __str__(self):
+        return self.number
+
+
+class TransferRequestLine(models.Model):
+    request = models.ForeignKey(TransferRequest, on_delete=models.CASCADE, related_name="lines")
+    item = models.ForeignKey("master_data.Item", on_delete=models.PROTECT, related_name="+")
+    requested_quantity = models.DecimalField(max_digits=14, decimal_places=3)
+    sent_quantity = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    received_quantity = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    send_operation = models.OneToOneField(StockOperation, on_delete=models.PROTECT, null=True, blank=True, related_name="transfer_request_send")
+    receive_operation = models.OneToOneField(StockOperation, on_delete=models.PROTECT, null=True, blank=True, related_name="transfer_request_receive")
+    loss_operation = models.OneToOneField(StockOperation, on_delete=models.PROTECT, null=True, blank=True, related_name="transfer_request_loss")
+
+    class Meta:
+        ordering = ["pk"]
+        constraints = [models.UniqueConstraint(fields=["request", "item"], name="inv_one_request_line_per_item")]

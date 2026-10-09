@@ -639,6 +639,52 @@ Status: RESOLVED — approved by Ahmed on 9 Oct 2026 ("موافق تعمل كل 
     - trial balance balanced and reconciliation clean in every scenario;
     - an order started before HG-036 still consumes at the finish.
 
+## HG-037 — Warehouse minimum/maximum and transfers by request and receipt (R2-7 follow-up)
+
+Status: RESOLVED — approved by Ahmed on 9 Oct 2026 ("موافق تعمل كل حاجة صح"). Implemented in branch `claude/wh-minmax-transfers`.
+
+- **Asked for:** the R2 warehouse plan left two items behind a gate: a minimum and maximum per warehouse, and transfers that are requested by one warehouse and received by it, not pushed in one step.
+- **Files:**
+  - `inventory/models.py` + migration `0007_location_levels_transfer_requests`;
+  - new `inventory/transfer_requests.py` (service) and `inventory/transfer_request_views.py`;
+  - `inventory/warehouse_views.py`, `inventory/urls.py`;
+  - templates under `templates/inventory/`;
+  - a status label in `settings_core/display_labels.py`.
+- **Schema:**
+  - `LocationStockLevel(location, item, min_quantity, max_quantity)`, one per pair. `Item.min_stock` is untouched and still drives purchase suggestions.
+  - `TransferRequest` and `TransferRequestLine`. Each line keeps its send, receive and shortage `StockOperation`.
+- **Stock behaviour:**
+  - nothing moves while a request is only requested;
+  - sending is `transfer_stock` from the source to the entity's **goods in transit** location (`TRANSIT-<entity>`, made on first use; not a selling or receiving place);
+  - receiving is `transfer_stock` from transit to the destination;
+  - what was sent but did not arrive is written off from transit with `adjust_stock` out, which needs `inventory.adjust_stock`;
+  - cancelling a sent request reverses each send with `cancel_stock_operation`, so the goods go back to the source;
+  - a received request cannot be cancelled.
+
+  The engine's permission, period and lock rules apply to every leg. Total stock and value never change except by a recorded shortage.
+- **Ledger:**
+  - transfers move value between inventory lines only;
+  - a shortage is an ordinary adjustment out, so it lands in stock-count losses;
+  - between entities, the existing intercompany balancing applies.
+- **Permissions (existing codes only):**
+  - viewing and requesting: `inventory.view_stock`;
+  - sending and receiving: `inventory.transfer_stock`;
+  - a shortage at receipt: `inventory.adjust_stock`;
+  - setting levels: `master_data.manage_locations`;
+  - cancelling: the requester or a transfer user.
+- **Refill suggestion:**
+  - an item at or below its minimum in a warehouse is refilled up to its maximum (or its minimum when there is none);
+  - the source is the warehouse in the same scope with the most stock above its own minimum.
+- **Tests (`inventory/tests_transfer_requests.py`):**
+  - levels, suggestions and the rules;
+  - request → send → receive quantities per warehouse and in transit, with total quantity and value unchanged;
+  - a partial send plus a shortage on arrival;
+  - the shortage permission;
+  - cancelling before and after sending, and refusing after receipt;
+  - trial balance balanced and reconciliation clean;
+  - the screens and who may act.
+- **Known effect:** the goods-in-transit location shows in location pickers (stock list, manual transfer, count). The warehouses hub shows it only while something is on the way.
+
 ## Final gate verification
 
 - Full Django suite: 794 tests passed in 576.477 seconds.

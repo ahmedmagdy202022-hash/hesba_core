@@ -1,0 +1,18 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'inventory:transfer_requests' %}?lang={{ lang }}">← {% if lang == 'en' %}Transfer requests{% else %}طلبات التحويل{% endif %}</a><h1>{% if lang == 'en' %}Ask another warehouse for stock{% else %}اطلب بضاعة من مخزن تاني{% endif %}</h1><p>{% if lang == 'en' %}Nothing moves until the other warehouse sends it.{% else %}مفيش حاجة بتتحرك لحد ما المخزن التاني يبعت.{% endif %}</p></div></section>
+{% if error %}<p class="op-message op-message-error" data-request-error>{{ error }}</p>{% endif %}
+<form method="post" class="op-form" data-request-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+<div class="op-form-grid">
+<div class="op-field"><label for="tr-to">{% if lang == 'en' %}For warehouse (receives){% else %}للمخزن (اللي هيستلم){% endif %}</label><select id="tr-to" name="destination" required><option value="">—</option>{% for place in places %}<option value="{{ place.pk }}"{% if destination and destination.pk == place.pk %} selected{% endif %}>{% if lang == 'en' %}{% firstof place.name_en place.name_ar %}{% else %}{{ place.name_ar }}{% endif %}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="tr-from">{% if lang == 'en' %}From warehouse (sends){% else %}من المخزن (اللي هيبعت){% endif %}</label><select id="tr-from" name="source" required><option value="">—</option>{% for place in places %}<option value="{{ place.pk }}"{% if source and source.pk == place.pk %} selected{% endif %}>{% if lang == 'en' %}{% firstof place.name_en place.name_ar %}{% else %}{{ place.name_ar }}{% endif %}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="tr-note">{% if lang == 'en' %}Note{% else %}ملاحظة{% endif %}</label><input id="tr-note" name="note" value="{{ note }}" maxlength="255"></div>
+</div>
+<h2>{% if lang == 'en' %}Items{% else %}الأصناف{% endif %}</h2>
+<div data-request-lines>{% for chosen, qty in prefill %}<div class="op-form-grid" data-request-line{% if forloop.counter > 3 and not chosen %} hidden{% endif %}>
+<div class="op-field"><label for="tr-i{{ forloop.counter0 }}">{% if lang == 'en' %}Item{% else %}الصنف{% endif %} {{ forloop.counter }}</label><select id="tr-i{{ forloop.counter0 }}" name="item_{{ forloop.counter0 }}"><option value="">—</option>{% for item in items %}<option value="{{ item.pk }}"{% if chosen == item.pk|stringformat:"s" %} selected{% endif %}>{{ item.item_code }} · {{ item.item_name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="tr-q{{ forloop.counter0 }}">{% if lang == 'en' %}Quantity{% else %}الكمية{% endif %}</label><input id="tr-q{{ forloop.counter0 }}" name="qty_{{ forloop.counter0 }}" value="{{ qty }}" inputmode="decimal" dir="ltr"></div></div>{% endfor %}</div>
+<div class="op-form-actions"><button class="op-secondary" type="button" data-add-request-line>+ {% if lang == 'en' %}Another item{% else %}صنف كمان{% endif %}</button><button class="op-primary" type="submit">{% if lang == 'en' %}Send the request{% else %}ابعت الطلب{% endif %}</button></div>
+</form>
+<script>(function(){var b=document.querySelector('[data-add-request-line]');if(!b){return;}b.addEventListener('click',function(){var next=document.querySelector('[data-request-line][hidden]');if(next){next.hidden=false;var s=next.querySelector('select');if(s){s.focus();}}if(!document.querySelector('[data-request-line][hidden]')){b.hidden=true;}});})();</script>
+{% endblock %}
