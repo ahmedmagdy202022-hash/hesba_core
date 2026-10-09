@@ -4,7 +4,6 @@
 <nav class="op-form-actions">
   <a href="{% url 'dashboard_snapshot' %}?lang={{ lang }}">{{ words.dashboard }}</a>
   <span>{{ words.page_title }}</span>
-  <a href="{% url 'status_counts_report' %}?lang={{ lang }}">{% if lang == 'en' %}Status{% else %}الحالة{% endif %}</a>
 </nav>
 <div class="op-card-grid">
   {% for card in cards %}
@@ -14,7 +13,6 @@
       <article class="op-card"><strong>{{ card.title }}</strong><p>{{ card.description }}</p><small>{% if lang == 'en' %}Requires an explicit permission.{% else %}يحتاج صلاحية مستقلة.{% endif %}</small></article>
     {% endif %}
   {% endfor %}
-  <a class="op-card" href="{% url 'status_counts_report' %}?lang={{ lang }}"><strong>{% if lang == 'en' %}Status counts{% else %}مؤشرات الحالة{% endif %}</strong><p>{% if lang == 'en' %}Safe non-financial usage counts.{% else %}أعداد تشغيل آمنة بدون بيانات مالية.{% endif %}</p></a>
 </div>
 <div class="op-notice">{% if lang == 'en' %}The profit report remains protected. Profit equals sales minus cost of goods sold.{% else %}يظل تقرير الأرباح محميًا بصلاحية مستقلة. الربح يساوي المبيعات ناقص تكلفة البضاعة المباعة.{% endif %}</div>
 {# Compatibility markers retained for the foundation characterization suite, never shown to users. #}
