@@ -1,0 +1,45 @@
+{% load hesba_labels hesba_invoice %}{% comment %}
+R2-6: the sales and purchase invoice form. Expects form, line_formset, lang,
+price_field, list_url, party ("customer" / "supplier"), can_post and tax_rates.
+{% endcomment %}
+<form class="op-form inv-form" method="post" novalidate data-invoice-form data-price-field="{{ price_field }}" data-words="{{ scan_words }}">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+{% if form.non_field_errors %}<div class="op-form-errors">{{ form.non_field_errors|ui:lang }}</div>{% endif %}
+<div class="inv-layout">
+<div class="inv-main">
+  <div class="inv-head" data-inv-head>{% for field in form|head_main %}{% include "operations/_inv_field.html" with wide=False %}{% endfor %}</div>
+  {% with more=form|head_more %}{% if more %}<details class="inv-more"{% if more|has_errors or more|has_values %} open{% endif %}><summary>{% if lang == 'en' %}More details{% else %}تفاصيل أكتر{% endif %} <small>({% for field in more %}{{ field.label }}{% if not forloop.last %}، {% endif %}{% endfor %})</small></summary><div class="inv-head">{% for field in more %}{% include "operations/_inv_field.html" with wide=True %}{% endfor %}</div></details>{% endif %}{% endwith %}
+
+  <div class="op-scan"><label for="hs-scan">{% if lang == 'en' %}Scan or type a barcode / item code{% else %}امسح الباركود أو اكتب كود الصنف{% endif %}</label><input id="hs-scan" type="search" inputmode="search" autocomplete="off" data-scan-input placeholder="{% if lang == 'en' %}Scan, then Enter{% else %}امسح واضغط Enter{% endif %}"><output data-scan-status aria-live="polite"></output></div>
+  {{ line_formset.management_form }}
+  {% if line_formset.non_form_errors %}<div class="op-form-errors">{{ line_formset.non_form_errors|ui:lang }}</div>{% endif %}
+  {% with heads=line_formset.empty_form|line_main %}
+  <div class="inv-lines" style="--inv-cols: {{ heads|length|add:'-1' }}">
+    <div class="inv-row inv-lines-head" aria-hidden="true"><span>#</span>{% for field in heads %}<span>{% short_label field lang %}</span>{% endfor %}<span>{% if lang == 'en' %}Line total{% else %}الإجمالي{% endif %}</span><span></span></div>
+    <div class="op-lines">{% for line_form in line_formset %}{% with extra=line_form|line_extra %}
+      <div class="op-line{% if line_form.errors %} has-error{% endif %}">
+        <div class="inv-row"><span class="inv-no" data-line-no>{{ forloop.counter }}</span>{% for field in line_form|line_main %}<div class="op-field inv-cell" data-col="{{ field.name }}"><label for="{{ field.id_for_label }}">{% short_label field lang %}</label>{{ field }}{% for error in field.errors %}<div class="op-field-error">{{ error|ui:lang }}</div>{% endfor %}</div>{% endfor %}<output class="inv-line-total" data-line-total>0.00</output><button class="inv-clear" type="button" data-clear-line title="{% if lang == 'en' %}Clear this line{% else %}امسح السطر ده{% endif %}" aria-label="{% if lang == 'en' %}Clear this line{% else %}امسح السطر ده{% endif %}">✕</button></div>
+        {% if extra %}<details class="inv-line-more"{% if extra|has_errors or extra|has_values %} open{% endif %}><summary>+ {% for field in extra %}{{ field.label }}{% if not forloop.last %}، {% endif %}{% endfor %}</summary><div class="inv-head">{% for field in extra %}{% include "operations/_inv_field.html" with wide=False %}{% endfor %}</div></details>{% endif %}
+      </div>{% endwith %}{% endfor %}</div>
+  </div>
+  {% endwith %}
+  <div class="op-form-actions inv-add"><button class="op-secondary" type="button" data-add-line>+ {% if lang == 'en' %}Add line{% else %}سطر جديد{% endif %}</button></div>
+</div>
+
+<aside class="inv-summary" aria-label="{% if lang == 'en' %}Invoice summary{% else %}ملخص الفاتورة{% endif %}">
+  <h2>{% if lang == 'en' %}Summary{% else %}ملخص الفاتورة{% endif %}</h2>
+  <div class="inv-sum-row"><span>{% if tax_rates %}{% if lang == 'en' %}Lines (incl. VAT){% else %}السطور (شامل الضريبة){% endif %}{% elif lang == 'en' %}Lines{% else %}إجمالي السطور{% endif %}</span><strong data-live-total>0.00</strong></div>
+  {% with field=form|field_named:"discount_amount" %}{% if field %}{% include "operations/_inv_field.html" with wide=False %}{% endif %}{% endwith %}
+  {% with field=form|field_named:"tax_amount" %}{% if field %}{% include "operations/_inv_field.html" with wide=False %}{% endif %}{% endwith %}
+  <div class="inv-sum-row inv-sum-total"><span>{% if lang == 'en' %}Invoice total{% else %}إجمالي الفاتورة{% endif %}</span><strong data-sum-total>0.00</strong></div>
+  {% with field=form|field_named:"paid_now" %}{% if field %}{% include "operations/_inv_field.html" with wide=False %}<button class="inv-pay-all" type="button" data-pay-all>{% if party == 'supplier' %}{% if lang == 'en' %}Pay it all now{% else %}ادفع الكل دلوقتي{% endif %}{% elif lang == 'en' %}Collected in full{% else %}اتحصّل كله{% endif %}</button>{% endif %}{% endwith %}
+  {% with field=form|field_named:"cashbox" %}{% if field %}{% include "operations/_inv_field.html" with wide=False %}{% endif %}{% endwith %}
+  <div class="inv-sum-row inv-sum-due"><span>{% if party == 'supplier' %}{% if lang == 'en' %}Still owed to the supplier{% else %}الباقي للمورد{% endif %}{% elif lang == 'en' %}Left on the customer{% else %}الباقي على العميل{% endif %}</span><strong data-sum-remaining>0.00</strong></div>
+  <p class="inv-sum-note">{% if lang == 'en' %}A preview: the server recalculates every figure{% if party == 'customer' %} and checks stock{% endif %} when saving.{% else %}الأرقام دي معاينة: السيستم بيحسبها من جديد{% if party == 'customer' %} ويتأكد من المخزون{% endif %} وقت الحفظ.{% endif %}</p>
+  <div class="inv-actions">
+    {% if can_post %}<button class="op-primary" type="submit" name="then" value="post" data-save-post>{% if lang == 'en' %}Save and post{% else %}حفظ وترحيل{% endif %}</button>{% endif %}
+    <button class="{% if can_post %}op-secondary{% else %}op-primary{% endif %}" type="submit">{{ words.save_draft }}</button>
+    <a class="op-secondary" href="{{ list_url }}?lang={{ lang }}">{{ words.back }}</a>
+  </div>
+</aside>
+</div>
+</form>

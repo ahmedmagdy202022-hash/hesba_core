@@ -153,13 +153,15 @@ def invoice_create(request):
                 form.add_error(None, exc)
             else:
                 messages.success(request, STRINGS[lang]["saved"])
+                if request.POST.get("then") == "post":  # R2-6: "save and post" in one press
+                    _post_now(request, invoice.pk, lang)
                 return redirect(f"/sales/{invoice.pk}/?lang={lang}")
     else:
         form = SalesDraftForm(lang=lang, initial=_party_initial(request, "customer"))
         if vat_enabled():
             del form.fields["tax_amount"]
         line_formset = SalesLineFormSet(prefix="lines", form_kwargs={"lang": lang})
-    return render(request, "sales/form.html", _context(request, form=form, line_formset=line_formset, item_catalog=item_catalog(sale_prices=True, purchase_prices=False), scan_words=scan_words(lang), price_book=price_book(), tax_rates=rates_by_item(), units=units_catalog()))
+    return render(request, "sales/form.html", _context(request, form=form, line_formset=line_formset, can_post=True, item_catalog=item_catalog(sale_prices=True, purchase_prices=False), scan_words=scan_words(lang), price_book=price_book(), tax_rates=rates_by_item(), units=units_catalog()))
 
 
 @require_permission("sales.view_sales_invoices")
@@ -178,15 +180,23 @@ def invoice_detail(request, pk):
             can_view_profit=user_has_permission(request.user, "reports.view_profit_report"),
             can_post=user_has_permission(request.user, "sales.create_sales_invoice"),
             can_return=user_has_permission(request.user, "sales.return_sale"),
+            einvoice_problems=_einvoice_problems(invoice, _lang(request)),
         ),
     )
 
 
-@require_permission("sales.create_sales_invoice")
-def invoice_post(request, pk):
-    if request.method != "POST":
-        return redirect("sales:detail", pk=pk)
-    lang = _lang(request)
+def _einvoice_problems(invoice, lang):
+    """R2-6: how many things the e-invoice document still lacks (None when e-invoicing is off or the invoice is a draft)."""
+
+    from einvoice.services import build_document
+    from settings_core.capabilities import capability_enabled
+
+    if invoice.status != "posted" or not capability_enabled("e_invoice"):
+        return None
+    return len(build_document(invoice, lang)[1])
+
+
+def _post_now(request, pk, lang):
     try:
         with transaction.atomic():
             check_invoice_serials(entity_scope.get_or_404(SalesInvoice, entity_scope.SALES_INVOICE, pk=pk), lang)  # SERIAL-001: still in stock?
@@ -195,6 +205,14 @@ def invoice_post(request, pk):
         messages.error(request, "; ".join(exc.messages))
     else:
         messages.success(request, STRINGS[lang]["posted"])
+
+
+@require_permission("sales.create_sales_invoice")
+def invoice_post(request, pk):
+    if request.method != "POST":
+        return redirect("sales:detail", pk=pk)
+    lang = _lang(request)
+    _post_now(request, pk, lang)
     return redirect(f"/sales/{pk}/?lang={lang}")
 
 

@@ -1,7 +1,9 @@
 from decimal import Decimal
+from unittest import mock
 
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from cashboxes.models import CashboxMovement
 from hesba_testing.factories import (
@@ -141,3 +143,67 @@ class SalesUiTests(TestCase):
         response = self.client.get(reverse("sales:list"), {"lang": "en"})
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Sales invoices")
+
+
+class InvoiceRedesignTests(TestCase):
+    """R2-6: one compact invoice screen, with "save and post" in one press."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from hesba_testing.factories import make_cashbox, make_customer, make_item, make_location, make_seeded_role, make_user, make_user_profile
+        from inventory.services import adjust_stock
+        from inventory.models import StockAdjustmentDirection
+        from permissions.models import RoleCode
+        from reports.tests_dashboard import prepared_client
+
+        prepared_client()
+        cls.owner = make_user(username="inv_owner")
+        make_user_profile(user=cls.owner, role=make_seeded_role(RoleCode.OWNER))
+        cls.customer = make_customer(customer_code="C-INV")
+        cls.location = make_location(location_code="L-INV", is_selling_location=True, is_receiving_location=True)
+        cls.item = make_item(item_code="IT-INV", default_sale_price="50")
+        adjust_stock("INV-OPEN", timezone.localdate(), cls.item, cls.location, StockAdjustmentDirection.IN, Decimal("10"), "opening", cls.owner, unit_cost=Decimal("20"))
+
+    def post(self, then=None):
+        data = {"lang": "ar", "invoice_number": "", "invoice_date": timezone.localdate().isoformat(), "customer": self.customer.pk,
+                "selling_location": self.location.pk, "discount_amount": "0", "tax_amount": "0", "paid_now": "0",
+                "lines-TOTAL_FORMS": "1", "lines-INITIAL_FORMS": "0", "lines-0-item": self.item.pk, "lines-0-quantity": "2", "lines-0-unit_sale_price": "50"}
+        if then:
+            data["then"] = then
+        self.client.force_login(self.owner)
+        return self.client.post(reverse("sales:create") + "?lang=ar", data)
+
+    def test_the_screen_has_a_header_row_line_table_and_summary(self):
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("sales:create") + "?lang=ar")
+        for marker in ("data-inv-head", "inv-lines-head", "data-line-total", "data-clear-line", "data-sum-total", "data-sum-remaining", "data-pay-all", "data-save-post", "data-add-line"):
+            self.assertContains(page, marker)
+        self.assertContains(page, "حفظ وترحيل")
+        self.assertContains(page, "الباقي على العميل")
+
+    def test_save_keeps_a_draft(self):
+        response = self.post()
+        invoice = SalesInvoice.objects.get(customer=self.customer)
+        self.assertRedirects(response, f"/sales/{invoice.pk}/?lang=ar", fetch_redirect_response=False)
+        self.assertEqual(invoice.status, "draft")
+
+    def test_save_and_post_posts_it_through_the_service(self):
+        from inventory.services import get_item_location_stock_quantity
+
+        self.post(then="post")
+        invoice = SalesInvoice.objects.get(customer=self.customer)
+        self.assertEqual(invoice.status, "posted")
+        self.assertEqual(invoice.total_amount, Decimal("100.00"))
+        self.assertEqual(get_item_location_stock_quantity(self.item, self.location), Decimal("8"))
+
+    def test_a_post_that_fails_leaves_the_saved_draft_and_says_why(self):
+        from sales import views
+
+        from django.core.exceptions import ValidationError
+
+        with mock.patch.object(views, "post_sales_invoice", side_effect=ValidationError("لا يوجد مخزون كافٍ")):
+            response = self.post(then="post")
+        invoice = SalesInvoice.objects.get(customer=self.customer)
+        self.assertEqual(invoice.status, "draft")
+        page = self.client.get(response["Location"])
+        self.assertContains(page, "لا يوجد مخزون كافٍ")
