@@ -103,6 +103,22 @@ MONTHS = {
 }
 
 
+GROUP_LINKS = {
+    "company": "settings_core:company", "entities": "entities:list", "currency": "settings_core:currency",
+    "modules": "settings_core:modules", "capabilities": "settings_core:capabilities",
+    "users": "settings_core:users", "roles": "settings_core:roles",
+    "taxes": "taxes:settings", "einvoice": "einvoice:issuer",
+    "backups": "settings_core:backup_key", "storage": "settings_core:storage", "imports": "imports:home",
+    "daily_email": "settings_core:daily_email",
+}
+
+
+def _group_links(user):
+    """{key: True} for each grouped settings link whose page ``user`` may open."""
+
+    return {key: _opens_for(user, reverse(name)) for key, name in GROUP_LINKS.items()}
+
+
 def _plain_profile(client, lang):
     """R2-10: the company's settings in words an owner reads, not field values."""
 
@@ -111,7 +127,7 @@ def _plain_profile(client, lang):
     from . import setup_catalog as catalog
     from .setup_services import enabled_modules
 
-    month = client.fiscal_year_start_month or 1
+    month = client.fiscal_year_start_month
     zones = {"Africa/Cairo": ("القاهرة", "Cairo")}
     zone = zones.get(client.timezone)
     return {
@@ -119,7 +135,9 @@ def _plain_profile(client, lang):
         "sub_activity": catalog.sub_activity_label(client.activity_slug, client.sub_activity_slug, lang) if client.sub_activity_slug else "",
         "language": {"ar": "العربية", "en": "English"}.get(client.default_language, client.default_language),
         "timezone": (zone[1] if lang == "en" else zone[0]) if zone else client.timezone,
-        "fiscal_start": MONTHS["en" if lang == "en" else "ar"][(month - 1) % 12],
+        # A month outside 1-12 (the field has no validator) is shown as stored, flagged, never wrapped.
+        "fiscal_start": MONTHS["en" if lang == "en" else "ar"][month - 1] if month in range(1, 13) else "",
+        "fiscal_bad": "" if month in range(1, 13) else str(month),
         "modules_on": len(enabled_modules()), "modules_total": len(catalog.MODULE_SLUGS),
     }
 
@@ -137,6 +155,7 @@ def settings_overview(request):
             request,
             client=client,
             plain=_plain_profile(client, lang),
+            opens=_group_links(request.user),
             features_on=sum(1 for feature in features if feature["on"]),
             settings=SystemSetting.objects.filter(active=True),
             features=features,
