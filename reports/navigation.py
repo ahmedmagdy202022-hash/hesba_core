@@ -79,7 +79,7 @@ NAV_ITEMS = (
     {"key": "einvoice", "ar": "الفاتورة الإلكترونية", "en": "E-invoicing", "url_name": "einvoice:issuer", "module": None, "capability": "e_invoice", "permission": "settings.view_settings"},
     {"key": "assets", "ar": "الأصول والإهلاك", "en": "Assets & depreciation", "url_name": "fixed_assets:list", "module": None, "capability": "fixed_assets", "permission": "cashboxes.view_expenses"},
     {"key": "reports", "ar": "التقارير", "en": "Reports", "url_name": "report_hub", "module": "reports"},
-    {"key": "ledger", "ar": "الحسابات العامة", "en": "Accounting", "url_name": "ledger:income_statement", "module": None, "permission": "accounting.view_ledger"},
+    {"key": "ledger", "ar": "الحسابات العامة", "en": "Accounting", "url_name": "ledger:summary", "module": None, "permission": "accounting.view_ledger"},
     {"key": "closing", "ar": "إقفال الفترات", "en": "Period closing", "url_name": "closing:list", "module": None, "permission": "closing.run_closing"},
     {"key": "profile", "ar": "ملفي", "en": "My profile", "url_name": "accounts:profile", "module": None},
     {"key": "settings", "ar": "الإعدادات", "en": "Settings", "url_name": "settings_core:overview", "module": None, "permission": "settings.view_settings"},

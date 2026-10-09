@@ -1,0 +1,26 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+{% include "ledger/_subnav.html" %}
+<section class="op-title-row"><div><h1>{{ words.tab_summary }}{% if entity %} — {% if lang == 'en' and entity.name_en %}{{ entity.name_en }}{% else %}{{ entity.name_ar }}{% endif %}{% endif %}</h1><p>{{ simple.intro }}</p></div></section>
+<div class="op-card-grid gl-simple" data-gl-simple>
+  <article class="op-card" data-answer="profit"><strong>{{ simple.profit_q }}</strong>
+    <p style="font-size:28px;margin:10px 0;color:var(--hs-{% if income.net_profit < 0 %}danger{% else %}navy{% endif %})"><b>{{ income.net_profit|money }}</b></p>
+    <p>{% if income.net_profit < 0 %}{{ simple.loss }}{% else %}{{ simple.profit_a }}{% endif %}</p>
+    <p>{{ simple.sales }}: {{ sales|money }}<br>{{ simple.cost }}: {{ cost|money }}<br>{{ simple.expenses }}: {{ expenses|money }}</p>
+    <p><a href="{% url 'ledger:income_statement' %}?lang={{ lang }}">{{ simple.details }} ←</a></p></article>
+  <article class="op-card" data-answer="cash"><strong>{{ simple.cash_q }}</strong>
+    <p style="font-size:28px;margin:10px 0;color:var(--hs-navy)"><b>{{ cash.cash_closing|money }}</b></p>
+    <p>{{ simple.cash_a }}<br>{{ simple.cash_change }} {{ cash.net_change|money }}</p>
+    <p><a href="{% url 'ledger:cash_flow' %}?lang={{ lang }}">{{ simple.details }} ←</a></p></article>
+  {% if owed %}<article class="op-card" data-answer="owed"><strong>{{ simple.owed_q }}</strong>
+    <p style="font-size:28px;margin:10px 0;color:var(--hs-navy)"><b>{{ owed.total|money }}</b></p>
+    {% if owed.rows %}<p>{{ simple.owed_a }}</p><p>{% for row in owed.rows %}{{ row.customer_name }}: {{ row.balance|money }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</p>{% else %}<p>{{ simple.nobody_owes }}</p>{% endif %}
+    <p><a href="{% url 'reports:aging' %}?lang={{ lang }}">{{ simple.all }} ({{ owed.count }}) ←</a></p></article>{% endif %}
+  {% if owe %}<article class="op-card" data-answer="owe"><strong>{{ simple.owe_q }}</strong>
+    <p style="font-size:28px;margin:10px 0;color:var(--hs-navy)"><b>{{ owe.total|money }}</b></p>
+    {% if owe.rows %}<p>{{ simple.owe_a }}</p><p>{% for row in owe.rows %}{{ row.supplier_name }}: {{ row.balance|money }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</p>{% else %}<p>{{ simple.owe_nobody }}</p>{% endif %}
+    <p><a href="{% url 'reports:suppliers' %}?lang={{ lang }}">{{ simple.all }} ({{ owe.count }}) ←</a></p></article>{% endif %}
+</div>
+<p class="op-muted" style="margin-top:18px">{{ simple.accountant }}</p>
+{% endblock %}

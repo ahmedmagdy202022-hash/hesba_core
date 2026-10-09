@@ -53,10 +53,13 @@ class FindableTests(TestCase):
         self.assertContains(page, reverse("settings_core:capabilities"))
         self.assertNotContains(page, "module.")  # no raw flag codes any more
 
-    def test_accounting_opens_on_profit_and_loss(self):
+    def test_accounting_opens_on_the_simple_summary(self):
         self.client.force_login(self.owner)
         page = self.client.get(reverse("dashboard_snapshot") + "?lang=ar")
-        self.assertContains(page, reverse("ledger:income_statement"))
+        self.assertContains(page, f'href="{reverse("ledger:summary")}')
+        summary = self.client.get(reverse("ledger:summary") + "?lang=ar")
+        self.assertEqual(summary.status_code, 200)
+        self.assertContains(summary, reverse("ledger:income_statement"))
         statement = self.client.get(reverse("ledger:income_statement") + "?lang=ar")
         self.assertEqual(statement.status_code, 200)
         self.assertContains(statement, "الأرباح والخسائر")
