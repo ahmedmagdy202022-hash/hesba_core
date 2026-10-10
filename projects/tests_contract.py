@@ -1077,3 +1077,38 @@ class ReviewRoundElevenTests(ContractSetup):
         self.assertIsNone(contract.project_entity(fresh))
         services.link_invoice(fresh, main_invoice, self.owner)  # from its own entity (or the whole group) it links
         self.assertEqual(contract.project_entity(fresh), contract.entity_of(self.store))
+
+    def test_a_backdated_certificate_counts_only_returns_made_by_its_date(self):
+        from datetime import timedelta
+
+        from sales.services import create_sales_return
+
+        first = contract.create_certificate(self.project, self.owner, quantities={self.concrete.pk: "40"}, certificate_date=TODAY - timedelta(days=3))
+        post_sales_invoice(first.invoice_id, self.owner)
+        create_sales_return("SR-LATE", TODAY - timedelta(days=1), first.invoice_id, [{"source_line": first.invoice.lines.get(), "quantity": D("10")}],
+                            "x", self.owner)
+        # On the day before the return all 40 were still billed: 40 to date is no new work then.
+        with self.assertRaisesMessage(ValidationError, contract.MESSAGES["ar"]["no_work"]):
+            contract.create_certificate(self.project, self.owner, quantities={self.concrete.pk: "40"}, certificate_date=TODAY - timedelta(days=2))
+        later = contract.create_certificate(self.project, self.owner, quantities={self.concrete.pk: "40"}, certificate_date=TODAY)
+        self.assertEqual(later.lines.get().quantity, D("10.000"))  # after the return, the 10 taken back are billed again
+
+    def test_two_collections_at_once_never_share_a_number(self):
+        from unittest import mock
+
+        from config import numbering
+        from sales.models import CustomerPayment
+        from sales.services import record_customer_payment
+
+        taken = record_customer_payment("CP-00001", TODAY, self.customer, self.cashbox, D("50"), self.owner)
+        real = numbering.next_in_series
+        answers = iter(["CP-00001"])  # the other request saved this number a moment ago
+
+        def racing(*args, **kwargs):
+            return next(answers, None) or real(*args, **kwargs)
+
+        with mock.patch.object(numbering, "next_in_series", racing):
+            payment = contract.receive_payment(self.project, self.owner, kind=ProjectPaymentKind.COLLECTION, cashbox=self.cashbox, amount="300")
+        self.assertNotEqual(payment.payment_number, taken.payment_number)
+        self.assertEqual(CustomerPayment.objects.filter(payment_number="CP-00001").count(), 1)
+        self.assertEqual(self.project.payments.get().payment, payment)

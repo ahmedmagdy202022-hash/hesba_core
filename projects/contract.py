@@ -160,16 +160,20 @@ def live_certificates(project):
     return project.certificates.exclude(invoice__status="cancelled")
 
 
-def certified_quantity(boq_line):
+def certified_quantity(boq_line, as_of=None):
     """What live certificates (draft or posted) billed on this item, less what
-    posted sales returns took back from those invoice lines."""
+    posted sales returns took back from those invoice lines. ``as_of`` counts
+    only returns made by that date: a certificate dated before a return was
+    billed on the quantity as it stood then."""
 
     from sales.models import SalesReturnLine
 
     lines = CertificateLine.objects.filter(boq_line=boq_line).exclude(certificate__invoice__status="cancelled")
     billed = lines.aggregate(total=Sum("quantity"))["total"] or ZERO
-    returned = SalesReturnLine.objects.filter(source_line__certificate_line__in=lines, sales_return__status="posted").aggregate(
-        total=Sum("quantity"))["total"] or ZERO
+    returns = SalesReturnLine.objects.filter(source_line__certificate_line__in=lines, sales_return__status="posted")
+    if as_of is not None:
+        returns = returns.filter(sales_return__return_date__lte=as_of)
+    returned = returns.aggregate(total=Sum("quantity"))["total"] or ZERO
     return billed - returned
 
 
@@ -324,10 +328,19 @@ def receive_payment(project, user, *, kind, cashbox, amount, payment_date=None, 
     amount = _money(amount, words)
     kind = kind if kind in ProjectPaymentKind.values else ProjectPaymentKind.COLLECTION
     label = "دفعة مقدمة" if kind == ProjectPaymentKind.ADVANCE else "تحصيل مستخلصات"
-    payment = record_customer_payment(
-        next_in_series(CustomerPayment, "payment_number", "CP-"), payment_date or timezone.localdate(), project.customer, cashbox, amount, user,
-        notes=f"{label} — مشروع {project.code}",
-    )
+    from django.db import IntegrityError
+
+    for attempt in range(5):
+        # The CP- series is shared with every collection: two at once may pick the same next number.
+        number = next_in_series(CustomerPayment, "payment_number", "CP-")
+        try:
+            with transaction.atomic():
+                payment = record_customer_payment(number, payment_date or timezone.localdate(), project.customer, cashbox, amount, user,
+                                                  notes=f"{label} — مشروع {project.code}")
+            break
+        except IntegrityError:
+            if attempt == 4 or not CustomerPayment.objects.filter(payment_number=number).exists():
+                raise  # not a taken number, or still taken after five tries
     ProjectPayment.objects.create(project=project, payment=payment, kind=kind, created_by=user)
     _audit(project, user, f"project_{kind}", {"payment": payment.payment_number, "amount": str(amount)})
     return payment
@@ -410,12 +423,13 @@ def create_certificate(project, user, *, quantities=None, amount=None, descripti
     boq = list(project.boq.select_for_update())
     quantities = quantities or {}
     rows = []
+    day = certificate_date or timezone.localdate()
     if boq and not quantities and amount not in (None, ""):
         raise ValidationError(words["boq_needed"])
     if boq:
         for line in boq:
             raw = quantities.get(line.pk, quantities.get(str(line.pk), ""))
-            previous = certified_quantity(line)
+            previous = certified_quantity(line, as_of=day)  # a return made after the certificate's date had not happened yet
             if raw in (None, ""):
                 continue
             cumulative = _quantity(raw, words, allow_zero=True)
@@ -454,7 +468,6 @@ def create_certificate(project, user, *, quantities=None, amount=None, descripti
         sequence += 1
         invoice_number = f"PB-{project.code}-{sequence:02d}"
     retention = money_round(gross * Decimal(project.retention_rate) / HUNDRED)
-    day = certificate_date or timezone.localdate()
     latest = live_certificates(project).order_by("-certificate_date").values_list("certificate_date", flat=True).first()
     if latest and day < latest:
         raise ValidationError(words["date_order"].format(date=latest.isoformat()))  # quantities to date run forward in time
