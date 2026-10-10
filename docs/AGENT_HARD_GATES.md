@@ -685,6 +685,55 @@ Status: RESOLVED — approved by Ahmed on 9 Oct 2026 ("موافق تعمل كل 
   - the screens and who may act.
 - **Known effect:** the goods-in-transit location shows in location pickers (stock list, manual transfer, count). The warehouses hub shows it only while something is on the way.
 
+## HG-039 — Signing and sending e-invoices to the Tax Authority (ETA-002)
+
+Status: APPROVED — Ahmed on 9 Oct 2026 ("خلص كله"), the third open decision in the audit report. Implemented in branch `claude/eta-002-submission`.
+
+- **Why a gate:** a new table (`einvoice.Submission`, migration `0002_eta_submissions`), and Hesba starts talking to an outside system on the client's behalf.
+- **What does not change:** sales invoices, posting, returns and every balance. Sending only reads a posted invoice through the EINV-001 document builder.
+- **How it works:**
+  - **Configuration:** comes only from the deployment's environment (`ETA_ENVIRONMENT`, `ETA_CLIENT_ID`, `ETA_CLIENT_SECRET`, `ETA_SIGNER_URL`, `ETA_SIGNER_TOKEN`). No secret is stored in the database or shown on a screen.
+  - **Signing:** the document is serialized by the authority's rule (`einvoice.portal.serialize`). The client's own signer, next to their e-signature token, returns the CAdES-BES signature.
+  - **Sending and reading back:** Hesba then submits, reads the status and cancels through the authority's API (`einvoice.portal`).
+- **Rules:**
+  - only a posted invoice with complete data is sent;
+  - an invoice that is valid, still being checked, or being sent right now is not sent twice: the invoice is claimed under its row lock with a `sending` row before the signer or portal is called. A claim left by a server that died mid-call is reconciled after 10 minutes: Hesba searches the authority for the invoice's internal ID over the claim's time (`GET /api/v1.0/documents/search`). If the document is found, the claim takes its uuid and status and nothing is sent again. If it is not found, the claim is closed as rejected and the invoice may be sent. If the authority cannot be asked, nothing is sent. The outcome is audited (`eta_send_recovered`). The screen offers this check ("ask the portal about this invoice") on any invoice stuck at sending. The search covers a one-hour window from the claim, well inside the authority's 30-day limit. A send whose outcome is unknown keeps its claim (audited `eta_send_unknown`) and is reconciled the same way before any retry: the connection cut after the request went out, or the authority answered 5xx. Only a definite 4xx refusal is recorded as rejected, and only a failure before the request (signer, login) drops the claim;
+  - a cancellation is claimed before the authority is called: the row becomes `cancel_requested`, with `cancel_requested_at`, so it is never asked twice. Only a definite 4xx refusal puts it back to valid. A lost answer keeps it requested (audited `eta_cancel_unknown`), and a refresh with no request on the authority's side puts it back to valid ("never reached the portal"), but only when it was read more than 5 minutes after the request, so a request still on its way is never taken for a lost one. It stays a request until the authority's details say `cancelled`. A refresh reloads the row under its lock, and also reads a pending request from the authority's own `cancelRequestDate`, so a refresh racing a cancellation never undoes it. The receiver may decline it, and the invoice is then valid again. Nothing can be sent again while a cancellation is pending;
+  - the signed text keeps each string's JSON escaping, exactly as it is sent;
+  - each recorded state of a sending or a cancellation is committed together with its audit row. A cancellation is audited when it is claimed, before it goes out. A refusal returns a cancellation to valid only while the row is still that request's claim, so a newer status saved by a refresh is never undone;
+  - the signer token is a required setting: Hesba never calls the signer without it. `ETA_ENVIRONMENT` is set in the deployment and not pinned by the blueprint, so a sync never moves a live client back to the test portal. Unset means `preprod`. Any other value than `preprod` or `prod` is reported as missing setup and nothing is sent, so a typo never falls back to testing;
+  - a rejected or invalid sending is kept as history and the invoice can be sent again;
+  - only a valid invoice can be cancelled, with a reason;
+  - every send, status check and cancellation is in the audit log;
+  - sending and cancelling need `sales.create_sales_invoice`; testing the connection needs `settings.manage_settings`.
+- **Tests (`einvoice/tests_portal.py`):** run against a fake portal and signer, with no network:
+  - the serialization rule, escaping included;
+  - sign → submit → status → cancellation request → cancelled or declined, with the exact headers;
+  - a second send while the first is on its way, and a stale claim;
+  - rejection with the authority's reason, then sending again;
+  - invalid after checking;
+  - signer down or settings missing: nothing is sent;
+  - incomplete data is never sent;
+  - the screens, and who may send;
+  - the connection check.
+- **Needs from Ahmed / the client to go live:** the portal account, the ERP client ID and secret, the signing token and a signer (docs/ETA_INTEGRATION.md).
+- **Protected touch: local cancellation of a sent invoice (Codex review on #181).**
+  - **Reason.** Sending claims the invoice under its row lock and then calls the portal outside any transaction. `cancel_posted_sales_invoice` never looked at the e-invoice side. An invoice could therefore be reversed here (stock, cash and customer ledger) while the authority accepted it. A legal document would then stand against books that say it never happened.
+  - **Change.**
+    - `sales/services.py::cancel_posted_sales_invoice` gains one line, under the lock it already holds: `einvoice.guards.before_sales_invoice_cancel(invoice)`. It refuses when the latest sending, in any environment, is sending, submitted, valid or cancel-requested.
+    - Rejected, invalid, cancelled and never-sent invoices pass untouched, so the reversal itself is unchanged.
+    - `send_invoice` now re-reads the invoice under the same lock and refuses one that is no longer posted.
+    - Together the two paths serialise: whichever takes the lock first wins, and the other sees its result.
+  - **Risk.** A user must cancel on the e-invoice page first and wait for the authority to confirm before cancelling here. That is the legally required order. The message says so in Arabic and English.
+  - **Tests.** `LocalCancellationTests` covers:
+    - each live state blocking;
+    - a cancellation during signing;
+    - a rejected invoice cancelling freely;
+    - a production document while the server talks to preprod;
+    - an invoice cancelled between building and locking never being sent;
+    - the Arabic message on the sales screen.
+  - **Not covered.** A sales *return* on an accepted invoice needs an ETA credit note, which is a separate feature (ETA-003).
+
 ## Final gate verification
 
 - Full Django suite: 794 tests passed in 576.477 seconds.

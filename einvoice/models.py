@@ -4,6 +4,7 @@ New tables only; customers and items are not altered. The issuer (the shop
 itself) lives in SystemSetting rows, like the other company details.
 """
 
+from django.conf import settings
 from django.db import models
 
 
@@ -40,3 +41,38 @@ class ItemCode(models.Model):
     code = models.CharField(max_length=100)
     unit_type = models.CharField(max_length=10, default="EA")
     updated_at = models.DateTimeField(auto_now=True)
+
+
+class SubmissionStatus(models.TextChoices):
+    SENDING = "sending", "Sending"
+    SUBMITTED = "submitted", "Submitted"
+    VALID = "valid", "Valid"
+    INVALID = "invalid", "Invalid"
+    REJECTED = "rejected", "Rejected"
+    CANCEL_REQUESTED = "cancel_requested", "Cancellation requested"
+    CANCELLED = "cancelled", "Cancelled"
+
+
+class Submission(models.Model):
+    """ETA-002: one sending of a sales invoice to the authority, and what came back.
+
+    A rejected or invalid sending stays as history; correcting the data and
+    sending again makes a new row. The invoice itself is never changed."""
+
+    invoice = models.ForeignKey("sales.SalesInvoice", on_delete=models.PROTECT, related_name="eta_submissions")
+    environment = models.CharField(max_length=10)
+    status = models.CharField(max_length=20, choices=SubmissionStatus.choices)
+    submission_id = models.CharField(max_length=100, blank=True)
+    uuid = models.CharField(max_length=100, blank=True)
+    long_id = models.CharField(max_length=200, blank=True)
+    message = models.TextField(blank=True)
+    response = models.JSONField(default=dict, blank=True)
+    submitted_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    submitted_at = models.DateTimeField(auto_now_add=True)
+    checked_at = models.DateTimeField(null=True, blank=True)
+    cancel_requested_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancel_reason = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["-submitted_at", "-pk"]

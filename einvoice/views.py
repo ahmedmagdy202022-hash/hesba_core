@@ -22,10 +22,11 @@ from .services import ISSUER_FIELDS, build_document, document_json, issuer_setti
 
 
 PAGE_SIZE = 40
+SEND = "sales.create_sales_invoice"  # ETA-002: whoever issues invoices sends them
 WORDS = {
     "ar": {
         "page_title": "الفاتورة الإلكترونية", "title": "الفاتورة الإلكترونية",
-        "intro": "المرحلة دي بتجهّز بيانات الشركة والعملاء والأصناف وملف الفاتورة بالشكل اللي مصلحة الضرائب بتطلبه. التوقيع والإرسال للمنظومة المرحلة الجاية، ومحتاجين حساب على المنظومة وتوقيع إلكتروني.",
+        "intro": "بيانات الشركة والعملاء والأصناف وملف الفاتورة بالشكل اللي مصلحة الضرائب بتطلبه، والتوقيع والإرسال للمنظومة لما الربط يتظبط (حساب على المنظومة وتوقيع إلكتروني).",
         "issuer": "بيانات الشركة في المنظومة", "tax_number": "الرقم الضريبي (من بيانات الشركة)", "edit_company": "تعديل بيانات الشركة",
         "items": "أكواد الأصناف", "customers": "بيانات العملاء", "save": "حفظ", "saved": "اتحفظ.", "unchanged": "مفيش تغيير.",
         "search": "بحث", "filter": "بحث", "prev": "السابق", "next": "التالي", "item": "الصنف", "code_type": "نوع الكود", "code": "الكود", "unit": "الوحدة",
@@ -34,10 +35,17 @@ WORDS = {
         "download": "تنزيل ملف JSON", "back_invoice": "العودة للفاتورة", "items_hint": "كود EGS بتسجّله الأول على بوابة المنظومة، أو استخدم باركود GS1 الدولي. الوحدة من أكواد المنظومة (EA = قطعة، KGM = كيلو، LTR = لتر، BOX = علبة).",
         "customers_hint": "الشركة (B) لازم رقمها الضريبي وعنوانها. الشخص (P) بياناته إجبارية لما الفاتورة توصل للحد المحدد بس. الأجنبي (F) رقم الجواز والعنوان.",
         "threshold_hint": "راجع الحد الحالي مع المصلحة أو محاسبك؛ القيمة الافتراضية 50,000 جنيه.",
+        "portal": "الإرسال للمنظومة", "send": "وقّع وابعت للمنظومة", "refresh": "حدّث الحالة من المنظومة", "recheck": "اسأل المنظومة عن الفاتورة دي", "recheck_hint": "الإرسال ده متعرفش نتيجته. بعد 10 دقايق من الإرسال، الزرار ده بيسأل المنظومة: لو الفاتورة وصلت بتتسجل، ولو موصلتش بتتبعت تاني مرة واحدة.", "cancel": "إلغاء على المنظومة", "cancel_reason": "سبب الإلغاء",
+        "sent": "اتبعتت الفاتورة؛ المنظومة بتراجعها، حدّث الحالة بعد دقيقة.", "sent_rejected": "المنظومة رفضت الفاتورة: {reason}", "refreshed": "اتحدثت الحالة.",
+        "cancelled": "اتبعت طلب الإلغاء للمنظومة؛ حدّث الحالة بعد شوية عشان تشوف النتيجة.", "not_sent": "الفاتورة دي لسه متبعتتش.", "env_preprod": "بيئة التجربة (preprod)", "env_prod": "بيئة الإنتاج",
+        "not_set": "الربط مع المنظومة لسه متظبطش على السيرفر. ناقص:", "setup_hint": "الخطوات في docs/ETA_INTEGRATION.md: حساب على بوابة المنظومة، Client ID و Secret للنظام، وتوكن التوقيع مع برنامج التوقيع.",
+        "status": "الحالة", "uuid": "رقم المستند في المنظومة", "submitted_at": "اتبعتت", "checked_at": "آخر مراجعة", "public": "صفحة الفاتورة على المنظومة",
+        "history": "إرسالات سابقة", "connection": "الربط مع المنظومة", "check": "اختبار الاتصال", "connection_ok": "الاتصال شغال: الدخول للمنظومة وجهاز التوقيع تمام.",
+        "connection_bad": "الاتصال فيه مشكلة: {problems}", "connection_ready": "الإعدادات موجودة على السيرفر.", "st_submitted": "اتبعتت — بتتراجع", "st_valid": "مقبولة", "st_invalid": "مرفوضة بعد المراجعة", "st_rejected": "مرفوضة", "st_cancelled": "ملغاة", "st_sending": "بتتبعت دلوقتي", "st_cancel_requested": "طلب إلغاء — مستني رد المستلم والمنظومة؛ دوس تحديث الحالة",
     },
     "en": {
         "page_title": "E-invoicing", "title": "E-invoicing",
-        "intro": "This phase prepares the company, customer and item data and builds the invoice document in the format the Tax Authority requires. Signing and sending to the portal is the next phase and needs a portal account and an e-signature.",
+        "intro": "The company, customer and item data and the invoice document in the Tax Authority's format, signed and sent to the portal once the connection is set up (a portal account and an e-signature).",
         "issuer": "Company details on the portal", "tax_number": "Tax registration number (from Company details)", "edit_company": "Edit company details",
         "items": "Item codes", "customers": "Customer data", "save": "Save", "saved": "Saved.", "unchanged": "Nothing changed.",
         "search": "Search", "filter": "Search", "prev": "Previous", "next": "Next", "item": "Item", "code_type": "Code type", "code": "Code", "unit": "Unit",
@@ -46,8 +54,29 @@ WORDS = {
         "download": "Download JSON", "back_invoice": "Back to the invoice", "items_hint": "Register an EGS code on the portal first, or use the international GS1 barcode. Units are portal codes (EA = piece, KGM = kilogram, LTR = litre, BOX = box).",
         "customers_hint": "A business (B) needs its tax number and address. A person (P) only needs details from the set invoice amount. A foreigner (F) needs a passport number and address.",
         "threshold_hint": "Confirm the current threshold with the authority or your accountant; the default is EGP 50,000.",
+        "portal": "Sending to the portal", "send": "Sign and send", "refresh": "Refresh the status", "recheck": "Ask the portal about this invoice", "recheck_hint": "This sending's outcome is unknown. From 10 minutes after it, this asks the portal: if the invoice arrived it is recorded, if not it is sent once more.", "cancel": "Cancel on the portal", "cancel_reason": "Cancellation reason",
+        "sent": "Sent; the portal is checking it. Refresh the status in a minute.", "sent_rejected": "The portal rejected the invoice: {reason}", "refreshed": "Status refreshed.",
+        "cancelled": "The cancellation request was sent; refresh the status shortly to see the outcome.", "not_sent": "This invoice has not been sent yet.", "env_preprod": "Pre-production (preprod)", "env_prod": "Production",
+        "not_set": "The portal connection is not set up on the server yet. Missing:", "setup_hint": "The steps are in docs/ETA_INTEGRATION.md: a portal account, the system's client ID and secret, and the signing token with its signer.",
+        "status": "Status", "uuid": "Portal document ID", "submitted_at": "Sent", "checked_at": "Last checked", "public": "The invoice on the portal",
+        "history": "Earlier sendings", "connection": "Portal connection", "check": "Test the connection", "connection_ok": "The connection works: portal login and signer are fine.",
+        "connection_bad": "The connection has a problem: {problems}", "connection_ready": "The settings are on the server.", "st_submitted": "Sent — being checked", "st_valid": "Valid", "st_invalid": "Invalid after checking", "st_rejected": "Rejected", "st_cancelled": "Cancelled", "st_sending": "Sending now", "st_cancel_requested": "Cancellation requested — waiting for the receiver and the portal; use refresh",
     },
 }
+
+
+MISSING_LABELS = {
+    "ar": {"ETA_ENVIRONMENT": "بيئة المنظومة (لازم تكون preprod أو prod بالظبط)", "ETA_CLIENT_ID": "رقم النظام على المنظومة (Client ID)", "ETA_CLIENT_SECRET": "كلمة سر النظام (Client Secret)", "ETA_SIGNER_URL": "عنوان برنامج التوقيع", "ETA_SIGNER_TOKEN": "مفتاح برنامج التوقيع (Signer token)"},
+    "en": {"ETA_ENVIRONMENT": "the portal environment (exactly preprod or prod)", "ETA_CLIENT_ID": "the system's client ID", "ETA_CLIENT_SECRET": "the system's client secret", "ETA_SIGNER_URL": "the signer's address", "ETA_SIGNER_TOKEN": "the signer's token"},
+}
+
+
+def _missing(lang):
+    """What the server still needs, in words (ETA-002)."""
+
+    from . import portal
+
+    return [MISSING_LABELS[lang].get(name, name) for name in portal.missing()]
 
 
 def _lang(request):
@@ -72,12 +101,24 @@ def issuer_view(request):
     if request.method == "POST":
         if not can_manage:
             raise PermissionDenied("Changing e-invoice details needs settings.manage_settings.")
+        if request.POST.get("action") == "check_connection":  # ETA-002
+            from . import portal
+
+            ok, problems = portal.check_connection()
+            if ok:
+                messages.success(request, WORDS[lang]["connection_ok"])
+            else:
+                messages.error(request, WORDS[lang]["connection_bad"].format(problems=", ".join(problems)))
+            return redirect(f"{reverse('einvoice:issuer')}?lang={lang}")
         changed = save_issuer_settings({key: request.POST.get(key, "") for key, *_ in ISSUER_FIELDS}, request.user)
         messages.success(request, WORDS[lang]["saved"] if changed else WORDS[lang]["unchanged"])
         return redirect(f"{reverse('einvoice:issuer')}?lang={lang}")
     values = issuer_settings()
     fields = [{"key": key, "label": label_en if lang == "en" else label_ar, "value": values[key]} for key, label_ar, label_en in ISSUER_FIELDS]
-    return render(request, "einvoice/issuer.html", _context(request, fields=fields, company=company_details(), can_manage=can_manage))
+    from . import portal
+
+    return render(request, "einvoice/issuer.html", _context(request, fields=fields, company=company_details(), can_manage=can_manage,
+                                                           missing=_missing(lang), environment=portal.settings()["environment"]))
 
 
 @require_permission("master_data.view_master_data")
@@ -160,12 +201,47 @@ def customer_data(request):
 
 @require_permission("sales.view_sales_invoices")
 def sales_document(request, pk):
+    from django.core.exceptions import ValidationError
+
+    from . import portal
+    from .services import cancel_submission, current_submission, public_url, refresh_submission, send_invoice
+
     lang = _lang(request)
+    words = WORDS[lang]
     invoice = get_object_or_404(entity_scope.scope(SalesInvoice.objects.select_related("customer"), entity_scope.SALES_INVOICE), pk=pk)
+    can_send = user_has_permission(request.user, SEND)
+    if request.method == "POST":
+        if not can_send:
+            raise PermissionDenied("Sending e-invoices needs sales.create_sales_invoice.")
+        action = request.POST.get("action", "")
+        try:
+            if action == "send":
+                submission = send_invoice(invoice, request.user, lang)
+                if submission.status == "rejected":
+                    messages.error(request, words["sent_rejected"].format(reason=submission.message))
+                else:
+                    messages.success(request, words["sent"])
+            elif action in ("refresh", "cancel"):
+                submission = current_submission(invoice)
+                if submission is None:
+                    raise ValidationError(words["not_sent"])
+                if action == "refresh":
+                    refresh_submission(submission, request.user, lang)
+                    messages.success(request, words["refreshed"])
+                else:
+                    cancel_submission(submission, request.user, request.POST.get("reason", ""), lang)
+                    messages.success(request, words["cancelled"])
+        except ValidationError as exc:
+            messages.error(request, " ".join(exc.messages))
+        return redirect(f"{reverse('einvoice:sales_document', args=[invoice.pk])}?lang={lang}")
     document, problems = build_document(invoice, lang)
     text = document_json(document)
     if request.GET.get("format") == "json":
         response = HttpResponse(text, content_type="application/json; charset=utf-8")
         response["Content-Disposition"] = f'attachment; filename="einvoice-{invoice.invoice_number}.json"'
         return response
-    return render(request, "einvoice/document.html", _context(request, invoice=invoice, problems=problems, document_text=text, section="sales"))
+    submission = current_submission(invoice)
+    return render(request, "einvoice/document.html", _context(
+        request, invoice=invoice, problems=problems, document_text=text, section="sales", can_send=can_send, missing=_missing(lang),
+        environment=portal.settings()["environment"], submission=submission, history=invoice.eta_submissions.exclude(pk=getattr(submission, "pk", None))[:5], public_url=public_url(submission),
+    ))
