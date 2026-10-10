@@ -88,6 +88,8 @@ MIDDLEWARE = [
     "settings_core.module_gate.ModuleGateMiddleware",
     # ENT-002: which entity the signed-in user is working in (menu, words, books).
     "entities.current.CurrentEntityMiddleware",
+    # DEMO-TRACK: on a showcase, note which pages each visitor opens. A no-op elsewhere.
+    "feedback.tracking.DemoVisitMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "config.middleware.NoStoreHtmlMiddleware",
