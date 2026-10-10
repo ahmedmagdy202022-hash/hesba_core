@@ -198,8 +198,10 @@
     left = Math.max(gutter, Math.min(left, window.innerWidth - gutter - width));
     var top = field.bottom + gap;
     if (top + height > window.innerHeight - gutter && field.top - gap - height >= gutter) top = field.top - gap - height;
+    // Neither side fits (a short phone or tablet screen): keep the whole calendar on screen.
+    top = Math.max(gutter, Math.min(top, window.innerHeight - gutter - height));
     pop.style.left = left + 'px';
-    pop.style.top = Math.max(gutter, top) + 'px';
+    pop.style.top = top + 'px';
   };
 
   Picker.prototype.render = function (focusDay) {

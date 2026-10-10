@@ -70,3 +70,7 @@ class DatePickerTests(TestCase):
         self.assertIn("this.text.addEventListener('input', function () { self.text.setCustomValidity('');", script)
         invoice = (root / "invoice_form.js").read_text(encoding="utf-8")
         self.assertIn("wrap.hsPicker.set(null)", invoice)  # the line's clear button goes through the picker
+
+    def test_the_calendar_stays_on_a_short_screen(self):
+        script = (settings.BASE_DIR / "static" / "hesba" / "js" / "datepicker.js").read_text(encoding="utf-8")
+        self.assertIn("top = Math.max(gutter, Math.min(top, window.innerHeight - gutter - height));", script)
