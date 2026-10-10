@@ -184,3 +184,8 @@ html.hs-cam-open,html.hs-cam-open body{overflow:hidden}
 [data-recipe-line][hidden]{display:none}[data-recipe-form] input[type=checkbox]{width:auto;min-height:0;inline-size:auto}
 .op-subnav__sep{align-self:center;color:var(--op-muted);padding:0 4px}.op-subnav__label{align-self:center;color:var(--op-muted);font-weight:600}
 .set-company{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:18px}.set-company p{margin:4px 0}.set-groups .op-card p{line-height:1.9}.set-links{display:flex;flex-direction:column;align-items:flex-start;gap:2px}
+
+/* CONTRACT-002: project tabs, inline row edit, warning rows */
+.op-row-warn td{background:var(--hs-warning-wash)}.op-row-edit summary{cursor:pointer;color:var(--op-teal);font-weight:700}.op-row-edit[open]{white-space:normal;min-width:min(560px,80vw)}.op-row-edit .op-form{margin-top:10px;padding:14px}.op-card+.op-card{margin-top:16px}.op-card h3{color:var(--op-navy);margin:18px 0 10px}
+.op-filters>*{min-width:0}@media(max-width:700px){.op-summary-grid.op-summary-grid--compact{grid-template-columns:repeat(2,minmax(0,1fr))}.op-summary-grid--compact strong{font-size:16px}}
+.op-inline-form{display:inline}

@@ -13,7 +13,7 @@ from master_data.models import Customer, Item, Location
 from permissions.decorators import require_permission
 from permissions.services import user_has_permission
 from sales.models import SalesInvoice
-from settings_core.display_labels import choice_label
+from settings_core.display_labels import choice_label, localized_choices
 
 from . import services
 from .models import Project, ProjectExpense, ProjectInvoice, ProjectStatus
@@ -112,7 +112,12 @@ def project_list(request):
     rows = Project.objects.select_related("customer")
     if status in ProjectStatus.values:
         rows = rows.filter(status=status)
-    rows = [{"project": project, "status_label": choice_label(project, "status", lang), "figures": services.summary(project)} for project in rows[:200]]
+    from .contract import due_now_many
+
+    page = list(rows[:200])
+    due = due_now_many(page)  # grouped queries, not one contract position per row
+    rows = [{"project": project, "status_label": choice_label(project, "status", lang), "figures": services.summary(project), "due_now": due[project.pk]}
+            for project in page]
     return render(request, "projects/list.html", _base(request, rows=rows, status=status, form=form, error=error,
                                                         customers=Customer.objects.filter(active=True).order_by("name")))
 
@@ -136,22 +141,25 @@ def project_detail(request, pk):
                                                  item=_pick(Item, request.POST.get("item"), active=True, is_stock_tracked=False), lang=lang)
                 messages.success(request, words["billed_ok"].format(number=invoice.invoice_number))
             elif action == "link_invoice":
-                invoice = _pick(SalesInvoice, request.POST.get("invoice"))
+                # Only what the working entity may see, as the picker offers (HG-034).
+                raw = str(request.POST.get("invoice") or "")
+                invoice = entity_scope.scope(SalesInvoice.objects, entity_scope.SALES_INVOICE).filter(pk=raw).first() if raw.isdigit() else None
                 if invoice is None:
                     raise ValidationError(services.MESSAGES[lang]["not_posted"])
                 services.link_invoice(project, invoice, request.user, lang)
                 messages.success(request, words["linked"])
             elif action == "link_expense":
-                expense = _pick(Expense, request.POST.get("expense"))
+                raw = str(request.POST.get("expense") or "")
+                expense = entity_scope.scope(Expense.objects, entity_scope.EXPENSE).filter(pk=raw).first() if raw.isdigit() else None
                 if expense is None:
                     raise ValidationError(services.MESSAGES[lang]["not_posted"])
-                services.link_expense(project, expense, request.user, lang)
+                services.link_expense(project, expense, request.user, lang, heading=request.POST.get("heading"))
                 messages.success(request, words["linked"])
             elif action in ("unlink_invoice", "unlink_expense"):
                 model = ProjectInvoice if action == "unlink_invoice" else ProjectExpense
                 link = _pick(model, request.POST.get("link"), project=project)
                 if link:
-                    services.unlink(project, link, request.user)
+                    services.unlink(project, link, request.user, lang)
                     messages.success(request, words["unlinked"])
             elif action == "issue":
                 if not user_has_permission(request.user, ISSUE):
@@ -175,7 +183,7 @@ def project_detail(request, pk):
         expense_links=project.expenses.select_related("expense", "expense__category", "expense__cashbox_operation"),
         free_invoices=entity_scope.scope(SalesInvoice.objects, entity_scope.SALES_INVOICE).filter(customer=project.customer).exclude(status="cancelled").exclude(pk__in=linked_ids).order_by("-invoice_date")[:50],
         free_expenses=entity_scope.scope(Expense.objects, entity_scope.EXPENSE).filter(expense_date__gte=since, cashbox_operation__status="posted", project_link__isnull=True).order_by("-expense_date")[:50],
-        services_list=Item.objects.filter(active=True, is_stock_tracked=False).exclude(item_code=services.BILLING_ITEM_CODE).order_by("item_name"),
+        services_list=Item.objects.filter(active=True, is_stock_tracked=False).exclude(item_code__startswith=services.BILLING_ITEM_CODE).order_by("item_name"),
         stock_items=Item.objects.filter(active=True, is_stock_tracked=True).order_by("item_name"), locations=entity_scope.locations(Location.objects).filter(active=True),
         customers=Customer.objects.filter(active=True).order_by("name"),
         form={"name": project.name, "customer": str(project.customer_id), "site": project.site, "contract_value": project.contract_value,
@@ -183,4 +191,9 @@ def project_detail(request, pk):
               "notes": project.notes, "status": project.status},
         is_open=project.status in services.OPEN,
     )
+    from .contract import position
+    from .contract_views import WORDS as CONTRACT_WORDS
+
+    context.update(tab="overview", cwords=CONTRACT_WORDS[lang], position=position(project),
+                   expense_headings=localized_choices(ProjectExpense, "heading", lang))
     return render(request, "projects/detail.html", context)

@@ -157,13 +157,34 @@ class Command(BaseCommand):
             save_visit(customer, {**visit, "visit_date": (today - timedelta(days=7)).isoformat(),
                                   "follow_up_date": (today + timedelta(days=7)).isoformat(), "doctor": doctor}, owner)
 
+    #: CONTRACT-002: a bill of quantities per contracting sub-activity (code, item, unit, quantity, rate).
+    BOQ = {
+        "contracting.general": (("1", "خرسانة عادية للأساسات", "م³", "120", "1800"), ("2", "خرسانة مسلحة للهيكل", "م³", "450", "3200"),
+                                ("3", "مباني طوب أحمر", "م²", "2200", "260"), ("4", "لياسة داخلية وخارجية", "م²", "5200", "95"),
+                                ("5", "عزل أسطح", "م²", "600", "180")),
+        "contracting.finishing": (("1", "معجون ودهانات بلاستيك", "م²", "3800", "85"), ("2", "أرضيات بورسلين", "م²", "900", "620"),
+                                  ("3", "أسقف جبس بورد", "م²", "700", "380"), ("4", "سيراميك حوائط حمامات ومطابخ", "م²", "450", "420")),
+        "contracting.electromechanical": (("1", "تأسيس كهرباء (نقطة)", "نقطة", "650", "450"), ("2", "تأسيس سباكة (نقطة)", "نقطة", "180", "900"),
+                                          ("3", "توريد وتركيب تكييفات", "جهاز", "24", "24500"), ("4", "لوحات توزيع كهرباء", "لوحة", "12", "8500")),
+        "contracting.infrastructure": (("1", "حفر وردم", "م³", "6000", "45"), ("2", "طبقة أساس سن", "م³", "2400", "420"),
+                                       ("3", "رصف أسفلت", "م²", "9000", "140"), ("4", "توريد وتركيب بلدورة", "م.ط", "1800", "190")),
+    }
+
     def _projects(self, master, owner):
+        """CONTRACT-002: one project with a bill of quantities, terms, an advance,
+        two certificates (one posted and collected, one draft), a subcontractor
+        and a budget; one lump-sum project with a draft bill."""
+
+        from projects import contract, costs
+        from projects.models import ProjectPaymentKind
         from projects.services import bill_progress, issue_materials, save_project
+        from purchases.services import post_purchase_invoice
         from sales.services import post_sales_invoice
 
         today = timezone.localdate()
         # Site materials: a well-stocked item (not the two kept short for the alerts), else a supply.
         stocked = [item for item in master["items"][:3] if item.is_stock_tracked] + master["raw"]
+        boq = self.BOQ.get(master["catalog"].key)
         rows = (
             (3, "عمارة سكنية - التجمع", "التجمع الخامس، القاهرة الجديدة", "2500000", 60),
             (2, "مبنى مدرسة - المرحلة الأولى", "مدينة نصر", "1200000", 25),
@@ -174,6 +195,31 @@ class Command(BaseCommand):
             if stocked:
                 issue_materials(project, owner, item=stocked[0], location=master["location"], quantity=5 - 2 * n,
                                 operation_date=today - timedelta(days=3))
+            if n == 0 and boq:
+                lines = [contract.save_boq_line(project, owner, {"code": code, "description": text, "unit": unit, "quantity": qty, "rate": rate})
+                         for code, text, unit, qty, rate in boq]
+                contract.save_terms(project, owner, retention_rate="5", advance_recovery_rate="10")
+                total = contract.boq_total(project)
+                contract.receive_payment(project, owner, kind=ProjectPaymentKind.ADVANCE, cashbox=master["cashboxes"][0],
+                                         amount=(total * Decimal("0.15")).quantize(Decimal("1")), payment_date=today - timedelta(days=started))
+                first = contract.create_certificate(project, owner, certificate_date=today - timedelta(days=30), description="أعمال الشهر الأول",
+                                                    quantities={line.pk: (line.quantity * Decimal("0.25")).quantize(Decimal("1")) for line in lines[:2]})
+                post_sales_invoice(first.invoice_id, user=owner)
+                contract.receive_payment(project, owner, kind=ProjectPaymentKind.COLLECTION, cashbox=master["cashboxes"][0],
+                                         amount=contract.net_payable(first), payment_date=today - timedelta(days=20))
+                contract.create_certificate(project, owner, certificate_date=today, description="أعمال الشهر التاني",
+                                            quantities={line.pk: (line.quantity * Decimal("0.45")).quantize(Decimal("1")) for line in lines[:3]})
+                if master["suppliers"]:
+                    subcontract = costs.save_subcontract(project, owner, {"supplier": master["suppliers"][-1], "scope": f"مقاولة باطن: {lines[-1].description}",
+                                                                          "value": contract.line_amount(lines[-1]) * Decimal("0.8"), "retention_rate": "5"})
+                    bill = costs.bill_subcontract(subcontract, owner, amount=(contract.line_amount(lines[-1]) * Decimal("0.2")).quantize(Decimal("1")),
+                                                  description="مستخلص 1", bill_date=today - timedelta(days=10))
+                    post_purchase_invoice(bill.invoice_id, owner)
+                costs.save_budget(project, owner, {"materials": (total * Decimal("0.35")).quantize(Decimal("1")),
+                                                   "subcontract": (total * Decimal("0.15")).quantize(Decimal("1")),
+                                                   "labour": (total * Decimal("0.2")).quantize(Decimal("1")),
+                                                   "equipment": (total * Decimal("0.05")).quantize(Decimal("1"))})
+                continue
             invoice = bill_progress(project, owner, amount=Decimal(value) * Decimal("0.2"), description="مستخلص رقم 1")
             if n == 0:
                 post_sales_invoice(invoice.id, user=owner)

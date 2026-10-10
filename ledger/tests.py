@@ -52,6 +52,23 @@ class EnsureChartTests(TestCase):
         self.assertFalse(Account.objects.get(code="2101").debit_normal)
         self.assertFalse(Account.objects.get(code="1202").debit_normal)  # contra asset
 
+    def test_a_users_account_on_a_default_code_never_leaves_a_control_without_its_account(self):
+        # An upgrade adds the project accounts after the user made their own 1111 and 2106.
+        prepared_client("contracting", "general", "customers,suppliers,items_services,sales_operations,cashboxes,reports,projects")
+        services.ensure_chart()
+        Account.objects.filter(control__in=("retention_receivable", "retention_payable")).delete()
+        receivables, payables = Account.objects.get(code="11"), Account.objects.get(code="21")
+        mine = Account.objects.create(code="1111", name_ar="سلف العاملين", account_type="asset", parent=receivables)
+        Account.objects.create(code="2106", name_ar="تأمينات للغير", account_type="liability", parent=payables)
+        Account.objects.create(code="1112", name_ar="عهد", account_type="asset", parent=receivables)
+        count = services.ensure_chart()
+        self.assertEqual(services.ensure_chart(), count)  # idempotent
+        held = services.account_for("retention_receivable")
+        self.assertEqual((held.code, held.parent.code, held.account_type), ("1113", "11", "asset"))
+        self.assertEqual(services.account_for("retention_payable").code, "2107")
+        mine.refresh_from_db()
+        self.assertEqual((mine.name_ar, mine.control), ("سلف العاملين", ""))  # the user's own account is untouched
+
     def test_activity_names_revenue_its_own_way(self):
         prepared_client("medical", "clinic", "customers,items_services,sales_operations,cashboxes,reports")
         services.ensure_chart()

@@ -106,3 +106,6 @@ body.pr-body{margin:0;background:var(--hs-ground);color:var(--hs-ink);font-famil
 }
 @page receipt{size:80mm auto;margin:0}
 .pr-receipt .pr-sheet{page:receipt}
+
+/* CONTRACT-002: three signatures on a progress certificate */
+.pr-signatures.pr-signatures--3{grid-template-columns:repeat(3,minmax(0,1fr))}

@@ -324,6 +324,9 @@ def cancel_posted_purchase_invoice(invoice_id, user=None, reason=""):
             "remaining_due": str(invoice.remaining_due),
         },
     )
+    from projects.guards import after_purchase_invoice_change
+
+    after_purchase_invoice_change(invoice)  # HG-038: a project's contract figures stay possible
     return invoice
 
 
@@ -616,6 +619,9 @@ def create_purchase_return(
             "status": purchase_return.status,
         },
     )
+    from projects.guards import after_purchase_invoice_change
+
+    after_purchase_invoice_change(purchase_return.source_invoice)  # HG-038: a project's contract figures stay possible
     return purchase_return
 
 
@@ -712,6 +718,9 @@ def cancel_purchase_return(return_id, reversal_date, reason, user):
         reason=reason,
         after_data={"status": purchase_return.status, "reversal_date": str(reversal_date)},
     )
+    from projects.guards import after_purchase_invoice_change
+
+    after_purchase_invoice_change(purchase_return.source_invoice)  # HG-038: a project's contract figures stay possible
     return purchase_return
 
 

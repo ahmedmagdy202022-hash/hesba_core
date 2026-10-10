@@ -685,6 +685,110 @@ Status: RESOLVED — approved by Ahmed on 9 Oct 2026 ("موافق تعمل كل 
   - the screens and who may act.
 - **Known effect:** the goods-in-transit location shows in location pickers (stock list, manual transfer, count). The warehouses hub shows it only while something is on the way.
 
+## HG-038 — Contracting phase 2: bill of quantities, progress certificates, retention, advances, subcontractors, budget (CONTRACT-002)
+
+Status: APPROVED — Ahmed approved on 9 Oct 2026 ("خلص كله"), after the audit report listed this as an open decision; the first demo feedback item also asked for it ("قدرات نشاط المقاولات محتاج تعديل كبير يمشي مع طبيعة النشاط"). Implemented in branch `claude/contract-002`.
+
+- **Why a gate:**
+  - it adds schema (models and a migration in `projects`);
+  - retention and advances change where customer and supplier balances appear in the projected general ledger (GL-002 / HG-032);
+  - a project's cost now also reads purchase invoices.
+- **What does not change:**
+  - sales and purchase posting, cancellation and returns;
+  - customer and supplier ledger rows and the party balances and statements built from them;
+  - cashbox movements;
+  - stock movement and average cost;
+  - report figures outside the projects screens and the general ledger.
+
+  Every certificate is an ordinary draft sales invoice made through `create_sales_draft_with_tax`, and every subcontractor bill an ordinary draft purchase invoice through `create_purchase_draft_with_tax`. Both are posted, collected or paid, returned and cancelled from their own screens exactly as today. An advance is an ordinary customer payment (`record_customer_payment`).
+- **Schema (`projects` only):**
+  - `Project.retention_rate` and `Project.advance_recovery_rate`, both defaulting to 0;
+  - `ProjectExpense.heading`, defaulting to "other", so every existing link keeps its meaning;
+  - new `BoqLine`, `Certificate` + `CertificateLine`, `ProjectAdvance`, `RetentionRelease`, `Subcontract`, `SubcontractBill`, `SubcontractRelease`, `ProjectPurchase`, `BudgetLine`.
+- **Contract arithmetic (on top of the invoice, never inside it):**
+  - **gross:** the certificate's gross is the work done since the last certificate, from the bill of quantities (cumulative quantity to date − quantity already certified, × rate) or a lump sum. The invoice carries the gross, so revenue and VAT are the full work value;
+  - **retention** = gross × the project's retention rate;
+  - **advance recovered** = gross × the recovery rate, capped by the advance not yet recovered;
+  - **net payable now** = the invoice total − retention − recovery.
+
+  A certificate whose invoice is cancelled stops counting. Only one certificate may be a draft at a time, so the quantities to date stay in order. A draft certificate can be withdrawn, which deletes its draft invoice: drafts have no ledger, stock or cash rows.
+- **General ledger (`ledger/projector.py`, `ledger/chart.py`, `ledger/reports.py`):**
+  - an advance payment credits **customer advances** (2105, already in the chart) instead of receivable;
+  - a posted certificate moves its recovery from customer advances to receivable, and its retention from receivable to **retention receivable** (new 1111 on the contracting chart). The same lines reverse in the cancellation entry;
+  - a retention release moves it back to receivable;
+  - subcontractor bills mirror this with **retention payable** (new 2106);
+  - a service purchase linked to a project books to **project costs** (5103) instead of other general expenses.
+
+  The customer reconciliation check now compares receivable + retention receivable + customer advances with the customers' balances (and payable + retention payable with the suppliers'). Those sums equal the party ledgers by construction. On a chart without these accounts (any other activity), the lines stay in receivable and payable as before.
+- **Cost and budget:**
+  - a project's cost is materials issued + linked expenses + linked service purchases (posted, before tax, after posted returns);
+  - a purchase invoice with stock lines cannot be linked: those goods go to the site through "issue from stock", so they are never counted twice;
+  - each cost reads against a budget per heading (materials, subcontractors, labour, equipment, other).
+- **Permissions (existing codes only):**
+  - certificates, retention and the bill of quantities: `sales.create_sales_invoice`;
+  - advances: `sales.receive_customer_payment`;
+  - subcontracts and their bills: `purchases.create_purchase_invoice`;
+  - figures that show cost or profit: `reports.view_profit_report`.
+- **Returns, cancellations and releases (review of #179):**
+  - **Sales return on a certificate:** gives back that invoice line's quantity to the bill of quantities. It also takes back the same share of the certificate's gross, retention and recovery as the return is of the invoice total (`projects.contract.return_share`). The projector books exactly that share in the return's entry and reverses it in the return's cancellation entry.
+  - **Purchase return on a subcontractor bill:** does the same for its retention (`projects.costs.return_share`).
+  - **Releases:** append-only. A release is never edited or deleted; it can be reversed on a date (`reversed_on`), which posts the opposite entry. A release or reversal dated in a closed month is refused (`ensure_period_is_open`).
+  - **One guard line in the engines:** `projects.guards` is called at the end of these services, inside their own transaction:
+    - sales: `cancel_posted_sales_invoice`, `create_sales_return`, `cancel_sales_return`, `cancel_customer_payment`;
+    - purchases: `cancel_posted_purchase_invoice`, `create_purchase_return`, `cancel_purchase_return`.
+
+    It refuses (and so undoes) any change that would leave a project with more retention released than held, or more advance recovered than received. Documents of no project pass untouched; nothing else in those services changes.
+  - **Entity scope:** project screens resolve submitted cashboxes, collections and purchase invoices through `entities.scope`.
+  - **Second review:**
+    - return shares are allocated on the cumulative returned total, so partial returns add up to exactly the whole deduction;
+    - a return cannot be cancelled once a later certificate billed the quantity it gave back;
+    - the guard takes the project's (or subcontract's) row lock, like certificates and releases;
+    - a project's certificates and a subcontract's bills stay in one entity, so retention and advances (and their releases) are held in one place.
+  - **Third review:**
+    - a project's payments join it in the same entity: the entity of its first certificate, or else of its first payment;
+    - an instalment-plan collection cannot be linked as an advance;
+    - the project's owner cannot change once it has invoices, payments, certificates or releases;
+    - certificate, payment and subcontractor-bill lists, and the certificate page and print, are scoped to the working entity.
+  - **Fourth review:**
+    - **Entity reach.** A project's money (terms, bill of quantities, certificates, payment links, releases and reversals) can change only from the entity it lives in, or from the whole group. The same holds for a subcontract's bills and releases and for linked service purchases. Every submitted id is resolved through `entities.scope`, and the services check it again.
+    - **Scoped figures.** The contract figures (`contract.position`), the project summary, the subcontract figures and the cost by heading are computed from the working entity's own documents. Another entity sees none of this project's money.
+    - **Closed months.** Linking or unlinking an advance moves that payment's journal entry between receivable and customer advances on the payment's own date, so it is refused when that month is closed. Linking or unlinking a posted service purchase moves its expense into or out of project cost on the invoice's date (and its returns' dates), so it is refused the same way. A collection link changes nothing in the books, so it is not restricted.
+    - **Stable return shares.** Returns are replayed in the order they were made and cancelled. A new return takes the returned share on the total still standing, less what those returns already took. Each share is fixed when the return is made, and cancelling a return reverses exactly its own share: no other return's entry moves.
+    - **Dated releases.** A release may take only what is held on its date and stays held on every later date: posted documents on their dates, returns on theirs, earlier releases and reversals (`contract.lowest_held`). The consistency guard checks the same balance on every date, not only today.
+  - **Fifth review:**
+    - **Dated advance recovery.** A certificate recovers only advance received by its own date that stays unclaimed on every later date (`contract.advance_events`). Unlinking or cancelling an advance is refused when an earlier certificate needs it on any date.
+    - **Header permission.** The project header's owner and contract figures need `sales.view_sales_invoices`. A purchases-only user (the stock keeper) on the subcontractors tab sees neither.
+    - **Reserved service items.** Bills and certificates use `services.service_item`. When a catalog item holding the reserved code (`PRJ-SUB`, `PRJ-BILL`) tracks stock or is inactive, it is left alone and the next free code (`PRJ-SUB-2`, …) is used as a non-stock service. A bill therefore never moves stock or books to inventory.
+  - **Sixth review:**
+    - **Permanent entity.** A project belongs for good to the entity of its first certificate, cancelled ones included, else of its first payment. A subcontract belongs to the entity of its first bill. A cancellation can no longer move a project (and the projection of its past releases) to another entity.
+    - **Exact return tax.** A linked service purchase's cost subtracts each posted return's total less the tax that return actually recorded, as the ledger books it. Lines at different VAT rates therefore stay exact.
+  - **Seventh review:**
+    - **Deductions capped.** Retention and advance recovery together cannot exceed 100% of a certificate: the terms are refused, and recovery is capped at what the certificate leaves after retention.
+    - **Cancellation after a release.** A sales or purchase invoice's cancellation is dated back to the invoice. A certificate (or subcontractor bill) whose retention was released on some date, even if that release was reversed later, therefore cannot be cancelled. The guard says so plainly and points to a return, which is dated today and keeps the history intact.
+  - **Eighth review:**
+    - **No instalments on a certificate.** `installments.services.create_plan` refuses a certificate's invoice (one guard line), and the sales screen no longer offers it: its collections must be recorded on the project so retention and the advance come off.
+    - **A certificate's invoice stays on its project.** `services.unlink` refuses it. The sales-side guard also resolves a project through the certificate itself, not only through the invoice link.
+  - **Ninth review:** the project list computes due-now for a whole page in grouped queries (`contract.due_now_many`). A project with returns on its certificates, or with releases seen from an entity, falls back to `position`. The reserved service item is created with an atomic get-or-create, so two first bills at once reuse one row.
+  - **Tenth review:** a project billed as a lump sum cannot get a bill of quantities afterwards, so billed work is never billed again. Certificates cannot be dated before the latest live one, so quantities to date run forward in time.
+  - **Eleventh review:** the project accounts (retention receivable and payable, project costs, project work in progress) follow the Projects module, not only the contracting activity. Any activity that switches Projects on gets them, so the ledger books the retention its project screens show.
+  - **Twelfth review:** an ordinary invoice linked to a project anchors it to that invoice's entity, as a first certificate or a first payment does. Linking an invoice from another entity is refused, so its collections always stay linkable. An instalment that pays an invoice on the project links as that project's collection, never as an advance. That invoice cannot be unlinked while such instalments count there. The payments screen offers only these instalments.
+  - **Thirteenth review:** when an upgrade adds a control account whose default code the user already took for an account of their own, `ensure_chart` creates the control under the nearest free code beside it under the same parent. The user's account is untouched, and nothing that posts to the control is silently skipped.
+  - **Fourteenth review:** a backdated certificate counts only the returns made by its date, so quantities already billed then are never billed again. A project collection that loses its CP- number to a collection saved at the same moment takes the next free number instead of failing.
+- **Known limits:**
+  - the customer's aging still shows the whole balance, retention included; the project screen shows what is due now;
+  - advances paid to subcontractors are not tracked separately: a supplier payment before the bill nets on the supplier's account as today.
+- **Tests:** `projects/tests_contract.py`:
+  - certificate quantities, gross, retention, recovery and net per scenario;
+  - the advance cap;
+  - a cancelled certificate releasing its quantities;
+  - one draft at a time and withdrawing it;
+  - retention release;
+  - subcontractor bill and release;
+  - the purchase-link rule;
+  - budget against actual;
+  - trial balance balanced and reconciliation clean, with the exact amounts in receivable, retention receivable, customer advances, payable, retention payable and project costs;
+  - the screens and who may act.
+
 ## Final gate verification
 
 - Full Django suite: 794 tests passed in 576.477 seconds.

@@ -363,6 +363,9 @@ def cancel_posted_sales_invoice(invoice_id, user=None, reason=""):
         },
     )
 
+    from projects.guards import after_sales_invoice_change
+
+    after_sales_invoice_change(invoice)  # HG-038: a project's contract figures stay possible
     return invoice
 
 
@@ -655,6 +658,9 @@ def create_sales_return(
             "status": sales_return.status,
         },
     )
+    from projects.guards import after_sales_invoice_change
+
+    after_sales_invoice_change(invoice)  # HG-038: a project's contract figures stay possible
     return sales_return
 
 
@@ -774,6 +780,9 @@ def cancel_sales_return(return_id, reversal_date, reason, user):
         reason=reason,
         after_data={"status": sales_return.status, "reversal_date": str(reversal_date)},
     )
+    from projects.guards import after_sales_invoice_change
+
+    after_sales_invoice_change(sales_return.source_invoice)  # HG-038: a project's contract figures stay possible
     return sales_return
 
 
@@ -837,4 +846,7 @@ def cancel_customer_payment(payment_id, user=None, reason=""):
         },
     )
 
+    from projects.guards import after_customer_payment_change
+
+    after_customer_payment_change(payment)  # HG-038: a project's contract figures stay possible
     return payment

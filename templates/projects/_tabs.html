@@ -1,0 +1,8 @@
+{% load hesba_labels %}<nav class="op-subnav" aria-label="{{ project.name }}" data-project-tabs>
+<a href="{% url 'projects:detail' project.pk %}?lang={{ lang }}"{% if tab == 'overview' %} aria-current="page"{% endif %}>{{ cwords.tab_overview }}</a>
+<a href="{% url 'projects:boq' project.pk %}?lang={{ lang }}"{% if tab == 'boq' %} aria-current="page"{% endif %}>{{ cwords.tab_boq }}</a>
+<a href="{% url 'projects:certificates' project.pk %}?lang={{ lang }}"{% if tab == 'certificates' %} aria-current="page"{% endif %}>{{ cwords.tab_certificates }}</a>
+<a href="{% url 'projects:payments' project.pk %}?lang={{ lang }}"{% if tab == 'payments' %} aria-current="page"{% endif %}>{{ cwords.tab_payments }}</a>
+{% url 'projects:subcontracts' project.pk as subcontracts_url %}{% link_ok subcontracts_url as subcontracts_ok %}{% url 'purchases:list' as purchases_url %}{% link_ok purchases_url as purchases_ok %}{% if subcontracts_ok and purchases_ok %}<a href="{{ subcontracts_url }}?lang={{ lang }}"{% if tab == 'subcontracts' %} aria-current="page"{% endif %}>{{ cwords.tab_subcontracts }}</a>{% endif %}
+{% url 'projects:budget' project.pk as budget_url %}{% link_ok budget_url as budget_ok %}{% if budget_ok %}<a href="{{ budget_url }}?lang={{ lang }}"{% if tab == 'budget' %} aria-current="page"{% endif %}>{{ cwords.tab_budget }}</a>{% endif %}
+</nav>
