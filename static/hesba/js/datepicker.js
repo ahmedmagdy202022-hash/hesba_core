@@ -112,6 +112,8 @@
     native.value = initial ? iso(initial) : '';
     this.text.value = initial ? shown(initial) : '';
 
+    // Typing again clears the old complaint; leaving the field (or submitting) checks it again.
+    this.text.addEventListener('input', function () { self.text.setCustomValidity(''); self.text.removeAttribute('aria-invalid'); });
     this.text.addEventListener('change', function () { self.commitTyped(); });
     this.text.addEventListener('blur', function () { self.commitTyped(); });
     this.text.addEventListener('keydown', function (e) {
@@ -139,7 +141,7 @@
     this.native.value = date ? iso(date) : '';
     this.text.value = date ? shown(date) : '';
     this.text.setCustomValidity('');
-    if (date) this.text.removeAttribute('aria-invalid');
+    this.text.removeAttribute('aria-invalid');  // an empty optional date is valid too
     if (before !== this.native.value) {
       this.native.dispatchEvent(new Event('input', { bubbles: true }));
       this.native.dispatchEvent(new Event('change', { bubbles: true }));

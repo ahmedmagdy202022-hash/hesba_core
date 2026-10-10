@@ -62,3 +62,11 @@ class DatePickerTests(TestCase):
         script = (root / "js" / "datepicker.js").read_text(encoding="utf-8")
         self.assertIn("this.wrap.getBoundingClientRect()", script)
         self.assertIn("window.addEventListener('scroll'", script)  # follows the field when a box scrolls
+
+    def test_a_cleared_or_retyped_date_drops_its_old_complaint(self):
+        root = settings.BASE_DIR / "static" / "hesba" / "js"
+        script = (root / "datepicker.js").read_text(encoding="utf-8")
+        self.assertIn("this.text.removeAttribute('aria-invalid');  // an empty optional date is valid too", script)
+        self.assertIn("this.text.addEventListener('input', function () { self.text.setCustomValidity('');", script)
+        invoice = (root / "invoice_form.js").read_text(encoding="utf-8")
+        self.assertIn("wrap.hsPicker.set(null)", invoice)  # the line's clear button goes through the picker
