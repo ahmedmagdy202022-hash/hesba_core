@@ -74,3 +74,8 @@ class DatePickerTests(TestCase):
     def test_the_calendar_stays_on_a_short_screen(self):
         script = (settings.BASE_DIR / "static" / "hesba" / "js" / "datepicker.js").read_text(encoding="utf-8")
         self.assertIn("top = Math.max(gutter, Math.min(top, window.innerHeight - gutter - height));", script)
+
+    def test_tabbing_out_closes_the_calendar(self):
+        script = (settings.BASE_DIR / "static" / "hesba" / "js" / "datepicker.js").read_text(encoding="utf-8")
+        self.assertIn("this.wrap.addEventListener('focusout'", script)
+        self.assertIn("!self.wrap.contains(e.relatedTarget)) self.close(false);", script)

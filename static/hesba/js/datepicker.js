@@ -115,6 +115,10 @@
     // Typing again clears the old complaint; leaving the field (or submitting) checks it again.
     this.text.addEventListener('input', function () { self.text.setCustomValidity(''); self.text.removeAttribute('aria-invalid'); });
     this.text.addEventListener('change', function () { self.commitTyped(); });
+    // Keyboard focus leaving the field and its calendar (Tab past the last button) closes the calendar.
+    this.wrap.addEventListener('focusout', function (e) {
+      if (self.isOpen() && e.relatedTarget && !self.wrap.contains(e.relatedTarget)) self.close(false);
+    });
     this.text.addEventListener('blur', function () { self.commitTyped(); });
     this.text.addEventListener('keydown', function (e) {
       if (e.key === 'ArrowDown' && (e.altKey || !self.text.value)) { e.preventDefault(); self.open(); }
