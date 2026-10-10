@@ -170,8 +170,13 @@ def link_invoice(project, invoice, user, lang="ar"):
         raise ValidationError(words["not_posted"])
     if ProjectInvoice.objects.filter(invoice=invoice).exists():
         raise ValidationError(words["linked"])
+    from entities import scope as entity_scope
+    from sales.models import SalesInvoice
+
     from . import contract
 
+    if not entity_scope.scope(SalesInvoice.objects, entity_scope.SALES_INVOICE).filter(pk=invoice.pk).exists():
+        raise ValidationError(contract.MESSAGES[lang]["entity"])  # another entity's invoice never anchors the project
     established = contract.project_entity(project)
     if established is not None and contract.entity_of(invoice.selling_location) != established:
         raise ValidationError(contract.MESSAGES[lang]["entity"])  # one entity per project: its collections stay linkable

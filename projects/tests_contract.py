@@ -1063,3 +1063,17 @@ class ReviewRoundElevenTests(ContractSetup):
         page = self.client.get(reverse("projects:payments", args=[self.project.pk]) + "?lang=ar")
         self.assertContains(page, "CP-M")
         self.assertNotContains(page, "CP-T")
+
+    def test_another_entitys_invoice_never_anchors_a_fresh_project(self):
+        from entities.current import working_in
+        from entities.models import Entity
+
+        branch = Entity.objects.create(code="E12", name_ar="فرع اتناشر")
+        make_location(location_code="E12-LOC", entity=branch)
+        main_invoice = self.sale("SI-MAIN", "700")
+        fresh = services.save_project({"name": "مشروع جديد", "customer": self.customer}, self.owner)
+        with working_in(branch), self.assertRaisesMessage(ValidationError, "من كيان تاني"):
+            services.link_invoice(fresh, main_invoice, self.owner)
+        self.assertIsNone(contract.project_entity(fresh))
+        services.link_invoice(fresh, main_invoice, self.owner)  # from its own entity (or the whole group) it links
+        self.assertEqual(contract.project_entity(fresh), contract.entity_of(self.store))

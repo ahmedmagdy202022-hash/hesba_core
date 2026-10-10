@@ -141,13 +141,16 @@ def project_detail(request, pk):
                                                  item=_pick(Item, request.POST.get("item"), active=True, is_stock_tracked=False), lang=lang)
                 messages.success(request, words["billed_ok"].format(number=invoice.invoice_number))
             elif action == "link_invoice":
-                invoice = _pick(SalesInvoice, request.POST.get("invoice"))
+                # Only what the working entity may see, as the picker offers (HG-034).
+                raw = str(request.POST.get("invoice") or "")
+                invoice = entity_scope.scope(SalesInvoice.objects, entity_scope.SALES_INVOICE).filter(pk=raw).first() if raw.isdigit() else None
                 if invoice is None:
                     raise ValidationError(services.MESSAGES[lang]["not_posted"])
                 services.link_invoice(project, invoice, request.user, lang)
                 messages.success(request, words["linked"])
             elif action == "link_expense":
-                expense = _pick(Expense, request.POST.get("expense"))
+                raw = str(request.POST.get("expense") or "")
+                expense = entity_scope.scope(Expense.objects, entity_scope.EXPENSE).filter(pk=raw).first() if raw.isdigit() else None
                 if expense is None:
                     raise ValidationError(services.MESSAGES[lang]["not_posted"])
                 services.link_expense(project, expense, request.user, lang, heading=request.POST.get("heading"))
