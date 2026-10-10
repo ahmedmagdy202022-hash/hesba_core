@@ -49,6 +49,7 @@ class Migration(migrations.Migration):
                 ("response", models.JSONField(blank=True, default=dict)),
                 ("submitted_at", models.DateTimeField(auto_now_add=True)),
                 ("checked_at", models.DateTimeField(blank=True, null=True)),
+                ("cancel_requested_at", models.DateTimeField(blank=True, null=True)),
                 ("cancelled_at", models.DateTimeField(blank=True, null=True)),
                 ("cancel_reason", models.CharField(blank=True, max_length=255)),
                 (

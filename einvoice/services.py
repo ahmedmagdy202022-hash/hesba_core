@@ -203,11 +203,11 @@ SEND_WORDS = {
     "ar": {"problems": "البيانات لسه ناقصة؛ كمّلها الأول.", "already": "الفاتورة دي اتبعتت واتقبلت بالفعل.", "pending": "الفاتورة دي اتبعتت ولسه المنظومة بتراجعها.",
            "setup": "الربط مع المنظومة لسه متظبطش على السيرفر ({names}).", "signer": "جهاز التوقيع مش بيرد أو رفض التوقيع؛ اتأكد إن التوكن متركّب والبرنامج شغال.",
            "login": "المنظومة رفضت الدخول؛ راجع Client ID و Client Secret.", "unreachable": "مش قادرين نوصل للمنظومة دلوقتي؛ جرّب كمان شوية.",
-           "refused": "المنظومة رفضت الفاتورة: {reason}", "unknown": "الاتصال اتقطع قبل ما نعرف رد المنظومة، وممكن تكون الفاتورة وصلت. مش هنبعتها تاني قبل ما نسأل المنظومة؛ جرّب الإرسال بعد 10 دقايق وهنتأكد الأول.", "reason": "اكتب سبب الإلغاء.", "not_valid": "الإلغاء للفواتير المقبولة بس."},
+           "refused": "المنظومة رفضت الفاتورة: {reason}", "unknown": "الاتصال اتقطع قبل ما نعرف رد المنظومة، وممكن تكون الفاتورة وصلت. مش هنبعتها تاني قبل ما نسأل المنظومة؛ جرّب الإرسال بعد 10 دقايق وهنتأكد الأول.", "cancel_unknown": "الاتصال اتقطع قبل ما نعرف رد المنظومة على طلب الإلغاء، وممكن يكون وصل. الطلب متسجل؛ دوس تحديث الحالة بعد شوية عشان نعرف النتيجة.", "reason": "اكتب سبب الإلغاء.", "not_valid": "الإلغاء للفواتير المقبولة بس."},
     "en": {"problems": "The data is still incomplete; complete it first.", "already": "This invoice was already sent and accepted.", "pending": "This invoice was sent and the portal is still checking it.",
            "setup": "The portal connection is not set up on the server yet ({names}).", "signer": "The signer did not answer or refused; check the token is plugged in and the signer is running.",
            "login": "The portal refused the login; check the client ID and secret.", "unreachable": "The portal cannot be reached right now; try again shortly.",
-           "refused": "The portal rejected the invoice: {reason}", "unknown": "The connection dropped before the portal answered, so the invoice may have arrived. It will not be sent again before the portal is asked: try again in 10 minutes and it will be checked first.", "reason": "Enter a cancellation reason.", "not_valid": "Only accepted invoices can be cancelled."},
+           "refused": "The portal rejected the invoice: {reason}", "unknown": "The connection dropped before the portal answered, so the invoice may have arrived. It will not be sent again before the portal is asked: try again in 10 minutes and it will be checked first.", "cancel_unknown": "The connection dropped before the portal answered the cancellation, so it may have arrived. The request is kept: refresh the status shortly to see the outcome.", "reason": "Enter a cancellation reason.", "not_valid": "Only accepted invoices can be cancelled."},
 }
 
 
@@ -389,6 +389,7 @@ def refresh_submission(submission, user, lang="ar"):
     words = SEND_WORDS[lang]
     if not submission.uuid:
         return submission
+    asked_at = timezone.now()
     try:
         answer = portal.details(submission.uuid)
     except portal.PortalError as exc:
@@ -397,8 +398,12 @@ def refresh_submission(submission, user, lang="ar"):
         # Reloaded under its lock: a cancellation saved while the authority was being asked is not lost.
         fresh = Submission.objects.select_for_update().get(pk=submission.pk)
         status = _portal_status(answer, fresh.status)
+        never_arrived = False
         if fresh.status == SubmissionStatus.CANCEL_REQUESTED and status == SubmissionStatus.VALID and not answer.get("declineCancelRequestDate"):
-            status = SubmissionStatus.CANCEL_REQUESTED  # our request is not on the authority's answer yet
+            if fresh.cancel_requested_at and asked_at < fresh.cancel_requested_at:
+                status = SubmissionStatus.CANCEL_REQUESTED  # this answer was read before our request was made
+            else:
+                never_arrived = True  # asked after our request, and the authority has none: it never arrived
         steps = ((answer.get("validationResults") or {}).get("validationSteps") or [])
         reasons = [portal.error_text(step.get("error") or {}) for step in steps if str(step.get("status", "")).lower() == "invalid"]
         fresh.status = status
@@ -406,20 +411,29 @@ def refresh_submission(submission, user, lang="ar"):
             fresh.cancelled_at = timezone.now()
         fresh.long_id = answer.get("longId") or fresh.long_id
         fresh.message = " · ".join(r for r in reasons if r)[:1000]
+        if never_arrived:
+            fresh.cancel_requested_at, fresh.message = None, "the cancellation request never reached the portal: request it again"
         fresh.response = answer
         fresh.checked_at = timezone.now()
-        fresh.save(update_fields=["status", "long_id", "message", "response", "checked_at", "cancelled_at"])
-    for field in ("status", "long_id", "message", "response", "checked_at", "cancelled_at", "cancel_reason"):
-        setattr(submission, field, getattr(fresh, field))
+        fresh.save(update_fields=["status", "long_id", "message", "response", "checked_at", "cancelled_at", "cancel_requested_at"])
+    _sync(submission, fresh)
     _audit_send(submission, user, "eta_refresh")
     return submission
 
 
 def cancel_submission(submission, user, reason, lang="ar"):
+    """Ask the authority to cancel a valid document.
+
+    Like a sending, the request is claimed first: the row becomes
+    ``cancel_requested`` (with its time) before the authority is called, so a
+    request whose answer is lost is never asked twice and stays refreshable.
+    Only a definite refusal (4xx) puts it back to valid."""
+
     from django.core.exceptions import ValidationError
+    from django.db import transaction
 
     from . import portal
-    from .models import SubmissionStatus
+    from .models import Submission, SubmissionStatus
 
     words = SEND_WORDS[lang]
     reason = (reason or "").strip()[:255]
@@ -428,15 +442,41 @@ def cancel_submission(submission, user, reason, lang="ar"):
     if submission.status != SubmissionStatus.VALID:
         raise ValidationError(words["not_valid"])
     try:
-        portal.cancel(submission.uuid, reason)
+        portal.token()  # a refused or unreachable login sends nothing
     except portal.PortalError as exc:
         raise ValidationError(_portal_error(exc, words))
-    # A request, not the end: the receiver of a B2B invoice may decline it within
-    # the authority's window. "Refresh" reads the outcome (cancelled, or valid again).
-    submission.status, submission.cancel_reason = SubmissionStatus.CANCEL_REQUESTED, reason
-    submission.save(update_fields=["status", "cancel_reason"])
+    with transaction.atomic():
+        fresh = Submission.objects.select_for_update().get(pk=submission.pk)
+        if fresh.status != SubmissionStatus.VALID:
+            raise ValidationError(words["not_valid"])
+        fresh.status, fresh.cancel_reason, fresh.cancel_requested_at = SubmissionStatus.CANCEL_REQUESTED, reason, timezone.now()
+        fresh.save(update_fields=["status", "cancel_reason", "cancel_requested_at"])
+    try:
+        portal.cancel(fresh.uuid, reason)
+    except portal.PortalError as exc:
+        if exc.message == "cancel refused" and exc.status and exc.status < 500:
+            with transaction.atomic():
+                fresh = Submission.objects.select_for_update().get(pk=submission.pk)
+                fresh.status, fresh.cancel_requested_at = SubmissionStatus.VALID, None
+                fresh.message = portal.error_text(exc.payload) or f"HTTP {exc.status}"
+                fresh.save(update_fields=["status", "cancel_requested_at", "message"])
+            _sync(submission, fresh)
+            _audit_send(submission, user, "eta_cancel_refused")
+            raise ValidationError(_portal_error(exc, words))
+        # Cut off, or a 5xx: the authority may hold the request. It stays requested; "refresh" settles it.
+        fresh.message = f"cancellation outcome unknown: {exc.message}" + (f" (HTTP {exc.status})" if exc.status else "")
+        fresh.save(update_fields=["message"])
+        _sync(submission, fresh)
+        _audit_send(submission, user, "eta_cancel_unknown")
+        raise ValidationError(words["cancel_unknown"])
+    _sync(submission, fresh)
     _audit_send(submission, user, "eta_cancel")
     return submission
+
+
+def _sync(submission, fresh):
+    for field in ("status", "long_id", "message", "response", "checked_at", "cancelled_at", "cancel_reason", "cancel_requested_at"):
+        setattr(submission, field, getattr(fresh, field))
 
 
 def public_url(submission):

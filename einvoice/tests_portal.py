@@ -20,9 +20,9 @@ ENV = {"ETA_ENVIRONMENT": "preprod", "ETA_CLIENT_ID": "cid", "ETA_CLIENT_SECRET"
 class FakePortal:
     """Answers like the authority and the signer, and remembers what it was sent."""
 
-    def __init__(self, accept=True, valid=True, signer_ok=True, refuse_http=None, details=None, on_sign=None, found=None, submit_fail=None):
+    def __init__(self, accept=True, valid=True, signer_ok=True, refuse_http=None, details=None, on_sign=None, found=None, submit_fail=None, cancel_fail=None):
         self.accept, self.valid, self.signer_ok, self.refuse_http, self.calls = accept, valid, signer_ok, refuse_http, []
-        self.details, self.on_sign, self.found, self.submit_fail = details, on_sign, found, submit_fail  # a fixed details answer; a hook run while "signing"; search hits
+        self.details, self.on_sign, self.found, self.submit_fail, self.cancel_fail = details, on_sign, found, submit_fail, cancel_fail  # a fixed details answer; a hook run while "signing"; search hits
 
     def __call__(self, method, url, *, body=None, form=None, headers=None):
         self.calls.append((method, url, body, form, headers))
@@ -68,6 +68,10 @@ class FakePortal:
                 return 200, {"status": "Valid", "longId": "L1", "validationResults": {"status": "Valid", "validationSteps": []}}
             return 200, {"status": "Invalid", "validationResults": {"validationSteps": [{"status": "Invalid", "error": {"message": "Total mismatch"}}]}}
         if url == "https://api.preprod.invoicing.eta.gov.eg/api/v1.0/documents/state/U1/state" and method == "PUT" and body.get("status") == "cancelled":
+            if self.cancel_fail == "cut":
+                raise portal.PortalError("unreachable: timeout")
+            if self.cancel_fail:
+                return self.cancel_fail, {"error": {"message": "Cancellation period is over"}}
             return 200, {}
         return 404, {}
 
@@ -329,12 +333,19 @@ class ReviewThreeTests(DocumentSetup):
     def test_a_refresh_never_undoes_a_cancellation_saved_meanwhile(self):
         with mock.patch.object(portal, "_http", FakePortal()):
             submission = refresh_submission(send_invoice(self.posted, self.owner, "en"), self.owner, "en")
-        stale_copy = Submission.objects.get(pk=submission.pk)  # what a refresh that started earlier holds: "valid"
-        with mock.patch.object(portal, "_http", FakePortal()):
-            cancel_submission(submission, self.owner, "غلط", "ar")  # saved while that refresh waits for the authority
         plain_valid = {"status": "Valid", "longId": "L1", "validationResults": {"validationSteps": []}}
-        with mock.patch.object(portal, "_http", FakePortal(details=plain_valid)):
-            refresh_submission(stale_copy, self.owner, "en")
+        inner, raced = FakePortal(), []
+
+        def racing(method, url, **kwargs):
+            if url.endswith("/U1/details") and not raced:
+                raced.append(True)
+                answer = (200, dict(plain_valid))  # read before the cancellation below was made
+                cancel_submission(Submission.objects.get(pk=submission.pk), self.owner, "غلط", "ar")
+                return answer
+            return inner(method, url, **kwargs)
+
+        with mock.patch.object(portal, "_http", racing):
+            refresh_submission(Submission.objects.get(pk=submission.pk), self.owner, "en")
         self.assertEqual(Submission.objects.get(pk=submission.pk).status, "cancel_requested")
         with_request = dict(plain_valid, cancelRequestDate="2026-10-09T21:00:00Z")
         other = Submission.objects.get(pk=submission.pk)
@@ -413,3 +424,50 @@ class UnknownOutcomeTests(DocumentSetup):
         with mock.patch.object(portal, "_http", FakePortal(found=[])):
             fresh = send_invoice(self.posted, self.owner, "en")  # the search was accepted (≤ 30 days) and found nothing
         self.assertEqual((fresh.status, Submission.objects.get(pk=claim.pk).status), ("submitted", "rejected"))
+
+
+@mock.patch.dict(os.environ, ENV)
+class CancellationClaimTests(DocumentSetup):
+    """Codex on #181: a cancellation whose answer was lost is never asked twice, and stays refreshable."""
+
+    def setUp(self):
+        super().setUp()
+        portal._TOKEN.update(value="", expires=0.0, key="")
+        self.complete_data()
+        self.posted = self.invoice()
+
+    def valid(self):
+        with mock.patch.dict(os.environ, ENV), mock.patch.object(portal, "_http", FakePortal()):
+            self.submission = refresh_submission(send_invoice(self.posted, self.owner, "en"), self.owner, "en")
+
+    def test_a_cut_connection_keeps_the_request_until_a_refresh_settles_it(self):
+        self.valid()
+        with mock.patch.object(portal, "_http", FakePortal(cancel_fail="cut")), self.assertRaisesMessage(ValidationError, "may have arrived"):
+            cancel_submission(self.submission, self.owner, "غلط", "en")
+        row = Submission.objects.get(pk=self.submission.pk)
+        self.assertEqual(row.status, "cancel_requested")
+        self.assertIsNotNone(row.cancel_requested_at)
+        self.assertTrue(AuditLog.objects.filter(action="eta_cancel_unknown", object_id=str(row.pk)).exists())
+        with mock.patch.object(portal, "_http", FakePortal()), self.assertRaisesMessage(ValidationError, "Only accepted"):
+            cancel_submission(row, self.owner, "غلط", "en")  # never asked twice
+        arrived = {"status": "Valid", "longId": "L1", "cancelRequestDate": "2026-10-10T07:00:00Z"}
+        with mock.patch.object(portal, "_http", FakePortal(details=arrived)):
+            self.assertEqual(refresh_submission(row, self.owner, "en").status, "cancel_requested")
+
+    def test_a_request_that_never_arrived_goes_back_to_valid_on_refresh(self):
+        self.valid()
+        with mock.patch.object(portal, "_http", FakePortal(cancel_fail="cut")), self.assertRaises(ValidationError):
+            cancel_submission(self.submission, self.owner, "غلط", "en")
+        none = {"status": "Valid", "longId": "L1"}
+        with mock.patch.object(portal, "_http", FakePortal(details=none)):
+            row = refresh_submission(Submission.objects.get(pk=self.submission.pk), self.owner, "en")
+        self.assertEqual((row.status, row.cancel_requested_at), ("valid", None))
+        self.assertIn("never reached", row.message)
+
+    def test_a_definite_refusal_puts_it_back_to_valid(self):
+        self.valid()
+        with mock.patch.object(portal, "_http", FakePortal(cancel_fail=400)), self.assertRaisesMessage(ValidationError, "Cancellation period is over"):
+            cancel_submission(self.submission, self.owner, "غلط", "en")
+        row = Submission.objects.get(pk=self.submission.pk)
+        self.assertEqual((row.status, row.cancel_requested_at), ("valid", None))
+        self.assertTrue(AuditLog.objects.filter(action="eta_cancel_refused", object_id=str(row.pk)).exists())
