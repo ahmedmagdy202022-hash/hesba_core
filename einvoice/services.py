@@ -242,6 +242,9 @@ def _audit_send(submission, user, action):
 
 
 STALE_SENDING = timedelta(minutes=10)
+# A cancellation's PUT (with its login retry) is over well within this: only after it can a refresh
+# that finds no request on the authority's side conclude the request never arrived.
+CANCEL_IN_FLIGHT = timedelta(minutes=5)
 
 
 def send_invoice(invoice, user, lang="ar"):
@@ -403,8 +406,9 @@ def refresh_submission(submission, user, lang="ar"):
         status = _portal_status(answer, fresh.status)
         never_arrived = False
         if fresh.status == SubmissionStatus.CANCEL_REQUESTED and status == SubmissionStatus.VALID and not answer.get("declineCancelRequestDate"):
-            if fresh.cancel_requested_at and asked_at < fresh.cancel_requested_at:
-                status = SubmissionStatus.CANCEL_REQUESTED  # this answer was read before our request was made
+            if fresh.cancel_requested_at and asked_at < fresh.cancel_requested_at + CANCEL_IN_FLIGHT:
+                # Read before our request was made, or while it may still be on its way: not a "no".
+                status = SubmissionStatus.CANCEL_REQUESTED
             else:
                 never_arrived = True  # asked after our request, and the authority has none: it never arrived
         steps = ((answer.get("validationResults") or {}).get("validationSteps") or [])

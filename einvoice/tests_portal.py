@@ -455,10 +455,16 @@ class CancellationClaimTests(DocumentSetup):
             self.assertEqual(refresh_submission(row, self.owner, "en").status, "cancel_requested")
 
     def test_a_request_that_never_arrived_goes_back_to_valid_on_refresh(self):
+        from django.utils import timezone
+
         self.valid()
         with mock.patch.object(portal, "_http", FakePortal(cancel_fail="cut")), self.assertRaises(ValidationError):
             cancel_submission(self.submission, self.owner, "غلط", "en")
         none = {"status": "Valid", "longId": "L1"}
+        with mock.patch.object(portal, "_http", FakePortal(details=none)):
+            row = refresh_submission(Submission.objects.get(pk=self.submission.pk), self.owner, "en")
+        self.assertEqual(row.status, "cancel_requested")  # it may still be on its way: not a "no" yet
+        Submission.objects.filter(pk=self.submission.pk).update(cancel_requested_at=timezone.now() - timedelta(minutes=6))
         with mock.patch.object(portal, "_http", FakePortal(details=none)):
             row = refresh_submission(Submission.objects.get(pk=self.submission.pk), self.owner, "en")
         self.assertEqual((row.status, row.cancel_requested_at), ("valid", None))
@@ -523,3 +529,45 @@ class ReviewSevenTests(DocumentSetup):
         claim = Submission.objects.get()
         self.assertEqual(claim.status, "sending")  # not "submitted" without its audit: reconciliation settles it later
         self.assertFalse(AuditLog.objects.filter(action="eta_send").exists())
+
+
+@mock.patch.dict(os.environ, ENV)
+class ReviewEightTests(DocumentSetup):
+    """Codex on #181: an in-flight cancellation is never taken for a lost one; a stuck sending can be checked from the screen."""
+
+    def setUp(self):
+        super().setUp()
+        portal._TOKEN.update(value="", expires=0.0, key="")
+        self.complete_data()
+        self.posted = self.invoice()
+
+    def test_a_refresh_during_the_cancellation_call_keeps_the_request(self):
+        with mock.patch.object(portal, "_http", FakePortal()):
+            submission = refresh_submission(send_invoice(self.posted, self.owner, "en"), self.owner, "en")
+        inner = FakePortal(details={"status": "Valid", "longId": "L1"})  # the authority has not recorded it yet
+
+        def racing(method, url, **kwargs):
+            if method == "PUT":
+                refresh_submission(Submission.objects.get(pk=submission.pk), self.owner, "en")
+            return inner(method, url, **kwargs)
+
+        with mock.patch.object(portal, "_http", racing):
+            cancel_submission(submission, self.owner, "غلط", "en")
+        self.assertEqual(Submission.objects.get(pk=submission.pk).status, "cancel_requested")
+
+    def test_a_stuck_sending_offers_a_check_that_reaches_reconciliation(self):
+        from datetime import timedelta as td
+
+        from django.utils import timezone
+
+        claim = Submission.objects.create(invoice=self.posted, environment="preprod", submitted_by=self.owner, status="sending")
+        self.client.force_login(self.owner)
+        url = reverse("einvoice:sales_document", args=[self.posted.pk])
+        page = self.client.get(url + "?lang=ar")
+        self.assertContains(page, "data-eta-recheck")
+        self.assertNotContains(page, "data-eta-send")
+        Submission.objects.filter(pk=claim.pk).update(submitted_at=timezone.now() - td(minutes=11))
+        found = [{"internalId": self.posted.invoice_number, "uuid": "U1", "longId": "L1", "status": "Valid", "dateTimeReceived": "x"}]
+        with mock.patch.object(portal, "_http", FakePortal(found=found)):
+            self.client.post(url, {"action": "send", "lang": "ar"})
+        self.assertEqual((Submission.objects.get(pk=claim.pk).status, Submission.objects.count()), ("valid", 1))
