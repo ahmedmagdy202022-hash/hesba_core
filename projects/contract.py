@@ -67,6 +67,7 @@ MESSAGES = {
         "release_more": "المبلغ أكبر من ضمان الأعمال المحتجز ({held}).", "cashbox": "اختار الخزنة.", "other_customer": "التحصيل ده لعميل تاني.",
         "payment_linked": "التحصيل ده مربوط بمشروع بالفعل.", "payment_status": "اربط التحصيلات المرحّلة بس.", "date": "التاريخ مش صحيح.",
         "advance_used": "المستخلصات خصمت من الدفعة المقدمة دي بالفعل، فمينفعش يتفك ربطها.",
+        "boq_after_lump": "المشروع ده اتعمل عليه مستخلص مقطوعية؛ مينفعش تضيف مقايسة بعده عشان الأعمال اللي اتفوترت متتفوترش تاني.", "date_order": "تاريخ المستخلص لازم ميكونش قبل آخر مستخلص ({date}).",
         "reversed": "الإفراج ده اتلغى بالفعل.", "rates_total": "مجموع نسبة ضمان الأعمال ونسبة استرداد الدفعة المقدمة لازم ميزيدش عن 100%.", "instalment": "التحصيل ده قسط على خطة تقسيط؛ مينفعش يتربط بمشروع.", "entity": "مستخلصات المشروع ده بتتعمل من كيان تاني؛ اشتغل من الكيان ده عشان ضمان الأعمال والدفعة المقدمة يفضلوا في مكان واحد.",
     },
     "en": {
@@ -79,6 +80,7 @@ MESSAGES = {
         "release_more": "The amount is more than the retention held ({held}).", "cashbox": "Choose the cashbox.", "other_customer": "This collection is for another customer.",
         "payment_linked": "This collection is already linked to a project.", "payment_status": "Only posted collections can be linked.", "date": "Invalid date.",
         "advance_used": "Certificates already recovered this advance, so it cannot be unlinked.",
+        "boq_after_lump": "This project already has a lump-sum certificate; a bill of quantities cannot be added after it, so billed work is never billed twice.", "date_order": "A certificate cannot be dated before the latest one ({date}).",
         "reversed": "This release is already reversed.", "rates_total": "Retention and advance recovery together cannot exceed 100%.", "instalment": "This collection pays an instalment plan; it cannot be linked to a project.", "entity": "This project's certificates are billed from another entity; work in that entity so its retention and advance stay in one place.",
     },
 }
@@ -251,6 +253,8 @@ def save_boq_line(project, user, data, line=None, lang="ar"):
     values = {"code": (data.get("code") or "").strip()[:20], "description": description, "unit": (data.get("unit") or "").strip()[:30],
               "quantity": quantity, "rate": rate}
     created = line is None
+    if created and not project.boq.exists() and live_certificates(project).exists():
+        raise ValidationError(words["boq_after_lump"])  # those certificates have no quantities to start the BOQ from
     if created:
         top = project.boq.order_by("-line_number").values_list("line_number", flat=True).first() or 0
         line = BoqLine(project=project, line_number=top + 1, created_by=user)
@@ -447,6 +451,9 @@ def create_certificate(project, user, *, quantities=None, amount=None, descripti
         invoice_number = f"PB-{project.code}-{sequence:02d}"
     retention = money_round(gross * Decimal(project.retention_rate) / HUNDRED)
     day = certificate_date or timezone.localdate()
+    latest = live_certificates(project).order_by("-certificate_date").values_list("certificate_date", flat=True).first()
+    if latest and day < latest:
+        raise ValidationError(words["date_order"].format(date=latest.isoformat()))  # quantities to date run forward in time
     # Only what was received by the certificate's date, and stays unclaimed on every date after it.
     available = min(advance_left(project), max(lowest_held(advance_events(project), day), ZERO))
     recovery = min(money_round(gross * Decimal(project.advance_recovery_rate) / HUNDRED), available, max(gross - retention, ZERO))

@@ -956,3 +956,22 @@ class ReviewRoundNineTests(ContractSetup):
             item = services.service_item("PRJ-RACE", "خدمة")
         self.assertEqual((item.item_code, item.item_name), ("PRJ-RACE", "من طلب تاني"))
         self.assertEqual(Item.objects.filter(item_code="PRJ-RACE").count(), 1)
+
+
+class ReviewRoundTenTests(ContractSetup):
+    """Codex's tenth review on #179."""
+
+    def test_no_bill_of_quantities_after_a_lump_sum_certificate(self):
+        lump = services.save_project({"name": "مقطوعية", "customer": self.customer}, self.owner)
+        contract.create_certificate(lump, self.owner, amount="5000", description="أعمال الشهر الأول")
+        with self.assertRaisesMessage(ValidationError, "مستخلص مقطوعية"):
+            contract.save_boq_line(lump, self.owner, {"description": "x", "quantity": "1", "rate": "1"})
+
+    def test_certificates_run_forward_in_time(self):
+        from datetime import timedelta
+
+        first = contract.create_certificate(self.project, self.owner, quantities={self.concrete.pk: "40"}, certificate_date=TODAY)
+        post_sales_invoice(first.invoice_id, self.owner)
+        with self.assertRaisesMessage(ValidationError, TODAY.isoformat()):
+            contract.create_certificate(self.project, self.owner, quantities={self.concrete.pk: "50"}, certificate_date=TODAY - timedelta(days=9))
+        self.assertTrue(contract.create_certificate(self.project, self.owner, quantities={self.concrete.pk: "50"}, certificate_date=TODAY).pk)
