@@ -505,10 +505,12 @@ def entity_locations(locations, entity_id):
 
 
 def project_entity(project):
-    """The one entity a project's money lives in: that of its first live
-    certificate, else of its first linked payment (None before either)."""
+    """The one entity a project's money lives in, for good: that of its first
+    certificate (cancelled ones too, so a cancellation never moves the project
+    and its past releases to another entity), else of its first linked
+    payment (None before either)."""
 
-    first = live_certificates(project).select_related("invoice__selling_location").order_by("number").first()
+    first = project.certificates.select_related("invoice__selling_location").order_by("number").first()
     if first is not None:
         return entity_of(first.invoice.selling_location)
     payment = project.payments.select_related("payment__cashbox").order_by("pk").first()

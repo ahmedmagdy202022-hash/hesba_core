@@ -139,8 +139,7 @@ def bill_subcontract(subcontract, user, *, amount, description, bill_date=None, 
 
     subcontract = Subcontract.objects.select_for_update().select_related("project", "supplier").get(pk=subcontract.pk)
     locations = entity_scope.locations(Location.objects).filter(active=True, is_receiving_location=True)
-    first = live_bills(subcontract).select_related("invoice__receiving_location").order_by("number").first()
-    established = entity_of(first.invoice.receiving_location) if first else None
+    established = subcontract_entity(subcontract)
     if established is not None:
         # One entity per subcontract: the retention held from it stays in one place.
         locations = entity_locations(locations, established)
@@ -223,8 +222,7 @@ def subcontract_entity(subcontract):
 
     from .contract import entity_of
 
-    bills = subcontract.bills.select_related("invoice__receiving_location").order_by("number")
-    first = bills.exclude(invoice__status="cancelled").first() or bills.first()
+    first = subcontract.bills.select_related("invoice__receiving_location").order_by("number").first()  # cancelled ones too: for good
     return entity_of(first.invoice.receiving_location) if first else None
 
 
@@ -390,15 +388,20 @@ def _period(invoice):
 
 
 def net_purchase(invoice):
-    """What a posted purchase cost: before tax, after its posted returns (the
-    returns' tax share taken at the invoice's own rate, as ``net_sales`` does)."""
+    """What a posted purchase cost: before tax, after its posted returns, each
+    return taken at its own total less the tax it actually recorded (as the
+    general ledger books it), so lines at different rates stay exact."""
+
+    from taxes.models import PurchaseReturnLineTax
 
     total = Decimal(invoice.total_amount)
     if total <= 0 or invoice.status != "posted":
         return ZERO
     before_tax = total - Decimal(invoice.tax_amount or 0)
-    returned = invoice.returns.filter(status="posted").aggregate(total=Sum("total_amount"))["total"] or ZERO
-    return money_round(max(before_tax - returned * before_tax / total, ZERO))
+    posted = invoice.returns.filter(status="posted")
+    returned = posted.aggregate(total=Sum("total_amount"))["total"] or ZERO
+    returned_tax = PurchaseReturnLineTax.objects.filter(return_line__purchase_return__in=posted).aggregate(total=Sum("tax_amount"))["total"] or ZERO
+    return money_round(max(before_tax - (Decimal(returned) - Decimal(returned_tax)), ZERO))
 
 
 # ---- cost by heading and budget ----

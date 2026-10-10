@@ -794,3 +794,46 @@ class ReviewRoundFiveTests(ContractSetup):
         post_sales_invoice(certificate.invoice_id, self.owner)
         self.assertEqual(gl("project_cost"), D("1000.00"))
         ledger_ok(self)
+
+
+class ReviewRoundSixTests(ContractSetup):
+    """Codex's sixth review on #179."""
+
+    def test_a_cancelled_certificate_keeps_the_project_in_its_entity(self):
+        from entities.current import working_in
+        from entities.models import Entity
+
+        first = self.certify(concrete="10")
+        post_sales_invoice(first.invoice_id, self.owner)
+        release = contract.release_retention(self.project, self.owner, amount="500")
+        contract.reverse_release(self.project, release, self.owner)
+        cancel_posted_sales_invoice(first.invoice_id, self.owner, reason="x")
+        branch = Entity.objects.create(code="E6", name_ar="فرع سادس")
+        make_location(location_code="E6-LOC", entity=branch)
+        with working_in(branch), self.assertRaisesMessage(ValidationError, "من كيان تاني"):
+            self.certify(concrete="5")  # the past release stays where its retention was held
+        self.assertEqual(contract.project_entity(self.project), contract.entity_of(first.invoice.selling_location))
+        ledger_ok(self)
+
+    def test_a_returned_service_line_takes_off_its_own_tax_only(self):
+        from purchases.services import create_purchase_return
+        from settings_core.capabilities import _write
+        from taxes.models import ItemTaxRate, TaxRate
+        from taxes.services import create_purchase_draft_with_tax
+
+        _write("vat", True)
+        taxed = make_item(item_code="SV-T", item_name="نقل", is_stock_tracked=False)
+        exempt = make_item(item_code="SV-E", item_name="خدمة معفاة", is_stock_tracked=False)
+        ItemTaxRate.objects.create(item=exempt, tax_rate=TaxRate.objects.get(code="EXEMPT"))
+        invoice = create_purchase_draft_with_tax(
+            {"invoice_number": "PI-VAT", "invoice_date": TODAY, "supplier": make_supplier(supplier_code="S-6", name="مورد"), "receiving_location": self.store},
+            [{"item": taxed, "quantity": D("10"), "unit_purchase_price": D("50")}, {"item": exempt, "quantity": D("4"), "unit_purchase_price": D("25")}], self.owner)
+        post_purchase_invoice(invoice.pk, self.owner)
+        invoice = PurchaseInvoice.objects.get(pk=invoice.pk)
+        self.assertEqual((invoice.tax_amount, invoice.total_amount), (D("70.00"), D("670.00")))
+        costs.link_purchase(self.project, invoice, self.owner, heading=CostHeading.EQUIPMENT)
+        create_purchase_return("PR-VAT", TODAY, invoice.pk, [{"source_line": invoice.lines.get(item=taxed), "quantity": D("2")}], "x", self.owner)
+        self.assertEqual(costs.net_purchase(invoice), D("500.00"))  # 600 before tax − the 100 returned before its 14 tax
+        self.assertEqual(costs.actual_by_heading(self.project)[CostHeading.EQUIPMENT], D("500.00"))
+        self.assertEqual(gl("project_cost"), D("500.00"))  # the books agree
+        ledger_ok(self)

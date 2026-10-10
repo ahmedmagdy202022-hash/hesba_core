@@ -759,6 +759,9 @@ Status: APPROVED — Ahmed approved on 9 Oct 2026 ("خلص كله"), after the a
     - **Dated advance recovery.** A certificate recovers only advance received by its own date that stays unclaimed on every later date (`contract.advance_events`). Unlinking or cancelling an advance is refused when an earlier certificate needs it on any date.
     - **Header permission.** The project header's owner and contract figures need `sales.view_sales_invoices`. A purchases-only user (the stock keeper) on the subcontractors tab sees neither.
     - **Reserved service items.** Bills and certificates use `services.service_item`. When a catalog item holding the reserved code (`PRJ-SUB`, `PRJ-BILL`) tracks stock or is inactive, it is left alone and the next free code (`PRJ-SUB-2`, …) is used as a non-stock service. A bill therefore never moves stock or books to inventory.
+  - **Sixth review:**
+    - **Permanent entity.** A project belongs for good to the entity of its first certificate, cancelled ones included, else of its first payment. A subcontract belongs to the entity of its first bill. A cancellation can no longer move a project (and the projection of its past releases) to another entity.
+    - **Exact return tax.** A linked service purchase's cost subtracts each posted return's total less the tax that return actually recorded, as the ledger books it. Lines at different VAT rates therefore stay exact.
 - **Known limits:**
   - the customer's aging still shows the whole balance, retention included; the project screen shows what is due now;
   - advances paid to subcontractors are not tracked separately: a supplier payment before the bill nets on the supplier's account as today.
