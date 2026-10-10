@@ -7,11 +7,14 @@ undoes the change. Documents that belong to no project pass untouched."""
 
 def after_sales_invoice_change(invoice):
     from .contract import ensure_consistent
-    from .models import ProjectInvoice
+    from .models import Certificate, ProjectInvoice
 
-    link = ProjectInvoice.objects.select_related("project").filter(invoice_id=invoice.pk).first()
-    if link is not None:
-        ensure_consistent(link.project)
+    # A certificate names its project directly, so the guard never depends on the invoice link.
+    certificate = Certificate.objects.select_related("project").filter(invoice_id=invoice.pk).first()
+    link = None if certificate else ProjectInvoice.objects.select_related("project").filter(invoice_id=invoice.pk).first()
+    project = certificate.project if certificate else (link.project if link else None)
+    if project is not None:
+        ensure_consistent(project)
 
 
 def after_customer_payment_change(payment):

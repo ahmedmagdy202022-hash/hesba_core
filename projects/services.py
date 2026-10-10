@@ -41,13 +41,13 @@ OPEN = (ProjectStatus.PLANNED, ProjectStatus.ACTIVE, ProjectStatus.ON_HOLD)
 MESSAGES = {
     "ar": {
         "name": "اكتب اسم المشروع.", "customer": "اختار العميل.", "value": "قيمة العقد مش صحيحة.", "dates": "تاريخ النهاية قبل البداية.",
-        "closed": "المشروع ده خلص أو اتلغى.", "amount": "المبلغ لازم أكبر من صفر.", "description": "اكتب وصف المستخلص.", "setup": "لازم يكون فيه مخزن بيع نشط.",
+        "closed": "المشروع ده خلص أو اتلغى.", "certificate_link": "دي فاتورة مستخلص؛ مينفعش تتفك من المشروع. اسحب المسودة من شاشة المستخلصات أو اعمل مرتجع.", "amount": "المبلغ لازم أكبر من صفر.", "description": "اكتب وصف المستخلص.", "setup": "لازم يكون فيه مخزن بيع نشط.",
         "other_customer": "الفاتورة دي لعميل تاني.", "linked": "ده مربوط بمشروع بالفعل.", "not_posted": "اربط الفواتير أو المصروفات المرحّلة بس.",
         "qty": "الكمية لازم أكبر من صفر.", "item": "اختار الصنف.", "customer_locked": "المشروع عليه فواتير أو تحصيلات؛ مينفعش يتغير صاحبه.", "location": "اختار المخزن.", "stock_item": "الصنف ده مش متتبع في المخزون.",
     },
     "en": {
         "name": "Enter the project name.", "customer": "Choose the customer.", "value": "Invalid contract value.", "dates": "The end date is before the start.",
-        "closed": "This project is done or cancelled.", "amount": "The amount must be above zero.", "description": "Describe the progress bill.", "setup": "An active selling location is needed.",
+        "closed": "This project is done or cancelled.", "certificate_link": "This is a certificate's invoice; it cannot be unlinked from the project. Withdraw the draft on the certificates tab, or make a return.", "amount": "The amount must be above zero.", "description": "Describe the progress bill.", "setup": "An active selling location is needed.",
         "other_customer": "This invoice is for another customer.", "linked": "This is already linked to a project.", "not_posted": "Only posted invoices or expenses can be linked.",
         "qty": "The quantity must be above zero.", "item": "Choose the item.", "customer_locked": "The project has invoices or payments; its owner cannot change.", "location": "Choose the location.", "stock_item": "This item is not stock-tracked.",
     },
@@ -190,9 +190,12 @@ def link_expense(project, expense, user, lang="ar", heading=None):
 
 
 @transaction.atomic
-def unlink(project, link, user):
-    """Take an invoice or expense off the project. The document itself is untouched."""
+def unlink(project, link, user, lang="ar"):
+    """Take an invoice or expense off the project. The document itself is untouched.
+    A certificate's invoice stays: its deductions and guards belong to the project."""
 
+    if isinstance(link, ProjectInvoice) and hasattr(link.invoice, "project_certificate"):
+        raise ValidationError(MESSAGES[lang]["certificate_link"])
     kind = type(link).__name__
     label = link.invoice.invoice_number if isinstance(link, ProjectInvoice) else link.expense.expense_number
     link.delete()

@@ -154,7 +154,7 @@ def project_detail(request, pk):
                 model = ProjectInvoice if action == "unlink_invoice" else ProjectExpense
                 link = _pick(model, request.POST.get("link"), project=project)
                 if link:
-                    services.unlink(project, link, request.user)
+                    services.unlink(project, link, request.user, lang)
                     messages.success(request, words["unlinked"])
             elif action == "issue":
                 if not user_has_permission(request.user, ISSUE):

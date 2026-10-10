@@ -548,8 +548,10 @@ class ReviewRoundThreeTests(ContractSetup):
         from settings_core.capabilities import _write
 
         _write("installments", True)
-        invoice = services.bill_progress(services.save_project({"name": "x", "customer": self.customer}, self.owner),
-                                         self.owner, amount="900", description="x")
+        from sales.services import create_sales_draft
+
+        invoice = create_sales_draft({"invoice_number": "SI-INST", "invoice_date": TODAY, "customer": self.customer, "selling_location": self.store},
+                                     [{"item": services.billing_item(), "quantity": D("1"), "unit_sale_price": D("900")}], self.owner)
         post_sales_invoice(invoice.pk, self.owner)
         from datetime import timedelta
 
@@ -874,3 +876,36 @@ class ReviewRoundSevenTests(ContractSetup):
         self.assertEqual(contract.retention_held(self.project), D("0.00"))
         self.assertGreaterEqual(contract.lowest_held(contract.retention_events(self.project)), 0)
         ledger_ok(self)
+
+
+class ReviewRoundEightTests(ContractSetup):
+    """Codex's eighth review on #179."""
+
+    def test_a_certificate_invoice_is_never_put_on_instalments(self):
+        from datetime import timedelta
+
+        from installments.services import create_plan
+        from settings_core.capabilities import _write
+
+        _write("installments", True)
+        certificate = self.certify(concrete="10")
+        post_sales_invoice(certificate.invoice_id, self.owner)
+        with self.assertRaisesMessage(ValidationError, "فاتورة مستخلص مشروع"):
+            create_plan(SalesInvoice.objects.get(pk=certificate.invoice_id), 3, TODAY + timedelta(days=30), self.owner)
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("sales:detail", args=[certificate.invoice_id]) + "?lang=ar")
+        self.assertNotContains(page, "data-instalment-new")
+
+    def test_a_certificate_invoice_stays_on_its_project_and_its_guards_still_run(self):
+        from .models import ProjectInvoice
+
+        first = self.certify(concrete="10")
+        post_sales_invoice(first.invoice_id, self.owner)
+        contract.release_retention(self.project, self.owner, amount="500")
+        link = ProjectInvoice.objects.get(invoice_id=first.invoice_id)
+        with self.assertRaisesMessage(ValidationError, "فاتورة مستخلص"):
+            services.unlink(self.project, link, self.owner)
+        self.assertTrue(ProjectInvoice.objects.filter(pk=link.pk).exists())
+        ProjectInvoice.objects.filter(pk=link.pk).delete()  # even without its link (an old row), the certificate guards it
+        with self.assertRaisesMessage(ValidationError, "more retention released than is held"):
+            cancel_posted_sales_invoice(first.invoice_id, self.owner, reason="x")
