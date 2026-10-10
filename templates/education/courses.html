@@ -1,0 +1,20 @@
+{% extends "operations/base.html" %}
+{% load hesba_format l10n %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div></section>
+{% include "education/_tabs.html" %}
+{% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
+<div class="op-table-wrap"><table class="op-table" data-courses><thead><tr><th>{{ words.name }}</th><th>{{ words.basis }}</th><th>{{ words.fee }}</th><th>{{ words.groups }}</th><th>{{ words.item }}</th>{% if can_manage %}<th></th>{% endif %}</tr></thead><tbody>
+{% for row in rows %}<tr data-course="{{ row.pk }}"{% if not row.active %} class="op-muted"{% endif %}><td class="op-cell-text">{{ row.name }}{% if row.description %} <span class="op-muted">— {{ row.description }}</span>{% endif %}</td><td>{{ row.basis_label }}</td><td>{{ row.fee|money }}</td><td>{{ row.group_count }}</td><td><bdi>{{ row.item.item_code }}</bdi></td>
+{% if can_manage %}<td><a href="?lang={{ lang }}&edit={{ row.pk }}">{{ words.edit_course }}</a>{% if row.active %} · <a href="{% url 'education:group_new' %}?lang={{ lang }}&course={{ row.pk }}">{{ words.new_group }}</a>{% endif %}</td>{% endif %}</tr>
+{% empty %}<tr><td colspan="6" class="op-empty">{{ words.no_courses }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_manage %}<form class="op-form" method="post" data-course-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">{% if editing %}<input type="hidden" name="course" value="{{ editing.pk }}"><input type="hidden" name="active_present" value="1">{% endif %}
+<h2>{% if editing %}{{ words.edit_course }}: {{ editing.name }}{% else %}{{ words.new_course }}{% endif %}</h2><div class="op-form-grid">
+<div class="op-field"><label for="co-name">{{ words.name }}</label><input id="co-name" name="name" required maxlength="160" value="{% if error %}{{ post.name }}{% else %}{{ editing.name }}{% endif %}" placeholder="{% if lang == 'en' %}e.g. Maths — Grade 3{% else %}مثلًا: رياضيات تالتة إعدادي{% endif %}"></div>
+<div class="op-field"><label for="co-basis">{{ words.basis }}</label><select id="co-basis" name="basis">{% for value, label in bases %}<option value="{{ value }}"{% if editing.basis == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="co-fee">{{ words.fee }}</label><input id="co-fee" name="fee" inputmode="decimal" value="{% if error %}{{ post.fee }}{% elif editing %}{{ editing.fee|unlocalize }}{% endif %}"></div>
+<div class="op-field"><label for="co-desc">{{ words.description }}</label><input id="co-desc" name="description" maxlength="255" value="{% if error %}{{ post.description }}{% else %}{{ editing.description }}{% endif %}"></div>
+{% if editing %}<label class="op-check"><input type="checkbox" name="active" value="1"{% if editing.active %} checked{% endif %}> {{ words.active }}</label>{% endif %}
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form>{% endif %}
+{% endblock %}

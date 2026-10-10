@@ -1,0 +1,5 @@
+<nav class="op-form-actions edu-tabs" aria-label="{{ words.title }}" data-edu-tabs>
+<a class="{% if tab == 'students' %}op-primary{% else %}op-secondary{% endif %}" href="{% url 'education:students' %}?lang={{ lang }}"{% if tab == 'students' %} aria-current="page"{% endif %}>{{ words.students }}</a>
+<a class="{% if tab == 'groups' %}op-primary{% else %}op-secondary{% endif %}" href="{% url 'education:groups' %}?lang={{ lang }}"{% if tab == 'groups' %} aria-current="page"{% endif %}>{{ words.groups }}</a>
+<a class="{% if tab == 'courses' %}op-primary{% else %}op-secondary{% endif %}" href="{% url 'education:courses' %}?lang={{ lang }}"{% if tab == 'courses' %} aria-current="page"{% endif %}>{{ words.courses }}</a>
+</nav>

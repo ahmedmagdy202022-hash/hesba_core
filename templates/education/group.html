@@ -1,0 +1,28 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'education:groups' %}?lang={{ lang }}">← {{ words.back_groups }}</a><h1>{{ group.course.name }} — {{ group.name }}</h1>
+<p><bdi>{{ group.code }}</bdi>{% if schedule %} · {{ schedule }}{% endif %}{% if group.teacher %} · {{ group.teacher.name }}{% endif %}{% if group.room %} · {{ words.room }} {{ group.room }}{% endif %}{% if not group.active %} · <span class="op-status op-status-draft">{{ words.status_stopped }}</span>{% endif %}</p></div></section>
+{% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
+<section class="op-summary-grid">
+<article><small>{{ words.seats }}</small><strong data-seats>{{ roster|length }}{% if group.capacity %} / {{ group.capacity }}{% endif %}</strong>{% if free is not None %}<small>{{ free }} {{ words.free_seats }}</small>{% endif %}</article>
+<article><small>{{ words.fee }}</small><strong>{{ group.effective_fee|money }}</strong></article>
+<article><small>{{ words.total_monthly }}</small><strong data-group-total>{{ total|money }}</strong></article>
+</section>
+<h2>{{ words.roster }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-roster><thead><tr><th>{{ words.student }}</th><th>{{ words.payer }}</th><th>{{ words.phone }}</th><th>{{ words.discount }}</th><th>{{ words.net }}</th><th>{{ words.since }}</th>{% if can_manage %}<th></th>{% endif %}</tr></thead><tbody>
+{% for row in roster %}<tr data-roster-row="{{ row.student.pk }}"><td class="op-cell-text"><a href="{% url 'education:student' row.student.pk %}?lang={{ lang }}">{{ row.student.name }}</a></td><td class="op-cell-text">{{ row.student.payer.name }}</td><td><bdi>{{ row.student.payer.phone|default:'—' }}</bdi></td><td>{{ row.discount_percent|floatformat:"-2" }}</td><td>{{ row.net|money }}</td><td><bdi>{{ row.start_date|date:"Y-m-d" }}</bdi></td>
+{% if can_manage %}<td><form method="post" class="edu-inline">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="stop"><input type="hidden" name="enrollment" value="{{ row.pk }}"><button class="op-secondary" type="submit">{{ words.stop }}</button></form></td>{% endif %}</tr>
+{% empty %}<tr><td colspan="7" class="op-empty">{{ words.no_roster }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_manage and group.active and others %}<form class="op-form" method="post" data-roster-add>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="enroll"><h2>{{ words.add_student }}</h2><div class="op-form-grid">
+<div class="op-field"><label for="ro-student">{{ words.student }}</label><select id="ro-student" name="student" required><option value="">{{ words.choose }}</option>{% for s in others %}<option value="{{ s.pk }}">{{ s.name }} — {{ s.code }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="ro-start">{{ words.start_date }}</label><input id="ro-start" type="date" name="start_date" value="{{ today|date:'Y-m-d' }}"></div>
+<div class="op-field"><label for="ro-discount">{{ words.discount }}</label><input id="ro-discount" name="discount_percent" inputmode="decimal" value="0"></div>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.enroll_btn }}</button></div></form>{% endif %}
+{% if can_manage %}<details class="op-form"{% if error %} open{% endif %}><summary><h2>{{ words.edit }}</h2></summary>
+<form method="post" data-group-edit>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="edit"><input type="hidden" name="active_present" value="1"><div class="op-form-grid">
+{% include "education/_group_fields.html" %}
+<label class="op-check"><input type="checkbox" name="active" value="1"{% if group.active %} checked{% endif %}> {{ words.active }}</label>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form></details>{% endif %}
+{% endblock %}

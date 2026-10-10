@@ -76,6 +76,7 @@ urlpatterns = [
     path("shifts/", include("shifts.urls")),
     path("parties/", include("parties.urls")),
     path("medical/", include("medical.urls")),
+    path("education/", include("education.urls")),
     path("search/", include("search.urls")),
     path("imports/", include("imports.urls")),
     path("closing/", include("closing.urls")),

@@ -1,0 +1,30 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'education:students' %}?lang={{ lang }}">← {{ words.back_students }}</a><h1>{{ student.name }}</h1>
+<p><bdi>{{ student.code }}</bdi>{% if student.stage %} · {{ student.stage }}{% endif %}{% if student.school %} · {{ student.school }}{% endif %}{% if student.phone %} · <bdi>{{ student.phone }}</bdi>{% endif %}{% if not student.active %} · <span class="op-status op-status-draft">{{ words.status_stopped }}</span>{% endif %}</p></div>
+<div class="op-form-actions"><a class="op-secondary" href="{% url 'parties:card' 'customer' student.payer.pk %}?lang={{ lang }}" data-payer-account>{{ words.account }}</a></div></section>
+{% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
+<section class="op-summary-grid">
+<article><small>{{ words.payer }}</small><strong>{{ student.payer.name }}</strong>{% if student.relation %}<small>{{ student.relation }}</small>{% endif %}</article>
+<article><small>{{ words.phone }}</small><strong><bdi>{{ student.payer.phone|default:'—' }}</bdi></strong></article>
+<article><small>{{ words.groups_count }}</small><strong>{{ enrollments|length }}</strong></article>
+</section>
+<h2>{{ words.enrollments }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-enrollments><thead><tr><th>{{ words.group }}</th><th>{{ words.schedule }}</th><th>{{ words.teacher }}</th><th>{{ words.fee }}</th><th>{{ words.discount }}</th><th>{{ words.net }}</th><th>{{ words.since }}</th><th>{{ words.status }}</th>{% if can_manage %}<th></th>{% endif %}</tr></thead><tbody>
+{% for row in enrollments %}<tr data-enrollment="{{ row.pk }}"><td class="op-cell-text"><a href="{% url 'education:group' row.group.pk %}?lang={{ lang }}">{{ row.group.course.name }} — {{ row.group.name }}</a></td><td>{{ row.schedule|default:'—' }}</td><td>{{ row.group.teacher.name|default:words.no_teacher }}</td><td>{{ row.group.effective_fee|money }}</td><td>{{ row.discount_percent|floatformat:"-2" }}</td><td>{{ row.net|money }}</td><td><bdi>{{ row.start_date|date:"Y-m-d" }}</bdi>{% if row.end_date %} → <bdi>{{ row.end_date|date:"Y-m-d" }}</bdi>{% endif %}</td><td><span class="op-status {% if row.status == 'active' %}op-status-open{% else %}op-status-draft{% endif %}">{{ row.status_label }}</span></td>
+{% if can_manage %}<td>{% if row.status == 'active' %}<form method="post" class="edu-inline">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="stop"><input type="hidden" name="enrollment" value="{{ row.pk }}"><button class="op-secondary" type="submit" data-stop-enrollment>{{ words.stop }}</button></form>{% endif %}</td>{% endif %}</tr>
+{% empty %}<tr><td colspan="9" class="op-empty">{{ words.no_enrollments }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_manage and open_groups %}<form class="op-form" method="post" data-enroll-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="enroll"><h2>{{ words.enroll }}</h2><div class="op-form-grid">
+<div class="op-field"><label for="en-group">{{ words.group }}</label><select id="en-group" name="group" required><option value="">{{ words.choose }}</option>{% for g in open_groups %}<option value="{{ g.pk }}">{{ g.course.name }} — {{ g.name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="en-start">{{ words.start_date }}</label><input id="en-start" type="date" name="start_date" value="{{ today|date:'Y-m-d' }}"></div>
+<div class="op-field"><label for="en-discount">{{ words.discount }}</label><input id="en-discount" name="discount_percent" inputmode="decimal" value="0"></div>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.enroll_btn }}</button></div></form>{% endif %}
+{% if can_manage %}<details class="op-form"{% if error %} open{% endif %}><summary><h2>{{ words.edit }}</h2></summary>
+<form method="post" data-student-edit>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="edit"><input type="hidden" name="active_present" value="1"><div class="op-form-grid">
+{% include "education/_student_fields.html" with post=None %}
+<div class="op-field"><label for="st-payer">{{ words.payer }}</label><select id="st-payer" name="payer">{% for p in payers %}<option value="{{ p.pk }}"{% if p.pk == student.payer_id %} selected{% endif %}>{{ p.name }}</option>{% endfor %}</select></div>
+<label class="op-check"><input type="checkbox" name="active" value="1"{% if student.active %} checked{% endif %}> {{ words.active }}</label>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form></details>{% endif %}
+{% endblock %}
