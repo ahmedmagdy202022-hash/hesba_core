@@ -46,3 +46,41 @@
       .then(function () { send.disabled = false; });
   });
 })();
+
+/* DEMO-TRACK: a one-time welcome that says pages are recorded, with an optional name and phone. */
+(function () {
+  var card = document.querySelector('[data-hello]');
+  if (!card) return;
+  var KEY = 'hesba-demo-hello';
+  function seen() { try { return window.localStorage.getItem(KEY); } catch (e) { return '1'; } }
+  function remember(value) { try { window.localStorage.setItem(KEY, value); } catch (e) { /* private window: shown again next time */ } }
+  if (seen()) return;
+  var form = card.querySelector('[data-hello-form]');
+  var status = card.querySelector('[data-hello-status]');
+  function lang() { return (document.body.dataset.lang || document.documentElement.lang || 'ar').indexOf('en') === 0 ? 'en' : 'ar'; }
+  var words = {
+    ar: { thanks: 'شكرًا! نوّرت 🙏', failed: 'ماتسجلش، جرّب تاني.' },
+    en: { thanks: 'Thank you! 🙏', failed: 'Not saved, please try again.' }
+  };
+  card.hidden = false;
+  card.querySelector('[data-hello-skip]').addEventListener('click', function () { remember('skipped'); card.hidden = true; });
+  form.addEventListener('submit', function (event) {
+    event.preventDefault();
+    var current = lang();
+    form.querySelector('[data-hello-lang]').value = current;
+    fetch(form.action, { method: 'POST', body: new FormData(form), credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } })
+      .then(function (response) { return response.json().then(function (data) { return { ok: response.ok && data.ok, data: data }; }); })
+      .then(function (result) {
+        if (result.ok) {
+          remember('sent');
+          status.textContent = words[current].thanks;
+          status.className = 'hs-hello__status is-ok';
+          setTimeout(function () { card.hidden = true; }, 1400);
+        } else {
+          status.textContent = (result.data && result.data.error) || words[current].failed;
+          status.className = 'hs-hello__status is-error';
+        }
+      })
+      .catch(function () { status.textContent = words[current].failed; status.className = 'hs-hello__status is-error'; });
+  });
+})();

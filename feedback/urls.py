@@ -7,4 +7,6 @@ app_name = "feedback"
 urlpatterns = [
     path("send/", views.send, name="send"),
     path("inbox/", views.inbox, name="inbox"),
+    path("hello/", views.hello, name="hello"),
+    path("visits/", views.visits, name="visits"),
 ]

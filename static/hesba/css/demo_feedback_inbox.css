@@ -18,3 +18,14 @@ body.fb-inbox{margin:0;background:var(--hs-ground);color:var(--hs-ink);font-fami
 .fb-note__text{margin:0;color:var(--hs-ink);font-size:var(--hs-text-md);line-height:1.8;white-space:normal;overflow-wrap:anywhere}
 .fb-note footer{color:var(--hs-muted);font-size:var(--hs-text-xs);overflow-wrap:anywhere}
 .fb-inbox__empty{padding:var(--hs-space-8);text-align:center;color:var(--hs-muted)}
+/* DEMO-TRACK: who visited, in tables that scroll on a phone. */
+.fb-section{display:grid;gap:var(--hs-space-3)}
+.fb-section h2{display:flex;flex-wrap:wrap;align-items:center;gap:var(--hs-space-2);margin:var(--hs-space-4) 0 0;font-family:var(--hs-font-head);font-size:var(--hs-text-lg);color:var(--hs-navy)}
+.fb-table-wrap{overflow-x:auto;border:1px solid var(--hs-line);border-radius:var(--hs-radius-lg);background:var(--hs-surface);box-shadow:var(--hs-shadow-sm)}
+.fb-table{width:100%;border-collapse:collapse;font-size:var(--hs-text-sm)}
+.fb-table th,.fb-table td{padding:10px 12px;border-bottom:1px solid var(--hs-line);text-align:start;vertical-align:top;white-space:nowrap}
+.fb-table th{background:var(--hs-ground);color:var(--hs-muted);font-weight:700}
+.fb-table tbody tr:last-child td{border-bottom:0}
+.fb-table a{color:var(--hs-teal-deep);font-weight:700}
+a.fb-chip{text-decoration:none}
+.fb-device{margin:0;color:var(--hs-muted);font-size:var(--hs-text-xs);overflow-wrap:anywhere}
