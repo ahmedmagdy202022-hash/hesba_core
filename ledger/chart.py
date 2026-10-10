@@ -84,14 +84,17 @@ ADD = {
         ("110503", "مخزون المنتج التام", "Finished goods", A, "finished_goods", True, False),
         ("5102", "تكلفة الإنتاج المحمّلة", "Absorbed production cost", X, "production_cost", True, False),
     ),
-    "contracting": (
-        ("1110", "أعمال تحت التنفيذ", "Work in progress on projects", A, "project_wip", True, False),
-        ("5103", "تكلفة المشاريع", "Project costs", X, "project_cost", True, False),
-        # CONTRACT-002 (HG-038): retention held on both sides of the contract.
-        ("1111", "محتجزات ضمان أعمال لدى أصحاب المشاريع", "Retention receivable", A, "retention_receivable", True, False),
-        ("2106", "محتجزات ضمان أعمال لمقاولي الباطن", "Retention payable", L, "retention_payable", True, False),
-    ),
 }
+# The accounts a project's contract needs (CONTRACT-002, HG-038). Contracting has them as its
+# own layer; any other activity gets them as soon as the Projects module is switched on, so the
+# ledger books the retention and project costs the project screens show.
+PROJECT_ACCOUNTS = (
+    ("1110", "أعمال تحت التنفيذ", "Work in progress on projects", A, "project_wip", True, False),
+    ("5103", "تكلفة المشاريع", "Project costs", X, "project_cost", True, False),
+    ("1111", "محتجزات ضمان أعمال لدى أصحاب المشاريع", "Retention receivable", A, "retention_receivable", True, False),
+    ("2106", "محتجزات ضمان أعمال لمقاولي الباطن", "Retention payable", L, "retention_payable", True, False),
+)
+ADD["contracting"] = PROJECT_ACCOUNTS
 
 #: Expense category code → account code.
 EXPENSE_ACCOUNTS = {
@@ -100,10 +103,12 @@ EXPENSE_ACCOUNTS = {
 }
 
 
-def rows_for(activity):
+def rows_for(activity, projects=False):
     renamed = RENAME.get(activity, {})
     rows = [(code, *renamed.get(code, (ar, en)), kind, control, postable, contra) for code, ar, en, kind, control, postable, contra in BASE]
     rows += list(ADD.get(activity, ()))
+    if projects and activity != "contracting":
+        rows += list(PROJECT_ACCOUNTS)
     if activity == "manufacturing":
         # Inventory becomes a heading over raw, WIP and finished stock.
         rows = [(c, ar, en, k, ("" if c == "1105" else ctl), (False if c == "1105" else p), ct) for c, ar, en, k, ctl, p, ct in rows]

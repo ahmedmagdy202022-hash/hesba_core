@@ -27,9 +27,11 @@ def _activity():
 def ensure_chart(activity=None):
     """Create whatever default accounts are missing; never changes existing ones."""
 
+    from settings_core.setup_services import enabled_modules
+
     activity = _activity() if activity is None else activity
     existing = {account.code: account for account in Account.objects.all()}
-    for code, ar, en, kind, control, postable, contra in chart.rows_for(activity):
+    for code, ar, en, kind, control, postable, contra in chart.rows_for(activity, projects="projects" in enabled_modules()):
         if code in existing:
             continue
         if control and Account.objects.filter(control=control).exists():

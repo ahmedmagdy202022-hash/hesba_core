@@ -271,7 +271,7 @@ class SubcontractTests(ContractSetup):
 
 
 class NonContractingChartTests(TestCase):
-    def test_without_the_contracting_accounts_balances_stay_in_receivable(self):
+    def test_another_activity_with_projects_on_books_retention_like_contracting(self):
         prepared_client(activity="services", sub_activity="maintenance", modules=MODULES)
         owner = person(RoleCode.OWNER, "c2_srv_owner")
         make_location(location_code="STORE", is_default=True)
@@ -280,8 +280,18 @@ class NonContractingChartTests(TestCase):
         project = services.save_project({"name": "عقد صيانة", "customer": customer, "contract_value": "10000"}, owner)
         contract.save_terms(project, owner, retention_rate="5", advance_recovery_rate="0")
         post_sales_invoice(services.bill_progress(project, owner, amount="10000", description="شهر 1").pk, owner)
-        self.assertEqual(gl("receivable"), D("10000.00"))
+        # The Projects module brings the retention account, so the ledger matches the project screen.
+        self.assertEqual((gl("receivable"), gl("retention_receivable")), (D("9500.00"), D("500.00")))
+        self.assertEqual(contract.position(project)["retention_held"], D("500.00"))
         ledger_ok(self)
+
+    def test_without_the_projects_module_no_project_accounts_are_added(self):
+        from ledger.models import Account
+        from ledger.services import ensure_chart
+
+        prepared_client(activity="services", sub_activity="maintenance", modules="customers,suppliers,items_services,sales_operations,cashboxes,reports")
+        ensure_chart()
+        self.assertFalse(Account.objects.filter(control__in=["retention_receivable", "retention_payable", "project_cost"]).exists())
 
 
 class ContractScreenTests(ContractSetup):

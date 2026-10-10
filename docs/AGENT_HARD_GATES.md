@@ -770,6 +770,7 @@ Status: APPROVED — Ahmed approved on 9 Oct 2026 ("خلص كله"), after the a
     - **A certificate's invoice stays on its project.** `services.unlink` refuses it. The sales-side guard also resolves a project through the certificate itself, not only through the invoice link.
   - **Ninth review:** the project list computes due-now for a whole page in grouped queries (`contract.due_now_many`). A project with returns on its certificates, or with releases seen from an entity, falls back to `position`. The reserved service item is created with an atomic get-or-create, so two first bills at once reuse one row.
   - **Tenth review:** a project billed as a lump sum cannot get a bill of quantities afterwards, so billed work is never billed again. Certificates cannot be dated before the latest live one, so quantities to date run forward in time.
+  - **Eleventh review:** the project accounts (retention receivable and payable, project costs, project work in progress) follow the Projects module, not only the contracting activity. Any activity that switches Projects on gets them, so the ledger books the retention its project screens show.
 - **Known limits:**
   - the customer's aging still shows the whole balance, retention included; the project screen shows what is due now;
   - advances paid to subcontractors are not tracked separately: a supplier payment before the bill nets on the supplier's account as today.
