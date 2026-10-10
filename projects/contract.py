@@ -759,3 +759,46 @@ def position(project):
         "advance": received, "recovered": recovered, "advance_left": money_round(max(received - recovered, ZERO)),
         "collections": collections, "due_now": money_round(added - (retention - released) - recovered - collections),
     }
+
+
+def due_now_many(projects):
+    """{project id: due now} for a page of projects, as ``position`` computes it,
+    in a handful of grouped queries instead of a dozen per project. A project
+    whose certificates have returns (their shares need ``effective``) or whose
+    releases depend on the working entity falls back to ``position`` itself."""
+
+    from entities import scope as entity_scope
+    from entities.current import current_entity
+    from sales.models import SalesReturn
+
+    ids = [project.pk for project in projects]
+    if not ids:
+        return {}
+
+    def grouped(queryset, field):
+        return {row["project_id"]: row["total"] or ZERO for row in queryset.values("project_id").annotate(total=Sum(field))}
+
+    invoice_scope = "invoice__" + entity_scope.SALES_INVOICE
+    links = entity_scope.scope(ProjectInvoice.objects.filter(project_id__in=ids, invoice__status="posted"), invoice_scope)
+    remaining = grouped(links, "invoice__remaining_due")
+    returned = {row["source_invoice__project_link__project_id"]: row["total"] or ZERO for row in
+                SalesReturn.objects.filter(status="posted", source_invoice__project_link__in=links)
+                .values("source_invoice__project_link__project_id").annotate(total=Sum("due_amount"))}
+    certificates = entity_scope.scope(Certificate.objects.filter(project_id__in=ids, invoice__status="posted"), invoice_scope)
+    retention, recovery = grouped(certificates, "retention_amount"), grouped(certificates, "recovery_amount")
+    with_returns = set(certificates.filter(invoice__returns__isnull=False).values_list("project_id", flat=True))
+    payments = entity_scope.scope(ProjectPayment.objects.filter(project_id__in=ids, payment__status="posted", kind=ProjectPaymentKind.COLLECTION),
+                                  "payment__" + entity_scope.CUSTOMER_PAYMENT)
+    collections = grouped(payments, "payment__amount")
+    released = grouped(RetentionRelease.objects.filter(project_id__in=ids, reversed_on__isnull=True), "amount")
+    scoped = current_entity() is not None
+    result = {}
+    for project in projects:
+        pk = project.pk
+        if pk in with_returns or (scoped and released.get(pk)):
+            result[pk] = position(project)["due_now"]
+            continue
+        held = Decimal(retention.get(pk, ZERO)) - Decimal(released.get(pk, ZERO))
+        result[pk] = money_round(Decimal(remaining.get(pk, ZERO)) - Decimal(returned.get(pk, ZERO)) - held
+                                 - Decimal(recovery.get(pk, ZERO)) - Decimal(collections.get(pk, ZERO)))
+    return result

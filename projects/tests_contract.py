@@ -909,3 +909,50 @@ class ReviewRoundEightTests(ContractSetup):
         ProjectInvoice.objects.filter(pk=link.pk).delete()  # even without its link (an old row), the certificate guards it
         with self.assertRaisesMessage(ValidationError, "more retention released than is held"):
             cancel_posted_sales_invoice(first.invoice_id, self.owner, reason="x")
+
+
+class ReviewRoundNineTests(ContractSetup):
+    """Codex's ninth review on #179."""
+
+    def test_the_project_list_computes_due_now_in_bulk_and_exactly(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        from sales.services import create_sales_return
+
+        contract.receive_payment(self.project, self.owner, kind=ProjectPaymentKind.ADVANCE, cashbox=self.cashbox, amount="5000")
+        post_sales_invoice(self.certify(concrete="10").invoice_id, self.owner)
+        contract.receive_payment(self.project, self.owner, kind=ProjectPaymentKind.COLLECTION, cashbox=self.cashbox, amount="2000")
+        contract.release_retention(self.project, self.owner, amount="200")
+        projects = [self.project]
+        for n in range(4):
+            other = services.save_project({"name": f"مشروع {n}", "customer": self.customer}, self.owner)
+            line = contract.save_boq_line(other, self.owner, {"description": "x", "quantity": "10", "rate": "100"})
+            contract.save_terms(other, self.owner, retention_rate="5", advance_recovery_rate="0")
+            certificate = contract.create_certificate(other, self.owner, quantities={line.pk: "4"})
+            post_sales_invoice(certificate.invoice_id, self.owner)
+            if n == 0:  # one with a return: it falls back to position()
+                create_sales_return(f"SR-L{n}", TODAY, certificate.invoice_id, [{"source_line": certificate.invoice.lines.get(), "quantity": D("1")}], "x", self.owner)
+            projects.append(other)
+        with CaptureQueriesContext(connection) as queries:
+            bulk = contract.due_now_many(projects)
+        self.assertEqual(bulk, {project.pk: contract.position(project)["due_now"] for project in projects})
+        self.assertLess(len(queries), 40)  # grouped, not a dozen per project
+        self.client.force_login(self.owner)
+        self.assertEqual(self.client.get(reverse("projects:list") + "?lang=ar").status_code, 200)
+
+    def test_a_reserved_item_made_meanwhile_is_reused_not_duplicated(self):
+        from django.db import IntegrityError
+
+        from master_data.models import Item
+
+        # The other request committed its row between our read and our insert: the insert fails on the unique code.
+        Item.objects.create(item_code="PRJ-RACE", item_name="من طلب تاني", is_stock_tracked=False, default_sale_price=0)
+
+        def raced(**kwargs):
+            raise IntegrityError("duplicate key")
+
+        with __import__("unittest").mock.patch.object(Item.objects, "get_or_create", side_effect=raced):
+            item = services.service_item("PRJ-RACE", "خدمة")
+        self.assertEqual((item.item_code, item.item_name), ("PRJ-RACE", "من طلب تاني"))
+        self.assertEqual(Item.objects.filter(item_code="PRJ-RACE").count(), 1)

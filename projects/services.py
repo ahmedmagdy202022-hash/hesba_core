@@ -126,11 +126,15 @@ def service_item(code, name):
 
     from master_data.models import Item
 
+    from django.db import IntegrityError
+
     candidate, number = code, 1
     while True:
-        item = Item.objects.filter(item_code=candidate).first()
-        if item is None:
-            return Item.objects.create(item_code=candidate, item_name=name, is_stock_tracked=False, default_sale_price=0)
+        try:
+            with transaction.atomic():  # two first bills at once: the loser reads the winner's row
+                item, _ = Item.objects.get_or_create(item_code=candidate, defaults={"item_name": name, "is_stock_tracked": False, "default_sale_price": 0})
+        except IntegrityError:
+            item = Item.objects.get(item_code=candidate)
         if item.active and not item.is_stock_tracked:
             return item
         number += 1

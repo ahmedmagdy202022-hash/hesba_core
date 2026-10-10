@@ -112,10 +112,12 @@ def project_list(request):
     rows = Project.objects.select_related("customer")
     if status in ProjectStatus.values:
         rows = rows.filter(status=status)
-    from .contract import position
+    from .contract import due_now_many
 
-    rows = [{"project": project, "status_label": choice_label(project, "status", lang), "figures": services.summary(project), "position": position(project)}
-            for project in rows[:200]]
+    page = list(rows[:200])
+    due = due_now_many(page)  # grouped queries, not one contract position per row
+    rows = [{"project": project, "status_label": choice_label(project, "status", lang), "figures": services.summary(project), "due_now": due[project.pk]}
+            for project in page]
     return render(request, "projects/list.html", _base(request, rows=rows, status=status, form=form, error=error,
                                                         customers=Customer.objects.filter(active=True).order_by("name")))
 
