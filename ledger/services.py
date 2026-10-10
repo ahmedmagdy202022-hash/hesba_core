@@ -31,10 +31,21 @@ def ensure_chart(activity=None):
 
     activity = _activity() if activity is None else activity
     existing = {account.code: account for account in Account.objects.all()}
-    for code, ar, en, kind, control, postable, contra in chart.rows_for(activity, projects="projects" in enabled_modules()):
+    rows = chart.rows_for(activity, projects="projects" in enabled_modules())
+    planned = {row[0] for row in rows}
+    for code, ar, en, kind, control, postable, contra in rows:
+        held = bool(control) and Account.objects.filter(control=control).exists()
         if code in existing:
-            continue
-        if control and Account.objects.filter(control=control).exists():
+            if not control or held or existing[code].control == control:
+                continue
+            # The default code is taken by an account of the user's own (an upgrade added this
+            # control after they made it): the control still needs its account, under a free
+            # code beside it, or the journal would silently skip what posts there.
+            free = _free_sibling(code, set(existing) | planned)
+            if free is None:
+                raise ValidationError(f"No free account code is left beside {code} for {control}; free one under {chart.parent_code(code)}.")
+            code = free
+        if held:
             control = ""
         parent = existing.get(chart.parent_code(code) or "")
         existing[code] = Account.objects.create(code=code, name_ar=ar, name_en=en, account_type=kind, parent=parent, control=control,
@@ -47,6 +58,19 @@ def ensure_chart(activity=None):
         if account is not None:
             ExpenseAccount.objects.create(category=category, account=account)
     return Account.objects.count()
+
+
+def _free_sibling(code, taken):
+    """The nearest unused code of the same length under the same parent, or None."""
+
+    prefix = chart.parent_code(code) or ""
+    width = len(code) - len(prefix)
+    start = int(code[len(prefix):])
+    for number in list(range(start + 1, 10 ** width)) + list(range(1, start)):
+        candidate = f"{prefix}{number:0{width}d}"
+        if candidate not in taken:
+            return candidate
+    return None
 
 
 def account_for(control):
