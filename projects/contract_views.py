@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db.models import Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -330,7 +331,9 @@ def payments(request, pk):
         kinds=localized_choices(ProjectPayment, "kind", lang),
         cashboxes=entity_scope.cashboxes(Cashbox.objects).filter(active=True),
         free_payments=entity_scope.scope(CustomerPayment.objects, entity_scope.CUSTOMER_PAYMENT).filter(
-            customer=project.customer, status="posted", project_payment__isnull=True, instalment_link__isnull=True).order_by("-payment_date")[:50],
+            customer=project.customer, status="posted", project_payment__isnull=True).filter(
+            # Instalments only of this project's own invoices; they link as collections.
+            Q(instalment_link__isnull=True) | Q(instalment_link__plan__invoice__project_link__project=project)).order_by("-payment_date")[:50],
         releases=project.retention_releases.all() if contract.in_reach(project) else [],
     ))
 

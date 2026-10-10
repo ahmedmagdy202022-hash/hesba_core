@@ -41,13 +41,13 @@ OPEN = (ProjectStatus.PLANNED, ProjectStatus.ACTIVE, ProjectStatus.ON_HOLD)
 MESSAGES = {
     "ar": {
         "name": "اكتب اسم المشروع.", "customer": "اختار العميل.", "value": "قيمة العقد مش صحيحة.", "dates": "تاريخ النهاية قبل البداية.",
-        "closed": "المشروع ده خلص أو اتلغى.", "certificate_link": "دي فاتورة مستخلص؛ مينفعش تتفك من المشروع. اسحب المسودة من شاشة المستخلصات أو اعمل مرتجع.", "amount": "المبلغ لازم أكبر من صفر.", "description": "اكتب وصف المستخلص.", "setup": "لازم يكون فيه مخزن بيع نشط.",
+        "closed": "المشروع ده خلص أو اتلغى.", "certificate_link": "دي فاتورة مستخلص؛ مينفعش تتفك من المشروع. اسحب المسودة من شاشة المستخلصات أو اعمل مرتجع.", "instalments_linked": "أقساط الفاتورة دي متربطة بالمشروع كتحصيلات؛ فكّها من «التحصيلات» الأول.", "amount": "المبلغ لازم أكبر من صفر.", "description": "اكتب وصف المستخلص.", "setup": "لازم يكون فيه مخزن بيع نشط.",
         "other_customer": "الفاتورة دي لعميل تاني.", "linked": "ده مربوط بمشروع بالفعل.", "not_posted": "اربط الفواتير أو المصروفات المرحّلة بس.",
         "qty": "الكمية لازم أكبر من صفر.", "item": "اختار الصنف.", "customer_locked": "المشروع عليه فواتير أو تحصيلات؛ مينفعش يتغير صاحبه.", "location": "اختار المخزن.", "stock_item": "الصنف ده مش متتبع في المخزون.",
     },
     "en": {
         "name": "Enter the project name.", "customer": "Choose the customer.", "value": "Invalid contract value.", "dates": "The end date is before the start.",
-        "closed": "This project is done or cancelled.", "certificate_link": "This is a certificate's invoice; it cannot be unlinked from the project. Withdraw the draft on the certificates tab, or make a return.", "amount": "The amount must be above zero.", "description": "Describe the progress bill.", "setup": "An active selling location is needed.",
+        "closed": "This project is done or cancelled.", "certificate_link": "This is a certificate's invoice; it cannot be unlinked from the project. Withdraw the draft on the certificates tab, or make a return.", "instalments_linked": "Instalments of this invoice are linked to the project as collections; unlink them under collections first.", "amount": "The amount must be above zero.", "description": "Describe the progress bill.", "setup": "An active selling location is needed.",
         "other_customer": "This invoice is for another customer.", "linked": "This is already linked to a project.", "not_posted": "Only posted invoices or expenses can be linked.",
         "qty": "The quantity must be above zero.", "item": "Choose the item.", "customer_locked": "The project has invoices or payments; its owner cannot change.", "location": "Choose the location.", "stock_item": "This item is not stock-tracked.",
     },
@@ -170,6 +170,11 @@ def link_invoice(project, invoice, user, lang="ar"):
         raise ValidationError(words["not_posted"])
     if ProjectInvoice.objects.filter(invoice=invoice).exists():
         raise ValidationError(words["linked"])
+    from . import contract
+
+    established = contract.project_entity(project)
+    if established is not None and contract.entity_of(invoice.selling_location) != established:
+        raise ValidationError(contract.MESSAGES[lang]["entity"])  # one entity per project: its collections stay linkable
     link = ProjectInvoice.objects.create(project=project, invoice=invoice, label=invoice.invoice_number, created_by=user)
     _audit(project, user, "link_project_invoice", {"invoice": invoice.invoice_number})
     return link
@@ -200,6 +205,8 @@ def unlink(project, link, user, lang="ar"):
 
     if isinstance(link, ProjectInvoice) and hasattr(link.invoice, "project_certificate"):
         raise ValidationError(MESSAGES[lang]["certificate_link"])
+    if isinstance(link, ProjectInvoice) and project.payments.filter(payment__instalment_link__plan__invoice_id=link.invoice_id).exists():
+        raise ValidationError(MESSAGES[lang]["instalments_linked"])  # its instalments count as this project's collections
     kind = type(link).__name__
     label = link.invoice.invoice_number if isinstance(link, ProjectInvoice) else link.expense.expense_number
     link.delete()

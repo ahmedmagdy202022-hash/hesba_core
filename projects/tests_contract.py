@@ -985,3 +985,81 @@ class ReviewRoundTenTests(ContractSetup):
         with self.assertRaisesMessage(ValidationError, TODAY.isoformat()):
             contract.create_certificate(self.project, self.owner, quantities={self.concrete.pk: "50"}, certificate_date=TODAY - timedelta(days=9))
         self.assertTrue(contract.create_certificate(self.project, self.owner, quantities={self.concrete.pk: "50"}, certificate_date=TODAY).pk)
+
+
+class ReviewRoundElevenTests(ContractSetup):
+    """Codex's eleventh review on #179: a linked invoice anchors the project; its instalments are its collections."""
+
+    def sale(self, number, amount, location=None):
+        from sales.services import create_sales_draft
+
+        invoice = create_sales_draft({"invoice_number": number, "invoice_date": TODAY, "customer": self.customer, "selling_location": location or self.store},
+                                     [{"item": services.billing_item(), "quantity": D("1"), "unit_sale_price": D(amount)}], self.owner)
+        post_sales_invoice(invoice.pk, self.owner)
+        return SalesInvoice.objects.get(pk=invoice.pk)
+
+    def test_an_ordinary_linked_invoice_anchors_the_project_to_its_entity(self):
+        from entities.current import working_in
+        from entities.models import Entity
+
+        branch = Entity.objects.create(code="E11", name_ar="فرع حداشر")
+        branch_store = make_location(location_code="E11-LOC", entity=branch)
+        services.link_invoice(self.project, self.sale("SI-A", "1000"), self.owner)
+        self.assertEqual(contract.project_entity(self.project), contract.entity_of(self.store))
+        with working_in(branch), self.assertRaisesMessage(ValidationError, "من كيان تاني"):
+            self.certify(concrete="5")  # its first certificate cannot move it to the branch
+        with self.assertRaisesMessage(ValidationError, "من كيان تاني"):
+            services.link_invoice(self.project, self.sale("SI-B", "500", branch_store), self.owner)
+        # The invoice's collection, from its own entity, still links and lowers what is due.
+        due = contract.position(self.project)["due_now"]
+        contract.receive_payment(self.project, self.owner, kind=ProjectPaymentKind.COLLECTION, cashbox=self.cashbox, amount="400")
+        self.assertEqual(contract.position(self.project)["due_now"], due - D("400"))
+
+    def test_an_instalment_of_the_projects_own_invoice_is_its_collection(self):
+        from datetime import timedelta
+
+        from installments.models import InstalmentPayment
+        from installments.services import create_plan
+        from sales.services import record_customer_payment
+        from settings_core.capabilities import _write
+
+        _write("installments", True)
+        invoice = self.sale("SI-PLAN", "900")
+        services.link_invoice(self.project, invoice, self.owner)
+        plan = create_plan(invoice, 3, TODAY + timedelta(days=30), self.owner)
+        paid = record_customer_payment("CP-P1", TODAY, self.customer, self.cashbox, D("300"), self.owner)
+        InstalmentPayment.objects.create(plan=plan, payment=paid)
+        due = contract.position(self.project)["due_now"]
+        with self.assertRaisesMessage(ValidationError, "كتحصيل بس"):
+            contract.link_payment(self.project, paid, self.owner, kind=ProjectPaymentKind.ADVANCE)
+        contract.link_payment(self.project, paid, self.owner, kind=ProjectPaymentKind.COLLECTION)
+        self.assertEqual(contract.position(self.project)["due_now"], due - D("300"))
+        # The invoice stays on the project while its instalments count there.
+        with self.assertRaisesMessage(ValidationError, "أقساط الفاتورة دي"):
+            services.unlink(self.project, self.project.invoices.get(invoice=invoice), self.owner)
+        # An instalment of an invoice that is not on this project is not its collection.
+        other = self.sale("SI-OTHER", "600")
+        other_plan = create_plan(other, 2, TODAY + timedelta(days=30), self.owner)
+        stray = record_customer_payment("CP-P2", TODAY, self.customer, self.cashbox, D("300"), self.owner)
+        InstalmentPayment.objects.create(plan=other_plan, payment=stray)
+        with self.assertRaisesMessage(ValidationError, "قسط على خطة تقسيط"):
+            contract.link_payment(self.project, stray, self.owner, kind=ProjectPaymentKind.COLLECTION)
+
+    def test_the_payments_screen_offers_only_this_projects_instalments(self):
+        from datetime import timedelta
+
+        from installments.models import InstalmentPayment
+        from installments.services import create_plan
+        from sales.services import record_customer_payment
+        from settings_core.capabilities import _write
+
+        _write("installments", True)
+        mine, theirs = self.sale("SI-MINE", "900"), self.sale("SI-THEIRS", "900")
+        services.link_invoice(self.project, mine, self.owner)
+        for number, invoice in (("CP-M", mine), ("CP-T", theirs)):
+            payment = record_customer_payment(number, TODAY, self.customer, self.cashbox, D("300"), self.owner)
+            InstalmentPayment.objects.create(plan=create_plan(invoice, 3, TODAY + timedelta(days=30), self.owner), payment=payment)
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("projects:payments", args=[self.project.pk]) + "?lang=ar")
+        self.assertContains(page, "CP-M")
+        self.assertNotContains(page, "CP-T")

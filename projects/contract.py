@@ -68,7 +68,7 @@ MESSAGES = {
         "payment_linked": "التحصيل ده مربوط بمشروع بالفعل.", "payment_status": "اربط التحصيلات المرحّلة بس.", "date": "التاريخ مش صحيح.",
         "advance_used": "المستخلصات خصمت من الدفعة المقدمة دي بالفعل، فمينفعش يتفك ربطها.",
         "boq_after_lump": "المشروع ده اتعمل عليه مستخلص مقطوعية؛ مينفعش تضيف مقايسة بعده عشان الأعمال اللي اتفوترت متتفوترش تاني.", "date_order": "تاريخ المستخلص لازم ميكونش قبل آخر مستخلص ({date}).",
-        "reversed": "الإفراج ده اتلغى بالفعل.", "rates_total": "مجموع نسبة ضمان الأعمال ونسبة استرداد الدفعة المقدمة لازم ميزيدش عن 100%.", "instalment": "التحصيل ده قسط على خطة تقسيط؛ مينفعش يتربط بمشروع.", "entity": "مستخلصات المشروع ده بتتعمل من كيان تاني؛ اشتغل من الكيان ده عشان ضمان الأعمال والدفعة المقدمة يفضلوا في مكان واحد.",
+        "reversed": "الإفراج ده اتلغى بالفعل.", "rates_total": "مجموع نسبة ضمان الأعمال ونسبة استرداد الدفعة المقدمة لازم ميزيدش عن 100%.", "instalment": "التحصيل ده قسط على خطة تقسيط؛ يتربط بالمشروع كتحصيل بس، ولو فاتورته مربوطة بالمشروع ده.", "entity": "مستخلصات المشروع ده بتتعمل من كيان تاني؛ اشتغل من الكيان ده عشان ضمان الأعمال والدفعة المقدمة يفضلوا في مكان واحد.",
     },
     "en": {
         "rate": "The rate must be between 0 and 100.", "description": "Describe the item.", "qty": "The quantity must be above zero.", "price": "Invalid rate.",
@@ -81,7 +81,7 @@ MESSAGES = {
         "payment_linked": "This collection is already linked to a project.", "payment_status": "Only posted collections can be linked.", "date": "Invalid date.",
         "advance_used": "Certificates already recovered this advance, so it cannot be unlinked.",
         "boq_after_lump": "This project already has a lump-sum certificate; a bill of quantities cannot be added after it, so billed work is never billed twice.", "date_order": "A certificate cannot be dated before the latest one ({date}).",
-        "reversed": "This release is already reversed.", "rates_total": "Retention and advance recovery together cannot exceed 100%.", "instalment": "This collection pays an instalment plan; it cannot be linked to a project.", "entity": "This project's certificates are billed from another entity; work in that entity so its retention and advance stay in one place.",
+        "reversed": "This release is already reversed.", "rates_total": "Retention and advance recovery together cannot exceed 100%.", "instalment": "This collection pays an instalment plan; it can be linked only as a collection, and only when its invoice is on this project.", "entity": "This project's certificates are billed from another entity; work in that entity so its retention and advance stay in one place.",
     },
 }
 
@@ -345,11 +345,15 @@ def link_payment(project, payment, user, *, kind, lang="ar"):
         raise ValidationError(words["payment_status"])
     if ProjectPayment.objects.filter(payment=payment).exists():
         raise ValidationError(words["payment_linked"])
+    kind = kind if kind in ProjectPaymentKind.values else ProjectPaymentKind.COLLECTION
     if hasattr(payment, "instalment_link"):
-        raise ValidationError(words["instalment"])  # it already settles an instalment plan
+        # It settles an instalment plan: a collection of this project only when the plan's invoice is on it,
+        # never an advance (the plan already counts it against its invoice).
+        plan_invoice = payment.instalment_link.plan.invoice_id
+        if kind != ProjectPaymentKind.COLLECTION or not project.invoices.filter(invoice_id=plan_invoice).exists():
+            raise ValidationError(words["instalment"])
     _same_entity(project, payment.cashbox, words)
     _in_scope(payment.cashbox, words)
-    kind = kind if kind in ProjectPaymentKind.values else ProjectPaymentKind.COLLECTION
     if kind == ProjectPaymentKind.ADVANCE:
         # An advance moves the payment's journal entry from receivable to
         # customer advances on its own date: a closed month stays closed.
@@ -517,11 +521,16 @@ def project_entity(project):
     """The one entity a project's money lives in, for good: that of its first
     certificate (cancelled ones too, so a cancellation never moves the project
     and its past releases to another entity), else of its first linked
-    payment (None before either)."""
+    invoice, else of its first linked payment (None before any). Every link
+    is checked against it first, so these never disagree."""
 
     first = project.certificates.select_related("invoice__selling_location").order_by("number").first()
     if first is not None:
         return entity_of(first.invoice.selling_location)
+    # An ordinary invoice already on the project counts too: its collections must stay linkable.
+    linked = project.invoices.select_related("invoice__selling_location").order_by("pk").first()
+    if linked is not None:
+        return entity_of(linked.invoice.selling_location)
     payment = project.payments.select_related("payment__cashbox").order_by("pk").first()
     if payment is not None:
         from entities.services import main_entity
