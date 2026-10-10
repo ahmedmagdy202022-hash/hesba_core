@@ -571,3 +571,23 @@ class ReviewEightTests(DocumentSetup):
         with mock.patch.object(portal, "_http", FakePortal(found=found)):
             self.client.post(url, {"action": "send", "lang": "ar"})
         self.assertEqual((Submission.objects.get(pk=claim.pk).status, Submission.objects.count()), ("valid", 1))
+
+
+@mock.patch.dict(os.environ, ENV)
+class EnvironmentValueTests(DocumentSetup):
+    def test_a_mistyped_environment_stops_sending_instead_of_falling_back_to_testing(self):
+        portal._TOKEN.update(value="", expires=0.0, key="")
+        self.complete_data()
+        posted = self.invoice()
+        with mock.patch.dict(os.environ, {"ETA_ENVIRONMENT": "production"}):
+            self.assertEqual(portal.missing()[0], "ETA_ENVIRONMENT")
+            with mock.patch.object(portal, "_http", FakePortal()) as fake, self.assertRaisesMessage(ValidationError, "ETA_ENVIRONMENT"):
+                send_invoice(posted, self.owner, "en")
+            self.assertEqual(fake.calls, [])
+            self.assertEqual(portal.check_connection(), (False, ["missing:ETA_ENVIRONMENT"]))
+            with self.assertRaises(portal.PortalError):
+                portal.token(force=True)
+        with mock.patch.dict(os.environ, {"ETA_ENVIRONMENT": ""}):
+            self.assertEqual(portal.settings()["environment"], "preprod")  # unset still means testing
+        with mock.patch.dict(os.environ, {"ETA_ENVIRONMENT": " PROD "}):
+            self.assertEqual((portal.settings()["environment"], portal.missing()), ("prod", []))

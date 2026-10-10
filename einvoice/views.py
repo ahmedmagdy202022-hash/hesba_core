@@ -66,8 +66,8 @@ WORDS = {
 
 
 MISSING_LABELS = {
-    "ar": {"ETA_CLIENT_ID": "رقم النظام على المنظومة (Client ID)", "ETA_CLIENT_SECRET": "كلمة سر النظام (Client Secret)", "ETA_SIGNER_URL": "عنوان برنامج التوقيع", "ETA_SIGNER_TOKEN": "مفتاح برنامج التوقيع (Signer token)"},
-    "en": {"ETA_CLIENT_ID": "the system's client ID", "ETA_CLIENT_SECRET": "the system's client secret", "ETA_SIGNER_URL": "the signer's address", "ETA_SIGNER_TOKEN": "the signer's token"},
+    "ar": {"ETA_ENVIRONMENT": "بيئة المنظومة (لازم تكون preprod أو prod بالظبط)", "ETA_CLIENT_ID": "رقم النظام على المنظومة (Client ID)", "ETA_CLIENT_SECRET": "كلمة سر النظام (Client Secret)", "ETA_SIGNER_URL": "عنوان برنامج التوقيع", "ETA_SIGNER_TOKEN": "مفتاح برنامج التوقيع (Signer token)"},
+    "en": {"ETA_ENVIRONMENT": "the portal environment (exactly preprod or prod)", "ETA_CLIENT_ID": "the system's client ID", "ETA_CLIENT_SECRET": "the system's client secret", "ETA_SIGNER_URL": "the signer's address", "ETA_SIGNER_TOKEN": "the signer's token"},
 }
 
 

@@ -47,9 +47,11 @@ class PortalError(Exception):
 
 
 def settings():
-    environment = config("ETA_ENVIRONMENT", default="preprod").strip().lower()
+    # Unset means testing. Anything else must be exactly preprod or prod: a typo is a setup error
+    # (missing() reports it), never a silent fall back to the test portal.
+    environment = config("ETA_ENVIRONMENT", default="").strip().lower() or "preprod"
     return {
-        "environment": environment if environment in ENVIRONMENTS else "preprod",
+        "environment": environment,
         "client_id": config("ETA_CLIENT_ID", default="").strip(),
         "client_secret": config("ETA_CLIENT_SECRET", default="").strip(),
         "signer_url": config("ETA_SIGNER_URL", default="").strip(),
@@ -61,7 +63,8 @@ def missing():
     """What the deployment still needs before it can send: a list of setting names."""
 
     values = settings()
-    return [name for name, key in (("ETA_CLIENT_ID", "client_id"), ("ETA_CLIENT_SECRET", "client_secret"), ("ETA_SIGNER_URL", "signer_url"),
+    wrong_environment = [] if values["environment"] in ENVIRONMENTS else ["ETA_ENVIRONMENT"]
+    return wrong_environment + [name for name, key in (("ETA_CLIENT_ID", "client_id"), ("ETA_CLIENT_SECRET", "client_secret"), ("ETA_SIGNER_URL", "signer_url"),
                                    ("ETA_SIGNER_TOKEN", "signer_token"))
             if not values[key]]
 
@@ -143,7 +146,10 @@ def sign(document):
 # ---- the API ----
 
 def _urls():
-    return ENVIRONMENTS[settings()["environment"]]
+    environment = settings()["environment"]
+    if environment not in ENVIRONMENTS:
+        raise PortalError("unknown environment")  # never guess which portal is meant
+    return ENVIRONMENTS[environment]
 
 
 def token(force=False):
