@@ -179,6 +179,20 @@ def details(uuid):
     return payload
 
 
+def search(internal_id, since, until):
+    """Documents this taxpayer sent with ``internal_id``, submitted between two
+    UTC datetimes (ETA SDK: ``GET /api/v1.0/documents/search``, at most 30 days)."""
+
+    query = urllib.parse.urlencode({
+        "submissionDateFrom": since.strftime("%Y-%m-%dT%H:%M:%SZ"), "submissionDateTo": until.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "internalID": internal_id, "direction": "Sent", "pageSize": 100,
+    })
+    status, payload = _api("GET", "/api/v1.0/documents/search?" + query)
+    if status != 200:
+        raise PortalError("search refused", status, payload)
+    return [row for row in payload.get("result") or [] if isinstance(row, dict) and row.get("internalId") == internal_id]
+
+
 def cancel(uuid, reason):
     status, payload = _api("PUT", f"/api/v1.0/documents/state/{urllib.parse.quote(uuid)}/state", {"status": "cancelled", "reason": reason})
     if status != 200:

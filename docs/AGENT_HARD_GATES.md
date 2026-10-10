@@ -697,8 +697,8 @@ Status: APPROVED — Ahmed on 9 Oct 2026 ("خلص كله"), the third open decis
   - **Sending and reading back:** Hesba then submits, reads the status and cancels through the authority's API (`einvoice.portal`).
 - **Rules:**
   - only a posted invoice with complete data is sent;
-  - an invoice that is valid, still being checked, or being sent right now is not sent twice: the invoice is claimed under its row lock with a `sending` row before the signer or portal is called. A claim left by a server that died mid-call stops blocking after 10 minutes, and the authority itself refuses a document it already holds;
-  - a cancellation is a request (`cancel_requested`) until the authority's details say `cancelled`. The receiver may decline it, and the invoice is then valid again. Nothing can be sent again while a cancellation is pending;
+  - an invoice that is valid, still being checked, or being sent right now is not sent twice: the invoice is claimed under its row lock with a `sending` row before the signer or portal is called. A claim left by a server that died mid-call is reconciled after 10 minutes: Hesba searches the authority for the invoice's internal ID over the claim's time (`GET /api/v1.0/documents/search`). If the document is found, the claim takes its uuid and status and nothing is sent again. If it is not found, the claim is closed as rejected and the invoice may be sent. If the authority cannot be asked, nothing is sent. The outcome is audited (`eta_send_recovered`);
+  - a cancellation is a request (`cancel_requested`) until the authority's details say `cancelled`. A refresh reloads the row under its lock, and also reads a pending request from the authority's own `cancelRequestDate`, so a refresh racing a cancellation never undoes it. The receiver may decline it, and the invoice is then valid again. Nothing can be sent again while a cancellation is pending;
   - the signed text keeps each string's JSON escaping, exactly as it is sent;
   - a rejected or invalid sending is kept as history and the invoice can be sent again;
   - only a valid invoice can be cancelled, with a reason;

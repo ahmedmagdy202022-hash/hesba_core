@@ -271,13 +271,13 @@ def send_invoice(invoice, user, lang="ar"):
     if problems:
         raise ValidationError(words["problems"])
     environment = portal.settings()["environment"]
+    latest = current_submission(invoice)
+    if latest and latest.status == SubmissionStatus.SENDING and latest.submitted_at < timezone.now() - STALE_SENDING:
+        reconcile_claim(latest, user, lang)  # ask the authority what became of it before anything is sent again
     with transaction.atomic():
         SalesInvoice.objects.select_for_update().get(pk=invoice.pk)
         latest = current_submission(invoice)
-        if latest and latest.status == SubmissionStatus.SENDING and latest.submitted_at < timezone.now() - STALE_SENDING:
-            latest.status, latest.message = SubmissionStatus.REJECTED, "no answer recorded"
-            latest.save(update_fields=["status", "message"])
-        elif latest and latest.status in (SubmissionStatus.VALID, SubmissionStatus.CANCEL_REQUESTED):
+        if latest and latest.status in (SubmissionStatus.VALID, SubmissionStatus.CANCEL_REQUESTED):
             raise ValidationError(words["already"])
         elif latest and latest.status in (SubmissionStatus.SUBMITTED, SubmissionStatus.SENDING):
             raise ValidationError(words["pending"])
@@ -309,14 +309,65 @@ def send_invoice(invoice, user, lang="ar"):
     return claim
 
 
-def refresh_submission(submission, user, lang="ar"):
-    """Read the document's status from the authority (it validates after accepting the submission)."""
+def reconcile_claim(claim, user, lang="ar"):
+    """A ``sending`` claim whose server died mid-call: look the invoice up on the
+    authority by its internal ID over the claim's time. Found: the claim takes
+    that document (uuid, long ID, status), so it is never sent twice. Not
+    found: the claim is closed as rejected and the invoice may be sent again.
+    Either way the outcome is in the audit log. If the authority cannot be
+    asked, nothing changes and nothing is sent."""
 
     from django.core.exceptions import ValidationError
 
     from . import portal
+    from .models import Submission, SubmissionStatus
+
+    words = SEND_WORDS[lang]
+    since = claim.submitted_at - timedelta(minutes=5)
+    try:
+        found = portal.search(claim.invoice.invoice_number, since, timezone.now() + timedelta(minutes=5))
+    except portal.PortalError as exc:
+        raise ValidationError(_portal_error(exc, words))
+    with transaction.atomic():
+        claim = Submission.objects.select_for_update().get(pk=claim.pk)
+        if claim.status != SubmissionStatus.SENDING:
+            return claim  # someone else settled it meanwhile
+        if found:
+            row = sorted(found, key=lambda item: str(item.get("dateTimeReceived") or ""))[-1]
+            claim.status = _portal_status(row, SubmissionStatus.SUBMITTED)
+            claim.uuid, claim.long_id = row.get("uuid") or "", row.get("longId") or ""
+            claim.submission_id = str(row.get("submissionUUID") or "")
+            claim.message, claim.response = "", row
+        else:
+            claim.status, claim.message = SubmissionStatus.REJECTED, "not found on the portal: never received"
+        claim.save(update_fields=["status", "uuid", "long_id", "submission_id", "message", "response"])
+        _audit_send(claim, user, "eta_send_recovered")
+    return claim
+
+
+def _portal_status(answer, current):
+    """The local status for the authority's answer about a document. A valid
+    document with a cancellation request the receiver has not declined (or a
+    newer one since) is a pending cancellation, whatever the row said before."""
 
     from .models import SubmissionStatus
+
+    status = STATUS_FROM_PORTAL.get(str(answer.get("status", "")).lower(), current)
+    if status == SubmissionStatus.VALID:
+        requested, declined = answer.get("cancelRequestDate"), answer.get("declineCancelRequestDate")
+        if requested and (not declined or str(requested) > str(declined)):
+            status = SubmissionStatus.CANCEL_REQUESTED
+    return status
+
+
+def refresh_submission(submission, user, lang="ar"):
+    """Read the document's status from the authority (it validates after accepting the submission)."""
+
+    from django.core.exceptions import ValidationError
+    from django.db import transaction
+
+    from . import portal
+    from .models import Submission, SubmissionStatus
 
     words = SEND_WORDS[lang]
     if not submission.uuid:
@@ -325,21 +376,24 @@ def refresh_submission(submission, user, lang="ar"):
         answer = portal.details(submission.uuid)
     except portal.PortalError as exc:
         raise ValidationError(_portal_error(exc, words))
-    status = STATUS_FROM_PORTAL.get(str(answer.get("status", "")).lower(), submission.status)
-    if submission.status == SubmissionStatus.CANCEL_REQUESTED and status == SubmissionStatus.VALID:
-        requested, declined = answer.get("cancelRequestDate"), answer.get("declineCancelRequestDate")
-        if not declined or (requested and str(requested) > str(declined)):
-            status = SubmissionStatus.CANCEL_REQUESTED  # the receiver has not answered this cancellation yet
-    if status == SubmissionStatus.CANCELLED and not submission.cancelled_at:
-        submission.cancelled_at = timezone.now()
-    steps = ((answer.get("validationResults") or {}).get("validationSteps") or [])
-    reasons = [portal.error_text(step.get("error") or {}) for step in steps if str(step.get("status", "")).lower() == "invalid"]
-    submission.status = status
-    submission.long_id = answer.get("longId") or submission.long_id
-    submission.message = " · ".join(r for r in reasons if r)[:1000]
-    submission.response = answer
-    submission.checked_at = timezone.now()
-    submission.save(update_fields=["status", "long_id", "message", "response", "checked_at", "cancelled_at"])
+    with transaction.atomic():
+        # Reloaded under its lock: a cancellation saved while the authority was being asked is not lost.
+        fresh = Submission.objects.select_for_update().get(pk=submission.pk)
+        status = _portal_status(answer, fresh.status)
+        if fresh.status == SubmissionStatus.CANCEL_REQUESTED and status == SubmissionStatus.VALID and not answer.get("declineCancelRequestDate"):
+            status = SubmissionStatus.CANCEL_REQUESTED  # our request is not on the authority's answer yet
+        steps = ((answer.get("validationResults") or {}).get("validationSteps") or [])
+        reasons = [portal.error_text(step.get("error") or {}) for step in steps if str(step.get("status", "")).lower() == "invalid"]
+        fresh.status = status
+        if status == SubmissionStatus.CANCELLED and not fresh.cancelled_at:
+            fresh.cancelled_at = timezone.now()
+        fresh.long_id = answer.get("longId") or fresh.long_id
+        fresh.message = " · ".join(r for r in reasons if r)[:1000]
+        fresh.response = answer
+        fresh.checked_at = timezone.now()
+        fresh.save(update_fields=["status", "long_id", "message", "response", "checked_at", "cancelled_at"])
+    for field in ("status", "long_id", "message", "response", "checked_at", "cancelled_at", "cancel_reason"):
+        setattr(submission, field, getattr(fresh, field))
     _audit_send(submission, user, "eta_refresh")
     return submission
 

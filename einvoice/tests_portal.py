@@ -19,9 +19,9 @@ ENV = {"ETA_ENVIRONMENT": "preprod", "ETA_CLIENT_ID": "cid", "ETA_CLIENT_SECRET"
 class FakePortal:
     """Answers like the authority and the signer, and remembers what it was sent."""
 
-    def __init__(self, accept=True, valid=True, signer_ok=True, refuse_http=None, details=None, on_sign=None):
+    def __init__(self, accept=True, valid=True, signer_ok=True, refuse_http=None, details=None, on_sign=None, found=None):
         self.accept, self.valid, self.signer_ok, self.refuse_http, self.calls = accept, valid, signer_ok, refuse_http, []
-        self.details, self.on_sign = details, on_sign  # a fixed details answer; a hook run while "signing"
+        self.details, self.on_sign, self.found = details, on_sign, found  # a fixed details answer; a hook run while "signing"; search hits
 
     def __call__(self, method, url, *, body=None, form=None, headers=None):
         self.calls.append((method, url, body, form, headers))
@@ -43,6 +43,14 @@ class FakePortal:
                 return 202, {"submissionUUID": "S1", "acceptedDocuments": [{"uuid": "U1", "longId": "L1", "internalId": internal}], "rejectedDocuments": []}
             return 202, {"submissionUUID": "S1", "acceptedDocuments": [],
                          "rejectedDocuments": [{"internalId": internal, "error": {"message": "Validation Error", "details": [{"propertyPath": "receiver.id", "message": "Invalid TIN"}]}}]}
+        if url.startswith("https://api.preprod.invoicing.eta.gov.eg/api/v1.0/documents/search?") and method == "GET":
+            from urllib.parse import parse_qs, urlparse
+
+            query = parse_qs(urlparse(url).query)
+            if not (query.get("internalID") and query.get("submissionDateFrom") and query.get("submissionDateTo") and query.get("direction") == ["Sent"]):
+                return 400, {}
+            return 200, {"result": [row for row in (self.found or []) if row.get("internalId") == query["internalID"][0]],
+                         "metadata": {"continuationToken": "EndofResultSet"}}
         if url == "https://api.preprod.invoicing.eta.gov.eg/api/v1.0/documents/U1/details":
             if self.details is not None:
                 return 200, self.details
@@ -263,19 +271,66 @@ class ReviewThreeTests(DocumentSetup):
         self.assertEqual((Submission.objects.count(), submission.status), (1, "submitted"))
         self.assertEqual(sum(1 for call in fake.calls if call[1].endswith("/documentsubmissions/")), 1)
 
-    def test_a_claim_left_by_a_dead_server_stops_blocking(self):
+    def stale_claim(self):
         from datetime import timedelta
 
         from django.utils import timezone
 
         stale = Submission.objects.create(invoice=self.posted, environment="preprod", submitted_by=self.owner, status="sending")
         with mock.patch.object(portal, "_http", FakePortal()), self.assertRaisesMessage(ValidationError, "still checking"):
-            send_invoice(self.posted, self.owner, "en")
+            send_invoice(self.posted, self.owner, "en")  # a claim still in its window blocks
         Submission.objects.filter(pk=stale.pk).update(submitted_at=timezone.now() - timedelta(minutes=11))
-        with mock.patch.object(portal, "_http", FakePortal()):
+        return stale
+
+    def test_a_dead_servers_claim_is_reconciled_and_never_sent_twice_when_the_authority_has_it(self):
+        stale = self.stale_claim()
+        found = [{"internalId": self.posted.invoice_number, "uuid": "U1", "longId": "L1", "submissionUUID": "S9", "status": "Valid",
+                  "dateTimeReceived": "2026-10-09T21:00:00Z"}]
+        fake = FakePortal(found=found)
+        with mock.patch.object(portal, "_http", fake), self.assertRaisesMessage(ValidationError, "already sent and accepted"):
+            send_invoice(self.posted, self.owner, "en")
+        recovered = Submission.objects.get(pk=stale.pk)
+        self.assertEqual((recovered.status, recovered.uuid, recovered.long_id, recovered.submission_id), ("valid", "U1", "L1", "S9"))
+        self.assertFalse(any(call[1].endswith("/documentsubmissions/") for call in fake.calls))
+        self.assertEqual(Submission.objects.count(), 1)
+        self.assertTrue(AuditLog.objects.filter(action="eta_send_recovered", object_id=str(stale.pk)).exists())
+
+    def test_a_dead_servers_claim_the_authority_never_got_is_closed_then_sent_again(self):
+        stale = self.stale_claim()
+        with mock.patch.object(portal, "_http", FakePortal(found=[])):
             fresh = send_invoice(self.posted, self.owner, "en")
         self.assertEqual(fresh.status, "submitted")
         self.assertEqual(Submission.objects.get(pk=stale.pk).status, "rejected")
+        self.assertTrue(AuditLog.objects.filter(action="eta_send_recovered", object_id=str(stale.pk)).exists())
+
+    def test_when_the_authority_cannot_be_asked_nothing_is_sent(self):
+        stale = self.stale_claim()
+
+        def down(method, url, **kwargs):
+            if "/documents/search" in url:
+                raise portal.PortalError("unreachable: timeout")
+            return FakePortal()(method, url, **kwargs)
+
+        with mock.patch.object(portal, "_http", down), self.assertRaisesMessage(ValidationError, "cannot be reached"):
+            send_invoice(self.posted, self.owner, "en")
+        self.assertEqual(Submission.objects.get(pk=stale.pk).status, "sending")
+        self.assertEqual(Submission.objects.count(), 1)
+
+    def test_a_refresh_never_undoes_a_cancellation_saved_meanwhile(self):
+        with mock.patch.object(portal, "_http", FakePortal()):
+            submission = refresh_submission(send_invoice(self.posted, self.owner, "en"), self.owner, "en")
+        stale_copy = Submission.objects.get(pk=submission.pk)  # what a refresh that started earlier holds: "valid"
+        with mock.patch.object(portal, "_http", FakePortal()):
+            cancel_submission(submission, self.owner, "غلط", "ar")  # saved while that refresh waits for the authority
+        plain_valid = {"status": "Valid", "longId": "L1", "validationResults": {"validationSteps": []}}
+        with mock.patch.object(portal, "_http", FakePortal(details=plain_valid)):
+            refresh_submission(stale_copy, self.owner, "en")
+        self.assertEqual(Submission.objects.get(pk=submission.pk).status, "cancel_requested")
+        with_request = dict(plain_valid, cancelRequestDate="2026-10-09T21:00:00Z")
+        other = Submission.objects.get(pk=submission.pk)
+        Submission.objects.filter(pk=other.pk).update(status="valid")
+        with mock.patch.object(portal, "_http", FakePortal(details=with_request)):
+            self.assertEqual(refresh_submission(other, self.owner, "en").status, "cancel_requested")  # read from the answer itself
 
     def test_a_cancellation_waits_for_the_authority(self):
         with mock.patch.object(portal, "_http", FakePortal()):
