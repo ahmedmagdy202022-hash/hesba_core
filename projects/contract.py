@@ -67,7 +67,7 @@ MESSAGES = {
         "release_more": "المبلغ أكبر من ضمان الأعمال المحتجز ({held}).", "cashbox": "اختار الخزنة.", "other_customer": "التحصيل ده لعميل تاني.",
         "payment_linked": "التحصيل ده مربوط بمشروع بالفعل.", "payment_status": "اربط التحصيلات المرحّلة بس.", "date": "التاريخ مش صحيح.",
         "advance_used": "المستخلصات خصمت من الدفعة المقدمة دي بالفعل، فمينفعش يتفك ربطها.",
-        "reversed": "الإفراج ده اتلغى بالفعل.", "instalment": "التحصيل ده قسط على خطة تقسيط؛ مينفعش يتربط بمشروع.", "entity": "مستخلصات المشروع ده بتتعمل من كيان تاني؛ اشتغل من الكيان ده عشان ضمان الأعمال والدفعة المقدمة يفضلوا في مكان واحد.",
+        "reversed": "الإفراج ده اتلغى بالفعل.", "rates_total": "مجموع نسبة ضمان الأعمال ونسبة استرداد الدفعة المقدمة لازم ميزيدش عن 100%.", "instalment": "التحصيل ده قسط على خطة تقسيط؛ مينفعش يتربط بمشروع.", "entity": "مستخلصات المشروع ده بتتعمل من كيان تاني؛ اشتغل من الكيان ده عشان ضمان الأعمال والدفعة المقدمة يفضلوا في مكان واحد.",
     },
     "en": {
         "rate": "The rate must be between 0 and 100.", "description": "Describe the item.", "qty": "The quantity must be above zero.", "price": "Invalid rate.",
@@ -79,7 +79,7 @@ MESSAGES = {
         "release_more": "The amount is more than the retention held ({held}).", "cashbox": "Choose the cashbox.", "other_customer": "This collection is for another customer.",
         "payment_linked": "This collection is already linked to a project.", "payment_status": "Only posted collections can be linked.", "date": "Invalid date.",
         "advance_used": "Certificates already recovered this advance, so it cannot be unlinked.",
-        "reversed": "This release is already reversed.", "instalment": "This collection pays an instalment plan; it cannot be linked to a project.", "entity": "This project's certificates are billed from another entity; work in that entity so its retention and advance stay in one place.",
+        "reversed": "This release is already reversed.", "rates_total": "Retention and advance recovery together cannot exceed 100%.", "instalment": "This collection pays an instalment plan; it cannot be linked to a project.", "entity": "This project's certificates are billed from another entity; work in that entity so its retention and advance stay in one place.",
     },
 }
 
@@ -142,6 +142,8 @@ def save_terms(project, user, *, retention_rate, advance_recovery_rate, lang="ar
     words = MESSAGES[lang]
     project = _held(project, lang)
     retention, recovery = _rate(retention_rate, words), _rate(advance_recovery_rate, words)
+    if retention + recovery > HUNDRED:
+        raise ValidationError(words["rates_total"])  # the deductions can never be more than the certificate
     before = {"retention_rate": str(project.retention_rate), "advance_recovery_rate": str(project.advance_recovery_rate)}
     project.retention_rate, project.advance_recovery_rate = retention, recovery
     project.save(update_fields=["retention_rate", "advance_recovery_rate"])
@@ -447,7 +449,7 @@ def create_certificate(project, user, *, quantities=None, amount=None, descripti
     day = certificate_date or timezone.localdate()
     # Only what was received by the certificate's date, and stays unclaimed on every date after it.
     available = min(advance_left(project), max(lowest_held(advance_events(project), day), ZERO))
-    recovery = min(money_round(gross * Decimal(project.advance_recovery_rate) / HUNDRED), available)
+    recovery = min(money_round(gross * Decimal(project.advance_recovery_rate) / HUNDRED), available, max(gross - retention, ZERO))
     title = f"مستخلص رقم {number}" + (f" — {label}" if label else "")
     invoice = create_sales_draft_with_tax(
         {"invoice_number": invoice_number, "invoice_date": day, "customer": project.customer, "selling_location": location, "cashbox": None,
@@ -658,8 +660,12 @@ def ensure_consistent(project, lang="en"):
 
     # The same lock as certificates and releases take, so these never race them.
     project = Project.objects.select_for_update().get(pk=project.pk)
-    if lowest_held(retention_events(project)) < 0:  # on any date, not only today
+    if retention_held(project) < 0:
         raise ValidationError(CONSISTENCY[lang]["retention"])
+    if lowest_held(retention_events(project)) < 0:
+        # Held today, but not on some past date: a cancellation is dated back to its invoice, and a
+        # release (even one reversed since) once took this retention. Disallowed outright: return instead.
+        raise ValidationError(CONSISTENCY[lang]["retention_history"])
     if advance_recovered(project) > advance_received(project) or lowest_held(advance_events(project)) < 0:  # on any date
         raise ValidationError(CONSISTENCY[lang]["advance"])
     for line in project.boq.all():
@@ -671,10 +677,12 @@ def ensure_consistent(project, lang="en"):
 CONSISTENCY = {
     "en": {"retention": "This would leave more retention released than is held on the project; reverse the release first.",
            "advance": "Certificates on this project already recovered this advance; cancel or return those certificates first.",
-           "quantity": "A later certificate already billed the quantity this return gave back; cancel or return that certificate first."},
+           "quantity": "A later certificate already billed the quantity this return gave back; cancel or return that certificate first.",
+           "retention_history": "Retention from this certificate was released at some point (even if that release was reversed later). A cancellation is dated back to the invoice and would rewrite that history, so it is not allowed: make a sales return instead."},
     "ar": {"retention": "كده الإفراج عن ضمان الأعمال هيبقى أكبر من المحتجز في المشروع؛ ألغِ الإفراج الأول.",
            "advance": "مستخلصات المشروع خصمت من الدفعة المقدمة دي بالفعل؛ ألغِ المستخلصات دي أو اعملها مرتجع الأول.",
-           "quantity": "مستخلص بعده فوتر الكمية اللي المرتجع ده رجّعها؛ ألغِ المستخلص ده أو اعمله مرتجع الأول."},
+           "quantity": "مستخلص بعده فوتر الكمية اللي المرتجع ده رجّعها؛ ألغِ المستخلص ده أو اعمله مرتجع الأول.",
+           "retention_history": "ضمان الأعمال بتاع المستخلص ده اتفرج عنه قبل كده (حتى لو الإفراج اتلغى بعدها). الإلغاء بيرجع لتاريخ الفاتورة وهيغيّر اللي حصل، فمش مسموح: اعمل مرتجع مبيعات بدله."},
 }
 
 

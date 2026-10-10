@@ -837,3 +837,40 @@ class ReviewRoundSixTests(ContractSetup):
         self.assertEqual(costs.actual_by_heading(self.project)[CostHeading.EQUIPMENT], D("500.00"))
         self.assertEqual(gl("project_cost"), D("500.00"))  # the books agree
         ledger_ok(self)
+
+
+class ReviewRoundSevenTests(ContractSetup):
+    """Codex's seventh review on #179."""
+
+    def test_the_deductions_never_exceed_the_certificate(self):
+        with self.assertRaisesMessage(ValidationError, "ميزيدش عن 100%"):
+            contract.save_terms(self.project, self.owner, retention_rate="60", advance_recovery_rate="50")
+        contract.save_terms(self.project, self.owner, retention_rate="100", advance_recovery_rate="0")
+        contract.receive_payment(self.project, self.owner, kind=ProjectPaymentKind.ADVANCE, cashbox=self.cashbox, amount="50000")
+        self.project.refresh_from_db()
+        from projects.models import Project
+
+        Project.objects.filter(pk=self.project.pk).update(advance_recovery_rate=D("100"))  # terms saved before the check existed
+        self.project.refresh_from_db()
+        certificate = self.certify(concrete="10")  # 10000
+        self.assertEqual((certificate.retention_amount, certificate.recovery_amount), (D("10000.00"), D("0.00")))
+        post_sales_invoice(certificate.invoice_id, self.owner)
+        self.assertGreaterEqual(contract.position(self.project)["due_now"], D("0"))
+
+    def test_a_certificate_whose_retention_was_once_released_is_returned_not_cancelled(self):
+        from datetime import timedelta
+
+        if TODAY.day < 3:
+            self.skipTest("needs two earlier days in the same month")
+        first = contract.create_certificate(self.project, self.owner, quantities={self.concrete.pk: "10"}, certificate_date=TODAY - timedelta(days=2))
+        post_sales_invoice(first.invoice_id, self.owner)
+        release = contract.release_retention(self.project, self.owner, amount="500", release_date=TODAY - timedelta(days=1))
+        contract.reverse_release(self.project, release, self.owner, reversal_date=TODAY)
+        with self.assertRaisesMessage(ValidationError, "make a sales return instead"):
+            cancel_posted_sales_invoice(first.invoice_id, self.owner, reason="x")
+        from sales.services import create_sales_return
+
+        create_sales_return("SR-H1", TODAY, first.invoice_id, [{"source_line": first.invoice.lines.get(), "quantity": D("10")}], "x", self.owner)
+        self.assertEqual(contract.retention_held(self.project), D("0.00"))
+        self.assertGreaterEqual(contract.lowest_held(contract.retention_events(self.project)), 0)
+        ledger_ok(self)

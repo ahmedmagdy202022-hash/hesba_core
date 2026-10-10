@@ -260,6 +260,12 @@ CONSISTENCY = {
 }
 
 
+HISTORY = {
+    "en": "Retention from this bill was released at some point (even if that release was reversed later). A cancellation is dated back to the bill and would rewrite that history, so it is not allowed: make a purchase return instead.",
+    "ar": "ضمان الأعمال بتاع المستخلص ده اتفرج عنه قبل كده (حتى لو الإفراج اتلغى بعدها). الإلغاء بيرجع لتاريخ الفاتورة وهيغيّر اللي حصل، فمش مسموح: اعمل مرتجع مشتريات بدله.",
+}
+
+
 def ensure_consistent(subcontract, lang="en"):
     """HG-038: refuse a cancellation, return or reversal that would leave
     released retention above what is held (called inside that change)."""
@@ -267,8 +273,10 @@ def ensure_consistent(subcontract, lang="en"):
     from .contract import lowest_held
 
     subcontract = Subcontract.objects.select_for_update().get(pk=subcontract.pk)  # the lock releases take
-    if lowest_held(retention_events(subcontract)) < 0:  # on any date, not only today
+    if subcontract_retention_held(subcontract) < 0:
         raise ValidationError(CONSISTENCY[lang])
+    if lowest_held(retention_events(subcontract)) < 0:
+        raise ValidationError(HISTORY[lang])  # released once on a date a back-dated cancellation would erase: return instead
 
 
 @transaction.atomic

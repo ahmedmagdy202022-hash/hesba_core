@@ -762,6 +762,9 @@ Status: APPROVED — Ahmed approved on 9 Oct 2026 ("خلص كله"), after the a
   - **Sixth review:**
     - **Permanent entity.** A project belongs for good to the entity of its first certificate, cancelled ones included, else of its first payment. A subcontract belongs to the entity of its first bill. A cancellation can no longer move a project (and the projection of its past releases) to another entity.
     - **Exact return tax.** A linked service purchase's cost subtracts each posted return's total less the tax that return actually recorded, as the ledger books it. Lines at different VAT rates therefore stay exact.
+  - **Seventh review:**
+    - **Deductions capped.** Retention and advance recovery together cannot exceed 100% of a certificate: the terms are refused, and recovery is capped at what the certificate leaves after retention.
+    - **Cancellation after a release.** A sales or purchase invoice's cancellation is dated back to the invoice. A certificate (or subcontractor bill) whose retention was released on some date, even if that release was reversed later, therefore cannot be cancelled. The guard says so plainly and points to a return, which is dated today and keeps the history intact.
 - **Known limits:**
   - the customer's aging still shows the whole balance, retention included; the project screen shows what is due now;
   - advances paid to subcontractors are not tracked separately: a supplier payment before the bill nets on the supplier's account as today.
