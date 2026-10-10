@@ -471,3 +471,55 @@ class CancellationClaimTests(DocumentSetup):
         row = Submission.objects.get(pk=self.submission.pk)
         self.assertEqual((row.status, row.cancel_requested_at), ("valid", None))
         self.assertTrue(AuditLog.objects.filter(action="eta_cancel_refused", object_id=str(row.pk)).exists())
+
+
+@mock.patch.dict(os.environ, ENV)
+class ReviewSevenTests(DocumentSetup):
+    """Codex on #181: the signer token is required, a refusal never undoes a newer status, state and audit commit together."""
+
+    def setUp(self):
+        super().setUp()
+        portal._TOKEN.update(value="", expires=0.0, key="")
+        self.complete_data()
+        self.posted = self.invoice()
+
+    def test_the_signer_token_is_required(self):
+        with mock.patch.dict(os.environ, {"ETA_SIGNER_TOKEN": ""}):
+            self.assertIn("ETA_SIGNER_TOKEN", portal.missing())
+            with mock.patch.object(portal, "_http", FakePortal()) as fake, self.assertRaisesMessage(ValidationError, "ETA_SIGNER_TOKEN"):
+                send_invoice(self.posted, self.owner, "en")
+            self.assertEqual(fake.calls, [])
+            with self.assertRaises(portal.PortalError):
+                portal.sign({"x": "y"})  # never an unauthenticated call to the signer
+
+    def test_a_refusal_never_undoes_a_status_a_refresh_saved_meanwhile(self):
+        with mock.patch.object(portal, "_http", FakePortal()):
+            submission = refresh_submission(send_invoice(self.posted, self.owner, "en"), self.owner, "en")
+        inner = FakePortal(details={"status": "Cancelled", "longId": "L1"})
+
+        def racing(method, url, **kwargs):
+            if method == "PUT":
+                refresh_submission(Submission.objects.get(pk=submission.pk), self.owner, "en")  # lands while the PUT is out
+                return 400, {"error": {"message": "Already cancelled"}}
+            return inner(method, url, **kwargs)
+
+        with mock.patch.object(portal, "_http", racing), self.assertRaises(ValidationError):
+            cancel_submission(submission, self.owner, "غلط", "en")
+        self.assertEqual(Submission.objects.get(pk=submission.pk).status, "cancelled")
+        self.assertTrue(AuditLog.objects.filter(action="eta_cancel_refused").exists())
+
+    def test_a_sending_state_never_lands_without_its_audit_row(self):
+        from . import services
+
+        real = services._audit_send
+
+        def failing(submission, user, action):
+            if action == "eta_send":
+                raise RuntimeError("audit store down")
+            return real(submission, user, action)
+
+        with mock.patch.object(portal, "_http", FakePortal()), mock.patch.object(services, "_audit_send", failing), self.assertRaises(RuntimeError):
+            send_invoice(self.posted, self.owner, "en")
+        claim = Submission.objects.get()
+        self.assertEqual(claim.status, "sending")  # not "submitted" without its audit: reconciliation settles it later
+        self.assertFalse(AuditLog.objects.filter(action="eta_send").exists())

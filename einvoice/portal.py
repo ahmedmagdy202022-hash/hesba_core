@@ -61,7 +61,8 @@ def missing():
     """What the deployment still needs before it can send: a list of setting names."""
 
     values = settings()
-    return [name for name, key in (("ETA_CLIENT_ID", "client_id"), ("ETA_CLIENT_SECRET", "client_secret"), ("ETA_SIGNER_URL", "signer_url"))
+    return [name for name, key in (("ETA_CLIENT_ID", "client_id"), ("ETA_CLIENT_SECRET", "client_secret"), ("ETA_SIGNER_URL", "signer_url"),
+                                   ("ETA_SIGNER_TOKEN", "signer_token"))
             if not values[key]]
 
 
@@ -129,7 +130,9 @@ def sign(document):
     if not values["signer_url"]:
         raise PortalError("no signer")
     unsigned = {key: item for key, item in document.items() if key != "signatures"}
-    headers = {"Authorization": f"Bearer {values['signer_token']}"} if values["signer_token"] else {}
+    if not values["signer_token"]:
+        raise PortalError("no signer")  # the signer must check who asks: never call it without its token
+    headers = {"Authorization": f"Bearer {values['signer_token']}"}
     status, payload = _http("POST", values["signer_url"], body={"serialized": serialize(unsigned)}, headers=headers)
     signature = payload.get("signature") if isinstance(payload, dict) else None
     if status != 200 or not signature:

@@ -20,11 +20,11 @@ EINV-001 builds the invoice document (type `i`, version 1.0) from a posted sales
 
 | Name | Value |
 |---|---|
-| `ETA_ENVIRONMENT` | `preprod` while testing, `prod` when live |
+| `ETA_ENVIRONMENT` | `preprod` while testing, `prod` when live (set in the Render dashboard; the blueprint does not pin it, so a sync never switches a live client back to testing) |
 | `ETA_CLIENT_ID` | the ERP system's client ID |
 | `ETA_CLIENT_SECRET` | its secret (never typed into Hesba's screens or stored in the database) |
 | `ETA_SIGNER_URL` | the signer's address, e.g. `https://signer.client-office.example/sign` |
-| `ETA_SIGNER_TOKEN` | a shared secret the signer checks (sent as `Authorization: Bearer …`) |
+| `ETA_SIGNER_TOKEN` | required: a shared secret the signer checks (sent as `Authorization: Bearer …`); Hesba never calls the signer without it |
 
 After setting them, **Settings → E-invoicing → Test the connection** checks the portal login and the signer.
 

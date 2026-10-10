@@ -295,8 +295,9 @@ def send_invoice(invoice, user, lang="ar"):
             # A definite refusal (400, 403, 422…): kept, with the authority's exact answer, like any sending.
             claim.status, claim.message = SubmissionStatus.REJECTED, portal.error_text(exc.payload) or f"HTTP {exc.status}"
             claim.response = {"http_status": exc.status, "body": exc.payload}
-            claim.save(update_fields=["status", "message", "response"])
-            _audit_send(claim, user, "eta_send")
+            with transaction.atomic():  # the state and its audit row together
+                claim.save(update_fields=["status", "message", "response"])
+                _audit_send(claim, user, "eta_send")
             return claim
         # Cut off mid-answer, or a 5xx: the authority may hold the invoice. The claim stays, so no
         # second send goes before it is reconciled with the authority (reconcile_claim, after STALE_SENDING).
@@ -311,16 +312,18 @@ def send_invoice(invoice, user, lang="ar"):
     claim.status = SubmissionStatus.SUBMITTED if accepted else SubmissionStatus.REJECTED
     claim.uuid, claim.long_id = (accepted or {}).get("uuid", ""), (accepted or {}).get("longId", "")
     claim.message, claim.response = ("" if accepted else portal.error_text(rejected or answer)), answer
-    claim.save(update_fields=["submission_id", "status", "uuid", "long_id", "message", "response"])
-    _audit_send(claim, user, "eta_send")
+    with transaction.atomic():  # the state and its audit row together
+        claim.save(update_fields=["submission_id", "status", "uuid", "long_id", "message", "response"])
+        _audit_send(claim, user, "eta_send")
     return claim
 
 
 def _keep_unknown(claim, user, exc):
     claim.message = f"outcome unknown: {exc.message}" + (f" (HTTP {exc.status})" if exc.status else "")
     claim.response = {"http_status": exc.status, "body": exc.payload} if exc.status else {}
-    claim.save(update_fields=["message", "response"])
-    _audit_send(claim, user, "eta_send_unknown")
+    with transaction.atomic():
+        claim.save(update_fields=["message", "response"])
+        _audit_send(claim, user, "eta_send_unknown")
 
 
 def reconcile_claim(claim, user, lang="ar"):
@@ -416,8 +419,8 @@ def refresh_submission(submission, user, lang="ar"):
         fresh.response = answer
         fresh.checked_at = timezone.now()
         fresh.save(update_fields=["status", "long_id", "message", "response", "checked_at", "cancelled_at", "cancel_requested_at"])
+        _audit_send(fresh, user, "eta_refresh")
     _sync(submission, fresh)
-    _audit_send(submission, user, "eta_refresh")
     return submission
 
 
@@ -449,28 +452,41 @@ def cancel_submission(submission, user, reason, lang="ar"):
         fresh = Submission.objects.select_for_update().get(pk=submission.pk)
         if fresh.status != SubmissionStatus.VALID:
             raise ValidationError(words["not_valid"])
-        fresh.status, fresh.cancel_reason, fresh.cancel_requested_at = SubmissionStatus.CANCEL_REQUESTED, reason, timezone.now()
+        requested_at = timezone.now()
+        fresh.status, fresh.cancel_reason, fresh.cancel_requested_at = SubmissionStatus.CANCEL_REQUESTED, reason, requested_at
         fresh.save(update_fields=["status", "cancel_reason", "cancel_requested_at"])
+        _audit_send(fresh, user, "eta_cancel")  # the request is recorded with its claim, before it goes out
+
+    def settle(change, action):
+        """Apply ``change`` only while the row is still this request's claim (a refresh may have moved it on)."""
+
+        with transaction.atomic():
+            row = Submission.objects.select_for_update().get(pk=submission.pk)
+            if row.status == SubmissionStatus.CANCEL_REQUESTED and row.cancel_requested_at == requested_at:
+                change(row)
+            _audit_send(row, user, action)
+        _sync(submission, row)
+
     try:
         portal.cancel(fresh.uuid, reason)
     except portal.PortalError as exc:
         if exc.message == "cancel refused" and exc.status and exc.status < 500:
-            with transaction.atomic():
-                fresh = Submission.objects.select_for_update().get(pk=submission.pk)
-                fresh.status, fresh.cancel_requested_at = SubmissionStatus.VALID, None
-                fresh.message = portal.error_text(exc.payload) or f"HTTP {exc.status}"
-                fresh.save(update_fields=["status", "cancel_requested_at", "message"])
-            _sync(submission, fresh)
-            _audit_send(submission, user, "eta_cancel_refused")
+            def refused(row):
+                row.status, row.cancel_requested_at = SubmissionStatus.VALID, None
+                row.message = portal.error_text(exc.payload) or f"HTTP {exc.status}"
+                row.save(update_fields=["status", "cancel_requested_at", "message"])
+
+            settle(refused, "eta_cancel_refused")
             raise ValidationError(_portal_error(exc, words))
+
         # Cut off, or a 5xx: the authority may hold the request. It stays requested; "refresh" settles it.
-        fresh.message = f"cancellation outcome unknown: {exc.message}" + (f" (HTTP {exc.status})" if exc.status else "")
-        fresh.save(update_fields=["message"])
-        _sync(submission, fresh)
-        _audit_send(submission, user, "eta_cancel_unknown")
+        def unknown(row):
+            row.message = f"cancellation outcome unknown: {exc.message}" + (f" (HTTP {exc.status})" if exc.status else "")
+            row.save(update_fields=["message"])
+
+        settle(unknown, "eta_cancel_unknown")
         raise ValidationError(words["cancel_unknown"])
     _sync(submission, fresh)
-    _audit_send(submission, user, "eta_cancel")
     return submission
 
 

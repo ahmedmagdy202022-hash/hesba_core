@@ -45,8 +45,8 @@ services:
       - key: PUBLIC_BASE_URL       # e.g. https://hesba-client.onrender.com (links inside the email)
         sync: false
       # ETA-002: the client's own e-invoicing portal connection (docs/ETA_INTEGRATION.md).
-      - key: ETA_ENVIRONMENT       # preprod while testing, prod when live
-        value: preprod
+      - key: ETA_ENVIRONMENT       # preprod while testing, prod when live: set in the dashboard (Hesba defaults to preprod)
+        sync: false
       - key: ETA_CLIENT_ID         # the ERP system's client ID from the portal
         sync: false
       - key: ETA_CLIENT_SECRET
