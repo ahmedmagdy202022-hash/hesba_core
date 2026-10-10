@@ -1,6 +1,7 @@
 """ETA-002: signing and sending to the authority, against a fake portal (no network)."""
 
 import os
+from datetime import timedelta
 from unittest import mock
 
 from django.core.exceptions import ValidationError
@@ -19,9 +20,9 @@ ENV = {"ETA_ENVIRONMENT": "preprod", "ETA_CLIENT_ID": "cid", "ETA_CLIENT_SECRET"
 class FakePortal:
     """Answers like the authority and the signer, and remembers what it was sent."""
 
-    def __init__(self, accept=True, valid=True, signer_ok=True, refuse_http=None, details=None, on_sign=None, found=None):
+    def __init__(self, accept=True, valid=True, signer_ok=True, refuse_http=None, details=None, on_sign=None, found=None, submit_fail=None):
         self.accept, self.valid, self.signer_ok, self.refuse_http, self.calls = accept, valid, signer_ok, refuse_http, []
-        self.details, self.on_sign, self.found = details, on_sign, found  # a fixed details answer; a hook run while "signing"; search hits
+        self.details, self.on_sign, self.found, self.submit_fail = details, on_sign, found, submit_fail  # a fixed details answer; a hook run while "signing"; search hits
 
     def __call__(self, method, url, *, body=None, form=None, headers=None):
         self.calls.append((method, url, body, form, headers))
@@ -37,6 +38,10 @@ class FakePortal:
             return 200, {"access_token": "T", "expires_in": 3600}
         if url == "https://api.preprod.invoicing.eta.gov.eg/api/v1.0/documentsubmissions/":
             internal = body["documents"][0]["internalID"]
+            if self.submit_fail == "cut":
+                raise portal.PortalError("unreachable: connection reset")  # it may have arrived
+            if self.submit_fail:
+                return self.submit_fail, {}
             if self.refuse_http:
                 return self.refuse_http, {"error": {"message": "Bad structure", "details": [{"propertyPath": "issuer.id", "message": "Required"}]}}
             if self.accept:
@@ -49,6 +54,11 @@ class FakePortal:
             query = parse_qs(urlparse(url).query)
             if not (query.get("internalID") and query.get("submissionDateFrom") and query.get("submissionDateTo") and query.get("direction") == ["Sent"]):
                 return 400, {}
+            from datetime import datetime
+
+            since, until = (datetime.strptime(query[key][0], "%Y-%m-%dT%H:%M:%SZ") for key in ("submissionDateFrom", "submissionDateTo"))
+            if not timedelta(0) <= until - since <= timedelta(days=30):
+                return 400, {"error": "range over 30 days"}
             return 200, {"result": [row for row in (self.found or []) if row.get("internalId") == query["internalID"][0]],
                          "metadata": {"continuationToken": "EndofResultSet"}}
         if url == "https://api.preprod.invoicing.eta.gov.eg/api/v1.0/documents/U1/details":
@@ -356,3 +366,50 @@ class ReviewThreeTests(DocumentSetup):
             done = refresh_submission(submission, self.owner, "en")
         self.assertEqual(done.status, "cancelled")
         self.assertIsNotNone(Submission.objects.get(pk=done.pk).cancelled_at)
+
+
+@mock.patch.dict(os.environ, ENV)
+class UnknownOutcomeTests(DocumentSetup):
+    """Codex on #181: a sending whose answer was lost is never repeated before the authority is asked."""
+
+    def setUp(self):
+        super().setUp()
+        portal._TOKEN.update(value="", expires=0.0, key="")
+        self.complete_data()
+        self.posted = self.invoice()
+
+    def check_kept(self, failure):
+        from django.utils import timezone
+
+        with mock.patch.object(portal, "_http", FakePortal(submit_fail=failure)), self.assertRaisesMessage(ValidationError, "may have arrived"):
+            send_invoice(self.posted, self.owner, "en")
+        claim = Submission.objects.get()
+        self.assertEqual(claim.status, "sending")
+        self.assertIn("outcome unknown", claim.message)
+        self.assertTrue(AuditLog.objects.filter(action="eta_send_unknown", object_id=str(claim.pk)).exists())
+        fake = FakePortal()
+        with mock.patch.object(portal, "_http", fake), self.assertRaisesMessage(ValidationError, "still checking"):
+            send_invoice(self.posted, self.owner, "en")  # an immediate retry sends nothing
+        self.assertFalse(any(call[1].endswith("/documentsubmissions/") for call in fake.calls))
+        Submission.objects.filter(pk=claim.pk).update(submitted_at=timezone.now() - timedelta(minutes=11))
+        found = [{"internalId": self.posted.invoice_number, "uuid": "U1", "longId": "L1", "status": "Submitted", "dateTimeReceived": "x"}]
+        fake = FakePortal(found=found)
+        with mock.patch.object(portal, "_http", fake), self.assertRaisesMessage(ValidationError, "still checking"):
+            send_invoice(self.posted, self.owner, "en")  # it had arrived: adopted, not resent
+        self.assertEqual((Submission.objects.get().status, Submission.objects.get().uuid, Submission.objects.count()), ("submitted", "U1", 1))
+        self.assertFalse(any(call[1].endswith("/documentsubmissions/") for call in fake.calls))
+
+    def test_a_connection_cut_mid_answer_keeps_the_claim(self):
+        self.check_kept("cut")
+
+    def test_a_server_error_keeps_the_claim(self):
+        self.check_kept(503)
+
+    def test_an_old_claim_is_searched_inside_the_authoritys_window(self):
+        from django.utils import timezone
+
+        claim = Submission.objects.create(invoice=self.posted, environment="preprod", submitted_by=self.owner, status="sending")
+        Submission.objects.filter(pk=claim.pk).update(submitted_at=timezone.now() - timedelta(days=40))
+        with mock.patch.object(portal, "_http", FakePortal(found=[])):
+            fresh = send_invoice(self.posted, self.owner, "en")  # the search was accepted (≤ 30 days) and found nothing
+        self.assertEqual((fresh.status, Submission.objects.get(pk=claim.pk).status), ("submitted", "rejected"))

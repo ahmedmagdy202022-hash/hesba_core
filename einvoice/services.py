@@ -203,11 +203,11 @@ SEND_WORDS = {
     "ar": {"problems": "البيانات لسه ناقصة؛ كمّلها الأول.", "already": "الفاتورة دي اتبعتت واتقبلت بالفعل.", "pending": "الفاتورة دي اتبعتت ولسه المنظومة بتراجعها.",
            "setup": "الربط مع المنظومة لسه متظبطش على السيرفر ({names}).", "signer": "جهاز التوقيع مش بيرد أو رفض التوقيع؛ اتأكد إن التوكن متركّب والبرنامج شغال.",
            "login": "المنظومة رفضت الدخول؛ راجع Client ID و Client Secret.", "unreachable": "مش قادرين نوصل للمنظومة دلوقتي؛ جرّب كمان شوية.",
-           "refused": "المنظومة رفضت الفاتورة: {reason}", "reason": "اكتب سبب الإلغاء.", "not_valid": "الإلغاء للفواتير المقبولة بس."},
+           "refused": "المنظومة رفضت الفاتورة: {reason}", "unknown": "الاتصال اتقطع قبل ما نعرف رد المنظومة، وممكن تكون الفاتورة وصلت. مش هنبعتها تاني قبل ما نسأل المنظومة؛ جرّب الإرسال بعد 10 دقايق وهنتأكد الأول.", "reason": "اكتب سبب الإلغاء.", "not_valid": "الإلغاء للفواتير المقبولة بس."},
     "en": {"problems": "The data is still incomplete; complete it first.", "already": "This invoice was already sent and accepted.", "pending": "This invoice was sent and the portal is still checking it.",
            "setup": "The portal connection is not set up on the server yet ({names}).", "signer": "The signer did not answer or refused; check the token is plugged in and the signer is running.",
            "login": "The portal refused the login; check the client ID and secret.", "unreachable": "The portal cannot be reached right now; try again shortly.",
-           "refused": "The portal rejected the invoice: {reason}", "reason": "Enter a cancellation reason.", "not_valid": "Only accepted invoices can be cancelled."},
+           "refused": "The portal rejected the invoice: {reason}", "unknown": "The connection dropped before the portal answered, so the invoice may have arrived. It will not be sent again before the portal is asked: try again in 10 minutes and it will be checked first.", "reason": "Enter a cancellation reason.", "not_valid": "Only accepted invoices can be cancelled."},
 }
 
 
@@ -284,19 +284,26 @@ def send_invoice(invoice, user, lang="ar"):
         claim = Submission.objects.create(invoice=invoice, environment=environment, submitted_by=user, status=SubmissionStatus.SENDING)
     try:
         signed = portal.sign(document)
+        portal.token()  # log in first: a refused or unreachable login is known to have sent nothing
+    except portal.PortalError as exc:
+        claim.delete()  # nothing reached the authority
+        raise ValidationError(_portal_error(exc, words))
+    try:
         answer = portal.submit([signed])
     except portal.PortalError as exc:
-        if exc.message != "submission refused":
-            claim.delete()  # nothing reached the authority
-            raise ValidationError(_portal_error(exc, words))
-        # The authority answered with a refusal (400, 403, 422…): kept, with its exact answer, like any sending.
-        claim.status, claim.message = SubmissionStatus.REJECTED, portal.error_text(exc.payload) or f"HTTP {exc.status}"
-        claim.response = {"http_status": exc.status, "body": exc.payload}
-        claim.save(update_fields=["status", "message", "response"])
-        _audit_send(claim, user, "eta_send")
-        return claim
-    except Exception:
-        claim.delete()
+        if exc.message == "submission refused" and exc.status and exc.status < 500:
+            # A definite refusal (400, 403, 422…): kept, with the authority's exact answer, like any sending.
+            claim.status, claim.message = SubmissionStatus.REJECTED, portal.error_text(exc.payload) or f"HTTP {exc.status}"
+            claim.response = {"http_status": exc.status, "body": exc.payload}
+            claim.save(update_fields=["status", "message", "response"])
+            _audit_send(claim, user, "eta_send")
+            return claim
+        # Cut off mid-answer, or a 5xx: the authority may hold the invoice. The claim stays, so no
+        # second send goes before it is reconciled with the authority (reconcile_claim, after STALE_SENDING).
+        _keep_unknown(claim, user, exc)
+        raise ValidationError(words["unknown"])
+    except Exception as exc:
+        _keep_unknown(claim, user, portal.PortalError(f"error: {exc.__class__.__name__}"))
         raise
     accepted = next((row for row in answer.get("acceptedDocuments") or [] if row.get("internalId") == invoice.invoice_number), None)
     rejected = next((row for row in answer.get("rejectedDocuments") or [] if row.get("internalId") == invoice.invoice_number), None)
@@ -307,6 +314,13 @@ def send_invoice(invoice, user, lang="ar"):
     claim.save(update_fields=["submission_id", "status", "uuid", "long_id", "message", "response"])
     _audit_send(claim, user, "eta_send")
     return claim
+
+
+def _keep_unknown(claim, user, exc):
+    claim.message = f"outcome unknown: {exc.message}" + (f" (HTTP {exc.status})" if exc.status else "")
+    claim.response = {"http_status": exc.status, "body": exc.payload} if exc.status else {}
+    claim.save(update_fields=["message", "response"])
+    _audit_send(claim, user, "eta_send_unknown")
 
 
 def reconcile_claim(claim, user, lang="ar"):
@@ -323,9 +337,12 @@ def reconcile_claim(claim, user, lang="ar"):
     from .models import Submission, SubmissionStatus
 
     words = SEND_WORDS[lang]
+    # The sending happened right after the claim (one request's time): a short window around it,
+    # well inside the authority's 30-day search limit however old the claim is.
     since = claim.submitted_at - timedelta(minutes=5)
+    until = min(claim.submitted_at + timedelta(hours=1), timezone.now() + timedelta(minutes=5))
     try:
-        found = portal.search(claim.invoice.invoice_number, since, timezone.now() + timedelta(minutes=5))
+        found = portal.search(claim.invoice.invoice_number, since, until)
     except portal.PortalError as exc:
         raise ValidationError(_portal_error(exc, words))
     with transaction.atomic():
