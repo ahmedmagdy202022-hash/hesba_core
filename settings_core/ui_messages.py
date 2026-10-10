@@ -102,6 +102,7 @@ EXACT = {
     "The selected opening-balance target is required.": "اختار الحساب اللي هتتعمله التسوية.",
     "The source cashbox cannot become negative.": "الخزنة مفيهاش رصيد كفاية للمبلغ ده.",
     "This category already exists.": "البند ده موجود بالفعل.",
+    "This invoice is registered with the e-invoice portal. Cancel it on the e-invoice page first, then cancel it here.": "الفاتورة دي متسجلة في منظومة الفاتورة الإلكترونية؛ الغيها الأول من صفحة الفاتورة الإلكترونية، وبعدين الغيها هنا.",
     "This date falls inside closed books; no new period can be opened there.": "التاريخ ده جوّه فترة اتقفلت؛ مينفعش تتسجل فيه حركة.",
     "This expense is already cancelled.": "المصروف ده اتلغى قبل كده.",
     "This record has no operational use yet; edit its opening balance directly.": "الحساب ده لسه ما اتستخدمش؛ عدّل رصيده الافتتاحي مباشرة.",

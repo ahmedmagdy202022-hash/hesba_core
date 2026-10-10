@@ -287,6 +287,9 @@ def cancel_posted_sales_invoice(invoice_id, user=None, reason=""):
     if invoice.status != SalesInvoiceStatus.POSTED:
         raise ValidationError("Only posted sales invoices can be cancelled.")
     _ensure_posting_period(invoice.invoice_date)  # HG-011: closed months stay closed.
+    from einvoice.guards import before_sales_invoice_cancel
+
+    before_sales_invoice_cancel(invoice)  # HG-039: an invoice the Tax Authority holds is cancelled there first
     if invoice.returns.filter(status=SalesReturnStatus.POSTED).exists():
         raise ValidationError(
             "A sales invoice with posted return documents cannot be cancelled."

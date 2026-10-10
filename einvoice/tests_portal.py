@@ -591,3 +591,96 @@ class EnvironmentValueTests(DocumentSetup):
             self.assertEqual(portal.settings()["environment"], "preprod")  # unset still means testing
         with mock.patch.dict(os.environ, {"ETA_ENVIRONMENT": " PROD "}):
             self.assertEqual((portal.settings()["environment"], portal.missing()), ("prod", []))
+
+
+@mock.patch.dict(os.environ, ENV)
+class LocalCancellationTests(DocumentSetup):
+    """Codex on #181: an invoice the authority holds is never cancelled here, and a cancelled one is never sent."""
+
+    def setUp(self):
+        super().setUp()
+        portal._TOKEN.update(value="", expires=0.0, key="")
+        self.complete_data()
+        self.posted = self.invoice()
+
+    def cancel_here(self):
+        from sales.services import cancel_posted_sales_invoice
+
+        return cancel_posted_sales_invoice(self.posted.pk, self.owner, "غلط")
+
+    def assert_untouched(self):
+        from inventory.models import StockMovement
+
+        self.posted.refresh_from_db()
+        self.assertEqual(self.posted.status, "posted")
+        self.assertFalse(StockMovement.objects.filter(sales_invoice=self.posted, movement_type="sale_return_in").exists())
+
+    def test_every_live_state_on_the_portal_blocks_the_local_cancellation(self):
+        from .guards import LIVE_MESSAGE
+
+        with mock.patch.object(portal, "_http", FakePortal()):
+            submission = send_invoice(self.posted, self.owner, "en")  # submitted: under review
+            with self.assertRaisesMessage(ValidationError, LIVE_MESSAGE):
+                self.cancel_here()
+            refresh_submission(submission, self.owner, "en")  # valid: a legal document
+            with self.assertRaisesMessage(ValidationError, LIVE_MESSAGE):
+                self.cancel_here()
+            cancel_submission(submission, self.owner, "مرتجع كامل", "en")  # asked, not yet confirmed
+            with self.assertRaisesMessage(ValidationError, LIVE_MESSAGE):
+                self.cancel_here()
+        self.assert_untouched()
+        Submission.objects.filter(pk=submission.pk).update(status="cancelled")  # the authority confirmed
+        self.assertEqual(self.cancel_here().status, "cancelled")
+
+    def test_a_sending_in_flight_blocks_it_too(self):
+        from .guards import LIVE_MESSAGE
+
+        blocked = []
+
+        def cancel_while_signing():
+            try:
+                self.cancel_here()
+            except ValidationError as exc:
+                blocked.append(exc.messages[0])
+
+        with mock.patch.object(portal, "_http", FakePortal(on_sign=cancel_while_signing)):
+            self.assertEqual(send_invoice(self.posted, self.owner, "en").status, "submitted")
+        self.assertEqual(blocked, [LIVE_MESSAGE])
+        self.assert_untouched()
+
+    def test_a_rejected_sending_or_none_leaves_it_free(self):
+        with mock.patch.object(portal, "_http", FakePortal(accept=False)):
+            self.assertEqual(send_invoice(self.posted, self.owner, "en").status, "rejected")
+        self.assertEqual(self.cancel_here().status, "cancelled")
+
+    def test_a_production_document_counts_while_the_server_talks_to_testing(self):
+        from .guards import LIVE_MESSAGE
+
+        Submission.objects.create(invoice=self.posted, environment="prod", submitted_by=self.owner, status="valid", uuid="P1")
+        with self.assertRaisesMessage(ValidationError, LIVE_MESSAGE):
+            self.cancel_here()
+        self.assert_untouched()
+
+    def test_an_invoice_cancelled_here_meanwhile_is_never_sent(self):
+        from sales.models import SalesInvoice
+
+        from . import services
+
+        real = services.build_document
+
+        def cancelled_meanwhile(invoice, lang):
+            built = real(invoice, lang)
+            SalesInvoice.objects.filter(pk=invoice.pk).update(status="cancelled")  # another request, before the lock
+            return built
+
+        with mock.patch.object(portal, "_http", FakePortal()) as fake, mock.patch.object(services, "build_document", cancelled_meanwhile), \
+                self.assertRaisesMessage(ValidationError, "not posted or was cancelled"):
+            send_invoice(self.posted, self.owner, "en")
+        self.assertEqual((fake.calls, Submission.objects.count()), ([], 0))
+
+    def test_the_sales_screen_says_it_in_arabic(self):
+        self.client.force_login(self.owner)
+        Submission.objects.create(invoice=self.posted, environment="preprod", submitted_by=self.owner, status="valid", uuid="U1")
+        page = self.client.post(reverse("sales:cancel", args=[self.posted.pk]), {"reason": "غلط", "lang": "ar"}, follow=True)
+        self.assertContains(page, "الغيها الأول من صفحة الفاتورة الإلكترونية")
+        self.assert_untouched()

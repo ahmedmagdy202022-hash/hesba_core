@@ -203,11 +203,11 @@ SEND_WORDS = {
     "ar": {"problems": "البيانات لسه ناقصة؛ كمّلها الأول.", "already": "الفاتورة دي اتبعتت واتقبلت بالفعل.", "pending": "الفاتورة دي اتبعتت ولسه المنظومة بتراجعها.",
            "setup": "الربط مع المنظومة لسه متظبطش على السيرفر ({names}).", "signer": "جهاز التوقيع مش بيرد أو رفض التوقيع؛ اتأكد إن التوكن متركّب والبرنامج شغال.",
            "login": "المنظومة رفضت الدخول؛ راجع Client ID و Client Secret.", "unreachable": "مش قادرين نوصل للمنظومة دلوقتي؛ جرّب كمان شوية.",
-           "refused": "المنظومة رفضت الفاتورة: {reason}", "unknown": "الاتصال اتقطع قبل ما نعرف رد المنظومة، وممكن تكون الفاتورة وصلت. مش هنبعتها تاني قبل ما نسأل المنظومة؛ جرّب الإرسال بعد 10 دقايق وهنتأكد الأول.", "cancel_unknown": "الاتصال اتقطع قبل ما نعرف رد المنظومة على طلب الإلغاء، وممكن يكون وصل. الطلب متسجل؛ دوس تحديث الحالة بعد شوية عشان نعرف النتيجة.", "reason": "اكتب سبب الإلغاء.", "not_valid": "الإلغاء للفواتير المقبولة بس."},
+           "refused": "المنظومة رفضت الفاتورة: {reason}", "unknown": "الاتصال اتقطع قبل ما نعرف رد المنظومة، وممكن تكون الفاتورة وصلت. مش هنبعتها تاني قبل ما نسأل المنظومة؛ جرّب الإرسال بعد 10 دقايق وهنتأكد الأول.", "cancel_unknown": "الاتصال اتقطع قبل ما نعرف رد المنظومة على طلب الإلغاء، وممكن يكون وصل. الطلب متسجل؛ دوس تحديث الحالة بعد شوية عشان نعرف النتيجة.", "reason": "اكتب سبب الإلغاء.", "not_valid": "الإلغاء للفواتير المقبولة بس.", "not_posted": "الفاتورة دي مش مرحّلة أو اتلغت؛ مينفعش تتبعت."},
     "en": {"problems": "The data is still incomplete; complete it first.", "already": "This invoice was already sent and accepted.", "pending": "This invoice was sent and the portal is still checking it.",
            "setup": "The portal connection is not set up on the server yet ({names}).", "signer": "The signer did not answer or refused; check the token is plugged in and the signer is running.",
            "login": "The portal refused the login; check the client ID and secret.", "unreachable": "The portal cannot be reached right now; try again shortly.",
-           "refused": "The portal rejected the invoice: {reason}", "unknown": "The connection dropped before the portal answered, so the invoice may have arrived. It will not be sent again before the portal is asked: try again in 10 minutes and it will be checked first.", "cancel_unknown": "The connection dropped before the portal answered the cancellation, so it may have arrived. The request is kept: refresh the status shortly to see the outcome.", "reason": "Enter a cancellation reason.", "not_valid": "Only accepted invoices can be cancelled."},
+           "refused": "The portal rejected the invoice: {reason}", "unknown": "The connection dropped before the portal answered, so the invoice may have arrived. It will not be sent again before the portal is asked: try again in 10 minutes and it will be checked first.", "cancel_unknown": "The connection dropped before the portal answered the cancellation, so it may have arrived. The request is kept: refresh the status shortly to see the outcome.", "reason": "Enter a cancellation reason.", "not_valid": "Only accepted invoices can be cancelled.", "not_posted": "This invoice is not posted or was cancelled; it cannot be sent."},
 }
 
 
@@ -261,7 +261,7 @@ def send_invoice(invoice, user, lang="ar"):
 
     from django.core.exceptions import ValidationError
 
-    from sales.models import SalesInvoice
+    from sales.models import SalesInvoice, SalesInvoiceStatus
 
     from . import portal
     from .models import Submission, SubmissionStatus
@@ -278,7 +278,10 @@ def send_invoice(invoice, user, lang="ar"):
     if latest and latest.status == SubmissionStatus.SENDING and latest.submitted_at < timezone.now() - STALE_SENDING:
         reconcile_claim(latest, user, lang)  # ask the authority what became of it before anything is sent again
     with transaction.atomic():
-        SalesInvoice.objects.select_for_update().get(pk=invoice.pk)
+        # Re-read under the lock the local cancellation also takes (einvoice.guards): an invoice
+        # cancelled here meanwhile is never sent.
+        if SalesInvoice.objects.select_for_update().get(pk=invoice.pk).status != SalesInvoiceStatus.POSTED:
+            raise ValidationError(words["not_posted"])
         latest = current_submission(invoice)
         if latest and latest.status in (SubmissionStatus.VALID, SubmissionStatus.CANCEL_REQUESTED):
             raise ValidationError(words["already"])

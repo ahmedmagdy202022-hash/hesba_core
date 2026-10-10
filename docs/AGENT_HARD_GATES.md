@@ -717,6 +717,22 @@ Status: APPROVED — Ahmed on 9 Oct 2026 ("خلص كله"), the third open decis
   - the screens, and who may send;
   - the connection check.
 - **Needs from Ahmed / the client to go live:** the portal account, the ERP client ID and secret, the signing token and a signer (docs/ETA_INTEGRATION.md).
+- **Protected touch: local cancellation of a sent invoice (Codex review on #181).**
+  - **Reason.** Sending claims the invoice under its row lock and then calls the portal outside any transaction. `cancel_posted_sales_invoice` never looked at the e-invoice side. An invoice could therefore be reversed here (stock, cash and customer ledger) while the authority accepted it. A legal document would then stand against books that say it never happened.
+  - **Change.**
+    - `sales/services.py::cancel_posted_sales_invoice` gains one line, under the lock it already holds: `einvoice.guards.before_sales_invoice_cancel(invoice)`. It refuses when the latest sending, in any environment, is sending, submitted, valid or cancel-requested.
+    - Rejected, invalid, cancelled and never-sent invoices pass untouched, so the reversal itself is unchanged.
+    - `send_invoice` now re-reads the invoice under the same lock and refuses one that is no longer posted.
+    - Together the two paths serialise: whichever takes the lock first wins, and the other sees its result.
+  - **Risk.** A user must cancel on the e-invoice page first and wait for the authority to confirm before cancelling here. That is the legally required order. The message says so in Arabic and English.
+  - **Tests.** `LocalCancellationTests` covers:
+    - each live state blocking;
+    - a cancellation during signing;
+    - a rejected invoice cancelling freely;
+    - a production document while the server talks to preprod;
+    - an invoice cancelled between building and locking never being sent;
+    - the Arabic message on the sales screen.
+  - **Not covered.** A sales *return* on an accepted invoice needs an ETA credit note, which is a separate feature (ETA-003).
 
 ## Final gate verification
 
