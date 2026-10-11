@@ -685,6 +685,65 @@ Status: RESOLVED — approved by Ahmed on 9 Oct 2026 ("موافق تعمل كل 
   - the screens and who may act.
 - **Known effect:** the goods-in-transit location shows in location pickers (stock list, manual transfer, count). The warehouses hub shows it only while something is on the way.
 
+## HG-041 — Services work orders and spare parts (proposed, not built)
+
+- **Status:** OPEN PROPOSAL. Nothing is built yet. This records the decision before the services work order package (`docs/ACTIVITY_SCORECARD.md`, step 2) touches stock.
+- **Why it is a gate:**
+  - A work order keeps its own states (received → diagnosed → quoted → approved → in repair → ready → delivered), so it needs new tables.
+  - Spare parts leave stock for a repair.
+    - The obvious shortcut, `inventory.services.adjust_stock` (an outbound adjustment), is wrong: `ledger/projector.py` projects an outbound adjustment as **stock-count loss**. Repair parts would show as shrinkage instead of the cost of the job.
+- **Proposed design (A, recommended): parts move only through the sales engine.**
+  - The work order holds its parts as planned lines. Nothing leaves stock while the job is open.
+  - Delivering the job makes its sales invoice through `taxes.services.create_sales_draft_with_tax` / `sales.services.post_sales_invoice`, unchanged.
+    - Labour goes on as a service item.
+    - Parts go on as stock items.
+  - Posting moves the parts out at authoritative movement cost (HG-003), as cost of goods sold. The ledger and the customer's account are exactly those of a sale.
+  - **Warranty jobs:** the part goes on the same invoice at price 0.
+    - The cost still lands in cost of goods sold, against a customer, so margin per job and per technician stays true.
+    - A test must first prove the sales engine accepts a zero-price stock line and costs it.
+  - **Not touched:** inventory movement types, the projector, sales posting, average cost.
+- **Alternative (B, needs approval):** a new movement type, "issued to a job".
+  - It would be projected to a "cost of services" account, and would let parts leave stock before the invoice (long repairs).
+  - It changes inventory movement and accounting (protected), so it is not done without Ahmed's approval.
+- **Files (A):** a new `workorders` app (models, services, views, templates, migration); the nav and dashboard panel for `services`; demo data. Sales, inventory and ledger: none.
+- **Risks (A):**
+  - Stock looks available until the job is delivered. The work order screen shows parts reserved by open jobs to make up for it.
+  - Parts reserved and then not used are simply dropped from the planned lines.
+- **Tests to write:**
+  - delivering a job posts one invoice whose stock lines move the exact quantities at movement cost;
+  - a warranty part at price 0 costs the part and leaves the receivable unchanged;
+  - cancelling the invoice brings the parts back;
+  - an open job moves nothing;
+  - permissions per role;
+  - the trial balance stays balanced and reconciliation clean.
+
+## HG-042 — Medical insurance: patient share and insurer share (proposed, not built)
+
+- **Status:** OPEN PROPOSAL. Nothing is built yet. This records the decision before the medical insurance work (`docs/ACTIVITY_SCORECARD.md`, step 4) touches customer accounts.
+- **Why it is a gate:** one visit is owed by two parties: the patient pays a share (co-pay) and the insurance company pays the rest, monthly, against a claim. Splitting one invoice's receivable between two customers changes the customer ledger (protected).
+- **Proposed design (A, recommended): two ordinary invoices per insured visit.**
+  - Each insurance company is a customer, carrying its contract: coverage % per service and a monthly claim day.
+  - An insured visit makes two sales invoices through the unchanged sales engine:
+    - the patient's, for their share;
+    - the insurer's, for the rest.
+  - Both carry the visit, so the patient file shows one visit with both invoices.
+  - **Monthly claim:** a read-only statement of the insurer's posted invoices for the month, printed and sent.
+  - **Payment:** the insurer pays through the ordinary customer collection.
+  - **Rejections:** a rejected line becomes the existing sales return against the insurer's invoice. If the patient must then pay it, a new invoice goes to the patient.
+  - **Not touched:** the customer ledger, sales posting, aging, report calculations.
+- **Alternative (B, needs approval):** one invoice with a receivable split between two customers. It keeps one document per visit, but it changes ledger posting and aging, so it is not done without Ahmed's approval.
+- **Files (A):** `medical` (an insurer contract model and migration, the visit-to-invoices service, the claim statement view); the reports for revenue per insurer and claims outstanding; demo data.
+- **Risks (A):**
+  - Revenue for one visit is split over two invoices. Reports per doctor and per service must add both, and the tests pin that down.
+  - Cancelling one invoice must offer to cancel the other.
+- **Tests to write:**
+  - the shares add up to the visit price to the piastre, with rounding on the insurer's side;
+  - each customer's balance moves by exactly its share;
+  - the claim lists only that insurer's posted invoices in the month;
+  - a rejection through a sales return lowers the insurer's balance;
+  - permissions;
+  - the trial balance and reconciliation.
+
 ## Final gate verification
 
 - Full Django suite: 794 tests passed in 576.477 seconds.
