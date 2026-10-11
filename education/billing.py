@@ -78,6 +78,10 @@ def due_lines(first, payer=None):
     last = month_end(first)
     running = (Enrollment.objects.filter(start_date__lte=last).filter(Q(end_date__isnull=True) | Q(end_date__gte=first))
                .select_related("student__payer", "group__course__item").order_by("student__payer__name", "student__name", "pk"))
+    from .services import scoped
+    from .models import Student
+
+    running = running.filter(student__in=scoped(Student.objects))  # only the entity being worked in (HG-034)
     if payer is not None:
         running = running.filter(student__payer=payer)
     lines = []
@@ -185,7 +189,10 @@ def bill_month(first, user, *, post=False, invoice_date=None, lang="ar"):
 def billed(first):
     """The month's invoices already made: [{invoice, students, total}]."""
 
-    charges = (_live(FeeCharge.objects.filter(month=first)).select_related("invoice__customer", "enrollment__student")
+    from .models import Student
+    from .services import scoped
+
+    charges = (_live(FeeCharge.objects.filter(month=first, enrollment__student__in=scoped(Student.objects))).select_related("invoice__customer", "enrollment__student")
                .order_by("invoice__customer__name", "invoice_id"))
     rows = OrderedDict()
     for charge in charges:
@@ -202,5 +209,7 @@ def dues(as_of=None):
 
     from .models import Student
 
-    payers = set(Student.objects.values_list("payer_id", flat=True))
+    from .services import scoped
+
+    payers = set(scoped(Student.objects).values_list("payer_id", flat=True))
     return [row for row in aging_rows("customers", as_of) if row["party"].pk in payers and row["total"] > 0]
