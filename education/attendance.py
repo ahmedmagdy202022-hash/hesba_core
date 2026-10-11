@@ -126,10 +126,13 @@ def take(group, user, day, marks, *, topic="", cancelled=False, lang="ar"):
     if day > timezone.localdate():
         raise ValidationError(words["future"])
     group = StudyGroup.objects.select_for_update().get(pk=group.pk)
-    if not group.active:
-        raise ValidationError(words["closed"])
-    if not meets_on(group, day):
-        raise ValidationError(words["off_day"])  # an unscheduled "class" would change everyone's attendance rate
+    # A class already recorded can always be corrected, even after its group was closed or its days changed;
+    # only a new one must be on a running group's own schedule.
+    if not ClassSession.objects.filter(group=group, date=day).exists():
+        if not group.active:
+            raise ValidationError(words["closed"])
+        if not meets_on(group, day):
+            raise ValidationError(words["off_day"])  # an unscheduled "class" would change everyone's attendance rate
     roster = list(roster_on(group, day))
     if not roster and not cancelled:
         raise ValidationError(words["no_roster"])

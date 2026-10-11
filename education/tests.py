@@ -442,3 +442,36 @@ class ReviewThreeTests(EducationSetup):
             services.save_student({"name": "يوسف", "payer_name": "محمد", "payer_phone": "123"}, self.owner)
         with self.assertRaisesMessage(ValidationError, "phone number is too short"):
             services.save_student({"name": "Omar", "self_pays": "1", "phone": "12"}, self.owner, lang="en")
+
+
+class ReviewFourTests(EducationSetup):
+    """Codex on #186, second round."""
+
+    def setUp(self):
+        super().setUp()
+        from . import attendance
+
+        self.register = attendance
+        self.class_day = TODAY - timedelta(days=(TODAY.weekday() - 5) % 7)
+        self.saturday = self.group(days="sat")
+        self.yousef = self.student()
+        services.enroll(self.yousef, self.saturday, self.owner, start_date=self.class_day - timedelta(days=30))
+
+    def test_a_recorded_class_can_be_corrected_after_the_group_changed(self):
+        self.register.take(self.saturday, self.owner, self.class_day, {str(self.yousef.pk): "absent"})
+        StudyGroup.objects.filter(pk=self.saturday.pk).update(days="sun", active=False)
+        session = self.register.take(self.saturday, self.owner, self.class_day, {str(self.yousef.pk): "excused"})
+        self.assertEqual(session.marks.get().presence, "excused")
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("education:attendance", args=[self.saturday.pk]) + f"?date={self.class_day.isoformat()}")
+        self.assertContains(page, "data-save-attendance")
+        with self.assertRaisesMessage(ValidationError, "مقفولة"):
+            self.register.take(self.saturday, self.owner, self.class_day - timedelta(days=7), {})  # but no new class on a closed group
+
+    def test_a_malformed_date_is_refused_not_taken_as_today(self):
+        self.client.force_login(self.owner)
+        url = reverse("education:attendance", args=[self.saturday.pk])
+        for bad in ("", "2026-13-40", "yesterday"):
+            with self.subTest(bad=bad):
+                self.assertEqual(self.client.post(url, {"date": bad, f"p_{self.yousef.pk}": "absent"}).status_code, 404)
+        self.assertFalse(self.saturday.sessions.exists())

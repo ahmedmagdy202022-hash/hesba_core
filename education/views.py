@@ -345,7 +345,7 @@ def take_attendance(request, pk):
         try:
             day = date.fromisoformat(request.POST.get("date") or "")
         except ValueError:
-            day = timezone.localdate()
+            raise Http404("A class is saved for the date its form was opened on.")  # never silently today
         marks = {key[len("p_"):]: value for key, value in request.POST.items() if key.startswith("p_")}
         marks.update({key: value for key, value in request.POST.items() if key.startswith("note_")})
         try:
@@ -367,4 +367,4 @@ def take_attendance(request, pk):
     return render(request, "education/attendance.html", _base(request, lang, "today", group=group, day=day, session=session, roster=roster, choices=choices,
                                                               schedule=services.schedule_text(group, lang), error=error, today=timezone.localdate(),
                                                               saved=bool(request.GET.get("saved")), notify=[row for row in roster if row.notify],
-                                                              scheduled=register.meets_on(group, day)))
+                                                              scheduled=bool(session) or (group.active and register.meets_on(group, day))))
