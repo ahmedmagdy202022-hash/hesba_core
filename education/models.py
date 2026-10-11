@@ -75,6 +75,15 @@ class Course(models.Model):
         return self.name
 
 
+class TeacherPay(models.TextChoices):
+    """EDU-004: how the group's teacher is paid."""
+
+    NONE = "none", "Not paid per group"
+    SESSION = "session", "Per class held"
+    PERCENT = "percent", "Share of the group's fees"
+    MONTHLY = "monthly", "Fixed per month"
+
+
 class StudyGroup(models.Model):
     code = models.CharField(max_length=20, unique=True)
     course = models.ForeignKey(Course, on_delete=models.PROTECT, related_name="groups")
@@ -89,6 +98,9 @@ class StudyGroup(models.Model):
                               help_text="Blank: the course's fee.")
     starts_on = models.DateField(null=True, blank=True)
     ends_on = models.DateField(null=True, blank=True)
+    teacher_pay = models.CharField(max_length=10, choices=TeacherPay.choices, default=TeacherPay.NONE)
+    teacher_rate = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"), validators=[MinValueValidator(Decimal("0"))],
+                                       help_text="Per class, per month, or a percentage of the fees, by teacher_pay.")
     active = models.BooleanField(default=True)
     # Codex on #185 (HG-034): in a group, each education entity sees only its own students, courses and groups.
     entity = models.ForeignKey("entities.Entity", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
@@ -194,3 +206,23 @@ class FeeCharge(models.Model):
     class Meta:
         ordering = ["-month", "pk"]
         indexes = [models.Index(fields=["enrollment", "month"])]
+
+
+class TeacherPayment(models.Model):
+    """EDU-004: money paid to a teacher for a month, made as an ordinary expense out of a cashbox.
+
+    The expense carries the cash movement; cancelling it (on the expenses page)
+    reverses the cash and the month is owed again.
+    """
+
+    teacher = models.ForeignKey("staff.Employee", on_delete=models.PROTECT, related_name="teacher_payments")
+    month = models.DateField(help_text="The first day of the month paid for.")
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    expense = models.OneToOneField("expenses.Expense", on_delete=models.PROTECT, related_name="teacher_payment")
+    entity = models.ForeignKey("entities.Entity", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-month", "pk"]
+        indexes = [models.Index(fields=["teacher", "month"])]

@@ -47,6 +47,12 @@ WORDS = {
         "invoice": "الفاتورة", "total": "الإجمالي", "fees_intro": "فاتورة واحدة لكل ولي أمر بكل مجموعات أولاده. الشهري بسعر الشهر، والحصة بعدد الحصص اللي حضرها، والكورس مرة واحدة.",
         "dues_intro": "أولياء الأمور اللي عليهم مصروفات، والأقدم الأول.", "overdue": "متأخر", "owed": "عليه", "oldest": "من", "last_payment": "آخر دفعة",
         "remind": "فكّره واتساب", "includes_tax": "منها ضريبة", "no_dues": "مفيش متأخرات. 👏", "collect": "تحصيل", "draft": "مسودة", "posted": "مترحّلة",
+        "teacher_pay": "أجر المدرس", "teacher_rate": "المبلغ أو النسبة", "teacher_rate_hint": "عن كل حصة، أو في الشهر، أو نسبة % من مصروفات المجموعة.",
+        "teachers": "أجور المدرسين", "teachers_intro": "اللي ليه كل مدرس في الشهر حسب طريقة أجره في كل مجموعة. الدفع بيطلع من الخزنة كمصروف عادي.",
+        "due": "ليه", "paid": "اتدفع", "remaining": "الباقي", "units": "الأساس", "pay_btn": "ادفع", "cashbox": "من خزنة", "paid_ok": "اتدفع {amount} لـ {teacher}.",
+        "no_teachers": "مفيش مجموعات ليها مدرس وطريقة أجر. حددها من صفحة المجموعة.", "classes_held": "حصة", "of_fees": "من مصروفات", "a_month": "شهر",
+        "report": "تقرير الشهر", "report_intro": "كل مجموعة في الشهر: الطلاب، والحصص، والحضور، والمصروفات اللي اتفوترت، وأجر المدرس، واللي فاضل للمركز.",
+        "held": "حصص اتعملت", "left": "فاضل للمركز", "no_report": "مفيش مجموعات شغالة في الشهر ده.", "month_rate": "الحضور",
     },
     "en": {
         "title": "Students & groups", "students": "Students", "groups": "Groups", "courses": "Courses & subjects",
@@ -79,6 +85,12 @@ WORDS = {
         "invoice": "Invoice", "total": "Total", "fees_intro": "One invoice per parent with all their children's groups: monthly groups at the month's fee, per-class groups by classes attended, whole courses once.",
         "dues_intro": "Parents who owe fees, oldest first.", "overdue": "Overdue", "owed": "Owes", "oldest": "Since", "last_payment": "Last payment",
         "remind": "Remind on WhatsApp", "includes_tax": "incl. VAT", "no_dues": "Nothing owed. 👏", "collect": "Collect", "draft": "Draft", "posted": "Posted",
+        "teacher_pay": "Teacher's pay", "teacher_rate": "Amount or share", "teacher_rate_hint": "Per class, per month, or a % of the group's fees.",
+        "teachers": "Teacher pay", "teachers_intro": "What each teacher is owed for the month, by how each of their groups pays. Paying takes the cash out of a cashbox as an ordinary expense.",
+        "due": "Owed", "paid": "Paid", "remaining": "Still owed", "units": "Based on", "pay_btn": "Pay", "cashbox": "From cashbox", "paid_ok": "{amount} paid to {teacher}.",
+        "no_teachers": "No group has a teacher and a way of paying them. Set it on the group's page.", "classes_held": "classes", "of_fees": "of fees", "a_month": "month",
+        "report": "Month report", "report_intro": "Each group in the month: students, classes, attendance, fees billed, the teacher's pay and what is left for the centre.",
+        "held": "Classes held", "left": "Left for the centre", "no_report": "No groups ran in this month.", "month_rate": "Attendance",
     },
 }
 
@@ -99,7 +111,8 @@ def _guard(request, write=False):
 def _base(request, lang, tab, **extra):
     return {"lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": WORDS[lang], "page_title": WORDS[lang]["title"], "section": "education",
             "tab": tab, "can_manage": services.can_manage(request.user), "can_view": services.can_view(request.user),
-            "can_see_fees": user_has_permission(request.user, FEES_VIEW), "can_see_dues": user_has_permission(request.user, DUES_VIEW), **extra}
+            "can_see_fees": user_has_permission(request.user, FEES_VIEW), "can_see_dues": user_has_permission(request.user, DUES_VIEW),
+            "can_see_pay": user_has_permission(request.user, PAY_VIEW), "can_see_report": user_has_permission(request.user, REPORT_VIEW), **extra}
 
 
 def _back(name, lang, *args):
@@ -215,7 +228,7 @@ def groups(request):
 
 def _group_form_context(request, lang, **extra):
     return _base(request, lang, "groups", courses=services.scoped(Course.objects).filter(active=True), teachers=_teachers(),
-                 weekdays=[(day, services.DAY_LABELS[lang][day]) for day in Weekday.values], **extra)
+                 pay_choices=list(services.PAY_LABELS[lang].items()), weekdays=[(day, services.DAY_LABELS[lang][day]) for day in Weekday.values], **extra)
 
 
 def group_new(request):
@@ -388,6 +401,8 @@ def take_attendance(request, pk):
 
 #: The month's invoices are sales invoices; who owes what is the customers' aging, behind its own report permission.
 FEES_VIEW, DUES_VIEW = "sales.view_sales_invoices", "reports.view_customer_report"
+#: EDU-004: teacher pay is an expense; the month report shows fees billed, so it sits with the sales reports.
+PAY_VIEW, REPORT_VIEW = "cashboxes.view_expenses", "reports.view_sales_report"
 
 
 def _fees_guard(request, write=False, permission=FEES_VIEW):
@@ -456,3 +471,65 @@ def dues(request):
         row["remind"] = reminder_link(row, company["name"], company.get("currency", "EGP"), lang)
     return render(request, "education/dues.html", _base(request, lang, "dues", rows=rows, total=sum((row["total"] for row in rows), start=0),
                                                         overdue=sum((row["overdue"] for row in rows), start=0)))
+
+
+# ---- EDU-004: teacher pay and the month report ----
+
+def _month(request, lang):
+    from . import billing
+
+    try:
+        return billing.month_of(request.POST.get("month") if request.method == "POST" else request.GET.get("month"))
+    except ValidationError:
+        return billing.month_of(None)
+
+
+def teachers(request):
+    from cashboxes.models import Cashbox
+    from entities import scope as entity_scope
+    from settings_core.templatetags.hesba_format import money
+    from settings_core.ui_messages import translate
+    from staff.models import Employee
+
+    from . import billing, pay
+
+    _fees_guard(request, permission=PAY_VIEW)
+    lang = _lang(request)
+    words = WORDS[lang]
+    first = _month(request, lang)
+    error = ""
+    if request.method == "POST":
+        _fees_guard(request, permission=pay.PAY_RECORD)
+        raw = (request.POST.get("month") or "").strip()
+        try:
+            if billing.month_of(raw) != first or not raw:
+                raise ValidationError(billing.MESSAGES[lang]["month"])  # a payment states its month
+            teacher = Employee.objects.filter(pk=request.POST.get("teacher") or 0, active=True).first()
+            cashbox = entity_scope.cashboxes(Cashbox.objects).filter(active=True, pk=request.POST.get("cashbox") or 0).first()
+            payment = pay.pay(teacher, first, request.POST.get("amount"), cashbox, request.user, lang=lang)
+        except ValidationError as exc:
+            error = translate(" ".join(exc.messages), lang)
+        else:
+            messages.success(request, words["paid_ok"].format(amount=money(payment.amount), teacher=payment.teacher.name))
+            return redirect(f"{reverse('education:teachers')}?lang={lang}&month={first:%Y-%m}")
+    rows = pay.teacher_rows(first)
+    for row in rows:
+        for line in row["groups"]:
+            line["basis"] = services.PAY_LABELS[lang][line["group"].teacher_pay]
+    return render(request, "education/teachers.html", _base(request, lang, "teachers", first=first, label=billing.month_label(first, lang), rows=rows,
+                                                            error=error, can_pay=user_has_permission(request.user, pay.PAY_RECORD),
+                                                            cashboxes=entity_scope.cashboxes(Cashbox.objects).filter(active=True),
+                                                            totals={key: sum((row[key] for row in rows), start=0) for key in ("due", "paid", "remaining")},
+                                                            today=timezone.localdate()))
+
+
+def report(request):
+    from . import billing, insights
+
+    _fees_guard(request, permission=REPORT_VIEW)
+    lang = _lang(request)
+    first = _month(request, lang)
+    with_pay = user_has_permission(request.user, PAY_VIEW)  # what teachers are paid is for those who see the expenses
+    rows, totals = insights.group_report(first, with_pay=with_pay)
+    return render(request, "education/report.html", _base(request, lang, "report", first=first, label=billing.month_label(first, lang), rows=rows,
+                                                          totals=totals, with_pay=with_pay, today=timezone.localdate()))

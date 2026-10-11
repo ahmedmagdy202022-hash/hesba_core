@@ -174,14 +174,16 @@ class Command(BaseCommand):
         if not courses:
             return
         second = save_employee({"name": "أ. نادية", "title": teacher.title or "مدرسة"}, owner)
+        # EDU-004: each group says how its teacher is paid: per class, a share of the fees, or a fixed month.
         plan = (
-            (courses[0], "مجموعة السبت والتلات", teacher, "قاعة 1", "sat,tue", time(16), 12),
-            (courses[0], "مجموعة الأحد والأربع", second, "قاعة 2", "sun,wed", time(18), 12),
-            (courses[-1], "مجموعة الاتنين والخميس", teacher, "قاعة 1", "mon,thu", time(17), 10),
+            (courses[0], "مجموعة السبت والتلات", teacher, "قاعة 1", "sat,tue", time(16), 12, "percent", "40"),
+            (courses[0], "مجموعة الأحد والأربع", second, "قاعة 2", "sun,wed", time(18), 12, "session", "120"),
+            (courses[-1], "مجموعة الاتنين والخميس", teacher, "قاعة 1", "mon,thu", time(17), 10, "monthly", "800"),
         )
         groups = [edu.save_group({"course": course, "name": name, "teacher": who, "room": room, "days": days, "start_time": start,
-                                  "duration_minutes": "90", "capacity": str(capacity), "starts_on": today - timedelta(days=40)}, owner)
-                  for course, name, who, room, days, start, capacity in plan]
+                                  "duration_minutes": "90", "capacity": str(capacity), "starts_on": today - timedelta(days=40),
+                                  "teacher_pay": pay_basis, "teacher_rate": rate}, owner)
+                  for course, name, who, room, days, start, capacity, pay_basis, rate in plan]
         families = (
             ("محمد السيد (ولي أمر)", "01001234501", "الأب", ("يوسف محمد", "مريم محمد")),
             ("هالة عبد الرحمن (ولية أمر)", "01101234502", "الأم", ("عمر خالد",)),
@@ -238,6 +240,16 @@ class Command(BaseCommand):
                 for invoice in invoices[:-2]:
                     record_customer_payment(next_in_series(CustomerPayment, "payment_number", "CP-"), day + timedelta(days=3), invoice.customer, cashbox,
                                             invoice.total_amount, owner, notes="مصروفات الشهر")
+        # EDU-004: last month's teachers paid out of the cashbox; this month still owed.
+        from education import pay
+
+        if cashbox is not None:
+            for row in pay.teacher_rows(last_month):
+                if row["remaining"] > 0:
+                    try:
+                        pay.pay(row["teacher"], last_month, row["remaining"], cashbox, owner)
+                    except ValidationError:
+                        pass  # the cashbox cannot cover it: the demo shows it owed
 
     def _projects(self, master, owner):
         from projects.services import bill_progress, issue_materials, save_project

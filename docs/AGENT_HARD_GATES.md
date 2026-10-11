@@ -721,11 +721,23 @@ Status: RESOLVED — approved by Ahmed on 9 Oct 2026 ("موافق تعمل كل 
   - **Duplicates:** a new `FeeCharge` row records which enrolment and month each line billed, so running the month again bills only what is new. A cancelled invoice frees its month. Each parent's customer row is locked while their lines are worked out, so two runs at once cannot bill one month twice.
   - **Not allowed:** future months.
   - **Fees owed:** the existing customer aging, kept to parents of students, with WhatsApp reminders.
-- **Next (EDU-004):**
-  - attendance;
-  - monthly invoices through the ordinary sales engine, with a duplicate guard per month;
-  - teacher pay;
-  - the education dashboard and reports.
+- **EDU-004 (teacher pay, dashboard, month report):**
+  - **New schema, education app only:**
+    - `StudyGroup.teacher_pay` (none / per class held / share of the group's fees / fixed per month) and `StudyGroup.teacher_rate`.
+    - A new `TeacherPayment` table: teacher, month, amount, and a one-to-one link to the `Expense` that paid it. Migration `education/0004`.
+  - **Paying a teacher:** `expenses.services.record_expense`, called unchanged, under a new "Teacher pay" category (`TEACHER-PAY`).
+    - The cash leaves the chosen cashbox through the existing cashbox operation.
+    - The payment shows in the expenses list and comes off profit.
+    - Cancelling the expense (expenses page, also unchanged) reverses the cash, and the month is owed again.
+    - The teacher's row is locked while the amount is checked. Nothing above what is still owed can be paid, and no future month.
+  - **What a teacher is owed** is read from records the system already keeps:
+    - classes held (attendance);
+    - the group's live fee charges (EDU-003);
+    - or whether the group had students that month.
+  - **Dashboard:** the education panel replaces the bookings panel for education installs, and "Today's classes" becomes the lead quick action.
+    - Panel: active students, today's classes with how many have attendance taken, 30-day attendance, fees billed this month (needs sales view), parents who owe (needs the customer report).
+  - **Month report:** per group: students, classes held, attendance, fees billed. Teacher pay and what is left only show for users who can see the expenses.
+  - **Not touched:** sales, cashbox and expense posting, ledgers, report calculations.
 - **Tests:** `education/tests.py` covers:
   - payers and siblings;
   - the course item kept in step;

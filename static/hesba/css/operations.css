@@ -193,6 +193,8 @@ html.hs-cam-open,html.hs-cam-open body{overflow:hidden}
 .edu-payer{border:1px solid var(--hs-line);border-radius:var(--hs-radius-lg);padding:var(--hs-space-4);margin:var(--hs-space-4) 0}
 /* EDU-002: attendance — big touch targets, one row per student. */
 .edu-low{color:var(--hs-danger);font-weight:700}
+.edu-inline-form{display:flex;flex-wrap:wrap;gap:var(--hs-space-2);align-items:center}
+.edu-inline-form input{max-width:9rem}
 .edu-classes{display:grid;gap:var(--hs-space-3);grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
 .edu-class header{display:grid;gap:4px;margin-bottom:var(--hs-space-2)}
 .edu-marks{display:grid;gap:var(--hs-space-2);margin-bottom:var(--hs-space-4)}

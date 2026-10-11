@@ -23,14 +23,14 @@ ZERO = Decimal("0")
 PANEL_BY_ACTIVITY = {
     "restaurants": "kitchen",
     "medical": "bookings",
-    "education": "bookings",
+    "education": "school",  # EDU-004: a school works from its classes, not from bookings
     "services": "bookings",
     "manufacturing": "production",
     "contracting": "projects",
 }
 
 #: The section each panel needs to be visible (same keys as reports.navigation).
-PANEL_SECTION = {"kitchen": "restaurant", "bookings": "appointments", "production": "manufacturing", "projects": "projects"}
+PANEL_SECTION = {"kitchen": "restaurant", "bookings": "appointments", "production": "manufacturing", "projects": "projects", "school": "education"}
 
 WORDS = {
     "ar": {
@@ -155,7 +155,7 @@ def _projects(words):
     ], []
 
 
-def build_activity_panel(activity, visible_sections, lang="ar", today=None):
+def build_activity_panel(activity, visible_sections, lang="ar", today=None, user=None):
     """The panel for this activity, or None when it has none or it is hidden."""
 
     kind = PANEL_BY_ACTIVITY.get(activity)
@@ -170,6 +170,11 @@ def build_activity_panel(activity, visible_sections, lang="ar", today=None):
         tiles, lists = _bookings(words, today, lang)
     elif kind == "production":
         tiles, lists = _production(words, today)
+    elif kind == "school":
+        from education.insights import WORDS as SCHOOL_WORDS, panel_tiles
+
+        tiles, lists = panel_tiles(lang, today, user)
+        return {"kind": kind, "title": SCHOOL_WORDS[lang]["school"], "tiles": tiles, "lists": lists, "link": reverse("education:today"), "open": words["open"]}
     else:
         tiles, lists = _projects(words)
     link = {"kitchen": "restaurant:board", "bookings": "appointments:agenda", "production": "manufacturing:home", "projects": "projects:list"}[kind]

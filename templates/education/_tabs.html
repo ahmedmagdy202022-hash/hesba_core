@@ -7,4 +7,6 @@
 {% endif %}
 {% if can_see_fees %}<a class="{% if tab == 'fees' %}op-primary{% else %}op-secondary{% endif %}" href="{% url 'education:fees' %}?lang={{ lang }}"{% if tab == 'fees' %} aria-current="page"{% endif %}>{{ words.fees }}</a>{% endif %}
 {% if can_see_dues %}<a class="{% if tab == 'dues' %}op-primary{% else %}op-secondary{% endif %}" href="{% url 'education:dues' %}?lang={{ lang }}"{% if tab == 'dues' %} aria-current="page"{% endif %}>{{ words.dues }}</a>{% endif %}
+{% if can_see_pay %}<a class="{% if tab == 'teachers' %}op-primary{% else %}op-secondary{% endif %}" href="{% url 'education:teachers' %}?lang={{ lang }}"{% if tab == 'teachers' %} aria-current="page"{% endif %}>{{ words.teachers }}</a>{% endif %}
+{% if can_see_report %}<a class="{% if tab == 'report' %}op-primary{% else %}op-secondary{% endif %}" href="{% url 'education:report' %}?lang={{ lang }}"{% if tab == 'report' %} aria-current="page"{% endif %}>{{ words.report }}</a>{% endif %}
 </nav>

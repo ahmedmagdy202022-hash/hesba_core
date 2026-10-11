@@ -34,6 +34,7 @@ MESSAGES = {
         "entity": "الطالب والمجموعة والكورس لازم يكونوا في نفس الكيان.",
         "capacity_below": "في المجموعة {count} طالب دلوقتي؛ السعة مينفعش تقل عن كده. أوقف تسجيل بعضهم الأول.",
         "phone": "رقم التليفون قصير؛ اكتبه كامل (7 أرقام على الأقل).",
+        "pay_percent": "نسبة المدرس لازم تكون بين 0 و100%.", "pay_basis": "اختار طريقة حساب أجر المدرس.",
     },
     "en": {
         "name": "Enter the name.", "payer": "Choose who pays, type the parent's name, or mark that the student pays for themselves.",
@@ -48,12 +49,17 @@ MESSAGES = {
         "entity": "The student, the group and the course must belong to the same entity.",
         "capacity_below": "The group has {count} students now; capacity cannot go below that. Stop some enrolments first.",
         "phone": "The phone number is too short; enter it in full (at least 7 digits).",
+        "pay_percent": "The teacher's share must be between 0 and 100%.", "pay_basis": "Choose how the teacher is paid.",
     },
 }
 
 DAY_LABELS = {
     "ar": {"sat": "السبت", "sun": "الأحد", "mon": "الاتنين", "tue": "التلات", "wed": "الأربع", "thu": "الخميس", "fri": "الجمعة"},
     "en": {"sat": "Sat", "sun": "Sun", "mon": "Mon", "tue": "Tue", "wed": "Wed", "thu": "Thu", "fri": "Fri"},
+}
+PAY_LABELS = {
+    "ar": {"none": "مش بيتحسب على المجموعة", "session": "مبلغ عن كل حصة", "percent": "نسبة من مصروفات المجموعة", "monthly": "مبلغ ثابت كل شهر"},
+    "en": {"none": "Not paid per group", "session": "Amount per class held", "percent": "Share of the group's fees", "monthly": "Fixed amount per month"},
 }
 BASIS_LABELS = {
     "ar": {"monthly": "شهري", "course": "الكورس كله", "session": "بالحصة"},
@@ -351,7 +357,7 @@ def save_group(data, user, group=None, lang="ar"):
     values = {
         "course": course, "name": name, "teacher": teacher, "room": _text(data, "room", 60), "capacity": capacity, "days": ",".join(days),
         "start_time": _time(data.get("start_time"), words), "duration_minutes": duration, "fee": _money(data.get("fee"), words),
-        "starts_on": starts_on, "ends_on": ends_on,
+        "starts_on": starts_on, "ends_on": ends_on, **_teacher_pay(data, group, words),
     }
     creating = group is None
     if creating:
@@ -380,6 +386,22 @@ def save_group(data, user, group=None, lang="ar"):
            {"code": group.code, "course": course.name, "name": name, "days": group.days, "teacher": teacher.name if teacher else ""},
            AuditEventType.CREATE if creating else AuditEventType.UPDATE)
     return group
+
+
+def _teacher_pay(data, group, words):
+    """EDU-004: how the teacher is paid for this group. A form without the fields keeps what the group had."""
+
+    from .models import TeacherPay
+
+    if "teacher_pay" not in data:
+        return {} if group is not None else {"teacher_pay": TeacherPay.NONE, "teacher_rate": Decimal("0")}
+    basis = (data.get("teacher_pay") or TeacherPay.NONE).strip()
+    if basis not in TeacherPay.values:
+        raise ValidationError(words["pay_basis"])
+    rate = _money(data.get("teacher_rate"), words, Decimal("0")) if basis != TeacherPay.NONE else Decimal("0")
+    if basis == TeacherPay.PERCENT and rate > 100:
+        raise ValidationError(words["pay_percent"])
+    return {"teacher_pay": basis, "teacher_rate": rate}
 
 
 def active_count(group):

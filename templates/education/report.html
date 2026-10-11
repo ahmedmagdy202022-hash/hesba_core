@@ -1,0 +1,18 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.report }}: {{ label }}</h1><p>{{ words.report_intro }}</p></div></section>
+{% include "education/_tabs.html" %}
+<form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><label class="sr-only" for="rep-month">{{ words.month }}</label><input id="rep-month" type="month" name="month" value="{{ first|date:'Y-m' }}" max="{{ today|date:'Y-m' }}"><button type="submit">{{ words.go }}</button></form>
+<section class="op-summary-grid">
+<article><small>{{ words.billed }}</small><strong data-report-billed>{{ totals.billed|money }}</strong></article>
+{% if with_pay %}<article><small>{{ words.teachers }}</small><strong data-report-teachers>{{ totals.teacher|money }}</strong></article>
+<article><small>{{ words.left }}</small><strong class="{% if totals.left < 0 %}edu-low{% endif %}" data-report-left>{{ totals.left|money }}</strong></article>{% endif %}
+<article><small>{{ words.month_rate }}</small><strong data-report-rate>{% if totals.rate is not None %}{{ totals.rate }}%{% else %}—{% endif %}</strong><small>{{ totals.held }} {{ words.classes_held }}</small></article>
+</section>
+{% if rows %}<div class="op-table-wrap"><table class="op-table" data-group-report><thead><tr><th>{{ words.group }}</th><th>{{ words.teacher }}</th><th>{{ words.seats }}</th><th>{{ words.held }}</th><th>{{ words.month_rate }}</th><th>{{ words.billed }}</th>{% if with_pay %}<th>{{ words.teacher_pay }}</th><th>{{ words.left }}</th>{% endif %}</tr></thead><tbody>
+{% for row in rows %}<tr data-report-group="{{ row.group.pk }}"><td class="op-cell-text"><a href="{% url 'education:group' row.group.pk %}?lang={{ lang }}">{{ row.group.course.name }} — {{ row.group.name }}</a></td><td class="op-cell-text">{{ row.group.teacher.name|default:'—' }}</td><td>{{ row.students }}</td><td>{{ row.held }}</td>
+<td>{% if row.rate is not None %}<span class="{% if row.rate < 75 %}edu-low{% endif %}">{{ row.rate }}%</span>{% else %}—{% endif %}</td><td>{{ row.billed|money }}</td>{% if with_pay %}<td>{{ row.teacher|money }}</td><td><span class="{% if row.left < 0 %}edu-low{% endif %}">{{ row.left|money }}</span></td>{% endif %}</tr>{% endfor %}
+</tbody></table></div>
+{% else %}<p class="op-muted">{{ words.no_report }}</p>{% endif %}
+{% endblock %}

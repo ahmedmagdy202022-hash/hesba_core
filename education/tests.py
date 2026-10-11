@@ -769,3 +769,114 @@ class FeesRoundTwoTests(MonthlyFeesTests):
         self.assertNotContains(self.client.get(reverse("education:fees")), f'href="{reverse("education:dues")}?lang=ar"')
         self.client.force_login(self.owner)
         self.assertEqual(self.client.get(reverse("education:dues")).status_code, 200)
+
+
+class TeacherPayTests(EducationSetup):
+    """EDU-004: teacher pay as an ordinary expense, the month report and the dashboard panel."""
+
+    def setUp(self):
+        super().setUp()
+        from cashboxes.models import CashboxDirection
+        from hesba_testing.factories import make_cashbox, make_cashbox_movement, make_location
+
+        from . import attendance, billing, pay
+
+        self.pay, self.billing, self.register = pay, billing, attendance
+        make_location(location_code="CENTER", is_default=True)
+        self.cashbox = make_cashbox(cashbox_code="CASH-EDU", is_default=True)
+        make_cashbox_movement(self.cashbox, CashboxDirection.IN, "5000.00")
+        self.month = TODAY.replace(day=1)
+        self.class_day = TODAY - timedelta(days=(TODAY.weekday() - 5) % 7)
+        self.saturday = self.group(days="sat")
+        self.yousef, self.mariam = self.student(), self.student("مريم محمد")
+        for student in (self.yousef, self.mariam):
+            services.enroll(student, self.saturday, self.owner, start_date=self.month - timedelta(days=40))
+
+    def set_pay(self, basis, rate):
+        StudyGroup.objects.filter(pk=self.saturday.pk).update(teacher_pay=basis, teacher_rate=D(rate))
+        self.saturday.refresh_from_db()
+
+    def test_each_basis_owes_what_it_says(self):
+        self.set_pay("session", "150")
+        held = self.class_day if self.class_day >= self.month else None
+        if held:
+            self.register.take(self.saturday, self.owner, held, {})
+        self.assertEqual(self.pay.group_due(self.saturday, self.month)["due"], D("150.00") if held else D("0.00"))
+        self.set_pay("monthly", "1200")
+        self.assertEqual(self.pay.group_due(self.saturday, self.month)["due"], D("1200.00"))
+        self.set_pay("percent", "40")
+        self.billing.bill_month(self.month, self.owner, post=True)  # 400 + 400
+        self.assertEqual(self.pay.group_due(self.saturday, self.month)["due"], D("320.00"))
+        self.set_pay("none", "0")
+        self.assertEqual(self.pay.teacher_rows(self.month), [])
+
+    def test_paying_is_an_expense_out_of_the_cashbox_and_cancelling_owes_it_again(self):
+        from cashboxes.services import get_cashbox_balance as cashbox_balance
+        from expenses.services import cancel_expense
+
+        self.set_pay("monthly", "1200")
+        before = cashbox_balance(self.cashbox)
+        payment = self.pay.pay(self.teacher, self.month, "1000", self.cashbox, self.owner)
+        expense = payment.expense
+        self.assertEqual((expense.amount, expense.category.code, expense.payee), (D("1000.00"), "TEACHER-PAY", "أ. محمود"))
+        self.assertEqual(cashbox_balance(self.cashbox), before - D("1000.00"))
+        row = self.pay.teacher_rows(self.month)[0]
+        self.assertEqual((row["due"], row["paid"], row["remaining"]), (D("1200.00"), D("1000.00"), D("200.00")))
+        with self.assertRaisesMessage(ValidationError, "أكبر من الباقي"):
+            self.pay.pay(self.teacher, self.month, "200.01", self.cashbox, self.owner)
+        cancel_expense(expense.pk, reversal_date=TODAY, reason="غلط", user=self.owner)
+        self.assertEqual(cashbox_balance(self.cashbox), before)
+        self.assertEqual(self.pay.owed(self.teacher, self.month), D("1200.00"))
+        with self.assertRaisesMessage(ValidationError, "لسه مجاش"):
+            self.pay.pay(self.teacher, self.billing.month_end(self.month) + timedelta(days=1), "1", self.cashbox, self.owner)
+
+    def test_the_teachers_screen_pays_and_needs_the_expense_permissions(self):
+        self.set_pay("monthly", "900")
+        url = reverse("education:teachers")
+        self.client.force_login(self.owner)
+        page = self.client.get(url)
+        self.assertContains(page, f'data-pay-form="{self.teacher.pk}"')
+        response = self.client.post(url, {"month": f"{self.month:%Y-%m}", "teacher": self.teacher.pk, "amount": "900", "cashbox": self.cashbox.pk})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(self.pay.owed(self.teacher, self.month), D("0"))
+        bad = self.client.post(url, {"month": "", "teacher": self.teacher.pk, "amount": "1", "cashbox": self.cashbox.pk})
+        self.assertContains(bad, "الشهر مش مظبوط")
+        stock_keeper = person(RoleCode.STOCK_KEEPER, "edu_pay_stock")
+        self.client.force_login(stock_keeper)
+        self.assertEqual(self.client.get(url).status_code, 403)
+
+    def test_the_month_report_per_group(self):
+        self.set_pay("percent", "50")
+        self.billing.bill_month(self.month, self.owner, post=True)
+        rows, totals = __import__("education.insights", fromlist=["group_report"]).group_report(self.month)
+        self.assertEqual([(row["group"], row["students"], row["billed"], row["teacher"], row["left"]) for row in rows],
+                         [(self.saturday, 2, D("800.00"), D("400.00"), D("400.00"))])
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("education:report"))
+        self.assertContains(page, f'data-report-group="{self.saturday.pk}"')
+        self.assertContains(page, "data-report-left")
+        # A cashier sees the fees billed, not what teachers are paid.
+        cashier = person(RoleCode.CASHIER, "edu_report_cashier")
+        from permissions.services import user_has_permission
+
+        if user_has_permission(cashier, "reports.view_sales_report") and not user_has_permission(cashier, "cashboxes.view_expenses"):
+            self.client.force_login(cashier)
+            self.assertNotContains(self.client.get(reverse("education:report")), "data-report-left")
+
+    def test_the_dashboard_leads_with_the_school(self):
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("dashboard_snapshot"))
+        self.assertContains(page, "المركز النهارده")
+        self.assertContains(page, f'href="{reverse("education:today")}?lang=ar" data-action="classes"')
+        tiles, _ = __import__("education.insights", fromlist=["panel_tiles"]).panel_tiles("ar", TODAY, self.owner)
+        self.assertEqual(tiles[0]["value"], 2)  # active students
+
+    def test_a_group_form_sets_how_the_teacher_is_paid(self):
+        data = {"course": self.maths, "name": "مجموعة الأحد", "days": "sun", "start_time": time(18), "teacher_pay": "percent", "teacher_rate": "120"}
+        with self.assertRaisesMessage(ValidationError, "بين 0 و100"):
+            services.save_group(data, self.owner)
+        group = services.save_group({**data, "teacher_rate": "35"}, self.owner)
+        self.assertEqual((group.teacher_pay, group.teacher_rate), ("percent", D("35.00")))
+        services.save_group({"course": self.maths, "name": "مجموعة الأحد", "days": "sun", "start_time": time(18)}, self.owner, group)
+        group.refresh_from_db()
+        self.assertEqual(group.teacher_pay, "percent")  # a form without the fields keeps them
