@@ -1,11 +1,11 @@
 # Agent Hard Gates
 
-Status: ALL GATES RESOLVED (HG-001–HG-007 from the end-to-end run; HG-008 approved 2026-09-26)
+Status: HG-001–HG-037 RESOLVED. Later entries carry their own status: an OPEN PROPOSAL (HG-041–HG-044) is a decision still waiting, and an IMPLEMENTED note is built and waiting for review. Read each entry's status before protected work.
 Decision source: Main Control decision comment on PR #54
 Implemented on: `agent/end-to-end-functional-cycle`, merged to `develop` via PR #54 (`c77c7e5`)
 Resolved: 2026-08-30
 
-This log records the seven protected business/accounting decisions raised during the end-to-end functional run. Main Control approved all seven decisions. They are implemented, migrated, and covered by the final verification run. No new Hard Gate remains open.
+This log records the seven protected business/accounting decisions raised during the end-to-end functional run. Main Control approved all seven decisions. They are implemented, migrated, and covered by the final verification run. Gates raised after that run are listed below with their own status.
 
 ## HG-001 — Cashbox master-data permission
 
@@ -798,7 +798,7 @@ Status: RESOLVED — approved by Ahmed on 9 Oct 2026 ("موافق تعمل كل 
 - **Files (1 and 2A):** `restaurant` (dish cost and waste screens, reports), `reports` (the waste report). No inventory or ledger change.
 - **Risks:**
   - With 2A, waste and count differences share one account, so only the report separates them by reason.
-  - With C1, stock of dishes must be produced before it is sold. A sale beyond production goes negative unless the run is recorded first.
+  - With C1, stock of dishes must be produced before it is sold. Selling more than was produced does not go negative: posting the sale is refused for lack of stock (`sales.services._validate_stock_available`), so the order cannot be paid. C1 therefore needs the dish produced before payment (a daily kitchen run, or a run made for the missing quantity just before the sale posts), and its tests must cover a sale beyond what was produced.
 - **Tests to write:**
   - dish cost equals the recipe's ingredient cost at average cost;
   - waste moves the exact quantity and value into stock loss, and the waste report shows it by reason;
