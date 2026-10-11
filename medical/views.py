@@ -223,13 +223,14 @@ def visit_edit(request, pk=None, visit_pk=None):
     error = ""
     if request.method == "POST":
         data = request.POST.dict()
-        data["doctor"] = _doctors().filter(pk=request.POST.get("doctor") or 0).first()
+        data["doctor"] = _doctors().filter(pk=_id(request.POST.get("doctor"))).first()
         if not visit and request.POST.get("appointment"):
-            data["appointment"] = patient.appointments.filter(pk=request.POST.get("appointment")).first()
+            data["appointment"] = patient.appointments.filter(pk=_id(request.POST.get("appointment"))).first()
         if _is_vet():
             from .models import Animal
 
-            data["animal"] = Animal.objects.filter(pk=request.POST.get("animal") or 0).first()  # the service refuses another owner's animal
+            data["animal"] = Animal.objects.filter(pk=_id(request.POST.get("animal"))).first()  # the service refuses another owner's animal
+            data["vet"] = True
         else:
             data.pop("animal", None)
         try:
@@ -263,8 +264,10 @@ def prescription(request, visit_pk):
     animal_line = ""
     if visit.animal_id:  # MED-006: the prescription is for the animal; the owner is who it is handed to
         animal_line = f"{visit.animal.name} ({vet.SPECIES_LABELS[lang].get(visit.animal.species, visit.animal.species)})"
+    allergies = visit.animal.allergies if visit.animal_id else ("" if _is_vet() else file.allergies)  # an animal's own, never its owner's
     return render(request, "medical/prescription.html", _base(lang, visit=visit, file=file, age=None if visit.animal_id else services.age(file, visit.visit_date),
-                                                              company=company_details(), animal_line=animal_line, animal_label=VET_WORDS[lang]["animal"]))
+                                                              company=company_details(), animal_line=animal_line, animal_label=VET_WORDS[lang]["animal"],
+                                                              allergies=allergies))
 
 
 DENTAL_WORDS = {
@@ -650,5 +653,5 @@ def _animal_form(request, lang, owner, animal):
         else:
             messages.success(request, words["saved"])
             return redirect(f"{reverse('medical:animal', args=[animal.pk])}?lang={lang}")
-    return render(request, "medical/animal_form.html", _base(lang, page_title=words["add"], vw=words, owner=owner, animal=animal, error=error,
+    return render(request, "medical/animal_form.html", _base(lang, page_title=animal.name if animal else words["add"], vw=words, owner=owner, animal=animal, error=error,
                                                              post=request.POST, species=_species(lang), today=timezone.localdate()))

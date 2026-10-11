@@ -22,9 +22,11 @@ SPECIES_LABELS = {
 }
 MESSAGES = {
     "ar": {"name": "اكتب اسم الحيوان.", "species": "اختار نوع الحيوان.", "sex": "النوع مش صحيح.", "date": "تاريخ الميلاد مش مظبوط.",
-           "future": "تاريخ الميلاد لسه مجاش.", "not_theirs": "الحيوان ده مش بتاع العميل ده."},
+           "future": "تاريخ الميلاد لسه مجاش.", "not_theirs": "الحيوان ده مش بتاع العميل ده.",
+           "choose_animal": "اختار الحيوان اللي الكشف ده عشانه.", "no_animal": "سجّل الحيوان في ملف صاحبه الأول، وبعدين سجّل الكشف."},
     "en": {"name": "Enter the animal's name.", "species": "Choose the species.", "sex": "The sex is not valid.", "date": "The date of birth is not valid.",
-           "future": "The date of birth is still to come.", "not_theirs": "This animal does not belong to this customer."},
+           "future": "The date of birth is still to come.", "not_theirs": "This animal does not belong to this customer.",
+           "choose_animal": "Choose the animal this visit is for.", "no_animal": "Add the animal to its owner's file first, then record the visit."},
 }
 FIELDS = ("name", "species", "breed", "sex", "date_of_birth", "colour", "microchip", "neutered", "allergies", "notes", "active")
 
@@ -40,7 +42,8 @@ def _words(lang):
 
 
 def _snapshot(animal):
-    return {field: (getattr(animal, field).isoformat() if isinstance(getattr(animal, field), date) else getattr(animal, field)) for field in FIELDS}
+    data = {field: (getattr(animal, field).isoformat() if isinstance(getattr(animal, field), date) else getattr(animal, field)) for field in FIELDS}
+    return {"owner": animal.owner_id, **data}
 
 
 @transaction.atomic
@@ -78,7 +81,7 @@ def save_animal(owner, data, user, animal=None, lang="ar"):
     animal.save()
     AuditLog.objects.create(event_type=AuditEventType.CREATE if creating else AuditEventType.UPDATE, actor=user, module="medical",
                             action="save_animal", object_type="medical.Animal", object_id=str(animal.pk), before_data=before,
-                            after_data={"owner": owner.pk, **_snapshot(animal)})
+                            after_data=_snapshot(animal))
     return animal
 
 
@@ -89,8 +92,20 @@ def age_text(animal, lang="ar", today=None):
         return ""
     today = today or timezone.localdate()
     months = (today.year - animal.date_of_birth.year) * 12 + today.month - animal.date_of_birth.month - (today.day < animal.date_of_birth.day)
-    if months >= 24:
-        return f"{months // 12} {'years' if lang == 'en' else 'سنين'}"
+    if lang == "en":
+        if months >= 12:
+            return "1 year" if months < 24 else f"{months // 12} years"
+        return "under a month" if months < 1 else ("1 month" if months == 1 else f"{months} months")
     if months >= 12:
-        return "1 year" if lang == "en" else "سنة"
-    return f"{max(months, 0)} {'months' if lang == 'en' else 'شهور'}"
+        return _arabic_count(months // 12, "سنة", "سنتين", "سنين", "سنة")
+    return "أقل من شهر" if months < 1 else _arabic_count(months, "شهر", "شهرين", "شهور", "شهر")
+
+
+def _arabic_count(n, one, two, few, many):
+    """1 سنة، سنتين، 3 سنين، 11 سنة — the way it is said."""
+
+    if n == 1:
+        return one
+    if n == 2:
+        return two
+    return f"{n} {few if n <= 10 else many}"

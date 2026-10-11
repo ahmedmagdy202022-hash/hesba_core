@@ -1,10 +1,10 @@
 {% extends "operations/base.html" %}
 {% load l10n %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'medical:patients' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ patient.name }}</h1><p><bdi>{{ file.file_number }}</bdi>{% if age is not None %} · {{ age }} {{ words.years }}{% endif %}{% if file.gender %} · {% if file.gender == 'male' %}{{ words.male }}{% else %}{{ words.female }}{% endif %}{% endif %}{% if file.blood_type %} · {{ words.blood }} <bdi>{{ file.blood_type }}</bdi>{% endif %}{% if patient.phone %} · <bdi>{{ patient.phone }}</bdi>{% endif %}</p></div>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'medical:patients' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ patient.name }}</h1><p><bdi>{{ file.file_number }}</bdi>{% if not is_vet %}{% if age is not None %} · {{ age }} {{ words.years }}{% endif %}{% if file.gender %} · {% if file.gender == 'male' %}{{ words.male }}{% else %}{{ words.female }}{% endif %}{% endif %}{% if file.blood_type %} · {{ words.blood }} <bdi>{{ file.blood_type }}</bdi>{% endif %}{% endif %}{% if patient.phone %} · <bdi>{{ patient.phone }}</bdi>{% endif %}</p></div>
 <div class="op-form-actions">{% if can_write %}<a class="op-primary" href="{% url 'medical:visit_new' patient.pk %}?lang={{ lang }}" data-new-visit>{{ words.new_visit }}</a>{% endif %}{% if is_physio %}<a class="op-secondary" href="{% url 'medical:packages' patient.pk %}?lang={{ lang }}" data-packages-link>{{ physio_label }}</a>{% endif %}{% if is_lab %}<a class="op-secondary" href="{% url 'medical:lab' patient.pk %}?lang={{ lang }}" data-lab-link>{{ lab_label }}</a>{% endif %}{% if is_dental %}<a class="op-secondary" href="{% url 'medical:dental' patient.pk %}?lang={{ lang }}" data-dental-link>{{ dental_label }}</a>{% endif %}<a class="op-secondary" href="{% url 'parties:card' 'customer' patient.pk %}?lang={{ lang }}">{{ words.account }}</a></div></section>
 {% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
-{% if file.allergies %}<div class="op-message op-message-error" role="alert" data-allergy-alert><strong>⚠ {{ words.allergy_alert }}:</strong> {{ file.allergies|linebreaksbr }}</div>{% endif %}
+{% if file.allergies and not is_vet %}<div class="op-message op-message-error" role="alert" data-allergy-alert><strong>⚠ {{ words.allergy_alert }}:</strong> {{ file.allergies|linebreaksbr }}</div>{% endif %}
 {% if not is_vet %}<section class="op-summary-grid med-summary">
 <article><small>{{ words.chronic }}</small><strong>{{ file.chronic_conditions|default:'—'|linebreaksbr }}</strong></article>
 <article><small>{{ words.medications }}</small><strong>{{ file.current_medications|default:'—'|linebreaksbr }}</strong></article>
@@ -30,7 +30,7 @@
 {% if v.diagnosis %}<p><b>{{ words.diagnosis }}:</b> {{ v.diagnosis|linebreaksbr }}</p>{% endif %}
 {% if v.treatment %}<p><b>{{ words.treatment }}:</b> {{ v.treatment|linebreaksbr }}</p>{% endif %}
 </article>{% empty %}<p class="op-muted">{{ words.no_visits }}</p>{% endfor %}
-<details class="op-form med-profile"{% if error %} open{% endif %}><summary><h2>{{ words.edit_profile }}</h2></summary>
+{% if not is_vet %}<details class="op-form med-profile"{% if error %} open{% endif %}><summary><h2>{{ words.edit_profile }}</h2></summary>
 {% if can_write %}<form method="post" data-patient-profile>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><div class="op-form-grid">
 <div class="op-field"><label for="dob">{{ words.dob }}</label><input id="dob" type="date" name="date_of_birth" value="{{ file.date_of_birth|date:'Y-m-d' }}"></div>
 <div class="op-field"><label for="gender">{{ words.gender }}</label><select id="gender" name="gender"><option value="">{{ words.choose }}</option><option value="male"{% if file.gender == 'male' %} selected{% endif %}>{{ words.male }}</option><option value="female"{% if file.gender == 'female' %} selected{% endif %}>{{ words.female }}</option></select></div>
@@ -41,5 +41,5 @@
 <div class="op-field"><label for="meds">{{ words.medications }}</label><textarea id="meds" name="current_medications">{{ file.current_medications }}</textarea></div>
 <div class="op-field"><label for="notes">{{ words.notes }}</label><textarea id="notes" name="notes">{{ file.notes }}</textarea></div>
 </div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form>{% endif %}
-</details>
+</details>{% endif %}
 {% endblock %}
