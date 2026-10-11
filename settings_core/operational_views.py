@@ -16,7 +16,9 @@ from .currency import CurrencyChangeRefused, change_company_currency, currency_c
 
 STRINGS = {
     "ar": {"page_title": "الإعدادات", "dashboard": "لوحة القيادة", "language": "English", "settings": "إعدادات التشغيل", "roles": "الأدوار والصلاحيات", "back": "العودة للإعدادات", "hidden": "قيمة حساسة مخفية",
-           "modules": "الموديولات", "modules_lead": "شغّل أو اقفل أي موديول. القفل بيخفي الموديول ويقفل شاشاته بس، وبياناته بتفضل محفوظة زي ما هي.",
+           "modules": "الموديولات", "modules_lead": "دي الموديولات اللي تناسب نشاطك. شغّل أو اقفل أي موديول: القفل بيخفي الموديول ويقفل شاشاته بس، وبياناته بتفضل محفوظة زي ما هي.",
+           "your_activity": "نشاطك", "inside": "فيه لنشاطك:", "open": "افتح", "features": "مميزات نشاطك", "features_lead": "شاشات جاية مع نشاطك نفسه، مش محتاجة تتشغّل.",
+           "may_need": "ممكن تحتاجها", "change_activity": "النشاط بيتغيّر من إعداد النشاط.",
            "state_on": "مفعّل", "state_off": "مقفول", "state_required": "أساسي لنشاطك", "state_soon": "قريبًا",
            "turn_on": "تفعيل", "turn_off": "قفل", "view_only": "تقدر تشوف الموديولات بس؛ التغيير لصاحب الحساب.",
            "setup_first": "كمّل الإعداد الأول قبل ما تغيّر الموديولات.", "saved_on": "اتفعّل موديول «{module}».", "saved_off": "اتقفل موديول «{module}». بياناته محفوظة.", "refused": "التغيير ده مش مسموح: الموديول أساسي لنشاطك أو لسه مش متاح.",
@@ -25,7 +27,9 @@ STRINGS = {
            "capabilities": "قدرات النشاط", "capabilities_lead": "طرق شغل بيحتاجها بعض الأنشطة بس. اللي عليه «مقترح» مناسب لنشاطك، وتقدر تشغّل أو تقفل أي حاجة في أي وقت من غير ما بيانات تتمسح.",
            "suggested": "مقترح لنشاطك", "cap_saved_on": "اتفعّلت «{capability}».", "cap_saved_off": "اتقفلت «{capability}». بياناتها محفوظة.", "cap_refused": "التغيير ده مش مسموح: القدرة لسه مش متاحة."},
     "en": {"page_title": "Settings", "dashboard": "Dashboard", "language": "العربية", "settings": "Operational settings", "roles": "Roles and permissions", "back": "Back to settings", "hidden": "Sensitive value hidden",
-           "modules": "Modules", "modules_lead": "Switch any module on or off. Switching off only hides the module and closes its screens; its data is kept as it is.",
+           "modules": "Modules", "modules_lead": "These are the modules that suit your activity. Switch any of them on or off: switching off only hides the module and closes its screens; its data is kept as it is.",
+           "your_activity": "Your activity", "inside": "For your activity:", "open": "Open", "features": "Your activity's features", "features_lead": "Screens that come with your activity itself; nothing to switch on.",
+           "may_need": "You may need", "change_activity": "The activity is changed from the activity setup.",
            "state_on": "On", "state_off": "Off", "state_required": "Required for your activity", "state_soon": "Coming soon",
            "turn_on": "Switch on", "turn_off": "Switch off", "view_only": "You can view modules; changing them is for the account owner.",
            "setup_first": "Finish setup before changing modules.", "saved_on": "The “{module}” module is on.", "saved_off": "The “{module}” module is off. Its data is kept.", "refused": "That change is not allowed: the module is required for your activity or not available yet.",
@@ -244,16 +248,41 @@ def module_settings(request):
                 key = "saved_on" if enabled else "saved_off"
                 messages.success(request, words[key].format(module=catalog.module_label(slug, lang)))
         return redirect(f"{reverse('settings_core:modules')}?lang={lang}")
+    rows = module_settings_rows(profile, lang) if profile is not None else []
     return render(
         request,
         "settings_core/modules.html",
         _context(
             request,
-            rows=module_settings_rows(profile, lang) if profile is not None else [],
+            rows=rows,
+            groups=_groups(rows, lang),
+            activity_name=_activity_name(profile, lang),
             setup_complete=profile is not None and profile.setup_is_complete,
             can_manage=can_manage,
         ),
     )
+
+
+#: ACT-FIT: how the modules screen groups what fits the activity.
+GROUP_TITLES = {
+    "ar": {"required": "أساسي لنشاطك", "suggested": "مقترح لنشاطك", "optional": "ممكن تحتاجه", "extra": "مش من موديولات نشاطك (شغال حاليًا)"},
+    "en": {"required": "Core for your activity", "suggested": "Suggested for your activity", "optional": "You may need", "extra": "Not one of your activity's modules (on now)"},
+}
+
+
+def _groups(rows, lang):
+    titles = GROUP_TITLES["en" if lang == "en" else "ar"]
+    return [{"key": key, "title": titles[key], "rows": [row for row in rows if row["group"] == key]}
+            for key in ("required", "suggested", "optional", "extra") if any(row["group"] == key for row in rows)]
+
+
+def _activity_name(profile, lang):
+    if profile is None or not profile.activity_slug:
+        return ""
+    name = catalog.activity_label(profile.activity_slug, lang)
+    if profile.sub_activity_slug and catalog.is_valid_sub_activity(profile.activity_slug, profile.sub_activity_slug):
+        name = f"{name} — {catalog.sub_activity_label(profile.activity_slug, profile.sub_activity_slug, lang)}"
+    return name
 
 
 @require_permission("settings.view_settings")
@@ -281,12 +310,19 @@ def capability_settings(request):
                 if note:
                     messages.warning(request, note)
         return redirect(f"{reverse('settings_core:capabilities')}?lang={lang}")
+    from . import activity_fit
+
+    rows = caps.settings_rows(profile, lang)
     return render(
         request,
         "settings_core/capabilities.html",
         _context(
             request,
-            rows=caps.settings_rows(profile, lang),
+            rows=rows,
+            suggested_rows=[row for row in rows if row["suggested"]],
+            other_rows=[row for row in rows if not row["suggested"]],
+            activity_features=activity_fit.features(profile.activity_slug, profile.sub_activity_slug, lang) if profile is not None else [],
+            activity_name=_activity_name(profile, lang),
             setup_complete=profile is not None and profile.setup_is_complete,
             can_manage=can_manage,
         ),

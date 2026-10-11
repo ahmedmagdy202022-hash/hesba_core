@@ -142,17 +142,22 @@ class ModuleChangeRefused(ValueError):
 def module_settings_rows(profile, lang="ar"):
     """Every catalog module with the state the settings screen shows for it."""
 
+    from . import activity_fit
+
     enabled = set(enabled_modules())
     required = set(catalog.required_modules(catalog.closest(profile.activity_slug, profile.sub_activity_slug)[0])) if profile else set()
     rows = []
-    for slug in catalog.MODULE_SLUGS:
+    # ACT-FIT: only what is offered to the activity (and anything already on), in its own words, most needed first.
+    for fit in activity_fit.module_rows(profile.activity_slug if profile else "", profile.sub_activity_slug if profile else "", lang, enabled=enabled):
+        slug = fit["slug"]
         if slug in catalog.MODULES_WITHOUT_BACKEND:
             state = "soon"
         elif slug in required:
             state = "required"
         else:
             state = "on" if slug in enabled else "off"
-        rows.append({"slug": slug, "label": catalog.module_label(slug, lang), "state": state, "enabled": slug in enabled})
+        rows.append({"slug": slug, "label": fit["label"], "about": fit["about"], "group": fit["preset"] or "extra", "features": fit["features"],
+                     "state": state, "enabled": slug in enabled})
     return rows
 
 
