@@ -123,7 +123,7 @@ def log_time(data, user, lang="ar"):
 @transaction.atomic
 def remove_entry(entry, user, lang="ar"):
     words = _words(lang)
-    entry = TimeEntry.objects.select_for_update().select_related("invoice").get(pk=entry.pk)
+    entry = TimeEntry.objects.select_for_update(of=("self",)).select_related("invoice").get(pk=entry.pk)  # Postgres: never lock the nullable invoice side
     if not user_has_permission(user, MANAGE):
         own = _employee_of(user)
         if own is None or entry.employee_id != own.pk:
