@@ -158,6 +158,7 @@ def student_detail(request, pk):
     for row in enrollments:
         row.schedule = services.schedule_text(row.group, lang)
         row.net = services.monthly_fee(row)
+        row.basis_label = services.BASIS_LABELS[lang][row.group.course.basis]  # a month, a class or the whole course
         row.status_label = _status_label(row.status, words)
     enrolled = {row.group_id for row in enrollments if row.status == EnrollmentStatus.ACTIVE}
     open_groups = services.scoped(StudyGroup.objects).filter(active=True).exclude(pk__in=enrolled).select_related("course")
@@ -240,10 +241,11 @@ def group_detail(request, pk):
     for row in roster:
         row.net = services.monthly_fee(row)
     others = services.scoped(Student.objects).filter(active=True).exclude(pk__in=[row.student_id for row in roster]).order_by("name")
-    total = sum((row.net for row in roster), start=group.effective_fee * 0)
+    # A monthly total only means something for a monthly course; a whole course or a per-class fee is not a month.
+    total = sum((row.net for row in roster), start=group.effective_fee * 0) if group.course.basis == FeeBasis.MONTHLY else None
     return render(request, "education/group.html", _group_form_context(
         request, lang, group=group, roster=roster, others=others, schedule=services.schedule_text(group, lang), error=error, post=None,
-        chosen_days=group.weekdays, total=total, free=(group.capacity - len(roster)) if group.capacity else None, today=timezone.localdate()))
+        chosen_days=group.weekdays, total=total, basis_label=services.BASIS_LABELS[lang][group.course.basis], free=(group.capacity - len(roster)) if group.capacity else None, today=timezone.localdate()))
 
 
 # ---- courses ----

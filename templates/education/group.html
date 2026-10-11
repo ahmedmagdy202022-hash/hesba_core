@@ -6,8 +6,8 @@
 {% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
 <section class="op-summary-grid">
 <article><small>{{ words.seats }}</small><strong data-seats>{{ roster|length }}{% if group.capacity %} / {{ group.capacity }}{% endif %}</strong>{% if free is not None %}<small>{{ free }} {{ words.free_seats }}</small>{% endif %}</article>
-<article><small>{{ words.fee }}</small><strong>{{ group.effective_fee|money }}</strong></article>
-<article><small>{{ words.total_monthly }}</small><strong data-group-total>{{ total|money }}</strong></article>
+<article><small>{{ words.fee }}</small><strong>{{ group.effective_fee|money }}</strong><small>{{ basis_label }}</small></article>
+{% if total is not None %}<article><small>{{ words.total_monthly }}</small><strong data-group-total>{{ total|money }}</strong></article>{% endif %}
 </section>
 <h2>{{ words.roster }}</h2>
 <div class="op-table-wrap"><table class="op-table" data-roster><thead><tr><th>{{ words.student }}</th><th>{{ words.payer }}</th><th>{{ words.phone }}</th><th>{{ words.discount }}</th><th>{{ words.net }}</th><th>{{ words.since }}</th>{% if can_manage %}<th></th>{% endif %}</tr></thead><tbody>
