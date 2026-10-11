@@ -3,7 +3,7 @@
 {% block operation_content %}
 <section class="op-title-row"><div><a class="op-back" href="{% url 'education:groups' %}?lang={{ lang }}">← {{ words.back_groups }}</a><h1>{{ group.course.name }} — {{ group.name }}</h1>
 <p><bdi>{{ group.code }}</bdi>{% if schedule %} · {{ schedule }}{% endif %}{% if group.teacher %} · {{ group.teacher.name }}{% endif %}{% if group.room %} · {{ words.room }} {{ group.room }}{% endif %}{% if not group.active %} · <span class="op-status op-status-draft">{{ words.status_stopped }}</span>{% endif %}</p></div>
-{% if can_take and group.active %}<div class="op-form-actions"><a class="op-primary" href="{% url 'education:attendance' group.pk %}?lang={{ lang }}" data-take-attendance>{{ words.take }}</a></div>{% endif %}</section>
+{% if can_take and group.active and last_class %}<div class="op-form-actions"><a class="op-primary" href="{% url 'education:attendance' group.pk %}?lang={{ lang }}&date={{ last_class|date:'Y-m-d' }}" data-take-attendance>{{ words.take }} · <bdi>{{ last_class|date:"Y-m-d" }}</bdi></a></div>{% endif %}</section>
 {% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
 <section class="op-summary-grid">
 <article><small>{{ words.seats }}</small><strong data-seats>{{ roster|length }}{% if group.capacity %} / {{ group.capacity }}{% endif %}</strong>{% if free is not None %}<small>{{ free }} {{ words.free_seats }}</small>{% endif %}</article>

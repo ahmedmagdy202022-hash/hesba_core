@@ -694,6 +694,7 @@ Status: RESOLVED — approved by Ahmed on 9 Oct 2026 ("موافق تعمل كل 
   - `Course`, which owns a non-stock service `Item`, so its invoices are ordinary sales invoices. Renaming the course or changing its price keeps the item in step.
   - `StudyGroup`, with its teacher (an `Employee`), room, weekdays, time, length, capacity, fee and dates. A teacher or a room is never booked into two groups at once.
   - `Enrollment`, with its start and stop dates, a discount percentage and a status. There is one active enrolment per student and group. Capacity is checked under the group's row lock.
+- **Entity scope (Codex on #185, HG-034):** students, courses and groups belong to the entity they were made in, and unowned ones count as the main entity's. Every list, file, choice and change is scoped to the entity being worked in; the whole group sees everything. A student, a group and its course must share one entity. A room clash counts within one entity; a teacher clash counts everywhere.
 - **Not touched:**
   - sales and payment posting, the customer ledger, cash, stock and reports;
   - the permission core: viewing uses `master_data.view_master_data`, and changing uses `master_data.manage_parties`.
@@ -707,6 +708,11 @@ Status: RESOLVED — approved by Ahmed on 9 Oct 2026 ("موافق تعمل كل 
   - Attendance rates count held classes only, with late counted as attended.
   - Absent and late students get a one-tap WhatsApp link to the parent.
   - No money moves.
+  - **Codex on #186:**
+    - A student stopped and enrolled again on the same day is one row, with one mark.
+    - Attendance is taken only on the group's own weekdays and within its dates, and the group page offers its latest class day.
+    - A message about an older class gives its date instead of "today".
+    - Attendance screens are scoped to the entity being worked in.
 - **EDU-003 (monthly fees):** `education/billing.py` makes one draft sales invoice per parent for a month. It goes through `create_sales_draft_with_tax`, and through `post_sales_invoice` when posting is asked for. Neither function is changed.
   - **Lines:** one per enrolment, using the course's own service item.
     - **Monthly groups:** one month at the group's fee, with the enrolment's discount as the line discount.

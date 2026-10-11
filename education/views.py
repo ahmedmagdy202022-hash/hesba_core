@@ -39,7 +39,7 @@ WORDS = {
         "cancelled_class": "الحصة اتلغت", "save_attendance": "حفظ الحضور", "attendance_saved": "اتسجّل الحضور.", "attendance": "الحضور",
         "rate": "نسبة الحضور (30 يوم)", "recent_absences": "آخر غياب", "no_absences": "مفيش غياب في آخر 30 يوم.", "sessions": "آخر الحصص",
         "no_sessions": "لسه متسجّلش حضور للمجموعة دي.", "tell_parent": "ابعت لولي الأمر واتساب", "all_present": "الكل حاضر",
-        "go": "عرض", "date": "التاريخ", "counts": "حاضر {present} · متأخر {late} · غايب {absent}", "notify": "بلّغ أولياء الأمور",
+        "go": "عرض", "date": "التاريخ", "off_day": "المجموعة دي مالهاش حصة في اليوم ده. اختار يوم من أيامها من «حصص النهارده».", "counts": "حاضر {present} · متأخر {late} · غايب {absent}", "notify": "بلّغ أولياء الأمور",
         "fees": "مصروفات الشهر", "dues": "المتأخرات", "month": "الشهر", "to_bill": "هيتفوتر", "billed": "اتفوتر", "lines": "البنود",
         "qty": "الكمية", "price": "السعر", "amount": "المبلغ", "bill_btn": "اعمل فواتير الشهر", "post_now": "رحّلها على طول (تتسجل على حساب ولي الأمر)",
         "invoice_date": "تاريخ الفاتورة", "billed_ok": "اتعملت {count} فاتورة بإجمالي {total}.", "nothing_new": "كل حاجة في الشهر ده اتفوترت.",
@@ -71,7 +71,7 @@ WORDS = {
         "cancelled_class": "Class cancelled", "save_attendance": "Save attendance", "attendance_saved": "Attendance saved.", "attendance": "Attendance",
         "rate": "Attendance (30 days)", "recent_absences": "Recent absences", "no_absences": "No absences in the last 30 days.", "sessions": "Recent classes",
         "no_sessions": "No attendance taken for this group yet.", "tell_parent": "WhatsApp the parent", "all_present": "All present",
-        "go": "Show", "date": "Date", "counts": "Present {present} · Late {late} · Absent {absent}", "notify": "Tell the parents",
+        "go": "Show", "date": "Date", "off_day": "This group has no class on that day. Pick one of its days from Today's classes.", "counts": "Present {present} · Late {late} · Absent {absent}", "notify": "Tell the parents",
         "fees": "Monthly fees", "dues": "Fees owed", "month": "Month", "to_bill": "To bill", "billed": "Billed", "lines": "Lines",
         "qty": "Qty", "price": "Price", "amount": "Amount", "bill_btn": "Make this month's invoices", "post_now": "Post them now (they go on the parent's account)",
         "invoice_date": "Invoice date", "billed_ok": "{count} invoices made, {total} in all.", "nothing_new": "Everything in this month is billed.",
@@ -124,7 +124,7 @@ def students(request):
     _guard(request)
     lang = _lang(request)
     query = (request.GET.get("q") or "").strip()
-    rows = Student.objects.select_related("payer").annotate(
+    rows = services.scoped(Student.objects).select_related("payer").annotate(
         groups_count=Count("enrollments", filter=Q(enrollments__status=EnrollmentStatus.ACTIVE)))
     if query:
         rows = rows.filter(Q(name__icontains=query) | Q(phone__icontains=query) | Q(code__icontains=query) | Q(payer__name__icontains=query))
@@ -152,7 +152,7 @@ def student_detail(request, pk):
     _guard(request)
     lang = _lang(request)
     words = WORDS[lang]
-    student = get_object_or_404(Student.objects.select_related("payer"), pk=pk)
+    student = get_object_or_404(services.scoped(Student.objects).select_related("payer"), pk=pk)
     error = ""
     if request.method == "POST":
         _guard(request, write=True)
@@ -164,7 +164,7 @@ def student_detail(request, pk):
                 services.save_student(data, request.user, student, lang)
                 message = words["saved"]
             elif action == "enroll":
-                group = get_object_or_404(StudyGroup, pk=request.POST.get("group") or 0)
+                group = get_object_or_404(services.scoped(StudyGroup.objects), pk=request.POST.get("group") or 0)
                 services.enroll(student, group, request.user, start_date=request.POST.get("start_date"),
                                 discount_percent=request.POST.get("discount_percent"), lang=lang)
                 message = words["enrolled_ok"]
@@ -185,7 +185,7 @@ def student_detail(request, pk):
         row.net = services.monthly_fee(row)
         row.status_label = _status_label(row.status, words)
     enrolled = {row.group_id for row in enrollments if row.status == EnrollmentStatus.ACTIVE}
-    open_groups = StudyGroup.objects.filter(active=True).exclude(pk__in=enrolled).select_related("course")
+    open_groups = services.scoped(StudyGroup.objects).filter(active=True).exclude(pk__in=enrolled).select_related("course")
     summary = register.student_summary(student)
     return render(request, "education/student.html", _base(request, lang, "students", student=student, enrollments=enrollments, open_groups=open_groups,
                                                            payers=_payers(), error=error, today=timezone.localdate(), summary=summary))
@@ -195,7 +195,7 @@ def student_detail(request, pk):
 
 def _group_data(request):
     data = request.POST.copy()
-    data["course"] = Course.objects.filter(pk=request.POST.get("course") or 0).first()
+    data["course"] = services.scoped(Course.objects).filter(pk=request.POST.get("course") or 0).first()
     data["teacher"] = _teachers().filter(pk=request.POST.get("teacher") or 0).first()
     return data
 
@@ -203,15 +203,15 @@ def _group_data(request):
 def groups(request):
     _guard(request)
     lang = _lang(request)
-    rows = list(StudyGroup.objects.select_related("course", "teacher").annotate(
+    rows = list(services.scoped(StudyGroup.objects).select_related("course", "teacher").annotate(
         seats=Count("enrollments", filter=Q(enrollments__status=EnrollmentStatus.ACTIVE))).order_by("-active", "course__name", "name"))
     for row in rows:
         row.schedule = services.schedule_text(row, lang)
-    return render(request, "education/groups.html", _base(request, lang, "groups", rows=rows, has_courses=Course.objects.filter(active=True).exists()))
+    return render(request, "education/groups.html", _base(request, lang, "groups", rows=rows, has_courses=services.scoped(Course.objects).filter(active=True).exists()))
 
 
 def _group_form_context(request, lang, **extra):
-    return _base(request, lang, "groups", courses=Course.objects.filter(active=True), teachers=_teachers(),
+    return _base(request, lang, "groups", courses=services.scoped(Course.objects).filter(active=True), teachers=_teachers(),
                  weekdays=[(day, services.DAY_LABELS[lang][day]) for day in Weekday.values], **extra)
 
 
@@ -236,7 +236,7 @@ def group_detail(request, pk):
     _guard(request)
     lang = _lang(request)
     words = WORDS[lang]
-    group = get_object_or_404(StudyGroup.objects.select_related("course", "teacher"), pk=pk)
+    group = get_object_or_404(services.scoped(StudyGroup.objects).select_related("course", "teacher"), pk=pk)
     error = ""
     if request.method == "POST":
         _guard(request, write=True)
@@ -246,7 +246,7 @@ def group_detail(request, pk):
                 services.save_group(_group_data(request), request.user, group, lang)
                 message = words["saved"]
             elif action == "enroll":
-                student = get_object_or_404(Student, pk=request.POST.get("student") or 0)
+                student = get_object_or_404(services.scoped(Student.objects), pk=request.POST.get("student") or 0)
                 services.enroll(student, group, request.user, start_date=request.POST.get("start_date"),
                                 discount_percent=request.POST.get("discount_percent"), lang=lang)
                 message = words["enrolled_ok"]
@@ -270,12 +270,12 @@ def group_detail(request, pk):
     sessions = list(group.sessions.annotate(
         present=Count("marks", filter=Q(marks__presence=Presence.PRESENT)), late=Count("marks", filter=Q(marks__presence=Presence.LATE)),
         absent=Count("marks", filter=Q(marks__presence=Presence.ABSENT)))[:8])
-    others = Student.objects.filter(active=True).exclude(pk__in=[row.student_id for row in roster]).order_by("name")
+    others = services.scoped(Student.objects).filter(active=True).exclude(pk__in=[row.student_id for row in roster]).order_by("name")
     total = sum((row.net for row in roster), start=group.effective_fee * 0)
     return render(request, "education/group.html", _group_form_context(
         request, lang, group=group, roster=roster, others=others, schedule=services.schedule_text(group, lang), error=error, post=None,
         chosen_days=group.weekdays, total=total, free=(group.capacity - len(roster)) if group.capacity else None, today=timezone.localdate(),
-        sessions=sessions, can_take=register.can_take(request.user, group)))
+        sessions=sessions, can_take=register.can_take(request.user, group), last_class=register.last_class_day(group)))
 
 
 # ---- courses ----
@@ -288,7 +288,7 @@ def courses(request):
     editing = None
     if request.method == "POST":
         _guard(request, write=True)
-        editing = Course.objects.filter(pk=request.POST.get("course") or 0).first()
+        editing = services.scoped(Course.objects).filter(pk=request.POST.get("course") or 0).first()
         try:
             services.save_course(request.POST, request.user, editing, lang)
         except ValidationError as exc:
@@ -297,8 +297,8 @@ def courses(request):
             messages.success(request, words["saved"])
             return _back("education:courses", lang)
     elif request.GET.get("edit"):
-        editing = Course.objects.filter(pk=request.GET.get("edit")).first()
-    rows = list(Course.objects.select_related("item").annotate(group_count=Count("groups", filter=Q(groups__active=True))))
+        editing = services.scoped(Course.objects).filter(pk=request.GET.get("edit")).first()
+    rows = list(services.scoped(Course.objects).select_related("item").annotate(group_count=Count("groups", filter=Q(groups__active=True))))
     for row in rows:
         row.basis_label = services.BASIS_LABELS[lang][row.basis]
     bases = [(value, services.BASIS_LABELS[lang][value]) for value in FeeBasis.values]
@@ -334,19 +334,19 @@ def today(request):
     rows = []
     for group in groups_today:
         rows.append({"group": group, "schedule": services.schedule_text(group, lang), "session": taken.get(group.pk),
-                     "seats": register.roster_on(group, day).count(), "can_take": register.can_take(request.user, group)})
+                     "seats": len(register.roster_on(group, day)), "can_take": register.can_take(request.user, group)})
     return render(request, "education/today.html", _base(request, lang, "today", rows=rows, day=day, today=timezone.localdate(),
                                                          weekday=services.DAY_LABELS[lang][register.weekday(day)]))
 
 
 def take_attendance(request, pk):
-    group = get_object_or_404(StudyGroup.objects.select_related("course", "teacher"), pk=pk)
+    group = get_object_or_404(services.scoped(StudyGroup.objects).select_related("course", "teacher"), pk=pk)
     _see(request, group)
     lang = _lang(request)
     words = WORDS[lang]
     if not register.can_take(request.user, group):
         raise PermissionDenied("Taking attendance needs managing students, or teaching the group.")
-    day = _day(request) if request.method == "GET" else None
+    day = (_day(request) if request.GET.get("date") else (register.last_class_day(group) or timezone.localdate())) if request.method == "GET" else None
     error = ""
     if request.method == "POST":
         from datetime import date
@@ -375,7 +375,8 @@ def take_attendance(request, pk):
     choices = [(Presence.PRESENT, words["present"]), (Presence.LATE, words["late"]), (Presence.ABSENT, words["absent"]), (Presence.EXCUSED, words["excused"])]
     return render(request, "education/attendance.html", _base(request, lang, "today", group=group, day=day, session=session, roster=roster, choices=choices,
                                                               schedule=services.schedule_text(group, lang), error=error, today=timezone.localdate(),
-                                                              saved=bool(request.GET.get("saved")), notify=[row for row in roster if row.notify]))
+                                                              saved=bool(request.GET.get("saved")), notify=[row for row in roster if row.notify],
+                                                              scheduled=register.meets_on(group, day)))
 
 
 # ---- monthly fees and fees owed (EDU-003) ----

@@ -400,3 +400,107 @@ class MonthlyFeesTests(EducationSetup):
 
         if not user_has_permission(cashier, "sales.create_sales_invoice"):
             self.assertEqual(self.client.post(reverse("education:fees"), {"month": f"{self.month:%Y-%m}"}).status_code, 403)
+class ReviewOneTests(EducationSetup):
+    """Codex on #185: entity scope, terms that never meet, amounts that are not numbers."""
+
+    def test_each_entity_sees_and_changes_only_its_own_education_records(self):
+        from entities.current import working_in
+        from entities.models import Entity
+
+        mine = self.student()
+        group = self.group()
+        branch = Entity.objects.create(code="E-EDU", name_ar="فرع التجمع", activity_slug="education", sub_activity_slug="tutoring_center")
+        with working_in(branch):
+            theirs = services.save_student({"name": "طالب الفرع", "self_pays": "1"}, self.owner)
+            self.assertEqual(list(services.scoped(Student.objects)), [theirs])
+            self.assertFalse(services.scoped(StudyGroup.objects).exists())
+            with self.assertRaisesMessage(ValidationError, "نفس الكيان"):
+                services.enroll(theirs, group, self.owner)  # another entity's group
+            with self.assertRaisesMessage(ValidationError, "نفس الكيان"):
+                services.save_group({"course": self.maths, "name": "x"}, self.owner)  # the main entity's course
+        # The whole group sees both; the main entity keeps its own (and older unowned ones).
+        self.assertEqual(set(services.scoped(Student.objects)), {mine, theirs})
+        from entities.services import main_entity
+
+        with working_in(main_entity()):
+            self.assertEqual(list(services.scoped(Student.objects)), [mine])
+        # The screens follow: from the branch, the main entity's student is not found.
+        self.client.force_login(self.owner)
+        session = self.client.session
+        session["hesba_entity"] = branch.pk
+        session.save()
+        self.assertEqual(self.client.get(reverse("education:student", args=[mine.pk])).status_code, 404)
+        self.assertEqual(self.client.post(reverse("education:student", args=[mine.pk]), {"action": "edit", "name": "x"}).status_code, 404)
+        self.assertEqual(self.client.get(reverse("education:student", args=[theirs.pk])).status_code, 200)
+
+    def test_groups_in_terms_that_never_meet_share_a_teacher_and_a_room(self):
+        from datetime import date
+
+        services.save_group({"course": self.maths, "name": "ترم أول", "teacher": self.teacher, "room": "قاعة 1", "days": "sat", "start_time": time(16),
+                             "starts_on": date(2026, 2, 1), "ends_on": date(2026, 6, 30)}, self.owner)
+        later = services.save_group({"course": self.maths, "name": "ترم تاني", "teacher": self.teacher, "room": "قاعة 1", "days": "sat",
+                                     "start_time": time(16), "starts_on": date(2026, 9, 1)}, self.owner)
+        self.assertTrue(later.pk)
+        with self.assertRaisesMessage(ValidationError, "أ. محمود"):
+            services.save_group({"course": self.maths, "name": "متداخل", "teacher": self.teacher, "days": "sat", "start_time": time(16),
+                                 "starts_on": date(2026, 6, 1), "ends_on": date(2026, 9, 15)}, self.owner)
+
+    def test_nan_and_infinity_are_refused_not_a_server_error(self):
+        for bad in ("NaN", "Infinity", "-inf"):
+            with self.subTest(bad=bad), self.assertRaisesMessage(ValidationError, "صفر أو أكبر"):
+                services.save_course({"name": "x", "fee": bad}, self.owner)
+        with self.assertRaisesMessage(ValidationError, "الخصم"):
+            services.enroll(self.student(), self.group(), self.owner, discount_percent="NaN")
+        self.client.force_login(self.owner)
+        page = self.client.post(reverse("education:courses"), {"name": "x", "fee": "NaN", "lang": "ar"})
+        self.assertContains(page, "صفر أو أكبر")
+
+
+class ReviewTwoTests(EducationSetup):
+    """Codex on #186: one mark per student, classes on the group's own days only, the class date in the parent's message."""
+
+    def setUp(self):
+        super().setUp()
+        from . import attendance
+
+        self.register = attendance
+        self.class_day = TODAY - timedelta(days=(TODAY.weekday() - 5) % 7)  # the latest Saturday
+        self.saturday = self.group(days="sat")
+        self.yousef = self.student()
+
+    def test_stopped_and_enrolled_again_the_same_day_is_one_mark(self):
+        first = services.enroll(self.yousef, self.saturday, self.owner, start_date=self.class_day - timedelta(days=14))
+        services.stop(first, self.owner, end_date=self.class_day)
+        services.enroll(self.yousef, self.saturday, self.owner, start_date=self.class_day)
+        self.assertEqual(len(self.register.roster_on(self.saturday, self.class_day)), 1)
+        session = self.register.take(self.saturday, self.owner, self.class_day, {})
+        self.assertEqual(session.marks.count(), 1)
+
+    def test_no_class_outside_the_groups_days_or_dates(self):
+        services.enroll(self.yousef, self.saturday, self.owner, start_date=self.class_day - timedelta(days=30))
+        with self.assertRaisesMessage(ValidationError, "مالهاش حصة"):
+            self.register.take(self.saturday, self.owner, self.class_day - timedelta(days=1), {})  # a Friday
+        StudyGroup.objects.filter(pk=self.saturday.pk).update(starts_on=self.class_day)
+        self.saturday.refresh_from_db()
+        with self.assertRaisesMessage(ValidationError, "مالهاش حصة"):
+            self.register.take(self.saturday, self.owner, self.class_day - timedelta(days=7), {})  # before the group began
+        # The group page offers the latest class day, never an off-day.
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("education:group", args=[self.saturday.pk]))
+        self.assertContains(page, f"date={self.class_day.isoformat()}")
+        off = self.client.get(reverse("education:attendance", args=[self.saturday.pk]) + f"?date={(self.class_day - timedelta(days=1)).isoformat()}")
+        self.assertContains(off, "data-off-day")
+        self.assertNotContains(off, "data-save-attendance")
+
+    def test_an_older_class_tells_the_parent_its_date(self):
+        from urllib.parse import unquote
+
+        earlier = self.class_day - timedelta(days=7)
+        services.enroll(self.yousef, self.saturday, self.owner, start_date=earlier - timedelta(days=7))
+        session = self.register.take(self.saturday, self.owner, earlier, {str(self.yousef.pk): "absent"})
+        text = unquote(self.register.parent_message(session.marks.get()))
+        self.assertIn(f"يوم {earlier.isoformat()}", text)
+        self.assertNotIn("النهارده", text)
+        if self.class_day == TODAY:
+            today_text = unquote(self.register.parent_message(self.register.take(self.saturday, self.owner, TODAY, {str(self.yousef.pk): "late"}).marks.get()))
+            self.assertIn("النهارده", today_text)

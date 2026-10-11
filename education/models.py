@@ -43,6 +43,8 @@ class Student(models.Model):
     relation = models.CharField(max_length=40, blank=True, help_text="The payer's relation to the student: father, mother, self…")
     notes = models.TextField(blank=True)
     active = models.BooleanField(default=True)
+    # Codex on #185 (HG-034): in a group, each education entity sees only its own students, courses and groups.
+    entity = models.ForeignKey("entities.Entity", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -62,6 +64,8 @@ class Course(models.Model):
                                 help_text="The service line its invoices use.")
     description = models.CharField(max_length=255, blank=True)
     active = models.BooleanField(default=True)
+    # Codex on #185 (HG-034): in a group, each education entity sees only its own students, courses and groups.
+    entity = models.ForeignKey("entities.Entity", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -86,6 +90,8 @@ class StudyGroup(models.Model):
     starts_on = models.DateField(null=True, blank=True)
     ends_on = models.DateField(null=True, blank=True)
     active = models.BooleanField(default=True)
+    # Codex on #185 (HG-034): in a group, each education entity sees only its own students, courses and groups.
+    entity = models.ForeignKey("entities.Entity", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

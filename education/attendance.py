@@ -25,12 +25,16 @@ COUNTS_AS_PRESENT = (Presence.PRESENT, Presence.LATE)
 MESSAGES = {
     "ar": {"future": "مينفعش تسجّل حضور ليوم لسه مجاش.", "teacher_only": "تقدر تسجّل حضور مجموعاتك بس.",
            "no_roster": "مفيش طلاب مسجّلين في المجموعة في اليوم ده.", "date": "التاريخ مش مظبوط.", "closed": "المجموعة دي مقفولة.",
-           "absent_msg": "أهلًا {parent}، {student} كان غايب النهارده عن حصة {group} في {company}. لو فيه حاجة كلمنا.",
-           "late_msg": "أهلًا {parent}، {student} وصل متأخر النهارده عن حصة {group} في {company}."},
+           "off_day": "المجموعة دي مالهاش حصة في اليوم ده (برّه أيامها أو مواعيد بدايتها ونهايتها).",
+           "absent_msg": "أهلًا {parent}، {student} كان غايب {when} عن حصة {group} في {company}. لو فيه حاجة كلمنا.",
+           "late_msg": "أهلًا {parent}، {student} وصل متأخر {when} عن حصة {group} في {company}.",
+           "today": "النهارده", "on_day": "يوم {date}"},
     "en": {"future": "Attendance cannot be taken for a day still to come.", "teacher_only": "You can take attendance for your own groups only.",
            "no_roster": "No students were enrolled in this group on that day.", "date": "The date is not valid.", "closed": "This group is closed.",
-           "absent_msg": "Hello {parent}, {student} was absent today from {group} at {company}. Please get in touch if anything is wrong.",
-           "late_msg": "Hello {parent}, {student} arrived late today to {group} at {company}."},
+           "off_day": "This group has no class on that day (not one of its days, or outside its dates).",
+           "absent_msg": "Hello {parent}, {student} was absent {when} from {group} at {company}. Please get in touch if anything is wrong.",
+           "late_msg": "Hello {parent}, {student} arrived late {when} to {group} at {company}.",
+           "today": "today", "on_day": "on {date}"},
 }
 
 
@@ -62,15 +66,37 @@ def can_see(user, group=None):
 def roster_on(group, day):
     """Enrolments running on ``day``: started by then and not stopped before it."""
 
-    return (Enrollment.objects.filter(group=group, start_date__lte=day).filter(Q(end_date__isnull=True) | Q(end_date__gte=day))
-            .select_related("student__payer").order_by("student__name"))
+    rows = (Enrollment.objects.filter(group=group, start_date__lte=day).filter(Q(end_date__isnull=True) | Q(end_date__gte=day))
+            .select_related("student__payer").order_by("student__name", "-start_date", "-pk"))
+    # Stopped and enrolled again on the same day gives two running enrolments: one student, one row (the newer).
+    seen, unique = set(), []
+    for row in rows:
+        if row.student_id not in seen:
+            seen.add(row.student_id)
+            unique.append(row)
+    return unique
+
+
+def meets_on(group, day):
+    """Whether the group has a class on ``day``: one of its weekdays, within its dates."""
+
+    if group.starts_on and day < group.starts_on or group.ends_on and day > group.ends_on:
+        return False
+    return weekday(day) in group.weekdays
+
+
+def last_class_day(group, today=None):
+    """The latest day up to ``today`` the group met (within a fortnight), else None."""
+
+    today = today or timezone.localdate()
+    return next((today - timedelta(days=n) for n in range(14) if meets_on(group, today - timedelta(days=n))), None)
 
 
 def groups_on(day, user=None):
     """Active groups meeting on ``day`` (by weekday and dates), the ones ``user`` teaches only when they are a teacher, not a manager."""
 
     code = weekday(day)
-    rows = StudyGroup.objects.filter(active=True).filter(Q(starts_on__isnull=True) | Q(starts_on__lte=day)).filter(
+    rows = services.scoped(StudyGroup.objects).filter(active=True).filter(Q(starts_on__isnull=True) | Q(starts_on__lte=day)).filter(
         Q(ends_on__isnull=True) | Q(ends_on__gte=day)).select_related("course", "teacher").order_by("start_time", "name")
     if user is not None and not services.can_view(user):
         teacher = teacher_of(user)
@@ -102,6 +128,8 @@ def take(group, user, day, marks, *, topic="", cancelled=False, lang="ar"):
     group = StudyGroup.objects.select_for_update().get(pk=group.pk)
     if not group.active:
         raise ValidationError(words["closed"])
+    if not meets_on(group, day):
+        raise ValidationError(words["off_day"])  # an unscheduled "class" would change everyone's attendance rate
     roster = list(roster_on(group, day))
     if not roster and not cancelled:
         raise ValidationError(words["no_roster"])
@@ -161,6 +189,9 @@ def parent_message(attendance, lang="ar"):
     number = whatsapp_number(payer.whatsapp or payer.phone)
     if not number or attendance.presence not in (Presence.ABSENT, Presence.LATE):
         return ""
-    template = MESSAGES[lang]["absent_msg" if attendance.presence == Presence.ABSENT else "late_msg"]
-    text = template.format(parent=payer.name, student=attendance.student.name, group=attendance.session.group.name, company=company_details()["name"])
+    words = MESSAGES[lang]
+    template = words["absent_msg" if attendance.presence == Presence.ABSENT else "late_msg"]
+    day = attendance.session.date
+    when = words["today"] if day == timezone.localdate() else words["on_day"].format(date=day.isoformat())  # an older class says its own date
+    text = template.format(parent=payer.name, student=attendance.student.name, group=attendance.session.group.name, company=company_details()["name"], when=when)
     return f"https://wa.me/{number}?text={quote(text)}"
