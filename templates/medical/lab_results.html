@@ -21,12 +21,13 @@
 <h2>{{ lw.history }}</h2>
 {% for day, results in days %}
 <section class="op-detail-meta" data-lab-day="{{ day|date:'Y-m-d' }}"><p><strong><bdi>{{ day|date:"Y-m-d" }}</bdi></strong> · <a href="{% url 'medical:lab_sheet' patient.pk day|date:'Y-m-d' %}?lang={{ lang }}" data-lab-print>{{ lw.print }}</a></p>
-<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ lw.name }}</th><th>{{ lw.value }}</th><th>{{ lw.range }}</th><th>{{ lw.flag }}</th><th>{{ lw.previous }}</th></tr></thead><tbody>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ lw.name }}</th><th>{{ lw.value }}</th><th>{{ lw.range }}</th><th>{{ lw.flag }}</th><th>{{ lw.previous }}</th>{% if can_write %}<th></th>{% endif %}</tr></thead><tbody>
 {% for result in results %}<tr data-lab-result="{{ result.pk }}" data-flag="{{ result.flag }}"><td class="op-cell-text">{{ result.test.name }}</td>
 <td><strong><bdi>{% if result.value is not None %}{{ result.value|qty }}{% endif %}{% if result.text_value %} {{ result.text_value }}{% endif %} {{ result.unit }}</bdi></strong></td>
 <td>{% if result.low is None and result.high is None %}—{% else %}<span dir="ltr">{% if result.low is not None %}{{ result.low|qty }}{% else %}…{% endif %} – {% if result.high is not None %}{{ result.high|qty }}{% else %}…{% endif %}</span>{% endif %}</td>
 <td>{% if result.flag %}<span class="op-status {% if result.flag == 'normal' %}op-status-posted{% else %}op-status-cancelled{% endif %}">{{ result.flag_label }}{% if result.flag == 'high' %} ↑{% elif result.flag == 'low' %} ↓{% endif %}</span>{% else %}—{% endif %}</td>
-<td>{% if result.before %}<bdi>{% if result.before.value is not None %}{{ result.before.value|qty }}{% endif %}{% if result.before.text_value %} {{ result.before.text_value }}{% endif %}</bdi> · <bdi>{{ result.before.taken_on|date:"Y-m-d" }}</bdi>{% else %}—{% endif %}</td></tr>{% endfor %}
+<td>{% if result.before %}<bdi>{% if result.before.value is not None %}{{ result.before.value|qty }}{% endif %}{% if result.before.text_value %} {{ result.before.text_value }}{% endif %}</bdi> · <bdi>{{ result.before.taken_on|date:"Y-m-d" }}</bdi>{% else %}—{% endif %}</td>
+{% if can_write %}<td><details><summary class="op-secondary">{{ lw.remove }}</summary><form method="post" class="op-form-actions">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="remove"><input type="hidden" name="result" value="{{ result.pk }}"><label class="sr-only" for="rm-{{ result.pk }}">{{ lw.reason }}</label><input id="rm-{{ result.pk }}" name="reason" required placeholder="{{ lw.reason }}" maxlength="200"><button class="op-secondary" type="submit" data-remove-result="{{ result.pk }}">{{ lw.remove }}</button></form></details></td>{% endif %}</tr>{% endfor %}
 </tbody></table></div></section>
 {% empty %}<p class="op-muted">{{ lw.no_results }}</p>{% endfor %}
 {% endblock %}
