@@ -455,3 +455,33 @@ class GroupRoundFiveTests(EducationSetup):
         services.enroll(student, group, self.owner, start_date=TODAY - timedelta(days=5))
         self.client.force_login(self.owner)
         self.assertContains(self.client.get(reverse("education:student", args=[student.pk])), "<strong data-active-groups>1</strong>")
+
+
+class GroupRoundSixTests(EducationSetup):
+    """Codex on #185, sixth round."""
+
+    def test_a_birth_date_in_the_future_is_refused(self):
+        with self.assertRaisesMessage(ValidationError, "تاريخ الميلاد"):
+            self.student(date_of_birth=(TODAY + timedelta(days=1)).isoformat())
+
+    def test_a_localized_discount_is_read(self):
+        group = self.group()
+        for typed in ("10,5", "١٠٫٥"):
+            with self.subTest(typed=typed):
+                student = self.student(f"طالب {typed}")
+                self.assertEqual(services.enroll(student, group, self.owner, discount_percent=typed).discount_percent, D("10.50"))
+
+    def test_fees_round_half_up_like_the_books(self):
+        self.assertEqual(services.save_course({"name": "نص قرش", "fee": "1.005"}, self.owner).fee, D("1.01"))
+
+    def test_a_failed_group_edit_keeps_what_was_typed(self):
+        group = self.group()
+        page = self.client
+        page.force_login(self.owner)
+        response = page.post(reverse("education:group", args=[group.pk]), {"action": "edit", "course": self.maths.pk, "name": "اسم جديد",
+                                                                            "room": "قاعة 7", "days": ["sun"], "start_time": "16:00",
+                                                                            "duration_minutes": "90", "capacity": "abc"})
+        html = response.content.decode()
+        self.assertIn('value="اسم جديد"', html)
+        self.assertIn('value="قاعة 7"', html)
+        self.assertIn('value="sun" checked', html)
