@@ -115,6 +115,7 @@ class Command(BaseCommand):
 
             for name in ("1", "2", "3", "4", "5", "6"):
                 tables.save_table({"name": name, "seats": 4}, owner)
+            self._floor(master, catalog, owner)
         if extras & {"appointments", "patients", "orders", "projects", "workorders"}:
             staff = save_employee({"name": catalog.staff[0], "title": catalog.staff[1], "commission_percent": "10"}, owner)
         if "appointments" in extras:
@@ -182,6 +183,50 @@ class Command(BaseCommand):
             wo.add_line(back, parts[0], owner, quantity="1", is_warranty=True)
         except ValidationError:
             pass  # a part out of stock: the demo keeps it ready instead
+
+    def _floor(self, master, catalog, owner):
+        """RESTO-002: dish ingredients, a week of paid orders at different hours, and one waste adjustment."""
+
+        from datetime import datetime as _dt
+
+        from inventory.services import adjust_stock
+        from restaurant import insights, services as floor
+        from restaurant.models import DiningTable, Order
+        from staff.services import save_employee
+
+        dishes = [item for item in master["items"] if not item.is_stock_tracked][:3]
+        raw = master["raw"]
+        if not dishes or not raw:
+            return
+        for n, dish in enumerate(dishes):
+            lines = [(raw[n % len(raw)], "0.250")]
+            if raw[-1].pk != raw[n % len(raw)].pk:
+                lines.append((raw[-1], "0.100"))
+            insights.save_ingredients(dish, lines, owner)
+        waiter = save_employee({"name": catalog.staff[0], "title": catalog.staff[1]}, owner)
+        cashbox = master["cashboxes"][0]
+        tables = list(DiningTable.objects.order_by("sort_order", "name"))
+        today = timezone.localdate()
+        plan = ((1, 13, 0, 2, (0, 1)), (1, 14, 1, 4, (0, 2)), (2, 20, 2, 3, (1,)), (3, 21, 0, 2, (0, 0, 2)), (4, 13, None, 1, (2,)),
+                (5, 20, 3, 5, (0, 1, 1)), (6, 21, None, 1, (1,)), (0, 13, 1, 2, (0,)))
+        for days, hour, table, guests, picks in plan:
+            if table is None:
+                order = floor.open_order(owner, kind="takeaway", waiter=waiter)
+            else:
+                order = floor.open_order(owner, table=tables[table], guests=guests, waiter=waiter)
+            for pick in picks:
+                floor.add_item(order, dishes[pick % len(dishes)], owner)
+            floor.pay(order, owner, cashbox=cashbox, tendered=Decimal("100000"))  # paid in cash
+            closed = timezone.make_aware(_dt.combine(today - timedelta(days=days), time(hour, 15)))
+            Order.objects.filter(pk=order.pk).update(opened_at=closed - timedelta(minutes=40 + 5 * guests), closed_at=closed)
+        adjust_stock(f"DEMO-WASTE-{today:%m%d}", today - timedelta(days=2), raw[0], master["location"], "out", "1", "هالك — باظت في التلاجة", owner)
+        driver = save_employee({"name": "محمود الطيار", "title": "طيار دليفري"}, owner)  # RESTO-003: a delivery out with its driver and fee
+        order = floor.open_order(owner, kind="delivery", customer=master["customers"][0], address="شارع النصر 12، مدينة نصر", delivery_fee="20")
+        floor.add_item(order, dishes[0], owner, 2)
+        floor.dispatch(order, driver, owner)
+        floor.pay(order, owner, cashbox=cashbox, tendered=Decimal("100000"))
+        closed = timezone.make_aware(_dt.combine(today - timedelta(days=1), time(21, 40)))
+        Order.objects.filter(pk=order.pk).update(opened_at=closed - timedelta(minutes=55), dispatched_at=closed - timedelta(minutes=30), closed_at=closed)
 
     def _appointments(self, master, staff, owner):
         from appointments.services import book

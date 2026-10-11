@@ -1206,3 +1206,41 @@ No unresolved business or accounting decision was discovered while implementing 
 - **Where:** medical / clinic and medical / medical_center, with a «Waiting list» entry in the menu.
 - **Money:** none. The visit is billed from its appointment or on a sales invoice, as before.
 - **Tests:** `medical/tests.py` → `ReceptionQueueTests`; `reports/tests_demo_catalogs.py` (the clinic demo has one patient called in and one waiting).
+## HG-044 — implementation note: dish cost, read only (RESTO-002)
+
+- **Status:** The read-only part of the HG-044 proposal (recorded in PR #184), built. **Taking ingredients out of stock when a dish is sold is not built; it still waits for Ahmed's decision.**
+- **Schema:** migration `restaurant/0002_dish_ingredients` adds `DishIngredient` and touches no existing table.
+  - Fields: dish (a menu item), ingredient (a stocked item), quantity per plate; one row per dish and ingredient.
+  - Manufacturing recipes can't hold this, because they need a stocked product and dishes are made to order (services).
+- **Dish cost:**
+  - the sum of the ingredients at each ingredient's current `average_cost` (the display cache, HG-003);
+  - an estimate for pricing, shown with the margin against the menu price;
+  - it never feeds posting, cost of goods sold or any report calculation.
+- **Waste:** no new table. The report lists stock taken out by an ordinary stock adjustment in the period, with its reason, at movement cost; a cancelled adjustment is left out.
+- **The restaurant report** reads paid orders whose invoice is posted, in the current entity:
+  - by hour, best sellers, by order type, tables (orders a day, average order, average stay), waiters;
+  - order values are net sales (`appointments.services.net_sales`: before tax, after posted returns);
+  - dish values are at menu price before the order's discount.
+- **Permissions:** the report needs `reports.view_all_sales_report`. Costs and waste values need `inventory.view_cost`. Editing ingredients needs `master_data.manage_items`.
+- **Not touched:** inventory movement and accounting, sales posting, average-cost logic, report calculations.
+- **Tests:** `restaurant/tests.py` → `RestaurantInsightTests` (including that selling a dish moves no stock); `reports/tests_demo_catalogs.py` (the restaurant demo).
+
+## HG-045 — restaurant delivery: driver, dispatch time and fee (RESTO-003)
+
+- **Status:** Built. Additive schema on an existing table, recorded here because it touches `restaurant.Order`.
+- **Schema:** migration `restaurant/0003_delivery` adds three nullable or defaulted fields to `Order`:
+  - `driver` (staff employee, SET_NULL);
+  - `dispatched_at`;
+  - `delivery_fee` (default 0).
+
+  Existing rows read as "no driver, no fee", and nothing else changes.
+- **Money:**
+  - the fee is billed as **its own line on the order's ordinary invoice**, through the same `sales.pos.checkout` the order already uses;
+  - the line uses a non-stocked service item `DELIVERY-FEE` («رسوم توصيل»), made once on first use;
+  - so the fee is sales revenue like any service and moves no stock; posting, the cashbox and the customer ledger are unchanged.
+- **Rules:**
+  - Only delivery orders carry a fee; a dine-in order ignores it.
+  - Dispatching sets the driver and the time it left, and can correct the fee while the order is open; it is audited before/after.
+  - The restaurant report gains deliveries per driver: count, fees, average minutes from leaving to closing.
+- **Not touched:** sales posting, cashbox and customer ledgers, inventory, report calculations outside the restaurant report.
+- **Tests:** `restaurant/tests.py` → `DeliveryTests` (one invoice with the fee line, the cashbox moves by the order plus fee, the fee item made once, no fee line without a fee, the rules, the driver report); `reports/tests_demo_catalogs.py`.

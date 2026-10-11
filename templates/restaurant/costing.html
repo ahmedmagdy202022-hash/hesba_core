@@ -1,0 +1,14 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'restaurant:board' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ iw.costing }}</h1><p>{{ iw.costing_intro }}</p></div></section>
+<div class="op-table-wrap"><table class="op-table" data-costing><thead><tr><th>{{ iw.dish }}</th><th>{{ iw.price }}</th><th>{{ iw.cost }}</th><th>{{ iw.margin }}</th><th>{{ iw.margin_pct }}</th><th>{{ iw.ingredients }}</th><th></th></tr></thead><tbody>
+{% for row in rows %}<tr data-dish="{{ row.dish.pk }}"><td class="op-cell-text">{{ row.dish.item_name }}</td><td>{{ row.price|money }}</td>
+<td>{% if row.cost is not None %}{{ row.cost|money }}{% else %}<span class="op-muted">{{ iw.no_recipe }}</span>{% endif %}</td>
+<td>{% if row.margin is not None %}{{ row.margin|money }}{% else %}—{% endif %}</td>
+<td>{% if row.margin_pct is not None %}<span class="op-status {% if row.margin_pct < 50 %}op-status-cancelled{% else %}op-status-posted{% endif %}" data-margin-pct="{{ row.margin_pct }}">{{ row.margin_pct }}%</span>{% else %}—{% endif %}</td>
+<td class="op-cell-text">{% for line in row.ingredients %}{{ line.ingredient.item_name }} <bdi>{{ line.quantity|qty }}</bdi>{% if not forloop.last %} · {% endif %}{% empty %}—{% endfor %}</td>
+<td><a href="{% url 'restaurant:dish' row.dish.pk %}?lang={{ lang }}">{{ iw.edit }}</a></td></tr>
+{% empty %}<tr><td colspan="7" class="op-empty">{{ words.no_items }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

@@ -30,6 +30,12 @@
     </li>
   {% empty %}<li class="op-muted">{{ words.empty }}</li>{% endfor %}
   </ul>
+  {% if order.kind == 'delivery' %}<p class="rs-total" data-delivery-fee-line><span>{{ dw.fee }}</span><span>{{ order.delivery_fee|money }}</span></p>
+  <p class="op-muted" data-delivery-driver>{{ dw.driver }}: {{ order.driver.name|default:'—' }}{% if order.dispatched_at %} · {{ dw.out }} {{ dw.at }} <bdi>{{ order.dispatched_at|time:"H:i" }}</bdi>{% endif %}</p>
+  {% if is_open and can_take %}<form method="post" class="op-form-actions" data-dispatch>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="dispatch">
+  <label class="sr-only" for="dl-driver">{{ dw.driver }}</label><select id="dl-driver" name="driver" required style="min-height:44px"><option value="">{{ dw.driver }}</option>{% for person in drivers %}<option value="{{ person.pk }}"{% if person.pk == order.driver_id %} selected{% endif %}>{{ person.name }}</option>{% endfor %}</select>
+  <label class="sr-only" for="dl-fee2">{{ dw.fee }}</label><input id="dl-fee2" name="delivery_fee" inputmode="decimal" value="{{ order.delivery_fee|stringformat:".2f" }}" style="min-height:44px;width:110px">
+  <button class="op-secondary" type="submit">{% if order.driver_id %}{{ dw.change_driver }}{% else %}{{ dw.dispatch }}{% endif %}</button></form>{% endif %}{% endif %}
   <p class="rs-total"><span>{{ words.total }}</span><span data-order-total>{{ total|money }}</span></p>
   {% if order.invoice %}<p>{{ words.invoice }}: <a href="{% url 'sales:detail' order.invoice.pk %}?lang={{ lang }}" data-order-invoice>{{ order.invoice.invoice_number }}</a></p>{% endif %}
   {% if is_open and can_take %}
