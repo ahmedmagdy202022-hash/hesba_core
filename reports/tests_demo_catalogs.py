@@ -122,9 +122,57 @@ class SampleBusinessPerActivityTests(TestCase):
 
         catalog = self.fill("medical", "clinic")
         self.assert_a_working_business(catalog)
-        self.assertEqual(PatientFile.objects.count(), 3)
-        self.assertEqual(ClinicalVisit.objects.filter(doctor__name="د. أحمد سالم").count(), 3)
-        self.assertEqual(Appointment.objects.filter(service__item_name="كشف").count(), 4)
+        self.assertEqual(PatientFile.objects.count(), 4)
+        self.assertEqual(ClinicalVisit.objects.filter(doctor__name="د. أحمد سالم").count(), 5)
+        self.assertEqual(Appointment.objects.filter(service__item_name="كشف").count(), 7)
+        # MED-002: the clinic report and the follow-ups have something to show.
+        from datetime import timedelta
+
+        from medical import insights
+
+        today = timezone.localdate()
+        report = insights.period_report(today - timedelta(days=30), today)
+        self.assertEqual((report["totals"]["returning"], report["totals"]["revenue"] > 0), (1, True))
+        self.assertEqual([row["patient"].name for row in insights.missed_follow_ups(today)], ["سلمى حسن"])
+        from medical.models import QueueTicket
+
+        self.assertEqual(sorted(QueueTicket.objects.values_list("number", "status")), [(1, "called"), (2, "waiting")])  # MED-007
+
+    def test_a_dental_clinic_has_a_chart_and_a_plan_in_stages(self):
+        from medical.models import ToothRecord, TreatmentStep
+
+        catalog = self.fill("medical", "dental")
+        self.assert_a_working_business(catalog)
+        self.assertEqual(ToothRecord.objects.count(), 5)
+        self.assertEqual(sorted(TreatmentStep.objects.values_list("stage", "status")), [(1, "done"), (2, "planned"), (3, "planned")])
+
+    def test_a_lab_has_tests_with_ranges_and_flagged_results(self):
+        from medical.models import LabResult, LabTest
+
+        catalog = self.fill("medical", "lab")
+        self.assert_a_working_business(catalog)
+        self.assertEqual(LabTest.objects.count(), 5)
+        self.assertEqual(LabResult.objects.count(), 7)
+        self.assertEqual(sorted(LabResult.objects.exclude(flag="normal").values_list("test__name", "flag")),
+                         [("سكر صايم", "high"), ("سكر صايم", "high"), ("فصيلة الدم", ""), ("هيموجلوبين", "low")])
+
+    def test_a_physio_centre_has_a_package_in_use(self):
+        from medical import physio
+        from medical.models import SessionPackage
+
+        catalog = self.fill("medical", "physio")
+        self.assert_a_working_business(catalog)
+        package = SessionPackage.objects.get()
+        self.assertEqual(physio.state(package), {"used": 3, "left": 7, "status": "active"})
+
+    def test_a_vet_has_owners_with_their_animals(self):
+        from medical.models import Animal, ClinicalVisit
+
+        catalog = self.fill("medical", "vet")
+        self.assert_a_working_business(catalog)
+        self.assertEqual(sorted(Animal.objects.values_list("name", "species")), [("روكي", "dog"), ("مشمش", "cat")])
+        self.assertEqual(ClinicalVisit.objects.filter(animal__name="روكي").count(), 2)
+        self.assertFalse(ClinicalVisit.objects.filter(animal__isnull=True).exists())
 
     def test_a_builder_has_projects_with_materials_and_a_progress_bill(self):
         from projects.models import Project

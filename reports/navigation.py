@@ -82,6 +82,9 @@ NAV_ITEMS = (
      "allow": "workorders.services.sees_work_orders"},
     {"key": "medical", "ar": "الملفات الطبية", "en": "Patient files", "url_name": "medical:patients", "module": "customers", "activity": "medical", "allow": "medical.services.can_view"},
     {"key": "appointments", "ar": "المواعيد", "en": "Appointments", "url_name": "appointments:agenda", "module": "appointments_visits", "permission": "sales.view_sales_invoices"},
+    # MED-007: reception's waiting list, for clinics and medical centres.
+    {"key": "queue", "ar": "قائمة الانتظار", "en": "Waiting list", "url_name": "medical:queue", "module": "appointments_visits", "activity": "medical",
+     "allow": "medical.queue.can_use"},
     {"key": "staff", "ar": "الموظفون", "en": "Employees", "url_name": "staff:list", "module": "employees_technicians", "allow": "reports.navigation.sees_staff"},
     {"key": "expenses", "ar": "المصروفات", "en": "Expenses", "url_name": "expenses:list", "module": "expenses", "permission": "cashboxes.view_expenses"},
     # R2: features switched on in Settings -> Features get their own place in the menu.

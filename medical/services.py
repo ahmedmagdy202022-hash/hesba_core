@@ -140,13 +140,22 @@ def save_visit(patient, data, user, visit=None, lang="ar"):
     follow = _date(data.get("follow_up_date"), words["follow_up_date"], errors)
     if follow and follow <= visit_date:
         errors.append(words["follow_before"])
-    pulse = _decimal(data.get("pulse"), words["pulse"], errors, 20, 250)
-    numbers = {"temperature": _decimal(data.get("temperature"), words["temperature"], errors, 30, 45),
-               "weight": _decimal(data.get("weight"), words["weight"], errors, Decimal("0.5"), 400),
-               "height": _decimal(data.get("height"), words["height"], errors, 20, 250)}
+    vet = bool(data.get("vet"))  # MED-006: a budgie weighs 40 g, a horse 500 kg, a rabbit's pulse runs past 250
+    pulse = _decimal(data.get("pulse"), words["pulse"], errors, *((5, 1000) if vet else (20, 250)))
+    numbers = {"temperature": _decimal(data.get("temperature"), words["temperature"], errors, *((25, 46) if vet else (30, 45))),
+               "weight": _decimal(data.get("weight"), words["weight"], errors, *((Decimal("0.005"), 2000) if vet else (Decimal("0.5"), 400))),
+               "height": _decimal(data.get("height"), words["height"], errors, *((1, 400) if vet else (20, 250)))}
     texts = {field: (data.get(field) or "").strip()[:5000] for field in ("complaint", "examination", "diagnosis", "treatment")}
     if not any(texts[f] for f in ("complaint", "diagnosis", "treatment")):
         errors.append(words["empty"])
+    animal = data.get("animal")
+    from .vet import MESSAGES as VET_MESSAGES
+
+    vet_words = VET_MESSAGES["en" if lang == "en" else "ar"]
+    if animal is not None and animal.owner_id != patient.pk:  # MED-006: a vet visit is for one of the owner's own animals
+        errors.append(vet_words["not_theirs"])
+    elif vet and animal is None:  # a vet visit always names its animal, so it shows on the animal's card
+        errors.append(vet_words["choose_animal"] if patient.animals.exists() else vet_words["no_animal"])
     if errors:
         raise ValidationError(errors)
     visit = visit or ClinicalVisit(patient=patient, created_by=user)
@@ -157,13 +166,15 @@ def save_visit(patient, data, user, visit=None, lang="ar"):
         setattr(visit, field, value)
     if data.get("doctor") is not None:
         visit.doctor = data.get("doctor")
+    if "animal" in data:
+        visit.animal = animal
     if data.get("appointment") is not None and visit.appointment_id is None:
         visit.appointment = data.get("appointment")
     creating = visit.pk is None
     visit.save()
     file_for(patient)
     _audit(user, "create_clinical_visit" if creating else "update_clinical_visit", visit,
-           {"patient": patient.pk, "visit_date": visit.visit_date.isoformat(), "diagnosis": visit.diagnosis[:200]})
+           {"patient": patient.pk, "animal": visit.animal_id, "visit_date": visit.visit_date.isoformat(), "diagnosis": visit.diagnosis[:200]})
     return visit
 
 

@@ -123,6 +123,8 @@ class Command(BaseCommand):
             self._patients(master, staff, owner)
         if "students" in extras:
             self._students(master, staff, owner)
+        if "animals" in extras:
+            self._vet(master, staff, owner, timezone.localdate())
         if "projects" in extras:
             self._projects(master, owner)
         if "orders" in extras:
@@ -205,10 +207,128 @@ class Command(BaseCommand):
             ({"date_of_birth": "2015-06-20", "gender": "male", "blood_type": "B+"},
              {"complaint": "متابعة دورية", "weight": "32", "height": "135", "diagnosis": "حالة عامة جيدة", "treatment": "لا يوجد"}),
         )
+        first = master["customers"][0]
+        save_visit(first, {"complaint": "كشف أول مرة", "blood_pressure": "160/100", "diagnosis": "ارتفاع ضغط الدم", "treatment": "كونكور 5 مجم",
+                           "visit_date": (today - timedelta(days=45)).isoformat(), "doctor": doctor}, owner)  # MED-002: a returning patient
         for customer, (profile, visit) in zip(master["customers"], cards):
             save_profile(file_for(customer), profile, owner)
             save_visit(customer, {**visit, "visit_date": (today - timedelta(days=7)).isoformat(),
                                   "follow_up_date": (today + timedelta(days=7)).isoformat(), "doctor": doctor}, owner)
+        self._clinic_month(master, doctor, owner, today)
+        self._dental(master, doctor, owner, today)
+        self._lab(master, owner, today)
+        self._physio(master, doctor, owner, today)
+        self._queue(master, doctor, owner, today)
+
+    def _queue(self, master, doctor, owner, today):
+        """MED-007: a clinic's waiting list has today's booked patient in, one called and one waiting."""
+
+        from appointments.models import Appointment
+        from medical import queue
+
+        if not queue.has_queue():
+            return
+        booked = Appointment.objects.filter(starts_at__date=today, customer=master["customers"][1]).first()
+        first = queue.check_in(master["customers"][2], owner, doctor=doctor)
+        queue.check_in(master["customers"][1], owner, appointment=booked)
+        queue.move(first, "called", owner)
+
+    def _vet(self, master, doctor, owner, today):
+        """MED-006: a vet's first customer owns a dog and a cat; the dog came twice."""
+
+        from medical import vet
+        from medical.services import save_visit
+
+        if not vet.is_vet():
+            return
+        owner_customer = master["customers"][0]
+        dog = vet.save_animal(owner_customer, {"name": "روكي", "species": "dog", "breed": "جيرمن شيبرد", "sex": "male",
+                                               "date_of_birth": (today - timedelta(days=3 * 365)).isoformat(), "colour": "أسود وبني",
+                                               "microchip": "956000012345678", "neutered": True}, owner)
+        vet.save_animal(owner_customer, {"name": "مشمش", "species": "cat", "breed": "شيرازي", "sex": "female",
+                                         "date_of_birth": (today - timedelta(days=300)).isoformat(), "allergies": "بنسلين"}, owner)
+        save_visit(owner_customer, {"animal": dog, "doctor": doctor, "visit_date": (today - timedelta(days=60)).isoformat(), "complaint": "تطعيم سنوي",
+                                    "weight": "31", "diagnosis": "حالة عامة جيدة", "treatment": "تطعيم سعار + تطعيم خماسي"}, owner)
+        save_visit(owner_customer, {"animal": dog, "doctor": doctor, "visit_date": (today - timedelta(days=5)).isoformat(), "complaint": "عرج في الرجل الشمال",
+                                    "weight": "32", "diagnosis": "التواء بسيط", "treatment": "راحة 5 أيام ومسكن",
+                                    "follow_up_date": (today + timedelta(days=5)).isoformat()}, owner)
+
+    def _physio(self, master, therapist, owner, today):
+        """MED-005: a physiotherapy centre's first patient bought ten sessions and used three."""
+
+        from medical import physio
+        from sales.services import post_sales_invoice
+
+        if not physio.is_physio():
+            return
+        session = next((item for item in master["items"] if not item.is_stock_tracked), None)
+        if session is None:
+            return
+        package = physio.sell(master["customers"][0], {"service": session, "sessions": 10, "price": "3000", "notes": "خشونة ركبة"}, owner)
+        post_sales_invoice(package.invoice.pk, owner)
+        for days in (14, 10, 7):
+            physio.use(package, owner, used_on=today - timedelta(days=days), therapist=therapist)
+
+    def _lab(self, master, owner, today):
+        """MED-004: a lab has its tests with normal ranges, and two days of results for its first patient."""
+
+        from medical import lab
+
+        if not lab.is_lab():
+            return
+        services = {item.item_name: item for item in master["items"] if not item.is_stock_tracked}
+        tests = {}
+        for position, (name, unit, low, high, service) in enumerate((
+                ("هيموجلوبين", "g/dL", "12", "16", "صورة دم كاملة"), ("كرات دم بيضاء", "×10³/µL", "4", "11", "صورة دم كاملة"),
+                ("سكر صايم", "mg/dL", "70", "100", ""), ("إنزيم ALT", "U/L", "7", "56", "وظائف كبد"), ("فصيلة الدم", "", "", "", ""))):
+            tests[name] = lab.save_test({"name": name, "unit": unit, "low": low, "high": high, "service": services.get(service), "position": position}, owner)
+        patient = master["customers"][0]
+        lab.record_results(patient, today - timedelta(days=30), {tests["هيموجلوبين"]: ("11.2", ""), tests["سكر صايم"]: ("132", "")}, owner)
+        lab.record_results(patient, today - timedelta(days=1), {tests["هيموجلوبين"]: ("12.8", ""), tests["كرات دم بيضاء"]: ("7.5", ""),
+                                                                tests["سكر صايم"]: ("118", ""), tests["إنزيم ALT"]: ("31", ""),
+                                                                tests["فصيلة الدم"]: ("", "A+")}, owner)
+
+    def _dental(self, master, doctor, owner, today):
+        """MED-003: a dental clinic's first patient has a chart and a plan in two stages, one step done."""
+
+        from medical import dental
+
+        if not dental.is_dental():
+            return
+        services = [item for item in master["items"] if not item.is_stock_tracked]
+        if len(services) < 3:
+            return
+        checkup, root_canal, cleaning = services[:3]
+        patient = master["customers"][0]
+        for tooth, condition, notes in ((16, "caries", "تسوّس عميق"), (26, "filled", ""), (36, "root_canal", ""), (46, "missing", "اتخلعت 2024"),
+                                        (11, "crown", "")):
+            dental.set_tooth(patient, tooth, condition, owner, notes)
+        first = dental.plan_step(patient, {"service": cleaning, "stage": 1, "doctor": doctor}, owner)
+        dental.plan_step(patient, {"service": root_canal, "tooth": 16, "stage": 2, "doctor": doctor}, owner)
+        dental.plan_step(patient, {"service": checkup, "stage": 3, "doctor": doctor, "notes": "متابعة بعد العلاج"}, owner)
+        dental.complete_step(first, owner, done_on=today - timedelta(days=7))
+
+    def _clinic_month(self, master, doctor, owner, today):
+        """MED-002: billed visits for the clinic report, and a follow-up that was missed."""
+
+        from appointments.services import bill, book, set_status
+        from medical.services import file_for, save_profile, save_visit
+        from sales.pos_customers import quick_add_customer
+        from sales.services import post_sales_invoice
+
+        service = next((item for item in master["items"] if not item.is_stock_tracked), None)
+        if service is not None:
+            for days, customer in ((7, 0), (7, 1), (7, 2)):
+                appointment = book({"customer": master["customers"][customer], "employee": doctor, "service": service,
+                                    "starts_at": timezone.make_aware(datetime.combine(today - timedelta(days=days), time(10 + customer))),
+                                    "duration_minutes": 30}, owner)
+                set_status(appointment, "arrived", owner)
+                post_sales_invoice(bill(appointment, owner).pk, owner)
+        missed, _ = quick_add_customer("سلمى حسن", "01000000105", owner)
+        save_profile(file_for(missed), {"gender": "female", "date_of_birth": "1985-01-09", "chronic_conditions": "سكر"}, owner)
+        save_visit(missed, {"complaint": "متابعة السكر", "diagnosis": "سكر من النوع الثاني", "treatment": "جلوكوفاج 500 مجم",
+                            "visit_date": (today - timedelta(days=21)).isoformat(), "follow_up_date": (today - timedelta(days=6)).isoformat(),
+                            "doctor": doctor}, owner)
 
     #: CONTRACT-002: a bill of quantities per contracting sub-activity (code, item, unit, quantity, rate).
     BOQ = {

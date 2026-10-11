@@ -1,0 +1,36 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'medical:file' patient.pk %}?lang={{ lang }}">← {{ pw.back }}</a>
+<h1>{{ pw.title }} — {{ patient.name }}</h1><p>{{ pw.intro }}</p></div></section>
+{% if error %}<p class="op-message op-message-error" role="alert">{{ error }}</p>{% endif %}
+<h2>{{ pw.packages }}</h2>
+{% for package in packages %}
+<section class="op-detail-meta" data-package="{{ package.pk }}" data-package-status="{{ package.state.status }}">
+<p><strong>{{ package.service.item_name }}</strong> · {{ package.sessions }} {{ pw.sessions }} · {{ package.price|money }}
+ · <span class="op-status {% if package.state.status == 'active' %}op-status-posted{% elif package.state.status == 'void' %}op-status-cancelled{% else %}op-status-draft{% endif %}">{{ package.status_label }}</span>
+ · {{ pw.invoice }}: <a href="{% url 'sales:detail' package.invoice.pk %}?lang={{ lang }}"><bdi>{{ package.invoice.invoice_number }}</bdi></a>{% if package.notes %} · {{ package.notes }}{% endif %}</p>
+<p>{{ pw.used }}: <strong data-used>{{ package.state.used }}</strong> · {{ pw.left }}: <strong data-left>{{ package.state.left }}</strong></p>
+{% if can_write and package.state.status == 'active' %}
+<form method="post" class="op-form-actions" data-use-session>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="use"><input type="hidden" name="package" value="{{ package.pk }}">
+<label class="sr-only" for="th-{{ package.pk }}">{{ pw.therapist }}</label><select id="th-{{ package.pk }}" name="therapist" style="min-height:44px"><option value="">{{ pw.therapist }}</option>{% for doctor in doctors %}<option value="{{ doctor.pk }}"{% if doctor.pk == own_id %} selected{% endif %}>{{ doctor.name }}</option>{% endfor %}</select>
+<label class="sr-only" for="nt-{{ package.pk }}">{{ pw.notes }}</label><input id="nt-{{ package.pk }}" name="notes" maxlength="255" placeholder="{{ pw.notes }}">
+<button class="op-primary" type="submit">{{ pw.use }}</button></form>
+{% endif %}
+{% if package.history %}<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ pw.day }}</th><th>{{ pw.therapist }}</th><th>{{ pw.notes }}</th><th></th></tr></thead><tbody>
+{% for session in package.history %}<tr data-session="{{ session.pk }}"{% if session.cancelled %} data-cancelled{% endif %}><td><bdi>{{ session.used_on|date:"Y-m-d" }}</bdi></td><td class="op-cell-text">{{ session.therapist.name|default:'—' }}</td>
+<td class="op-cell-text">{{ session.notes|default:'—' }}</td><td>{% if session.cancelled %}<span class="op-status op-status-cancelled">{{ pw.cancelled }}</span>{% elif can_write %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="cancel"><input type="hidden" name="session" value="{{ session.pk }}"><button class="op-secondary" type="submit">{{ pw.cancel }}</button></form>{% endif %}</td></tr>{% endfor %}
+</tbody></table></div>{% endif %}
+</section>
+{% empty %}<p class="op-muted">{{ pw.no_packages }}</p>{% endfor %}
+{% if can_sell %}
+<h2>{{ pw.sell }}</h2>
+<form class="op-form" method="post" data-sell-package>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="sell">
+<div class="op-form-grid">
+<div class="op-field"><label for="pk-service">{{ pw.service }}</label><select id="pk-service" name="service" required><option value="">{{ pw.choose }}</option>{% for item in services %}<option value="{{ item.pk }}"{% if post.service == item.pk|stringformat:'s' %} selected{% endif %}>{{ item.item_name }} — {{ item.default_sale_price|money }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="pk-sessions">{{ pw.sessions }}</label><input id="pk-sessions" name="sessions" inputmode="numeric" required value="{{ post.sessions|default:'10' }}"></div>
+<div class="op-field"><label for="pk-price">{{ pw.price }}</label><input id="pk-price" name="price" inputmode="decimal" placeholder="{{ pw.price_hint }}" value="{{ post.price|default:'' }}"></div>
+<div class="op-field"><label for="pk-notes">{{ pw.notes }}</label><input id="pk-notes" name="notes" maxlength="255" value="{{ post.notes|default:'' }}"></div>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ pw.save }}</button></div></form>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,36 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ qw.title }}</h1><p>{{ qw.intro }}</p></div>
+<div class="op-form-actions"><a class="op-secondary" href="{% url 'medical:queue_screen' %}?lang={{ lang }}" target="_blank" rel="noopener" data-queue-screen>{{ qw.screen }}</a>
+<form method="post" data-call-next>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="call_next"><button class="op-primary" type="submit">{{ qw.call_next }}</button></form></div></section>
+{% if error %}<p class="op-message op-message-error" role="alert">{{ error }}</p>{% endif %}
+<h2>{{ qw.queue }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-queue><thead><tr><th>{{ qw.number }}</th><th>{{ qw.patient }}</th><th>{{ qw.doctor }}</th><th>{{ qw.arrived }}</th><th>{{ qw.status }}</th><th></th></tr></thead><tbody>
+{% for t in tickets %}<tr data-ticket="{{ t.pk }}" data-ticket-status="{{ t.status }}"><td><strong>{{ t.number }}</strong></td>
+<td class="op-cell-text">{% if shows_files %}<a href="{% url 'medical:file' t.patient.pk %}?lang={{ lang }}">{{ t.patient.name }}</a>{% else %}{{ t.patient.name }}{% endif %}</td>
+<td class="op-cell-text">{{ t.doctor.name|default:'—' }}</td><td><bdi>{{ t.arrived_at|time:"H:i" }}</bdi>{% if t.waited is not None %} · {{ t.waited }} {{ qw.minutes }}{% endif %}</td>
+<td><span class="op-status {% if t.status == 'called' %}op-status-posted{% elif t.status == 'waiting' %}op-status-draft{% elif t.status == 'left' %}op-status-cancelled{% endif %}">{{ t.status_label }}</span></td>
+<td><form method="post" class="op-form-actions">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="ticket" value="{{ t.pk }}">
+{% if t.status == waiting %}<button class="op-secondary" type="submit" name="action" value="called">{{ qw.call }}</button><button class="op-secondary" type="submit" name="action" value="left">{{ qw.left }}</button>{% endif %}
+{% if t.status == called %}<button class="op-secondary" type="submit" name="action" value="done">{{ qw.done }}</button><button class="op-secondary" type="submit" name="action" value="waiting">{{ qw.back_to_wait }}</button>
+{% if shows_files %}<a class="op-secondary" href="{% url 'medical:visit_new' t.patient.pk %}?lang={{ lang }}{% if t.appointment_id %}&appointment={{ t.appointment_id }}{% endif %}">{{ qw.record_visit }}</a>{% endif %}{% endif %}
+</form></td></tr>
+{% empty %}<tr><td colspan="6" class="op-empty">{{ qw.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if is_desk %}
+<h2>{{ qw.appointments }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-queue-appointments><thead><tr><th>{{ qw.at }}</th><th>{{ qw.patient }}</th><th>{{ qw.doctor }}</th><th></th></tr></thead><tbody>
+{% for a in appointments %}<tr data-queue-appointment="{{ a.pk }}"><td><bdi>{{ a.starts_at|time:"H:i" }}</bdi></td><td class="op-cell-text">{{ a.customer.name }}</td><td class="op-cell-text">{{ a.employee.name|default:'—' }}</td>
+<td><form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="check_in"><input type="hidden" name="appointment" value="{{ a.pk }}"><button class="op-primary" type="submit">{{ qw.check_in }}</button></form></td></tr>
+{% empty %}<tr><td colspan="4" class="op-empty">{{ qw.none_appts }}</td></tr>{% endfor %}
+</tbody></table></div>
+<h2>{{ qw.walk_in }}</h2>
+<form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><input type="search" name="q" value="{{ query }}" placeholder="{{ qw.search }}" aria-label="{{ qw.search }}"><button type="submit">{{ qw.find }}</button></form>
+{% if found %}<div class="op-table-wrap"><table class="op-table" data-queue-found><tbody>
+{% for p in found %}<tr data-found="{{ p.pk }}"><td class="op-cell-text">{{ p.name }}</td><td><bdi>{{ p.phone|default:'—' }}</bdi></td>
+<td><form method="post" class="op-form-actions">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="check_in"><input type="hidden" name="patient" value="{{ p.pk }}">
+<label class="sr-only" for="qd-{{ p.pk }}">{{ qw.doctor }}</label><select id="qd-{{ p.pk }}" name="doctor" style="min-height:44px"><option value="">{{ qw.doctor }}</option>{% for d in doctors %}<option value="{{ d.pk }}">{{ d.name }}</option>{% endfor %}</select>
+<button class="op-primary" type="submit">{{ qw.check_in }}</button></form></td></tr>{% endfor %}
+</tbody></table></div>{% endif %}
+{% endif %}
+{% endblock %}

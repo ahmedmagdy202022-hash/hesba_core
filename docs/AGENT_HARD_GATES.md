@@ -1112,3 +1112,97 @@ No unresolved business or accounting decision was discovered while implementing 
   - what a technician may and may not do;
   - screens, permissions, the menu, the dashboard;
   - a salon having no work orders.
+## HG-043 — implementation note: dental chart and treatment plan (MED-003)
+
+- **Status:** The dental part of the HG-043 proposal (recorded in PR #184), built as design A. The lab, physiotherapy, vet and reception-queue parts are not built yet.
+- **Schema:** migration `medical/0002_dental_chart` adds two tables and touches no existing one.
+  - `ToothRecord`: patient, FDI tooth number, condition, notes; one row per patient and tooth (unique constraint). A tooth with no row is healthy.
+  - `TreatmentStep`: patient, tooth (empty = the whole mouth), service item, price, stage 1–20, status (planned → done or cancelled), doctor, done date, visit, invoice.
+- **Money:** a step never moves money.
+  - "Invoice the done steps" makes one ordinary **draft** sales invoice through `taxes.services.create_sales_draft_with_tax`, the same way appointments bill.
+  - Posting it on the sales page is what touches the customer's account and the cashbox.
+  - A step on a cancelled invoice can be billed again, and a step is never on two live invoices: the patient row is locked while billing.
+  - Making the invoice needs `sales.create_sales_invoice`; charting and planning need the medical records permission (or being a linked doctor).
+- **Not touched:** sales posting and cancellation, customer ledgers, appointments, report calculations, average cost.
+- **Shown only** when the current entity (or the installation) is medical / dental.
+- **Risks:**
+  - FDI numbers are checked against the permanent (11–48) and primary (51–85) sets, nothing else.
+  - The price is the clinic's to set per step; it defaults to the service's price.
+  - Rolling back the migration drops the two tables (charts and plans); nothing else depends on them.
+- **Tests:** `medical/tests.py` → `DentalChartTests`; `reports/tests_demo_catalogs.py` (the dental demo has a chart and a plan in three stages).
+
+## HG-043 — implementation note: lab results (MED-004)
+
+- **Status:** The lab part of the HG-043 proposal, built as design A. The physiotherapy, vet and reception-queue parts are not built yet.
+- **Schema:** migration `medical/0003_lab_results` adds two tables and touches no existing one.
+  - `LabTest`: name (unique), unit, normal low and/or high, optional service item, order, active.
+  - `LabResult`: patient, test, sample day (one result per patient, test and day), the number or a text value, and the unit and range **copied from the test when entered**, plus the flag.
+- **Rules:**
+  - The boundaries count as normal.
+  - Changing a test's range never rewrites an old result's flag.
+  - A text result (negative, A+) has no flag.
+  - Arabic digits and the Arabic decimal sign are read; a comma groups thousands.
+  - Each entry and correction is audited before/after.
+- **Money:** none. A test is billed like any service, on an ordinary sales invoice.
+- **Not touched:** sales, ledgers, appointments, report calculations.
+- **Shown only** for medical / lab.
+- **Risk:** the flag compares numbers only; it does not convert between units, so a range is valid for the test's own unit.
+- **Tests:** `medical/tests.py` → `LabResultTests`; `reports/tests_demo_catalogs.py` (the lab demo).
+
+## HG-043 — implementation note: physiotherapy session packages (MED-005)
+
+- **Status:** The physiotherapy part of the HG-043 proposal, built as design A. The vet and reception-queue parts are not built yet.
+- **Schema:** migration `medical/0004_session_packages` adds two tables and touches no existing one.
+  - `SessionPackage`: patient, service, number of sessions, price, and its own sales invoice (one to one).
+  - `PackageSession`: package, day, therapist, optional visit, notes, cancelled flag.
+- **Money:**
+  - selling a package makes one ordinary **draft** sales invoice through `create_sales_draft_with_tax`;
+  - its revenue counts when that invoice is posted, like any service, as the proposal says;
+  - spreading package revenue over the sessions (deferred revenue) would change ledger posting and is **not** done;
+  - using a session moves no money.
+- **Rules:**
+  - Sessions are used only once the invoice is posted.
+  - A package never goes below zero: the package row is locked while a session is recorded.
+  - A mistaken session is cancelled (kept and audited), which gives it back.
+  - A package whose invoice was cancelled is void.
+  - Selling needs `sales.create_sales_invoice`; recording sessions needs the medical write permission (or being a linked therapist).
+- **Not touched:** sales posting and cancellation, customer ledgers, appointments, report calculations.
+- **Shown only** for medical / physio.
+- **Tests:** `medical/tests.py` → `SessionPackageTests`; `reports/tests_demo_catalogs.py` (the physio demo: 10 sessions, 3 used).
+
+## HG-043 — implementation note: the vet's animal file (MED-006)
+
+- **Status:** The vet part of the HG-043 proposal, built as design A with **one change from the proposal**, explained below. The reception queue is not built yet.
+- **Change from the proposal:** the proposal had `PatientFile` gain a kind, species, breed and owner. But `PatientFile` is one-to-one with its customer, and a vet's customer often brings **several** animals. So:
+  - the animal is its own table, `Animal`, owned by an ordinary customer;
+  - the one change to an existing table is a nullable `ClinicalVisit.animal` (PROTECT), which says which animal a visit was for.
+  - `PatientFile` is unchanged, and existing rows and every other medical sub-activity are unaffected: the column stays empty.
+- **Schema:** migration `medical/0005_vet_animals` creates `Animal` (name, species, breed, sex, date of birth, colour, microchip, neutered, allergies, notes, active) and adds `ClinicalVisit.animal`. Rolling back drops the column and the table.
+- **Rules:**
+  - The owner books, is billed and pays as before; the statement stays on the customer.
+  - A visit can only name one of the patient's own animals, refused in `medical.services.save_visit` and in the view.
+  - The animal's card shows its own visits only.
+  - The prescription names the animal and its species.
+  - The patients list also finds an owner by an animal's name.
+  - Every save is audited before/after.
+- **Money:** none.
+- **Not touched:** sales, ledgers, appointments, report calculations.
+- **Shown only** for medical / vet. The vet demo uses its own `animals` extra, so owners are not given human patient profiles.
+- **Tests:** `medical/tests.py` → `VetAnimalTests`; `reports/tests_demo_catalogs.py` (the vet demo: a dog with two visits and a cat).
+
+## HG-043 — implementation note: the reception queue (MED-007)
+
+- **Status:** The last part of the HG-043 proposal, built as design A. With MED-003 to MED-007, every part of the proposal is built.
+- **Schema:** migration `medical/0006_reception_queue` adds `QueueTicket` and touches no existing table.
+  - Fields: day, number (unique per day), patient, optional appointment (one to one), optional doctor, status, and the arrived/called/done times.
+- **Rules:**
+  - Checking in gives today's next number; a race for the same number retries on the unique constraint.
+  - A patient can't hold two open turns in a day.
+  - Arriving for today's appointment marks it "arrived" through `appointments.services.set_status`, unchanged.
+  - A doctor calls the longest-waiting patient who is theirs or unassigned (an unassigned one becomes theirs); reception can call anyone.
+  - Status moves: waiting → called → done, back to waiting if called by mistake, or left; each move is audited.
+  - **The waiting-room screen shows numbers (and the doctor's name) only, never a patient's name.** It refreshes every 15 seconds.
+- **Who:** reception works the queue with `sales.create_sales_invoice`, the booking permission appointments use, so a cashier at the desk can use it without opening patient files; doctors (linked employees) call their own patients.
+- **Where:** medical / clinic and medical / medical_center, with a «Waiting list» entry in the menu.
+- **Money:** none. The visit is billed from its appointment or on a sales invoice, as before.
+- **Tests:** `medical/tests.py` → `ReceptionQueueTests`; `reports/tests_demo_catalogs.py` (the clinic demo has one patient called in and one waiting).

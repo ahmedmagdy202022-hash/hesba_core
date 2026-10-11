@@ -1,0 +1,20 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.follow_title }}</h1><p>{{ words.follow_intro }}</p></div></section>
+{% include "medical/_tabs.html" %}
+<h2>{{ words.missed }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-missed><thead><tr><th>{{ words.patient }}</th><th>{{ words.phone }}</th><th>{{ words.last_seen }}</th><th>{{ words.doctor }}</th><th>{{ words.due }}</th><th>{{ words.late }}</th><th></th></tr></thead><tbody>
+{% for row in missed %}<tr data-missed-patient="{{ row.patient.pk }}"><td class="op-cell-text"><a href="{% url 'medical:file' row.patient.pk %}?lang={{ lang }}">{{ row.patient.name }}</a></td><td><bdi>{{ row.patient.phone|default:'—' }}</bdi></td>
+<td><bdi>{{ row.visit.visit_date|date:"Y-m-d" }}</bdi></td><td class="op-cell-text">{{ row.doctor.name|default:'—' }}</td><td><bdi>{{ row.due|date:"Y-m-d" }}</bdi></td>
+<td><span class="op-status op-status-cancelled">{{ row.late }} {{ words.days }}</span></td>
+<td>{% if row.patient.phone %}<a href="{{ row.whatsapp }}" target="_blank" rel="noopener" data-remind>{{ words.remind }}</a> · {% endif %}<a href="{% url 'appointments:agenda' %}?lang={{ lang }}&day={{ today|date:'Y-m-d' }}">{{ words.book }}</a></td></tr>
+{% empty %}<tr><td colspan="7" class="op-empty">{{ words.no_missed }}</td></tr>{% endfor %}
+</tbody></table></div>
+<h2>{{ words.coming }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-coming><thead><tr><th>{{ words.patient }}</th><th>{{ words.phone }}</th><th>{{ words.last_seen }}</th><th>{{ words.doctor }}</th><th>{{ words.due }}</th><th></th></tr></thead><tbody>
+{% for row in coming %}<tr data-coming-patient="{{ row.patient.pk }}"><td class="op-cell-text"><a href="{% url 'medical:file' row.patient.pk %}?lang={{ lang }}">{{ row.patient.name }}</a></td><td><bdi>{{ row.patient.phone|default:'—' }}</bdi></td>
+<td><bdi>{{ row.visit.visit_date|date:"Y-m-d" }}</bdi></td><td class="op-cell-text">{{ row.doctor.name|default:'—' }}</td><td><span class="op-status op-status-draft"><bdi>{{ row.due|date:"Y-m-d" }}</bdi></span></td>
+<td><a href="{% url 'appointments:agenda' %}?lang={{ lang }}&day={{ row.due|date:'Y-m-d' }}">{{ words.book }}</a></td></tr>
+{% empty %}<tr><td colspan="6" class="op-empty">{{ words.no_coming }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}
