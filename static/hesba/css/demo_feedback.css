@@ -1,6 +1,7 @@
 /* DEMO-FEEDBACK: the floating "feedback" button and its dialog. Tokens only. */
 body[data-lang="ar"] .hs-feedback .t-en, body[data-lang="ar"] .hs-feedback-fab .t-en,
 body[data-lang="en"] .hs-feedback .t-ar, body[data-lang="en"] .hs-feedback-fab .t-ar,
+body[data-lang="ar"] .hs-hello .t-en, body[data-lang="en"] .hs-hello .t-ar,
 body[data-lang="ar"] .login-demo .t-en, body[data-lang="en"] .login-demo .t-ar{display:none}
 
 .hs-feedback-fab{
@@ -51,4 +52,35 @@ body.login-page .hs-feedback-fab{bottom:calc(64px + env(safe-area-inset-bottom))
 .hs-feedback__actions{display:flex;justify-content:flex-end}
 .hs-feedback__send{min-width:140px;min-height:48px;border:0;border-radius:var(--hs-radius-lg);background:var(--hs-teal);color:var(--hs-on-teal);font:inherit;font-weight:700;cursor:pointer}
 .hs-feedback__send:disabled{opacity:.6;cursor:progress}
-@media print{.hs-feedback-fab,.hs-feedback{display:none!important}}
+.hs-feedback__privacy{margin:0;padding:8px 12px;border-radius:var(--hs-radius-md);background:var(--hs-neutral-wash);color:var(--hs-muted);font-size:var(--hs-text-xs);line-height:1.7}
+
+/* DEMO-TRACK: the one-time welcome card, with an optional name and phone. */
+.hs-hello{
+  position:fixed;z-index:61;inset-inline-start:18px;bottom:calc(72px + env(safe-area-inset-bottom));
+  width:min(380px,calc(100vw - 32px));box-sizing:border-box;padding:var(--hs-space-5);
+  border:1px solid var(--hs-line);border-radius:var(--hs-radius-xl);background:var(--hs-surface);color:var(--hs-ink);
+  box-shadow:var(--hs-shadow-lg);font-family:var(--hs-font-body);
+}
+.hs-hello[hidden]{display:none}
+.hs-hello form{display:grid;gap:var(--hs-space-3)}
+.hs-hello h2{margin:0;font-family:var(--hs-font-head);font-weight:700;font-size:var(--hs-text-md);color:var(--hs-navy)}
+.hs-hello p{margin:0;color:var(--hs-muted);font-size:var(--hs-text-sm);line-height:1.7}
+.hs-hello__fields{display:grid;grid-template-columns:1fr 1fr;gap:var(--hs-space-2)}
+.hs-hello__fields label{display:grid;gap:4px;color:var(--hs-navy);font-size:var(--hs-text-xs);font-weight:600}
+.hs-hello__fields input{width:100%;box-sizing:border-box;min-height:40px;padding:0 10px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-md);background:var(--hs-surface);color:var(--hs-ink);font:inherit;font-weight:400}
+.hs-hello__fields input:focus{outline:none;border-color:var(--hs-teal);box-shadow:var(--hs-focus-ring)}
+.hs-hello .hs-hello__status{font-size:var(--hs-text-xs)}
+.hs-hello .hs-hello__status:empty{display:none}
+.hs-hello__status.is-ok{color:var(--hs-success)}
+.hs-hello__status.is-error{color:var(--hs-danger)}
+.hs-hello__actions{display:flex;gap:var(--hs-space-2)}
+.hs-hello__send,.hs-hello__skip{min-height:40px;padding:0 16px;border-radius:var(--hs-radius-md);font:inherit;font-weight:700;cursor:pointer}
+.hs-hello__send{border:0;background:var(--hs-teal);color:var(--hs-on-teal)}
+.hs-hello__skip{border:1px solid var(--hs-line-strong);background:var(--hs-surface);color:var(--hs-navy)}
+body.login-page .hs-hello{bottom:calc(118px + env(safe-area-inset-bottom))}
+body.activity-selection-page .hs-hello{bottom:calc(154px + env(safe-area-inset-bottom))}
+@media (max-width:760px){
+  /* A short sheet at the very bottom, clear of the sign-in form above it. */
+  .hs-hello,body.login-page .hs-hello,body.activity-selection-page .hs-hello{inset-inline:12px;width:auto;bottom:calc(12px + env(safe-area-inset-bottom));padding:var(--hs-space-4)}
+}
+@media print{.hs-feedback-fab,.hs-feedback,.hs-hello{display:none!important}}

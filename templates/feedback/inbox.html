@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex">
 <title>ملاحظات المجرّبين - حِسبة</title>
 <link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
-<link rel="stylesheet" href="{% static 'hesba/css/demo_feedback_inbox.css' %}?v=demo-feedback-1">
+<link rel="stylesheet" href="{% static 'hesba/css/demo_feedback_inbox.css' %}?v=demo-feedback-2">
 </head>
 <body class="fb-inbox">
 <header class="fb-inbox__head">
@@ -18,6 +18,7 @@
     <input type="hidden" name="key" value="{{ key }}">
     <input type="search" name="q" value="{{ query }}" placeholder="دوّر في الملاحظات">
     <button type="submit">بحث</button>
+    <a href="{% url 'feedback:visits' %}?key={{ key|urlencode }}">الزوّار</a>
     <a href="?key={{ key|urlencode }}&format=csv{% if query %}&q={{ query|urlencode }}{% endif %}">تنزيل CSV</a>
   </form>
   {% for note in notes %}

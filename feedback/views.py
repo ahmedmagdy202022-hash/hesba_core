@@ -155,3 +155,103 @@ def inbox(request):
         "notes": notes[:500], "query": query, "key": request.GET.get("key", ""),
         "total": total, "testers": testers,
     })
+
+
+# DEMO-TRACK ---------------------------------------------------------------
+
+@login_not_required
+@require_POST
+def hello(request):
+    """The visitor's name and phone, if they chose to give them."""
+
+    _demo_only()
+    from .models import Visit
+    from .tracking import visitor_of
+
+    lang = "en" if request.POST.get("lang") == "en" else "ar"
+    visitor = visitor_of(request)
+    name = (request.POST.get("name") or "").strip()[:120]
+    phone = (request.POST.get("phone") or "").strip()[:40]
+    if visitor is None:
+        return JsonResponse({"ok": False, "error": "Reload the page first." if lang == "en" else "حدّث الصفحة الأول."}, status=400)
+    if not name and not phone:
+        return JsonResponse({"ok": False, "error": "Write your name or phone." if lang == "en" else "اكتب اسمك أو رقمك."}, status=400)
+    log.warning("DEMO-VISITOR %s", json.dumps({"visitor": visitor[:8], "name": name, "phone": phone}, ensure_ascii=False))
+    try:
+        Visit.objects.filter(visitor=visitor).update(**{k: v for k, v in (("name", name), ("phone", phone)) if v})
+    except DatabaseError:
+        log.error("DEMO-VISITOR not stored: the feedback database is unreachable; the line above is the only copy.")
+    return JsonResponse({"ok": True})
+
+
+def _activity_name(activity, sub_activity):
+    """The activity in Ahmed's words, e.g. "طبي / عيادة"."""
+
+    from settings_core.setup_catalog import activity_label, sub_activity_label
+
+    if not activity:
+        return ""
+    return activity_label(activity) + (f" / {sub_activity_label(activity, sub_activity)}" if sub_activity else "")
+
+
+def _cairo(moment):
+    return timezone.localtime(moment).strftime("%Y-%m-%d %H:%M") if moment else ""
+
+
+@never_cache
+@login_not_required
+def visits(request):
+    """Ahmed's view of who visited the demo and what they opened."""
+
+    _demo_only()
+    if not _allowed(request):
+        raise Http404("Not found.")
+    from django.db.models import Count, Max, Sum
+
+    from .models import PageView, Visit
+
+    key = request.GET.get("key", "")
+    chosen = request.GET.get("visit", "")
+    if chosen.isdigit():
+        visit = Visit.objects.filter(pk=int(chosen)).first()
+        if visit is None:
+            raise Http404("Not found.")
+        views = list(visit.views.all()[:500])
+        for view in views:
+            view.activity_name = _activity_name(view.activity, view.sub_activity)
+        return render(request, "feedback/visit.html", {
+            "visit": visit, "views": views, "key": key,
+            "notes": Feedback.objects.filter(sandbox=visit.sandbox).order_by("created_at") if visit.sandbox else [],
+        })
+    all_visits = Visit.objects.all()
+    activity = request.GET.get("activity", "").strip()
+    shown = all_visits.filter(activity=activity) if activity else all_visits
+    if request.GET.get("format") == "csv":
+        response = HttpResponse(content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = 'attachment; filename="hesba-demo-visits.csv"'
+        response.write("﻿")
+        writer = csv.writer(response)
+        writer.writerow(["started", "last_seen", "minutes", "name", "phone", "activity", "sub_activity", "role", "pages",
+                         "first_page", "last_page", "lang", "device", "visitor"])
+        for visit in shown:
+            writer.writerow([_cairo(visit.started_at), _cairo(visit.last_seen_at), visit.minutes, visit.name, visit.phone,
+                             visit.activity, visit.sub_activity, visit.role, visit.pages, visit.first_path, visit.last_path,
+                             visit.lang, visit.user_agent, visit.visitor[:8]])
+        return response
+    # Which activities were tried, counted from the pages themselves: one visitor
+    # may try several activities by starting over.
+    tried = (PageView.objects.exclude(activity="").values("activity", "sub_activity")
+             .annotate(visitors=Count("visit", distinct=True), pages=Count("id"), last=Max("at"))
+             .order_by("-visitors", "-pages"))
+    totals = all_visits.aggregate(pages=Sum("pages"))
+    tried = [dict(row, label=_activity_name(row["activity"], row["sub_activity"])) for row in tried]
+    listed = list(shown[:500])
+    for visit in listed:
+        visit.activity_name = _activity_name(visit.activity, visit.sub_activity)
+    activities = sorted({(row["activity"], _activity_name(row["activity"], "")) for row in tried}, key=lambda pair: pair[1])
+    return render(request, "feedback/visits.html", {
+        "visits": listed, "tried": tried, "activities": activities, "key": key, "activity": activity,
+        "total": all_visits.count(), "named": all_visits.exclude(name="", phone="").count(),
+        "pages": totals["pages"] or 0,
+        "today": all_visits.filter(last_seen_at__gte=timezone.now() - timedelta(hours=24)).count(),
+    })
