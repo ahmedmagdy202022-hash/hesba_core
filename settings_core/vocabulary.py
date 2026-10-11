@@ -135,10 +135,11 @@ SUB_ACTIVITY = {
     ("commercial", "wholesale"): {
         "customers": {"ar": "العملاء والتجار", "en": "Customers & traders"},
     },
+    # SVC-001: the work orders have their own section now; sales is where their invoices land.
     ("services", "maintenance"): {
-        "operations": {"ar": "أوامر الشغل والفواتير", "en": "Work orders & invoices"},
-        "operations_short": {"ar": "أوامر الشغل", "en": "Jobs"},
-        "record_sale": {"ar": "تسجيل أمر شغل", "en": "Record a job"},
+        "operations": {"ar": "الفواتير والتحصيل", "en": "Invoices & payments"},
+        "operations_short": {"ar": "الفواتير", "en": "Invoices"},
+        "record_sale": {"ar": "فاتورة مباشرة", "en": "Direct invoice"},
     },
     ("services", "clinic"): ACTIVITY["medical"],
     ("services", "education"): ACTIVITY["education"],

@@ -710,3 +710,28 @@ The final blocking implementation review did not introduce a new business/accoun
 Regression coverage for every item above is included in the final 794-test run. No migration was required and the model-drift check remains clean.
 
 No unresolved business or accounting decision was discovered while implementing or verifying these approvals.
+
+## HG-041 — implementation note: services work orders, design A (SVC-001)
+
+- **Status:** Built as design A (the proposal is recorded under HG-041 in PR #184).
+  - Parts leave stock only through the work order's sales invoice, on the unchanged sales engine.
+  - `inventory.services.adjust_stock` is not used, so repair parts are never posted as stock-count loss.
+- **New schema:** a new `workorders` app (migration `workorders/0001`), with three tables:
+  - `WorkOrder`: customer, device, serial, accessories, problem, diagnosis, technician, status, promised date, warranty days and end, the order it came back under warranty of, the invoice, entity;
+  - `WorkOrderLine`: item, quantity, price, warranty flag;
+  - `WorkOrderEvent`: the timeline.
+- **Delivery** (`workorders.services.deliver`):
+  - the order's lines go to `taxes.services.create_sales_draft_with_tax` and then `sales.services.post_sales_invoice`, both unchanged;
+  - stock lines move out at movement cost (HG-003);
+  - a warranty line goes on at price 0, so its cost still lands in cost of goods sold and the receivable does not change;
+  - payment at the counter is the invoice's own `paid_now` into a chosen cashbox, never more than the invoice total.
+- **Not touched:** inventory movement types, the projector, sales posting, average cost, cashbox and customer ledgers.
+- **Tests** (`workorders/tests.py`):
+  - an open job moves nothing;
+  - delivery moves the exact quantity at movement cost and sets the customer balance and cashbox exactly;
+  - a warranty part costs 1350 at price 0, with the ledger balanced and nothing new left in suspense;
+  - cancelling the invoice brings the parts back;
+  - the status path;
+  - what a technician may and may not do;
+  - screens, permissions, the menu, the dashboard;
+  - a salon having no work orders.

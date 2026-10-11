@@ -30,7 +30,7 @@ PANEL_BY_ACTIVITY = {
 }
 
 #: The section each panel needs to be visible (same keys as reports.navigation).
-PANEL_SECTION = {"kitchen": "restaurant", "bookings": "appointments", "production": "manufacturing", "projects": "projects"}
+PANEL_SECTION = {"kitchen": "restaurant", "bookings": "appointments", "production": "manufacturing", "projects": "projects", "workshop": "workorders"}
 
 WORDS = {
     "ar": {
@@ -155,10 +155,42 @@ def _projects(words):
     ], []
 
 
+WORKSHOP_WORDS = {
+    "ar": {"title": "الورشة دلوقتي", "open": "أوامر مفتوحة", "ready": "جاهزة للتسليم", "late": "متأخرة عن ميعادها", "delivered": "اتسلّمت الشهر ده",
+           "returns": "رجعت في الضمان (الشهر)", "late_none": "مفيش تأخير"},
+    "en": {"title": "The workshop now", "open": "Open orders", "ready": "Ready for pickup", "late": "Past the promised date", "delivered": "Delivered this month",
+           "returns": "Warranty returns (month)", "late_none": "nothing late"},
+}
+
+
+def _workshop(lang, today):
+    from workorders.models import OPEN, Status, WorkOrder
+    from workorders.services import late, scoped
+
+    words = WORKSHOP_WORDS["en" if lang == "en" else "ar"]
+    orders = scoped(WorkOrder.objects)
+    first = today.replace(day=1)
+    counts = orders.aggregate(open=Count("id", filter=Q(status__in=OPEN)), ready=Count("id", filter=Q(status=Status.READY)),
+                              delivered=Count("id", filter=Q(status=Status.DELIVERED, delivered_at__date__gte=first)),
+                              returns=Count("id", filter=Q(warranty_of__isnull=False, received_at__date__gte=first)))
+    overdue = late(today).count()
+    return [
+        _tile("wo_open", words["open"], counts["open"], tone="lead"),
+        _tile("wo_ready", words["ready"], counts["ready"], tone="good" if counts["ready"] else ""),
+        _tile("wo_late", words["late"], overdue, tone="bad" if overdue else "good", sub="" if overdue else words["late_none"]),
+        _tile("wo_delivered", words["delivered"], counts["delivered"]),
+        _tile("wo_returns", words["returns"], counts["returns"], tone="bad" if counts["returns"] else ""),
+    ], []
+
+
 def build_activity_panel(activity, visible_sections, lang="ar", today=None):
     """The panel for this activity, or None when it has none or it is hidden."""
 
     kind = PANEL_BY_ACTIVITY.get(activity)
+    if activity == "services":
+        from workorders.services import is_workshop
+
+        kind = "workshop" if is_workshop() else kind  # SVC-001: a workshop leads with its work orders
     if kind is None or PANEL_SECTION[kind] not in visible_sections:
         return None
     lang = "en" if lang == "en" else "ar"
@@ -170,6 +202,10 @@ def build_activity_panel(activity, visible_sections, lang="ar", today=None):
         tiles, lists = _bookings(words, today, lang)
     elif kind == "production":
         tiles, lists = _production(words, today)
+    elif kind == "workshop":
+        tiles, lists = _workshop(lang, today)
+        title = WORKSHOP_WORDS["en" if lang == "en" else "ar"]["title"]
+        return {"kind": kind, "title": title, "tiles": tiles, "lists": lists, "link": reverse("workorders:list"), "open": words["open"]}
     else:
         tiles, lists = _projects(words)
     link = {"kitchen": "restaurant:board", "bookings": "appointments:agenda", "production": "manufacturing:home", "projects": "projects:list"}[kind]

@@ -24,7 +24,7 @@ ACTIVITY_LEAD = {
     "restaurants": ("restaurant", "pos"),
     "medical": ("appointments", "medical"),
     "education": ("appointments",),
-    "services": ("appointments",),
+    "services": ("workorders", "appointments"),
     "manufacturing": ("manufacturing",),
     "contracting": ("projects",),
 }
@@ -72,6 +72,9 @@ NAV_ITEMS = (
     {"key": "manufacturing", "ar": "التصنيع", "en": "Manufacturing", "url_name": "manufacturing:home", "module": "manufacturing", "permission": "inventory.view_stock"},
     {"key": "projects", "ar": "المشاريع", "en": "Projects", "url_name": "projects:list", "module": "projects", "permission": "sales.view_sales_invoices"},
     {"key": "restaurant", "ar": "الطاولات", "en": "Tables", "url_name": "restaurant:board", "module": "tables_orders", "permission": "sales.view_sales_invoices"},
+    # SVC-001: a workshop works from its work orders (a technician who has orders sees them too).
+    {"key": "workorders", "ar": "أوامر الشغل", "en": "Work orders", "url_name": "workorders:list", "module": "sales_operations", "activity": "services",
+     "allow": "workorders.services.sees_work_orders"},
     {"key": "medical", "ar": "الملفات الطبية", "en": "Patient files", "url_name": "medical:patients", "module": "customers", "activity": "medical", "allow": "medical.services.can_view"},
     {"key": "appointments", "ar": "المواعيد", "en": "Appointments", "url_name": "appointments:agenda", "module": "appointments_visits", "permission": "sales.view_sales_invoices"},
     {"key": "staff", "ar": "الموظفون", "en": "Employees", "url_name": "staff:list", "module": "employees_technicians", "allow": "reports.navigation.sees_staff"},
@@ -108,6 +111,7 @@ TAB_LABELS = {
     "manufacturing": {"ar": "التصنيع", "en": "Production"},
     "projects": {"ar": "المشاريع", "en": "Projects"},
     "medical": {"ar": "الملفات", "en": "Files"},
+    "workorders": {"ar": "الأوامر", "en": "Orders"},
 }
 
 SHELL_WORDS = {
