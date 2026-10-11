@@ -1,0 +1,14 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'education:students' %}?lang={{ lang }}">← {{ words.back_students }}</a><h1>{{ words.new_student }}</h1></div></section>
+{% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
+<form class="op-form" method="post" data-student-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+<div class="op-form-grid">{% include "education/_student_fields.html" with student=None %}</div>
+<fieldset class="op-form-grid edu-payer"><legend>{{ words.payer }}</legend>
+<div class="op-field"><label for="st-payer">{{ words.payer_existing }}</label><select id="st-payer" name="payer"><option value="">{{ words.choose }}</option>{% for p in payers %}<option value="{{ p.pk }}"{% if post.payer == p.pk|stringformat:'s' %} selected{% endif %}>{{ p.name }}{% if p.phone %} — {{ p.phone }}{% endif %}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="st-payer-name">{{ words.payer_new }}: {{ words.payer_name }}</label><input id="st-payer-name" name="payer_name" maxlength="255" value="{{ post.payer_name }}"></div>
+<div class="op-field"><label for="st-payer-phone">{{ words.payer_phone }}</label><input id="st-payer-phone" name="payer_phone" maxlength="50" inputmode="tel" dir="ltr" value="{{ post.payer_phone }}"></div>
+<label class="op-check"><input type="checkbox" name="self_pays" value="1"{% if post.self_pays %} checked{% endif %}> {{ words.self_pays }}</label>
+</fieldset>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form>
+{% endblock %}

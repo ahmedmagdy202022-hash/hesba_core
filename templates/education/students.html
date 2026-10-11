@@ -1,0 +1,11 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div>
+{% if can_manage %}<div class="op-form-actions"><a class="op-primary" href="{% url 'education:student_new' %}?lang={{ lang }}" data-new-student>{{ words.new_student }}</a></div>{% endif %}</section>
+{% include "education/_tabs.html" %}
+<form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><input type="search" name="q" value="{{ query }}" placeholder="{{ words.search }}" aria-label="{{ words.search }}"><button type="submit">{{ words.find }}</button></form>
+<div class="op-table-wrap"><table class="op-table" data-students><thead><tr><th>{{ words.code }}</th><th>{{ words.name }}</th><th>{{ words.stage }}</th><th>{{ words.payer }}</th><th>{{ words.phone }}</th><th>{{ words.groups_count }}</th><th></th></tr></thead><tbody>
+{% for row in rows %}<tr data-student="{{ row.pk }}"{% if not row.active %} class="op-muted"{% endif %}><td><bdi>{{ row.code }}</bdi></td><td class="op-cell-text">{{ row.name }}</td><td>{{ row.stage|default:'—' }}</td><td class="op-cell-text">{{ row.payer.name }}{% if row.relation %} <span class="op-muted">({{ row.relation }})</span>{% endif %}</td><td><bdi>{{ row.phone|default:row.payer.phone|default:'—' }}</bdi></td><td>{{ row.groups_count }}</td><td><a href="{% url 'education:student' row.pk %}?lang={{ lang }}">{{ words.open }}</a></td></tr>
+{% empty %}<tr><td colspan="7" class="op-empty">{{ words.no_students }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

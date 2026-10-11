@@ -121,6 +121,8 @@ class Command(BaseCommand):
             self._appointments(master, staff, owner)
         if "patients" in extras:
             self._patients(master, staff, owner)
+        if "students" in extras:
+            self._students(master, staff, owner)
         if "projects" in extras:
             self._projects(master, owner)
         if "orders" in extras:
@@ -156,6 +158,52 @@ class Command(BaseCommand):
             save_profile(file_for(customer), profile, owner)
             save_visit(customer, {**visit, "visit_date": (today - timedelta(days=7)).isoformat(),
                                   "follow_up_date": (today + timedelta(days=7)).isoformat(), "doctor": doctor}, owner)
+
+    def _students(self, master, teacher, owner):
+        """EDU-001: courses from the catalog's services, three groups, parents with their children enrolled."""
+
+        from education import services as edu
+        from master_data.models import Customer
+        from staff.services import save_employee
+
+        if not edu.is_education_install():
+            return  # the same catalog also serves a services business, which has no student files
+        today = timezone.localdate()
+        courses = [edu.save_course({"name": item.item_name, "fee": item.default_sale_price, "basis": "monthly", "item": item}, owner)
+                   for item in master["items"] if not item.is_stock_tracked][:2]
+        if not courses:
+            return
+        second = save_employee({"name": "أ. نادية", "title": teacher.title or "مدرسة"}, owner)
+        plan = (
+            (courses[0], "مجموعة السبت والتلات", teacher, "قاعة 1", "sat,tue", time(16), 12),
+            (courses[0], "مجموعة الأحد والأربع", second, "قاعة 2", "sun,wed", time(18), 12),
+            (courses[-1], "مجموعة الاتنين والخميس", teacher, "قاعة 1", "mon,thu", time(17), 10),
+        )
+        groups = [edu.save_group({"course": course, "name": name, "teacher": who, "room": room, "days": days, "start_time": start,
+                                  "duration_minutes": "90", "capacity": str(capacity), "starts_on": today - timedelta(days=40)}, owner)
+                  for course, name, who, room, days, start, capacity in plan]
+        families = (
+            ("محمد السيد (ولي أمر)", "01001234501", "الأب", ("يوسف محمد", "مريم محمد")),
+            ("هالة عبد الرحمن (ولية أمر)", "01101234502", "الأم", ("عمر خالد",)),
+            ("طارق فهمي (ولي أمر)", "01201234503", "الأب", ("سلمى طارق", "آدم طارق")),
+            ("نجلاء حسن (ولية أمر)", "01501234504", "الأم", ("ليلى أحمد",)),
+            ("إبراهيم سالم (ولي أمر)", "01001234505", "الأب", ("حمزة إبراهيم",)),
+        )
+        students = []
+        for parent, phone, relation, children in families:
+            payer = Customer.objects.filter(phone=phone).first()
+            for child in children:
+                data = {"name": child, "stage": "تالتة إعدادي", "relation": relation}
+                data.update({"payer": payer} if payer else {"payer_name": parent, "payer_phone": phone})
+                student = edu.save_student(data, owner)
+                payer = student.payer
+                students.append(student)
+        for n, student in enumerate(students):
+            # Brothers and sisters get 10% off; the first two groups share the students, the third takes a few.
+            sibling = sum(1 for other in students if other.payer_id == student.payer_id) > 1
+            edu.enroll(student, groups[n % 2], owner, start_date=today - timedelta(days=35), discount_percent="10" if sibling else "0")
+            if n < 4:
+                edu.enroll(student, groups[2], owner, start_date=today - timedelta(days=20))
 
     def _projects(self, master, owner):
         from projects.services import bill_progress, issue_materials, save_project

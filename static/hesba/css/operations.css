@@ -184,3 +184,10 @@ html.hs-cam-open,html.hs-cam-open body{overflow:hidden}
 [data-recipe-line][hidden]{display:none}[data-recipe-form] input[type=checkbox]{width:auto;min-height:0;inline-size:auto}
 .op-subnav__sep{align-self:center;color:var(--op-muted);padding:0 4px}.op-subnav__label{align-self:center;color:var(--op-muted);font-weight:600}
 .set-company{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:18px}.set-company p{margin:4px 0}.set-groups .op-card p{line-height:1.9}.set-links{display:flex;flex-direction:column;align-items:flex-start;gap:2px}
+
+/* EDU-001: students and groups. */
+.edu-tabs{margin:0 0 var(--hs-space-4);flex-wrap:wrap}
+.edu-inline{display:inline;margin:0}
+.edu-days{display:flex;flex-wrap:wrap;gap:var(--hs-space-2) var(--hs-space-4);border:0;padding:0;margin:0}
+.edu-days legend{width:100%;margin-bottom:6px}
+.edu-payer{border:1px solid var(--hs-line);border-radius:var(--hs-radius-lg);padding:var(--hs-space-4);margin:var(--hs-space-4) 0}
