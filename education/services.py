@@ -32,6 +32,8 @@ MESSAGES = {
         "group_closed": "المجموعة دي مقفولة.", "student_inactive": "الطالب ده موقوف.", "stopped": "التسجيل ده متوقف بالفعل.",
         "before_start": "تاريخ الإيقاف لازم يكون بعد بداية التسجيل.",
         "entity": "الطالب والمجموعة والكورس لازم يكونوا في نفس الكيان.",
+        "capacity_below": "في المجموعة {count} طالب دلوقتي؛ السعة مينفعش تقل عن كده. أوقف تسجيل بعضهم الأول.",
+        "phone": "رقم التليفون قصير؛ اكتبه كامل (7 أرقام على الأقل).",
     },
     "en": {
         "name": "Enter the name.", "payer": "Choose who pays, type the parent's name, or mark that the student pays for themselves.",
@@ -44,6 +46,8 @@ MESSAGES = {
         "group_closed": "This group is closed.", "student_inactive": "This student is inactive.", "stopped": "This enrolment is already stopped.",
         "before_start": "The stop date must come after the enrolment started.",
         "entity": "The student, the group and the course must belong to the same entity.",
+        "capacity_below": "The group has {count} students now; capacity cannot go below that. Stop some enrolments first.",
+        "phone": "The phone number is too short; enter it in full (at least 7 digits).",
     },
 }
 
@@ -165,14 +169,20 @@ def _payer(data, name, phone, user, words):
 
     from sales.pos_customers import quick_add_customer
 
+    def add(who, number):
+        try:
+            return quick_add_customer(who, number, user)[0]
+        except ValidationError as exc:  # its messages are codes ("name", "phone"), not words
+            raise ValidationError(words["phone"] if "phone" in exc.messages else words["payer_name"])
+
     chosen = data.get("payer")
     if chosen is not None and not isinstance(chosen, str):
         return chosen
     if data.get("self_pays") in ("1", "on", True):
-        return quick_add_customer(name, phone, user)[0]
+        return add(name, phone)
     parent = _text(data, "payer_name", 255)
     if parent:
-        return quick_add_customer(parent, _text(data, "payer_phone", 50), user)[0]
+        return add(parent, _text(data, "payer_phone", 50))
     raise ValidationError(words["payer"])
 
 
@@ -251,6 +261,22 @@ def _span(group):
     return start, start + timedelta(minutes=group.duration_minutes)
 
 
+WEEKDAY_CODE = {5: "sat", 6: "sun", 0: "mon", 1: "tue", 2: "wed", 3: "thu", 4: "fri"}  # Python's weekday() → ours
+
+
+def _meet_on_a_shared_day(group, other):
+    """Whether the two groups' date ranges overlap on a day that is one of both groups' weekdays."""
+
+    shared = set(group.weekdays) & set(other.weekdays)
+    first = max(day for day in (group.starts_on, other.starts_on) if day) if (group.starts_on or other.starts_on) else None
+    last = min(day for day in (group.ends_on, other.ends_on) if day) if (group.ends_on or other.ends_on) else None
+    if first and last and last < first:
+        return False
+    if not (first and last) or (last - first).days >= 6:
+        return bool(shared)  # a whole week or more in common: every weekday occurs
+    return any(WEEKDAY_CODE[(first + timedelta(days=n)).weekday()] in shared for n in range((last - first).days + 1))
+
+
 def clash(group, lang="ar"):
     """The first active group sharing a day and an overlapping time with this one's teacher or room, as a message."""
 
@@ -262,8 +288,8 @@ def clash(group, lang="ar"):
     for other in others:
         if not set(other.weekdays) & set(group.weekdays):
             continue
-        # Terms that never overlap (one ends in June, the next starts in September) share nothing.
-        if (group.ends_on and other.starts_on and group.ends_on < other.starts_on) or (other.ends_on and group.starts_on and other.ends_on < group.starts_on):
+        # Terms that never meet on a shared weekday (one ends in June, the next starts in September) share nothing.
+        if not _meet_on_a_shared_day(group, other):
             continue
         other_start, other_end = _span(other)
         if not (start < other_end and other_start < end):
@@ -320,6 +346,8 @@ def save_group(data, user, group=None, lang="ar"):
             group.active = data.get("active") in ("1", "on", True)
     if entity_id_of(course) != entity_id_of(group):
         raise ValidationError(words["entity"])
+    if not creating and capacity and capacity < active_count(group):
+        raise ValidationError(words["capacity_below"].format(count=active_count(group)))  # stop some enrolments first
     problem = clash(group, lang) if group.active else ""
     if problem:
         raise ValidationError(problem)
@@ -381,12 +409,18 @@ def stop(enrollment, user, *, end_date=None, lang="ar"):
 
 
 def monthly_fee(enrollment):
-    """What this enrolment costs a month after its discount (for the monthly invoices, EDU-003)."""
+    """The enrolment's fee after its discount, per the course's basis: a month, a class or the whole course.
+
+    Only monthly courses add up to a monthly total (``is_monthly``)."""
 
     from config.money import money_round
 
     fee = enrollment.group.effective_fee
     return money_round(fee * (Decimal("100") - enrollment.discount_percent) / Decimal("100"))
+
+
+def is_monthly(enrollment):
+    return enrollment.group.course.basis == FeeBasis.MONTHLY
 
 
 def schedule_text(group, lang="ar"):

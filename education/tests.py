@@ -403,3 +403,42 @@ class ReviewTwoTests(EducationSetup):
         if self.class_day == TODAY:
             today_text = unquote(self.register.parent_message(self.register.take(self.saturday, self.owner, TODAY, {str(self.yousef.pk): "late"}).marks.get()))
             self.assertIn("النهارده", today_text)
+class ReviewThreeTests(EducationSetup):
+    """Codex on #185, second round."""
+
+    def test_capacity_cannot_drop_below_the_students_already_in(self):
+        group = self.group(capacity="3")
+        for name in ("أ", "ب"):
+            services.enroll(self.student(name), group, self.owner)
+        data = {"course": self.maths, "name": group.name, "teacher": self.teacher, "room": group.room, "days": "sat,tue", "start_time": time(16),
+                "duration_minutes": "90", "capacity": "1"}
+        with self.assertRaisesMessage(ValidationError, "2 طالب"):
+            services.save_group(data, self.owner, group)
+        services.save_group({**data, "capacity": "2"}, self.owner, group)  # down to the roster is fine
+
+    def test_overlapping_dates_without_a_shared_meeting_day_do_not_clash(self):
+        from datetime import date
+
+        # Both meet on Sunday; the only day their dates share is a Monday.
+        services.save_group({"course": self.maths, "name": "قديمة", "teacher": self.teacher, "days": "sun", "start_time": time(16),
+                             "ends_on": date(2026, 10, 12)}, self.owner)  # Monday 12 October
+        self.assertTrue(services.save_group({"course": self.maths, "name": "جديدة", "teacher": self.teacher, "days": "sun", "start_time": time(16),
+                                             "starts_on": date(2026, 10, 12)}, self.owner).pk)
+        with self.assertRaisesMessage(ValidationError, "أ. محمود"):
+            services.save_group({"course": self.maths, "name": "متداخلة", "teacher": self.teacher, "days": "sun", "start_time": time(16),
+                                 "starts_on": date(2026, 10, 4), "ends_on": date(2026, 10, 11)}, self.owner)  # shares Sunday 11 October
+
+    def test_a_whole_course_fee_is_never_shown_as_a_monthly_total(self):
+        course = services.save_course({"name": "كورس Excel", "fee": "1500", "basis": "course"}, self.owner)
+        group = services.save_group({"course": course, "name": "Excel", "days": "fri"}, self.owner)
+        services.enroll(self.student(), group, self.owner)
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("education:group", args=[group.pk]))
+        self.assertNotContains(page, "data-group-total")
+        self.assertContains(page, "الكورس كله")
+
+    def test_a_short_parent_phone_says_so_in_the_screens_language(self):
+        with self.assertRaisesMessage(ValidationError, "رقم التليفون قصير"):
+            services.save_student({"name": "يوسف", "payer_name": "محمد", "payer_phone": "123"}, self.owner)
+        with self.assertRaisesMessage(ValidationError, "phone number is too short"):
+            services.save_student({"name": "Omar", "self_pays": "1", "phone": "12"}, self.owner, lang="en")
