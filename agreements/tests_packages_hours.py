@@ -104,6 +104,18 @@ class PackageTests(Setup):
         with self.assertRaisesMessage(ValidationError, "اتلغت"):
             packages.use_session(other, self.owner)
 
+    def test_a_returned_invoice_ends_the_package(self):
+        from sales.services import create_sales_return
+
+        package = self.sell()
+        post_sales_invoice(package.invoice.id, user=self.owner)
+        line = package.invoice.lines.get()
+        create_sales_return("SR-PK2", TODAY, package.invoice.pk, [{"source_line": line, "quantity": line.quantity}], "رجعت فلوسها", self.owner)
+        package.invoice.refresh_from_db()
+        self.assertEqual(packages.state(package), "void")
+        with self.assertRaisesMessage(ValidationError, "اترجعت"):
+            packages.use_session(package, self.owner)
+
     def test_refusals(self):
         for extra, text in (({"customer": None}, "اختار العميل"), ({"service": None}, "اختار الخدمة"), ({"sessions": "0"}, "عدد الجلسات"),
                             ({"sessions": "x"}, "عدد الجلسات"), ({"price": "-1"}, "سعر الباكدج"), ({"price": "inf"}, "سعر الباكدج"),

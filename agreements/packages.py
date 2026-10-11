@@ -29,14 +29,14 @@ MAX_SESSIONS = 200
 PRICE_LIMIT = Decimal("10000000")
 
 STATE_LABELS = {
-    "ar": {"draft": "فاتورته لسه مسودة", "active": "شغال", "used_up": "خلص", "expired": "انتهت صلاحيته", "void": "اتلغى"},
-    "en": {"draft": "Invoice still a draft", "active": "Active", "used_up": "Used up", "expired": "Expired", "void": "Cancelled"},
+    "ar": {"draft": "فاتورته لسه مسودة", "active": "شغال", "used_up": "خلص", "expired": "انتهت صلاحيته", "void": "اتلغى أو اترجع"},
+    "en": {"draft": "Invoice still a draft", "active": "Active", "used_up": "Used up", "expired": "Expired", "void": "Cancelled or returned"},
 }
 MESSAGES = {
     "ar": {"customer": "اختار العميل.", "service": "اختار الخدمة.", "sessions": "عدد الجلسات من 1 لـ 200.", "price": "سعر الباكدج لازم يكون رقم صفر أو أكبر.",
            "setup": "لازم يكون فيه مخزن بيع نشط.", "manage": "الباكدجات محتاجة صلاحية إنشاء فاتورة بيع.", "date": "التاريخ مش مظبوط.",
            "expires": "تاريخ انتهاء الباكدج لازم يكون النهارده أو بعده.", "future": "مينفعش تسجّل جلسة في يوم لسه مجاش.",
-           "draft": "فاتورة الباكدج لسه مسودة؛ رحّلها الأول عشان الجلسات تتسحب منها.", "void": "فاتورة الباكدج اتلغت؛ الباكدج ده مبقاش شغال.",
+           "draft": "فاتورة الباكدج لسه مسودة؛ رحّلها الأول عشان الجلسات تتسحب منها.", "void": "فاتورة الباكدج اتلغت أو اترجعت؛ الباكدج ده مبقاش شغال.",
            "used_up": "الباكدج خلص؛ مفيش جلسات باقية.", "expired": "الباكدج انتهت صلاحيته يوم {date}.", "already": "الجلسة دي اتلغت قبل كده.",
            "line": "باكدج {sessions} جلسة — {service}", "note": "باكدج {number}: {sessions} جلسة"},
     "en": {"customer": "Choose the customer.", "service": "Choose the service.", "sessions": "The number of sessions is from 1 to 200.",
@@ -44,7 +44,7 @@ MESSAGES = {
            "manage": "Packages need the create-sales-invoice permission.", "date": "The date is not valid.",
            "expires": "The package's expiry date must be today or later.", "future": "A session cannot be recorded on a day still to come.",
            "draft": "The package's invoice is still a draft; post it first so sessions can be used from it.",
-           "void": "The package's invoice was cancelled; this package can no longer be used.", "used_up": "The package is used up; no sessions are left.",
+           "void": "The package's invoice was cancelled or returned; this package can no longer be used.", "used_up": "The package is used up; no sessions are left.",
            "expired": "The package expired on {date}.", "already": "This session was already cancelled.",
            "line": "Package of {sessions} sessions — {service}", "note": "Package {number}: {sessions} sessions"},
 }
@@ -84,8 +84,8 @@ def remaining(package):
 
 def state(package, today=None):
     status = package.invoice.status
-    if status == "cancelled":
-        return "void"
+    if status == "cancelled" or (status == "posted" and package.invoice.returns.filter(status="posted").exists()):
+        return "void"  # cancelled, or its money given back by a sales return
     if status != "posted":
         return "draft"
     if remaining(package) <= 0:
