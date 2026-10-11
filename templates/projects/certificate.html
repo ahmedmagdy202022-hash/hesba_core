@@ -1,0 +1,22 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+{% include "projects/_head.html" %}
+{% with invoice=certificate.invoice %}
+<section class="op-title-row"><div><h2>{% if lang == 'en' %}Certificate {{ certificate.number }}{% else %}مستخلص رقم {{ certificate.number }}{% endif %}</h2><p><span dir="ltr">{{ certificate.certificate_date|date:"Y-m-d" }}</span>{% if certificate.notes %} · {{ certificate.notes }}{% endif %}</p></div>
+<div class="op-form-actions"><a class="op-secondary" href="{% url 'sales:detail' invoice.pk %}?lang={{ lang }}" data-open-invoice>{{ cwords.open_invoice }}&nbsp;<bdi>{{ invoice.invoice_number }}</bdi></a><a class="op-secondary" href="{% url 'projects:certificate_print' project.pk certificate.number %}?lang={{ lang }}" data-print-certificate>{{ cwords.print }}</a></div></section>
+<p><span class="op-status op-status-{{ invoice.status }}" data-certificate-status="{{ invoice.status }}">{{ status_label }}</span>{% if invoice.status == 'posted' %} <span class="op-muted">{{ cwords.posted_note }}</span>{% endif %}</p>
+{% if lines %}<div class="op-table-wrap"><table class="op-table" data-certificate-detail><thead><tr><th>{{ cwords.code }}</th><th>{{ cwords.description }}</th><th>{{ cwords.unit }}</th><th>{{ cwords.rate }}</th><th>{{ cwords.previous }}</th><th>{{ cwords.current }}</th><th>{{ cwords.cumulative }}</th><th>{{ cwords.previous_value }}</th><th>{{ cwords.current_value }}</th><th>{{ cwords.cumulative_value }}</th></tr></thead><tbody>
+{% for row in lines %}<tr{% if row.cumulative > row.boq.quantity %} class="op-row-warn" title="{{ cwords.over_qty }}"{% endif %}><td dir="ltr">{{ row.boq.code|default:row.boq.line_number }}</td><td>{{ row.boq.description }}</td><td><bdi>{{ row.boq.unit }}</bdi></td><td>{{ row.line.rate|money }}</td><td>{{ row.line.previous_quantity|qty }}</td><td>{{ row.line.quantity|qty }}</td><td>{{ row.cumulative|qty }}</td><td>{{ row.previous_value|money }}</td><td>{{ row.line.amount|money }}</td><td>{{ row.cumulative_value|money }}</td></tr>{% endfor %}
+</tbody></table></div>{% endif %}
+<section class="op-summary-grid" data-certificate-totals>
+<article><small>{{ cwords.gross }}</small><strong data-total="gross">{{ certificate.gross|money }}</strong></article>
+{% if invoice.tax_amount %}<article><small>{{ cwords.tax }}</small><strong data-total="tax">{{ invoice.tax_amount|money }}</strong></article>{% endif %}
+<article><small>{{ cwords.invoice_total }}</small><strong data-total="invoice">{{ invoice.total_amount|money }}</strong></article>
+<article><small>{{ cwords.retention }} ({{ certificate.retention_rate|stringformat:'s' }}%)</small><strong data-total="retention">− {{ certificate.retention_amount|money }}</strong></article>
+<article><small>{{ cwords.recovery }}</small><strong data-total="recovery">− {{ certificate.recovery_amount|money }}</strong></article>
+<article><small>{{ cwords.net }}</small><strong data-total="net">{{ net|money }}</strong></article>
+</section>
+{% if can_manage and invoice.status == 'draft' %}<form method="post" data-withdraw-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="withdraw"><button class="op-secondary" type="submit">{{ cwords.withdraw }}</button></form>{% endif %}
+{% endwith %}
+{% endblock %}

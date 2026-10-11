@@ -1,0 +1,23 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+{% include "projects/_head.html" %}
+<p class="op-muted">{{ cwords.certificates_intro }}</p>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ cwords.number }}</th><th>{{ cwords.date }}</th><th>{{ cwords.gross }}</th><th>{{ cwords.invoice_total }}</th><th>{{ cwords.retention }}</th><th>{{ cwords.recovery }}</th><th>{{ cwords.net }}</th><th>{{ cwords.status }}</th></tr></thead><tbody>
+{% for row in rows %}{% with c=row.certificate %}<tr data-certificate="{{ c.number }}"><td><a href="{% url 'projects:certificate' project.pk c.number %}?lang={{ lang }}">{{ c.number }}</a></td><td dir="ltr">{{ c.certificate_date|date:"Y-m-d" }}</td><td>{{ c.gross|money }}</td><td>{{ c.invoice.total_amount|money }}</td><td>{{ c.retention_amount|money }}</td><td>{{ c.recovery_amount|money }}</td><td><strong>{{ row.net|money }}</strong></td><td><span class="op-status op-status-{{ c.invoice.status }}">{{ row.status_label }}</span></td></tr>{% endwith %}
+{% empty %}<tr><td colspan="8" class="op-empty">{{ cwords.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_manage and is_open %}
+{% if draft %}<p class="op-message" data-draft-open>{{ cwords.draft_open }} <a href="{% url 'projects:certificate' project.pk draft.number %}?lang={{ lang }}">{% if lang == 'en' %}Certificate{% else %}المستخلص{% endif %} {{ draft.number }}</a></p>
+{% else %}
+<form class="op-form" method="post" data-certificate-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><h2>{{ cwords.new_certificate }}</h2>
+<div class="op-form-grid"><div class="op-field"><label for="ct-date">{{ cwords.date }}</label><input id="ct-date" type="date" name="certificate_date" value="{{ posted.certificate_date|default:today }}"></div>
+{% if not boq_rows %}<div class="op-field"><label for="ct-amount">{{ cwords.lump_amount }}</label><input id="ct-amount" name="amount" value="{{ posted.amount|default:'' }}" inputmode="decimal" dir="ltr" required></div>{% endif %}
+<div class="op-field"><label for="ct-desc">{{ cwords.lump_description }}</label><input id="ct-desc" name="description" value="{{ posted.description|default:'' }}" maxlength="255"{% if not boq_rows %} required{% endif %}></div></div>
+{% if boq_rows %}<div class="op-table-wrap"><table class="op-table" data-certificate-lines><thead><tr><th>{{ cwords.code }}</th><th>{{ cwords.description }}</th><th>{{ cwords.unit }}</th><th>{{ cwords.contract_qty }}</th><th>{{ cwords.rate }}</th><th>{{ cwords.previous }}</th><th>{{ cwords.cumulative }}</th></tr></thead><tbody>
+{% for row in boq_rows %}<tr><td dir="ltr">{{ row.line.code|default:row.line.line_number }}</td><td>{{ row.line.description }}</td><td><bdi>{{ row.line.unit }}</bdi></td><td>{{ row.line.quantity|qty }}</td><td>{{ row.line.rate|money }}</td><td>{{ row.previous|qty }}</td><td><input name="q_{{ row.line.pk }}" value="{{ row.value }}" inputmode="decimal" dir="ltr" aria-label="{{ cwords.cumulative }} — {{ row.line.description }}" placeholder="{{ row.previous|qty }}"></td></tr>{% endfor %}
+</tbody></table></div>{% endif %}
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ cwords.make_certificate }}</button></div></form>
+{% endif %}
+{% endif %}
+{% endblock %}

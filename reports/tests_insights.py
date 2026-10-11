@@ -52,7 +52,9 @@ class InsightsTests(TestCase):
         section = self.page().context["data"]["section"]
         self.assertEqual(section["kind"], "projects")
         first = next(row for row in section["rows"] if row["project"].name.startswith("عمارة"))
-        self.assertEqual(first["progress"], 20)  # one posted bill of 20% of the contract
+        # CONTRACT-003: two posted certificates; the second brings the first three bill-of-quantities
+        # items to 45%, so 35% of the contract is billed (the third, today's, is still a draft).
+        self.assertEqual(first["progress"], 35)
 
     def test_a_factory_sees_cost_per_unit(self):
         self.fill("manufacturing", "garments")

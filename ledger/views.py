@@ -98,7 +98,8 @@ CONTROL_WORDS = {
            "customer_advances": "دفعات مقدمة من العملاء", "sales_discount": "خصم المبيعات", "other_income": "إيرادات أخرى",
            "asset_disposal": "بيع أو استبعاد أصل", "suspense": "حساب معلّق (لازم يبقى صفر)", "raw_materials": "حركات الخامات",
            "wip": "إنتاج تحت التشغيل", "finished_goods": "حركات المنتج التام", "production_cost": "تكلفة الإنتاج المحمّلة",
-           "project_wip": "أعمال تحت التنفيذ", "project_cost": "تكلفة المشاريع"},
+           "project_wip": "أعمال تحت التنفيذ", "project_cost": "تكلفة المشاريع",
+           "retention_receivable": "محتجزات ضمان أعمال لدى أصحاب المشاريع", "retention_payable": "محتجزات ضمان أعمال لمقاولي الباطن"},
     "en": {"cash": "Cashboxes", "bank": "Banks", "receivable": "Credit sales and collections", "inventory": "Stock movements",
            "vat_in": "Purchase VAT", "vat_out": "Sales VAT", "payable": "Credit purchases and payments", "sales": "Sales invoices",
            "sales_returns": "Sales returns", "cogs": "Cost of sales", "depreciation": "Depreciation", "accumulated_depreciation": "Depreciation",
@@ -108,7 +109,8 @@ CONTROL_WORDS = {
            "customer_advances": "Customer advances", "sales_discount": "Sales discount", "other_income": "Other income",
            "asset_disposal": "Asset disposal", "suspense": "Suspense (should be zero)", "raw_materials": "Raw material movements",
            "wip": "Work in progress", "finished_goods": "Finished goods movements", "production_cost": "Absorbed production cost",
-           "project_wip": "Work in progress on projects", "project_cost": "Project costs"},
+           "project_wip": "Work in progress on projects", "project_cost": "Project costs",
+           "retention_receivable": "Retention receivable", "retention_payable": "Retention payable"},
 }
 
 
