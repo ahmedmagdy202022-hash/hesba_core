@@ -1,0 +1,16 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'education:today' %}?lang={{ lang }}&date={{ day|date:'Y-m-d' }}">← {{ words.today }}</a><h1>{{ words.attendance }}: {{ group.course.name }} — {{ group.name }}</h1><p><bdi>{{ day|date:"Y-m-d" }}</bdi>{% if schedule %} · {{ schedule }}{% endif %}{% if group.teacher %} · {{ group.teacher.name }}{% endif %}</p></div></section>
+{% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
+{% if saved and notify %}<section class="op-detail-meta" data-notify><h2>{{ words.notify }}</h2>{% for row in notify %}<p>{{ row.student.name }} — <a href="{{ row.notify }}" target="_blank" rel="noopener" data-whatsapp>{{ words.tell_parent }}</a></p>{% endfor %}</section>{% endif %}
+<form class="op-form" method="post" data-attendance-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="date" value="{{ day|date:'Y-m-d' }}">
+<div class="edu-marks">
+{% for row in roster %}<fieldset class="edu-mark" data-mark="{{ row.student_id }}"><legend>{{ row.student.name }}</legend>
+<div class="edu-mark__choices">{% for value, label in choices %}<label class="edu-chip edu-chip--{{ value }}"><input type="radio" name="p_{{ row.student_id }}" value="{{ value }}"{% if row.presence == value %} checked{% endif %}><span>{{ label }}</span></label>{% endfor %}</div>
+<input class="edu-mark__note" name="note_{{ row.student_id }}" value="{{ row.note }}" maxlength="255" aria-label="{{ words.notes }}" placeholder="{{ words.notes }}">
+</fieldset>{% empty %}<p class="op-empty">{{ words.no_roster }}</p>{% endfor %}
+</div>
+<div class="op-form-grid"><div class="op-field"><label for="at-topic">{{ words.topic }}</label><input id="at-topic" name="topic" maxlength="255" value="{{ session.topic }}"></div>
+<label class="op-check"><input type="checkbox" name="cancelled" value="1"{% if session.status == 'cancelled' %} checked{% endif %}> {{ words.cancelled_class }}</label></div>
+<div class="op-form-actions"><button class="op-primary" type="submit" data-save-attendance>{{ words.save_attendance }}</button></div></form>
+{% endblock %}

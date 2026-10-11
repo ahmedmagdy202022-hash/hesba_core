@@ -1,0 +1,13 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.classes_on }} {{ weekday }} <bdi>{{ day|date:"Y-m-d" }}</bdi></p></div></section>
+{% include "education/_tabs.html" %}
+<form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><label class="sr-only" for="edu-day">{{ words.date }}</label><input id="edu-day" type="date" name="date" value="{{ day|date:'Y-m-d' }}" max="{{ today|date:'Y-m-d' }}"><button type="submit">{{ words.go }}</button></form>
+<div class="edu-classes" data-today>
+{% for row in rows %}<article class="op-detail-meta edu-class" data-class="{{ row.group.pk }}">
+<header><strong>{{ row.group.course.name }} — {{ row.group.name }}</strong><span class="op-muted">{{ row.schedule }}{% if row.group.teacher %} · {{ row.group.teacher.name }}{% endif %}{% if row.group.room %} · {{ row.group.room }}{% endif %}</span></header>
+<p>{{ words.seats }}: {{ row.seats }}{% if row.session %} · {% if row.session.status == 'cancelled' %}<span class="op-status op-status-draft">{{ words.cancelled_class }}</span>{% else %}<span class="op-status op-status-open">✓ {{ words.taken }}</span> {{ words.present }} {{ row.session.present }} · {{ words.late }} {{ row.session.late }} · {{ words.absent }} {{ row.session.absent }}{% endif %}{% endif %}</p>
+{% if row.can_take %}<a class="{% if row.session %}op-secondary{% else %}op-primary{% endif %}" href="{% url 'education:attendance' row.group.pk %}?lang={{ lang }}&date={{ day|date:'Y-m-d' }}" data-take="{{ row.group.pk }}">{% if row.session %}{{ words.change }}{% else %}{{ words.take }}{% endif %}</a>{% endif %}
+</article>{% empty %}<p class="op-empty">{{ words.no_classes }}</p>{% endfor %}
+</div>
+{% endblock %}

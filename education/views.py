@@ -10,8 +10,9 @@ from django.utils import timezone
 
 from master_data.models import Customer
 
+from . import attendance as register
 from . import services
-from .models import Course, Enrollment, EnrollmentStatus, FeeBasis, Student, StudyGroup, Weekday
+from .models import Attendance, ClassSession, Course, Enrollment, EnrollmentStatus, FeeBasis, Presence, SessionStatus, Student, StudyGroup, Weekday
 
 WORDS = {
     "ar": {
@@ -33,6 +34,12 @@ WORDS = {
         "saved": "اتحفظ.", "enrolled_ok": "اتسجل الطالب.", "stopped_ok": "اتوقف التسجيل.", "per": "/", "no_teacher": "—",
         "add_course_first": "اعمل كورس الأول من «الكورسات والمواد».", "group_title": "مجموعة", "item": "صنف الفاتورة",
         "free_seats": "متاح", "total_monthly": "إجمالي المصروفات الشهرية للمجموعة",
+        "today": "حصص النهارده", "classes_on": "الحصص يوم", "no_classes": "مفيش حصص في اليوم ده.", "take": "سجّل الحضور", "taken": "اتسجّل",
+        "change": "تعديل الحضور", "present": "حاضر", "late": "متأخر", "absent": "غايب", "excused": "بعذر", "topic": "اتشرح إيه (اختياري)",
+        "cancelled_class": "الحصة اتلغت", "save_attendance": "حفظ الحضور", "attendance_saved": "اتسجّل الحضور.", "attendance": "الحضور",
+        "rate": "نسبة الحضور (30 يوم)", "recent_absences": "آخر غياب", "no_absences": "مفيش غياب في آخر 30 يوم.", "sessions": "آخر الحصص",
+        "no_sessions": "لسه متسجّلش حضور للمجموعة دي.", "tell_parent": "ابعت لولي الأمر واتساب", "all_present": "الكل حاضر",
+        "go": "عرض", "date": "التاريخ", "counts": "حاضر {present} · متأخر {late} · غايب {absent}", "notify": "بلّغ أولياء الأمور",
     },
     "en": {
         "title": "Students & groups", "students": "Students", "groups": "Groups", "courses": "Courses & subjects",
@@ -53,6 +60,12 @@ WORDS = {
         "saved": "Saved.", "enrolled_ok": "Student enrolled.", "stopped_ok": "Enrolment stopped.", "per": "/", "no_teacher": "—",
         "add_course_first": "Add a course first under “Courses & subjects”.", "group_title": "Group", "item": "Invoice item",
         "free_seats": "free", "total_monthly": "Monthly fees of the group",
+        "today": "Today's classes", "classes_on": "Classes on", "no_classes": "No classes on that day.", "take": "Take attendance", "taken": "Taken",
+        "change": "Change attendance", "present": "Present", "late": "Late", "absent": "Absent", "excused": "Excused", "topic": "What was covered (optional)",
+        "cancelled_class": "Class cancelled", "save_attendance": "Save attendance", "attendance_saved": "Attendance saved.", "attendance": "Attendance",
+        "rate": "Attendance (30 days)", "recent_absences": "Recent absences", "no_absences": "No absences in the last 30 days.", "sessions": "Recent classes",
+        "no_sessions": "No attendance taken for this group yet.", "tell_parent": "WhatsApp the parent", "all_present": "All present",
+        "go": "Show", "date": "Date", "counts": "Present {present} · Late {late} · Absent {absent}", "notify": "Tell the parents",
     },
 }
 
@@ -161,8 +174,9 @@ def student_detail(request, pk):
         row.status_label = _status_label(row.status, words)
     enrolled = {row.group_id for row in enrollments if row.status == EnrollmentStatus.ACTIVE}
     open_groups = StudyGroup.objects.filter(active=True).exclude(pk__in=enrolled).select_related("course")
+    summary = register.student_summary(student)
     return render(request, "education/student.html", _base(request, lang, "students", student=student, enrollments=enrollments, open_groups=open_groups,
-                                                           payers=_payers(), error=error, today=timezone.localdate()))
+                                                           payers=_payers(), error=error, today=timezone.localdate(), summary=summary))
 
 
 # ---- groups ----
@@ -237,13 +251,19 @@ def group_detail(request, pk):
             messages.success(request, message)
             return _back("education:group", lang, group.pk)
     roster = list(group.enrollments.filter(status=EnrollmentStatus.ACTIVE).select_related("student__payer").order_by("student__name"))
+    rates = register.group_rates(group)
     for row in roster:
         row.net = services.monthly_fee(row)
+        row.rate = rates.get(row.student_id)
+    sessions = list(group.sessions.annotate(
+        present=Count("marks", filter=Q(marks__presence=Presence.PRESENT)), late=Count("marks", filter=Q(marks__presence=Presence.LATE)),
+        absent=Count("marks", filter=Q(marks__presence=Presence.ABSENT)))[:8])
     others = Student.objects.filter(active=True).exclude(pk__in=[row.student_id for row in roster]).order_by("name")
     total = sum((row.net for row in roster), start=group.effective_fee * 0)
     return render(request, "education/group.html", _group_form_context(
         request, lang, group=group, roster=roster, others=others, schedule=services.schedule_text(group, lang), error=error, post=None,
-        chosen_days=group.weekdays, total=total, free=(group.capacity - len(roster)) if group.capacity else None, today=timezone.localdate()))
+        chosen_days=group.weekdays, total=total, free=(group.capacity - len(roster)) if group.capacity else None, today=timezone.localdate(),
+        sessions=sessions, can_take=register.can_take(request.user, group)))
 
 
 # ---- courses ----
@@ -271,3 +291,76 @@ def courses(request):
         row.basis_label = services.BASIS_LABELS[lang][row.basis]
     bases = [(value, services.BASIS_LABELS[lang][value]) for value in FeeBasis.values]
     return render(request, "education/courses.html", _base(request, lang, "courses", rows=rows, editing=editing, bases=bases, error=error, post=request.POST))
+
+
+# ---- attendance (EDU-002) ----
+
+def _see(request, group=None):
+    if not services.is_education_install():
+        raise Http404("Attendance is for education activities.")
+    if not register.can_see(request.user, group):
+        raise PermissionDenied("Attendance needs master_data.view_master_data, or teaching the group.")
+
+
+def _day(request):
+    from datetime import date
+
+    try:
+        return date.fromisoformat(request.GET.get("date") or "")
+    except ValueError:
+        return timezone.localdate()
+
+
+def today(request):
+    _see(request)
+    lang = _lang(request)
+    day = _day(request)
+    groups_today = register.groups_on(day, request.user)
+    taken = {session.group_id: session for session in ClassSession.objects.filter(date=day, group__in=groups_today).annotate(
+        present=Count("marks", filter=Q(marks__presence=Presence.PRESENT)), late=Count("marks", filter=Q(marks__presence=Presence.LATE)),
+        absent=Count("marks", filter=Q(marks__presence=Presence.ABSENT)))}
+    rows = []
+    for group in groups_today:
+        rows.append({"group": group, "schedule": services.schedule_text(group, lang), "session": taken.get(group.pk),
+                     "seats": register.roster_on(group, day).count(), "can_take": register.can_take(request.user, group)})
+    return render(request, "education/today.html", _base(request, lang, "today", rows=rows, day=day, today=timezone.localdate(),
+                                                         weekday=services.DAY_LABELS[lang][register.weekday(day)]))
+
+
+def take_attendance(request, pk):
+    group = get_object_or_404(StudyGroup.objects.select_related("course", "teacher"), pk=pk)
+    _see(request, group)
+    lang = _lang(request)
+    words = WORDS[lang]
+    if not register.can_take(request.user, group):
+        raise PermissionDenied("Taking attendance needs managing students, or teaching the group.")
+    day = _day(request) if request.method == "GET" else None
+    error = ""
+    if request.method == "POST":
+        from datetime import date
+
+        try:
+            day = date.fromisoformat(request.POST.get("date") or "")
+        except ValueError:
+            day = timezone.localdate()
+        marks = {key[len("p_"):]: value for key, value in request.POST.items() if key.startswith("p_")}
+        marks.update({key: value for key, value in request.POST.items() if key.startswith("note_")})
+        try:
+            register.take(group, request.user, day, marks, topic=request.POST.get("topic", ""), cancelled=request.POST.get("cancelled") == "1", lang=lang)
+        except ValidationError as exc:
+            error = " ".join(exc.messages)
+        else:
+            messages.success(request, words["attendance_saved"])
+            return redirect(f"{reverse('education:attendance', args=[group.pk])}?lang={lang}&date={day.isoformat()}&saved=1")
+    session = ClassSession.objects.filter(group=group, date=day).first()
+    marks = {mark.student_id: mark for mark in session.marks.select_related("student__payer", "session__group")} if session else {}
+    roster = list(register.roster_on(group, day))
+    for row in roster:
+        mark = marks.get(row.student_id)
+        row.presence = mark.presence if mark else Presence.PRESENT
+        row.note = mark.note if mark else ""
+        row.notify = register.parent_message(mark, lang) if mark and request.GET.get("saved") else ""
+    choices = [(Presence.PRESENT, words["present"]), (Presence.LATE, words["late"]), (Presence.ABSENT, words["absent"]), (Presence.EXCUSED, words["excused"])]
+    return render(request, "education/attendance.html", _base(request, lang, "today", group=group, day=day, session=session, roster=roster, choices=choices,
+                                                              schedule=services.schedule_text(group, lang), error=error, today=timezone.localdate(),
+                                                              saved=bool(request.GET.get("saved")), notify=[row for row in roster if row.notify]))

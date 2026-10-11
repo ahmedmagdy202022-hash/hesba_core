@@ -2,7 +2,8 @@
 {% load hesba_format %}
 {% block operation_content %}
 <section class="op-title-row"><div><a class="op-back" href="{% url 'education:groups' %}?lang={{ lang }}">← {{ words.back_groups }}</a><h1>{{ group.course.name }} — {{ group.name }}</h1>
-<p><bdi>{{ group.code }}</bdi>{% if schedule %} · {{ schedule }}{% endif %}{% if group.teacher %} · {{ group.teacher.name }}{% endif %}{% if group.room %} · {{ words.room }} {{ group.room }}{% endif %}{% if not group.active %} · <span class="op-status op-status-draft">{{ words.status_stopped }}</span>{% endif %}</p></div></section>
+<p><bdi>{{ group.code }}</bdi>{% if schedule %} · {{ schedule }}{% endif %}{% if group.teacher %} · {{ group.teacher.name }}{% endif %}{% if group.room %} · {{ words.room }} {{ group.room }}{% endif %}{% if not group.active %} · <span class="op-status op-status-draft">{{ words.status_stopped }}</span>{% endif %}</p></div>
+{% if can_take and group.active %}<div class="op-form-actions"><a class="op-primary" href="{% url 'education:attendance' group.pk %}?lang={{ lang }}" data-take-attendance>{{ words.take }}</a></div>{% endif %}</section>
 {% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
 <section class="op-summary-grid">
 <article><small>{{ words.seats }}</small><strong data-seats>{{ roster|length }}{% if group.capacity %} / {{ group.capacity }}{% endif %}</strong>{% if free is not None %}<small>{{ free }} {{ words.free_seats }}</small>{% endif %}</article>
@@ -10,11 +11,15 @@
 <article><small>{{ words.total_monthly }}</small><strong data-group-total>{{ total|money }}</strong></article>
 </section>
 <h2>{{ words.roster }}</h2>
-<div class="op-table-wrap"><table class="op-table" data-roster><thead><tr><th>{{ words.student }}</th><th>{{ words.payer }}</th><th>{{ words.phone }}</th><th>{{ words.discount }}</th><th>{{ words.net }}</th><th>{{ words.since }}</th>{% if can_manage %}<th></th>{% endif %}</tr></thead><tbody>
-{% for row in roster %}<tr data-roster-row="{{ row.student.pk }}"><td class="op-cell-text"><a href="{% url 'education:student' row.student.pk %}?lang={{ lang }}">{{ row.student.name }}</a></td><td class="op-cell-text">{{ row.student.payer.name }}</td><td><bdi>{{ row.student.payer.phone|default:'—' }}</bdi></td><td>{{ row.discount_percent|floatformat:"-2" }}</td><td>{{ row.net|money }}</td><td><bdi>{{ row.start_date|date:"Y-m-d" }}</bdi></td>
+<div class="op-table-wrap"><table class="op-table" data-roster><thead><tr><th>{{ words.student }}</th><th>{{ words.payer }}</th><th>{{ words.phone }}</th><th>{{ words.discount }}</th><th>{{ words.net }}</th><th>{{ words.rate }}</th><th>{{ words.since }}</th>{% if can_manage %}<th></th>{% endif %}</tr></thead><tbody>
+{% for row in roster %}<tr data-roster-row="{{ row.student.pk }}"><td class="op-cell-text"><a href="{% url 'education:student' row.student.pk %}?lang={{ lang }}">{{ row.student.name }}</a></td><td class="op-cell-text">{{ row.student.payer.name }}</td><td><bdi>{{ row.student.payer.phone|default:'—' }}</bdi></td><td>{{ row.discount_percent|floatformat:"-2" }}</td><td>{{ row.net|money }}</td><td>{% if row.rate is not None %}<span class="{% if row.rate < 75 %}edu-low{% endif %}">{{ row.rate }}%</span>{% else %}—{% endif %}</td><td><bdi>{{ row.start_date|date:"Y-m-d" }}</bdi></td>
 {% if can_manage %}<td><form method="post" class="edu-inline">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="stop"><input type="hidden" name="enrollment" value="{{ row.pk }}"><button class="op-secondary" type="submit">{{ words.stop }}</button></form></td>{% endif %}</tr>
-{% empty %}<tr><td colspan="7" class="op-empty">{{ words.no_roster }}</td></tr>{% endfor %}
+{% empty %}<tr><td colspan="8" class="op-empty">{{ words.no_roster }}</td></tr>{% endfor %}
 </tbody></table></div>
+<h2>{{ words.sessions }}</h2>
+{% if sessions %}<div class="op-table-wrap"><table class="op-table" data-sessions><thead><tr><th>{{ words.date }}</th><th>{{ words.attendance }}</th><th>{{ words.topic }}</th><th></th></tr></thead><tbody>
+{% for s in sessions %}<tr data-session="{{ s.pk }}"><td><bdi>{{ s.date|date:"Y-m-d" }}</bdi></td><td>{% if s.status == 'cancelled' %}<span class="op-status op-status-draft">{{ words.cancelled_class }}</span>{% else %}{{ words.present }} {{ s.present }} · {{ words.late }} {{ s.late }} · {{ words.absent }} {{ s.absent }}{% endif %}</td><td>{{ s.topic|default:'—' }}</td><td>{% if can_take %}<a href="{% url 'education:attendance' group.pk %}?lang={{ lang }}&date={{ s.date|date:'Y-m-d' }}">{{ words.change }}</a>{% endif %}</td></tr>{% endfor %}
+</tbody></table></div>{% else %}<p class="op-muted">{{ words.no_sessions }}</p>{% endif %}
 {% if can_manage and group.active and others %}<form class="op-form" method="post" data-roster-add>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="enroll"><h2>{{ words.add_student }}</h2><div class="op-form-grid">
 <div class="op-field"><label for="ro-student">{{ words.student }}</label><select id="ro-student" name="student" required><option value="">{{ words.choose }}</option>{% for s in others %}<option value="{{ s.pk }}">{{ s.name }} — {{ s.code }}</option>{% endfor %}</select></div>
 <div class="op-field"><label for="ro-start">{{ words.start_date }}</label><input id="ro-start" type="date" name="start_date" value="{{ today|date:'Y-m-d' }}"></div>
