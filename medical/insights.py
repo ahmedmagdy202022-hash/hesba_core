@@ -1,7 +1,7 @@
 """MED-002: how the clinic is doing, read from the records it already keeps.
 
 Read-only. Visits come from ``ClinicalVisit``. Revenue comes from the posted
-invoices of done appointments (the same figure the appointments performance
+invoices of done appointments (both of an insured one, MED-008) (the same figure the appointments performance
 report uses: before tax, after posted returns), counted only in the entity
 being worked in (HG-034). Nothing here writes or changes a ledger.
 
@@ -54,11 +54,18 @@ def _billed(first, last):
     from appointments.models import Appointment, AppointmentStatus
     from sales.models import SalesReturn
 
+    from django.db.models import Q
+
+    from .insurance import bills_for, invoices_of
+
     start, end = _span(first, last)
     rows = list(entity_scope.scope(Appointment.objects, "invoice__" + entity_scope.SALES_INVOICE)
-                .filter(status=AppointmentStatus.DONE, starts_at__gte=start, starts_at__lt=end, invoice__status="posted")
+                .filter(Q(invoice__status="posted") | Q(insured_bill__insurer_invoice__status="posted"),
+                        status=AppointmentStatus.DONE, starts_at__gte=start, starts_at__lt=end)
                 .select_related("invoice", "employee", "service"))
-    returned = dict(SalesReturn.objects.filter(source_invoice__in=[row.invoice_id for row in rows], status="posted")
+    bills = bills_for(rows)  # MED-008: an insured visit earned on both its invoices, the patient's and the insurer's
+    posted = {row.pk: [invoice for invoice in invoices_of(row, bills.get(row.pk)) if invoice.status == "posted"] for row in rows}
+    returned = dict(SalesReturn.objects.filter(source_invoice__in=[invoice.pk for found in posted.values() for invoice in found], status="posted")
                     .values("source_invoice").annotate(total=Sum("total_amount")).values_list("source_invoice", "total"))
 
     def earned(invoice):  # appointments.services.net_sales, with the period's returns read in one query
@@ -69,7 +76,7 @@ def _billed(first, last):
         back = Decimal(returned.get(invoice.pk) or 0)
         return money_round(max(before_tax - back * before_tax / total, Decimal("0")))
 
-    return [(appointment, earned(appointment.invoice)) for appointment in rows]
+    return [(appointment, sum((earned(invoice) for invoice in posted[appointment.pk]), Decimal("0.00"))) for appointment in rows]
 
 
 def _steps_billed(first, last):

@@ -132,6 +132,30 @@ def _medical_file(user):
     return shows_files(user)
 
 
+def _insured(appointment, lang):
+    """MED-008: the insured bill already made, or the insurer and share it would be billed at."""
+
+    from medical import insurance
+
+    if not insurance.is_insurance_install():
+        return {}
+    bill = insurance.bill_of(appointment)
+    if bill is not None:
+        return {"insured_bill": bill}
+    cover = insurance.cover_for(appointment.customer) if not appointment.invoice_id else None
+    if cover is None or appointment.service is None:
+        return {}
+    percent = insurance.percent_for(cover.contract, appointment.service)
+    if percent <= 0:
+        return {}
+    from settings_core.templatetags.hesba_format import money as display_money
+
+    insurer_share, patient_share = insurance.split(appointment.price, percent)
+    label = (f"Bill with insurance: {cover.contract.insurer.name} pays {display_money(insurer_share)}, the patient {display_money(patient_share)}" if lang == "en"
+             else f"فوتر بالتأمين: {cover.contract.insurer.name} تدفع {display_money(insurer_share)} والمريض {display_money(patient_share)}")
+    return {"insured_label": label}
+
+
 @require_permission(VIEW)
 def detail(request, pk):
     lang = _lang(request)
@@ -150,6 +174,15 @@ def detail(request, pk):
                 invoice = services.bill(appointment, request.user, lang)
                 messages.success(request, words["billed"].format(number=invoice.invoice_number))
                 return redirect(f"{reverse('sales:detail', args=[invoice.pk])}?lang={lang}")
+            elif action == "bill_insured":  # MED-008: the patient's share and the insurer's, on two ordinary draft invoices
+                from medical import insurance
+
+                if not insurance.is_insurance_install():
+                    raise PermissionDenied("Insured billing is for medical activities.")
+                bill = insurance.bill_insured(appointment, request.user, lang)
+                numbers = " + ".join(invoice.invoice_number for invoice in (bill.patient_invoice, bill.insurer_invoice) if invoice is not None)
+                messages.success(request, words["billed"].format(number=numbers))
+                return redirect(f"{reverse('appointments:detail', args=[appointment.pk])}?lang={lang}")
             else:
                 services.reschedule(appointment, _form_data(request, words), request.user, lang)
                 messages.success(request, words["saved"])
@@ -168,8 +201,9 @@ def detail(request, pk):
             "employee": str(appointment.employee_id or ""), "service": str(appointment.service_id or ""), "price": appointment.price, "kind": appointment.kind,
             "address": appointment.address, "notes": appointment.notes}
     editable = appointment.status not in (AppointmentStatus.DONE, AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW) and not appointment.invoice_id
+    insured = _insured(appointment, lang)
     return render(request, "appointments/detail.html", _base(
-        request, appointment=appointment, local=local, status_label=choice_label(appointment, "status", lang), reminder=reminder, actions=actions,
+        request, appointment=appointment, **insured, local=local, status_label=choice_label(appointment, "status", lang), reminder=reminder, actions=actions,
         form=form, editable=editable, error=error, medical_file=_medical_file(request.user), can_bill=appointment.status in (AppointmentStatus.ARRIVED, AppointmentStatus.DONE) and not appointment.invoice_id,
         **_choices(lang),
     ))

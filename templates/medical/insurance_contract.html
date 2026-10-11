@@ -1,0 +1,36 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'medical:insurance' %}?lang={{ lang }}">← {{ iw.back }}</a><h1>{{ contract.insurer.name }}</h1><p>{{ iw.percent }} <bdi>{{ contract.coverage_percent|qty }}%</bdi> · {{ iw.next_claim }} <bdi>{{ next_claim|date:"Y-m-d" }}</bdi></p></div>
+<div class="op-form-actions"><a class="op-secondary" href="{% url 'parties:card' 'customer' contract.insurer_id %}?lang={{ lang }}">{{ words.account }}</a></div></section>
+{% if error %}<p class="op-message op-message-error" role="alert" data-insurance-error>{{ error }}</p>{% endif %}
+<section class="op-summary-grid"><article><small>{{ iw.owed }}</small><strong data-insurer-owed>{{ owed|money }}</strong></article><article><small>{{ iw.count }}</small><strong>{{ totals.count }}</strong></article><article><small>{{ iw.claimed }}</small><strong>{{ totals.claimed|money }}</strong></article><article><small>{{ iw.net }}</small><strong data-claim-net>{{ totals.net|money }}</strong></article></section>
+<h2>{{ iw.claim }}</h2>
+<form class="op-form-actions" method="get"><input type="hidden" name="lang" value="{{ lang }}"><label for="claim-month">{{ iw.month }}</label><input id="claim-month" type="month" name="month" value="{{ month }}"><button class="op-secondary" type="submit">{{ iw.show }}</button><a class="op-primary" href="{% url 'medical:insurance_claim' contract.pk %}?lang={{ lang }}&month={{ month }}" target="_blank" rel="noopener" data-claim-print>{{ iw.print }}</a></form>
+<div class="op-table-wrap"><table class="op-table" data-claim><thead><tr><th>{{ iw.date }}</th><th>{{ iw.invoice }}</th><th>{{ iw.patient }}</th><th>{{ iw.member }}</th><th>{{ iw.service }}</th><th>{{ iw.visit_price }}</th><th>{{ iw.claimed }}</th><th>{{ iw.rejected }}</th><th>{{ iw.net }}</th></tr></thead><tbody>
+{% for row in rows %}<tr data-claim-row="{{ row.invoice.pk }}"><td><bdi>{{ row.invoice.invoice_date|date:"Y-m-d" }}</bdi></td><td><a href="{% url 'sales:detail' row.invoice.pk %}?lang={{ lang }}"><bdi>{{ row.invoice.invoice_number }}</bdi></a></td>
+<td class="op-cell-text">{{ row.patient.name }}</td><td><bdi>{{ row.bill.member_number|default:'—' }}</bdi></td><td class="op-cell-text">{{ row.service.item_name|default:'—' }}</td>
+<td><bdi>{{ row.bill.price|money }}</bdi></td><td><bdi>{{ row.claimed|money }}</bdi></td><td><bdi>{% if row.rejected %}{{ row.rejected|money }}{% else %}—{% endif %}</bdi></td><td><bdi>{{ row.net|money }}</bdi></td></tr>
+{% empty %}<tr><td colspan="9" class="op-empty">{{ iw.no_claim }}</td></tr>{% endfor %}
+</tbody>{% if rows %}<tfoot><tr><th colspan="5">{{ iw.total }}</th><th><bdi>{{ totals.price|money }}</bdi></th><th><bdi>{{ totals.claimed|money }}</bdi></th><th><bdi>{{ totals.rejected|money }}</bdi></th><th><bdi>{{ totals.net|money }}</bdi></th></tr></tfoot>{% endif %}</table></div>
+<p class="op-muted">{{ iw.reject_hint }}</p>
+<h2>{{ iw.services }}</h2>
+<p class="op-muted">{{ iw.services_hint }}</p>
+<div class="op-table-wrap"><table class="op-table" data-coverages><thead><tr><th>{{ iw.service }}</th><th>{{ iw.service_percent }}</th></tr></thead><tbody>
+{% for row in overrides %}<tr data-coverage="{{ row.service_id }}"><td class="op-cell-text">{{ row.service.item_name }}</td><td><bdi>{{ row.percent|qty }}%</bdi></td></tr>
+{% empty %}<tr><td colspan="2" class="op-empty">{{ iw.no_services }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_manage %}
+<form class="op-form" method="post" data-coverage-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="service"><input type="hidden" name="month" value="{{ month }}"><div class="op-form-grid">
+<div class="op-field"><label for="cov-service">{{ iw.service }}</label><select id="cov-service" name="service" required><option value="">{{ iw.choose }}</option>{% for item in services_list %}<option value="{{ item.pk }}">{{ item.item_name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="cov-percent">{{ iw.service_percent }}</label><input id="cov-percent" name="percent" inputmode="decimal"></div>
+</div><div class="op-form-actions"><button class="op-secondary" type="submit">{{ iw.set }}</button></div></form>
+<h2>{{ iw.contract }}</h2>
+<form class="op-form" method="post" data-contract-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="save"><input type="hidden" name="month" value="{{ month }}"><div class="op-form-grid">
+<div class="op-field"><label for="ct-percent">{{ iw.percent }}</label><input id="ct-percent" name="coverage_percent" inputmode="decimal" required value="{{ contract.coverage_percent|qty }}"></div>
+<div class="op-field"><label for="ct-day">{{ iw.claim_day }}</label><input id="ct-day" name="claim_day" inputmode="numeric" value="{{ contract.claim_day }}"></div>
+<div class="op-field"><label for="ct-notes">{{ iw.notes }}</label><input id="ct-notes" name="notes" maxlength="255" value="{{ contract.notes }}"></div>
+<label class="op-check"><input type="checkbox" name="active" value="1"{% if contract.active %} checked{% endif %}> {{ iw.active }}</label>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ iw.save }}</button></div></form>
+{% endif %}
+{% endblock %}

@@ -2,7 +2,7 @@
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db.models import Max, Q
+from django.db.models import Count, Max, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -11,7 +11,7 @@ from django.utils import timezone
 from master_data.models import Customer
 
 from . import services
-from .models import BloodType, ClinicalVisit, Gender
+from .models import BloodType, ClinicalVisit, Gender, InsuranceContract
 
 WORDS = {
     "ar": {"title": "الملفات الطبية", "intro": "ملف لكل مريض: بياناته، وحساسيته وأمراضه المزمنة، وكل كشف بالشكوى والتشخيص والعلاج.",
@@ -94,7 +94,11 @@ MONEY_VIEW = "reports.view_all_sales_report"
 def _tabs(request, current):
     from permissions.services import user_has_permission
 
-    return {"tab": current, "shows_report": user_has_permission(request.user, REPORT_VIEW), "shows_lab": _is_lab(), "lab_tests_label": LAB_WORDS[_lang(request)]["tests"]}
+    from . import insurance
+
+    lang = _lang(request)
+    return {"tab": current, "shows_report": user_has_permission(request.user, REPORT_VIEW), "shows_lab": _is_lab(), "lab_tests_label": LAB_WORDS[lang]["tests"],
+            "shows_insurance": insurance.can_view(request.user), "insurance_label": INSURANCE_WORDS[lang]["tab"]}
 
 
 def _period(request, words):
@@ -162,7 +166,8 @@ def patients(request):
     _guard(request)
     lang = _lang(request)
     query = (request.GET.get("q") or "").strip()
-    rows = _patients().filter(active=True).select_related("patient_file").annotate(last=Max("clinical_visits__visit_date"))
+    rows = (_patients().filter(active=True, insurance_contract__isnull=True)  # MED-008: an insurance company is a customer, not a patient
+            .select_related("patient_file").annotate(last=Max("clinical_visits__visit_date")))
     if query:
         rows = rows.filter(Q(name__icontains=query) | Q(phone__icontains=query) | Q(patient_file__file_number__icontains=query) | Q(customer_code__icontains=query)
                            | Q(animals__name__icontains=query)).distinct()
@@ -195,9 +200,15 @@ def patient_file(request, pk):
             return redirect(f"{reverse('medical:file', args=[patient.pk])}?lang={lang}")
     visits = list(ClinicalVisit.objects.filter(patient=patient).select_related("doctor", "created_by", "appointment", "animal"))
     upcoming = patient.appointments.filter(starts_at__gte=timezone.now(), status__in=("booked", "confirmed")).select_related("employee").order_by("starts_at")[:5]
-    from . import dental
+    from . import dental, insurance
 
-    return render(request, "medical/file.html", _base(lang, patient=patient, file=file, age=services.age(file), visits=visits, upcoming=upcoming,
+    cover_context = {}
+    if insurance.can_view(request.user):  # MED-008: the patient's insurer, and changing it
+        cover = insurance.PatientCover.objects.select_related("contract__insurer").filter(patient=patient).first()
+        cover_context = {"shows_cover": True, "cover": cover, "cover_live": insurance.cover_for(patient) is not None if cover else False,
+                         "cover_contracts": insurance.contracts(active_only=True).exclude(insurer=patient), "iw": INSURANCE_WORDS[lang],
+                         "can_cover": insurance.can_manage(request.user) or can_write}
+    return render(request, "medical/file.html", _base(lang, patient=patient, file=file, **cover_context, age=services.age(file), visits=visits, upcoming=upcoming,
                                                       is_dental=dental.is_dental(), dental_label=DENTAL_WORDS[lang]["title"],
                                                       is_lab=_is_lab(), lab_label=LAB_WORDS[lang]["title"],
                                                       is_physio=_is_physio(), physio_label=PHYSIO_WORDS[lang]["title"],
@@ -747,3 +758,155 @@ def queue_screen(request):
 
     return render(request, "medical/queue_screen.html", _base(lang, qw=QUEUE_WORDS[lang], board=queue.board(), company=company_details(),
                                                              now=timezone.localtime()))
+
+
+# ---- MED-008: medical insurance (HG-042, design A) ----
+
+INSURANCE_WORDS = {
+    "ar": {"title": "التأمين الطبي", "tab": "التأمين", "intro": "كل شركة تأمين عميل عادي عليها عقد: نسبة بتتحمّلها من الكشف (ونسبة مختلفة لأي خدمة لو حبيت) ويوم المطالبة. الكشف المؤمَّن عليه بيطلع فاتورتين عاديتين: واحدة على المريض بنصيبه، وواحدة على الشركة بالباقي. المطالبة الشهرية هي فواتير الشركة المترحّلة في الشهر، والشركة بتدفع بتحصيل عادي.",
+           "insurer": "شركة التأمين", "existing": "شركة موجودة في العملاء", "or_new": "أو اسم شركة جديدة", "phone": "التليفون", "percent": "نسبة التحمّل %",
+           "claim_day": "يوم المطالبة في الشهر", "notes": "ملاحظات", "active": "شغالة", "save": "حفظ", "add": "ضيف شركة تأمين", "none": "مفيش شركات تأمين لسه.",
+           "members": "مرضى عليها", "owed": "عليها دلوقتي", "next_claim": "المطالبة الجاية", "open": "افتح", "saved": "اتحفظ.", "back": "التأمين الطبي",
+           "contract": "العقد", "services": "خدمات بنسبة مختلفة", "services_hint": "اكتب 0 لخدمة مش مغطاة؛ امسح النسبة عشان ترجع لنسبة العقد.",
+           "service": "الخدمة", "service_percent": "النسبة %", "set": "ثبّت", "no_services": "كل الخدمات بنسبة العقد.", "choose": "اختار",
+           "claim": "مطالبة الشهر", "month": "الشهر", "show": "اعرض", "print": "اطبع المطالبة", "date": "اليوم", "invoice": "الفاتورة", "patient": "المريض",
+           "member": "رقم العضوية", "visit_price": "سعر الكشف", "claimed": "المطلوب", "rejected": "اترفض (مرتجع)", "net": "الصافي", "patient_share": "نصيب المريض",
+           "no_claim": "مفيش فواتير مترحّلة للشركة دي في الشهر ده.", "total": "الإجمالي", "count": "عدد الكشوفات",
+           "unpaired": "كشوفات واحدة من فاتورتيها اتلغت والتانية لأ", "unpaired_hint": "راجع كل واحدة: يا تلغي التانية، يا تعمل فاتورة جديدة.",
+           "reject_hint": "البند المرفوض بيترجع بمرتجع بيع عادي على فاتورة الشركة؛ لو المريض هيدفعه، اعمله فاتورة عادية.",
+           "cover": "التأمين", "cover_none": "مفيش تأمين", "expires": "ينتهي يوم (اختياري)", "cover_saved": "اتحفظ تأمين المريض.", "cover_expired": "انتهى",
+           "view_only": "إضافة الشركات وتعديلها للي عنده صلاحية إنشاء فاتورة بيع بس.",
+           "claim_title": "مطالبة تأمين", "period": "الفترة", "signature": "الختم والتوقيع"},
+    "en": {"title": "Medical insurance", "tab": "Insurance", "intro": "Each insurance company is an ordinary customer with a contract: the share of a visit it covers (with an own share for any service if you like) and its claim day. An insured visit makes two ordinary invoices: the patient's for their share and the insurer's for the rest. The monthly claim is the insurer's posted invoices in the month, and it pays through an ordinary collection.",
+           "insurer": "Insurance company", "existing": "A company already in customers", "or_new": "or a new company's name", "phone": "Phone", "percent": "Covered share %",
+           "claim_day": "Claim day of the month", "notes": "Notes", "active": "Active", "save": "Save", "add": "Add an insurance company", "none": "No insurance companies yet.",
+           "members": "Patients covered", "owed": "Owes now", "next_claim": "Next claim", "open": "Open", "saved": "Saved.", "back": "Medical insurance",
+           "contract": "Contract", "services": "Services at another share", "services_hint": "Type 0 for a service not covered; clear the share to go back to the contract's.",
+           "service": "Service", "service_percent": "Share %", "set": "Set", "no_services": "Every service at the contract's share.", "choose": "Choose",
+           "claim": "The month's claim", "month": "Month", "show": "Show", "print": "Print the claim", "date": "Day", "invoice": "Invoice", "patient": "Patient",
+           "member": "Member no.", "visit_price": "Visit price", "claimed": "Claimed", "rejected": "Rejected (returned)", "net": "Net", "patient_share": "Patient's share",
+           "no_claim": "No posted invoices for this company in this month.", "total": "Total", "count": "Visits",
+           "unpaired": "Visits where one of the two invoices was cancelled and the other was not", "unpaired_hint": "Check each: cancel the other, or bill again.",
+           "reject_hint": "A rejected line is returned by an ordinary sales return on the insurer's invoice; if the patient will pay it, make them an ordinary invoice.",
+           "cover": "Insurance", "cover_none": "No insurance", "expires": "Expires on (optional)", "cover_saved": "The patient's insurance was saved.", "cover_expired": "Expired",
+           "view_only": "Adding and changing companies needs the create-sales-invoice permission.",
+           "claim_title": "Insurance claim", "period": "Period", "signature": "Stamp and signature"},
+}
+
+
+def _insurance_guard(request):
+    from permissions.services import user_has_permission
+
+    from . import insurance
+
+    if not insurance.is_insurance_install():
+        raise Http404("Medical insurance is for clinics, centres, hospitals and labs.")
+    if not user_has_permission(request.user, insurance.VIEW):
+        raise PermissionDenied("Medical insurance needs sales.view_sales_invoices.")
+
+
+def _insurance_base(request, lang, **extra):
+    from . import insurance
+
+    return _base(lang, iw=INSURANCE_WORDS[lang], can_manage=insurance.can_manage(request.user), **_tabs(request, "insurance"), **extra)
+
+
+def insurance_list(request):
+    from . import insurance
+
+    _insurance_guard(request)
+    lang = _lang(request)
+    words = INSURANCE_WORDS[lang]
+    error = ""
+    if request.method == "POST":
+        data = request.POST.dict()
+        data["insurer"] = _patients().filter(pk=_id(request.POST.get("insurer")), active=True).first() if request.POST.get("insurer") else None
+        data["active"] = True
+        try:
+            contract = insurance.save_contract(data, request.user, lang=lang)
+        except ValidationError as exc:
+            error = " ".join(exc.messages)
+        else:
+            messages.success(request, words["saved"])
+            return redirect(f"{reverse('medical:insurance_contract', args=[contract.pk])}?lang={lang}")
+    rows = list(insurance.contracts().annotate(member_count=Count("members")))
+    today = timezone.localdate()
+    for row in rows:
+        row.owed = insurance.outstanding(row)
+        row.next_claim = insurance.next_claim_day(row, today)
+    taken = InsuranceContract.objects.values_list("insurer_id", flat=True)
+    candidates = _patients().filter(active=True).exclude(pk__in=taken).exclude(patient_file__isnull=False).order_by("name")[:300]
+    return render(request, "medical/insurance.html", _insurance_base(request, lang, rows=rows, candidates=candidates, unpaired=insurance.unpaired(),
+                                                                     error=error, post=request.POST if error else {}))
+
+
+def insurance_contract(request, pk):
+    from master_data.models import Item
+
+    from . import insurance
+
+    _insurance_guard(request)
+    lang = _lang(request)
+    words = INSURANCE_WORDS[lang]
+    contract = get_object_or_404(insurance.contracts(), pk=pk)
+    error = ""
+    if request.method == "POST":
+        try:
+            if request.POST.get("action") == "service":
+                service = Item.objects.filter(pk=_id(request.POST.get("service")), is_stock_tracked=False).first()
+                insurance.set_service_percent(contract, service, request.POST.get("percent", ""), request.user, lang)
+            else:
+                data = request.POST.dict()
+                data["active"] = request.POST.get("active") == "1"
+                insurance.save_contract(data, request.user, contract=contract, lang=lang)
+        except ValidationError as exc:
+            error = " ".join(exc.messages)
+        else:
+            messages.success(request, words["saved"])
+            return redirect(f"{reverse('medical:insurance_contract', args=[contract.pk])}?lang={lang}&month={request.POST.get('month', '')}")
+        contract.refresh_from_db()
+    try:
+        first, last = insurance.month_bounds(request.GET.get("month"), lang=lang)
+    except ValidationError as exc:
+        first, last = insurance.month_bounds("")
+        error = error or " ".join(exc.messages)
+    data = insurance.claim(contract, first, last)
+    services_list = Item.objects.filter(active=True, is_stock_tracked=False).order_by("item_name")
+    return render(request, "medical/insurance_contract.html", _insurance_base(
+        request, lang, contract=contract, overrides=contract.services.select_related("service"), services_list=services_list, first=first, last=last,
+        month=first.strftime("%Y-%m"), owed=insurance.outstanding(contract), next_claim=insurance.next_claim_day(contract), error=error, **data))
+
+
+def insurance_claim_print(request, pk):
+    from printing.company import company_details
+
+    from . import insurance
+
+    _insurance_guard(request)
+    lang = _lang(request)
+    contract = get_object_or_404(insurance.contracts(), pk=pk)
+    try:
+        first, last = insurance.month_bounds(request.GET.get("month"), lang=lang)
+    except ValidationError:
+        raise Http404("Not a month.")
+    return render(request, "medical/insurance_claim.html", _base(lang, iw=INSURANCE_WORDS[lang], contract=contract, first=first, last=last,
+                                                                 company=company_details(), **insurance.claim(contract, first, last)))
+
+
+def patient_cover(request, pk):
+    from . import insurance
+
+    if request.method != "POST":
+        raise Http404("Insurance is set from the patient's file.")
+    _insurance_guard(request)
+    lang = _lang(request)
+    patient = get_object_or_404(_patients(), pk=pk)
+    data = request.POST.dict()
+    data["contract"] = insurance.contracts(active_only=True).filter(pk=_id(request.POST.get("contract"))).first() if request.POST.get("contract") else None
+    try:
+        insurance.set_cover(patient, data, request.user, lang)
+    except ValidationError as exc:
+        messages.error(request, " ".join(exc.messages))
+    else:
+        messages.success(request, INSURANCE_WORDS[lang]["cover_saved"])
+    return redirect(f"{reverse('medical:file', args=[patient.pk])}?lang={lang}")

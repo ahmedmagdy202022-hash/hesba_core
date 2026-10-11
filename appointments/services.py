@@ -227,6 +227,9 @@ def net_sales(invoice):
 def performance(date_from, date_to):
     """Per employee: done appointments, sales of their posted invoices and the commission on it."""
 
+    from django.db.models import Q
+
+    from medical.insurance import bills_for, invoices_of
     from staff.models import Employee
 
     start = timezone.make_aware(timezone.datetime.combine(date_from, timezone.datetime.min.time()))
@@ -236,7 +239,10 @@ def performance(date_from, date_to):
     for employee in Employee.objects.all():
         mine = done.filter(employee=employee)
         count = mine.count()
-        sales = sum((net_sales(appointment.invoice) for appointment in mine.filter(invoice__status="posted").select_related("invoice")), Decimal("0"))
+        billed = list(mine.filter(Q(invoice__status="posted") | Q(insured_bill__insurer_invoice__status="posted")).select_related("invoice"))
+        bills = bills_for(billed)  # MED-008: an insured visit earned on the patient's invoice and the insurer's
+        sales = sum((net_sales(invoice) for appointment in billed for invoice in invoices_of(appointment, bills.get(appointment.pk))
+                     if invoice.status == "posted"), Decimal("0"))
         if not count and not employee.active:
             continue
         rows.append({"employee": employee, "done": count, "sales": money_round(sales),

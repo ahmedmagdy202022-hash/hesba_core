@@ -1,0 +1,21 @@
+{% load static hesba_format %}<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{{ iw.claim_title }} — {{ contract.insurer.name }}</title>
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}"><link rel="stylesheet" href="{% static 'hesba/css/print.css' %}?v=print-002">
+<style>.claim{max-width:960px;margin:24px auto;padding:28px;background:var(--hs-surface);border:1px solid var(--hs-line);border-radius:14px;font-family:var(--hs-font-body);color:var(--hs-ink)}.claim header{display:flex;justify-content:space-between;gap:16px;border-bottom:2px solid var(--hs-teal);padding-bottom:12px}.claim h1{margin:0;font-family:var(--hs-font-head);color:var(--hs-navy);font-size:22px}.claim h2{color:var(--hs-navy);font-size:18px;margin:16px 0 8px}.claim .meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 18px;margin:12px 0}.claim table{width:100%;border-collapse:collapse;font-size:14px}.claim th,.claim td{padding:7px 8px;border-bottom:1px solid var(--hs-line);text-align:start}.claim th{color:var(--hs-muted);font-size:12px}.claim tfoot th{color:var(--hs-ink);font-size:14px}.claim footer{display:flex;justify-content:flex-end;margin-top:30px;padding-top:12px;border-top:1px solid var(--hs-line)}@media print{.no-print{display:none}.claim{border:0;margin:0}}</style></head>
+<body style="background:var(--hs-ground)">
+<p class="no-print" style="text-align:center"><button type="button" data-print style="min-height:44px;padding:0 18px;border:0;border-radius:10px;background:var(--hs-teal);color:var(--hs-on-teal);font-weight:700">{{ iw.print }}</button></p>
+<main class="claim" data-claim-sheet>
+<header><div><h1>{{ company.name }}</h1>{% if company.phone %}<div><bdi>{{ company.phone }}</bdi></div>{% endif %}{% if company.address %}<div>{{ company.address }}</div>{% endif %}</div>{% if company.logo %}<img src="{{ company.logo }}" alt="" style="max-height:64px">{% endif %}</header>
+<h2>{{ iw.claim_title }}</h2>
+<section class="meta"><div><b>{{ iw.insurer }}:</b> {{ contract.insurer.name }}</div><div><b>{{ iw.period }}:</b> <bdi>{{ first|date:"Y-m-d" }} → {{ last|date:"Y-m-d" }}</bdi></div>
+<div><b>{{ iw.count }}:</b> {{ totals.count }}</div><div><b>{{ iw.percent }}:</b> <bdi>{{ contract.coverage_percent|qty }}%</bdi></div></section>
+<table><thead><tr><th>{{ iw.date }}</th><th>{{ iw.invoice }}</th><th>{{ iw.patient }}</th><th>{{ iw.member }}</th><th>{{ iw.service }}</th><th>{{ iw.visit_price }}</th><th>{{ iw.patient_share }}</th><th>{{ iw.claimed }}</th><th>{{ iw.rejected }}</th><th>{{ iw.net }}</th></tr></thead><tbody>
+{% for row in rows %}<tr data-claim-row="{{ row.invoice.pk }}"><td><bdi>{{ row.invoice.invoice_date|date:"Y-m-d" }}</bdi></td><td><bdi>{{ row.invoice.invoice_number }}</bdi></td><td>{{ row.patient.name }}</td><td><bdi>{{ row.bill.member_number|default:'—' }}</bdi></td><td>{{ row.service.item_name|default:'—' }}</td>
+<td><bdi>{{ row.bill.price|money }}</bdi></td><td><bdi>{{ row.bill.patient_share|money }}</bdi></td><td><bdi>{{ row.claimed|money }}</bdi></td><td><bdi>{% if row.rejected %}{{ row.rejected|money }}{% else %}—{% endif %}</bdi></td><td><bdi>{{ row.net|money }}</bdi></td></tr>
+{% empty %}<tr><td colspan="10">{{ iw.no_claim }}</td></tr>{% endfor %}
+</tbody><tfoot><tr><th colspan="5">{{ iw.total }}</th><th><bdi>{{ totals.price|money }}</bdi></th><th><bdi>{{ totals.patient|money }}</bdi></th><th><bdi>{{ totals.claimed|money }}</bdi></th><th><bdi>{{ totals.rejected|money }}</bdi></th><th><bdi data-claim-sheet-net>{{ totals.net|money }}</bdi></th></tr></tfoot></table>
+<footer><div>{{ iw.signature }}: ____________</div></footer>
+</main>
+<script>document.querySelector('[data-print]').addEventListener('click', function(){ window.print(); });</script>
+</body></html>

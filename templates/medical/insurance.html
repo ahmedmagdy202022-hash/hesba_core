@@ -1,0 +1,26 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ iw.title }}</h1><p>{{ iw.intro }}</p></div></section>
+{% include "medical/_tabs.html" %}
+{% if error %}<p class="op-message op-message-error" role="alert" data-insurance-error>{{ error }}</p>{% endif %}
+{% if unpaired %}<section class="op-message op-message-error" role="alert" data-insurance-unpaired><strong>{{ iw.unpaired }}</strong> — {{ iw.unpaired_hint }}
+<ul>{% for bill in unpaired %}<li><a href="{% url 'appointments:detail' bill.appointment_id %}?lang={{ lang }}">{{ bill.appointment.number }}</a> · {{ bill.appointment.customer.name }} · <a href="{% url 'sales:detail' bill.patient_invoice.pk %}?lang={{ lang }}">{{ bill.patient_invoice.invoice_number }}</a> / <a href="{% url 'sales:detail' bill.insurer_invoice.pk %}?lang={{ lang }}">{{ bill.insurer_invoice.invoice_number }}</a></li>{% endfor %}</ul></section>{% endif %}
+<div class="op-table-wrap"><table class="op-table" data-insurers><thead><tr><th>{{ iw.insurer }}</th><th>{{ iw.percent }}</th><th>{{ iw.members }}</th><th>{{ iw.owed }}</th><th>{{ iw.next_claim }}</th><th>{{ iw.active }}</th><th></th></tr></thead><tbody>
+{% for row in rows %}<tr data-insurer="{{ row.pk }}"><td class="op-cell-text">{{ row.insurer.name }}</td><td><bdi>{{ row.coverage_percent|qty }}%</bdi></td><td>{{ row.member_count }}</td>
+<td><bdi>{{ row.owed|money }}</bdi></td><td><bdi>{{ row.next_claim|date:"Y-m-d" }}</bdi></td><td>{% if row.active %}✓{% else %}—{% endif %}</td>
+<td><a href="{% url 'medical:insurance_contract' row.pk %}?lang={{ lang }}">{{ iw.open }}</a></td></tr>
+{% empty %}<tr><td colspan="7" class="op-empty">{{ iw.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_manage %}
+<h2>{{ iw.add }}</h2>
+<form class="op-form" method="post" data-insurer-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><div class="op-form-grid">
+<div class="op-field"><label for="ins-existing">{{ iw.existing }}</label><select id="ins-existing" name="insurer"><option value="">—</option>{% for c in candidates %}<option value="{{ c.pk }}"{% if post.insurer == c.pk|stringformat:'s' %} selected{% endif %}>{{ c.name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="ins-name">{{ iw.or_new }}</label><input id="ins-name" name="name" maxlength="255" value="{{ post.name|default:'' }}"></div>
+<div class="op-field"><label for="ins-phone">{{ iw.phone }}</label><input id="ins-phone" name="phone" maxlength="50" value="{{ post.phone|default:'' }}"></div>
+<div class="op-field"><label for="ins-percent">{{ iw.percent }} <span aria-hidden="true">*</span></label><input id="ins-percent" name="coverage_percent" inputmode="decimal" required value="{{ post.coverage_percent|default:'80' }}"></div>
+<div class="op-field"><label for="ins-day">{{ iw.claim_day }}</label><input id="ins-day" name="claim_day" inputmode="numeric" value="{{ post.claim_day|default:'1' }}"></div>
+<div class="op-field"><label for="ins-notes">{{ iw.notes }}</label><input id="ins-notes" name="notes" maxlength="255" value="{{ post.notes|default:'' }}"></div>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ iw.save }}</button></div></form>
+{% else %}<p class="op-muted">{{ iw.view_only }}</p>{% endif %}
+{% endblock %}
