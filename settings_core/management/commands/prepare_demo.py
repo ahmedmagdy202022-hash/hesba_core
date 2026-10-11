@@ -165,6 +165,13 @@ class Command(BaseCommand):
             closed = timezone.make_aware(_dt.combine(today - timedelta(days=days), time(hour, 15)))
             Order.objects.filter(pk=order.pk).update(opened_at=closed - timedelta(minutes=40 + 5 * guests), closed_at=closed)
         adjust_stock(f"DEMO-WASTE-{today:%m%d}", today - timedelta(days=2), raw[0], master["location"], "out", "1", "هالك — باظت في التلاجة", owner)
+        driver = save_employee({"name": "محمود الطيار", "title": "طيار دليفري"}, owner)  # RESTO-003: a delivery out with its driver and fee
+        order = floor.open_order(owner, kind="delivery", customer=master["customers"][0], address="شارع النصر 12، مدينة نصر", delivery_fee="20")
+        floor.add_item(order, dishes[0], owner, 2)
+        floor.dispatch(order, driver, owner)
+        floor.pay(order, owner, cashbox=cashbox, tendered=Decimal("100000"))
+        closed = timezone.make_aware(_dt.combine(today - timedelta(days=1), time(21, 40)))
+        Order.objects.filter(pk=order.pk).update(opened_at=closed - timedelta(minutes=55), dispatched_at=closed - timedelta(minutes=30), closed_at=closed)
 
     def _appointments(self, master, staff, owner):
         from appointments.services import book

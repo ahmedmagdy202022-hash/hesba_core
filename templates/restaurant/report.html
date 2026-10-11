@@ -32,6 +32,10 @@
 <div class="op-table-wrap"><table class="op-table" data-r-tables><thead><tr><th>{{ iw.table }}</th><th>{{ iw.orders }}</th><th>{{ iw.per_day }}</th><th>{{ iw.average }}</th><th>{{ iw.stay }}</th></tr></thead><tbody>
 {% for row in tables %}<tr data-r-table="{{ row.table.pk }}"><td>{{ row.table.name }}</td><td>{{ row.orders }}</td><td><bdi>{{ row.per_day|stringformat:".1f" }}</bdi></td><td>{{ row.average|money }}</td><td>{{ row.minutes }}</td></tr>{% endfor %}
 </tbody></table></div>{% endif %}
+{% if deliveries %}<h2>{{ dw.deliveries }}</h2><p class="op-muted">{{ dw.deliveries_intro }}</p>
+<div class="op-table-wrap"><table class="op-table" data-r-deliveries><thead><tr><th>{{ dw.driver }}</th><th>{{ dw.count }}</th><th>{{ dw.fees }}</th><th>{{ dw.minutes }}</th></tr></thead><tbody>
+{% for row in deliveries %}<tr data-r-driver="{{ row.driver.pk|default:'' }}"><td class="op-cell-text">{% if row.driver %}{{ row.driver.name }}{% else %}{{ dw.no_driver }}{% endif %}</td><td>{{ row.orders }}</td><td>{{ row.fees|money }}</td><td>{{ row.minutes|default_if_none:'—' }}</td></tr>{% endfor %}
+</tbody></table></div>{% endif %}
 <h2>{{ iw.waiters }}</h2>
 <div class="op-table-wrap"><table class="op-table" data-r-waiters><thead><tr><th>{{ iw.waiter }}</th><th>{{ iw.orders }}</th><th>{{ iw.sales }}</th><th>{{ iw.average }}</th></tr></thead><tbody>
 {% for row in waiters %}<tr><td class="op-cell-text">{% if row.waiter %}{{ row.waiter.name }}{% else %}{{ iw.no_waiter }}{% endif %}</td><td>{{ row.orders }}</td><td>{{ row.sales|money }}</td><td>{{ row.average|money }}</td></tr>{% endfor %}

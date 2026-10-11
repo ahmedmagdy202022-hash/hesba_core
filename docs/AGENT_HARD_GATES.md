@@ -729,3 +729,23 @@ No unresolved business or accounting decision was discovered while implementing 
 - **Permissions:** the report needs `reports.view_all_sales_report`. Costs and waste values need `inventory.view_cost`. Editing ingredients needs `master_data.manage_items`.
 - **Not touched:** inventory movement and accounting, sales posting, average-cost logic, report calculations.
 - **Tests:** `restaurant/tests.py` → `RestaurantInsightTests` (including that selling a dish moves no stock); `reports/tests_demo_catalogs.py` (the restaurant demo).
+
+## HG-045 — restaurant delivery: driver, dispatch time and fee (RESTO-003)
+
+- **Status:** Built. Additive schema on an existing table, recorded here because it touches `restaurant.Order`.
+- **Schema:** migration `restaurant/0003_delivery` adds three nullable or defaulted fields to `Order`:
+  - `driver` (staff employee, SET_NULL);
+  - `dispatched_at`;
+  - `delivery_fee` (default 0).
+
+  Existing rows read as "no driver, no fee", and nothing else changes.
+- **Money:**
+  - the fee is billed as **its own line on the order's ordinary invoice**, through the same `sales.pos.checkout` the order already uses;
+  - the line uses a non-stocked service item `DELIVERY-FEE` («رسوم توصيل»), made once on first use;
+  - so the fee is sales revenue like any service and moves no stock; posting, the cashbox and the customer ledger are unchanged.
+- **Rules:**
+  - Only delivery orders carry a fee; a dine-in order ignores it.
+  - Dispatching sets the driver and the time it left, and can correct the fee while the order is open; it is audited before/after.
+  - The restaurant report gains deliveries per driver: count, fees, average minutes from leaving to closing.
+- **Not touched:** sales posting, cashbox and customer ledgers, inventory, report calculations outside the restaurant report.
+- **Tests:** `restaurant/tests.py` → `DeliveryTests` (one invoice with the fee line, the cashbox moves by the order plus fee, the fee item made once, no fee line without a fee, the rules, the driver report); `reports/tests_demo_catalogs.py`.

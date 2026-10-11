@@ -180,3 +180,19 @@ def waste(first, last):
     out = [{"movement": row, "value": money_round(abs(Decimal(row.quantity)) * Decimal(row.unit_cost or 0)),
             "reason": getattr(row.stock_operation, "reason", "") if getattr(row, "stock_operation_id", None) else ""} for row in rows]
     return out, money_round(sum((row["value"] for row in out), ZERO))
+
+
+def deliveries(first, last):
+    """RESTO-003: paid deliveries per driver: count, delivery fees, average minutes from leaving to closing."""
+
+    rows = {}
+    for order in _paid(first, last).filter(kind=OrderKind.DELIVERY).select_related("driver"):
+        row = rows.setdefault(order.driver_id, {"driver": order.driver, "orders": 0, "fees": ZERO, "minutes": []})
+        row["orders"] += 1
+        row["fees"] += order.delivery_fee or ZERO
+        if order.dispatched_at and order.closed_at and order.closed_at >= order.dispatched_at:
+            row["minutes"].append((order.closed_at - order.dispatched_at).total_seconds() / 60)
+    for row in rows.values():
+        row["fees"] = money_round(row["fees"])
+        row["minutes"] = round(sum(row["minutes"]) / len(row["minutes"])) if row["minutes"] else None
+    return sorted(rows.values(), key=lambda row: (row["driver"] is None, -row["orders"]))

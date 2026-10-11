@@ -118,6 +118,7 @@ def board(request):
                 request.user, kind=kind, table=_pick(DiningTable, request.POST.get("table")), guests=request.POST.get("guests") or 1,
                 customer=_pick(Customer, request.POST.get("customer"), active=True), waiter=_pick(Employee, request.POST.get("waiter"), active=True),
                 address=request.POST.get("address", ""), phone=request.POST.get("phone", ""), notes=request.POST.get("notes", ""), lang=lang,
+                delivery_fee=request.POST.get("delivery_fee"),
             )
         except ValidationError as exc:
             messages.error(request, " ".join(exc.messages))
@@ -173,6 +174,9 @@ def order_detail(request, pk):
             elif action == "move":
                 services.move_table(order, _pick(DiningTable, request.POST.get("table")), request.user, lang)
                 messages.success(request, words["moved"])
+            elif action == "dispatch":
+                services.dispatch(order, _pick(Employee, request.POST.get("driver"), active=True), request.user,
+                                  delivery_fee=request.POST.get("delivery_fee"), lang=lang)
             elif action == "cancel":
                 services.cancel_order(order, request.user, request.POST.get("reason", ""), lang)
                 messages.success(request, words["cancelled"])
@@ -200,6 +204,7 @@ def order_detail(request, pk):
     free_tables = DiningTable.objects.filter(active=True).exclude(orders__status=OrderStatus.OPEN)
     return render(request, "restaurant/order.html", _base(
         request, order=order, lines=lines, total=order.total, items=items, categories=categories, kind_label=_kind_label(order, lang),
+        drivers=Employee.objects.filter(active=True) if order.kind == OrderKind.DELIVERY else [], dw=DELIVERY_WORDS[lang],
         status_label=choice_label(order, "status", lang), is_open=order.status == OrderStatus.OPEN,
         pending=any(not line.ticket_id and not line.voided for line in lines), tickets=order.tickets.all(),
         cashboxes=cashboxes, default_cashbox=(shift.cashbox if shift else None) or cashboxes.filter(is_default=True).first() or cashboxes.first(),
@@ -243,6 +248,14 @@ def tables(request):
 
 
 REPORT_VIEW, COST_VIEW = "reports.view_all_sales_report", "inventory.view_cost"
+DELIVERY_WORDS = {
+    "ar": {"fee": "رسوم التوصيل", "driver": "الطيار", "dispatch": "خرج مع الطيار", "change_driver": "غيّر الطيار", "out": "خرج", "at": "الساعة",
+           "deliveries": "الدليفري", "deliveries_intro": "طلبات الدليفري المدفوعة لكل طيار: عددها ورسوم التوصيل ووقت التوصيل من خروجه لحد ما اتقفل.",
+           "count": "طلبات", "fees": "رسوم التوصيل", "minutes": "متوسط التوصيل (دقيقة)", "no_driver": "من غير طيار"},
+    "en": {"fee": "Delivery fee", "driver": "Driver", "dispatch": "Out with the driver", "change_driver": "Change the driver", "out": "Left", "at": "at",
+           "deliveries": "Deliveries", "deliveries_intro": "Paid delivery orders per driver: how many, the delivery fees, and the time from leaving to closing.",
+           "count": "Orders", "fees": "Delivery fees", "minutes": "Average delivery (min)", "no_driver": "No driver"},
+}
 INSIGHT_WORDS = {
     "ar": {"costing": "تكلفة الأطباق", "costing_intro": "مكوّنات الطبق الواحد وتكلفتها بمتوسط تكلفة الخامة النهارده، قصاد سعر البيع. ده حساب تقديري للتسعير؛ البيع مش بيخصم خامات من المخزن.",
            "dish": "الطبق", "price": "سعر البيع", "cost": "تكلفة الطبق", "margin": "الهامش", "margin_pct": "نسبة الهامش", "ingredients": "المكوّنات",
@@ -254,7 +267,7 @@ INSIGHT_WORDS = {
            "tables": "الطاولات", "table": "الطاولة", "per_day": "طلب في اليوم", "stay": "متوسط القعدة (دقيقة)", "waiters": "الويترز", "waiter": "الويتر",
            "no_waiter": "من غير ويتر", "kinds": "نوع الطلب", "kind": "النوع", "waste": "الهالك والفاقد", "waste_intro": "اللي اتشال من المخزن بتسوية في الفترة دي، بسببها.",
            "item": "الصنف", "date": "التاريخ", "reason": "السبب", "value": "القيمة", "no_waste": "مفيش هالك متسجّل في الفترة دي.", "nothing": "مفيش طلبات مدفوعة في الفترة دي.",
-           "bad_period": "الفترة مش مظبوطة؛ اتعرض الشهر ده.", "dine_in": "صالة", "takeaway": "تيك أواي", "delivery": "دليفري", "total": "الإجمالي"},
+           "bad_period": "الفترة مش مظبوطة؛ اتعرض الشهر ده.", "delivery_fee": "رسوم التوصيل", "dine_in": "صالة", "takeaway": "تيك أواي", "delivery": "دليفري", "total": "الإجمالي"},
     "en": {"costing": "Dish costs", "costing_intro": "What one plate uses and what it costs at today's average ingredient cost, against its price. An estimate for pricing; selling takes nothing out of stock.",
            "dish": "Dish", "price": "Price", "cost": "Plate cost", "margin": "Margin", "margin_pct": "Margin %", "ingredients": "Ingredients",
            "no_recipe": "No ingredients yet", "edit": "Ingredients", "ingredient": "Ingredient", "quantity": "Quantity per plate", "save": "Save", "saved": "Ingredients saved.",
@@ -265,7 +278,7 @@ INSIGHT_WORDS = {
            "tables": "Tables", "table": "Table", "per_day": "orders a day", "stay": "Average stay (min)", "waiters": "Waiters", "waiter": "Waiter",
            "no_waiter": "No waiter", "kinds": "Order type", "kind": "Type", "waste": "Waste and losses", "waste_intro": "What was taken out of stock by adjustment in this period, with its reason.",
            "item": "Item", "date": "Date", "reason": "Reason", "value": "Value", "no_waste": "No waste recorded in this period.", "nothing": "No paid orders in this period.",
-           "bad_period": "The period was not valid; showing this month.", "dine_in": "Dine in", "takeaway": "Takeaway", "delivery": "Delivery", "total": "Total"},
+           "bad_period": "The period was not valid; showing this month.", "delivery_fee": "Delivery fee", "dine_in": "Dine in", "takeaway": "Takeaway", "delivery": "Delivery", "total": "Total"},
 }
 
 
@@ -343,5 +356,6 @@ def report(request):
         row["label"] = words.get(row["kind"], row["kind"])
     waste_rows, waste_total = insights.waste(first, last)
     return render(request, "restaurant/report.html", _base(request, page_title=words["report"], iw=words, first=first, last=last, note=note,
+                                                         deliveries=insights.deliveries(first, last), dw=DELIVERY_WORDS[lang],
                                                          today=timezone.localdate(), waste=waste_rows, waste_total=waste_total,
                                                          can_cost=user_has_permission(request.user, COST_VIEW), **data))

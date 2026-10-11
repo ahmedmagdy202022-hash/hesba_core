@@ -48,6 +48,10 @@ class Order(models.Model):
     address = models.CharField(max_length=255, blank=True)
     phone = models.CharField(max_length=50, blank=True)
     notes = models.CharField(max_length=255, blank=True)
+    #: RESTO-003: who takes a delivery out, when it left, and what the customer pays for it (billed as its own invoice line).
+    driver = models.ForeignKey("staff.Employee", on_delete=models.SET_NULL, null=True, blank=True, related_name="deliveries")
+    dispatched_at = models.DateTimeField(null=True, blank=True)
+    delivery_fee = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
     invoice = models.OneToOneField("sales.SalesInvoice", on_delete=models.PROTECT, null=True, blank=True, related_name="restaurant_order")
     opened_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="restaurant_orders")
     opened_at = models.DateTimeField(auto_now_add=True)
@@ -68,7 +72,7 @@ class Order(models.Model):
 
     @property
     def total(self):
-        return money_round(sum((line.amount for line in self.live_lines()), Decimal("0.00")))
+        return money_round(sum((line.amount for line in self.live_lines()), Decimal("0.00")) + (self.delivery_fee or Decimal("0")))
 
 
 class KitchenTicket(models.Model):

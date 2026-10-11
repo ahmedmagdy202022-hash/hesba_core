@@ -349,3 +349,74 @@ class RestaurantInsightTests(RestaurantSetup):
         board = self.client.get(reverse("restaurant:board"))
         self.assertNotContains(board, "data-resto-report")
         self.assertNotContains(board, "data-resto-costing")
+
+
+class DeliveryTests(RestaurantSetup):
+    """RESTO-003: the driver, when it left, and the delivery fee on the same invoice."""
+
+    def setUp(self):
+        super().setUp()
+        from staff.services import save_employee
+
+        self.driver = save_employee({"name": "محمود الطيار"}, self.owner)
+        self.client.force_login(self.owner)
+
+    def test_a_delivery_carries_its_fee_and_driver_to_one_invoice(self):
+        from cashboxes.services import get_cashbox_balance
+
+        self.client.post(reverse("restaurant:board"), {"kind": "delivery", "address": "شارع النصر 5", "phone": "01001234567", "delivery_fee": "15"})
+        order = Order.objects.get(kind=OrderKind.DELIVERY)
+        self.assertEqual(order.delivery_fee, D("15.00"))
+        services.add_item(order, self.koshary, self.owner, 2)
+        url = reverse("restaurant:order", args=[order.pk])
+        self.assertContains(self.client.get(url), "data-dispatch")
+        self.client.post(url, {"action": "dispatch", "driver": self.driver.pk, "delivery_fee": "20"})
+        order.refresh_from_db()
+        self.assertEqual((order.driver, order.delivery_fee, order.dispatched_at is not None, order.total), (self.driver, D("20.00"), True, D("140.00")))
+        before = get_cashbox_balance(self.cashbox)
+        invoice, _ = services.pay(order, self.owner, cashbox=self.cashbox, tendered=D("140"))
+        self.assertEqual(invoice.total_amount, D("140.00"))
+        fee = invoice.lines.get(item__item_code="DELIVERY-FEE")
+        self.assertEqual((fee.line_total_amount, fee.item.is_stock_tracked), (D("20.00"), False))
+        self.assertEqual(get_cashbox_balance(self.cashbox) - before, D("140.00"))
+        second = services.open_order(self.owner, kind="delivery", address="x", delivery_fee="10")
+        services.add_item(second, self.tea, self.owner)
+        services.pay(second, self.owner, cashbox=self.cashbox, tendered=D("100"))
+        from master_data.models import Item
+
+        self.assertEqual(Item.objects.filter(item_code="DELIVERY-FEE").count(), 1)  # made once
+
+    def test_a_delivery_without_a_fee_has_no_fee_line_and_the_rules(self):
+        order = services.open_order(self.owner, kind="delivery", address="x")
+        services.add_item(order, self.tea, self.owner)
+        invoice, _ = services.pay(order, self.owner, cashbox=self.cashbox, tendered=D("15"))
+        self.assertFalse(invoice.lines.filter(item__item_code="DELIVERY-FEE").exists())
+        with self.assertRaisesMessage(ValidationError, "رسوم التوصيل"):
+            services.open_order(self.owner, kind="delivery", address="x", delivery_fee="-5")
+        hall = services.open_order(self.owner, table=self.t1, delivery_fee="30")
+        self.assertEqual(hall.delivery_fee, D("0"))  # only deliveries carry a fee
+        with self.assertRaisesMessage(ValidationError, "مش طلب دليفري"):
+            services.dispatch(hall, self.driver, self.owner)
+        open_one = services.open_order(self.owner, kind="delivery", address="y")
+        with self.assertRaisesMessage(ValidationError, "الطيار"):
+            services.dispatch(open_one, None, self.owner)
+        services.dispatch(open_one, self.driver, self.owner)
+        self.assertEqual(AuditLog.objects.filter(action="dispatch_delivery").count(), 1)
+
+    def test_the_report_counts_deliveries_per_driver(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from . import insights
+
+        order = services.open_order(self.owner, kind="delivery", address="x", delivery_fee="15")
+        services.add_item(order, self.koshary, self.owner)
+        services.dispatch(order, self.driver, self.owner)
+        services.pay(order, self.owner, cashbox=self.cashbox, tendered=D("75"))
+        order.refresh_from_db()
+        Order.objects.filter(pk=order.pk).update(dispatched_at=order.closed_at - timedelta(minutes=25))
+        today = timezone.localdate()
+        rows = insights.deliveries(today.replace(day=1), today)
+        self.assertEqual([(row["driver"], row["orders"], row["fees"], row["minutes"]) for row in rows], [(self.driver, 1, D("15.00"), 25)])
+        self.assertContains(self.client.get(reverse("restaurant:report")), f'data-r-driver="{self.driver.pk}"')
