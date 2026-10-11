@@ -45,6 +45,6 @@
 <div class="op-table-wrap"><table class="op-table" data-r-waste><thead><tr><th>{{ iw.date }}</th><th>{{ iw.item }}</th><th>{{ iw.qty }}</th><th>{{ iw.reason }}</th>{% if can_cost %}<th>{{ iw.value }}</th>{% endif %}</tr></thead><tbody>
 {% for row in waste %}<tr data-r-waste-row="{{ row.movement.pk }}"><td><bdi>{{ row.movement.movement_date|date:"Y-m-d" }}</bdi></td><td class="op-cell-text">{{ row.movement.item.item_name }}</td><td><bdi>{{ row.movement.quantity|qty }}</bdi></td>
 <td class="op-cell-text">{{ row.reason|default:'—' }}</td>{% if can_cost %}<td>{{ row.value|money }}</td>{% endif %}</tr>
-{% empty %}<tr><td colspan="5" class="op-empty">{{ iw.no_waste }}</td></tr>{% endfor %}
+{% empty %}<tr><td colspan="{% if can_cost %}5{% else %}4{% endif %}" class="op-empty">{{ iw.no_waste }}</td></tr>{% endfor %}
 </tbody></table></div>
 {% endblock %}
