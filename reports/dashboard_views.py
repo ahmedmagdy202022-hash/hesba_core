@@ -482,7 +482,7 @@ def dashboard(request):
         "cards": cards,
         "alerts": _alerts(lang, strings, held, today, shared) + _transfer_alerts(request.user, lang, strings, modules),
         "quick_actions": _quick_actions(request.user, lang, modules, activity, sections),
-        "activity_panel": build_activity_panel(activity, sections, lang, today),
+        "activity_panel": build_activity_panel(activity, sections, lang, today, request.user),
         "demo_activities": _demo_activities(request.user, lang, profile),
         "onboarding_steps": _onboarding(lang),
         # Guide someone whose installation has seen no trade yet, and anyone who

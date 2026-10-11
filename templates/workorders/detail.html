@@ -13,7 +13,7 @@
 <article><small>{{ words.received }}</small><strong><bdi>{{ order.received_at|date:"Y-m-d" }}</bdi></strong></article>
 <article><small>{{ words.promised }}</small><strong class="{% if order.is_open and order.promised_on and order.promised_on < today and order.status != 'ready' %}wo-low{% endif %}"><bdi>{{ order.promised_on|date:"Y-m-d"|default:'—' }}</bdi></strong></article>
 <article><small>{{ words.technician }}</small><strong>{{ order.technician.name|default:'—' }}</strong></article>
-<article><small>{{ words.total }}</small><strong data-order-total>{{ numbers.total|money }}</strong><small>{{ words.parts }} {{ numbers.parts|money }} · {{ words.labour }} {{ numbers.labour|money }}</small></article>
+<article><small>{{ words.total }}</small><strong data-order-total>{{ numbers.total|money }}</strong><small>{{ words.parts }} {{ numbers.parts|money }} · {{ words.labour }} {{ numbers.labour|money }}{% if numbers.tax %} · {{ words.tax }} {{ numbers.tax|money }}{% endif %}</small></article>
 {% if order.warranty_until %}<article><small>{{ words.warranty_until }}</small><strong><bdi>{{ order.warranty_until|date:"Y-m-d" }}</bdi></strong></article>{% endif %}
 {% if order.warranty_of %}<article><small>{{ words.warranty_of }}</small><strong><a href="{% url 'workorders:detail' order.warranty_of.pk %}?lang={{ lang }}"><bdi>{{ order.warranty_of.number }}</bdi></a></strong></article>{% endif %}
 </section>

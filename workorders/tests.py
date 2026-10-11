@@ -91,7 +91,7 @@ class WorkOrderCycleTests(WorkshopSetup):
         self.assertIsNone(first.invoice)
         back = services.receive({"warranty_of": first, "device": first.device, "problem": "رجع نفس العطل"}, self.owner)
         self.assertEqual(back.customer, self.customer)
-        line = services.add_line(back, self.part, self.owner)
+        line = services.add_line(back, self.part, self.owner, is_warranty=True)
         self.assertTrue(line.is_warranty)
         back = self.to_ready(back)
         services.deliver(back, self.owner)
@@ -205,3 +205,78 @@ class NotAWorkshopTests(WorkshopSetup):
         self.client.force_login(self.owner)
         self.assertEqual(self.client.get(reverse("workorders:list")).status_code, 404)
         self.assertNotContains(self.client.get(reverse("dashboard_snapshot")), reverse("workorders:list"))
+
+
+class WorkOrderRoundOneTests(WorkshopSetup):
+    """Codex on #190."""
+
+    def test_the_total_and_the_default_payment_include_vat(self):
+        from settings_core.capabilities import set_capability_enabled
+        from settings_core.models import ClientProfile
+        from taxes.models import TaxRate
+        from taxes.services import default_rate, vat_enabled
+
+        set_capability_enabled(ClientProfile.get_active(), "vat", True, user=self.owner)
+        TaxRate.objects.filter(code="VAT14").update(is_default=True, active=True)
+        self.assertTrue(vat_enabled())
+        self.assertEqual(default_rate().rate, D("14.00"))
+        order = self.order()
+        services.add_line(order, self.labour, self.owner)  # 300 + 14%
+        numbers = services.totals(order)
+        self.assertEqual((numbers["tax"], numbers["total"]), (D("42.00"), D("342.00")))
+        services.deliver(self.to_ready(order), self.owner, paid_now="342", cashbox=self.cashbox)
+        order.refresh_from_db()
+        self.assertEqual((order.invoice.total_amount, order.invoice.remaining_due), (D("342.00"), D("0.00")))
+
+    def test_a_chargeable_line_on_a_warranty_return_is_charged(self):
+        first = self.to_ready(self.order())
+        services.deliver(first, self.owner)
+        first.refresh_from_db()
+        back = services.receive({"warranty_of": first, "device": first.device, "problem": "عطل تاني"}, self.owner)
+        self.assertFalse(services.add_line(back, self.labour, self.owner).is_warranty)
+        self.assertTrue(services.add_line(back, self.part, self.owner, is_warranty=True).is_warranty)
+        self.assertEqual(services.totals(back)["total"], D("300.00"))
+        self.client.force_login(self.owner)
+        self.assertContains(self.client.get(reverse("workorders:detail", args=[back.pk])), 'name="is_warranty" value="1" checked')  # the form's default
+
+    def test_a_new_customer_needs_the_customer_permission(self):
+        from permissions.services import user_has_permission
+
+        cashier = person(RoleCode.CASHIER, "wo_cash_new")
+        if not user_has_permission(cashier, "sales.create_sales_invoice") or user_has_permission(cashier, "master_data.manage_parties"):
+            self.skipTest("the seeded cashier's rights changed")
+        with self.assertRaisesMessage(ValidationError, "صلاحية إدارة العملاء"):
+            services.receive({"customer_name": "عميل", "device": "x", "problem": "y"}, cashier)
+        self.assertTrue(services.receive({"customer": self.customer, "device": "x", "problem": "y"}, cashier).pk)
+        self.client.force_login(cashier)
+        self.assertNotContains(self.client.get(reverse("workorders:new")), 'name="customer_name"')
+
+    def test_cancelling_the_delivery_invoice_reopens_the_order(self):
+        from sales.services import cancel_posted_sales_invoice
+
+        order = self.order()
+        services.add_line(order, self.labour, self.owner)
+        services.deliver(self.to_ready(order), self.owner)
+        order.refresh_from_db()
+        cancel_posted_sales_invoice(order.invoice.pk, self.owner, "غلط")
+        self.client.force_login(self.owner)
+        self.assertContains(self.client.get(reverse("workorders:detail", args=[order.pk])), 'data-status="ready"')
+        order.refresh_from_db()
+        self.assertEqual((order.status, order.invoice, order.warranty_until), (Status.READY, None, None))
+        services.deliver(order, self.owner)  # and it can be delivered again
+        order.refresh_from_db()
+        self.assertEqual((order.status, order.invoice.status), (Status.DELIVERED, "posted"))
+
+    def test_a_technicians_dashboard_counts_only_their_orders(self):
+        from reports.activity_panel import build_activity_panel
+        from staff.services import save_employee
+
+        technician = make_user(username="wo_tech_dash")
+        make_user_profile(user=technician, role=make_role("ROLE-TECH-D"))
+        self.tech.user = technician
+        self.tech.save()
+        self.order()
+        self.order(technician=save_employee({"name": "فني تاني"}, self.owner))
+        panel = build_activity_panel("services", {"workorders"}, "ar", TODAY, technician)
+        self.assertEqual(panel["tiles"][0]["value"], 1)
+        self.assertEqual(build_activity_panel("services", {"workorders"}, "ar", TODAY, self.owner)["tiles"][0]["value"], 2)

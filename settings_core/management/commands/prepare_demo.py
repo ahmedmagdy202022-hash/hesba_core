@@ -175,7 +175,7 @@ class Command(BaseCommand):
             delivered.refresh_from_db()
             back = wo.receive({"warranty_of": delivered, "device": delivered.device, "serial": delivered.serial, "problem": "رجع نفس العطل",
                                "technician": staff}, owner)
-            wo.add_line(back, parts[0], owner, quantity="1")
+            wo.add_line(back, parts[0], owner, quantity="1", is_warranty=True)
         except ValidationError:
             pass  # a part out of stock: the demo keeps it ready instead
 

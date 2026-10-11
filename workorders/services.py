@@ -51,14 +51,17 @@ MESSAGES = {
            "closed": "الأمر ده اتقفل؛ مينفعش يتعدّل.", "item": "اختار الصنف أو الخدمة.", "quantity": "الكمية لازم تكون أكبر من صفر.",
            "price": "السعر لازم يكون رقم صفر أو أكبر.", "not_ready": "الأمر لازم يكون «جاهز للتسليم» الأول.", "setup": "لازم يكون فيه مخزن بيع نشط.",
            "paid": "المدفوع لازم يكون بين صفر وإجمالي الفاتورة.", "cashbox": "اختار الخزنة اللي هيتحصّل فيها.", "own": "تقدر تشتغل على أوامرك بس.",
-           "warranty_of": "الضمان ده خلص أو الأمر مش متسلّم.", "note_invoice": "أمر شغل {number}: {device}"},
+           "warranty_of": "الضمان ده خلص أو الأمر مش متسلّم.", "note_invoice": "أمر شغل {number}: {device}",
+           "no_new_customer": "إضافة عميل جديد محتاجة صلاحية إدارة العملاء؛ اختار عميل موجود.", "reopened": "فاتورة التسليم {invoice} اتلغت؛ الأمر رجع جاهز للتسليم."},
     "en": {"customer": "Choose the customer or type their name.", "device": "Enter the device or the service asked for.", "problem": "Enter the fault or what is needed.",
            "date": "The date is not valid.", "days": "Warranty days must be a number from 0 to 3650.", "move": "The order cannot go from “{from_}” to “{to}”.",
            "closed": "This order is closed and cannot change.", "item": "Choose the item or service.", "quantity": "The quantity must be more than zero.",
            "price": "The price must be zero or more.", "not_ready": "The order must be “Ready for pickup” first.", "setup": "An active selling location is needed.",
            "paid": "The amount paid must be between zero and the invoice total.", "cashbox": "Choose the cashbox that takes the payment.",
            "own": "You can work on your own orders only.", "warranty_of": "That warranty has ended, or the order was not delivered.",
-           "note_invoice": "Work order {number}: {device}"},
+           "note_invoice": "Work order {number}: {device}",
+           "no_new_customer": "Adding a new customer needs the customer-management permission; choose an existing customer.",
+           "reopened": "Delivery invoice {invoice} was cancelled; the order is back to ready for pickup."},
 }
 
 
@@ -145,6 +148,8 @@ def _customer(data, user, words):
     name = (data.get("customer_name") or "").strip()
     if not name:
         raise ValidationError(words["customer"])
+    if not user_has_permission(user, "master_data.manage_parties"):
+        raise ValidationError(words["no_new_customer"])  # the same rule as the cashier's quick add
     from sales.pos_customers import quick_add_customer
 
     customer, _ = quick_add_customer(name[:255], (data.get("customer_phone") or "").strip()[:50], user)
@@ -166,8 +171,10 @@ def receive(data, user, lang="ar"):
         raise ValidationError(words["device"])
     if not problem:
         raise ValidationError(words["problem"])
+    sync_cancelled(user)
     warranty_of = data.get("warranty_of")
     if warranty_of is not None:  # back under warranty: the same customer as the order it came back on
+        warranty_of.refresh_from_db()  # its invoice may just have been cancelled
         if warranty_of.status != Status.DELIVERED or not warranty_of.warranty_until or warranty_of.warranty_until < timezone.localdate():
             raise ValidationError(words["warranty_of"])
         customer = warranty_of.customer
@@ -276,7 +283,7 @@ def add_line(order, item, user, *, quantity="1", unit_price=None, description=""
     price = _decimal(unit_price, words, "price", item.default_sale_price or ZERO)
     if price < 0:
         raise ValidationError(words["price"])
-    covered = bool(is_warranty) or order.warranty_of_id is not None  # a warranty return is free by default
+    covered = bool(is_warranty)  # the line says; a warranty return only ticks the box by default on the form (Codex on #190)
     line = WorkOrderLine.objects.create(order=order, item=item, description=(description or "").strip()[:255], quantity=quantity,
                                         unit_price=money_round(price), is_warranty=covered)
     _audit(user, "add_line", order, {"item": item.item_code, "quantity": str(quantity), "price": str(line.unit_price), "warranty": covered})
@@ -292,11 +299,25 @@ def remove_line(line, user, lang="ar"):
     line.delete()
 
 
+def _rows(lines):
+    return [{"item": line.item, "quantity": line.quantity, "unit_sale_price": ZERO if line.is_warranty else line.unit_price,
+             "line_discount_amount": ZERO, "description": (line.description or line.item.item_name)[:255]} for line in lines]
+
+
+def _tax(rows):
+    from taxes.services import compute_lines, vat_enabled
+
+    return sum((tax for *_, tax in compute_lines(rows)), ZERO) if rows and vat_enabled() else ZERO
+
+
 def totals(order):
+    """Parts, labour, VAT and the total the delivery invoice will come to."""
+
     lines = list(order.lines.select_related("item"))
     parts = sum((line.amount for line in lines if line.item.is_stock_tracked), ZERO)
     labour = sum((line.amount for line in lines if not line.item.is_stock_tracked), ZERO)
-    return {"lines": lines, "parts": parts, "labour": labour, "total": parts + labour}
+    tax = money_round(_tax(_rows(lines)))
+    return {"lines": lines, "parts": parts, "labour": labour, "tax": tax, "total": parts + labour + tax}
 
 
 def reserved_parts():
@@ -338,13 +359,8 @@ def deliver(order, user, *, paid_now="0", cashbox=None, invoice_date=None, lang=
         location = _location()
         if location is None:
             raise ValidationError(words["setup"])
-        rows = [{"item": line.item, "quantity": line.quantity, "unit_sale_price": ZERO if line.is_warranty else line.unit_price,
-                 "line_discount_amount": ZERO, "description": (line.description or line.item.item_name)[:255]} for line in lines]
-        from taxes.services import compute_lines, vat_enabled
-
-        total = sum((line.amount for line in lines), ZERO)
-        if vat_enabled():
-            total += sum((tax for *_, tax in compute_lines(rows)), ZERO)
+        rows = _rows(lines)
+        total = sum((line.amount for line in lines), ZERO) + money_round(_tax(rows))
         paid = money_round(_decimal(paid_now, words, "paid", ZERO))
         if paid < 0 or paid > total:  # never take more than the invoice will come to
             raise ValidationError(words["paid"])
@@ -373,6 +389,22 @@ def deliver(order, user, *, paid_now="0", cashbox=None, invoice_date=None, lang=
     _audit(user, "deliver", order, {"invoice": invoice.invoice_number if invoice else "", "total": str(invoice.total_amount if invoice else ZERO),
                                      "warranty_until": str(order.warranty_until or "")})
     return order
+
+
+def sync_cancelled(user=None):
+    """An order whose delivery invoice was cancelled on the sales page goes back to ready (Codex on #190).
+
+    Cancelling reversed the stock, cash and accounts; the order follows: it is open again, its warranty is void,
+    and it can be delivered (and invoiced) once more. Its timeline keeps the cancelled invoice's number."""
+
+    stale = list(scoped(WorkOrder.objects).filter(status=Status.DELIVERED, invoice__status="cancelled").select_related("invoice"))
+    for order in stale:
+        number = order.invoice.invoice_number
+        WorkOrder.objects.filter(pk=order.pk).update(status=Status.READY, invoice=None, delivered_at=None, warranty_until=None)
+        order.status = Status.READY
+        WorkOrderEvent.objects.create(order=order, status=Status.READY, note=MESSAGES["ar"]["reopened"].format(invoice=number)[:255],
+                                      user=user or order.created_by)
+    return len(stale)
 
 
 # ---- the workshop's figures ----

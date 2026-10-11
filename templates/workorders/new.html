@@ -6,8 +6,8 @@
 <div class="op-form-grid">
 {% if not warranty_of %}
 <div class="op-field"><label for="wo-customer">{{ words.customer_existing }}</label><select id="wo-customer" name="customer"><option value="">{{ words.choose }}</option>{% for c in customers %}<option value="{{ c.pk }}"{% if post.customer == c.pk|stringformat:'s' %} selected{% endif %}>{{ c.name }}{% if c.phone %} — {{ c.phone }}{% endif %}</option>{% endfor %}</select></div>
-<div class="op-field"><label for="wo-cname">{{ words.customer_new }}</label><input id="wo-cname" name="customer_name" maxlength="255" value="{{ post.customer_name }}"></div>
-<div class="op-field"><label for="wo-cphone">{{ words.customer_phone }}</label><input id="wo-cphone" name="customer_phone" inputmode="tel" maxlength="50" value="{{ post.customer_phone }}"></div>
+{% if can_add_customer %}<div class="op-field"><label for="wo-cname">{{ words.customer_new }}</label><input id="wo-cname" name="customer_name" maxlength="255" value="{{ post.customer_name }}"></div>
+<div class="op-field"><label for="wo-cphone">{{ words.customer_phone }}</label><input id="wo-cphone" name="customer_phone" inputmode="tel" maxlength="50" value="{{ post.customer_phone }}"></div>{% endif %}
 {% endif %}
 <div class="op-field"><label for="wo-device">{{ words.device }}</label><input id="wo-device" name="device" required maxlength="160" value="{% if post %}{{ post.device }}{% elif warranty_of %}{{ warranty_of.device }}{% endif %}" placeholder="{% if lang == 'en' %}e.g. Samsung A54 / AC unit 1.5 HP{% else %}مثلًا: سامسونج A54 / تكييف 1.5 حصان{% endif %}"></div>
 <div class="op-field"><label for="wo-serial">{{ words.serial }}</label><input id="wo-serial" name="serial" maxlength="80" value="{% if post %}{{ post.serial }}{% elif warranty_of %}{{ warranty_of.serial }}{% endif %}"></div>

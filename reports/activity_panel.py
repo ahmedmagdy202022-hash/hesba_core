@@ -163,17 +163,19 @@ WORKSHOP_WORDS = {
 }
 
 
-def _workshop(lang, today):
+def _workshop(lang, today, user=None):
     from workorders.models import OPEN, Status, WorkOrder
-    from workorders.services import late, scoped
+    from workorders.services import late, scoped, sync_cancelled, visible_to
 
     words = WORKSHOP_WORDS["en" if lang == "en" else "ar"]
-    orders = scoped(WorkOrder.objects)
+    sync_cancelled(user)
+    # A technician who sees only their own orders gets their own counts (Codex on #190).
+    orders = visible_to(user) if user is not None else scoped(WorkOrder.objects)
     first = today.replace(day=1)
     counts = orders.aggregate(open=Count("id", filter=Q(status__in=OPEN)), ready=Count("id", filter=Q(status=Status.READY)),
                               delivered=Count("id", filter=Q(status=Status.DELIVERED, delivered_at__date__gte=first)),
                               returns=Count("id", filter=Q(warranty_of__isnull=False, received_at__date__gte=first)))
-    overdue = late(today).count()
+    overdue = late(today).filter(pk__in=orders.values("pk")).count()
     return [
         _tile("wo_open", words["open"], counts["open"], tone="lead"),
         _tile("wo_ready", words["ready"], counts["ready"], tone="good" if counts["ready"] else ""),
@@ -183,7 +185,7 @@ def _workshop(lang, today):
     ], []
 
 
-def build_activity_panel(activity, visible_sections, lang="ar", today=None):
+def build_activity_panel(activity, visible_sections, lang="ar", today=None, user=None):
     """The panel for this activity, or None when it has none or it is hidden."""
 
     kind = PANEL_BY_ACTIVITY.get(activity)
@@ -203,7 +205,7 @@ def build_activity_panel(activity, visible_sections, lang="ar", today=None):
     elif kind == "production":
         tiles, lists = _production(words, today)
     elif kind == "workshop":
-        tiles, lists = _workshop(lang, today)
+        tiles, lists = _workshop(lang, today, user)
         title = WORKSHOP_WORDS["en" if lang == "en" else "ar"]["title"]
         return {"kind": kind, "title": title, "tiles": tiles, "lists": lists, "link": reverse("workorders:list"), "open": words["open"]}
     else:

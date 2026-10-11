@@ -24,7 +24,7 @@ WORDS = {
         "customer_existing": "عميل موجود", "choose": "اختار", "customer_new": "أو عميل جديد: الاسم", "customer_phone": "تليفون العميل", "save": "حفظ",
         "receive_btn": "استلام وطباعة الإيصال", "back": "أوامر الشغل", "timeline": "اللي حصل", "diagnosis": "التشخيص / اللي اتعمل",
         "details": "بيانات الشغل", "lines": "قطع الغيار والمصنعية", "item": "الصنف / الخدمة", "qty": "الكمية", "price": "السعر", "amount": "القيمة",
-        "warranty": "ضمان (ببلاش)", "add": "ضيف", "remove": "شيل", "parts": "قطع الغيار", "labour": "المصنعية", "total": "الإجمالي",
+        "warranty": "ضمان (ببلاش)", "add": "ضيف", "remove": "شيل", "parts": "قطع الغيار", "labour": "المصنعية", "total": "الإجمالي", "tax": "الضريبة",
         "no_lines": "لسه مفيش قطع ولا مصنعية على الأمر.", "next": "انقل الأمر لـ", "deliver": "تسليم للعميل", "paid_now": "المدفوع دلوقتي",
         "cashbox": "الخزنة", "deliver_btn": "سلّم واعمل الفاتورة", "delivered_ok": "اتسلّم الأمر {number}.", "invoice": "الفاتورة",
         "receipt": "اطبع إيصال الاستلام", "warranty_until": "ضمان لحد", "warranty_return": "رجع في الضمان", "warranty_of": "ضمان على أمر",
@@ -44,7 +44,7 @@ WORDS = {
         "customer_existing": "Existing customer", "choose": "Choose", "customer_new": "or a new customer: name", "customer_phone": "Customer's phone", "save": "Save",
         "receive_btn": "Receive and print the receipt", "back": "Work orders", "timeline": "What happened", "diagnosis": "Diagnosis / work done",
         "details": "Job details", "lines": "Parts and labour", "item": "Item / service", "qty": "Qty", "price": "Price", "amount": "Amount",
-        "warranty": "Warranty (free)", "add": "Add", "remove": "Remove", "parts": "Parts", "labour": "Labour", "total": "Total",
+        "warranty": "Warranty (free)", "add": "Add", "remove": "Remove", "parts": "Parts", "labour": "Labour", "total": "Total", "tax": "VAT",
         "no_lines": "No parts or labour on the order yet.", "next": "Move the order to", "deliver": "Hand back to the customer", "paid_now": "Paid now",
         "cashbox": "Cashbox", "deliver_btn": "Deliver and invoice", "delivered_ok": "Order {number} delivered.", "invoice": "Invoice",
         "receipt": "Print the intake receipt", "warranty_until": "Warranty until", "warranty_return": "Back under warranty", "warranty_of": "Warranty on order",
@@ -92,6 +92,7 @@ def _error(exc, lang):
 
 def board(request):
     _guard(request)
+    services.sync_cancelled(request.user)  # a delivery whose invoice was cancelled is open again
     lang = _lang(request)
     today = timezone.localdate()
     show = request.GET.get("show") or "open"
@@ -138,12 +139,16 @@ def new(request):
             messages.success(request, WORDS[lang]["received_ok"].format(number=order.number))
             return redirect(f"{reverse('workorders:receipt', args=[order.pk])}?lang={lang}")
     customers = Customer.objects.filter(active=True).exclude(customer_code="WALK-IN").order_by("name")[:500]
+    from permissions.services import user_has_permission
+
     return render(request, "workorders/new.html", _base(request, lang, customers=customers, technicians=_technicians(), post=request.POST,
-                                                        error=error, warranty_of=warranty_of))
+                                                        error=error, warranty_of=warranty_of,
+                                                        can_add_customer=user_has_permission(request.user, "master_data.manage_parties")))
 
 
 def detail(request, pk):
     _guard(request)
+    services.sync_cancelled(request.user)  # a delivery whose invoice was cancelled is open again
     lang = _lang(request)
     order = get_object_or_404(services.visible_to(request.user).select_related("customer", "technician", "invoice", "warranty_of"), pk=pk)
     words = WORDS[lang]
@@ -220,6 +225,7 @@ def report(request):
     _guard(request)
     if not services.can_view(request.user):
         raise PermissionDenied("The technicians' report needs sales.view_sales_invoices.")
+    services.sync_cancelled(request.user)  # a delivery whose invoice was cancelled is open again
     lang = _lang(request)
     today = timezone.localdate()
     raw = request.GET.get("month") or ""

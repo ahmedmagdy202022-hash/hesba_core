@@ -725,7 +725,16 @@ No unresolved business or accounting decision was discovered while implementing 
   - stock lines move out at movement cost (HG-003);
   - a warranty line goes on at price 0, so its cost still lands in cost of goods sold and the receivable does not change;
   - payment at the counter is the invoice's own `paid_now` into a chosen cashbox, never more than the invoice total.
-- **Not touched:** inventory movement types, the projector, sales posting, average cost, cashbox and customer ledgers.
+- **A cancelled delivery invoice** (cancelled on the sales page, unchanged) sends its order back to "ready" on the next look:
+  - the warranty is void;
+  - the timeline keeps the cancelled invoice's number;
+  - the order can be delivered and invoiced again.
+
+  The sales cancel flow is not changed or blocked.
+- **Totals:** shown with VAT, as the invoice will come to.
+- **The warranty flag:** each line carries its own; a warranty return only ticks the box by default.
+- **New customers:** creating one from the work order needs `master_data.manage_parties`, the same rule as the cashier's quick add.
+- **Not touched:** inventory movement types, the projector, sales posting and cancellation, average cost, cashbox and customer ledgers.
 - **Tests** (`workorders/tests.py`):
   - an open job moves nothing;
   - delivery moves the exact quantity at movement cost and sets the customer balance and cashbox exactly;
