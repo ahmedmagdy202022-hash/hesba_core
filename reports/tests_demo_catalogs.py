@@ -140,11 +140,20 @@ class SampleBusinessPerActivityTests(TestCase):
         from projects import contract
 
         self.assertEqual(project.boq.count(), 5)
-        self.assertEqual(list(project.certificates.values_list("invoice__status", flat=True)), ["posted", "draft"])
+        self.assertEqual(list(project.certificates.values_list("invoice__status", flat=True)), ["posted", "posted", "draft"])
         figures = contract.position(project)
         self.assertGreater(figures["retention_held"], 0)
         self.assertGreater(figures["recovered"], 0)
-        self.assertEqual(figures["due_now"], 0)  # the first certificate's net payable was collected
+        self.assertGreater(figures["due_now"], 0)  # the first was collected; the second is still owed
+        # CONTRACT-003: the second certificate is overdue, and the portfolio reads both projects.
+        from projects import insights
+
+        overdue, total, _ = insights.overdue_certificates()
+        self.assertEqual([row["certificate"].number for row in overdue], [2])
+        self.assertGreater(total, 0)
+        rows, totals = insights.portfolio()
+        self.assertEqual(len(rows), 2)
+        self.assertGreater(totals["retention"], 0)
         self.assertTrue(project.subcontracts.get().bills.filter(invoice__status="posted").exists())
         self.assertEqual(project.budget.count(), 4)
         result = reconciliation()

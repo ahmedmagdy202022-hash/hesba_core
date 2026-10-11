@@ -7,6 +7,7 @@ app_name = "projects"
 
 urlpatterns = [
     path("", views.project_list, name="list"),
+    path("report/", views.report, name="report"),
     path("<int:pk>/", views.project_detail, name="detail"),
     # CONTRACT-002
     path("<int:pk>/boq/", contract_views.boq, name="boq"),

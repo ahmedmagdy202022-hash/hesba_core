@@ -202,13 +202,17 @@ class Command(BaseCommand):
                 total = contract.boq_total(project)
                 contract.receive_payment(project, owner, kind=ProjectPaymentKind.ADVANCE, cashbox=master["cashboxes"][0],
                                          amount=(total * Decimal("0.15")).quantize(Decimal("1")), payment_date=today - timedelta(days=started))
-                first = contract.create_certificate(project, owner, certificate_date=today - timedelta(days=30), description="أعمال الشهر الأول",
+                first = contract.create_certificate(project, owner, certificate_date=today - timedelta(days=started), description="أعمال الشهر الأول",
                                                     quantities={line.pk: (line.quantity * Decimal("0.25")).quantize(Decimal("1")) for line in lines[:2]})
                 post_sales_invoice(first.invoice_id, user=owner)
                 contract.receive_payment(project, owner, kind=ProjectPaymentKind.COLLECTION, cashbox=master["cashboxes"][0],
-                                         amount=contract.net_payable(first), payment_date=today - timedelta(days=20))
-                contract.create_certificate(project, owner, certificate_date=today, description="أعمال الشهر التاني",
-                                            quantities={line.pk: (line.quantity * Decimal("0.45")).quantize(Decimal("1")) for line in lines[:3]})
+                                         amount=contract.net_payable(first), payment_date=today - timedelta(days=started - 10))
+                # CONTRACT-003: the second certificate is posted and still unpaid past the credit days, so it shows as overdue.
+                second = contract.create_certificate(project, owner, certificate_date=today - timedelta(days=40), description="أعمال الشهر التاني",
+                                                     quantities={line.pk: (line.quantity * Decimal("0.45")).quantize(Decimal("1")) for line in lines[:3]})
+                post_sales_invoice(second.invoice_id, user=owner)
+                contract.create_certificate(project, owner, certificate_date=today, description="أعمال الشهر التالت",
+                                            quantities={line.pk: (line.quantity * Decimal("0.60")).quantize(Decimal("1")) for line in lines[:3]})
                 if master["suppliers"]:
                     subcontract = costs.save_subcontract(project, owner, {"supplier": master["suppliers"][-1], "scope": f"مقاولة باطن: {lines[-1].description}",
                                                                           "value": contract.line_amount(lines[-1]) * Decimal("0.8"), "retention_rate": "5"})

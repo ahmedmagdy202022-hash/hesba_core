@@ -42,7 +42,7 @@ WORDS = {
         "runs": "تشغيلات", "units": "وحدات اتنتجت", "prod_cost": "تكلفة الإنتاج", "short_recipes": "وصفات ناقصها خامات", "open_orders_mfg": "أوامر إنتاج شغالة", "late_orders": "متأخر عن ميعاده", "late_none": "مفيش تأخير",
         "short_none": "كل الوصفات خاماتها كفاية لتشغيلة", "short_list": "ناقصها خامات:",
         "active_projects": "مشاريع شغالة", "contract_total": "قيمة العقود", "billed_pct": "اتفوتر من العقود", "losing": "مشاريع خسرانة",
-        "project_dues": "مستحقات على المشاريع", "open": "افتح", "of": "من",
+        "project_dues": "مستحقات على المشاريع", "overdue_certs": "مستخلصات متأخرة", "open": "افتح", "of": "من",
     },
     "en": {
         "kitchen": "Floor and kitchen now", "bookings": "Today's bookings", "production": "Production this month", "projects": "Running projects",
@@ -53,7 +53,7 @@ WORDS = {
         "runs": "Runs", "units": "Units produced", "prod_cost": "Production cost", "short_recipes": "Recipes short of materials", "open_orders_mfg": "Open production orders", "late_orders": "past their due date", "late_none": "nothing late",
         "short_none": "Every recipe has materials for a batch", "short_list": "Short:",
         "active_projects": "Active projects", "contract_total": "Contract value", "billed_pct": "Billed of contracts", "losing": "Projects losing money",
-        "project_dues": "Owed on projects", "open": "Open", "of": "of",
+        "project_dues": "Owed on projects", "overdue_certs": "Overdue certificates", "open": "Open", "of": "of",
     },
 }
 
@@ -152,7 +152,19 @@ def _projects(words):
         _tile("billed_pct", words["billed_pct"], f"{round(billed / contract * 100)}%" if contract > 0 else "—", "text"),
         _tile("project_dues", words["project_dues"], money_round(dues), "money"),
         _tile("losing", words["losing"], len(losing), tone="bad" if losing else "good", sub="، ".join(losing[:3])),
+        _overdue_tile(words),
     ], []
+
+
+def _overdue_tile(words):
+    """CONTRACT-003: posted certificates still owed past the credit days."""
+
+    from settings_core.templatetags.hesba_format import money
+
+    from projects.insights import overdue_certificates
+
+    rows, total, _ = overdue_certificates()
+    return _tile("overdue_certs", words["overdue_certs"], len(rows), tone="bad" if rows else "good", sub=money(total) if rows else "")
 
 
 def build_activity_panel(activity, visible_sections, lang="ar", today=None):

@@ -118,7 +118,7 @@ def project_list(request):
     due = due_now_many(page)  # grouped queries, not one contract position per row
     rows = [{"project": project, "status_label": choice_label(project, "status", lang), "figures": services.summary(project), "due_now": due[project.pk]}
             for project in page]
-    return render(request, "projects/list.html", _base(request, rows=rows, status=status, form=form, error=error,
+    return render(request, "projects/list.html", _base(request, rows=rows, status=status, form=form, error=error, report_label=REPORT_WORDS[lang]["report"],
                                                         customers=Customer.objects.filter(active=True).order_by("name")))
 
 
@@ -197,3 +197,36 @@ def project_detail(request, pk):
     context.update(tab="overview", cwords=CONTRACT_WORDS[lang], position=position(project),
                    expense_headings=localized_choices(ProjectExpense, "heading", lang))
     return render(request, "projects/detail.html", context)
+
+
+REPORT_WORDS = {
+    "ar": {"report": "تقرير المشاريع", "intro": "كل مشروع: العقد واللي اتفوتر، والجدول الزمني قصاد الفوترة، والتكلفة والربح، وضمان الأعمال المحجوز. من المستندات المرحّلة بس.",
+           "all": "كل الحالات", "show": "اعرض", "project": "المشروع", "contract": "العقد", "billed": "اتفوتر", "progress": "نسبة الفوترة",
+           "time": "اللي فات من المدة", "behind": "متأخر عن الجدول", "cost": "التكلفة", "profit": "الربح", "margin": "الهامش", "due": "على العميل",
+           "retention": "ضمان محجوز", "losing": "مشاريع خسرانة", "behind_n": "متأخرة عن الجدول", "overdue": "مستخلصات متأخرة",
+           "overdue_intro": "مستخلصات مترحّلة لسه عليها فلوس وعدّى عليها أكتر من {days} يوم (مدة الآجل في إعدادات أعمار الديون).",
+           "certificate": "المستخلص", "date": "التاريخ", "owed": "الباقي", "age": "عمره (يوم)", "late": "متأخر (يوم)", "customer": "العميل",
+           "none": "مفيش مشاريع.", "no_overdue": "مفيش مستخلصات متأخرة.", "total": "الإجمالي"},
+    "en": {"report": "Projects report", "intro": "Each project: contract and billed, the calendar against billing, cost and profit, and the retention held. Posted documents only.",
+           "all": "All statuses", "show": "Show", "project": "Project", "contract": "Contract", "billed": "Billed", "progress": "Billed %",
+           "time": "Time gone", "behind": "Behind schedule", "cost": "Cost", "profit": "Profit", "margin": "Margin", "due": "Owed by client",
+           "retention": "Retention held", "losing": "Projects losing money", "behind_n": "behind schedule", "overdue": "Overdue certificates",
+           "overdue_intro": "Posted certificates still owed and older than {days} days (the credit days in the aging settings).",
+           "certificate": "Certificate", "date": "Date", "owed": "Owed", "age": "Age (days)", "late": "Late (days)", "customer": "Client",
+           "none": "No projects.", "no_overdue": "No overdue certificates.", "total": "Total"},
+}
+
+
+@require_permission(PROFIT)
+def report(request):
+    from . import insights
+
+    lang = _lang(request)
+    status = request.GET.get("status", ProjectStatus.ACTIVE)
+    status = status if status in ProjectStatus.values else ""
+    rows, totals = insights.portfolio(status)
+    overdue, overdue_total, terms = insights.overdue_certificates()
+    words = REPORT_WORDS[lang]
+    return render(request, "projects/report.html", _base(request, page_title=words["report"], rw=words, rows=rows, totals=totals, status=status,
+                                                       overdue=overdue, overdue_total=overdue_total,
+                                                       overdue_intro=words["overdue_intro"].format(days=terms)))
