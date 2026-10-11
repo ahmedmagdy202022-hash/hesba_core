@@ -23,8 +23,9 @@ from .tests_dashboard import prepared_client
 
 ROLES = (RoleCode.OWNER, RoleCode.MANAGER, RoleCode.ACCOUNTANT, RoleCode.CASHIER, RoleCode.STOCK_KEEPER)
 #: Links that are actions, downloads, prints or leaving the app, not screens to open.
-SKIP = re.compile(r"(logout|/demo/|export|download|backup|\.csv|format=csv|/print|pdf|manifest|service-worker|sw\.js|healthz|nightly|"
-                  r"/admin/|/share/|wa\.me|mailto:|tel:|javascript:|^#|/static/|/media/)")
+#: Only actions and files are skipped; a screen whose path merely mentions one (the backups settings page) is crawled.
+SKIP = re.compile(r"(logout|/demo/|export|download|/drive/|\.csv|format=csv|/print|pdf|manifest|service-worker|sw\.js|healthz|/ops/|"
+                  r"/admin/|/share/|wa\.me|mailto:|tel:|javascript:|^#|/static/|/media/|/imports/templates/)")
 HREF = re.compile(r'<a\b[^>]*\bhref="([^"]+)"')
 PER_PAGE = 25
 
@@ -157,3 +158,13 @@ def _make_sample_case(activity, sub):
 for _activity in catalog.ACTIVITY_LABELS:
     _first = next(iter(catalog.SUB_ACTIVITY_LABELS.get(_activity, {})), None)
     setattr(EverySampleBusinessTests, f"test_{_activity}", _make_sample_case(_activity, _first))
+
+
+class CrawlerSelfTests(TestCase):
+    """The crawler skips actions and files only, never a screen (Codex on #188)."""
+
+    def test_screens_are_crawled_and_actions_skipped(self):
+        for screen in ("/settings/backups/", "/settings/", "/education/", "/reports/"):
+            self.assertIsNone(SKIP.search(screen), screen)
+        for action in ("/logout/", "/sales/1/print/", "/reports/x/?format=csv", "/ops/nightly/", "/settings/backups/drive/callback/", "https://wa.me/2010"):
+            self.assertIsNotNone(SKIP.search(action), action)
