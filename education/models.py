@@ -134,3 +134,44 @@ class Enrollment(models.Model):
 
     def __str__(self):
         return f"{self.student} @ {self.group}"
+
+
+class SessionStatus(models.TextChoices):
+    HELD = "held", "Held"
+    CANCELLED = "cancelled", "Cancelled"
+
+
+class ClassSession(models.Model):
+    """EDU-002: one meeting of a group on one day, and who came."""
+
+    group = models.ForeignKey(StudyGroup, on_delete=models.PROTECT, related_name="sessions")
+    date = models.DateField(db_index=True)
+    status = models.CharField(max_length=10, choices=SessionStatus.choices, default=SessionStatus.HELD)
+    topic = models.CharField(max_length=255, blank=True)
+    taken_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    taken_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-date", "-pk"]
+        constraints = [models.UniqueConstraint(fields=["group", "date"], name="education_one_session_per_group_day")]
+
+    def __str__(self):
+        return f"{self.group} {self.date}"
+
+
+class Presence(models.TextChoices):
+    PRESENT = "present", "Present"
+    LATE = "late", "Late"
+    ABSENT = "absent", "Absent"
+    EXCUSED = "excused", "Excused"
+
+
+class Attendance(models.Model):
+    session = models.ForeignKey(ClassSession, on_delete=models.CASCADE, related_name="marks")
+    student = models.ForeignKey(Student, on_delete=models.PROTECT, related_name="attendance")
+    presence = models.CharField(max_length=10, choices=Presence.choices, default=Presence.PRESENT)
+    note = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["student__name", "pk"]
+        constraints = [models.UniqueConstraint(fields=["session", "student"], name="education_one_mark_per_student_session")]

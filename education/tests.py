@@ -213,10 +213,92 @@ class DemoDataTests(TestCase):
         self.assertEqual(Student.objects.count(), 7)
         self.assertEqual(Student.objects.values("payer").distinct().count(), 5)  # brothers and sisters share a parent
         self.assertEqual(Enrollment.objects.filter(discount_percent=D("10")).count(), 4)
+        from .models import Attendance, ClassSession
+
+        self.assertGreaterEqual(ClassSession.objects.count(), 8)  # four weeks of classes
+        self.assertTrue(Attendance.objects.filter(presence="absent").exists())
         self.assertTrue(self.client.login(username="owner", password="Demo-pass-1"))
         self.assertContains(self.client.get(reverse("education:groups")), "مجموعة السبت والتلات")
 
 
+class AttendanceTests(EducationSetup):
+    def setUp(self):
+        super().setUp()
+        from . import attendance
+
+        self.register = attendance
+        self.class_day = TODAY - timedelta(days=(TODAY.weekday() - 5) % 7)  # the latest Saturday, today included
+        self.saturday = self.group(days="sat")
+        self.yousef, self.mariam = self.student(), self.student("مريم محمد")
+        services.enroll(self.yousef, self.saturday, self.owner, start_date=self.class_day - timedelta(days=30))
+        services.enroll(self.mariam, self.saturday, self.owner, start_date=self.class_day - timedelta(days=30))
+
+    def test_take_change_and_read_attendance(self):
+        session = self.register.take(self.saturday, self.owner, self.class_day, {str(self.mariam.pk): "absent", f"note_{self.mariam.pk}": "تعبانة"})
+        marks = dict(session.marks.values_list("student__name", "presence"))
+        self.assertEqual(marks, {"يوسف محمد": "present", "مريم محمد": "absent"})  # unmarked counts as present
+        self.assertEqual(session.marks.get(student=self.mariam).note, "تعبانة")
+        # Taking it again for the same day corrects it, never doubles it.
+        self.register.take(self.saturday, self.owner, self.class_day, {str(self.mariam.pk): "late"})
+        self.assertEqual(self.saturday.sessions.count(), 1)
+        self.assertEqual(self.register.student_summary(self.mariam, today=self.class_day)["rate"], 100)  # late still attended
+        self.assertEqual(self.register.group_rates(self.saturday, today=self.class_day), {self.yousef.pk: 100, self.mariam.pk: 100})
+        self.assertTrue(AuditLog.objects.filter(action="take_attendance").exists())
+
+    def test_rates_count_held_classes_only(self):
+        earlier = self.class_day - timedelta(days=7)
+        self.register.take(self.saturday, self.owner, earlier, {str(self.mariam.pk): "absent"})
+        self.register.take(self.saturday, self.owner, self.class_day, {})
+        self.assertEqual(self.register.student_summary(self.mariam, today=self.class_day)["rate"], 50)
+        self.register.take(self.saturday, self.owner, earlier, {}, cancelled=True)  # the class turned out cancelled
+        summary = self.register.student_summary(self.mariam, today=self.class_day)
+        self.assertEqual((summary["rate"], summary["absences"]), (100, []))
+
+    def test_the_roster_is_who_was_enrolled_that_day(self):
+        late_joiner = self.student("عمر خالد")
+        services.enroll(late_joiner, self.saturday, self.owner, start_date=self.class_day)
+        week_before = self.class_day - timedelta(days=7)
+        session = self.register.take(self.saturday, self.owner, week_before, {})
+        self.assertNotIn(late_joiner.pk, session.marks.values_list("student", flat=True))
+        stopped = Enrollment.objects.get(student=self.yousef, group=self.saturday)
+        services.stop(stopped, self.owner, end_date=week_before)
+        self.assertNotIn(self.yousef.pk, self.register.take(self.saturday, self.owner, self.class_day, {}).marks.values_list("student", flat=True))
+
+    def test_no_future_days_and_only_ones_own_groups_for_a_teacher(self):
+        from django.core.exceptions import PermissionDenied
+
+        with self.assertRaisesMessage(ValidationError, "لسه مجاش"):
+            self.register.take(self.saturday, self.owner, TODAY + timedelta(days=1), {})
+        teacher_user = person(RoleCode.CASHIER, "edu_teacher")
+        self.teacher.user = teacher_user
+        self.teacher.save()
+        self.assertTrue(self.register.can_take(teacher_user, self.saturday))
+        from staff.services import save_employee
+
+        other = self.group("مجموعة تانية", days="sun", teacher=save_employee({"name": "أ. نادية"}, self.owner))
+        self.assertFalse(self.register.can_take(teacher_user, other))
+        with self.assertRaises(PermissionDenied):
+            self.register.take(other, teacher_user, self.class_day, {})
+
+    def test_todays_classes_and_the_attendance_screen(self):
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("education:today") + f"?date={self.class_day.isoformat()}")
+        self.assertContains(page, f'data-class="{self.saturday.pk}"')
+        self.assertContains(page, f'data-take="{self.saturday.pk}"')
+        url = reverse("education:attendance", args=[self.saturday.pk])
+        form = self.client.get(url + f"?date={self.class_day.isoformat()}")
+        self.assertContains(form, f'data-mark="{self.yousef.pk}"')
+        from master_data.models import Customer as C
+
+        C.objects.filter(pk=self.mariam.payer_id).update(phone="01001234501")
+        response = self.client.post(url, {"date": self.class_day.isoformat(), f"p_{self.yousef.pk}": "present", f"p_{self.mariam.pk}": "absent",
+                                          "topic": "المعادلات", "lang": "ar"})
+        self.assertEqual(response.status_code, 302)
+        done = self.client.get(response["Location"])
+        self.assertContains(done, "https://wa.me/201001234501")  # tell the parent in one tap
+        self.assertContains(self.client.get(reverse("education:group", args=[self.saturday.pk])), "المعادلات")
+        self.assertContains(self.client.get(reverse("education:student", args=[self.mariam.pk])), "data-absences")
+        self.assertContains(self.client.get(reverse("education:today") + f"?date={self.class_day.isoformat()}&lang=en"), "Taken")
 class ReviewOneTests(EducationSetup):
     """Codex on #185: entity scope, terms that never meet, amounts that are not numbers."""
 
@@ -273,6 +355,54 @@ class ReviewOneTests(EducationSetup):
         self.assertContains(page, "صفر أو أكبر")
 
 
+class ReviewTwoTests(EducationSetup):
+    """Codex on #186: one mark per student, classes on the group's own days only, the class date in the parent's message."""
+
+    def setUp(self):
+        super().setUp()
+        from . import attendance
+
+        self.register = attendance
+        self.class_day = TODAY - timedelta(days=(TODAY.weekday() - 5) % 7)  # the latest Saturday
+        self.saturday = self.group(days="sat")
+        self.yousef = self.student()
+
+    def test_stopped_and_enrolled_again_the_same_day_is_one_mark(self):
+        first = services.enroll(self.yousef, self.saturday, self.owner, start_date=self.class_day - timedelta(days=14))
+        services.stop(first, self.owner, end_date=self.class_day)
+        services.enroll(self.yousef, self.saturday, self.owner, start_date=self.class_day)
+        self.assertEqual(len(self.register.roster_on(self.saturday, self.class_day)), 1)
+        session = self.register.take(self.saturday, self.owner, self.class_day, {})
+        self.assertEqual(session.marks.count(), 1)
+
+    def test_no_class_outside_the_groups_days_or_dates(self):
+        services.enroll(self.yousef, self.saturday, self.owner, start_date=self.class_day - timedelta(days=30))
+        with self.assertRaisesMessage(ValidationError, "مالهاش حصة"):
+            self.register.take(self.saturday, self.owner, self.class_day - timedelta(days=1), {})  # a Friday
+        StudyGroup.objects.filter(pk=self.saturday.pk).update(starts_on=self.class_day)
+        self.saturday.refresh_from_db()
+        with self.assertRaisesMessage(ValidationError, "مالهاش حصة"):
+            self.register.take(self.saturday, self.owner, self.class_day - timedelta(days=7), {})  # before the group began
+        # The group page offers the latest class day, never an off-day.
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("education:group", args=[self.saturday.pk]))
+        self.assertContains(page, f"date={self.class_day.isoformat()}")
+        off = self.client.get(reverse("education:attendance", args=[self.saturday.pk]) + f"?date={(self.class_day - timedelta(days=1)).isoformat()}")
+        self.assertContains(off, "data-off-day")
+        self.assertNotContains(off, "data-save-attendance")
+
+    def test_an_older_class_tells_the_parent_its_date(self):
+        from urllib.parse import unquote
+
+        earlier = self.class_day - timedelta(days=7)
+        services.enroll(self.yousef, self.saturday, self.owner, start_date=earlier - timedelta(days=7))
+        session = self.register.take(self.saturday, self.owner, earlier, {str(self.yousef.pk): "absent"})
+        text = unquote(self.register.parent_message(session.marks.get()))
+        self.assertIn(f"يوم {earlier.isoformat()}", text)
+        self.assertNotIn("النهارده", text)
+        if self.class_day == TODAY:
+            today_text = unquote(self.register.parent_message(self.register.take(self.saturday, self.owner, TODAY, {str(self.yousef.pk): "late"}).marks.get()))
+            self.assertIn("النهارده", today_text)
 class ReviewThreeTests(EducationSetup):
     """Codex on #185, second round."""
 
@@ -312,3 +442,36 @@ class ReviewThreeTests(EducationSetup):
             services.save_student({"name": "يوسف", "payer_name": "محمد", "payer_phone": "123"}, self.owner)
         with self.assertRaisesMessage(ValidationError, "phone number is too short"):
             services.save_student({"name": "Omar", "self_pays": "1", "phone": "12"}, self.owner, lang="en")
+
+
+class ReviewFourTests(EducationSetup):
+    """Codex on #186, second round."""
+
+    def setUp(self):
+        super().setUp()
+        from . import attendance
+
+        self.register = attendance
+        self.class_day = TODAY - timedelta(days=(TODAY.weekday() - 5) % 7)
+        self.saturday = self.group(days="sat")
+        self.yousef = self.student()
+        services.enroll(self.yousef, self.saturday, self.owner, start_date=self.class_day - timedelta(days=30))
+
+    def test_a_recorded_class_can_be_corrected_after_the_group_changed(self):
+        self.register.take(self.saturday, self.owner, self.class_day, {str(self.yousef.pk): "absent"})
+        StudyGroup.objects.filter(pk=self.saturday.pk).update(days="sun", active=False)
+        session = self.register.take(self.saturday, self.owner, self.class_day, {str(self.yousef.pk): "excused"})
+        self.assertEqual(session.marks.get().presence, "excused")
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("education:attendance", args=[self.saturday.pk]) + f"?date={self.class_day.isoformat()}")
+        self.assertContains(page, "data-save-attendance")
+        with self.assertRaisesMessage(ValidationError, "مقفولة"):
+            self.register.take(self.saturday, self.owner, self.class_day - timedelta(days=7), {})  # but no new class on a closed group
+
+    def test_a_malformed_date_is_refused_not_taken_as_today(self):
+        self.client.force_login(self.owner)
+        url = reverse("education:attendance", args=[self.saturday.pk])
+        for bad in ("", "2026-13-40", "yesterday"):
+            with self.subTest(bad=bad):
+                self.assertEqual(self.client.post(url, {"date": bad, f"p_{self.yousef.pk}": "absent"}).status_code, 404)
+        self.assertFalse(self.saturday.sessions.exists())

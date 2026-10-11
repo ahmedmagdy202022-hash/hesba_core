@@ -204,6 +204,23 @@ class Command(BaseCommand):
             edu.enroll(student, groups[n % 2], owner, start_date=today - timedelta(days=35), discount_percent="10" if sibling else "0")
             if n < 4:
                 edu.enroll(student, groups[2], owner, start_date=today - timedelta(days=20))
+        # EDU-002: four weeks of attendance, with a few absences and late arrivals.
+        from education import attendance
+
+        for group in groups:
+            for days_ago in range(28, -1, -1):
+                day = today - timedelta(days=days_ago)
+                if attendance.weekday(day) not in group.weekdays:
+                    continue
+                roster = list(attendance.roster_on(group, day))
+                marks = {}
+                for k, row in enumerate(roster):
+                    if (k + days_ago) % 9 == 0:
+                        marks[str(row.student_id)] = "absent"
+                    elif (k + days_ago) % 11 == 0:
+                        marks[str(row.student_id)] = "late"
+                if roster:
+                    attendance.take(group, owner, day, marks)
 
     def _projects(self, master, owner):
         from projects.services import bill_progress, issue_materials, save_project

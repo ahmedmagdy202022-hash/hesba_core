@@ -191,3 +191,19 @@ html.hs-cam-open,html.hs-cam-open body{overflow:hidden}
 .edu-days{display:flex;flex-wrap:wrap;gap:var(--hs-space-2) var(--hs-space-4);border:0;padding:0;margin:0}
 .edu-days legend{width:100%;margin-bottom:6px}
 .edu-payer{border:1px solid var(--hs-line);border-radius:var(--hs-radius-lg);padding:var(--hs-space-4);margin:var(--hs-space-4) 0}
+/* EDU-002: attendance — big touch targets, one row per student. */
+.edu-low{color:var(--hs-danger);font-weight:700}
+.edu-classes{display:grid;gap:var(--hs-space-3);grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
+.edu-class header{display:grid;gap:4px;margin-bottom:var(--hs-space-2)}
+.edu-marks{display:grid;gap:var(--hs-space-2);margin-bottom:var(--hs-space-4)}
+.edu-mark{display:grid;grid-template-columns:minmax(140px,1fr) auto minmax(140px,1fr);align-items:center;gap:var(--hs-space-3);margin:0;padding:var(--hs-space-3);border:1px solid var(--hs-line);border-radius:var(--hs-radius-lg);background:var(--hs-surface)}
+.edu-mark legend{float:inline-start;padding:0;font-weight:700;color:var(--hs-navy)}
+.edu-mark__choices{display:flex;flex-wrap:wrap;gap:6px}
+.edu-chip{position:relative;cursor:pointer}
+.edu-chip input{position:absolute;opacity:0;inset:0}
+.edu-chip span{display:inline-flex;align-items:center;min-height:40px;padding:0 14px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-pill);font-weight:600}
+.edu-chip input:checked + span{border-color:var(--hs-teal);background:var(--hs-teal-wash);color:var(--hs-teal-deep)}
+.edu-chip--absent input:checked + span{border-color:var(--hs-danger);background:var(--hs-neutral-wash);color:var(--hs-danger)}
+.edu-chip input:focus-visible + span{box-shadow:var(--hs-focus-ring)}
+.edu-mark__note{min-height:40px;padding:0 10px;border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);font:inherit}
+@media (max-width:760px){.edu-mark{grid-template-columns:1fr}}

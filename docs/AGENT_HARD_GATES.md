@@ -700,7 +700,20 @@ Status: RESOLVED — approved by Ahmed on 9 Oct 2026 ("موافق تعمل كل 
   - the permission core: viewing uses `master_data.view_master_data`, and changing uses `master_data.manage_parties`.
 
   The screens appear only on an education install, or in an education entity of a group.
-- **Next (EDU-002 to EDU-004):**
+- **EDU-002 (attendance):**
+  - `ClassSession` is one per group and day, held or cancelled, with the topic covered.
+  - `Attendance` is one mark per student and class: present, late, absent or excused.
+  - The roster is the enrolments running on that day. Unmarked students count as present, and taking a day again corrects it.
+  - A teacher (a user linked to the group's employee) takes attendance for their own groups only; managers can take it for any group.
+  - Attendance rates count held classes only, with late counted as attended.
+  - Absent and late students get a one-tap WhatsApp link to the parent.
+  - No money moves.
+  - **Codex on #186:**
+    - A student stopped and enrolled again on the same day is one row, with one mark.
+    - Attendance is taken only on the group's own weekdays and within its dates, and the group page offers its latest class day.
+    - A message about an older class gives its date instead of "today".
+    - Attendance screens are scoped to the entity being worked in.
+- **Next (EDU-003 to EDU-004):**
   - attendance;
   - monthly invoices through the ordinary sales engine, with a duplicate guard per month;
   - teacher pay;
