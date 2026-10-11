@@ -7,6 +7,7 @@
 <div class="op-field"><label for="sc-visits">{{ words.visits }}</label><input id="sc-visits" name="visits_per_period" inputmode="numeric" value="{% if post %}{{ post.visits_per_period }}{% else %}{{ contract.visits_per_period|default:'0' }}{% endif %}"></div>
 <div class="op-field"><label for="sc-starts">{{ words.starts }}</label><input id="sc-starts" type="date" name="starts_on" required value="{% if post %}{{ post.starts_on }}{% elif contract %}{{ contract.starts_on|date:'Y-m-d' }}{% else %}{{ today|date:'Y-m-d' }}{% endif %}"></div>
 <div class="op-field"><label for="sc-ends">{{ words.ends }}</label><input id="sc-ends" type="date" name="ends_on" value="{% if post %}{{ post.ends_on }}{% else %}{{ contract.ends_on|date:'Y-m-d' }}{% endif %}"></div>
+<div class="op-field"><label for="sc-from">{{ words.billing_from }}</label><input id="sc-from" type="date" name="billing_from" value="{% if post %}{{ post.billing_from }}{% else %}{{ contract.billing_from|date:'Y-m-d' }}{% endif %}"></div>
 {% if contract %}<div class="op-field"><label for="sc-status">{{ words.status }}</label><select id="sc-status" name="status">{% for value, label in statuses %}<option value="{{ value }}"{% if post.status == value or not post and contract.status == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>{% endif %}
 <div class="op-field"><label for="sc-notes">{{ words.notes }}</label><input id="sc-notes" name="notes" maxlength="255" value="{% if post %}{{ post.notes }}{% else %}{{ contract.notes|default:'' }}{% endif %}"></div>
 </div>

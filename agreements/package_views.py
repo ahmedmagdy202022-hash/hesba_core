@@ -107,7 +107,7 @@ def package_list(request):
         else:
             messages.success(request, words["saved"])
             return redirect(f"{reverse('agreements:package', args=[package.pk])}?lang={lang}")
-    every = package_service.with_used(Package.objects.select_related("customer", "service", "invoice"))
+    every = package_service.with_used(package_service.in_scope(Package.objects.select_related("customer", "service", "invoice")))
     packages = list(every[:300])
     labels = package_service.STATE_LABELS[lang]
     rows = []
@@ -123,7 +123,7 @@ def package_detail(request, pk):
     _package_guard(request)
     lang = _lang(request)
     words = WORDS[lang]
-    package = get_object_or_404(Package.objects.select_related("customer", "service", "invoice"), pk=pk)
+    package = get_object_or_404(package_service.in_scope(Package.objects.select_related("customer", "service", "invoice")), pk=pk)
     error = ""
     if request.method == "POST":
         try:

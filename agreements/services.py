@@ -85,7 +85,8 @@ def next_start(contract, start):
 
 
 def period_end(contract, start):
-    return next_start(contract, start) - timedelta(days=1)
+    end = next_start(contract, start) - timedelta(days=1)
+    return min(end, contract.ends_on) if contract.ends_on else end
 
 
 def periods(contract, until):
@@ -94,8 +95,8 @@ def periods(contract, until):
     out, n = [], 0
     while True:
         start = add_months(contract.starts_on, STEP[contract.every] * n)
-        if start > until or (contract.ends_on and start > contract.ends_on):
-            return out
+        if start > until or (contract.ends_on and (start > contract.ends_on or (n > 0 and start == contract.ends_on))):
+            return out  # a period starting on the end day itself is not billed (unless it is the only one)
         out.append(start)
         n += 1
         if n > 1200:  # a hundred years of months: never in practice
@@ -113,7 +114,7 @@ def due_periods(contract, today=None):
         return []
     today = today or timezone.localdate()
     done = billed_periods(contract)
-    return [start for start in periods(contract, today) if start not in done]
+    return [start for start in periods(contract, today) if start not in done and (contract.billing_from is None or start >= contract.billing_from)]
 
 
 def current_period(contract, today=None):
@@ -155,7 +156,8 @@ def _audit(user, action, contract, after, before=None, event=AuditEventType.UPDA
 def _snapshot(contract):
     return {"customer": contract.customer_id, "service": contract.service_id, "amount": str(contract.amount), "every": contract.every,
             "starts_on": contract.starts_on.isoformat(), "ends_on": contract.ends_on.isoformat() if contract.ends_on else "",
-            "visits": contract.visits_per_period, "status": contract.status}
+            "visits": contract.visits_per_period, "status": contract.status,
+            "billing_from": contract.billing_from.isoformat() if contract.billing_from else ""}
 
 
 @transaction.atomic
@@ -174,7 +176,7 @@ def save_contract(data, user, contract=None, lang="ar"):
         amount = Decimal(str(data.get("amount") or "").strip().replace(",", ""))
     except (InvalidOperation, ValueError):
         raise ValidationError(words["amount"])
-    if not amount.is_finite() or amount <= 0 or amount >= AMOUNT_LIMIT:
+    if not amount.is_finite() or money_round(amount) <= 0 or amount >= AMOUNT_LIMIT:  # 0.004 is not an amount
         raise ValidationError(words["amount"])
     every = data.get("every") or Every.MONTH
     if every not in Every.values:
@@ -192,19 +194,38 @@ def save_contract(data, user, contract=None, lang="ar"):
     status = data.get("status") or ContractStatus.ACTIVE
     if status not in ContractStatus.values:
         raise ValidationError(words["status"])
+    billing_from = _date(data.get("billing_from"), words, allow_blank=True)
     creating = contract is None
     before = {} if creating else _snapshot(contract)
     if contract is None:
-        contract = ServiceContract(number=next_in_series(ServiceContract, "number", "SC-", 4), created_by=user)
+        contract = ServiceContract(created_by=user, location=selling_location())
+        was_active = True
     else:
         contract = ServiceContract.objects.select_for_update().get(pk=contract.pk)
         if (contract.starts_on != starts_on or contract.every != every) and billed_periods(contract):
             raise ValidationError(words["locked"])  # billed periods would no longer line up
+        was_active = contract.status == ContractStatus.ACTIVE
     contract.customer, contract.service, contract.amount, contract.every = customer, service, money_round(amount), every
     contract.starts_on, contract.ends_on, contract.visits_per_period, contract.status = starts_on, ends_on, visits, status
     contract.description = (data.get("description") or "").strip()[:255]
     contract.notes = (data.get("notes") or "").strip()[:255]
-    contract.save()
+    if billing_from is not None:
+        contract.billing_from = billing_from
+    elif not was_active and status == ContractStatus.ACTIVE:  # resumed: the months it was on hold are never due
+        current = current_period(contract)
+        contract.billing_from = max(filter(None, (contract.billing_from, current))) if current else contract.billing_from
+    if creating:
+        for attempt in range(5):  # two contracts saved at the same moment took the same number: take the next
+            contract.number = next_in_series(ServiceContract, "number", "SC-", 4)
+            try:
+                with transaction.atomic():
+                    contract.save()
+                break
+            except IntegrityError:
+                if attempt == 4 or not ServiceContract.objects.filter(number=contract.number).exists():
+                    raise
+    else:
+        contract.save()
     _audit(user, "save_service_contract", contract, {"number": contract.number, **_snapshot(contract)}, before,
            AuditEventType.CREATE if creating else AuditEventType.UPDATE)
     return contract
@@ -215,6 +236,14 @@ def selling_location():
     from master_data.models import Location
 
     return entity_scope.locations(Location.objects).filter(active=True, is_selling_location=True).order_by("-is_default", "pk").first()
+
+
+def in_scope(queryset):
+    """The contracts of the entity being worked in (all of them in the whole-group view)."""
+
+    from entities import scope as entity_scope
+
+    return entity_scope.scope(queryset, "location__entity")
 
 
 def draft_invoice(customer, rows, notes, user, location):
@@ -254,14 +283,15 @@ def bill_due(user, today=None, contracts=None, lang="ar"):
     if not user_has_permission(user, MANAGE):
         raise PermissionDenied(words["manage"])
     today = today or timezone.localdate()
-    location = selling_location()
-    if location is None:
-        raise ValidationError(words["setup"])
-    queryset = ServiceContract.objects.filter(status=ContractStatus.ACTIVE)
+    fallback = selling_location()
+    queryset = in_scope(ServiceContract.objects.filter(status=ContractStatus.ACTIVE))
     if contracts is not None:
         queryset = queryset.filter(pk__in=[contract.pk for contract in contracts])
     made = []
-    for contract in queryset.select_for_update().select_related("customer", "service").order_by("pk"):  # two clicks never bill a period twice
+    for contract in queryset.select_for_update(of=("self",)).select_related("customer", "service", "location").order_by("pk"):  # two clicks never bill a period twice
+        location = contract.location if contract.location and contract.location.active else fallback  # billed where it was made
+        if location is None:
+            raise ValidationError(words["setup"])
         for start in due_periods(contract, today):
             bill = _bill_one(contract, start, user, location, words)
             made.append(bill)
@@ -274,7 +304,7 @@ def bill_due(user, today=None, contracts=None, lang="ar"):
 
 def due_count(today=None):
     today = today or timezone.localdate()
-    return sum(len(due_periods(contract, today)) for contract in ServiceContract.objects.filter(status=ContractStatus.ACTIVE))
+    return sum(len(due_periods(contract, today)) for contract in in_scope(ServiceContract.objects.filter(status=ContractStatus.ACTIVE)))
 
 
 def overview(contract, today=None):
@@ -293,9 +323,8 @@ def overview(contract, today=None):
 
 
 def unpaid(contract):
-    """What the contract's posted invoices still have owed."""
+    """What the customer owes now, from their own ledger (payments and returns included), when it is above zero."""
 
-    from django.db.models import Sum
+    from parties.services import balance
 
-    total = contract.bills.filter(invoice__status="posted").aggregate(total=Sum("invoice__remaining_due"))["total"]
-    return money_round(total or ZERO)
+    return max(balance("customer", contract.customer), ZERO)

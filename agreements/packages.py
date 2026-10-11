@@ -65,6 +65,14 @@ def _words(lang):
     return MESSAGES["en" if lang == "en" else "ar"]
 
 
+def in_scope(queryset):
+    """The packages sold in the entity being worked in (through their invoice), all of them in the whole-group view."""
+
+    from entities import scope as entity_scope
+
+    return entity_scope.scope(queryset, "invoice__" + entity_scope.SALES_INVOICE)
+
+
 def with_used(queryset):
     """Packages with their used sessions counted in the same query (``used_count``)."""
 
