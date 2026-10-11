@@ -53,6 +53,7 @@ WORDS = {
         "no_teachers": "مفيش مجموعات ليها مدرس وطريقة أجر. حددها من صفحة المجموعة.", "classes_held": "حصة", "of_fees": "من مصروفات", "a_month": "شهر",
         "report": "تقرير الشهر", "report_intro": "كل مجموعة في الشهر: الطلاب، والحصص، والحضور، والمصروفات اللي اتفوترت، وأجر المدرس، واللي فاضل للمركز.",
         "held": "حصص اتعملت", "left": "فاضل للمركز", "no_report": "مفيش مجموعات شغالة في الشهر ده.", "month_rate": "الحضور",
+        "discard": "احذف المسودة", "discarded": "اتحذفت مسودة {number}؛ الشهر ده يتفوتر تاني لأولياء الأمور دول.",
     },
     "en": {
         "title": "Students & groups", "students": "Students", "groups": "Groups", "courses": "Courses & subjects",
@@ -91,6 +92,7 @@ WORDS = {
         "no_teachers": "No group has a teacher and a way of paying them. Set it on the group's page.", "classes_held": "classes", "of_fees": "of fees", "a_month": "month",
         "report": "Month report", "report_intro": "Each group in the month: students, classes, attendance, fees billed, the teacher's pay and what is left for the centre.",
         "held": "Classes held", "left": "Left for the centre", "no_report": "No groups ran in this month.", "month_rate": "Attendance",
+        "discard": "Discard draft", "discarded": "Draft {number} discarded; this month can be billed again for these parents.",
     },
 }
 
@@ -125,10 +127,12 @@ def _payers(keep=None):
     return Customer.objects.filter(Q(active=True) | Q(pk=keep or 0)).exclude(customer_code="WALK-IN").order_by("name")
 
 
-def _teachers():
+def _teachers(keep=None):
+    """Active staff; a group's own teacher stays listed even after being switched off (Codex on #185)."""
+
     from staff.models import Employee
 
-    return Employee.objects.filter(active=True).order_by("name")
+    return Employee.objects.filter(Q(active=True) | Q(pk=keep or 0)).order_by("name")
 
 
 def _status_label(status, words):
@@ -203,19 +207,27 @@ def student_detail(request, pk):
         row.basis_label = services.BASIS_LABELS[lang][row.group.course.basis]  # a month, a class or the whole course
         row.status_label = _status_label(row.status, words)
     enrolled = {row.group_id for row in enrollments if row.status == EnrollmentStatus.ACTIVE}
+    active_groups = len(enrolled)  # groups the student is in now, not every enrolment ever made
     open_groups = services.same_entity_as(services.scoped(StudyGroup.objects), student).filter(active=True).exclude(pk__in=enrolled).select_related("course")
     summary = register.student_summary(student)
     return render(request, "education/student.html", _base(request, lang, "students", student=student, enrollments=enrollments, open_groups=open_groups,
-                                                           payers=_payers(student.payer_id), error=error, today=timezone.localdate(), summary=summary))
+                                                           payers=_payers(student.payer_id), error=error, today=timezone.localdate(), summary=summary,
+                                                           active_groups=active_groups))
 
 
 # ---- groups ----
 
-def _group_data(request):
+def _group_data(request, group=None):
     data = request.POST.copy()
-    data["course"] = services.scoped(Course.objects).filter(pk=request.POST.get("course") or 0).first()
-    data["teacher"] = _teachers().filter(pk=request.POST.get("teacher") or 0).first()
+    data["course"] = _courses(group).filter(pk=request.POST.get("course") or 0).first()
+    data["teacher"] = _teachers(group.teacher_id if group else None).filter(pk=request.POST.get("teacher") or 0).first()
     return data
+
+
+def _courses(group=None):
+    """Active courses; editing a group keeps its own course listed even when that course was switched off."""
+
+    return services.scoped(Course.objects).filter(Q(active=True) | Q(pk=group.course_id if group else 0))
 
 
 def groups(request):
@@ -229,7 +241,8 @@ def groups(request):
 
 
 def _group_form_context(request, lang, **extra):
-    return _base(request, lang, "groups", courses=services.scoped(Course.objects).filter(active=True), teachers=_teachers(),
+    group = extra.get("group")
+    return _base(request, lang, "groups", courses=_courses(group), teachers=_teachers(group.teacher_id if group else None),
                  pay_choices=list(services.PAY_LABELS[lang].items()), weekdays=[(day, services.DAY_LABELS[lang][day]) for day in Weekday.values], **extra)
 
 
@@ -261,7 +274,7 @@ def group_detail(request, pk):
         action = request.POST.get("action")
         try:
             if action == "edit":
-                services.save_group(_group_data(request), request.user, group, lang)
+                services.save_group(_group_data(request, group), request.user, group, lang)
                 message = words["saved"]
             elif action == "enroll":
                 student = get_object_or_404(services.scoped(Student.objects), pk=request.POST.get("student") or 0)
@@ -309,6 +322,8 @@ def courses(request):
     if request.method == "POST":
         _guard(request, write=True)
         editing = services.scoped(Course.objects).filter(pk=request.POST.get("course") or 0).first()
+        if request.POST.get("course") and editing is None:
+            raise Http404("That course is not in this entity.")  # an edit never turns into a new course (Codex on #185)
         try:
             services.save_course(request.POST, request.user, editing, lang)
         except ValidationError as exc:
@@ -435,7 +450,18 @@ def fees(request):
         if posting:  # a billing run states its month: never bill some other month than the one asked for
             error = billing.MESSAGES[lang]["month"]
         first = billing.month_of(None)
-    if posting and not error:
+    if posting and not error and request.POST.get("action") == "discard":
+        from sales.models import SalesInvoice
+
+        invoice = get_object_or_404(SalesInvoice, pk=request.POST.get("invoice") or 0)
+        try:
+            billing.discard_draft(invoice, request.user, lang)
+        except ValidationError as exc:
+            error = " ".join(exc.messages)
+        else:
+            messages.success(request, words["discarded"].format(number=invoice.invoice_number))
+            return redirect(f"{reverse('education:fees')}?lang={lang}&month={first:%Y-%m}")
+    elif posting and not error:
         from datetime import date
 
         try:

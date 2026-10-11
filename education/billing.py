@@ -34,11 +34,13 @@ MONTHS_EN = ("January", "February", "March", "April", "May", "June", "July", "Au
 MESSAGES = {
     "ar": {"month": "الشهر مش مظبوط.", "future": "مينفعش تعمل فواتير لشهر لسه مجاش.",
            "entity": "اختار الكيان (الفرع) اللي هتعمل فواتيره الأول من أعلى الشاشة؛ كل كيان بيتفوتر على مخزنه.",
-           "invoice_date": "تاريخ الفاتورة مش مظبوط.", "nothing": "مفيش حاجة جديدة تتفوتر في الشهر ده.",
+           "invoice_date": "تاريخ الفاتورة مش مظبوط.", "not_draft": "الفاتورة دي اترحّلت؛ تتلغي من صفحة الفاتورة مش من هنا.",
+           "linked": "الفاتورة دي مربوطة بحاجة تانية ومينفعش تتحذف.", "nothing": "مفيش حاجة جديدة تتفوتر في الشهر ده.",
            "setup": "لازم يكون فيه مخزن بيع نشط (الفاتورة بتتسجل عليه).", "note": "مصروفات {month}"},
     "en": {"month": "The month is not valid.", "future": "A month still to come cannot be billed.",
            "entity": "Choose the entity (branch) to bill first, at the top of the screen; each entity is billed on its own location.",
-           "invoice_date": "The invoice date is not valid.", "nothing": "Nothing new to bill for this month.",
+           "invoice_date": "The invoice date is not valid.", "not_draft": "This invoice is posted; cancel it on the invoice page, not here.",
+           "linked": "This invoice is linked to something else and cannot be removed.", "nothing": "Nothing new to bill for this month.",
            "setup": "An active selling location is needed (the invoice is recorded against it).", "note": "Fees for {month}"},
 }
 
@@ -228,6 +230,37 @@ def bill_month(first, user, *, post=False, invoice_date=None, lang="ar"):
                             after_data={"month": first.isoformat(), "invoices": [invoice.invoice_number for invoice in made], "posted": bool(post),
                                         "total": str(sum((invoice.total_amount for invoice in made), ZERO))})
     return made
+
+
+@transaction.atomic
+def discard_draft(invoice, user, lang="ar"):
+    """Throw away a fee invoice that was never posted, so its month can be billed again (Codex on #187).
+
+    A draft has moved no stock, cash or account, so removing it changes no book; a posted invoice is cancelled on
+    its own page instead. Only invoices the month's billing made, in the entity being worked in, can go this way."""
+
+    from django.db.models import ProtectedError
+
+    from sales.models import SalesInvoice
+
+    from .models import Student
+    from .services import scoped
+
+    words = MESSAGES[lang]
+    invoice = SalesInvoice.objects.select_for_update().get(pk=invoice.pk)
+    charges = invoice.fee_charges.all()
+    if invoice.status != "draft":
+        raise ValidationError(words["not_draft"])
+    if not charges.exists() or charges.exclude(enrollment__student__in=scoped(Student.objects)).exists():
+        raise ValidationError(words["linked"])
+    record = {"invoice": invoice.invoice_number, "customer": invoice.customer.customer_code, "total": str(invoice.total_amount),
+              "charges": [{"enrollment": c.enrollment_id, "month": c.month.isoformat(), "quantity": str(c.quantity), "amount": str(c.amount)} for c in charges]}
+    try:
+        invoice.delete()  # its lines, line taxes and fee charges go with it
+    except ProtectedError:
+        raise ValidationError(words["linked"])
+    AuditLog.objects.create(event_type=AuditEventType.DELETE, actor=user, module="education", action="discard_fee_draft", object_type="sales.SalesInvoice",
+                            object_id=record["invoice"], before_data=record, after_data={})
 
 
 def billed(first):

@@ -156,6 +156,9 @@ def take(group, user, day, marks, *, topic="", cancelled=False, lang="ar"):
             if value not in (None, "") and value not in Presence.values:
                 raise ValidationError(words["presence"])
     session, created = ClassSession.objects.get_or_create(group=group, date=day, defaults={"taken_by": user})
+    # What the class looked like before this save, mark by mark, so a correction can be traced (Codex on #186).
+    before = {} if created else {"status": session.status, "topic": session.topic,
+                                 "marks": {mark.student.code: mark.presence for mark in session.marks.select_related("student")}}
     session.status = SessionStatus.CANCELLED if cancelled else SessionStatus.HELD
     session.topic, session.taken_by = (topic or "").strip()[:255], user
     session.save()
@@ -169,8 +172,9 @@ def take(group, user, day, marks, *, topic="", cancelled=False, lang="ar"):
                                                    note=(marks.get(f"note_{row.student_id}") or "").strip()[:255]) for row in roster])
     counts = dict(session.marks.values_list("presence").annotate(n=Count("id")))
     AuditLog.objects.create(event_type=AuditEventType.CREATE if created else AuditEventType.UPDATE, actor=user, module="education", action="take_attendance",
-                            object_type="education.ClassSession", object_id=str(session.pk), before_data={},
-                            after_data={"group": group.code, "date": day.isoformat(), "status": session.status, "counts": counts})
+                            object_type="education.ClassSession", object_id=str(session.pk), before_data=before,
+                            after_data={"group": group.code, "date": day.isoformat(), "status": session.status, "topic": session.topic, "counts": counts,
+                                        "marks": {mark.student.code: mark.presence for mark in session.marks.select_related("student")}})
     return session
 
 
