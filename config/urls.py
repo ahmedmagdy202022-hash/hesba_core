@@ -86,6 +86,7 @@ urlpatterns = [
     path("staff/", include("staff.urls")),
     # APPT-001: appointments & visits.
     path("appointments/", include("appointments.urls")),
+    path("contracts/", include("agreements.urls")),
     # RESTO-001: tables, orders and the kitchen ticket.
     path("restaurant/", include("restaurant.urls")),
     path("work-orders/", include("workorders.urls")),

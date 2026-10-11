@@ -128,6 +128,12 @@ class Command(BaseCommand):
             self._vet(master, staff, owner, timezone.localdate())
         if "projects" in extras:
             self._projects(master, owner)
+        if "contracts" in extras:
+            self._contracts(master, owner)
+        if "packages" in extras:
+            self._packages(master, owner)
+        if "hours" in extras:
+            self._hours(master, owner)
         if "orders" in extras:
             self._orders(master, owner)
         if "batches" in extras:
@@ -536,6 +542,66 @@ class Command(BaseCommand):
             invoice = bill_progress(project, owner, amount=Decimal(value) * Decimal("0.2"), description="مستخلص رقم 1")
             if n == 0:
                 post_sales_invoice(invoice.id, user=owner)
+
+    def _contracts(self, master, owner):
+        """SVC-002: a monthly contract billed for its past months (two posted, one still a draft) and a
+        quarterly one with a visit a period that is due, so "bill what is due" has work to do."""
+
+        from agreements.services import add_months, bill_due, save_contract
+        from sales.services import post_sales_invoice
+
+        today = timezone.localdate()
+        services = [item for item in master["items"] if not item.is_stock_tracked]
+        if not services:
+            return
+        monthly = next((item for item in services if "شهر" in item.item_name), services[-1])
+        first = save_contract({"customer": master["customers"][3], "service": monthly, "amount": monthly.default_sale_price, "every": "month",
+                               "starts_on": add_months(today, -2).replace(day=1)}, owner)
+        for bill in bill_due(owner, contracts=[first])[:2]:
+            post_sales_invoice(bill.invoice.id, user=owner)
+        save_contract({"customer": master["customers"][2], "service": services[0], "amount": Decimal(services[0].default_sale_price) * 2,
+                       "every": "quarter", "visits_per_period": 1, "description": "عقد زيارات دورية",
+                       "starts_on": today - timedelta(days=10)}, owner)
+
+    def _packages(self, master, owner):
+        """SVC-003: a posted package with two sessions used, and one still on a draft invoice."""
+
+        from agreements.packages import sell_package, use_session
+        from sales.services import post_sales_invoice
+        from staff.models import Employee
+
+        today = timezone.localdate()
+        services = [item for item in master["items"] if not item.is_stock_tracked]
+        if not services:
+            return
+        staff = Employee.objects.filter(active=True).order_by("pk").first()
+        first = sell_package({"customer": master["customers"][0], "service": services[0], "sessions": 6,
+                              "price": (Decimal(services[0].default_sale_price) * 6 * Decimal("0.85")).quantize(Decimal("0.01")),
+                              "expires_on": today + timedelta(days=90), "notes": "خصم 15% على الباكدج"}, owner)
+        post_sales_invoice(first.invoice.id, user=owner)
+        for days in (9, 2):
+            use_session(first, owner, used_on=today - timedelta(days=days), employee=staff)
+        sell_package({"customer": master["customers"][1], "service": services[-1], "sessions": 4}, owner)
+
+    def _hours(self, master, owner):
+        """SVC-003: a week of hours for two customers; one customer's are billed on a draft invoice, one more hour after it."""
+
+        from agreements.hours import bill_hours, log_time
+        from staff.models import Employee
+
+        today = timezone.localdate()
+        services = [item for item in master["items"] if not item.is_stock_tracked]
+        if not services:
+            return
+        staff = Employee.objects.filter(active=True).order_by("pk").first()
+        work = ((6, 0, "2", "مراجعة المستندات"), (5, 1, "1.5", "اجتماع مع العميل"), (4, 0, "3", "إعداد التقرير"),
+                (3, 1, "2.5", "تعديلات مطلوبة"), (2, 0, "1", "متابعة"))
+        for days, customer, hours, description in work:
+            log_time({"customer": master["customers"][customer], "service": services[0], "employee": staff, "hours": hours,
+                      "worked_on": today - timedelta(days=days), "description": description}, owner)
+        bill_hours(master["customers"][0], owner)
+        log_time({"customer": master["customers"][0], "service": services[0], "employee": staff, "hours": "1", "worked_on": today,
+                  "description": "مكالمة متابعة"}, owner)
 
     def _orders(self, master, owner):
         from manufacturing import orders

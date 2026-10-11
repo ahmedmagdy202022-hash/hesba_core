@@ -1,5 +1,6 @@
 """R2-5: the sample business looks like the activity that chose it."""
 
+from decimal import Decimal
 from io import StringIO
 
 from django.core.management import call_command
@@ -221,6 +222,47 @@ class SampleBusinessPerActivityTests(TestCase):
         self.assertEqual(project.budget.count(), 4)
         result = reconciliation()
         self.assertTrue(result["balanced"] and result["ok"], result["rows"])
+
+    def test_a_professional_office_has_contracts_billed_by_the_month(self):
+        from agreements import services as contracts
+        from agreements.models import ServiceContract
+
+        catalog = self.fill("services", "professional")
+        self.assert_a_working_business(catalog)
+        monthly = ServiceContract.objects.get(every="month")
+        self.assertEqual(monthly.service.item_name, "مراجعة حسابات شهرية")
+        self.assertEqual(monthly.bills.filter(invoice__status="posted").count(), 2)
+        self.assertEqual(monthly.bills.filter(invoice__status="draft").count(), 1)
+        self.assertGreater(contracts.unpaid(monthly), 0)
+        self.assertEqual(len(contracts.due_periods(ServiceContract.objects.get(every="quarter"))), 1)
+        self.assertEqual(self.client.get("/contracts/").status_code, 200)
+        for activity, sub in (("services", "general"), ("services", "maintenance"), ("services", "digital_marketing"),
+                              ("contracting", "maintenance_contracts")):
+            self.assertIn("contracts", catalog_for(activity, sub).extras)
+        self.assertNotIn("contracts", catalog_for("services", "beauty").extras)
+
+    def test_a_salon_sells_session_packages(self):
+        from agreements import packages
+        from agreements.models import Package
+
+        catalog = self.fill("services", "beauty")
+        self.assert_a_working_business(catalog)
+        posted, draft = Package.objects.get(sessions=6), Package.objects.get(sessions=4)
+        self.assertEqual((packages.state(posted), packages.used(posted), posted.price), ("active", 2, Decimal("1275.00")))
+        self.assertEqual(packages.state(draft), "draft")
+        self.assertEqual(self.client.get("/contracts/packages/").status_code, 200)
+
+    def test_an_office_bills_its_hours(self):
+        from agreements import hours
+        from agreements.models import TimeEntry
+
+        catalog = self.fill("services", "digital_marketing")
+        self.assert_a_working_business(catalog)
+        self.assertEqual(TimeEntry.objects.count(), 6)
+        self.assertEqual(TimeEntry.objects.filter(invoice__status="draft").count(), 3)
+        waiting = {row["customer"].name: row["hours"] for row in hours.by_customer()}
+        self.assertEqual(waiting, {catalog.customers[0]: Decimal("1.00"), catalog.customers[1]: Decimal("4.00")})
+        self.assertEqual(self.client.get("/contracts/hours/").status_code, 200)
 
     def test_a_factory_makes_its_goods_from_materials(self):
         from manufacturing.models import ProductionOrder, ProductionRun, Recipe

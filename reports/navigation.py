@@ -24,7 +24,7 @@ ACTIVITY_LEAD = {
     "restaurants": ("restaurant", "pos"),
     "medical": ("appointments", "medical"),
     "education": ("education", "classes", "appointments"),
-    "services": ("workorders", "appointments"),
+    "services": ("workorders", "appointments", "packages", "hours", "contracts"),
     "manufacturing": ("manufacturing",),
     "contracting": ("projects",),
 }
@@ -85,6 +85,9 @@ NAV_ITEMS = (
     # MED-007: reception's waiting list, for clinics and medical centres.
     {"key": "queue", "ar": "قائمة الانتظار", "en": "Waiting list", "url_name": "medical:queue", "module": "appointments_visits", "activity": "medical",
      "allow": "medical.queue.can_use"},
+    {"key": "contracts", "ar": "عقود الخدمة", "en": "Service contracts", "url_name": "agreements:list", "module": None, "allow": "agreements.services.can_view"},
+    {"key": "packages", "ar": "باكدجات الجلسات", "en": "Session packages", "url_name": "agreements:packages", "module": None, "allow": "agreements.packages.can_view"},
+    {"key": "hours", "ar": "ساعات العمل", "en": "Hours worked", "url_name": "agreements:hours", "module": None, "allow": "agreements.hours.can_view"},
     {"key": "staff", "ar": "الموظفون", "en": "Employees", "url_name": "staff:list", "module": "employees_technicians", "allow": "reports.navigation.sees_staff"},
     {"key": "expenses", "ar": "المصروفات", "en": "Expenses", "url_name": "expenses:list", "module": "expenses", "permission": "cashboxes.view_expenses"},
     # R2: features switched on in Settings -> Features get their own place in the menu.
@@ -122,6 +125,9 @@ TAB_LABELS = {
     "education": {"ar": "الطلاب", "en": "Students"},
     "classes": {"ar": "حصصي", "en": "Classes"},
     "workorders": {"ar": "الأوامر", "en": "Orders"},
+    "contracts": {"ar": "العقود", "en": "Contracts"},
+    "packages": {"ar": "الباكدجات", "en": "Packages"},
+    "hours": {"ar": "الساعات", "en": "Hours"},
 }
 
 SHELL_WORDS = {

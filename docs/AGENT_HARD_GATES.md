@@ -1049,6 +1049,87 @@ Status: APPROVED — Ahmed approved on 9 Oct 2026 ("خلص كله"), after the a
   - permissions;
   - other activities not seeing the module;
   - the demo data.
+## HG-046 — service contracts billed per period (SVC-002)
+
+Status: IMPLEMENTED for review — new tables only, no protected logic changed. Implemented in branch `claude/svc-002-contracts`. The number is HG-046 because HG-041…HG-045 are taken on open branches.
+
+- **Asked for:** the activity scorecard left services at about 76%. What service businesses were missing most is a recurring contract: a maintenance contract or a monthly retainer billed every period, with its visits.
+- **Files:**
+  - new app `agreements/` (models, `services.py`, views, urls, migration `0001_initial`);
+  - templates under `templates/agreements/`;
+  - a menu entry and icon (`reports/navigation.py`, `templates/partials/shell_icons.html`);
+  - demo seeding (`prepare_demo._contracts`, `reports/demo_catalogs.py` extras).
+- **Schema:**
+  - `ServiceContract`: customer, service item, amount per period, month/quarter/year, start, optional end, visits per period, status;
+  - `ContractBill(contract, period_start, invoice)`, where the invoice is a one-to-one with `PROTECT`.
+- **Money behaviour:**
+  - "bill what is due" makes one ordinary **draft** sales invoice per due period through `taxes.services.create_sales_draft_with_tax`, with no cashbox and nothing paid;
+  - posting it on the sales page is what touches the customer's ledger and the cashbox, exactly as any invoice;
+  - a period whose invoice was cancelled is due again;
+  - the contract row is locked while it is billed, so two clicks never bill one period twice;
+  - once a contract has been billed, its start date and period cannot change (the billed periods would no longer line up). The amount, end date and status can.
+- **Who:** seeing contracts needs `sales.view_sales_invoices`; adding, editing and billing need `sales.create_sales_invoice`. It is shown to services (general, maintenance, professional, digital, other) and to maintenance contractors; a salon, a clinic or a shop gets a 404.
+- **After review:**
+  - each contract keeps the selling location (so the entity) it was made in; it is billed there and listed only in that entity (the whole-group view shows all);
+  - a contract resumed after a pause, or given a "bill from" date, never bills the periods before it;
+  - the last period stops at the contract's end date, and a period starting on the end day is not billed;
+  - "customer balance" comes from the customer's own ledger, so payments and returns count.
+- **Not done:**
+  - no proration: a short last period is billed at the full amount;
+  - visits are read from the customer's done appointments for the contract's service, and a visit is not booked automatically.
+- **Tests:** `agreements/tests.py` covers:
+  - periods at month ends;
+  - due, paused and ended contracts;
+  - refusals and the billed lock;
+  - drafts that leave the ledger untouched until posted;
+  - a cancelled invoice freeing its period;
+  - visits;
+  - the screens in Arabic and English;
+  - each seeded role;
+  - the activities it is hidden from.
+
+  The demo is covered in `reports/tests_demo_catalogs.py`.
+
+## HG-047 — session packages and billable hours (SVC-003)
+
+Status: IMPLEMENTED for review. New tables only; no protected logic changed. Implemented in branch `claude/svc-003-packages-hours`, stacked on SVC-002 (HG-046) in the same `agreements` app.
+
+- **Asked for:** these close the rest of the services gap on the scorecard:
+  - a salon sells packages of sessions;
+  - an office (accountant, consultant, designer) bills the hours it worked.
+- **Files:**
+  - `agreements/packages.py`, `agreements/hours.py` and `agreements/package_views.py`;
+  - migration `agreements/0002`;
+  - templates `agreements/packages.html`, `package.html` and `hours.html`;
+  - the menu and icons;
+  - demo seeding.
+  - `agreements/services.py` gains `draft_invoice()` and `selling_location()`, shared with the contracts. The contracts' billing behaviour is unchanged.
+- **Schema:**
+  - `Package` and `PackageUse` (one row per session, cancelled rather than deleted);
+  - `TimeEntry`, whose invoice is nullable and `PROTECT`.
+- **Money behaviour:**
+  - **Packages:**
+    - a package is sold on one ordinary draft sales invoice for its whole price, and its revenue counts when that invoice is posted, like any service;
+    - spreading revenue over the sessions (deferred revenue) would change ledger posting and is not part of this design;
+    - sessions are used only once the invoice is posted, never below zero, and never on a day after the expiry date;
+    - the package row is locked, so the last session cannot be taken twice;
+    - a package whose invoice was cancelled cannot be used.
+  - **Hours:**
+    - "bill the hours" turns all of one customer's unbilled entries into one draft invoice, with one line per entry (quantity is the hours, price is the rate);
+    - the entries are locked while this happens;
+    - a cancelled invoice frees its hours;
+    - a billed hour cannot be removed.
+- **Who:**
+  - Seeing either screen needs `sales.view_sales_invoices`.
+  - Selling, using sessions and billing need `sales.create_sales_invoice`.
+  - An employee linked to a login can log and remove their own unbilled hours without the invoice permission, and sees only their own.
+  - Where each screen shows:
+    - packages: services in beauty, general and other;
+    - hours: services in professional, digital marketing, general and other.
+- **Known overlap:** MED-005 (#195, not merged) has physiotherapy packages in `medical/` with the same rules. Once both are merged, they can be folded into one; until then each stays in its own activity.
+- **Tests:**
+  - `agreements/tests_packages_hours.py`: 15 tests;
+  - demo tests for a salon and a digital agency in `reports/tests_demo_catalogs.py`.
 
 ## Final gate verification
 
