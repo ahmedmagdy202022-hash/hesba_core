@@ -10,6 +10,7 @@ Results never move money: the tests are billed like any service, on an
 ordinary sales invoice.
 """
 
+import re
 from decimal import Decimal, InvalidOperation
 
 from django.core.exceptions import ValidationError
@@ -29,11 +30,11 @@ FLAG_LABELS = {
 }
 MESSAGES = {
     "ar": {"name": "اكتب اسم التحليل.", "taken": "اسم التحليل ده موجود.", "number": "«{value}» مش رقم.", "range": "الحد الأدنى أكبر من الحد الأعلى.",
-           "date": "تاريخ العينة مش مظبوط.", "future": "تاريخ العينة لسه مجاش.", "nothing": "اكتب نتيجة تحليل واحد على الأقل.",
+           "date": "تاريخ العينة مش مظبوط.", "future": "تاريخ العينة لسه مجاش.", "nothing": "اكتب نتيجة تحليل واحد على الأقل.", "reason": "اكتب سبب المسح (مثلًا: مريض تاني).",
            "result": "نتيجة «{test}»: «{value}» مش رقم؛ لو النتيجة كلام (زي سلبي) اكتبها في خانة الوصف."},
     "en": {"name": "Enter the test's name.", "taken": "A test with this name exists.", "number": "“{value}” is not a number.",
            "range": "The low limit is above the high limit.", "date": "The sample date is not valid.", "future": "The sample date is still to come.",
-           "nothing": "Enter at least one test's result.",
+           "nothing": "Enter at least one test's result.", "reason": "Give the reason for removing it (for example: another patient).",
            "result": "Result of “{test}”: “{value}” is not a number; if the result is a word (like negative), put it in the text box."},
 }
 
@@ -48,16 +49,36 @@ def _words(lang):
     return MESSAGES["en" if lang == "en" else "ar"]
 
 
-def number(raw):
-    """A typed number, or None when blank. Arabic digits and the Arabic decimal sign are read; a comma groups thousands."""
+THOUSANDS = re.compile(r"-?\d{1,3}(,\d{3})+(\.\d+)?")
+DECIMAL_COMMA = re.compile(r"-?\d+,(\d{1,2}|\d{4,})")
 
-    text = str(raw if raw is not None else "").strip().translate(ARABIC_DIGITS).replace("٫", ".").replace("٬", "").replace(",", "")
+
+def _comma(text):
+    """'7,500' and '1,250,000.5' group thousands in threes (as Egyptian lab sheets write a count); '12,5' or '0,75' is a
+    decimal comma (as some devices print it). Anything else with a comma is refused rather than guessed."""
+
+    if THOUSANDS.fullmatch(text):
+        return text.replace(",", "")
+    if DECIMAL_COMMA.fullmatch(text):
+        return text.replace(",", ".")
+    raise InvalidOperation(text)
+
+
+def number(raw):
+    """A typed number, or None when blank. Arabic digits and the Arabic decimal sign are read.
+
+    A comma is read only when it cannot be misread (``_comma``); otherwise the value is refused rather than guessed:
+    a result that silently becomes ten times bigger is worse than a question."""
+
+    text = str(raw if raw is not None else "").strip().translate(ARABIC_DIGITS).replace("٫", ".").replace("٬", ",")
     if not text:
         return None
-    value = Decimal(text)  # InvalidOperation for anything else
-    if not value.is_finite() or abs(value) >= VALUE_LIMIT:
+    if "," in text:
+        text = _comma(text)
+    value = Decimal(text).quantize(Decimal("0.001"))  # InvalidOperation for anything else
+    if not value.is_finite() or abs(value) >= VALUE_LIMIT:  # checked after rounding, so it always fits the column
         raise InvalidOperation(text)
-    return value.quantize(Decimal("0.001"))
+    return value
 
 
 def flag(value, low, high):
@@ -77,6 +98,14 @@ def _limit(raw, words):
         raise ValidationError(words["number"].format(value=str(raw)[:30]))
 
 
+def _test_snapshot(test):
+    def text(value):
+        return "" if value is None else str(value)  # a limit of 0 is a limit
+
+    return {"name": test.name, "unit": test.unit, "low": text(test.low), "high": text(test.high), "active": test.active,
+            "service": test.service_id, "position": test.position}
+
+
 @transaction.atomic
 def save_test(data, user, test=None, lang="ar"):
     words = _words(lang)
@@ -89,7 +118,7 @@ def save_test(data, user, test=None, lang="ar"):
     if low is not None and high is not None and low > high:
         raise ValidationError(words["range"])
     creating = test is None
-    before = {} if creating else {"name": test.name, "unit": test.unit, "low": str(test.low or ""), "high": str(test.high or "")}
+    before = {} if creating else _test_snapshot(test)
     test = test or LabTest()
     test.name, test.unit, test.low, test.high = name, (data.get("unit") or "").strip()[:30], low, high
     test.service = data.get("service")
@@ -101,7 +130,7 @@ def save_test(data, user, test=None, lang="ar"):
     test.save()
     AuditLog.objects.create(event_type=AuditEventType.CREATE if creating else AuditEventType.UPDATE, actor=user, module="medical",
                             action="save_lab_test", object_type="medical.LabTest", object_id=str(test.pk), before_data=before,
-                            after_data={"name": test.name, "unit": test.unit, "low": str(test.low or ""), "high": str(test.high or ""), "active": test.active})
+                            after_data=_test_snapshot(test))
     return test
 
 
@@ -143,14 +172,16 @@ def record_results(patient, taken_on, entries, user, lang="ar"):
     for test, value, text in rows:
         result = LabResult.objects.select_for_update().filter(patient=patient, test=test, taken_on=day).first()
         before = {"value": str(result.value if result.value is not None else ""), "text": result.text_value, "flag": result.flag} if result else {}
-        fields = {"value": value, "text_value": text, "unit": test.unit, "low": test.low, "high": test.high,
-                  "flag": flag(value, test.low, test.high), "entered_by": user}
+        # a correction keeps the range and unit that were on the result that day; a new result takes the test's current ones
+        unit, low, high = (result.unit, result.low, result.high) if result else (test.unit, test.low, test.high)
+        fields = {"value": value, "text_value": text, "unit": unit, "low": low, "high": high, "flag": flag(value, low, high), "entered_by": user}
         if result is None:
             try:
                 with transaction.atomic():
                     result = LabResult.objects.create(patient=patient, test=test, taken_on=day, **fields)
             except IntegrityError:  # entered twice at once: the second corrects the first
                 result = LabResult.objects.select_for_update().get(patient=patient, test=test, taken_on=day)
+                before = {"value": str(result.value if result.value is not None else ""), "text": result.text_value, "flag": result.flag}
         for key, val in fields.items():
             setattr(result, key, val)
         result.save()
@@ -160,6 +191,22 @@ def record_results(patient, taken_on, entries, user, lang="ar"):
                                             "value": str(value if value is not None else ""), "text": text, "flag": result.flag})
         saved.append(result)
     return saved
+
+
+@transaction.atomic
+def remove_result(result, user, reason, lang="ar"):
+    """A result entered by mistake (wrong patient or test) is removed, with its values and the reason kept in the audit."""
+
+    words = _words(lang)
+    reason = (reason or "").strip()[:200]
+    if not reason:
+        raise ValidationError(words["reason"])
+    result = LabResult.objects.select_for_update().get(pk=result.pk)
+    AuditLog.objects.create(event_type=AuditEventType.DELETE, actor=user, module="medical", action="remove_lab_result", object_type="medical.LabResult",
+                            object_id=str(result.pk), before_data={"patient": result.patient_id, "test": result.test_id, "day": result.taken_on.isoformat(),
+                                                                   "value": str(result.value if result.value is not None else ""), "text": result.text_value},
+                            after_data={"reason": reason})
+    result.delete()
 
 
 def by_day(patient):
