@@ -1087,3 +1087,30 @@ class AttendanceRoundFiveTests(AttendanceRoundThreeTests):
         log = AuditLog.objects.filter(action="take_attendance").latest("pk")
         self.assertEqual(log.before_data["marks"], {self.yousef.code: "absent", self.mariam.code: "present"})
         self.assertEqual(log.after_data["marks"], {self.yousef.code: "present", self.mariam.code: "absent"})  # same totals, swapped marks
+
+
+class TeacherPayRoundTwoTests(TeacherPayTests):
+    """Codex on #189, second round."""
+
+    def test_a_paid_month_keeps_its_teacher_and_rate_after_the_group_changes(self):
+        from staff.services import save_employee
+
+        self.set_pay("monthly", "1000")
+        self.pay.pay(self.teacher, self.month, "1000", self.cashbox, self.owner)
+        newcomer = save_employee({"name": "أ. سامي"}, self.owner)
+        StudyGroup.objects.filter(pk=self.saturday.pk).update(teacher=newcomer, teacher_rate=D("1500"))
+        rows = {row["teacher"].pk: row for row in self.pay.teacher_rows(self.month)}
+        self.assertEqual(set(rows), {self.teacher.pk})  # the month stays the first teacher's, fully paid
+        self.assertEqual((rows[self.teacher.pk]["due"], rows[self.teacher.pk]["remaining"]), (D("1000.00"), D("0")))
+        next_month = self.billing.month_end(self.month) + timedelta(days=1)
+        self.saturday.refresh_from_db()
+        self.assertEqual(self.pay.group_due(self.saturday, next_month)["teacher"], newcomer)  # months to come follow the group
+
+    def test_a_switched_off_teacher_can_still_be_paid_what_is_owed(self):
+        from staff.models import Employee
+
+        self.set_pay("monthly", "700")
+        Employee.objects.filter(pk=self.teacher.pk).update(active=False)
+        self.client.force_login(self.owner)
+        self.client.post(reverse("education:teachers"), {"month": f"{self.month:%Y-%m}", "teacher": self.teacher.pk, "amount": "700", "cashbox": self.cashbox.pk})
+        self.assertEqual(self.pay.owed(self.teacher, self.month), D("0"))

@@ -725,6 +725,9 @@ Status: RESOLVED — approved by Ahmed on 9 Oct 2026 ("موافق تعمل كل 
   - **New schema, education app only:**
     - `StudyGroup.teacher_pay` (none / per class held / share of the group's fees / fixed per month) and `StudyGroup.teacher_rate`.
     - A new `TeacherPayment` table: teacher, month, amount, and a one-to-one link to the `Expense` that paid it. Migration `education/0004`.
+    - A new `GroupPayTerm` table (migration `education/0005`): the teacher, pay basis and rate of each group for a month, frozen when that month is first paid.
+      - Editing a group afterwards changes only the months still to pay.
+      - A payment can never drop out of its month or be made twice.
   - **Paying a teacher:** `expenses.services.record_expense`, called unchanged, under a new "Teacher pay" category (`TEACHER-PAY`).
     - The cash leaves the chosen cashbox through the existing cashbox operation.
     - The payment shows in the expenses list and comes off profit.

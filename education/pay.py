@@ -21,7 +21,7 @@ from config.money import money_round
 
 from . import services
 from .billing import _live, month_end, month_label
-from .models import ClassSession, Enrollment, FeeCharge, SessionStatus, StudyGroup, TeacherPay, TeacherPayment
+from .models import ClassSession, Enrollment, FeeCharge, GroupPayTerm, SessionStatus, StudyGroup, TeacherPay, TeacherPayment
 
 ZERO = Decimal("0")
 PAY_VIEW = "cashboxes.view_expenses"
@@ -48,17 +48,32 @@ def _runs_in(group, first, last):
     return not (group.starts_on and group.starts_on > last) and not (group.ends_on and group.ends_on < first)
 
 
+def terms(group, first):
+    """(teacher, basis, rate) for the group's month: frozen once the month was paid, else the group's own."""
+
+    frozen = GroupPayTerm.objects.filter(group=group, month=first).select_related("teacher").first()
+    if frozen is not None:
+        return frozen.teacher, frozen.teacher_pay, frozen.teacher_rate
+    return group.teacher, group.teacher_pay, group.teacher_rate or ZERO
+
+
 def group_due(group, first):
-    """What the group owes its teacher for the month: {"units", "due"} (units: classes held, fees billed, or 1 month)."""
+    """What the group owes its teacher for the month: {"teacher", "basis", "rate", "units", "due"}
+    (units: classes held, fees billed, or 1 month)."""
 
     last = month_end(first)
-    rate = group.teacher_rate or ZERO
-    if group.teacher_id is None or group.teacher_pay == TeacherPay.NONE or not _runs_in(group, first, last):
-        return {"units": ZERO, "due": ZERO}
-    if group.teacher_pay == TeacherPay.SESSION:
+    teacher, basis, rate = terms(group, first)
+    line = {"teacher": teacher, "basis": basis, "rate": rate}
+    if teacher is None or basis == TeacherPay.NONE or not _runs_in(group, first, last):
+        return {**line, "units": ZERO, "due": ZERO}
+    return {**line, **_due(group, first, last, basis, rate)}
+
+
+def _due(group, first, last, basis, rate):
+    if basis == TeacherPay.SESSION:
         held = ClassSession.objects.filter(group=group, status=SessionStatus.HELD, date__gte=first, date__lte=last).count()
         return {"units": Decimal(held), "due": money_round(held * rate)}
-    if group.teacher_pay == TeacherPay.PERCENT:
+    if basis == TeacherPay.PERCENT:
         fees = _live(FeeCharge.objects.filter(enrollment__group=group, month=first)).aggregate(total=Sum("amount"))["total"] or ZERO
         return {"units": fees, "due": money_round(fees * rate / Decimal("100"))}
     # A fixed month is owed when the group had students in it.
@@ -74,18 +89,32 @@ def _paid(teacher, first):
 def teacher_rows(first):
     """Per teacher for the month: [{teacher, groups: [{group, units, due}], due, paid, remaining}], by name."""
 
-    groups = (services.scoped(StudyGroup.objects).filter(teacher__isnull=False).exclude(teacher_pay=TeacherPay.NONE)
-              .select_related("teacher", "course").order_by("teacher__name", "course__name", "name"))
+    frozen = GroupPayTerm.objects.filter(month=first).values_list("group_id", flat=True)
+    groups = (services.scoped(StudyGroup.objects).filter((Q(teacher__isnull=False) & ~Q(teacher_pay=TeacherPay.NONE)) | Q(pk__in=frozen))
+              .select_related("teacher", "course").order_by("course__name", "name"))
     rows = OrderedDict()
     for group in groups:
         line = group_due(group, first)
-        row = rows.setdefault(group.teacher_id, {"teacher": group.teacher, "groups": [], "due": ZERO})
+        if line["teacher"] is None or line["basis"] == TeacherPay.NONE:
+            continue
+        row = rows.setdefault(line["teacher"].pk, {"teacher": line["teacher"], "groups": [], "due": ZERO})
         row["groups"].append({"group": group, **line})
         row["due"] += line["due"]
     for row in rows.values():
         row["paid"] = _paid(row["teacher"], first)
         row["remaining"] = max(row["due"] - row["paid"], ZERO)
-    return list(rows.values())
+    return sorted(rows.values(), key=lambda row: row["teacher"].name)
+
+
+def _freeze(teacher, first):
+    """Paying a month fixes how each of this teacher's groups pays for it."""
+
+    for row in teacher_rows(first):
+        if row["teacher"].pk != teacher.pk:
+            continue
+        for line in row["groups"]:
+            GroupPayTerm.objects.get_or_create(group=line["group"], month=first,
+                                               defaults={"teacher": teacher, "teacher_pay": line["basis"], "teacher_rate": line["rate"]})
 
 
 def owed(teacher, first):
@@ -134,6 +163,7 @@ def pay(teacher, first, amount, cashbox, user, *, pay_date=None, lang="ar"):
     expense = record_expense(category=_category(words), cashbox=cashbox, amount=amount,
                              expense_date=pay_date or timezone.localdate(),  # the cash leaves on the day it is paid
                              description=words["description"].format(teacher=teacher.name, month=label), user=user, payee=teacher.name)
+    _freeze(teacher, first)
     payment = TeacherPayment.objects.create(teacher=teacher, month=first, amount=expense.amount, expense=expense, entity=services.owner_entity(), created_by=user)
     AuditLog.objects.create(event_type=AuditEventType.CREATE, actor=user, module="education", action="pay_teacher", object_type="education.TeacherPayment",
                             object_id=str(payment.pk), before_data={},

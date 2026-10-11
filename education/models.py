@@ -226,3 +226,21 @@ class TeacherPayment(models.Model):
     class Meta:
         ordering = ["-month", "pk"]
         indexes = [models.Index(fields=["teacher", "month"])]
+
+
+class GroupPayTerm(models.Model):
+    """EDU-004 (Codex on #189): how a group's teacher was paid for a month, frozen when that month is first paid.
+
+    Editing the group afterwards (another teacher, another rate) changes the months still to pay, never one
+    already paid, so a payment cannot vanish from its month or be made twice for it.
+    """
+
+    group = models.ForeignKey(StudyGroup, on_delete=models.CASCADE, related_name="pay_terms")
+    month = models.DateField()
+    teacher = models.ForeignKey("staff.Employee", on_delete=models.PROTECT, related_name="+")
+    teacher_pay = models.CharField(max_length=10, choices=TeacherPay.choices)
+    teacher_rate = models.DecimalField(max_digits=12, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["group", "month"], name="education_one_pay_term_per_group_month")]

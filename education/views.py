@@ -541,7 +541,9 @@ def teachers(request):
         try:
             if billing.month_of(raw) != first or not raw:
                 raise ValidationError(billing.MESSAGES[lang]["month"])  # a payment states its month
-            teacher = Employee.objects.filter(pk=request.POST.get("teacher") or 0, active=True).first()
+            # A teacher switched off since still gets what is owed: the month's own rows decide, not current employment (Codex on #189).
+            owed_to = {row["teacher"].pk for row in pay.teacher_rows(first) if row["remaining"] > 0}
+            teacher = Employee.objects.filter(pk=request.POST.get("teacher") or 0).filter(pk__in=owed_to).first()
             cashbox = entity_scope.cashboxes(Cashbox.objects).filter(active=True, pk=request.POST.get("cashbox") or 0).first()
             payment = pay.pay(teacher, first, request.POST.get("amount"), cashbox, request.user, lang=lang)
         except ValidationError as exc:
@@ -552,7 +554,8 @@ def teachers(request):
     rows = pay.teacher_rows(first)
     for row in rows:
         for line in row["groups"]:
-            line["basis"] = services.PAY_LABELS[lang][line["group"].teacher_pay]
+            line["basis_code"] = line["basis"]
+            line["basis"] = services.PAY_LABELS[lang][line["basis"]]
     return render(request, "education/teachers.html", _base(request, lang, "teachers", first=first, label=billing.month_label(first, lang), rows=rows,
                                                             error=error, can_pay=user_has_permission(request.user, pay.PAY_RECORD),
                                                             cashboxes=entity_scope.cashboxes(Cashbox.objects).filter(active=True),
