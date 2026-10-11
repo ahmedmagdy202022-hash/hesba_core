@@ -12,6 +12,7 @@ month again bills only what is new; a cancelled invoice frees its month.
 """
 
 import calendar
+import re
 from collections import OrderedDict
 from datetime import date
 from decimal import Decimal
@@ -31,9 +32,13 @@ MONTHS_AR = ("يناير", "فبراير", "مارس", "أبريل", "مايو",
 MONTHS_EN = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
 
 MESSAGES = {
-    "ar": {"month": "الشهر مش مظبوط.", "future": "مينفعش تعمل فواتير لشهر لسه مجاش.", "nothing": "مفيش حاجة جديدة تتفوتر في الشهر ده.",
+    "ar": {"month": "الشهر مش مظبوط.", "future": "مينفعش تعمل فواتير لشهر لسه مجاش.",
+           "entity": "اختار الكيان (الفرع) اللي هتعمل فواتيره الأول من أعلى الشاشة؛ كل كيان بيتفوتر على مخزنه.",
+           "invoice_date": "تاريخ الفاتورة مش مظبوط.", "nothing": "مفيش حاجة جديدة تتفوتر في الشهر ده.",
            "setup": "لازم يكون فيه مخزن بيع نشط (الفاتورة بتتسجل عليه).", "note": "مصروفات {month}"},
-    "en": {"month": "The month is not valid.", "future": "A month still to come cannot be billed.", "nothing": "Nothing new to bill for this month.",
+    "en": {"month": "The month is not valid.", "future": "A month still to come cannot be billed.",
+           "entity": "Choose the entity (branch) to bill first, at the top of the screen; each entity is billed on its own location.",
+           "invoice_date": "The invoice date is not valid.", "nothing": "Nothing new to bill for this month.",
            "setup": "An active selling location is needed (the invoice is recorded against it).", "note": "Fees for {month}"},
 }
 
@@ -46,10 +51,12 @@ def month_of(raw):
         return today.replace(day=1)
     if hasattr(raw, "year"):
         return raw.replace(day=1)
+    text = str(raw).strip()
+    if not re.fullmatch(r"\d{4}-\d{2}", text):  # the whole value, not a valid start with anything after it
+        raise ValidationError(MESSAGES["ar"]["month"])
     try:
-        year, month = (int(part) for part in str(raw).strip()[:7].split("-"))
-        return date(year, month, 1)
-    except (TypeError, ValueError):
+        return date(int(text[:4]), int(text[5:]), 1)
+    except ValueError:
         raise ValidationError(MESSAGES["ar"]["month"])
 
 
@@ -190,10 +197,15 @@ def bill_month(first, user, *, post=False, invoice_date=None, lang="ar"):
     from master_data.models import Customer
     from sales.services import post_sales_invoice
 
+    from entities.current import current_entity
+    from entities.services import is_multi_entity
+
     words = MESSAGES[lang]
     first = month_of(first)
     if first > timezone.localdate().replace(day=1):
         raise ValidationError(words["future"])
+    if current_entity() is None and is_multi_entity():
+        raise ValidationError(words["entity"])  # the whole group at once would put every branch's fees on one location (Codex on #187)
     invoice_date = invoice_date or min(timezone.localdate(), month_end(first))
     payers = {line["enrollment"].student.payer_id for line in due_lines(first)}
     made = []

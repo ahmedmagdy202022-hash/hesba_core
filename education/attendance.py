@@ -107,7 +107,14 @@ def groups_on(day, user=None):
     if user is not None and not services.can_view(user):
         teacher = teacher_of(user)
         rows = rows.filter(teacher=teacher) if teacher else rows.none()
-    return [group for group in rows if code in group.weekdays]
+    scheduled = [group for group in rows if code in group.weekdays]
+    # A class already recorded that day stays listed even after its group was closed or its days changed,
+    # so whoever took it (a teacher who sees nothing else, too) can still open and correct it (Codex on #186).
+    recorded = services.scoped(StudyGroup.objects).filter(sessions__date=day).exclude(pk__in=[group.pk for group in scheduled]).select_related("course", "teacher")
+    if user is not None and not services.can_view(user):
+        teacher = teacher_of(user)
+        recorded = recorded.filter(teacher=teacher) if teacher else recorded.none()
+    return scheduled + list(recorded.order_by("start_time", "name"))
 
 
 def _date(raw, words):

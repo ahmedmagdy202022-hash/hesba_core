@@ -32,11 +32,13 @@ MESSAGES = {
     "ar": {"future": "مينفعش تدفع عن شهر لسه مجاش.", "amount": "المبلغ لازم يكون أكبر من صفر.",
            "too_much": "المبلغ أكبر من الباقي للمدرس في الشهر ده ({remaining}).", "cashbox": "اختار الخزنة اللي هيتصرف منها.",
            "category": "بند «أجور المدرسين» في المصروفات متوقف. فعّله من إعدادات المصروفات الأول.",
-           "description": "أجر {teacher} — {month}", "teacher": "اختار المدرس."},
+           "description": "أجر {teacher} — {month}", "teacher": "اختار المدرس.",
+           "entity": "اختار الكيان (الفرع) الأول من أعلى الشاشة؛ أجور كل كيان بتتدفع من خزنته."},
     "en": {"future": "A month still to come cannot be paid.", "amount": "The amount must be more than zero.",
            "too_much": "The amount is more than the teacher is still owed for this month ({remaining}).", "cashbox": "Choose the cashbox to pay from.",
            "category": "The “Teacher pay” expense category is switched off. Turn it on in the expense settings first.",
-           "description": "Pay for {teacher} — {month}", "teacher": "Choose the teacher."},
+           "description": "Pay for {teacher} — {month}", "teacher": "Choose the teacher.",
+           "entity": "Choose the entity (branch) first, at the top of the screen; each entity pays its teachers from its own cashbox."},
 }
 
 
@@ -107,7 +109,12 @@ def pay(teacher, first, amount, cashbox, user, *, pay_date=None, lang="ar"):
     from expenses.services import record_expense
     from staff.models import Employee
 
+    from entities.current import current_entity
+    from entities.services import is_multi_entity
+
     words = MESSAGES[lang]
+    if current_entity() is None and is_multi_entity():
+        raise ValidationError(words["entity"])  # as with billing: the whole group at once would mix the branches' pay
     if teacher is None:
         raise ValidationError(words["teacher"])
     if cashbox is None:

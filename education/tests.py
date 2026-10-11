@@ -880,3 +880,135 @@ class TeacherPayTests(EducationSetup):
         services.save_group({"course": self.maths, "name": "مجموعة الأحد", "days": "sun", "start_time": time(18)}, self.owner, group)
         group.refresh_from_db()
         self.assertEqual(group.teacher_pay, "percent")  # a form without the fields keeps them
+
+
+class GroupRoundFourTests(EducationSetup):
+    """Codex on #185, fourth round."""
+
+    def test_editing_a_student_keeps_a_switched_off_payer(self):
+        other_parent = make_customer(customer_code="CUS-OTHER", name="أ ولي أمر تاني")
+        student = self.student()
+        Customer.objects.filter(pk=student.payer_id).update(active=False)
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("education:student", args=[student.pk])).content.decode()
+        self.assertIn(f'<option value="{student.payer_id}" selected>', page)
+        self.client.post(reverse("education:student", args=[student.pk]), {"action": "edit", "name": "يوسف محمد علي", "payer": student.payer_id})
+        student.refresh_from_db()
+        self.assertNotEqual(student.payer_id, other_parent.pk)
+        self.assertEqual(student.name, "يوسف محمد علي")
+
+    def test_a_late_class_running_past_midnight_clashes_with_the_next_morning(self):
+        services.save_group({"course": self.maths, "name": "سهرة السبت", "teacher": self.teacher, "days": "sat", "start_time": time(23),
+                             "duration_minutes": "120"}, self.owner)  # Saturday 23:00 – Sunday 01:00
+        with self.assertRaisesMessage(ValidationError, "أ. محمود"):
+            services.save_group({"course": self.maths, "name": "فجر الأحد", "teacher": self.teacher, "days": "sun", "start_time": time(0, 30),
+                                 "duration_minutes": "60"}, self.owner)
+        self.assertTrue(services.save_group({"course": self.maths, "name": "ضهر الأحد", "teacher": self.teacher, "days": "sun", "start_time": time(12),
+                                             "duration_minutes": "60"}, self.owner).pk)
+        # Friday night into Saturday wraps round the week.
+        services.save_group({"course": self.maths, "name": "سهرة الجمعة", "room": "قاعة 9", "days": "fri", "start_time": time(23, 30),
+                             "duration_minutes": "90"}, self.owner)
+        with self.assertRaisesMessage(ValidationError, "قاعة 9"):
+            services.save_group({"course": self.maths, "name": "بدري السبت", "room": "قاعة 9", "days": "sat", "start_time": time(0, 15),
+                                 "duration_minutes": "30"}, self.owner)
+
+    def test_the_clash_check_takes_the_teacher_and_entity_locks(self):
+        from unittest import mock
+
+        from staff.models import Employee
+
+        with mock.patch.object(Employee.objects, "select_for_update", wraps=Employee.objects.select_for_update) as teacher_lock:
+            self.group()
+        self.assertTrue(teacher_lock.called)
+
+    def test_a_capacity_too_big_for_the_column_is_a_message(self):
+        with self.assertRaisesMessage(ValidationError, "السعة"):
+            services.save_group({"course": self.maths, "name": "ضخمة", "days": "sat", "capacity": "2147483648"}, self.owner)
+
+    def test_edits_record_what_changed(self):
+        student = self.student()
+        old_payer = student.payer.customer_code
+        new_parent = make_customer(customer_code="CUS-NEW", name="ولي أمر جديد")
+        services.save_student({"name": student.name, "payer": new_parent}, self.owner, student)
+        log = AuditLog.objects.filter(action="edit_student").latest("pk")
+        self.assertEqual((log.before_data["payer"], log.after_data["payer"]), (old_payer, "CUS-NEW"))
+        group = self.group(capacity="10")
+        services.save_group({"course": self.maths, "name": group.name, "teacher": self.teacher, "room": "قاعة 5", "days": "sat,tue",
+                             "start_time": time(16), "duration_minutes": "90", "capacity": "12"}, self.owner, group)
+        log = AuditLog.objects.filter(action="edit_group").latest("pk")
+        self.assertEqual((log.before_data["room"], log.after_data["room"]), ("قاعة 1", "قاعة 5"))
+        self.assertEqual((log.before_data["capacity"], log.after_data["capacity"]), (10, 12))
+
+
+class AttendanceRoundFourTests(AttendanceRoundThreeTests):
+    """Codex on #186, fourth round."""
+
+    def test_a_teacher_can_still_reach_a_recorded_class_after_its_days_change(self):
+        from hesba_testing.factories import make_role
+
+        teacher_user = make_user(username="edu_teacher_history")
+        make_user_profile(user=teacher_user, role=make_role("ROLE-TEACHER-H"))
+        self.teacher.user = teacher_user
+        self.teacher.save()
+        self.register.take(self.saturday, self.owner, self.class_day, {str(self.mariam.pk): "absent"})
+        StudyGroup.objects.filter(pk=self.saturday.pk).update(days="sun", active=False)  # moved and closed afterwards
+        self.client.force_login(teacher_user)
+        page = self.client.get(reverse("education:today") + f"?date={self.class_day.isoformat()}")
+        self.assertContains(page, f'data-take="{self.saturday.pk}"')
+        form = self.client.get(reverse("education:attendance", args=[self.saturday.pk]) + f"?date={self.class_day.isoformat()}")
+        self.assertEqual(form.status_code, 200)
+        self.client.post(reverse("education:attendance", args=[self.saturday.pk]),
+                         {"date": self.class_day.isoformat(), f"p_{self.mariam.pk}": "excused", f"p_{self.yousef.pk}": "present"})
+        self.assertEqual(self.saturday.sessions.get().marks.get(student=self.mariam).presence, "excused")
+
+
+class FeesRoundThreeTests(MonthlyFeesTests):
+    """Codex on #187, third round."""
+
+    def test_the_whole_group_cannot_bill_every_branch_on_one_location(self):
+        from entities.current import working_in
+        from entities.models import Entity
+        from sales.models import SalesInvoice
+
+        Entity.objects.create(code="E-EDU-B", name_ar="فرع تاني", activity_slug="education", sub_activity_slug="tutoring_center")
+        with self.assertRaisesMessage(ValidationError, "اختار الكيان"):
+            self.billing.bill_month(self.month, self.owner)
+        self.assertFalse(SalesInvoice.objects.exists())
+        self.client.force_login(self.owner)
+        self.assertContains(self.client.get(reverse("education:fees")), "data-needs-entity")
+        from entities.services import main_entity
+
+        with working_in(main_entity()):
+            self.assertEqual(len(self.billing.bill_month(self.month, self.owner)), 1)
+
+    def test_a_month_with_anything_after_it_bills_nothing(self):
+        from sales.models import SalesInvoice
+
+        with self.assertRaises(ValidationError):
+            self.billing.month_of("2026-10garbage")
+        self.client.force_login(self.owner)
+        response = self.client.post(reverse("education:fees"), {"month": f"{self.month:%Y-%m}garbage", "post": "1"})
+        self.assertContains(response, "الشهر مش مظبوط")
+        self.assertFalse(SalesInvoice.objects.exists())
+
+    def test_a_bad_invoice_date_bills_nothing(self):
+        from sales.models import SalesInvoice
+
+        self.client.force_login(self.owner)
+        response = self.client.post(reverse("education:fees"), {"month": f"{self.month:%Y-%m}", "invoice_date": "2026-02-31", "post": "1"})
+        self.assertContains(response, "تاريخ الفاتورة مش مظبوط")
+        self.assertFalse(SalesInvoice.objects.exists())
+
+
+class TeacherPayEntityTests(TeacherPayTests):
+    def test_the_whole_group_cannot_pay_a_teacher_across_branches(self):
+        from entities.current import working_in
+        from entities.models import Entity
+        from entities.services import main_entity
+
+        self.set_pay("monthly", "500")
+        Entity.objects.create(code="E-EDU-P", name_ar="فرع تالت", activity_slug="education", sub_activity_slug="tutoring_center")
+        with self.assertRaisesMessage(ValidationError, "اختار الكيان"):
+            self.pay.pay(self.teacher, self.month, "500", self.cashbox, self.owner)
+        with working_in(main_entity()):
+            self.assertEqual(self.pay.pay(self.teacher, self.month, "500", self.cashbox, self.owner).amount, D("500.00"))
