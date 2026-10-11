@@ -20,6 +20,8 @@ from audit.models import AuditEventType, AuditLog
 from config.money import money_round
 from permissions.services import user_has_permission
 
+from sales.models import SalesInvoice
+
 from .models import TimeEntry
 from .services import MANAGE, VIEW, ZERO, _date, draft_invoice, selling_location
 
@@ -104,7 +106,7 @@ def log_time(data, user, lang="ar"):
     hours = _decimal(data.get("hours") or "", words["hours"])
     if hours < Decimal("0.25") or hours > MAX_HOURS:
         raise ValidationError(words["hours"])
-    raw_rate = data.get("rate")
+    raw_rate = data.get("rate") if manager else None  # only someone who may price an invoice sets a rate; others bill at the service's price
     rate = _decimal(raw_rate, words["rate"]) if raw_rate not in (None, "") else Decimal(service.default_sale_price or 0)
     if rate < 0 or rate >= RATE_LIMIT:
         raise ValidationError(words["rate"])
@@ -123,12 +125,13 @@ def log_time(data, user, lang="ar"):
 @transaction.atomic
 def remove_entry(entry, user, lang="ar"):
     words = _words(lang)
-    entry = TimeEntry.objects.select_for_update(of=("self",)).select_related("invoice").get(pk=entry.pk)  # Postgres: never lock the nullable invoice side
+    entry = TimeEntry.objects.select_for_update().get(pk=entry.pk)
     if not user_has_permission(user, MANAGE):
         own = _employee_of(user)
         if own is None or entry.employee_id != own.pk:
             raise PermissionDenied(words["not_yours"])
-    if entry.invoice_id and entry.invoice.status != "cancelled":
+    # the invoice is read after the lock, so an hour billed while this waited is seen as billed
+    if entry.invoice_id and SalesInvoice.objects.filter(pk=entry.invoice_id).exclude(status="cancelled").exists():
         raise ValidationError(words["billed"])
     before = {"customer": entry.customer_id, "worked_on": entry.worked_on.isoformat(), "hours": str(entry.hours), "rate": str(entry.rate)}
     _audit(user, "remove_time_entry", entry, {}, before, AuditEventType.DELETE)
@@ -163,11 +166,14 @@ def bill_hours(customer, user, lang="ar"):
     return invoice
 
 
-def by_customer():
-    """Unbilled hours per customer: [{customer, hours, amount, entries}], the most owed first."""
+def by_customer(employee=None):
+    """Unbilled hours per customer: [{customer, hours, amount, entries}], the most owed first. With ``employee``, only theirs."""
 
     groups = {}
-    for entry in unbilled().select_related("customer", "service", "employee").order_by("worked_on", "pk"):
+    entries = unbilled().select_related("customer", "service", "employee").order_by("worked_on", "pk")
+    if employee is not None:
+        entries = entries.filter(employee=employee)
+    for entry in entries:
         row = groups.setdefault(entry.customer_id, {"customer": entry.customer, "hours": ZERO, "amount": ZERO, "entries": []})
         entry.amount = money_round(entry.hours * entry.rate)
         row["hours"] += entry.hours

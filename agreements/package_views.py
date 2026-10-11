@@ -68,6 +68,12 @@ def _employees():
     return Employee.objects.filter(active=True).order_by("name")
 
 
+def _number(raw):
+    """A posted id, or 0 (which finds nothing) when it is not a number."""
+
+    return int(raw) if str(raw or "").isdigit() else 0
+
+
 def _pick(model, raw, **filters):
     return model.objects.filter(pk=raw or 0, **filters).first() if str(raw or "").isdigit() else None
 
@@ -101,14 +107,15 @@ def package_list(request):
         else:
             messages.success(request, words["saved"])
             return redirect(f"{reverse('agreements:package', args=[package.pk])}?lang={lang}")
-    packages = list(Package.objects.select_related("customer", "service", "invoice")[:300])
+    every = package_service.with_used(Package.objects.select_related("customer", "service", "invoice"))
+    packages = list(every[:300])
     labels = package_service.STATE_LABELS[lang]
     rows = []
     for package in packages:
-        used = package_service.used(package)
         status = package_service.state(package)
-        rows.append({"package": package, "used": used, "left": max(package.sessions - used, 0), "state": status, "state_label": labels[status]})
-    return render(request, "agreements/packages.html", _package_base(request, lang, rows=rows, totals=package_service.totals(packages), error=error,
+        rows.append({"package": package, "used": package_service.used(package), "left": package_service.remaining(package), "state": status,
+                     "state_label": labels[status]})
+    return render(request, "agreements/packages.html", _package_base(request, lang, rows=rows, totals=package_service.totals(every), error=error,
                                                                     post=request.POST if error else {}))
 
 
@@ -121,7 +128,7 @@ def package_detail(request, pk):
     if request.method == "POST":
         try:
             if request.POST.get("action") == "cancel_use":
-                use = get_object_or_404(PackageUse, pk=request.POST.get("use") or 0, package=package)
+                use = get_object_or_404(PackageUse, pk=_number(request.POST.get("use")), package=package)
                 package_service.cancel_use(use, request.user, lang)
                 messages.success(request, words["cancel_ok"])
             else:
@@ -158,12 +165,12 @@ def hours_home(request):
         action = request.POST.get("action")
         try:
             if action == "bill":
-                customer = get_object_or_404(Customer, pk=request.POST.get("customer") or 0)
+                customer = get_object_or_404(Customer, pk=_number(request.POST.get("customer")))
                 invoice = hours_service.bill_hours(customer, request.user, lang)
                 messages.success(request, words["billed_ok"].format(number=invoice.invoice_number))
                 return redirect(f"{reverse('sales:detail', args=[invoice.pk])}?lang={lang}")
             if action == "remove":
-                hours_service.remove_entry(get_object_or_404(TimeEntry, pk=request.POST.get("entry") or 0), request.user, lang)
+                hours_service.remove_entry(get_object_or_404(TimeEntry, pk=_number(request.POST.get("entry"))), request.user, lang)
                 messages.success(request, words["removed"])
             else:
                 data = request.POST.dict()
@@ -176,11 +183,9 @@ def hours_home(request):
             error = " ".join(exc.messages)
         else:
             return redirect(f"{reverse('agreements:hours')}?lang={lang}")
-    groups = hours_service.by_customer()
     own = hours_service._employee_of(request.user)
-    if not sees_all:  # an employee without the sales view sees their own hours only
-        groups = [dict(group, entries=[entry for entry in group["entries"] if own and entry.employee_id == own.pk]) for group in groups]
-        groups = [group for group in groups if group["entries"]]
+    # an employee without the sales view sees their own hours only, totals included
+    groups = hours_service.by_customer() if sees_all else (hours_service.by_customer(employee=own) if own else [])
     today = timezone.localdate()
     team = hours_service.by_employee(today.replace(day=1), today) if sees_all else []
     recent = (TimeEntry.objects.filter(invoice__isnull=False).exclude(invoice__status="cancelled").select_related("customer", "invoice", "employee")[:20]

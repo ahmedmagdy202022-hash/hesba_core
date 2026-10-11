@@ -113,6 +113,27 @@ class PackageTests(Setup):
         self.assertFalse(Package.objects.exists())
         self.assertFalse(SalesInvoice.objects.exists())
 
+    def test_totals_cover_every_package_and_the_list_counts_in_one_query(self):
+        for _ in range(3):
+            post_sales_invoice(self.sell(sessions="2").invoice.id, user=self.owner)
+        every = packages.with_used(Package.objects.select_related("invoice"))
+        self.assertEqual(packages.totals(every)["sold"], 6)
+        self.client.force_login(self.owner)
+        url = reverse("agreements:packages")
+        self.client.get(url)
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        with CaptureQueriesContext(connection) as three:
+            self.client.get(url)
+        for _ in range(3):
+            self.sell(sessions="2")
+        with CaptureQueriesContext(connection) as six:
+            self.client.get(url)
+        self.assertEqual(len(three), len(six))  # no query per package
+        package = Package.objects.first()
+        self.assertEqual(self.client.post(reverse("agreements:package", args=[package.pk]), {"action": "cancel_use", "use": "x"}).status_code, 404)
+
     def test_totals_count_posted_packages_only(self):
         posted, draft = self.sell(sessions="4"), self.sell(sessions="3")
         post_sales_invoice(posted.invoice.id, user=self.owner)
@@ -225,6 +246,26 @@ class HoursTests(Setup):
         self.assertNotContains(page, "data-bill-hours")
         self.assertNotContains(page, "data-hours-team")
         self.assertNotContains(page, f'data-remove-entry="{theirs.pk}"')  # someone else's hours are not shown
+
+    def test_an_employee_sees_only_their_own_totals_and_cannot_set_a_rate(self):
+        consultant = person(RoleCode.STOCK_KEEPER, "ph_consultant2")
+        self.staff.user = consultant
+        self.staff.save()
+        colleague = save_employee({"name": "أ. محمود"}, self.owner)
+        self.log(employee=colleague, hours="5")
+        mine = hours.log_time({"customer": self.customer, "service": self.service, "hours": "3", "rate": "5000"}, consultant)
+        self.assertEqual(mine.rate, D("200.00"))  # the service's price, not the typed one
+        self.client.force_login(consultant)
+        page = self.client.get(reverse("agreements:hours"))
+        self.assertContains(page, 'data-hours-total>3<', html=False)
+        self.assertNotContains(page, 'data-hours-total>8<', html=False)
+        self.assertNotContains(page, "1,600.00")  # the colleague's 5h × 200 + 3h × 200
+
+    def test_a_bad_id_is_a_404_not_a_crash(self):
+        self.client.force_login(self.owner)
+        for action, field in (("bill", "customer"), ("remove", "entry")):
+            with self.subTest(action=action):
+                self.assertEqual(self.client.post(reverse("agreements:hours"), {"action": action, field: "abc"}).status_code, 404)
 
     def test_team_hours_and_billed_share(self):
         self.log(employee=self.staff, hours="3")

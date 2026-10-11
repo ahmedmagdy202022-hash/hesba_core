@@ -14,7 +14,7 @@ cancelled can no longer be used.
 from decimal import Decimal, InvalidOperation
 
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from audit.models import AuditEventType, AuditLog
@@ -65,8 +65,17 @@ def _words(lang):
     return MESSAGES["en" if lang == "en" else "ar"]
 
 
+def with_used(queryset):
+    """Packages with their used sessions counted in the same query (``used_count``)."""
+
+    from django.db.models import Count, Q
+
+    return queryset.annotate(used_count=Count("uses", filter=Q(uses__cancelled=False)))
+
+
 def used(package):
-    return package.uses.filter(cancelled=False).count()
+    counted = getattr(package, "used_count", None)
+    return counted if counted is not None else package.uses.filter(cancelled=False).count()
 
 
 def remaining(package):
@@ -124,13 +133,20 @@ def sell_package(data, user, lang="ar"):
     location = selling_location()
     if location is None:
         raise ValidationError(words["setup"])
-    number = next_in_series(Package, "number", "PK-", 4)
     price = money_round(price)
     rows = [{"item": service, "quantity": Decimal("1"), "unit_sale_price": price, "line_discount_amount": ZERO,
              "description": words["line"].format(sessions=sessions, service=service.item_name)[:255]}]
-    invoice = draft_invoice(customer, rows, words["note"].format(number=number, sessions=sessions), user, location)
-    package = Package.objects.create(number=number, customer=customer, service=service, sessions=sessions, price=price, expires_on=expires_on,
-                                     invoice=invoice, notes=(data.get("notes") or "").strip()[:255], created_by=user)
+    for attempt in range(5):  # two sales at the same moment took the same number: take the next
+        number = next_in_series(Package, "number", "PK-", 4)
+        try:
+            with transaction.atomic():
+                invoice = draft_invoice(customer, rows, words["note"].format(number=number, sessions=sessions), user, location)
+                package = Package.objects.create(number=number, customer=customer, service=service, sessions=sessions, price=price,
+                                                 expires_on=expires_on, invoice=invoice, notes=(data.get("notes") or "").strip()[:255], created_by=user)
+            break
+        except IntegrityError:
+            if attempt == 4 or not Package.objects.filter(number=number).exists():
+                raise
     _audit(user, "sell_service_package", package, {"number": number, "customer": customer.pk, "service": service.pk, "sessions": sessions,
                                                    "price": str(price), "invoice": invoice.invoice_number}, event=AuditEventType.CREATE)
     return package
@@ -175,7 +191,7 @@ def customer_packages(customer):
 
 
 def totals(packages):
-    """Sessions sold, used and left, and the posted value, for a list of packages."""
+    """Sessions sold, used and left, and the posted value, for packages (a list, or all of a ``with_used`` queryset)."""
 
     rows = [(package, used(package)) for package in packages]
     live = [(package, count) for package, count in rows if package.invoice.status == "posted"]
