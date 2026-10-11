@@ -576,3 +576,64 @@ class ReviewFourTests(EducationSetup):
             with self.subTest(bad=bad):
                 self.assertEqual(self.client.post(url, {"date": bad, f"p_{self.yousef.pk}": "absent"}).status_code, 404)
         self.assertFalse(self.saturday.sessions.exists())
+
+
+class ReviewFiveTests(MonthlyFeesTests):
+    """Codex on #187."""
+
+    def per_class(self):
+        course = services.save_course({"name": "حصص مراجعة", "fee": "100", "basis": "session"}, self.owner)
+        group = services.save_group({"course": course, "name": "مراجعة", "days": "sun,mon,tue,wed,thu,fri,sat"}, self.owner)
+        student = services.save_student({"name": "عمر", "self_pays": "1", "phone": "01112223334"}, self.owner)
+        return group, student
+
+    def test_a_class_is_billed_once_when_stopped_and_enrolled_again(self):
+        from . import attendance
+
+        if TODAY == self.month:
+            self.skipTest("needs two days of the month behind us")
+        group, omar = self.per_class()
+        first = services.enroll(omar, group, self.owner, start_date=self.month)
+        attendance.take(group, self.owner, self.month, {})
+        services.stop(first, self.owner, end_date=self.month + timedelta(days=1))
+        services.enroll(omar, group, self.owner, start_date=self.month + timedelta(days=1))
+        attendance.take(group, self.owner, self.month + timedelta(days=1), {})
+        quantities = sorted(line["quantity"] for line in self.billing.due_lines(self.month, omar.payer))
+        self.assertEqual(quantities, [D("1"), D("1")])  # one class on each enrolment, not two on both
+
+    def test_classes_recorded_after_a_run_are_billed_next_run(self):
+        from . import attendance
+
+        if TODAY == self.month:
+            self.skipTest("needs two days of the month behind us")
+        group, omar = self.per_class()
+        services.enroll(omar, group, self.owner, start_date=self.month)
+        attendance.take(group, self.owner, self.month, {})
+        self.billing.bill_month(self.month, self.owner)
+        attendance.take(group, self.owner, self.month + timedelta(days=1), {})
+        later = [line for line in self.billing.due_lines(self.month, omar.payer) if line["enrollment"].group_id == group.pk]
+        self.assertEqual([line["quantity"] for line in later], [D("1")])  # only the new class
+        self.billing.bill_month(self.month, self.owner)
+        self.assertEqual([line for line in self.billing.due_lines(self.month, omar.payer) if line["enrollment"].group_id == group.pk], [])
+
+    def test_the_preview_shows_the_vat_the_invoice_adds(self):
+        from settings_core.capabilities import _write
+        from taxes.models import TaxRate
+
+        _write("vat", True)
+        if not TaxRate.objects.filter(is_default=True, active=True).exists():
+            TaxRate.objects.create(code="VAT14", name_ar="ضريبة 14%", rate=D("14"), is_default=True, active=True)
+        row = next(row for row in self.billing.preview(self.month) if row["payer"] == self.yousef.payer)
+        invoice = next(invoice for invoice in self.billing.bill_month(self.month, self.owner) if invoice.customer == self.yousef.payer)
+        self.assertGreater(row["tax"], 0)
+        self.assertEqual(row["total"], invoice.total_amount)
+
+    def test_fees_follow_the_entity_being_worked_in(self):
+        from entities.current import working_in
+        from entities.models import Entity
+
+        branch = Entity.objects.create(code="E-FEE", name_ar="فرع", activity_slug="education", sub_activity_slug="tutoring_center")
+        with working_in(branch):
+            self.assertEqual(self.billing.preview(self.month), [])  # the main entity's students are not billed from the branch
+            self.assertEqual(self.billing.dues(), [])
+        self.assertTrue(self.billing.preview(self.month))

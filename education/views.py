@@ -45,7 +45,7 @@ WORDS = {
         "invoice_date": "تاريخ الفاتورة", "billed_ok": "اتعملت {count} فاتورة بإجمالي {total}.", "nothing_new": "كل حاجة في الشهر ده اتفوترت.",
         "invoice": "الفاتورة", "total": "الإجمالي", "fees_intro": "فاتورة واحدة لكل ولي أمر بكل مجموعات أولاده. الشهري بسعر الشهر، والحصة بعدد الحصص اللي حضرها، والكورس مرة واحدة.",
         "dues_intro": "أولياء الأمور اللي عليهم مصروفات، والأقدم الأول.", "overdue": "متأخر", "owed": "عليه", "oldest": "من", "last_payment": "آخر دفعة",
-        "remind": "فكّره واتساب", "no_dues": "مفيش متأخرات. 👏", "collect": "تحصيل", "draft": "مسودة", "posted": "مترحّلة",
+        "remind": "فكّره واتساب", "includes_tax": "منها ضريبة", "no_dues": "مفيش متأخرات. 👏", "collect": "تحصيل", "draft": "مسودة", "posted": "مترحّلة",
     },
     "en": {
         "title": "Students & groups", "students": "Students", "groups": "Groups", "courses": "Courses & subjects",
@@ -77,7 +77,7 @@ WORDS = {
         "invoice_date": "Invoice date", "billed_ok": "{count} invoices made, {total} in all.", "nothing_new": "Everything in this month is billed.",
         "invoice": "Invoice", "total": "Total", "fees_intro": "One invoice per parent with all their children's groups: monthly groups at the month's fee, per-class groups by classes attended, whole courses once.",
         "dues_intro": "Parents who owe fees, oldest first.", "overdue": "Overdue", "owed": "Owes", "oldest": "Since", "last_payment": "Last payment",
-        "remind": "Remind on WhatsApp", "no_dues": "Nothing owed. 👏", "collect": "Collect", "draft": "Draft", "posted": "Posted",
+        "remind": "Remind on WhatsApp", "includes_tax": "incl. VAT", "no_dues": "Nothing owed. 👏", "collect": "Collect", "draft": "Draft", "posted": "Posted",
     },
 }
 

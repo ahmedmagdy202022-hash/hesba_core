@@ -18,7 +18,7 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Q
+from django.db.models import Q, Sum
 from django.utils import timezone
 
 from audit.models import AuditEventType, AuditLog
@@ -67,6 +67,20 @@ def _live(charges):
 
 
 def _attended(enrollment, first, last):
+    """Classes attended in [first, last] while this enrolment ran. A student stopped and enrolled again keeps
+    each class on one enrolment only: the newer one from its start, the older one up to the day before."""
+
+    from datetime import timedelta
+
+    first = max(first, enrollment.start_date)
+    if enrollment.end_date:
+        last = min(last, enrollment.end_date)
+    newer = (Enrollment.objects.filter(student_id=enrollment.student_id, group_id=enrollment.group_id, pk__gt=enrollment.pk,
+                                       start_date__gte=enrollment.start_date).order_by("start_date").values_list("start_date", flat=True).first())
+    if newer is not None:
+        last = min(last, newer - timedelta(days=1))
+    if last < first:
+        return 0
     return Attendance.objects.filter(student=enrollment.student, session__group=enrollment.group, session__status=SessionStatus.HELD,
                                      session__date__gte=first, session__date__lte=last,
                                      presence__in=(Presence.PRESENT, Presence.LATE)).count()
@@ -93,10 +107,14 @@ def due_lines(first, payer=None):
             if _live(enrollment.charges.all()).exists():
                 continue
             quantity = Decimal("1")
+        elif basis == FeeBasis.SESSION:
+            # Classes recorded after an earlier run this month are billed then: only what is not billed yet.
+            billed = _live(enrollment.charges.filter(month=first)).aggregate(total=Sum("quantity"))["total"] or Decimal("0")
+            quantity = Decimal(_attended(enrollment, first, last)) - billed
         else:
             if _live(enrollment.charges.filter(month=first)).exists():
                 continue
-            quantity = Decimal(_attended(enrollment, first, last)) if basis == FeeBasis.SESSION else Decimal("1")
+            quantity = Decimal("1")
         if quantity <= 0 or fee <= 0:
             continue
         gross = money_round(quantity * fee)
@@ -108,12 +126,22 @@ def due_lines(first, payer=None):
 def preview(first):
     """The month by payer: [{payer, lines, total}] in name order."""
 
+    from taxes.services import compute_lines, vat_enabled
+
+    lines = due_lines(first)
+    # The invoice adds VAT when the business charges it, so the preview does the same: what it shows is what is billed.
+    taxes = [tax for *_, tax in compute_lines([{"item": line["enrollment"].group.course.item, "quantity": line["quantity"],
+                                                "unit_sale_price": line["price"], "line_discount_amount": line["discount"]} for line in lines])] \
+        if vat_enabled() and lines else [ZERO] * len(lines)
     by_payer = OrderedDict()
-    for line in due_lines(first):
+    for line, tax in zip(lines, taxes):
         payer = line["enrollment"].student.payer
-        by_payer.setdefault(payer.pk, {"payer": payer, "lines": [], "total": ZERO})
-        by_payer[payer.pk]["lines"].append(line)
-        by_payer[payer.pk]["total"] += line["amount"]
+        row = by_payer.setdefault(payer.pk, {"payer": payer, "lines": [], "net": ZERO, "tax": ZERO, "total": ZERO})
+        line["tax"] = tax
+        row["lines"].append(line)
+        row["net"] += line["amount"]
+        row["tax"] += tax
+        row["total"] += line["amount"] + tax
     return list(by_payer.values())
 
 
