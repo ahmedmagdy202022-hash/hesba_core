@@ -705,9 +705,14 @@ Status: IMPLEMENTED for review — new tables only, no protected logic changed. 
   - the contract row is locked while it is billed, so two clicks never bill one period twice;
   - once a contract has been billed, its start date and period cannot change (the billed periods would no longer line up). The amount, end date and status can.
 - **Who:** seeing contracts needs `sales.view_sales_invoices`; adding, editing and billing need `sales.create_sales_invoice`. It is shown to services (general, maintenance, professional, digital, other) and to maintenance contractors; a salon, a clinic or a shop gets a 404.
-- **Not done (left for review):**
-  - contracts are not tied to an entity; the invoices they make are, through the selling location;
-  - visits are read from the customer's done appointments for the contract's service; a visit is not booked automatically.
+- **After review:**
+  - each contract keeps the selling location (so the entity) it was made in; it is billed there and listed only in that entity (the whole-group view shows all);
+  - a contract resumed after a pause, or given a "bill from" date, never bills the periods before it;
+  - the last period stops at the contract's end date, and a period starting on the end day is not billed;
+  - "customer balance" comes from the customer's own ledger, so payments and returns count.
+- **Not done:**
+  - no proration: a short last period is billed at the full amount;
+  - visits are read from the customer's done appointments for the contract's service, and a visit is not booked automatically.
 - **Tests:** `agreements/tests.py` covers:
   - periods at month ends;
   - due, paused and ended contracts;

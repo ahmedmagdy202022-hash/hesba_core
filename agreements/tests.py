@@ -53,7 +53,7 @@ class PeriodTests(ContractSetup):
         self.assertEqual(services.periods(contract, date(2026, 12, 31)),
                          [date(2026, 1, 31), date(2026, 2, 28), date(2026, 3, 31), date(2026, 4, 30)])
         self.assertEqual(services.period_end(contract, date(2026, 2, 28)), date(2026, 3, 30))  # the next one starts on the 31st again
-        self.assertEqual(services.period_end(contract, date(2026, 4, 30)), date(2026, 5, 30))
+        self.assertEqual(services.period_end(contract, date(2026, 4, 30)), date(2026, 5, 15))  # the last period stops at the contract's end
         quarterly = self.contract(every="quarter", starts_on=date(2026, 1, 1), ends_on=None)
         self.assertEqual(services.periods(quarterly, date(2026, 10, 1)), [date(2026, 1, 1), date(2026, 4, 1), date(2026, 7, 1), date(2026, 10, 1)])
         self.assertEqual(services.period_end(quarterly, date(2026, 1, 1)), date(2026, 3, 31))
@@ -70,6 +70,70 @@ class PeriodTests(ContractSetup):
                                          "starts_on": started.starts_on, "status": "paused"}, self.owner, started)
         self.assertEqual(services.due_periods(paused), [])
         self.assertIsNone(services.overview(paused)["next"])
+
+
+class ReviewFixTests(ContractSetup):
+    """Findings from the review of #201."""
+
+    def test_a_resumed_contract_never_bills_the_months_it_was_on_hold(self):
+        contract = self.contract(starts_on=services.add_months(TODAY, -3))
+        services.bill_due(self.owner, today=services.add_months(TODAY, -3))  # the first month billed
+        base = {"customer": self.customer, "service": self.service, "amount": "1500", "every": "month", "starts_on": contract.starts_on}
+        services.save_contract({**base, "status": "paused"}, self.owner, contract)
+        contract = services.save_contract({**base, "status": "active"}, self.owner, contract)
+        self.assertEqual(contract.billing_from, services.current_period(contract))
+        self.assertEqual(services.due_periods(contract), [services.current_period(contract)])  # only the period in progress
+
+    def test_bill_from_skips_months_billed_elsewhere_and_the_end_day_is_not_a_new_period(self):
+        contract = self.contract(starts_on=services.add_months(TODAY, -5), billing_from=services.add_months(TODAY, -1))
+        self.assertEqual(len(services.due_periods(contract)), 2)
+        year = self.contract(starts_on=date(2026, 1, 1), ends_on=date(2027, 1, 1))
+        self.assertEqual(len(services.periods(year, date(2027, 6, 1))), 12)  # not a 13th month for the end day
+
+    def test_the_customer_balance_follows_payments(self):
+        from hesba_testing.factories import make_cashbox
+        from sales.services import record_customer_payment
+
+        contract = self.contract(starts_on=TODAY)
+        bill = services.bill_due(self.owner)[0]
+        post_sales_invoice(bill.invoice.id, user=self.owner)
+        self.assertEqual(services.unpaid(contract), D("1500.00"))
+        record_customer_payment("CP-SC1", TODAY, self.customer, make_cashbox(cashbox_code="CB-SC"), D("1500.00"), user=self.owner)
+        self.assertEqual(services.unpaid(contract), D("0"))
+
+    def test_a_deactivated_customer_can_still_be_ended_and_tiny_amounts_are_refused(self):
+        contract = self.contract(starts_on=TODAY)
+        self.customer.active = False
+        self.customer.save()
+        self.client.force_login(self.owner)
+        self.client.post(reverse("agreements:detail", args=[contract.pk]), {"customer": self.customer.pk, "service": self.service.pk, "amount": "1500",
+                                                                            "every": "month", "starts_on": TODAY.isoformat(), "status": "ended"})
+        contract.refresh_from_db()
+        self.assertEqual(contract.status, "ended")
+        with self.assertRaisesMessage(ValidationError, "قيمة الفترة"):
+            self.contract(amount="0.004")
+
+    def test_a_contract_is_billed_and_listed_in_the_entity_it_was_made_in(self):
+        from entities import services as entity_services
+        from entities.models import EntityMembership
+        from hesba_testing.factories import make_location as location
+
+        branch = entity_services.save_entity({"code": "BR-SC", "name_ar": "فرع", "activity_slug": "services", "sub_activity_slug": "maintenance"},
+                                             self.owner)
+        branch_shop = location(location_code="BR-SHOP", entity=branch, is_selling_location=True)
+        here = self.contract(starts_on=TODAY)
+        there = self.contract(starts_on=TODAY)
+        ServiceContract.objects.filter(pk=there.pk).update(location=branch_shop)
+        services.bill_due(self.owner)  # the whole group: each is billed where it was made
+        self.assertEqual(there.bills.get().invoice.selling_location, branch_shop)
+        self.assertNotEqual(here.bills.get().invoice.selling_location, branch_shop)
+        manager = person(RoleCode.MANAGER, "sc_branch_manager")
+        EntityMembership.objects.create(user=manager, entity=branch, is_default=True)
+        self.client.force_login(manager)
+        page = self.client.get(reverse("agreements:list"))
+        self.assertContains(page, f'data-contract="{there.number}"')
+        self.assertNotContains(page, f'data-contract="{here.number}"')
+        self.assertEqual(self.client.get(reverse("agreements:detail", args=[here.pk])).status_code, 404)
 
 
 class SaveTests(ContractSetup):

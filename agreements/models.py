@@ -31,6 +31,10 @@ class ServiceContract(models.Model):
     starts_on = models.DateField()
     ends_on = models.DateField(null=True, blank=True)
     visits_per_period = models.PositiveSmallIntegerField(default=0)
+    #: Periods starting before this are never due: set when a paused contract resumes, or typed for one billed elsewhere until now.
+    billing_from = models.DateField(null=True, blank=True)
+    #: Where it is billed: the selling location (and so the entity) it was made in.
+    location = models.ForeignKey("master_data.Location", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
     status = models.CharField(max_length=10, choices=ContractStatus.choices, default=ContractStatus.ACTIVE, db_index=True)
     notes = models.CharField(max_length=255, blank=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
