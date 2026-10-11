@@ -685,6 +685,126 @@ Status: RESOLVED — approved by Ahmed on 9 Oct 2026 ("موافق تعمل كل 
   - the screens and who may act.
 - **Known effect:** the goods-in-transit location shows in location pickers (stock list, manual transfer, count). The warehouses hub shows it only while something is on the way.
 
+## HG-041 — Services work orders and spare parts (proposed, not built)
+
+- **Status:** OPEN PROPOSAL. Nothing is built yet. This records the decision before the services work order package (`docs/ACTIVITY_SCORECARD.md`, step 2) touches stock.
+- **Why it is a gate:**
+  - A work order keeps its own states (received → diagnosed → quoted → approved → in repair → ready → delivered), so it needs new tables.
+  - Spare parts leave stock for a repair.
+    - The obvious shortcut, `inventory.services.adjust_stock` (an outbound adjustment), is wrong: `ledger/projector.py` projects an outbound adjustment as **stock-count loss**. Repair parts would show as shrinkage instead of the cost of the job.
+- **Proposed design (A, recommended): parts move only through the sales engine.**
+  - The work order holds its parts as planned lines. Nothing leaves stock while the job is open.
+  - Delivering the job makes its sales invoice through `taxes.services.create_sales_draft_with_tax` / `sales.services.post_sales_invoice`, unchanged.
+    - Labour goes on as a service item.
+    - Parts go on as stock items.
+  - Posting moves the parts out at authoritative movement cost (HG-003), as cost of goods sold. The ledger and the customer's account are exactly those of a sale.
+  - **Warranty jobs:** the part goes on the same invoice at price 0.
+    - The cost still lands in cost of goods sold, against a customer, so margin per job and per technician stays true.
+    - A test must first prove the sales engine accepts a zero-price stock line and costs it.
+  - **Not touched:** inventory movement types, the projector, sales posting, average cost.
+- **Alternative (B, needs approval):** a new movement type, "issued to a job".
+  - It would be projected to a "cost of services" account, and would let parts leave stock before the invoice (long repairs).
+  - It changes inventory movement and accounting (protected), so it is not done without Ahmed's approval.
+- **Files (A):** a new `workorders` app (models, services, views, templates, migration); the nav and dashboard panel for `services`; demo data. Sales, inventory and ledger: none.
+- **Risks (A):**
+  - Stock looks available until the job is delivered. The work order screen shows parts reserved by open jobs to make up for it.
+  - Parts reserved and then not used are simply dropped from the planned lines.
+- **Tests to write:**
+  - delivering a job posts one invoice whose stock lines move the exact quantities at movement cost;
+  - a warranty part at price 0 costs the part and leaves the receivable unchanged;
+  - cancelling the invoice brings the parts back;
+  - an open job moves nothing;
+  - permissions per role;
+  - the trial balance stays balanced and reconciliation clean.
+
+## HG-042 — Medical insurance: patient share and insurer share (proposed, not built)
+
+- **Status:** OPEN PROPOSAL. Nothing is built yet. This records the decision before the medical insurance work (`docs/ACTIVITY_SCORECARD.md`, step 4) touches customer accounts.
+- **Why it is a gate:** one visit is owed by two parties: the patient pays a share (co-pay) and the insurance company pays the rest, monthly, against a claim. Splitting one invoice's receivable between two customers changes the customer ledger (protected).
+- **Proposed design (A, recommended): two ordinary invoices per insured visit.**
+  - Each insurance company is a customer, carrying its contract: coverage % per service and a monthly claim day.
+  - An insured visit makes two sales invoices through the unchanged sales engine:
+    - the patient's, for their share;
+    - the insurer's, for the rest.
+  - Both carry the visit, so the patient file shows one visit with both invoices.
+  - **Monthly claim:** a read-only statement of the insurer's posted invoices for the month, printed and sent.
+  - **Payment:** the insurer pays through the ordinary customer collection.
+  - **Rejections:** a rejected line becomes the existing sales return against the insurer's invoice. If the patient must then pay it, a new invoice goes to the patient.
+  - **Not touched:** the customer ledger, sales posting, aging, report calculations.
+- **Alternative (B, needs approval):** one invoice with a receivable split between two customers. It keeps one document per visit, but it changes ledger posting and aging, so it is not done without Ahmed's approval.
+- **Files (A):** `medical` (an insurer contract model and migration, the visit-to-invoices service, the claim statement view); the reports for revenue per insurer and claims outstanding; demo data.
+- **Risks (A):**
+  - Revenue for one visit is split over two invoices. Reports per doctor and per service must add both, and the tests pin that down.
+  - Cancelling one invoice must offer to cancel the other.
+- **Tests to write:**
+  - the shares add up to the visit price to the piastre, with rounding on the insurer's side;
+  - each customer's balance moves by exactly its share;
+  - the claim lists only that insurer's posted invoices in the month;
+  - a rejection through a sales return lowers the insurer's balance;
+  - permissions;
+  - the trial balance and reconciliation.
+
+## HG-043 — Medical specialty records (proposed, not built)
+
+- **Status:** OPEN PROPOSAL. Nothing is built yet. This records the schema decision before the medical package (`docs/ACTIVITY_SCORECARD.md`, step 4) adds specialty records.
+- **Why it is a gate:** the current `medical.PatientFile` and `medical.ClinicalVisit` cannot hold:
+  - a dental chart and treatment in stages;
+  - lab results against reference ranges;
+  - physiotherapy session packages;
+  - an animal and its owner;
+  - a reception queue.
+
+  Each of these needs new models and migrations.
+- **Proposed design (A, recommended): new tables in the `medical` app, one per specialty. Each links to the patient file and, where it is done in a visit, to the visit.**
+  - **Dental:** `ToothRecord` (patient, tooth number in FDI notation, condition, planned treatment, stage, done in visit).
+  - **Lab:** `LabTest` (the test, unit, reference low/high, linked to its service item) and `LabResult` (visit, test, value, flag computed from the range). The result sheet prints like any document.
+  - **Physiotherapy:** `SessionPackage`, plus a session count used per visit.
+    - The package is sold as an ordinary service invoice (unchanged sales engine), and its revenue is recognised at sale, like any service today.
+    - Spreading package revenue over sessions (deferred revenue) would change ledger posting, so it is not part of this design.
+  - **Vet:** `PatientFile` gains a kind (person/animal), species, breed and an owner (the existing customer). One migration, no behaviour change for people.
+  - **Reception queue:** `QueueTicket` (appointment or walk-in, number, arrived/called/done times). Read by the waiting screen.
+  - **Shown only for their sub-activity:** dental, lab, physio, vet, clinic/medical centre for the queue.
+- **Not touched:** sales posting, customer ledgers, appointments' existing statuses, report calculations.
+- **Files:** `medical` (models, migrations, services, views, templates); demo data per sub-activity; the medical dashboard panel.
+- **Risks:**
+  - The `PatientFile` change (kind/owner) is the only change to an existing table. It adds nullable fields with defaults, and existing rows stay people.
+  - Lab flags depend on the units entered: a range is only checked against the same unit.
+- **Tests to write:**
+  - each specialty's record is created and shown only for its sub-activity;
+  - lab flags (low/normal/high) at the boundaries;
+  - session counts never go below zero, and a package's invoice is an ordinary posted sale;
+  - a vet file's owner is the customer who pays;
+  - the queue order;
+  - permissions per role;
+  - migrations forward and back on a database with existing patient files.
+
+## HG-044 — Restaurants: dish cost, waste and ingredient deduction (proposed, not built)
+
+- **Status:** OPEN PROPOSAL. Nothing is built yet. This records the decision before the restaurant package (`docs/ACTIVITY_SCORECARD.md`, step 5) touches stock.
+  - `docs/PROJECT_STATE.md` already notes that deducting ingredients by recipe on sale needs a Hard Gate.
+- **Why it is a gate:** waste and recipe deduction both take ingredients out of stock, and each decides which account the cost lands in. The existing outbound adjustment is projected as **stock-count loss** (`ledger/projector.py`).
+- **Proposed design:**
+  1. **Dish cost and margin: read-only, no gate needed.**
+     - Cost per dish comes from the recipe and ingredient average cost, and is compared with the menu price.
+     - It reuses `manufacturing.Recipe`, read-only.
+  2. **Waste (A, recommended now): the existing stock adjustment, unchanged, with a "waste" reason.**
+     - The value lands in the stock-loss account, which is where shrinkage and spoilage belong in a small restaurant's books.
+     - A waste report reads those adjustments by reason, kept apart from count differences.
+  3. **Waste (B, needs approval):** a new movement type, "waste out", projected to its own "food waste" expense account. It changes inventory movement and projection (protected).
+  4. **Ingredient deduction on sale (needs approval, either way):**
+     - **C1:** the dish becomes a stock item made by a daily production run from its recipe, using the existing manufacturing engine unchanged. Ingredients become dish cost through HG-030/HG-036, and selling the dish costs it as any stock item. The kitchen records the day's production.
+     - **C2:** posting a sale of a dish with a recipe moves its ingredients out at cost as cost of goods sold. Real-time, but it changes sales posting (protected).
+     - **Recommended:** C1, because it keeps every engine unchanged. Ahmed decides between C1 and C2 before anything is built.
+- **Files (1 and 2A):** `restaurant` (dish cost and waste screens, reports), `reports` (the waste report). No inventory or ledger change.
+- **Risks:**
+  - With 2A, waste and count differences share one account, so only the report separates them by reason.
+  - With C1, stock of dishes must be produced before it is sold. A sale beyond production goes negative unless the run is recorded first.
+- **Tests to write:**
+  - dish cost equals the recipe's ingredient cost at average cost;
+  - waste moves the exact quantity and value into stock loss, and the waste report shows it by reason;
+  - (C1) a production run plus a sale costs the dish at the run's cost, with the ledger balanced and reconciliation clean;
+  - permissions.
+
 ## Final gate verification
 
 - Full Django suite: 794 tests passed in 576.477 seconds.
