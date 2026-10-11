@@ -8,4 +8,10 @@
 <div class="op-form-grid">{% for field in fields %}<div class="op-field"><label for="f-{{ forloop.counter }}">{{ field.label }}</label><input id="f-{{ forloop.counter }}" name="{{ field.key }}" value="{{ field.value }}"{% if not can_manage %} disabled{% endif %}>{% if field.key == 'einvoice.person_id_threshold' %}<small class="op-muted">{{ words.threshold_hint }}</small>{% endif %}</div>{% endfor %}</div>
 {% if can_manage %}<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div>{% endif %}
 </form>
+<section class="op-form" data-eta-connection>
+<h2>{{ words.connection }} <small class="op-muted">· {% if environment == 'prod' %}{{ words.env_prod }}{% else %}{{ words.env_preprod }}{% endif %}</small></h2>
+{% if missing %}<div class="op-message" data-eta-not-set><strong>{{ words.not_set }}</strong> {{ missing|join:"، " }}<br>{{ words.setup_hint }}</div>
+{% else %}<p class="op-message op-message-success">✓ {{ words.connection_ready }}</p>
+{% if can_manage %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="check_connection"><button class="op-secondary" type="submit" data-eta-check>{{ words.check }}</button></form>{% endif %}{% endif %}
+</section>
 {% endblock %}
