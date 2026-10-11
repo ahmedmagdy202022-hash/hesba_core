@@ -49,14 +49,27 @@ def _span(first, last):
 def _billed(first, last):
     """Done appointments in [first, last] whose invoice is posted, in this entity, with what each earned."""
 
+    from django.db.models import Sum
+
     from appointments.models import Appointment, AppointmentStatus
-    from appointments.services import net_sales
+    from sales.models import SalesReturn
 
     start, end = _span(first, last)
-    rows = (entity_scope.scope(Appointment.objects, "invoice__" + entity_scope.SALES_INVOICE)
-            .filter(status=AppointmentStatus.DONE, starts_at__gte=start, starts_at__lt=end, invoice__status="posted")
-            .select_related("invoice", "employee", "service"))
-    return [(appointment, net_sales(appointment.invoice)) for appointment in rows]
+    rows = list(entity_scope.scope(Appointment.objects, "invoice__" + entity_scope.SALES_INVOICE)
+                .filter(status=AppointmentStatus.DONE, starts_at__gte=start, starts_at__lt=end, invoice__status="posted")
+                .select_related("invoice", "employee", "service"))
+    returned = dict(SalesReturn.objects.filter(source_invoice__in=[row.invoice_id for row in rows], status="posted")
+                    .values("source_invoice").annotate(total=Sum("total_amount")).values_list("source_invoice", "total"))
+
+    def earned(invoice):  # appointments.services.net_sales, with the period's returns read in one query
+        total = Decimal(invoice.total_amount)
+        if total <= 0:
+            return Decimal("0.00")
+        before_tax = total - Decimal(invoice.tax_amount or 0)
+        back = Decimal(returned.get(invoice.pk) or 0)
+        return money_round(max(before_tax - back * before_tax / total, Decimal("0")))
+
+    return [(appointment, earned(appointment.invoice)) for appointment in rows]
 
 
 def _steps_billed(first, last):
@@ -144,25 +157,25 @@ def _latest_asking(since, until):
     """Each patient's latest visit, when that visit asks for a follow-up dated in [since, until]."""
 
     latest = ClinicalVisit.objects.filter(patient=OuterRef("patient")).order_by("-visit_date", "-pk").values("pk")[:1]
-    return list(ClinicalVisit.objects.filter(follow_up_date__gte=since, follow_up_date__lte=until).annotate(latest=Subquery(latest))
-                .filter(pk=F("latest")).select_related("patient", "doctor"))
+    return list(ClinicalVisit.objects.filter(follow_up_date__gte=since, follow_up_date__lte=until, patient__active=True)  # never a deactivated patient
+                .annotate(latest=Subquery(latest)).filter(pk=F("latest")).select_related("patient", "doctor"))
 
 
-def missed_follow_ups(today=None):
+def missed_follow_ups(today=None, booked=None):
     """Follow-ups whose date passed (within the last 90 days) with no visit since and nothing booked; most overdue first."""
 
     today = today or timezone.localdate()
-    booked = _booked_patients(today)
+    booked = _booked_patients(today) if booked is None else booked
     rows = [{"visit": visit, "patient": visit.patient, "doctor": visit.doctor, "due": visit.follow_up_date, "late": (today - visit.follow_up_date).days}
             for visit in _latest_asking(today - timedelta(days=MISSED_WINDOW_DAYS), today - timedelta(days=1)) if visit.patient_id not in booked]
     return sorted(rows, key=lambda row: (-row["late"], row["patient"].name))
 
 
-def coming_follow_ups(today=None):
+def coming_follow_ups(today=None, booked=None):
     """Follow-ups due today or in the next 7 days that are not booked yet: the patients to call."""
 
     today = today or timezone.localdate()
-    booked = _booked_patients(today)
+    booked = _booked_patients(today) if booked is None else booked
     rows = [{"visit": visit, "patient": visit.patient, "doctor": visit.doctor, "due": visit.follow_up_date}
             for visit in _latest_asking(today, today + timedelta(days=DUE_WINDOW_DAYS)) if visit.patient_id not in booked]
     return sorted(rows, key=lambda row: (row["due"], row["patient"].name))
