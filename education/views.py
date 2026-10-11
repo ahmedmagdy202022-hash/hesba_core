@@ -183,6 +183,7 @@ def student_detail(request, pk):
     for row in enrollments:
         row.schedule = services.schedule_text(row.group, lang)
         row.net = services.monthly_fee(row)
+        row.basis_label = services.BASIS_LABELS[lang][row.group.course.basis]  # a month, a class or the whole course
         row.status_label = _status_label(row.status, words)
     enrolled = {row.group_id for row in enrollments if row.status == EnrollmentStatus.ACTIVE}
     open_groups = services.scoped(StudyGroup.objects).filter(active=True).exclude(pk__in=enrolled).select_related("course")
@@ -271,10 +272,12 @@ def group_detail(request, pk):
         present=Count("marks", filter=Q(marks__presence=Presence.PRESENT)), late=Count("marks", filter=Q(marks__presence=Presence.LATE)),
         absent=Count("marks", filter=Q(marks__presence=Presence.ABSENT)))[:8])
     others = services.scoped(Student.objects).filter(active=True).exclude(pk__in=[row.student_id for row in roster]).order_by("name")
-    total = sum((row.net for row in roster), start=group.effective_fee * 0)
+    # A monthly total only means something for a monthly course; a whole course or a per-class fee is not a month.
+    total = sum((row.net for row in roster), start=group.effective_fee * 0) if group.course.basis == FeeBasis.MONTHLY else None
     return render(request, "education/group.html", _group_form_context(
         request, lang, group=group, roster=roster, others=others, schedule=services.schedule_text(group, lang), error=error, post=None,
-        chosen_days=group.weekdays, total=total, free=(group.capacity - len(roster)) if group.capacity else None, today=timezone.localdate(),
+        chosen_days=group.weekdays, total=total, basis_label=services.BASIS_LABELS[lang][group.course.basis],
+        free=(group.capacity - len(roster)) if group.capacity else None, today=timezone.localdate(),
         sessions=sessions, can_take=register.can_take(request.user, group), last_class=register.last_class_day(group)))
 
 
@@ -354,7 +357,7 @@ def take_attendance(request, pk):
         try:
             day = date.fromisoformat(request.POST.get("date") or "")
         except ValueError:
-            day = timezone.localdate()
+            raise Http404("A class is saved for the date its form was opened on.")  # never silently today
         marks = {key[len("p_"):]: value for key, value in request.POST.items() if key.startswith("p_")}
         marks.update({key: value for key, value in request.POST.items() if key.startswith("note_")})
         try:
@@ -376,7 +379,7 @@ def take_attendance(request, pk):
     return render(request, "education/attendance.html", _base(request, lang, "today", group=group, day=day, session=session, roster=roster, choices=choices,
                                                               schedule=services.schedule_text(group, lang), error=error, today=timezone.localdate(),
                                                               saved=bool(request.GET.get("saved")), notify=[row for row in roster if row.notify],
-                                                              scheduled=register.meets_on(group, day)))
+                                                              scheduled=bool(session) or (group.active and register.meets_on(group, day))))
 
 
 # ---- monthly fees and fees owed (EDU-003) ----
