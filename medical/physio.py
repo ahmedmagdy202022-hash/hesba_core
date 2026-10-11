@@ -31,13 +31,13 @@ PRICE_LIMIT = Decimal("10000000")
 MESSAGES = {
     "ar": {"service": "اختار الخدمة.", "sessions": "عدد الجلسات من 1 لـ 200.", "price": "سعر الباكدج لازم يكون رقم صفر أو أكبر.",
            "setup": "لازم يكون فيه مخزن بيع نشط.", "sell": "بيع باكدج محتاج صلاحية إنشاء فاتورة بيع.",
-           "not_posted": "فاتورة الباكدج لسه مسودة؛ رحّلها الأول عشان الجلسات تتسحب منها.", "void": "فاتورة الباكدج اتلغت؛ الباكدج ده مبقاش شغال.",
+           "not_posted": "فاتورة الباكدج لسه مسودة؛ رحّلها الأول عشان الجلسات تتسحب منها.", "void": "فاتورة الباكدج اتلغت أو اترجعت؛ الباكدج ده مبقاش شغال.",
            "empty": "الباكدج خلص؛ مفيش جلسات باقية.", "date": "التاريخ مش مظبوط.", "future": "مينفعش تسجّل جلسة في يوم لسه مجاش.",
            "already": "الجلسة دي اتلغت قبل كده.", "line": "باكدج {sessions} جلسة — {service}", "note_invoice": "باكدج جلسات: {sessions} جلسة"},
     "en": {"service": "Choose the service.", "sessions": "The number of sessions is from 1 to 200.", "price": "The package price must be zero or more.",
            "setup": "An active selling location is needed.", "sell": "Selling a package needs the create-sales-invoice permission.",
            "not_posted": "The package's invoice is still a draft; post it first so sessions can be used from it.",
-           "void": "The package's invoice was cancelled; this package can no longer be used.", "empty": "The package is used up; no sessions are left.",
+           "void": "The package's invoice was cancelled or returned; this package can no longer be used.", "empty": "The package is used up; no sessions are left.",
            "date": "The date is not valid.", "future": "A session cannot be recorded on a day still to come.", "already": "This session was already cancelled.",
            "line": "Package of {sessions} sessions — {service}", "note_invoice": "Session package: {sessions} sessions"},
 }
@@ -57,12 +57,18 @@ def used(package):
     return package.uses.filter(cancelled=False).count()
 
 
+def refunded(invoice):
+    """A posted sales return against the package's invoice gave the money back: the package is over."""
+
+    return invoice.returns.filter(status="posted").exists()
+
+
 def state(package):
-    """{"used", "left", "status"}: status is draft (invoice not posted), active, finished or void."""
+    """{"used", "left", "status"}: status is draft (invoice not posted), active, finished or void (cancelled or returned)."""
 
     count = used(package)
     status = package.invoice.status
-    if status == "cancelled":
+    if status == "cancelled" or (status == "posted" and refunded(package.invoice)):
         label = "void"
     elif status != "posted":
         label = "draft"
@@ -143,7 +149,7 @@ def use(package, user, *, used_on=None, therapist=None, visit=None, notes="", la
     words = _words(lang)
     package = SessionPackage.objects.select_for_update(of=("self",)).select_related("invoice").get(pk=package.pk)  # two at once never overdraw it
     status = package.invoice.status
-    if status == "cancelled":
+    if status == "cancelled" or (status == "posted" and refunded(package.invoice)):
         raise ValidationError(words["void"])
     if status != "posted":
         raise ValidationError(words["not_posted"])
