@@ -47,12 +47,15 @@ def is_multi_entity():
 def activity_of(entity):
     """The entity's activity, falling back to the installation's."""
 
+    from settings_core.setup_catalog import closest
+
     if entity is not None and entity.activity_slug:
-        return entity.activity_slug, entity.sub_activity_slug
+        return closest(entity.activity_slug, entity.sub_activity_slug)
     from settings_core.models import ClientProfile
 
     profile = ClientProfile.get_active()
-    return ((profile.activity_slug or ""), (profile.sub_activity_slug or "")) if profile else ("", "")
+    # OTHER-001: "other, closer to products" works as a shop, "closer to services" as a services business.
+    return closest(profile.activity_slug or "", profile.sub_activity_slug or "") if profile else ("", "")
 
 
 @transaction.atomic

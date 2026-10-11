@@ -19,8 +19,10 @@ MESSAGES = {
 def _activity():
     from settings_core.models import ClientProfile
 
-    profile = ClientProfile.get_active()
-    return (profile.activity_slug or "") if profile is not None else ""
+    from settings_core import setup_catalog
+
+    profile = ClientProfile.get_active()  # OTHER-001: "closer to services" keeps a services chart (service revenue)
+    return setup_catalog.closest(profile.activity_slug, profile.sub_activity_slug)[0] if profile is not None else ""
 
 
 @transaction.atomic

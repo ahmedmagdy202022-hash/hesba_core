@@ -60,11 +60,16 @@ def entity_list(request):
     return render(request, "entities/list.html", _context(request, rows=rows, can_manage=user_has_permission(request.user, "settings.manage_settings")))
 
 
-def _activity_choices(lang):
+def _activity_choices(lang, keep=""):
+    """Every activity and sub-activity, plus ``keep`` (an entity's own older choice no longer offered), so saving never clears it."""
+
     choices = []
     for activity in catalog.ACTIVITY_LABELS:
         for sub in catalog.SUB_ACTIVITY_LABELS.get(activity, {}):
             choices.append((f"{activity}:{sub}", f"{catalog.activity_label(activity, lang)} · {catalog.sub_activity_label(activity, sub, lang)}"))
+    if keep and ":" in keep and keep not in dict(choices):
+        activity, _, sub = keep.partition(":")
+        choices.append((keep, f"{catalog.activity_label(activity, lang)} · {catalog.sub_activity_label(activity, sub, lang)}"))
     return choices
 
 
@@ -87,7 +92,7 @@ def entity_edit(request, pk=None):
     current = f"{entity.activity_slug}:{entity.sub_activity_slug}" if entity and entity.activity_slug else ""
     return render(request, "entities/form.html", _context(request, entity=entity, error=error, post=request.POST,
                                                           kinds=[(EntityKind.BRANCH, WORDS[lang]["kind_branch"]), (EntityKind.COMPANY, WORDS[lang]["kind_company"])],
-                                                          activities=_activity_choices(lang), current_activity=current))
+                                                          activities=_activity_choices(lang, current), current_activity=current))
 
 
 @require_permission("inventory.view_group_stock")

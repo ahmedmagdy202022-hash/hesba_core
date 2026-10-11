@@ -153,6 +153,7 @@ def _capability_rows(activity, sub_activity, lang):
 
     from . import capabilities
 
+    activity, sub_activity = catalog.closest(activity, sub_activity)  # OTHER-001: offered what the closest activity is offered
     rows = []
     for slug in capabilities.CAPABILITY_SLUGS:
         entry = capabilities.CAPABILITIES[slug]
@@ -310,8 +311,8 @@ SUB_STEP_COPY = {
         "en": {"title": "Choose the manufacturing type", "subtitle": "Choosing the type helps Hesba prepare recipes, materials and production runs."},
     },
     catalog.OTHER: {
-        "ar": {"title": "اختر شكل نشاطك", "subtitle": "لو نشاطك مش في القايمة، اختار الأقرب؛ وتقدر تغيّر الموديولات بعدين من الإعدادات."},
-        "en": {"title": "Choose the shape of your activity", "subtitle": "If your activity is not listed, pick the closest; you can change the modules later in settings."},
+        "ar": {"title": "شغلك أقرب لإيه؟", "subtitle": "حِسْبَة هتجهّز لك الشاشات والكلمات والتقارير بتاعة أقرب نشاط. وتقدر تغيّر الموديولات بعدين من الإعدادات."},
+        "en": {"title": "What is your work closer to?", "subtitle": "Hesba sets up the screens, words and reports of the closest activity. You can change the modules later in settings."},
     },
 }
 SUB_STEP_COMMON = {

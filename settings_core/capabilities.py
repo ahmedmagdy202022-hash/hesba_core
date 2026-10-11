@@ -225,6 +225,7 @@ def about(activity, slug, lang="ar"):
 
 
 def preset_state(activity, sub_activity, slug):
+    activity, sub_activity = catalog.closest(activity, sub_activity)  # OTHER-001: "closer to services" is preset as services
     if not fits(activity, slug):
         return OPTIONAL
     if activity == catalog.MANUFACTURING:
@@ -331,8 +332,7 @@ def set_capability_enabled(profile, slug, enabled, user=None):
 
 def settings_rows(profile, lang="ar"):
     enabled = set(enabled_capabilities())
-    activity = profile.activity_slug if profile else ""
-    sub_activity = profile.sub_activity_slug if profile else ""
+    activity, sub_activity = catalog.closest(profile.activity_slug if profile else "", profile.sub_activity_slug if profile else "")
     rows = []
     for slug in CAPABILITY_SLUGS:
         entry = CAPABILITIES[slug]

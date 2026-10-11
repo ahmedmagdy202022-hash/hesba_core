@@ -609,7 +609,7 @@ CATALOGS = {
                     "maintenance_contracts": MAINTENANCE_CONTRACTS, None: CONTRACTING_GENERAL},
     "manufacturing": {"food": FOOD, "garments": GARMENTS, "furniture": FURNITURE, "printing": PRINTING, "chemicals": CHEMICALS,
                       "workshop": WORKSHOP, None: FOOD},
-    "other": {"mixed": SERVICES_GENERAL, None: RETAIL},
+    "other": {"mixed": SERVICES_GENERAL, "products": RETAIL, "services": SERVICES_GENERAL, None: RETAIL},
 }
 
 
@@ -628,7 +628,9 @@ def active_catalog():
     profile = ClientProfile.get_active()
     if profile is None or not profile.activity_slug:
         return BASE
-    return catalog_for(profile.activity_slug, profile.sub_activity_slug)
+    from settings_core.setup_catalog import closest
+
+    return catalog_for(*closest(profile.activity_slug, profile.sub_activity_slug))
 
 
 def all_catalogs():
