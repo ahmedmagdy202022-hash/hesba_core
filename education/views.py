@@ -112,7 +112,7 @@ def students(request):
     _guard(request)
     lang = _lang(request)
     query = (request.GET.get("q") or "").strip()
-    rows = Student.objects.select_related("payer").annotate(
+    rows = services.scoped(Student.objects).select_related("payer").annotate(
         groups_count=Count("enrollments", filter=Q(enrollments__status=EnrollmentStatus.ACTIVE)))
     if query:
         rows = rows.filter(Q(name__icontains=query) | Q(phone__icontains=query) | Q(code__icontains=query) | Q(payer__name__icontains=query))
@@ -140,7 +140,7 @@ def student_detail(request, pk):
     _guard(request)
     lang = _lang(request)
     words = WORDS[lang]
-    student = get_object_or_404(Student.objects.select_related("payer"), pk=pk)
+    student = get_object_or_404(services.scoped(Student.objects).select_related("payer"), pk=pk)
     error = ""
     if request.method == "POST":
         _guard(request, write=True)
@@ -152,7 +152,7 @@ def student_detail(request, pk):
                 services.save_student(data, request.user, student, lang)
                 message = words["saved"]
             elif action == "enroll":
-                group = get_object_or_404(StudyGroup, pk=request.POST.get("group") or 0)
+                group = get_object_or_404(services.scoped(StudyGroup.objects), pk=request.POST.get("group") or 0)
                 services.enroll(student, group, request.user, start_date=request.POST.get("start_date"),
                                 discount_percent=request.POST.get("discount_percent"), lang=lang)
                 message = words["enrolled_ok"]
@@ -173,7 +173,7 @@ def student_detail(request, pk):
         row.net = services.monthly_fee(row)
         row.status_label = _status_label(row.status, words)
     enrolled = {row.group_id for row in enrollments if row.status == EnrollmentStatus.ACTIVE}
-    open_groups = StudyGroup.objects.filter(active=True).exclude(pk__in=enrolled).select_related("course")
+    open_groups = services.scoped(StudyGroup.objects).filter(active=True).exclude(pk__in=enrolled).select_related("course")
     summary = register.student_summary(student)
     return render(request, "education/student.html", _base(request, lang, "students", student=student, enrollments=enrollments, open_groups=open_groups,
                                                            payers=_payers(), error=error, today=timezone.localdate(), summary=summary))
@@ -183,7 +183,7 @@ def student_detail(request, pk):
 
 def _group_data(request):
     data = request.POST.copy()
-    data["course"] = Course.objects.filter(pk=request.POST.get("course") or 0).first()
+    data["course"] = services.scoped(Course.objects).filter(pk=request.POST.get("course") or 0).first()
     data["teacher"] = _teachers().filter(pk=request.POST.get("teacher") or 0).first()
     return data
 
@@ -191,15 +191,15 @@ def _group_data(request):
 def groups(request):
     _guard(request)
     lang = _lang(request)
-    rows = list(StudyGroup.objects.select_related("course", "teacher").annotate(
+    rows = list(services.scoped(StudyGroup.objects).select_related("course", "teacher").annotate(
         seats=Count("enrollments", filter=Q(enrollments__status=EnrollmentStatus.ACTIVE))).order_by("-active", "course__name", "name"))
     for row in rows:
         row.schedule = services.schedule_text(row, lang)
-    return render(request, "education/groups.html", _base(request, lang, "groups", rows=rows, has_courses=Course.objects.filter(active=True).exists()))
+    return render(request, "education/groups.html", _base(request, lang, "groups", rows=rows, has_courses=services.scoped(Course.objects).filter(active=True).exists()))
 
 
 def _group_form_context(request, lang, **extra):
-    return _base(request, lang, "groups", courses=Course.objects.filter(active=True), teachers=_teachers(),
+    return _base(request, lang, "groups", courses=services.scoped(Course.objects).filter(active=True), teachers=_teachers(),
                  weekdays=[(day, services.DAY_LABELS[lang][day]) for day in Weekday.values], **extra)
 
 
@@ -224,7 +224,7 @@ def group_detail(request, pk):
     _guard(request)
     lang = _lang(request)
     words = WORDS[lang]
-    group = get_object_or_404(StudyGroup.objects.select_related("course", "teacher"), pk=pk)
+    group = get_object_or_404(services.scoped(StudyGroup.objects).select_related("course", "teacher"), pk=pk)
     error = ""
     if request.method == "POST":
         _guard(request, write=True)
@@ -234,7 +234,7 @@ def group_detail(request, pk):
                 services.save_group(_group_data(request), request.user, group, lang)
                 message = words["saved"]
             elif action == "enroll":
-                student = get_object_or_404(Student, pk=request.POST.get("student") or 0)
+                student = get_object_or_404(services.scoped(Student.objects), pk=request.POST.get("student") or 0)
                 services.enroll(student, group, request.user, start_date=request.POST.get("start_date"),
                                 discount_percent=request.POST.get("discount_percent"), lang=lang)
                 message = words["enrolled_ok"]
@@ -258,7 +258,7 @@ def group_detail(request, pk):
     sessions = list(group.sessions.annotate(
         present=Count("marks", filter=Q(marks__presence=Presence.PRESENT)), late=Count("marks", filter=Q(marks__presence=Presence.LATE)),
         absent=Count("marks", filter=Q(marks__presence=Presence.ABSENT)))[:8])
-    others = Student.objects.filter(active=True).exclude(pk__in=[row.student_id for row in roster]).order_by("name")
+    others = services.scoped(Student.objects).filter(active=True).exclude(pk__in=[row.student_id for row in roster]).order_by("name")
     total = sum((row.net for row in roster), start=group.effective_fee * 0)
     return render(request, "education/group.html", _group_form_context(
         request, lang, group=group, roster=roster, others=others, schedule=services.schedule_text(group, lang), error=error, post=None,
@@ -276,7 +276,7 @@ def courses(request):
     editing = None
     if request.method == "POST":
         _guard(request, write=True)
-        editing = Course.objects.filter(pk=request.POST.get("course") or 0).first()
+        editing = services.scoped(Course.objects).filter(pk=request.POST.get("course") or 0).first()
         try:
             services.save_course(request.POST, request.user, editing, lang)
         except ValidationError as exc:
@@ -285,8 +285,8 @@ def courses(request):
             messages.success(request, words["saved"])
             return _back("education:courses", lang)
     elif request.GET.get("edit"):
-        editing = Course.objects.filter(pk=request.GET.get("edit")).first()
-    rows = list(Course.objects.select_related("item").annotate(group_count=Count("groups", filter=Q(groups__active=True))))
+        editing = services.scoped(Course.objects).filter(pk=request.GET.get("edit")).first()
+    rows = list(services.scoped(Course.objects).select_related("item").annotate(group_count=Count("groups", filter=Q(groups__active=True))))
     for row in rows:
         row.basis_label = services.BASIS_LABELS[lang][row.basis]
     bases = [(value, services.BASIS_LABELS[lang][value]) for value in FeeBasis.values]
