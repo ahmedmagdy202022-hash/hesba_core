@@ -354,3 +354,61 @@ class GroupRoundThreeTests(EducationSetup):
         with mock.patch("education.models.StudyGroup.objects.select_for_update", wraps=StudyGroup.objects.select_for_update) as lock:
             services.save_group(data, self.owner, group)
         self.assertTrue(lock.called)
+
+
+class GroupRoundFourTests(EducationSetup):
+    """Codex on #185, fourth round."""
+
+    def test_editing_a_student_keeps_a_switched_off_payer(self):
+        other_parent = make_customer(customer_code="CUS-OTHER", name="أ ولي أمر تاني")
+        student = self.student()
+        Customer.objects.filter(pk=student.payer_id).update(active=False)
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("education:student", args=[student.pk])).content.decode()
+        self.assertIn(f'<option value="{student.payer_id}" selected>', page)
+        self.client.post(reverse("education:student", args=[student.pk]), {"action": "edit", "name": "يوسف محمد علي", "payer": student.payer_id})
+        student.refresh_from_db()
+        self.assertNotEqual(student.payer_id, other_parent.pk)
+        self.assertEqual(student.name, "يوسف محمد علي")
+
+    def test_a_late_class_running_past_midnight_clashes_with_the_next_morning(self):
+        services.save_group({"course": self.maths, "name": "سهرة السبت", "teacher": self.teacher, "days": "sat", "start_time": time(23),
+                             "duration_minutes": "120"}, self.owner)  # Saturday 23:00 – Sunday 01:00
+        with self.assertRaisesMessage(ValidationError, "أ. محمود"):
+            services.save_group({"course": self.maths, "name": "فجر الأحد", "teacher": self.teacher, "days": "sun", "start_time": time(0, 30),
+                                 "duration_minutes": "60"}, self.owner)
+        self.assertTrue(services.save_group({"course": self.maths, "name": "ضهر الأحد", "teacher": self.teacher, "days": "sun", "start_time": time(12),
+                                             "duration_minutes": "60"}, self.owner).pk)
+        # Friday night into Saturday wraps round the week.
+        services.save_group({"course": self.maths, "name": "سهرة الجمعة", "room": "قاعة 9", "days": "fri", "start_time": time(23, 30),
+                             "duration_minutes": "90"}, self.owner)
+        with self.assertRaisesMessage(ValidationError, "قاعة 9"):
+            services.save_group({"course": self.maths, "name": "بدري السبت", "room": "قاعة 9", "days": "sat", "start_time": time(0, 15),
+                                 "duration_minutes": "30"}, self.owner)
+
+    def test_the_clash_check_takes_the_teacher_and_entity_locks(self):
+        from unittest import mock
+
+        from staff.models import Employee
+
+        with mock.patch.object(Employee.objects, "select_for_update", wraps=Employee.objects.select_for_update) as teacher_lock:
+            self.group()
+        self.assertTrue(teacher_lock.called)
+
+    def test_a_capacity_too_big_for_the_column_is_a_message(self):
+        with self.assertRaisesMessage(ValidationError, "السعة"):
+            services.save_group({"course": self.maths, "name": "ضخمة", "days": "sat", "capacity": "2147483648"}, self.owner)
+
+    def test_edits_record_what_changed(self):
+        student = self.student()
+        old_payer = student.payer.customer_code
+        new_parent = make_customer(customer_code="CUS-NEW", name="ولي أمر جديد")
+        services.save_student({"name": student.name, "payer": new_parent}, self.owner, student)
+        log = AuditLog.objects.filter(action="edit_student").latest("pk")
+        self.assertEqual((log.before_data["payer"], log.after_data["payer"]), (old_payer, "CUS-NEW"))
+        group = self.group(capacity="10")
+        services.save_group({"course": self.maths, "name": group.name, "teacher": self.teacher, "room": "قاعة 5", "days": "sat,tue",
+                             "start_time": time(16), "duration_minutes": "90", "capacity": "12"}, self.owner, group)
+        log = AuditLog.objects.filter(action="edit_group").latest("pk")
+        self.assertEqual((log.before_data["room"], log.after_data["room"]), ("قاعة 1", "قاعة 5"))
+        self.assertEqual((log.before_data["capacity"], log.after_data["capacity"]), (10, 12))
