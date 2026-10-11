@@ -121,6 +121,8 @@ class Command(BaseCommand):
             self._appointments(master, staff, owner)
         if "patients" in extras:
             self._patients(master, staff, owner)
+        if "students" in extras:
+            self._students(master, staff, owner)
         if "projects" in extras:
             self._projects(master, owner)
         if "orders" in extras:
@@ -169,6 +171,97 @@ class Command(BaseCommand):
         "contracting.infrastructure": (("1", "حفر وردم", "م³", "6000", "45"), ("2", "طبقة أساس سن", "م³", "2400", "420"),
                                        ("3", "رصف أسفلت", "م²", "9000", "140"), ("4", "توريد وتركيب بلدورة", "م.ط", "1800", "190")),
     }
+    def _students(self, master, teacher, owner):
+        """EDU-001: courses from the catalog's services, three groups, parents with their children enrolled."""
+
+        from education import services as edu
+        from master_data.models import Customer
+        from staff.services import save_employee
+
+        if not edu.is_education_install():
+            return  # the same catalog also serves a services business, which has no student files
+        today = timezone.localdate()
+        courses = [edu.save_course({"name": item.item_name, "fee": item.default_sale_price, "basis": "monthly", "item": item}, owner)
+                   for item in master["items"] if not item.is_stock_tracked][:2]
+        if not courses:
+            return
+        second = save_employee({"name": "أ. نادية", "title": teacher.title or "مدرسة"}, owner)
+        # EDU-004: each group says how its teacher is paid: per class, a share of the fees, or a fixed month.
+        plan = (
+            (courses[0], "مجموعة السبت والتلات", teacher, "قاعة 1", "sat,tue", time(16), 12, "percent", "40"),
+            (courses[0], "مجموعة الأحد والأربع", second, "قاعة 2", "sun,wed", time(18), 12, "session", "120"),
+            (courses[-1], "مجموعة الاتنين والخميس", teacher, "قاعة 1", "mon,thu", time(17), 10, "monthly", "800"),
+        )
+        groups = [edu.save_group({"course": course, "name": name, "teacher": who, "room": room, "days": days, "start_time": start,
+                                  "duration_minutes": "90", "capacity": str(capacity), "starts_on": today - timedelta(days=40),
+                                  "teacher_pay": pay_basis, "teacher_rate": rate}, owner)
+                  for course, name, who, room, days, start, capacity, pay_basis, rate in plan]
+        families = (
+            ("محمد السيد (ولي أمر)", "01001234501", "الأب", ("يوسف محمد", "مريم محمد")),
+            ("هالة عبد الرحمن (ولية أمر)", "01101234502", "الأم", ("عمر خالد",)),
+            ("طارق فهمي (ولي أمر)", "01201234503", "الأب", ("سلمى طارق", "آدم طارق")),
+            ("نجلاء حسن (ولية أمر)", "01501234504", "الأم", ("ليلى أحمد",)),
+            ("إبراهيم سالم (ولي أمر)", "01001234505", "الأب", ("حمزة إبراهيم",)),
+        )
+        students = []
+        for parent, phone, relation, children in families:
+            payer = Customer.objects.filter(phone=phone).first()
+            for child in children:
+                data = {"name": child, "stage": "تالتة إعدادي", "relation": relation}
+                data.update({"payer": payer} if payer else {"payer_name": parent, "payer_phone": phone})
+                student = edu.save_student(data, owner)
+                payer = student.payer
+                students.append(student)
+        for n, student in enumerate(students):
+            # Brothers and sisters get 10% off; the first two groups share the students, the third takes a few.
+            sibling = sum(1 for other in students if other.payer_id == student.payer_id) > 1
+            edu.enroll(student, groups[n % 2], owner, start_date=today - timedelta(days=35), discount_percent="10" if sibling else "0")
+            if n < 4:
+                edu.enroll(student, groups[2], owner, start_date=today - timedelta(days=20))
+        # EDU-002: four weeks of attendance, with a few absences and late arrivals.
+        from education import attendance
+
+        for group in groups:
+            for days_ago in range(28, -1, -1):
+                day = today - timedelta(days=days_ago)
+                if attendance.weekday(day) not in group.weekdays:
+                    continue
+                roster = list(attendance.roster_on(group, day))
+                marks = {}
+                for k, row in enumerate(roster):
+                    if (k + days_ago) % 9 == 0:
+                        marks[str(row.student_id)] = "absent"
+                    elif (k + days_ago) % 11 == 0:
+                        marks[str(row.student_id)] = "late"
+                if roster:
+                    attendance.take(group, owner, day, marks)
+        # EDU-003: last month billed and mostly paid, this month billed; two parents still owe.
+        from config.numbering import next_in_series
+        from education import billing
+        from sales.models import CustomerPayment
+        from sales.services import record_customer_payment
+
+        last_month = (today.replace(day=1) - timedelta(days=1)).replace(day=1)
+        cashbox = next((box for box in master["cashboxes"] if box.is_default), master["cashboxes"][0]) if master["cashboxes"] else None
+        for month, day in ((last_month, min(last_month + timedelta(days=2), today)), (today.replace(day=1), today)):
+            try:
+                invoices = billing.bill_month(month, owner, post=True, invoice_date=day)
+            except ValidationError:
+                continue  # nothing running that month
+            if month == last_month and cashbox is not None:
+                for invoice in invoices[:-2]:
+                    record_customer_payment(next_in_series(CustomerPayment, "payment_number", "CP-"), day + timedelta(days=3), invoice.customer, cashbox,
+                                            invoice.total_amount, owner, notes="مصروفات الشهر")
+        # EDU-004: last month's teachers paid out of the cashbox; this month still owed.
+        from education import pay
+
+        if cashbox is not None:
+            for row in pay.teacher_rows(last_month):
+                if row["remaining"] > 0:
+                    try:
+                        pay.pay(row["teacher"], last_month, row["remaining"], cashbox, owner)
+                    except ValidationError:
+                        pass  # the cashbox cannot cover it: the demo shows it owed
 
     def _projects(self, master, owner):
         """CONTRACT-002: one project with a bill of quantities, terms, an advance,

@@ -955,6 +955,100 @@ Status: APPROVED — Ahmed approved on 9 Oct 2026 ("خلص كله"), after the a
   - budget against actual;
   - trial balance balanced and reconciliation clean, with the exact amounts in receivable, retention receivable, customer advances, payable, retention payable and project costs;
   - the screens and who may act.
+## HG-040 — Education module: students, payers, courses, study groups, enrolments (EDU-001)
+
+- **Status:** approved by Ahmed on 10 October 2026, as part of the education restructure: "اعادة هيكلة التعليمي". See `docs/ACTIVITY_SCORECARD.md`.
+- **Why:** education scored 54%. A student was only a customer and a class was only an appointment. There was no group, schedule, enrolment, attendance or monthly fee.
+- **Change.** A new `education` app (new models and one migration), which touches no existing model:
+  - `Student`, whose `payer` is an ordinary `Customer` (a parent, or the student themselves). Brothers and sisters share one account.
+  - `Course`, which owns a non-stock service `Item`, so its invoices are ordinary sales invoices. Renaming the course or changing its price keeps the item in step.
+  - `StudyGroup`, with its teacher (an `Employee`), room, weekdays, time, length, capacity, fee and dates. A teacher or a room is never booked into two groups at once.
+  - `Enrollment`, with its start and stop dates, a discount percentage and a status. There is one active enrolment per student and group. Capacity is checked under the group's row lock.
+- **Entity scope (Codex on #185, HG-034):** students, courses and groups belong to the entity they were made in, and unowned ones count as the main entity's. Every list, file, choice and change is scoped to the entity being worked in; the whole group sees everything. A student, a group and its course must share one entity. A room clash counts within one entity; a teacher clash counts everywhere.
+- **Not touched:**
+  - sales and payment posting, the customer ledger, cash, stock and reports;
+  - the permission core: viewing uses `master_data.view_master_data`, and changing uses `master_data.manage_parties`.
+
+  The screens appear only on an education install, or in an education entity of a group.
+- **EDU-002 (attendance):**
+  - `ClassSession` is one per group and day, held or cancelled, with the topic covered.
+  - `Attendance` is one mark per student and class: present, late, absent or excused.
+  - The roster is the enrolments running on that day. Unmarked students count as present, and taking a day again corrects it.
+  - A teacher (a user linked to the group's employee) takes attendance for their own groups only; managers can take it for any group.
+  - Attendance rates count held classes only, with late counted as attended.
+  - Absent and late students get a one-tap WhatsApp link to the parent.
+  - No money moves.
+  - **Codex on #186:**
+    - A student stopped and enrolled again on the same day is one row, with one mark.
+    - Attendance is taken only on the group's own weekdays and within its dates, and the group page offers its latest class day.
+    - A message about an older class gives its date instead of "today".
+    - Attendance screens are scoped to the entity being worked in.
+  - **Schema change and its risk plan (Codex on #186):**
+    - **Files:**
+      - `education/models.py` (`ClassSession`, `Attendance`, `Presence`, `SessionStatus`);
+      - migration `education/0002`;
+      - `education/attendance.py` (all writes);
+      - `education/views.py`;
+      - `templates/education/today.html` and `attendance.html`;
+      - `reports/navigation.py` ("My classes").
+    - **Schema:** two new tables in the education app only.
+      - Unique constraints: one session per group and day, one mark per student and session.
+      - No existing table is altered, and the migration only adds tables, so rolling back is dropping them; no other app reads them.
+    - **Risk 1, a correction rewrites history.** Taking a class again replaces its marks.
+      - The audit row keeps the full before and after: status, topic, and each student's mark and note.
+      - Nothing else is deleted.
+    - **Risk 2, rates drift.** Rates count only held classes, over a window of exactly the last N calendar days, today included.
+    - **Risk 3, a teacher reaches others' groups.** A teacher-only user sees and changes only the groups linked to their own employee record, and only through the attendance screens.
+    - **No money or stock is touched.**
+    - **Verification** (`education/tests.py`):
+      - roster on a day, including stop-and-rejoin;
+      - weekday and term checks;
+      - future days refused;
+      - unknown marks refused;
+      - corrections recorded mark by mark;
+      - excused counted;
+      - the 30-day window;
+      - teacher-only access and menu;
+      - entity scope;
+      - malformed dates.
+- **EDU-003 (monthly fees):** `education/billing.py` makes one draft sales invoice per parent for a month. It goes through `create_sales_draft_with_tax`, and through `post_sales_invoice` when posting is asked for. Neither function is changed.
+  - **Lines:** one per enrolment, using the course's own service item.
+    - **Monthly groups:** one month at the group's fee, with the enrolment's discount as the line discount.
+    - **Per-class groups:** the classes attended that month; late counts as attended.
+    - **Whole courses:** billed once.
+  - **Duplicates:** a new `FeeCharge` row records which enrolment and month each line billed, so running the month again bills only what is new. A cancelled invoice frees its month. Each parent's customer row is locked while their lines are worked out, so two runs at once cannot bill one month twice.
+  - **Not allowed:** future months.
+  - **Fees owed:** the existing customer aging, kept to parents of students, with WhatsApp reminders.
+  - **`FeeCharge.amount`** is as wide as an invoice line (14 digits), because a per-class charge is quantity × fee (Codex on #187).
+- **EDU-004 (teacher pay, dashboard, month report):**
+  - **New schema, education app only:**
+    - `StudyGroup.teacher_pay` (none / per class held / share of the group's fees / fixed per month) and `StudyGroup.teacher_rate`.
+    - A new `TeacherPayment` table: teacher, month, amount, and a one-to-one link to the `Expense` that paid it. Migration `education/0004`.
+    - A new `GroupPayTerm` table (migration `education/0005`): the teacher, pay basis and rate of each group for a month, frozen when that month is first paid.
+      - Editing a group afterwards changes only the months still to pay.
+      - A payment can never drop out of its month or be made twice.
+  - **Paying a teacher:** `expenses.services.record_expense`, called unchanged, under a new "Teacher pay" category (`TEACHER-PAY`).
+    - The cash leaves the chosen cashbox through the existing cashbox operation.
+    - The payment shows in the expenses list and comes off profit.
+    - Cancelling the expense (expenses page, also unchanged) reverses the cash, and the month is owed again.
+    - The teacher's row is locked while the amount is checked. Nothing above what is still owed can be paid, and no future month.
+  - **What a teacher is owed** is read from records the system already keeps:
+    - classes held (attendance);
+    - the group's live fee charges (EDU-003);
+    - or whether the group had students that month.
+  - **Dashboard:** the education panel replaces the bookings panel for education installs, and "Today's classes" becomes the lead quick action.
+    - Panel: active students, today's classes with how many have attendance taken, 30-day attendance, fees billed this month (needs sales view), parents who owe (needs the customer report).
+  - **Month report:** per group: students, classes held, attendance, fees billed. Teacher pay and what is left only show for users who can see the expenses.
+  - **Not touched:** sales, cashbox and expense posting, ledgers, report calculations.
+- **Tests:** `education/tests.py` covers:
+  - payers and siblings;
+  - the course item kept in step;
+  - teacher and room clashes;
+  - capacity, discount, stop and re-enrol;
+  - the screens in Arabic and English;
+  - permissions;
+  - other activities not seeing the module;
+  - the demo data.
 
 ## Final gate verification
 

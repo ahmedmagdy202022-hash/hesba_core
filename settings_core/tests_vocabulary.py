@@ -25,8 +25,8 @@ class VocabularyTableTests(SimpleTestCase):
     def test_activities_speak_their_own_language(self):
         self.assertEqual(vocabulary("medical", "clinic")["customers"]["ar"], "المرضى")
         self.assertEqual(vocabulary("services", "clinic")["customers"]["ar"], "المرضى")
-        self.assertEqual(vocabulary("education", "tutoring_center")["customers"]["ar"], "الطلاب")
-        self.assertEqual(vocabulary("education", "nursery")["customers"]["ar"], "الأطفال")
+        self.assertEqual(vocabulary("education", "tutoring_center")["customers"]["ar"], "أولياء الأمور")  # EDU-001: students have their own files
+        self.assertEqual(vocabulary("education", "nursery")["customers"]["ar"], "أولياء الأمور")
         self.assertEqual(vocabulary("restaurants", "cafe")["items"]["ar"], "المنيو")
         self.assertEqual(vocabulary("contracting", "general")["operations"]["ar"], "المستخلصات والفواتير")
         self.assertEqual(vocabulary("commercial", "pharmacy")["items"]["ar"], "الأدوية والأصناف")
@@ -60,8 +60,8 @@ class ScreenWordsTests(TestCase):
     def test_english_follows_too_and_a_shop_is_unchanged(self):
         self.set_activity("education", "training")
         page = self.client.get(reverse("dashboard_snapshot"), {"lang": "en"}).content.decode()
-        self.assertIn(">Students<", page)
-        self.assertIn("New student", page)
+        self.assertIn(">Trainee accounts<", page)  # EDU-001: the trainee's file is under Students & groups
+        self.assertIn("New trainee account", page)
         self.set_activity("commercial", "retail")
         page = self.client.get(reverse("dashboard_snapshot")).content.decode()
         self.assertIn(">العملاء<", page)

@@ -435,7 +435,7 @@ def _education(key, category, services, goods, staff):
     return Catalog(
         key=key, category=category, items=tuple(_s(*s) for s in services) + tuple(_p(*g) for g in goods),
         customers=("أحمد عبد الله (ولي أمر)", "سارة محمود (ولية أمر)", "محمد إبراهيم", "شركة النور للتجارة (منح موظفين)"),
-        suppliers=("مطبعة المعرفة", "مكتبة الوادي"), staff=staff, extras=frozenset({"appointments"}),
+        suppliers=("مطبعة المعرفة", "مكتبة الوادي"), staff=staff, extras=frozenset({"appointments", "students"}),
     )
 
 

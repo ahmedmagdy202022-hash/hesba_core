@@ -67,6 +67,7 @@ LOCAL_APPS = [
     "entities",
     "ledger",
     "medical",
+    "education",
     "feedback",
 ]
 
