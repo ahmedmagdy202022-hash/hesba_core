@@ -233,3 +233,233 @@ class ScreenTests(RestaurantSetup):
 
         with self.assertRaises(ModuleChangeRefused):  # required for a restaurant
             set_module_enabled(self.profile, "tables_orders", False, self.owner)
+
+
+class RestaurantInsightTests(RestaurantSetup):
+    """RESTO-002: dish costs and margins, and the restaurant report."""
+
+    def setUp(self):
+        super().setUp()
+        self.rice = make_item(item_code="R-RICE", item_name="أرز", unit="كجم", is_stock_tracked=True)
+        self.lentil = make_item(item_code="R-LENT", item_name="عدس", unit="كجم", is_stock_tracked=True)
+        stock_in(self.rice, self.location, 20, "30.00")
+        stock_in(self.lentil, self.location, 10, "50.00")
+        from inventory.services import recalculate_item_average_cost
+
+        for item in (self.rice, self.lentil):
+            recalculate_item_average_cost(item)
+        self.client.force_login(self.owner)
+
+    def paid(self, *, table=None, items=(), guests=2, kind="dine_in"):
+        from . import services as floor
+
+        order = floor.open_order(self.owner, kind=kind, table=table, guests=guests)
+        for item in items:
+            floor.add_item(order, item, self.owner)
+        floor.pay(order, self.owner, cashbox=self.cashbox, tendered=D("100000"))
+        order.refresh_from_db()
+        return order
+
+    def test_a_dish_costs_its_ingredients_and_shows_its_margin(self):
+        from . import insights
+
+        url = reverse("restaurant:dish", args=[self.koshary.pk])
+        self.client.post(url, {"ingredient": [self.rice.pk, self.lentil.pk, ""], "quantity": ["0.200", "0.100", ""]})
+        self.assertEqual(insights.plate_cost(self.koshary), D("11.00"))  # 0.2 × 30 + 0.1 × 50
+        rows = {row["dish"].pk: row for row in insights.menu_costing([self.koshary, self.tea])}
+        self.assertEqual((rows[self.koshary.pk]["margin"], rows[self.koshary.pk]["margin_pct"]), (D("49.00"), 82))
+        self.assertIsNone(rows[self.tea.pk]["cost"])
+        page = self.client.get(reverse("restaurant:costing"))
+        self.assertContains(page, 'data-margin-pct="82"')
+        self.assertContains(self.client.get(reverse("restaurant:board")), "data-resto-costing")
+        log = AuditLog.objects.filter(action="save_dish_ingredients").latest("pk")
+        self.assertEqual(len(log.after_data["ingredients"]), 2)
+        before = StockMovement.objects.count()
+        self.paid(table=self.t1, items=[self.koshary])
+        self.assertEqual(StockMovement.objects.count(), before)  # selling a dish takes no ingredient out of stock (HG-044)
+
+    def test_bad_ingredients_are_refused(self):
+        from . import insights
+
+        for lines, message in (([(self.tea, "1")], "صنف مخزني"), ([(self.rice, "0")], "أكبر من صفر"), ([(self.rice, "abc")], "أكبر من صفر"),
+                               ([(self.rice, "1"), (self.rice, "2")], "متكرر"), ([(self.rice, "0.0004")], "أكبر من صفر")):
+            with self.subTest(lines=lines), self.assertRaisesMessage(ValidationError, message):
+                insights.save_ingredients(self.koshary, lines, self.owner)
+        response = self.client.post(reverse("restaurant:dish", args=[self.koshary.pk]), {"ingredient": [self.rice.pk], "quantity": ["x"]})
+        self.assertContains(response, 'value="x"')
+
+    def test_a_deactivated_ingredient_still_saves_and_a_future_end_is_today(self):
+        from . import insights
+
+        insights.save_ingredients(self.koshary, [(self.rice, "0.2"), (self.lentil, "0.1")], self.owner)
+        self.rice.active = False
+        self.rice.save()
+        url = reverse("restaurant:dish", args=[self.koshary.pk])
+        self.assertContains(self.client.get(url), f'value="{self.rice.pk}" selected')
+        self.client.post(url, {"ingredient": [self.rice.pk, self.lentil.pk], "quantity": ["0.3", "0.1"]})
+        self.assertEqual(self.koshary.dish_ingredients.get(ingredient=self.rice).quantity, D("0.300"))
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        page = self.client.get(reverse("restaurant:report") + f"?to={(timezone.localdate() + timedelta(days=60)).isoformat()}")
+        self.assertEqual(page.context["last"], timezone.localdate())
+
+    def test_the_report_counts_paid_orders_by_hour_dish_table_and_waiter(self):
+        from datetime import datetime, time, timedelta
+
+        from django.utils import timezone
+
+        from . import insights
+
+        first = self.paid(table=self.t1, items=[self.koshary, self.koshary, self.tea], guests=3)  # 135
+        second = self.paid(table=self.t1, items=[self.tea])  # 15
+        third = self.paid(kind="takeaway", items=[self.koshary])  # 60
+        today = timezone.localdate()
+        noon = timezone.make_aware(datetime.combine(today, time(13, 10)))
+        Order.objects.filter(pk=first.pk).update(opened_at=noon - timedelta(minutes=50), closed_at=noon)
+        Order.objects.filter(pk=second.pk).update(opened_at=noon - timedelta(minutes=10), closed_at=noon + timedelta(minutes=30))
+        Order.objects.filter(pk=third.pk).update(closed_at=timezone.make_aware(datetime.combine(today, time(20, 5))))
+        cancelled = services.open_order(self.owner, table=self.t2)
+        services.add_item(cancelled, self.koshary, self.owner)
+        services.cancel_order(cancelled, self.owner, "غلط")
+        data = insights.period_report(today.replace(day=1), today)
+        totals = data["totals"]
+        self.assertEqual((totals["orders"], totals["sales"], totals["average"]), (3, D("210.00"), D("70.00")))
+        self.assertEqual([(row["hour"], row["orders"]) for row in data["hours"]], [(13, 2), (20, 1)])
+        self.assertEqual(data["peak"]["hour"], 13)
+        self.assertEqual([(row["item"].pk, row["quantity"]) for row in data["dishes"]], [(self.koshary.pk, D("3.000")), (self.tea.pk, D("2.000"))])
+        table = data["tables"][0]
+        self.assertEqual((table["table"], table["orders"], table["average"], table["minutes"]), (self.t1, 2, D("75.00"), 45))
+        self.assertEqual({row["kind"]: row["orders"] for row in data["kinds"]}, {"dine_in": 2, "takeaway": 1})
+        page = self.client.get(reverse("restaurant:report"))
+        self.assertContains(page, 'data-r-hour="13"')
+        self.assertContains(page, "210.00")
+        self.assertNotContains(page, "0,1")  # no locale decimal comma in the per-day figure
+        self.assertEqual(self.client.get(reverse("restaurant:report") + "?lang=en&from=bad").status_code, 200)
+
+    def test_waste_lists_stock_taken_out_by_adjustment(self):
+        from django.utils import timezone
+
+        from inventory.services import adjust_stock, cancel_stock_operation
+
+        from . import insights
+
+        today = timezone.localdate()
+        adjust_stock("W-1", today, self.rice, self.location, "out", "2", "هالك — اتحرق", self.owner)
+        mistake = adjust_stock("W-2", today, self.lentil, self.location, "out", "1", "غلط", self.owner)
+        cancel_stock_operation(mistake.pk, today, "غلط في التسجيل", self.owner)
+        rows, total = insights.waste(today.replace(day=1), today)
+        self.assertEqual([(row["movement"].item_id, row["reason"]) for row in rows], [(self.rice.pk, "هالك — اتحرق")])
+        self.assertEqual(total, D("60.00"))
+        self.assertContains(self.client.get(reverse("restaurant:report")), "هالك — اتحرق")
+
+    def test_who_sees_the_report_and_the_costs(self):
+        from permissions.services import user_has_permission
+
+        cashier = person(RoleCode.CASHIER, "resto_cashier2")
+        self.client.force_login(cashier)
+        if user_has_permission(cashier, "reports.view_all_sales_report") or user_has_permission(cashier, "inventory.view_cost"):
+            self.skipTest("the seeded cashier's rights changed")
+        self.assertEqual(self.client.get(reverse("restaurant:report")).status_code, 403)
+        self.assertEqual(self.client.get(reverse("restaurant:costing")).status_code, 403)
+        board = self.client.get(reverse("restaurant:board"))
+        self.assertNotContains(board, "data-resto-report")
+        self.assertNotContains(board, "data-resto-costing")
+
+
+class DeliveryTests(RestaurantSetup):
+    """RESTO-003: the driver, when it left, and the delivery fee on the same invoice."""
+
+    def setUp(self):
+        super().setUp()
+        from staff.services import save_employee
+
+        self.driver = save_employee({"name": "محمود الطيار"}, self.owner)
+        self.client.force_login(self.owner)
+
+    def test_a_delivery_carries_its_fee_and_driver_to_one_invoice(self):
+        from cashboxes.services import get_cashbox_balance
+
+        self.client.post(reverse("restaurant:board"), {"kind": "delivery", "address": "شارع النصر 5", "phone": "01001234567", "delivery_fee": "15"})
+        order = Order.objects.get(kind=OrderKind.DELIVERY)
+        self.assertEqual(order.delivery_fee, D("15.00"))
+        services.add_item(order, self.koshary, self.owner, 2)
+        url = reverse("restaurant:order", args=[order.pk])
+        self.assertContains(self.client.get(url), "data-dispatch")
+        self.client.post(url, {"action": "dispatch", "driver": self.driver.pk, "delivery_fee": "20"})
+        order.refresh_from_db()
+        self.assertEqual((order.driver, order.delivery_fee, order.dispatched_at is not None, order.total), (self.driver, D("20.00"), True, D("140.00")))
+        before = get_cashbox_balance(self.cashbox)
+        invoice, _ = services.pay(order, self.owner, cashbox=self.cashbox, tendered=D("140"))
+        self.assertEqual(invoice.total_amount, D("140.00"))
+        fee = invoice.lines.get(item__item_code="DELIVERY-FEE")
+        self.assertEqual((fee.line_total_amount, fee.item.is_stock_tracked), (D("20.00"), False))
+        self.assertEqual(get_cashbox_balance(self.cashbox) - before, D("140.00"))
+        second = services.open_order(self.owner, kind="delivery", address="x", delivery_fee="10")
+        services.add_item(second, self.tea, self.owner)
+        services.pay(second, self.owner, cashbox=self.cashbox, tendered=D("100"))
+        from master_data.models import Item
+
+        self.assertEqual(Item.objects.filter(item_code="DELIVERY-FEE").count(), 1)  # made once
+
+    def test_a_delivery_without_a_fee_has_no_fee_line_and_the_rules(self):
+        order = services.open_order(self.owner, kind="delivery", address="x")
+        services.add_item(order, self.tea, self.owner)
+        invoice, _ = services.pay(order, self.owner, cashbox=self.cashbox, tendered=D("15"))
+        self.assertFalse(invoice.lines.filter(item__item_code="DELIVERY-FEE").exists())
+        with self.assertRaisesMessage(ValidationError, "رسوم التوصيل"):
+            services.open_order(self.owner, kind="delivery", address="x", delivery_fee="-5")
+        hall = services.open_order(self.owner, table=self.t1, delivery_fee="30")
+        self.assertEqual(hall.delivery_fee, D("0"))  # only deliveries carry a fee
+        with self.assertRaisesMessage(ValidationError, "مش طلب دليفري"):
+            services.dispatch(hall, self.driver, self.owner)
+        open_one = services.open_order(self.owner, kind="delivery", address="y")
+        with self.assertRaisesMessage(ValidationError, "الطيار"):
+            services.dispatch(open_one, None, self.owner)
+        services.dispatch(open_one, self.driver, self.owner)
+        self.assertEqual(AuditLog.objects.filter(action="dispatch_delivery").count(), 1)
+
+    def test_the_fee_item_stays_off_the_menu_and_never_moves_stock(self):
+        from master_data.models import Item
+
+        order = services.open_order(self.owner, kind="delivery", address="x", delivery_fee="15")
+        services.add_item(order, self.tea, self.owner)
+        services.pay(order, self.owner, cashbox=self.cashbox, tendered=D("100"))
+        fee = Item.objects.get(item_code=services.FEE_ITEM_CODE)
+        other = services.open_order(self.owner, kind="delivery", address="y")
+        page = self.client.get(reverse("restaurant:order", args=[other.pk]))
+        self.assertContains(page, f'value="{self.tea.pk}"')
+        self.assertNotContains(page, f'value="{fee.pk}"')  # not a dish to add
+        self.assertNotContains(self.client.get(reverse("restaurant:costing")), "رسوم توصيل")
+        Item.objects.filter(pk=fee.pk).update(is_stock_tracked=True)
+        third = services.open_order(self.owner, kind="delivery", address="z", delivery_fee="10")
+        services.add_item(third, self.tea, self.owner)
+        with self.assertRaisesMessage(ValidationError, "صنف مخزني"):
+            services.pay(third, self.owner, cashbox=self.cashbox, tendered=D("100"))
+
+    def test_emptying_the_fee_on_the_dispatch_form_waives_it(self):
+        order = services.open_order(self.owner, kind="delivery", address="x", delivery_fee="15")
+        response = self.client.post(reverse("restaurant:order", args=[order.pk]), {"action": "dispatch", "driver": self.driver.pk, "delivery_fee": ""},
+                                    follow=True)
+        self.assertContains(response, "الطلب خرج مع الطيار.")
+        order.refresh_from_db()
+        self.assertEqual(order.delivery_fee, D("0.00"))
+
+    def test_the_report_counts_deliveries_per_driver(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from . import insights
+
+        order = services.open_order(self.owner, kind="delivery", address="x", delivery_fee="15")
+        services.add_item(order, self.koshary, self.owner)
+        services.dispatch(order, self.driver, self.owner)
+        services.pay(order, self.owner, cashbox=self.cashbox, tendered=D("75"))
+        order.refresh_from_db()
+        Order.objects.filter(pk=order.pk).update(dispatched_at=order.closed_at - timedelta(minutes=25))
+        today = timezone.localdate()
+        rows = insights.deliveries(today.replace(day=1), today)
+        self.assertEqual([(row["driver"], row["orders"], row["fees"], row["minutes"]) for row in rows], [(self.driver, 1, D("15.00"), 25)])
+        self.assertContains(self.client.get(reverse("restaurant:report")), f'data-r-driver="{self.driver.pk}"')

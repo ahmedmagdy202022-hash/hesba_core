@@ -74,6 +74,7 @@
 | Restaurants and cafés: tables, dine-in/takeaway/delivery orders, kitchen ticket, bill through the POS checkout itself | #130 |
 | Medical, education and "other" activities, with their sub-activities and presets | #131 |
 | Contracting: projects, progress bills, materials issued to site, linked expenses, project profit (HG-029) | #132 |
+| Contracting phase 2: bill of quantities, progress certificates by quantity (printable), retention and its release, owner's advance and its recovery, collections per project, subcontractors with their bills and retention, service purchases as project cost, budget against actual (HG-038) | CONTRACT-002 |
 | Manufacturing: recipes (BOM) and production runs that take out materials and bring in the product at their cost (HG-030) | #133 |
 
 Every protected-logic decision is recorded in `docs/AGENT_HARD_GATES.md` (HG-001 to HG-030; HG-029 and HG-030 are open proposals that block nothing).

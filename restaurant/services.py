@@ -25,6 +25,8 @@ from django.utils import timezone
 from audit.models import AuditEventType, AuditLog
 from config.money import money_round
 
+from master_data.models import Item
+
 from .models import DiningTable, KitchenTicket, Order, OrderKind, OrderLine, OrderStatus
 from entities import scope as entity_scope
 
@@ -37,6 +39,9 @@ MESSAGES = {
         "closed": "الطلب ده اتقفل؛ مينفعش يتعدّل.", "item": "اختار صنف من المنيو.", "qty": "الكمية لازم أكبر من صفر ولحد {max}.",
         "sent": "السطر ده راح المطبخ؛ تقدر تلغيه بس.", "empty": "الطلب فاضي.", "address": "الدليفري محتاج عنوان.",
         "setup": "لازم يكون فيه مخزن بيع نشط.", "dine_in_only": "النقل للطاولات بس لطلبات الصالة.", "has_open": "الطاولة دي عليها طلبات مفتوحة؛ اقفلها الأول.",
+        "fee": "رسوم التوصيل لازم تكون رقم صفر أو أكبر.", "not_delivery": "ده مش طلب دليفري.", "driver": "اختار الطيار.",
+        "fee_line": "رسوم توصيل", "fee_item": "رسوم توصيل",
+        "fee_stocked": "الصنف {code} متسجل صنف مخزني؛ رسوم التوصيل لازم تكون خدمة. عدّله من الأصناف وشيل «يتتبع في المخزن».",
     },
     "en": {
         "table_name": "Enter the table name or number.", "table_taken": "A table with this name exists.", "seats": "Seats must be 1 to 99.",
@@ -44,6 +49,9 @@ MESSAGES = {
         "closed": "This order is closed; it cannot be changed.", "item": "Choose an item from the menu.", "qty": "The quantity must be above zero and up to {max}.",
         "sent": "This line went to the kitchen; it can only be voided.", "empty": "The order is empty.", "address": "A delivery needs an address.",
         "setup": "An active selling location is needed.", "dine_in_only": "Only dine-in orders move between tables.", "has_open": "This table has open orders; close them first.",
+        "fee": "The delivery fee must be zero or more.", "not_delivery": "This is not a delivery order.", "driver": "Choose the driver.",
+        "fee_line": "Delivery fee", "fee_item": "رسوم توصيل",
+        "fee_stocked": "Item {code} is a stocked item; the delivery fee must be a service. Edit it under Items and untick stock tracking.",
     },
 }
 
@@ -104,7 +112,22 @@ def _next_number(day):
     return f"{prefix}{number:03d}"
 
 
-def open_order(user, *, kind=OrderKind.DINE_IN, table=None, guests=1, customer=None, waiter=None, address="", phone="", notes="", lang="ar"):
+def _fee(raw, words):
+    """RESTO-003: a delivery fee as typed (blank = 0)."""
+
+    if raw in (None, ""):
+        return Decimal("0")
+    try:
+        value = Decimal(str(raw).strip().replace(",", ""))
+    except (InvalidOperation, ValueError):
+        raise ValidationError(words["fee"])
+    if not value.is_finite() or value < 0 or value >= Decimal("100000"):
+        raise ValidationError(words["fee"])
+    return money_round(value)
+
+
+def open_order(user, *, kind=OrderKind.DINE_IN, table=None, guests=1, customer=None, waiter=None, address="", phone="", notes="", lang="ar",
+               delivery_fee=None):
     """A new order, or, for a table already taken, the order already open there."""
 
     words = MESSAGES[lang]
@@ -121,6 +144,7 @@ def open_order(user, *, kind=OrderKind.DINE_IN, table=None, guests=1, customer=N
         guests = max(1, min(int(guests or 1), 99))
     except (TypeError, ValueError):
         guests = 1
+    fee = _fee(delivery_fee, words) if kind == OrderKind.DELIVERY else Decimal("0")
     for _attempt in range(5):
         try:
             with transaction.atomic():
@@ -134,7 +158,7 @@ def open_order(user, *, kind=OrderKind.DINE_IN, table=None, guests=1, customer=N
                 order = Order.objects.create(
                     number=_next_number(timezone.localdate()), kind=kind, table=table, guests=guests, customer=customer, waiter=waiter,
                     address=address if kind == OrderKind.DELIVERY else "", phone=(phone or (getattr(customer, "phone", "") if customer else "") or "").strip()[:50],
-                    notes=(notes or "").strip()[:255], opened_by=user,
+                    notes=(notes or "").strip()[:255], opened_by=user, delivery_fee=fee,
                 )
                 _audit(order, user, "open_order", {"number": order.number, "kind": kind, "table": table.name if table else ""}, event=AuditEventType.CREATE)
                 return order
@@ -251,6 +275,39 @@ def cancel_order(order, user, reason="", lang="ar"):
 
 
 @transaction.atomic
+def dispatch(order, driver, user, *, delivery_fee=None, lang="ar"):
+    """RESTO-003: a delivery leaves with its driver (the fee can be corrected here). Sent again, it changes the driver."""
+
+    words = MESSAGES[lang]
+    order = _locked_open(order, words)
+    if order.kind != OrderKind.DELIVERY:
+        raise ValidationError(words["not_delivery"])
+    if driver is None:
+        raise ValidationError(words["driver"])
+    before = {"driver": order.driver_id, "fee": str(order.delivery_fee), "dispatched_at": order.dispatched_at.isoformat() if order.dispatched_at else ""}
+    order.driver = driver
+    if delivery_fee is not None:  # the form always sends the fee: a box emptied on purpose means no fee, as when the order was opened
+        order.delivery_fee = _fee(delivery_fee, words)
+    order.dispatched_at = order.dispatched_at or timezone.now()
+    order.save(update_fields=["driver", "delivery_fee", "dispatched_at"])
+    _audit(order, user, "dispatch_delivery", {"driver": driver.pk, "fee": str(order.delivery_fee), "dispatched_at": order.dispatched_at.isoformat()}, before)
+    return order
+
+
+FEE_ITEM_CODE = "DELIVERY-FEE"
+
+
+def _fee_item(words):
+    """The service item a delivery fee is billed as; made once (two first payments at once share it), like projects' billing item."""
+
+    item, _ = Item.objects.get_or_create(item_code=FEE_ITEM_CODE, defaults={"item_name": words["fee_item"], "is_stock_tracked": False,
+                                                                            "default_sale_price": Decimal("0")})
+    if item.is_stock_tracked:  # a fee must never move stock
+        raise ValidationError(words["fee_stocked"].format(code=FEE_ITEM_CODE))
+    return item
+
+
+@transaction.atomic
 def pay(order, user, *, cashbox, discount=Decimal("0"), tendered=Decimal("0"), customer=None, lang="ar"):
     """Post the order as one sales invoice through the cashier's checkout. Returns (invoice, change)."""
 
@@ -267,9 +324,13 @@ def pay(order, user, *, cashbox, discount=Decimal("0"), tendered=Decimal("0"), c
         raise ValidationError(words["setup"])
     customer = customer or order.customer or walk_in_customer()
     where = order.table.name if order.table else order.get_kind_display()
+    rows = [{"item": line.item, "quantity": line.quantity, "unit_sale_price": line.unit_price, "line_discount_amount": Decimal("0"),
+             "description": line.note} for line in lines]
+    if order.kind == OrderKind.DELIVERY and order.delivery_fee > 0:  # RESTO-003: the fee is its own line on the same invoice
+        rows.append({"item": _fee_item(words), "quantity": Decimal("1"), "unit_sale_price": order.delivery_fee, "line_discount_amount": Decimal("0"),
+                     "description": words["fee_line"]})
     invoice, change = checkout(
-        lines=[{"item": line.item, "quantity": line.quantity, "unit_sale_price": line.unit_price, "line_discount_amount": Decimal("0"),
-                "description": line.note} for line in lines],
+        lines=rows,
         customer=customer, location=location, cashbox=cashbox, discount=discount, tendered=tendered, user=user,
         notes=f"Restaurant {order.number} ({where})",
     )

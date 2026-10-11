@@ -23,8 +23,8 @@ TAB_TERMS = {"operations": "operations_short", "customers": "customers", "items"
 ACTIVITY_LEAD = {
     "restaurants": ("restaurant", "pos"),
     "medical": ("appointments", "medical"),
-    "education": ("appointments",),
-    "services": ("appointments",),
+    "education": ("education", "classes", "appointments"),
+    "services": ("workorders", "appointments", "packages", "hours", "contracts"),
     "manufacturing": ("manufacturing",),
     "contracting": ("projects",),
 }
@@ -72,8 +72,22 @@ NAV_ITEMS = (
     {"key": "manufacturing", "ar": "التصنيع", "en": "Manufacturing", "url_name": "manufacturing:home", "module": "manufacturing", "permission": "inventory.view_stock"},
     {"key": "projects", "ar": "المشاريع", "en": "Projects", "url_name": "projects:list", "module": "projects", "permission": "sales.view_sales_invoices"},
     {"key": "restaurant", "ar": "الطاولات", "en": "Tables", "url_name": "restaurant:board", "module": "tables_orders", "permission": "sales.view_sales_invoices"},
+    {"key": "education", "ar": "الطلاب والمجموعات", "en": "Students & groups", "url_name": "education:students", "module": "customers", "activity": "education",
+     "permission": "master_data.view_master_data"},
+    # EDU-002: a teacher without the school's records still reaches the attendance of their own groups.
+    {"key": "classes", "ar": "حصص مجموعاتي", "en": "My classes", "url_name": "education:today", "module": "customers", "activity": "education",
+     "allow": "education.attendance.teaches_only"},
+    # SVC-001: a workshop works from its work orders (a technician who has orders sees them too).
+    {"key": "workorders", "ar": "أوامر الشغل", "en": "Work orders", "url_name": "workorders:list", "module": "sales_operations", "activity": "services",
+     "allow": "workorders.services.sees_work_orders"},
     {"key": "medical", "ar": "الملفات الطبية", "en": "Patient files", "url_name": "medical:patients", "module": "customers", "activity": "medical", "allow": "medical.services.can_view"},
     {"key": "appointments", "ar": "المواعيد", "en": "Appointments", "url_name": "appointments:agenda", "module": "appointments_visits", "permission": "sales.view_sales_invoices"},
+    # MED-007: reception's waiting list, for clinics and medical centres.
+    {"key": "queue", "ar": "قائمة الانتظار", "en": "Waiting list", "url_name": "medical:queue", "module": "appointments_visits", "activity": "medical",
+     "allow": "medical.queue.can_use"},
+    {"key": "contracts", "ar": "عقود الخدمة", "en": "Service contracts", "url_name": "agreements:list", "module": None, "allow": "agreements.services.can_view"},
+    {"key": "packages", "ar": "باكدجات الجلسات", "en": "Session packages", "url_name": "agreements:packages", "module": None, "allow": "agreements.packages.can_view"},
+    {"key": "hours", "ar": "ساعات العمل", "en": "Hours worked", "url_name": "agreements:hours", "module": None, "allow": "agreements.hours.can_view"},
     {"key": "staff", "ar": "الموظفون", "en": "Employees", "url_name": "staff:list", "module": "employees_technicians", "allow": "reports.navigation.sees_staff"},
     {"key": "expenses", "ar": "المصروفات", "en": "Expenses", "url_name": "expenses:list", "module": "expenses", "permission": "cashboxes.view_expenses"},
     # R2: features switched on in Settings -> Features get their own place in the menu.
@@ -108,6 +122,12 @@ TAB_LABELS = {
     "manufacturing": {"ar": "التصنيع", "en": "Production"},
     "projects": {"ar": "المشاريع", "en": "Projects"},
     "medical": {"ar": "الملفات", "en": "Files"},
+    "education": {"ar": "الطلاب", "en": "Students"},
+    "classes": {"ar": "حصصي", "en": "Classes"},
+    "workorders": {"ar": "الأوامر", "en": "Orders"},
+    "contracts": {"ar": "العقود", "en": "Contracts"},
+    "packages": {"ar": "الباكدجات", "en": "Packages"},
+    "hours": {"ar": "الساعات", "en": "Hours"},
 }
 
 SHELL_WORDS = {

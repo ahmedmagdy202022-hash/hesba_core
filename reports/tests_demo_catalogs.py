@@ -1,5 +1,6 @@
 """R2-5: the sample business looks like the activity that chose it."""
 
+from decimal import Decimal
 from io import StringIO
 
 from django.core.management import call_command
@@ -115,6 +116,21 @@ class SampleBusinessPerActivityTests(TestCase):
         self.assertFalse(dish.is_stock_tracked)
         self.assertFalse(PurchaseLine.objects.filter(item=dish).exists())
         self.assertTrue(PurchaseLine.objects.filter(item__item_code="DEMO-RAW-01").exists())  # the kitchen's ingredients
+        # RESTO-002: dishes have ingredients and a margin, the week has paid orders, and one waste adjustment.
+        from datetime import timedelta
+        from decimal import Decimal
+        from django.utils import timezone
+
+        from restaurant import insights
+        from restaurant.models import Order
+
+        self.assertIsNotNone(insights.plate_cost(dish))
+        self.assertEqual(Order.objects.filter(status="paid", invoice__status="posted").count(), 9)
+        today = timezone.localdate()
+        report = insights.period_report(today - timedelta(days=7), today)
+        self.assertEqual((report["totals"]["orders"], len(report["hours"]) >= 3), (9, True))
+        self.assertEqual([(row["orders"], row["fees"], row["minutes"]) for row in insights.deliveries(today - timedelta(days=7), today)], [(1, Decimal("20.00"), 30)])
+        self.assertEqual(len(insights.waste(today - timedelta(days=7), today)[0]), 1)
 
     def test_a_clinic_has_patients_visits_and_appointments(self):
         from appointments.models import Appointment
@@ -122,9 +138,57 @@ class SampleBusinessPerActivityTests(TestCase):
 
         catalog = self.fill("medical", "clinic")
         self.assert_a_working_business(catalog)
-        self.assertEqual(PatientFile.objects.count(), 3)
-        self.assertEqual(ClinicalVisit.objects.filter(doctor__name="د. أحمد سالم").count(), 3)
-        self.assertEqual(Appointment.objects.filter(service__item_name="كشف").count(), 4)
+        self.assertEqual(PatientFile.objects.count(), 4)
+        self.assertEqual(ClinicalVisit.objects.filter(doctor__name="د. أحمد سالم").count(), 5)
+        self.assertEqual(Appointment.objects.filter(service__item_name="كشف").count(), 7)
+        # MED-002: the clinic report and the follow-ups have something to show.
+        from datetime import timedelta
+
+        from medical import insights
+
+        today = timezone.localdate()
+        report = insights.period_report(today - timedelta(days=30), today)
+        self.assertEqual((report["totals"]["returning"], report["totals"]["revenue"] > 0), (1, True))
+        self.assertEqual([row["patient"].name for row in insights.missed_follow_ups(today)], ["سلمى حسن"])
+        from medical.models import QueueTicket
+
+        self.assertEqual(sorted(QueueTicket.objects.values_list("number", "status")), [(1, "called"), (2, "waiting")])  # MED-007
+
+    def test_a_dental_clinic_has_a_chart_and_a_plan_in_stages(self):
+        from medical.models import ToothRecord, TreatmentStep
+
+        catalog = self.fill("medical", "dental")
+        self.assert_a_working_business(catalog)
+        self.assertEqual(ToothRecord.objects.count(), 5)
+        self.assertEqual(sorted(TreatmentStep.objects.values_list("stage", "status")), [(1, "done"), (2, "planned"), (3, "planned")])
+
+    def test_a_lab_has_tests_with_ranges_and_flagged_results(self):
+        from medical.models import LabResult, LabTest
+
+        catalog = self.fill("medical", "lab")
+        self.assert_a_working_business(catalog)
+        self.assertEqual(LabTest.objects.count(), 5)
+        self.assertEqual(LabResult.objects.count(), 7)
+        self.assertEqual(sorted(LabResult.objects.exclude(flag="normal").values_list("test__name", "flag")),
+                         [("سكر صايم", "high"), ("سكر صايم", "high"), ("فصيلة الدم", ""), ("هيموجلوبين", "low")])
+
+    def test_a_physio_centre_has_a_package_in_use(self):
+        from medical import physio
+        from medical.models import SessionPackage
+
+        catalog = self.fill("medical", "physio")
+        self.assert_a_working_business(catalog)
+        package = SessionPackage.objects.get()
+        self.assertEqual(physio.state(package), {"used": 3, "left": 7, "status": "active"})
+
+    def test_a_vet_has_owners_with_their_animals(self):
+        from medical.models import Animal, ClinicalVisit
+
+        catalog = self.fill("medical", "vet")
+        self.assert_a_working_business(catalog)
+        self.assertEqual(sorted(Animal.objects.values_list("name", "species")), [("روكي", "dog"), ("مشمش", "cat")])
+        self.assertEqual(ClinicalVisit.objects.filter(animal__name="روكي").count(), 2)
+        self.assertFalse(ClinicalVisit.objects.filter(animal__isnull=True).exists())
 
     def test_a_builder_has_projects_with_materials_and_a_progress_bill(self):
         from projects.models import Project
@@ -135,6 +199,70 @@ class SampleBusinessPerActivityTests(TestCase):
         project = Project.objects.get(name__startswith="عمارة")
         self.assertTrue(project.issues.exists())
         self.assertTrue(project.invoices.filter(invoice__status="posted").exists())
+        # CONTRACT-002: a bill of quantities, an advance, a posted and a draft certificate, a subcontractor, a budget.
+        from ledger.reports import reconciliation
+        from projects import contract
+
+        self.assertEqual(project.boq.count(), 5)
+        self.assertEqual(list(project.certificates.values_list("invoice__status", flat=True)), ["posted", "posted", "draft"])
+        figures = contract.position(project)
+        self.assertGreater(figures["retention_held"], 0)
+        self.assertGreater(figures["recovered"], 0)
+        self.assertGreater(figures["due_now"], 0)  # the first was collected; the second is still owed
+        # CONTRACT-003: the second certificate is overdue, and the portfolio reads both projects.
+        from projects import insights
+
+        overdue, total, _ = insights.overdue_certificates()
+        self.assertEqual([row["certificate"].number for row in overdue], [2])
+        self.assertGreater(total, 0)
+        rows, totals = insights.portfolio()
+        self.assertEqual(len(rows), 2)
+        self.assertGreater(totals["retention"], 0)
+        self.assertTrue(project.subcontracts.get().bills.filter(invoice__status="posted").exists())
+        self.assertEqual(project.budget.count(), 4)
+        result = reconciliation()
+        self.assertTrue(result["balanced"] and result["ok"], result["rows"])
+
+    def test_a_professional_office_has_contracts_billed_by_the_month(self):
+        from agreements import services as contracts
+        from agreements.models import ServiceContract
+
+        catalog = self.fill("services", "professional")
+        self.assert_a_working_business(catalog)
+        monthly = ServiceContract.objects.get(every="month")
+        self.assertEqual(monthly.service.item_name, "مراجعة حسابات شهرية")
+        self.assertEqual(monthly.bills.filter(invoice__status="posted").count(), 2)
+        self.assertEqual(monthly.bills.filter(invoice__status="draft").count(), 1)
+        self.assertGreater(contracts.unpaid(monthly), 0)
+        self.assertEqual(len(contracts.due_periods(ServiceContract.objects.get(every="quarter"))), 1)
+        self.assertEqual(self.client.get("/contracts/").status_code, 200)
+        for activity, sub in (("services", "general"), ("services", "maintenance"), ("services", "digital_marketing"),
+                              ("contracting", "maintenance_contracts")):
+            self.assertIn("contracts", catalog_for(activity, sub).extras)
+        self.assertNotIn("contracts", catalog_for("services", "beauty").extras)
+
+    def test_a_salon_sells_session_packages(self):
+        from agreements import packages
+        from agreements.models import Package
+
+        catalog = self.fill("services", "beauty")
+        self.assert_a_working_business(catalog)
+        posted, draft = Package.objects.get(sessions=6), Package.objects.get(sessions=4)
+        self.assertEqual((packages.state(posted), packages.used(posted), posted.price), ("active", 2, Decimal("1275.00")))
+        self.assertEqual(packages.state(draft), "draft")
+        self.assertEqual(self.client.get("/contracts/packages/").status_code, 200)
+
+    def test_an_office_bills_its_hours(self):
+        from agreements import hours
+        from agreements.models import TimeEntry
+
+        catalog = self.fill("services", "digital_marketing")
+        self.assert_a_working_business(catalog)
+        self.assertEqual(TimeEntry.objects.count(), 6)
+        self.assertEqual(TimeEntry.objects.filter(invoice__status="draft").count(), 3)
+        waiting = {row["customer"].name: row["hours"] for row in hours.by_customer()}
+        self.assertEqual(waiting, {catalog.customers[0]: Decimal("1.00"), catalog.customers[1]: Decimal("4.00")})
+        self.assertEqual(self.client.get("/contracts/hours/").status_code, 200)
 
     def test_a_factory_makes_its_goods_from_materials(self):
         from manufacturing.models import ProductionOrder, ProductionRun, Recipe

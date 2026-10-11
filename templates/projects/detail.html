@@ -1,29 +1,29 @@
 {% extends "operations/base.html" %}
 {% load hesba_format %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'projects:list' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ project.name }}</h1><p><span dir="ltr">{{ project.code }}</span> · {{ project.customer.name }}{% if project.site %} · {{ project.site }}{% endif %}</p></div><span class="op-status op-status-{% if project.status == 'done' %}posted{% elif project.status == 'cancelled' %}cancelled{% else %}open{% endif %}" data-project-status="{{ project.status }}">{{ status_label }}</span></section>
-{% if error %}<div class="op-message op-message-error" role="alert" data-project-error>{{ error }}</div>{% endif %}
+{% include "projects/_head.html" %}
 <section class="op-summary-grid" data-project-figures>
-<article><small>{{ words.contract }}</small><strong data-figure="contract">{{ figures.contract|money }}</strong></article>
 <article><small>{{ words.billed }}</small><strong data-figure="billed">{{ figures.billed|money }}</strong><small>{{ figures.progress }}%</small></article>
-<article><small>{{ words.collected }}</small><strong data-figure="collected">{{ figures.collected|money }}</strong></article>
-<article><small>{{ words.due }}</small><strong data-figure="due">{{ figures.due|money }}</strong></article>
 {% if figures.over %}<article><small>{{ words.over }}</small><strong data-figure="over">{{ figures.over|money }}</strong></article>{% else %}<article><small>{{ words.remaining }}</small><strong data-figure="remaining">{{ figures.remaining|money }}</strong></article>{% endif %}
-{% if can_profit %}<article><small>{{ words.profit }} ({{ words.margin }} {{ figures.margin }}%)</small><strong data-figure="profit">{{ figures.profit|money }}</strong><small>{{ words.cost }}: {{ figures.cost|money }}</small></article>{% endif %}
+<article><small>{{ cwords.collections }}</small><strong data-figure="collected">{{ position.collections|money }}</strong></article>
+{% if can_profit %}<article><small>{{ words.cost }}</small><strong data-figure="cost">{{ figures.cost|money }}</strong><small>{{ words.materials }} {{ figures.materials|money }} · {{ words.expenses }} {{ figures.expenses|money }}{% if figures.purchases %} · {{ cwords.tab_subcontracts }} {{ figures.purchases|money }}{% endif %}</small></article>
+<article><small>{{ words.profit }} ({{ words.margin }} {{ figures.margin }}%)</small><strong data-figure="profit">{{ figures.profit|money }}</strong></article>{% endif %}
+<article><small>{{ words.status }}</small><strong><span class="op-status op-status-{% if project.status == 'done' %}posted{% elif project.status == 'cancelled' %}cancelled{% else %}open{% endif %}" data-project-status="{{ project.status }}">{{ status_label }}</span></strong></article>
 </section>
 {% if figures.drafts %}<p class="op-muted">{{ words.drafts }}: {{ figures.drafts|money }}</p>{% endif %}
 
 <h2>{{ words.bills }}</h2>
-<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.invoice }}</th><th>{{ words.description }}</th><th>{{ words.date }}</th><th>{{ words.total }}</th><th>{{ words.due }}</th><th>{{ words.doc_status }}</th>{% if can_manage %}<th></th>{% endif %}</tr></thead><tbody>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.invoice }}</th><th>{{ cwords.description }}</th><th>{{ words.date }}</th><th>{{ words.total }}</th><th>{{ words.due }}</th><th>{{ words.doc_status }}</th>{% if can_manage %}<th></th>{% endif %}</tr></thead><tbody>
 {% for row in invoices %}{% with link=row.link invoice=row.link.invoice %}<tr data-project-invoice="{{ invoice.invoice_number }}"><td dir="ltr"><a href="{% url 'sales:detail' invoice.pk %}?lang={{ lang }}">{{ invoice.invoice_number }}</a></td><td>{{ link.label }}</td><td dir="ltr">{{ invoice.invoice_date|date:"Y-m-d" }}</td><td>{{ invoice.total_amount|money }}</td><td>{{ invoice.remaining_due|money }}</td><td><span class="op-status op-status-{{ invoice.status }}">{{ row.status_label }}</span></td>{% if can_manage %}<td><form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="unlink_invoice"><input type="hidden" name="link" value="{{ link.pk }}"><button class="op-secondary" type="submit">{{ words.unlink }}</button></form></td>{% endif %}</tr>{% endwith %}
 {% empty %}<tr><td colspan="7" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
 </tbody></table></div>
 {% if can_manage and is_open %}
-<form class="op-form" method="post" data-bill-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="bill"><h2>{{ words.bill_new }}</h2>
+<p class="op-muted"><a href="{% url 'projects:certificates' project.pk %}?lang={{ lang }}">{{ cwords.new_certificate }} →</a></p>
+{% if not project.boq.exists %}<form class="op-form" method="post" data-bill-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="bill"><h2>{{ words.bill_new }}</h2>
 <div class="op-form-grid"><div class="op-field"><label for="pb-amount">{{ words.amount }}</label><input id="pb-amount" name="amount" inputmode="decimal" dir="ltr" required></div>
 <div class="op-field"><label for="pb-desc">{{ words.description }}</label><input id="pb-desc" name="description" maxlength="255" required></div>
 <div class="op-field"><label for="pb-item">{{ words.service }}</label><select id="pb-item" name="item"><option value="">{{ words.default_service }}</option>{% for item in services_list %}<option value="{{ item.pk }}">{{ item.item_name }}</option>{% endfor %}</select></div></div>
-<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.bill_btn }}</button></div></form>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.bill_btn }}</button></div></form>{% endif %}
 {% if free_invoices %}<form class="op-filters" method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="link_invoice"><select name="invoice" aria-label="{{ words.link_invoice }}">{% for invoice in free_invoices %}<option value="{{ invoice.pk }}">{{ invoice.invoice_number }} · {{ invoice.invoice_date|date:"Y-m-d" }} · {{ invoice.total_amount|money }}</option>{% endfor %}</select><button class="op-secondary" type="submit">{{ words.link_invoice }}</button></form>{% endif %}
 {% endif %}
 
@@ -39,11 +39,11 @@
 <div class="op-form-actions"><button class="op-primary" type="submit">{{ words.issue_btn }}</button></div></form>{% endif %}
 
 <h2>{{ words.expenses_title }}</h2>
-<div class="op-table-wrap"><table class="op-table"><thead><tr><th>#</th><th>{{ words.date }}</th><th>{{ words.description }}</th><th>{{ words.amount }}</th><th>{{ words.doc_status }}</th>{% if can_manage %}<th></th>{% endif %}</tr></thead><tbody>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>#</th><th>{{ words.date }}</th><th>{{ cwords.description }}</th><th>{{ words.amount }}</th><th>{{ words.doc_status }}</th>{% if can_manage %}<th></th>{% endif %}</tr></thead><tbody>
 {% for link in expense_links %}{% with expense=link.expense %}<tr data-project-expense="{{ expense.expense_number }}"><td dir="ltr">{{ expense.expense_number }}</td><td dir="ltr">{{ expense.expense_date|date:"Y-m-d" }}</td><td>{{ expense.description }}{% if expense.payee %} · {{ expense.payee }}{% endif %}</td><td>{{ expense.amount|money }}</td><td>{% if expense.cashbox_operation.status == 'posted' %}✓{% else %}—{% endif %}</td>{% if can_manage %}<td><form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="unlink_expense"><input type="hidden" name="link" value="{{ link.pk }}"><button class="op-secondary" type="submit">{{ words.unlink }}</button></form></td>{% endif %}</tr>{% endwith %}
 {% empty %}<tr><td colspan="6" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
 </tbody></table></div>
-{% if can_manage %}<p class="op-muted">{{ words.expense_hint }}</p>{% if free_expenses %}<form class="op-filters" method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="link_expense"><select name="expense" aria-label="{{ words.link_expense }}">{% for expense in free_expenses %}<option value="{{ expense.pk }}">{{ expense.expense_number }} · {{ expense.expense_date|date:"Y-m-d" }} · {{ expense.description|truncatechars:40 }} · {{ expense.amount|money }}</option>{% endfor %}</select><button class="op-secondary" type="submit">{{ words.link_expense }}</button></form>{% endif %}
+{% if can_manage %}<p class="op-muted">{{ words.expense_hint }}</p>{% if free_expenses %}<form class="op-filters" method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="link_expense"><select name="expense" aria-label="{{ words.link_expense }}">{% for expense in free_expenses %}<option value="{{ expense.pk }}">{{ expense.expense_number }} · {{ expense.expense_date|date:"Y-m-d" }} · {{ expense.description|truncatechars:40 }} · {{ expense.amount|money }}</option>{% endfor %}</select><select name="heading" aria-label="{{ cwords.heading }}">{% for value, label in expense_headings %}<option value="{{ value }}"{% if value == 'other' %} selected{% endif %}>{{ label }}</option>{% endfor %}</select><button class="op-secondary" type="submit">{{ words.link_expense }}</button></form>{% endif %}
 <form class="op-form" method="post" data-project-edit novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="edit"><h2>{{ words.edit }}</h2>{% include "projects/_form.html" %}<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form>
 {% endif %}
 {% endblock %}

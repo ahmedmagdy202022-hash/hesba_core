@@ -185,6 +185,8 @@
         if (el.tagName === 'SELECT') { el.selectedIndex = 0; }
         else { el.value = /line_discount_amount$/.test(el.name || '') ? '0' : ''; }
       });
+      // A date picker is cleared through its own API, so an earlier "not a date" complaint goes too.
+      row.querySelectorAll('.hs-date').forEach(function (wrap) { if (wrap.hsPicker) { wrap.hsPicker.set(null); } });
       recalc();
       return;
     }

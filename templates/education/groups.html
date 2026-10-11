@@ -1,0 +1,12 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div>
+{% if can_manage and has_courses %}<div class="op-form-actions"><a class="op-primary" href="{% url 'education:group_new' %}?lang={{ lang }}" data-new-group>{{ words.new_group }}</a></div>{% endif %}</section>
+{% include "education/_tabs.html" %}
+{% if not has_courses %}<div class="op-message" role="status">{{ words.add_course_first }}</div>{% endif %}
+<div class="op-table-wrap"><table class="op-table" data-groups><thead><tr><th>{{ words.code }}</th><th>{{ words.group }}</th><th>{{ words.schedule }}</th><th>{{ words.teacher }}</th><th>{{ words.room }}</th><th>{{ words.seats }}</th><th>{{ words.fee }}</th><th></th></tr></thead><tbody>
+{% for row in rows %}<tr data-group="{{ row.pk }}"{% if not row.active %} class="op-muted"{% endif %}><td><bdi>{{ row.code }}</bdi></td><td class="op-cell-text">{{ row.course.name }} — {{ row.name }}</td><td>{{ row.schedule|default:'—' }}</td><td>{{ row.teacher.name|default:words.no_teacher }}</td><td>{{ row.room|default:'—' }}</td><td>{{ row.seats }}{% if row.capacity %} / {{ row.capacity }}{% if row.seats >= row.capacity %} <span class="op-status op-status-draft">{{ words.full }}</span>{% endif %}{% endif %}</td><td>{{ row.effective_fee|money }}</td><td><a href="{% url 'education:group' row.pk %}?lang={{ lang }}">{{ words.open }}</a></td></tr>
+{% empty %}<tr><td colspan="8" class="op-empty">{{ words.no_groups }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

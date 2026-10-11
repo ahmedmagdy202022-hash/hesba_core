@@ -1,0 +1,56 @@
+{% load static %}<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>زوّار الديمو - حِسبة</title>
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
+<link rel="stylesheet" href="{% static 'hesba/css/demo_feedback_inbox.css' %}?v=demo-feedback-2">
+</head>
+<body class="fb-inbox">
+<header class="fb-inbox__head">
+  <img src="{% static 'hesba/brand/hesba-logo-reversed.png' %}" alt="حِسبة" width="642" height="225">
+  <div><h1>زوّار الديمو</h1><p>{{ total }} زيارة · {{ named }} سابوا اسمهم أو رقمهم · {{ today }} آخر 24 ساعة · {{ pages }} صفحة اتفتحت</p></div>
+</header>
+<main class="fb-inbox__main">
+  <nav class="fb-inbox__filters" aria-label="روابط">
+    <a href="{% url 'feedback:inbox' %}?key={{ key|urlencode }}">الملاحظات</a>
+    <a href="?key={{ key|urlencode }}&format=csv{% if activity %}&activity={{ activity|urlencode }}{% endif %}">تنزيل CSV</a>
+  </nav>
+
+  <section class="fb-section" aria-labelledby="tried-title">
+    <h2 id="tried-title">الأنشطة اللي اتجرّبت</h2>
+    {% if tried %}
+    <div class="fb-table-wrap"><table class="fb-table" data-tried>
+      <thead><tr><th>النشاط</th><th>زوّار</th><th>صفحات</th><th>آخر مرة</th></tr></thead>
+      <tbody>{% for row in tried %}
+        <tr><td><a href="?key={{ key|urlencode }}&activity={{ row.activity|urlencode }}">{{ row.label }}</a></td>
+          <td>{{ row.visitors }}</td><td>{{ row.pages }}</td><td dir="ltr">{{ row.last|date:"Y-m-d H:i" }}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% else %}<p class="fb-inbox__empty">لسه محدش اختار نشاط.</p>{% endif %}
+  </section>
+
+  <section class="fb-section" aria-labelledby="visits-title">
+    <h2 id="visits-title">الزيارات{% if activity %} <a class="fb-chip" href="?key={{ key|urlencode }}">كل الأنشطة ×</a>{% endif %}</h2>
+    {% if visits %}
+    <div class="fb-table-wrap"><table class="fb-table">
+      <thead><tr><th>البداية</th><th>الاسم / الرقم</th><th>النشاط</th><th>صفحات</th><th>دقايق</th><th>آخر صفحة</th><th></th></tr></thead>
+      <tbody>{% for visit in visits %}
+        <tr data-visit>
+          <td dir="ltr">{{ visit.started_at|date:"Y-m-d H:i" }}</td>
+          <td>{% if visit.name or visit.phone %}<strong>{{ visit.name }}</strong>{% if visit.phone %} <bdi dir="ltr">{{ visit.phone }}</bdi>{% endif %}{% else %}<span class="fb-chip fb-chip--muted" dir="ltr">#{{ visit.visitor|slice:":6" }}</span>{% endif %}</td>
+          <td>{{ visit.activity_name|default:"—" }}{% if visit.role %} <span class="fb-chip fb-chip--muted">{{ visit.role }}</span>{% endif %}</td>
+          <td>{{ visit.pages }}</td>
+          <td>{{ visit.minutes }}</td>
+          <td><bdi dir="ltr">{{ visit.last_path|truncatechars:48 }}</bdi></td>
+          <td><a href="?key={{ key|urlencode }}&visit={{ visit.pk }}">التفاصيل</a></td>
+        </tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% else %}<p class="fb-inbox__empty">لسه مفيش زيارات.</p>{% endif %}
+  </section>
+</main>
+</body>
+</html>

@@ -90,6 +90,8 @@ _REF_WORDS = {
     "asset_disposal": ("استبعاد أصل", "Asset disposal"),
     "asset_opening": ("رصيد افتتاحي — أصل", "Opening balance — asset"),
     "depreciation": ("إهلاك", "Depreciation"),
+    "retention_release": ("إفراج عن ضمان أعمال — مشروع", "Retention release — project"),
+    "subcontract_release": ("إفراج عن ضمان أعمال — مقاول باطن", "Retention release — subcontractor"),
 }
 
 

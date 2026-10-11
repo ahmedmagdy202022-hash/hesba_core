@@ -48,6 +48,10 @@ class Order(models.Model):
     address = models.CharField(max_length=255, blank=True)
     phone = models.CharField(max_length=50, blank=True)
     notes = models.CharField(max_length=255, blank=True)
+    #: RESTO-003: who takes a delivery out, when it left, and what the customer pays for it (billed as its own invoice line).
+    driver = models.ForeignKey("staff.Employee", on_delete=models.SET_NULL, null=True, blank=True, related_name="deliveries")
+    dispatched_at = models.DateTimeField(null=True, blank=True)
+    delivery_fee = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
     invoice = models.OneToOneField("sales.SalesInvoice", on_delete=models.PROTECT, null=True, blank=True, related_name="restaurant_order")
     opened_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="restaurant_orders")
     opened_at = models.DateTimeField(auto_now_add=True)
@@ -68,7 +72,7 @@ class Order(models.Model):
 
     @property
     def total(self):
-        return money_round(sum((line.amount for line in self.live_lines()), Decimal("0.00")))
+        return money_round(sum((line.amount for line in self.live_lines()), Decimal("0.00")) + (self.delivery_fee or Decimal("0")))
 
 
 class KitchenTicket(models.Model):
@@ -100,3 +104,21 @@ class OrderLine(models.Model):
     @property
     def amount(self):
         return money_round(self.quantity * self.unit_price)
+
+
+class DishIngredient(models.Model):
+    """RESTO-002: what one plate of a dish uses, for its cost and margin (HG-044, read-only part).
+
+    Reading only: nothing here takes ingredients out of stock. Selling a dish
+    deducts nothing until Ahmed decides HG-044's ingredient deduction."""
+
+    dish = models.ForeignKey("master_data.Item", on_delete=models.CASCADE, related_name="dish_ingredients")
+    ingredient = models.ForeignKey("master_data.Item", on_delete=models.PROTECT, related_name="used_in_dishes")
+    quantity = models.DecimalField(max_digits=12, decimal_places=3, help_text="Per plate, in the ingredient's unit.")
+
+    class Meta:
+        ordering = ["dish", "ingredient__item_name"]
+        constraints = [models.UniqueConstraint(fields=["dish", "ingredient"], name="restaurant_one_line_per_ingredient")]
+
+    def __str__(self):
+        return f"{self.dish_id}:{self.ingredient_id}"

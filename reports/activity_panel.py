@@ -23,14 +23,15 @@ ZERO = Decimal("0")
 PANEL_BY_ACTIVITY = {
     "restaurants": "kitchen",
     "medical": "bookings",
-    "education": "bookings",
+    "education": "school",  # EDU-004: a school works from its classes, not from bookings
     "services": "bookings",
     "manufacturing": "production",
     "contracting": "projects",
 }
 
 #: The section each panel needs to be visible (same keys as reports.navigation).
-PANEL_SECTION = {"kitchen": "restaurant", "bookings": "appointments", "production": "manufacturing", "projects": "projects"}
+PANEL_SECTION = {"kitchen": "restaurant", "bookings": "appointments", "production": "manufacturing", "projects": "projects", "school": "education",
+                 "workshop": "workorders"}
 
 WORDS = {
     "ar": {
@@ -42,7 +43,7 @@ WORDS = {
         "runs": "تشغيلات", "units": "وحدات اتنتجت", "prod_cost": "تكلفة الإنتاج", "short_recipes": "وصفات ناقصها خامات", "open_orders_mfg": "أوامر إنتاج شغالة", "late_orders": "متأخر عن ميعاده", "late_none": "مفيش تأخير",
         "short_none": "كل الوصفات خاماتها كفاية لتشغيلة", "short_list": "ناقصها خامات:",
         "active_projects": "مشاريع شغالة", "contract_total": "قيمة العقود", "billed_pct": "اتفوتر من العقود", "losing": "مشاريع خسرانة",
-        "project_dues": "مستحقات على المشاريع", "open": "افتح", "of": "من",
+        "project_dues": "مستحقات على المشاريع", "overdue_certs": "مستخلصات متأخرة", "open": "افتح", "of": "من",
     },
     "en": {
         "kitchen": "Floor and kitchen now", "bookings": "Today's bookings", "production": "Production this month", "projects": "Running projects",
@@ -53,7 +54,7 @@ WORDS = {
         "runs": "Runs", "units": "Units produced", "prod_cost": "Production cost", "short_recipes": "Recipes short of materials", "open_orders_mfg": "Open production orders", "late_orders": "past their due date", "late_none": "nothing late",
         "short_none": "Every recipe has materials for a batch", "short_list": "Short:",
         "active_projects": "Active projects", "contract_total": "Contract value", "billed_pct": "Billed of contracts", "losing": "Projects losing money",
-        "project_dues": "Owed on projects", "open": "Open", "of": "of",
+        "project_dues": "Owed on projects", "overdue_certs": "Overdue certificates", "open": "Open", "of": "of",
     },
 }
 
@@ -136,7 +137,7 @@ def _production(words, today):
     ], []
 
 
-def _projects(words):
+def _projects(words, today):
     from projects.models import Project, ProjectStatus
     from projects.services import summary
 
@@ -152,13 +153,58 @@ def _projects(words):
         _tile("billed_pct", words["billed_pct"], f"{round(billed / contract * 100)}%" if contract > 0 else "—", "text"),
         _tile("project_dues", words["project_dues"], money_round(dues), "money"),
         _tile("losing", words["losing"], len(losing), tone="bad" if losing else "good", sub="، ".join(losing[:3])),
+        _overdue_tile(words, today),
     ], []
 
 
-def build_activity_panel(activity, visible_sections, lang="ar", today=None):
+def _overdue_tile(words, today):
+    """CONTRACT-003: posted certificates still owed past the credit days."""
+
+    from settings_core.templatetags.hesba_format import money
+
+    from projects.insights import overdue_certificates
+    from projects.models import ProjectStatus
+
+    rows, total, _ = overdue_certificates(today, status=ProjectStatus.ACTIVE)  # the active projects, as the tiles beside it
+    return _tile("overdue_certs", words["overdue_certs"], len(rows), tone="bad" if rows else "good", sub=money(total) if rows else "")
+WORKSHOP_WORDS = {
+    "ar": {"title": "الورشة دلوقتي", "open": "أوامر مفتوحة", "ready": "جاهزة للتسليم", "late": "متأخرة عن ميعادها", "delivered": "اتسلّمت الشهر ده",
+           "returns": "رجعت في الضمان (الشهر)", "late_none": "مفيش تأخير"},
+    "en": {"title": "The workshop now", "open": "Open orders", "ready": "Ready for pickup", "late": "Past the promised date", "delivered": "Delivered this month",
+           "returns": "Warranty returns (month)", "late_none": "nothing late"},
+}
+
+
+def _workshop(lang, today, user=None):
+    from workorders.models import OPEN, Status, WorkOrder
+    from workorders.services import late, scoped, sync_cancelled, visible_to
+
+    words = WORKSHOP_WORDS["en" if lang == "en" else "ar"]
+    sync_cancelled(user)
+    # A technician who sees only their own orders gets their own counts (Codex on #190).
+    orders = visible_to(user) if user is not None else scoped(WorkOrder.objects)
+    first = today.replace(day=1)
+    counts = orders.aggregate(open=Count("id", filter=Q(status__in=OPEN)), ready=Count("id", filter=Q(status=Status.READY)),
+                              delivered=Count("id", filter=Q(status=Status.DELIVERED, delivered_at__date__gte=first)),
+                              returns=Count("id", filter=Q(warranty_of__isnull=False, received_at__date__gte=first)))
+    overdue = late(today).filter(pk__in=orders.values("pk")).count()
+    return [
+        _tile("wo_open", words["open"], counts["open"], tone="lead"),
+        _tile("wo_ready", words["ready"], counts["ready"], tone="good" if counts["ready"] else ""),
+        _tile("wo_late", words["late"], overdue, tone="bad" if overdue else "good", sub="" if overdue else words["late_none"]),
+        _tile("wo_delivered", words["delivered"], counts["delivered"]),
+        _tile("wo_returns", words["returns"], counts["returns"], tone="bad" if counts["returns"] else ""),
+    ], []
+
+
+def build_activity_panel(activity, visible_sections, lang="ar", today=None, user=None):
     """The panel for this activity, or None when it has none or it is hidden."""
 
     kind = PANEL_BY_ACTIVITY.get(activity)
+    if activity == "services":
+        from workorders.services import is_workshop
+
+        kind = "workshop" if is_workshop() else kind  # SVC-001: a workshop leads with its work orders
     if kind is None or PANEL_SECTION[kind] not in visible_sections:
         return None
     lang = "en" if lang == "en" else "ar"
@@ -170,7 +216,16 @@ def build_activity_panel(activity, visible_sections, lang="ar", today=None):
         tiles, lists = _bookings(words, today, lang)
     elif kind == "production":
         tiles, lists = _production(words, today)
+    elif kind == "school":
+        from education.insights import WORDS as SCHOOL_WORDS, panel_tiles
+
+        tiles, lists = panel_tiles(lang, today, user)
+        return {"kind": kind, "title": SCHOOL_WORDS[lang]["school"], "tiles": tiles, "lists": lists, "link": reverse("education:today"), "open": words["open"]}
+    elif kind == "workshop":
+        tiles, lists = _workshop(lang, today, user)
+        title = WORKSHOP_WORDS["en" if lang == "en" else "ar"]["title"]
+        return {"kind": kind, "title": title, "tiles": tiles, "lists": lists, "link": reverse("workorders:list"), "open": words["open"]}
     else:
-        tiles, lists = _projects(words)
+        tiles, lists = _projects(words, today)
     link = {"kitchen": "restaurant:board", "bookings": "appointments:agenda", "production": "manufacturing:home", "projects": "projects:list"}[kind]
     return {"kind": kind, "title": words[kind], "tiles": tiles, "lists": lists, "link": reverse(link), "open": words["open"]}

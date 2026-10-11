@@ -60,6 +60,7 @@ LOCAL_APPS = [
     "offline_pos",
     "staff",
     "appointments",
+    "agreements",
     "restaurant",
     "projects",
     "manufacturing",
@@ -67,6 +68,8 @@ LOCAL_APPS = [
     "entities",
     "ledger",
     "medical",
+    "education",
+    "workorders",
     "feedback",
 ]
 
@@ -88,6 +91,8 @@ MIDDLEWARE = [
     "settings_core.module_gate.ModuleGateMiddleware",
     # ENT-002: which entity the signed-in user is working in (menu, words, books).
     "entities.current.CurrentEntityMiddleware",
+    # DEMO-TRACK: on a showcase, note which pages each visitor opens. A no-op elsewhere.
+    "feedback.tracking.DemoVisitMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "config.middleware.NoStoreHtmlMiddleware",

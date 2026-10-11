@@ -1,0 +1,10 @@
+{% load hesba_format %}<section class="op-title-row"><div><a class="op-back" href="{% url 'projects:list' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ project.name }}</h1><p><span dir="ltr">{{ project.code }}</span>{% if position %} · {{ project.customer.name }}{% endif %}{% if project.site %} · {{ project.site }}{% endif %}</p></div></section>
+{% include "projects/_tabs.html" %}
+{% if error %}<div class="op-message op-message-error" role="alert" data-project-error>{{ error }}</div>{% endif %}
+{% if position %}<section class="op-summary-grid op-summary-grid--compact" data-contract-position>
+<article><small>{{ cwords.contract }}</small><strong data-position="contract">{{ position.contract|money }}</strong></article>
+<article><small>{{ cwords.certified }}</small><strong data-position="certified">{{ position.certified|money }}</strong><small>{{ position.certified_progress }}%</small></article>
+<article><small>{{ cwords.due_now }}</small><strong data-position="due_now">{{ position.due_now|money }}</strong></article>
+<article><small>{{ cwords.retention_held }}</small><strong data-position="retention_held">{{ position.retention_held|money }}</strong></article>
+{% if position.advance %}<article><small>{{ cwords.advance_left }}</small><strong data-position="advance_left">{{ position.advance_left|money }}</strong></article>{% endif %}
+</section>{% endif %}

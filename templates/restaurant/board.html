@@ -2,7 +2,7 @@
 {% load static hesba_format %}
 {% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/restaurant.css' %}?v=resto-001">{% endblock %}
 {% block operation_content %}
-<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div>{% if can_tables %}<a class="op-secondary" href="{% url 'restaurant:tables' %}?lang={{ lang }}">{{ words.tables_title }}</a>{% endif %}</section>
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div><div class="op-form-actions">{% if can_report %}<a class="op-secondary" href="{% url 'restaurant:report' %}?lang={{ lang }}" data-resto-report>{{ links.report }}</a>{% endif %}{% if can_costing %}<a class="op-secondary" href="{% url 'restaurant:costing' %}?lang={{ lang }}" data-resto-costing>{{ links.costing }}</a>{% endif %}{% if can_tables %}<a class="op-secondary" href="{% url 'restaurant:tables' %}?lang={{ lang }}">{{ words.tables_title }}</a>{% endif %}</div></section>
 {% if tables %}
 <div class="rs-tables" role="list">
 {% for row in tables %}{% with table=row.table order=row.order %}
@@ -26,6 +26,7 @@
 <div class="op-form-grid"><div class="op-field"><label for="dl-customer">{{ words.customer }}</label><select id="dl-customer" name="customer"><option value="">{{ words.walk_in }}</option>{% for customer in customers %}<option value="{{ customer.pk }}">{{ customer.name }}</option>{% endfor %}</select></div>
 <div class="op-field"><label for="dl-phone">{{ words.phone }}</label><input id="dl-phone" name="phone" inputmode="tel" dir="ltr"></div>
 <div class="op-field"><label for="dl-address">{{ words.address }}</label><input id="dl-address" name="address"></div>
+<div class="op-field"><label for="dl-fee">{{ links.delivery_fee }}</label><input id="dl-fee" name="delivery_fee" inputmode="decimal" placeholder="0" data-delivery-fee></div>
 {% if waiters %}<div class="op-field"><label for="dl-waiter">{{ words.waiter }}</label><select id="dl-waiter" name="waiter"><option value="">—</option>{% for person in waiters %}<option value="{{ person.pk }}">{{ person.name }}</option>{% endfor %}</select></div>{% endif %}</div>
 <div class="op-form-actions"><button class="op-primary" type="submit">{{ words.new_delivery }}</button></div></form>
 </div>

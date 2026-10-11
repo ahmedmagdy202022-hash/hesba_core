@@ -1,0 +1,20 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'agreements:packages' %}?lang={{ lang }}">← {{ words.back }}</a><h1 dir="ltr">{{ package.number }}</h1><p>{{ package.customer.name }} · {{ package.service.item_name }}</p></div><span class="op-status op-status-{% if state == 'active' %}posted{% elif state == 'draft' %}draft{% else %}cancelled{% endif %}" data-package-state="{{ state }}">{{ state_label }}</span></section>
+{% if error %}<div class="op-message op-message-error" role="alert" data-package-error>{{ error }}</div>{% endif %}
+<section class="op-summary-grid"><article><small>{{ words.sessions }}</small><strong>{{ package.sessions }}</strong></article><article><small>{{ words.used }}</small><strong>{{ used }}</strong></article><article><small>{{ words.left }}</small><strong data-package-left>{{ left }}</strong></article><article><small>{{ words.price_short }}</small><strong>{{ package.price|money }}</strong></article>{% if package.expires_on %}<article><small>{{ words.expires }}</small><strong><bdi>{{ package.expires_on|date:"Y-m-d" }}</bdi></strong></article>{% endif %}<article><small>{{ words.invoice }}</small><strong><a href="{% url 'sales:detail' package.invoice.pk %}?lang={{ lang }}" data-package-invoice><bdi>{{ package.invoice.invoice_number }}</bdi></a></strong></article></section>
+{% if state == 'draft' %}<p class="op-message">{{ words.post_first }}</p>{% endif %}
+{% if can_manage and state == 'active' %}<form class="op-form" method="post" data-use-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="use"><h2>{{ words.use }}</h2><div class="op-form-grid">
+<div class="op-field"><label for="use-day">{{ words.used_on }}</label><input id="use-day" type="date" name="used_on" value="{{ today|date:'Y-m-d' }}"></div>
+<div class="op-field"><label for="use-employee">{{ words.employee }}</label><select id="use-employee" name="employee"><option value="">{{ words.nobody }}</option>{% for e in employees %}<option value="{{ e.pk }}">{{ e.name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="use-notes">{{ words.notes }}</label><input id="use-notes" name="notes" maxlength="255"></div>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.use }}</button></div></form>{% endif %}
+<h2>{{ words.uses }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-package-uses><thead><tr><th>{{ words.used_on }}</th><th>{{ words.employee }}</th><th>{{ words.notes }}</th><th></th></tr></thead><tbody>
+{% for use in uses %}<tr><td><bdi>{{ use.used_on|date:"Y-m-d" }}</bdi></td><td>{{ use.employee.name|default:'—' }}</td><td class="op-cell-text">{{ use.notes|default:'—' }}</td>
+<td>{% if use.cancelled %}<span class="op-status op-status-cancelled">{{ words.cancelled }}</span>{% elif can_manage %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="cancel_use"><input type="hidden" name="use" value="{{ use.pk }}"><button class="op-secondary" type="submit" data-cancel-use="{{ use.pk }}">{{ words.cancel }}</button></form>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="4" class="op-empty">{{ words.no_uses }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if not can_manage %}<p class="op-message">{{ words.view_only }}</p>{% endif %}
+{% endblock %}

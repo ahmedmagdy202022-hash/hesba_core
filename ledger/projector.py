@@ -154,6 +154,53 @@ class Projector:
             self.group(*source, row.movement_date).add(self.acc.inventory(row.item_id), amount, row.location.entity_id or self.main_id, "stock", location_id=row.location_id)
         self._openings()
         self._fixed_assets()
+        self._contracts()
+
+    def _contracts(self):
+        """CONTRACT-002 (HG-038): what the project screens add to the journal.
+
+        The customer and supplier rows stay exactly as posted; these only say
+        which part of a balance is an advance or retention, so the general
+        ledger shows it in its own account. Releases are dated events of their
+        own: they move retention back to what the party may now be paid or owe.
+        """
+
+        from projects.models import Certificate, ProjectPayment, ProjectPaymentKind, ProjectPurchase, RetentionRelease, SubcontractBill, SubcontractRelease
+
+        self._advances = set(ProjectPayment.objects.filter(kind=ProjectPaymentKind.ADVANCE).values_list("payment_id", flat=True))
+        self._certificates = {invoice: (retention, recovery) for invoice, retention, recovery
+                              in Certificate.objects.values_list("invoice_id", "retention_amount", "recovery_amount")}
+        self._sub_bills = dict(SubcontractBill.objects.values_list("invoice_id", "retention_amount"))
+        self._project_purchases = set(ProjectPurchase.objects.values_list("invoice_id", flat=True))
+        if self.acc.has("retention_receivable"):
+            for release in RetentionRelease.objects.select_related("project"):
+                certificates = Certificate.objects.filter(project=release.project_id).select_related("invoice__selling_location").order_by("number")
+                first = certificates.first()  # one entity per project, for good (projects.contract.project_entity)
+                entity = (first.invoice.selling_location.entity_id if first else None) or self.main_id
+                # A reversed release keeps its entry and gets the opposite one on its reversal date.
+                for day, sign in ((release.release_date, 1), (release.reversed_on, -1)):
+                    if day is None:
+                        continue
+                    g = self.group("retention_release", release.pk, day)
+                    g.add(self.acc["receivable"], sign * Decimal(release.amount), entity, customer_id=release.project.customer_id)
+                    g.add(self.acc["retention_receivable"], -sign * Decimal(release.amount), entity)
+        if self.acc.has("retention_payable"):
+            for release in SubcontractRelease.objects.select_related("subcontract"):
+                bills = release.subcontract.bills.select_related("invoice__receiving_location").order_by("number")
+                first = bills.first()  # one entity per subcontract, for good (projects.costs.subcontract_entity)
+                entity = (first.invoice.receiving_location.entity_id if first else None) or self.main_id
+                for day, sign in ((release.release_date, 1), (release.reversed_on, -1)):
+                    if day is None:
+                        continue
+                    g = self.group("subcontract_release", release.pk, day)
+                    g.add(self.acc["retention_payable"], sign * Decimal(release.amount), entity)
+                    g.add(self.acc["payable"], -sign * Decimal(release.amount), entity, supplier_id=release.subcontract.supplier_id)
+
+    @staticmethod
+    def _party(g, key):
+        """The customer or supplier on a document's receivable or payable line."""
+
+        return next((line[key] for line in g.lines if line.get(key)), None)
 
     def _entity_of_customer_row(self, row):
         location = None
@@ -242,6 +289,28 @@ class Projector:
         g.add(self.acc["vat_out"], -tax, g.entity_id)
         g.add(self.acc["sales"], -(g.money - tax), g.entity_id)
         g.add(self.acc["cogs"], -g.stock, g.entity_id)
+        if g.source_id in self._certificates and g.money:
+            # HG-038: a certificate's retention waits in retention receivable and
+            # its recovery pays back the advance. The cancellation entry carries
+            # the opposite sign, so a cancelled certificate nets to nothing.
+            retention, recovery = self._certificates[g.source_id]
+            sign = 1 if g.money > 0 else -1
+            customer = self._party(g, "customer_id") or inv.customer_id
+            if retention and self.acc.has("retention_receivable"):
+                g.add(self.acc["retention_receivable"], sign * retention, g.entity_id)
+                g.add(self.acc["receivable"], -sign * retention, g.entity_id, customer_id=customer)
+            if recovery and self.acc.has("customer_advances"):
+                g.add(self.acc["customer_advances"], sign * recovery, g.entity_id)
+                g.add(self.acc["receivable"], -sign * recovery, g.entity_id, customer_id=customer)
+
+    def _place_customer_payment(self, g):
+        """HG-038: an owner's advance is a liability until certificates recover it."""
+
+        if g.source_id not in self._advances or not self.acc.has("customer_advances"):
+            return
+        for line in g.lines:
+            if line["account"] == self.acc["receivable"]:
+                line["account"] = self.acc["customer_advances"]
 
     def _place_sales_return(self, g):
         from sales.models import SalesReturn
@@ -253,6 +322,24 @@ class Projector:
         g.add(self.acc["vat_out"], -tax, g.entity_id)
         g.add(self.acc["sales_returns"], -(g.money - tax), g.entity_id)
         g.add(self.acc["cogs"], -g.stock, g.entity_id)
+        if ret.source_invoice_id in self._certificates and g.money:
+            # HG-038: a return on a certificate takes back the same share of its
+            # retention and recovery (projects.contract.return_share), so the
+            # project and the books agree. Its cancellation entry reverses it.
+            from projects.contract import return_share
+
+            invoice = ret.source_invoice
+            retention, recovery = self._certificates[ret.source_invoice_id]
+            sign = 1 if g.money < 0 else -1
+            customer = self._party(g, "customer_id") or invoice.customer_id
+            share = return_share(retention, invoice, ret)
+            if share and self.acc.has("retention_receivable"):
+                g.add(self.acc["retention_receivable"], -sign * share, g.entity_id)
+                g.add(self.acc["receivable"], sign * share, g.entity_id, customer_id=customer)
+            share = return_share(recovery, invoice, ret)
+            if share and self.acc.has("customer_advances"):
+                g.add(self.acc["customer_advances"], -sign * share, g.entity_id)
+                g.add(self.acc["receivable"], sign * share, g.entity_id, customer_id=customer)
 
     def _place_purchase_invoice(self, g):
         from purchases.models import PurchaseInvoice
@@ -261,7 +348,20 @@ class Projector:
         tax = self._split_tax(g.money, inv.tax_amount, inv.total_amount)
         g.add(self.acc["vat_in"], -tax, g.entity_id)
         # Whatever the stock lines do not carry was bought as a service or expense.
-        g.add(self.acc["general_expense"], -(g.money - tax) - g.stock, g.entity_id)
+        g.add(self._service_cost(g.source_id), -(g.money - tax) - g.stock, g.entity_id)
+        retention = self._sub_bills.get(g.source_id)
+        if retention and g.money and self.acc.has("retention_payable"):
+            # HG-038: retention held from a subcontractor waits in retention payable.
+            sign = 1 if g.money < 0 else -1
+            g.add(self.acc["payable"], sign * retention, g.entity_id, supplier_id=self._party(g, "supplier_id") or inv.supplier_id)
+            g.add(self.acc["retention_payable"], -sign * retention, g.entity_id)
+
+    def _service_cost(self, purchase_id):
+        """HG-038: services bought for a project are a project cost."""
+
+        if purchase_id in self._project_purchases and self.acc.has("project_cost"):
+            return self.acc["project_cost"]
+        return self.acc["general_expense"]
 
     def _place_purchase_return(self, g):
         from purchases.models import PurchaseReturn
@@ -271,7 +371,16 @@ class Projector:
         returned_tax = PurchaseReturnLineTax.objects.filter(return_line__purchase_return=ret).aggregate(t=Sum("tax_amount"))["t"] or ZERO
         tax = self._split_tax(g.money, returned_tax, ret.total_amount)
         g.add(self.acc["vat_in"], -tax, g.entity_id)
-        g.add(self.acc["general_expense"], -(g.money - tax) - g.stock, g.entity_id)
+        g.add(self._service_cost(ret.source_invoice_id), -(g.money - tax) - g.stock, g.entity_id)
+        retention = self._sub_bills.get(ret.source_invoice_id)
+        if retention and g.money and self.acc.has("retention_payable"):
+            # HG-038: the returned share of a subcontractor bill's retention.
+            from projects.costs import return_share
+
+            share = return_share(retention, ret.source_invoice, ret)
+            sign = 1 if g.money > 0 else -1
+            g.add(self.acc["payable"], -sign * share, g.entity_id, supplier_id=self._party(g, "supplier_id") or ret.source_invoice.supplier_id)
+            g.add(self.acc["retention_payable"], sign * share, g.entity_id)
 
     def _place_opening_balance_adjustment(self, g):
         g.add(self.acc["opening_equity"], -g.balance(), g.entity_id)
@@ -426,8 +535,22 @@ def fingerprint():
         parts.append(str(model.objects.aggregate(s=Sum("opening_balance"))["s"]))
     parts.append(";".join(f"{a.pk}{a.status}{a.disposed_on}" for a in FixedAsset.objects.order_by("pk")))
     parts.append(timezone.localdate().strftime("%Y-%m"))  # depreciation months roll over
+    parts.append(_contracts_fingerprint())
     parts.append(str(Account.objects.count()))
     return "|".join(parts)
+
+
+def _contracts_fingerprint():
+    """HG-038: advances, certificates, subcontractor bills, project purchases and releases."""
+
+    from projects.models import Certificate, ProjectPayment, ProjectPurchase, RetentionRelease, SubcontractBill, SubcontractRelease
+
+    parts = [";".join(f"{p}{k}" for p, k in ProjectPayment.objects.order_by("pk").values_list("payment_id", "kind")),
+             str(RetentionRelease.objects.filter(reversed_on__isnull=False).count() + SubcontractRelease.objects.filter(reversed_on__isnull=False).count())]
+    for model in (Certificate, SubcontractBill, ProjectPurchase, RetentionRelease, SubcontractRelease):
+        agg = model.objects.aggregate(n=Max("pk"))
+        parts.append(f"{model.objects.count()}:{agg['n'] or 0}")
+    return ",".join(parts)
 
 
 def ensure_fresh():

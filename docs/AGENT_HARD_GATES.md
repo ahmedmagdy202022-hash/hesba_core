@@ -1,11 +1,11 @@
 # Agent Hard Gates
 
-Status: ALL GATES RESOLVED (HG-001–HG-007 from the end-to-end run; HG-008 approved 2026-09-26)
+Status: HG-001–HG-037 RESOLVED. Later entries carry their own status: an OPEN PROPOSAL (HG-041–HG-044) is a decision still waiting, and an IMPLEMENTED note is built and waiting for review. Read each entry's status before protected work.
 Decision source: Main Control decision comment on PR #54
 Implemented on: `agent/end-to-end-functional-cycle`, merged to `develop` via PR #54 (`c77c7e5`)
 Resolved: 2026-08-30
 
-This log records the seven protected business/accounting decisions raised during the end-to-end functional run. Main Control approved all seven decisions. They are implemented, migrated, and covered by the final verification run. No new Hard Gate remains open.
+This log records the seven protected business/accounting decisions raised during the end-to-end functional run. Main Control approved all seven decisions. They are implemented, migrated, and covered by the final verification run. Gates raised after that run are listed below with their own status.
 
 ## HG-001 — Cashbox master-data permission
 
@@ -684,6 +684,635 @@ Status: RESOLVED — approved by Ahmed on 9 Oct 2026 ("موافق تعمل كل 
   - trial balance balanced and reconciliation clean;
   - the screens and who may act.
 - **Known effect:** the goods-in-transit location shows in location pickers (stock list, manual transfer, count). The warehouses hub shows it only while something is on the way.
+
+## HG-041 — Services work orders and spare parts (proposed, not built)
+
+- **Status:** OPEN PROPOSAL. Nothing is built yet. This records the decision before the services work order package (`docs/ACTIVITY_SCORECARD.md`, step 2) touches stock.
+- **Why it is a gate:**
+  - A work order keeps its own states (received → diagnosed → quoted → approved → in repair → ready → delivered), so it needs new tables.
+  - Spare parts leave stock for a repair.
+    - The obvious shortcut, `inventory.services.adjust_stock` (an outbound adjustment), is wrong: `ledger/projector.py` projects an outbound adjustment as **stock-count loss**. Repair parts would show as shrinkage instead of the cost of the job.
+- **Proposed design (A, recommended): parts move only through the sales engine.**
+  - The work order holds its parts as planned lines. Nothing leaves stock while the job is open.
+  - Delivering the job makes its sales invoice through `taxes.services.create_sales_draft_with_tax` / `sales.services.post_sales_invoice`, unchanged.
+    - Labour goes on as a service item.
+    - Parts go on as stock items.
+  - Posting moves the parts out at authoritative movement cost (HG-003), as cost of goods sold. The ledger and the customer's account are exactly those of a sale.
+  - **Warranty jobs:** the part goes on the same invoice at price 0.
+    - The cost still lands in cost of goods sold, against a customer, so margin per job and per technician stays true.
+    - A test must first prove the sales engine accepts a zero-price stock line and costs it.
+  - **Not touched:** inventory movement types, the projector, sales posting, average cost.
+- **Alternative (B, needs approval):** a new movement type, "issued to a job".
+  - It would be projected to a "cost of services" account, and would let parts leave stock before the invoice (long repairs).
+  - It changes inventory movement and accounting (protected), so it is not done without Ahmed's approval.
+- **Files (A):** a new `workorders` app (models, services, views, templates, migration); the nav and dashboard panel for `services`; demo data. Sales, inventory and ledger: none.
+- **Risks (A):**
+  - Stock looks available until the job is delivered. The work order screen shows parts reserved by open jobs to make up for it.
+  - Parts reserved and then not used are simply dropped from the planned lines.
+- **Tests to write:**
+  - delivering a job posts one invoice whose stock lines move the exact quantities at movement cost;
+  - a warranty part at price 0 costs the part and leaves the receivable unchanged;
+  - cancelling the invoice brings the parts back;
+  - an open job moves nothing;
+  - permissions per role;
+  - the trial balance stays balanced and reconciliation clean.
+
+## HG-042 — Medical insurance: patient share and insurer share (proposed, not built)
+
+- **Status:** OPEN PROPOSAL. Nothing is built yet. This records the decision before the medical insurance work (`docs/ACTIVITY_SCORECARD.md`, step 4) touches customer accounts.
+- **Why it is a gate:** one visit is owed by two parties: the patient pays a share (co-pay) and the insurance company pays the rest, monthly, against a claim. Splitting one invoice's receivable between two customers changes the customer ledger (protected).
+- **Proposed design (A, recommended): two ordinary invoices per insured visit.**
+  - Each insurance company is a customer, carrying its contract: coverage % per service and a monthly claim day.
+  - An insured visit makes two sales invoices through the unchanged sales engine:
+    - the patient's, for their share;
+    - the insurer's, for the rest.
+  - Both carry the visit, so the patient file shows one visit with both invoices.
+  - **Monthly claim:** a read-only statement of the insurer's posted invoices for the month, printed and sent.
+  - **Payment:** the insurer pays through the ordinary customer collection.
+  - **Rejections:** a rejected line becomes the existing sales return against the insurer's invoice. If the patient must then pay it, a new invoice goes to the patient.
+  - **Not touched:** the customer ledger, sales posting, aging, report calculations.
+- **Alternative (B, needs approval):** one invoice with a receivable split between two customers. It keeps one document per visit, but it changes ledger posting and aging, so it is not done without Ahmed's approval.
+- **Files (A):** `medical` (an insurer contract model and migration, the visit-to-invoices service, the claim statement view); the reports for revenue per insurer and claims outstanding; demo data.
+- **Risks (A):**
+  - Revenue for one visit is split over two invoices. Reports per doctor and per service must add both, and the tests pin that down.
+  - Cancelling one invoice must offer to cancel the other.
+- **Tests to write:**
+  - the shares add up to the visit price to the piastre, with rounding on the insurer's side;
+  - each customer's balance moves by exactly its share;
+  - the claim lists only that insurer's posted invoices in the month;
+  - a rejection through a sales return lowers the insurer's balance;
+  - permissions;
+  - the trial balance and reconciliation.
+
+## HG-043 — Medical specialty records (proposed, not built)
+
+- **Status:** OPEN PROPOSAL. Nothing is built yet. This records the schema decision before the medical package (`docs/ACTIVITY_SCORECARD.md`, step 4) adds specialty records.
+- **Why it is a gate:** the current `medical.PatientFile` and `medical.ClinicalVisit` cannot hold:
+  - a dental chart and treatment in stages;
+  - lab results against reference ranges;
+  - physiotherapy session packages;
+  - an animal and its owner;
+  - a reception queue.
+
+  Each of these needs new models and migrations.
+- **Proposed design (A, recommended): new tables in the `medical` app, one per specialty. Each links to the patient file and, where it is done in a visit, to the visit.**
+  - **Dental:** `ToothRecord` (patient, tooth number in FDI notation, condition, planned treatment, stage, done in visit).
+  - **Lab:** `LabTest` (the test, unit, reference low/high, linked to its service item) and `LabResult` (visit, test, value, flag computed from the range). The result sheet prints like any document.
+  - **Physiotherapy:** `SessionPackage`, plus a session count used per visit.
+    - The package is sold as an ordinary service invoice (unchanged sales engine), and its revenue is recognised at sale, like any service today.
+    - Spreading package revenue over sessions (deferred revenue) would change ledger posting, so it is not part of this design.
+  - **Vet:** `PatientFile` gains a kind (person/animal), species, breed and an owner (the existing customer). One migration, no behaviour change for people.
+  - **Reception queue:** `QueueTicket` (appointment or walk-in, number, arrived/called/done times). Read by the waiting screen.
+  - **Shown only for their sub-activity:** dental, lab, physio, vet, clinic/medical centre for the queue.
+- **Not touched:** sales posting, customer ledgers, appointments' existing statuses, report calculations.
+- **Files:** `medical` (models, migrations, services, views, templates); demo data per sub-activity; the medical dashboard panel.
+- **Risks:**
+  - The `PatientFile` change (kind/owner) is the only change to an existing table. It adds nullable fields with defaults, and existing rows stay people.
+  - Lab flags depend on the units entered: a range is only checked against the same unit.
+- **Tests to write:**
+  - each specialty's record is created and shown only for its sub-activity;
+  - lab flags (low/normal/high) at the boundaries;
+  - session counts never go below zero, and a package's invoice is an ordinary posted sale;
+  - a vet file's owner is the customer who pays;
+  - the queue order;
+  - permissions per role;
+  - migrations forward and back on a database with existing patient files.
+
+## HG-044 — Restaurants: dish cost, waste and ingredient deduction (proposed, not built)
+
+- **Status:** OPEN PROPOSAL. Nothing is built yet. This records the decision before the restaurant package (`docs/ACTIVITY_SCORECARD.md`, step 5) touches stock.
+  - `docs/PROJECT_STATE.md` already notes that deducting ingredients by recipe on sale needs a Hard Gate.
+- **Why it is a gate:** waste and recipe deduction both take ingredients out of stock, and each decides which account the cost lands in. The existing outbound adjustment is projected as **stock-count loss** (`ledger/projector.py`).
+- **Proposed design:**
+  1. **Dish cost and margin: read-only, no gate needed.**
+     - Cost per dish comes from the recipe and ingredient average cost, and is compared with the menu price.
+     - It reuses `manufacturing.Recipe`, read-only.
+  2. **Waste (A, recommended now): the existing stock adjustment, unchanged, with a "waste" reason.**
+     - The value lands in the stock-loss account, which is where shrinkage and spoilage belong in a small restaurant's books.
+     - A waste report reads those adjustments by reason, kept apart from count differences.
+  3. **Waste (B, needs approval):** a new movement type, "waste out", projected to its own "food waste" expense account. It changes inventory movement and projection (protected).
+  4. **Ingredient deduction on sale (needs approval, either way):**
+     - **C1:** the dish becomes a stock item made by a daily production run from its recipe, using the existing manufacturing engine unchanged. Ingredients become dish cost through HG-030/HG-036, and selling the dish costs it as any stock item. The kitchen records the day's production.
+     - **C2:** posting a sale of a dish with a recipe moves its ingredients out at cost as cost of goods sold. Real-time, but it changes sales posting (protected).
+     - **Recommended:** C1, because it keeps every engine unchanged. Ahmed decides between C1 and C2 before anything is built.
+- **Files (1 and 2A):** `restaurant` (dish cost and waste screens, reports), `reports` (the waste report). No inventory or ledger change.
+- **Risks:**
+  - With 2A, waste and count differences share one account, so only the report separates them by reason.
+  - With C1, stock of dishes must be produced before it is sold. Selling more than was produced does not go negative: posting the sale is refused for lack of stock (`sales.services._validate_stock_available`), so the order cannot be paid. C1 therefore needs the dish produced before payment (a daily kitchen run, or a run made for the missing quantity just before the sale posts), and its tests must cover a sale beyond what was produced.
+- **Tests to write:**
+  - dish cost equals the recipe's ingredient cost at average cost;
+  - waste moves the exact quantity and value into stock loss, and the waste report shows it by reason;
+  - (C1) a production run plus a sale costs the dish at the run's cost, with the ledger balanced and reconciliation clean;
+  - permissions.
+## HG-039 — Signing and sending e-invoices to the Tax Authority (ETA-002)
+
+Status: APPROVED — Ahmed on 9 Oct 2026 ("خلص كله"), the third open decision in the audit report. Implemented in branch `claude/eta-002-submission`.
+
+- **Why a gate:** a new table (`einvoice.Submission`, migration `0002_eta_submissions`), and Hesba starts talking to an outside system on the client's behalf.
+- **What does not change:** sales invoices, posting, returns and every balance. Sending only reads a posted invoice through the EINV-001 document builder.
+- **How it works:**
+  - **Configuration:** comes only from the deployment's environment (`ETA_ENVIRONMENT`, `ETA_CLIENT_ID`, `ETA_CLIENT_SECRET`, `ETA_SIGNER_URL`, `ETA_SIGNER_TOKEN`). No secret is stored in the database or shown on a screen.
+  - **Signing:** the document is serialized by the authority's rule (`einvoice.portal.serialize`). The client's own signer, next to their e-signature token, returns the CAdES-BES signature.
+  - **Sending and reading back:** Hesba then submits, reads the status and cancels through the authority's API (`einvoice.portal`).
+- **Rules:**
+  - only a posted invoice with complete data is sent;
+  - an invoice that is valid, still being checked, or being sent right now is not sent twice: the invoice is claimed under its row lock with a `sending` row before the signer or portal is called. A claim left by a server that died mid-call is reconciled after 10 minutes: Hesba searches the authority for the invoice's internal ID over the claim's time (`GET /api/v1.0/documents/search`). If the document is found, the claim takes its uuid and status and nothing is sent again. If it is not found, the claim is closed as rejected and the invoice may be sent. If the authority cannot be asked, nothing is sent. The outcome is audited (`eta_send_recovered`). The screen offers this check ("ask the portal about this invoice") on any invoice stuck at sending. The search covers a one-hour window from the claim, well inside the authority's 30-day limit. A send whose outcome is unknown keeps its claim (audited `eta_send_unknown`) and is reconciled the same way before any retry: the connection cut after the request went out, or the authority answered 5xx. Only a definite 4xx refusal is recorded as rejected, and only a failure before the request (signer, login) drops the claim;
+  - a cancellation is claimed before the authority is called: the row becomes `cancel_requested`, with `cancel_requested_at`, so it is never asked twice. Only a definite 4xx refusal puts it back to valid. A lost answer keeps it requested (audited `eta_cancel_unknown`), and a refresh with no request on the authority's side puts it back to valid ("never reached the portal"), but only when it was read more than 5 minutes after the request, so a request still on its way is never taken for a lost one. It stays a request until the authority's details say `cancelled`. A refresh reloads the row under its lock, and also reads a pending request from the authority's own `cancelRequestDate`, so a refresh racing a cancellation never undoes it. The receiver may decline it, and the invoice is then valid again. Nothing can be sent again while a cancellation is pending;
+  - the signed text keeps each string's JSON escaping, exactly as it is sent;
+  - each recorded state of a sending or a cancellation is committed together with its audit row. A cancellation is audited when it is claimed, before it goes out. A refusal returns a cancellation to valid only while the row is still that request's claim, so a newer status saved by a refresh is never undone;
+  - the signer token is a required setting: Hesba never calls the signer without it. `ETA_ENVIRONMENT` is set in the deployment and not pinned by the blueprint, so a sync never moves a live client back to the test portal. Unset means `preprod`. Any other value than `preprod` or `prod` is reported as missing setup and nothing is sent, so a typo never falls back to testing;
+  - a rejected or invalid sending is kept as history and the invoice can be sent again;
+  - only a valid invoice can be cancelled, with a reason;
+  - every send, status check and cancellation is in the audit log;
+  - sending and cancelling need `sales.create_sales_invoice`; testing the connection needs `settings.manage_settings`.
+- **Tests (`einvoice/tests_portal.py`):** run against a fake portal and signer, with no network:
+  - the serialization rule, escaping included;
+  - sign → submit → status → cancellation request → cancelled or declined, with the exact headers;
+  - a second send while the first is on its way, and a stale claim;
+  - rejection with the authority's reason, then sending again;
+  - invalid after checking;
+  - signer down or settings missing: nothing is sent;
+  - incomplete data is never sent;
+  - the screens, and who may send;
+  - the connection check.
+- **Needs from Ahmed / the client to go live:** the portal account, the ERP client ID and secret, the signing token and a signer (docs/ETA_INTEGRATION.md).
+- **Protected touch: local cancellation of a sent invoice (Codex review on #181).**
+  - **Reason.** Sending claims the invoice under its row lock and then calls the portal outside any transaction. `cancel_posted_sales_invoice` never looked at the e-invoice side. An invoice could therefore be reversed here (stock, cash and customer ledger) while the authority accepted it. A legal document would then stand against books that say it never happened.
+  - **Change.**
+    - `sales/services.py::cancel_posted_sales_invoice` gains one line, under the lock it already holds: `einvoice.guards.before_sales_invoice_cancel(invoice)`. It refuses when the latest sending, in any environment, is sending, submitted, valid or cancel-requested.
+    - Rejected, invalid, cancelled and never-sent invoices pass untouched, so the reversal itself is unchanged.
+    - `send_invoice` now re-reads the invoice under the same lock and refuses one that is no longer posted.
+    - Together the two paths serialise: whichever takes the lock first wins, and the other sees its result.
+  - **Risk.** A user must cancel on the e-invoice page first and wait for the authority to confirm before cancelling here. That is the legally required order. The message says so in Arabic and English.
+  - **Tests.** `LocalCancellationTests` covers:
+    - each live state blocking;
+    - a cancellation during signing;
+    - a rejected invoice cancelling freely;
+    - a production document while the server talks to preprod;
+    - an invoice cancelled between building and locking never being sent;
+    - the Arabic message on the sales screen.
+  - **Not covered.** A sales *return* on an accepted invoice needs an ETA credit note, which is a separate feature (ETA-003).
+## HG-038 — Contracting phase 2: bill of quantities, progress certificates, retention, advances, subcontractors, budget (CONTRACT-002)
+
+Status: APPROVED — Ahmed approved on 9 Oct 2026 ("خلص كله"), after the audit report listed this as an open decision; the first demo feedback item also asked for it ("قدرات نشاط المقاولات محتاج تعديل كبير يمشي مع طبيعة النشاط"). Implemented in branch `claude/contract-002`.
+
+- **Why a gate:**
+  - it adds schema (models and a migration in `projects`);
+  - retention and advances change where customer and supplier balances appear in the projected general ledger (GL-002 / HG-032);
+  - a project's cost now also reads purchase invoices.
+- **What does not change:**
+  - sales and purchase posting, cancellation and returns;
+  - customer and supplier ledger rows and the party balances and statements built from them;
+  - cashbox movements;
+  - stock movement and average cost;
+  - report figures outside the projects screens and the general ledger.
+
+  Every certificate is an ordinary draft sales invoice made through `create_sales_draft_with_tax`, and every subcontractor bill an ordinary draft purchase invoice through `create_purchase_draft_with_tax`. Both are posted, collected or paid, returned and cancelled from their own screens exactly as today. An advance is an ordinary customer payment (`record_customer_payment`).
+- **Schema (`projects` only):**
+  - `Project.retention_rate` and `Project.advance_recovery_rate`, both defaulting to 0;
+  - `ProjectExpense.heading`, defaulting to "other", so every existing link keeps its meaning;
+  - new `BoqLine`, `Certificate` + `CertificateLine`, `ProjectAdvance`, `RetentionRelease`, `Subcontract`, `SubcontractBill`, `SubcontractRelease`, `ProjectPurchase`, `BudgetLine`.
+- **Contract arithmetic (on top of the invoice, never inside it):**
+  - **gross:** the certificate's gross is the work done since the last certificate, from the bill of quantities (cumulative quantity to date − quantity already certified, × rate) or a lump sum. The invoice carries the gross, so revenue and VAT are the full work value;
+  - **retention** = gross × the project's retention rate;
+  - **advance recovered** = gross × the recovery rate, capped by the advance not yet recovered;
+  - **net payable now** = the invoice total − retention − recovery.
+
+  A certificate whose invoice is cancelled stops counting. Only one certificate may be a draft at a time, so the quantities to date stay in order. A draft certificate can be withdrawn, which deletes its draft invoice: drafts have no ledger, stock or cash rows.
+- **General ledger (`ledger/projector.py`, `ledger/chart.py`, `ledger/reports.py`):**
+  - an advance payment credits **customer advances** (2105, already in the chart) instead of receivable;
+  - a posted certificate moves its recovery from customer advances to receivable, and its retention from receivable to **retention receivable** (new 1111 on the contracting chart). The same lines reverse in the cancellation entry;
+  - a retention release moves it back to receivable;
+  - subcontractor bills mirror this with **retention payable** (new 2106);
+  - a service purchase linked to a project books to **project costs** (5103) instead of other general expenses.
+
+  The customer reconciliation check now compares receivable + retention receivable + customer advances with the customers' balances (and payable + retention payable with the suppliers'). Those sums equal the party ledgers by construction. On a chart without these accounts (any other activity), the lines stay in receivable and payable as before.
+- **Cost and budget:**
+  - a project's cost is materials issued + linked expenses + linked service purchases (posted, before tax, after posted returns);
+  - a purchase invoice with stock lines cannot be linked: those goods go to the site through "issue from stock", so they are never counted twice;
+  - each cost reads against a budget per heading (materials, subcontractors, labour, equipment, other).
+- **Permissions (existing codes only):**
+  - certificates, retention and the bill of quantities: `sales.create_sales_invoice`;
+  - advances: `sales.receive_customer_payment`;
+  - subcontracts and their bills: `purchases.create_purchase_invoice`;
+  - figures that show cost or profit: `reports.view_profit_report`.
+- **Returns, cancellations and releases (review of #179):**
+  - **Sales return on a certificate:** gives back that invoice line's quantity to the bill of quantities. It also takes back the same share of the certificate's gross, retention and recovery as the return is of the invoice total (`projects.contract.return_share`). The projector books exactly that share in the return's entry and reverses it in the return's cancellation entry.
+  - **Purchase return on a subcontractor bill:** does the same for its retention (`projects.costs.return_share`).
+  - **Releases:** append-only. A release is never edited or deleted; it can be reversed on a date (`reversed_on`), which posts the opposite entry. A release or reversal dated in a closed month is refused (`ensure_period_is_open`).
+  - **One guard line in the engines:** `projects.guards` is called at the end of these services, inside their own transaction:
+    - sales: `cancel_posted_sales_invoice`, `create_sales_return`, `cancel_sales_return`, `cancel_customer_payment`;
+    - purchases: `cancel_posted_purchase_invoice`, `create_purchase_return`, `cancel_purchase_return`.
+
+    It refuses (and so undoes) any change that would leave a project with more retention released than held, or more advance recovered than received. Documents of no project pass untouched; nothing else in those services changes.
+  - **Entity scope:** project screens resolve submitted cashboxes, collections and purchase invoices through `entities.scope`.
+  - **Second review:**
+    - return shares are allocated on the cumulative returned total, so partial returns add up to exactly the whole deduction;
+    - a return cannot be cancelled once a later certificate billed the quantity it gave back;
+    - the guard takes the project's (or subcontract's) row lock, like certificates and releases;
+    - a project's certificates and a subcontract's bills stay in one entity, so retention and advances (and their releases) are held in one place.
+  - **Third review:**
+    - a project's payments join it in the same entity: the entity of its first certificate, or else of its first payment;
+    - an instalment-plan collection cannot be linked as an advance;
+    - the project's owner cannot change once it has invoices, payments, certificates or releases;
+    - certificate, payment and subcontractor-bill lists, and the certificate page and print, are scoped to the working entity.
+  - **Fourth review:**
+    - **Entity reach.** A project's money (terms, bill of quantities, certificates, payment links, releases and reversals) can change only from the entity it lives in, or from the whole group. The same holds for a subcontract's bills and releases and for linked service purchases. Every submitted id is resolved through `entities.scope`, and the services check it again.
+    - **Scoped figures.** The contract figures (`contract.position`), the project summary, the subcontract figures and the cost by heading are computed from the working entity's own documents. Another entity sees none of this project's money.
+    - **Closed months.** Linking or unlinking an advance moves that payment's journal entry between receivable and customer advances on the payment's own date, so it is refused when that month is closed. Linking or unlinking a posted service purchase moves its expense into or out of project cost on the invoice's date (and its returns' dates), so it is refused the same way. A collection link changes nothing in the books, so it is not restricted.
+    - **Stable return shares.** Returns are replayed in the order they were made and cancelled. A new return takes the returned share on the total still standing, less what those returns already took. Each share is fixed when the return is made, and cancelling a return reverses exactly its own share: no other return's entry moves.
+    - **Dated releases.** A release may take only what is held on its date and stays held on every later date: posted documents on their dates, returns on theirs, earlier releases and reversals (`contract.lowest_held`). The consistency guard checks the same balance on every date, not only today.
+  - **Fifth review:**
+    - **Dated advance recovery.** A certificate recovers only advance received by its own date that stays unclaimed on every later date (`contract.advance_events`). Unlinking or cancelling an advance is refused when an earlier certificate needs it on any date.
+    - **Header permission.** The project header's owner and contract figures need `sales.view_sales_invoices`. A purchases-only user (the stock keeper) on the subcontractors tab sees neither.
+    - **Reserved service items.** Bills and certificates use `services.service_item`. When a catalog item holding the reserved code (`PRJ-SUB`, `PRJ-BILL`) tracks stock or is inactive, it is left alone and the next free code (`PRJ-SUB-2`, …) is used as a non-stock service. A bill therefore never moves stock or books to inventory.
+  - **Sixth review:**
+    - **Permanent entity.** A project belongs for good to the entity of its first certificate, cancelled ones included, else of its first payment. A subcontract belongs to the entity of its first bill. A cancellation can no longer move a project (and the projection of its past releases) to another entity.
+    - **Exact return tax.** A linked service purchase's cost subtracts each posted return's total less the tax that return actually recorded, as the ledger books it. Lines at different VAT rates therefore stay exact.
+  - **Seventh review:**
+    - **Deductions capped.** Retention and advance recovery together cannot exceed 100% of a certificate: the terms are refused, and recovery is capped at what the certificate leaves after retention.
+    - **Cancellation after a release.** A sales or purchase invoice's cancellation is dated back to the invoice. A certificate (or subcontractor bill) whose retention was released on some date, even if that release was reversed later, therefore cannot be cancelled. The guard says so plainly and points to a return, which is dated today and keeps the history intact.
+  - **Eighth review:**
+    - **No instalments on a certificate.** `installments.services.create_plan` refuses a certificate's invoice (one guard line), and the sales screen no longer offers it: its collections must be recorded on the project so retention and the advance come off.
+    - **A certificate's invoice stays on its project.** `services.unlink` refuses it. The sales-side guard also resolves a project through the certificate itself, not only through the invoice link.
+  - **Ninth review:** the project list computes due-now for a whole page in grouped queries (`contract.due_now_many`). A project with returns on its certificates, or with releases seen from an entity, falls back to `position`. The reserved service item is created with an atomic get-or-create, so two first bills at once reuse one row.
+  - **Tenth review:** a project billed as a lump sum cannot get a bill of quantities afterwards, so billed work is never billed again. Certificates cannot be dated before the latest live one, so quantities to date run forward in time.
+  - **Eleventh review:** the project accounts (retention receivable and payable, project costs, project work in progress) follow the Projects module, not only the contracting activity. Any activity that switches Projects on gets them, so the ledger books the retention its project screens show.
+  - **Twelfth review:** an ordinary invoice linked to a project anchors it to that invoice's entity, as a first certificate or a first payment does. Linking an invoice from another entity is refused, so its collections always stay linkable. An instalment that pays an invoice on the project links as that project's collection, never as an advance. That invoice cannot be unlinked while such instalments count there. The payments screen offers only these instalments.
+  - **Thirteenth review:** when an upgrade adds a control account whose default code the user already took for an account of their own, `ensure_chart` creates the control under the nearest free code beside it under the same parent. The user's account is untouched, and nothing that posts to the control is silently skipped.
+  - **Fourteenth review:** a backdated certificate counts only the returns made by its date, so quantities already billed then are never billed again. A project collection that loses its CP- number to a collection saved at the same moment takes the next free number instead of failing.
+- **Known limits:**
+  - the customer's aging still shows the whole balance, retention included; the project screen shows what is due now;
+  - advances paid to subcontractors are not tracked separately: a supplier payment before the bill nets on the supplier's account as today.
+- **Tests:** `projects/tests_contract.py`:
+  - certificate quantities, gross, retention, recovery and net per scenario;
+  - the advance cap;
+  - a cancelled certificate releasing its quantities;
+  - one draft at a time and withdrawing it;
+  - retention release;
+  - subcontractor bill and release;
+  - the purchase-link rule;
+  - budget against actual;
+  - trial balance balanced and reconciliation clean, with the exact amounts in receivable, retention receivable, customer advances, payable, retention payable and project costs;
+  - the screens and who may act.
+## HG-040 — Education module: students, payers, courses, study groups, enrolments (EDU-001)
+
+- **Status:** approved by Ahmed on 10 October 2026, as part of the education restructure: "اعادة هيكلة التعليمي". See `docs/ACTIVITY_SCORECARD.md`.
+- **Why:** education scored 54%. A student was only a customer and a class was only an appointment. There was no group, schedule, enrolment, attendance or monthly fee.
+- **Change.** A new `education` app (new models and one migration), which touches no existing model:
+  - `Student`, whose `payer` is an ordinary `Customer` (a parent, or the student themselves). Brothers and sisters share one account.
+  - `Course`, which owns a non-stock service `Item`, so its invoices are ordinary sales invoices. Renaming the course or changing its price keeps the item in step.
+  - `StudyGroup`, with its teacher (an `Employee`), room, weekdays, time, length, capacity, fee and dates. A teacher or a room is never booked into two groups at once.
+  - `Enrollment`, with its start and stop dates, a discount percentage and a status. There is one active enrolment per student and group. Capacity is checked under the group's row lock.
+- **Entity scope (Codex on #185, HG-034):** students, courses and groups belong to the entity they were made in, and unowned ones count as the main entity's. Every list, file, choice and change is scoped to the entity being worked in; the whole group sees everything. A student, a group and its course must share one entity. A room clash counts within one entity; a teacher clash counts everywhere.
+- **Not touched:**
+  - sales and payment posting, the customer ledger, cash, stock and reports;
+  - the permission core: viewing uses `master_data.view_master_data`, and changing uses `master_data.manage_parties`.
+
+  The screens appear only on an education install, or in an education entity of a group.
+- **EDU-002 (attendance):**
+  - `ClassSession` is one per group and day, held or cancelled, with the topic covered.
+  - `Attendance` is one mark per student and class: present, late, absent or excused.
+  - The roster is the enrolments running on that day. Unmarked students count as present, and taking a day again corrects it.
+  - A teacher (a user linked to the group's employee) takes attendance for their own groups only; managers can take it for any group.
+  - Attendance rates count held classes only, with late counted as attended.
+  - Absent and late students get a one-tap WhatsApp link to the parent.
+  - No money moves.
+  - **Codex on #186:**
+    - A student stopped and enrolled again on the same day is one row, with one mark.
+    - Attendance is taken only on the group's own weekdays and within its dates, and the group page offers its latest class day.
+    - A message about an older class gives its date instead of "today".
+    - Attendance screens are scoped to the entity being worked in.
+  - **Schema change and its risk plan (Codex on #186):**
+    - **Files:**
+      - `education/models.py` (`ClassSession`, `Attendance`, `Presence`, `SessionStatus`);
+      - migration `education/0002`;
+      - `education/attendance.py` (all writes);
+      - `education/views.py`;
+      - `templates/education/today.html` and `attendance.html`;
+      - `reports/navigation.py` ("My classes").
+    - **Schema:** two new tables in the education app only.
+      - Unique constraints: one session per group and day, one mark per student and session.
+      - No existing table is altered, and the migration only adds tables, so rolling back is dropping them; no other app reads them.
+    - **Risk 1, a correction rewrites history.** Taking a class again replaces its marks.
+      - The audit row keeps the full before and after: status, topic, and each student's mark and note.
+      - Nothing else is deleted.
+    - **Risk 2, rates drift.** Rates count only held classes, over a window of exactly the last N calendar days, today included.
+    - **Risk 3, a teacher reaches others' groups.** A teacher-only user sees and changes only the groups linked to their own employee record, and only through the attendance screens.
+    - **No money or stock is touched.**
+    - **Verification** (`education/tests.py`):
+      - roster on a day, including stop-and-rejoin;
+      - weekday and term checks;
+      - future days refused;
+      - unknown marks refused;
+      - corrections recorded mark by mark;
+      - excused counted;
+      - the 30-day window;
+      - teacher-only access and menu;
+      - entity scope;
+      - malformed dates.
+- **EDU-003 (monthly fees):** `education/billing.py` makes one draft sales invoice per parent for a month. It goes through `create_sales_draft_with_tax`, and through `post_sales_invoice` when posting is asked for. Neither function is changed.
+  - **Lines:** one per enrolment, using the course's own service item.
+    - **Monthly groups:** one month at the group's fee, with the enrolment's discount as the line discount.
+    - **Per-class groups:** the classes attended that month; late counts as attended.
+    - **Whole courses:** billed once.
+  - **Duplicates:** a new `FeeCharge` row records which enrolment and month each line billed, so running the month again bills only what is new. A cancelled invoice frees its month. Each parent's customer row is locked while their lines are worked out, so two runs at once cannot bill one month twice.
+  - **Not allowed:** future months.
+  - **Fees owed:** the existing customer aging, kept to parents of students, with WhatsApp reminders.
+  - **`FeeCharge.amount`** is as wide as an invoice line (14 digits), because a per-class charge is quantity × fee (Codex on #187).
+- **EDU-004 (teacher pay, dashboard, month report):**
+  - **New schema, education app only:**
+    - `StudyGroup.teacher_pay` (none / per class held / share of the group's fees / fixed per month) and `StudyGroup.teacher_rate`.
+    - A new `TeacherPayment` table: teacher, month, amount, and a one-to-one link to the `Expense` that paid it. Migration `education/0004`.
+    - A new `GroupPayTerm` table (migration `education/0005`): the teacher, pay basis and rate of each group for a month, frozen when that month is first paid.
+      - Editing a group afterwards changes only the months still to pay.
+      - A payment can never drop out of its month or be made twice.
+  - **Paying a teacher:** `expenses.services.record_expense`, called unchanged, under a new "Teacher pay" category (`TEACHER-PAY`).
+    - The cash leaves the chosen cashbox through the existing cashbox operation.
+    - The payment shows in the expenses list and comes off profit.
+    - Cancelling the expense (expenses page, also unchanged) reverses the cash, and the month is owed again.
+    - The teacher's row is locked while the amount is checked. Nothing above what is still owed can be paid, and no future month.
+  - **What a teacher is owed** is read from records the system already keeps:
+    - classes held (attendance);
+    - the group's live fee charges (EDU-003);
+    - or whether the group had students that month.
+  - **Dashboard:** the education panel replaces the bookings panel for education installs, and "Today's classes" becomes the lead quick action.
+    - Panel: active students, today's classes with how many have attendance taken, 30-day attendance, fees billed this month (needs sales view), parents who owe (needs the customer report).
+  - **Month report:** per group: students, classes held, attendance, fees billed. Teacher pay and what is left only show for users who can see the expenses.
+  - **Not touched:** sales, cashbox and expense posting, ledgers, report calculations.
+- **Tests:** `education/tests.py` covers:
+  - payers and siblings;
+  - the course item kept in step;
+  - teacher and room clashes;
+  - capacity, discount, stop and re-enrol;
+  - the screens in Arabic and English;
+  - permissions;
+  - other activities not seeing the module;
+  - the demo data.
+## HG-046 — service contracts billed per period (SVC-002)
+
+Status: IMPLEMENTED for review — new tables only, no protected logic changed. Implemented in branch `claude/svc-002-contracts`. The number is HG-046 because HG-041…HG-045 are taken on open branches.
+
+- **Asked for:** the activity scorecard left services at about 76%. What service businesses were missing most is a recurring contract: a maintenance contract or a monthly retainer billed every period, with its visits.
+- **Files:**
+  - new app `agreements/` (models, `services.py`, views, urls, migration `0001_initial`);
+  - templates under `templates/agreements/`;
+  - a menu entry and icon (`reports/navigation.py`, `templates/partials/shell_icons.html`);
+  - demo seeding (`prepare_demo._contracts`, `reports/demo_catalogs.py` extras).
+- **Schema:**
+  - `ServiceContract`: customer, service item, amount per period, month/quarter/year, start, optional end, visits per period, status;
+  - `ContractBill(contract, period_start, invoice)`, where the invoice is a one-to-one with `PROTECT`.
+- **Money behaviour:**
+  - "bill what is due" makes one ordinary **draft** sales invoice per due period through `taxes.services.create_sales_draft_with_tax`, with no cashbox and nothing paid;
+  - posting it on the sales page is what touches the customer's ledger and the cashbox, exactly as any invoice;
+  - a period whose invoice was cancelled is due again;
+  - the contract row is locked while it is billed, so two clicks never bill one period twice;
+  - once a contract has been billed, its start date and period cannot change (the billed periods would no longer line up). The amount, end date and status can.
+- **Who:** seeing contracts needs `sales.view_sales_invoices`; adding, editing and billing need `sales.create_sales_invoice`. It is shown to services (general, maintenance, professional, digital, other) and to maintenance contractors; a salon, a clinic or a shop gets a 404.
+- **After review:**
+  - each contract keeps the selling location (so the entity) it was made in; it is billed there and listed only in that entity (the whole-group view shows all);
+  - a contract resumed after a pause, or given a "bill from" date, never bills the periods before it;
+  - the last period stops at the contract's end date, and a period starting on the end day is not billed;
+  - "customer balance" comes from the customer's own ledger, so payments and returns count.
+- **Not done:**
+  - no proration: a short last period is billed at the full amount;
+  - visits are read from the customer's done appointments for the contract's service, and a visit is not booked automatically.
+- **Tests:** `agreements/tests.py` covers:
+  - periods at month ends;
+  - due, paused and ended contracts;
+  - refusals and the billed lock;
+  - drafts that leave the ledger untouched until posted;
+  - a cancelled invoice freeing its period;
+  - visits;
+  - the screens in Arabic and English;
+  - each seeded role;
+  - the activities it is hidden from.
+
+  The demo is covered in `reports/tests_demo_catalogs.py`.
+
+## HG-047 — session packages and billable hours (SVC-003)
+
+Status: IMPLEMENTED for review. New tables only; no protected logic changed. Implemented in branch `claude/svc-003-packages-hours`, stacked on SVC-002 (HG-046) in the same `agreements` app.
+
+- **Asked for:** these close the rest of the services gap on the scorecard:
+  - a salon sells packages of sessions;
+  - an office (accountant, consultant, designer) bills the hours it worked.
+- **Files:**
+  - `agreements/packages.py`, `agreements/hours.py` and `agreements/package_views.py`;
+  - migration `agreements/0002`;
+  - templates `agreements/packages.html`, `package.html` and `hours.html`;
+  - the menu and icons;
+  - demo seeding.
+  - `agreements/services.py` gains `draft_invoice()` and `selling_location()`, shared with the contracts. The contracts' billing behaviour is unchanged.
+- **Schema:**
+  - `Package` and `PackageUse` (one row per session, cancelled rather than deleted);
+  - `TimeEntry`, whose invoice is nullable and `PROTECT`.
+- **Money behaviour:**
+  - **Packages:**
+    - a package is sold on one ordinary draft sales invoice for its whole price, and its revenue counts when that invoice is posted, like any service;
+    - spreading revenue over the sessions (deferred revenue) would change ledger posting and is not part of this design;
+    - sessions are used only once the invoice is posted, never below zero, and never on a day after the expiry date;
+    - the package row is locked, so the last session cannot be taken twice;
+    - a package whose invoice was cancelled cannot be used.
+  - **Hours:**
+    - "bill the hours" turns all of one customer's unbilled entries into one draft invoice, with one line per entry (quantity is the hours, price is the rate);
+    - the entries are locked while this happens;
+    - a cancelled invoice frees its hours;
+    - a billed hour cannot be removed.
+- **Who:**
+  - Seeing either screen needs `sales.view_sales_invoices`.
+  - Selling, using sessions and billing need `sales.create_sales_invoice`.
+  - An employee linked to a login can log and remove their own unbilled hours without the invoice permission, and sees only their own.
+  - Where each screen shows:
+    - packages: services in beauty, general and other;
+    - hours: services in professional, digital marketing, general and other.
+- **Known overlap:** MED-005 (#195, not merged) has physiotherapy packages in `medical/` with the same rules. Once both are merged, they can be folded into one; until then each stays in its own activity.
+- **Tests:**
+  - `agreements/tests_packages_hours.py`: 15 tests;
+  - demo tests for a salon and a digital agency in `reports/tests_demo_catalogs.py`.
+
+## HG-041 — implementation note: services work orders, design A (SVC-001)
+
+- **Status:** Built as design A (the proposal is recorded under HG-041 in PR #184).
+  - Parts leave stock only through the work order's sales invoice, on the unchanged sales engine.
+  - `inventory.services.adjust_stock` is not used, so repair parts are never posted as stock-count loss.
+- **New schema:** a new `workorders` app (migration `workorders/0001`), with three tables:
+  - `WorkOrder`: customer, device, serial, accessories, problem, diagnosis, technician, status, promised date, warranty days and end, the order it came back under warranty of, the invoice, entity;
+  - `WorkOrderLine`: item, quantity, price, warranty flag;
+  - `WorkOrderEvent`: the timeline.
+- **Delivery** (`workorders.services.deliver`):
+  - the order's lines go to `taxes.services.create_sales_draft_with_tax` and then `sales.services.post_sales_invoice`, both unchanged;
+  - stock lines move out at movement cost (HG-003);
+  - a warranty line goes on at price 0, so its cost still lands in cost of goods sold and the receivable does not change;
+  - payment at the counter is the invoice's own `paid_now` into a chosen cashbox, never more than the invoice total.
+- **A cancelled delivery invoice** (cancelled on the sales page, unchanged) sends its order back to "ready" on the next look:
+  - the warranty is void;
+  - the timeline keeps the cancelled invoice's number;
+  - the order can be delivered and invoiced again.
+
+  The sales cancel flow is not changed or blocked. The reopening is conditional on the order still being delivered on that very invoice, so a second caller never undoes a redelivery made in between.
+- **A refused quote:** its lines come off when the customer refuses (kept in the audit as `drop_quote`), so pickup never charges the rejected work; an inspection fee is added afterwards as its own line.
+- **Serial-tracked parts** (while serials are on) cannot go on a work order and block delivery; they are sold on a sales invoice, which records the serial (`serials` is not touched).
+- **Line amounts** round half up with `config.money.money_round`, as the invoice lines do.
+- **Totals:** shown with VAT, as the invoice will come to.
+- **The warranty flag:** each line carries its own; a warranty return only ticks the box by default.
+- **New customers:** creating one from the work order needs `master_data.manage_parties`, the same rule as the cashier's quick add.
+- **Not touched:** inventory movement types, the projector, sales posting and cancellation, average cost, cashbox and customer ledgers.
+- **Tests** (`workorders/tests.py`):
+  - an open job moves nothing;
+  - delivery moves the exact quantity at movement cost and sets the customer balance and cashbox exactly;
+  - a warranty part costs 1350 at price 0, with the ledger balanced and nothing new left in suspense;
+  - cancelling the invoice brings the parts back;
+  - the status path;
+  - what a technician may and may not do;
+  - screens, permissions, the menu, the dashboard;
+  - a salon having no work orders.
+## HG-043 — implementation note: dental chart and treatment plan (MED-003)
+
+- **Status:** The dental part of the HG-043 proposal (recorded in PR #184), built as design A. The lab, physiotherapy, vet and reception-queue parts are not built yet.
+- **Schema:** migration `medical/0002_dental_chart` adds two tables and touches no existing one.
+  - `ToothRecord`: patient, FDI tooth number, condition, notes; one row per patient and tooth (unique constraint). A tooth with no row is healthy.
+  - `TreatmentStep`: patient, tooth (empty = the whole mouth), service item, price, stage 1–20, status (planned → done or cancelled), doctor, done date, visit, invoice.
+- **Money:** a step never moves money.
+  - "Invoice the done steps" makes one ordinary **draft** sales invoice through `taxes.services.create_sales_draft_with_tax`, the same way appointments bill.
+  - Posting it on the sales page is what touches the customer's account and the cashbox.
+  - A step on a cancelled invoice can be billed again, and a step is never on two live invoices: the patient row is locked while billing.
+  - Making the invoice needs `sales.create_sales_invoice`; charting and planning need the medical records permission (or being a linked doctor).
+- **Not touched:** sales posting and cancellation, customer ledgers, appointments, report calculations, average cost.
+- **Shown only** when the current entity (or the installation) is medical / dental.
+- **Risks:**
+  - FDI numbers are checked against the permanent (11–48) and primary (51–85) sets, nothing else.
+  - The price is the clinic's to set per step; it defaults to the service's price.
+  - Rolling back the migration drops the two tables (charts and plans); nothing else depends on them.
+- **Tests:** `medical/tests.py` → `DentalChartTests`; `reports/tests_demo_catalogs.py` (the dental demo has a chart and a plan in three stages).
+
+## HG-043 — implementation note: lab results (MED-004)
+
+- **Status:** The lab part of the HG-043 proposal, built as design A. The physiotherapy, vet and reception-queue parts are not built yet.
+- **Schema:** migration `medical/0003_lab_results` adds two tables and touches no existing one.
+  - `LabTest`: name (unique), unit, normal low and/or high, optional service item, order, active.
+  - `LabResult`: patient, test, sample day (one result per patient, test and day), the number or a text value, and the unit and range **copied from the test when entered**, plus the flag.
+- **Rules:**
+  - The boundaries count as normal.
+  - Changing a test's range never rewrites an old result's flag.
+  - A text result (negative, A+) has no flag.
+  - Arabic digits and the Arabic decimal sign are read; a comma groups thousands.
+  - Each entry and correction is audited before/after.
+- **Money:** none. A test is billed like any service, on an ordinary sales invoice.
+- **Not touched:** sales, ledgers, appointments, report calculations.
+- **Shown only** for medical / lab.
+- **Risk:** the flag compares numbers only; it does not convert between units, so a range is valid for the test's own unit.
+- **Tests:** `medical/tests.py` → `LabResultTests`; `reports/tests_demo_catalogs.py` (the lab demo).
+
+## HG-043 — implementation note: physiotherapy session packages (MED-005)
+
+- **Status:** The physiotherapy part of the HG-043 proposal, built as design A. The vet and reception-queue parts are not built yet.
+- **Schema:** migration `medical/0004_session_packages` adds two tables and touches no existing one.
+  - `SessionPackage`: patient, service, number of sessions, price, and its own sales invoice (one to one).
+  - `PackageSession`: package, day, therapist, optional visit, notes, cancelled flag.
+- **Money:**
+  - selling a package makes one ordinary **draft** sales invoice through `create_sales_draft_with_tax`;
+  - its revenue counts when that invoice is posted, like any service, as the proposal says;
+  - spreading package revenue over the sessions (deferred revenue) would change ledger posting and is **not** done;
+  - using a session moves no money.
+- **Rules:**
+  - Sessions are used only once the invoice is posted.
+  - A package never goes below zero: the package row is locked while a session is recorded.
+  - A mistaken session is cancelled (kept and audited), which gives it back.
+  - A package whose invoice was cancelled is void.
+  - Selling needs `sales.create_sales_invoice`; recording sessions needs the medical write permission (or being a linked therapist).
+- **Not touched:** sales posting and cancellation, customer ledgers, appointments, report calculations.
+- **Shown only** for medical / physio.
+- **Tests:** `medical/tests.py` → `SessionPackageTests`; `reports/tests_demo_catalogs.py` (the physio demo: 10 sessions, 3 used).
+
+## HG-043 — implementation note: the vet's animal file (MED-006)
+
+- **Status:** The vet part of the HG-043 proposal, built as design A with **one change from the proposal**, explained below. The reception queue is not built yet.
+- **Change from the proposal:** the proposal had `PatientFile` gain a kind, species, breed and owner. But `PatientFile` is one-to-one with its customer, and a vet's customer often brings **several** animals. So:
+  - the animal is its own table, `Animal`, owned by an ordinary customer;
+  - the one change to an existing table is a nullable `ClinicalVisit.animal` (PROTECT), which says which animal a visit was for.
+  - `PatientFile` is unchanged, and existing rows and every other medical sub-activity are unaffected: the column stays empty.
+- **Schema:** migration `medical/0005_vet_animals` creates `Animal` (name, species, breed, sex, date of birth, colour, microchip, neutered, allergies, notes, active) and adds `ClinicalVisit.animal`. Rolling back drops the column and the table.
+- **Rules:**
+  - The owner books, is billed and pays as before; the statement stays on the customer.
+  - A visit can only name one of the patient's own animals, refused in `medical.services.save_visit` and in the view.
+  - The animal's card shows its own visits only.
+  - The prescription names the animal and its species.
+  - The patients list also finds an owner by an animal's name.
+  - Every save is audited before/after.
+- **Money:** none.
+- **Not touched:** sales, ledgers, appointments, report calculations.
+- **Shown only** for medical / vet. The vet demo uses its own `animals` extra, so owners are not given human patient profiles.
+- **Tests:** `medical/tests.py` → `VetAnimalTests`; `reports/tests_demo_catalogs.py` (the vet demo: a dog with two visits and a cat).
+
+## HG-043 — implementation note: the reception queue (MED-007)
+
+- **Status:** The last part of the HG-043 proposal, built as design A. With MED-003 to MED-007, every part of the proposal is built.
+- **Schema:** migration `medical/0006_reception_queue` adds `QueueTicket` and touches no existing table.
+  - Fields: day, number (unique per day), patient, optional appointment (one to one), optional doctor, status, and the arrived/called/done times.
+- **Rules:**
+  - Checking in gives today's next number; a race for the same number retries on the unique constraint.
+  - A patient can't hold two open turns in a day.
+  - Arriving for today's appointment marks it "arrived" through `appointments.services.set_status`, unchanged.
+  - A doctor calls the longest-waiting patient who is theirs or unassigned (an unassigned one becomes theirs); reception can call anyone.
+  - Status moves: waiting → called → done, back to waiting if called by mistake, or left; each move is audited.
+  - **The waiting-room screen shows numbers (and the doctor's name) only, never a patient's name.** It refreshes every 15 seconds.
+- **Who:** reception works the queue with `sales.create_sales_invoice`, the booking permission appointments use, so a cashier at the desk can use it without opening patient files; doctors (linked employees) call their own patients.
+- **Where:** medical / clinic and medical / medical_center, with a «Waiting list» entry in the menu.
+- **Money:** none. The visit is billed from its appointment or on a sales invoice, as before.
+- **Tests:** `medical/tests.py` → `ReceptionQueueTests`; `reports/tests_demo_catalogs.py` (the clinic demo has one patient called in and one waiting).
+## HG-044 — implementation note: dish cost, read only (RESTO-002)
+
+- **Status:** The read-only part of the HG-044 proposal (recorded in PR #184), built. **Taking ingredients out of stock when a dish is sold is not built; it still waits for Ahmed's decision.**
+- **Schema:** migration `restaurant/0002_dish_ingredients` adds `DishIngredient` and touches no existing table.
+  - Fields: dish (a menu item), ingredient (a stocked item), quantity per plate; one row per dish and ingredient.
+  - Manufacturing recipes can't hold this, because they need a stocked product and dishes are made to order (services).
+- **Dish cost:**
+  - the sum of the ingredients at each ingredient's current `average_cost` (the display cache, HG-003);
+  - an estimate for pricing, shown with the margin against the menu price;
+  - it never feeds posting, cost of goods sold or any report calculation.
+- **Waste:** no new table. The report lists stock taken out by an ordinary stock adjustment in the period, with its reason, at movement cost; a cancelled adjustment is left out.
+- **The restaurant report** reads paid orders whose invoice is posted, in the current entity:
+  - by hour, best sellers, by order type, tables (orders a day, average order, average stay), waiters;
+  - order values are net sales (`appointments.services.net_sales`: before tax, after posted returns);
+  - dish values are at menu price before the order's discount.
+- **Permissions:** the report needs `reports.view_all_sales_report`. Costs and waste values need `inventory.view_cost`. Editing ingredients needs `master_data.manage_items`.
+- **Not touched:** inventory movement and accounting, sales posting, average-cost logic, report calculations.
+- **Tests:** `restaurant/tests.py` → `RestaurantInsightTests` (including that selling a dish moves no stock); `reports/tests_demo_catalogs.py` (the restaurant demo).
+
+## HG-045 — restaurant delivery: driver, dispatch time and fee (RESTO-003)
+
+- **Status:** Built. Additive schema on an existing table, recorded here because it touches `restaurant.Order`.
+- **Schema:** migration `restaurant/0003_delivery` adds three nullable or defaulted fields to `Order`:
+  - `driver` (staff employee, SET_NULL);
+  - `dispatched_at`;
+  - `delivery_fee` (default 0).
+
+  Existing rows read as "no driver, no fee", and nothing else changes.
+- **Money:**
+  - the fee is billed as **its own line on the order's ordinary invoice**, through the same `sales.pos.checkout` the order already uses;
+  - the line uses a non-stocked service item `DELIVERY-FEE` («رسوم توصيل»), made once on first use;
+  - so the fee is sales revenue like any service and moves no stock; posting, the cashbox and the customer ledger are unchanged.
+- **Rules:**
+  - Only delivery orders carry a fee; a dine-in order ignores it.
+  - Dispatching sets the driver and the time it left, and can correct the fee while the order is open; it is audited before/after.
+  - The restaurant report gains deliveries per driver: count, fees, average minutes from leaving to closing.
+- **Not touched:** sales posting, cashbox and customer ledgers, inventory, report calculations outside the restaurant report.
+- **Tests:** `restaurant/tests.py` → `DeliveryTests` (one invoice with the fee line, the cashbox moves by the order plus fee, the fee item made once, no fee line without a fee, the rules, the driver report); `reports/tests_demo_catalogs.py`.
+
+## قرارات اتاخدت من غير ما نستنى (11 أكتوبر 2026)
+
+أحمد قال: «اعمل أصح حاجة تعرف تعملها من غير ما تستنى قراري». كل قرار هنا اتاخد بالاختيار الأأمن، وتقدر تغيّره في أي وقت.
+
+| القرار | اللي اتعمل | ليه |
+|---|---|---|
+| Codex خلص رصيده | مراجعة كاملة لـ #191–#202 بدله، واتصلّح فيها كل ملاحظة حقيقية | المراجعة لقت مشاكل فعلية في الفلوس والطبي والصلاحيات |
+| التأمين الطبي (HG-042) | التصميم A: فاتورتين عاديتين لكل كشف (واحدة على المريض وواحدة على شركة التأمين) | مش بيلمس دفتر العملاء ولا الترحيل. لسه متبناش |
+| خصم الخامات في المطاعم (HG-044) | C1: إنتاج الطبق عن طريق محرك التصنيع، اختياري لكل طبق | مش بيغيّر ترحيل المبيعات. لسه متبناش |
+| السحابة | الخيار B: كل عميل بياناته على حساب Supabase باسمه هو | ده اللي كنا ناصحين بيه، وتكلفته عليك أقل |
+| تصميم البيطري (#196) | جدول حيوانات مستقل، وصاحب الحيوان عميل عادي | العميل الواحد ممكن يجيب أكتر من حيوان |
+| باكدجات البيوتي والعلاج الطبيعي | كل واحد فضل في نشاطه، ونوحّدهم بعد الدمج | توحيدهم دلوقتي كان هيلخبط PRين مش متدمجين |
+| ربط عقود الخدمة بالكيان | كل عقد بيتسجّل فيه مخزن البيع (يعني الكيان) اللي اتعمل فيه، وبيتفوتر ويظهر فيه بس | زي الفواتير بالظبط (HG-034) |
 
 ## Final gate verification
 

@@ -322,7 +322,7 @@ def _build_cards(user, lang, held, figures):
 ACTIVITY_ACTIONS = {
     "restaurants": {"key": "open_tables", "section": "restaurant", "url_name": "restaurant:board", "ar": "الطاولات والطلبات", "en": "Tables & orders"},
     "medical": {"key": "bookings", "section": "appointments", "url_name": "appointments:agenda", "ar": "الحجوزات وكشوفات النهارده", "en": "Today's bookings"},
-    "education": {"key": "bookings", "section": "appointments", "url_name": "appointments:agenda", "ar": "حصص ومواعيد النهارده", "en": "Today's classes"},
+    "education": {"key": "classes", "section": "education", "url_name": "education:today", "ar": "حصص النهارده والحضور", "en": "Today's classes"},
     "services": {"key": "bookings", "section": "appointments", "url_name": "appointments:agenda", "ar": "مواعيد النهارده", "en": "Today's appointments"},
     "manufacturing": {"key": "produce", "section": "manufacturing", "url_name": "manufacturing:home", "ar": "تشغيلة إنتاج", "en": "Production run"},
     "contracting": {"key": "projects", "section": "projects", "url_name": "projects:list", "ar": "المشاريع", "en": "Projects"},
@@ -340,6 +340,8 @@ def _quick_actions(user, lang, modules, activity="", sections=frozenset()):
     words = active_vocabulary()
     actions = []
     lead = ACTIVITY_ACTIONS.get(activity)
+    if activity == "services" and "workorders" in sections and user_has_permission(user, "sales.create_sales_invoice"):  # SVC-001: a workshop's day starts at the counter
+        lead = {"key": "workorders", "section": "workorders", "url_name": "workorders:new", "ar": "استلام جهاز / طلب", "en": "Receive a device"}
     if lead and lead["section"] in sections:
         actions.append({"key": lead["key"], "label": lead[lang], "primary": True, "url_name": lead["url_name"], "hint": ""})
     for action in QUICK_ACTIONS:
@@ -480,7 +482,7 @@ def dashboard(request):
         "cards": cards,
         "alerts": _alerts(lang, strings, held, today, shared) + _transfer_alerts(request.user, lang, strings, modules),
         "quick_actions": _quick_actions(request.user, lang, modules, activity, sections),
-        "activity_panel": build_activity_panel(activity, sections, lang, today),
+        "activity_panel": build_activity_panel(activity, sections, lang, today, request.user),
         "demo_activities": _demo_activities(request.user, lang, profile),
         "onboarding_steps": _onboarding(lang),
         # Guide someone whose installation has seen no trade yet, and anyone who

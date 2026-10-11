@@ -1,0 +1,18 @@
+{% load static %}<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="refresh" content="15"><title>{{ qw.screen }}</title>
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
+<style>body{margin:0;min-height:100vh;background:var(--hs-navy);color:var(--hs-surface);font-family:var(--hs-font-body);display:flex;flex-direction:column}
+header{display:flex;justify-content:space-between;align-items:center;padding:20px 32px;border-bottom:2px solid var(--hs-teal)}header h1{margin:0;font-size:28px;font-family:var(--hs-font-head)}
+main{flex:1;display:grid;grid-template-columns:2fr 1fr;gap:24px;padding:32px}section{background:color-mix(in srgb,var(--hs-surface) 8%,transparent);border-radius:20px;padding:24px}
+h2{margin:0 0 16px;color:var(--hs-gold-bright);font-size:26px}.now{display:grid;gap:16px;align-content:start}.now article{display:flex;justify-content:space-between;align-items:center;background:var(--hs-teal);color:var(--hs-navy);border-radius:16px;padding:16px 28px}
+.now strong{font-size:min(14vw,120px);line-height:1}.now span{font-size:28px;font-weight:700}.next ol{list-style:none;margin:0;padding:0;display:grid;gap:12px}.next li{font-size:48px;font-weight:700;border-bottom:1px solid color-mix(in srgb,var(--hs-surface) 20%,transparent);padding-bottom:8px}
+.muted{opacity:.7;font-size:22px}@media(max-width:800px){main{grid-template-columns:1fr}}</style></head>
+<body data-queue-board>
+<header><h1>{{ company.name }}</h1><div class="muted"><bdi>{{ now|time:"H:i" }}</bdi></div></header>
+<main>
+<section class="now"><h2>{{ qw.now }}</h2>{% for t in board.called %}<article data-board-called="{{ t.number }}"><strong>{{ t.number }}</strong><span>{{ t.doctor.name|default:'' }}</span></article>{% empty %}<p class="muted">{{ qw.no_one }}</p>{% endfor %}</section>
+<section class="next"><h2>{{ qw.next }}</h2><ol>{% for t in board.next %}<li data-board-next="{{ t.number }}">{{ t.number }}</li>{% empty %}<li class="muted">{{ qw.no_one }}</li>{% endfor %}</ol>
+<p class="muted">{{ board.waiting }} {{ qw.waiting_n }}</p></section>
+</main>
+</body></html>

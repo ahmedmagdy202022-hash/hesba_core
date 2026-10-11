@@ -11,6 +11,17 @@ import re
 
 
 EXACT = {
+    # HG-038: a project's contract figures stay possible.
+    "This would leave more retention released than is held on the project; reverse the release first.":
+        "كده الإفراج عن ضمان الأعمال هيبقى أكبر من المحتجز في المشروع؛ ألغِ الإفراج الأول.",
+    "Certificates on this project already recovered this advance; cancel or return those certificates first.":
+        "مستخلصات المشروع خصمت من الدفعة المقدمة دي بالفعل؛ ألغِ المستخلصات دي أو اعملها مرتجع الأول.",
+    "This would leave more subcontractor retention released than is held; reverse the release first.":
+        "كده الإفراج عن ضمان أعمال مقاول الباطن هيبقى أكبر من المحتجز؛ ألغِ الإفراج الأول.",
+    "Retention from this certificate was released at some point (even if that release was reversed later). A cancellation is dated back to the invoice and would rewrite that history, so it is not allowed: make a sales return instead.":
+        "ضمان الأعمال بتاع المستخلص ده اتفرج عنه قبل كده (حتى لو الإفراج اتلغى بعدها). الإلغاء بيرجع لتاريخ الفاتورة وهيغيّر اللي حصل، فمش مسموح: اعمل مرتجع مبيعات بدله.",
+    "Retention from this bill was released at some point (even if that release was reversed later). A cancellation is dated back to the bill and would rewrite that history, so it is not allowed: make a purchase return instead.":
+        "ضمان الأعمال بتاع المستخلص ده اتفرج عنه قبل كده (حتى لو الإفراج اتلغى بعدها). الإلغاء بيرجع لتاريخ الفاتورة وهيغيّر اللي حصل، فمش مسموح: اعمل مرتجع مشتريات بدله.",
     "A cancellation reason is required.": "اكتب سبب الإلغاء.",
     "A cash operation with this reference already exists.": "فيه حركة نقدية بنفس رقم المرجع ده.",
     "A customer collection with this number already exists.": "فيه تحصيل بنفس الرقم ده.",
@@ -102,6 +113,7 @@ EXACT = {
     "The selected opening-balance target is required.": "اختار الحساب اللي هتتعمله التسوية.",
     "The source cashbox cannot become negative.": "الخزنة مفيهاش رصيد كفاية للمبلغ ده.",
     "This category already exists.": "البند ده موجود بالفعل.",
+    "This invoice is registered with the e-invoice portal. Cancel it on the e-invoice page first, then cancel it here.": "الفاتورة دي متسجلة في منظومة الفاتورة الإلكترونية؛ الغيها الأول من صفحة الفاتورة الإلكترونية، وبعدين الغيها هنا.",
     "This date falls inside closed books; no new period can be opened there.": "التاريخ ده جوّه فترة اتقفلت؛ مينفعش تتسجل فيه حركة.",
     "This expense is already cancelled.": "المصروف ده اتلغى قبل كده.",
     "This record has no operational use yet; edit its opening balance directly.": "الحساب ده لسه ما اتستخدمش؛ عدّل رصيده الافتتاحي مباشرة.",

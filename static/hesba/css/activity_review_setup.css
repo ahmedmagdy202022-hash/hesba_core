@@ -72,3 +72,4 @@
   .setup-complete-placeholder-page .complete-card{padding:var(--hs-space-5)}
   .complete-sample .complete-sample__button{justify-self:stretch}
 }
+.review-features{margin:6px 0 14px;padding-inline-start:20px;color:var(--hs-ink);font-size:var(--hs-text-sm);line-height:1.9}

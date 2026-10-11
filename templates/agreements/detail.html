@@ -1,0 +1,26 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'agreements:list' %}?lang={{ lang }}">← {{ words.back }}</a><h1 dir="ltr">{{ contract.number }}</h1><p>{{ contract.customer.name }} · {{ contract.description|default:contract.service.item_name }}</p></div><span class="op-status op-status-{% if contract.status == 'active' %}posted{% elif contract.status == 'ended' %}cancelled{% else %}draft{% endif %}" data-contract-status="{{ contract.status }}">{{ status_label }}</span></section>
+{% if error %}<div class="op-message op-message-error" role="alert" data-contract-error>{{ error }}</div>{% endif %}
+<section class="op-summary-grid">
+<article><small>{{ words.amount }}</small><strong>{{ contract.amount|money }}</strong></article>
+<article><small>{{ words.every }}</small><strong>{{ every_label }}</strong></article>
+<article><small>{{ words.this_period }}</small><strong>{% if overview.current %}<bdi>{{ overview.current|date:"Y-m-d" }} → {{ overview.current_end|date:"Y-m-d" }}</bdi>{% else %}—{% endif %}</strong></article>
+{% if contract.visits_per_period %}<article><small>{{ words.done_visits }}</small><strong data-contract-visits>{{ overview.visits }} {{ words.of }} {{ contract.visits_per_period }}</strong></article>{% endif %}
+<article><small>{{ words.due }}</small><strong data-contract-due="{{ overview.due|length }}">{{ overview.due|length }}</strong></article>
+<article><small>{{ words.next }}</small><strong><bdi>{{ overview.next|date:"Y-m-d"|default:'—' }}</bdi></strong></article>
+<article><small>{{ words.unpaid }}</small><strong data-contract-unpaid>{{ unpaid|money }}</strong></article>
+</section>
+{% if can_manage and overview.due %}<form method="post" class="op-form-actions">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="bill_due"><button class="op-primary" type="submit" data-bill-due>{{ bill_due_label }}</button></form>{% endif %}
+<h2>{{ words.bills }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-contract-bills><thead><tr><th>{{ words.period }}</th><th>{{ words.invoice }}</th><th>{{ words.amount }}</th><th>{{ words.invoice_status }}</th></tr></thead><tbody>
+{% for bill in bills %}<tr><td><bdi>{{ bill.period_start|date:"Y-m-d" }} → {{ bill.end|date:"Y-m-d" }}</bdi></td><td><a href="{% url 'sales:detail' bill.invoice.pk %}?lang={{ lang }}"><bdi>{{ bill.invoice.invoice_number }}</bdi></a></td><td>{{ bill.invoice.total_amount|money }}</td>
+<td><span class="op-status op-status-{{ bill.invoice.status }}">{{ bill.status_label }}</span></td></tr>
+{% empty %}<tr><td colspan="4" class="op-empty">{{ words.no_bills }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if contract.notes %}<p class="op-muted">{{ words.notes }}: {{ contract.notes }}</p>{% endif %}
+{% if can_manage %}<form class="op-form" method="post" data-contract-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="edit"><h2>{{ words.edit }}</h2>{% include "agreements/_form.html" %}
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form>
+{% else %}<p class="op-message">{{ words.view_only }}</p>{% endif %}
+{% endblock %}
