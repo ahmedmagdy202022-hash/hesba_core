@@ -589,6 +589,18 @@ class SessionPackageTests(TestCase):
         with self.assertRaisesMessage(ValidationError, "اتلغت"):
             self.physio.use(package, self.owner)
 
+    def test_a_returned_invoice_voids_the_package(self):
+        from django.utils import timezone
+
+        from sales.services import create_sales_return
+
+        package = self.sold("5")
+        line = package.invoice.lines.get()
+        create_sales_return("SR-PK1", timezone.localdate(), package.invoice.pk, [{"source_line": line, "quantity": line.quantity}], "رجع فلوسه", self.owner)
+        self.assertEqual(self.physio.state(package)["status"], "void")
+        with self.assertRaisesMessage(ValidationError, "اترجعت"):
+            self.physio.use(package, self.owner)
+
     def test_bad_input_and_who_may_do_what(self):
         for data, message in (({"service": None, "sessions": "3"}, "الخدمة"), ({"service": self.session, "sessions": "0"}, "عدد الجلسات"),
                               ({"service": self.session, "sessions": "x"}, "عدد الجلسات"), ({"service": self.session, "sessions": "3", "price": "-1"}, "سعر")):
