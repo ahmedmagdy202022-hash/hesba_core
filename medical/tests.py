@@ -701,7 +701,7 @@ class VetAnimalTests(TestCase):
         dog = Animal.objects.get(name="روكي")
         self.assertRedirects(response, reverse("medical:animal", args=[dog.pk]) + "?lang=ar", fetch_redirect_response=False)
         cat = self.vet.save_animal(self.customer, {"name": "مشمش", "species": "cat", "allergies": "بنسلين"}, self.owner)
-        self.assertEqual((dog.owner, dog.neutered, self.vet.age_text(dog)), (self.customer, True, "2 سنين"))
+        self.assertEqual((dog.owner, dog.neutered, self.vet.age_text(dog)), (self.customer, True, "سنتين"))
         form = self.client.get(reverse("medical:visit_new", args=[self.customer.pk]) + f"?animal={cat.pk}")
         self.assertContains(form, f'<option value="{cat.pk}" selected>')
         self.client.post(reverse("medical:visit_new", args=[self.customer.pk]), {"animal": dog.pk, "doctor": self.doctor.pk, "complaint": "عرج",
@@ -718,6 +718,21 @@ class VetAnimalTests(TestCase):
         rx = self.client.get(reverse("medical:prescription", args=[ClinicalVisit.objects.get(animal=dog).pk]))
         self.assertContains(rx, "data-rx-animal")
         self.assertContains(rx, "روكي (كلب)")
+        # Review fixes: the cat's prescription warns of the cat's allergy, never the owner's own
+        from . import services as medical
+
+        medical.save_profile(medical.file_for(self.customer), {"allergies": "فول سوداني"}, self.owner)
+        cat_rx = self.client.get(reverse("medical:prescription", args=[ClinicalVisit.objects.get(animal=cat).pk]))
+        self.assertContains(cat_rx, "بنسلين")
+        self.assertNotContains(cat_rx, "فول سوداني")
+        self.assertContains(self.client.get(reverse("medical:visit_new", args=[self.customer.pk])), f'data-animal-allergy="{cat.pk}"')
+        horse = self.vet.save_animal(self.customer, {"name": "برق", "species": "horse"}, self.owner)
+        self.client.post(reverse("medical:visit_new", args=[self.customer.pk]), {"animal": horse.pk, "weight": "500", "pulse": "36", "diagnosis": "فحص"})
+        self.assertTrue(ClinicalVisit.objects.filter(animal=horse, weight=500).exists())  # a horse is not refused for weighing 500 kg
+        refused = self.client.post(reverse("medical:visit_new", args=[self.customer.pk]), {"animal": "", "diagnosis": "بدون حيوان"})
+        self.assertContains(refused, "اختار الحيوان")
+        self.assertEqual(self.client.post(reverse("medical:visit_new", args=[self.customer.pk]), {"animal": "abc", "diagnosis": "x"}).status_code, 200)
+        self.assertEqual(self.vet.age_text(horse), "")
         self.assertContains(self.client.get(reverse("medical:patients") + "?q=مشمش"), f'data-patient="{self.customer.pk}"')  # found by the animal's name
 
     def test_another_owners_animal_is_refused(self):
