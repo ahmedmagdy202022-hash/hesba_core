@@ -59,6 +59,27 @@ def _billed(first, last):
     return [(appointment, net_sales(appointment.invoice)) for appointment in rows]
 
 
+def _steps_billed(first, last):
+    """MED-003: dental steps done in [first, last] whose invoice is posted, in this entity, each with its share of the invoice's net sales."""
+
+    from appointments.services import net_sales
+
+    from .models import StepStatus, TreatmentStep
+
+    steps = list(entity_scope.scope(TreatmentStep.objects, "invoice__" + entity_scope.SALES_INVOICE)
+                 .filter(status=StepStatus.DONE, done_on__gte=first, done_on__lte=last, invoice__status="posted")
+                 .select_related("invoice", "doctor", "service"))
+    by_invoice = {}
+    for step in steps:
+        by_invoice.setdefault(step.invoice_id, []).append(step)
+    rows = []
+    for group in by_invoice.values():
+        net, total = net_sales(group[0].invoice), sum((step.price for step in group), ZERO)
+        for step in group:  # the invoice's net (after discount and returns) shared by price
+            rows.append((step, net * step.price / total if total > 0 else ZERO))
+    return rows
+
+
 def period_report(first, last, with_money=True):
     """The period per doctor and per service, and the patients seen.
 
@@ -82,6 +103,11 @@ def period_report(first, last, with_money=True):
         for appointment, earned in _billed(first, last):
             doctor_row(appointment.employee)["revenue"] += earned
             service = services.setdefault(appointment.service_id, {"service": appointment.service, "count": 0, "revenue": ZERO})
+            service["count"] += 1
+            service["revenue"] += earned
+        for step, earned in _steps_billed(first, last):  # dental plans are billed by step, not by appointment
+            doctor_row(step.doctor)["revenue"] += earned
+            service = services.setdefault(step.service_id, {"service": step.service, "count": 0, "revenue": ZERO})
             service["count"] += 1
             service["revenue"] += earned
     doctor_rows = sorted(doctors.values(), key=lambda row: (row["doctor"] is None, -row["revenue"], -row["visits"], row["doctor"].name if row["doctor"] else ""))
