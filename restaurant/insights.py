@@ -85,7 +85,7 @@ def save_ingredients(dish, lines, user, lang="ar"):
             quantity = Decimal(str(raw or "").strip().replace(",", ""))
         except (InvalidOperation, ValueError):
             raise ValidationError(words["qty"].format(item=ingredient.item_name))
-        if not quantity.is_finite() or quantity <= 0 or quantity >= 100000:
+        if not quantity.is_finite() or quantity >= 100000 or quantity.quantize(Decimal("0.001")) <= 0:  # 0.0004 rounds to nothing
             raise ValidationError(words["qty"].format(item=ingredient.item_name))
         seen.add(ingredient.pk)
         clean.append((ingredient, quantity.quantize(Decimal("0.001"))))
@@ -115,9 +115,22 @@ def _paid(first, last):
 def period_report(first, last):
     """The period's orders by hour, top dishes, tables, waiters and kinds."""
 
-    from appointments.services import net_sales
+    from django.db.models import Sum
+
+    from sales.models import SalesReturn
 
     orders = list(_paid(first, last))
+    returned = dict(SalesReturn.objects.filter(source_invoice__in=[order.invoice_id for order in orders], status="posted")
+                    .values("source_invoice").annotate(total=Sum("total_amount")).values_list("source_invoice", "total"))
+
+    def net_sales(invoice):  # appointments.services.net_sales, with the returns read once for the whole period
+        total = Decimal(invoice.total_amount)
+        if total <= 0:
+            return Decimal("0.00")
+        before_tax = total - Decimal(invoice.tax_amount or 0)
+        back = Decimal(returned.get(invoice.pk) or 0)
+        return money_round(max(before_tax - back * before_tax / total, Decimal("0")))
+
     days = (last - first).days + 1
     hours = OrderedDict((hour, {"hour": hour, "orders": 0, "sales": ZERO}) for hour in range(24))
     dishes, tables, waiters, kinds = {}, {}, {}, {}

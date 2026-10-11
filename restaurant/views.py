@@ -291,12 +291,16 @@ def dish_ingredients(request, pk):
     lang = _lang(request)
     words = INSIGHT_WORDS[lang]
     dish = get_object_or_404(_dishes(), pk=pk)
-    ingredients = Item.objects.filter(active=True, is_stock_tracked=True).order_by("item_name")
+    from django.db.models import Q
+
+    kept = dish.dish_ingredients.values_list("ingredient_id", flat=True)  # one made inactive since still shows, so the page saves
+    ingredients = Item.objects.filter(Q(active=True) | Q(pk__in=kept), is_stock_tracked=True).order_by("item_name")
     error = ""
     if request.method == "POST":
         if not user_has_permission(request.user, TABLES):
             raise PermissionDenied("Changing a dish's ingredients needs master_data.manage_items.")
-        lines = [(ingredients.filter(pk=raw).first() if str(raw).isdigit() else None, qty)
+        chosen = ingredients.in_bulk([int(raw) for raw in request.POST.getlist("ingredient") if str(raw).isdigit()])
+        lines = [(chosen.get(int(raw)) if str(raw).isdigit() else None, qty)
                  for raw, qty in zip(request.POST.getlist("ingredient"), request.POST.getlist("quantity"))]
         try:
             insights.save_ingredients(dish, lines, request.user, lang)
@@ -322,8 +326,8 @@ def _period(request, words):
     first, last, note = today.replace(day=1), today, ""
     if request.GET.get("from") or request.GET.get("to"):
         try:
-            first = date.fromisoformat(request.GET.get("from")) if request.GET.get("from") else first
-            last = date.fromisoformat(request.GET.get("to")) if request.GET.get("to") else last
+            last = min(date.fromisoformat(request.GET.get("to")), today) if request.GET.get("to") else last  # days still to come never dilute it
+            first = date.fromisoformat(request.GET.get("from")) if request.GET.get("from") else last.replace(day=1)
             if first > last or (last - first).days > 366:
                 raise ValueError
         except ValueError:

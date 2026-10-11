@@ -282,11 +282,28 @@ class RestaurantInsightTests(RestaurantSetup):
         from . import insights
 
         for lines, message in (([(self.tea, "1")], "صنف مخزني"), ([(self.rice, "0")], "أكبر من صفر"), ([(self.rice, "abc")], "أكبر من صفر"),
-                               ([(self.rice, "1"), (self.rice, "2")], "متكرر")):
+                               ([(self.rice, "1"), (self.rice, "2")], "متكرر"), ([(self.rice, "0.0004")], "أكبر من صفر")):
             with self.subTest(lines=lines), self.assertRaisesMessage(ValidationError, message):
                 insights.save_ingredients(self.koshary, lines, self.owner)
         response = self.client.post(reverse("restaurant:dish", args=[self.koshary.pk]), {"ingredient": [self.rice.pk], "quantity": ["x"]})
         self.assertContains(response, 'value="x"')
+
+    def test_a_deactivated_ingredient_still_saves_and_a_future_end_is_today(self):
+        from . import insights
+
+        insights.save_ingredients(self.koshary, [(self.rice, "0.2"), (self.lentil, "0.1")], self.owner)
+        self.rice.active = False
+        self.rice.save()
+        url = reverse("restaurant:dish", args=[self.koshary.pk])
+        self.assertContains(self.client.get(url), f'value="{self.rice.pk}" selected')
+        self.client.post(url, {"ingredient": [self.rice.pk, self.lentil.pk], "quantity": ["0.3", "0.1"]})
+        self.assertEqual(self.koshary.dish_ingredients.get(ingredient=self.rice).quantity, D("0.300"))
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        page = self.client.get(reverse("restaurant:report") + f"?to={(timezone.localdate() + timedelta(days=60)).isoformat()}")
+        self.assertEqual(page.context["last"], timezone.localdate())
 
     def test_the_report_counts_paid_orders_by_hour_dish_table_and_waiter(self):
         from datetime import datetime, time, timedelta
