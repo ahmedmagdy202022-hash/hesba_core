@@ -28,13 +28,13 @@ MESSAGES = {
            "off_day": "المجموعة دي مالهاش حصة في اليوم ده (برّه أيامها أو مواعيد بدايتها ونهايتها).",
            "absent_msg": "أهلًا {parent}، {student} كان غايب {when} عن حصة {group} في {company}. لو فيه حاجة كلمنا.",
            "late_msg": "أهلًا {parent}، {student} وصل متأخر {when} عن حصة {group} في {company}.",
-           "today": "النهارده", "on_day": "يوم {date}"},
+           "today": "النهارده", "on_day": "يوم {date}", "presence": "فيه علامة حضور مش معروفة. افتح الصفحة من جديد وسجّل تاني."},
     "en": {"future": "Attendance cannot be taken for a day still to come.", "teacher_only": "You can take attendance for your own groups only.",
            "no_roster": "No students were enrolled in this group on that day.", "date": "The date is not valid.", "closed": "This group is closed.",
            "off_day": "This group has no class on that day (not one of its days, or outside its dates).",
            "absent_msg": "Hello {parent}, {student} was absent {when} from {group} at {company}. Please get in touch if anything is wrong.",
            "late_msg": "Hello {parent}, {student} arrived late {when} to {group} at {company}.",
-           "today": "today", "on_day": "on {date}"},
+           "today": "today", "on_day": "on {date}", "presence": "An attendance mark was not recognised. Reload the page and save again."},
 }
 
 
@@ -54,6 +54,12 @@ def can_take(user, group):
         return True
     teacher = teacher_of(user)
     return teacher is not None and group.teacher_id == teacher.pk
+
+
+def teaches_only(user):
+    """A teacher who sees the attendance of their own groups and nothing else of the school (the menu offers just that)."""
+
+    return not services.can_view(user) and teacher_of(user) is not None
 
 
 def can_see(user, group=None):
@@ -136,6 +142,12 @@ def take(group, user, day, marks, *, topic="", cancelled=False, lang="ar"):
     roster = list(roster_on(group, day))
     if not roster and not cancelled:
         raise ValidationError(words["no_roster"])
+    if not cancelled:
+        # Only a student left unmarked counts as present; a mark that is not one of the four is refused, never guessed.
+        for row in roster:
+            value = marks.get(str(row.student_id), marks.get(row.student_id))
+            if value not in (None, "") and value not in Presence.values:
+                raise ValidationError(words["presence"])
     session, created = ClassSession.objects.get_or_create(group=group, date=day, defaults={"taken_by": user})
     session.status = SessionStatus.CANCELLED if cancelled else SessionStatus.HELD
     session.topic, session.taken_by = (topic or "").strip()[:255], user
@@ -144,7 +156,7 @@ def take(group, user, day, marks, *, topic="", cancelled=False, lang="ar"):
     if not cancelled:
         def presence_of(student_id):
             value = marks.get(str(student_id), marks.get(student_id))
-            return value if value in Presence.values else Presence.PRESENT
+            return value or Presence.PRESENT
 
         Attendance.objects.bulk_create([Attendance(session=session, student=row.student, presence=presence_of(row.student_id),
                                                    note=(marks.get(f"note_{row.student_id}") or "").strip()[:255]) for row in roster])

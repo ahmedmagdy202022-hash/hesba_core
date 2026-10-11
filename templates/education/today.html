@@ -6,7 +6,7 @@
 <div class="edu-classes" data-today>
 {% for row in rows %}<article class="op-detail-meta edu-class" data-class="{{ row.group.pk }}">
 <header><strong>{{ row.group.course.name }} — {{ row.group.name }}</strong><span class="op-muted">{{ row.schedule }}{% if row.group.teacher %} · {{ row.group.teacher.name }}{% endif %}{% if row.group.room %} · {{ row.group.room }}{% endif %}</span></header>
-<p>{{ words.seats }}: {{ row.seats }}{% if row.session %} · {% if row.session.status == 'cancelled' %}<span class="op-status op-status-draft">{{ words.cancelled_class }}</span>{% else %}<span class="op-status op-status-open">✓ {{ words.taken }}</span> {{ words.present }} {{ row.session.present }} · {{ words.late }} {{ row.session.late }} · {{ words.absent }} {{ row.session.absent }}{% endif %}{% endif %}</p>
+<p>{{ words.seats }}: {{ row.seats }}{% if row.session %} · {% if row.session.status == 'cancelled' %}<span class="op-status op-status-draft">{{ words.cancelled_class }}</span>{% else %}<span class="op-status op-status-open">✓ {{ words.taken }}</span> {{ words.present }} {{ row.session.present }} · {{ words.late }} {{ row.session.late }} · {{ words.absent }} {{ row.session.absent }}{% if row.session.excused %} · {{ words.excused }} {{ row.session.excused }}{% endif %}{% endif %}{% endif %}</p>
 {% if row.can_take %}<a class="{% if row.session %}op-secondary{% else %}op-primary{% endif %}" href="{% url 'education:attendance' row.group.pk %}?lang={{ lang }}&date={{ day|date:'Y-m-d' }}" data-take="{{ row.group.pk }}">{% if row.session %}{{ words.change }}{% else %}{{ words.take }}{% endif %}</a>{% endif %}
 </article>{% empty %}<p class="op-empty">{{ words.no_classes }}</p>{% endfor %}
 </div>

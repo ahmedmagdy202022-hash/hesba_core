@@ -23,7 +23,7 @@ TAB_TERMS = {"operations": "operations_short", "customers": "customers", "items"
 ACTIVITY_LEAD = {
     "restaurants": ("restaurant", "pos"),
     "medical": ("appointments", "medical"),
-    "education": ("education", "appointments"),
+    "education": ("education", "classes", "appointments"),
     "services": ("appointments",),
     "manufacturing": ("manufacturing",),
     "contracting": ("projects",),
@@ -74,6 +74,9 @@ NAV_ITEMS = (
     {"key": "restaurant", "ar": "الطاولات", "en": "Tables", "url_name": "restaurant:board", "module": "tables_orders", "permission": "sales.view_sales_invoices"},
     {"key": "education", "ar": "الطلاب والمجموعات", "en": "Students & groups", "url_name": "education:students", "module": "customers", "activity": "education",
      "permission": "master_data.view_master_data"},
+    # EDU-002: a teacher without the school's records still reaches the attendance of their own groups.
+    {"key": "classes", "ar": "حصص مجموعاتي", "en": "My classes", "url_name": "education:today", "module": "customers", "activity": "education",
+     "allow": "education.attendance.teaches_only"},
     {"key": "medical", "ar": "الملفات الطبية", "en": "Patient files", "url_name": "medical:patients", "module": "customers", "activity": "medical", "allow": "medical.services.can_view"},
     {"key": "appointments", "ar": "المواعيد", "en": "Appointments", "url_name": "appointments:agenda", "module": "appointments_visits", "permission": "sales.view_sales_invoices"},
     {"key": "staff", "ar": "الموظفون", "en": "Employees", "url_name": "staff:list", "module": "employees_technicians", "allow": "reports.navigation.sees_staff"},
@@ -111,6 +114,7 @@ TAB_LABELS = {
     "projects": {"ar": "المشاريع", "en": "Projects"},
     "medical": {"ar": "الملفات", "en": "Files"},
     "education": {"ar": "الطلاب", "en": "Students"},
+    "classes": {"ar": "حصصي", "en": "Classes"},
 }
 
 SHELL_WORDS = {

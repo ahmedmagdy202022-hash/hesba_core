@@ -85,7 +85,7 @@ def _guard(request, write=False):
 
 def _base(request, lang, tab, **extra):
     return {"lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": WORDS[lang], "page_title": WORDS[lang]["title"], "section": "education",
-            "tab": tab, "can_manage": services.can_manage(request.user), **extra}
+            "tab": tab, "can_manage": services.can_manage(request.user), "can_view": services.can_view(request.user), **extra}
 
 
 def _back(name, lang, *args):
@@ -174,7 +174,7 @@ def student_detail(request, pk):
         row.basis_label = services.BASIS_LABELS[lang][row.group.course.basis]  # a month, a class or the whole course
         row.status_label = _status_label(row.status, words)
     enrolled = {row.group_id for row in enrollments if row.status == EnrollmentStatus.ACTIVE}
-    open_groups = services.scoped(StudyGroup.objects).filter(active=True).exclude(pk__in=enrolled).select_related("course")
+    open_groups = services.same_entity_as(services.scoped(StudyGroup.objects), student).filter(active=True).exclude(pk__in=enrolled).select_related("course")
     summary = register.student_summary(student)
     return render(request, "education/student.html", _base(request, lang, "students", student=student, enrollments=enrollments, open_groups=open_groups,
                                                            payers=_payers(), error=error, today=timezone.localdate(), summary=summary))
@@ -258,8 +258,8 @@ def group_detail(request, pk):
         row.rate = rates.get(row.student_id)
     sessions = list(group.sessions.annotate(
         present=Count("marks", filter=Q(marks__presence=Presence.PRESENT)), late=Count("marks", filter=Q(marks__presence=Presence.LATE)),
-        absent=Count("marks", filter=Q(marks__presence=Presence.ABSENT)))[:8])
-    others = services.scoped(Student.objects).filter(active=True).exclude(pk__in=[row.student_id for row in roster]).order_by("name")
+        absent=Count("marks", filter=Q(marks__presence=Presence.ABSENT)), excused=Count("marks", filter=Q(marks__presence=Presence.EXCUSED)))[:8])
+    others = services.same_entity_as(services.scoped(Student.objects), group).filter(active=True).exclude(pk__in=[row.student_id for row in roster]).order_by("name")
     # A monthly total only means something for a monthly course; a whole course or a per-class fee is not a month.
     total = sum((row.net for row in roster), start=group.effective_fee * 0) if group.course.basis == FeeBasis.MONTHLY else None
     return render(request, "education/group.html", _group_form_context(
@@ -321,7 +321,7 @@ def today(request):
     groups_today = register.groups_on(day, request.user)
     taken = {session.group_id: session for session in ClassSession.objects.filter(date=day, group__in=groups_today).annotate(
         present=Count("marks", filter=Q(marks__presence=Presence.PRESENT)), late=Count("marks", filter=Q(marks__presence=Presence.LATE)),
-        absent=Count("marks", filter=Q(marks__presence=Presence.ABSENT)))}
+        absent=Count("marks", filter=Q(marks__presence=Presence.ABSENT)), excused=Count("marks", filter=Q(marks__presence=Presence.EXCUSED)))}
     rows = []
     for group in groups_today:
         rows.append({"group": group, "schedule": services.schedule_text(group, lang), "session": taken.get(group.pk),
