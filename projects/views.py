@@ -221,11 +221,13 @@ REPORT_WORDS = {
 def report(request):
     from . import insights
 
+    if not user_has_permission(request.user, VIEW):  # it shows the projects and their invoices, as the list does
+        raise PermissionDenied("The projects report also needs sales.view_sales_invoices.")
     lang = _lang(request)
     status = request.GET.get("status", ProjectStatus.ACTIVE)
     status = status if status in ProjectStatus.values else ""
     rows, totals = insights.portfolio(status)
-    overdue, overdue_total, terms = insights.overdue_certificates()
+    overdue, overdue_total, terms = insights.overdue_certificates(status=status)
     words = REPORT_WORDS[lang]
     return render(request, "projects/report.html", _base(request, page_title=words["report"], rw=words, rows=rows, totals=totals, status=status,
                                                        overdue=overdue, overdue_total=overdue_total,

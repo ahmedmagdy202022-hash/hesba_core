@@ -18,6 +18,7 @@
 <td>{{ f.cost|money }}</td><td><span class="{% if f.profit < 0 %}op-status op-status-cancelled{% endif %}">{{ f.profit|money }}</span></td><td>{{ f.margin }}%</td><td>{{ f.due|money }}</td><td>{{ row.retention|money }}</td></tr>{% endwith %}
 {% empty %}<tr><td colspan="10" class="op-empty">{{ rw.none }}</td></tr>{% endfor %}
 </tbody></table></div>
+{% if totals.count > totals.shown %}<p class="op-muted" data-portfolio-cut>{% if lang == 'en' %}Showing the first {{ totals.shown }} of {{ totals.count }} projects; the figures above cover these {{ totals.shown }}.{% else %}ظاهر أول {{ totals.shown }} مشروع من {{ totals.count }}، والأرقام اللي فوق عنهم بس.{% endif %}</p>{% endif %}
 <h2>{{ rw.overdue }}</h2><p class="op-muted">{{ overdue_intro }}</p>
 <div class="op-table-wrap"><table class="op-table" data-overdue-certificates><thead><tr><th>{{ rw.certificate }}</th><th>{{ rw.project }}</th><th>{{ rw.customer }}</th><th>{{ rw.date }}</th><th>{{ rw.owed }}</th><th>{{ rw.age }}</th><th>{{ rw.late }}</th></tr></thead><tbody>
 {% for row in overdue %}<tr data-overdue="{{ row.certificate.pk }}"><td><a href="{% url 'projects:certificate' row.project.pk row.certificate.number %}?lang={{ lang }}">#{{ row.certificate.number }}</a> · <bdi>{{ row.certificate.invoice.invoice_number }}</bdi></td>

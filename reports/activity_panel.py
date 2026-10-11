@@ -136,7 +136,7 @@ def _production(words, today):
     ], []
 
 
-def _projects(words):
+def _projects(words, today):
     from projects.models import Project, ProjectStatus
     from projects.services import summary
 
@@ -152,18 +152,19 @@ def _projects(words):
         _tile("billed_pct", words["billed_pct"], f"{round(billed / contract * 100)}%" if contract > 0 else "—", "text"),
         _tile("project_dues", words["project_dues"], money_round(dues), "money"),
         _tile("losing", words["losing"], len(losing), tone="bad" if losing else "good", sub="، ".join(losing[:3])),
-        _overdue_tile(words),
+        _overdue_tile(words, today),
     ], []
 
 
-def _overdue_tile(words):
+def _overdue_tile(words, today):
     """CONTRACT-003: posted certificates still owed past the credit days."""
 
     from settings_core.templatetags.hesba_format import money
 
     from projects.insights import overdue_certificates
+    from projects.models import ProjectStatus
 
-    rows, total, _ = overdue_certificates()
+    rows, total, _ = overdue_certificates(today, status=ProjectStatus.ACTIVE)  # the active projects, as the tiles beside it
     return _tile("overdue_certs", words["overdue_certs"], len(rows), tone="bad" if rows else "good", sub=money(total) if rows else "")
 
 
@@ -183,6 +184,6 @@ def build_activity_panel(activity, visible_sections, lang="ar", today=None):
     elif kind == "production":
         tiles, lists = _production(words, today)
     else:
-        tiles, lists = _projects(words)
+        tiles, lists = _projects(words, today)
     link = {"kitchen": "restaurant:board", "bookings": "appointments:agenda", "production": "manufacturing:home", "projects": "projects:list"}[kind]
     return {"kind": kind, "title": words[kind], "tiles": tiles, "lists": lists, "link": reverse(link), "open": words["open"]}

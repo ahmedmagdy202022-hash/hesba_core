@@ -42,6 +42,21 @@ class ProjectInsightTests(ContractSetup):
         self.assertEqual([row["certificate"].pk for row in rows], [second.pk])
         self.assertEqual(total, contract.net_payable(second) - D("1000"))
 
+    def test_another_unpaid_invoice_is_never_put_on_a_paid_certificate(self):
+        from sales.services import post_sales_invoice
+
+        first = self.certified(50, concrete="20")
+        contract.receive_payment(self.project, self.owner, kind=ProjectPaymentKind.COLLECTION, cashbox=self.cashbox, amount=contract.net_payable(first))
+        from hesba_testing.factories import add_sales_line, make_draft_sales_invoice, make_item
+
+        extra = make_draft_sales_invoice(customer=self.customer, location=self.store, invoice_number="SI-EXTRA", invoice_date=TODAY)
+        add_sales_line(extra, make_item(item_code="SRV-X", item_name="أعمال إضافية", is_stock_tracked=False), 1, "10000")
+        post_sales_invoice(extra.pk, user=self.owner)
+        services.link_invoice(self.project, extra, self.owner)
+        self.assertEqual(insights.certificate_owed(self.project)[first.pk], D("0.00"))
+        rows, total, _ = insights.overdue_certificates()
+        self.assertEqual((rows, total), ([], D("0.00")))  # the 10,000 is owed on the other invoice, not the paid certificate
+
     def test_the_portfolio_reads_each_project_and_flags_one_behind_its_calendar(self):
         self.project.start_date, self.project.end_date = TODAY - timedelta(days=90), TODAY + timedelta(days=10)
         self.project.save()
