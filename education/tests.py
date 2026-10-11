@@ -215,3 +215,59 @@ class DemoDataTests(TestCase):
         self.assertEqual(Enrollment.objects.filter(discount_percent=D("10")).count(), 4)
         self.assertTrue(self.client.login(username="owner", password="Demo-pass-1"))
         self.assertContains(self.client.get(reverse("education:groups")), "مجموعة السبت والتلات")
+
+
+class ReviewOneTests(EducationSetup):
+    """Codex on #185: entity scope, terms that never meet, amounts that are not numbers."""
+
+    def test_each_entity_sees_and_changes_only_its_own_education_records(self):
+        from entities.current import working_in
+        from entities.models import Entity
+
+        mine = self.student()
+        group = self.group()
+        branch = Entity.objects.create(code="E-EDU", name_ar="فرع التجمع", activity_slug="education", sub_activity_slug="tutoring_center")
+        with working_in(branch):
+            theirs = services.save_student({"name": "طالب الفرع", "self_pays": "1"}, self.owner)
+            self.assertEqual(list(services.scoped(Student.objects)), [theirs])
+            self.assertFalse(services.scoped(StudyGroup.objects).exists())
+            with self.assertRaisesMessage(ValidationError, "نفس الكيان"):
+                services.enroll(theirs, group, self.owner)  # another entity's group
+            with self.assertRaisesMessage(ValidationError, "نفس الكيان"):
+                services.save_group({"course": self.maths, "name": "x"}, self.owner)  # the main entity's course
+        # The whole group sees both; the main entity keeps its own (and older unowned ones).
+        self.assertEqual(set(services.scoped(Student.objects)), {mine, theirs})
+        from entities.services import main_entity
+
+        with working_in(main_entity()):
+            self.assertEqual(list(services.scoped(Student.objects)), [mine])
+        # The screens follow: from the branch, the main entity's student is not found.
+        self.client.force_login(self.owner)
+        session = self.client.session
+        session["hesba_entity"] = branch.pk
+        session.save()
+        self.assertEqual(self.client.get(reverse("education:student", args=[mine.pk])).status_code, 404)
+        self.assertEqual(self.client.post(reverse("education:student", args=[mine.pk]), {"action": "edit", "name": "x"}).status_code, 404)
+        self.assertEqual(self.client.get(reverse("education:student", args=[theirs.pk])).status_code, 200)
+
+    def test_groups_in_terms_that_never_meet_share_a_teacher_and_a_room(self):
+        from datetime import date
+
+        services.save_group({"course": self.maths, "name": "ترم أول", "teacher": self.teacher, "room": "قاعة 1", "days": "sat", "start_time": time(16),
+                             "starts_on": date(2026, 2, 1), "ends_on": date(2026, 6, 30)}, self.owner)
+        later = services.save_group({"course": self.maths, "name": "ترم تاني", "teacher": self.teacher, "room": "قاعة 1", "days": "sat",
+                                     "start_time": time(16), "starts_on": date(2026, 9, 1)}, self.owner)
+        self.assertTrue(later.pk)
+        with self.assertRaisesMessage(ValidationError, "أ. محمود"):
+            services.save_group({"course": self.maths, "name": "متداخل", "teacher": self.teacher, "days": "sat", "start_time": time(16),
+                                 "starts_on": date(2026, 6, 1), "ends_on": date(2026, 9, 15)}, self.owner)
+
+    def test_nan_and_infinity_are_refused_not_a_server_error(self):
+        for bad in ("NaN", "Infinity", "-inf"):
+            with self.subTest(bad=bad), self.assertRaisesMessage(ValidationError, "صفر أو أكبر"):
+                services.save_course({"name": "x", "fee": bad}, self.owner)
+        with self.assertRaisesMessage(ValidationError, "الخصم"):
+            services.enroll(self.student(), self.group(), self.owner, discount_percent="NaN")
+        self.client.force_login(self.owner)
+        page = self.client.post(reverse("education:courses"), {"name": "x", "fee": "NaN", "lang": "ar"})
+        self.assertContains(page, "صفر أو أكبر")

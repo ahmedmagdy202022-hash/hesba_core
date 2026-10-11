@@ -31,6 +31,7 @@ MESSAGES = {
         "enrolled": "الطالب ده مسجّل في المجموعة دي بالفعل.", "discount": "الخصم لازم يكون بين 0 و100%.",
         "group_closed": "المجموعة دي مقفولة.", "student_inactive": "الطالب ده موقوف.", "stopped": "التسجيل ده متوقف بالفعل.",
         "before_start": "تاريخ الإيقاف لازم يكون بعد بداية التسجيل.",
+        "entity": "الطالب والمجموعة والكورس لازم يكونوا في نفس الكيان.",
     },
     "en": {
         "name": "Enter the name.", "payer": "Choose who pays, type the parent's name, or mark that the student pays for themselves.",
@@ -42,6 +43,7 @@ MESSAGES = {
         "enrolled": "This student is already enrolled in this group.", "discount": "The discount must be between 0 and 100%.",
         "group_closed": "This group is closed.", "student_inactive": "This student is inactive.", "stopped": "This enrolment is already stopped.",
         "before_start": "The stop date must come after the enrolment started.",
+        "entity": "The student, the group and the course must belong to the same entity.",
     },
 }
 
@@ -71,6 +73,40 @@ def can_manage(user):
     return user_has_permission(user, MANAGE)
 
 
+def owner_entity():
+    """The entity new records belong to: the one being worked in, else the main one."""
+
+    from entities.current import current_entity
+    from entities.services import main_entity
+
+    return current_entity() or main_entity()
+
+
+def _main_id():
+    from entities.services import main_entity
+
+    return main_entity().pk
+
+
+def entity_id_of(record):
+    return record.entity_id or _main_id()
+
+
+def scoped(queryset):
+    """Only the records of the entity being worked in (all of them for the whole group); unowned ones are the main entity's."""
+
+    from django.db.models import Q
+
+    from entities.current import current_entity
+
+    queryset, entity = queryset.all(), current_entity()
+    if entity is None:
+        return queryset
+    if entity.pk == _main_id():
+        return queryset.filter(Q(entity=entity) | Q(entity__isnull=True))
+    return queryset.filter(entity=entity)
+
+
 def _audit(user, action, obj, after, event=AuditEventType.CREATE):
     AuditLog.objects.create(event_type=event, actor=user, module="education", action=action, object_type=f"education.{type(obj).__name__}",
                             object_id=str(obj.pk), before_data={}, after_data=after)
@@ -98,7 +134,7 @@ def _money(raw, words, blank=None):
         value = Decimal(str(raw).strip().replace(",", ""))
     except InvalidOperation:
         raise ValidationError(words["money"])
-    if value < 0:
+    if not value.is_finite() or value < 0:  # "NaN" and "Infinity" parse but are not amounts
         raise ValidationError(words["money"])
     return value.quantize(Decimal("0.01"))
 
@@ -153,7 +189,7 @@ def save_student(data, user, student=None, lang="ar"):
     }
     if student is None:
         values["payer"] = _payer(data, name, phone, user, words)
-        student = _create_numbered(Student, "code", "ST-", created_by=user, **values)
+        student = _create_numbered(Student, "code", "ST-", created_by=user, entity=owner_entity(), **values)
         _audit(user, "create_student", student, {"code": student.code, "name": name, "payer": student.payer.customer_code})
         return student
     if data.get("payer") is not None and not isinstance(data.get("payer"), str):
@@ -187,7 +223,7 @@ def save_course(data, user, course=None, lang="ar"):
     if course is None:
         # An existing service the business already sells can become the course; otherwise the course gets its own.
         item = data.get("item") if hasattr(data.get("item"), "item_code") and not hasattr(data.get("item"), "course") else _course_item(name, fee)
-        course = Course.objects.create(name=name, fee=fee, basis=basis, description=description, item=item)
+        course = Course.objects.create(name=name, fee=fee, basis=basis, description=description, item=item, entity=owner_entity())
         _audit(user, "create_course", course, {"name": name, "fee": str(fee), "basis": basis, "item": course.item.item_code})
         return course
     course.name, course.fee, course.basis, course.description = name, fee, basis, description
@@ -226,12 +262,16 @@ def clash(group, lang="ar"):
     for other in others:
         if not set(other.weekdays) & set(group.weekdays):
             continue
+        # Terms that never overlap (one ends in June, the next starts in September) share nothing.
+        if (group.ends_on and other.starts_on and group.ends_on < other.starts_on) or (other.ends_on and group.starts_on and other.ends_on < group.starts_on):
+            continue
         other_start, other_end = _span(other)
         if not (start < other_end and other_start < end):
             continue
         if group.teacher_id and other.teacher_id == group.teacher_id:
             return words["teacher_busy"].format(teacher=group.teacher.name, group=other.name)
-        if group.room and other.room.strip().lower() == group.room.strip().lower():
+        same_place = (other.entity_id or _main_id()) == (group.entity_id or _main_id())  # rooms belong to one entity's building
+        if group.room and same_place and other.room.strip().lower() == group.room.strip().lower():
             return words["room_busy"].format(room=group.room, group=other.name)
     return ""
 
@@ -271,12 +311,15 @@ def save_group(data, user, group=None, lang="ar"):
     }
     creating = group is None
     if creating:
+        values["entity"] = owner_entity()
         group = StudyGroup(**values)
     else:
         for key, value in values.items():
             setattr(group, key, value)
         if "active_present" in data:
             group.active = data.get("active") in ("1", "on", True)
+    if entity_id_of(course) != entity_id_of(group):
+        raise ValidationError(words["entity"])
     problem = clash(group, lang) if group.active else ""
     if problem:
         raise ValidationError(problem)
@@ -303,6 +346,8 @@ def enroll(student, group, user, *, start_date=None, discount_percent="0", notes
         raise ValidationError(words["group_closed"])
     if not student.active:
         raise ValidationError(words["student_inactive"])
+    if entity_id_of(student) != entity_id_of(group):
+        raise ValidationError(words["entity"])
     if group.enrollments.filter(student=student, status=EnrollmentStatus.ACTIVE).exists():
         raise ValidationError(words["enrolled"])
     if group.capacity and active_count(group) >= group.capacity:
@@ -311,7 +356,7 @@ def enroll(student, group, user, *, start_date=None, discount_percent="0", notes
         discount = Decimal(str(discount_percent or "0").strip())
     except InvalidOperation:
         raise ValidationError(words["discount"])
-    if not Decimal("0") <= discount <= Decimal("100"):
+    if not discount.is_finite() or not Decimal("0") <= discount <= Decimal("100"):
         raise ValidationError(words["discount"])
     enrollment = Enrollment.objects.create(student=student, group=group, start_date=_date(start_date, words) or timezone.localdate(),
                                            discount_percent=discount, notes=(notes or "").strip()[:255], created_by=user)
