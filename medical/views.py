@@ -637,3 +637,94 @@ def _animal_form(request, lang, owner, animal):
             return redirect(f"{reverse('medical:animal', args=[animal.pk])}?lang={lang}")
     return render(request, "medical/animal_form.html", _base(lang, page_title=words["add"], vw=words, owner=owner, animal=animal, error=error,
                                                              post=request.POST, species=_species(lang), today=timezone.localdate()))
+
+
+QUEUE_WORDS = {
+    "ar": {"title": "قائمة الانتظار", "intro": "سجّل وصول المريض ياخد رقم دوره، والدكتور ينادي على اللي عليه الدور. شاشة الانتظار بتعرض الأرقام بس.",
+           "screen": "شاشة الانتظار", "appointments": "مواعيد النهارده اللي لسه ماوصلتش", "walk_in": "مريض من غير ميعاد", "search": "دوّر بالاسم أو التليفون",
+           "find": "بحث", "check_in": "وصل", "queue": "الدور النهارده", "number": "الرقم", "patient": "المريض", "doctor": "الدكتور", "status": "الحالة",
+           "arrived": "وصل", "wait": "مستني بقاله", "minutes": "دقيقة", "call_next": "نادي على اللي بعده", "call": "نادي", "done": "خلص", "left": "مشي",
+           "back_to_wait": "رجّعه للانتظار", "record_visit": "سجّل الكشف", "none": "مفيش حد في الدور النهارده.", "none_appts": "مفيش مواعيد مستنية.",
+           "now": "اتفضل", "next": "اللي عليه الدور", "waiting_n": "مستنيين", "no_one": "—", "at": "الساعة", "saved": "اتحفظ.",
+           "called": "اتنادى على رقم {number}.", "checked": "{name} رقم دوره {number}."},
+    "en": {"title": "Waiting list", "intro": "Check a patient in and they get their turn number; the doctor calls the next one in. The waiting screen shows numbers only.",
+           "screen": "Waiting screen", "appointments": "Today's appointments not arrived yet", "walk_in": "Walk-in patient", "search": "Search by name or phone",
+           "find": "Search", "check_in": "Arrived", "queue": "Today's queue", "number": "No.", "patient": "Patient", "doctor": "Doctor", "status": "Status",
+           "arrived": "Arrived", "wait": "Waiting for", "minutes": "min", "call_next": "Call the next one", "call": "Call", "done": "Done", "left": "Left",
+           "back_to_wait": "Back to waiting", "record_visit": "Record the visit", "none": "Nobody in the queue today.", "none_appts": "No appointments waiting.",
+           "now": "Please come in", "next": "Next", "waiting_n": "waiting", "no_one": "—", "at": "at", "saved": "Saved.",
+           "called": "Number {number} was called in.", "checked": "{name} is number {number}."},
+}
+
+
+def _queue_guard(request):
+    from . import queue
+
+    if not queue.has_queue():
+        raise Http404("The waiting list is for clinics and medical centres.")
+    if not queue.can_use(request.user):
+        raise PermissionDenied("The waiting list needs the booking permission, or being a doctor.")
+
+
+def queue_desk(request):
+    from datetime import timedelta
+
+    from appointments.models import Appointment, AppointmentStatus
+
+    from . import queue
+    from .models import QueueTicket, TicketStatus
+
+    _queue_guard(request)
+    lang = _lang(request)
+    words = QUEUE_WORDS[lang]
+    url = f"{reverse('medical:queue')}?lang={lang}"
+    error = ""
+    if request.method == "POST":
+        action = request.POST.get("action")
+        try:
+            if action == "check_in":
+                appointment = Appointment.objects.filter(pk=request.POST.get("appointment") or 0).select_related("employee").first()
+                patient = appointment.customer if appointment else _patients().filter(pk=request.POST.get("patient") or 0).first()
+                ticket = queue.check_in(patient, request.user, appointment=appointment, doctor=_doctors().filter(pk=request.POST.get("doctor") or 0).first(), lang=lang)
+                messages.success(request, words["checked"].format(name=ticket.patient.name, number=ticket.number))
+            elif action == "call_next":
+                ticket = queue.call_next(request.user, lang)
+                messages.success(request, words["called"].format(number=ticket.number))
+            elif action in ("called", "done", "left", "waiting"):
+                ticket = get_object_or_404(QueueTicket, pk=request.POST.get("ticket") or 0, day=timezone.localdate())
+                queue.move(ticket, action, request.user, lang)
+                messages.success(request, words["saved"])
+            else:
+                raise Http404("Unknown action.")
+        except ValidationError as exc:
+            error = " ".join(exc.messages)
+        else:
+            return redirect(url)
+    today = timezone.localdate()
+    tickets = list(queue.today_tickets(today))
+    labels = queue.STATUS_LABELS[lang]
+    now = timezone.now()
+    for ticket in tickets:
+        ticket.status_label = labels[ticket.status]
+        ticket.waited = int((now - ticket.arrived_at).total_seconds() // 60) if ticket.status == TicketStatus.WAITING else None
+    in_queue = {ticket.appointment_id for ticket in tickets if ticket.appointment_id}
+    start = timezone.make_aware(timezone.datetime.combine(today, timezone.datetime.min.time()))
+    appointments = [a for a in Appointment.objects.filter(starts_at__gte=start, starts_at__lt=start + timedelta(days=1),
+                                                          status__in=(AppointmentStatus.BOOKED, AppointmentStatus.CONFIRMED))
+                    .select_related("customer", "employee").order_by("starts_at") if a.pk not in in_queue]
+    query = (request.GET.get("q") or "").strip()
+    found = list(_patients().filter(active=True).filter(Q(name__icontains=query) | Q(phone__icontains=query))[:20]) if query else []
+    return render(request, "medical/queue.html", _base(lang, page_title=words["title"], qw=words, tickets=tickets, appointments=appointments, found=found,
+                                                      query=query, doctors=_doctors(), error=error, is_desk=queue.is_desk(request.user),
+                                                      shows_files=services.can_view(request.user), waiting=TicketStatus.WAITING, called=TicketStatus.CALLED))
+
+
+def queue_screen(request):
+    from . import queue
+
+    _queue_guard(request)
+    lang = _lang(request)
+    from printing.company import company_details
+
+    return render(request, "medical/queue_screen.html", _base(lang, qw=QUEUE_WORDS[lang], board=queue.board(), company=company_details(),
+                                                             now=timezone.localtime()))

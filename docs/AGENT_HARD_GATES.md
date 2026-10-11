@@ -788,3 +788,20 @@ No unresolved business or accounting decision was discovered while implementing 
 - **Not touched:** sales, ledgers, appointments, report calculations.
 - **Shown only** for medical / vet. The vet demo uses its own `animals` extra, so owners are not given human patient profiles.
 - **Tests:** `medical/tests.py` → `VetAnimalTests`; `reports/tests_demo_catalogs.py` (the vet demo: a dog with two visits and a cat).
+
+## HG-043 — implementation note: the reception queue (MED-007)
+
+- **Status:** The last part of the HG-043 proposal, built as design A. With MED-003 to MED-007, every part of the proposal is built.
+- **Schema:** migration `medical/0006_reception_queue` adds `QueueTicket` and touches no existing table.
+  - Fields: day, number (unique per day), patient, optional appointment (one to one), optional doctor, status, and the arrived/called/done times.
+- **Rules:**
+  - Checking in gives today's next number; a race for the same number retries on the unique constraint.
+  - A patient can't hold two open turns in a day.
+  - Arriving for today's appointment marks it "arrived" through `appointments.services.set_status`, unchanged.
+  - A doctor calls the longest-waiting patient who is theirs or unassigned (an unassigned one becomes theirs); reception can call anyone.
+  - Status moves: waiting → called → done, back to waiting if called by mistake, or left; each move is audited.
+  - **The waiting-room screen shows numbers (and the doctor's name) only, never a patient's name.** It refreshes every 15 seconds.
+- **Who:** reception works the queue with `sales.create_sales_invoice`, the booking permission appointments use, so a cashier at the desk can use it without opening patient files; doctors (linked employees) call their own patients.
+- **Where:** medical / clinic and medical / medical_center, with a «Waiting list» entry in the menu.
+- **Money:** none. The visit is billed from its appointment or on a sales invoice, as before.
+- **Tests:** `medical/tests.py` → `ReceptionQueueTests`; `reports/tests_demo_catalogs.py` (the clinic demo has one patient called in and one waiting).

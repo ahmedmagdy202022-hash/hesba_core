@@ -262,3 +262,36 @@ class Animal(models.Model):
 
     def __str__(self):
         return self.name
+
+
+# ---- MED-007: the reception queue (HG-043, design A) ----
+
+class TicketStatus(models.TextChoices):
+    WAITING = "waiting", "Waiting"
+    CALLED = "called", "Called in"
+    DONE = "done", "Done"
+    LEFT = "left", "Left without being seen"
+
+
+class QueueTicket(models.Model):
+    """A patient's turn on a day: numbered in arrival order, called in, then done (or left).
+
+    Arriving for an appointment marks that appointment "arrived" through the appointments service."""
+
+    day = models.DateField(db_index=True)
+    number = models.PositiveIntegerField()
+    patient = models.ForeignKey("master_data.Customer", on_delete=models.PROTECT, related_name="queue_tickets")
+    appointment = models.OneToOneField("appointments.Appointment", on_delete=models.SET_NULL, null=True, blank=True, related_name="queue_ticket")
+    doctor = models.ForeignKey("staff.Employee", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    status = models.CharField(max_length=10, choices=TicketStatus.choices, default=TicketStatus.WAITING, db_index=True)
+    arrived_at = models.DateTimeField()
+    called_at = models.DateTimeField(null=True, blank=True)
+    done_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+
+    class Meta:
+        ordering = ["day", "number"]
+        constraints = [models.UniqueConstraint(fields=["day", "number"], name="medical_one_ticket_number_per_day")]
+
+    def __str__(self):
+        return f"{self.day}#{self.number}"

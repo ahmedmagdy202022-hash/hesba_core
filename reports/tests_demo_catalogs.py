@@ -134,6 +134,9 @@ class SampleBusinessPerActivityTests(TestCase):
         report = insights.period_report(today - timedelta(days=30), today)
         self.assertEqual((report["totals"]["returning"], report["totals"]["revenue"] > 0), (1, True))
         self.assertEqual([row["patient"].name for row in insights.missed_follow_ups(today)], ["سلمى حسن"])
+        from medical.models import QueueTicket
+
+        self.assertEqual(sorted(QueueTicket.objects.values_list("number", "status")), [(1, "called"), (2, "waiting")])  # MED-007
 
     def test_a_dental_clinic_has_a_chart_and_a_plan_in_stages(self):
         from medical.models import ToothRecord, TreatmentStep

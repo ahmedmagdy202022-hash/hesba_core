@@ -165,6 +165,20 @@ class Command(BaseCommand):
         self._dental(master, doctor, owner, today)
         self._lab(master, owner, today)
         self._physio(master, doctor, owner, today)
+        self._queue(master, doctor, owner, today)
+
+    def _queue(self, master, doctor, owner, today):
+        """MED-007: a clinic's waiting list has today's booked patient in, one called and one waiting."""
+
+        from appointments.models import Appointment
+        from medical import queue
+
+        if not queue.has_queue():
+            return
+        booked = Appointment.objects.filter(starts_at__date=today, customer=master["customers"][1]).first()
+        first = queue.check_in(master["customers"][2], owner, doctor=doctor)
+        queue.check_in(master["customers"][1], owner, appointment=booked)
+        queue.move(first, "called", owner)
 
     def _vet(self, master, doctor, owner, today):
         """MED-006: a vet's first customer owns a dog and a cat; the dog came twice."""

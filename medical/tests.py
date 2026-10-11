@@ -705,3 +705,104 @@ class VetAnimalTests(TestCase):
         self.assertEqual(self.client.get(reverse("medical:animal_new", args=[self.customer.pk])).status_code, 404)
         self.assertNotContains(self.client.get(reverse("medical:file", args=[self.customer.pk])), "data-add-animal")
         self.assertNotContains(self.client.get(reverse("medical:visit_new", args=[self.customer.pk])), "data-visit-animal-select")
+
+
+class ReceptionQueueTests(TestCase):
+    """MED-007: the reception queue and the waiting-room screen (HG-043)."""
+
+    def setUp(self):
+        from staff.services import save_employee
+
+        from . import queue
+
+        prepared_client("medical", "clinic", CLINIC)
+        self.queue = queue
+        self.owner = person(RoleCode.OWNER, "q_owner")
+        self.desk = person(RoleCode.CASHIER, "q_desk")
+        self.sara = save_employee({"name": "د. سارة"}, self.owner)
+        self.karim = save_employee({"name": "د. كريم"}, self.owner)
+        self.mona = make_customer(customer_code="P-1", name="منى", phone="01001234567")
+        self.ali = make_customer(customer_code="P-2", name="علي")
+        self.nour = make_customer(customer_code="P-3", name="نور")
+        self.url = reverse("medical:queue")
+
+    def test_reception_checks_in_and_numbers_follow_arrival(self):
+        from appointments.models import Appointment
+
+        self.assertTrue(self.queue.can_use(self.desk))
+        self.client.force_login(self.desk)
+        self.assertIn(self.url, sidebar_links(self.client.get(reverse("dashboard_snapshot"))))
+        appointment = Appointment.objects.create(number="AP-Q1", customer=self.mona, employee=self.sara, starts_at=timezone.now(), created_by=self.owner)
+        page = self.client.get(self.url)
+        self.assertContains(page, f'data-queue-appointment="{appointment.pk}"')
+        self.client.post(self.url, {"action": "check_in", "appointment": appointment.pk})
+        self.client.post(self.url, {"action": "check_in", "patient": self.ali.pk})
+        tickets = list(self.queue.today_tickets())
+        self.assertEqual([(t.number, t.patient.name, t.doctor_id) for t in tickets], [(1, "منى", self.sara.pk), (2, "علي", None)])
+        appointment.refresh_from_db()
+        self.assertEqual(appointment.status, "arrived")  # through the appointments service
+        self.assertNotContains(self.client.get(self.url), f'data-queue-appointment="{appointment.pk}"')
+        response = self.client.post(self.url, {"action": "check_in", "patient": self.ali.pk})
+        self.assertContains(response, "في الدور النهارده بالفعل (رقم 2)")
+        self.assertContains(self.client.get(self.url + "?q=نور"), f'data-found="{self.nour.pk}"')
+        self.assertEqual(self.client.get(self.url + "?lang=en").status_code, 200)
+
+    def test_a_doctor_calls_their_own_or_unassigned_patients_in_order(self):
+        doctor_user = person(RoleCode.STOCK_KEEPER, "q_doctor")
+        self.karim.user = doctor_user
+        self.karim.save()
+        first = self.queue.check_in(self.mona, self.desk, doctor=self.sara)  # Sara's
+        second = self.queue.check_in(self.ali, self.desk)  # nobody's yet
+        third = self.queue.check_in(self.nour, self.desk, doctor=self.karim)
+        self.assertTrue(self.queue.can_use(doctor_user))
+        called = self.queue.call_next(doctor_user)
+        self.assertEqual((called.pk, called.status, called.doctor_id), (second.pk, "called", self.karim.pk))  # the unassigned one becomes his
+        self.assertEqual(self.queue.call_next(doctor_user).pk, third.pk)
+        with self.assertRaisesMessage(ValidationError, "مفيش حد مستني"):
+            self.queue.call_next(doctor_user)  # Sara's patient is not his to call
+        with self.assertRaises(PermissionDenied):
+            self.queue.move(first, "called", doctor_user)
+        self.queue.move(second, "done", doctor_user)
+        with self.assertRaisesMessage(ValidationError, "مينفعش يتغيّر"):
+            self.queue.move(second, "called", doctor_user)
+        self.assertEqual([t.number for t in self.queue.board()["called"]], [third.number])
+        self.assertEqual([t.number for t in self.queue.board()["next"]], [first.number])
+        log = AuditLog.objects.filter(action="queue_move", object_id=str(second.pk)).latest("pk")
+        self.assertEqual((log.before_data["status"], log.after_data["status"]), ("called", "done"))
+
+    def test_left_unseen_and_called_by_mistake(self):
+        ticket = self.queue.check_in(self.mona, self.desk)
+        self.queue.move(ticket, "called", self.desk)
+        self.queue.move(ticket, "waiting", self.desk)  # called by mistake: back in line, same number
+        ticket.refresh_from_db()
+        self.assertEqual((ticket.status, ticket.called_at, ticket.number), ("waiting", None, 1))
+        self.queue.move(ticket, "left", self.desk)
+        again = self.queue.check_in(self.mona, self.desk)  # came back later: a new turn
+        self.assertEqual(again.number, 2)
+
+    def test_the_waiting_screen_shows_numbers_only(self):
+        self.client.force_login(self.desk)
+        ticket = self.queue.check_in(self.mona, self.desk, doctor=self.sara)
+        self.queue.check_in(self.nour, self.desk)
+        self.queue.move(ticket, "called", self.desk)
+        screen = self.client.get(reverse("medical:queue_screen"))
+        self.assertContains(screen, 'data-board-called="1"')
+        self.assertContains(screen, 'data-board-next="2"')
+        self.assertContains(screen, 'http-equiv="refresh"')
+        self.assertNotContains(screen, "منى")  # no patient names on a public screen
+        self.assertNotContains(screen, "نور")
+
+    def test_who_may_use_it_and_where(self):
+        from settings_core.models import ClientProfile
+
+        keeper = person(RoleCode.STOCK_KEEPER, "q_keeper")
+        self.client.force_login(keeper)
+        self.assertEqual(self.client.get(self.url).status_code, 403)
+        with self.assertRaises(PermissionDenied):
+            self.queue.check_in(self.mona, keeper)
+        self.client.force_login(self.desk)
+        self.assertEqual(self.client.post(self.url, {"action": "check_in", "patient": self.mona.pk}).status_code, 302)
+        ClientProfile.objects.update(sub_activity_slug="lab")
+        self.assertEqual(self.client.get(self.url).status_code, 404)
+        self.assertEqual(self.client.get(reverse("medical:queue_screen")).status_code, 404)
+        self.assertNotIn(self.url, sidebar_links(self.client.get(reverse("dashboard_snapshot"))))
