@@ -24,7 +24,7 @@ ACTIVITY_LEAD = {
     "restaurants": ("restaurant", "pos"),
     "medical": ("appointments", "medical"),
     "education": ("education", "classes", "appointments"),
-    "services": ("appointments",),
+    "services": ("workorders", "appointments"),
     "manufacturing": ("manufacturing",),
     "contracting": ("projects",),
 }
@@ -77,6 +77,9 @@ NAV_ITEMS = (
     # EDU-002: a teacher without the school's records still reaches the attendance of their own groups.
     {"key": "classes", "ar": "حصص مجموعاتي", "en": "My classes", "url_name": "education:today", "module": "customers", "activity": "education",
      "allow": "education.attendance.teaches_only"},
+    # SVC-001: a workshop works from its work orders (a technician who has orders sees them too).
+    {"key": "workorders", "ar": "أوامر الشغل", "en": "Work orders", "url_name": "workorders:list", "module": "sales_operations", "activity": "services",
+     "allow": "workorders.services.sees_work_orders"},
     {"key": "medical", "ar": "الملفات الطبية", "en": "Patient files", "url_name": "medical:patients", "module": "customers", "activity": "medical", "allow": "medical.services.can_view"},
     {"key": "appointments", "ar": "المواعيد", "en": "Appointments", "url_name": "appointments:agenda", "module": "appointments_visits", "permission": "sales.view_sales_invoices"},
     {"key": "staff", "ar": "الموظفون", "en": "Employees", "url_name": "staff:list", "module": "employees_technicians", "allow": "reports.navigation.sees_staff"},
@@ -115,6 +118,7 @@ TAB_LABELS = {
     "medical": {"ar": "الملفات", "en": "Files"},
     "education": {"ar": "الطلاب", "en": "Students"},
     "classes": {"ar": "حصصي", "en": "Classes"},
+    "workorders": {"ar": "الأوامر", "en": "Orders"},
 }
 
 SHELL_WORDS = {

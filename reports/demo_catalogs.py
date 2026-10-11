@@ -207,7 +207,7 @@ SERVICES_GENERAL = Catalog(
     customers=PEOPLE + ("شركة النور للتجارة",),
     suppliers=("شركة التوريدات الفنية", "موردون متحدون"),
     raw=(_raw("DEMO-RAW-01", "عدة وأدوات صغيرة", "طقم", "300.00", "4"),),
-    extras=frozenset({"appointments"}),
+    extras=frozenset({"appointments", "workorders"}),
 )
 
 MAINTENANCE = Catalog(
@@ -225,7 +225,7 @@ MAINTENANCE = Catalog(
     raw=(_raw("DEMO-RAW-01", "فريون تكييف (أسطوانة)", "أسطوانة", "1400.00", "3"),
          _raw("DEMO-RAW-02", "مواسير نحاس (متر)", "متر", "180.00", "20")),
     staff=("أحمد الفني", "فني صيانة"),
-    extras=frozenset({"appointments"}),
+    extras=frozenset({"appointments", "workorders"}),
 )
 
 BEAUTY = Catalog(

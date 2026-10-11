@@ -1,0 +1,48 @@
+{% load static %}<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ order.number }}</title>
+{% include "partials/brand_icons.html" %}
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
+<link rel="stylesheet" href="{% static 'hesba/css/print.css' %}?v=print-002">
+</head>
+<body class="pr-body pr-receipt" data-format="receipt">
+<nav class="pr-toolbar" aria-label="{{ words.receipt }}">
+  <a class="pr-button pr-button--ghost" href="{% url 'workorders:detail' order.pk %}?lang={{ lang }}">← {{ order.number }}</a>
+  <button class="pr-button pr-button--primary" type="button" data-print>{{ words.receipt }}</button>
+</nav>
+<article class="pr-sheet" data-kind="work_order">
+  <header class="pr-head">
+    <div class="pr-company">
+      {% if company.logo %}<img class="pr-company__logo" src="{{ company.logo }}" alt="{{ company.name }}">{% endif %}
+      <h1 class="pr-company__name">{{ company.name }}</h1>
+      {% if company.address %}<p>{{ company.address|linebreaksbr }}</p>{% endif %}
+      {% if company.phone %}<p><bdi>{{ company.phone }}</bdi></p>{% endif %}
+    </div>
+    <div class="pr-doc">
+      <h2 class="pr-doc__title">{{ words.receipt }}</h2>
+      <dl class="pr-meta">
+        <div><dt>{{ words.number }}</dt><dd><bdi data-receipt-number>{{ order.number }}</bdi></dd></div>
+        <div><dt>{{ words.received }}</dt><dd><bdi>{{ order.received_at|date:"Y-m-d H:i" }}</bdi></dd></div>
+        {% if order.promised_on %}<div><dt>{{ words.promised }}</dt><dd><bdi>{{ order.promised_on|date:"Y-m-d" }}</bdi></dd></div>{% endif %}
+      </dl>
+    </div>
+  </header>
+  <dl class="pr-meta">
+    <div><dt>{{ words.customer }}</dt><dd>{{ order.customer.name }}{% if order.customer.phone %} · <bdi>{{ order.customer.phone }}</bdi>{% endif %}</dd></div>
+    <div><dt>{{ words.device }}</dt><dd>{{ order.device }}</dd></div>
+    {% if order.serial %}<div><dt>{{ words.serial }}</dt><dd><bdi>{{ order.serial }}</bdi></dd></div>{% endif %}
+    {% if order.accessories %}<div><dt>{{ words.accessories }}</dt><dd>{{ order.accessories }}</dd></div>{% endif %}
+    <div><dt>{{ words.problem }}</dt><dd>{{ order.problem|linebreaksbr }}</dd></div>
+    {% if order.warranty_days %}<div><dt>{{ words.warranty_days }}</dt><dd>{{ order.warranty_days }}</dd></div>{% endif %}
+  </dl>
+  <div class="pr-signatures"><div>{{ words.signature }}</div><div>{{ company.name }}</div></div>
+  <footer class="pr-foot"><p class="pr-foot__note">{{ words.terms }}</p></footer>
+</article>
+<script>
+document.querySelector('[data-print]').addEventListener('click', function(){ window.print(); });
+</script>
+</body>
+</html>

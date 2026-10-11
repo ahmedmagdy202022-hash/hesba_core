@@ -115,7 +115,7 @@ class Command(BaseCommand):
 
             for name in ("1", "2", "3", "4", "5", "6"):
                 tables.save_table({"name": name, "seats": 4}, owner)
-        if extras & {"appointments", "patients", "orders", "projects"}:
+        if extras & {"appointments", "patients", "orders", "projects", "workorders"}:
             staff = save_employee({"name": catalog.staff[0], "title": catalog.staff[1], "commission_percent": "10"}, owner)
         if "appointments" in extras:
             self._appointments(master, staff, owner)
@@ -129,6 +129,57 @@ class Command(BaseCommand):
             self._orders(master, owner)
         if "batches" in extras:
             self._batches(master, owner)
+        if "workorders" in extras:
+            self._workorders(master, staff, owner)
+
+    def _workorders(self, master, staff, owner):
+        """SVC-001: a workshop's week: devices in, on the bench, waiting for approval, ready, delivered, and one back under warranty."""
+
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from workorders import services as wo
+        from workorders.models import Status, WorkOrder
+
+        if not wo.is_workshop():
+            return
+        parts = [item for item in master["items"] if item.is_stock_tracked]
+        labour = [item for item in master["items"] if not item.is_stock_tracked]
+        customers = [customer for customer in master["customers"] if customer.customer_code != "WALK-IN"]
+        if not (parts and labour and customers):
+            return
+        cashbox = next((box for box in master["cashboxes"] if box.is_default), master["cashboxes"][0]) if master["cashboxes"] else None
+        today, now = timezone.localdate(), timezone.now()
+        plan = (
+            ("غسالة توشيبا 7 كيلو", "مش بتعصر وبتعمل صوت عالي", None, 0, ()),
+            ("تكييف شارب 1.5 حصان", "مش بيبرّد", (Status.DIAGNOSED, Status.QUOTED), 3, ((labour[0], 1), (parts[0], 1))),
+            ("ثلاجة كريازي", "الفريزر بيعمل تلج زيادة", (Status.IN_REPAIR,), 7, ((labour[-1], 1),)),
+            ("غسالة أطباق بوش", "مش بتسحب مياه", (Status.DIAGNOSED, Status.APPROVED, Status.IN_REPAIR, Status.READY), 2, ((labour[-1], 1), (parts[-1], 1))),
+            ("ميكروويف شارب", "مش بيسخّن", (Status.IN_REPAIR, Status.READY), 10, ((labour[0], 1), (parts[0], 1))),
+        )
+        orders = []
+        for n, (device, problem, path, days_ago, lines) in enumerate(plan):
+            order = wo.receive({"customer": customers[n % len(customers)], "device": device, "problem": problem, "technician": staff if path else None,
+                                "promised_on": today + timedelta(days=2 - days_ago // 2), "warranty_days": "30", "serial": f"SN-{4710 + n}"}, owner)
+            WorkOrder.objects.filter(pk=order.pk).update(received_at=now - timedelta(days=days_ago))
+            for item, quantity in lines:
+                wo.add_line(order, item, owner, quantity=str(quantity))
+            for status in path or ():
+                wo.move(order, status, owner)
+            orders.append(order)
+        # The microwave went home ten days ago, paid in cash; the dishwasher is waiting at the counter.
+        delivered = orders[-1]
+        try:
+            paid = wo.totals(delivered)["total"]
+            wo.deliver(delivered, owner, paid_now=str(paid) if cashbox else "0", cashbox=cashbox)
+            WorkOrder.objects.filter(pk=delivered.pk).update(delivered_at=now - timedelta(days=8), warranty_until=today + timedelta(days=22))
+            delivered.refresh_from_db()
+            back = wo.receive({"warranty_of": delivered, "device": delivered.device, "serial": delivered.serial, "problem": "رجع نفس العطل",
+                               "technician": staff}, owner)
+            wo.add_line(back, parts[0], owner, quantity="1", is_warranty=True)
+        except ValidationError:
+            pass  # a part out of stock: the demo keeps it ready instead
 
     def _appointments(self, master, staff, owner):
         from appointments.services import book

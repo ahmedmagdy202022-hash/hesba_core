@@ -1,0 +1,56 @@
+{% extends "operations/base.html" %}
+{% load hesba_format l10n %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'workorders:list' %}?lang={{ lang }}">← {{ words.back }}</a>
+<h1><bdi>{{ order.number }}</bdi> — {{ order.device }}</h1>
+<p>{{ order.customer.name }}{% if order.customer.phone %} · <bdi>{{ order.customer.phone }}</bdi>{% endif %}{% if order.serial %} · {{ words.serial }} <bdi>{{ order.serial }}</bdi>{% endif %}
+ · <span class="op-status {% if order.status == 'ready' %}op-status-open{% elif order.status == 'delivered' %}op-status-posted{% elif order.status == 'cancelled' %}op-status-cancelled{% else %}op-status-draft{% endif %}" data-status="{{ order.status }}">{% for key, label in labels.items %}{% if key == order.status %}{{ label }}{% endif %}{% endfor %}</span></p></div>
+<div class="op-form-actions"><a class="op-secondary" href="{% url 'workorders:receipt' order.pk %}?lang={{ lang }}" data-receipt>{{ words.receipt }}</a>
+{% if order.invoice %}<a class="op-secondary" href="{% url 'sales:detail' order.invoice.pk %}?lang={{ lang }}" data-invoice>{{ words.invoice }} <bdi>{{ order.invoice.invoice_number }}</bdi></a>{% endif %}
+{% if under_warranty and can_manage %}<a class="op-secondary" href="{% url 'workorders:new' %}?lang={{ lang }}&warranty_of={{ order.pk }}" data-warranty-return>{{ words.warranty_return }}</a>{% endif %}</div></section>
+{% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
+<section class="op-summary-grid">
+<article><small>{{ words.received }}</small><strong><bdi>{{ order.received_at|date:"Y-m-d" }}</bdi></strong></article>
+<article><small>{{ words.promised }}</small><strong class="{% if order.is_open and order.promised_on and order.promised_on < today and order.status != 'ready' %}wo-low{% endif %}"><bdi>{{ order.promised_on|date:"Y-m-d"|default:'—' }}</bdi></strong></article>
+<article><small>{{ words.technician }}</small><strong>{{ order.technician.name|default:'—' }}</strong></article>
+<article><small>{{ words.total }}</small><strong data-order-total>{{ numbers.total|money }}</strong><small>{{ words.parts }} {{ numbers.parts|money }} · {{ words.labour }} {{ numbers.labour|money }}{% if numbers.tax %} · {{ words.tax }} {{ numbers.tax|money }}{% endif %}</small></article>
+{% if order.warranty_until %}<article><small>{{ words.warranty_until }}</small><strong><bdi>{{ order.warranty_until|date:"Y-m-d" }}</bdi></strong></article>{% endif %}
+{% if order.warranty_of %}<article><small>{{ words.warranty_of }}</small><strong><a href="{% url 'workorders:detail' order.warranty_of.pk %}?lang={{ lang }}"><bdi>{{ order.warranty_of.number }}</bdi></a></strong></article>{% endif %}
+</section>
+<section class="op-detail-meta"><p><strong>{{ words.problem }}:</strong> {{ order.problem|linebreaksbr }}</p>{% if order.accessories %}<p><strong>{{ words.accessories }}:</strong> {{ order.accessories }}</p>{% endif %}{% if order.notes %}<p><strong>{{ words.notes }}:</strong> {{ order.notes }}</p>{% endif %}</section>
+
+{% if order.is_open and next_moves and can_work %}<h2>{{ words.next }}</h2>
+<div class="op-form-actions wo-tabs" data-moves>{% for status, label in next_moves %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="move"><input type="hidden" name="to" value="{{ status }}"><button class="{% if status == 'cancelled' %}op-danger{% else %}op-secondary{% endif %}" type="submit" data-move="{{ status }}">{{ label }}</button></form>{% endfor %}</div>{% endif %}
+
+{% if order.is_open and can_work %}<h2>{{ words.details }}</h2>
+<form class="op-form" method="post" data-details>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="details"><div class="op-form-grid">
+<div class="op-field"><label for="wo-diag">{{ words.diagnosis }}</label><textarea id="wo-diag" name="diagnosis">{{ order.diagnosis }}</textarea></div>
+{% if can_manage %}<div class="op-field"><label for="wo-tech">{{ words.technician }}</label><select id="wo-tech" name="technician"><option value="">—</option>{% for t in technicians %}<option value="{{ t.pk }}"{% if t.pk == order.technician_id %} selected{% endif %}>{{ t.name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="wo-prom">{{ words.promised }}</label><input id="wo-prom" type="date" name="promised_on" value="{{ order.promised_on|date:'Y-m-d' }}"></div>
+<div class="op-field"><label for="wo-wd">{{ words.warranty_days }}</label><input id="wo-wd" name="warranty_days" inputmode="numeric" value="{{ order.warranty_days }}"></div>{% endif %}
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form>
+{% elif order.diagnosis %}<section class="op-detail-meta"><p><strong>{{ words.diagnosis }}:</strong> {{ order.diagnosis|linebreaksbr }}</p></section>{% endif %}
+
+<h2>{{ words.lines }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-order-lines><thead><tr><th>{{ words.item }}</th><th>{{ words.qty }}</th><th>{{ words.price }}</th><th>{{ words.amount }}</th><th></th></tr></thead><tbody>
+{% for line in numbers.lines %}<tr data-line="{{ line.pk }}"><td class="op-cell-text">{{ line.item.item_name }}{% if line.description %} — {{ line.description }}{% endif %}{% if line.is_warranty %} · <span class="op-status op-status-open">{{ words.warranty }}</span>{% endif %}</td><td>{{ line.quantity|floatformat:"-3" }}</td><td>{{ line.unit_price|money }}</td><td>{{ line.amount|money }}</td>
+<td>{% if order.is_open and can_manage %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="remove_line"><input type="hidden" name="line" value="{{ line.pk }}"><button class="op-secondary" type="submit">{{ words.remove }}</button></form>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="5" class="op-empty">{{ words.no_lines }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if order.is_open and can_manage %}<form class="op-form" method="post" data-add-line>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="add_line"><div class="op-form-grid">
+<div class="op-field"><label for="wo-item">{{ words.item }}</label><select id="wo-item" name="item" required><option value="">{{ words.choose }}</option>{% for item in items %}<option value="{{ item.pk }}">{{ item.item_name }} — {{ item.default_sale_price|money }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="wo-qty">{{ words.qty }}</label><input id="wo-qty" name="quantity" inputmode="decimal" value="1"></div>
+<div class="op-field"><label for="wo-price">{{ words.price }}</label><input id="wo-price" name="unit_price" inputmode="decimal" placeholder="{{ words.price }}"></div>
+<label class="op-check"><input type="checkbox" name="is_warranty" value="1"{% if order.warranty_of_id %} checked{% endif %}> {{ words.warranty }}</label>
+</div><div class="op-form-actions"><button class="op-secondary" type="submit">{{ words.add }}</button></div></form>{% endif %}
+
+{% if order.status == 'ready' and can_manage %}<h2>{{ words.deliver }}</h2>
+<form class="op-form" method="post" data-deliver>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="deliver"><div class="op-form-grid">
+<div class="op-field"><label for="wo-paid">{{ words.paid_now }}</label><input id="wo-paid" name="paid_now" inputmode="decimal" value="{{ numbers.total|unlocalize }}"></div>
+<div class="op-field"><label for="wo-box">{{ words.cashbox }}</label><select id="wo-box" name="cashbox">{% for box in cashboxes %}<option value="{{ box.pk }}"{% if box.is_default %} selected{% endif %}>{% if lang == "en" and box.name_en %}{{ box.name_en }}{% else %}{{ box.name_ar }}{% endif %}</option>{% endfor %}</select></div>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.deliver_btn }}</button></div></form>{% endif %}
+
+<h2>{{ words.timeline }}</h2>
+<ul class="wo-timeline" data-timeline>{% for event in events %}<li><bdi>{{ event.at|date:"Y-m-d H:i" }}</bdi> · <strong>{% for key, label in labels.items %}{% if key == event.status %}{{ label }}{% endif %}{% endfor %}</strong> · {{ event.user.get_full_name|default:event.user.username }}{% if event.note %} — {{ event.note }}{% endif %}</li>{% endfor %}</ul>
+{% if returns %}<h2>{{ words.warranty_return }}</h2><ul>{% for back in returns %}<li><a href="{% url 'workorders:detail' back.pk %}?lang={{ lang }}"><bdi>{{ back.number }}</bdi></a> · <bdi>{{ back.received_at|date:"Y-m-d" }}</bdi></li>{% endfor %}</ul>{% endif %}
+{% endblock %}

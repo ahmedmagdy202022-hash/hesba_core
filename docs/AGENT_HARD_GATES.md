@@ -1075,3 +1075,40 @@ The final blocking implementation review did not introduce a new business/accoun
 Regression coverage for every item above is included in the final 794-test run. No migration was required and the model-drift check remains clean.
 
 No unresolved business or accounting decision was discovered while implementing or verifying these approvals.
+
+## HG-041 — implementation note: services work orders, design A (SVC-001)
+
+- **Status:** Built as design A (the proposal is recorded under HG-041 in PR #184).
+  - Parts leave stock only through the work order's sales invoice, on the unchanged sales engine.
+  - `inventory.services.adjust_stock` is not used, so repair parts are never posted as stock-count loss.
+- **New schema:** a new `workorders` app (migration `workorders/0001`), with three tables:
+  - `WorkOrder`: customer, device, serial, accessories, problem, diagnosis, technician, status, promised date, warranty days and end, the order it came back under warranty of, the invoice, entity;
+  - `WorkOrderLine`: item, quantity, price, warranty flag;
+  - `WorkOrderEvent`: the timeline.
+- **Delivery** (`workorders.services.deliver`):
+  - the order's lines go to `taxes.services.create_sales_draft_with_tax` and then `sales.services.post_sales_invoice`, both unchanged;
+  - stock lines move out at movement cost (HG-003);
+  - a warranty line goes on at price 0, so its cost still lands in cost of goods sold and the receivable does not change;
+  - payment at the counter is the invoice's own `paid_now` into a chosen cashbox, never more than the invoice total.
+- **A cancelled delivery invoice** (cancelled on the sales page, unchanged) sends its order back to "ready" on the next look:
+  - the warranty is void;
+  - the timeline keeps the cancelled invoice's number;
+  - the order can be delivered and invoiced again.
+
+  The sales cancel flow is not changed or blocked. The reopening is conditional on the order still being delivered on that very invoice, so a second caller never undoes a redelivery made in between.
+- **A refused quote:** its lines come off when the customer refuses (kept in the audit as `drop_quote`), so pickup never charges the rejected work; an inspection fee is added afterwards as its own line.
+- **Serial-tracked parts** (while serials are on) cannot go on a work order and block delivery; they are sold on a sales invoice, which records the serial (`serials` is not touched).
+- **Line amounts** round half up with `config.money.money_round`, as the invoice lines do.
+- **Totals:** shown with VAT, as the invoice will come to.
+- **The warranty flag:** each line carries its own; a warranty return only ticks the box by default.
+- **New customers:** creating one from the work order needs `master_data.manage_parties`, the same rule as the cashier's quick add.
+- **Not touched:** inventory movement types, the projector, sales posting and cancellation, average cost, cashbox and customer ledgers.
+- **Tests** (`workorders/tests.py`):
+  - an open job moves nothing;
+  - delivery moves the exact quantity at movement cost and sets the customer balance and cashbox exactly;
+  - a warranty part costs 1350 at price 0, with the ledger balanced and nothing new left in suspense;
+  - cancelling the invoice brings the parts back;
+  - the status path;
+  - what a technician may and may not do;
+  - screens, permissions, the menu, the dashboard;
+  - a salon having no work orders.

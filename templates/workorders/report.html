@@ -1,0 +1,16 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.report }}: <bdi>{{ first|date:"Y-m" }}</bdi></h1><p>{{ words.report_intro }}</p></div></section>
+{% with tab="report" %}{% include "workorders/_tabs.html" %}{% endwith %}
+<form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><label class="sr-only" for="wo-month">{{ words.month }}</label><input id="wo-month" type="month" name="month" value="{{ first|date:'Y-m' }}" max="{{ today|date:'Y-m' }}"><button type="submit">{{ words.go }}</button></form>
+<div class="op-table-wrap"><table class="op-table" data-tech-report><thead><tr><th>{{ words.technician }}</th><th>{{ words.count }}</th><th>{{ words.billed }}</th><th>{{ words.avg_days }}</th><th>{{ words.returns }}</th></tr></thead><tbody>
+{% for row in rows %}<tr data-tech="{{ row.technician.pk|default:0 }}"><td class="op-cell-text">{{ row.technician.name|default:words.nobody }}</td><td>{{ row.count }}</td><td>{{ row.billed|money }}</td><td>{{ row.avg_days|default:'—' }}</td><td>{% if row.returns %}<span class="wo-low">{{ row.returns }}</span>{% else %}0{% endif %}</td></tr>
+{% empty %}<tr><td colspan="5" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+<h2>{{ words.late_list }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-late><thead><tr><th>{{ words.number }}</th><th>{{ words.customer }}</th><th>{{ words.device }}</th><th>{{ words.technician }}</th><th>{{ words.promised }}</th></tr></thead><tbody>
+{% for row in late %}<tr><td><a href="{% url 'workorders:detail' row.pk %}?lang={{ lang }}"><bdi>{{ row.number }}</bdi></a></td><td class="op-cell-text">{{ row.customer.name }}</td><td class="op-cell-text">{{ row.device }}</td><td class="op-cell-text">{{ row.technician.name|default:'—' }}</td><td><bdi class="wo-low">{{ row.promised_on|date:"Y-m-d" }}</bdi></td></tr>
+{% empty %}<tr><td colspan="5" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

@@ -68,6 +68,7 @@ LOCAL_APPS = [
     "ledger",
     "medical",
     "education",
+    "workorders",
     "feedback",
 ]
 
