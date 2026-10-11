@@ -730,7 +730,10 @@ No unresolved business or accounting decision was discovered while implementing 
   - the timeline keeps the cancelled invoice's number;
   - the order can be delivered and invoiced again.
 
-  The sales cancel flow is not changed or blocked.
+  The sales cancel flow is not changed or blocked. The reopening is conditional on the order still being delivered on that very invoice, so a second caller never undoes a redelivery made in between.
+- **A refused quote:** its lines come off when the customer refuses (kept in the audit as `drop_quote`), so pickup never charges the rejected work; an inspection fee is added afterwards as its own line.
+- **Serial-tracked parts** (while serials are on) cannot go on a work order and block delivery; they are sold on a sales invoice, which records the serial (`serials` is not touched).
+- **Line amounts** round half up with `config.money.money_round`, as the invoice lines do.
 - **Totals:** shown with VAT, as the invoice will come to.
 - **The warranty flag:** each line carries its own; a warranty return only ticks the box by default.
 - **New customers:** creating one from the work order needs `master_data.manage_parties`, the same rule as the cashier's quick add.

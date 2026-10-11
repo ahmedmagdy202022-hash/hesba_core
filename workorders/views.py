@@ -198,7 +198,14 @@ def detail(request, pk):
     next_moves = [(status, services.STATUS_LABELS[lang][status]) for status in services.NEXT.get(order.status, ())
                   if services.can_manage(request.user) or status in services.TECHNICIAN_MOVES]
     is_own = services.technician_of(request.user) is not None and order.technician_id == services.technician_of(request.user).pk
-    items = Item.objects.filter(active=True).order_by("-is_stock_tracked", "item_name")[:500] if services.can_manage(request.user) else []
+    items = []
+    if services.can_manage(request.user):
+        from serials.services import serials_enabled, tracked_settings
+
+        items = Item.objects.filter(active=True).order_by("-is_stock_tracked", "item_name")
+        if serials_enabled():  # sold by serial on a sales invoice, not from a work order
+            items = items.exclude(pk__in=list(tracked_settings()))
+        items = items[:500]
     today = timezone.localdate()
     return render(request, "workorders/detail.html", _base(
         request, lang, order=order, numbers=numbers, next_moves=next_moves, items=items, error=error, today=today,

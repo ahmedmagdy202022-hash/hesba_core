@@ -280,3 +280,74 @@ class WorkOrderRoundOneTests(WorkshopSetup):
         panel = build_activity_panel("services", {"workorders"}, "ar", TODAY, technician)
         self.assertEqual(panel["tiles"][0]["value"], 1)
         self.assertEqual(build_activity_panel("services", {"workorders"}, "ar", TODAY, self.owner)["tiles"][0]["value"], 2)
+
+
+class WorkOrderRoundTwoTests(WorkshopSetup):
+    """Codex on #190, second round."""
+
+    def test_a_refused_quote_is_not_charged_on_pickup(self):
+        from audit.models import AuditLog
+
+        order = self.order()
+        services.add_line(order, self.part, self.owner)
+        services.add_line(order, self.labour, self.owner)
+        for status in (Status.DIAGNOSED, Status.QUOTED, Status.REFUSED):
+            services.move(order, status, self.owner)
+        self.assertFalse(order.lines.exists())
+        dropped = AuditLog.objects.filter(module="workorders", action="drop_quote").latest("pk")
+        self.assertEqual([line["item"] for line in dropped.before_data["lines"]], ["PART-1", "LAB-1"])
+        self.assertEqual(services.reserved_parts(), {})  # the part is no longer spoken for
+        services.add_line(order, self.labour, self.owner, unit_price="50", description="رسم كشف")  # an inspection fee is its own line
+        services.move(order, Status.READY, self.owner)
+        services.deliver(order, self.owner)
+        order.refresh_from_db()
+        self.assertEqual(order.invoice.total_amount, D("50.00"))
+        self.assertEqual(get_item_stock_quantity(self.part), D("5"))
+
+    def test_a_serial_tracked_part_is_sold_on_a_sales_invoice(self):
+        from serials.models import SerialSetting
+        from settings_core.capabilities import set_capability_enabled
+        from settings_core.models import ClientProfile
+
+        order = self.order()
+        services.add_line(order, self.part, self.owner)  # added before serials were switched on
+        set_capability_enabled(ClientProfile.get_active(), "serials", True, user=self.owner)
+        SerialSetting.objects.create(item=self.part, tracked=True)
+        with self.assertRaisesMessage(ValidationError, "بيتباع بالسيريال"):
+            services.add_line(order, self.part, self.owner)
+        with self.assertRaisesMessage(ValidationError, "بيتباع بالسيريال"):
+            services.deliver(self.to_ready(order), self.owner)
+        self.assertEqual(get_item_stock_quantity(self.part), D("5"))
+        self.client.force_login(self.owner)
+        self.assertNotContains(self.client.get(reverse("workorders:detail", args=[order.pk])), f'<option value="{self.part.pk}">{self.part.item_name}')  # not offered on the line form
+
+    def test_a_second_reconciliation_leaves_a_redelivery_alone(self):
+        from unittest import mock
+
+        from sales.services import cancel_posted_sales_invoice
+
+        order = self.order()
+        services.add_line(order, self.labour, self.owner)
+        services.deliver(self.to_ready(order), self.owner)
+        order.refresh_from_db()
+        cancel_posted_sales_invoice(order.invoice.pk, self.owner, "غلط")
+        slow = list(WorkOrder.objects.filter(pk=order.pk).select_related("invoice"))  # what a slower caller read: delivered, on the cancelled invoice
+        self.assertEqual(services.sync_cancelled(self.owner), 1)
+        services.deliver(WorkOrder.objects.get(pk=order.pk), self.owner)  # redelivered in between
+        order.refresh_from_db()
+        redelivered, events = order.invoice, order.events.count()
+        query = mock.Mock()
+        query.filter.return_value.select_related.return_value = slow
+        with mock.patch.object(services, "scoped", return_value=query):
+            self.assertEqual(services.sync_cancelled(self.owner), 0)
+        order.refresh_from_db()
+        self.assertEqual((order.status, order.invoice_id, order.events.count()), (Status.DELIVERED, redelivered.pk, events))
+        self.assertEqual(redelivered.status, "posted")
+
+    def test_amounts_round_half_up_like_the_invoice(self):
+        order = self.order()
+        line = services.add_line(order, self.labour, self.owner, quantity="0.025", unit_price="1")
+        self.assertEqual(line.amount, D("0.03"))
+        services.deliver(self.to_ready(order), self.owner, paid_now=str(services.totals(order)["total"]), cashbox=self.cashbox)
+        order.refresh_from_db()
+        self.assertEqual((order.invoice.total_amount, order.invoice.remaining_due), (D("0.03"), D("0.00")))

@@ -13,6 +13,8 @@ from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils import timezone
 
+from config.money import money_round
+
 
 class Status(models.TextChoices):
     RECEIVED = "received", "Received"
@@ -76,7 +78,7 @@ class WorkOrderLine(models.Model):
 
     @property
     def amount(self):
-        return Decimal("0") if self.is_warranty else (self.quantity * self.unit_price).quantize(Decimal("0.01"))
+        return Decimal("0") if self.is_warranty else money_round(self.quantity * self.unit_price)  # half up, as the invoice line will be
 
 
 class WorkOrderEvent(models.Model):

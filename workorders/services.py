@@ -52,7 +52,9 @@ MESSAGES = {
            "price": "السعر لازم يكون رقم صفر أو أكبر.", "not_ready": "الأمر لازم يكون «جاهز للتسليم» الأول.", "setup": "لازم يكون فيه مخزن بيع نشط.",
            "paid": "المدفوع لازم يكون بين صفر وإجمالي الفاتورة.", "cashbox": "اختار الخزنة اللي هيتحصّل فيها.", "own": "تقدر تشتغل على أوامرك بس.",
            "warranty_of": "الضمان ده خلص أو الأمر مش متسلّم.", "note_invoice": "أمر شغل {number}: {device}",
-           "no_new_customer": "إضافة عميل جديد محتاجة صلاحية إدارة العملاء؛ اختار عميل موجود.", "reopened": "فاتورة التسليم {invoice} اتلغت؛ الأمر رجع جاهز للتسليم."},
+           "no_new_customer": "إضافة عميل جديد محتاجة صلاحية إدارة العملاء؛ اختار عميل موجود.", "reopened": "فاتورة التسليم {invoice} اتلغت؛ الأمر رجع جاهز للتسليم.",
+           "serial": "«{item}» بيتباع بالسيريال؛ بيعه من فاتورة البيع عشان يتسجّل السيريال.",
+           "refused": "العميل رفض العرض؛ اتشالت بنود العرض. لو فيه رسم كشف، ضيفه كبند."},
     "en": {"customer": "Choose the customer or type their name.", "device": "Enter the device or the service asked for.", "problem": "Enter the fault or what is needed.",
            "date": "The date is not valid.", "days": "Warranty days must be a number from 0 to 3650.", "move": "The order cannot go from “{from_}” to “{to}”.",
            "closed": "This order is closed and cannot change.", "item": "Choose the item or service.", "quantity": "The quantity must be more than zero.",
@@ -61,7 +63,9 @@ MESSAGES = {
            "own": "You can work on your own orders only.", "warranty_of": "That warranty has ended, or the order was not delivered.",
            "note_invoice": "Work order {number}: {device}",
            "no_new_customer": "Adding a new customer needs the customer-management permission; choose an existing customer.",
-           "reopened": "Delivery invoice {invoice} was cancelled; the order is back to ready for pickup."},
+           "reopened": "Delivery invoice {invoice} was cancelled; the order is back to ready for pickup.",
+           "serial": "“{item}” is sold by serial number; sell it on a sales invoice so its serial is recorded.",
+           "refused": "The customer refused the quote; its lines were taken off. Add an inspection fee as a line if one is charged."},
 }
 
 
@@ -229,9 +233,25 @@ def move(order, to, user, note="", lang="ar"):
     before = order.status
     order.status = to
     order.save(update_fields=["status"])
+    if to == Status.REFUSED:
+        _drop_quote(order, user, lang)
     _event(order, user, note)
     _audit(user, "move", order, {"status": to, "note": note[:255]}, before={"status": before})
     return order
+
+
+def _drop_quote(order, user, lang):
+    """A refused quote is not charged on pickup: its lines come off, kept in the audit (Codex on #190).
+
+    An inspection fee, if the shop charges one, is added afterwards as its own line."""
+
+    lines = list(order.lines.select_related("item"))
+    if not lines:
+        return
+    _audit(user, "drop_quote", order, {}, before={"lines": [{"item": line.item.item_code, "quantity": str(line.quantity), "price": str(line.unit_price),
+                                                               "warranty": line.is_warranty} for line in lines]})
+    order.lines.all().delete()
+    WorkOrderEvent.objects.create(order=order, status=order.status, note=MESSAGES[lang]["refused"][:255], user=user)
 
 
 @transaction.atomic
@@ -258,6 +278,14 @@ def update_details(order, data, user, lang="ar"):
 
 # ---- parts and labour ----
 
+def _serial_tracked(items):
+    """The items sold by serial number, while serials are on: they go through the sales invoice, which records the serial (Codex on #190)."""
+
+    from serials.services import serials_enabled, tracked_settings
+
+    return set(tracked_settings([item.pk for item in items])) if items and serials_enabled() else set()
+
+
 def _decimal(raw, words, key, default=None):
     if raw in (None, "") and default is not None:
         return default
@@ -277,6 +305,8 @@ def add_line(order, item, user, *, quantity="1", unit_price=None, description=""
     _may_work(user, order, words, counter_only=True)  # what the customer pays is the counter's
     if item is None:
         raise ValidationError(words["item"])
+    if _serial_tracked([item]):
+        raise ValidationError(words["serial"].format(item=item.item_name))
     quantity = _decimal(quantity, words, "quantity", Decimal("1")).quantize(Decimal("0.001"))
     if quantity <= 0:
         raise ValidationError(words["quantity"])
@@ -354,6 +384,9 @@ def deliver(order, user, *, paid_now="0", cashbox=None, invoice_date=None, lang=
         raise ValidationError(words["not_ready"])
     today = timezone.localdate()
     lines = list(order.lines.select_related("item"))
+    tracked = _serial_tracked([line.item for line in lines])  # a line added before serials were switched on
+    if tracked:
+        raise ValidationError(words["serial"].format(item=next(line.item.item_name for line in lines if line.item_id in tracked)))
     invoice = None
     if lines:
         location = _location()
@@ -398,13 +431,18 @@ def sync_cancelled(user=None):
     and it can be delivered (and invoiced) once more. Its timeline keeps the cancelled invoice's number."""
 
     stale = list(scoped(WorkOrder.objects).filter(status=Status.DELIVERED, invoice__status="cancelled").select_related("invoice"))
+    reopened = 0
     for order in stale:
         number = order.invoice.invoice_number
-        WorkOrder.objects.filter(pk=order.pk).update(status=Status.READY, invoice=None, delivered_at=None, warranty_until=None)
+        # Only while it is still delivered on that very invoice: a second caller must not undo a redelivery made in between (Codex on #190).
+        if not WorkOrder.objects.filter(pk=order.pk, status=Status.DELIVERED, invoice_id=order.invoice_id).update(
+                status=Status.READY, invoice=None, delivered_at=None, warranty_until=None):
+            continue
         order.status = Status.READY
         WorkOrderEvent.objects.create(order=order, status=Status.READY, note=MESSAGES["ar"]["reopened"].format(invoice=number)[:255],
                                       user=user or order.created_by)
-    return len(stale)
+        reopened += 1
+    return reopened
 
 
 # ---- the workshop's figures ----
