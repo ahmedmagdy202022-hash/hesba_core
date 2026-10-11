@@ -87,12 +87,16 @@ def check_in(patient, user, *, appointment=None, doctor=None, lang="ar"):
         raise PermissionDenied(words["desk"])
     if patient is None:
         raise ValidationError(words["patient"])
+    from master_data.models import Customer
+
+    Customer.objects.select_for_update().filter(pk=patient.pk).exists()  # a double click checks the patient in once
     day = timezone.localdate()
     open_one = QueueTicket.objects.filter(day=day, patient=patient, status__in=(TicketStatus.WAITING, TicketStatus.CALLED)).first()
     if open_one is not None:
         raise ValidationError(words["twice"].format(number=open_one.number))
-    if appointment is not None and (appointment.customer_id != patient.pk or timezone.localtime(appointment.starts_at).date() != day):
-        appointment = None  # only the patient's own appointment of today
+    if appointment is not None and (appointment.customer_id != patient.pk or timezone.localtime(appointment.starts_at).date() != day
+                                    or appointment.status not in (AppointmentStatus.BOOKED, AppointmentStatus.CONFIRMED, AppointmentStatus.ARRIVED)):
+        appointment = None  # only the patient's own live appointment of today
     if appointment is not None and doctor is None:
         doctor = appointment.employee
     linked = appointment if appointment is not None and not QueueTicket.objects.filter(appointment=appointment).exists() else None  # a second turn for it stays unlinked
@@ -151,7 +155,8 @@ def call_next(user, lang="ar"):
     """Call in the longest-waiting patient this user may see: a doctor gets their own or unassigned ones."""
 
     words = _words(lang)
-    waiting = QueueTicket.objects.select_for_update().filter(day=timezone.localdate(), status=TicketStatus.WAITING).order_by("number")
+    # skip_locked: a doctor calling at the same moment as another gets the next patient, not "nobody is waiting"
+    waiting = QueueTicket.objects.select_for_update(skip_locked=True).filter(day=timezone.localdate(), status=TicketStatus.WAITING).order_by("number")
     own = _doctor_of(user)
     if not is_desk(user):
         if own is None:

@@ -780,6 +780,28 @@ class ReceptionQueueTests(TestCase):
         again = self.queue.check_in(self.mona, self.desk)  # came back later: a new turn
         self.assertEqual(again.number, 2)
 
+    def test_review_fixes_arrived_cancelled_other_doctor_and_bad_ids(self):
+        from appointments.models import Appointment, AppointmentStatus
+
+        arrived = Appointment.objects.create(number="AP-Q2", customer=self.mona, employee=self.sara, starts_at=timezone.now(), created_by=self.owner,
+                                             status=AppointmentStatus.ARRIVED)
+        cancelled = Appointment.objects.create(number="AP-Q3", customer=self.ali, employee=self.sara, starts_at=timezone.now(), created_by=self.owner,
+                                               status=AppointmentStatus.CANCELLED)
+        self.client.force_login(self.desk)
+        self.assertContains(self.client.get(self.url), f'data-queue-appointment="{arrived.pk}"')  # marked arrived from the agenda: still checkable in
+        ticket = self.queue.check_in(self.mona, self.desk, appointment=arrived)
+        self.assertEqual((ticket.appointment_id, ticket.doctor_id), (arrived.pk, self.sara.pk))
+        other = self.queue.check_in(self.ali, self.desk, appointment=cancelled)
+        self.assertIsNone(other.appointment_id)  # a cancelled booking is never linked
+        doctor_user = person(RoleCode.STOCK_KEEPER, "q_doctor2")
+        self.karim.user = doctor_user
+        self.karim.save()
+        self.client.force_login(doctor_user)
+        page = self.client.post(self.url, {"action": "called", "ticket": ticket.pk})  # Sara's patient
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, "مرضاك")
+        self.assertEqual(self.client.post(self.url, {"action": "called", "ticket": "x"}).status_code, 404)
+
     def test_the_waiting_screen_shows_numbers_only(self):
         self.client.force_login(self.desk)
         ticket = self.queue.check_in(self.mona, self.desk, doctor=self.sara)

@@ -63,6 +63,12 @@ WORDS = {
 }
 
 
+def _id(raw):
+    """A posted id, or 0 (which finds nothing) when it is not a number."""
+
+    return int(raw) if str(raw or "").isdigit() else 0
+
+
 def _lang(request):
     return "en" if request.GET.get("lang") == "en" or request.POST.get("lang") == "en" else "ar"
 
@@ -683,21 +689,21 @@ def queue_desk(request):
         action = request.POST.get("action")
         try:
             if action == "check_in":
-                appointment = Appointment.objects.filter(pk=request.POST.get("appointment") or 0).select_related("employee").first()
-                patient = appointment.customer if appointment else _patients().filter(pk=request.POST.get("patient") or 0).first()
-                ticket = queue.check_in(patient, request.user, appointment=appointment, doctor=_doctors().filter(pk=request.POST.get("doctor") or 0).first(), lang=lang)
+                appointment = Appointment.objects.filter(pk=_id(request.POST.get("appointment"))).select_related("employee").first()
+                patient = appointment.customer if appointment else _patients().filter(pk=_id(request.POST.get("patient"))).first()
+                ticket = queue.check_in(patient, request.user, appointment=appointment, doctor=_doctors().filter(pk=_id(request.POST.get("doctor"))).first(), lang=lang)
                 messages.success(request, words["checked"].format(name=ticket.patient.name, number=ticket.number))
             elif action == "call_next":
                 ticket = queue.call_next(request.user, lang)
                 messages.success(request, words["called"].format(number=ticket.number))
             elif action in ("called", "done", "left", "waiting"):
-                ticket = get_object_or_404(QueueTicket, pk=request.POST.get("ticket") or 0, day=timezone.localdate())
+                ticket = get_object_or_404(QueueTicket, pk=_id(request.POST.get("ticket")), day=timezone.localdate())
                 queue.move(ticket, action, request.user, lang)
                 messages.success(request, words["saved"])
             else:
                 raise Http404("Unknown action.")
-        except ValidationError as exc:
-            error = " ".join(exc.messages)
+        except (ValidationError, PermissionDenied) as exc:  # another doctor's patient: say so on the page
+            error = " ".join(exc.messages) if isinstance(exc, ValidationError) else str(exc)
         else:
             return redirect(url)
     today = timezone.localdate()
@@ -710,13 +716,13 @@ def queue_desk(request):
     in_queue = {ticket.appointment_id for ticket in tickets if ticket.appointment_id}
     start = timezone.make_aware(timezone.datetime.combine(today, timezone.datetime.min.time()))
     appointments = [a for a in Appointment.objects.filter(starts_at__gte=start, starts_at__lt=start + timedelta(days=1),
-                                                          status__in=(AppointmentStatus.BOOKED, AppointmentStatus.CONFIRMED))
+                                                          status__in=(AppointmentStatus.BOOKED, AppointmentStatus.CONFIRMED, AppointmentStatus.ARRIVED))
                     .select_related("customer", "employee").order_by("starts_at") if a.pk not in in_queue]
     query = (request.GET.get("q") or "").strip()
     found = list(_patients().filter(active=True).filter(Q(name__icontains=query) | Q(phone__icontains=query))[:20]) if query else []
     return render(request, "medical/queue.html", _base(lang, page_title=words["title"], qw=words, tickets=tickets, appointments=appointments, found=found,
                                                       query=query, doctors=_doctors(), error=error, is_desk=queue.is_desk(request.user),
-                                                      shows_files=services.can_view(request.user), waiting=TicketStatus.WAITING, called=TicketStatus.CALLED))
+                                                      shows_files=services.can_write(request.user), waiting=TicketStatus.WAITING, called=TicketStatus.CALLED))
 
 
 def queue_screen(request):
