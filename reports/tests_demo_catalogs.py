@@ -135,6 +135,14 @@ class SampleBusinessPerActivityTests(TestCase):
         self.assertEqual((report["totals"]["returning"], report["totals"]["revenue"] > 0), (1, True))
         self.assertEqual([row["patient"].name for row in insights.missed_follow_ups(today)], ["سلمى حسن"])
 
+    def test_a_dental_clinic_has_a_chart_and_a_plan_in_stages(self):
+        from medical.models import ToothRecord, TreatmentStep
+
+        catalog = self.fill("medical", "dental")
+        self.assert_a_working_business(catalog)
+        self.assertEqual(ToothRecord.objects.count(), 5)
+        self.assertEqual(sorted(TreatmentStep.objects.values_list("stage", "status")), [(1, "done"), (2, "planned"), (3, "planned")])
+
     def test_a_builder_has_projects_with_materials_and_a_progress_bill(self):
         from projects.models import Project
 

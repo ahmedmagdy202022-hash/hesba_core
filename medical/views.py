@@ -187,7 +187,10 @@ def patient_file(request, pk):
             return redirect(f"{reverse('medical:file', args=[patient.pk])}?lang={lang}")
     visits = list(ClinicalVisit.objects.filter(patient=patient).select_related("doctor", "created_by", "appointment"))
     upcoming = patient.appointments.filter(starts_at__gte=timezone.now(), status__in=("booked", "confirmed")).select_related("employee").order_by("starts_at")[:5]
+    from . import dental
+
     return render(request, "medical/file.html", _base(lang, patient=patient, file=file, age=services.age(file), visits=visits, upcoming=upcoming,
+                                                      is_dental=dental.is_dental(), dental_label=DENTAL_WORDS[lang]["title"],
                                                       can_write=can_write, error=error, genders=Gender.values, bloods=BloodType.values,
                                                       user_id=request.user.pk, today=timezone.localdate()))
 
@@ -235,3 +238,92 @@ def prescription(request, visit_pk):
 
     file = services.file_for(visit.patient)
     return render(request, "medical/prescription.html", _base(lang, visit=visit, file=file, age=services.age(file, visit.visit_date), company=company_details()))
+
+
+DENTAL_WORDS = {
+    "ar": {"title": "خريطة الأسنان", "intro": "حالة كل سنة بترقيم FDI، وخطة العلاج على مراحل. الخطوات اللي اتعملت بتتفوتر في فاتورة بيع عادية.",
+           "upper": "الفك العلوي", "lower": "الفك السفلي", "right": "يمين", "left": "شمال", "permanent": "الأسنان الدائمة", "primary": "الأسنان اللبني",
+           "show_primary": "اعرض الأسنان اللبني", "show_permanent": "اعرض الأسنان الدائمة", "tooth": "السنة", "condition": "الحالة",
+           "notes": "ملاحظات", "save_tooth": "سجّل حالة السنة", "plan": "خطة العلاج", "stage": "المرحلة", "service": "الخدمة", "price": "السعر",
+           "doctor": "الدكتور", "status": "الحالة", "done_on": "اتعملت يوم", "invoice": "الفاتورة", "whole_mouth": "الفم كله",
+           "add_step": "ضيف خطوة", "mark_done": "اتعملت", "cancel": "إلغاء", "no_steps": "مفيش خطة علاج لسه.", "planned_total": "مخطط",
+           "done_total": "اتعمل", "unbilled_total": "اتعمل ولسه ماتفوترش", "bill": "اعمل فاتورة باللي اتعمل", "billed": "اتعملت الفاتورة {number} (مسودة). رحّلها من صفحة الفواتير.",
+           "saved": "اتحفظ.", "back": "ملف المريض", "choose": "اختار", "open_invoice": "افتح", "legend": "دليل الألوان"},
+    "en": {"title": "Dental chart", "intro": "Each tooth's condition in FDI numbering, and the treatment plan in stages. Done steps are billed on an ordinary sales invoice.",
+           "upper": "Upper jaw", "lower": "Lower jaw", "right": "Right", "left": "Left", "permanent": "Permanent teeth", "primary": "Primary teeth",
+           "show_primary": "Show primary teeth", "show_permanent": "Show permanent teeth", "tooth": "Tooth", "condition": "Condition",
+           "notes": "Notes", "save_tooth": "Record the tooth", "plan": "Treatment plan", "stage": "Stage", "service": "Service", "price": "Price",
+           "doctor": "Doctor", "status": "Status", "done_on": "Done on", "invoice": "Invoice", "whole_mouth": "Whole mouth",
+           "add_step": "Add step", "mark_done": "Done", "cancel": "Cancel", "no_steps": "No treatment plan yet.", "planned_total": "Planned",
+           "done_total": "Done", "unbilled_total": "Done, not billed yet", "bill": "Invoice the done steps", "billed": "Invoice {number} was made (draft). Post it from the invoices page.",
+           "saved": "Saved.", "back": "Patient file", "choose": "Choose", "open_invoice": "Open", "legend": "Colour key"},
+}
+
+
+def dental_chart(request, pk):
+    from master_data.models import Item
+    from permissions.services import user_has_permission
+
+    from . import dental
+    from .models import StepStatus, ToothCondition, TreatmentStep
+
+    _guard(request)
+    if not dental.is_dental():
+        raise Http404("The dental chart is for dental clinics.")
+    lang = _lang(request)
+    words = DENTAL_WORDS[lang]
+    patient = get_object_or_404(_patients(), pk=pk)
+    can_write = services.can_write(request.user)
+    can_bill = user_has_permission(request.user, dental.BILL)
+    services_ = Item.objects.filter(active=True, is_stock_tracked=False).order_by("item_name")
+    url = f"{reverse('medical:dental', args=[patient.pk])}?lang={lang}"
+    error = ""
+    if request.method == "POST":
+        if not can_write:
+            raise PermissionDenied("Editing the dental chart needs medical.write_records.")
+        action = request.POST.get("action")
+        try:
+            if action == "tooth":
+                dental.set_tooth(patient, request.POST.get("tooth"), request.POST.get("condition"), request.user, request.POST.get("notes"), lang)
+            elif action == "plan":
+                dental.plan_step(patient, {"service": services_.filter(pk=request.POST.get("service") or 0).first(), "tooth": request.POST.get("tooth"),
+                                           "price": request.POST.get("price"), "stage": request.POST.get("stage"), "notes": request.POST.get("notes"),
+                                           "doctor": _doctors().filter(pk=request.POST.get("doctor") or 0).first()}, request.user, lang)
+            elif action in ("done", "cancel"):
+                step = get_object_or_404(TreatmentStep, pk=request.POST.get("step") or 0, patient=patient)
+                if action == "done":
+                    dental.complete_step(step, request.user, doctor=_doctors().filter(pk=request.POST.get("doctor") or 0).first(), lang=lang)
+                else:
+                    dental.cancel_step(step, request.user, lang)
+            elif action == "bill":
+                invoice = dental.bill_done(patient, request.user, lang)
+                messages.success(request, words["billed"].format(number=invoice.invoice_number))
+                return redirect(url)
+            else:
+                raise Http404("Unknown action.")
+        except ValidationError as exc:
+            error = " ".join(exc.messages)
+        else:
+            messages.success(request, words["saved"])
+            return redirect(url + ("&primary=1" if request.POST.get("primary") else ""))
+    primary = request.GET.get("primary") == "1" or request.POST.get("primary") == "1"
+    records = dental.chart(patient)
+    labels = dental.CONDITION_LABELS[lang]
+    layout = dental.PRIMARY if primary else dental.PERMANENT
+
+    def cells(row):
+        return [{"tooth": tooth, "condition": records[tooth].condition if tooth in records else "healthy",
+                 "label": labels[records[tooth].condition if tooth in records else "healthy"],
+                 "notes": records[tooth].notes if tooth in records else ""} for tooth in row]
+
+    rows = {"upper_right": cells(layout[0]), "upper_left": cells(layout[1]), "lower_right": cells(layout[2]), "lower_left": cells(layout[3])}
+    steps = list(TreatmentStep.objects.filter(patient=patient).select_related("service", "doctor", "invoice"))
+    status_labels = dental.STATUS_LABELS[lang]
+    for step in steps:
+        step.status_label = status_labels[step.status]
+        step.billed = step.invoice_id is not None and step.invoice.status != "cancelled"
+    teeth = sorted(tooth for row in layout for tooth in row)
+    return render(request, "medical/dental.html", _base(lang, page_title=words["title"], dw=words, patient=patient, rows=rows, primary=primary,
+                                                        conditions=[(value, labels[value]) for value in ToothCondition.values], teeth=teeth,
+                                                        steps=steps, totals=dental.plan_totals(patient), services=services_, doctors=_doctors(),
+                                                        can_write=can_write, can_bill=can_bill, error=error, post=request.POST, planned=StepStatus.PLANNED))

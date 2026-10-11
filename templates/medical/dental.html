@@ -1,0 +1,66 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/dental.css' %}?v=med-003b">{% endblock %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'medical:file' patient.pk %}?lang={{ lang }}">← {{ dw.back }}</a>
+<h1>{{ dw.title }} — {{ patient.name }}</h1><p>{{ dw.intro }}</p></div>
+<div class="op-form-actions"><a class="op-secondary" href="{% url 'medical:dental' patient.pk %}?lang={{ lang }}{% if not primary %}&primary=1{% endif %}" data-teeth-toggle>{% if primary %}{{ dw.show_permanent }}{% else %}{{ dw.show_primary }}{% endif %}</a></div></section>
+{% if error %}<p class="op-message op-message-error" role="alert">{{ error }}</p>{% endif %}
+
+<section class="dn-jaws" data-dental-chart aria-label="{% if primary %}{{ dw.primary }}{% else %}{{ dw.permanent }}{% endif %}">
+<div class="dn-jaw"><h3>{{ dw.upper }}</h3>
+<div class="dn-row"><div class="dn-side" aria-label="{{ dw.upper }} — {{ dw.right }}">{% for cell in rows.upper_right %}{% include "medical/_tooth.html" %}{% endfor %}</div>
+<div class="dn-side" aria-label="{{ dw.upper }} — {{ dw.left }}">{% for cell in rows.upper_left %}{% include "medical/_tooth.html" %}{% endfor %}</div></div></div>
+<div class="dn-jaw"><h3>{{ dw.lower }}</h3>
+<div class="dn-row"><div class="dn-side" aria-label="{{ dw.lower }} — {{ dw.right }}">{% for cell in rows.lower_right %}{% include "medical/_tooth.html" %}{% endfor %}</div>
+<div class="dn-side" aria-label="{{ dw.lower }} — {{ dw.left }}">{% for cell in rows.lower_left %}{% include "medical/_tooth.html" %}{% endfor %}</div></div></div>
+<ul class="dn-legend" aria-label="{{ dw.legend }}">{% for value, label in conditions %}<li><span class="dn-tooth" data-condition="{{ value }}" aria-hidden="true"></span>{{ label }}</li>{% endfor %}</ul>
+</section>
+
+{% if can_write %}
+<form class="op-form" method="post" data-tooth-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="tooth">{% if primary %}<input type="hidden" name="primary" value="1">{% endif %}
+<div class="op-form-grid">
+<div class="op-field"><label for="dn-tooth">{{ dw.tooth }}</label><select id="dn-tooth" name="tooth" required data-tooth-select><option value="">{{ dw.choose }}</option>{% for tooth in teeth %}<option value="{{ tooth }}">{{ tooth }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="dn-cond">{{ dw.condition }}</label><select id="dn-cond" name="condition" required>{% for value, label in conditions %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="dn-notes">{{ dw.notes }}</label><input id="dn-notes" name="notes" maxlength="255"></div>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ dw.save_tooth }}</button></div></form>
+{% endif %}
+
+<h2>{{ dw.plan }}</h2>
+<p class="dn-totals" data-plan-totals><span>{{ dw.planned_total }}: <strong>{{ totals.planned|money }}</strong></span><span>{{ dw.done_total }}: <strong>{{ totals.done|money }}</strong></span><span>{{ dw.unbilled_total }}: <strong data-unbilled>{{ totals.unbilled|money }}</strong></span></p>
+<div class="op-table-wrap"><table class="op-table" data-plan><thead><tr><th>{{ dw.stage }}</th><th>{{ dw.tooth }}</th><th>{{ dw.service }}</th><th>{{ dw.price }}</th><th>{{ dw.doctor }}</th><th>{{ dw.status }}</th><th>{{ dw.invoice }}</th><th></th></tr></thead><tbody>
+{% for step in steps %}<tr data-step="{{ step.pk }}" data-step-status="{{ step.status }}"><td>{{ step.stage }}</td><td><bdi>{{ step.tooth|default:dw.whole_mouth }}</bdi></td><td class="op-cell-text">{{ step.service.item_name }}{% if step.notes %} — {{ step.notes }}{% endif %}</td>
+<td>{{ step.price|money }}</td><td class="op-cell-text">{{ step.doctor.name|default:'—' }}</td>
+<td><span class="op-status {% if step.status == 'done' %}op-status-posted{% elif step.status == 'cancelled' %}op-status-cancelled{% else %}op-status-draft{% endif %}">{{ step.status_label }}</span>{% if step.done_on %} <bdi>{{ step.done_on|date:"Y-m-d" }}</bdi>{% endif %}</td>
+<td>{% if step.billed %}<a href="{% url 'sales:detail' step.invoice.pk %}?lang={{ lang }}"><bdi>{{ step.invoice.invoice_number }}</bdi></a>{% else %}—{% endif %}</td>
+<td>{% if can_write and step.status == planned %}<form method="post" class="op-form-actions">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="step" value="{{ step.pk }}">
+<button class="op-secondary" type="submit" name="action" value="done">{{ dw.mark_done }}</button><button class="op-secondary" type="submit" name="action" value="cancel">{{ dw.cancel }}</button></form>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="8" class="op-empty">{{ dw.no_steps }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_bill and totals.unbilled %}<form method="post" class="op-form-actions" data-bill-steps>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="bill"><button class="op-primary" type="submit">{{ dw.bill }} ({{ totals.unbilled|money }})</button></form>{% endif %}
+
+{% if can_write %}
+<form class="op-form" method="post" data-plan-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="plan">
+<div class="op-form-grid">
+<div class="op-field"><label for="st-service">{{ dw.service }}</label><select id="st-service" name="service" required><option value="">{{ dw.choose }}</option>{% for item in services %}<option value="{{ item.pk }}">{{ item.item_name }} — {{ item.default_sale_price|money }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="st-tooth">{{ dw.tooth }}</label><select id="st-tooth" name="tooth"><option value="">{{ dw.whole_mouth }}</option>{% for tooth in teeth %}<option value="{{ tooth }}">{{ tooth }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="st-stage">{{ dw.stage }}</label><input id="st-stage" name="stage" inputmode="numeric" value="1"></div>
+<div class="op-field"><label for="st-price">{{ dw.price }}</label><input id="st-price" name="price" inputmode="decimal" placeholder="{{ dw.price }}"></div>
+<div class="op-field"><label for="st-doc">{{ dw.doctor }}</label><select id="st-doc" name="doctor"><option value="">—</option>{% for doctor in doctors %}<option value="{{ doctor.pk }}">{{ doctor.name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="st-notes">{{ dw.notes }}</label><input id="st-notes" name="notes" maxlength="255"></div>
+</div><div class="op-form-actions"><button class="op-secondary" type="submit">{{ dw.add_step }}</button></div></form>
+{% endif %}
+<script>
+document.querySelectorAll('[data-dental-chart] button[data-tooth]').forEach(function (button) {
+  button.addEventListener('click', function () {
+    var select = document.querySelector('[data-tooth-select]');
+    if (!select) { return; }
+    select.value = button.dataset.tooth;
+    document.querySelectorAll('[data-dental-chart] button[data-tooth]').forEach(function (other) { other.setAttribute('aria-pressed', other === button ? 'true' : 'false'); });
+    var condition = document.getElementById('dn-cond');
+    if (condition) { condition.value = button.dataset.condition; }
+    select.focus();
+  });
+});
+</script>
+{% endblock %}

@@ -69,3 +69,68 @@ class ClinicalVisit(models.Model):
 
     class Meta:
         ordering = ["-visit_date", "-pk"]
+
+
+# ---- MED-003: the dental chart and the treatment plan (HG-043, design A) ----
+
+class ToothCondition(models.TextChoices):
+    HEALTHY = "healthy", "Healthy"
+    CARIES = "caries", "Caries"
+    FILLED = "filled", "Filled"
+    ROOT_CANAL = "root_canal", "Root canal"
+    CROWN = "crown", "Crown"
+    BRIDGE = "bridge", "Bridge"
+    IMPLANT = "implant", "Implant"
+    FRACTURED = "fractured", "Fractured"
+    MISSING = "missing", "Missing"
+
+
+class ToothRecord(models.Model):
+    """The state of one tooth (FDI number) of one patient: the dental chart is the set of them."""
+
+    patient = models.ForeignKey("master_data.Customer", on_delete=models.PROTECT, related_name="teeth")
+    tooth = models.PositiveSmallIntegerField()
+    condition = models.CharField(max_length=20, choices=ToothCondition.choices, default=ToothCondition.HEALTHY)
+    notes = models.CharField(max_length=255, blank=True)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["tooth"]
+        constraints = [models.UniqueConstraint(fields=["patient", "tooth"], name="medical_one_record_per_tooth")]
+
+    def __str__(self):
+        return f"{self.patient_id}:{self.tooth}"
+
+
+class StepStatus(models.TextChoices):
+    PLANNED = "planned", "Planned"
+    DONE = "done", "Done"
+    CANCELLED = "cancelled", "Cancelled"
+
+
+class TreatmentStep(models.Model):
+    """One step of a patient's treatment plan: a service on a tooth (or the whole mouth), in a numbered stage.
+
+    A done step is billed by an ordinary draft sales invoice (``medical.dental.bill_done``); posting that
+    invoice is what touches the customer's account and the cashbox. A step never moves money by itself."""
+
+    patient = models.ForeignKey("master_data.Customer", on_delete=models.PROTECT, related_name="treatment_steps")
+    tooth = models.PositiveSmallIntegerField(null=True, blank=True)
+    service = models.ForeignKey("master_data.Item", on_delete=models.PROTECT, related_name="+")
+    price = models.DecimalField(max_digits=14, decimal_places=2)
+    stage = models.PositiveSmallIntegerField(default=1)
+    status = models.CharField(max_length=20, choices=StepStatus.choices, default=StepStatus.PLANNED, db_index=True)
+    notes = models.CharField(max_length=255, blank=True)
+    doctor = models.ForeignKey("staff.Employee", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    done_on = models.DateField(null=True, blank=True)
+    visit = models.ForeignKey(ClinicalVisit, on_delete=models.SET_NULL, null=True, blank=True, related_name="treatment_steps")
+    invoice = models.ForeignKey("sales.SalesInvoice", on_delete=models.PROTECT, null=True, blank=True, related_name="treatment_steps")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["stage", "pk"]
+
+    def __str__(self):
+        return f"{self.patient_id}:{self.stage}:{self.service_id}"

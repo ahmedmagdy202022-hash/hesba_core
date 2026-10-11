@@ -3,7 +3,7 @@
 from datetime import timedelta
 from decimal import Decimal
 
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -293,3 +293,126 @@ class ClinicReportTests(TestCase):
         self.client.force_login(self.owner)
         self.assertEqual(self.client.get(reverse("medical:report")).status_code, 404)
         self.assertEqual(self.client.get(reverse("medical:follow_ups")).status_code, 404)
+
+
+class DentalChartTests(TestCase):
+    """MED-003: the dental chart and the treatment plan in stages (HG-043)."""
+
+    def setUp(self):
+        from hesba_testing.factories import make_item, make_location
+        from staff.services import save_employee
+
+        prepared_client("medical", "dental", CLINIC)
+        self.owner = person(RoleCode.OWNER, "dn_owner")
+        make_location(location_code="CLINIC", is_default=True, is_selling_location=True)
+        self.doctor = save_employee({"name": "د. هالة"}, self.owner)
+        self.filling = make_item(item_code="SRV-FIL", item_name="حشو عصب", is_stock_tracked=False, default_sale_price="1500")
+        self.cleaning = make_item(item_code="SRV-CLN", item_name="تنظيف جير", is_stock_tracked=False, default_sale_price="600")
+        self.patient = make_customer(customer_code="P-1", name="منى", phone="01001234567")
+        self.client.force_login(self.owner)
+        self.url = reverse("medical:dental", args=[self.patient.pk])
+
+    def test_a_tooth_is_recorded_and_shown_on_the_chart(self):
+        from .models import ToothRecord
+
+        self.assertContains(self.client.get(reverse("medical:file", args=[self.patient.pk])), "data-dental-link")
+        self.client.post(self.url, {"action": "tooth", "tooth": "16", "condition": "caries", "notes": "عميق"})
+        self.client.post(self.url, {"action": "tooth", "tooth": "16", "condition": "filled"})  # the same tooth again: updated, not doubled
+        record = ToothRecord.objects.get()
+        self.assertEqual((record.tooth, record.condition, record.notes), (16, "filled", ""))
+        log = AuditLog.objects.filter(action="set_tooth").latest("pk")
+        self.assertEqual((log.before_data["condition"], log.after_data["condition"]), ("caries", "filled"))
+        page = self.client.get(self.url)
+        self.assertContains(page, 'data-tooth="16" data-condition="filled"')
+        self.assertContains(page, 'data-tooth="48" data-condition="healthy"')
+        self.assertContains(self.client.get(self.url + "?primary=1"), 'data-tooth="55"')
+        self.assertEqual(self.client.get(self.url + "?lang=en").status_code, 200)
+
+    def test_bad_teeth_and_conditions_are_refused(self):
+        from . import dental
+
+        for tooth in ("19", "0", "abc", "", "90"):
+            with self.subTest(tooth=tooth), self.assertRaises(ValidationError):
+                dental.set_tooth(self.patient, tooth, "caries", self.owner)
+        with self.assertRaises(ValidationError):
+            dental.set_tooth(self.patient, "11", "purple", self.owner)
+        response = self.client.post(self.url, {"action": "tooth", "tooth": "99", "condition": "caries"})
+        self.assertContains(response, "ترقيم FDI")
+
+    def test_a_plan_in_stages_billed_on_one_ordinary_invoice(self):
+        from parties.services import balance
+        from sales.services import post_sales_invoice
+
+        from . import dental
+        from .models import TreatmentStep
+
+        self.client.post(self.url, {"action": "plan", "service": self.cleaning.pk, "stage": "1", "doctor": self.doctor.pk})
+        self.client.post(self.url, {"action": "plan", "service": self.filling.pk, "tooth": "16", "stage": "2", "price": "1,400"})
+        self.client.post(self.url, {"action": "plan", "service": self.filling.pk, "tooth": "26", "stage": "2"})
+        cleaning, first, second = TreatmentStep.objects.order_by("pk")
+        self.assertEqual((cleaning.tooth, cleaning.price, first.price, second.price), (None, Decimal("600.00"), Decimal("1400.00"), Decimal("1500.00")))
+        self.assertEqual(dental.plan_totals(self.patient)["planned"], Decimal("3500.00"))
+        self.client.post(self.url, {"action": "done", "step": cleaning.pk})
+        self.client.post(self.url, {"action": "done", "step": first.pk, "doctor": self.doctor.pk})
+        self.client.post(self.url, {"action": "cancel", "step": second.pk})
+        totals = dental.plan_totals(self.patient)
+        self.assertEqual((totals["planned"], totals["done"], totals["unbilled"]), (Decimal("0"), Decimal("2000.00"), Decimal("2000.00")))
+        self.assertEqual(balance("customer", self.patient), Decimal("0"))  # nothing touches the account before an invoice is posted
+
+        self.client.post(self.url, {"action": "bill"})
+        invoice = TreatmentStep.objects.get(pk=first.pk).invoice
+        self.assertEqual((invoice.status, invoice.total_amount, invoice.customer_id), ("draft", Decimal("2000.00"), self.patient.pk))
+        self.assertEqual(sorted(invoice.lines.values_list("item__item_code", flat=True)), ["SRV-CLN", "SRV-FIL"])
+        self.assertEqual(dental.plan_totals(self.patient)["unbilled"], Decimal("0"))
+        with self.assertRaisesMessage(ValidationError, "مفيش خطوات"):
+            dental.bill_done(self.patient, self.owner)  # never billed twice
+        post_sales_invoice(invoice.pk, self.owner)
+        self.assertEqual(balance("customer", self.patient), Decimal("2000.00"))
+        self.assertContains(self.client.get(self.url), invoice.invoice_number)
+
+    def test_a_cancelled_invoice_frees_its_steps_and_a_done_step_stays_done(self):
+        from sales.services import cancel_posted_sales_invoice, post_sales_invoice
+
+        from . import dental
+
+        step = dental.plan_step(self.patient, {"service": self.cleaning}, self.owner)
+        dental.complete_step(step, self.owner)
+        invoice = dental.bill_done(self.patient, self.owner)
+        post_sales_invoice(invoice.pk, self.owner)
+        cancel_posted_sales_invoice(invoice.pk, self.owner, "غلط")
+        self.assertEqual(dental.plan_totals(self.patient)["unbilled"], Decimal("600.00"))
+        self.assertNotEqual(dental.bill_done(self.patient, self.owner).pk, invoice.pk)
+        for action in (dental.complete_step, dental.cancel_step):
+            with self.subTest(action=action.__name__), self.assertRaisesMessage(ValidationError, "مش مخططة"):
+                action(step, self.owner)
+        with self.assertRaisesMessage(ValidationError, "يوم لسه مجاش"):
+            dental.complete_step(dental.plan_step(self.patient, {"service": self.cleaning}, self.owner), self.owner,
+                                 done_on=timezone.localdate() + timedelta(days=1))
+
+    def test_who_may_do_what(self):
+        from . import dental
+
+        cashier = person(RoleCode.CASHIER, "dn_cashier")
+        self.client.force_login(cashier)
+        self.assertEqual(self.client.get(self.url).status_code, 403)
+        doctor_user = person(RoleCode.STOCK_KEEPER, "dn_doctor")
+        self.doctor.user = doctor_user
+        self.doctor.save()
+        self.client.force_login(doctor_user)
+        self.client.post(self.url, {"action": "tooth", "tooth": "21", "condition": "caries"})
+        self.assertTrue(self.patient.teeth.filter(tooth=21).exists())  # a doctor charts their patients
+        step = dental.plan_step(self.patient, {"service": self.cleaning}, self.owner)
+        dental.complete_step(step, self.owner)
+        page = self.client.get(self.url)
+        self.assertNotContains(page, "data-bill-steps")  # billing is the counter's
+        self.client.post(self.url, {"action": "bill"})
+        self.assertIsNone(self.patient.treatment_steps.get().invoice)
+        with self.assertRaises(PermissionDenied):
+            dental.bill_done(self.patient, doctor_user)
+
+    def test_only_for_a_dental_clinic(self):
+        from settings_core.models import ClientProfile
+
+        ClientProfile.objects.update(sub_activity_slug="clinic")
+        self.assertEqual(self.client.get(self.url).status_code, 404)
+        self.assertNotContains(self.client.get(reverse("medical:file", args=[self.patient.pk])), "data-dental-link")

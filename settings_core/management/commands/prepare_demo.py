@@ -160,6 +160,27 @@ class Command(BaseCommand):
             save_visit(customer, {**visit, "visit_date": (today - timedelta(days=7)).isoformat(),
                                   "follow_up_date": (today + timedelta(days=7)).isoformat(), "doctor": doctor}, owner)
         self._clinic_month(master, doctor, owner, today)
+        self._dental(master, doctor, owner, today)
+
+    def _dental(self, master, doctor, owner, today):
+        """MED-003: a dental clinic's first patient has a chart and a plan in two stages, one step done."""
+
+        from medical import dental
+
+        if not dental.is_dental():
+            return
+        services = [item for item in master["items"] if not item.is_stock_tracked]
+        if len(services) < 3:
+            return
+        checkup, root_canal, cleaning = services[:3]
+        patient = master["customers"][0]
+        for tooth, condition, notes in ((16, "caries", "تسوّس عميق"), (26, "filled", ""), (36, "root_canal", ""), (46, "missing", "اتخلعت 2024"),
+                                        (11, "crown", "")):
+            dental.set_tooth(patient, tooth, condition, owner, notes)
+        first = dental.plan_step(patient, {"service": cleaning, "stage": 1, "doctor": doctor}, owner)
+        dental.plan_step(patient, {"service": root_canal, "tooth": 16, "stage": 2, "doctor": doctor}, owner)
+        dental.plan_step(patient, {"service": checkup, "stage": 3, "doctor": doctor, "notes": "متابعة بعد العلاج"}, owner)
+        dental.complete_step(first, owner, done_on=today - timedelta(days=7))
 
     def _clinic_month(self, master, doctor, owner, today):
         """MED-002: billed visits for the clinic report, and a follow-up that was missed."""

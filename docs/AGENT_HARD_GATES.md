@@ -710,3 +710,22 @@ The final blocking implementation review did not introduce a new business/accoun
 Regression coverage for every item above is included in the final 794-test run. No migration was required and the model-drift check remains clean.
 
 No unresolved business or accounting decision was discovered while implementing or verifying these approvals.
+
+## HG-043 — implementation note: dental chart and treatment plan (MED-003)
+
+- **Status:** The dental part of the HG-043 proposal (recorded in PR #184), built as design A. The lab, physiotherapy, vet and reception-queue parts are not built yet.
+- **Schema:** migration `medical/0002_dental_chart` adds two tables and touches no existing one.
+  - `ToothRecord`: patient, FDI tooth number, condition, notes; one row per patient and tooth (unique constraint). A tooth with no row is healthy.
+  - `TreatmentStep`: patient, tooth (empty = the whole mouth), service item, price, stage 1–20, status (planned → done or cancelled), doctor, done date, visit, invoice.
+- **Money:** a step never moves money.
+  - "Invoice the done steps" makes one ordinary **draft** sales invoice through `taxes.services.create_sales_draft_with_tax`, the same way appointments bill.
+  - Posting it on the sales page is what touches the customer's account and the cashbox.
+  - A step on a cancelled invoice can be billed again, and a step is never on two live invoices: the patient row is locked while billing.
+  - Making the invoice needs `sales.create_sales_invoice`; charting and planning need the medical records permission (or being a linked doctor).
+- **Not touched:** sales posting and cancellation, customer ledgers, appointments, report calculations, average cost.
+- **Shown only** when the current entity (or the installation) is medical / dental.
+- **Risks:**
+  - FDI numbers are checked against the permanent (11–48) and primary (51–85) sets, nothing else.
+  - The price is the clinic's to set per step; it defaults to the service's price.
+  - Rolling back the migration drops the two tables (charts and plans); nothing else depends on them.
+- **Tests:** `medical/tests.py` → `DentalChartTests`; `reports/tests_demo_catalogs.py` (the dental demo has a chart and a plan in three stages).
