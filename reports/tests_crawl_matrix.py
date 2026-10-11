@@ -122,7 +122,7 @@ class CrawlMixin:
                         seen.add(shape)
                         status, _ = self.land(link, lang)
                         self.opened += 1
-                        if status >= 500 or status in (310, 400, 401, 403, 404):  # a link a page shows must open for whoever sees it
+                        if status >= 400 or status == 310:  # any client or server error: a link a page shows must open for whoever sees it
                             problems.append(f"{label} {role}: {path} → {link} → {status}")
         return problems
 
