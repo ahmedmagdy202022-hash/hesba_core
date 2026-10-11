@@ -300,9 +300,9 @@ def dental_chart(request, pk):
     url = f"{reverse('medical:dental', args=[patient.pk])}?lang={lang}"
     error = ""
     if request.method == "POST":
-        if not can_write:
-            raise PermissionDenied("Editing the dental chart needs medical.write_records.")
         action = request.POST.get("action")
+        if action == "bill" and not can_bill or action != "bill" and not can_write:  # billing is the counter's; the chart is the doctor's
+            raise PermissionDenied("Billing needs sales.create_sales_invoice; editing the chart needs medical.write_records.")
         try:
             if action == "tooth":
                 dental.set_tooth(patient, request.POST.get("tooth"), request.POST.get("condition"), request.user, request.POST.get("notes"), lang)

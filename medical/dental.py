@@ -195,8 +195,9 @@ def plan_totals(patient):
     steps = list(TreatmentStep.objects.filter(patient=patient).exclude(status=StepStatus.CANCELLED))
     planned = sum((step.price for step in steps if step.status == StepStatus.PLANNED), ZERO)
     done = sum((step.price for step in steps if step.status == StepStatus.DONE), ZERO)
-    waiting = sum((step.price for step in unbilled(patient)), ZERO)
-    return {"planned": planned, "done": done, "plan": planned + done, "unbilled": waiting}
+    waiting = list(unbilled(patient))
+    return {"planned": planned, "done": done, "plan": planned + done, "unbilled": sum((step.price for step in waiting), ZERO),
+            "unbilled_count": len(waiting)}  # a done step at price 0 still goes on an invoice
 
 
 @transaction.atomic
