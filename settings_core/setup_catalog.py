@@ -102,10 +102,11 @@ SUB_ACTIVITY_LABELS = {
         "private_tutor": {"ar": "مدرس خصوصي", "en": "Private tutor"},
         "other": {"ar": "نشاط تعليمي آخر", "en": "Other education"},
     },
+    # OTHER-001: one question, "what is your work closer to?", and the business works like the closest activity.
     OTHER: {
-        "mixed": {"ar": "بيع وخدمات مع بعض", "en": "Selling and services together"},
-        "general": {"ar": "نشاط عام", "en": "General activity"},
-        "other": {"ar": "حاجة تانية", "en": "Something else"},
+        "products": {"ar": "أقرب لبيع منتجات", "en": "Mostly selling products"},
+        "services": {"ar": "أقرب لتقديم خدمات", "en": "Mostly providing services"},
+        "mixed": {"ar": "الاتنين مع بعض", "en": "Both, products and services"},
     },
     CONTRACTING: {
         "general": {"ar": "مقاولات عامة / مباني", "en": "General building"},
@@ -295,8 +296,26 @@ def activity_label(slug, lang="ar"):
     return _label(ACTIVITY_LABELS.get(slug), lang, slug)
 
 
+#: OTHER-001: the activity a "not in the list" business takes its setup, words, menu, dashboard and sample data from.
+CLOSEST = {
+    (OTHER, "products"): (COMMERCIAL, "retail"),
+    (OTHER, "services"): (SERVICES, "general"),
+}
+#: Choices older installs may still carry; they keep their name on screen and the general behaviour.
+LEGACY_SUB_ACTIVITY_LABELS = {
+    OTHER: {"general": {"ar": "نشاط عام", "en": "General activity"}, "other": {"ar": "حاجة تانية", "en": "Something else"}},
+}
+
+
+def closest(activity, sub_activity):
+    """(activity, sub-activity) the business behaves as: itself, or for "other" the activity it said it is closest to."""
+
+    return CLOSEST.get((activity or "", sub_activity or ""), (activity or "", sub_activity or ""))
+
+
 def sub_activity_label(activity, slug, lang="ar"):
-    return _label(SUB_ACTIVITY_LABELS.get(activity, {}).get(slug), lang, slug)
+    entry = SUB_ACTIVITY_LABELS.get(activity, {}).get(slug) or LEGACY_SUB_ACTIVITY_LABELS.get(activity, {}).get(slug)
+    return _label(entry, lang, slug)
 
 
 def module_label(slug, lang="ar"):
