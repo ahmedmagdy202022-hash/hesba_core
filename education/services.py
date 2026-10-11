@@ -169,11 +169,24 @@ def _date(raw, words, required=False):
 MONEY_LIMIT = Decimal("10000000000")
 
 
+def _plain_number(raw):
+    """A typed amount as a plain number: Arabic digits and separators, "1,250.50", "1,250" and a decimal comma "400,50" (Codex on #185)."""
+
+    import re
+
+    text = str(raw).strip().translate(str.maketrans("٠١٢٣٤٥٦٧٨٩٫٬", "0123456789.,")).replace(" ", "")
+    if "," in text and "." in text:
+        return text.replace(",", "")  # 1,250.50: the comma groups thousands
+    if re.fullmatch(r"\d{1,3}(,\d{3})+", text):
+        return text.replace(",", "")  # 1,250 or 12,500,000: thousands
+    return text.replace(",", ".")  # 400,50: a decimal comma
+
+
 def _money(raw, words, blank=None):
     if raw in (None, ""):
         return blank
     try:
-        value = Decimal(str(raw).strip().replace(",", ""))
+        value = Decimal(_plain_number(raw))
     except InvalidOperation:
         raise ValidationError(words["money"])
     if not value.is_finite() or value < 0 or value >= MONEY_LIMIT:  # "NaN" and "Infinity" parse but are not amounts
