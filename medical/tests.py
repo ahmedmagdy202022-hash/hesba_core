@@ -453,6 +453,33 @@ class LabResultTests(TestCase):
         self.group = lab.save_test({"name": "فصيلة الدم"}, self.owner)
         self.url = reverse("medical:lab", args=[self.patient.pk])
 
+    def test_review_fixes_commas_corrections_and_removal(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from .models import LabResult
+
+        self.assertEqual(self.lab.number("12,5"), Decimal("12.500"))  # a decimal comma, not 125
+        self.assertEqual(self.lab.number("1,250.5"), Decimal("1250.500"))
+        self.assertEqual(self.lab.number("0,75"), Decimal("0.750"))
+        for raw in ("1,2,3", "12,34,5", "999999999.9996"):  # no way to read them, or too big once rounded
+            with self.subTest(raw=raw), self.assertRaises(Exception):
+                self.lab.number(raw)
+        yesterday = timezone.localdate() - timedelta(days=1)
+        self.lab.record_results(self.patient, yesterday, {self.sugar: ("105", "")}, self.owner)
+        self.lab.save_test({"name": "سكر صايم", "unit": "mg/dL", "low": "70", "high": "110"}, self.owner, self.sugar)
+        self.lab.record_results(self.patient, yesterday, {self.sugar: ("105", "")}, self.owner)  # a correction of that day
+        result = LabResult.objects.get(test=self.sugar)
+        self.assertEqual((result.high, result.flag), (Decimal("100.000"), "high"))  # judged by that day's range, not today's
+        self.client.force_login(self.owner)
+        self.client.post(self.url, {"action": "remove", "result": result.pk, "reason": "مريض تاني"})
+        self.assertFalse(LabResult.objects.filter(pk=result.pk).exists())
+        self.assertTrue(AuditLog.objects.filter(action="remove_lab_result", after_data__reason="مريض تاني").exists())
+        self.assertEqual(self.client.get(reverse("medical:lab_tests") + "?edit=abc").status_code, 404)
+        log = AuditLog.objects.filter(action="save_lab_test", object_id=str(self.sugar.pk)).latest("pk")
+        self.assertEqual(log.before_data["high"], "100.000")
+
     def test_flags_at_the_boundaries(self):
         flag = self.lab.flag
         cases = ((Decimal("11.999"), "low"), (Decimal("12"), "normal"), (Decimal("16"), "normal"), (Decimal("16.001"), "high"), (None, ""))
