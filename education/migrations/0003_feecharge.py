@@ -38,7 +38,7 @@ class Migration(migrations.Migration):
                         max_digits=8,
                     ),
                 ),
-                ("amount", models.DecimalField(decimal_places=2, max_digits=12)),
+                ("amount", models.DecimalField(decimal_places=2, max_digits=14)),
                 ("created_at", models.DateTimeField(auto_now_add=True)),
                 (
                     "enrollment",

@@ -188,7 +188,7 @@ class FeeCharge(models.Model):
     month = models.DateField(help_text="The first day of the month billed.")
     invoice = models.ForeignKey("sales.SalesInvoice", on_delete=models.CASCADE, related_name="fee_charges")
     quantity = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("1"), help_text="Months, or classes attended for per-class fees.")
-    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)  # quantity × fee: as wide as an invoice line (Codex on #187)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
