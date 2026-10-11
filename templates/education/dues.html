@@ -1,0 +1,15 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.dues }}</h1><p>{{ words.dues_intro }}</p></div></section>
+{% include "education/_tabs.html" %}
+<section class="op-summary-grid">
+<article><small>{{ words.owed }}</small><strong data-dues-total>{{ total|money }}</strong><small>{{ rows|length }} {{ words.payer }}</small></article>
+<article><small>{{ words.overdue }}</small><strong class="{% if overdue %}edu-low{% endif %}">{{ overdue|money }}</strong></article>
+</section>
+<div class="op-table-wrap"><table class="op-table" data-dues><thead><tr><th>{{ words.payer }}</th><th>{{ words.phone }}</th><th>{{ words.owed }}</th><th>{{ words.overdue }}</th><th>{{ words.oldest }}</th><th>{{ words.last_payment }}</th><th></th></tr></thead><tbody>
+{% for row in rows %}<tr data-due="{{ row.party.pk }}"><td class="op-cell-text"><a href="{% url 'parties:card' 'customer' row.party.pk %}?lang={{ lang }}">{{ row.name }}</a></td><td><bdi>{{ row.phone|default:'—' }}</bdi></td><td>{{ row.total|money }}</td><td>{% if row.overdue %}<span class="edu-low">{{ row.overdue|money }}</span>{% else %}—{% endif %}</td><td><bdi>{{ row.oldest|date:"Y-m-d"|default:'—' }}</bdi></td><td><bdi>{{ row.last_payment|date:"Y-m-d"|default:'—' }}</bdi></td>
+<td>{% if row.remind %}<a href="{{ row.remind }}" target="_blank" rel="noopener" data-remind>{{ words.remind }}</a>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="7" class="op-empty">{{ words.no_dues }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

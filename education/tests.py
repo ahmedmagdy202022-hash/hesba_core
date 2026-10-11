@@ -217,6 +217,11 @@ class DemoDataTests(TestCase):
 
         self.assertGreaterEqual(ClassSession.objects.count(), 8)  # four weeks of classes
         self.assertTrue(Attendance.objects.filter(presence="absent").exists())
+        from .billing import dues
+        from .models import FeeCharge
+
+        self.assertTrue(FeeCharge.objects.filter(month=timezone.localdate().replace(day=1)).exists())  # this month is billed
+        self.assertTrue(dues())  # and some parents still owe
         self.assertTrue(self.client.login(username="owner", password="Demo-pass-1"))
         self.assertContains(self.client.get(reverse("education:groups")), "مجموعة السبت والتلات")
 
@@ -299,3 +304,99 @@ class AttendanceTests(EducationSetup):
         self.assertContains(self.client.get(reverse("education:group", args=[self.saturday.pk])), "المعادلات")
         self.assertContains(self.client.get(reverse("education:student", args=[self.mariam.pk])), "data-absences")
         self.assertContains(self.client.get(reverse("education:today") + f"?date={self.class_day.isoformat()}&lang=en"), "Taken")
+
+
+class MonthlyFeesTests(EducationSetup):
+    def setUp(self):
+        super().setUp()
+        from . import billing
+
+        from hesba_testing.factories import make_location
+
+        self.billing = billing
+        make_location(location_code="CENTER", is_default=True)  # where invoices are recorded, as every install has
+        self.month = TODAY.replace(day=1)
+        self.saturday = self.group(days="sat")
+        self.yousef, self.mariam = self.student(), self.student("مريم محمد")
+        services.enroll(self.yousef, self.saturday, self.owner, start_date=self.month)
+        services.enroll(self.mariam, self.saturday, self.owner, start_date=self.month, discount_percent="10")
+
+    def ledger_due(self, customer):
+        from parties.services import balance
+
+        return balance("customer", customer)
+
+    def test_one_invoice_per_parent_through_the_sales_engine(self):
+        parent = self.yousef.payer
+        made = self.billing.bill_month(self.month, self.owner, post=True)
+        self.assertEqual(len(made), 1)
+        invoice = made[0]
+        self.assertEqual((invoice.customer, invoice.status, invoice.total_amount), (parent, "posted", D("760.00")))  # 400 + 400 − 10%
+        lines = list(invoice.lines.order_by("line_number"))
+        self.assertEqual([line.item for line in lines], [self.maths.item, self.maths.item])
+        discounts = {line.description.split(" — ")[0]: line.line_discount_amount for line in lines}
+        self.assertEqual(discounts, {"يوسف محمد": D("0.00"), "مريم محمد": D("40.00")})  # each child's line says who it is for
+        self.assertEqual(self.ledger_due(parent), D("760.00"))  # on the parent's account, like any credit sale
+        # Running the month again bills nothing twice.
+        with self.assertRaisesMessage(ValidationError, "مفيش حاجة جديدة"):
+            self.billing.bill_month(self.month, self.owner)
+        self.assertEqual(self.billing.preview(self.month), [])
+
+    def test_a_late_enrolment_is_billed_on_its_own_and_a_cancelled_invoice_frees_the_month(self):
+        from sales.services import cancel_posted_sales_invoice
+
+        first = self.billing.bill_month(self.month, self.owner, post=True)[0]
+        omar = services.save_student({"name": "عمر خالد", "payer_name": "هالة", "payer_phone": "01101234502"}, self.owner)
+        services.enroll(omar, self.saturday, self.owner, start_date=self.month)
+        second = self.billing.bill_month(self.month, self.owner)
+        self.assertEqual([(invoice.customer, invoice.total_amount, invoice.status) for invoice in second], [(omar.payer, D("400.00"), "draft")])
+        cancel_posted_sales_invoice(first.pk, self.owner, "خطأ")
+        again = self.billing.bill_month(self.month, self.owner)
+        self.assertEqual([invoice.total_amount for invoice in again], [D("760.00")])
+
+    def test_per_class_and_whole_course_fees(self):
+        from . import attendance
+
+        per_class = services.save_course({"name": "حصص مراجعة", "fee": "150", "basis": "session"}, self.owner)
+        course = services.save_course({"name": "كورس Excel", "fee": "1500", "basis": "course"}, self.owner)
+        review = services.save_group({"course": per_class, "name": "مراجعة", "days": "sun,mon,tue,wed,thu,fri,sat"}, self.owner)
+        excel = services.save_group({"course": course, "name": "Excel مسائي", "days": "fri"}, self.owner)
+        omar = services.save_student({"name": "عمر", "self_pays": "1", "phone": "01112223334"}, self.owner)
+        services.enroll(omar, review, self.owner, start_date=self.month)
+        services.enroll(omar, excel, self.owner, start_date=self.month)
+        attendance.take(review, self.owner, self.month, {})
+        if TODAY > self.month:
+            attendance.take(review, self.owner, self.month + timedelta(days=1), {str(omar.pk): "absent"})  # an absence is not billed
+        lines = {line["enrollment"].group_id: line for line in self.billing.due_lines(self.month, omar.payer)}
+        self.assertEqual((lines[review.pk]["quantity"], lines[review.pk]["amount"]), (D("1"), D("150.00")))
+        self.assertEqual(lines[excel.pk]["amount"], D("1500.00"))
+        self.billing.bill_month(self.month, self.owner)
+        # The whole course is never billed again, even next month.
+        next_month = (self.month + timedelta(days=32)).replace(day=1)
+        self.assertNotIn(excel.pk, [line["enrollment"].group_id for line in self.billing.due_lines(next_month, omar.payer)])
+
+    def test_a_month_still_to_come_is_refused(self):
+        next_month = (self.month + timedelta(days=32)).replace(day=1)
+        with self.assertRaisesMessage(ValidationError, "لسه مجاش"):
+            self.billing.bill_month(next_month, self.owner)
+
+    def test_the_fees_and_dues_screens(self):
+        self.client.force_login(self.owner)
+        url = reverse("education:fees") + f"?month={self.month:%Y-%m}"
+        page = self.client.get(url)
+        self.assertContains(page, f'data-fee-payer="{self.yousef.payer_id}"')
+        self.assertContains(page, "760.00")
+        response = self.client.post(reverse("education:fees"), {"month": f"{self.month:%Y-%m}", "post": "1", "invoice_date": TODAY.isoformat(), "lang": "ar"})
+        self.assertEqual(response.status_code, 302)
+        page = self.client.get(url)
+        self.assertContains(page, "data-nothing-new")
+        self.assertContains(page, "data-fee-billed")
+        dues = self.client.get(reverse("education:dues"))
+        self.assertContains(dues, f'data-due="{self.yousef.payer_id}"')
+        self.assertContains(dues, "https://wa.me/201001234501")
+        cashier = person(RoleCode.CASHIER, "edu_fee_cashier")
+        self.client.force_login(cashier)
+        from permissions.services import user_has_permission
+
+        if not user_has_permission(cashier, "sales.create_sales_invoice"):
+            self.assertEqual(self.client.post(reverse("education:fees"), {"month": f"{self.month:%Y-%m}"}).status_code, 403)

@@ -221,6 +221,23 @@ class Command(BaseCommand):
                         marks[str(row.student_id)] = "late"
                 if roster:
                     attendance.take(group, owner, day, marks)
+        # EDU-003: last month billed and mostly paid, this month billed; two parents still owe.
+        from config.numbering import next_in_series
+        from education import billing
+        from sales.models import CustomerPayment
+        from sales.services import record_customer_payment
+
+        last_month = (today.replace(day=1) - timedelta(days=1)).replace(day=1)
+        cashbox = next((box for box in master["cashboxes"] if box.is_default), master["cashboxes"][0]) if master["cashboxes"] else None
+        for month, day in ((last_month, min(last_month + timedelta(days=2), today)), (today.replace(day=1), today)):
+            try:
+                invoices = billing.bill_month(month, owner, post=True, invoice_date=day)
+            except ValidationError:
+                continue  # nothing running that month
+            if month == last_month and cashbox is not None:
+                for invoice in invoices[:-2]:
+                    record_customer_payment(next_in_series(CustomerPayment, "payment_number", "CP-"), day + timedelta(days=3), invoice.customer, cashbox,
+                                            invoice.total_amount, owner, notes="مصروفات الشهر")
 
     def _projects(self, master, owner):
         from projects.services import bill_progress, issue_materials, save_project
