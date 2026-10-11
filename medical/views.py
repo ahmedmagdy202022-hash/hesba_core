@@ -143,12 +143,13 @@ def follow_ups(request):
     lang = _lang(request)
     words = WORDS[lang]
     today = timezone.localdate()
-    missed, coming = insights.missed_follow_ups(today), insights.coming_follow_ups(today)
+    booked = insights._booked_patients(today)  # read once for both lists
+    missed, coming = insights.missed_follow_ups(today, booked), insights.coming_follow_ups(today, booked)
     if not user_has_permission(request.user, REPORT_VIEW):  # a doctor sees the patients they asked to come back
         own = getattr(request.user, "employee", None)
         missed = [row for row in missed if own is not None and row["visit"].doctor_id == own.pk]
         coming = [row for row in coming if own is not None and row["visit"].doctor_id == own.pk]
-    for row in missed + coming:
+    for row in missed:  # the reminder text says the date has passed, so only the missed ones get a link
         row["whatsapp"] = whatsapp_link(row["patient"].phone, words["wa_text"].format(name=row["patient"].name, date=row["due"].isoformat()))
     return render(request, "medical/follow_ups.html", _base(lang, missed=missed, coming=coming, today=today, **_tabs(request, "follow")))
 
