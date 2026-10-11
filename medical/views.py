@@ -364,7 +364,7 @@ LAB_WORDS = {
            "flag": "الحكم", "previous": "المرة اللي فاتت", "record": "سجّل النتايج", "history": "النتايج السابقة", "print": "اطبع النتيجة",
            "no_tests": "مفيش تحاليل متسجلة لسه. ضيفها من «التحاليل والمعدلات».", "no_results": "مفيش نتايج لسه.", "saved": "اتحفظ.",
            "back": "ملف المريض", "sheet": "تقرير نتيجة تحاليل", "patient": "المريض", "file_no": "رقم الملف", "age": "السن", "years": "سنة",
-           "signature": "توقيع المسؤول", "choose": "—", "none": "—"},
+           "signature": "توقيع المسؤول", "choose": "—", "none": "—", "remove": "امسح (اتسجلت غلط)", "reason": "السبب"},
     "en": {"title": "Lab results", "intro": "Enter each test's result; the value is checked against the normal range in force when it is entered.",
            "tests": "Tests and ranges", "tests_intro": "Each test with its unit and normal range. Changing a range never changes results already entered.",
            "name": "Test", "unit": "Unit", "low": "Low limit", "high": "High limit", "range": "Normal range", "service": "Service (for the invoice)",
@@ -372,7 +372,7 @@ LAB_WORDS = {
            "text": "Text (if the result is a word)", "flag": "Flag", "previous": "Last time", "record": "Record the results", "history": "Earlier results",
            "print": "Print the result", "no_tests": "No tests yet. Add them under “Tests and ranges”.", "no_results": "No results yet.", "saved": "Saved.",
            "back": "Patient file", "sheet": "Laboratory report", "patient": "Patient", "file_no": "File no.", "age": "Age", "years": "yrs",
-           "signature": "Signed", "choose": "—", "none": "—"},
+           "signature": "Signed", "choose": "—", "none": "—", "remove": "Remove (entered by mistake)", "reason": "Reason"},
 }
 
 
@@ -400,14 +400,17 @@ def lab_tests(request):
     lang = _lang(request)
     words = LAB_WORDS[lang]
     can_write = services.can_write(request.user)
-    editing = get_object_or_404(LabTest, pk=request.GET.get("edit") or request.POST.get("test")) if (request.GET.get("edit") or request.POST.get("test")) else None
+    editing = get_object_or_404(LabTest, pk=_id(request.GET.get("edit") or request.POST.get("test"))) if (request.GET.get("edit") or request.POST.get("test")) else None
     error = ""
-    services_ = Item.objects.filter(active=True, is_stock_tracked=False).order_by("item_name")
+    from django.db.models import Q
+
+    kept = Q(pk=editing.service_id) if editing and editing.service_id else Q(pk__in=[])  # its own service stays, even if inactive since
+    services_ = Item.objects.filter(Q(active=True, is_stock_tracked=False) | kept).order_by("item_name")
     if request.method == "POST":
         if not can_write:
             raise PermissionDenied("Editing lab tests needs medical.write_records.")
         data = request.POST.dict()
-        data["service"] = services_.filter(pk=request.POST.get("service") or 0).first()
+        data["service"] = services_.filter(pk=_id(request.POST.get("service"))).first()
         data["active"] = request.POST.get("active") == "1"
         try:
             lab.save_test(data, request.user, editing, lang)
@@ -436,7 +439,13 @@ def lab_results(request, pk):
             raise PermissionDenied("Recording lab results needs medical.write_records.")
         entries = {test: (request.POST.get(f"value_{test.pk}"), request.POST.get(f"text_{test.pk}")) for test in tests}
         try:
-            lab.record_results(patient, request.POST.get("taken_on"), entries, request.user, lang)
+            if request.POST.get("action") == "remove":  # entered by mistake (wrong patient or test)
+                from .models import LabResult
+
+                lab.remove_result(get_object_or_404(LabResult, pk=_id(request.POST.get("result")), patient=patient), request.user,
+                                  request.POST.get("reason"), lang)
+            else:
+                lab.record_results(patient, request.POST.get("taken_on"), entries, request.user, lang)
         except ValidationError as exc:
             error = " ".join(exc.messages)
         else:
