@@ -47,6 +47,7 @@ WORDS = {
         "invoice": "الفاتورة", "total": "الإجمالي", "fees_intro": "فاتورة واحدة لكل ولي أمر بكل مجموعات أولاده. الشهري بسعر الشهر، والحصة بعدد الحصص اللي حضرها، والكورس مرة واحدة.",
         "dues_intro": "أولياء الأمور اللي عليهم مصروفات، والأقدم الأول.", "overdue": "متأخر", "owed": "عليه", "oldest": "من", "last_payment": "آخر دفعة",
         "remind": "فكّره واتساب", "includes_tax": "منها ضريبة", "no_dues": "مفيش متأخرات. 👏", "collect": "تحصيل", "draft": "مسودة", "posted": "مترحّلة",
+        "discard": "احذف المسودة", "discarded": "اتحذفت مسودة {number}؛ الشهر ده يتفوتر تاني لأولياء الأمور دول.",
     },
     "en": {
         "title": "Students & groups", "students": "Students", "groups": "Groups", "courses": "Courses & subjects",
@@ -79,6 +80,7 @@ WORDS = {
         "invoice": "Invoice", "total": "Total", "fees_intro": "One invoice per parent with all their children's groups: monthly groups at the month's fee, per-class groups by classes attended, whole courses once.",
         "dues_intro": "Parents who owe fees, oldest first.", "overdue": "Overdue", "owed": "Owes", "oldest": "Since", "last_payment": "Last payment",
         "remind": "Remind on WhatsApp", "includes_tax": "incl. VAT", "no_dues": "Nothing owed. 👏", "collect": "Collect", "draft": "Draft", "posted": "Posted",
+        "discard": "Discard draft", "discarded": "Draft {number} discarded; this month can be billed again for these parents.",
     },
 }
 
@@ -420,7 +422,18 @@ def fees(request):
         if posting:  # a billing run states its month: never bill some other month than the one asked for
             error = billing.MESSAGES[lang]["month"]
         first = billing.month_of(None)
-    if posting and not error:
+    if posting and not error and request.POST.get("action") == "discard":
+        from sales.models import SalesInvoice
+
+        invoice = get_object_or_404(SalesInvoice, pk=request.POST.get("invoice") or 0)
+        try:
+            billing.discard_draft(invoice, request.user, lang)
+        except ValidationError as exc:
+            error = " ".join(exc.messages)
+        else:
+            messages.success(request, words["discarded"].format(number=invoice.invoice_number))
+            return redirect(f"{reverse('education:fees')}?lang={lang}&month={first:%Y-%m}")
+    elif posting and not error:
         from datetime import date
 
         try:

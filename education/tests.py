@@ -887,3 +887,23 @@ class FeesRoundThreeTests(MonthlyFeesTests):
         response = self.client.post(reverse("education:fees"), {"month": f"{self.month:%Y-%m}", "invoice_date": "2026-02-31", "post": "1"})
         self.assertContains(response, "تاريخ الفاتورة مش مظبوط")
         self.assertFalse(SalesInvoice.objects.exists())
+
+
+class FeesRoundFourTests(MonthlyFeesTests):
+    """Codex on #187, fourth round."""
+
+    def test_a_fee_draft_can_be_discarded_and_billed_again(self):
+        from sales.models import SalesInvoice
+
+        draft = self.billing.bill_month(self.month, self.owner)[0]
+        self.assertEqual(self.billing.due_lines(self.month), [])
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("education:fees") + f"?month={self.month:%Y-%m}")
+        self.assertContains(page, f'data-discard="{draft.pk}"')
+        self.client.post(reverse("education:fees"), {"month": f"{self.month:%Y-%m}", "action": "discard", "invoice": draft.pk})
+        self.assertFalse(SalesInvoice.objects.filter(pk=draft.pk).exists())
+        self.assertEqual(len(self.billing.due_lines(self.month)), 2)  # the month is free again
+        self.assertTrue(AuditLog.objects.filter(action="discard_fee_draft", object_id=draft.invoice_number).exists())
+        posted = self.billing.bill_month(self.month, self.owner, post=True)[0]
+        with self.assertRaisesMessage(ValidationError, "اترحّلت"):
+            self.billing.discard_draft(posted, self.owner)
