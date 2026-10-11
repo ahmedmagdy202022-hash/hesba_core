@@ -1,0 +1,30 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.report }}</h1><p>{{ words.report_intro }}</p></div></section>
+{% include "medical/_tabs.html" %}
+{% if note %}<p class="op-notice">{{ note }}</p>{% endif %}
+<form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}">
+<label class="sr-only" for="rep-from">{{ words.from }}</label><input id="rep-from" type="date" name="from" value="{{ first|date:'Y-m-d' }}" max="{{ today|date:'Y-m-d' }}">
+<label class="sr-only" for="rep-to">{{ words.to }}</label><input id="rep-to" type="date" name="to" value="{{ last|date:'Y-m-d' }}" max="{{ today|date:'Y-m-d' }}">
+<button type="submit">{{ words.go }}</button></form>
+<section class="op-summary-grid">
+<article><small>{{ words.visits_n }}</small><strong data-report-visits>{{ totals.visits }}</strong><small>{{ totals.first }} {{ words.first_n }} · {{ totals.follow_up }} {{ words.follow_n }}</small></article>
+<article><small>{{ words.patients_n }}</small><strong data-report-patients>{{ totals.patients }}</strong></article>
+<article><small>{{ words.new_n }}</small><strong data-report-new>{{ totals.new }}</strong></article>
+<article><small>{{ words.returning_n }}</small><strong data-report-returning>{{ totals.returning }}</strong></article>
+{% if with_money %}<article><small>{{ words.revenue }}</small><strong data-report-revenue>{{ totals.revenue|money }}</strong></article>{% endif %}
+</section>
+{% if doctors or services %}
+<h2>{{ words.per_doctor }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-doctor-report><thead><tr><th>{{ words.doctor }}</th><th>{{ words.visits_n }}</th><th>{{ words.first_n }}</th><th>{{ words.follow_n }}</th><th>{{ words.patients_n }}</th>{% if with_money %}<th>{{ words.revenue }}</th>{% endif %}</tr></thead><tbody>
+{% for row in doctors %}<tr data-report-doctor="{{ row.doctor.pk|default:'' }}"><td class="op-cell-text">{% if row.doctor %}{{ row.doctor.name }}{% else %}{{ words.no_doctor }}{% endif %}</td><td>{{ row.visits }}</td><td>{{ row.first }}</td><td>{{ row.follow_up }}</td><td>{{ row.patients }}</td>{% if with_money %}<td>{{ row.revenue|money }}</td>{% endif %}</tr>{% endfor %}
+</tbody></table></div>
+{% if with_money and services %}
+<h2>{{ words.per_service }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-service-report><thead><tr><th>{{ words.service }}</th><th>{{ words.count }}</th><th>{{ words.revenue }}</th><th>{{ words.average }}</th></tr></thead><tbody>
+{% for row in services %}<tr data-report-service="{{ row.service.pk|default:'' }}"><td class="op-cell-text">{% if row.service %}{{ row.service.item_name }}{% else %}{{ words.no_service }}{% endif %}</td><td>{{ row.count }}</td><td>{{ row.revenue|money }}</td><td>{{ row.average|money }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endif %}
+{% else %}<p class="op-muted">{{ words.no_report }}</p>{% endif %}
+{% endblock %}

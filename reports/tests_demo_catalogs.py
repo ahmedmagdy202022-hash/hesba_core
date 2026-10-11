@@ -122,9 +122,18 @@ class SampleBusinessPerActivityTests(TestCase):
 
         catalog = self.fill("medical", "clinic")
         self.assert_a_working_business(catalog)
-        self.assertEqual(PatientFile.objects.count(), 3)
-        self.assertEqual(ClinicalVisit.objects.filter(doctor__name="د. أحمد سالم").count(), 3)
-        self.assertEqual(Appointment.objects.filter(service__item_name="كشف").count(), 4)
+        self.assertEqual(PatientFile.objects.count(), 4)
+        self.assertEqual(ClinicalVisit.objects.filter(doctor__name="د. أحمد سالم").count(), 5)
+        self.assertEqual(Appointment.objects.filter(service__item_name="كشف").count(), 7)
+        # MED-002: the clinic report and the follow-ups have something to show.
+        from datetime import timedelta
+
+        from medical import insights
+
+        today = timezone.localdate()
+        report = insights.period_report(today - timedelta(days=30), today)
+        self.assertEqual((report["totals"]["returning"], report["totals"]["revenue"] > 0), (1, True))
+        self.assertEqual([row["patient"].name for row in insights.missed_follow_ups(today)], ["سلمى حسن"])
 
     def test_a_builder_has_projects_with_materials_and_a_progress_bill(self):
         from projects.models import Project

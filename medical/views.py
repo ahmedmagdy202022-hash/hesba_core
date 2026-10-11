@@ -26,7 +26,17 @@ WORDS = {
            "diagnosis": "التشخيص", "treatment": "العلاج / الروشتة", "follow_up": "ميعاد المتابعة", "print": "اطبع الروشتة", "edit": "تعديل",
            "upcoming": "المواعيد الجاية", "account": "الحساب والفواتير", "saved": "اتحفظ.", "visit_saved": "اتسجل الكشف.",
            "male": "ذكر", "female": "أنثى", "unknown": "—", "choose": "اختار", "from_appointment": "من الموعد",
-           "rx": "روشتة", "clinic_signature": "توقيع الطبيب", "follow_due": "متابعة مستحقة"},
+           "rx": "روشتة", "clinic_signature": "توقيع الطبيب", "follow_due": "متابعة مستحقة",
+           "tab_files": "الملفات", "tab_follow": "المتابعات", "tab_report": "تقرير العيادة",
+           "report": "تقرير العيادة", "report_intro": "الكشوفات والمتابعات والمرضى الجداد لكل دكتور، والإيراد لكل دكتور وخدمة من الفواتير المرحّلة (قبل الضريبة وبعد المرتجعات).",
+           "from": "من", "to": "لحد", "go": "اعرض", "visits_n": "كشوفات", "first_n": "كشف أول مرة", "follow_n": "متابعات",
+           "patients_n": "مرضى اتشافوا", "new_n": "مرضى جداد", "returning_n": "مرضى قدام", "revenue": "الإيراد", "per_doctor": "لكل دكتور",
+           "per_service": "لكل خدمة", "service": "الخدمة", "count": "العدد", "average": "المتوسط", "no_doctor": "من غير دكتور",
+           "no_service": "من غير خدمة", "no_report": "مفيش كشوفات ولا مواعيد اتفوترت في الفترة دي.", "bad_period": "الفترة مش مظبوطة؛ اتعرض الشهر ده.",
+           "follow_title": "المتابعات", "follow_intro": "اللي ميعاد متابعته فات ومجاش ومفيش له حجز، واللي ميعاده جاي في الأسبوع ده ولسه ماحجزش.",
+           "missed": "متابعات فاتت", "coming": "متابعات جاية (7 أيام)", "due": "ميعاد المتابعة", "late": "متأخر", "days": "يوم",
+           "last_seen": "آخر كشف", "remind": "فكّره على واتساب", "book": "احجز", "no_missed": "مفيش متابعات فاتت.", "no_coming": "مفيش متابعات جاية من غير حجز.",
+           "wa_text": "أهلًا {name}، معاد متابعتك كان {date}. تحب نحجزلك ميعاد؟"},
     "en": {"title": "Patient files", "intro": "One file per patient: their details, allergies and chronic conditions, and every visit with its complaint, diagnosis and treatment.",
            "search": "Search by name, phone or file number", "find": "Search", "file_no": "File no.", "patient": "Patient", "phone": "Phone",
            "age": "Age", "last_visit": "Last visit", "open": "Open file", "none": "No patients yet. A patient is added from Patients or when booking.",
@@ -39,7 +49,17 @@ WORDS = {
            "diagnosis": "Diagnosis", "treatment": "Treatment / prescription", "follow_up": "Follow-up date", "print": "Print prescription", "edit": "Edit",
            "upcoming": "Upcoming appointments", "account": "Account and invoices", "saved": "Saved.", "visit_saved": "Visit recorded.",
            "male": "Male", "female": "Female", "unknown": "—", "choose": "Choose", "from_appointment": "From appointment",
-           "rx": "Prescription", "clinic_signature": "Doctor's signature", "follow_due": "Follow-up due"},
+           "rx": "Prescription", "clinic_signature": "Doctor's signature", "follow_due": "Follow-up due",
+           "tab_files": "Files", "tab_follow": "Follow-ups", "tab_report": "Clinic report",
+           "report": "Clinic report", "report_intro": "Visits, follow-ups and new patients per doctor, and revenue per doctor and service from posted invoices (before tax, after returns).",
+           "from": "From", "to": "To", "go": "Show", "visits_n": "Visits", "first_n": "First visits", "follow_n": "Follow-ups",
+           "patients_n": "Patients seen", "new_n": "New patients", "returning_n": "Returning patients", "revenue": "Revenue", "per_doctor": "Per doctor",
+           "per_service": "Per service", "service": "Service", "count": "Count", "average": "Average", "no_doctor": "No doctor",
+           "no_service": "No service", "no_report": "No visits and no billed appointments in this period.", "bad_period": "The period was not valid; showing this month.",
+           "follow_title": "Follow-ups", "follow_intro": "Patients whose follow-up date passed without a visit or a booking, and those due this week who have not booked yet.",
+           "missed": "Missed follow-ups", "coming": "Coming follow-ups (7 days)", "due": "Follow-up date", "late": "Late", "days": "days",
+           "last_seen": "Last visit", "remind": "Remind on WhatsApp", "book": "Book", "no_missed": "No missed follow-ups.", "no_coming": "No coming follow-ups without a booking.",
+           "wa_text": "Hello {name}, your follow-up was due on {date}. Shall we book you a time?"},
 }
 
 
@@ -59,6 +79,74 @@ def _base(lang, **extra):
     return {"lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": WORDS[lang], "page_title": WORDS[lang]["title"], "section": "medical", **extra}
 
 
+#: The clinic's whole picture is for those who hold the records permission by role, not for a doctor reading their own patients.
+REPORT_VIEW = services.VIEW
+#: What the clinic earned is for those who see the business-wide sales.
+MONEY_VIEW = "reports.view_all_sales_report"
+
+
+def _tabs(request, current):
+    from permissions.services import user_has_permission
+
+    return {"tab": current, "shows_report": user_has_permission(request.user, REPORT_VIEW)}
+
+
+def _period(request, words):
+    from datetime import date
+
+    today = timezone.localdate()
+    first, last = today.replace(day=1), today
+    note = ""
+    raw_from, raw_to = request.GET.get("from"), request.GET.get("to")
+    if raw_from or raw_to:
+        try:
+            first = date.fromisoformat(raw_from) if raw_from else first
+            last = date.fromisoformat(raw_to) if raw_to else last
+            if first > last or (last - first).days > 366:
+                raise ValueError
+        except ValueError:
+            first, last, note = today.replace(day=1), today, words["bad_period"]
+    return first, last, note
+
+
+def report(request):
+    from permissions.services import user_has_permission
+
+    from . import insights
+
+    if not services.is_medical_install():
+        raise Http404("The clinic report is for medical activities.")
+    if not user_has_permission(request.user, REPORT_VIEW):
+        raise PermissionDenied("The clinic report needs medical.view_records.")
+    lang = _lang(request)
+    words = WORDS[lang]
+    first, last, note = _period(request, words)
+    with_money = user_has_permission(request.user, MONEY_VIEW)
+    data = insights.period_report(first, last, with_money=with_money)
+    return render(request, "medical/report.html", _base(lang, first=first, last=last, note=note, with_money=with_money, today=timezone.localdate(),
+                                                        **data, **_tabs(request, "report")))
+
+
+def follow_ups(request):
+    from permissions.services import user_has_permission
+    from printing.share import whatsapp_link
+
+    from . import insights
+
+    _guard(request)
+    lang = _lang(request)
+    words = WORDS[lang]
+    today = timezone.localdate()
+    missed, coming = insights.missed_follow_ups(today), insights.coming_follow_ups(today)
+    if not user_has_permission(request.user, REPORT_VIEW):  # a doctor sees the patients they asked to come back
+        own = getattr(request.user, "employee", None)
+        missed = [row for row in missed if own is not None and row["visit"].doctor_id == own.pk]
+        coming = [row for row in coming if own is not None and row["visit"].doctor_id == own.pk]
+    for row in missed + coming:
+        row["whatsapp"] = whatsapp_link(row["patient"].phone, words["wa_text"].format(name=row["patient"].name, date=row["due"].isoformat()))
+    return render(request, "medical/follow_ups.html", _base(lang, missed=missed, coming=coming, today=today, **_tabs(request, "follow")))
+
+
 def _patients():
     return Customer.objects.exclude(customer_code="WALK-IN")
 
@@ -76,7 +164,7 @@ def patients(request):
         file = getattr(row, "patient_file", None)
         row.file_number = file.file_number if file else ""
         row.age = services.age(file, today)
-    return render(request, "medical/patients.html", _base(lang, rows=rows, query=query))
+    return render(request, "medical/patients.html", _base(lang, rows=rows, query=query, **_tabs(request, "files")))
 
 
 def patient_file(request, pk):

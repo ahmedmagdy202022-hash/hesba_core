@@ -152,10 +152,36 @@ class Command(BaseCommand):
             ({"date_of_birth": "2015-06-20", "gender": "male", "blood_type": "B+"},
              {"complaint": "متابعة دورية", "weight": "32", "height": "135", "diagnosis": "حالة عامة جيدة", "treatment": "لا يوجد"}),
         )
+        first = master["customers"][0]
+        save_visit(first, {"complaint": "كشف أول مرة", "blood_pressure": "160/100", "diagnosis": "ارتفاع ضغط الدم", "treatment": "كونكور 5 مجم",
+                           "visit_date": (today - timedelta(days=45)).isoformat(), "doctor": doctor}, owner)  # MED-002: a returning patient
         for customer, (profile, visit) in zip(master["customers"], cards):
             save_profile(file_for(customer), profile, owner)
             save_visit(customer, {**visit, "visit_date": (today - timedelta(days=7)).isoformat(),
                                   "follow_up_date": (today + timedelta(days=7)).isoformat(), "doctor": doctor}, owner)
+        self._clinic_month(master, doctor, owner, today)
+
+    def _clinic_month(self, master, doctor, owner, today):
+        """MED-002: billed visits for the clinic report, and a follow-up that was missed."""
+
+        from appointments.services import bill, book, set_status
+        from medical.services import file_for, save_profile, save_visit
+        from sales.pos_customers import quick_add_customer
+        from sales.services import post_sales_invoice
+
+        service = next((item for item in master["items"] if not item.is_stock_tracked), None)
+        if service is not None:
+            for days, customer in ((7, 0), (7, 1), (7, 2)):
+                appointment = book({"customer": master["customers"][customer], "employee": doctor, "service": service,
+                                    "starts_at": timezone.make_aware(datetime.combine(today - timedelta(days=days), time(10 + customer))),
+                                    "duration_minutes": 30}, owner)
+                set_status(appointment, "arrived", owner)
+                post_sales_invoice(bill(appointment, owner).pk, owner)
+        missed, _ = quick_add_customer("سلمى حسن", "01000000105", owner)
+        save_profile(file_for(missed), {"gender": "female", "date_of_birth": "1985-01-09", "chronic_conditions": "سكر"}, owner)
+        save_visit(missed, {"complaint": "متابعة السكر", "diagnosis": "سكر من النوع الثاني", "treatment": "جلوكوفاج 500 مجم",
+                            "visit_date": (today - timedelta(days=21)).isoformat(), "follow_up_date": (today - timedelta(days=6)).isoformat(),
+                            "doctor": doctor}, owner)
 
     def _projects(self, master, owner):
         from projects.services import bill_progress, issue_materials, save_project
