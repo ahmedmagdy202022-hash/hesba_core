@@ -169,3 +169,22 @@ class Attendance(models.Model):
     class Meta:
         ordering = ["student__name", "pk"]
         constraints = [models.UniqueConstraint(fields=["session", "student"], name="education_one_mark_per_student_session")]
+
+
+class FeeCharge(models.Model):
+    """EDU-003: one enrolment billed for one month (or once, for a whole course), and the invoice line that billed it.
+
+    Deleting the draft invoice deletes its charges, so the month can be billed
+    again; a cancelled invoice is skipped when checking what is already billed.
+    """
+
+    enrollment = models.ForeignKey(Enrollment, on_delete=models.PROTECT, related_name="charges")
+    month = models.DateField(help_text="The first day of the month billed.")
+    invoice = models.ForeignKey("sales.SalesInvoice", on_delete=models.CASCADE, related_name="fee_charges")
+    quantity = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("1"), help_text="Months, or classes attended for per-class fees.")
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-month", "pk"]
+        indexes = [models.Index(fields=["enrollment", "month"])]

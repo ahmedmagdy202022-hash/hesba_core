@@ -207,3 +207,8 @@ html.hs-cam-open,html.hs-cam-open body{overflow:hidden}
 .edu-chip input:focus-visible + span{box-shadow:var(--hs-focus-ring)}
 .edu-mark__note{min-height:40px;padding:0 10px;border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);font:inherit}
 @media (max-width:760px){.edu-mark{grid-template-columns:1fr}}
+/* On a phone the section tabs stay one row that scrolls sideways, not six stacked buttons. */
+@media (max-width:700px){
+  .op-form-actions.edu-tabs{display:flex;flex-wrap:nowrap;overflow-x:auto;width:auto;gap:8px;padding-bottom:4px;scrollbar-width:none}
+  .edu-tabs .op-primary,.edu-tabs .op-secondary{flex:0 0 auto;width:auto;min-height:40px;padding:0 14px;white-space:nowrap}
+}

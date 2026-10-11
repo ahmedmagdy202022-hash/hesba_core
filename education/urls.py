@@ -14,4 +14,6 @@ urlpatterns = [
     path("courses/", views.courses, name="courses"),
     path("today/", views.today, name="today"),
     path("groups/<int:pk>/attendance/", views.take_attendance, name="attendance"),
+    path("fees/", views.fees, name="fees"),
+    path("dues/", views.dues, name="dues"),
 ]

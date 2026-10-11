@@ -1,0 +1,25 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.fees }}: {{ label }}</h1><p>{{ words.fees_intro }}</p></div></section>
+{% include "education/_tabs.html" %}
+{% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
+<form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><label class="sr-only" for="fee-month">{{ words.month }}</label><input id="fee-month" type="month" name="month" value="{{ first|date:'Y-m' }}" max="{{ today|date:'Y-m' }}"><button type="submit">{{ words.go }}</button></form>
+<section class="op-summary-grid">
+<article><small>{{ words.to_bill }}</small><strong data-to-bill>{{ total|money }}</strong><small>{{ rows|length }} {{ words.payer }}</small></article>
+<article><small>{{ words.billed }}</small><strong data-billed-count>{{ done|length }}</strong></article>
+</section>
+<h2>{{ words.to_bill }}</h2>
+{% if rows %}<div class="op-table-wrap"><table class="op-table" data-fee-preview><thead><tr><th>{{ words.payer }}</th><th>{{ words.lines }}</th><th>{{ words.total }}</th></tr></thead><tbody>
+{% for row in rows %}<tr data-fee-payer="{{ row.payer.pk }}"><td class="op-cell-text">{{ row.payer.name }}</td><td class="op-cell-text">{% for line in row.lines %}<div>{{ line.enrollment.student.name }} — {{ line.enrollment.group.name }}: {{ line.quantity|floatformat:"-2" }} × {{ line.price|money }}{% if line.discount %} − {{ line.discount|money }}{% endif %} = <strong>{{ line.amount|money }}</strong></div>{% endfor %}</td><td><strong>{{ row.total|money }}</strong></td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_bill and not is_future %}<form class="op-form" method="post" data-bill-month>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="month" value="{{ first|date:'Y-m' }}"><div class="op-form-grid">
+<div class="op-field"><label for="fee-date">{{ words.invoice_date }}</label><input id="fee-date" type="date" name="invoice_date" value="{{ today|date:'Y-m-d' }}"></div>
+<label class="op-check"><input type="checkbox" name="post" value="1" checked> {{ words.post_now }}</label></div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.bill_btn }}</button></div></form>{% endif %}
+{% else %}<p class="op-muted" data-nothing-new>{{ words.nothing_new }}</p>{% endif %}
+<h2>{{ words.billed }}</h2>
+{% if done %}<div class="op-table-wrap"><table class="op-table" data-fee-billed><thead><tr><th>{{ words.invoice }}</th><th>{{ words.payer }}</th><th>{{ words.students }}</th><th>{{ words.total }}</th><th>{{ words.status }}</th></tr></thead><tbody>
+{% for row in done %}<tr><td><a href="{% url 'sales:detail' row.invoice.pk %}?lang={{ lang }}"><bdi>{{ row.invoice.invoice_number }}</bdi></a></td><td class="op-cell-text">{{ row.invoice.customer.name }}</td><td class="op-cell-text">{{ row.students|join:"، " }}</td><td>{{ row.invoice.total_amount|money }}</td><td><span class="op-status {% if row.invoice.status == 'posted' %}op-status-open{% else %}op-status-draft{% endif %}">{% if row.invoice.status == 'posted' %}{{ words.posted }}{% else %}{{ words.draft }}{% endif %}</span></td></tr>{% endfor %}
+</tbody></table></div>{% else %}<p class="op-muted">—</p>{% endif %}
+{% endblock %}

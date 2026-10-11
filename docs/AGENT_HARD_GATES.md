@@ -707,7 +707,15 @@ Status: RESOLVED — approved by Ahmed on 9 Oct 2026 ("موافق تعمل كل 
   - Attendance rates count held classes only, with late counted as attended.
   - Absent and late students get a one-tap WhatsApp link to the parent.
   - No money moves.
-- **Next (EDU-003 to EDU-004):**
+- **EDU-003 (monthly fees):** `education/billing.py` makes one draft sales invoice per parent for a month. It goes through `create_sales_draft_with_tax`, and through `post_sales_invoice` when posting is asked for. Neither function is changed.
+  - **Lines:** one per enrolment, using the course's own service item.
+    - **Monthly groups:** one month at the group's fee, with the enrolment's discount as the line discount.
+    - **Per-class groups:** the classes attended that month; late counts as attended.
+    - **Whole courses:** billed once.
+  - **Duplicates:** a new `FeeCharge` row records which enrolment and month each line billed, so running the month again bills only what is new. A cancelled invoice frees its month. Each parent's customer row is locked while their lines are worked out, so two runs at once cannot bill one month twice.
+  - **Not allowed:** future months.
+  - **Fees owed:** the existing customer aging, kept to parents of students, with WhatsApp reminders.
+- **Next (EDU-004):**
   - attendance;
   - monthly invoices through the ordinary sales engine, with a duplicate guard per month;
   - teacher pay;

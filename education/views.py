@@ -40,6 +40,12 @@ WORDS = {
         "rate": "نسبة الحضور (30 يوم)", "recent_absences": "آخر غياب", "no_absences": "مفيش غياب في آخر 30 يوم.", "sessions": "آخر الحصص",
         "no_sessions": "لسه متسجّلش حضور للمجموعة دي.", "tell_parent": "ابعت لولي الأمر واتساب", "all_present": "الكل حاضر",
         "go": "عرض", "date": "التاريخ", "counts": "حاضر {present} · متأخر {late} · غايب {absent}", "notify": "بلّغ أولياء الأمور",
+        "fees": "مصروفات الشهر", "dues": "المتأخرات", "month": "الشهر", "to_bill": "هيتفوتر", "billed": "اتفوتر", "lines": "البنود",
+        "qty": "الكمية", "price": "السعر", "amount": "المبلغ", "bill_btn": "اعمل فواتير الشهر", "post_now": "رحّلها على طول (تتسجل على حساب ولي الأمر)",
+        "invoice_date": "تاريخ الفاتورة", "billed_ok": "اتعملت {count} فاتورة بإجمالي {total}.", "nothing_new": "كل حاجة في الشهر ده اتفوترت.",
+        "invoice": "الفاتورة", "total": "الإجمالي", "fees_intro": "فاتورة واحدة لكل ولي أمر بكل مجموعات أولاده. الشهري بسعر الشهر، والحصة بعدد الحصص اللي حضرها، والكورس مرة واحدة.",
+        "dues_intro": "أولياء الأمور اللي عليهم مصروفات، والأقدم الأول.", "overdue": "متأخر", "owed": "عليه", "oldest": "من", "last_payment": "آخر دفعة",
+        "remind": "فكّره واتساب", "no_dues": "مفيش متأخرات. 👏", "collect": "تحصيل", "draft": "مسودة", "posted": "مترحّلة",
     },
     "en": {
         "title": "Students & groups", "students": "Students", "groups": "Groups", "courses": "Courses & subjects",
@@ -66,6 +72,12 @@ WORDS = {
         "rate": "Attendance (30 days)", "recent_absences": "Recent absences", "no_absences": "No absences in the last 30 days.", "sessions": "Recent classes",
         "no_sessions": "No attendance taken for this group yet.", "tell_parent": "WhatsApp the parent", "all_present": "All present",
         "go": "Show", "date": "Date", "counts": "Present {present} · Late {late} · Absent {absent}", "notify": "Tell the parents",
+        "fees": "Monthly fees", "dues": "Fees owed", "month": "Month", "to_bill": "To bill", "billed": "Billed", "lines": "Lines",
+        "qty": "Qty", "price": "Price", "amount": "Amount", "bill_btn": "Make this month's invoices", "post_now": "Post them now (they go on the parent's account)",
+        "invoice_date": "Invoice date", "billed_ok": "{count} invoices made, {total} in all.", "nothing_new": "Everything in this month is billed.",
+        "invoice": "Invoice", "total": "Total", "fees_intro": "One invoice per parent with all their children's groups: monthly groups at the month's fee, per-class groups by classes attended, whole courses once.",
+        "dues_intro": "Parents who owe fees, oldest first.", "overdue": "Overdue", "owed": "Owes", "oldest": "Since", "last_payment": "Last payment",
+        "remind": "Remind on WhatsApp", "no_dues": "Nothing owed. 👏", "collect": "Collect", "draft": "Draft", "posted": "Posted",
     },
 }
 
@@ -364,3 +376,70 @@ def take_attendance(request, pk):
     return render(request, "education/attendance.html", _base(request, lang, "today", group=group, day=day, session=session, roster=roster, choices=choices,
                                                               schedule=services.schedule_text(group, lang), error=error, today=timezone.localdate(),
                                                               saved=bool(request.GET.get("saved")), notify=[row for row in roster if row.notify]))
+
+
+# ---- monthly fees and fees owed (EDU-003) ----
+
+def _fees_guard(request, write=False):
+    from permissions.services import user_has_permission
+
+    if not services.is_education_install():
+        raise Http404("Fees are for education activities.")
+    if not user_has_permission(request.user, "sales.view_sales_invoices"):
+        raise PermissionDenied("Fees need sales.view_sales_invoices.")
+    if write and not user_has_permission(request.user, "sales.create_sales_invoice"):
+        raise PermissionDenied("Billing the month needs sales.create_sales_invoice.")
+
+
+def fees(request):
+    from permissions.services import user_has_permission
+
+    from . import billing
+
+    _fees_guard(request)
+    lang = _lang(request)
+    words = WORDS[lang]
+    try:
+        first = billing.month_of(request.POST.get("month") or request.GET.get("month"))
+    except ValidationError:
+        first = billing.month_of(None)
+    error = ""
+    if request.method == "POST":
+        _fees_guard(request, write=True)
+        from datetime import date
+
+        try:
+            day = date.fromisoformat(request.POST.get("invoice_date") or "") if request.POST.get("invoice_date") else None
+        except ValueError:
+            day = None
+        try:
+            made = billing.bill_month(first, request.user, post=request.POST.get("post") == "1", invoice_date=day, lang=lang)
+        except ValidationError as exc:
+            error = " ".join(exc.messages)
+        else:
+            from settings_core.templatetags.hesba_format import money
+
+            messages.success(request, words["billed_ok"].format(count=len(made), total=money(sum(invoice.total_amount for invoice in made))))
+            return redirect(f"{reverse('education:fees')}?lang={lang}&month={first:%Y-%m}")
+    rows = billing.preview(first)
+    done = billing.billed(first)
+    return render(request, "education/fees.html", _base(request, lang, "fees", first=first, label=billing.month_label(first, lang), rows=rows, done=done,
+                                                        total=sum((row["total"] for row in rows), start=0), error=error,
+                                                        can_bill=user_has_permission(request.user, "sales.create_sales_invoice"),
+                                                        is_future=first > timezone.localdate().replace(day=1), today=timezone.localdate()))
+
+
+def dues(request):
+    from printing.company import company_details
+    from reports.aging import reminder_link
+
+    from . import billing
+
+    _fees_guard(request)
+    lang = _lang(request)
+    rows = billing.dues()
+    company = company_details()
+    for row in rows:
+        row["remind"] = reminder_link(row, company["name"], company.get("currency", "EGP"), lang)
+    return render(request, "education/dues.html", _base(request, lang, "dues", rows=rows, total=sum((row["total"] for row in rows), start=0),
+                                                        overdue=sum((row["overdue"] for row in rows), start=0)))
