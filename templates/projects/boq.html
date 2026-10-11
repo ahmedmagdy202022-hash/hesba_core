@@ -1,0 +1,32 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+{% include "projects/_head.html" %}
+<p class="op-muted">{{ cwords.boq_intro }}</p>
+<div class="op-table-wrap"><table class="op-table" data-boq><thead><tr><th>{{ cwords.code }}</th><th>{{ cwords.description }}</th><th>{{ cwords.unit }}</th><th>{{ cwords.qty }}</th><th>{{ cwords.rate }}</th><th>{{ cwords.amount }}</th><th>{{ cwords.certified_qty }}</th><th>{{ cwords.done_pct }}</th>{% if can_manage and is_open %}<th></th>{% endif %}</tr></thead><tbody>
+{% for row in rows %}{% with line=row.line %}<tr data-boq-line="{{ line.line_number }}"><td dir="ltr">{{ line.code|default:line.line_number }}</td><td>{{ line.description }}</td><td><bdi>{{ line.unit }}</bdi></td><td>{{ line.quantity|qty }}</td><td>{{ line.rate|money }}</td><td>{{ row.amount|money }}</td><td>{{ row.certified|qty }}</td><td>{{ row.done }}%</td>
+{% if can_manage and is_open %}<td><details class="op-row-edit"><summary>{% if lang == 'en' %}Edit{% else %}تعديل{% endif %}</summary><form method="post" class="op-form" novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="edit"><input type="hidden" name="line" value="{{ line.pk }}">
+<div class="op-form-grid"><div class="op-field"><label for="bq-c-{{ line.pk }}">{{ cwords.code }}</label><input id="bq-c-{{ line.pk }}" name="code" value="{{ line.code }}" maxlength="20" dir="ltr"></div>
+<div class="op-field"><label for="bq-d-{{ line.pk }}">{{ cwords.description }}</label><input id="bq-d-{{ line.pk }}" name="description" value="{{ line.description }}" maxlength="255" required></div>
+<div class="op-field"><label for="bq-u-{{ line.pk }}">{{ cwords.unit }}</label><input id="bq-u-{{ line.pk }}" name="unit" value="{{ line.unit }}" maxlength="30"></div>
+<div class="op-field"><label for="bq-q-{{ line.pk }}">{{ cwords.qty }}</label><input id="bq-q-{{ line.pk }}" name="quantity" value="{{ line.quantity|stringformat:'s' }}" inputmode="decimal" dir="ltr" required></div>
+<div class="op-field"><label for="bq-r-{{ line.pk }}">{{ cwords.rate }}</label><input id="bq-r-{{ line.pk }}" name="rate" value="{{ line.rate|stringformat:'s' }}" inputmode="decimal" dir="ltr" required></div></div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ cwords.save }}</button></div></form>
+{% if not row.certified %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="delete"><input type="hidden" name="line" value="{{ line.pk }}"><button class="op-secondary" type="submit">{{ cwords.delete }}</button></form>{% endif %}</details></td>{% endif %}</tr>{% endwith %}
+{% empty %}<tr><td colspan="9" class="op-empty">{{ cwords.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if rows %}<p class="op-muted">{{ cwords.total }}: <strong data-boq-total>{{ total|money }}</strong></p>{% endif %}
+{% if can_manage and is_open %}
+<form class="op-form" method="post" data-boq-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="add"><h2>{{ cwords.add_line }}</h2>
+<div class="op-form-grid"><div class="op-field"><label for="bq-code">{{ cwords.code }}</label><input id="bq-code" name="code" maxlength="20" dir="ltr"></div>
+<div class="op-field"><label for="bq-desc">{{ cwords.description }}</label><input id="bq-desc" name="description" maxlength="255" required></div>
+<div class="op-field"><label for="bq-unit">{{ cwords.unit }}</label><input id="bq-unit" name="unit" maxlength="30" list="bq-units"><datalist id="bq-units"><option value="م³"><option value="م²"><option value="م.ط"><option value="طن"><option value="عدد"><option value="مقطوعية"></datalist></div>
+<div class="op-field"><label for="bq-qty">{{ cwords.qty }}</label><input id="bq-qty" name="quantity" inputmode="decimal" dir="ltr" required></div>
+<div class="op-field"><label for="bq-rate">{{ cwords.rate }}</label><input id="bq-rate" name="rate" inputmode="decimal" dir="ltr" required></div></div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ cwords.save }}</button></div></form>
+{% endif %}
+<form class="op-form" method="post" data-terms-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="terms"><h2>{{ cwords.terms }}</h2><p class="op-muted">{{ cwords.terms_hint }}</p>
+<div class="op-form-grid"><div class="op-field"><label for="tr-ret">{{ cwords.retention_rate }}</label><input id="tr-ret" name="retention_rate" value="{{ project.retention_rate|stringformat:'s' }}" inputmode="decimal" dir="ltr"{% if not can_manage %} disabled{% endif %}></div>
+<div class="op-field"><label for="tr-rec">{{ cwords.recovery_rate }}</label><input id="tr-rec" name="advance_recovery_rate" value="{{ project.advance_recovery_rate|stringformat:'s' }}" inputmode="decimal" dir="ltr"{% if not can_manage %} disabled{% endif %}></div></div>
+{% if can_manage %}<div class="op-form-actions"><button class="op-primary" type="submit">{{ cwords.save }}</button></div>{% endif %}</form>
+{% endblock %}

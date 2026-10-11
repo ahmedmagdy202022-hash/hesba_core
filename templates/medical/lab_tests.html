@@ -1,0 +1,27 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ lw.tests }}</h1><p>{{ lw.tests_intro }}</p></div></section>
+{% include "medical/_tabs.html" %}
+{% if error %}<p class="op-message op-message-error" role="alert">{{ error }}</p>{% endif %}
+<div class="op-table-wrap"><table class="op-table" data-lab-tests><thead><tr><th>{{ lw.name }}</th><th>{{ lw.unit }}</th><th>{{ lw.range }}</th><th>{{ lw.service }}</th><th>{{ lw.active }}</th><th></th></tr></thead><tbody>
+{% for test in tests %}<tr data-lab-test="{{ test.pk }}"><td class="op-cell-text">{{ test.name }}</td><td><bdi>{{ test.unit|default:'—' }}</bdi></td>
+<td>{% if test.low is None and test.high is None %}—{% else %}<span dir="ltr">{% if test.low is not None %}{{ test.low|qty }}{% else %}…{% endif %} – {% if test.high is not None %}{{ test.high|qty }}{% else %}…{% endif %}</span>{% endif %}</td>
+<td class="op-cell-text">{{ test.service.item_name|default:'—' }}</td><td>{% if test.active %}✓{% else %}—{% endif %}</td>
+<td>{% if can_write %}<a href="?lang={{ lang }}&edit={{ test.pk }}">{{ lw.edit }}</a>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="6" class="op-empty">{{ lw.no_tests }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_write %}
+<h2>{% if editing %}{{ lw.edit }}: {{ editing.name }}{% else %}{{ lw.add }}{% endif %}</h2>
+<form class="op-form" method="post" data-lab-test-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">{% if editing %}<input type="hidden" name="test" value="{{ editing.pk }}">{% endif %}
+<div class="op-form-grid">
+<div class="op-field"><label for="lt-name">{{ lw.name }}</label><input id="lt-name" name="name" required maxlength="120" value="{% if post.name %}{{ post.name }}{% else %}{{ editing.name|default:'' }}{% endif %}"></div>
+<div class="op-field"><label for="lt-unit">{{ lw.unit }}</label><input id="lt-unit" name="unit" maxlength="30" value="{% if post.unit %}{{ post.unit }}{% else %}{{ editing.unit|default:'' }}{% endif %}"></div>
+<div class="op-field"><label for="lt-low">{{ lw.low }}</label><input id="lt-low" name="low" inputmode="decimal" value="{% if post.low %}{{ post.low }}{% elif editing.low is not None %}{{ editing.low|qty }}{% endif %}"></div>
+<div class="op-field"><label for="lt-high">{{ lw.high }}</label><input id="lt-high" name="high" inputmode="decimal" value="{% if post.high %}{{ post.high }}{% elif editing.high is not None %}{{ editing.high|qty }}{% endif %}"></div>
+<div class="op-field"><label for="lt-service">{{ lw.service }}</label><select id="lt-service" name="service"><option value="">—</option>{% for item in services %}<option value="{{ item.pk }}"{% if editing.service_id == item.pk %} selected{% endif %}>{{ item.item_name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="lt-pos">{{ lw.position }}</label><input id="lt-pos" name="position" inputmode="numeric" value="{% if post.position %}{{ post.position }}{% else %}{{ editing.position|default:'0' }}{% endif %}"></div>
+<label class="op-check"><input type="checkbox" name="active" value="1"{% if not editing or editing.active %} checked{% endif %}> {{ lw.active }}</label>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ lw.save }}</button></div></form>
+{% endif %}
+{% endblock %}

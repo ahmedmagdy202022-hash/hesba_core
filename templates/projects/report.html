@@ -1,0 +1,29 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'projects:list' %}?lang={{ lang }}">← {{ words.title }}</a><h1>{{ rw.report }}</h1><p>{{ rw.intro }}</p></div></section>
+<form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><select name="status" aria-label="{{ words.status }}"><option value="all"{% if not status %} selected{% endif %}>{{ rw.all }}</option>{% for value, label in statuses %}<option value="{{ value }}"{% if status == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select><button type="submit">{{ rw.show }}</button></form>
+<section class="op-summary-grid">
+<article><small>{{ rw.contract }}</small><strong data-p-contract>{{ totals.contract|money }}</strong><small>{{ rw.progress }} {{ totals.progress }}%</small></article>
+<article><small>{{ rw.billed }}</small><strong data-p-billed>{{ totals.billed|money }}</strong></article>
+<article><small>{{ rw.profit }}</small><strong data-p-profit>{{ totals.profit|money }}</strong><small>{{ rw.margin }} {{ totals.margin }}%</small></article>
+<article><small>{{ rw.due }}</small><strong>{{ totals.due|money }}</strong></article>
+<article><small>{{ rw.retention }}</small><strong data-p-retention>{{ totals.retention|money }}</strong></article>
+<article><small>{{ rw.overdue }}</small><strong data-p-overdue>{{ overdue_total|money }}</strong><small>{{ overdue|length }} · {{ totals.losing }} {{ rw.losing }} · {{ totals.behind }} {{ rw.behind_n }}</small></article>
+</section>
+<div class="op-table-wrap"><table class="op-table" data-portfolio><thead><tr><th>{{ rw.project }}</th><th>{{ rw.contract }}</th><th>{{ rw.billed }}</th><th>{{ rw.progress }}</th><th>{{ rw.time }}</th><th>{{ rw.cost }}</th><th>{{ rw.profit }}</th><th>{{ rw.margin }}</th><th>{{ rw.due }}</th><th>{{ rw.retention }}</th></tr></thead><tbody>
+{% for row in rows %}{% with p=row.project f=row.figures %}<tr data-portfolio-row="{{ p.code }}"{% if row.behind %} data-behind{% endif %}><td class="op-cell-text"><a href="{% url 'projects:detail' p.pk %}?lang={{ lang }}">{{ p.name }}</a><br><small class="op-muted">{{ p.customer.name }}</small></td>
+<td>{{ f.contract|money }}</td><td>{{ f.billed|money }}</td><td>{{ f.progress }}%</td>
+<td>{% if row.time_pct is not None %}{{ row.time_pct }}%{% if row.behind %} <span class="op-status op-status-cancelled">{{ rw.behind }}</span>{% endif %}{% else %}—{% endif %}</td>
+<td>{{ f.cost|money }}</td><td><span class="{% if f.profit < 0 %}op-status op-status-cancelled{% endif %}">{{ f.profit|money }}</span></td><td>{{ f.margin }}%</td><td>{{ f.due|money }}</td><td>{{ row.retention|money }}</td></tr>{% endwith %}
+{% empty %}<tr><td colspan="10" class="op-empty">{{ rw.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if totals.count > totals.shown %}<p class="op-muted" data-portfolio-cut>{% if lang == 'en' %}Showing the first {{ totals.shown }} of {{ totals.count }} projects; the figures above cover these {{ totals.shown }}.{% else %}ظاهر أول {{ totals.shown }} مشروع من {{ totals.count }}، والأرقام اللي فوق عنهم بس.{% endif %}</p>{% endif %}
+<h2>{{ rw.overdue }}</h2><p class="op-muted">{{ overdue_intro }}</p>
+<div class="op-table-wrap"><table class="op-table" data-overdue-certificates><thead><tr><th>{{ rw.certificate }}</th><th>{{ rw.project }}</th><th>{{ rw.customer }}</th><th>{{ rw.date }}</th><th>{{ rw.owed }}</th><th>{{ rw.age }}</th><th>{{ rw.late }}</th></tr></thead><tbody>
+{% for row in overdue %}<tr data-overdue="{{ row.certificate.pk }}"><td><a href="{% url 'projects:certificate' row.project.pk row.certificate.number %}?lang={{ lang }}">#{{ row.certificate.number }}</a> · <bdi>{{ row.certificate.invoice.invoice_number }}</bdi></td>
+<td class="op-cell-text">{{ row.project.name }}</td><td class="op-cell-text">{{ row.project.customer.name }}</td><td><bdi>{{ row.certificate.certificate_date|date:"Y-m-d" }}</bdi></td>
+<td>{{ row.owed|money }}</td><td>{{ row.age }}</td><td><span class="op-status op-status-cancelled">{{ row.late }}</span></td></tr>
+{% empty %}<tr><td colspan="7" class="op-empty">{{ rw.no_overdue }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

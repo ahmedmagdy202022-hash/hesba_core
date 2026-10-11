@@ -1,0 +1,19 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div>
+{% if can_manage and due %}<form method="post" data-bill-due>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="bill_due"><button class="op-primary" type="submit">{{ bill_due_label }}</button></form>{% endif %}</section>
+{% if error %}<p class="op-message op-message-error" role="alert">{{ error }}</p>{% endif %}
+<div class="op-table-wrap"><table class="op-table" data-contracts><thead><tr><th>{{ words.number }}</th><th>{{ words.customer }}</th><th>{{ words.service }}</th><th>{{ words.amount }}</th><th>{{ words.every }}</th><th>{{ words.due }}</th><th>{{ words.next }}</th><th>{{ words.unpaid }}</th><th>{{ words.status }}</th></tr></thead><tbody>
+{% for row in rows %}{% with c=row.contract o=row.overview %}<tr data-contract="{{ c.number }}"><td><a href="{% url 'agreements:detail' c.pk %}?lang={{ lang }}"><bdi>{{ c.number }}</bdi></a></td><td class="op-cell-text">{{ c.customer.name }}</td>
+<td class="op-cell-text">{{ c.description|default:c.service.item_name }}</td><td>{{ c.amount|money }}</td><td>{{ row.every_label }}</td>
+<td>{% if o.due %}<span class="op-status op-status-draft" data-contract-due="{{ o.due|length }}">{{ o.due|length }}</span>{% else %}—{% endif %}</td>
+<td><bdi>{{ o.next|date:"Y-m-d"|default:'—' }}</bdi></td><td>{% if row.unpaid %}<span class="op-status op-status-cancelled">{{ row.unpaid|money }}</span>{% else %}—{% endif %}</td>
+<td>{{ row.status_label }}</td></tr>{% endwith %}
+{% empty %}<tr><td colspan="9" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_manage %}<h2>{{ words.new }}</h2>
+<form class="op-form" method="post" data-contract-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">{% include "agreements/_form.html" %}
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form>
+{% else %}<p class="op-message">{{ words.view_only }}</p>{% endif %}
+{% endblock %}

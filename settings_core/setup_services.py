@@ -85,7 +85,7 @@ def complete_setup(profile, activity, sub_activity, modules_raw, user=None, capa
     if not catalog.is_valid_sub_activity(activity, sub_activity):
         raise ValueError(f"Unknown sub-activity for {activity}: {sub_activity!r}")
 
-    chosen = catalog.clean_module_slugs(activity, modules_raw)
+    chosen = catalog.clean_module_slugs(catalog.closest(activity, sub_activity)[0], modules_raw)  # OTHER-001: the closest activity's required ones
 
     before = {
         "activity_slug": profile.activity_slug,
@@ -143,7 +143,7 @@ def module_settings_rows(profile, lang="ar"):
     """Every catalog module with the state the settings screen shows for it."""
 
     enabled = set(enabled_modules())
-    required = set(catalog.required_modules(profile.activity_slug)) if profile else set()
+    required = set(catalog.required_modules(catalog.closest(profile.activity_slug, profile.sub_activity_slug)[0])) if profile else set()
     rows = []
     for slug in catalog.MODULE_SLUGS:
         if slug in catalog.MODULES_WITHOUT_BACKEND:
@@ -171,7 +171,7 @@ def set_module_enabled(profile, slug, enabled, user=None):
         raise ModuleChangeRefused(f"Unknown module: {slug!r}")
     if slug in catalog.MODULES_WITHOUT_BACKEND:
         raise ModuleChangeRefused(f"{slug} is not available yet.")
-    if not enabled and slug in catalog.required_modules(profile.activity_slug):
+    if not enabled and slug in catalog.required_modules(catalog.closest(profile.activity_slug, profile.sub_activity_slug)[0]):
         raise ModuleChangeRefused(f"{slug} is required for this activity.")
 
     code = module_flag_code(slug)

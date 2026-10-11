@@ -76,6 +76,7 @@ urlpatterns = [
     path("shifts/", include("shifts.urls")),
     path("parties/", include("parties.urls")),
     path("medical/", include("medical.urls")),
+    path("education/", include("education.urls")),
     path("search/", include("search.urls")),
     path("imports/", include("imports.urls")),
     path("closing/", include("closing.urls")),
@@ -85,8 +86,10 @@ urlpatterns = [
     path("staff/", include("staff.urls")),
     # APPT-001: appointments & visits.
     path("appointments/", include("appointments.urls")),
+    path("contracts/", include("agreements.urls")),
     # RESTO-001: tables, orders and the kitchen ticket.
     path("restaurant/", include("restaurant.urls")),
+    path("work-orders/", include("workorders.urls")),
     # CONTRACT-001: projects for contractors.
     path("projects/", include("projects.urls")),
     # MFG-001: recipes and production runs.

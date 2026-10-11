@@ -1,0 +1,8 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'education:groups' %}?lang={{ lang }}">← {{ words.back_groups }}</a><h1>{{ words.new_group }}</h1></div></section>
+{% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
+<form class="op-form" method="post" data-group-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><div class="op-form-grid">{% include "education/_group_fields.html" %}</div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form>
+{% endblock %}

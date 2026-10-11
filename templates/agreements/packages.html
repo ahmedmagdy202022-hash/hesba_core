@@ -1,0 +1,23 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div></section>
+{% if error %}<p class="op-message op-message-error" role="alert">{{ error }}</p>{% endif %}
+<section class="op-summary-grid" data-package-totals><article><small>{{ words.sold_total }}</small><strong>{{ totals.sold }}</strong></article><article><small>{{ words.used_total }}</small><strong>{{ totals.used }}</strong></article><article><small>{{ words.left_total }}</small><strong data-packages-left>{{ totals.left }}</strong></article><article><small>{{ words.value_total }}</small><strong>{{ totals.value|money }}</strong></article></section>
+<div class="op-table-wrap"><table class="op-table" data-packages><thead><tr><th>{{ words.number }}</th><th>{{ words.customer }}</th><th>{{ words.service }}</th><th>{{ words.price_short }}</th><th>{{ words.used }}</th><th>{{ words.left }}</th><th>{{ words.status }}</th></tr></thead><tbody>
+{% for row in rows %}{% with p=row.package %}<tr data-package="{{ p.number }}"><td><a href="{% url 'agreements:package' p.pk %}?lang={{ lang }}"><bdi>{{ p.number }}</bdi></a></td><td class="op-cell-text">{{ p.customer.name }}</td><td class="op-cell-text">{{ p.service.item_name }}</td>
+<td>{{ p.price|money }}</td><td>{{ row.used }} / {{ p.sessions }}</td><td>{{ row.left }}</td>
+<td><span class="op-status op-status-{% if row.state == 'active' %}posted{% elif row.state == 'draft' %}draft{% else %}cancelled{% endif %}" data-package-state="{{ row.state }}">{{ row.state_label }}</span></td></tr>{% endwith %}
+{% empty %}<tr><td colspan="7" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_manage %}<h2>{{ words.sell }}</h2>
+<form class="op-form" method="post" data-package-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><div class="op-form-grid">
+<div class="op-field"><label for="pk-customer">{{ words.customer }}</label><select id="pk-customer" name="customer" required><option value="">{{ words.choose }}</option>{% for c in customers %}<option value="{{ c.pk }}"{% if post.customer == c.pk|stringformat:'s' %} selected{% endif %}>{{ c.name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="pk-service">{{ words.service }}</label><select id="pk-service" name="service" required><option value="">{{ words.choose }}</option>{% for s in services_list %}<option value="{{ s.pk }}"{% if post.service == s.pk|stringformat:'s' %} selected{% endif %}>{{ s.item_name }} — {{ s.default_sale_price|money }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="pk-sessions">{{ words.sessions }}</label><input id="pk-sessions" name="sessions" inputmode="numeric" required value="{{ post.sessions|default:'6' }}"></div>
+<div class="op-field"><label for="pk-price">{{ words.price }}</label><input id="pk-price" name="price" inputmode="decimal" value="{{ post.price|default:'' }}"></div>
+<div class="op-field"><label for="pk-expires">{{ words.expires }}</label><input id="pk-expires" type="date" name="expires_on" value="{{ post.expires_on|default:'' }}"></div>
+<div class="op-field"><label for="pk-notes">{{ words.notes }}</label><input id="pk-notes" name="notes" maxlength="255" value="{{ post.notes|default:'' }}"></div>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form>
+{% else %}<p class="op-message">{{ words.view_only }}</p>{% endif %}
+{% endblock %}

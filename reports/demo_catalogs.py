@@ -207,7 +207,7 @@ SERVICES_GENERAL = Catalog(
     customers=PEOPLE + ("شركة النور للتجارة",),
     suppliers=("شركة التوريدات الفنية", "موردون متحدون"),
     raw=(_raw("DEMO-RAW-01", "عدة وأدوات صغيرة", "طقم", "300.00", "4"),),
-    extras=frozenset({"appointments"}),
+    extras=frozenset({"appointments", "workorders", "contracts"}),
 )
 
 MAINTENANCE = Catalog(
@@ -225,7 +225,7 @@ MAINTENANCE = Catalog(
     raw=(_raw("DEMO-RAW-01", "فريون تكييف (أسطوانة)", "أسطوانة", "1400.00", "3"),
          _raw("DEMO-RAW-02", "مواسير نحاس (متر)", "متر", "180.00", "20")),
     staff=("أحمد الفني", "فني صيانة"),
-    extras=frozenset({"appointments"}),
+    extras=frozenset({"appointments", "workorders", "contracts"}),
 )
 
 BEAUTY = Catalog(
@@ -242,7 +242,7 @@ BEAUTY = Catalog(
     suppliers=("شركة الجمال لمستحضرات التجميل", "موزع المنتجات الاحترافية"),
     raw=(_raw("DEMO-RAW-01", "صبغة احترافية (أنبوبة)", "أنبوبة", "120.00", "30"),),
     staff=("منى الكوافيرة", "كوافيرة"),
-    extras=frozenset({"appointments"}),
+    extras=frozenset({"appointments", "packages"}),
 )
 
 PROFESSIONAL = Catalog(
@@ -258,7 +258,7 @@ PROFESSIONAL = Catalog(
     customers=("شركة الأمل للتجارة", "مؤسسة النور", "م. محمد إبراهيم", "شركة النور للتجارة"),
     suppliers=("مكتبة المعرفة", "موردون متحدون"),
     staff=("أ. محمود المحاسب", "محاسب"),
-    extras=frozenset({"appointments"}),
+    extras=frozenset({"appointments", "contracts", "hours"}),
 )
 
 DIGITAL = Catalog(
@@ -274,7 +274,7 @@ DIGITAL = Catalog(
     customers=("مطعم أبو علي", "صيدلية الشفاء", "محل الأناقة", "شركة النور للتجارة"),
     suppliers=("مطبعة الوادي", "موردون متحدون"),
     staff=("كريم المصمم", "مصمم"),
-    extras=frozenset({"appointments"}),
+    extras=frozenset({"appointments", "contracts", "hours"}),
 )
 
 # --- restaurants: dishes are made to order, drinks are bought and resold ----
@@ -426,7 +426,7 @@ VET = Catalog(
     suppliers=("الشركة المصرية للأدوية البيطرية", "مخزن أغذية الحيوانات"),
     raw=(_raw("DEMO-RAW-01", "تطعيمات (علبة 10)", "علبة", "2200.00", "2"),),
     staff=("د. كريم البيطري", "طبيب بيطري"),
-    extras=frozenset({"appointments"}),
+    extras=frozenset({"appointments", "animals"}),  # MED-006: owners and their animals, not human patient files
 )
 
 # --- education: subscriptions are sold; books and kits are stocked ----------
@@ -435,7 +435,7 @@ def _education(key, category, services, goods, staff):
     return Catalog(
         key=key, category=category, items=tuple(_s(*s) for s in services) + tuple(_p(*g) for g in goods),
         customers=("أحمد عبد الله (ولي أمر)", "سارة محمود (ولية أمر)", "محمد إبراهيم", "شركة النور للتجارة (منح موظفين)"),
-        suppliers=("مطبعة المعرفة", "مكتبة الوادي"), staff=staff, extras=frozenset({"appointments"}),
+        suppliers=("مطبعة المعرفة", "مكتبة الوادي"), staff=staff, extras=frozenset({"appointments", "students"}),
     )
 
 
@@ -509,7 +509,7 @@ MAINTENANCE_CONTRACTS = _contracting(
     "contracting.maintenance_contracts", ("عقود صيانة", "Maintenance contracts"),
     (("فلتر تكييف مركزي", "قطعة", "650.00", "450.00"), ("كونتاكتور كهرباء", "قطعة", "380.00", "260.00")),
     services=(("عقد صيانة شهري", "شهر", "6000.00"), ("زيارة طوارئ", "زيارة", "1200.00"), ("صيانة دورية", "زيارة", "2500.00")),
-    extras=frozenset({"projects", "appointments"}),
+    extras=frozenset({"projects", "appointments", "contracts"}),
 )
 
 # --- manufacturing: goods are made from raw materials, not bought ----------
@@ -609,7 +609,7 @@ CATALOGS = {
                     "maintenance_contracts": MAINTENANCE_CONTRACTS, None: CONTRACTING_GENERAL},
     "manufacturing": {"food": FOOD, "garments": GARMENTS, "furniture": FURNITURE, "printing": PRINTING, "chemicals": CHEMICALS,
                       "workshop": WORKSHOP, None: FOOD},
-    "other": {"mixed": SERVICES_GENERAL, None: RETAIL},
+    "other": {"mixed": SERVICES_GENERAL, "products": RETAIL, "services": SERVICES_GENERAL, None: RETAIL},
 }
 
 
@@ -628,7 +628,9 @@ def active_catalog():
     profile = ClientProfile.get_active()
     if profile is None or not profile.activity_slug:
         return BASE
-    return catalog_for(profile.activity_slug, profile.sub_activity_slug)
+    from settings_core.setup_catalog import closest
+
+    return catalog_for(*closest(profile.activity_slug, profile.sub_activity_slug))
 
 
 def all_catalogs():

@@ -1,0 +1,33 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'medical:file' patient.pk %}?lang={{ lang }}">← {{ lw.back }}</a>
+<h1>{{ lw.title }} — {{ patient.name }}</h1><p>{{ lw.intro }}</p></div>
+<div class="op-form-actions"><a class="op-secondary" href="{% url 'medical:lab_tests' %}?lang={{ lang }}">{{ lw.tests }}</a></div></section>
+{% if error %}<p class="op-message op-message-error" role="alert">{{ error }}</p>{% endif %}
+{% if can_write %}
+{% if rows %}
+<form class="op-form" method="post" data-lab-entry>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+<div class="op-field" style="max-width:260px"><label for="lr-day">{{ lw.day }}</label><input id="lr-day" type="date" name="taken_on" value="{{ taken_on }}" max="{{ today|date:'Y-m-d' }}" required></div>
+<div class="op-table-wrap" style="margin-top:14px"><table class="op-table"><thead><tr><th>{{ lw.name }}</th><th>{{ lw.range }}</th><th>{{ lw.value }}</th><th>{{ lw.text }}</th></tr></thead><tbody>
+{% for row in rows %}<tr><td class="op-cell-text"><label for="v-{{ row.test.pk }}">{{ row.test.name }}</label></td>
+<td>{% if row.test.low is None and row.test.high is None %}—{% else %}<span dir="ltr">{% if row.test.low is not None %}{{ row.test.low|qty }}{% else %}…{% endif %} – {% if row.test.high is not None %}{{ row.test.high|qty }}{% else %}…{% endif %} {{ row.test.unit }}</span>{% endif %}</td>
+<td><input id="v-{{ row.test.pk }}" name="value_{{ row.test.pk }}" inputmode="decimal" value="{{ row.value }}" style="min-height:40px;width:120px"></td>
+<td><input name="text_{{ row.test.pk }}" maxlength="120" value="{{ row.text }}" aria-label="{{ lw.text }} — {{ row.test.name }}" style="min-height:40px;width:160px"></td></tr>{% endfor %}
+</tbody></table></div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ lw.record }}</button></div></form>
+{% else %}<p class="op-notice">{{ lw.no_tests }}</p>{% endif %}
+{% endif %}
+<h2>{{ lw.history }}</h2>
+{% for day, results in days %}
+<section class="op-detail-meta" data-lab-day="{{ day|date:'Y-m-d' }}"><p><strong><bdi>{{ day|date:"Y-m-d" }}</bdi></strong> · <a href="{% url 'medical:lab_sheet' patient.pk day|date:'Y-m-d' %}?lang={{ lang }}" data-lab-print>{{ lw.print }}</a></p>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ lw.name }}</th><th>{{ lw.value }}</th><th>{{ lw.range }}</th><th>{{ lw.flag }}</th><th>{{ lw.previous }}</th>{% if can_write %}<th></th>{% endif %}</tr></thead><tbody>
+{% for result in results %}<tr data-lab-result="{{ result.pk }}" data-flag="{{ result.flag }}"><td class="op-cell-text">{{ result.test.name }}</td>
+<td><strong><bdi>{% if result.value is not None %}{{ result.value|qty }}{% endif %}{% if result.text_value %} {{ result.text_value }}{% endif %} {{ result.unit }}</bdi></strong></td>
+<td>{% if result.low is None and result.high is None %}—{% else %}<span dir="ltr">{% if result.low is not None %}{{ result.low|qty }}{% else %}…{% endif %} – {% if result.high is not None %}{{ result.high|qty }}{% else %}…{% endif %}</span>{% endif %}</td>
+<td>{% if result.flag %}<span class="op-status {% if result.flag == 'normal' %}op-status-posted{% else %}op-status-cancelled{% endif %}">{{ result.flag_label }}{% if result.flag == 'high' %} ↑{% elif result.flag == 'low' %} ↓{% endif %}</span>{% else %}—{% endif %}</td>
+<td>{% if result.before %}<bdi>{% if result.before.value is not None %}{{ result.before.value|qty }}{% endif %}{% if result.before.text_value %} {{ result.before.text_value }}{% endif %}</bdi> · <bdi>{{ result.before.taken_on|date:"Y-m-d" }}</bdi>{% else %}—{% endif %}</td>
+{% if can_write %}<td><details><summary class="op-secondary">{{ lw.remove }}</summary><form method="post" class="op-form-actions">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="remove"><input type="hidden" name="result" value="{{ result.pk }}"><label class="sr-only" for="rm-{{ result.pk }}">{{ lw.reason }}</label><input id="rm-{{ result.pk }}" name="reason" required placeholder="{{ lw.reason }}" maxlength="200"><button class="op-secondary" type="submit" data-remove-result="{{ result.pk }}">{{ lw.remove }}</button></form></details></td>{% endif %}</tr>{% endfor %}
+</tbody></table></div></section>
+{% empty %}<p class="op-muted">{{ lw.no_results }}</p>{% endfor %}
+{% endblock %}

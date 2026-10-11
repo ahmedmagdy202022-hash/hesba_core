@@ -55,11 +55,13 @@ ACTIVITY = {
         "staff": {"ar": "الأطباء والطاقم", "en": "Doctors & staff"},
         "appointments": {"ar": "الحجوزات", "en": "Bookings"},
     },
+    # EDU-001: the student has their own file (Students & groups); the account,
+    # its invoices and its payments belong to whoever pays: the parent.
     "education": {
-        "customers": {"ar": "الطلاب", "en": "Students"},
-        "customer": {"ar": "طالب", "en": "Student"},
-        "the_customer": {"ar": "الطالب", "en": "Student"},
-        "new_customer": {"ar": "طالب جديد", "en": "New student"},
+        "customers": {"ar": "أولياء الأمور", "en": "Parents & payers"},
+        "customer": {"ar": "ولي أمر", "en": "Parent"},
+        "the_customer": {"ar": "ولي الأمر", "en": "Parent"},
+        "new_customer": {"ar": "ولي أمر جديد", "en": "New parent"},
         "collect": {"ar": "تحصيل مصروفات", "en": "Collect fees"},
         "customer_dues": {"ar": "مصروفات متأخرة", "en": "Fees outstanding"},
         "items": {"ar": "الكورسات والمواد", "en": "Courses & materials"},
@@ -135,13 +137,20 @@ SUB_ACTIVITY = {
     ("commercial", "wholesale"): {
         "customers": {"ar": "العملاء والتجار", "en": "Customers & traders"},
     },
+    # SVC-001: the work orders have their own section now; sales is where their invoices land.
     ("services", "maintenance"): {
-        "operations": {"ar": "أوامر الشغل والفواتير", "en": "Work orders & invoices"},
-        "operations_short": {"ar": "أوامر الشغل", "en": "Jobs"},
-        "record_sale": {"ar": "تسجيل أمر شغل", "en": "Record a job"},
+        "operations": {"ar": "الفواتير والتحصيل", "en": "Invoices & payments"},
+        "operations_short": {"ar": "الفواتير", "en": "Invoices"},
+        "record_sale": {"ar": "فاتورة مباشرة", "en": "Direct invoice"},
     },
     ("services", "clinic"): ACTIVITY["medical"],
-    ("services", "education"): ACTIVITY["education"],
+    # A training business set up as a service has no student files: the learner is the account.
+    ("services", "education"): {**ACTIVITY["education"], **{
+        "customers": {"ar": "الطلاب", "en": "Students"},
+        "customer": {"ar": "طالب", "en": "Student"},
+        "the_customer": {"ar": "الطالب", "en": "Student"},
+        "new_customer": {"ar": "طالب جديد", "en": "New student"},
+    }},
     ("services", "beauty"): {
         "staff": {"ar": "الطاقم والخبيرات", "en": "Stylists & staff"},
         "appointments": {"ar": "الحجوزات", "en": "Bookings"},
@@ -163,11 +172,20 @@ SUB_ACTIVITY = {
         "record_sale": {"ar": "تسجيل طلب تحليل", "en": "Record a test order"},
     },
     ("education", "nursery"): {
-        "customers": {"ar": "الأطفال", "en": "Children"},
-        "customer": {"ar": "طفل", "en": "Child"},
-        "the_customer": {"ar": "الطفل", "en": "Child"},
-        "new_customer": {"ar": "طفل جديد", "en": "New child"},
         "staff": {"ar": "المشرفات والطاقم", "en": "Carers & staff"},
+    },
+    # Adults mostly pay for themselves.
+    ("education", "training"): {
+        "customers": {"ar": "حسابات المتدربين", "en": "Trainee accounts"},
+        "customer": {"ar": "متدرب", "en": "Trainee"},
+        "the_customer": {"ar": "المتدرب", "en": "Trainee"},
+        "new_customer": {"ar": "حساب متدرب جديد", "en": "New trainee account"},
+    },
+    ("education", "languages"): {
+        "customers": {"ar": "حسابات الدارسين", "en": "Learner accounts"},
+        "customer": {"ar": "دارس", "en": "Learner"},
+        "the_customer": {"ar": "الدارس", "en": "Learner"},
+        "new_customer": {"ar": "حساب دارس جديد", "en": "New learner account"},
     },
 }
 
