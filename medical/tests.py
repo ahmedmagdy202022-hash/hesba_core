@@ -513,3 +513,105 @@ class LabResultTests(TestCase):
         self.assertEqual(self.client.get(self.url).status_code, 404)
         self.assertEqual(self.client.get(reverse("medical:lab_tests")).status_code, 404)
         self.assertNotContains(self.client.get(reverse("medical:file", args=[self.patient.pk])), "data-lab-link")
+
+
+class SessionPackageTests(TestCase):
+    """MED-005: physiotherapy session packages (HG-043)."""
+
+    def setUp(self):
+        from hesba_testing.factories import make_item, make_location
+        from staff.services import save_employee
+
+        from . import physio
+
+        prepared_client("medical", "physio", CLINIC)
+        self.physio = physio
+        self.owner = person(RoleCode.OWNER, "ph_owner")
+        make_location(location_code="CLINIC", is_default=True, is_selling_location=True)
+        self.therapist = save_employee({"name": "د. ياسمين"}, self.owner)
+        self.session = make_item(item_code="SRV-PHY", item_name="جلسة علاج طبيعي", is_stock_tracked=False, default_sale_price="350")
+        self.patient = make_customer(customer_code="P-1", name="منى", phone="01001234567")
+        self.client.force_login(self.owner)
+        self.url = reverse("medical:packages", args=[self.patient.pk])
+
+    def sold(self, sessions="3", price=""):
+        from sales.services import post_sales_invoice
+
+        package = self.physio.sell(self.patient, {"service": self.session, "sessions": sessions, "price": price}, self.owner)
+        post_sales_invoice(package.invoice.pk, self.owner)
+        package.invoice.refresh_from_db()
+        return package
+
+    def test_a_package_is_one_ordinary_invoice_and_its_sessions_never_go_below_zero(self):
+        from parties.services import balance
+
+        from .models import SessionPackage
+
+        self.assertContains(self.client.get(reverse("medical:file", args=[self.patient.pk])), "data-packages-link")
+        self.client.post(self.url, {"action": "sell", "service": self.session.pk, "sessions": "10", "price": "3,000"})
+        package = SessionPackage.objects.get()
+        self.assertEqual((package.invoice.status, package.invoice.total_amount, package.sessions), ("draft", Decimal("3000.00"), 10))
+        self.assertEqual(balance("customer", self.patient), Decimal("0"))  # nothing on the account until it is posted
+        with self.assertRaisesMessage(ValidationError, "مسودة"):
+            self.physio.use(package, self.owner)
+        from sales.services import post_sales_invoice
+
+        post_sales_invoice(package.invoice.pk, self.owner)
+        self.assertEqual(balance("customer", self.patient), Decimal("3000.00"))
+        small = self.sold("2")
+        self.assertEqual(small.price, Decimal("700.00"))  # blank price = sessions × the session's price
+        for _ in range(2):
+            self.client.post(self.url, {"action": "use", "package": small.pk, "therapist": self.therapist.pk})
+        self.assertEqual(self.physio.state(small), {"used": 2, "left": 0, "status": "finished"})
+        self.assertContains(self.client.post(self.url, {"action": "use", "package": small.pk}), "الباكدج خلص")
+        self.assertEqual(self.physio.used(small), 2)
+        self.assertEqual(balance("customer", self.patient), Decimal("3700.00"))  # using sessions moves no money
+
+    def test_a_mistaken_session_is_cancelled_and_given_back(self):
+        package = self.sold("1")
+        session = self.physio.use(package, self.owner, therapist=self.therapist)
+        self.client.post(self.url, {"action": "cancel", "session": session.pk})
+        session.refresh_from_db()
+        self.assertTrue(session.cancelled)
+        self.assertEqual(self.physio.state(package)["left"], 1)
+        with self.assertRaisesMessage(ValidationError, "اتلغت قبل كده"):
+            self.physio.cancel_use(session, self.owner)
+        self.assertTrue(AuditLog.objects.filter(action="cancel_package_session").exists())
+        self.assertContains(self.client.get(self.url), f'data-session="{session.pk}" data-cancelled')
+
+    def test_a_cancelled_invoice_voids_the_package(self):
+        from sales.services import cancel_posted_sales_invoice
+
+        package = self.sold("5")
+        cancel_posted_sales_invoice(package.invoice.pk, self.owner, "غلط")
+        package.invoice.refresh_from_db()
+        self.assertEqual(self.physio.state(package)["status"], "void")
+        with self.assertRaisesMessage(ValidationError, "اتلغت"):
+            self.physio.use(package, self.owner)
+
+    def test_bad_input_and_who_may_do_what(self):
+        for data, message in (({"service": None, "sessions": "3"}, "الخدمة"), ({"service": self.session, "sessions": "0"}, "عدد الجلسات"),
+                              ({"service": self.session, "sessions": "x"}, "عدد الجلسات"), ({"service": self.session, "sessions": "3", "price": "-1"}, "سعر")):
+            with self.subTest(data=data), self.assertRaisesMessage(ValidationError, message):
+                self.physio.sell(self.patient, data, self.owner)
+        package = self.sold("2")
+        with self.assertRaisesMessage(ValidationError, "لسه مجاش"):
+            self.physio.use(package, self.owner, used_on=timezone.localdate() + timedelta(days=1))
+        therapist_user = person(RoleCode.STOCK_KEEPER, "ph_therapist")
+        self.therapist.user = therapist_user
+        self.therapist.save()
+        self.client.force_login(therapist_user)
+        self.client.post(self.url, {"action": "use", "package": package.pk})
+        self.assertEqual(self.physio.used(package), 1)  # a therapist records sessions
+        self.assertNotContains(self.client.get(self.url), "data-sell-package")  # selling is the counter's
+        self.assertEqual(self.client.post(self.url, {"action": "sell", "service": self.session.pk, "sessions": "3"}).status_code, 403)
+        self.client.force_login(person(RoleCode.CASHIER, "ph_cashier"))
+        self.assertEqual(self.client.get(self.url).status_code, 403)
+
+    def test_only_for_physiotherapy(self):
+        from settings_core.models import ClientProfile
+
+        self.assertEqual(self.client.get(self.url + "?lang=en").status_code, 200)
+        ClientProfile.objects.update(sub_activity_slug="clinic")
+        self.assertEqual(self.client.get(self.url).status_code, 404)
+        self.assertNotContains(self.client.get(reverse("medical:file", args=[self.patient.pk])), "data-packages-link")

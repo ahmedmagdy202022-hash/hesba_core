@@ -747,3 +747,24 @@ No unresolved business or accounting decision was discovered while implementing 
 - **Shown only** for medical / lab.
 - **Risk:** the flag compares numbers only; it does not convert between units, so a range is valid for the test's own unit.
 - **Tests:** `medical/tests.py` → `LabResultTests`; `reports/tests_demo_catalogs.py` (the lab demo).
+
+## HG-043 — implementation note: physiotherapy session packages (MED-005)
+
+- **Status:** The physiotherapy part of the HG-043 proposal, built as design A. The vet and reception-queue parts are not built yet.
+- **Schema:** migration `medical/0004_session_packages` adds two tables and touches no existing one.
+  - `SessionPackage`: patient, service, number of sessions, price, and its own sales invoice (one to one).
+  - `PackageSession`: package, day, therapist, optional visit, notes, cancelled flag.
+- **Money:**
+  - selling a package makes one ordinary **draft** sales invoice through `create_sales_draft_with_tax`;
+  - its revenue counts when that invoice is posted, like any service, as the proposal says;
+  - spreading package revenue over the sessions (deferred revenue) would change ledger posting and is **not** done;
+  - using a session moves no money.
+- **Rules:**
+  - Sessions are used only once the invoice is posted.
+  - A package never goes below zero: the package row is locked while a session is recorded.
+  - A mistaken session is cancelled (kept and audited), which gives it back.
+  - A package whose invoice was cancelled is void.
+  - Selling needs `sales.create_sales_invoice`; recording sessions needs the medical write permission (or being a linked therapist).
+- **Not touched:** sales posting and cancellation, customer ledgers, appointments, report calculations.
+- **Shown only** for medical / physio.
+- **Tests:** `medical/tests.py` → `SessionPackageTests`; `reports/tests_demo_catalogs.py` (the physio demo: 10 sessions, 3 used).

@@ -11,6 +11,7 @@ urlpatterns = [
     path("patients/<int:pk>/", views.patient_file, name="file"),
     path("patients/<int:pk>/visit/", views.visit_edit, name="visit_new"),
     path("patients/<int:pk>/dental/", views.dental_chart, name="dental"),
+    path("patients/<int:pk>/packages/", views.session_packages, name="packages"),
     path("patients/<int:pk>/lab/", views.lab_results, name="lab"),
     path("patients/<int:pk>/lab/<str:day>/print/", views.lab_sheet, name="lab_sheet"),
     path("lab/tests/", views.lab_tests, name="lab_tests"),

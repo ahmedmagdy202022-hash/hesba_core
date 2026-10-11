@@ -192,6 +192,7 @@ def patient_file(request, pk):
     return render(request, "medical/file.html", _base(lang, patient=patient, file=file, age=services.age(file), visits=visits, upcoming=upcoming,
                                                       is_dental=dental.is_dental(), dental_label=DENTAL_WORDS[lang]["title"],
                                                       is_lab=_is_lab(), lab_label=LAB_WORDS[lang]["title"],
+                                                      is_physio=_is_physio(), physio_label=PHYSIO_WORDS[lang]["title"],
                                                       can_write=can_write, error=error, genders=Gender.values, bloods=BloodType.values,
                                                       user_id=request.user.pk, today=timezone.localdate()))
 
@@ -453,3 +454,77 @@ def lab_sheet(request, pk, day):
     file = services.file_for(patient)
     return render(request, "medical/lab_sheet.html", _base(lang, lw=words, patient=patient, file=file, age=services.age(file, taken_on),
                                                           taken_on=taken_on, results=results, company=company_details()))
+
+
+PHYSIO_WORDS = {
+    "ar": {"title": "باكدج الجلسات", "intro": "الباكدج بيتباع في فاتورة بيع عادية، والجلسات بتتسحب منه واحدة واحدة بعد ما الفاتورة تترحّل.",
+           "sell": "بيع باكدج", "service": "الخدمة", "sessions": "عدد الجلسات", "price": "سعر الباكدج", "price_hint": "فاضي = عدد الجلسات × سعر الجلسة",
+           "notes": "ملاحظات", "save": "اعمل الفاتورة", "packages": "الباكدجات", "used": "اتعمل", "left": "باقي", "status": "الحالة",
+           "invoice": "الفاتورة", "use": "سجّل جلسة", "therapist": "الأخصائي", "day": "اليوم", "history": "الجلسات", "cancel": "إلغاء الجلسة",
+           "no_packages": "مفيش باكدجات لسه.", "no_uses": "مفيش جلسات لسه.", "saved": "اتحفظ.", "sold": "اتعملت فاتورة الباكدج {number} (مسودة). رحّلها عشان الجلسات تشتغل.",
+           "back": "ملف المريض", "choose": "اختار", "cancelled": "اتلغت", "draft": "الفاتورة مسودة", "active": "شغال", "finished": "خلص", "void": "اتلغى"},
+    "en": {"title": "Session packages", "intro": "A package is sold on an ordinary sales invoice; sessions are used from it one by one once the invoice is posted.",
+           "sell": "Sell a package", "service": "Service", "sessions": "Sessions", "price": "Package price", "price_hint": "Blank = sessions × the session price",
+           "notes": "Notes", "save": "Make the invoice", "packages": "Packages", "used": "Used", "left": "Left", "status": "Status",
+           "invoice": "Invoice", "use": "Record a session", "therapist": "Therapist", "day": "Day", "history": "Sessions", "cancel": "Cancel the session",
+           "no_packages": "No packages yet.", "no_uses": "No sessions yet.", "saved": "Saved.", "sold": "Package invoice {number} was made (draft). Post it so the sessions can be used.",
+           "back": "Patient file", "choose": "Choose", "cancelled": "Cancelled", "draft": "Invoice still a draft", "active": "Active", "finished": "Used up", "void": "Void"},
+}
+
+
+def _is_physio():
+    from . import physio
+
+    return physio.is_physio()
+
+
+def session_packages(request, pk):
+    from master_data.models import Item
+    from permissions.services import user_has_permission
+
+    from . import physio
+    from .models import PackageSession, SessionPackage
+
+    _guard(request)
+    if not physio.is_physio():
+        raise Http404("Session packages are for physiotherapy.")
+    lang = _lang(request)
+    words = PHYSIO_WORDS[lang]
+    patient = get_object_or_404(_patients(), pk=pk)
+    can_write = services.can_write(request.user)
+    can_sell = user_has_permission(request.user, physio.SELL)
+    services_ = Item.objects.filter(active=True, is_stock_tracked=False).order_by("item_name")
+    url = f"{reverse('medical:packages', args=[patient.pk])}?lang={lang}"
+    error = ""
+    if request.method == "POST":
+        action = request.POST.get("action")
+        try:
+            if action == "sell":
+                package = physio.sell(patient, {"service": services_.filter(pk=request.POST.get("service") or 0).first(), "sessions": request.POST.get("sessions"),
+                                                "price": request.POST.get("price"), "notes": request.POST.get("notes")}, request.user, lang)
+                messages.success(request, words["sold"].format(number=package.invoice.invoice_number))
+                return redirect(url)
+            if not can_write:
+                raise PermissionDenied("Recording sessions needs medical.write_records.")
+            if action == "use":
+                package = get_object_or_404(SessionPackage, pk=request.POST.get("package") or 0, patient=patient)
+                physio.use(package, request.user, therapist=_doctors().filter(pk=request.POST.get("therapist") or 0).first(),
+                           notes=request.POST.get("notes"), lang=lang)
+            elif action == "cancel":
+                physio.cancel_use(get_object_or_404(PackageSession, pk=request.POST.get("session") or 0, package__patient=patient), request.user, lang)
+            else:
+                raise Http404("Unknown action.")
+        except ValidationError as exc:
+            error = " ".join(exc.messages)
+        else:
+            messages.success(request, words["saved"])
+            return redirect(url)
+    packages = list(SessionPackage.objects.filter(patient=patient).select_related("service", "invoice"))
+    for package in packages:
+        package.state = physio.state(package)
+        package.status_label = words[package.state["status"]]
+        package.history = list(package.uses.select_related("therapist"))
+    own = getattr(request.user, "employee", None)
+    return render(request, "medical/packages.html", _base(lang, page_title=words["title"], pw=words, patient=patient, packages=packages,
+                                                         services=services_, doctors=_doctors(), can_write=can_write, can_sell=can_sell, error=error,
+                                                         post=request.POST, own_id=own.pk if own else None))

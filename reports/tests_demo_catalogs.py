@@ -153,6 +153,15 @@ class SampleBusinessPerActivityTests(TestCase):
         self.assertEqual(sorted(LabResult.objects.exclude(flag="normal").values_list("test__name", "flag")),
                          [("سكر صايم", "high"), ("سكر صايم", "high"), ("فصيلة الدم", ""), ("هيموجلوبين", "low")])
 
+    def test_a_physio_centre_has_a_package_in_use(self):
+        from medical import physio
+        from medical.models import SessionPackage
+
+        catalog = self.fill("medical", "physio")
+        self.assert_a_working_business(catalog)
+        package = SessionPackage.objects.get()
+        self.assertEqual(physio.state(package), {"used": 3, "left": 7, "status": "active"})
+
     def test_a_builder_has_projects_with_materials_and_a_progress_bill(self):
         from projects.models import Project
 

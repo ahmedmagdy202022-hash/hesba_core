@@ -162,6 +162,23 @@ class Command(BaseCommand):
         self._clinic_month(master, doctor, owner, today)
         self._dental(master, doctor, owner, today)
         self._lab(master, owner, today)
+        self._physio(master, doctor, owner, today)
+
+    def _physio(self, master, therapist, owner, today):
+        """MED-005: a physiotherapy centre's first patient bought ten sessions and used three."""
+
+        from medical import physio
+        from sales.services import post_sales_invoice
+
+        if not physio.is_physio():
+            return
+        session = next((item for item in master["items"] if not item.is_stock_tracked), None)
+        if session is None:
+            return
+        package = physio.sell(master["customers"][0], {"service": session, "sessions": 10, "price": "3000", "notes": "خشونة ركبة"}, owner)
+        post_sales_invoice(package.invoice.pk, owner)
+        for days in (14, 10, 7):
+            physio.use(package, owner, used_on=today - timedelta(days=days), therapist=therapist)
 
     def _lab(self, master, owner, today):
         """MED-004: a lab has its tests with normal ranges, and two days of results for its first patient."""

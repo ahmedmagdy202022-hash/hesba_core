@@ -185,3 +185,40 @@ class LabResult(models.Model):
 
     def __str__(self):
         return f"{self.patient_id}:{self.test_id}:{self.taken_on}"
+
+
+# ---- MED-005: physiotherapy session packages (HG-043, design A) ----
+
+class SessionPackage(models.Model):
+    """A package of sessions sold on one ordinary sales invoice (revenue at sale, like any service); sessions are used one by one."""
+
+    patient = models.ForeignKey("master_data.Customer", on_delete=models.PROTECT, related_name="session_packages")
+    service = models.ForeignKey("master_data.Item", on_delete=models.PROTECT, related_name="+")
+    sessions = models.PositiveSmallIntegerField()
+    price = models.DecimalField(max_digits=14, decimal_places=2)
+    invoice = models.OneToOneField("sales.SalesInvoice", on_delete=models.PROTECT, related_name="session_package")
+    notes = models.CharField(max_length=255, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+
+    def __str__(self):
+        return f"{self.patient_id}:{self.sessions}"
+
+
+class PackageSession(models.Model):
+    """One session used from a package. A mistaken one is cancelled (kept), which gives the session back."""
+
+    package = models.ForeignKey(SessionPackage, on_delete=models.PROTECT, related_name="uses")
+    used_on = models.DateField()
+    therapist = models.ForeignKey("staff.Employee", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    visit = models.ForeignKey(ClinicalVisit, on_delete=models.SET_NULL, null=True, blank=True, related_name="package_sessions")
+    notes = models.CharField(max_length=255, blank=True)
+    cancelled = models.BooleanField(default=False)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-used_on", "-pk"]
