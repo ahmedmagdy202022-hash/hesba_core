@@ -161,7 +161,7 @@ def student_detail(request, pk):
         row.basis_label = services.BASIS_LABELS[lang][row.group.course.basis]  # a month, a class or the whole course
         row.status_label = _status_label(row.status, words)
     enrolled = {row.group_id for row in enrollments if row.status == EnrollmentStatus.ACTIVE}
-    open_groups = services.scoped(StudyGroup.objects).filter(active=True).exclude(pk__in=enrolled).select_related("course")
+    open_groups = services.same_entity_as(services.scoped(StudyGroup.objects), student).filter(active=True).exclude(pk__in=enrolled).select_related("course")
     return render(request, "education/student.html", _base(request, lang, "students", student=student, enrollments=enrollments, open_groups=open_groups,
                                                            payers=_payers(), error=error, today=timezone.localdate()))
 
@@ -240,7 +240,7 @@ def group_detail(request, pk):
     roster = list(group.enrollments.filter(status=EnrollmentStatus.ACTIVE).select_related("student__payer").order_by("student__name"))
     for row in roster:
         row.net = services.monthly_fee(row)
-    others = services.scoped(Student.objects).filter(active=True).exclude(pk__in=[row.student_id for row in roster]).order_by("name")
+    others = services.same_entity_as(services.scoped(Student.objects), group).filter(active=True).exclude(pk__in=[row.student_id for row in roster]).order_by("name")
     # A monthly total only means something for a monthly course; a whole course or a per-class fee is not a month.
     total = sum((row.net for row in roster), start=group.effective_fee * 0) if group.course.basis == FeeBasis.MONTHLY else None
     return render(request, "education/group.html", _group_form_context(

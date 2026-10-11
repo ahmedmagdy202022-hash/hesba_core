@@ -312,3 +312,45 @@ class ReviewThreeTests(EducationSetup):
             services.save_student({"name": "يوسف", "payer_name": "محمد", "payer_phone": "123"}, self.owner)
         with self.assertRaisesMessage(ValidationError, "phone number is too short"):
             services.save_student({"name": "Omar", "self_pays": "1", "phone": "12"}, self.owner, lang="en")
+
+
+class GroupRoundThreeTests(EducationSetup):
+    """Codex on #185, third round."""
+
+    def test_a_record_is_offered_only_partners_from_its_own_entity_when_the_whole_group_is_open(self):
+        from entities.current import working_in
+        from entities.models import Entity
+
+        mine, group = self.student(), self.group()
+        branch = Entity.objects.create(code="E-EDU2", name_ar="فرع المعادي", activity_slug="education", sub_activity_slug="tutoring_center")
+        with working_in(branch):
+            course = services.save_course({"name": "علوم", "fee": "300"}, self.owner)
+            theirs_group = services.save_group({"course": course, "name": "علوم 1", "days": "mon"}, self.owner)
+            theirs = services.save_student({"name": "طالب الفرع", "self_pays": "1"}, self.owner)
+        self.client.force_login(self.owner)  # no entity chosen: the whole group
+        page = self.client.get(reverse("education:student", args=[mine.pk])).content.decode()
+        self.assertIn(group.name, page)
+        self.assertNotIn(theirs_group.name, page)
+        page = self.client.get(reverse("education:group", args=[group.pk])).content.decode()
+        self.assertNotIn(theirs.name, page)
+        page = self.client.get(reverse("education:group", args=[theirs_group.pk])).content.decode()
+        self.assertIn(theirs.name, page)
+        self.assertNotIn(mine.name, page)
+
+    def test_a_fee_too_big_for_the_books_is_a_message_not_a_server_error(self):
+        for fee in ("10000000000", "9999999999.999"):
+            with self.assertRaisesMessage(ValidationError, "المبلغ"):
+                services.save_course({"name": f"كورس {fee}", "fee": fee}, self.owner)
+        self.assertEqual(services.save_course({"name": "أكبر مبلغ", "fee": "9999999999.99"}, self.owner).fee, D("9999999999.99"))
+        self.client.force_login(self.owner)
+        response = self.client.post(reverse("education:courses"), {"name": "ضخم", "fee": "10000000000"})
+        self.assertLess(response.status_code, 500)
+
+    def test_editing_the_capacity_takes_the_lock_enrolling_takes(self):
+        from unittest import mock
+
+        group = self.group(capacity="3")
+        data = {"course": self.maths, "name": group.name, "days": "sat,tue", "start_time": time(16), "capacity": "2"}
+        with mock.patch("education.models.StudyGroup.objects.select_for_update", wraps=StudyGroup.objects.select_for_update) as lock:
+            services.save_group(data, self.owner, group)
+        self.assertTrue(lock.called)

@@ -111,6 +111,17 @@ def scoped(queryset):
     return queryset.filter(entity=entity)
 
 
+def same_entity_as(queryset, record):
+    """The records of ``record``'s own entity: what it may be paired with, even when the whole group is open."""
+
+    from django.db.models import Q
+
+    entity_id = entity_id_of(record)
+    if entity_id == _main_id():
+        return queryset.filter(Q(entity_id=entity_id) | Q(entity__isnull=True))
+    return queryset.filter(entity_id=entity_id)
+
+
 def _audit(user, action, obj, after, event=AuditEventType.CREATE):
     AuditLog.objects.create(event_type=event, actor=user, module="education", action=action, object_type=f"education.{type(obj).__name__}",
                             object_id=str(obj.pk), before_data={}, after_data=after)
@@ -131,6 +142,10 @@ def _date(raw, words, required=False):
         raise ValidationError(words["date"])
 
 
+#: The fee fields hold 12 digits with 2 after the point.
+MONEY_LIMIT = Decimal("10000000000")
+
+
 def _money(raw, words, blank=None):
     if raw in (None, ""):
         return blank
@@ -138,9 +153,12 @@ def _money(raw, words, blank=None):
         value = Decimal(str(raw).strip().replace(",", ""))
     except InvalidOperation:
         raise ValidationError(words["money"])
-    if not value.is_finite() or value < 0:  # "NaN" and "Infinity" parse but are not amounts
+    if not value.is_finite() or value < 0 or value >= MONEY_LIMIT:  # "NaN" and "Infinity" parse but are not amounts
         raise ValidationError(words["money"])
-    return value.quantize(Decimal("0.01"))
+    value = value.quantize(Decimal("0.01"))
+    if value >= MONEY_LIMIT:  # 9999999999.999 rounds up past the limit
+        raise ValidationError(words["money"])
+    return value
 
 
 def _next(model, field, prefix):
@@ -346,6 +364,8 @@ def save_group(data, user, group=None, lang="ar"):
             group.active = data.get("active") in ("1", "on", True)
     if entity_id_of(course) != entity_id_of(group):
         raise ValidationError(words["entity"])
+    if not creating:
+        StudyGroup.objects.select_for_update().filter(pk=group.pk).exists()  # the lock enrol() takes: no seat is taken while the count is checked
     if not creating and capacity and capacity < active_count(group):
         raise ValidationError(words["capacity_below"].format(count=active_count(group)))  # stop some enrolments first
     problem = clash(group, lang) if group.active else ""
