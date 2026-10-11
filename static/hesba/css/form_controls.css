@@ -14,3 +14,6 @@ select:not([multiple]):not([size]){
 [dir="rtl"] select:not([multiple]):not([size]){background-position:12px 50%,18px 50%}
 select:not([multiple]):not([size]):disabled{cursor:not-allowed;opacity:.7}
 @media print{select{background-image:none}}
+
+/* UX-ONCE: a form on its way shows its buttons busy (static/hesba/js/submit_once.js). */
+[data-submit-busy]{opacity:.6;cursor:progress;pointer-events:none}
