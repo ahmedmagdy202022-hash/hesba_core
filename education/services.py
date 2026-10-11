@@ -122,9 +122,32 @@ def same_entity_as(queryset, record):
     return queryset.filter(entity_id=entity_id)
 
 
-def _audit(user, action, obj, after, event=AuditEventType.CREATE):
+#: What an edit's audit records before and after (Codex on #185): a change of payer, room, fee or dates can be traced.
+SNAPSHOT = {
+    "Student": ("code", "name", "phone", "date_of_birth", "stage", "school", "relation", "notes", "payer", "active"),
+    "Course": ("name", "fee", "basis", "description", "item", "active"),
+    "StudyGroup": ("code", "course", "name", "teacher", "room", "capacity", "days", "start_time", "duration_minutes", "fee", "starts_on", "ends_on",
+                   "teacher_pay", "teacher_rate", "active"),
+}
+
+
+def _snapshot(obj):
+    out = {}
+    for field in SNAPSHOT.get(type(obj).__name__, ()):
+        if not hasattr(obj, field):
+            continue
+        value = getattr(obj, field)
+        if hasattr(value, "pk"):  # a related record: its code, or its name
+            value = getattr(value, "customer_code", None) or getattr(value, "item_code", None) or getattr(value, "code", None) or str(value)
+        out[field] = value if value is None or isinstance(value, (bool, int, str)) else str(value)
+    return out
+
+
+def _audit(user, action, obj, after, event=AuditEventType.CREATE, before=None):
+    if event == AuditEventType.UPDATE:
+        after = {**after, **_snapshot(obj)}
     AuditLog.objects.create(event_type=event, actor=user, module="education", action=action, object_type=f"education.{type(obj).__name__}",
-                            object_id=str(obj.pk), before_data={}, after_data=after)
+                            object_id=str(obj.pk), before_data=before or {}, after_data=after)
 
 
 def _text(data, key, limit):
@@ -220,6 +243,7 @@ def save_student(data, user, student=None, lang="ar"):
         student = _create_numbered(Student, "code", "ST-", created_by=user, entity=owner_entity(), **values)
         _audit(user, "create_student", student, {"code": student.code, "name": name, "payer": student.payer.customer_code})
         return student
+    before = _snapshot(student)
     if data.get("payer") is not None and not isinstance(data.get("payer"), str):
         values["payer"] = data["payer"]
     if "active_present" in data:  # the edit form says the box was shown, so an unticked box means inactive
@@ -227,7 +251,7 @@ def save_student(data, user, student=None, lang="ar"):
     for key, value in values.items():
         setattr(student, key, value)
     student.save()
-    _audit(user, "edit_student", student, {"code": student.code, "name": name, "active": student.active}, AuditEventType.UPDATE)
+    _audit(user, "edit_student", student, {"code": student.code, "name": name, "active": student.active}, AuditEventType.UPDATE, before)
     return student
 
 
@@ -254,12 +278,13 @@ def save_course(data, user, course=None, lang="ar"):
         course = Course.objects.create(name=name, fee=fee, basis=basis, description=description, item=item, entity=owner_entity())
         _audit(user, "create_course", course, {"name": name, "fee": str(fee), "basis": basis, "item": course.item.item_code})
         return course
+    before = _snapshot(course)
     course.name, course.fee, course.basis, course.description = name, fee, basis, description
     course.active = data.get("active") in ("1", "on", True) if "active_present" in data else course.active
     course.save()
     course.item.item_name, course.item.default_sale_price = name[:255], fee  # the invoice line reads the course's own name and price
     course.item.save(update_fields=["item_name", "default_sale_price", "updated_at"])
-    _audit(user, "edit_course", course, {"name": name, "fee": str(fee), "basis": basis}, AuditEventType.UPDATE)
+    _audit(user, "edit_course", course, {"name": name, "fee": str(fee), "basis": basis}, AuditEventType.UPDATE, before)
     return course
 
 
@@ -274,50 +299,75 @@ def _time(raw, words):
         raise ValidationError(words["time"])
 
 
-def _span(group):
-    start = datetime.combine(timezone.localdate(), group.start_time)
-    return start, start + timedelta(minutes=group.duration_minutes)
-
-
 WEEKDAY_CODE = {5: "sat", 6: "sun", 0: "mon", 1: "tue", 2: "wed", 3: "thu", 4: "fri"}  # Python's weekday() → ours
+PY_WEEKDAY = {code: number for number, code in WEEKDAY_CODE.items()}
+DAY, WEEK = 1440, 7 * 1440
 
 
-def _meet_on_a_shared_day(group, other):
-    """Whether the two groups' date ranges overlap on a day that is one of both groups' weekdays."""
+def _slots(group):
+    """Each weekly meeting as minutes from Monday 00:00: [(python weekday, start, end)]; a late class runs past midnight."""
 
-    shared = set(group.weekdays) & set(other.weekdays)
-    first = max(day for day in (group.starts_on, other.starts_on) if day) if (group.starts_on or other.starts_on) else None
-    last = min(day for day in (group.ends_on, other.ends_on) if day) if (group.ends_on or other.ends_on) else None
+    start = group.start_time.hour * 60 + group.start_time.minute
+    return [(PY_WEEKDAY[code], PY_WEEKDAY[code] * DAY + start, PY_WEEKDAY[code] * DAY + start + group.duration_minutes) for code in group.weekdays]
+
+
+def _a_date_with(weekday, offset, group, other):
+    """Whether some date D on ``weekday`` is in ``group``'s term while D + ``offset`` days is in ``other``'s."""
+
+    def shifted(day):
+        return day - timedelta(days=offset) if day else None
+
+    lows = [day for day in (group.starts_on, shifted(other.starts_on)) if day]
+    highs = [day for day in (group.ends_on, shifted(other.ends_on)) if day]
+    first, last = (max(lows) if lows else None), (min(highs) if highs else None)
     if first and last and last < first:
         return False
     if not (first and last) or (last - first).days >= 6:
-        return bool(shared)  # a whole week or more in common: every weekday occurs
-    return any(WEEKDAY_CODE[(first + timedelta(days=n)).weekday()] in shared for n in range((last - first).days + 1))
+        return True  # a whole week or more in common: every weekday occurs
+    return any((first + timedelta(days=n)).weekday() == weekday for n in range((last - first).days + 1))
+
+
+def _overlap(group, other):
+    """Whether the two groups are ever in class at the same moment, on real dates of both terms (Codex on #185)."""
+
+    for weekday, start, end in _slots(group):
+        for other_weekday, other_start, other_end in _slots(other):
+            for wrap in (-WEEK, 0, WEEK):  # Friday night runs into Saturday morning
+                if start < other_end + wrap and other_start + wrap < end:
+                    offset = (other_weekday * DAY + wrap - weekday * DAY) // DAY
+                    if _a_date_with(weekday, offset, group, other):
+                        return True
+    return False
 
 
 def clash(group, lang="ar"):
-    """The first active group sharing a day and an overlapping time with this one's teacher or room, as a message."""
+    """The first active group in class at the same time as this one, with its teacher or in its room, as a message."""
 
     words = MESSAGES[lang]
     if not group.start_time or not group.weekdays:
         return ""
-    start, end = _span(group)
     others = StudyGroup.objects.filter(active=True, start_time__isnull=False).exclude(pk=group.pk).select_related("teacher")
     for other in others:
-        if not set(other.weekdays) & set(group.weekdays):
-            continue
-        # Terms that never meet on a shared weekday (one ends in June, the next starts in September) share nothing.
-        if not _meet_on_a_shared_day(group, other):
-            continue
-        other_start, other_end = _span(other)
-        if not (start < other_end and other_start < end):
-            continue
-        if group.teacher_id and other.teacher_id == group.teacher_id:
-            return words["teacher_busy"].format(teacher=group.teacher.name, group=other.name)
+        same_teacher = bool(group.teacher_id) and other.teacher_id == group.teacher_id
         same_place = (other.entity_id or _main_id()) == (group.entity_id or _main_id())  # rooms belong to one entity's building
-        if group.room and same_place and other.room.strip().lower() == group.room.strip().lower():
-            return words["room_busy"].format(room=group.room, group=other.name)
+        same_room = bool(group.room) and same_place and other.room.strip().lower() == group.room.strip().lower()
+        if not (same_teacher or same_room) or not other.weekdays or not _overlap(group, other):
+            continue
+        if same_teacher:
+            return words["teacher_busy"].format(teacher=group.teacher.name, group=other.name)
+        return words["room_busy"].format(room=group.room, group=other.name)
     return ""
+
+
+def _lock_schedule(group):
+    """Two saves at once for one teacher or one entity's rooms wait for each other, so both cannot pass the clash check."""
+
+    from entities.models import Entity
+    from staff.models import Employee
+
+    if group.teacher_id:
+        Employee.objects.select_for_update().filter(pk=group.teacher_id).exists()
+    Entity.objects.select_for_update().filter(pk=group.entity_id or _main_id()).exists()
 
 
 @transaction.atomic
@@ -338,7 +388,7 @@ def save_group(data, user, group=None, lang="ar"):
         duration = int(str(data.get("duration_minutes") or "60").strip())
     except ValueError:
         raise ValidationError(words["capacity"])
-    if capacity < 0:
+    if not 0 <= capacity <= 100000:  # the column is an integer; a school group is never bigger
         raise ValidationError(words["capacity"])
     if not 15 <= duration <= 480:
         raise ValidationError(words["duration"])
@@ -354,6 +404,7 @@ def save_group(data, user, group=None, lang="ar"):
         "starts_on": starts_on, "ends_on": ends_on,
     }
     creating = group is None
+    before = {} if creating else _snapshot(StudyGroup.objects.get(pk=group.pk))
     if creating:
         values["entity"] = owner_entity()
         group = StudyGroup(**values)
@@ -368,6 +419,8 @@ def save_group(data, user, group=None, lang="ar"):
         StudyGroup.objects.select_for_update().filter(pk=group.pk).exists()  # the lock enrol() takes: no seat is taken while the count is checked
     if not creating and capacity and capacity < active_count(group):
         raise ValidationError(words["capacity_below"].format(count=active_count(group)))  # stop some enrolments first
+    if group.active:
+        _lock_schedule(group)
     problem = clash(group, lang) if group.active else ""
     if problem:
         raise ValidationError(problem)
@@ -378,7 +431,7 @@ def save_group(data, user, group=None, lang="ar"):
         group.save()
     _audit(user, "create_group" if creating else "edit_group", group,
            {"code": group.code, "course": course.name, "name": name, "days": group.days, "teacher": teacher.name if teacher else ""},
-           AuditEventType.CREATE if creating else AuditEventType.UPDATE)
+           AuditEventType.CREATE if creating else AuditEventType.UPDATE, before)
     return group
 
 

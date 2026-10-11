@@ -92,8 +92,10 @@ def _back(name, lang, *args):
     return redirect(f"{reverse(name, args=args)}?lang={lang}")
 
 
-def _payers():
-    return Customer.objects.filter(active=True).exclude(customer_code="WALK-IN").order_by("name")
+def _payers(keep=None):
+    """Active parents; editing a student keeps its own payer listed even when that account was switched off (Codex on #185)."""
+
+    return Customer.objects.filter(Q(active=True) | Q(pk=keep or 0)).exclude(customer_code="WALK-IN").order_by("name")
 
 
 def _teachers():
@@ -148,7 +150,7 @@ def student_detail(request, pk):
         try:
             if action == "edit":
                 data = request.POST.dict()
-                data["payer"] = _payers().filter(pk=request.POST.get("payer") or 0).first() or student.payer
+                data["payer"] = _payers(student.payer_id).filter(pk=request.POST.get("payer") or 0).first() or student.payer
                 services.save_student(data, request.user, student, lang)
                 message = words["saved"]
             elif action == "enroll":
@@ -177,7 +179,7 @@ def student_detail(request, pk):
     open_groups = services.same_entity_as(services.scoped(StudyGroup.objects), student).filter(active=True).exclude(pk__in=enrolled).select_related("course")
     summary = register.student_summary(student)
     return render(request, "education/student.html", _base(request, lang, "students", student=student, enrollments=enrollments, open_groups=open_groups,
-                                                           payers=_payers(), error=error, today=timezone.localdate(), summary=summary))
+                                                           payers=_payers(student.payer_id), error=error, today=timezone.localdate(), summary=summary))
 
 
 # ---- groups ----
