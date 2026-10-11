@@ -37,7 +37,7 @@
 <button class="op-secondary" type="submit" name="action" value="done">{{ dw.mark_done }}</button><button class="op-secondary" type="submit" name="action" value="cancel">{{ dw.cancel }}</button></form>{% endif %}</td></tr>
 {% empty %}<tr><td colspan="8" class="op-empty">{{ dw.no_steps }}</td></tr>{% endfor %}
 </tbody></table></div>
-{% if can_bill and totals.unbilled %}<form method="post" class="op-form-actions" data-bill-steps>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="bill"><button class="op-primary" type="submit">{{ dw.bill }} ({{ totals.unbilled|money }})</button></form>{% endif %}
+{% if can_bill and totals.unbilled_count %}<form method="post" class="op-form-actions" data-bill-steps>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="bill"><button class="op-primary" type="submit">{{ dw.bill }} ({{ totals.unbilled|money }})</button></form>{% endif %}
 
 {% if can_write %}
 <form class="op-form" method="post" data-plan-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="plan">
