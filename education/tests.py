@@ -836,6 +836,7 @@ class TeacherPayTests(EducationSetup):
         self.client.force_login(self.owner)
         page = self.client.get(url)
         self.assertContains(page, f'data-pay-form="{self.teacher.pk}"')
+        self.assertContains(page, f'<option value="{self.cashbox.pk}" selected>{self.cashbox.name_ar}</option>')  # the cashbox is named
         response = self.client.post(url, {"month": f"{self.month:%Y-%m}", "teacher": self.teacher.pk, "amount": "900", "cashbox": self.cashbox.pk})
         self.assertEqual(response.status_code, 302)
         self.assertEqual(self.pay.owed(self.teacher, self.month), D("0"))

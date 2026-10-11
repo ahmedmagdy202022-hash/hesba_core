@@ -16,7 +16,7 @@
 <td>{{ row.due|money }}</td><td>{{ row.paid|money }}</td><td>{% if row.remaining %}<strong class="edu-low">{{ row.remaining|money }}</strong>{% else %}—{% endif %}</td>
 <td>{% if can_pay and row.remaining %}<form class="edu-inline-form" method="post" data-pay-form="{{ row.teacher.pk }}">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="month" value="{{ first|date:'Y-m' }}"><input type="hidden" name="teacher" value="{{ row.teacher.pk }}">
 <label class="sr-only" for="pay-amount-{{ row.teacher.pk }}">{{ words.amount }}</label><input id="pay-amount-{{ row.teacher.pk }}" name="amount" inputmode="decimal" value="{{ row.remaining|unlocalize }}" size="8">
-<label class="sr-only" for="pay-cashbox-{{ row.teacher.pk }}">{{ words.cashbox }}</label><select id="pay-cashbox-{{ row.teacher.pk }}" name="cashbox" required>{% for box in cashboxes %}<option value="{{ box.pk }}">{{ box.name }}</option>{% endfor %}</select>
+<label class="sr-only" for="pay-cashbox-{{ row.teacher.pk }}">{{ words.cashbox }}</label><select id="pay-cashbox-{{ row.teacher.pk }}" name="cashbox" required>{% for box in cashboxes %}<option value="{{ box.pk }}"{% if box.is_default %} selected{% endif %}>{% if lang == "en" and box.name_en %}{{ box.name_en }}{% else %}{{ box.name_ar }}{% endif %}</option>{% endfor %}</select>
 <button class="op-primary" type="submit">{{ words.pay_btn }}</button></form>{% endif %}</td></tr>{% endfor %}
 </tbody></table></div>
 {% else %}<p class="op-muted" data-no-teachers>{{ words.no_teachers }}</p>{% endif %}
