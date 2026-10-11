@@ -41,6 +41,7 @@ MESSAGES = {
         "setup": "لازم يكون فيه مخزن بيع نشط.", "dine_in_only": "النقل للطاولات بس لطلبات الصالة.", "has_open": "الطاولة دي عليها طلبات مفتوحة؛ اقفلها الأول.",
         "fee": "رسوم التوصيل لازم تكون رقم صفر أو أكبر.", "not_delivery": "ده مش طلب دليفري.", "driver": "اختار الطيار.",
         "fee_line": "رسوم توصيل", "fee_item": "رسوم توصيل",
+        "fee_stocked": "الصنف {code} متسجل صنف مخزني؛ رسوم التوصيل لازم تكون خدمة. عدّله من الأصناف وشيل «يتتبع في المخزن».",
     },
     "en": {
         "table_name": "Enter the table name or number.", "table_taken": "A table with this name exists.", "seats": "Seats must be 1 to 99.",
@@ -50,6 +51,7 @@ MESSAGES = {
         "setup": "An active selling location is needed.", "dine_in_only": "Only dine-in orders move between tables.", "has_open": "This table has open orders; close them first.",
         "fee": "The delivery fee must be zero or more.", "not_delivery": "This is not a delivery order.", "driver": "Choose the driver.",
         "fee_line": "Delivery fee", "fee_item": "رسوم توصيل",
+        "fee_stocked": "Item {code} is a stocked item; the delivery fee must be a service. Edit it under Items and untick stock tracking.",
     },
 }
 
@@ -284,7 +286,7 @@ def dispatch(order, driver, user, *, delivery_fee=None, lang="ar"):
         raise ValidationError(words["driver"])
     before = {"driver": order.driver_id, "fee": str(order.delivery_fee), "dispatched_at": order.dispatched_at.isoformat() if order.dispatched_at else ""}
     order.driver = driver
-    if delivery_fee not in (None, ""):
+    if delivery_fee is not None:  # the form always sends the fee: a box emptied on purpose means no fee, as when the order was opened
         order.delivery_fee = _fee(delivery_fee, words)
     order.dispatched_at = order.dispatched_at or timezone.now()
     order.save(update_fields=["driver", "delivery_fee", "dispatched_at"])
@@ -292,12 +294,16 @@ def dispatch(order, driver, user, *, delivery_fee=None, lang="ar"):
     return order
 
 
-def _fee_item(words):
-    """The service item a delivery fee is billed as; made once, like the expenses engine's own categories."""
+FEE_ITEM_CODE = "DELIVERY-FEE"
 
-    item = Item.objects.filter(item_code="DELIVERY-FEE").first()
-    if item is None:
-        item = Item.objects.create(item_code="DELIVERY-FEE", item_name=words["fee_item"], is_stock_tracked=False, default_sale_price=Decimal("0"))
+
+def _fee_item(words):
+    """The service item a delivery fee is billed as; made once (two first payments at once share it), like projects' billing item."""
+
+    item, _ = Item.objects.get_or_create(item_code=FEE_ITEM_CODE, defaults={"item_name": words["fee_item"], "is_stock_tracked": False,
+                                                                            "default_sale_price": Decimal("0")})
+    if item.is_stock_tracked:  # a fee must never move stock
+        raise ValidationError(words["fee_stocked"].format(code=FEE_ITEM_CODE))
     return item
 
 

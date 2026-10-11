@@ -403,6 +403,32 @@ class DeliveryTests(RestaurantSetup):
         services.dispatch(open_one, self.driver, self.owner)
         self.assertEqual(AuditLog.objects.filter(action="dispatch_delivery").count(), 1)
 
+    def test_the_fee_item_stays_off_the_menu_and_never_moves_stock(self):
+        from master_data.models import Item
+
+        order = services.open_order(self.owner, kind="delivery", address="x", delivery_fee="15")
+        services.add_item(order, self.tea, self.owner)
+        services.pay(order, self.owner, cashbox=self.cashbox, tendered=D("100"))
+        fee = Item.objects.get(item_code=services.FEE_ITEM_CODE)
+        other = services.open_order(self.owner, kind="delivery", address="y")
+        page = self.client.get(reverse("restaurant:order", args=[other.pk]))
+        self.assertContains(page, f'value="{self.tea.pk}"')
+        self.assertNotContains(page, f'value="{fee.pk}"')  # not a dish to add
+        self.assertNotContains(self.client.get(reverse("restaurant:costing")), "رسوم توصيل")
+        Item.objects.filter(pk=fee.pk).update(is_stock_tracked=True)
+        third = services.open_order(self.owner, kind="delivery", address="z", delivery_fee="10")
+        services.add_item(third, self.tea, self.owner)
+        with self.assertRaisesMessage(ValidationError, "صنف مخزني"):
+            services.pay(third, self.owner, cashbox=self.cashbox, tendered=D("100"))
+
+    def test_emptying_the_fee_on_the_dispatch_form_waives_it(self):
+        order = services.open_order(self.owner, kind="delivery", address="x", delivery_fee="15")
+        response = self.client.post(reverse("restaurant:order", args=[order.pk]), {"action": "dispatch", "driver": self.driver.pk, "delivery_fee": ""},
+                                    follow=True)
+        self.assertContains(response, "الطلب خرج مع الطيار.")
+        order.refresh_from_db()
+        self.assertEqual(order.delivery_fee, D("0.00"))
+
     def test_the_report_counts_deliveries_per_driver(self):
         from datetime import timedelta
 

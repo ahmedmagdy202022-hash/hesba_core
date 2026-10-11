@@ -34,7 +34,7 @@ WORDS = {
         "add": "ضيف", "qty": "الكمية", "note": "ملاحظة للمطبخ", "item": "الصنف", "price": "السعر", "amount": "القيمة", "total": "الإجمالي", "empty": "الطلب فاضي؛ اختار من المنيو.",
         "sent": "راح المطبخ", "new": "جديد", "voided": "ملغي", "remove": "شيل", "void": "إلغاء السطر", "void_confirm": "السطر ده راح المطبخ. تلغيه؟",
         "send": "ابعت للمطبخ", "sent_ok": "اتبعتت تذكرة المطبخ رقم {n}.", "nothing_new": "مفيش أصناف جديدة تتبعت.", "tickets": "تذاكر المطبخ", "reprint": "اطبع تاني",
-        "move": "انقل لطاولة", "moved": "اتنقل الطلب.", "cancel": "إلغاء الطلب", "cancel_confirm": "تلغي الطلب كله؟", "cancelled": "اتلغى الطلب.", "reason": "السبب",
+        "move": "انقل لطاولة", "moved": "اتنقل الطلب.", "dispatched": "الطلب خرج مع الطيار.", "cancel": "إلغاء الطلب", "cancel_confirm": "تلغي الطلب كله؟", "cancelled": "اتلغى الطلب.", "reason": "السبب",
         "pay": "الحساب", "cashbox": "الخزنة", "discount": "خصم", "tendered": "المدفوع", "print": "اطبع الإيصال", "pay_btn": "ادفع واقفل الطلب",
         "paid": "اتقفل الطلب {number} بفاتورة {invoice} بإجمالي {total}.", "change": "الباقي للعميل: {change}.", "view_only": "أخذ الطلبات للي عنده صلاحية البيع بس.",
         "closed_order": "الطلب ده مقفول.", "invoice": "الفاتورة", "table": "الطاولة", "kind": "النوع", "status": "الحالة", "opened": "اتفتح",
@@ -50,7 +50,7 @@ WORDS = {
         "add": "Add", "qty": "Qty", "note": "Note for the kitchen", "item": "Item", "price": "Price", "amount": "Amount", "total": "Total", "empty": "The order is empty; pick from the menu.",
         "sent": "Sent", "new": "New", "voided": "Void", "remove": "Remove", "void": "Void line", "void_confirm": "This line went to the kitchen. Void it?",
         "send": "Send to kitchen", "sent_ok": "Kitchen ticket {n} sent.", "nothing_new": "Nothing new to send.", "tickets": "Kitchen tickets", "reprint": "Print again",
-        "move": "Move to table", "moved": "Order moved.", "cancel": "Cancel order", "cancel_confirm": "Cancel the whole order?", "cancelled": "Order cancelled.", "reason": "Reason",
+        "move": "Move to table", "moved": "Order moved.", "dispatched": "The order is out with the driver.", "cancel": "Cancel order", "cancel_confirm": "Cancel the whole order?", "cancelled": "Order cancelled.", "reason": "Reason",
         "pay": "Bill", "cashbox": "Cashbox", "discount": "Discount", "tendered": "Paid", "print": "Print the receipt", "pay_btn": "Pay and close",
         "paid": "Order {number} closed with invoice {invoice}, total {total}.", "change": "Change due: {change}.", "view_only": "Only users who can sell can take orders.",
         "closed_order": "This order is closed.", "invoice": "Invoice", "table": "Table", "kind": "Type", "status": "Status", "opened": "Opened",
@@ -136,7 +136,8 @@ def board(request):
 
 
 def _menu():
-    items = Item.objects.filter(active=True).select_related("category").order_by("category__category_code", "item_name")
+    items = (Item.objects.filter(active=True).exclude(item_code=services.FEE_ITEM_CODE).select_related("category")
+             .order_by("category__category_code", "item_name"))
     categories, seen = [], set()
     for item in items:
         if item.category_id and item.category_id not in seen:
@@ -177,6 +178,7 @@ def order_detail(request, pk):
             elif action == "dispatch":
                 services.dispatch(order, _pick(Employee, request.POST.get("driver"), active=True), request.user,
                                   delivery_fee=request.POST.get("delivery_fee"), lang=lang)
+                messages.success(request, words["dispatched"])
             elif action == "cancel":
                 services.cancel_order(order, request.user, request.POST.get("reason", ""), lang)
                 messages.success(request, words["cancelled"])
@@ -283,7 +285,7 @@ INSIGHT_WORDS = {
 
 
 def _dishes():
-    return Item.objects.filter(active=True, is_stock_tracked=False).order_by("item_name")
+    return Item.objects.filter(active=True, is_stock_tracked=False).exclude(item_code=services.FEE_ITEM_CODE).order_by("item_name")
 
 
 @require_permission(COST_VIEW)
