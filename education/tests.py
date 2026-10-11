@@ -637,3 +637,135 @@ class ReviewFiveTests(MonthlyFeesTests):
             self.assertEqual(self.billing.preview(self.month), [])  # the main entity's students are not billed from the branch
             self.assertEqual(self.billing.dues(), [])
         self.assertTrue(self.billing.preview(self.month))
+
+
+class GroupRoundThreeTests(EducationSetup):
+    """Codex on #185, third round."""
+
+    def test_a_record_is_offered_only_partners_from_its_own_entity_when_the_whole_group_is_open(self):
+        from entities.current import working_in
+        from entities.models import Entity
+
+        mine, group = self.student(), self.group()
+        branch = Entity.objects.create(code="E-EDU2", name_ar="فرع المعادي", activity_slug="education", sub_activity_slug="tutoring_center")
+        with working_in(branch):
+            course = services.save_course({"name": "علوم", "fee": "300"}, self.owner)
+            theirs_group = services.save_group({"course": course, "name": "علوم 1", "days": "mon"}, self.owner)
+            theirs = services.save_student({"name": "طالب الفرع", "self_pays": "1"}, self.owner)
+        self.client.force_login(self.owner)  # no entity chosen: the whole group
+        page = self.client.get(reverse("education:student", args=[mine.pk])).content.decode()
+        self.assertIn(group.name, page)
+        self.assertNotIn(theirs_group.name, page)
+        page = self.client.get(reverse("education:group", args=[group.pk])).content.decode()
+        self.assertNotIn(theirs.name, page)
+        page = self.client.get(reverse("education:group", args=[theirs_group.pk])).content.decode()
+        self.assertIn(theirs.name, page)
+        self.assertNotIn(mine.name, page)
+
+    def test_a_fee_too_big_for_the_books_is_a_message_not_a_server_error(self):
+        for fee in ("10000000000", "9999999999.999"):
+            with self.assertRaisesMessage(ValidationError, "المبلغ"):
+                services.save_course({"name": f"كورس {fee}", "fee": fee}, self.owner)
+        self.assertEqual(services.save_course({"name": "أكبر مبلغ", "fee": "9999999999.99"}, self.owner).fee, D("9999999999.99"))
+        self.client.force_login(self.owner)
+        response = self.client.post(reverse("education:courses"), {"name": "ضخم", "fee": "10000000000"})
+        self.assertLess(response.status_code, 500)
+
+    def test_editing_the_capacity_takes_the_lock_enrolling_takes(self):
+        from unittest import mock
+
+        group = self.group(capacity="3")
+        data = {"course": self.maths, "name": group.name, "days": "sat,tue", "start_time": time(16), "capacity": "2"}
+        with mock.patch("education.models.StudyGroup.objects.select_for_update", wraps=StudyGroup.objects.select_for_update) as lock:
+            services.save_group(data, self.owner, group)
+        self.assertTrue(lock.called)
+
+
+class AttendanceRoundThreeTests(EducationSetup):
+    """Codex on #186, third round."""
+
+    def setUp(self):
+        super().setUp()
+        from . import attendance
+
+        self.register = attendance
+        self.class_day = TODAY - timedelta(days=(TODAY.weekday() - 5) % 7)
+        self.saturday = self.group(days="sat")
+        self.yousef, self.mariam = self.student(), self.student("مريم محمد")
+        for student in (self.yousef, self.mariam):
+            services.enroll(student, self.saturday, self.owner, start_date=self.class_day - timedelta(days=30))
+
+    def test_a_teacher_without_the_schools_records_finds_their_classes_in_the_menu(self):
+        from permissions.services import user_has_permission
+
+        from hesba_testing.factories import make_role
+
+        teacher_user = make_user(username="edu_teacher_only")
+        make_user_profile(user=teacher_user, role=make_role("ROLE-TEACHER"))  # a role with none of the school's records
+        self.assertFalse(user_has_permission(teacher_user, "master_data.view_master_data"))
+        self.teacher.user = teacher_user
+        self.teacher.save()
+        self.client.force_login(teacher_user)
+        today_url = reverse("education:today")
+        page = self.client.get(reverse("dashboard_snapshot")).content.decode()
+        self.assertIn(f'href="{today_url}?lang=ar"', page)
+        self.assertNotIn(f'href="{reverse("education:students")}?lang=ar"', page)
+        screen = self.client.get(today_url + f"?date={self.class_day.isoformat()}")
+        self.assertContains(screen, f'data-take="{self.saturday.pk}"')
+        for blocked in ("education:students", "education:groups", "education:courses"):
+            self.assertNotContains(screen, f'href="{reverse(blocked)}?lang=ar"')  # no tab leads to a closed door
+        # The owner still sees the school's records, and not the teacher's own entry.
+        self.client.force_login(self.owner)
+        self.assertNotContains(self.client.get(reverse("dashboard_snapshot")), f'href="{today_url}?lang=ar" title="حصص مجموعاتي"')
+
+    def test_an_unknown_mark_is_refused_and_changes_nothing(self):
+        self.register.take(self.saturday, self.owner, self.class_day, {str(self.mariam.pk): "absent"})
+        with self.assertRaisesMessage(ValidationError, "مش معروفة"):
+            self.register.take(self.saturday, self.owner, self.class_day, {str(self.mariam.pk): "here"})
+        self.assertEqual(self.saturday.sessions.get().marks.get(student=self.mariam).presence, "absent")
+        self.register.take(self.saturday, self.owner, self.class_day, {str(self.mariam.pk): ""})  # left unmarked: present
+        self.assertEqual(self.saturday.sessions.get().marks.get(student=self.mariam).presence, "present")
+
+    def test_excused_students_are_counted_on_the_class_summaries(self):
+        self.register.take(self.saturday, self.owner, self.class_day, {str(self.yousef.pk): "excused", str(self.mariam.pk): "excused"})
+        self.client.force_login(self.owner)
+        today = self.client.get(reverse("education:today") + f"?date={self.class_day.isoformat()}")
+        self.assertContains(today, "بعذر 2")
+        self.assertContains(self.client.get(reverse("education:group", args=[self.saturday.pk])), "بعذر 2")
+
+
+class FeesRoundTwoTests(MonthlyFeesTests):
+    """Codex on #187, second round."""
+
+    def test_a_month_outside_the_groups_term_bills_nothing(self):
+        from datetime import timedelta as td
+
+        StudyGroup.objects.filter(pk=self.saturday.pk).update(starts_on=self.billing.month_end(self.month) + td(days=1))  # starts next month
+        self.assertEqual(self.billing.due_lines(self.month), [])
+        StudyGroup.objects.filter(pk=self.saturday.pk).update(starts_on=None, ends_on=self.month - td(days=1))  # ended last month
+        self.assertEqual(self.billing.due_lines(self.month), [])
+        StudyGroup.objects.filter(pk=self.saturday.pk).update(ends_on=None)
+        self.assertEqual(len(self.billing.due_lines(self.month)), 2)
+
+    def test_a_billing_run_with_a_bad_month_bills_nothing(self):
+        from sales.models import SalesInvoice
+
+        self.client.force_login(self.owner)
+        for month in ("", "2026-13", "not-a-month"):
+            with self.subTest(month=month):
+                response = self.client.post(reverse("education:fees"), {"month": month, "post": "1"})
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, "الشهر مش مظبوط")
+        self.assertFalse(SalesInvoice.objects.exists())
+
+    def test_who_owes_needs_the_customer_report_permission(self):
+        from permissions.services import user_has_permission
+
+        cashier = person(RoleCode.CASHIER, "edu_fee_cashier")
+        self.assertTrue(user_has_permission(cashier, "sales.view_sales_invoices"))
+        self.assertFalse(user_has_permission(cashier, "reports.view_customer_report"))
+        self.client.force_login(cashier)
+        self.assertEqual(self.client.get(reverse("education:dues")).status_code, 403)
+        self.assertNotContains(self.client.get(reverse("education:fees")), f'href="{reverse("education:dues")}?lang=ar"')
+        self.client.force_login(self.owner)
+        self.assertEqual(self.client.get(reverse("education:dues")).status_code, 200)

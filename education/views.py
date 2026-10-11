@@ -9,6 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from master_data.models import Customer
+from permissions.services import user_has_permission
 
 from . import attendance as register
 from . import services
@@ -97,7 +98,8 @@ def _guard(request, write=False):
 
 def _base(request, lang, tab, **extra):
     return {"lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": WORDS[lang], "page_title": WORDS[lang]["title"], "section": "education",
-            "tab": tab, "can_manage": services.can_manage(request.user), **extra}
+            "tab": tab, "can_manage": services.can_manage(request.user), "can_view": services.can_view(request.user),
+            "can_see_fees": user_has_permission(request.user, FEES_VIEW), "can_see_dues": user_has_permission(request.user, DUES_VIEW), **extra}
 
 
 def _back(name, lang, *args):
@@ -186,7 +188,7 @@ def student_detail(request, pk):
         row.basis_label = services.BASIS_LABELS[lang][row.group.course.basis]  # a month, a class or the whole course
         row.status_label = _status_label(row.status, words)
     enrolled = {row.group_id for row in enrollments if row.status == EnrollmentStatus.ACTIVE}
-    open_groups = services.scoped(StudyGroup.objects).filter(active=True).exclude(pk__in=enrolled).select_related("course")
+    open_groups = services.same_entity_as(services.scoped(StudyGroup.objects), student).filter(active=True).exclude(pk__in=enrolled).select_related("course")
     summary = register.student_summary(student)
     return render(request, "education/student.html", _base(request, lang, "students", student=student, enrollments=enrollments, open_groups=open_groups,
                                                            payers=_payers(), error=error, today=timezone.localdate(), summary=summary))
@@ -270,8 +272,8 @@ def group_detail(request, pk):
         row.rate = rates.get(row.student_id)
     sessions = list(group.sessions.annotate(
         present=Count("marks", filter=Q(marks__presence=Presence.PRESENT)), late=Count("marks", filter=Q(marks__presence=Presence.LATE)),
-        absent=Count("marks", filter=Q(marks__presence=Presence.ABSENT)))[:8])
-    others = services.scoped(Student.objects).filter(active=True).exclude(pk__in=[row.student_id for row in roster]).order_by("name")
+        absent=Count("marks", filter=Q(marks__presence=Presence.ABSENT)), excused=Count("marks", filter=Q(marks__presence=Presence.EXCUSED)))[:8])
+    others = services.same_entity_as(services.scoped(Student.objects), group).filter(active=True).exclude(pk__in=[row.student_id for row in roster]).order_by("name")
     # A monthly total only means something for a monthly course; a whole course or a per-class fee is not a month.
     total = sum((row.net for row in roster), start=group.effective_fee * 0) if group.course.basis == FeeBasis.MONTHLY else None
     return render(request, "education/group.html", _group_form_context(
@@ -333,7 +335,7 @@ def today(request):
     groups_today = register.groups_on(day, request.user)
     taken = {session.group_id: session for session in ClassSession.objects.filter(date=day, group__in=groups_today).annotate(
         present=Count("marks", filter=Q(marks__presence=Presence.PRESENT)), late=Count("marks", filter=Q(marks__presence=Presence.LATE)),
-        absent=Count("marks", filter=Q(marks__presence=Presence.ABSENT)))}
+        absent=Count("marks", filter=Q(marks__presence=Presence.ABSENT)), excused=Count("marks", filter=Q(marks__presence=Presence.EXCUSED)))}
     rows = []
     for group in groups_today:
         rows.append({"group": group, "schedule": services.schedule_text(group, lang), "session": taken.get(group.pk),
@@ -384,32 +386,39 @@ def take_attendance(request, pk):
 
 # ---- monthly fees and fees owed (EDU-003) ----
 
-def _fees_guard(request, write=False):
-    from permissions.services import user_has_permission
+#: The month's invoices are sales invoices; who owes what is the customers' aging, behind its own report permission.
+FEES_VIEW, DUES_VIEW = "sales.view_sales_invoices", "reports.view_customer_report"
 
+
+def _fees_guard(request, write=False, permission=FEES_VIEW):
     if not services.is_education_install():
         raise Http404("Fees are for education activities.")
-    if not user_has_permission(request.user, "sales.view_sales_invoices"):
-        raise PermissionDenied("Fees need sales.view_sales_invoices.")
+    if not user_has_permission(request.user, permission):
+        raise PermissionDenied(f"This page needs {permission}.")
     if write and not user_has_permission(request.user, "sales.create_sales_invoice"):
         raise PermissionDenied("Billing the month needs sales.create_sales_invoice.")
 
 
 def fees(request):
-    from permissions.services import user_has_permission
-
     from . import billing
 
     _fees_guard(request)
     lang = _lang(request)
     words = WORDS[lang]
-    try:
-        first = billing.month_of(request.POST.get("month") or request.GET.get("month"))
-    except ValidationError:
-        first = billing.month_of(None)
     error = ""
-    if request.method == "POST":
+    posting = request.method == "POST"
+    if posting:
         _fees_guard(request, write=True)
+    raw = (request.POST.get("month") if posting else request.GET.get("month")) or ""
+    try:
+        first = billing.month_of(raw)
+        if posting and not raw.strip():
+            raise ValidationError("")
+    except ValidationError:
+        if posting:  # a billing run states its month: never bill some other month than the one asked for
+            error = billing.MESSAGES[lang]["month"]
+        first = billing.month_of(None)
+    if posting and not error:
         from datetime import date
 
         try:
@@ -439,7 +448,7 @@ def dues(request):
 
     from . import billing
 
-    _fees_guard(request)
+    _fees_guard(request, permission=DUES_VIEW)
     lang = _lang(request)
     rows = billing.dues()
     company = company_details()

@@ -72,9 +72,11 @@ def _attended(enrollment, first, last):
 
     from datetime import timedelta
 
-    first = max(first, enrollment.start_date)
+    first = max(first, enrollment.start_date, enrollment.group.starts_on or first)
     if enrollment.end_date:
         last = min(last, enrollment.end_date)
+    if enrollment.group.ends_on:
+        last = min(last, enrollment.group.ends_on)
     newer = (Enrollment.objects.filter(student_id=enrollment.student_id, group_id=enrollment.group_id, pk__gt=enrollment.pk,
                                        start_date__gte=enrollment.start_date).order_by("start_date").values_list("start_date", flat=True).first())
     if newer is not None:
@@ -90,7 +92,9 @@ def due_lines(first, payer=None):
     """What the month would bill: [{enrollment, quantity, price, discount, amount}], nothing already billed."""
 
     last = month_end(first)
+    # A month is billed only while both the enrolment and the group's own term run in it (attendance keeps to the same dates).
     running = (Enrollment.objects.filter(start_date__lte=last).filter(Q(end_date__isnull=True) | Q(end_date__gte=first))
+               .filter(Q(group__starts_on__isnull=True) | Q(group__starts_on__lte=last)).filter(Q(group__ends_on__isnull=True) | Q(group__ends_on__gte=first))
                .select_related("student__payer", "group__course__item").order_by("student__payer__name", "student__name", "pk"))
     from .services import scoped
     from .models import Student
