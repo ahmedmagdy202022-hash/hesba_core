@@ -860,7 +860,7 @@ class TeacherPayTests(EducationSetup):
         cashier = person(RoleCode.CASHIER, "edu_report_cashier")
         from permissions.services import user_has_permission
 
-        if user_has_permission(cashier, "reports.view_sales_report") and not user_has_permission(cashier, "cashboxes.view_expenses"):
+        if user_has_permission(cashier, "reports.view_all_sales_report") and not user_has_permission(cashier, "cashboxes.view_expenses"):
             self.client.force_login(cashier)
             self.assertNotContains(self.client.get(reverse("education:report")), "data-report-left")
 
@@ -1114,3 +1114,18 @@ class TeacherPayRoundTwoTests(TeacherPayTests):
         self.client.force_login(self.owner)
         self.client.post(reverse("education:teachers"), {"month": f"{self.month:%Y-%m}", "teacher": self.teacher.pk, "amount": "700", "cashbox": self.cashbox.pk})
         self.assertEqual(self.pay.owed(self.teacher, self.month), D("0"))
+
+
+class TeacherPayRoundThreeTests(TeacherPayTests):
+    """Codex on #189, third round."""
+
+    def test_the_group_report_needs_the_business_wide_sales_report(self):
+        from permissions.services import user_has_permission
+
+        cashier = person(RoleCode.CASHIER, "edu_report_cashier3")
+        self.assertFalse(user_has_permission(cashier, "reports.view_all_sales_report"))
+        self.client.force_login(cashier)
+        self.assertEqual(self.client.get(reverse("education:report")).status_code, 403)
+        self.assertNotContains(self.client.get(reverse("education:fees")), f'href="{reverse("education:report")}?lang=ar"')
+        self.client.force_login(self.owner)
+        self.assertEqual(self.client.get(reverse("education:report")).status_code, 200)

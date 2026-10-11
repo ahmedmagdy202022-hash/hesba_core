@@ -418,8 +418,9 @@ def take_attendance(request, pk):
 
 #: The month's invoices are sales invoices; who owes what is the customers' aging, behind its own report permission.
 FEES_VIEW, DUES_VIEW = "sales.view_sales_invoices", "reports.view_customer_report"
-#: EDU-004: teacher pay is an expense; the month report shows fees billed, so it sits with the sales reports.
-PAY_VIEW, REPORT_VIEW = "cashboxes.view_expenses", "reports.view_sales_report"
+#: EDU-004: teacher pay is an expense; the month report adds up every group's fees, so it needs the business-wide
+#: sales report (a cashier's own-sales report is not enough, Codex on #189).
+PAY_VIEW, REPORT_VIEW = "cashboxes.view_expenses", "reports.view_all_sales_report"
 
 
 def _fees_guard(request, write=False, permission=FEES_VIEW):
