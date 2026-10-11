@@ -106,8 +106,10 @@ def _back(name, lang, *args):
     return redirect(f"{reverse(name, args=args)}?lang={lang}")
 
 
-def _payers():
-    return Customer.objects.filter(active=True).exclude(customer_code="WALK-IN").order_by("name")
+def _payers(keep=None):
+    """Active parents; editing a student keeps its own payer listed even when that account was switched off (Codex on #185)."""
+
+    return Customer.objects.filter(Q(active=True) | Q(pk=keep or 0)).exclude(customer_code="WALK-IN").order_by("name")
 
 
 def _teachers():
@@ -162,7 +164,7 @@ def student_detail(request, pk):
         try:
             if action == "edit":
                 data = request.POST.dict()
-                data["payer"] = _payers().filter(pk=request.POST.get("payer") or 0).first() or student.payer
+                data["payer"] = _payers(student.payer_id).filter(pk=request.POST.get("payer") or 0).first() or student.payer
                 services.save_student(data, request.user, student, lang)
                 message = words["saved"]
             elif action == "enroll":
@@ -191,7 +193,7 @@ def student_detail(request, pk):
     open_groups = services.same_entity_as(services.scoped(StudyGroup.objects), student).filter(active=True).exclude(pk__in=enrolled).select_related("course")
     summary = register.student_summary(student)
     return render(request, "education/student.html", _base(request, lang, "students", student=student, enrollments=enrollments, open_groups=open_groups,
-                                                           payers=_payers(), error=error, today=timezone.localdate(), summary=summary))
+                                                           payers=_payers(student.payer_id), error=error, today=timezone.localdate(), summary=summary))
 
 
 # ---- groups ----
@@ -422,10 +424,11 @@ def fees(request):
         from datetime import date
 
         try:
-            day = date.fromisoformat(request.POST.get("invoice_date") or "") if request.POST.get("invoice_date") else None
-        except ValueError:
-            day = None
-        try:
+            raw_day = (request.POST.get("invoice_date") or "").strip()
+            try:
+                day = date.fromisoformat(raw_day) if raw_day else None
+            except ValueError:
+                raise ValidationError(billing.MESSAGES[lang]["invoice_date"])  # never record the invoices on a date nobody chose
             made = billing.bill_month(first, request.user, post=request.POST.get("post") == "1", invoice_date=day, lang=lang)
         except ValidationError as exc:
             error = " ".join(exc.messages)
@@ -439,7 +442,15 @@ def fees(request):
     return render(request, "education/fees.html", _base(request, lang, "fees", first=first, label=billing.month_label(first, lang), rows=rows, done=done,
                                                         total=sum((row["total"] for row in rows), start=0), error=error,
                                                         can_bill=user_has_permission(request.user, "sales.create_sales_invoice"),
-                                                        is_future=first > timezone.localdate().replace(day=1), today=timezone.localdate()))
+                                                        is_future=first > timezone.localdate().replace(day=1), today=timezone.localdate(),
+                                                        needs_entity=billing.MESSAGES[lang]["entity"] if _whole_group() else ""))
+
+
+def _whole_group():
+    from entities.current import current_entity
+    from entities.services import is_multi_entity
+
+    return current_entity() is None and is_multi_entity()
 
 
 def dues(request):
