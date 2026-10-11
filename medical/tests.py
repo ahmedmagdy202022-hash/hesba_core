@@ -328,6 +328,25 @@ class DentalChartTests(TestCase):
         self.assertContains(self.client.get(self.url + "?primary=1"), 'data-tooth="55"')
         self.assertEqual(self.client.get(self.url + "?lang=en").status_code, 200)
 
+    def test_billed_steps_count_in_the_clinic_report_and_a_free_step_can_be_billed(self):
+        from django.utils import timezone
+
+        from sales.services import post_sales_invoice
+
+        from . import dental, insights
+
+        step = dental.plan_step(self.patient, {"service": self.filling, "tooth": "16", "doctor": self.doctor}, self.owner)
+        free = dental.plan_step(self.patient, {"service": self.cleaning, "price": "0"}, self.owner)
+        dental.complete_step(free, self.owner)
+        self.assertContains(self.client.get(self.url), "data-bill-steps")  # a done step at 0 still needs its invoice
+        dental.complete_step(step, self.owner)
+        invoice = dental.bill_done(self.patient, self.owner)
+        post_sales_invoice(invoice.pk, self.owner)
+        today = timezone.localdate()
+        report = insights.period_report(today.replace(day=1), today)
+        self.assertEqual([(row["doctor"], row["revenue"]) for row in report["doctors"] if row["revenue"]], [(self.doctor, Decimal("1500.00"))])
+        self.assertEqual(report["totals"]["revenue"], Decimal("1500.00"))
+
     def test_bad_teeth_and_conditions_are_refused(self):
         from . import dental
 
