@@ -48,10 +48,14 @@ def _runs_in(group, first, last):
     return not (group.starts_on and group.starts_on > last) and not (group.ends_on and group.ends_on < first)
 
 
+def _frozen(group, first):
+    return GroupPayTerm.objects.filter(group=group, month=first).select_related("teacher").first()
+
+
 def terms(group, first):
     """(teacher, basis, rate) for the group's month: frozen once the month was paid, else the group's own."""
 
-    frozen = GroupPayTerm.objects.filter(group=group, month=first).select_related("teacher").first()
+    frozen = _frozen(group, first)
     if frozen is not None:
         return frozen.teacher, frozen.teacher_pay, frozen.teacher_rate
     return group.teacher, group.teacher_pay, group.teacher_rate or ZERO
@@ -66,7 +70,12 @@ def group_due(group, first):
     line = {"teacher": teacher, "basis": basis, "rate": rate}
     if teacher is None or basis == TeacherPay.NONE or not _runs_in(group, first, last):
         return {**line, "units": ZERO, "due": ZERO}
-    return {**line, **_due(group, first, last, basis, rate)}
+    live = _due(group, first, last, basis, rate)
+    frozen = _frozen(group, first)
+    if frozen is not None and frozen.due > live["due"]:
+        # A paid month never owes less than it came to when it was paid, even if its fee drafts were discarded since (Codex on #189).
+        live = {**live, "due": frozen.due}
+    return {**line, **live}
 
 
 def _due(group, first, last, basis, rate):
@@ -113,8 +122,10 @@ def _freeze(teacher, first):
         if row["teacher"].pk != teacher.pk:
             continue
         for line in row["groups"]:
-            GroupPayTerm.objects.get_or_create(group=line["group"], month=first,
-                                               defaults={"teacher": teacher, "teacher_pay": line["basis"], "teacher_rate": line["rate"]})
+            term, created = GroupPayTerm.objects.get_or_create(group=line["group"], month=first, defaults={
+                "teacher": teacher, "teacher_pay": line["basis"], "teacher_rate": line["rate"], "due": line["due"]})
+            if not created and line["due"] > term.due:
+                GroupPayTerm.objects.filter(pk=term.pk).update(due=line["due"])
 
 
 def owed(teacher, first):

@@ -16,7 +16,7 @@ from reports.tests_dashboard import prepared_client
 from reports.tests_shell import sidebar_links
 
 from . import services
-from .models import Course, Enrollment, Student, StudyGroup
+from .models import Attendance, Course, Enrollment, Student, StudyGroup
 
 CENTER = "customers,items_services,sales_operations,cashboxes,reports,appointments_visits,employees_technicians"
 TODAY = timezone.localdate()
@@ -1085,8 +1085,8 @@ class AttendanceRoundFiveTests(AttendanceRoundThreeTests):
         self.register.take(self.saturday, self.owner, self.class_day, {str(self.yousef.pk): "absent", str(self.mariam.pk): "present"})
         self.register.take(self.saturday, self.owner, self.class_day, {str(self.yousef.pk): "present", str(self.mariam.pk): "absent"})
         log = AuditLog.objects.filter(action="take_attendance").latest("pk")
-        self.assertEqual(log.before_data["marks"], {self.yousef.code: "absent", self.mariam.code: "present"})
-        self.assertEqual(log.after_data["marks"], {self.yousef.code: "present", self.mariam.code: "absent"})  # same totals, swapped marks
+        self.assertEqual(log.before_data["marks"], {self.yousef.code: ["absent", ""], self.mariam.code: ["present", ""]})
+        self.assertEqual(log.after_data["marks"], {self.yousef.code: ["present", ""], self.mariam.code: ["absent", ""]})  # same totals, swapped marks
 
 
 class TeacherPayRoundTwoTests(TeacherPayTests):
@@ -1129,3 +1129,87 @@ class TeacherPayRoundThreeTests(TeacherPayTests):
         self.assertNotContains(self.client.get(reverse("education:fees")), f'href="{reverse("education:report")}?lang=ar"')
         self.client.force_login(self.owner)
         self.assertEqual(self.client.get(reverse("education:report")).status_code, 200)
+
+
+class GroupRoundSixTests(EducationSetup):
+    """Codex on #185, sixth round."""
+
+    def test_a_birth_date_in_the_future_is_refused(self):
+        with self.assertRaisesMessage(ValidationError, "تاريخ الميلاد"):
+            self.student(date_of_birth=(TODAY + timedelta(days=1)).isoformat())
+
+    def test_a_localized_discount_is_read(self):
+        group = self.group()
+        for typed in ("10,5", "١٠٫٥"):
+            with self.subTest(typed=typed):
+                student = self.student(f"طالب {typed}")
+                self.assertEqual(services.enroll(student, group, self.owner, discount_percent=typed).discount_percent, D("10.50"))
+
+    def test_fees_round_half_up_like_the_books(self):
+        self.assertEqual(services.save_course({"name": "نص قرش", "fee": "1.005"}, self.owner).fee, D("1.01"))
+
+    def test_a_failed_group_edit_keeps_what_was_typed(self):
+        group = self.group()
+        page = self.client
+        page.force_login(self.owner)
+        response = page.post(reverse("education:group", args=[group.pk]), {"action": "edit", "course": self.maths.pk, "name": "اسم جديد",
+                                                                            "room": "قاعة 7", "days": ["sun"], "start_time": "16:00",
+                                                                            "duration_minutes": "90", "capacity": "abc"})
+        html = response.content.decode()
+        self.assertIn('value="اسم جديد"', html)
+        self.assertIn('value="قاعة 7"', html)
+        self.assertIn('value="sun" checked', html)
+
+
+class AttendanceRoundSixTests(AttendanceRoundThreeTests):
+    """Codex on #186, sixth round."""
+
+    def test_a_note_only_correction_keeps_the_old_note(self):
+        self.register.take(self.saturday, self.owner, self.class_day, {str(self.mariam.pk): "absent", f"note_{self.mariam.pk}": "تعبانة"})
+        self.register.take(self.saturday, self.owner, self.class_day, {str(self.mariam.pk): "absent", f"note_{self.mariam.pk}": "مسافرة"})
+        log = AuditLog.objects.filter(action="take_attendance").latest("pk")
+        self.assertEqual(log.before_data["marks"][self.mariam.code], ["absent", "تعبانة"])
+        self.assertEqual(log.after_data["marks"][self.mariam.code], ["absent", "مسافرة"])
+
+    def test_thirty_days_means_thirty_calendar_days(self):
+        from .models import ClassSession
+
+        old = ClassSession.objects.create(group=self.saturday, date=TODAY - timedelta(days=30), taken_by=self.owner)
+        Attendance.objects.create(session=old, student=self.mariam, presence="absent")
+        self.assertIsNone(self.register.student_summary(self.mariam, today=TODAY)["rate"])  # 30 days ago is outside the last 30
+
+
+class FeesRoundFiveTests(MonthlyFeesTests):
+    """Codex on #187, fifth round."""
+
+    def test_a_per_class_charge_above_a_single_fee_is_stored(self):
+        from .models import FeeCharge
+
+        field = FeeCharge._meta.get_field("amount")
+        self.assertGreaterEqual(field.max_digits, 14)  # quantity × fee fits, like an invoice line
+
+
+class TeacherPayRoundFourTests(TeacherPayTests):
+    """Codex on #189, fourth round."""
+
+    def test_a_paid_share_survives_its_draft_being_discarded(self):
+        self.set_pay("percent", "50")
+        draft = self.billing.bill_month(self.month, self.owner)[0]  # 800, not posted
+        self.pay.pay(self.teacher, self.month, "400", self.cashbox, self.owner)
+        self.billing.discard_draft(draft, self.owner)
+        row = self.pay.teacher_rows(self.month)[0]
+        self.assertEqual((row["due"], row["paid"], row["remaining"]), (D("400.00"), D("400.00"), D("0")))
+
+    def test_the_report_names_the_teacher_who_was_paid(self):
+        from staff.services import save_employee
+
+        self.set_pay("monthly", "1000")
+        self.pay.pay(self.teacher, self.month, "1000", self.cashbox, self.owner)
+        StudyGroup.objects.filter(pk=self.saturday.pk).update(teacher=save_employee({"name": "أ. سامي"}, self.owner))
+        rows, _ = __import__("education.insights", fromlist=["group_report"]).group_report(self.month)
+        self.assertEqual(rows[0]["teacher_name"], "أ. محمود")
+
+    def test_the_billed_tile_needs_the_business_wide_sales_report(self):
+        cashier = person(RoleCode.CASHIER, "edu_tile_cashier")
+        tiles, _ = __import__("education.insights", fromlist=["panel_tiles"]).panel_tiles("ar", TODAY, cashier)
+        self.assertNotIn("billed", [tile["key"] for tile in tiles])

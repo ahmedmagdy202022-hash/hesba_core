@@ -33,7 +33,7 @@ MESSAGES = {
         "before_start": "تاريخ الإيقاف لازم يكون بعد بداية التسجيل.",
         "entity": "الطالب والمجموعة والكورس لازم يكونوا في نفس الكيان.",
         "capacity_below": "في المجموعة {count} طالب دلوقتي؛ السعة مينفعش تقل عن كده. أوقف تسجيل بعضهم الأول.",
-        "phone": "رقم التليفون قصير؛ اكتبه كامل (7 أرقام على الأقل).",
+        "phone": "رقم التليفون قصير؛ اكتبه كامل (7 أرقام على الأقل).", "dob": "تاريخ الميلاد مينفعش يكون بعد النهارده.",
         "pay_percent": "نسبة المدرس لازم تكون بين 0 و100%.", "pay_basis": "اختار طريقة حساب أجر المدرس.",
     },
     "en": {
@@ -48,7 +48,7 @@ MESSAGES = {
         "before_start": "The stop date must come after the enrolment started.",
         "entity": "The student, the group and the course must belong to the same entity.",
         "capacity_below": "The group has {count} students now; capacity cannot go below that. Stop some enrolments first.",
-        "phone": "The phone number is too short; enter it in full (at least 7 digits).",
+        "phone": "The phone number is too short; enter it in full (at least 7 digits).", "dob": "The date of birth cannot be after today.",
         "pay_percent": "The teacher's share must be between 0 and 100%.", "pay_basis": "Choose how the teacher is paid.",
     },
 }
@@ -197,7 +197,9 @@ def _money(raw, words, blank=None):
         raise ValidationError(words["money"])
     if not value.is_finite() or value < 0 or value >= MONEY_LIMIT:  # "NaN" and "Infinity" parse but are not amounts
         raise ValidationError(words["money"])
-    value = value.quantize(Decimal("0.01"))
+    from config.money import money_round
+
+    value = money_round(value)  # half-up, like every other amount in the books
     if value >= MONEY_LIMIT:  # 9999999999.999 rounds up past the limit
         raise ValidationError(words["money"])
     return value
@@ -246,6 +248,13 @@ def _payer(data, name, phone, user, words):
     raise ValidationError(words["payer"])
 
 
+def _birth_date(raw, words):
+    born = _date(raw, words)
+    if born and born > timezone.localdate():
+        raise ValidationError(words["dob"])  # nobody is born tomorrow (Codex on #185)
+    return born
+
+
 @transaction.atomic
 def save_student(data, user, student=None, lang="ar"):
     words = MESSAGES[lang]
@@ -254,7 +263,7 @@ def save_student(data, user, student=None, lang="ar"):
         raise ValidationError(words["name"])
     phone = _text(data, "phone", 50)
     values = {
-        "name": name, "phone": phone, "date_of_birth": _date(data.get("date_of_birth"), words), "stage": _text(data, "stage", 80),
+        "name": name, "phone": phone, "date_of_birth": _birth_date(data.get("date_of_birth"), words), "stage": _text(data, "stage", 80),
         "school": _text(data, "school", 120), "relation": _text(data, "relation", 40), "notes": (data.get("notes") or "").strip(),
     }
     if student is None:
@@ -489,7 +498,7 @@ def enroll(student, group, user, *, start_date=None, discount_percent="0", notes
     if group.capacity and active_count(group) >= group.capacity:
         raise ValidationError(words["full"].format(capacity=group.capacity))
     try:
-        discount = Decimal(str(discount_percent or "0").strip())
+        discount = Decimal(_plain_number(discount_percent or "0"))  # 10,5 and ١٠٫٥ are 10.5%
     except InvalidOperation:
         raise ValidationError(words["discount"])
     if not discount.is_finite() or not Decimal("0") <= discount <= Decimal("100"):

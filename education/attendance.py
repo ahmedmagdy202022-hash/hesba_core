@@ -158,7 +158,7 @@ def take(group, user, day, marks, *, topic="", cancelled=False, lang="ar"):
     session, created = ClassSession.objects.get_or_create(group=group, date=day, defaults={"taken_by": user})
     # What the class looked like before this save, mark by mark, so a correction can be traced (Codex on #186).
     before = {} if created else {"status": session.status, "topic": session.topic,
-                                 "marks": {mark.student.code: mark.presence for mark in session.marks.select_related("student")}}
+                                 "marks": {mark.student.code: [mark.presence, mark.note] for mark in session.marks.select_related("student")}}
     session.status = SessionStatus.CANCELLED if cancelled else SessionStatus.HELD
     session.topic, session.taken_by = (topic or "").strip()[:255], user
     session.save()
@@ -174,7 +174,7 @@ def take(group, user, day, marks, *, topic="", cancelled=False, lang="ar"):
     AuditLog.objects.create(event_type=AuditEventType.CREATE if created else AuditEventType.UPDATE, actor=user, module="education", action="take_attendance",
                             object_type="education.ClassSession", object_id=str(session.pk), before_data=before,
                             after_data={"group": group.code, "date": day.isoformat(), "status": session.status, "topic": session.topic, "counts": counts,
-                                        "marks": {mark.student.code: mark.presence for mark in session.marks.select_related("student")}})
+                                        "marks": {mark.student.code: [mark.presence, mark.note] for mark in session.marks.select_related("student")}})
     return session
 
 
@@ -187,8 +187,10 @@ def rate(queryset):
 
 
 def student_summary(student, days=30, today=None):
+    """The last ``days`` calendar days, today included (Codex on #186: not one day more)."""
+
     today = today or timezone.localdate()
-    recent = Attendance.objects.filter(student=student, session__date__gte=today - timedelta(days=days))
+    recent = Attendance.objects.filter(student=student, session__date__gte=today - timedelta(days=days - 1))
     return {
         "rate": rate(recent),
         "absences": list(recent.filter(presence=Presence.ABSENT, session__status=SessionStatus.HELD)
@@ -200,7 +202,7 @@ def group_rates(group, days=30, today=None):
     """{student id: attendance % over the last ``days``} for the group's own classes."""
 
     today = today or timezone.localdate()
-    rows = (Attendance.objects.filter(session__group=group, session__status=SessionStatus.HELD, session__date__gte=today - timedelta(days=days))
+    rows = (Attendance.objects.filter(session__group=group, session__status=SessionStatus.HELD, session__date__gte=today - timedelta(days=days - 1))
             .values("student").annotate(all=Count("id"), came=Count("id", filter=Q(presence__in=COUNTS_AS_PRESENT))))
     return {row["student"]: round(100 * row["came"] / row["all"]) for row in rows if row["all"]}
 

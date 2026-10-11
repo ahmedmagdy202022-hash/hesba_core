@@ -268,7 +268,7 @@ def group_detail(request, pk):
     lang = _lang(request)
     words = WORDS[lang]
     group = get_object_or_404(services.scoped(StudyGroup.objects).select_related("course", "teacher"), pk=pk)
-    error = ""
+    error, failed_edit = "", None
     if request.method == "POST":
         _guard(request, write=True)
         action = request.POST.get("action")
@@ -290,6 +290,8 @@ def group_detail(request, pk):
         except ValidationError as exc:
             error = " ".join(exc.messages)
             group.refresh_from_db()
+            if action == "edit":  # the form comes back with what was typed, not the saved values (Codex on #185)
+                failed_edit = request.POST
         else:
             messages.success(request, message)
             return _back("education:group", lang, group.pk)
@@ -305,8 +307,8 @@ def group_detail(request, pk):
     # A monthly total only means something for a monthly course; a whole course or a per-class fee is not a month.
     total = sum((row.net for row in roster), start=group.effective_fee * 0) if group.course.basis == FeeBasis.MONTHLY else None
     return render(request, "education/group.html", _group_form_context(
-        request, lang, group=group, roster=roster, others=others, schedule=services.schedule_text(group, lang), error=error, post=None,
-        chosen_days=group.weekdays, total=total, basis_label=services.BASIS_LABELS[lang][group.course.basis],
+        request, lang, group=group, roster=roster, others=others, schedule=services.schedule_text(group, lang), error=error, post=failed_edit,
+        chosen_days=failed_edit.getlist("days") if failed_edit else group.weekdays, total=total, basis_label=services.BASIS_LABELS[lang][group.course.basis],
         free=(group.capacity - len(roster)) if group.capacity else None, today=timezone.localdate(),
         sessions=sessions, can_take=register.can_take(request.user, group), last_class=register.last_class_day(group)))
 

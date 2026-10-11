@@ -713,6 +713,34 @@ Status: RESOLVED — approved by Ahmed on 9 Oct 2026 ("موافق تعمل كل 
     - Attendance is taken only on the group's own weekdays and within its dates, and the group page offers its latest class day.
     - A message about an older class gives its date instead of "today".
     - Attendance screens are scoped to the entity being worked in.
+  - **Schema change and its risk plan (Codex on #186):**
+    - **Files:**
+      - `education/models.py` (`ClassSession`, `Attendance`, `Presence`, `SessionStatus`);
+      - migration `education/0002`;
+      - `education/attendance.py` (all writes);
+      - `education/views.py`;
+      - `templates/education/today.html` and `attendance.html`;
+      - `reports/navigation.py` ("My classes").
+    - **Schema:** two new tables in the education app only.
+      - Unique constraints: one session per group and day, one mark per student and session.
+      - No existing table is altered, and the migration only adds tables, so rolling back is dropping them; no other app reads them.
+    - **Risk 1, a correction rewrites history.** Taking a class again replaces its marks.
+      - The audit row keeps the full before and after: status, topic, and each student's mark and note.
+      - Nothing else is deleted.
+    - **Risk 2, rates drift.** Rates count only held classes, over a window of exactly the last N calendar days, today included.
+    - **Risk 3, a teacher reaches others' groups.** A teacher-only user sees and changes only the groups linked to their own employee record, and only through the attendance screens.
+    - **No money or stock is touched.**
+    - **Verification** (`education/tests.py`):
+      - roster on a day, including stop-and-rejoin;
+      - weekday and term checks;
+      - future days refused;
+      - unknown marks refused;
+      - corrections recorded mark by mark;
+      - excused counted;
+      - the 30-day window;
+      - teacher-only access and menu;
+      - entity scope;
+      - malformed dates.
 - **EDU-003 (monthly fees):** `education/billing.py` makes one draft sales invoice per parent for a month. It goes through `create_sales_draft_with_tax`, and through `post_sales_invoice` when posting is asked for. Neither function is changed.
   - **Lines:** one per enrolment, using the course's own service item.
     - **Monthly groups:** one month at the group's fee, with the enrolment's discount as the line discount.
@@ -721,6 +749,7 @@ Status: RESOLVED — approved by Ahmed on 9 Oct 2026 ("موافق تعمل كل 
   - **Duplicates:** a new `FeeCharge` row records which enrolment and month each line billed, so running the month again bills only what is new. A cancelled invoice frees its month. Each parent's customer row is locked while their lines are worked out, so two runs at once cannot bill one month twice.
   - **Not allowed:** future months.
   - **Fees owed:** the existing customer aging, kept to parents of students, with WhatsApp reminders.
+  - **`FeeCharge.amount`** is as wide as an invoice line (14 digits), because a per-class charge is quantity × fee (Codex on #187).
 - **EDU-004 (teacher pay, dashboard, month report):**
   - **New schema, education app only:**
     - `StudyGroup.teacher_pay` (none / per class held / share of the group's fees / fixed per month) and `StudyGroup.teacher_rate`.

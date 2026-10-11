@@ -200,7 +200,7 @@ class FeeCharge(models.Model):
     month = models.DateField(help_text="The first day of the month billed.")
     invoice = models.ForeignKey("sales.SalesInvoice", on_delete=models.CASCADE, related_name="fee_charges")
     quantity = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("1"), help_text="Months, or classes attended for per-class fees.")
-    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)  # quantity × fee: as wide as an invoice line (Codex on #187)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -240,6 +240,8 @@ class GroupPayTerm(models.Model):
     teacher = models.ForeignKey("staff.Employee", on_delete=models.PROTECT, related_name="+")
     teacher_pay = models.CharField(max_length=10, choices=TeacherPay.choices)
     teacher_rate = models.DecimalField(max_digits=12, decimal_places=2)
+    due = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"),
+                              help_text="What the month came to when it was last paid: it never owes less than that afterwards.")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

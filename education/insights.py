@@ -54,7 +54,7 @@ def panel_tiles(lang="ar", today=None, user=None):
               tone="bad" if groups and taken < len(groups) else "", sub=words["taken"] if groups else words["none"]),
         _tile("attendance", words["rate"], f"{rate}%" if rate is not None else "—", "text", tone="bad" if rate is not None and rate < 75 else ""),
     ]
-    if user is None or user_has_permission(user, "sales.view_sales_invoices"):
+    if user is None or user_has_permission(user, "reports.view_all_sales_report"):  # the whole school's fees, not one cashier's (Codex on #189)
         tiles.append(_tile("billed", words["billed"], _billed(today.replace(day=1)), "money"))
     if user is None or user_has_permission(user, "reports.view_customer_report"):
         from .billing import dues
@@ -81,8 +81,9 @@ def group_report(first, with_pay=True):
         if not students and not held:
             continue
         billed = _live(FeeCharge.objects.filter(enrollment__group=group, month=first)).aggregate(total=Sum("amount"))["total"] or ZERO
-        teacher = group_due(group, first)["due"] if with_pay else ZERO
-        rows.append({"group": group, "students": students, "held": held,
+        pay = group_due(group, first)
+        teacher = pay["due"] if with_pay else ZERO
+        rows.append({"group": group, "teacher_name": pay["teacher"].name if pay["teacher"] else (group.teacher.name if group.teacher else ""), "students": students, "held": held,
                      "rate": attendance.rate(Attendance.objects.filter(session__group=group, session__date__gte=first, session__date__lte=last)),
                      "billed": billed, "teacher": teacher, "left": billed - teacher})
     totals = {key: sum((row[key] for row in rows), ZERO) for key in ("billed", "teacher", "left")}
