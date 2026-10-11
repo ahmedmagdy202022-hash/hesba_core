@@ -210,28 +210,39 @@ def save_contract(data, user, contract=None, lang="ar"):
     return contract
 
 
-def _bill_one(contract, start, user, location, words):
+def selling_location():
+    from entities import scope as entity_scope
+    from master_data.models import Location
+
+    return entity_scope.locations(Location.objects).filter(active=True, is_selling_location=True).order_by("-is_default", "pk").first()
+
+
+def draft_invoice(customer, rows, notes, user, location):
+    """An ordinary draft sales invoice (nothing paid, no cashbox) through the tax-aware sales engine; a number taken by
+    someone else at the same moment is retried. Shared by contracts, packages and hours."""
+
     from config.numbering import next_in_series
     from sales.models import SalesInvoice
     from taxes.services import create_sales_draft_with_tax
 
-    end = period_end(contract, start)
-    description = contract.description or contract.service.item_name
-    rows = [{"item": contract.service, "quantity": Decimal("1"), "unit_sale_price": contract.amount, "line_discount_amount": ZERO,
-             "description": words["line"].format(description=description, start=start.isoformat(), end=end.isoformat())[:255]}]
-    header = {"invoice_date": timezone.localdate(), "customer": contract.customer, "selling_location": location, "cashbox": None,
-              "discount_amount": ZERO, "tax_amount": ZERO, "paid_now": ZERO,
-              "notes": words["note"].format(number=contract.number, start=start.isoformat())[:255]}
-    invoice = None
+    header = {"invoice_date": timezone.localdate(), "customer": customer, "selling_location": location, "cashbox": None,
+              "discount_amount": ZERO, "tax_amount": ZERO, "paid_now": ZERO, "notes": notes[:255]}
     for attempt in range(5):
         number = next_in_series(SalesInvoice, "invoice_number", "SI-")
         try:
             with transaction.atomic():
-                invoice = create_sales_draft_with_tax({**header, "invoice_number": number}, rows, user)
-            break
+                return create_sales_draft_with_tax({**header, "invoice_number": number}, rows, user)
         except IntegrityError:
             if attempt == 4 or not SalesInvoice.objects.filter(invoice_number=number).exists():
                 raise
+
+
+def _bill_one(contract, start, user, location, words):
+    end = period_end(contract, start)
+    description = contract.description or contract.service.item_name
+    rows = [{"item": contract.service, "quantity": Decimal("1"), "unit_sale_price": contract.amount, "line_discount_amount": ZERO,
+             "description": words["line"].format(description=description, start=start.isoformat(), end=end.isoformat())[:255]}]
+    invoice = draft_invoice(contract.customer, rows, words["note"].format(number=contract.number, start=start.isoformat()), user, location)
     return ContractBill.objects.create(contract=contract, period_start=start, invoice=invoice, created_by=user)
 
 
@@ -239,14 +250,11 @@ def _bill_one(contract, start, user, location, words):
 def bill_due(user, today=None, contracts=None, lang="ar"):
     """Draft invoices for every due period of the active contracts (or the given ones). Returns the new bills."""
 
-    from entities import scope as entity_scope
-    from master_data.models import Location
-
     words = _words(lang)
     if not user_has_permission(user, MANAGE):
         raise PermissionDenied(words["manage"])
     today = today or timezone.localdate()
-    location = entity_scope.locations(Location.objects).filter(active=True, is_selling_location=True).order_by("-is_default", "pk").first()
+    location = selling_location()
     if location is None:
         raise ValidationError(words["setup"])
     queryset = ServiceContract.objects.filter(status=ContractStatus.ACTIVE)

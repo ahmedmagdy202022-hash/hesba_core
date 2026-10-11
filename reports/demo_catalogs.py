@@ -242,7 +242,7 @@ BEAUTY = Catalog(
     suppliers=("شركة الجمال لمستحضرات التجميل", "موزع المنتجات الاحترافية"),
     raw=(_raw("DEMO-RAW-01", "صبغة احترافية (أنبوبة)", "أنبوبة", "120.00", "30"),),
     staff=("منى الكوافيرة", "كوافيرة"),
-    extras=frozenset({"appointments"}),
+    extras=frozenset({"appointments", "packages"}),
 )
 
 PROFESSIONAL = Catalog(
@@ -258,7 +258,7 @@ PROFESSIONAL = Catalog(
     customers=("شركة الأمل للتجارة", "مؤسسة النور", "م. محمد إبراهيم", "شركة النور للتجارة"),
     suppliers=("مكتبة المعرفة", "موردون متحدون"),
     staff=("أ. محمود المحاسب", "محاسب"),
-    extras=frozenset({"appointments", "contracts"}),
+    extras=frozenset({"appointments", "contracts", "hours"}),
 )
 
 DIGITAL = Catalog(
@@ -274,7 +274,7 @@ DIGITAL = Catalog(
     customers=("مطعم أبو علي", "صيدلية الشفاء", "محل الأناقة", "شركة النور للتجارة"),
     suppliers=("مطبعة الوادي", "موردون متحدون"),
     staff=("كريم المصمم", "مصمم"),
-    extras=frozenset({"appointments", "contracts"}),
+    extras=frozenset({"appointments", "contracts", "hours"}),
 )
 
 # --- restaurants: dishes are made to order, drinks are bought and resold ----

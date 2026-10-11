@@ -721,6 +721,47 @@ Status: IMPLEMENTED for review — new tables only, no protected logic changed. 
 
   The demo is covered in `reports/tests_demo_catalogs.py`.
 
+## HG-047 — session packages and billable hours (SVC-003)
+
+Status: IMPLEMENTED for review. New tables only; no protected logic changed. Implemented in branch `claude/svc-003-packages-hours`, stacked on SVC-002 (HG-046) in the same `agreements` app.
+
+- **Asked for:** these close the rest of the services gap on the scorecard:
+  - a salon sells packages of sessions;
+  - an office (accountant, consultant, designer) bills the hours it worked.
+- **Files:**
+  - `agreements/packages.py`, `agreements/hours.py` and `agreements/package_views.py`;
+  - migration `agreements/0002`;
+  - templates `agreements/packages.html`, `package.html` and `hours.html`;
+  - the menu and icons;
+  - demo seeding.
+  - `agreements/services.py` gains `draft_invoice()` and `selling_location()`, shared with the contracts. The contracts' billing behaviour is unchanged.
+- **Schema:**
+  - `Package` and `PackageUse` (one row per session, cancelled rather than deleted);
+  - `TimeEntry`, whose invoice is nullable and `PROTECT`.
+- **Money behaviour:**
+  - **Packages:**
+    - a package is sold on one ordinary draft sales invoice for its whole price, and its revenue counts when that invoice is posted, like any service;
+    - spreading revenue over the sessions (deferred revenue) would change ledger posting and is not part of this design;
+    - sessions are used only once the invoice is posted, never below zero, and never on a day after the expiry date;
+    - the package row is locked, so the last session cannot be taken twice;
+    - a package whose invoice was cancelled cannot be used.
+  - **Hours:**
+    - "bill the hours" turns all of one customer's unbilled entries into one draft invoice, with one line per entry (quantity is the hours, price is the rate);
+    - the entries are locked while this happens;
+    - a cancelled invoice frees its hours;
+    - a billed hour cannot be removed.
+- **Who:**
+  - Seeing either screen needs `sales.view_sales_invoices`.
+  - Selling, using sessions and billing need `sales.create_sales_invoice`.
+  - An employee linked to a login can log and remove their own unbilled hours without the invoice permission, and sees only their own.
+  - Where each screen shows:
+    - packages: services in beauty, general and other;
+    - hours: services in professional, digital marketing, general and other.
+- **Known overlap:** MED-005 (#195, not merged) has physiotherapy packages in `medical/` with the same rules. Once both are merged, they can be folded into one; until then each stays in its own activity.
+- **Tests:**
+  - `agreements/tests_packages_hours.py`: 15 tests;
+  - demo tests for a salon and a digital agency in `reports/tests_demo_catalogs.py`.
+
 ## Final gate verification
 
 - Full Django suite: 794 tests passed in 576.477 seconds.
