@@ -1,0 +1,20 @@
+{% extends "operations/base.html" %}
+{% load l10n %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'medical:file' animal.owner.pk %}?lang={{ lang }}">← {{ animal.owner.name }}</a>
+<h1>{{ animal.name }}</h1><p>{{ animal.species_label }}{% if animal.breed %} · {{ animal.breed }}{% endif %}{% if animal.age_text %} · {{ animal.age_text }}{% endif %}{% if animal.sex %} · {% if animal.sex == 'male' %}{{ vw.male }}{% else %}{{ vw.female }}{% endif %}{% endif %}{% if animal.neutered %} · {{ vw.neutered }}{% endif %}</p></div>
+<div class="op-form-actions">{% if can_write %}<a class="op-primary" href="{% url 'medical:visit_new' animal.owner.pk %}?lang={{ lang }}&animal={{ animal.pk }}">{{ vw.new_visit }}</a><a class="op-secondary" href="?lang={{ lang }}&edit=1">{{ vw.edit }}</a>{% endif %}</div></section>
+{% if animal.allergies %}<div class="op-message op-message-error" role="alert" data-animal-allergy><strong>⚠ {{ vw.allergies }}:</strong> {{ animal.allergies|linebreaksbr }}</div>{% endif %}
+<section class="op-summary-grid">
+<article><small>{{ vw.owner }}</small><strong>{{ animal.owner.name }}</strong>{% if animal.owner.phone %}<small><bdi>{{ animal.owner.phone }}</bdi></small>{% endif %}</article>
+<article><small>{{ vw.colour }}</small><strong>{{ animal.colour|default:'—' }}</strong></article>
+<article><small>{{ vw.microchip }}</small><strong style="overflow-wrap:anywhere;font-size:16px"><bdi>{{ animal.microchip|default:'—' }}</bdi></strong></article>
+<article><small>{{ vw.dob }}</small><strong><bdi>{{ animal.date_of_birth|date:"Y-m-d"|default:'—' }}</bdi></strong></article>
+</section>
+{% if animal.notes %}<section class="op-detail-meta"><p>{{ animal.notes|linebreaksbr }}</p></section>{% endif %}
+{% if edit and can_write %}{% include "medical/_animal_fields.html" %}{% endif %}
+<h2>{{ vw.visits }}</h2>
+{% for v in visits %}<article class="op-detail-meta" data-animal-visit="{{ v.pk }}"><p><strong><bdi>{{ v.visit_date|date:"Y-m-d" }}</bdi></strong>{% if v.doctor %} · {{ v.doctor.name }}{% endif %}{% if v.weight %} · {{ v.weight|unlocalize }} kg{% endif %}{% if v.follow_up_date %} · <bdi>{{ v.follow_up_date|date:"Y-m-d" }}</bdi>{% endif %}</p>
+{% if v.complaint %}<p>{{ v.complaint|linebreaksbr }}</p>{% endif %}{% if v.diagnosis %}<p><b>{{ v.diagnosis|linebreaksbr }}</b></p>{% endif %}{% if v.treatment %}<p>{{ v.treatment|linebreaksbr }}</p>{% endif %}</article>
+{% empty %}<p class="op-muted">{{ vw.no_visits }}</p>{% endfor %}
+{% endblock %}

@@ -157,7 +157,8 @@ def patients(request):
     query = (request.GET.get("q") or "").strip()
     rows = _patients().filter(active=True).select_related("patient_file").annotate(last=Max("clinical_visits__visit_date"))
     if query:
-        rows = rows.filter(Q(name__icontains=query) | Q(phone__icontains=query) | Q(patient_file__file_number__icontains=query) | Q(customer_code__icontains=query))
+        rows = rows.filter(Q(name__icontains=query) | Q(phone__icontains=query) | Q(patient_file__file_number__icontains=query) | Q(customer_code__icontains=query)
+                           | Q(animals__name__icontains=query)).distinct()
     rows = list(rows.order_by("-last", "name")[:200])
     today = timezone.localdate()
     for row in rows:
@@ -185,7 +186,7 @@ def patient_file(request, pk):
         else:
             messages.success(request, words["saved"])
             return redirect(f"{reverse('medical:file', args=[patient.pk])}?lang={lang}")
-    visits = list(ClinicalVisit.objects.filter(patient=patient).select_related("doctor", "created_by", "appointment"))
+    visits = list(ClinicalVisit.objects.filter(patient=patient).select_related("doctor", "created_by", "appointment", "animal"))
     upcoming = patient.appointments.filter(starts_at__gte=timezone.now(), status__in=("booked", "confirmed")).select_related("employee").order_by("starts_at")[:5]
     from . import dental
 
@@ -193,6 +194,7 @@ def patient_file(request, pk):
                                                       is_dental=dental.is_dental(), dental_label=DENTAL_WORDS[lang]["title"],
                                                       is_lab=_is_lab(), lab_label=LAB_WORDS[lang]["title"],
                                                       is_physio=_is_physio(), physio_label=PHYSIO_WORDS[lang]["title"],
+                                                      is_vet=_is_vet(), vw=VET_WORDS[lang], animals=_animals_of(patient, lang) if _is_vet() else [],
                                                       can_write=can_write, error=error, genders=Gender.values, bloods=BloodType.values,
                                                       user_id=request.user.pk, today=timezone.localdate()))
 
@@ -218,6 +220,12 @@ def visit_edit(request, pk=None, visit_pk=None):
         data["doctor"] = _doctors().filter(pk=request.POST.get("doctor") or 0).first()
         if not visit and request.POST.get("appointment"):
             data["appointment"] = patient.appointments.filter(pk=request.POST.get("appointment")).first()
+        if _is_vet():
+            from .models import Animal
+
+            data["animal"] = Animal.objects.filter(pk=request.POST.get("animal") or 0).first()  # the service refuses another owner's animal
+        else:
+            data.pop("animal", None)
         try:
             services.save_visit(patient, data, request.user, visit, lang)
         except ValidationError as exc:
@@ -227,19 +235,30 @@ def visit_edit(request, pk=None, visit_pk=None):
             return redirect(f"{reverse('medical:file', args=[patient.pk])}?lang={lang}")
     own_doctor = getattr(request.user, "employee", None)
     default_doctor = visit.doctor_id if visit else (appointment.employee_id if appointment and appointment.employee_id else (own_doctor.pk if own_doctor else None))
+    animals, default_animal = [], None
+    if _is_vet():
+        animals = list(patient.animals.filter(active=True) | patient.animals.filter(pk=visit.animal_id if visit else 0))
+        default_animal = visit.animal_id if visit else (int(request.GET.get("animal")) if (request.GET.get("animal") or "").isdigit() else None)
     return render(request, "medical/visit_form.html", _base(lang, patient=patient, visit=visit, appointment=appointment, error=error, post=request.POST,
-                                                            doctors=_doctors(), default_doctor=default_doctor,
+                                                            doctors=_doctors(), default_doctor=default_doctor, animals=animals,
+                                                            default_animal=default_animal, animal_label=VET_WORDS[lang]["animal"],
                                                             default_date=(visit.visit_date if visit else timezone.localdate())))
 
 
 def prescription(request, visit_pk):
     _guard(request)
     lang = _lang(request)
-    visit = get_object_or_404(ClinicalVisit.objects.select_related("patient", "doctor"), pk=visit_pk)
+    visit = get_object_or_404(ClinicalVisit.objects.select_related("patient", "doctor", "animal"), pk=visit_pk)
     from printing.company import company_details
 
+    from . import vet
+
     file = services.file_for(visit.patient)
-    return render(request, "medical/prescription.html", _base(lang, visit=visit, file=file, age=services.age(file, visit.visit_date), company=company_details()))
+    animal_line = ""
+    if visit.animal_id:  # MED-006: the prescription is for the animal; the owner is who it is handed to
+        animal_line = f"{visit.animal.name} ({vet.SPECIES_LABELS[lang].get(visit.animal.species, visit.animal.species)})"
+    return render(request, "medical/prescription.html", _base(lang, visit=visit, file=file, age=None if visit.animal_id else services.age(file, visit.visit_date),
+                                                              company=company_details(), animal_line=animal_line, animal_label=VET_WORDS[lang]["animal"]))
 
 
 DENTAL_WORDS = {
@@ -528,3 +547,93 @@ def session_packages(request, pk):
     return render(request, "medical/packages.html", _base(lang, page_title=words["title"], pw=words, patient=patient, packages=packages,
                                                          services=services_, doctors=_doctors(), can_write=can_write, can_sell=can_sell, error=error,
                                                          post=request.POST, own_id=own.pk if own else None))
+
+
+VET_WORDS = {
+    "ar": {"animals": "الحيوانات", "animal": "الحيوان", "add": "+ حيوان جديد", "name": "الاسم", "species": "النوع", "breed": "السلالة",
+           "sex": "الجنس", "dob": "تاريخ الميلاد", "age": "السن", "colour": "اللون", "microchip": "رقم الشريحة", "neutered": "متعقّم",
+           "allergies": "الحساسية", "notes": "ملاحظات", "active": "لسه بييجي", "save": "حفظ", "visits": "الكشوفات", "no_animals": "مفيش حيوانات متسجلة للعميل ده.",
+           "no_visits": "مفيش كشوفات للحيوان ده لسه.", "owner": "صاحبه", "new_visit": "+ كشف للحيوان ده", "saved": "اتحفظ.", "edit": "تعديل البيانات",
+           "male": "ذكر", "female": "أنثى", "choose": "اختار", "yes": "أيوه", "open": "افتح"},
+    "en": {"animals": "Animals", "animal": "Animal", "add": "+ New animal", "name": "Name", "species": "Species", "breed": "Breed",
+           "sex": "Sex", "dob": "Date of birth", "age": "Age", "colour": "Colour", "microchip": "Microchip no.", "neutered": "Neutered",
+           "allergies": "Allergies", "notes": "Notes", "active": "Still coming", "save": "Save", "visits": "Visits", "no_animals": "No animals recorded for this customer.",
+           "no_visits": "No visits for this animal yet.", "owner": "Owner", "new_visit": "+ Visit for this animal", "saved": "Saved.", "edit": "Edit details",
+           "male": "Male", "female": "Female", "choose": "Choose", "yes": "Yes", "open": "Open"},
+}
+
+
+def _is_vet():
+    from . import vet
+
+    return vet.is_vet()
+
+
+def _animals_of(owner, lang):
+    from . import vet
+
+    labels = vet.SPECIES_LABELS[lang]
+    rows = list(owner.animals.all())
+    for animal in rows:
+        animal.species_label = labels.get(animal.species, animal.species)
+        animal.age_text = vet.age_text(animal, lang)
+    return rows
+
+
+def animal_new(request, pk):
+    from . import vet
+
+    _guard(request, write=True)
+    if not vet.is_vet():
+        raise Http404("Animal files are for vets.")
+    lang = _lang(request)
+    owner = get_object_or_404(_patients(), pk=pk)
+    return _animal_form(request, lang, owner, None)
+
+
+def animal_card(request, pk):
+    from . import vet
+    from .models import Animal
+
+    _guard(request)
+    if not vet.is_vet():
+        raise Http404("Animal files are for vets.")
+    lang = _lang(request)
+    animal = get_object_or_404(Animal.objects.select_related("owner"), pk=pk)
+    if request.method == "POST":
+        _guard(request, write=True)
+        return _animal_form(request, lang, animal.owner, animal)
+    words = VET_WORDS[lang]
+    animal.species_label = vet.SPECIES_LABELS[lang].get(animal.species, animal.species)
+    animal.age_text = vet.age_text(animal, lang)
+    visits = list(animal.visits.select_related("doctor"))
+    return render(request, "medical/animal.html", _base(lang, page_title=animal.name, vw=words, animal=animal, visits=visits, edit=request.GET.get("edit") == "1",
+                                                        can_write=services.can_write(request.user), species=_species(lang), today=timezone.localdate(),
+                                                        post=None))
+
+
+def _species(lang):
+    from . import vet
+    from .models import Species
+
+    return [(value, vet.SPECIES_LABELS[lang][value]) for value in Species.values]
+
+
+def _animal_form(request, lang, owner, animal):
+    from . import vet
+
+    words = VET_WORDS[lang]
+    error = ""
+    if request.method == "POST":
+        data = request.POST.dict()
+        data["neutered"] = request.POST.get("neutered") == "1"
+        data["active"] = request.POST.get("active", "1") == "1"
+        try:
+            animal = vet.save_animal(owner, data, request.user, animal, lang)
+        except ValidationError as exc:
+            error = " ".join(exc.messages)
+        else:
+            messages.success(request, words["saved"])
+            return redirect(f"{reverse('medical:animal', args=[animal.pk])}?lang={lang}")
+    return render(request, "medical/animal_form.html", _base(lang, page_title=words["add"], vw=words, owner=owner, animal=animal, error=error,
+                                                             post=request.POST, species=_species(lang), today=timezone.localdate()))

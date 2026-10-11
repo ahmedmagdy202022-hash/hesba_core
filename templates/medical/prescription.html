@@ -7,7 +7,7 @@
 <p class="no-print" style="text-align:center"><button type="button" data-print style="min-height:44px;padding:0 18px;border:0;border-radius:10px;background:var(--hs-teal);color:var(--hs-on-teal);font-weight:700">{{ words.print }}</button></p>
 <main class="rx" data-prescription>
 <header><div><h1>{{ company.name }}</h1>{% if company.phone %}<div><bdi>{{ company.phone }}</bdi></div>{% endif %}{% if company.address %}<div>{{ company.address }}</div>{% endif %}</div>{% if company.logo %}<img src="{{ company.logo }}" alt="" style="max-height:64px">{% endif %}</header>
-<section class="meta"><div><b>{{ words.patient }}:</b> {{ visit.patient.name }}</div><div><b>{{ words.date }}:</b> <bdi>{{ visit.visit_date|date:"Y-m-d" }}</bdi></div>
+<section class="meta">{% if animal_line %}<div data-rx-animal><b>{{ animal_label }}:</b> {{ animal_line }}</div>{% endif %}<div><b>{{ words.patient }}:</b> {{ visit.patient.name }}</div><div><b>{{ words.date }}:</b> <bdi>{{ visit.visit_date|date:"Y-m-d" }}</bdi></div>
 <div><b>{{ words.file_no }}:</b> <bdi>{{ file.file_number }}</bdi></div><div>{% if age is not None %}<b>{{ words.age }}:</b> {{ age }} {{ words.years }}{% endif %}</div>
 {% if visit.doctor %}<div><b>{{ words.doctor }}:</b> {{ visit.doctor.name }}</div>{% endif %}{% if file.allergies %}<div class="alert">⚠ {{ words.allergies }}: {{ file.allergies }}</div>{% endif %}</section>
 {% if visit.diagnosis %}<p><b>{{ words.diagnosis }}:</b> {{ visit.diagnosis }}</p>{% endif %}

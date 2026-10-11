@@ -768,3 +768,23 @@ No unresolved business or accounting decision was discovered while implementing 
 - **Not touched:** sales posting and cancellation, customer ledgers, appointments, report calculations.
 - **Shown only** for medical / physio.
 - **Tests:** `medical/tests.py` → `SessionPackageTests`; `reports/tests_demo_catalogs.py` (the physio demo: 10 sessions, 3 used).
+
+## HG-043 — implementation note: the vet's animal file (MED-006)
+
+- **Status:** The vet part of the HG-043 proposal, built as design A with **one change from the proposal**, explained below. The reception queue is not built yet.
+- **Change from the proposal:** the proposal had `PatientFile` gain a kind, species, breed and owner. But `PatientFile` is one-to-one with its customer, and a vet's customer often brings **several** animals. So:
+  - the animal is its own table, `Animal`, owned by an ordinary customer;
+  - the one change to an existing table is a nullable `ClinicalVisit.animal` (PROTECT), which says which animal a visit was for.
+  - `PatientFile` is unchanged, and existing rows and every other medical sub-activity are unaffected: the column stays empty.
+- **Schema:** migration `medical/0005_vet_animals` creates `Animal` (name, species, breed, sex, date of birth, colour, microchip, neutered, allergies, notes, active) and adds `ClinicalVisit.animal`. Rolling back drops the column and the table.
+- **Rules:**
+  - The owner books, is billed and pays as before; the statement stays on the customer.
+  - A visit can only name one of the patient's own animals, refused in `medical.services.save_visit` and in the view.
+  - The animal's card shows its own visits only.
+  - The prescription names the animal and its species.
+  - The patients list also finds an owner by an animal's name.
+  - Every save is audited before/after.
+- **Money:** none.
+- **Not touched:** sales, ledgers, appointments, report calculations.
+- **Shown only** for medical / vet. The vet demo uses its own `animals` extra, so owners are not given human patient profiles.
+- **Tests:** `medical/tests.py` → `VetAnimalTests`; `reports/tests_demo_catalogs.py` (the vet demo: a dog with two visits and a cat).

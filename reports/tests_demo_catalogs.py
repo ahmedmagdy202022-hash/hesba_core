@@ -162,6 +162,15 @@ class SampleBusinessPerActivityTests(TestCase):
         package = SessionPackage.objects.get()
         self.assertEqual(physio.state(package), {"used": 3, "left": 7, "status": "active"})
 
+    def test_a_vet_has_owners_with_their_animals(self):
+        from medical.models import Animal, ClinicalVisit
+
+        catalog = self.fill("medical", "vet")
+        self.assert_a_working_business(catalog)
+        self.assertEqual(sorted(Animal.objects.values_list("name", "species")), [("روكي", "dog"), ("مشمش", "cat")])
+        self.assertEqual(ClinicalVisit.objects.filter(animal__name="روكي").count(), 2)
+        self.assertFalse(ClinicalVisit.objects.filter(animal__isnull=True).exists())
+
     def test_a_builder_has_projects_with_materials_and_a_progress_bill(self):
         from projects.models import Project
 

@@ -121,6 +121,8 @@ class Command(BaseCommand):
             self._appointments(master, staff, owner)
         if "patients" in extras:
             self._patients(master, staff, owner)
+        if "animals" in extras:
+            self._vet(master, staff, owner, timezone.localdate())
         if "projects" in extras:
             self._projects(master, owner)
         if "orders" in extras:
@@ -163,6 +165,26 @@ class Command(BaseCommand):
         self._dental(master, doctor, owner, today)
         self._lab(master, owner, today)
         self._physio(master, doctor, owner, today)
+
+    def _vet(self, master, doctor, owner, today):
+        """MED-006: a vet's first customer owns a dog and a cat; the dog came twice."""
+
+        from medical import vet
+        from medical.services import save_visit
+
+        if not vet.is_vet():
+            return
+        owner_customer = master["customers"][0]
+        dog = vet.save_animal(owner_customer, {"name": "روكي", "species": "dog", "breed": "جيرمن شيبرد", "sex": "male",
+                                               "date_of_birth": (today - timedelta(days=3 * 365)).isoformat(), "colour": "أسود وبني",
+                                               "microchip": "956000012345678", "neutered": True}, owner)
+        vet.save_animal(owner_customer, {"name": "مشمش", "species": "cat", "breed": "شيرازي", "sex": "female",
+                                         "date_of_birth": (today - timedelta(days=300)).isoformat(), "allergies": "بنسلين"}, owner)
+        save_visit(owner_customer, {"animal": dog, "doctor": doctor, "visit_date": (today - timedelta(days=60)).isoformat(), "complaint": "تطعيم سنوي",
+                                    "weight": "31", "diagnosis": "حالة عامة جيدة", "treatment": "تطعيم سعار + تطعيم خماسي"}, owner)
+        save_visit(owner_customer, {"animal": dog, "doctor": doctor, "visit_date": (today - timedelta(days=5)).isoformat(), "complaint": "عرج في الرجل الشمال",
+                                    "weight": "32", "diagnosis": "التواء بسيط", "treatment": "راحة 5 أيام ومسكن",
+                                    "follow_up_date": (today + timedelta(days=5)).isoformat()}, owner)
 
     def _physio(self, master, therapist, owner, today):
         """MED-005: a physiotherapy centre's first patient bought ten sessions and used three."""

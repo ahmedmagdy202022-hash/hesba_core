@@ -147,6 +147,11 @@ def save_visit(patient, data, user, visit=None, lang="ar"):
     texts = {field: (data.get(field) or "").strip()[:5000] for field in ("complaint", "examination", "diagnosis", "treatment")}
     if not any(texts[f] for f in ("complaint", "diagnosis", "treatment")):
         errors.append(words["empty"])
+    animal = data.get("animal")
+    if animal is not None and animal.owner_id != patient.pk:  # MED-006: a vet visit is for one of the owner's own animals
+        from .vet import MESSAGES as VET_MESSAGES
+
+        errors.append(VET_MESSAGES["en" if lang == "en" else "ar"]["not_theirs"])
     if errors:
         raise ValidationError(errors)
     visit = visit or ClinicalVisit(patient=patient, created_by=user)
@@ -157,13 +162,15 @@ def save_visit(patient, data, user, visit=None, lang="ar"):
         setattr(visit, field, value)
     if data.get("doctor") is not None:
         visit.doctor = data.get("doctor")
+    if "animal" in data:
+        visit.animal = animal
     if data.get("appointment") is not None and visit.appointment_id is None:
         visit.appointment = data.get("appointment")
     creating = visit.pk is None
     visit.save()
     file_for(patient)
     _audit(user, "create_clinical_visit" if creating else "update_clinical_visit", visit,
-           {"patient": patient.pk, "visit_date": visit.visit_date.isoformat(), "diagnosis": visit.diagnosis[:200]})
+           {"patient": patient.pk, "animal": visit.animal_id, "visit_date": visit.visit_date.isoformat(), "diagnosis": visit.diagnosis[:200]})
     return visit
 
 

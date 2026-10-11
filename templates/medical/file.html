@@ -5,16 +5,24 @@
 <div class="op-form-actions">{% if can_write %}<a class="op-primary" href="{% url 'medical:visit_new' patient.pk %}?lang={{ lang }}" data-new-visit>{{ words.new_visit }}</a>{% endif %}{% if is_physio %}<a class="op-secondary" href="{% url 'medical:packages' patient.pk %}?lang={{ lang }}" data-packages-link>{{ physio_label }}</a>{% endif %}{% if is_lab %}<a class="op-secondary" href="{% url 'medical:lab' patient.pk %}?lang={{ lang }}" data-lab-link>{{ lab_label }}</a>{% endif %}{% if is_dental %}<a class="op-secondary" href="{% url 'medical:dental' patient.pk %}?lang={{ lang }}" data-dental-link>{{ dental_label }}</a>{% endif %}<a class="op-secondary" href="{% url 'parties:card' 'customer' patient.pk %}?lang={{ lang }}">{{ words.account }}</a></div></section>
 {% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
 {% if file.allergies %}<div class="op-message op-message-error" role="alert" data-allergy-alert><strong>⚠ {{ words.allergy_alert }}:</strong> {{ file.allergies|linebreaksbr }}</div>{% endif %}
-<section class="op-summary-grid med-summary">
+{% if not is_vet %}<section class="op-summary-grid med-summary">
 <article><small>{{ words.chronic }}</small><strong>{{ file.chronic_conditions|default:'—'|linebreaksbr }}</strong></article>
 <article><small>{{ words.medications }}</small><strong>{{ file.current_medications|default:'—'|linebreaksbr }}</strong></article>
 <article><small>{{ words.emergency }}</small><strong>{{ file.emergency_contact|default:'—' }}</strong></article>
 <article><small>{{ words.last_visit }}</small><strong><bdi>{% if visits %}{{ visits.0.visit_date|date:"Y-m-d" }}{% else %}—{% endif %}</bdi></strong></article>
-</section>
+</section>{% endif %}
 {% if upcoming %}<section class="op-detail-meta"><h2>{{ words.upcoming }}</h2>{% for a in upcoming %}<p><a href="{% url 'appointments:detail' a.pk %}?lang={{ lang }}"><bdi>{{ a.starts_at|date:"Y-m-d H:i" }}</bdi></a>{% if a.employee %} · {{ a.employee.name }}{% endif %}</p>{% endfor %}</section>{% endif %}
+{% if is_vet %}<h2 class="med-heading">{{ vw.animals }}</h2>
+<div class="op-table-wrap" data-animals><table class="op-table"><thead><tr><th>{{ vw.name }}</th><th>{{ vw.species }}</th><th>{{ vw.breed }}</th><th>{{ vw.age }}</th><th></th></tr></thead><tbody>
+{% for a in animals %}<tr data-animal="{{ a.pk }}"><td class="op-cell-text"><a href="{% url 'medical:animal' a.pk %}?lang={{ lang }}">{{ a.name }}</a>{% if not a.active %} <span class="op-status">—</span>{% endif %}</td><td>{{ a.species_label }}</td><td class="op-cell-text">{{ a.breed|default:'—' }}</td><td>{{ a.age_text|default:'—' }}</td>
+<td>{% if can_write %}<a href="{% url 'medical:visit_new' patient.pk %}?lang={{ lang }}&animal={{ a.pk }}">{{ vw.new_visit }}</a>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="5" class="op-empty">{{ vw.no_animals }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_write %}<div class="op-form-actions"><a class="op-secondary" href="{% url 'medical:animal_new' patient.pk %}?lang={{ lang }}" data-add-animal>{{ vw.add }}</a></div>{% endif %}
+{% endif %}
 <h2 class="med-heading">{{ words.visits }}</h2>
 {% for v in visits %}<article class="op-detail-meta med-visit" data-visit="{{ v.pk }}">
-<header class="med-visit__head"><strong><bdi>{{ v.visit_date|date:"Y-m-d" }}</bdi></strong>{% if v.doctor %} · {{ words.doctor }}: {{ v.doctor.name }}{% endif %}{% if v.follow_up_date %} · <span class="op-status {% if v.follow_up_date <= today %}op-status-draft{% else %}op-status-open{% endif %}">{{ words.follow_up }} <bdi>{{ v.follow_up_date|date:"Y-m-d" }}</bdi></span>{% endif %}
+<header class="med-visit__head"><strong><bdi>{{ v.visit_date|date:"Y-m-d" }}</bdi></strong>{% if v.animal %} · <a href="{% url 'medical:animal' v.animal.pk %}?lang={{ lang }}" data-visit-animal>{{ v.animal.name }}</a>{% endif %}{% if v.doctor %} · {{ words.doctor }}: {{ v.doctor.name }}{% endif %}{% if v.follow_up_date %} · <span class="op-status {% if v.follow_up_date <= today %}op-status-draft{% else %}op-status-open{% endif %}">{{ words.follow_up }} <bdi>{{ v.follow_up_date|date:"Y-m-d" }}</bdi></span>{% endif %}
 <span class="med-visit__actions"><a href="{% url 'medical:prescription' v.pk %}?lang={{ lang }}" target="_blank" rel="noopener" data-print-rx>{{ words.print }}</a>{% if can_write %} · <a href="{% url 'medical:visit_edit' v.pk %}?lang={{ lang }}">{{ words.edit }}</a>{% endif %}</span></header>
 {% if v.complaint %}<p><b>{{ words.complaint }}:</b> {{ v.complaint|linebreaksbr }}</p>{% endif %}
 {% if v.blood_pressure or v.pulse or v.temperature or v.weight %}<p class="op-muted"><b>{{ words.vitals }}:</b>{% if v.blood_pressure %} {{ words.bp }} <bdi>{{ v.blood_pressure }}</bdi>{% endif %}{% if v.pulse %} · {{ words.pulse }} {{ v.pulse }}{% endif %}{% if v.temperature %} · {{ words.temp }} {{ v.temperature|unlocalize }}°{% endif %}{% if v.weight %} · {{ words.weight }} {{ v.weight|unlocalize }}{% endif %}{% if v.height %} · {{ words.height }} {{ v.height|unlocalize }}{% endif %}</p>{% endif %}

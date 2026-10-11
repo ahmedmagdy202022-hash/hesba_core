@@ -52,6 +52,8 @@ class ClinicalVisit(models.Model):
     patient = models.ForeignKey("master_data.Customer", on_delete=models.PROTECT, related_name="clinical_visits")
     appointment = models.OneToOneField("appointments.Appointment", on_delete=models.SET_NULL, null=True, blank=True, related_name="clinical_visit")
     doctor = models.ForeignKey("staff.Employee", on_delete=models.SET_NULL, null=True, blank=True, related_name="clinical_visits")
+    #: MED-006: for a vet, the owner's animal this visit was for (the owner stays the patient who pays).
+    animal = models.ForeignKey("medical.Animal", on_delete=models.PROTECT, null=True, blank=True, related_name="visits")
     visit_date = models.DateField(db_index=True)
     complaint = models.TextField(blank=True)
     examination = models.TextField(blank=True)
@@ -222,3 +224,41 @@ class PackageSession(models.Model):
 
     class Meta:
         ordering = ["-used_on", "-pk"]
+
+
+# ---- MED-006: the vet's animal file (HG-043, design A, with one owner able to bring several animals) ----
+
+class Species(models.TextChoices):
+    DOG = "dog", "Dog"
+    CAT = "cat", "Cat"
+    BIRD = "bird", "Bird"
+    RABBIT = "rabbit", "Rabbit"
+    HORSE = "horse", "Horse"
+    CATTLE = "cattle", "Cattle"
+    SHEEP_GOAT = "sheep_goat", "Sheep / goat"
+    OTHER = "other", "Other"
+
+
+class Animal(models.Model):
+    """An animal brought to a vet. Its owner is an ordinary customer: the one who books, is billed and pays."""
+
+    owner = models.ForeignKey("master_data.Customer", on_delete=models.PROTECT, related_name="animals")
+    name = models.CharField(max_length=80)
+    species = models.CharField(max_length=20, choices=Species.choices)
+    breed = models.CharField(max_length=80, blank=True)
+    sex = models.CharField(max_length=10, choices=Gender.choices, blank=True)
+    date_of_birth = models.DateField(null=True, blank=True)
+    colour = models.CharField(max_length=60, blank=True)
+    microchip = models.CharField(max_length=40, blank=True)
+    neutered = models.BooleanField(default=False)
+    allergies = models.TextField(blank=True)
+    notes = models.TextField(blank=True)
+    active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name", "pk"]
+
+    def __str__(self):
+        return self.name

@@ -426,7 +426,7 @@ VET = Catalog(
     suppliers=("الشركة المصرية للأدوية البيطرية", "مخزن أغذية الحيوانات"),
     raw=(_raw("DEMO-RAW-01", "تطعيمات (علبة 10)", "علبة", "2200.00", "2"),),
     staff=("د. كريم البيطري", "طبيب بيطري"),
-    extras=frozenset({"appointments"}),
+    extras=frozenset({"appointments", "animals"}),  # MED-006: owners and their animals, not human patient files
 )
 
 # --- education: subscriptions are sold; books and kits are stocked ----------

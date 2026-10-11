@@ -615,3 +615,93 @@ class SessionPackageTests(TestCase):
         ClientProfile.objects.update(sub_activity_slug="clinic")
         self.assertEqual(self.client.get(self.url).status_code, 404)
         self.assertNotContains(self.client.get(reverse("medical:file", args=[self.patient.pk])), "data-packages-link")
+
+
+class VetAnimalTests(TestCase):
+    """MED-006: the vet's animal file (HG-043)."""
+
+    def setUp(self):
+        from staff.services import save_employee
+
+        from . import vet
+
+        prepared_client("medical", "vet", CLINIC)
+        self.vet = vet
+        self.owner = person(RoleCode.OWNER, "vet_owner")
+        self.doctor = save_employee({"name": "د. كريم"}, self.owner)
+        self.customer = make_customer(customer_code="P-1", name="منى", phone="01001234567")
+        self.client.force_login(self.owner)
+
+    def test_an_owner_brings_two_animals_and_each_keeps_its_own_visits(self):
+        from .models import Animal, ClinicalVisit
+
+        file_url = reverse("medical:file", args=[self.customer.pk])
+        self.assertContains(self.client.get(file_url), "data-add-animal")
+        response = self.client.post(reverse("medical:animal_new", args=[self.customer.pk]),
+                                    {"name": "روكي", "species": "dog", "breed": "جيرمن", "sex": "male", "neutered": "1", "active": "1",
+                                     "date_of_birth": (timezone.localdate() - timedelta(days=800)).isoformat()})
+        dog = Animal.objects.get(name="روكي")
+        self.assertRedirects(response, reverse("medical:animal", args=[dog.pk]) + "?lang=ar", fetch_redirect_response=False)
+        cat = self.vet.save_animal(self.customer, {"name": "مشمش", "species": "cat", "allergies": "بنسلين"}, self.owner)
+        self.assertEqual((dog.owner, dog.neutered, self.vet.age_text(dog)), (self.customer, True, "2 سنين"))
+        form = self.client.get(reverse("medical:visit_new", args=[self.customer.pk]) + f"?animal={cat.pk}")
+        self.assertContains(form, f'<option value="{cat.pk}" selected>')
+        self.client.post(reverse("medical:visit_new", args=[self.customer.pk]), {"animal": dog.pk, "doctor": self.doctor.pk, "complaint": "عرج",
+                                                                                 "weight": "32", "diagnosis": "التواء"})
+        self.client.post(reverse("medical:visit_new", args=[self.customer.pk]), {"animal": cat.pk, "diagnosis": "تطعيم"})
+        self.assertEqual(sorted(ClinicalVisit.objects.values_list("animal__name", "diagnosis")), [("روكي", "التواء"), ("مشمش", "تطعيم")])
+        card = self.client.get(reverse("medical:animal", args=[cat.pk]))
+        self.assertContains(card, "data-animal-allergy")
+        self.assertContains(card, "تطعيم")
+        self.assertNotContains(card, "التواء")  # the dog's visit is the dog's
+        page = self.client.get(file_url)
+        self.assertContains(page, f'data-animal="{dog.pk}"')
+        self.assertContains(page, "data-visit-animal")
+        rx = self.client.get(reverse("medical:prescription", args=[ClinicalVisit.objects.get(animal=dog).pk]))
+        self.assertContains(rx, "data-rx-animal")
+        self.assertContains(rx, "روكي (كلب)")
+        self.assertContains(self.client.get(reverse("medical:patients") + "?q=مشمش"), f'data-patient="{self.customer.pk}"')  # found by the animal's name
+
+    def test_another_owners_animal_is_refused(self):
+        from . import services as medical
+
+        other = make_customer(customer_code="P-2", name="علي")
+        theirs = self.vet.save_animal(other, {"name": "بوبي", "species": "dog"}, self.owner)
+        with self.assertRaisesMessage(ValidationError, "مش بتاع العميل"):
+            medical.save_visit(self.customer, {"animal": theirs, "diagnosis": "x"}, self.owner)
+        with self.assertRaisesMessage(ValidationError, "مش بتاع العميل"):
+            self.vet.save_animal(self.customer, {"name": "بوبي", "species": "dog"}, self.owner, theirs)
+        response = self.client.post(reverse("medical:visit_new", args=[self.customer.pk]), {"animal": theirs.pk, "diagnosis": "x"})
+        self.assertContains(response, "مش بتاع العميل")
+
+    def test_bad_input_is_refused(self):
+        for data, message in (({"species": "dog"}, "اسم الحيوان"), ({"name": "x", "species": "dragon"}, "نوع الحيوان"),
+                              ({"name": "x", "species": "dog", "date_of_birth": "2999-01-01"}, "لسه مجاش"),
+                              ({"name": "x", "species": "dog", "date_of_birth": "nope"}, "مش مظبوط")):
+            with self.subTest(data=data), self.assertRaisesMessage(ValidationError, message):
+                self.vet.save_animal(self.customer, data, self.owner)
+        response = self.client.post(reverse("medical:animal_new", args=[self.customer.pk]), {"name": "", "species": "dog", "breed": "بلدي"})
+        self.assertContains(response, 'value="بلدي"')
+
+    def test_an_edit_is_audited_and_who_may_do_what(self):
+        animal = self.vet.save_animal(self.customer, {"name": "روكي", "species": "dog"}, self.owner)
+        self.client.post(reverse("medical:animal", args=[animal.pk]), {"name": "روكي", "species": "dog", "colour": "أسود", "active": "1"})
+        animal.refresh_from_db()
+        self.assertEqual(animal.colour, "أسود")
+        log = AuditLog.objects.filter(action="save_animal").latest("pk")
+        self.assertEqual((log.before_data["colour"], log.after_data["colour"]), ("", "أسود"))
+        self.assertEqual(self.client.get(reverse("medical:animal", args=[animal.pk]) + "?lang=en&edit=1").status_code, 200)
+        self.client.force_login(person(RoleCode.CASHIER, "vet_cashier"))
+        for url in (reverse("medical:animal", args=[animal.pk]), reverse("medical:animal_new", args=[self.customer.pk])):
+            with self.subTest(url=url):
+                self.assertEqual(self.client.get(url).status_code, 403)
+
+    def test_only_for_a_vet(self):
+        from settings_core.models import ClientProfile
+
+        animal = self.vet.save_animal(self.customer, {"name": "روكي", "species": "dog"}, self.owner)
+        ClientProfile.objects.update(sub_activity_slug="clinic")
+        self.assertEqual(self.client.get(reverse("medical:animal", args=[animal.pk])).status_code, 404)
+        self.assertEqual(self.client.get(reverse("medical:animal_new", args=[self.customer.pk])).status_code, 404)
+        self.assertNotContains(self.client.get(reverse("medical:file", args=[self.customer.pk])), "data-add-animal")
+        self.assertNotContains(self.client.get(reverse("medical:visit_new", args=[self.customer.pk])), "data-visit-animal-select")
