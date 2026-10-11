@@ -207,7 +207,7 @@ class ScreenTests(ContractSetup):
         self.assertFalse(ServiceContract.objects.exists())
 
     def test_the_menu_carries_it(self):
-        self.assertContains(self.client.get(reverse("dashboard_snapshot")), reverse("agreements:list"))
+        self.assertContains(self.client.get(reverse("dashboard_snapshot")), f'href="{reverse("agreements:list")}?lang')
 
 
 class AccessTests(ContractSetup):
@@ -236,7 +236,7 @@ class AccessTests(ContractSetup):
             with self.subTest(sub=sub):
                 complete_setup(self.profile, activity, sub, MODULES)
                 self.assertEqual(self.client.get(reverse("agreements:list")).status_code, 404)
-                self.assertNotContains(self.client.get(reverse("dashboard_snapshot")), reverse("agreements:list"))
+                self.assertNotContains(self.client.get(reverse("dashboard_snapshot")), f'href="{reverse("agreements:list")}?lang')
 
 
 class MaintenanceContractorTests(ContractSetup):
