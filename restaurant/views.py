@@ -87,7 +87,9 @@ def _kind_label(order, lang):
 def _base(request, **extra):
     lang = _lang(request)
     context = {"lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": WORDS[lang], "page_title": WORDS[lang]["page_title"],
-               "can_take": user_has_permission(request.user, TAKE), "can_tables": user_has_permission(request.user, TABLES)}
+               "can_take": user_has_permission(request.user, TAKE), "can_tables": user_has_permission(request.user, TABLES),
+               "can_report": user_has_permission(request.user, REPORT_VIEW), "can_costing": user_has_permission(request.user, COST_VIEW),
+               "links": INSIGHT_WORDS[lang]}
     context.update(extra)
     return context
 
@@ -238,3 +240,108 @@ def tables(request):
     elif editing:
         form = {"name": editing.name, "area": editing.area, "seats": editing.seats, "sort_order": editing.sort_order, "active": editing.active}
     return render(request, "restaurant/tables.html", _base(request, rows=DiningTable.objects.all(), form=form, editing=editing, error=error))
+
+
+REPORT_VIEW, COST_VIEW = "reports.view_all_sales_report", "inventory.view_cost"
+INSIGHT_WORDS = {
+    "ar": {"costing": "تكلفة الأطباق", "costing_intro": "مكوّنات الطبق الواحد وتكلفتها بمتوسط تكلفة الخامة النهارده، قصاد سعر البيع. ده حساب تقديري للتسعير؛ البيع مش بيخصم خامات من المخزن.",
+           "dish": "الطبق", "price": "سعر البيع", "cost": "تكلفة الطبق", "margin": "الهامش", "margin_pct": "نسبة الهامش", "ingredients": "المكوّنات",
+           "no_recipe": "لسه مالوش مكوّنات", "edit": "المكوّنات", "ingredient": "الخامة", "quantity": "الكمية للطبق", "save": "حفظ", "saved": "اتحفظت المكوّنات.",
+           "back": "تكلفة الأطباق", "add_row": "سطر زيادة", "report": "تقرير المطعم",
+           "report_intro": "الطلبات المدفوعة اللي فاتورتها مترحّلة. قيمة الطلب صافي البيع (قبل الضريبة وبعد المرتجعات)، وقيمة الطبق بسعر المنيو قبل خصم الطلب.",
+           "from": "من", "to": "لحد", "go": "اعرض", "orders": "طلبات", "sales": "المبيعات", "average": "متوسط الطلب", "guests": "أفراد في الصالة",
+           "minutes": "دقيقة متوسط القعدة", "by_hour": "حسب الساعة", "hour": "الساعة", "peak": "أزحم ساعة", "top": "الأكثر مبيعًا", "qty": "الكمية",
+           "tables": "الطاولات", "table": "الطاولة", "per_day": "طلب في اليوم", "stay": "متوسط القعدة (دقيقة)", "waiters": "الويترز", "waiter": "الويتر",
+           "no_waiter": "من غير ويتر", "kinds": "نوع الطلب", "kind": "النوع", "waste": "الهالك والفاقد", "waste_intro": "اللي اتشال من المخزن بتسوية في الفترة دي، بسببها.",
+           "item": "الصنف", "date": "التاريخ", "reason": "السبب", "value": "القيمة", "no_waste": "مفيش هالك متسجّل في الفترة دي.", "nothing": "مفيش طلبات مدفوعة في الفترة دي.",
+           "bad_period": "الفترة مش مظبوطة؛ اتعرض الشهر ده.", "dine_in": "صالة", "takeaway": "تيك أواي", "delivery": "دليفري", "total": "الإجمالي"},
+    "en": {"costing": "Dish costs", "costing_intro": "What one plate uses and what it costs at today's average ingredient cost, against its price. An estimate for pricing; selling takes nothing out of stock.",
+           "dish": "Dish", "price": "Price", "cost": "Plate cost", "margin": "Margin", "margin_pct": "Margin %", "ingredients": "Ingredients",
+           "no_recipe": "No ingredients yet", "edit": "Ingredients", "ingredient": "Ingredient", "quantity": "Quantity per plate", "save": "Save", "saved": "Ingredients saved.",
+           "back": "Dish costs", "add_row": "Another row", "report": "Restaurant report",
+           "report_intro": "Paid orders whose invoice is posted. An order's value is its net sales (before tax, after returns); a dish's is at menu price, before the order's discount.",
+           "from": "From", "to": "To", "go": "Show", "orders": "Orders", "sales": "Sales", "average": "Average order", "guests": "Guests seated",
+           "minutes": "min average stay", "by_hour": "By hour", "hour": "Hour", "peak": "Busiest hour", "top": "Best sellers", "qty": "Qty",
+           "tables": "Tables", "table": "Table", "per_day": "orders a day", "stay": "Average stay (min)", "waiters": "Waiters", "waiter": "Waiter",
+           "no_waiter": "No waiter", "kinds": "Order type", "kind": "Type", "waste": "Waste and losses", "waste_intro": "What was taken out of stock by adjustment in this period, with its reason.",
+           "item": "Item", "date": "Date", "reason": "Reason", "value": "Value", "no_waste": "No waste recorded in this period.", "nothing": "No paid orders in this period.",
+           "bad_period": "The period was not valid; showing this month.", "dine_in": "Dine in", "takeaway": "Takeaway", "delivery": "Delivery", "total": "Total"},
+}
+
+
+def _dishes():
+    return Item.objects.filter(active=True, is_stock_tracked=False).order_by("item_name")
+
+
+@require_permission(COST_VIEW)
+def menu_costing(request):
+    from . import insights
+
+    lang = _lang(request)
+    words = INSIGHT_WORDS[lang]
+    rows = insights.menu_costing(list(_dishes()))
+    return render(request, "restaurant/costing.html", _base(request, page_title=words["costing"], iw=words, rows=rows,
+                                                          can_edit=user_has_permission(request.user, TABLES)))
+
+
+@require_permission(COST_VIEW)
+def dish_ingredients(request, pk):
+    from . import insights
+
+    lang = _lang(request)
+    words = INSIGHT_WORDS[lang]
+    dish = get_object_or_404(_dishes(), pk=pk)
+    ingredients = Item.objects.filter(active=True, is_stock_tracked=True).order_by("item_name")
+    error = ""
+    if request.method == "POST":
+        if not user_has_permission(request.user, TABLES):
+            raise PermissionDenied("Changing a dish's ingredients needs master_data.manage_items.")
+        lines = [(ingredients.filter(pk=raw).first() if str(raw).isdigit() else None, qty)
+                 for raw, qty in zip(request.POST.getlist("ingredient"), request.POST.getlist("quantity"))]
+        try:
+            insights.save_ingredients(dish, lines, request.user, lang)
+        except ValidationError as exc:
+            error = " ".join(exc.messages)
+        else:
+            messages.success(request, words["saved"])
+            return redirect(f"{reverse('restaurant:costing')}?lang={lang}")
+    current = list(dish.dish_ingredients.select_related("ingredient"))
+    rows = [{"ingredient": row.ingredient_id, "quantity": row.quantity} for row in current] + [{"ingredient": None, "quantity": ""}] * 3
+    if request.method == "POST":
+        rows = [{"ingredient": int(raw) if str(raw).isdigit() else None, "quantity": qty}
+                for raw, qty in zip(request.POST.getlist("ingredient"), request.POST.getlist("quantity"))]
+    return render(request, "restaurant/dish_ingredients.html", _base(request, page_title=dish.item_name, iw=words, dish=dish, rows=rows,
+                                                                   ingredients=ingredients, cost=insights.plate_cost(dish, current), error=error,
+                                                                   can_edit=user_has_permission(request.user, TABLES)))
+
+
+def _period(request, words):
+    from datetime import date
+
+    today = timezone.localdate()
+    first, last, note = today.replace(day=1), today, ""
+    if request.GET.get("from") or request.GET.get("to"):
+        try:
+            first = date.fromisoformat(request.GET.get("from")) if request.GET.get("from") else first
+            last = date.fromisoformat(request.GET.get("to")) if request.GET.get("to") else last
+            if first > last or (last - first).days > 366:
+                raise ValueError
+        except ValueError:
+            first, last, note = today.replace(day=1), today, words["bad_period"]
+    return first, last, note
+
+
+@require_permission(REPORT_VIEW)
+def report(request):
+    from . import insights
+
+    lang = _lang(request)
+    words = INSIGHT_WORDS[lang]
+    first, last, note = _period(request, words)
+    data = insights.period_report(first, last)
+    for row in data["kinds"]:
+        row["label"] = words.get(row["kind"], row["kind"])
+    waste_rows, waste_total = insights.waste(first, last)
+    return render(request, "restaurant/report.html", _base(request, page_title=words["report"], iw=words, first=first, last=last, note=note,
+                                                         today=timezone.localdate(), waste=waste_rows, waste_total=waste_total,
+                                                         can_cost=user_has_permission(request.user, COST_VIEW), **data))

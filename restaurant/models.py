@@ -100,3 +100,21 @@ class OrderLine(models.Model):
     @property
     def amount(self):
         return money_round(self.quantity * self.unit_price)
+
+
+class DishIngredient(models.Model):
+    """RESTO-002: what one plate of a dish uses, for its cost and margin (HG-044, read-only part).
+
+    Reading only: nothing here takes ingredients out of stock. Selling a dish
+    deducts nothing until Ahmed decides HG-044's ingredient deduction."""
+
+    dish = models.ForeignKey("master_data.Item", on_delete=models.CASCADE, related_name="dish_ingredients")
+    ingredient = models.ForeignKey("master_data.Item", on_delete=models.PROTECT, related_name="used_in_dishes")
+    quantity = models.DecimalField(max_digits=12, decimal_places=3, help_text="Per plate, in the ingredient's unit.")
+
+    class Meta:
+        ordering = ["dish", "ingredient__item_name"]
+        constraints = [models.UniqueConstraint(fields=["dish", "ingredient"], name="restaurant_one_line_per_ingredient")]
+
+    def __str__(self):
+        return f"{self.dish_id}:{self.ingredient_id}"

@@ -710,3 +710,22 @@ The final blocking implementation review did not introduce a new business/accoun
 Regression coverage for every item above is included in the final 794-test run. No migration was required and the model-drift check remains clean.
 
 No unresolved business or accounting decision was discovered while implementing or verifying these approvals.
+
+## HG-044 — implementation note: dish cost, read only (RESTO-002)
+
+- **Status:** The read-only part of the HG-044 proposal (recorded in PR #184), built. **Taking ingredients out of stock when a dish is sold is not built; it still waits for Ahmed's decision.**
+- **Schema:** migration `restaurant/0002_dish_ingredients` adds `DishIngredient` and touches no existing table.
+  - Fields: dish (a menu item), ingredient (a stocked item), quantity per plate; one row per dish and ingredient.
+  - Manufacturing recipes can't hold this, because they need a stocked product and dishes are made to order (services).
+- **Dish cost:**
+  - the sum of the ingredients at each ingredient's current `average_cost` (the display cache, HG-003);
+  - an estimate for pricing, shown with the margin against the menu price;
+  - it never feeds posting, cost of goods sold or any report calculation.
+- **Waste:** no new table. The report lists stock taken out by an ordinary stock adjustment in the period, with its reason, at movement cost; a cancelled adjustment is left out.
+- **The restaurant report** reads paid orders whose invoice is posted, in the current entity:
+  - by hour, best sellers, by order type, tables (orders a day, average order, average stay), waiters;
+  - order values are net sales (`appointments.services.net_sales`: before tax, after posted returns);
+  - dish values are at menu price before the order's discount.
+- **Permissions:** the report needs `reports.view_all_sales_report`. Costs and waste values need `inventory.view_cost`. Editing ingredients needs `master_data.manage_items`.
+- **Not touched:** inventory movement and accounting, sales posting, average-cost logic, report calculations.
+- **Tests:** `restaurant/tests.py` → `RestaurantInsightTests` (including that selling a dish moves no stock); `reports/tests_demo_catalogs.py` (the restaurant demo).

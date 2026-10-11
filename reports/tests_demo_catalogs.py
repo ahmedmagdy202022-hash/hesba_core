@@ -115,6 +115,19 @@ class SampleBusinessPerActivityTests(TestCase):
         self.assertFalse(dish.is_stock_tracked)
         self.assertFalse(PurchaseLine.objects.filter(item=dish).exists())
         self.assertTrue(PurchaseLine.objects.filter(item__item_code="DEMO-RAW-01").exists())  # the kitchen's ingredients
+        # RESTO-002: dishes have ingredients and a margin, the week has paid orders, and one waste adjustment.
+        from datetime import timedelta
+        from django.utils import timezone
+
+        from restaurant import insights
+        from restaurant.models import Order
+
+        self.assertIsNotNone(insights.plate_cost(dish))
+        self.assertEqual(Order.objects.filter(status="paid", invoice__status="posted").count(), 8)
+        today = timezone.localdate()
+        report = insights.period_report(today - timedelta(days=7), today)
+        self.assertEqual((report["totals"]["orders"], len(report["hours"]) >= 3), (8, True))
+        self.assertEqual(len(insights.waste(today - timedelta(days=7), today)[0]), 1)
 
     def test_a_clinic_has_patients_visits_and_appointments(self):
         from appointments.models import Appointment

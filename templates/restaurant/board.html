@@ -2,7 +2,7 @@
 {% load static hesba_format %}
 {% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/restaurant.css' %}?v=resto-001">{% endblock %}
 {% block operation_content %}
-<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div>{% if can_tables %}<a class="op-secondary" href="{% url 'restaurant:tables' %}?lang={{ lang }}">{{ words.tables_title }}</a>{% endif %}</section>
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div><div class="op-form-actions">{% if can_report %}<a class="op-secondary" href="{% url 'restaurant:report' %}?lang={{ lang }}" data-resto-report>{{ links.report }}</a>{% endif %}{% if can_costing %}<a class="op-secondary" href="{% url 'restaurant:costing' %}?lang={{ lang }}" data-resto-costing>{{ links.costing }}</a>{% endif %}{% if can_tables %}<a class="op-secondary" href="{% url 'restaurant:tables' %}?lang={{ lang }}">{{ words.tables_title }}</a>{% endif %}</div></section>
 {% if tables %}
 <div class="rs-tables" role="list">
 {% for row in tables %}{% with table=row.table order=row.order %}

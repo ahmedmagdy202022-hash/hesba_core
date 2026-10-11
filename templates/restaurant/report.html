@@ -1,0 +1,46 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'restaurant:board' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ iw.report }}</h1><p>{{ iw.report_intro }}</p></div></section>
+{% if note %}<p class="op-notice">{{ note }}</p>{% endif %}
+<form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}">
+<label class="sr-only" for="rr-from">{{ iw.from }}</label><input id="rr-from" type="date" name="from" value="{{ first|date:'Y-m-d' }}" max="{{ today|date:'Y-m-d' }}">
+<label class="sr-only" for="rr-to">{{ iw.to }}</label><input id="rr-to" type="date" name="to" value="{{ last|date:'Y-m-d' }}" max="{{ today|date:'Y-m-d' }}">
+<button type="submit">{{ iw.go }}</button></form>
+<section class="op-summary-grid">
+<article><small>{{ iw.orders }}</small><strong data-r-orders>{{ totals.orders }}</strong></article>
+<article><small>{{ iw.sales }}</small><strong data-r-sales>{{ totals.sales|money }}</strong></article>
+<article><small>{{ iw.average }}</small><strong data-r-average>{{ totals.average|money }}</strong></article>
+<article><small>{{ iw.guests }}</small><strong>{{ totals.guests }}</strong>{% if totals.minutes is not None %}<small>{{ totals.minutes }} {{ iw.minutes }}</small>{% endif %}</article>
+<article><small>{{ iw.peak }}</small><strong data-r-peak>{% if peak %}<bdi>{{ peak.hour|stringformat:"02d" }}:00</bdi>{% else %}—{% endif %}</strong>{% if peak %}<small>{{ peak.orders }} {{ iw.orders }}</small>{% endif %}</article>
+{% if can_cost %}<article><small>{{ iw.waste }}</small><strong data-r-waste>{{ waste_total|money }}</strong></article>{% endif %}
+</section>
+{% if totals.orders %}
+<h2>{{ iw.top }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-r-dishes><thead><tr><th>{{ iw.dish }}</th><th>{{ iw.qty }}</th><th>{{ iw.sales }}</th></tr></thead><tbody>
+{% for row in dishes %}<tr data-r-dish="{{ row.item.pk }}"><td class="op-cell-text">{{ row.item.item_name }}</td><td><bdi>{{ row.quantity|qty }}</bdi></td><td>{{ row.sales|money }}</td></tr>{% endfor %}
+</tbody></table></div>
+<h2>{{ iw.by_hour }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-r-hours><thead><tr><th>{{ iw.hour }}</th><th>{{ iw.orders }}</th><th>{{ iw.sales }}</th></tr></thead><tbody>
+{% for row in hours %}<tr data-r-hour="{{ row.hour }}"><td><bdi>{{ row.hour|stringformat:"02d" }}:00</bdi></td><td>{{ row.orders }}</td><td>{{ row.sales|money }}</td></tr>{% endfor %}
+</tbody></table></div>
+<h2>{{ iw.kinds }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-r-kinds><thead><tr><th>{{ iw.kind }}</th><th>{{ iw.orders }}</th><th>{{ iw.sales }}</th><th>{{ iw.average }}</th></tr></thead><tbody>
+{% for row in kinds %}<tr data-r-kind="{{ row.kind }}"><td>{{ row.label }}</td><td>{{ row.orders }}</td><td>{{ row.sales|money }}</td><td>{{ row.average|money }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if tables %}<h2>{{ iw.tables }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-r-tables><thead><tr><th>{{ iw.table }}</th><th>{{ iw.orders }}</th><th>{{ iw.per_day }}</th><th>{{ iw.average }}</th><th>{{ iw.stay }}</th></tr></thead><tbody>
+{% for row in tables %}<tr data-r-table="{{ row.table.pk }}"><td>{{ row.table.name }}</td><td>{{ row.orders }}</td><td><bdi>{{ row.per_day|stringformat:".1f" }}</bdi></td><td>{{ row.average|money }}</td><td>{{ row.minutes }}</td></tr>{% endfor %}
+</tbody></table></div>{% endif %}
+<h2>{{ iw.waiters }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-r-waiters><thead><tr><th>{{ iw.waiter }}</th><th>{{ iw.orders }}</th><th>{{ iw.sales }}</th><th>{{ iw.average }}</th></tr></thead><tbody>
+{% for row in waiters %}<tr><td class="op-cell-text">{% if row.waiter %}{{ row.waiter.name }}{% else %}{{ iw.no_waiter }}{% endif %}</td><td>{{ row.orders }}</td><td>{{ row.sales|money }}</td><td>{{ row.average|money }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% else %}<p class="op-muted">{{ iw.nothing }}</p>{% endif %}
+<h2>{{ iw.waste }}</h2><p class="op-muted">{{ iw.waste_intro }}</p>
+<div class="op-table-wrap"><table class="op-table" data-r-waste><thead><tr><th>{{ iw.date }}</th><th>{{ iw.item }}</th><th>{{ iw.qty }}</th><th>{{ iw.reason }}</th>{% if can_cost %}<th>{{ iw.value }}</th>{% endif %}</tr></thead><tbody>
+{% for row in waste %}<tr data-r-waste-row="{{ row.movement.pk }}"><td><bdi>{{ row.movement.movement_date|date:"Y-m-d" }}</bdi></td><td class="op-cell-text">{{ row.movement.item.item_name }}</td><td><bdi>{{ row.movement.quantity|qty }}</bdi></td>
+<td class="op-cell-text">{{ row.reason|default:'—' }}</td>{% if can_cost %}<td>{{ row.value|money }}</td>{% endif %}</tr>
+{% empty %}<tr><td colspan="5" class="op-empty">{{ iw.no_waste }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}
