@@ -729,3 +729,21 @@ No unresolved business or accounting decision was discovered while implementing 
   - The price is the clinic's to set per step; it defaults to the service's price.
   - Rolling back the migration drops the two tables (charts and plans); nothing else depends on them.
 - **Tests:** `medical/tests.py` → `DentalChartTests`; `reports/tests_demo_catalogs.py` (the dental demo has a chart and a plan in three stages).
+
+## HG-043 — implementation note: lab results (MED-004)
+
+- **Status:** The lab part of the HG-043 proposal, built as design A. The physiotherapy, vet and reception-queue parts are not built yet.
+- **Schema:** migration `medical/0003_lab_results` adds two tables and touches no existing one.
+  - `LabTest`: name (unique), unit, normal low and/or high, optional service item, order, active.
+  - `LabResult`: patient, test, sample day (one result per patient, test and day), the number or a text value, and the unit and range **copied from the test when entered**, plus the flag.
+- **Rules:**
+  - The boundaries count as normal.
+  - Changing a test's range never rewrites an old result's flag.
+  - A text result (negative, A+) has no flag.
+  - Arabic digits and the Arabic decimal sign are read; a comma groups thousands.
+  - Each entry and correction is audited before/after.
+- **Money:** none. A test is billed like any service, on an ordinary sales invoice.
+- **Not touched:** sales, ledgers, appointments, report calculations.
+- **Shown only** for medical / lab.
+- **Risk:** the flag compares numbers only; it does not convert between units, so a range is valid for the test's own unit.
+- **Tests:** `medical/tests.py` → `LabResultTests`; `reports/tests_demo_catalogs.py` (the lab demo).

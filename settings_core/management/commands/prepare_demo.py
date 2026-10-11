@@ -161,6 +161,26 @@ class Command(BaseCommand):
                                   "follow_up_date": (today + timedelta(days=7)).isoformat(), "doctor": doctor}, owner)
         self._clinic_month(master, doctor, owner, today)
         self._dental(master, doctor, owner, today)
+        self._lab(master, owner, today)
+
+    def _lab(self, master, owner, today):
+        """MED-004: a lab has its tests with normal ranges, and two days of results for its first patient."""
+
+        from medical import lab
+
+        if not lab.is_lab():
+            return
+        services = {item.item_name: item for item in master["items"] if not item.is_stock_tracked}
+        tests = {}
+        for position, (name, unit, low, high, service) in enumerate((
+                ("هيموجلوبين", "g/dL", "12", "16", "صورة دم كاملة"), ("كرات دم بيضاء", "×10³/µL", "4", "11", "صورة دم كاملة"),
+                ("سكر صايم", "mg/dL", "70", "100", ""), ("إنزيم ALT", "U/L", "7", "56", "وظائف كبد"), ("فصيلة الدم", "", "", "", ""))):
+            tests[name] = lab.save_test({"name": name, "unit": unit, "low": low, "high": high, "service": services.get(service), "position": position}, owner)
+        patient = master["customers"][0]
+        lab.record_results(patient, today - timedelta(days=30), {tests["هيموجلوبين"]: ("11.2", ""), tests["سكر صايم"]: ("132", "")}, owner)
+        lab.record_results(patient, today - timedelta(days=1), {tests["هيموجلوبين"]: ("12.8", ""), tests["كرات دم بيضاء"]: ("7.5", ""),
+                                                                tests["سكر صايم"]: ("118", ""), tests["إنزيم ALT"]: ("31", ""),
+                                                                tests["فصيلة الدم"]: ("", "A+")}, owner)
 
     def _dental(self, master, doctor, owner, today):
         """MED-003: a dental clinic's first patient has a chart and a plan in two stages, one step done."""

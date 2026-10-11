@@ -1,0 +1,21 @@
+{% load static hesba_format %}<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{{ lw.sheet }} — {{ patient.name }}</title>
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}"><link rel="stylesheet" href="{% static 'hesba/css/print.css' %}?v=print-002">
+<style>.lab{max-width:760px;margin:24px auto;padding:28px;background:var(--hs-surface);border:1px solid var(--hs-line);border-radius:14px;font-family:var(--hs-font-body);color:var(--hs-ink)}.lab header{display:flex;justify-content:space-between;gap:16px;border-bottom:2px solid var(--hs-teal);padding-bottom:12px}.lab h1{margin:0;font-family:var(--hs-font-head);color:var(--hs-navy);font-size:22px}.lab h2{color:var(--hs-navy);font-size:18px;margin:16px 0 8px}.lab .meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 18px;margin:12px 0}.lab table{width:100%;border-collapse:collapse}.lab th,.lab td{padding:8px 10px;border-bottom:1px solid var(--hs-line);text-align:start}.lab th{color:var(--hs-muted);font-size:13px}.lab .out{font-weight:700;color:var(--hs-danger-solid)}.lab footer{display:flex;justify-content:flex-end;margin-top:30px;padding-top:12px;border-top:1px solid var(--hs-line)}@media print{.no-print{display:none}.lab{border:0;margin:0}}</style></head>
+<body style="background:var(--hs-ground)">
+<p class="no-print" style="text-align:center"><button type="button" data-print style="min-height:44px;padding:0 18px;border:0;border-radius:10px;background:var(--hs-teal);color:var(--hs-on-teal);font-weight:700">{{ lw.print }}</button></p>
+<main class="lab" data-lab-sheet>
+<header><div><h1>{{ company.name }}</h1>{% if company.phone %}<div><bdi>{{ company.phone }}</bdi></div>{% endif %}{% if company.address %}<div>{{ company.address }}</div>{% endif %}</div>{% if company.logo %}<img src="{{ company.logo }}" alt="" style="max-height:64px">{% endif %}</header>
+<h2>{{ lw.sheet }}</h2>
+<section class="meta"><div><b>{{ lw.patient }}:</b> {{ patient.name }}</div><div><b>{{ lw.day }}:</b> <bdi>{{ taken_on|date:"Y-m-d" }}</bdi></div>
+<div><b>{{ lw.file_no }}:</b> <bdi>{{ file.file_number }}</bdi></div><div>{% if age is not None %}<b>{{ lw.age }}:</b> {{ age }} {{ lw.years }}{% endif %}</div></section>
+<table><thead><tr><th>{{ lw.name }}</th><th>{{ lw.value }}</th><th>{{ lw.unit }}</th><th>{{ lw.range }}</th><th>{{ lw.flag }}</th></tr></thead><tbody>
+{% for result in results %}<tr data-sheet-result="{{ result.test.pk }}"><td>{{ result.test.name }}</td><td class="{% if result.flag == 'low' or result.flag == 'high' %}out{% endif %}"><bdi>{% if result.value is not None %}{{ result.value|qty }}{% endif %}{% if result.text_value %} {{ result.text_value }}{% endif %}</bdi></td>
+<td><bdi>{{ result.unit }}</bdi></td><td>{% if result.low is None and result.high is None %}—{% else %}<span dir="ltr">{% if result.low is not None %}{{ result.low|qty }}{% else %}…{% endif %} – {% if result.high is not None %}{{ result.high|qty }}{% else %}…{% endif %}</span>{% endif %}</td>
+<td class="{% if result.flag == 'low' or result.flag == 'high' %}out{% endif %}">{{ result.flag_label }}{% if result.flag == 'high' %} ↑{% elif result.flag == 'low' %} ↓{% endif %}</td></tr>{% endfor %}
+</tbody></table>
+<footer><div>{{ lw.signature }}: ____________</div></footer>
+</main>
+<script>document.querySelector('[data-print]').addEventListener('click', function(){ window.print(); });</script>
+</body></html>

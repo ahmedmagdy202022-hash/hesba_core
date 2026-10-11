@@ -416,3 +416,100 @@ class DentalChartTests(TestCase):
         ClientProfile.objects.update(sub_activity_slug="clinic")
         self.assertEqual(self.client.get(self.url).status_code, 404)
         self.assertNotContains(self.client.get(reverse("medical:file", args=[self.patient.pk])), "data-dental-link")
+
+
+class LabResultTests(TestCase):
+    """MED-004: tests with normal ranges and the patient's results (HG-043)."""
+
+    def setUp(self):
+        prepared_client("medical", "lab", CLINIC)
+        self.owner = person(RoleCode.OWNER, "lab_owner")
+        self.patient = make_customer(customer_code="P-1", name="منى", phone="01001234567")
+        self.client.force_login(self.owner)
+        from . import lab
+
+        self.lab = lab
+        self.hb = lab.save_test({"name": "هيموجلوبين", "unit": "g/dL", "low": "12", "high": "16"}, self.owner)
+        self.sugar = lab.save_test({"name": "سكر صايم", "unit": "mg/dL", "low": "70", "high": "100"}, self.owner)
+        self.group = lab.save_test({"name": "فصيلة الدم"}, self.owner)
+        self.url = reverse("medical:lab", args=[self.patient.pk])
+
+    def test_flags_at_the_boundaries(self):
+        flag = self.lab.flag
+        cases = ((Decimal("11.999"), "low"), (Decimal("12"), "normal"), (Decimal("16"), "normal"), (Decimal("16.001"), "high"), (None, ""))
+        for value, expected in cases:
+            with self.subTest(value=value):
+                self.assertEqual(flag(value, Decimal("12"), Decimal("16")), expected)
+        self.assertEqual(flag(Decimal("5"), None, Decimal("3")), "high")  # only an upper limit
+        self.assertEqual(flag(Decimal("5"), Decimal("6"), None), "low")
+        self.assertEqual(flag(Decimal("5"), None, None), "")
+        for typed, expected in (("١٢٫٥", Decimal("12.500")), ("7,500", Decimal("7500.000")), (" 9 ", Decimal("9.000")), ("", None)):
+            with self.subTest(typed=typed):
+                self.assertEqual(self.lab.number(typed), expected)
+
+    def test_results_are_entered_flagged_corrected_and_printed(self):
+        from .models import LabResult
+
+        day = (timezone.localdate() - timedelta(days=1)).isoformat()
+        response = self.client.post(self.url, {"taken_on": day, f"value_{self.hb.pk}": "11.2", f"value_{self.sugar.pk}": "95",
+                                               f"text_{self.group.pk}": "A+"})
+        self.assertRedirects(response, self.url + "?lang=ar", fetch_redirect_response=False)
+        flags = dict(LabResult.objects.values_list("test__name", "flag"))
+        self.assertEqual(flags, {"هيموجلوبين": "low", "سكر صايم": "normal", "فصيلة الدم": ""})
+        self.client.post(self.url, {"taken_on": day, f"value_{self.hb.pk}": "12.4"})  # a correction of the same day
+        hb = LabResult.objects.get(test=self.hb)
+        self.assertEqual((LabResult.objects.count(), hb.value, hb.flag), (3, Decimal("12.400"), "normal"))
+        log = AuditLog.objects.filter(action="record_lab_result", object_id=str(hb.pk)).latest("pk")
+        self.assertEqual((log.before_data["flag"], log.after_data["flag"]), ("low", "normal"))
+        page = self.client.get(self.url)
+        self.assertContains(page, f'data-lab-result="{hb.pk}" data-flag="normal"')
+        sheet = self.client.get(reverse("medical:lab_sheet", args=[self.patient.pk, day]))
+        self.assertContains(sheet, "data-lab-sheet")
+        self.assertContains(sheet, "12.4")
+        self.assertContains(sheet, "A+")
+        self.assertEqual(self.client.get(reverse("medical:lab_sheet", args=[self.patient.pk, "2020-01-01"])).status_code, 404)
+        self.assertEqual(self.client.get(reverse("medical:lab_sheet", args=[self.patient.pk, "nope"])).status_code, 404)
+
+    def test_a_changed_range_does_not_rewrite_an_old_result(self):
+        from .models import LabResult
+
+        old = timezone.localdate() - timedelta(days=10)
+        self.lab.record_results(self.patient, old, {self.sugar: ("105", "")}, self.owner)
+        self.client.post(reverse("medical:lab_tests"), {"test": self.sugar.pk, "name": "سكر صايم", "unit": "mg/dL", "low": "70", "high": "110", "active": "1"})
+        self.sugar.refresh_from_db()
+        self.assertEqual(self.sugar.high, Decimal("110.000"))
+        first = LabResult.objects.get()
+        self.assertEqual((first.flag, first.high), ("high", Decimal("100.000")))  # flagged against the range of its day
+        self.lab.record_results(self.patient, timezone.localdate(), {self.sugar: ("105", "")}, self.owner)
+        latest = LabResult.objects.get(taken_on=timezone.localdate())
+        self.assertEqual(latest.flag, "normal")
+        self.assertEqual(self.lab.previous(latest), first)
+
+    def test_bad_input_is_refused_with_what_was_typed(self):
+        response = self.client.post(self.url, {"taken_on": timezone.localdate().isoformat(), f"value_{self.hb.pk}": "عالي"})
+        self.assertContains(response, "مش رقم")
+        self.assertContains(response, 'value="عالي"')
+        self.assertContains(self.client.post(self.url, {"taken_on": timezone.localdate().isoformat()}), "نتيجة تحليل واحد")
+        tomorrow = (timezone.localdate() + timedelta(days=1)).isoformat()
+        self.assertContains(self.client.post(self.url, {"taken_on": tomorrow, f"value_{self.hb.pk}": "13"}), "لسه مجاش")
+        for data, message in (({"name": ""}, "اسم التحليل"), ({"name": "هيموجلوبين"}, "موجود"), ({"name": "X", "low": "10", "high": "5"}, "أكبر"),
+                              ({"name": "Y", "low": "abc"}, "مش رقم")):
+            with self.subTest(data=data), self.assertRaisesMessage(ValidationError, message):
+                self.lab.save_test(data, self.owner)
+
+    def test_who_may_do_what_and_only_for_a_lab(self):
+        from settings_core.models import ClientProfile
+
+        self.assertContains(self.client.get(reverse("medical:file", args=[self.patient.pk])), "data-lab-link")
+        self.assertContains(self.client.get(reverse("medical:patients")), reverse("medical:lab_tests"))
+        cashier = person(RoleCode.CASHIER, "lab_cashier")
+        self.client.force_login(cashier)
+        for url in (self.url, reverse("medical:lab_tests")):
+            with self.subTest(url=url):
+                self.assertEqual(self.client.get(url).status_code, 403)
+        self.client.force_login(self.owner)
+        self.assertEqual(self.client.get(self.url + "?lang=en").status_code, 200)
+        ClientProfile.objects.update(sub_activity_slug="clinic")
+        self.assertEqual(self.client.get(self.url).status_code, 404)
+        self.assertEqual(self.client.get(reverse("medical:lab_tests")).status_code, 404)
+        self.assertNotContains(self.client.get(reverse("medical:file", args=[self.patient.pk])), "data-lab-link")

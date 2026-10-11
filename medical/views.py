@@ -88,7 +88,7 @@ MONEY_VIEW = "reports.view_all_sales_report"
 def _tabs(request, current):
     from permissions.services import user_has_permission
 
-    return {"tab": current, "shows_report": user_has_permission(request.user, REPORT_VIEW)}
+    return {"tab": current, "shows_report": user_has_permission(request.user, REPORT_VIEW), "shows_lab": _is_lab(), "lab_tests_label": LAB_WORDS[_lang(request)]["tests"]}
 
 
 def _period(request, words):
@@ -191,6 +191,7 @@ def patient_file(request, pk):
 
     return render(request, "medical/file.html", _base(lang, patient=patient, file=file, age=services.age(file), visits=visits, upcoming=upcoming,
                                                       is_dental=dental.is_dental(), dental_label=DENTAL_WORDS[lang]["title"],
+                                                      is_lab=_is_lab(), lab_label=LAB_WORDS[lang]["title"],
                                                       can_write=can_write, error=error, genders=Gender.values, bloods=BloodType.values,
                                                       user_id=request.user.pk, today=timezone.localdate()))
 
@@ -327,3 +328,128 @@ def dental_chart(request, pk):
                                                         conditions=[(value, labels[value]) for value in ToothCondition.values], teeth=teeth,
                                                         steps=steps, totals=dental.plan_totals(patient), services=services_, doctors=_doctors(),
                                                         can_write=can_write, can_bill=can_bill, error=error, post=request.POST, planned=StepStatus.PLANNED))
+
+
+LAB_WORDS = {
+    "ar": {"title": "نتايج التحاليل", "intro": "اكتب نتيجة كل تحليل؛ القيمة بتتقارن بالمعدل الطبيعي وقت تسجيلها.", "tests": "التحاليل والمعدلات",
+           "tests_intro": "كل تحليل بوحدته ومعدله الطبيعي. تغيير المعدل مش بيغيّر نتايج اتسجلت قبل كده.", "name": "التحليل", "unit": "الوحدة",
+           "low": "الحد الأدنى", "high": "الحد الأعلى", "range": "المعدل الطبيعي", "service": "الخدمة (للفاتورة)", "position": "الترتيب",
+           "active": "شغال", "save": "حفظ", "add": "+ تحليل جديد", "edit": "تعديل", "day": "تاريخ العينة", "value": "النتيجة", "text": "وصف (لو النتيجة كلام)",
+           "flag": "الحكم", "previous": "المرة اللي فاتت", "record": "سجّل النتايج", "history": "النتايج السابقة", "print": "اطبع النتيجة",
+           "no_tests": "مفيش تحاليل متسجلة لسه. ضيفها من «التحاليل والمعدلات».", "no_results": "مفيش نتايج لسه.", "saved": "اتحفظ.",
+           "back": "ملف المريض", "sheet": "تقرير نتيجة تحاليل", "patient": "المريض", "file_no": "رقم الملف", "age": "السن", "years": "سنة",
+           "signature": "توقيع المسؤول", "choose": "—", "none": "—"},
+    "en": {"title": "Lab results", "intro": "Enter each test's result; the value is checked against the normal range in force when it is entered.",
+           "tests": "Tests and ranges", "tests_intro": "Each test with its unit and normal range. Changing a range never changes results already entered.",
+           "name": "Test", "unit": "Unit", "low": "Low limit", "high": "High limit", "range": "Normal range", "service": "Service (for the invoice)",
+           "position": "Order", "active": "Active", "save": "Save", "add": "+ New test", "edit": "Edit", "day": "Sample date", "value": "Result",
+           "text": "Text (if the result is a word)", "flag": "Flag", "previous": "Last time", "record": "Record the results", "history": "Earlier results",
+           "print": "Print the result", "no_tests": "No tests yet. Add them under “Tests and ranges”.", "no_results": "No results yet.", "saved": "Saved.",
+           "back": "Patient file", "sheet": "Laboratory report", "patient": "Patient", "file_no": "File no.", "age": "Age", "years": "yrs",
+           "signature": "Signed", "choose": "—", "none": "—"},
+}
+
+
+def _is_lab():
+    from . import lab
+
+    return lab.is_lab()
+
+
+def _lab_guard(request, write=False):
+    from . import lab
+
+    _guard(request, write=write)
+    if not lab.is_lab():
+        raise Http404("Lab results are for labs.")
+
+
+def lab_tests(request):
+    from master_data.models import Item
+
+    from . import lab
+    from .models import LabTest
+
+    _lab_guard(request)
+    lang = _lang(request)
+    words = LAB_WORDS[lang]
+    can_write = services.can_write(request.user)
+    editing = get_object_or_404(LabTest, pk=request.GET.get("edit") or request.POST.get("test")) if (request.GET.get("edit") or request.POST.get("test")) else None
+    error = ""
+    services_ = Item.objects.filter(active=True, is_stock_tracked=False).order_by("item_name")
+    if request.method == "POST":
+        if not can_write:
+            raise PermissionDenied("Editing lab tests needs medical.write_records.")
+        data = request.POST.dict()
+        data["service"] = services_.filter(pk=request.POST.get("service") or 0).first()
+        data["active"] = request.POST.get("active") == "1"
+        try:
+            lab.save_test(data, request.user, editing, lang)
+        except ValidationError as exc:
+            error = " ".join(exc.messages)
+        else:
+            messages.success(request, words["saved"])
+            return redirect(f"{reverse('medical:lab_tests')}?lang={lang}")
+    return render(request, "medical/lab_tests.html", _base(lang, **_tabs(request, "lab_tests"), page_title=words["tests"], lw=words, tests=LabTest.objects.select_related("service"),
+                                                          editing=editing, services=services_, can_write=can_write, error=error, post=request.POST))
+
+
+def lab_results(request, pk):
+    from . import lab
+    from .models import LabTest
+
+    _lab_guard(request)
+    lang = _lang(request)
+    words = LAB_WORDS[lang]
+    patient = get_object_or_404(_patients(), pk=pk)
+    can_write = services.can_write(request.user)
+    tests = list(LabTest.objects.filter(active=True))
+    error = ""
+    if request.method == "POST":
+        if not can_write:
+            raise PermissionDenied("Recording lab results needs medical.write_records.")
+        entries = {test: (request.POST.get(f"value_{test.pk}"), request.POST.get(f"text_{test.pk}")) for test in tests}
+        try:
+            lab.record_results(patient, request.POST.get("taken_on"), entries, request.user, lang)
+        except ValidationError as exc:
+            error = " ".join(exc.messages)
+        else:
+            messages.success(request, words["saved"])
+            return redirect(f"{reverse('medical:lab', args=[patient.pk])}?lang={lang}")
+    labels = lab.FLAG_LABELS[lang]
+    days = lab.by_day(patient)
+    for _, results in days:
+        for result in results:
+            result.flag_label = labels[result.flag]
+            result.before = lab.previous(result)
+    rows = [{"test": test, "value": request.POST.get(f"value_{test.pk}", ""), "text": request.POST.get(f"text_{test.pk}", "")} for test in tests]
+    return render(request, "medical/lab_results.html", _base(lang, page_title=words["title"], lw=words, patient=patient, rows=rows, days=days,
+                                                            can_write=can_write, error=error, today=timezone.localdate(),
+                                                            taken_on=request.POST.get("taken_on") or timezone.localdate().isoformat()))
+
+
+def lab_sheet(request, pk, day):
+    from datetime import date
+
+    from printing.company import company_details
+
+    from . import lab
+    from .models import LabResult
+
+    _lab_guard(request)
+    lang = _lang(request)
+    words = LAB_WORDS[lang]
+    patient = get_object_or_404(_patients(), pk=pk)
+    try:
+        taken_on = date.fromisoformat(day)
+    except ValueError:
+        raise Http404("Not a date.")
+    results = list(LabResult.objects.filter(patient=patient, taken_on=taken_on).select_related("test", "entered_by"))
+    if not results:
+        raise Http404("No results that day.")
+    labels = lab.FLAG_LABELS[lang]
+    for result in results:
+        result.flag_label = labels[result.flag]
+    file = services.file_for(patient)
+    return render(request, "medical/lab_sheet.html", _base(lang, lw=words, patient=patient, file=file, age=services.age(file, taken_on),
+                                                          taken_on=taken_on, results=results, company=company_details()))

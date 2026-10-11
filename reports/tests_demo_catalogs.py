@@ -143,6 +143,16 @@ class SampleBusinessPerActivityTests(TestCase):
         self.assertEqual(ToothRecord.objects.count(), 5)
         self.assertEqual(sorted(TreatmentStep.objects.values_list("stage", "status")), [(1, "done"), (2, "planned"), (3, "planned")])
 
+    def test_a_lab_has_tests_with_ranges_and_flagged_results(self):
+        from medical.models import LabResult, LabTest
+
+        catalog = self.fill("medical", "lab")
+        self.assert_a_working_business(catalog)
+        self.assertEqual(LabTest.objects.count(), 5)
+        self.assertEqual(LabResult.objects.count(), 7)
+        self.assertEqual(sorted(LabResult.objects.exclude(flag="normal").values_list("test__name", "flag")),
+                         [("سكر صايم", "high"), ("سكر صايم", "high"), ("فصيلة الدم", ""), ("هيموجلوبين", "low")])
+
     def test_a_builder_has_projects_with_materials_and_a_progress_bill(self):
         from projects.models import Project
 

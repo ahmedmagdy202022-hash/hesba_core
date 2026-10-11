@@ -134,3 +134,54 @@ class TreatmentStep(models.Model):
 
     def __str__(self):
         return f"{self.patient_id}:{self.stage}:{self.service_id}"
+
+
+# ---- MED-004: lab tests and their results (HG-043, design A) ----
+
+class LabTest(models.Model):
+    """A test the lab runs: its unit and normal range. A result is checked against the range it had when it was entered."""
+
+    name = models.CharField(max_length=120, unique=True)
+    unit = models.CharField(max_length=30, blank=True)
+    low = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True)
+    high = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True)
+    service = models.ForeignKey("master_data.Item", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    position = models.PositiveSmallIntegerField(default=0)
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["position", "name"]
+
+    def __str__(self):
+        return self.name
+
+
+class LabFlag(models.TextChoices):
+    LOW = "low", "Low"
+    NORMAL = "normal", "Normal"
+    HIGH = "high", "High"
+    NONE = "", "No range"
+
+
+class LabResult(models.Model):
+    """One test's result for one patient on one day. The unit and range are copied from the test when entered."""
+
+    patient = models.ForeignKey("master_data.Customer", on_delete=models.PROTECT, related_name="lab_results")
+    test = models.ForeignKey(LabTest, on_delete=models.PROTECT, related_name="results")
+    taken_on = models.DateField(db_index=True)
+    value = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True)
+    text_value = models.CharField(max_length=120, blank=True)
+    unit = models.CharField(max_length=30, blank=True)
+    low = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True)
+    high = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True)
+    flag = models.CharField(max_length=10, choices=LabFlag.choices, blank=True)
+    entered_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-taken_on", "test__position", "test__name"]
+        constraints = [models.UniqueConstraint(fields=["patient", "test", "taken_on"], name="medical_one_result_per_test_and_day")]
+
+    def __str__(self):
+        return f"{self.patient_id}:{self.test_id}:{self.taken_on}"
