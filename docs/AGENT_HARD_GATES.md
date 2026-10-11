@@ -1131,32 +1131,6 @@ Status: IMPLEMENTED for review. New tables only; no protected logic changed. Imp
   - `agreements/tests_packages_hours.py`: 15 tests;
   - demo tests for a salon and a digital agency in `reports/tests_demo_catalogs.py`.
 
-## Final gate verification
-
-- Full Django suite: 794 tests passed in 576.477 seconds.
-- Django system check: no issues.
-- Production-shaped deployment check: no issues.
-- Migration drift check: no changes detected.
-- Existing database migration check: current.
-- Fresh empty-database migration: all migrations applied successfully; follow-up migration check was current.
-- Static collection dry run: all 174 assets resolved.
-- Arabic/English and desktop, tablet-landscape, and mobile verification: passed with no page-level overflow or browser console errors on the sampled affected routes.
-
-## PR #54 final-review hardening
-
-The final blocking implementation review did not introduce a new business/accounting decision. The following defects were corrected under the already-approved service and audit rules:
-
-- Django Admin now freezes used Customer, Supplier, and Cashbox opening balances; used Cashbox currency is also immutable. Stock/cash movements, party ledger entries, purchase/sales invoices, and purchase/sales lines are view-only. Draft creation/editing remains exclusively in the service-backed functional UI, and no transaction can be changed or bulk-deleted through Admin.
-- Proportional allocations reject negative inputs and cap intermediate rounded shares so every allocation is nonnegative while the exact rounded total is preserved.
-- Purchase-return stock validation and sales-return cancellation validation aggregate quantities by item/location before checking availability.
-- Sales-return cash refunds lock the Cashbox row before balance validation and movement creation.
-- The Cashbox master-data form freezes currency after operational use.
-- Stock transfers require a nonblank reason in the form, service, and model validation path.
-
-Regression coverage for every item above is included in the final 794-test run. No migration was required and the model-drift check remains clean.
-
-No unresolved business or accounting decision was discovered while implementing or verifying these approvals.
-
 ## HG-041 — implementation note: services work orders, design A (SVC-001)
 
 - **Status:** Built as design A (the proposal is recorded under HG-041 in PR #184).
@@ -1325,3 +1299,43 @@ No unresolved business or accounting decision was discovered while implementing 
   - The restaurant report gains deliveries per driver: count, fees, average minutes from leaving to closing.
 - **Not touched:** sales posting, cashbox and customer ledgers, inventory, report calculations outside the restaurant report.
 - **Tests:** `restaurant/tests.py` → `DeliveryTests` (one invoice with the fee line, the cashbox moves by the order plus fee, the fee item made once, no fee line without a fee, the rules, the driver report); `reports/tests_demo_catalogs.py`.
+
+## قرارات اتاخدت من غير ما نستنى (11 أكتوبر 2026)
+
+أحمد قال: «اعمل أصح حاجة تعرف تعملها من غير ما تستنى قراري». كل قرار هنا اتاخد بالاختيار الأأمن، وتقدر تغيّره في أي وقت.
+
+| القرار | اللي اتعمل | ليه |
+|---|---|---|
+| Codex خلص رصيده | مراجعة كاملة لـ #191–#202 بدله، واتصلّح فيها كل ملاحظة حقيقية | المراجعة لقت مشاكل فعلية في الفلوس والطبي والصلاحيات |
+| التأمين الطبي (HG-042) | التصميم A: فاتورتين عاديتين لكل كشف (واحدة على المريض وواحدة على شركة التأمين) | مش بيلمس دفتر العملاء ولا الترحيل. لسه متبناش |
+| خصم الخامات في المطاعم (HG-044) | C1: إنتاج الطبق عن طريق محرك التصنيع، اختياري لكل طبق | مش بيغيّر ترحيل المبيعات. لسه متبناش |
+| السحابة | الخيار B: كل عميل بياناته على حساب Supabase باسمه هو | ده اللي كنا ناصحين بيه، وتكلفته عليك أقل |
+| تصميم البيطري (#196) | جدول حيوانات مستقل، وصاحب الحيوان عميل عادي | العميل الواحد ممكن يجيب أكتر من حيوان |
+| باكدجات البيوتي والعلاج الطبيعي | كل واحد فضل في نشاطه، ونوحّدهم بعد الدمج | توحيدهم دلوقتي كان هيلخبط PRين مش متدمجين |
+| ربط عقود الخدمة بالكيان | كل عقد بيتسجّل فيه مخزن البيع (يعني الكيان) اللي اتعمل فيه، وبيتفوتر ويظهر فيه بس | زي الفواتير بالظبط (HG-034) |
+
+## Final gate verification
+
+- Full Django suite: 794 tests passed in 576.477 seconds.
+- Django system check: no issues.
+- Production-shaped deployment check: no issues.
+- Migration drift check: no changes detected.
+- Existing database migration check: current.
+- Fresh empty-database migration: all migrations applied successfully; follow-up migration check was current.
+- Static collection dry run: all 174 assets resolved.
+- Arabic/English and desktop, tablet-landscape, and mobile verification: passed with no page-level overflow or browser console errors on the sampled affected routes.
+
+## PR #54 final-review hardening
+
+The final blocking implementation review did not introduce a new business/accounting decision. The following defects were corrected under the already-approved service and audit rules:
+
+- Django Admin now freezes used Customer, Supplier, and Cashbox opening balances; used Cashbox currency is also immutable. Stock/cash movements, party ledger entries, purchase/sales invoices, and purchase/sales lines are view-only. Draft creation/editing remains exclusively in the service-backed functional UI, and no transaction can be changed or bulk-deleted through Admin.
+- Proportional allocations reject negative inputs and cap intermediate rounded shares so every allocation is nonnegative while the exact rounded total is preserved.
+- Purchase-return stock validation and sales-return cancellation validation aggregate quantities by item/location before checking availability.
+- Sales-return cash refunds lock the Cashbox row before balance validation and movement creation.
+- The Cashbox master-data form freezes currency after operational use.
+- Stock transfers require a nonblank reason in the form, service, and model validation path.
+
+Regression coverage for every item above is included in the final 794-test run. No migration was required and the model-drift check remains clean.
+
+No unresolved business or accounting decision was discovered while implementing or verifying these approvals.
