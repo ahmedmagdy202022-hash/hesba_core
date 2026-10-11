@@ -242,6 +242,9 @@ class ClinicReportTests(TestCase):
         self.assertContains(page, "https://wa.me/201001234567?text=")
         self.assertContains(page, f'data-coming-patient="{nour.pk}"')
         self.assertNotContains(page, f'data-missed-patient="{hala.pk}"')
+        self.mona.active = False  # a patient made inactive is never chased again
+        self.mona.save()
+        self.assertEqual(insights.missed_follow_ups(self.today), [])
 
     def test_the_report_page_and_who_sees_what(self):
         from permissions.services import user_has_permission
