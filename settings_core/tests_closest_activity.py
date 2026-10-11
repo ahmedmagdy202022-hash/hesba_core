@@ -45,3 +45,25 @@ class ClosestActivityTests(TestCase):
         self.assertEqual(catalog.closest("other", "mixed"), ("other", "mixed"))
         self.assertEqual(catalog.closest("other", "general"), ("other", "general"))
         self.assertEqual(catalog.sub_activity_label("other", "general"), "نشاط عام")  # an older install still reads its own choice
+
+
+class BehavesAsEverywhereTests(TestCase):
+    """Review of #191: every preset follows the closest activity, not the raw "other"."""
+
+    def test_capabilities_modules_and_chart_follow_the_closest_activity(self):
+        from ledger import chart
+        from ledger.services import _activity
+        from settings_core import capabilities
+
+        self.assertEqual(capabilities.default_selection("other", "services"), capabilities.default_selection("services", "general"))
+        self.assertEqual(capabilities.preset_state("other", "products", "pos"), capabilities.preset_state("commercial", "retail", "pos"))
+        prepared_client(activity="other", sub_activity="services", modules=",".join(catalog.default_modules("services")))
+        self.assertEqual(_activity(), "services")
+        self.assertEqual(dict((row[0], row[1]) for row in chart.rows_for(_activity())).get("4101"),
+                         dict((row[0], row[1]) for row in chart.rows_for("services")).get("4101"))
+
+    def test_an_older_entity_keeps_its_activity_when_edited(self):
+        from entities.views import _activity_choices
+
+        self.assertIn("other:general", dict(_activity_choices("ar", "other:general")))
+        self.assertNotIn("other:general", dict(_activity_choices("ar")))

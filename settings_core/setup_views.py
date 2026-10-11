@@ -134,6 +134,7 @@ def _capability_rows(activity, sub_activity, lang):
 
     from . import capabilities
 
+    activity, sub_activity = catalog.closest(activity, sub_activity)  # OTHER-001: offered what the closest activity is offered
     rows = []
     for slug in capabilities.CAPABILITY_SLUGS:
         entry = capabilities.CAPABILITIES[slug]

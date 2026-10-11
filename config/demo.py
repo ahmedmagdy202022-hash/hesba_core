@@ -47,7 +47,7 @@ def switch_activity(request):
         from settings_core.setup_services import complete_setup
 
         profile = ClientProfile.get_active()
-        complete_setup(profile, activity, sub, ",".join(catalog.default_modules(activity)), user=request.user)
+        complete_setup(profile, activity, sub, ",".join(catalog.default_modules(catalog.closest(activity, sub)[0])), user=request.user)
     lang = "en" if request.POST.get("lang") == "en" else "ar"
     return redirect(f"/dashboard/?lang={lang}")
 
