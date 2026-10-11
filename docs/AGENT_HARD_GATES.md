@@ -708,6 +708,11 @@ Status: RESOLVED — approved by Ahmed on 9 Oct 2026 ("موافق تعمل كل 
   - Attendance rates count held classes only, with late counted as attended.
   - Absent and late students get a one-tap WhatsApp link to the parent.
   - No money moves.
+  - **Codex on #186:**
+    - A student stopped and enrolled again on the same day is one row, with one mark.
+    - Attendance is taken only on the group's own weekdays and within its dates, and the group page offers its latest class day.
+    - A message about an older class gives its date instead of "today".
+    - Attendance screens are scoped to the entity being worked in.
 - **Next (EDU-003 to EDU-004):**
   - attendance;
   - monthly invoices through the ordinary sales engine, with a duplicate guard per month;

@@ -353,3 +353,53 @@ class ReviewOneTests(EducationSetup):
         self.client.force_login(self.owner)
         page = self.client.post(reverse("education:courses"), {"name": "x", "fee": "NaN", "lang": "ar"})
         self.assertContains(page, "صفر أو أكبر")
+
+
+class ReviewTwoTests(EducationSetup):
+    """Codex on #186: one mark per student, classes on the group's own days only, the class date in the parent's message."""
+
+    def setUp(self):
+        super().setUp()
+        from . import attendance
+
+        self.register = attendance
+        self.class_day = TODAY - timedelta(days=(TODAY.weekday() - 5) % 7)  # the latest Saturday
+        self.saturday = self.group(days="sat")
+        self.yousef = self.student()
+
+    def test_stopped_and_enrolled_again_the_same_day_is_one_mark(self):
+        first = services.enroll(self.yousef, self.saturday, self.owner, start_date=self.class_day - timedelta(days=14))
+        services.stop(first, self.owner, end_date=self.class_day)
+        services.enroll(self.yousef, self.saturday, self.owner, start_date=self.class_day)
+        self.assertEqual(len(self.register.roster_on(self.saturday, self.class_day)), 1)
+        session = self.register.take(self.saturday, self.owner, self.class_day, {})
+        self.assertEqual(session.marks.count(), 1)
+
+    def test_no_class_outside_the_groups_days_or_dates(self):
+        services.enroll(self.yousef, self.saturday, self.owner, start_date=self.class_day - timedelta(days=30))
+        with self.assertRaisesMessage(ValidationError, "مالهاش حصة"):
+            self.register.take(self.saturday, self.owner, self.class_day - timedelta(days=1), {})  # a Friday
+        StudyGroup.objects.filter(pk=self.saturday.pk).update(starts_on=self.class_day)
+        self.saturday.refresh_from_db()
+        with self.assertRaisesMessage(ValidationError, "مالهاش حصة"):
+            self.register.take(self.saturday, self.owner, self.class_day - timedelta(days=7), {})  # before the group began
+        # The group page offers the latest class day, never an off-day.
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("education:group", args=[self.saturday.pk]))
+        self.assertContains(page, f"date={self.class_day.isoformat()}")
+        off = self.client.get(reverse("education:attendance", args=[self.saturday.pk]) + f"?date={(self.class_day - timedelta(days=1)).isoformat()}")
+        self.assertContains(off, "data-off-day")
+        self.assertNotContains(off, "data-save-attendance")
+
+    def test_an_older_class_tells_the_parent_its_date(self):
+        from urllib.parse import unquote
+
+        earlier = self.class_day - timedelta(days=7)
+        services.enroll(self.yousef, self.saturday, self.owner, start_date=earlier - timedelta(days=7))
+        session = self.register.take(self.saturday, self.owner, earlier, {str(self.yousef.pk): "absent"})
+        text = unquote(self.register.parent_message(session.marks.get()))
+        self.assertIn(f"يوم {earlier.isoformat()}", text)
+        self.assertNotIn("النهارده", text)
+        if self.class_day == TODAY:
+            today_text = unquote(self.register.parent_message(self.register.take(self.saturday, self.owner, TODAY, {str(self.yousef.pk): "late"}).marks.get()))
+            self.assertIn("النهارده", today_text)
