@@ -713,6 +713,34 @@ Status: RESOLVED — approved by Ahmed on 9 Oct 2026 ("موافق تعمل كل 
     - Attendance is taken only on the group's own weekdays and within its dates, and the group page offers its latest class day.
     - A message about an older class gives its date instead of "today".
     - Attendance screens are scoped to the entity being worked in.
+  - **Schema change and its risk plan (Codex on #186):**
+    - **Files:**
+      - `education/models.py` (`ClassSession`, `Attendance`, `Presence`, `SessionStatus`);
+      - migration `education/0002`;
+      - `education/attendance.py` (all writes);
+      - `education/views.py`;
+      - `templates/education/today.html` and `attendance.html`;
+      - `reports/navigation.py` ("My classes").
+    - **Schema:** two new tables in the education app only.
+      - Unique constraints: one session per group and day, one mark per student and session.
+      - No existing table is altered, and the migration only adds tables, so rolling back is dropping them; no other app reads them.
+    - **Risk 1, a correction rewrites history.** Taking a class again replaces its marks.
+      - The audit row keeps the full before and after: status, topic, and each student's mark and note.
+      - Nothing else is deleted.
+    - **Risk 2, rates drift.** Rates count only held classes, over a window of exactly the last N calendar days, today included.
+    - **Risk 3, a teacher reaches others' groups.** A teacher-only user sees and changes only the groups linked to their own employee record, and only through the attendance screens.
+    - **No money or stock is touched.**
+    - **Verification** (`education/tests.py`):
+      - roster on a day, including stop-and-rejoin;
+      - weekday and term checks;
+      - future days refused;
+      - unknown marks refused;
+      - corrections recorded mark by mark;
+      - excused counted;
+      - the 30-day window;
+      - teacher-only access and menu;
+      - entity scope;
+      - malformed dates.
 - **Next (EDU-003 to EDU-004):**
   - attendance;
   - monthly invoices through the ordinary sales engine, with a duplicate guard per month;
