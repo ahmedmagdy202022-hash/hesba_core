@@ -8,7 +8,7 @@
 <section class="op-summary-grid">
 <article><small>{{ words.payer }}</small><strong>{{ student.payer.name }}</strong>{% if student.relation %}<small>{{ student.relation }}</small>{% endif %}</article>
 <article><small>{{ words.phone }}</small><strong><bdi>{{ student.payer.phone|default:'—' }}</bdi></strong></article>
-<article><small>{{ words.groups_count }}</small><strong>{{ enrollments|length }}</strong></article>
+<article><small>{{ words.groups_count }}</small><strong data-active-groups>{{ active_groups }}</strong></article>
 </section>
 <h2>{{ words.enrollments }}</h2>
 <div class="op-table-wrap"><table class="op-table" data-enrollments><thead><tr><th>{{ words.group }}</th><th>{{ words.schedule }}</th><th>{{ words.teacher }}</th><th>{{ words.fee }}</th><th>{{ words.discount }}</th><th>{{ words.net }}</th><th>{{ words.since }}</th><th>{{ words.status }}</th>{% if can_manage %}<th></th>{% endif %}</tr></thead><tbody>

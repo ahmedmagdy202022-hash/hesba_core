@@ -16,7 +16,7 @@ from reports.tests_dashboard import prepared_client
 from reports.tests_shell import sidebar_links
 
 from . import services
-from .models import Enrollment, Student, StudyGroup
+from .models import Course, Enrollment, Student, StudyGroup
 
 CENTER = "customers,items_services,sales_operations,cashboxes,reports,appointments_visits,employees_technicians"
 TODAY = timezone.localdate()
@@ -412,3 +412,46 @@ class GroupRoundFourTests(EducationSetup):
         log = AuditLog.objects.filter(action="edit_group").latest("pk")
         self.assertEqual((log.before_data["room"], log.after_data["room"]), ("قاعة 1", "قاعة 5"))
         self.assertEqual((log.before_data["capacity"], log.after_data["capacity"]), (10, 12))
+
+
+class GroupRoundFiveTests(EducationSetup):
+    """Codex on #185, fifth round."""
+
+    def test_a_decimal_comma_is_a_decimal_point_and_thousands_still_group(self):
+        for typed, fee in (("400,50", "400.50"), ("1,250", "1250.00"), ("1,250.75", "1250.75"), ("٤٠٠٫٥٠", "400.50"), ("12,500,000", "12500000.00")):
+            with self.subTest(typed=typed):
+                self.assertEqual(services.save_course({"name": f"كورس {typed}", "fee": typed}, self.owner).fee, D(fee))
+
+    def test_editing_a_group_keeps_its_switched_off_teacher_and_course(self):
+        from staff.models import Employee
+
+        group = self.group()
+        Employee.objects.filter(pk=self.teacher.pk).update(active=False)
+        Course.objects.filter(pk=self.maths.pk).update(active=False)
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("education:group", args=[group.pk])).content.decode()
+        self.assertIn(f'<option value="{self.teacher.pk}" selected>', page)
+        self.assertIn(f'<option value="{self.maths.pk}" selected>', page)
+        self.client.post(reverse("education:group", args=[group.pk]), {"action": "edit", "course": self.maths.pk, "name": "اسم جديد", "teacher": self.teacher.pk,
+                                                                       "days": ["sat", "tue"], "start_time": "16:00", "duration_minutes": "90", "capacity": "0"})
+        group.refresh_from_db()
+        self.assertEqual((group.name, group.teacher_id, group.course_id), ("اسم جديد", self.teacher.pk, self.maths.pk))
+
+    def test_a_failed_course_form_keeps_the_chosen_basis(self):
+        self.client.force_login(self.owner)
+        page = self.client.post(reverse("education:courses"), {"name": "كورس Excel", "fee": "abc", "basis": "course"}).content.decode()
+        self.assertIn('<option value="course" selected>', page)
+
+    def test_an_edit_of_a_course_out_of_reach_is_not_a_new_course(self):
+        self.client.force_login(self.owner)
+        before = Course.objects.count()
+        self.assertEqual(self.client.post(reverse("education:courses"), {"course": "99999", "name": "x", "fee": "1"}).status_code, 404)
+        self.assertEqual(Course.objects.count(), before)
+
+    def test_the_student_card_counts_groups_not_enrolment_history(self):
+        student, group = self.student(), self.group()
+        first = services.enroll(student, group, self.owner, start_date=TODAY - timedelta(days=30))
+        services.stop(first, self.owner, end_date=TODAY - timedelta(days=10))
+        services.enroll(student, group, self.owner, start_date=TODAY - timedelta(days=5))
+        self.client.force_login(self.owner)
+        self.assertContains(self.client.get(reverse("education:student", args=[student.pk])), "<strong data-active-groups>1</strong>")

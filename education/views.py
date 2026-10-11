@@ -85,10 +85,12 @@ def _payers(keep=None):
     return Customer.objects.filter(Q(active=True) | Q(pk=keep or 0)).exclude(customer_code="WALK-IN").order_by("name")
 
 
-def _teachers():
+def _teachers(keep=None):
+    """Active staff; a group's own teacher stays listed even after being switched off (Codex on #185)."""
+
     from staff.models import Employee
 
-    return Employee.objects.filter(active=True).order_by("name")
+    return Employee.objects.filter(Q(active=True) | Q(pk=keep or 0)).order_by("name")
 
 
 def _status_label(status, words):
@@ -163,18 +165,26 @@ def student_detail(request, pk):
         row.basis_label = services.BASIS_LABELS[lang][row.group.course.basis]  # a month, a class or the whole course
         row.status_label = _status_label(row.status, words)
     enrolled = {row.group_id for row in enrollments if row.status == EnrollmentStatus.ACTIVE}
+    active_groups = len(enrolled)  # groups the student is in now, not every enrolment ever made
     open_groups = services.same_entity_as(services.scoped(StudyGroup.objects), student).filter(active=True).exclude(pk__in=enrolled).select_related("course")
     return render(request, "education/student.html", _base(request, lang, "students", student=student, enrollments=enrollments, open_groups=open_groups,
-                                                           payers=_payers(student.payer_id), error=error, today=timezone.localdate()))
+                                                           payers=_payers(student.payer_id), error=error, today=timezone.localdate(),
+                                                           active_groups=active_groups))
 
 
 # ---- groups ----
 
-def _group_data(request):
+def _group_data(request, group=None):
     data = request.POST.copy()
-    data["course"] = services.scoped(Course.objects).filter(pk=request.POST.get("course") or 0).first()
-    data["teacher"] = _teachers().filter(pk=request.POST.get("teacher") or 0).first()
+    data["course"] = _courses(group).filter(pk=request.POST.get("course") or 0).first()
+    data["teacher"] = _teachers(group.teacher_id if group else None).filter(pk=request.POST.get("teacher") or 0).first()
     return data
+
+
+def _courses(group=None):
+    """Active courses; editing a group keeps its own course listed even when that course was switched off."""
+
+    return services.scoped(Course.objects).filter(Q(active=True) | Q(pk=group.course_id if group else 0))
 
 
 def groups(request):
@@ -188,7 +198,8 @@ def groups(request):
 
 
 def _group_form_context(request, lang, **extra):
-    return _base(request, lang, "groups", courses=services.scoped(Course.objects).filter(active=True), teachers=_teachers(),
+    group = extra.get("group")
+    return _base(request, lang, "groups", courses=_courses(group), teachers=_teachers(group.teacher_id if group else None),
                  weekdays=[(day, services.DAY_LABELS[lang][day]) for day in Weekday.values], **extra)
 
 
@@ -220,7 +231,7 @@ def group_detail(request, pk):
         action = request.POST.get("action")
         try:
             if action == "edit":
-                services.save_group(_group_data(request), request.user, group, lang)
+                services.save_group(_group_data(request, group), request.user, group, lang)
                 message = words["saved"]
             elif action == "enroll":
                 student = get_object_or_404(services.scoped(Student.objects), pk=request.POST.get("student") or 0)
@@ -261,6 +272,8 @@ def courses(request):
     if request.method == "POST":
         _guard(request, write=True)
         editing = services.scoped(Course.objects).filter(pk=request.POST.get("course") or 0).first()
+        if request.POST.get("course") and editing is None:
+            raise Http404("That course is not in this entity.")  # an edit never turns into a new course (Codex on #185)
         try:
             services.save_course(request.POST, request.user, editing, lang)
         except ValidationError as exc:
