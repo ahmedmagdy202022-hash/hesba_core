@@ -24,7 +24,7 @@ ACTIVITY_LEAD = {
     "restaurants": ("restaurant", "pos"),
     "medical": ("appointments", "medical"),
     "education": ("appointments",),
-    "services": ("appointments",),
+    "services": ("appointments", "contracts"),
     "manufacturing": ("manufacturing",),
     "contracting": ("projects",),
 }
@@ -74,6 +74,7 @@ NAV_ITEMS = (
     {"key": "restaurant", "ar": "الطاولات", "en": "Tables", "url_name": "restaurant:board", "module": "tables_orders", "permission": "sales.view_sales_invoices"},
     {"key": "medical", "ar": "الملفات الطبية", "en": "Patient files", "url_name": "medical:patients", "module": "customers", "activity": "medical", "allow": "medical.services.can_view"},
     {"key": "appointments", "ar": "المواعيد", "en": "Appointments", "url_name": "appointments:agenda", "module": "appointments_visits", "permission": "sales.view_sales_invoices"},
+    {"key": "contracts", "ar": "عقود الخدمة", "en": "Service contracts", "url_name": "agreements:list", "module": None, "allow": "agreements.services.can_view"},
     {"key": "staff", "ar": "الموظفون", "en": "Employees", "url_name": "staff:list", "module": "employees_technicians", "allow": "reports.navigation.sees_staff"},
     {"key": "expenses", "ar": "المصروفات", "en": "Expenses", "url_name": "expenses:list", "module": "expenses", "permission": "cashboxes.view_expenses"},
     # R2: features switched on in Settings -> Features get their own place in the menu.
@@ -108,6 +109,7 @@ TAB_LABELS = {
     "manufacturing": {"ar": "التصنيع", "en": "Production"},
     "projects": {"ar": "المشاريع", "en": "Projects"},
     "medical": {"ar": "الملفات", "en": "Files"},
+    "contracts": {"ar": "العقود", "en": "Contracts"},
 }
 
 SHELL_WORDS = {

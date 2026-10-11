@@ -685,6 +685,42 @@ Status: RESOLVED — approved by Ahmed on 9 Oct 2026 ("موافق تعمل كل 
   - the screens and who may act.
 - **Known effect:** the goods-in-transit location shows in location pickers (stock list, manual transfer, count). The warehouses hub shows it only while something is on the way.
 
+## HG-046 — service contracts billed per period (SVC-002)
+
+Status: IMPLEMENTED for review — new tables only, no protected logic changed. Implemented in branch `claude/svc-002-contracts`. The number is HG-046 because HG-041…HG-045 are taken on open branches.
+
+- **Asked for:** the activity scorecard left services at about 76%. What service businesses were missing most is a recurring contract: a maintenance contract or a monthly retainer billed every period, with its visits.
+- **Files:**
+  - new app `agreements/` (models, `services.py`, views, urls, migration `0001_initial`);
+  - templates under `templates/agreements/`;
+  - a menu entry and icon (`reports/navigation.py`, `templates/partials/shell_icons.html`);
+  - demo seeding (`prepare_demo._contracts`, `reports/demo_catalogs.py` extras).
+- **Schema:**
+  - `ServiceContract`: customer, service item, amount per period, month/quarter/year, start, optional end, visits per period, status;
+  - `ContractBill(contract, period_start, invoice)`, where the invoice is a one-to-one with `PROTECT`.
+- **Money behaviour:**
+  - "bill what is due" makes one ordinary **draft** sales invoice per due period through `taxes.services.create_sales_draft_with_tax`, with no cashbox and nothing paid;
+  - posting it on the sales page is what touches the customer's ledger and the cashbox, exactly as any invoice;
+  - a period whose invoice was cancelled is due again;
+  - the contract row is locked while it is billed, so two clicks never bill one period twice;
+  - once a contract has been billed, its start date and period cannot change (the billed periods would no longer line up). The amount, end date and status can.
+- **Who:** seeing contracts needs `sales.view_sales_invoices`; adding, editing and billing need `sales.create_sales_invoice`. It is shown to services (general, maintenance, professional, digital, other) and to maintenance contractors; a salon, a clinic or a shop gets a 404.
+- **Not done (left for review):**
+  - contracts are not tied to an entity; the invoices they make are, through the selling location;
+  - visits are read from the customer's done appointments for the contract's service; a visit is not booked automatically.
+- **Tests:** `agreements/tests.py` covers:
+  - periods at month ends;
+  - due, paused and ended contracts;
+  - refusals and the billed lock;
+  - drafts that leave the ledger untouched until posted;
+  - a cancelled invoice freeing its period;
+  - visits;
+  - the screens in Arabic and English;
+  - each seeded role;
+  - the activities it is hidden from.
+
+  The demo is covered in `reports/tests_demo_catalogs.py`.
+
 ## Final gate verification
 
 - Full Django suite: 794 tests passed in 576.477 seconds.

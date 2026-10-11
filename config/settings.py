@@ -60,6 +60,7 @@ LOCAL_APPS = [
     "offline_pos",
     "staff",
     "appointments",
+    "agreements",
     "restaurant",
     "projects",
     "manufacturing",

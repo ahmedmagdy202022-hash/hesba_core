@@ -136,6 +136,24 @@ class SampleBusinessPerActivityTests(TestCase):
         self.assertTrue(project.issues.exists())
         self.assertTrue(project.invoices.filter(invoice__status="posted").exists())
 
+    def test_a_professional_office_has_contracts_billed_by_the_month(self):
+        from agreements import services as contracts
+        from agreements.models import ServiceContract
+
+        catalog = self.fill("services", "professional")
+        self.assert_a_working_business(catalog)
+        monthly = ServiceContract.objects.get(every="month")
+        self.assertEqual(monthly.service.item_name, "مراجعة حسابات شهرية")
+        self.assertEqual(monthly.bills.filter(invoice__status="posted").count(), 2)
+        self.assertEqual(monthly.bills.filter(invoice__status="draft").count(), 1)
+        self.assertGreater(contracts.unpaid(monthly), 0)
+        self.assertEqual(len(contracts.due_periods(ServiceContract.objects.get(every="quarter"))), 1)
+        self.assertEqual(self.client.get("/contracts/").status_code, 200)
+        for activity, sub in (("services", "general"), ("services", "maintenance"), ("services", "digital_marketing"),
+                              ("contracting", "maintenance_contracts")):
+            self.assertIn("contracts", catalog_for(activity, sub).extras)
+        self.assertNotIn("contracts", catalog_for("services", "beauty").extras)
+
     def test_a_factory_makes_its_goods_from_materials(self):
         from manufacturing.models import ProductionOrder, ProductionRun, Recipe
 

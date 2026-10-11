@@ -207,7 +207,7 @@ SERVICES_GENERAL = Catalog(
     customers=PEOPLE + ("شركة النور للتجارة",),
     suppliers=("شركة التوريدات الفنية", "موردون متحدون"),
     raw=(_raw("DEMO-RAW-01", "عدة وأدوات صغيرة", "طقم", "300.00", "4"),),
-    extras=frozenset({"appointments"}),
+    extras=frozenset({"appointments", "contracts"}),
 )
 
 MAINTENANCE = Catalog(
@@ -225,7 +225,7 @@ MAINTENANCE = Catalog(
     raw=(_raw("DEMO-RAW-01", "فريون تكييف (أسطوانة)", "أسطوانة", "1400.00", "3"),
          _raw("DEMO-RAW-02", "مواسير نحاس (متر)", "متر", "180.00", "20")),
     staff=("أحمد الفني", "فني صيانة"),
-    extras=frozenset({"appointments"}),
+    extras=frozenset({"appointments", "contracts"}),
 )
 
 BEAUTY = Catalog(
@@ -258,7 +258,7 @@ PROFESSIONAL = Catalog(
     customers=("شركة الأمل للتجارة", "مؤسسة النور", "م. محمد إبراهيم", "شركة النور للتجارة"),
     suppliers=("مكتبة المعرفة", "موردون متحدون"),
     staff=("أ. محمود المحاسب", "محاسب"),
-    extras=frozenset({"appointments"}),
+    extras=frozenset({"appointments", "contracts"}),
 )
 
 DIGITAL = Catalog(
@@ -274,7 +274,7 @@ DIGITAL = Catalog(
     customers=("مطعم أبو علي", "صيدلية الشفاء", "محل الأناقة", "شركة النور للتجارة"),
     suppliers=("مطبعة الوادي", "موردون متحدون"),
     staff=("كريم المصمم", "مصمم"),
-    extras=frozenset({"appointments"}),
+    extras=frozenset({"appointments", "contracts"}),
 )
 
 # --- restaurants: dishes are made to order, drinks are bought and resold ----
@@ -509,7 +509,7 @@ MAINTENANCE_CONTRACTS = _contracting(
     "contracting.maintenance_contracts", ("عقود صيانة", "Maintenance contracts"),
     (("فلتر تكييف مركزي", "قطعة", "650.00", "450.00"), ("كونتاكتور كهرباء", "قطعة", "380.00", "260.00")),
     services=(("عقد صيانة شهري", "شهر", "6000.00"), ("زيارة طوارئ", "زيارة", "1200.00"), ("صيانة دورية", "زيارة", "2500.00")),
-    extras=frozenset({"projects", "appointments"}),
+    extras=frozenset({"projects", "appointments", "contracts"}),
 )
 
 # --- manufacturing: goods are made from raw materials, not bought ----------

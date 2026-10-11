@@ -123,6 +123,8 @@ class Command(BaseCommand):
             self._patients(master, staff, owner)
         if "projects" in extras:
             self._projects(master, owner)
+        if "contracts" in extras:
+            self._contracts(master, owner)
         if "orders" in extras:
             self._orders(master, owner)
         if "batches" in extras:
@@ -177,6 +179,26 @@ class Command(BaseCommand):
             invoice = bill_progress(project, owner, amount=Decimal(value) * Decimal("0.2"), description="مستخلص رقم 1")
             if n == 0:
                 post_sales_invoice(invoice.id, user=owner)
+
+    def _contracts(self, master, owner):
+        """SVC-002: a monthly contract billed for its past months (two posted, one still a draft) and a
+        quarterly one with a visit a period that is due, so "bill what is due" has work to do."""
+
+        from agreements.services import add_months, bill_due, save_contract
+        from sales.services import post_sales_invoice
+
+        today = timezone.localdate()
+        services = [item for item in master["items"] if not item.is_stock_tracked]
+        if not services:
+            return
+        monthly = next((item for item in services if "شهر" in item.item_name), services[-1])
+        first = save_contract({"customer": master["customers"][3], "service": monthly, "amount": monthly.default_sale_price, "every": "month",
+                               "starts_on": add_months(today, -2).replace(day=1)}, owner)
+        for bill in bill_due(owner, contracts=[first])[:2]:
+            post_sales_invoice(bill.invoice.id, user=owner)
+        save_contract({"customer": master["customers"][2], "service": services[0], "amount": Decimal(services[0].default_sale_price) * 2,
+                       "every": "quarter", "visits_per_period": 1, "description": "عقد زيارات دورية",
+                       "starts_on": today - timedelta(days=10)}, owner)
 
     def _orders(self, master, owner):
         from manufacturing import orders
