@@ -64,6 +64,25 @@ def sell(patient, data, user, lang="ar"):
     return engine.sell_package({**data, "customer": patient}, user, lang)
 
 
+def sell_insured(patient, data, user, lang="ar"):
+    """MED-009: sell a package billed with the patient's insurance: the insurer's invoice and the patient's share.
+
+    The package rides on the patient's invoice (the insurer's when it pays it all), so it opens once that is
+    posted, like any package. Returns the package; its ``InsuredBill`` is the one on that invoice."""
+
+    from . import insurance
+
+    insurance.live_cover(patient, lang=lang)  # say why before anything is made
+
+    def make_invoice(customer, rows, notes, user_, location):
+        row = rows[0]
+        bill = insurance.insured_drafts(customer, [{"service": row["item"], "price": row["unit_sale_price"], "label": row["description"]}],
+                                        notes, "package", user_, lang)
+        return bill.patient_invoice or bill.insurer_invoice
+
+    return engine.sell_package({**data, "customer": patient}, user, lang, make_invoice=make_invoice)
+
+
 def use(package, user, *, used_on=None, therapist=None, visit=None, notes="", lang="ar"):
     """Use one session. Refused while the invoice is a draft, once it is cancelled or returned, or when nothing is left.
 
@@ -76,4 +95,4 @@ def cancel_use(session, user, lang="ar"):
     return engine.cancel_use(session, user, lang, authorized=_may_record(user))
 
 
-__all__ = ["Package", "PackageUse", "SELL", "cancel_use", "is_physio", "packages_of", "refunded", "sell", "state", "use", "used"]
+__all__ = ["Package", "PackageUse", "SELL", "cancel_use", "is_physio", "packages_of", "refunded", "sell", "sell_insured", "state", "use", "used"]
