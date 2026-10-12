@@ -67,6 +67,28 @@ def _labels(lang):
     return {value: (label if lang == "en" else CATEGORY_AR[value]) for value, label in AssetCategory.choices}
 
 
+def category_label(category, lang):
+    """A built-in type in the screen's language; a type of the business's own as it was typed."""
+
+    return _labels(lang).get(category, category)
+
+
+def _own_categories():
+    """FB-TYPES: the types this business added itself, from the assets it registered."""
+
+    return sorted(set(FixedAsset.objects.exclude(category__in=AssetCategory.values).values_list("category", flat=True)))
+
+
+def _chosen_category(request):
+    raw = (request.POST.get("category") or "").strip()
+    own = (request.POST.get("category_new") or "").strip()[:60]
+    if own and raw in ("__new__", own):  # the "+ new type" box carries the typed name
+        return own
+    if raw in AssetCategory.values or raw in _own_categories():
+        return raw
+    return AssetCategory.OTHER
+
+
 def _status_label(asset, lang):
     return asset.get_status_display() if lang == "en" else STATUS_AR[asset.status]
 
@@ -95,7 +117,7 @@ def asset_list(request):
                 months = int(request.POST.get("useful_months") or 0)
             except (ValueError, InvalidOperation, ValidationError):
                 raise ValidationError(words["bad"])
-            category = request.POST.get("category") if request.POST.get("category") in AssetCategory.values else AssetCategory.OTHER
+            category = _chosen_category(request)
             cashbox = entity_scope.cashboxes(Cashbox.objects).filter(active=True, pk=request.POST.get("cashbox") or 0).first()
             asset = register_asset(name=request.POST.get("name", ""), category=category, in_service_on=in_service, cost=cost, salvage_value=salvage,
                                    useful_months=months, user=request.user, cashbox=cashbox, notes=request.POST.get("notes", ""), lang=lang)
@@ -108,7 +130,7 @@ def asset_list(request):
     labels = _labels(lang)
     rows, totals = [], {"cost": Decimal("0"), "accumulated": Decimal("0"), "book": Decimal("0")}
     for asset in FixedAsset.objects.exclude(status=AssetStatus.CANCELLED):
-        row = {"asset": asset, "category": labels[asset.category], "status": _status_label(asset, lang), "accumulated": accumulated(asset, today),
+        row = {"asset": asset, "category": category_label(asset.category, lang), "status": _status_label(asset, lang), "accumulated": accumulated(asset, today),
                "book": book_value(asset, today) if asset.status == AssetStatus.ACTIVE else Decimal("0.00")}
         rows.append(row)
         if asset.status == AssetStatus.ACTIVE:
@@ -117,7 +139,7 @@ def asset_list(request):
             totals["book"] += row["book"]
     this_month = depreciation_between(month_start(today), today)
     return render(request, "fixed_assets/list.html", _context(request, rows=rows, totals={k: money_round(v) for k, v in totals.items()}, this_month=this_month,
-                                                             categories=list(labels.items()), cashboxes=entity_scope.cashboxes(Cashbox.objects).filter(active=True), today=today, life_hint=LIFE_HINT))
+                                                             categories=list(labels.items()) + [(own, own) for own in _own_categories()], cashboxes=entity_scope.cashboxes(Cashbox.objects).filter(active=True), today=today, life_hint=LIFE_HINT))
 
 
 @require_permission("cashboxes.view_expenses")
@@ -146,6 +168,6 @@ def asset_detail(request, pk):
             messages.error(request, " ".join(exc.messages))
         return redirect(f"{reverse('fixed_assets:detail', args=[asset.pk])}?lang={lang}")
     return render(request, "fixed_assets/detail.html", _context(
-        request, asset=asset, category=_labels(lang)[asset.category], status=_status_label(asset, lang), rows=schedule(asset, today),
+        request, asset=asset, category=category_label(asset.category, lang), status=_status_label(asset, lang), rows=schedule(asset, today),
         accumulated=accumulated(asset, today), book=book_value(asset, today), result=disposal_result(asset), cashboxes=entity_scope.cashboxes(Cashbox.objects).filter(active=True), today=today,
     ))

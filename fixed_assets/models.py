@@ -34,7 +34,8 @@ class AssetStatus(models.TextChoices):
 class FixedAsset(models.Model):
     code = models.CharField(max_length=30, unique=True)
     name = models.CharField(max_length=255)
-    category = models.CharField(max_length=20, choices=AssetCategory.choices, default=AssetCategory.EQUIPMENT)
+    # FB-TYPES (HG-050): one of AssetCategory's codes, or a type of the business's own, kept as its name.
+    category = models.CharField(max_length=60, default=AssetCategory.EQUIPMENT)
     in_service_on = models.DateField()
     cost = models.DecimalField(max_digits=14, decimal_places=2, validators=[MinValueValidator(Decimal("0.01"))])
     salvage_value = models.DecimalField(max_digits=14, decimal_places=2, default=0, validators=[MinValueValidator(Decimal("0"))])

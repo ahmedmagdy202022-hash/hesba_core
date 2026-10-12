@@ -19,11 +19,12 @@ not be dropped.
 {% block styles %}{% endblock %}
 <link rel="stylesheet" href="{% static 'hesba/css/table_cards.css' %}">
 <link rel="stylesheet" href="{% static 'hesba/css/form_required.css' %}?v=req-2">
-<link rel="stylesheet" href="{% static 'hesba/css/form_controls.css' %}?v=ctl-3">
+<link rel="stylesheet" href="{% static 'hesba/css/form_controls.css' %}?v=ctl-4">
 <link rel="stylesheet" href="{% static 'hesba/css/datepicker.css' %}?v=date-3">
 </head>
 <body class="{% block body_class %}{% endblock %}" data-lang="{{ lang|default:'ar' }}">
 {% block content %}{% endblock %}
+<script src="{% static 'hesba/js/quick_option.js' %}?v=fb-types" defer></script>
 
 <script>
 (function(){

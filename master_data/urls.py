@@ -18,6 +18,7 @@ urlpatterns = [
     path("cashboxes/", views.entity_list, {"entity": "cashboxes"}, name="cashboxes"),
     path("locations/", views.entity_list, {"entity": "locations"}, name="locations"),
     path("categories/", views.entity_list, {"entity": "categories"}, name="categories"),
+    path("categories/quick/", views.category_quick_create, name="category_quick_create"),
 
     path("<str:entity>/", views.entity_list, name="list"),
     path("<str:entity>/new/", views.entity_create, name="create"),

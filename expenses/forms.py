@@ -41,6 +41,9 @@ class ExpenseForm(forms.Form):
         categories = ExpenseCategory.objects.filter(active=True)
         self.fields["category"].queryset = categories
         self.fields["category"].label_from_instance = lambda category: category.label(lang)
+        # FB-TYPES: a new category from the expense form itself.
+        self.fields["category"].widget.attrs.update({"data-quick-add": "+ New category…" if lang == "en" else "+ بند جديد…",
+                                                     "data-quick-add-url": "/expenses/categories/quick/"})
         cashboxes = entity_scope.cashboxes(Cashbox.objects).filter(active=True)
         self.fields["cashbox"].queryset = cashboxes
         for name, field in self.fields.items():
