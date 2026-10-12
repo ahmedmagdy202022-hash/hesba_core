@@ -511,13 +511,13 @@ PHYSIO_WORDS = {
            "notes": "ملاحظات", "save": "اعمل الفاتورة", "packages": "الباكدجات", "used": "اتعمل", "left": "باقي", "status": "الحالة",
            "invoice": "الفاتورة", "use": "سجّل جلسة", "therapist": "الأخصائي", "day": "اليوم", "history": "الجلسات", "cancel": "إلغاء الجلسة",
            "no_packages": "مفيش باكدجات لسه.", "no_uses": "مفيش جلسات لسه.", "saved": "اتحفظ.", "sold": "اتعملت فاتورة الباكدج {number} (مسودة). رحّلها عشان الجلسات تشتغل.",
-           "back": "ملف المريض", "choose": "اختار", "cancelled": "اتلغت", "draft": "الفاتورة مسودة", "active": "شغال", "finished": "خلص", "void": "اتلغى"},
+           "back": "ملف المريض", "choose": "اختار", "cancelled": "اتلغت", "draft": "الفاتورة مسودة", "active": "شغال", "expired": "انتهت صلاحيته", "finished": "خلص", "void": "اتلغى"},
     "en": {"title": "Session packages", "intro": "A package is sold on an ordinary sales invoice; sessions are used from it one by one once the invoice is posted.",
            "sell": "Sell a package", "service": "Service", "sessions": "Sessions", "price": "Package price", "price_hint": "Blank = sessions × the session price",
            "notes": "Notes", "save": "Make the invoice", "packages": "Packages", "used": "Used", "left": "Left", "status": "Status",
            "invoice": "Invoice", "use": "Record a session", "therapist": "Therapist", "day": "Day", "history": "Sessions", "cancel": "Cancel the session",
            "no_packages": "No packages yet.", "no_uses": "No sessions yet.", "saved": "Saved.", "sold": "Package invoice {number} was made (draft). Post it so the sessions can be used.",
-           "back": "Patient file", "choose": "Choose", "cancelled": "Cancelled", "draft": "Invoice still a draft", "active": "Active", "finished": "Used up", "void": "Void"},
+           "back": "Patient file", "choose": "Choose", "cancelled": "Cancelled", "draft": "Invoice still a draft", "active": "Active", "expired": "Expired", "finished": "Used up", "void": "Void"},
 }
 
 
@@ -532,7 +532,6 @@ def session_packages(request, pk):
     from permissions.services import user_has_permission
 
     from . import physio
-    from .models import PackageSession, SessionPackage
 
     _guard(request)
     if not physio.is_physio():
@@ -556,11 +555,11 @@ def session_packages(request, pk):
             if not can_write:
                 raise PermissionDenied("Recording sessions needs medical.write_records.")
             if action == "use":
-                package = get_object_or_404(SessionPackage, pk=request.POST.get("package") or 0, patient=patient)
+                package = get_object_or_404(physio.packages_of(patient), pk=_id(request.POST.get("package")))
                 physio.use(package, request.user, therapist=_doctors().filter(pk=request.POST.get("therapist") or 0).first(),
                            notes=request.POST.get("notes"), lang=lang)
             elif action == "cancel":
-                physio.cancel_use(get_object_or_404(PackageSession, pk=request.POST.get("session") or 0, package__patient=patient), request.user, lang)
+                physio.cancel_use(get_object_or_404(physio.PackageUse, pk=_id(request.POST.get("session")), package__customer=patient), request.user, lang)
             else:
                 raise Http404("Unknown action.")
         except ValidationError as exc:
@@ -568,11 +567,11 @@ def session_packages(request, pk):
         else:
             messages.success(request, words["saved"])
             return redirect(url)
-    packages = list(SessionPackage.objects.filter(patient=patient).select_related("service", "invoice"))
+    packages = list(physio.packages_of(patient))
     for package in packages:
         package.state = physio.state(package)
         package.status_label = words[package.state["status"]]
-        package.history = list(package.uses.select_related("therapist"))
+        package.history = list(package.uses.select_related("employee"))
     own = getattr(request.user, "employee", None)
     return render(request, "medical/packages.html", _base(lang, page_title=words["title"], pw=words, patient=patient, packages=packages,
                                                          services=services_, doctors=_doctors(), can_write=can_write, can_sell=can_sell, error=error,

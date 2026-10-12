@@ -7,7 +7,7 @@
 <h2>{{ pw.packages }}</h2>
 {% for package in packages %}
 <section class="op-detail-meta" data-package="{{ package.pk }}" data-package-status="{{ package.state.status }}">
-<p><strong>{{ package.service.item_name }}</strong> · {{ package.sessions }} {{ pw.sessions }} · {{ package.price|money }}
+<p><bdi>{{ package.number }}</bdi> · <strong>{{ package.service.item_name }}</strong> · {{ package.sessions }} {{ pw.sessions }} · {{ package.price|money }}
  · <span class="op-status {% if package.state.status == 'active' %}op-status-posted{% elif package.state.status == 'void' %}op-status-cancelled{% else %}op-status-draft{% endif %}">{{ package.status_label }}</span>
  · {{ pw.invoice }}: <a href="{% url 'sales:detail' package.invoice.pk %}?lang={{ lang }}"><bdi>{{ package.invoice.invoice_number }}</bdi></a>{% if package.notes %} · {{ package.notes }}{% endif %}</p>
 <p>{{ pw.used }}: <strong data-used>{{ package.state.used }}</strong> · {{ pw.left }}: <strong data-left>{{ package.state.left }}</strong></p>
@@ -18,7 +18,7 @@
 <button class="op-primary" type="submit">{{ pw.use }}</button></form>
 {% endif %}
 {% if package.history %}<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ pw.day }}</th><th>{{ pw.therapist }}</th><th>{{ pw.notes }}</th><th></th></tr></thead><tbody>
-{% for session in package.history %}<tr data-session="{{ session.pk }}"{% if session.cancelled %} data-cancelled{% endif %}><td><bdi>{{ session.used_on|date:"Y-m-d" }}</bdi></td><td class="op-cell-text">{{ session.therapist.name|default:'—' }}</td>
+{% for session in package.history %}<tr data-session="{{ session.pk }}"{% if session.cancelled %} data-cancelled{% endif %}><td><bdi>{{ session.used_on|date:"Y-m-d" }}</bdi></td><td class="op-cell-text">{{ session.employee.name|default:'—' }}</td>
 <td class="op-cell-text">{{ session.notes|default:'—' }}</td><td>{% if session.cancelled %}<span class="op-status op-status-cancelled">{{ pw.cancelled }}</span>{% elif can_write %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="cancel"><input type="hidden" name="session" value="{{ session.pk }}"><button class="op-secondary" type="submit">{{ pw.cancel }}</button></form>{% endif %}</td></tr>{% endfor %}
 </tbody></table></div>{% endif %}
 </section>
