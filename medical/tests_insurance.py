@@ -308,3 +308,11 @@ class InsuranceScreenTests(InsuranceSetup):
         ClientProfile.objects.update(activity_slug="commercial", sub_activity_slug="retail")
         self.assertEqual(self.client.get(reverse("medical:insurance")).status_code, 404)
         self.assertNotContains(self.client.get(reverse("appointments:detail", args=[self.appointment().pk])), "data-appointment-bill-insured")
+
+
+class InsuranceFitTests(TestCase):
+    def test_insurance_shows_among_a_clinic_s_features_but_not_a_vet_s(self):
+        from settings_core import activity_fit
+
+        self.assertIn("medical_insurance", {f["slug"] for f in activity_fit.features("medical", "dental")})
+        self.assertNotIn("medical_insurance", {f["slug"] for f in activity_fit.features("medical", "vet")})
