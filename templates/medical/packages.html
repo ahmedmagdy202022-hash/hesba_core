@@ -31,6 +31,7 @@
 <div class="op-field"><label for="pk-sessions">{{ pw.sessions }}</label><input id="pk-sessions" name="sessions" inputmode="numeric" required value="{{ post.sessions|default:'10' }}"></div>
 <div class="op-field"><label for="pk-price">{{ pw.price }}</label><input id="pk-price" name="price" inputmode="decimal" placeholder="{{ pw.price_hint }}" value="{{ post.price|default:'' }}"></div>
 <div class="op-field"><label for="pk-notes">{{ pw.notes }}</label><input id="pk-notes" name="notes" maxlength="255" value="{{ post.notes|default:'' }}"></div>
+{% if cover %}<div class="op-field op-check"><label><input type="checkbox" name="insured" value="1"{% if post.insured %} checked{% endif %} data-sell-insured> {{ insured_label }}</label></div>{% endif %}
 </div><div class="op-form-actions"><button class="op-primary" type="submit">{{ pw.save }}</button></div></form>
 {% endif %}
 {% endblock %}

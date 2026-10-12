@@ -1441,3 +1441,19 @@ No unresolved business or accounting decision was discovered while implementing 
   - A customer without an address is skipped with a clear message.
 - **Not touched:** billing (`bill_due`), the sales engine, ledgers, reports. Permission: `sales.create_sales_invoice`, the same as billing contracts and booking appointments.
 - **Tests:** `agreements/tests_visits.py`.
+## HG-042 — implementation note: insurance on dental steps and physio packages (MED-009)
+
+- **Status:** BUILT on design A, as for visits. A patient's done dental steps, or a physio package, can now be billed through the patient's insurance: the insurer's invoice and the patient's share, two ordinary draft invoices through the unchanged sales engine.
+- **Schema change, migration `medical/0009_insured_bill_kinds`** (only the medical app's own `InsuredBill`):
+  - `appointment` becomes optional, since dental steps and packages have no appointment;
+  - new `kind` (visit / dental / package), `patient` (the patient billed) and `description` (what was billed, shown on the claim);
+  - the migration fills `patient` from the appointment for bills made before; it skips a database without the table (demo restart replay).
+- **Billing:** `medical.insurance.insured_drafts(patient, parts, what, kind, user)`.
+  - Each line is split by its own service's share (`percent_for`, `split`), so a service the contract does not cover goes on the patient's invoice in full. If nothing is covered, nothing is made.
+  - Numbers come from the ordinary SI- series (`agreements.services.draft_invoice`). The check for an expired or missing cover is shared with visits (`live_cover`).
+  - **Dental:** `dental.bill_done_insured`, with the same row locks as `bill_done`. The steps point at the patient's invoice, or at the insurer's when it pays it all.
+  - **Packages:** `physio.sell_insured`, through a new optional `make_invoice` hook on `agreements.packages.sell_package`; without the hook the engine is unchanged. The package rides on the patient's invoice (the insurer's at 100%), so it opens once that is posted, like any package.
+- **Double-claim guard:** `dental.unbilled` no longer counts a step as unbilled when its patient's invoice was cancelled but the insurer's still stands. That bill shows on the insurance page's list of bills with only one invoice cancelled; once both are cancelled, the steps can be billed again.
+- **Known limit:** an insurer rejecting a package (a sales return on the insurer's invoice) does not close the package, because only the package's own invoice decides that. The clinic bills the patient for the rejected part, as for a visit.
+- **Not touched:** sales posting, the customer ledger, aging, returns, report calculations, permissions. Billing needs `sales.create_sales_invoice`, as before.
+- **Tests:** `medical/tests_insurance_more.py`.

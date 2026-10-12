@@ -290,6 +290,8 @@ DENTAL_WORDS = {
            "doctor": "الدكتور", "status": "الحالة", "done_on": "اتعملت يوم", "invoice": "الفاتورة", "whole_mouth": "الفم كله",
            "add_step": "ضيف خطوة", "mark_done": "اتعملت", "cancel": "إلغاء", "no_steps": "مفيش خطة علاج لسه.", "planned_total": "مخطط",
            "done_total": "اتعمل", "unbilled_total": "اتعمل ولسه ماتفوترش", "bill": "اعمل فاتورة باللي اتعمل", "billed": "اتعملت الفاتورة {number} (مسودة). رحّلها من صفحة الفواتير.",
+           "bill_insured": "فاتورة على التأمين ({insurer})", "billed_insured": "اتعملت فاتورة شركة التأمين {insurer_number}{patient_part} (مسودات). رحّلهم من صفحة الفواتير.",
+           "patient_part": " وفاتورة نصيب المريض {number}",
            "saved": "اتحفظ.", "back": "ملف المريض", "choose": "اختار", "open_invoice": "افتح", "legend": "دليل الألوان"},
     "en": {"title": "Dental chart", "intro": "Each tooth's condition in FDI numbering, and the treatment plan in stages. Done steps are billed on an ordinary sales invoice.",
            "upper": "Upper jaw", "lower": "Lower jaw", "right": "Right", "left": "Left", "permanent": "Permanent teeth", "primary": "Primary teeth",
@@ -298,6 +300,8 @@ DENTAL_WORDS = {
            "doctor": "Doctor", "status": "Status", "done_on": "Done on", "invoice": "Invoice", "whole_mouth": "Whole mouth",
            "add_step": "Add step", "mark_done": "Done", "cancel": "Cancel", "no_steps": "No treatment plan yet.", "planned_total": "Planned",
            "done_total": "Done", "unbilled_total": "Done, not billed yet", "bill": "Invoice the done steps", "billed": "Invoice {number} was made (draft). Post it from the invoices page.",
+           "bill_insured": "Invoice through insurance ({insurer})", "billed_insured": "The insurer's invoice {insurer_number}{patient_part} were made (drafts). Post them from the invoices page.",
+           "patient_part": " and the patient's share invoice {number}",
            "saved": "Saved.", "back": "Patient file", "choose": "Choose", "open_invoice": "Open", "legend": "Colour key"},
 }
 
@@ -322,7 +326,8 @@ def dental_chart(request, pk):
     error = ""
     if request.method == "POST":
         action = request.POST.get("action")
-        if action == "bill" and not can_bill or action != "bill" and not can_write:  # billing is the counter's; the chart is the doctor's
+        billing = action in ("bill", "bill_insured")
+        if billing and not can_bill or not billing and not can_write:  # billing is the counter's; the chart is the doctor's
             raise PermissionDenied("Billing needs sales.create_sales_invoice; editing the chart needs medical.write_records.")
         try:
             if action == "tooth":
@@ -340,6 +345,11 @@ def dental_chart(request, pk):
             elif action == "bill":
                 invoice = dental.bill_done(patient, request.user, lang)
                 messages.success(request, words["billed"].format(number=invoice.invoice_number))
+                return redirect(url)
+            elif action == "bill_insured":  # MED-009
+                bill = dental.bill_done_insured(patient, request.user, lang)
+                patient_part = words["patient_part"].format(number=bill.patient_invoice.invoice_number) if bill.patient_invoice else ""
+                messages.success(request, words["billed_insured"].format(insurer_number=bill.insurer_invoice.invoice_number, patient_part=patient_part))
                 return redirect(url)
             else:
                 raise Http404("Unknown action.")
@@ -368,7 +378,8 @@ def dental_chart(request, pk):
     return render(request, "medical/dental.html", _base(lang, page_title=words["title"], dw=words, patient=patient, rows=rows, primary=primary,
                                                         conditions=[(value, labels[value]) for value in ToothCondition.values], teeth=teeth,
                                                         steps=steps, totals=dental.plan_totals(patient), services=services_, doctors=_doctors(),
-                                                        can_write=can_write, can_bill=can_bill, error=error, post=request.POST, planned=StepStatus.PLANNED))
+                                                        can_write=can_write, can_bill=can_bill, error=error, post=request.POST, planned=StepStatus.PLANNED,
+                                                        **_cover_context(request, patient, words["bill_insured"])))
 
 
 LAB_WORDS = {
@@ -511,12 +522,14 @@ PHYSIO_WORDS = {
            "notes": "ملاحظات", "save": "اعمل الفاتورة", "packages": "الباكدجات", "used": "اتعمل", "left": "باقي", "status": "الحالة",
            "invoice": "الفاتورة", "use": "سجّل جلسة", "therapist": "الأخصائي", "day": "اليوم", "history": "الجلسات", "cancel": "إلغاء الجلسة",
            "no_packages": "مفيش باكدجات لسه.", "no_uses": "مفيش جلسات لسه.", "saved": "اتحفظ.", "sold": "اتعملت فاتورة الباكدج {number} (مسودة). رحّلها عشان الجلسات تشتغل.",
+           "insured": "على التأمين ({insurer})", "sold_insured": "اتعملت فاتورة شركة التأمين {insurer_number} وفاتورة الباكدج {number} (مسودات). رحّل فاتورة الباكدج عشان الجلسات تشتغل.",
            "back": "ملف المريض", "choose": "اختار", "cancelled": "اتلغت", "draft": "الفاتورة مسودة", "active": "شغال", "expired": "انتهت صلاحيته", "finished": "خلص", "void": "اتلغى"},
     "en": {"title": "Session packages", "intro": "A package is sold on an ordinary sales invoice; sessions are used from it one by one once the invoice is posted.",
            "sell": "Sell a package", "service": "Service", "sessions": "Sessions", "price": "Package price", "price_hint": "Blank = sessions × the session price",
            "notes": "Notes", "save": "Make the invoice", "packages": "Packages", "used": "Used", "left": "Left", "status": "Status",
            "invoice": "Invoice", "use": "Record a session", "therapist": "Therapist", "day": "Day", "history": "Sessions", "cancel": "Cancel the session",
            "no_packages": "No packages yet.", "no_uses": "No sessions yet.", "saved": "Saved.", "sold": "Package invoice {number} was made (draft). Post it so the sessions can be used.",
+           "insured": "Through insurance ({insurer})", "sold_insured": "The insurer's invoice {insurer_number} and the package invoice {number} were made (drafts). Post the package invoice so the sessions can be used.",
            "back": "Patient file", "choose": "Choose", "cancelled": "Cancelled", "draft": "Invoice still a draft", "active": "Active", "expired": "Expired", "finished": "Used up", "void": "Void"},
 }
 
@@ -527,11 +540,28 @@ def _is_physio():
     return physio.is_physio()
 
 
+def _billable_cover(request, patient):
+    """MED-009: the patient's insurance when this user can bill through it now, else None."""
+
+    from . import insurance
+
+    if not (insurance.is_insurance_install() and insurance.can_manage(request.user)):
+        return None
+    return insurance.cover_for(patient)
+
+
+def _cover_context(request, patient, label):
+    cover = _billable_cover(request, patient)
+    return {"cover": cover, "insured_label": label.format(insurer=cover.contract.insurer.name) if cover else ""}
+
+
 def session_packages(request, pk):
+    from django.db.models import Q
+
     from master_data.models import Item
     from permissions.services import user_has_permission
 
-    from . import physio
+    from . import insurance, physio
 
     _guard(request)
     if not physio.is_physio():
@@ -548,9 +578,15 @@ def session_packages(request, pk):
         action = request.POST.get("action")
         try:
             if action == "sell":
-                package = physio.sell(patient, {"service": services_.filter(pk=request.POST.get("service") or 0).first(), "sessions": request.POST.get("sessions"),
-                                                "price": request.POST.get("price"), "notes": request.POST.get("notes")}, request.user, lang)
-                messages.success(request, words["sold"].format(number=package.invoice.invoice_number))
+                data = {"service": services_.filter(pk=request.POST.get("service") or 0).first(), "sessions": request.POST.get("sessions"),
+                        "price": request.POST.get("price"), "notes": request.POST.get("notes")}
+                if request.POST.get("insured"):  # MED-009
+                    package = physio.sell_insured(patient, data, request.user, lang)
+                    bill = insurance.InsuredBill.objects.select_related("insurer_invoice").get(Q(patient_invoice=package.invoice) | Q(insurer_invoice=package.invoice))
+                    messages.success(request, words["sold_insured"].format(insurer_number=bill.insurer_invoice.invoice_number, number=package.invoice.invoice_number))
+                else:
+                    package = physio.sell(patient, data, request.user, lang)
+                    messages.success(request, words["sold"].format(number=package.invoice.invoice_number))
                 return redirect(url)
             if not can_write:
                 raise PermissionDenied("Recording sessions needs medical.write_records.")
@@ -575,7 +611,7 @@ def session_packages(request, pk):
     own = getattr(request.user, "employee", None)
     return render(request, "medical/packages.html", _base(lang, page_title=words["title"], pw=words, patient=patient, packages=packages,
                                                          services=services_, doctors=_doctors(), can_write=can_write, can_sell=can_sell, error=error,
-                                                         post=request.POST, own_id=own.pk if own else None))
+                                                         post=request.POST, own_id=own.pk if own else None, **_cover_context(request, patient, words["insured"])))
 
 
 VET_WORDS = {
