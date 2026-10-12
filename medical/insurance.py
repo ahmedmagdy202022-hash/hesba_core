@@ -1,5 +1,7 @@
 """MED-008: medical insurance (HG-042, design A: two ordinary invoices per insured visit).
 
+MED-009: the same two invoices for a patient's done dental steps and for a physio package (``insured_drafts``).
+
 An insurance company is an ordinary customer carrying a contract: the share of
 a visit it pays (one figure, with an own figure for any service that differs)
 and the day of the month its claim is sent. A patient is covered by one
@@ -46,7 +48,7 @@ MESSAGES = {
            "not_done": "الميعاد لازم يكون وصل أو خلص عشان يتفوتر.", "billed": "الميعاد ده اتعملت فاتورته بالفعل.", "setup": "لازم يكون فيه مخزن بيع نشط.",
            "patient_line": "{service} — نصيب المريض {share}%", "insurer_line": "{service} — {patient}{member} — تحمّل {percent}%",
            "patient_note": "ميعاد {number}: نصيب المريض", "insurer_note": "مطالبة تأمين — ميعاد {number}", "member": " — رقم {member}",
-           "month": "الشهر مش مظبوط."},
+           "month": "الشهر مش مظبوط.", "insurer_note_of": "مطالبة تأمين — {what}", "patient_note_of": "{what}: نصيب المريض"},
     "en": {"manage": "Insurance needs the create-sales-invoice permission.", "insurer": "Choose the insurance company or type its name.",
            "percent": "The covered share must be a number above zero and up to 100.", "service_percent": "A service's share must be a number from 0 to 100.",
            "claim_day": "The claim day is from 1 to 28.", "taken": "This company already has a contract.", "patient_insurer": "The insurer cannot be the patient.",
@@ -56,7 +58,7 @@ MESSAGES = {
            "not_done": "The appointment must be arrived or done to be billed.", "billed": "This appointment already has its invoice.", "setup": "An active selling location is needed.",
            "patient_line": "{service} — patient's share {share}%", "insurer_line": "{service} — {patient}{member} — covered {percent}%",
            "patient_note": "Appointment {number}: patient's share", "insurer_note": "Insurance claim — appointment {number}", "member": " — member {member}",
-           "month": "The month is not valid."},
+           "month": "The month is not valid.", "insurer_note_of": "Insurance claim — {what}", "patient_note_of": "{what}: patient's share"},
 }
 
 
@@ -228,6 +230,20 @@ def cover_for(patient, day=None):
     return cover
 
 
+def live_cover(patient, today=None, lang="ar"):
+    """The patient's cover to bill on, or the reason there is none (expired, or no active insurer) as a ValidationError."""
+
+    words = _words(lang)
+    today = today or timezone.localdate()
+    cover = PatientCover.objects.select_related("contract__insurer").filter(patient=patient).first()
+    if cover is not None and cover.expires_on and cover.expires_on < today:
+        raise ValidationError(words["expired"].format(date=cover.expires_on.isoformat()))
+    cover = cover_for(patient, today)
+    if cover is None:
+        raise ValidationError(words["no_cover"])
+    return cover
+
+
 @transaction.atomic
 def bill_insured(appointment, user, lang="ar"):
     """The insured appointment's two draft invoices. Returns the ``InsuredBill``."""
@@ -247,12 +263,7 @@ def bill_insured(appointment, user, lang="ar"):
     if appointment.service is None:
         raise ValidationError(words["no_service"])
     today = timezone.localdate()
-    cover = PatientCover.objects.select_related("contract__insurer").filter(patient=appointment.customer).first()
-    if cover is not None and cover.expires_on and cover.expires_on < today:
-        raise ValidationError(words["expired"].format(date=cover.expires_on.isoformat()))
-    cover = cover_for(appointment.customer, today)
-    if cover is None:
-        raise ValidationError(words["no_cover"])
+    cover = live_cover(appointment.customer, today, lang)
     contract = cover.contract
     percent = percent_for(contract, appointment.service)
     insurer_share, patient_share = split(appointment.price, percent)
@@ -279,7 +290,7 @@ def bill_insured(appointment, user, lang="ar"):
             {**header, "invoice_number": f"INV-{appointment.number}", "customer": appointment.customer,
              "notes": words["patient_note"].format(number=appointment.number)[:255]},
             line(patient_share, words["patient_line"].format(service=service, share=_figure(HUNDRED - percent))), user)
-    bill = InsuredBill.objects.create(appointment=appointment, contract=contract, member_number=cover.member_number, price=money_round(appointment.price),
+    bill = InsuredBill.objects.create(appointment=appointment, patient=appointment.customer, description=service[:255], contract=contract, member_number=cover.member_number, price=money_round(appointment.price),
                                       percent=percent, insurer_share=insurer_share, patient_share=patient_share, insurer_invoice=insurer_invoice,
                                       patient_invoice=patient_invoice, created_by=user)
     appointment.invoice = patient_invoice or insurer_invoice  # the appointment shows as billed, so it is never billed again
@@ -292,6 +303,60 @@ def bill_insured(appointment, user, lang="ar"):
                                                     "insurer_invoice": insurer_invoice.invoice_number, "insurer_share": str(insurer_share),
                                                     "patient_invoice": patient_invoice.invoice_number if patient_invoice else "",
                                                     "patient_share": str(patient_share)}, event=AuditEventType.CREATE)
+    return bill
+
+
+@transaction.atomic
+def insured_drafts(patient, parts, what, kind, user, lang="ar"):
+    """MED-009: the two draft invoices for ``parts`` billed with the patient's insurance (dental steps, a physio package).
+
+    ``parts`` is a list of {"service", "price", "label"}; each is split by its own service's share, so a
+    service the contract does not cover goes on the patient's invoice in full. Numbers come from the
+    ordinary SI- series. ``what`` names the bill on both invoices' notes. Returns the ``InsuredBill``;
+    the caller links its own records to ``bill.patient_invoice or bill.insurer_invoice``."""
+
+    from agreements.services import draft_invoice, selling_location
+
+    words = _words(lang)
+    if not can_manage(user):
+        raise PermissionDenied(words["manage"])
+    cover = live_cover(patient, lang=lang)
+    contract = cover.contract
+    member = words["member"].format(member=cover.member_number) if cover.member_number else ""
+    insurer_rows, patient_rows, percents = [], [], set()
+    price_total = insurer_total = patient_total = ZERO
+
+    def row(service, amount, description):
+        return {"item": service, "quantity": Decimal("1"), "unit_sale_price": amount, "line_discount_amount": ZERO, "description": description[:255]}
+
+    for part in parts:
+        percent = percent_for(contract, part["service"])
+        insurer_share, patient_share = split(part["price"], percent)
+        price_total += insurer_share + patient_share
+        if insurer_share > 0:
+            percents.add(percent)
+            insurer_total += insurer_share
+            insurer_rows.append(row(part["service"], insurer_share, words["insurer_line"].format(
+                service=part["label"], patient=patient.name, member=member, percent=_figure(percent))))
+        if patient_share > 0:
+            patient_total += patient_share
+            patient_rows.append(row(part["service"], patient_share, words["patient_line"].format(service=part["label"], share=_figure(HUNDRED - percent))))
+    if not insurer_rows:
+        raise ValidationError(words["not_covered"].format(insurer=contract.insurer.name))
+    location = selling_location()
+    if location is None:
+        raise ValidationError(words["setup"])
+    insurer_invoice = draft_invoice(contract.insurer, insurer_rows, words["insurer_note_of"].format(what=what), user, location)
+    patient_invoice = draft_invoice(patient, patient_rows, words["patient_note_of"].format(what=what), user, location) if patient_rows else None
+    # one share for the bill when every covered line had the same; else the share it came to overall
+    percent = percents.pop() if len(percents) == 1 else (insurer_total * HUNDRED / price_total).quantize(Decimal("0.01"))
+    bill = InsuredBill.objects.create(kind=kind, patient=patient, description=what[:255], contract=contract, member_number=cover.member_number,
+                                      price=price_total, percent=percent, insurer_share=insurer_total, patient_share=patient_total,
+                                      insurer_invoice=insurer_invoice, patient_invoice=patient_invoice, created_by=user)
+    _audit(user, f"bill_insured_{kind}", bill, {"patient": patient.pk, "insurer": contract.insurer_id, "what": what[:255],
+                                                "insurer_invoice": insurer_invoice.invoice_number, "insurer_share": str(insurer_total),
+                                                "patient_invoice": patient_invoice.invoice_number if patient_invoice else "",
+                                                "patient_share": str(patient_total)}, event=AuditEventType.CREATE)
     return bill
 
 
@@ -350,7 +415,7 @@ def claim(contract, first, last):
     bills = list(entity_scope.scope(InsuredBill.objects, "insurer_invoice__" + entity_scope.SALES_INVOICE)
                  .filter(contract=contract, insurer_invoice__status="posted", insurer_invoice__invoice_date__gte=first,
                          insurer_invoice__invoice_date__lte=last)
-                 .select_related("appointment__customer", "appointment__service", "insurer_invoice")
+                 .select_related("patient", "appointment__customer", "appointment__service", "insurer_invoice")
                  .order_by("insurer_invoice__invoice_date", "pk"))
     returned = dict(SalesReturn.objects.filter(source_invoice__in=[bill.insurer_invoice_id for bill in bills], status="posted")
                     .values("source_invoice").annotate(total=Sum("total_amount")).values_list("source_invoice", "total"))
@@ -359,8 +424,9 @@ def claim(contract, first, last):
         invoice = bill.insurer_invoice
         back = money_round(Decimal(returned.get(invoice.pk) or 0))
         net = money_round(Decimal(invoice.total_amount) - back)
-        rows.append({"bill": bill, "invoice": invoice, "patient": bill.appointment.customer, "service": bill.appointment.service,
-                     "claimed": invoice.total_amount, "rejected": back, "net": net})
+        service = bill.appointment.service if bill.appointment_id else None
+        rows.append({"bill": bill, "invoice": invoice, "patient": bill.patient or bill.appointment.customer, "service": service,
+                     "what": bill.description or (service.item_name if service else ""), "claimed": invoice.total_amount, "rejected": back, "net": net})
         totals["count"] += 1
         totals["price"] += bill.price
         totals["claimed"] += invoice.total_amount
@@ -378,7 +444,7 @@ def unpaired():
     one_side = (Q(insurer_invoice__status="cancelled") & ~Q(patient_invoice__status="cancelled")) | (
         ~Q(insurer_invoice__status="cancelled") & Q(patient_invoice__status="cancelled"))
     return list(entity_scope.scope(InsuredBill.objects, "insurer_invoice__" + entity_scope.SALES_INVOICE)
-                .filter(one_side, patient_invoice__isnull=False).select_related("appointment__customer", "insurer_invoice", "patient_invoice", "contract__insurer"))
+                .filter(one_side, patient_invoice__isnull=False).select_related("patient", "appointment__customer", "insurer_invoice", "patient_invoice", "contract__insurer"))
 
 
 def next_claim_day(contract, today=None):

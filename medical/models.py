@@ -312,13 +312,22 @@ class PatientCover(models.Model):
 
 
 class InsuredBill(models.Model):
-    """One insured visit billed as two ordinary draft invoices: the patient's share and the insurer's.
+    """One insured visit (or dental steps, or a physio package: MED-009) billed as two ordinary draft invoices: the patient's share and the insurer's.
 
     The figures are what was agreed when it was billed. The patient's invoice is
     absent when the insurer pays it all; the appointment's own invoice is then
     the insurer's."""
 
-    appointment = models.OneToOneField("appointments.Appointment", on_delete=models.PROTECT, related_name="insured_bill")
+    class Kind(models.TextChoices):
+        VISIT = "visit", "Appointment"
+        DENTAL = "dental", "Dental steps"
+        PACKAGE = "package", "Session package"
+
+    #: MED-009: an insured bill is an appointment's, a patient's done dental steps' or a physio package's.
+    kind = models.CharField(max_length=10, choices=Kind.choices, default=Kind.VISIT)
+    appointment = models.OneToOneField("appointments.Appointment", on_delete=models.PROTECT, null=True, blank=True, related_name="insured_bill")
+    patient = models.ForeignKey("master_data.Customer", on_delete=models.PROTECT, null=True, related_name="insured_bills")
+    description = models.CharField(max_length=255, blank=True)
     contract = models.ForeignKey(InsuranceContract, on_delete=models.PROTECT, related_name="bills")
     member_number = models.CharField(max_length=60, blank=True)
     price = models.DecimalField(max_digits=14, decimal_places=2)
