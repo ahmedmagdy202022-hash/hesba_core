@@ -609,7 +609,7 @@ CATALOGS = {
                     "maintenance_contracts": MAINTENANCE_CONTRACTS, None: CONTRACTING_GENERAL},
     "manufacturing": {"food": FOOD, "garments": GARMENTS, "furniture": FURNITURE, "printing": PRINTING, "chemicals": CHEMICALS,
                       "workshop": WORKSHOP, None: FOOD},
-    "other": {"mixed": SERVICES_GENERAL, "products": RETAIL, "services": SERVICES_GENERAL, None: RETAIL},
+    "other": {"mixed": MAINTENANCE, "products": RETAIL, "services": SERVICES_GENERAL, None: RETAIL},
 }
 
 

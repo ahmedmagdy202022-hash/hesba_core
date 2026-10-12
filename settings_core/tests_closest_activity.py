@@ -41,8 +41,27 @@ class ClosestActivityTests(TestCase):
         self.client.force_login(self.owner())
         self.assertEqual(self.client.get(reverse("dashboard_snapshot")).status_code, 200)
 
-    def test_both_and_older_choices_keep_the_mixed_setup(self):
-        self.assertEqual(catalog.closest("other", "mixed"), ("other", "mixed"))
+    def test_both_works_as_a_business_that_sells_and_services(self):
+        """OTHER-002: products and services together gets stock, purchases, work orders and contracts."""
+
+        from agreements.services import is_contract_business
+        from settings_core import activity_fit
+        from workorders.services import is_workshop
+
+        self.assertEqual(catalog.closest("other", "mixed"), ("services", "maintenance"))
+        prepared_client("other", "mixed", ",".join(catalog.default_modules("services")))
+        self.assertEqual(effective_activity(), ("services", "maintenance"))
+        self.assertEqual(active_catalog(), catalog_for("services", "maintenance"))
+        self.assertTrue(any(item.stock for item in active_catalog().items) and any(not item.stock for item in active_catalog().items))
+        self.assertTrue(is_workshop() and is_contract_business())
+        for slug in ("inventory", "purchases", "employees_technicians"):
+            self.assertEqual(activity_fit.module_state("other", "mixed", slug), catalog.SUGGESTED, slug)
+        profile = ClientProfile.get_active()
+        self.assertEqual((profile.activity_slug, profile.sub_activity_slug), ("other", "mixed"))  # what they chose is kept
+        self.client.force_login(self.owner())
+        self.assertEqual(self.client.get(reverse("dashboard_snapshot")).status_code, 200)
+
+    def test_older_choices_keep_the_general_setup(self):
         self.assertEqual(catalog.closest("other", "general"), ("other", "general"))
         self.assertEqual(catalog.sub_activity_label("other", "general"), "نشاط عام")  # an older install still reads its own choice
 

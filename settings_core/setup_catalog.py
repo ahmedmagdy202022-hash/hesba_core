@@ -300,6 +300,9 @@ def activity_label(slug, lang="ar"):
 CLOSEST = {
     (OTHER, "products"): (COMMERCIAL, "retail"),
     (OTHER, "services"): (SERVICES, "general"),
+    # OTHER-002: products and services together (a shop that also repairs, installs or maintains) works like a
+    # maintenance business: stock and purchases for what it sells, work orders, technicians and contracts for its services.
+    (OTHER, "mixed"): (SERVICES, "maintenance"),
 }
 #: Choices older installs may still carry; they keep their name on screen and the general behaviour.
 LEGACY_SUB_ACTIVITY_LABELS = {
