@@ -27,6 +27,9 @@ body a:focus-visible,body button:focus-visible,body input:focus-visible,body sel
 .op-module.is-soon{opacity:.72}
 .op-module__state{margin:0;font-weight:600}
 .op-module form{margin:0}
+.op-module p{margin:0}
+.op-module__features{margin:0;padding-inline-start:18px;display:grid;gap:2px;font-size:var(--hs-text-sm)}
+.op-section-title{margin:var(--hs-space-5) 0 var(--hs-space-3);font-size:var(--hs-text-md);color:var(--hs-navy)}
 .op-module button{min-height:var(--hs-control-height);padding:0 var(--hs-space-4);border-radius:var(--hs-radius-md);font:inherit;font-weight:600;cursor:pointer}
 /* EXP-001: expenses filters, summary and per-category bars. */
 .op-expense-filters{grid-template-columns:minmax(180px,1fr) auto auto 170px 170px auto}

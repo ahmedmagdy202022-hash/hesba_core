@@ -16,7 +16,7 @@ from reports.functional_views import report_hub
 from reports.views import home
 from accounts.login_guard import GuardedLoginView, login_verify
 from printing import views as printing_views
-from settings_core.setup_views import after_login, root_redirect, setup_complete, setup_review, sub_activity_step
+from settings_core.setup_views import after_login, root_redirect, setup_complete, setup_modules, setup_review, sub_activity_step
 
 
 urlpatterns = [
@@ -47,7 +47,7 @@ urlpatterns = [
     path("setup/activity/manufacturing/", sub_activity_step, {"activity": "manufacturing"}, name="setup_activity_manufacturing"),
     path("setup/activity/services/", TemplateView.as_view(template_name="setup/activity_services_subactivity.html"), name="setup_activity_services"),
     path("setup/activity/service/", TemplateView.as_view(template_name="setup/activity_subactivity_placeholder.html"), name="setup_activity_service"),
-    path("setup/modules/", TemplateView.as_view(template_name="setup/modules_selection.html"), name="setup_modules"),
+    path("setup/modules/", setup_modules, name="setup_modules"),
     path("setup/review/", setup_review, name="setup_review"),
     path("setup/complete/", setup_complete, name="setup_complete"),
     path("home/", home, name="home"),

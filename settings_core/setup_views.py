@@ -148,6 +148,47 @@ ACTIVITY_FEATURES = {
 }
 
 
+def _review_features(activity, sub_activity, modules_param, lang):
+    """ACT-FIT: what comes with the activity in the chosen modules; a contractor's projects say what they do in detail."""
+
+    from . import activity_fit
+
+    chosen = set(modules_param.split(",")) | set(catalog.required_modules(catalog.closest(activity, sub_activity)[0]))
+    detail = ACTIVITY_FEATURES.get(activity, {}).get(lang, ()) if "projects" in chosen else ()
+    lines = [f"{feature['label']}: {feature['about']}" for feature in activity_fit.features(activity, sub_activity, lang)
+             if feature["module"] in chosen and not (detail and feature["module"] == "projects")]
+    return lines + list(detail)
+
+
+def _fit_rows(activity, sub_activity):
+    """ACT-FIT: the modules offered to this activity, with both languages' words for the page's language switch."""
+
+    from . import activity_fit
+
+    arabic, english = activity_fit.module_rows(activity, sub_activity, "ar"), activity_fit.module_rows(activity, sub_activity, "en")
+    rows = []
+    for ar, en in zip(arabic, english):
+        rows.append({"slug": ar["slug"], "preset": ar["preset"], "label_ar": ar["label"], "label_en": en["label"], "about_ar": ar["about"],
+                     "about_en": en["about"], "features": [{"label_ar": a["label"], "label_en": e["label"]} for a, e in zip(ar["features"], en["features"])]})
+    features = [{"slug": a["slug"], "label_ar": a["label"], "label_en": e["label"], "about_ar": a["about"], "about_en": e["about"]}
+                for a, e in zip(activity_fit.features(activity, sub_activity, "ar"), activity_fit.features(activity, sub_activity, "en"))]
+    return rows, features
+
+
+def setup_modules(request):
+    """Step 3: the modules that fit the chosen activity and sub-activity, most needed first."""
+
+    activity = request.GET.get("activity", "")
+    sub_activity = request.GET.get("sub_activity", "")
+    if not catalog.is_valid_activity(activity):
+        activity, sub_activity = "", ""
+    rows, features = _fit_rows(activity or catalog.COMMERCIAL, sub_activity)
+    label_ar = catalog.sub_activity_label(activity, sub_activity, "ar") if catalog.is_valid_sub_activity(activity, sub_activity) else catalog.activity_label(activity or catalog.COMMERCIAL, "ar")
+    label_en = catalog.sub_activity_label(activity, sub_activity, "en") if catalog.is_valid_sub_activity(activity, sub_activity) else catalog.activity_label(activity or catalog.COMMERCIAL, "en")
+    return render(request, "setup/modules_selection.html", {"module_rows": rows, "fit_features": features, "fit_activity": activity, "fit_sub": sub_activity,
+                                                             "fit_label_ar": label_ar, "fit_label_en": label_en})
+
+
 def _capability_rows(activity, sub_activity, lang):
     """CAP-001: the review step's capability list, suggestions ticked."""
 
@@ -203,7 +244,7 @@ def setup_review(request):
         "back_href": _setup_modules_href(lang, activity, sub_activity, modules_param),
         "complete_url": reverse("setup_complete"),
         "capability_rows": _capability_rows(activity, sub_activity, lang),
-        "activity_features": ACTIVITY_FEATURES.get(activity, {}).get(lang, ()) if "projects" in modules_param.split(",") else (),
+        "activity_features": _review_features(activity, sub_activity, modules_param, lang),
         **REVIEW_STRINGS[lang],
     }
     return render(request, "setup/review_setup.html", context)

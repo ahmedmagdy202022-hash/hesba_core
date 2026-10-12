@@ -60,10 +60,9 @@ class ActivityTests(RestaurantSetup):
             self.assertContains(sub, f'data-sub-activity="{slug}"')
         self.assertContains(sub, "url.searchParams.set('activity','restaurants')")
         modules = self.client.get("/setup/modules/?lang=ar&activity=restaurants&sub_activity=cafe")
-        for slug in catalog.MODULE_SLUGS:
-            with self.subTest(slug=slug):
-                self.assertContains(modules, f'data-module="{slug}"')
-                self.assertRegex(modules.content.decode(), rf'data-module="{slug}"[^>]*data-restaurants-state="{catalog.preset_state("restaurants", slug)}"')
+        self.assertContains(modules, 'data-module="tables_orders" data-preset-state="required"')
+        self.assertNotContains(modules, 'data-module="projects"')  # ACT-FIT: a café has no projects
+        self.assertContains(modules, 'data-activity-feature="tables_board"')
 
 
 class OrderTests(RestaurantSetup):

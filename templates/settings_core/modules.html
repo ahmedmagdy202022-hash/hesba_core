@@ -1,13 +1,17 @@
 {% extends "operations/base.html" %}
 {% block operation_content %}
 <section class="op-title-row">
-  <div><a class="op-back" href="{% url 'settings_core:overview' %}?lang={{ lang }}">{{ words.back }}</a><h1>{{ words.modules }}</h1><p>{{ words.modules_lead }}</p></div>
+  <div><a class="op-back" href="{% url 'settings_core:overview' %}?lang={{ lang }}">{{ words.back }}</a><h1>{{ words.modules }}</h1><p>{{ words.modules_lead }}</p>{% if activity_name %}<p class="op-muted" data-modules-activity>{{ words.your_activity }}: <strong>{{ activity_name }}</strong></p>{% endif %}</div>
 </section>
 {% if not setup_complete %}<p class="op-message op-message-info">{{ words.setup_first }}</p>{% elif not can_manage %}<p class="op-message op-message-info">{{ words.view_only }}</p>{% endif %}
+{% for group in groups %}
+<h2 class="op-section-title" data-module-group="{{ group.key }}">{{ group.title }}</h2>
 <div class="op-card-grid op-modules">
-  {% for row in rows %}
-    <article class="op-card op-module is-{{ row.state }}" data-module="{{ row.slug }}" data-state="{{ row.state }}">
+  {% for row in group.rows %}
+    <article class="op-card op-module is-{{ row.state }}" data-module="{{ row.slug }}" data-state="{{ row.state }}" data-group="{{ row.group }}">
       <strong>{{ row.label }}</strong>
+      <p>{{ row.about }}</p>
+      {% if row.features %}<p class="op-muted" data-module-features>{{ words.inside }}</p><ul class="op-module__features">{% for feature in row.features %}<li data-module-feature="{{ feature.slug }}">{% if feature.url and row.enabled %}<a href="{{ feature.url }}?lang={{ lang }}">{{ feature.label }}</a>{% else %}{{ feature.label }}{% endif %}</li>{% endfor %}</ul>{% endif %}
       <p class="op-module__state">{% if row.state == "on" %}{{ words.state_on }}{% elif row.state == "off" %}{{ words.state_off }}{% elif row.state == "required" %}{{ words.state_required }}{% else %}{{ words.state_soon }}{% endif %}</p>
       {% if can_manage and setup_complete and row.state == "on" or can_manage and setup_complete and row.state == "off" %}
         <form method="post" action="{% url 'settings_core:modules' %}?lang={{ lang }}">{% csrf_token %}
@@ -19,4 +23,5 @@
     </article>
   {% endfor %}
 </div>
+{% endfor %}
 {% endblock %}
