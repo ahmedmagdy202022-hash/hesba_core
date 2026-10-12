@@ -1476,3 +1476,20 @@ No unresolved business or accounting decision was discovered while implementing 
 - **Known limit:** an insurer rejecting a package (a sales return on the insurer's invoice) does not close the package, because only the package's own invoice decides that. The clinic bills the patient for the rejected part, as for a visit.
 - **Not touched:** sales posting, the customer ledger, aging, returns, report calculations, permissions. Billing needs `sales.create_sales_invoice`, as before.
 - **Tests:** `medical/tests_insurance_more.py`.
+
+## HG-040 — implementation note: language levels and the placement test (EDU-006)
+
+- **Status:** BUILT through migration `education/0007_language_levels`:
+  - one new optional column, `StudyGroup.level` (1 to 20, blank when a course has no levels);
+  - one new table, `PlacementTest` (student, course, day, mark out of, the level given, notes).
+- **Placement:** `education.levels.record_placement` records the test. The student's file then lists the course's active groups at that level that still have a free seat.
+- **Moving up:** `levels.move_up(group, students, target, user, on_date)`, all or nothing.
+  - The target must be the same course at a higher level and have the seats.
+  - Each student's enrolment in the old group stops the day before (`services.stop`), and a new one starts in the target (`services.enroll`) with the same discount.
+  - For a monthly course the move must start on the first of a month, so no month is billed twice. The billing test pins this down: next month bills only the new group.
+- **Screens, for language centres and training only:**
+  - a "Level" field on the group form;
+  - "Move students up a level" on a group page (tick who passed, choose the next group);
+  - the placement test and the suggested groups on a student's file.
+- **Not touched:** fee billing (`billing.due_lines` unchanged), invoices, ledgers, attendance, permissions core. Permission: `master_data.manage_parties`, as for enrolment.
+- **Tests:** `education/tests_levels.py`; the language-centre demo in `reports/tests_demo_catalogs.py`.
