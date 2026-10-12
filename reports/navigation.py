@@ -67,11 +67,14 @@ NAV_ITEMS = (
     {"key": "customers", "ar": "العملاء", "en": "Customers", "url_name": "master_data:customers", "module": "customers", "permission": "master_data.view_master_data",
      "allow": "reports.navigation.sees_customers"},
     {"key": "suppliers", "ar": "الموردون", "en": "Suppliers", "url_name": "master_data:suppliers", "module": "suppliers", "permission": "master_data.view_suppliers"},
-    {"key": "items", "ar": "الأصناف والخدمات", "en": "Items & services", "url_name": "master_data:items", "module": "items_services"},
+    {"key": "items", "ar": "الأصناف والخدمات", "en": "Items & services", "url_name": "master_data:items", "module": "items_services",
+     "permission": "master_data.view_master_data"},  # HG-048: a waiter or site engineer does not hold it
     {"key": "cashboxes", "ar": "الخزائن", "en": "Cashboxes", "url_name": "cashboxes:list", "module": "cashboxes", "permission": "cashboxes.view_cashboxes"},
     {"key": "manufacturing", "ar": "التصنيع", "en": "Manufacturing", "url_name": "manufacturing:home", "module": "manufacturing", "permission": "inventory.view_stock"},
-    {"key": "projects", "ar": "المشاريع", "en": "Projects", "url_name": "projects:list", "module": "projects", "permission": "sales.view_sales_invoices"},
-    {"key": "restaurant", "ar": "الطاولات", "en": "Tables", "url_name": "restaurant:board", "module": "tables_orders", "permission": "sales.view_sales_invoices"},
+    {"key": "projects", "ar": "المشاريع", "en": "Projects", "url_name": "projects:list", "module": "projects",
+     "permission": ("sales.view_sales_invoices", "projects.view_projects")},
+    {"key": "restaurant", "ar": "الطاولات", "en": "Tables", "url_name": "restaurant:board", "module": "tables_orders",
+     "permission": ("sales.view_sales_invoices", "restaurant.take_orders")},
     {"key": "education", "ar": "الطلاب والمجموعات", "en": "Students & groups", "url_name": "education:students", "module": "customers", "activity": "education",
      "permission": "master_data.view_master_data"},
     # EDU-002: a teacher without the school's records still reaches the attendance of their own groups.
@@ -191,7 +194,8 @@ def nav_items(user, lang, modules):
         if item.get("capability") and not capability_enabled(item["capability"]):
             continue
         permission = item.get("permission")
-        if permission and not user_has_permission(user, permission):
+        # A tuple is any one of them (HG-048: the floor for a waiter, the projects for a site engineer).
+        if permission and not any(user_has_permission(user, code) for code in ((permission,) if isinstance(permission, str) else permission)):
             continue
         if item.get("activity") and item["activity"] != _activity():
             continue

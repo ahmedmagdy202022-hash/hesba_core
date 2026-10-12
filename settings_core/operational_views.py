@@ -180,6 +180,7 @@ PERMISSION_SECTIONS = {
     "reports": ("التقارير", "Reports"), "accounting": ("الحسابات العامة", "Accounting"), "closing": ("إقفال الفترات", "Period closing"),
     "settings": ("الإعدادات", "Settings"), "permissions": ("الصلاحيات", "Permissions"), "audit": ("سجل المراجعة", "Audit log"),
     "imports": ("الاستيراد", "Imports"), "medical": ("الملفات الطبية", "Medical records"), "barcode": ("الباركود", "Barcodes"),
+    "restaurant": ("الطاولات والطلبات", "Tables & orders"), "projects": ("المشاريع", "Projects"),
 }
 ROLE_ABOUT = {
     "owner": ("كل حاجة: الأرقام والإعدادات والصلاحيات والإقفال.", "Everything: figures, settings, permissions and closing."),
@@ -188,6 +189,9 @@ ROLE_ABOUT = {
     "cashier": ("البيع والتحصيل من العملاء وخزنة اليوم.", "Selling, collecting from customers and the day's cashbox."),
     "stock_keeper": ("المخزون والمخازن والاستلام من الموردين.", "Stock, warehouses and receiving from suppliers."),
     "support": ("الدعم الفني: يشوف الإعدادات من غير ما يغيّر في الأرقام.", "Technical support: sees settings without touching the figures."),
+    "waiter": ("الطاولات والطلبات والمطبخ، من غير ما يحاسب أو يشوف الفواتير والخزنة.", "Tables, orders and the kitchen, without billing or seeing invoices and the cashbox."),
+    "site_engineer": ("المشاريع والمقايسة، الكميات المنفذة في مستخلص مسودة، وصرف الخامات للموقع.",
+                      "Projects and the bill of quantities, quantities done on a draft certificate, materials issued to the site."),
 }
 
 

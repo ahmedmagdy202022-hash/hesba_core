@@ -165,12 +165,12 @@ def _check_stock(lines, batches, location, words):
             raise ValidationError(words["short"].format(item=line.component.item_name, need=fmt_qty(need), have=fmt_qty(have)))
 
 
-def _consume(lines, batches, location, prefix, reason, run_date, user):
+def _consume(lines, batches, location, prefix, reason, run_date, user, stand_in=None):
     from inventory.models import StockAdjustmentDirection
     from inventory.services import adjust_stock
 
     return [adjust_stock(f"{prefix}{index:02d}", run_date, line.component, location, StockAdjustmentDirection.OUT,
-                         (line.quantity * batches).quantize(Decimal("0.001")), reason, user)
+                         (line.quantity * batches).quantize(Decimal("0.001")), reason, user, stand_in=stand_in)
             for index, line in enumerate(lines, start=1)]
 
 
@@ -198,9 +198,11 @@ def issue(recipe, user, *, batches, location, reference, issue_date=None, lang="
 
 
 @transaction.atomic
-def produce(recipe, user, *, batches, location, run_date=None, notes="", lang="ar", conversion_cost=Decimal("0"), scrap=Decimal("0"), issued=None):
+def produce(recipe, user, *, batches, location, run_date=None, notes="", lang="ar", conversion_cost=Decimal("0"), scrap=Decimal("0"), issued=None,
+            stand_in=None):
     """Post a run. ``issued`` are the operations an order already issued at
-    its start; without them the components are consumed now, as before."""
+    its start; without them the components are consumed now, as before.
+    ``stand_in``: HG-048, the narrower permission the caller's flow allows in place of inventory.adjust_stock."""
 
     from inventory.models import StockAdjustmentDirection
     from inventory.services import adjust_stock
@@ -217,14 +219,14 @@ def produce(recipe, user, *, batches, location, run_date=None, notes="", lang="a
     reason = f"تصنيع {number} / Production {number}"
     if issued is None:
         _check_stock(lines, batches, location, words)
-        consumed = _consume(lines, batches, location, f"{number}-C", reason, run_date, user)
+        consumed = _consume(lines, batches, location, f"{number}-C", reason, run_date, user, stand_in=stand_in)
     else:
         consumed = list(issued)
         if any(operation.status != "posted" for operation in consumed):
             raise ValidationError(words["reversed"])
     total = sum((operation.quantity * operation.unit_cost for operation in consumed), Decimal("0"))
     produced = adjust_stock(f"{number}-OUT", run_date, recipe.product, location, StockAdjustmentDirection.IN, output, reason, user,
-                            unit_cost=cost_round((total + conversion_cost) / output))
+                            unit_cost=cost_round((total + conversion_cost) / output), stand_in=stand_in)
     run = ProductionRun.objects.create(number=number, recipe=recipe, batches=batches, location=location, run_date=run_date, output_quantity=output,
                                        total_cost=money_round(total), conversion_cost=conversion_cost, scrap_quantity=scrap,
                                        output_operation=produced, notes=(notes or "").strip()[:255], created_by=user)

@@ -121,6 +121,21 @@ def _require_permission(user, permission_code):
         raise PermissionDenied(f"This stock operation requires {permission_code}.")
 
 
+#: HG-048: the only narrower permissions that stand in for inventory.adjust_stock, each for the one
+#: flow that names it (making a plate at payment, issuing materials to a project site). Nothing else
+#: may pass one, and a general adjustment still needs inventory.adjust_stock.
+ADJUSTMENT_STAND_INS = frozenset({"restaurant.prepare_at_payment", "projects.issue_to_site"})
+
+
+def _require_adjust(user, stand_in):
+    if stand_in is not None:
+        if stand_in not in ADJUSTMENT_STAND_INS:
+            raise PermissionDenied(f"{stand_in} cannot stand in for inventory.adjust_stock.")
+        if user_has_permission(user, stand_in):
+            return
+    _require_permission(user, "inventory.adjust_stock")
+
+
 def _create_operation_movement(
     operation,
     movement_date,
@@ -253,8 +268,9 @@ def adjust_stock(
     reason,
     user,
     unit_cost=None,
+    stand_in=None,
 ):
-    _require_permission(user, "inventory.adjust_stock")
+    _require_adjust(user, stand_in)
     reason = (reason or "").strip()
     if not reason:
         raise ValidationError("Stock adjustment reason is required.")
@@ -276,7 +292,8 @@ def adjust_stock(
                 f"Not enough stock to adjust out. Available: {available}, required: {quantity}."
             )
     if unit_cost is not None:
-        if not user_has_permission(user, "inventory.view_cost"):
+        # A stand-in flow (HG-048) passes a cost the engine worked out itself (a production run's), never one a person typed.
+        if stand_in is None and not user_has_permission(user, "inventory.view_cost"):
             raise PermissionDenied("Setting adjustment cost requires inventory.view_cost.")
         operation_cost = cost_round(unit_cost)
     else:

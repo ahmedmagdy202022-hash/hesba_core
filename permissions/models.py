@@ -22,6 +22,8 @@ class RoleCode(models.TextChoices):
     STOCK_KEEPER = "stock_keeper", "Stock Keeper"
     ACCOUNTANT = "accountant", "Accountant"
     SUPPORT = "support", "Support"
+    WAITER = "waiter", "Waiter"  # HG-048
+    SITE_ENGINEER = "site_engineer", "Site engineer"  # HG-048
 
 
 class Permission(models.Model):

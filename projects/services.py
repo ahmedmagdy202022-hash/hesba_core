@@ -243,6 +243,7 @@ def issue_materials(project, user, *, item, location, quantity, operation_date=N
     operation = adjust_stock(
         f"PI-{project.code}-{sequence:03d}", operation_date or timezone.localdate(), item, location, StockAdjustmentDirection.OUT,
         quantity.quantize(Decimal("0.001")), f"صرف خامات لمشروع {project.code} / Materials for project {project.code}", user,
+        stand_in="projects.issue_to_site",  # HG-048: a site engineer issues to the site without general stock adjustment
     )
     ProjectIssue.objects.create(project=project, operation=operation, created_by=user)
     _audit(project, user, "issue_project_materials", {"operation": operation.reference_number, "item": item.item_code, "quantity": str(operation.quantity)})
