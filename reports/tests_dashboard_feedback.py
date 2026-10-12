@@ -79,6 +79,18 @@ class ScreenTests(FeedbackSetup):
         english = self.client.get(reverse("dashboard_snapshot"), {"lang": "en"}).content.decode()
         self.assertIn(">العربية<", english)
 
+    def test_the_bell_panel_never_leaves_a_phone_screen(self):
+        """BELL-001: on a phone the panel is fixed full width under the bell (checked in a browser at 360 and 390px)."""
+
+        from pathlib import Path
+
+        from django.conf import settings
+
+        css = Path(settings.BASE_DIR, "static/hesba/css/dashboard.css").read_text(encoding="utf-8")
+        js = Path(settings.BASE_DIR, "static/hesba/js/dashboard.js").read_text(encoding="utf-8")
+        self.assertIn("@media (max-width:767px){.dash-bell-panel{position:fixed;inset-inline:12px;", css)
+        self.assertIn("--bell-top", js)
+
     def test_insights_tabs_and_side_charts(self):
         body = self.client.get(reverse("dashboard_snapshot"), {"period": "7d"}).content.decode()
         for tab in ("sales", "profit", "weekdays", "hours"):
