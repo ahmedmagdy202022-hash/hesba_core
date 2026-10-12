@@ -12,6 +12,20 @@
 <article><small>{{ words.rate }}</small><strong data-attendance-rate{% if summary.rate is not None and summary.rate < 75 %} class="edu-low"{% endif %}>{% if summary.rate is not None %}{{ summary.rate }}%{% else %}—{% endif %}</strong></article>
 </section>
 {% if summary.absences %}<section class="op-detail-meta" data-absences><h2>{{ words.recent_absences }}</h2>{% for a in summary.absences %}<p><bdi>{{ a.session.date|date:"Y-m-d" }}</bdi> · {{ a.session.group.course.name }} — {{ a.session.group.name }}{% if a.note %} · {{ a.note }}{% endif %}</p>{% endfor %}</section>{% endif %}
+{% if is_nursery %}<section class="op-detail-meta" data-pickup-people><h2>{{ nw.pickup }}</h2><p class="op-muted">{{ nw.pickup_intro }}</p>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ nw.name }}</th><th>{{ nw.relation }}</th><th>{{ nw.phone }}</th><th>{{ nw.id_number }}</th>{% if can_manage %}<th></th>{% endif %}</tr></thead><tbody>
+{% for person in pickup_people %}<tr data-pickup="{{ person.pk }}"{% if not person.active %} class="op-muted"{% endif %}><td class="op-cell-text">{{ person.name }}</td><td>{{ person.relation|default:'—' }}</td><td><bdi>{{ person.phone }}</bdi></td><td><bdi>{{ person.id_number|default:'—' }}</bdi></td>
+{% if can_manage %}<td>{% if person.active %}<form method="post" class="edu-inline">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="pickup_off"><input type="hidden" name="person" value="{{ person.pk }}"><button class="op-secondary" type="submit" data-pickup-off>{{ nw.remove }}</button></form>{% else %}{{ nw.removed }}{% endif %}</td>{% endif %}</tr>
+{% empty %}<tr><td colspan="5" class="op-empty">{{ nw.no_pickup }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_manage %}<form class="op-form" method="post" data-pickup-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="pickup_add"><div class="op-form-grid">
+<div class="op-field"><label for="pp-name">{{ nw.name }}</label><input id="pp-name" name="name" maxlength="120" required></div>
+<div class="op-field"><label for="pp-relation">{{ nw.relation }}</label><input id="pp-relation" name="relation" maxlength="40"></div>
+<div class="op-field"><label for="pp-phone">{{ nw.phone }}</label><input id="pp-phone" name="phone" maxlength="50" inputmode="tel" required></div>
+<div class="op-field"><label for="pp-id">{{ nw.id_number }}</label><input id="pp-id" name="id_number" maxlength="30"></div>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ nw.add }}</button></div></form>{% endif %}
+{% if day_history %}<h3>{{ nw.history }}</h3><ul>{% for r in day_history %}<li><bdi>{{ r.day|date:"Y-m-d" }}</bdi> · {{ nw.arrived }} <bdi>{{ r.arrived_at|time:"H:i" }}</bdi>{% if r.left_at %} · {{ nw.left }} <bdi>{{ r.left_at|time:"H:i" }}</bdi> {{ nw.with }} {{ r.picked_by.name }}{% endif %}</li>{% endfor %}</ul>{% endif %}
+</section>{% endif %}
 <h2>{{ words.enrollments }}</h2>
 <div class="op-table-wrap"><table class="op-table" data-enrollments><thead><tr><th>{{ words.group }}</th><th>{{ words.schedule }}</th><th>{{ words.teacher }}</th><th>{{ words.fee }}</th><th>{{ words.discount }}</th><th>{{ words.net }}</th><th>{{ words.since }}</th><th>{{ words.status }}</th>{% if can_manage %}<th></th>{% endif %}</tr></thead><tbody>
 {% for row in enrollments %}<tr data-enrollment="{{ row.pk }}"><td class="op-cell-text"><a href="{% url 'education:group' row.group.pk %}?lang={{ lang }}">{{ row.group.course.name }} — {{ row.group.name }}</a></td><td>{{ row.schedule|default:'—' }}</td><td>{{ row.group.teacher.name|default:words.no_teacher }}</td><td>{{ row.group.effective_fee|money }} <span class="op-muted">{{ row.basis_label }}</span></td><td>{{ row.discount_percent|floatformat:"-2" }}</td><td>{{ row.net|money }}</td><td><bdi>{{ row.start_date|date:"Y-m-d" }}</bdi>{% if row.end_date %} → <bdi>{{ row.end_date|date:"Y-m-d" }}</bdi>{% endif %}</td><td><span class="op-status {% if row.status == 'active' %}op-status-open{% else %}op-status-draft{% endif %}">{{ row.status_label }}</span></td>

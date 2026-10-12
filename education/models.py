@@ -246,3 +246,43 @@ class GroupPayTerm(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["group", "month"], name="education_one_pay_term_per_group_month")]
+
+
+class PickupPerson(models.Model):
+    """EDU-005: someone a nursery hands a child to at the end of the day (a parent, a grandparent, the driver).
+
+    The child leaves only with one of these; a person no longer allowed is switched off, never deleted, so
+    the days they picked the child up still show who it was."""
+
+    student = models.ForeignKey(Student, on_delete=models.PROTECT, related_name="pickup_people")
+    name = models.CharField(max_length=120)
+    relation = models.CharField(max_length=40, blank=True)
+    phone = models.CharField(max_length=50, blank=True)
+    id_number = models.CharField(max_length=30, blank=True, help_text="National ID or another document, checked at the door.")
+    active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-active", "name", "pk"]
+
+    def __str__(self):
+        return self.name
+
+
+class DayRecord(models.Model):
+    """EDU-005: a child's day at the nursery: when they arrived, when they left and who picked them up."""
+
+    student = models.ForeignKey(Student, on_delete=models.PROTECT, related_name="day_records")
+    day = models.DateField(db_index=True)
+    arrived_at = models.DateTimeField()
+    arrived_with = models.CharField(max_length=120, blank=True)
+    left_at = models.DateTimeField(null=True, blank=True)
+    picked_by = models.ForeignKey(PickupPerson, on_delete=models.PROTECT, null=True, blank=True, related_name="pickups")
+    note = models.CharField(max_length=255, blank=True)
+    checked_in_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    checked_out_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+
+    class Meta:
+        ordering = ["-day", "arrived_at", "pk"]
+        constraints = [models.UniqueConstraint(fields=["student", "day"], name="education_one_day_record_per_child")]

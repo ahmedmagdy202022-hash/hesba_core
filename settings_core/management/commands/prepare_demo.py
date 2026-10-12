@@ -506,6 +506,30 @@ class Command(BaseCommand):
                         pay.pay(row["teacher"], last_month, row["remaining"], cashbox, owner)
                     except ValidationError:
                         pass  # the cashbox cannot cover it: the demo shows it owed
+        self._nursery_day(students, owner)
+
+    def _nursery_day(self, students, owner):
+        """EDU-005: a nursery's door this morning — who may pick each child up, most children in, one already gone home."""
+
+        from education import nursery
+
+        if not nursery.is_nursery():
+            return
+        relations = {"الأب": "الأم", "الأم": "الأب"}
+        now = timezone.now()
+        for n, student in enumerate(students):
+            parent = student.payer
+            nursery.save_person(student, {"name": parent.name.split(" (")[0], "relation": student.relation or "ولي الأمر", "phone": parent.phone}, owner)
+            nursery.save_person(student, {"name": f"{relations.get(student.relation, 'الجدة')} — {student.name.split()[-1]}",
+                                          "relation": relations.get(student.relation, "الجدة"), "phone": f"0122{n:07d}"}, owner)
+            if n == len(students) - 1:
+                continue  # one child is not here yet
+            arrived = timezone.localtime(now).replace(hour=8, minute=n * 5 % 60, second=0, microsecond=0)
+            if arrived > now:
+                arrived = now - timedelta(hours=1)
+            nursery.check_in(student, owner, brought_by=student.relation, at=arrived)
+            if n == 0 and now - arrived > timedelta(hours=2):
+                nursery.check_out(student, nursery.allowed(student).first(), owner, at=arrived + timedelta(hours=2))
 
     def _projects(self, master, owner):
         """CONTRACT-002: one project with a bill of quantities, terms, an advance,
