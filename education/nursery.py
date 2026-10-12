@@ -129,7 +129,7 @@ def check_out(student, person, user, *, at=None, lang="ar"):
         raise PermissionDenied(words["desk"])
     at = at or timezone.now()
     day = timezone.localtime(at).date()
-    record = DayRecord.objects.select_for_update().select_related("picked_by").filter(student=student, day=day).first()
+    record = DayRecord.objects.select_for_update(of=("self",)).select_related("picked_by").filter(student=student, day=day).first()
     if record is None:
         raise ValidationError(words["not_in"].format(student=student.name))
     if record.left_at is not None:
