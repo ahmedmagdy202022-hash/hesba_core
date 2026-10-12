@@ -2,7 +2,8 @@
 {% load hesba_format %}
 {% block operation_content %}
 <section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div>
-{% if can_manage and due %}<form method="post" data-bill-due>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="bill_due"><button class="op-primary" type="submit">{{ bill_due_label }}</button></form>{% endif %}</section>
+{% if can_manage and due %}<form method="post" data-bill-due>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="bill_due"><button class="op-primary" type="submit">{{ bill_due_label }}</button></form>{% endif %}
+{% if can_manage and to_book %}<form method="post" data-schedule-visits>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="schedule_visits"><button class="op-secondary" type="submit">{{ schedule_label }}</button></form>{% endif %}</section>
 {% if error %}<p class="op-message op-message-error" role="alert">{{ error }}</p>{% endif %}
 <div class="op-table-wrap"><table class="op-table" data-contracts><thead><tr><th>{{ words.number }}</th><th>{{ words.customer }}</th><th>{{ words.service }}</th><th>{{ words.amount }}</th><th>{{ words.every }}</th><th>{{ words.due }}</th><th>{{ words.next }}</th><th>{{ words.unpaid }}</th><th>{{ words.status }}</th></tr></thead><tbody>
 {% for row in rows %}{% with c=row.contract o=row.overview %}<tr data-contract="{{ c.number }}"><td><a href="{% url 'agreements:detail' c.pk %}?lang={{ lang }}"><bdi>{{ c.number }}</bdi></a></td><td class="op-cell-text">{{ c.customer.name }}</td>
