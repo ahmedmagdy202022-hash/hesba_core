@@ -98,6 +98,8 @@ class StudyGroup(models.Model):
                               help_text="Blank: the course's fee.")
     starts_on = models.DateField(null=True, blank=True)
     ends_on = models.DateField(null=True, blank=True)
+    #: EDU-006: the level this group teaches within its course (a language centre's level 1, 2, 3…); blank when the course has none.
+    level = models.PositiveSmallIntegerField(null=True, blank=True)
     teacher_pay = models.CharField(max_length=10, choices=TeacherPay.choices, default=TeacherPay.NONE)
     teacher_rate = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"), validators=[MinValueValidator(Decimal("0"))],
                                        help_text="Per class, per month, or a percentage of the fees, by teacher_pay.")
@@ -286,3 +288,20 @@ class DayRecord(models.Model):
     class Meta:
         ordering = ["-day", "arrived_at", "pk"]
         constraints = [models.UniqueConstraint(fields=["student", "day"], name="education_one_day_record_per_child")]
+
+
+class PlacementTest(models.Model):
+    """EDU-006: a placement test: the level a student was placed at in a course, and the mark that put them there."""
+
+    student = models.ForeignKey(Student, on_delete=models.PROTECT, related_name="placements")
+    course = models.ForeignKey(Course, on_delete=models.PROTECT, related_name="placements")
+    taken_on = models.DateField()
+    score = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    out_of = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    level = models.PositiveSmallIntegerField()
+    notes = models.CharField(max_length=255, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-taken_on", "-pk"]

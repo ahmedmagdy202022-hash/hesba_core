@@ -11,7 +11,7 @@ from django.utils import timezone
 from master_data.models import Customer
 from permissions.services import user_has_permission
 
-from . import nursery, attendance as register
+from . import levels, nursery, attendance as register
 from . import services
 from .models import Attendance, ClassSession, Course, Enrollment, EnrollmentStatus, FeeBasis, PickupPerson, Presence, SessionStatus, Student, StudyGroup, Weekday
 
@@ -194,6 +194,10 @@ def student_detail(request, pk):
                 enrollment = get_object_or_404(Enrollment, pk=request.POST.get("enrollment") or 0, student=student)
                 services.stop(enrollment, request.user, end_date=request.POST.get("end_date"), lang=lang)
                 message = words["stopped_ok"]
+            elif action == "placement" and levels.is_levels_install():  # EDU-006
+                course = get_object_or_404(services.same_entity_as(services.scoped(Course.objects), student), pk=request.POST.get("course") or 0)
+                levels.record_placement(student, {**request.POST.dict(), "course": course}, request.user, lang)
+                message = LEVEL_WORDS[lang]["placed"]
             elif action in ("pickup_add", "pickup_off") and nursery.is_nursery():  # EDU-005
                 if action == "pickup_add":
                     nursery.save_person(student, request.POST.dict(), request.user, lang=lang)
@@ -223,7 +227,19 @@ def student_detail(request, pk):
                                                            payers=_payers(student.payer_id), error=error, today=timezone.localdate(), summary=summary,
                                                            active_groups=active_groups, nw=NURSERY_WORDS[lang],
                                                            pickup_people=list(student.pickup_people.all()) if nursery.is_nursery() else [],
-                                                           day_history=nursery.history(student, 10) if nursery.is_nursery() else []))
+                                                           day_history=nursery.history(student, 10) if nursery.is_nursery() else [],
+                                                           **_placement_context(student, lang)))
+
+
+def _placement_context(student, lang):
+    """EDU-006: the student's placement tests, and the groups at each test's level with a seat."""
+
+    if not levels.is_levels_install():
+        return {"uses_levels": False}
+    tests = list(student.placements.select_related("course"))
+    suggestions = [{"test": test, "groups": levels.groups_at(test.course, test.level, student)} for test in levels.latest(student).values()]
+    return {"uses_levels": True, "lw": LEVEL_WORDS[lang], "placements": tests, "suggestions": suggestions,
+            "level_courses": services.same_entity_as(services.scoped(Course.objects.filter(active=True)), student).order_by("name")}
 
 
 # ---- groups ----
@@ -254,7 +270,8 @@ def groups(request):
 def _group_form_context(request, lang, **extra):
     group = extra.get("group")
     return _base(request, lang, "groups", courses=_courses(group), teachers=_teachers(group.teacher_id if group else None),
-                 pay_choices=list(services.PAY_LABELS[lang].items()), weekdays=[(day, services.DAY_LABELS[lang][day]) for day in Weekday.values], **extra)
+                 pay_choices=list(services.PAY_LABELS[lang].items()), weekdays=[(day, services.DAY_LABELS[lang][day]) for day in Weekday.values],
+                 uses_levels=levels.is_levels_install(), lw=LEVEL_WORDS[lang], **extra)
 
 
 def group_new(request):
@@ -296,6 +313,18 @@ def group_detail(request, pk):
                 enrollment = get_object_or_404(Enrollment, pk=request.POST.get("enrollment") or 0, group=group)
                 services.stop(enrollment, request.user, end_date=request.POST.get("end_date"), lang=lang)
                 message = words["stopped_ok"]
+            elif action == "move_up" and levels.is_levels_install():  # EDU-006
+                from datetime import date
+
+                chosen = [int(pk) for pk in request.POST.getlist("students") if pk.isdigit()]
+                students = list(services.scoped(Student.objects).filter(pk__in=chosen))
+                target = next((other for other in levels.next_groups(group) if str(other.pk) == request.POST.get("target")), None)
+                try:
+                    on_date = date.fromisoformat(request.POST.get("on_date") or "")
+                except ValueError:
+                    on_date = None
+                moved = levels.move_up(group, students, target, request.user, on_date=on_date, lang=lang)
+                message = LEVEL_WORDS[lang]["moved"].format(n=len(moved), group=target.name)
             else:
                 raise Http404("Unknown action.")
         except ValidationError as exc:
@@ -321,7 +350,17 @@ def group_detail(request, pk):
         request, lang, group=group, roster=roster, others=others, schedule=services.schedule_text(group, lang), error=error, post=failed_edit,
         chosen_days=failed_edit.getlist("days") if failed_edit else group.weekdays, total=total, basis_label=services.BASIS_LABELS[lang][group.course.basis],
         free=(group.capacity - len(roster)) if group.capacity else None, today=timezone.localdate(),
-        sessions=sessions, can_take=register.can_take(request.user, group), last_class=register.last_class_day(group)))
+        sessions=sessions, can_take=register.can_take(request.user, group), last_class=register.last_class_day(group),
+        next_groups=levels.next_groups(group) if levels.is_levels_install() else [], next_first=_next_first()))
+
+
+def _next_first():
+    """The first of next month: when a monthly course's students move up."""
+
+    from datetime import timedelta
+
+    today = timezone.localdate()
+    return today if today.day == 1 else (today.replace(day=28) + timedelta(days=4)).replace(day=1)
 
 
 # ---- courses ----
@@ -648,3 +687,25 @@ def nursery_day(request):
         row["tell"] = nursery.left_message(record, lang) if record and told and str(record.pk) == told else ""
     return render(request, "education/nursery.html", _base(request, lang, "nursery", nw=words, rows=rows, counts=counts, error=error,
                                                            can_desk=nursery.can_desk(request.user), today=timezone.localdate()))
+
+
+# ---- EDU-006: language levels ----
+
+LEVEL_WORDS = {
+    "ar": {"level": "المستوى", "level_hint": "رقم المستوى في الكورس (1، 2، 3…)؛ سيبه فاضي لو الكورس مالوش مستويات.", "level_n": "المستوى {n}",
+           "placement": "امتحان تحديد المستوى", "placement_intro": "سجّل نتيجة الامتحان والمستوى اللي اتحدد؛ هيظهر لك المجموعات اللي في المستوى ده وفيها مكان.",
+           "course": "الكورس", "score": "الدرجة (اختياري)", "out_of": "من (اختياري)", "taken_on": "يوم الامتحان", "notes": "ملاحظات", "save": "سجّل",
+           "placed": "اتسجل امتحان تحديد المستوى.", "no_tests": "لسه مااتعملش امتحان تحديد مستوى.", "groups_for": "مجموعات {course} — المستوى {n}",
+           "no_groups": "مفيش مجموعة في المستوى ده فيها مكان دلوقتي.", "free": "{n} مكان فاضي", "open": "مفتوحة",
+           "move_up": "طلّع الطلاب للمستوى الجاي", "move_intro": "علّم على اللي نجحوا، واختار مجموعة المستوى الجاي. اشتراكهم هنا بيقف يوم قبل، وبيبدأ هناك بنفس الخصم.",
+           "target": "مجموعة المستوى الجاي", "on_date": "من يوم", "move": "طلّعهم", "moved": "اتنقل {n} طالب لمجموعة {group}.",
+           "all": "الكل", "no_next": "مفيش مجموعة في مستوى أعلى من نفس الكورس؛ اعملها الأول.", "monthly_note": "الكورس بالشهر: النقل بيبدأ أول الشهر."},
+    "en": {"level": "Level", "level_hint": "The level within the course (1, 2, 3…); leave blank when the course has no levels.", "level_n": "Level {n}",
+           "placement": "Placement test", "placement_intro": "Record the test's mark and the level it gives; the groups at that level with a free seat show here.",
+           "course": "Course", "score": "Mark (optional)", "out_of": "Out of (optional)", "taken_on": "Test day", "notes": "Notes", "save": "Save",
+           "placed": "Placement test recorded.", "no_tests": "No placement test yet.", "groups_for": "{course} groups — level {n}",
+           "no_groups": "No group at this level has a free seat now.", "free": "{n} free seats", "open": "Open",
+           "move_up": "Move students up a level", "move_intro": "Tick those who passed and choose the next level's group. Their enrolment here stops the day before and starts there with the same discount.",
+           "target": "Next level's group", "on_date": "From", "move": "Move them up", "moved": "{n} students moved to {group}.",
+           "all": "All", "no_next": "There is no higher-level group in this course; create it first.", "monthly_note": "A monthly course moves up on the first of a month."},
+}

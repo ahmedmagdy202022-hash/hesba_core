@@ -287,6 +287,14 @@ class SampleBusinessPerActivityTests(TestCase):
         self.assert_a_working_business(catalog)
         self.assertFalse(Item.objects.get(item_code="DEMO-ITEM-01").is_stock_tracked)
 
+    def test_a_language_centre_teaches_in_levels(self):
+        from education.models import PlacementTest, StudyGroup
+
+        catalog = self.fill("education", "languages")
+        self.assert_a_working_business(catalog)
+        self.assertEqual(sorted(StudyGroup.objects.values_list("level", flat=True)), [1, 1, 2])
+        self.assertEqual(sorted(PlacementTest.objects.values_list("level", flat=True)), [1, 2])
+
     def test_a_nursery_has_its_door_this_morning(self):
         from education import nursery
         from education.models import DayRecord, PickupPerson, Student

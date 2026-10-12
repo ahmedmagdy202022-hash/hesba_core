@@ -25,7 +25,7 @@ MESSAGES = {
         "name": "اكتب الاسم.", "payer": "اختار مين اللي بيدفع، أو اكتب اسم ولي الأمر، أو علّم إن الطالب بيدفع لنفسه.",
         "payer_name": "اكتب اسم ولي الأمر.", "date": "التاريخ مش مظبوط.", "money": "المبلغ لازم يكون رقم صفر أو أكبر.",
         "course": "اختار الكورس.", "group_name": "اكتب اسم المجموعة.", "days": "اختار أيام من الأسبوع.", "time": "الميعاد مش مظبوط.",
-        "duration": "مدة الحصة لازم تكون بين 15 دقيقة و8 ساعات.", "capacity": "السعة لازم تكون رقم صفر أو أكبر.",
+        "duration": "مدة الحصة لازم تكون بين 15 دقيقة و8 ساعات.", "capacity": "السعة لازم تكون رقم صفر أو أكبر.", "level": "المستوى رقم من 1 لـ 20.",
         "dates": "تاريخ النهاية لازم يكون بعد البداية.", "teacher_busy": "المدرس {teacher} عنده مجموعة «{group}» في نفس الوقت.",
         "room_busy": "القاعة {room} عليها مجموعة «{group}» في نفس الوقت.", "full": "المجموعة كاملة ({capacity} طالب).",
         "enrolled": "الطالب ده مسجّل في المجموعة دي بالفعل.", "discount": "الخصم لازم يكون بين 0 و100%.",
@@ -40,7 +40,7 @@ MESSAGES = {
         "name": "Enter the name.", "payer": "Choose who pays, type the parent's name, or mark that the student pays for themselves.",
         "payer_name": "Enter the parent's name.", "date": "The date is not valid.", "money": "The amount must be zero or more.",
         "course": "Choose the course.", "group_name": "Enter the group's name.", "days": "Choose days of the week.", "time": "The time is not valid.",
-        "duration": "A class lasts between 15 minutes and 8 hours.", "capacity": "Capacity must be zero or more.",
+        "duration": "A class lasts between 15 minutes and 8 hours.", "capacity": "Capacity must be zero or more.", "level": "The level is a number from 1 to 20.",
         "dates": "The end date must come after the start.", "teacher_busy": "{teacher} already teaches «{group}» at that time.",
         "room_busy": "Room {room} already has «{group}» at that time.", "full": "The group is full ({capacity} students).",
         "enrolled": "This student is already enrolled in this group.", "discount": "The discount must be between 0 and 100%.",
@@ -133,7 +133,7 @@ SNAPSHOT = {
     "Student": ("code", "name", "phone", "date_of_birth", "stage", "school", "relation", "notes", "payer", "active"),
     "Course": ("name", "fee", "basis", "description", "item", "active"),
     "StudyGroup": ("code", "course", "name", "teacher", "room", "capacity", "days", "start_time", "duration_minutes", "fee", "starts_on", "ends_on",
-                   "teacher_pay", "teacher_rate", "active"),
+                   "teacher_pay", "teacher_rate", "level", "active"),
 }
 
 
@@ -429,7 +429,7 @@ def save_group(data, user, group=None, lang="ar"):
     values = {
         "course": course, "name": name, "teacher": teacher, "room": _text(data, "room", 60), "capacity": capacity, "days": ",".join(days),
         "start_time": _time(data.get("start_time"), words), "duration_minutes": duration, "fee": _money(data.get("fee"), words),
-        "starts_on": starts_on, "ends_on": ends_on, **_teacher_pay(data, group, words),
+        "starts_on": starts_on, "ends_on": ends_on, **_teacher_pay(data, group, words), **_level(data, group, words),
     }
     creating = group is None
     before = {} if creating else _snapshot(StudyGroup.objects.get(pk=group.pk))
@@ -461,6 +461,23 @@ def save_group(data, user, group=None, lang="ar"):
            {"code": group.code, "course": course.name, "name": name, "days": group.days, "teacher": teacher.name if teacher else ""},
            AuditEventType.CREATE if creating else AuditEventType.UPDATE, before)
     return group
+
+
+def _level(data, group, words):
+    """EDU-006: the group's level in its course (1 to 20, or blank). A form without the field keeps what the group had."""
+
+    if "level" not in data:
+        return {}
+    raw = str(data.get("level") or "").strip()
+    if not raw:
+        return {"level": None}
+    try:
+        level = int(_plain_number(raw))
+    except (TypeError, ValueError, InvalidOperation):
+        raise ValidationError(words["level"])
+    if not 1 <= level <= 20:
+        raise ValidationError(words["level"])
+    return {"level": level}
 
 
 def _teacher_pay(data, group, words):

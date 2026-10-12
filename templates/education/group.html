@@ -16,6 +16,13 @@
 {% if can_manage %}<td><form method="post" class="edu-inline">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="stop"><input type="hidden" name="enrollment" value="{{ row.pk }}"><button class="op-secondary" type="submit">{{ words.stop }}</button></form></td>{% endif %}</tr>
 {% empty %}<tr><td colspan="8" class="op-empty">{{ words.no_roster }}</td></tr>{% endfor %}
 </tbody></table></div>
+{% if uses_levels and can_manage and group.level and roster %}<section class="op-detail-meta" data-move-up><h2>{{ lw.move_up }}</h2><p class="op-muted">{{ lw.move_intro }}</p>
+{% if next_groups %}<form class="op-form" method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="move_up">
+<fieldset class="op-field edu-days"><legend>{{ words.roster }}</legend>{% for row in roster %}<label class="op-check"><input type="checkbox" name="students" value="{{ row.student.pk }}" checked> {{ row.student.name }}</label>{% endfor %}</fieldset>
+<div class="op-form-grid"><div class="op-field"><label for="mv-target">{{ lw.target }}</label><select id="mv-target" name="target" required>{% for other in next_groups %}<option value="{{ other.pk }}">{{ other.name }} — {{ lw.level }} {{ other.level }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="mv-date">{{ lw.on_date }}</label><input id="mv-date" type="date" name="on_date" value="{{ next_first|date:'Y-m-d' }}">{% if group.course.basis == 'monthly' %}<small class="op-muted">{{ lw.monthly_note }}</small>{% endif %}</div></div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ lw.move }}</button></div></form>
+{% else %}<p class="op-message" data-no-next>{{ lw.no_next }}</p>{% endif %}</section>{% endif %}
 <h2>{{ words.sessions }}</h2>
 {% if sessions %}<div class="op-table-wrap"><table class="op-table" data-sessions><thead><tr><th>{{ words.date }}</th><th>{{ words.attendance }}</th><th>{{ words.topic }}</th><th></th></tr></thead><tbody>
 {% for s in sessions %}<tr data-session="{{ s.pk }}"><td><bdi>{{ s.date|date:"Y-m-d" }}</bdi></td><td>{% if s.status == 'cancelled' %}<span class="op-status op-status-draft">{{ words.cancelled_class }}</span>{% else %}{{ words.present }} {{ s.present }} · {{ words.late }} {{ s.late }} · {{ words.absent }} {{ s.absent }}{% if s.excused %} · {{ words.excused }} {{ s.excused }}{% endif %}{% endif %}</td><td>{{ s.topic|default:'—' }}</td><td>{% if can_take %}<a href="{% url 'education:attendance' group.pk %}?lang={{ lang }}&date={{ s.date|date:'Y-m-d' }}">{{ words.change }}</a>{% endif %}</td></tr>{% endfor %}

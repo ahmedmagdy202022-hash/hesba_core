@@ -12,6 +12,22 @@
 <article><small>{{ words.rate }}</small><strong data-attendance-rate{% if summary.rate is not None and summary.rate < 75 %} class="edu-low"{% endif %}>{% if summary.rate is not None %}{{ summary.rate }}%{% else %}—{% endif %}</strong></article>
 </section>
 {% if summary.absences %}<section class="op-detail-meta" data-absences><h2>{{ words.recent_absences }}</h2>{% for a in summary.absences %}<p><bdi>{{ a.session.date|date:"Y-m-d" }}</bdi> · {{ a.session.group.course.name }} — {{ a.session.group.name }}{% if a.note %} · {{ a.note }}{% endif %}</p>{% endfor %}</section>{% endif %}
+{% if uses_levels %}<section class="op-detail-meta" data-placement><h2>{{ lw.placement }}</h2><p class="op-muted">{{ lw.placement_intro }}</p>
+{% for s in suggestions %}<h3>{% with n=s.test.level %}{{ s.test.course.name }} — {{ lw.level }} {{ n }}{% endwith %}</h3>
+{% if s.groups %}<ul data-suggested-groups>{% for g in s.groups %}<li><a href="{% url 'education:group' g.pk %}?lang={{ lang }}">{{ g.name }}</a>{% if g.teacher %} · {{ g.teacher.name }}{% endif %} · {% if g.free is not None %}{{ g.free }} {{ lw.open }}{% else %}{{ lw.open }}{% endif %}</li>{% endfor %}</ul>
+{% else %}<p class="op-muted" data-no-groups>{{ lw.no_groups }}</p>{% endif %}{% endfor %}
+{% if placements %}<div class="op-table-wrap"><table class="op-table" data-placements><thead><tr><th>{{ lw.taken_on }}</th><th>{{ lw.course }}</th><th>{{ lw.score }}</th><th>{{ lw.level }}</th><th>{{ lw.notes }}</th></tr></thead><tbody>
+{% for t in placements %}<tr><td><bdi>{{ t.taken_on|date:"Y-m-d" }}</bdi></td><td>{{ t.course.name }}</td><td>{% if t.score is not None %}<bdi>{{ t.score|floatformat:"-2" }}{% if t.out_of %} / {{ t.out_of|floatformat:"-2" }}{% endif %}</bdi>{% else %}—{% endif %}</td><td>{{ t.level }}</td><td>{{ t.notes|default:'—' }}</td></tr>{% endfor %}
+</tbody></table></div>{% else %}<p class="op-muted">{{ lw.no_tests }}</p>{% endif %}
+{% if can_manage %}<form class="op-form" method="post" data-placement-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="placement"><div class="op-form-grid">
+<div class="op-field"><label for="pl-course">{{ lw.course }}</label><select id="pl-course" name="course" required><option value="">{{ words.choose }}</option>{% for c in level_courses %}<option value="{{ c.pk }}">{{ c.name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="pl-level">{{ lw.level }}</label><input id="pl-level" name="level" inputmode="numeric" required></div>
+<div class="op-field"><label for="pl-score">{{ lw.score }}</label><input id="pl-score" name="score" inputmode="decimal"></div>
+<div class="op-field"><label for="pl-out">{{ lw.out_of }}</label><input id="pl-out" name="out_of" inputmode="decimal"></div>
+<div class="op-field"><label for="pl-day">{{ lw.taken_on }}</label><input id="pl-day" type="date" name="taken_on" value="{{ today|date:'Y-m-d' }}" max="{{ today|date:'Y-m-d' }}"></div>
+<div class="op-field"><label for="pl-notes">{{ lw.notes }}</label><input id="pl-notes" name="notes" maxlength="255"></div>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ lw.save }}</button></div></form>{% endif %}
+</section>{% endif %}
 {% if is_nursery %}<section class="op-detail-meta" data-pickup-people><h2>{{ nw.pickup }}</h2><p class="op-muted">{{ nw.pickup_intro }}</p>
 <div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ nw.name }}</th><th>{{ nw.relation }}</th><th>{{ nw.phone }}</th><th>{{ nw.id_number }}</th>{% if can_manage %}<th></th>{% endif %}</tr></thead><tbody>
 {% for person in pickup_people %}<tr data-pickup="{{ person.pk }}"{% if not person.active %} class="op-muted"{% endif %}><td class="op-cell-text">{{ person.name }}</td><td>{{ person.relation|default:'—' }}</td><td><bdi>{{ person.phone }}</bdi></td><td><bdi>{{ person.id_number|default:'—' }}</bdi></td>

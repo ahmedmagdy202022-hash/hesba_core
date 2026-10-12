@@ -507,6 +507,22 @@ class Command(BaseCommand):
                     except ValidationError:
                         pass  # the cashbox cannot cover it: the demo shows it owed
         self._nursery_day(students, owner)
+        self._levels(groups, students, owner)
+
+    def _levels(self, groups, students, owner):
+        """EDU-006: a language centre's groups teach levels 1 and 2 of the first course, and two students sat a placement test."""
+
+        from education import levels
+        from education.models import StudyGroup
+
+        if not levels.is_levels_install():
+            return
+        StudyGroup.objects.filter(pk=groups[0].pk).update(level=1)
+        StudyGroup.objects.filter(pk=groups[1].pk).update(level=2)
+        StudyGroup.objects.filter(pk=groups[2].pk).update(level=1)
+        course = groups[0].course
+        levels.record_placement(students[0], {"course": course, "level": "1", "score": "18", "out_of": "50", "notes": "مبتدئ"}, owner)
+        levels.record_placement(students[1], {"course": course, "level": "2", "score": "36", "out_of": "50", "notes": "محادثة كويسة"}, owner)
 
     def _nursery_day(self, students, owner):
         """EDU-005: a nursery's door this morning — who may pick each child up, most children in, one already gone home."""
