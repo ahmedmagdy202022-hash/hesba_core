@@ -1379,7 +1379,7 @@ Status: IMPLEMENTED for review. New tables only; no protected logic changed. Imp
   - `medical/tests.py` (physio tests, now on the shared table);
   - `reports/tests_demo_catalogs.py` (the physio demo).
 
-## HG-047 — New roles and one new permission (proposed, waiting for Ahmed)
+## HG-048 — New roles and one new permission (proposed, waiting for Ahmed)
 
 - **Status:** OPEN PROPOSAL. Nothing is built yet. The roles and the permission core are protected, so this waits for Ahmed's approval.
 - **Why it is needed:** the scorecard (`docs/ACTIVITY_SCORECARD.md`, criterion 9 "Roles") is at 7 for restaurants and contracting, because the existing roles are too broad. The roles today are owner, manager, cashier, stock keeper, accountant and support.
