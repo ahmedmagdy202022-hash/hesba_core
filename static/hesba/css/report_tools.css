@@ -1,0 +1,15 @@
+/* FB-REPORTS: the print / Excel toolbar on reading screens, and the printed page. */
+.hs-report-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 14px}
+.hs-report-tools__hint{flex:1 1 220px}
+.hs-print-head{display:none}
+@media print{
+  .hs-report-tools,.op-filters,.op-subnav,.op-messages,.op-form,.op-form-actions,.dash-bell,.hs-entity-bar,.op-back,
+  form button,a.op-primary,a.op-secondary,button.op-primary,button.op-secondary{display:none !important}
+  .hs-print-head{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;margin:0 0 12px;padding:0 0 8px;border-bottom:1px solid #000;font-size:12px}
+  .op-shell{padding:0 !important}
+  .op-table-wrap{border:0;overflow:visible}
+  .op-table{min-width:0;width:100%;font-size:11px}
+  .op-table tr{break-inside:avoid}
+  .op-summary-grid{break-inside:avoid}
+  a{color:inherit;text-decoration:none}
+}
