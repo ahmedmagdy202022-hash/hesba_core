@@ -179,7 +179,7 @@ class SampleBusinessPerActivityTests(TestCase):
 
     def test_a_physio_centre_has_a_package_in_use(self):
         from medical import physio
-        from medical.models import SessionPackage
+        from agreements.models import Package as SessionPackage  # PKG-UNIFY
 
         catalog = self.fill("medical", "physio")
         self.assert_a_working_business(catalog)

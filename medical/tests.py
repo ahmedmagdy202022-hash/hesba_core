@@ -594,11 +594,11 @@ class SessionPackageTests(TestCase):
     def test_a_package_is_one_ordinary_invoice_and_its_sessions_never_go_below_zero(self):
         from parties.services import balance
 
-        from .models import SessionPackage
+        from agreements.models import Package  # PKG-UNIFY: the shared package table
 
         self.assertContains(self.client.get(reverse("medical:file", args=[self.patient.pk])), "data-packages-link")
         self.client.post(self.url, {"action": "sell", "service": self.session.pk, "sessions": "10", "price": "3,000"})
-        package = SessionPackage.objects.get()
+        package = Package.objects.get()
         self.assertEqual((package.invoice.status, package.invoice.total_amount, package.sessions), ("draft", Decimal("3000.00"), 10))
         self.assertEqual(balance("customer", self.patient), Decimal("0"))  # nothing on the account until it is posted
         with self.assertRaisesMessage(ValidationError, "مسودة"):

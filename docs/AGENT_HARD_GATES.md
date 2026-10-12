@@ -1355,8 +1355,29 @@ Status: IMPLEMENTED for review. New tables only; no protected logic changed. Imp
 | خصم الخامات في المطاعم (HG-044) | C1: إنتاج الطبق عن طريق محرك التصنيع، اختياري لكل طبق | مش بيغيّر ترحيل المبيعات. اتبنى في RESTO-004؛ لسه قرار: صلاحية للكاشير يحضّر وقت الحساب |
 | السحابة | الخيار B: كل عميل بياناته على حساب Supabase باسمه هو | ده اللي كنا ناصحين بيه، وتكلفته عليك أقل |
 | تصميم البيطري (#196) | جدول حيوانات مستقل، وصاحب الحيوان عميل عادي | العميل الواحد ممكن يجيب أكتر من حيوان |
-| باكدجات البيوتي والعلاج الطبيعي | كل واحد فضل في نشاطه، ونوحّدهم بعد الدمج | توحيدهم دلوقتي كان هيلخبط PRين مش متدمجين |
+| باكدجات البيوتي والعلاج الطبيعي | كل واحد فضل في نشاطه، ونوحّدهم بعد الدمج | اتوحّدوا في PKG-UNIFY: محرك واحد وجدول واحد، والعلاج الطبيعي محتفظ بكلامه وصلاحياته |
 | ربط عقود الخدمة بالكيان | كل عقد بيتسجّل فيه مخزن البيع (يعني الكيان) اللي اتعمل فيه، وبيتفوتر ويظهر فيه بس | زي الفواتير بالظبط (HG-034) |
+
+## PKG-UNIFY — physiotherapy packages on the shared package engine (schema)
+
+- **Status:** BUILT. This carries out the default decision "packages unify after merge" from the decisions table below.
+- **Why it is a gate:** it is a schema change and it moves data. Physio's `medical.SessionPackage` and `medical.PackageSession` are replaced by the shared `agreements.Package` and `agreements.PackageUse`, which salons and service businesses already use.
+- **Migrations:**
+  - `agreements/0003_move_physio_packages` copies the data:
+    - each physio package becomes a shared package with a new `PK-` number, numbered after the existing ones, keeping the same patient, service, sessions, price, invoice, notes, author and date;
+    - each session becomes a package use, with the therapist as the employee and the same day, notes, cancelled flag, author and date;
+    - the link a session could keep to a clinical visit has no column in the shared table, so it is written into the session's notes. The screen never set it.
+  - `medical/0008_remove_session_packages` then drops the two old tables; it depends on the copy.
+  - The reverse is a no-op for the data.
+- **What does not change:**
+  - the invoices, the customer's account, the sessions used and their rules (draft invoice, cancelled or returned, never below zero, no future day);
+  - physio's own wording and who may do what: the counter sells; the therapist (a user linked to an employee) or anyone with the medical records permission records sessions.
+  - `agreements.packages.use_session` / `cancel_use` take an `authorized` flag so the clinic can apply that rule; the services screens keep their rule.
+- **Gained:** physio packages now have a number and an optional expiry date, and show on the shared packages list.
+- **Tests:**
+  - `agreements/tests_pkg_unify.py` runs the migration on real old rows and checks every moved field, the numbering and the state;
+  - `medical/tests.py` (physio tests, now on the shared table);
+  - `reports/tests_demo_catalogs.py` (the physio demo).
 
 ## Final gate verification
 

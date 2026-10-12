@@ -51,10 +51,12 @@ MESSAGES = {
 
 
 def is_package_business():
+    """Salons and service businesses, and (PKG-UNIFY) physiotherapy, whose packages are the same engine."""
+
     from entities.current import effective_activity
 
     activity, sub = effective_activity()
-    return activity == "services" and (sub or "") in SUB_ACTIVITIES
+    return (activity == "services" and (sub or "") in SUB_ACTIVITIES) or (activity, sub) == ("medical", "physio")
 
 
 def can_view(user):
@@ -161,9 +163,11 @@ def sell_package(data, user, lang="ar"):
 
 
 @transaction.atomic
-def use_session(package, user, *, used_on=None, employee=None, notes="", lang="ar"):
+def use_session(package, user, *, used_on=None, employee=None, notes="", lang="ar", authorized=None):
+    """Use one session. ``authorized`` lets a caller with its own rule (physiotherapy: the therapist) decide who may; else the invoice permission."""
+
     words = _words(lang)
-    if not user_has_permission(user, MANAGE):
+    if not (user_has_permission(user, MANAGE) if authorized is None else authorized):
         raise PermissionDenied(words["manage"])
     package = Package.objects.select_for_update().select_related("invoice").get(pk=package.pk)  # two clicks never take the last session twice
     day = _date(used_on or timezone.localdate(), words)
@@ -181,9 +185,9 @@ def use_session(package, user, *, used_on=None, employee=None, notes="", lang="a
 
 
 @transaction.atomic
-def cancel_use(use, user, lang="ar"):
+def cancel_use(use, user, lang="ar", authorized=None):
     words = _words(lang)
-    if not user_has_permission(user, MANAGE):
+    if not (user_has_permission(user, MANAGE) if authorized is None else authorized):
         raise PermissionDenied(words["manage"])
     use = PackageUse.objects.select_for_update().get(pk=use.pk)
     if use.cancelled:
