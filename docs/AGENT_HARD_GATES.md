@@ -1379,6 +1379,32 @@ Status: IMPLEMENTED for review. New tables only; no protected logic changed. Imp
   - `medical/tests.py` (physio tests, now on the shared table);
   - `reports/tests_demo_catalogs.py` (the physio demo).
 
+## HG-048 — New roles and one new permission (proposed, waiting for Ahmed)
+
+- **Status:** OPEN PROPOSAL. Nothing is built yet. The roles and the permission core are protected, so this waits for Ahmed's approval.
+- **Why it is needed:** the scorecard (`docs/ACTIVITY_SCORECARD.md`, criterion 9 "Roles") is at 7 for restaurants and contracting, because the existing roles are too broad. The roles today are owner, manager, cashier, stock keeper, accountant and support.
+- **Proposal 1: a "waiter" role (restaurants).**
+  - May: open a table and an order, add and void lines, send to the kitchen, move a table. These are the floor screens.
+  - May not: take payment, see invoices, the cashbox, costs or reports.
+  - Today a waiter is given the cashier role, which also takes money.
+- **Proposal 2: a "site engineer" role (contracting).**
+  - May: read the projects and their bill of quantities, enter the quantities done on a progress certificate as a draft, and record materials issued to the site.
+  - May not: approve or post the certificate, see payments, the cashbox, profit, or the subcontractors' rates.
+  - Today an engineer either sees everything (manager) or nothing.
+- **Proposal 3: the new permission `restaurant.prepare_at_payment` (HG-044 open question).**
+  - It is given to the cashier role.
+  - It lets `restaurant.kitchen.prepare_shortfall` make the missing plates at payment for someone without `inventory.adjust_stock`. Today a cashier sells only what the kitchen prepared ahead.
+- **What it would change:**
+  - two new `RoleCode` values (a migration in `permissions`);
+  - a seed migration for the two roles and their permission rows, and for the new permission;
+  - one check in `kitchen.prepare_shortfall`;
+  - the navigation and home for the two roles (AUDIT-2 pattern).
+  - Existing roles and their permissions are untouched.
+- **Risks:**
+  - New roles must be added to the crawl matrix (`reports/tests_crawl_matrix.py`) so every screen is checked for them too.
+  - A site engineer entering quantities must never post a certificate. A test pins that.
+- **Tests to write:** for each role, what it sees in the navigation and what returns 403; the waiter cannot pay; the engineer cannot post; a cashier with the new permission has plates made at payment, and one without it is told the dish is not ready.
+
 ## Final gate verification
 
 - Full Django suite: 794 tests passed in 576.477 seconds.
