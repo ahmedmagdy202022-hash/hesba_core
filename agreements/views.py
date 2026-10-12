@@ -9,8 +9,9 @@ from django.utils import timezone
 
 from master_data.models import Customer, Item
 from permissions.services import user_has_permission
+from settings_core.display_labels import choice_label
 
-from . import services
+from . import services, visits
 from .models import ContractStatus, Every, ServiceContract
 
 WORDS = {
@@ -21,7 +22,10 @@ WORDS = {
            "none": "مفيش عقود لسه.", "back": "عقود الخدمة", "bills": "الفترات اللي اتفوترت", "period": "الفترة", "invoice": "الفاتورة",
            "invoice_status": "حالة الفاتورة", "this_period": "الفترة الحالية", "done_visits": "زيارات اتعملت", "of": "من", "choose": "اختار",
            "saved": "اتحفظ العقد.", "billed": "اتعملت {n} فاتورة (مسودة). رحّلها من صفحة الفواتير.", "edit": "تعديل العقد", "no_bills": "لسه مفيش فواتير.",
-           "draft": "مسودة", "posted": "مترحّلة", "cancelled": "اتلغت", "view_only": "إضافة العقود وفوترتها للي عنده صلاحية إنشاء فاتورة بيع بس."},
+           "draft": "مسودة", "posted": "مترحّلة", "cancelled": "اتلغت", "view_only": "إضافة العقود وفوترتها للي عنده صلاحية إنشاء فاتورة بيع بس.",
+           "schedule": "احجز زيارات الفترة ({n} زيارة)", "scheduled": "اتحجزت {n} زيارة في المواعيد.", "skipped": "{number}: {why}",
+           "employee": "الفني (اختياري)", "anyone": "مين ما كان", "booked_visits": "زيارات محجوزة", "visits_list": "زيارات الفترة دي",
+           "when": "الميعاد", "visit_status": "الحالة", "no_booked": "لسه مفيش زيارات محجوزة في الفترة دي."},
     "en": {"title": "Service contracts", "intro": "Maintenance contracts and retainers billed every period. “Bill what is due” makes a draft sales invoice for each period that has come and is not billed yet, and never bills a period twice.",
            "number": "Contract", "customer": "Customer", "service": "Service", "description": "Description", "amount": "Amount per period", "every": "Billed",
            "starts": "From", "ends": "Until (optional)", "visits": "Visits per period", "status": "Status", "notes": "Notes", "next": "Next period",
@@ -29,7 +33,10 @@ WORDS = {
            "none": "No contracts yet.", "back": "Service contracts", "bills": "Billed periods", "period": "Period", "invoice": "Invoice",
            "invoice_status": "Invoice status", "this_period": "This period", "done_visits": "Visits done", "of": "of", "choose": "Choose",
            "saved": "Contract saved.", "billed": "{n} draft invoices made. Post them from the invoices page.", "edit": "Edit the contract", "no_bills": "No invoices yet.",
-           "draft": "Draft", "posted": "Posted", "cancelled": "Cancelled", "view_only": "Adding and billing contracts needs the create-sales-invoice permission."},
+           "draft": "Draft", "posted": "Posted", "cancelled": "Cancelled", "view_only": "Adding and billing contracts needs the create-sales-invoice permission.",
+           "schedule": "Book this period's visits ({n})", "scheduled": "{n} visits were booked in the appointments.", "skipped": "{number}: {why}",
+           "employee": "Technician (optional)", "anyone": "Anyone", "booked_visits": "Visits booked", "visits_list": "This period's visits",
+           "when": "When", "visit_status": "Status", "no_booked": "No visits booked in this period yet."},
 }
 
 
@@ -63,6 +70,12 @@ def _lists(contract):
             "services_list": Item.objects.filter(Q(active=True, is_stock_tracked=False) | keep_service).order_by("item_name")}
 
 
+def _employees():
+    from staff.models import Employee
+
+    return Employee.objects.filter(active=True).order_by("name")
+
+
 def _id(raw):
     return int(raw) if str(raw or "").isdigit() else 0
 
@@ -91,6 +104,12 @@ def contract_list(request):
                 bills = services.bill_due(request.user, lang=lang)
                 messages.success(request, words["billed"].format(n=len(bills)))
                 return redirect(f"{reverse('agreements:list')}?lang={lang}")
+            if request.POST.get("action") == "schedule_visits":  # SVC-004
+                booked, skipped = visits.schedule_all(request.user, lang=lang)
+                messages.success(request, words["scheduled"].format(n=len(booked)))
+                for contract, why in skipped:
+                    messages.warning(request, words["skipped"].format(number=contract.number, why=why))
+                return redirect(f"{reverse('agreements:list')}?lang={lang}")
             contract = services.save_contract(_data(request), request.user, lang=lang)
         except ValidationError as exc:
             error = " ".join(exc.messages)
@@ -103,7 +122,9 @@ def contract_list(request):
         rows.append({"contract": contract, "overview": services.overview(contract, today), "unpaid": services.unpaid(contract),
                      "every_label": services.EVERY_LABELS[lang][contract.every], "status_label": services.STATUS_LABELS[lang][contract.status]})
     due = services.due_count(today)  # every contract the button bills, not only the rows shown
+    to_book = visits.missing_count(today)
     return render(request, "agreements/list.html", _base(request, lang, rows=rows, due=due, bill_due_label=words["bill_due"].format(n=due), error=error, post=request.POST if error else {},
+                                                       to_book=to_book, schedule_label=words["schedule"].format(n=to_book),
                                                        today=today))
 
 
@@ -118,6 +139,10 @@ def contract_detail(request, pk):
             if request.POST.get("action") == "bill_due":
                 bills = services.bill_due(request.user, contracts=[contract], lang=lang)
                 messages.success(request, words["billed"].format(n=len(bills)))
+            elif request.POST.get("action") == "schedule_visits":  # SVC-004
+                employee = _employees().filter(pk=_id(request.POST.get("employee"))).first()
+                booked = visits.schedule(contract, request.user, employee=employee, lang=lang)
+                messages.success(request, words["scheduled"].format(n=len(booked)))
             else:
                 services.save_contract(_data(request, contract), request.user, contract, lang)
                 messages.success(request, words["saved"])
@@ -126,6 +151,10 @@ def contract_detail(request, pk):
         else:
             return redirect(f"{reverse('agreements:detail', args=[contract.pk])}?lang={lang}")
     overview = services.overview(contract)
+    to_book = visits.missing(contract)
+    period_visits = list(visits.booked_in(contract, overview["current"]).select_related("employee")) if overview["current"] and contract.visits_per_period else []
+    for visit in period_visits:
+        visit.status_label = choice_label(visit, "status", lang)
     bills = list(contract.bills.select_related("invoice"))
     for bill in bills:
         bill.end = services.period_end(contract, bill.period_start)
@@ -133,5 +162,7 @@ def contract_detail(request, pk):
     return render(request, "agreements/detail.html", _base(request, lang, contract=contract, overview=overview, bills=bills, today=timezone.localdate(),
                                                          bill_due_label=words["bill_due"].format(n=len(overview["due"])),
                                                          unpaid=services.unpaid(contract), error=error, post=request.POST if error else {},
+                                                         to_book=to_book, schedule_label=words["schedule"].format(n=to_book), period_visits=period_visits,
+                                                         employees=_employees(),
                                                          every_label=services.EVERY_LABELS[lang][contract.every],
                                                          status_label=services.STATUS_LABELS[lang][contract.status]))

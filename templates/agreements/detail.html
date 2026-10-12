@@ -13,6 +13,14 @@
 <article><small>{{ words.unpaid }}</small><strong data-contract-unpaid>{{ unpaid|money }}</strong></article>
 </section>
 {% if can_manage and overview.due %}<form method="post" class="op-form-actions">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="bill_due"><button class="op-primary" type="submit" data-bill-due>{{ bill_due_label }}</button></form>{% endif %}
+{% if can_manage and to_book %}<form method="post" class="op-form" data-schedule-visits>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="schedule_visits">
+<div class="op-form-grid"><div class="op-field"><label for="ct-employee">{{ words.employee }}</label><select id="ct-employee" name="employee"><option value="">{{ words.anyone }}</option>{% for employee in employees %}<option value="{{ employee.pk }}">{{ employee.name }}</option>{% endfor %}</select></div></div>
+<div class="op-form-actions"><button class="op-secondary" type="submit">{{ schedule_label }}</button></div></form>{% endif %}
+{% if contract.visits_per_period and overview.current %}<h2>{{ words.visits_list }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-period-visits><thead><tr><th>{{ words.when }}</th><th>{{ words.employee }}</th><th>{{ words.visit_status }}</th></tr></thead><tbody>
+{% for visit in period_visits %}<tr data-visit="{{ visit.number }}"><td><a href="{% url 'appointments:detail' visit.pk %}?lang={{ lang }}"><bdi>{{ visit.starts_at|date:"Y-m-d H:i" }}</bdi></a></td><td>{{ visit.employee.name|default:'—' }}</td><td>{{ visit.status_label }}</td></tr>
+{% empty %}<tr><td colspan="3" class="op-empty">{{ words.no_booked }}</td></tr>{% endfor %}
+</tbody></table></div>{% endif %}
 <h2>{{ words.bills }}</h2>
 <div class="op-table-wrap"><table class="op-table" data-contract-bills><thead><tr><th>{{ words.period }}</th><th>{{ words.invoice }}</th><th>{{ words.amount }}</th><th>{{ words.invoice_status }}</th></tr></thead><tbody>
 {% for bill in bills %}<tr><td><bdi>{{ bill.period_start|date:"Y-m-d" }} → {{ bill.end|date:"Y-m-d" }}</bdi></td><td><a href="{% url 'sales:detail' bill.invoice.pk %}?lang={{ lang }}"><bdi>{{ bill.invoice.invoice_number }}</bdi></a></td><td>{{ bill.invoice.total_amount|money }}</td>

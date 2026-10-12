@@ -1430,3 +1430,14 @@ The final blocking implementation review did not introduce a new business/accoun
 Regression coverage for every item above is included in the final 794-test run. No migration was required and the model-drift check remains clean.
 
 No unresolved business or accounting decision was discovered while implementing or verifying these approvals.
+
+## HG-046 — implementation note: contract visits booked automatically (SVC-004)
+
+- **Status:** BUILT, no schema change.
+- **What:** `agreements.visits` books a contract's missing visits for the current period with one click: "Book this period's visits" on the contracts list (every active contract) and on a contract's page (with an optional technician).
+  - The visits go through the unchanged `appointments.services.book`, as visits to the customer's address at no price, since the contract bills the period. They are spread evenly over the rest of the period, and a Friday moves to the next day.
+  - A busy technician gets the next free hour, 10:00 to 17:00.
+  - A visit counts when it is booked, confirmed, in progress or done; a cancelled or no-show one frees its place. Booking twice never doubles the visits: the contract row is locked.
+  - A customer without an address is skipped with a clear message.
+- **Not touched:** billing (`bill_due`), the sales engine, ledgers, reports. Permission: `sales.create_sales_invoice`, the same as billing contracts and booking appointments.
+- **Tests:** `agreements/tests_visits.py`.
