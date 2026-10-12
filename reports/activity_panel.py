@@ -44,6 +44,8 @@ WORDS = {
         "short_none": "كل الوصفات خاماتها كفاية لتشغيلة", "short_list": "ناقصها خامات:",
         "active_projects": "مشاريع شغالة", "contract_total": "قيمة العقود", "billed_pct": "اتفوتر من العقود", "losing": "مشاريع خسرانة",
         "project_dues": "مستحقات على المشاريع", "overdue_certs": "مستخلصات متأخرة", "open": "افتح", "of": "من",
+        "queue_waiting": "مستنيين في الاستقبال دلوقتي", "follow_missed": "متابعات فاتت", "follow_coming": "متابعات جاية (7 أيام)",
+        "insurers_owe": "على شركات التأمين", "hours_unbilled": "ساعات لسه ماتفوترتش", "contracts_due": "فترات عقود مستحقة الفوترة",
     },
     "en": {
         "kitchen": "Floor and kitchen now", "bookings": "Today's bookings", "production": "Production this month", "projects": "Running projects",
@@ -55,6 +57,8 @@ WORDS = {
         "short_none": "Every recipe has materials for a batch", "short_list": "Short:",
         "active_projects": "Active projects", "contract_total": "Contract value", "billed_pct": "Billed of contracts", "losing": "Projects losing money",
         "project_dues": "Owed on projects", "overdue_certs": "Overdue certificates", "open": "Open", "of": "of",
+        "queue_waiting": "Waiting at reception now", "follow_missed": "Missed follow-ups", "follow_coming": "Follow-ups due (7 days)",
+        "insurers_owe": "Owed by insurers", "hours_unbilled": "Hours not billed yet", "contracts_due": "Contract periods due to bill",
     },
 }
 
@@ -107,6 +111,51 @@ def _bookings(words, today, lang):
         _tile("no_show_rate", words["no_show_rate"], f"{rate}%" if rate is not None else "—", "text", tone="bad" if rate and rate >= 15 else ""),
         _tile("next", words["next"], next_text, "text"),
     ], []
+
+
+def _clinic_tiles(words, today, user):
+    """DASH-003: what a clinic follows up on its home: who waits now, the follow-ups, what insurers owe."""
+
+    from permissions.services import user_has_permission
+
+    from medical import insurance, insights, services as medical
+    from medical.models import QueueTicket, TicketStatus
+
+    tiles = []
+    if medical.can_view(user):
+        waiting = QueueTicket.objects.filter(day=today, status=TicketStatus.WAITING).count()
+        tiles.append(_tile("queue_waiting", words["queue_waiting"], waiting, tone="lead" if waiting else ""))
+    if user_has_permission(user, medical.VIEW):  # the clinic's whole picture, as on its report
+        booked = insights._booked_patients(today)
+        missed = len(insights.missed_follow_ups(today, booked))
+        tiles.append(_tile("follow_missed", words["follow_missed"], missed, tone="bad" if missed else "good"))
+        tiles.append(_tile("follow_coming", words["follow_coming"], len(insights.coming_follow_ups(today, booked))))
+    if insurance.can_view(user):
+        owed = sum((insurance.outstanding(contract) for contract in insurance.contracts(active_only=True)), ZERO)
+        tiles.append(_tile("insurers_owe", words["insurers_owe"], money_round(owed), "money", tone="bad" if owed else ""))
+    return tiles
+
+
+def _office_tiles(words, today, user):
+    """DASH-003: an office's unbilled hours and the contract periods due to be billed."""
+
+    from permissions.services import user_has_permission
+
+    from agreements import hours, services as agreements
+
+    tiles = []
+    if hours.is_hours_business() and user_has_permission(user, "sales.view_sales_invoices"):
+        rows = hours.by_customer()
+        total = sum((row["hours"] for row in rows), ZERO)
+        amount = money_round(sum((row["amount"] for row in rows), ZERO))
+        from settings_core.templatetags.hesba_format import money as display_money, qty
+
+        tiles.append(_tile("hours_unbilled", words["hours_unbilled"], qty(total), "text", tone="bad" if total else "",
+                           sub=display_money(amount) if total else ""))
+    if agreements.is_contract_business() and user_has_permission(user, "sales.view_sales_invoices"):
+        due = agreements.due_count(today)
+        tiles.append(_tile("contracts_due", words["contracts_due"], due, tone="bad" if due else "good"))
+    return tiles
 
 
 def _production(words, today):
@@ -214,6 +263,10 @@ def build_activity_panel(activity, visible_sections, lang="ar", today=None, user
         tiles, lists = _kitchen(words, today)
     elif kind == "bookings":
         tiles, lists = _bookings(words, today, lang)
+        if activity == "medical":
+            tiles = tiles + _clinic_tiles(words, today, user)
+        elif activity == "services":
+            tiles = tiles + _office_tiles(words, today, user)
     elif kind == "production":
         tiles, lists = _production(words, today)
     elif kind == "school":
