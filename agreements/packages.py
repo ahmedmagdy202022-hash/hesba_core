@@ -111,8 +111,11 @@ def _audit(user, action, obj, after, before=None, event=AuditEventType.UPDATE):
 
 
 @transaction.atomic
-def sell_package(data, user, lang="ar"):
-    """A package and its draft invoice: one line, the whole price."""
+def sell_package(data, user, lang="ar", make_invoice=None):
+    """A package and its draft invoice: one line, the whole price.
+
+    ``make_invoice(customer, rows, notes, user, location)`` makes that invoice instead of the ordinary
+    draft (MED-009: a physio package billed with the patient's insurance); it returns the package's invoice."""
 
     from config.numbering import next_in_series
 
@@ -150,7 +153,7 @@ def sell_package(data, user, lang="ar"):
         number = next_in_series(Package, "number", "PK-", 4)
         try:
             with transaction.atomic():
-                invoice = draft_invoice(customer, rows, words["note"].format(number=number, sessions=sessions), user, location)
+                invoice = (make_invoice or draft_invoice)(customer, rows, words["note"].format(number=number, sessions=sessions), user, location)
                 package = Package.objects.create(number=number, customer=customer, service=service, sessions=sessions, price=price,
                                                  expires_on=expires_on, invoice=invoice, notes=(data.get("notes") or "").strip()[:255], created_by=user)
             break

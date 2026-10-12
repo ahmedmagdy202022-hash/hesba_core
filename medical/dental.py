@@ -52,13 +52,13 @@ MESSAGES = {
            "not_planned": "الخطوة دي مش مخططة؛ مينفعش تتغيّر.", "nothing": "مفيش خطوات اتعملت ولسه ماتفوترتش.",
            "setup": "لازم يكون فيه مخزن بيع نشط.", "bill": "عمل الفاتورة محتاج صلاحية إنشاء فاتورة بيع.",
            "date": "التاريخ مش مظبوط.", "future": "مينفعش خطوة تتسجّل إنها اتعملت في يوم لسه مجاش.",
-           "note_invoice": "علاج أسنان: {steps}"},
+           "note_invoice": "علاج أسنان: {steps}", "insured_what": "علاج أسنان {patient}: {steps}"},
     "en": {"tooth": "The tooth number is not valid (FDI: 11 to 48, primary teeth 51 to 85).", "condition": "Choose the tooth's condition.",
            "service": "Choose the service.", "price": "The price must be zero or more.", "stage": "The stage is a number from 1 to 20.",
            "not_planned": "This step is not planned any more; it cannot change.", "nothing": "There are no done steps waiting for an invoice.",
            "setup": "An active selling location is needed.", "bill": "Making the invoice needs the create-sales-invoice permission.",
            "date": "The date is not valid.", "future": "A step cannot be recorded as done on a day still to come.",
-           "note_invoice": "Dental treatment: {steps}"},
+           "note_invoice": "Dental treatment: {steps}", "insured_what": "Dental treatment for {patient}: {steps}"},
 }
 
 
@@ -185,10 +185,14 @@ def cancel_step(step, user, lang="ar"):
 
 
 def unbilled(patient):
-    """Done steps not on a live invoice (never billed, or their invoice was cancelled)."""
+    """Done steps not on a live invoice (never billed, or their invoice was cancelled).
 
+    An insured bill whose patient's invoice was cancelled while the insurer's still stands is not
+    billed again (MED-009): that would claim from the insurer twice; it shows on the insurance page instead."""
+
+    insurer_live = Q(invoice__insured_patient_bill__insurer_invoice__status__in=("draft", "posted"))
     return (TreatmentStep.objects.filter(patient=patient, status=StepStatus.DONE)
-            .filter(Q(invoice__isnull=True) | Q(invoice__status="cancelled")).select_related("service"))
+            .filter(Q(invoice__isnull=True) | (Q(invoice__status="cancelled") & ~insurer_live)).select_related("service"))
 
 
 def plan_totals(patient):
@@ -240,3 +244,34 @@ def bill_done(patient, user, lang="ar"):
     _audit(user, "bill_treatment_steps", patient, {"invoice": invoice.invoice_number, "steps": [step.pk for step in steps],
                                                    "total": str(invoice.total_amount)})
     return invoice
+
+
+@transaction.atomic
+def bill_done_insured(patient, user, lang="ar"):
+    """MED-009: the done, unbilled steps billed with the patient's insurance: the insurer's invoice and the patient's share.
+
+    Each step is split by its own service's share (``medical.insurance``). The steps point at the patient's
+    invoice, or at the insurer's when it pays it all. Returns the ``InsuredBill``."""
+
+    from master_data.models import Customer
+    from permissions.services import user_has_permission
+
+    from . import insurance
+
+    words = _words(lang)
+    if not user_has_permission(user, BILL):
+        raise PermissionDenied(words["bill"])
+    Customer.objects.select_for_update().filter(pk=patient.pk).exists()  # two clicks at once never bill a step twice
+    steps = list(unbilled(patient).select_for_update(of=("self",)))
+    if not steps:
+        raise ValidationError(words["nothing"])
+    parts = [{"service": step.service, "price": step.price,
+              "label": f"{step.service.item_name} — {step.tooth}" if step.tooth else step.service.item_name} for step in steps]
+    what = words["insured_what"].format(patient=patient.name, steps=", ".join(str(step.tooth or "—") for step in steps))
+    bill = insurance.insured_drafts(patient, parts, what, "dental", user, lang)
+    invoice = bill.patient_invoice or bill.insurer_invoice
+    TreatmentStep.objects.filter(pk__in=[step.pk for step in steps]).update(invoice=invoice)
+    _audit(user, "bill_treatment_steps_insured", patient, {"insurer_invoice": bill.insurer_invoice.invoice_number,
+                                                           "patient_invoice": bill.patient_invoice.invoice_number if bill.patient_invoice else "",
+                                                           "steps": [step.pk for step in steps]})
+    return bill
