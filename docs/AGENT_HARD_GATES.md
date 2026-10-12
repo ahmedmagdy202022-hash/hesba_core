@@ -1450,6 +1450,16 @@ No unresolved business or accounting decision was discovered while implementing 
   - On the child's file: the pick-up list and the recent days.
 - **Not touched:** fees and invoices, ledgers, attendance of classes, permissions core.
 - **Tests:** `education/tests_nursery.py`; the nursery demo in `reports/tests_demo_catalogs.py`.
+## HG-046 — implementation note: contract visits booked automatically (SVC-004)
+
+- **Status:** BUILT, no schema change.
+- **What:** `agreements.visits` books a contract's missing visits for the current period with one click: "Book this period's visits" on the contracts list (every active contract) and on a contract's page (with an optional technician).
+  - The visits go through the unchanged `appointments.services.book`, as visits to the customer's address at no price, since the contract bills the period. They are spread evenly over the rest of the period, and a Friday moves to the next day.
+  - A busy technician gets the next free hour, 10:00 to 17:00.
+  - A visit counts when it is booked, confirmed, in progress or done; a cancelled or no-show one frees its place. Booking twice never doubles the visits: the contract row is locked.
+  - A customer without an address is skipped with a clear message.
+- **Not touched:** billing (`bill_due`), the sales engine, ledgers, reports. Permission: `sales.create_sales_invoice`, the same as billing contracts and booking appointments.
+- **Tests:** `agreements/tests_visits.py`.
 ## HG-042 — implementation note: insurance on dental steps and physio packages (MED-009)
 
 - **Status:** BUILT on design A, as for visits. A patient's done dental steps, or a physio package, can now be billed through the patient's insurance: the insurer's invoice and the patient's share, two ordinary draft invoices through the unchanged sales engine.

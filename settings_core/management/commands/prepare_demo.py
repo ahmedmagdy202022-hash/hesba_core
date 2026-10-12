@@ -621,7 +621,11 @@ class Command(BaseCommand):
                                "starts_on": add_months(today, -2).replace(day=1)}, owner)
         for bill in bill_due(owner, contracts=[first])[:2]:
             post_sales_invoice(bill.invoice.id, user=owner)
-        save_contract({"customer": master["customers"][2], "service": services[0], "amount": Decimal(services[0].default_sale_price) * 2,
+        visited = master["customers"][2]
+        if not visited.address:  # SVC-004: its visits are booked at the customer's address
+            visited.address = "١٤ شارع مصدق، الدقي، الجيزة"
+            visited.save(update_fields=["address"])
+        save_contract({"customer": visited, "service": services[0], "amount": Decimal(services[0].default_sale_price) * 2,
                        "every": "quarter", "visits_per_period": 1, "description": "عقد زيارات دورية",
                        "starts_on": today - timedelta(days=10)}, owner)
 
