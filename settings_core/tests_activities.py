@@ -36,12 +36,23 @@ class ActivityWizardTests(TestCase):
                 self.assertContains(page, 'id="hs-sub-copy"')
                 self.assertContains(page, "url.searchParams.set('activity',activitySlug)")
 
-    def test_module_cards_carry_the_catalog_presets(self):
-        page = self.client.get("/setup/modules/?lang=ar&activity=medical&sub_activity=clinic").content.decode()
+    def test_module_cards_carry_the_activity_fit(self):
+        """ACT-FIT: each activity's page shows only the modules offered to it, each with its state there."""
+
+        from settings_core import activity_fit
+
         for activity in NEW:
+            sub = next(iter(catalog.SUB_ACTIVITY_LABELS[activity]))
+            page = self.client.get(f"/setup/modules/?lang=ar&activity={activity}&sub_activity={sub}").content.decode()
             for slug in catalog.MODULE_SLUGS:
+                state = activity_fit.module_state(activity, sub, slug)
                 with self.subTest(activity=activity, slug=slug):
-                    self.assertRegex(page, rf'data-module="{slug}"[^>]*data-{activity}-state="{catalog.preset_state(activity, slug)}"')
+                    if state is None:
+                        self.assertNotIn(f'data-module="{slug}"', page)
+                    else:
+                        self.assertRegex(page, rf'data-module="{slug}" data-preset-state="{state}"')
+                        if catalog.preset_state(activity, slug) == catalog.REQUIRED:
+                            self.assertEqual(state, catalog.REQUIRED)  # the activity's locked modules stay locked
 
     def test_review_shows_catalog_labels_in_both_languages(self):
         page = self.client.get("/setup/review/?lang=ar&activity=education&sub_activity=languages&modules=customers")

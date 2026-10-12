@@ -1,24 +1,24 @@
 {% extends "operations/base.html" %}
 {% block operation_content %}
 <section class="op-title-row">
-  <div><a class="op-back" href="{% url 'settings_core:overview' %}?lang={{ lang }}">{{ words.back }}</a><h1>{{ words.capabilities }}</h1><p>{{ words.capabilities_lead }}</p></div>
+  <div><a class="op-back" href="{% url 'settings_core:overview' %}?lang={{ lang }}">{{ words.back }}</a><h1>{{ words.capabilities }}</h1><p>{{ words.capabilities_lead }}</p>{% if activity_name %}<p class="op-muted" data-capabilities-activity>{{ words.your_activity }}: <strong>{{ activity_name }}</strong></p>{% endif %}</div>
 </section>
 {% if not setup_complete %}<p class="op-message op-message-info">{{ words.setup_first }}</p>{% elif not can_manage %}<p class="op-message op-message-info">{{ words.view_only }}</p>{% endif %}
-<div class="op-card-grid op-modules">
-  {% for row in rows %}
-    <article class="op-card op-module is-{{ row.state }}" data-capability="{{ row.slug }}" data-state="{{ row.state }}">
-      <strong>{{ row.label }}</strong>{% if row.suggested %} <span class="op-status op-status-posted">{{ words.suggested }}</span>{% endif %}
-      <p>{{ row.about }}</p>
-      {% if row.note %}<p class="op-message op-message-warning" role="note" data-capability-note>⚠️ {{ row.note }}</p>{% endif %}
-      <p class="op-module__state">{% if row.state == "on" %}{{ words.state_on }}{% elif row.state == "off" %}{{ words.state_off }}{% else %}{{ words.state_soon }}{% endif %}</p>
-      {% if can_manage and setup_complete and row.state != "soon" %}
-        <form method="post" action="{% url 'settings_core:capabilities' %}?lang={{ lang }}">{% csrf_token %}
-          <input type="hidden" name="capability" value="{{ row.slug }}">
-          <input type="hidden" name="enabled" value="{% if row.state == 'on' %}0{% else %}1{% endif %}">
-          <button class="{% if row.state == 'on' %}op-secondary{% else %}op-primary{% endif %}" type="submit">{% if row.state == "on" %}{{ words.turn_off }}{% else %}{{ words.turn_on }}{% endif %}</button>
-        </form>
-      {% endif %}
+{% if activity_features %}
+<h2 class="op-section-title" data-capability-group="features">{{ words.features }}</h2>
+<p class="op-muted">{{ words.features_lead }}</p>
+<div class="op-card-grid op-modules" data-activity-features>
+  {% for feature in activity_features %}
+    <article class="op-card op-module is-on" data-activity-feature="{{ feature.slug }}">
+      <strong>{{ feature.label }}</strong>
+      <p>{{ feature.about }}</p>
+      {% if feature.url %}<p><a class="op-secondary" href="{{ feature.url }}?lang={{ lang }}">{{ words.open }}</a></p>{% endif %}
     </article>
   {% endfor %}
 </div>
+{% endif %}
+{% if suggested_rows %}<h2 class="op-section-title" data-capability-group="suggested">{{ words.suggested }}</h2>
+<div class="op-card-grid op-modules">{% for row in suggested_rows %}{% include "settings_core/_capability_card.html" %}{% endfor %}</div>{% endif %}
+{% if other_rows %}<h2 class="op-section-title" data-capability-group="optional">{{ words.may_need }}</h2>
+<div class="op-card-grid op-modules">{% for row in other_rows %}{% include "settings_core/_capability_card.html" %}{% endfor %}</div>{% endif %}
 {% endblock %}
