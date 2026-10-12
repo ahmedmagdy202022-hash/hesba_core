@@ -10,4 +10,13 @@
 <td><label class="sr-only" for="qty-{{ forloop.counter }}">{{ iw.quantity }}</label><input id="qty-{{ forloop.counter }}" name="quantity" inputmode="decimal" value="{{ row.quantity|default_if_none:'' }}" style="min-height:44px;width:120px"{% if not can_edit %} disabled{% endif %}></td></tr>{% endfor %}
 </tbody></table></div>
 {% if can_edit %}<div class="op-form-actions"><button class="op-primary" type="submit">{{ iw.save }}</button></div>{% endif %}</form>
+<section class="op-detail-meta" data-kitchen>
+<h2>{{ kw.title }}</h2>
+{% if kitchen_made %}<p data-kitchen-on>{{ kw.on }}</p><p class="op-muted">{{ kw.auto }}</p>
+<p>{{ kw.in_stock }}: <strong data-kitchen-stock>{{ in_stock|qty|default:"0" }}</strong></p>
+{% if can_edit %}<form class="op-form-actions" method="post" data-kitchen-prepare>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="prepare"><label for="prep-qty">{{ kw.quantity }}</label><input id="prep-qty" name="quantity" inputmode="decimal" required style="min-height:44px;width:110px"><button class="op-primary" type="submit">{{ kw.prepare }}</button></form>{% endif %}
+{% else %}<p data-kitchen-off>{{ kw.off }}</p>
+{% if can_edit %}<form method="post" data-kitchen-switch>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="kitchen"><p class="op-muted">{{ kw.switch_hint }}</p><div class="op-form-actions"><button class="op-secondary" type="submit">{{ kw.switch }}</button></div></form>{% endif %}
+{% endif %}
+</section>
 {% endblock %}

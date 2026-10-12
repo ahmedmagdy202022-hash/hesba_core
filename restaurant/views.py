@@ -259,7 +259,7 @@ DELIVERY_WORDS = {
            "count": "Orders", "fees": "Delivery fees", "minutes": "Average delivery (min)", "no_driver": "No driver"},
 }
 INSIGHT_WORDS = {
-    "ar": {"costing": "تكلفة الأطباق", "costing_intro": "مكوّنات الطبق الواحد وتكلفتها بمتوسط تكلفة الخامة النهارده، قصاد سعر البيع. ده حساب تقديري للتسعير؛ البيع مش بيخصم خامات من المخزن.",
+    "ar": {"costing": "تكلفة الأطباق", "costing_intro": "مكوّنات الطبق الواحد وتكلفتها بمتوسط تكلفة الخامة النهارده، قصاد سعر البيع. ده حساب تقديري للتسعير. الطبق اللي عليه «بيتخصم من المخزن» بيتحضّر من مكوناته قبل ما يتباع؛ غيره البيع مش بيخصم خامات.",
            "dish": "الطبق", "price": "سعر البيع", "cost": "تكلفة الطبق", "margin": "الهامش", "margin_pct": "نسبة الهامش", "ingredients": "المكوّنات",
            "no_recipe": "لسه مالوش مكوّنات", "edit": "المكوّنات", "ingredient": "الخامة", "quantity": "الكمية للطبق", "save": "حفظ", "saved": "اتحفظت المكوّنات.",
            "back": "تكلفة الأطباق", "add_row": "سطر زيادة", "report": "تقرير المطعم",
@@ -270,7 +270,7 @@ INSIGHT_WORDS = {
            "no_waiter": "من غير ويتر", "kinds": "نوع الطلب", "kind": "النوع", "waste": "الهالك والفاقد", "waste_intro": "اللي اتشال من المخزن بتسوية في الفترة دي، بسببها.",
            "item": "الصنف", "date": "التاريخ", "reason": "السبب", "value": "القيمة", "no_waste": "مفيش هالك متسجّل في الفترة دي.", "nothing": "مفيش طلبات مدفوعة في الفترة دي.",
            "bad_period": "الفترة مش مظبوطة؛ اتعرض الشهر ده.", "delivery_fee": "رسوم التوصيل", "dine_in": "صالة", "takeaway": "تيك أواي", "delivery": "دليفري", "total": "الإجمالي"},
-    "en": {"costing": "Dish costs", "costing_intro": "What one plate uses and what it costs at today's average ingredient cost, against its price. An estimate for pricing; selling takes nothing out of stock.",
+    "en": {"costing": "Dish costs", "costing_intro": "What one plate uses and what it costs at today's average ingredient cost, against its price. An estimate for pricing. A dish marked “Taken from stock” is made from its ingredients before it sells; selling any other dish takes nothing out of stock.",
            "dish": "Dish", "price": "Price", "cost": "Plate cost", "margin": "Margin", "margin_pct": "Margin %", "ingredients": "Ingredients",
            "no_recipe": "No ingredients yet", "edit": "Ingredients", "ingredient": "Ingredient", "quantity": "Quantity per plate", "save": "Save", "saved": "Ingredients saved.",
            "back": "Dish costs", "add_row": "Another row", "report": "Restaurant report",
@@ -285,7 +285,30 @@ INSIGHT_WORDS = {
 
 
 def _dishes():
-    return Item.objects.filter(active=True, is_stock_tracked=False).exclude(item_code=services.FEE_ITEM_CODE).order_by("item_name")
+    """The menu's dishes: services, and (RESTO-004) the stock dishes made in the kitchen from a recipe."""
+
+    from django.db.models import Q
+
+    from . import kitchen
+
+    return (Item.objects.filter(Q(is_stock_tracked=False) | Q(pk__in=kitchen.kitchen_dish_ids()), active=True)
+            .exclude(item_code=services.FEE_ITEM_CODE).order_by("item_name"))
+
+
+KITCHEN_WORDS = {
+    "ar": {"title": "الخصم من المخزن", "off": "الطبق ده خدمة: بيعه مش بيخصم خامات من المخزن، والتكلفة اللي فوق تقديرية.",
+           "on": "الطبق ده بيتحضّر في المطبخ: كل طبق بيتعمل من مكوّناته (بتتخصم من المخزن بتكلفتها) قبل ما يتباع، وتكلفته الحقيقية بتدخل في تكلفة المبيعات.",
+           "switch": "اخصم الخامات لما الطبق يتباع", "switch_hint": "لو الطبق اتباع قبل كده، هيتعمل له صنف مخزني جديد بنفس الاسم والسعر يحل محله في المنيو، والقديم يفضل لفواتيره.",
+           "switched": "اتحوّل الطبق: من دلوقتي بيتحضّر من مكوّناته قبل ما يتباع.", "prepare": "حضّر كمية دلوقتي", "quantity": "عدد الأطباق",
+           "prepared": "اتحضّر {quantity} طبق.", "in_stock": "جاهز في المخزن", "auto": "لو الجاهز مش كفاية وقت الحساب: اللي عنده صلاحية تسوية المخزون الناقص بيتحضّر له لوحده، والكاشير بيبيع من الجاهز بس. ولو خامة ناقصة، الحساب بيقف ويقول هي إيه.",
+           "badge": "بيتخصم من المخزن"},
+    "en": {"title": "Taking it out of stock", "off": "This dish is a service: selling it takes no ingredients out of stock, and the cost above is an estimate.",
+           "on": "This dish is made in the kitchen: each plate is made from its ingredients (taken out of stock at their cost) before it is sold, and its real cost goes into the cost of sales.",
+           "switch": "Take the ingredients out of stock when it sells", "switch_hint": "If the dish was sold before, a new stock item with the same name and price takes its place on the menu; the old one stays for its invoices.",
+           "switched": "Switched: from now on the dish is made from its ingredients before it is sold.", "prepare": "Prepare a quantity now", "quantity": "Plates",
+           "prepared": "{quantity} plates prepared.", "in_stock": "Ready in stock", "auto": "If not enough is ready at the bill: for someone who may adjust stock the rest is made on the spot; a cashier sells only what is ready. If an ingredient is short, the bill stops and says which.",
+           "badge": "Taken from stock"},
+}
 
 
 @require_permission(COST_VIEW)
@@ -294,8 +317,12 @@ def menu_costing(request):
 
     lang = _lang(request)
     words = INSIGHT_WORDS[lang]
-    rows = insights.menu_costing(list(_dishes()))
+    from . import kitchen
+
+    dishes = list(_dishes())
+    rows = insights.menu_costing(dishes)
     return render(request, "restaurant/costing.html", _base(request, page_title=words["costing"], iw=words, rows=rows,
+                                                          kitchen_ids=kitchen.kitchen_dish_ids(dishes), kw=KITCHEN_WORDS[lang],
                                                           can_edit=user_has_permission(request.user, TABLES)))
 
 
@@ -310,7 +337,23 @@ def dish_ingredients(request, pk):
 
     kept = dish.dish_ingredients.values_list("ingredient_id", flat=True)  # one made inactive since still shows, so the page saves
     ingredients = Item.objects.filter(Q(active=True) | Q(pk__in=kept), is_stock_tracked=True).order_by("item_name")
+    from . import kitchen
+
+    kw = KITCHEN_WORDS[lang]
     error = ""
+    if request.method == "POST" and request.POST.get("action") in ("kitchen", "prepare"):
+        try:
+            if request.POST["action"] == "kitchen":  # RESTO-004
+                dish = kitchen.make_in_kitchen(dish, request.user, lang)
+                messages.success(request, kw["switched"])
+            else:
+                run = kitchen.prepare(dish, request.POST.get("quantity", ""), request.user, lang)
+                from settings_core.templatetags.hesba_format import qty
+
+                messages.success(request, kw["prepared"].format(quantity=qty(run.output_quantity)))
+        except (ValidationError, PermissionDenied) as exc:
+            messages.error(request, " ".join(exc.messages) if isinstance(exc, ValidationError) else str(exc))
+        return redirect(f"{reverse('restaurant:dish', args=[dish.pk])}?lang={lang}")
     if request.method == "POST":
         if not user_has_permission(request.user, TABLES):
             raise PermissionDenied("Changing a dish's ingredients needs master_data.manage_items.")
@@ -331,7 +374,21 @@ def dish_ingredients(request, pk):
                 for raw, qty in zip(request.POST.getlist("ingredient"), request.POST.getlist("quantity"))]
     return render(request, "restaurant/dish_ingredients.html", _base(request, page_title=dish.item_name, iw=words, dish=dish, rows=rows,
                                                                    ingredients=ingredients, cost=insights.plate_cost(dish, current), error=error,
-                                                                   can_edit=user_has_permission(request.user, TABLES)))
+                                                                   can_edit=user_has_permission(request.user, TABLES), kw=kw,
+                                                                   kitchen_made=kitchen.is_kitchen_made(dish), in_stock=_in_stock(dish)))
+
+
+def _in_stock(dish):
+    """Plates of a kitchen dish ready in the selling location, else None."""
+
+    from inventory.services import get_item_location_stock_quantity
+
+    from . import kitchen
+
+    if not dish.is_stock_tracked:
+        return None
+    location = kitchen._location()
+    return get_item_location_stock_quantity(dish, location) if location is not None else None
 
 
 def _period(request, words):

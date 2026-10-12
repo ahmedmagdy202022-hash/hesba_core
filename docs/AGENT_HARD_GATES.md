@@ -1273,6 +1273,38 @@ Status: IMPLEMENTED for review. New tables only; no protected logic changed. Imp
 - **Where:** medical / clinic and medical / medical_center, with a «Waiting list» entry in the menu.
 - **Money:** none. The visit is billed from its appointment or on a sales invoice, as before.
 - **Tests:** `medical/tests.py` → `ReceptionQueueTests`; `reports/tests_demo_catalogs.py` (the clinic demo has one patient called in and one waiting).
+## HG-044 — implementation note: ingredient deduction, design C1 (RESTO-004)
+
+- **Status:** BUILT with design C1, the default recorded in the decisions table. Design C2 (sales posting moves ingredients) was not built.
+- **What was built:** `restaurant/kitchen.py`. A dish is switched to "made in the kitchen" from its page; this is opt-in, dish by dish.
+  - It becomes a stock item with a manufacturing recipe (`DISH-<pk>`, one plate a batch). The recipe's lines are the dish's ingredients, re-read before every production.
+  - Producing a dish goes through the unchanged `manufacturing.services.produce`. The ingredients go out of stock at their cost and the dish comes in at that cost.
+  - Selling the dish then costs it like any stock item, from its movement cost (HG-003).
+- **Produced before payment:**
+  - **Ahead of time:** from the dish's page ("prepare a quantity"), for the day's batch.
+  - **At payment:** `restaurant.services.pay` calls `kitchen.prepare_shortfall` before the cashier's checkout, inside the same transaction. Plates that are missing are made first. If an ingredient is short, the payment is refused and names the ingredient, and nothing is posted or moved.
+- **A dish already sold as a service is not switched in place (new finding):**
+  - The sales return and invoice cancellation code decides whether to move stock by the item's *current* `is_stock_tracked`, not by its state when the invoice was posted.
+  - So a returned old invoice of a dish switched in place would bring in stock that never went out.
+  - Instead, such a dish gets a new stock item with the same name, price, category, tax rate, e-invoice code, barcode and ingredients. It takes the old item's place on the menu; the old item is kept inactive for its invoices. A test pins that returning an old invoice moves no stock.
+  - Reports per dish show the two items apart from the switch date.
+- **Open question for Ahmed (not built): preparing at payment by a cashier.**
+  - Making plates moves stock, and the stock engine requires `inventory.adjust_stock`, which a cashier does not hold. The permission core was left unchanged.
+  - So a cashier sells what the kitchen prepared ahead, and a dish not ready stops the bill with a clear message. Someone who holds the permission (owner, manager) has the missing plates made on the spot.
+  - **Proposed:** a new permission (for example `restaurant.prepare_at_payment`) given to the cashier role, which lets `prepare_shortfall` run the production for them. It changes the permission core (protected), so it waits for Ahmed's approval.
+- **Not touched:** sales posting, returns, cancellations, the manufacturing engine, inventory movement and accounting, average cost, the permission core.
+- **Tests:** `restaurant/tests_kitchen.py` (12 tests). They cover:
+  - switching a dish in place;
+  - the stock copy for a dish already sold, whose old invoice returns without moving stock;
+  - paying makes and costs the plates, with the ledger reconciled;
+  - plates prepared ahead are sold first;
+  - a short ingredient stops the bill;
+  - a cashier sells only what is ready;
+  - changed ingredients are used from the next plate;
+  - a service dish moves nothing;
+  - permissions;
+  - the screens.
+
 ## HG-044 — implementation note: dish cost, read only (RESTO-002)
 
 - **Status:** The read-only part of the HG-044 proposal (recorded in PR #184), built. **Taking ingredients out of stock when a dish is sold is not built; it still waits for Ahmed's decision.**
@@ -1320,7 +1352,7 @@ Status: IMPLEMENTED for review. New tables only; no protected logic changed. Imp
 |---|---|---|
 | Codex خلص رصيده | مراجعة كاملة لـ #191–#202 بدله، واتصلّح فيها كل ملاحظة حقيقية | المراجعة لقت مشاكل فعلية في الفلوس والطبي والصلاحيات |
 | التأمين الطبي (HG-042) | التصميم A: فاتورتين عاديتين لكل كشف (واحدة على المريض وواحدة على شركة التأمين) | مش بيلمس دفتر العملاء ولا الترحيل. اتبنى في MED-008 |
-| خصم الخامات في المطاعم (HG-044) | C1: إنتاج الطبق عن طريق محرك التصنيع، اختياري لكل طبق | مش بيغيّر ترحيل المبيعات. لسه متبناش |
+| خصم الخامات في المطاعم (HG-044) | C1: إنتاج الطبق عن طريق محرك التصنيع، اختياري لكل طبق | مش بيغيّر ترحيل المبيعات. اتبنى في RESTO-004؛ لسه قرار: صلاحية للكاشير يحضّر وقت الحساب |
 | السحابة | الخيار B: كل عميل بياناته على حساب Supabase باسمه هو | ده اللي كنا ناصحين بيه، وتكلفته عليك أقل |
 | تصميم البيطري (#196) | جدول حيوانات مستقل، وصاحب الحيوان عميل عادي | العميل الواحد ممكن يجيب أكتر من حيوان |
 | باكدجات البيوتي والعلاج الطبيعي | كل واحد فضل في نشاطه، ونوحّدهم بعد الدمج | توحيدهم دلوقتي كان هيلخبط PRين مش متدمجين |

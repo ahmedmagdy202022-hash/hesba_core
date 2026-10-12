@@ -322,6 +322,9 @@ def pay(order, user, *, cashbox, discount=Decimal("0"), tendered=Decimal("0"), c
     location = entity_scope.locations(Location.objects).filter(active=True, is_selling_location=True).order_by("-is_default", "pk").first()
     if location is None or cashbox is None:
         raise ValidationError(words["setup"])
+    from . import kitchen
+
+    kitchen.prepare_shortfall(lines, location, user, lang)  # RESTO-004: a kitchen dish is made from its ingredients before it is sold
     customer = customer or order.customer or walk_in_customer()
     where = order.table.name if order.table else order.get_kind_display()
     rows = [{"item": line.item, "quantity": line.quantity, "unit_sale_price": line.unit_price, "line_discount_amount": Decimal("0"),
