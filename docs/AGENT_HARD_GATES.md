@@ -717,9 +717,21 @@ Status: RESOLVED — approved by Ahmed on 9 Oct 2026 ("موافق تعمل كل 
   - permissions per role;
   - the trial balance stays balanced and reconciliation clean.
 
-## HG-042 — Medical insurance: patient share and insurer share (proposed, not built)
+## HG-042 — Medical insurance: patient share and insurer share (design A, built in MED-008)
 
-- **Status:** OPEN PROPOSAL. Nothing is built yet. This records the decision before the medical insurance work (`docs/ACTIVITY_SCORECARD.md`, step 4) touches customer accounts.
+- **Status:** BUILT with design A (MED-008), the default recorded in the decisions table below. Design B was not built.
+- **What was built (MED-008):**
+  - **New tables, migration `medical/0007_insurance`:** `InsuranceContract` (insurer customer, covered %, claim day), `ServiceCoverage` (a service's own %, 0 = not covered), `PatientCover` (patient, insurer, member number, expiry) and `InsuredBill` (the appointment, the agreed figures, both invoices).
+  - **Billing:** `medical.insurance.bill_insured` makes the two draft invoices through the unchanged `create_sales_draft_with_tax`.
+    - The patient's share is rounded half up, and the insurer takes the rest, so the two add up to the visit price to the piastre.
+    - If the insurer pays it all, there is no patient invoice; the appointment's own invoice is then the insurer's.
+    - Before tax, the two shares always add up to the visit's price. With VAT on, each invoice rounds its own tax, so their combined tax can differ by a piastre from what one invoice would have charged.
+  - **Claim:** `claim()` is read-only, scoped to the entity, and shows posted returns as rejected.
+  - **Cancelling:** sales cancelling is protected, so cancelling one invoice does not cancel the other automatically. Instead, a visit with only one of its two invoices cancelled is listed on the insurance page.
+  - **Reports:** the clinic report (`medical.insights._billed`) and `appointments.performance` now add both invoices of an insured visit. They use the same net-sales formula; only which invoices count changed.
+  - **Not touched:** the customer ledger, sales posting, aging, returns, cashbox movements, `parties.balance`.
+  - **Scope:** insurance covers appointments only. Dental steps and physiotherapy packages are still billed to the patient alone.
+  - **Tests:** `medical/tests_insurance.py` (22).
 - **Why it is a gate:** one visit is owed by two parties: the patient pays a share (co-pay) and the insurance company pays the rest, monthly, against a claim. Splitting one invoice's receivable between two customers changes the customer ledger (protected).
 - **Proposed design (A, recommended): two ordinary invoices per insured visit.**
   - Each insurance company is a customer, carrying its contract: coverage % per service and a monthly claim day.
@@ -1307,7 +1319,7 @@ Status: IMPLEMENTED for review. New tables only; no protected logic changed. Imp
 | القرار | اللي اتعمل | ليه |
 |---|---|---|
 | Codex خلص رصيده | مراجعة كاملة لـ #191–#202 بدله، واتصلّح فيها كل ملاحظة حقيقية | المراجعة لقت مشاكل فعلية في الفلوس والطبي والصلاحيات |
-| التأمين الطبي (HG-042) | التصميم A: فاتورتين عاديتين لكل كشف (واحدة على المريض وواحدة على شركة التأمين) | مش بيلمس دفتر العملاء ولا الترحيل. لسه متبناش |
+| التأمين الطبي (HG-042) | التصميم A: فاتورتين عاديتين لكل كشف (واحدة على المريض وواحدة على شركة التأمين) | مش بيلمس دفتر العملاء ولا الترحيل. اتبنى في MED-008 |
 | خصم الخامات في المطاعم (HG-044) | C1: إنتاج الطبق عن طريق محرك التصنيع، اختياري لكل طبق | مش بيغيّر ترحيل المبيعات. لسه متبناش |
 | السحابة | الخيار B: كل عميل بياناته على حساب Supabase باسمه هو | ده اللي كنا ناصحين بيه، وتكلفته عليك أقل |
 | تصميم البيطري (#196) | جدول حيوانات مستقل، وصاحب الحيوان عميل عادي | العميل الواحد ممكن يجيب أكتر من حيوان |

@@ -2,5 +2,6 @@
 <a class="{% if tab == 'files' %}op-primary{% else %}op-secondary{% endif %}" href="{% url 'medical:patients' %}?lang={{ lang }}"{% if tab == 'files' %} aria-current="page"{% endif %}>{{ words.tab_files }}</a>
 <a class="{% if tab == 'follow' %}op-primary{% else %}op-secondary{% endif %}" href="{% url 'medical:follow_ups' %}?lang={{ lang }}"{% if tab == 'follow' %} aria-current="page"{% endif %}>{{ words.tab_follow }}</a>
 {% if shows_lab %}<a class="{% if tab == 'lab_tests' %}op-primary{% else %}op-secondary{% endif %}" href="{% url 'medical:lab_tests' %}?lang={{ lang }}"{% if tab == 'lab_tests' %} aria-current="page"{% endif %}>{{ lab_tests_label }}</a>{% endif %}
+{% if shows_insurance %}<a class="{% if tab == 'insurance' %}op-primary{% else %}op-secondary{% endif %}" href="{% url 'medical:insurance' %}?lang={{ lang }}"{% if tab == 'insurance' %} aria-current="page"{% endif %} data-tab-insurance>{{ insurance_label }}</a>{% endif %}
 {% if shows_report %}<a class="{% if tab == 'report' %}op-primary{% else %}op-secondary{% endif %}" href="{% url 'medical:report' %}?lang={{ lang }}"{% if tab == 'report' %} aria-current="page"{% endif %}>{{ words.tab_report }}</a>{% endif %}
 </nav>

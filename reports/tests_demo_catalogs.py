@@ -140,7 +140,12 @@ class SampleBusinessPerActivityTests(TestCase):
         self.assert_a_working_business(catalog)
         self.assertEqual(PatientFile.objects.count(), 4)
         self.assertEqual(ClinicalVisit.objects.filter(doctor__name="د. أحمد سالم").count(), 5)
-        self.assertEqual(Appointment.objects.filter(service__item_name="كشف").count(), 7)
+        self.assertEqual(Appointment.objects.filter(service__item_name="كشف").count(), 8)  # MED-008: one of them insured
+        from medical.models import InsuredBill
+
+        bill = InsuredBill.objects.get()
+        self.assertEqual((bill.contract.insurer.name, bill.insurer_invoice.status, bill.patient_invoice.status), ("مصر للتأمين الصحي", "posted", "posted"))
+        self.assertEqual(bill.insurer_share + bill.patient_share, bill.price)
         # MED-002: the clinic report and the follow-ups have something to show.
         from datetime import timedelta
 

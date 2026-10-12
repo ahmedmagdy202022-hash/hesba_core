@@ -11,6 +11,14 @@
 <article><small>{{ words.emergency }}</small><strong>{{ file.emergency_contact|default:'—' }}</strong></article>
 <article><small>{{ words.last_visit }}</small><strong><bdi>{% if visits %}{{ visits.0.visit_date|date:"Y-m-d" }}{% else %}—{% endif %}</bdi></strong></article>
 </section>{% endif %}
+{% if shows_cover %}<section class="op-detail-meta" data-patient-cover><h2>{{ iw.cover }}</h2>
+<p>{% if cover %}<strong>{{ cover.contract.insurer.name }}</strong>{% if cover.member_number %} · {{ iw.member }} <bdi>{{ cover.member_number }}</bdi>{% endif %}{% if cover.expires_on %} · {{ iw.expires }} <bdi>{{ cover.expires_on|date:"Y-m-d" }}</bdi>{% endif %}{% if not cover_live %} · <span class="op-status op-status-cancelled" data-cover-expired>{{ iw.cover_expired }}</span>{% endif %}{% else %}{{ iw.cover_none }}{% endif %}</p>
+{% if can_cover %}<form method="post" action="{% url 'medical:patient_cover' patient.pk %}" data-cover-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><div class="op-form-grid">
+<div class="op-field"><label for="cover-contract">{{ iw.insurer }}</label><select id="cover-contract" name="contract"><option value="">{{ iw.cover_none }}</option>{% for c in cover_contracts %}<option value="{{ c.pk }}"{% if cover.contract_id == c.pk %} selected{% endif %}>{{ c.insurer.name }} ({{ c.coverage_percent|floatformat:"-2" }}%)</option>{% endfor %}</select></div>
+<div class="op-field"><label for="cover-member">{{ iw.member }}</label><input id="cover-member" name="member_number" maxlength="60" value="{{ cover.member_number|default:'' }}"></div>
+<div class="op-field"><label for="cover-expires">{{ iw.expires }}</label><input id="cover-expires" type="date" name="expires_on" value="{{ cover.expires_on|date:'Y-m-d' }}"></div>
+</div><div class="op-form-actions"><button class="op-secondary" type="submit">{{ words.save }}</button></div></form>{% endif %}
+</section>{% endif %}
 {% if upcoming %}<section class="op-detail-meta"><h2>{{ words.upcoming }}</h2>{% for a in upcoming %}<p><a href="{% url 'appointments:detail' a.pk %}?lang={{ lang }}"><bdi>{{ a.starts_at|date:"Y-m-d H:i" }}</bdi></a>{% if a.employee %} · {{ a.employee.name }}{% endif %}</p>{% endfor %}</section>{% endif %}
 {% if is_vet %}<h2 class="med-heading">{{ vw.animals }}</h2>
 <div class="op-table-wrap" data-animals><table class="op-table"><thead><tr><th>{{ vw.name }}</th><th>{{ vw.species }}</th><th>{{ vw.breed }}</th><th>{{ vw.age }}</th><th></th></tr></thead><tbody>

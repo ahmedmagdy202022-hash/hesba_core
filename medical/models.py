@@ -295,3 +295,74 @@ class QueueTicket(models.Model):
 
     def __str__(self):
         return f"{self.day}#{self.number}"
+
+
+# ---- MED-008: medical insurance (HG-042, design A: two ordinary invoices per insured visit) ----
+
+class InsuranceContract(models.Model):
+    """An insurance company the clinic bills and what it covers.
+
+    The company is an ordinary customer: its invoices, balance, aging and
+    collections are that customer's, through the unchanged sales engine."""
+
+    insurer = models.OneToOneField("master_data.Customer", on_delete=models.PROTECT, related_name="insurance_contract")
+    #: The share of a visit's price the insurer pays, unless the service has its own (``ServiceCoverage``).
+    coverage_percent = models.DecimalField(max_digits=5, decimal_places=2)
+    #: The day of the month the previous month's claim is sent.
+    claim_day = models.PositiveSmallIntegerField(default=1)
+    notes = models.CharField(max_length=255, blank=True)
+    active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["insurer__name", "pk"]
+
+    def __str__(self):
+        return str(self.insurer)
+
+
+class ServiceCoverage(models.Model):
+    """A service an insurer covers at its own share (0 = not covered)."""
+
+    contract = models.ForeignKey(InsuranceContract, on_delete=models.CASCADE, related_name="services")
+    service = models.ForeignKey("master_data.Item", on_delete=models.PROTECT, related_name="+")
+    percent = models.DecimalField(max_digits=5, decimal_places=2)
+
+    class Meta:
+        ordering = ["service__item_name", "pk"]
+        constraints = [models.UniqueConstraint(fields=["contract", "service"], name="medical_one_coverage_per_service")]
+
+
+class PatientCover(models.Model):
+    """The insurer a patient is covered by, with their member number."""
+
+    patient = models.OneToOneField("master_data.Customer", on_delete=models.PROTECT, related_name="insurance_cover")
+    contract = models.ForeignKey(InsuranceContract, on_delete=models.PROTECT, related_name="members")
+    member_number = models.CharField(max_length=60, blank=True)
+    expires_on = models.DateField(null=True, blank=True)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class InsuredBill(models.Model):
+    """One insured visit billed as two ordinary draft invoices: the patient's share and the insurer's.
+
+    The figures are what was agreed when it was billed. The patient's invoice is
+    absent when the insurer pays it all; the appointment's own invoice is then
+    the insurer's."""
+
+    appointment = models.OneToOneField("appointments.Appointment", on_delete=models.PROTECT, related_name="insured_bill")
+    contract = models.ForeignKey(InsuranceContract, on_delete=models.PROTECT, related_name="bills")
+    member_number = models.CharField(max_length=60, blank=True)
+    price = models.DecimalField(max_digits=14, decimal_places=2)
+    percent = models.DecimalField(max_digits=5, decimal_places=2)
+    insurer_share = models.DecimalField(max_digits=14, decimal_places=2)
+    patient_share = models.DecimalField(max_digits=14, decimal_places=2)
+    insurer_invoice = models.OneToOneField("sales.SalesInvoice", on_delete=models.PROTECT, related_name="insured_bill")
+    patient_invoice = models.OneToOneField("sales.SalesInvoice", on_delete=models.PROTECT, null=True, blank=True, related_name="insured_patient_bill")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]

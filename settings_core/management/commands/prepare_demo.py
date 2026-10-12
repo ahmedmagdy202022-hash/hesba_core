@@ -375,11 +375,33 @@ class Command(BaseCommand):
                                     "duration_minutes": 30}, owner)
                 set_status(appointment, "arrived", owner)
                 post_sales_invoice(bill(appointment, owner).pk, owner)
+            self._insured_visit(service, doctor, owner, today)
         missed, _ = quick_add_customer("سلمى حسن", "01000000105", owner)
         save_profile(file_for(missed), {"gender": "female", "date_of_birth": "1985-01-09", "chronic_conditions": "سكر"}, owner)
         save_visit(missed, {"complaint": "متابعة السكر", "diagnosis": "سكر من النوع الثاني", "treatment": "جلوكوفاج 500 مجم",
                             "visit_date": (today - timedelta(days=21)).isoformat(), "follow_up_date": (today - timedelta(days=6)).isoformat(),
                             "doctor": doctor}, owner)
+
+    def _insured_visit(self, service, doctor, owner, today):
+        """MED-008: an insurance company, an insured patient, and one visit billed as two invoices (posted, so it shows on the claim)."""
+
+        from appointments.services import book, set_status
+        from medical import insurance
+        from sales.pos_customers import quick_add_customer
+        from sales.services import post_sales_invoice
+
+        if not insurance.is_insurance_install():
+            return
+        contract = insurance.save_contract({"name": "مصر للتأمين الصحي", "phone": "0223456789", "coverage_percent": "80", "claim_day": "5"}, owner)
+        insured, _ = quick_add_customer("كريم فؤاد", "01000000106", owner)
+        insurance.set_cover(insured, {"contract": contract, "member_number": "MI-204518"}, owner)
+        appointment = book({"customer": insured, "employee": doctor, "service": service,
+                            "starts_at": timezone.make_aware(datetime.combine(today - timedelta(days=3), time(12))), "duration_minutes": 30}, owner)
+        set_status(appointment, "arrived", owner)
+        bill = insurance.bill_insured(appointment, owner)
+        for invoice in (bill.patient_invoice, bill.insurer_invoice):
+            if invoice is not None:
+                post_sales_invoice(invoice.pk, owner)
 
     #: CONTRACT-002: a bill of quantities per contracting sub-activity (code, item, unit, quantity, rate).
     BOQ = {
