@@ -1379,31 +1379,38 @@ Status: IMPLEMENTED for review. New tables only; no protected logic changed. Imp
   - `medical/tests.py` (physio tests, now on the shared table);
   - `reports/tests_demo_catalogs.py` (the physio demo).
 
-## HG-048 — New roles and one new permission (proposed, waiting for Ahmed)
+## HG-048 — New roles and narrow permissions (RESOLVED)
 
-- **Status:** OPEN PROPOSAL. Nothing is built yet. The roles and the permission core are protected, so this waits for Ahmed's approval.
-- **Why it is needed:** the scorecard (`docs/ACTIVITY_SCORECARD.md`, criterion 9 "Roles") is at 7 for restaurants and contracting, because the existing roles are too broad. The roles today are owner, manager, cashier, stock keeper, accountant and support.
-- **Proposal 1: a "waiter" role (restaurants).**
-  - May: open a table and an order, add and void lines, send to the kitchen, move a table. These are the floor screens.
-  - May not: take payment, see invoices, the cashbox, costs or reports.
-  - Today a waiter is given the cashier role, which also takes money.
-- **Proposal 2: a "site engineer" role (contracting).**
-  - May: read the projects and their bill of quantities, enter the quantities done on a progress certificate as a draft, and record materials issued to the site.
-  - May not: approve or post the certificate, see payments, the cashbox, profit, or the subcontractors' rates.
-  - Today an engineer either sees everything (manager) or nothing.
-- **Proposal 3: the new permission `restaurant.prepare_at_payment` (HG-044 open question).**
-  - It is given to the cashier role.
-  - It lets `restaurant.kitchen.prepare_shortfall` make the missing plates at payment for someone without `inventory.adjust_stock`. Today a cashier sells only what the kitchen prepared ahead.
-- **What it would change:**
-  - two new `RoleCode` values (a migration in `permissions`);
-  - a seed migration for the two roles and their permission rows, and for the new permission;
-  - one check in `kitchen.prepare_shortfall`;
-  - the navigation and home for the two roles (AUDIT-2 pattern).
-  - Existing roles and their permissions are untouched.
-- **Risks:**
-  - New roles must be added to the crawl matrix (`reports/tests_crawl_matrix.py`) so every screen is checked for them too.
-  - A site engineer entering quantities must never post a certificate. A test pins that.
-- **Tests to write:** for each role, what it sees in the navigation and what returns 403; the waiter cannot pay; the engineer cannot post; a cashier with the new permission has plates made at payment, and one without it is told the dish is not ready.
+- **Status:** RESOLVED. Ahmed's word on 12 Oct 2026: "اعمل اصح حاجة تتعمل" (do the most correct thing). Built on `claude/hg-048-roles`.
+- **Why:** the scorecard (`docs/ACTIVITY_SCORECARD.md`, criterion 9 "Roles") was at 7 for restaurants and contracting. A waiter had to be given the cashier role, which also takes money. A site engineer either saw everything (manager) or nothing.
+- **What was built:**
+  - **Roles:** two new `RoleCode` values, `waiter` and `site_engineer` (migration `permissions/0010_hg048_roles`, which also seeds the roles and their grants).
+  - **Permissions:** five new permissions:
+    - `restaurant.take_orders`: owner, manager, cashier, waiter;
+    - `restaurant.prepare_at_payment`: owner, manager, cashier;
+    - `projects.view_projects`, `projects.record_progress`, `projects.issue_to_site`: owner, manager, site_engineer.
+    The site engineer also holds `inventory.view_stock` and, by the HG-031 rule (whoever sees stock sees the group's quantities), `inventory.view_group_stock`. Every existing grant of every existing role is unchanged.
+  - **Waiter:**
+    - may: the floor (open a table or an order, add and void lines, send to the kitchen, move a table, reprint a ticket);
+    - may not: pay, dispatch or cancel an order (each refused with a 403 even when posted by hand), see the invoice number or the sales screens, pick a cashbox, see costs or reports;
+    - lands on the floor after signing in.
+  - **Site engineer:**
+    - may: read the projects, the bill of quantities and the certificates; record the quantities done on a certificate (it stays a draft invoice); issue materials to the site;
+    - may not: post or withdraw a certificate, change the contract or the bill of quantities, bill, collect, or see the payments, subcontractors, budget or profit. Collections, the contract position and the invoice list are hidden on the project page;
+    - lands on the projects after signing in.
+  - **Cashier:** with `restaurant.prepare_at_payment` the missing plates are made from their ingredients at payment (RESTO-004). An owner can take the permission back, and the cashier is then told the dish is not ready, as before.
+- **The protected change (inventory engine):**
+  - `inventory.services.adjust_stock` gained one optional argument, `stand_in`. It names a narrower permission that may stand in for `inventory.adjust_stock`.
+  - Only the two permissions in `ADJUSTMENT_STAND_INS` are accepted (`restaurant.prepare_at_payment`, `projects.issue_to_site`). Any other name is refused (403).
+  - Only two flows pass it: `restaurant.kitchen.prepare_shortfall` (through `manufacturing.services.produce`) and `projects.services.issue_materials`.
+  - When it is passed, the engine skips its `inventory.view_cost` check on `unit_cost`. That cost is the production run's own, worked out by the engine, never typed by a person.
+  - Default behaviour is unchanged: a call without `stand_in` checks exactly what it checked before. Movement, quantity, cost and period rules are untouched.
+- **Also fixed:** the "Items & services" menu entry had no permission, so a role without `master_data.view_master_data` was shown a link that answered 403. The new crawl found it, and the entry now carries that permission.
+- **Tests:**
+  - `restaurant/tests_roles.py` and `projects/tests_roles.py`: each role's grants, what each may and may not do (403s), where each lands, and that a manager and a cashier are unchanged.
+  - `restaurant/tests_kitchen.py`: plates made at payment by a cashier (cost of sales and ledger checked), and the old refusal when the permission is taken away.
+  - Stand-in limits: a general adjustment and the day's batch still need `inventory.adjust_stock`, and an unknown stand-in is refused.
+  - `reports/tests_crawl_matrix.py`: the waiter walks every restaurant sub-activity and the site engineer every contracting one, empty and with sample data.
 
 ## Final gate verification
 

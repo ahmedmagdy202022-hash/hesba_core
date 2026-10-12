@@ -320,9 +320,27 @@ def after_login(request):
 
     profile = ClientProfile.get_active()
     if profile is not None and profile.setup_is_complete:
-        return redirect("dashboard_snapshot")
+        return redirect(_role_home(request.user))
 
     return redirect("setup_gate")
+
+
+#: HG-048: someone whose whole job is one screen starts on it: a waiter on the floor, a site engineer on
+#: the projects. Anyone who also sees the sales side (a cashier, a manager) keeps the dashboard.
+ROLE_HOMES = (("restaurant.take_orders", "restaurant:board", "tables_orders"), ("projects.view_projects", "projects:list", "projects"))
+
+
+def _role_home(user):
+    from permissions.services import user_has_permission
+
+    from .setup_services import usable_modules
+
+    if not user_has_permission(user, "sales.view_sales_invoices"):
+        modules = set(usable_modules())
+        for code, url_name, module in ROLE_HOMES:
+            if module in modules and user_has_permission(user, code):
+                return url_name
+    return "dashboard_snapshot"
 
 
 @login_not_required

@@ -19,6 +19,8 @@ DEMO_USERS = (
     (RoleCode.CASHIER, "cashier", "الكاشير"),
     (RoleCode.STOCK_KEEPER, "stock_keeper", "أمين المخزن"),
     (RoleCode.ACCOUNTANT, "accountant", "المحاسب"),
+    (RoleCode.WAITER, "waiter", "الويتر"),  # HG-048
+    (RoleCode.SITE_ENGINEER, "engineer", "مهندس الموقع"),  # HG-048
 )
 
 

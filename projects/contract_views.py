@@ -13,7 +13,7 @@ from django.utils import timezone
 
 from cashboxes.models import Cashbox
 from master_data.models import Supplier
-from permissions.decorators import require_permission
+from permissions.decorators import require_any_permission, require_permission
 from permissions.services import user_has_permission
 from purchases.models import PurchaseInvoice
 from sales.models import CustomerPayment
@@ -24,7 +24,9 @@ from . import contract, costs
 from .models import (
     BudgetLine, Certificate, CostHeading, Project, ProjectPayment, ProjectPurchase, RetentionRelease, Subcontract, SubcontractBill, SubcontractRelease,
 )
-from .views import MANAGE, PROFIT, VIEW, _base, _date, _lang, _pick
+from .views import MANAGE, PROFIT, PROJECT_SCREENS, VIEW, _base, _date, _lang, _pick
+
+RECORD = "projects.record_progress"  # HG-048: a site engineer drafts a certificate's quantities; posting it stays with sales
 from entities import scope as entity_scope
 
 COLLECT, BUY, BUY_VIEW = "sales.receive_customer_payment", "purchases.create_purchase_invoice", "purchases.view_purchase_invoices"
@@ -115,6 +117,7 @@ def _context(request, project, tab, **extra):
     can_view_sales = user_has_permission(request.user, VIEW)
     context = _base(request, project=project, tab=tab, cwords=WORDS[lang], position=contract.position(project) if can_view_sales else None,
                     can_view_sales=can_view_sales, is_open=project.status in OPEN,
+                    can_record=user_has_permission(request.user, RECORD) or user_has_permission(request.user, MANAGE),
                     can_collect=user_has_permission(request.user, COLLECT), can_buy=user_has_permission(request.user, BUY),
                     can_view_purchases=user_has_permission(request.user, BUY_VIEW))
     context["page_title"] = f"{project.name} — {WORDS[lang]['tab_' + tab]}"
@@ -144,7 +147,7 @@ def _need(request, code):
 
 # ---- bill of quantities ----
 
-@require_permission(VIEW)
+@require_any_permission(*PROJECT_SCREENS)
 def boq(request, pk):
     lang = _lang(request)
     words = WORDS[lang]
@@ -186,14 +189,15 @@ def boq(request, pk):
 
 # ---- certificates ----
 
-@require_permission(VIEW)
+@require_any_permission(*PROJECT_SCREENS)
 def certificates(request, pk):
     lang = _lang(request)
     words = WORDS[lang]
     project = _project(pk)
     error, posted = "", {}
     if request.method == "POST":
-        _need(request, MANAGE)
+        if not user_has_permission(request.user, RECORD):
+            _need(request, MANAGE)
         posted = request.POST
         quantities = {line.pk: request.POST.get(f"q_{line.pk}", "") for line in project.boq.all()}
         try:
@@ -233,7 +237,7 @@ def _certificate(project, number):
     return get_object_or_404(_certificates(project).select_related("invoice", "invoice__customer"), number=number)
 
 
-@require_permission(VIEW)
+@require_any_permission(*PROJECT_SCREENS)
 def certificate_detail(request, pk, number):
     lang = _lang(request)
     words = WORDS[lang]

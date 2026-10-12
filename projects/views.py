@@ -10,7 +10,7 @@ from django.utils import timezone
 
 from expenses.models import Expense
 from master_data.models import Customer, Item, Location
-from permissions.decorators import require_permission
+from permissions.decorators import require_any_permission, require_permission
 from permissions.services import user_has_permission
 from sales.models import SalesInvoice
 from settings_core.display_labels import choice_label, localized_choices
@@ -21,6 +21,14 @@ from entities import scope as entity_scope
 
 
 VIEW, MANAGE, PROFIT, ISSUE = "sales.view_sales_invoices", "sales.create_sales_invoice", "reports.view_profit_report", "inventory.adjust_stock"
+#: HG-048: a site engineer reads the projects without the sales screens, and issues materials to the site
+#: without general stock adjustment (the stock engine accepts projects.issue_to_site for that one flow).
+VIEW_PROJECTS, ISSUE_TO_SITE = "projects.view_projects", "projects.issue_to_site"
+PROJECT_SCREENS = (VIEW, VIEW_PROJECTS)
+
+
+def can_issue(user):
+    return user_has_permission(user, ISSUE) or user_has_permission(user, ISSUE_TO_SITE)
 WORDS = {
     "ar": {
         "page_title": "المشاريع", "title": "المشاريع", "intro": "كل مشروع بعميله وقيمة عقده: المستخلصات، الخامات المصروفة، المصروفات، والربح.",
@@ -81,7 +89,7 @@ def _base(request, **extra):
     lang = _lang(request)
     context = {"lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": WORDS[lang], "page_title": WORDS[lang]["page_title"],
                "can_manage": user_has_permission(request.user, MANAGE), "can_profit": user_has_permission(request.user, PROFIT),
-               "can_issue": user_has_permission(request.user, ISSUE), "statuses": _statuses(lang)}
+               "can_issue": can_issue(request.user), "can_view_sales": user_has_permission(request.user, VIEW), "statuses": _statuses(lang)}
     context.update(extra)
     return context
 
@@ -92,7 +100,7 @@ def _form_data(request):
             "end_date": _date(request.POST.get("end_date")), "notes": request.POST.get("notes", ""), "status": request.POST.get("status")}
 
 
-@require_permission(VIEW)
+@require_any_permission(*PROJECT_SCREENS)
 def project_list(request):
     lang = _lang(request)
     words = WORDS[lang]
@@ -122,16 +130,19 @@ def project_list(request):
                                                         customers=Customer.objects.filter(active=True).order_by("name")))
 
 
-@require_permission(VIEW)
+@require_any_permission(*PROJECT_SCREENS)
 def project_detail(request, pk):
     lang = _lang(request)
     words = WORDS[lang]
     project = get_object_or_404(Project.objects.select_related("customer"), pk=pk)
     error = ""
     if request.method == "POST":
-        if not user_has_permission(request.user, MANAGE):
-            raise PermissionDenied("Projects need sales.create_sales_invoice.")
         action = request.POST.get("action", "")
+        if action == "issue":
+            if not can_issue(request.user):
+                raise PermissionDenied("Issuing materials needs inventory.adjust_stock or projects.issue_to_site.")
+        elif not user_has_permission(request.user, MANAGE):
+            raise PermissionDenied("Projects need sales.create_sales_invoice.")
         try:
             if action == "edit":
                 services.save_project(_form_data(request), request.user, project, lang)
@@ -162,8 +173,6 @@ def project_detail(request, pk):
                     services.unlink(project, link, request.user, lang)
                     messages.success(request, words["unlinked"])
             elif action == "issue":
-                if not user_has_permission(request.user, ISSUE):
-                    raise PermissionDenied("Issuing materials needs inventory.adjust_stock.")
                 operation = services.issue_materials(project, request.user, item=_pick(Item, request.POST.get("item"), active=True),
                                                      location=_pick(Location, request.POST.get("location"), active=True), quantity=request.POST.get("quantity", ""), lang=lang)
                 messages.success(request, words["issued"].format(ref=operation.reference_number))
@@ -194,7 +203,7 @@ def project_detail(request, pk):
     from .contract import position
     from .contract_views import WORDS as CONTRACT_WORDS
 
-    context.update(tab="overview", cwords=CONTRACT_WORDS[lang], position=position(project),
+    context.update(tab="overview", cwords=CONTRACT_WORDS[lang], position=position(project) if context["can_view_sales"] else None,
                    expense_headings=localized_choices(ProjectExpense, "heading", lang))
     return render(request, "projects/detail.html", context)
 

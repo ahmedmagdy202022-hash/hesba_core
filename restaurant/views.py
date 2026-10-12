@@ -10,7 +10,7 @@ from django.utils import timezone
 
 from cashboxes.models import Cashbox
 from master_data.models import Customer, Item
-from permissions.decorators import require_permission
+from permissions.decorators import require_any_permission, require_permission
 from permissions.services import user_has_permission
 from printing.company import company_details
 from settings_core.display_labels import choice_label
@@ -24,6 +24,14 @@ from entities import scope as entity_scope
 
 
 VIEW, TAKE, TABLES = "sales.view_sales_invoices", "sales.create_sales_invoice", "master_data.manage_items"
+#: HG-048: the floor (tables, orders, kitchen tickets) without selling: a waiter holds this and not TAKE,
+#: so they never take money, see the invoices or pick a cashbox.
+TAKE_ORDERS = "restaurant.take_orders"
+FLOOR = (VIEW, TAKE_ORDERS)
+
+
+def _takes_orders(user):
+    return user_has_permission(user, TAKE) or user_has_permission(user, TAKE_ORDERS)
 WORDS = {
     "ar": {
         "page_title": "الطاولات والطلبات", "title": "الطاولات والطلبات", "intro": "دوس على طاولة فاضية تفتح لها طلب، أو على طاولة مشغولة تكمّل طلبها.",
@@ -87,7 +95,8 @@ def _kind_label(order, lang):
 def _base(request, **extra):
     lang = _lang(request)
     context = {"lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": WORDS[lang], "page_title": WORDS[lang]["page_title"],
-               "can_take": user_has_permission(request.user, TAKE), "can_tables": user_has_permission(request.user, TABLES),
+               "can_take": _takes_orders(request.user), "can_sell": user_has_permission(request.user, TAKE),
+               "can_see_invoices": user_has_permission(request.user, VIEW), "can_tables": user_has_permission(request.user, TABLES),
                "can_report": user_has_permission(request.user, REPORT_VIEW), "can_costing": user_has_permission(request.user, COST_VIEW),
                "links": INSIGHT_WORDS[lang]}
     context.update(extra)
@@ -105,13 +114,13 @@ def _error(exc, lang):
     return translate(_error_text(exc, POS_WORDS[lang]), lang)
 
 
-@require_permission(VIEW)
+@require_any_permission(*FLOOR)
 def board(request):
     lang = _lang(request)
     words = WORDS[lang]
     if request.method == "POST":
-        if not user_has_permission(request.user, TAKE):
-            raise PermissionDenied("Taking orders needs sales.create_sales_invoice.")
+        if not _takes_orders(request.user):
+            raise PermissionDenied("Taking orders needs sales.create_sales_invoice or restaurant.take_orders.")
         kind = request.POST.get("kind", OrderKind.DINE_IN)
         try:
             order = services.open_order(
@@ -146,15 +155,17 @@ def _menu():
     return items, categories
 
 
-@require_permission(VIEW)
+@require_any_permission(*FLOOR)
 def order_detail(request, pk):
     lang = _lang(request)
     words = WORDS[lang]
     order = get_object_or_404(Order.objects.select_related("table", "customer", "waiter", "invoice"), pk=pk)
     if request.method == "POST":
-        if not user_has_permission(request.user, TAKE):
-            raise PermissionDenied("Taking orders needs sales.create_sales_invoice.")
+        if not _takes_orders(request.user):
+            raise PermissionDenied("Taking orders needs sales.create_sales_invoice or restaurant.take_orders.")
         action = request.POST.get("action", "")
+        if action in SELLING_ACTIONS and not user_has_permission(request.user, TAKE):
+            raise PermissionDenied("Billing, dispatching or cancelling an order needs sales.create_sales_invoice.")
         line = _pick(OrderLine, request.POST.get("line"), order=order)
         try:
             if action == "add":
@@ -214,7 +225,11 @@ def order_detail(request, pk):
     ))
 
 
-@require_permission(VIEW)
+#: What only someone who sells may do on an order: take the money, send it out with a driver (it carries a fee), cancel it.
+SELLING_ACTIONS = frozenset({"pay", "dispatch", "cancel"})
+
+
+@require_any_permission(*FLOOR)
 def ticket(request, pk):
     lang = _lang(request)
     ticket = get_object_or_404(KitchenTicket.objects.select_related("order", "order__table", "order__waiter", "sent_by"), pk=pk)

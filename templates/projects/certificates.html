@@ -7,7 +7,7 @@
 {% for row in rows %}{% with c=row.certificate %}<tr data-certificate="{{ c.number }}"><td><a href="{% url 'projects:certificate' project.pk c.number %}?lang={{ lang }}">{{ c.number }}</a></td><td dir="ltr">{{ c.certificate_date|date:"Y-m-d" }}</td><td>{{ c.gross|money }}</td><td>{{ c.invoice.total_amount|money }}</td><td>{{ c.retention_amount|money }}</td><td>{{ c.recovery_amount|money }}</td><td><strong>{{ row.net|money }}</strong></td><td><span class="op-status op-status-{{ c.invoice.status }}">{{ row.status_label }}</span></td></tr>{% endwith %}
 {% empty %}<tr><td colspan="8" class="op-empty">{{ cwords.none }}</td></tr>{% endfor %}
 </tbody></table></div>
-{% if can_manage and is_open %}
+{% if can_record and is_open %}
 {% if draft %}<p class="op-message" data-draft-open>{{ cwords.draft_open }} <a href="{% url 'projects:certificate' project.pk draft.number %}?lang={{ lang }}">{% if lang == 'en' %}Certificate{% else %}المستخلص{% endif %} {{ draft.number }}</a></p>
 {% else %}
 <form class="op-form" method="post" data-certificate-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><h2>{{ cwords.new_certificate }}</h2>

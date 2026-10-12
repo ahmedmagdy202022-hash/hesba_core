@@ -32,24 +32,24 @@
   </ul>
   {% if order.kind == 'delivery' %}<p class="rs-total" data-delivery-fee-line><span>{{ dw.fee }}</span><span>{{ order.delivery_fee|money }}</span></p>
   <p class="op-muted" data-delivery-driver>{{ dw.driver }}: {{ order.driver.name|default:'—' }}{% if order.dispatched_at %} · {{ dw.out }} {{ dw.at }} <bdi>{{ order.dispatched_at|time:"H:i" }}</bdi>{% endif %}</p>
-  {% if is_open and can_take %}<form method="post" class="op-form-actions" data-dispatch>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="dispatch">
+  {% if is_open and can_sell %}<form method="post" class="op-form-actions" data-dispatch>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="dispatch">
   <label class="sr-only" for="dl-driver">{{ dw.driver }}</label><select id="dl-driver" name="driver" required style="min-height:44px"><option value="">{{ dw.driver }}</option>{% for person in drivers %}<option value="{{ person.pk }}"{% if person.pk == order.driver_id %} selected{% endif %}>{{ person.name }}</option>{% endfor %}</select>
   <label class="sr-only" for="dl-fee2">{{ dw.fee }}</label><input id="dl-fee2" name="delivery_fee" inputmode="decimal" value="{{ order.delivery_fee|stringformat:".2f" }}" style="min-height:44px;width:110px">
   <button class="op-secondary" type="submit">{% if order.driver_id %}{{ dw.change_driver }}{% else %}{{ dw.dispatch }}{% endif %}</button></form>{% endif %}{% endif %}
   <p class="rs-total"><span>{{ words.total }}</span><span data-order-total>{{ total|money }}</span></p>
-  {% if order.invoice %}<p>{{ words.invoice }}: <a href="{% url 'sales:detail' order.invoice.pk %}?lang={{ lang }}" data-order-invoice>{{ order.invoice.invoice_number }}</a></p>{% endif %}
+  {% if order.invoice and can_see_invoices %}<p>{{ words.invoice }}: <a href="{% url 'sales:detail' order.invoice.pk %}?lang={{ lang }}" data-order-invoice>{{ order.invoice.invoice_number }}</a></p>{% endif %}
   {% if is_open and can_take %}
   <div class="rs-actions">
     {% if pending %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="send"><button class="op-primary" type="submit" data-send-kitchen>{{ words.send }}</button></form>{% endif %}
-    {% if lines %}<form method="post" data-pay-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="pay"><h2>{{ words.pay }}</h2>
+    {% if lines and can_sell %}<form method="post" data-pay-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="pay"><h2>{{ words.pay }}</h2>
       <div class="rs-row"><label>{{ words.cashbox }}<select name="cashbox">{% for box in cashboxes %}<option value="{{ box.pk }}"{% if default_cashbox and box.pk == default_cashbox.pk %} selected{% endif %}>{% if lang == "en" and box.name_en %}{{ box.name_en }}{% else %}{{ box.name_ar }}{% endif %}</option>{% endfor %}</select></label>
       <label>{{ words.customer }}<select name="customer"><option value="">{% if order.customer %}{{ order.customer.name }}{% else %}{{ words.walk_in }}{% endif %}</option>{% for customer in customers %}{% if customer.pk != order.customer_id %}<option value="{{ customer.pk }}">{{ customer.name }}</option>{% endif %}{% endfor %}</select></label></div>
       <div class="rs-row"><label>{{ words.discount }}<input name="discount" value="0" inputmode="decimal" dir="ltr"></label><label>{{ words.tendered }}<input name="tendered" value="{{ total|stringformat:"s" }}" inputmode="decimal" dir="ltr" data-tendered></label></div>
       <label class="rs-check"><input type="checkbox" name="print" value="1" checked> {{ words.print }}</label>
       <button class="op-primary" type="submit" data-pay>{{ words.pay_btn }}</button></form>{% endif %}
-    <details class="rs-more"><summary>{{ words.move }} / {{ words.cancel }}</summary>
+    <details class="rs-more"><summary>{{ words.move }}{% if can_sell %} / {{ words.cancel }}{% endif %}</summary>
       {% if order.kind == 'dine_in' and free_tables %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="move"><label>{{ words.move }}<select name="table">{% for table in free_tables %}<option value="{{ table.pk }}">{{ table.name }}</option>{% endfor %}</select></label><button class="op-secondary" type="submit" data-move>{{ words.move }}</button></form>{% endif %}
-      <form method="post" data-confirm="{{ words.cancel_confirm }}">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="cancel"><label>{{ words.reason }}<input name="reason"></label><button class="op-danger" type="submit" data-cancel-order>{{ words.cancel }}</button></form>
+      {% if can_sell %}<form method="post" data-confirm="{{ words.cancel_confirm }}">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="cancel"><label>{{ words.reason }}<input name="reason"></label><button class="op-danger" type="submit" data-cancel-order>{{ words.cancel }}</button></form>{% endif %}
     </details>
   </div>
   {% endif %}

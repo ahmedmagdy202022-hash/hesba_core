@@ -37,6 +37,7 @@ from permissions.services import user_has_permission
 
 RECIPE_PREFIX = "DISH-"
 MANAGE = "master_data.manage_items"
+PREPARE_AT_PAYMENT = "restaurant.prepare_at_payment"  # HG-048
 
 MESSAGES = {
     "ar": {"manage": "تحويل الأطباق محتاج صلاحية إدارة الأصناف، وتحضيرها محتاج كمان صلاحية تسوية المخزون.", "no_ingredients": "ضيف مكونات الطبق الأول.",
@@ -196,14 +197,14 @@ def _quantity(raw, words):
     return value
 
 
-def _produce(dish, quantity, location, user, lang, notes=""):
+def _produce(dish, quantity, location, user, lang, notes="", stand_in=None):
     from manufacturing.services import produce
 
     words = _words(lang)
     recipe = _sync_recipe(dish, user, lang)  # the ingredients as they are now
     try:
         return produce(recipe, user, batches=quantity, location=location, run_date=timezone.localdate(),
-                       notes=(notes or words["prepared"].format(dish=dish.item_name))[:255], lang=lang)
+                       notes=(notes or words["prepared"].format(dish=dish.item_name))[:255], lang=lang, stand_in=stand_in)
     except ValidationError as exc:
         raise ValidationError(words["short"].format(dish=dish.item_name, detail=" ".join(exc.messages)))
 
@@ -232,9 +233,11 @@ def prepare_shortfall(lines, location, user, lang="ar"):
     from settings_core.templatetags.hesba_format import qty
 
     words = _words(lang)
-    # Making plates moves stock, which needs inventory.adjust_stock (the stock engine's own rule, unchanged). Someone without it
-    # (a cashier) sells what the kitchen prepared ahead; anything not ready stops the bill with a clear message.
-    may_make = user_has_permission(user, "inventory.adjust_stock")
+    # Making plates moves stock, which needs inventory.adjust_stock, or (HG-048) restaurant.prepare_at_payment, which the stock
+    # engine accepts in its place for this flow only. Someone with neither sells what the kitchen prepared ahead; anything not
+    # ready stops the bill with a clear message.
+    stand_in = PREPARE_AT_PAYMENT if not user_has_permission(user, "inventory.adjust_stock") else None
+    may_make = stand_in is None or user_has_permission(user, PREPARE_AT_PAYMENT)
     need = {}
     for line in lines:
         if line.item.is_stock_tracked:
@@ -248,5 +251,5 @@ def prepare_shortfall(lines, location, user, lang="ar"):
             continue
         if not may_make:
             raise ValidationError(words["not_ready"].format(dish=item.item_name, need=qty(need[item.pk]), have=qty(have)))
-        runs.append(_produce(item, missing, location, user, lang))
+        runs.append(_produce(item, missing, location, user, lang, stand_in=stand_in))
     return runs

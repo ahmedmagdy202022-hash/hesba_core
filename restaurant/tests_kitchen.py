@@ -140,11 +140,14 @@ class SellingTests(KitchenSetup):
         self.assertFalse(ProductionRun.objects.exists())
         self.assertEqual(self.stock(self.rice), D("20"))
 
-    def test_a_cashier_sells_what_the_kitchen_prepared_and_is_told_when_it_is_not_ready(self):
+    def test_a_cashier_without_plate_making_sells_what_the_kitchen_prepared_and_is_told_when_it_is_not_ready(self):
+        from permissions.models import RolePermission
         from permissions.services import user_has_permission
 
         cashier = person(RoleCode.CASHIER, "kitchen_till")
-        self.assertFalse(user_has_permission(cashier, "inventory.adjust_stock"))  # the stock engine's rule, unchanged
+        # HG-048: the cashier role holds restaurant.prepare_at_payment; an owner may take it away.
+        RolePermission.objects.filter(role__code=RoleCode.CASHIER, permission__code=kitchen.PREPARE_AT_PAYMENT).delete()
+        self.assertFalse(user_has_permission(cashier, "inventory.adjust_stock"))
         order = self.order(self.dish, 2)
         with self.assertRaisesMessage(ValidationError, "مش جاهز"):
             self.pay(order, cashier)
@@ -155,6 +158,29 @@ class SellingTests(KitchenSetup):
         self.assertEqual(self.stock(self.dish), D("0"))
         self.assertEqual(self.stock(self.rice), D("19.600"))
         ledger_ok(self)
+
+    def test_a_cashier_with_plate_making_has_the_missing_plates_made_at_payment(self):
+        """HG-048: restaurant.prepare_at_payment stands in for inventory.adjust_stock in this flow only."""
+
+        from inventory.services import adjust_stock
+        from inventory.models import StockAdjustmentDirection
+        from permissions.services import user_has_permission
+
+        cashier = person(RoleCode.CASHIER, "kitchen_till2")
+        self.assertTrue(user_has_permission(cashier, kitchen.PREPARE_AT_PAYMENT))
+        self.assertFalse(user_has_permission(cashier, "inventory.adjust_stock"))
+        invoice = self.pay(self.order(self.dish, 3), cashier)
+        self.assertEqual(invoice.status, "posted")
+        run = ProductionRun.objects.get(recipe__product=self.dish)
+        self.assertEqual((run.output_quantity, run.total_cost, run.created_by), (D("3.000"), D("33.00"), cashier))
+        self.assertEqual(self.stock(self.rice), D("19.400"))
+        self.assertEqual(SalesLine.objects.get(invoice=invoice, item=self.dish).line_cost_amount, D("33.00"))
+        ledger_ok(self)
+        # It opens nothing else: an ordinary adjustment, or making the day's batch, still needs inventory.adjust_stock.
+        with self.assertRaises(PermissionDenied):
+            adjust_stock("ADJ-X", run.run_date, self.rice, self.location, StockAdjustmentDirection.OUT, D("1"), "test", cashier)
+        with self.assertRaises(PermissionDenied):
+            kitchen.prepare(self.dish, "2", cashier)
 
     def test_changed_ingredients_are_used_from_the_next_plate(self):
         save_ingredients(self.dish, [(self.rice, "0.300")], self.owner)

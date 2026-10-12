@@ -22,6 +22,9 @@ from settings_core import setup_catalog as catalog
 from .tests_dashboard import prepared_client
 
 ROLES = (RoleCode.OWNER, RoleCode.MANAGER, RoleCode.ACCOUNTANT, RoleCode.CASHIER, RoleCode.STOCK_KEEPER)
+#: HG-048: the roles of one activity walk that activity's businesses too. Their whole menu is the home and their one screen.
+ACTIVITY_ROLES = {"restaurants": (RoleCode.WAITER,), "contracting": (RoleCode.SITE_ENGINEER,)}
+MIN_MENU = {RoleCode.WAITER: 2, RoleCode.SITE_ENGINEER: 2}
 #: Links that are actions, downloads, prints or leaving the app, not screens to open.
 #: Only actions and files are skipped; a screen whose path merely mentions one (the backups settings page) is crawled.
 SKIP = re.compile(r"(logout|/demo/|export|download|/drive/|\.csv|format=csv|/print|pdf|manifest|service-worker|sw\.js|healthz|/ops/|"
@@ -93,10 +96,10 @@ class CrawlMixin:
         self.last = response
         return response.status_code, path
 
-    def crawl(self, label, deep):
+    def crawl(self, label, deep, roles=ROLES):
         problems, self.opened = [], 0
         seen = set()  # (role, link shape): the same screen for another record is opened once per role
-        for role in ROLES:
+        for role in roles:
             user = person(role, f"crawl_{role}_{abs(hash(label)) % 10 ** 6}")
             self.client.force_login(user)
             lang = "en" if role == RoleCode.MANAGER else "ar"  # one role walks the English screens
@@ -105,7 +108,7 @@ class CrawlMixin:
                 problems.append(f"{label} {role}: dashboard {dashboard.status_code}")
                 continue
             menu = menu_links(dashboard.content.decode())
-            if len(menu) < 3:  # the crawler itself must still find the menu: an empty walk proves nothing
+            if len(menu) < MIN_MENU.get(role, 3):  # the crawler itself must still find the menu: an empty walk proves nothing
                 problems.append(f"{label} {role}: only {len(menu)} menu links found")
             for path in menu:
                 status, _ = self.land(path, lang)
@@ -137,7 +140,7 @@ def _make_case(activity, subs):
 
                 ClientProfile.objects.all().delete()
                 prepared_client(activity, sub, ",".join(catalog.default_modules(activity)))
-                problems += self.crawl(f"{activity}/{sub}", deep=True)  # each sub-activity turns on its own capabilities and links
+                problems += self.crawl(f"{activity}/{sub}", deep=True, roles=ROLES + ACTIVITY_ROLES.get(activity, ()))  # each sub-activity turns on its own capabilities and links
         self.assertEqual(problems, [])
 
     return test
@@ -174,7 +177,7 @@ def _make_sample_case(activity, sub):
     def test(self):
         self.client.raise_request_exception = False
         self.fill(activity, sub)
-        self.assertEqual(self.crawl(f"{activity}/{sub} (sample data)", deep=True), [])
+        self.assertEqual(self.crawl(f"{activity}/{sub} (sample data)", deep=True, roles=ROLES + ACTIVITY_ROLES.get(activity, ())), [])
 
     return test
 
