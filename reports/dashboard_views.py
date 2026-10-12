@@ -438,14 +438,17 @@ def dashboard(request):
     # do not each re-run the same stock and party queries.
     shared = SharedReads()
     figures = DashboardFigures(request.user, today, shared)
-    cards = _build_cards(request.user, lang, held, figures)
+    from .dashboard_fit import Fit, fit_analytics, option_panel
+
+    fit = Fit.current(today)  # DASH-FIT: only what this business is and chose in setup
+    cards = [card for card in _build_cards(request.user, lang, held, figures) if fit.shows(f"kpi.{card['key']}")]
 
     from entities.current import effective_activity
 
     activity = effective_activity()[0] or ""
     sections = {item["key"] for item in nav_items(request.user, lang, modules)}
     period = request.GET.get("period", "month")
-    analytics = build_analytics(permitted_codes(request.user, ANALYTICS_PERMISSIONS), period, today, lang)
+    analytics = fit_analytics(build_analytics(permitted_codes(request.user, ANALYTICS_PERMISSIONS), period, today, lang), fit)
     has_data = has_any_business_data()
     period_label = PERIOD_LABELS[lang].get(analytics["period"], "")
     previous_range = (analytics.get("daily") or {}).get("previous_range")
@@ -480,7 +483,9 @@ def dashboard(request):
         # the context so the section set can be asserted without parsing HTML.
         "nav_items": nav_items(request.user, lang, modules),
         "cards": cards,
-        "alerts": _alerts(lang, strings, held, today, shared) + _transfer_alerts(request.user, lang, strings, modules),
+        "alerts": [alert for alert in _alerts(lang, strings, held, today, shared) if fit.shows_alert(alert["key"])]
+                  + _transfer_alerts(request.user, lang, strings, modules),
+        "option_panel": option_panel(fit, request.user, lang),
         "quick_actions": _quick_actions(request.user, lang, modules, activity, sections),
         "activity_panel": build_activity_panel(activity, sections, lang, today, request.user),
         "demo_activities": _demo_activities(request.user, lang, profile),

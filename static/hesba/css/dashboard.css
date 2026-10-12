@@ -457,6 +457,10 @@ a.dash-alert__title:hover{color:var(--teal-deep);text-decoration:underline}
 .dash-atile.is-lead{background:var(--teal-wash);border-inline-start-color:var(--hs-teal)}
 .dash-atile.is-good{border-inline-start-color:var(--hs-success)}
 .dash-atile.is-bad{border-inline-start-color:var(--risk);background:var(--hs-danger-wash)}
+/* DASH-FIT: the options chosen in setup, each tile a link to its screen */
+.dash-atile.is-warn{border-inline-start-color:var(--due-soon)}
+a.dash-atile{color:inherit;text-decoration:none}
+a.dash-atile:hover,a.dash-atile:focus-visible{background:var(--teal-wash)}
 .dash-atile__label{font-size:12.5px;color:var(--muted)}
 .dash-atile__value{font-family:var(--hs-font-head);font-size:clamp(16px,12cqi,24px);font-weight:700;color:var(--navy);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .dash-atile__value small{margin-inline-start:4px;font-family:var(--hs-font-body);font-size:11px;font-weight:400;color:var(--muted)}
