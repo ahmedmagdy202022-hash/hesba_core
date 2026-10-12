@@ -16,6 +16,8 @@ from django.db import migrations
 
 def move(apps, schema_editor):
     SessionPackage = apps.get_model("medical", "SessionPackage")
+    if SessionPackage._meta.db_table not in schema_editor.connection.introspection.table_names():
+        return  # already moved and dropped (a demo restart replays every data step on today's tables): nothing to move
     PackageSession = apps.get_model("medical", "PackageSession")
     Package = apps.get_model("agreements", "Package")
     PackageUse = apps.get_model("agreements", "PackageUse")
