@@ -106,10 +106,17 @@ class Command(BaseCommand):
         from reports.management.commands.seed_demo_business import Command as Seed
         from staff.services import save_employee
 
+        from batches.services import batches_enabled
+        from settings_core.setup_services import usable_modules
+
         owner = get_user_model().objects.get(username="owner")
         catalog = active_catalog()
         master = Seed()._seed_master_data(catalog)
-        extras = catalog.extras
+        # DEMO-FIT: an extra whose module (or option) was switched off in setup is left out.
+        modules = set(usable_modules())
+        extras = {extra for extra in catalog.extras if self.EXTRA_MODULES.get(extra, "") in modules | {""}}
+        if not (batches_enabled() and "inventory" in modules):
+            extras.discard("batches")
         if "tables" in extras:
             from restaurant import services as tables
 
@@ -140,6 +147,152 @@ class Command(BaseCommand):
             self._batches(master, owner)
         if "workorders" in extras:
             self._workorders(master, staff, owner)
+        self._options(master, owner, modules)
+
+    #: The module a catalog extra belongs to; an extra not listed here belongs to the activity itself.
+    EXTRA_MODULES = {"tables": "tables_orders", "appointments": "appointments_visits", "projects": "projects", "orders": "manufacturing"}
+
+    def _options(self, master, owner, modules):
+        """DEMO-FIT: each option switched on in setup gets something of its own to show, unless the
+        activity's extras already gave it some: a credit sale on instalments with one overdue, a
+        wholesale price list, a carton unit, sizes and colours in stock, serial numbers on the shelf,
+        expiry dates, two sales with VAT, an asset depreciating, barcodes on the goods and an open shift."""
+
+        from settings_core.capabilities import enabled_capabilities
+
+        on = set(enabled_capabilities())
+        goods = [item for item in master["items"] if item.is_stock_tracked]
+        steps = (
+            ("barcode", self._barcodes), ("installments", self._instalments), ("price_lists", self._price_list),
+            ("units", self._units), ("variants", self._variants), ("serials", self._serials),
+            ("batches_expiry", self._batches_option), ("vat", self._vat), ("fixed_assets", self._asset), ("pos", self._shift),
+        )
+        for slug, step in steps:
+            if slug in on:
+                step(master, goods, owner, modules)
+
+    def _barcodes(self, master, goods, owner, modules):
+        from barcode.symbology import internal_ean13
+        from master_data.models import Item
+
+        for item in goods:
+            if not item.barcode:
+                Item.objects.filter(pk=item.pk).update(barcode=internal_ean13(item.pk))
+
+    def _instalments(self, master, goods, owner, modules):
+        """The oldest credit sale is put on four monthly instalments starting a week after it, so one is already late."""
+
+        from installments.models import InstalmentPlan
+        from installments.services import create_plan
+        from sales.models import SalesInvoice
+
+        if InstalmentPlan.objects.exists() or "customers" not in modules:
+            return
+        invoice = (SalesInvoice.objects.filter(status="posted", remaining_due__gt=0, customer__isnull=False, project_certificate__isnull=True)
+                   .order_by("invoice_date", "pk").first())
+        if invoice is not None:
+            create_plan(invoice, 4, invoice.invoice_date + timedelta(days=7), owner, notes="تقسيط على 4 شهور")
+
+    def _price_list(self, master, goods, owner, modules):
+        from pricing.models import PriceList
+        from pricing.services import assign_customers, save_price_list
+
+        if PriceList.objects.exists():
+            return
+        wholesale = save_price_list(user=owner, code="WHOLESALE", name_ar="سعر الجملة", name_en="Wholesale", adjust_percent=Decimal("-10"))
+        assign_customers(wholesale, [master["customers"][3]], owner)  # the big account buys at wholesale
+
+    def _units(self, master, goods, owner, modules):
+        from units.models import ItemUnit
+
+        if ItemUnit.objects.exists() or not goods:
+            return
+        ItemUnit.objects.create(item=goods[0], name_ar="كرتونة", name_en="Carton", factor=Decimal("12"))
+
+    def _variants(self, master, goods, owner, modules):
+        """A model in three sizes and two colours, some of it bought in (when purchases are on)."""
+
+        from reports.management.commands.seed_demo_business import Command as Seed
+        from variants.models import VariantGroup
+        from variants.services import create_group
+
+        if VariantGroup.objects.exists() or "inventory" not in modules:
+            return
+        sale = Decimal(goods[0].default_sale_price if goods else "300")
+        _, items = create_group(code="DEMO-MODEL", name="موديل تجريبي", sizes=["S", "M", "L"], colors=["أسود", "كحلي"],
+                                sale_price=sale, purchase_price=(sale * Decimal("0.6")).quantize(Decimal("0.01")), user=owner,
+                                category=master["items"][0].category)
+        if "purchases" in modules:
+            Seed()._post_purchase("DEMO-PI-VAR", timezone.localdate() - timedelta(days=3), master["suppliers"][0], master["location"],
+                                  master["cashboxes"][0], [(item, Decimal(n % 3 + 2)) for n, item in enumerate(items)], Decimal("0.00"), owner)
+
+    def _serials(self, master, goods, owner, modules):
+        """A good the daily trade never sells (items 2 and 4) is tracked by serial, one serial for each unit on
+        the shelf; the fewer units the better (a phone shop, not a warehouse of screws)."""
+
+        from batches.services import stock_on_hand
+        from serials.models import SerialNumber, SerialSetting
+        from serials.services import register_serials
+
+        candidates = [item for item in (master["items"][3], master["items"][1]) if item.is_stock_tracked]
+        if SerialNumber.objects.exists() or not candidates:
+            return
+        on_hand = stock_on_hand([item.pk for item in candidates])
+        shelf = sorted((quantity, item.pk, item) for item in candidates if 0 < (quantity := on_hand.get(item.pk) or 0) <= 30)
+        if not shelf:
+            return
+        quantity, _, item = shelf[0]
+        SerialSetting.objects.update_or_create(item=item, defaults={"tracked": True, "warranty_months": 12})
+        register_serials(item, [f"SN{item.pk:03d}{n:04d}" for n in range(1, int(quantity) + 1)], timezone.localdate() - timedelta(days=20), owner,
+                         note="Demo")
+
+    def _batches_option(self, master, goods, owner, modules):
+        from batches.models import Batch
+
+        if not Batch.objects.exists() and "inventory" in modules:
+            self._batches(master, owner)
+
+    def _vat(self, master, goods, owner, modules):
+        """Two paid sales with VAT on them (three days ago and today), so the month's tax report has figures."""
+
+        from sales.models import SalesInvoice
+        from sales.services import post_sales_invoice
+        from taxes.services import compute_lines, create_sales_draft_with_tax
+
+        if SalesInvoice.objects.filter(status="posted", tax_amount__gt=0).exists():
+            return
+        item = master["items"][0]  # never the good planted low or sold out
+        today = timezone.localdate()
+        for n, day in enumerate((today - timedelta(days=3), today), start=1):
+            line = {"item": item, "quantity": Decimal("1"), "unit_sale_price": Decimal(item.default_sale_price)}
+            paid = sum((taxable + tax for *_, taxable, tax in compute_lines([line])), Decimal("0.00"))  # paid in full, tax included
+            draft = create_sales_draft_with_tax({"invoice_number": f"DEMO-TAX-{n:03d}", "invoice_date": day, "customer": master["customers"][0],
+                                                 "selling_location": master["location"], "cashbox": master["cashboxes"][0], "paid_now": paid},
+                                                [line], owner)
+            post_sales_invoice(draft.id, user=owner)
+
+    def _asset(self, master, goods, owner, modules):
+        from fixed_assets.models import FixedAsset
+        from fixed_assets.services import register_asset
+
+        if FixedAsset.objects.exists():
+            return
+        started = (timezone.localdate().replace(day=1) - timedelta(days=100)).replace(day=1)
+        register_asset(name="أجهزة كمبيوتر وطابعة", category="computers", in_service_on=started, cost=Decimal("36000"), salvage_value=Decimal("0"),
+                       useful_months=36, user=owner, notes="Demo")
+
+    def _shift(self, master, goods, owner, modules):
+        """The cashier's shift is open this morning with a float in the drawer."""
+
+        from django.contrib.auth import get_user_model
+
+        from shifts.models import Shift
+        from shifts.services import open_shift
+
+        if Shift.objects.exists() or "cashboxes" not in modules:
+            return
+        cashier = get_user_model().objects.filter(username="cashier").first() or owner
+        open_shift(cashier, master["cashboxes"][0], Decimal("500"))
 
     def _workorders(self, master, staff, owner):
         """SVC-001: a workshop's week: devices in, on the bench, waiting for approval, ready, delivered, and one back under warranty."""

@@ -12,7 +12,7 @@ from master_data.models import Customer, Item
 from purchases.models import PurchaseInvoice, PurchaseLine
 from reports import selectors
 from reports.dashboard_data import SharedReads
-from settings_core import setup_catalog
+from settings_core import activity_fit, setup_catalog
 from settings_core.models import ClientProfile
 
 from .demo_catalogs import BASE, CATALOGS, all_catalogs, catalog_for
@@ -65,12 +65,13 @@ class CatalogShapeTests(TestCase):
 class SampleBusinessPerActivityTests(TestCase):
     """The demo's "add sample data", run for one kind of business at a time."""
 
-    def fill(self, activity, sub):
+    def fill(self, activity, sub, modules=None, capabilities=None):
         from settings_core.management.commands.prepare_demo import Command as Prepare
         from settings_core.setup_services import complete_setup
 
         call_command("bootstrap_client", display_name="تجربة", client_code="DEMO", password="Demo-pass-1", verbosity=0)
-        complete_setup(ClientProfile.get_active(), activity, sub, ",".join(setup_catalog.default_modules(activity)))
+        complete_setup(ClientProfile.get_active(), activity, sub, modules if modules is not None else ",".join(activity_fit.default_modules(activity, sub)),
+                       capabilities_raw=capabilities)
         call_command("seed_demo_users", password="Demo-pass-1", force=True, verbosity=0)
         prepare = Prepare()
         prepare._history()
@@ -307,6 +308,98 @@ class SampleBusinessPerActivityTests(TestCase):
         self.assertEqual(counts["away"], 1)  # one child not here yet
         self.assertEqual(counts["in"] + counts["left"], children - 1)
         self.assertTrue(all(record.picked_by.student_id == record.student_id for record in DayRecord.objects.exclude(picked_by=None)))
+
+
+@override_settings(DEMO_MODE=True, DEMO_PASSWORD="Demo-pass-1", DEBUG=True)
+class SampleFollowsSetupTests(TestCase):
+    """DEMO-FIT: the sample data follows what was switched on in setup, not only the kind of business."""
+
+    fill = SampleBusinessPerActivityTests.fill
+    assert_a_working_business = SampleBusinessPerActivityTests.assert_a_working_business
+
+    EVERY_OPTION = "pos,barcode,price_lists,units,variants,batches_expiry,serials,installments,vat,fixed_assets"
+
+    def test_every_option_switched_on_gets_its_own_sample(self):
+        from batches.models import Batch
+        from fixed_assets.models import FixedAsset
+        from fixed_assets.services import depreciation_between
+        from installments.models import InstalmentPlan
+        from installments.services import overdue_summary
+        from pricing.models import PriceList
+        from sales.models import SalesInvoice
+        from serials.services import available_serials
+        from shifts.models import Shift, ShiftStatus
+        from taxes.services import vat_report
+        from units.models import ItemUnit
+        from variants.models import VariantGroup
+
+        catalog = self.fill("commercial", "retail", capabilities=self.EVERY_OPTION)
+        self.assert_a_working_business(catalog)  # the planted alerts and today's profit are untouched
+        today = timezone.localdate()
+        plan = InstalmentPlan.objects.get()
+        self.assertEqual(plan.count, 4)
+        self.assertGreaterEqual(overdue_summary(today)["count"], 1)  # the first one is already late
+        self.assertEqual(list(PriceList.objects.get().customer_links.values_list("customer__customer_code", flat=True)), ["DEMO-CUST-04"])
+        self.assertEqual(ItemUnit.objects.get().factor, Decimal("12"))
+        group = VariantGroup.objects.get()
+        self.assertEqual(group.variants.count(), 6)
+        self.assertTrue(PurchaseLine.objects.filter(item__variant__group=group, invoice__status="posted").exists())
+        self.assertTrue(available_serials().exists())
+        self.assertEqual(Batch.objects.count(), 4)  # the goods on the shelf, two of them running out soon
+        taxed = SalesInvoice.objects.filter(status="posted", tax_amount__gt=0)
+        self.assertEqual(taxed.count(), 2)
+        self.assertGreater(vat_report(today.replace(day=1), today)["net_tax"], 0)
+        self.assertEqual(FixedAsset.objects.count(), 1)
+        self.assertGreater(depreciation_between(today.replace(day=1), today), 0)
+        self.assertEqual(Shift.objects.filter(status=ShiftStatus.OPEN, cashier__username="cashier").count(), 1)
+        self.assertFalse(Item.objects.filter(item_code__startswith="DEMO-ITEM-", is_stock_tracked=True, barcode="").exists())
+        # The dashboard's own tiles for these options (DASH-FIT) now have something true to show.
+        from django.contrib.auth import get_user_model
+
+        from reports.dashboard_fit import Fit, option_tiles
+
+        owner = get_user_model().objects.get(username="owner")
+        tiles = {tile["key"]: tile["value"] for tile in option_tiles(Fit.current(today), owner)}
+        self.assertGreaterEqual(tiles["opt_instalments"], 1)
+        self.assertEqual(tiles["opt_batches_soon"], 2)
+        self.assertGreater(tiles["opt_vat"], 0)
+        self.assertGreater(tiles["opt_assets"], 0)
+        self.assertEqual(tiles["opt_shifts"], 1)
+        self.assertGreater(tiles["opt_serials"], 0)
+
+    def test_options_left_off_get_nothing(self):
+        from batches.models import Batch
+        from installments.models import InstalmentPlan
+        from serials.models import SerialNumber
+        from shifts.models import Shift
+
+        self.fill("commercial", "pharmacy", capabilities="")
+        self.assertFalse(InstalmentPlan.objects.exists() or Shift.objects.exists() or SerialNumber.objects.exists())
+        self.assertFalse(Batch.objects.exists())  # a pharmacy that switched expiry dates off has none, even from its catalog
+        from sales.models import SalesInvoice
+
+        self.assertFalse(SalesInvoice.objects.filter(tax_amount__gt=0).exists())
+
+    def test_a_salon_starts_with_appointments_on_and_gets_a_day_of_them(self):
+        from appointments.models import Appointment
+
+        self.fill("services", "beauty")
+        self.assertTrue(Appointment.objects.exists())
+
+    def test_an_extra_whose_module_is_off_is_left_out(self):
+        from appointments.models import Appointment
+
+        modules = ",".join(slug for slug in activity_fit.default_modules("services", "beauty") if slug != "appointments_visits")
+        self.fill("services", "beauty", modules=modules)
+        self.assertFalse(Appointment.objects.exists())  # switched off: its screens are closed, so no appointments are made
+
+    def test_running_the_options_twice_adds_nothing_more(self):
+        from installments.models import InstalmentPlan
+        from settings_core.management.commands.prepare_demo import Command as Prepare
+
+        self.fill("commercial", "retail", capabilities=self.EVERY_OPTION)
+        Prepare()._extras()
+        self.assertEqual(InstalmentPlan.objects.count(), 1)
 
 
 @override_settings(DEBUG=True)
