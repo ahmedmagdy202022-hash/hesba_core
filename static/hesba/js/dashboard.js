@@ -14,6 +14,9 @@
     var toggle = bell.querySelector('[data-bell-toggle]');
     var panel = bell.querySelector('[data-bell-panel]');
     var setOpen = function (open) {
+      if (open) {  // BELL-001: on a phone the panel is fixed under the bell, never off the screen
+        panel.style.setProperty('--bell-top', Math.round(toggle.getBoundingClientRect().bottom + 8) + 'px');
+      }
       panel.hidden = !open;
       toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
     };

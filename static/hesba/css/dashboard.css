@@ -327,6 +327,9 @@
 .dash-icon-button[aria-expanded="true"]{background:var(--teal-wash);border-color:var(--border-strong)}
 .dash-bell-panel{position:absolute;top:calc(100% + 8px);inset-inline-end:0;z-index:20;width:min(360px,calc(100vw - 32px));max-height:70vh;overflow:auto;padding:12px;background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--hs-radius-lg);box-shadow:var(--shadow-lift)}
 .dash-bell-panel[hidden]{display:none}
+/* BELL-001: on a phone the bell sits mid-header, so a panel hung from it ran off the screen;
+   it opens full width under the header instead (its top is set from the bell when it opens). */
+@media (max-width:767px){.dash-bell-panel{position:fixed;inset-inline:12px;top:var(--bell-top,72px);width:auto;max-height:calc(100vh - var(--bell-top,72px) - 16px)}}
 .dash-bell-panel__title{margin:0 0 8px;font-weight:700;font-size:14px}
 .dash-bell-list{list-style:none;margin:0;padding:0;display:grid;gap:6px}
 .dash-bell-list li > a,.dash-bell-list li > span{display:flex;flex-direction:column;gap:2px;padding:9px 11px;border-radius:var(--hs-radius-md);border:1px solid var(--border);border-inline-start:4px solid var(--border-strong);background:var(--surface-soft)}
