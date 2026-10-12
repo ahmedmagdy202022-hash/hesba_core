@@ -11,9 +11,9 @@ from django.utils import timezone
 from master_data.models import Customer
 from permissions.services import user_has_permission
 
-from . import attendance as register
+from . import nursery, attendance as register
 from . import services
-from .models import Attendance, ClassSession, Course, Enrollment, EnrollmentStatus, FeeBasis, Presence, SessionStatus, Student, StudyGroup, Weekday
+from .models import Attendance, ClassSession, Course, Enrollment, EnrollmentStatus, FeeBasis, PickupPerson, Presence, SessionStatus, Student, StudyGroup, Weekday
 
 WORDS = {
     "ar": {
@@ -114,7 +114,8 @@ def _base(request, lang, tab, **extra):
     return {"lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": WORDS[lang], "page_title": WORDS[lang]["title"], "section": "education",
             "tab": tab, "can_manage": services.can_manage(request.user), "can_view": services.can_view(request.user),
             "can_see_fees": user_has_permission(request.user, FEES_VIEW), "can_see_dues": user_has_permission(request.user, DUES_VIEW),
-            "can_see_pay": user_has_permission(request.user, PAY_VIEW), "can_see_report": user_has_permission(request.user, REPORT_VIEW), **extra}
+            "can_see_pay": user_has_permission(request.user, PAY_VIEW), "can_see_report": user_has_permission(request.user, REPORT_VIEW),
+            "is_nursery": nursery.is_nursery(), "nursery_tab": NURSERY_WORDS[lang]["tab"], **extra}
 
 
 def _back(name, lang, *args):
@@ -193,6 +194,14 @@ def student_detail(request, pk):
                 enrollment = get_object_or_404(Enrollment, pk=request.POST.get("enrollment") or 0, student=student)
                 services.stop(enrollment, request.user, end_date=request.POST.get("end_date"), lang=lang)
                 message = words["stopped_ok"]
+            elif action in ("pickup_add", "pickup_off") and nursery.is_nursery():  # EDU-005
+                if action == "pickup_add":
+                    nursery.save_person(student, request.POST.dict(), request.user, lang=lang)
+                else:
+                    person = get_object_or_404(PickupPerson, pk=request.POST.get("person") or 0, student=student)
+                    nursery.save_person(student, {"name": person.name, "relation": person.relation, "phone": person.phone,
+                                                  "id_number": person.id_number, "active": False}, request.user, person, lang)
+                message = words["saved"]
             else:
                 raise Http404("Unknown action.")
         except ValidationError as exc:
@@ -212,7 +221,9 @@ def student_detail(request, pk):
     summary = register.student_summary(student)
     return render(request, "education/student.html", _base(request, lang, "students", student=student, enrollments=enrollments, open_groups=open_groups,
                                                            payers=_payers(student.payer_id), error=error, today=timezone.localdate(), summary=summary,
-                                                           active_groups=active_groups))
+                                                           active_groups=active_groups, nw=NURSERY_WORDS[lang],
+                                                           pickup_people=list(student.pickup_people.all()) if nursery.is_nursery() else [],
+                                                           day_history=nursery.history(student, 10) if nursery.is_nursery() else []))
 
 
 # ---- groups ----
@@ -576,3 +587,64 @@ def report(request):
     rows, totals = insights.group_report(first, with_pay=with_pay)
     return render(request, "education/report.html", _base(request, lang, "report", first=first, label=billing.month_label(first, lang), rows=rows,
                                                           totals=totals, with_pay=with_pay, today=timezone.localdate()))
+
+
+# ---- EDU-005: the nursery's day (check-in, pick-up by an allowed person) ----
+
+NURSERY_WORDS = {
+    "ar": {"tab": "الحضور والانصراف", "title": "حضور وانصراف الأطفال", "intro": "سجّل وصول كل طفل الصبح، ووقت المشي سلّمه بس لحد من اللي مسموح لهم يستلموه.",
+           "child": "الطفل", "arrived": "وصل", "left": "مشي", "with": "مع", "brought_by": "جه مع (اختياري)", "check_in": "وصل",
+           "check_out": "سلّم الطفل", "picker": "هيستلمه", "choose": "اختار", "inside": "جوه دلوقتي", "gone": "مشيوا", "away": "لسه ماجوش",
+           "all": "كل الأطفال", "no_children": "مفيش أطفال متسجلين.", "no_people": "مفيش حد مسموح له يستلمه؛ ضيفه من ملف الطفل.",
+           "tell_parent": "ابعت لولي الأمر", "checked_in": "اتسجل وصول {student}.", "checked_out": "{student} مشي مع {person}.",
+           "pickup": "المسموح لهم يستلموا الطفل", "pickup_intro": "الطفل مش هيمشي غير مع حد من دول. اتأكد من البطاقة عند الباب.",
+           "name": "الاسم", "relation": "صلة القرابة", "phone": "التليفون", "id_number": "رقم البطاقة (اختياري)", "add": "ضيف",
+           "remove": "شيله من القايمة", "removed": "مش مسموح", "no_pickup": "لسه مفيش حد في القايمة.", "history": "آخر الأيام",
+           "day": "اليوم", "view_only": "الحضور والانصراف للإدارة أو المدرّسين بس."},
+    "en": {"tab": "Check-in & pick-up", "title": "Children's check-in and pick-up", "intro": "Check each child in in the morning, and at the end of the day hand them only to someone allowed to pick them up.",
+           "child": "Child", "arrived": "Arrived", "left": "Left", "with": "with", "brought_by": "Brought by (optional)", "check_in": "Arrived",
+           "check_out": "Hand over", "picker": "Picked up by", "choose": "Choose", "inside": "Inside now", "gone": "Gone home", "away": "Not here yet",
+           "all": "All children", "no_children": "No children recorded.", "no_people": "Nobody may pick this child up; add someone from the child's file.",
+           "tell_parent": "Tell the parent", "checked_in": "{student} checked in.", "checked_out": "{student} left with {person}.",
+           "pickup": "Who may pick the child up", "pickup_intro": "The child leaves only with one of these people. Check their ID at the door.",
+           "name": "Name", "relation": "Relation", "phone": "Phone", "id_number": "ID number (optional)", "add": "Add",
+           "remove": "Take off the list", "removed": "Not allowed", "no_pickup": "Nobody on the list yet.", "history": "Recent days",
+           "day": "Day", "view_only": "Check-in and pick-up are for the office or the teachers."},
+}
+
+
+def nursery_day(request):
+    _see(request)
+    if not nursery.is_nursery():
+        raise Http404("Check-in and pick-up are for nurseries.")
+    lang = _lang(request)
+    words = NURSERY_WORDS[lang]
+    error = ""
+    tell = ""
+    if request.method == "POST":
+        if not nursery.can_desk(request.user):
+            raise PermissionDenied("Check-in and pick-up need managing students, or working as staff.")
+        student = get_object_or_404(services.scoped(Student.objects), pk=request.POST.get("student") or 0)
+        try:
+            if request.POST.get("action") == "in":
+                nursery.check_in(student, request.user, brought_by=request.POST.get("brought_by", ""), lang=lang)
+                messages.success(request, words["checked_in"].format(student=student.name))
+            elif request.POST.get("action") == "out":
+                person = PickupPerson.objects.filter(pk=request.POST.get("person") or 0).first()
+                record = nursery.check_out(student, person, request.user, lang=lang)
+                messages.success(request, words["checked_out"].format(student=student.name, person=record.picked_by.name))
+                tell = nursery.left_message(record, lang)
+            else:
+                raise Http404("Unknown action.")
+        except ValidationError as exc:
+            error = " ".join(exc.messages)
+        else:
+            url = f"{reverse('education:nursery')}?lang={lang}"
+            return redirect(url + (f"&told={record.pk}" if tell else ""))
+    rows, counts = nursery.board()
+    told = request.GET.get("told")
+    for row in rows:
+        record = row["record"]
+        row["tell"] = nursery.left_message(record, lang) if record and told and str(record.pk) == told else ""
+    return render(request, "education/nursery.html", _base(request, lang, "nursery", nw=words, rows=rows, counts=counts, error=error,
+                                                           can_desk=nursery.can_desk(request.user), today=timezone.localdate()))

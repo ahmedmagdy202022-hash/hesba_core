@@ -287,6 +287,19 @@ class SampleBusinessPerActivityTests(TestCase):
         self.assert_a_working_business(catalog)
         self.assertFalse(Item.objects.get(item_code="DEMO-ITEM-01").is_stock_tracked)
 
+    def test_a_nursery_has_its_door_this_morning(self):
+        from education import nursery
+        from education.models import DayRecord, PickupPerson, Student
+
+        catalog = self.fill("education", "nursery")
+        self.assert_a_working_business(catalog)
+        children = Student.objects.count()
+        self.assertEqual(PickupPerson.objects.count(), 2 * children)  # a parent and one more for every child
+        rows, counts = nursery.board()
+        self.assertEqual(counts["away"], 1)  # one child not here yet
+        self.assertEqual(counts["in"] + counts["left"], children - 1)
+        self.assertTrue(all(record.picked_by.student_id == record.student_id for record in DayRecord.objects.exclude(picked_by=None)))
+
 
 @override_settings(DEBUG=True)
 class BaseBusinessUnchangedTests(TestCase):

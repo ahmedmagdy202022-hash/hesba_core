@@ -1,0 +1,24 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ nw.title }}</h1><p>{{ nw.intro }}</p></div></section>
+{% include "education/_tabs.html" %}
+{% if error %}<p class="op-message op-message-error" role="alert" data-nursery-error>{{ error }}</p>{% endif %}
+<section class="op-summary-grid" data-nursery-counts>
+<article><small>{{ nw.inside }}</small><strong data-count-in>{{ counts.in }}</strong></article>
+<article><small>{{ nw.gone }}</small><strong data-count-left>{{ counts.left }}</strong></article>
+<article><small>{{ nw.away }}</small><strong data-count-away>{{ counts.away }}</strong></article>
+<article><small>{{ nw.all }}</small><strong>{{ counts.all }}</strong></article>
+</section>
+{% if not can_desk %}<p class="op-message">{{ nw.view_only }}</p>{% endif %}
+<div class="op-table-wrap"><table class="op-table" data-nursery-board><thead><tr><th>{{ nw.child }}</th><th>{{ nw.arrived }}</th><th>{{ nw.left }}</th>{% if can_desk %}<th></th>{% endif %}</tr></thead><tbody>
+{% for row in rows %}{% with r=row.record %}<tr data-child="{{ row.student.pk }}" data-state="{% if r and r.left_at %}left{% elif r %}in{% else %}away{% endif %}">
+<td class="op-cell-text"><a href="{% url 'education:student' row.student.pk %}?lang={{ lang }}">{{ row.student.name }}</a></td>
+<td>{% if r %}<bdi>{{ r.arrived_at|time:"H:i" }}</bdi>{% if r.arrived_with %} <span class="op-muted">{{ nw.with }} {{ r.arrived_with }}</span>{% endif %}{% else %}—{% endif %}</td>
+<td>{% if r.left_at %}<bdi>{{ r.left_at|time:"H:i" }}</bdi> <span class="op-muted">{{ nw.with }} {{ r.picked_by.name }}</span>{% if row.tell %} <a class="op-secondary" href="{{ row.tell }}" target="_blank" rel="noopener" data-tell-parent>{{ nw.tell_parent }}</a>{% endif %}{% else %}—{% endif %}</td>
+{% if can_desk %}<td>{% if not r %}<form method="post" class="edu-inline" data-check-in>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="in"><input type="hidden" name="student" value="{{ row.student.pk }}"><label class="sr-only" for="bb-{{ row.student.pk }}">{{ nw.brought_by }}</label><input id="bb-{{ row.student.pk }}" name="brought_by" maxlength="120" placeholder="{{ nw.brought_by }}"><button class="op-primary" type="submit">{{ nw.check_in }}</button></form>
+{% elif not r.left_at %}{% if row.people %}<form method="post" class="edu-inline" data-check-out>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="out"><input type="hidden" name="student" value="{{ row.student.pk }}"><label class="sr-only" for="pk-{{ row.student.pk }}">{{ nw.picker }}</label><select id="pk-{{ row.student.pk }}" name="person" required><option value="">{{ nw.picker }}…</option>{% for person in row.people %}<option value="{{ person.pk }}">{{ person.name }}{% if person.relation %} ({{ person.relation }}){% endif %}</option>{% endfor %}</select><button class="op-primary" type="submit">{{ nw.check_out }}</button></form>
+{% else %}<span class="op-status op-status-cancelled" data-no-pickup>{{ nw.no_people }}</span>{% endif %}{% endif %}</td>{% endif %}
+</tr>{% endwith %}
+{% empty %}<tr><td colspan="4" class="op-empty">{{ nw.no_children }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

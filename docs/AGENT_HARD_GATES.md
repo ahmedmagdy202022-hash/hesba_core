@@ -1431,6 +1431,25 @@ Regression coverage for every item above is included in the final 794-test run. 
 
 No unresolved business or accounting decision was discovered while implementing or verifying these approvals.
 
+## HG-040 — implementation note: the nursery's check-in and pick-up (EDU-005)
+
+- **Status:** BUILT. New tables only, in the education app's own module, through migration `education/0006_nursery_pickup`. No change to an existing table.
+- **New tables:**
+  - `PickupPerson`: who may pick a child up (name, relation, phone, optional ID number). A person is switched off, never deleted, so past pick-ups still show who it was.
+  - `DayRecord`: one per child per day, holding the arrival time and who brought the child, the departure time, who picked the child up, and who checked the child in and out.
+- **Rules (`education/nursery.py`):**
+  - A child leaves only with an active person on their own list. Any other choice is refused with a clear message.
+  - Checking in twice on one day is refused; the row lock plus a unique constraint enforce this.
+  - Leaving needs an arrival first.
+  - The parent gets a one-tap WhatsApp saying who picked the child up and when.
+- **Who may do what:**
+  - The office (`master_data.manage_parties`) or any staff member linked to an employee checks children in and out.
+  - Only the office changes the list of who may pick a child up.
+- **Screens:**
+  - A "Check-in & pick-up" tab and page, for nurseries only: today's board with counts for inside, gone home and not here yet.
+  - On the child's file: the pick-up list and the recent days.
+- **Not touched:** fees and invoices, ledgers, attendance of classes, permissions core.
+- **Tests:** `education/tests_nursery.py`; the nursery demo in `reports/tests_demo_catalogs.py`.
 ## HG-046 — implementation note: contract visits booked automatically (SVC-004)
 
 - **Status:** BUILT, no schema change.

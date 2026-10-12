@@ -13,6 +13,7 @@ urlpatterns = [
     path("groups/<int:pk>/", views.group_detail, name="group"),
     path("courses/", views.courses, name="courses"),
     path("today/", views.today, name="today"),
+    path("nursery/", views.nursery_day, name="nursery"),
     path("groups/<int:pk>/attendance/", views.take_attendance, name="attendance"),
     path("fees/", views.fees, name="fees"),
     path("dues/", views.dues, name="dues"),
