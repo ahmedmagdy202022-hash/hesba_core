@@ -4,7 +4,7 @@
 {% block body_class %}dashboard-page{% endblock %}
 
 {% block styles %}
-<link rel="stylesheet" href="{% static 'hesba/css/dashboard.css' %}?v=dash-003">
+<link rel="stylesheet" href="{% static 'hesba/css/dashboard.css' %}?v=dash-fit">
 <link rel="stylesheet" href="{% static 'hesba/css/shell.css' %}">
 {% endblock %}
 
@@ -121,6 +121,19 @@
       </section>
       {% endif %}
 
+      {% if option_panel %}
+      <section class="dash-section dash-activity dash-activity--options" aria-label="{{ option_panel.title }}" data-option-panel>
+        <h2 class="dash-section__title">{{ option_panel.title }}</h2>
+        <div class="dash-activity__tiles">
+          {% for t in option_panel.tiles %}<a class="dash-atile{% if t.tone %} is-{{ t.tone }}{% endif %}" href="{{ t.url }}?lang={{ lang }}" data-tile="{{ t.key }}">
+            <span class="dash-atile__label">{{ t.label }}</span>
+            <span class="dash-atile__value">{% if t.kind == 'money' %}{{ t.value|money }}{% if currency %}<small>{{ currency }}</small>{% endif %}{% else %}{{ t.value }}{% endif %}</span>
+            {% if t.sub %}<span class="dash-atile__sub">{{ t.sub }}</span>{% endif %}
+          </a>{% endfor %}
+        </div>
+      </section>
+      {% endif %}
+
       {% if analytics.available %}
       <section class="dash-section dash-analytics" aria-label="{{ analytics_title }}" data-period="{{ analytics.period }}">
         <div class="dash-section__head">
@@ -152,8 +165,8 @@
               <span class="dash-tabs" role="tablist" aria-labelledby="insights-title">
                 <button class="dash-tab is-current" type="button" role="tab" id="tab-sales" aria-controls="panel-sales" aria-selected="true" data-tab="sales">{{ tab_sales }}</button>
                 {% if analytics.profit_daily %}<button class="dash-tab" type="button" role="tab" id="tab-profit" aria-controls="panel-profit" aria-selected="false" tabindex="-1" data-tab="profit">{{ tab_profit }}</button>{% endif %}
-                <button class="dash-tab" type="button" role="tab" id="tab-weekdays" aria-controls="panel-weekdays" aria-selected="false" tabindex="-1" data-tab="weekdays">{{ tab_weekdays }}</button>
-                <button class="dash-tab" type="button" role="tab" id="tab-hours" aria-controls="panel-hours" aria-selected="false" tabindex="-1" data-tab="hours">{{ tab_hours }}</button>
+                {% if analytics.weekdays %}<button class="dash-tab" type="button" role="tab" id="tab-weekdays" aria-controls="panel-weekdays" aria-selected="false" tabindex="-1" data-tab="weekdays">{{ tab_weekdays }}</button>{% endif %}
+                {% if analytics.hours %}<button class="dash-tab" type="button" role="tab" id="tab-hours" aria-controls="panel-hours" aria-selected="false" tabindex="-1" data-tab="hours">{{ tab_hours }}</button>{% endif %}
               </span>
               <button class="dash-rotate" type="button" data-rotate-toggle data-label-pause="{{ pause }}" data-label-play="{{ play }}" aria-label="{{ pause }}" title="{{ pause }}"><span aria-hidden="true" data-rotate-icon>❚❚</span></button>
             </figcaption>
@@ -195,24 +208,24 @@
             </div>
             {% endif %}
 
-            <div class="dash-panel" role="tabpanel" id="panel-weekdays" aria-labelledby="tab-weekdays" data-panel="weekdays" hidden>
+            {% if analytics.weekdays %}<div class="dash-panel" role="tabpanel" id="panel-weekdays" aria-labelledby="tab-weekdays" data-panel="weekdays" hidden>
               <p class="dash-panel__title">{{ weekdays_title }}</p>
               {% if analytics.weekdays.empty %}<p class="dash-empty-note">{{ no_sales_chart }}</p>{% else %}
               <ul class="dash-hbars">
                 {% for row in analytics.weekdays.rows %}<li class="{% if row.best %}is-best{% endif %}"><span class="dash-hbars__label">{{ row.label }}</span><span class="dash-hbars__track"><span class="dash-hbars__fill" style="width:{{ row.pct }}%"></span></span><span class="dash-hbars__value">{{ row.value|money }}</span></li>{% endfor %}
               </ul>
               {% endif %}
-            </div>
+            </div>{% endif %}
 
-            <div class="dash-panel" role="tabpanel" id="panel-hours" aria-labelledby="tab-hours" data-panel="hours" hidden>
+            {% if analytics.hours %}<div class="dash-panel" role="tabpanel" id="panel-hours" aria-labelledby="tab-hours" data-panel="hours" hidden>
               <p class="dash-panel__title" id="hours-title">{{ hours_title }}</p>
               <div class="dash-hours" role="list">{% for c in analytics.hours.cells %}<div class="dash-hour lvl-{{ c.level }}" role="listitem" title="{{ c.hour }}:00 · {{ c.count }} {{ invoices_word }}"><span class="dash-hour__count">{{ c.count }}</span><span class="dash-hour__label">{{ c.hour }}:00</span></div>{% endfor %}</div>
               {% if analytics.hours.peak is not None %}<p class="dash-chart__note">{{ hours_peak }}: {{ analytics.hours.peak }}:00</p>{% endif %}
-            </div>
+            </div>{% endif %}
           </figure>
 
           <div class="dash-side">
-            <figure class="dash-chart dash-split-card" aria-labelledby="split-title">
+            {% if analytics.split %}<figure class="dash-chart dash-split-card" aria-labelledby="split-title" data-split>
               <figcaption id="split-title" class="dash-chart__title">{{ split_title }}</figcaption>
               {% if analytics.split.empty %}<p class="dash-empty-note">{{ split_empty }}</p>{% else %}
               <div class="dash-donut">
@@ -230,7 +243,7 @@
               </div>
               <p class="dash-chart__note">{{ split_note }}</p>
               {% endif %}
-            </figure>
+            </figure>{% endif %}
 
             {% if analytics.top %}<section class="dash-list dash-top"><h3>{% if analytics.top_by_profit %}{{ top_title_profit }}{% else %}{{ top_title_sales }}{% endif %}</h3><ol>{% for row in analytics.top %}<li><span class="dash-list__name">{{ row.name }}</span><span class="dash-list__value">{% if analytics.top_by_profit %}{{ row.profit|money }}{% else %}{{ row.sales|money }}{% endif %}</span></li>{% endfor %}</ol></section>{% endif %}
           </div>
