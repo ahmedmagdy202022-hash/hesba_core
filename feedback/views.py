@@ -223,7 +223,12 @@ def visits(request):
             "visit": visit, "views": views, "key": key,
             "notes": Feedback.objects.filter(sandbox=visit.sandbox).order_by("created_at") if visit.sandbox else [],
         })
-    all_visits = Visit.objects.all()
+    everyone = Visit.objects.all()
+    # FB-STAFF: a "visit" that only saw the sign-in page and never got in is a link scanner or a ping, not a person;
+    # it stays countable behind "show everything".
+    never_in = everyone.filter(pages__lte=1, sandbox="", first_path__startswith="/login")
+    show_all = request.GET.get("all") == "1"
+    all_visits = everyone if show_all else everyone.exclude(pk__in=never_in.values("pk"))
     activity = request.GET.get("activity", "").strip()
     shown = all_visits.filter(activity=activity) if activity else all_visits
     if request.GET.get("format") == "csv":
@@ -254,4 +259,5 @@ def visits(request):
         "total": all_visits.count(), "named": all_visits.exclude(name="", phone="").count(),
         "pages": totals["pages"] or 0,
         "today": all_visits.filter(last_seen_at__gte=timezone.now() - timedelta(hours=24)).count(),
+        "hidden": 0 if show_all else never_in.count(), "show_all": show_all,
     })

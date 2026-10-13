@@ -23,6 +23,12 @@ WORDS = {
         "commission": "نسبة العمولة %", "commission_hint": "من المبيعات المرحّلة للشغل اللي خلّصه (للتقرير بس؛ الصرف بيتسجل كمصروف).",
         "user": "حساب الدخول (اختياري)", "none": "— من غير حساب —", "active": "نشط", "notes": "ملاحظات", "save": "حفظ", "code": "الكود",
         "status": "الحالة", "on": "نشط", "off": "موقوف", "empty": "لسه مفيش موظفين.", "saved": "اتحفظ الموظف {name}.", "back": "الموظفون", "view_only": "إضافة الموظفين وتعديلهم لصاحب الصلاحية بس.",
+        "search": "دوّر بالاسم أو الوظيفة أو الموبايل", "all": "الكل", "only_active": "النشطين بس", "only_off": "الموقوفين", "filter": "عرض",
+        "month": "الشهر ده", "done": "شغل خلّصه", "sales": "مبيعات", "earned": "العمولة", "edit": "تعديل البيانات", "count": "{n} موظف نشط",
+        "work_title": "شغله الشهر ده", "nothing": "مفيش شغل متسجل باسمه الشهر ده.", "appointments": "المواعيد والزيارات", "rep": "كمندوب مبيعات",
+        "invoices": "فاتورة", "customers": "عميل تبعه", "collected": "اتحصّل", "groups": "المجموعات اللي بيدرّسها", "floor": "الصالة",
+        "served": "طلب خدمه", "delivered": "توصيلة", "upcoming": "مواعيده الجاية", "agenda": "الأجندة", "rep_report": "تقرير المناديب",
+        "performance": "تقرير الأداء",
     },
     "en": {
         "page_title": "Employees", "title": "Employees & technicians", "intro": "The technicians, doctors, stylists and teachers who serve customers. Link them to appointments and see their work and commission.",
@@ -30,6 +36,12 @@ WORDS = {
         "commission": "Commission %", "commission_hint": "Of the posted sales of work they completed (report only; paying it is recorded as an expense).",
         "user": "Login account (optional)", "none": "— no login —", "active": "Active", "notes": "Notes", "save": "Save", "code": "Code",
         "status": "Status", "on": "Active", "off": "Disabled", "empty": "No employees yet.", "saved": "Employee {name} saved.", "back": "Employees", "view_only": "Only users with the permission can add or change employees.",
+        "search": "Search by name, job or mobile", "all": "All", "only_active": "Active only", "only_off": "Disabled", "filter": "Show",
+        "month": "This month", "done": "Jobs done", "sales": "Sales", "earned": "Commission", "edit": "Edit details", "count": "{n} active",
+        "work_title": "Their work this month", "nothing": "No work recorded under their name this month.", "appointments": "Appointments & visits", "rep": "As a sales rep",
+        "invoices": "invoices", "customers": "customers", "collected": "Collected", "groups": "Groups they teach", "floor": "The floor",
+        "served": "orders served", "delivered": "deliveries", "upcoming": "Their next appointments", "agenda": "Agenda", "rep_report": "Reps report",
+        "performance": "Performance report",
     },
 }
 
@@ -66,7 +78,25 @@ def employee_list(request):
         else:
             messages.success(request, WORDS[lang]["saved"].format(name=employee.name))
             return redirect(f"{reverse('staff:list')}?lang={lang}")
-    return render(request, "staff/list.html", _context(request, employees=Employee.objects.select_related("user"), form=form, error=error))
+    from django.db.models import Q
+
+    from .work import team_month
+
+    query, status = (request.GET.get("q") or "").strip(), request.GET.get("status", "active")
+    employees = Employee.objects.select_related("user").order_by("-active", "name")
+    if query:
+        employees = employees.filter(Q(name__icontains=query) | Q(title__icontains=query) | Q(phone__icontains=query) | Q(code__icontains=query))
+    if status == "active":
+        employees = employees.filter(active=True)
+    elif status == "off":
+        employees = employees.filter(active=False)
+    employees = list(employees)
+    month = team_month(employees)
+    rows = [{"employee": employee, "month": month.get(employee.pk)} for employee in employees]
+    active_count = Employee.objects.filter(active=True).count()
+    return render(request, "staff/list.html", _context(
+        request, rows=rows, form=form, error=error, query=query, status=status,
+        count_label=WORDS[lang]["count"].format(n=active_count), open_form=bool(error) or not Employee.objects.exists()))
 
 
 @require_any_permission(*STAFF_AUDIENCE)
@@ -86,4 +116,6 @@ def employee_detail(request, pk):
             return redirect(f"{reverse('staff:detail', args=[employee.pk])}?lang={lang}")
     form = {"name": employee.name, "title": employee.title, "phone": employee.phone, "commission_percent": employee.commission_percent,
             "user": str(employee.user_id or ""), "active": employee.active, "notes": employee.notes}
-    return render(request, "staff/detail.html", _context(request, employee=employee, form=form, error=error))
+    from .work import employee_month
+
+    return render(request, "staff/detail.html", _context(request, employee=employee, form=form, error=error, work=employee_month(employee)))

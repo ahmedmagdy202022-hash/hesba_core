@@ -11,7 +11,7 @@
 <body class="fb-inbox">
 <header class="fb-inbox__head">
   <img src="{% static 'hesba/brand/hesba-logo-reversed.png' %}" alt="حِسبة" width="642" height="225">
-  <div><h1>زوّار الديمو</h1><p>{{ total }} زيارة · {{ named }} سابوا اسمهم أو رقمهم · {{ today }} آخر 24 ساعة · {{ pages }} صفحة اتفتحت</p></div>
+  <div><h1>زوّار الديمو</h1><p>{{ total }} زيارة · {{ named }} سابوا اسمهم أو رقمهم · {{ today }} آخر 24 ساعة · {{ pages }} صفحة اتفتحت</p>{% if hidden %}<p class="muted" data-hidden-visits>مخفي {{ hidden }} «زيارة» ماعدتش صفحة الدخول (فحص لينكات أو نبضات سيرفر، مش ناس) · <a href="?key={{ key }}&all=1">اعرض الكل</a></p>{% elif show_all %}<p class="muted"><a href="?key={{ key }}">اخفي اللي ماعدّوش صفحة الدخول</a></p>{% endif %}</div>
 </header>
 <main class="fb-inbox__main">
   <nav class="fb-inbox__filters" aria-label="روابط">
