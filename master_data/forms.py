@@ -289,5 +289,8 @@ class ItemForm(AutoNumbered, HesbaModelForm):
     def __init__(self, *args, can_view_cost=False, **kwargs):
         super().__init__(*args, **kwargs)
         self.offer_auto_number(self.lang)
+        if "category" in self.fields:  # FB-TYPES: a new category without leaving the item
+            self.fields["category"].widget.attrs.update({"data-quick-add": "+ New category…" if self.lang == "en" else "+ تصنيف جديد…",
+                                                         "data-quick-add-url": "/master-data/categories/quick/"})
         if not can_view_cost:
             self.fields.pop("default_purchase_price", None)

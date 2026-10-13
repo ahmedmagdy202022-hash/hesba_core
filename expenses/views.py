@@ -271,3 +271,22 @@ def category_toggle(request, pk):
         category.save(update_fields=["active"])
         messages.success(request, STRINGS[lang]["category_toggled"])
     return redirect(f"/expenses/categories/?lang={lang}")
+
+
+@require_permission(RECORD_PERMISSION)
+def category_quick_create(request):
+    """FB-TYPES: "+ new category" from inside the expense form; an existing name is reused, not doubled."""
+
+    from django.http import JsonResponse
+
+    name = (request.POST.get("name") or "").strip()[:120]
+    if request.method != "POST" or not name:
+        return JsonResponse({"ok": False, "error": "اكتب اسم البند." if _lang(request) == "ar" else "Enter the category's name."}, status=400)
+    lang = _lang(request)
+    category = ExpenseCategory.objects.filter(name_ar__iexact=name).first() or ExpenseCategory.objects.filter(name_en__iexact=name).first()
+    if category is None:
+        category = ExpenseCategory.objects.create(code=_category_code(f"custom {ExpenseCategory.objects.count() + 1}"), name_ar=name, name_en="")
+    elif not category.active:
+        category.active = True
+        category.save(update_fields=["active"])
+    return JsonResponse({"ok": True, "id": category.pk, "label": category.label(lang)})

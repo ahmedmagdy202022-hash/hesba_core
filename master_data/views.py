@@ -584,6 +584,28 @@ def reverse_opening_balance_adjustment(request, entity, pk, adjustment_id):
     )
 
 
+def category_quick_create(request):
+    """FB-TYPES: "+ new category" from inside the item form; an existing name is reused, not doubled."""
+
+    from django.http import JsonResponse
+
+    from config.numbering import next_in_series
+
+    lang = _lang(request)
+    if not user_has_permission(request.user, "master_data.manage_items"):
+        return JsonResponse({"ok": False, "error": "Not allowed."}, status=403)
+    name = (request.POST.get("name") or "").strip()[:255]
+    if request.method != "POST" or not name:
+        return JsonResponse({"ok": False, "error": "اكتب اسم التصنيف." if lang == "ar" else "Enter the category's name."}, status=400)
+    category = Category.objects.filter(Q(name_ar__iexact=name) | Q(name_en__iexact=name)).first()
+    if category is None:
+        category = Category.objects.create(category_code=next_in_series(Category, "category_code", "CAT-"), name_ar=name, active=True)
+    elif not category.active:
+        category.active = True
+        category.save(update_fields=["active"])
+    return JsonResponse({"ok": True, "id": category.pk, "label": (category.name_en or category.name_ar) if lang == "en" else category.name_ar})
+
+
 QUICK_ITEM_WORDS = {
     "ar": {"denied": "إضافة صنف محتاجة صلاحية إدارة الأصناف.", "bad": "راجع بيانات الصنف."},
     "en": {"denied": "Adding an item needs the manage-items permission.", "bad": "Check the item's details."},

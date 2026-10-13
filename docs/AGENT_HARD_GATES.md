@@ -1412,6 +1412,23 @@ Status: IMPLEMENTED for review. New tables only; no protected logic changed. Imp
   - Stand-in limits: a general adjustment and the day's batch still need `inventory.adjust_stock`, and an unknown stand-in is refused.
   - `reports/tests_crawl_matrix.py`: the waiter walks every restaurant sub-activity and the site engineer every contracting one, empty and with sample data.
 
+## HG-050 — Asset types of the business's own (RESOLVED)
+
+- **Status:** RESOLVED. Built on `claude/fb-own-types`.
+- **Why:** Ahmed's demo note on 13 Oct 2026: "محتاج هنا برده امكانيه إضافة نوع جديد وكذلك على أي حاجة شبهه في اي مجال تاني". The asset types were a fixed list of six.
+- **Schema change:** `FixedAsset.category` is no longer limited to `AssetCategory` and is longer: 60 characters instead of 20 (migration `fixed_assets/0002_own_asset_types`).
+  - The built-in codes (vehicles, equipment ...) are unchanged and still shown in the screen's language.
+  - A type the business adds is stored as the name it typed. It is offered again for the next asset.
+  - Anything unknown that is posted falls back to "other".
+  - Nothing reads the category for depreciation or the ledger; it is a label only.
+- **Same idea elsewhere, no schema change:** "+ new category…" on the item form (item categories) and on the expense form (expense categories).
+  - The new category is saved on the spot. An existing name is reused, not doubled.
+  - The endpoints check the same permissions as the screens that manage those lists (`master_data.manage_items`, recording expenses).
+- **How it works:** one small script (`static/hesba/js/quick_option.js`) turns any `<select data-quick-add>` into a list with "+ new…". More lists can opt in with one attribute.
+- **Kept fixed on purpose:** lists that carry meaning in the engines stay fixed. These are movement types, ledger account types, appointment kinds (a visit needs an address), payment kinds and order kinds.
+- **Tests:**
+  - `fixed_assets/tests_own_types.py`: a new type is kept, shown and offered again; junk falls back to "other".
+  - `master_data/tests_quick_types.py`: both category endpoints, reuse instead of duplicates, and 403 for a cashier.
 ## HG-049 — Roles of the owner's own (RESOLVED)
 
 - **Status:** RESOLVED. Built on `claude/fb-roles-screen`.

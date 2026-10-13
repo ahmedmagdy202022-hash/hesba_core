@@ -9,7 +9,7 @@
 </tbody></table></div>
 {% if can_manage %}<form class="op-form" method="post" data-new-asset>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><h2>{{ words.new }}</h2><div class="op-form-grid">
 <div class="op-field"><label for="a-name">{{ words.name }}</label><input id="a-name" name="name" maxlength="255" required></div>
-<div class="op-field"><label for="a-cat">{{ words.category }}</label><select id="a-cat" name="category">{% for value, label in categories %}<option value="{{ value }}"{% if value == 'equipment' %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="a-cat">{{ words.category }}</label><input type="hidden" name="category_new" value=""><select id="a-cat" name="category" data-quick-add="{% if lang == 'en' %}+ New type…{% else %}+ نوع جديد…{% endif %}" data-quick-add-field="category_new">{% for value, label in categories %}<option value="{{ value }}"{% if value == 'equipment' %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
 <div class="op-field"><label for="a-date">{{ words.in_service }}</label><input id="a-date" name="in_service_on" type="date" value="{{ today|date:'Y-m-d' }}" required></div>
 <div class="op-field"><label for="a-cost">{{ words.cost }}</label><input id="a-cost" name="cost" inputmode="decimal" required></div>
 <div class="op-field"><label for="a-salvage">{{ words.salvage }}</label><input id="a-salvage" name="salvage_value" inputmode="decimal" value="0"></div>
