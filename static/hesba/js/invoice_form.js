@@ -265,6 +265,64 @@
     recalc();
   });
   form.addEventListener('input', recalc);
+  // FB-QUICKADD: a new item from inside the invoice. Saved through the items screen's own form (automatic code,
+  // same checks), then offered on every line and put on the next empty one.
+  var quick = form.querySelector('[data-quick-item]');
+  var quickOpen = form.querySelector('[data-quick-item-open]');
+  if (quick && quickOpen && quick.showModal) {
+    var quickError = quick.querySelector('[data-quick-item-error]');
+    var quickSave = quick.querySelector('[data-quick-item-save]');
+    var csrf = form.querySelector('input[name="csrfmiddlewaretoken"]');
+    var isPurchase = priceField === 'unit_purchase_price';
+    quickOpen.addEventListener('click', function () {
+      quickError.hidden = true;
+      quick.showModal();
+      quick.querySelector('[name="item_name"]').focus();
+    });
+    quick.querySelector('[data-quick-item-close]').addEventListener('click', function () { quick.close(); });
+    quick.addEventListener('keydown', function (event) {
+      if (event.key === 'Enter' && event.target.tagName === 'INPUT') { event.preventDefault(); quickSave.click(); }
+    });
+    quickSave.addEventListener('click', function () {
+      var body = new FormData();
+      quick.querySelectorAll('input[name], select[name]').forEach(function (input) {
+        if (input.type === 'checkbox') { if (input.checked) { body.append(input.name, 'on'); } } else { body.append(input.name, input.value); }
+      });
+      body.append('lang', document.body.dataset.lang === 'en' ? 'en' : 'ar');
+      quickSave.disabled = true;
+      fetch(quick.getAttribute('data-url'), { method: 'POST', body: body, credentials: 'same-origin', headers: { 'X-CSRFToken': csrf ? csrf.value : '' } })
+        .then(function (response) { return response.json(); })
+        .then(function (answer) {
+          if (!answer.ok) {
+            var detail = answer.errors ? Object.keys(answer.errors).map(function (k) { return k + ': ' + answer.errors[k].join(' '); }).join(' · ') : '';
+            quickError.textContent = (answer.error || '') + (detail ? ' ' + detail : '');
+            quickError.hidden = false;
+            return;
+          }
+          var made = answer.item;
+          var entry = { id: made.id, code: made.code, barcode: made.barcode, label: made.label, price: isPurchase ? (made.purchase_price || '') : made.sale_price };
+          if (!entry.price) { delete entry.price; }
+          catalog.push(entry);
+          byId[String(entry.id)] = entry;
+          if (entry.barcode) { byCode[entry.barcode.toLowerCase()] = entry; }
+          if (entry.code) { byCode[entry.code.toLowerCase()] = entry; }
+          form.querySelectorAll('select[name$="-item"]').forEach(function (select) {
+            var option = document.createElement('option');
+            option.value = String(entry.id);
+            option.textContent = entry.label;
+            select.appendChild(option);
+          });
+          quick.querySelectorAll('input[name]').forEach(function (input) {
+            if (input.type === 'checkbox') { input.checked = true; } else { input.value = /price/.test(input.name) ? '0' : ''; }
+          });
+          quick.close();
+          addItem(entry, null);
+        })
+        .catch(function () { quickError.textContent = words.offline || 'Could not save; try again.'; quickError.hidden = false; })
+        .finally(function () { quickSave.disabled = false; });
+    });
+  }
+
   var addButton = form.querySelector('[data-add-line]');
   if (addButton) { addButton.addEventListener('click', function () { if (addLine() < 0) { say(words.full || 'No more lines.', true); } }); }
   for (var u = 0; u < count(); u += 1) { fillUnits(u); }

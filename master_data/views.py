@@ -582,3 +582,43 @@ def reverse_opening_balance_adjustment(request, entity, pk, adjustment_id):
     return redirect(
         f"{reverse('master_data:opening_adjustment', kwargs={'entity': entity, 'pk': pk})}?lang={lang}"
     )
+
+
+QUICK_ITEM_WORDS = {
+    "ar": {"denied": "إضافة صنف محتاجة صلاحية إدارة الأصناف.", "bad": "راجع بيانات الصنف."},
+    "en": {"denied": "Adding an item needs the manage-items permission.", "bad": "Check the item's details."},
+}
+
+
+def item_quick_create(request):
+    """FB-QUICKADD: a new item from inside an invoice (or any document line), without leaving it.
+
+    The same form, validation and automatic code as the items screen, answered
+    as JSON so the line picker can take the new item straight away."""
+
+    from django.http import JsonResponse
+
+    lang = _lang(request)
+    words = QUICK_ITEM_WORDS[lang]
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "POST only"}, status=405)
+    if not user_has_permission(request.user, "master_data.manage_items"):
+        return JsonResponse({"ok": False, "error": words["denied"]}, status=403)
+    can_view_cost = user_has_permission(request.user, "inventory.view_cost")
+    data = {
+        "item_code": "", "barcode": request.POST.get("barcode", ""), "item_name": request.POST.get("item_name", ""),
+        "category": request.POST.get("category", ""), "size": "", "color": "", "unit": request.POST.get("unit", "") or "unit",
+        "default_sale_price": request.POST.get("default_sale_price", "") or "0",
+        "default_purchase_price": request.POST.get("default_purchase_price", "") or "0",
+        "min_stock": "0", "is_stock_tracked": "on" if request.POST.get("is_stock_tracked") in ("on", "1", "true") else "", "active": "on",
+    }
+    form = ItemForm(data, lang=lang, can_view_cost=can_view_cost)
+    if not form.is_valid():
+        errors = {(form.fields[name].label if name in form.fields else name): [str(message) for message in messages_]
+                  for name, messages_ in form.errors.items()}
+        return JsonResponse({"ok": False, "error": words["bad"], "errors": errors}, status=400)
+    item = form.save()
+    return JsonResponse({"ok": True, "item": {
+        "id": item.pk, "code": item.item_code, "barcode": item.barcode, "label": item.search_label,
+        "sale_price": str(item.default_sale_price), "purchase_price": str(item.default_purchase_price) if can_view_cost else "",
+        "is_stock_tracked": item.is_stock_tracked}})

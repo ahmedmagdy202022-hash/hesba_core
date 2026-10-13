@@ -22,7 +22,7 @@ price_field, list_url, party ("customer" / "supplier"), can_post and tax_rates.
       </div>{% endwith %}{% endfor %}</div>
   </div>
   {% endwith %}
-  <div class="op-form-actions inv-add"><button class="op-secondary" type="button" data-add-line>+ {% if lang == 'en' %}Add line{% else %}سطر جديد{% endif %}</button></div>
+  <div class="op-form-actions inv-add"><button class="op-secondary" type="button" data-add-line>+ {% if lang == 'en' %}Add line{% else %}سطر جديد{% endif %}</button>{% quick_item_dialog party %}</div>
 </div>
 
 <aside class="inv-summary" aria-label="{% if lang == 'en' %}Invoice summary{% else %}ملخص الفاتورة{% endif %}">
