@@ -42,8 +42,20 @@ def visitor_of(request):
     return None
 
 
+#: FB-STAFF: machines, not people: uptime pings, link previews and scanners, scripts, headless browsers.
+BOT_MARKERS = ("go-http-client", "bot", "spider", "crawl", "preview", "headless", "curl/", "wget/", "python-requests", "python-urllib",
+               "httpclient", "okhttp", "uptime", "monitor", "facebookexternalhit", "whatsapp", "telegram", "slurp", "lighthouse")
+
+
+def is_machine(user_agent):
+    agent = (user_agent or "").lower()
+    return any(marker in agent for marker in BOT_MARKERS)
+
+
 def _worth_noting(request, response):
     if request.method != "GET" or response.status_code != 200:
+        return False
+    if is_machine(request.META.get("HTTP_USER_AGENT", "")):
         return False
     if not response.get("Content-Type", "").startswith("text/html"):
         return False

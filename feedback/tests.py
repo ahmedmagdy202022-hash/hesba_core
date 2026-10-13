@@ -462,3 +462,32 @@ class NoTrackingOnClientsTests(TestCase):
         self.assertNotContains(page, "data-hello")
         self.assertFalse(Visit.objects.exists())
         self.assertEqual(self.client.post(reverse("feedback:hello"), {"name": "x"}).status_code, 404)
+
+
+@override_settings(DEMO_MODE=True, FEEDBACK_VIEW_TOKEN=KEY)
+class MachineVisitTests(TestCase):
+    """FB-STAFF: uptime pings and link scanners are not visitors."""
+
+    databases = {"default", "feedback"}
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+
+    def test_machines_are_not_noted_and_never_signed_in_visits_are_hidden(self):
+        from .models import Visit
+        from .tracking import is_machine
+
+        for agent in ("Go-http-client/2.0", "WhatsApp/2.23", "Mozilla/5.0 (compatible; Googlebot/2.1)", "curl/8.4", "HeadlessChrome/120"):
+            self.assertTrue(is_machine(agent), agent)
+        self.assertFalse(is_machine("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36"))
+        self.client.get(reverse("login"), HTTP_USER_AGENT="Go-http-client/2.0")
+        self.assertFalse(Visit.objects.exists())
+        now = timezone.now()
+        Visit.objects.create(visitor="s" * 24, pages=1, first_path="/login/?next=/reports/", last_seen_at=now)
+        Visit.objects.create(visitor="p" * 24, pages=6, first_path="/login/", sandbox="sbx-real", last_seen_at=now)
+        page = self.client.get(reverse("feedback:visits") + f"?key={KEY}")
+        self.assertEqual(page.context["total"], 1)
+        self.assertContains(page, "data-hidden-visits")
+        self.assertEqual(self.client.get(reverse("feedback:visits") + f"?key={KEY}&all=1").context["total"], 2)
