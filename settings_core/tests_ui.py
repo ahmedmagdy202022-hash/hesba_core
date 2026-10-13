@@ -53,17 +53,17 @@ class SettingsAndProfileUiTests(TestCase):
         self.assertContains(response, "Sensitive value hidden")
         self.assertNotContains(response, "never-render-this")
 
-    def test_admin_links_are_for_superusers_only(self):
-        # ADMIN-001: an owner, even one marked staff, never gets sent to Django Admin.
+    def test_roles_are_managed_in_hesba_never_in_django_admin(self):
+        # ADMIN-001 + FB-ROLES: the owner manages roles on Hesba's own screens; nobody is sent to Django Admin.
         self.login_as(RoleCode.OWNER, "owner_staff", is_staff=True)
         response = self.client.get(reverse("settings_core:roles"), {"lang": "en"})
-        self.assertFalse(response.context["can_manage"])
-        # AUDIT-1: the page names each permission in words ("Manage roles" may be one); no Admin link.
-        self.assertNotContains(response, reverse("admin:permissions_role_changelist"))
-        self.client.logout()
-        superuser = get_user_model().objects.create_superuser(username="root_ui", password="x-Root-pass-9")
-        self.client.force_login(superuser)
-        response = self.client.get(reverse("settings_core:roles"), {"lang": "en"})
         self.assertTrue(response.context["can_manage"])
-        self.assertContains(response, reverse("admin:permissions_role_changelist"))
+        self.assertContains(response, "data-new-role")
+        self.assertNotContains(response, reverse("admin:permissions_role_changelist"))
+        self.assertNotContains(response, "/admin/")
+        self.client.logout()
+        self.login_as(RoleCode.MANAGER, "manager_roles")
+        response = self.client.get(reverse("settings_core:roles"), {"lang": "en"})
+        self.assertFalse(response.context["can_manage"])
+        self.assertNotContains(response, "data-new-role")
 

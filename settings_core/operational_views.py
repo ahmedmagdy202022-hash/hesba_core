@@ -207,27 +207,99 @@ def _role_sections(role, lang):
     return [{"name": name, "items": sorted(items)} for name, items in sections.items()]
 
 
+ROLE_WORDS = {
+    "ar": {"new_role": "دور جديد", "copy": "انسخه لدور جديد", "edit": "عدّل", "custom": "دور خاص", "users_screen": "المستخدمون",
+           "in_use": "{n} مستخدم", "form_new": "دور جديد", "form_edit": "تعديل الدور", "from": "بداية من دور", "from_none": "— من غير —",
+           "name_ar": "اسم الدور (عربي)", "name_en": "اسم الدور (إنجليزي)", "about": "الدور ده بيعمل إيه (اختياري)", "active": "الدور شغال",
+           "what": "يقدر يعمل إيه", "save": "حفظ الدور", "saved": "اتحفظ الدور «{name}».", "back": "الأدوار",
+           "locked_note": "إدارة الأدوار والمستخدمين بتفضل لصاحب الحساب بس، فمش موجودة هنا.",
+           "system_note": "الأدوار الأساسية ثابتة عشان كل الشاشات متظبطة عليها. لو محتاج حاجة بينهم، انسخ الأقرب وعدّل فيه.",
+           "intro": "كل دور بيقول صاحبه يقدر يعمل إيه. اختار دور جاهز للمستخدم، أو اعمل دور خاص بيك.",
+           "role_name_required": "اكتب اسم الدور.", "role_name_taken": "في دور تاني بنفس الاسم.", "role_needs_permissions": "اختار حاجة واحدة على الأقل الدور ده يقدر يعملها.",
+           "role_locked_permission": "إدارة الأدوار مش بتتدّى لدور خاص.", "role_unknown_permission": "في صلاحية مش معروفة؛ حدّث الصفحة.",
+           "role_beyond_actor": "مينفعش تدّي صلاحية إنت نفسك معندكش.", "role_system_locked": "الأدوار الأساسية مش بتتعدّل؛ انسخها لدور جديد.",
+           "role_in_use": "في مستخدمين شغالين على الدور ده؛ غيّر دورهم الأول.", "role_manage_denied": "إدارة الأدوار لصاحب الحساب بس."},
+    "en": {"new_role": "New role", "copy": "Copy to a new role", "edit": "Edit", "custom": "Custom role", "users_screen": "Users",
+           "in_use": "{n} users", "form_new": "New role", "form_edit": "Edit role", "from": "Start from role", "from_none": "— none —",
+           "name_ar": "Role name (Arabic)", "name_en": "Role name (English)", "about": "What this role does (optional)", "active": "Role is active",
+           "what": "What it can do", "save": "Save role", "saved": "Role “{name}” saved.", "back": "Roles",
+           "locked_note": "Managing roles and users stays with the account owner, so it is not offered here.",
+           "system_note": "The built-in roles are fixed because every screen is set up on them. For something in between, copy the closest and change it.",
+           "intro": "Each role says what its holder can do. Pick a ready role for a user, or make a role of your own.",
+           "role_name_required": "Enter the role's name.", "role_name_taken": "Another role has this name.", "role_needs_permissions": "Tick at least one thing this role can do.",
+           "role_locked_permission": "Managing roles cannot go in a custom role.", "role_unknown_permission": "An unknown permission; reload the page.",
+           "role_beyond_actor": "You cannot give a permission you do not hold.", "role_system_locked": "Built-in roles are not edited; copy one to a new role.",
+           "role_in_use": "Active users have this role; change their role first.", "role_manage_denied": "Managing roles is the account owner's."},
+}
+
+
+def _permission_groups(lang, chosen):
+    from permissions.role_services import grantable_permissions
+
+    groups = {}
+    for permission in grantable_permissions():
+        ar, en = PERMISSION_SECTIONS.get(permission.module, (permission.module, permission.module))
+        name = (permission.name_en or permission.name_ar) if lang == "en" else permission.name_ar
+        groups.setdefault(en if lang == "en" else ar, []).append({"code": permission.code, "name": name, "on": permission.code in chosen})
+    return [{"name": name, "items": sorted(items, key=lambda row: row["name"])} for name, items in groups.items()]
+
+
 @require_permission("settings.view_settings")
 def role_list(request):
-    can_manage = user_has_permission(request.user, "permissions.manage_roles") and request.user.is_superuser
+    from permissions.role_services import copyable, in_use
+
+    can_manage = user_has_permission(request.user, "permissions.manage_roles")
     lang = lang_of(request)
-    roles = list(Role.objects.filter(active=True).prefetch_related("rolepermission_set__permission"))
+    roles = list(Role.objects.filter(active=True).prefetch_related("rolepermission_set__permission").order_by("-is_system_role", "pk"))
     for role in roles:
         role.sections = _role_sections(role, lang)
         about = ROLE_ABOUT.get(role.code)
-        role.about = (about[1] if lang == "en" else about[0]) if about else ""
-    return render(
-        request,
-        "settings_core/roles.html",
-        _context(
-            request,
-            roles=roles,
-            can_manage=can_manage,
-            admin_roles_url=reverse("admin:permissions_role_changelist") if can_manage else "",
-            admin_users_url=reverse("admin:auth_user_changelist") if can_manage else "",
-        ),
-    )
+        role.about = (about[1] if lang == "en" else about[0]) if about else role.description
+        role.copyable = copyable(role)
+        users = in_use(role) if can_manage else 0
+        role.users_label = ROLE_WORDS[lang]["in_use"].format(n=users) if users else ""
+    return render(request, "settings_core/roles.html", _context(request, roles=roles, can_manage=can_manage, rw=ROLE_WORDS[lang]))
 
+
+@require_permission("permissions.manage_roles")
+def role_form(request, pk=None):
+    """FB-ROLES: a role of the owner's own, made from scratch or as a copy of a ready one."""
+
+    from django.core.exceptions import ValidationError
+    from django.shortcuts import get_object_or_404
+
+    from permissions.role_services import create_role, role_codes, update_role
+
+    lang = lang_of(request)
+    words = ROLE_WORDS[lang]
+    role = get_object_or_404(Role, pk=pk, is_system_role=False) if pk else None
+    source = None
+    if role is None and (request.GET.get("from") or "").isdigit():
+        source = Role.objects.filter(pk=request.GET["from"]).first()
+    error = ""
+    if request.method == "POST":
+        data = {"name_ar": request.POST.get("name_ar", ""), "name_en": request.POST.get("name_en", ""),
+                "description": request.POST.get("description", ""), "codes": request.POST.getlist("perm"), "actor": request.user}
+        try:
+            if role is None:
+                saved = create_role(**data)
+            else:
+                saved = update_role(role, active=request.POST.get("active") == "on", **data)
+        except ValidationError as exc:
+            error = " ".join(words.get(message, message) for message in exc.messages)
+            form = dict(data, active=request.POST.get("active") == "on")
+            chosen = set(data["codes"])
+        else:
+            messages.success(request, words["saved"].format(name=saved.name_ar))
+            return redirect(f"{reverse('settings_core:roles')}?lang={lang}")
+    else:
+        base = role or source
+        form = {"name_ar": role.name_ar if role else "", "name_en": role.name_en if role else "",
+                "description": role.description if role else "", "active": role.active if role else True}
+        chosen = set(role_codes(base)) if base else set()
+    return render(request, "settings_core/role_form.html", _context(
+        request, rw=words, role=role, source=source, form=form, groups=_permission_groups(lang, chosen), error=error,
+        title=words["form_edit"] if role else words["form_new"]))
 
 
 @require_permission("settings.view_settings")
