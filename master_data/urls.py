@@ -15,6 +15,7 @@ urlpatterns = [
     path("suppliers/new/", views.entity_create, {"entity": "suppliers"}, name="supplier_create"),
     path("items/", views.entity_list, {"entity": "items"}, name="items"),
     path("items/new/", views.entity_create, {"entity": "items"}, name="item_create"),
+    path("items/quick/", views.item_quick_create, name="item_quick_create"),
     path("cashboxes/", views.entity_list, {"entity": "cashboxes"}, name="cashboxes"),
     path("locations/", views.entity_list, {"entity": "locations"}, name="locations"),
     path("categories/", views.entity_list, {"entity": "categories"}, name="categories"),

@@ -73,3 +73,19 @@ def short_label(field, lang):
     if pair is None:
         return field.label
     return pair[1] if lang == "en" else pair[0]
+
+
+@register.inclusion_tag("operations/_quick_item.html", takes_context=True)
+def quick_item_dialog(context, party):
+    """FB-QUICKADD: "+ new item" beside the invoice lines, for whoever may add items."""
+
+    from master_data.models import Category
+    from permissions.services import user_has_permission
+
+    request = context.get("request")
+    user = getattr(request, "user", None)
+    lang = context.get("lang", "ar")
+    if not user_has_permission(user, "master_data.manage_items"):
+        return {"show": False}
+    return {"show": True, "lang": lang, "party": party, "can_cost": user_has_permission(user, "inventory.view_cost"),
+            "categories": Category.objects.filter(active=True).order_by("name_ar")}
