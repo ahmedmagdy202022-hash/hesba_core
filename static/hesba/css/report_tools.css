@@ -1,4 +1,5 @@
 /* FB-REPORTS: the print / Excel toolbar on reading screens, and the printed page. */
+.hs-report-tools[hidden]{display:none}
 .hs-report-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 14px}
 .hs-report-tools__hint{flex:1 1 220px}
 .hs-print-head{display:none}
