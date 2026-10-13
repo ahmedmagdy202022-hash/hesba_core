@@ -1429,6 +1429,33 @@ Status: IMPLEMENTED for review. New tables only; no protected logic changed. Imp
 - **Tests:**
   - `fixed_assets/tests_own_types.py`: a new type is kept, shown and offered again; junk falls back to "other".
   - `master_data/tests_quick_types.py`: both category endpoints, reuse instead of duplicates, and 403 for a cashier.
+## HG-049 — Roles of the owner's own (RESOLVED)
+
+- **Status:** RESOLVED. Built on `claude/fb-roles-screen`.
+- **Why:** Ahmed's demo notes on 13 Oct 2026:
+  - "إدارة الادوار بتفتح صفحة قديمة": the roles screen's button opened Django Admin;
+  - "امكانيه إضافة أدوار": adding roles from the new-user screen.
+- **What changed in the permission core:**
+  - `Role.code` is no longer limited to the `RoleCode` choices (migration `permissions/0011_role_code_custom`). The column is unchanged on SQLite and Postgres; only the model's validation is.
+  - The built-in roles keep their codes. A role the owner makes gets `custom_<n>`, with `is_system_role=False`.
+  - `user_has_permission` is unchanged: it still reads the role's own permission rows.
+- **Rules (`permissions/role_services.py`):**
+  - Only holders of `permissions.manage_roles` (the owner) make or edit roles.
+  - A custom role can never contain `permissions.manage_roles`. A role made there cannot make roles itself.
+  - Whoever saves a role must hold every permission in it, so no one hands out what they don't have.
+  - Built-in roles are never edited (404 on their edit screen; the service refuses). Every screen and test is set up on them; for something in between, the owner copies the closest one.
+  - A custom role still held by an active user cannot be switched off.
+  - Every create or edit is in the audit log with the permissions before and after.
+- **Screens:**
+  - `/settings/roles/` lists every role with what it can do. For the owner, every role except support has "copy to a new role"; custom roles also have "edit". There are no Django Admin links any more.
+  - `/settings/roles/new/` (optionally `?from=<role>`) and `/settings/roles/<pk>/`: name, description, and a checkbox per permission, grouped by section and named in words.
+  - The new-user form has "+ New role" next to the role field.
+- **Tests:** `permissions/tests_custom_roles.py`
+  - a copied cashier with stock receiving works through `user_has_permission`;
+  - every guard: name, empty, locked permission, unknown permission, not the owner, built-in role, beyond the actor, role in use;
+  - the audit log entries;
+  - the screens: copy, save, refused save keeps the input, 404 and 403.
+  - The updated ADMIN-001 test in `settings_core/tests_ui.py` checks that no roles link goes to Django Admin.
 
 ## Final gate verification
 

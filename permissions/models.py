@@ -54,7 +54,8 @@ class Permission(models.Model):
 
 
 class Role(models.Model):
-    code = models.CharField(max_length=40, choices=RoleCode.choices, unique=True)
+    # FB-ROLES (HG-049): the seeded roles use RoleCode; an owner's own roles are "custom_<n>", so the code is not limited to the choices.
+    code = models.CharField(max_length=40, unique=True)
     name_ar = models.CharField(max_length=255)
     name_en = models.CharField(max_length=255, blank=True)
     description = models.TextField(blank=True)
