@@ -89,6 +89,19 @@ class SandboxesTests(SimpleTestCase):
         self.assertTrue(fresh.exists())
 
 
+    def test_a_copy_that_vanishes_while_pruning_is_skipped(self):
+        # Two visitors starting at the same moment: the other's half copy is renamed (or an old
+        # copy removed) between listing the folder and reading its time. That is not an error.
+        from unittest import mock
+
+        kept = Path(self.boxes.create())
+        gone = [self.boxes.root / "gone.partial", self.boxes.root / "gone.sqlite3"]
+        listing = list(self.boxes.root.iterdir()) + gone
+        with mock.patch.object(Path, "iterdir", return_value=iter(listing)):
+            self.assertEqual(self.boxes.prune(), 0)
+        self.assertTrue(self.boxes.exists(kept.name))
+
+
 class FreshTemplateTests(SimpleTestCase):
     def setUp(self):
         folder = tempfile.TemporaryDirectory()
@@ -132,6 +145,18 @@ class NewCopyLimitTests(SimpleTestCase):
         request = RequestFactory().get("/", HTTP_X_FORWARDED_FOR="9.9.9.9, 41.1.2.3", REMOTE_ADDR="10.0.0.1")
         self.assertEqual(client_address(request), "41.1.2.3")
         self.assertEqual(client_address(RequestFactory().get("/", REMOTE_ADDR="10.0.0.1")), "10.0.0.1")
+
+    def test_cloudflare_names_the_visitor_not_renders_proxy(self):
+        from django.test import RequestFactory
+
+        # Render: Cloudflare's header is the visitor; X-Forwarded-For ends with the proxy, shared by all.
+        first = RequestFactory().get("/", HTTP_CF_CONNECTING_IP="41.33.1.1", HTTP_X_FORWARDED_FOR="41.33.1.1, 10.200.0.7")
+        second = RequestFactory().get("/", HTTP_CF_CONNECTING_IP="197.45.2.2", HTTP_X_FORWARDED_FOR="197.45.2.2, 10.200.0.7")
+        self.assertEqual(client_address(first), "41.33.1.1")
+        self.assertEqual(client_address(second), "197.45.2.2")
+        limit = _NewCopyLimit(limit=1, window=3600)
+        self.assertTrue(limit.allow(client_address(first), now=1000))
+        self.assertTrue(limit.allow(client_address(second), now=1000))
 
 
 class SwitchTests(TestCase):

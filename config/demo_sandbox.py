@@ -93,10 +93,16 @@ class Sandboxes:
         now = now or time.time()
         copies = []
         for entry in self.root.iterdir():
-            if entry.suffix == ".partial" and now - entry.stat().st_mtime > 3600:
+            # Another visitor's copy can appear (a half copy renamed) or go (pruned) while we look:
+            # a file that is gone is simply not counted.
+            try:
+                mtime = entry.stat().st_mtime
+            except FileNotFoundError:
+                continue
+            if entry.suffix == ".partial" and now - mtime > 3600:
                 entry.unlink(missing_ok=True)
             elif entry.suffix == ".sqlite3":
-                copies.append((entry.stat().st_mtime, entry))
+                copies.append((mtime, entry))
         copies.sort()
         stale = [entry for mtime, entry in copies if now - mtime > self.ttl]
         fresh = [entry for mtime, entry in copies if now - mtime <= self.ttl]
@@ -156,8 +162,16 @@ class _NewCopyLimit:
 
 
 def client_address(request):
-    """The visitor's address; behind Render's proxy the last X-Forwarded-For hop is the real one."""
+    """The visitor's address.
 
+    Render serves through Cloudflare, which names the visitor in CF-Connecting-IP (and sets it
+    itself, whatever the browser sent). Render's own proxy only appends to X-Forwarded-For, so
+    its last hop can be the proxy, the same for every visitor; there the limit on new copies
+    would be shared by everyone at once. Without Cloudflare's header the last hop is kept."""
+
+    cloudflare = request.META.get("HTTP_CF_CONNECTING_IP", "").strip()
+    if cloudflare:
+        return cloudflare
     forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
     if forwarded:
         return forwarded.split(",")[-1].strip()
