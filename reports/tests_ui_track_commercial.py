@@ -301,3 +301,40 @@ class ReturnTableQueryTests(TestCase):
             return len(queries)
 
         self.assertEqual(counted(2), counted(6))
+
+    def test_saving_checks_each_row_without_a_query_per_row(self):
+        prepared_client()
+        owner = person(RoleCode.OWNER, "rq_saver")
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        from config.return_table import return_table
+        from hesba_testing.factories import make_draft_purchase_invoice, recalculate_purchase_totals
+        from purchases.forms import PurchaseReturnTableFormSet
+
+        def invoice_with(lines):
+            invoice = make_draft_purchase_invoice(invoice_number=f"PI-RS-{lines}")
+            for n in range(lines):
+                add_purchase_line(invoice, make_item(item_code=f"RS-{lines}-{n}", item_name=f"صنف {n}"), quantity=1, unit_purchase_price="5.00")
+            recalculate_purchase_totals(invoice)
+            post_purchase_invoice(invoice.pk, owner)
+            return invoice
+
+        def checked(invoice, ids):
+            data = {"lines-TOTAL_FORMS": str(len(ids)), "lines-INITIAL_FORMS": "0", "lines-MIN_NUM_FORMS": "0", "lines-MAX_NUM_FORMS": "500"}
+            for n, pk in enumerate(ids):
+                data[f"lines-{n}-source_line"] = pk
+                data[f"lines-{n}-quantity"] = "1"
+            formset = return_table(PurchaseReturnTableFormSet, invoice, data, "ar", "purchase_return")
+            with CaptureQueriesContext(connection) as queries:
+                valid = formset.is_valid()
+            return valid, len(queries), formset
+
+        small, large = invoice_with(2), invoice_with(6)
+        ids = lambda invoice: [line.pk for line in invoice.lines.order_by("line_number")]
+        few, many = checked(small, ids(small)), checked(large, ids(large))
+        self.assertTrue(few[0] and many[0])
+        self.assertEqual((few[1], many[1]), (0, 0))
+        valid, _, formset = checked(large, [ids(small)[0]] + ids(large)[1:])  # a line of another invoice is refused
+        self.assertFalse(valid)
+        self.assertIn("source_line", formset.forms[0].errors)

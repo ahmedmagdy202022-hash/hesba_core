@@ -8,7 +8,30 @@ are not part of the return. The return services still check every quantity.
 
 from decimal import Decimal
 
+from django import forms
+from django.core.exceptions import ValidationError
 from django.db.models import Sum
+
+
+class InvoiceLineField(forms.Field):
+    """Codex #233: a row's hidden line id, checked against the invoice lines already loaded, so saving asks no query per row."""
+
+    default_error_messages = {"invalid_choice": forms.ModelChoiceField.default_error_messages["invalid_choice"]}
+
+    def __init__(self, by_id, **kwargs):
+        self.by_id = by_id
+        super().__init__(required=False, widget=forms.HiddenInput, **kwargs)
+
+    def prepare_value(self, value):
+        return getattr(value, "pk", value)
+
+    def to_python(self, value):
+        if value in self.empty_values:
+            return None
+        line = self.by_id.get(int(value)) if str(value).isdigit() else None
+        if line is None:
+            raise ValidationError(self.error_messages["invalid_choice"], code="invalid_choice")
+        return line
 
 
 def return_table(formset_class, invoice, data, lang, document_field):
@@ -32,6 +55,7 @@ def return_table(formset_class, invoice, data, lang, document_field):
         .values("source_line").annotate(q=Sum("quantity")).values_list("source_line", "q")
     )
     for index, form in enumerate(formset.forms):
+        form.fields["source_line"] = InvoiceLineField(by_id, label=form.fields["source_line"].label)
         line = lines[index] if index < len(lines) else None
         if data is not None:  # posted: the row says which line it is
             raw = form.data.get(form.add_prefix("source_line"), "")
