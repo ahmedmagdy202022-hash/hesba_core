@@ -274,6 +274,12 @@ class ShopDemoDataTests(TestCase):
 
         # Codex #233: the default unit is stored language-neutral ("unit") and read in the screen's language.
         self.assertEqual(set(Item.objects.filter(item_code__startswith=group.code).values_list("unit", flat=True)), {"unit"})
+        # Codex #233: no one-language marker in the documents' notes; a seeded document reads like any other.
+        from purchases.models import PurchaseInvoice, SupplierPayment
+        from sales.models import CustomerPayment, SalesInvoice
+
+        for model in (SalesInvoice, PurchaseInvoice, CustomerPayment, SupplierPayment):
+            self.assertFalse(model.objects.filter(notes__in=["بيانات تجريبية", "Demo business seed"]).exists(), model.__name__)
 
     def test_a_demo_made_before_the_fix_drops_the_waiter_when_it_is_refreshed(self):
         from django.contrib.auth import get_user_model
