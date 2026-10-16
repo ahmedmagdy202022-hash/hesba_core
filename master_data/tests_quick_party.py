@@ -22,7 +22,9 @@ class QuickPartyTests(TestCase):
         self.client.force_login(self.owner)
 
     def url(self, kind):
-        return reverse("master_data:quick_record", kwargs={"kind": kind})
+        from master_data.quick import URL_NAMES
+
+        return reverse(URL_NAMES[kind])
 
     def test_the_invoice_lists_offer_a_new_one(self):
         purchase = self.client.get(reverse("purchases:create")).content.decode()
@@ -31,7 +33,8 @@ class QuickPartyTests(TestCase):
         self.assertIn(self.url("supplier"), purchase)
         sale = self.client.get(reverse("sales:create")).content.decode()
         self.assertIn('data-quick-add="+ عميل جديد…"', sale)
-        self.assertIn(self.url("location"), sale)
+        self.assertIn(self.url("location") + "?use=selling", sale)
+        self.assertIn(self.url("location") + "?use=receiving", purchase)
 
     def test_each_kind_is_made_with_its_automatic_code_and_handed_back(self):
         supplier = self.client.post(self.url("supplier"), {"name": "مصنع النور"}).json()
@@ -53,9 +56,30 @@ class QuickPartyTests(TestCase):
         self.assertTrue(Supplier.objects.get(pk=first).active)  # brought back, not doubled
         self.assertEqual(Supplier.objects.filter(name="مصنع النور").count(), 1)
 
+    def test_a_same_name_warehouse_is_made_usable_where_it_was_picked(self):
+        # Codex #230: a receiving-only warehouse reused from a sales invoice would fail on save.
+        place = Location.objects.create(location_code="WH-RCV", name_ar="مخزن الاستلام", is_receiving_location=True, is_selling_location=False)
+        answer = self.client.post(self.url("location") + "?use=selling", {"name": "مخزن الاستلام"}).json()
+        self.assertEqual(answer["id"], place.pk)
+        place.refresh_from_db()
+        self.assertTrue(place.is_selling_location and place.is_receiving_location)
+        from sales.forms import SalesDraftForm
+
+        self.assertIn(place, SalesDraftForm().fields["selling_location"].queryset)
+
+    def test_a_switched_off_module_closes_its_quick_add_too(self):
+        # Codex #230: the module gate must cover the endpoint, not only hide the choice.
+        from settings_core.models import ClientProfile
+        from settings_core.setup_services import set_module_enabled
+
+        set_module_enabled(ClientProfile.get_active(), "suppliers", False, user=self.owner)
+        response = self.client.post(self.url("supplier"), {"name": "مورد ممنوع"})
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(Supplier.objects.filter(name="مورد ممنوع").exists())
+        self.assertNotIn(self.url("supplier"), self.client.get(reverse("purchases:create")).content.decode())
+
     def test_no_name_unknown_kind_and_get_are_refused(self):
         self.assertEqual(self.client.post(self.url("supplier"), {"name": "  "}).status_code, 400)
-        self.assertEqual(self.client.post(self.url("cashbox"), {"name": "x"}).status_code, 404)
         self.assertEqual(self.client.get(self.url("supplier")).status_code, 405)
 
     def test_only_who_may_add_one_is_offered_it_or_can_make_it(self):

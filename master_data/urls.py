@@ -20,7 +20,10 @@ urlpatterns = [
     path("locations/", views.entity_list, {"entity": "locations"}, name="locations"),
     path("categories/", views.entity_list, {"entity": "categories"}, name="categories"),
     path("categories/quick/", views.category_quick_create, name="category_quick_create"),
-    path("quick/<str:kind>/", quick.quick_record, name="quick_record"),  # FB2-QUICKPARTY
+    # FB2-QUICKPARTY: "+ new …" inside an invoice, each under its own (module-gated) section.
+    path("suppliers/quick/", quick.quick_record, {"kind": "supplier"}, name="supplier_quick"),
+    path("customers/quick/", quick.quick_record, {"kind": "customer"}, name="customer_quick"),
+    path("locations/quick/", quick.quick_record, {"kind": "location"}, name="location_quick"),
 
     path("<str:entity>/", views.entity_list, name="list"),
     path("<str:entity>/new/", views.entity_create, name="create"),
