@@ -41,6 +41,8 @@ WORDS = {
         "generated": "تم توليد باركود لعدد {count} صنف.",
         "none_missing": "كل الأصناف ليها باركود بالفعل.",
         "missing_count": "{count} صنف من غير باركود.",
+        "from_purchase": "أصناف فاتورة الشراء {number}، وعدد كل ملصق قد الكمية اللي اتستلمت. غيّر العدد لو عايز، واختار الشكل واطبع.",
+        "all_items": "كل الأصناف",
         "empty": "مفيش أصناف مطابقة.",
         "nothing_selected": "اختار صنف واحد على الأقل وحط عدد الملصقات.",
         "back": "رجوع",
@@ -79,6 +81,8 @@ WORDS = {
         "generated": "Generated barcodes for {count} items.",
         "none_missing": "Every item already has a barcode.",
         "missing_count": "{count} items have no barcode.",
+        "from_purchase": "The items of purchase invoice {number}, one label per unit received. Change the counts if you like, pick a design and print.",
+        "all_items": "All items",
         "empty": "No matching items.",
         "nothing_selected": "Pick at least one item and a number of labels.",
         "back": "Back",
@@ -126,12 +130,39 @@ def _context(request, **extra):
 
 
 @require_permission("barcode.print_labels")
+def _purchase_copies(request):
+    """FB2-LABELS: ?purchase=<id> → (invoice, {item id: labels}), one label per unit received (whole units, at most MAX_LABELS)."""
+
+    import math
+
+    from entities import scope as entity_scope
+    from purchases.models import PurchaseInvoice
+
+    raw = request.GET.get("purchase", "")
+    if not raw.isdigit() or not user_has_permission(request.user, "purchases.view_purchase_invoices"):
+        return None, {}
+    invoice = entity_scope.scope(PurchaseInvoice.objects.prefetch_related("lines"), entity_scope.PURCHASE_INVOICE).filter(pk=int(raw)).first()
+    if invoice is None:
+        return None, {}
+    copies = {}
+    for line in invoice.lines.all():
+        copies[line.item_id] = copies.get(line.item_id, 0) + line.quantity
+    return invoice, {item: max(1, min(math.ceil(quantity), MAX_LABELS)) for item, quantity in copies.items()}
+
+
 def labels(request):
     query = request.GET.get("q", "").strip()
+    purchase, copies = _purchase_copies(request)
     items = Item.objects.filter(active=True)
+    if purchase is not None:
+        items = items.filter(pk__in=copies)
     if query:
         items = items.filter(Q(item_code__icontains=query) | Q(barcode__icontains=query) | Q(item_name__icontains=query))
     page = Paginator(items, 50).get_page(request.GET.get("page"))
+    if copies:
+        page.object_list = list(page.object_list)
+        for item in page.object_list:
+            item.copies = copies.get(item.pk, 0)
     return render(
         request,
         "barcode/labels.html",
@@ -145,6 +176,8 @@ def labels(request):
             templates=[(key, label, json.dumps(spec(key)["defaults"])) for key, label in label_choices(_lang(request))],
             can_design=user_has_permission(request.user, "master_data.manage_items"),
             selected_template=request.GET.get("template", ""),
+            purchase=purchase,
+            purchase_text=WORDS[_lang(request)]["from_purchase"].format(number=purchase.invoice_number) if purchase else "",
         ),
     )
 
