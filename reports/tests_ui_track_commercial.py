@@ -275,6 +275,24 @@ class ShopDemoDataTests(TestCase):
         # Codex #233: the default unit is stored language-neutral ("unit") and read in the screen's language.
         self.assertEqual(set(Item.objects.filter(item_code__startswith=group.code).values_list("unit", flat=True)), {"unit"})
 
+    def test_a_demo_made_before_the_fix_drops_the_waiter_when_it_is_refreshed(self):
+        from django.contrib.auth import get_user_model
+        from django.core.management import call_command
+
+        from settings_core import setup_catalog as catalog
+        from settings_core.models import ClientProfile
+        from settings_core.setup_services import complete_setup
+
+        call_command("bootstrap_client", display_name="تجربة", client_code="DEMO", password="Demo-pass-1", verbosity=0)
+        complete_setup(ClientProfile.get_active(), "commercial", "fashion", ",".join(catalog.default_modules("commercial")))
+        call_command("seed_demo_users", password="Demo-pass-1", force=True, verbosity=0)
+        self.assertTrue(get_user_model().objects.filter(username="waiter").exists())  # as an older demo has it
+        call_command("prepare_demo", verbosity=0)
+        users = set(get_user_model().objects.filter(is_active=True).values_list("username", flat=True))
+        self.assertNotIn("waiter", users)
+        self.assertNotIn("engineer", users)
+        self.assertIn("cashier", users)
+
 
 class UnitWordTests(TestCase):
     """Codex #233: the default unit is stored as "unit", so every screen that shows an item's unit reads it through unit_label."""

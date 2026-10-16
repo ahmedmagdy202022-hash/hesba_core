@@ -33,6 +33,9 @@ class Command(BaseCommand):
 
         if ClientProfile.get_active() is not None:
             call_command("seed_demo_business", username="owner", force=True, verbosity=0)
+            from settings_core.setup_services import usable_modules
+
+            self._fit_users(set(usable_modules()))  # Codex #233: a demo made before F26 loses its waiter too
             self.stdout.write("Demo data already present; today's trade topped up.")
             return
         password = settings.DEMO_PASSWORD
