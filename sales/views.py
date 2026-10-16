@@ -169,7 +169,9 @@ def invoice_create(request):
                 form.add_error(None, exc)
             else:
                 # R2-6: "save and post" in one press; UI-TRACK F23: one message, "posted", unless posting failed.
-                if request.POST.get("then") != "post" or not _post_now(request, invoice.pk, lang):
+                if request.POST.get("then") == "post":
+                    _post_now(request, invoice.pk, lang, saved_first=True)
+                else:
                     messages.success(request, STRINGS[lang]["saved"])
                 return redirect(f"/sales/{invoice.pk}/?lang={lang}")
     else:
@@ -225,13 +227,15 @@ def _einvoice_problems(invoice, lang):
         return None
 
 
-def _post_now(request, pk, lang):
+def _post_now(request, pk, lang, saved_first=False):
     try:
         with transaction.atomic():
             check_invoice_serials(entity_scope.get_or_404(SalesInvoice, entity_scope.SALES_INVOICE, pk=pk), lang)  # SERIAL-001: still in stock?
             post_sales_invoice(pk, request.user)
     except ValidationError as exc:
-        messages.error(request, "; ".join(exc.messages))
+        # Codex #233: one message either way; after "save and post" it also says the draft was kept.
+        reason = "; ".join(exc.messages)
+        messages.error(request, f"{STRINGS[lang]['saved']}; {reason}" if saved_first else reason)  # "; " so each part is still translated (ui_messages)
         return False
     messages.success(request, STRINGS[lang]["posted"])
     return True

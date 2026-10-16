@@ -123,6 +123,25 @@ class ShopScreensTests(TestCase):
         again = self.page("purchases:return_create", invoice.pk)
         self.assertIn("<strong>2</strong>", again)  # 3 bought, 1 back: 2 left on that line
 
+    def test_a_failed_save_and_post_says_saved_and_why_in_one_message(self):
+        # Codex #233: one message, not "saved" and the reason separately.
+        from unittest import mock
+
+        from django.core.exceptions import ValidationError
+
+        from purchases import views
+
+        location, item, supplier = make_location(), make_item(), make_supplier()
+        with mock.patch.object(views, "post_purchase_invoice", side_effect=ValidationError("Purchase invoice must have at least one line before posting.")):
+            response = self.client.post(reverse("purchases:create") + "?lang=ar", {
+                "lang": "ar", "then": "post", "invoice_number": "", "invoice_date": today(), "supplier": supplier.pk,
+                "receiving_location": location.pk, "discount_amount": "0", "tax_amount": "0", "paid_now": "0",
+                "lines-TOTAL_FORMS": "1", "lines-INITIAL_FORMS": "0", "lines-0-item": item.pk, "lines-0-quantity": "1", "lines-0-unit_purchase_price": "5"})
+        notes = [str(m) for m in get_messages(response.wsgi_request)]
+        self.assertEqual(len(notes), 1)
+        self.assertTrue(notes[0].startswith("تم حفظ مسودة فاتورة الشراء.; "))
+        self.assertEqual(PurchaseInvoice.objects.get(supplier=supplier).status, "draft")
+
     def test_a_sales_return_with_nothing_typed_says_so(self):
         invoice, item, location, cashbox = posted_invoice_ready()
         post_sales_invoice(invoice.pk, self.owner)

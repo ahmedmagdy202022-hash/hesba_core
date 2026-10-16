@@ -322,3 +322,19 @@ class OfflineSyncTests(_Group):
         self.client.force_login(cashier)
         self.assertEqual(self.sync("main")["status"], "refused")
         self.assertEqual(self.sync("branch")["status"], "posted")
+
+
+class OpenShiftsScopeTests(_Group):
+    """Codex #233: "shifts open now" lists only the shifts on the chosen entity's cashboxes."""
+
+    def test_the_owner_in_the_branch_sees_only_the_branch_shift(self):
+        from shifts.services import open_shift
+
+        for key in ("main", "branch"):
+            open_shift(person(RoleCode.CASHIER, f"till_{key}"), self.side[key]["cashbox"], D("100"))
+        self.as_owner(self.branch)
+        page = self.client.get(reverse("shifts:mine") + "?lang=ar").content.decode()
+        table = page[page.index("data-shifts-open-now"):]
+        table = table[:table.index("</table>")]
+        self.assertIn("till_branch", table)
+        self.assertNotIn("till_main", table)

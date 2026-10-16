@@ -88,7 +88,9 @@ def my_shift(request):
         history = history.filter(cashier=request.user)
     page = Paginator(history, 25).get_page(request.GET.get("page"))
     # UI-TRACK F21: the dashboard counts every open shift; whoever may see them all sees them here too.
-    open_now = Shift.objects.select_related("cashier", "cashbox").filter(status="open").exclude(pk=getattr(current, "pk", None)) if can_all else Shift.objects.none()
+    # Codex #233: only the shifts on this entity's cashboxes, like the cashbox list above.
+    open_now = (Shift.objects.select_related("cashier", "cashbox").filter(status="open", cashbox__in=entity_scope.cashboxes(Cashbox.objects))
+                .exclude(pk=getattr(current, "pk", None))) if can_all else Shift.objects.none()
     cashboxes = entity_scope.cashboxes(Cashbox.objects).filter(active=True)
     return render(request, "shifts/mine.html", {
         "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": words, "page_title": words["page_title"], "section": "pos",
