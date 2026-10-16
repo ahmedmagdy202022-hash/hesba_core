@@ -352,7 +352,7 @@ class Command(BaseCommand):
             recipe = save_recipe({"product": product, "name": product.item_name, "output_quantity": output},
                                  [(master["raw"][r], q) for r, q in parts], actor)
         return produce(recipe, actor, batches=(quantity / recipe.output_quantity).quantize(D("0.001")), location=master["location"],
-                       run_date=run_date, notes="Demo business seed")
+                       run_date=run_date, notes="بيانات تجريبية")
 
     @staticmethod
     def _line_total(price, quantity):
@@ -467,7 +467,7 @@ class Command(BaseCommand):
             remaining_due=subtotal - paid_now,
             payment_status=self._purchase_payment_status(subtotal, paid_now),
             created_by=actor,
-            notes="Demo business seed",
+            notes="بيانات تجريبية",
         )
         for number_in_invoice, (item, qty) in enumerate(lines, start=1):
             line_total = self._line_total(item.default_purchase_price, qty)
@@ -509,7 +509,7 @@ class Command(BaseCommand):
             payment_status=self._sales_payment_status(subtotal, paid_now),
             salesperson=customer.sales_rep if reps_in_use() else None,  # FEEDBACK-R1
             created_by=actor,
-            notes="Demo business seed",
+            notes="بيانات تجريبية",
         )
         for number_in_invoice, (item, qty) in enumerate(lines, start=1):
             line_total = self._line_total(item.default_sale_price, qty)
@@ -549,7 +549,7 @@ class Command(BaseCommand):
                 cashbox=cashbox,
                 amount=self._scaled(master, amount, daily, "sale"),
                 user=actor,
-                notes="Demo business seed",
+                notes="بيانات تجريبية",
             )
 
         supplier_amount = self._scaled(master, D("2000.00"), STOCKING, "buy")
@@ -561,7 +561,7 @@ class Command(BaseCommand):
                 cashbox=cashbox,
                 amount=supplier_amount,
                 user=actor,
-                notes="Demo business seed",
+                notes="بيانات تجريبية",
             )
 
     # ---- summary ----

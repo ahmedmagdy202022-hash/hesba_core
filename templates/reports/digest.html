@@ -1,7 +1,7 @@
 {% extends "operations/base.html" %}
 {% load hesba_format %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'report_hub' %}?lang={{ lang }}">← {% if lang == 'en' %}Reports{% else %}التقارير{% endif %}</a><h1>{% if lang == 'en' %}Daily summary{% else %}ملخص اليوم{% endif %} · <bdi>{{ day|date:"Y-m-d" }}</bdi></h1></div>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'report_hub' %}?lang={{ lang }}">← {% if lang == 'en' %}Reports{% else %}التقارير{% endif %}</a><h1>{% if lang == 'en' %}Daily summary{% else %}ملخص اليوم{% endif %} · <bdi>{{ day|date:"Y-m-d" }}</bdi>{% if day == today %} <small data-digest-when>({% if lang == 'en' %}today{% else %}النهارده{% endif %})</small>{% elif day == prev_of_today %} <small data-digest-when>({% if lang == 'en' %}yesterday{% else %}امبارح{% endif %})</small>{% endif %}</h1></div>
 <div class="op-form-actions"><a class="op-secondary" href="?lang={{ lang }}&date={{ prev|date:'Y-m-d' }}">‹ {% if lang == 'en' %}Previous day{% else %}اليوم اللي قبله{% endif %}</a>{% if next %}<a class="op-secondary" href="?lang={{ lang }}&date={{ next|date:'Y-m-d' }}">{% if lang == 'en' %}Next day{% else %}اليوم اللي بعده{% endif %} ›</a>{% endif %}<a class="op-primary" href="{{ whatsapp }}" target="_blank" rel="noopener" data-digest-whatsapp>{% if lang == 'en' %}Send on WhatsApp{% else %}ابعته واتساب{% endif %}</a></div></section>
 {% if data.sales %}<h2>{% if lang == 'en' %}Sales{% else %}المبيعات{% endif %}</h2><section class="op-summary-grid" data-digest-sales>
 <article><small>{% if lang == 'en' %}Total{% else %}الإجمالي{% endif %}</small><strong>{{ data.sales.total|money }}</strong></article>

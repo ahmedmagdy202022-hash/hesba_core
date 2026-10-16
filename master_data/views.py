@@ -15,7 +15,7 @@ from cashboxes.services import (
 )
 from entities import scope as entity_scope
 from permissions.services import user_has_permission
-from settings_core.templatetags.hesba_format import money as display_money
+from settings_core.templatetags.hesba_format import money as display_money, unit_label
 
 from .forms import CashboxForm, CategoryForm, CustomerForm, ItemForm, LocationForm, SupplierForm
 from .models import Category, Customer, Item, Location, Supplier
@@ -230,7 +230,7 @@ def _rows(entity, objects, lang, words, can_view_cost):
                 obj.item_code,
                 obj.item_name,
                 _localized_name(obj.category, lang) if obj.category else "—",
-                obj.unit,
+                unit_label(obj.unit, lang),
                 words["stock_item"] if obj.is_stock_tracked else words["service"],
                 display_money(obj.default_sale_price),
             ]
@@ -629,7 +629,7 @@ def item_quick_create(request):
     can_view_cost = user_has_permission(request.user, "inventory.view_cost")
     data = {
         "item_code": "", "barcode": request.POST.get("barcode", ""), "item_name": request.POST.get("item_name", ""),
-        "category": request.POST.get("category", ""), "size": "", "color": "", "unit": request.POST.get("unit", "") or "unit",
+        "category": request.POST.get("category", ""), "size": "", "color": "", "unit": request.POST.get("unit", "") or ("piece" if lang == "en" else "قطعة"),
         "default_sale_price": request.POST.get("default_sale_price", "") or "0",
         "default_purchase_price": request.POST.get("default_purchase_price", "") or "0",
         "min_stock": "0", "is_stock_tracked": "on" if request.POST.get("is_stock_tracked") in ("on", "1", "true") else "", "active": "on",

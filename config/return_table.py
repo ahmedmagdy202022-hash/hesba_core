@@ -1,0 +1,46 @@
+"""UI-TRACK F15: a return starts from the invoice's own lines.
+
+The return screens used to show five empty "source line" lists. Now each line
+of the invoice is a row: the item, how much was sold, how much is already
+back, what is left, and one box for how much comes back now. Rows left empty
+are not part of the return. The return services still check every quantity.
+"""
+
+from decimal import Decimal
+
+from django.db.models import Sum
+
+
+def return_table(formset_class, invoice, data, lang, document_field):
+    """The bound or unbound formset with one row per invoice line, each row carrying its numbers.
+
+    ``document_field`` names the return document on a return line ("sales_return" or "purchase_return").
+    """
+
+    lines = list(invoice.lines.select_related("item").order_by("line_number"))
+    formset = formset_class(
+        data,
+        prefix="lines",
+        form_kwargs={"invoice": invoice, "lang": lang},
+        initial=[{"source_line": line.pk} for line in lines],
+    )
+    by_id = {line.pk: line for line in lines}
+    for index, form in enumerate(formset.forms):
+        line = lines[index] if index < len(lines) else None
+        if data is not None:  # posted: the row says which line it is
+            raw = form.data.get(form.add_prefix("source_line"), "")
+            line = by_id.get(int(raw)) if str(raw).isdigit() else line
+        form.line = line
+        if line is None:
+            continue
+        back = line.return_lines.filter(**{f"{document_field}__status": "posted"}).aggregate(q=Sum("quantity"))["q"] or Decimal("0")
+        form.returned = back
+        form.left = line.quantity - back
+        form.fields["quantity"].widget.attrs.update({"inputmode": "decimal", "min": "0", "max": f"{form.left}", "step": "any", "placeholder": "0"})
+    return formset
+
+
+def chosen_lines(formset):
+    """The rows that return something, as the services expect them."""
+
+    return [row.cleaned_data for row in formset.forms if row.cleaned_data.get("source_line") and row.cleaned_data.get("quantity")]

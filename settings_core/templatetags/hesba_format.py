@@ -153,6 +153,36 @@ def unit_cost(value):
     return f"{whole}.{fraction}"
 
 
+@register.filter
+def unit_label(value, lang="ar"):
+    """An item's unit as the reader says it (UI-TRACK F01).
+
+    Item.unit defaults to "unit" in the database; an Arabic screen shows that
+    default as "قطعة" rather than an English word. Any unit the client typed
+    is shown exactly as typed.
+    """
+
+    text = (value or "").strip()
+    if text.casefold() in ("", "unit") and lang != "en":
+        return "قطعة"
+    return text or "unit"
+
+
+@register.filter
+def one_language(value, lang="ar"):
+    """The reader's half of a stored "عربي / English" name (UI-TRACK F04).
+
+    Periods are named in both languages at once ("أكتوبر 2026 / October 2026");
+    each screen shows only the half in its own language.
+    """
+
+    text = str(value or "")
+    if " / " not in text:
+        return text
+    arabic, english = text.split(" / ", 1)
+    return english.strip() if lang == "en" else arabic.strip()
+
+
 @register.simple_tag
 def currency_code():
     """This installation's currency code, or "" before bootstrap."""

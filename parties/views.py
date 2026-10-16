@@ -14,6 +14,7 @@ from reports.aging import whatsapp_number
 from settings_core.templatetags.hesba_format import money as display_money
 
 from .services import KINDS, card, statement
+from reports.navigation import display_name
 
 
 PERMISSION = {"customer": "reports.view_customer_report", "supplier": "reports.view_supplier_report"}
@@ -118,5 +119,5 @@ def party_statement_print(request, kind, pk):
     data, date_from, date_to = _statement_context(request, kind, party)
     return render(request, "parties/statement_print.html", {
         "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": WORDS[lang], "kind": kind, "party": party, "code": getattr(party, f"{kind}_code"),
-        "data": data, "date_from": date_from, "date_to": date_to, "company": company_details(), "printed_by": request.user.get_username(),
+        "data": data, "date_from": date_from, "date_to": date_to, "company": company_details(), "printed_by": display_name(request.user),
     })

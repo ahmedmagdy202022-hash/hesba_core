@@ -5,6 +5,7 @@ from django.forms import BaseFormSet, formset_factory
 from django.utils import timezone
 
 from cashboxes.models import Cashbox
+from config.form_defaults import ZeroWhenBlank, preselect
 from config.numbering import AutoNumbered
 from master_data.models import Customer, Item, Location
 from staff.models import Employee
@@ -51,8 +52,9 @@ SALES_LABELS = {
 }
 
 
-class SalesDraftForm(AutoNumbered, forms.Form):
+class SalesDraftForm(ZeroWhenBlank, AutoNumbered, forms.Form):
     auto_number = ("invoice_number", SalesInvoice, "invoice_number", "SI-")  # AUTONUM
+    zero_when_blank = ("discount_amount", "tax_amount", "paid_now")  # UI-TRACK F14: normally 0, so not starred
     invoice_number = forms.CharField(max_length=80)
     invoice_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
     customer = forms.ModelChoiceField(queryset=Customer.objects.none())
@@ -88,6 +90,7 @@ class SalesDraftForm(AutoNumbered, forms.Form):
         self.fields["cashbox"].queryset = entity_scope.cashboxes(Cashbox.objects).filter(active=True)
         if not self.is_bound:
             self.initial.setdefault("invoice_date", timezone.localdate())
+        preselect(self, "selling_location", "cashbox")  # UI-TRACK F13
         self.offer_auto_number(lang)
 
     def clean_invoice_number(self):
@@ -185,6 +188,7 @@ class CustomerPaymentForm(AutoNumbered, forms.Form):
         self.fields["cashbox"].queryset = entity_scope.cashboxes(Cashbox.objects).filter(active=True)
         if not self.is_bound:
             self.initial.setdefault("payment_date", timezone.localdate())
+        preselect(self, "cashbox")  # UI-TRACK F13
         self.offer_auto_number(lang)
 
     def clean_payment_number(self):
@@ -265,6 +269,23 @@ SalesReturnLineFormSet = formset_factory(
     max_num=20,
     validate_max=True,
 )
+
+
+class SalesReturnTableBase(BaseFormSet):
+    """UI-TRACK F15: one row per invoice line; a row without a quantity is simply not returned."""
+
+    def clean(self):
+        super().clean()
+        if any(self.errors):
+            return
+        for form in self.forms:
+            if form.cleaned_data.get("quantity") and not form.cleaned_data.get("source_line"):
+                form.add_error("source_line", "Source line is required.")
+        if not any(form.cleaned_data.get("quantity") for form in self.forms):
+            raise forms.ValidationError("Add at least one sales return line.")
+
+
+SalesReturnTableFormSet = formset_factory(SalesReturnLineForm, formset=SalesReturnTableBase, extra=0, max_num=500, validate_max=True)
 
 
 class SalesReturnReversalForm(forms.Form):

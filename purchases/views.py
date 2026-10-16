@@ -1,7 +1,6 @@
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
-from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 
@@ -15,12 +14,13 @@ from units.services import convert_lines, units_catalog
 from permissions.decorators import require_permission
 from entities import scope as entity_scope
 from permissions.services import user_has_permission
+from config.return_table import chosen_lines, return_table
 
 from .forms import (
     PurchaseDraftForm,
     PurchaseLineFormSet,
     PurchaseReturnForm,
-    PurchaseReturnLineFormSet,
+    PurchaseReturnTableFormSet,
     PurchaseReturnReversalForm,
     SupplierPaymentForm,
 )
@@ -177,16 +177,19 @@ def invoice_create(request):
             try:
                 line_data = convert_lines(line_data, "unit_purchase_price", lang)  # UNITS-001
                 line_data = prepare_purchase_serials(line_data, lang)  # SERIAL-001
-                with transaction.atomic():
+                def create():
                     invoice = create_purchase_draft_with_tax(form.cleaned_data, line_data, request.user)
                     attach_purchase_batches(invoice, line_data, request.user)  # BATCH-001
                     attach_purchase_serials(invoice, line_data, request.user)
+                    return invoice
+
+                invoice = form.create_with_fresh_number(create)  # UI-TRACK F12: atomic, retried on a taken PI- number
             except ValidationError as exc:
                 form.add_error(None, exc)
             else:
-                messages.success(request, STRINGS[lang]["saved"])
-                if request.POST.get("then") == "post":  # R2-6: "save and post" in one press
-                    _post_now(request, invoice.pk, lang)
+                # R2-6: "save and post" in one press; UI-TRACK F23: one message, "posted", unless posting failed.
+                if request.POST.get("then") != "post" or not _post_now(request, invoice.pk, lang):
+                    messages.success(request, STRINGS[lang]["saved"])
                 return redirect(f"/purchases/{invoice.pk}/?lang={lang}")
     else:
         form = PurchaseDraftForm(lang=lang, initial=_party_initial(request, "supplier"))
@@ -232,12 +235,15 @@ def invoice_post(request, pk):
 
 
 def _post_now(request, pk, lang):
+    """Post the invoice; say so, or say why not. True when it posted."""
+
     try:
         post_purchase_invoice(pk, request.user)
     except ValidationError as exc:
         messages.error(request, "; ".join(exc.messages))
-    else:
-        messages.success(request, STRINGS[lang]["posted"])
+        return False
+    messages.success(request, STRINGS[lang]["posted"])
+    return True
 
 
 @require_permission("purchases.return_purchase")
@@ -263,22 +269,17 @@ def return_create(request, pk):
     )
     lang = _lang(request)
     form = PurchaseReturnForm(request.POST or None, lang=lang)
-    line_formset = PurchaseReturnLineFormSet(
-        request.POST or None,
-        prefix="lines",
-        form_kwargs={"invoice": invoice, "lang": lang},
-    )
+    # UI-TRACK F15: one row per line of the invoice, not five empty pickers.
+    line_formset = return_table(PurchaseReturnTableFormSet, invoice, request.POST or None, lang, "purchase_return")
     if request.method == "POST" and form.is_valid() and line_formset.is_valid():
-        line_data = [
-            row.cleaned_data for row in line_formset.forms if row.cleaned_data.get("source_line")
-        ]
+        line_data = chosen_lines(line_formset)
         try:
-            purchase_return = create_purchase_return(
+            purchase_return = form.create_with_fresh_number(lambda: create_purchase_return(  # UI-TRACK F09
                 source_invoice_id=invoice.pk,
                 lines=line_data,
                 user=request.user,
                 **form.cleaned_data,
-            )
+            ))
         except ValidationError as exc:
             form.add_error(None, exc)
         else:
@@ -369,7 +370,7 @@ def payment_create(request):
         form = SupplierPaymentForm(request.POST, lang=lang)
         if form.is_valid():
             try:
-                record_supplier_payment(user=request.user, **form.cleaned_data)
+                form.create_with_fresh_number(lambda: record_supplier_payment(user=request.user, **form.cleaned_data))  # UI-TRACK F08
             except ValidationError as exc:
                 form.add_error(None, exc)
             else:

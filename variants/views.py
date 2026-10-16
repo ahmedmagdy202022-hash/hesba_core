@@ -83,7 +83,7 @@ def group_index(request):
                 code=request.POST.get("code", ""), name=request.POST.get("name", ""),
                 sizes=parse_values(request.POST.get("sizes")), colors=parse_values(request.POST.get("colors")),
                 sale_price=_price(request.POST.get("sale_price"), words, True), purchase_price=_price(request.POST.get("purchase_price"), words, True),
-                unit=request.POST.get("unit") or "unit", category=category, barcodes=request.POST.get("barcodes") == "1", user=request.user,
+                unit=request.POST.get("unit") or ("piece" if lang == "en" else "قطعة"), category=category, barcodes=request.POST.get("barcodes") == "1", user=request.user,
             )
         except ValidationError as exc:
             messages.error(request, " ".join(exc.messages))

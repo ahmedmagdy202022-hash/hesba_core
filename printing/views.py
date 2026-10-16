@@ -17,6 +17,7 @@ from settings_core.display_labels import choice_label
 
 from .amount_words import amount_in_words
 from .company import FIELDS, MAX_LOGO_BYTES, company_details, save_company_details
+from reports.navigation import display_name
 
 
 WORDS = {
@@ -189,7 +190,7 @@ def _render(request, doc, back_url, public=False):
             "back_url": f"/sales/pos/?lang={lang}" if request.GET.get("next") == "pos" else f"{back_url}?lang={lang}",
             "return_after_print": request.GET.get("next") == "pos" and request.GET.get("autoprint") == "1",
             "page_title": f"{doc['title']} {doc['number']}",
-            "printed_by": getattr(request.user, "get_full_name", lambda: "")() or request.user.get_username(),
+            "printed_by": display_name(request.user) if request.user.is_authenticated else "",
             "public": public,
         },
     )

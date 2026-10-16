@@ -269,10 +269,16 @@ class CashboxForm(AutoNumbered, _EntityField, HesbaModelForm):
             self.fields["currency"].disabled = True
 
 
-class CategoryForm(HesbaModelForm):
+class CategoryForm(AutoNumbered, HesbaModelForm):
+    auto_number = ("category_code", Category, "category_code", "CAT-")  # UI-TRACK F11: like warehouses and items
+
     class Meta:
         model = Category
         fields = ("category_code", "name_ar", "name_en", "parent", "active")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.offer_auto_number(self.lang)
 
     def clean_parent(self):
         parent = self.cleaned_data.get("parent")
@@ -314,6 +320,8 @@ class ItemForm(AutoNumbered, HesbaModelForm):
     def __init__(self, *args, can_view_cost=False, **kwargs):
         super().__init__(*args, **kwargs)
         self.offer_auto_number(self.lang)
+        if not self.instance.pk and "unit" in self.fields and self.initial.get("unit") in (None, "", "unit"):
+            self.initial["unit"] = "piece" if self.lang == "en" else "قطعة"  # UI-TRACK F01: not the English "unit"
         if "category" in self.fields:  # FB-TYPES: a new category without leaving the item
             self.fields["category"].widget.attrs.update({"data-quick-add": "+ New category…" if self.lang == "en" else "+ تصنيف جديد…",
                                                          "data-quick-add-url": "/master-data/categories/quick/"})

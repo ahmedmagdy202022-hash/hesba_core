@@ -16,7 +16,7 @@
    summary and its total was clipped; narrower minimums fit 1366px, and a
    still-narrower screen scrolls the lines instead of cutting them. */
 .inv-lines{border:1px solid var(--op-border);border-radius:var(--hs-radius-md,14px);overflow-x:auto}
-.inv-row{display:grid;grid-template-columns:2rem minmax(9rem,3fr) repeat(var(--inv-cols,3),minmax(4.25rem,1fr)) 5.75rem 2.4rem;gap:8px;align-items:center;padding:8px 10px;min-width:min-content}
+.inv-row{display:grid;grid-template-columns:2rem minmax(9rem,3fr) repeat(var(--inv-cols,3),minmax(5rem,1fr)) 5.75rem 2.4rem;gap:8px;align-items:center;padding:8px 10px;min-width:min-content}
 .inv-lines-head{background:var(--hs-ground);color:var(--op-muted);font-size:13px;font-weight:700}
 .op-lines{display:block}
 .inv-form .op-line{display:block;border:0;border-top:1px solid var(--hs-line);border-radius:0;padding:0}
@@ -57,3 +57,5 @@
   .inv-cell>label{position:static;width:auto;height:auto;clip:auto;font-size:13px}
   .inv-line-total{text-align:start}
 }
+/* UI-TRACK F31: the whole price shows; number spinners took the room of the digits */
+.inv-cell input[type=number]{-moz-appearance:textfield;appearance:textfield;padding-inline:8px;font-variant-numeric:tabular-nums}.inv-cell input[type=number]::-webkit-inner-spin-button,.inv-cell input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}

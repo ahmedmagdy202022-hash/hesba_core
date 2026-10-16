@@ -5,9 +5,11 @@ from django.forms import BaseFormSet, formset_factory
 from django.utils import timezone
 
 from cashboxes.models import Cashbox
+from config.form_defaults import ZeroWhenBlank, preselect
+from config.numbering import AutoNumbered
 from master_data.models import Item, Location, Supplier
 
-from .models import PurchaseLine, PurchaseReturn, SupplierPayment
+from .models import PurchaseInvoice, PurchaseLine, PurchaseReturn, SupplierPayment
 from entities import scope as entity_scope
 
 
@@ -47,7 +49,10 @@ PURCHASE_LABELS = {
 }
 
 
-class PurchaseDraftForm(forms.Form):
+class PurchaseDraftForm(ZeroWhenBlank, AutoNumbered, forms.Form):
+    # UI-TRACK F12: the supplier's own number when there is one, else the next PI- number.
+    auto_number = ("invoice_number", PurchaseInvoice, "invoice_number", "PI-")
+    zero_when_blank = ("discount_amount", "tax_amount", "paid_now")  # UI-TRACK F14
     invoice_number = forms.CharField(max_length=80)
     invoice_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
     supplier = forms.ModelChoiceField(queryset=Supplier.objects.none())
@@ -70,6 +75,17 @@ class PurchaseDraftForm(forms.Form):
         self.fields["cashbox"].queryset = entity_scope.cashboxes(Cashbox.objects).filter(active=True)
         if not self.is_bound:
             self.initial.setdefault("invoice_date", timezone.localdate())
+        self.fields["invoice_number"].help_text = (
+            "The supplier's invoice number, if there is one." if lang == "en" else "رقم فاتورة المورد لو موجود؛ لو مفيش سيبه فاضي."
+        )
+        preselect(self, "receiving_location", "cashbox")  # UI-TRACK F13
+        self.offer_auto_number(lang)
+
+    def clean_invoice_number(self):
+        number = (self.cleaned_data.get("invoice_number") or "").strip()
+        if number and PurchaseInvoice.objects.filter(invoice_number=number).exists():
+            raise forms.ValidationError("A purchase invoice with this number already exists.")
+        return number
 
 
 class PurchaseLineInputForm(forms.Form):
@@ -144,7 +160,8 @@ PurchaseLineFormSet = formset_factory(
 )
 
 
-class SupplierPaymentForm(forms.Form):
+class SupplierPaymentForm(AutoNumbered, forms.Form):
+    auto_number = ("payment_number", SupplierPayment, "payment_number", "SP-")  # UI-TRACK F08: like CP- collections
     payment_number = forms.CharField(max_length=80)
     payment_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
     supplier = forms.ModelChoiceField(queryset=Supplier.objects.none())
@@ -165,15 +182,18 @@ class SupplierPaymentForm(forms.Form):
         self.fields["cashbox"].queryset = entity_scope.cashboxes(Cashbox.objects).filter(active=True)
         if not self.is_bound:
             self.initial.setdefault("payment_date", timezone.localdate())
+        preselect(self, "cashbox")  # UI-TRACK F13
+        self.offer_auto_number(lang)
 
     def clean_payment_number(self):
-        number = self.cleaned_data["payment_number"]
-        if SupplierPayment.objects.filter(payment_number=number).exists():
+        number = (self.cleaned_data["payment_number"] or "").strip()
+        if number and SupplierPayment.objects.filter(payment_number=number).exists():
             raise forms.ValidationError("A supplier payment with this number already exists.")
         return number
 
 
-class PurchaseReturnForm(forms.Form):
+class PurchaseReturnForm(AutoNumbered, forms.Form):
+    auto_number = ("return_number", PurchaseReturn, "return_number", "PR-")  # UI-TRACK F09: like SR- sales returns
     return_number = forms.CharField(max_length=80)
     return_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
     reason = forms.CharField(widget=forms.Textarea(attrs={"rows": 3}))
@@ -189,10 +209,11 @@ class PurchaseReturnForm(forms.Form):
             field.label = self.LABELS[lang][name]
         if not self.is_bound:
             self.initial["return_date"] = timezone.localdate()
+        self.offer_auto_number(lang)
 
     def clean_return_number(self):
-        number = self.cleaned_data["return_number"].strip()
-        if PurchaseReturn.objects.filter(return_number=number).exists():
+        number = (self.cleaned_data["return_number"] or "").strip()
+        if number and PurchaseReturn.objects.filter(return_number=number).exists():
             raise forms.ValidationError("A purchase return with this number already exists.")
         return number
 
@@ -242,6 +263,23 @@ PurchaseReturnLineFormSet = formset_factory(
     max_num=20,
     validate_max=True,
 )
+
+
+class PurchaseReturnTableBase(BaseFormSet):
+    """UI-TRACK F15: one row per invoice line; a row without a quantity is simply not returned."""
+
+    def clean(self):
+        super().clean()
+        if any(self.errors):
+            return
+        for form in self.forms:
+            if form.cleaned_data.get("quantity") and not form.cleaned_data.get("source_line"):
+                form.add_error("source_line", "Source line is required.")
+        if not any(form.cleaned_data.get("quantity") for form in self.forms):
+            raise forms.ValidationError("Add at least one purchase return line.")
+
+
+PurchaseReturnTableFormSet = formset_factory(PurchaseReturnLineForm, formset=PurchaseReturnTableBase, extra=0, max_num=500, validate_max=True)
 
 
 class PurchaseReturnReversalForm(forms.Form):

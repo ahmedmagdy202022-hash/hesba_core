@@ -19,7 +19,7 @@ WORDS = {
         "to": "يتبعت لمين", "no_email": "مفيش إيميل مسجّل — ضيفه من شاشة المستخدمين", "each_sees": "كل واحد بيوصله اللي صلاحياته تسمح بيه بس.",
         "lang": "اللغة", "lang_ar": "العربية", "lang_en": "الإنجليزي", "save": "حفظ", "saved": "اتحفظت إعدادات الإيميل اليومي.", "test": "ابعتلي إيميل تجربة دلوقتي", "tested": "اتبعت إيميل تجربة لـ {email}.",
         "test_failed": "الإيميل ما اتبعتش ({error}). راجع إعدادات السيرفر.", "no_self_email": "حسابك مفيهوش إيميل؛ ضيفه الأول من شاشة المستخدمين.",
-        "not_ready": "إرسال الإيميل لسه مش متفعّل على السيرفر. محتاج إعدادات SMTP (EMAIL_HOST وباقي متغيرات EMAIL_*) — الخطوات في docs/DAILY_EMAIL_SETUP.md.",
+        "not_ready": "إرسال الإيميل لسه مش متفعّل على السيرفر ده. اختياراتك هتتحفظ، والإرسال هيبدأ أول ما الدعم يفعّله.",
         "last": "آخر إرسال", "never": "لسه", "next": "الإرسال الجاي", "off": "الإيميل اليومي متوقف (مفيش ميعاد مختار).", "view_only": "التعديل لمدير النظام بس.",
     },
     "en": {
@@ -29,7 +29,7 @@ WORDS = {
         "to": "Send to", "no_email": "No email on file — add it from the users screen", "each_sees": "Each person only gets what their permissions allow.",
         "lang": "Language", "lang_ar": "Arabic", "lang_en": "English", "save": "Save", "saved": "Daily email settings saved.", "test": "Send me a test email now", "tested": "A test email was sent to {email}.",
         "test_failed": "The email was not sent ({error}). Check the server settings.", "no_self_email": "Your account has no email; add it from the users screen first.",
-        "not_ready": "Sending email is not set up on the server yet. It needs SMTP settings (EMAIL_HOST and the other EMAIL_* variables) — see docs/DAILY_EMAIL_SETUP.md.",
+        "not_ready": "Sending email is not switched on for this server yet. Your choices are saved, and sending starts as soon as support switches it on.",
         "last": "Last sent", "never": "not yet", "next": "Next send", "off": "The daily email is off (no time chosen).", "view_only": "Only the system manager can change this.",
     },
 }
