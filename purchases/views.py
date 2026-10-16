@@ -6,6 +6,7 @@ from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 
 from barcode.services import item_catalog, scan_words
+from master_data.quick import offer_quick_add
 from settings_core.capabilities import capability_enabled
 from taxes.services import create_purchase_draft_with_tax, rates_by_item, vat_enabled
 from batches.services import attach_purchase_batches
@@ -192,6 +193,7 @@ def invoice_create(request):
         if vat_enabled():
             del form.fields["tax_amount"]
         line_formset = PurchaseLineFormSet(prefix="lines", form_kwargs={"lang": lang}, initial=_reorder_initial(request))
+    offer_quick_add(form, request.user, lang)  # FB2-QUICKPARTY: + new supplier / customer / warehouse
     return render(
         request,
         "purchases/form.html",
