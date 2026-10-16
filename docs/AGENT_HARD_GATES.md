@@ -1457,6 +1457,16 @@ Status: IMPLEMENTED for review. New tables only; no protected logic changed. Imp
   - the screens: copy, save, refused save keeps the input, 404 and 403.
   - The updated ADMIN-001 test in `settings_core/tests_ui.py` checks that no roles link goes to Django Admin.
 
+## HG-051 — Return posting reads prior returns one line at a time (PROPOSED, not built)
+
+- **Status:** PROPOSED, waiting for Main Control. Raised by Codex on PR #233.
+- **What:** `purchases.services._prepare_purchase_return_lines` and `sales.services._prepare_sales_return_lines` run one `aggregate()` per requested line to read what is already returned (quantity and amount of posted returns).
+  - Before UI-TRACK F15 the return form allowed at most 20 rows. Now the return screen lists every line of the invoice (up to 500), so a full return of a large invoice costs one query per line.
+  - The screen itself no longer does this: it reads all prior returns in one grouped query (`config/return_table.py`), and row validation asks no query per row.
+- **Why it is a gate:** both functions sit inside sales and purchase return posting (protected: posting, ledgers). PR #233 does not touch them.
+- **Proposed fix:** before the loop, read the prior totals for all requested source lines in one grouped query (`values("source_line").annotate(quantity=Sum, amount=Sum)` over posted returns), then look each line up in that map. Same checks and the same error messages, same rounding, same allocation.
+- **Tests to add:** the query count for a 2-line and a 6-line return is the same; the existing return tests (cumulative quantity limit, amount allocation, residual on the last unit) stay green unchanged.
+
 ## Final gate verification
 
 - Full Django suite: 794 tests passed in 576.477 seconds.

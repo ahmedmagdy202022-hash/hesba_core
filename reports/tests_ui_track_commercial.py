@@ -275,6 +275,39 @@ class ShopDemoDataTests(TestCase):
         # Codex #233: the default unit is stored language-neutral ("unit") and read in the screen's language.
         self.assertEqual(set(Item.objects.filter(item_code__startswith=group.code).values_list("unit", flat=True)), {"unit"})
 
+    def test_a_demo_made_before_the_fix_drops_the_waiter_when_it_is_refreshed(self):
+        from django.contrib.auth import get_user_model
+        from django.core.management import call_command
+
+        from settings_core import setup_catalog as catalog
+        from settings_core.models import ClientProfile
+        from settings_core.setup_services import complete_setup
+
+        call_command("bootstrap_client", display_name="تجربة", client_code="DEMO", password="Demo-pass-1", verbosity=0)
+        complete_setup(ClientProfile.get_active(), "commercial", "fashion", ",".join(catalog.default_modules("commercial")))
+        call_command("seed_demo_users", password="Demo-pass-1", force=True, verbosity=0)
+        self.assertTrue(get_user_model().objects.filter(username="waiter").exists())  # as an older demo has it
+        call_command("prepare_demo", verbosity=0)
+        users = set(get_user_model().objects.filter(is_active=True).values_list("username", flat=True))
+        self.assertNotIn("waiter", users)
+        self.assertNotIn("engineer", users)
+        self.assertIn("cashier", users)
+
+
+class UnitWordTests(TestCase):
+    """Codex #233: the default unit is stored as "unit", so every screen that shows an item's unit reads it through unit_label."""
+
+    def test_no_template_prints_an_item_unit_raw(self):
+        import re
+        from pathlib import Path
+
+        from django.conf import settings
+
+        raw = re.compile(r"\{\{\s*[\w.]*item\.unit\s*\}\}")
+        found = [f"{path}: {match.group(0)}" for path in Path(settings.BASE_DIR, "templates").rglob("*.html")
+                 for match in raw.finditer(path.read_text(encoding="utf-8"))]
+        self.assertEqual(found, [])
+
 
 class ReturnTableQueryTests(TestCase):
     """Codex #233: the return screen asks for what is already back once, not once per line."""
@@ -301,3 +334,40 @@ class ReturnTableQueryTests(TestCase):
             return len(queries)
 
         self.assertEqual(counted(2), counted(6))
+
+    def test_saving_checks_each_row_without_a_query_per_row(self):
+        prepared_client()
+        owner = person(RoleCode.OWNER, "rq_saver")
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        from config.return_table import return_table
+        from hesba_testing.factories import make_draft_purchase_invoice, recalculate_purchase_totals
+        from purchases.forms import PurchaseReturnTableFormSet
+
+        def invoice_with(lines):
+            invoice = make_draft_purchase_invoice(invoice_number=f"PI-RS-{lines}")
+            for n in range(lines):
+                add_purchase_line(invoice, make_item(item_code=f"RS-{lines}-{n}", item_name=f"صنف {n}"), quantity=1, unit_purchase_price="5.00")
+            recalculate_purchase_totals(invoice)
+            post_purchase_invoice(invoice.pk, owner)
+            return invoice
+
+        def checked(invoice, ids):
+            data = {"lines-TOTAL_FORMS": str(len(ids)), "lines-INITIAL_FORMS": "0", "lines-MIN_NUM_FORMS": "0", "lines-MAX_NUM_FORMS": "500"}
+            for n, pk in enumerate(ids):
+                data[f"lines-{n}-source_line"] = pk
+                data[f"lines-{n}-quantity"] = "1"
+            formset = return_table(PurchaseReturnTableFormSet, invoice, data, "ar", "purchase_return")
+            with CaptureQueriesContext(connection) as queries:
+                valid = formset.is_valid()
+            return valid, len(queries), formset
+
+        small, large = invoice_with(2), invoice_with(6)
+        ids = lambda invoice: [line.pk for line in invoice.lines.order_by("line_number")]
+        few, many = checked(small, ids(small)), checked(large, ids(large))
+        self.assertTrue(few[0] and many[0])
+        self.assertEqual((few[1], many[1]), (0, 0))
+        valid, _, formset = checked(large, [ids(small)[0]] + ids(large)[1:])  # a line of another invoice is refused
+        self.assertFalse(valid)
+        self.assertIn("source_line", formset.forms[0].errors)
