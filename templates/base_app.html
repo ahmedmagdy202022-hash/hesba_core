@@ -19,13 +19,14 @@ not be dropped.
 {% block styles %}{% endblock %}
 <link rel="stylesheet" href="{% static 'hesba/css/table_cards.css' %}">
 <link rel="stylesheet" href="{% static 'hesba/css/form_required.css' %}?v=req-2">
-<link rel="stylesheet" href="{% static 'hesba/css/form_controls.css' %}?v=ctl-4">
+<link rel="stylesheet" href="{% static 'hesba/css/form_controls.css' %}?v=ctl-5">
 <link rel="stylesheet" href="{% static 'hesba/css/datepicker.css' %}?v=date-3">
 {% if report_tools %}<link rel="stylesheet" href="{% static 'hesba/css/report_tools.css' %}?v=fb-reports-2">{% endif %}
 </head>
 <body class="{% block body_class %}{% endblock %}" data-lang="{{ lang|default:'ar' }}">
 {% block content %}{% endblock %}
 <script src="{% static 'hesba/js/quick_option.js' %}?v=fb-types" defer></script>
+<script src="{% static 'hesba/js/price_markup.js' %}?v=fb2-price" defer></script>
 {% if report_tools %}{% include "partials/report_tools.html" %}<script src="{% static 'hesba/js/report_tools.js' %}?v=fb-reports" defer></script>{% endif %}
 
 <script>
