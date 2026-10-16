@@ -3,6 +3,7 @@ from django import forms
 from cashboxes.models import Cashbox, OpeningBalanceTarget
 from cashboxes.services import target_has_operational_use
 from config.numbering import AutoNumbered
+from settings_core.templatetags.hesba_format import DEFAULT_UNITS
 from settings_core.models import ClientProfile
 
 from .models import Category, Customer, Item, Location, Supplier
@@ -320,10 +321,16 @@ class ItemForm(AutoNumbered, HesbaModelForm):
     def __init__(self, *args, can_view_cost=False, **kwargs):
         super().__init__(*args, **kwargs)
         self.offer_auto_number(self.lang)
-        if not self.instance.pk and "unit" in self.fields and self.initial.get("unit") in (None, "", "unit"):
+        if "unit" in self.fields and str(self.initial.get("unit") or "").strip().casefold() in DEFAULT_UNITS:
             self.initial["unit"] = "piece" if self.lang == "en" else "قطعة"  # UI-TRACK F01: not the English "unit"
         if "category" in self.fields:  # FB-TYPES: a new category without leaving the item
             self.fields["category"].widget.attrs.update({"data-quick-add": "+ New category…" if self.lang == "en" else "+ تصنيف جديد…",
                                                          "data-quick-add-url": "/master-data/categories/quick/"})
         if not can_view_cost:
             self.fields.pop("default_purchase_price", None)
+
+    def clean_unit(self):
+        """Codex #233: the default unit is stored once, language-neutral; screens show it in their language."""
+
+        unit = (self.cleaned_data.get("unit") or "").strip()
+        return "unit" if unit.casefold() in DEFAULT_UNITS else unit

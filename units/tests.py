@@ -78,7 +78,7 @@ class ConversionTests(UnitsSetup):
         sale = units_catalog()[str(self.juice.pk)]
         self.assertEqual([(row["name_ar"], row["factor"], row["price"]) for row in sale], [("كرتونة", "12.000", "100.00"), ("علبة", "24.000", "216.00")])
         self.assertEqual(units_catalog(purchase=True)[str(self.juice.pk)][0]["price"], "84.00")
-        self.assertEqual(split_quantity(self.juice, D("62"), "en"), f"2 Box + 1 Carton + 2 {self.juice.unit}")
+        self.assertEqual(split_quantity(self.juice, D("62"), "en"), "2 Box + 1 Carton + 2 piece")  # the default unit reads in the screen language (Codex #233)
         set_capability_enabled(self.profile, "units", False)
         self.assertIsNone(units_catalog())
 

@@ -629,7 +629,7 @@ def item_quick_create(request):
     can_view_cost = user_has_permission(request.user, "inventory.view_cost")
     data = {
         "item_code": "", "barcode": request.POST.get("barcode", ""), "item_name": request.POST.get("item_name", ""),
-        "category": request.POST.get("category", ""), "size": "", "color": "", "unit": request.POST.get("unit", "") or ("piece" if lang == "en" else "قطعة"),
+        "category": request.POST.get("category", ""), "size": "", "color": "", "unit": request.POST.get("unit", "") or "unit",
         "default_sale_price": request.POST.get("default_sale_price", "") or "0",
         "default_purchase_price": request.POST.get("default_purchase_price", "") or "0",
         "min_stock": "0", "is_stock_tracked": "on" if request.POST.get("is_stock_tracked") in ("on", "1", "true") else "", "active": "on",

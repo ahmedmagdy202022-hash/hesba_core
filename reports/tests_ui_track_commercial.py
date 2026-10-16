@@ -61,7 +61,14 @@ class ShopScreensTests(TestCase):
         location = make_location()
         stock_in(old, location, 3)
         rendered = Template("{% load hesba_format %}{{ u|unit_label:'ar' }}|{{ u|unit_label:'en' }}|{{ v|unit_label:'ar' }}").render(Context({"u": "unit", "v": "جوز"}))
-        self.assertEqual(rendered, "قطعة|unit|جوز")
+        self.assertEqual(rendered, "قطعة|piece|جوز")
+        both = Template("{% load hesba_format %}{{ a|unit_label:'en' }}|{{ b|unit_label:'ar' }}").render(Context({"a": "قطعة", "b": "piece"}))
+        self.assertEqual(both, "piece|قطعة")  # whichever language typed the default, each screen reads its own word
+        self.client.post(reverse("master_data:create", args=["items"]), {"lang": "ar", "item_code": "", "item_name": "شراب", "unit": "قطعة",
+                                                                         "default_sale_price": "10", "default_purchase_price": "5", "min_stock": "0", "is_stock_tracked": "on", "active": "on"})
+        from master_data.models import Item
+
+        self.assertEqual(Item.objects.get(item_name="شراب").unit, "unit")
         self.assertNotIn(">unit<", self.page("inventory:stocktake"))
 
     # F02, F23
@@ -260,10 +267,10 @@ class ShopDemoDataTests(TestCase):
         self.assertIn("cashier", users)
         group = VariantGroup.objects.get()
         self.assertNotIn("تجريبي", group.name)
-        self.assertFalse(group.items.filter(unit="unit").exists() if hasattr(group, "items") else False)
         first_day = timezone.localdate() - timezone.timedelta(days=29)
         for cashbox in Cashbox.objects.exclude(opening_balance=0):
             self.assertLess(timezone.localdate(cashbox.created_at), first_day)
         from master_data.models import Item
 
-        self.assertFalse(Item.objects.filter(item_code__startswith=group.code, unit="unit").exists())
+        # Codex #233: the default unit is stored language-neutral ("unit") and read in the screen's language.
+        self.assertEqual(set(Item.objects.filter(item_code__startswith=group.code).values_list("unit", flat=True)), {"unit"})

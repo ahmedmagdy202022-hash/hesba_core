@@ -153,19 +153,23 @@ def unit_cost(value):
     return f"{whole}.{fraction}"
 
 
+#: Item.unit's default as stored ("unit") and as either language writes it; all mean one piece.
+DEFAULT_UNITS = ("", "unit", "piece", "قطعة")
+
+
 @register.filter
 def unit_label(value, lang="ar"):
     """An item's unit as the reader says it (UI-TRACK F01).
 
-    Item.unit defaults to "unit" in the database; an Arabic screen shows that
-    default as "قطعة" rather than an English word. Any unit the client typed
-    is shown exactly as typed.
+    Item.unit defaults to "unit" in the database. That default (or "piece" /
+    "قطعة", which forms store back as "unit") reads "قطعة" on an Arabic screen
+    and "piece" on an English one. Any other unit is shown exactly as typed.
     """
 
     text = (value or "").strip()
-    if text.casefold() in ("", "unit") and lang != "en":
-        return "قطعة"
-    return text or "unit"
+    if text.casefold() in DEFAULT_UNITS:  # Codex #233: one stored default, shown in the reader's language
+        return "piece" if lang == "en" else "قطعة"
+    return text
 
 
 @register.filter

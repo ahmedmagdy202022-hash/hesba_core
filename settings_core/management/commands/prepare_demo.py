@@ -252,7 +252,7 @@ class Command(BaseCommand):
 
     #: sub-activity -> (code, name, sizes, colours, unit) of the one demo model
     VARIANT_MODELS = {
-        "": ("TSHIRT", "تيشيرت قطن بياقة", ["S", "M", "L"], ["أسود", "كحلي"], "قطعة"),
+        "": ("TSHIRT", "تيشيرت قطن بياقة", ["S", "M", "L"], ["أسود", "كحلي"], "unit"),
         "cafe": ("LATTE", "لاتيه", ["صغير", "وسط", "كبير"], ["سخن", "ساقع"], "كوباية"),
     }
 

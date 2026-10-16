@@ -83,13 +83,13 @@ def my_shift(request):
         return redirect(f"{reverse('shifts:mine')}?lang={lang}")
     live = summary(current, timezone.now()) if current else None
     can_all = user_has_permission(request.user, "cashboxes.view_finance")
-    history = Shift.objects.select_related("cashier", "cashbox").filter(status="closed")
+    history = Shift.objects.select_related("cashier__hesba_profile", "cashbox").filter(status="closed")
     if not can_all:
         history = history.filter(cashier=request.user)
     page = Paginator(history, 25).get_page(request.GET.get("page"))
     # UI-TRACK F21: the dashboard counts every open shift; whoever may see them all sees them here too.
     # Codex #233: only the shifts on this entity's cashboxes, like the cashbox list above.
-    open_now = (Shift.objects.select_related("cashier", "cashbox").filter(status="open", cashbox__in=entity_scope.cashboxes(Cashbox.objects))
+    open_now = (Shift.objects.select_related("cashier__hesba_profile", "cashbox").filter(status="open", cashbox__in=entity_scope.cashboxes(Cashbox.objects))
                 .exclude(pk=getattr(current, "pk", None))) if can_all else Shift.objects.none()
     cashboxes = entity_scope.cashboxes(Cashbox.objects).filter(active=True)
     return render(request, "shifts/mine.html", {
