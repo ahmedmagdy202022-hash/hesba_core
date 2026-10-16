@@ -6,6 +6,7 @@ from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 
 from barcode.services import item_catalog, scan_words
+from settings_core.capabilities import capability_enabled
 from taxes.services import create_purchase_draft_with_tax, rates_by_item, vat_enabled
 from batches.services import attach_purchase_batches
 from serials.services import attach_purchase_serials, prepare_purchase_serials
@@ -212,6 +213,8 @@ def invoice_detail(request, pk):
             invoice=invoice,
             can_post=user_has_permission(request.user, "purchases.create_purchase_invoice"),
             can_return=user_has_permission(request.user, "purchases.return_purchase"),
+            # FB2-LABELS: goods just received usually need their price labels.
+            can_labels=capability_enabled("barcode") and user_has_permission(request.user, "barcode.print_labels"),
         ),
     )
 

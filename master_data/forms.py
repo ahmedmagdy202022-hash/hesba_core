@@ -10,7 +10,7 @@ from .models import Category, Customer, Item, Location, Supplier
 
 LABELS = {
     "ar": {
-        "location_code": "كود الموقع / المخزن",
+        "location_code": "كود المخزن",
         "entity": "الكيان / الفرع",
         "name_ar": "الاسم بالعربية",
         "name_en": "الاسم بالإنجليزية",
@@ -47,7 +47,7 @@ LABELS = {
         "is_stock_tracked": "يتابع كمخزون",
     },
     "en": {
-        "location_code": "Location code",
+        "location_code": "Warehouse code",
         "entity": "Entity / branch",
         "name_ar": "Arabic name",
         "name_en": "English name",
@@ -86,6 +86,22 @@ LABELS = {
 }
 
 
+#: FB2-LOC: what each tick box means, shown under it (a bare "Default" or "Selling enabled" says too little).
+HELP = {
+    "ar": {
+        "is_default": "ده اللي بيتختار لوحده في الفواتير والحركات الجديدة.",
+        "is_receiving_location": "ينفع تستلم فيه بضاعة المشتريات والتحويلات.",
+        "is_selling_location": "ينفع تبيع منه وتخصم من رصيده في فواتير البيع.",
+        "active": "لو شلت العلامة بيختفي من الاختيارات، وحركاته القديمة بتفضل زي ما هي.",
+    },
+    "en": {
+        "is_default": "Picked by itself on new invoices and movements.",
+        "is_receiving_location": "Purchases and transfers can be received into it.",
+        "is_selling_location": "Sales invoices can sell from it and take from its stock.",
+        "active": "Untick to hide it from the choices; its past movements stay as they are.",
+    },
+}
+
 class HesbaModelForm(forms.ModelForm):
     def __init__(self, *args, lang="ar", **kwargs):
         super().__init__(*args, **kwargs)
@@ -94,8 +110,11 @@ class HesbaModelForm(forms.ModelForm):
         for name, field in self.fields.items():
             if name in words:
                 field.label = words[name]
-            if isinstance(field.widget, forms.Textarea):
-                field.widget.attrs.setdefault("rows", 3)
+            if name in HELP[self.lang] and not field.help_text:
+                field.help_text = HELP[self.lang][name]
+            # Django gives every Textarea rows=10, so setdefault never took: a 270px box for an address.
+            if isinstance(field.widget, forms.Textarea) and str(field.widget.attrs.get("rows", "10")) == "10":
+                field.widget.attrs["rows"] = 3
             if not isinstance(field.widget, (forms.CheckboxInput, forms.Select)):
                 field.widget.attrs.setdefault("autocomplete", "off")
 
@@ -128,7 +147,9 @@ class _EntityField:
         return self.cleaned_data.get("entity") or current_entity()
 
 
-class LocationForm(_EntityField, HesbaModelForm):
+class LocationForm(AutoNumbered, _EntityField, HesbaModelForm):
+    auto_number = ("location_code", Location, "location_code", "WH-")  # FB2-LOC: like suppliers and items
+
     class Meta:
         model = Location
         fields = (
@@ -146,6 +167,7 @@ class LocationForm(_EntityField, HesbaModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._entity_field()
+        self.offer_auto_number(self.lang)
 
 
 class SupplierForm(AutoNumbered, HesbaModelForm):

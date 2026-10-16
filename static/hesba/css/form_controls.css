@@ -20,3 +20,10 @@ select:not([multiple]):not([size]):disabled{cursor:not-allowed;opacity:.7}
 
 /* FB-TYPES: "+ new …" box under a list */
 .hs-quick-option{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px}.hs-quick-option input{flex:1 1 180px;min-height:44px}
+.hs-quick-option[hidden]{display:none}
+.hs-quick-option button{min-height:44px;padding:0 14px;border:1px solid var(--hs-line-strong);border-radius:10px;background:var(--hs-surface);color:var(--hs-navy);font:inherit;font-weight:700;cursor:pointer}
+/* FB2-PRICE: margin % and rounding beside the purchase price */
+.hs-markup__row{display:flex;gap:8px;align-items:stretch}
+.hs-markup__row input{flex:1 1 90px;min-width:0}
+.hs-markup__row select{flex:1 1 150px;min-width:0}
+.hs-markup small{color:var(--hs-muted);font-size:13px;line-height:1.5}
