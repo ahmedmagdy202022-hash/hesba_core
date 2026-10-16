@@ -3,6 +3,7 @@ from django.db.models import Q
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 
 from master_data.models import Item, Location
 from permissions.decorators import require_any_permission, require_permission
@@ -159,6 +160,17 @@ def item_detail(request, pk):
             }
         )
     movements = entity_scope.scope(item.stock_movements.select_related("location"), entity_scope.STOCK_MOVEMENT)[:100]
+    # UI-TRACK grocery G02: what of this item is on the shelf, batch by batch, soonest expiry first.
+    from batches.services import DEFAULT_WARN_DAYS, batch_positions, batches_enabled, expiry_state
+    from batches.views import WORDS as BATCH_WORDS
+
+    batch_rows = []
+    if batches_enabled():
+        today = timezone.localdate()
+        place_ids = set(locations.values_list("pk", flat=True))
+        for row in batch_positions(items=[item])[0]:
+            if row["remaining"] > 0 and row["batch"].location_id in place_ids:
+                batch_rows.append({**row, "state": expiry_state(row["batch"].expiry_date, today, DEFAULT_WARN_DAYS)})
     return render(
         request,
         "inventory/item_detail.html",
@@ -167,6 +179,8 @@ def item_detail(request, pk):
             item=item,
             location_rows=location_rows,
             movements=movements,
+            batch_rows=batch_rows,
+            batch_words=BATCH_WORDS["en" if _lang(request) == "en" else "ar"],
             can_view_cost=user_has_permission(request.user, "inventory.view_cost"),
         ),
     )

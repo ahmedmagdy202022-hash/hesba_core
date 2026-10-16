@@ -103,6 +103,8 @@ class PurchaseLineInputForm(forms.Form):
         for name, field in self.fields.items():
             field.label = labels[name]
         self.fields["item"].queryset = Item.objects.filter(active=True)
+        # UI-TRACK grocery G05: a narrow line shows the start of the choice; let that be the item's name, not its code.
+        self.fields["item"].label_from_instance = lambda item: f"{item.item_name} · {item.item_code}"
         # UNITS-001: optional bigger unit (carton, box...) when the shop uses units.
         from units.models import ItemUnit
         from units.services import units_enabled

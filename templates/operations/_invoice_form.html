@@ -18,7 +18,7 @@ price_field, list_url, party ("customer" / "supplier"), can_post and tax_rates.
     <div class="op-lines">{% for line_form in line_formset %}{% with extra=line_form|line_extra %}
       <div class="op-line{% if line_form.errors %} has-error{% endif %}">
         <div class="inv-row"><span class="inv-no" data-line-no>{{ forloop.counter }}</span>{% for field in line_form|line_main %}<div class="op-field inv-cell" data-col="{{ field.name }}"><label for="{{ field.id_for_label }}">{% short_label field lang %}</label>{{ field }}{% for error in field.errors %}<div class="op-field-error">{{ error|ui:lang }}</div>{% endfor %}</div>{% endfor %}<output class="inv-line-total" data-line-total>0.00</output><button class="inv-clear" type="button" data-clear-line title="{% if lang == 'en' %}Clear this line{% else %}امسح السطر ده{% endif %}" aria-label="{% if lang == 'en' %}Clear this line{% else %}امسح السطر ده{% endif %}">✕</button></div>
-        {% if extra %}<details class="inv-line-more"{% if extra|has_errors or extra|has_values %} open{% endif %}><summary>+ {% for field in extra %}{{ field.label }}{% if not forloop.last %}، {% endif %}{% endfor %}</summary><div class="inv-head">{% for field in extra %}{% include "operations/_inv_field.html" with wide=False %}{% endfor %}</div></details>{% endif %}
+        {% if extra %}<details class="inv-line-more"{% if extra|has_errors or extra|has_values or extra|must_fill %} open{% endif %}><summary>+ {% for field in extra %}{{ field.label }}{% if not forloop.last %}، {% endif %}{% endfor %}</summary><div class="inv-head">{% for field in extra %}{% include "operations/_inv_field.html" with wide=False %}{% endfor %}</div></details>{% endif %}
       </div>{% endwith %}{% endfor %}</div>
   </div>
   {% endwith %}

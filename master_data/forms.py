@@ -328,6 +328,13 @@ class ItemForm(AutoNumbered, HesbaModelForm):
                                                          "data-quick-add-url": "/master-data/categories/quick/"})
         if not can_view_cost:
             self.fields.pop("default_purchase_price", None)
+        # UI-TRACK grocery G01: size and colour belong to a trade that sells sizes and colours.
+        from settings_core.capabilities import capability_enabled
+
+        if not capability_enabled("variants"):
+            for name in ("size", "color"):
+                if not getattr(self.instance, name, ""):  # a value already typed stays editable
+                    self.fields.pop(name, None)
 
     def clean_unit(self):
         """Codex #233: the default unit is stored once, language-neutral; screens show it in their language."""
