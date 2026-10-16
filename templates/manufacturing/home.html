@@ -22,7 +22,7 @@
 
 <h2>{% if lang == 'en' %}Materials for the open orders{% else %}الخامات المطلوبة للأوامر المفتوحة{% endif %}</h2>
 {% if shortages %}<div class="op-table-wrap"><table class="op-table" data-shortages><thead><tr><th>{{ words.component }}</th><th>{{ words.location }}</th><th>{{ words.need }}</th><th>{{ words.have }}</th><th>{{ words.short }}</th><th>{% if lang == 'en' %}For{% else %}لأوامر{% endif %}</th></tr></thead><tbody>
-{% for row in shortages %}<tr><td>{{ row.item.item_name }}</td><td>{% if lang == 'en' %}{% firstof row.location.name_en row.location.name_ar %}{% else %}{{ row.location.name_ar }}{% endif %}</td><td>{{ row.need|qty }} {{ row.item.unit }}</td><td>{{ row.have|qty }}</td><td><b style="color:var(--hs-danger)">{{ row.missing|qty }}</b></td><td dir="ltr">{{ row.orders|join:", " }}</td></tr>{% endfor %}
+{% for row in shortages %}<tr><td>{{ row.item.item_name }}</td><td>{% if lang == 'en' %}{% firstof row.location.name_en row.location.name_ar %}{% else %}{{ row.location.name_ar }}{% endif %}</td><td>{{ row.need|qty }} {{ row.item.unit|unit_label:lang }}</td><td>{{ row.have|qty }}</td><td><b style="color:var(--hs-danger)">{{ row.missing|qty }}</b></td><td dir="ltr">{{ row.orders|join:", " }}</td></tr>{% endfor %}
 </tbody></table></div><p class="op-muted"><a href="{% url 'purchases:create' %}?lang={{ lang }}">{% if lang == 'en' %}Buy the missing materials{% else %}اشتري الخامات الناقصة{% endif %} ←</a></p>
 {% else %}<p class="op-notice op-message-success">{% if lang == 'en' %}The materials on hand cover every open order.{% else %}الخامات الموجودة مكفية كل الأوامر المفتوحة.{% endif %}</p>{% endif %}
 

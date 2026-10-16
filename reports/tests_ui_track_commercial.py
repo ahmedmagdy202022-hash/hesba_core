@@ -276,6 +276,21 @@ class ShopDemoDataTests(TestCase):
         self.assertEqual(set(Item.objects.filter(item_code__startswith=group.code).values_list("unit", flat=True)), {"unit"})
 
 
+class UnitWordTests(TestCase):
+    """Codex #233: the default unit is stored as "unit", so every screen that shows an item's unit reads it through unit_label."""
+
+    def test_no_template_prints_an_item_unit_raw(self):
+        import re
+        from pathlib import Path
+
+        from django.conf import settings
+
+        raw = re.compile(r"\{\{\s*[\w.]*item\.unit\s*\}\}")
+        found = [f"{path}: {match.group(0)}" for path in Path(settings.BASE_DIR, "templates").rglob("*.html")
+                 for match in raw.finditer(path.read_text(encoding="utf-8"))]
+        self.assertEqual(found, [])
+
+
 class ReturnTableQueryTests(TestCase):
     """Codex #233: the return screen asks for what is already back once, not once per line."""
 
