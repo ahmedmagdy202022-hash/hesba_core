@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import quick, views
 
 
 app_name = "master_data"
@@ -20,6 +20,7 @@ urlpatterns = [
     path("locations/", views.entity_list, {"entity": "locations"}, name="locations"),
     path("categories/", views.entity_list, {"entity": "categories"}, name="categories"),
     path("categories/quick/", views.category_quick_create, name="category_quick_create"),
+    path("quick/<str:kind>/", quick.quick_record, name="quick_record"),  # FB2-QUICKPARTY
 
     path("<str:entity>/", views.entity_list, name="list"),
     path("<str:entity>/new/", views.entity_create, name="create"),
