@@ -99,6 +99,8 @@ def cashbox_list(request):
             query=query,
             can_view_finance=can_view_finance,
             can_move_cash=user_has_permission(request.user, "cashboxes.move_cash"),
+            # FB2-CASHBOX: a new cashbox from the cashboxes page itself (HG-001: managing them is its own permission).
+            can_manage=user_has_permission(request.user, "cashboxes.manage_cashboxes"),
         ),
     )
 
