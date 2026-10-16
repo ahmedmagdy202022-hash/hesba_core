@@ -25,6 +25,12 @@ def return_table(formset_class, invoice, data, lang, document_field):
         initial=[{"source_line": line.pk} for line in lines],
     )
     by_id = {line.pk: line for line in lines}
+    # Codex #233: what is already back, for every line in one query.
+    return_line_model = invoice.lines.model._meta.get_field("return_lines").related_model
+    back_by_line = dict(
+        return_line_model.objects.filter(source_line__in=lines, **{f"{document_field}__status": "posted"})
+        .values("source_line").annotate(q=Sum("quantity")).values_list("source_line", "q")
+    )
     for index, form in enumerate(formset.forms):
         line = lines[index] if index < len(lines) else None
         if data is not None:  # posted: the row says which line it is
@@ -33,7 +39,7 @@ def return_table(formset_class, invoice, data, lang, document_field):
         form.line = line
         if line is None:
             continue
-        back = line.return_lines.filter(**{f"{document_field}__status": "posted"}).aggregate(q=Sum("quantity"))["q"] or Decimal("0")
+        back = back_by_line.get(line.pk) or Decimal("0")
         form.returned = back
         form.left = line.quantity - back
         form.fields["quantity"].widget.attrs.update({"inputmode": "decimal", "min": "0", "max": f"{form.left}", "step": "any", "placeholder": "0"})

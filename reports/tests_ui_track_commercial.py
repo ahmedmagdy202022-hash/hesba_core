@@ -274,3 +274,30 @@ class ShopDemoDataTests(TestCase):
 
         # Codex #233: the default unit is stored language-neutral ("unit") and read in the screen's language.
         self.assertEqual(set(Item.objects.filter(item_code__startswith=group.code).values_list("unit", flat=True)), {"unit"})
+
+
+class ReturnTableQueryTests(TestCase):
+    """Codex #233: the return screen asks for what is already back once, not once per line."""
+
+    def test_the_query_count_does_not_grow_with_the_lines(self):
+        prepared_client()
+        owner = person(RoleCode.OWNER, "rq_owner")
+        self.client.force_login(owner)
+        from hesba_testing.factories import recalculate_purchase_totals
+
+        from hesba_testing.factories import make_draft_purchase_invoice
+
+        def counted(lines):
+            invoice = make_draft_purchase_invoice(invoice_number=f"PI-RQ-{lines}")
+            for n in range(lines):
+                add_purchase_line(invoice, make_item(item_code=f"RQ-{lines}-{n}", item_name=f"صنف {n}"), quantity=1, unit_purchase_price="5.00")
+            recalculate_purchase_totals(invoice)
+            post_purchase_invoice(invoice.pk, owner)
+            from django.db import connection
+            from django.test.utils import CaptureQueriesContext
+
+            with CaptureQueriesContext(connection) as queries:
+                self.assertEqual(self.client.get(reverse("purchases:return_create", args=[invoice.pk])).status_code, 200)
+            return len(queries)
+
+        self.assertEqual(counted(2), counted(6))
