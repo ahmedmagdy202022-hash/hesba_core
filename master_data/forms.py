@@ -236,7 +236,9 @@ class CustomerForm(AutoNumbered, HesbaModelForm):
             self.fields["opening_balance"].disabled = True
 
 
-class CashboxForm(_EntityField, HesbaModelForm):
+class CashboxForm(AutoNumbered, _EntityField, HesbaModelForm):
+    auto_number = ("cashbox_code", Cashbox, "cashbox_code", "CB-")  # FB2-CASHBOX: like suppliers and items
+
     class Meta:
         model = Cashbox
         fields = (
@@ -254,6 +256,7 @@ class CashboxForm(_EntityField, HesbaModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._entity_field()
+        self.offer_auto_number(self.lang)
         if not self.instance.pk:
             # SETTINGS-002: a new cashbox starts in the company currency.
             profile = ClientProfile.get_active()
