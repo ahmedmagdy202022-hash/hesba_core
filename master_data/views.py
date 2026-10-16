@@ -92,7 +92,7 @@ ENTITY_CONFIG = {
         "view_permission": "master_data.view_master_data",
         "manage_permission": "master_data.manage_locations",
         "title": {"ar": "المخازن والمواقع", "en": "Warehouses & locations"},
-        "singular": {"ar": "مخزن / موقع", "en": "Warehouse"},
+        "singular": {"ar": "مخزن", "en": "Warehouse"},
         "search_fields": ("location_code", "name_ar", "name_en", "description"),
         "select_related": (),
     },
