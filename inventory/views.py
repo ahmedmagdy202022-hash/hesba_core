@@ -1,3 +1,5 @@
+from datetime import date
+
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.contrib import messages
@@ -167,9 +169,12 @@ def item_detail(request, pk):
     batch_rows = []
     if batches_enabled():
         today = timezone.localdate()
-        for row in batch_positions(items=[item], locations=locations)[0]:  # Codex #234: this entity's stock only
-            if row["remaining"] > 0:
-                batch_rows.append({**row, "state": expiry_state(row["batch"].expiry_date, today, DEFAULT_WARN_DAYS)})
+        # Codex #234: each warehouse shares out only its own stock among its own batches.
+        for location in locations:
+            for row in batch_positions(items=[item], locations=[location])[0]:
+                if row["remaining"] > 0:
+                    batch_rows.append({**row, "state": expiry_state(row["batch"].expiry_date, today, DEFAULT_WARN_DAYS)})
+        batch_rows.sort(key=lambda row: (row["batch"].expiry_date or date.max, row["batch"].pk))
     return render(
         request,
         "inventory/item_detail.html",

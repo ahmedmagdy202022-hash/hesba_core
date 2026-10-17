@@ -83,6 +83,13 @@ class GroceryScreensTests(TestCase):
         self.assertIn("LOT-HERE", card)
         self.assertIn("<td>4 ", card)  # what is on our shelf, not the branch's 30
 
+    def test_each_warehouse_shares_out_only_its_own_stock(self):
+        back = make_location(location_code="WH-2", name_ar="مخزن خلفي")  # same entity, second warehouse
+        stock_in(self.oil, self.shelf, 12, "50.00", movement_date=TODAY - timedelta(days=6))
+        register_batch(item=self.oil, location=back, batch_no="LOT-BACK", expiry_date=TODAY + timedelta(days=60),
+                       quantity=Decimal("12"), received_on=TODAY - timedelta(days=6), user=self.owner)
+        self.assertNotIn("LOT-BACK", self.page("inventory:item_detail", self.oil.pk))  # the back room holds none of it
+
     # G03
     def test_the_batch_screen_names_the_warehouse(self):
         stock_in(self.oil, self.shelf, 5, "50.00", movement_date=TODAY - timedelta(days=3))
