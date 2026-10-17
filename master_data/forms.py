@@ -2,6 +2,8 @@ from django import forms
 
 from cashboxes.models import Cashbox, OpeningBalanceTarget
 from cashboxes.services import target_has_operational_use
+from config.form_defaults import ZeroWhenBlank
+from config.form_sections import Sectioned
 from config.numbering import AutoNumbered
 from settings_core.templatetags.hesba_format import DEFAULT_UNITS
 from settings_core.models import ClientProfile
@@ -103,7 +105,7 @@ HELP = {
     },
 }
 
-class HesbaModelForm(forms.ModelForm):
+class HesbaModelForm(Sectioned, forms.ModelForm):
     def __init__(self, *args, lang="ar", **kwargs):
         super().__init__(*args, **kwargs)
         self.lang = "en" if lang == "en" else "ar"
@@ -149,6 +151,11 @@ class _EntityField:
 
 
 class LocationForm(AutoNumbered, _EntityField, HesbaModelForm):
+    sections_spec = (
+        ("main", "بيانات المخزن", "The store", "اسم المخزن زي ما بتقوله في الشغل.", "The name you use for it day to day.", ("name_ar", "name_en", "location_code", "entity")),
+        ("more", "وصف", "Description", "", "", ("description",)),
+    )
+
     auto_number = ("location_code", Location, "location_code", "WH-")  # FB2-LOC: like suppliers and items
 
     class Meta:
@@ -171,7 +178,14 @@ class LocationForm(AutoNumbered, _EntityField, HesbaModelForm):
         self.offer_auto_number(self.lang)
 
 
-class SupplierForm(AutoNumbered, HesbaModelForm):
+class SupplierForm(ZeroWhenBlank, AutoNumbered, HesbaModelForm):
+    zero_when_blank = ("opening_balance",)
+    sections_spec = (
+        ("main", "بيانات المورد", "The supplier", "الاسم بس كفاية، والكود بيتعمل لوحده.", "The name is enough; the code is made for you.", ("name", "supplier_code")),
+        ("contact", "التواصل", "Contact", "", "", ("phone", "whatsapp", "email", "address")),
+        ("account", "الحساب", "Account", "لو ليه فلوس عندك من قبل البرنامج اكتبها هنا، وإلا سيبها فاضية.", "Money you already owed before Hesba; leave it empty if none.", ("opening_balance", "notes")),
+    )
+
     auto_number = ("supplier_code", Supplier, "supplier_code", "S-")  # AUTONUM
 
     class Meta:
@@ -197,7 +211,14 @@ class SupplierForm(AutoNumbered, HesbaModelForm):
             self.fields["opening_balance"].disabled = True
 
 
-class CustomerForm(AutoNumbered, HesbaModelForm):
+class CustomerForm(ZeroWhenBlank, AutoNumbered, HesbaModelForm):
+    zero_when_blank = ("opening_balance", "credit_limit")
+    sections_spec = (
+        ("main", "بيانات العميل", "The customer", "الاسم بس كفاية، والكود بيتعمل لوحده.", "The name is enough; the code is made for you.", ("name", "customer_code", "sales_rep")),
+        ("contact", "التواصل", "Contact", "", "", ("phone", "whatsapp", "email", "address")),
+        ("account", "الحساب والآجل", "Account and credit", "سيبها فاضية لو مفيش رصيد قديم ولا حد للآجل.", "Leave empty for no old balance and no credit limit.", ("opening_balance", "credit_limit", "notes")),
+    )
+
     auto_number = ("customer_code", Customer, "customer_code", "C-")  # AUTONUM
 
     class Meta:
@@ -237,7 +258,13 @@ class CustomerForm(AutoNumbered, HesbaModelForm):
             self.fields["opening_balance"].disabled = True
 
 
-class CashboxForm(AutoNumbered, _EntityField, HesbaModelForm):
+class CashboxForm(ZeroWhenBlank, AutoNumbered, _EntityField, HesbaModelForm):
+    zero_when_blank = ("opening_balance",)
+    sections_spec = (
+        ("main", "بيانات الخزنة", "The cashbox", "", "", ("name_ar", "name_en", "cashbox_code", "currency", "entity")),
+        ("money", "الرصيد", "Balance", "الفلوس اللي فيها النهارده قبل أي حركة، أو سيبها فاضية.", "The cash in it today before any movement, or leave it empty.", ("opening_balance", "notes")),
+    )
+
     auto_number = ("cashbox_code", Cashbox, "cashbox_code", "CB-")  # FB2-CASHBOX: like suppliers and items
 
     class Meta:
@@ -271,6 +298,10 @@ class CashboxForm(AutoNumbered, _EntityField, HesbaModelForm):
 
 
 class CategoryForm(AutoNumbered, HesbaModelForm):
+    sections_spec = (
+        ("main", "بيانات التصنيف", "The category", "", "", ("name_ar", "name_en", "category_code", "parent")),
+    )
+
     auto_number = ("category_code", Category, "category_code", "CAT-")  # UI-TRACK F11: like warehouses and items
 
     class Meta:
@@ -298,7 +329,15 @@ class CategoryForm(AutoNumbered, HesbaModelForm):
         return parent
 
 
-class ItemForm(AutoNumbered, HesbaModelForm):
+class ItemForm(ZeroWhenBlank, AutoNumbered, HesbaModelForm):
+    zero_when_blank = ("min_stock",)
+    sections_spec = (
+        ("main", "الصنف", "The item", "الاسم والتصنيف. الكود بيتعمل لوحده، والباركود لو موجود.", "Name and category. The code is made for you; add the barcode if it has one.", ("item_name", "category", "unit", "item_code", "barcode")),
+        ("variant", "المقاس واللون", "Size and colour", "", "", ("size", "color")),
+        ("prices", "الأسعار", "Prices", "سعر الشراء والبيع للوحدة.", "Purchase and sale price per unit.", ("default_purchase_price", "default_sale_price")),
+        ("stock", "المخزون", "Stock", "لو الكمية نزلت عن الحد الأدنى هيظهرلك تنبيه. سيبها فاضية لو مش محتاج.", "You get a warning when stock drops below it. Leave empty if you don't need one.", ("min_stock",)),
+    )
+
     auto_number = ("item_code", Item, "item_code", "IT-")  # AUTONUM
 
     class Meta:

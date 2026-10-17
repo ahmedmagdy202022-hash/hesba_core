@@ -3,7 +3,7 @@ from django.db.models import Q
 from django.shortcuts import redirect, render
 from django.utils.safestring import mark_safe
 
-from master_data.models import Item
+from master_data.models import Item, Location
 from permissions.decorators import require_permission
 from permissions.services import user_has_permission
 
@@ -150,11 +150,33 @@ def _purchase_copies(request):
     return invoice, {item: max(1, min(math.ceil(quantity), MAX_LABELS)) for item, quantity in copies.items()}
 
 
+def _stock_copies(request):
+    """AN3 (Ahmed, inventory report: "محتاج تضيف امكانيه طباعة ملصقات"): ?stock=1[&location=<id>] →
+    {item id: labels}, one label per unit on the shelf (whole units, at most MAX_LABELS)."""
+
+    import math
+
+    from entities import scope as entity_scope
+    from reports.selectors import stock_report
+
+    if request.GET.get("stock") != "1" or not user_has_permission(request.user, "reports.view_inventory_report"):
+        return {}
+    raw = request.GET.get("location", "")
+    location = entity_scope.locations(Location.objects).filter(pk=int(raw), active=True).first() if raw.isdigit() else None
+    copies = {}
+    for row in stock_report(location):
+        if row["quantity"] > 0:
+            copies[row["item_id"]] = copies.get(row["item_id"], 0) + row["quantity"]
+    return {item: max(1, min(math.ceil(quantity), MAX_LABELS)) for item, quantity in copies.items()}
+
+
 def labels(request):
     query = request.GET.get("q", "").strip()
     purchase, copies = _purchase_copies(request)
+    if purchase is None:
+        copies = _stock_copies(request) or copies
     items = Item.objects.filter(active=True)
-    if purchase is not None:
+    if purchase is not None or request.GET.get("stock") == "1":
         items = items.filter(pk__in=copies)
     if query:
         items = items.filter(Q(item_code__icontains=query) | Q(barcode__icontains=query) | Q(item_name__icontains=query))

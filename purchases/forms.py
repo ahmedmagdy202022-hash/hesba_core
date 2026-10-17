@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from cashboxes.models import Cashbox
 from config.form_defaults import ZeroWhenBlank, item_choice_label, preselect
+from config.form_sections import Sectioned
 from config.numbering import AutoNumbered
 from master_data.models import Item, Location, Supplier
 
@@ -162,7 +163,11 @@ PurchaseLineFormSet = formset_factory(
 )
 
 
-class SupplierPaymentForm(AutoNumbered, forms.Form):
+class SupplierPaymentForm(Sectioned, AutoNumbered, forms.Form):
+    sections_spec = (  # AN3
+        ("main", "المورد والمبلغ", "Supplier and amount", "", "", ("supplier", "amount", "cashbox", "payment_date")),
+        ("more", "تفاصيل", "Details", "", "", ("payment_number", "notes")),
+    )
     auto_number = ("payment_number", SupplierPayment, "payment_number", "SP-")  # UI-TRACK F08: like CP- collections
     payment_number = forms.CharField(max_length=80)
     payment_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
@@ -186,6 +191,7 @@ class SupplierPaymentForm(AutoNumbered, forms.Form):
             self.initial.setdefault("payment_date", timezone.localdate())
         preselect(self, "cashbox")  # UI-TRACK F13
         self.offer_auto_number(lang)
+        self.lang = "en" if lang == "en" else "ar"
 
     def clean_payment_number(self):
         number = (self.cleaned_data["payment_number"] or "").strip()

@@ -304,6 +304,11 @@ def _columns(entity, lang, can_view_cost):
     return [labels[key] for key in keys]
 
 
+#: AN3: the master-data cards wear the menu's icons, like the reports hub.
+HUB_LOOK = {"customers": ("customers", "teal"), "suppliers": ("suppliers", "gold"), "items": ("items", "teal"),
+            "categories": ("items", "navy"), "locations": ("warehouses", "navy"), "cashboxes": ("cashboxes", "gold")}
+
+
 def master_data_hub(request):
     lang = _lang(request)
     words = STRINGS[lang]
@@ -321,9 +326,12 @@ def master_data_hub(request):
 
             if not sees_customers(request.user):
                 continue
+        icon, tone = HUB_LOOK.get(key, ("items", "navy"))
         visible.append(
             {
                 "key": key,
+                "icon": icon,
+                "tone": tone,
                 "title": config["title"][lang],
                 "count": _scoped_rows(config).filter(active=True).count(),
                 "can_manage": bool(

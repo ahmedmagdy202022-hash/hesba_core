@@ -175,7 +175,33 @@
     var totalValue = invoiceTotal(sum);
     if (sumTotal) { sumTotal.textContent = money(totalValue); }
     if (sumRemaining) { sumRemaining.textContent = money(Math.max(totalValue - num(header('paid_now')), 0)); }
+    showBalance(totalValue);
   }
+
+  // AN3: the party's balance before this invoice, and where the invoice leaves it.
+  var balanceBox = form.querySelector('[data-party-balance]');
+  var partySelect = form.querySelector('select[name="customer"], select[name="supplier"]');
+  var balanceBefore = null;
+  function showBalance(totalValue) {
+    if (!balanceBox) { return; }
+    if (balanceBefore === null) { balanceBox.hidden = true; return; }
+    var paidNow = num(header('paid_now'));
+    balanceBox.querySelector('[data-balance-before]').textContent = money(balanceBefore);
+    balanceBox.querySelector('[data-balance-invoice]').textContent = money(totalValue);
+    balanceBox.querySelector('[data-balance-paid]').textContent = money(paidNow);
+    balanceBox.querySelector('[data-balance-after]').textContent = money(cents(balanceBefore + totalValue - paidNow));
+    balanceBox.hidden = false;
+  }
+  function loadBalance() {
+    balanceBefore = null;
+    if (!balanceBox || !partySelect || !partySelect.value || !window.fetch) { recalc(); return; }
+    var url = balanceBox.getAttribute('data-url').replace(/\/0\/balance\/$/, '/' + encodeURIComponent(partySelect.value) + '/balance/');
+    fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+      .then(function (response) { return response.ok ? response.json() : null; })
+      .then(function (data) { balanceBefore = data ? parseFloat(data.balance) : null; recalc(); })
+      .catch(function () { balanceBefore = null; recalc(); });
+  }
+  if (partySelect) { partySelect.addEventListener('change', loadBalance); }
 
   form.addEventListener('click', function (event) {
     var clear = event.target.closest('[data-clear-line]');
@@ -327,5 +353,5 @@
   if (addButton) { addButton.addEventListener('click', function () { if (addLine() < 0) { say(words.full || 'No more lines.', true); } }); }
   for (var u = 0; u < count(); u += 1) { fillUnits(u); }
   showList();
-  recalc();
+  loadBalance();
 })();

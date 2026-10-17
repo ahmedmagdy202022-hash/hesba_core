@@ -59,3 +59,8 @@
 }
 /* UI-TRACK F31: the whole price shows; number spinners took the room of the digits */
 .inv-cell input[type=number]{-moz-appearance:textfield;appearance:textfield;padding-inline:8px;font-variant-numeric:tabular-nums}.inv-cell input[type=number]::-webkit-inner-spin-button,.inv-cell input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+/* AN3: the party's account under the totals: balance before, this invoice, paid now, balance after. */
+.inv-balance{margin-top:12px;padding:12px 14px;border:1px dashed var(--hs-line-strong);border-radius:var(--hs-radius-md);background:var(--hs-ground);display:grid;gap:6px}
+.inv-balance h3{margin:0 0 2px;font-size:var(--hs-text-md);color:var(--hs-navy)}
+.inv-balance .inv-sum-row{font-size:var(--hs-text-md)}
+.inv-sum-after{padding-top:6px;border-top:1px solid var(--hs-line);font-weight:700;color:var(--hs-navy)}
