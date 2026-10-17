@@ -13,7 +13,10 @@ from permissions.decorators import require_permission
 from permissions.services import user_has_permission
 
 from .models import VariantGroup
+from settings_core.capabilities import capability_enabled
+
 from .services import create_group, extend_group, matrix, parse_values, set_group_prices
+from .standard import color_choices, picked, size_choices
 from config.paging import page_of
 
 
@@ -28,6 +31,8 @@ WORDS = {
         "extend": "إضافة مقاسات أو ألوان", "add": "إضافة", "added": "اتضاف {n} صنف.", "nothing_added": "مفيش حاجة جديدة.",
         "prices": "سعر موحّد لكل الموديل", "apply": "تطبيق", "priced": "اتحدّث سعر {n} صنف.", "back": "الموديلات", "view_only": "تقدر تشوف بس؛ التعديل لمسؤول الأصناف.",
         "bad_price": "السعر لازم رقم مش سالب.", "codes": "أكواد الأصناف", "none": "—", "prev": "السابق", "next": "التالي",
+        "items_n": "{n} صنف", "stock_n": "المخزون {n}", "labels": "اطبع ملصقات الموديل", "extra": "غير اللي فوق؟ اكتبها وافصل بفاصلة",
+        "grid_hint": "كل خانة صنف لوحده بكوده وباركوده؛ دوس عليها تفتح كارت الصنف.", "inactive": "موقوف",
     },
     "en": {
         "page_title": "Sizes & colours", "title": "Sizes & colours",
@@ -39,6 +44,8 @@ WORDS = {
         "extend": "Add sizes or colours", "add": "Add", "added": "{n} items added.", "nothing_added": "Nothing new.",
         "prices": "One price for the whole model", "apply": "Apply", "priced": "{n} item prices updated.", "back": "Models", "view_only": "You can view; editing is for item managers.",
         "bad_price": "Prices must be numbers, not negative.", "codes": "Item codes", "none": "—", "prev": "Previous", "next": "Next",
+        "items_n": "{n} items", "stock_n": "Stock {n}", "labels": "Print the model's labels", "extra": "Others? Type them, comma separated",
+        "grid_hint": "Each box is its own item with its own code and barcode; tap it to open the item card.", "inactive": "inactive",
     },
 }
 
@@ -81,7 +88,7 @@ def group_index(request):
             category = Category.objects.filter(pk=request.POST.get("category") or 0).first()
             group, created = create_group(
                 code=request.POST.get("code", ""), name=request.POST.get("name", ""),
-                sizes=parse_values(request.POST.get("sizes")), colors=parse_values(request.POST.get("colors")),
+                sizes=_values(request.POST, "sizes"), colors=_values(request.POST, "colors"),
                 sale_price=_price(request.POST.get("sale_price"), words, True), purchase_price=_price(request.POST.get("purchase_price"), words, True),
                 unit=_unit(request.POST.get("unit")), category=category, barcodes=request.POST.get("barcodes") == "1", user=request.user,
             )
@@ -95,7 +102,8 @@ def group_index(request):
     if query:
         groups = groups.filter(Q(code__icontains=query) | Q(name__icontains=query))
     page = page_of(request, groups)
-    return render(request, "variants/index.html", _context(request, page=page, q=query, categories=Category.objects.filter(active=True).order_by("category_code")))
+    return render(request, "variants/index.html", _context(request, page=page, q=query, categories=Category.objects.filter(active=True).order_by("category_code"),
+                                                           size_options=[value for value, _ in size_choices()], color_options=[value for value, _ in color_choices(lang)]))
 
 
 @require_permission("master_data.view_master_data")
@@ -111,13 +119,27 @@ def group_detail(request, pk):
                 count = set_group_prices(group, sale_price=_price(request.POST.get("sale_price"), words), purchase_price=_price(request.POST.get("purchase_price"), words), user=request.user)
                 messages.success(request, words["priced"].format(n=count))
             else:
-                created = extend_group(group, sizes=parse_values(request.POST.get("sizes")), colors=parse_values(request.POST.get("colors")),
+                created = extend_group(group, sizes=_values(request.POST, "sizes"), colors=_values(request.POST, "colors"),
                                        barcodes=request.POST.get("barcodes") == "1", user=request.user)
                 messages.success(request, words["added"].format(n=len(created)) if created else words["nothing_added"])
         except ValidationError as exc:
             messages.error(request, " ".join(exc.messages))
         return redirect(f"{reverse('variants:group', args=[group.pk])}?lang={lang}")
-    return render(request, "variants/group.html", _context(request, group=group, grid=matrix(group)))
+    grid = matrix(group)
+    lang_colors = color_choices(lang)
+    return render(request, "variants/group.html", _context(
+        request, group=group, grid=grid, item_count=sum(1 for row in grid["rows"] for cell in row["cells"] if cell),
+        # AN5: the extend form ticks standard values the model does not have yet.
+        size_options=[value for value, _ in size_choices() if value.casefold() not in {v.casefold() for v in group.sizes}],
+        color_options=[value for value, _ in lang_colors if value.casefold() not in {v.casefold() for v in group.colors}],
+        can_labels=capability_enabled("barcode") and user_has_permission(request.user, "barcode.print_labels"),
+    ))
+
+
+def _values(post, kind):
+    """AN5: the values ticked (``<kind>_std``) and typed (``<kind>_extra``), plus the older free-text ``<kind>`` box."""
+
+    return parse_values(",".join([",".join(picked(post, kind)), post.get(kind) or ""]))
 
 
 def _unit(value):

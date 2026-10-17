@@ -1,0 +1,17 @@
+{% load static hesba_labels %}{# AN5: sizes and colours from the new-item form, Amazon/Noon style: tick the standard ones, type your own, see what will be made. #}
+<section class="hs-section hs-variant-pick" data-variant-pick data-words-count="{% if lang == 'en' %}{n} items will be made{% else %}هيتعمل {n} صنف{% endif %}" data-words-one="{% if lang == 'en' %}One item, as usual{% else %}صنف واحد عادي{% endif %}">
+  <header class="hs-section__head"><span class="hs-section__num" aria-hidden="true">+</span><div><h2>{% if lang == 'en' %}Sizes and colours{% else %}المقاسات والألوان{% endif %}</h2><p>{{ form.has_variants.help_text }}</p></div></header>
+  <div class="hs-check hs-variant-pick__toggle">{{ form.has_variants }}<label for="{{ form.has_variants.id_for_label }}"><b>{{ form.has_variants.label }}</b></label>{% for error in form.has_variants.errors %}<div class="md-field-error">{{ error|ui:lang }}</div>{% endfor %}</div>
+  <div class="hs-variant-pick__body" data-variant-body>
+    <fieldset class="hs-variant-pick__group" data-variant-kind="sizes"><legend>{{ form.sizes_std.label }}</legend>
+      <div class="hs-pick-chips">{% for choice in form.sizes_std %}<label class="hs-pick-chip">{{ choice.tag }}<span>{{ choice.choice_label }}</span></label>{% endfor %}</div>
+      <label class="hs-pick-extra"><span>{{ form.sizes_extra.label }}</span>{{ form.sizes_extra }}</label>
+    </fieldset>
+    <fieldset class="hs-variant-pick__group" data-variant-kind="colors"><legend>{{ form.colors_std.label }}</legend>
+      <div class="hs-pick-chips">{% for choice in form.colors_std %}<label class="hs-pick-chip">{{ choice.tag }}<span>{{ choice.choice_label }}</span></label>{% endfor %}</div>
+      <label class="hs-pick-extra"><span>{{ form.colors_extra.label }}</span>{{ form.colors_extra }}</label>
+    </fieldset>
+    <div class="hs-variant-pick__preview" aria-live="polite"><strong data-variant-count></strong><ul data-variant-list></ul></div>
+  </div>
+</section>
+<script src="{% static 'hesba/js/variant_picker.js' %}?v=an5-1" defer></script>

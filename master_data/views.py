@@ -446,6 +446,9 @@ def entity_edit(request, entity, pk):
     return _entity_form(request, entity, config, instance)
 
 
+VARIANTS_MADE = {"ar": "اتعمل {n} صنف، كل مقاس ولون بكوده وباركوده.", "en": "{n} items made, each size and colour with its own code and barcode."}
+
+
 def _entity_form(request, entity, config, instance):
     lang = _lang(request)
     words = STRINGS[lang]
@@ -455,7 +458,15 @@ def _entity_form(request, entity, config, instance):
 
     if request.method == "POST":
         form = config["form"](request.POST, **kwargs)
-        if form.is_valid():
+        if form.is_valid() and getattr(form, "offers_variants", False) and form.cleaned_data.get("has_variants"):
+            try:
+                group, created = form.create_variants(request.user)  # AN5: one item per size and colour
+            except ValidationError as exc:
+                form.add_error(None, exc)
+            else:
+                messages.success(request, VARIANTS_MADE[lang].format(n=len(created)))
+                return redirect(f"{reverse('variants:group', args=[group.pk])}?lang={lang}")
+        elif form.is_valid():
             form.save()
             messages.success(request, words["saved"])
             return redirect(f"{reverse('master_data:list', kwargs={'entity': entity})}?lang={lang}")
