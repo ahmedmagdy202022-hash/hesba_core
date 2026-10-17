@@ -1,4 +1,5 @@
 {% extends "operations/base.html" %}
+{% load hesba_paging %}
 {% block operation_content %}
 <section class="op-title-row"><div><a class="op-back" href="{% url 'einvoice:issuer' %}?lang={{ lang }}">← {{ words.title }}</a><h1>{{ words.customers }}</h1><p>{{ words.customers_hint }}</p></div>{% include "einvoice/_nav.html" %}</section>
 {% if not can_manage %}<p class="op-message op-message-info">{{ words.view_only }}</p>{% endif %}
@@ -11,7 +12,7 @@
 {% else %}<td>{{ p.receiver_type|default:"P" }}</td><td><bdi>{{ p.tax_id|default:"—" }}</bdi></td><td>{{ p.governate|default:"—" }}</td><td>{{ p.region_city|default:"—" }}</td><td>{{ p.street|default:"—" }}</td><td>{{ p.building_number|default:"—" }}</td>{% endif %}</tr>{% endwith %}
 {% empty %}<tr><td colspan="7">—</td></tr>{% endfor %}
 </tbody></table></div>
-{% if page.has_other_pages %}<p class="op-form-actions">{% if page.has_previous %}<a class="op-secondary" href="?lang={{ lang }}&q={{ q|urlencode }}&page={{ page.previous_page_number }}">{{ words.prev }}</a>{% endif %}<span class="op-muted">{{ page.number }} / {{ page.paginator.num_pages }}</span>{% if page.has_next %}<a class="op-secondary" href="?lang={{ lang }}&q={{ q|urlencode }}&page={{ page.next_page_number }}">{{ words.next }}</a>{% endif %}</p>{% endif %}
+{% pager page %}
 {% if can_manage and rows %}<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div>{% endif %}
 </form>
 {% endblock %}

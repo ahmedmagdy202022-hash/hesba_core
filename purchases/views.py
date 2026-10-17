@@ -1,6 +1,5 @@
 from django.contrib import messages
 from django.core.exceptions import ValidationError
-from django.core.paginator import Paginator
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 
@@ -33,6 +32,7 @@ from .services import (
     post_purchase_invoice,
     record_supplier_payment,
 )
+from config.paging import page_of
 
 
 STRINGS = {
@@ -151,7 +151,7 @@ def invoice_list(request):
         queryset = queryset.filter(status=status)
     else:
         status = ""
-    page = Paginator(queryset, 25).get_page(request.GET.get("page"))
+    page = page_of(request, queryset)
     return render(
         request,
         "purchases/list.html",
@@ -349,7 +349,7 @@ def payment_list(request):
     else:
         status = ""
     lang = _lang(request)
-    page = Paginator(queryset, 25).get_page(request.GET.get("page"))
+    page = page_of(request, queryset)
     return render(
         request,
         "payments/list.html",
