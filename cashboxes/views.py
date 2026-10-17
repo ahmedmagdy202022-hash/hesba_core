@@ -1,4 +1,3 @@
-from django.core.paginator import Paginator
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import Q
@@ -13,6 +12,7 @@ from .forms import CashboxOperationForm, CashboxOperationReversalForm
 from .models import Cashbox, CashboxMovement, CashboxOperation
 from .services import cancel_cashbox_operation, create_cashbox_operation
 from entities import scope as entity_scope
+from config.paging import page_of
 
 
 STRINGS = {
@@ -80,7 +80,7 @@ def cashbox_list(request):
             | Q(name_ar__icontains=query)
             | Q(name_en__icontains=query)
         )
-    page = Paginator(queryset, 25).get_page(request.GET.get("page"))
+    page = page_of(request, queryset)
     can_view_finance = user_has_permission(request.user, "cashboxes.view_finance")
     finance_by_id = {}
     if can_view_finance:
@@ -165,7 +165,7 @@ def movement_list(request):
         queryset = queryset.filter(movement_type=movement_type)
     else:
         movement_type = ""
-    page = Paginator(queryset, 50).get_page(request.GET.get("page"))
+    page = page_of(request, queryset)
     return render(
         request,
         "cashboxes/movements.html",
@@ -183,12 +183,12 @@ def movement_list(request):
 
 @require_permission("cashboxes.move_cash")
 def operation_list(request):
-    page = Paginator(
+    page = page_of(
+        request,
         entity_scope.scope(CashboxOperation.objects.select_related(
             "source_cashbox", "destination_cashbox", "created_by", "cancelled_by", "expense"
         ), entity_scope.CASHBOX_OPERATION).distinct(),
-        50,
-    ).get_page(request.GET.get("page"))
+    )
     return render(
         request,
         "cashboxes/operations.html",

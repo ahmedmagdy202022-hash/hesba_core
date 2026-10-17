@@ -53,7 +53,7 @@ class ServiceTests(VariantSetup):
         self.assertTrue(is_ean13(item.barcode))
         self.assertEqual(len({i.barcode for i in created}), 6)
         self.assertEqual(item.variant.group, group)
-        self.assertIn("M - أسود", item.search_label)
+        self.assertIn("M · أسود", item.search_label)
         self.assertTrue(AuditLog.objects.filter(module="variants", action="create_variant_group", object_id=str(group.pk)).exists())
 
     def test_codes_never_collide_and_bad_input_is_refused(self):

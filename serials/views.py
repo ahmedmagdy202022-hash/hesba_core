@@ -4,7 +4,6 @@ from datetime import date
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
@@ -19,6 +18,7 @@ from sales.models import SalesReturnLine
 
 from .models import SerialNumber, SerialSetting
 from .services import available_serials, history, normalize, record_return, register_serials, retire_serial, state_of
+from config.paging import page_of
 
 
 WORDS = {
@@ -104,7 +104,7 @@ def serial_index(request):
     stock = available_serials().select_related("item").order_by("item__item_code", "serial")
     if item_filter.isdigit():
         stock = stock.filter(item_id=item_filter)
-    page = Paginator(stock, 50).get_page(request.GET.get("page"))
+    page = page_of(request, stock)
     tracked_items = Item.objects.filter(serial_setting__tracked=True).order_by("item_code")
     return render(request, "serials/index.html", _context(request, q=request.GET.get("q", ""), found=found, page=page, tracked_items=tracked_items,
                                                           item_filter=item_filter, today=timezone.localdate()))
@@ -154,7 +154,7 @@ def item_settings(request):
     items = Item.objects.filter(active=True).order_by("item_code")
     if query:
         items = items.filter(Q(item_code__icontains=query) | Q(item_name__icontains=query) | Q(barcode=query))
-    page = Paginator(items, 40).get_page(request.GET.get("page") or request.POST.get("page"))
+    page = page_of(request, items)
     if request.method == "POST":
         if not can_manage:
             raise PermissionDenied("Setting serial tracking needs master_data.manage_items.")

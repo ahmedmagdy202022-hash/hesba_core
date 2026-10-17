@@ -3,7 +3,6 @@ from datetime import date
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.core.paginator import Paginator
 from django.db.models import Count, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -16,6 +15,7 @@ from .forms import ExpenseCancelForm, ExpenseCategoryForm, ExpenseForm
 from .models import Expense, ExpenseCategory
 from .services import RECORD_PERMISSION, VIEW_PERMISSION, cancel_expense, record_expense
 from entities import scope as entity_scope
+from config.paging import page_of
 
 
 STRINGS = {
@@ -174,7 +174,7 @@ def expense_list(request):
         .annotate(total=Sum("amount"), count=Count("id"))
         .order_by("-total")
     ]
-    page = Paginator(queryset, 50).get_page(request.GET.get("page"))
+    page = page_of(request, queryset)
     return render(
         request,
         "expenses/list.html",

@@ -1,4 +1,5 @@
 {% extends "operations/base.html" %}
+{% load hesba_paging %}
 {% load hesba_format %}
 {% block operation_content %}
 <section class="op-title-row"><div><h1>{{ words.where_title }}</h1><p>{{ words.where_intro }}</p></div></section>
@@ -13,5 +14,5 @@
   {% else %}<p class="op-muted">{{ words.nowhere }}</p>{% endif %}
 </section>
 {% empty %}<p class="op-empty">{{ words.no_items }}</p>{% endfor %}
-{% if page.paginator.num_pages > 1 %}<nav class="op-pagination">{% if page.has_previous %}<a href="?lang={{ lang }}&q={{ query|urlencode }}&page={{ page.previous_page_number }}">‹</a>{% endif %}<span>{{ page.number }} / {{ page.paginator.num_pages }}</span>{% if page.has_next %}<a href="?lang={{ lang }}&q={{ query|urlencode }}&page={{ page.next_page_number }}">›</a>{% endif %}</nav>{% endif %}
+{% pager page %}
 {% endblock %}

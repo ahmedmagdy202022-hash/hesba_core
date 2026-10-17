@@ -4,7 +4,6 @@ from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -17,6 +16,7 @@ from permissions.services import user_has_permission
 from .models import Shift
 from .services import close_shift, open_shift, open_shift_for, post_difference, summary
 from entities import scope as entity_scope
+from config.paging import page_of
 
 
 WORDS = {
@@ -90,7 +90,7 @@ def my_shift(request):
     history = Shift.objects.select_related("cashier__hesba_profile", "cashbox").filter(status="closed")
     if not can_all:
         history = history.filter(cashier=request.user)
-    page = Paginator(history, 25).get_page(request.GET.get("page"))
+    page = page_of(request, history)
     # UI-TRACK F21: the dashboard counts every open shift; whoever may see them all sees them here too.
     # Codex #233: only the shifts on this entity's cashboxes, like the cashbox list above.
     open_now = (Shift.objects.select_related("cashier__hesba_profile", "cashbox").filter(status="open", cashbox__in=entity_scope.cashboxes(Cashbox.objects))

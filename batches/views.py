@@ -5,7 +5,6 @@ from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -17,6 +16,7 @@ from permissions.services import user_has_permission
 from .models import Batch
 from .services import DEFAULT_WARN_DAYS, batch_positions, expiry_state, register_batch, retire_batch
 from entities import scope as entity_scope
+from config.paging import page_of
 
 
 WARN_CHOICES = (30, 60, 90, 180)
@@ -126,7 +126,7 @@ def batch_index(request):
         if query and query not in f"{batch.item.item_code} {batch.item.item_name} {batch.batch_no} {batch.item.barcode}".lower():
             continue
         shown.append(row)
-    page = Paginator(shown, 50).get_page(request.GET.get("page"))
+    page = page_of(request, shown)
     uncovered_items = [{"item": item, "quantity": uncovered[item.pk]} for item in Item.objects.filter(pk__in=uncovered).order_by("item_code")]
     context = {
         "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": words, "page_title": words["page_title"], "section": "inventory",
