@@ -5,7 +5,7 @@ import re
 from django.test import TestCase
 from django.urls import reverse
 
-from hesba_testing.factories import make_customer, make_draft_sales_invoice, make_location, make_seeded_role, make_user, make_user_profile
+from hesba_testing.factories import make_cashbox, make_customer, make_draft_sales_invoice, make_location, make_seeded_role, make_user, make_user_profile
 from permissions.models import RoleCode
 from reports.tests_dashboard import prepared_client
 
@@ -57,3 +57,11 @@ class PagerTests(TestCase):
         report = self.page("reports:customers", per=10)
         self.assertEqual(rows(report, r"data-party-link>"), 10)  # the filter list above still names everyone
         self.assertIn("1–10 من 15 سطر", report)
+
+    def test_the_cashbox_list_reaches_every_cashbox(self):
+        for n in range(25):
+            make_cashbox(cashbox_code=f"CB-PG-{n:02d}", name_ar=f"خزنة {n:02d}")
+        first = self.page("cashboxes:list")
+        self.assertIn("data-pager", first)
+        self.assertIn("page=2", first)  # Codex #235: the 21st cashbox had no way in
+        self.assertGreaterEqual(rows(self.page("cashboxes:list", page=2), r">CB-PG-\d{2}<"), 5)
