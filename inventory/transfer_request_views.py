@@ -17,7 +17,7 @@ from .models import LocationStockLevel, TransferRequest, TransferRequestStatus
 from .views import _context, _lang
 
 EXTRA_ROWS = 3
-NEW_ROWS = 8
+NEW_ROWS = 8  # 3 shown, the rest behind "+ صنف كمان" (needs [hidden] to win, UI-TRACK F16)
 
 
 def _error(exc, lang):

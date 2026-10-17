@@ -30,6 +30,7 @@ STRINGS = {
         "all_locations": "كل المواقع",
         "all_types": "كل أنواع الحركة",
         "empty": "لا توجد نتائج مطابقة.",
+        "empty_ops": "مفيش تحويلات أو تسويات لسه.",
         "dashboard": "لوحة القيادة",
         "language": "English",
         "back": "العودة للمخزون",
@@ -50,6 +51,7 @@ STRINGS = {
         "all_locations": "All locations",
         "all_types": "All movement types",
         "empty": "No matching results.",
+        "empty_ops": "No transfers or adjustments yet.",
         "dashboard": "Dashboard",
         "language": "العربية",
         "back": "Back to inventory",
@@ -240,7 +242,7 @@ def transfer_create(request):
     form = StockTransferForm(request.POST or None, lang=lang, initial={"source_location": start} if start.isdigit() else None)
     if request.method == "POST" and form.is_valid():
         try:
-            transfer_stock(user=request.user, **form.cleaned_data)
+            form.create_with_fresh_number(lambda: transfer_stock(user=request.user, **form.cleaned_data))  # UI-TRACK F10
         except ValidationError as exc:
             form.add_error(None, exc)
         else:
@@ -262,7 +264,7 @@ def adjustment_create(request):
     )
     if request.method == "POST" and form.is_valid():
         try:
-            adjust_stock(user=request.user, **form.cleaned_data)
+            form.create_with_fresh_number(lambda: adjust_stock(user=request.user, **form.cleaned_data))  # UI-TRACK F10
         except ValidationError as exc:
             form.add_error(None, exc)
         else:

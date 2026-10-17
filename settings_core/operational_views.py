@@ -195,11 +195,14 @@ ROLE_ABOUT = {
 }
 
 
-def _role_sections(role, lang):
+def _role_sections(role, lang, fits=None):
     sections = {}
+    fits = {} if fits is None else fits
     for grant in role.rolepermission_set.all():
         permission = grant.permission
-        if not (grant.allow and permission.active):
+        if permission.module not in fits:
+            fits[permission.module] = _section_fits(permission.module)
+        if not (grant.allow and permission.active and fits[permission.module]):
             continue
         ar, en = PERMISSION_SECTIONS.get(permission.module, (permission.module, permission.module))
         name = (permission.name_en or permission.name_ar) if lang == "en" else permission.name_ar
@@ -233,15 +236,44 @@ ROLE_WORDS = {
 }
 
 
+#: A permission section that belongs to one activity or module (UI-TRACK F25): a clothes shop is not offered medical files.
+SECTION_NEEDS = {"medical": ("activity", "medical"), "restaurant": ("module", "tables_orders"), "projects": ("module", "projects")}
+
+
+def _section_fits(module):
+    need = SECTION_NEEDS.get(module)
+    if need is None:
+        return True
+    from settings_core.models import ClientProfile
+    from settings_core.setup_services import usable_modules
+
+    kind, slug = need
+    if kind == "module":
+        return slug in usable_modules()
+    profile = ClientProfile.get_active()
+    return getattr(profile, "activity_slug", "") == slug
+
+
 def _permission_groups(lang, chosen):
+    """The role form's ticks, by section. A section this business does not use is left off the
+    screen; whatever it already grants is carried in ``kept`` so saving does not take it away."""
+
     from permissions.role_services import grantable_permissions
 
     groups = {}
+    kept = []
+    fits = {}
     for permission in grantable_permissions():
+        if permission.module not in fits:
+            fits[permission.module] = _section_fits(permission.module)
+        if not fits[permission.module]:
+            if permission.code in chosen:
+                kept.append(permission.code)
+            continue
         ar, en = PERMISSION_SECTIONS.get(permission.module, (permission.module, permission.module))
         name = (permission.name_en or permission.name_ar) if lang == "en" else permission.name_ar
         groups.setdefault(en if lang == "en" else ar, []).append({"code": permission.code, "name": name, "on": permission.code in chosen})
-    return [{"name": name, "items": sorted(items, key=lambda row: row["name"])} for name, items in groups.items()]
+    return [{"name": name, "items": sorted(items, key=lambda row: row["name"])} for name, items in groups.items()], kept
 
 
 @require_permission("settings.view_settings")
@@ -251,8 +283,9 @@ def role_list(request):
     can_manage = user_has_permission(request.user, "permissions.manage_roles")
     lang = lang_of(request)
     roles = list(Role.objects.filter(active=True).prefetch_related("rolepermission_set__permission").order_by("-is_system_role", "pk"))
+    fits = {}  # one look at the activity and modules per section, not per permission
     for role in roles:
-        role.sections = _role_sections(role, lang)
+        role.sections = _role_sections(role, lang, fits)
         about = ROLE_ABOUT.get(role.code)
         role.about = (about[1] if lang == "en" else about[0]) if about else role.description
         role.copyable = copyable(role)
@@ -297,8 +330,9 @@ def role_form(request, pk=None):
         form = {"name_ar": role.name_ar if role else "", "name_en": role.name_en if role else "",
                 "description": role.description if role else "", "active": role.active if role else True}
         chosen = set(role_codes(base)) if base else set()
+    groups, kept = _permission_groups(lang, chosen)
     return render(request, "settings_core/role_form.html", _context(
-        request, rw=words, role=role, source=source, form=form, groups=_permission_groups(lang, chosen), error=error,
+        request, rw=words, role=role, source=source, form=form, groups=groups, kept=kept, error=error,
         title=words["form_edit"] if role else words["form_new"]))
 
 

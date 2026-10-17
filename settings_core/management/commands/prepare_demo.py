@@ -33,6 +33,9 @@ class Command(BaseCommand):
 
         if ClientProfile.get_active() is not None:
             call_command("seed_demo_business", username="owner", force=True, verbosity=0)
+            from settings_core.setup_services import usable_modules
+
+            self._fit_users(set(usable_modules()))  # Codex #233: a demo made before F26 loses its waiter too
             self.stdout.write("Demo data already present; today's trade topped up.")
             return
         password = settings.DEMO_PASSWORD
@@ -74,6 +77,7 @@ class Command(BaseCommand):
         owner = get_user_model().objects.get(username="owner")
         master = seed._seed_master_data()
         today = timezone.localdate()
+        self._date_openings(today - timedelta(days=30))
         need = {}
         for _, _, lines, _ in self.HISTORY_SALES:
             for index, quantity in lines:
@@ -81,6 +85,24 @@ class Command(BaseCommand):
         seed.stock_in(master, "DEMO-PI-HIST", today - timedelta(days=29), master["suppliers"][0], sorted(need.items()), Decimal("0.00"), owner)
         for n, (days_ago, customer, lines, share) in enumerate(self.HISTORY_SALES, start=1):
             seed.sell(master, f"DEMO-SH-{n:03d}", today - timedelta(days=days_ago), customer, lines, owner, share=share)
+
+    @staticmethod
+    def _date_openings(day):
+        """UI-TRACK F28: the opening balances count from before the month of history, not from today.
+
+        The general ledger dates an opening balance on the day its record was made; the demo makes
+        its records today and then backfills four weeks of trade, so the cash ledger used to start
+        in the red. The sample records are dated a day before the first sample document instead.
+        """
+
+        from datetime import datetime, time
+
+        from cashboxes.models import Cashbox
+        from master_data.models import Customer, Supplier
+
+        moment = timezone.make_aware(datetime.combine(day, time(9, 0)))
+        for model in (Cashbox, Customer, Supplier):
+            model.objects.filter(created_at__gt=moment).update(created_at=moment)
 
     def _spread_sale_times(self):
         """Past invoices were all created this second; give them shop hours so
@@ -148,6 +170,28 @@ class Command(BaseCommand):
         if "workorders" in extras:
             self._workorders(master, staff, owner)
         self._options(master, owner, modules)
+        self._fit_users(modules)
+
+    #: A demo login whose role only makes sense with one module (HG-048): a clothes shop has no waiter.
+    ROLE_MODULES = {"waiter": "tables_orders", "engineer": "projects"}
+
+    def _fit_users(self, modules):
+        """UI-TRACK F26: the users screen of a shop lists only the people a shop has."""
+
+        from django.contrib.auth import get_user_model
+        from django.db.models import ProtectedError
+
+        for username, module in self.ROLE_MODULES.items():
+            if module in modules:
+                continue
+            user = get_user_model().objects.filter(username=username).first()
+            if user is None:
+                continue
+            try:
+                user.delete()
+            except ProtectedError:  # already used for something: keep it, switched off
+                user.is_active = False
+                user.save(update_fields=["is_active"])
 
     #: The module a catalog extra belongs to; an extra not listed here belongs to the activity itself.
     EXTRA_MODULES = {"tables": "tables_orders", "appointments": "appointments_visits", "projects": "projects", "orders": "manufacturing"}
@@ -209,17 +253,27 @@ class Command(BaseCommand):
             return
         ItemUnit.objects.create(item=goods[0], name_ar="كرتونة", name_en="Carton", factor=Decimal("12"))
 
+    #: sub-activity -> (code, name, sizes, colours, unit) of the one demo model
+    VARIANT_MODELS = {
+        "": ("TSHIRT", "تيشيرت قطن بياقة", ["S", "M", "L"], ["أسود", "كحلي"], "unit"),
+        "cafe": ("LATTE", "لاتيه", ["صغير", "وسط", "كبير"], ["سخن", "ساقع"], "كوباية"),
+    }
+
     def _variants(self, master, goods, owner, modules):
         """A model in three sizes and two colours, some of it bought in (when purchases are on)."""
 
         from reports.management.commands.seed_demo_business import Command as Seed
+        from settings_core.models import ClientProfile
         from variants.models import VariantGroup
         from variants.services import create_group
 
         if VariantGroup.objects.exists() or "inventory" not in modules:
             return
         sale = Decimal(goods[0].default_sale_price if goods else "300")
-        _, items = create_group(code="DEMO-MODEL", name="موديل تجريبي", sizes=["S", "M", "L"], colors=["أسود", "كحلي"],
+        # UI-TRACK F27: a real model of this trade, so the first thing seen under sizes & colours is not "sample model".
+        profile = ClientProfile.get_active()
+        code, name, sizes, colors, unit = self.VARIANT_MODELS.get(getattr(profile, "sub_activity_slug", ""), self.VARIANT_MODELS[""])
+        _, items = create_group(code=code, name=name, sizes=sizes, colors=colors, unit=unit,
                                 sale_price=sale, purchase_price=(sale * Decimal("0.6")).quantize(Decimal("0.01")), user=owner,
                                 category=master["items"][0].category)
         if "purchases" in modules:
@@ -695,7 +749,9 @@ class Command(BaseCommand):
                 continue  # one child is not here yet
             arrived = timezone.localtime(now).replace(hour=8, minute=n * 5 % 60, second=0, microsecond=0)
             if arrived > now:
-                arrived = now - timedelta(hours=1)
+                # Before 8 a.m.: an hour ago, but never before midnight, or "this morning" would be yesterday.
+                midnight = timezone.localtime(now).replace(hour=0, minute=0, second=0, microsecond=0)
+                arrived = max(now - timedelta(hours=1), midnight)
             nursery.check_in(student, owner, brought_by=student.relation, at=arrived)
             if n == 0 and now - arrived > timedelta(hours=2):
                 nursery.check_out(student, nursery.allowed(student).first(), owner, at=arrived + timedelta(hours=2))

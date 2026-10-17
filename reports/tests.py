@@ -152,7 +152,7 @@ class FirstUiNavigationMapTests(AuthenticatedTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "096_FOUNDATION_READ_ONLY_REPORT_HUB")
-        self.assertContains(response, "مركز التقارير قراءة فقط")
+        self.assertContains(response, "<h1>التقارير</h1>", html=False)  # UI-TRACK F20: the title is just "Reports"
         self.assertContains(response, "Customer Report")
         self.assertContains(response, "Supplier Report")
         self.assertContains(response, "Inventory Report")
@@ -162,7 +162,7 @@ class FirstUiNavigationMapTests(AuthenticatedTestCase):
     def test_report_hub_keeps_reports_read_only_and_profit_protected(self):
         response = self.client.get(reverse("report_hub"))
 
-        self.assertContains(response, "التقارير قراءة فقط")
+        self.assertContains(response, "التقارير بتعرض بس ومش بتغيّر أي رقم")  # still read-only, said plainly (UI-TRACK F20)
         self.assertContains(response, "Profit Report")
         self.assertContains(response, "Sales - Cost of Goods Sold")
         self.assertContains(response, "صلاحيات حقيقية")

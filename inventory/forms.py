@@ -3,6 +3,8 @@ from decimal import Decimal
 from django import forms
 from django.utils import timezone
 
+from config.form_defaults import preselect
+from config.numbering import AutoNumbered
 from master_data.models import Item, Location
 from settings_core.display_labels import localized_choices
 
@@ -40,7 +42,10 @@ LABELS = {
 }
 
 
-class StockOperationForm(forms.Form):
+class StockOperationForm(AutoNumbered, forms.Form):
+    # UI-TRACK F10: the reference is the next TR- / ADJ- number unless one is typed.
+    auto_number = None
+
     def __init__(self, *args, lang="ar", **kwargs):
         super().__init__(*args, **kwargs)
         for name, field in self.fields.items():
@@ -58,15 +63,19 @@ class StockOperationForm(forms.Form):
                 self.fields[name].queryset = entity_scope.locations(Location.objects).filter(active=True)
         if not self.is_bound and "operation_date" in self.fields:
             self.initial["operation_date"] = timezone.localdate()
+        preselect(self, "source_location", "location")  # UI-TRACK F13: the default warehouse
+        if self.auto_number:
+            self.offer_auto_number(lang)
 
     def clean_reference_number(self):
-        number = self.cleaned_data["reference_number"]
-        if StockOperation.objects.filter(reference_number=number).exists():
+        number = (self.cleaned_data["reference_number"] or "").strip()
+        if number and StockOperation.objects.filter(reference_number=number).exists():
             raise forms.ValidationError("A stock operation with this reference already exists.")
         return number
 
 
 class StockTransferForm(StockOperationForm):
+    auto_number = ("reference_number", StockOperation, "reference_number", "TR-")
     reference_number = forms.CharField(max_length=100)
     operation_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
     item = forms.ModelChoiceField(queryset=Item.objects.none())
@@ -85,6 +94,7 @@ class StockTransferForm(StockOperationForm):
 
 
 class StockAdjustmentForm(StockOperationForm):
+    auto_number = ("reference_number", StockOperation, "reference_number", "ADJ-")
     reference_number = forms.CharField(max_length=100)
     operation_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
     item = forms.ModelChoiceField(queryset=Item.objects.none())

@@ -91,5 +91,7 @@ def split_quantity(item, quantity, lang="ar"):
             parts.append(f"{whole} {unit.label(lang)}")
             left -= whole * unit.factor
     if left:
-        parts.append(f"{left.normalize():f} {item.unit}")
+        from settings_core.templatetags.hesba_format import unit_label
+
+        parts.append(f"{left.normalize():f} {unit_label(item.unit, lang)}")  # the stored default "unit" reads «قطعة»
     return " + ".join(parts)

@@ -29,5 +29,6 @@ def daily_summary(request):
     return render(request, "reports/digest.html", {
         "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "page_title": "Daily summary" if lang == "en" else "ملخص اليوم", "section": "reports",
         "data": data, "day": day, "prev": day - timedelta(days=1), "next": day + timedelta(days=1) if day < today else None, "today": today,
+        "prev_of_today": today - timedelta(days=1),  # UI-TRACK F22: the heading says "yesterday", the page opens on it for the morning send
         "whatsapp": f"https://wa.me/?text={quote(text)}", "text": text, "currency": company["currency"],
     })

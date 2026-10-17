@@ -31,7 +31,7 @@ class QuickItemTests(TestCase):
         item = Item.objects.get(pk=answer["item"]["id"])
         self.assertTrue(item.item_code.startswith("IT-"))
         self.assertEqual((item.item_name, item.unit, item.default_sale_price, item.default_purchase_price, item.is_stock_tracked, item.active),
-                         ("شاحن سريع", "قطعة", Decimal("250.00"), Decimal("180.00"), True, True))
+                         ("شاحن سريع", "unit", Decimal("250.00"), Decimal("180.00"), True, True))  # «قطعة» is stored as the neutral default (Codex #233)
         self.assertEqual(answer["item"]["label"], item.search_label)
         service = self.client.post(self.url, {"item_name": "تركيب", "default_sale_price": "50"}).json()
         self.assertFalse(Item.objects.get(pk=service["item"]["id"]).is_stock_tracked)  # unticked: a service

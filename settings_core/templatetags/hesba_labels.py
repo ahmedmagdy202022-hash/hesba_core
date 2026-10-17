@@ -106,6 +106,30 @@ def entry_ref(context, reference):
     return f"{words[1] if context.get('lang') == 'en' else words[0]} #{match.group(2)}"
 
 
+#: UI-TRACK F29: what a journal entry was, for the "description" column when it has no memo of its own.
+_SOURCE_WORDS = {
+    "sales_invoice": ("فاتورة بيع", "Sales invoice"), "sales_return": ("مرتجع بيع", "Sales return"),
+    "customer_payment": ("تحصيل من عميل", "Customer collection"), "purchase_invoice": ("فاتورة شراء", "Purchase invoice"),
+    "purchase_return": ("مرتجع شراء", "Purchase return"), "supplier_payment": ("سداد لمورد", "Supplier payment"),
+    "cashbox_operation": ("حركة خزنة", "Cashbox operation"), "stock_operation": ("تحويل / تسوية مخزون", "Stock transfer / adjustment"),
+    "opening_balance_adjustment": ("تسوية رصيد افتتاحي", "Opening balance adjustment"),
+    "customer_entry": ("حركة عميل", "Customer entry"), "supplier_entry": ("حركة مورد", "Supplier entry"),
+    "cash_movement": ("حركة خزنة", "Cash movement"),
+}
+
+
+@register.simple_tag(takes_context=True)
+def entry_memo(context, entry):
+    """A journal entry's memo, or, when it has none, the kind of document it came from."""
+
+    if entry.memo:
+        return entry.memo
+    words = _SOURCE_WORDS.get(entry.source_type) or _REF_WORDS.get(entry.source_type)
+    if not words:
+        return ""
+    return words[1] if context.get("lang") == "en" else words[0]
+
+
 @register.simple_tag(takes_context=True)
 def link_ok(context, path):
     """AUDIT-1: True when ``path`` opens for this viewer: its module and

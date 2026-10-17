@@ -16,13 +16,14 @@ from units.services import convert_lines, units_catalog
 from permissions.decorators import require_permission
 from entities import scope as entity_scope
 from permissions.services import user_has_permission
+from config.return_table import chosen_lines, return_table
 
 from .forms import (
     CustomerPaymentForm,
     SalesDraftForm,
     SalesLineFormSet,
     SalesReturnForm,
-    SalesReturnLineFormSet,
+    SalesReturnTableFormSet,
     SalesReturnReversalForm,
 )
 from .models import CustomerPayment, SalesInvoice, SalesReturn
@@ -54,7 +55,6 @@ STRINGS = {
         "language": "English",
         "dashboard": "لوحة القيادة",
         "all": "كل الحالات",
-        "cost_warning": "تكلفة البيع تستخدم متوسط التكلفة المخزن حاليًا؛ راجع HG-003 قبل اعتماد الربح للإصدار.",
         "collections": "تحصيلات العملاء",
         "new_collection": "تحصيل جديد من عميل",
         "collection_saved": "تم تسجيل تحصيل العميل.",
@@ -80,7 +80,6 @@ STRINGS = {
         "language": "العربية",
         "dashboard": "Dashboard",
         "all": "All statuses",
-        "cost_warning": "Sales posting cost is captured from authoritative inventory movements; cached item cost is display-only.",
         "collections": "Customer collections",
         "new_collection": "New customer collection",
         "collection_saved": "Customer collection recorded.",
@@ -169,9 +168,11 @@ def invoice_create(request):
             except ValidationError as exc:
                 form.add_error(None, exc)
             else:
-                messages.success(request, STRINGS[lang]["saved"])
-                if request.POST.get("then") == "post":  # R2-6: "save and post" in one press
-                    _post_now(request, invoice.pk, lang)
+                # R2-6: "save and post" in one press; UI-TRACK F23: one message, "posted", unless posting failed.
+                if request.POST.get("then") == "post":
+                    _post_now(request, invoice.pk, lang, saved_first=True)
+                else:
+                    messages.success(request, STRINGS[lang]["saved"])
                 return redirect(f"/sales/{invoice.pk}/?lang={lang}")
     else:
         initial = _party_initial(request, "customer") or {}
@@ -226,15 +227,18 @@ def _einvoice_problems(invoice, lang):
         return None
 
 
-def _post_now(request, pk, lang):
+def _post_now(request, pk, lang, saved_first=False):
     try:
         with transaction.atomic():
             check_invoice_serials(entity_scope.get_or_404(SalesInvoice, entity_scope.SALES_INVOICE, pk=pk), lang)  # SERIAL-001: still in stock?
             post_sales_invoice(pk, request.user)
     except ValidationError as exc:
-        messages.error(request, "; ".join(exc.messages))
-    else:
-        messages.success(request, STRINGS[lang]["posted"])
+        # Codex #233: one message either way; after "save and post" it also says the draft was kept.
+        reason = "; ".join(exc.messages)
+        messages.error(request, f"{STRINGS[lang]['saved']}; {reason}" if saved_first else reason)  # "; " so each part is still translated (ui_messages)
+        return False
+    messages.success(request, STRINGS[lang]["posted"])
+    return True
 
 
 @require_permission("sales.create_sales_invoice")
@@ -269,15 +273,10 @@ def return_create(request, pk):
     )
     lang = _lang(request)
     form = SalesReturnForm(request.POST or None, lang=lang)
-    line_formset = SalesReturnLineFormSet(
-        request.POST or None,
-        prefix="lines",
-        form_kwargs={"invoice": invoice, "lang": lang},
-    )
+    # UI-TRACK F15: one row per line of the invoice, not five empty pickers.
+    line_formset = return_table(SalesReturnTableFormSet, invoice, request.POST or None, lang, "sales_return")
     if request.method == "POST" and form.is_valid() and line_formset.is_valid():
-        line_data = [
-            row.cleaned_data for row in line_formset.forms if row.cleaned_data.get("source_line")
-        ]
+        line_data = chosen_lines(line_formset)
         try:
             sales_return = form.create_with_fresh_number(lambda: create_sales_return(  # AUTONUM
                 source_invoice_id=invoice.pk,

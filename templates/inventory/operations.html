@@ -21,6 +21,6 @@
         {% if operation.operation_type == 'adjustment' and can_adjust %}{% include "inventory/_operation_reversal_form.html" %}{% endif %}
       {% endif %}
     </td>
-  </tr>{% empty %}<tr><td colspan="8" class="op-empty">{{ words.empty }}</td></tr>{% endfor %}</tbody>
+  </tr>{% empty %}<tr><td colspan="8" class="op-empty">{{ words.empty_ops }}</td></tr>{% endfor %}</tbody>
 </table></div>
 {% endblock %}

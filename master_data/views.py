@@ -15,7 +15,7 @@ from cashboxes.services import (
 )
 from entities import scope as entity_scope
 from permissions.services import user_has_permission
-from settings_core.templatetags.hesba_format import money as display_money
+from settings_core.templatetags.hesba_format import money as display_money, unit_label
 
 from .forms import CashboxForm, CategoryForm, CustomerForm, ItemForm, LocationForm, SupplierForm
 from .models import Category, Customer, Item, Location, Supplier
@@ -230,7 +230,7 @@ def _rows(entity, objects, lang, words, can_view_cost):
                 obj.item_code,
                 obj.item_name,
                 _localized_name(obj.category, lang) if obj.category else "—",
-                obj.unit,
+                unit_label(obj.unit, lang),
                 words["stock_item"] if obj.is_stock_tracked else words["service"],
                 display_money(obj.default_sale_price),
             ]

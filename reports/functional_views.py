@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 
 from django.core.paginator import Paginator
 from django.shortcuts import render
@@ -24,7 +25,7 @@ from entities import scope as entity_scope
 
 
 STRINGS = {
-    "ar": {"page_title": "التقارير", "dashboard": "لوحة القيادة", "language": "English", "reports": "مركز التقارير قراءة فقط", "search": "تطبيق الفلاتر", "empty": "لا توجد نتائج مطابقة.", "back": "العودة للتقارير", "all_statuses": "كل الحالات", "all_cashboxes": "كل الخزن"},
+    "ar": {"page_title": "التقارير", "dashboard": "لوحة القيادة", "language": "English", "reports": "التقارير", "search": "تطبيق الفلاتر", "empty": "لا توجد نتائج مطابقة.", "back": "العودة للتقارير", "all_statuses": "كل الحالات", "all_cashboxes": "كل الخزن"},
     "en": {"page_title": "Reports", "dashboard": "Dashboard", "language": "العربية", "reports": "Read-only report center", "search": "Apply filters", "empty": "No matching results.", "back": "Back to reports", "all_statuses": "All statuses", "all_cashboxes": "All cashboxes"},
 }
 
@@ -114,7 +115,9 @@ def inventory_report_view(request):
     if location_id.isdigit():
         location = entity_scope.locations(Location.objects).filter(pk=location_id, active=True).first()
     rows = stock_report(location)
-    return render(request, "reports/inventory.html", _context(request, title="Inventory Report" if _lang(request) == "en" else "تقرير المخزون", rows=rows, locations=entity_scope.locations(Location.objects).filter(active=True), selected_location=location, can_view_cost=user_has_permission(request.user, "inventory.view_cost")))
+    # UI-TRACK F19: a total under the list (the same rows, summed for display).
+    totals = {"lines": len(rows), "value": sum((row["stock_value"] for row in rows), Decimal("0"))}
+    return render(request, "reports/inventory.html", _context(request, title="Inventory Report" if _lang(request) == "en" else "تقرير المخزون", rows=rows, totals=totals, locations=entity_scope.locations(Location.objects).filter(active=True), selected_location=location, can_view_cost=user_has_permission(request.user, "inventory.view_cost")))
 
 
 def _party_context(request, party_kind):

@@ -1,0 +1,9 @@
+{% load hesba_format hesba_labels %}{# UI-TRACK F15: the invoice's own lines, one quantity box each #}
+<div class="op-table-wrap"><table class="op-table" data-return-lines><thead><tr><th>#</th><th>{% if lang == 'en' %}Item{% else %}الصنف{% endif %}</th><th>{% if lang == 'en' %}On the invoice{% else %}في الفاتورة{% endif %}</th><th>{% if lang == 'en' %}Already returned{% else %}اترجع قبل كده{% endif %}</th><th>{% if lang == 'en' %}Can return{% else %}يترجع لحد{% endif %}</th><th>{% if lang == 'en' %}Return now{% else %}يرجع دلوقتي{% endif %}</th></tr></thead><tbody>
+{% for line_form in line_formset %}{% with line=line_form.line %}<tr data-return-line="{{ line.pk }}">
+<td>{{ line.line_number }}<input type="hidden" name="{{ line_form.source_line.html_name }}" value="{{ line.pk }}"></td>
+<td class="op-cell-text">{{ line.item.item_name }}{% if line.description %}<br><small class="op-muted">{{ line.description }}</small>{% endif %}</td>
+<td>{{ line.quantity|qty }}</td><td>{{ line_form.returned|qty }}</td><td><strong>{{ line_form.left|qty }}</strong></td>
+<td>{% if line_form.left > 0 %}<label class="sr-only" for="{{ line_form.quantity.id_for_label }}">{{ line_form.quantity.label }} — {{ line.item.item_name }}</label>{{ line_form.quantity }}{% else %}<span class="op-muted">{% if lang == 'en' %}all returned{% else %}اترجع كله{% endif %}</span>{% endif %}{% for error in line_form.quantity.errors %}<small class="op-error">{{ error|ui:lang }}</small>{% endfor %}{% for error in line_form.source_line.errors %}<small class="op-error">{{ error|ui:lang }}</small>{% endfor %}</td>
+</tr>{% endwith %}{% empty %}<tr><td colspan="6" class="op-empty">{% if lang == 'en' %}This invoice has no lines.{% else %}الفاتورة دي مفيهاش بنود.{% endif %}</td></tr>{% endfor %}
+</tbody></table></div>

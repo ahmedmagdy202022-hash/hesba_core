@@ -237,3 +237,11 @@ html.hs-cam-open,html.hs-cam-open body{overflow:hidden}
 .hs-quick-item{width:min(640px,calc(100% - 32px));border:0;border-radius:16px;padding:0;background:var(--hs-surface);color:inherit}
 .hs-quick-item::backdrop{background:color-mix(in srgb,var(--hs-navy) 45%,transparent)}
 .hs-quick-item .op-form{margin:0;box-shadow:none}
+/* UI-TRACK F17: cancelling a row is one tap away, not a red button on every line */
+.op-row-cancel{display:inline-block}.op-row-cancel>summary{cursor:pointer;list-style:none;color:var(--hs-danger);font-weight:600;padding:6px 8px;border-radius:8px;min-height:32px;display:inline-flex;align-items:center}.op-row-cancel>summary::-webkit-details-marker{display:none}.op-row-cancel>summary:hover{background:var(--hs-danger-wash)}.op-row-cancel[open]>summary{background:var(--hs-danger-wash)}.op-row-cancel form{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+/* UI-TRACK F30: a screen shows its three main actions; the rest sit under "More" */
+.op-more{position:relative;display:inline-block}.op-more>summary{list-style:none;cursor:pointer}.op-more>summary::-webkit-details-marker{display:none}.op-more>summary::after{content:" ▾"}
+.op-more__menu{position:absolute;inset-inline-end:0;top:calc(100% + 6px);z-index:20;min-width:200px;display:flex;flex-direction:column;gap:4px;padding:8px;background:var(--hs-surface);border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);box-shadow:var(--hs-shadow-sm)}
+.op-more__menu a{justify-content:flex-start;width:100%}
+@media (max-width:640px){.op-more__menu{position:static;margin-top:6px}}
+[data-return-lines] input{max-width:8rem;min-height:40px}

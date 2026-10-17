@@ -152,8 +152,10 @@ def run_due(now=None):
 def recipients_choices():
     """Active users, with whether they have an email address to send to."""
 
-    users = get_user_model().objects.filter(is_active=True).order_by("username")
-    return [{"user": user, "has_email": bool(user.email)} for user in users]
+    users = get_user_model().objects.filter(is_active=True).select_related("hesba_profile").order_by("username")
+    from reports.navigation import display_name
+
+    return [{"user": user, "name": display_name(user), "has_email": bool(user.email)} for user in users]
 
 
 def next_run(conf, now=None):

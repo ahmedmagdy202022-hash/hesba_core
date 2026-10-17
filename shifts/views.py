@@ -29,6 +29,7 @@ WORDS = {
         "invoices": "عدد الفواتير", "history": "الورديات السابقة", "cashier": "الكاشير", "opened_at": "الفتح", "closed_at": "القفل", "report": "تقرير الوردية",
         "post": "سجّل الفرق في الخزنة", "posted": "اتسجل الفرق في الخزنة.", "posted_ref": "اتسجل بالمرجع", "empty": "مفيش ورديات.", "bad": "المبلغ مش صحيح.",
         "print": "طباعة", "back": "الوردية", "float_label": "فكّة البداية", "prev": "السابق", "next": "التالي", "live": "لحد دلوقتي",
+        "open_now": "الورديات المفتوحة دلوقتي",
     },
     "en": {
         "page_title": "Shift", "title": "Cashier shift",
@@ -40,6 +41,7 @@ WORDS = {
         "invoices": "Invoices", "history": "Past shifts", "cashier": "Cashier", "opened_at": "Opened", "closed_at": "Closed", "report": "Shift report",
         "post": "Post the difference to the cashbox", "posted": "Difference posted to the cashbox.", "posted_ref": "Posted as", "empty": "No shifts.", "bad": "Invalid amount.",
         "print": "Print", "back": "Shift", "float_label": "Opening float", "prev": "Previous", "next": "Next", "live": "so far",
+        "open_now": "Shifts open now",
     },
 }
 
@@ -81,15 +83,19 @@ def my_shift(request):
         return redirect(f"{reverse('shifts:mine')}?lang={lang}")
     live = summary(current, timezone.now()) if current else None
     can_all = user_has_permission(request.user, "cashboxes.view_finance")
-    history = Shift.objects.select_related("cashier", "cashbox").filter(status="closed")
+    history = Shift.objects.select_related("cashier__hesba_profile", "cashbox").filter(status="closed")
     if not can_all:
         history = history.filter(cashier=request.user)
     page = Paginator(history, 25).get_page(request.GET.get("page"))
+    # UI-TRACK F21: the dashboard counts every open shift; whoever may see them all sees them here too.
+    # Codex #233: only the shifts on this entity's cashboxes, like the cashbox list above.
+    open_now = (Shift.objects.select_related("cashier__hesba_profile", "cashbox").filter(status="open", cashbox__in=entity_scope.cashboxes(Cashbox.objects))
+                .exclude(pk=getattr(current, "pk", None))) if can_all else Shift.objects.none()
     cashboxes = entity_scope.cashboxes(Cashbox.objects).filter(active=True)
     return render(request, "shifts/mine.html", {
         "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": words, "page_title": words["page_title"], "section": "pos",
         "current": current, "live": live, "live_rows": _rows(live, words) if live else [], "live_expected": Decimal(live["expected"]) if live else None,
-        "page": page, "can_all": can_all, "cashboxes": cashboxes, "default_cashbox": cashboxes.filter(is_default=True).first() or cashboxes.first(),
+        "page": page, "can_all": can_all, "open_now": open_now, "cashboxes": cashboxes, "default_cashbox": cashboxes.filter(is_default=True).first() or cashboxes.first(),
     })
 
 
