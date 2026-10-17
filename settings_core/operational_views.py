@@ -58,7 +58,7 @@ def lang_of(request):
 #: R2: the screen each feature opens on (a capability's paths are the prefixes
 #: it owns, not always a page of their own).
 FEATURE_LANDING = {
-    "pos": "sales:pos", "barcode": "barcode:labels", "price_lists": "pricing:list", "units": "units:index",
+    "pos": "sales:pos", "shift_required": "shifts:mine", "barcode": "barcode:labels", "price_lists": "pricing:list", "units": "units:index",
     "variants": "variants:index", "batches_expiry": "batches:index", "serials": "serials:index",
     "installments": "installments:list", "vat": "taxes:settings", "e_invoice": "einvoice:issuer", "fixed_assets": "fixed_assets:list",
 }

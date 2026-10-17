@@ -309,3 +309,10 @@ def purchase_ready(paid_now="0.00", quantity=4, unit_purchase_price="25.00"):
     recalculate_purchase_totals(invoice, paid_now=paid_now)
     invoice.refresh_from_db()
     return invoice, item, location, cashbox
+
+
+def open_test_shift(user, cashbox=None):
+    """AN4: a sale is posted only inside an open shift; open one for ``user`` on ``cashbox`` (or a till made here)."""
+    from shifts.services import open_shift
+
+    return open_shift(user, cashbox or make_cashbox(cashbox_code=f"SHIFT-{user.pk}"), "0")

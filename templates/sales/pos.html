@@ -1,6 +1,7 @@
 {% extends "operations/base.html" %}
 {% load static hesba_format hesba_print %}
-{% block operation_content %}{% printing_enabled as can_print %}
+{% load hesba_shifts %}{% block operation_content %}{% printing_enabled as can_print %}
+{% shift_gate %}
 <form class="pos" method="post" data-pos data-words="{{ js_words }}" data-sync-url="{% url 'sales:pos_sync' %}" data-pos-user="{{ request.user.pk }}" novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="line_count" value="0" data-line-count><input type="hidden" name="cart_json" value="" data-cart-json><input type="hidden" name="print" value="0" data-print-flag>
 <section class="pos-main">
   <div class="pos-offline" data-pos-offline role="status" aria-live="polite" hidden></div>

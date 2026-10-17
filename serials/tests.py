@@ -10,7 +10,7 @@ from django.utils import timezone
 
 from audit.models import AuditLog
 from closing.models import Period
-from hesba_testing.factories import make_cashbox, make_customer, make_item, make_location, make_seeded_role, make_supplier, make_user, make_user_profile
+from hesba_testing.factories import open_test_shift, make_cashbox, make_customer, make_item, make_location, make_seeded_role, make_supplier, make_user, make_user_profile
 from permissions.models import RoleCode
 from purchases.models import PurchaseInvoice
 from purchases.services import cancel_posted_purchase_invoice, post_purchase_invoice
@@ -47,6 +47,7 @@ class SerialSetup(TestCase):
         self.owner = person(RoleCode.OWNER, "serial_owner")
         self.location = make_location(location_code="SHOP", is_default=True, is_receiving_location=True)
         self.cashbox = make_cashbox(cashbox_code="TILL", is_default=True)
+        open_test_shift(self.owner, self.cashbox)  # AN4
         self.phone = make_item(item_code="PHONE", item_name="Phone X", default_sale_price=D("9000.00"), default_purchase_price=D("7500.00"))
         self.cable = make_item(item_code="CABLE", item_name="Cable", default_sale_price=D("50.00"), default_purchase_price=D("20.00"))
         SerialSetting.objects.create(item=self.phone, tracked=True, warranty_months=12)
@@ -142,6 +143,7 @@ class SaleTests(SerialSetup):
 
     def test_the_till_sells_by_scanning_the_serial(self):
         cashier = person(RoleCode.CASHIER, "serial_cashier")
+        open_test_shift(cashier, self.cashbox)  # AN4
         self.client.force_login(cashier)
         page = self.client.get(reverse("sales:pos"))
         self.assertContains(page, 'id="hs-serials"')

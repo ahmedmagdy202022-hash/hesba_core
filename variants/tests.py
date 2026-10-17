@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from audit.models import AuditLog
 from barcode.symbology import is_ean13
-from hesba_testing.factories import make_cashbox, make_location, make_seeded_role, make_user, make_user_profile, stock_in
+from hesba_testing.factories import open_test_shift, make_cashbox, make_location, make_seeded_role, make_user, make_user_profile, stock_in
 from inventory.services import recalculate_item_average_cost
 from master_data.models import Item
 from permissions.models import RoleCode
@@ -116,7 +116,9 @@ class ScreenTests(VariantSetup):
         item = Item.objects.get(item_code="TS01-S-WHITE")
         stock_in(item, location, 3, "120.00", movement_date=timezone.localdate())
         recalculate_item_average_cost(item)
-        self.client.force_login(person(RoleCode.CASHIER, "variant_cashier"))
+        cashier = person(RoleCode.CASHIER, "variant_cashier")
+        open_test_shift(cashier, cashbox)  # AN4
+        self.client.force_login(cashier)
         self.assertContains(self.client.get(reverse("sales:pos")), item.barcode)
         self.client.post(reverse("sales:pos"), {"line_count": "1", "customer": "", "location": str(location.pk), "cashbox": str(cashbox.pk), "discount": "0", "tendered": "250", "print": "0",
                                                 "item_0": str(item.pk), "qty_0": "1", "price_0": "250.00"})

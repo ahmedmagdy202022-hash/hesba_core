@@ -1,0 +1,6 @@
+{% if show %}{% load static %}<link rel="stylesheet" href="{% static 'hesba/css/shift_gate.css' %}?v=an4-1"><form class="hs-shift-gate" method="post" action="{% url 'shifts:mine' %}" data-shift-gate>{% csrf_token %}
+<input type="hidden" name="action" value="open"><input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="next" value="{{ next }}">
+<div class="hs-shift-gate__text"><strong>{% if lang == 'en' %}Open a shift first{% else %}افتح وردية الأول{% endif %}</strong><p>{% if lang == 'en' %}No sale is recorded without an open shift. Count the float in the drawer and start.{% else %}مفيش بيع يتسجل من غير وردية مفتوحة. اعدّ الفكّة اللي في الدرج وابدأ.{% endif %}</p></div>
+<label>{% if lang == 'en' %}Cashbox{% else %}الخزنة{% endif %}<select name="cashbox" required>{% for cashbox in cashboxes %}<option value="{{ cashbox.pk }}"{% if cashbox == default_cashbox %} selected{% endif %}>{% if lang == 'en' and cashbox.name_en %}{{ cashbox.name_en }}{% else %}{{ cashbox.name_ar }}{% endif %}</option>{% endfor %}</select></label>
+<label>{% if lang == 'en' %}Float in the drawer{% else %}الفكّة في الدرج{% endif %}<input name="opening_float" type="number" min="0" step="0.01" value="0" inputmode="decimal"></label>
+<button class="op-primary" type="submit">{% if lang == 'en' %}Open shift{% else %}افتح الوردية{% endif %}</button></form>{% endif %}
