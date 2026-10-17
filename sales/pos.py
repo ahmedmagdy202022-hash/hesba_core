@@ -299,7 +299,10 @@ QUICK_PICKS = 24
 
 def quick_pick_ids(catalog, days=60):
     """AN6 (Ahmed: "شاشة الكاشير محتاجة تكون أسهل وأسلس"): the items this shop sells most lately,
-    as tap-to-add tiles; topped up from the catalog for a shop that has sold little yet."""
+    as tap-to-add tiles; topped up from the catalog for a shop that has sold little yet.
+
+    AN7 (G07): the items the shop picked come first, in its order; then what sells without a
+    barcode (bread, vegetables by weight: nothing to scan), then the rest of what sells."""
 
     from datetime import timedelta
 
@@ -307,14 +310,18 @@ def quick_pick_ids(catalog, days=60):
     from django.utils import timezone
 
     from .models import SalesLine
+    from .pos_buttons import pinned_ids
 
     on_sale = [entry["id"] for entry in catalog]
+    no_barcode = {entry["id"] for entry in catalog if not entry.get("barcode")}
     since = timezone.localdate() - timedelta(days=days)
     invoices = entity_scope.scope(SalesInvoice.objects, entity_scope.SALES_INVOICE).filter(status="posted", invoice_date__gte=since)
-    sold = (SalesLine.objects.filter(invoice__in=invoices, item_id__in=on_sale)
-            .values("item_id").annotate(units=Sum("quantity")).order_by("-units").values_list("item_id", flat=True)[:QUICK_PICKS])
-    picks = list(sold)
-    picks += [item_id for item_id in on_sale if item_id not in picks][:QUICK_PICKS - len(picks)]
+    sold = list(SalesLine.objects.filter(invoice__in=invoices, item_id__in=on_sale)
+                .values("item_id").annotate(units=Sum("quantity")).order_by("-units", "item_id").values_list("item_id", flat=True)[:QUICK_PICKS * 2])
+    listed = set(on_sale)
+    picks = [item_id for item_id in pinned_ids() if item_id in listed]
+    for group in ([pk for pk in sold if pk in no_barcode], sold, [pk for pk in on_sale if pk in no_barcode], on_sale):
+        picks += [item_id for item_id in group if item_id not in picks][:QUICK_PICKS - len(picks)]
     names = {item.pk: " · ".join(part for part in (item.item_name, item.size, item.color) if part)
              for item in Item.objects.filter(pk__in=picks).only("item_name", "size", "color")}
     return [{"id": item_id, "name": names.get(item_id, "")} for item_id in picks]
@@ -374,6 +381,7 @@ def pos(request):
             "section": "sales",
             "catalog": catalog,
             "quick_picks": quick_pick_ids(catalog),
+            "can_pick_buttons": user_has_permission(request.user, "master_data.manage_items"),  # AN7 (G07)
             "price_book": price_book(),
             "tax_rates": rates_by_item(),
             "units": units_catalog(),

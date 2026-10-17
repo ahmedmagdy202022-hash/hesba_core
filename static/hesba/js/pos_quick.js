@@ -27,6 +27,19 @@
       grid.appendChild(tile);
     });
     box.hidden = !grid.children.length;
+    // AN7 (G07): the first twelve (eight on a phone) show; the rest wait behind one link, so the basket stays in view.
+    if (grid.children.length > 8) {
+      var more = document.createElement('button');
+      more.type = 'button'; more.className = 'pos-quick__more'; more.setAttribute('data-pos-quick-more', '');
+      var all = box.getAttribute('data-all') || 'All buttons', fewer = box.getAttribute('data-fewer') || 'Fewer';
+      more.textContent = all + ' (' + grid.children.length + ')';
+      more.addEventListener('click', function () {
+        var open = grid.classList.toggle('is-open');
+        more.textContent = open ? fewer : all + ' (' + grid.children.length + ')';
+      });
+      grid.after(more);
+      if (grid.children.length <= 12) more.classList.add('pos-quick__more--phone');
+    }
   }
 
   var tendered = form.querySelector('[data-pos-tendered]'), total = form.querySelector('[data-pos-total]');

@@ -96,3 +96,28 @@ class ModelPageTests(TestCase):
         self.group.refresh_from_db()
         self.assertEqual((self.group.sizes, self.group.colors), (["M", "L"], ["أسود", "زيتي"]))
         self.assertEqual(Item.objects.filter(variant__group=self.group).count(), 4)
+
+
+class SingleItemSizeTests(TestCase):
+    """AN7 (F32): a single item's size and colour offer the standard lists; "لارج" is kept as "L"."""
+
+    def test_the_spoken_size_is_the_standard_size(self):
+        from variants.standard import standard_color, standard_size
+
+        self.assertEqual([standard_size(v) for v in ("لارج", " l ", "اكس  لارج", "ميديم", "42", "مقاس خاص", "")],
+                         ["L", "L", "XL", "M", "42", "مقاس خاص", ""])
+        self.assertEqual(standard_color("اسود"), "اسود")  # spelled differently: kept as typed
+        self.assertEqual(standard_color("black"), "Black")
+
+    def test_the_item_form_suggests_and_keeps_the_standard(self):
+        from master_data.forms import ItemForm
+
+        prepared_client(sub_activity="fashion")  # sizes & colours on
+        form = ItemForm(data={"item_name": "قميص", "item_code": "SH-1", "unit": "قطعة", "size": "لارج", "color": "أسود",
+                              "default_sale_price": "100", "min_stock": ""}, lang="ar")
+        html = str(form["size"])
+        self.assertIn('list="hs-std-sizes"', html)
+        self.assertIn('<option value="XL">', html)
+        self.assertIn('list="hs-std-colors"', str(form["color"]))
+        form.is_valid()
+        self.assertEqual(form.cleaned_data.get("size"), "L")

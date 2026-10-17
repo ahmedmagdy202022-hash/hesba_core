@@ -374,8 +374,31 @@ class ItemForm(ZeroWhenBlank, AutoNumbered, HesbaModelForm):
             for name in ("size", "color"):
                 if not getattr(self.instance, name, ""):  # a value already typed stays editable
                     self.fields.pop(name, None)
-        elif not self.instance.pk:
-            self._offer_variants()
+        else:
+            self._suggest_sizes()
+            if not self.instance.pk:
+                self._offer_variants()
+
+    def _suggest_sizes(self):
+        """AN7 (F32): a single item's size and colour offer the same standard lists as the variants picker,
+        and "لارج" is kept as "L", so one size is never two in the reports."""
+
+        from variants.standard import COLORS, NUMBER_SIZES, SIZES, SuggestInput
+
+        if "size" in self.fields:
+            self.fields["size"].widget = SuggestInput("sizes", SIZES + NUMBER_SIZES, self.fields["size"].widget.attrs)
+        if "color" in self.fields:
+            self.fields["color"].widget = SuggestInput("colors", COLORS["en" if self.lang == "en" else "ar"], self.fields["color"].widget.attrs)
+
+    def clean_size(self):
+        from variants.standard import standard_size
+
+        return standard_size(self.cleaned_data.get("size", ""))
+
+    def clean_color(self):
+        from variants.standard import standard_color
+
+        return standard_color(self.cleaned_data.get("color", ""))
 
     #: AN5 (Ahmed: "اسم صنف واحد وتحته مقاسات وألوان كتير، وكل واحد بكوده وباركوده زي أمازون ونون").
     VARIANT_FIELDS = ("has_variants", "sizes_std", "sizes_extra", "colors_std", "colors_extra")

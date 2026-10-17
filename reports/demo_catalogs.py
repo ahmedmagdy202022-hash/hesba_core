@@ -46,6 +46,23 @@ class Supply:
 
 
 @dataclass(frozen=True)
+class ShelfItem:
+    """AN7 (G06): one more item on a shop's shelf, beyond the five with planted roles."""
+
+    name: str
+    unit: str
+    sale: Decimal
+    purchase: Decimal
+    quantity: Decimal
+    #: False for what is weighed or counted at the till: vegetables, bread, eggs.
+    barcode: bool = True
+    #: (name_ar, name_en, factor) of the pack it is also bought and sold by.
+    carton: tuple = ()
+    #: days left before it expires, for goods kept by batch.
+    expires: int = 0
+
+
+@dataclass(frozen=True)
 class Catalog:
     key: str
     category: tuple
@@ -59,6 +76,8 @@ class Catalog:
     staff: tuple = ("أحمد الفني", "فني")
     #: what this business also shows: tables, appointments, patients, projects, batches, orders
     extras: frozenset = frozenset()
+    #: AN7 (G06): ((category code or None for ``category``, name_ar, name_en, (ShelfItem, ...)), ...)
+    shelf: tuple = ()
 
 
 def _p(name, unit, sale, purchase="0", stock=True):
@@ -67,6 +86,10 @@ def _p(name, unit, sale, purchase="0", stock=True):
 
 def _s(name, unit, sale):
     return Product(name, unit, D(sale), D("0"), False)
+
+
+def _sh(name, unit, sale, purchase, quantity, barcode=True, carton=(), expires=0):
+    return ShelfItem(name, unit, D(sale), D(purchase), D(quantity), barcode, carton, expires)
 
 
 def _raw(code, name, unit, price, quantity):
@@ -117,6 +140,58 @@ GROCERY = Catalog(
     customers=PEOPLE + ("مطعم أبو علي",),
     suppliers=("شركة المنصورة للمواد الغذائية", "مخازن الشروق للجملة"),
     extras=frozenset({"batches"}),
+    # AN7 (G06, Ahmed approved): a supermarket of a few hundred lines, in miniature, so search,
+    # the till and its buttons are tried on something like a real shelf.
+    shelf=(
+        (None, "بقالة", "Pantry", (
+            _sh("مكرونة 400 جم", "كيس", "18.00", "14.00", 60, carton=("كرتونة", "Carton", 20)),
+            _sh("عدس أصفر 1 كجم", "كيس", "75.00", "62.00", 25),
+            _sh("فول مدمس علبة 400 جم", "علبة", "22.00", "17.00", 48, carton=("كرتونة", "Carton", 24)),
+            _sh("صلصة طماطم 360 جم", "علبة", "25.00", "19.00", 36),
+            _sh("ملح 1 كجم", "كيس", "10.00", "7.00", 30),
+            _sh("دقيق 1 كجم", "كيس", "32.00", "26.00", 30),
+            _sh("عيش بلدي (5 أرغفة)", "كيس", "10.00", "7.00", 40, barcode=False, expires=2),
+        )),
+        ("DEMO-CAT-G2", "ألبان وبيض", "Dairy & eggs", (
+            _sh("لبن كامل الدسم 1 لتر", "علبة", "45.00", "38.00", 36, carton=("كرتونة", "Carton", 12), expires=9),
+            _sh("زبادي 105 جم", "علبة", "9.00", "7.00", 48, expires=6),
+            _sh("لبنة 250 جم", "علبة", "40.00", "32.00", 18, expires=14),
+            _sh("زبدة 200 جم", "قطعة", "95.00", "80.00", 15, expires=60),
+            _sh("جبنة رومي", "كيلو", "380.00", "310.00", 8, barcode=False, expires=40),
+            _sh("بيض (طبق 30)", "طبق", "180.00", "155.00", 20, barcode=False, expires=18),
+        )),
+        ("DEMO-CAT-G3", "مشروبات", "Drinks", (
+            _sh("مياه معدنية 1.5 لتر", "زجاجة", "9.00", "6.50", 72, carton=("كرتونة", "Carton", 6)),
+            _sh("مياه غازية كانز 330 مل", "كانز", "15.00", "12.00", 48, carton=("كرتونة", "Carton", 24)),
+            _sh("عصير مانجو 1 لتر", "علبة", "40.00", "32.00", 24, expires=120),
+            _sh("قهوة سريعة 3 في 1 (12 كيس)", "علبة", "85.00", "70.00", 20),
+            _sh("بن محوج 250 جم", "كيس", "150.00", "125.00", 15),
+        )),
+        ("DEMO-CAT-G4", "سناكس وحلويات", "Snacks & sweets", (
+            _sh("شيبسي 40 جم", "كيس", "10.00", "8.00", 60, carton=("كرتونة", "Carton", 30)),
+            _sh("بسكويت شاي", "باكو", "10.00", "8.00", 48),
+            _sh("شوكولاتة 30 جم", "قطعة", "20.00", "16.00", 40),
+            _sh("كرواسون محشي", "قطعة", "15.00", "12.00", 36, expires=45),
+            _sh("لب سوري 250 جم", "كيس", "75.00", "60.00", 12),
+        )),
+        ("DEMO-CAT-G5", "منظفات", "Cleaning", (
+            _sh("مسحوق غسيل 2.5 كجم", "كيس", "260.00", "215.00", 12),
+            _sh("سائل أطباق 1 لتر", "زجاجة", "55.00", "43.00", 18),
+            _sh("كلور 1 لتر", "زجاجة", "22.00", "16.00", 24),
+            _sh("مناديل ورق (10 علب)", "عبوة", "120.00", "95.00", 10),
+            _sh("صابون (4 قطع)", "عبوة", "60.00", "46.00", 16),
+            _sh("معطر أرضيات 1 لتر", "زجاجة", "50.00", "38.00", 14),
+        )),
+        ("DEMO-CAT-G6", "خضار وفاكهة بالوزن", "Fruit & veg by weight", (
+            _sh("طماطم", "كيلو", "20.00", "15.00", 40, barcode=False),
+            _sh("بطاطس", "كيلو", "18.00", "13.00", 40, barcode=False),
+            _sh("خيار", "كيلو", "25.00", "18.00", 25, barcode=False),
+            _sh("بصل", "كيلو", "22.00", "16.00", 30, barcode=False),
+            _sh("موز", "كيلو", "40.00", "30.00", 20, barcode=False),
+            _sh("برتقال", "كيلو", "30.00", "22.00", 25, barcode=False),
+            _sh("ليمون", "كيلو", "45.00", "35.00", 10, barcode=False),
+        )),
+    ),
 )
 
 FASHION = Catalog(
