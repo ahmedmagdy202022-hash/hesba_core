@@ -4,7 +4,6 @@ from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -15,6 +14,7 @@ from permissions.services import user_has_permission
 
 from .models import VariantGroup
 from .services import create_group, extend_group, matrix, parse_values, set_group_prices
+from config.paging import page_of
 
 
 WORDS = {
@@ -94,7 +94,7 @@ def group_index(request):
     groups = VariantGroup.objects.filter(active=True).annotate(item_count=Count("variants")).order_by("code")
     if query:
         groups = groups.filter(Q(code__icontains=query) | Q(name__icontains=query))
-    page = Paginator(groups, 50).get_page(request.GET.get("page"))
+    page = page_of(request, groups)
     return render(request, "variants/index.html", _context(request, page=page, q=query, categories=Category.objects.filter(active=True).order_by("category_code")))
 
 

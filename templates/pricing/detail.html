@@ -1,4 +1,5 @@
 {% extends "operations/base.html" %}
+{% load hesba_paging %}
 {% load hesba_format l10n %}
 {% block operation_content %}
 <section class="op-title-row"><div><a class="op-back" href="{% url 'pricing:list' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ price_list.label }}</h1><p><bdi>{{ price_list.code }}</bdi> · <bdi dir="ltr">{% if price_list.adjust_percent > 0 %}+{% endif %}{{ price_list.adjust_percent|unlocalize }}%</bdi> · {% if price_list.active %}{{ words.active }}{% else %}{{ words.inactive }}{% endif %}</p></div></section>
@@ -23,7 +24,7 @@
 {% for row in rows %}<tr><td class="op-cell-text">{{ row.item|named:lang }}</td><td>{{ row.item.default_sale_price|money }}</td><td>{% if can_manage %}<input type="hidden" name="shown_{{ row.item.pk }}" value="1"><input class="stk-count" type="text" inputmode="decimal" name="price_{{ row.item.pk }}" value="{% if row.explicit is not None %}{{ row.explicit|unlocalize }}{% endif %}" placeholder="{{ row.effective|unlocalize }}" aria-label="{{ words.list_price }} {{ row.item.item_code }}" autocomplete="off">{% elif row.explicit is not None %}{{ row.explicit|money }}{% else %}—{% endif %}</td><td><strong>{{ row.effective|money }}</strong></td></tr>
 {% empty %}<tr><td colspan="4">—</td></tr>{% endfor %}
 </tbody></table></div>
-{% if page.has_other_pages %}<p class="op-form-actions">{% if page.has_previous %}<a class="op-secondary" href="?lang={{ lang }}&q={{ q|urlencode }}&page={{ page.previous_page_number }}">{{ words.prev }}</a>{% endif %}<span class="op-muted">{{ page.number }} / {{ page.paginator.num_pages }}</span>{% if page.has_next %}<a class="op-secondary" href="?lang={{ lang }}&q={{ q|urlencode }}&page={{ page.next_page_number }}">{{ words.next }}</a>{% endif %}</p>{% endif %}
+{% pager page %}
 {% if can_manage and rows %}<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div>{% endif %}
 </form>
 

@@ -1,7 +1,6 @@
 from datetime import date
 from decimal import Decimal
 
-from django.core.paginator import Paginator
 from django.shortcuts import render
 
 from cashboxes.models import Cashbox
@@ -22,6 +21,7 @@ from .selectors import (
     supplier_report,
 )
 from entities import scope as entity_scope
+from config.paging import page_of
 
 
 STRINGS = {
@@ -93,7 +93,7 @@ def sales_report_view(request):
     rows = sales_report(date_from, date_to, status or None)
     if not user_has_permission(request.user, "reports.view_all_sales_report"):
         rows = rows.filter(created_by=request.user)
-    page = Paginator(rows, 50).get_page(request.GET.get("page"))
+    page = page_of(request, rows)
     return render(request, "reports/invoices.html", _context(request, title="Sales Report" if _lang(request) == "en" else "تقرير المبيعات", kind="sales", page=page, date_from=date_from_raw, date_to=date_to_raw, status=status))
 
 
@@ -104,7 +104,7 @@ def purchase_report_view(request):
     status = request.GET.get("status", "")
     if status not in {"draft", "posted", "cancelled"}:
         status = ""
-    page = Paginator(purchase_report(date_from, date_to, status or None), 50).get_page(request.GET.get("page"))
+    page = page_of(request, purchase_report(date_from, date_to, status or None))
     return render(request, "reports/invoices.html", _context(request, title="Purchase Report" if _lang(request) == "en" else "تقرير المشتريات", kind="purchases", page=page, date_from=date_from_raw, date_to=date_to_raw, status=status))
 
 
@@ -117,7 +117,7 @@ def inventory_report_view(request):
     rows = stock_report(location)
     # UI-TRACK F19: a total under the list (the same rows, summed for display).
     totals = {"lines": len(rows), "value": sum((row["stock_value"] for row in rows), Decimal("0"))}
-    return render(request, "reports/inventory.html", _context(request, title="Inventory Report" if _lang(request) == "en" else "تقرير المخزون", rows=rows, totals=totals, locations=entity_scope.locations(Location.objects).filter(active=True), selected_location=location, can_view_cost=user_has_permission(request.user, "inventory.view_cost")))
+    return render(request, "reports/inventory.html", _context(request, title="Inventory Report" if _lang(request) == "en" else "تقرير المخزون", rows=rows, page=page_of(request, rows), totals=totals, locations=entity_scope.locations(Location.objects).filter(active=True), selected_location=location, can_view_cost=user_has_permission(request.user, "inventory.view_cost")))
 
 
 def _party_context(request, party_kind):
@@ -130,7 +130,7 @@ def _party_context(request, party_kind):
     entries = selected.ledger_entries.filter(entity_scope.customer_entries_q()).select_related("sales_invoice", "customer_payment") if selected and party_kind == "customer" else None
     if selected and party_kind == "supplier":
         entries = selected.ledger_entries.filter(entity_scope.supplier_entries_q()).select_related("purchase_invoice", "supplier_payment")
-    return {"rows": rows, "parties": model.objects.filter(active=True), "selected": selected, "entries": entries, "party_kind": party_kind}
+    return {"rows": rows, "page": page_of(request, rows), "parties": model.objects.filter(active=True), "selected": selected, "entries": entries, "party_kind": party_kind}
 
 
 @require_permission("reports.view_customer_report")
@@ -151,7 +151,8 @@ def cashbox_report_view(request):
         selected = entity_scope.cashboxes(Cashbox.objects).filter(pk=cashbox_id, active=True).first()
     date_from, date_from_raw = _date_filter(request, "date_from")
     date_to, date_to_raw = _date_filter(request, "date_to")
-    return render(request, "reports/cashboxes.html", _context(request, title="Cashbox Report" if _lang(request) == "en" else "تقرير الخزن", rows=cashbox_report(selected, date_from, date_to), cashboxes=entity_scope.cashboxes(Cashbox.objects).filter(active=True), selected=selected, date_from=date_from_raw, date_to=date_to_raw))
+    rows = cashbox_report(selected, date_from, date_to)
+    return render(request, "reports/cashboxes.html", _context(request, title="Cashbox Report" if _lang(request) == "en" else "تقرير الخزن", rows=rows, page=page_of(request, rows), cashboxes=entity_scope.cashboxes(Cashbox.objects).filter(active=True), selected=selected, date_from=date_from_raw, date_to=date_to_raw))
 
 
 @require_permission("reports.view_profit_report")
@@ -174,4 +175,4 @@ def profit_report_view(request):
             totals["depreciation"] = depreciation_between(date_from, date_to)
             totals["asset_disposals"] = disposal_results_between(date_from, date_to)
             totals["net_after_depreciation"] = totals["net_profit"] - totals["depreciation"] + totals["asset_disposals"]
-    return render(request, "reports/profit.html", _context(request, title="Profit Report" if _lang(request) == "en" else "تقرير الأرباح", rows=rows, totals=totals, show_expenses=show_expenses, date_from=date_from_raw, date_to=date_to_raw))
+    return render(request, "reports/profit.html", _context(request, title="Profit Report" if _lang(request) == "en" else "تقرير الأرباح", rows=rows, page=page_of(request, rows), totals=totals, show_expenses=show_expenses, date_from=date_from_raw, date_to=date_to_raw))

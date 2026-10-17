@@ -4,7 +4,6 @@ from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -16,6 +15,7 @@ from settings_core.ui_messages import translate
 
 from .models import CustomerPriceList, PriceList
 from .services import assign_customers, list_prices, save_price_list, set_item_prices
+from config.paging import page_of
 
 
 VIEW_PERMISSION = "master_data.view_master_data"
@@ -105,7 +105,7 @@ def price_list_detail(request, pk):
     items = Item.objects.filter(active=True).order_by("item_code")
     if query:
         items = items.filter(Q(item_code__icontains=query) | Q(item_name__icontains=query) | Q(barcode=query))
-    page = Paginator(items, PAGE_SIZE).get_page(request.GET.get("page") or request.POST.get("page"))
+    page = page_of(request, items)
 
     if request.method == "POST":
         if not user_has_permission(request.user, MANAGE_PERMISSION):
