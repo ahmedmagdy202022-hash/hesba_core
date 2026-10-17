@@ -11,7 +11,7 @@ from django.utils import timezone
 
 from audit.models import AuditLog
 from closing.models import Period
-from hesba_testing.factories import make_cashbox, make_customer, make_item, make_location, make_seeded_role, make_supplier, make_user, make_user_profile, stock_in
+from hesba_testing.factories import open_test_shift, make_cashbox, make_customer, make_item, make_location, make_seeded_role, make_supplier, make_user, make_user_profile, stock_in
 from inventory.models import StockMovement
 from inventory.services import recalculate_item_average_cost
 from permissions.models import RoleCode
@@ -151,6 +151,7 @@ class InvoiceTests(UnitsSetup):
 class PosTests(UnitsSetup):
     def test_scanned_carton_is_sold_as_pieces(self):
         cashier = person(RoleCode.CASHIER, "units_cashier")
+        open_test_shift(cashier, self.cashbox)  # AN4
         self.client.force_login(cashier)
         page = self.client.get(reverse("sales:pos"))
         self.assertContains(page, 'id="hs-units"')

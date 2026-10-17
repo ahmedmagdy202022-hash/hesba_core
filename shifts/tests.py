@@ -113,3 +113,79 @@ class ShiftTests(ShiftSetup):
         self.assertContains(self.client.get(reverse("shifts:mine"), {"lang": "en"}), "Close shift")
         self.client.force_login(person(RoleCode.STOCK_KEEPER, "shift_store"))
         self.assertEqual(self.client.get(reverse("shifts:mine")).status_code, 403)
+
+
+class ShiftBeforeSellingTests(TestCase):
+    """AN4 (Ahmed: "محدش يقدر يسجل بيع غير لما يفتح وردية")."""
+
+    def setUp(self):
+        from decimal import Decimal as D
+
+        from django.utils import timezone
+
+        from hesba_testing.factories import make_cashbox, make_customer, make_item, make_location, make_seeded_role, make_user, make_user_profile, stock_in
+        from permissions.models import RoleCode
+        from reports.tests_dashboard import prepared_client
+
+        self.profile = prepared_client()  # retail: a till, so the rule starts on
+        self.cashier = make_user(username="gate_cashier")
+        make_user_profile(user=self.cashier, role=make_seeded_role(RoleCode.CASHIER))
+        self.client.force_login(self.cashier)
+        self.location = make_location(location_code="SHOP", is_default=True)
+        self.cashbox = make_cashbox(cashbox_code="TILL", is_default=True)
+        self.customer = make_customer()
+        self.item = make_item(item_code="SHIRT", default_sale_price=D("100.00"))
+        stock_in(self.item, self.location, 10, "50.00", movement_date=timezone.localdate())
+
+    def till(self):
+        from sales.pos import walk_in_customer
+
+        return self.client.post(reverse("sales:pos"), {"lang": "ar", "line_count": "1", "customer": str(walk_in_customer().pk), "location": str(self.location.pk),
+                                                        "cashbox": str(self.cashbox.pk), "discount": "0", "tendered": "100", "print": "0",
+                                                        "item_0": str(self.item.pk), "qty_0": "1", "price_0": "100.00"}, follow=True)
+
+    def test_the_rule_starts_on_wherever_there_is_a_till(self):
+        from settings_core.capabilities import capability_enabled, fits, suggested
+
+        self.assertTrue(capability_enabled("shift_required"))
+        self.assertNotIn("shift_required", suggested("commercial", "wholesale"))
+        self.assertFalse(fits("contracting", "shift_required"))
+
+    def test_no_till_sale_without_a_shift_and_the_bar_opens_one_in_place(self):
+        from sales.models import SalesInvoice
+
+        page = self.client.get(reverse("sales:pos"), {"lang": "ar"}).content.decode()
+        self.assertIn("data-shift-gate", page)
+        self.assertIn('name="next" value="/sales/pos/', page)
+        response = self.till()
+        self.assertContains(response, "افتح وردية الأول عشان تسجّل بيع.")
+        self.assertFalse(SalesInvoice.objects.exists())
+        opened = self.client.post(reverse("shifts:mine"), {"lang": "ar", "action": "open", "cashbox": self.cashbox.pk, "opening_float": "0", "next": "/sales/pos/?lang=ar"})
+        self.assertRedirects(opened, "/sales/pos/?lang=ar", fetch_redirect_response=False)
+        self.assertNotIn("data-shift-gate", self.client.get(reverse("sales:pos"), {"lang": "ar"}).content.decode())
+        self.till()
+        self.assertEqual(SalesInvoice.objects.get().status, "posted")
+
+    def test_an_invoice_is_saved_as_a_draft_but_not_posted_without_a_shift(self):
+        from sales.models import SalesInvoice
+        from hesba_testing.factories import make_draft_sales_invoice, add_sales_line
+
+        invoice = make_draft_sales_invoice(customer=self.customer, location=self.location, cashbox=self.cashbox, invoice_number="SI-GATE")
+        add_sales_line(invoice, self.item, 1, "100.00")
+        self.assertIn("data-shift-gate", self.client.get(reverse("sales:detail", args=[invoice.pk]), {"lang": "ar"}).content.decode())
+        response = self.client.post(reverse("sales:post", args=[invoice.pk]), {"lang": "ar"}, follow=True)
+        self.assertContains(response, "افتح وردية الأول")
+        self.assertEqual(SalesInvoice.objects.get(pk=invoice.pk).status, "draft")
+
+    def test_the_bar_only_returns_to_this_site(self):
+        opened = self.client.post(reverse("shifts:mine"), {"lang": "ar", "action": "open", "cashbox": self.cashbox.pk, "opening_float": "0", "next": "https://evil.example/"})
+        self.assertRedirects(opened, f"{reverse('shifts:mine')}?lang=ar", fetch_redirect_response=False)
+
+    def test_the_owner_can_switch_the_rule_off(self):
+        from sales.models import SalesInvoice
+        from settings_core.capabilities import set_capability_enabled
+
+        set_capability_enabled(self.profile, "shift_required", False)
+        self.assertNotIn("data-shift-gate", self.client.get(reverse("sales:pos"), {"lang": "ar"}).content.decode())
+        self.till()
+        self.assertEqual(SalesInvoice.objects.get().status, "posted")

@@ -7,6 +7,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 
 from cashboxes.models import Cashbox
 from permissions.decorators import require_permission
@@ -74,6 +75,9 @@ def my_shift(request):
                     raise ValidationError(words["bad"])
                 open_shift(request.user, cashbox, _amount(request.POST.get("opening_float"), words), lang)
                 messages.success(request, words["opened"])
+                back = request.POST.get("next", "")
+                if back and url_has_allowed_host_and_scheme(back, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
+                    return redirect(back)  # AN4: opened from a sales screen's "open a shift first" bar
             elif current is not None:
                 shift = close_shift(current, _amount(request.POST.get("counted_cash"), words), request.user, request.POST.get("notes", ""), lang)
                 messages.success(request, words["closed"])

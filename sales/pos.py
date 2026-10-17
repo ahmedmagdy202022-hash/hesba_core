@@ -21,6 +21,7 @@ from barcode.services import item_catalog
 from pricing.services import price_book
 from taxes.services import compute_lines, create_sales_draft_with_tax, rates_by_item, vat_enabled
 from serials.services import attach_sale_serials, pos_serial_catalog, prepare_sale_serials
+from shifts.gate import require_open_shift
 from shifts.services import open_shift_for
 from .pos_customers import customer_directory
 from units.services import units_catalog
@@ -335,6 +336,7 @@ def pos(request):
     if request.method == "POST":
         selected = {key: request.POST.get(key, "") for key in selected}
         try:
+            require_open_shift(request.user, lang)  # AN4
             lines = prepare_sale_serials(parse_cart(request.POST), lang)
             location = locations.filter(pk=selected["location"]).first() if selected["location"].isdigit() else None
             cashbox = cashboxes.filter(pk=selected["cashbox"]).first() if selected["cashbox"].isdigit() else None

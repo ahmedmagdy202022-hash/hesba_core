@@ -42,6 +42,12 @@ CAPABILITIES = {
         "about_en": "A fast sales screen with barcode scanning, change due and an 80mm receipt.",
         "available": True, "legacy_on": True, "paths": ("/sales/pos/",),
     },
+    "shift_required": {
+        "ar": "وردية قبل البيع", "en": "Shift before selling",
+        "about_ar": "مفيش بيع يتسجل (فاتورة أو كاشير) غير لما الكاشير يفتح وردية، عشان درج كل واحد يتحاسب لوحده.",
+        "about_en": "No sale is recorded (invoice or till) until the cashier opens a shift, so each drawer is counted on its own.",
+        "available": True, "paths": (),
+    },
     "barcode": {
         "ar": "الباركود والملصقات", "en": "Barcodes & labels",
         "about_ar": "توليد باركود للأصناف وطباعة ملصقات الأسعار.",
@@ -185,8 +191,8 @@ ACTIVITY_PRESETS = {
 #: it at all (a builder never needs a quick till or sizes and colours). One that
 #: is already on still shows in Settings, so it can be switched off.
 NOT_FOR = {
-    catalog.CONTRACTING: {"pos", "barcode", "variants", "serials", "batches_expiry", "installments", "price_lists"},
-    catalog.EDUCATION: {"pos", "barcode", "variants", "serials", "batches_expiry", "units"},
+    catalog.CONTRACTING: {"pos", "shift_required", "barcode", "variants", "serials", "batches_expiry", "installments", "price_lists"},
+    catalog.EDUCATION: {"pos", "shift_required", "barcode", "variants", "serials", "batches_expiry", "units"},
     catalog.MEDICAL: {"variants", "serials"},
     catalog.RESTAURANTS: {"serials", "installments"},
     catalog.SERVICES: {"variants", "batches_expiry"},
@@ -225,6 +231,8 @@ def about(activity, slug, lang="ar"):
 
 
 def preset_state(activity, sub_activity, slug):
+    if slug == "shift_required":  # AN4: wherever there is a till, a sale waits for an open shift
+        slug = "pos"
     activity, sub_activity = catalog.closest(activity, sub_activity)  # OTHER-001: "closer to services" is preset as services
     if not fits(activity, slug):
         return OPTIONAL

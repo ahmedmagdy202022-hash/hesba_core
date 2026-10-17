@@ -7,7 +7,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from cashboxes.services import get_cashbox_balance
-from hesba_testing.factories import make_cashbox, make_customer, make_item, make_location, make_seeded_role, make_user, make_user_profile, stock_in
+from hesba_testing.factories import open_test_shift, make_cashbox, make_customer, make_item, make_location, make_seeded_role, make_user, make_user_profile, stock_in
 from inventory.models import StockMovement
 from inventory.services import recalculate_item_average_cost
 from permissions.models import RoleCode
@@ -33,6 +33,7 @@ class PosTests(TestCase):
         self.client.force_login(self.cashier)
         self.location = make_location(location_code="SHOP", is_default=True)
         self.cashbox = make_cashbox(cashbox_code="TILL", is_default=True)
+        open_test_shift(self.cashier, self.cashbox)  # AN4: the till sells inside an open shift
         self.shirt = make_item(item_code="SHIRT", barcode="5901234123457", default_sale_price="240.00")
         self.belt = make_item(item_code="BELT", default_sale_price="120.00")
         for item in (self.shirt, self.belt):
