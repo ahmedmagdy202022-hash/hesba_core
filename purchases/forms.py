@@ -5,7 +5,7 @@ from django.forms import BaseFormSet, formset_factory
 from django.utils import timezone
 
 from cashboxes.models import Cashbox
-from config.form_defaults import ZeroWhenBlank, preselect
+from config.form_defaults import ZeroWhenBlank, item_choice_label, preselect
 from config.numbering import AutoNumbered
 from master_data.models import Item, Location, Supplier
 
@@ -103,6 +103,8 @@ class PurchaseLineInputForm(forms.Form):
         for name, field in self.fields.items():
             field.label = labels[name]
         self.fields["item"].queryset = Item.objects.filter(active=True)
+        # UI-TRACK grocery G05: a narrow line shows the start of the choice; let that be the item's name, not its code.
+        self.fields["item"].label_from_instance = item_choice_label
         # UNITS-001: optional bigger unit (carton, box...) when the shop uses units.
         from units.models import ItemUnit
         from units.services import units_enabled

@@ -62,6 +62,15 @@ def has_errors(fields):
     return any(field.errors for field in fields)
 
 
+#: Line extras a trade must fill on every line it receives (UI-TRACK grocery G08): shown open, not folded.
+ALWAYS_OPEN = ("batch_no", "expiry_date", "serials")
+
+
+@register.filter
+def must_fill(fields):
+    return any(field.name in ALWAYS_OPEN for field in fields)
+
+
 @register.filter
 def has_values(fields):
     return any(field.value() not in (None, "", []) for field in fields)
