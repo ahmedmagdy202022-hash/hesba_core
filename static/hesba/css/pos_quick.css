@@ -1,0 +1,17 @@
+/* AN6: tap-to-add tiles, one-tap cash, and the tucked-away warehouse/cashbox on the till. */
+.pos-quick{margin-block:var(--hs-space-3)}
+.pos-quick h2{margin:0 0 var(--hs-space-2);font-size:var(--hs-text-sm);color:var(--hs-muted);font-weight:var(--hs-weight-semibold)}
+.pos-quick__grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:var(--hs-space-2)}
+.pos-tile{display:grid;gap:var(--hs-space-1);align-content:space-between;min-height:72px;padding:var(--hs-space-2) var(--hs-space-3);border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);background:var(--hs-surface);color:var(--hs-ink);font:inherit;text-align:start;cursor:pointer;transition:border-color .12s ease,background .12s ease,transform .12s ease}
+.pos-tile span{font-size:var(--hs-text-sm);line-height:1.35;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.pos-tile b{color:var(--hs-teal-deep);font-size:var(--hs-text-sm)}
+.pos-tile:hover,.pos-tile:focus-visible{border-color:var(--hs-teal);background:var(--hs-teal-wash)}
+.pos-tile.is-added{transform:scale(.97);background:var(--hs-teal-wash);border-color:var(--hs-teal)}
+.pos-cash{display:flex;flex-wrap:wrap;gap:var(--hs-space-2);margin-block:calc(-1 * var(--hs-space-1)) var(--hs-space-3)}
+.pos-cash button{flex:1 1 56px;min-height:40px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-sm);background:var(--hs-surface);color:var(--hs-ink);font:inherit;font-weight:var(--hs-weight-semibold);cursor:pointer}
+.pos-cash button[data-cash="exact"]{flex-basis:100%;background:var(--hs-teal-wash);border-color:var(--hs-teal);color:var(--hs-teal-deep)}
+.pos-cash button:hover,.pos-cash button:focus-visible{border-color:var(--hs-teal)}
+.pos-more{border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);padding:var(--hs-space-2) var(--hs-space-3);margin-block-end:var(--hs-space-3)}
+.pos-more summary{cursor:pointer;font-size:var(--hs-text-sm);color:var(--hs-muted)}
+.pos-more summary span{color:var(--hs-ink)}
+.pos-more[open] summary{margin-block-end:var(--hs-space-2)}

@@ -293,6 +293,32 @@ def _error_text(exc, words):
     return " ".join(parts)
 
 
+QUICK_PICKS = 24
+
+
+def quick_pick_ids(catalog, days=60):
+    """AN6 (Ahmed: "شاشة الكاشير محتاجة تكون أسهل وأسلس"): the items this shop sells most lately,
+    as tap-to-add tiles; topped up from the catalog for a shop that has sold little yet."""
+
+    from datetime import timedelta
+
+    from django.db.models import Sum
+    from django.utils import timezone
+
+    from .models import SalesLine
+
+    on_sale = [entry["id"] for entry in catalog]
+    since = timezone.localdate() - timedelta(days=days)
+    invoices = entity_scope.scope(SalesInvoice.objects, entity_scope.SALES_INVOICE).filter(status="posted", invoice_date__gte=since)
+    sold = (SalesLine.objects.filter(invoice__in=invoices, item_id__in=on_sale)
+            .values("item_id").annotate(units=Sum("quantity")).order_by("-units").values_list("item_id", flat=True)[:QUICK_PICKS])
+    picks = list(sold)
+    picks += [item_id for item_id in on_sale if item_id not in picks][:QUICK_PICKS - len(picks)]
+    names = {item.pk: " · ".join(part for part in (item.item_name, item.size, item.color) if part)
+             for item in Item.objects.filter(pk__in=picks).only("item_name", "size", "color")}
+    return [{"id": item_id, "name": names.get(item_id, "")} for item_id in picks]
+
+
 @require_permission("sales.create_sales_invoice")
 def pos(request):
     lang = _lang(request)
@@ -333,6 +359,7 @@ def pos(request):
                 return redirect(f"/print/sales/{invoice.pk}/?lang={lang}&format=receipt&autoprint=1&next=pos")
             return redirect(f"/sales/pos/?lang={lang}&last={invoice.pk}")
     cart_back = _clean_cart(cart_back)
+    catalog = item_catalog(sale_prices=True)
     last = request.GET.get("last", "")
     return render(
         request,
@@ -343,7 +370,8 @@ def pos(request):
             "words": words,
             "page_title": words["page_title"],
             "section": "sales",
-            "catalog": item_catalog(sale_prices=True),
+            "catalog": catalog,
+            "quick_picks": quick_pick_ids(catalog),
             "price_book": price_book(),
             "tax_rates": rates_by_item(),
             "units": units_catalog(),
