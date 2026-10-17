@@ -228,9 +228,13 @@ def _einvoice_problems(invoice, lang):
 
 
 def _post_now(request, pk, lang, saved_first=False):
+    from shifts.gate import require_open_shift
+
+    invoice = entity_scope.get_or_404(SalesInvoice, entity_scope.SALES_INVOICE, pk=pk)  # another entity's invoice stays a 404
     try:
+        require_open_shift(request.user, lang)  # AN4: no sale is posted without an open shift
         with transaction.atomic():
-            check_invoice_serials(entity_scope.get_or_404(SalesInvoice, entity_scope.SALES_INVOICE, pk=pk), lang)  # SERIAL-001: still in stock?
+            check_invoice_serials(invoice, lang)  # SERIAL-001: still in stock?
             post_sales_invoice(pk, request.user)
     except ValidationError as exc:
         # Codex #233: one message either way; after "save and post" it also says the draft was kept.

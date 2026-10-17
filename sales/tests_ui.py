@@ -163,6 +163,9 @@ class InvoiceRedesignTests(TestCase):
         cls.location = make_location(location_code="L-INV", is_selling_location=True, is_receiving_location=True)
         cls.item = make_item(item_code="IT-INV", default_sale_price="50")
         adjust_stock("INV-OPEN", timezone.localdate(), cls.item, cls.location, StockAdjustmentDirection.IN, Decimal("10"), "opening", cls.owner, unit_cost=Decimal("20"))
+        from hesba_testing.factories import open_test_shift
+
+        open_test_shift(cls.owner)  # AN4: posting a sale needs an open shift
 
     def post(self, then=None):
         data = {"lang": "ar", "invoice_number": "", "invoice_date": timezone.localdate().isoformat(), "customer": self.customer.pk,
