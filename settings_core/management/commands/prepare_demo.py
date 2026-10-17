@@ -170,7 +170,74 @@ class Command(BaseCommand):
         if "workorders" in extras:
             self._workorders(master, staff, owner)
         self._options(master, owner, modules)
+        if catalog.shelf:
+            self._shelf(master, catalog, owner, modules, "batches" in extras)
         self._fit_users(modules)
+
+    #: AN7 (G06): (days ago, ((shelf item number, quantity), ...)) of walk-in sales from the shelf, so the
+    #: till's buttons and the reports have the weighed goods and the everyday packs selling.
+    SHELF_SALES = (
+        (13, ((7, 2), (30, Decimal("1.5")), (14, 6), (26, 1))), (11, ((32, 2), (35, Decimal("0.5")), (8, 2), (21, 3))),
+        (10, ((7, 1), (31, 2), (33, 1), (15, 4))), (8, ((1, 3), (34, Decimal("1.5")), (8, 1), (13, 1))),
+        (7, ((7, 2), (36, 2), (22, 2), (12, 1))), (5, ((30, Decimal("2.5")), (32, 1), (9, 4), (14, 6))),
+        (4, ((7, 3), (33, Decimal("1.5")), (3, 2), (28, 1))), (3, ((35, 1), (31, 1), (16, 1), (23, 2))),
+        (2, ((7, 2), (32, 2), (8, 2), (21, 2))), (1, ((30, 2), (34, 1), (36, Decimal("0.5")), (14, 6))),
+    )
+
+    def _shelf(self, master, catalog, owner, modules, batches):
+        """AN7 (G06, Ahmed approved): the rest of a supermarket's shelf, in sections; packs scan, weighed goods
+        do not; some are bought by the carton and the fresh ones are kept by batch. Bought once on credit from
+        the wholesaler (so the cashbox never goes below zero) and sold to walk-in customers over two weeks."""
+
+        from barcode.symbology import internal_ean13
+        from master_data.models import Category, Item
+        from reports.management.commands.seed_demo_business import Command as Seed
+        from sales.pos import walk_in_customer
+        from settings_core.capabilities import enabled_capabilities
+        from units.models import ItemUnit
+
+        if Item.objects.filter(item_code="DEMO-SH-01").exists():
+            return
+        on = set(enabled_capabilities())
+        today = timezone.localdate()
+        base_category = master["items"][0].category
+        shelf, number = [], 0
+        for code, name_ar, name_en, products in catalog.shelf:
+            category = base_category if code is None else Category.objects.update_or_create(
+                category_code=code, defaults={"name_ar": name_ar, "name_en": name_en, "active": True})[0]
+            for product in products:
+                number += 1
+                item = Item.objects.create(item_code=f"DEMO-SH-{number:02d}", item_name=product.name, category=category, unit=product.unit,
+                                           default_sale_price=product.sale, default_purchase_price=product.purchase, min_stock=Decimal("0"),
+                                           is_stock_tracked=True, active=True, import_batch_id="DEMO-BUSINESS")
+                if product.barcode and "barcode" in on:
+                    Item.objects.filter(pk=item.pk).update(barcode=internal_ean13(item.pk))
+                if product.carton and "units" in on:
+                    name, name_en_unit, factor = product.carton
+                    ItemUnit.objects.create(item=item, name_ar=name, name_en=name_en_unit, factor=Decimal(factor),
+                                            sale_price=(product.sale * factor).quantize(Decimal("0.01")),
+                                            purchase_price=(product.purchase * factor).quantize(Decimal("0.01")))
+                shelf.append((item, product))
+        if "purchases" not in modules:
+            return
+        seed = Seed()
+        received = today - timedelta(days=16)
+        seed._post_purchase("DEMO-PI-SHELF", received, master["suppliers"][1], master["location"], master["cashboxes"][0],
+                            [(item, product.quantity) for item, product in shelf], Decimal("0.00"), owner)
+        if batches:
+            from batches.services import register_batch
+
+            for item, product in shelf:
+                if product.expires:
+                    register_batch(item=item, location=master["location"], batch_no=f"LOT-{item.item_code[-2:]}{received:%y%m%d}",
+                                   expiry_date=today + timedelta(days=product.expires), quantity=product.quantity, received_on=received, user=owner)
+        walk_in = walk_in_customer()
+        for n, (days, lines) in enumerate(self.SHELF_SALES, start=1):
+            sold = [(shelf[index - 1][0], Decimal(quantity)) for index, quantity in lines]
+            total = sum(((item.default_sale_price * quantity).quantize(Decimal("0.01")) for item, quantity in sold), Decimal("0.00"))
+            seed._post_sale(f"DEMO-SI-SH-{n:02d}", today - timedelta(days=days), walk_in, master["location"], master["cashboxes"][0],
+                            sold, total, owner)
+        self._spread_sale_times()
 
     #: A demo login whose role only makes sense with one module (HG-048): a clothes shop has no waiter.
     ROLE_MODULES = {"waiter": "tables_orders", "engineer": "projects"}
