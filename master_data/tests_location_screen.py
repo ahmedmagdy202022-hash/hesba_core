@@ -26,7 +26,7 @@ class LocationScreenTests(TestCase):
         for help_text in ("ده اللي بيتختار لوحده في الفواتير والحركات الجديدة.", "ينفع تستلم فيه بضاعة المشتريات والتحويلات.",
                           "ينفع تبيع منه وتخصم من رصيده في فواتير البيع."):
             self.assertIn(help_text, page)
-        self.assertIn('class="md-checks"', page)
+        self.assertIn('class="hs-checks"', page)  # AN3: the tick boxes sit together under "الإعدادات"
         self.assertIn('rows="3"', page)
         self.assertNotIn('rows="10"', page)
 

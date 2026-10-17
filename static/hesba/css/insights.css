@@ -32,3 +32,12 @@
 .ins-table-view table{width:100%;border-collapse:collapse}.ins-table-view td,.ins-table-view th{padding:4px 6px;border-bottom:1px solid var(--hs-line);text-align:start}
 @media(max-width:860px){.ins-grid{grid-template-columns:1fr}.ins-bars li{grid-template-columns:minmax(5rem,1fr) 1.2fr auto}}
 @media(max-width:700px){.op-summary-grid.ins-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.ins-svg .a{font-size:16px}}
+/* AN3 (Ahmed: "الشارتات تكون بالوان … لو هيكون اشيك"): one hue still carries the amount (no rainbow: colour would claim a meaning
+   the bars do not have), but it now reads with depth: the teal runs light to deep along each bar, and the leader of a ranking wears gold. */
+.ins-bars .f{background:linear-gradient(90deg,var(--hs-chart-1),var(--hs-teal-deep))}
+[dir="rtl"] .ins-bars .f{background:linear-gradient(270deg,var(--hs-chart-1),var(--hs-teal-deep))}
+.ins-bars li:first-child .f{background:linear-gradient(90deg,var(--hs-chart-2),var(--hs-gold))}
+[dir="rtl"] .ins-bars li:first-child .f{background:linear-gradient(270deg,var(--hs-chart-2),var(--hs-gold))}
+.ins-bars .t{height:14px;border-radius:7px}
+.ins-progress span{background:linear-gradient(90deg,var(--hs-chart-1),var(--hs-teal-deep))}
+.ins-card{border-radius:var(--hs-radius-xl);box-shadow:var(--hs-shadow-sm);border-top:3px solid var(--hs-chart-1)}

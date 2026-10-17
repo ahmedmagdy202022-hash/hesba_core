@@ -1,0 +1,20 @@
+{% load hesba_labels hesba_forms %}{# AN3: a form in short titled parts; `prefix` keeps each app's field class (md / op) so the required star still works. #}
+<div class="hs-sections">
+{% for part in form.sections %}<section class="hs-section" data-section="{{ part.key }}">
+  {% if part.title %}<header class="hs-section__head"><span class="hs-section__num" aria-hidden="true">{{ forloop.counter }}</span><div><h2>{{ part.title }}</h2>{% if part.hint %}<p>{{ part.hint }}</p>{% endif %}</div></header>{% endif %}
+  <div class="hs-section__grid">{% for field in part.fields %}
+    <div class="{{ prefix|default:'op' }}-field{% if field|is_wide %} hs-field--wide{% endif %}{% if field.errors %} has-error{% endif %}">
+      <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+      {{ field }}
+      {% if field.help_text %}<small class="hs-help">{{ field.help_text }}</small>{% endif %}
+      {% for error in field.errors %}<div class="{{ prefix|default:'op' }}-field-error">{{ error|ui:lang }}</div>{% endfor %}
+    </div>{% endfor %}
+  </div>
+</section>{% endfor %}
+{% if form.checks %}<section class="hs-section hs-section--checks" data-section="settings">
+  <header class="hs-section__head"><span class="hs-section__num" aria-hidden="true">✓</span><div><h2>{% if lang == 'en' %}Settings{% else %}الإعدادات{% endif %}</h2></div></header>
+  <div class="hs-checks">{% for field in form.checks %}
+    <div class="hs-check">{{ field }}<label for="{{ field.id_for_label }}"><b>{{ field.label }}</b>{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}</label>{% for error in field.errors %}<div class="{{ prefix|default:'op' }}-field-error">{{ error|ui:lang }}</div>{% endfor %}</div>{% endfor %}
+  </div>
+</section>{% endif %}
+</div>

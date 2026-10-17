@@ -3,6 +3,9 @@ from decimal import Decimal
 from django import forms
 from django.utils import timezone
 
+from config.form_sections import Sectioned
+from config.numbering import AutoNumbered
+
 from settings_core.display_labels import localized_choices
 
 from .models import Cashbox, CashboxOperation, CashboxOperationType
@@ -58,7 +61,14 @@ class OpeningBalanceReversalForm(forms.Form):
             self.initial["reversal_date"] = timezone.localdate()
 
 
-class CashboxOperationForm(forms.Form):
+class CashboxOperationForm(Sectioned, AutoNumbered, forms.Form):
+    # AN3 (Ahmed: "يعني ايه رقم المرجع"): the movement numbers itself; a receipt number can still be typed.
+    auto_number = ("reference_number", CashboxOperation, "reference_number", "CO-")
+    sections_spec = (
+        ("what", "الحركة", "The movement", "إيداع في خزنة، صرف منها، أو تحويل بين خزنتين.", "Cash in, cash out, or a transfer between two cashboxes.", ("operation_type", "amount", "operation_date")),
+        ("where", "الخزن", "Cashboxes", "للإيداع اختار المستلمة بس، وللصرف المصدر بس، وللتحويل الاتنين.", "Cash in: the receiving one only. Cash out: the source only. Transfer: both.", ("source_cashbox", "destination_cashbox")),
+        ("why", "السبب", "Reason", "", "", ("reason", "reference_number")),
+    )
     reference_number = forms.CharField(max_length=100)
     operation_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
     operation_type = forms.ChoiceField(choices=CashboxOperationType.choices)
@@ -75,7 +85,7 @@ class CashboxOperationForm(forms.Form):
 
     LABELS = {
         "ar": {
-            "reference_number": "رقم المرجع",
+            "reference_number": "رقم الحركة",
             "operation_date": "تاريخ الحركة",
             "operation_type": "نوع الحركة",
             "source_cashbox": "الخزنة المصدر",
@@ -84,7 +94,7 @@ class CashboxOperationForm(forms.Form):
             "reason": "السبب",
         },
         "en": {
-            "reference_number": "Reference number",
+            "reference_number": "Movement number",
             "operation_date": "Operation date",
             "operation_type": "Operation type",
             "source_cashbox": "Source cashbox",
@@ -106,10 +116,16 @@ class CashboxOperationForm(forms.Form):
         )
         if not self.is_bound:
             self.initial["operation_date"] = timezone.localdate()
+        self.lang = "en" if lang == "en" else "ar"
+        self.fields["reference_number"].help_text = (
+            "Made for you; type your receipt number here if you have one." if lang == "en"
+            else "بيتعمل لوحده؛ لو عندك رقم إيصال اكتبه هنا."
+        )
+        self.offer_auto_number(lang)
 
     def clean_reference_number(self):
-        number = self.cleaned_data["reference_number"].strip()
-        if CashboxOperation.objects.filter(reference_number=number).exists():
+        number = (self.cleaned_data["reference_number"] or "").strip()
+        if number and CashboxOperation.objects.filter(reference_number=number).exists():
             raise forms.ValidationError("A cash operation with this reference already exists.")
         return number
 

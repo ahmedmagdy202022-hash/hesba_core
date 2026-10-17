@@ -66,6 +66,15 @@ def _date_filter(request, name):
         return None, raw
 
 
+#: AN3 (Ahmed: "شكل الكروت محتاج يكون اشيك"): each report card gets the menu's icon and a colour for its kind of work.
+CARD_LOOK = {
+    "reports:insights": ("dashboard", "teal"), "reports:daily": ("operations", "navy"), "reports:sales": ("operations", "teal"),
+    "reports:purchases": ("purchases", "gold"), "reports:inventory": ("inventory", "navy"), "reports:customers": ("customers", "teal"),
+    "reports:suppliers": ("suppliers", "gold"), "reports:cashboxes": ("cashboxes", "navy"), "reports:aging": ("customers", "gold"),
+    "reports:reps": ("staff", "teal"), "taxes:report": ("taxes", "navy"), "reports:profit": ("reports", "gold"),
+}
+
+
 def report_hub(request):
     from sales.models import SalesInvoice
     from staff.services import reps_in_use
@@ -80,6 +89,8 @@ def report_hub(request):
         if url_name != "taxes:report" or capability_enabled("vat")  # TAX-001
         if url_name != "reports:reps" or reps_shown  # FEEDBACK-R1
     ]
+    for card in cards:
+        card["icon"], card["tone"] = CARD_LOOK.get(card["url_name"], ("reports", "navy"))
     return render(request, "reports/functional_hub.html", _context(request, cards=cards, checkpoint_code="096_FOUNDATION_READ_ONLY_REPORT_HUB"))
 
 
@@ -117,7 +128,8 @@ def inventory_report_view(request):
     rows = stock_report(location)
     # UI-TRACK F19: a total under the list (the same rows, summed for display).
     totals = {"lines": len(rows), "value": sum((row["stock_value"] for row in rows), Decimal("0"))}
-    return render(request, "reports/inventory.html", _context(request, title="Inventory Report" if _lang(request) == "en" else "تقرير المخزون", rows=rows, page=page_of(request, rows), totals=totals, locations=entity_scope.locations(Location.objects).filter(active=True), selected_location=location, can_view_cost=user_has_permission(request.user, "inventory.view_cost")))
+    return render(request, "reports/inventory.html", _context(request, title="Inventory Report" if _lang(request) == "en" else "تقرير المخزون", rows=rows, page=page_of(request, rows), totals=totals, locations=entity_scope.locations(Location.objects).filter(active=True), selected_location=location, can_view_cost=user_has_permission(request.user, "inventory.view_cost"),
+                  can_labels=capability_enabled("barcode") and user_has_permission(request.user, "barcode.print_labels")))
 
 
 def _party_context(request, party_kind):
