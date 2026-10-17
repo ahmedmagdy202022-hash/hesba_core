@@ -4,7 +4,6 @@ from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
-from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
@@ -16,6 +15,7 @@ from permissions.decorators import require_permission
 from permissions.services import user_has_permission
 
 from .models import ItemUnit
+from config.paging import page_of
 
 
 WORDS = {
@@ -56,7 +56,7 @@ def unit_index(request):
     items = Item.objects.filter(active=True).annotate(unit_count=Count("alt_units", filter=Q(alt_units__active=True))).order_by("-unit_count", "item_code")
     if query:
         items = items.filter(Q(item_code__icontains=query) | Q(item_name__icontains=query) | Q(barcode=query))
-    page = Paginator(items, 50).get_page(request.GET.get("page"))
+    page = page_of(request, items)
     return render(request, "units/index.html", _context(request, page=page, q=query))
 
 

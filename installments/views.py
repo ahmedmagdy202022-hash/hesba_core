@@ -6,7 +6,6 @@ from urllib.parse import quote
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -21,6 +20,7 @@ from sales.models import SalesInvoice
 from .models import InstalmentPlan, PlanStatus
 from .services import add_months, cancel_plan, collect, create_plan, is_active, schedule, split
 from entities import scope as entity_scope
+from config.paging import page_of
 
 
 WORDS = {
@@ -77,7 +77,7 @@ def plan_list(request):
             continue
         rows.append({"plan": plan, "info": info})
     rows.sort(key=lambda row: (-row["info"]["overdue"], row["info"]["next_due"].due_date if row["info"]["next_due"] else date.max))
-    page = Paginator(rows, 50).get_page(request.GET.get("page"))
+    page = page_of(request, rows)
     return render(request, "installments/list.html", _context(request, page=page, only_overdue=only_overdue))
 
 

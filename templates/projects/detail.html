@@ -34,7 +34,7 @@
 {% empty %}<tr><td colspan="7" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
 </tbody></table></div>
 {% if can_issue and is_open %}<form class="op-form" method="post" data-issue-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="issue"><h2>{{ words.issue_btn }}</h2><p class="op-muted">{{ words.issue_note }}</p>
-<div class="op-form-grid"><div class="op-field"><label for="mi-item">{{ words.item }}</label><select id="mi-item" name="item">{% for item in stock_items %}<option value="{{ item.pk }}">{{ item.item_code }} · {{ item.item_name }}</option>{% endfor %}</select></div>
+<div class="op-form-grid"><div class="op-field"><label for="mi-item">{{ words.item }}</label><select id="mi-item" name="item">{% for item in stock_items %}<option value="{{ item.pk }}">{{ item|choice_text:lang }}</option>{% endfor %}</select></div>
 <div class="op-field"><label for="mi-loc">{{ words.location }}</label><select id="mi-loc" name="location">{% for location in locations %}<option value="{{ location.pk }}"{% if location.is_default %} selected{% endif %}>{{ location }}</option>{% endfor %}</select></div>
 <div class="op-field"><label for="mi-qty">{{ words.qty }}</label><input id="mi-qty" name="quantity" inputmode="decimal" dir="ltr" required></div></div>
 <div class="op-form-actions"><button class="op-primary" type="submit">{{ words.issue_btn }}</button></div></form>{% endif %}

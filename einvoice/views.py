@@ -2,7 +2,6 @@
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
-from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Q
 from django.http import HttpResponse
@@ -19,6 +18,7 @@ from sales.models import SalesInvoice
 
 from .models import ItemCode, ItemCodeType, ReceiverProfile, ReceiverType
 from .services import ISSUER_FIELDS, build_document, document_json, issuer_settings, save_issuer_settings
+from config.paging import page_of
 
 
 PAGE_SIZE = 40
@@ -91,7 +91,7 @@ def _context(request, **extra):
 
 
 def _page(queryset, request):
-    return Paginator(queryset, PAGE_SIZE).get_page(request.GET.get("page") or request.POST.get("page"))
+    return page_of(request, queryset)
 
 
 @require_permission("settings.view_settings")

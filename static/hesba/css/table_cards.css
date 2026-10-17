@@ -35,3 +35,5 @@
   /* Links and buttons inside a card stay comfortably tappable. */
   table.hs-cards tbody td a, table.hs-cards tbody td button { min-height: var(--hs-control-height, 44px); display: inline-flex; align-items: center; }
 }
+/* AN2 (F33): the name leads; the code sits small beside it. */
+.hs-code{font-size:.78em;font-weight:500;color:var(--hs-muted);margin-inline-start:.35em;letter-spacing:.02em;white-space:nowrap}
