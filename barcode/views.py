@@ -1,5 +1,4 @@
 from django.contrib import messages
-from django.core.paginator import Paginator
 from django.db.models import Q
 from django.shortcuts import redirect, render
 from django.utils.safestring import mark_safe
@@ -17,6 +16,7 @@ from .services import assign_missing_barcodes
 from .label_templates import FIELDS, TEMPLATES, offset, spec
 from .label_templates import choices as label_choices
 from .symbology import barcode_modules, barcode_svg
+from config.paging import page_of
 
 
 WORDS = {
@@ -158,7 +158,7 @@ def labels(request):
         items = items.filter(pk__in=copies)
     if query:
         items = items.filter(Q(item_code__icontains=query) | Q(barcode__icontains=query) | Q(item_name__icontains=query))
-    page = Paginator(items, 50).get_page(request.GET.get("page"))
+    page = page_of(request, items)
     if copies:
         page.object_list = list(page.object_list)
         for item in page.object_list:

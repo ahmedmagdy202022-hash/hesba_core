@@ -1,4 +1,5 @@
 {% extends "master_data/base.html" %}
+{% load hesba_paging %}
 {% load hesba_capabilities %}
 {% block master_content %}
 <section class="md-title-row">
@@ -53,11 +54,5 @@
   </table>
 </div>
 
-{% if page.paginator.num_pages > 1 %}
-<nav class="md-pagination">
-  {% if page.has_previous %}<a href="?lang={{ lang }}&q={{ query|urlencode }}&status={{ status_filter }}&page={{ page.previous_page_number }}">‹</a>{% endif %}
-  <span>{{ page.number }} / {{ page.paginator.num_pages }}</span>
-  {% if page.has_next %}<a href="?lang={{ lang }}&q={{ query|urlencode }}&status={{ status_filter }}&page={{ page.next_page_number }}">›</a>{% endif %}
-</nav>
-{% endif %}
+{% pager page %}
 {% endblock %}

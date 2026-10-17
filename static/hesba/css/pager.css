@@ -1,0 +1,14 @@
+/* AN1: one pager for every list and report: where you are, previous/next, and how many rows a page shows. */
+.hs-pager{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 18px;margin:14px 0 4px;padding:10px 14px;border:1px solid var(--hs-line);border-radius:14px;background:var(--hs-surface);color:var(--hs-muted);font-size:14px}
+.hs-pager__count{font-variant-numeric:tabular-nums}
+.hs-pager__steps{display:inline-flex;align-items:center;gap:8px}
+.hs-pager__step{display:inline-flex;align-items:center;min-height:40px;padding:0 14px;border:1px solid var(--hs-line);border-radius:10px;background:var(--hs-surface);color:var(--hs-navy);font-weight:700;text-decoration:none}
+.hs-pager__step:hover{border-color:var(--hs-teal);background:var(--hs-teal-wash)}
+.hs-pager__at{min-width:4.5em;text-align:center;color:var(--hs-navy);font-weight:700;font-variant-numeric:tabular-nums}
+.hs-pager__sizes{display:inline-flex;align-items:center;gap:4px}
+.hs-pager__sizes a,.hs-pager__sizes b{display:inline-grid;place-items:center;min-width:40px;min-height:36px;padding:0 6px;border-radius:9px;font-variant-numeric:tabular-nums}
+.hs-pager__sizes a{color:var(--hs-navy);text-decoration:none}
+.hs-pager__sizes a:hover{background:var(--hs-teal-wash)}
+.hs-pager__sizes b{background:var(--hs-navy);color:var(--hs-surface)}
+@media (max-width:640px){.hs-pager{justify-content:center}.hs-pager__count{width:100%;text-align:center}}
+@media print{.hs-pager{display:none}}
