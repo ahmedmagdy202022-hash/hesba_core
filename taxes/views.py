@@ -5,7 +5,6 @@ from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
-from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import redirect, render
@@ -19,6 +18,7 @@ from permissions.services import user_has_permission
 
 from .models import ItemTaxRate, TaxRate
 from .services import default_rate, vat_return
+from config.paging import page_of
 
 
 VIEW_PERMISSION = "master_data.view_master_data"
@@ -99,7 +99,7 @@ def tax_settings(request):
     items = Item.objects.filter(active=True).order_by("item_code")
     if query:
         items = items.filter(Q(item_code__icontains=query) | Q(item_name__icontains=query) | Q(barcode=query))
-    page = Paginator(items, PAGE_SIZE).get_page(request.GET.get("page") or request.POST.get("page"))
+    page = page_of(request, items)
     if request.method == "POST":
         if not user_has_permission(request.user, MANAGE_PERMISSION):
             raise PermissionDenied("Managing tax rates needs master_data.manage_items.")

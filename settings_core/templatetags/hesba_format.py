@@ -196,3 +196,42 @@ def currency_code():
     except DatabaseError:
         return ""
     return profile.default_currency if profile is not None else ""
+
+
+#: AN2 (F33): the field that holds each record's code, for the small code shown after its name.
+_CODE_FIELDS = ("item_code", "customer_code", "supplier_code", "location_code", "cashbox_code", "category_code", "code")
+
+
+def name_and_code(obj, lang="ar"):
+    """(the name a screen shows, the record's code) for an item, a party, a place, a cashbox or a category."""
+
+    if obj is None:
+        return "", ""
+    code = next((getattr(obj, field) for field in _CODE_FIELDS if getattr(obj, field, "")), "")
+    if hasattr(obj, "display_name"):
+        name = obj.display_name
+    elif hasattr(obj, "name_ar"):
+        name = (getattr(obj, "name_en", "") if lang == "en" else "") or obj.name_ar
+    else:
+        name = getattr(obj, "name", "") or str(obj)
+    return name or code, code
+
+
+@register.filter
+def named(obj, lang="ar"):
+    """AN2 (F33): the name, with the code small beside it (``{{ item|named:lang }}``)."""
+
+    from django.utils.html import conditional_escape, format_html
+
+    name, code = name_and_code(obj, lang)
+    if not code or code == name:
+        return conditional_escape(name)
+    return format_html('{} <small class="hs-code"><bdi>{}</bdi></small>', name, code)
+
+
+@register.filter
+def choice_text(obj, lang="ar"):
+    """AN2: a record inside a dropdown option (plain text): name first, then the code to search by."""
+
+    name, code = name_and_code(obj, lang)
+    return f"{name} · {code}" if code and code != name else name

@@ -39,7 +39,7 @@ class Entity(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.code} - {self.name_ar}"
+        return self.name_ar or self.code  # AN2 (F33)
 
     def display(self, lang="ar"):
         return (self.name_en or self.name_ar) if lang == "en" else self.name_ar

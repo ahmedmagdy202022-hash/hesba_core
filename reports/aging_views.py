@@ -5,6 +5,7 @@ from django.core.exceptions import PermissionDenied
 from django.shortcuts import redirect, render
 from django.utils import timezone
 
+from config.paging import page_of
 from permissions.services import user_has_permission
 
 from .aging import BUCKETS, aging_rows, aging_totals, credit_days, reminder_link, set_credit_days
@@ -118,6 +119,7 @@ def aging_report(request):
             "page_title": words["page_title"],
             "kind": kind,
             "rows": rows,
+            "page": page_of(request, rows),  # AN1: a page at a time; the totals above still count every row
             "totals": aging_totals(rows),
             "buckets": [(key, words[key]) for key, *_ in BUCKETS],
             "as_of": as_of.isoformat(),
