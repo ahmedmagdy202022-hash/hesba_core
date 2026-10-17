@@ -164,3 +164,23 @@ class PosTests(TestCase):
         from settings_core.module_gate import module_for_path
 
         self.assertEqual(module_for_path(POS), "sales_operations")
+
+
+class EasierTillTests(TestCase):
+    """AN6 (Ahmed: "شاشة الكاشير محتاجة تكون أسهل وأسلس"): tap-to-add tiles, one-tap cash, details tucked away."""
+
+    setUp = PosTests.setUp
+    sell = PosTests.sell
+
+    def test_the_best_sellers_come_first_as_tiles(self):
+        self.sell([(self.belt, "3", "120.00")], "360")
+        page = self.client.get(POS, {"lang": "ar"})
+        picks = page.context["quick_picks"]
+        self.assertEqual(picks[0]["id"], self.belt.pk)  # sold the most lately
+        self.assertIn(self.shirt.pk, [pick["id"] for pick in picks])  # topped up from the catalog
+        html = page.content.decode()
+        self.assertIn("data-pos-quick", html)
+        self.assertIn('id="hs-quick-picks"', html)
+        self.assertIn('data-cash="exact"', html)
+        self.assertIn('<details class="pos-more">', html)
+        self.assertIn('name="cashbox"', html)  # still posted with the sale

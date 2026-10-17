@@ -66,7 +66,10 @@ def return_table(formset_class, invoice, data, lang, document_field):
         back = back_by_line.get(line.pk) or Decimal("0")
         form.returned = back
         form.left = line.quantity - back
-        form.fields["quantity"].widget.attrs.update({"inputmode": "decimal", "min": "0", "max": f"{form.left}", "step": "any", "placeholder": "0"})
+        # AN6: what one unit of this line was worth after its own discount, for the screen's running value.
+        form.unit_value = (line.line_total_amount / line.quantity).quantize(Decimal("0.0001")) if line.quantity else Decimal("0")
+        form.fields["quantity"].widget.attrs.update({"inputmode": "decimal", "min": "0", "max": f"{form.left}", "step": "any", "placeholder": "0",
+                                                  "data-return-qty": "", "data-unit-value": f"{form.unit_value}", "data-left": f"{form.left}"})
     return formset
 
 
