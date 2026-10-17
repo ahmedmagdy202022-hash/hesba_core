@@ -23,7 +23,8 @@ class Location(models.Model):
         verbose_name_plural = "Locations"
 
     def __str__(self):
-        return f"{self.location_code} - {self.name_ar}"
+        # AN2 (F33): screens name a place; the code is only for search and the code column.
+        return self.name_ar or self.location_code
 
     def save(self, *args, **kwargs):
         # ENT-001: a record made without an entity belongs to the main one, so
@@ -56,7 +57,7 @@ class Category(models.Model):
         verbose_name_plural = "Categories"
 
     def __str__(self):
-        return f"{self.category_code} - {self.name_ar}"
+        return self.name_ar or self.category_code  # AN2 (F33)
 
 
 class Item(models.Model):
@@ -102,11 +103,18 @@ class Item(models.Model):
 
     @property
     def search_label(self):
-        parts = [self.item_code, self.item_name, self.size, self.color]
-        return " - ".join(part for part in parts if part)
+        """Everything a search box matches: the name first, then size, colour and the code (AN2)."""
+
+        return " · ".join(part for part in (self.item_name, self.size, self.color, self.item_code) if part)
+
+    @property
+    def display_name(self):
+        """AN2 (F33): how screens name an item: its name, and the size and colour that tell a variant apart."""
+
+        return " · ".join(part for part in (self.item_name, self.size, self.color) if part)
 
     def __str__(self):
-        return self.search_label
+        return self.display_name or self.item_code
 
 
 class Customer(models.Model):
@@ -143,7 +151,7 @@ class Customer(models.Model):
         verbose_name_plural = "Customers"
 
     def __str__(self):
-        return f"{self.customer_code} - {self.name}"
+        return self.name or self.customer_code  # AN2 (F33)
 
 
 class Supplier(models.Model):
@@ -171,4 +179,4 @@ class Supplier(models.Model):
         verbose_name_plural = "Suppliers"
 
     def __str__(self):
-        return f"{self.supplier_code} - {self.name}"
+        return self.name or self.supplier_code  # AN2 (F33)
