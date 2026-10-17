@@ -67,6 +67,22 @@ class GroceryScreensTests(TestCase):
         set_capability_enabled(self.profile, "batches_expiry", False)
         self.assertNotIn("data-item-batches", self.page("inventory:item_detail", self.oil.pk))
 
+    def test_the_item_card_counts_only_this_entitys_stock_against_its_batches(self):
+        from entities import services as entities
+        from entities.models import Entity
+
+        branch = entities.save_entity({"code": "BR2", "name_ar": "فرع المعادي", "activity_slug": "commercial", "sub_activity_slug": "grocery"}, self.owner)
+        other = make_location(location_code="BR-WH", name_ar="مخزن الفرع", entity=branch)
+        stock_in(self.oil, other, 30, "50.00", movement_date=TODAY - timedelta(days=5))  # the branch's stock, not ours
+        register_batch(item=self.oil, location=self.shelf, batch_no="LOT-HERE", expiry_date=TODAY + timedelta(days=90),
+                       quantity=Decimal("10"), received_on=TODAY - timedelta(days=5), user=self.owner)
+        self.client.post(reverse("entities:switch"), {"entity": Entity.objects.get(is_main=True).pk, "next": "/dashboard/"})
+        self.assertNotIn("LOT-HERE", self.page("inventory:item_detail", self.oil.pk))  # nothing of it is on our shelf
+        stock_in(self.oil, self.shelf, 4, "50.00", movement_date=TODAY - timedelta(days=4))
+        card = self.page("inventory:item_detail", self.oil.pk)
+        self.assertIn("LOT-HERE", card)
+        self.assertIn("<td>4 ", card)  # what is on our shelf, not the branch's 30
+
     # G03
     def test_the_batch_screen_names_the_warehouse(self):
         stock_in(self.oil, self.shelf, 5, "50.00", movement_date=TODAY - timedelta(days=3))
@@ -85,6 +101,10 @@ class GroceryScreensTests(TestCase):
     def test_an_invoice_line_starts_with_the_item_name(self):
         for screen in ("sales:create", "purchases:create"):
             self.assertIn(">زيت عباد الشمس · IT-0007<", self.page(screen), screen)
+
+    def test_a_variant_line_keeps_its_size_and_colour(self):
+        make_item(item_code="TS-L-BK", item_name="تيشيرت قطن", size="L", color="أسود")
+        self.assertIn(">تيشيرت قطن · L · أسود · TS-L-BK<", self.page("sales:create"))
 
     # G08
     def test_batch_and_expiry_on_a_purchase_line_are_shown_open(self):

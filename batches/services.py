@@ -65,11 +65,14 @@ def attach_purchase_batches(invoice, line_data, user=None):
     return created
 
 
-def stock_on_hand(item_ids):
-    """{item_id: on-hand quantity across every location}, from stock movements."""
+def stock_on_hand(item_ids, locations=None):
+    """{item_id: on-hand quantity across every location (or only ``locations``)}, from stock movements."""
 
     totals = defaultdict(lambda: ZERO)
-    rows = StockMovement.objects.filter(item_id__in=item_ids).values("item_id", "movement_type").annotate(total=Sum("quantity"))
+    movements = StockMovement.objects.filter(item_id__in=item_ids)
+    if locations is not None:
+        movements = movements.filter(location__in=locations)
+    rows = movements.values("item_id", "movement_type").annotate(total=Sum("quantity"))
     for row in rows:
         if row["movement_type"] in IN_MOVEMENT_TYPES:
             totals[row["item_id"]] += row["total"] or ZERO
@@ -78,20 +81,24 @@ def stock_on_hand(item_ids):
     return totals
 
 
-def batch_positions(items=None):
+def batch_positions(items=None, locations=None):
     """Every counted batch with what is left of it, plus the uncovered quantity per item.
 
     Returns ``(rows, uncovered)``: rows are dicts {batch, remaining}, in
     expiry order; ``uncovered`` is {item_id: on-hand quantity no batch covers}.
+    ``locations`` limits both the batches and the stock they share out to
+    those places (UI-TRACK grocery, Codex #234: one entity's card).
     """
 
     batches = counted_batches().select_related("item", "location")
     if items is not None:
         batches = batches.filter(item__in=items)
+    if locations is not None:
+        batches = batches.filter(location__in=locations)
     by_item = defaultdict(list)
     for batch in batches:
         by_item[batch.item_id].append(batch)
-    on_hand = stock_on_hand(list(by_item))
+    on_hand = stock_on_hand(list(by_item), locations)
     rows, uncovered = [], {}
     for item_id, item_batches in by_item.items():
         left = max(on_hand[item_id], ZERO)

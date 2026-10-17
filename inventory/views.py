@@ -167,9 +167,8 @@ def item_detail(request, pk):
     batch_rows = []
     if batches_enabled():
         today = timezone.localdate()
-        place_ids = set(locations.values_list("pk", flat=True))
-        for row in batch_positions(items=[item])[0]:
-            if row["remaining"] > 0 and row["batch"].location_id in place_ids:
+        for row in batch_positions(items=[item], locations=locations)[0]:  # Codex #234: this entity's stock only
+            if row["remaining"] > 0:
                 batch_rows.append({**row, "state": expiry_state(row["batch"].expiry_date, today, DEFAULT_WARN_DAYS)})
     return render(
         request,

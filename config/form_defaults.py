@@ -4,6 +4,7 @@
   marked default, or on the only one there is.
 - ``ZeroWhenBlank``: an amount that is normally zero (invoice discount, tax,
   paid now) is not marked required; left empty it counts as 0.
+- ``item_choice_label(item)``: how an item reads in an invoice line's list.
 """
 
 from decimal import Decimal
@@ -47,3 +48,12 @@ class ZeroWhenBlank:
             if name in self.fields and cleaned.get(name) in (None, ""):
                 cleaned[name] = Decimal("0")
         return cleaned
+
+
+def item_choice_label(item):
+    """UI-TRACK grocery G05: an invoice line shows the start of the choice, so lead with the name.
+
+    Size and colour stay right after it (Codex #234): they are what tells one variant from another.
+    """
+
+    return " · ".join(part for part in (item.item_name, item.size, item.color, item.item_code) if part)
