@@ -1,7 +1,7 @@
 {% extends "operations/base.html" %}
 {% load l10n hesba_format %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'units:index' %}?lang={{ lang }}">← {{ words.back }}</a><h1><bdi>{{ item.item_code }}</bdi> · {{ item.item_name }}</h1><p>{{ words.base }}: <strong>{{ item.unit|unit_label:lang }}</strong> · {{ words.price_hint }}</p></div></section>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'units:index' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ item|named:lang }}</h1><p>{{ words.base }}: <strong>{{ item.unit|unit_label:lang }}</strong> · {{ words.price_hint }}</p></div></section>
 {% if not can_manage %}<p class="op-message op-message-info">{{ words.view_only }}</p>{% endif %}
 <form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
 <div class="op-table-wrap"><table class="op-table" data-units-table><thead><tr><th>{{ words.name_ar }}</th><th>{{ words.name_en }}</th><th>{{ words.factor }}</th><th>{{ words.barcode }}</th><th>{{ words.sale_price }}</th><th>{{ words.purchase_price }}</th><th>{{ words.active }}</th></tr></thead><tbody>

@@ -30,7 +30,7 @@ class Cashbox(models.Model):
         verbose_name_plural = "Cashboxes"
 
     def __str__(self):
-        return f"{self.cashbox_code} - {self.name_ar}"
+        return self.name_ar or self.cashbox_code  # AN2 (F33)
 
     def save(self, *args, **kwargs):
         # ENT-001: a record made without an entity belongs to the main one, so

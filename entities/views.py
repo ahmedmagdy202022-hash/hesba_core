@@ -2,7 +2,6 @@
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.core.paginator import Paginator
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -14,6 +13,7 @@ from settings_core import setup_catalog as catalog
 
 from . import services
 from .models import Entity, EntityKind
+from config.paging import page_of
 
 WORDS = {
     "ar": {
@@ -105,7 +105,7 @@ def where_is(request):
         items = items.filter(Q(item_code__icontains=query) | Q(item_name__icontains=query) | Q(barcode=query))
     if request.GET.get("item", "").isdigit():
         items = items.filter(pk=int(request.GET["item"]))
-    page = Paginator(items.order_by("item_name"), 25).get_page(request.GET.get("page"))
+    page = page_of(request, items.order_by("item_name"))
     can_cost = user_has_permission(request.user, "inventory.view_cost")
     stock = services.group_stock(list(page.object_list), include_cost=can_cost)
     rows = []

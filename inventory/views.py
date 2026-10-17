@@ -1,6 +1,5 @@
 from datetime import date
 
-from django.core.paginator import Paginator
 from django.db.models import Q
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -22,6 +21,7 @@ from .services import (
     transfer_stock,
 )
 from entities import scope as entity_scope
+from config.paging import page_of
 
 
 STRINGS = {
@@ -111,7 +111,7 @@ def stock_list(request):
             | Q(item_name__icontains=query)
             | Q(barcode__icontains=query)
         )
-    page = Paginator(items, 25).get_page(request.GET.get("page"))
+    page = page_of(request, items)
     can_view_cost = user_has_permission(request.user, "inventory.view_cost")
     rows = []
     counts = {"healthy": 0, "low": 0, "out": 0}
@@ -216,7 +216,7 @@ def movement_list(request):
         queryset = queryset.filter(location_id=location_id)
     else:
         location_id = ""
-    page = Paginator(queryset, 50).get_page(request.GET.get("page"))
+    page = page_of(request, queryset)
     return render(
         request,
         "inventory/movements.html",
@@ -238,7 +238,7 @@ def operation_list(request):
     operations = entity_scope.scope(StockOperation.objects.select_related(
         "item", "source_location", "destination_location", "created_by", "cancelled_by"
     ), entity_scope.STOCK_OPERATION).distinct()
-    page = Paginator(operations, 50).get_page(request.GET.get("page"))
+    page = page_of(request, operations)
     return render(
         request,
         "inventory/operations.html",

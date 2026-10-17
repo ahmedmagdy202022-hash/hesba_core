@@ -1,6 +1,5 @@
 from django.contrib import messages
 from django.core.exceptions import ValidationError
-from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 
 from permissions.decorators import require_any_permission, require_permission
@@ -12,6 +11,7 @@ from datetime import date
 from django.utils import timezone
 
 from .services import complete_period_closing, provision_period_for, reopen_period
+from config.paging import page_of
 
 
 STRINGS = {
@@ -33,7 +33,7 @@ def _context(request, **extra):
 
 @require_any_permission("closing.run_closing", "closing.reopen_period")
 def period_list(request):
-    page = Paginator(Period.objects.all(), 25).get_page(request.GET.get("page"))
+    page = page_of(request, Period.objects.all())
     return render(
         request,
         "closing/list.html",

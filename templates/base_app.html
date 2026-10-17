@@ -17,10 +17,11 @@ not be dropped.
 {% include "partials/brand_icons.html" %}
 <link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
 {% block styles %}{% endblock %}
-<link rel="stylesheet" href="{% static 'hesba/css/table_cards.css' %}">
+<link rel="stylesheet" href="{% static 'hesba/css/table_cards.css' %}?v=an2-1">
 <link rel="stylesheet" href="{% static 'hesba/css/form_required.css' %}?v=req-2">
 <link rel="stylesheet" href="{% static 'hesba/css/form_controls.css' %}?v=an5-1">
 <link rel="stylesheet" href="{% static 'hesba/css/datepicker.css' %}?v=date-3">
+<link rel="stylesheet" href="{% static 'hesba/css/pager.css' %}?v=an1-1">
 {% if report_tools %}<link rel="stylesheet" href="{% static 'hesba/css/report_tools.css' %}?v=fb-reports-2">{% endif %}
 </head>
 <body class="{% block body_class %}{% endblock %}" data-lang="{{ lang|default:'ar' }}">
