@@ -5,12 +5,12 @@
   <a href="{% url 'dashboard_snapshot' %}?lang={{ lang }}">{{ words.dashboard }}</a>
   <span>{{ words.page_title }}</span>
 </nav>
-<div class="hs-cards">
+<div class="hs-tiles">
   {% for card in cards %}
     {% if card.allowed %}
-      <a class="hs-card hs-card--{{ card.tone }}" href="{% url card.url_name %}?lang={{ lang }}"><span class="hs-card__icon"><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-{{ card.icon }}"></use></svg></span><span class="hs-card__body"><strong>{{ card.title }}</strong><p>{{ card.description }}</p></span><span class="hs-card__go" aria-hidden="true">{% if lang == 'en' %}›{% else %}‹{% endif %}</span></a>
+      <a class="hs-tile hs-tile--{{ card.tone }}" href="{% url card.url_name %}?lang={{ lang }}"><span class="hs-tile__icon"><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-{{ card.icon }}"></use></svg></span><span class="hs-tile__body"><strong>{{ card.title }}</strong><p>{{ card.description }}</p></span><span class="hs-tile__go" aria-hidden="true">{% if lang == 'en' %}›{% else %}‹{% endif %}</span></a>
     {% else %}
-      <article class="hs-card hs-card--locked"><span class="hs-card__icon"><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-{{ card.icon }}"></use></svg></span><span class="hs-card__body"><strong>{{ card.title }}</strong><p>{{ card.description }}</p><small>{% if lang == 'en' %}Needs its own permission.{% else %}محتاج صلاحية خاصة.{% endif %}</small></span></article>
+      <article class="hs-tile hs-tile--locked"><span class="hs-tile__icon"><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-{{ card.icon }}"></use></svg></span><span class="hs-tile__body"><strong>{{ card.title }}</strong><p>{{ card.description }}</p><small>{% if lang == 'en' %}Needs its own permission.{% else %}محتاج صلاحية خاصة.{% endif %}</small></span></article>
     {% endif %}
   {% endfor %}
 </div>
