@@ -5,16 +5,15 @@
   <a href="{% url 'dashboard_snapshot' %}?lang={{ lang }}">{{ words.dashboard }}</a>
   <span>{{ words.page_title }}</span>
 </nav>
-<div class="op-card-grid">
+<div class="hs-cards">
   {% for card in cards %}
     {% if card.allowed %}
-      <a class="op-card" href="{% url card.url_name %}?lang={{ lang }}"><strong>{{ card.title }}</strong><p>{{ card.description }}</p></a>
+      <a class="hs-card hs-card--{{ card.tone }}" href="{% url card.url_name %}?lang={{ lang }}"><span class="hs-card__icon"><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-{{ card.icon }}"></use></svg></span><span class="hs-card__body"><strong>{{ card.title }}</strong><p>{{ card.description }}</p></span><span class="hs-card__go" aria-hidden="true">{% if lang == 'en' %}›{% else %}‹{% endif %}</span></a>
     {% else %}
-      <article class="op-card"><strong>{{ card.title }}</strong><p>{{ card.description }}</p><small>{% if lang == 'en' %}Requires an explicit permission.{% else %}يحتاج صلاحية مستقلة.{% endif %}</small></article>
+      <article class="hs-card hs-card--locked"><span class="hs-card__icon"><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-{{ card.icon }}"></use></svg></span><span class="hs-card__body"><strong>{{ card.title }}</strong><p>{{ card.description }}</p><small>{% if lang == 'en' %}Needs its own permission.{% else %}محتاج صلاحية خاصة.{% endif %}</small></span></article>
     {% endif %}
   {% endfor %}
 </div>
-<div class="op-notice">{% if lang == 'en' %}The profit report remains protected. Profit equals sales minus cost of goods sold.{% else %}يظل تقرير الأرباح محميًا بصلاحية مستقلة. الربح يساوي المبيعات ناقص تكلفة البضاعة المباعة.{% endif %}</div>
 {# Compatibility markers retained for the foundation characterization suite, never shown to users. #}
 <span hidden aria-hidden="true">{{ checkpoint_code }} Dashboard Reports Status Customer Report Supplier Report Inventory Report Cashbox Report Status Counts Profit Report Sales - Cost of Goods Sold صلاحيات حقيقية</span>
 {% endblock %}

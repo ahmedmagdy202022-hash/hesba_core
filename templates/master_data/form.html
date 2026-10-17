@@ -12,31 +12,12 @@
   <div class="md-notice">{{ words.opening_locked }} {% if can_adjust_opening %}<a href="{% url 'master_data:opening_adjustment' entity=entity pk=form.instance.pk %}?lang={{ lang }}">{{ words.adjust_opening }}</a>{% endif %}</div>
 {% endif %}
 
-<form class="md-form" method="post" novalidate>
+<form class="md-form hs-form" method="post" novalidate>
   {% csrf_token %}
   {% if form.non_field_errors %}<div class="md-form-errors">{{ form.non_field_errors|ui:lang }}</div>{% endif %}
   {# FB2-LOC: a hidden field (the entity, when there is only one) gets no empty label. #}
   {% for field in form.hidden_fields %}{{ field }}{% for error in field.errors %}<div class="md-form-errors">{{ error|ui:lang }}</div>{% endfor %}{% endfor %}
-  <div class="md-form-grid">
-    {% for field in form.visible_fields %}{% if field.field.widget.input_type != 'checkbox' %}
-      <div class="md-field">
-        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
-        {{ field }}
-        {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
-        {% for error in field.errors %}<div class="md-field-error">{{ error|ui:lang }}</div>{% endfor %}
-      </div>
-    {% endif %}{% endfor %}
-  </div>
-  {# Tick boxes together, each with what it means beside it. #}
-  <div class="md-checks">
-    {% for field in form.visible_fields %}{% if field.field.widget.input_type == 'checkbox' %}
-      <div class="md-check-field">
-        {{ field }}
-        <label for="{{ field.id_for_label }}"><b>{{ field.label }}</b>{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}</label>
-        {% for error in field.errors %}<div class="md-field-error">{{ error|ui:lang }}</div>{% endfor %}
-      </div>
-    {% endif %}{% endfor %}
-  </div>
+  {% include "partials/form_sections.html" with prefix="md" %}
   <div class="md-form-actions">
     <button class="md-primary" type="submit">{{ words.save }}</button>
     <a class="md-secondary" href="{% url 'master_data:list' entity=entity %}?lang={{ lang }}">{{ words.cancel }}</a>

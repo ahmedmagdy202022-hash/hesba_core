@@ -4,7 +4,7 @@ from datetime import date
 from urllib.parse import quote
 
 from django.core.exceptions import PermissionDenied
-from django.http import Http404
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 
@@ -13,7 +13,7 @@ from printing.company import company_details
 from reports.aging import whatsapp_number
 from settings_core.templatetags.hesba_format import money as display_money
 
-from .services import KINDS, card, statement
+from .services import KINDS, balance, card, statement
 from reports.navigation import display_name
 
 
@@ -121,3 +121,18 @@ def party_statement_print(request, kind, pk):
         "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": WORDS[lang], "kind": kind, "party": party, "code": getattr(party, f"{kind}_code"),
         "data": data, "date_from": date_from, "date_to": date_to, "company": company_details(), "printed_by": display_name(request.user),
     })
+
+
+#: AN3: whoever writes the invoice may see the balance it adds to.
+INVOICE_PERMISSION = {"customer": "sales.create_sales_invoice", "supplier": "purchases.create_purchase_invoice"}
+
+
+def party_balance(request, kind, pk):
+    """AN3 (Ahmed: "الملخص محتاج يبين قيمة الفاتورة قبل ما يضفها للاجمالي"): the balance before this invoice, for its summary."""
+
+    if kind not in KINDS:
+        raise Http404
+    if not (user_has_permission(request.user, PERMISSION[kind]) or user_has_permission(request.user, INVOICE_PERMISSION[kind])):
+        raise PermissionDenied(f"The {kind} balance needs {PERMISSION[kind]}.")
+    party = get_object_or_404(KINDS[kind]["model"], pk=pk)
+    return JsonResponse({"balance": str(balance(kind, party))})

@@ -1,7 +1,7 @@
 {% extends "operations/base.html" %}
 {% load static hesba_format %}
 {% block styles %}{{ block.super }}
-<link rel="stylesheet" href="{% static 'hesba/css/insights.css' %}?v=ins-1">{% endblock %}
+<link rel="stylesheet" href="{% static 'hesba/css/insights.css' %}?v=an3-1">{% endblock %}
 {% block operation_content %}
 <section class="op-title-row"><div><a class="op-back" href="{% url 'report_hub' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{% if lang == 'en' %}Business insights{% else %}تحليل النشاط{% endif %}</h1><p>{{ data.start|date:"Y-m-d" }} → {{ data.end|date:"Y-m-d" }} · {% if lang == 'en' %}compared with{% else %}مقارنة بـ{% endif %} {{ data.prev_start|date:"Y-m-d" }} → {{ data.prev_end|date:"Y-m-d" }}</p></div></section>
 

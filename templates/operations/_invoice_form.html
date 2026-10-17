@@ -34,6 +34,14 @@ price_field, list_url, party ("customer" / "supplier"), can_post and tax_rates.
   {% with field=form|field_named:"paid_now" %}{% if field %}{% include "operations/_inv_field.html" with wide=False %}<button class="inv-pay-all" type="button" data-pay-all>{% if party == 'supplier' %}{% if lang == 'en' %}Pay it all now{% else %}ادفع الكل دلوقتي{% endif %}{% elif lang == 'en' %}Collected in full{% else %}اتحصّل كله{% endif %}</button>{% endif %}{% endwith %}
   {% with field=form|field_named:"cashbox" %}{% if field %}{% include "operations/_inv_field.html" with wide=False %}{% endif %}{% endwith %}
   <div class="inv-sum-row inv-sum-due"><span>{% if party == 'supplier' %}{% if lang == 'en' %}Still owed to the supplier{% else %}الباقي للمورد{% endif %}{% elif lang == 'en' %}Left on the customer{% else %}الباقي على العميل{% endif %}</span><strong data-sum-remaining>0.00</strong></div>
+  {# AN3: where this invoice leaves the account: the balance before it, the invoice, what is paid now, the balance after. #}
+  {% url 'parties:balance' party 0 as balance_url %}<div class="inv-balance" data-party-balance data-url="{{ balance_url }}" hidden>
+    <h3>{% if party == 'supplier' %}{% if lang == 'en' %}Supplier account{% else %}حساب المورد{% endif %}{% elif lang == 'en' %}Customer account{% else %}حساب العميل{% endif %}</h3>
+    <div class="inv-sum-row"><span>{% if lang == 'en' %}Balance before this invoice{% else %}الرصيد قبل الفاتورة{% endif %}</span><strong data-balance-before>0.00</strong></div>
+    <div class="inv-sum-row"><span>{% if lang == 'en' %}+ This invoice{% else %}+ قيمة الفاتورة دي{% endif %}</span><strong data-balance-invoice>0.00</strong></div>
+    <div class="inv-sum-row"><span>{% if lang == 'en' %}− Paid now{% else %}− المدفوع دلوقتي{% endif %}</span><strong data-balance-paid>0.00</strong></div>
+    <div class="inv-sum-row inv-sum-after"><span>{% if lang == 'en' %}Balance after this invoice{% else %}الرصيد بعد الفاتورة{% endif %}</span><strong data-balance-after>0.00</strong></div>
+  </div>
   <p class="inv-sum-note">{% if lang == 'en' %}A preview: the server recalculates every figure{% if party == 'customer' %} and checks stock{% endif %} when saving.{% else %}الأرقام دي معاينة: السيستم بيحسبها من جديد{% if party == 'customer' %} ويتأكد من المخزون{% endif %} وقت الحفظ.{% endif %}</p>
   <div class="inv-actions">
     {# The draft button comes first: Enter in a field submits with the first button, and that must never post. #}
