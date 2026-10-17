@@ -6,12 +6,12 @@
     <p>{{ words.hub_note }}</p>
   </div>
 </section>
-<section class="hs-cards">
+<section class="hs-tiles">
   {% for area in areas %}
-    <a class="hs-card hs-card--{{ area.tone }}" href="{% url 'master_data:list' entity=area.key %}?lang={{ lang }}">
-      <span class="hs-card__icon"><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-{{ area.icon }}"></use></svg></span>
-      <span class="hs-card__body"><strong>{{ area.title }}</strong><p><b class="hs-card__count">{{ area.count }}</b> {% if lang == 'en' %}active{% else %}نشط{% endif %}{% if not area.can_manage %} · {{ words.readonly }}{% endif %}</p></span>
-      <span class="hs-card__go" aria-hidden="true">{% if lang == 'en' %}›{% else %}‹{% endif %}</span>
+    <a class="hs-tile hs-tile--{{ area.tone }}" href="{% url 'master_data:list' entity=area.key %}?lang={{ lang }}">
+      <span class="hs-tile__icon"><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-{{ area.icon }}"></use></svg></span>
+      <span class="hs-tile__body"><strong>{{ area.title }}</strong><p><b class="hs-tile__count">{{ area.count }}</b> {% if lang == 'en' %}active{% else %}نشط{% endif %}{% if not area.can_manage %} · {{ words.readonly }}{% endif %}</p></span>
+      <span class="hs-tile__go" aria-hidden="true">{% if lang == 'en' %}›{% else %}‹{% endif %}</span>
     </a>
   {% endfor %}
 </section>

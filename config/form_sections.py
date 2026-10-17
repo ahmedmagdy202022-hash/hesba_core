@@ -17,11 +17,15 @@ def _is_check(field):
 
 class Sectioned:
     sections_spec = ()
+    #: AN5: fields the form's template draws itself (the sizes and colours picker), kept out of the parts.
+    drawn_apart = ()
+    #: AN5: {part key: template} drawn right after that part (``partials/form_sections.html``).
+    section_inserts = {}
 
     @property
     def sections(self):
         lang = "en" if getattr(self, "lang", "ar") == "en" else "ar"
-        visible = [field for field in self.visible_fields() if not _is_check(field)]
+        visible = [field for field in self.visible_fields() if not _is_check(field) and field.name not in self.drawn_apart]
         by_name = {field.name: field for field in visible}
         used, parts = set(), []
         for key, title_ar, title_en, hint_ar, hint_en, names in self.sections_spec:
@@ -29,7 +33,8 @@ class Sectioned:
             if not fields:
                 continue
             used.update(field.name for field in fields)
-            parts.append({"key": key, "title": title_en if lang == "en" else title_ar, "hint": hint_en if lang == "en" else hint_ar, "fields": fields})
+            parts.append({"key": key, "title": title_en if lang == "en" else title_ar, "hint": hint_en if lang == "en" else hint_ar, "fields": fields,
+                          "insert": self.section_inserts.get(key, "")})
         rest = [field for field in visible if field.name not in used]
         if rest:
             parts.append({"key": "other", "title": OTHER[lang] if parts else "", "hint": "", "fields": rest})
@@ -37,4 +42,4 @@ class Sectioned:
 
     @property
     def checks(self):
-        return [field for field in self.visible_fields() if _is_check(field)]
+        return [field for field in self.visible_fields() if _is_check(field) and field.name not in self.drawn_apart]

@@ -1,20 +1,27 @@
 {% extends "operations/base.html" %}
-{% load hesba_format l10n %}
+{% load hesba_format l10n static %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/variants.css' %}?v=an5-1">{% endblock %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'variants:index' %}?lang={{ lang }}">← {{ words.back }}</a><h1><bdi>{{ group.code }}</bdi> · {{ group.name }}</h1><p>{{ words.sale_price }} {{ group.default_sale_price|money }} · {{ words.purchase_price }} {{ group.default_purchase_price|money }}</p></div></section>
-<h2>{{ words.stock_grid }}</h2>
-<div class="op-table-wrap"><table class="op-table" data-variant-grid><thead><tr><th>{{ words.size }}</th>{% for color in grid.colors %}<th>{{ color|default:words.none }}</th>{% endfor %}<th>{{ words.total }}</th></tr></thead><tbody>
-{% for row in grid.rows %}<tr><th scope="row">{{ row.size|default:words.none }}</th>{% for cell in row.cells %}<td>{% if cell %}<a href="{% url 'inventory:item_detail' cell.item.pk %}?lang={{ lang }}" data-variant-cell="{{ cell.item.item_code }}"><strong>{{ cell.stock|qty }}</strong></a><br><small class="op-muted"><bdi>{{ cell.item.item_code }}</bdi>{% if cell.item.barcode %}<br><bdi>{{ cell.item.barcode }}</bdi>{% endif %}<br>{{ cell.item.default_sale_price|money }}{% if not cell.item.active %} · ✕{% endif %}</small>{% else %}—{% endif %}</td>{% endfor %}<td><strong>{{ row.total|qty }}</strong></td></tr>{% endfor %}
-<tr><th scope="row">{{ words.total }}</th>{% for total in grid.color_totals %}<td><strong>{{ total|qty }}</strong></td>{% endfor %}<td><strong data-variant-total>{{ grid.total|qty }}</strong></td></tr>
-</tbody></table></div>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'variants:index' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ group.name }} <small class="hs-code"><bdi>{{ group.code }}</bdi></small></h1>
+<p class="vr-facts"><span>{{ words.sale_price }} <b>{{ group.default_sale_price|money }}</b></span><span>{{ words.purchase_price }} <b>{{ group.default_purchase_price|money }}</b></span><span>{% if lang == 'en' %}{{ item_count }} items{% else %}{{ item_count }} صنف{% endif %}</span><span>{% if lang == 'en' %}Stock{% else %}المخزون{% endif %} <b data-variant-total>{{ grid.total|qty }}</b></span></p></div>
+{% if can_labels %}<div class="op-form-actions"><a class="op-secondary" href="{% url 'barcode:labels' %}?q={{ group.code|urlencode }}&amp;lang={{ lang }}" data-variant-labels>{{ words.labels }}</a></div>{% endif %}</section>
+<section class="vr-card"><header><h2>{{ words.stock_grid }}</h2><p class="op-muted">{{ words.grid_hint }}</p></header>
+<div class="vr-grid-wrap"><div class="vr-grid" data-variant-grid style="--vr-cols:{{ grid.colors|length }}">
+  <div class="vr-grid__corner">{{ words.size }}</div>{% for color in grid.colors %}<div class="vr-grid__head">{{ color|default:words.none }}</div>{% endfor %}<div class="vr-grid__head vr-grid__head--total">{{ words.total }}</div>
+  {% for row in grid.rows %}<div class="vr-grid__size">{{ row.size|default:words.none }}</div>{% for cell in row.cells %}{% if cell %}<a class="vr-cell{% if not cell.stock %} vr-cell--empty{% endif %}{% if not cell.item.active %} vr-cell--off{% endif %}" href="{% url 'inventory:item_detail' cell.item.pk %}?lang={{ lang }}" data-variant-cell="{{ cell.item.item_code }}"><strong>{{ cell.stock|qty }}</strong><small><bdi>{{ cell.item.item_code }}</bdi></small>{% if cell.item.barcode %}<small><bdi>{{ cell.item.barcode }}</bdi></small>{% endif %}<small>{{ cell.item.default_sale_price|money }}{% if not cell.item.active %} · {{ words.inactive }}{% endif %}</small></a>{% else %}<span class="vr-cell vr-cell--none">—</span>{% endif %}{% endfor %}<div class="vr-grid__total">{{ row.total|qty }}</div>{% endfor %}
+  <div class="vr-grid__size vr-grid__size--total">{{ words.total }}</div>{% for total in grid.color_totals %}<div class="vr-grid__total">{{ total|qty }}</div>{% endfor %}<div class="vr-grid__total vr-grid__total--grand">{{ grid.total|qty }}</div>
+</div></div></section>
 {% if can_manage %}
-<form class="op-form" method="post" data-extend-model>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="extend"><h2>{{ words.extend }}</h2><div class="op-form-grid">
-<div class="op-field"><label for="x-sizes">{{ words.sizes }}</label><input id="x-sizes" name="sizes" placeholder="{{ words.sizes_hint }}"></div>
-<div class="op-field"><label for="x-colors">{{ words.colors }}</label><input id="x-colors" name="colors" placeholder="{{ words.colors_hint }}"></div>
-</div><label class="op-check"><input type="checkbox" name="barcodes" value="1" checked> {{ words.barcodes }}</label><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.add }}</button></div></form>
-<form class="op-form" method="post" data-price-model>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="prices"><h2>{{ words.prices }}</h2><div class="op-form-grid">
+<div class="vr-forms">
+<form class="vr-card hs-variant-pick" method="post" data-extend-model>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="extend"><header><h2>{{ words.extend }}</h2></header>
+{% include "variants/_chips.html" with kind="sizes" legend=words.sizes options=size_options %}
+{% include "variants/_chips.html" with kind="colors" legend=words.colors options=color_options %}
+<div class="hs-check"><input type="checkbox" id="x-barcodes" name="barcodes" value="1" checked><label for="x-barcodes"><b>{{ words.barcodes }}</b></label></div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.add }}</button></div></form>
+<form class="vr-card" method="post" data-price-model>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="prices"><header><h2>{{ words.prices }}</h2></header><div class="vr-two">
 <div class="op-field"><label for="p-sale">{{ words.sale_price }}</label><input id="p-sale" name="sale_price" inputmode="decimal" placeholder="{{ group.default_sale_price|unlocalize }}"></div>
 <div class="op-field"><label for="p-purchase">{{ words.purchase_price }}</label><input id="p-purchase" name="purchase_price" inputmode="decimal" placeholder="{{ group.default_purchase_price|unlocalize }}"></div>
 </div><div class="op-form-actions"><button class="op-secondary" type="submit">{{ words.apply }}</button></div></form>
+</div>
 {% else %}<p class="op-muted">{{ words.view_only }}</p>{% endif %}
 {% endblock %}

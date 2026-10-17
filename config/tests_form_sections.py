@@ -65,12 +65,20 @@ class FormSectionsTests(TestCase):
 
     def test_the_reports_and_master_data_hubs_show_cards_with_icons(self):
         reports = self.page("report_hub")
-        self.assertIn('class="hs-card hs-card--', reports)
+        self.assertIn('class="hs-tile hs-tile--', reports)
         self.assertIn("#hs-i-customers", reports)
         self.assertNotIn("يظل تقرير الأرباح محميًا", reports)
         hub = self.page("master_data:hub")
-        self.assertIn('class="hs-card hs-card--', hub)
-        self.assertIn("hs-card__count", hub)
+        self.assertIn('class="hs-tile hs-tile--', hub)
+        self.assertIn("hs-tile__count", hub)
+
+    def test_the_hub_tiles_never_restyle_data_tables(self):
+        # table_cards.js marks every data table "hs-cards" for its phone layout; a hub grid of that name broke them all.
+        from django.contrib.staticfiles import finders
+
+        css = open(finders.find("hesba/css/form_controls.css"), encoding="utf-8").read()
+        self.assertNotIn(".hs-cards", css)
+        self.assertNotIn(".hs-card{", css)
 
     def test_the_customer_card_calls_and_whatsapps_with_icons(self):
         customer = make_customer(phone="01001234567")

@@ -374,6 +374,69 @@ class ItemForm(ZeroWhenBlank, AutoNumbered, HesbaModelForm):
             for name in ("size", "color"):
                 if not getattr(self.instance, name, ""):  # a value already typed stays editable
                     self.fields.pop(name, None)
+        elif not self.instance.pk:
+            self._offer_variants()
+
+    #: AN5 (Ahmed: "اسم صنف واحد وتحته مقاسات وألوان كتير، وكل واحد بكوده وباركوده زي أمازون ونون").
+    VARIANT_FIELDS = ("has_variants", "sizes_std", "sizes_extra", "colors_std", "colors_extra")
+    VARIANT_WORDS = {
+        "ar": {"has_variants": "الصنف ده له مقاسات وألوان", "has_variants_help": "هيتعمل صنف لكل مقاس ولون، كل واحد بكوده وباركوده ومخزونه.",
+               "sizes": "المقاسات", "colors": "الألوان", "extra": "غير اللي فوق؟ اكتبها وافصل بفاصلة", "none": "اختار مقاس أو لون واحد على الأقل."},
+        "en": {"has_variants": "This item comes in sizes and colours", "has_variants_help": "One item is made per size and colour, each with its own code, barcode and stock.",
+               "sizes": "Sizes", "colors": "Colours", "extra": "Others? Type them, comma separated", "none": "Pick at least one size or one colour."},
+    }
+    variant_sizes = variant_colors = ()
+
+    def _offer_variants(self):
+        from variants.standard import color_choices, size_choices
+
+        words = self.VARIANT_WORDS[self.lang]
+        self.fields["has_variants"] = forms.BooleanField(required=False, label=words["has_variants"], help_text=words["has_variants_help"])
+        self.fields["sizes_std"] = forms.MultipleChoiceField(required=False, label=words["sizes"], choices=size_choices(), widget=forms.CheckboxSelectMultiple)
+        self.fields["colors_std"] = forms.MultipleChoiceField(required=False, label=words["colors"], choices=color_choices(self.lang), widget=forms.CheckboxSelectMultiple)
+        for kind in ("sizes", "colors"):
+            self.fields[f"{kind}_extra"] = forms.CharField(required=False, max_length=400, label=words["extra"],
+                                                           widget=forms.TextInput(attrs={"autocomplete": "off", "data-variant-extra": kind}))
+        self.drawn_apart = self.VARIANT_FIELDS
+        self.section_inserts = {"main": "variants/_item_picker.html"}
+
+    @property
+    def offers_variants(self):
+        return "has_variants" in self.fields
+
+    def clean(self):
+        cleaned = super().clean()
+        if not cleaned.get("has_variants"):
+            return cleaned
+        from variants.services import parse_values
+
+        self.variant_sizes = parse_values(",".join([*cleaned.get("sizes_std", []), cleaned.get("sizes_extra", "")]))
+        self.variant_colors = parse_values(",".join([*cleaned.get("colors_std", []), cleaned.get("colors_extra", "")]))
+        if not self.variant_sizes and not self.variant_colors:
+            self.add_error("has_variants", self.VARIANT_WORDS[self.lang]["none"])
+        cleaned["size"] = cleaned["color"] = ""  # every combination carries its own
+        cleaned["barcode"] = ""  # and its own barcode
+        return cleaned
+
+    def create_variants(self, user):
+        """AN5: the model and one item per size and colour (variants.services), instead of a single item."""
+
+        from config.numbering import next_in_series
+        from variants.models import VariantGroup
+        from variants.services import create_group
+
+        data = self.cleaned_data
+        # A code typed by hand names the model; an automatic one comes from the models' own series,
+        # so the next plain item can never be handed the same number.
+        code = next_in_series(VariantGroup, "code", "MD-") if self.auto_filled else data["item_code"]
+        group, created = create_group(
+            code=code, name=data["item_name"], sizes=list(self.variant_sizes), colors=list(self.variant_colors),
+            sale_price=data.get("default_sale_price") or 0, purchase_price=data.get("default_purchase_price") or 0,
+            unit=data.get("unit") or "unit", category=data.get("category"), barcodes=True, user=user,
+        )
+        if data.get("min_stock"):
+            Item.objects.filter(pk__in=[item.pk for item in created]).update(min_stock=data["min_stock"])
+        return group, created
 
     def clean_unit(self):
         """Codex #233: the default unit is stored once, language-neutral; screens show it in their language."""

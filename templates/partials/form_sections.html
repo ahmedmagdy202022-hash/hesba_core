@@ -10,7 +10,7 @@
       {% for error in field.errors %}<div class="{{ prefix|default:'op' }}-field-error">{{ error|ui:lang }}</div>{% endfor %}
     </div>{% endfor %}
   </div>
-</section>{% endfor %}
+</section>{% if part.insert %}{% include part.insert %}{% endif %}{% endfor %}
 {% if form.checks %}<section class="hs-section hs-section--checks" data-section="settings">
   <header class="hs-section__head"><span class="hs-section__num" aria-hidden="true">✓</span><div><h2>{% if lang == 'en' %}Settings{% else %}الإعدادات{% endif %}</h2></div></header>
   <div class="hs-checks">{% for field in form.checks %}
