@@ -143,7 +143,9 @@ def _error_messages(exc, lang):
 @require_permission(MANAGE_PERMISSION)
 def user_list(request):
     lang = _lang(request)
-    users = get_user_model().objects.filter(is_superuser=False).select_related("hesba_profile__role").order_by("username")
+    # TRACK-START S05: the owner shows too (the roles screen counts them), first and without an edit link:
+    # an account that holds everything is never changed from here (ADMIN-001).
+    users = get_user_model().objects.select_related("hesba_profile__role").order_by("-is_superuser", "username")
     rows = []
     for user in users:
         profile = getattr(user, "hesba_profile", None)
@@ -152,6 +154,7 @@ def user_list(request):
             "profile": profile,
             "role": _role_label(profile.role, lang) if profile and profile.role else "—",
             "active": user.is_active and bool(profile and profile.active),
+            "locked": user.is_superuser,
         })
     return render(request, "accounts/users/list.html", _context(request, rows=rows))
 
@@ -191,7 +194,9 @@ def user_edit(request, pk):
         else:
             messages.success(request, WORDS[lang]["updated"])
             return redirect(f"/settings/users/?lang={lang}")
-    return render(request, "accounts/users/form.html", _context(request, form=form, reset_form=reset_form, edited=user, edited_two_factor=device_for(user), title=user.username))
+    return render(request, "accounts/users/form.html", _context(request, form=form, reset_form=reset_form, edited=user, edited_two_factor=device_for(user),
+                                                                   title=getattr(getattr(user, "hesba_profile", None), "display_name", "") or user.username,  # TRACK-START S08
+                                                                   login_name=user.username))
 
 
 class PasswordResetForm(forms.Form):

@@ -1,6 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
+from django.db.models import Count, Sum
 from django.shortcuts import render
 
 from cashboxes.models import Cashbox
@@ -105,7 +106,11 @@ def sales_report_view(request):
     if not user_has_permission(request.user, "reports.view_all_sales_report"):
         rows = rows.filter(created_by=request.user)
     page = page_of(request, rows)
-    return render(request, "reports/invoices.html", _context(request, title="Sales Report" if _lang(request) == "en" else "تقرير المبيعات", kind="sales", page=page, date_from=date_from_raw, date_to=date_to_raw, status=status))
+    totals = _posted_totals(rows)
+    if user_has_permission(request.user, "reports.view_all_sales_report"):
+        # TRACK-START: the dashboard's month figure is net of returns and tax; say so under the same list.
+        totals["net"] = profit_totals(date_from=date_from, date_to=date_to)["sales"]
+    return render(request, "reports/invoices.html", _context(request, title="Sales Report" if _lang(request) == "en" else "تقرير المبيعات", kind="sales", page=page, totals=totals, date_from=date_from_raw, date_to=date_to_raw, status=status))
 
 
 @require_permission("reports.view_purchase_report")
@@ -115,8 +120,16 @@ def purchase_report_view(request):
     status = request.GET.get("status", "")
     if status not in {"draft", "posted", "cancelled"}:
         status = ""
-    page = page_of(request, purchase_report(date_from, date_to, status or None))
-    return render(request, "reports/invoices.html", _context(request, title="Purchase Report" if _lang(request) == "en" else "تقرير المشتريات", kind="purchases", page=page, date_from=date_from_raw, date_to=date_to_raw, status=status))
+    rows = purchase_report(date_from, date_to, status or None)
+    page = page_of(request, rows)
+    return render(request, "reports/invoices.html", _context(request, title="Purchase Report" if _lang(request) == "en" else "تقرير المشتريات", kind="purchases", page=page, totals=_posted_totals(rows), date_from=date_from_raw, date_to=date_to_raw, status=status))
+
+
+def _posted_totals(rows):
+    """TRACK-START: a total under the invoice list, posted invoices only (drafts and cancelled carry no money)."""
+
+    totals = rows.filter(status="posted").aggregate(count=Count("id"), total=Sum("total_amount"), paid=Sum("paid_now"), due=Sum("remaining_due"))
+    return {key: value if value is not None else Decimal("0") for key, value in totals.items()}
 
 
 @require_permission("reports.view_inventory_report")

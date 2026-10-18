@@ -17,8 +17,8 @@ from config.paging import page_of
 
 WORDS = {
     "ar": {
-        "title": "الكيانات والفروع", "intro": "كل كيان (مصنع، محل، فرع) ليه مخازنه وخزنه وحساباته، وكلهم تحت نفس الشركة.",
-        "new": "كيان جديد", "edit": "تعديل", "code": "الكود", "name_ar": "الاسم بالعربي", "name_en": "الاسم بالإنجليزي", "kind": "النوع",
+        "title": "الفروع", "intro": "كل فرع (محل، مصنع، مخزن) ليه مخازنه وخزنه وحساباته، وكلهم تحت نفس الشركة.",
+        "new": "فرع جديد", "edit": "تعديل", "code": "الكود", "name_ar": "الاسم بالعربي", "name_en": "الاسم بالإنجليزي", "kind": "النوع",
         "kind_branch": "فرع (نفس الشركة)", "kind_company": "شركة مستقلة (سجل وضريبة منفصلين)", "activity": "النشاط",
         "same_activity": "نفس نشاط الشركة", "tax": "الرقم الضريبي", "prefix": "بادئة المستندات", "active": "نشط", "main": "الرئيسي",
         "locations": "المخازن", "cashboxes": "الخزن", "save": "حفظ", "saved": "اتحفظ الكيان.", "back": "رجوع", "empty": "لسه مفيش كيانات غير الرئيسي.",
@@ -28,8 +28,8 @@ WORDS = {
         "no_items": "مفيش أصناف مطابقة.", "where_link": "فين الصنف ده؟",
     },
     "en": {
-        "title": "Entities & branches", "intro": "Each entity (factory, shop, branch) has its own stores, cashboxes and books, all under one company.",
-        "new": "New entity", "edit": "Edit", "code": "Code", "name_ar": "Arabic name", "name_en": "English name", "kind": "Kind",
+        "title": "Branches", "intro": "Each entity (factory, shop, branch) has its own stores, cashboxes and books, all under one company.",
+        "new": "New branch", "edit": "Edit", "code": "Code", "name_ar": "Arabic name", "name_en": "English name", "kind": "Kind",
         "kind_branch": "Branch (same company)", "kind_company": "Separate company (own registration and tax)", "activity": "Activity",
         "same_activity": "Same as the company", "tax": "Tax registration number", "prefix": "Document prefix", "active": "Active", "main": "Main",
         "locations": "Stores", "cashboxes": "Cashboxes", "save": "Save", "saved": "Entity saved.", "back": "Back", "empty": "No entities besides the main one yet.",
@@ -57,7 +57,11 @@ def entity_list(request):
     rows = [{"entity": e, "locations": e.locations.filter(active=True).count(), "cashboxes": e.cashboxes.filter(active=True).count()}
             for e in Entity.objects.all()]
     services.main_entity()
-    return render(request, "entities/list.html", _context(request, rows=rows, can_manage=user_has_permission(request.user, "settings.manage_settings")))
+    from settings_core.models import ClientProfile
+
+    profile = ClientProfile.get_active()  # TRACK-START S09: the main one is the company itself, by its own name
+    return render(request, "entities/list.html", _context(request, rows=rows, can_manage=user_has_permission(request.user, "settings.manage_settings"),
+                                                          company_name=getattr(profile, "display_name", "")))
 
 
 def _activity_choices(lang, keep=""):

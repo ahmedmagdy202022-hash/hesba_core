@@ -18,6 +18,14 @@ def profile(request):
         permissions = role.rolepermission_set.filter(
             allow=True, permission__active=True
         ).select_related("permission").order_by("permission__module", "permission__code")
+        # TRACK-START S07: what this business uses, like the roles screen (UI-TRACK F25).
+        from settings_core.operational_views import _section_fits
+
+        fits = {}
+        for row in permissions:
+            if row.permission.module not in fits:
+                fits[row.permission.module] = _section_fits(row.permission.module)
+        permissions = [row for row in permissions if fits[row.permission.module]]
     return render(
         request,
         "accounts/profile.html",

@@ -34,7 +34,7 @@
       <nav class="activity-stepper" aria-label="Setup steps">
         <div class="activity-step"><span class="activity-step__number">1</span><span data-i18n="stepGeneral">النشاط العام</span></div>
         <div class="activity-step is-current"><span class="activity-step__number">2</span><span data-i18n="stepSub">النشاط الفرعي</span></div>
-        <div class="activity-step"><span class="activity-step__number">3</span><span data-i18n="stepModules">الموديولات</span></div>
+        <div class="activity-step"><span class="activity-step__number">3</span><span data-i18n="stepModules">الأقسام</span></div>
         <div class="activity-step"><span class="activity-step__number">4</span><span data-i18n="stepReview">المراجعة</span></div>
       </nav>
       <div class="activity-copy">
@@ -45,7 +45,7 @@
         {% for sub in subs %}<button class="activity-card subactivity-card is-active" type="button" role="listitem" data-sub-activity="{{ sub.slug }}" aria-pressed="false"><span class="activity-card__title" data-i18n="{{ sub.slug }}">{{ sub.ar }}</span></button>{% endfor %}
       </div>
       <footer class="activity-footer" aria-label="Activity navigation">
-        <button class="activity-action activity-next" type="button" disabled data-next-button><span data-i18n="next">التالي: اختيار الموديولات</span><span class="activity-action__circle" aria-hidden="true">←</span></button>
+        <button class="activity-action activity-next" type="button" disabled data-next-button><span data-i18n="next">التالي: اختيار الأقسام</span><span class="activity-action__circle" aria-hidden="true">←</span></button>
         <a class="activity-action activity-back" href="/setup/activity/?lang=ar" data-back-link><span data-i18n="back">الرجوع لاختيار النشاط العام</span><span class="activity-action__plain" aria-hidden="true">‹</span></a>
       </footer>
     </section>

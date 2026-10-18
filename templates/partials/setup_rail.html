@@ -9,19 +9,19 @@
     <p class="setup-rail__kicker"><span class="t-ar">إعداد حِسبة</span><span class="t-en">Setting up Hesba</span></p>
     {% if step == 0 %}
     <h2 class="setup-rail__headline"><span class="t-ar">جهّز حِسبة في ٤ خطوات</span><span class="t-en">Set Hesba up in four steps</span></h2>
-    <p class="setup-rail__lead"><span class="t-ar">دقيقتين وتكون جاهز: نختار نشاطك، ونشغّل الموديولات اللي محتاجها، ونراجع مع بعض قبل ما تبدأ.</span><span class="t-en">Two minutes and you are ready: pick your activity, switch on the modules you need, and review together before you start.</span></p>
+    <p class="setup-rail__lead"><span class="t-ar">دقيقتين وتكون جاهز: نختار نشاطك، ونشغّل الأقسام اللي محتاجها، ونراجع مع بعض قبل ما تبدأ.</span><span class="t-en">Two minutes and you are ready: pick your activity, switch on the modules you need, and review together before you start.</span></p>
     {% elif step == 1 %}
     <h2 class="setup-rail__headline"><span class="t-ar">نبدأ بنوع شغلك</span><span class="t-en">Start with your kind of business</span></h2>
     <p class="setup-rail__lead"><span class="t-ar">على حسب نشاطك هنجهّزلك القوائم والكلمات والتقارير المناسبة، من غير ما تضيّع وقت في حاجات مش بتاعتك.</span><span class="t-en">Your activity decides the menus, the words and the reports you get, so nothing you don't need gets in the way.</span></p>
     {% elif step == 2 %}
     <h2 class="setup-rail__headline"><span class="t-ar">ندخل في التفاصيل</span><span class="t-en">Now the details</span></h2>
-    <p class="setup-rail__lead"><span class="t-ar">النشاط الفرعي بيحدد الموديولات المقترحة والقدرات الخاصة بيه، زي الباركود للمحلات أو كارت المريض للعيادات.</span><span class="t-en">The sub-activity picks the suggested modules and special features, like barcodes for shops or patient files for clinics.</span></p>
+    <p class="setup-rail__lead"><span class="t-ar">النشاط الفرعي بيحدد الأقسام المقترحة والخصائص الخاصة بيه، اللي تناسب نوع شغلك بالظبط.</span><span class="t-en">The sub-activity picks the suggested modules and special features, like barcodes for shops or patient files for clinics.</span></p>
     {% elif step == 3 %}
     <h2 class="setup-rail__headline"><span class="t-ar">شغّل اللي محتاجه بس</span><span class="t-en">Turn on only what you need</span></h2>
-    <p class="setup-rail__lead"><span class="t-ar">الأساسي مقفول لأنه قلب النظام، والمقترح متجهّز لنشاطك، والاختياري تزوّده وقت ما تحب.</span><span class="t-en">Core modules stay on, suggested ones fit your activity, and optional ones can be added whenever you like.</span></p>
+    <p class="setup-rail__lead"><span class="t-ar">الأساسي شغّال دايمًا لأنه قلب النظام، والمقترح متجهّز لنشاطك، والاختياري تزوّده وقت ما تحب.</span><span class="t-en">Core modules stay on, suggested ones fit your activity, and optional ones can be added whenever you like.</span></p>
     {% elif step == 4 %}
     <h2 class="setup-rail__headline"><span class="t-ar">نظرة أخيرة قبل ما نبدأ</span><span class="t-en">One last look</span></h2>
-    <p class="setup-rail__lead"><span class="t-ar">راجع اختياراتك وفعّل القدرات اللي تناسبك. تقدر ترجع لأي خطوة دلوقتي أو تعدّل بعدين من الإعدادات.</span><span class="t-en">Check your choices and switch on the features you want. Go back to any step now, or change it later in Settings.</span></p>
+    <p class="setup-rail__lead"><span class="t-ar">راجع اختياراتك وفعّل الخصائص اللي تناسبك. تقدر ترجع لأي خطوة دلوقتي أو تعدّل بعدين من الإعدادات.</span><span class="t-en">Check your choices and switch on the features you want. Go back to any step now, or change it later in Settings.</span></p>
     {% else %}
     <h2 class="setup-rail__headline"><span class="t-ar">حِسبة جاهزة ليك</span><span class="t-en">Hesba is ready for you</span></h2>
     <p class="setup-rail__lead"><span class="t-ar">ابدأ فاضي ودخّل بياناتك، أو املاها بشهر بيانات تجريبية وشوف الأرقام بنفسك.</span><span class="t-en">Start empty with your own data, or fill it with a month of sample trade and see the figures for yourself.</span></p>
@@ -29,12 +29,12 @@
     <ol class="setup-rail__steps">
       <li class="{% if step > 1 %}is-done{% elif step == 1 %}is-current{% endif %}"><span class="setup-rail__dot" aria-hidden="true">1</span><span><span class="t-ar">النشاط العام</span><span class="t-en">General activity</span></span></li>
       <li class="{% if step > 2 %}is-done{% elif step == 2 %}is-current{% endif %}"><span class="setup-rail__dot" aria-hidden="true">2</span><span><span class="t-ar">النشاط الفرعي</span><span class="t-en">Sub-activity</span></span></li>
-      <li class="{% if step > 3 %}is-done{% elif step == 3 %}is-current{% endif %}"><span class="setup-rail__dot" aria-hidden="true">3</span><span><span class="t-ar">الموديولات</span><span class="t-en">Modules</span></span></li>
+      <li class="{% if step > 3 %}is-done{% elif step == 3 %}is-current{% endif %}"><span class="setup-rail__dot" aria-hidden="true">3</span><span><span class="t-ar">الأقسام</span><span class="t-en">Modules</span></span></li>
       <li class="{% if step > 4 %}is-done{% elif step == 4 %}is-current{% endif %}"><span class="setup-rail__dot" aria-hidden="true">4</span><span><span class="t-ar">المراجعة</span><span class="t-en">Review</span></span></li>
     </ol>
   </div>
   <div class="setup-rail__foot">
     <p class="setup-rail__assure"><span class="t-ar">تغيير أي اختيار بعدين مش بيمسح أي بيانات.</span><span class="t-en">Changing a choice later never deletes data.</span></p>
-    <p class="setup-rail__credit">Developed by <strong>Ahmed Magdy</strong></p>
+    <p class="setup-rail__credit"><span class="t-ar">تطوير <strong>أحمد مجدي</strong></span><span class="t-en">Developed by <strong>Ahmed Magdy</strong></span></p>
   </div>
 </aside>

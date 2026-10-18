@@ -38,6 +38,7 @@ from .dashboard_kpis import (
 )
 from .activity_panel import build_activity_panel
 from .navigation import display_name, nav_items
+from settings_core.currency import currency_label
 
 
 CHECKPOINT_CODE = "120F_DASHBOARD_LIVE_DATA"
@@ -410,11 +411,14 @@ def _demo_activities(user, lang, profile):
 
     if not getattr(settings, "DEMO_MODE", False) or not user_has_permission(user, "settings.view_settings"):
         return None
-    from config.demo import demo_activity_choices
+    from settings_core import setup_catalog as catalog
 
-    current = f"{profile.activity_slug}:{profile.sub_activity_slug}" if profile else ""
-    return {"choices": demo_activity_choices(lang), "current": current,
-            "label": "Try another activity" if lang == "en" else "جرّب نشاط تاني"}
+    # TRACK-START S01: the shop's own activity, whatever it is; trying another starts over from choosing it,
+    # so the words, the menu and the sample data always belong to the same business.
+    activity, sub = (profile.activity_slug, profile.sub_activity_slug) if profile else ("", "")
+    current = " · ".join(part for part in (catalog.activity_label(activity, lang) if activity else "",
+                                           catalog.sub_activity_label(activity, sub, lang) if sub else "") if part)
+    return {"current": current, "label": "Your activity" if lang == "en" else "نشاطك"}
 
 
 def dashboard(request):
@@ -469,7 +473,7 @@ def dashboard(request):
         "activity_slug": activity,
         # The installation's own currency, not a hard-coded "EGP". Empty before
         # bootstrap, in which case the template shows no unit at all.
-        "currency": profile.default_currency if profile is not None else "",
+        "currency": currency_label(profile.default_currency, lang) if profile is not None else "",  # TRACK-START S16
         # DASH-002: explained analytics replace the old penalty-based score.
         "analytics": analytics,
         "periods": [(key, PERIOD_LABELS[lang][key]) for key in PERIODS],

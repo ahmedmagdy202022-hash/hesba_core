@@ -156,7 +156,7 @@ def fit_analytics(analytics, fit):
 # ---- the options chosen in setup, each with what it has to watch ----
 
 WORDS = {
-    "ar": {"title": "متابعة اللي فعّلته في الإعدادات", "open": "افتح",
+    "ar": {"title": "متابعة الخصائص اللي شغّلتها", "open": "افتح",
            "instalments": "أقساط متأخرة", "instalments_sub": "{amount} على {plans} عميل", "instalments_none": "مفيش أقساط متأخرة",
            "batches_expired": "تشغيلات انتهت ولسه في المخزن", "batches_soon": "تشغيلات هتنتهي قريب",
            "vat": "ضريبة مبيعات الشهر", "vat_sub": "صافي ضريبة القيمة المضافة على المبيعات المرحّلة",

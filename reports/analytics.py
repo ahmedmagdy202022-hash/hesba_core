@@ -195,12 +195,13 @@ def stock_health(today, limit=5):
         last = last_sale.get(item_id)
         idle_days = (today - last).days if last else None
         if idle_days is None or idle_days >= SLOW_DAYS:
-            slow.append({"code": item.item_code, "name": item.item_name, "quantity": qty, "value": value, "idle_days": idle_days})
+            slow.append({"code": item.item_code, "name": str(item),  # TRACK-START S10: the size and colour too
+                          "quantity": qty, "value": value, "idle_days": idle_days})
         per_day = (sold_30.get(item_id) or ZERO) / Decimal(30)
         if per_day > 0:
             cover = float(qty / per_day)
             if cover <= COVER_ALERT_DAYS:
-                running_out.append({"code": item.item_code, "name": item.item_name, "quantity": qty, "cover_days": round(cover, 1)})
+                running_out.append({"code": item.item_code, "name": str(item), "quantity": qty, "cover_days": round(cover, 1)})
     slow.sort(key=lambda row: -row["value"])
     running_out.sort(key=lambda row: row["cover_days"])
     return {

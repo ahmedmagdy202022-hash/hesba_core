@@ -1,3 +1,4 @@
+from django.conf import settings as django_settings
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import redirect, render
@@ -16,16 +17,16 @@ from .currency import CurrencyChangeRefused, change_company_currency, currency_c
 
 STRINGS = {
     "ar": {"page_title": "الإعدادات", "dashboard": "لوحة القيادة", "language": "English", "settings": "إعدادات التشغيل", "roles": "الأدوار والصلاحيات", "back": "العودة للإعدادات", "hidden": "قيمة حساسة مخفية",
-           "modules": "الموديولات", "modules_lead": "دي الموديولات اللي تناسب نشاطك. شغّل أو اقفل أي موديول: القفل بيخفي الموديول ويقفل شاشاته بس، وبياناته بتفضل محفوظة زي ما هي.",
+           "modules": "الأقسام", "modules_lead": "دي الأقسام اللي تناسب نشاطك. شغّل أو أوقف أي قسم: الإيقاف بيخفي القسم وشاشاته بس، وبياناته بتفضل محفوظة زي ما هي.",
            "your_activity": "نشاطك", "inside": "فيه لنشاطك:", "open": "افتح", "features": "مميزات نشاطك", "features_lead": "شاشات جاية مع نشاطك نفسه، مش محتاجة تتشغّل.",
            "may_need": "ممكن تحتاجها", "change_activity": "النشاط بيتغيّر من إعداد النشاط.",
-           "state_on": "مفعّل", "state_off": "مقفول", "state_required": "أساسي لنشاطك", "state_soon": "قريبًا",
-           "turn_on": "تفعيل", "turn_off": "قفل", "view_only": "تقدر تشوف الموديولات بس؛ التغيير لصاحب الحساب.",
-           "setup_first": "كمّل الإعداد الأول قبل ما تغيّر الموديولات.", "saved_on": "اتفعّل موديول «{module}».", "saved_off": "اتقفل موديول «{module}». بياناته محفوظة.", "refused": "التغيير ده مش مسموح: الموديول أساسي لنشاطك أو لسه مش متاح.",
+           "state_on": "شغّال", "state_off": "مش شغّال", "state_required": "أساسي · شغّال دايمًا", "state_soon": "قريبًا",
+           "turn_on": "تشغيل", "turn_off": "إيقاف", "view_only": "تقدر تشوف الأقسام بس؛ التغيير لصاحب الحساب.",
+           "setup_first": "كمّل الإعداد الأول قبل ما تغيّر الأقسام.", "saved_on": "اشتغل قسم «{module}».", "saved_off": "اتوقف قسم «{module}». بياناته محفوظة.", "refused": "التغيير ده مش مسموح: القسم أساسي لنشاطك أو لسه مش متاح.",
            "currency": "العملة", "currency_lead": "حسبة بتستخدم عملة واحدة للشركة، وبتظهر جنب كل مبلغ.", "currency_field": "عملة الشركة", "save": "حفظ",
            "currency_locked": "العملة مقفولة لأن فيه مبالغ متسجلة بيها بالفعل (فواتير أو حركات خزنة أو أرصدة افتتاحية). حسبة مابتحوّلش المبالغ بين العملات، فتغييرها دلوقتي هيغيّر معنى الأرقام.", "currency_saved": "العملة اتغيرت لـ {code}.", "no_profile": "لسه مفيش بيانات شركة. كمّل الإعداد الأول.",
-           "capabilities": "قدرات النشاط", "capabilities_lead": "طرق شغل بيحتاجها بعض الأنشطة بس. اللي عليه «مقترح» مناسب لنشاطك، وتقدر تشغّل أو تقفل أي حاجة في أي وقت من غير ما بيانات تتمسح.",
-           "suggested": "مقترح لنشاطك", "cap_saved_on": "اتفعّلت «{capability}».", "cap_saved_off": "اتقفلت «{capability}». بياناتها محفوظة.", "cap_refused": "التغيير ده مش مسموح: القدرة لسه مش متاحة."},
+           "capabilities": "الخصائص", "capabilities_lead": "طرق شغل بيحتاجها بعض الأنشطة بس. اللي عليه «مقترح» مناسب لنشاطك، وتقدر تشغّل أو توقف أي خاصية في أي وقت من غير ما بيانات تتمسح.",
+           "suggested": "مقترح لنشاطك", "cap_saved_on": "اشتغلت «{capability}».", "cap_saved_off": "اتوقفت «{capability}». بياناتها محفوظة.", "cap_refused": "التغيير ده مش مسموح: الخاصية لسه مش متاحة."},
     "en": {"page_title": "Settings", "dashboard": "Dashboard", "language": "العربية", "settings": "Operational settings", "roles": "Roles and permissions", "back": "Back to settings", "hidden": "Sensitive value hidden",
            "modules": "Modules", "modules_lead": "These are the modules that suit your activity. Switch any of them on or off: switching off only hides the module and closes its screens; its data is kept as it is.",
            "your_activity": "Your activity", "inside": "For your activity:", "open": "Open", "features": "Your activity's features", "features_lead": "Screens that come with your activity itself; nothing to switch on.",
@@ -133,6 +134,7 @@ def _plain_profile(client, lang):
     if client is None:
         return None
     from . import setup_catalog as catalog
+    from .currency import CURRENCIES
     from .setup_services import enabled_modules
 
     month = client.fiscal_year_start_month
@@ -142,6 +144,8 @@ def _plain_profile(client, lang):
         "activity": catalog.activity_label(client.activity_slug, lang) if client.activity_slug else "",
         "sub_activity": catalog.sub_activity_label(client.activity_slug, client.sub_activity_slug, lang) if client.sub_activity_slug else "",
         "language": {"ar": "العربية", "en": "English"}.get(client.default_language, client.default_language),
+        # TRACK-START S16: the currency by its name ("جنيه مصري"), like the currency screen.
+        "currency": dict((code, labels) for code, labels in CURRENCIES).get(client.default_currency, {}).get("en" if lang == "en" else "ar", client.default_currency),
         "timezone": (zone[1] if lang == "en" else zone[0]) if zone else client.timezone,
         # A month outside 1-12 (the field has no validator) is shown as stored, flagged, never wrapped.
         "fiscal_start": MONTHS["en" if lang == "en" else "ar"][month - 1] if month in range(1, 13) else "",
@@ -168,6 +172,8 @@ def settings_overview(request):
             settings=SystemSetting.objects.filter(active=True),
             features=features,
             can_manage=can_manage,
+            # TRACK-START S04: a showcase has no support corner; Django Admin is closed there (config.urls).
+            show_advanced=can_manage and not getattr(django_settings, "DEMO_MODE", False),
             admin_settings_url=reverse("admin:settings_core_clientprofile_changelist") if can_manage else "",
         ),
     )
@@ -238,10 +244,12 @@ ROLE_WORDS = {
 
 #: A permission section that belongs to one activity or module (UI-TRACK F25): a clothes shop is not offered medical files.
 SECTION_NEEDS = {"medical": ("activity", "medical"), "restaurant": ("module", "tables_orders"), "projects": ("module", "projects")}
+#: TRACK-START S06: a ready-made role whose work is one module's (HG-048) shows only where that module is used.
+ROLE_NEEDS = {"waiter": ("module", "tables_orders"), "site_engineer": ("module", "projects")}
 
 
-def _section_fits(module):
-    need = SECTION_NEEDS.get(module)
+def _section_fits(module, needs=SECTION_NEEDS):
+    need = needs.get(module)
     if need is None:
         return True
     from settings_core.models import ClientProfile
@@ -282,7 +290,8 @@ def role_list(request):
 
     can_manage = user_has_permission(request.user, "permissions.manage_roles")
     lang = lang_of(request)
-    roles = list(Role.objects.filter(active=True).prefetch_related("rolepermission_set__permission").order_by("-is_system_role", "pk"))
+    roles = [role for role in Role.objects.filter(active=True).prefetch_related("rolepermission_set__permission").order_by("-is_system_role", "pk")
+             if _section_fits(role.code, ROLE_NEEDS) or in_use(role)]  # S06: no waiter in a clothes shop, unless someone holds it
     fits = {}  # one look at the activity and modules per section, not per permission
     for role in roles:
         role.sections = _role_sections(role, lang, fits)
@@ -375,7 +384,7 @@ def module_settings(request):
 
 #: ACT-FIT: how the modules screen groups what fits the activity.
 GROUP_TITLES = {
-    "ar": {"required": "أساسي لنشاطك", "suggested": "مقترح لنشاطك", "optional": "ممكن تحتاجه", "extra": "مش من موديولات نشاطك (شغال حاليًا)"},
+    "ar": {"required": "أساسي لنشاطك", "suggested": "مقترح لنشاطك", "optional": "ممكن تحتاجه", "extra": "مش من أقسام نشاطك (شغال حاليًا)"},
     "en": {"required": "Core for your activity", "suggested": "Suggested for your activity", "optional": "You may need", "extra": "Not one of your activity's modules (on now)"},
 }
 
