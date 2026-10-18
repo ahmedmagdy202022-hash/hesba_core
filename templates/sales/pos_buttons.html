@@ -1,7 +1,13 @@
 {% extends "operations/base.html" %}
 {% load static hesba_format %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'sales:pos' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ words.title }}</h1><p class="op-muted">{{ words.intro }}</p></div></section>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'sales:pos' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ words.title_full }}</h1><p class="op-muted">{{ words.intro }}</p></div></section>
+<section class="pb-part" id="card" data-pos-card>
+  <h2>{{ words.card }}</h2><p class="op-muted">{{ words.card_intro }}</p>
+  <form class="pb-search" method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="card">
+    <select name="card_cashbox" aria-label="{{ words.card }}"><option value="">{{ words.card_none }}</option>{% for cashbox in cashboxes %}<option value="{{ cashbox.pk }}"{% if card_cashbox and card_cashbox.pk == cashbox.pk %} selected{% endif %}>{{ cashbox }}</option>{% endfor %}</select>
+    <button class="op-primary" type="submit">{{ words.card_save }}</button></form>
+</section>
 <section class="pb-part" data-pos-buttons-picked>
   <h2>{{ words.picked }}</h2>
   {% if chosen %}<ol class="pb-list">{% for item in chosen %}<li class="pb-row"><span class="pb-name">{{ item|named }}{% if not item.barcode %} <small class="pb-tag">{{ words.no_barcode }}</small>{% endif %}</span><span class="pb-price">{{ item.default_sale_price|money }}</span>
@@ -16,5 +22,5 @@
     <span class="pb-actions">{% if not full %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="q" value="{{ query }}"><input type="hidden" name="item" value="{{ item.pk }}"><button class="op-primary" type="submit" name="action" value="add" data-pos-button-add="{{ item.pk }}">{{ words.add }}</button></form>{% endif %}</span></li>{% endfor %}</ul>
   {% else %}<p class="op-empty">{{ words.nothing }}</p>{% endif %}
 </section>
-<link rel="stylesheet" href="{% static 'hesba/css/pos_quick.css' %}?v=an7-1">
+<link rel="stylesheet" href="{% static 'hesba/css/pos_quick.css' %}?v=an8-1">
 {% endblock %}

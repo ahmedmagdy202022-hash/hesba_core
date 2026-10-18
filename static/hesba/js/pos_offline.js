@@ -77,7 +77,7 @@
     var total = lines.reduce(function (sum, row) { return sum + (parseFloat(row.qty) || 0) * (parseFloat(row.price) || 0); }, 0) - (parseFloat(data.get('discount')) || 0);
     return {
       key: newKey(), recorded_at: new Date().toISOString(), customer: data.get('customer'), location: data.get('location'), cashbox: data.get('cashbox'),
-      discount: data.get('discount') || '0', tendered: data.get('tendered') || '0', lines: lines, total: total
+      discount: data.get('discount') || '0', tendered: data.get('tendered') || '0', method: data.get('pay_method') || 'cash', lines: lines, total: total
     };
   }
 

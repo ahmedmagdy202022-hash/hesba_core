@@ -132,6 +132,12 @@ def flag_code(slug):
 
 
 def label(slug, lang="ar"):
+    if slug == "batches_expiry":
+        from batches.words import words as expiry_words
+
+        named = expiry_words(lang).get("capability")  # AN8: a supermarket keeps expiry dates, not batches
+        if named:
+            return named
     entry = CAPABILITIES.get(slug) or {}
     return entry.get(lang) or catalog.fallback_label(slug)
 
@@ -224,6 +230,12 @@ def fits(activity, slug):
 
 
 def about(activity, slug, lang="ar"):
+    if slug == "batches_expiry":
+        from batches.words import words as expiry_words
+
+        about_text = expiry_words(lang).get("capability_about")
+        if about_text:
+            return about_text
     override = ABOUT_FOR.get((activity, slug))
     if override:
         return override[1] if lang == "en" else override[0]

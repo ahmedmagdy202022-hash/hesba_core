@@ -17,7 +17,12 @@ def shift_gate(context):
     user = getattr(request, "user", None)
     if user is None or not user.is_authenticated or not shift_missing(user):
         return {"show": False}
+    from sales.pos_buttons import card_cashbox
+
     cashboxes = entity_scope.cashboxes(Cashbox.objects).filter(active=True)
+    machine = card_cashbox(cashboxes)
+    if machine:  # AN8: a shift is opened on a drawer, never on the card machine
+        cashboxes = cashboxes.exclude(pk=machine.pk)
     return {
         "show": True, "lang": context.get("lang", "ar"), "next": request.get_full_path(), "csrf_token": context.get("csrf_token"),
         "cashboxes": cashboxes, "default_cashbox": cashboxes.filter(is_default=True).first() or cashboxes.first(),

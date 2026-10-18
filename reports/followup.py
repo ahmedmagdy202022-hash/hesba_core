@@ -111,7 +111,10 @@ def todo(user, today, slot, lang="ar"):
             alerts = expiry_alerts(today)
             batches = alerts["expired"] + alerts["soon"]
             if batches:
-                items.append(_item("expiring", words, len(batches), (str(batch) for batch in batches), path="/batches/"))
+                from batches.words import words as expiry_words
+
+                said = {**words, "expiring": expiry_words(lang).get("followup") or words["expiring"]}  # AN8
+                items.append(_item("expiring", said, len(batches), (str(batch) for batch in batches), path="/batches/"))
     if _module("appointments_visits") and _can(user, "sales.view_sales_invoices"):
         from appointments.models import HOLDS_TIME, Appointment
 

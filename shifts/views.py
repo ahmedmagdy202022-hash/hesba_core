@@ -70,8 +70,10 @@ def my_shift(request):
     if request.method == "POST":
         try:
             if request.POST.get("action") == "open":
+                from sales.pos_buttons import card_cashbox
+
                 cashbox = entity_scope.cashboxes(Cashbox.objects).filter(active=True, pk=request.POST.get("cashbox") or 0).first()
-                if cashbox is None:
+                if cashbox is None or cashbox == card_cashbox():  # AN8: no drawer to count on the card machine
                     raise ValidationError(words["bad"])
                 open_shift(request.user, cashbox, _amount(request.POST.get("opening_float"), words), lang)
                 messages.success(request, words["opened"])
@@ -95,7 +97,12 @@ def my_shift(request):
     # Codex #233: only the shifts on this entity's cashboxes, like the cashbox list above.
     open_now = (Shift.objects.select_related("cashier__hesba_profile", "cashbox").filter(status="open", cashbox__in=entity_scope.cashboxes(Cashbox.objects))
                 .exclude(pk=getattr(current, "pk", None))) if can_all else Shift.objects.none()
+    from sales.pos_buttons import card_cashbox
+
     cashboxes = entity_scope.cashboxes(Cashbox.objects).filter(active=True)
+    machine = card_cashbox(cashboxes)
+    if machine:  # AN8: a shift counts a drawer; the card machine has none
+        cashboxes = cashboxes.exclude(pk=machine.pk)
     return render(request, "shifts/mine.html", {
         "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": words, "page_title": words["page_title"], "section": "pos",
         "current": current, "live": live, "live_rows": _rows(live, words) if live else [], "live_expected": Decimal(live["expected"]) if live else None,
