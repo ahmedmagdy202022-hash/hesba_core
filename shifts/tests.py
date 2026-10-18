@@ -157,12 +157,15 @@ class ShiftBeforeSellingTests(TestCase):
         page = self.client.get(reverse("sales:pos"), {"lang": "ar"}).content.decode()
         self.assertIn("data-shift-gate", page)
         self.assertIn('name="next" value="/sales/pos/', page)
+        self.assertNotIn("data-pos-shift", page)  # TRACK-ACTS W03: one way to open it, not the bar and a second button
         response = self.till()
         self.assertContains(response, "افتح وردية الأول عشان تسجّل بيع.")
         self.assertFalse(SalesInvoice.objects.exists())
         opened = self.client.post(reverse("shifts:mine"), {"lang": "ar", "action": "open", "cashbox": self.cashbox.pk, "opening_float": "0", "next": "/sales/pos/?lang=ar"})
         self.assertRedirects(opened, "/sales/pos/?lang=ar", fetch_redirect_response=False)
-        self.assertNotIn("data-shift-gate", self.client.get(reverse("sales:pos"), {"lang": "ar"}).content.decode())
+        page = self.client.get(reverse("sales:pos"), {"lang": "ar"}).content.decode()
+        self.assertNotIn("data-shift-gate", page)
+        self.assertIn("data-pos-shift", page)  # the open shift, and the way to close it
         self.till()
         self.assertEqual(SalesInvoice.objects.get().status, "posted")
 
@@ -186,6 +189,8 @@ class ShiftBeforeSellingTests(TestCase):
         from settings_core.capabilities import set_capability_enabled
 
         set_capability_enabled(self.profile, "shift_required", False)
-        self.assertNotIn("data-shift-gate", self.client.get(reverse("sales:pos"), {"lang": "ar"}).content.decode())
+        page = self.client.get(reverse("sales:pos"), {"lang": "ar"}).content.decode()
+        self.assertNotIn("data-shift-gate", page)
+        self.assertIn("data-pos-shift", page)  # the open shift, and the way to close it
         self.till()
         self.assertEqual(SalesInvoice.objects.get().status, "posted")

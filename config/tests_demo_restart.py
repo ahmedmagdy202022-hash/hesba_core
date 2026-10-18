@@ -64,7 +64,16 @@ class DemoRestartTests(TestCase):
         self.assertRedirects(response, "/dashboard/?lang=ar", fetch_redirect_response=False)
         self.assertTrue(SalesInvoice.objects.filter(status="posted").exists())
         self.assertEqual(ClientProfile.get_active().activity_slug, "medical")
+        self.assertEqual(ClientProfile.get_active().display_name, "عيادة حِسبة التجريبية")  # TRACK-ACTS W02: not "محل"
         self.assertEqual(self.client.get("/dashboard/?lang=ar").status_code, 200)
+
+    def test_the_sample_shop_is_named_for_its_activity(self):
+        from config.demo import DEMO_NAME, demo_name
+
+        self.assertEqual(demo_name("commercial", "pharmacy"), "صيدلية حِسبة التجريبية")
+        self.assertEqual(demo_name("commercial", "fashion"), DEMO_NAME)
+        self.assertEqual(demo_name("restaurants", "fast_food"), "مطعم حِسبة التجريبي")
+        self.assertEqual(demo_name("other", "general"), DEMO_NAME)
 
     def test_pressing_sample_data_twice_adds_it_once(self):
         # FEEDBACK-R1: the second press used to fail on duplicate invoice numbers.
