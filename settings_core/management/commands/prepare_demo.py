@@ -698,6 +698,9 @@ class Command(BaseCommand):
         "contracting.infrastructure": (("1", "حفر وردم", "م³", "6000", "45"), ("2", "طبقة أساس سن", "م³", "2400", "420"),
                                        ("3", "رصف أسفلت", "م²", "9000", "140"), ("4", "توريد وتركيب بلدورة", "م.ط", "1800", "190")),
     }
+    #: TRACK-ACTS W19: the children's stage fits the place (a nursery has no prep-school pupils).
+    STAGES = {"nursery": "كي جي 1", "languages": "مستوى مبتدئ", "training": "خريجين", "tutoring_center": "تالتة إعدادي", "private_tutor": "تالتة إعدادي"}
+
     def _students(self, master, teacher, owner):
         """EDU-001: courses from the catalog's services, three groups, parents with their children enrolled."""
 
@@ -730,11 +733,14 @@ class Command(BaseCommand):
             ("نجلاء حسن (ولية أمر)", "01501234504", "الأم", ("ليلى أحمد",)),
             ("إبراهيم سالم (ولي أمر)", "01001234505", "الأب", ("حمزة إبراهيم",)),
         )
+        from settings_core.models import ClientProfile
+
+        stage = self.STAGES.get(getattr(ClientProfile.get_active(), "sub_activity_slug", ""), "تالتة إعدادي")
         students = []
         for parent, phone, relation, children in families:
             payer = Customer.objects.filter(phone=phone).first()
             for child in children:
-                data = {"name": child, "stage": "تالتة إعدادي", "relation": relation}
+                data = {"name": child, "stage": stage, "relation": relation}
                 data.update({"payer": payer} if payer else {"payer_name": parent, "payer_phone": phone})
                 student = edu.save_student(data, owner)
                 payer = student.payer

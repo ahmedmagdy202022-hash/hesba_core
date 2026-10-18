@@ -308,6 +308,7 @@ class SampleBusinessPerActivityTests(TestCase):
         self.assertEqual(counts["away"], 1)  # one child not here yet
         self.assertEqual(counts["in"] + counts["left"], children - 1)
         self.assertTrue(all(record.picked_by.student_id == record.student_id for record in DayRecord.objects.exclude(picked_by=None)))
+        self.assertEqual(set(Student.objects.values_list("stage", flat=True)), {"كي جي 1"})  # TRACK-ACTS W19: no prep-school pupils in a nursery
 
 
 @override_settings(DEMO_MODE=True, DEMO_PASSWORD="Demo-pass-1", DEBUG=True)

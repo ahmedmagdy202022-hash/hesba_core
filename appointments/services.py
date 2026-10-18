@@ -186,7 +186,7 @@ def bill(appointment, user, lang="ar"):
     invoice = create_sales_draft_with_tax(
         {"invoice_number": f"INV-{appointment.number}", "invoice_date": timezone.localdate(), "customer": appointment.customer,
          "selling_location": location, "cashbox": None, "discount_amount": Decimal("0"), "tax_amount": Decimal("0"),
-         "paid_now": Decimal("0"), "notes": f"Appointment {appointment.number}"},
+         "paid_now": Decimal("0"), "notes": (f"Appointment {appointment.number}" if lang == "en" else f"ميعاد {appointment.number}")},  # TRACK-ACTS W18
         [{"item": appointment.service, "quantity": Decimal("1"), "unit_sale_price": appointment.price, "line_discount_amount": Decimal("0"),
           "description": appointment.notes or ""}],
         user,
