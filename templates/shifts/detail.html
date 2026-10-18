@@ -1,7 +1,7 @@
 {% extends "operations/base.html" %}
 {% load hesba_format %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'shifts:mine' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ words.report }}</h1><p>{{ shift.cashier.get_username }} · {{ shift.cashbox.name_ar }} · <bdi>{{ shift.opened_at|date:"Y-m-d H:i" }}</bdi>{% if shift.closed_at %} → <bdi>{{ shift.closed_at|date:"H:i" }}</bdi>{% endif %}</p></div><div class="op-form-actions"><button class="op-secondary" type="button" onclick="window.print()">{{ words.print }}</button></div></section>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'shifts:mine' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ words.report }}</h1><p>{{ shift.cashier|person }} · {{ shift.cashbox.name_ar }} · <bdi>{{ shift.opened_at|date:"Y-m-d H:i" }}</bdi>{% if shift.closed_at %} → <bdi>{{ shift.closed_at|date:"H:i" }}</bdi>{% endif %}</p></div><div class="op-form-actions"><button class="op-secondary" type="button" onclick="window.print()">{{ words.print }}</button></div></section>
 <div class="op-table-wrap"><table class="op-table" data-shift-report><tbody>
 <tr><td>{{ words.float_label }}</td><td>{{ shift.opening_float|money }}</td></tr>
 {% for label, value in rows %}<tr><td>{{ label }}</td><td>{{ value|money }}</td></tr>{% endfor %}

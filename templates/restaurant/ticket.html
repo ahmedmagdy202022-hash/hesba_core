@@ -29,7 +29,7 @@ body{margin:0;background:var(--hs-ground);color:#000;font-family:var(--hs-font-b
   <h1>{{ words.kitchen }} · {{ words.ticket }} {{ ticket.sequence }}</h1>
   <p class="kt-where">{% if order.table %}{{ words.table }} {{ order.table.name }}{% else %}{{ kind_label }}{% endif %}</p>
   <p class="kt-meta"><span dir="ltr">{{ order.number }}</span><span dir="ltr">{{ sent_at|date:"H:i" }}</span></p>
-  <p class="kt-meta"><span>{{ ticket.sent_by.get_full_name|default:ticket.sent_by.username }}</span><span>{% if order.waiter %}{{ order.waiter.name }}{% endif %}{% if order.guests > 1 %} · {{ order.guests }} {{ words.guests }}{% endif %}</span></p>
+  <p class="kt-meta"><span>{{ ticket.sent_by|person }}</span><span>{% if order.waiter %}{{ order.waiter.name }}{% endif %}{% if order.guests > 1 %} · {{ order.guests }} {{ words.guests }}{% endif %}</span></p>
   <ul>{% for line in lines %}<li data-ticket-line="{{ line.item.item_code }}"{% if line.voided %} style="text-decoration:line-through"{% endif %}><b>{{ line.quantity|qty }} ×</b> {{ line.item.item_name }}{% if line.voided %} ({{ words.voided }}){% endif %}{% if line.note %}<small>{{ line.note }}</small>{% endif %}</li>{% endfor %}</ul>
   {% if order.notes %}<p class="kt-notes">{{ order.notes }}</p>{% endif %}
 </article>

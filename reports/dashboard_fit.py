@@ -42,10 +42,11 @@ class Need:
     modules: frozenset = frozenset()  # all of these switched on
     activities: frozenset = frozenset()  # one of these (empty: any)
     fact: str = ""  # a named fact from the data, see Fit.fact
+    or_fact: str = ""  # shows even without the modules when this fact holds
 
 
-def need(*modules, activities=(), fact=""):
-    return Need(frozenset(modules), frozenset(activities), fact)
+def need(*modules, activities=(), fact="", or_fact=""):
+    return Need(frozenset(modules), frozenset(activities), fact, or_fact)
 
 
 #: What each dashboard element belongs to. An element missing here always shows (subject to permission).
@@ -54,7 +55,8 @@ NEEDS = {
     "kpi.purchases_today": need("purchases"),
     "kpi.supplier_dues": need("suppliers"),
     "kpi.supplier_payments_today": need("suppliers"),
-    "kpi.customer_dues": need("customers"),
+    # TRACK-ACTS W15: money owed is never hidden; a restaurant with the customers module off still bills company lunches on credit.
+    "kpi.customer_dues": need("customers", or_fact="sells_on_credit"),
     "kpi.receipts_today": need("customers"),
     "kpi.low_stock_count": need("inventory"),
     "kpi.out_of_stock_count": need("inventory"),
@@ -63,7 +65,7 @@ NEEDS = {
     "metric.expenses": need("expenses"),
     "metric.net_profit": need("expenses"),
     "metric.cash": need("cashboxes"),
-    "metric.receivables": need("customers"),
+    "metric.receivables": need("customers", or_fact="sells_on_credit"),
     "metric.payables": need("suppliers"),
     # charts and lists
     "chart.split": need("customers", fact="sells_on_credit"),
@@ -127,7 +129,7 @@ class Fit:
         if rule is None:
             return True
         if not rule.modules <= self.modules:
-            return False
+            return bool(rule.or_fact) and self.fact(rule.or_fact)
         if rule.activities and self.activity not in rule.activities:
             return False
         return not rule.fact or self.fact(rule.fact)

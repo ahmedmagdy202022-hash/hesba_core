@@ -326,7 +326,9 @@ def pay(order, user, *, cashbox, discount=Decimal("0"), tendered=Decimal("0"), c
 
     kitchen.prepare_shortfall(lines, location, user, lang)  # RESTO-004: a kitchen dish is made from its ingredients before it is sold
     customer = customer or order.customer or walk_in_customer()
-    where = order.table.name if order.table else order.get_kind_display()
+    from settings_core.display_labels import choice_label
+
+    where = order.table.name if order.table else choice_label(order, "kind", lang)
     rows = [{"item": line.item, "quantity": line.quantity, "unit_sale_price": line.unit_price, "line_discount_amount": Decimal("0"),
              "description": line.note} for line in lines]
     if order.kind == OrderKind.DELIVERY and order.delivery_fee > 0:  # RESTO-003: the fee is its own line on the same invoice
@@ -335,7 +337,7 @@ def pay(order, user, *, cashbox, discount=Decimal("0"), tendered=Decimal("0"), c
     invoice, change = checkout(
         lines=rows,
         customer=customer, location=location, cashbox=cashbox, discount=discount, tendered=tendered, user=user,
-        notes=f"Restaurant {order.number} ({where})",
+        notes=(f"Restaurant {order.number} ({where})" if lang == "en" else f"طلب مطعم {order.number} ({where})"),  # TRACK-ACTS W11
     )
     order.invoice = invoice
     order.customer = customer

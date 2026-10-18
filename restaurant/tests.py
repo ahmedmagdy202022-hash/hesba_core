@@ -142,6 +142,8 @@ class PaymentTests(RestaurantSetup):
         self.assertFalse(StockMovement.objects.filter(item=self.koshary).exists())  # a dish is a service item
         self.assertEqual(CashboxMovement.objects.get(sales_invoice=invoice).amount, D("170.00"))
         self.assertIn(order.number, invoice.notes)
+        self.assertTrue(invoice.notes.startswith("طلب مطعم"))  # TRACK-ACTS W11: no English on an Arabic invoice
+        self.assertNotIn("Restaurant", invoice.notes)
         with self.assertRaisesMessage(ValidationError, "اتقفل"):
             services.pay(order, self.owner, cashbox=self.cashbox, tendered=D("200"))
         self.assertEqual(SalesInvoice.objects.count(), 1)
@@ -335,6 +337,16 @@ class RestaurantInsightTests(RestaurantSetup):
         self.assertContains(page, 'data-r-hour="13"')
         self.assertContains(page, "210.00")
         self.assertNotContains(page, "0,1")  # no locale decimal comma in the per-day figure
+        self.assertNotContains(page, "data-r-others")  # every sale here is a restaurant order
+        # TRACK-ACTS W14: a sale made outside the floor is named, so the report agrees with the dashboard.
+        from sales.pos import checkout, walk_in_customer
+
+        checkout(lines=[{"item": self.tea, "quantity": D("1"), "unit_sale_price": D("15.00"), "line_discount_amount": D("0")}],
+                 customer=walk_in_customer(), location=self.location, cashbox=self.cashbox, discount=D("0"), tendered=D("15.00"), user=self.owner)
+        others = self.client.get(reverse("restaurant:report")).content.decode()
+        self.assertIn("data-r-others", others)
+        self.assertIn("15.00", others)
+        self.assertIn("225.00", others)  # 210.00 of orders + 15.00 at the counter
         self.assertEqual(self.client.get(reverse("restaurant:report") + "?lang=en&from=bad").status_code, 200)
 
     def test_waste_lists_stock_taken_out_by_adjustment(self):

@@ -218,6 +218,17 @@ def name_and_code(obj, lang="ar"):
 
 
 @register.filter
+def person(user):
+    """TRACK-ACTS W13: a user by the name the shop gave them («المالك»), not the login name («owner»)."""
+
+    if not user:
+        return ""
+    from reports.navigation import display_name
+
+    return display_name(user)
+
+
+@register.filter
 def named(obj, lang="ar"):
     """AN2 (F33): the name, with the code small beside it (``{{ item|named:lang }}``)."""
 

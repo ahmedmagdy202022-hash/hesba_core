@@ -278,6 +278,7 @@ INSIGHT_WORDS = {
            "dish": "الطبق", "price": "سعر البيع", "cost": "تكلفة الطبق", "margin": "الهامش", "margin_pct": "نسبة الهامش", "ingredients": "المكوّنات",
            "no_recipe": "لسه مالوش مكوّنات", "edit": "المكوّنات", "ingredient": "الخامة", "quantity": "الكمية للطبق", "save": "حفظ", "saved": "اتحفظت المكوّنات.",
            "back": "تكلفة الأطباق", "add_row": "سطر زيادة", "report": "تقرير المطعم",
+           "others": "فيه كمان فواتير بيع من غير طلب مطعم (فواتير شركات أو من شاشة البيع) بـ {other}، فكل مبيعات الفترة {all}، وده رقم لوحة القيادة.",
            "report_intro": "الطلبات المدفوعة اللي فاتورتها مترحّلة. قيمة الطلب صافي البيع (قبل الضريبة وبعد المرتجعات)، وقيمة الطبق بسعر المنيو قبل خصم الطلب.",
            "from": "من", "to": "لحد", "go": "اعرض", "orders": "طلبات", "sales": "المبيعات", "average": "متوسط الطلب", "guests": "أفراد في الصالة",
            "minutes": "دقيقة متوسط القعدة", "by_hour": "حسب الساعة", "hour": "الساعة", "peak": "أزحم ساعة", "top": "الأكثر مبيعًا", "qty": "الكمية",
@@ -289,6 +290,7 @@ INSIGHT_WORDS = {
            "dish": "Dish", "price": "Price", "cost": "Plate cost", "margin": "Margin", "margin_pct": "Margin %", "ingredients": "Ingredients",
            "no_recipe": "No ingredients yet", "edit": "Ingredients", "ingredient": "Ingredient", "quantity": "Quantity per plate", "save": "Save", "saved": "Ingredients saved.",
            "back": "Dish costs", "add_row": "Another row", "report": "Restaurant report",
+           "others": "There are also sales invoices without a restaurant order (company invoices or from the sales screen) worth {other}, so the period's sales are {all}, the dashboard figure.",
            "report_intro": "Paid orders whose invoice is posted. An order's value is its net sales (before tax, after returns); a dish's is at menu price, before the order's discount.",
            "from": "From", "to": "To", "go": "Show", "orders": "Orders", "sales": "Sales", "average": "Average order", "guests": "Guests seated",
            "minutes": "min average stay", "by_hour": "By hour", "hour": "Hour", "peak": "Busiest hour", "top": "Best sellers", "qty": "Qty",
@@ -433,7 +435,13 @@ def report(request):
     for row in data["kinds"]:
         row["label"] = words.get(row["kind"], row["kind"])
     waste_rows, waste_total = insights.waste(first, last)
-    return render(request, "restaurant/report.html", _base(request, page_title=words["report"], iw=words, first=first, last=last, note=note,
+    # TRACK-ACTS W14: the report counts restaurant orders only; name the rest so it agrees with the dashboard.
+    from reports.selectors import profit_totals
+    from settings_core.templatetags.hesba_format import money
+
+    all_sales = profit_totals(date_from=first, date_to=last)["sales"]
+    others = words["others"].format(other=money(all_sales - data["totals"]["sales"]), all=money(all_sales)) if all_sales > data["totals"]["sales"] else ""
+    return render(request, "restaurant/report.html", _base(request, page_title=words["report"], iw=words, first=first, last=last, note=note, others=others,
                                                          deliveries=insights.deliveries(first, last), dw=DELIVERY_WORDS[lang],
                                                          today=timezone.localdate(), waste=waste_rows, waste_total=waste_total,
                                                          can_cost=user_has_permission(request.user, COST_VIEW), **data))
