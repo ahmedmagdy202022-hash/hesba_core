@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
 <link rel="stylesheet" href="{% static 'hesba/css/activity_selection.css' %}?v=117a-screen-pack">
 <link rel="stylesheet" href="{% static 'hesba/css/activity_selection_final_overrides.css' %}?v=117a-final-panel-back-arrow">
-<link rel="stylesheet" href="{% static 'hesba/css/activity_review_setup.css' %}?v=119-review-setup">
+<link rel="stylesheet" href="{% static 'hesba/css/activity_review_setup.css' %}?v=dm1-1">
 </head>
 <body class="activity-selection-page setup-complete-placeholder-page" data-lang="{{ lang }}">
 <main class="activity-stage" aria-label="Setup complete placeholder">
@@ -52,12 +52,12 @@
       <section class="review-card complete-card" aria-label="Setup completion summary">
         <h2 class="review-card__title" data-i18n="title">{{ title }}</h2>
         <p class="review-note" data-i18n="message">{{ message }}</p>
-        {% if demo_mode %}<form class="complete-sample" method="post" action="{% url 'demo_sample' %}" data-demo-sample onsubmit="var b=this.querySelector('button');if(b.disabled)return false;b.disabled=true;b.setAttribute('aria-busy','true');b.textContent=b.dataset.busy;">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><p class="complete-sample__title">{% if lang == 'en' %}See it with real-looking figures{% else %}شوفها بأرقام شبه الحقيقة{% endif %}</p><p class="review-note">{% if lang == 'en' %}Demo: start empty and enter your own data, or fill it with a month of sample trade.{% else %}تجربة: تقدر تبدأ فاضي وتدخّل بياناتك بنفسك، أو تملاها بشهر بيانات تجريبية جاهزة.{% endif %}</p><button type="submit" class="activity-action complete-sample__button" data-busy="{% if lang == 'en' %}Filling it in… (about a minute){% else %}جاري تجهيز البيانات… (حوالي دقيقة){% endif %}">{% if lang == 'en' %}Fill with sample data{% else %}املاها ببيانات تجريبية{% endif %}</button></form>{% endif %}
+        {% if demo_mode %}<form class="complete-sample" method="post" action="{% url 'demo_sample' %}" data-demo-sample onsubmit="var b=this.querySelector('button');if(b.disabled)return false;b.disabled=true;b.setAttribute('aria-busy','true');b.textContent=b.dataset.busy;">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><p class="complete-sample__title">{% if lang == 'en' %}Start with a month of sample trade (recommended){% else %}ادخل ببيانات شهر كامل (اقتراحنا){% endif %}</p><p class="review-note">{% if lang == 'en' %}Sales, purchases, customers and stock for your kind of business, so every screen has something to show. Or start empty and enter your own.{% else %}مبيعات ومشتريات وعملاء ومخزون على حسب نشاطك، علشان كل شاشة يبقى فيها حاجة تشوفها. أو ابدأ فاضي ودخّل بياناتك بنفسك.{% endif %}</p><button type="submit" class="activity-action complete-sample__button" data-sample-primary data-busy="{% if lang == 'en' %}Filling it in… (about a minute){% else %}جاري تجهيز البيانات… (حوالي دقيقة){% endif %}">{% if lang == 'en' %}Open the dashboard with sample data{% else %}ادخل لوحة القيادة بالبيانات التجريبية{% endif %}</button></form>{% endif %}
       </section>
 
       <footer class="activity-footer" aria-label="Complete navigation">
-        <a class="activity-action activity-next" href="{{ dashboard_url }}" data-dashboard-link>
-          <span data-i18n="next">{{ next }}</span>
+        <a class="activity-action activity-next{% if demo_mode %} complete-empty{% endif %}" href="{{ dashboard_url }}" data-dashboard-link>
+          {% if demo_mode %}<span data-i18n="startEmpty" data-start-empty>{% if lang == 'en' %}Start empty{% else %}ابدأ فاضي{% endif %}</span>{% else %}<span data-i18n="next">{{ next }}</span>{% endif %}
           <span class="activity-action__circle" aria-hidden="true">←</span>
         </a>
         <a class="activity-action activity-back complete-back" href="{{ review_href }}" data-back-link>
@@ -87,7 +87,7 @@
       subtitle: 'اتحفظت إعدادات نشاطك، وحِسبة جاهزة.',
       message: 'اتسجل نشاطك والأقسام اللي اخترتها. تقدر تغيّرهم بعدين من الإعدادات من غير ما بيانات تتمسح.',
       back: 'الرجوع إلى المراجعة',
-      next: 'الانتقال إلى لوحة القيادة',
+      next: 'الانتقال إلى لوحة القيادة', startEmpty: 'ابدأ فاضي',
       changeLanguage: 'تغيير اللغة'
     },
     en: {
@@ -102,7 +102,7 @@
       subtitle: 'Your activity settings are saved and Hesba is ready to use.',
       message: 'Your activity and selected modules are recorded. You can adjust them later from Settings without deleting any data.',
       back: 'Back to review',
-      next: 'Go to the dashboard',
+      next: 'Go to the dashboard', startEmpty: 'Start empty',
       changeLanguage: 'Change language'
     }
   };
