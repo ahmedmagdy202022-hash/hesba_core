@@ -157,13 +157,20 @@ def last_costs(item_ids):
     """HG-052 (display only): the unit cost of each item's latest purchase or opening stock.
 
     Shown in place of the average cost when nothing is on hand, so a sold-out item does not read
-    as costing 0.00. ``Item.average_cost`` and the costing logic are not touched."""
+    as costing 0.00. Only the entity being worked in counts; a cancelled purchase, a reversal row
+    and the stock a cancelled return brought back are not purchases. A zero price is a real price.
+    ``Item.average_cost`` and the costing logic are not touched."""
+
+    from purchases.models import PurchaseInvoiceStatus
 
     from .models import StockMovementType
 
     costs = {}
-    rows = (StockMovement.objects.filter(item_id__in=list(item_ids), unit_cost__gt=0,
-                                         movement_type__in=(StockMovementType.PURCHASE_IN, StockMovementType.OPENING_STOCK))
+    movements = (StockMovement.objects
+                 .filter(item_id__in=list(item_ids), reversal_of__isnull=True, purchase_return__isnull=True,
+                         movement_type__in=(StockMovementType.PURCHASE_IN, StockMovementType.OPENING_STOCK))
+                 .exclude(purchase_invoice__status=PurchaseInvoiceStatus.CANCELLED))
+    rows = (entity_scope.scope(movements, entity_scope.STOCK_MOVEMENT)
             .order_by("item_id", "-movement_date", "-id").values_list("item_id", "unit_cost"))
     for item_id, cost in rows:
         costs.setdefault(item_id, cost)

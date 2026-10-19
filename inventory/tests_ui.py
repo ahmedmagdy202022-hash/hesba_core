@@ -124,3 +124,43 @@ class LastCostTests(TestCase):
         card = self.client.get(reverse("inventory:item_detail", args=[self.sold_out.pk]), {"lang": "ar"})
         self.assertContains(card, "آخر تكلفة (مفيش في المخزن)")
         self.assertNotContains(self.client.get(reverse("inventory:item_detail", args=[self.on_shelf.pk]), {"lang": "ar"}), "data-last-cost")
+
+    def test_a_cancelled_purchase_is_not_the_last_cost(self):
+        from hesba_testing.factories import add_purchase_line, make_draft_purchase_invoice, recalculate_purchase_totals
+        from purchases.services import cancel_posted_purchase_invoice, post_purchase_invoice
+
+        invoice = make_draft_purchase_invoice(location=self.location, invoice_number="PI-VOID")
+        add_purchase_line(invoice, self.sold_out, 2, "40.00")
+        recalculate_purchase_totals(invoice, paid_now="0.00")
+        post_purchase_invoice(invoice.pk)
+        cancel_posted_purchase_invoice(invoice.pk, reason="غلط")
+        from .views import last_costs
+
+        self.assertEqual(last_costs([self.sold_out.pk])[self.sold_out.pk], Decimal("12.5000"))
+
+    def test_a_free_latest_purchase_shows_zero_not_an_older_price(self):
+        from hesba_testing.factories import make_stock_movement
+
+        free = make_item(item_code="FREE", average_cost=Decimal("0"))
+        stock_in(free, self.location, 2, "9.00")
+        stock_in(free, self.location, 2, "0.00")
+        make_stock_movement(free, self.location, StockMovementType.SALE_OUT, 4, "4.50")
+        page = self.client.get(reverse("inventory:stock"), {"lang": "ar"})
+        rows = {row["item"].item_code: row for row in page.context["rows"]}
+        self.assertEqual(rows["FREE"]["last_cost"], Decimal("0"))
+
+    def test_only_the_entity_worked_in_counts(self):
+        from entities.current import working_in
+        from entities.models import Entity
+
+        from .views import last_costs
+
+        main = Entity.objects.filter(is_main=True).first() or Entity.objects.create(code="MAIN", name_ar="الرئيسي", is_main=True)
+        branch = Entity.objects.create(code="BR-LC", name_ar="فرع")
+        self.location.entity = main
+        self.location.save(update_fields=["entity"])
+        stock_in(self.sold_out, make_location(location_code="BR-STORE", entity=branch), 1, "99.00")
+        with working_in(main):
+            self.assertEqual(last_costs([self.sold_out.pk])[self.sold_out.pk], Decimal("12.5000"))
+        with working_in(branch):
+            self.assertEqual(last_costs([self.sold_out.pk])[self.sold_out.pk], Decimal("99.0000"))
