@@ -170,10 +170,10 @@ class Command(BaseCommand):
         if "workorders" in extras:
             self._workorders(master, staff, owner)
         self._options(master, owner, modules)
-        if "expenses" in modules:
-            self._expenses(master, owner)
         if catalog.shelf:
             self._shelf(master, catalog, owner, modules, "batches" in extras)
+        if "expenses" in modules:
+            self._expenses(master, owner)  # last: a share of the whole month's sales, the shelf's included
         self._fit_users(modules)
 
     #: DM2 (W06): the month's running costs, as a share of the month's sales, and how many days ago each was paid.
@@ -214,6 +214,13 @@ class Command(BaseCommand):
         (4, ((7, 3), (33, Decimal("1.5")), (3, 2), (28, 1))), (3, ((35, 1), (31, 1), (16, 1), (23, 2))),
         (2, ((7, 2), (32, 2), (8, 2), (21, 2))), (1, ((30, 2), (34, 1), (36, Decimal("0.5")), (14, 6))),
     )
+
+    @staticmethod
+    def _shelf_sales(count):
+        """W05: ten walk-in sales over two weeks, three shelf items each, one of a kind; every item sells at
+        most twice, well inside what was bought."""
+
+        return tuple((13 - n, tuple(((n * 3 + k * 7) % count + 1, 1) for k in range(3))) for n in range(10))
 
     def _shelf(self, master, catalog, owner, modules, batches):
         """AN7 (G06, Ahmed approved): the rest of a supermarket's shelf, in sections; packs scan, weighed goods
@@ -263,7 +270,8 @@ class Command(BaseCommand):
                     register_batch(item=item, location=master["location"], batch_no=f"LOT-{item.item_code[-2:]}{received:%y%m%d}",
                                    expiry_date=today + timedelta(days=product.expires), quantity=product.quantity, received_on=received, user=owner)
         walk_in = walk_in_customer()
-        for n, (days, lines) in enumerate(self.SHELF_SALES, start=1):
+        sales = self.SHELF_SALES if catalog.key == "commercial.grocery" else self._shelf_sales(len(shelf))
+        for n, (days, lines) in enumerate(sales, start=1):
             sold = [(shelf[index - 1][0], Decimal(quantity)) for index, quantity in lines]
             total = sum(((item.default_sale_price * quantity).quantize(Decimal("0.01")) for item, quantity in sold), Decimal("0.00"))
             seed._post_sale(f"DEMO-SI-SH-{n:02d}", today - timedelta(days=days), walk_in, master["location"], master["cashboxes"][0],

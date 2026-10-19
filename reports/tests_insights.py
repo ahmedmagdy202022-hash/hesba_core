@@ -30,7 +30,9 @@ class InsightsTests(TestCase):
         for chart in ('data-chart="daily"', 'data-chart="top"', 'data-chart="categories"', 'data-chart="customers"', 'data-chart="weekdays"'):
             self.assertContains(page, chart)
         self.assertFalse(data["daily"]["empty"])
-        self.assertEqual(data["categories"][0]["share"], 100)  # one category in the sample shop
+        shares = [row["share"] for row in data["categories"]]
+        self.assertGreater(len(shares), 1)  # W05: the sample shop has a shelf of several sections
+        self.assertAlmostEqual(sum(shares), 100, delta=len(shares))  # each share is rounded
         self.assertContains(self.page("en"), "Quick read")
 
     def test_a_restaurant_sees_its_dishes(self):

@@ -1,18 +1,14 @@
 {% extends "operations/base.html" %}
 {% block operation_content %}
 <section class="op-title-row"><div><a class="op-back" href="{% url 'settings_core:overview' %}?lang={{ lang }}">← {% if lang == 'en' %}Back to settings{% else %}العودة للإعدادات{% endif %}</a><h1>{{ words.company_title }}</h1><p>{{ words.company_intro }}</p></div></section>
-<form class="op-form" method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+<form class="op-form" method="post" enctype="multipart/form-data" data-company-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="brand_present" value="1">
 <div class="op-form-grid"><div class="op-field"><label>{{ words.company_name }}</label><input value="{{ company.name }}" disabled></div>
 {% for field in fields %}<div class="op-field"><label for="f-{{ forloop.counter }}">{{ field.label }}</label>{% if field.multiline %}<textarea id="f-{{ forloop.counter }}" name="{{ field.key }}" rows="3"{% if not can_manage %} disabled{% endif %}>{{ field.value }}</textarea>{% else %}<input id="f-{{ forloop.counter }}" name="{{ field.key }}" value="{{ field.value }}"{% if not can_manage %} disabled{% endif %}>{% endif %}</div>{% endfor %}</div>
-{% if can_manage %}<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div>{% endif %}
-</form>
-<form class="op-form" method="post" enctype="multipart/form-data" data-logo-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="logo">
 <h2>{{ words.logo_title }}</h2><p class="op-muted">{{ words.logo_hint }}</p>
 {% if company.logo %}<p><img src="{{ company.logo }}" alt="{{ words.logo_title }}" style="max-height:80px;max-width:240px" data-logo-preview></p>{% else %}<p class="op-muted">{{ words.logo_none }}</p>{% endif %}
-{% if can_manage %}<div class="op-field"><input type="file" name="logo" accept="image/png,image/jpeg,image/webp" aria-label="{{ words.logo_title }}"></div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.logo_upload }}</button>{% if company.logo %}<button class="op-secondary" type="submit" name="action" value="remove_logo" formnovalidate>{{ words.logo_remove }}</button>{% endif %}</div>{% endif %}
-</form>
-<form class="op-form" method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="brand">
+{% if can_manage %}<div class="op-field" data-logo-form><input type="file" name="logo" accept="image/png,image/jpeg,image/webp" aria-label="{{ words.logo_title }}"></div>{% if company.logo %}<div class="op-form-actions"><button class="op-secondary" type="submit" form="company-logo-remove" data-logo-remove>{{ words.logo_remove }}</button></div>{% endif %}{% endif %}
 <label class="op-check"><input type="checkbox" name="show_hesba_brand" value="1"{% if company.show_hesba_brand %} checked{% endif %}{% if not can_manage %} disabled{% endif %}> {{ words.brand_label }}</label>
-{% if can_manage %}<div class="op-form-actions"><button class="op-secondary" type="submit">{{ words.brand_save }}</button></div>{% endif %}
+{% if can_manage %}<div class="op-form-actions"><button class="op-primary" type="submit" name="action" value="details" data-company-save>{{ words.save }}</button></div>{% endif %}
 </form>
+{% if can_manage and company.logo %}{# Its own form, so Enter in a details field never removes the logo. #}<form id="company-logo-remove" method="post" hidden>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="remove_logo"></form>{% endif %}
 {% endblock %}
