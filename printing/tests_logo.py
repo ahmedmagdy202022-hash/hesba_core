@@ -78,6 +78,7 @@ class LogoTests(TestCase):
 
 class OneSaveTests(TestCase):
     setUp = LogoTests.setUp
+    upload = LogoTests.upload
     """S18: the company page is one form with one save button."""
 
     def test_details_logo_and_mark_save_together(self):
@@ -96,4 +97,17 @@ class OneSaveTests(TestCase):
                                               "logo": SimpleUploadedFile("logo.png", b"<svg/>")}, follow=True)
         self.assertContains(response, "PNG أو JPG أو WebP")
         self.assertEqual(company_details()["phone"], "01000000888")
+        self.assertEqual(company_details()["logo"], "")
+
+    def test_enter_in_a_details_field_saves_rather_than_removing_the_logo(self):
+        import re
+
+        self.upload(PNG)
+        page = self.client.get(COMPANY).content.decode()
+        start = page.index("data-company-form")
+        form = page[start:page.index("</form>", start)]
+        own_buttons = [tag for tag in re.findall(r"<button[^>]*>", form) if 'type="submit"' in tag and "form=" not in tag]
+        self.assertIn("data-company-save", own_buttons[0])  # the default (Enter) button
+        self.assertIn('form="company-logo-remove"', page)
+        self.client.post(COMPANY, {"action": "remove_logo"})
         self.assertEqual(company_details()["logo"], "")
