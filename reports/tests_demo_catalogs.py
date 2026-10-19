@@ -94,6 +94,33 @@ class SampleBusinessPerActivityTests(TestCase):
         self.assertTrue(self.client.login(username="owner", password="Demo-pass-1"))
         self.assertEqual(self.client.get("/dashboard/?lang=ar").status_code, 200)
 
+    def test_the_sample_month_pays_its_running_costs(self):
+        """DM2 (W06): rent, electricity, internet and supplies, so net profit is not the gross profit."""
+
+        from expenses.models import Expense
+        from expenses.services import expense_total
+
+        catalog = self.fill("commercial", "retail", modules="customers,suppliers,items_services,sales_operations,purchases,inventory,cashboxes,expenses,reports")
+        self.assert_a_working_business(catalog)
+        self.assertEqual(set(Expense.objects.values_list("category__code", flat=True)), {"rent", "utilities", "internet_phone", "supplies"})
+        first = timezone.localdate().replace(day=1)
+        self.assertTrue(all(expense.expense_date >= first for expense in Expense.objects.all()))
+        self.assertGreater(expense_total(first, timezone.localdate()), 0)
+        from django.db.models import Sum
+
+        from sales.models import SalesInvoice
+
+        month = SalesInvoice.objects.filter(status="posted", invoice_date__gte=first).aggregate(total=Sum("total_amount"))["total"]
+        self.assertTrue(SalesInvoice.objects.filter(invoice_number__startswith="DEMO-SI-SH-").exists())  # the shelf's sales count too
+        self.assertEqual(Expense.objects.get(category__code="rent").amount, (month * Decimal("0.08")).quantize(Decimal("1")))
+        self.assertGreater(sum(row["balance"] for row in selectors.cashbox_report()), 0)  # paid from what the drawer holds
+
+    def test_no_expenses_without_the_expenses_module(self):
+        from expenses.models import Expense
+
+        self.fill("commercial", "retail", modules="customers,suppliers,items_services,sales_operations,purchases,inventory,cashboxes,reports")
+        self.assertFalse(Expense.objects.exists())
+
     def shelf_of(self, sub):
         """W05: retail, electronics, pharmacy, wholesale and online carry 25-40 items in sections, like the supermarket."""
 

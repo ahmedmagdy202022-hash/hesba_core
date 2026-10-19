@@ -201,7 +201,38 @@ class Command(BaseCommand):
         self._options(master, owner, modules)
         if catalog.shelf:
             self._shelf(master, catalog, owner, modules, "batches" in extras)
+        if "expenses" in modules:
+            self._expenses(master, owner)  # last: a share of the whole month's sales, the shelf's included
         self._fit_users(modules)
+
+    #: DM2 (W06): the month's running costs, as a share of the month's sales, and how many days ago each was paid.
+    MONTH_EXPENSES = (("rent", "0.08", 17, "إيجار المحل — الشهر ده"), ("utilities", "0.03", 9, "فاتورة الكهربا والمية"),
+                      ("internet_phone", "0.015", 12, "باقة الإنترنت والتليفون"), ("supplies", "0.02", 5, "أدوات نظافة وتغليف"))
+
+    def _expenses(self, master, owner):
+        """DM2 (W06): a month without rent or electricity made net profit the same as gross profit. Paid from the
+        main cashbox, never more than it holds, inside this month."""
+
+        from django.db.models import Sum
+
+        from cashboxes.services import get_cashbox_balance
+        from expenses.models import Expense, ExpenseCategory
+        from expenses.services import record_expense
+        from sales.models import SalesInvoice
+
+        if Expense.objects.exists():
+            return
+        today = timezone.localdate()
+        first = today.replace(day=1)
+        sales = SalesInvoice.objects.filter(status="posted", invoice_date__gte=first).aggregate(total=Sum("total_amount"))["total"] or Decimal("0")
+        cashbox = master["cashboxes"][0]
+        for code, share, days_ago, description in self.MONTH_EXPENSES:
+            category = ExpenseCategory.objects.filter(code=code, active=True).first()
+            amount = (sales * Decimal(share)).quantize(Decimal("1"))
+            if category is None or amount <= 0 or amount > get_cashbox_balance(cashbox):
+                continue
+            record_expense(category=category, cashbox=cashbox, amount=amount, expense_date=max(first, today - timedelta(days=days_ago)),
+                           description=description, user=owner)
 
     #: AN7 (G06): (days ago, ((shelf item number, quantity), ...)) of walk-in sales from the shelf, so the
     #: till's buttons and the reports have the weighed goods and the everyday packs selling.
