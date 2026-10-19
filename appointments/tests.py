@@ -101,6 +101,7 @@ class BillingTests(AppointmentSetup):
         appointment.refresh_from_db()
         self.assertEqual((invoice.status, invoice.total_amount, invoice.customer, appointment.status, appointment.invoice), ("draft", D("300.00"), self.customer, AppointmentStatus.DONE, invoice))
         self.assertEqual(services.bill(appointment, self.owner), invoice)  # once only
+        self.assertEqual(invoice.notes, f"ميعاد {appointment.number}")  # TRACK-ACTS W18: no English note on an Arabic invoice
         self.assertEqual(SalesInvoice.objects.count(), 1)
         self.assertFalse(CustomerLedgerEntry.objects.exists())  # nothing moves until the invoice is posted
         post_sales_invoice(invoice.pk, self.owner)
