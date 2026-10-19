@@ -36,27 +36,28 @@ jobs:
   django-tests-postgres:
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        # The official image through Google's Docker Hub mirror. Docker Hub rate-limits anonymous pulls from shared
-        # runners, and AWS's public mirror began refusing them too ("toomanyrequests: Data limit exceeded", Oct 2026).
-        image: mirror.gcr.io/library/postgres:16
-        env:
-          POSTGRES_DB: hesba
-          POSTGRES_USER: hesba
-          POSTGRES_PASSWORD: hesba-ci-only
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U hesba"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-
     env:
       DATABASE_URL: postgresql://hesba:hesba-ci-only@localhost:5432/hesba
 
     steps:
+      - name: Start PostgreSQL
+        # The official postgres:16 image, tried from several registries in turn. Shared runners get
+        # rate-limited on anonymous pulls: Docker Hub first, then AWS's public mirror ("toomanyrequests:
+        # Data limit exceeded", Oct 2026). Google's mirror is tried first; a miss there falls back.
+        run: |
+          for image in mirror.gcr.io/library/postgres:16 docker.io/library/postgres:16 public.ecr.aws/docker/library/postgres:16; do
+            if docker pull "$image"; then pulled="$image"; break; fi
+          done
+          test -n "$pulled" || { echo "::error::postgres:16 could not be pulled from any registry"; exit 1; }
+          docker run -d --name postgres -p 5432:5432 \
+            -e POSTGRES_DB=hesba -e POSTGRES_USER=hesba -e POSTGRES_PASSWORD=hesba-ci-only "$pulled"
+          for attempt in $(seq 1 30); do
+            docker exec postgres pg_isready -h 127.0.0.1 -U hesba && exit 0
+            sleep 2
+          done
+          docker logs postgres
+          exit 1
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
