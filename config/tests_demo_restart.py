@@ -59,7 +59,10 @@ class DemoRestartTests(TestCase):
 
         self.client.post(reverse("demo_restart"), {"lang": "ar"})
         complete_setup(ClientProfile.get_active(), "medical", "clinic", ",".join(catalog.MODULE_SLUGS))
-        self.assertContains(self.client.get(reverse("setup_complete")), "data-demo-sample")
+        page = self.client.get(reverse("setup_complete"), {"lang": "ar"})
+        self.assertContains(page, "data-demo-sample")
+        self.assertContains(page, "ادخل لوحة القيادة بالبيانات التجريبية")  # DM1 (S17): sample data is the main way in
+        self.assertContains(page, "data-start-empty")  # and starting empty is still one click
         response = self.client.post(reverse("demo_sample"), {"lang": "ar"})
         self.assertRedirects(response, "/dashboard/?lang=ar", fetch_redirect_response=False)
         self.assertTrue(SalesInvoice.objects.filter(status="posted").exists())

@@ -64,6 +64,8 @@
   justify-self:start;border:0;background:var(--hs-gold-bright);color:var(--hs-navy);min-height:48px;
 }
 .complete-sample .complete-sample__button:hover{background:var(--hs-surface)}
+/* DM1 (S17): in the demo, starting empty is the second choice, not the main button */
+.activity-next.complete-empty{background:var(--hs-surface);color:var(--hs-navy);border:1px solid var(--hs-line);box-shadow:none}
 
 @media (max-width:760px){
   .review-summary{grid-template-columns:minmax(0,1fr);gap:var(--hs-space-3)}
