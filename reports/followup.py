@@ -96,10 +96,11 @@ def todo(user, today, slot, lang="ar"):
             items.append(_item("owed_suppliers", words, len(owed), (f"{row['name']} — {money(row['overdue'])}" for row in owed),
                                sum(row["overdue"] for row in owed), "/reports/aging/?party=suppliers"))
     if _can(user, "reports.view_inventory_report"):
-        from .selectors import stock_levels_by_item
+        from .selectors import made_to_order_ids, stock_levels_by_item
 
         levels = list(stock_levels_by_item())
-        out = [row for row in levels if row["quantity"] <= 0]
+        cooked = made_to_order_ids()
+        out = [row for row in levels if row["quantity"] <= 0 and row["item_id"] not in cooked]
         low = [row for row in levels if row["quantity"] > 0 and row["min_stock"] > 0 and row["quantity"] <= row["min_stock"]]
         if out:
             items.append(_item("out_of_stock", words, len(out), (row["item_label"] for row in out), path="/reports/inventory/"))

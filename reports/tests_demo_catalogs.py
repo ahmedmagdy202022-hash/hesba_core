@@ -169,7 +169,9 @@ class SampleBusinessPerActivityTests(TestCase):
         self.assert_a_working_business(catalog)
         self.assertEqual(DiningTable.objects.count(), 6)
         dish = Item.objects.get(item_code="DEMO-ITEM-01")
-        self.assertFalse(dish.is_stock_tracked)
+        from restaurant import kitchen
+
+        self.assertTrue(kitchen.is_kitchen_made(dish))  # W16: cooked from its ingredients, never bought
         self.assertFalse(PurchaseLine.objects.filter(item=dish).exists())
         self.assertTrue(PurchaseLine.objects.filter(item__item_code="DEMO-RAW-01").exists())  # the kitchen's ingredients
         # RESTO-002: dishes have ingredients and a margin, the week has paid orders, and one waste adjustment.
@@ -187,6 +189,26 @@ class SampleBusinessPerActivityTests(TestCase):
         self.assertEqual((report["totals"]["orders"], len(report["hours"]) >= 3), (9, True))
         self.assertEqual([(row["orders"], row["fees"], row["minutes"]) for row in insights.deliveries(today - timedelta(days=7), today)], [(1, Decimal("20.00"), 30)])
         self.assertEqual(len(insights.waste(today - timedelta(days=7), today)[0]), 1)
+
+    def test_a_restaurant_plate_costs_its_ingredients(self):
+        """W16: the dashboard's margin is the dish-costing screen's, not 98% from dishes that cost nothing."""
+
+        from datetime import timedelta
+
+        from django.db.models import Sum
+
+        from restaurant import insights
+        from sales.models import SalesLine
+
+        self.fill("restaurants", "restaurant")
+        for code in ("DEMO-ITEM-01", "DEMO-ITEM-02", "DEMO-ITEM-03"):
+            dish = Item.objects.get(item_code=code)
+            sold = SalesLine.objects.filter(item=dish, invoice__status="posted").aggregate(qty=Sum("quantity"), cost=Sum("line_cost_amount"))
+            self.assertGreater(sold["qty"], 0)
+            self.assertAlmostEqual(sold["cost"] / sold["qty"], insights.plate_cost(dish), delta=Decimal("0.05"))
+        today = timezone.localdate()
+        totals = selectors.profit_totals(today - timedelta(days=31), today)
+        self.assertLess(totals["profit"] / totals["sales"], Decimal("0.90"))
 
     def test_a_clinic_has_patients_visits_and_appointments(self):
         from appointments.models import Appointment

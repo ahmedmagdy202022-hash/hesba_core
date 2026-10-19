@@ -308,7 +308,7 @@ class Command(BaseCommand):
         prices unless ``base_amount`` is False."""
 
         catalog = master["catalog"]
-        bought, made, materials = [], [], {}
+        bought, made, materials, cooked = [], [], {}, {}
         for index, quantity in lines:
             quantity = D(quantity)
             if index in catalog.recipes:
@@ -316,9 +316,16 @@ class Command(BaseCommand):
                 made.append((index, quantity))
                 for raw_index, per_batch in parts:
                     materials[raw_index] = materials.get(raw_index, D("0")) + per_batch * quantity / output
+            elif self._kitchen_recipe(master["items"][index]) is not None:
+                # W16: a dish made in the kitchen is cooked when it is sold (sell); what is bought is its ingredients.
+                recipe = self._kitchen_recipe(master["items"][index])
+                for line in recipe.lines.select_related("component"):
+                    item, so_far = cooked.get(line.component_id, (line.component, D("0")))
+                    cooked[line.component_id] = (item, so_far + line.quantity * quantity / recipe.output_quantity)
             elif master["items"][index].is_stock_tracked:
                 bought.append((master["items"][index], quantity))
         bought += [(master["raw"][i], q.quantize(D("0.001"))) for i, q in sorted(materials.items())]
+        bought += [(item, q.quantize(D("0.001"))) for _, (item, q) in sorted(cooked.items())]
         invoice = None
         if bought:
             total = sum((self._line_total(item.default_purchase_price, qty) for item, qty in bought), ZERO)
@@ -338,8 +345,40 @@ class Command(BaseCommand):
             paid = (total * D(str(share))).quantize(D("0.01"))
         else:
             paid = self._scaled(master, paid_now, lines, "sale")
+        self._cook(master, items, invoice_date, actor)
         return self._post_sale(number=number, invoice_date=invoice_date, customer=master["customers"][customer_index],
                                location=master["location"], cashbox=master["cashboxes"][0], lines=items, paid_now=paid, actor=actor)
+
+    @staticmethod
+    def _kitchen_recipe(item):
+        """The kitchen recipe of a dish made in the kitchen (RESTO-004), or None."""
+
+        if not item.is_stock_tracked:
+            return None
+        from restaurant.kitchen import recipe_of
+
+        return recipe_of(item)
+
+    def _cook(self, master, items, run_date, actor):
+        """W16: make the plates of kitchen dishes about to be sold that are not in stock, on the sale's day."""
+
+        from inventory.services import get_item_location_stock_quantity
+        from manufacturing.services import produce
+        from permissions.services import user_has_permission
+        from restaurant.kitchen import PREPARE_AT_PAYMENT
+
+        # As at the till (HG-048): someone who may not adjust stock makes the plates under prepare_at_payment.
+        stand_in = None if user_has_permission(actor, "inventory.adjust_stock") else PREPARE_AT_PAYMENT
+        need = {}
+        for item, quantity in items:
+            if self._kitchen_recipe(item) is not None:
+                need[item.pk] = (item, need.get(item.pk, (item, D("0")))[1] + quantity)
+        for item, quantity in need.values():
+            missing = (quantity - get_item_location_stock_quantity(item, master["location"])).quantize(D("0.001"))
+            if missing > 0:
+                recipe = self._kitchen_recipe(item)
+                produce(recipe, actor, batches=(missing / recipe.output_quantity).quantize(D("0.001")), location=master["location"],
+                        run_date=run_date, notes="", stand_in=stand_in)
 
     def _produce(self, master, index, quantity, run_date, actor):
         from manufacturing.models import Recipe

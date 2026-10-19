@@ -182,13 +182,18 @@ def period_report(first, last):
 
 
 def waste(first, last):
-    """Stock taken out by adjustment in the period: [{movement, value}] and the total value."""
+    """Stock thrown away in the period: [{movement, value}] and the total value.
+
+    An outbound adjustment that a production run or an order consumed is cooking, not waste."""
 
     from inventory.models import StockMovement, StockMovementType
 
     rows = list(entity_scope.scope(StockMovement.objects, entity_scope.STOCK_MOVEMENT)
                 .filter(movement_type=StockMovementType.ADJUSTMENT_OUT, movement_date__gte=first, movement_date__lte=last)
                 .exclude(stock_operation__status="cancelled")  # a cancelled adjustment put the stock back
+                # W16: ingredients cooked into plates (RESTO-004) or issued to an order are used, not wasted
+                .exclude(stock_operation__production_consumption__isnull=False)
+                .exclude(stock_operation__order_issue__isnull=False)
                 .select_related("item", "stock_operation").order_by("-movement_date", "-pk"))
     out = [{"movement": row, "value": money_round(abs(Decimal(row.quantity)) * Decimal(row.unit_cost or 0)),
             "reason": getattr(row.stock_operation, "reason", "") if getattr(row, "stock_operation_id", None) else ""} for row in rows]
