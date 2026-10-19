@@ -38,8 +38,9 @@ jobs:
 
     services:
       postgres:
-        # The official image through AWS's public mirror: Docker Hub rate-limits anonymous pulls from shared runners.
-        image: public.ecr.aws/docker/library/postgres:16
+        # The official image through Google's Docker Hub mirror. Docker Hub rate-limits anonymous pulls from shared
+        # runners, and AWS's public mirror began refusing them too ("toomanyrequests: Data limit exceeded", Oct 2026).
+        image: mirror.gcr.io/library/postgres:16
         env:
           POSTGRES_DB: hesba
           POSTGRES_USER: hesba
