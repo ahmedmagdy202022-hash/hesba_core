@@ -183,6 +183,11 @@ def option_tiles(fit, user, lang="ar"):
     from settings_core.templatetags.hesba_format import money as display_money
 
     words = WORDS["en" if lang == "en" else "ar"]
+    from batches.words import words as expiry_words
+
+    dated = expiry_words(lang)
+    if dated:  # AN8: a shop keeping expiry dates only
+        words = {**words, "batches_expired": dated["summary_expired"], "batches_soon": dated["summary_soon"]}
     today = fit.today or timezone.localdate()
     month_start = today.replace(day=1)
     can = lambda code: user_has_permission(user, code)  # noqa: E731

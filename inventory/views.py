@@ -165,6 +165,7 @@ def item_detail(request, pk):
     # UI-TRACK grocery G02: what of this item is on the shelf, batch by batch, soonest expiry first.
     from batches.services import DEFAULT_WARN_DAYS, batch_positions, batches_enabled, expiry_state
     from batches.views import WORDS as BATCH_WORDS
+    from batches.words import expiry_only, words as expiry_words
 
     batch_rows = []
     if batches_enabled():
@@ -184,7 +185,8 @@ def item_detail(request, pk):
             location_rows=location_rows,
             movements=movements,
             batch_rows=batch_rows,
-            batch_words=BATCH_WORDS["en" if _lang(request) == "en" else "ar"],
+            batch_words={**BATCH_WORDS["en" if _lang(request) == "en" else "ar"], **expiry_words(_lang(request))},  # AN8
+            show_batch_no=not expiry_only(),
             can_view_cost=user_has_permission(request.user, "inventory.view_cost"),
         ),
     )

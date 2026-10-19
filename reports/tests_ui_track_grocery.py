@@ -61,8 +61,11 @@ class GroceryScreensTests(TestCase):
         make_stock_movement(self.oil, self.shelf, StockMovementType.SALE_OUT, 10, "50.00", movement_date=TODAY)  # the soonest batch is sold out
         card = self.page("inventory:item_detail", self.oil.pk)
         self.assertIn("data-item-batches", card)
-        self.assertIn("LOT-LATE", card)
-        self.assertNotIn("LOT-SOON", card)
+        # AN8: a supermarket reads each quantity by its expiry date; the lot number is not shown.
+        self.assertIn(str(TODAY + timedelta(days=200)), card)
+        self.assertNotIn(str(TODAY + timedelta(days=20)), card)
+        self.assertNotIn("LOT-LATE", card)
+        self.assertIn("الصلاحية للي في المخزون", card)
         self.assertIn("المخزن الرئيسي", card)
         set_capability_enabled(self.profile, "batches_expiry", False)
         self.assertNotIn("data-item-batches", self.page("inventory:item_detail", self.oil.pk))
@@ -77,10 +80,11 @@ class GroceryScreensTests(TestCase):
         register_batch(item=self.oil, location=self.shelf, batch_no="LOT-HERE", expiry_date=TODAY + timedelta(days=90),
                        quantity=Decimal("10"), received_on=TODAY - timedelta(days=5), user=self.owner)
         self.client.post(reverse("entities:switch"), {"entity": Entity.objects.get(is_main=True).pk, "next": "/dashboard/"})
-        self.assertNotIn("LOT-HERE", self.page("inventory:item_detail", self.oil.pk))  # nothing of it is on our shelf
+        here = str(TODAY + timedelta(days=90))  # AN8: known by its expiry date in a supermarket
+        self.assertNotIn(here, self.page("inventory:item_detail", self.oil.pk))  # nothing of it is on our shelf
         stock_in(self.oil, self.shelf, 4, "50.00", movement_date=TODAY - timedelta(days=4))
         card = self.page("inventory:item_detail", self.oil.pk)
-        self.assertIn("LOT-HERE", card)
+        self.assertIn(here, card)
         self.assertIn("<td>4 ", card)  # what is on our shelf, not the branch's 30
 
     def test_each_warehouse_shares_out_only_its_own_stock(self):

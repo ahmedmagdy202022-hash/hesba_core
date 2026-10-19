@@ -109,6 +109,11 @@ def sync_sale(request):
         lines = prepare_sale_serials(parse_cart(_cart_post(payload)), lang)
         location = entity_scope.for_user(Location.objects, entity_scope.LOCATION, request.user).filter(pk=str(payload.get("location", "")), active=True, is_selling_location=True).first() if str(payload.get("location", "")).isdigit() else None
         cashbox = entity_scope.for_user(Cashbox.objects, entity_scope.CASHBOX, request.user).filter(pk=str(payload.get("cashbox", "")), active=True).first() if str(payload.get("cashbox", "")).isdigit() else None
+        card = payload.get("method") == "card"  # AN8: a card sale lands in the card machine's cashbox
+        if card:
+            from sales.pos_buttons import card_cashbox
+
+            cashbox = card_cashbox(entity_scope.for_user(Cashbox.objects, entity_scope.CASHBOX, request.user))
         if location is None or cashbox is None:
             return _answer("refused", error=refusals["setup"])
         customer_id = str(payload.get("customer", ""))
@@ -120,7 +125,7 @@ def sync_sale(request):
         with transaction.atomic():
             invoice, _change = checkout(
                 lines=lines, customer=customer or walk_in_customer(), location=location, cashbox=cashbox,
-                discount=discount, tendered=tendered, user=request.user,
+                discount=discount, tendered=tendered, user=request.user, card=card,
                 sale_date=timezone.localtime(recorded_at).date(), notes="POS offline",
             )
             OfflineSale.objects.create(sale_key=key, invoice=invoice, cashier=request.user, recorded_at=recorded_at)

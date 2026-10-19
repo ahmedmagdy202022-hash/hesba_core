@@ -1,10 +1,10 @@
 /* AN6: tap-to-add tiles, one-tap cash, and the tucked-away warehouse/cashbox on the till. */
 .pos-quick{margin-block:var(--hs-space-3)}
 .pos-quick h2{margin:0 0 var(--hs-space-2);font-size:var(--hs-text-sm);color:var(--hs-muted);font-weight:var(--hs-weight-semibold)}
-.pos-quick__grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:var(--hs-space-2)}
-.pos-tile{display:grid;gap:var(--hs-space-1);align-content:space-between;min-height:72px;padding:var(--hs-space-2) var(--hs-space-3);border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);background:var(--hs-surface);color:var(--hs-ink);font:inherit;text-align:start;cursor:pointer;transition:border-color .12s ease,background .12s ease,transform .12s ease}
-.pos-tile span{font-size:var(--hs-text-sm);line-height:1.35;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-.pos-tile b{color:var(--hs-teal-deep);font-size:var(--hs-text-sm)}
+.pos-quick__grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:var(--hs-space-2)}
+.pos-tile{display:grid;gap:var(--hs-space-1);align-content:space-between;min-height:54px;padding:var(--hs-space-1) var(--hs-space-2);border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);background:var(--hs-surface);color:var(--hs-ink);font:inherit;text-align:start;cursor:pointer;transition:border-color .12s ease,background .12s ease,transform .12s ease}
+.pos-tile span{font-size:var(--hs-text-xs);line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.pos-tile b{color:var(--hs-teal-deep);font-size:var(--hs-text-xs)}
 .pos-tile:hover,.pos-tile:focus-visible{border-color:var(--hs-teal);background:var(--hs-teal-wash)}
 .pos-tile.is-added{transform:scale(.97);background:var(--hs-teal-wash);border-color:var(--hs-teal)}
 .pos-cash{display:flex;flex-wrap:wrap;gap:var(--hs-space-2);margin-block:calc(-1 * var(--hs-space-1)) var(--hs-space-3)}
@@ -32,10 +32,17 @@
 .pb-actions form{margin:0}
 .pb-search{display:flex;gap:var(--hs-space-2);max-width:480px}
 .pb-search input{flex:1;min-width:0}
-.pos-quick__grid:not(.is-open) .pos-tile:nth-child(n+13){display:none}
+.pos-quick__grid:not(.is-open) .pos-tile:nth-child(n+9){display:none}
 .pos-quick__more{margin-block-start:var(--hs-space-2);padding:0;border:0;background:none;color:var(--hs-teal-deep);font:inherit;font-size:var(--hs-text-sm);font-weight:var(--hs-weight-semibold);cursor:pointer;text-decoration:underline}
 .pos-quick__more--phone{display:none}
 @media (max-width:700px){
-  .pos-quick__grid:not(.is-open) .pos-tile:nth-child(n+9){display:none}
+  .pos-quick__grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .pos-quick__grid:not(.is-open) .pos-tile:nth-child(n+7){display:none}
   .pos-quick__more--phone{display:inline}
 }
+/* AN8: cash or card. */
+.pos-method{display:grid;grid-template-columns:1fr 1fr;gap:var(--hs-space-2);margin-block:0 var(--hs-space-2)}
+.pos-method button{min-height:42px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-sm);background:var(--hs-surface);color:var(--hs-ink);font:inherit;font-weight:var(--hs-weight-semibold);cursor:pointer}
+.pos-method button.is-on{background:var(--hs-teal);border-color:var(--hs-teal);color:var(--hs-navy)}
+.pos-method-hint{margin:0 0 var(--hs-space-2);font-size:var(--hs-text-sm)}
+.pos-method-hint a{color:var(--hs-teal-deep)}

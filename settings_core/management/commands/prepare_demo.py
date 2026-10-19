@@ -414,6 +414,15 @@ class Command(BaseCommand):
             return
         cashier = get_user_model().objects.filter(username="cashier").first() or owner
         open_shift(cashier, master["cashboxes"][0], Decimal("500"))
+        # AN8: the till takes cards too; what is paid by card lands in the card machine's account.
+        from cashboxes.models import Cashbox
+        from sales.pos_buttons import card_cashbox, save_card_cashbox
+
+        if card_cashbox() is None:
+            machine, _ = Cashbox.objects.get_or_create(cashbox_code="DEMO-CASH-CARD", defaults={
+                "name_ar": "ماكينة الفيزا", "name_en": "Card machine", "currency": "EGP", "opening_balance": Decimal("0.00"),
+                "import_batch_id": "DEMO-BUSINESS"})
+            save_card_cashbox(machine)
 
     def _workorders(self, master, staff, owner):
         """SVC-001: a workshop's week: devices in, on the bench, waiting for approval, ready, delivered, and one back under warranty."""

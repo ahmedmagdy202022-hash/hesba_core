@@ -11,6 +11,7 @@ from permissions.services import user_has_permission
 from printing.company import company_details
 
 from .digest import daily_digest, digest_text
+from batches.words import words as expiry_words
 
 
 def daily_summary(request):
@@ -31,4 +32,5 @@ def daily_summary(request):
         "data": data, "day": day, "prev": day - timedelta(days=1), "next": day + timedelta(days=1) if day < today else None, "today": today,
         "prev_of_today": today - timedelta(days=1),  # UI-TRACK F22: the heading says "yesterday", the page opens on it for the morning send
         "whatsapp": f"https://wa.me/?text={quote(text)}", "text": text, "currency": company["currency"],
+        "expired_label": expiry_words(lang).get("digest_expired", ""),  # AN8: a supermarket keeps expiry dates, not batches
     })

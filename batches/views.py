@@ -83,7 +83,9 @@ def _register(request, words):
 @require_permission("inventory.view_stock")
 def batch_index(request):
     lang = _lang(request)
-    words = WORDS[lang]
+    from .words import expiry_only, words as expiry_words
+
+    words = {**WORDS[lang], **expiry_words(lang)}  # AN8: a shop keeping expiry dates only
     can_manage = user_has_permission(request.user, "inventory.adjust_stock")
     if request.method == "POST":
         if not can_manage:
@@ -134,4 +136,5 @@ def batch_index(request):
         "state_filter": state_filter, "on_hand_only": on_hand_only, "q": request.GET.get("q", ""), "today": today,
         "locations": entity_scope.locations(Location.objects).filter(active=True).order_by("location_code"),
     }
+    context["show_batch_no"] = not expiry_only()
     return render(request, "batches/index.html", context)

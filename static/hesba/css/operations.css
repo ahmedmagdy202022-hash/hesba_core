@@ -183,6 +183,10 @@ html.hs-cam-open,html.hs-cam-open body{overflow:hidden}
 .op-indent{padding-inline-start:32px!important}
 .op-statement-sides{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
 .op-statement-sides .op-table{min-width:0}
+/* AN8 (Ahmed: "عشان تشوف الارقام مع الكلام لازم تقلب التليفون بالعرض"): a two-column statement (line, amount)
+   has no header row; it fits the screen instead of pushing its amounts off a phone. */
+.op-table:not(:has(> thead)){min-width:0}
+.op-table:not(:has(> thead)) td.op-num{white-space:nowrap}
 @media(max-width:1000px){.op-statement-sides{grid-template-columns:minmax(0,1fr)}}
 @media print{.op-subnav,.op-filters,.op-statement-actions{display:none!important}.op-table-wrap{border:0;overflow:visible}.op-table{min-width:0}}
 @media(max-width:700px){.op-subnav{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin}.op-subnav a{white-space:nowrap;flex:0 0 auto}}

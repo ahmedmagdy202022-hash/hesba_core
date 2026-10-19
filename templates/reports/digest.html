@@ -24,7 +24,7 @@
 {% if data.stock %}<h2>{% if lang == 'en' %}Stock{% else %}المخزون{% endif %}</h2><section class="op-summary-grid" data-digest-stock>
 <article><small>{% if lang == 'en' %}Out of stock{% else %}خلصان{% endif %}</small><strong>{{ data.stock.out }}</strong></article>
 <article><small>{% if lang == 'en' %}Below minimum{% else %}تحت الحد الأدنى{% endif %}</small><strong>{{ data.stock.low }}</strong></article>
-{% if data.stock.expired is not None %}<article><small>{% if lang == 'en' %}Expired batches{% else %}تشغيلات منتهية{% endif %}</small><strong>{{ data.stock.expired }}</strong></article><article><small>{% if lang == 'en' %}Expiring soon{% else %}قربت تنتهي{% endif %}</small><strong>{{ data.stock.expiring }}</strong></article>{% endif %}</section>{% endif %}
+{% if data.stock.expired is not None %}<article><small>{% if expired_label %}{{ expired_label }}{% elif lang == 'en' %}Expired batches{% else %}تشغيلات منتهية{% endif %}</small><strong>{{ data.stock.expired }}</strong></article><article><small>{% if lang == 'en' %}Expiring soon{% else %}قربت تنتهي{% endif %}</small><strong>{{ data.stock.expiring }}</strong></article>{% endif %}</section>{% endif %}
 {% if data.shifts %}<h2>{% if lang == 'en' %}Shift differences{% else %}فروق الورديات{% endif %}</h2><ul data-digest-shifts>{% for shift in data.shifts %}<li>{{ shift.cashier }}: {{ shift.difference|money }}</li>{% endfor %}</ul>{% endif %}
 <details class="op-card"><summary>{% if lang == 'en' %}Message text{% else %}نص الرسالة{% endif %}</summary><pre style="white-space:pre-wrap;font:inherit" data-digest-text>{{ text }}</pre></details>
 {% endblock %}

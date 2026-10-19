@@ -33,6 +33,7 @@ from .services import (
     record_supplier_payment,
 )
 from config.paging import page_of
+from batches.words import expiry_only
 
 
 STRINGS = {
@@ -217,6 +218,7 @@ def invoice_detail(request, pk):
         "purchases/detail.html",
         _context(
             request,
+            expiry_only=expiry_only(),  # AN8: a supermarket reads the expiry date, not a lot number
             invoice=invoice,
             can_post=user_has_permission(request.user, "purchases.create_purchase_invoice"),
             can_return=user_has_permission(request.user, "purchases.return_purchase"),

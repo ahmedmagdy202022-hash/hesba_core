@@ -102,7 +102,10 @@ def digest_text(data, company, lang="ar"):
         st = data["stock"]
         parts = [f"{'out of stock' if en else 'خلصان'} {st['out']}", f"{'below minimum' if en else 'تحت الحد'} {st['low']}"]
         if st.get("expired") or st.get("expiring"):
-            parts.append(f"{'expired batches' if en else 'تشغيلات منتهية'} {st.get('expired', 0)}، {'expiring soon' if en else 'قربت تنتهي'} {st.get('expiring', 0)}")
+            from batches.words import words as expiry_words
+
+            expired_label = expiry_words("en" if en else "ar").get("digest_expired") or ("expired batches" if en else "تشغيلات منتهية")  # AN8
+            parts.append(f"{expired_label} {st.get('expired', 0)}، {'expiring soon' if en else 'قربت تنتهي'} {st.get('expiring', 0)}")
         lines.append(f"{'Stock' if en else 'المخزون'}: " + "، ".join(parts))
     for shift in data.get("shifts", []):
         lines.append(f"{'Shift' if en else 'وردية'} {shift['cashier']}: {'difference' if en else 'فرق'} {m(shift['difference'])}")

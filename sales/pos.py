@@ -23,6 +23,7 @@ from taxes.services import compute_lines, create_sales_draft_with_tax, rates_by_
 from serials.services import attach_sale_serials, pos_serial_catalog, prepare_sale_serials
 from shifts.gate import require_open_shift
 from shifts.services import open_shift_for
+from .pos_buttons import card_cashbox
 from .pos_customers import customer_directory
 from units.services import units_catalog
 from cashboxes.models import Cashbox
@@ -207,7 +208,7 @@ def _next_number(today):
     return f"{prefix}{sequence:04d}"
 
 
-def checkout(*, lines, customer, location, cashbox, discount, tendered, user, sale_date=None, notes="POS"):
+def checkout(*, lines, customer, location, cashbox, discount, tendered, user, sale_date=None, notes="POS", card=False):
     """Create and post the sale. Returns (invoice, change).
 
     POS-003: an offline sale passes the day it was rung up as ``sale_date``;
@@ -222,7 +223,7 @@ def checkout(*, lines, customer, location, cashbox, discount, tendered, user, sa
     # TAX-001: VAT per line from item rates; the invoice discount comes after tax.
     tax = money_round(sum((line_tax for *_, line_tax in compute_lines(lines)), Decimal("0"))) if vat_enabled() else Decimal("0.00")
     total = money_round(subtotal - discount + tax)
-    tendered = money_round(tendered or 0)
+    tendered = total if card else money_round(tendered or 0)  # AN8: a card pays the total exactly, no change
     paid_now = min(tendered, total)
     if paid_now < total and customer.customer_code == WALK_IN_CODE:
         raise ValidationError("err_walk_in_credit")
@@ -259,7 +260,12 @@ def today_summary(user):
     today = timezone.localdate()
     rows = SalesInvoice.objects.filter(invoice_date=today, status="posted", created_by=user)
     totals = rows.aggregate(count=Count("id"), total=Sum("total_amount"), cash=Sum("paid_now"), credit=Sum("remaining_due"))
-    return {key: value or 0 for key, value in totals.items()}
+    summary = {key: value or 0 for key, value in totals.items()}
+    card = card_cashbox()
+    # AN8: what came by card is not cash in the drawer.
+    summary["card"] = (rows.filter(cashbox=card).aggregate(paid=Sum("paid_now"))["paid"] or 0) if card else 0
+    summary["cash"] -= summary["card"]
+    return summary
 
 
 def _clean_cart(raw):
@@ -332,7 +338,9 @@ def pos(request):
     lang = _lang(request)
     words = WORDS[lang]
     locations = entity_scope.locations(Location.objects).filter(active=True, is_selling_location=True)
-    cashboxes = entity_scope.cashboxes(Cashbox.objects).filter(active=True)
+    all_cashboxes = entity_scope.cashboxes(Cashbox.objects).filter(active=True)
+    machine = card_cashbox(all_cashboxes)
+    cashboxes = all_cashboxes.exclude(pk=machine.pk) if machine else all_cashboxes  # AN8: the card machine is never the drawer
     customer_default = walk_in_customer()
     cart_back = "[]"  # raw JSON from the form; cleaned before it is rendered
     selected = {
@@ -347,6 +355,9 @@ def pos(request):
             lines = prepare_sale_serials(parse_cart(request.POST), lang)
             location = locations.filter(pk=selected["location"]).first() if selected["location"].isdigit() else None
             cashbox = cashboxes.filter(pk=selected["cashbox"]).first() if selected["cashbox"].isdigit() else None
+            card = request.POST.get("pay_method") == "card"  # AN8: paid by card goes to the card machine's cashbox
+            if card:
+                cashbox = machine
             if location is None or cashbox is None:
                 raise ValidationError("err_setup")
             customer = Customer.objects.filter(pk=selected["customer"], active=True).first() if selected["customer"].isdigit() else None
@@ -355,7 +366,8 @@ def pos(request):
             tendered = _decimal(request.POST.get("tendered") or "0", 2)
             if discount is None or tendered is None or tendered < 0:
                 raise ValidationError("err_line")
-            invoice, change = checkout(lines=lines, customer=customer, location=location, cashbox=cashbox, discount=discount, tendered=tendered, user=request.user)
+            invoice, change = checkout(lines=lines, customer=customer, location=location, cashbox=cashbox, discount=discount, tendered=tendered,
+                                       user=request.user, card=card)
         except ValidationError as exc:
             messages.error(request, _error_text(exc, words))
             cart_back = request.POST.get("cart_json", "[]")
@@ -382,6 +394,7 @@ def pos(request):
             "catalog": catalog,
             "quick_picks": quick_pick_ids(catalog),
             "can_pick_buttons": user_has_permission(request.user, "master_data.manage_items"),  # AN7 (G07)
+            "card_cashbox": machine,  # AN8
             "price_book": price_book(),
             "tax_rates": rates_by_item(),
             "units": units_catalog(),

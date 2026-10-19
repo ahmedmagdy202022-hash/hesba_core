@@ -82,6 +82,22 @@ class SharedReads:
     def cashboxes(self):
         return self._get("cashboxes", selectors.cashbox_report)
 
+    def expiry_only(self):
+        from batches.words import expiry_only
+
+        return self._get("expiry_only", expiry_only)
+
+    def card_cashbox_id(self):
+        """AN8: the card machine's cashbox, which keeps no float and so never runs low."""
+
+        def produce():
+            from sales.pos_buttons import card_cashbox
+
+            card = card_cashbox()
+            return card.pk if card else None
+
+        return self._get("card_cashbox_id", produce)
+
     def credit_limits(self):
         return self._get(
             "credit_limits",
@@ -266,15 +282,18 @@ def build_alerts(held_permissions, today, shared=None):
 
         # BATCH-001: batches still on hand that expired or expire soon.
         expiring = shared.expiring_batches(today)
+        from batches.words import WORDS as EXPIRY_WORDS
+
+        dated = getattr(shared, "expiry_only", lambda: False)()  # AN8: a shop keeping expiry dates only reads "items", not "batches"
         if expiring["expired"]:
             alerts.append(
                 {
                     "key": "batches_expired",
                     "severity": "urgent",
-                    "ar": f"{len(expiring['expired'])} تشغيلة منتهية الصلاحية لسه في المخزون",
-                    "en": f"{len(expiring['expired'])} expired batch(es) still in stock",
-                    "detail_ar": "شيلها من الرف وراجع شاشة التشغيلات.",
-                    "detail_en": "Take them off the shelf; see the batches screen.",
+                    "ar": EXPIRY_WORDS["ar"]["expired_alert"].format(n=len(expiring["expired"])) if dated else f"{len(expiring['expired'])} تشغيلة منتهية الصلاحية لسه في المخزون",
+                    "en": EXPIRY_WORDS["en"]["expired_alert"].format(n=len(expiring["expired"])) if dated else f"{len(expiring['expired'])} expired batch(es) still in stock",
+                    "detail_ar": EXPIRY_WORDS["ar"]["expired_detail"] if dated else "شيلها من الرف وراجع شاشة التشغيلات.",
+                    "detail_en": EXPIRY_WORDS["en"]["expired_detail"] if dated else "Take them off the shelf; see the batches screen.",
                     "amount": "",
                 }
             )
@@ -283,8 +302,8 @@ def build_alerts(held_permissions, today, shared=None):
                 {
                     "key": "batches_expiring",
                     "severity": "soon",
-                    "ar": f"{len(expiring['soon'])} تشغيلة صلاحيتها قربت تخلص",
-                    "en": f"{len(expiring['soon'])} batch(es) expiring soon",
+                    "ar": EXPIRY_WORDS["ar"]["soon_alert"].format(n=len(expiring["soon"])) if dated else f"{len(expiring['soon'])} تشغيلة صلاحيتها قربت تخلص",
+                    "en": EXPIRY_WORDS["en"]["soon_alert"].format(n=len(expiring["soon"])) if dated else f"{len(expiring['soon'])} batch(es) expiring soon",
                     "detail_ar": "بيعها الأول أو رجّعها للمورد.",
                     "detail_en": "Sell them first or return them to the supplier.",
                     "amount": "",
@@ -325,6 +344,7 @@ def build_alerts(held_permissions, today, shared=None):
             )
 
     if "cashboxes.view_finance" in held_permissions:
+        card_id = getattr(shared, "card_cashbox_id", lambda: None)()
         for row in shared.cashboxes():
             if row["balance"] < 0:
                 alerts.append(
@@ -338,7 +358,7 @@ def build_alerts(held_permissions, today, shared=None):
                         "amount": display_money(row["balance"]),
                     }
                 )
-            elif row["balance"] < CASHBOX_LOW_THRESHOLD:
+            elif row["balance"] < CASHBOX_LOW_THRESHOLD and row["cashbox_id"] != card_id:  # AN8: the card machine keeps no float
                 alerts.append(
                     {
                         "key": f"cashbox_low_{row['cashbox_id']}",

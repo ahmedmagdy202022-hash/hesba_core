@@ -27,8 +27,9 @@
       grid.appendChild(tile);
     });
     box.hidden = !grid.children.length;
-    // AN7 (G07): the first twelve (eight on a phone) show; the rest wait behind one link, so the basket stays in view.
-    if (grid.children.length > 8) {
+    // AN7 (G07), AN8 (Ahmed: "قلل عددهم وحط كلمة المزيد"): the first eight (six on a phone) show; the rest
+    // wait behind "المزيد", so the basket stays in view.
+    if (grid.children.length > 6) {
       var more = document.createElement('button');
       more.type = 'button'; more.className = 'pos-quick__more'; more.setAttribute('data-pos-quick-more', '');
       var all = box.getAttribute('data-all') || 'All buttons', fewer = box.getAttribute('data-fewer') || 'Fewer';
@@ -38,7 +39,7 @@
         more.textContent = open ? fewer : all + ' (' + grid.children.length + ')';
       });
       grid.after(more);
-      if (grid.children.length <= 12) more.classList.add('pos-quick__more--phone');
+      if (grid.children.length <= 8) more.classList.add('pos-quick__more--phone');
     }
   }
 
@@ -56,6 +57,30 @@
   });
   tendered.addEventListener('keydown', function () { delete tendered.dataset.cashAdded; });
   form.addEventListener('reset', function () { delete tendered.dataset.cashAdded; });
+
+  // AN8 (Ahmed: "ضيف طرق دفع زي دفع كاش او فيزا"): a card pays the total exactly, so no notes and no change.
+  var method = form.querySelector('[data-pos-method]'), cashButtons = form.querySelector('[data-pos-cash]');
+  function pay(kind) {
+    if (!method) return;
+    method.value = kind;
+    form.querySelectorAll('[data-pay]').forEach(function (button) {
+      var on = button.getAttribute('data-pay') === kind;
+      button.classList.toggle('is-on', on); button.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    if (cashButtons) cashButtons.hidden = kind === 'card';
+    tendered.readOnly = kind === 'card';
+    if (kind === 'card') {
+      delete tendered.dataset.cashAdded;
+      tendered.value = '';
+      tendered.dispatchEvent(new Event('input', { bubbles: true }));  // the till fills the total back in
+    }
+  }
+  form.querySelectorAll('[data-pay]').forEach(function (button) {
+    button.addEventListener('click', function () { pay(button.getAttribute('data-pay')); });
+  });
+  form.addEventListener('reset', function () { pay('cash'); });
+  var clear = form.querySelector('[data-pos-clear]');
+  if (clear) clear.addEventListener('click', function () { pay('cash'); });
 
   var more = form.querySelector('.pos-more'), summary = form.querySelector('[data-pos-more-summary]');
   function show() {

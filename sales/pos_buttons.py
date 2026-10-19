@@ -44,15 +44,40 @@ def save_pinned(ids):
         "description": "AN7: the items with a tap-to-add button on the till, in order."})
 
 
+CARD_KEY = "pos.card_cashbox"
+
+
+def card_cashbox(cashboxes=None):
+    """AN8 (Ahmed: "ضيف طرق دفع زي كاش او فيزا"): where a card payment at the till lands, a cashbox of its own
+    (the card machine's account) so the drawer's cash and the shift count never include it. None until chosen."""
+
+    from cashboxes.models import Cashbox
+
+    raw = SystemSetting.objects.filter(key=CARD_KEY, active=True).values_list("value", flat=True).first()
+    if not (raw or "").isdigit():
+        return None
+    return (cashboxes if cashboxes is not None else Cashbox.objects).filter(pk=int(raw), active=True).first()
+
+
+def save_card_cashbox(cashbox):
+    SystemSetting.objects.update_or_create(key=CARD_KEY, defaults={
+        "value": str(cashbox.pk) if cashbox else "", "data_type": SystemSetting.DataType.INTEGER, "active": True,
+        "description": "AN8: the cashbox a card payment at the till goes to."})
+
+
 WORDS = {
     "ar": {"title": "أزرار الكاشير", "intro": "الأصناف اللي هيبقى ليها زرار في شاشة الكاشير، تدوس عليه يتضاف للسلة. مفيد للأصناف اللي من غير باركود (العيش، الخضار والفاكهة بالوزن). لو مختارتش حاجة، الشاشة بتعرض لوحدها الأكتر بيعًا من غير باركود.",
            "picked": "الأزرار اللي اخترتها", "none": "لسه مختارتش أزرار. الكاشير بيعرض الأكتر بيعًا لوحده.", "find": "دوّر على صنف تضيفه",
            "suggest": "أصناف من غير باركود", "results": "نتايج البحث", "add": "+ زرار", "remove": "شيل", "up": "لفوق", "full": "وصلت لأقصى عدد (24 زرار).",
-           "no_barcode": "من غير باركود", "back": "رجوع للكاشير", "search": "دوّر", "nothing": "مفيش أصناف بالاسم ده.", "saved": "اتحفظت أزرار الكاشير."},
+           "no_barcode": "من غير باركود", "back": "رجوع للكاشير", "search": "دوّر", "nothing": "مفيش أصناف بالاسم ده.", "saved": "اتحفظت أزرار الكاشير.",
+           "card": "الدفع بالفيزا", "card_intro": "الفلوس اللي بتتدفع بالفيزا بتروح الخزنة دي (حساب ماكينة الفيزا)، مش درج الكاشير، علشان عدّ الوردية يطلع مظبوط.",
+           "card_none": "— الفيزا مقفولة —", "card_save": "احفظ", "card_saved": "اتحفظت خزنة الفيزا.", "card_same": "اختار خزنة غير خزنة الكاشير.", "title_full": "إعدادات الكاشير"},
     "en": {"title": "Till buttons", "intro": "Items that get a button on the till: tap it and it goes in the basket. Handy for items without a barcode (bread, vegetables and fruit by weight). With none picked, the till shows what sells most without a barcode by itself.",
            "picked": "Your buttons", "none": "No buttons picked yet. The till shows the best sellers by itself.", "find": "Find an item to add",
            "suggest": "Items without a barcode", "results": "Search results", "add": "+ button", "remove": "Remove", "up": "Up", "full": "That is the most buttons (24).",
-           "no_barcode": "no barcode", "back": "Back to the till", "search": "Search", "nothing": "No items by that name.", "saved": "Till buttons saved."},
+           "no_barcode": "no barcode", "back": "Back to the till", "search": "Search", "nothing": "No items by that name.", "saved": "Till buttons saved.",
+           "card": "Card payments", "card_intro": "Money paid by card goes to this cashbox (the card machine's account), not the till drawer, so the shift count stays right.",
+           "card_none": "— No card payments —", "card_save": "Save", "card_saved": "Card cashbox saved.", "card_same": "Pick a cashbox other than the till's.", "title_full": "Till settings"},
 }
 
 
@@ -61,6 +86,19 @@ def pos_buttons(request):
     lang = "en" if (request.POST.get("lang") or request.GET.get("lang")) == "en" else "ar"
     words = WORDS[lang]
     pinned = pinned_ids()
+    from cashboxes.models import Cashbox
+    from entities import scope as entity_scope
+
+    cashboxes = entity_scope.cashboxes(Cashbox.objects).filter(active=True)
+    if request.method == "POST" and request.POST.get("action") == "card":
+        chosen = request.POST.get("card_cashbox", "")
+        cashbox = cashboxes.filter(pk=chosen).first() if chosen.isdigit() else None
+        if cashbox is not None and cashbox.is_default:  # the drawer's own cashbox would mix card money into the cash count
+            messages.error(request, words["card_same"])
+            return redirect(f"/sales/pos/buttons/?lang={lang}#card")
+        save_card_cashbox(cashbox)
+        messages.success(request, words["card_saved"])
+        return redirect(f"/sales/pos/buttons/?lang={lang}")
     if request.method == "POST":
         item_id = request.POST.get("item", "")
         action = request.POST.get("action", "")
@@ -96,4 +134,5 @@ def pos_buttons(request):
     return render(request, "sales/pos_buttons.html", {
         "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": words, "page_title": words["title"], "section": "sales",
         "chosen": chosen, "others": others, "query": query, "full": len(chosen) >= MAX_PINNED,
+        "cashboxes": cashboxes, "card_cashbox": card_cashbox(cashboxes),
     })
