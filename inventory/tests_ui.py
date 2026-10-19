@@ -93,3 +93,34 @@ class InventoryUiTests(TestCase):
         self.assertContains(response, "Stock by item and location")
         self.assertContains(response, "Transfers and adjustments")
         self.assertContains(response, reverse("inventory:operations"))
+
+
+class LastCostTests(TestCase):
+    """HG-052 (display only): a sold-out item shows its last purchase cost, not an average of 0.00."""
+
+    def setUp(self):
+        from hesba_testing.factories import make_stock_movement
+
+        owner = make_user(username="last_cost_owner")
+        make_user_profile(user=owner, role=make_seeded_role(RoleCode.OWNER))
+        self.client.force_login(owner)
+        self.location = make_location()
+        self.sold_out = make_item(item_code="GONE", average_cost=Decimal("0"))
+        stock_in(self.sold_out, self.location, 5, "12.50")
+        make_stock_movement(self.sold_out, self.location, StockMovementType.SALE_OUT, 5, "12.50")
+        self.on_shelf = make_item(item_code="HERE", average_cost=Decimal("8.00"))
+        stock_in(self.on_shelf, self.location, 3, "8.00")
+
+    def test_the_stock_list_names_the_last_cost_of_what_ran_out(self):
+        page = self.client.get(reverse("inventory:stock"), {"lang": "ar"})
+        rows = {row["item"].item_code: row for row in page.context["rows"]}
+        self.assertEqual(rows["GONE"]["last_cost"], Decimal("12.5000"))
+        self.assertIsNone(rows["HERE"]["last_cost"])  # on hand: the average cost, as before
+        self.assertContains(page, "آخر تكلفة")
+        self.sold_out.refresh_from_db()
+        self.assertEqual(self.sold_out.average_cost, Decimal("0"))  # the cached figure is not touched
+
+    def test_the_item_card_says_it_is_the_last_cost(self):
+        card = self.client.get(reverse("inventory:item_detail", args=[self.sold_out.pk]), {"lang": "ar"})
+        self.assertContains(card, "آخر تكلفة (مفيش في المخزن)")
+        self.assertNotContains(self.client.get(reverse("inventory:item_detail", args=[self.on_shelf.pk]), {"lang": "ar"}), "data-last-cost")
