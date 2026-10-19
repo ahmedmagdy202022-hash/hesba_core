@@ -217,3 +217,36 @@ class KitchenScreenTests(KitchenSetup):
                 kitchen.prepare(dish, raw, self.owner)
         self.assertFalse(ProductionRun.objects.exists())
         self.assertTrue(Item.objects.filter(pk=dish.pk, is_stock_tracked=True).exists())
+
+
+class MadeToOrderAlertTests(KitchenSetup):
+    """W16: a dish made in the kitchen with no plates ready is cooked to order, not "out of stock"."""
+
+    def test_no_plates_ready_is_not_an_out_of_stock_alert(self):
+        from django.utils import timezone
+
+        from reports.followup import todo
+        from reports.selectors import stock_alert_counts
+
+        before = stock_alert_counts()["out_of_stock"]
+        dish = kitchen.make_in_kitchen(self.koshary, self.owner)
+        self.assertEqual(self.stock(dish), 0)
+        self.assertEqual(stock_alert_counts()["out_of_stock"], before)
+        make_item(item_code="R-SALT", item_name="ملح", is_stock_tracked=True)  # an ingredient that ran out still counts
+        self.assertEqual(stock_alert_counts()["out_of_stock"], before + 1)
+        labels = [label for item in todo(self.owner, timezone.localdate(), "morning") if item["key"] == "out_of_stock" for label in item["lines"]]
+        self.assertNotIn(dish.item_name, " ".join(labels))
+
+    def test_cooking_a_plate_is_not_waste(self):
+        from django.utils import timezone
+
+        from inventory.services import adjust_stock
+        from restaurant.insights import waste
+
+        today = timezone.localdate()
+        dish = kitchen.make_in_kitchen(self.koshary, self.owner)
+        kitchen.prepare(dish, "3", self.owner, location=self.location)
+        self.assertEqual(waste(today, today), ([], D("0.00")))
+        adjust_stock("WASTE-1", today, self.rice, self.location, "out", "1", "هالك", self.owner)
+        rows, total = waste(today, today)
+        self.assertEqual(([row["movement"].item for row in rows], total), ([self.rice], D("30.00")))

@@ -158,6 +158,14 @@ def stock_levels_by_item():
     ]
 
 
+def made_to_order_ids():
+    """Items made in the kitchen when ordered (RESTO-004): no plates on hand is not "out of stock"."""
+
+    from restaurant.kitchen import kitchen_dish_ids
+
+    return kitchen_dish_ids()
+
+
 def stock_alert_counts():
     """How many tracked items have run out, and how many are running low.
 
@@ -167,8 +175,11 @@ def stock_alert_counts():
 
     out_of_stock = 0
     low_stock = 0
+    cooked = made_to_order_ids()
 
     for row in stock_levels_by_item():
+        if row["quantity"] <= 0 and row["item_id"] in cooked:
+            continue  # W16: a dish made in the kitchen is cooked to order, not run out
         if row["quantity"] <= 0:
             out_of_stock += 1
         elif row["min_stock"] > 0 and row["quantity"] <= row["min_stock"]:

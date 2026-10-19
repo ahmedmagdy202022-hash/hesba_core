@@ -816,6 +816,11 @@ Status: RESOLVED — approved by Ahmed on 9 Oct 2026 ("موافق تعمل كل 
   - waste moves the exact quantity and value into stock loss, and the waste report shows it by reason;
   - (C1) a production run plus a sale costs the dish at the run's cost, with the ledger balanced and reconciliation clean;
   - permissions.
+- **W16 note (demo and two RESTO-004 follow-ups, no engine change):**
+  - The restaurant demos switch their dishes to "made in the kitchen" before the sample month, so every plate sold is cooked from its ingredients through the manufacturing engine. The dashboard margin then matches the dish-costing screen (77.6% in the restaurant demo, down from 98%).
+  - A kitchen dish with no plates ready is cooked to order, so it is no longer counted as "out of stock" (`reports.selectors.stock_alert_counts`, `reports.followup`).
+  - The waste report no longer counts ingredients that a production run consumed (`restaurant.insights.waste`). Before this, cooking showed up as waste.
+  - Sales posting, the manufacturing engine, inventory movements and the ledger are unchanged.
 ## HG-039 — Signing and sending e-invoices to the Tax Authority (ETA-002)
 
 Status: APPROVED — Ahmed on 9 Oct 2026 ("خلص كله"), the third open decision in the audit report. Implemented in branch `claude/eta-002-submission`.

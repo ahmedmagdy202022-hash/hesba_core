@@ -76,6 +76,7 @@ class Command(BaseCommand):
         seed = Seed()
         owner = get_user_model().objects.get(username="owner")
         master = seed._seed_master_data()
+        self._kitchen(master, owner)
         today = timezone.localdate()
         self._date_openings(today - timedelta(days=30))
         need = {}
@@ -85,6 +86,34 @@ class Command(BaseCommand):
         seed.stock_in(master, "DEMO-PI-HIST", today - timedelta(days=29), master["suppliers"][0], sorted(need.items()), Decimal("0.00"), owner)
         for n, (days_ago, customer, lines, share) in enumerate(self.HISTORY_SALES, start=1):
             seed.sell(master, f"DEMO-SH-{n:03d}", today - timedelta(days=days_ago), customer, lines, owner, share=share)
+
+    @staticmethod
+    def _dishes(master):
+        """The menu's dishes (made to order, not bought), in catalog order."""
+
+        return [item for item, product in zip(master["items"], master["catalog"].items) if not product.stock][:3]
+
+    def _kitchen(self, master, owner):
+        """W16: a restaurant demo's dishes are made in the kitchen (RESTO-004, HG-044 C1).
+
+        Before anything is sold, each dish gets its ingredients and is switched to "made in the kitchen", so every
+        plate sold in the sample month is cooked from stock through the manufacturing engine. The dashboard's margin
+        is then the dish-costing screen's, not 98% from dishes that cost nothing."""
+
+        from restaurant import insights, kitchen
+
+        raw = master["raw"]
+        if not (master["catalog"].key.startswith("restaurants.") and raw):
+            return
+        for n, dish in enumerate(self._dishes(master)):
+            if kitchen.is_kitchen_made(dish):
+                continue
+            lines = [(raw[n % len(raw)], "0.250")]
+            if raw[-1].pk != raw[n % len(raw)].pk:
+                lines.append((raw[-1], "0.100"))
+            insights.save_ingredients(dish, lines, owner)
+            kitchen.make_in_kitchen(dish, owner)
+            dish.refresh_from_db(fields=["is_stock_tracked"])  # switched in place: nothing has sold it yet
 
     @staticmethod
     def _date_openings(day):
@@ -474,24 +503,20 @@ class Command(BaseCommand):
             pass  # a part out of stock: the demo keeps it ready instead
 
     def _floor(self, master, catalog, owner):
-        """RESTO-002: dish ingredients, a week of paid orders at different hours, and one waste adjustment."""
+        """RESTO-002: a week of paid orders at different hours, and one waste adjustment. The dishes' ingredients come from _kitchen."""
 
         from datetime import datetime as _dt
 
         from inventory.services import adjust_stock
-        from restaurant import insights, services as floor
+        from restaurant import services as floor
         from restaurant.models import DiningTable, Order
         from staff.services import save_employee
 
-        dishes = [item for item in master["items"] if not item.is_stock_tracked][:3]
+        dishes = self._dishes(master)
         raw = master["raw"]
         if not dishes or not raw:
             return
-        for n, dish in enumerate(dishes):
-            lines = [(raw[n % len(raw)], "0.250")]
-            if raw[-1].pk != raw[n % len(raw)].pk:
-                lines.append((raw[-1], "0.100"))
-            insights.save_ingredients(dish, lines, owner)
+        self._kitchen(master, owner)  # already done before the month's sales; here for a demo filled without them
         waiter = save_employee({"name": catalog.staff[0], "title": catalog.staff[1]}, owner)
         cashbox = master["cashboxes"][0]
         tables = list(DiningTable.objects.order_by("sort_order", "name"))
