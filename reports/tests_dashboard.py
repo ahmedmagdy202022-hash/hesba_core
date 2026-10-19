@@ -896,14 +896,15 @@ class DashboardCurrencyTests(TestCase):
     def test_money_cards_carry_the_configured_currency(self):
         ClientProfile.objects.filter(pk=self.profile.pk).update(default_currency="SAR")
         response = self.client.get(DASHBOARD)
-        self.assertContains(response, '<small class="dash-kpi__unit">SAR</small>')
+        self.assertContains(response, '<small class="dash-kpi__unit">ر.س</small>')  # TRACK-START S16: an Arabic screen reads the symbol
         self.assertNoCurrencyWord(response, "EGP")
+        self.assertContains(self.client.get(DASHBOARD, {"lang": "en"}), '<small class="dash-kpi__unit">SAR</small>')
 
     def test_alert_amounts_carry_the_configured_currency(self):
         ClientProfile.objects.filter(pk=self.profile.pk).update(default_currency="SAR")
         make_cashbox_movement(make_cashbox(), CashboxDirection.OUT, "50.00")
         response = self.client.get(DASHBOARD)
-        self.assertContains(response, "50.00<small>SAR</small>")
+        self.assertContains(response, "50.00<small>ر.س</small>")
         self.assertNoCurrencyWord(response, "EGP")
 
     def assertNoCurrencyWord(self, response, code):

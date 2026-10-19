@@ -25,6 +25,16 @@ CURRENCIES = (
     ("EUR", {"ar": "يورو", "en": "Euro"}),
 )
 CURRENCY_CODES = tuple(code for code, _ in CURRENCIES)
+#: TRACK-START S16: how an amount's currency reads on an Arabic screen ("1,250.00 ج.م", not "EGP").
+SYMBOLS_AR = {"EGP": "ج.م", "SAR": "ر.س", "AED": "د.إ", "KWD": "د.ك", "QAR": "ر.ق", "BHD": "د.ب", "OMR": "ر.ع", "JOD": "د.أ", "USD": "$", "EUR": "€"}
+
+
+def currency_label(code, lang="ar"):
+    """The currency shown after an amount: the Arabic symbol on an Arabic screen, the ISO code in English."""
+
+    if not code:
+        return ""
+    return code if lang == "en" else SYMBOLS_AR.get(code, code)
 
 
 class CurrencyChangeRefused(ValueError):

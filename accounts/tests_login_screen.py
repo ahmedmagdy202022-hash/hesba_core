@@ -12,6 +12,7 @@ class LoginScreenTests(TestCase):
         self.assertIn('data-i18n="tagline"', body)
         # The credit is real text now, not pixels inside a background image.
         self.assertIn("Developed by <strong>Ahmed Magdy</strong>", body)
+        self.assertIn("تطوير <strong>أحمد مجدي</strong>", body)  # TRACK-START S15
 
     def test_old_artwork_background_is_not_loaded(self):
         with open(finders.find("hesba/css/login.css"), encoding="utf-8") as handle:

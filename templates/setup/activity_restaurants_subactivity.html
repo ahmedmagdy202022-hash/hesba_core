@@ -34,7 +34,7 @@
       <nav class="activity-stepper" aria-label="Setup steps">
         <div class="activity-step"><span class="activity-step__number">1</span><span data-i18n="stepGeneral">النشاط العام</span></div>
         <div class="activity-step is-current"><span class="activity-step__number">2</span><span data-i18n="stepSub">النشاط الفرعي</span></div>
-        <div class="activity-step"><span class="activity-step__number">3</span><span data-i18n="stepModules">الموديولات</span></div>
+        <div class="activity-step"><span class="activity-step__number">3</span><span data-i18n="stepModules">الأقسام</span></div>
         <div class="activity-step"><span class="activity-step__number">4</span><span data-i18n="stepReview">المراجعة</span></div>
       </nav>
       <div class="activity-copy">
@@ -50,7 +50,7 @@
         <button class="activity-card subactivity-card is-active" type="button" role="listitem" data-sub-activity="other" aria-pressed="false"><span class="activity-card__title" data-i18n="other">نشاط أكل ومشروبات آخر</span></button>
       </div>
       <footer class="activity-footer" aria-label="Activity navigation">
-        <button class="activity-action activity-next" type="button" disabled data-next-button><span data-i18n="next">التالي: اختيار الموديولات</span><span class="activity-action__circle" aria-hidden="true">←</span></button>
+        <button class="activity-action activity-next" type="button" disabled data-next-button><span data-i18n="next">التالي: اختيار الأقسام</span><span class="activity-action__circle" aria-hidden="true">←</span></button>
         <a class="activity-action activity-back" href="/setup/activity/?lang=ar" data-back-link><span data-i18n="back">الرجوع لاختيار النشاط العام</span><span class="activity-action__plain" aria-hidden="true">‹</span></a>
       </footer>
     </section>
@@ -59,7 +59,7 @@
 <script>
 (function(){
   var params=new URLSearchParams(window.location.search);var saved=localStorage.getItem('hesba_lang');var lang=params.get('lang')==='en'?'en':(params.get('lang')==='ar'?'ar':(saved==='en'?'en':'ar'));var selectedSlug='';
-  var dict={ar:{pageTitle:'اختيار نوع المطعم أو الكافيه - حِسْبَة',logout:'تسجيل الخروج',language:'العربية',stepGeneral:'النشاط العام',stepSub:'النشاط الفرعي',stepModules:'الموديولات',stepReview:'المراجعة',title:'اختر نوع المطعم أو الكافيه',subtitle:'اختيار النوع يساعد حِسْبَة في تجهيز الطاولات والطلبات والمطبخ والكاشير.',restaurant:'مطعم',cafe:'كافيه / كوفي شوب',fast_food:'وجبات سريعة',bakery:'مخبز / حلواني',cloud_kitchen:'مطبخ أونلاين / دليفري',other:'نشاط أكل ومشروبات آخر',next:'التالي: اختيار الموديولات',back:'الرجوع لاختيار النشاط العام',changeLanguage:'تغيير اللغة'},en:{pageTitle:'Choose restaurant type - Hesba',logout:'Logout',language:'English',stepGeneral:'General activity',stepSub:'Sub activity',stepModules:'Modules',stepReview:'Review',title:'Choose the restaurant or café type',subtitle:'Choosing the type helps Hesba prepare tables, orders, the kitchen and the till.',restaurant:'Restaurant',cafe:'Café / Coffee shop',fast_food:'Fast food',bakery:'Bakery / Sweets',cloud_kitchen:'Cloud kitchen / Delivery',other:'Other food & drinks',next:'Next: choose modules',back:'Back to general activity',changeLanguage:'Change language'}};
+  var dict={ar:{pageTitle:'اختيار نوع المطعم أو الكافيه - حِسْبَة',logout:'تسجيل الخروج',language:'العربية',stepGeneral:'النشاط العام',stepSub:'النشاط الفرعي',stepModules:'الأقسام',stepReview:'المراجعة',title:'اختر نوع المطعم أو الكافيه',subtitle:'اختيار النوع يساعد حِسْبَة في تجهيز الطاولات والطلبات والمطبخ والكاشير.',restaurant:'مطعم',cafe:'كافيه / كوفي شوب',fast_food:'وجبات سريعة',bakery:'مخبز / حلواني',cloud_kitchen:'مطبخ أونلاين / دليفري',other:'نشاط أكل ومشروبات آخر',next:'التالي: اختيار الأقسام',back:'الرجوع لاختيار النشاط العام',changeLanguage:'تغيير اللغة'},en:{pageTitle:'Choose restaurant type - Hesba',logout:'Logout',language:'English',stepGeneral:'General activity',stepSub:'Sub activity',stepModules:'Modules',stepReview:'Review',title:'Choose the restaurant or café type',subtitle:'Choosing the type helps Hesba prepare tables, orders, the kitchen and the till.',restaurant:'Restaurant',cafe:'Café / Coffee shop',fast_food:'Fast food',bakery:'Bakery / Sweets',cloud_kitchen:'Cloud kitchen / Delivery',other:'Other food & drinks',next:'Next: choose modules',back:'Back to general activity',changeLanguage:'Change language'}};
   function withLang(path){var url=new URL(path,window.location.origin);url.searchParams.set('lang',lang);return url.pathname+url.search;}
   function moduleTarget(slug){var url=new URL('/setup/modules/',window.location.origin);url.searchParams.set('lang',lang);url.searchParams.set('activity','restaurants');url.searchParams.set('sub_activity',slug);return url.pathname+url.search;}
   function refreshLinks(){var back=document.querySelector('[data-back-link]');var next=document.querySelector('[data-next-button]');if(back)back.href=withLang('/setup/activity/');if(next&&selectedSlug)next.dataset.href=moduleTarget(selectedSlug);}

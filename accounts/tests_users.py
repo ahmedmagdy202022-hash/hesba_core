@@ -117,9 +117,12 @@ class UserScreenTests(TestCase):
                 self.assertEqual(self.client.get(reverse("settings_core:users")).status_code, 403)
                 self.assertEqual(self.client.post(reverse("settings_core:user_create"), {"username": "x"}).status_code, 403)
 
-    def test_superusers_are_not_listed_or_editable(self):
+    def test_superusers_are_listed_but_never_editable(self):
+        # TRACK-START S05: the owner shows in the list (the roles screen counts them), with no edit link.
         root = get_user_model().objects.create_superuser(username="root_hidden", password="x-Root-pass-9")
-        self.assertNotContains(self.client.get(reverse("settings_core:users")), "root_hidden")
+        page = self.client.get(reverse("settings_core:users")).content.decode()
+        self.assertIn('data-user-row="root_hidden"', page)
+        self.assertNotIn(reverse("settings_core:user_edit", args=[root.pk]), page)
         self.assertEqual(self.client.get(reverse("settings_core:user_edit", args=[root.pk])).status_code, 404)
 
 

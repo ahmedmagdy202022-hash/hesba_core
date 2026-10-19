@@ -16,6 +16,7 @@ WORDS = {
         "page_title": "الإيميل اليومي", "title": "إيميل المتابعة اليومي",
         "intro": "حِسبة تبعتلك كل يوم على الإيميل: المطلوب متابعته (عملاء متأخرين، أصناف خلصت، مواعيد، مسودات)، واللي حصل (مبيعات، تحصيل، خزن)، وأهم الأحداث (إلغاءات، تسويات، فروق ورديات).",
         "when": "إمتى يتبعت", "morning": "الصبح (متابعة النهارده + ملخص امبارح)", "evening": "بالليل (ملخص النهارده + متابعة بكرة)", "hour": "الساعة",
+        "morning_short": "الصبح", "evening_short": "بالليل", "hour_of": "ساعة {slot}",
         "to": "يتبعت لمين", "no_email": "مفيش إيميل مسجّل — ضيفه من شاشة المستخدمين", "each_sees": "كل واحد بيوصله اللي صلاحياته تسمح بيه بس.",
         "lang": "اللغة", "lang_ar": "العربية", "lang_en": "الإنجليزي", "save": "حفظ", "saved": "اتحفظت إعدادات الإيميل اليومي.", "test": "ابعتلي إيميل تجربة دلوقتي", "tested": "اتبعت إيميل تجربة لـ {email}.",
         "test_failed": "الإيميل ما اتبعتش ({error}). راجع إعدادات السيرفر.", "no_self_email": "حسابك مفيهوش إيميل؛ ضيفه الأول من شاشة المستخدمين.",
@@ -26,6 +27,7 @@ WORDS = {
         "page_title": "Daily email", "title": "Daily follow-up email",
         "intro": "Hesba emails you every day: what to follow up (overdue customers, items out of stock, appointments, drafts), what happened (sales, collections, cash) and the key events (cancellations, adjustments, shift differences).",
         "when": "When", "morning": "Morning (today's follow-up + yesterday's summary)", "evening": "Evening (today's summary + tomorrow's follow-up)", "hour": "Hour",
+        "morning_short": "Morning", "evening_short": "Evening", "hour_of": "{slot} hour",
         "to": "Send to", "no_email": "No email on file — add it from the users screen", "each_sees": "Each person only gets what their permissions allow.",
         "lang": "Language", "lang_ar": "Arabic", "lang_en": "English", "save": "Save", "saved": "Daily email settings saved.", "test": "Send me a test email now", "tested": "A test email was sent to {email}.",
         "test_failed": "The email was not sent ({error}). Check the server settings.", "no_self_email": "Your account has no email; add it from the users screen first.",
@@ -74,5 +76,6 @@ def daily_email_settings(request):
     return render(request, "settings_core/daily_email.html", {
         "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": words, "page_title": words["page_title"], "section": "settings",
         "conf": conf, "ready": daily_email.email_ready(), "users": daily_email.recipients_choices(), "hours": range(24),
-        "can_manage": can_manage, "upcoming": upcoming, "slots": [(slot, words[slot]) for slot in daily_email.SLOTS],
+        "can_manage": can_manage, "upcoming": upcoming, # TRACK-START S11: each slot's short name for its hour box, the "last sent" card and the test send.
+        "slots": [(slot, words[slot], words[f"{slot}_short"], words["hour_of"].format(slot=words[f"{slot}_short"])) for slot in daily_email.SLOTS],
     })

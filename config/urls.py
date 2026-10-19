@@ -104,9 +104,10 @@ urlpatterns = [
 
 
 def _superuser_only(request):
-    """ADMIN-001: shop owners and staff never reach Django Admin; only a superuser does."""
+    """ADMIN-001: shop owners and staff never reach Django Admin; only a superuser does.
+    TRACK-START S04: and never on a showcase, where every tester's owner is a superuser of their own copy."""
 
-    return request.user.is_active and request.user.is_superuser
+    return request.user.is_active and request.user.is_superuser and not getattr(settings, "DEMO_MODE", False)
 
 
 django_admin.site.has_permission = _superuser_only

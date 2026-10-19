@@ -241,7 +241,7 @@ class ExpenseScreenTests(TestCase):
         set_module_enabled(ClientProfile.get_active(), "expenses", False, user=self.owner)
         response = self.client.get(reverse("expenses:list"))
         self.assertEqual(response.status_code, 403)
-        self.assertContains(response, "غير مفعّل", status_code=403)
+        self.assertContains(response, "مش شغّال", status_code=403)
 
     def test_categories_can_be_added_and_retired(self):
         self.client.post(reverse("expenses:categories"), {"name_ar": "عمولات", "name_en": "Commissions"})

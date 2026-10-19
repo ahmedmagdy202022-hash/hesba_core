@@ -172,14 +172,14 @@ class ModulesSelectionScreenTests(AuthenticatedTestCase):
         response = self.client.get('/setup/modules/?lang=ar&activity=commercial&sub_activity=retail')
 
         arabic_labels = [
-            'اختر الموديولات المناسبة',
-            'جهزنا لك اقتراحًا مبدئيًا حسب نوع نشاطك، ويمكنك تعديله قبل المتابعة.',
+            'اختر الأقسام المناسبة',
+            'جهّزنالك اقتراح على حسب نشاطك، وتقدر تغيّره قبل ما تكمّل.',
             'أساسي',
             'مقترح',
             'اختياري',
-            'مقفول',
-            'مفعّل',
-            'غير مفعّل',
+            'أساسي · شغّال دايمًا',  # TRACK-START S03: «مقفول» meant always-on here and off in the settings
+            'شغّال',
+            'مش شغّال',
             'الأصناف والخدمات',
             'عمليات البيع',
             'الخزن',
@@ -197,7 +197,7 @@ class ModulesSelectionScreenTests(AuthenticatedTestCase):
             'Required',
             'Suggested',
             'Optional',
-            'Locked',
+            'Core · always on',
             'On',
             'Off',
             'Items & services',
@@ -347,14 +347,14 @@ class ReviewSetupScreenTests(AuthenticatedTestCase):
 
         arabic_labels = [
             'راجع إعدادات نشاطك',
-            'تأكد من الاختيارات التالية قبل إنهاء إعداد حِسْبَة لنشاطك.',
+            'راجع اختياراتك قبل ما تنهي الإعداد.',
             'ملخص النشاط',
             'النشاط العام',
             'النشاط الفرعي',
-            'الموديولات المختارة',
+            'الأقسام المختارة',
             'ملاحظة الإعدادات',
-            'يمكنك تعديل الموديولات لاحقًا من الإعدادات، ولن يتم حذف أي بيانات عند تعطيل موديول.',
-            'الرجوع إلى اختيار الموديولات',
+            'تقدر تغيّر الأقسام بعدين من الإعدادات، ومفيش بيانات بتتمسح لما توقف قسم.',
+            'الرجوع إلى اختيار الأقسام',
             'إنهاء الإعداد',
         ]
         for label in arabic_labels:

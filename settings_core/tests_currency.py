@@ -41,7 +41,8 @@ class CurrencySettingsTests(TestCase):
     def test_the_new_currency_shows_on_the_dashboard(self):
         sign_in(self)
         self.client.post(CURRENCY, {"currency": "AED"})
-        self.assertEqual(self.client.get(reverse("dashboard_snapshot")).context["currency"], "AED")
+        self.assertEqual(self.client.get(reverse("dashboard_snapshot")).context["currency"], "د.إ")  # TRACK-START S16
+        self.assertEqual(self.client.get(reverse("dashboard_snapshot"), {"lang": "en"}).context["currency"], "AED")
 
     def test_currency_locks_once_money_is_recorded(self):
         sign_in(self)
