@@ -17,7 +17,7 @@
 {% if order.run %}<p><a class="op-secondary" href="{% url 'manufacturing:run' order.run.pk %}?lang={{ lang }}" data-order-run>{{ words.run }} <bdi>{{ order.run.number }}</bdi></a></p>{% endif %}
 <h2>{{ words.history }}</h2>
 <div class="op-table-wrap"><table class="op-table" data-stage-history><thead><tr><th>{{ words.stage }}</th><th>{{ words.good }}</th><th>{{ words.defect }}</th><th>{{ words.by }}</th><th>{{ words.notes }}</th></tr></thead><tbody>
-{% for row in logs %}<tr><td>{{ row.label }}</td><td>{{ row.log.good_quantity|qty }}</td><td>{{ row.log.defect_quantity|qty }}</td><td>{{ row.log.done_by.get_username }} · <bdi>{{ row.log.done_at|date:"Y-m-d H:i" }}</bdi></td><td>{{ row.log.note }}</td></tr>
+{% for row in logs %}<tr><td>{{ row.label }}</td><td>{{ row.log.good_quantity|qty }}</td><td>{{ row.log.defect_quantity|qty }}</td><td>{{ row.log.done_by|person }} · <bdi>{{ row.log.done_at|date:"Y-m-d H:i" }}</bdi></td><td>{{ row.log.note }}</td></tr>
 {% empty %}<tr><td colspan="5" class="op-empty">—</td></tr>{% endfor %}
 </tbody></table></div>
 {% if quality.defects %}<p data-quality>{{ words.defects }}: {{ quality.defects|qty }} · {{ words.rate }}: {{ quality.rate }}%</p>{% endif %}

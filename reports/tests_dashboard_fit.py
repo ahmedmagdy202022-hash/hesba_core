@@ -52,8 +52,9 @@ class RuleTableTests(TestCase):
                 self.assertIn(name, cards)
             elif kind == "metric":
                 self.assertIn(name, metrics)
-            if rule.fact:
-                self.assertTrue(hasattr(dashboard_fit.Fit, f"_fact_{rule.fact}"), key)
+            for fact in (rule.fact, rule.or_fact):
+                if fact:
+                    self.assertTrue(hasattr(dashboard_fit.Fit, f"_fact_{fact}"), key)
 
 
 class CreditSplitTests(FitSetup):
@@ -86,6 +87,22 @@ class ModuleTests(FitSetup):
         self.assertFalse(metrics & {"payables", "expenses", "net_profit"})
         self.assertIsNone(context["analytics"]["stock"])
         self.assertFalse([alert for alert in context["alerts"] if alert["key"] in ("out_of_stock", "low_stock")])
+
+
+class OwedMoneyTests(FitSetup):
+    """TRACK-ACTS W15: a restaurant without the customers module still bills company lunches on credit."""
+
+    activity, sub, modules = "restaurants", "restaurant", "items_services,sales_operations,cashboxes,reports"
+
+    def test_what_customers_owe_shows_once_anything_is_sold_on_credit(self):
+        sell(self.item, self.location, self.cashbox, 2, "10.00", "20.00", self.owner, number="DF-R1", when=TODAY)  # paid in full
+        context = self.page().context
+        self.assertNotIn("customer_dues", {card["key"] for card in context["cards"]})
+        self.assertNotIn("receivables", {metric["key"] for metric in context["analytics"]["metrics"]})
+        sell(self.item, self.location, self.cashbox, 2, "10.00", "5.00", self.owner, number="DF-R2", when=TODAY)  # 15.00 owed
+        context = self.page().context
+        self.assertIn("customer_dues", {card["key"] for card in context["cards"]})
+        self.assertIn("receivables", {metric["key"] for metric in context["analytics"]["metrics"]})
 
 
 class ActivityTests(FitSetup):

@@ -24,11 +24,11 @@
 {% endif %}
 {% if open_now %}<h2>{{ words.open_now }}</h2>
 <div class="op-table-wrap" data-shifts-open-now><table class="op-table"><thead><tr><th>{{ words.cashier }}</th><th>{{ words.cashbox }}</th><th>{{ words.opened_at }}</th><th>{{ words.float_label }}</th></tr></thead><tbody>
-{% for shift in open_now %}<tr><td>{{ shift.cashier.hesba_profile.display_name|default:shift.cashier.get_username }}</td><td>{{ shift.cashbox.name_ar }}</td><td><bdi>{{ shift.opened_at|date:"Y-m-d H:i" }}</bdi></td><td>{{ shift.opening_float|money }}</td></tr>{% endfor %}
+{% for shift in open_now %}<tr><td>{{ shift.cashier|person }}</td><td>{{ shift.cashbox.name_ar }}</td><td><bdi>{{ shift.opened_at|date:"Y-m-d H:i" }}</bdi></td><td>{{ shift.opening_float|money }}</td></tr>{% endfor %}
 </tbody></table></div>{% endif %}
 <h2>{{ words.history }}</h2>
 <div class="op-table-wrap"><table class="op-table"><thead><tr>{% if can_all %}<th>{{ words.cashier }}</th>{% endif %}<th>{{ words.cashbox }}</th><th>{{ words.opened_at }}</th><th>{{ words.closed_at }}</th><th>{{ words.expected }}</th><th>{{ words.counted }}</th><th>{{ words.difference }}</th><th></th></tr></thead><tbody>
-{% for shift in page.object_list %}<tr data-shift-row="{{ shift.pk }}">{% if can_all %}<td>{{ shift.cashier.hesba_profile.display_name|default:shift.cashier.get_username }}</td>{% endif %}<td>{{ shift.cashbox.name_ar }}</td><td><bdi>{{ shift.opened_at|date:"Y-m-d H:i" }}</bdi></td><td><bdi>{{ shift.closed_at|date:"H:i" }}</bdi></td><td>{{ shift.expected_cash|money }}</td><td>{{ shift.counted_cash|money }}</td><td><span class="op-status op-status-{% if shift.difference < 0 %}cancelled{% elif shift.difference > 0 %}draft{% else %}posted{% endif %}">{{ shift.difference|money }}</span></td><td><a href="{% url 'shifts:detail' shift.pk %}?lang={{ lang }}">{{ words.report }}</a></td></tr>
+{% for shift in page.object_list %}<tr data-shift-row="{{ shift.pk }}">{% if can_all %}<td>{{ shift.cashier|person }}</td>{% endif %}<td>{{ shift.cashbox.name_ar }}</td><td><bdi>{{ shift.opened_at|date:"Y-m-d H:i" }}</bdi></td><td><bdi>{{ shift.closed_at|date:"H:i" }}</bdi></td><td>{{ shift.expected_cash|money }}</td><td>{{ shift.counted_cash|money }}</td><td><span class="op-status op-status-{% if shift.difference < 0 %}cancelled{% elif shift.difference > 0 %}draft{% else %}posted{% endif %}">{{ shift.difference|money }}</span></td><td><a href="{% url 'shifts:detail' shift.pk %}?lang={{ lang }}">{{ words.report }}</a></td></tr>
 {% empty %}<tr><td colspan="8" class="op-empty">{{ words.empty }}</td></tr>{% endfor %}
 </tbody></table></div>
 {% pager page %}

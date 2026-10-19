@@ -165,6 +165,7 @@ def _feature_table():
 
     from agreements import hours, packages
     from agreements.services import SUB_ACTIVITIES as CONTRACT_SUBS
+    from medical.queue import SUB_ACTIVITIES as QUEUE_SUBS
     from workorders.services import WORK_SUBS
 
     medical, education, restaurants = ((catalog.MEDICAL, "*"),), ((catalog.EDUCATION, "*"),), ((catalog.RESTAURANTS, "*"),)
@@ -176,7 +177,8 @@ def _feature_table():
         _feature("follow_ups", "المتابعات", "Follow-ups", "مين ميعاد متابعته فات ومجاش، ومين ميعاده جاي ولسه ماحجزش، مع تذكير واتساب.",
                  "Who missed a follow-up and who is due but has not booked, with a WhatsApp reminder.", "medical:follow_ups", "appointments_visits", medical),
         _feature("reception_queue", "قايمة الانتظار", "Reception queue", "رقم لكل مريض بترتيب وصوله، والدكتور بينده الدور، وشاشة للصالة.",
-                 "A number per patient in arrival order, the doctor calls the next one, and a waiting-room screen.", "medical:queue", "appointments_visits", medical),
+                 "A number per patient in arrival order, the doctor calls the next one, and a waiting-room screen.", "medical:queue", "appointments_visits",
+                 tuple((catalog.MEDICAL, sub) for sub in QUEUE_SUBS)),  # TRACK-ACTS W12: a dental clinic's link was a 404
         _feature("clinic_report", "تقرير العيادة", "Clinic report", "الكشوفات والمتابعات والمرضى الجداد، والإيراد لكل دكتور وخدمة.",
                  "Visits, follow-ups and new patients, and revenue per doctor and service.", "medical:report", "reports", medical),
         _feature("medical_insurance", "التأمين الطبي", "Medical insurance", "شركات التأمين وعقودها، وكل كشف مؤمَّن عليه بفاتورتين (المريض والشركة)، والمطالبة الشهرية.",

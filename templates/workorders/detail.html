@@ -51,6 +51,6 @@
 </div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.deliver_btn }}</button></div></form>{% endif %}
 
 <h2>{{ words.timeline }}</h2>
-<ul class="wo-timeline" data-timeline>{% for event in events %}<li><bdi>{{ event.at|date:"Y-m-d H:i" }}</bdi> · <strong>{% for key, label in labels.items %}{% if key == event.status %}{{ label }}{% endif %}{% endfor %}</strong> · {{ event.user.get_full_name|default:event.user.username }}{% if event.note %} — {{ event.note }}{% endif %}</li>{% endfor %}</ul>
+<ul class="wo-timeline" data-timeline>{% for event in events %}<li><bdi>{{ event.at|date:"Y-m-d H:i" }}</bdi> · <strong>{% for key, label in labels.items %}{% if key == event.status %}{{ label }}{% endif %}{% endfor %}</strong> · {{ event.user|person }}{% if event.note %} — {{ event.note }}{% endif %}</li>{% endfor %}</ul>
 {% if returns %}<h2>{{ words.warranty_return }}</h2><ul>{% for back in returns %}<li><a href="{% url 'workorders:detail' back.pk %}?lang={{ lang }}"><bdi>{{ back.number }}</bdi></a> · <bdi>{{ back.received_at|date:"Y-m-d" }}</bdi></li>{% endfor %}</ul>{% endif %}
 {% endblock %}
