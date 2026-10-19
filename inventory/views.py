@@ -124,6 +124,10 @@ def stock_list(request):
         state = _stock_state(quantity, item.min_stock)
         counts[state] += 1
         rows.append({"item": item, "quantity": quantity, "state": state})
+    if can_view_cost:
+        sold_out = last_costs(row["item"].pk for row in rows if row["quantity"] <= 0)
+        for row in rows:
+            row["last_cost"] = sold_out.get(row["item"].pk)
 
     return render(
         request,
@@ -145,6 +149,32 @@ def stock_list(request):
             can_add_location=user_has_permission(request.user, "master_data.manage_locations"),
         ),
     )
+
+
+
+
+def last_costs(item_ids):
+    """HG-052 (display only): the unit cost of each item's latest purchase or opening stock.
+
+    Shown in place of the average cost when nothing is on hand, so a sold-out item does not read
+    as costing 0.00. Only the entity being worked in counts; a cancelled purchase, a reversal row
+    and the stock a cancelled return brought back are not purchases. A zero price is a real price.
+    ``Item.average_cost`` and the costing logic are not touched."""
+
+    from purchases.models import PurchaseInvoiceStatus
+
+    from .models import StockMovementType
+
+    costs = {}
+    movements = (StockMovement.objects
+                 .filter(item_id__in=list(item_ids), reversal_of__isnull=True, purchase_return__isnull=True,
+                         movement_type__in=(StockMovementType.PURCHASE_IN, StockMovementType.OPENING_STOCK))
+                 .exclude(purchase_invoice__status=PurchaseInvoiceStatus.CANCELLED))
+    rows = (entity_scope.scope(movements, entity_scope.STOCK_MOVEMENT)
+            .order_by("item_id", "-movement_date", "-id").values_list("item_id", "unit_cost"))
+    for item_id, cost in rows:
+        costs.setdefault(item_id, cost)
+    return costs
 
 
 @require_permission("inventory.view_stock")
@@ -188,6 +218,7 @@ def item_detail(request, pk):
             batch_words={**BATCH_WORDS["en" if _lang(request) == "en" else "ar"], **expiry_words(_lang(request))},  # AN8
             show_batch_no=not expiry_only(),
             can_view_cost=user_has_permission(request.user, "inventory.view_cost"),
+            last_cost=last_costs([item.pk]).get(item.pk) if all(row["quantity"] <= 0 for row in location_rows) else None,
         ),
     )
 

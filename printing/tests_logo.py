@@ -74,3 +74,40 @@ class LogoTests(TestCase):
         response = self.client.post(COMPANY, {"action": "logo", "logo": SimpleUploadedFile("l.png", PNG)})
         self.assertEqual(response.status_code, 403)
         self.assertEqual(company_details()["logo"], "")
+
+
+class OneSaveTests(TestCase):
+    setUp = LogoTests.setUp
+    upload = LogoTests.upload
+    """S18: the company page is one form with one save button."""
+
+    def test_details_logo_and_mark_save_together(self):
+        page = self.client.get(COMPANY).content.decode()
+        self.assertEqual(page.count("data-company-save"), 1)
+        self.assertEqual(page.count('<form class="op-form"'), 1)
+        self.client.post(COMPANY, {"action": "details", "company.phone": "01000000999", "brand_present": "1",
+                                   "logo": SimpleUploadedFile("logo.png", PNG)})
+        details = company_details()
+        self.assertEqual(details["phone"], "01000000999")
+        self.assertTrue(details["logo"].startswith("data:image/png;base64,"))
+        self.assertFalse(details["show_hesba_brand"])  # unticked on the same save
+
+    def test_a_bad_logo_does_not_lose_the_details(self):
+        response = self.client.post(COMPANY, {"action": "details", "company.phone": "01000000888", "brand_present": "1", "show_hesba_brand": "1",
+                                              "logo": SimpleUploadedFile("logo.png", b"<svg/>")}, follow=True)
+        self.assertContains(response, "PNG أو JPG أو WebP")
+        self.assertEqual(company_details()["phone"], "01000000888")
+        self.assertEqual(company_details()["logo"], "")
+
+    def test_enter_in_a_details_field_saves_rather_than_removing_the_logo(self):
+        import re
+
+        self.upload(PNG)
+        page = self.client.get(COMPANY).content.decode()
+        start = page.index("data-company-form")
+        form = page[start:page.index("</form>", start)]
+        own_buttons = [tag for tag in re.findall(r"<button[^>]*>", form) if 'type="submit"' in tag and "form=" not in tag]
+        self.assertIn("data-company-save", own_buttons[0])  # the default (Enter) button
+        self.assertIn('form="company-logo-remove"', page)
+        self.client.post(COMPANY, {"action": "remove_logo"})
+        self.assertEqual(company_details()["logo"], "")

@@ -35,6 +35,8 @@ class Setup(TestCase):
     sub = "beauty"
 
     def setUp(self):
+        global TODAY
+        TODAY = timezone.localdate()  # read per test: a run that crosses midnight in Cairo must not compare yesterday with today
         self.profile = prepared_client(activity="services", sub_activity=self.sub, modules=MODULES)
         self.owner = person(RoleCode.OWNER, "ph_owner")
         make_location(location_code="SHOP", is_default=True)

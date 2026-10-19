@@ -1561,9 +1561,9 @@ No unresolved business or accounting decision was discovered while implementing 
 - **Not touched:** fee billing (`billing.due_lines` unchanged), invoices, ledgers, attendance, permissions core. Permission: `master_data.manage_parties`, as for enrolment.
 - **Tests:** `education/tests_levels.py`; the language-centre demo in `reports/tests_demo_catalogs.py`.
 
-## HG-052 — question (not built): a sold-out item shows an average cost of 0.00 (TRACK-ACTS W07)
+## HG-052 — a sold-out item shows an average cost of 0.00 (TRACK-ACTS W07) (RESOLVED, display only)
 
-- **Status:** OPEN. Recorded only; nothing in this gate is built.
+- **Status:** RESOLVED, display only (Ahmed, 19 Oct: "كمل" with merge rights, so the proposed fix was applied). `inventory.views.last_costs` reads each item's latest purchase or opening-stock movement with a unit cost. When nothing is on hand, the stock list and the item card show that cost, labelled «آخر تكلفة». `Item.average_cost`, the averaging code and sales costing are unchanged. Tests: `inventory/tests_ui.py` `LastCostTests`.
 - **Seen:** the pharmacy demo's stock screen. "كمامات طبية (50)" has quantity 0 and an average cost of 0.00, even though it was bought before and sold out.
 - **Why it is protected:** the figure is `Item.average_cost`, the display cache refreshed by the average-cost logic (HG-003). Posted sales cost still comes from the stock movements, so no money figure is wrong. Only the display misleads: an owner reading 0.00 may think the item cost nothing.
 - **Proposed fix:** when nothing is on hand, show the last known unit cost (the latest inbound movement's `unit_cost`), labelled «آخر تكلفة». Leave the cached field and the cost logic as they are.

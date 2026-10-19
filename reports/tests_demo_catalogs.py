@@ -94,6 +94,34 @@ class SampleBusinessPerActivityTests(TestCase):
         self.assertTrue(self.client.login(username="owner", password="Demo-pass-1"))
         self.assertEqual(self.client.get("/dashboard/?lang=ar").status_code, 200)
 
+    def shelf_of(self, sub):
+        """W05: retail, electronics, pharmacy, wholesale and online carry 25-40 items in sections, like the supermarket."""
+
+        from master_data.models import Category
+        from sales.models import SalesInvoice
+
+        catalog = self.fill("commercial", sub)
+        self.assert_a_working_business(catalog)
+        items = Item.objects.filter(active=True, item_code__startswith="DEMO-")
+        self.assertGreaterEqual(items.count(), 25)
+        self.assertGreaterEqual(Category.objects.filter(items__in=items).distinct().count(), 5)
+        self.assertEqual(SalesInvoice.objects.filter(invoice_number__startswith="DEMO-SI-SH-", status="posted").count(), 10)
+
+    def test_a_household_shop_has_a_real_shelf(self):
+        self.shelf_of("retail")
+
+    def test_a_phone_shop_has_a_real_shelf(self):
+        self.shelf_of("electronics")
+
+    def test_a_pharmacy_has_a_real_shelf(self):
+        self.shelf_of("pharmacy")
+
+    def test_a_wholesaler_has_a_real_range(self):
+        self.shelf_of("wholesale")
+
+    def test_an_online_shop_has_a_real_catalogue(self):
+        self.shelf_of("online")
+
     def test_a_pharmacy_sells_medicines_with_expiry_dates(self):
         from datetime import timedelta
 
@@ -363,7 +391,7 @@ class SampleFollowsSetupTests(TestCase):
         self.assertEqual(plan.count, 4)
         self.assertGreaterEqual(overdue_summary(today)["count"], 1)  # the first one is already late
         self.assertEqual(list(PriceList.objects.get().customer_links.values_list("customer__customer_code", flat=True)), ["DEMO-CUST-04"])
-        self.assertEqual(ItemUnit.objects.get().factor, Decimal("12"))
+        self.assertEqual(ItemUnit.objects.get(item__item_code__startswith="DEMO-ITEM-").factor, Decimal("12"))  # the shelf (W05) has its own cartons
         group = VariantGroup.objects.get()
         self.assertEqual(group.variants.count(), 6)
         self.assertTrue(PurchaseLine.objects.filter(item__variant__group=group, invoice__status="posted").exists())

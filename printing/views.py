@@ -364,7 +364,21 @@ def company_settings(request):
             set_hesba_brand(request.POST.get("show_hesba_brand") == "1", request.user)
             messages.success(request, words["saved"])
         else:
+            # S18: one page, one save. The details, the Hesba mark and a newly chosen logo are saved together;
+            # a bad logo is refused on its own and the rest still saves.
             changed = save_company_details({key: request.POST.get(key, "") for key, *_ in FIELDS}, request.user)
+            if request.POST.get("brand_present") == "1":
+                wanted = request.POST.get("show_hesba_brand") == "1"
+                if wanted != bool(details.get("show_hesba_brand")):
+                    set_hesba_brand(wanted, request.user)
+                    changed = True
+            upload = request.FILES.get("logo")
+            if upload is not None:
+                try:
+                    save_logo(upload.read(MAX_LOGO_BYTES + 1), request.user, lang)
+                    changed = True
+                except ValidationError as exc:
+                    messages.error(request, " ".join(exc.messages))
             messages.success(request, words["saved"] if changed else words["unchanged"])
         return redirect(f"/settings/company/?lang={lang}")
     current = dict(zip((key for key, *_ in FIELDS), (details["phone"], details["address"], details["tax_number"], details["commercial_register"], details["footer_note"])))
