@@ -26,6 +26,7 @@ from .forms import (
     SalesReturnReversalForm,
 )
 from .models import CustomerPayment, SalesInvoice, SalesReturn
+from .return_reasons import return_reasons
 from .services import (
     cancel_customer_payment,
     cancel_posted_sales_invoice,
@@ -296,7 +297,7 @@ def return_create(request, pk):
     return render(
         request,
         "sales/return_form.html",
-        _context(request, invoice=invoice, form=form, line_formset=line_formset),
+        _context(request, invoice=invoice, form=form, line_formset=line_formset, return_reasons=return_reasons(_lang(request))),
     )
 
 

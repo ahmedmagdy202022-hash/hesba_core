@@ -24,9 +24,22 @@ class ReturnScreenTests(TestCase):
         self.assertIn('data-left="2', html)
         self.assertIn("data-return-all", html)
         self.assertIn("data-return-total", html)
-        self.assertIn("المقاس مش مظبوط", html)  # a reason a click away
+        self.assertIn("العميل غيّر رأيه", html)  # a reason a click away
+        self.assertNotIn("المقاس مش مظبوط", html)  # TRACK-ACTS W01: a size is a clothes shop's reason
         self.assertIn("البضاعة بترجع المخزن", html)
         self.assertNotIn("تتحقق الخدمة", html)  # no engine talk
+
+    def test_the_reasons_fit_the_shop(self):
+        from settings_core.models import ClientProfile
+
+        url = reverse("sales:return_create", args=[self.invoice.pk])
+        for sub, mine, not_mine in (("pharmacy", "الصلاحية قريبة", "المقاس مش مظبوط"), ("fashion", "المقاس مش مظبوط", "الصلاحية قريبة"),
+                                    ("electronics", "الجهاز فيه عطل", "اللون مش مناسب")):
+            ClientProfile.objects.update(sub_activity_slug=sub)
+            html = self.client.get(url, {"lang": "ar"}).content.decode()
+            self.assertIn(mine, html, sub)
+            self.assertNotIn(not_mine, html, sub)
+        self.assertIn("Faulty device", self.client.get(url, {"lang": "en"}).content.decode())
 
     def test_the_purchase_return_screen_speaks_plainly_too(self):
         # The purchase return shares the lines partial; its own wording lives in its template.

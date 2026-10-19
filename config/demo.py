@@ -19,6 +19,34 @@ DEMO_ACTIVITIES = (
 )
 
 
+# TRACK-ACTS W02: the sample shop is called what it is ("صيدلية" for a pharmacy, not "محل").
+DEMO_NAME = "محل حِسبة التجريبي"
+DEMO_NAMES = {
+    ("commercial", "grocery"): "سوبر ماركت حِسبة التجريبي", ("commercial", "pharmacy"): "صيدلية حِسبة التجريبية",
+    ("commercial", "wholesale"): "حِسبة لتجارة الجملة (تجريبي)", ("commercial", "online"): "متجر حِسبة أونلاين (تجريبي)",
+    ("restaurants", "cafe"): "كافيه حِسبة التجريبي", ("restaurants", "bakery"): "مخبز حِسبة التجريبي",
+    ("medical", "dental"): "عيادة حِسبة للأسنان (تجريبي)", ("medical", "lab"): "معمل حِسبة للتحاليل (تجريبي)",
+    ("medical", "medical_center"): "مركز حِسبة الطبي (تجريبي)", ("medical", "physio"): "مركز حِسبة للعلاج الطبيعي (تجريبي)",
+    ("medical", "vet"): "عيادة حِسبة البيطرية (تجريبي)", ("education", "nursery"): "حضانة حِسبة (تجريبي)",
+    ("services", "beauty"): "صالون حِسبة التجريبي",
+    "restaurants": "مطعم حِسبة التجريبي", "medical": "عيادة حِسبة التجريبية", "education": "مركز حِسبة التعليمي (تجريبي)",
+    "services": "حِسبة للخدمات (تجريبي)", "manufacturing": "مصنع حِسبة التجريبي", "contracting": "حِسبة للمقاولات (تجريبي)",
+}
+
+
+def demo_name(activity, sub_activity):
+    return DEMO_NAMES.get((activity, sub_activity)) or DEMO_NAMES.get(activity) or DEMO_NAME
+
+
+def _name_the_demo_shop():
+    from settings_core.models import ClientProfile
+
+    profile = ClientProfile.get_active()
+    if profile and profile.display_name == DEMO_NAME:  # never a name the visitor typed
+        profile.display_name = demo_name(profile.activity_slug, profile.sub_activity_slug)
+        profile.save(update_fields=["display_name", "updated_at"])
+
+
 def demo_activity_choices(lang):
     from settings_core import setup_catalog as catalog
 
@@ -111,6 +139,7 @@ def sample(request):
                 call_command("seed_demo_business", username="owner", force=True, verbosity=0)
                 prepare._spread_sale_times()
                 prepare._extras()
+                _name_the_demo_shop()
         except CommandError:
             pass
         except DatabaseError:

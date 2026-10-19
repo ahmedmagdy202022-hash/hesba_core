@@ -21,7 +21,7 @@ from barcode.services import item_catalog
 from pricing.services import price_book
 from taxes.services import compute_lines, create_sales_draft_with_tax, rates_by_item, vat_enabled
 from serials.services import attach_sale_serials, pos_serial_catalog, prepare_sale_serials
-from shifts.gate import require_open_shift
+from shifts.gate import require_open_shift, shift_missing
 from shifts.services import open_shift_for
 from .pos_buttons import card_cashbox
 from .pos_customers import customer_directory
@@ -399,6 +399,7 @@ def pos(request):
             "tax_rates": rates_by_item(),
             "units": units_catalog(),
             "open_shift": open_shift_for(request.user),
+            "shift_gate_shown": shift_missing(request.user),  # TRACK-ACTS W03: the banner above already opens one
             "serial_catalog": pos_serial_catalog(),
             "customers": Customer.objects.filter(active=True).order_by("name"),
             "customer_directory": customer_directory(),  # POS-002
