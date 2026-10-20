@@ -10,8 +10,10 @@
 <link rel="stylesheet" href="{% static 'hesba/css/activity_selection.css' %}?v=117a-screen-pack">
 <link rel="stylesheet" href="{% static 'hesba/css/activity_selection_final_overrides.css' %}?v=117a-final-panel-back-arrow">
 <link rel="stylesheet" href="{% static 'hesba/css/activity_review_setup.css' %}?v=cap-001">
+<link rel="stylesheet" href="{% static 'hesba/css/setup_wizard.css' %}?v=st5-1">
 </head>
 <body class="activity-selection-page review-setup-page" data-lang="{{ lang }}" data-activity="{{ activity }}" data-sub-activity="{{ sub_activity_slug }}" data-modules="{{ modules_param }}">
+{% include "partials/shell_icons.html" %}
 <main class="activity-stage" aria-label="Review Setup">
   <div class="activity-bg-frame" aria-hidden="true"></div>
   <section class="activity-ui-layer">
@@ -80,16 +82,28 @@
           {% if activity_features %}<p class="review-note"><strong>{% if lang == 'en' %}Comes with your activity{% else %}جاي مع نشاطك{% endif %}</strong></p>
           <ul class="review-features" data-activity-features>{% for feature in activity_features %}<li>{{ feature }}</li>{% endfor %}</ul>{% endif %}
           <p class="review-note">{{ capabilities_lead }}</p>
-          <ul class="review-capabilities">
-            {% for cap in capability_rows %}
-            <li class="review-capability{% if not cap.available %} is-soon{% endif %}" data-capability="{{ cap.slug }}">
+          <div class="review-groups" data-capability-groups>
+          {% for group in capability_groups %}<section class="review-group" data-capability-group="{{ group.key }}">
+            <h3 class="review-group__title">{{ group.title }}</h3>
+            <ul class="review-capabilities wiz-caps">
+            {% for cap in group.rows %}
+            <li class="review-capability{% if not cap.available %} is-soon{% endif %}{% if cap.checked %} is-checked{% endif %}" data-capability="{{ cap.slug }}" data-needs="{% for need in cap.needs %}{{ need.slug }}{% if not forloop.last %},{% endif %}{% endfor %}" data-needs-cap="{{ cap.needs_cap }}">
               <label>
                 <input type="checkbox" name="capability" value="{{ cap.slug }}" form="setup-complete-form"{% if cap.checked %} checked{% endif %}{% if not cap.available %} disabled{% endif %}>
-                <span><strong>{{ cap.label }}</strong>{% if cap.suggested %} <em class="review-badge">{{ suggested_badge }}</em>{% endif %}{% if not cap.available %} <em class="review-badge review-badge--soon">{{ soon_badge }}</em>{% endif %}<br><small>{{ cap.about }}</small></span>
+                <span class="review-capability__icon" aria-hidden="true"><svg class="hs-icon"><use href="#hs-i-{{ cap.icon }}"></use></svg></span>
+                <span class="review-capability__body">
+                  <span class="review-capability__title"><strong>{{ cap.label }}</strong>{% if cap.suggested %} <em class="review-badge">{{ suggested_badge }}</em>{% endif %}{% if not cap.available %} <em class="review-badge review-badge--soon">{{ soon_badge }}</em>{% endif %}</span>
+                  <small>{{ cap.about }}</small>
+                  {% if cap.where %}<span class="review-capability__where" data-capability-where><b>{% if lang == 'en' %}Where you find it{% else %}هتلاقيها في{% endif %}:</b> {{ cap.where }}</span>{% endif %}
+                  {% if cap.needs %}<span class="review-capability__links">{% for need in cap.needs %}<span class="wiz-tag wiz-tag--need" data-need-module="{{ need.slug }}" data-need-name="{{ need.label }}">{% if lang == 'en' %}Needs {{ need.label }}{% else %}محتاجة {{ need.label }}{% endif %}</span>{% endfor %}</span>{% endif %}
+                  <span class="review-capability__note" data-capability-note hidden></span>
+                </span>
               </label>
             </li>
             {% endfor %}
-          </ul>
+            </ul>
+          </section>{% endfor %}
+          </div>
         </section>
 
         <section class="review-card review-card--note" data-review-section="settings-note">
@@ -287,6 +301,38 @@
     url.searchParams.set('lang', lang);
     window.history.replaceState({}, '', url.pathname + url.search + url.hash);
   }
+
+  // SETUP-WIZARD: a feature that needs a module not chosen says it will switch that module on
+  // (complete_setup adds it); the shift needs the till, so they tick together.
+  var chosenModules = (modulesParam || '').split(',').filter(Boolean);
+  var capItems = Array.prototype.slice.call(document.querySelectorAll('.review-capability[data-capability]'));
+  function capBox(slug){var item = capItems.filter(function(i){return i.dataset.capability === slug;})[0];return item ? item.querySelector('input[type=checkbox]') : null;}
+  function refreshCaps(){
+    var added = {};
+    capItems.forEach(function(item){
+      var box = item.querySelector('input[type=checkbox]');var on = box && box.checked;
+      item.classList.toggle('is-checked', !!on);
+      var missing = [];
+      item.querySelectorAll('[data-need-module]').forEach(function(tag){var have = chosenModules.indexOf(tag.dataset.needModule) !== -1;tag.classList.toggle('is-on', have || !!on);if(on && !have){missing.push(tag.dataset.needName);added[tag.dataset.needModule] = tag.dataset.needName;}});
+      var note = item.querySelector('[data-capability-note]');
+      if(note){note.hidden = !missing.length;note.textContent = missing.length ? (lang === 'en' ? 'Switches on with it: ' + missing.join(', ') : 'هيشتغل معاها قسم ' + missing.join('، ')) : '';}
+    });
+    var list = document.querySelector('[data-selected-modules]');
+    if(list){
+      list.querySelectorAll('[data-added-module]').forEach(function(pill){pill.remove();});
+      Object.keys(added).forEach(function(slug){var pill = document.createElement('span');pill.className = 'review-module-pill is-added';pill.dataset.addedModule = slug;pill.textContent = '+ ' + added[slug];list.appendChild(pill);});
+    }
+  }
+  capItems.forEach(function(item){
+    var box = item.querySelector('input[type=checkbox]');if(!box){return;}
+    box.addEventListener('change', function(){
+      var slug = item.dataset.capability;
+      if(box.checked && item.dataset.needsCap){var need = capBox(item.dataset.needsCap);if(need && !need.disabled){need.checked = true;}}
+      if(!box.checked){capItems.forEach(function(other){if(other.dataset.needsCap === slug){var dep = other.querySelector('input[type=checkbox]');if(dep){dep.checked = false;}}});}
+      refreshCaps();
+    });
+  });
+  refreshCaps();
 
   document.querySelectorAll('[data-lang-toggle]').forEach(function(btn){
     btn.addEventListener('click', function(){applyLanguage(lang === 'ar' ? 'en' : 'ar');});
