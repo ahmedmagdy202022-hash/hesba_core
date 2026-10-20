@@ -72,7 +72,8 @@ class TillButtonsTests(TestCase):
         self.assertEqual(self.client.get(reverse("sales:pos"), {"lang": "ar"}).status_code, 200)
 
     def test_there_is_a_limit(self):
-        save_pinned(list(range(1000, 1000 + MAX_PINNED)))
+        # Far above any real id: on PostgreSQL the ids keep counting across tests, so 1000+ could be rice itself.
+        save_pinned(list(range(10**9, 10**9 + MAX_PINNED)))
         self.client.post(BUTTONS, {"action": "add", "item": self.rice.pk, "lang": "ar"})
         self.assertNotIn(self.rice.pk, pinned_ids())
 
