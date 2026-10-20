@@ -1,0 +1,51 @@
+/* SETUP-INTERVIEW (ST6): the questions step, in the settings screens' rows (settings.css .set-list / .set-opt).
+ * One question per row: the question, what it gives, and a Yes/No pair at its side; a follow-up sits under
+ * the answer it hangs on. Tokens only. */
+
+.iv-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.iv-for{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:6px 0 0}
+.iv-for span,.iv-for b{padding:3px 12px;border-radius:var(--hs-radius-pill);font-size:var(--hs-text-sm)}
+.iv-for span{background:var(--hs-neutral-wash);color:var(--hs-muted)}
+.iv-for b{background:var(--hs-teal-wash);color:var(--hs-teal-deep)}
+.iv-form{display:grid;gap:var(--hs-space-5)}
+
+.iv-list{list-style:none;margin:0;padding:0;display:grid;border:1px solid var(--hs-line);border-radius:var(--hs-radius-xl);background:var(--hs-surface);box-shadow:var(--hs-shadow-sm);overflow:hidden}
+.iv-q{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--hs-space-4);align-items:center;padding:16px 18px;transition:background .15s ease}
+.iv-q + .iv-q{border-top:1px solid var(--hs-line)}
+.iv-q[hidden]{display:none}
+.iv-q--follow{position:relative;padding-inline-start:52px;background:var(--hs-ground)}
+.iv-q--follow::before{content:"";position:absolute;inset-inline-start:26px;top:0;bottom:50%;width:14px;border-inline-start:2px solid var(--hs-teal);border-bottom:2px solid var(--hs-teal);border-end-start-radius:10px;opacity:.6}
+.iv-q__body{display:grid;gap:4px;min-width:0}
+.iv-q__ask{margin:0;color:var(--hs-navy);font-size:var(--hs-text-base);font-weight:var(--hs-weight-bold);line-height:1.55}
+.iv-q__num{display:inline-block;min-width:1.6em;color:var(--hs-teal-deep)}
+.iv-q__tip{margin-inline-start:6px;padding:1px 8px;border-radius:var(--hs-radius-pill);background:var(--hs-gold-wash);color:var(--hs-gold);font-size:var(--hs-text-xs);font-style:normal;font-weight:var(--hs-weight-semibold);vertical-align:2px}
+.iv-q__gives{margin:0;color:var(--hs-muted);font-size:var(--hs-text-sm);line-height:1.65}
+.iv-q__gives b{color:var(--hs-ink);font-weight:var(--hs-weight-semibold)}
+.iv-q.is-yes .iv-q__gives{color:var(--hs-ink)}
+.iv-q.is-yes .iv-q__gives b{color:var(--hs-teal-deep)}
+
+/* Yes / No: one pill, two halves */
+.iv-q__answer{display:inline-flex;margin:0;padding:3px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-pill);background:var(--hs-surface)}
+.iv-choice{position:relative;cursor:pointer}
+.iv-choice input{position:absolute;opacity:0;pointer-events:none}
+.iv-choice span{display:inline-grid;place-items:center;min-width:64px;min-height:36px;padding:0 14px;border-radius:var(--hs-radius-pill);color:var(--hs-muted);font-weight:var(--hs-weight-bold);font-size:var(--hs-text-sm);transition:background .15s ease,color .15s ease}
+.iv-choice input:checked + span{background:var(--hs-navy);color:var(--hs-surface)}
+.iv-choice input[value="yes"]:checked + span{background:var(--hs-teal);color:var(--hs-on-teal)}
+.iv-choice input:focus-visible + span{box-shadow:var(--hs-focus-ring)}
+
+/* what the answers set up */
+.iv-summary{display:grid;gap:var(--hs-space-3);padding:var(--hs-space-5);border:1px solid var(--hs-line);border-radius:var(--hs-radius-xl);background:var(--hs-surface);box-shadow:var(--hs-shadow-sm)}
+.iv-summary h2{margin:0;font-family:var(--hs-font-head);font-size:var(--hs-text-md);color:var(--hs-navy)}
+.iv-chips{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
+.iv-chips li{padding:4px 12px;border-radius:var(--hs-radius-pill);background:var(--hs-teal-wash);color:var(--hs-teal-deep);font-size:var(--hs-text-sm);font-weight:var(--hs-weight-semibold)}
+.iv-always{margin:0;color:var(--hs-muted);font-size:var(--hs-text-sm);line-height:1.7}
+.iv-always b{color:var(--hs-ink)}
+.iv-manual{justify-self:start;color:var(--hs-teal-deep);font-size:var(--hs-text-sm);font-weight:var(--hs-weight-semibold)}
+
+@media (max-width:640px){
+  .iv-q{grid-template-columns:minmax(0,1fr);gap:var(--hs-space-3);padding:14px}
+  .iv-q--follow{padding-inline-start:40px}
+  .iv-q--follow::before{inset-inline-start:18px}
+  .iv-q__answer{justify-self:start}
+}
+@media (prefers-reduced-motion:reduce){.iv-q,.iv-choice span{transition:none}}

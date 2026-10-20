@@ -142,7 +142,8 @@
   }
 
   function buildNextHref(){
-    var url = new URL('/setup/modules/', window.location.origin);
+    // SETUP-INTERVIEW (ST6): the next step asks about the business in its own words.
+    var url = new URL('/setup/questions/', window.location.origin);
     url.searchParams.set('lang', lang);
     url.searchParams.set('activity', 'services');
     url.searchParams.set('sub_activity', selectedSubActivity);

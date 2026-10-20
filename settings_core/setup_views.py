@@ -426,3 +426,57 @@ def sub_activity_step(request, activity):
         copy[lang] = words
     subs = [{"slug": slug, "ar": labels["ar"]} for slug, labels in catalog.SUB_ACTIVITY_LABELS[activity].items()]
     return render(request, "setup/activity_generic_subactivity.html", {"activity": activity, "subs": subs, "copy": copy})
+
+
+QUESTION_STRINGS = {
+    "ar": {"title": "خلينا نعرف شغلك ماشي إزاي", "lead": "أسئلة بكلام نشاطك، والإجابات متعلّمة باقتراحنا لنشاطك. غيّر اللي مش مظبوط، أو دوس «جهّز حسبة» على طول. وتقدر تغيّر أي حاجة بعدين من الإعدادات.",
+           "yes": "أيوه", "no": "لأ", "gives": "هيظهرلك", "summary": "حسبة هتجهّزلك", "always": "وده موجود دايمًا لنشاطك",
+           "finish": "جهّز حسبة", "back": "الرجوع لنوع النشاط", "manual": "عايز تختار الأقسام والخصائص بنفسك؟", "suggested": "اقتراحنا لنشاطك",
+           "accept": "خليها على اقتراحنا", "count": "{n} من {total}", "next_q": "السؤال اللي بعده", "page_title": "شغلك ماشي إزاي - حِسْبَة"},
+    "en": {"title": "Tell us how your business works", "lead": "Questions in your trade's words, already answered with our suggestion for your business. Change what is wrong, or press “Set Hesba up” straight away; anything can change later in Settings.",
+           "yes": "Yes", "no": "No", "gives": "You get", "summary": "Hesba will set up", "always": "Always there for your business",
+           "finish": "Set Hesba up", "back": "Back to the kind of business", "manual": "Rather choose the modules and features yourself?", "suggested": "Suggested for you",
+           "accept": "Keep our suggestions", "count": "{n} of {total}", "next_q": "Next question", "page_title": "How your business works - Hesba"},
+}
+
+
+def setup_questions(request):
+    """SETUP-INTERVIEW (ST6): step 3, the business described in its own words (settings_core/setup_interview.py).
+
+    GET asks; POST turns the answers into modules and features and saves the setup as the old
+    review step did."""
+
+    from . import setup_interview as interview
+    from .activity_fit import module_text
+
+    lang = _lang(request)
+    data = request.POST if request.method == "POST" else request.GET
+    activity, sub_activity = data.get("activity", ""), data.get("sub_activity", "")
+    if not catalog.is_valid_activity(activity) or not catalog.is_valid_sub_activity(activity, sub_activity):
+        return redirect(f"{reverse('setup_activity')}?lang={_query_value(lang)}")
+    if request.method == "POST":
+        profile = ClientProfile.get_active()
+        yes = request.POST.getlist("yes") + [name[2:] for name, value in request.POST.items() if name.startswith("q_") and value == "yes"]
+        modules, features = interview.resolve(activity, sub_activity, yes)
+        if profile is None:
+            return redirect(f"{reverse('setup_activity')}?lang={_query_value(lang)}")
+        complete_setup(profile, activity=activity, sub_activity=sub_activity, modules_raw=",".join(modules),
+                       user=request.user, capabilities_raw=",".join(features))
+        return redirect(f"{reverse('setup_complete')}?lang={_query_value(lang)}")
+    rows = interview.questions(activity, sub_activity, lang)
+    from . import activity_fit
+
+    always = [module_text(activity, sub_activity, row["slug"], lang)[0]
+              for row in activity_fit.module_rows(activity, sub_activity, lang) if row["preset"] == catalog.REQUIRED]
+    # only the screens whose module is always on; the others come with the answer that turns their module on
+    forced = interview.forced_modules(activity, sub_activity)
+    always += [feature["label"] for feature in activity_fit.features(activity, sub_activity, lang)
+               if not feature["module"] or feature["module"] in forced]
+    context = {
+        "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "questions": rows, "activity": activity, "sub_activity": sub_activity,
+        "activity_label": catalog.activity_label(activity, lang), "sub_activity_label": catalog.sub_activity_label(activity, sub_activity, lang),
+        "always": always, "back_href": f"/setup/activity/{activity}/?lang={_query_value(lang)}",
+        "manual_href": _setup_modules_href(lang, activity, sub_activity, ""), "words": QUESTION_STRINGS[lang],
+        "other_lang": "ar" if lang == "en" else "en",
+    }
+    return render(request, "setup/questions.html", context)
