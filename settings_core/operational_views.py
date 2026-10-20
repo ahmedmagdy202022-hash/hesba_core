@@ -87,22 +87,22 @@ def _features(lang, user):
 
     The Open link is left out when the viewer could not open that screen."""
 
-    from .capabilities import CAPABILITIES, about, enabled_capabilities, fits
+    from .capabilities import CAPABILITIES, about, enabled_capabilities, fits, label
 
     on = set(enabled_capabilities())
     profile = ClientProfile.get_active()
-    activity = profile.activity_slug if profile else ""
+    activity, sub_activity = (profile.activity_slug, profile.sub_activity_slug) if profile else ("", "")
     rows = []
     for slug, info in CAPABILITIES.items():
         if not info.get("available"):
             continue
-        if not fits(activity, slug) and slug not in on:  # AUDIT-3
+        if not fits(activity, slug, sub_activity) and slug not in on:  # AUDIT-3 + SETTINGS-TRACK: the sub-activity's fit
             continue
         name = FEATURE_LANDING.get(slug)
         url = reverse(name) if name else ""
         rows.append({
             "slug": slug,
-            "label": info["en" if lang == "en" else "ar"],
+            "label": label(slug, lang),
             "about": about(activity, slug, lang),
             "on": slug in on,
             "url": url if url and _opens_for(user, url) else "",
