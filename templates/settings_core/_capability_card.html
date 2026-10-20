@@ -16,6 +16,11 @@
       {% if row.state == "paused" %}<button class="set-wake" type="submit">{{ row.wake_text }}</button>
       {% else %}<button class="set-switch" type="submit" role="switch" aria-checked="{% if row.state == 'on' %}true{% else %}false{% endif %}" aria-label="{{ row.label }}"><span class="set-switch__text">{% if row.state == "on" %}{{ words.turn_off }}{% else %}{{ words.turn_on }}{% endif %}</span></button>{% endif %}
     </form>
+    {% if row.state == "paused" %}{# a paused feature is still switched on: it can also be switched off for good, without its module #}
+    <form method="post" action="{% url 'settings_core:capabilities' %}?lang={{ lang }}" data-capability-off>{% csrf_token %}
+      <input type="hidden" name="capability" value="{{ row.slug }}"><input type="hidden" name="enabled" value="0">
+      <button class="set-off" type="submit">{{ words.turn_off }}</button>
+    </form>{% endif %}
     {% endif %}
     <span class="set-opt__state">{% if row.state == "on" %}{{ words.state_on }}{% elif row.state == "off" %}{{ words.state_off }}{% elif row.state == "soon" %}{{ words.state_soon }}{% endif %}</span>
     {% if row.open_url %}<a class="set-opt__open" href="{{ row.open_url }}?lang={{ lang }}">{{ words.open_it }} <svg class="hs-icon" aria-hidden="true"><use href="#hs-i-arrow"></use></svg></a>{% endif %}

@@ -1,7 +1,7 @@
 {% extends "operations/base.html" %}
 {% load static hesba_settings %}
 {% comment %}SETTINGS-DESIGN: every settings screen inside one frame: the business's card, the map of the settings beside the page.{% endcomment %}
-{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/settings.css' %}?v=st-2">{% endblock %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/settings.css' %}?v=st-3">{% endblock %}
 {% block operation_content %}{% settings_shell as shell %}
 <div class="set-page" data-settings-frame>
   {% if shell.identity %}<header class="set-hero{% if shell.active != 'overview' %} set-hero--compact{% endif %}" data-settings-identity>

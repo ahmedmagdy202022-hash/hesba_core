@@ -157,6 +157,10 @@ button.set-switch,.set-switch{position:relative;display:inline-flex;align-items:
 .set-wake{display:inline-flex;align-items:center;min-height:34px;padding:0 12px;border:1px solid var(--hs-warning-line);border-radius:var(--hs-radius-md);
   background:var(--hs-warning-wash);color:var(--hs-warning);font:inherit;font-size:var(--hs-text-sm);font-weight:var(--hs-weight-semibold);cursor:pointer}
 
+.set-off{min-height:30px;padding:0 10px;border:0;background:none;color:var(--hs-muted);font:inherit;font-size:var(--hs-text-sm);text-decoration:underline;cursor:pointer}
+.set-off:hover{color:var(--hs-navy)}
+.set-off:focus-visible{outline:0;box-shadow:var(--hs-focus-ring);border-radius:var(--hs-radius-sm)}
+
 /* the activity's own screens */
 .set-screens{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:var(--hs-space-3)}
 .set-screen{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;padding:14px 16px;border:1px solid var(--hs-line);border-radius:var(--hs-radius-lg);
