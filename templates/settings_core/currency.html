@@ -1,7 +1,7 @@
-{% extends "operations/base.html" %}
-{% block operation_content %}
+{% extends "settings_core/base.html" %}
+{% block settings_content %}
 <section class="op-title-row">
-  <div><a class="op-back" href="{% url 'settings_core:overview' %}?lang={{ lang }}">{{ words.back }}</a><h1>{{ words.currency }}</h1><p>{{ words.currency_lead }}</p></div>
+  <div><h1>{{ words.currency }}</h1><p>{{ words.currency_lead }}</p></div>
 </section>
 {% if profile is None %}
   <p class="op-message op-message-info">{{ words.no_profile }}</p>

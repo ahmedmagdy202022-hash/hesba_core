@@ -39,7 +39,7 @@ class StartAndSettingsTests(TestCase):
         self.assertNotIn("مقفول", modules)
         self.assertIn("شغّال", modules)
         capabilities = self.page("settings_core:capabilities")
-        self.assertIn("الخصائص", capabilities)
+        self.assertIn("خصائص الشغل", capabilities)  # SETTINGS-DESIGN: one name, in the menu and on the page
         self.assertNotIn("قدرات النشاط", capabilities)
         hub = self.page("settings_core:overview")
         self.assertNotIn("الموديولات", hub)

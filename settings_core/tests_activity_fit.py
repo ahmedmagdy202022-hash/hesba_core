@@ -133,6 +133,8 @@ class SettingsFitTests(TestCase):
         page = self.client.get(reverse("settings_core:capabilities"))
         self.assertContains(page, 'data-activity-feature="work_orders"')
         self.assertContains(page, f'href="{reverse("workorders:list")}?lang=ar"')
-        self.assertContains(page, 'data-capability-group="suggested"')  # serial numbers suit a repair shop
-        self.assertContains(page, 'data-capability="serials"')
+        import re
+
+        serials = re.search(r'data-capability="serials".*?</article>', page.content.decode(), re.S).group(0)
+        self.assertIn("مقترح لنشاطك", serials)  # serial numbers suit a repair shop (SETTINGS-DESIGN: a tag on its row)
         self.assertNotContains(page, 'data-capability="variants"')  # sizes and colours do not

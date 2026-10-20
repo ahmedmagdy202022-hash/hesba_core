@@ -1,6 +1,6 @@
-{% extends "operations/base.html" %}
-{% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'settings_core:overview' %}?lang={{ lang }}">← {% if lang == 'en' %}Back to settings{% else %}العودة للإعدادات{% endif %}</a><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div></section>
+{% extends "settings_core/base.html" %}
+{% block settings_content %}
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div></section>
 {% if not ready %}<div class="op-notice" role="status" data-email-not-ready>{{ words.not_ready }}</div>{% endif %}
 <section class="op-summary-grid">{% for slot, label, short, hour_label in slots %}<article data-last="{{ slot }}"><small>{{ words.last }} · {{ short }}</small><strong dir="ltr">{% for key, value in conf.last.items %}{% if key == slot %}{{ value|default:words.never }}{% endif %}{% endfor %}</strong></article>{% endfor %}
 <article data-next-send><small>{{ words.next }}</small><strong dir="ltr">{% if upcoming %}{{ upcoming.0|date:"Y-m-d H:i" }}{% else %}—{% endif %}</strong></article></section>

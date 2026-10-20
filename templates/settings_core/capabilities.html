@@ -1,24 +1,17 @@
-{% extends "operations/base.html" %}
-{% block operation_content %}
-<section class="op-title-row">
-  <div><a class="op-back" href="{% url 'settings_core:overview' %}?lang={{ lang }}">{{ words.back }}</a><h1>{{ words.capabilities }}</h1><p>{{ words.capabilities_lead }}</p>{% if activity_name %}<p class="op-muted" data-capabilities-activity>{{ words.your_activity }}: <strong>{{ activity_name }}</strong></p>{% endif %}</div>
-</section>
+{% extends "settings_core/base.html" %}
+{% block settings_content %}
+<div class="set-head"><div><h1>{{ words.capabilities }}</h1><p>{{ words.capabilities_lead }}</p>{% if activity_name %}<p data-capabilities-activity>{{ words.your_activity }}: <strong>{{ activity_name }}</strong></p>{% endif %}</div></div>
 {% if not setup_complete %}<p class="op-message op-message-info">{{ words.setup_first }}</p>{% elif not can_manage %}<p class="op-message op-message-info">{{ words.view_only }}</p>{% endif %}
+{% for group in groups %}
+<section class="set-group" data-capability-group="{{ group.key }}">
+  <div class="set-group__head"><h2 class="set-section-title">{{ group.title }} <small>{{ group.on_text }}</small></h2></div>
+  <div class="set-list">{% for row in group.rows %}{% include "settings_core/_capability_card.html" %}{% endfor %}</div>
+</section>
+{% endfor %}
 {% if activity_features %}
-<h2 class="op-section-title" data-capability-group="features">{{ words.features }}</h2>
-<p class="op-muted">{{ words.features_lead }}</p>
-<div class="op-card-grid op-modules" data-activity-features>
-  {% for feature in activity_features %}
-    <article class="op-card op-module is-on" data-activity-feature="{{ feature.slug }}">
-      <strong>{{ feature.label }}</strong>
-      <p>{{ feature.about }}</p>
-      {% if feature.url %}<p><a class="op-secondary" href="{{ feature.url }}?lang={{ lang }}">{{ words.open }}</a></p>{% endif %}
-    </article>
-  {% endfor %}
-</div>
+<section class="set-group" data-capability-group="features">
+  <div class="set-group__head"><h2 class="set-section-title">{{ words.features }}</h2><p>{{ words.features_lead }}</p></div>
+  <div class="set-screens" data-activity-features>{% for feature in activity_features %}{% if feature.url %}<a class="set-screen" href="{{ feature.url }}?lang={{ lang }}" data-activity-feature="{{ feature.slug }}"><strong>{{ feature.label }}</strong><span>{{ feature.about }}</span></a>{% else %}<div class="set-screen" data-activity-feature="{{ feature.slug }}"><strong>{{ feature.label }}</strong><span>{{ feature.about }}</span></div>{% endif %}{% endfor %}</div>
+</section>
 {% endif %}
-{% if suggested_rows %}<h2 class="op-section-title" data-capability-group="suggested">{{ words.suggested }}</h2>
-<div class="op-card-grid op-modules">{% for row in suggested_rows %}{% include "settings_core/_capability_card.html" %}{% endfor %}</div>{% endif %}
-{% if other_rows %}<h2 class="op-section-title" data-capability-group="optional">{{ words.may_need }}</h2>
-<div class="op-card-grid op-modules">{% for row in other_rows %}{% include "settings_core/_capability_card.html" %}{% endfor %}</div>{% endif %}
 {% endblock %}

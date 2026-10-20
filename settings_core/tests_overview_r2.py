@@ -17,9 +17,10 @@ class SettingsHomeTests(TestCase):
 
     def test_grouped_and_plain(self):
         page = self.client.get(reverse("settings_core:overview") + "?lang=ar")
-        for group in ("business", "features", "people", "taxes", "data", "alerts"):
+        # SETTINGS-DESIGN: the business's card on top, the sections grouped by what they are about.
+        for group in ("business", "work", "people", "data"):
             self.assertContains(page, f'data-group="{group}"')
-        self.assertContains(page, "data-company-card")
+        self.assertContains(page, "data-settings-identity")
         self.assertContains(page, "صيدلية")          # the activity in words
         self.assertContains(page, "العربية")
         self.assertContains(page, "يناير")
@@ -27,7 +28,7 @@ class SettingsHomeTests(TestCase):
         # An owner who is not a superuser, with no system settings, sees no technical table.
         self.assertNotContains(page, "إعدادات متقدمة")
         english = self.client.get(reverse("settings_core:overview") + "?lang=en")
-        self.assertContains(english, "People and permissions")
+        self.assertContains(english, ">People<")
         self.assertContains(english, "January")
 
     def test_bad_fiscal_month_is_flagged_not_wrapped(self):

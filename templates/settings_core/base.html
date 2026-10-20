@@ -1,0 +1,28 @@
+{% extends "operations/base.html" %}
+{% load static hesba_settings %}
+{% comment %}SETTINGS-DESIGN: every settings screen inside one frame: the business's card, the map of the settings beside the page.{% endcomment %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/settings.css' %}?v=st-2">{% endblock %}
+{% block operation_content %}{% settings_shell as shell %}
+<div class="set-page" data-settings-frame>
+  {% if shell.identity %}<header class="set-hero{% if shell.active != 'overview' %} set-hero--compact{% endif %}" data-settings-identity>
+    <span class="set-hero__mark" aria-hidden="true">{% if shell.identity.logo %}<img src="{{ shell.identity.logo }}" alt="">{% else %}{{ shell.identity.initial }}{% endif %}</span>
+    <div class="set-hero__body">
+      <span class="set-hero__kicker">{% if lang == 'en' %}Settings{% else %}الإعدادات{% endif %}</span>
+      <p class="set-hero__name">{{ shell.identity.name }}</p>
+      {% if shell.identity.activity %}<p class="set-hero__activity">{{ shell.identity.activity }}</p>{% endif %}
+      {% if shell.active == 'overview' %}<ul class="set-hero__facts">{% for fact in shell.identity.facts %}<li>{{ fact }}</li>{% endfor %}</ul>{% endif %}
+    </div>
+    {% if shell.active != 'company' %}{% for group in shell.groups %}{% for row in group.rows %}{% if row.key == 'company' %}<a class="set-hero__edit" href="{{ row.url }}?lang={{ lang }}"><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-company"></use></svg>{{ shell.words.edit }}</a>{% endif %}{% endfor %}{% endfor %}{% endif %}
+  </header>{% endif %}
+  <div class="set-layout">
+    <nav class="set-nav" aria-label="{{ shell.words.menu }}" data-settings-nav>
+      {% for group in shell.groups %}<div class="set-nav__group" data-settings-nav-group="{{ group.key }}">
+        <span class="set-nav__title">{{ group.title }}</span>
+        {% for row in group.rows %}<a class="set-nav__link{% if row.active %} is-active{% endif %}{% if row.tone == 'todo' %} is-todo{% endif %}" href="{{ row.url }}?lang={{ lang }}" data-settings-nav-link="{{ row.key }}"{% if row.active %} aria-current="page"{% endif %}>
+          <svg class="hs-icon" aria-hidden="true"><use href="#hs-i-{{ row.icon }}"></use></svg><span class="set-nav__label">{{ row.label }}</span>{% if row.status %}<span class="set-nav__status">{{ row.status }}</span>{% endif %}</a>{% endfor %}
+      </div>{% endfor %}
+    </nav>
+    <section class="set-main">{% block settings_content %}{% endblock %}</section>
+  </div>
+</div>
+{% endblock %}

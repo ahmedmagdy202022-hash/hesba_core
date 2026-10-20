@@ -17,7 +17,8 @@ from .currency import CurrencyChangeRefused, change_company_currency, currency_c
 
 STRINGS = {
     "ar": {"page_title": "الإعدادات", "dashboard": "لوحة القيادة", "language": "English", "settings": "إعدادات التشغيل", "roles": "الأدوار والصلاحيات", "back": "العودة للإعدادات", "hidden": "قيمة حساسة مخفية",
-           "modules": "الأقسام", "modules_lead": "دي الأقسام اللي تناسب نشاطك. شغّل أو أوقف أي قسم: الإيقاف بيخفي القسم وشاشاته بس، وبياناته بتفضل محفوظة زي ما هي.",
+           "modules": "أقسام البرنامج", "modules_lead": "دي الأقسام اللي تناسب نشاطك. شغّل أو أوقف أي قسم: الإيقاف بيخفي القسم وشاشاته بس، وبياناته بتفضل محفوظة زي ما هي.",
+           "in_menu": "في القايمة", "needs_module": "محتاج", "needed_by_short": "بيعتمد عليه", "required_lock": "أساسي لنشاطك",
            "your_activity": "نشاطك", "inside": "فيه لنشاطك:", "open": "افتح", "features": "مميزات نشاطك", "features_lead": "شاشات جاية مع نشاطك نفسه، مش محتاجة تتشغّل.",
            "may_need": "ممكن تحتاجها", "change_activity": "النشاط بيتغيّر من إعداد النشاط.",
            "state_on": "شغّال", "state_off": "مش شغّال", "state_required": "أساسي · شغّال دايمًا", "state_soon": "قريبًا", "state_paused": "واقفة لحد ما يشتغل قسم", "needs": "محتاجة قسم", "works_with": "أحسن مع",
@@ -27,10 +28,12 @@ STRINGS = {
            "also_on": "واشتغل معاه: {modules}.", "cap_also_on": "واشتغل معاها قسم: {modules}.", "paused_now": "ووقفت معاه لحد ما يرجع: {capabilities}.",
            "currency": "العملة", "currency_lead": "حسبة بتستخدم عملة واحدة للشركة، وبتظهر جنب كل مبلغ.", "currency_field": "عملة الشركة", "save": "حفظ",
            "currency_locked": "العملة مقفولة لأن فيه مبالغ متسجلة بيها بالفعل (فواتير أو حركات خزنة أو أرصدة افتتاحية). حسبة مابتحوّلش المبالغ بين العملات، فتغييرها دلوقتي هيغيّر معنى الأرقام.", "currency_saved": "العملة اتغيرت لـ {code}.", "no_profile": "لسه مفيش بيانات شركة. كمّل الإعداد الأول.",
-           "capabilities": "الخصائص", "capabilities_lead": "طرق شغل بيحتاجها بعض الأنشطة بس. اللي عليه «مقترح» مناسب لنشاطك، وتقدر تشغّل أو توقف أي خاصية في أي وقت من غير ما بيانات تتمسح.",
+           "capabilities": "خصائص الشغل", "capabilities_lead": "طرق شغل بيحتاجها بعض الأنشطة بس، ومعروض هنا اللي يناسب نشاطك بس. شغّل أو اقفل أي خاصية في أي وقت، وبياناتها مش بتتمسح.",
+           "where": "هتلاقيها في", "open_it": "افتحها", "wake": "شغّل {module}", "group_on": "{n} شغّالة",
            "suggested": "مقترح لنشاطك", "cap_saved_on": "اشتغلت «{capability}».", "cap_saved_off": "اتوقفت «{capability}». بياناتها محفوظة.", "cap_refused": "التغيير ده مش مسموح: الخاصية لسه مش متاحة."},
     "en": {"page_title": "Settings", "dashboard": "Dashboard", "language": "العربية", "settings": "Operational settings", "roles": "Roles and permissions", "back": "Back to settings", "hidden": "Sensitive value hidden",
            "modules": "Modules", "modules_lead": "These are the modules that suit your activity. Switch any of them on or off: switching off only hides the module and closes its screens; its data is kept as it is.",
+           "in_menu": "In the menu", "needs_module": "Needs", "needed_by_short": "Needed by", "required_lock": "Core for your activity",
            "your_activity": "Your activity", "inside": "For your activity:", "open": "Open", "features": "Your activity's features", "features_lead": "Screens that come with your activity itself; nothing to switch on.",
            "may_need": "You may need", "change_activity": "The activity is changed from the activity setup.",
            "state_on": "On", "state_off": "Off", "state_required": "Required for your activity", "state_soon": "Coming soon", "state_paused": "Paused until this module is on:", "needs": "Needs the module", "works_with": "Works best with",
@@ -40,7 +43,8 @@ STRINGS = {
            "also_on": "Also switched on with it: {modules}.", "cap_also_on": "The module it needs is on too: {modules}.", "paused_now": "Paused with it until it is back: {capabilities}.",
            "currency": "Currency", "currency_lead": "Hesba uses one currency for the company, shown beside every amount.", "currency_field": "Company currency", "save": "Save",
            "currency_locked": "The currency is locked because amounts are already recorded in it (invoices, cash movements or opening balances). Hesba does not convert amounts between currencies, so changing it now would change what the figures mean.", "currency_saved": "The currency is now {code}.", "no_profile": "There is no company profile yet. Finish setup first.",
-           "capabilities": "Business capabilities", "capabilities_lead": "Ways of working that only some businesses need. Those marked “Suggested” suit your activity; switch anything on or off at any time without losing data.",
+           "capabilities": "Features", "capabilities_lead": "Ways of working only some businesses need; only the ones that suit yours are listed. Switch any of them on or off at any time, and nothing is deleted.",
+           "where": "Where you find it", "open_it": "Open", "wake": "Switch on {module}", "group_on": "{n} on",
            "suggested": "Suggested for you", "cap_saved_on": "“{capability}” is on.", "cap_saved_off": "“{capability}” is off. Its data is kept.", "cap_refused": "That change is not allowed: the capability is not available yet."},
 }
 
@@ -164,11 +168,15 @@ def settings_overview(request):
     lang = lang_of(request)
     client = ClientProfile.get_active()
     features = _features(lang, request.user)
+    from . import settings_shell
+
     return render(
         request,
         "settings_core/overview.html",
         _context(
             request,
+            ready=settings_shell.readiness(request.user, lang) if client is not None else None,
+            tiles=[group for group in settings_shell.sections(request.user, lang, "overview")],
             client=client,
             plain=_plain_profile(client, lang),
             opens=_group_links(request.user),
@@ -382,6 +390,13 @@ def module_settings(request):
                     messages.info(request, words["paused_now"].format(capabilities=(", " if lang == "en" else "، ").join(paused)))
         return redirect(f"{reverse('settings_core:modules')}?lang={lang}")
     rows = module_settings_rows(profile, lang) if profile is not None else []
+    from .setup_services import enabled_modules, module_needs, needed_by
+
+    name, on = _module_name(profile, lang), set(enabled_modules())
+    for row in rows:  # SETTINGS-DESIGN: its icon, what it needs and what leans on it
+        row["icon"] = MODULE_ICONS.get(row["slug"], "modules")
+        row["needs"] = [{"label": name(slug), "on": slug in on} for slug in module_needs(row["slug"])]
+        row["needed_by"] = [name(slug) for slug in needed_by(row["slug"], on)]
     return render(
         request,
         "settings_core/modules.html",
@@ -395,6 +410,12 @@ def module_settings(request):
         ),
     )
 
+
+#: SETTINGS-DESIGN: each module's icon, the same as its place in the menu.
+MODULE_ICONS = {"customers": "customers", "suppliers": "suppliers", "items_services": "items", "sales_operations": "operations",
+                "purchases": "purchases", "inventory": "inventory", "cashboxes": "cashboxes", "expenses": "expenses", "reports": "reports",
+                "pdf_printing": "print", "appointments_visits": "appointments", "employees_technicians": "staff", "tables_orders": "restaurant",
+                "projects": "projects", "manufacturing": "manufacturing"}
 
 #: ACT-FIT: how the modules screen groups what fits the activity.
 GROUP_TITLES = {
@@ -459,12 +480,22 @@ def capability_settings(request):
     from . import activity_fit
 
     rows = caps.settings_rows(profile, lang)
+    joiner = ", " if lang == "en" else "، "
+    for row in rows:  # SETTINGS-DESIGN: an option at work opens its own screen from its row
+        name = FEATURE_LANDING.get(row["slug"])
+        url = reverse(name) if name and row["state"] == "on" else ""
+        row["open_url"] = url if url and _opens_for(request.user, url) else ""
+        row["wake_text"] = words["wake"].format(module=joiner.join(row["paused_by"])) if row["paused_by"] else ""
+    groups = caps.grouped_rows(rows, lang)
+    for group in groups:
+        group["on_text"] = words["group_on"].format(n=group["on"])
     return render(
         request,
         "settings_core/capabilities.html",
         _context(
             request,
             rows=rows,
+            groups=groups,
             suggested_rows=[row for row in rows if row["suggested"]],
             other_rows=[row for row in rows if not row["suggested"]],
             activity_features=activity_fit.features(profile.activity_slug, profile.sub_activity_slug, lang) if profile is not None else [],
