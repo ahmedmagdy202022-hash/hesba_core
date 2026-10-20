@@ -1,6 +1,6 @@
-{% extends "operations/base.html" %}
-{% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'settings_core:overview' %}?lang={{ lang }}">← {% if lang == 'en' %}Settings{% else %}الإعدادات{% endif %}</a><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div>{% include "einvoice/_nav.html" %}</section>
+{% extends "settings_core/base.html" %}
+{% block settings_content %}
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div>{% include "einvoice/_nav.html" %}</section>
 {% if not can_manage %}<p class="op-message op-message-info">{{ words.view_only }}</p>{% endif %}
 <h2>{{ words.issuer }}</h2>
 <p>{{ words.tax_number }}: <strong><bdi>{{ company.tax_number|default:"—" }}</bdi></strong> · <a href="{% url 'settings_core:company' %}?lang={{ lang }}">{{ words.edit_company }}</a></p>

@@ -1,8 +1,8 @@
-{% extends "operations/base.html" %}
+{% extends "settings_core/base.html" %}
 {% load hesba_format %}
 {% load hesba_paging %}
 {% load hesba_labels l10n %}
-{% block operation_content %}
+{% block settings_content %}
 <section class="op-title-row"><div><a class="op-back" href="{% url 'master_data:items' %}?lang={{ lang }}">← {% if lang == 'en' %}Items{% else %}الأصناف{% endif %}</a><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div><div class="op-form-actions">{% url 'taxes:report' as tax_report_url %}{% link_ok tax_report_url as tax_report_ok %}{% if tax_report_ok %}<a class="op-secondary" href="{% url 'taxes:report' %}?lang={{ lang }}">{{ words.report }}</a>{% endif %}</div></section>
 {% if not can_manage %}<p class="op-message op-message-info">{{ words.view_only }}</p>{% endif %}
 <h2>{{ words.rates }}</h2>

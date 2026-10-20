@@ -272,6 +272,36 @@ WORKS_BEST_WITH = {
 }
 
 
+#: SETTINGS-DESIGN: how the features screen groups them, the icon of each, and where each one shows once on.
+#: "Where" is what the settings track saw appear when the feature was switched on.
+GROUPS = (
+    ("selling", ("البيع والكاشير", "Selling and the till"), ("pos", "shift_required", "price_lists", "installments")),
+    ("goods", ("الأصناف والمخزون", "Items and stock"), ("barcode", "units", "variants", "batches_expiry", "serials")),
+    ("money", ("الحسابات والضرايب", "Accounts and tax"), ("vat", "e_invoice", "fixed_assets")),
+)
+ICONS = {"pos": "pos", "shift_required": "shift", "price_lists": "pricetag", "installments": "instalments", "barcode": "barcode",
+         "units": "units", "variants": "variants", "batches_expiry": "expiry", "serials": "serial", "vat": "taxes",
+         "e_invoice": "einvoice", "fixed_assets": "assets"}
+WHERE = {
+    "pos": ("«الكاشير» في القايمة، وزرار في لوحة القيادة وفي قايمة الفواتير", "“Till” in the menu, with a button on the dashboard and the invoice list"),
+    "shift_required": ("فاتورة البيع والكاشير بيطلبوا فتح وردية الأول", "The sales invoice and the till ask for an open shift first"),
+    "barcode": ("«طباعة الملصقات» في الأصناف، وبعد كل فاتورة شراء", "“Print labels” on the items list, and after each purchase invoice"),
+    "price_lists": ("«قوائم الأسعار» في الأصناف، وسعر العميل في الفاتورة", "“Price lists” on the items list, and the customer's price on the invoice"),
+    "units": ("خانة «الوحدة» في فواتير البيع والشراء، و«الوحدات» في الأصناف", "A “Unit” column on sales and purchase invoices, and “Units” on the items list"),
+    "variants": ("«مقاسات وألوان» في فورم الصنف، وشاشة المقاسات والألوان", "“Sizes and colours” on the item form, and its own screen"),
+    "batches_expiry": ("تاريخ الصلاحية في فاتورة الشراء، وشاشة في المخزون، وتنبيه في لوحة القيادة", "The expiry date on purchase invoices, a screen under stock, and a dashboard alert"),
+    "serials": ("خانة السيريال في فواتير البيع والشراء، وشاشة في المخزون", "A serial number field on sales and purchase invoices, and a screen under stock"),
+    "installments": ("«الأقساط» في المبيعات، وكارت في لوحة القيادة", "“Instalments” under sales, and a dashboard card"),
+    "vat": ("«الضرايب» في القايمة، وضريبة كل صنف، وتقرير ضريبة المبيعات", "“Taxes” in the menu, a rate per item, and the sales VAT report"),
+    "e_invoice": ("«الفاتورة الإلكترونية» في القايمة، وملف لكل فاتورة مترحّلة", "“E-invoicing” in the menu, and a document for each posted invoice"),
+    "fixed_assets": ("«الأصول الثابتة» في القايمة، والإهلاك في المصروفات وصافي الربح", "“Fixed assets” in the menu, and depreciation in expenses and net profit"),
+}
+
+
+def group_of(slug):
+    return next((key for key, _, slugs in GROUPS if slug in slugs), "money")
+
+
 def fits(activity, slug, sub_activity=""):
     """Whether ``slug`` is offered to this activity (and sub-activity) at all."""
 
@@ -458,6 +488,11 @@ def settings_rows(profile, lang="ar"):
     switched = set(switched_on())
     modules = _modules_on()
     activity, sub_activity = catalog.closest(profile.activity_slug if profile else "", profile.sub_activity_slug if profile else "")
+    from .activity_fit import module_text
+
+    def name(module):  # in the activity's own words: a clinic's customers are its patients
+        return module_text(activity, sub_activity, module, lang)[0]
+
     rows = []
     for slug in CAPABILITY_SLUGS:
         entry = CAPABILITIES[slug]
@@ -477,10 +512,23 @@ def settings_rows(profile, lang="ar"):
             "state": state,
             "suggested": preset_state(activity, sub_activity, slug) == SUGGESTED,
             "note": entry.get(f"note_{lang}", ""),
-            "needs": [{"slug": module, "label": catalog.module_label(module, lang), "on": modules is None or module in modules} for module in needs(slug)],
-            "works_with": [{"slug": module, "label": catalog.module_label(module, lang), "on": modules is None or module in modules}
+            "needs": [{"slug": module, "label": name(module), "on": modules is None or module in modules} for module in needs(slug)],
+            "works_with": [{"slug": module, "label": name(module), "on": modules is None or module in modules}
                            for module in WORKS_BEST_WITH.get(slug, ())],
-            "paused_by": [catalog.module_label(module, lang) for module in paused],
+            "paused_by": [name(module) for module in paused],
             "fits": fits(activity, slug, sub_activity),
+            "icon": ICONS.get(slug, "settings"),
+            "where": WHERE.get(slug, ("", ""))[1 if lang == "en" else 0],
+            "group": group_of(slug),
         })
     return rows
+
+
+def grouped_rows(rows, lang="ar"):
+    """SETTINGS-DESIGN: the features screen's rows by group, in the groups' order."""
+
+    index = 1 if lang == "en" else 0
+    by_slug = {row["slug"]: row for row in rows}
+    return [{"key": key, "title": titles[index], "rows": [by_slug[slug] for slug in slugs if slug in by_slug],
+             "on": sum(1 for slug in slugs if slug in by_slug and by_slug[slug]["state"] == "on")}
+            for key, titles, slugs in GROUPS if any(slug in by_slug for slug in slugs)]

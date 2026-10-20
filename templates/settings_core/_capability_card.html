@@ -1,21 +1,28 @@
-<article class="op-card op-module is-{{ row.state }}" data-capability="{{ row.slug }}" data-state="{{ row.state }}">
-  <strong>{{ row.label }}</strong>{% if row.suggested %} <span class="op-status op-status-posted">{{ words.suggested }}</span>{% endif %}
-  <p>{{ row.about }}</p>
-  {% if row.note %}<p class="op-message op-message-warning" role="note" data-capability-note>⚠️ {{ row.note }}</p>{% endif %}
-  {% if row.needs %}<p class="op-muted" data-capability-needs>{{ words.needs }}: {% for need in row.needs %}{{ need.label }}{% if not forloop.last %}، {% endif %}{% endfor %}</p>{% endif %}
-  <p class="op-module__state">{% if row.state == "on" %}{{ words.state_on }}{% elif row.state == "off" %}{{ words.state_off }}{% elif row.state == "paused" %}<span data-capability-paused>{{ words.state_paused }} {{ row.paused_by|join:"، " }}</span>{% else %}{{ words.state_soon }}{% endif %}</p>
-  {% if can_manage and setup_complete and row.state == "paused" %}
-    {# SETTINGS-TRACK: a paused feature is still switched on, so it can be resumed (its module comes back) or switched off for good. #}
-    <form method="post" action="{% url 'settings_core:capabilities' %}?lang={{ lang }}" data-capability-off>{% csrf_token %}
-      <input type="hidden" name="capability" value="{{ row.slug }}"><input type="hidden" name="enabled" value="0">
-      <button class="op-secondary" type="submit">{{ words.turn_off }}</button>
-    </form>
-  {% endif %}
-  {% if can_manage and setup_complete and row.state != "soon" %}
+<article class="set-opt is-{{ row.state }}" data-capability="{{ row.slug }}" data-state="{{ row.state }}">
+  <span class="set-opt__icon" aria-hidden="true"><svg class="hs-icon"><use href="#hs-i-{{ row.icon }}"></use></svg></span>
+  <div class="set-opt__body">
+    <div class="set-opt__title"><strong>{{ row.label }}</strong>{% if row.suggested %}<span class="set-tag set-tag--gold">{{ words.suggested }}</span>{% endif %}</div>
+    <p class="set-opt__about">{{ row.about }}</p>
+    {% if row.where %}<p class="set-opt__meta" data-capability-where><b>{{ words.where }}:</b> {{ row.where }}</p>{% endif %}
+    {% if row.needs or row.works_with %}<p class="set-opt__meta" data-capability-needs>{% for need in row.needs %}<span class="set-tag {% if need.on %}set-tag--ok{% else %}set-tag--need{% endif %}">{% if need.on %}<svg class="hs-icon" aria-hidden="true"><use href="#hs-i-check"></use></svg>{% endif %}{{ words.needs }} {{ need.label }}</span>{% endfor %}{% for other in row.works_with %}<span class="set-tag">{{ words.works_with }} {{ other.label }}</span>{% endfor %}</p>{% endif %}
+    {% if row.state == "paused" %}<p class="set-opt__paused" data-capability-paused>{{ words.state_paused }} {{ row.paused_by|join:"، " }}</p>{% endif %}
+    {% if row.note %}<p class="set-opt__note" role="note" data-capability-note>{{ row.note }}</p>{% endif %}
+  </div>
+  <div class="set-opt__side">
+    {% if can_manage and setup_complete and row.state != "soon" %}
     <form method="post" action="{% url 'settings_core:capabilities' %}?lang={{ lang }}">{% csrf_token %}
       <input type="hidden" name="capability" value="{{ row.slug }}">
       <input type="hidden" name="enabled" value="{% if row.state == 'on' %}0{% else %}1{% endif %}">
-      <button class="{% if row.state == 'on' %}op-secondary{% else %}op-primary{% endif %}" type="submit">{% if row.state == "on" %}{{ words.turn_off }}{% else %}{{ words.turn_on }}{% endif %}</button>
+      {% if row.state == "paused" %}<button class="set-wake" type="submit">{{ row.wake_text }}</button>
+      {% else %}<button class="set-switch" type="submit" role="switch" aria-checked="{% if row.state == 'on' %}true{% else %}false{% endif %}" aria-label="{{ row.label }}"><span class="set-switch__text">{% if row.state == "on" %}{{ words.turn_off }}{% else %}{{ words.turn_on }}{% endif %}</span></button>{% endif %}
     </form>
-  {% endif %}
+    {% if row.state == "paused" %}{# a paused feature is still switched on: it can also be switched off for good, without its module #}
+    <form method="post" action="{% url 'settings_core:capabilities' %}?lang={{ lang }}" data-capability-off>{% csrf_token %}
+      <input type="hidden" name="capability" value="{{ row.slug }}"><input type="hidden" name="enabled" value="0">
+      <button class="set-off" type="submit">{{ words.turn_off }}</button>
+    </form>{% endif %}
+    {% endif %}
+    <span class="set-opt__state">{% if row.state == "on" %}{{ words.state_on }}{% elif row.state == "off" %}{{ words.state_off }}{% elif row.state == "soon" %}{{ words.state_soon }}{% endif %}</span>
+    {% if row.open_url %}<a class="set-opt__open" href="{{ row.open_url }}?lang={{ lang }}">{{ words.open_it }} <svg class="hs-icon" aria-hidden="true"><use href="#hs-i-arrow"></use></svg></a>{% endif %}
+  </div>
 </article>
