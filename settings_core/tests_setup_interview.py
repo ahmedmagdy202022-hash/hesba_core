@@ -100,6 +100,16 @@ class QuestionsPageTests(TestCase):
         self.assertFalse(caps.capability_enabled("shift_required"))
         self.assertFalse(caps.capability_enabled("e_invoice"))  # its parent (VAT) is no
 
+    def test_only_screens_that_are_always_on_are_promised_as_always_there(self):
+        # Codex on #258: teacher pay sits under the team module and attendance under bookings, both answered per school.
+        page = self.client.get(reverse("setup_questions"), {"lang": "en", "activity": "education", "sub_activity": "tutoring_center"})
+        always, rows = page.context["always"], {q["key"]: q for q in page.context["questions"]}
+        self.assertIn("Students & groups", always)
+        self.assertNotIn("Teacher pay", always)
+        self.assertNotIn("Attendance", always)
+        self.assertIn("Teacher pay", rows["team"]["labels"])
+        self.assertIn("Attendance", rows["booking"]["labels"])
+
     def test_a_made_up_activity_goes_back_to_the_start(self):
         page = self.client.get(reverse("setup_questions"), {"activity": "spaceships", "sub_activity": "x"})
         self.assertRedirects(page, reverse("setup_activity") + "?lang=ar", fetch_redirect_response=False)

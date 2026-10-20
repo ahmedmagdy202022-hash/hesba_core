@@ -468,7 +468,10 @@ def setup_questions(request):
 
     always = [module_text(activity, sub_activity, row["slug"], lang)[0]
               for row in activity_fit.module_rows(activity, sub_activity, lang) if row["preset"] == catalog.REQUIRED]
-    always += [feature["label"] for feature in activity_fit.features(activity, sub_activity, lang)]
+    # only the screens whose module is always on; the others come with the answer that turns their module on
+    forced = interview.forced_modules(activity, sub_activity)
+    always += [feature["label"] for feature in activity_fit.features(activity, sub_activity, lang)
+               if not feature["module"] or feature["module"] in forced]
     context = {
         "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "questions": rows, "activity": activity, "sub_activity": sub_activity,
         "activity_label": catalog.activity_label(activity, lang), "sub_activity_label": catalog.sub_activity_label(activity, sub_activity, lang),

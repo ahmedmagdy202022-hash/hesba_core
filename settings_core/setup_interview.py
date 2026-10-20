@@ -217,15 +217,22 @@ def _names(activity, sub_activity, lang):
                               ("items", "items_services"), ("employees", "employees_technicians"))}
 
 
-def _plan(activity, sub_activity):
-    """{key: (modules, features, parent, default)} for the questions this business is asked."""
+def forced_modules(activity, sub_activity):
+    """The modules this business always gets: the required ones and what they need."""
 
     from .setup_services import with_needs
+
+    offered = activity_fit.module_rows(activity, sub_activity, "ar")
+    return set(with_needs([row["slug"] for row in offered if row["preset"] == catalog.REQUIRED]))
+
+
+def _plan(activity, sub_activity):
+    """{key: (modules, features, parent, default)} for the questions this business is asked."""
 
     asked_activity = asked_as(activity, sub_activity)
     near_activity, near_sub = catalog.closest(activity, sub_activity)
     offered = {row["slug"]: row["preset"] for row in activity_fit.module_rows(activity, sub_activity, "ar")}
-    forced = set(with_needs([slug for slug, preset in offered.items() if preset == catalog.REQUIRED]))
+    forced = forced_modules(activity, sub_activity)
     plan = {}
     for key, _ in ACTIVITY_QUESTIONS.get(asked_activity, ()):
         modules, features, parent = LIBRARY[key]
@@ -251,6 +258,10 @@ def questions(activity, sub_activity, lang="ar"):
     overrides = dict(ACTIVITY_QUESTIONS.get(asked_as(activity, sub_activity), ()))
     names = _names(activity, sub_activity, lang)
     plan = _plan(activity, sub_activity)
+    # the activity's own screens come with the module that holds them (Codex on #258)
+    screens = {}
+    for screen in activity_fit.features(activity, sub_activity, lang):
+        screens.setdefault(screen["module"], []).append(screen["label"])
     # each follow-up straight under the answer it hangs on
     order = []
     for key, (_, _, parent, _) in plan.items():
@@ -265,7 +276,8 @@ def questions(activity, sub_activity, lang="ar"):
         rows.append({"key": key, "ask": _text(ask, lang), "gives": _text(gives, lang).format(**names), "parent": parent or "",
                      "default": default, "modules": ",".join(modules), "features": ",".join(features),
                      "labels": [activity_fit.module_text(activity, sub_activity, slug, lang)[0] for slug in modules]
-                     + [caps.label(slug, lang) for slug in features]})
+                     + [caps.label(slug, lang) for slug in features]
+                     + [label for slug in modules for label in screens.get(slug, ())]})
     return rows
 
 
