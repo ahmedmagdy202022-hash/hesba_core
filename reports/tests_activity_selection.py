@@ -84,7 +84,7 @@ class SetupFlowSmokeTests(AuthenticatedTestCase):
         self.assertContains(response, 'data-sub-activity="retail"')
         self.assertContains(response, 'data-sub-activity=', count=8)
         self.assertContains(response, "url.searchParams.set('activity','commercial')")
-        self.assertContains(response, "'/setup/modules/'")
+        self.assertContains(response, "'/setup/questions/'")  # ST6: the questions step follows
 
     def test_117c_services_subactivity_still_works(self):
         response = self.client.get('/setup/activity/services/?lang=en')
@@ -95,7 +95,7 @@ class SetupFlowSmokeTests(AuthenticatedTestCase):
         self.assertContains(response, 'data-sub-activity="general"')
         self.assertContains(response, 'data-sub-activity=', count=8)
         self.assertContains(response, "url.searchParams.set('activity', 'services');")
-        self.assertContains(response, "new URL('/setup/modules/', window.location.origin)")
+        self.assertContains(response, "new URL('/setup/questions/', window.location.origin)")  # ST6
 
     def test_setup_gate_still_routes_to_117a(self):
         response = self.client.get(reverse('setup_gate'))
