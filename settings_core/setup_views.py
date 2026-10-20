@@ -256,6 +256,10 @@ def setup_review(request):
     ]
 
     capability_rows = _capability_rows(activity, sub_activity, lang)
+    if "caps" in request.GET:  # SETUP-WIZARD: the ticks made before switching language
+        ticked = set(request.GET.get("caps", "").split(","))
+        for row in capability_rows:
+            row["checked"] = row["available"] and row["slug"] in ticked
     context = {
         "lang": lang,
         "dir": "ltr" if lang == "en" else "rtl",

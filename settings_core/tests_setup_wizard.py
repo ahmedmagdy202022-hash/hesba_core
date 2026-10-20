@@ -40,3 +40,14 @@ class WizardLinksTests(TestCase):
     def test_a_fashion_shop_is_not_offered_expiry_dates_here_either(self):
         page = self.client.get(reverse("setup_review"), {"lang": "ar", "activity": "commercial", "sub_activity": "fashion", "modules": ""})
         self.assertNotIn('data-capability="batches_expiry"', page.content.decode())
+
+    def test_switching_language_keeps_the_ticks(self):
+        # Codex on #257: the page reloads in the other language, so every word on it is in that language.
+        params = {"activity": "commercial", "sub_activity": "retail", "modules": "customers", "caps": "units,vat"}
+        page = self.client.get(reverse("setup_review"), {"lang": "en", **params})
+        ticked = {row["slug"] for row in page.context["capability_rows"] if row["checked"]}
+        self.assertEqual(ticked, {"units", "vat"})
+        self.assertEqual([group["title"] for group in page.context["capability_groups"]], ["Selling and the till", "Items and stock", "Accounts and tax"])
+        self.assertContains(page, "Where you find it")
+        self.assertNotContains(page, "هتلاقيها في")
+        self.assertIn("url.searchParams.set('caps'", page.content.decode())

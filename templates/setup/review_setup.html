@@ -334,8 +334,18 @@
   });
   refreshCaps();
 
+  // The features (their names, groups, where they show, what they need) come from the server in
+  // one language, so switching language reloads the page in the other one; ticks made here are
+  // kept in the URL's caps parameter.
   document.querySelectorAll('[data-lang-toggle]').forEach(function(btn){
-    btn.addEventListener('click', function(){applyLanguage(lang === 'ar' ? 'en' : 'ar');});
+    btn.addEventListener('click', function(){
+      var next = lang === 'ar' ? 'en' : 'ar';
+      localStorage.setItem('hesba_lang', next);
+      var url = new URL(window.location.href);
+      url.searchParams.set('lang', next);
+      url.searchParams.set('caps', capItems.filter(function(item){var box = item.querySelector('input[type=checkbox]');return box && box.checked;}).map(function(item){return item.dataset.capability;}).join(','));
+      window.location.assign(url.pathname + url.search);
+    });
   });
 
   applyLanguage(lang);
