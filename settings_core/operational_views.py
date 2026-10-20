@@ -9,7 +9,7 @@ from permissions.models import Role
 from permissions.services import user_has_permission
 
 from .models import ClientProfile, SystemSetting
-from .setup_services import ModuleChangeRefused, module_settings_rows, set_module_enabled
+from .setup_services import ModuleChangeRefused, ModuleNeeded, module_settings_rows, set_module_enabled
 from . import capabilities as caps
 from . import setup_catalog as catalog
 from .currency import CurrencyChangeRefused, change_company_currency, currency_choices, has_financial_records
@@ -20,9 +20,11 @@ STRINGS = {
            "modules": "الأقسام", "modules_lead": "دي الأقسام اللي تناسب نشاطك. شغّل أو أوقف أي قسم: الإيقاف بيخفي القسم وشاشاته بس، وبياناته بتفضل محفوظة زي ما هي.",
            "your_activity": "نشاطك", "inside": "فيه لنشاطك:", "open": "افتح", "features": "مميزات نشاطك", "features_lead": "شاشات جاية مع نشاطك نفسه، مش محتاجة تتشغّل.",
            "may_need": "ممكن تحتاجها", "change_activity": "النشاط بيتغيّر من إعداد النشاط.",
-           "state_on": "شغّال", "state_off": "مش شغّال", "state_required": "أساسي · شغّال دايمًا", "state_soon": "قريبًا",
+           "state_on": "شغّال", "state_off": "مش شغّال", "state_required": "أساسي · شغّال دايمًا", "state_soon": "قريبًا", "state_paused": "واقفة لحد ما يشتغل قسم", "needs": "محتاجة قسم", "works_with": "أحسن مع",
            "turn_on": "تشغيل", "turn_off": "إيقاف", "view_only": "تقدر تشوف الأقسام بس؛ التغيير لصاحب الحساب.",
            "setup_first": "كمّل الإعداد الأول قبل ما تغيّر الأقسام.", "saved_on": "اشتغل قسم «{module}».", "saved_off": "اتوقف قسم «{module}». بياناته محفوظة.", "refused": "التغيير ده مش مسموح: القسم أساسي لنشاطك أو لسه مش متاح.",
+           "needed_by": "مينفعش تقفل «{module}» و«{others}» شغّال: محتاجه علشان يشتغل. اقفل «{others}» الأول.",
+           "also_on": "واشتغل معاه: {modules}.", "cap_also_on": "واشتغل معاها قسم: {modules}.", "paused_now": "ووقفت معاه لحد ما يرجع: {capabilities}.",
            "currency": "العملة", "currency_lead": "حسبة بتستخدم عملة واحدة للشركة، وبتظهر جنب كل مبلغ.", "currency_field": "عملة الشركة", "save": "حفظ",
            "currency_locked": "العملة مقفولة لأن فيه مبالغ متسجلة بيها بالفعل (فواتير أو حركات خزنة أو أرصدة افتتاحية). حسبة مابتحوّلش المبالغ بين العملات، فتغييرها دلوقتي هيغيّر معنى الأرقام.", "currency_saved": "العملة اتغيرت لـ {code}.", "no_profile": "لسه مفيش بيانات شركة. كمّل الإعداد الأول.",
            "capabilities": "الخصائص", "capabilities_lead": "طرق شغل بيحتاجها بعض الأنشطة بس. اللي عليه «مقترح» مناسب لنشاطك، وتقدر تشغّل أو توقف أي خاصية في أي وقت من غير ما بيانات تتمسح.",
@@ -31,9 +33,11 @@ STRINGS = {
            "modules": "Modules", "modules_lead": "These are the modules that suit your activity. Switch any of them on or off: switching off only hides the module and closes its screens; its data is kept as it is.",
            "your_activity": "Your activity", "inside": "For your activity:", "open": "Open", "features": "Your activity's features", "features_lead": "Screens that come with your activity itself; nothing to switch on.",
            "may_need": "You may need", "change_activity": "The activity is changed from the activity setup.",
-           "state_on": "On", "state_off": "Off", "state_required": "Required for your activity", "state_soon": "Coming soon",
+           "state_on": "On", "state_off": "Off", "state_required": "Required for your activity", "state_soon": "Coming soon", "state_paused": "Paused until this module is on:", "needs": "Needs the module", "works_with": "Works best with",
            "turn_on": "Switch on", "turn_off": "Switch off", "view_only": "You can view modules; changing them is for the account owner.",
            "setup_first": "Finish setup before changing modules.", "saved_on": "The “{module}” module is on.", "saved_off": "The “{module}” module is off. Its data is kept.", "refused": "That change is not allowed: the module is required for your activity or not available yet.",
+           "needed_by": "“{module}” cannot be switched off while “{others}” is on: it needs it to work. Switch “{others}” off first.",
+           "also_on": "Also switched on with it: {modules}.", "cap_also_on": "The module it needs is on too: {modules}.", "paused_now": "Paused with it until it is back: {capabilities}.",
            "currency": "Currency", "currency_lead": "Hesba uses one currency for the company, shown beside every amount.", "currency_field": "Company currency", "save": "Save",
            "currency_locked": "The currency is locked because amounts are already recorded in it (invoices, cash movements or opening balances). Hesba does not convert amounts between currencies, so changing it now would change what the figures mean.", "currency_saved": "The currency is now {code}.", "no_profile": "There is no company profile yet. Finish setup first.",
            "capabilities": "Business capabilities", "capabilities_lead": "Ways of working that only some businesses need. Those marked “Suggested” suit your activity; switch anything on or off at any time without losing data.",
@@ -83,22 +87,22 @@ def _features(lang, user):
 
     The Open link is left out when the viewer could not open that screen."""
 
-    from .capabilities import CAPABILITIES, about, enabled_capabilities, fits
+    from .capabilities import CAPABILITIES, about, enabled_capabilities, fits, label
 
     on = set(enabled_capabilities())
     profile = ClientProfile.get_active()
-    activity = profile.activity_slug if profile else ""
+    activity, sub_activity = (profile.activity_slug, profile.sub_activity_slug) if profile else ("", "")
     rows = []
     for slug, info in CAPABILITIES.items():
         if not info.get("available"):
             continue
-        if not fits(activity, slug) and slug not in on:  # AUDIT-3
+        if not fits(activity, slug, sub_activity) and slug not in on:  # AUDIT-3 + SETTINGS-TRACK: the sub-activity's fit
             continue
         name = FEATURE_LANDING.get(slug)
         url = reverse(name) if name else ""
         rows.append({
             "slug": slug,
-            "label": info["en" if lang == "en" else "ar"],
+            "label": label(slug, lang),
             "about": about(activity, slug, lang),
             "on": slug in on,
             "url": url if url and _opens_for(user, url) else "",
@@ -358,14 +362,24 @@ def module_settings(request):
             raise PermissionDenied("Changing modules needs settings.manage_settings.")
         slug = request.POST.get("module", "")
         enabled = request.POST.get("enabled") == "1"
+        name = _module_name(profile, lang)
+        before = set(caps.enabled_capabilities())
+        switched = []
         try:
-            changed = set_module_enabled(profile, slug, enabled, user=request.user)
+            changed = set_module_enabled(profile, slug, enabled, user=request.user, switched_modules=switched)
+        except ModuleNeeded as refused:
+            messages.error(request, words["needed_by"].format(module=name(slug), others=("”, “" if lang == "en" else "»، «").join(name(other) for other in refused.needed_by)))
         except ModuleChangeRefused:
             messages.error(request, words["setup_first"] if profile is None or not profile.setup_is_complete else words["refused"])
         else:
             if changed:
                 key = "saved_on" if enabled else "saved_off"
-                messages.success(request, words[key].format(module=catalog.module_label(slug, lang)))
+                messages.success(request, words[key].format(module=name(slug)))
+                if switched:
+                    messages.info(request, words["also_on"].format(modules=(", " if lang == "en" else "، ").join(name(other) for other in switched)))
+                paused = [caps.label(cap, lang) for cap in caps.CAPABILITY_SLUGS if cap in before and cap not in caps.enabled_capabilities()]
+                if paused:  # SETTINGS-TRACK: expiry dates and serial numbers rest while the store is off
+                    messages.info(request, words["paused_now"].format(capabilities=(", " if lang == "en" else "، ").join(paused)))
         return redirect(f"{reverse('settings_core:modules')}?lang={lang}")
     rows = module_settings_rows(profile, lang) if profile is not None else []
     return render(
@@ -395,6 +409,15 @@ def _groups(rows, lang):
             for key in ("required", "suggested", "optional", "extra") if any(row["group"] == key for row in rows)]
 
 
+def _module_name(profile, lang):
+    """A module's name in the activity's own words (a clinic's customers are its patients)."""
+
+    from . import activity_fit
+
+    activity, sub_activity = (profile.activity_slug, profile.sub_activity_slug) if profile is not None else ("", "")
+    return lambda slug: activity_fit.module_text(activity, sub_activity, slug, lang)[0]
+
+
 def _activity_name(profile, lang):
     if profile is None or not profile.activity_slug:
         return ""
@@ -417,14 +440,18 @@ def capability_settings(request):
             raise PermissionDenied("Changing capabilities needs settings.manage_settings.")
         slug = request.POST.get("capability", "")
         enabled = request.POST.get("enabled") == "1"
+        switched = []
         try:
-            changed = caps.set_capability_enabled(profile, slug, enabled, user=request.user)
+            changed = caps.set_capability_enabled(profile, slug, enabled, user=request.user, switched_modules=switched)
         except caps.CapabilityChangeRefused:
             messages.error(request, words["setup_first"] if profile is None or not profile.setup_is_complete else words["cap_refused"])
         else:
             if changed:
                 key = "cap_saved_on" if enabled else "cap_saved_off"
                 messages.success(request, words[key].format(capability=caps.label(slug, lang)))
+                if switched:  # SETTINGS-TRACK: the module it rides on came on with it
+                    name = _module_name(profile, lang)
+                    messages.info(request, words["cap_also_on"].format(modules=(", " if lang == "en" else "، ").join(name(module) for module in switched)))
                 note = caps.CAPABILITIES[slug].get(f"note_{lang}")
                 if note:
                     messages.warning(request, note)

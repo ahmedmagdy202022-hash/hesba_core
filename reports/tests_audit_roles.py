@@ -157,17 +157,23 @@ class CustomRoleNavTests(TestCase):
 
 
 class BackLinkTests(TestCase):
-    def test_batches_and_serials_go_home_when_stock_is_switched_off(self):
+    def test_batches_and_serials_close_while_stock_is_switched_off(self):
+        # SETTINGS-TRACK: expiry dates and serial numbers follow the stock, so with the store off their screens
+        # close (they used to open with a dead link back to it), and come back with it.
         from settings_core.capabilities import _write
+        from settings_core.setup_services import set_module_enabled
 
-        modules = [m for m in catalog.default_modules("medical") if m != "inventory"]
-        prepared_client("medical", "lab", ",".join(modules))
+        profile = prepared_client("medical", "lab", ",".join(catalog.default_modules("medical")))
         _write("batches_expiry", True)
         _write("serials", True)
+        set_module_enabled(profile, "inventory", False)
         self.client.force_login(person(RoleCode.OWNER, "audit_back_owner"))
+        for url in (reverse("batches:index"), reverse("serials:index")):
+            with self.subTest(url=url):
+                self.assertEqual(self.client.get(url + "?lang=ar").status_code, 403)
+        set_module_enabled(profile, "inventory", True)
         for url in (reverse("batches:index"), reverse("serials:index")):
             with self.subTest(url=url):
                 page = self.client.get(url + "?lang=ar")
                 self.assertEqual(page.status_code, 200)
-                self.assertNotContains(page, 'href="' + reverse("inventory:stock") + "?")
-                self.assertContains(page, "← الرئيسية")
+                self.assertContains(page, 'href="' + reverse("inventory:stock") + "?")

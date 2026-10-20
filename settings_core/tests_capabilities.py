@@ -90,7 +90,7 @@ class ReviewStepTests(TestCase):
         self.assertTrue(rows["pos"]["checked"])
         self.assertTrue(rows["batches_expiry"]["suggested"])
         self.assertTrue(rows["batches_expiry"]["checked"])
-        self.assertFalse(rows["variants"]["suggested"])
+        self.assertNotIn("variants", rows)  # SETTINGS-TRACK: a pharmacy sells no sizes and colours
         self.assertContains(page, "خصائص مقترحة لنشاطك")  # TRACK-START S02
         self.assertContains(page, 'value="pos" form="setup-complete-form" checked')
         self.assertContains(page, "قريبًا")

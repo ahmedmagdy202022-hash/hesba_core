@@ -223,10 +223,88 @@ ABOUT_FOR = {
 }
 
 
-def fits(activity, slug):
-    """Whether ``slug`` is offered to this activity at all."""
+#: SETTINGS-TRACK: what a sub-activity never needs, on top of its activity's NOT_FOR (Ahmed, 20 Oct: "مش كل الأنشطة
+#: ينفع نربط التشغيلات بتواريخ الصلاحية"). A clothes shop has no expiry dates, a pharmacy sells no sizes and colours,
+#: an office has nothing to scan. As with NOT_FOR, one that is already on still shows, so it can be switched off.
+NOT_FOR_SUB = {
+    (catalog.COMMERCIAL, "grocery"): {"serials", "variants", "installments"},
+    (catalog.COMMERCIAL, "fashion"): {"batches_expiry", "serials"},
+    (catalog.COMMERCIAL, "electronics"): {"batches_expiry"},
+    (catalog.COMMERCIAL, "pharmacy"): {"serials", "variants", "installments"},
+    (catalog.SERVICES, "general"): {"serials", "units", "barcode"},
+    (catalog.SERVICES, "clinic"): {"serials", "units", "barcode"},
+    (catalog.SERVICES, "beauty"): {"serials", "units"},
+    (catalog.SERVICES, "education"): {"serials", "units", "barcode", "pos", "shift_required"},
+    (catalog.SERVICES, "professional"): {"serials", "units", "barcode", "pos", "shift_required"},
+    (catalog.SERVICES, "digital_marketing"): {"serials", "units", "barcode", "pos", "shift_required"},
+    (catalog.SERVICES, "other"): {"serials", "units"},
+    (catalog.MEDICAL, "clinic"): {"barcode", "units"},
+    (catalog.MEDICAL, "dental"): {"barcode", "units"},
+    (catalog.MEDICAL, "physio"): {"barcode", "units", "batches_expiry"},
+    (catalog.MEDICAL, "lab"): {"barcode"},
+    (catalog.RESTAURANTS, "restaurant"): {"barcode"},
+    (catalog.RESTAURANTS, "fast_food"): {"barcode"},
+    (catalog.RESTAURANTS, "cloud_kitchen"): {"barcode"},
+    (catalog.MANUFACTURING, "food"): {"variants", "serials", "installments"},
+    (catalog.MANUFACTURING, "garments"): {"batches_expiry", "serials", "installments"},
+    (catalog.MANUFACTURING, "chemicals"): {"variants", "serials", "installments", "pos", "shift_required"},
+    (catalog.MANUFACTURING, "furniture"): {"batches_expiry"},
+    (catalog.MANUFACTURING, "printing"): {"batches_expiry", "variants", "serials", "installments", "pos", "shift_required"},
+    (catalog.MANUFACTURING, "workshop"): {"batches_expiry", "variants", "pos", "shift_required"},
+}
 
-    return slug not in NOT_FOR.get(activity, set())
+#: SETTINGS-TRACK: a capability that rides on a module works only while that module is on: expiry dates and serial
+#: numbers follow the stock, instalments and e-invoices belong to a customer. Switching one on switches its module on
+#: too; switching the module off pauses it (its flag is kept, so it comes back with the module).
+NEEDS = {
+    "batches_expiry": ("inventory",),
+    "serials": ("inventory",),
+    "installments": ("customers",),
+    "e_invoice": ("customers",),
+}
+
+#: ... and what it works best with, said on its card but never enforced.
+WORKS_BEST_WITH = {
+    "batches_expiry": ("purchases",),
+    "serials": ("purchases",),
+    "units": ("purchases",),
+    "price_lists": ("customers",),
+}
+
+
+def fits(activity, slug, sub_activity=""):
+    """Whether ``slug`` is offered to this activity (and sub-activity) at all."""
+
+    activity, sub_activity = catalog.closest(activity, sub_activity)
+    if slug in NOT_FOR.get(activity, set()):
+        return False
+    if slug == "shift_required" and "pos" in NOT_FOR_SUB.get((activity, sub_activity), set()):
+        return False
+    return slug not in NOT_FOR_SUB.get((activity, sub_activity), set())
+
+
+def needs(slug):
+    return NEEDS.get(slug, ())
+
+
+def _modules_on():
+    """The modules switched on, or None while setup is not finished (then nothing is closed, as in module_gate)."""
+
+    profile = ClientProfile.get_active()
+    if profile is None or not profile.setup_is_complete:
+        return None
+    from .setup_services import enabled_modules
+
+    return set(enabled_modules())
+
+
+def paused_by(slug, modules_on=None):
+    """The needed modules that are off, which pause ``slug`` while its own switch stays on."""
+
+    on = _modules_on() if modules_on is None else modules_on
+    if on is None:
+        return ()
+    return tuple(module for module in needs(slug) if module not in on)
 
 
 def about(activity, slug, lang="ar"):
@@ -246,7 +324,7 @@ def preset_state(activity, sub_activity, slug):
     if slug == "shift_required":  # AN4: wherever there is a till, a sale waits for an open shift
         slug = "pos"
     activity, sub_activity = catalog.closest(activity, sub_activity)  # OTHER-001: "closer to services" is preset as services
-    if not fits(activity, slug):
+    if not fits(activity, slug, sub_activity):
         return OPTIONAL
     if activity == catalog.MANUFACTURING:
         return MANUFACTURING_PRESETS.get(sub_activity, {}).get(slug, OPTIONAL)
@@ -277,7 +355,9 @@ def parse(raw):
     return tuple(slug for slug in CAPABILITY_SLUGS if slug in submitted and is_available(slug))
 
 
-def enabled_capabilities():
+def switched_on():
+    """Capabilities whose own switch is on, whatever their modules."""
+
     rows = dict(FeatureFlag.objects.filter(code__startswith=FLAG_PREFIX).values_list("code", "enabled"))
     return tuple(
         slug for slug in CAPABILITY_SLUGS
@@ -285,6 +365,18 @@ def enabled_capabilities():
         # capabilities it already had (legacy_on) stay on and new ones stay off.
         if is_available(slug) and rows.get(flag_code(slug), bool(CAPABILITIES[slug].get("legacy_on")))
     )
+
+
+def enabled_capabilities():
+    """Capabilities at work: switched on, and (SETTINGS-TRACK) the modules they need on too."""
+
+    on = switched_on()
+    if not any(needs(slug) for slug in on):
+        return on
+    modules = _modules_on()
+    if modules is None:
+        return on
+    return tuple(slug for slug in on if not paused_by(slug, modules))
 
 
 def capability_enabled(slug):
@@ -325,16 +417,28 @@ class CapabilityChangeRefused(ValueError):
 
 
 @transaction.atomic
-def set_capability_enabled(profile, slug, enabled, user=None):
+def set_capability_enabled(profile, slug, enabled, user=None, switched_modules=None):
+    """Switch ``slug``. Switching it on also switches on the modules it needs (SETTINGS-TRACK), listed into ``switched_modules``."""
+
     if profile is None or not profile.setup_is_complete:
         raise CapabilityChangeRefused("Finish setup before changing capabilities.")
     if slug not in CAPABILITIES:
         raise CapabilityChangeRefused(f"Unknown capability: {slug!r}")
     if not is_available(slug):
         raise CapabilityChangeRefused(f"{slug} is not available yet.")
-    was = capability_enabled(slug)
+    turned_on = []
+    if enabled:
+        from .setup_services import module_is_enabled, set_module_enabled
+
+        for module in needs(slug):
+            if not module_is_enabled(module):
+                set_module_enabled(profile, module, True, user)
+                turned_on.append(module)
+    if switched_modules is not None:
+        switched_modules.extend(turned_on)
+    was = slug in switched_on()
     if was == enabled:
-        return False
+        return bool(turned_on)
     _write(slug, enabled)
     AuditLog.objects.create(
         event_type=AuditEventType.UPDATE,
@@ -351,20 +455,32 @@ def set_capability_enabled(profile, slug, enabled, user=None):
 
 
 def settings_rows(profile, lang="ar"):
-    enabled = set(enabled_capabilities())
+    switched = set(switched_on())
+    modules = _modules_on()
     activity, sub_activity = catalog.closest(profile.activity_slug if profile else "", profile.sub_activity_slug if profile else "")
     rows = []
     for slug in CAPABILITY_SLUGS:
         entry = CAPABILITIES[slug]
-        if not fits(activity, slug) and slug not in enabled:
+        if not fits(activity, slug, sub_activity) and slug not in switched:
             continue
-        state = "soon" if not entry["available"] else ("on" if slug in enabled else "off")
+        paused = paused_by(slug, modules) if slug in switched and modules is not None else ()
+        if not entry["available"]:
+            state = "soon"
+        elif slug in switched:
+            state = "paused" if paused else "on"
+        else:
+            state = "off"
         rows.append({
             "slug": slug,
-            "label": entry[lang],
+            "label": label(slug, lang),
             "about": about(activity, slug, lang),
             "state": state,
             "suggested": preset_state(activity, sub_activity, slug) == SUGGESTED,
             "note": entry.get(f"note_{lang}", ""),
+            "needs": [{"slug": module, "label": catalog.module_label(module, lang), "on": modules is None or module in modules} for module in needs(slug)],
+            "works_with": [{"slug": module, "label": catalog.module_label(module, lang), "on": modules is None or module in modules}
+                           for module in WORKS_BEST_WITH.get(slug, ())],
+            "paused_by": [catalog.module_label(module, lang) for module in paused],
+            "fits": fits(activity, slug, sub_activity),
         })
     return rows

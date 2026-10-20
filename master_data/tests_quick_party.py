@@ -72,6 +72,7 @@ class QuickPartyTests(TestCase):
         from settings_core.models import ClientProfile
         from settings_core.setup_services import set_module_enabled
 
+        set_module_enabled(ClientProfile.get_active(), "purchases", False, user=self.owner)  # SETTINGS-TRACK: purchases need suppliers
         set_module_enabled(ClientProfile.get_active(), "suppliers", False, user=self.owner)
         response = self.client.post(self.url("supplier"), {"name": "مورد ممنوع"})
         self.assertEqual(response.status_code, 403)
