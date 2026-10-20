@@ -4,6 +4,13 @@
   {% if row.note %}<p class="op-message op-message-warning" role="note" data-capability-note>⚠️ {{ row.note }}</p>{% endif %}
   {% if row.needs %}<p class="op-muted" data-capability-needs>{{ words.needs }}: {% for need in row.needs %}{{ need.label }}{% if not forloop.last %}، {% endif %}{% endfor %}</p>{% endif %}
   <p class="op-module__state">{% if row.state == "on" %}{{ words.state_on }}{% elif row.state == "off" %}{{ words.state_off }}{% elif row.state == "paused" %}<span data-capability-paused>{{ words.state_paused }} {{ row.paused_by|join:"، " }}</span>{% else %}{{ words.state_soon }}{% endif %}</p>
+  {% if can_manage and setup_complete and row.state == "paused" %}
+    {# SETTINGS-TRACK: a paused feature is still switched on, so it can be resumed (its module comes back) or switched off for good. #}
+    <form method="post" action="{% url 'settings_core:capabilities' %}?lang={{ lang }}" data-capability-off>{% csrf_token %}
+      <input type="hidden" name="capability" value="{{ row.slug }}"><input type="hidden" name="enabled" value="0">
+      <button class="op-secondary" type="submit">{{ words.turn_off }}</button>
+    </form>
+  {% endif %}
   {% if can_manage and setup_complete and row.state != "soon" %}
     <form method="post" action="{% url 'settings_core:capabilities' %}?lang={{ lang }}">{% csrf_token %}
       <input type="hidden" name="capability" value="{{ row.slug }}">

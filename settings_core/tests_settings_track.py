@@ -76,6 +76,18 @@ class NeedsTests(TestCase):
         self.assertTrue(caps.capability_enabled("batches_expiry"))  # back with the store
         self.assertEqual(self.client.get("/batches/?lang=ar").status_code, 200)
 
+    def test_a_paused_feature_can_be_switched_off_without_its_module(self):
+        set_module_enabled(self.profile, "inventory", True)
+        caps.set_capability_enabled(self.profile, "serials", True)
+        set_module_enabled(self.profile, "inventory", False)
+        page = self.client.get(reverse("settings_core:capabilities") + "?lang=ar").content.decode()
+        card = page[page.index('data-capability="serials"'):]
+        card = card[:card.index("</article>")]
+        self.assertIn("data-capability-off", card)
+        self.switch("settings_core:capabilities", "capability", "serials", False)
+        self.assertNotIn("serials", caps.switched_on())
+        self.assertNotIn("inventory", enabled_modules())  # switching off never brings the store back
+
     def test_instalments_need_customers(self):
         set_module_enabled(self.profile, "customers", False)
         caps.set_capability_enabled(self.profile, "installments", True)
