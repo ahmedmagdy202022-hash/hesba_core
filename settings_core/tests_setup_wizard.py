@@ -51,3 +51,22 @@ class WizardLinksTests(TestCase):
         self.assertContains(page, "Where you find it")
         self.assertNotContains(page, "هتلاقيها في")
         self.assertIn("url.searchParams.set('caps'", page.content.decode())
+
+
+class WizardFrameTests(TestCase):
+    """Ahmed, 20 Oct: the setup screens after "ابدأ تجربة جديدة" look like the settings screens."""
+
+    def setUp(self):
+        owner = make_user(username="frame_owner")
+        make_user_profile(user=owner, role=make_seeded_role(RoleCode.OWNER))
+        self.client.force_login(owner)
+
+    def test_every_step_sits_in_the_settings_frame(self):
+        for url in ("/setup/?lang=ar", "/setup/activity/?lang=ar", "/setup/activity/commercial/?lang=ar",
+                    "/setup/activity/services/?lang=ar", "/setup/activity/medical/?lang=ar",
+                    "/setup/modules/?lang=ar&activity=commercial&sub_activity=retail",
+                    "/setup/review/?lang=ar&activity=commercial&sub_activity=retail&modules=customers"):
+            body = self.client.get(url).content.decode()
+            self.assertIn('class="setup-hero"', body, url)       # the navy card on top
+            self.assertIn('class="setup-steps"', body, url)      # the map of the steps beside the page
+            self.assertEqual(body.count('id="hs-i-modules"'), 1, url)  # the shared icons, once

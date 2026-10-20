@@ -2,7 +2,6 @@
  * (settings.css): an icon per option, options grouped by what they are, and the links between
  * them said on the card. Tokens only. */
 
-.activity-selection-page .hs-icon{width:22px;height:22px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 
 /* live line above the groups: how many modules, and what switched together */
 .wiz-summary{display:flex;flex-wrap:wrap;align-items:center;gap:var(--hs-space-3)}
@@ -57,3 +56,63 @@
   .module-card__icon,.review-capability__icon{width:38px;height:38px}
 }
 @media (prefers-reduced-motion:reduce){.module-card__icon,.review-capability__icon{transition:none}}
+
+/* ---------- SETUP-FRAME: the rows of the settings screens (settings.css .set-list / .set-opt) ---------- */
+.modules-selection-page .wiz-group__grid{display:grid;grid-template-columns:minmax(0,1fr);gap:0;border:1px solid var(--hs-line);border-radius:var(--hs-radius-xl);background:var(--hs-surface);box-shadow:var(--hs-shadow-sm);overflow:hidden}
+.modules-selection-page .wiz-group--required .wiz-group__grid{grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}
+.modules-selection-page .wiz-modules .module-card{
+  display:grid;grid-template-columns:46px minmax(0,1fr);gap:14px;align-items:start;min-height:0;padding:16px 18px;
+  border:0;border-radius:0;background:transparent;box-shadow:none;transform:none;
+}
+.modules-selection-page .wiz-modules .module-card + .module-card{border-top:1px solid var(--hs-line)}
+.modules-selection-page .wiz-modules .module-card:hover:not(.is-locked){transform:none;box-shadow:none;background:var(--hs-ground)}
+.modules-selection-page .wiz-modules .module-card.is-selected{background:transparent}
+.modules-selection-page .wiz-modules .module-card.is-selected:hover{background:var(--hs-ground)}
+.modules-selection-page .wiz-modules .module-card.is-locked{background:transparent}
+.module-card__icon{width:46px;height:46px;border-radius:13px}
+.modules-selection-page .module-card__body{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:14px;row-gap:4px;align-items:start}
+.modules-selection-page .module-card__body > *{grid-column:1}
+.modules-selection-page .wiz-modules .module-card__meta{grid-column:2;grid-row:1 / span 5;align-self:center;flex-direction:column;align-items:flex-end;gap:6px;padding-top:0;border-top:0}
+.modules-selection-page .module-card__title{font-family:var(--hs-font-body);font-size:var(--hs-text-base);font-weight:var(--hs-weight-bold)}
+.modules-selection-page .module-card__description{color:var(--hs-ink);font-size:var(--hs-text-sm);line-height:1.6}
+.modules-selection-page .module-card__top{justify-content:flex-start;flex-wrap:wrap;gap:6px 8px}
+.modules-selection-page .module-card__state{font-weight:var(--hs-weight-semibold)}
+.modules-selection-page .module-card.is-suggested .module-card__state{background:var(--hs-gold-wash);color:var(--hs-gold)}
+/* the settings switch (54 × 30), drawn on the status label */
+.modules-selection-page .module-card__status{flex-direction:column-reverse;align-items:flex-end;gap:6px;font-size:var(--hs-text-xs)}
+.modules-selection-page .module-card__status::before{flex:none;width:54px;height:30px;background-image:radial-gradient(circle at 15px 50%,var(--hs-surface) 12px,transparent 12.5px)}
+.modules-selection-page .module-card.is-selected .module-card__status::before{background-position:24px 0}
+.modules-selection-page .module-card.is-selected .module-card__status{color:var(--hs-success)}
+.modules-selection-page .wiz-group--required .module-card{grid-template-columns:40px minmax(0,1fr);align-items:center;padding:12px 16px}
+.modules-selection-page .wiz-group--required .module-card__icon{width:40px;height:40px;border-radius:11px}
+.modules-selection-page .wiz-group--required .module-card + .module-card{border-top:0}
+.modules-selection-page .wiz-group--required .module-card__body{display:flex}
+.modules-selection-page .wiz-group--required .module-card__meta{align-items:center}
+.module-card.is-locked .module-card__icon{background:var(--hs-teal-wash);color:var(--hs-teal-deep)}
+
+/* features step: the same rows; the checkbox is the settings switch */
+.review-setup-page .review-group__title{font-size:var(--hs-text-base)}
+.review-setup-page .review-capabilities.wiz-caps{grid-template-columns:minmax(0,1fr);gap:0;border:1px solid var(--hs-line);border-radius:var(--hs-radius-xl);background:var(--hs-surface);overflow:hidden}
+.review-setup-page .wiz-caps .review-capability{margin:0;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none}
+.review-setup-page .wiz-caps .review-capability + .review-capability{border-top:1px solid var(--hs-line)}
+.review-setup-page .wiz-caps .review-capability label{display:grid;grid-template-columns:46px minmax(0,1fr) auto;gap:14px;align-items:start;padding:16px 18px;border:0;border-radius:0;background:transparent;box-shadow:none;cursor:pointer}
+.review-setup-page .wiz-caps .review-capability label:hover{background:var(--hs-ground)}
+.review-setup-page .wiz-caps .review-capability__icon{grid-column:1;grid-row:1;width:46px;height:46px;border-radius:13px}
+.review-setup-page .wiz-caps .review-capability__body{grid-column:2;grid-row:1}
+.review-setup-page .wiz-caps input[type=checkbox]{
+  grid-column:3;grid-row:1;align-self:center;appearance:none;-webkit-appearance:none;margin:0;flex:none;width:54px;height:30px;border-radius:var(--hs-radius-pill);cursor:pointer;
+  background:var(--hs-line-strong) no-repeat;background-image:radial-gradient(circle at 15px 50%,var(--hs-surface) 12px,transparent 12.5px);transition:background-color .18s ease,background-position .18s ease;
+}
+.review-setup-page .wiz-caps input[type=checkbox]:checked{background-color:var(--hs-teal);background-position:24px 0}
+[dir="rtl"] .review-setup-page .wiz-caps input[type=checkbox]{transform:scaleX(-1)}
+.review-setup-page .wiz-caps input[type=checkbox]:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
+.review-setup-page .wiz-caps input[type=checkbox]:disabled{opacity:.5;cursor:not-allowed}
+.review-setup-page .wiz-caps .review-capability.is-checked{background:transparent}
+.review-setup-page .wiz-caps .review-capability__title strong{color:var(--hs-navy)}
+.review-setup-page .wiz-caps small{color:var(--hs-ink);font-size:var(--hs-text-sm);line-height:1.6}
+.review-setup-page .review-badge{background:var(--hs-gold-wash);color:var(--hs-gold)}
+@media (max-width:640px){
+  .modules-selection-page .wiz-group--required .wiz-group__grid{grid-template-columns:minmax(0,1fr)}
+  .modules-selection-page .wiz-modules .module-card,.review-setup-page .wiz-caps .review-capability label{grid-template-columns:38px minmax(0,1fr) auto;padding:14px}
+  .modules-selection-page .wiz-modules .module-card{grid-template-columns:38px minmax(0,1fr)}
+}
