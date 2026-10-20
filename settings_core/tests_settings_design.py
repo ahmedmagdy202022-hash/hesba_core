@@ -33,6 +33,17 @@ class FrameTests(TestCase):
             self.assertContains(page, "data-settings-identity", msg_prefix=name)
             self.assertRegex(page.content.decode(), rf'is-active[^"]*" href="[^"]+" data-settings-nav-link="{key}" aria-current="page"')
 
+    def test_the_sections_from_other_apps_open_in_the_frame_too(self):
+        # Codex on #256: Branches, Taxes, E-invoicing and Import data are in the menu, so they keep it.
+        caps.set_capability_enabled(self.profile, "vat", True)
+        caps.set_capability_enabled(self.profile, "e_invoice", True)
+        for name, key in (("entities:list", "entities"), ("taxes:settings", "taxes"),
+                          ("einvoice:issuer", "einvoice"), ("imports:home", "imports")):
+            page = self.client.get(reverse(name) + "?lang=ar")
+            self.assertEqual(page.status_code, 200, name)
+            self.assertContains(page, "data-settings-frame", msg_prefix=name)
+            self.assertRegex(page.content.decode(), rf'data-settings-nav-link="{key}" aria-current="page"')
+
     def test_the_menu_says_what_each_section_holds(self):
         page = self.client.get(reverse("settings_core:overview") + "?lang=ar").content.decode()
         self.assertIn("مفيش مفتاح لسه", page)   # no backup key yet: a thing to do
