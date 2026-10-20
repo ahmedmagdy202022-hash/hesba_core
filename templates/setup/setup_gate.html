@@ -7,8 +7,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>بوابة الإعداد - حِسْبَة</title>
 <link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
-<link rel="stylesheet" href="{% static 'hesba/css/activity_selection.css' %}?v=setup-ui">
-<link rel="stylesheet" href="{% static 'hesba/css/setup_gate_web.css' %}?v=setup-ui">
+<link rel="stylesheet" href="{% static 'hesba/css/activity_selection.css' %}?v=st5-frame">
+<link rel="stylesheet" href="{% static 'hesba/css/setup_gate_web.css' %}?v=st5-frame">
 <link rel="stylesheet" href="{% static 'hesba/css/setup_gate_pack.css' %}?v=116d-mobile-safe-frame">
 <link rel="stylesheet" href="{% static 'hesba/css/setup_gate_mobile_refine.css' %}?v=116j-background-first">
 </head>
@@ -19,7 +19,7 @@
   <symbol id="setup-icon-arrow" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M13.5 8.5L10 12l3.5 3.5"></path><path d="M10.5 12H17"></path></symbol>
   <symbol id="setup-icon-caret" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5"></path></symbol>
 </svg>
-<main class="setup-shell" aria-label="Setup Gate">
+<main class="setup-shell activity-ui-layer" aria-label="Setup Gate">
   {% include "partials/setup_rail.html" with step=0 %}
   <header class="setup-header" aria-label="Setup header">
     <div class="setup-brand"><img class="setup-brand-logo" src="{% static 'hesba/setup_gate/assets/setup_gate_logo_approved.png' %}" alt="Hesba" onerror="this.hidden=true"></div>
@@ -29,6 +29,7 @@
       <button class="control-pill language-pill" type="button" data-lang-toggle aria-label="تغيير اللغة"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#setup-icon-globe"></use></svg><span data-i18n="language">العربية</span><svg class="ui-icon caret-icon" aria-hidden="true" focusable="false"><use href="#setup-icon-caret"></use></svg></button>
     </div>
   </header>
+  <div class="activity-panel setup-gate-panel">
   <section class="hero-card" aria-labelledby="setup-title">
     <div class="hero-copy">
       <p class="hero-kicker" data-i18n="heroKicker">بوابة الإعداد</p>
@@ -61,6 +62,7 @@
       <article class="activity-pill"><img src="{% static 'hesba/setup_gate/icons/activity_other_icon.png' %}" alt="" aria-hidden="true" onerror="this.hidden=true"><span data-i18n="other">أخرى</span></article>
     </div>
   </section>
+  </div>
 </main>
 <script>
 (function(){

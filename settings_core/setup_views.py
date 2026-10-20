@@ -165,11 +165,21 @@ def _fit_rows(activity, sub_activity):
 
     from . import activity_fit
 
+    from .operational_views import MODULE_ICONS
+    from .setup_services import module_needs
+
     arabic, english = activity_fit.module_rows(activity, sub_activity, "ar"), activity_fit.module_rows(activity, sub_activity, "en")
+    names = {ar["slug"]: (ar["label"], en["label"]) for ar, en in zip(arabic, english)}
     rows = []
     for ar, en in zip(arabic, english):
+        # SETUP-WIZARD: what this module needs and what needs it, among the modules offered here (the page switches them together).
+        needs = [slug for slug in module_needs(ar["slug"]) if slug in names]
+        needed_by = [slug for slug in names if ar["slug"] in module_needs(slug)]
         rows.append({"slug": ar["slug"], "preset": ar["preset"], "label_ar": ar["label"], "label_en": en["label"], "about_ar": ar["about"],
-                     "about_en": en["about"], "features": [{"label_ar": a["label"], "label_en": e["label"]} for a, e in zip(ar["features"], en["features"])]})
+                     "about_en": en["about"], "features": [{"label_ar": a["label"], "label_en": e["label"]} for a, e in zip(ar["features"], en["features"])],
+                     "icon": MODULE_ICONS.get(ar["slug"], "modules"), "needs": ",".join(needs), "needed_by": ",".join(needed_by),
+                     "needs_names": [{"ar": names[slug][0], "en": names[slug][1]} for slug in needs],
+                     "needed_by_names": [{"ar": names[slug][0], "en": names[slug][1]} for slug in needed_by]})
     features = [{"slug": a["slug"], "label_ar": a["label"], "label_en": e["label"], "about_ar": a["about"], "about_en": e["about"]}
                 for a, e in zip(activity_fit.features(activity, sub_activity, "ar"), activity_fit.features(activity, sub_activity, "en"))]
     return rows, features
@@ -183,16 +193,17 @@ def setup_modules(request):
     if not catalog.is_valid_activity(activity):
         activity, sub_activity = "", ""
     rows, features = _fit_rows(activity or catalog.COMMERCIAL, sub_activity)
+    groups = [{"key": key, "rows": [row for row in rows if row["preset"] == key]} for key in ("required", "suggested", "optional", "soon")]
     label_ar = catalog.sub_activity_label(activity, sub_activity, "ar") if catalog.is_valid_sub_activity(activity, sub_activity) else catalog.activity_label(activity or catalog.COMMERCIAL, "ar")
     label_en = catalog.sub_activity_label(activity, sub_activity, "en") if catalog.is_valid_sub_activity(activity, sub_activity) else catalog.activity_label(activity or catalog.COMMERCIAL, "en")
-    return render(request, "setup/modules_selection.html", {"module_rows": rows, "fit_features": features, "fit_activity": activity, "fit_sub": sub_activity,
+    return render(request, "setup/modules_selection.html", {"module_rows": rows, "module_groups": [group for group in groups if group["rows"]], "fit_features": features, "fit_activity": activity, "fit_sub": sub_activity,
                                                              "fit_label_ar": label_ar, "fit_label_en": label_en})
 
 
 def _capability_rows(activity, sub_activity, lang):
     """CAP-001: the review step's capability list, suggestions ticked."""
 
-    from . import capabilities
+    from . import activity_fit, capabilities
 
     activity, sub_activity = catalog.closest(activity, sub_activity)  # OTHER-001: offered what the closest activity is offered
     rows = []
@@ -208,8 +219,24 @@ def _capability_rows(activity, sub_activity, lang):
             "available": entry["available"],
             "suggested": is_suggested,
             "checked": entry["available"] and is_suggested,
+            # SETUP-WIZARD: the same facts the features screen shows, so the choice is made knowing them.
+            "icon": capabilities.ICONS.get(slug, "features"),
+            "where": capabilities.WHERE.get(slug, ("", ""))[1 if lang == "en" else 0],
+            "group": capabilities.group_of(slug),
+            "needs": [{"slug": module, "label": activity_fit.module_text(activity, sub_activity, module, lang)[0]} for module in capabilities.needs(slug)],
+            "needs_cap": "pos" if slug == "shift_required" else "",
         })
     return rows
+
+
+def _capability_groups(rows, lang):
+    """SETUP-WIZARD: the review step's features in the features screen's groups."""
+
+    from . import capabilities
+
+    index = 1 if lang == "en" else 0
+    return [{"key": key, "title": titles[index], "rows": [row for row in rows if row["group"] == key]}
+            for key, titles, _ in capabilities.GROUPS if any(row["group"] == key for row in rows)]
 
 
 def setup_review(request):
@@ -228,6 +255,11 @@ def setup_review(request):
         if slug not in catalog.MODULES_WITHOUT_BACKEND
     ]
 
+    capability_rows = _capability_rows(activity, sub_activity, lang)
+    if "caps" in request.GET:  # SETUP-WIZARD: the ticks made before switching language
+        ticked = set(request.GET.get("caps", "").split(","))
+        for row in capability_rows:
+            row["checked"] = row["available"] and row["slug"] in ticked
     context = {
         "lang": lang,
         "dir": "ltr" if lang == "en" else "rtl",
@@ -243,7 +275,8 @@ def setup_review(request):
         "sub_activity_label_en": catalog.sub_activity_label(activity, sub_activity, "en"),
         "back_href": _setup_modules_href(lang, activity, sub_activity, modules_param),
         "complete_url": reverse("setup_complete"),
-        "capability_rows": _capability_rows(activity, sub_activity, lang),
+        "capability_rows": capability_rows,
+        "capability_groups": _capability_groups(capability_rows, lang),
         "activity_features": _review_features(activity, sub_activity, modules_param, lang),
         **REVIEW_STRINGS[lang],
     }
