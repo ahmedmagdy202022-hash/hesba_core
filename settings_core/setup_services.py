@@ -39,6 +39,42 @@ def module_is_enabled(slug):
     return FeatureFlag.objects.filter(code=module_flag_code(slug), enabled=True).exists()
 
 
+#: SETTINGS-TRACK: a module that cannot work without another one. A purchase invoice is made out to a supplier, a
+#: production run takes its materials from the store, an appointment is booked for a customer. Switching one on
+#: switches on what it needs; what another switched-on module needs cannot be switched off.
+MODULE_NEEDS = {
+    "purchases": ("suppliers",),
+    "manufacturing": ("inventory",),
+    "appointments_visits": ("customers",),
+}
+
+
+def module_needs(slug):
+    return MODULE_NEEDS.get(slug, ())
+
+
+def needed_by(slug, enabled=None):
+    """The switched-on modules that need ``slug``."""
+
+    on = set(enabled_modules() if enabled is None else enabled)
+    return tuple(other for other in catalog.MODULE_SLUGS if other in on and slug in module_needs(other))
+
+
+def with_needs(modules):
+    """``modules`` and everything they need, in the catalog's order."""
+
+    chosen = set(modules)
+    changed = True
+    while changed:
+        changed = False
+        for slug in list(chosen):
+            for need in module_needs(slug):
+                if need not in chosen:
+                    chosen.add(need)
+                    changed = True
+    return tuple(slug for slug in catalog.MODULE_SLUGS if slug in chosen)
+
+
 def usable_modules():
     """Enabled modules that Hesba can actually serve today.
 
@@ -86,6 +122,7 @@ def complete_setup(profile, activity, sub_activity, modules_raw, user=None, capa
         raise ValueError(f"Unknown sub-activity for {activity}: {sub_activity!r}")
 
     chosen = catalog.clean_module_slugs(catalog.closest(activity, sub_activity)[0], modules_raw)  # OTHER-001: the closest activity's required ones
+    chosen = with_needs(chosen)  # SETTINGS-TRACK: purchases bring suppliers, manufacturing brings the store
 
     before = {
         "activity_slug": profile.activity_slug,
@@ -106,6 +143,13 @@ def complete_setup(profile, activity, sub_activity, modules_raw, user=None, capa
     from .capabilities import apply_setup_choice
 
     chosen_capabilities = apply_setup_choice(activity, sub_activity, capabilities_raw)
+    from .capabilities import needs as capability_needs
+
+    # SETTINGS-TRACK: a chosen capability brings the module it rides on (expiry dates need the store).
+    grown = with_needs(set(chosen) | {module for slug in chosen_capabilities for module in capability_needs(slug)})
+    if grown != tuple(chosen):
+        chosen = tuple(slug for slug in grown if slug not in catalog.MODULES_WITHOUT_BACKEND)
+        _write_module_flags(chosen)
 
     # HG-010: the installation is ready to record from today, so its first
     # accounting period is open before the first entry.
@@ -139,6 +183,15 @@ class ModuleChangeRefused(ValueError):
     """A module switch that the catalog does not allow."""
 
 
+class ModuleNeeded(ModuleChangeRefused):
+    """SETTINGS-TRACK: switching off a module another switched-on module needs."""
+
+    def __init__(self, slug, needed_by):
+        super().__init__(f"{slug} is needed by {', '.join(needed_by)}.")
+        self.slug = slug
+        self.needed_by = needed_by
+
+
 def module_settings_rows(profile, lang="ar"):
     """Every catalog module with the state the settings screen shows for it."""
 
@@ -162,7 +215,7 @@ def module_settings_rows(profile, lang="ar"):
 
 
 @transaction.atomic
-def set_module_enabled(profile, slug, enabled, user=None):
+def set_module_enabled(profile, slug, enabled, user=None, switched_modules=None):
     """Switch one module on or off after setup (SETTINGS-001).
 
     Switching off never deletes data: it only flips the module's feature flag,
@@ -178,6 +231,14 @@ def set_module_enabled(profile, slug, enabled, user=None):
         raise ModuleChangeRefused(f"{slug} is not available yet.")
     if not enabled and slug in catalog.required_modules(catalog.closest(profile.activity_slug, profile.sub_activity_slug)[0]):
         raise ModuleChangeRefused(f"{slug} is required for this activity.")
+    if not enabled and needed_by(slug):
+        raise ModuleNeeded(slug, needed_by(slug))
+    if enabled:
+        for need in module_needs(slug):  # SETTINGS-TRACK: what it cannot work without comes on with it
+            if not module_is_enabled(need):
+                set_module_enabled(profile, need, True, user)
+                if switched_modules is not None:
+                    switched_modules.append(need)
 
     code = module_flag_code(slug)
     was_enabled = module_is_enabled(slug)

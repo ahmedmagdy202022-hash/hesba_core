@@ -48,6 +48,7 @@ class ModuleSettingsTests(TestCase):
     def test_switching_off_and_on_keeps_the_data(self):
         sign_in(self)
         Supplier.objects.create(supplier_code="SUP-KEEP", name="Kept Supplier")
+        self.post("purchases", False)  # SETTINGS-TRACK: a purchase invoice needs its supplier, so purchases go first
         self.post("suppliers", False)
         self.assertNotIn("suppliers", enabled_modules())
         self.assertEqual(self.client.get(reverse("master_data:suppliers")).status_code, 403)

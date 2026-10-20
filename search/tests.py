@@ -66,5 +66,6 @@ class SearchTests(TestCase):
         invoice, *_ = posted_invoice_ready()
         self.assertIn("sales", self.keys(self.owner, invoice.invoice_number))
         self.assertNotIn("sales", self.keys(keeper, invoice.invoice_number))
+        set_module_enabled(ClientProfile.get_active(), "purchases", False, self.owner)  # SETTINGS-TRACK: purchases need suppliers
         set_module_enabled(ClientProfile.get_active(), "suppliers", False, self.owner)
         self.assertNotIn("suppliers", self.keys(self.owner, "nile"))

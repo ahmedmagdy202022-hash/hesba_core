@@ -1571,3 +1571,16 @@ No unresolved business or accounting decision was discovered while implementing 
 - **Tests if approved:**
   - buy, sell everything, then check that the card shows the purchase cost labelled as the last one;
   - check that sales cost is unchanged.
+
+## HG-053 — Options that ride on a module (settings track)
+
+- **Status:** IMPLEMENTED NOTE (settings gating only; no model, posting, costing or permission change).
+- **What:** expiry dates and serial numbers need the inventory module; instalments and e-invoicing need the customers module (`settings_core.capabilities.NEEDS`). A capability is at work only while its own switch **and** those modules are on (`enabled_capabilities`). Switching it on switches the module on. Switching the module off pauses it and keeps its switch, so it comes back with the module.
+- Modules too (`setup_services.MODULE_NEEDS`):
+  - purchases need suppliers;
+  - manufacturing needs inventory;
+  - appointments need customers.
+  Switching one on brings what it needs. What a switched-on module needs cannot be switched off. Setup applies the same rule to its choice.
+- **Effect to know about:** while inventory is off, sales and purchases of serial-tracked items no longer ask for serial numbers, and purchases record no expiry dates. That is the same as the capability being off, which is what the screens already show. The stock movements themselves are unchanged.
+- **Tests:** `settings_core/tests_settings_track.py`.
+
