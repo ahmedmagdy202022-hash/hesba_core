@@ -116,3 +116,77 @@ class OrderInvoiceLine(models.Model):
     class Meta:
         ordering = ["pk"]
         constraints = [models.UniqueConstraint(fields=["order_line", "sales_line"], name="orders_one_link_per_line")]
+
+
+# ---- T2: purchase orders ----
+
+class PurchaseStatus(models.TextChoices):
+    DRAFT = "draft", "Draft"
+    SENT = "sent", "Sent"
+    CONFIRMED = "confirmed", "Confirmed"
+    CANCELLED = "cancelled", "Cancelled"
+    CLOSED = "closed", "Closed"
+
+
+class PurchaseOrder(models.Model):
+    """T2: what is ordered from a supplier, received in one go or in parts on ordinary purchase invoices (HG-054)."""
+
+    number = models.CharField(max_length=20, unique=True)
+    supplier = models.ForeignKey("master_data.Supplier", on_delete=models.PROTECT, related_name="purchase_orders")
+    order_date = models.DateField(default=timezone.localdate)
+    expected_on = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=10, choices=PurchaseStatus.choices, default=PurchaseStatus.DRAFT, db_index=True)
+    notes = models.CharField(max_length=255, blank=True)
+    terms = models.TextField(blank=True)
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    entity = models.ForeignKey("entities.Entity", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-order_date", "-pk"]
+
+    def __str__(self):
+        return self.number
+
+    @property
+    def is_open(self):
+        return self.status in (PurchaseStatus.DRAFT, PurchaseStatus.SENT)
+
+    def is_late(self, today=None):
+        today = today or timezone.localdate()
+        return self.status == PurchaseStatus.CONFIRMED and self.expected_on is not None and self.expected_on < today
+
+
+class PurchaseOrderLine(models.Model):
+    order = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE, related_name="lines")
+    item = models.ForeignKey("master_data.Item", on_delete=models.PROTECT, related_name="+")
+    description = models.CharField(max_length=255, blank=True)
+    quantity = models.DecimalField(max_digits=14, decimal_places=3, validators=[MinValueValidator(Decimal("0.001"))])
+    unit_price = models.DecimalField(max_digits=14, decimal_places=2, validators=[MinValueValidator(Decimal("0"))])
+    discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0"),
+                                           validators=[MinValueValidator(Decimal("0")), MaxValueValidator(HUNDRED)])
+    vat_rate = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True,
+                                   help_text="The VAT % at the moment the order was confirmed with the supplier (empty while it is open).")
+
+    class Meta:
+        ordering = ["pk"]
+        constraints = [models.UniqueConstraint(fields=["order", "item"], name="orders_po_one_line_per_item")]
+
+    gross = SalesOrderLine.gross
+    discount = SalesOrderLine.discount
+    amount = SalesOrderLine.amount
+    discount_for = SalesOrderLine.discount_for
+
+
+class OrderReceiptLine(models.Model):
+    """Which ordinary purchase-invoice line received how much of a purchase-order line."""
+
+    order_line = models.ForeignKey(PurchaseOrderLine, on_delete=models.PROTECT, related_name="received")
+    purchase_line = models.ForeignKey("purchases.PurchaseLine", on_delete=models.CASCADE, related_name="+")
+    quantity = models.DecimalField(max_digits=14, decimal_places=3)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["pk"]
+        constraints = [models.UniqueConstraint(fields=["order_line", "purchase_line"], name="orders_one_receipt_per_line")]

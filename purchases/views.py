@@ -163,7 +163,10 @@ def invoice_list(request):
 
 @require_permission("purchases.create_purchase_invoice")
 def invoice_create(request):
+    from orders.purchasing import link_receipt, order_for_receipt, receipt_initial
+
     lang = _lang(request)
+    from_order = order_for_receipt(request.user, request.POST.get("order") if request.method == "POST" else request.GET.get("order"))  # T2
     if request.method == "POST":
         form = PurchaseDraftForm(request.POST, lang=lang)
         if vat_enabled():
@@ -182,6 +185,8 @@ def invoice_create(request):
                     invoice = create_purchase_draft_with_tax(form.cleaned_data, line_data, request.user)
                     attach_purchase_batches(invoice, line_data, request.user)  # BATCH-001
                     attach_purchase_serials(invoice, line_data, request.user)
+                    if from_order is not None:  # T2: this invoice receives goods ordered on the purchase order
+                        link_receipt(from_order, invoice, request.user, lang)
                     return invoice
 
                 invoice = form.create_with_fresh_number(create)  # UI-TRACK F12: atomic, retried on a taken PI- number
@@ -195,15 +200,21 @@ def invoice_create(request):
                     messages.success(request, STRINGS[lang]["saved"])
                 return redirect(f"/purchases/{invoice.pk}/?lang={lang}")
     else:
-        form = PurchaseDraftForm(lang=lang, initial=_party_initial(request, "supplier"))
+        initial = _party_initial(request, "supplier") or {}
+        line_initial = _reorder_initial(request)
+        if from_order is not None:  # T2: what is still to come on the order, at the order's prices
+            order_header, line_initial = receipt_initial(from_order, lang)
+            initial.update({key: getattr(value, "pk", value) for key, value in order_header.items()})
+        form = PurchaseDraftForm(lang=lang, initial=initial)
         if vat_enabled():
             del form.fields["tax_amount"]
-        line_formset = PurchaseLineFormSet(prefix="lines", form_kwargs={"lang": lang}, initial=_reorder_initial(request))
+        line_formset = PurchaseLineFormSet(prefix="lines", form_kwargs={"lang": lang}, initial=line_initial)
     offer_quick_add(form, request.user, lang)  # FB2-QUICKPARTY: + new supplier / customer / warehouse
     return render(
         request,
         "purchases/form.html",
-        _context(request, form=form, line_formset=line_formset, can_post=True, item_catalog=item_catalog(sale_prices=False, purchase_prices=True), scan_words=scan_words(lang), tax_rates=rates_by_item(), units=units_catalog(purchase=True)),
+        _context(request, form=form, line_formset=line_formset, can_post=True, item_catalog=item_catalog(sale_prices=False, purchase_prices=True), scan_words=scan_words(lang), tax_rates=rates_by_item(), units=units_catalog(purchase=True), from_order=from_order,
+                 from_order_url=f"/purchases/orders/{from_order.pk}/" if from_order else ""),
     )
 
 

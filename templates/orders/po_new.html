@@ -1,0 +1,14 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'purchase_orders:list' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ words.new }}</h1><p>{{ words.intro }}</p></div></section>
+{% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
+<form class="op-form" method="post" data-new-po-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+<div class="op-form-grid">
+<div class="op-field"><label for="po-supplier">{{ words.supplier }}</label><select id="po-supplier" name="supplier" required><option value="">{{ words.choose }}</option>{% for s in suppliers %}<option value="{{ s.pk }}"{% if chosen == s.pk|stringformat:'s' %} selected{% endif %}>{{ s.name }}{% if s.phone %} — {{ s.phone }}{% endif %}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="po-date">{{ words.order_date }}</label><input id="po-date" type="date" name="order_date" value="{% if post.order_date %}{{ post.order_date }}{% else %}{{ today|date:'Y-m-d' }}{% endif %}"></div>
+<div class="op-field"><label for="po-exp">{{ words.expected }}</label><input id="po-exp" type="date" name="expected_on" value="{% if post.expected_on %}{{ post.expected_on }}{% else %}{{ expected_default|date:'Y-m-d' }}{% endif %}"></div>
+<div class="op-field"><label for="po-notes">{{ words.notes }}</label><input id="po-notes" name="notes" maxlength="255" value="{{ post.notes }}"></div>
+<div class="op-field"><label for="po-terms">{{ words.terms }}</label><textarea id="po-terms" name="terms" rows="3" placeholder="{{ words.terms_hint }}">{{ post.terms }}</textarea></div>
+</div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.create_btn }}</button></div></form>
+{% endblock %}
