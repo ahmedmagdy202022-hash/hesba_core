@@ -1,12 +1,12 @@
 {% extends "operations/base.html" %}
 {% load hesba_format hesba_labels %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'orders:po_list' %}?lang={{ lang }}">← {{ words.back }}</a>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'purchase_orders:list' %}?lang={{ lang }}">← {{ words.back }}</a>
 <h1><bdi>{{ order.number }}</bdi> — {{ order.supplier.name }}</h1>
 <p>{{ words.date }} <bdi>{{ order.order_date|date:"Y-m-d" }}</bdi>{% if order.expected_on %} · {{ words.expected }} <bdi>{{ order.expected_on|date:"Y-m-d" }}</bdi>{% endif %} · {% include "orders/_po_state.html" %}</p></div>
 <div class="op-form-actions">
 {% if whatsapp %}<a class="op-secondary" href="{{ whatsapp }}" target="_blank" rel="noopener" data-share-whatsapp>{{ words.whatsapp }}</a>{% endif %}
-<a class="op-secondary" href="{% url 'orders:po_print' order.pk %}?lang={{ lang }}" target="_blank" rel="noopener" data-print-link>{{ words.print }}</a>
+<a class="op-secondary" href="{% url 'purchase_orders:print' order.pk %}?lang={{ lang }}" target="_blank" rel="noopener" data-print-link>{{ words.print }}</a>
 </div></section>
 {% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
 

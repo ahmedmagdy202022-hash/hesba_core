@@ -92,6 +92,7 @@ urlpatterns = [
     path("restaurant/", include("restaurant.urls")),
     path("work-orders/", include("workorders.urls")),
     path("orders/", include("orders.urls")),
+    path("purchases/orders/", include("orders.purchase_urls")),  # T2
     # CONTRACT-001: projects for contractors.
     path("projects/", include("projects.urls")),
     # MFG-001: recipes and production runs.

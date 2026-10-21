@@ -112,7 +112,7 @@ def new(request):
             error = _error(exc, lang)
         else:
             messages.success(request, WORDS[lang]["created"].format(number=order.number))
-            return redirect(f"{reverse('orders:po_detail', args=[order.pk])}?lang={lang}")
+            return redirect(f"{reverse('purchase_orders:detail', args=[order.pk])}?lang={lang}")
     today = timezone.localdate()
     return render(request, "orders/po_new.html", _base(request, lang, suppliers=Supplier.objects.filter(active=True).order_by("name")[:500],
                                                        chosen=request.POST.get("supplier") or request.GET.get("supplier") or "", post=request.POST,
@@ -150,7 +150,7 @@ def detail(request, pk):
             error = _error(exc, lang)
         else:
             messages.success(request, message)
-            return redirect(f"{reverse('orders:po_detail', args=[order.pk])}?lang={lang}")
+            return redirect(f"{reverse('purchase_orders:detail', args=[order.pk])}?lang={lang}")
         order.refresh_from_db()
     today = timezone.localdate()
     rows = po.quantities(order)
@@ -198,4 +198,4 @@ def print_order(request, pk):
            "reference": (own["expected"], order.expected_on.strftime("%Y-%m-%d")) if order.expected_on else None, "lines": lines,
            "has_discounts": any(line["discount"] for line in lines), "totals": totals, "grand_total": numbers["total"],
            "notes": order.notes, "terms": order.terms, "words_amount": numbers["total"]}
-    return _render(request, doc, f"/orders/purchase/{pk}/")
+    return _render(request, doc, f"/purchases/orders/{pk}/")

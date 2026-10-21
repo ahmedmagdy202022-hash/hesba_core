@@ -120,13 +120,13 @@ class PurchaseOrderTests(PurchaseOrderSetup):
     def test_the_screens_and_print(self):
         self.client.force_login(self.owner)
         order = self.order()
-        self.assertContains(self.client.get(reverse("orders:po_list") + "?lang=ar"), order.number)
-        detail = self.client.get(reverse("orders:po_detail", args=[order.pk]) + "?lang=ar")
+        self.assertContains(self.client.get(reverse("purchase_orders:list") + "?lang=ar"), order.number)
+        detail = self.client.get(reverse("purchase_orders:detail", args=[order.pk]) + "?lang=ar")
         self.assertContains(detail, "data-receive-order")
         self.assertContains(detail, "data-share-whatsapp")
-        self.assertContains(self.client.get(reverse("orders:po_print", args=[order.pk]) + "?lang=ar"), "أمر شراء")
+        self.assertContains(self.client.get(reverse("purchase_orders:print", args=[order.pk]) + "?lang=ar"), "أمر شراء")
         self.assertContains(self.client.get(reverse("purchases:list") + "?lang=ar"), "data-purchase-orders-link")
-        board = self.client.get(reverse("orders:po_list") + "?lang=ar").content.decode()
+        board = self.client.get(reverse("purchase_orders:list") + "?lang=ar").content.decode()
         self.assertRegex(board, r'is-current" href="/purchases/')  # the menu marks purchases, not quotations
 
     def test_only_buyers_make_purchase_orders(self):

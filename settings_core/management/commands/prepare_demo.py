@@ -350,7 +350,10 @@ class Command(BaseCommand):
         for slug, step in steps:
             if slug in on:
                 step(master, goods, owner, modules)
-        if "purchases" in modules:
+        from settings_core.models import ClientProfile
+
+        profile = ClientProfile.get_active()
+        if "purchases" in modules and getattr(profile, "activity_slug", "") == "commercial":  # T2: a trader's sample, not the clinic's or the factory's
             self._purchase_orders(master, goods, owner, modules)
 
     def _purchase_orders(self, master, goods, owner, modules):

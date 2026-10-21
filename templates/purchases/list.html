@@ -5,7 +5,7 @@
 {% block operation_content %}
 <section class="op-title-row">
   <div><h1>{{ words.invoices }}</h1><p>{% if lang == 'en' %}Draft, post, review, and safely reverse purchase invoices.{% else %}أنشئ مسودات المشتريات ورحّلها وراجعها واعكسها بأمان.{% endif %}</p></div>
-  <div class="op-form-actions"><a class="op-secondary" href="{% url 'orders:po_list' %}?lang={{ lang }}" data-purchase-orders-link>{% if lang == 'en' %}Purchase orders{% else %}أوامر الشراء{% endif %}</a>
+  <div class="op-form-actions"><a class="op-secondary" href="{% url 'purchase_orders:list' %}?lang={{ lang }}" data-purchase-orders-link>{% if lang == 'en' %}Purchase orders{% else %}أوامر الشراء{% endif %}</a>
   {% if can_create %}<a class="op-primary" href="{% url 'purchases:create' %}?lang={{ lang }}">+ {{ words.new }}</a>{% endif %}</div>
 </section>
 <form class="op-filters" method="get">

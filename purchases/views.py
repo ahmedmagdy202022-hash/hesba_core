@@ -214,7 +214,7 @@ def invoice_create(request):
         request,
         "purchases/form.html",
         _context(request, form=form, line_formset=line_formset, can_post=True, item_catalog=item_catalog(sale_prices=False, purchase_prices=True), scan_words=scan_words(lang), tax_rates=rates_by_item(), units=units_catalog(purchase=True), from_order=from_order,
-                 from_order_url=f"/orders/purchase/{from_order.pk}/" if from_order else ""),
+                 from_order_url=f"/purchases/orders/{from_order.pk}/" if from_order else ""),
     )
 
 
