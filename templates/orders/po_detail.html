@@ -1,0 +1,56 @@
+{% extends "operations/base.html" %}
+{% load hesba_format hesba_labels %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'orders:po_list' %}?lang={{ lang }}">← {{ words.back }}</a>
+<h1><bdi>{{ order.number }}</bdi> — {{ order.supplier.name }}</h1>
+<p>{{ words.date }} <bdi>{{ order.order_date|date:"Y-m-d" }}</bdi>{% if order.expected_on %} · {{ words.expected }} <bdi>{{ order.expected_on|date:"Y-m-d" }}</bdi>{% endif %} · {% include "orders/_po_state.html" %}</p></div>
+<div class="op-form-actions">
+{% if whatsapp %}<a class="op-secondary" href="{{ whatsapp }}" target="_blank" rel="noopener" data-share-whatsapp>{{ words.whatsapp }}</a>{% endif %}
+<a class="op-secondary" href="{% url 'orders:po_print' order.pk %}?lang={{ lang }}" target="_blank" rel="noopener" data-print-link>{{ words.print }}</a>
+</div></section>
+{% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
+
+<section class="op-summary-grid">
+<article><small>{{ words.gross }}</small><strong>{{ numbers.gross|money }}</strong></article>
+{% if numbers.discount %}<article><small>{{ words.discount_total }}</small><strong>{{ numbers.discount|money }}</strong></article>{% endif %}
+{% if numbers.tax %}<article><small>{{ words.tax }}</small><strong>{{ numbers.tax|money }}</strong></article>{% endif %}
+<article><small>{{ words.net_total }}</small><strong data-order-total>{{ numbers.total|money }}</strong></article>
+</section>
+
+{% if moves %}<h2>{{ words.next }}</h2>
+<div class="op-form-actions wo-tabs" data-moves>{% for status, label in moves %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="move"><input type="hidden" name="to" value="{{ status }}"><button class="{% if status == 'cancelled' %}op-danger{% elif status == 'confirmed' %}op-primary{% else %}op-secondary{% endif %}" type="submit" data-move="{{ status }}">{{ label }}</button></form>{% endfor %}</div>{% endif %}
+
+{% if can_receive %}<section class="op-detail-meta" data-receive><p>{{ words.receive_hint }}</p>
+<div class="op-form-actions"><a class="op-primary" href="{% url 'purchases:create' %}?lang={{ lang }}&order={{ order.pk }}" data-receive-order>{{ words.receive }}</a></div></section>{% endif %}
+
+<h2>{{ words.lines }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-order-lines><thead><tr><th>{{ words.item }}</th><th>{{ words.qty }}</th><th>{{ words.price }}</th><th>{{ words.discount }}</th><th>{{ words.amount }}</th>{% if not order.is_open %}<th>{{ words.received }}</th><th>{{ words.left }}</th>{% endif %}<th></th></tr></thead><tbody>
+{% for row in rows %}{% with line=row.line %}<tr data-line="{{ line.pk }}"><td class="op-cell-text">{{ line.item.item_name }}</td>
+<td>{{ line.quantity|qty }}</td><td>{{ line.unit_price|money }}</td><td>{% if line.discount_percent %}{{ line.discount_percent|floatformat:"-2" }}%{% else %}—{% endif %}</td><td>{{ line.amount|money }}</td>
+{% if not order.is_open %}<td data-received>{{ row.received|qty }}{% if row.drafted %} <small class="op-muted">+ {{ row.drafted|qty }} {{ words.drafted }}</small>{% endif %}</td><td data-left>{{ row.left|qty }}</td>{% endif %}
+<td>{% if editable %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="remove_line"><input type="hidden" name="line" value="{{ line.pk }}"><button class="op-secondary" type="submit">{{ words.remove }}</button></form>{% endif %}</td></tr>{% endwith %}
+{% empty %}<tr><td colspan="8" class="op-empty">{{ words.no_lines }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if editable %}<form class="op-form" method="post" data-add-line>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="add_line"><div class="op-form-grid">
+<div class="op-field"><label for="po-item">{{ words.item }}</label><select id="po-item" name="item" required><option value="">{{ words.choose }}</option>{% for item in items %}<option value="{{ item.pk }}">{{ item.item_name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="po-qty">{{ words.qty }}</label><input id="po-qty" name="quantity" inputmode="decimal" value="1"></div>
+<div class="op-field"><label for="po-price">{{ words.price }}</label><input id="po-price" name="unit_price" inputmode="decimal" placeholder="{{ words.price_hint }}"></div>
+<div class="op-field"><label for="po-disc">{{ words.discount }}</label><input id="po-disc" name="discount_percent" inputmode="decimal" value="0"></div>
+</div><div class="op-form-actions"><button class="op-secondary" type="submit">{{ words.add }}</button></div></form>
+
+<h2>{{ words.details }}</h2>
+<form class="op-form" method="post" data-details>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="details"><div class="op-form-grid">
+<div class="op-field"><label for="po-date">{{ words.order_date }}</label><input id="po-date" type="date" name="order_date" value="{{ order.order_date|date:'Y-m-d' }}"></div>
+<div class="op-field"><label for="po-exp">{{ words.expected }}</label><input id="po-exp" type="date" name="expected_on" value="{{ order.expected_on|date:'Y-m-d' }}"></div>
+<div class="op-field"><label for="po-notes">{{ words.notes }}</label><input id="po-notes" name="notes" maxlength="255" value="{{ order.notes }}"></div>
+<div class="op-field"><label for="po-terms">{{ words.terms }}</label><textarea id="po-terms" name="terms" rows="3" placeholder="{{ words.terms_hint }}">{{ order.terms }}</textarea></div>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form>
+{% else %}{% if order.notes or order.terms %}<section class="op-detail-meta">{% if order.notes %}<p><strong>{{ words.notes }}:</strong> {{ order.notes }}</p>{% endif %}{% if order.terms %}<p><strong>{{ words.terms }}:</strong> {{ order.terms|linebreaksbr }}</p>{% endif %}</section>{% endif %}{% endif %}
+
+{% if not order.is_open %}<h2>{{ words.receipts }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-order-receipts><thead><tr><th>{{ words.number }}</th><th>{{ words.date }}</th><th>{{ words.status }}</th><th>{{ words.total }}</th></tr></thead><tbody>
+{% for invoice in receipts %}<tr data-invoice="{{ invoice.pk }}"><td><a href="{% url 'purchases:detail' invoice.pk %}?lang={{ lang }}"><bdi>{{ invoice.invoice_number }}</bdi></a></td><td><bdi>{{ invoice.invoice_date|date:"Y-m-d" }}</bdi></td>
+<td><span class="op-status op-status-{{ invoice.status }}">{% choice_label invoice "status" %}</span></td><td>{{ invoice.total_amount|money }}</td></tr>
+{% empty %}<tr><td colspan="4" class="op-empty">{{ words.no_receipts }}</td></tr>{% endfor %}
+</tbody></table></div>{% endif %}
+{% endblock %}

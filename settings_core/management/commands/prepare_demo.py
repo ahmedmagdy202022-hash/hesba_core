@@ -350,6 +350,38 @@ class Command(BaseCommand):
         for slug, step in steps:
             if slug in on:
                 step(master, goods, owner, modules)
+        if "purchases" in modules:
+            self._purchase_orders(master, goods, owner, modules)
+
+    def _purchase_orders(self, master, goods, owner, modules):
+        """T2: an order sent to a supplier, and one confirmed and partly received on a purchase invoice."""
+
+        from orders import purchasing as po
+        from orders.models import PurchaseOrder, PurchaseStatus
+        from purchases.services import post_purchase_invoice
+        from taxes.services import create_purchase_draft_with_tax
+
+        suppliers = master.get("suppliers") or []
+        if PurchaseOrder.objects.exists() or not suppliers or len(goods) < 2:
+            return
+        today = timezone.localdate()
+        sent = po.create_order({"supplier": suppliers[0], "order_date": today - timedelta(days=1), "terms": "التوريد في المخزن الرئيسي."}, owner)
+        for item, quantity in ((goods[0], "24"), (goods[1], "12")):
+            po.add_line(sent, item, owner, quantity=quantity)
+        po.move(sent, PurchaseStatus.SENT, owner)
+        order = po.create_order({"supplier": suppliers[-1], "order_date": today - timedelta(days=8), "expected_on": today - timedelta(days=2),
+                                 "terms": "الدفع بعد 30 يوم من الاستلام."}, owner)
+        for item, quantity in ((goods[1], "20"), (goods[0], "10")):
+            po.add_line(order, item, owner, quantity=quantity, discount_percent="2")
+        order = po.move(order, PurchaseStatus.CONFIRMED, owner)
+        first = order.lines.order_by("pk").first()
+        half = first.quantity / 2
+        invoice = create_purchase_draft_with_tax({"invoice_number": "DEMO-PO-001", "invoice_date": today - timedelta(days=3), "supplier": order.supplier,
+                                                  "receiving_location": master["location"], "paid_now": Decimal("0"), "notes": f"أمر شراء {order.number}"},
+                                                 [{"item": first.item, "quantity": half, "unit_purchase_price": first.unit_price,
+                                                   "line_discount_amount": first.discount_for(half)}], owner)
+        po.link_receipt(order, invoice, owner)
+        post_purchase_invoice(invoice.pk, user=owner)
 
     def _barcodes(self, master, goods, owner, modules):
         from barcode.symbology import internal_ean13

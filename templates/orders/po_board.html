@@ -1,0 +1,26 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'purchases:list' %}?lang={{ lang }}">← {% if lang == 'en' %}Purchases{% else %}المشتريات{% endif %}</a><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div>
+{% if can_manage %}<div class="op-form-actions"><a class="op-primary" href="{% url 'orders:po_new' %}?lang={{ lang }}" data-new-po>{{ words.new }}</a></div>{% endif %}</section>
+<section class="op-summary-grid">
+<article><small>{{ words.f_open }}</small><strong data-count-open>{{ counts.open }}</strong></article>
+<article><small>{{ words.f_waiting }}</small><strong data-count-waiting>{{ counts.waiting }}</strong></article>
+<article><small>{{ words.f_late }}</small><strong class="{% if counts.late %}wo-low{% endif %}" data-count-late>{{ counts.late }}</strong></article>
+</section>
+<form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="show" value="{{ show }}">
+<label class="sr-only" for="po-q">{{ words.search }}</label><input id="po-q" type="search" name="q" value="{{ query }}" placeholder="{{ words.search }}"><button type="submit">{{ words.find }}</button></form>
+<nav class="op-form-actions wo-tabs" data-po-filter>
+<a class="{% if show == 'waiting' %}op-primary{% else %}op-secondary{% endif %}" href="?lang={{ lang }}&show=waiting">{{ words.f_waiting }}</a>
+<a class="{% if show == 'late' %}op-primary{% else %}op-secondary{% endif %}" href="?lang={{ lang }}&show=late">{{ words.f_late }}</a>
+<a class="{% if show == 'open' %}op-primary{% else %}op-secondary{% endif %}" href="?lang={{ lang }}&show=open">{{ words.f_open }}</a>
+<a class="{% if show == 'done' %}op-primary{% else %}op-secondary{% endif %}" href="?lang={{ lang }}&show=done">{{ words.f_done }}</a>
+<a class="{% if show == 'all' %}op-primary{% else %}op-secondary{% endif %}" href="?lang={{ lang }}&show=all">{{ words.f_all }}</a>
+</nav>
+<div class="op-table-wrap"><table class="op-table" data-purchase-orders><thead><tr><th>{{ words.number }}</th><th>{{ words.supplier }}</th><th>{{ words.date }}</th><th>{{ words.expected }}</th><th>{{ words.status }}</th><th>{{ words.total }}</th></tr></thead><tbody>
+{% for row in rows %}<tr data-order="{{ row.pk }}"><td><a href="{% url 'orders:po_detail' row.pk %}?lang={{ lang }}"><bdi>{{ row.number }}</bdi></a></td><td class="op-cell-text">{{ row.supplier.name }}</td>
+<td><bdi>{{ row.order_date|date:"Y-m-d" }}</bdi></td><td>{% if row.expected_on %}<bdi>{{ row.expected_on|date:"Y-m-d" }}</bdi>{% else %}—{% endif %}</td>
+<td>{% with state=row.state %}{% include "orders/_po_state.html" %}{% endwith %}</td><td>{{ row.total|money }}</td></tr>
+{% empty %}<tr><td colspan="6" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}
