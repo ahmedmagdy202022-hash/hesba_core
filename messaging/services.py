@@ -16,9 +16,12 @@ from urllib.parse import quote
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from audit.models import AuditEventType, AuditLog
+from entities import scope as entity_scope
+from entities.current import working_in
 from permissions.services import user_has_permission
 
 from .models import MessageKind, MessageTemplate, OutboxMessage, OutboxStatus
@@ -142,7 +145,8 @@ def _instalments(today, company, currency):
     if not installments_enabled():
         return
     horizon = today + timedelta(days=INSTALMENT_AHEAD_DAYS)
-    plans = (InstalmentPlan.objects.filter(status=PlanStatus.ACTIVE, invoice__status="posted", instalments__due_date__lte=horizon).distinct()
+    plans = (entity_scope.scope(InstalmentPlan.objects, "invoice__" + entity_scope.SALES_INVOICE)
+             .filter(status=PlanStatus.ACTIVE, invoice__status="posted", instalments__due_date__lte=horizon).distinct()
              .select_related("invoice", "customer"))
     for plan in plans:
         phone = plan.customer.whatsapp or plan.customer.phone
@@ -188,35 +192,74 @@ def _refills(today, company, currency):
 
 
 SOURCES = {MessageKind.DUE: _due, MessageKind.INSTALMENT: _instalments, MessageKind.APPOINTMENT: _appointments, MessageKind.REFILL: _refills}
+#: Appointments carry no entity of their own; like every record without one, they belong to the main entity (HG-034).
+UNSCOPED = {MessageKind.APPOINTMENT}
+
+
+def _entities():
+    """Each entity is gathered on its own, so a message belongs to one entity and the amount is that entity's."""
+
+    from entities.models import Entity
+    from entities.services import is_multi_entity
+
+    if not is_multi_entity():
+        return [None]
+    return list(Entity.objects.filter(active=True).order_by("-is_main", "code"))
 
 
 def build(today=None):
-    """Queue today's messages. Running it again the same day adds only what is new; a customer reminded within the kind's
-    ``every_days`` is not reminded again. Returns how many messages were added."""
+    """Queue today's messages. Running it again the same day adds only what is new. A customer sent a reminder within
+    the kind's ``every_days`` is not reminded again; a reminder still waiting from an earlier day moves to today with
+    today's figures instead of being queued twice. Returns how many messages were added."""
 
     today = today or timezone.localdate()
     company, currency = _company()
     added = 0
-    for kind, source in SOURCES.items():
-        row = template(kind)
-        if not row.active:
-            continue
-        since = today - timedelta(days=row.every_days - 1)
-        recent = set(OutboxMessage.objects.filter(kind=kind, day__gte=since).exclude(status=OutboxStatus.SKIPPED, day__lt=today)
-                     .values_list("key", flat=True))
-        for candidate in source(today, company, currency):
-            if candidate["key"] in recent or not _number(candidate["phone"]):
-                continue
-            text = render(row.text, name=candidate["name"], company=company, **candidate["values"])
-            try:
-                with transaction.atomic():
-                    OutboxMessage.objects.create(kind=kind, key=candidate["key"], day=today, name=candidate["name"][:255],
-                                                 phone=_number(candidate["phone"])[:30], text=text, link=candidate["link"][:255])
-            except IntegrityError:
-                continue  # queued by another request a moment ago
-            recent.add(candidate["key"])
-            added += 1
+    for entity in _entities():
+        with working_in(entity):
+            for kind, source in SOURCES.items():
+                if entity is not None and not entity.is_main and kind in UNSCOPED:
+                    continue
+                row = template(kind)
+                if row.active:
+                    added += _gather(kind, source, row, entity, today, company, currency)
     return added
+
+
+def _gather(kind, source, row, entity, today, company, currency):
+    since = today - timedelta(days=row.every_days - 1)
+    done = OutboxMessage.objects.filter(kind=kind, day__gte=since).filter(
+        Q(status=OutboxStatus.SENT) | Q(status=OutboxStatus.SKIPPED, day=today))
+    recent = set(done.values_list("key", flat=True))
+    waiting = {message.key: message for message in OutboxMessage.objects.filter(kind=kind, status=OutboxStatus.PENDING)}
+    added = 0
+    for candidate in source(today, company, currency):
+        key = candidate["key"] if entity is None else f"{candidate['key']}@{entity.pk}"
+        phone = _number(candidate["phone"])
+        if key in recent or not phone:
+            continue
+        fields = {"name": candidate["name"][:255], "phone": phone[:30], "link": candidate["link"][:255], "entity": entity,
+                  "text": render(row.text, name=candidate["name"], company=company, **candidate["values"])}
+        earlier = waiting.get(key)
+        if earlier is not None:
+            if earlier.day != today:  # still waiting from an earlier day: it moves to today, with today's figures
+                OutboxMessage.objects.filter(pk=earlier.pk, status=OutboxStatus.PENDING).update(day=today, **fields)
+            recent.add(key)
+            continue
+        try:
+            with transaction.atomic():
+                OutboxMessage.objects.create(kind=kind, key=key, day=today, **fields)
+        except IntegrityError:
+            continue  # queued by another request a moment ago
+        recent.add(key)
+        added += 1
+    return added
+
+
+def visible(user):
+    """The messages this user may see and send: the entity being worked in, never another (HG-034)."""
+
+    return entity_scope.for_user(entity_scope.scope(OutboxMessage.objects.all(), "entity"), "entity", user)
 
 
 # ---- sending ----
@@ -231,7 +274,9 @@ def mark(message, status, user, lang="ar"):
 
     if not can_view(user):
         raise PermissionDenied("The outbox needs a customer-facing permission.")
-    message = OutboxMessage.objects.select_for_update().get(pk=message.pk)
+    message = visible(user).select_for_update().filter(pk=message.pk).first()
+    if message is None:
+        raise PermissionDenied("This message belongs to another entity.")
     if message.status != OutboxStatus.PENDING:
         raise ValidationError(MESSAGES[lang]["done"])
     message.status = status
@@ -243,7 +288,7 @@ def mark(message, status, user, lang="ar"):
     return message
 
 
-def counts(today=None):
+def counts(user, today=None):
     today = today or timezone.localdate()
-    rows = OutboxMessage.objects.filter(day=today)
+    rows = visible(user).filter(day=today)
     return {status: rows.filter(status=status).count() for status in OutboxStatus.values}

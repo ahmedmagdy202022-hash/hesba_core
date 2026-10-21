@@ -56,6 +56,37 @@ class BuildTests(OutboxSetup):
         self.assertEqual(services.build(TODAY + timedelta(days=3)), 0)  # within the 7 days
         self.assertEqual(services.build(TODAY + timedelta(days=7)), 1)
 
+    def test_a_message_left_waiting_moves_to_the_next_day_and_is_not_queued_twice(self):
+        services.build()
+        first = OutboxMessage.objects.get()
+        tomorrow = TODAY + timedelta(days=1)
+        self.assertEqual(services.build(tomorrow), 0)  # nothing new: the same reminder, still waiting
+        first.refresh_from_db()
+        self.assertEqual((first.day, first.status), (tomorrow, OutboxStatus.PENDING))  # still on the outbox tomorrow
+        self.assertEqual(OutboxMessage.objects.count(), 1)
+        services.mark(first, OutboxStatus.SENT, self.owner)
+        self.assertEqual(services.build(tomorrow + timedelta(days=1)), 0)  # sent now: the 7 days start
+
+    def test_each_entity_gets_its_own_messages_and_no_one_sends_another_entitys(self):
+        from entities.models import Entity, EntityMembership
+        from entities.services import main_entity
+
+        branch = Entity.objects.create(code="E-MS", name_ar="فرع الرسائل")
+        services.build()
+        message = OutboxMessage.objects.get()  # the debt sits in the main entity; the branch has none
+        self.assertEqual(message.entity, main_entity())
+        outsider = person(RoleCode.CASHIER, "ms_branch")
+        EntityMembership.objects.create(user=outsider, entity=branch, is_default=True)
+        self.assertFalse(services.visible(outsider).exists())
+        with self.assertRaises(PermissionDenied):
+            services.mark(message, OutboxStatus.SENT, outsider)
+        self.client.force_login(outsider)
+        self.assertNotContains(self.client.get(reverse("messaging:outbox") + "?lang=ar"), f'data-send="{message.pk}"')
+        self.assertEqual(self.client.post(reverse("messaging:outbox"), {"lang": "ar", "action": "send", "message": message.pk}).status_code, 404)
+        message.refresh_from_db()
+        self.assertEqual(message.status, OutboxStatus.PENDING)
+        self.assertTrue(services.visible(self.owner).filter(pk=message.pk).exists())
+
     def test_a_switched_off_kind_sends_nothing_and_unknown_words_are_refused(self):
         services.save_template(MessageKind.DUE, {"text": "تذكير {name}", "every_days": "7"}, self.owner)  # active unticked
         self.assertEqual(services.build(), 0)

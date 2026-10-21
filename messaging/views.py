@@ -11,7 +11,7 @@ from permissions.decorators import require_any_permission
 from reports.navigation import CUSTOMER_AUDIENCE
 
 from . import services
-from .models import MessageKind, OutboxMessage, OutboxStatus
+from .models import MessageKind, OutboxStatus
 
 WORDS = {
     "ar": {
@@ -54,10 +54,10 @@ def outbox(request):
         action = request.POST.get("action")
         try:
             if action == "send":
-                message = services.mark(get_object_or_404(OutboxMessage, pk=request.POST.get("message") or 0), OutboxStatus.SENT, request.user, lang)
+                message = services.mark(get_object_or_404(services.visible(request.user), pk=request.POST.get("message") or 0), OutboxStatus.SENT, request.user, lang)
                 return redirect(services.whatsapp_url(message))
             if action == "skip":
-                services.mark(get_object_or_404(OutboxMessage, pk=request.POST.get("message") or 0), OutboxStatus.SKIPPED, request.user, lang)
+                services.mark(get_object_or_404(services.visible(request.user), pk=request.POST.get("message") or 0), OutboxStatus.SKIPPED, request.user, lang)
                 flash.success(request, words["saved"])
             elif action == "refresh":
                 added = services.build()
@@ -77,7 +77,7 @@ def outbox(request):
     services.build()  # opening the outbox gathers what is new today
     show = request.GET.get("show") if request.GET.get("show") in OutboxStatus.values else "pending"
     today = timezone.localdate()
-    rows = OutboxMessage.objects.filter(status=show)
+    rows = services.visible(request.user).filter(status=show)
     rows = rows.filter(day=today) if show == "pending" else rows.order_by("-sent_at", "-pk")
     rows = list(rows[:300])
     from permissions.services import user_has_permission
@@ -87,5 +87,5 @@ def outbox(request):
         row.can_open = bool(row.link) and (sees_cards or not row.link.startswith("/parties/"))
     return render(request, "messaging/outbox.html", {
         "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": words, "page_title": words["title"], "rows": rows, "show": show,
-        "counts": services.counts(today), "kinds": services.KIND_LABELS[lang], "templates": services.templates(), "can_edit": services.can_edit(request.user),
+        "counts": services.counts(request.user, today), "kinds": services.KIND_LABELS[lang], "templates": services.templates(), "can_edit": services.can_edit(request.user),
         "api": services.api_connected(), "error": error, "today": today})

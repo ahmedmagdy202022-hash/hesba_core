@@ -45,6 +45,8 @@ class OutboxMessage(models.Model):
     phone = models.CharField(max_length=30)
     text = models.TextField()
     link = models.CharField(max_length=255, blank=True, help_text="The record the message is about, inside Hesba.")
+    #: The entity whose record the message is about; only people working in it see and send it (HG-034).
+    entity = models.ForeignKey("entities.Entity", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
     status = models.CharField(max_length=10, choices=OutboxStatus.choices, default=OutboxStatus.PENDING, db_index=True)
     #: link (opened in WhatsApp by a person) or api (sent by the WhatsApp Business account).
     channel = models.CharField(max_length=10, blank=True)

@@ -1702,6 +1702,8 @@ The entries below are the protected-logic decisions in the commercial gate, reco
     - tomorrow's booked or confirmed appointments;
     - chronic prescriptions due for a refill.
   - `key` + day is unique, so nothing is queued twice. A customer reminded of a kind is not reminded again within that kind's `every_days`.
+  - A message left waiting moves to the next day with that day's figures; the `every_days` wait starts only once it is sent.
+  - Each entity is gathered on its own and every message keeps its `entity`; the outbox, the counts and send/skip show only the entity being worked in (HG-034). Appointments have no entity, so their messages belong to the main entity.
   - "Send" marks the message sent and opens WhatsApp with the text written. "Skip" moves it aside.
   - Each message moves once. A second click is refused.
 - **Permissions:** existing ones only. The outbox is for the customer-facing roles (`sees_customers`); the wording is edited with `settings.manage_settings`.
