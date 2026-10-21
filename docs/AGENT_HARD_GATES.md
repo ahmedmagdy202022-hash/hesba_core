@@ -1620,6 +1620,36 @@ The entries below are the protected-logic decisions in the commercial gate, reco
   - entity scope;
   - posting totals equal the order.
 
+## HG-062 — The pharmacy pack: drug data and prescriptions (T10)
+
+- **Status:** IMPLEMENTED NOTE when T10 merges. Additive tables only, like HG-054.
+- **What:**
+  - A new `pharmacy` app.
+  - `DrugInfo` sits beside an item, one to one: active ingredient, strength, form, maker, and "prescription only".
+  - `Prescription` and its lines record the paper as the patient brings it.
+  - `PrescriptionInvoice` records which ordinary sales invoice dispensed it.
+- **Not changed:**
+  - The `Item` model (no new column), sales posting, stock movement, batches and expiry, and the customer ledger.
+- **How:**
+  - Alternatives are read, never stored: the other active items with the same normalised active ingredient.
+  - "Dispense" opens the ordinary sales invoice form with `?prescription=<pk>`. The draft is saved by `create_sales_draft_with_tax` and posted the usual way, so stock, the batch that expires first, the cashbox and the ledger behave as on any sale.
+  - `link_dispense` locks the prescription row inside the transaction that saves the draft. A one-off prescription that another invoice already dispensed is refused, so the same paper is never dispensed twice.
+  - A linked draft counts as dispensed; only a cancelled invoice frees the prescription.
+  - A chronic prescription (`refill_days`) may be dispensed again and shows as due a few days before its next date.
+  - The items import takes the drug columns (active ingredient, strength, form, maker, prescription only) while the capability is on, and writes them through `pharmacy.services.from_import` after the item row is saved.
+- **Risk:**
+  - Nothing stops selling a "prescription only" drug without a prescription: it is shown, not enforced. Enforcing it would touch the sales screens and is a choice for Ahmed.
+  - Ingredient matching is by spelling. "Paracetamol" and "باراسيتامول" are two ingredients until written the same way. The form suggests the spellings already used.
+- **Tests:** `pharmacy/tests.py` covers:
+  - matching keys and alternatives (same strength and form first, then in stock);
+  - prescription → invoice → posted, with stock leaving once;
+  - a second dispense refused;
+  - a cancelled invoice frees the prescription;
+  - another customer's invoice refused;
+  - a chronic refill coming due;
+  - the import columns;
+  - permissions, the capability gate, and the pages in Arabic and English.
+
 ## HG-055 — Bank accounts (T3)
 
 - **Status:** OPEN PROPOSAL.

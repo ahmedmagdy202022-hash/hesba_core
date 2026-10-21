@@ -1,0 +1,57 @@
+{% extends "operations/base.html" %}
+{% load hesba_format hesba_labels %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'pharmacy:prescriptions' %}?lang={{ lang }}">← {{ words.back }}</a>
+<h1><bdi>{{ prescription.number }}</bdi> — {{ prescription.patient_name }}</h1>
+<p>{{ words.date }} <bdi>{{ prescription.issued_on|date:"Y-m-d" }}</bdi>{% if prescription.doctor_name %} · {{ words.doctor }}: {{ prescription.doctor_name }}{% endif %}{% if prescription.refill_days %} · {{ words.refill }} <bdi>{{ prescription.refill_days }}</bdi>{% endif %} · {% include "pharmacy/_state.html" %}{% if next_refill %} · {{ words.next_refill }} <bdi data-next-refill>{{ next_refill|date:"Y-m-d" }}</bdi>{% endif %}</p></div>
+<div class="op-form-actions">
+{% if whatsapp %}<a class="op-secondary" href="{{ whatsapp }}" target="_blank" rel="noopener" data-share-whatsapp>{{ words.whatsapp }}</a>{% endif %}
+{% if rows %}<a class="op-secondary" href="{% url 'pharmacy:print' prescription.pk %}?lang={{ lang }}" target="_blank" rel="noopener" data-print-link>{{ words.print }}</a>{% endif %}
+</div></section>
+{% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
+
+{% if can_dispense %}<section class="op-detail-meta" data-dispense><p>{{ words.dispense_hint }}</p>
+<div class="op-form-actions"><a class="op-primary" href="{% url 'sales:create' %}?lang={{ lang }}&prescription={{ prescription.pk }}" data-dispense-rx>{% if dispenses %}{{ words.dispense_again }}{% else %}{{ words.dispense }}{% endif %}</a></div></section>{% endif %}
+
+<h2>{{ words.lines }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-rx-lines><thead><tr><th>{{ words.prescribed }}</th><th>{{ words.dispensed_item }}</th><th>{{ words.qty }}</th><th>{{ words.dosage }}</th><th>{{ words.stock }}</th><th>{{ words.price }}</th><th></th></tr></thead><tbody>
+{% for row in rows %}{% with line=row.line %}<tr data-line="{{ line.pk }}"><td class="op-cell-text">{{ line.prescribed_name }}</td>
+<td class="op-cell-text">{% if line.item %}{{ line.item.item_name }}{% if line.substituted %} <span class="op-status op-status-draft" data-substituted>{{ words.substituted }}</span>{% endif %}{% if line.item.drug.prescription_only %} <span class="op-status op-status-draft">{{ words.rx_only }}</span>{% endif %}{% else %}<span class="op-muted" data-no-item>{{ words.no_item }}</span>{% endif %}
+{% if editable and not line.item %}<form method="post" class="op-inline-form">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="choose"><input type="hidden" name="line" value="{{ line.pk }}"><label class="sr-only" for="rx-choose-{{ line.pk }}">{{ words.choose }}</label><select id="rx-choose-{{ line.pk }}" name="item" required><option value="">{{ words.choose }}</option>{% for item in items %}<option value="{{ item.pk }}">{{ item.item_name }}{% if item.drug %} — {{ item.drug.active_ingredient }}{% endif %}</option>{% endfor %}</select><button class="op-secondary" type="submit">{{ words.pick }}</button></form>{% endif %}
+{% if row.alternatives %}<div data-rx-alternatives><small class="op-muted">{{ words.short }} — {{ words.alternatives }}:</small>{% for alt in row.alternatives %}
+{% if editable %}<form method="post" class="op-inline-form">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="choose"><input type="hidden" name="line" value="{{ line.pk }}"><input type="hidden" name="item" value="{{ alt.item.pk }}"><button class="op-secondary" type="submit" data-pick="{{ alt.item.pk }}">{{ words.pick }}: {{ alt.item.item_name }} ({{ alt.on_hand|qty }} · {{ alt.price|money }})</button></form>{% else %}<span>{{ alt.item.item_name }} ({{ alt.on_hand|qty }})</span>{% endif %}{% endfor %}</div>{% endif %}</td>
+<td>{{ line.quantity|qty }}</td><td class="op-cell-text">{{ line.dosage|default:"—" }}</td>
+<td>{% if row.on_hand is not None %}{% if row.short %}<span class="op-status op-status-cancelled" data-short>{{ row.on_hand|qty }}</span>{% else %}{{ row.on_hand|qty }}{% endif %}{% else %}—{% endif %}</td>
+<td>{% if row.price is not None %}{{ row.price|money }}{% else %}—{% endif %}</td>
+<td>{% if editable %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="remove_line"><input type="hidden" name="line" value="{{ line.pk }}"><button class="op-secondary" type="submit">{{ words.remove }}</button></form>{% endif %}</td></tr>{% endwith %}
+{% empty %}<tr><td colspan="7" class="op-empty">{{ words.no_lines }}</td></tr>{% endfor %}
+</tbody></table></div>
+
+{% if editable %}<form class="op-form" method="post" data-add-line>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="add_line"><div class="op-form-grid">
+<div class="op-field"><label for="rx-item">{{ words.choose }}</label><select id="rx-item" name="item"><option value="">—</option>{% for item in items %}<option value="{{ item.pk }}">{{ item.item_name }}{% if item.drug %} — {{ item.drug.active_ingredient }}{% if item.drug.strength %} {{ item.drug.strength }}{% endif %}{% endif %}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="rx-name">{{ words.prescribed }}</label><input id="rx-name" name="prescribed_name" maxlength="255"></div>
+<div class="op-field"><label for="rx-qty">{{ words.qty }}</label><input id="rx-qty" name="quantity" inputmode="decimal" value="1"></div>
+<div class="op-field"><label for="rx-dose">{{ words.dosage }}</label><input id="rx-dose" name="dosage" maxlength="255" placeholder="{{ words.dosage_hint }}"></div>
+</div><div class="op-form-actions"><button class="op-secondary" type="submit">{{ words.add }}</button></div></form>
+
+<h2>{{ words.details }}</h2>
+<form class="op-form" method="post" data-details>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="details"><div class="op-form-grid">
+<div class="op-field"><label for="rx-patient">{{ words.patient }}</label><input id="rx-patient" name="patient_name" maxlength="120" value="{{ prescription.patient_name }}" required></div>
+<div class="op-field"><label for="rx-phone">{{ words.phone }}</label><input id="rx-phone" name="patient_phone" maxlength="30" inputmode="tel" value="{{ prescription.patient_phone }}"></div>
+<div class="op-field"><label for="rx-doctor">{{ words.doctor }}</label><input id="rx-doctor" name="doctor_name" maxlength="120" value="{{ prescription.doctor_name }}"></div>
+<div class="op-field"><label for="rx-date">{{ words.issued_on }}</label><input id="rx-date" type="date" name="issued_on" value="{{ prescription.issued_on|date:'Y-m-d' }}"></div>
+{% if not dispenses %}<div class="op-field"><label for="rx-customer">{{ words.customer }}</label><select id="rx-customer" name="customer"><option value="">{{ words.cash }}</option>{% for c in customers %}<option value="{{ c.pk }}"{% if c.pk == prescription.customer_id %} selected{% endif %}>{{ c.name }}</option>{% endfor %}</select></div>{% endif %}
+<div class="op-field"><label for="rx-refill">{{ words.refill }}</label><input id="rx-refill" name="refill_days" inputmode="numeric" value="{{ prescription.refill_days|default_if_none:'' }}"><small class="op-muted">{{ words.refill_hint }}</small></div>
+<div class="op-field"><label for="rx-notes">{{ words.notes }}</label><input id="rx-notes" name="notes" maxlength="255" value="{{ prescription.notes }}"></div>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form>
+{% elif prescription.notes %}<section class="op-detail-meta"><p><strong>{{ words.notes }}:</strong> {{ prescription.notes }}</p></section>{% endif %}
+
+<h2>{{ words.dispenses }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-rx-invoices><thead><tr><th>{{ words.number }}</th><th>{{ words.date }}</th><th>{{ words.status }}</th><th>{{ words.total }}</th></tr></thead><tbody>
+{% for invoice in dispenses %}<tr data-invoice="{{ invoice.pk }}"><td><a href="{% url 'sales:detail' invoice.pk %}?lang={{ lang }}"><bdi>{{ invoice.invoice_number }}</bdi></a></td><td><bdi>{{ invoice.invoice_date|date:"Y-m-d" }}</bdi></td>
+<td><span class="op-status op-status-{{ invoice.status }}">{% choice_label invoice "status" %}</span></td><td>{{ invoice.total_amount|money }}</td></tr>
+{% empty %}<tr><td colspan="4" class="op-empty">{{ words.no_dispenses }}</td></tr>{% endfor %}
+</tbody></table></div>
+
+{% if can_cancel %}<form method="post" class="op-form-actions" data-cancel-rx>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="cancel"><button class="op-danger" type="submit">{{ words.cancel }}</button></form>{% endif %}
+{% endblock %}

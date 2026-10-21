@@ -37,7 +37,7 @@ def sign_in(test, role_code=RoleCode.OWNER, username="caps_owner"):
 class CatalogTests(SimpleTestCase):
     def test_each_commercial_activity_has_its_own_suggestions(self):
         # AN4: wherever there is a till, a sale waits for an open shift.
-        self.assertEqual(caps.suggested("commercial", "pharmacy"), ("pos", "shift_required", "barcode", "units", "batches_expiry"))
+        self.assertEqual(caps.suggested("commercial", "pharmacy"), ("pos", "shift_required", "barcode", "units", "batches_expiry", "drugs"))
         self.assertEqual(caps.suggested("commercial", "fashion"), ("pos", "shift_required", "barcode", "variants"))
         self.assertEqual(caps.suggested("commercial", "electronics"), ("pos", "shift_required", "barcode", "serials", "installments"))
         self.assertNotIn("shift_required", caps.suggested("commercial", "wholesale"))
@@ -47,7 +47,7 @@ class CatalogTests(SimpleTestCase):
 
     @with_future_capability
     def test_only_shipped_capabilities_are_ticked_or_accepted(self):
-        self.assertEqual(caps.default_selection("commercial", "pharmacy"), ("pos", "shift_required", "barcode", "units", "batches_expiry"))
+        self.assertEqual(caps.default_selection("commercial", "pharmacy"), ("pos", "shift_required", "barcode", "units", "batches_expiry", "drugs"))
         self.assertEqual(caps.parse("pos, future_cap, bogus,barcode, fixed_assets"), ("pos", "barcode", "fixed_assets"))
         self.assertTrue(all(caps.is_available(slug) for slug in caps.CAPABILITY_SLUGS if slug != "future_cap"))
         self.assertFalse(caps.is_available("future_cap"))
