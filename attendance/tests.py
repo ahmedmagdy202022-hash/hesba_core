@@ -162,6 +162,27 @@ class LeaveTests(AttendanceSetup):
         self.assertEqual((leave.status, leave.decided_by), (LeaveStatus.APPROVED, self.owner))
 
 
+class CodexFixesTests(AttendanceSetup):
+    """Codex on #263: leave from the balance stays in one year, and the demo's waiting leave falls on a working day."""
+
+    def test_annual_leave_across_new_year_is_split_but_sick_leave_is_not(self):
+        with self.assertRaises(ValidationError):
+            services.request_leave(self.ali, {"kind": "annual", "start_date": date(2026, 12, 30), "end_date": date(2027, 1, 3)}, self.owner)
+        sick = services.request_leave(self.ali, {"kind": "sick", "start_date": date(2026, 12, 30), "end_date": date(2027, 1, 3)}, self.owner)
+        self.assertEqual(sick.days, 4)  # Friday 1 January is the day off
+
+    def test_the_demo_leave_lands_on_a_working_day_whatever_the_weekday(self):
+        from settings_core.management.commands.prepare_demo import Command
+
+        tuesday = date(2026, 10, 20)  # + 3 days is a Friday, the day off
+        for employee in Employee.objects.all():
+            employee.attendance_days.all().delete()
+        with mock.patch("django.utils.timezone.localdate", return_value=tuesday):
+            Command()._attendance(self.owner)
+        waiting = LeaveRequest.objects.get(status=LeaveStatus.PENDING)
+        self.assertNotIn(waiting.start_date.weekday(), services.schedule_for(waiting.employee).off_weekdays())
+
+
 class DeviceImportTests(AttendanceSetup):
     FILE = ("No.,Name,Time,State\n"
             "7,Ali,2026-09-16 08:58:10,C/In\n"

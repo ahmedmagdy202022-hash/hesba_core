@@ -57,7 +57,8 @@ MESSAGES = {
            "overlap": "فيه إجازة تانية في نفس الأيام.", "decided": "الطلب ده اتقرر قبل كده.", "balance": "الرصيد مش مكفي: فاضل {left} يوم.",
            "hours": "ميعاد الانصراف لازم يكون بعد ميعاد الحضور.", "grace": "السماح من 0 لـ 240 دقيقة.", "leave_days": "أيام الإجازة من 0 لـ 366.",
            "holiday": "اكتب اسم العطلة وتاريخها.", "file": "ارفع ملف CSV من جهاز البصمة.", "big": "الملف أكبر من 2 ميجا؛ قسّمه على شهور.",
-           "columns": "مش لاقي عمود رقم الموظف وعمود التاريخ والوقت في الملف.", "kind": "اختار نوع الإجازة."},
+           "columns": "مش لاقي عمود رقم الموظف وعمود التاريخ والوقت في الملف.", "kind": "اختار نوع الإجازة.",
+           "two_years": "الإجازة دي بتعدّي لسنة جديدة؛ قسّمها طلبين: واحد لحد آخر ديسمبر {year} وواحد من أول يناير."},
     "en": {"module": "Employees are switched off in Settings.", "time": "The time is not valid; write it like 09:30.", "date": "The date is not valid.",
            "order": "The time out must be after the time in.", "future": "Attendance cannot be recorded for a day that has not come.",
            "no_employee": "Your login is not linked to an employee; ask the manager to link it on the employees screen.", "already_in": "You checked in today at {time}.",
@@ -65,7 +66,8 @@ MESSAGES = {
            "overlap": "Another leave covers some of those days.", "decided": "This request was already decided.", "balance": "Not enough balance: {left} days left.",
            "hours": "The end of the day must be after its start.", "grace": "The grace is 0 to 240 minutes.", "leave_days": "Leave days are 0 to 366.",
            "holiday": "Enter the holiday's name and date.", "file": "Upload a CSV file from the fingerprint device.", "big": "The file is over 2 MB; split it by month.",
-           "columns": "Could not find the employee number and the date and time columns in the file.", "kind": "Choose the kind of leave."},
+           "columns": "Could not find the employee number and the date and time columns in the file.", "kind": "Choose the kind of leave.",
+           "two_years": "This leave runs into a new year; split it in two requests: one to 31 December {year} and one from 1 January."},
 }
 
 
@@ -407,6 +409,8 @@ def request_leave(employee, data, user, lang="ar"):
     end = _date(data.get("end_date"), words, start)
     if start is None or end < start:
         raise ValidationError(words["range"])
+    if kind in FROM_BALANCE and start.year != end.year:  # each year has its own balance (Codex on #263)
+        raise ValidationError(words["two_years"].format(year=start.year))
     days = working_days(schedule_for(employee), start, end)
     if days <= 0:
         raise ValidationError(words["no_days"])
@@ -428,6 +432,8 @@ def decide(leave, approve, user, lang="ar"):
     words = MESSAGES[lang]
     _require_manage(user, words)
     leave = LeaveRequest.objects.select_for_update().get(pk=leave.pk)
+    # One decision at a time per employee, so two approvals never both read the same balance (Codex on #263).
+    Employee.objects.select_for_update().filter(pk=leave.employee_id).first()
     if leave.status != LeaveStatus.PENDING:
         raise ValidationError(words["decided"])
     if approve:

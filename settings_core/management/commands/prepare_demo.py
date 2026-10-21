@@ -259,8 +259,10 @@ class Command(BaseCommand):
             taken = attendance.request_leave(employees[-1], {"kind": "annual", "start_date": today - timedelta(days=6), "end_date": today - timedelta(days=4),
                                                              "reason": "إجازة سنوية", "approve": "1"}, owner)
             AttendanceDay.objects.filter(employee=employees[-1], date__gte=taken.start_date, date__lte=taken.end_date).delete()
-            attendance.request_leave(employees[0], {"kind": "casual", "start_date": today + timedelta(days=3), "end_date": today + timedelta(days=3),
-                                                    "reason": "ظرف عائلي"}, owner)
+            schedule, wanted = attendance.schedule_for(employees[0]), today + timedelta(days=3)
+            while wanted.weekday() in schedule.off_weekdays() or Holiday.objects.filter(date=wanted).exists():
+                wanted += timedelta(days=1)  # a working day, whatever day the demo is prepared on (Codex on #263)
+            attendance.request_leave(employees[0], {"kind": "casual", "start_date": wanted, "end_date": wanted, "reason": "ظرف عائلي"}, owner)
 
     #: DM2 (W06): the month's running costs, as a share of the month's sales, and how many days ago each was paid.
     MONTH_EXPENSES = (("rent", "0.08", 17, "إيجار المحل — الشهر ده"), ("utilities", "0.03", 9, "فاتورة الكهربا والمية"),
