@@ -1686,6 +1686,38 @@ The entries below are the protected-logic decisions in the commercial gate, reco
   - the screens in Arabic and English;
   - the module switch.
 
+## HG-064 — Customer messages outbox (T9, offline part)
+
+- **Status:** IMPLEMENTED NOTE when T9 merges. Additive tables only.
+- **What:**
+  - A new `messaging` app under `/messages/`. It follows the customers module.
+  - `MessageTemplate` holds the wording of each kind of message, whether it is sent, and how often.
+  - `OutboxMessage` holds one message waiting today, then sent or skipped.
+  - A `gather_messages` command queues the day's messages, the way the daily digest runs.
+- **Not changed:** balances, invoices, instalments, appointments and prescriptions. They are only read.
+- **How:**
+  - Each day the outbox gathers:
+    - customers past their credit days, with the overdue amount, from the aging report;
+    - instalments due in the next two days or late;
+    - tomorrow's booked or confirmed appointments;
+    - chronic prescriptions due for a refill.
+  - `key` + day is unique, so nothing is queued twice. A customer reminded of a kind is not reminded again within that kind's `every_days`.
+  - "Send" marks the message sent and opens WhatsApp with the text written. "Skip" moves it aside.
+  - Each message moves once. A second click is refused.
+- **Permissions:** existing ones only. The outbox is for the customer-facing roles (`sees_customers`); the wording is edited with `settings.manage_settings`.
+- **Live part still outside:** sending without a click needs the shop's own WhatsApp Business (Cloud API) account. `api_connected()` returns False, and nothing calls an outside service.
+- **Risk:** "sent" is recorded when the person opens WhatsApp, not when the message is delivered. The live API part would record delivery.
+- **Tests:** `messaging/tests.py` covers:
+  - one message per overdue customer, with the amount;
+  - nothing twice the same day, and the `every_days` wait;
+  - a kind switched off;
+  - unknown words refused, and only the owner edits the wording;
+  - appointments and refills gathered;
+  - the daily command;
+  - "send" opens wa.me with the text and refuses a second send;
+  - skip, templates in both languages, the menu item;
+  - a stock keeper is refused.
+
 ## HG-055 — Bank accounts (T3)
 
 - **Status:** OPEN PROPOSAL.
