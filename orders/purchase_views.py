@@ -70,28 +70,27 @@ def board(request):
     lang = _lang(request)
     today = timezone.localdate()
     show = request.GET.get("show") or "waiting"
+    show = show if show in ("open", "waiting", "late", "done", "all") else "waiting"
     rows = po.scoped().select_related("supplier")
-    if show == "open":
-        rows = rows.filter(status__in=(Status.DRAFT, Status.SENT))
-    elif show == "late":
-        rows = rows.filter(status=Status.CONFIRMED, expected_on__lt=today)
-    elif show == "done":
-        rows = rows.filter(status__in=(Status.CONFIRMED, Status.CLOSED, Status.CANCELLED))
-    elif show != "all":
-        show = "waiting"
-        rows = rows.filter(status=Status.CONFIRMED)
     query = (request.GET.get("q") or "").strip()
     if query:
         from django.db.models import Q
 
         rows = rows.filter(Q(number__icontains=query) | Q(supplier__name__icontains=query))
+    # Codex on #261: what is still waiting is decided from the received quantities before the list is cut.
+    if show == "open":
+        rows = list(rows.filter(status__in=(Status.DRAFT, Status.SENT))[:200])
+    elif show in ("waiting", "late"):
+        rows = po.waiting(rows, today, late=show == "late")[:200]
+    elif show == "done":
+        done = po.received_in_full(list(rows.filter(status=Status.CONFIRMED)))
+        rows = [row for row in rows.filter(status__in=(Status.CONFIRMED, Status.CLOSED, Status.CANCELLED))
+                if row.status != Status.CONFIRMED or row.pk in done][:200]
+    else:
+        rows = list(rows[:200])
     shown = []
-    for row in rows.prefetch_related("lines__item")[:200]:
+    for row in rows:
         row.state = po.state(row, today)
-        if show in ("waiting", "late") and row.state == "done":
-            continue
-        if show == "done" and row.status == Status.CONFIRMED and row.state != "done":
-            continue
         row.total = po.totals(row)["total"]
         shown.append(row)
     return render(request, "orders/po_board.html", _base(request, lang, rows=shown, show=show, query=query, counts=po.counts()))

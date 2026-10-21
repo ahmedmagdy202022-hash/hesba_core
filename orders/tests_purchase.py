@@ -133,3 +133,41 @@ class PurchaseOrderTests(PurchaseOrderSetup):
         cashier = person(RoleCode.CASHIER, "po_cashier")
         with self.assertRaises(PermissionDenied):
             po.create_order({"supplier": self.supplier}, cashier)
+
+
+class PurchaseCodexFixesTests(PurchaseOrderSetup):
+    """Codex on #261: the agreed VAT, the latest purchase cost as the default price, and counts that skip what arrived."""
+
+    def test_a_confirmed_order_keeps_the_vat_it_was_agreed_at(self):
+        from taxes.models import TaxRate
+
+        order = self.order()
+        before = po.totals(order)["total"]
+        self.assertTrue(all(line.vat_rate is not None for line in order.lines.all()))
+        TaxRate.objects.update(rate=D("10.00"))  # the rate changes after the supplier confirmed
+        self.assertEqual(po.totals(order)["total"], before)
+
+    def test_the_default_price_is_the_latest_purchase_cost_even_when_sold_out(self):
+        from hesba_testing.factories import stock_in
+
+        rice = make_item(item_code="RICE-PO", item_name="أرز", default_purchase_price=D("0"), is_stock_tracked=True)
+        stock_in(rice, self.location, "10", "20.00")
+        stock_in(rice, self.location, "10", "26.00")  # the supplier raised the price; the average would say 23.00
+        draft = po.create_order({"supplier": self.supplier}, self.owner)
+        self.assertEqual(po.add_line(draft, rice, self.owner, quantity="5").unit_price, D("26.00"))
+
+    def test_received_orders_leave_the_waiting_and_late_counts(self):
+        from django.utils.timezone import timedelta
+
+        done, open_order = self.order(), self.order()
+        po.PurchaseOrder.objects.filter(pk__in=[done.pk, open_order.pk]).update(expected_on=TODAY - timedelta(days=3))
+        self.receive(done, {self.sugar.pk: "100", self.tea.pk: "40"})
+        self.assertEqual(po.state(done), "done")
+        counts = po.counts()
+        self.assertEqual((counts["waiting"], counts["late"]), (1, 1))
+        self.client.force_login(self.owner)
+        late = self.client.get(reverse("purchase_orders:list") + "?lang=ar&show=late")
+        self.assertContains(late, open_order.number)
+        self.assertNotContains(late, done.number)
+        finished = self.client.get(reverse("purchase_orders:list") + "?lang=ar&show=done")
+        self.assertContains(finished, done.number)

@@ -11,6 +11,7 @@ stored: a cancelled purchase invoice gives its quantities back by itself.
 
 from collections import defaultdict
 from datetime import timedelta
+from decimal import Decimal
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
@@ -145,14 +146,14 @@ def update_header(order, data, user, lang="ar"):
 
 
 def _default_price(item):
-    from inventory.services import get_item_authoritative_average_cost
+    """The item's purchase price, else what its latest purchase or opening stock cost (Codex on #261: not the
+    average, which hides a new supplier price and reads 0.00 once the item is sold out)."""
+
+    from inventory.views import last_costs
 
     price = item.default_purchase_price or ZERO
     if not price:
-        try:
-            price = get_item_authoritative_average_cost(item) or ZERO
-        except Exception:  # an item with no movements yet: no cost to suggest
-            price = ZERO
+        price = last_costs([item.pk]).get(item.pk) or ZERO
     return money_round(price)
 
 
@@ -215,9 +216,20 @@ def move(order, to, user, lang="ar"):
     if to == Status.CONFIRMED:
         order.confirmed_at = timezone.now()
         fields.append("confirmed_at")
+        _keep_vat(order)  # the order keeps the VAT it was agreed at (Codex on #261)
     order.save(update_fields=fields)
     _audit(user, "move", order, {"status": to}, before={"status": before})
     return order
+
+
+def _keep_vat(order):
+    from taxes.services import rate_for, vat_enabled
+
+    on = vat_enabled()
+    for line in order.lines.select_related("item"):
+        rate = rate_for(line.item) if on else None
+        line.vat_rate = rate.rate if rate is not None else ZERO
+        line.save(update_fields=["vat_rate"])
 
 
 def quantities(order):
@@ -239,8 +251,11 @@ def totals(order):
     lines = list(order.lines.select_related("item"))
     gross = sum((line.gross for line in lines), ZERO)
     discount = sum((line.discount for line in lines), ZERO)
-    rows = [{"item": line.item, "quantity": line.quantity, "unit_purchase_price": line.unit_price, "line_discount_amount": line.discount} for line in lines]
-    tax = money_round(sum((tax for *_, tax in compute_lines(rows, price_key="unit_purchase_price")), ZERO)) if rows and vat_enabled() else ZERO
+    if lines and all(line.vat_rate is not None for line in lines):  # a confirmed order: the VAT it was agreed at
+        tax = money_round(sum((money_round(line.amount * line.vat_rate / Decimal("100")) for line in lines), ZERO))
+    else:
+        rows = [{"item": line.item, "quantity": line.quantity, "unit_purchase_price": line.unit_price, "line_discount_amount": line.discount} for line in lines]
+        tax = money_round(sum((tax for *_, tax in compute_lines(rows, price_key="unit_purchase_price")), ZERO)) if rows and vat_enabled() else ZERO
     return {"lines": lines, "gross": gross, "discount": discount, "net": gross - discount, "tax": tax, "total": gross - discount + tax}
 
 
@@ -297,8 +312,40 @@ def link_receipt(order, invoice, user, lang="ar"):
     return links
 
 
+def received_in_full(orders):
+    """The pks of the confirmed ``orders`` received in full on posted invoices (``state`` "done"), read in two queries."""
+
+    from django.db.models import Sum
+
+    ids = [order.pk for order in orders]
+    posted, drafted = defaultdict(lambda: ZERO), defaultdict(lambda: ZERO)
+    links = (OrderReceiptLine.objects.filter(order_line__order_id__in=ids).exclude(purchase_line__invoice__status="cancelled")
+             .values("order_line_id", "purchase_line__invoice__status").annotate(total=Sum("quantity")))
+    for row in links:
+        bucket = posted if row["purchase_line__invoice__status"] == "posted" else drafted
+        bucket[row["order_line_id"]] += row["total"] or ZERO
+    with_lines, short = set(), set()
+    for pk, order_id, quantity in PurchaseOrderLine.objects.filter(order_id__in=ids).values_list("pk", "order_id", "quantity"):
+        with_lines.add(order_id)
+        if drafted[pk] > 0 or posted[pk] < quantity:
+            short.add(order_id)
+    return with_lines - short
+
+
+def waiting(queryset, today=None, late=False):
+    """Confirmed orders still waiting for goods (``late``: past their date), every one checked before any list is cut (Codex on #261)."""
+
+    rows = queryset.filter(status=Status.CONFIRMED)
+    if late:
+        rows = rows.filter(expected_on__lt=today or timezone.localdate())
+    rows = list(rows)
+    done = received_in_full(rows)
+    return [order for order in rows if order.pk not in done]
+
+
 def counts():
     rows = scoped()
     today = timezone.localdate()
-    return {"open": rows.filter(status__in=(Status.DRAFT, Status.SENT)).count(), "waiting": rows.filter(status=Status.CONFIRMED).count(),
-            "late": rows.filter(status=Status.CONFIRMED, expected_on__lt=today).count()}
+    open_orders = waiting(rows, today)
+    return {"open": rows.filter(status__in=(Status.DRAFT, Status.SENT)).count(), "waiting": len(open_orders),
+            "late": sum(1 for order in open_orders if order.is_late(today))}

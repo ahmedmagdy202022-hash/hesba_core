@@ -166,6 +166,8 @@ class PurchaseOrderLine(models.Model):
     unit_price = models.DecimalField(max_digits=14, decimal_places=2, validators=[MinValueValidator(Decimal("0"))])
     discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0"),
                                            validators=[MinValueValidator(Decimal("0")), MaxValueValidator(HUNDRED)])
+    vat_rate = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True,
+                                   help_text="The VAT % at the moment the order was confirmed with the supplier (empty while it is open).")
 
     class Meta:
         ordering = ["pk"]
