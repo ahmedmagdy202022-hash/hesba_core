@@ -167,7 +167,7 @@ def invoice_create(request):
                     invoice = create_sales_draft_with_tax(form.cleaned_data, line_data, request.user)
                     attach_sale_serials(invoice, line_data)
                     if from_order is not None:  # T1: this invoice takes its quantities off the order
-                        link_invoice(from_order, invoice, request.user)
+                        link_invoice(from_order, invoice, request.user, lang)
                     return invoice
 
                 invoice = form.create_with_fresh_number(create)  # AUTONUM: atomic, retried on a taken number

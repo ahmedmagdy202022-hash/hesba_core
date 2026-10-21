@@ -164,6 +164,41 @@ class InvoicingTests(OrdersSetup):
         self.assertEqual(self.left(), {self.oil.pk: D("10"), self.rice.pk: D("6")})
 
 
+class CodexFixesTests(OrdersSetup):
+    """Codex on #260: the accepted VAT, discount rounding across parts, the order's own customer, one line per item."""
+
+    def test_an_order_keeps_the_vat_it_was_accepted_at(self):
+        from taxes.models import TaxRate
+
+        order = services.move(self.quote(), Status.CONFIRMED, self.owner)
+        before = services.totals(order)["total"]
+        TaxRate.objects.update(rate=D("10.00"))  # the rate changes after the customer accepted
+        self.assertEqual(services.totals(order)["total"], before)
+
+    def test_partial_discounts_add_back_to_the_line_discount(self):
+        pen = make_item(item_code="PEN-1", item_name="قلم", default_sale_price=D("0.10"), is_stock_tracked=False)
+        order = services.create_quote({"customer": self.customer}, self.owner)
+        line = services.add_line(order, pen, self.owner, quantity="3", discount_percent="5")
+        parts = [line.discount_for(D("1"), D(str(n))) for n in range(3)]
+        self.assertEqual(sum(parts), line.discount)  # 0.02, never 0.03
+
+    def test_another_customers_invoice_does_not_take_the_order(self):
+        order = services.move(self.quote(), Status.CONFIRMED, self.owner)
+        other = make_customer(customer_code="CUS-OTHER", name="عميل تاني")
+        from taxes.services import create_sales_draft_with_tax
+
+        invoice = create_sales_draft_with_tax({"invoice_number": "SI-OTHER", "invoice_date": TODAY, "customer": other,
+                                               "selling_location": self.location, "paid_now": D("0")},
+                                              [{"item": self.oil, "quantity": D("5"), "unit_sale_price": D("80")}], self.owner)
+        with self.assertRaises(ValidationError):
+            services.link_invoice(order, invoice, self.owner)
+
+    def test_an_item_goes_on_a_quotation_once(self):
+        order = self.quote()
+        with self.assertRaises(ValidationError):
+            services.add_line(order, self.oil, self.owner, quantity="2")
+
+
 class ScreensTests(OrdersSetup):
     def test_the_screens_print_and_share(self):
         self.client.force_login(self.owner)

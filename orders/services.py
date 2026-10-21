@@ -62,14 +62,18 @@ MESSAGES = {
            "move": "مينفعش تنقل «{number}» من «{from_}» لـ «{to}».", "empty": "ضيف صنف واحد على الأقل قبل ما تحوّله لأمر بيع.",
            "invoiced": "الأمر ده عليه فواتير؛ اقفله بدل ما تلغيه.", "not_order": "ده لسه عرض سعر؛ العميل لازم يوافق الأول.",
            "nothing_left": "الأمر ده اتفوتر بالكامل.", "line_invoiced": "البند ده عليه فواتير؛ مينفعش يتشال.",
-           "note_invoice": "أمر بيع {number}", "no_capability": "عروض الأسعار مقفولة في الإعدادات."},
+           "note_invoice": "أمر بيع {number}", "no_capability": "عروض الأسعار مقفولة في الإعدادات.",
+           "same_item": "«{item}» موجود في العرض؛ عدّل الكمية بإنك تشيله وتضيفه تاني.",
+           "other_customer": "الفاتورة دي لعميل تاني غير عميل الأمر {number}؛ رجّع العميل أو اعمل الفاتورة من غير الأمر."},
     "en": {"customer": "Choose the customer.", "date": "The date is not valid.", "valid": "“Valid until” must be after the quotation date.",
            "item": "Choose the item or service.", "quantity": "The quantity must be more than zero.", "price": "The price must be zero or more.",
            "discount": "The discount is a percentage from 0 to 100.", "locked": "This quotation is no longer a draft or sent, so it cannot change.",
            "move": "“{number}” cannot go from “{from_}” to “{to}”.", "empty": "Add at least one line before making it a sales order.",
            "invoiced": "This order has invoices; close it instead of cancelling it.", "not_order": "This is still a quotation; the customer has to accept it first.",
            "nothing_left": "This order is fully invoiced.", "line_invoiced": "This line has invoices and cannot be removed.",
-           "note_invoice": "Sales order {number}", "no_capability": "Quotations are switched off in Settings."},
+           "note_invoice": "Sales order {number}", "no_capability": "Quotations are switched off in Settings.",
+           "same_item": "“{item}” is already on the quotation; remove it and add it again to change the quantity.",
+           "other_customer": "This invoice is for another customer than order {number}; put the customer back or make the invoice without the order."},
 }
 
 
@@ -203,6 +207,8 @@ def add_line(order, item, user, *, quantity="1", unit_price=None, discount_perce
     order = _locked(order, words)
     if item is None or not item.active:
         raise ValidationError(words["item"])
+    if order.lines.filter(item=item).exists():  # one line per item, so every invoice line knows its order line (Codex on #260)
+        raise ValidationError(words["same_item"].format(item=item.item_name))
     quantity = _decimal(quantity, words, "quantity", Decimal("1")).quantize(Decimal("0.001"))
     if quantity <= 0:
         raise ValidationError(words["quantity"])
@@ -252,6 +258,7 @@ def move(order, to, user, lang="ar"):
     if to == Status.CONFIRMED:
         order.confirmed_at = timezone.now()
         fields.append("confirmed_at")
+        _keep_vat(order)  # the order keeps the VAT the customer accepted (Codex on #260)
         if not order.order_number:
             for attempt in range(5):
                 number = next_in_series(SalesOrder, "order_number", "SO-")
@@ -292,6 +299,16 @@ def quantities(order):
     return rows
 
 
+def _keep_vat(order):
+    from taxes.services import rate_for, vat_enabled
+
+    on = vat_enabled()
+    for line in order.lines.select_related("item"):
+        rate = rate_for(line.item) if on else None
+        line.vat_rate = rate.rate if rate is not None else ZERO
+        line.save(update_fields=["vat_rate"])
+
+
 def _tax(rows):
     from taxes.services import compute_lines, vat_enabled
 
@@ -304,8 +321,11 @@ def totals(order):
     lines = list(order.lines.select_related("item"))
     gross = sum((line.gross for line in lines), ZERO)
     discount = sum((line.discount for line in lines), ZERO)
-    rows = [{"item": line.item, "quantity": line.quantity, "unit_sale_price": line.unit_price, "line_discount_amount": line.discount} for line in lines]
-    tax = money_round(_tax(rows))
+    if lines and all(line.vat_rate is not None for line in lines):  # an order: the VAT it was accepted at
+        tax = money_round(sum((money_round(line.amount * line.vat_rate / Decimal("100")) for line in lines), ZERO))
+    else:
+        rows = [{"item": line.item, "quantity": line.quantity, "unit_sale_price": line.unit_price, "line_discount_amount": line.discount} for line in lines]
+        tax = money_round(_tax(rows))
     return {"lines": lines, "gross": gross, "discount": discount, "net": gross - discount, "tax": tax, "total": gross - discount + tax}
 
 
@@ -344,8 +364,8 @@ def invoice_initial(order, lang="ar"):
     """(header initial, line initials) for the ordinary invoice form: what is left on the order, at the order's prices."""
 
     rows = [row for row in quantities(order) if row["left"] > 0][:INVOICE_LINES]
-    lines = [{"item": row["line"].item, "description": row["line"].description, "quantity": row["left"],
-              "unit_sale_price": row["line"].unit_price, "line_discount_amount": row["line"].discount_for(row["left"])} for row in rows]
+    lines = [{"item": row["line"].item, "description": row["line"].description, "quantity": row["left"], "unit_sale_price": row["line"].unit_price,
+              "line_discount_amount": row["line"].discount_for(row["left"], row["invoiced"] + row["drafted"])} for row in rows]
     header = {"customer": order.customer, "notes": MESSAGES[lang]["note_invoice"].format(number=order.display_number)}
     if order.salesperson_id:
         header["salesperson"] = order.salesperson
@@ -353,7 +373,7 @@ def invoice_initial(order, lang="ar"):
 
 
 @transaction.atomic
-def link_invoice(order, invoice, user):
+def link_invoice(order, invoice, user, lang="ar"):
     """Remember which lines of the new invoice take which order quantities.
 
     Each invoice line goes to the order's lines of the same item, oldest first,
@@ -363,22 +383,18 @@ def link_invoice(order, invoice, user):
     order = SalesOrder.objects.select_for_update().get(pk=order.pk)
     if order.status != Status.CONFIRMED:
         return []
+    if invoice.customer_id != order.customer_id:  # another customer's invoice never takes this order's quantities (Codex on #260)
+        raise ValidationError(MESSAGES[lang]["other_customer"].format(number=order.display_number))
     left = {row["line"].pk: row["left"] for row in quantities(order)}
-    by_item = defaultdict(list)
-    for line in order.lines.all():
-        by_item[line.item_id].append(line)
+    by_item = {line.item_id: line for line in order.lines.all()}  # one line per item (see add_line)
     links = []
     for sales_line in invoice.lines.order_by("line_number"):
-        want = sales_line.quantity
-        for order_line in by_item.get(sales_line.item_id, ()):
-            if want <= 0:
-                break
-            take = min(want, left.get(order_line.pk, ZERO))
-            if take <= 0:
-                continue
-            links.append(OrderInvoiceLine.objects.create(order_line=order_line, sales_line=sales_line, quantity=take))
-            left[order_line.pk] -= take
-            want -= take
+        order_line = by_item.get(sales_line.item_id)
+        take = min(sales_line.quantity, left.get(order_line.pk, ZERO)) if order_line else ZERO
+        if take <= 0:
+            continue
+        links.append(OrderInvoiceLine.objects.create(order_line=order_line, sales_line=sales_line, quantity=take))
+        left[order_line.pk] -= take
     _audit(user, "link_invoice", order, {"invoice": invoice.invoice_number, "lines": len(links)})
     return links
 

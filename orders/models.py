@@ -74,14 +74,23 @@ class SalesOrderLine(models.Model):
     unit_price = models.DecimalField(max_digits=14, decimal_places=2, validators=[MinValueValidator(Decimal("0"))])
     discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0"),
                                            validators=[MinValueValidator(Decimal("0")), MaxValueValidator(HUNDRED)])
+    vat_rate = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True,
+                                   help_text="The VAT % the customer accepted, kept when the quotation becomes an order (empty while it is offered).")
 
     class Meta:
         ordering = ["pk"]
+        constraints = [models.UniqueConstraint(fields=["order", "item"], name="orders_one_line_per_item")]
 
-    def discount_for(self, quantity):
-        """The line discount on ``quantity`` units, the way the invoice line will carry it."""
+    def discount_for(self, quantity, already=Decimal("0")):
+        """The discount on ``quantity`` more units after ``already`` were invoiced.
 
-        return money_round(quantity * self.unit_price * self.discount_percent / HUNDRED)
+        Worked out on the running total so the parts always add back to the line's own discount:
+        the last part takes whatever rounding is left."""
+
+        if already + quantity >= self.quantity:
+            return self.discount - self.discount_for(already) if already > 0 else self.discount
+        whole = self.quantity * self.unit_price * self.discount_percent / HUNDRED
+        return money_round(whole * (already + quantity) / self.quantity) - money_round(whole * already / self.quantity)
 
     @property
     def gross(self):
@@ -89,7 +98,7 @@ class SalesOrderLine(models.Model):
 
     @property
     def discount(self):
-        return self.discount_for(self.quantity)
+        return money_round(self.quantity * self.unit_price * self.discount_percent / HUNDRED)
 
     @property
     def amount(self):
