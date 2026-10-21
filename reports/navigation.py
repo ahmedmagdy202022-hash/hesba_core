@@ -98,6 +98,11 @@ NAV_ITEMS = (
     {"key": "packages", "ar": "باكدجات الجلسات", "en": "Session packages", "url_name": "agreements:packages", "module": None, "allow": "agreements.packages.can_view"},
     {"key": "hours", "ar": "ساعات العمل", "en": "Hours worked", "url_name": "agreements:hours", "module": None, "allow": "agreements.hours.can_view"},
     {"key": "staff", "ar": "الموظفون", "en": "Employees", "url_name": "staff:list", "module": "employees_technicians", "allow": "reports.navigation.sees_staff"},
+    # T11: who came in today, the month's sheet and leave; and each employee's own check-in button.
+    {"key": "attendance", "ar": "الحضور والإجازات", "en": "Attendance & leave", "url_name": "attendance:today", "module": "employees_technicians",
+     "allow": "reports.navigation.sees_staff"},
+    {"key": "my_attendance", "ar": "حضوري وانصرافي", "en": "My attendance", "url_name": "attendance:me", "module": "employees_technicians",
+     "allow": "reports.navigation.checks_in_only"},
     {"key": "expenses", "ar": "المصروفات", "en": "Expenses", "url_name": "expenses:list", "module": "expenses", "permission": "cashboxes.view_expenses"},
     # R2: features switched on in Settings -> Features get their own place in the menu.
     {"key": "taxes", "ar": "الضرائب", "en": "Taxes", "url_name": "taxes:settings", "module": None, "capability": "vat", "permission": "master_data.view_master_data",
@@ -136,6 +141,8 @@ TAB_LABELS = {
     "workorders": {"ar": "الأوامر", "en": "Orders"},
     "quotes": {"ar": "العروض", "en": "Quotes"},
     "drugs": {"ar": "الأدوية", "en": "Drugs"},
+    "attendance": {"ar": "الحضور", "en": "Attendance"},
+    "my_attendance": {"ar": "حضوري", "en": "Check in"},
     "contracts": {"ar": "العقود", "en": "Contracts"},
     "packages": {"ar": "الباكدجات", "en": "Packages"},
     "hours": {"ar": "الساعات", "en": "Hours"},
@@ -189,6 +196,14 @@ def sees_customers(user):
 
 def sees_staff(user):
     return any(user_has_permission(user, code) for code in STAFF_AUDIENCE)
+
+
+def checks_in_only(user):
+    """T11: an employee who does not manage the team gets "my attendance" in the menu (managers reach it from the attendance tabs)."""
+
+    from attendance.services import is_linked_employee
+
+    return not sees_staff(user) and is_linked_employee(user)
 
 
 def nav_items(user, lang, modules):

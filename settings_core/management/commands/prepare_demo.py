@@ -205,9 +205,62 @@ class Command(BaseCommand):
 
         if capability_enabled("drugs"):
             self._drugs(master, owner, modules)  # T10: after the shelf, whose brands are the alternatives
+        if "employees_technicians" in modules:
+            self._attendance(owner)  # T11: three weeks of attendance, a leave taken and one waiting
         if "expenses" in modules:
             self._expenses(master, owner)  # last: a share of the whole month's sales, the shelf's included
         self._fit_users(modules)
+
+    #: T11: when each demo employee came in, in minutes after their start, by day (a few late, one absent day).
+    ARRIVALS = (-5, 3, 25, -10, 0, 40, 8, -2, 12, 55, 1, -8, 6, 30)
+
+    def _attendance(self, owner):
+        """T11: three weeks of days for every demo employee, a public holiday, a leave already taken and one waiting."""
+
+        from datetime import time as clock
+
+        from attendance import services as attendance
+        from attendance.models import AttendanceDay, DayStatus, Holiday, WorkSchedule
+        from staff.models import Employee
+
+        employees = list(Employee.objects.filter(active=True).order_by("pk")[:8])
+        if not employees or AttendanceDay.objects.exists():
+            return
+        today = timezone.localdate()
+        if today.month == 10 and today.day > 6:
+            Holiday.objects.get_or_create(date=today.replace(day=6), defaults={"name": "عيد القوات المسلحة"})
+        for n, employee in enumerate(employees):
+            late_shift = n % 3 == 2
+            WorkSchedule.objects.update_or_create(employee=employee, defaults={
+                "start_time": clock(10, 0) if late_shift else clock(9, 0), "end_time": clock(18, 0) if late_shift else clock(17, 0),
+                "days_off": "4,5" if late_shift else "4", "device_id": str(n + 1)})
+        Employee.objects.filter(pk__in=[employee.pk for employee in employees]).update(created_at=timezone.now() - timedelta(days=40))
+        moment = timezone.localtime()
+        holidays = attendance.holidays_between(today - timedelta(days=21), today)
+        for n, employee in enumerate(employees):
+            schedule = attendance.schedule_for(employee)
+            for back in range(21, -1, -1):
+                day = today - timedelta(days=back)
+                if day.weekday() in schedule.off_weekdays() or day in holidays:
+                    continue
+                if n == 1 and back == 9:  # one day away without leave
+                    AttendanceDay.objects.create(employee=employee, date=day, status=DayStatus.ABSENT, note="من غير إذن", recorded_by=owner)
+                    continue
+                shift = self.ARRIVALS[(back + n * 3) % len(self.ARRIVALS)]
+                start = datetime.combine(day, schedule.start_time) + timedelta(minutes=shift)
+                end = datetime.combine(day, schedule.end_time) + timedelta(minutes=(back * 7 + n * 11) % 50 - 10)
+                if back == 0:
+                    if timezone.make_aware(start) > moment or n >= 3:
+                        continue  # today: the later ones have not come in yet
+                    end = None
+                AttendanceDay.objects.create(employee=employee, date=day, check_in=start.time(), check_out=end.time() if end else None,
+                                             source="device" if n % 2 else "self", recorded_by=owner)
+        if len(employees) > 1:
+            taken = attendance.request_leave(employees[-1], {"kind": "annual", "start_date": today - timedelta(days=6), "end_date": today - timedelta(days=4),
+                                                             "reason": "إجازة سنوية", "approve": "1"}, owner)
+            AttendanceDay.objects.filter(employee=employees[-1], date__gte=taken.start_date, date__lte=taken.end_date).delete()
+            attendance.request_leave(employees[0], {"kind": "casual", "start_date": today + timedelta(days=3), "end_date": today + timedelta(days=3),
+                                                    "reason": "ظرف عائلي"}, owner)
 
     #: DM2 (W06): the month's running costs, as a share of the month's sales, and how many days ago each was paid.
     MONTH_EXPENSES = (("rent", "0.08", 17, "إيجار المحل — الشهر ده"), ("utilities", "0.03", 9, "فاتورة الكهربا والمية"),

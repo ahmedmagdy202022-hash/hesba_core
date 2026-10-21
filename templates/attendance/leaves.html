@@ -1,0 +1,47 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.leaves_title }}</h1><p>{{ words.balance_hint }}</p></div></section>
+{% include "attendance/_tabs.html" %}
+{% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
+<h2>{{ words.pending }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-pending-leaves><thead><tr><th>{{ words.employee }}</th><th>{{ words.kind }}</th><th>{{ words.from }}</th><th>{{ words.to }}</th><th>{{ words.count }}</th><th>{{ words.reason }}</th>{% if can_manage %}<th></th>{% endif %}</tr></thead><tbody>
+{% for leave in pending %}<tr data-leave="{{ leave.pk }}"><td class="op-cell-text">{{ leave.employee.name }}</td><td>{% for key, label in kinds.items %}{% if key == leave.kind %}{{ label }}{% endif %}{% endfor %}</td><td><bdi>{{ leave.start_date|date:"Y-m-d" }}</bdi></td><td><bdi>{{ leave.end_date|date:"Y-m-d" }}</bdi></td><td>{{ leave.days }}</td><td class="op-cell-text">{{ leave.reason|default:"—" }}</td>
+{% if can_manage %}<td><div class="op-form-actions">
+<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="approve"><input type="hidden" name="leave" value="{{ leave.pk }}"><button class="op-primary" type="submit" data-approve="{{ leave.pk }}">{{ words.approve }}</button></form>
+<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="reject"><input type="hidden" name="leave" value="{{ leave.pk }}"><button class="op-danger" type="submit" data-reject="{{ leave.pk }}">{{ words.reject }}</button></form></div></td>{% endif %}</tr>
+{% empty %}<tr><td colspan="7" class="op-empty">{{ words.no_pending }}</td></tr>{% endfor %}
+</tbody></table></div>
+
+{% if can_manage %}<form class="op-form" method="post" data-leave-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="new"><h2>{{ words.new_leave }}</h2><div class="op-form-grid">
+<div class="op-field"><label for="lv-emp">{{ words.employee }}</label><select id="lv-emp" name="employee" required><option value="">—</option>{% for employee in employees %}<option value="{{ employee.pk }}">{{ employee.name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="lv-kind">{{ words.kind }}</label><select id="lv-kind" name="kind">{% for value in kind_choices %}<option value="{{ value }}">{% for key, label in kinds.items %}{% if key == value %}{{ label }}{% endif %}{% endfor %}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="lv-from">{{ words.from }}</label><input id="lv-from" type="date" name="start_date" required></div>
+<div class="op-field"><label for="lv-to">{{ words.to }}</label><input id="lv-to" type="date" name="end_date"></div>
+<div class="op-field"><label for="lv-reason">{{ words.reason }}</label><input id="lv-reason" name="reason" maxlength="255"></div>
+<label class="op-check"><input type="checkbox" name="approve" value="1" checked> {{ words.approve_now }}</label>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.request }}</button></div></form>{% endif %}
+
+<h2>{{ words.balances }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-balances><thead><tr><th>{{ words.employee }}</th><th>{{ words.entitled }}</th><th>{{ words.taken }}</th><th>{{ words.asked }}</th><th>{{ words.left }}</th></tr></thead><tbody>
+{% for row in balances %}<tr data-balance="{{ row.employee.pk }}"><td class="op-cell-text"><a href="{% url 'attendance:month' %}?lang={{ lang }}&employee={{ row.employee.pk }}">{{ row.employee.name }}</a></td><td>{{ row.entitled }}</td><td>{{ row.taken }}</td><td>{{ row.pending }}</td><td data-left>{{ row.left }}</td></tr>
+{% empty %}<tr><td colspan="5" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+
+<h2>{{ words.history }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-leave-history><thead><tr><th>{{ words.employee }}</th><th>{{ words.kind }}</th><th>{{ words.from }}</th><th>{{ words.to }}</th><th>{{ words.count }}</th><th>{{ words.status }}</th>{% if can_manage %}<th></th>{% endif %}</tr></thead><tbody>
+{% for leave in history %}<tr><td class="op-cell-text">{{ leave.employee.name }}</td><td>{% for key, label in kinds.items %}{% if key == leave.kind %}{{ label }}{% endif %}{% endfor %}</td><td><bdi>{{ leave.start_date|date:"Y-m-d" }}</bdi></td><td><bdi>{{ leave.end_date|date:"Y-m-d" }}</bdi></td><td>{{ leave.days }}</td>
+<td>{% for key, label in leave_labels.items %}{% if key == leave.status %}{{ label }}{% endif %}{% endfor %}</td>
+{% if can_manage %}<td>{% if leave.status == 'approved' and leave.end_date >= today %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="cancel"><input type="hidden" name="leave" value="{{ leave.pk }}"><button class="op-secondary" type="submit">{{ words.cancel }}</button></form>{% endif %}</td>{% endif %}</tr>
+{% empty %}<tr><td colspan="7" class="op-empty">{{ words.no_leave }}</td></tr>{% endfor %}
+</tbody></table></div>
+
+<h2>{{ words.holidays }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-holidays><thead><tr><th>{{ words.date }}</th><th>{{ words.holiday_name }}</th>{% if can_manage %}<th></th>{% endif %}</tr></thead><tbody>
+{% for holiday in holidays %}<tr><td><bdi>{{ holiday.date|date:"Y-m-d" }}</bdi></td><td class="op-cell-text">{{ holiday.name }}</td>{% if can_manage %}<td><form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="remove_holiday"><input type="hidden" name="holiday" value="{{ holiday.pk }}"><button class="op-secondary" type="submit">{{ words.remove }}</button></form></td>{% endif %}</tr>
+{% empty %}<tr><td colspan="3" class="op-empty">{{ words.no_holidays }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_manage %}<form class="op-form" method="post" data-holiday-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="holiday"><div class="op-form-grid">
+<div class="op-field"><label for="hd-date">{{ words.date }}</label><input id="hd-date" type="date" name="date" required></div>
+<div class="op-field"><label for="hd-name">{{ words.holiday_name }}</label><input id="hd-name" name="name" maxlength="120" required></div>
+</div><div class="op-form-actions"><button class="op-secondary" type="submit">{{ words.add }}</button></div></form>{% endif %}
+{% endblock %}

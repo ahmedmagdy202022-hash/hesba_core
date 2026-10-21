@@ -1,0 +1,8 @@
+<nav class="op-form-actions wo-tabs" aria-label="{{ words.title }}" data-attendance-tabs>
+{% if can_view %}<a class="op-secondary" href="{% url 'staff:list' %}?lang={{ lang }}">{{ words.tab_staff }}</a>
+<a class="{% if tab == 'today' %}op-primary{% else %}op-secondary{% endif %}" href="{% url 'attendance:today' %}?lang={{ lang }}"{% if tab == 'today' %} aria-current="page"{% endif %}>{{ words.tab_today }}</a>
+<a class="{% if tab == 'month' %}op-primary{% else %}op-secondary{% endif %}" href="{% url 'attendance:month' %}?lang={{ lang }}"{% if tab == 'month' %} aria-current="page"{% endif %}>{{ words.tab_month }}</a>
+<a class="{% if tab == 'leaves' %}op-primary{% else %}op-secondary{% endif %}" href="{% url 'attendance:leaves' %}?lang={{ lang }}"{% if tab == 'leaves' %} aria-current="page"{% endif %}>{{ words.tab_leaves }}</a>
+{% if can_manage %}<a class="{% if tab == 'import' %}op-primary{% else %}op-secondary{% endif %}" href="{% url 'attendance:import' %}?lang={{ lang }}"{% if tab == 'import' %} aria-current="page"{% endif %}>{{ words.tab_import }}</a>{% endif %}{% endif %}
+{% if me %}<a class="{% if tab == 'me' %}op-primary{% else %}op-secondary{% endif %}" href="{% url 'attendance:me' %}?lang={{ lang }}"{% if tab == 'me' %} aria-current="page"{% endif %} data-my-attendance>{{ words.tab_me }}</a>{% endif %}
+</nav>
