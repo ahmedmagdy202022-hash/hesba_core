@@ -201,6 +201,10 @@ class Command(BaseCommand):
         self._options(master, owner, modules)
         if catalog.shelf:
             self._shelf(master, catalog, owner, modules, "batches" in extras)
+        from settings_core.capabilities import capability_enabled
+
+        if capability_enabled("drugs"):
+            self._drugs(master, owner, modules)  # T10: after the shelf, whose brands are the alternatives
         if "expenses" in modules:
             self._expenses(master, owner)  # last: a share of the whole month's sales, the shelf's included
         self._fit_users(modules)
@@ -561,6 +565,62 @@ class Command(BaseCommand):
                                               [{"item": first.item, "quantity": half, "unit_sale_price": first.unit_price,
                                                 "line_discount_amount": first.discount_for(half)}], owner)
         quotes.link_invoice(order, invoice, owner)
+        post_sales_invoice(invoice.pk, user=owner)
+
+    #: T10: what the pharmacy shelf's drugs are made of: (active ingredient, strength, form, prescription only).
+    DRUGS = {
+        "باراسيتامول 500 مجم": ("Paracetamol", "500 mg", "tablet", False), "بنادول 500 مجم": ("Paracetamol", "500 mg", "tablet", False),
+        "شراب خافض حرارة للأطفال": ("Paracetamol", "120 mg/5 ml", "syrup", False), "أقراص برد ورشح": ("Paracetamol + Pseudoephedrine", "", "tablet", False),
+        "أموكسيسيلين 500 مجم": ("Amoxicillin", "500 mg", "capsule", True), "أموكسيل 500 مجم": ("Amoxicillin", "500 mg", "capsule", True),
+        "إيبوبروفين 400 مجم": ("Ibuprofen", "400 mg", "tablet", False), "أسبرين 81 مجم": ("Acetylsalicylic acid", "81 mg", "tablet", False),
+        "فيتامين سي 1000 فوار": ("Vitamin C", "1000 mg", "tablet", False), "فيتامين د 50000 وحدة": ("Cholecalciferol", "50000 IU", "capsule", False),
+        "شراب كحة للأطفال 100 مل": ("Dextromethorphan", "", "syrup", False), "زنك 50 مجم": ("Zinc", "50 mg", "tablet", False),
+        "حديد وفوليك": ("Iron + Folic acid", "", "capsule", False), "أوميجا 3 (30 كبسولة)": ("Omega 3", "1000 mg", "capsule", False),
+        "بخاخ أنف": ("Xylometazoline", "0.1%", "spray", False),
+    }
+
+    def _drugs(self, master, owner, modules):
+        """T10: drug data on the shelf, one prescription waiting with a drug running short (its alternative is in stock),
+        and a chronic one dispensed thirteen days ago, due for its refill in two."""
+
+        from batches.services import stock_on_hand
+        from master_data.models import Item
+        from pharmacy import services as pharmacy
+        from pharmacy.models import DrugInfo, Prescription
+        from sales.pos import walk_in_customer
+        from sales.services import post_sales_invoice
+        from taxes.services import compute_lines, create_sales_draft_with_tax, vat_enabled
+
+        if DrugInfo.objects.exists() or "inventory" not in modules:
+            return
+        items = {item.item_name: item for item in Item.objects.filter(active=True, item_name__in=list(self.DRUGS))}
+        for name, (ingredient, strength, form, rx_only) in self.DRUGS.items():
+            if name in items:
+                pharmacy.save_drug(items[name], {"active_ingredient": ingredient, "strength": strength, "form": form,
+                                                 "prescription_only": rx_only}, owner)
+        amoxicillin, paracetamol = items.get("أموكسيسيلين 500 مجم"), items.get("باراسيتامول 500 مجم")
+        aspirin, omega = items.get("أسبرين 81 مجم"), items.get("أوميجا 3 (30 كبسولة)")
+        if Prescription.objects.exists() or not all((amoxicillin, paracetamol, aspirin, omega)):
+            return
+        today = timezone.localdate()
+        short = (stock_on_hand([amoxicillin.pk]).get(amoxicillin.pk) or Decimal("0")).to_integral_value() + 1
+        waiting = pharmacy.create_prescription({"patient_name": "سعاد علي", "patient_phone": "01001234567", "doctor_name": "د. أحمد فؤاد"}, owner)
+        pharmacy.add_line(waiting, {"item": amoxicillin, "quantity": min(short, Decimal("10")), "dosage": "كبسولة كل 8 ساعات لمدة 5 أيام"}, owner)
+        pharmacy.add_line(waiting, {"item": paracetamol, "quantity": "1", "dosage": "قرص عند اللزوم، بحد أقصى 4 في اليوم"}, owner)
+        chronic = pharmacy.create_prescription({"patient_name": "محمود عبد الله", "patient_phone": "01112345678", "doctor_name": "د. هالة سمير",
+                                                "issued_on": today - timedelta(days=13), "refill_days": "15", "notes": "قلب، بيتصرف كل 15 يوم"}, owner)
+        pharmacy.add_line(chronic, {"item": aspirin, "quantity": "1", "dosage": "قرص يوميًا بعد الغدا"}, owner)
+        pharmacy.add_line(chronic, {"item": omega, "quantity": "1", "dosage": "كبسولة يوميًا"}, owner)
+        customer = walk_in_customer()
+        lines = [{"item": line.item, "quantity": line.quantity, "unit_sale_price": Decimal(line.item.default_sale_price)} for line in chronic.lines.all()]
+        if vat_enabled():  # paid in full, tax included when the shop charges it
+            paid = sum((taxable + tax for *_, taxable, tax in compute_lines(lines)), Decimal("0.00"))
+        else:
+            paid = sum(((line["unit_sale_price"] * line["quantity"]).quantize(Decimal("0.01")) for line in lines), Decimal("0.00"))
+        invoice = create_sales_draft_with_tax({"invoice_number": "DEMO-RX-001", "invoice_date": today - timedelta(days=13), "customer": customer,
+                                               "selling_location": master["location"], "cashbox": master["cashboxes"][0], "paid_now": paid,
+                                               "notes": f"روشتة {chronic.number}"}, lines, owner)
+        pharmacy.link_dispense(chronic, invoice, owner)
         post_sales_invoice(invoice.pk, user=owner)
 
     def _workorders(self, master, staff, owner):

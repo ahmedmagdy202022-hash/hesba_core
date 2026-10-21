@@ -1,0 +1,32 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'pharmacy:lookup' %}?lang={{ lang }}">← {{ words.back }}</a>
+<h1>{{ item.item_name }}{% if info.prescription_only %} <span class="op-status op-status-draft">{{ words.rx_only }}</span>{% endif %}</h1>
+<p>{% if info %}<bdi>{{ info.active_ingredient }}{% if info.strength %} {{ info.strength }}{% endif %}</bdi>{% if info.form %} · {% for key, label in forms.items %}{% if key == info.form %}{{ label }}{% endif %}{% endfor %}{% endif %}{% if info.manufacturer %} · {{ info.manufacturer }}{% endif %}{% else %}{{ words.no_alt_data }}{% endif %}</p></div></section>
+{% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
+<section class="op-summary-grid">
+<article><small>{{ words.stock }}</small><strong data-on-hand>{% if item.is_stock_tracked %}{{ stock|qty }}{% else %}—{% endif %}</strong></article>
+<article><small>{{ words.price }}</small><strong>{{ price|money }}</strong></article>
+<article><small>{{ words.alternatives }}</small><strong data-alt-count>{{ alternatives|length }}</strong></article>
+</section>
+
+<h2>{{ words.alt_title }}</h2>
+<p class="op-muted">{{ words.alt_intro }}</p>
+<div class="op-table-wrap"><table class="op-table" data-alternatives><thead><tr><th>{{ words.item }}</th><th>{{ words.strength }}</th><th>{{ words.form }}</th><th>{{ words.maker }}</th><th>{{ words.stock }}</th><th>{{ words.price }}</th></tr></thead><tbody>
+{% for row in alternatives %}<tr data-alt="{{ row.item.pk }}" data-match="{{ row.match }}"><td class="op-cell-text"><a href="{% url 'pharmacy:drug' row.item.pk %}?lang={{ lang }}">{{ row.item.item_name }}</a> <span class="op-status {% if row.match == 'same' %}op-status-posted{% else %}op-status-draft{% endif %}">{% if row.match == 'same' %}{{ words.same }}{% else %}{{ words.other }}{% endif %}</span></td>
+<td><bdi>{{ row.drug.strength|default:"—" }}</bdi></td><td>{% if row.drug.form %}{% for key, label in forms.items %}{% if key == row.drug.form %}{{ label }}{% endif %}{% endfor %}{% else %}—{% endif %}</td>
+<td class="op-cell-text">{{ row.drug.manufacturer|default:"—" }}</td><td>{% if row.on_hand > 0 %}{{ row.on_hand|qty }}{% else %}<span class="op-status op-status-cancelled">{{ words.sold_out }}</span>{% endif %}</td><td>{{ row.price|money }}</td></tr>
+{% empty %}<tr><td colspan="6" class="op-empty">{% if info %}{{ words.no_alt }}{% else %}{{ words.no_alt_data }}{% endif %}</td></tr>{% endfor %}
+</tbody></table></div>
+
+{% if can_edit %}<h2>{{ words.drug_data }}</h2>
+<form class="op-form" method="post" data-drug-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><div class="op-form-grid">
+<div class="op-field"><label for="d-ing">{{ words.ingredient }}</label><input id="d-ing" name="active_ingredient" maxlength="255" list="d-ings" value="{% if post.active_ingredient %}{{ post.active_ingredient }}{% else %}{{ info.active_ingredient }}{% endif %}"><small class="op-muted">{{ words.ingredient_hint }}</small>
+<datalist id="d-ings">{% for name in ingredients %}<option value="{{ name }}">{% endfor %}</datalist></div>
+<div class="op-field"><label for="d-str">{{ words.strength }}</label><input id="d-str" name="strength" maxlength="60" placeholder="500 mg" value="{% if post.strength %}{{ post.strength }}{% else %}{{ info.strength }}{% endif %}"></div>
+<div class="op-field"><label for="d-form">{{ words.form }}</label><select id="d-form" name="form"><option value="">—</option>{% for value, label in form_choices %}<option value="{{ value }}"{% if value == info.form %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="d-maker">{{ words.maker }}</label><input id="d-maker" name="manufacturer" maxlength="120" value="{% if post.manufacturer %}{{ post.manufacturer }}{% else %}{{ info.manufacturer }}{% endif %}"></div>
+<label class="op-check"><input type="checkbox" name="prescription_only" value="1"{% if info.prescription_only %} checked{% endif %}> {{ words.rx_only_label }}</label>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button>{% if info %}<button class="op-secondary" type="submit" name="remove" value="1" formnovalidate data-remove-drug>{{ words.remove }}</button>{% endif %}</div></form>{% endif %}
+{% endblock %}

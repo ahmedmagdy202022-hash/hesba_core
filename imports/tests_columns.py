@@ -2,7 +2,7 @@
 
 from decimal import Decimal as D
 
-from django.test import SimpleTestCase, TestCase
+from django.test import TestCase
 from django.urls import reverse
 
 from master_data.models import Customer, Item
@@ -13,7 +13,7 @@ from .models import ImportBatch
 from .tests_screen import HOME, csv_file, person, xlsx_file
 
 
-class RecognitionTests(SimpleTestCase):
+class RecognitionTests(TestCase):  # T10: the item columns read whether the drug database is on
     def test_common_arabic_headers_are_recognised(self):
         headers = ["كود الصنف", "اسم الصنف", "الباركود", "سعر البيع", "سعر الشراء", "حد الطلب", "المجموعة", "ملاحظات غريبة"]
         self.assertEqual(columns.suggest("items", headers), {

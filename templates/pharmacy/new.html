@@ -1,0 +1,16 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'pharmacy:prescriptions' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ words.new }}</h1><p>{{ words.intro }}</p></div></section>
+{% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
+<form class="op-form" method="post" data-new-rx-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+<div class="op-form-grid">
+<div class="op-field"><label for="rx-patient">{{ words.patient }}</label><input id="rx-patient" name="patient_name" maxlength="120" value="{{ post.patient_name }}" required></div>
+<div class="op-field"><label for="rx-phone">{{ words.phone }}</label><input id="rx-phone" name="patient_phone" maxlength="30" inputmode="tel" value="{{ post.patient_phone }}"></div>
+<div class="op-field"><label for="rx-doctor">{{ words.doctor }}</label><input id="rx-doctor" name="doctor_name" maxlength="120" value="{{ post.doctor_name }}"></div>
+<div class="op-field"><label for="rx-date">{{ words.issued_on }}</label><input id="rx-date" type="date" name="issued_on" value="{% if post.issued_on %}{{ post.issued_on }}{% else %}{{ today|date:'Y-m-d' }}{% endif %}"></div>
+<div class="op-field"><label for="rx-customer">{{ words.customer }}</label><select id="rx-customer" name="customer"><option value="">{{ words.cash }}</option>{% for c in customers %}<option value="{{ c.pk }}"{% if post.customer == c.pk|stringformat:'s' %} selected{% endif %}>{{ c.name }}{% if c.phone %} — {{ c.phone }}{% endif %}</option>{% endfor %}</select><small class="op-muted">{{ words.customer_hint }}</small></div>
+<div class="op-field"><label for="rx-refill">{{ words.refill }}</label><input id="rx-refill" name="refill_days" inputmode="numeric" value="{{ post.refill_days }}"><small class="op-muted">{{ words.refill_hint }}</small></div>
+<div class="op-field"><label for="rx-notes">{{ words.notes }}</label><input id="rx-notes" name="notes" maxlength="255" value="{{ post.notes }}"></div>
+</div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.create_btn }}</button></div></form>
+{% endblock %}
