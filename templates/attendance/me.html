@@ -1,0 +1,31 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.me_title }}</h1><p>{{ employee.name }}{% if employee.title %} · {{ employee.title }}{% endif %} · <bdi>{{ sheet.schedule.start_time|time:"H:i" }}–{{ sheet.schedule.end_time|time:"H:i" }}</bdi></p></div></section>
+{% include "attendance/_tabs.html" %}
+{% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
+<section class="op-detail-meta" data-my-card><h2>{{ words.me_today }}</h2>
+{% if today_row %}<p>{% with state=today_row.state %}{% include "attendance/_state.html" %}{% endwith %}
+{% if today_row.check_in %} · {{ words.in }} <bdi>{{ today_row.check_in|time:"H:i" }}</bdi>{% endif %}
+{% if today_row.check_out %} · {{ words.out }} <bdi>{{ today_row.check_out|time:"H:i" }}</bdi>{% endif %}</p>{% endif %}
+{% if not today_row or today_row.state == 'missing' or today_row.state == 'present' or today_row.state == 'late' %}<form method="post" class="op-form-actions">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="check"><button class="op-primary" type="submit" data-self-check>{% if today_row.check_in %}{{ words.me_out }}{% else %}{{ words.me_in }}{% endif %}</button></form>{% endif %}
+<p class="op-muted">{{ words.me_hint }}</p></section>
+<section class="op-summary-grid">
+<article><small>{{ words.present_days }}</small><strong>{{ sheet.totals.present }}</strong></article>
+<article><small>{{ words.late_days }}</small><strong>{{ sheet.totals.late_days }}</strong></article>
+<article><small>{{ words.absent_days }}</small><strong>{{ sheet.totals.absent }}</strong></article>
+<article><small>{{ words.left }}</small><strong data-balance-left>{{ balance.left }}</strong></article>
+</section>
+<h2>{{ words.my_leave }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-my-leaves><thead><tr><th>{{ words.kind }}</th><th>{{ words.from }}</th><th>{{ words.to }}</th><th>{{ words.count }}</th><th>{{ words.status }}</th><th></th></tr></thead><tbody>
+{% for leave in leaves %}<tr><td>{% for key, label in kinds.items %}{% if key == leave.kind %}{{ label }}{% endif %}{% endfor %}</td><td><bdi>{{ leave.start_date|date:"Y-m-d" }}</bdi></td><td><bdi>{{ leave.end_date|date:"Y-m-d" }}</bdi></td><td>{{ leave.days }}</td>
+<td>{% for key, label in leave_labels.items %}{% if key == leave.status %}{{ label }}{% endif %}{% endfor %}</td>
+<td>{% if leave.status == 'pending' %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="cancel_leave"><input type="hidden" name="leave" value="{{ leave.pk }}"><button class="op-secondary" type="submit">{{ words.cancel }}</button></form>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="6" class="op-empty">{{ words.no_leave }}</td></tr>{% endfor %}
+</tbody></table></div>
+<form class="op-form" method="post" data-leave-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="leave"><h2>{{ words.new_leave }}</h2><div class="op-form-grid">
+<div class="op-field"><label for="lv-kind">{{ words.kind }}</label><select id="lv-kind" name="kind">{% for value in kind_choices %}<option value="{{ value }}">{% for key, label in kinds.items %}{% if key == value %}{{ label }}{% endif %}{% endfor %}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="lv-from">{{ words.from }}</label><input id="lv-from" type="date" name="start_date" required></div>
+<div class="op-field"><label for="lv-to">{{ words.to }}</label><input id="lv-to" type="date" name="end_date"></div>
+<div class="op-field"><label for="lv-reason">{{ words.reason }}</label><input id="lv-reason" name="reason" maxlength="255"></div>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.request }}</button></div></form>
+{% endblock %}

@@ -1,0 +1,39 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div>{% if employee %}<a class="op-back" href="{% url 'attendance:month' %}?lang={{ lang }}&month={{ first|date:'Y-m' }}">← {{ words.all_staff }}</a>{% endif %}
+<h1>{{ words.tab_month }}{% if employee %} — {{ employee.name }}{% endif %}</h1><p>{{ words.payroll_hint }}</p></div></section>
+{% include "attendance/_tabs.html" %}
+{% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
+<form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}">{% if employee %}<input type="hidden" name="employee" value="{{ employee.pk }}">{% endif %}
+<label class="sr-only" for="at-month">{{ words.month }}</label><select id="at-month" name="month">{% for m in months %}<option value="{{ m|date:'Y-m' }}"{% if m == first %} selected{% endif %}>{{ m|date:'Y-m' }}</option>{% endfor %}</select><button type="submit">{{ words.show }}</button></form>
+<div class="op-table-wrap"><table class="op-table" data-attendance-month><thead><tr><th>{{ words.employee }}</th><th>{{ words.present_days }}</th><th>{{ words.late_days }}</th><th>{{ words.late_total }}</th><th>{{ words.absent_days }}</th><th>{{ words.leave_days }}</th><th>{{ words.over_total }}</th><th>{{ words.off_days }}</th>{% if not employee %}<th></th>{% endif %}</tr></thead><tbody>
+{% for sheet in sheets %}<tr data-sheet="{{ sheet.employee.pk }}"><td class="op-cell-text">{{ sheet.employee.name }}</td><td data-present>{{ sheet.totals.present }}</td><td>{{ sheet.totals.late_days }}</td><td data-late-minutes>{{ sheet.totals.late }}</td>
+<td data-absent>{{ sheet.totals.absent }}</td><td>{{ sheet.totals.leave }}{% if sheet.totals.unpaid %} <small class="op-muted">({{ words.unpaid_days }} {{ sheet.totals.unpaid }})</small>{% endif %}</td><td>{{ sheet.totals.over }}</td><td>{{ sheet.totals.off }}</td>
+{% if not employee %}<td><a class="op-secondary" href="?lang={{ lang }}&month={{ first|date:'Y-m' }}&employee={{ sheet.employee.pk }}">{{ words.open }}</a></td>{% endif %}</tr>
+{% empty %}<tr><td colspan="9" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if employee %}{% with sheet=sheets.0 %}
+<h2>{{ words.days }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-attendance-days><thead><tr><th>{{ words.date }}</th><th>{{ words.state }}</th><th>{{ words.in }}</th><th>{{ words.out }}</th><th>{{ words.late }}</th><th>{{ words.over }}</th>{% if can_manage %}<th></th>{% endif %}</tr></thead><tbody>
+{% for row in sheet.days reversed %}<tr data-day="{{ row.date|date:'Y-m-d' }}"><td><bdi>{{ row.date|date:"Y-m-d" }}</bdi> <small class="op-muted">{% for name in weekdays %}{% if forloop.counter0 == row.date.weekday %}{{ name }}{% endif %}{% endfor %}</small></td>
+<td>{% with state=row.state %}{% include "attendance/_state.html" %}{% endwith %}{% if row.record.note %} <small class="op-muted">{{ row.record.note }}</small>{% endif %}</td>
+<td><bdi>{{ row.check_in|time:"H:i"|default:"—" }}</bdi></td><td><bdi>{{ row.check_out|time:"H:i"|default:"—" }}</bdi></td><td>{{ row.late|default:"—" }}</td><td>{{ row.over|default:"—" }}</td>
+{% if can_manage %}<td>{% if row.state != 'off' and row.state != 'holiday' and row.state != 'leave' %}<details><summary>{{ words.edit }}</summary><form method="post" class="op-form">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="day"><input type="hidden" name="employee" value="{{ employee.pk }}"><input type="hidden" name="month" value="{{ first|date:'Y-m' }}"><input type="hidden" name="date" value="{{ row.date|date:'Y-m-d' }}">
+<div class="op-form-grid"><div class="op-field"><label>{{ words.in }}<input name="check_in" value="{{ row.check_in|time:'H:i' }}" placeholder="09:00" inputmode="numeric"></label></div><div class="op-field"><label>{{ words.out }}<input name="check_out" value="{{ row.check_out|time:'H:i' }}" placeholder="17:00" inputmode="numeric"></label></div>
+<label class="op-check"><input type="checkbox" name="absent" value="1"{% if row.state == 'absent' and row.record %} checked{% endif %}> {{ words.absent }}</label>
+<div class="op-field"><label>{{ words.note }}<input name="note" maxlength="255" value="{{ row.record.note }}"></label></div></div>
+<p class="op-muted">{{ words.clear_hint }}</p><div class="op-form-actions"><button class="op-secondary" type="submit">{{ words.save }}</button></div></form></details>{% endif %}</td>{% endif %}</tr>
+{% endfor %}
+</tbody></table></div>
+{% endwith %}
+<section class="op-summary-grid"><article><small>{{ words.entitled }} <bdi>{{ balance.year }}</bdi></small><strong>{{ balance.entitled }}</strong></article><article><small>{{ words.taken }}</small><strong>{{ balance.taken }}</strong></article><article><small>{{ words.left }}</small><strong data-balance-left>{{ balance.left }}</strong></article></section>
+{% if can_manage %}<form class="op-form" method="post" data-schedule-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="schedule"><input type="hidden" name="employee" value="{{ employee.pk }}"><input type="hidden" name="month" value="{{ first|date:'Y-m' }}"><h2>{{ words.schedule }}</h2><div class="op-form-grid">
+<div class="op-field"><label for="sc-start">{{ words.start_time }}</label><input id="sc-start" name="start_time" value="{{ schedule.start_time|time:'H:i' }}" inputmode="numeric"></div>
+<div class="op-field"><label for="sc-end">{{ words.end_time }}</label><input id="sc-end" name="end_time" value="{{ schedule.end_time|time:'H:i' }}" inputmode="numeric"></div>
+<div class="op-field"><label for="sc-grace">{{ words.grace }}</label><input id="sc-grace" name="grace_minutes" value="{{ schedule.grace_minutes }}" inputmode="numeric"></div>
+<div class="op-field"><label for="sc-annual">{{ words.annual }}</label><input id="sc-annual" name="annual_leave_days" value="{{ schedule.annual_leave_days }}" inputmode="numeric"></div>
+<div class="op-field"><label for="sc-device">{{ words.device_id }}</label><input id="sc-device" name="device_id" maxlength="30" value="{{ schedule.device_id }}"><small class="op-muted">{{ words.device_hint }}</small></div>
+<fieldset class="op-field"><legend>{{ words.days_off }}</legend>{% for name in weekdays %}<label class="op-check"><input type="checkbox" name="days_off" value="{{ forloop.counter0 }}"{% if forloop.counter0 in schedule.off_weekdays %} checked{% endif %}> {{ name }}</label>{% endfor %}</fieldset>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form>{% endif %}
+{% endif %}
+{% endblock %}

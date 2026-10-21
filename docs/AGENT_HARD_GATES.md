@@ -1650,6 +1650,42 @@ The entries below are the protected-logic decisions in the commercial gate, reco
   - the import columns;
   - permissions, the capability gate, and the pages in Arabic and English.
 
+## HG-063 — Staff attendance and leave (T11)
+
+- **Status:** IMPLEMENTED NOTE when T11 merges. Additive tables only, like HG-054 and HG-062.
+- **What:**
+  - A new `attendance` app, mounted under `/staff/attendance/`, so the employees module opens and closes it.
+  - `WorkSchedule` sits beside an employee, one to one: working hours, days off, the grace before a late arrival, the leave days a year, and the fingerprint-device number.
+  - `AttendanceDay` holds one employee's day: the time in and the time out, or absent.
+  - `LeaveRequest` holds leave asked for, then approved, rejected or cancelled.
+  - `Holiday` holds the public holidays.
+- **Not changed:** the `Employee` model (no new column), the permission core, pay, expenses and every posting.
+- **How:**
+  - **Permissions:** the screens use existing permissions only. The team's pages are for `sees_staff` (owner, manager, accountant). Recording and approving needs `master_data.manage_parties`, the permission that already edits employees. An employee whose login is linked to them gets "my attendance", with one check-in/check-out button and their own leave requests.
+  - **What a day counts as:**
+    - a time in after the grace → late;
+    - a time out past the end of the day → overtime;
+    - leaving before the end of the day → early;
+    - a day off or a holiday → not counted;
+    - approved leave → leave;
+    - a past working day with nothing recorded → absent (but not before the employee was added).
+  - **Leave balance:** annual and casual leave come off the yearly balance; sick and unpaid leave do not. Overlapping requests are refused, and so is an approval beyond the balance.
+  - **The fingerprint file (CSV):** the first punch of a day is the time in and the last is the time out. Loading the same file twice changes nothing. Numbers that match no employee are listed back.
+  - The monthly sheet only counts days and minutes. Turning them into pay is payroll (HG-060), which still waits for Ahmed.
+- **Risk:**
+  - A day with nothing recorded reads as absent. A shop that does not record attendance every day will see absences; the sheet says so.
+  - A day's times are wall-clock times with no night shift across midnight. A shift that ends after midnight would need its own design.
+- **Tests:** `attendance/tests.py` covers:
+  - late, early, overtime, days off, holidays, leave and absence;
+  - the manager's corrections;
+  - self check-in;
+  - the menu per role;
+  - leave days, balance, overlaps and decisions;
+  - an employee can only ask for their own leave;
+  - the device file (English and Arabic headers, run twice, unknown numbers, unreadable lines);
+  - the screens in Arabic and English;
+  - the module switch.
+
 ## HG-055 — Bank accounts (T3)
 
 - **Status:** OPEN PROPOSAL.
