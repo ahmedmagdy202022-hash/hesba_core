@@ -57,9 +57,10 @@
   </section>
   {% else %}
   <table class="pr-lines">
-    <thead><tr><th class="pr-col-no">#</th><th>{{ words.item }}</th><th class="pr-num">{{ words.qty }}</th><th class="pr-num">{{ words.price }}</th>{% if doc.has_discounts %}<th class="pr-num">{{ words.discount }}</th>{% endif %}<th class="pr-num">{{ words.total }}</th></tr></thead>
-    <tbody>{% for line in doc.lines %}<tr><td class="pr-col-no">{{ forloop.counter }}</td><td class="pr-item">{{ line.label }}</td><td class="pr-num">{{ line.quantity|qty }}</td><td class="pr-num">{{ line.unit_price|money }}</td>{% if doc.has_discounts %}<td class="pr-num">{{ line.discount|money }}</td>{% endif %}<td class="pr-num">{{ line.total|money }}</td></tr>{% endfor %}</tbody>
+    <thead><tr><th class="pr-col-no">#</th><th>{{ words.item }}</th><th class="pr-num">{{ words.qty }}</th>{% if not doc.no_prices %}<th class="pr-num">{{ words.price }}</th>{% if doc.has_discounts %}<th class="pr-num">{{ words.discount }}</th>{% endif %}<th class="pr-num">{{ words.total }}</th>{% endif %}</tr></thead>
+    <tbody>{% for line in doc.lines %}<tr><td class="pr-col-no">{{ forloop.counter }}</td><td class="pr-item">{{ line.label }}</td><td class="pr-num">{{ line.quantity|qty }}</td>{% if not doc.no_prices %}<td class="pr-num">{{ line.unit_price|money }}</td>{% if doc.has_discounts %}<td class="pr-num">{{ line.discount|money }}</td>{% endif %}<td class="pr-num">{{ line.total|money }}</td>{% endif %}</tr>{% endfor %}</tbody>
   </table>
+  {% if not doc.no_prices %}
 
   <section class="pr-totals">
     <dl>
@@ -75,12 +76,14 @@
     </dl>
   </section>
   {% endif %}
+  {% endif %}
 
-  <p class="pr-words"><span>{{ words.words }}:</span> {{ doc.amount_words }}</p>
+  {% if doc.amount_words %}<p class="pr-words"><span>{{ words.words }}:</span> {{ doc.amount_words }}</p>{% endif %}
   {% if doc.notes %}<p class="pr-notes"><span>{% firstof doc.notes_label words.notes %}:</span> {{ doc.notes }}</p>{% endif %}
+  {% if doc.terms %}<p class="pr-notes" data-terms><span>{% if lang == 'en' %}Terms{% else %}الشروط{% endif %}:</span> {{ doc.terms|linebreaksbr }}</p>{% endif %}
 
   {% if format == 'a4' %}
-  <section class="pr-signatures"><div>{{ words.signature_receiver }}</div><div>{{ words.signature_cashier }}</div></section>
+  <section class="pr-signatures"><div>{{ words.signature_receiver }}</div><div>{% firstof doc.signature_second words.signature_cashier %}</div></section>
   {% endif %}
 
   <footer class="pr-foot">

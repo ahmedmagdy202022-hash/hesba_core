@@ -69,7 +69,7 @@ class SetupChoiceTests(TestCase):
     @with_future_capability
     def test_setup_applies_the_preset_when_nothing_is_sent(self):
         complete_setup(self.profile(), "commercial", "wholesale", "")
-        self.assertEqual(caps.enabled_capabilities(), ("barcode", "price_lists", "units", "vat", "e_invoice"))
+        self.assertEqual(caps.enabled_capabilities(), ("barcode", "price_lists", "quotations", "units", "vat", "e_invoice"))  # T1: wholesalers quote
         self.assertFalse(FeatureFlag.objects.get(code="capability.pos").enabled)
         self.assertFalse(FeatureFlag.objects.get(code="capability.fixed_assets").enabled)  # optional for wholesale
         self.assertFalse(FeatureFlag.objects.filter(code="capability.future_cap").exists())  # not shipped yet

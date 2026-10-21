@@ -70,6 +70,7 @@ LOCAL_APPS = [
     "medical",
     "education",
     "workorders",
+    "orders",
     "feedback",
 ]
 

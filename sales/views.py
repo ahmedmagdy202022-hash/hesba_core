@@ -149,7 +149,10 @@ def invoice_list(request):
 
 @require_permission("sales.create_sales_invoice")
 def invoice_create(request):
+    from orders.services import invoice_initial, link_invoice, order_for_invoice
+
     lang = _lang(request)
+    from_order = order_for_invoice(request.user, request.POST.get("order") if request.method == "POST" else request.GET.get("order"))  # T1
     if request.method == "POST":
         form = SalesDraftForm(request.POST, lang=lang)
         if vat_enabled():
@@ -163,6 +166,8 @@ def invoice_create(request):
                 def create():
                     invoice = create_sales_draft_with_tax(form.cleaned_data, line_data, request.user)
                     attach_sale_serials(invoice, line_data)
+                    if from_order is not None:  # T1: this invoice takes its quantities off the order
+                        link_invoice(from_order, invoice, request.user)
                     return invoice
 
                 invoice = form.create_with_fresh_number(create)  # AUTONUM: atomic, retried on a taken number
@@ -177,6 +182,10 @@ def invoice_create(request):
                 return redirect(f"/sales/{invoice.pk}/?lang={lang}")
     else:
         initial = _party_initial(request, "customer") or {}
+        line_initial = []
+        if from_order is not None:  # T1: what is left on the order, at the order's prices
+            order_header, line_initial = invoice_initial(from_order, lang)
+            initial.update({key: getattr(value, "pk", value) for key, value in order_header.items()})
         if not initial.get("customer"):
             from settings_core.setup_services import enabled_modules
 
@@ -187,9 +196,9 @@ def invoice_create(request):
         form = SalesDraftForm(lang=lang, initial=initial)
         if vat_enabled():
             del form.fields["tax_amount"]
-        line_formset = SalesLineFormSet(prefix="lines", form_kwargs={"lang": lang})
+        line_formset = SalesLineFormSet(prefix="lines", form_kwargs={"lang": lang}, initial=line_initial or None)
     offer_quick_add(form, request.user, lang)  # FB2-QUICKPARTY: + new supplier / customer / warehouse
-    return render(request, "sales/form.html", _context(request, form=form, line_formset=line_formset, can_post=True, item_catalog=item_catalog(sale_prices=True, purchase_prices=False), scan_words=scan_words(lang), price_book=price_book(), tax_rates=rates_by_item(), units=units_catalog()))
+    return render(request, "sales/form.html", _context(request, form=form, line_formset=line_formset, can_post=True, item_catalog=item_catalog(sale_prices=True, purchase_prices=False), scan_words=scan_words(lang), price_book=price_book(), tax_rates=rates_by_item(), units=units_catalog(), from_order=from_order))
 
 
 @require_permission("sales.view_sales_invoices")

@@ -1,0 +1,60 @@
+{% extends "operations/base.html" %}
+{% load hesba_format hesba_labels %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'orders:list' %}?lang={{ lang }}">← {{ words.back }}</a>
+<h1><bdi>{{ order.display_number }}</bdi> — {{ order.customer.name }}</h1>
+<p>{% if order.order_number %}{{ words.quote_number }} <bdi>{{ order.number }}</bdi> · {% endif %}{{ words.date }} <bdi>{{ order.quote_date|date:"Y-m-d" }}</bdi>{% if order.valid_until and not order.order_number %} · {{ words.valid_until }} <bdi>{{ order.valid_until|date:"Y-m-d" }}</bdi>{% endif %} · {% include "orders/_state.html" %}</p></div>
+<div class="op-form-actions">
+{% if share %}<a class="op-secondary" href="{{ share.whatsapp }}" target="_blank" rel="noopener" data-share-whatsapp>{{ words.whatsapp }}</a><button class="op-secondary" type="button" data-copy-link="{{ share.url }}">{{ words.copy }}</button>{% endif %}
+<a class="op-secondary" href="{% url 'orders:print' order.pk %}?lang={{ lang }}" target="_blank" rel="noopener" data-print-link>{% if order.order_number %}{{ words.print_order }}{% else %}{{ words.print_quote }}{% endif %}</a>
+</div></section>
+{% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
+{% if state == 'expired' %}<div class="op-message" role="status" data-expired>{{ expired_hint }}</div>{% endif %}
+
+<section class="op-summary-grid">
+<article><small>{{ words.gross }}</small><strong>{{ numbers.gross|money }}</strong></article>
+{% if numbers.discount %}<article><small>{{ words.discount_total }}</small><strong>{{ numbers.discount|money }}</strong></article>{% endif %}
+{% if numbers.tax %}<article><small>{{ words.tax }}</small><strong>{{ numbers.tax|money }}</strong></article>{% endif %}
+<article><small>{{ words.net_total }}</small><strong data-order-total>{{ numbers.total|money }}</strong></article>
+{% if order.salesperson %}<article><small>{{ words.salesperson }}</small><strong>{{ order.salesperson.name }}</strong></article>{% endif %}
+</section>
+
+{% if moves %}<h2>{{ words.next }}</h2>
+<div class="op-form-actions wo-tabs" data-moves>{% for status, label in moves %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="move"><input type="hidden" name="to" value="{{ status }}"><button class="{% if status == 'cancelled' or status == 'rejected' %}op-danger{% elif status == 'confirmed' %}op-primary{% else %}op-secondary{% endif %}" type="submit" data-move="{{ status }}">{{ label }}</button></form>{% endfor %}</div>{% endif %}
+
+{% if can_invoice %}<section class="op-detail-meta" data-make-invoice><p>{{ words.make_invoice_hint }}</p>
+<div class="op-form-actions"><a class="op-primary" href="{% url 'sales:create' %}?lang={{ lang }}&order={{ order.pk }}" data-invoice-order>{{ words.make_invoice }}</a></div></section>{% endif %}
+
+<h2>{{ words.lines }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-order-lines><thead><tr><th>{{ words.item }}</th><th>{{ words.qty }}</th><th>{{ words.price }}</th><th>{{ words.discount }}</th><th>{{ words.amount }}</th>{% if order.order_number %}<th>{{ words.invoiced }}</th><th>{{ words.left }}</th>{% endif %}<th></th></tr></thead><tbody>
+{% for row in rows %}{% with line=row.line %}<tr data-line="{{ line.pk }}"><td class="op-cell-text">{{ line.item.item_name }}{% if line.description %} — {{ line.description }}{% endif %}</td>
+<td>{{ line.quantity|qty }}</td><td>{{ line.unit_price|money }}</td><td>{% if line.discount_percent %}{{ line.discount_percent|floatformat:"-2" }}%{% else %}—{% endif %}</td><td>{{ line.amount|money }}</td>
+{% if order.order_number %}<td data-invoiced>{{ row.invoiced|qty }}{% if row.drafted %} <small class="op-muted">+ {{ row.drafted|qty }} {{ words.drafted }}</small>{% endif %}</td><td data-left>{{ row.left|qty }}</td>{% endif %}
+<td>{% if editable %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="remove_line"><input type="hidden" name="line" value="{{ line.pk }}"><button class="op-secondary" type="submit">{{ words.remove }}</button></form>{% endif %}</td></tr>{% endwith %}
+{% empty %}<tr><td colspan="8" class="op-empty">{{ words.no_lines }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if editable %}<form class="op-form" method="post" data-add-line>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="add_line"><div class="op-form-grid">
+<div class="op-field"><label for="so-item">{{ words.item }}</label><select id="so-item" name="item" required><option value="">{{ words.choose }}</option>{% for item in items %}<option value="{{ item.pk }}">{{ item.item_name }} — {{ item.default_sale_price|money }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="so-qty">{{ words.qty }}</label><input id="so-qty" name="quantity" inputmode="decimal" value="1"></div>
+<div class="op-field"><label for="so-price">{{ words.price }}</label><input id="so-price" name="unit_price" inputmode="decimal" placeholder="{{ words.price_hint }}"></div>
+<div class="op-field"><label for="so-disc">{{ words.discount }}</label><input id="so-disc" name="discount_percent" inputmode="decimal" value="0"></div>
+</div><div class="op-form-actions"><button class="op-secondary" type="submit">{{ words.add }}</button></div></form>
+
+<h2>{{ words.details }}</h2>
+<form class="op-form" method="post" data-details>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="details"><div class="op-form-grid">
+<div class="op-field"><label for="so-date">{{ words.quote_date }}</label><input id="so-date" type="date" name="quote_date" value="{{ order.quote_date|date:'Y-m-d' }}"></div>
+<div class="op-field"><label for="so-valid">{{ words.valid_until }}</label><input id="so-valid" type="date" name="valid_until" value="{{ order.valid_until|date:'Y-m-d' }}"></div>
+{% if salespeople %}<div class="op-field"><label for="so-rep">{{ words.salesperson }}</label><select id="so-rep" name="salesperson"><option value="">—</option>{% for rep in salespeople %}<option value="{{ rep.pk }}"{% if rep.pk == order.salesperson_id %} selected{% endif %}>{{ rep.name }}</option>{% endfor %}</select></div>{% endif %}
+<div class="op-field"><label for="so-notes">{{ words.notes }}</label><input id="so-notes" name="notes" maxlength="255" value="{{ order.notes }}"></div>
+<div class="op-field"><label for="so-terms">{{ words.terms }}</label><textarea id="so-terms" name="terms" rows="3" placeholder="{{ words.terms_hint }}">{{ order.terms }}</textarea></div>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form>
+{% else %}{% if order.notes or order.terms %}<section class="op-detail-meta">{% if order.notes %}<p><strong>{{ words.notes }}:</strong> {{ order.notes }}</p>{% endif %}{% if order.terms %}<p><strong>{{ words.terms }}:</strong> {{ order.terms|linebreaksbr }}</p>{% endif %}</section>{% endif %}{% endif %}
+
+{% if order.order_number %}<h2>{{ words.invoices }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-order-invoices><thead><tr><th>{{ words.number }}</th><th>{{ words.date }}</th><th>{{ words.status }}</th><th>{{ words.total }}</th><th></th></tr></thead><tbody>
+{% for invoice in invoices %}<tr data-invoice="{{ invoice.pk }}"><td><a href="{% url 'sales:detail' invoice.pk %}?lang={{ lang }}"><bdi>{{ invoice.invoice_number }}</bdi></a></td><td><bdi>{{ invoice.invoice_date|date:"Y-m-d" }}</bdi></td>
+<td><span class="op-status op-status-{{ invoice.status }}">{% choice_label invoice "status" %}</span></td><td>{{ invoice.total_amount|money }}</td>
+<td>{% if invoice.status != 'cancelled' %}<a class="op-secondary" href="{% url 'orders:delivery_note' order.pk invoice.pk %}?lang={{ lang }}" target="_blank" rel="noopener" data-delivery-note>{{ words.delivery_note }}</a>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="5" class="op-empty">{{ words.no_invoices }}</td></tr>{% endfor %}
+</tbody></table></div>{% endif %}
+{% endblock %}

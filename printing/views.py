@@ -424,6 +424,11 @@ def shared_document(request, token):
         from sales.models import CustomerPayment
 
         doc = _voucher_doc(get_object_or_404(CustomerPayment, pk=pk), "customer_payment", lang, "customer")
+    elif kind == "sales_quote":  # T1: a quotation (or the order it became) sent to the customer
+        from orders.models import SalesOrder
+        from orders.views import _doc as order_doc
+
+        doc = order_doc(get_object_or_404(SalesOrder.objects.select_related("customer", "salesperson"), pk=pk), lang)
     elif kind == "customer_statement":
         from master_data.models import Customer
         from parties.services import statement
