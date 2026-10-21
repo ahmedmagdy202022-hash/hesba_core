@@ -324,6 +324,9 @@ PHARMACY = Catalog(
             _sh("بخاخ أنف", "زجاجة", "65.00", "48.00", 15, expires=350),
             _sh("أقراص استحلاب للحلق", "علبة", "35.00", "25.00", 20, expires=420),
             _sh("شراب خافض حرارة للأطفال", "زجاجة", "48.00", "36.00", 18, expires=260),
+            # T10: brands with the same active ingredient as the planted paracetamol and amoxicillin, so alternatives show.
+            _sh("بنادول 500 مجم", "شريط", "42.00", "33.00", 25, expires=500),
+            _sh("أموكسيل 500 مجم", "علبة", "92.00", "72.00", 12, expires=420),
         )),
         ("DEMO-CAT-P2", "فيتامينات ومكملات", "Vitamins & supplements", (
             _sh("فيتامين د 50000 وحدة", "علبة", "120.00", "90.00", 15, expires=600),

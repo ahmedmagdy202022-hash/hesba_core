@@ -41,6 +41,11 @@ FIELDS = {
                          ("entity_code", "الكود", "Code", True), ("opening_balance", "الرصيد", "Balance", True)],
 }
 
+#: T10: the drug columns an items file may carry while the drug database is on (pharmacy.services.from_import).
+DRUG_FIELDS = [("active_ingredient", "المادة الفعالة", "Active ingredient", False), ("strength", "التركيز", "Strength", False),
+               ("dosage_form", "الشكل الدوائي", "Dosage form", False), ("manufacturer", "الشركة المنتجة", "Maker", False),
+               ("prescription_only", "بروشتة", "Prescription only", False)]
+
 #: Code fields Hesba can number itself when the old program has no codes.
 AUTO_CODE = {"categories": ("category_code", "CAT-"), "locations": ("location_code", "LOC-"), "items": ("item_code", "ITM-"),
              "customers": ("customer_code", "C-"), "suppliers": ("supplier_code", "S-"), "cashboxes": ("cashbox_code", "CB-")}
@@ -83,9 +88,14 @@ ALIASES = {
     "unit_cost": ["التكلفه", "تكلفه", "سعر التكلفه", "متوسط التكلفه", "cost", "unit cost"],
     "entity_type": ["النوع", "نوع الحساب", "type"],
     "entity_code": ["الكود", "كود", "code"],
+    "active_ingredient": ["المادة الفعاله", "الماده الفعاله", "الاسم العلمي", "المادة العلمية", "scientific name", "generic name", "generic", "ingredient", "active ingredient"],
+    "strength": ["تركيز", "التركيز", "قوه الدواء", "strength", "dose", "concentration"],
+    "dosage_form": ["الشكل", "شكل", "الشكل الصيدلي", "form", "dosage form", "pharmaceutical form"],
+    "manufacturer": ["الشركه", "الشركه المنتجه", "الشركه المصنعه", "المصنع", "company", "manufacturer", "maker"],
+    "prescription_only": ["روشته", "يصرف بروشته", "بروشته", "rx", "prescription", "prescription only"],
 }
 
-BOOLEAN_FIELDS = {"active", "is_default", "is_receiving_location", "is_selling_location", "is_stock_tracked"}
+BOOLEAN_FIELDS = {"active", "is_default", "is_receiving_location", "is_selling_location", "is_stock_tracked", "prescription_only"}
 NUMBER_FIELDS = {"default_sale_price", "default_purchase_price", "average_cost", "min_stock", "opening_balance", "credit_limit", "quantity", "unit_cost"}
 TRUE_WORDS = {"نعم", "ايوه", "اه", "صح", "فعال", "نشط", "نشطه", "مفعل", "✓", "x"}
 FALSE_WORDS = {"لا", "لأ", "غير فعال", "غير نشط", "موقوف", "متوقف", "ملغي"}
@@ -106,7 +116,15 @@ def normalise(text):
 
 
 def fields(target_type):
+    if target_type == "items" and _drugs_on():
+        return FIELDS["items"] + DRUG_FIELDS
     return FIELDS.get(target_type, [])
+
+
+def _drugs_on():
+    from settings_core.capabilities import capability_enabled
+
+    return capability_enabled("drugs")
 
 
 def _names(target_type, key, labels):

@@ -90,6 +90,12 @@ CAPABILITIES = {
         "about_en": "Track every unit by its number from purchase to sale, with its warranty.",
         "available": True, "paths": ("/serials/",),
     },
+    "drugs": {
+        "ar": "قاعدة الأدوية والروشتات", "en": "Drug database & prescriptions",
+        "about_ar": "المادة الفعالة والتركيز لكل دوا، والبدائل اللي عندك في المخزون، وصرف الروشتة بفاتورة بيع، وتجديد الروشتات المزمنة.",
+        "about_en": "The active ingredient and strength of each drug, the alternatives you have in stock, dispensing a prescription on a sales invoice, and chronic refills.",
+        "available": True, "paths": ("/pharmacy/",),
+    },
     "installments": {
         "ar": "البيع بالتقسيط", "en": "Instalment sales",
         "about_ar": "جدول أقساط للعميل، ومواعيد استحقاق، وتذكير بالتحصيل.",
@@ -126,7 +132,7 @@ PRESETS = {
     "grocery": {"pos": SUGGESTED, "barcode": SUGGESTED, "units": SUGGESTED, "batches_expiry": SUGGESTED},
     "fashion": {"pos": SUGGESTED, "barcode": SUGGESTED, "variants": SUGGESTED},
     "electronics": {"pos": SUGGESTED, "barcode": SUGGESTED, "serials": SUGGESTED, "installments": SUGGESTED},
-    "pharmacy": {"pos": SUGGESTED, "barcode": SUGGESTED, "batches_expiry": SUGGESTED, "units": SUGGESTED},
+    "pharmacy": {"pos": SUGGESTED, "barcode": SUGGESTED, "batches_expiry": SUGGESTED, "units": SUGGESTED, "drugs": SUGGESTED},
     "wholesale": {"barcode": SUGGESTED, "price_lists": SUGGESTED, "units": SUGGESTED, "vat": SUGGESTED, "e_invoice": SUGGESTED, "quotations": SUGGESTED},
     "online": {"barcode": SUGGESTED, "variants": SUGGESTED},
     "other": {"pos": SUGGESTED, "barcode": SUGGESTED},
@@ -178,7 +184,7 @@ ACTIVITY_PRESETS = {
     },
     catalog.MEDICAL: {
         "dental": {"installments": SUGGESTED},
-        "medical_center": {"fixed_assets": SUGGESTED, "batches_expiry": SUGGESTED},
+        "medical_center": {"fixed_assets": SUGGESTED, "batches_expiry": SUGGESTED, "drugs": SUGGESTED},
         "lab": {"batches_expiry": SUGGESTED, "fixed_assets": SUGGESTED},
         "vet": {"batches_expiry": SUGGESTED, "pos": SUGGESTED},
     },
@@ -261,6 +267,12 @@ NOT_FOR_SUB = {
     (catalog.MANUFACTURING, "workshop"): {"batches_expiry", "variants", "pos", "shift_required"},
 }
 
+#: T10: a capability offered only to these (activity, sub-activity) pairs, "*" for every sub-activity of the activity.
+#: A drug database is a pharmacy's (or a medical centre's own pharmacy's); a shop or a café never needs one.
+ONLY_FOR = {
+    "drugs": {(catalog.COMMERCIAL, "pharmacy"), (catalog.MEDICAL, "*")},
+}
+
 #: SETTINGS-TRACK: a capability that rides on a module works only while that module is on: expiry dates and serial
 #: numbers follow the stock, instalments and e-invoices belong to a customer. Switching one on switches its module on
 #: too; switching the module off pauses it (its flag is kept, so it comes back with the module).
@@ -270,6 +282,7 @@ NEEDS = {
     "installments": ("customers",),
     "e_invoice": ("customers",),
     "quotations": ("customers",),
+    "drugs": ("inventory",),
 }
 
 #: ... and what it works best with, said on its card but never enforced.
@@ -285,12 +298,12 @@ WORKS_BEST_WITH = {
 #: "Where" is what the settings track saw appear when the feature was switched on.
 GROUPS = (
     ("selling", ("البيع والكاشير", "Selling and the till"), ("pos", "shift_required", "price_lists", "installments", "quotations")),
-    ("goods", ("الأصناف والمخزون", "Items and stock"), ("barcode", "units", "variants", "batches_expiry", "serials")),
+    ("goods", ("الأصناف والمخزون", "Items and stock"), ("barcode", "units", "variants", "batches_expiry", "serials", "drugs")),
     ("money", ("الحسابات والضرايب", "Accounts and tax"), ("vat", "e_invoice", "fixed_assets")),
 )
 ICONS = {"pos": "pos", "shift_required": "shift", "price_lists": "pricetag", "installments": "instalments", "barcode": "barcode",
          "units": "units", "variants": "variants", "batches_expiry": "expiry", "serials": "serial", "vat": "taxes",
-         "e_invoice": "einvoice", "fixed_assets": "assets", "quotations": "quotes"}
+         "e_invoice": "einvoice", "fixed_assets": "assets", "quotations": "quotes", "drugs": "drugs"}
 WHERE = {
     "pos": ("«الكاشير» في القايمة، وزرار في لوحة القيادة وفي قايمة الفواتير", "“Till” in the menu, with a button on the dashboard and the invoice list"),
     "shift_required": ("فاتورة البيع والكاشير بيطلبوا فتح وردية الأول", "The sales invoice and the till ask for an open shift first"),
@@ -302,6 +315,7 @@ WHERE = {
     "serials": ("خانة السيريال في فواتير البيع والشراء، وشاشة في المخزون", "A serial number field on sales and purchase invoices, and a screen under stock"),
     "installments": ("«الأقساط» في المبيعات، وكارت في لوحة القيادة", "“Instalments” under sales, and a dashboard card"),
     "quotations": ("«عروض الأسعار والأوامر» في القايمة، وزرار «اعمل فاتورة بالباقي» على كل أمر", "“Quotations & orders” in the menu, and “Invoice what is left” on each order"),
+    "drugs": ("«الأدوية والبدائل» في القايمة، وزرار «اصرف الروشتة» اللي بيفتح فاتورة البيع", "“Drugs & alternatives” in the menu, and “Dispense” opening the sales invoice"),
     "vat": ("«الضرايب» في القايمة، وضريبة كل صنف، وتقرير ضريبة المبيعات", "“Taxes” in the menu, a rate per item, and the sales VAT report"),
     "e_invoice": ("«الفاتورة الإلكترونية» في القايمة، وملف لكل فاتورة مترحّلة", "“E-invoicing” in the menu, and a document for each posted invoice"),
     "fixed_assets": ("«الأصول الثابتة» في القايمة، والإهلاك في المصروفات وصافي الربح", "“Fixed assets” in the menu, and depreciation in expenses and net profit"),
@@ -319,6 +333,9 @@ def fits(activity, slug, sub_activity=""):
     if slug in NOT_FOR.get(activity, set()):
         return False
     if slug == "shift_required" and "pos" in NOT_FOR_SUB.get((activity, sub_activity), set()):
+        return False
+    only = ONLY_FOR.get(slug)
+    if only is not None and (activity, sub_activity) not in only and (activity, "*") not in only:
         return False
     return slug not in NOT_FOR_SUB.get((activity, sub_activity), set())
 

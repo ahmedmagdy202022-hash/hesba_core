@@ -65,6 +65,9 @@ NAV_ITEMS = (
     {"key": "pos", "ar": "الكاشير", "en": "Point of sale", "url_name": "sales:pos", "module": "sales_operations", "capability": "pos", "permission": "sales.create_sales_invoice"},
     {"key": "purchases", "ar": "المشتريات", "en": "Purchases", "url_name": "purchases:list", "module": "purchases", "permission": "purchases.view_purchase_invoices"},
     {"key": "inventory", "ar": "المخزون", "en": "Inventory", "url_name": "inventory:stock", "module": "inventory", "permission": "inventory.view_stock"},
+    # T10: a pharmacy finds a drug by name or active ingredient, sees its alternatives in stock, and dispenses prescriptions.
+    {"key": "drugs", "ar": "الأدوية والبدائل", "en": "Drugs & alternatives", "url_name": "pharmacy:lookup", "module": "inventory", "capability": "drugs",
+     "permission": "master_data.view_master_data"},
     {"key": "warehouses", "ar": "المخازن", "en": "Warehouses", "url_name": "inventory:warehouses", "module": "inventory", "permission": "inventory.view_stock",
      "also": ("/master-data/locations/",)},  # R2-7: the warehouses hub; adding or editing one is still master data
     {"key": "customers", "ar": "العملاء", "en": "Customers", "url_name": "master_data:customers", "module": "customers", "permission": "master_data.view_master_data",
@@ -132,6 +135,7 @@ TAB_LABELS = {
     "classes": {"ar": "حصصي", "en": "Classes"},
     "workorders": {"ar": "الأوامر", "en": "Orders"},
     "quotes": {"ar": "العروض", "en": "Quotes"},
+    "drugs": {"ar": "الأدوية", "en": "Drugs"},
     "contracts": {"ar": "العقود", "en": "Contracts"},
     "packages": {"ar": "الباكدجات", "en": "Packages"},
     "hours": {"ar": "الساعات", "en": "Hours"},

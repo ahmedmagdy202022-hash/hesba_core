@@ -167,7 +167,12 @@ def apply_item_row(data, batch):
     obj.is_stock_tracked = _bool(data, "is_stock_tracked", default=True)
     obj.active = _bool(data, "active", "is_active", default=True)
     obj.import_batch_id = batch.batch_code
-    return _save_model(obj), MODEL_LABELS["items"]
+    obj = _save_model(obj)
+    if _text(data, "active_ingredient"):  # T10: a drug file brings the active ingredient with the item
+        from pharmacy.services import from_import
+
+        from_import(obj, data)
+    return obj, MODEL_LABELS["items"]
 
 
 def apply_customer_row(data, batch):
