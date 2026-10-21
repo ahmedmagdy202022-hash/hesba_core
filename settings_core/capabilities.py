@@ -60,6 +60,12 @@ CAPABILITIES = {
         "about_en": "More than one price per item, and special prices per customer or customer group.",
         "available": True, "paths": ("/pricing/",),
     },
+    "quotations": {
+        "ar": "عروض الأسعار وأوامر البيع", "en": "Quotations & sales orders",
+        "about_ar": "عرض سعر تطبعه أو تبعته واتساب، ولما العميل يوافق يبقى أمر بيع تفوتره مرة واحدة أو على دفعات، وإذن تسليم مع كل فاتورة.",
+        "about_en": "A quotation you print or send on WhatsApp; once accepted it becomes a sales order you invoice in one go or in parts, with a delivery note for each invoice.",
+        "available": True, "paths": ("/orders/",),
+    },
     "units": {
         "ar": "وحدات القياس", "en": "Units of measure",
         "about_ar": "بيع وشراء بالكرتونة أو العلبة أو القطعة مع تحويل تلقائي.",
@@ -121,7 +127,7 @@ PRESETS = {
     "fashion": {"pos": SUGGESTED, "barcode": SUGGESTED, "variants": SUGGESTED},
     "electronics": {"pos": SUGGESTED, "barcode": SUGGESTED, "serials": SUGGESTED, "installments": SUGGESTED},
     "pharmacy": {"pos": SUGGESTED, "barcode": SUGGESTED, "batches_expiry": SUGGESTED, "units": SUGGESTED},
-    "wholesale": {"barcode": SUGGESTED, "price_lists": SUGGESTED, "units": SUGGESTED, "vat": SUGGESTED, "e_invoice": SUGGESTED},
+    "wholesale": {"barcode": SUGGESTED, "price_lists": SUGGESTED, "units": SUGGESTED, "vat": SUGGESTED, "e_invoice": SUGGESTED, "quotations": SUGGESTED},
     "online": {"barcode": SUGGESTED, "variants": SUGGESTED},
     "other": {"pos": SUGGESTED, "barcode": SUGGESTED},
 }
@@ -153,9 +159,9 @@ MANUFACTURING_PRESETS = {
     "garments": {"variants": SUGGESTED, "barcode": SUGGESTED, "units": SUGGESTED, "price_lists": SUGGESTED},
     "food": {"batches_expiry": SUGGESTED, "units": SUGGESTED, "barcode": SUGGESTED, "price_lists": SUGGESTED},
     "chemicals": {"batches_expiry": SUGGESTED, "units": SUGGESTED, "price_lists": SUGGESTED},
-    "furniture": {"barcode": SUGGESTED, "price_lists": SUGGESTED},
-    "printing": {"units": SUGGESTED, "price_lists": SUGGESTED},
-    "workshop": {"barcode": SUGGESTED},
+    "furniture": {"barcode": SUGGESTED, "price_lists": SUGGESTED, "quotations": SUGGESTED},
+    "printing": {"units": SUGGESTED, "price_lists": SUGGESTED, "quotations": SUGGESTED},
+    "workshop": {"barcode": SUGGESTED, "quotations": SUGGESTED},
     "other": {"units": SUGGESTED, "price_lists": SUGGESTED},
 }
 
@@ -187,6 +193,8 @@ ACTIVITY_PRESETS = {
     catalog.SERVICES: {
         "maintenance": {"serials": SUGGESTED},
         "beauty": {"pos": SUGGESTED},
+        "professional": {"quotations": SUGGESTED},
+        "digital_marketing": {"quotations": SUGGESTED},
     },
     catalog.OTHER: {
         "*": {"pos": SUGGESTED, "barcode": SUGGESTED},
@@ -197,10 +205,10 @@ ACTIVITY_PRESETS = {
 #: it at all (a builder never needs a quick till or sizes and colours). One that
 #: is already on still shows in Settings, so it can be switched off.
 NOT_FOR = {
-    catalog.CONTRACTING: {"pos", "shift_required", "barcode", "variants", "serials", "batches_expiry", "installments", "price_lists"},
-    catalog.EDUCATION: {"pos", "shift_required", "barcode", "variants", "serials", "batches_expiry", "units"},
-    catalog.MEDICAL: {"variants", "serials"},
-    catalog.RESTAURANTS: {"serials", "installments"},
+    catalog.CONTRACTING: {"pos", "shift_required", "barcode", "variants", "serials", "batches_expiry", "installments", "price_lists", "quotations"},
+    catalog.EDUCATION: {"pos", "shift_required", "barcode", "variants", "serials", "batches_expiry", "units", "quotations"},
+    catalog.MEDICAL: {"variants", "serials", "quotations"},
+    catalog.RESTAURANTS: {"serials", "installments", "quotations"},
     catalog.SERVICES: {"variants", "batches_expiry"},
 }
 
@@ -227,14 +235,14 @@ ABOUT_FOR = {
 #: ينفع نربط التشغيلات بتواريخ الصلاحية"). A clothes shop has no expiry dates, a pharmacy sells no sizes and colours,
 #: an office has nothing to scan. As with NOT_FOR, one that is already on still shows, so it can be switched off.
 NOT_FOR_SUB = {
-    (catalog.COMMERCIAL, "grocery"): {"serials", "variants", "installments"},
+    (catalog.COMMERCIAL, "grocery"): {"serials", "variants", "installments", "quotations"},
     (catalog.COMMERCIAL, "fashion"): {"batches_expiry", "serials"},
     (catalog.COMMERCIAL, "electronics"): {"batches_expiry"},
-    (catalog.COMMERCIAL, "pharmacy"): {"serials", "variants", "installments"},
+    (catalog.COMMERCIAL, "pharmacy"): {"serials", "variants", "installments", "quotations"},
     (catalog.SERVICES, "general"): {"serials", "units", "barcode"},
-    (catalog.SERVICES, "clinic"): {"serials", "units", "barcode"},
-    (catalog.SERVICES, "beauty"): {"serials", "units"},
-    (catalog.SERVICES, "education"): {"serials", "units", "barcode", "pos", "shift_required"},
+    (catalog.SERVICES, "clinic"): {"serials", "units", "barcode", "quotations"},
+    (catalog.SERVICES, "beauty"): {"serials", "units", "quotations"},
+    (catalog.SERVICES, "education"): {"serials", "units", "barcode", "pos", "shift_required", "quotations"},
     (catalog.SERVICES, "professional"): {"serials", "units", "barcode", "pos", "shift_required"},
     (catalog.SERVICES, "digital_marketing"): {"serials", "units", "barcode", "pos", "shift_required"},
     (catalog.SERVICES, "other"): {"serials", "units"},
@@ -261,6 +269,7 @@ NEEDS = {
     "serials": ("inventory",),
     "installments": ("customers",),
     "e_invoice": ("customers",),
+    "quotations": ("customers",),
 }
 
 #: ... and what it works best with, said on its card but never enforced.
@@ -275,13 +284,13 @@ WORKS_BEST_WITH = {
 #: SETTINGS-DESIGN: how the features screen groups them, the icon of each, and where each one shows once on.
 #: "Where" is what the settings track saw appear when the feature was switched on.
 GROUPS = (
-    ("selling", ("البيع والكاشير", "Selling and the till"), ("pos", "shift_required", "price_lists", "installments")),
+    ("selling", ("البيع والكاشير", "Selling and the till"), ("pos", "shift_required", "price_lists", "installments", "quotations")),
     ("goods", ("الأصناف والمخزون", "Items and stock"), ("barcode", "units", "variants", "batches_expiry", "serials")),
     ("money", ("الحسابات والضرايب", "Accounts and tax"), ("vat", "e_invoice", "fixed_assets")),
 )
 ICONS = {"pos": "pos", "shift_required": "shift", "price_lists": "pricetag", "installments": "instalments", "barcode": "barcode",
          "units": "units", "variants": "variants", "batches_expiry": "expiry", "serials": "serial", "vat": "taxes",
-         "e_invoice": "einvoice", "fixed_assets": "assets"}
+         "e_invoice": "einvoice", "fixed_assets": "assets", "quotations": "quotes"}
 WHERE = {
     "pos": ("«الكاشير» في القايمة، وزرار في لوحة القيادة وفي قايمة الفواتير", "“Till” in the menu, with a button on the dashboard and the invoice list"),
     "shift_required": ("فاتورة البيع والكاشير بيطلبوا فتح وردية الأول", "The sales invoice and the till ask for an open shift first"),
@@ -292,6 +301,7 @@ WHERE = {
     "batches_expiry": ("تاريخ الصلاحية في فاتورة الشراء، وشاشة في المخزون، وتنبيه في لوحة القيادة", "The expiry date on purchase invoices, a screen under stock, and a dashboard alert"),
     "serials": ("خانة السيريال في فواتير البيع والشراء، وشاشة في المخزون", "A serial number field on sales and purchase invoices, and a screen under stock"),
     "installments": ("«الأقساط» في المبيعات، وكارت في لوحة القيادة", "“Instalments” under sales, and a dashboard card"),
+    "quotations": ("«عروض الأسعار والأوامر» في القايمة، وزرار «اعمل فاتورة بالباقي» على كل أمر", "“Quotations & orders” in the menu, and “Invoice what is left” on each order"),
     "vat": ("«الضرايب» في القايمة، وضريبة كل صنف، وتقرير ضريبة المبيعات", "“Taxes” in the menu, a rate per item, and the sales VAT report"),
     "e_invoice": ("«الفاتورة الإلكترونية» في القايمة، وملف لكل فاتورة مترحّلة", "“E-invoicing” in the menu, and a document for each posted invoice"),
     "fixed_assets": ("«الأصول الثابتة» في القايمة، والإهلاك في المصروفات وصافي الربح", "“Fixed assets” in the menu, and depreciation in expenses and net profit"),

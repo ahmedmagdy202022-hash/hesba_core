@@ -345,6 +345,7 @@ class Command(BaseCommand):
             ("barcode", self._barcodes), ("installments", self._instalments), ("price_lists", self._price_list),
             ("units", self._units), ("variants", self._variants), ("serials", self._serials),
             ("batches_expiry", self._batches_option), ("vat", self._vat), ("fixed_assets", self._asset), ("pos", self._shift),
+            ("quotations", self._quotations),
         )
         for slug, step in steps:
             if slug in on:
@@ -491,6 +492,41 @@ class Command(BaseCommand):
                 "name_ar": "ماكينة الفيزا", "name_en": "Card machine", "currency": "EGP", "opening_balance": Decimal("0.00"),
                 "import_batch_id": "DEMO-BUSINESS"})
             save_card_cashbox(machine)
+
+    def _quotations(self, master, goods, owner, modules):
+        """T1: a draft quotation, one sent and waiting, and an accepted order already half invoiced and delivered."""
+
+        from batches.services import stock_on_hand
+        from orders import services as quotes
+        from orders.models import SalesOrder, Status
+        from sales.services import post_sales_invoice
+        from taxes.services import create_sales_draft_with_tax
+
+        customers = [customer for customer in master["customers"] if customer.customer_code != "WALK-IN"]
+        on_hand = stock_on_hand([item.pk for item in goods])
+        stocked = [item for item in goods if (on_hand.get(item.pk) or 0) >= 6]
+        if SalesOrder.objects.exists() or len(customers) < 3 or len(stocked) < 2:
+            return
+        today = timezone.localdate()
+        draft = quotes.create_quote({"customer": customers[1], "quote_date": today, "terms": "الأسعار شاملة النقل داخل المحافظة."}, owner)
+        for item, quantity in ((stocked[0], "10"), (stocked[1], "5")):
+            quotes.add_line(draft, item, owner, quantity=quantity)
+        sent = quotes.create_quote({"customer": customers[2], "quote_date": today - timedelta(days=4), "terms": "التسليم خلال 7 أيام من الموافقة."}, owner)
+        for item, quantity in ((stocked[1], "8"), (stocked[0], "12")):
+            quotes.add_line(sent, item, owner, quantity=quantity, discount_percent="5")
+        quotes.move(sent, Status.SENT, owner)
+        order = quotes.create_quote({"customer": customers[0], "quote_date": today - timedelta(days=9), "terms": "50% مقدم والباقي عند التسليم."}, owner)
+        for item, quantity in ((stocked[0], "6"), (stocked[1], "6")):
+            quotes.add_line(order, item, owner, quantity=quantity, discount_percent="3")
+        order = quotes.move(quotes.move(order, Status.SENT, owner), Status.CONFIRMED, owner)
+        first = order.lines.order_by("pk").first()
+        half = first.quantity / 2
+        invoice = create_sales_draft_with_tax({"invoice_number": "DEMO-SO-001", "invoice_date": today - timedelta(days=2), "customer": order.customer,
+                                               "selling_location": master["location"], "paid_now": Decimal("0"), "notes": f"أمر بيع {order.order_number}"},
+                                              [{"item": first.item, "quantity": half, "unit_sale_price": first.unit_price,
+                                                "line_discount_amount": first.discount_for(half)}], owner)
+        quotes.link_invoice(order, invoice, owner)
+        post_sales_invoice(invoice.pk, user=owner)
 
     def _workorders(self, master, staff, owner):
         """SVC-001: a workshop's week: devices in, on the bench, waiting for approval, ready, delivered, and one back under warranty."""

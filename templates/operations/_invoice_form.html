@@ -2,7 +2,7 @@
 R2-6: the sales and purchase invoice form. Expects form, line_formset, lang,
 price_field, list_url, party ("customer" / "supplier"), can_post and tax_rates.
 {% endcomment %}
-<form class="op-form inv-form" method="post" novalidate data-invoice-form data-price-field="{{ price_field }}" data-words="{{ scan_words }}">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+<form class="op-form inv-form" method="post" novalidate data-invoice-form data-price-field="{{ price_field }}" data-words="{{ scan_words }}">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">{% if from_order %}<input type="hidden" name="order" value="{{ from_order.pk }}" data-from-order>{% endif %}
 {% if form.non_field_errors %}<div class="op-form-errors">{{ form.non_field_errors|ui:lang }}</div>{% endif %}
 <div class="inv-layout">
 <div class="inv-main">

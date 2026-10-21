@@ -1,0 +1,15 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'orders:list' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ words.new }}</h1><p>{{ words.intro }}</p></div></section>
+{% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
+<form class="op-form" method="post" data-new-quote-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+<div class="op-form-grid">
+<div class="op-field"><label for="so-customer">{{ words.customer }}</label><select id="so-customer" name="customer" required><option value="">{{ words.choose }}</option>{% for c in customers %}<option value="{{ c.pk }}"{% if chosen == c.pk|stringformat:'s' %} selected{% endif %}>{{ c.name }}{% if c.phone %} — {{ c.phone }}{% endif %}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="so-date">{{ words.quote_date }}</label><input id="so-date" type="date" name="quote_date" value="{% if post.quote_date %}{{ post.quote_date }}{% else %}{{ today|date:'Y-m-d' }}{% endif %}"></div>
+<div class="op-field"><label for="so-valid">{{ words.valid_until }}</label><input id="so-valid" type="date" name="valid_until" value="{% if post.valid_until %}{{ post.valid_until }}{% else %}{{ valid_default|date:'Y-m-d' }}{% endif %}"></div>
+{% if salespeople %}<div class="op-field"><label for="so-rep">{{ words.salesperson }}</label><select id="so-rep" name="salesperson"><option value="">—</option>{% for rep in salespeople %}<option value="{{ rep.pk }}"{% if post.salesperson == rep.pk|stringformat:'s' %} selected{% endif %}>{{ rep.name }}</option>{% endfor %}</select></div>{% endif %}
+<div class="op-field"><label for="so-notes">{{ words.notes }}</label><input id="so-notes" name="notes" maxlength="255" value="{{ post.notes }}"></div>
+<div class="op-field"><label for="so-terms">{{ words.terms }}</label><textarea id="so-terms" name="terms" rows="3" placeholder="{{ words.terms_hint }}">{{ post.terms }}</textarea></div>
+</div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.create_btn }}</button></div></form>
+{% endblock %}

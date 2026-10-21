@@ -91,6 +91,7 @@ urlpatterns = [
     # RESTO-001: tables, orders and the kitchen ticket.
     path("restaurant/", include("restaurant.urls")),
     path("work-orders/", include("workorders.urls")),
+    path("orders/", include("orders.urls")),
     # CONTRACT-001: projects for contractors.
     path("projects/", include("projects.urls")),
     # MFG-001: recipes and production runs.

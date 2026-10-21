@@ -59,6 +59,9 @@ def _lead_first(keys, activity):
 NAV_ITEMS = (
     {"key": "dashboard", "ar": "لوحة القيادة", "en": "Dashboard", "url_name": "dashboard_snapshot", "module": None},
     {"key": "operations", "ar": "عمليات البيع", "en": "Sales operations", "url_name": "sales:list", "module": "sales_operations", "permission": "sales.view_sales_invoices"},
+    # T1: quotations that become sales orders, invoiced on the ordinary invoice form.
+    {"key": "quotes", "ar": "عروض الأسعار والأوامر", "en": "Quotations & orders", "url_name": "orders:list", "module": "sales_operations", "capability": "quotations",
+     "permission": "sales.view_sales_invoices"},
     {"key": "pos", "ar": "الكاشير", "en": "Point of sale", "url_name": "sales:pos", "module": "sales_operations", "capability": "pos", "permission": "sales.create_sales_invoice"},
     {"key": "purchases", "ar": "المشتريات", "en": "Purchases", "url_name": "purchases:list", "module": "purchases", "permission": "purchases.view_purchase_invoices"},
     {"key": "inventory", "ar": "المخزون", "en": "Inventory", "url_name": "inventory:stock", "module": "inventory", "permission": "inventory.view_stock"},
@@ -128,6 +131,7 @@ TAB_LABELS = {
     "education": {"ar": "الطلاب", "en": "Students"},
     "classes": {"ar": "حصصي", "en": "Classes"},
     "workorders": {"ar": "الأوامر", "en": "Orders"},
+    "quotes": {"ar": "العروض", "en": "Quotes"},
     "contracts": {"ar": "العقود", "en": "Contracts"},
     "packages": {"ar": "الباكدجات", "en": "Packages"},
     "hours": {"ar": "الساعات", "en": "Hours"},
