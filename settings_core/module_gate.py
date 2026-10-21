@@ -36,6 +36,7 @@ MODULE_ROUTES = (
     ("/expenses/", "expenses"),
     ("/print/", "pdf_printing"),
     ("/master-data/customers/", "customers"),
+    ("/messages/", "customers"),  # T9: messages go to customers
     ("/master-data/suppliers/", "suppliers"),
     ("/master-data/items/", "items_services"),
     ("/master-data/categories/", "items_services"),

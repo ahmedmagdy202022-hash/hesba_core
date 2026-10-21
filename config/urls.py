@@ -94,7 +94,8 @@ urlpatterns = [
     path("orders/", include("orders.urls")),
     path("purchases/orders/", include("orders.purchase_urls")),  # T2
     path("pharmacy/", include("pharmacy.urls")),
-    path("staff/attendance/", include("attendance.urls")),  # T11: under /staff/, so the employees module opens and closes it
+    path("staff/attendance/", include("attendance.urls")),
+    path("messages/", include("messaging.urls")),  # T9: the daily outbox of customer messages  # T11: under /staff/, so the employees module opens and closes it
     # CONTRACT-001: projects for contractors.
     path("projects/", include("projects.urls")),
     # MFG-001: recipes and production runs.
