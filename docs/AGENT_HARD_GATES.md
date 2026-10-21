@@ -1584,3 +1584,135 @@ No unresolved business or accounting decision was discovered while implementing 
 - **Effect to know about:** while inventory is off, sales and purchases of serial-tracked items no longer ask for serial numbers, and purchases record no expiry dates. That is the same as the capability being off, which is what the screens already show. The stock movements themselves are unchanged.
 - **Tests:** `settings_core/tests_settings_track.py`.
 
+
+## Market parity: commercial gate (MARKET-PARITY, `docs/MARKET_PARITY_ROADMAP.md`)
+
+Ahmed approved the market-parity roadmap on 21 October 2026 («ابدأ»).
+
+The entries below are the protected-logic decisions in the commercial gate, recorded before any code. Each one waits for Ahmed's approval. HG-054 is the exception: it only adds new tables, the same way the education, work orders and medical specialities did (HG-040, HG-041, HG-043).
+
+## HG-054 — Quotations and sales orders (T1) and purchase orders (T2)
+
+- **Status:** IMPLEMENTED NOTE when T1 and T2 merge. Additive tables only.
+- **What:**
+  - A new `orders` app with quotation/order documents and their lines.
+  - A link table that records which ordinary sales (or purchase) invoice took which order quantities.
+- **Not changed:**
+  - Sales and purchase posting.
+  - Stock movement and the customer and supplier ledgers.
+  - The `sales` and `purchases` models (no new column on the invoice).
+- **How:**
+  - "Make invoice" builds an ordinary draft with `sales.services.create_sales_draft` (purchases: the purchase draft service). That draft is posted the usual way.
+  - Stock leaves only when the invoice is posted, exactly as today.
+  - The delivery note is a printed document from the order. It does not move stock.
+  - Invoiced quantity = the order lines' quantities on linked invoices that are posted and not cancelled.
+- **Risk:**
+  - An order can show a stale "invoiced" figure if a linked invoice is cancelled. That figure is computed on read, never stored, so it stays correct.
+- **Later, only if asked:** stock leaving at delivery before the invoice would need a new movement type. That would be its own Hard Gate.
+- **Tests:**
+  - quote → order → partial invoice → remaining;
+  - cancelling the invoice frees the quantity;
+  - permissions;
+  - entity scope;
+  - posting totals equal the order.
+
+## HG-055 — Bank accounts (T3)
+
+- **Status:** OPEN PROPOSAL.
+- **Why:** a cashbox today has no kind, so a bank account is just a cashbox with a bank's name. Bank fees, a statement match and the trial balance need to tell them apart.
+- **Proposed:**
+  - add `Cashbox.kind` (cash / bank) with bank details (bank, account number, IBAN);
+  - add a bank-fee movement type;
+  - a "match the statement" screen that marks movements as cleared against an imported CSV (no change to the movement amounts);
+  - the GL projector maps bank cashboxes to the bank account in the chart.
+- **Files:** `cashboxes/models.py` + migration, `cashboxes/services.py`, `ledger/projector.py`, `ledger/chart.py`.
+- **Risk:**
+  - existing cashboxes default to cash, so nothing moves;
+  - the projector mapping must keep the trial balance equal before and after (test).
+- **Tests:** a migration keeps balances; transfer cash ↔ bank; the fee movement; matching does not change balances; the trial balance is unchanged for old data.
+
+## HG-056 — Cheques: notes receivable and payable (T4)
+
+- **Why:** wholesale and contracting in Egypt run on post-dated cheques. Today a cheque can only be recorded as cash on the day it is received.
+- **Proposed:**
+  - a `Cheque` (in/out) with number, bank, due date and status (in hand → deposited → cleared, or bounced; issued → cleared);
+  - receiving a cheque reduces the customer's balance through an ordinary customer payment into a new "cheques in hand" cashbox of kind `cheques`;
+  - clearing moves it from that box into the bank by a transfer;
+  - a bounced cheque is reversed by the existing append-only payment cancellation, and the customer owes again;
+  - outgoing cheques are the mirror on the supplier side.
+- **Files:**
+  - a new `cheques` app;
+  - `cashboxes` (kind `cheques`, from HG-055);
+  - `sales.services.record_customer_payment` and `cancel_customer_payment` (called, not changed);
+  - the purchases equivalents.
+- **Risk:**
+  - a cheque in hand counts as money in the cashbox list. It is shown separately and kept out of "cash on hand" figures.
+- **Tests:**
+  - receive → deposit → clear;
+  - receive → bounce: the customer balance returns and an audit row is written;
+  - due-date alert;
+  - closed-period rules;
+  - an outgoing cheque.
+
+## HG-057 — Promotions and coupons (T5)
+
+- **Why:** an automatic promotion changes the invoice price. Sales posting must keep using the line amounts it is given.
+- **Proposed:**
+  - a promotion engine that only fills each line's existing discount field before the draft is saved (rules: buy X get Y, % off a section, fixed off over an amount, coupon code, date and time window);
+  - posting stays untouched;
+  - the invoice remembers which promotion gave each discount (a new link table) for the report.
+- **Files:** a new `promotions` app; the hooks are the POS and the invoice form, which call it before `create_sales_draft`.
+- **Risk:**
+  - promotion + price list + manual discount stacking: the rule is that the best single promotion wins, and a manual discount needs `sales.discount` as today;
+  - returns refund the discounted amount, as today.
+- **Tests:** each rule; stacking; returns; the offline POS keeps the price shown when the sale was made.
+
+## HG-058 — Loyalty points (T6)
+
+- **Why:** redeeming points is a discount that is paid for by the business. It touches the customer card and the sales totals.
+- **Proposed:**
+  - points are earned on posted invoices (a rate per pound) into a points ledger per customer;
+  - redemption fills the invoice's discount like HG-057, and writes a points "spend" row;
+  - cancelling or returning the invoice reverses its rows (append-only);
+  - no money movement, no change to posting.
+- **Files:** a new `loyalty` app; it listens to posting and cancellation through the existing audit hooks (no change to the posting function itself).
+- **Risk:** points earned on an invoice later returned. The return writes the reversal rows.
+- **Tests:** earn; spend; return; cancel; expiry; the customer card shows the balance.
+
+## HG-059 — E-invoice live and the credit note for returns (T7)
+
+- **Why:** a sales return must be sent to the Tax Authority as a credit note that points to the original document. Signing must not block posting.
+- **Proposed:**
+  - the return builds an ETA credit note from `einvoice.services` and queues it;
+  - signing is done by a signer service (USB token or the authority's signing tool) outside the request;
+  - the queue retries;
+  - posting and the return themselves do not change and never wait for the authority.
+- **Files:** `einvoice/services.py`, `einvoice/portal.py`, `einvoice/models.py` (credit-note kind on `Submission`) + migration.
+- **Needs:** Ahmed's preprod credentials and the signing method.
+- **Tests:** the credit-note document; the link to the original UUID; the queue and retry; posting a return still works with the authority down.
+
+## HG-060 — Payroll (T12)
+
+- **Why:** the salary run creates expenses and money movements, and it needs its own control accounts (salaries payable, social insurance, payroll tax).
+- **Proposed:**
+  - the payroll run builds one ordinary expense per payroll line through `expenses` services;
+  - the net pay is paid out of a cashbox or bank by the existing expense payment;
+  - the employee and company social-insurance shares, and income tax, go to their own accounts in the chart through the GL projector;
+  - attendance and leave (T11) only feed the amounts.
+- **Files:** a new `payroll` app; `expenses` (called); `ledger/chart.py`, `ledger/projector.py` (new controls).
+- **Risk:**
+  - Egyptian social-insurance and tax tables change every year, so they are kept as data, not code;
+  - the defaults need Ahmed's or an accountant's review.
+- **Tests:** one run with insurance and tax; payment; reversal of a run; the trial balance balances.
+
+## HG-061 — Shipping companies and cash on delivery (T14)
+
+- **Why:** with cash on delivery, the shipping company collects the money and settles it later minus its fees. That is a receivable from the courier, not cash.
+- **Proposed:**
+  - the courier is a customer-like party with its own ledger;
+  - the online order's invoice is paid "on account of the courier" by a transfer of the receivable (customer payment from a courier clearing cashbox of kind `courier`);
+  - the settlement moves the money to the bank and books the fee as an expense;
+  - returned parcels use the ordinary sales return.
+- **Files:** a new `shipping` app; `cashboxes` (kind `courier`); `sales.services` (called, not changed).
+- **Risk:** a parcel lost by the courier is written off as an expense with a reason.
+- **Tests:** COD sale → courier settles → bank; fee; returned parcel; lost parcel.
