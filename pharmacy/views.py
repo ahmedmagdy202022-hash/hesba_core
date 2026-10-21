@@ -146,21 +146,23 @@ def board(request):
     show = request.GET.get("show") or "open"
     show = show if show in ("open", "due", "all") else "open"
     rows = services.scoped().select_related("customer")
-    if show != "all":
-        rows = rows.filter(status="active")
     query = (request.GET.get("q") or "").strip()
     if query:
         from django.db.models import Q
 
         rows = rows.filter(Q(number__icontains=query) | Q(patient_name__icontains=query) | Q(doctor_name__icontains=query) | Q(patient_phone__icontains=query))
-    shown = []
-    rows = list(rows[:300])
+    # Codex on #262: the state is filtered before the list is cut, so nothing waiting or due is hidden behind newer ones.
+    if show == "open":
+        rows = list(services.waiting(rows)[:300])
+    elif show == "due":
+        rows = services.due(rows, today)[:300]
+    else:
+        rows = list(rows[:300])
     dispensed = services.dispenses_by_prescription(rows)
+    shown = []
     for row in rows:
         done = dispensed[row.pk]
         row.state = services.state(row, today, done)
-        if show == "open" and row.state != "open" or show == "due" and row.state != "due":
-            continue
         row.next_refill = services.next_refill(row, done)
         shown.append(row)
     return render(request, "pharmacy/board.html", _base(request, lang, RX_WORDS[lang], rows=shown, show=show, query=query,

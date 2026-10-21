@@ -54,7 +54,7 @@ MESSAGES = {
            "dispensed": "الروشتة {number} اتصرفت قبل كده.", "nothing": "مفيش ولا دوا متحدد له صنف على الروشتة؛ اختار الأصناف الأول.",
            "other_customer": "الفاتورة دي لعميل تاني غير صاحب الروشتة {number}؛ رجّع العميل أو اعمل الفاتورة من غير الروشتة.",
            "not_alternative": "الصنف ده مش بديل للدوا اللي على الروشتة.", "has_dispenses": "الروشتة دي عليها فواتير صرف؛ مينفعش تتلغي.",
-           "note_invoice": "روشتة {number}"},
+           "note_invoice": "روشتة {number}", "too_many": "الروشتة بتاخد لحد {limit} دوا؛ اعمل روشتة تانية للباقي."},
     "en": {"no_capability": "The drug database is switched off in Settings.", "ingredient": "Enter the active ingredient.", "item": "Choose the item.",
            "patient": "Enter the patient's name.", "date": "The date is not valid.", "refill": "The refill is a number of days from 1 to 365.",
            "line": "Enter the drug written on the prescription or choose the item.", "quantity": "The quantity must be more than zero.",
@@ -62,7 +62,7 @@ MESSAGES = {
            "dispensed": "Prescription {number} was already dispensed.", "nothing": "No drug on the prescription has an item yet; choose the items first.",
            "other_customer": "This invoice is for another customer than prescription {number}'s; put the customer back or make the invoice without the prescription.",
            "not_alternative": "That item is not an alternative to the drug on the prescription.", "has_dispenses": "This prescription has dispensing invoices and cannot be cancelled.",
-           "note_invoice": "Prescription {number}"},
+           "note_invoice": "Prescription {number}", "too_many": "A prescription takes up to {limit} drugs; record a second one for the rest."},
 }
 
 
@@ -381,6 +381,8 @@ def add_line(prescription, data, user, lang="ar"):
     words = MESSAGES[lang]
     _require(user, MANAGE, words)
     prescription = _locked(prescription, words)
+    if prescription.lines.count() >= INVOICE_LINES:  # one invoice dispenses the whole prescription, never part of it (Codex on #262)
+        raise ValidationError(words["too_many"].format(limit=INVOICE_LINES))
     item = data.get("item") if isinstance(data.get("item"), Item) and data.get("item").active else None
     name = (data.get("prescribed_name") or "").strip()[:255] or (item.item_name if item else "")
     if not name:
@@ -495,18 +497,32 @@ def can_dispense(prescription, done=None):
     return prescription.lines.filter(item__isnull=False, item__active=True).exists()
 
 
+def waiting(queryset):
+    """The active prescriptions no invoice has dispensed yet (a cancelled invoice does not count), filtered in the database."""
+
+    from sales.models import SalesInvoiceStatus
+
+    return queryset.filter(status=Status.ACTIVE).exclude(dispenses__invoice__status__in=(SalesInvoiceStatus.DRAFT, SalesInvoiceStatus.POSTED))
+
+
+def due(queryset, today=None):
+    """The chronic prescriptions due for their refill, oldest refill date first: every one is checked, none cut off (Codex on #262)."""
+
+    from sales.models import SalesInvoiceStatus
+
+    today = today or timezone.localdate()
+    chronic = list(queryset.filter(status=Status.ACTIVE, refill_days__isnull=False,
+                                   dispenses__invoice__status__in=(SalesInvoiceStatus.DRAFT, SalesInvoiceStatus.POSTED)).distinct())
+    done = dispenses_by_prescription(chronic)
+    rows = [(next_refill(prescription, done[prescription.pk]), prescription) for prescription in chronic
+            if state(prescription, today, done[prescription.pk]) == "due"]
+    return [prescription for _refill, prescription in sorted(rows, key=lambda row: (row[0], row[1].pk))]
+
+
 def counts(today=None):
     """How many are waiting to be dispensed and how many chronic ones are due for a refill."""
 
-    today = today or timezone.localdate()
-    result = {"open": 0, "due": 0}
-    active = list(scoped().filter(status=Status.ACTIVE)[:1000])
-    done = dispenses_by_prescription(active)
-    for prescription in active:
-        current = state(prescription, today, done[prescription.pk])
-        if current in result:
-            result[current] += 1
-    return result
+    return {"open": waiting(scoped()).count(), "due": len(due(scoped(), today))}
 
 
 # ---- dispensing on the ordinary invoice form ----

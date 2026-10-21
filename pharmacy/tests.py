@@ -175,6 +175,31 @@ class PrescriptionTests(PharmacySetup):
             services.create_prescription({"patient_name": "سعاد"}, keeper)
 
 
+class CodexFixesTests(PharmacySetup):
+    """Codex on #262: the board filters before it cuts the list, and a prescription never outgrows one invoice."""
+
+    def test_a_due_refill_shows_behind_hundreds_of_newer_prescriptions(self):
+        from .models import Prescription
+
+        chronic = self.prescription(refill_days="30", customer=self.customer, issued_on=TODAY - timedelta(days=60))
+        self.dispense(chronic, day=TODAY - timedelta(days=29))
+        Prescription.objects.bulk_create([Prescription(number=f"RX-B{n:04d}", patient_name=f"مريض {n}", issued_on=TODAY, created_by=self.owner)
+                                          for n in range(305)])
+        self.client.force_login(self.owner)
+        due = self.client.get(reverse("pharmacy:prescriptions") + "?lang=ar&show=due")
+        self.assertContains(due, chronic.number)
+        self.assertEqual(services.counts(), {"open": 305, "due": 1})
+        waiting = self.client.get(reverse("pharmacy:prescriptions") + "?lang=ar&show=open")
+        self.assertNotContains(waiting, chronic.number)
+
+    def test_a_prescription_takes_no_more_drugs_than_one_invoice(self):
+        prescription = services.create_prescription({"patient_name": "سعاد"}, self.owner)
+        for n in range(services.INVOICE_LINES):
+            services.add_line(prescription, {"prescribed_name": f"دوا {n}"}, self.owner)
+        with self.assertRaises(ValidationError):
+            services.add_line(prescription, {"prescribed_name": "دوا زيادة"}, self.owner)
+
+
 class ScreensTests(PharmacySetup):
     def test_the_invoice_form_opens_with_the_drugs_and_links_on_save(self):
         self.client.force_login(self.owner)
