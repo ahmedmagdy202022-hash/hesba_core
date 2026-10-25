@@ -156,4 +156,14 @@ def run_detail(request, pk):
     return render(request, "payroll/detail.html", _context(
         request, lang, run=run, lines=run.lines.select_related("employee"), totals=totals, cost=totals["gross"] + totals["company_insurance"],
         owed=[(key, words["pay_to"][key], value) for key, value in owed.items()], payments=run.payments.select_related("operation__source_cashbox"),
-        cashboxes=entity_scope.cashboxes(Cashbox.objects).filter(active=True), today=timezone.localdate(), pay_to=PayTo.values))
+        cashboxes=_main_cashboxes(), today=timezone.localdate(), pay_to=PayTo.values))
+
+
+def _main_cashboxes():
+    """Payroll is paid from the main entity's money only (Codex #269)."""
+
+    from django.db.models import Q
+
+    from entities.services import main_entity
+
+    return entity_scope.cashboxes(Cashbox.objects).filter(active=True).filter(Q(entity__isnull=True) | Q(entity=main_entity()))

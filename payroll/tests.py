@@ -207,3 +207,22 @@ class CodexFixesTests(PayrollSetup):
         with mock.patch("attendance.services.month_sheet", return_value=[]) as sheet:
             services.prepare(TODAY.strftime("%Y-%m"), self.owner)
         self.assertEqual(sheet.call_args.kwargs["today"], TODAY)  # not the month's end: days to come are not absences
+
+
+class SecondReviewTests(PayrollSetup):
+    """Codex on #269 (second look): a cancellation never goes back before its payment, and only the main entity pays."""
+
+    def test_a_cancellation_is_not_dated_before_its_payment(self):
+        run = services.post(self.make_run(), self.owner)
+        payment = services.pay(run, PayTo.TAX, self.cash, "", self.owner, paid_on=TODAY.isoformat())
+        with self.assertRaisesMessage(ValidationError, "قبل تاريخ الدفعة"):
+            services.cancel_payment(payment, self.owner, "غلط", cancelled_on=(TODAY - timedelta(days=1)).isoformat())
+
+    def test_only_the_main_entitys_money_pays_payroll(self):
+        from entities.models import Entity
+
+        branch = Entity.objects.create(code="BR2", name_ar="الفرع")
+        other = Cashbox.objects.create(cashbox_code="CASH-BR2", name_ar="خزنة الفرع", opening_balance=D("50000.00"), entity=branch)
+        run = services.post(self.make_run(), self.owner)
+        with self.assertRaisesMessage(ValidationError, "الشركة الرئيسية"):
+            services.pay(run, PayTo.NET, other, "", self.owner)

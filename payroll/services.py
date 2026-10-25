@@ -41,14 +41,16 @@ MESSAGES = {
         "nobody": "مفيش موظفين ليهم مرتب. اكتب مرتب كل موظف الأول.", "not_draft": "الكشف ده اترحّل خلاص؛ مينفعش يتعدل.", "not_posted": "الكشف لازم يكون مترحّل.",
         "paid": "اتدفع من الكشف ده؛ ألغي الدفعات الأول.", "more": "المبلغ أكتر من المستحق ({left}).", "zero": "المبلغ لازم أكبر من صفر.",
         "reason": "اكتب سبب الإلغاء.", "brackets": "شرائح الضريبة مش مفهومة: كل سطر «لحد:نسبة»، وآخر سطر من غير «لحد».", "date": "التاريخ مش مفهوم.",
-        "before": "التاريخ قبل تاريخ الترحيل.", "cancelled": "الدفعة دي اتلغت قبل كده.",
+        "before": "التاريخ قبل تاريخ الترحيل.", "cancelled": "الدفعة دي اتلغت قبل كده.", "before_paid": "تاريخ الإلغاء قبل تاريخ الدفعة.",
+        "entity": "المرتبات بتتدفع من خزنة أو بنك الشركة الرئيسية.",
     },
     "en": {
         "number": "This number is not understood.", "negative": "Amounts cannot be negative.", "month": "Choose the month.", "taken": "This month's payroll was made already.",
         "nobody": "No employee has a salary. Type each employee's salary first.", "not_draft": "This run is posted; it cannot be changed.", "not_posted": "The run must be posted.",
         "paid": "Payments were made from this run; cancel them first.", "more": "The amount is more than what is owed ({left}).", "zero": "The amount must be above zero.",
         "reason": "Type the reason.", "brackets": "The tax brackets are not understood: one “up to:rate” per line, the last with nothing before the colon.",
-        "date": "The date is not understood.", "before": "The date is before the posting date.", "cancelled": "This payment was cancelled already.",
+        "date": "The date is not understood.", "before": "The date is before the posting date.", "cancelled": "This payment was cancelled already.", "before_paid": "The cancellation is dated before the payment.",
+        "entity": "Payroll is paid from a cashbox or bank of the main entity.",
     },
 }
 
@@ -363,6 +365,10 @@ def pay(run, pay_to, cashbox, raw_amount, user, lang="ar", paid_on=None):
         raise ValidationError(words["not_posted"])
     if pay_to not in PayTo.values:
         raise ValidationError(words["number"])
+    from entities.services import main_entity
+
+    if cashbox.entity_id and cashbox.entity_id != main_entity().pk:
+        raise ValidationError(words["entity"])  # Codex #269: the debts are the main entity's, so is the money that settles them
     left = owed(run)[pay_to]["left"]
     amount = _amount(raw_amount, words, left)
     if amount <= 0:
@@ -391,6 +397,8 @@ def cancel_payment(payment, user, reason, lang="ar", cancelled_on=None):
     if not str(reason or "").strip():
         raise ValidationError(words["reason"])
     day = _day(cancelled_on, words, timezone.localdate())
+    if day < payment.paid_on:
+        raise ValidationError(words["before_paid"])  # Codex #269: never back before the money left
     cancel_cashbox_operation(payment.operation_id, day, str(reason).strip(), user)
     payment.cancelled_on = day
     payment.save(update_fields=["cancelled_on"])
