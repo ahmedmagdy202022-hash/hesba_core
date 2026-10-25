@@ -289,3 +289,22 @@ class ThirdReviewTests(SecondReviewTests):
         invoice = SalesInvoice.objects.get()
         self.assertEqual(invoice.total_amount, D("500.00"))
         self.assertFalse(InvoicePromotion.objects.filter(invoice=invoice).exists())
+
+
+class FourthReviewTests(PromotionSetup):
+    """Codex on #268 (fourth look): a fixed amount is taken off in full, and editing keeps the promotion's own target."""
+
+    def test_a_fixed_amount_is_taken_off_in_full_when_the_last_line_is_small(self):
+        self.promo(kind=PromotionKind.AMOUNT_OVER, amount=D("99.99"))
+        lines = [line(self.sneaker, 1, "100.00") for _ in range(6)] + [line(self.sock, 1, "0.01")]
+        lines, _promo, off = services.apply(lines)
+        self.assertEqual(off, D("99.99"))
+        self.assertEqual(sum(l["line_discount_amount"] for l in lines), D("99.99"))
+        self.assertTrue(all(l["line_discount_amount"] <= l["quantity"] * l["unit_sale_price"] for l in lines))
+
+    def test_editing_keeps_an_inactive_target(self):
+        promo = self.promo(percent=D("10"), item=self.sock)
+        type(self.sock).objects.filter(pk=self.sock.pk).update(active=False)
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("promotions:list"), {"lang": "ar", "edit": promo.pk})
+        self.assertContains(page, f'<option value="{self.sock.pk}" selected>')

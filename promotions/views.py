@@ -63,5 +63,14 @@ def promotion_list(request):
     return render(request, "promotions/list.html", {
         "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": words, "page_title": words["title"], "rows": rows, "error": error,
         "can_manage": can_manage, "editing": editing, "form": form, "kinds": PromotionKind.choices, "today": timezone.localdate(),
-        "items": Item.objects.filter(active=True).order_by("item_name")[:800] if can_manage else [],
-        "categories": Category.objects.filter(active=True).order_by("name_ar") if can_manage else []})
+        "items": _with(list(Item.objects.filter(active=True).order_by("item_name")[:800]), editing and editing.item) if can_manage else [],
+        "categories": _with(list(Category.objects.filter(active=True).order_by("name_ar")), editing and editing.category) if can_manage else []})
+
+
+def _with(options, current):
+    """Codex #268: the promotion's own target stays in the list (inactive or past the first 800), so saving an
+    unrelated change never empties it and widens the promotion to everything."""
+
+    if current and all(option.pk != current.pk for option in options):
+        options.insert(0, current)
+    return options

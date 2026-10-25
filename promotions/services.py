@@ -139,6 +139,12 @@ def discounts(promo, lines):
                 share = left if position == len(eligible) - 1 else money_round(off * _gross(lines[index]) / base)
                 share = min(share, _gross(lines[index]), left)
                 result[index], left = share, left - share
+            for index in eligible:  # Codex #268: a cent the last line could not hold goes to a line with room
+                if left <= 0:
+                    break
+                room = _gross(lines[index]) - result[index]
+                extra = min(room, left)
+                result[index], left = result[index] + extra, left - extra
     return [min(value, _gross(line)) for value, line in zip(result, lines)]
 
 
