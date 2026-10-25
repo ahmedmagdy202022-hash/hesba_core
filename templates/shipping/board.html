@@ -20,13 +20,15 @@
 
 <h2>{{ words.to_settle }}</h2>
 {% if delivered %}<form class="op-form" method="post" data-settle-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="settle">
-<div class="op-table-wrap"><table class="op-table"><thead><tr><th></th><th>{{ words.invoice }}</th><th>{{ words.courier }}</th><th>{{ words.cod }}</th><th>{{ words.fee }}</th><th>{{ words.date }}</th></tr></thead><tbody>
-{% for row in delivered %}<tr data-delivered="{{ row.pk }}"><td><input type="checkbox" name="shipments" value="{{ row.pk }}" checked aria-label="{{ row.invoice.invoice_number }}"></td><td><bdi>{{ row.invoice.invoice_number }}</bdi></td><td>{{ row.courier.name }}</td><td>{{ row.cod_amount|money }}</td><td>{{ row.fee|money }}</td><td><bdi>{{ row.closed_on|date:"Y-m-d" }}</bdi></td></tr>{% endfor %}
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th></th><th>{{ words.invoice }}</th><th>{{ words.courier }}</th><th>{{ words.cod }}</th><th>{{ words.fee }}</th><th>{{ words.date }}</th><th></th></tr></thead><tbody>
+{% for row in delivered %}<tr data-delivered="{{ row.pk }}"><td><input type="checkbox" name="shipments" value="{{ row.pk }}" checked aria-label="{{ row.invoice.invoice_number }}"></td><td><bdi>{{ row.invoice.invoice_number }}</bdi></td><td>{{ row.courier.name }}</td><td>{{ row.cod_amount|money }}</td><td>{{ row.fee|money }}</td><td><bdi>{{ row.closed_on|date:"Y-m-d" }}</bdi></td>
+<td><div class="op-form-actions"><input name="reason" form="undo-{{ row.pk }}" required placeholder="{{ words.reason }}" aria-label="{{ words.reason }}"><button class="op-secondary" type="submit" form="undo-{{ row.pk }}" data-undo>{{ words.undo }}</button></div></td></tr>{% endfor %}
 </tbody></table></div><div class="op-form-grid">
 <div class="op-field"><label for="st-dest">{{ words.destination }}</label><select id="st-dest" name="destination">{% for box in destinations %}<option value="{{ box.pk }}">{{ box }}</option>{% endfor %}</select></div>
 <div class="op-field"><label for="st-fees">{{ words.fees }}</label><input id="st-fees" name="fees" inputmode="decimal" dir="ltr"></div>
 <div class="op-field"><label for="st-date">{{ words.date }}</label><input id="st-date" type="date" name="settled_on" value="{{ today|date:'Y-m-d' }}"></div>
-</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.settle }}</button></div></form>{% else %}<p class="op-muted">{{ words.none }}</p>{% endif %}
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.settle }}</button></div></form>
+{% for row in delivered %}<form id="undo-{{ row.pk }}" method="post" hidden>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="undo"><input type="hidden" name="shipment" value="{{ row.pk }}"></form>{% endfor %}{% else %}<p class="op-muted">{{ words.none }}</p>{% endif %}
 
 <h2>{{ words.couriers }}</h2>
 <div class="op-table-wrap"><table class="op-table" data-couriers><thead><tr><th>{{ words.name }}</th><th>{{ words.phone }}</th><th>{{ words.fee }}</th><th>{{ words.held }}</th><th>{{ words.out }}</th></tr></thead><tbody>

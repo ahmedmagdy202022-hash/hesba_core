@@ -40,7 +40,8 @@ MESSAGES = {
         "other_courier": "كل الشحنات لازم تكون مع نفس شركة الشحن.", "short": "اللي مع شركة الشحن ({have}) أقل من المطلوب تسويته.",
         "paid": "تحصيل شحنة {number} عن طريق {courier}", "lost": "شحنة {number} ضاعت مع {courier}: {reason}", "fee": "مصاريف شحن {courier} — تسوية {count} شحنة",
         "settle": "تسوية {courier}: {count} شحنة", "active": "شركة الشحن دي متوقفة.", "dest": "اختار الخزنة أو البنك اللي هتستلم فيه.",
-        "twice": "الفاتورة دي معاها شحنة لسه مفتوحة.",
+        "twice": "الفاتورة دي معاها شحنة لسه مفتوحة.", "entity": "شركة الشحن دي متسجّلة لكيان تاني غير كيان الفاتورة أو الخزنة.",
+        "shortfall": "فرق مصاريف شحن {courier} — تسوية {count} شحنة",
     },
     "en": {
         "name": "Type the shipping company's name.", "number": "This number is not understood.", "negative": "The amount cannot be negative.",
@@ -51,12 +52,38 @@ MESSAGES = {
         "paid": "Collection of shipment {number} through {courier}", "lost": "Shipment {number} lost by {courier}: {reason}",
         "fee": "{courier} shipping fees — settlement of {count} shipments", "settle": "Settlement with {courier}: {count} shipments",
         "active": "This courier is switched off.", "dest": "Choose the cashbox or bank that receives it.", "twice": "This invoice already has an open shipment.",
+        "entity": "This courier is set up for another entity than the invoice's or the cashbox's.",
+        "shortfall": "{courier} shipping fees beyond what it collected — settlement of {count} shipments",
     },
 }
 
 
 def _words(lang):
     return MESSAGES["en" if lang == "en" else "ar"]
+
+
+def _entity_pk(entity_id):
+    """Records without an entity belong to the main one."""
+
+    from entities.services import main_entity
+
+    return entity_id or main_entity().pk
+
+
+def scoped(queryset):
+    """Shipments of the entity being worked in (HG-034), through their invoice (Codex #272)."""
+
+    from entities import scope as entity_scope
+
+    return entity_scope.scope(queryset, "invoice__" + entity_scope.SALES_INVOICE)
+
+
+def couriers(queryset=None):
+    """Couriers of the entity being worked in: each courier's box, and so its collections, is one entity's (Codex #272)."""
+
+    from entities import scope as entity_scope
+
+    return entity_scope.scope(Courier.objects.all() if queryset is None else queryset, "cashbox__" + entity_scope.CASHBOX)
 
 
 def can_ship(user):
@@ -140,10 +167,13 @@ def save_courier(data, user, courier=None, lang="ar"):
         raise ValidationError(words["name"])
     fee = _amount(data.get("fee_per_parcel"), words, ZERO)
     if courier is None:
+        from entities.current import current_entity
         from entities.services import main_entity
 
+        # Codex #272: the box belongs to the entity being worked in, so what the courier collects lands in that entity's books.
         code = next_in_series(Cashbox, "cashbox_code", "COURIER-")
-        box = Cashbox.objects.create(cashbox_code=code, name_ar=f"تحصيلات {name}", name_en=f"{name} collections", kind=CashboxKind.COURIER, entity=main_entity())
+        box = Cashbox.objects.create(cashbox_code=code, name_ar=f"تحصيلات {name}", name_en=f"{name} collections", kind=CashboxKind.COURIER,
+                                     entity=current_entity() or main_entity())
         courier = Courier.objects.create(name=name, phone=str(data.get("phone") or "").strip()[:50], fee_per_parcel=fee, cashbox=box)
     else:
         courier.name, courier.phone, courier.fee_per_parcel = name, str(data.get("phone") or "").strip()[:50], fee
@@ -167,14 +197,18 @@ def ship(invoice, courier, user, data=None, lang="ar"):
     _need(user, SHIP)
     words = _words(lang)
     data = data or {}
-    invoice = SalesInvoice.objects.select_for_update().get(pk=invoice.pk)
+    invoice = SalesInvoice.objects.select_for_update().select_related("selling_location").get(pk=invoice.pk)
     if invoice.status != "posted":
         raise ValidationError(words["not_posted"])
     if not courier.active:
         raise ValidationError(words["active"])
+    if _entity_pk(courier.cashbox.entity_id) != _entity_pk(invoice.selling_location.entity_id):
+        raise ValidationError(words["entity"])  # Codex #272: the collection is credited in the courier box's entity
     if Shipment.objects.filter(invoice=invoice, status=ShipmentStatus.WITH_COURIER).exists():
         raise ValidationError(words["twice"])
-    left = invoice.remaining_due
+    # Codex #272: what earlier shipments of this invoice collected is not due any more (payments do not touch remaining_due).
+    earlier = Shipment.objects.filter(invoice=invoice, payment__isnull=False).aggregate(total=Sum("cod_amount"))["total"] or ZERO
+    left = max(ZERO, invoice.remaining_due - earlier)
     cod = _amount(data.get("cod_amount"), words, left)
     if cod > left:
         raise ValidationError(words["more"].format(left=f"{left:,.2f}"))
@@ -268,8 +302,8 @@ def settle(shipments, destination, user, data=None, lang="ar"):
     words = _words(lang)
     data = data or {}
     ids = sorted({getattr(row, "pk", row) for row in shipments})
-    rows = list(Shipment.objects.select_for_update(of=("self",)).select_related("courier__cashbox").filter(pk__in=ids, status=ShipmentStatus.DELIVERED,
-                                                                                                     settlement__isnull=True).order_by("pk"))
+    rows = list(scoped(Shipment.objects.select_for_update(of=("self",))).select_related("courier__cashbox").filter(
+        pk__in=ids, status=ShipmentStatus.DELIVERED, settlement__isnull=True).order_by("pk"))  # Codex #272: the entity's own only
     if not rows or len(rows) != len(ids):
         raise ValidationError(words["none"])
     courier = rows[0].courier
@@ -277,10 +311,10 @@ def settle(shipments, destination, user, data=None, lang="ar"):
         raise ValidationError(words["other_courier"])
     if destination is None or destination.kind in (CashboxKind.COURIER, CashboxKind.CHEQUES_IN, CashboxKind.CHEQUES_OUT):
         raise ValidationError(words["dest"])
+    if _entity_pk(destination.entity_id) != _entity_pk(courier.cashbox.entity_id):
+        raise ValidationError(words["entity"])
     collected = money_round(sum((row.cod_amount for row in rows), ZERO))
     fees = _amount(data.get("fees"), words, money_round(sum((row.fee for row in rows), ZERO)))
-    if fees > collected:
-        raise ValidationError(words["fees"])
     have = held(courier)
     if have < collected:
         raise ValidationError(words["short"].format(have=f"{have:,.2f}"))
@@ -292,6 +326,12 @@ def settle(shipments, destination, user, data=None, lang="ar"):
         settlement.transfer = create_cashbox_operation(f"SET-{settlement.pk}", day, CashboxOperationType.TRANSFER, settlement.net,
                                                        words["settle"].format(courier=courier.name, count=count), user,
                                                        source_cashbox=courier.cashbox, destination_cashbox=destination)
+    elif settlement.net < 0:
+        # Codex #272: fees above what was collected (a prepaid parcel, a small COD) are paid in from the chosen box first,
+        # so the fee expense still leaves the courier's box and that box ends at what it held before.
+        settlement.transfer = create_cashbox_operation(f"SET-{settlement.pk}", day, CashboxOperationType.TRANSFER, -settlement.net,
+                                                       words["shortfall"].format(courier=courier.name, count=count), user,
+                                                       source_cashbox=destination, destination_cashbox=courier.cashbox)
     if fees > 0:
         settlement.fee_expense = record_expense(category=_expense_category(), cashbox=courier.cashbox, amount=fees, expense_date=day,
                                                 description=words["fee"].format(courier=courier.name, count=count)[:255], user=user, payee=courier.name)
@@ -305,4 +345,4 @@ def courier_rows():
     """Each courier with what it holds and how many parcels are out with it."""
 
     out = dict(Shipment.objects.filter(status=ShipmentStatus.WITH_COURIER).values("courier").annotate(n=Sum("cod_amount")).values_list("courier", "n"))
-    return [{"courier": courier, "held": held(courier), "out": out.get(courier.pk) or ZERO} for courier in Courier.objects.select_related("cashbox")]
+    return [{"courier": courier, "held": held(courier), "out": out.get(courier.pk) or ZERO} for courier in couriers().select_related("cashbox")]

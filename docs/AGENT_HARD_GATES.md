@@ -1868,6 +1868,9 @@ The entries below are the protected-logic decisions in the commercial gate, reco
   - **Lost:** what should have been collected is recorded as collected and written off at once as an expense with the reason.
   - **Permissions:** shipping needs `sales.create_sales_invoice`; delivery, undo and loss need `sales.receive_customer_payment`; couriers and settlements need `cashboxes.move_cash`. The expense steps also need `cashboxes.record_expenses`.
   - The sales invoice page has «ابعت مع شركة شحن».
+  - **Entities (Codex #272):** a courier's box belongs to the entity it was added in. An invoice ships only with a courier of its own entity, and a settlement lands only in that entity's cashbox or bank. So a collection is credited in the same entity as the invoice's debt; a business whose branches use the same company adds it once per branch. Shipments are read and acted on only within the entity being worked in.
+  - **Second shipment:** what earlier shipments of the invoice collected is subtracted from what is left to collect (a customer payment does not change `remaining_due`).
+  - **Fees above what was collected** (a prepaid parcel, a small COD): the shortfall is paid into the courier's box from the chosen cashbox or bank, then the whole fee leaves the courier's box as before.
 - **Why:** with cash on delivery, the shipping company collects the money and settles it later minus its fees. That is a receivable from the courier, not cash.
 - **Proposed:**
   - the courier is a customer-like party with its own ledger;

@@ -111,8 +111,6 @@ class CodTests(ShippingSetup):
         shipment = services.deliver(shipment, self.owner)
         with self.assertRaisesMessage(ValidationError, "undo the delivery"):
             cancel_customer_payment(shipment.payment_id, self.owner, "غلط")
-        with self.assertRaisesMessage(ValidationError, "مصاريف الشحن أكتر"):
-            services.settle([shipment], self.cash, self.owner, {"fees": "250"})
         services.undo_delivery(shipment, self.owner, "اتسجلت بالغلط")
         shipment.refresh_from_db()
         self.assertEqual((shipment.status, shipment.payment), (ShipmentStatus.WITH_COURIER, None))
@@ -126,6 +124,82 @@ class CodTests(ShippingSetup):
         cashier = person(RoleCode.CASHIER, "sh_cashier")
         with self.assertRaises(PermissionDenied):
             services.save_courier({"name": "x"}, cashier)
+
+
+class CodexFixesTests(ShippingSetup):
+    """Codex on #272: each entity's parcels and couriers stay its own, a second shipment collects only what is left, a
+    delivery is undone from the board, and fees above what was collected are paid in from the chosen box."""
+
+    def branch(self):
+        from entities.models import Entity
+        from entities.services import main_entity
+
+        main_entity()
+        branch = Entity.objects.create(code="BR-SH", name_ar="الفرع")
+        shop = make_location(location_code="SHOP-BR", is_selling_location=True, entity=branch)
+        stock_in(self.dress, shop, 5, "200.00", movement_date=TODAY)
+        return branch, shop
+
+    def test_a_branch_invoice_ships_with_the_branchs_courier_and_its_collection_stays_there(self):
+        from entities.current import working_in
+
+        branch, shop = self.branch()
+        invoice = create_sales_draft({"invoice_number": "SH-BR", "invoice_date": TODAY, "customer": self.customer, "selling_location": shop,
+                                      "cashbox": self.cash, "paid_now": D("0"), "discount_amount": D("0")},
+                                     [{"item": self.dress, "quantity": D("1"), "unit_sale_price": D("500.00"), "line_discount_amount": D("0")}], self.owner)
+        post_sales_invoice(invoice.pk, self.owner)
+        with self.assertRaisesMessage(ValidationError, "لكيان تاني"):
+            services.ship(invoice, self.courier, self.owner)
+        with working_in(branch):
+            local = services.save_courier({"name": "بوسطة الفرع", "fee_per_parcel": "20"}, self.owner)
+        self.assertEqual(local.cashbox.entity, branch)
+        shipment = services.deliver(services.ship(invoice, local, self.owner), self.owner)
+        self.assertEqual(shipment.payment.cashbox.entity, branch)  # the customer's payment is the branch's, like its debt
+        with self.assertRaisesMessage(ValidationError, "لكيان تاني"):
+            services.settle([shipment], self.cash, self.owner)  # the main entity's cashbox
+
+    def test_someone_kept_to_a_branch_never_sees_or_moves_the_main_entitys_parcels(self):
+        from entities.models import EntityMembership
+
+        branch, _shop = self.branch()
+        main_parcel = services.ship(self.invoice(), self.courier, self.owner)
+        clerk = person(RoleCode.MANAGER, "sh_branch_clerk")
+        EntityMembership.objects.create(user=clerk, entity=branch, is_default=True)
+        self.client.force_login(clerk)
+        self.assertNotContains(self.client.get(reverse("shipping:board") + "?lang=ar"), f'data-shipment="{main_parcel.pk}"')
+        self.assertEqual(self.client.post(reverse("shipping:board"), {"lang": "ar", "action": "deliver", "shipment": main_parcel.pk}).status_code, 404)
+        self.assertEqual(Shipment.objects.get(pk=main_parcel.pk).status, ShipmentStatus.WITH_COURIER)
+
+    def test_a_second_shipment_collects_only_what_is_left(self):
+        invoice = self.invoice()
+        services.deliver(services.ship(invoice, self.courier, self.owner), self.owner)
+        with self.assertRaisesMessage(ValidationError, "أكتر من الباقي"):
+            services.ship(invoice, self.courier, self.owner, {"cod_amount": "500"})
+        again = services.ship(invoice, self.courier, self.owner)  # a replacement parcel, nothing more to collect
+        self.assertEqual(again.cod_amount, D("0.00"))
+        services.deliver(again, self.owner)
+        self.assertEqual(balance("customer", self.customer), D("0.00"))  # not a spurious credit
+
+    def test_a_delivery_is_undone_from_the_board(self):
+        shipment = services.deliver(services.ship(self.invoice(), self.courier, self.owner), self.owner)
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("shipping:board") + "?lang=ar")
+        self.assertContains(page, f'id="undo-{shipment.pk}"')
+        self.assertContains(page, f'form="undo-{shipment.pk}"')
+        self.client.post(reverse("shipping:board"), {"lang": "ar", "action": "undo", "shipment": shipment.pk, "reason": "اتسجلت بالغلط"})
+        self.assertEqual(Shipment.objects.get(pk=shipment.pk).status, ShipmentStatus.WITH_COURIER)
+        self.assertEqual(balance("customer", self.customer), D("500.00"))
+
+    def test_fees_above_what_was_collected_are_paid_from_the_chosen_box(self):
+        shipment = services.deliver(services.ship(self.invoice(), self.courier, self.owner, {"cod_amount": "0", "fee": "30"}), self.owner)
+        settlement = services.settle([shipment], self.cash, self.owner)
+        self.assertEqual((settlement.collected, settlement.fees, settlement.net), (D("0.00"), D("30.00"), D("-30.00")))
+        self.assertEqual(get_cashbox_balance(self.cash), D("970.00"))
+        self.assertEqual(services.held(self.courier), D("0.00"))
+        self.assertEqual(settlement.fee_expense.amount, D("30.00"))
+        Projector().rebuild()
+        self.assertTrue(reports.trial_balance()["balanced"])
+        self.assertEqual(bal("1120"), D("0"))
 
 
 class ScreenTests(ShippingSetup):

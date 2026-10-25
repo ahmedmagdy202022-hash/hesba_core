@@ -12,7 +12,7 @@ from permissions.decorators import require_permission
 from sales.models import SalesInvoice
 
 from . import services
-from .models import Courier, Settlement, Shipment, ShipmentStatus
+from .models import Settlement, Shipment, ShipmentStatus
 
 WORDS = {
     "ar": {
@@ -52,14 +52,14 @@ def board(request):
         action = request.POST.get("action")
         try:
             if action == "courier":
-                courier = get_object_or_404(Courier, pk=request.POST["courier"]) if request.POST.get("courier", "").isdigit() else None
+                courier = get_object_or_404(services.couriers(), pk=request.POST["courier"]) if request.POST.get("courier", "").isdigit() else None
                 services.save_courier(request.POST, request.user, courier, lang)
             elif action == "ship":
                 invoice = get_object_or_404(entity_scope.scope(SalesInvoice.objects, entity_scope.SALES_INVOICE), pk=request.POST.get("invoice") or 0)
-                courier = get_object_or_404(Courier, pk=request.POST.get("courier") or 0)
+                courier = get_object_or_404(services.couriers(), pk=request.POST.get("courier") or 0)
                 services.ship(invoice, courier, request.user, request.POST, lang)
             elif action in ("deliver", "back", "lost", "undo"):
-                shipment = get_object_or_404(Shipment, pk=request.POST.get("shipment") or 0)
+                shipment = get_object_or_404(services.scoped(Shipment.objects), pk=request.POST.get("shipment") or 0)  # Codex #272
                 if action == "deliver":
                     services.deliver(shipment, request.user, request.POST.get("day"), lang)
                 elif action == "back":
@@ -81,12 +81,14 @@ def board(request):
     invoice = None
     if request.GET.get("invoice", "").isdigit():
         invoice = entity_scope.scope(SalesInvoice.objects, entity_scope.SALES_INVOICE).filter(pk=request.GET["invoice"], status="posted").select_related("customer").first()
-    delivered = Shipment.objects.filter(status=ShipmentStatus.DELIVERED, settlement__isnull=True).select_related("invoice__customer", "courier")
+    shipments = services.scoped(Shipment.objects)  # Codex #272: the entity's own parcels only
+    delivered = shipments.filter(status=ShipmentStatus.DELIVERED, settlement__isnull=True).select_related("invoice__customer", "courier")
     return render(request, "shipping/board.html", {
         "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": words, "page_title": words["title"], "invoice": invoice, "today": timezone.localdate(),
-        "couriers": services.courier_rows(), "active_couriers": Courier.objects.filter(active=True),
-        "open": Shipment.objects.filter(status=ShipmentStatus.WITH_COURIER).select_related("invoice__customer", "courier"),
-        "delivered": delivered, "settlements": Settlement.objects.select_related("courier", "destination")[:20],
+        "couriers": services.courier_rows(), "active_couriers": services.couriers().filter(active=True),
+        "open": shipments.filter(status=ShipmentStatus.WITH_COURIER).select_related("invoice__customer", "courier"),
+        "delivered": delivered,
+        "settlements": entity_scope.scope(Settlement.objects, "courier__cashbox__" + entity_scope.CASHBOX).select_related("courier", "destination")[:20],
         "destinations": entity_scope.cashboxes(Cashbox.objects).filter(active=True), "can_ship": services.can_ship(request.user),
-        "closed": Shipment.objects.filter(status__in=(ShipmentStatus.RETURNED, ShipmentStatus.LOST)).select_related("invoice", "courier")[:20],
+        "closed": shipments.filter(status__in=(ShipmentStatus.RETURNED, ShipmentStatus.LOST)).select_related("invoice", "courier")[:20],
     })
