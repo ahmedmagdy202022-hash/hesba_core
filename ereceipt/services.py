@@ -11,6 +11,7 @@
 """
 
 import hashlib
+import json
 from datetime import timedelta
 from decimal import Decimal
 
@@ -177,7 +178,8 @@ def issue(invoice, lang="ar"):
     uuid = receipt_uuid(document)
     document["header"]["uuid"] = uuid
     receipt.device, receipt.status, receipt.problems = till, ReceiptStatus.QUEUED, []
-    receipt.uuid, receipt.previous_uuid, receipt.document, receipt.issued_at = uuid, till.last_uuid, document, timezone.now()
+    receipt.uuid, receipt.previous_uuid, receipt.issued_at = uuid, till.last_uuid, timezone.now()
+    receipt.document_text = json.dumps(document, ensure_ascii=False)  # the order it was hashed in
     receipt.save()
     till.last_uuid = uuid
     till.save(update_fields=["last_uuid"])
@@ -191,15 +193,36 @@ def issue_again(receipt, lang="ar"):
     return issue(receipt.invoice, lang)
 
 
+def issued_moment(receipt):
+    """The issue time written in the hashed receipt (``dateTimeIssued``, UTC): what the 24 hours count from."""
+
+    from datetime import datetime, timezone as dt_timezone
+
+    text = receipt.document.get("header", {}).get("dateTimeIssued", "")
+    try:
+        return datetime.strptime(text, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt_timezone.utc)
+    except ValueError:
+        return receipt.issued_at
+
+
+def scoped(queryset):
+    """Receipts of the entity being worked in (HG-034): through their invoice's selling location."""
+
+    from entities import scope as entity_scope
+
+    return entity_scope.scope(queryset, "invoice__" + entity_scope.SALES_INVOICE)
+
+
 def queue():
-    """Issued receipts not sent yet, oldest first, each with the moment it falls due (24 hours after issue)."""
+    """Issued receipts not sent yet, oldest first, each due 24 hours after the issue time written in it (Codex #271:
+    not after the moment it was made, which can be later for an offline sale or one completed afterwards)."""
 
     now = timezone.now()
     rows = []
-    for receipt in Receipt.objects.filter(status=ReceiptStatus.QUEUED).select_related("invoice").order_by("issued_at", "pk"):
-        due = receipt.issued_at + WINDOW
+    for receipt in scoped(Receipt.objects.filter(status=ReceiptStatus.QUEUED)).select_related("invoice"):
+        due = issued_moment(receipt) + WINDOW
         rows.append({"receipt": receipt, "due": due, "late": due < now})
-    return rows
+    return sorted(rows, key=lambda row: (row["due"], row["receipt"].pk))
 
 
 def qr_text(receipt, environment="prod"):

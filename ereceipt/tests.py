@@ -83,8 +83,11 @@ class ReceiptTests(ReceiptSetup):
         Device.objects.create(serial_number="POS-SN-1", branch_code="0")
         receipt = Receipt.objects.get(invoice=self.sale())
         self.assertEqual([row["late"] for row in services.queue()], [False])
-        Receipt.objects.filter(pk=receipt.pk).update(issued_at=timezone.now() - timedelta(hours=25))
+        aged = receipt.document
+        aged["header"]["dateTimeIssued"] = (timezone.now() - timedelta(hours=25)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        Receipt.objects.filter(pk=receipt.pk).update(document_text=__import__("json").dumps(aged))
         self.assertEqual([row["late"] for row in services.queue()], [True])
+        receipt.refresh_from_db()
         text = services.qr_text(receipt, "prod")
         self.assertTrue(text.startswith(f"https://invoicing.eta.gov.eg/receipts/search/{receipt.uuid}/share/{receipt.document['header']['dateTimeIssued']}#Total:"))
         self.assertTrue(text.endswith(",IssuerRIN:100200300"))
@@ -109,3 +112,36 @@ class ScreenTests(ReceiptSetup):
         self.assertContains(self.client.get(url + "?lang=ar"), f'data-receipt="{receipt.pk}"')
         self.assertIn('"receiptType": "s"', self.client.get(url + "?format=json").content.decode())
         self.assertIn(receipt.uuid, self.client.get(reverse("ereceipt:json", args=[receipt.pk])).content.decode())
+
+
+class CodexFixesTests(ReceiptSetup):
+    """Codex on #271: the receipt is kept exactly as hashed, its 24 hours count from the time written in it, and
+    another entity's receipts stay out of reach."""
+
+    def test_the_stored_text_still_hashes_to_its_uuid(self):
+        Device.objects.create(serial_number="POS-SN-1", branch_code="0")
+        receipt = Receipt.objects.get(invoice=self.sale())
+        receipt.refresh_from_db()  # read back as the database keeps it
+        doc = receipt.document
+        blank = {**doc, "header": {**doc["header"], "uuid": ""}}
+        self.assertEqual(hashlib.sha256(serialize(blank).encode("utf-8")).hexdigest(), receipt.uuid)
+        self.client.force_login(self.owner)
+        self.assertEqual(self.client.get(reverse("ereceipt:json", args=[receipt.pk])).content.decode(), receipt.document_text)
+
+    def test_the_deadline_counts_from_the_issue_time_in_the_receipt(self):
+        Device.objects.create(serial_number="POS-SN-1", branch_code="0")
+        receipt = Receipt.objects.get(invoice=self.sale())
+        doc = receipt.document
+        doc["header"]["dateTimeIssued"] = (timezone.now() - timedelta(hours=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        Receipt.objects.filter(pk=receipt.pk).update(document_text=__import__("json").dumps(doc), issued_at=timezone.now())
+        self.assertEqual([row["late"] for row in services.queue()], [True])  # made just now, but issued 30 hours ago
+
+    def test_another_entitys_receipts_are_out_of_reach(self):
+        from unittest import mock
+
+        Device.objects.create(serial_number="POS-SN-1", branch_code="0")
+        receipt = Receipt.objects.get(invoice=self.sale())
+        self.client.force_login(self.owner)
+        with mock.patch("ereceipt.services.scoped", side_effect=lambda queryset: queryset.none()):
+            self.assertEqual(self.client.get(reverse("ereceipt:json", args=[receipt.pk])).status_code, 404)
+            self.assertNotContains(self.client.get(reverse("ereceipt:board") + "?lang=ar"), f'data-receipt="{receipt.pk}"')

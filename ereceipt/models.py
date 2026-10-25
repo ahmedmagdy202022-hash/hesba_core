@@ -38,7 +38,9 @@ class Receipt(models.Model):
     uuid = models.CharField(max_length=64, blank=True, db_index=True)
     previous_uuid = models.CharField(max_length=64, blank=True)
     issued_at = models.DateTimeField(null=True, blank=True)
-    document = models.JSONField(default=dict, blank=True)
+    #: The receipt exactly as it was hashed, as JSON text: a JSON column may reorder its keys (PostgreSQL's does),
+    #: and the UUID is the hash of this text's own order (Codex #271).
+    document_text = models.TextField(blank=True)
     #: Why a receipt could not be issued yet (company, item or device data missing).
     problems = models.JSONField(default=list, blank=True)
     message = models.TextField(blank=True)
@@ -47,3 +49,9 @@ class Receipt(models.Model):
 
     class Meta:
         ordering = ["-created_at", "-pk"]
+
+    @property
+    def document(self):
+        import json
+
+        return json.loads(self.document_text) if self.document_text else {}

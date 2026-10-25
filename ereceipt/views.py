@@ -1,6 +1,5 @@
 """T8 screen: the till's device, the receipts waiting to be sent (24 hours each), and the ones still missing data."""
 
-import json
 
 from django.contrib import messages as flash
 from django.core.exceptions import PermissionDenied
@@ -53,22 +52,22 @@ def board(request):
                     till.serial_number, till.branch_code = serial, (request.POST.get("branch_code") or "0").strip()[:50]
                     till.save(update_fields=["serial_number", "branch_code"])
         elif request.POST.get("action") == "again":
-            services.issue_again(get_object_or_404(Receipt, pk=request.POST.get("receipt") or 0, status=ReceiptStatus.NOT_ISSUED), lang)
+            services.issue_again(get_object_or_404(services.scoped(Receipt.objects), pk=request.POST.get("receipt") or 0, status=ReceiptStatus.NOT_ISSUED), lang)
         flash.success(request, words["saved"])
         return redirect(f"{reverse('ereceipt:board')}?lang={lang}")
     if request.GET.get("format") == "json":
-        body = json.dumps({"receipts": [row["receipt"].document for row in services.queue()]}, ensure_ascii=False, indent=2)
+        body = '{"receipts": [' + ", ".join(row["receipt"].document_text for row in services.queue()) + "]}"  # each exactly as hashed
         response = HttpResponse(body, content_type="application/json; charset=utf-8")
         response["Content-Disposition"] = 'attachment; filename="ereceipts-queue.json"'
         return response
     return render(request, "ereceipt/board.html", {
         "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": words, "page_title": words["title"], "can_manage": can_manage,
-        "device": services.device(), "queue": services.queue(), "missing": Receipt.objects.filter(status=ReceiptStatus.NOT_ISSUED).select_related("invoice")[:50]})
+        "device": services.device(), "queue": services.queue(), "missing": services.scoped(Receipt.objects.filter(status=ReceiptStatus.NOT_ISSUED)).select_related("invoice")[:50]})
 
 
 @require_permission("sales.view_sales_invoices")
 def receipt_json(request, pk):
-    receipt = get_object_or_404(Receipt, pk=pk)
-    response = HttpResponse(json.dumps(receipt.document, ensure_ascii=False, indent=2), content_type="application/json; charset=utf-8")
+    receipt = get_object_or_404(services.scoped(Receipt.objects), pk=pk)  # Codex #271: the user's own entity only
+    response = HttpResponse(receipt.document_text, content_type="application/json; charset=utf-8")  # exactly as hashed
     response["Content-Disposition"] = f'attachment; filename="ereceipt-{receipt.invoice.invoice_number}.json"'
     return response
