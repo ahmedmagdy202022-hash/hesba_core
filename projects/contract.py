@@ -65,6 +65,7 @@ MESSAGES = {
         "boq_needed": "المشروع ده ليه مقايسة: اعمل المستخلص بالكميات.", "amount": "المبلغ لازم أكبر من صفر.", "lump_description": "اكتب وصف المستخلص.",
         "not_draft": "المستخلص ده اترحّل؛ لو فيه غلط اعمل مرتجع أو إلغاء من شاشة الفاتورة.", "withdraw_blocked": "الفاتورة دي مربوطة بحاجة تانية ومينفعش تتسحب.",
         "release_more": "المبلغ أكبر من ضمان الأعمال المحتجز ({held}).", "cashbox": "اختار الخزنة.", "other_customer": "التحصيل ده لعميل تاني.",
+        "cheque_open": "التحصيل ده شيك لسه ماتحصلش؛ اربطه بالمشروع بعد ما يتصرف.",
         "payment_linked": "التحصيل ده مربوط بمشروع بالفعل.", "payment_status": "اربط التحصيلات المرحّلة بس.", "date": "التاريخ مش صحيح.",
         "advance_used": "المستخلصات خصمت من الدفعة المقدمة دي بالفعل، فمينفعش يتفك ربطها.",
         "boq_after_lump": "المشروع ده اتعمل عليه مستخلص مقطوعية؛ مينفعش تضيف مقايسة بعده عشان الأعمال اللي اتفوترت متتفوترش تاني.", "date_order": "تاريخ المستخلص لازم ميكونش قبل آخر مستخلص ({date}).",
@@ -78,6 +79,7 @@ MESSAGES = {
         "boq_needed": "This project has a bill of quantities: certify by quantities.", "amount": "The amount must be above zero.", "lump_description": "Describe the certificate.",
         "not_draft": "This certificate is posted; correct it with a return or a cancellation on the invoice screen.", "withdraw_blocked": "This invoice is linked to something else and cannot be withdrawn.",
         "release_more": "The amount is more than the retention held ({held}).", "cashbox": "Choose the cashbox.", "other_customer": "This collection is for another customer.",
+        "cheque_open": "This collection is a cheque not yet cleared; link it to the project once it is.",
         "payment_linked": "This collection is already linked to a project.", "payment_status": "Only posted collections can be linked.", "date": "Invalid date.",
         "advance_used": "Certificates already recovered this advance, so it cannot be unlinked.",
         "boq_after_lump": "This project already has a lump-sum certificate; a bill of quantities cannot be added after it, so billed work is never billed twice.", "date_order": "A certificate cannot be dated before the latest one ({date}).",
@@ -358,6 +360,9 @@ def link_payment(project, payment, user, *, kind, lang="ar"):
         raise ValidationError(words["payment_status"])
     if ProjectPayment.objects.filter(payment=payment).exists():
         raise ValidationError(words["payment_linked"])
+    cheque = getattr(payment, "cheque", None)
+    if cheque is not None and cheque.status != "cleared":
+        raise ValidationError(words["cheque_open"])  # T4: a cheque that may still bounce is not money the project has
     kind = kind if kind in ProjectPaymentKind.values else ProjectPaymentKind.COLLECTION
     if hasattr(payment, "instalment_link"):
         # It settles an instalment plan: a collection of this project only when the plan's invoice is on it,
@@ -585,7 +590,8 @@ def _in_scope(cashbox, words):
     from cashboxes.models import Cashbox
     from entities import scope as entity_scope
 
-    if not entity_scope.cashboxes(Cashbox.objects.filter(pk=cashbox.pk)).exists():
+    # The entity only: a cheque's payment sits in the cheques box, which pickers leave out but is the entity's all the same (T4).
+    if not entity_scope.scope(Cashbox.objects.filter(pk=cashbox.pk), entity_scope.CASHBOX).exists():
         raise ValidationError(words["entity"])
 
 

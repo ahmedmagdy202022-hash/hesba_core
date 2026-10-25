@@ -258,3 +258,28 @@ class ScreenTests(ChequeSetup):
         page = self.client.get(reverse("cheques:register") + "?lang=ar")
         self.assertEqual(page.status_code, 200)  # the cashier takes cheques at the counter
         self.assertNotContains(page, "data-deposit=")
+
+
+class ProjectChequeTests(TestCase):
+    def test_a_cheque_counts_for_a_project_only_once_it_cleared(self):
+        from projects import contract, services as projects
+        from projects.models import ProjectPaymentKind
+
+        prepared_client(activity="contracting", sub_activity="general",
+                        modules="customers,suppliers,items_services,sales_operations,purchases,cashboxes,reports,inventory,expenses,projects")
+        owner = person(RoleCode.OWNER, "cqp_owner")
+        customer = make_customer(customer_code="CQP-C", name="شركة")
+        bank = Cashbox.objects.create(cashbox_code="BANK-P", name_ar="بنك", kind=CashboxKind.BANK, bank_name="بنك")
+        project = projects.save_project({"name": "عمارة", "customer": customer}, owner)
+        cheque = services.receive(customer, {"number": "77", "bank_name": "CIB", "due_date": TODAY.isoformat(), "amount": "1000"}, owner)
+        from entities.current import working_in
+        from entities.services import main_entity
+
+        with working_in(main_entity()):
+            with self.assertRaisesMessage(ValidationError, "لسه ماتحصلش"):
+                contract.link_payment(project, cheque.customer_payment, owner, kind=ProjectPaymentKind.COLLECTION)
+            services.deposit(cheque, bank, owner, on=TODAY)
+            services.clear(cheque, owner, on=TODAY)
+            cheque.refresh_from_db()
+            contract.link_payment(project, cheque.customer_payment, owner, kind=ProjectPaymentKind.COLLECTION)
+        self.assertTrue(project.payments.filter(payment=cheque.customer_payment).exists())

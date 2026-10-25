@@ -51,6 +51,7 @@ MESSAGES = {
         "before": "التاريخ ده قبل آخر خطوة في الشيك.", "bank_short": "رصيد البنك مش مكفّي لرد الشيك ده.",
         "received_note": "شيك {number} — {bank}، يستحق {due}", "deposit": "إيداع شيك {number}", "bounce_back": "رد شيك {number} مرتد من البنك",
         "bounced": "شيك {number} مرتد: {reason}", "paid": "صرف شيك {number} للمورد",
+        "project": "الشيك ده مربوط بمشروع؛ فك الربط من شاشة المشروع الأول.",
     },
     "en": {
         "number": "Type the cheque number.", "bank_name": "Type the bank the cheque is drawn on.", "due": "Type the due date.", "amount": "The amount must be a number above zero.",
@@ -59,6 +60,7 @@ MESSAGES = {
         "cancel_reason": "Type why it is cancelled.", "before": "This date is before the cheque's last step.", "bank_short": "The bank balance does not cover returning this cheque.",
         "received_note": "Cheque {number} — {bank}, due {due}", "deposit": "Deposit of cheque {number}", "bounce_back": "Cheque {number} returned unpaid by the bank",
         "bounced": "Cheque {number} bounced: {reason}", "paid": "Cheque {number} paid to the supplier",
+        "project": "This cheque is linked to a project; unlink it on the project first.",
     },
 }
 
@@ -223,6 +225,9 @@ def receive(customer, data, user, lang="ar"):
     if customer is None:
         raise ValidationError(words["party"].format(party=words["customer"]))
     number, bank_name, due, amount, received_on = _details(data, words)
+    from master_data.models import Customer
+
+    Customer.objects.select_for_update().filter(pk=customer.pk).first()  # the same cheque saved twice at once waits for the first
     _not_twice(ChequeDirection.IN, number, bank_name, words, customer=customer)
     holder = box(CashboxKind.CHEQUES_IN)
     note = words["received_note"].format(number=number, bank=bank_name, due=due.isoformat())
@@ -272,6 +277,7 @@ def issue(supplier, bank, data, user, lang="ar"):
     values = {key: data.get(key) for key in ("number", "bank_name", "due_date", "amount", "received_on", "notes")}  # a QueryDict gives lists to **
     values["bank_name"] = values["bank_name"] or bank.bank_name or bank.name_ar
     number, bank_name, due, amount, issued_on = _details(values, words)
+    Cashbox.objects.select_for_update().filter(pk=bank.pk).first()  # the same cheque saved twice at once waits for the first
     _not_twice(ChequeDirection.OUT, number, bank_name, words, bank=bank)
     holder = box(CashboxKind.CHEQUES_OUT, bank.entity)
     note = words["received_note"].format(number=number, bank=bank_name, due=due.isoformat())
@@ -329,6 +335,8 @@ def bounce(cheque, reason, user, lang="ar", on=None):
 
         _state(cheque, (ChequeStatus.IN_HAND, ChequeStatus.DEPOSITED), words, lang)
         _after(cheque, on, words)
+        if hasattr(cheque.customer_payment, "project_payment"):
+            raise ValidationError(words["project"])
         if cheque.status == ChequeStatus.DEPOSITED:
             # The bank takes the money back first, so the bank is not overstated and the box never goes below zero.
             Cashbox.objects.select_for_update().filter(pk=cheque.bank_id).first()
