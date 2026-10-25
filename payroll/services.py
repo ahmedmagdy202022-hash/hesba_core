@@ -44,6 +44,7 @@ MESSAGES = {
         "before": "التاريخ قبل تاريخ الترحيل.", "cancelled": "الدفعة دي اتلغت قبل كده.", "before_paid": "تاريخ الإلغاء قبل تاريخ الدفعة.",
         "entity": "المرتبات بتتدفع من خزنة أو بنك الشركة الرئيسية.", "before_cancel": "التاريخ قبل إلغاء دفعة من الكشف ده.",
         "net_negative": "صافي مرتب {name} بالسالب ({net})؛ قلّل الخصومات قبل الترحيل.",
+        "before_reversal": "الكشف ده بيحل محل كشف اتلغى يوم {day}؛ رحّله من اليوم ده أو بعده.",
     },
     "en": {
         "number": "This number is not understood.", "negative": "Amounts cannot be negative.", "month": "Choose the month.", "taken": "This month's payroll was made already.",
@@ -53,6 +54,7 @@ MESSAGES = {
         "date": "The date is not understood.", "before": "The date is before the posting date.", "cancelled": "This payment was cancelled already.", "before_paid": "The cancellation is dated before the payment.",
         "entity": "Payroll is paid from a cashbox or bank of the main entity.", "before_cancel": "The date is before a cancelled payment of this run.",
         "net_negative": "{name}'s net pay is negative ({net}); lower the deductions before posting.",
+        "before_reversal": "This run replaces one reversed on {day}; post it on that day or later.",
     },
 }
 
@@ -339,7 +341,14 @@ def post(run, user, lang="ar", posted_on=None):
     from closing.services import ensure_period_is_open as ensure_period_open  # a closed month stays closed (HG-011)
 
     today = timezone.localdate()
-    day = _day(posted_on, words, min(_month_end(run.month), max(today, run.month)))  # the month's end, or today for a month still running
+    default = min(_month_end(run.month), max(today, run.month))  # the month's end, or today for a month still running
+    # Codex #269: a corrected run replaces a reversed one only from that reversal on, so the two never stand together.
+    replaced = PayrollRun.objects.filter(month=run.month, status=RunStatus.REVERSED).exclude(pk=run.pk).aggregate(last=Max("reversed_on"))["last"]
+    if replaced and default < replaced:
+        default = replaced
+    day = _day(posted_on, words, default)
+    if replaced and day < replaced:
+        raise ValidationError(words["before_reversal"].format(day=replaced.isoformat()))
     ensure_period_open(day)
     run.status, run.posted_on = RunStatus.POSTED, day
     run.save(update_fields=["status", "posted_on"])

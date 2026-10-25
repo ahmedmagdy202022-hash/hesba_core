@@ -286,7 +286,13 @@ class FourthReviewTests(PayrollSetup):
         services.reverse(first, self.owner, "غلط في المرتبات")
         again = self.make_run()
         self.assertNotEqual(again.pk, first.pk)
-        self.assertEqual(services.post(again, self.owner).status, RunStatus.POSTED)
+        first.refresh_from_db()
+        if first.reversed_on > first.posted_on:
+            with self.assertRaisesMessage(ValidationError, "بيحل محل"):
+                services.post(again, self.owner, posted_on=first.posted_on.isoformat())
+        again = services.post(again, self.owner)
+        self.assertEqual(again.status, RunStatus.POSTED)
+        self.assertGreaterEqual(again.posted_on, first.reversed_on)  # Codex #269: never standing together with the first
         with self.assertRaisesMessage(ValidationError, "اتعملت قبل كده"):
             self.make_run()  # one standing run a month
         Projector().rebuild()
