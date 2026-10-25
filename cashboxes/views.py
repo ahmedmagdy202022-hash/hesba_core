@@ -230,6 +230,12 @@ def operation_cancel(request, pk):
         # so the expense and its cash movement can never disagree.
         messages.error(request, "هذه الحركة تابعة لمصروف؛ ألغِها من شاشة المصروفات." if lang == "ar" else "This operation belongs to an expense; cancel it from the expenses screen.")
         return redirect(f"/cashboxes/operations/?lang={lang}")
+    from cheques.services import owns_operation
+
+    if owns_operation(pk):
+        # T4 (HG-056): a cheque's deposit, payment or return moves with the cheque, so the two never disagree.
+        messages.error(request, "الحركة دي تابعة لشيك؛ اتعامل معاها من شاشة الشيكات." if lang == "ar" else "This operation belongs to a cheque; handle it from the cheques screen.")
+        return redirect(f"/cashboxes/operations/?lang={lang}")
     if form.is_valid():
         try:
             cancel_cashbox_operation(pk, user=request.user, **form.cleaned_data)

@@ -123,7 +123,8 @@ def reconciliation():
     checks = [
         ("receivable", money_round(receivable), party_total(Customer)),
         ("payable", money_round(-payable), party_total(Supplier)),
-        ("cash", money_round(control_balance("cash") + control_balance("bank")), cash_report),  # T3: cashboxes and bank accounts together
+        # T3/T4: cashboxes, bank accounts and the cheque boxes together, as the cashbox formula counts them all.
+        ("cash", money_round(sum((control_balance(c) for c in ("cash", "bank", "notes_receivable", "notes_payable")), ZERO)), cash_report),
         ("inventory", money_round(sum((control_balance(c) for c in inventory_controls), ZERO)), stock_value),
         ("sales", money_round(revenue), money_round(profit["sales"])),
         ("cogs", control_balance("cogs"), money_round(profit["cost"])),

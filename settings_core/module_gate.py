@@ -35,6 +35,7 @@ MODULE_ROUTES = (
     ("/cashboxes/", "cashboxes"),
     ("/promotions/", "sales_operations"),
     ("/banks/", "cashboxes"),
+    ("/cheques/", "cashboxes"),
     ("/expenses/", "expenses"),
     ("/print/", "pdf_printing"),
     ("/master-data/customers/", "customers"),
