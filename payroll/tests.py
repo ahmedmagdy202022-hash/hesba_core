@@ -256,3 +256,11 @@ class ThirdReviewTests(PayrollSetup):
         with self.assertRaisesMessage(ValidationError, "قبل إلغاء دفعة"):
             services.reverse(run, self.owner, "غلط", reversed_on=LAST_MONTH.isoformat())
         self.assertEqual(services.reverse(run, self.owner, "غلط", reversed_on=TODAY.isoformat()).status, RunStatus.REVERSED)
+
+    def test_a_replacement_payment_is_not_dated_before_the_cancellation_it_replaces(self):
+        run = services.post(self.make_run(), self.owner, posted_on=LAST_MONTH.isoformat())
+        payment = services.pay(run, PayTo.TAX, self.cash, "", self.owner, paid_on=LAST_MONTH.isoformat())
+        services.cancel_payment(payment, self.owner, "غلط", cancelled_on=TODAY.isoformat())
+        with self.assertRaisesMessage(ValidationError, "قبل إلغاء دفعة"):
+            services.pay(run, PayTo.TAX, self.cash, "", self.owner, paid_on=LAST_MONTH.isoformat())
+        self.assertEqual(services.pay(run, PayTo.TAX, self.cash, "", self.owner, paid_on=TODAY.isoformat()).paid_on, TODAY)

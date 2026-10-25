@@ -392,6 +392,9 @@ def pay(run, pay_to, cashbox, raw_amount, user, lang="ar", paid_on=None):
     day = _day(paid_on, words, timezone.localdate())
     if day < run.posted_on:
         raise ValidationError(words["before"])
+    last_cancel = run.payments.filter(pay_to=pay_to, cancelled_on__isnull=False).aggregate(last=Max("cancelled_on"))["last"]
+    if last_cancel and day < last_cancel:  # Codex #269: the debt a cancellation frees is free only from that day on
+        raise ValidationError(words["before_cancel"])
     number = PayrollPayment.objects.filter(run=run).count() + 1
     label = {"net": "صافي المرتبات", "insurance": "التأمينات الاجتماعية", "tax": "ضريبة كسب العمل"}[pay_to]
     operation = create_cashbox_operation(f"PAY-{run.month:%Y%m}-{run.pk}-{number}", day, CashboxOperationType.PAYROLL, amount,
