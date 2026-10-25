@@ -209,9 +209,13 @@ def ship(invoice, courier, user, data=None, lang="ar"):
         raise ValidationError(words["entity"])  # Codex #272: the collection is credited in the courier box's entity
     if Shipment.objects.filter(invoice=invoice, status=ShipmentStatus.WITH_COURIER).exists():
         raise ValidationError(words["twice"])
-    # Codex #272: what earlier shipments of this invoice collected is not due any more (payments do not touch remaining_due).
+    # Codex #272: what earlier shipments of this invoice collected, and what posted returns took off its debt, are not due
+    # any more (neither a payment nor a return touches remaining_due).
+    from sales.models import SalesReturn, SalesReturnStatus
+
     earlier = Shipment.objects.filter(invoice=invoice, payment__isnull=False).aggregate(total=Sum("cod_amount"))["total"] or ZERO
-    left = max(ZERO, invoice.remaining_due - earlier)
+    returned = SalesReturn.objects.filter(source_invoice=invoice, status=SalesReturnStatus.POSTED).aggregate(total=Sum("due_amount"))["total"] or ZERO
+    left = max(ZERO, invoice.remaining_due - earlier - returned)
     cod = _amount(data.get("cod_amount"), words, left)
     if cod > left:
         raise ValidationError(words["more"].format(left=f"{left:,.2f}"))

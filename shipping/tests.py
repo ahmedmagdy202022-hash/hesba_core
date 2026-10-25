@@ -226,6 +226,30 @@ class SecondReviewTests(ShippingSetup):
         self.assertContains(page, "data-settlements")
 
 
+class ThirdReviewTests(ShippingSetup):
+    """Codex on #272 (third look): the reconciliation counts what couriers hold, and a posted return lowers what is collected."""
+
+    def test_an_unsettled_collection_reconciles(self):
+        services.deliver(services.ship(self.invoice(), self.courier, self.owner), self.owner)
+        Projector().rebuild()
+        result = reports.reconciliation()
+        self.assertTrue(result["ok"], [row for row in result["rows"] if row["difference"]])
+
+    def test_a_posted_return_is_not_collected_again(self):
+        from sales.services import create_sales_return
+
+        invoice = create_sales_draft({"invoice_number": "SH-RET", "invoice_date": TODAY, "customer": self.customer, "selling_location": self.location,
+                                      "cashbox": self.cash, "paid_now": D("0"), "discount_amount": D("0")},
+                                     [{"item": self.dress, "quantity": D("2"), "unit_sale_price": D("250.00"), "line_discount_amount": D("0")}], self.owner)
+        post_sales_invoice(invoice.pk, self.owner)
+        create_sales_return(return_number="SR-SH", return_date=TODAY, source_invoice_id=invoice.pk,
+                            lines=[{"source_line": invoice.lines.get(), "quantity": 1}], reason="رجّع واحد", user=self.owner)
+        shipment = services.ship(invoice, self.courier, self.owner)
+        self.assertEqual(shipment.cod_amount, D("250.00"))
+        services.deliver(shipment, self.owner)
+        self.assertEqual(balance("customer", self.customer), D("0.00"))
+
+
 class ScreenTests(ShippingSetup):
     def test_the_board_and_the_invoice_link(self):
         invoice = self.invoice()
