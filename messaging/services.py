@@ -223,6 +223,8 @@ def build(today=None):
                 row = template(kind)
                 if row.active:
                     added += _gather(kind, source, row, entity, today, company, currency)
+                else:
+                    _waiting(kind, entity).delete()  # switched off: nothing of this kind is left to send
     return added
 
 
@@ -231,19 +233,20 @@ def _gather(kind, source, row, entity, today, company, currency):
     done = OutboxMessage.objects.filter(kind=kind, day__gte=since).filter(
         Q(status=OutboxStatus.SENT) | Q(status=OutboxStatus.SKIPPED, day=today))
     recent = set(done.values_list("key", flat=True))
-    waiting = {message.key: message for message in OutboxMessage.objects.filter(kind=kind, status=OutboxStatus.PENDING)}
-    added = 0
+    waiting = {message.key: message for message in _waiting(kind, entity)}
+    seen, added = set(), 0
     for candidate in source(today, company, currency):
         key = candidate["key"] if entity is None else f"{candidate['key']}@{entity.pk}"
         phone = _number(candidate["phone"])
         if key in recent or not phone:
             continue
+        seen.add(key)
         fields = {"name": candidate["name"][:255], "phone": phone[:30], "link": candidate["link"][:255], "entity": entity,
                   "text": render(row.text, name=candidate["name"], company=company, **candidate["values"])}
         earlier = waiting.get(key)
         if earlier is not None:
-            if earlier.day != today:  # still waiting from an earlier day: it moves to today, with today's figures
-                OutboxMessage.objects.filter(pk=earlier.pk, status=OutboxStatus.PENDING).update(day=today, **fields)
+            # Still waiting: it carries today's date and today's figures (a part payment lowers the amount).
+            OutboxMessage.objects.filter(pk=earlier.pk, status=OutboxStatus.PENDING).update(day=today, **fields)
             recent.add(key)
             continue
         try:
@@ -253,7 +256,14 @@ def _gather(kind, source, row, entity, today, company, currency):
             continue  # queued by another request a moment ago
         recent.add(key)
         added += 1
+    # Paid in full, cancelled or moved since it was queued: the message is withdrawn before anyone sends it.
+    _waiting(kind, entity).exclude(key__in=seen).delete()
     return added
+
+
+def _waiting(kind, entity):
+    rows = OutboxMessage.objects.filter(kind=kind, status=OutboxStatus.PENDING)
+    return rows if entity is None else rows.filter(entity=entity)
 
 
 def visible(user):

@@ -14,7 +14,7 @@ from django.utils import timezone
 from hesba_testing.factories import make_customer, make_seeded_role, make_user, make_user_profile
 from master_data.models import Customer
 from permissions.models import RoleCode
-from reports.tests_aging import owe
+from reports.tests_aging import owe, pay
 from reports.tests_dashboard import prepared_client
 
 from . import services
@@ -66,6 +66,20 @@ class BuildTests(OutboxSetup):
         self.assertEqual(OutboxMessage.objects.count(), 1)
         services.mark(first, OutboxStatus.SENT, self.owner)
         self.assertEqual(services.build(tomorrow + timedelta(days=1)), 0)  # sent now: the 7 days start
+
+    def test_a_payment_after_gathering_updates_or_withdraws_the_waiting_message(self):
+        services.build()
+        message = OutboxMessage.objects.get()
+        pay(self.ali, "250.00", TODAY)
+        services.build()
+        message.refresh_from_db()
+        self.assertIn("500.00", message.text)  # today's figure, not the 750 it was queued with
+        self.client.force_login(self.cashier)
+        self.client.get(reverse("messaging:outbox") + "?lang=ar")
+        pay(self.ali, "500.00", TODAY)  # paid in full while the page was open
+        response = self.client.post(reverse("messaging:outbox"), {"lang": "ar", "action": "send", "message": message.pk})
+        self.assertContains(response, "مبقتش لازمة")
+        self.assertFalse(OutboxMessage.objects.exists())  # withdrawn, never sent
 
     def test_each_entity_gets_its_own_messages_and_no_one_sends_another_entitys(self):
         from entities.models import Entity, EntityMembership

@@ -11,7 +11,7 @@ from permissions.decorators import require_any_permission
 from reports.navigation import CUSTOMER_AUDIENCE
 
 from . import services
-from .models import MessageKind, OutboxStatus
+from .models import MessageKind, OutboxMessage, OutboxStatus
 
 WORDS = {
     "ar": {
@@ -21,7 +21,7 @@ WORDS = {
         "none": "مفيش رسائل هنا.", "templates": "نصوص الرسائل", "active": "تتبعت", "every": "متتكررش لنفس العميل قبل (يوم)", "save": "حفظ",
         "placeholders": "الكلمات اللي بتتغير لوحدها: {name} الاسم، {company} اسم الشركة، {amount} المبلغ، {date} التاريخ، {time} الوقت، {number} رقم الفاتورة أو الروشتة.",
         "api_off": "الإرسال الأوتوماتيك من غير ضغط محتاج حساب WhatsApp Business للمحل نفسه. لحد ما يتربط، الرسالة بتتبعت بضغطة من هنا.",
-        "saved": "اتحفظ.", "day": "اليوم", "when": "اتبعتت",
+        "saved": "اتحفظ.", "day": "اليوم", "when": "اتبعتت", "gone": "الرسالة دي مبقتش لازمة: اتدفع المبلغ أو الميعاد اتلغى أو اتغير.",
     },
     "en": {
         "title": "Customer messages", "intro": "Every day the messages worth sending gather here: customers past their credit days, instalments coming up or late, tomorrow's appointments, and prescriptions due for a refill. “Send” opens WhatsApp with the message written.",
@@ -30,7 +30,7 @@ WORDS = {
         "none": "No messages here.", "templates": "Message wording", "active": "Send these", "every": "Not again to the same customer within (days)", "save": "Save",
         "placeholders": "Words filled in by themselves: {name} the name, {company} your company, {amount} the amount, {date} the date, {time} the time, {number} the invoice or prescription number.",
         "api_off": "Sending without a click needs the shop's own WhatsApp Business account. Until it is connected, each message goes with one click from here.",
-        "saved": "Saved.", "day": "Day", "when": "Sent",
+        "saved": "Saved.", "day": "Day", "when": "Sent", "gone": "This message is no longer needed: the amount was paid, or the appointment was cancelled or moved.",
     },
 }
 
@@ -53,11 +53,17 @@ def outbox(request):
     if request.method == "POST":
         action = request.POST.get("action")
         try:
-            if action == "send":
-                message = services.mark(get_object_or_404(services.visible(request.user), pk=request.POST.get("message") or 0), OutboxStatus.SENT, request.user, lang)
-                return redirect(services.whatsapp_url(message))
-            if action == "skip":
-                services.mark(get_object_or_404(services.visible(request.user), pk=request.POST.get("message") or 0), OutboxStatus.SKIPPED, request.user, lang)
+            if action in ("send", "skip"):
+                pk = request.POST.get("message") or 0
+                services.build()  # what was paid or cancelled since the page opened is withdrawn first
+                message = services.visible(request.user).filter(pk=pk).first()
+                if message is None:
+                    if OutboxMessage.objects.filter(pk=pk).exists():
+                        raise Http404("Another entity's message.")
+                    raise ValidationError(words["gone"])
+                message = services.mark(message, OutboxStatus.SENT if action == "send" else OutboxStatus.SKIPPED, request.user, lang)
+                if action == "send":
+                    return redirect(services.whatsapp_url(message))
                 flash.success(request, words["saved"])
             elif action == "refresh":
                 added = services.build()
