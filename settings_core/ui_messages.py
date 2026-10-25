@@ -122,6 +122,8 @@ EXACT = {
     "A bank fee requires only the bank account it was taken from.": "المصروفات البنكية بتتسجل على الحساب البنكي اللي اتخصمت منه بس.",
     "Bank fees are taken from a bank account only.": "المصروفات البنكية بتتخصم من حساب بنكي بس، مش من خزنة.",
     "This payment is a cheque; cancel or bounce it from the cheques screen.": "الدفعة دي شيك؛ الغيه أو سجّله مرتد من شاشة الشيكات.",
+    "This payment was collected by a courier; undo the delivery from the shipments screen.": "الدفعة دي حصّلتها شركة الشحن؛ لغي التسليم من شاشة الشحن.",
+    "This expense belongs to a courier settlement or a lost shipment.": "المصروف ده تابع لتسوية شركة شحن أو لشحنة ضاعت؛ مينفعش يتلغي من هنا.",
     "Transfer locations must be different.": "المخزنين لازم يكونوا مختلفين.",
     "Transfer quantity must be greater than zero.": "كمية التحويل لازم تكون أكبر من صفر.",
     "Unknown cash operation type.": "نوع حركة غير معروف.",
