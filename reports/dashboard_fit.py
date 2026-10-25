@@ -218,7 +218,7 @@ def option_tiles(fit, user, lang="ar"):
         from sales.models import SalesInvoice
 
         posted = entity_scope.scope(SalesInvoice.objects, entity_scope.SALES_INVOICE).filter(status="posted", invoice_date__gte=month_start)
-        sent = posted.filter(eta_submissions__status__in=(SubmissionStatus.SUBMITTED, SubmissionStatus.VALID)).distinct().count()
+        sent = posted.filter(eta_submissions__sales_return__isnull=True, eta_submissions__status__in=(SubmissionStatus.SUBMITTED, SubmissionStatus.VALID)).distinct().count()
         total = posted.count()
         tiles.append(_tile("opt_einvoice", words["einvoice"], total - sent, reverse("sales:list"), tone="warn" if total - sent else "good",
                            sub=words["einvoice_sub"].format(total=total)))

@@ -1814,7 +1814,18 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 
 ## HG-059 — E-invoice live and the credit note for returns (T7)
 
-- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق»), as written below.
+- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق»), as written below. The part that needs no outside account is BUILT in T7 (`claude/t7-credit-note`). Going live still needs Ahmed's preprod credentials and the signing method (the `ETA_*` settings).
+- **What was built:**
+  - `build_credit_note(sales_return)`: an ETA credit note (`documentType` "c") with the issuer and receiver of the original invoice and `references` set to the original's accepted UUID. Each returned line gives back its refund:
+    - the price × quantity returned;
+    - less the line's share of every discount (its own and the invoice's);
+    - plus the tax given back (HG-015).
+    The total must equal the return's.
+  - `Submission.sales_return` (nullable, migration 0003) marks a credit note's sending. The invoice's own sending, history and the dashboard count ignore those rows.
+  - `send_credit_note` claims a `sending` row under the return's lock and goes through the same sign → submit → record path as an invoice. `send_invoice`'s tail became `_deliver`, shared by both, so their behaviour is unchanged. Refresh, reconciliation (by the return number) and the public link work as for an invoice; a credit note is not cancelled from Hesba.
+  - The queue: `credit_notes_due()` lists the posted returns of accepted invoices with no credit note yet, or with a sending cut off long enough ago to be checked again. `manage.py send_credit_notes` sends them, run from cron every few minutes; one that fails stays queued, and a rejected one waits for a manual send after its data is corrected.
+  - The return page links to its credit-note page (document, JSON, send, refresh) when e-invoicing is on.
+  - Posting a return is unchanged and never waits for the authority.
 - **Why:** a sales return must be sent to the Tax Authority as a credit note that points to the original document. Signing must not block posting.
 - **Proposed:**
   - the return builds an ETA credit note from `einvoice.services` and queues it;
