@@ -141,6 +141,25 @@ def _catalogue():
     return out, variant_of
 
 
+def _parent_skus(catalogue):
+    """{group id: SKU} for each size/colour group's WooCommerce parent (Codex #273). WooCommerce matches products by SKU,
+    and a group's code may equal an item code, so such a parent gets a SKU of its own; the items keep their codes."""
+
+    from master_data.models import Item
+
+    taken = set(Item.objects.values_list("item_code", flat=True))
+    out = {}
+    for group, _items in catalogue:
+        if group is None:
+            continue
+        sku = group.code if group.code not in taken else f"{group.code}-group-{group.pk}"
+        while sku in taken:
+            sku += "-x"
+        taken.add(sku)
+        out[group.pk] = sku
+    return out
+
+
 def _options(group, items, variant_of):
     """The option names a group uses (size, colour), each with its values in the group's order."""
 
@@ -182,6 +201,7 @@ def export_rows(kind, user):
 
     rows = [list(SHOPIFY_COLUMNS if kind == "shopify" else WOO_COLUMNS)]
     handles = _handles(catalogue)
+    parent_skus = _parent_skus(catalogue)
     for group, items in catalogue:
         if kind == "shopify":
             options = _options(group, items, variant_of) if group else []
@@ -219,7 +239,8 @@ def export_rows(kind, user):
                 woo(Type="simple", SKU=item.item_code, Name=item.item_name, Published="1", Categories=category(item), **stock_cells(item))
                 continue
             options = _options(group, items, variant_of)
-            parent = {"Type": "variable", "SKU": group.code, "Name": group.name, "Published": "1", "Categories": category(group),
+            parent_sku = parent_skus[group.pk]
+            parent = {"Type": "variable", "SKU": parent_sku, "Name": group.name, "Published": "1", "Categories": category(group),
                       "Tax status": "taxable" if taxed(items[0]) else "none"}
             for number, (name, field) in enumerate(options, start=1):
                 values = list(OrderedDict.fromkeys(getattr(variant_of[item.pk], field) or "-" for item in items))
@@ -227,7 +248,7 @@ def export_rows(kind, user):
                                f"Attribute {number} global": "0"})
             woo(**parent)
             for item in items:
-                variation = {"Type": "variation", "SKU": item.item_code, "Name": item.item_name, "Published": "1", "Parent": group.code, **stock_cells(item)}
+                variation = {"Type": "variation", "SKU": item.item_code, "Name": item.item_name, "Published": "1", "Parent": parent_sku, **stock_cells(item)}
                 for number, (name, field) in enumerate(options, start=1):
                     variation.update({f"Attribute {number} name": name, f"Attribute {number} value(s)": getattr(variant_of[item.pk], field) or "-",
                                       f"Attribute {number} global": "0"})
@@ -275,11 +296,23 @@ def _read(raw, words):
 
 
 def _decimal(text, words, default=None):
-    text = re.sub(r"[^\d.\-]", "", _latin(text))
+    """A number as stores and spreadsheets write it (Codex #273): Arabic digits and separators, 1,234.50 or 12,50; a
+    currency or spaces around it are dropped, anything else is refused rather than guessed."""
+
+    text = _latin(text).replace("\u066b", ".").replace("\u066c", "").replace("\u00a0", "").replace(" ", "")
+    text = re.sub(r"^[^\d\-.,]+|[^\d.,]+$", "", text)  # "EGP 12.50", "12.50 ج.م"
     if not text:
         if default is None:
             raise ValidationError(words["number"])
         return default
+    if "," in text and "." in text:
+        text = text.replace(",", "")  # 1,234.50
+    elif text.count(",") == 1 and len(text.split(",")[1]) <= 2:
+        text = text.replace(",", ".")  # 12,50
+    elif "," in text:
+        text = text.replace(",", "")  # 1,234 or 1,234,567
+    if not re.fullmatch(r"-?\d+(\.\d+)?", text):
+        raise ValidationError(words["number"])
     try:
         return Decimal(text)
     except InvalidOperation:

@@ -93,6 +93,16 @@ class ExportTests(StoreSetup):
         handles = [row["Handle"] for row in rows(services.export_csv("shopify", self.owner)) if row["Variant SKU"] in ("DR-1", "DR_1")]
         self.assertEqual(len(set(handles)), 2)
 
+    def test_a_group_never_shares_its_woocommerce_sku_with_an_item(self):
+        make_item(item_code="TEE", item_name="تيشيرت لوحده", default_sale_price="90.00")
+        group = VariantGroup.objects.create(code="TEE", name="تيشيرت", sizes=["S"], colors=[])
+        Variant.objects.create(group=group, item=make_item(item_code="TEE-S", item_name="تيشيرت S", default_sale_price="150.00"), size="S")
+        woo = rows(services.export_csv("woocommerce", self.owner))
+        parent = next(row for row in woo if row["Type"] == "variable")
+        self.assertEqual(parent["SKU"], f"TEE-group-{group.pk}")
+        self.assertEqual(next(row for row in woo if row["SKU"] == "TEE-S")["Parent"], parent["SKU"])
+        self.assertEqual([row["SKU"] for row in woo].count("TEE"), 1)
+
     def test_the_export_needs_the_items_permission(self):
         with self.assertRaises(PermissionDenied):
             services.export_csv("shopify", person(RoleCode.WAITER, "st_waiter"))
@@ -135,6 +145,16 @@ class OrderImportTests(StoreSetup):
         self.assertEqual(invoice.customer.customer_code, "WALK-IN")
         self.assertIn("Sara Ahmed", invoice.notes)
         self.assertEqual(Customer.objects.exclude(customer_code="WALK-IN").count(), before)
+
+    def test_numbers_keep_their_decimal_point(self):
+        words = services.MESSAGES["en"]
+        for text, value in (("١٢٫٥٠", "12.50"), ("12,50", "12.50"), ("1,234.50", "1234.50"), ("1,234", "1234"), ("EGP 99.90", "99.90"), ("٣", "3")):
+            self.assertEqual(services._decimal(text, words), D(value), text)
+        from django.core.exceptions import ValidationError
+
+        for bad in ("12.5.0", "1-2", "abc"):
+            with self.assertRaises(ValidationError, msg=bad):
+                services._decimal(bad, words)
 
     def test_another_file_is_refused_with_a_reason(self):
         from django.core.exceptions import ValidationError
