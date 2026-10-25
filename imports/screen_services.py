@@ -66,6 +66,12 @@ def read_upload(uploaded):
     return _clean_rows(rows)
 
 
+def _number_text(value):
+    """An Excel number as written: 1234567.89 stays 1234567.89 and 5.0 is 5 (``:g`` would give 1.23457e+06 and lose digits)."""
+
+    return str(int(value)) if value.is_integer() else repr(value)
+
+
 def read_table(uploaded):
     """(headers as written in the file, rows keyed by those headers). IMPORT-002."""
 
@@ -85,7 +91,7 @@ def read_table(uploaded):
         keys = [str(cell).replace("\ufeff", "").strip() if cell not in (None, "") else "" for cell in header]
         rows = []
         for record in values:
-            rows.append({key: ("" if cell is None else (f"{cell:g}" if isinstance(cell, float) else cell.isoformat()[:10] if hasattr(cell, "isoformat") else cell)) for key, cell in zip(keys, record) if key})
+            rows.append({key: ("" if cell is None else (_number_text(cell) if isinstance(cell, float) else cell.isoformat()[:10] if hasattr(cell, "isoformat") else cell)) for key, cell in zip(keys, record) if key})
     elif name.endswith(".csv"):
         for encoding in ("utf-8-sig", "cp1256"):
             try:

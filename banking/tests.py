@@ -111,6 +111,23 @@ class BankInTheBooksTests(BankSetup):
         cancel_cashbox_operation(fee.pk, TODAY, "اتردت", self.owner)
         self.assertEqual(expense_total(D3, D3), D("0.00"))
 
+    def test_another_entitys_bank_fee_is_not_this_entitys_expense(self):
+        from entities.current import working_in
+        from entities.models import Entity
+        from entities.services import main_entity
+        from expenses.services import expense_total
+
+        branch = Entity.objects.create(code="E-FEE", name_ar="فرع")
+        theirs = Cashbox.objects.create(cashbox_code="BANK-F", name_ar="بنك الفرع", kind=CashboxKind.BANK, bank_name="QNB", entity=branch,
+                                        opening_balance=D("100.00"))
+        self.fee("15.00", D3)
+        self.fee("7.00", D3, ref="FEE-B", cashbox=theirs)
+        with working_in(main_entity()):
+            self.assertEqual(expense_total(D3, D3), D("15.00"))
+        with working_in(branch):
+            self.assertEqual(expense_total(D3, D3), D("7.00"))
+        self.assertEqual(expense_total(D3, D3), D("22.00"))  # the whole group
+
     def test_a_fee_is_only_taken_from_a_bank_and_never_below_zero(self):
         with self.assertRaisesMessage(ValidationError, "bank account only"):
             self.fee("10.00", D3, cashbox=self.cash)
@@ -145,6 +162,8 @@ class StatementTests(BankSetup):
         self.assertEqual(services.parse_amount("(1,250.50)"), D("-1250.50"))
         self.assertEqual(services.parse_amount("٣٠٠٫٥٠ ج.م"), D("300.50"))
         self.assertEqual(services.parse_amount("1,000.00-"), D("-1000.00"))
+        _, unknown = services.read_statement(csv_file(f"date,amount,balance\n{D2:%Y-%m-%d},100.00,110.00\n{D3:%Y-%m-%d},-10.00,\n"))
+        self.assertIsNone(unknown)  # the last day printed no balance: an earlier day's is not the closing one
         with self.assertRaisesMessage(ValidationError, "سطر 2"):
             services.read_statement(csv_file("date,amount\nyesterday,10\n"))
         with self.assertRaisesMessage(ValidationError, "عمود التاريخ"):
@@ -209,6 +228,70 @@ class StatementTests(BankSetup):
         report = services.reconciliation(statement)
         self.assertEqual(report["unrecorded_total"], D("-70.00"))  # matched, but booked the day after the statement ends
         self.assertEqual(report["difference"], D("0.00"))
+
+    def test_an_excel_statement_keeps_every_digit(self):
+        import io
+
+        from openpyxl import Workbook
+
+        book = Workbook()
+        sheet = book.active
+        sheet.append(["date", "description", "amount", "balance"])
+        sheet.append([D3, "big transfer", 1234567.89, 1244567.89])
+        data = io.BytesIO()
+        book.save(data)
+        lines, closing = services.read_statement(SimpleUploadedFile("statement.xlsx", data.getvalue()))
+        self.assertEqual((lines[0]["amount"], closing), (D("1234567.89"), D("1244567.89")))
+        self.assertEqual(services.parse_amount("1.23456789e+06"), D("1234567.89"))
+
+    def test_a_statement_uploaded_twice_or_overlapping_brings_each_line_once(self):
+        services.import_statement(self.bank, csv_file(STATEMENT), self.accountant)
+        with self.assertRaisesMessage(ValidationError, "اترفعت قبل كده"):
+            services.import_statement(self.bank, csv_file(STATEMENT), self.accountant)
+        later = STATEMENT + f"{TODAY:%d/%m/%Y},إيداع,,,50.00,\"12,038.00\"\n"
+        statement, _ = services.import_statement(self.bank, csv_file(later), self.accountant)
+        self.assertEqual([line.amount for line in statement.lines.all()], [D("50.00")])
+        self.assertEqual(StatementLine.objects.filter(amount=D("-15.00")).count(), 1)
+
+    def test_a_reversal_after_the_cutoff_leaves_the_statement_as_it_was(self):
+        a, _ = services.import_statement(self.bank, csv_file(f"date,amount\n{D2:%Y-%m-%d},2000.00\n"), self.accountant, closing_balance="12000.00")
+        self.assertEqual(services.reconciliation(a)["difference"], D("0.00"))  # the 500 cheque outstanding
+        cancel_cashbox_operation(self.cheque.pk, TODAY, "اتلغى بعدين", self.owner)
+        self.assertEqual(services.reconciliation(a)["difference"], D("0.00"))
+
+    def test_an_overlapping_upload_keeps_the_files_own_last_day(self):
+        first, _ = services.import_statement(self.bank, csv_file(f"date,amount\n{D3:%Y-%m-%d},-500.00\n"), self.accountant, closing_balance="9500.00")
+        self.assertEqual(services.reconciliation(first)["difference"], D("0.00"))
+        second, _ = services.import_statement(self.bank, csv_file(f"date,amount\n{D2:%Y-%m-%d},2000.00\n{D3:%Y-%m-%d},-500.00\n"), self.accountant,
+                                              closing_balance="11500.00")
+        self.assertEqual((second.lines.count(), second.ends_on), (1, D3))  # the repeated line is not kept twice
+        self.assertEqual(services.reconciliation(second)["difference"], D("0.00"))
+
+    def test_the_refund_of_a_cleared_fee_stays_outstanding_until_the_bank_shows_it(self):
+        fee = create_cashbox_operation("FEE-X", D2, CashboxOperationType.BANK_FEE, D("15.00"), "عمولة", self.owner, source_cashbox=self.bank)
+        a, _ = services.import_statement(self.bank, csv_file(f"date,amount\n{D2:%Y-%m-%d},2000.00\n{D2:%Y-%m-%d},-500.00\n{D2:%Y-%m-%d},-15.00\n"),
+                                         self.accountant, closing_balance="11485.00")
+        self.assertEqual(services.reconciliation(a)["difference"], D("0.00"))
+        cancel_cashbox_operation(fee.pk, D3, "البنك هيرجعها", self.owner)
+        b, _ = services.import_statement(self.bank, csv_file(f"date,amount\n{TODAY:%Y-%m-%d},1.00\n"), self.accountant, closing_balance="11486.00")
+        report = services.reconciliation(b)
+        self.assertEqual(report["outstanding_total"], D("15.00"))  # the refund the bank has not made yet
+        self.assertEqual(report["difference"], D("0.00"))
+
+    def test_leading_decimals_an_old_cheque_to_match_by_hand_and_an_overlapped_statement_stays(self):
+        self.assertEqual(services.parse_amount(".50"), D("0.50"))
+        self.assertEqual(services.parse_amount("-.50"), D("-0.50"))
+        old = create_cashbox_operation("OLD-CHQ", TODAY - timedelta(days=90), CashboxOperationType.DIRECT_OUT, D("321.00"), "شيك قديم", self.owner,
+                                       source_cashbox=self.bank)
+        statement, matched = services.import_statement(self.bank, csv_file(f"date,amount\n{D3:%Y-%m-%d},-321.00\n"), self.accountant)
+        self.assertEqual(matched, 0)  # too far for matching by itself
+        line = statement.lines.get()
+        self.assertEqual(services.candidates(line, days=None), [old.movements.get()])
+        later, _ = services.import_statement(self.bank, csv_file(f"date,amount\n{D3:%Y-%m-%d},-321.00\n{TODAY:%Y-%m-%d},9.00\n"), self.accountant)
+        with self.assertRaisesMessage(ValidationError, "الكشف الأحدث"):
+            services.delete_statement(statement, self.accountant)
+        services.delete_statement(later, self.accountant)
+        services.delete_statement(statement, self.accountant)
 
     def test_manual_match_unmatch_and_the_refusals(self):
         statement, _ = services.import_statement(self.bank, csv_file(STATEMENT), self.accountant)

@@ -14,6 +14,10 @@ from django.db import models
 class BankStatement(models.Model):
     cashbox = models.ForeignKey("cashboxes.Cashbox", on_delete=models.PROTECT, related_name="statements")
     name = models.CharField(max_length=160)
+    #: The days the bank's file covers, as uploaded (lines it repeats from an earlier upload are not kept twice, but the
+    #: statement still ends where the file ends: its closing balance is that day's).
+    starts_on = models.DateField(null=True, blank=True)
+    ends_on = models.DateField(null=True, blank=True)
     #: The balance the bank printed at the end of the statement, when the file or the person gives it.
     closing_balance = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     imported_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")

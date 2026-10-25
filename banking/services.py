@@ -53,7 +53,8 @@ MESSAGES = {
         "row": "سطر {n}: {problem}", "bad_date": "التاريخ مش مفهوم ({value})", "bad_amount": "المبلغ مش مفهوم ({value})", "empty": "الكشف مفيهوش ولا سطر.",
         "too_many": "الكشف أكبر من {n} سطر؛ قسّمه على شهور.", "other_account": "الحركة دي على حساب تاني.", "amount": "المبلغ مش زي الكشف؛ لو فيه فرق سجّله الأول.",
         "taken": "الحركة دي متطابقة مع سطر تاني.", "matched": "السطر ده متطابق بالفعل.", "not_fee": "ده مش مبلغ اتخصم من الحساب.",
-        "fee_reason": "مصروفات بنكية", "closing": "رصيد آخر الكشف لازم رقم.",
+        "fee_reason": "مصروفات بنكية", "closing": "رصيد آخر الكشف لازم رقم.", "already": "كل سطور الكشف ده اترفعت قبل كده.",
+        "overlapped": "فيه كشف اترفع بعد ده وبيعتمد على سطوره؛ شيل الكشف الأحدث الأول.",
     },
     "en": {
         "not_bank": "This is not a bank account.", "file": "Upload the statement as a CSV or Excel file.", "file_too_big": "The file is over 5 MB.",
@@ -64,6 +65,8 @@ MESSAGES = {
         "other_account": "This movement is on another account.", "amount": "The amount differs from the statement; record the difference first.",
         "taken": "This movement is already matched to another line.", "matched": "This line is already matched.",
         "not_fee": "This is not money taken from the account.", "fee_reason": "Bank charges", "closing": "The statement's closing balance must be a number.",
+        "already": "Every line of this statement was uploaded before.",
+        "overlapped": "A later statement relies on this one's lines; remove the later one first.",
     },
 }
 
@@ -111,9 +114,10 @@ def balance(cashbox, as_of=None):
 
 
 def _live(movements):
-    """Movements that still stand: neither a reversal nor reversed (a cancelled operation nets to nothing)."""
+    """Movements a statement line can be: never reversed, or a reversal of one the bank already cleared (its refund)."""
 
-    return movements.filter(reversal_of__isnull=True, reversal_movements__isnull=True)
+    return movements.filter(Q(reversal_of__isnull=True, reversal_movements__isnull=True)
+                            | Q(reversal_of__isnull=False, reversal_of__statement_line__isnull=False))
 
 
 # ---- reading the bank's file ----
@@ -134,14 +138,15 @@ def parse_amount(raw):
     """A bank's way of writing money: thousands commas, a currency word, (brackets) or a minus sign for money out."""
 
     text = str(raw or "").translate(ARABIC_DIGITS).strip().replace(",", "")
-    found = re.search(r"\d+(?:\.\d+)?", text)
+    found = re.search(r"(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?", text)  # .50 is half a pound, never fifty
     if not found:
         return None
     try:
         value = Decimal(found.group()).quantize(Decimal("0.01"))
     except InvalidOperation:
         return None
-    negative = (text.startswith("(") and text.endswith(")")) or "-" in text
+    around = text[:found.start()] + text[found.end():]  # an exponent's own sign is part of the number
+    negative = (text.startswith("(") and text.endswith(")")) or "-" in around
     return -value if negative else value
 
 
@@ -208,10 +213,10 @@ def read_statement(uploaded, lang="ar"):
 def _closing(lines, balances):
     """The printed balance of the statement's last day. A bank may list newest first: then that day's first row is its last."""
 
-    if not balances:
-        return None
-    last = max(day for day, _ in balances)
+    last = max(line["date"] for line in lines)
     on_last = [printed for day, printed in balances if day == last]
+    if not on_last:
+        return None  # no balance printed on the statement's last day: the person types it, or it stays unknown
     newest_first = lines[0]["date"] > lines[-1]["date"]
     return on_last[0] if newest_first else on_last[-1]
 
@@ -232,12 +237,17 @@ def import_statement(cashbox, uploaded, user, lang="ar", closing_balance=""):
     if cashbox.kind != CashboxKind.BANK:
         raise ValidationError(words["not_bank"])
     lines, printed = read_statement(uploaded, lang)
+    first, last = min(line["date"] for line in lines), max(line["date"] for line in lines)
+    _lock_account(cashbox.pk)  # two uploads at once to the same account wait for each other, so the second sees the first's lines
+    lines = _new_lines(cashbox, lines)
+    if not lines:
+        raise ValidationError(words["already"])
     if str(closing_balance or "").strip():
         printed = parse_amount(closing_balance)
         if printed is None:
             raise ValidationError(words["closing"])
-    first, last = min(line["date"] for line in lines), max(line["date"] for line in lines)
-    statement = BankStatement.objects.create(cashbox=cashbox, name=f"{first.isoformat()} → {last.isoformat()}", closing_balance=printed, imported_by=user)
+    statement = BankStatement.objects.create(cashbox=cashbox, name=f"{first.isoformat()} → {last.isoformat()}", starts_on=first, ends_on=last,
+                                             closing_balance=printed, imported_by=user)
     StatementLine.objects.bulk_create(StatementLine(statement=statement, line_date=line["date"], description=line["description"],
                                                     reference=line["reference"], amount=line["amount"]) for line in lines)
     matched = auto_match(statement, user)
@@ -246,20 +256,50 @@ def import_statement(cashbox, uploaded, user, lang="ar", closing_balance=""):
     return statement, matched
 
 
+def _new_lines(cashbox, lines):
+    """The lines not already on an earlier statement of this account: a file uploaded twice, or two exports that
+    overlap, bring each bank transaction once. Two identical lines in the same file stay two."""
+
+    from collections import Counter
+
+    def key(day, amount, reference, description):
+        return day, amount, reference.strip(), description.strip()
+
+    first, last = min(line["date"] for line in lines), max(line["date"] for line in lines)
+    known = Counter(key(*row) for row in StatementLine.objects.filter(statement__cashbox=cashbox, line_date__gte=first, line_date__lte=last)
+                    .values_list("line_date", "amount", "reference", "description"))
+    fresh = []
+    for line in lines:
+        k = key(line["date"], line["amount"], line["reference"], line["description"])
+        if known[k]:
+            known[k] -= 1
+            continue
+        fresh.append(line)
+    return fresh
+
+
 def candidates(line, exclude=(), days=MATCH_DAYS):
-    """Unmatched movements of the line's account with the same signed amount and a date within ``days``, nearest first."""
+    """Unmatched movements of the line's account with the same signed amount, nearest first: within ``days`` of the
+    line for matching by itself, any date (``days=None``) for matching by hand, so a cheque cashed months later is reachable."""
 
     direction, amount = ("in", line.amount) if line.amount > 0 else ("out", -line.amount)
     rows = _live(CashboxMovement.objects.filter(cashbox_id=line.statement.cashbox_id, direction=direction, amount=amount,
-                                                movement_date__gte=line.line_date - timedelta(days=days),
-                                                movement_date__lte=line.line_date + timedelta(days=days),
                                                 statement_line__isnull=True)).exclude(pk__in=list(exclude))
+    if days is not None:
+        rows = rows.filter(movement_date__gte=line.line_date - timedelta(days=days), movement_date__lte=line.line_date + timedelta(days=days))
     return sorted(rows, key=lambda movement: (abs((movement.movement_date - line.line_date).days), movement.pk))
+
+
+def _lock_account(cashbox_id):
+    """Every upload and every match on one bank account runs one at a time, so no movement is picked by two lines."""
+
+    Cashbox.objects.select_for_update().filter(pk=cashbox_id).first()
 
 
 @transaction.atomic
 def auto_match(statement, user):
     _require_work(user)
+    _lock_account(statement.cashbox_id)
     taken, matched, now = set(), 0, timezone.now()
     for line in statement.lines.select_for_update().filter(movement__isnull=True).select_related("statement"):
         found = candidates(line, taken)
@@ -276,6 +316,7 @@ def auto_match(statement, user):
 def match(line, movement, user, lang="ar"):
     _require_work(user)
     words = MESSAGES[lang]
+    _lock_account(movement.cashbox_id)
     line = StatementLine.objects.select_for_update().select_related("statement").get(pk=line.pk)
     if line.movement_id:
         raise ValidationError(words["matched"])
@@ -323,10 +364,14 @@ def record_fee(line, user, lang="ar"):
 
 
 @transaction.atomic
-def delete_statement(statement, user):
+def delete_statement(statement, user, lang="ar"):
     """A statement uploaded by mistake goes, with its matches; no amount or balance changes."""
 
     _require_work(user)
+    words = MESSAGES[lang]
+    # A later upload that overlaps this one kept only its new lines; the shared ones live here, so this one stays.
+    if statements(statement.cashbox).filter(pk__gt=statement.pk, starts_on__lte=statement.ends_on, ends_on__gte=statement.starts_on).exists():
+        raise ValidationError(words["overlapped"])
     _audit(user, "delete_statement", statement, {"cashbox_id": statement.cashbox_id, "lines": statement.lines.count()})
     statement.delete()
 
@@ -349,13 +394,19 @@ def reconciliation(statement):
 
     lines = list(statement.lines.select_related("movement").order_by("line_date", "pk"))
     cashbox = statement.cashbox
-    first = min((line.line_date for line in lines), default=timezone.localdate())
-    last = max((line.line_date for line in lines), default=timezone.localdate())
+    first = statement.starts_on or min((line.line_date for line in lines), default=timezone.localdate())
+    last = statement.ends_on or max((line.line_date for line in lines), default=timezone.localdate())
     book = balance(cashbox, last)
     # What came before the account's first statement is already inside the bank's figures.
     since = StatementLine.objects.filter(statement__cashbox=cashbox).order_by("line_date").values_list("line_date", flat=True).first() or first
-    outstanding = list(_live(cashbox.movements.filter(movement_date__gte=since - timedelta(days=MATCH_DAYS), movement_date__lte=last))
+    # Every movement by the cutoff that no line by the cutoff cleared, reversals included: a cancelled pair the bank never
+    # saw nets to nothing, and the refund of a movement the bank did clear stays outstanding until the bank shows it.
+    outstanding = list(cashbox.movements.filter(movement_date__gte=since - timedelta(days=MATCH_DAYS), movement_date__lte=last)
                        .exclude(statement_line__isnull=False, statement_line__line_date__lte=last).order_by("movement_date", "pk"))
+    standing = {movement.pk for movement in outstanding}
+    pairs = {movement.pk for movement in outstanding if movement.reversal_of_id in standing} | \
+        {movement.reversal_of_id for movement in outstanding if movement.reversal_of_id in standing}
+    outstanding = [movement for movement in outstanding if movement.pk not in pairs]  # shown without the pairs, which add up to nothing
     unrecorded = list(StatementLine.objects.filter(statement__cashbox=cashbox, line_date__lte=last)
                       .filter(Q(movement__isnull=True) | Q(movement__movement_date__gt=last)).order_by("line_date", "pk"))
     outstanding_total = sum((signed(movement) for movement in outstanding), ZERO)
