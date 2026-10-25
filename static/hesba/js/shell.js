@@ -101,7 +101,8 @@
     });
   }
   function numeric(el){
-    return el && el.tagName === 'INPUT' && (el.type === 'number' || el.type === 'tel' || el.inputMode === 'decimal' || el.inputMode === 'numeric');
+    // a read-only or switched-off box takes no typing, so it is left alone too
+    return el && el.tagName === 'INPUT' && !el.readOnly && !el.disabled && (el.type === 'number' || el.type === 'tel' || el.inputMode === 'decimal' || el.inputMode === 'numeric');
   }
   function put(el, text){
     if (el.type !== 'number' && typeof el.selectionStart === 'number') {

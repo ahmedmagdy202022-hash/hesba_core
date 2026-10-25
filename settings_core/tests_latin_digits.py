@@ -15,7 +15,7 @@ class LatinDigitsTests(SimpleTestCase):
                 self.assertIn("hesba/js/shell.js", get_template(name).template.source)
         with open(finders.find("hesba/js/shell.js"), encoding="utf-8") as handle:
             js = handle.read()
-        for needed in ("FB-23", "\\u0660-\\u0669\\u06F0-\\u06F9", "beforeinput", "paste", "'number'", "'decimal'", "event.preventDefault()"):
+        for needed in ("FB-23", "\\u0660-\\u0669\\u06F0-\\u06F9", "beforeinput", "paste", "'number'", "'decimal'", "event.preventDefault()", "!el.readOnly && !el.disabled"):
             with self.subTest(needed=needed):
                 self.assertIn(needed, js)
 
