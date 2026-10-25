@@ -133,7 +133,11 @@ def bank_fee_total(date_from=None, date_to=None):
 
     from cashboxes.models import CashboxOperation
 
-    queryset = CashboxOperation.objects.filter(operation_type=CashboxOperationType.BANK_FEE, status=CashboxOperationStatus.POSTED)
+    from entities import scope as entity_scope
+
+    # The entity being worked in only; the whole group when none is chosen (HG-034).
+    queryset = entity_scope.scope(CashboxOperation.objects.filter(operation_type=CashboxOperationType.BANK_FEE, status=CashboxOperationStatus.POSTED),
+                                  "source_cashbox__entity")
     if date_from:
         queryset = queryset.filter(operation_date__gte=date_from)
     if date_to:

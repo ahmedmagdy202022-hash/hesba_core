@@ -112,9 +112,10 @@ def balance(cashbox, as_of=None):
 
 
 def _live(movements):
-    """Movements that still stand: neither a reversal nor reversed (a cancelled operation nets to nothing)."""
+    """Movements a statement line can be: never reversed, or a reversal of one the bank already cleared (its refund)."""
 
-    return movements.filter(reversal_of__isnull=True, reversal_movements__isnull=True)
+    return movements.filter(Q(reversal_of__isnull=True, reversal_movements__isnull=True)
+                            | Q(reversal_of__isnull=False, reversal_of__statement_line__isnull=False))
 
 
 # ---- reading the bank's file ----
@@ -234,6 +235,7 @@ def import_statement(cashbox, uploaded, user, lang="ar", closing_balance=""):
     if cashbox.kind != CashboxKind.BANK:
         raise ValidationError(words["not_bank"])
     lines, printed = read_statement(uploaded, lang)
+    first, last = min(line["date"] for line in lines), max(line["date"] for line in lines)
     lines = _new_lines(cashbox, lines)
     if not lines:
         raise ValidationError(words["already"])
@@ -241,8 +243,8 @@ def import_statement(cashbox, uploaded, user, lang="ar", closing_balance=""):
         printed = parse_amount(closing_balance)
         if printed is None:
             raise ValidationError(words["closing"])
-    first, last = min(line["date"] for line in lines), max(line["date"] for line in lines)
-    statement = BankStatement.objects.create(cashbox=cashbox, name=f"{first.isoformat()} → {last.isoformat()}", closing_balance=printed, imported_by=user)
+    statement = BankStatement.objects.create(cashbox=cashbox, name=f"{first.isoformat()} → {last.isoformat()}", starts_on=first, ends_on=last,
+                                             closing_balance=printed, imported_by=user)
     StatementLine.objects.bulk_create(StatementLine(statement=statement, line_date=line["date"], description=line["description"],
                                                     reference=line["reference"], amount=line["amount"]) for line in lines)
     matched = auto_match(statement, user)
@@ -376,15 +378,19 @@ def reconciliation(statement):
 
     lines = list(statement.lines.select_related("movement").order_by("line_date", "pk"))
     cashbox = statement.cashbox
-    first = min((line.line_date for line in lines), default=timezone.localdate())
-    last = max((line.line_date for line in lines), default=timezone.localdate())
+    first = statement.starts_on or min((line.line_date for line in lines), default=timezone.localdate())
+    last = statement.ends_on or max((line.line_date for line in lines), default=timezone.localdate())
     book = balance(cashbox, last)
     # What came before the account's first statement is already inside the bank's figures.
     since = StatementLine.objects.filter(statement__cashbox=cashbox).order_by("line_date").values_list("line_date", flat=True).first() or first
-    # A movement and its reversal both by the cutoff net to nothing; a reversal after the cutoff leaves the movement standing then.
-    outstanding = list(cashbox.movements.filter(movement_date__gte=since - timedelta(days=MATCH_DAYS), movement_date__lte=last, reversal_of__isnull=True)
-                       .exclude(reversal_movements__movement_date__lte=last)
+    # Every movement by the cutoff that no line by the cutoff cleared, reversals included: a cancelled pair the bank never
+    # saw nets to nothing, and the refund of a movement the bank did clear stays outstanding until the bank shows it.
+    outstanding = list(cashbox.movements.filter(movement_date__gte=since - timedelta(days=MATCH_DAYS), movement_date__lte=last)
                        .exclude(statement_line__isnull=False, statement_line__line_date__lte=last).order_by("movement_date", "pk"))
+    standing = {movement.pk for movement in outstanding}
+    pairs = {movement.pk for movement in outstanding if movement.reversal_of_id in standing} | \
+        {movement.reversal_of_id for movement in outstanding if movement.reversal_of_id in standing}
+    outstanding = [movement for movement in outstanding if movement.pk not in pairs]  # shown without the pairs, which add up to nothing
     unrecorded = list(StatementLine.objects.filter(statement__cashbox=cashbox, line_date__lte=last)
                       .filter(Q(movement__isnull=True) | Q(movement__movement_date__gt=last)).order_by("line_date", "pk"))
     outstanding_total = sum((signed(movement) for movement in outstanding), ZERO)
