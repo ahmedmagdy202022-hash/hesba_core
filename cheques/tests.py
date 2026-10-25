@@ -148,6 +148,8 @@ class ReceivedChequeTests(ChequeSetup):
         self.receive()
         with self.assertRaisesMessage(ValidationError, "متسجل قبل كده"):
             self.receive()
+        other = make_customer(customer_code="CQ-C2", name="عميل تاني")
+        services.receive(other, {"number": "100200", "bank_name": "QNB", "due_date": TODAY.isoformat(), "amount": "10"}, self.owner)  # another customer's cheque book
         with self.assertRaisesMessage(ValidationError, "رقم الشيك"):
             services.receive(self.customer, {"bank_name": "QNB", "due_date": TODAY.isoformat(), "amount": "10"}, self.owner)
         with self.assertRaisesMessage(ValidationError, "أكبر من صفر"):

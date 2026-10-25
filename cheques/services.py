@@ -169,9 +169,27 @@ def _audit(user, action, cheque, after=None):
                                         **(after or {})})
 
 
-def _not_twice(direction, number, bank_name, words):
-    if Cheque.objects.filter(direction=direction, number=number, bank_name__iexact=bank_name).exclude(status=ChequeStatus.CANCELLED).exists():
+def _not_twice(direction, number, bank_name, words, customer=None, bank=None):
+    """The same cheque recorded twice: the same number and bank from the same customer, or from the same account of ours."""
+
+    rows = Cheque.objects.filter(direction=direction, number=number, bank_name__iexact=bank_name).exclude(status=ChequeStatus.CANCELLED)
+    rows = rows.filter(customer=customer) if direction == ChequeDirection.IN else rows.filter(bank=bank)
+    if rows.exists():
         raise ValidationError(words["twice"])
+
+
+def _numbered(model, make):
+    """Run ``make(number)`` with the next CHQ- payment number, again with a fresh one if another till took it a moment ago."""
+
+    from django.db import IntegrityError
+
+    for _attempt in range(5):
+        try:
+            with transaction.atomic():
+                return make(next_in_series(model, "payment_number", "CHQ-"))
+        except IntegrityError:
+            continue
+    raise ValidationError("Could not allocate a payment number; try again.")
 
 
 def _state(cheque, allowed, words, lang):
@@ -205,11 +223,10 @@ def receive(customer, data, user, lang="ar"):
     if customer is None:
         raise ValidationError(words["party"].format(party=words["customer"]))
     number, bank_name, due, amount, received_on = _details(data, words)
-    _not_twice(ChequeDirection.IN, number, bank_name, words)
+    _not_twice(ChequeDirection.IN, number, bank_name, words, customer=customer)
     holder = box(CashboxKind.CHEQUES_IN)
     note = words["received_note"].format(number=number, bank=bank_name, due=due.isoformat())
-    payment = record_customer_payment(next_in_series(CustomerPayment, "payment_number", "CHQ-"), received_on, customer, holder, amount,
-                                      user=user, notes=note)
+    payment = _numbered(CustomerPayment, lambda number: record_customer_payment(number, received_on, customer, holder, amount, user=user, notes=note))
     cheque = Cheque.objects.create(direction=ChequeDirection.IN, number=number, bank_name=bank_name, due_date=due, amount=amount, customer=customer,
                                    customer_payment=payment, box=holder, status=ChequeStatus.IN_HAND, received_on=received_on,
                                    notes=str(data.get("notes") or "").strip(), created_by=user)
@@ -255,11 +272,10 @@ def issue(supplier, bank, data, user, lang="ar"):
     values = {key: data.get(key) for key in ("number", "bank_name", "due_date", "amount", "received_on", "notes")}  # a QueryDict gives lists to **
     values["bank_name"] = values["bank_name"] or bank.bank_name or bank.name_ar
     number, bank_name, due, amount, issued_on = _details(values, words)
-    _not_twice(ChequeDirection.OUT, number, bank_name, words)
+    _not_twice(ChequeDirection.OUT, number, bank_name, words, bank=bank)
     holder = box(CashboxKind.CHEQUES_OUT, bank.entity)
     note = words["received_note"].format(number=number, bank=bank_name, due=due.isoformat())
-    payment = record_supplier_payment(next_in_series(SupplierPayment, "payment_number", "CHQ-"), issued_on, supplier, holder, amount,
-                                      user=user, notes=note)
+    payment = _numbered(SupplierPayment, lambda number: record_supplier_payment(number, issued_on, supplier, holder, amount, user=user, notes=note))
     cheque = Cheque.objects.create(direction=ChequeDirection.OUT, number=number, bank_name=bank_name, due_date=due, amount=amount, supplier=supplier,
                                    supplier_payment=payment, box=holder, bank=bank, status=ChequeStatus.ISSUED, received_on=issued_on,
                                    notes=str(data.get("notes") or "").strip(), created_by=user)
