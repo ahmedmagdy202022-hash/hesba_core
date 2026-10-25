@@ -226,3 +226,33 @@ class SecondReviewTests(PayrollSetup):
         run = services.post(self.make_run(), self.owner)
         with self.assertRaisesMessage(ValidationError, "الشركة الرئيسية"):
             services.pay(run, PayTo.NET, other, "", self.owner)
+
+
+class ThirdReviewTests(PayrollSetup):
+    """Codex on #269 (third look): payroll is the main entity's, and a reversal waits for every payment cancellation."""
+
+    def test_someone_kept_to_another_entity_never_sees_or_changes_payroll(self):
+        from entities.models import Entity, EntityMembership
+        from entities.services import main_entity
+
+        main_entity()
+        branch = Entity.objects.create(code="BR3", name_ar="الفرع")
+        manager = person(RoleCode.MANAGER, "py_branch_manager")
+        EntityMembership.objects.create(user=manager, entity=branch, is_default=True)
+        run = services.post(self.make_run(), self.owner)
+        self.assertFalse(services.can_view(manager))
+        with self.assertRaises(PermissionDenied):
+            services.reverse(run, manager, "غلط")
+        self.client.force_login(manager)
+        self.assertEqual(self.client.get(reverse("payroll:list")).status_code, 403)
+        self.assertEqual(self.client.get(reverse("payroll:detail", args=[run.pk])).status_code, 403)
+        EntityMembership.objects.create(user=manager, entity=main_entity())
+        self.assertTrue(services.can_view(manager))  # a member of the main entity too: allowed again
+
+    def test_a_reversal_is_not_dated_before_a_payment_cancellation(self):
+        run = services.post(self.make_run(), self.owner, posted_on=LAST_MONTH.isoformat())
+        payment = services.pay(run, PayTo.TAX, self.cash, "", self.owner, paid_on=LAST_MONTH.isoformat())
+        services.cancel_payment(payment, self.owner, "غلط", cancelled_on=TODAY.isoformat())
+        with self.assertRaisesMessage(ValidationError, "قبل إلغاء دفعة"):
+            services.reverse(run, self.owner, "غلط", reversed_on=LAST_MONTH.isoformat())
+        self.assertEqual(services.reverse(run, self.owner, "غلط", reversed_on=TODAY.isoformat()).status, RunStatus.REVERSED)

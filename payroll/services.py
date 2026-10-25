@@ -20,7 +20,7 @@ from decimal import Decimal, InvalidOperation
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Max, Sum
 from django.utils import timezone
 
 from audit.models import AuditEventType, AuditLog
@@ -42,7 +42,7 @@ MESSAGES = {
         "paid": "اتدفع من الكشف ده؛ ألغي الدفعات الأول.", "more": "المبلغ أكتر من المستحق ({left}).", "zero": "المبلغ لازم أكبر من صفر.",
         "reason": "اكتب سبب الإلغاء.", "brackets": "شرائح الضريبة مش مفهومة: كل سطر «لحد:نسبة»، وآخر سطر من غير «لحد».", "date": "التاريخ مش مفهوم.",
         "before": "التاريخ قبل تاريخ الترحيل.", "cancelled": "الدفعة دي اتلغت قبل كده.", "before_paid": "تاريخ الإلغاء قبل تاريخ الدفعة.",
-        "entity": "المرتبات بتتدفع من خزنة أو بنك الشركة الرئيسية.",
+        "entity": "المرتبات بتتدفع من خزنة أو بنك الشركة الرئيسية.", "before_cancel": "التاريخ قبل إلغاء دفعة من الكشف ده.",
     },
     "en": {
         "number": "This number is not understood.", "negative": "Amounts cannot be negative.", "month": "Choose the month.", "taken": "This month's payroll was made already.",
@@ -50,7 +50,7 @@ MESSAGES = {
         "paid": "Payments were made from this run; cancel them first.", "more": "The amount is more than what is owed ({left}).", "zero": "The amount must be above zero.",
         "reason": "Type the reason.", "brackets": "The tax brackets are not understood: one “up to:rate” per line, the last with nothing before the colon.",
         "date": "The date is not understood.", "before": "The date is before the posting date.", "cancelled": "This payment was cancelled already.", "before_paid": "The cancellation is dated before the payment.",
-        "entity": "Payroll is paid from a cashbox or bank of the main entity.",
+        "entity": "Payroll is paid from a cashbox or bank of the main entity.", "before_cancel": "The date is before a cancelled payment of this run.",
     },
 }
 
@@ -67,12 +67,23 @@ def enabled():
     return module_is_enabled("employees_technicians")
 
 
+def _main_entity_allowed(user):
+    """Payroll is the main entity's (Codex #269): someone kept to other entities by a membership never sees or changes it."""
+
+    from entities.current import allowed_entities, is_group_wide
+    from entities.services import is_multi_entity
+
+    if not is_multi_entity() or is_group_wide(user):
+        return True
+    return any(entity.is_main for entity in allowed_entities(user))
+
+
 def can_view(user):
-    return user_has_permission(user, VIEW)
+    return user_has_permission(user, VIEW) and _main_entity_allowed(user)
 
 
 def can_manage(user):
-    return user_has_permission(user, MANAGE)
+    return user_has_permission(user, MANAGE) and _main_entity_allowed(user)
 
 
 def _require(user, lang):
@@ -344,6 +355,9 @@ def reverse(run, user, reason, lang="ar", reversed_on=None):
     day = _day(reversed_on, words, timezone.localdate())
     if day < run.posted_on:
         raise ValidationError(words["before"])
+    last_cancel = run.payments.aggregate(last=Max("cancelled_on"))["last"]
+    if last_cancel and day < last_cancel:  # Codex #269: the debt stays while a payment still stands against it
+        raise ValidationError(words["before_cancel"])
     ensure_period_open(day)
     run.status, run.reversed_on, run.reversal_reason = RunStatus.REVERSED, day, str(reason).strip()[:255]
     run.save(update_fields=["status", "reversed_on", "reversal_reason"])
