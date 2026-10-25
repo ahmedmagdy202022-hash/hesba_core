@@ -150,6 +150,12 @@ class ScreenTests(PlanSetup):
         for marker in ("data-plan-call", "data-plan-whatsapp", "data-plan-reminder", "hs-contact__icon"):  # FB-19: call and WhatsApp with their icons
             self.assertContains(page, marker)
         self.assertContains(page, 'href="tel:')
+        html = page.content.decode()
+        chat = html[html.index("data-plan-whatsapp"):html.index("</a>", html.index("data-plan-whatsapp"))]
+        self.assertIn("M12 2a10 10", chat)  # Codex #267: the WhatsApp button wears the WhatsApp icon and label
+        self.assertIn("واتساب", chat)
+        self.assertNotIn("M6.6 10.8", chat)
+        self.assertEqual(html.count("data-party-whatsapp"), 0)
         self.client.post(reverse("installments:detail", args=[plan.pk]), {"action": "collect", "amount": "1500", "cashbox": self.cashbox.pk, "payment_date": TODAY.isoformat()})
         self.assertEqual(schedule(plan)["paid"], D("1500.00"))
         self.assertContains(self.client.get(reverse("installments:detail", args=[plan.pk])), 'data-instalment="paid"', count=1)

@@ -11,7 +11,15 @@
   var busy = false;
   var boxes = [];
 
+  // A figure shown by the page ("1,250.00"): commas group thousands.
   function num(text) { var v = parseFloat(String(text || '').replace(/,/g, '')); return isNaN(v) ? 0 : v; }
+  // What someone typed (Codex #267): a lone comma is the decimal point, as in the till's own boxes ("2,5" is 2.5).
+  function typed(text) {
+    var value = String(text || '').trim();
+    value = value.indexOf('.') < 0 && (value.match(/,/g) || []).length === 1 ? value.replace(',', '.') : value.replace(/,/g, '');
+    var v = parseFloat(value);
+    return isNaN(v) ? 0 : v;
+  }
   function cents(v) { return Math.round(v * 100 + 1e-9) / 100; }
   function named(form, name) { return form ? form.querySelector('[name="' + name + '"]') : null; }
   function price(form, prefix) { return named(form, prefix + 'unit_sale_price') || named(form, prefix + 'unit_purchase_price'); }
@@ -19,7 +27,7 @@
   function lineBase(form, prefix) {
     var item = named(form, prefix + 'item');
     if (item && !item.value) { return 0; }
-    return num((named(form, prefix + 'quantity') || {}).value) * num((price(form, prefix) || {}).value);
+    return typed((named(form, prefix + 'quantity') || {}).value) * typed((price(form, prefix) || {}).value);
   }
 
   // What the discount in ``input`` is a percent of, or null when this page has nothing to take it from.
@@ -35,7 +43,7 @@
         form.querySelectorAll('[name$="-quantity"]').forEach(function (qty) {
           var prefix = qty.name.slice(0, -'quantity'.length);
           if (!price(form, prefix)) { return; }
-          sum += cents(lineBase(form, prefix) - num((named(form, prefix + 'line_discount_amount') || {}).value));
+          sum += cents(lineBase(form, prefix) - typed((named(form, prefix + 'line_discount_amount') || {}).value));
         });
         return sum;
       };
@@ -48,7 +56,7 @@
   }
 
   function set(box) {
-    var pct = num(box.pct.value);
+    var pct = typed(box.pct.value);
     if (!box.pct.value.trim()) { return; }
     if (box.amount.value !== box.lastSet && box.lastSet !== null) {  // changed elsewhere (by hand, or the page reset it)
       box.pct.value = '';
