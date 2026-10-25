@@ -119,6 +119,8 @@ EXACT = {
     "This expense is already cancelled.": "المصروف ده اتلغى قبل كده.",
     "This record has no operational use yet; edit its opening balance directly.": "الحساب ده لسه ما اتستخدمش؛ عدّل رصيده الافتتاحي مباشرة.",
     "Transfer cashboxes must be different.": "الخزنتين لازم يكونوا مختلفين.",
+    "A bank fee requires only the bank account it was taken from.": "المصروفات البنكية بتتسجل على الحساب البنكي اللي اتخصمت منه بس.",
+    "Bank fees are taken from a bank account only.": "المصروفات البنكية بتتخصم من حساب بنكي بس، مش من خزنة.",
     "Transfer locations must be different.": "المخزنين لازم يكونوا مختلفين.",
     "Transfer quantity must be greater than zero.": "كمية التحويل لازم تكون أكبر من صفر.",
     "Unknown cash operation type.": "نوع حركة غير معروف.",

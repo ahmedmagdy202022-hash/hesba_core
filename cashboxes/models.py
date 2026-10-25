@@ -3,11 +3,20 @@ from django.core.exceptions import ValidationError
 from django.db import models
 
 
+class CashboxKind(models.TextChoices):
+    CASH = "cash", "Cash"
+    BANK = "bank", "Bank account"
+
+
 class Cashbox(models.Model):
     """Money holder.
 
     Cashbox balances must be calculated from opening balance plus real cashbox
     movements only. Invoices affect cashboxes only by actual paid amounts.
+
+    T3 (HG-055): a bank account is a cashbox of kind ``bank``. It moves money
+    exactly like a cashbox; the journal puts it in the banks account, and its
+    statement can be matched against its movements.
     """
 
     cashbox_code = models.CharField(max_length=80, unique=True)
@@ -18,6 +27,10 @@ class Cashbox(models.Model):
     is_default = models.BooleanField(default=False)
     active = models.BooleanField(default=True)
     notes = models.TextField(blank=True)
+    kind = models.CharField(max_length=10, choices=CashboxKind.choices, default=CashboxKind.CASH, db_index=True)
+    bank_name = models.CharField(max_length=120, blank=True)
+    account_number = models.CharField(max_length=60, blank=True)
+    iban = models.CharField(max_length=34, blank=True)
     import_batch_id = models.CharField(max_length=120, blank=True)
     # ENT-001 (HG-031): the entity whose money this cashbox holds.
     entity = models.ForeignKey("entities.Entity", on_delete=models.PROTECT, null=True, blank=True, related_name="cashboxes")
@@ -54,6 +67,7 @@ class CashboxMovementType(models.TextChoices):
     TRANSFER_IN = "transfer_in", "Transfer in"
     TRANSFER_OUT = "transfer_out", "Transfer out"
     ADJUSTMENT = "adjustment", "Adjustment"
+    BANK_FEE = "bank_fee", "Bank fee"
 
 
 class CashboxDirection(models.TextChoices):
@@ -169,6 +183,7 @@ class CashboxOperationType(models.TextChoices):
     DIRECT_IN = "direct_in", "Direct cash in"
     DIRECT_OUT = "direct_out", "Direct cash out"
     TRANSFER = "transfer", "Cashbox transfer"
+    BANK_FEE = "bank_fee", "Bank fee"
 
 
 class CashboxOperationStatus(models.TextChoices):
@@ -240,6 +255,11 @@ class CashboxOperation(models.Model):
         elif self.operation_type == CashboxOperationType.DIRECT_OUT:
             if not self.source_cashbox_id or self.destination_cashbox_id:
                 raise ValidationError("Direct cash out requires only a source cashbox.")
+        elif self.operation_type == CashboxOperationType.BANK_FEE:
+            if not self.source_cashbox_id or self.destination_cashbox_id:
+                raise ValidationError("A bank fee requires only the bank account it was taken from.")
+            if self.source_cashbox.kind != CashboxKind.BANK:
+                raise ValidationError("Bank fees are taken from a bank account only.")
         elif self.operation_type == CashboxOperationType.TRANSFER:
             if not self.source_cashbox_id or not self.destination_cashbox_id:
                 raise ValidationError("A transfer requires source and destination cashboxes.")

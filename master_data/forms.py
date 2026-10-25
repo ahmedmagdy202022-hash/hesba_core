@@ -1,11 +1,12 @@
 from django import forms
 
-from cashboxes.models import Cashbox, OpeningBalanceTarget
+from cashboxes.models import Cashbox, CashboxKind, OpeningBalanceTarget
 from cashboxes.services import target_has_operational_use
 from config.form_defaults import ZeroWhenBlank
 from config.form_sections import Sectioned
 from config.numbering import AutoNumbered
 from settings_core.templatetags.hesba_format import DEFAULT_UNITS
+from settings_core.display_labels import localized_choices
 from settings_core.models import ClientProfile
 
 from .models import Category, Customer, Item, Location, Supplier
@@ -261,9 +262,17 @@ class CustomerForm(ZeroWhenBlank, AutoNumbered, HesbaModelForm):
 class CashboxForm(ZeroWhenBlank, AutoNumbered, _EntityField, HesbaModelForm):
     zero_when_blank = ("opening_balance",)
     sections_spec = (
-        ("main", "بيانات الخزنة", "The cashbox", "", "", ("name_ar", "name_en", "cashbox_code", "currency", "entity")),
+        ("main", "بيانات الخزنة", "The cashbox", "", "", ("name_ar", "name_en", "kind", "cashbox_code", "currency", "entity")),
+        ("bank", "بيانات البنك", "Bank details", "للحساب البنكي بس: بتظهر في مطابقة كشف الحساب.", "For a bank account only: shown when matching its statement.",
+         ("bank_name", "account_number", "iban")),
         ("money", "الرصيد", "Balance", "الفلوس اللي فيها النهارده قبل أي حركة، أو سيبها فاضية.", "The cash in it today before any movement, or leave it empty.", ("opening_balance", "notes")),
     )
+    KIND_WORDS = {
+        "ar": {"kind": "النوع", "bank_name": "اسم البنك", "account_number": "رقم الحساب", "iban": "IBAN",
+               "kind_help": "حساب بنكي: فلوسه بتتسجل في حساب البنوك، وتقدر تطابقه على كشف البنك.", "bank_needed": "اكتب اسم البنك."},
+        "en": {"kind": "Kind", "bank_name": "Bank", "account_number": "Account number", "iban": "IBAN",
+               "kind_help": "Bank account: its money sits in the banks account, and you can match it against the bank statement.", "bank_needed": "Type the bank's name."},
+    }
 
     auto_number = ("cashbox_code", Cashbox, "cashbox_code", "CB-")  # FB2-CASHBOX: like suppliers and items
 
@@ -273,6 +282,10 @@ class CashboxForm(ZeroWhenBlank, AutoNumbered, _EntityField, HesbaModelForm):
             "cashbox_code",
             "name_ar",
             "name_en",
+            "kind",
+            "bank_name",
+            "account_number",
+            "iban",
             "entity",
             "opening_balance",
             "currency",
@@ -295,6 +308,26 @@ class CashboxForm(ZeroWhenBlank, AutoNumbered, _EntityField, HesbaModelForm):
         ):
             self.fields["opening_balance"].disabled = True
             self.fields["currency"].disabled = True
+            self.fields["kind"].disabled = True  # T3: its history stays where the journal put it
+        words = self.KIND_WORDS[self.lang]
+        for name in ("kind", "bank_name", "account_number", "iban"):
+            self.fields[name].label = words[name]
+        self.fields["kind"].help_text = words["kind_help"]
+        self.fields["kind"].choices = localized_choices(Cashbox, "kind", self.lang)
+        self.fields["kind"].required = False  # left out (an older screen, an import): a cash cashbox, as before T3
+
+    def clean_kind(self):
+        if self.fields["kind"].disabled:
+            return self.instance.kind
+        return self.cleaned_data.get("kind") or CashboxKind.CASH
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("kind") == CashboxKind.BANK and not (cleaned.get("bank_name") or "").strip():
+            self.add_error("bank_name", self.KIND_WORDS[self.lang]["bank_needed"])
+        if cleaned.get("kind") == CashboxKind.CASH:
+            cleaned["bank_name"] = cleaned["account_number"] = cleaned["iban"] = ""
+        return cleaned
 
 
 class CategoryForm(AutoNumbered, HesbaModelForm):

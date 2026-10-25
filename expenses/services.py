@@ -122,10 +122,27 @@ def posted_expenses(date_from=None, date_to=None):
 
 
 def expense_total(date_from=None, date_to=None):
-    """Posted expenses in the window. Cancelled ones count as never spent."""
+    """Posted expenses in the window, and the bank fees taken in it (T3). Cancelled ones count as never spent."""
 
     total = posted_expenses(date_from, date_to).aggregate(total=Sum("amount"))["total"]
-    return money_round(total or 0)
+    return money_round((total or 0) + bank_fee_total(date_from, date_to))
+
+
+def bank_fee_total(date_from=None, date_to=None):
+    """T3 (HG-055): bank fees are cashbox operations, not ``Expense`` rows, but they are spent all the same."""
+
+    from cashboxes.models import CashboxOperation
+
+    from entities import scope as entity_scope
+
+    # The entity being worked in only; the whole group when none is chosen (HG-034).
+    queryset = entity_scope.scope(CashboxOperation.objects.filter(operation_type=CashboxOperationType.BANK_FEE, status=CashboxOperationStatus.POSTED),
+                                  "source_cashbox__entity")
+    if date_from:
+        queryset = queryset.filter(operation_date__gte=date_from)
+    if date_to:
+        queryset = queryset.filter(operation_date__lte=date_to)
+    return money_round(queryset.aggregate(total=Sum("amount"))["total"] or 0)
 
 
 def expense_totals_by_category(date_from=None, date_to=None, lang="ar"):

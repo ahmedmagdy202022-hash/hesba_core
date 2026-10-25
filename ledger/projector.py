@@ -118,6 +118,13 @@ class Projector:
         self.main_id = main_entity().pk
         self.groups = {}
 
+    def money_account(self, cashbox):
+        """T3 (HG-055): a bank account's money sits in the banks account, a cashbox's in cash on hand."""
+
+        if cashbox.kind == "bank" and self.acc.has("bank"):
+            return self.acc["bank"]
+        return self.acc["cash"]
+
     # ---- collecting sub-ledger rows ----
 
     def group(self, source_type, source_id, day):
@@ -146,7 +153,7 @@ class Projector:
         for row in CashboxMovement.objects.select_related("cashbox", "reversal_of"):
             source = _key(row, CASH_KEYS) or ("cash_movement", row.pk)
             amount = row.amount if row.direction == "in" else -row.amount
-            self.group(*source, row.movement_date).add(self.acc["cash"], amount, row.cashbox.entity_id or self.main_id, "money", cashbox_id=row.cashbox_id)
+            self.group(*source, row.movement_date).add(self.money_account(row.cashbox), amount, row.cashbox.entity_id or self.main_id, "money", cashbox_id=row.cashbox_id)
         for row in StockMovement.objects.select_related("location", "reversal_of"):
             source = _key(row, STOCK_KEYS) or ("opening_stock" if row.movement_type == "opening_stock" else "stock_movement", row.pk)
             value = money_round(row.quantity * row.unit_cost)
@@ -236,7 +243,7 @@ class Projector:
             g.add(self.acc["payable"], -supplier.opening_balance, self.main_id, "money", supplier_id=supplier.pk)
         for cashbox in Cashbox.objects.exclude(opening_balance=0):
             g = self.group("opening_cashbox", cashbox.pk, timezone.localdate(cashbox.created_at))
-            g.add(self.acc["cash"], cashbox.opening_balance, cashbox.entity_id or self.main_id, "money", cashbox_id=cashbox.pk)
+            g.add(self.money_account(cashbox), cashbox.opening_balance, cashbox.entity_id or self.main_id, "money", cashbox_id=cashbox.pk)
 
     def _fixed_assets(self):
         from fixed_assets.models import AssetStatus, FixedAsset
@@ -402,6 +409,8 @@ class Projector:
             g.add(self.acc["fixed_assets"], remainder, g.entity_id)
         elif asset is not None and asset[0] == "disposal":
             g.add(self.acc["asset_disposal"], remainder, g.entity_id)
+        elif op.operation_type == "bank_fee":
+            g.add(self.acc["bank_charges" if self.acc.has("bank_charges") else "general_expense"], remainder, g.entity_id)
         elif remainder:
             g.add(self.acc["owner_drawings"], remainder, g.entity_id)
 
@@ -533,6 +542,7 @@ def fingerprint():
         parts.append(f"{model.objects.count()}:{agg['n']}")
     for model in (Customer, Supplier, Cashbox):
         parts.append(str(model.objects.aggregate(s=Sum("opening_balance"))["s"]))
+    parts.append(",".join(str(pk) for pk in Cashbox.objects.filter(kind="bank").order_by("pk").values_list("pk", flat=True)))  # T3: cash ↔ bank
     parts.append(";".join(f"{a.pk}{a.status}{a.disposed_on}" for a in FixedAsset.objects.order_by("pk")))
     parts.append(timezone.localdate().strftime("%Y-%m"))  # depreciation months roll over
     parts.append(_contracts_fingerprint())

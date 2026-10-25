@@ -16,7 +16,7 @@ class CashboxAdmin(admin.ModelAdmin):
     def get_readonly_fields(self, request, obj=None):
         fields = list(super().get_readonly_fields(request, obj))
         if obj and target_has_operational_use(OpeningBalanceTarget.CASHBOX, obj):
-            fields.extend(("opening_balance", "currency"))
+            fields.extend(("opening_balance", "currency", "kind"))  # T3: a used cashbox keeps its kind
         return tuple(dict.fromkeys(fields))
 
 
