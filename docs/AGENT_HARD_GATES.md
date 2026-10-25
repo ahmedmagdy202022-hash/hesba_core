@@ -1867,3 +1867,17 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 - **Files:** a new `shipping` app; `cashboxes` (kind `courier`); `sales.services` (called, not changed).
 - **Risk:** a parcel lost by the courier is written off as an expense with a reason.
 - **Tests:** COD sale → courier settles → bank; fee; returned parcel; lost parcel.
+
+## HG-067 — Online store by file: a new table for imported orders (T13)
+
+- **Status:** RECORDED (Codex #273). This is a new, additive table in a new app. No existing model, migration, posting or report changed.
+- **Change:** `onlinestore.StoreOrder` (migration `onlinestore/0001_initial`) holds:
+  - `source` (`shopify` or `template`), `order_number`, a one-to-one link to the draft `sales.SalesInvoice` it made, `store_total`, `imported_by`, `imported_at`;
+  - a unique constraint on (`source`, `order_number`).
+- **Why:** the same orders file uploaded twice must not make the same invoices twice. The draft also needs to show the store's own total, to compare with what Hesba computed.
+- **Accounting:** none. Orders become **drafts** through `taxes.create_sales_draft_with_tax` (the invoice form's path). Stock, cash, the customer ledger and the ledger move only when someone posts the draft as usual.
+- **Risk:**
+  - two branches with separate stores whose order numbers coincide share one namespace per source, so the second branch's order would be reported as imported already;
+  - the invoice link is `PROTECT`, so a draft that came from the store is cancelled, not deleted.
+- **Files:** `onlinestore/` (new app), `config/settings.py`, `config/urls.py`, capability wiring (`settings_core/capabilities.py`, `module_gate.py`, `operational_views.py`, `display_labels.py`, `reports/navigation.py`).
+- **Tests:** `onlinestore/tests.py`. They cover once-only import, drafts only (status `draft`), the phone match, the walk-in fallback, the template, and permissions.

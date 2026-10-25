@@ -88,6 +88,11 @@ class ExportTests(StoreSetup):
         self.assertEqual((woo[0]["Attribute 1 name"], woo[0]["Attribute 1 value(s)"]), ("Size", "M, S"))
         self.assertEqual({row["Type"] for row in woo[1:]}, {"variation"})
 
+    def test_handles_never_collide(self):
+        make_item(item_code="DR_1", item_name="فستان تاني", default_sale_price="400.00")  # cleans to dr-1 like DR-1
+        handles = [row["Handle"] for row in rows(services.export_csv("shopify", self.owner)) if row["Variant SKU"] in ("DR-1", "DR_1")]
+        self.assertEqual(len(set(handles)), 2)
+
     def test_the_export_needs_the_items_permission(self):
         with self.assertRaises(PermissionDenied):
             services.export_csv("shopify", person(RoleCode.WAITER, "st_waiter"))
@@ -155,6 +160,16 @@ class ScreenTests(StoreSetup):
         self.assertContains(page, "data-store-skipped")
         self.assertContains(page, "NOPE-9")
         self.assertContains(self.client.get(url, {"lang": "ar"}), "WEB-1001")
+
+    def test_the_imported_orders_show_only_to_who_sees_sales(self):
+        services.import_orders(SHOPIFY_ORDERS.encode("utf-8"), self.shop, self.owner)
+        keeper = person(RoleCode.STOCK_KEEPER, "st_keeper")
+        self.client.force_login(keeper)
+        page = self.client.get(reverse("onlinestore:board"), {"lang": "ar"})
+        self.assertEqual(page.status_code, 200)
+        self.assertNotContains(page, "data-store-recent")
+        self.assertNotContains(page, "WEB-1001")
+        self.assertContains(page, 'data-export="shopify"')  # the catalogue stays theirs
 
     def test_the_menu_shows_it_only_when_switched_on(self):
         from settings_core import capabilities as caps

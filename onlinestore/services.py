@@ -92,6 +92,18 @@ def _handle(code, pk):
     return text or f"item-{pk}"
 
 
+def _handles(catalogue):
+    """{(kind, pk): handle} for every product, unique across the catalogue (Codex #273): codes that read the same once
+    cleaned (AB-1, AB_1), or a group and an item with the same code, get their own kind and id added."""
+
+    keys = [("group", group.pk, group.code) if group else ("item", items[0].pk, items[0].item_code) for group, items in catalogue]
+    base = {(kind, pk): _handle(code, pk) for kind, pk, code in keys}
+    seen = {}
+    for handle in base.values():
+        seen[handle] = seen.get(handle, 0) + 1
+    return {key: handle if seen[handle] == 1 else f"{handle}-{key[0][0]}{key[1]}" for key, handle in base.items()}
+
+
 def _money(value):
     return f"{money_round(value or ZERO):.2f}"
 
@@ -169,6 +181,7 @@ def export_rows(kind, user):
         return str(stock.get(item.pk, 0)) if item.is_stock_tracked else ""
 
     rows = [list(SHOPIFY_COLUMNS if kind == "shopify" else WOO_COLUMNS)]
+    handles = _handles(catalogue)
     for group, items in catalogue:
         if kind == "shopify":
             options = _options(group, items, variant_of) if group else []
@@ -176,7 +189,7 @@ def export_rows(kind, user):
                 first = index == 0
                 row = dict.fromkeys(SHOPIFY_COLUMNS, "")
                 row.update({
-                    "Handle": _handle(group.code, group.pk) if group else _handle(item.item_code, item.pk), "Variant SKU": item.item_code, "Variant Grams": "0",
+                    "Handle": handles[("group", group.pk) if group else ("item", items[0].pk)], "Variant SKU": item.item_code, "Variant Grams": "0",
                     "Variant Inventory Tracker": "shopify" if item.is_stock_tracked else "", "Variant Inventory Qty": quantity(item),
                     "Variant Inventory Policy": "deny", "Variant Fulfillment Service": "manual", "Variant Price": _money(item.default_sale_price),
                     "Variant Requires Shipping": "TRUE", "Variant Taxable": "TRUE" if taxed(item) else "FALSE", "Variant Barcode": item.barcode,

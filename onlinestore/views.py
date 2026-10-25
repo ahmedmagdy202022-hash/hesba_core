@@ -7,6 +7,7 @@ from django.shortcuts import render
 from entities import scope as entity_scope
 from master_data.models import Location
 from permissions.decorators import require_permission
+from permissions.services import user_has_permission
 
 from . import services
 
@@ -76,5 +77,7 @@ def board(request):
                 result["again_text"] = words["again"].format(numbers=("، " if lang == "ar" else ", ").join(result["again"][:30]))
     return render(request, "onlinestore/board.html", {
         "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": words, "page_title": words["title"], "error": error, "result": result,
-        "locations": locations, "can_import": services.can_import(request.user), "recent": services.recent_orders(),
+        # Codex #273: the imported orders are sales (customers, totals): shown only to who may see sales invoices.
+        "locations": locations, "can_import": services.can_import(request.user),
+        "recent": services.recent_orders() if user_has_permission(request.user, "sales.view_sales_invoices") else None,
     })
