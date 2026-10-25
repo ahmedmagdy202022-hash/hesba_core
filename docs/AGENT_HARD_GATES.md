@@ -1876,6 +1876,11 @@ The entries below are the protected-logic decisions in the commercial gate, reco
   - a unique constraint on (`source`, `order_number`).
 - **Why:** the same orders file uploaded twice must not make the same invoices twice. The draft also needs to show the store's own total, to compare with what Hesba computed.
 - **Accounting:** none. Orders become **drafts** through `taxes.create_sales_draft_with_tax` (the invoice form's path). Stock, cash, the customer ledger and the ledger move only when someone posts the draft as usual.
+- **Correcting an order (Codex #273):** a draft has no edit screen. So the board can:
+  - put the store's shipping charge on a line of a chosen service item;
+  - take VAT-inclusive store prices back to before tax;
+  - when a corrected file is uploaded again with «بدّل الطلبات اللي لسه مسودة», delete the old **draft** with its `StoreOrder` and make it again. A draft has no stock, cash or ledger effect, and its lines, tax rows and serial links go with it. A posted invoice is never replaced.
+- Serial-tracked items go through `prepare_sale_serials` and `attach_sale_serials`, as on the invoice form, with the serials taken from the template's «السيريال» column. Invoice numbers are Hesba's own `WEB-` series; the store's number stays in the notes and on `StoreOrder`.
 - **Risk:**
   - two branches with separate stores whose order numbers coincide share one namespace per source, so the second branch's order would be reported as imported already;
   - the invoice link is `PROTECT`, so a draft that came from the store is cancelled, not deleted.

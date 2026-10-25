@@ -21,7 +21,9 @@ WORDS = {
         "made": "اتعمل {n} فاتورة مسودة.", "again": "طلبات اتسجلت قبل كده ومادخلتش تاني: {numbers}", "skipped": "طلبات مادخلتش",
         "order": "الطلب", "invoice": "الفاتورة", "customer": "العميل", "total": "إجمالي الفاتورة", "store_total": "إجمالي المتجر", "reason": "السبب",
         "new_customer": "عميل جديد", "recent": "آخر الطلبات اللي دخلت", "status": "الحالة", "none": "لسه مفيش.",
-        "check": "راجع كل فاتورة: لو إجمالي المتجر مختلف (مصاريف شحن أو ضريبة جوه السعر)، عدّلها قبل الترحيل.",
+        "check": "راجع كل فاتورة قبل الترحيل: لو إجمالي المتجر مختلف، صحّح الملف وارفعه تاني مع «بدّل الطلبات اللي لسه مسودة».",
+        "shipping_item": "صنف مصاريف الشحن (خدمة)", "no_shipping_item": "من غير — تتكتب في الملاحظات", "with_vat": "أسعار المتجر شاملة الضريبة",
+        "replace": "بدّل الطلبات اللي اتسجلت قبل كده ولسه مسودة", "replaced": "اتبدّلت",
     },
     "en": {
         "title": "Online store", "intro": "Until a store account is linked: download the items in the store's own file and upload it there, and download the orders from the store and upload them here as draft invoices to check and post.",
@@ -32,7 +34,9 @@ WORDS = {
         "made": "{n} draft invoices made.", "again": "Orders imported before and not again: {numbers}", "skipped": "Orders not imported",
         "order": "Order", "invoice": "Invoice", "customer": "Customer", "total": "Invoice total", "store_total": "Store total", "reason": "Reason",
         "new_customer": "New customer", "recent": "Latest orders imported", "status": "Status", "none": "None yet.",
-        "check": "Check each invoice: if the store's total differs (shipping, or tax inside the price), correct it before posting.",
+        "check": "Check each invoice before posting: if the store's total differs, correct the file and upload it again with “Replace orders still in draft”.",
+        "shipping_item": "Shipping charge item (a service)", "no_shipping_item": "None — noted on the invoice", "with_vat": "Store prices include VAT",
+        "replace": "Replace orders imported before that are still drafts", "replaced": "Replaced",
     },
 }
 
@@ -68,7 +72,9 @@ def board(request):
                 raise ValidationError(services.MESSAGES[lang]["file"])
             if upload.size > services.MAX_IMPORT_BYTES:
                 raise ValidationError(services.MESSAGES[lang]["big"])
-            result = services.import_orders(upload.read(), location, request.user, lang)
+            shipping_item = services.shipping_items().filter(pk=request.POST.get("shipping_item") or 0).first()
+            result = services.import_orders(upload.read(), location, request.user, lang, shipping_item=shipping_item,
+                                            with_vat=request.POST.get("with_vat") == "1", replace=request.POST.get("replace") == "1")
         except ValidationError as exc:
             error = " ".join(exc.messages)
         else:
@@ -78,6 +84,6 @@ def board(request):
     return render(request, "onlinestore/board.html", {
         "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": words, "page_title": words["title"], "error": error, "result": result,
         # Codex #273: the imported orders are sales (customers, totals): shown only to who may see sales invoices.
-        "locations": locations, "can_import": services.can_import(request.user),
+        "locations": locations, "can_import": services.can_import(request.user), "shipping_items": services.shipping_items(),
         "recent": services.recent_orders() if user_has_permission(request.user, "sales.view_sales_invoices") else None,
     })

@@ -117,14 +117,16 @@ class OrderImportTests(StoreSetup):
         result = self.upload()
         self.assertEqual([row["number"] for row in result["made"]], ["1001", "1002"])
         self.assertEqual({row["number"]: row["reason"][:20] for row in result["skipped"]}.keys(), {"1003", "1004"})
-        first = SalesInvoice.objects.get(invoice_number="WEB-1001")
+        first = StoreOrder.objects.get(order_number="1001").invoice
         self.assertEqual(first.status, "draft")  # nothing posted: stock and cash move only when it is posted
         self.assertEqual(list(first.lines.order_by("line_number").values_list("item__item_code", "quantity", "unit_sale_price")),
                          [("DR-1", D("1.000"), D("500.00")), ("SC-1", D("2.000"), D("100.00"))])
         self.assertEqual((first.discount_amount, first.total_amount, first.invoice_date.isoformat()), (D("50.00"), D("650.00"), "2026-10-20"))
         self.assertIn("50.00", first.notes)  # the shipping the store charged
         self.assertEqual((first.customer.name, first.customer.phone), ("Sara Ahmed", "+20 100 123 4567"))
-        self.assertEqual(SalesInvoice.objects.get(invoice_number="WEB-1002").customer, known)  # found by phone
+        self.assertTrue(first.invoice_number.startswith("WEB-"))
+        self.assertIn("1001", first.notes)  # the store's own number
+        self.assertEqual(StoreOrder.objects.get(order_number="1002").invoice.customer, known)  # found by phone
         self.assertEqual(StoreOrder.objects.get(order_number="1001").store_total, D("700.00"))
         again = self.upload()
         self.assertEqual((again["made"], again["again"]), ([], ["1001", "1002"]))
@@ -134,7 +136,7 @@ class OrderImportTests(StoreSetup):
         text = "رقم الطلب,التاريخ,العميل,التليفون,الكود,الكمية,السعر\n55,2026-10-22,منى,01000000055,6221000000011,٣,90\n"
         result = self.upload(text)
         self.assertEqual(result["source"], "template")
-        invoice = SalesInvoice.objects.get(invoice_number="WEB-55")
+        invoice = StoreOrder.objects.get(order_number="55").invoice
         self.assertEqual(list(invoice.lines.values_list("item", "quantity", "unit_sale_price")), [(self.scarf.pk, D("3.000"), D("90.00"))])
 
     def test_without_the_customers_permission_the_order_goes_to_the_walk_in_customer(self):
@@ -155,6 +157,46 @@ class OrderImportTests(StoreSetup):
         for bad in ("12.5.0", "1-2", "abc"):
             with self.assertRaises(ValidationError, msg=bad):
                 services._decimal(bad, words)
+
+    def test_order_numbers_never_collapse(self):
+        text = "order,sku,quantity,price\nA_1,DR-1,1,500\nA1,DR-1,1,500\n"
+        self.assertEqual([row["number"] for row in self.upload(text)["made"]], ["A_1", "A1"])
+        self.assertEqual(StoreOrder.objects.values("invoice__invoice_number").distinct().count(), 2)
+
+    def test_shipping_on_a_service_line_vat_inclusive_prices_and_replacing_a_draft(self):
+        fee = make_item(item_code="SHIP", item_name="شحن", default_sale_price="0", is_stock_tracked=False)
+        result = services.import_orders(SHOPIFY_ORDERS.encode("utf-8"), self.shop, self.owner, shipping_item=fee)
+        first = result["made"][0]["invoice"]
+        self.assertEqual(first.lines.get(item=fee).unit_sale_price, D("50.00"))
+        self.assertEqual(first.total_amount, D("700.00"))  # 500 + 200 + 50 shipping − 50 discount: the store's total
+        again = services.import_orders(SHOPIFY_ORDERS.encode("utf-8"), self.shop, self.owner, replace=True)
+        self.assertEqual({row["number"] for row in again["made"]}, {"1001", "1002"})
+        self.assertTrue(all(row["replaced"] for row in again["made"]))
+        self.assertFalse(SalesInvoice.objects.filter(pk=first.pk).exists())
+        self.assertEqual(StoreOrder.objects.count(), 2)
+        posted = StoreOrder.objects.get(order_number="1002").invoice
+        type(posted).objects.filter(pk=posted.pk).update(status="posted")
+        third = services.import_orders(SHOPIFY_ORDERS.encode("utf-8"), self.shop, self.owner, replace=True)
+        self.assertIn("1002", {row["number"] for row in third["skipped"]})  # a posted one is never replaced
+
+    def test_prices_that_include_vat_are_taken_back_to_before_tax(self):
+        from unittest import mock
+
+        text = "order,sku,quantity,price\n77,DR-1,1,570\n"
+        with mock.patch("taxes.services.rates_by_item", return_value={str(self.dress.pk): "14.00"}):
+            invoice = services.import_orders(text.encode("utf-8"), self.shop, self.owner, with_vat=True)["made"][0]["invoice"]
+        self.assertEqual(invoice.lines.get().unit_sale_price, D("500.00"))
+
+    def test_a_serial_tracked_item_needs_its_serials(self):
+        from serials.models import SerialSetting
+        from settings_core import capabilities as caps
+        from settings_core.models import ClientProfile
+
+        caps.set_capability_enabled(ClientProfile.get_active(), "serials", True)
+        SerialSetting.objects.create(item=self.dress, tracked=True)
+        result = self.upload()
+        self.assertIn("1001", {row["number"] for row in result["skipped"]})
+        self.assertFalse(StoreOrder.objects.filter(order_number="1001").exists())
 
     def test_another_file_is_refused_with_a_reason(self):
         from django.core.exceptions import ValidationError
@@ -179,7 +221,7 @@ class ScreenTests(StoreSetup):
         self.assertContains(page, "data-store-made")
         self.assertContains(page, "data-store-skipped")
         self.assertContains(page, "NOPE-9")
-        self.assertContains(self.client.get(url, {"lang": "ar"}), "WEB-1001")
+        self.assertContains(self.client.get(url, {"lang": "ar"}), StoreOrder.objects.get(order_number="1001").invoice.invoice_number)
 
     def test_the_imported_orders_show_only_to_who_sees_sales(self):
         services.import_orders(SHOPIFY_ORDERS.encode("utf-8"), self.shop, self.owner)
@@ -188,7 +230,7 @@ class ScreenTests(StoreSetup):
         page = self.client.get(reverse("onlinestore:board"), {"lang": "ar"})
         self.assertEqual(page.status_code, 200)
         self.assertNotContains(page, "data-store-recent")
-        self.assertNotContains(page, "WEB-1001")
+        self.assertNotContains(page, StoreOrder.objects.get(order_number="1001").invoice.invoice_number)
         self.assertContains(page, 'data-export="shopify"')  # the catalogue stays theirs
 
     def test_the_menu_shows_it_only_when_switched_on(self):

@@ -8,6 +8,9 @@
   export plugin can be set to write), becomes draft sales invoices, one per order, its lines matched by SKU (item
   code, then barcode). The customer is found by phone, or added. Nothing is posted: each draft is checked and posted
   as usual, so stock, cash and the ledger move only through the ordinary sales posting. An order is imported once.
+  Codex #273: the store's shipping charge can go on a line of a chosen service item, prices that include VAT can be
+  taken back to before tax, and an order whose draft was not posted yet can be uploaded again to replace that draft —
+  the way to correct an order, since a draft has no edit screen. A serial-tracked item needs its serials in the file.
 """
 
 import csv
@@ -27,6 +30,7 @@ from permissions.services import user_has_permission
 from .models import StoreOrder, StoreSource
 
 ZERO = Decimal("0")
+HUNDRED = Decimal("100")
 EXPORT = "master_data.view_master_data"
 IMPORT = "sales.create_sales_invoice"
 ADD_CUSTOMER = "master_data.manage_parties"
@@ -52,7 +56,7 @@ TEMPLATE_ALIASES = {
     "order": ("order", "order number", "رقم الطلب"), "date": ("date", "order date", "التاريخ"), "customer": ("customer", "name", "العميل"),
     "phone": ("phone", "التليفون", "الموبايل"), "email": ("email", "الإيميل"), "address": ("address", "العنوان"),
     "sku": ("sku", "code", "الكود"), "quantity": ("quantity", "qty", "الكمية"), "price": ("price", "unit price", "السعر"),
-    "discount": ("discount", "الخصم"), "total": ("total", "الإجمالي"),
+    "discount": ("discount", "الخصم"), "total": ("total", "الإجمالي"), "serial": ("serial", "serials", "السيريال"),
 }
 
 MESSAGES = {
@@ -61,14 +65,16 @@ MESSAGES = {
         "location": "اختار المخزن اللي الطلبات هتطلع منه.", "sku": "الكود {sku} مش موجود في الأصناف.", "number": "سطر فيه كمية أو سعر مش مفهوم.",
         "refunded": "الطلب اترد أو اتلغى في المتجر ({status}).", "taken": "رقم الفاتورة {number} مستخدم قبل كده.", "empty": "الطلب من غير أصناف.",
         "notes": "طلب من المتجر الأونلاين {source} رقم {number}.", "shipping": "مصاريف شحن اتحصّلت في المتجر: {amount}.", "who": "العميل: {who}.",
-        "customer_note": "اتضاف من طلب المتجر الأونلاين.",
+        "customer_note": "اتضاف من طلب المتجر الأونلاين.", "shipping_line": "مصاريف الشحن", "posted": "الطلب ده فاتورته اترحّلت؛ مينفعش يتبدّل.",
+        "replaced": "اتبدّلت مسودته.",
     },
     "en": {
         "file": "Choose the orders file.", "big": "The file is over 2 MB; split it.", "format": "This is neither a Shopify orders export nor the Hesba template: it needs order, SKU, quantity and price columns.",
         "location": "Choose the location the orders leave from.", "sku": "SKU {sku} is not an item code or barcode.", "number": "A line has a quantity or price that is not understood.",
         "refunded": "The order was refunded or voided in the store ({status}).", "taken": "Invoice number {number} is taken already.", "empty": "The order has no lines.",
         "notes": "Online store order, {source} number {number}.", "shipping": "Shipping charged in the store: {amount}.", "who": "Customer: {who}.",
-        "customer_note": "Added from an online store order.",
+        "customer_note": "Added from an online store order.", "shipping_line": "Shipping", "posted": "This order's invoice is posted; it cannot be replaced.",
+        "replaced": "its draft was replaced.",
     },
 }
 
@@ -380,7 +386,7 @@ def _template_orders(headers, rows):
                                            "discount": "", "shipping": "", "total": "", "status": ""})
         for field in ("date", "customer", "phone", "email", "address", "discount", "total"):
             order[field] = order[field] or cell(row, field)
-        order["lines"].append({"sku": cell(row, "sku"), "quantity": cell(row, "quantity"), "price": cell(row, "price")})
+        order["lines"].append({"sku": cell(row, "sku"), "quantity": cell(row, "quantity"), "price": cell(row, "price"), "serials": cell(row, "serial")})
     return orders
 
 
@@ -452,9 +458,11 @@ def _item(sku):
     return Item.objects.filter(active=True, item_code=sku).first() or Item.objects.filter(active=True, barcode=sku).first()
 
 
-def _draft(source, order, location, user, words, phones):
+def _draft(source, order, location, user, words, phones, options):
+    from config.numbering import next_in_series
     from sales.models import SalesInvoice
     from sales.pos import WALK_IN_CODE
+    from serials.services import attach_sale_serials, prepare_sale_serials
     from taxes.services import create_sales_draft_with_tax
 
     if order["status"].lower() in ("refunded", "voided", "partially_refunded"):
@@ -466,53 +474,98 @@ def _draft(source, order, location, user, words, phones):
         item = _item(line["sku"])
         if item is None:
             raise ValidationError(words["sku"].format(sku=line["sku"] or "—"))
-        quantity, price = _decimal(line["quantity"], words), money_round(_decimal(line["price"], words))
+        quantity, price = _decimal(line["quantity"], words), _decimal(line["price"], words)
         if quantity <= 0 or price < 0:
             raise ValidationError(words["number"])
-        lines.append({"item": item, "quantity": quantity, "unit_sale_price": price, "line_discount_amount": ZERO, "description": ""})
-    number = f"WEB-{re.sub(r'[^0-9A-Za-z-]+', '', order['number'])[:60] or order['number'][:60]}"
-    if SalesInvoice.objects.filter(invoice_number=number).exists():
-        raise ValidationError(words["taken"].format(number=number))
+        rate = Decimal((options.get("rates") or {}).get(str(item.pk), "0")) if options.get("with_vat") else ZERO
+        price = money_round(price * HUNDRED / (HUNDRED + rate)) if rate else money_round(price)  # the store's price had the VAT in it
+        lines.append({"item": item, "quantity": quantity, "unit_sale_price": price, "line_discount_amount": ZERO, "description": "",
+                      "serials": line.get("serials", "")})
+    lines = prepare_sale_serials(lines)  # Codex #273: a serial-tracked item needs its serials, as on the invoice form
     customer, added = _customer(order, user, words, phones)
     notes = [words["notes"].format(source=StoreSource(source).label.split(" (")[0], number=order["number"])]
     shipping = _decimal(order["shipping"], words, ZERO)
-    if shipping:
+    if shipping and options.get("shipping_item") is not None:
+        lines.append({"item": options["shipping_item"], "quantity": Decimal("1"), "unit_sale_price": money_round(shipping), "line_discount_amount": ZERO,
+                      "description": words["shipping_line"]})
+    elif shipping:
         notes.append(words["shipping"].format(amount=f"{shipping:,.2f}"))
     if customer.customer_code == WALK_IN_CODE and (order["customer"] or order["phone"]):
         notes.append(words["who"].format(who=" ".join(part for part in (order["customer"], order["phone"], order["address"]) if part)))
-    invoice = create_sales_draft_with_tax({
-        "invoice_number": number, "invoice_date": _day(order["date"]), "customer": customer, "selling_location": location, "cashbox": None,
-        "paid_now": ZERO, "discount_amount": money_round(_decimal(order["discount"], words, ZERO)), "notes": " ".join(notes),
-    }, lines, user)
+    header = {"invoice_date": _day(order["date"]), "customer": customer, "selling_location": location, "cashbox": None,
+              "paid_now": ZERO, "discount_amount": money_round(_decimal(order["discount"], words, ZERO)), "notes": " ".join(notes)}
+    for _attempt in range(5):  # Codex #273: Hesba's own number; the store's stays in the notes and on StoreOrder
+        try:
+            with transaction.atomic():
+                invoice = create_sales_draft_with_tax(dict(header, invoice_number=next_in_series(SalesInvoice, "invoice_number", "WEB-")), lines, user)
+            break
+        except IntegrityError:
+            continue
+    else:
+        raise ValidationError(words["taken"].format(number="WEB-"))
+    attach_sale_serials(invoice, lines)
     store_total = _decimal(order["total"], words, ZERO) if order["total"] else None
     StoreOrder.objects.create(source=source, order_number=order["number"][:60], invoice=invoice, store_total=store_total, imported_by=user)
     return invoice, added
 
 
-def import_orders(raw, location, user, lang="ar"):
-    """Each order of the file as a draft sales invoice. Returns {"source", "made": [...], "skipped": [...], "again": [...]}."""
+def shipping_items():
+    """Items that can carry the store's shipping charge: active, not kept in stock (a service)."""
+
+    from master_data.models import Item
+
+    return Item.objects.filter(active=True, is_stock_tracked=False).order_by("item_name")
+
+
+def _replace(found, words):
+    """Codex #273: an imported order whose draft was never posted is uploaded again to correct it: the draft goes."""
+
+    from django.db.models import ProtectedError
+
+    invoice = found.invoice
+    if invoice.status != "draft":
+        raise ValidationError(words["posted"])
+    found.delete()
+    try:
+        invoice.delete()  # a draft has no stock, cash or ledger effect; its lines, tax rows and serial links go with it
+    except ProtectedError:
+        raise ValidationError(words["posted"])
+
+
+def import_orders(raw, location, user, lang="ar", shipping_item=None, with_vat=False, replace=False):
+    """Each order of the file as a draft sales invoice. Returns {"source", "made": [...], "skipped": [...], "again": [...]}.
+
+    ``shipping_item``: a service item the store's shipping charge goes on (else it is noted); ``with_vat``: the store's
+    prices include VAT; ``replace``: an order imported before whose draft is not posted yet is made again."""
 
     if not can_import(user):
         raise PermissionDenied(f"Importing store orders needs {IMPORT}.")
     words = _words(lang)
     if location is None:
         raise ValidationError(words["location"])
+    from taxes.services import rates_by_item
+
+    options = {"shipping_item": shipping_item, "with_vat": with_vat, "rates": rates_by_item() if with_vat else None}
     source, orders = read_orders(raw, lang)
     made, skipped, again = [], [], []
     phones = phone_index()
     for order in orders.values():
-        if StoreOrder.objects.filter(source=source, order_number=order["number"][:60]).exists():
+        found = StoreOrder.objects.filter(source=source, order_number=order["number"][:60]).select_related("invoice").first()
+        if found is not None and not replace:
             again.append(order["number"])
             continue
         trial = dict(phones)  # a customer added for an order that fails is rolled back with it
         try:
             with transaction.atomic():
-                invoice, added = _draft(source, order, location, user, words, trial)
+                if found is not None:
+                    _replace(found, words)
+                invoice, added = _draft(source, order, location, user, words, trial, options)
         except ValidationError as exc:
             skipped.append({"number": order["number"], "reason": " ".join(exc.messages)})
         else:
             phones.update(trial)
-            made.append({"number": order["number"], "invoice": invoice, "added_customer": added, "store_total": invoice.store_order.store_total})
+            made.append({"number": order["number"], "invoice": invoice, "added_customer": added, "store_total": invoice.store_order.store_total,
+                         "replaced": found is not None})
     return {"source": source, "made": made, "skipped": skipped, "again": again}
 
 
