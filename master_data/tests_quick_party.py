@@ -92,3 +92,46 @@ class QuickPartyTests(TestCase):
         page = self.client.get(reverse("sales:create"))
         self.assertEqual(page.status_code, 200)  # the cashier sells…
         self.assertNotIn(self.url("customer"), page.content.decode())  # …but is not offered a new customer
+
+
+class FullFormInABoxTests(TestCase):
+    """FB-26: "+ new supplier" opens the supplier's full form in a box, and an English name is as good as an Arabic one."""
+
+    def setUp(self):
+        prepared_client()
+        self.owner = person(RoleCode.OWNER, "qf_owner")
+        self.client.force_login(self.owner)
+
+    def test_the_invoice_lists_name_the_full_form(self):
+        purchase = self.client.get(reverse("purchases:create")).content.decode()
+        self.assertIn(f'data-quick-add-form="{reverse("master_data:supplier_create")}"', purchase)
+        sale = self.client.get(reverse("sales:create")).content.decode()
+        self.assertIn(f'data-quick-add-form="{reverse("master_data:customer_create")}"', sale)
+        self.assertNotIn('data-quick-add-form="/master-data/locations', purchase)  # a warehouse keeps the name-only box
+
+    def test_the_form_in_the_box_saves_everything_and_hands_the_record_back(self):
+        url = reverse("master_data:supplier_create") + "?popup=1&lang=ar"
+        page = self.client.get(url)
+        self.assertEqual(page["X-Frame-Options"], "SAMEORIGIN")
+        self.assertContains(page, "data-popup-cancel")
+        self.assertNotContains(page, "data-shell-nav")  # just the form, no menu
+        done = self.client.post(url, {"name": "Nile Trading Co.", "phone": "01001234567", "address": "العبور", "opening_balance": "", "active": "on"})
+        made = Supplier.objects.get(name="Nile Trading Co.")
+        self.assertEqual((made.phone, made.address), ("01001234567", "العبور"))
+        self.assertContains(done, f'data-popup-done="{made.pk}"')
+        self.assertContains(done, "hesbaQuickAdd")
+        self.assertEqual(done["X-Frame-Options"], "SAMEORIGIN")
+
+    def test_outside_the_box_nothing_changes(self):
+        page = self.client.get(reverse("master_data:supplier_create"))
+        self.assertEqual(page["X-Frame-Options"], "DENY")
+        self.assertContains(page, "data-shell-nav")
+        self.assertNotContains(self.client.get(reverse("master_data:create", args=["items"]) + "?popup=1"), "data-popup-cancel")
+        response = self.client.post(reverse("master_data:supplier_create") + "?lang=ar", {"name": "مورد عادي", "active": "on"})
+        self.assertEqual(response.status_code, 302)
+
+    def test_only_who_may_add_parties_gets_the_box(self):
+        from permissions.models import RoleCode as Code
+
+        self.client.force_login(person(Code.CASHIER, "qf_cashier"))
+        self.assertEqual(self.client.get(reverse("master_data:supplier_create") + "?popup=1").status_code, 403)

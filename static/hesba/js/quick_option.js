@@ -1,7 +1,9 @@
 /* FB-TYPES: "+ new …" on a list you pick from, anywhere it makes sense (item category, expense category, asset type…).
    A <select data-quick-add="+ New category"> gets one more option. Choosing it opens a small box under the list to
    type the name; with data-quick-add-url it is saved there (POST name → {ok, id, label}) and picked, and without a
-   URL the typed name itself becomes the choice (data-quick-add-field names the hidden input that carries it). */
+   URL the typed name itself becomes the choice (data-quick-add-field names the hidden input that carries it).
+   FB-26: with data-quick-add-form (a supplier, a customer) the record's full form opens in a box instead, and the
+   record saved there is picked. */
 (function () {
   'use strict';
   var NEW = '__new__';
@@ -20,7 +22,7 @@
     var box = document.createElement('div');
     box.className = 'hs-quick-option';
     box.hidden = true;
-    box.innerHTML = '<input type="text" maxlength="60" autocomplete="off"><button type="button" class="op-secondary">' + (en ? 'Add' : 'إضافة') +
+    box.innerHTML = '<input type="text" maxlength="60" autocomplete="off" dir="auto"><button type="button" class="op-secondary">' + (en ? 'Add' : 'إضافة') +
       '</button><button type="button" class="op-secondary">' + (en ? 'Cancel' : 'إلغاء') + '</button><small class="op-field-error" hidden></small>';
     select.insertAdjacentElement('afterend', box);
     var input = box.querySelector('input');
@@ -32,8 +34,30 @@
     var field = select.getAttribute('data-quick-add-field');
     var carrier = field ? select.form && select.form.querySelector('input[name="' + field + '"]') : null;
 
+    var formUrl = select.getAttribute('data-quick-add-form');
+    var dialog = null, frame = null;
+    function openForm() {
+      if (!dialog) {
+        dialog = document.createElement('dialog');
+        dialog.className = 'hs-quick-item hs-quick-form';
+        dialog.innerHTML = '<iframe title=""></iframe>';
+        frame = dialog.querySelector('iframe');
+        frame.setAttribute('title', select.getAttribute('data-quick-add'));
+        document.body.appendChild(dialog);
+        dialog.addEventListener('close', function () { if (select.value === NEW) { select.value = previous; } });
+        window.addEventListener('message', function (event) {
+          if (event.origin !== window.location.origin || event.source !== frame.contentWindow || !event.data) { return; }
+          if (event.data.hesbaQuickAdd === 'saved') { pick(String(event.data.id), event.data.label); dialog.close(); }
+          else if (event.data.hesbaQuickAdd === 'cancel') { dialog.close(); }
+        });
+      }
+      frame.src = formUrl + (formUrl.indexOf('?') < 0 ? '?' : '&') + 'popup=1&lang=' + (en ? 'en' : 'ar');
+      dialog.showModal();
+    }
+
     select.addEventListener('change', function () {
       if (select.value !== NEW) { previous = select.value; if (carrier) { carrier.value = ''; } return; }
+      if (formUrl && window.HTMLDialogElement) { openForm(); return; }
       box.hidden = false;
       error.hidden = true;
       input.value = '';

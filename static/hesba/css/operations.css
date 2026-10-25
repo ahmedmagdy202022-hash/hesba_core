@@ -252,3 +252,6 @@ html.hs-cam-open,html.hs-cam-open body{overflow:hidden}
 /* UI-TRACK grocery G04: the units table fits its row of inputs instead of running off the side */
 [data-units-table] td,[data-units-table] th{padding:6px}
 [data-units-table] input:not([type=checkbox]){width:100%;min-width:4.5rem;min-height:40px;padding-inline:8px}
+/* FB-26: a supplier's or customer's full form in a box over the invoice */
+.hs-quick-form{width:min(760px,calc(100% - 32px));height:min(720px,calc(100% - 48px))}
+.hs-quick-form iframe{display:block;width:100%;height:100%;border:0;border-radius:16px;background:var(--hs-surface)}
