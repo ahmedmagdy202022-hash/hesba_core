@@ -12,7 +12,7 @@ The rules:
 * a line with a discount typed by hand keeps it and takes no promotion;
 * the price on the line is whatever it already is (the item's price or the customer's price list).
 
-A sale made offline at the till keeps the price shown when it was made: syncing it applies nothing.
+A sale made offline at the till syncs with the promotion that was running when it was rung up (its recorded time).
 """
 
 from decimal import ROUND_FLOOR, Decimal, InvalidOperation
@@ -286,7 +286,10 @@ def save(data, user, promo=None, lang="ar"):
 def report(date_from=None, date_to=None):
     """Each promotion's posted invoices and the discount it gave."""
 
-    uses = InvoicePromotion.objects.filter(invoice__status="posted")
+    from entities import scope as entity_scope
+
+    # Codex #268: the entity being worked in only, through the invoice's selling location (HG-034).
+    uses = entity_scope.scope(InvoicePromotion.objects.filter(invoice__status="posted"), "invoice__" + entity_scope.SALES_INVOICE)
     if date_from:
         uses = uses.filter(invoice__invoice_date__gte=date_from)
     if date_to:

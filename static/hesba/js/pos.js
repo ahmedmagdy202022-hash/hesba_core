@@ -238,6 +238,7 @@
     var field = event.target.getAttribute('data-field');
     if (!tr || !field) { return; }
     cart[parseInt(tr.getAttribute('data-line'), 10)][field] = event.target.value;
+    requote();  // Codex #268: a typed quantity or price changes the promotion too
     totals();
   });
   customer.addEventListener('change', function () {

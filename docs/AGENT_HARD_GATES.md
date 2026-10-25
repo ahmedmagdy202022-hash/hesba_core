@@ -1796,7 +1796,7 @@ The entries below are the protected-logic decisions in the commercial gate, reco
   - Each promotion can have dates, a time window (one that runs past midnight works), and a coupon code. A coupon counts only when typed; an unknown code is refused.
   - `promotions.apply` fills the line discount fields before `create_sales_draft`, on the sales invoice form and at the till. The best single promotion wins. A line with a discount typed by hand keeps it. Posting is unchanged.
   - `InvoicePromotion` records the promotion, discount and coupon of each invoice for the report on the promotions screen, and the invoice page shows it.
-  - An offline sale syncs through `checkout` without `apply`, so it keeps the price shown when it was rung up.
+  - The till asks the server for the cart's promotion before payment, and a payment for another total is refused. An offline sale syncs with the promotion that was running at its recorded time, so it posts at the total shown and collected (Codex #268). The report follows the entity scope.
   - Managing promotions needs `master_data.manage_items`, the same as price lists. The manual discount stays open to invoice creators, as proposed.
 - **Why:** an automatic promotion changes the invoice price. Sales posting must keep using the line amounts it is given.
 - **Proposed:**

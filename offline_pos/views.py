@@ -106,7 +106,12 @@ def sync_sale(request):
     if recorded_at < now - timedelta(days=max_age_days()):
         return _answer("refused", error=refusals["old"].format(days=max_age_days()))
     try:
-        lines = prepare_sale_serials(parse_cart(_cart_post(payload)), lang)
+        from promotions import services as promotions
+
+        coupon = str(payload.get("coupon") or "")[:40]
+        # T5 (Codex #268): the promotion running when the sale was rung up, so the sale posts at the total shown and collected.
+        lines, promotion, promotion_off = promotions.apply(parse_cart(_cart_post(payload)), now=recorded_at, coupon=coupon, lang=lang)
+        lines = prepare_sale_serials(lines, lang)
         location = entity_scope.for_user(Location.objects, entity_scope.LOCATION, request.user).filter(pk=str(payload.get("location", "")), active=True, is_selling_location=True).first() if str(payload.get("location", "")).isdigit() else None
         cashbox = entity_scope.for_user(Cashbox.objects, entity_scope.CASHBOX, request.user).filter(pk=str(payload.get("cashbox", "")), active=True).first() if str(payload.get("cashbox", "")).isdigit() else None
         card = payload.get("method") == "card"  # AN8: a card sale lands in the card machine's cashbox
@@ -127,6 +132,7 @@ def sync_sale(request):
                 lines=lines, customer=customer or walk_in_customer(), location=location, cashbox=cashbox,
                 discount=discount, tendered=tendered, user=request.user, card=card,
                 sale_date=timezone.localtime(recorded_at).date(), notes="POS offline",
+                promotion=(promotion, promotion_off, coupon) if promotion else None,
             )
             OfflineSale.objects.create(sale_key=key, invoice=invoice, cashier=request.user, recorded_at=recorded_at)
     except IntegrityError:

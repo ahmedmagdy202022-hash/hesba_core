@@ -142,10 +142,10 @@ class SellingTests(PromotionSetup):
         self.assertEqual(InvoicePromotion.objects.get(invoice=invoice).discount, D("100.00"))
         self.assertEqual(services.report()[InvoicePromotion.objects.get().promotion_id], {"invoices": 1, "discount": D("100.00")})
 
-    def test_an_offline_sale_syncs_at_the_price_it_was_rung_up_at(self):
+    def test_checkout_itself_applies_nothing(self):
         invoice, _change = checkout(lines=[line(self.sneaker, 1, "500.00")], customer=walk_in_customer(), location=self.location, cashbox=self.cashbox,
                                     discount=D("0"), tendered=D("500.00"), user=self.owner)
-        self.assertEqual(invoice.total_amount, D("500.00"))  # the sync path applies nothing
+        self.assertEqual(invoice.total_amount, D("500.00"))  # the views apply promotions before checkout, not checkout
         self.assertFalse(InvoicePromotion.objects.exists())
 
     def test_the_invoice_form_with_a_coupon(self):
@@ -218,3 +218,40 @@ class CodexFixesTests(SellingTests):
         self.client.force_login(self.owner)
         page = self.client.post(reverse("promotions:list"), {"lang": "ar", "name": "x", "kind": "percent", "percent": "500", "item": str(self.sock.pk)})
         self.assertContains(page, f'<option value="{self.sock.pk}" selected>')
+
+
+class SecondReviewTests(SellingTests):
+    """Codex on #268 (second look): an offline sale syncs with the promotion of its moment, and the report follows the entity."""
+
+    def sync(self, when, coupon=""):
+        import json
+        import uuid
+
+        from shifts.services import open_shift_for
+
+        if open_shift_for(self.cashier) is None:
+            open_test_shift(self.cashier, self.cashbox)
+        self.client.force_login(self.cashier)
+        body = {"key": str(uuid.uuid4()), "recorded_at": when.isoformat(), "customer": "", "location": str(self.location.pk), "cashbox": str(self.cashbox.pk),
+                "discount": "0", "tendered": "400", "coupon": coupon, "lines": [{"id": self.sneaker.pk, "qty": "1", "price": "500.00", "unit": None, "serial": None}]}
+        return self.client.post(reverse("sales:pos_sync"), json.dumps(body), content_type="application/json").json()
+
+    def test_an_offline_sale_syncs_with_the_promotion_running_when_it_was_rung_up(self):
+        answer = self.sync(timezone.now() - timedelta(minutes=30))
+        self.assertEqual(answer["status"], "posted")
+        invoice = SalesInvoice.objects.get()
+        self.assertEqual(invoice.total_amount, D("400.00"))  # what the till showed and collected
+        self.assertEqual(InvoicePromotion.objects.get(invoice=invoice).discount, D("100.00"))
+        Promotion.objects.update(ends_on=TODAY - timedelta(days=3))
+        answer = self.sync(timezone.now() - timedelta(days=5))  # rung up while it still ran
+        self.assertEqual(answer["status"], "posted")
+        self.assertEqual(SalesInvoice.objects.latest("pk").total_amount, D("400.00"))
+
+    def test_the_report_follows_the_entity(self):
+        from unittest import mock
+
+        self.sync(timezone.now())
+        promo = Promotion.objects.get()
+        self.assertEqual(services.report()[promo.pk]["invoices"], 1)
+        with mock.patch("entities.scope.scope", side_effect=lambda queryset, path: queryset.none()):
+            self.assertEqual(services.report(), {})
