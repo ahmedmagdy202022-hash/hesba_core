@@ -162,6 +162,8 @@ class StatementTests(BankSetup):
         self.assertEqual(services.parse_amount("(1,250.50)"), D("-1250.50"))
         self.assertEqual(services.parse_amount("٣٠٠٫٥٠ ج.م"), D("300.50"))
         self.assertEqual(services.parse_amount("1,000.00-"), D("-1000.00"))
+        _, unknown = services.read_statement(csv_file(f"date,amount,balance\n{D2:%Y-%m-%d},100.00,110.00\n{D3:%Y-%m-%d},-10.00,\n"))
+        self.assertIsNone(unknown)  # the last day printed no balance: an earlier day's is not the closing one
         with self.assertRaisesMessage(ValidationError, "سطر 2"):
             services.read_statement(csv_file("date,amount\nyesterday,10\n"))
         with self.assertRaisesMessage(ValidationError, "عمود التاريخ"):

@@ -213,10 +213,10 @@ def read_statement(uploaded, lang="ar"):
 def _closing(lines, balances):
     """The printed balance of the statement's last day. A bank may list newest first: then that day's first row is its last."""
 
-    if not balances:
-        return None
-    last = max(day for day, _ in balances)
+    last = max(line["date"] for line in lines)
     on_last = [printed for day, printed in balances if day == last]
+    if not on_last:
+        return None  # no balance printed on the statement's last day: the person types it, or it stays unknown
     newest_first = lines[0]["date"] > lines[-1]["date"]
     return on_last[0] if newest_first else on_last[-1]
 
