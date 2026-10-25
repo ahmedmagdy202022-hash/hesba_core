@@ -79,9 +79,14 @@ def bank_account(request, pk):
     if not services.can_view(request.user):
         raise PermissionDenied
     cashbox = get_object_or_404(services.accounts(), pk=pk)
-    statements = list(services.statements(cashbox)[:24])
+    statements = list(services.statements(cashbox)[:24])  # the navigation shows the latest; any of the account's opens by its id
     chosen = request.POST.get("statement") or request.GET.get("statement")
-    statement = next((row for row in statements if str(row.pk) == str(chosen)), statements[0] if statements else None)
+    if chosen:
+        statement = get_object_or_404(services.statements(cashbox), pk=chosen if str(chosen).isdigit() else 0)
+        if statement not in statements:
+            statements.append(statement)
+    else:
+        statement = statements[0] if statements else None
     error = ""
     if request.method == "POST":
         action = request.POST.get("action")

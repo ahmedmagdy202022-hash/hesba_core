@@ -191,6 +191,25 @@ class StatementTests(BankSetup):
         self.assertEqual(bal("5212"), D("15.00"))
         self.assertTrue(reports.reconciliation()["ok"])
 
+    def test_each_statement_is_read_at_its_own_cutoff(self):
+        # Statement A: the deposit cleared, the cheque not yet. 10000 + 2000 = 12000 at the bank.
+        a, _ = services.import_statement(self.bank, csv_file(f"date,amount\n{D2:%Y-%m-%d},2000.00\n"), self.accountant, closing_balance="12000.00")
+        self.assertEqual(services.reconciliation(a)["difference"], D("0.00"))
+        # Statement B clears the cheque; A's figures do not move.
+        b, _ = services.import_statement(self.bank, csv_file(f"date,amount\n{D3:%Y-%m-%d},-500.00\n"), self.accountant, closing_balance="11500.00")
+        self.assertIsNotNone(b.lines.get().movement_id)
+        self.assertEqual(services.reconciliation(a)["difference"], D("0.00"))
+        self.assertEqual(services.reconciliation(b)["difference"], D("0.00"))
+
+    def test_a_line_matched_to_a_movement_booked_after_the_cutoff_still_counts(self):
+        create_cashbox_operation("LATE-1", D3 + timedelta(days=1), CashboxOperationType.DIRECT_OUT, D("70.00"), "سحب", self.owner, source_cashbox=self.bank)
+        statement, matched = services.import_statement(self.bank, csv_file(f"date,amount\n{D3:%Y-%m-%d},-70.00\n"), self.accountant,
+                                                       closing_balance="9930.00")  # the bank saw only the 70
+        self.assertEqual(matched, 1)
+        report = services.reconciliation(statement)
+        self.assertEqual(report["unrecorded_total"], D("-70.00"))  # matched, but booked the day after the statement ends
+        self.assertEqual(report["difference"], D("0.00"))
+
     def test_manual_match_unmatch_and_the_refusals(self):
         statement, _ = services.import_statement(self.bank, csv_file(STATEMENT), self.accountant)
         deposit = statement.lines.get(amount=D("2000.00"))
@@ -242,6 +261,19 @@ class ScreenTests(BankSetup):
         self.assertContains(self.client.get(url + "?lang=en"), "The statement should say")
         bad = self.client.post(url, {"lang": "ar", "action": "import", "file": csv_file("x,y\n1,2\n")})
         self.assertContains(bad, "عمود التاريخ")
+
+    def test_an_older_statement_opens_by_its_id(self):
+        self.client.force_login(self.accountant)
+        url = reverse("banking:account", args=[self.bank.pk])
+        old, _ = services.import_statement(self.bank, csv_file(f"date,amount\n{D1:%Y-%m-%d},1.00\n"), self.accountant)
+        for day in range(25):
+            services.import_statement(self.bank, csv_file(f"date,amount\n{D3:%Y-%m-%d},{day + 2}.00\n"), self.accountant)
+        page = self.client.get(url + f"?lang=ar&statement={old.pk}")
+        self.assertContains(page, f'data-line="{old.lines.get().pk}"')
+        self.assertEqual(self.client.get(url + "?lang=ar&statement=999999").status_code, 404)
+        self.client.post(url, {"lang": "ar", "action": "delete", "statement": old.pk})
+        self.assertFalse(services.statements(self.bank).filter(pk=old.pk).exists())
+        self.assertEqual(services.statements(self.bank).count(), 25)  # the old one went, not the newest
 
     def test_who_sees_the_banks(self):
         self.client.force_login(self.cashier)

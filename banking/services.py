@@ -16,7 +16,7 @@ from decimal import Decimal, InvalidOperation
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Sum
+from django.db.models import Q, Sum
 from django.utils import timezone
 
 from audit.models import AuditEventType, AuditLog
@@ -334,14 +334,17 @@ def delete_statement(statement, user):
 # ---- the reconciliation ----
 
 def reconciliation(statement):
-    """The statement beside the books, up to the statement's last day.
+    """The statement beside the books, as they stood on the statement's last day (the cutoff).
 
-    * ``book``: the account's balance in Hesba on that day;
-    * ``outstanding``: movements in the books since the statement began that the bank has not shown yet
-      (a deposit on its way, a cheque not cashed);
-    * ``unrecorded``: lines on the statement that are not in the books yet (a fee, interest);
+    * ``book``: the account's balance in Hesba on the cutoff;
+    * ``outstanding``: movements in the books by the cutoff that no statement line by the cutoff has cleared
+      (a deposit on its way, a cheque not cashed), carried forward from the account's first statement;
+    * ``unrecorded``: statement lines by the cutoff that the books did not have by the cutoff (a fee, interest,
+      or one matched to a movement booked after it);
     * ``expected``: what the statement should say once both are accounted for (book − outstanding + unrecorded);
     * ``difference``: the statement's closing balance minus ``expected``, when the statement gives one. Zero means it reconciles.
+
+    Matching a later statement does not change an earlier one's figures: each is read at its own cutoff.
     """
 
     lines = list(statement.lines.select_related("movement").order_by("line_date", "pk"))
@@ -349,19 +352,19 @@ def reconciliation(statement):
     first = min((line.line_date for line in lines), default=timezone.localdate())
     last = max((line.line_date for line in lines), default=timezone.localdate())
     book = balance(cashbox, last)
-    # Outstanding items carry forward: anything unmatched since the account's first statement began, not only this one's
-    # days. What came before the first statement is already inside the bank's figures.
+    # What came before the account's first statement is already inside the bank's figures.
     since = StatementLine.objects.filter(statement__cashbox=cashbox).order_by("line_date").values_list("line_date", flat=True).first() or first
-    outstanding = list(_live(cashbox.movements.filter(movement_date__gte=since - timedelta(days=MATCH_DAYS), movement_date__lte=last,
-                                                      statement_line__isnull=True)).order_by("movement_date", "pk"))
-    unrecorded = [line for line in lines if line.movement_id is None]
+    outstanding = list(_live(cashbox.movements.filter(movement_date__gte=since - timedelta(days=MATCH_DAYS), movement_date__lte=last))
+                       .exclude(statement_line__isnull=False, statement_line__line_date__lte=last).order_by("movement_date", "pk"))
+    unrecorded = list(StatementLine.objects.filter(statement__cashbox=cashbox, line_date__lte=last)
+                      .filter(Q(movement__isnull=True) | Q(movement__movement_date__gt=last)).order_by("line_date", "pk"))
     outstanding_total = sum((signed(movement) for movement in outstanding), ZERO)
     unrecorded_total = sum((line.amount for line in unrecorded), ZERO)
     expected = book - outstanding_total + unrecorded_total
     difference = None if statement.closing_balance is None else statement.closing_balance - expected
     return {"lines": lines, "first": first, "last": last, "book": book, "outstanding": outstanding, "outstanding_total": outstanding_total,
             "unrecorded": unrecorded, "unrecorded_total": unrecorded_total, "expected": expected, "difference": difference,
-            "matched": len(lines) - len(unrecorded), "count": len(lines)}
+            "matched": sum(1 for line in lines if line.movement_id), "count": len(lines)}
 
 
 def open_lines(cashbox):
