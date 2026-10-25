@@ -152,6 +152,12 @@ class ReconcileTypeTests(CreditNoteSetup):
         with mock.patch.object(portal, "search", return_value=[invoice_row]):
             claim = reconcile_claim(claim, self.owner, "en")
         self.assertEqual((claim.status, claim.uuid), (SubmissionStatus.REJECTED, ""))  # not found: it may be sent again
+        from einvoice.services import credit_notes_due
+
+        self.accept_original()
+        self.assertIn(self.sales_return, credit_notes_due())  # never received is not rejected: the queue sends it again
+        Submission.objects.filter(pk=claim.pk).update(message="Invalid TIN")
+        self.assertNotIn(self.sales_return, credit_notes_due())  # a real rejection waits for its data
         claim = Submission.objects.create(invoice=self.posted, sales_return=self.sales_return, environment="preprod",
                                           status=SubmissionStatus.SENDING, submitted_by=self.owner)
         with mock.patch.object(portal, "search", return_value=[invoice_row, dict(invoice_row, uuid="CN-U", typeName="C")]):

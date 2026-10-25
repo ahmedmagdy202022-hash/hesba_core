@@ -302,6 +302,10 @@ def send_credit_note(sales_return, user, lang="ar"):
     return _deliver(claim, document, sales_return.return_number, user, words)
 
 
+#: The message of a cut-off sending the authority never received (``reconcile_claim``): closed, not rejected by it.
+NEVER_RECEIVED = "not found on the portal: never received"
+
+
 def credit_notes_due():
     """The queue: posted returns of accepted invoices whose credit note has not been sent, or whose sending was cut
     off long enough ago to be checked again. A rejected one waits for its data to be corrected and a manual send."""
@@ -317,7 +321,10 @@ def credit_notes_due():
     rows = []
     for sales_return in SalesReturn.objects.filter(status="posted", source_invoice__in=accepted).select_related("source_invoice").order_by("return_date", "pk"):
         latest = current_credit_note(sales_return)
-        if latest is None or (latest.status == SubmissionStatus.SENDING and latest.submitted_at < timezone.now() - STALE_SENDING):
+        stale = latest is not None and latest.status == SubmissionStatus.SENDING and latest.submitted_at < timezone.now() - STALE_SENDING
+        # Codex #270: one the authority never received was not rejected by it, so it is sent again on the next run
+        never_received = latest is not None and latest.status == SubmissionStatus.REJECTED and latest.message == NEVER_RECEIVED
+        if latest is None or stale or never_received:
             rows.append(sales_return)
     return rows
 
@@ -537,7 +544,7 @@ def reconcile_claim(claim, user, lang="ar"):
             claim.submission_id = str(row.get("submissionUUID") or "")
             claim.message, claim.response = "", row
         else:
-            claim.status, claim.message = SubmissionStatus.REJECTED, "not found on the portal: never received"
+            claim.status, claim.message = SubmissionStatus.REJECTED, NEVER_RECEIVED
         claim.save(update_fields=["status", "uuid", "long_id", "submission_id", "message", "response"])
         _audit_send(claim, user, "eta_send_recovered")
     return claim
