@@ -129,6 +129,15 @@ class PurchaseOrderTests(PurchaseOrderSetup):
         board = self.client.get(reverse("purchase_orders:list") + "?lang=ar").content.decode()
         self.assertRegex(board, r'is-current" href="/purchases/')  # the menu marks purchases, not quotations
 
+    def test_a_new_item_can_be_made_from_the_order(self):
+        """FB-22: "+ new item" on a draft order's line form, through the same quick form as the invoice."""
+
+        self.client.force_login(self.owner)
+        draft = self.client.get(reverse("purchase_orders:detail", args=[self.order(confirm=False).pk]) + "?lang=ar")
+        for marker in ("data-quick-item-open", 'data-quick-item-select="#po-item"', "hesba/js/quick_item_select.js", reverse("master_data:item_quick_create")):
+            self.assertContains(draft, marker)
+        self.assertNotContains(self.client.get(reverse("purchase_orders:detail", args=[self.order().pk]) + "?lang=ar"), "data-quick-item-open")  # confirmed: no new lines
+
     def test_only_buyers_make_purchase_orders(self):
         cashier = person(RoleCode.CASHIER, "po_cashier")
         with self.assertRaises(PermissionDenied):
