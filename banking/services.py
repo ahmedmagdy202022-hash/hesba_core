@@ -54,6 +54,7 @@ MESSAGES = {
         "too_many": "الكشف أكبر من {n} سطر؛ قسّمه على شهور.", "other_account": "الحركة دي على حساب تاني.", "amount": "المبلغ مش زي الكشف؛ لو فيه فرق سجّله الأول.",
         "taken": "الحركة دي متطابقة مع سطر تاني.", "matched": "السطر ده متطابق بالفعل.", "not_fee": "ده مش مبلغ اتخصم من الحساب.",
         "fee_reason": "مصروفات بنكية", "closing": "رصيد آخر الكشف لازم رقم.", "already": "كل سطور الكشف ده اترفعت قبل كده.",
+        "overlapped": "فيه كشف اترفع بعد ده وبيعتمد على سطوره؛ شيل الكشف الأحدث الأول.",
     },
     "en": {
         "not_bank": "This is not a bank account.", "file": "Upload the statement as a CSV or Excel file.", "file_too_big": "The file is over 5 MB.",
@@ -65,6 +66,7 @@ MESSAGES = {
         "taken": "This movement is already matched to another line.", "matched": "This line is already matched.",
         "not_fee": "This is not money taken from the account.", "fee_reason": "Bank charges", "closing": "The statement's closing balance must be a number.",
         "already": "Every line of this statement was uploaded before.",
+        "overlapped": "A later statement relies on this one's lines; remove the later one first.",
     },
 }
 
@@ -136,7 +138,7 @@ def parse_amount(raw):
     """A bank's way of writing money: thousands commas, a currency word, (brackets) or a minus sign for money out."""
 
     text = str(raw or "").translate(ARABIC_DIGITS).strip().replace(",", "")
-    found = re.search(r"\d+(?:\.\d+)?(?:[eE][+-]?\d+)?", text)
+    found = re.search(r"(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?", text)  # .50 is half a pound, never fifty
     if not found:
         return None
     try:
@@ -276,13 +278,14 @@ def _new_lines(cashbox, lines):
 
 
 def candidates(line, exclude=(), days=MATCH_DAYS):
-    """Unmatched movements of the line's account with the same signed amount and a date within ``days``, nearest first."""
+    """Unmatched movements of the line's account with the same signed amount, nearest first: within ``days`` of the
+    line for matching by itself, any date (``days=None``) for matching by hand, so a cheque cashed months later is reachable."""
 
     direction, amount = ("in", line.amount) if line.amount > 0 else ("out", -line.amount)
     rows = _live(CashboxMovement.objects.filter(cashbox_id=line.statement.cashbox_id, direction=direction, amount=amount,
-                                                movement_date__gte=line.line_date - timedelta(days=days),
-                                                movement_date__lte=line.line_date + timedelta(days=days),
                                                 statement_line__isnull=True)).exclude(pk__in=list(exclude))
+    if days is not None:
+        rows = rows.filter(movement_date__gte=line.line_date - timedelta(days=days), movement_date__lte=line.line_date + timedelta(days=days))
     return sorted(rows, key=lambda movement: (abs((movement.movement_date - line.line_date).days), movement.pk))
 
 
@@ -352,10 +355,14 @@ def record_fee(line, user, lang="ar"):
 
 
 @transaction.atomic
-def delete_statement(statement, user):
+def delete_statement(statement, user, lang="ar"):
     """A statement uploaded by mistake goes, with its matches; no amount or balance changes."""
 
     _require_work(user)
+    words = MESSAGES[lang]
+    # A later upload that overlaps this one kept only its new lines; the shared ones live here, so this one stays.
+    if statements(statement.cashbox).filter(pk__gt=statement.pk, starts_on__lte=statement.ends_on, ends_on__gte=statement.starts_on).exists():
+        raise ValidationError(words["overlapped"])
     _audit(user, "delete_statement", statement, {"cashbox_id": statement.cashbox_id, "lines": statement.lines.count()})
     statement.delete()
 

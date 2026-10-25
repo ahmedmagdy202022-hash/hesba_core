@@ -99,7 +99,7 @@ def bank_account(request, pk):
             elif action == "auto":
                 flash.success(request, words["auto_done"].format(n=services.auto_match(statement, request.user)))
             elif action == "delete":
-                services.delete_statement(statement, request.user)
+                services.delete_statement(statement, request.user, lang)
                 flash.success(request, words["deleted"])
                 return redirect(f"{reverse('banking:account', args=[cashbox.pk])}?lang={lang}")
             elif action in ("match", "unmatch", "fee"):
@@ -121,7 +121,7 @@ def bank_account(request, pk):
     report = services.reconciliation(statement) if statement else None
     if report:
         for line in report["lines"]:
-            line.choices = [] if line.movement_id else services.candidates(line, days=31)[:8]
+            line.choices = [] if line.movement_id else services.candidates(line, days=None)[:100]  # same amount, any date
     book_label = words["book"].format(day=report["last"].isoformat()) if report else ""
     return render(request, "banking/account.html", _context(request, lang, cashbox=cashbox, statements=statements, statement=statement,
                                                             report=report, error=error, balance=services.balance(cashbox), book_label=book_label))

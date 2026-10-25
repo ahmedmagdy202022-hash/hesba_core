@@ -276,6 +276,21 @@ class StatementTests(BankSetup):
         self.assertEqual(report["outstanding_total"], D("15.00"))  # the refund the bank has not made yet
         self.assertEqual(report["difference"], D("0.00"))
 
+    def test_leading_decimals_an_old_cheque_to_match_by_hand_and_an_overlapped_statement_stays(self):
+        self.assertEqual(services.parse_amount(".50"), D("0.50"))
+        self.assertEqual(services.parse_amount("-.50"), D("-0.50"))
+        old = create_cashbox_operation("OLD-CHQ", TODAY - timedelta(days=90), CashboxOperationType.DIRECT_OUT, D("321.00"), "شيك قديم", self.owner,
+                                       source_cashbox=self.bank)
+        statement, matched = services.import_statement(self.bank, csv_file(f"date,amount\n{D3:%Y-%m-%d},-321.00\n"), self.accountant)
+        self.assertEqual(matched, 0)  # too far for matching by itself
+        line = statement.lines.get()
+        self.assertEqual(services.candidates(line, days=None), [old.movements.get()])
+        later, _ = services.import_statement(self.bank, csv_file(f"date,amount\n{D3:%Y-%m-%d},-321.00\n{TODAY:%Y-%m-%d},9.00\n"), self.accountant)
+        with self.assertRaisesMessage(ValidationError, "الكشف الأحدث"):
+            services.delete_statement(statement, self.accountant)
+        services.delete_statement(later, self.accountant)
+        services.delete_statement(statement, self.accountant)
+
     def test_manual_match_unmatch_and_the_refusals(self):
         statement, _ = services.import_statement(self.bank, csv_file(STATEMENT), self.accountant)
         deposit = statement.lines.get(amount=D("2000.00"))
