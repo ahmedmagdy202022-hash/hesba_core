@@ -147,6 +147,9 @@ class ScreenTests(PlanSetup):
         page = self.client.get(reverse("installments:detail", args=[plan.pk]))
         self.assertContains(page, 'data-instalment="upcoming"', count=6)
         self.assertContains(page, "https://wa.me/201001234567")
+        for marker in ("data-plan-call", "data-plan-whatsapp", "data-plan-reminder", "hs-contact__icon"):  # FB-19: call and WhatsApp with their icons
+            self.assertContains(page, marker)
+        self.assertContains(page, 'href="tel:')
         self.client.post(reverse("installments:detail", args=[plan.pk]), {"action": "collect", "amount": "1500", "cashbox": self.cashbox.pk, "payment_date": TODAY.isoformat()})
         self.assertEqual(schedule(plan)["paid"], D("1500.00"))
         self.assertContains(self.client.get(reverse("installments:detail", args=[plan.pk])), 'data-instalment="paid"', count=1)
