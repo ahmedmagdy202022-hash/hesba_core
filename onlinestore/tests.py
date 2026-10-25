@@ -121,7 +121,8 @@ class OrderImportTests(StoreSetup):
         self.assertEqual(first.status, "draft")  # nothing posted: stock and cash move only when it is posted
         self.assertEqual(list(first.lines.order_by("line_number").values_list("item__item_code", "quantity", "unit_sale_price")),
                          [("DR-1", D("1.000"), D("500.00")), ("SC-1", D("2.000"), D("100.00"))])
-        self.assertEqual((first.discount_amount, first.total_amount, first.invoice_date.isoformat()), (D("50.00"), D("650.00"), "2026-10-20"))
+        self.assertEqual((first.discount_amount, first.total_amount, first.invoice_date.isoformat()), (D("0"), D("650.00"), "2026-10-20"))
+        self.assertEqual(sum(line.line_discount_amount for line in first.lines.all()), D("50.00"))  # on the lines, before VAT
         self.assertIn("50.00", first.notes)  # the shipping the store charged
         self.assertEqual((first.customer.name, first.customer.phone), ("Sara Ahmed", "+20 100 123 4567"))
         self.assertTrue(first.invoice_number.startswith("WEB-"))
@@ -214,6 +215,22 @@ class OrderImportTests(StoreSetup):
             result = services.import_orders(SHOPIFY_ORDERS.encode("utf-8"), self.shop, self.owner, replace=True)
         self.assertIn("1001", {row["number"] for row in result["skipped"]})
         self.assertEqual(StoreOrder.objects.get(order_number="1001").invoice_id, theirs)
+
+    def test_a_vat_inclusive_discount_comes_off_before_tax(self):
+        from unittest import mock
+
+        text = "order,sku,quantity,price,discount\n79,DR-1,1,114,11.40\n"
+        with mock.patch("taxes.services.rates_by_item", return_value={str(self.dress.pk): "14.00"}):
+            invoice = services.import_orders(text.encode("utf-8"), self.shop, self.owner, with_vat=True)["made"][0]["invoice"]
+        line = invoice.lines.get()
+        self.assertEqual((line.unit_sale_price, line.line_discount_amount, invoice.discount_amount), (D("100.00"), D("10.00"), D("0")))
+
+    def test_an_order_in_another_currency_is_refused(self):
+        text = SHOPIFY_ORDERS.replace(",EGP,", ",USD,", 1)
+        result = self.upload(text)
+        reason = next(row["reason"] for row in result["skipped"] if row["number"] == "1001")
+        self.assertIn("USD", reason)
+        self.assertFalse(StoreOrder.objects.filter(order_number="1001").exists())
 
     def test_a_serial_tracked_item_needs_its_serials(self):
         from serials.models import SerialSetting

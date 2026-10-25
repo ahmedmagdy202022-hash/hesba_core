@@ -57,6 +57,7 @@ TEMPLATE_ALIASES = {
     "phone": ("phone", "التليفون", "الموبايل"), "email": ("email", "الإيميل"), "address": ("address", "العنوان"),
     "sku": ("sku", "code", "الكود"), "quantity": ("quantity", "qty", "الكمية"), "price": ("price", "unit price", "السعر"),
     "discount": ("discount", "الخصم"), "total": ("total", "الإجمالي"), "serial": ("serial", "serials", "السيريال"),
+    "currency": ("currency", "العملة"),
 }
 
 MESSAGES = {
@@ -66,6 +67,7 @@ MESSAGES = {
         "refunded": "الطلب اترد أو اتلغى في المتجر ({status}).", "taken": "رقم الفاتورة {number} مستخدم قبل كده.", "empty": "الطلب من غير أصناف.",
         "notes": "طلب من المتجر الأونلاين {source} رقم {number}.", "shipping": "مصاريف شحن اتحصّلت في المتجر: {amount}.", "who": "العميل: {who}.",
         "customer_note": "اتضاف من طلب المتجر الأونلاين.", "shipping_line": "مصاريف الشحن", "posted": "الطلب ده فاتورته اترحّلت؛ مينفعش يتبدّل.",
+        "currency": "الطلب بعملة {currency} وحسبة شغالة بـ {own}؛ حوّله الأول أو سجّله يدوي.",
         "replaced": "اتبدّلت مسودته.", "elsewhere": "رقم الطلب ده متسجّل لكيان تاني؛ مش هيتبدّل من هنا.",
     },
     "en": {
@@ -74,6 +76,7 @@ MESSAGES = {
         "refunded": "The order was refunded or voided in the store ({status}).", "taken": "Invoice number {number} is taken already.", "empty": "The order has no lines.",
         "notes": "Online store order, {source} number {number}.", "shipping": "Shipping charged in the store: {amount}.", "who": "Customer: {who}.",
         "customer_note": "Added from an online store order.", "shipping_line": "Shipping", "posted": "This order's invoice is posted; it cannot be replaced.",
+        "currency": "The order is in {currency} and Hesba works in {own}; convert it first or enter it by hand.",
         "replaced": "its draft was replaced.", "elsewhere": "This order number belongs to another entity; it is not replaced from here.",
     },
 }
@@ -354,10 +357,10 @@ def _shopify_orders(headers, rows):
         if not number:
             continue
         order = orders.setdefault(number, {"number": number, "lines": [], "date": "", "customer": "", "phone": "", "email": "", "address": "",
-                                           "discount": "", "shipping": "", "total": "", "status": ""})
+                                           "discount": "", "shipping": "", "total": "", "status": "", "currency": ""})
         for field, names in (("date", ("created at",)), ("customer", ("billing name", "shipping name")), ("phone", ("billing phone", "phone", "shipping phone")),
                              ("email", ("email",)), ("address", ("shipping address1", "billing address1")), ("discount", ("discount amount",)),
-                             ("shipping", ("shipping",)), ("total", ("total",)), ("status", ("financial status",))):
+                             ("shipping", ("shipping",)), ("total", ("total",)), ("status", ("financial status",)), ("currency", ("currency",))):
             order[field] = order[field] or cell(row, *names)
         city = cell(row, "shipping city", "billing city")
         if city and city not in order["address"]:
@@ -383,8 +386,8 @@ def _template_orders(headers, rows):
         if not number:
             continue
         order = orders.setdefault(number, {"number": number, "lines": [], "date": "", "customer": "", "phone": "", "email": "", "address": "",
-                                           "discount": "", "shipping": "", "total": "", "status": ""})
-        for field in ("date", "customer", "phone", "email", "address", "discount", "total"):
+                                           "discount": "", "shipping": "", "total": "", "status": "", "currency": ""})
+        for field in ("date", "customer", "phone", "email", "address", "discount", "total", "currency"):
             order[field] = order[field] or cell(row, field)
         order["lines"].append({"sku": cell(row, "sku"), "quantity": cell(row, "quantity"), "price": cell(row, "price"), "serials": cell(row, "serial")})
     return orders
@@ -458,6 +461,22 @@ def _item(sku):
     return Item.objects.filter(active=True, item_code=sku).first() or Item.objects.filter(active=True, barcode=sku).first()
 
 
+def _spread_discount(lines, gross, rates, discount):
+    """Codex #273: a store's discount comes off the product lines before VAT, as the store takes it, not after tax like
+    Hesba's invoice discount. Each line takes its share of the store's (possibly VAT-inclusive) amount, and a VAT-
+    inclusive share is taken back to before tax at the line's rate."""
+
+    base = sum(gross, ZERO)
+    if discount <= 0 or base <= 0:
+        return
+    discount, left = min(discount, base), min(discount, base)
+    for index, line in enumerate(lines):
+        share = left if index == len(lines) - 1 else min(money_round(discount * gross[index] / base), left)
+        left -= share
+        pre_tax = money_round(share * HUNDRED / (HUNDRED + rates[index])) if rates[index] else share
+        line["line_discount_amount"] = min(pre_tax, money_round(line["quantity"] * line["unit_sale_price"]))
+
+
 def _draft(source, order, location, user, words, phones, options):
     from config.numbering import next_in_series
     from sales.models import SalesInvoice
@@ -469,7 +488,10 @@ def _draft(source, order, location, user, words, phones, options):
         raise ValidationError(words["refunded"].format(status=order["status"]))
     if not order["lines"]:
         raise ValidationError(words["empty"])
-    lines = []
+    own = (options.get("currency") or "EGP").upper()
+    if order.get("currency") and order["currency"].strip().upper() != own:  # Codex #273: one company currency, no conversion
+        raise ValidationError(words["currency"].format(currency=order["currency"].strip().upper(), own=own))
+    lines, gross, rates = [], [], []
     for line in order["lines"]:
         item = _item(line["sku"])
         if item is None:
@@ -478,9 +500,12 @@ def _draft(source, order, location, user, words, phones, options):
         if quantity <= 0 or price < 0:
             raise ValidationError(words["number"])
         rate = Decimal((options.get("rates") or {}).get(str(item.pk), "0")) if options.get("with_vat") else ZERO
+        gross.append(quantity * price)
+        rates.append(rate)
         price = money_round(price * HUNDRED / (HUNDRED + rate)) if rate else money_round(price)  # the store's price had the VAT in it
         lines.append({"item": item, "quantity": quantity, "unit_sale_price": price, "line_discount_amount": ZERO, "description": "",
                       "serials": line.get("serials", "")})
+    _spread_discount(lines, gross, rates, money_round(_decimal(order["discount"], words, ZERO)))
     lines = prepare_sale_serials(lines)  # Codex #273: a serial-tracked item needs its serials, as on the invoice form
     customer, added = _customer(order, user, words, phones)
     notes = [words["notes"].format(source=StoreSource(source).label.split(" (")[0], number=order["number"])]
@@ -496,7 +521,7 @@ def _draft(source, order, location, user, words, phones, options):
     if customer.customer_code == WALK_IN_CODE and (order["customer"] or order["phone"]):
         notes.append(words["who"].format(who=" ".join(part for part in (order["customer"], order["phone"], order["address"]) if part)))
     header = {"invoice_date": _day(order["date"]), "customer": customer, "selling_location": location, "cashbox": None,
-              "paid_now": ZERO, "discount_amount": money_round(_decimal(order["discount"], words, ZERO)), "notes": " ".join(notes)}
+              "paid_now": ZERO, "discount_amount": ZERO, "notes": " ".join(notes)}
     for _attempt in range(5):  # Codex #273: Hesba's own number; the store's stays in the notes and on StoreOrder
         try:
             with transaction.atomic():
@@ -548,7 +573,10 @@ def import_orders(raw, location, user, lang="ar", shipping_item=None, with_vat=F
         raise ValidationError(words["location"])
     from taxes.services import rates_by_item
 
-    options = {"shipping_item": shipping_item, "with_vat": with_vat, "rates": rates_by_item() if with_vat else None}
+    from settings_core.models import ClientProfile
+
+    options = {"shipping_item": shipping_item, "with_vat": with_vat, "rates": rates_by_item() if with_vat else None,
+               "currency": getattr(ClientProfile.get_active(), "default_currency", None) or "EGP"}
     source, orders = read_orders(raw, lang)
     made, skipped, again = [], [], []
     phones = phone_index()
