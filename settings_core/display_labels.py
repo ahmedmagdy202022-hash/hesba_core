@@ -106,6 +106,7 @@ AR_LABELS = {
     ("cheques.cheque", "status"): {"in_hand": "في الإيد", "deposited": "اتودع في البنك", "issued": "صادر ولسه ماتصرفش", "cleared": "اتصرف",
                                    "bounced": "مرتد", "cancelled": "ملغي"},
     ("cheques.cheque", "direction"): {"in": "وارد", "out": "صادر"},
+    ("onlinestore.storeorder", "source"): {"shopify": "Shopify", "template": "قالب حسبة"},
     ("cashboxes.cashbox", "kind"): {"cash": "خزنة", "bank": "حساب بنكي", "cheques_in": "شيكات في الإيد", "cheques_out": "شيكات صادرة"},
     ("cashboxes.cashboxoperation", "status"): DOCUMENT_STATUS,
     ("cashboxes.openingbalanceadjustment", "status"): DOCUMENT_STATUS,

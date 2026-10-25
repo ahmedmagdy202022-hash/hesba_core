@@ -64,6 +64,7 @@ urlpatterns = [
     path("cashboxes/", include("cashboxes.urls")),
     path("banks/", include("banking.urls")),
     path("cheques/", include("cheques.urls")),
+    path("store/", include("onlinestore.urls")),
     path("expenses/", include("expenses.urls")),
     path("print/", include("printing.urls")),
     path("barcode/", include("barcode.urls")),
