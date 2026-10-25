@@ -1,0 +1,47 @@
+{% extends "operations/base.html" %}
+{% load hesba_format hesba_labels hesba_paging %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div></section>
+{% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
+<section class="op-summary-grid" data-cheque-totals>
+<article><small>{{ words.in_hand }}</small><strong data-in-hand>{{ totals.in_hand|money }}</strong></article>
+<article><small>{{ words.issued }}</small><strong data-issued>{{ totals.issued|money }}</strong></article>
+<article><small>{{ words.tab_due }}</small><strong data-due-count>{{ due_count }}</strong></article>
+</section>
+<nav class="op-form-actions wo-tabs" aria-label="{{ words.title }}" data-cheque-tabs>
+<a class="{% if tab == 'in' %}op-primary{% else %}op-secondary{% endif %}" href="?lang={{ lang }}&tab=in"{% if tab == 'in' %} aria-current="page"{% endif %}>{{ words.tab_in }}</a>
+<a class="{% if tab == 'out' %}op-primary{% else %}op-secondary{% endif %}" href="?lang={{ lang }}&tab=out"{% if tab == 'out' %} aria-current="page"{% endif %}>{{ words.tab_out }}</a>
+<a class="{% if tab == 'due' %}op-primary{% else %}op-secondary{% endif %}" href="?lang={{ lang }}&tab=due"{% if tab == 'due' %} aria-current="page"{% endif %}>{{ words.tab_due }} ({{ due_count }})</a>
+</nav>
+{% if tab == 'in' and can_receive %}<form class="op-form" method="post" data-receive-cheque>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="tab" value="in"><input type="hidden" name="action" value="receive">
+<h2>{{ words.receive }}</h2><div class="op-form-grid">
+<div class="op-field"><label for="id_customer">{{ words.customer }}</label><select id="id_customer" name="customer" required><option value=""></option>{% for customer in customers %}<option value="{{ customer.pk }}">{{ customer.name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="id_number">{{ words.number }}</label><input id="id_number" name="number" required autocomplete="off" dir="ltr"></div>
+<div class="op-field"><label for="id_bank_name">{{ words.bank_name }}</label><input id="id_bank_name" name="bank_name" required autocomplete="off"></div>
+<div class="op-field"><label for="id_due_date">{{ words.due_date }}</label><input id="id_due_date" name="due_date" type="date" required></div>
+<div class="op-field"><label for="id_amount">{{ words.amount }}</label><input id="id_amount" name="amount" inputmode="decimal" required autocomplete="off" dir="ltr"></div>
+<div class="op-field"><label for="id_received_on">{{ words.received_on }}</label><input id="id_received_on" name="received_on" type="date" value="{{ today|date:'Y-m-d' }}"></div>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form>{% endif %}
+{% if tab == 'out' and can_issue %}<form class="op-form" method="post" data-issue-cheque>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="tab" value="out"><input type="hidden" name="action" value="issue">
+<h2>{{ words.issue }}</h2>{% if not banks %}<div class="op-notice">{{ words.no_banks }}</div>{% else %}<div class="op-form-grid">
+<div class="op-field"><label for="id_supplier">{{ words.supplier }}</label><select id="id_supplier" name="supplier" required><option value=""></option>{% for supplier in suppliers %}<option value="{{ supplier.pk }}">{{ supplier.name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="id_bank">{{ words.drawn_on }}</label><select id="id_bank" name="bank" required>{% for bank in banks %}<option value="{{ bank.pk }}">{{ bank }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="id_out_number">{{ words.number }}</label><input id="id_out_number" name="number" required autocomplete="off" dir="ltr"></div>
+<div class="op-field"><label for="id_out_due">{{ words.due_date }}</label><input id="id_out_due" name="due_date" type="date" required></div>
+<div class="op-field"><label for="id_out_amount">{{ words.amount }}</label><input id="id_out_amount" name="amount" inputmode="decimal" required autocomplete="off" dir="ltr"></div>
+<div class="op-field"><label for="id_issued_on">{{ words.issued_on }}</label><input id="id_issued_on" name="received_on" type="date" value="{{ today|date:'Y-m-d' }}"></div>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div>{% endif %}</form>{% endif %}
+{% if tab == 'due' %}<p class="op-muted">{{ due_note }}</p>{% endif %}
+<div class="op-table-wrap"><table class="op-table" data-cheques><thead><tr><th>{{ words.number }}</th><th>{{ words.party }}</th><th>{{ words.bank_name }}</th><th>{{ words.due_date }}</th><th>{{ words.amount }}</th><th>{{ words.state }}</th>{% if can_move %}<th></th>{% endif %}</tr></thead><tbody>
+{% for cheque in page.object_list %}<tr data-cheque="{{ cheque.pk }}" data-status="{{ cheque.status }}"><td><bdi>{{ cheque.number }}</bdi></td><td class="op-cell-text">{{ cheque.party.name }}</td><td>{{ cheque.bank_name }}</td>
+<td><bdi>{{ cheque.due_date|date:"Y-m-d" }}</bdi>{% if cheque.due_date <= today and cheque.status == 'in_hand' or cheque.due_date <= today and cheque.status == 'issued' %} <small data-overdue>⚠</small>{% endif %}</td><td>{{ cheque.amount|money }}</td>
+<td>{% choice_label cheque "status" %}{% if cheque.bounce_reason %} <small class="op-muted">{{ cheque.bounce_reason }}</small>{% endif %}</td>
+{% if can_move %}<td><div class="op-form-actions">
+{% if cheque.status == 'in_hand' and banks %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="tab" value="{{ tab }}"><input type="hidden" name="action" value="deposit"><input type="hidden" name="cheque" value="{{ cheque.pk }}"><select name="bank" aria-label="{{ words.bank }}">{% for bank in banks %}<option value="{{ bank.pk }}">{{ bank }}</option>{% endfor %}</select><input type="date" name="on" value="{{ today|date:'Y-m-d' }}" aria-label="{{ words.date }}"><button class="op-secondary" type="submit" data-deposit="{{ cheque.pk }}">{{ words.deposit }}</button></form>{% endif %}
+{% if cheque.status == 'deposited' or cheque.status == 'issued' %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="tab" value="{{ tab }}"><input type="hidden" name="action" value="clear"><input type="hidden" name="cheque" value="{{ cheque.pk }}"><input type="date" name="on" value="{{ today|date:'Y-m-d' }}" aria-label="{{ words.date }}"><button class="op-secondary" type="submit" data-clear="{{ cheque.pk }}">{% if cheque.direction == 'in' %}{{ words.clear_in }}{% else %}{{ words.clear_out }}{% endif %}</button></form>{% endif %}
+{% if cheque.status == 'in_hand' or cheque.status == 'deposited' or cheque.status == 'issued' %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="tab" value="{{ tab }}"><input type="hidden" name="action" value="bounce"><input type="hidden" name="cheque" value="{{ cheque.pk }}"><input type="date" name="on" value="{{ today|date:'Y-m-d' }}" aria-label="{{ words.date }}"><input name="reason" placeholder="{{ words.reason }}" aria-label="{{ words.reason }}" required><button class="op-danger" type="submit" data-bounce="{{ cheque.pk }}">{{ words.bounce }}</button></form>{% endif %}
+{% if cheque.status == 'in_hand' or cheque.status == 'issued' %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="tab" value="{{ tab }}"><input type="hidden" name="action" value="cancel"><input type="hidden" name="cheque" value="{{ cheque.pk }}"><input name="reason" placeholder="{{ words.reason }}" aria-label="{{ words.reason }}" required><button class="op-secondary" type="submit" data-cancel="{{ cheque.pk }}">{{ words.cancel }}</button></form>{% endif %}
+</div></td>{% endif %}</tr>
+{% empty %}<tr><td colspan="7" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
+</tbody></table></div>{% pager page %}
+{% endblock %}
