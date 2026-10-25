@@ -1856,6 +1856,9 @@ The entries below are the protected-logic decisions in the commercial gate, reco
     - `cashboxes/forms.py` and `cashboxes/views.py`: the guards;
     - `ledger/chart.py`, `ledger/projector.py` and ledger migration 0005;
     - `expenses/services.py`: `expense_total` adds the payroll cost.
+  - **Corrections (Codex #269):**
+    - A run with a negative net pay is not posted; it would lower what the other employees are owed.
+    - A reversed month can be made again, corrected. `payroll/0002` replaces the unique month with "one run a month that is not reversed", and the reversed run stays for the record.
 - **Why:** the salary run creates expenses and money movements, and it needs its own control accounts (salaries payable, social insurance, payroll tax).
 - **Why the expense service cannot be reused as it is:** `expenses.services.record_expense` pays cash out for exactly the expense amount at once. Gross pay would overpay the cash; net pay would understate the salary cost and leave no liability for what is withheld.
 - **Proposed: a payroll accrual and payment of its own.**

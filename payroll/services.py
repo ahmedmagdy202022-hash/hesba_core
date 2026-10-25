@@ -43,6 +43,7 @@ MESSAGES = {
         "reason": "اكتب سبب الإلغاء.", "brackets": "شرائح الضريبة مش مفهومة: كل سطر «لحد:نسبة»، وآخر سطر من غير «لحد».", "date": "التاريخ مش مفهوم.",
         "before": "التاريخ قبل تاريخ الترحيل.", "cancelled": "الدفعة دي اتلغت قبل كده.", "before_paid": "تاريخ الإلغاء قبل تاريخ الدفعة.",
         "entity": "المرتبات بتتدفع من خزنة أو بنك الشركة الرئيسية.", "before_cancel": "التاريخ قبل إلغاء دفعة من الكشف ده.",
+        "net_negative": "صافي مرتب {name} بالسالب ({net})؛ قلّل الخصومات قبل الترحيل.",
     },
     "en": {
         "number": "This number is not understood.", "negative": "Amounts cannot be negative.", "month": "Choose the month.", "taken": "This month's payroll was made already.",
@@ -51,6 +52,7 @@ MESSAGES = {
         "reason": "Type the reason.", "brackets": "The tax brackets are not understood: one “up to:rate” per line, the last with nothing before the colon.",
         "date": "The date is not understood.", "before": "The date is before the posting date.", "cancelled": "This payment was cancelled already.", "before_paid": "The cancellation is dated before the payment.",
         "entity": "Payroll is paid from a cashbox or bank of the main entity.", "before_cancel": "The date is before a cancelled payment of this run.",
+        "net_negative": "{name}'s net pay is negative ({net}); lower the deductions before posting.",
     },
 }
 
@@ -251,8 +253,8 @@ def prepare(raw_month, user, lang="ar"):
     _require(user, lang)
     words = _words(lang)
     first = month_of(raw_month, words)
-    if PayrollRun.objects.filter(month=first).exists():
-        raise ValidationError(words["taken"])
+    if PayrollRun.objects.filter(month=first).exclude(status=RunStatus.REVERSED).exists():
+        raise ValidationError(words["taken"])  # a reversed month is made again, corrected
     profiles = list(SalaryProfile.objects.filter(employee__active=True).select_related("employee").filter(basic__gt=0))
     if not profiles:
         raise ValidationError(words["nobody"])
@@ -328,6 +330,9 @@ def post(run, user, lang="ar", posted_on=None):
     run = PayrollRun.objects.select_for_update().get(pk=run.pk)
     if run.status != RunStatus.DRAFT:
         raise ValidationError(words["not_draft"])
+    below = run.lines.filter(net__lt=0).select_related("employee").first()
+    if below is not None:  # Codex #269: one employee's shortfall would quietly lower what the others are owed
+        raise ValidationError(words["net_negative"].format(name=below.employee.name, net=f"{below.net:,.2f}"))
     from closing.services import ensure_period_is_open as ensure_period_open  # a closed month stays closed (HG-011)
 
     today = timezone.localdate()

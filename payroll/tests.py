@@ -264,3 +264,31 @@ class ThirdReviewTests(PayrollSetup):
         with self.assertRaisesMessage(ValidationError, "قبل إلغاء دفعة"):
             services.pay(run, PayTo.TAX, self.cash, "", self.owner, paid_on=LAST_MONTH.isoformat())
         self.assertEqual(services.pay(run, PayTo.TAX, self.cash, "", self.owner, paid_on=TODAY.isoformat()).paid_on, TODAY)
+
+
+class FourthReviewTests(PayrollSetup):
+    """Codex on #269 (fourth look): no negative net pay is posted, and a reversed month is made again, corrected."""
+
+    def test_a_negative_net_pay_is_not_posted(self):
+        run = self.make_run()
+        line = run.lines.get(employee=self.mona)
+        services.change_line(line, {"other_deductions": "12000"}, self.owner)
+        self.assertLess(run.lines.get(employee=self.mona).net, 0)  # insurance still withheld on a nothing salary
+        with self.assertRaisesMessage(ValidationError, "منى"):
+            services.post(run, self.owner)
+        services.change_line(line, {"other_deductions": "0"}, self.owner)
+        self.assertEqual(services.post(run, self.owner).status, RunStatus.POSTED)
+
+    def test_a_reversed_month_is_made_again(self):
+        first = services.post(self.make_run(), self.owner)
+        with self.assertRaisesMessage(ValidationError, "اتعملت قبل كده"):
+            self.make_run()
+        services.reverse(first, self.owner, "غلط في المرتبات")
+        again = self.make_run()
+        self.assertNotEqual(again.pk, first.pk)
+        self.assertEqual(services.post(again, self.owner).status, RunStatus.POSTED)
+        with self.assertRaisesMessage(ValidationError, "اتعملت قبل كده"):
+            self.make_run()  # one standing run a month
+        Projector().rebuild()
+        self.assertTrue(reports.trial_balance()["balanced"])
+        self.assertEqual(PayrollRun.objects.filter(month=LAST_MONTH).count(), 2)

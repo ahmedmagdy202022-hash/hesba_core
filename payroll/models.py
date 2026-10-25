@@ -53,7 +53,7 @@ class RunStatus(models.TextChoices):
 
 
 class PayrollRun(models.Model):
-    month = models.DateField(unique=True, help_text="The first day of the month paid for.")
+    month = models.DateField(help_text="The first day of the month paid for.")
     status = models.CharField(max_length=10, choices=RunStatus.choices, default=RunStatus.DRAFT)
     posted_on = models.DateField(null=True, blank=True)
     reversed_on = models.DateField(null=True, blank=True)
@@ -62,7 +62,9 @@ class PayrollRun(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ["-month"]
+        ordering = ["-month", "-pk"]
+        # Codex #269: one run a month that stands; a reversed one stays for the record and a corrected run replaces it.
+        constraints = [models.UniqueConstraint(fields=["month"], condition=~models.Q(status="reversed"), name="payroll_one_standing_run_per_month")]
 
 
 class PayrollLine(models.Model):
