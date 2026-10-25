@@ -126,3 +126,12 @@ a.hs-tile:hover{transform:translateY(-2px);box-shadow:var(--hs-shadow-md);border
 .hs-pct-toggle{flex:0 0 auto;min-width:28px;min-height:28px;border:1px solid var(--hs-line-strong);border-radius:8px;background:var(--hs-surface);color:var(--hs-navy);font:inherit;font-weight:700;cursor:pointer;padding:0 6px}
 .hs-pct-toggle[aria-pressed="true"]{background:var(--hs-teal);border-color:var(--hs-teal);color:var(--hs-on-teal)}
 .hs-pct-amount{flex:1 0 100%;color:var(--hs-muted);font-size:12px}
+/* FB-27: "are you sure?" before a delete, a removal or a cancellation */
+.hs-confirm{width:min(420px,calc(100% - 32px));border:0;border-radius:16px;padding:20px;background:var(--hs-surface);color:var(--hs-ink)}
+.hs-confirm::backdrop{background:color-mix(in srgb,var(--hs-navy) 45%,transparent)}
+.hs-confirm h2{margin:0 0 8px;color:var(--hs-navy);font-size:20px}
+.hs-confirm p{margin:0 0 18px;color:var(--hs-muted)}
+.hs-confirm__actions{display:flex;flex-wrap:wrap;gap:10px}
+.hs-confirm__actions button{min-height:44px;border-radius:11px;padding:0 18px;font:inherit;font-weight:700;cursor:pointer}
+.hs-confirm .op-danger{border:0;background:var(--hs-danger-solid);color:var(--hs-surface)}
+.hs-confirm .op-secondary{border:1px solid var(--hs-line);background:var(--hs-surface);color:var(--hs-navy)}
