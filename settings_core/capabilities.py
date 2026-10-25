@@ -131,6 +131,10 @@ CAPABILITIES = {
 }
 CAPABILITY_SLUGS = tuple(CAPABILITIES)
 
+#: Screens two capabilities share (Codex #271): the issuer and item-code setup under /einvoice/ feed the e-receipt too,
+#: so either capability opens them. Matched exactly; the rest of /einvoice/ stays with the e-invoice.
+SHARED_PATHS = {"/einvoice/": ("e_invoice", "e_receipt"), "/einvoice/items/": ("e_invoice", "e_receipt")}
+
 #: Which capabilities start on for each commercial sub-activity. Anything not
 #: listed is OPTIONAL. Services activities suggest none of the trade ones.
 PRESETS = {
@@ -456,7 +460,9 @@ def closed_capability(path):
     profile = ClientProfile.get_active()
     if profile is None or not profile.setup_is_complete:
         return None
-    return None if capability_enabled(owner) else owner
+    if any(capability_enabled(slug) for slug in SHARED_PATHS.get(path, (owner,))):
+        return None
+    return owner
 
 
 def _write(slug, enabled):

@@ -52,6 +52,20 @@ def device():
     return Device.objects.filter(active=True).order_by("pk").first()
 
 
+@transaction.atomic
+def register(serial, branch_code="0"):
+    """The till in use now. A different serial is a different device (Codex #271): it gets its own row and its own
+    chain, and the old device keeps its receipts and its last UUID; going back to an old serial picks up its chain."""
+
+    serial, branch_code = str(serial).strip()[:100], (str(branch_code or "").strip() or "0")[:50]
+    till, _ = Device.objects.select_for_update().get_or_create(serial_number=serial, defaults={"branch_code": branch_code})
+    Device.objects.filter(active=True).exclude(pk=till.pk).update(active=False)
+    if till.branch_code != branch_code or not till.active:
+        till.branch_code, till.active = branch_code, True
+        till.save(update_fields=["branch_code", "active"])
+    return till
+
+
 def _is_till_sale(invoice):
     return invoice.invoice_number.startswith("POS-")
 

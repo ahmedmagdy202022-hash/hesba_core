@@ -11,7 +11,7 @@ from permissions.decorators import require_permission
 from permissions.services import user_has_permission
 
 from . import services
-from .models import Device, Receipt, ReceiptStatus
+from .models import Receipt, ReceiptStatus
 
 MANAGE = "settings.manage_settings"
 WORDS = {
@@ -45,12 +45,7 @@ def board(request):
         if request.POST.get("action") == "device":
             serial = (request.POST.get("serial_number") or "").strip()[:100]
             if serial:
-                till = services.device()
-                if till is None:
-                    Device.objects.create(serial_number=serial, branch_code=(request.POST.get("branch_code") or "0").strip()[:50])
-                else:
-                    till.serial_number, till.branch_code = serial, (request.POST.get("branch_code") or "0").strip()[:50]
-                    till.save(update_fields=["serial_number", "branch_code"])
+                services.register(serial, request.POST.get("branch_code"))
         elif request.POST.get("action") == "again":
             services.issue_again(get_object_or_404(services.scoped(Receipt.objects), pk=request.POST.get("receipt") or 0, status=ReceiptStatus.NOT_ISSUED), lang)
         flash.success(request, words["saved"])

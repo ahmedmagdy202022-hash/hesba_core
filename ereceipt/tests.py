@@ -145,3 +145,31 @@ class CodexFixesTests(ReceiptSetup):
         with mock.patch("ereceipt.services.scoped", side_effect=lambda queryset: queryset.none()):
             self.assertEqual(self.client.get(reverse("ereceipt:json", args=[receipt.pk])).status_code, 404)
             self.assertNotContains(self.client.get(reverse("ereceipt:board") + "?lang=ar"), f'data-receipt="{receipt.pk}"')
+
+
+class SecondReviewTests(ReceiptSetup):
+    """Codex on #271 (second look): a new till is a new device with its own chain, and receipts alone open their setup."""
+
+    def test_a_new_serial_starts_its_own_chain_and_the_old_one_keeps_its_own(self):
+        old = services.register("POS-SN-1")
+        first = Receipt.objects.get(invoice=self.sale())
+        self.client.force_login(self.owner)
+        self.client.post(reverse("ereceipt:board"), {"lang": "ar", "action": "device", "serial_number": "POS-SN-2", "branch_code": "0"})
+        new = services.device()
+        self.assertNotEqual(new.pk, old.pk)
+        second = Receipt.objects.get(invoice=self.sale())
+        self.assertEqual((second.device_id, second.previous_uuid), (new.pk, ""))  # the new device's chain starts empty
+        old.refresh_from_db()
+        self.assertEqual((old.active, old.last_uuid, first.device_id), (False, first.uuid, old.pk))
+        self.assertEqual(services.register("POS-SN-1").pk, old.pk)  # back on the old till: its chain goes on
+        self.assertEqual(Receipt.objects.get(invoice=self.sale()).previous_uuid, first.uuid)
+
+    def test_receipts_alone_open_the_issuer_and_item_code_screens(self):
+        profile = ClientProfile.get_active()
+        set_capability_enabled(profile, "e_invoice", False)
+        self.client.force_login(self.owner)
+        self.assertEqual(self.client.get(reverse("einvoice:issuer")).status_code, 200)
+        self.assertEqual(self.client.get(reverse("einvoice:items")).status_code, 200)
+        self.assertNotEqual(self.client.get(reverse("einvoice:customers")).status_code, 200)  # the B2B screens stay with the e-invoice
+        set_capability_enabled(profile, "e_receipt", False)
+        self.assertNotEqual(self.client.get(reverse("einvoice:issuer")).status_code, 200)
