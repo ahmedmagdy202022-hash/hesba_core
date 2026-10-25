@@ -118,11 +118,16 @@ class Projector:
         self.main_id = main_entity().pk
         self.groups = {}
 
-    def money_account(self, cashbox):
-        """T3 (HG-055): a bank account's money sits in the banks account, a cashbox's in cash on hand."""
+    #: T3/T4: where each kind of cashbox keeps its money in the chart.
+    KIND_CONTROLS = {"bank": "bank", "cheques_in": "notes_receivable", "cheques_out": "notes_payable"}
 
-        if cashbox.kind == "bank" and self.acc.has("bank"):
-            return self.acc["bank"]
+    def money_account(self, cashbox):
+        """T3 (HG-055): a bank account's money sits in the banks account, a cashbox's in cash on hand.
+        T4 (HG-056): cheques in hand are notes receivable; cheques issued and not yet paid are notes payable."""
+
+        control = self.KIND_CONTROLS.get(cashbox.kind)
+        if control and self.acc.has(control):
+            return self.acc[control]
         return self.acc["cash"]
 
     # ---- collecting sub-ledger rows ----
@@ -542,7 +547,7 @@ def fingerprint():
         parts.append(f"{model.objects.count()}:{agg['n']}")
     for model in (Customer, Supplier, Cashbox):
         parts.append(str(model.objects.aggregate(s=Sum("opening_balance"))["s"]))
-    parts.append(",".join(str(pk) for pk in Cashbox.objects.filter(kind="bank").order_by("pk").values_list("pk", flat=True)))  # T3: cash ↔ bank
+    parts.append(",".join(f"{pk}{kind}" for pk, kind in Cashbox.objects.exclude(kind="cash").order_by("pk").values_list("pk", "kind")))  # T3/T4: kinds
     parts.append(";".join(f"{a.pk}{a.status}{a.disposed_on}" for a in FixedAsset.objects.order_by("pk")))
     parts.append(timezone.localdate().strftime("%Y-%m"))  # depreciation months roll over
     parts.append(_contracts_fingerprint())
