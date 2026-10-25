@@ -205,8 +205,9 @@ CREDIT_WORDS = {
 
 def build_credit_note(sales_return, lang="ar"):
     """T7 (HG-059): (document dict, problems list) for a posted sales return — an ETA credit note pointing to the
-    original invoice's accepted document. Each line gives back its refund: the price × quantity returned, less
-    the line's share of every discount (its own and the invoice's), plus the tax given back (HG-015)."""
+    original invoice's accepted document, laid out like the invoice: each line is the price × quantity returned less
+    its own discount share (the VAT base), plus the tax given back (HG-015); the lines' share of the invoice discount,
+    taken after tax as on the invoice, is the extraDiscountAmount, so totalAmount is the refund."""
 
     from .models import SubmissionStatus
 
@@ -228,14 +229,20 @@ def build_credit_note(sales_return, lang="ar"):
         code = codes.get(line.item_id)
         tax = row.tax.tax_amount if hasattr(row, "tax") else ZERO
         sales_total = money_round(row.quantity * line.unit_sale_price)
-        net = money_round(row.amount - tax)
-        discount = money_round(sales_total - net)
+        # Codex #270: the line's own discount stays before tax, as on the invoice; its share of the invoice discount is
+        # taken after tax (extraDiscountAmount below), so netTotal is the VAT base the given-back tax was charged on.
+        discount = money_round(line.line_discount_amount * row.quantity / line.quantity) if line.quantity else ZERO
+        net = money_round(sales_total - discount)
+        if net + tax < row.amount:  # a rounding cent the other way: kept on the line, so no extra discount is negative
+            net = money_round(row.amount - tax)
+            discount = money_round(sales_total - net)
+        line_total = money_round(net + tax)
         rate = getattr(getattr(line, "tax", None), "rate", ZERO) or ZERO
         subtype = (line.tax.tax_rate.eta_subtype if getattr(line, "tax", None) and line.tax.tax_rate else "") or ("V009" if tax else "V003")
         doc_lines.append({
             "description": line.description or line.item.item_name, "itemType": code.code_type if code else "EGS", "itemCode": code.code if code else "",
             "unitType": code.unit_type if code else "EA", "quantity": _num(row.quantity), "internalCode": line.item.item_code,
-            "salesTotal": _num(sales_total), "total": _num(row.amount), "valueDifference": 0, "totalTaxableFees": 0, "netTotal": _num(net),
+            "salesTotal": _num(sales_total), "total": _num(line_total), "valueDifference": 0, "totalTaxableFees": 0, "netTotal": _num(net),
             "itemsDiscount": 0, "unitValue": {"currencySold": "EGP", "amountEGP": _num(line.unit_sale_price)},
             "discount": {"rate": 0, "amount": _num(discount)},
             "taxableItems": [{"taxType": "T1", "amount": _num(tax), "subType": subtype, "rate": _num(rate)}],
@@ -244,7 +251,9 @@ def build_credit_note(sales_return, lang="ar"):
         sums["discount"] += discount
         sums["net"] += net
         sums["tax"] += tax
+        sums["lines"] = sums.get("lines", ZERO) + line_total
         sums["total"] += row.amount
+    extra = money_round(sums.get("lines", ZERO) - sums["total"])  # the returned lines' share of the invoice discount
     if money_round(sums["total"]) != money_round(sales_return.total_amount):
         problems.append(words["total"].format(total=money_round(sums["total"]), amount=sales_return.total_amount))
     document = {
@@ -252,7 +261,7 @@ def build_credit_note(sales_return, lang="ar"):
         "dateTimeIssued": _issued_at(invoice, sales_return.return_date), "taxpayerActivityCode": base["taxpayerActivityCode"],
         "internalID": sales_return.return_number, "references": [original.uuid] if original and original.uuid else [],
         "invoiceLines": doc_lines, "totalSalesAmount": _num(sums["sales"]), "totalDiscountAmount": _num(sums["discount"]),
-        "netAmount": _num(sums["net"]), "taxTotals": [{"taxType": "T1", "amount": _num(sums["tax"])}], "extraDiscountAmount": 0,
+        "netAmount": _num(sums["net"]), "taxTotals": [{"taxType": "T1", "amount": _num(sums["tax"])}], "extraDiscountAmount": _num(extra),
         "totalItemsDiscountAmount": 0, "totalAmount": _num(sums["total"]),
     }
     return document, problems

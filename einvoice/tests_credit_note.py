@@ -20,7 +20,7 @@ from .tests_portal import ENV, FakePortal
 
 
 @mock.patch.dict(os.environ, ENV)
-class CreditNoteTests(DocumentSetup):
+class CreditNoteSetup(DocumentSetup):
     def setUp(self):
         super().setUp()
         portal._TOKEN.update(value="", expires=0.0, key="")
@@ -32,6 +32,10 @@ class CreditNoteTests(DocumentSetup):
     def accept_original(self):
         with mock.patch.object(portal, "_http", FakePortal()):
             refresh_submission(send_invoice(self.posted, self.owner, "en"), self.owner, "en")
+
+
+@mock.patch.dict(os.environ, ENV)
+class CreditNoteTests(CreditNoteSetup):
 
     def test_the_credit_note_points_to_the_accepted_original_and_matches_the_return(self):
         _document, problems = build_credit_note(self.sales_return, "en")
@@ -45,6 +49,12 @@ class CreditNoteTests(DocumentSetup):
         self.assertEqual(document["totalAmount"], float(self.sales_return.total_amount))  # every discount's share and the tax given back
         self.assertEqual(round(line["netTotal"] + line["taxableItems"][0]["amount"], 2), line["total"])
         self.assertEqual(round(line["salesTotal"] - line["discount"]["amount"], 2), line["netTotal"])
+        # Codex #270: the VAT base excludes the invoice discount (taken after tax, as on the invoice)
+        tax = line["taxableItems"][0]
+        self.assertAlmostEqual(tax["amount"], round(line["netTotal"] * tax["rate"] / 100, 2), delta=0.011)
+        self.assertGreater(document["extraDiscountAmount"], 0)
+        self.assertEqual(round(sum(l["total"] for l in document["invoiceLines"]) - document["extraDiscountAmount"], 2), document["totalAmount"])
+        self.assertEqual(document["netAmount"], round(sum(l["netTotal"] for l in document["invoiceLines"]), 2))
 
     def test_sending_is_claimed_like_an_invoice_and_kept_apart_from_it(self):
         with self.assertRaisesMessage(ValidationError, "accepted first"):
@@ -102,3 +112,27 @@ class CreditNoteTests(DocumentSetup):
         self.assertIn('"documentType": "c"', json_file.content.decode())
         invoice_page = self.client.get(reverse("einvoice:sales_document", args=[self.posted.pk]) + "?lang=en")
         self.assertContains(invoice_page, 'data-eta-status="valid"')  # the invoice page still shows the invoice's own sending
+
+
+@mock.patch.dict(os.environ, ENV)
+class ReturnGuardTests(CreditNoteSetup):
+    """Codex on #270: a return whose credit note the authority holds is not reversed here; the invoice guard looks
+    at the invoice's own sendings only."""
+
+    def test_a_return_with_a_live_credit_note_is_not_reversed(self):
+        from sales.services import cancel_sales_return
+
+        self.accept_original()
+        with mock.patch.object(portal, "_http", FakePortal()):
+            send_credit_note(self.sales_return, self.owner, "en")
+        with self.assertRaisesMessage(ValidationError, "credit note is registered"):
+            cancel_sales_return(self.sales_return.pk, TODAY, "غلط", self.owner)
+        self.sales_return.refresh_from_db()
+        self.assertEqual(self.sales_return.status, "posted")
+
+    def test_a_return_never_sent_is_reversed_as_before(self):
+        from sales.services import cancel_sales_return
+
+        cancel_sales_return(self.sales_return.pk, TODAY, "غلط", self.owner)
+        self.sales_return.refresh_from_db()
+        self.assertEqual(self.sales_return.status, "cancelled")
