@@ -187,6 +187,34 @@ class OrderImportTests(StoreSetup):
             invoice = services.import_orders(text.encode("utf-8"), self.shop, self.owner, with_vat=True)["made"][0]["invoice"]
         self.assertEqual(invoice.lines.get().unit_sale_price, D("500.00"))
 
+    def test_shipping_that_includes_vat_is_taken_back_too(self):
+        from unittest import mock
+
+        fee = make_item(item_code="SHIP", item_name="شحن", default_sale_price="0", is_stock_tracked=False)
+        text = "order,sku,quantity,price\n78,DR-1,1,570\n"
+        orders = services.read_orders(text.encode("utf-8"))[1]
+        orders["78"]["shipping"] = "114"
+        with mock.patch("onlinestore.services.read_orders", return_value=("template", orders)), \
+             mock.patch("taxes.services.rates_by_item", return_value={str(self.dress.pk): "14.00", str(fee.pk): "14.00"}):
+            invoice = services.import_orders(b"x", self.shop, self.owner, shipping_item=fee, with_vat=True)["made"][0]["invoice"]
+        self.assertEqual(invoice.lines.get(item=fee).unit_sale_price, D("100.00"))
+
+    def test_another_entitys_order_is_never_replaced(self):
+        from entities.current import working_in
+        from entities.models import Entity
+        from entities.services import main_entity
+
+        main_entity()
+        branch = Entity.objects.create(code="BR-ST", name_ar="الفرع")
+        branch_shop = make_location(location_code="SHOP-BR", is_selling_location=True, entity=branch)
+        with working_in(branch):
+            services.import_orders(SHOPIFY_ORDERS.encode("utf-8"), branch_shop, self.owner)
+        theirs = StoreOrder.objects.get(order_number="1001").invoice_id
+        with working_in(main_entity()):
+            result = services.import_orders(SHOPIFY_ORDERS.encode("utf-8"), self.shop, self.owner, replace=True)
+        self.assertIn("1001", {row["number"] for row in result["skipped"]})
+        self.assertEqual(StoreOrder.objects.get(order_number="1001").invoice_id, theirs)
+
     def test_a_serial_tracked_item_needs_its_serials(self):
         from serials.models import SerialSetting
         from settings_core import capabilities as caps

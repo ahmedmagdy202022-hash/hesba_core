@@ -66,7 +66,7 @@ MESSAGES = {
         "refunded": "الطلب اترد أو اتلغى في المتجر ({status}).", "taken": "رقم الفاتورة {number} مستخدم قبل كده.", "empty": "الطلب من غير أصناف.",
         "notes": "طلب من المتجر الأونلاين {source} رقم {number}.", "shipping": "مصاريف شحن اتحصّلت في المتجر: {amount}.", "who": "العميل: {who}.",
         "customer_note": "اتضاف من طلب المتجر الأونلاين.", "shipping_line": "مصاريف الشحن", "posted": "الطلب ده فاتورته اترحّلت؛ مينفعش يتبدّل.",
-        "replaced": "اتبدّلت مسودته.",
+        "replaced": "اتبدّلت مسودته.", "elsewhere": "رقم الطلب ده متسجّل لكيان تاني؛ مش هيتبدّل من هنا.",
     },
     "en": {
         "file": "Choose the orders file.", "big": "The file is over 2 MB; split it.", "format": "This is neither a Shopify orders export nor the Hesba template: it needs order, SKU, quantity and price columns.",
@@ -74,7 +74,7 @@ MESSAGES = {
         "refunded": "The order was refunded or voided in the store ({status}).", "taken": "Invoice number {number} is taken already.", "empty": "The order has no lines.",
         "notes": "Online store order, {source} number {number}.", "shipping": "Shipping charged in the store: {amount}.", "who": "Customer: {who}.",
         "customer_note": "Added from an online store order.", "shipping_line": "Shipping", "posted": "This order's invoice is posted; it cannot be replaced.",
-        "replaced": "its draft was replaced.",
+        "replaced": "its draft was replaced.", "elsewhere": "This order number belongs to another entity; it is not replaced from here.",
     },
 }
 
@@ -486,7 +486,10 @@ def _draft(source, order, location, user, words, phones, options):
     notes = [words["notes"].format(source=StoreSource(source).label.split(" (")[0], number=order["number"])]
     shipping = _decimal(order["shipping"], words, ZERO)
     if shipping and options.get("shipping_item") is not None:
-        lines.append({"item": options["shipping_item"], "quantity": Decimal("1"), "unit_sale_price": money_round(shipping), "line_discount_amount": ZERO,
+        fee = options["shipping_item"]
+        rate = Decimal((options.get("rates") or {}).get(str(fee.pk), "0")) if options.get("with_vat") else ZERO
+        shipping = money_round(shipping * HUNDRED / (HUNDRED + rate)) if rate else money_round(shipping)  # Codex #273: as the prices
+        lines.append({"item": fee, "quantity": Decimal("1"), "unit_sale_price": shipping, "line_discount_amount": ZERO,
                       "description": words["shipping_line"]})
     elif shipping:
         notes.append(words["shipping"].format(amount=f"{shipping:,.2f}"))
@@ -549,10 +552,17 @@ def import_orders(raw, location, user, lang="ar", shipping_item=None, with_vat=F
     source, orders = read_orders(raw, lang)
     made, skipped, again = [], [], []
     phones = phone_index()
+    from entities import scope as entity_scope
+    from sales.models import SalesInvoice
+
+    mine = entity_scope.scope(SalesInvoice.objects, entity_scope.SALES_INVOICE)
     for order in orders.values():
         found = StoreOrder.objects.filter(source=source, order_number=order["number"][:60]).select_related("invoice").first()
         if found is not None and not replace:
             again.append(order["number"])
+            continue
+        if found is not None and not mine.filter(pk=found.invoice_id).exists():
+            skipped.append({"number": order["number"], "reason": words["elsewhere"]})  # Codex #273: another entity's order stays untouched
             continue
         trial = dict(phones)  # a customer added for an order that fails is rolled back with it
         try:
