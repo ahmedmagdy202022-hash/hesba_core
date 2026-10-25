@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from master_data.models import Category, Item
 from permissions.decorators import require_permission
+from permissions.services import user_has_permission
 
 from . import services
 from .models import Promotion, PromotionKind
@@ -56,13 +57,14 @@ def promotion_list(request):
             flash.success(request, words["saved"])
             return redirect(f"{reverse('promotions:list')}?lang={lang}")
     running = {promo.pk for promo in services.running()}
-    used = services.report()
+    can_see_use = user_has_permission(request.user, "reports.view_sales_report")
+    used = services.report(user=request.user)
     rows = [{"promo": promo, "running": promo.pk in running, "use": used.get(promo.pk, {"invoices": 0, "discount": 0})}
             for promo in Promotion.objects.select_related("item", "category")]
     form = request.POST if request.method == "POST" else None
     return render(request, "promotions/list.html", {
         "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": words, "page_title": words["title"], "rows": rows, "error": error,
-        "can_manage": can_manage, "editing": editing, "form": form, "kinds": PromotionKind.choices, "today": timezone.localdate(),
+        "can_manage": can_manage, "can_see_use": can_see_use, "editing": editing, "form": form, "kinds": PromotionKind.choices, "today": timezone.localdate(),
         "items": _with(list(Item.objects.filter(active=True).order_by("item_name")[:800]), editing and editing.item) if can_manage else [],
         "categories": _with(list(Category.objects.filter(active=True).order_by("name_ar")), editing and editing.category) if can_manage else []})
 

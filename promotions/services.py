@@ -289,13 +289,19 @@ def save(data, user, promo=None, lang="ar"):
     return promo
 
 
-def report(date_from=None, date_to=None):
-    """Each promotion's posted invoices and the discount it gave."""
+def report(date_from=None, date_to=None, user=None):
+    """Each promotion's posted invoices and the discount it gave. With ``user``: what that user's sales report shows them
+    (Codex #268): nothing without ``reports.view_sales_report``, their own invoices only without ``view_all_sales_report``."""
 
     from entities import scope as entity_scope
 
     # Codex #268: the entity being worked in only, through the invoice's selling location (HG-034).
     uses = entity_scope.scope(InvoicePromotion.objects.filter(invoice__status="posted"), "invoice__" + entity_scope.SALES_INVOICE)
+    if user is not None:
+        if not user_has_permission(user, "reports.view_sales_report"):
+            return {}
+        if not user_has_permission(user, "reports.view_all_sales_report"):
+            uses = uses.filter(invoice__created_by=user)
     if date_from:
         uses = uses.filter(invoice__invoice_date__gte=date_from)
     if date_to:

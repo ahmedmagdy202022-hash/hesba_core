@@ -327,3 +327,17 @@ class FifthReviewTests(SellingTests):
         js = open(finders.find("hesba/js/invoice_form.js"), encoding="utf-8").read()
         for needed in ("quotePromotion", "promo.byLine[i]", "seq !== promoSeq", "discount_"):
             self.assertIn(needed, js)
+
+
+class SixthReviewTests(SecondReviewTests):
+    """Codex on #268 (sixth look): the promotion usage figures follow the sales-report permissions."""
+
+    def test_usage_follows_the_sales_report_permissions(self):
+        self.sync(timezone.now())  # rung up by self.cashier
+        promo = Promotion.objects.get()
+        self.assertEqual(services.report(user=self.owner)[promo.pk]["invoices"], 1)
+        self.assertEqual(services.report(user=self.cashier)[promo.pk]["invoices"], 1)  # their own sale
+        other = person(RoleCode.CASHIER, "pr_other_cashier")
+        self.assertEqual(services.report(user=other), {})
+        keeper = person(RoleCode.STOCK_KEEPER, "pr_keeper")
+        self.assertEqual(services.report(user=keeper), {})
