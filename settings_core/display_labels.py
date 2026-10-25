@@ -105,6 +105,7 @@ AR_LABELS = {
     },
     ("cheques.cheque", "status"): {"in_hand": "في الإيد", "deposited": "اتودع في البنك", "issued": "صادر ولسه ماتصرفش", "cleared": "اتصرف",
                                    "bounced": "مرتد", "cancelled": "ملغي"},
+    ("ereceipt.receipt", "status"): {"queued": "مستني الإرسال", "submitted": "اتبعت", "valid": "اتقبل", "invalid": "مرفوض", "not_issued": "متعملش: بيانات ناقصة"},
     ("cheques.cheque", "direction"): {"in": "وارد", "out": "صادر"},
     ("cashboxes.cashbox", "kind"): {"cash": "خزنة", "bank": "حساب بنكي", "cheques_in": "شيكات في الإيد", "cheques_out": "شيكات صادرة"},
     ("cashboxes.cashboxoperation", "status"): DOCUMENT_STATUS,
