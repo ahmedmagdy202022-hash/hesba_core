@@ -9,6 +9,7 @@ from django.utils import timezone
 from cashboxes.models import Cashbox
 from entities import scope as entity_scope
 from permissions.decorators import require_permission
+from permissions.services import user_has_permission
 from sales.models import SalesInvoice
 
 from . import services
@@ -82,13 +83,16 @@ def board(request):
     if request.GET.get("invoice", "").isdigit():
         invoice = entity_scope.scope(SalesInvoice.objects, entity_scope.SALES_INVOICE).filter(pk=request.GET["invoice"], status="posted").select_related("customer").first()
     shipments = services.scoped(Shipment.objects)  # Codex #272: the entity's own parcels only
+    can_view_finance = user_has_permission(request.user, "cashboxes.view_finance")
     delivered = shipments.filter(status=ShipmentStatus.DELIVERED, settlement__isnull=True).select_related("invoice__customer", "courier")
     return render(request, "shipping/board.html", {
         "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": words, "page_title": words["title"], "invoice": invoice, "today": timezone.localdate(),
-        "couriers": services.courier_rows(), "active_couriers": services.couriers().filter(active=True),
+        "couriers": services.courier_rows(), "can_view_finance": can_view_finance, "active_couriers": services.couriers().filter(active=True),
         "open": shipments.filter(status=ShipmentStatus.WITH_COURIER).select_related("invoice__customer", "courier"),
         "delivered": delivered,
-        "settlements": entity_scope.scope(Settlement.objects, "courier__cashbox__" + entity_scope.CASHBOX).select_related("courier", "destination")[:20],
+        # Codex #272: what a courier holds and the settlements are money, shown as the cashbox screens show it (cashboxes.view_finance).
+        "settlements": entity_scope.scope(Settlement.objects, "courier__cashbox__" + entity_scope.CASHBOX).select_related("courier", "destination")[:20]
+        if can_view_finance else [],
         "destinations": entity_scope.cashboxes(Cashbox.objects).filter(active=True), "can_ship": services.can_ship(request.user),
         "closed": shipments.filter(status__in=(ShipmentStatus.RETURNED, ShipmentStatus.LOST)).select_related("invoice", "courier")[:20],
     })

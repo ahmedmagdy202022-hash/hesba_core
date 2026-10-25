@@ -202,6 +202,30 @@ class CodexFixesTests(ShippingSetup):
         self.assertEqual(bal("1120"), D("0"))
 
 
+class SecondReviewTests(ShippingSetup):
+    """Codex on #272 (second look): a courier's box is in the company's currency, and only who sees money sees what it holds."""
+
+    def test_a_new_courier_box_is_in_the_company_currency(self):
+        from settings_core.models import ClientProfile
+
+        ClientProfile.objects.filter(pk=ClientProfile.get_active().pk).update(default_currency="SAR")
+        self.assertEqual(services.save_courier({"name": "سمسا"}, self.owner).cashbox.currency, "SAR")
+
+    def test_a_cashier_handles_parcels_without_seeing_courier_money(self):
+        shipment = services.deliver(services.ship(self.invoice(), self.courier, self.owner), self.owner)
+        services.settle([shipment], self.cash, self.owner)
+        cashier = person(RoleCode.CASHIER, "sh_cashier_view")
+        self.client.force_login(cashier)
+        page = self.client.get(reverse("shipping:board") + "?lang=ar")
+        self.assertEqual(page.status_code, 200)
+        self.assertNotContains(page, "data-held")
+        self.assertNotContains(page, "data-settlements")
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("shipping:board") + "?lang=ar")
+        self.assertContains(page, "data-held")
+        self.assertContains(page, "data-settlements")
+
+
 class ScreenTests(ShippingSetup):
     def test_the_board_and_the_invoice_link(self):
         invoice = self.invoice()

@@ -169,11 +169,14 @@ def save_courier(data, user, courier=None, lang="ar"):
     if courier is None:
         from entities.current import current_entity
         from entities.services import main_entity
+        from settings_core.models import ClientProfile
 
-        # Codex #272: the box belongs to the entity being worked in, so what the courier collects lands in that entity's books.
+        # Codex #272: the box belongs to the entity being worked in, so what the courier collects lands in that entity's books,
+        # and it is in the company's currency, so settling into the company's cashboxes is a same-currency transfer.
+        currency = getattr(ClientProfile.get_active(), "default_currency", None) or "EGP"
         code = next_in_series(Cashbox, "cashbox_code", "COURIER-")
         box = Cashbox.objects.create(cashbox_code=code, name_ar=f"تحصيلات {name}", name_en=f"{name} collections", kind=CashboxKind.COURIER,
-                                     entity=current_entity() or main_entity())
+                                     entity=current_entity() or main_entity(), currency=currency)
         courier = Courier.objects.create(name=name, phone=str(data.get("phone") or "").strip()[:50], fee_per_parcel=fee, cashbox=box)
     else:
         courier.name, courier.phone, courier.fee_per_parcel = name, str(data.get("phone") or "").strip()[:50], fee

@@ -31,9 +31,9 @@
 {% for row in delivered %}<form id="undo-{{ row.pk }}" method="post" hidden>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="undo"><input type="hidden" name="shipment" value="{{ row.pk }}"></form>{% endfor %}{% else %}<p class="op-muted">{{ words.none }}</p>{% endif %}
 
 <h2>{{ words.couriers }}</h2>
-<div class="op-table-wrap"><table class="op-table" data-couriers><thead><tr><th>{{ words.name }}</th><th>{{ words.phone }}</th><th>{{ words.fee }}</th><th>{{ words.held }}</th><th>{{ words.out }}</th></tr></thead><tbody>
-{% for row in couriers %}<tr data-courier="{{ row.courier.pk }}"><td class="op-cell-text">{{ row.courier.name }}</td><td><bdi>{{ row.courier.phone|default:"—" }}</bdi></td><td>{{ row.courier.fee_per_parcel|money }}</td><td data-held>{{ row.held|money }}</td><td>{{ row.out|money }}</td></tr>
-{% empty %}<tr><td colspan="5" class="op-empty">{{ words.none }}</td></tr>{% endfor %}</tbody></table></div>
+<div class="op-table-wrap"><table class="op-table" data-couriers><thead><tr><th>{{ words.name }}</th><th>{{ words.phone }}</th><th>{{ words.fee }}</th>{% if can_view_finance %}<th>{{ words.held }}</th>{% endif %}<th>{{ words.out }}</th></tr></thead><tbody>
+{% for row in couriers %}<tr data-courier="{{ row.courier.pk }}"><td class="op-cell-text">{{ row.courier.name }}</td><td><bdi>{{ row.courier.phone|default:"—" }}</bdi></td><td>{{ row.courier.fee_per_parcel|money }}</td>{% if can_view_finance %}<td data-held>{{ row.held|money }}</td>{% endif %}<td>{{ row.out|money }}</td></tr>
+{% empty %}<tr><td colspan="{% if can_view_finance %}5{% else %}4{% endif %}" class="op-empty">{{ words.none }}</td></tr>{% endfor %}</tbody></table></div>
 <form class="op-form" method="post" data-courier-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="courier"><h2>{{ words.new_courier }}</h2><div class="op-form-grid">
 <div class="op-field"><label for="c-name">{{ words.name }}</label><input id="c-name" name="name" required></div>
 <div class="op-field"><label for="c-phone">{{ words.phone }}</label><input id="c-phone" name="phone" inputmode="tel" dir="ltr"></div>
