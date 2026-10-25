@@ -33,7 +33,7 @@ WORDS = {
         "created": "اتعملت خطة التقسيط.", "number": "#", "due_date": "الاستحقاق", "amount": "القسط", "settled": "المسدد", "state": "الحالة",
         "states": {"paid": "مسدد", "overdue": "متأخر", "due_today": "مستحق النهارده", "upcoming": "لسه"}, "partial": "جزئي",
         "collect": "تحصيل", "collect_amount": "المبلغ", "cashbox": "الخزنة", "date": "التاريخ", "collected": "اتسجل التحصيل {number}.", "bad": "بيانات غير صحيحة.",
-        "remind": "تذكير واتساب", "cancel": "إلغاء الخطة", "cancelled_msg": "اتلغت الخطة.", "plan_cancelled": "الخطة ملغية.", "invoice_cancelled": "الفاتورة اتلغت؛ الخطة متوقفة.",
+        "remind": "تذكير بالقسط", "call": "اتصال", "whatsapp": "واتساب", "cancel": "إلغاء الخطة", "cancelled_msg": "اتلغت الخطة.", "plan_cancelled": "الخطة ملغية.", "invoice_cancelled": "الفاتورة اتلغت؛ الخطة متوقفة.",
         "credited": "مرتجعات خصمت من الباقي", "done": "الخطة اتسددت بالكامل.", "back": "خطط التقسيط", "view_only": "تقدر تشوف بس.", "prev": "السابق", "next": "التالي",
         "reminder": "أهلاً {name}، ده تذكير ودّي من {company} بقسط فاتورة {invoice}: {amount} مستحق يوم {date}. شكرًا لحضرتك.",
     },
@@ -46,7 +46,7 @@ WORDS = {
         "created": "Instalment plan created.", "number": "#", "due_date": "Due", "amount": "Instalment", "settled": "Paid", "state": "State",
         "states": {"paid": "Paid", "overdue": "Overdue", "due_today": "Due today", "upcoming": "Upcoming"}, "partial": "partly",
         "collect": "Collect", "collect_amount": "Amount", "cashbox": "Cashbox", "date": "Date", "collected": "Collection {number} recorded.", "bad": "Invalid input.",
-        "remind": "WhatsApp reminder", "cancel": "Cancel plan", "cancelled_msg": "Plan cancelled.", "plan_cancelled": "This plan is cancelled.", "invoice_cancelled": "The invoice was cancelled; the plan is stopped.",
+        "remind": "Instalment reminder", "call": "Call", "whatsapp": "WhatsApp", "cancel": "Cancel plan", "cancelled_msg": "Plan cancelled.", "plan_cancelled": "This plan is cancelled.", "invoice_cancelled": "The invoice was cancelled; the plan is stopped.",
         "credited": "Returns taken off the balance", "done": "The plan is fully paid.", "back": "Instalment plans", "view_only": "You can view only.", "prev": "Previous", "next": "Next",
         "reminder": "Hello {name}, a friendly reminder from {company} about the instalment on invoice {invoice}: {amount} due on {date}. Thank you.",
     },
@@ -147,7 +147,8 @@ def plan_detail(request, pk):
         text = words["reminder"].format(name=plan.customer.name, company=company_details()["name"], invoice=plan.invoice.invoice_number,
                                         amount=f"{info['next_open']:,.2f}", date=info["next_due"].due_date.isoformat())
         reminder = f"https://wa.me/{number}?text={quote(text)}"
+    whatsapp = f"https://wa.me/{number}" if number else ""  # FB-19: a plain chat, beside the reminder with its text
     cashboxes = entity_scope.cashboxes(Cashbox.objects).filter(active=True)
     default_cashbox = cashboxes.filter(is_default=True).first() or cashboxes.first()
-    return render(request, "installments/detail.html", _context(request, plan=plan, info=info, active=is_active(plan), reminder=reminder, cashboxes=cashboxes,
+    return render(request, "installments/detail.html", _context(request, plan=plan, info=info, active=is_active(plan), reminder=reminder, whatsapp=whatsapp, cashboxes=cashboxes,
                                                                default_cashbox=default_cashbox, today=today))

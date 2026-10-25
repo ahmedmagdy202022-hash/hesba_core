@@ -1878,3 +1878,23 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 - **Files:** a new `shipping` app; `cashboxes` (kind `courier`); `sales.services` (called, not changed).
 - **Risk:** a parcel lost by the courier is written off as an expense with a reason.
 - **Tests:** COD sale → courier settles → bank; fee; returned parcel; lost parcel.
+
+## HG-065 — Selling an item that is not in stock (Ahmed's notes #20, #21, #24)
+
+- **Status:** PROPOSED, waiting for Ahmed's approval. Nothing is built.
+- **What Ahmed asked:** at the till and on the sales invoice, allow selling an item whose stock is not enough, with a box asking the seller to agree to selling what is not there.
+- **What happens today:** `sales.services._validate_stock_available` refuses to post a sale above the warehouse's stock, at the till, on the invoice, and on an offline sale when it syncs.
+- **Why this is protected:** it touches inventory movement and accounting, the average cost, and posted sales cost (HG-003). A sale below zero has no real cost to take: the authoritative cost comes from the stock movements that are not there yet.
+- **Proposed:**
+  - a setting "Allow selling without stock", off by default, that only the owner can switch on (`settings_core`);
+  - when it is on, the till and the invoice show a box naming each short item and how much is missing; posting goes ahead only after the seller agrees, and the agreement is written in the audit log with who agreed;
+  - the missing quantity takes the item's last known cost (the last purchase, else its default purchase price) and is marked "cost to settle";
+  - when stock arrives, a dated cost adjustment settles the difference between that cost and the real one, so the profit report ends up right; nothing already posted is rewritten;
+  - the stock report shows items below zero in red, with a "sold before it arrived" list;
+  - with the setting off, nothing changes.
+- **Files:** `sales/services.py` (the stock check), `sales/pos.py`, `inventory/services.py` (the settling adjustment), `settings_core` (the setting), `reports` (the below-zero list), and the till and invoice templates.
+- **Risk:**
+  - the average cost and the profit for the days between the sale and the purchase are estimates until settled;
+  - a warehouse can show a negative quantity, which some reports and checks assume cannot happen; each must be checked;
+  - an offline sale that syncs after stock ran out must follow the same rule.
+- **Tests:** off by default refuses as today; on, a short sale posts only with the agreement and logs it; the settling adjustment brings the cost of sales and the stock value to what they would be had the purchase come first; returns of a short sale; the trial balance stays balanced throughout.

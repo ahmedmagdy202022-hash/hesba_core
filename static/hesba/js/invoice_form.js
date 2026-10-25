@@ -312,6 +312,8 @@
     }
     say((words.added || 'Added: ') + item.label + ' × ' + field(target, 'quantity').value, false);
     recalc();
+    // FB-25 (Codex #267): tell the page's other scripts the quantity changed, so a discount given as a percent follows a scan.
+    field(target, 'quantity').dispatchEvent(new Event('input', { bubbles: true }));
   }
 
   if (scan) {
