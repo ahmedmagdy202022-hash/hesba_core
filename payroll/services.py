@@ -228,7 +228,8 @@ def _absences(employees, first):
     if not attendance_on():
         return {}
 
-    sheets = month_sheet(employees, first.year, first.month, today=_month_end(first))
+    # Codex #269: the real day, so days still to come are not absences and a finished month's last day counts.
+    sheets = month_sheet(employees, first.year, first.month, today=timezone.localdate())
     return {sheet["employee"].pk: sheet["totals"]["absent"] + sheet["totals"]["unpaid"] for sheet in sheets}
 
 
@@ -259,8 +260,9 @@ def prepare(raw_month, user, lang="ar"):
 def change_line(line, data, user, lang="ar"):
     _require(user, lang)
     words = _words(lang)
+    run = PayrollRun.objects.select_for_update().get(pk=line.run_id)  # Codex #269: the same lock as post(), so a posted run never changes
     line = PayrollLine.objects.select_related("run", "employee").select_for_update(of=("self",)).get(pk=line.pk)
-    if line.run.status != RunStatus.DRAFT:
+    if run.status != RunStatus.DRAFT:
         raise ValidationError(words["not_draft"])
     for field in ("basic", "allowances", "absence_deduction", "other_deductions"):
         if field in data:
@@ -273,6 +275,28 @@ def change_line(line, data, user, lang="ar"):
 def run_totals(run):
     sums = run.lines.aggregate(**{name: Sum(name) for name in AMOUNTS})
     return {name: sums[name] or ZERO for name in AMOUNTS}
+
+
+def cost_total(date_from=None, date_to=None):
+    """The payroll cost (gross + the company's insurance) posted in the window, less the runs reversed in it: what the
+    reports add to the expenses (Codex #269), as the ledger books it. Payroll belongs to the main entity."""
+
+    from entities.current import current_entity
+    from entities.services import main_entity
+
+    entity = current_entity()
+    if entity is not None and entity.pk != main_entity().pk:
+        return ZERO
+    total = ZERO
+    for field, sign in (("posted_on", 1), ("reversed_on", -1)):
+        runs = PayrollRun.objects.exclude(status=RunStatus.DRAFT).exclude(**{f"{field}__isnull": True})
+        if date_from:
+            runs = runs.filter(**{f"{field}__gte": date_from})
+        if date_to:
+            runs = runs.filter(**{f"{field}__lte": date_to})
+        sums = PayrollLine.objects.filter(run__in=runs).aggregate(gross=Sum("gross"), company=Sum("company_insurance"))
+        total += sign * ((sums["gross"] or ZERO) + (sums["company"] or ZERO))
+    return money_round(total)
 
 
 def owed(run):

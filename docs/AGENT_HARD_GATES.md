@@ -1849,11 +1849,13 @@ The entries below are the protected-logic decisions in the commercial gate, reco
     - a payment is cancelled from the payroll screen by a dated reversal of its operation. The cashbox screen refuses to cancel it, and its manual form does not offer the kind.
   - **Reversal:** a posted run with nothing paid is reversed on a date of its own. Its accrual entry stays and the opposite one is added.
   - **Permissions:** viewing needs `cashboxes.view_expenses`; preparing, posting, paying and the rules need `cashboxes.record_expenses`; paying also needs `cashboxes.move_cash`, through `create_cashbox_operation`. A closed month stays closed (HG-011).
+  - **Reports (Codex #269):** `expenses.services.expense_total`, behind the dashboard's expenses and net profit, the daily digest and the functional report, adds the payroll cost the ledger books: gross + company insurance on the posting date, less a reversed run on its reversal date (`payroll.services.cost_total`). Payroll belongs to the main entity.
   - **Changed protected files:**
     - `cashboxes/models.py` + migration 0015: the operation and movement kind;
     - `cashboxes/services.py`: create and reverse that kind, like a bank fee;
     - `cashboxes/forms.py` and `cashboxes/views.py`: the guards;
-    - `ledger/chart.py`, `ledger/projector.py` and ledger migration 0005.
+    - `ledger/chart.py`, `ledger/projector.py` and ledger migration 0005;
+    - `expenses/services.py`: `expense_total` adds the payroll cost.
 - **Why:** the salary run creates expenses and money movements, and it needs its own control accounts (salaries payable, social insurance, payroll tax).
 - **Why the expense service cannot be reused as it is:** `expenses.services.record_expense` pays cash out for exactly the expense amount at once. Gross pay would overpay the cash; net pay would understate the salary cost and leave no liability for what is withheld.
 - **Proposed: a payroll accrual and payment of its own.**

@@ -183,3 +183,27 @@ class ScreenTests(PayrollSetup):
         self.assertFalse(SalaryProfile.objects.get(employee=self.ali).taxed)
         self.client.force_login(self.cashier)
         self.assertEqual(self.client.get(reverse("payroll:list")).status_code, 403)
+
+
+class CodexFixesTests(PayrollSetup):
+    """Codex on #269: the reports count the payroll cost, and absences are counted up to the real day."""
+
+    def test_the_reports_count_the_posted_cost_and_drop_a_reversed_run(self):
+        from expenses.services import expense_total
+
+        before = expense_total()
+        run = services.post(self.make_run(), self.owner)
+        self.assertEqual(services.cost_total(), D("17437.50"))
+        self.assertEqual(expense_total() - before, D("17437.50"))  # the dashboard's net profit sees it
+        self.assertEqual(services.cost_total(run.posted_on, run.posted_on), D("17437.50"))
+        self.assertEqual(services.cost_total(run.posted_on + timedelta(days=1)), D("0.00"))
+        services.reverse(run, self.owner, "غلط", reversed_on=TODAY.isoformat())
+        self.assertEqual(services.cost_total(), D("0.00"))
+        self.assertEqual(services.cost_total(TODAY, TODAY), D("-17437.50"))  # the reversal's own date
+
+    def test_absences_are_counted_up_to_today(self):
+        from unittest import mock
+
+        with mock.patch("attendance.services.month_sheet", return_value=[]) as sheet:
+            services.prepare(TODAY.strftime("%Y-%m"), self.owner)
+        self.assertEqual(sheet.call_args.kwargs["today"], TODAY)  # not the month's end: days to come are not absences
