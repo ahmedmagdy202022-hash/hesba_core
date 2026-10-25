@@ -87,3 +87,44 @@
     window.location.assign(link ? link.getAttribute('href') : '/search/');
   });
 })();
+
+/* FB-23: Arabic or Persian digits typed into a number box become 0-9. A number box drops them without a word, so
+   the keyboard looked stuck; now ٤٥ becomes 45 as it is typed or pasted. The server reads either kind already. */
+(function(){
+  var EASTERN = /[\u0660-\u0669\u06F0-\u06F9\u066B\u066C]/;
+  function latin(text){
+    return text.replace(/[\u0660-\u0669\u06F0-\u06F9\u066B\u066C]/g, function(ch){
+      var code = ch.charCodeAt(0);
+      if (code === 0x066B) { return '.'; }  // Arabic decimal separator
+      if (code === 0x066C) { return ''; }   // Arabic thousands separator
+      return String(code >= 0x06F0 ? code - 0x06F0 : code - 0x0660);
+    });
+  }
+  function numeric(el){
+    return el && el.tagName === 'INPUT' && (el.type === 'number' || el.type === 'tel' || el.inputMode === 'decimal' || el.inputMode === 'numeric');
+  }
+  function put(el, text){
+    if (el.type !== 'number' && typeof el.selectionStart === 'number') {
+      el.setRangeText(text, el.selectionStart, el.selectionEnd, 'end');
+    } else if (!(document.execCommand && document.execCommand('insertText', false, text))) {
+      el.value = el.value + text;  // a number box has no caret to place the digits at
+    } else {
+      return;  // insertText sent its own input event
+    }
+    el.dispatchEvent(new Event('input', {bubbles: true}));
+  }
+  function take(event, text){
+    if (!numeric(event.target) || !text || !EASTERN.test(text)) { return; }
+    event.preventDefault();
+    put(event.target, latin(text));
+  }
+  document.addEventListener('keydown', function(event){
+    if (!event.ctrlKey && !event.metaKey && !event.altKey && event.key && event.key.length === 1) { take(event, event.key); }
+  }, true);
+  document.addEventListener('beforeinput', function(event){
+    take(event, event.data || (event.dataTransfer && event.dataTransfer.getData('text')));
+  }, true);
+  document.addEventListener('paste', function(event){
+    take(event, event.clipboardData && event.clipboardData.getData('text'));
+  }, true);
+})();
