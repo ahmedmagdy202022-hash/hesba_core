@@ -523,6 +523,9 @@ def reconcile_claim(claim, user, lang="ar"):
         found = portal.search(_internal_id(claim), since, until)
     except portal.PortalError as exc:
         raise ValidationError(_portal_error(exc, words))
+    # Codex #270: an invoice and a return may share a number; only a document of the claim's own type is taken.
+    wanted = "c" if claim.sales_return_id else "i"
+    found = [row for row in found if str(row.get("typeName") or row.get("documentType") or wanted).strip().lower() == wanted]
     with transaction.atomic():
         claim = Submission.objects.select_for_update().get(pk=claim.pk)
         if claim.status != SubmissionStatus.SENDING:

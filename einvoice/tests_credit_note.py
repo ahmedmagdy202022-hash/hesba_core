@@ -136,3 +136,24 @@ class ReturnGuardTests(CreditNoteSetup):
         cancel_sales_return(self.sales_return.pk, TODAY, "غلط", self.owner)
         self.sales_return.refresh_from_db()
         self.assertEqual(self.sales_return.status, "cancelled")
+
+
+@mock.patch.dict(os.environ, ENV)
+class ReconcileTypeTests(CreditNoteSetup):
+    """Codex on #270: a cut-off credit-note sending is matched only to a credit note, never to an invoice with the same number."""
+
+    def test_only_a_document_of_the_claims_type_is_taken(self):
+        from einvoice.models import Submission, SubmissionStatus
+        from einvoice.services import reconcile_claim
+
+        claim = Submission.objects.create(invoice=self.posted, sales_return=self.sales_return, environment="preprod",
+                                          status=SubmissionStatus.SENDING, submitted_by=self.owner)
+        invoice_row = {"uuid": "INV-U", "longId": "L", "internalId": "RET-1", "typeName": "I", "status": "Valid", "dateTimeReceived": "2026-10-25T10:00:00Z"}
+        with mock.patch.object(portal, "search", return_value=[invoice_row]):
+            claim = reconcile_claim(claim, self.owner, "en")
+        self.assertEqual((claim.status, claim.uuid), (SubmissionStatus.REJECTED, ""))  # not found: it may be sent again
+        claim = Submission.objects.create(invoice=self.posted, sales_return=self.sales_return, environment="preprod",
+                                          status=SubmissionStatus.SENDING, submitted_by=self.owner)
+        with mock.patch.object(portal, "search", return_value=[invoice_row, dict(invoice_row, uuid="CN-U", typeName="C")]):
+            claim = reconcile_claim(claim, self.owner, "en")
+        self.assertEqual(claim.uuid, "CN-U")
