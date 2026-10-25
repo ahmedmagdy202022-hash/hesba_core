@@ -78,6 +78,9 @@ NAV_ITEMS = (
     {"key": "cashboxes", "ar": "الخزائن", "en": "Cashboxes", "url_name": "cashboxes:list", "module": "cashboxes", "permission": "cashboxes.view_cashboxes"},
     # T3: bank accounts and matching their statements.
     {"key": "banks", "ar": "البنوك", "en": "Banks", "url_name": "banking:list", "module": "cashboxes", "permission": "cashboxes.view_finance"},
+    # T4: cheques received and issued, and what falls due.
+    {"key": "cheques", "ar": "الشيكات", "en": "Cheques", "url_name": "cheques:register", "module": "cashboxes",
+     "permission": ("cashboxes.view_finance", "sales.receive_customer_payment", "purchases.pay_supplier")},
     {"key": "manufacturing", "ar": "التصنيع", "en": "Manufacturing", "url_name": "manufacturing:home", "module": "manufacturing", "permission": "inventory.view_stock"},
     {"key": "projects", "ar": "المشاريع", "en": "Projects", "url_name": "projects:list", "module": "projects",
      "permission": ("sales.view_sales_invoices", "projects.view_projects")},
@@ -150,6 +153,7 @@ TAB_LABELS = {
     "messages": {"ar": "الرسائل", "en": "Messages"},
     "my_attendance": {"ar": "حضوري", "en": "Check in"},
     "banks": {"ar": "البنوك", "en": "Banks"},
+    "cheques": {"ar": "الشيكات", "en": "Cheques"},
     "contracts": {"ar": "العقود", "en": "Contracts"},
     "packages": {"ar": "الباكدجات", "en": "Packages"},
     "hours": {"ar": "الساعات", "en": "Hours"},

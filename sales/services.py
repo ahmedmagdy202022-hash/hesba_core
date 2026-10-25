@@ -806,6 +806,10 @@ def cancel_customer_payment(payment_id, user=None, reason=""):
     if payment.status != CustomerPaymentStatus.POSTED:
         raise ValidationError("Only posted customer payments can be cancelled.")
     _ensure_posting_period(payment.payment_date)  # HG-011: closed months stay closed.
+    # T4 (HG-056): a cheque's payment is cancelled only from the cheques screen, while the cheque is still in hand.
+    cheque = getattr(payment, "cheque", None)
+    if cheque is not None and cheque.status != "cancelled":
+        raise ValidationError("This payment is a cheque; cancel or bounce it from the cheques screen.")
 
     CustomerLedgerEntry.objects.create(
         customer=payment.customer,

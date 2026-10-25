@@ -6,6 +6,13 @@ from django.db import models
 class CashboxKind(models.TextChoices):
     CASH = "cash", "Cash"
     BANK = "bank", "Bank account"
+    #: T4 (HG-056): cheques received and not yet in the bank, and cheques issued and not yet paid. Kept out of every
+    #: cashbox picker and of cash on hand; the cheques screen moves them.
+    CHEQUES_IN = "cheques_in", "Cheques in hand"
+    CHEQUES_OUT = "cheques_out", "Cheques issued"
+
+
+CHEQUE_KINDS = (CashboxKind.CHEQUES_IN, CashboxKind.CHEQUES_OUT)
 
 
 class Cashbox(models.Model):
@@ -27,7 +34,7 @@ class Cashbox(models.Model):
     is_default = models.BooleanField(default=False)
     active = models.BooleanField(default=True)
     notes = models.TextField(blank=True)
-    kind = models.CharField(max_length=10, choices=CashboxKind.choices, default=CashboxKind.CASH, db_index=True)
+    kind = models.CharField(max_length=12, choices=CashboxKind.choices, default=CashboxKind.CASH, db_index=True)
     bank_name = models.CharField(max_length=120, blank=True)
     account_number = models.CharField(max_length=60, blank=True)
     iban = models.CharField(max_length=34, blank=True)
@@ -68,6 +75,7 @@ class CashboxMovementType(models.TextChoices):
     TRANSFER_OUT = "transfer_out", "Transfer out"
     ADJUSTMENT = "adjustment", "Adjustment"
     BANK_FEE = "bank_fee", "Bank fee"
+    CHEQUE_BOUNCED = "cheque_bounced", "Cheque bounced"
 
 
 class CashboxDirection(models.TextChoices):

@@ -738,6 +738,10 @@ def cancel_supplier_payment(payment_id, user=None, reason=""):
     if payment.status != SupplierPaymentStatus.POSTED:
         raise ValidationError("Only posted supplier payments can be cancelled.")
     _ensure_posting_period(payment.payment_date)  # HG-011: closed months stay closed.
+    # T4 (HG-056): a cheque's payment is cancelled only from the cheques screen, while the cheque is not yet paid.
+    cheque = getattr(payment, "cheque", None)
+    if cheque is not None and cheque.status != "cancelled":
+        raise ValidationError("This payment is a cheque; cancel or bounce it from the cheques screen.")
 
     SupplierLedgerEntry.objects.create(
         supplier=payment.supplier,

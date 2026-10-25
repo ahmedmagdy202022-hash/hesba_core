@@ -70,7 +70,12 @@ def locations(queryset):
 
 
 def cashboxes(queryset):
-    return scope(queryset, CASHBOX)
+    """The entity's cashboxes and bank accounts. T4 (HG-056): never the cheque boxes, which only the cheques screen moves,
+    so no invoice, payment or report picks them and cash on hand never counts a cheque."""
+
+    from cashboxes.models import CHEQUE_KINDS
+
+    return scope(queryset, CASHBOX).exclude(kind__in=CHEQUE_KINDS)
 
 
 def for_user(queryset, path, user):
