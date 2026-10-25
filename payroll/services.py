@@ -148,6 +148,9 @@ def brackets(text, lang="ar"):
     tops = [top for top, _ in rows[:-1]]
     if tops != sorted(tops):
         raise ValidationError(words["brackets"])
+    # Codex #269: a rate is a share of the income, 0 to 100; a negative one would pay the employee the tax.
+    if any(rate < 0 or rate > HUNDRED for _, rate in rows) or any(top < 0 for top in tops):
+        raise ValidationError(words["brackets"])
     return rows
 
 

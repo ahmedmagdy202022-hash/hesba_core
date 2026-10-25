@@ -292,3 +292,8 @@ class FourthReviewTests(PayrollSetup):
         Projector().rebuild()
         self.assertTrue(reports.trial_balance()["balanced"])
         self.assertEqual(PayrollRun.objects.filter(month=LAST_MONTH).count(), 2)
+
+    def test_a_tax_bracket_rate_is_never_negative(self):
+        for text in (":-10", "40000:0\n:-5", "40000:150\n:10"):
+            with self.assertRaisesMessage(ValidationError, "شرائح", msg=text):
+                services.save_rules({"tax_brackets": text}, self.owner)
