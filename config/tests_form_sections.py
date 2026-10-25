@@ -86,6 +86,9 @@ class FormSectionsTests(TestCase):
         self.assertIn('href="tel:01001234567"', card)
         self.assertIn("data-party-call", card)
         self.assertIn("hs-contact--call", card)
+        self.assertEqual(card.count("data-party-whatsapp"), 1)  # Codex #267: one WhatsApp button, with its own icon
+        chat = card[card.index("data-party-whatsapp"):card.index("</a>", card.index("data-party-whatsapp"))]
+        self.assertIn("M12 2a10 10", chat)
 
 
 class InvoiceBalanceTests(TestCase):
