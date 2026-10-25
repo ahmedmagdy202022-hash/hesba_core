@@ -99,6 +99,9 @@ NAV_ITEMS = (
     {"key": "contracts", "ar": "عقود الخدمة", "en": "Service contracts", "url_name": "agreements:list", "module": None, "allow": "agreements.services.can_view"},
     {"key": "packages", "ar": "باكدجات الجلسات", "en": "Session packages", "url_name": "agreements:packages", "module": None, "allow": "agreements.packages.can_view"},
     {"key": "hours", "ar": "ساعات العمل", "en": "Hours worked", "url_name": "agreements:hours", "module": None, "allow": "agreements.hours.can_view"},
+    # T9: the day's messages to customers (amounts due, instalments, appointments, refills), sent through WhatsApp.
+    {"key": "messages", "ar": "رسائل العملاء", "en": "Customer messages", "url_name": "messaging:outbox", "module": "customers",
+     "allow": "reports.navigation.sees_customers"},
     {"key": "staff", "ar": "الموظفون", "en": "Employees", "url_name": "staff:list", "module": "employees_technicians", "allow": "reports.navigation.sees_staff"},
     # T11: who came in today, the month's sheet and leave; and each employee's own check-in button.
     {"key": "attendance", "ar": "الحضور والإجازات", "en": "Attendance & leave", "url_name": "attendance:today", "module": "employees_technicians",
@@ -144,6 +147,7 @@ TAB_LABELS = {
     "quotes": {"ar": "العروض", "en": "Quotes"},
     "drugs": {"ar": "الأدوية", "en": "Drugs"},
     "attendance": {"ar": "الحضور", "en": "Attendance"},
+    "messages": {"ar": "الرسائل", "en": "Messages"},
     "my_attendance": {"ar": "حضوري", "en": "Check in"},
     "banks": {"ar": "البنوك", "en": "Banks"},
     "contracts": {"ar": "العقود", "en": "Contracts"},
