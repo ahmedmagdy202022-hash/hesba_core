@@ -27,3 +27,10 @@ class LatinDigitsTests(SimpleTestCase):
         form = Amount({"amount": "١٢.٥٠", "count": "٧"})
         self.assertTrue(form.is_valid(), form.errors)
         self.assertEqual((form.cleaned_data["amount"], form.cleaned_data["count"]), (Decimal("12.50"), 7))
+
+    def test_a_phone_in_arabic_digits_makes_a_working_whatsapp_link(self):
+        from reports.aging import whatsapp_number
+
+        self.assertEqual(whatsapp_number("٠١٠٠١٢٣٤٥٦٧"), "201001234567")
+        self.assertEqual(whatsapp_number("01001234567"), "201001234567")
+        self.assertEqual(whatsapp_number("+٩٦٦ ٥٠ ١٢٣ ٤٥٦٧"), "966501234567")
