@@ -1744,7 +1744,21 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 
 ## HG-056 — Cheques: notes receivable and payable (T4)
 
-- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق»), as written below.
+- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق»), as written below. BUILT in T4 (`claude/t4-cheques`).
+- **What was built:**
+  - Two cashbox kinds:
+    - `cheques_in` (cheques in hand) posts to 1104 Notes receivable;
+    - `cheques_out` (cheques issued and not yet paid) posts to 2102 Notes payable.
+  - Data migration `ledger/0004` gives the default 1104 and 2102 their control keys.
+  - Each entity gets one box of each kind, made on first use. `entities.scope.cashboxes()` leaves the cheque boxes out, so no invoice, payment or report picks them and cash on hand never counts a cheque. The ledger reconciliation's cash check counts cash, banks and both cheque accounts against every cashbox.
+  - A new `cheques` app (`/cheques/`) with received and issued cheques and what falls due within 7 days. The steps:
+    - **Receive:** an ordinary `record_customer_payment` into the box.
+    - **Deposit:** a transfer from the box into a bank.
+    - **Clear:** a status change only for a received cheque. For an issued cheque it is a transfer from the bank into the issued box.
+    - **Bounce:** dated the bounce day, in an open period. For a deposited cheque, a transfer back from the bank comes first. Then a `cheque_bounced` movement out of the box and a customer ledger adjustment that puts the amount back on the customer, both linked to the original payment so the journal pairs them. An issued cheque mirrors this on the supplier.
+    - **Cancel:** only while nothing has happened to the cheque yet; it goes through `cancel_customer_payment` / `cancel_supplier_payment`.
+  - `cancel_customer_payment` and `cancel_supplier_payment` now refuse a cheque's payment unless the cheques screen is cancelling it. This is a three-line guard; nothing else in them changed.
+  - Permissions: receiving needs `sales.receive_customer_payment`, issuing needs `purchases.pay_supplier`, and deposit, clear and bounce need `cashboxes.move_cash`.
 - **Why:** wholesale and contracting in Egypt run on post-dated cheques. Today a cheque can only be recorded as cash on the day it is received.
 - **Proposed:**
   - a `Cheque` (in/out) with number, bank, due date and status (in hand → deposited → cleared, or bounced; issued → cleared);
