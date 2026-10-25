@@ -4,8 +4,9 @@ The invoice's own <select> gets one more choice (the "+ new …" box of
 quick_option.js). Typing a name there makes the record on the spot, with its
 automatic code, and picks it, so the invoice is never left half typed. Only
 someone allowed to add that kind of record is offered it, and the endpoint
-checks the same permission. Anything beyond the name (phone, address, opening
-balance) is added later from the record's own screen.
+checks the same permission. A supplier or a customer opens its full form in a
+box instead (FB-26), so the phone, address and opening balance go in at once;
+the name-only endpoint stays for a warehouse and for older pages.
 """
 
 from django.db import IntegrityError, transaction
@@ -34,6 +35,8 @@ FIELDS = {"supplier": ("supplier", ""), "customer": ("customer", ""),
 USES = {"receiving": "is_receiving_location", "selling": "is_selling_location"}
 #: kind -> URL name; each sits under its own master-data section, so a switched-off module closes it too (module_gate)
 URL_NAMES = {"supplier": "master_data:supplier_quick", "customer": "master_data:customer_quick", "location": "master_data:location_quick"}
+#: FB-26: kinds whose "+ new …" opens their full form in a box, so the phone, address and the rest go in at once
+FORM_URL_NAMES = {"supplier": "master_data:supplier_create", "customer": "master_data:customer_create"}
 
 WORDS = {
     "ar": {"supplier": "+ مورد جديد…", "location": "+ مخزن جديد…", "name": "اكتب الاسم.", "denied": "مش مسموحلك تضيف ده.", "retry": "محصلش حفظ؛ جرّب تاني."},
@@ -57,6 +60,8 @@ def offer_quick_add(form, user, lang):
         # The customer is the patient, the student, the pet owner…: the activity's own word.
         label = f"+ {term('new_customer', lang)}…" if kind == "customer" else WORDS[lang][kind]
         field.widget.attrs.update({"data-quick-add": label, "data-quick-add-url": url})
+        if kind in FORM_URL_NAMES:
+            field.widget.attrs["data-quick-add-form"] = reverse(FORM_URL_NAMES[kind])
     return form
 
 

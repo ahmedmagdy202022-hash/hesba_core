@@ -1,5 +1,5 @@
 {% extends "operations/base.html" %}
-{% load hesba_format hesba_labels %}
+{% load static hesba_format hesba_labels hesba_invoice %}
 {% block operation_content %}
 <section class="op-title-row"><div><a class="op-back" href="{% url 'purchase_orders:list' %}?lang={{ lang }}">← {{ words.back }}</a>
 <h1><bdi>{{ order.number }}</bdi> — {{ order.supplier.name }}</h1>
@@ -31,12 +31,13 @@
 <td>{% if editable %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="remove_line"><input type="hidden" name="line" value="{{ line.pk }}"><button class="op-secondary" type="submit">{{ words.remove }}</button></form>{% endif %}</td></tr>{% endwith %}
 {% empty %}<tr><td colspan="8" class="op-empty">{{ words.no_lines }}</td></tr>{% endfor %}
 </tbody></table></div>
-{% if editable %}<form class="op-form" method="post" data-add-line>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="add_line"><div class="op-form-grid">
+{% if editable %}<form class="op-form" method="post" data-add-line data-quick-item-select="#po-item" data-quick-item-price="#po-price">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="add_line"><div class="op-form-grid">
 <div class="op-field"><label for="po-item">{{ words.item }}</label><select id="po-item" name="item" required><option value="">{{ words.choose }}</option>{% for item in items %}<option value="{{ item.pk }}">{{ item.item_name }}</option>{% endfor %}</select></div>
 <div class="op-field"><label for="po-qty">{{ words.qty }}</label><input id="po-qty" name="quantity" inputmode="decimal" value="1"></div>
 <div class="op-field"><label for="po-price">{{ words.price }}</label><input id="po-price" name="unit_price" inputmode="decimal" placeholder="{{ words.price_hint }}"></div>
 <div class="op-field"><label for="po-disc">{{ words.discount }}</label><input id="po-disc" name="discount_percent" inputmode="decimal" value="0"></div>
-</div><div class="op-form-actions"><button class="op-secondary" type="submit">{{ words.add }}</button></div></form>
+</div><div class="op-form-actions"><button class="op-secondary" type="submit">{{ words.add }}</button>{% quick_item_dialog order.supplier %}</div></form>
+<script src="{% static 'hesba/js/quick_item_select.js' %}" defer></script>
 
 <h2>{{ words.details }}</h2>
 <form class="op-form" method="post" data-details>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="details"><div class="op-form-grid">
