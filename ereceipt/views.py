@@ -9,6 +9,7 @@ from django.urls import reverse
 
 from permissions.decorators import require_permission
 from permissions.services import user_has_permission
+from sales.models import SalesInvoiceStatus
 
 from . import services
 from .models import Receipt, ReceiptStatus
@@ -47,7 +48,8 @@ def board(request):
             if serial:
                 services.register(serial, request.POST.get("branch_code"))
         elif request.POST.get("action") == "again":
-            services.issue_again(get_object_or_404(services.scoped(Receipt.objects), pk=request.POST.get("receipt") or 0, status=ReceiptStatus.NOT_ISSUED), lang)
+            services.issue_again(get_object_or_404(services.scoped(Receipt.objects), pk=request.POST.get("receipt") or 0, status=ReceiptStatus.NOT_ISSUED,
+                                                 invoice__status=SalesInvoiceStatus.POSTED), lang)
         flash.success(request, words["saved"])
         return redirect(f"{reverse('ereceipt:board')}?lang={lang}")
     if request.GET.get("format") == "json":
@@ -57,7 +59,7 @@ def board(request):
         return response
     return render(request, "ereceipt/board.html", {
         "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": words, "page_title": words["title"], "can_manage": can_manage,
-        "device": services.device(), "queue": services.queue(), "missing": services.scoped(Receipt.objects.filter(status=ReceiptStatus.NOT_ISSUED)).select_related("invoice")[:50]})
+        "device": services.device(), "queue": services.queue(), "missing": services.scoped(Receipt.objects.filter(status=ReceiptStatus.NOT_ISSUED, invoice__status=SalesInvoiceStatus.POSTED)).select_related("invoice")[:50]})
 
 
 @require_permission("sales.view_sales_invoices")

@@ -179,8 +179,13 @@ def _audit(receipt, action):
 def issue(invoice, lang="ar"):
     """Issue (or keep as not issued) the receipt of a posted till sale. Returns the Receipt."""
 
+    from sales.models import SalesInvoice, SalesInvoiceStatus
+
     existing = Receipt.objects.select_for_update().filter(invoice=invoice).first()
     if existing is not None and existing.status != ReceiptStatus.NOT_ISSUED:
+        return existing
+    invoice = SalesInvoice.objects.select_for_update().get(pk=invoice.pk)
+    if invoice.status != SalesInvoiceStatus.POSTED:  # Codex #271: a cancelled sale gets no receipt and moves no chain
         return existing
     till = Device.objects.select_for_update().filter(pk=getattr(device(), "pk", None)).first()  # one receipt at a time per device
     document, problems = build(invoice, till, till.last_uuid if till else "", lang)

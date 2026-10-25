@@ -131,9 +131,9 @@ CAPABILITIES = {
 }
 CAPABILITY_SLUGS = tuple(CAPABILITIES)
 
-#: Screens two capabilities share (Codex #271): the issuer and item-code setup under /einvoice/ feed the e-receipt too,
-#: so either capability opens them. Matched exactly; the rest of /einvoice/ stays with the e-invoice.
-SHARED_PATHS = {"/einvoice/": ("e_invoice", "e_receipt"), "/einvoice/items/": ("e_invoice", "e_receipt")}
+#: Screens two capabilities share (Codex #271): the issuer, item-code and buyer-ID setup under /einvoice/ feed the
+#: e-receipt too, so either capability opens them. Matched exactly; the invoice documents stay with the e-invoice.
+SHARED_PATHS = {path: ("e_invoice", "e_receipt") for path in ("/einvoice/", "/einvoice/items/", "/einvoice/customers/")}
 
 #: Which capabilities start on for each commercial sub-activity. Anything not
 #: listed is OPTIONAL. Services activities suggest none of the trade ones.

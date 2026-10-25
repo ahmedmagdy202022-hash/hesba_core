@@ -170,6 +170,25 @@ class SecondReviewTests(ReceiptSetup):
         self.client.force_login(self.owner)
         self.assertEqual(self.client.get(reverse("einvoice:issuer")).status_code, 200)
         self.assertEqual(self.client.get(reverse("einvoice:items")).status_code, 200)
-        self.assertNotEqual(self.client.get(reverse("einvoice:customers")).status_code, 200)  # the B2B screens stay with the e-invoice
+        self.assertEqual(self.client.get(reverse("einvoice:customers")).status_code, 200)  # buyer IDs: a named receipt over the threshold needs one
         set_capability_enabled(profile, "e_receipt", False)
         self.assertNotEqual(self.client.get(reverse("einvoice:issuer")).status_code, 200)
+
+
+class ThirdReviewTests(ReceiptSetup):
+    """Codex on #271 (third look): a sale cancelled before its receipt was issued never gets one."""
+
+    def test_a_cancelled_sale_is_not_issued_on_retry(self):
+        from sales.models import SalesInvoiceStatus
+
+        invoice = self.sale()
+        receipt = Receipt.objects.get(invoice=invoice)
+        self.assertEqual(receipt.status, ReceiptStatus.NOT_ISSUED)  # no device yet
+        type(invoice).objects.filter(pk=invoice.pk).update(status=SalesInvoiceStatus.CANCELLED)
+        till = services.register("POS-SN-1")
+        self.assertEqual(services.issue_again(receipt).status, ReceiptStatus.NOT_ISSUED)
+        till.refresh_from_db()
+        self.assertEqual(till.last_uuid, "")  # the chain did not move
+        self.client.force_login(self.owner)
+        self.assertNotContains(self.client.get(reverse("ereceipt:board") + "?lang=ar"), "data-receipt-missing")
+        self.assertEqual(self.client.post(reverse("ereceipt:board"), {"lang": "ar", "action": "again", "receipt": receipt.pk}).status_code, 404)
