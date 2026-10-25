@@ -223,6 +223,32 @@ class ScreenTests(ChequeSetup):
                                      "due_date": TODAY.isoformat(), "amount": "5"})
         self.assertContains(bad, "رقم الشيك")
 
+    def test_issuing_from_the_screen_and_a_cheque_transfer_cannot_be_reversed_alone(self):
+        self.client.force_login(self.owner)
+        url = reverse("cheques:register")
+        response = self.client.post(url, {"lang": "ar", "tab": "out", "action": "issue", "supplier": self.supplier.pk, "bank": self.bank.pk, "number": "8001",
+                                          "due_date": (TODAY + timedelta(days=10)).isoformat(), "amount": "700", "received_on": TODAY.isoformat()})
+        self.assertEqual(response.status_code, 302)
+        issued = Cheque.objects.get(number="8001")
+        self.assertEqual((issued.status, issued.due_date), (ChequeStatus.ISSUED, TODAY + timedelta(days=10)))
+        received = self.receive()
+        services.deposit(received, self.bank, self.owner, on=TODAY)
+        received.refresh_from_db()
+        response = self.client.post(reverse("cashboxes:operation_cancel", args=[received.deposit_operation_id]),
+                                    {"lang": "ar", "reversal_date": TODAY.isoformat(), "reason": "غلط"}, follow=True)
+        self.assertContains(response, "تابعة لشيك")
+        received.deposit_operation.refresh_from_db()
+        self.assertEqual(received.deposit_operation.status, "posted")
+
+    def test_the_cashier_can_cancel_a_cheque_they_received(self):
+        cheque = self.receive()
+        self.client.force_login(self.cashier)
+        page = self.client.get(reverse("cheques:register") + "?lang=ar")
+        self.assertContains(page, f'data-cancel="{cheque.pk}"')
+        self.client.post(reverse("cheques:register"), {"lang": "ar", "action": "cancel", "cheque": cheque.pk, "reason": "اتسجل غلط"})
+        cheque.refresh_from_db()
+        self.assertEqual(cheque.status, ChequeStatus.CANCELLED)
+
     def test_who_does_what(self):
         self.client.force_login(person(RoleCode.STOCK_KEEPER, "cq_keeper"))
         self.assertEqual(self.client.get(reverse("cheques:register")).status_code, 403)

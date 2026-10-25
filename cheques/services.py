@@ -188,7 +188,7 @@ def _after(cheque, day, words):
 
 
 def _locked(cheque):
-    return Cheque.objects.select_for_update().select_related("box", "bank", "customer", "supplier", "customer_payment", "supplier_payment").get(pk=cheque.pk)
+    return Cheque.objects.select_for_update(of=("self",)).select_related("box", "bank", "customer", "supplier", "customer_payment", "supplier_payment").get(pk=cheque.pk)
 
 
 # ---- received cheques ----
@@ -252,7 +252,9 @@ def issue(supplier, bank, data, user, lang="ar"):
         raise ValidationError(words["party"].format(party=words["supplier"]))
     if bank is None or bank.kind != CashboxKind.BANK:
         raise ValidationError(words["bank"])
-    number, bank_name, due, amount, issued_on = _details({**data, "bank_name": data.get("bank_name") or bank.bank_name or bank.name_ar}, words)
+    values = {key: data.get(key) for key in ("number", "bank_name", "due_date", "amount", "received_on", "notes")}  # a QueryDict gives lists to **
+    values["bank_name"] = values["bank_name"] or bank.bank_name or bank.name_ar
+    number, bank_name, due, amount, issued_on = _details(values, words)
     _not_twice(ChequeDirection.OUT, number, bank_name, words)
     holder = box(CashboxKind.CHEQUES_OUT, bank.entity)
     note = words["received_note"].format(number=number, bank=bank_name, due=due.isoformat())
@@ -371,6 +373,14 @@ def cancel(cheque, reason, user, lang="ar"):
 
 
 # ---- what is due ----
+
+def owns_operation(operation_id):
+    """Whether a cashbox operation is a cheque's deposit, payment or return: only the cheques screen reverses it."""
+
+    from django.db.models import Q
+
+    return Cheque.objects.filter(Q(deposit_operation_id=operation_id) | Q(payment_operation_id=operation_id) | Q(return_operation_id=operation_id)).exists()
+
 
 def due_soon(today=None, days=DUE_SOON_DAYS):
     """Cheques in hand to deposit, and cheques issued the bank must cover, falling due within ``days`` (or already due)."""
