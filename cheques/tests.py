@@ -199,6 +199,17 @@ class IssuedChequeTests(ChequeSetup):
         self.assertEqual(get_cashbox_balance(cheque.box), D("0"))
         books_hold(self)
 
+    def test_a_cheque_on_a_dollar_account_is_owed_and_paid_in_dollars(self):
+        usd = Cashbox.objects.create(cashbox_code="BANK-USD", name_ar="حساب دولار", kind=CashboxKind.BANK, bank_name="HSBC", currency="USD",
+                                     opening_balance=D("5000.00"))
+        cheque = services.issue(self.supplier, usd, {"number": "U1", "due_date": TODAY.isoformat(), "amount": "100"}, self.owner)
+        self.assertEqual(cheque.box.currency, "USD")
+        services.clear(cheque, self.owner, on=TODAY)
+        self.assertEqual(get_cashbox_balance(usd), D("4900.00"))
+        received = services.receive(self.customer, {"number": "R1", "bank_name": "QNB", "due_date": TODAY.isoformat(), "amount": "10"}, self.owner)
+        with self.assertRaisesMessage(ValidationError, "نفس العملة"):
+            services.deposit(received, usd, self.owner, on=TODAY)
+
     def test_a_cheque_bigger_than_the_bank_cannot_be_paid(self):
         cheque = self.issue(amount="12000.00")
         with self.assertRaisesMessage(ValidationError, "negative"):

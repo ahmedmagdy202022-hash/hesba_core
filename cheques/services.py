@@ -52,6 +52,7 @@ MESSAGES = {
         "received_note": "شيك {number} — {bank}، يستحق {due}", "deposit": "إيداع شيك {number}", "bounce_back": "رد شيك {number} مرتد من البنك",
         "bounced": "شيك {number} مرتد: {reason}", "paid": "صرف شيك {number} للمورد",
         "project": "الشيك ده مربوط بمشروع؛ فك الربط من شاشة المشروع الأول.",
+        "currency": "الشيك بعملة {currency}؛ اختار حساب بنكي بنفس العملة.",
     },
     "en": {
         "number": "Type the cheque number.", "bank_name": "Type the bank the cheque is drawn on.", "due": "Type the due date.", "amount": "The amount must be a number above zero.",
@@ -61,6 +62,7 @@ MESSAGES = {
         "received_note": "Cheque {number} — {bank}, due {due}", "deposit": "Deposit of cheque {number}", "bounce_back": "Cheque {number} returned unpaid by the bank",
         "bounced": "Cheque {number} bounced: {reason}", "paid": "Cheque {number} paid to the supplier",
         "project": "This cheque is linked to a project; unlink it on the project first.",
+        "currency": "The cheque is in {currency}; choose a bank account in the same currency.",
     },
 }
 
@@ -101,22 +103,26 @@ def banks():
 
 # ---- the two cheque boxes ----
 
-def box(kind, entity=None):
-    """The entity's cheques-in-hand or cheques-issued box, made the first time it is needed."""
+def box(kind, entity=None, currency=None):
+    """The entity's cheques-in-hand or cheques-issued box in ``currency`` (the company's by default), made the first time
+    it is needed. Two first cheques at once wait for each other on the entity's row, so only one box is made."""
 
     from entities.current import current_entity
+    from entities.models import Entity
     from entities.services import main_entity
     from settings_core.models import ClientProfile
 
     entity = entity or current_entity() or main_entity()
-    found = Cashbox.objects.filter(kind=kind, entity=entity).order_by("pk").first()
+    profile = ClientProfile.get_active()
+    currency = currency or getattr(profile, "default_currency", None) or "EGP"
+    Entity.objects.select_for_update().filter(pk=entity.pk).first()
+    found = Cashbox.objects.filter(kind=kind, entity=entity, currency=currency).order_by("pk").first()
     if found is not None:
         return found
     prefix, name_ar, name_en = BOX_NAMES[kind]
-    code = prefix if not Cashbox.objects.filter(cashbox_code=prefix).exists() else f"{prefix}-{entity.code}"
-    profile = ClientProfile.get_active()
-    return Cashbox.objects.create(cashbox_code=code, name_ar=name_ar, name_en=name_en, kind=kind, entity=entity,
-                                  currency=getattr(profile, "default_currency", None) or "EGP")
+    code = next(candidate for candidate in (prefix, f"{prefix}-{entity.code}", f"{prefix}-{entity.code}-{currency}", f"{prefix}-{entity.pk}-{currency}")
+                if not Cashbox.objects.filter(cashbox_code=candidate).exists())
+    return Cashbox.objects.create(cashbox_code=code, name_ar=name_ar, name_en=name_en, kind=kind, entity=entity, currency=currency)
 
 
 def _balance(cashbox):
@@ -249,6 +255,8 @@ def deposit(cheque, bank, user, lang="ar", on=None):
     _state(cheque, (ChequeStatus.IN_HAND,), words, lang)
     if bank is None or bank.kind != CashboxKind.BANK:
         raise ValidationError(words["bank"])
+    if bank.currency != cheque.box.currency:
+        raise ValidationError(words["currency"].format(currency=cheque.box.currency))
     on = _date(on, words, timezone.localdate())
     _after(cheque, on, words)
     cheque.deposit_operation = create_cashbox_operation(f"CHQ-DEP-{cheque.pk}", on, CashboxOperationType.TRANSFER, cheque.amount,
@@ -279,7 +287,7 @@ def issue(supplier, bank, data, user, lang="ar"):
     number, bank_name, due, amount, issued_on = _details(values, words)
     Cashbox.objects.select_for_update().filter(pk=bank.pk).first()  # the same cheque saved twice at once waits for the first
     _not_twice(ChequeDirection.OUT, number, bank_name, words, bank=bank)
-    holder = box(CashboxKind.CHEQUES_OUT, bank.entity)
+    holder = box(CashboxKind.CHEQUES_OUT, bank.entity, bank.currency)  # paid out of this bank, so in its currency
     note = words["received_note"].format(number=number, bank=bank_name, due=due.isoformat())
     payment = _numbered(SupplierPayment, lambda number: record_supplier_payment(number, issued_on, supplier, holder, amount, user=user, notes=note))
     cheque = Cheque.objects.create(direction=ChequeDirection.OUT, number=number, bank_name=bank_name, due_date=due, amount=amount, supplier=supplier,
