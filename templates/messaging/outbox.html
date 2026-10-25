@@ -1,0 +1,31 @@
+{% extends "operations/base.html" %}
+{% load hesba_labels %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div>
+<form method="post" class="op-form-actions">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="refresh"><button class="op-secondary" type="submit" data-refresh>{{ words.refresh }}</button></form></section>
+{% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
+{% if not api %}<div class="op-message" role="status" data-api-off>{{ words.api_off }}</div>{% endif %}
+<nav class="op-form-actions wo-tabs" data-outbox-tabs>
+<a class="{% if show == 'pending' %}op-primary{% else %}op-secondary{% endif %}" href="?lang={{ lang }}&show=pending">{{ words.pending }} ({{ counts.pending }})</a>
+<a class="{% if show == 'sent' %}op-primary{% else %}op-secondary{% endif %}" href="?lang={{ lang }}&show=sent">{{ words.sent }}</a>
+<a class="{% if show == 'skipped' %}op-primary{% else %}op-secondary{% endif %}" href="?lang={{ lang }}&show=skipped">{{ words.skipped }}</a>
+</nav>
+<div class="op-table-wrap"><table class="op-table" data-outbox><thead><tr><th>{{ words.kind }}</th><th>{{ words.to }}</th><th>{{ words.phone }}</th><th>{{ words.text }}</th>{% if show != 'pending' %}<th>{{ words.when }}</th>{% endif %}<th></th></tr></thead><tbody>
+{% for row in rows %}<tr data-message="{{ row.pk }}" data-kind="{{ row.kind }}"><td>{% for key, label in kinds.items %}{% if key == row.kind %}{{ label }}{% endif %}{% endfor %}</td>
+<td class="op-cell-text">{% link_ok row.link as row_ok %}{% if row.can_open and row_ok %}<a href="{{ row.link }}?lang={{ lang }}">{{ row.name }}</a>{% else %}{{ row.name }}{% endif %}</td><td dir="ltr">{{ row.phone }}</td>
+<td class="op-cell-text"><small>{{ row.text }}</small></td>
+{% if show != 'pending' %}<td><bdi>{{ row.sent_at|date:"Y-m-d H:i" }}</bdi></td>{% endif %}
+<td>{% if row.status == 'pending' %}<div class="op-form-actions">
+<form method="post" target="_blank">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="send"><input type="hidden" name="message" value="{{ row.pk }}"><button class="op-primary" type="submit" data-send="{{ row.pk }}" onclick="setTimeout(function(){location.reload();},800)">{{ words.send }}</button></form>
+<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="skip"><input type="hidden" name="message" value="{{ row.pk }}"><button class="op-secondary" type="submit" data-skip="{{ row.pk }}">{{ words.skip }}</button></form>
+</div>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="6" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_edit %}<h2>{{ words.templates }}</h2><p class="op-muted">{{ words.placeholders }}</p>
+{% for template in templates %}<form class="op-form" method="post" data-template="{{ template.kind }}">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="template"><input type="hidden" name="kind" value="{{ template.kind }}">
+<h3>{% for key, label in kinds.items %}{% if key == template.kind %}{{ label }}{% endif %}{% endfor %}</h3><div class="op-form-grid">
+<div class="op-field"><label for="tp-{{ template.kind }}">{{ words.text }}</label><textarea id="tp-{{ template.kind }}" name="text" rows="3" maxlength="1000">{{ template.text }}</textarea></div>
+<div class="op-field"><label for="ev-{{ template.kind }}">{{ words.every }}</label><input id="ev-{{ template.kind }}" name="every_days" inputmode="numeric" value="{{ template.every_days }}"></div>
+<label class="op-check"><input type="checkbox" name="active" value="1"{% if template.active %} checked{% endif %}> {{ words.active }}</label>
+</div><div class="op-form-actions"><button class="op-secondary" type="submit">{{ words.save }}</button></div></form>{% endfor %}{% endif %}
+{% endblock %}
