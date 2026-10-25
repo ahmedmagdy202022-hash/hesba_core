@@ -29,7 +29,7 @@ def _sum(queryset, field):
     return queryset.aggregate(t=Sum(field))["t"] or ZERO
 
 
-def _row(rep, date_from, date_to, base_invoices, base_returns, base_payments):
+def _row(rep, date_from, date_to, base_invoices, base_returns, base_payments, base_bounced=None):
     invoices = base_invoices.filter(salesperson=rep)
     returns = base_returns.filter(source_invoice__salesperson=rep)
     lines = SalesLine.objects.filter(invoice__in=invoices)
@@ -42,7 +42,9 @@ def _row(rep, date_from, date_to, base_invoices, base_returns, base_payments):
     net = money_round(gross - returned)
     paid_on_invoices = _sum(invoices, "paid_now")
     payments = base_payments.filter(customer__sales_rep=rep) if rep is not None else base_payments.none()
-    collected = money_round(paid_on_invoices + _sum(payments, "amount"))
+    # T4: a cheque that bounced in the period was never collected; its payment stays posted, so it comes off here.
+    bounced = base_bounced.filter(customer__sales_rep=rep) if rep is not None and base_bounced is not None else None
+    collected = money_round(paid_on_invoices + _sum(payments, "amount") - (_sum(bounced, "amount") if bounced is not None else ZERO))
     sold = _sum(invoices, "total_amount")
     rate = rep.commission_percent if rep is not None else ZERO
     row = {
@@ -88,10 +90,14 @@ def rep_performance(date_from, date_to):
     payments = entity_scope.scope(CustomerPayment.objects, entity_scope.CUSTOMER_PAYMENT).filter(
         status="posted", payment_date__gte=date_from, payment_date__lte=date_to
     )
+    from cheques.models import ChequeDirection, ChequeStatus
+    from cheques.services import scoped as scoped_cheques
+
+    bounced = scoped_cheques().filter(direction=ChequeDirection.IN, status=ChequeStatus.BOUNCED, bounced_on__gte=date_from, bounced_on__lte=date_to)
     involved = set(invoices.exclude(salesperson=None).values_list("salesperson", flat=True))
     involved |= set(returns.exclude(source_invoice__salesperson=None).values_list("source_invoice__salesperson", flat=True))
     reps = Employee.objects.filter(active=True) | Employee.objects.filter(pk__in=involved)
-    rows = [_row(rep, date_from, date_to, invoices, returns, payments) for rep in reps.distinct().order_by("name")]
+    rows = [_row(rep, date_from, date_to, invoices, returns, payments, bounced) for rep in reps.distinct().order_by("name")]
     rows = [row for row in rows if row["invoices"] or row["returns"] or row["customers"] or row["rep"].pk in involved]
     unassigned = _row(None, date_from, date_to, invoices.filter(salesperson=None), returns.filter(source_invoice__salesperson=None), payments.none())
     if unassigned["invoices"] or unassigned["returns"]:

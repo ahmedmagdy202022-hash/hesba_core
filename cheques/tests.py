@@ -294,3 +294,19 @@ class ProjectChequeTests(TestCase):
             cheque.refresh_from_db()
             contract.link_payment(project, cheque.customer_payment, owner, kind=ProjectPaymentKind.COLLECTION)
         self.assertTrue(project.payments.filter(payment=cheque.customer_payment).exists())
+
+
+class RepCollectionTests(TestCase):
+    def test_a_bounced_cheque_is_not_a_reps_collection(self):
+        from reports.reps import rep_performance
+        from staff.services import save_employee
+
+        prepared_client(modules="customers,suppliers,items_services,sales_operations,purchases,inventory,cashboxes,reports,employees_technicians")
+        owner = person(RoleCode.OWNER, "cqr_owner")
+        rep = save_employee({"name": "سمير", "commission_percent": "5"}, owner)
+        customer = make_customer(customer_code="CQR-C", name="موزع", sales_rep=rep, opening_balance=D("1000.00"))
+        cheque = services.receive(customer, {"number": "9", "bank_name": "QNB", "due_date": TODAY.isoformat(), "amount": "400"}, owner)
+        row = lambda: next(r for r in rep_performance(TODAY, TODAY)[0] if r["rep"] == rep)
+        self.assertEqual(row()["collected"], D("400.00"))
+        services.bounce(cheque, "رجع", owner, on=TODAY)
+        self.assertEqual(row()["collected"], D("0.00"))
