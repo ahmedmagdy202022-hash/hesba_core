@@ -88,14 +88,25 @@ def _covers(promo, item):
     return True
 
 
+def _rounding(line):
+    """The cents a selling unit's price rounding put in the line's discount (units.services.convert_line)."""
+
+    if "typed_discount" not in line:
+        return ZERO
+    return money_round(Decimal(line.get("line_discount_amount") or 0) - Decimal(line["typed_discount"]))
+
+
 def _gross(line):
-    return money_round(Decimal(line["quantity"]) * Decimal(line["unit_sale_price"]))
+    """The line's own value, before any promotion (and without the unit rounding's cents)."""
+
+    return money_round(Decimal(line["quantity"]) * Decimal(line["unit_sale_price"])) - _rounding(line)
 
 
 def _open(line):
     """A line that may take a promotion: no discount typed by hand."""
 
-    return not (line.get("line_discount_amount") or ZERO)
+    typed = line["typed_discount"] if "typed_discount" in line else line.get("line_discount_amount")
+    return not (typed or ZERO)
 
 
 def discounts(promo, lines):
@@ -107,11 +118,18 @@ def discounts(promo, lines):
         for index in eligible:
             result[index] = money_round(_gross(lines[index]) * promo.percent / HUNDRED)
     elif promo.kind == PromotionKind.BUY_GET and promo.buy_quantity and promo.get_quantity:
+        # Counted over every line it covers (Codex #268: a serialized item comes one unit per line), and the free
+        # units are the cheapest ones, as shops do it.
         group = Decimal(promo.buy_quantity + promo.get_quantity)
-        for index in eligible:
+        units = sum((Decimal(lines[index]["quantity"]) for index in eligible), ZERO)
+        free = (units / group).to_integral_value(rounding=ROUND_FLOOR) * promo.get_quantity
+        for index in sorted(eligible, key=lambda i: (_gross(lines[i]) / Decimal(lines[i]["quantity"]), i)):
+            if free <= 0:
+                break
             line = lines[index]
-            free = (Decimal(line["quantity"]) / group).to_integral_value(rounding=ROUND_FLOOR) * promo.get_quantity
-            result[index] = min(money_round(free * Decimal(line["unit_sale_price"])), _gross(line))
+            take = min(free, Decimal(line["quantity"]))
+            result[index] = min(money_round(take * _gross(line) / Decimal(line["quantity"])), _gross(line))
+            free -= take
     elif promo.kind == PromotionKind.AMOUNT_OVER and promo.amount:
         base = sum((_gross(lines[index]) for index in eligible), ZERO)
         if eligible and base > 0 and base >= (promo.min_total or ZERO):
@@ -147,7 +165,7 @@ def apply(lines, now=None, coupon="", lang="ar"):
         return lines, None, ZERO
     filled = []
     for line, off in zip(lines, best_off):
-        filled.append(dict(line, line_discount_amount=off) if off else line)
+        filled.append(dict(line, line_discount_amount=off + _rounding(line)) if off else line)  # the unit rounding's cents stay
     return filled, best, best_total
 
 

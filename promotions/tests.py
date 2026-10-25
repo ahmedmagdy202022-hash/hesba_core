@@ -179,3 +179,42 @@ class SellingTests(PromotionSetup):
         self.assertContains(self.client.get(reverse("dashboard_snapshot") + "?lang=ar"), 'href="/promotions/?lang=ar"')
         self.client.force_login(self.cashier)
         self.assertEqual(self.client.post(url, {"lang": "ar", "name": "x", "kind": "percent", "percent": "5"}).status_code, 403)
+
+
+class CodexFixesTests(SellingTests):
+    """Codex on #268: the till shows the promotion before payment, unit rounding is not a typed discount, buy X get Y
+    counts across lines, and a form with an error keeps the item or section it was for."""
+
+    def test_the_till_quotes_the_promotion_and_refuses_a_payment_for_another_total(self):
+        open_test_shift(self.cashier, self.cashbox)
+        self.client.force_login(self.cashier)
+        self.assertContains(self.client.get(reverse("sales:pos") + "?lang=ar"), "data-pos-promo-row")
+        cart = {"line_count": "1", "item_0": str(self.sneaker.pk), "qty_0": "1", "price_0": "500.00"}
+        quote = self.client.post(reverse("sales:pos_promotion"), cart).json()
+        self.assertEqual((quote["discount"], quote["name"], quote["lines"]), ("100.00", "الأحذية 20%", ["100.00"]))
+        sale = dict(cart, customer=str(walk_in_customer().pk), location=str(self.location.pk), cashbox=str(self.cashbox.pk), discount="0", tendered="500", print="0")
+        refused = self.client.post(reverse("sales:pos"), dict(sale, promotion_seen="0.00"), follow=True)
+        self.assertContains(refused, "العروض اتغيرت")
+        self.assertFalse(SalesInvoice.objects.exists())
+        self.assertEqual(self.client.post(reverse("sales:pos"), dict(sale, promotion_seen="100.00")).status_code, 302)
+        self.assertEqual(SalesInvoice.objects.get().total_amount, D("400.00"))
+
+    def test_a_unit_price_rounding_is_not_a_typed_discount(self):
+        converted = dict(line(self.sneaker, "3", "166.67", discount="0.01"), typed_discount=D("0.00"))  # a box of 3 at 500.00
+        lines, promo, off = services.apply([converted])
+        self.assertEqual(off, D("100.00"))  # 20% of the 500.00 the box costs
+        self.assertEqual(lines[0]["line_discount_amount"], D("100.01"))  # the rounding cent stays
+        typed = dict(line(self.sneaker, "3", "166.67", discount="5.01"), typed_discount=D("5.00"))
+        self.assertIsNone(services.apply([typed])[1])  # a discount typed by hand still keeps the line out
+
+    def test_buy_two_get_one_counts_across_lines(self):
+        Promotion.objects.update(active=False)
+        self.promo(kind=PromotionKind.BUY_GET, buy_quantity=2, get_quantity=1, item=self.sock)
+        lines, _promo, off = services.apply([line(self.sock, 1, "30.00"), line(self.sock, 1, "30.00"), line(self.sock, 1, "25.00")])
+        self.assertEqual(off, D("25.00"))  # three single serial lines: one free, the cheapest
+        self.assertEqual([l["line_discount_amount"] for l in lines], [D("0"), D("0"), D("25.00")])
+
+    def test_a_form_with_an_error_keeps_its_item(self):
+        self.client.force_login(self.owner)
+        page = self.client.post(reverse("promotions:list"), {"lang": "ar", "name": "x", "kind": "percent", "percent": "500", "item": str(self.sock.pk)})
+        self.assertContains(page, f'<option value="{self.sock.pk}" selected>')

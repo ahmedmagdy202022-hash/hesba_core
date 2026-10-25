@@ -127,6 +127,7 @@
   }
 
   function render() {
+    requote();
     body.textContent = '';
     if (!cart.length) {
       var empty = el('tr', { 'class': 'pos-empty' });
@@ -160,18 +161,51 @@
   // TAX-001: VAT per line at the item's rate, rounded per line like the server.
   var ratesNode = document.getElementById('hs-tax-rates');
   var rates = ratesNode ? JSON.parse(ratesNode.textContent) : null;
-  function lineTax(row) {
+  function lineTax(row, index) {
     if (!rates) { return 0; }
-    var net = Math.round(num(row.qty) * num(row.price) * 100) / 100;
+    var net = Math.round(num(row.qty) * num(row.price) * 100) / 100 - num(promo.lines[index]);
     return Math.round(net * num(rates[String(row.id)]) + 1e-9) / 100;
   }
 
+  // T5 (Codex #268): the promotion the server would give this cart, shown before the payment is taken.
+  var promoRow = form.querySelector('[data-pos-promo-row]');
+  var promoSeen = form.querySelector('[data-pos-promo-seen]');
+  var coupon = form.querySelector('[data-pos-coupon]');
+  var promo = { off: 0, lines: [], key: '' }, promoTimer = null;
+  function quote() {
+    if (!promoRow || !window.fetch) { return; }
+    var body = new FormData();
+    body.append('lang', document.body.dataset.lang === 'en' ? 'en' : 'ar');
+    body.append('line_count', String(cart.length));
+    body.append('coupon', coupon ? coupon.value : '');
+    cart.forEach(function (row, index) {
+      body.append('item_' + index, row.id); body.append('qty_' + index, row.qty); body.append('price_' + index, row.price); body.append('unit_' + index, row.unit || '');
+    });
+    var key = JSON.stringify([coupon ? coupon.value : '', cart.map(function (row) { return [row.id, row.qty, row.price, row.unit || '']; })]);
+    if (key === promo.key) { return; }
+    var token = form.querySelector('input[name="csrfmiddlewaretoken"]');
+    fetch(promoRow.getAttribute('data-url'), { method: 'POST', body: body, credentials: 'same-origin', headers: { 'X-CSRFToken': token ? token.value : '' } })
+      .then(function (response) { return response.ok ? response.json() : null; })
+      .then(function (answer) {
+        if (!answer || !answer.ok) { promo = { off: 0, lines: [], key: '' }; promoSeen.value = ''; promoRow.hidden = true; totals(); return; }
+        promo = { off: num(answer.discount), lines: answer.lines || [], key: key };
+        promoSeen.value = answer.discount;
+        promoRow.hidden = !promo.off;
+        promoRow.querySelector('[data-pos-promo]').textContent = '-' + money(promo.off);
+        promoRow.querySelector('[data-pos-promo-name]').textContent = answer.name || '';
+        totals();
+      })
+      .catch(function () { promoSeen.value = ''; });  // offline: the sale keeps the price shown, as before
+  }
+  function requote() { if (promoRow) { promo.key = ''; promoSeen.value = ''; clearTimeout(promoTimer); promoTimer = setTimeout(quote, 250); } }
+  if (coupon) { coupon.addEventListener('input', requote); }
+
   function totals() {
     var subtotal = cart.reduce(function (sum, row) { return sum + num(row.qty) * num(row.price); }, 0);
-    var tax = cart.reduce(function (sum, row) { return sum + lineTax(row); }, 0);
+    var tax = cart.reduce(function (sum, row, index) { return sum + lineTax(row, index); }, 0);
     var taxCell = form.querySelector('[data-pos-tax]');
     if (taxCell) { taxCell.textContent = money(tax); }
-    var total = Math.max(0, subtotal - num(discount.value) + tax);
+    var total = Math.max(0, subtotal - num(discount.value) - promo.off + tax);
     if (!tenderedTouched) { tendered.value = total ? total.toFixed(2) : ''; }
     var paid = num(tendered.value);
     form.querySelector('[data-pos-subtotal]').textContent = money(subtotal);
