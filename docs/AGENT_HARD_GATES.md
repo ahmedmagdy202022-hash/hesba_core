@@ -1772,7 +1772,18 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 
 ## HG-057 — Promotions and coupons (T5)
 
-- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق»), as written below.
+- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق»), as written below. BUILT in T5 (`claude/t5-promotions`).
+- **What was built:**
+  - A `promotions` app and the capability «العروض والكوبونات». It is optional, and is not offered to contracting, education or medical.
+  - Three kinds:
+    - % off an item, a section or everything;
+    - buy X get Y free;
+    - an amount off once the eligible lines reach a total, spread over them.
+  - Each promotion can have dates, a time window (one that runs past midnight works), and a coupon code. A coupon counts only when typed; an unknown code is refused.
+  - `promotions.apply` fills the line discount fields before `create_sales_draft`, on the sales invoice form and at the till. The best single promotion wins. A line with a discount typed by hand keeps it. Posting is unchanged.
+  - `InvoicePromotion` records the promotion, discount and coupon of each invoice for the report on the promotions screen, and the invoice page shows it.
+  - An offline sale syncs through `checkout` without `apply`, so it keeps the price shown when it was rung up.
+  - Managing promotions needs `master_data.manage_items`, the same as price lists. The manual discount stays open to invoice creators, as proposed.
 - **Why:** an automatic promotion changes the invoice price. Sales posting must keep using the line amounts it is given.
 - **Proposed:**
   - a promotion engine that only fills each line's existing discount field before the draft is saved (rules: buy X get Y, % off a section, fixed off over an amount, coupon code, date and time window);

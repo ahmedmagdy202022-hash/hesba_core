@@ -208,7 +208,7 @@ def _next_number(today):
     return f"{prefix}{sequence:04d}"
 
 
-def checkout(*, lines, customer, location, cashbox, discount, tendered, user, sale_date=None, notes="POS", card=False):
+def checkout(*, lines, customer, location, cashbox, discount, tendered, user, sale_date=None, notes="POS", card=False, promotion=None):
     """Create and post the sale. Returns (invoice, change).
 
     POS-003: an offline sale passes the day it was rung up as ``sale_date``;
@@ -248,12 +248,28 @@ def checkout(*, lines, customer, location, cashbox, discount, tendered, user, sa
                     user,
                 )
                 attach_sale_serials(invoice, lines)  # SERIAL-001
+                if promotion is not None:  # T5: (promotion, discount, coupon) the till filled into the lines
+                    from promotions.services import record
+
+                    record(invoice, *promotion)
                 post_sales_invoice(invoice.pk, user)
             invoice.refresh_from_db()
             return invoice, change
         except IntegrityError:
             continue  # another till took the same number a moment ago
     raise ValidationError("Could not allocate an invoice number; try again.")
+
+
+def _promotions_on():
+    from promotions.services import enabled
+
+    return enabled()
+
+
+def _running_promotions():
+    from promotions.services import enabled, running
+
+    return running() if enabled() else []
 
 
 def today_summary(user):
@@ -366,8 +382,12 @@ def pos(request):
             tendered = _decimal(request.POST.get("tendered") or "0", 2)
             if discount is None or tendered is None or tendered < 0:
                 raise ValidationError("err_line")
+            from promotions import services as promotions
+
+            coupon = request.POST.get("coupon", "")
+            lines, promotion, promotion_off = promotions.apply(lines, coupon=coupon, lang=lang)  # T5: the best running promotion
             invoice, change = checkout(lines=lines, customer=customer, location=location, cashbox=cashbox, discount=discount, tendered=tendered,
-                                       user=request.user, card=card)
+                                       user=request.user, card=card, promotion=(promotion, promotion_off, coupon) if promotion else None)
         except ValidationError as exc:
             messages.error(request, _error_text(exc, words))
             cart_back = request.POST.get("cart_json", "[]")
@@ -396,6 +416,8 @@ def pos(request):
             "can_pick_buttons": user_has_permission(request.user, "master_data.manage_items"),  # AN7 (G07)
             "card_cashbox": machine,  # AN8
             "price_book": price_book(),
+            "promotions_on": _promotions_on(),  # T5
+            "running_promotions": _running_promotions(),
             "tax_rates": rates_by_item(),
             "units": units_catalog(),
             "open_shift": open_shift_for(request.user),

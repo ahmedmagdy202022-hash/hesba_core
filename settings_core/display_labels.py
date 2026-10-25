@@ -102,6 +102,7 @@ AR_LABELS = {
         "transfer": "تحويل بين الخزن",
         "bank_fee": "مصروفات بنكية",
     },
+    ("promotions.promotion", "kind"): {"percent": "خصم %", "buy_get": "اشتري وخد ببلاش", "amount_over": "خصم مبلغ فوق حد"},
     ("cashboxes.cashbox", "kind"): {"cash": "خزنة", "bank": "حساب بنكي"},
     ("cashboxes.cashboxoperation", "status"): DOCUMENT_STATUS,
     ("cashboxes.openingbalanceadjustment", "status"): DOCUMENT_STATUS,
