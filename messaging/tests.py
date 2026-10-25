@@ -81,6 +81,24 @@ class BuildTests(OutboxSetup):
         self.assertContains(response, "مبقتش لازمة")
         self.assertFalse(OutboxMessage.objects.exists())  # withdrawn, never sent
 
+    def test_a_second_entity_keeps_the_main_entitys_reminders_as_they_were(self):
+        from entities.models import Entity
+        from entities.services import main_entity
+
+        services.build()
+        first = OutboxMessage.objects.get()
+        self.assertEqual((first.key, first.entity), (f"due:customer:{self.ali.pk}", main_entity()))
+        services.mark(first, OutboxStatus.SENT, self.owner)
+        Entity.objects.create(code="E-MS2", name_ar="فرع تاني")
+        self.assertEqual(services.build(TODAY + timedelta(days=1)), 0)  # still within its 7 days: no second reminder
+        OutboxMessage.objects.all().delete()
+        services.build()
+        waiting = OutboxMessage.objects.get()
+        OutboxMessage.objects.filter(pk=waiting.pk).update(entity=None)  # queued before entities were recorded
+        pay(self.ali, "750.00", TODAY)
+        services.build()
+        self.assertFalse(OutboxMessage.objects.exists())  # paid: withdrawn, whatever entity it was queued under
+
     def test_each_entity_gets_its_own_messages_and_no_one_sends_another_entitys(self):
         from entities.models import Entity, EntityMembership
         from entities.services import main_entity

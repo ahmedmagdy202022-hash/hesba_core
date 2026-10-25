@@ -197,14 +197,16 @@ UNSCOPED = {MessageKind.APPOINTMENT}
 
 
 def _entities():
-    """Each entity is gathered on its own, so a message belongs to one entity and the amount is that entity's."""
+    """Each entity is gathered on its own, so a message belongs to one entity and the amount is that entity's.
+
+    The main entity is always one of them, also before a second entity exists, so its reminders keep the same key
+    and the same ``entity`` when the group grows (records without an entity belong to it, HG-034)."""
 
     from entities.models import Entity
-    from entities.services import is_multi_entity
+    from entities.services import main_entity
 
-    if not is_multi_entity():
-        return [None]
-    return list(Entity.objects.filter(active=True).order_by("-is_main", "code"))
+    main = main_entity()
+    return [main] + list(Entity.objects.filter(active=True).exclude(pk=main.pk).order_by("code"))
 
 
 def build(today=None):
@@ -218,7 +220,7 @@ def build(today=None):
     for entity in _entities():
         with working_in(entity):
             for kind, source in SOURCES.items():
-                if entity is not None and not entity.is_main and kind in UNSCOPED:
+                if not entity.is_main and kind in UNSCOPED:
                     continue
                 row = template(kind)
                 if row.active:
@@ -236,7 +238,7 @@ def _gather(kind, source, row, entity, today, company, currency):
     waiting = {message.key: message for message in _waiting(kind, entity)}
     seen, added = set(), 0
     for candidate in source(today, company, currency):
-        key = candidate["key"] if entity is None else f"{candidate['key']}@{entity.pk}"
+        key = candidate["key"] if entity.is_main else f"{candidate['key']}@{entity.pk}"
         phone = _number(candidate["phone"])
         if key in recent or not phone:
             continue
@@ -262,8 +264,10 @@ def _gather(kind, source, row, entity, today, company, currency):
 
 
 def _waiting(kind, entity):
+    """The kind's messages still waiting in ``entity``; the main entity's include any queued without one."""
+
     rows = OutboxMessage.objects.filter(kind=kind, status=OutboxStatus.PENDING)
-    return rows if entity is None else rows.filter(entity=entity)
+    return rows.filter(Q(entity=entity) | Q(entity__isnull=True)) if entity.is_main else rows.filter(entity=entity)
 
 
 def visible(user):
