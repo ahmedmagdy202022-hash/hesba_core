@@ -118,6 +118,9 @@ def box(kind, entity=None, currency=None):
     Entity.objects.select_for_update().filter(pk=entity.pk).first()
     found = Cashbox.objects.filter(kind=kind, entity=entity, currency=currency).order_by("pk").first()
     if found is not None:
+        if not found.active:  # switched off by hand somewhere: the cheques that go through it still need it
+            Cashbox.objects.filter(pk=found.pk).update(active=True)
+            found.active = True
         return found
     prefix, name_ar, name_en = BOX_NAMES[kind]
     code = next(candidate for candidate in (prefix, f"{prefix}-{entity.code}", f"{prefix}-{entity.code}-{currency}", f"{prefix}-{entity.pk}-{currency}")

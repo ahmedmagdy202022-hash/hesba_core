@@ -155,6 +155,16 @@ class ReceivedChequeTests(ChequeSetup):
         with self.assertRaisesMessage(ValidationError, "أكبر من صفر"):
             services.receive(self.customer, {"number": "9", "bank_name": "QNB", "due_date": TODAY.isoformat(), "amount": "0"}, self.owner)
 
+    def test_the_cheque_box_is_not_master_data_and_stays_on(self):
+        cheque = self.receive()
+        self.client.force_login(self.owner)
+        self.assertEqual(self.client.get(reverse("master_data:edit", kwargs={"entity": "cashboxes", "pk": cheque.box_id})).status_code, 404)
+        self.assertNotContains(self.client.get(reverse("master_data:list", kwargs={"entity": "cashboxes"}) + "?lang=ar"), cheque.box.cashbox_code)
+        Cashbox.objects.filter(pk=cheque.box_id).update(active=False)
+        second = self.receive(number="100299")
+        self.assertTrue(Cashbox.objects.get(pk=second.box_id).active)
+        services.deposit(second, self.bank, self.owner, on=TODAY)
+
     def test_what_falls_due(self):
         soon = self.receive(number="1", due=TODAY + timedelta(days=3))
         self.receive(number="2", due=TODAY + timedelta(days=60))

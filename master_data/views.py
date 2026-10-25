@@ -358,7 +358,9 @@ def master_data_hub(request):
 def _scoped_rows(config):
     """HG-034: locations and cashboxes are listed and edited inside the entity being worked in."""
 
-    if config["model"] in (Location, Cashbox):
+    if config["model"] is Cashbox:
+        return entity_scope.cashboxes(Cashbox.objects.all())  # T4: never the cheque boxes, which only the cheques screen runs
+    if config["model"] is Location:
         return entity_scope.scope(config["model"].objects.all(), entity_scope.LOCATION)
     return config["model"].objects.all()
 
