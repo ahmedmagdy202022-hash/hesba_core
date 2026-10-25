@@ -314,6 +314,12 @@ class CashboxForm(ZeroWhenBlank, AutoNumbered, _EntityField, HesbaModelForm):
             self.fields[name].label = words[name]
         self.fields["kind"].help_text = words["kind_help"]
         self.fields["kind"].choices = localized_choices(Cashbox, "kind", self.lang)
+        self.fields["kind"].required = False  # left out (an older screen, an import): a cash cashbox, as before T3
+
+    def clean_kind(self):
+        if self.fields["kind"].disabled:
+            return self.instance.kind
+        return self.cleaned_data.get("kind") or CashboxKind.CASH
 
     def clean(self):
         cleaned = super().clean()
