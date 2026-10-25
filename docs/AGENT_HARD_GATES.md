@@ -1688,7 +1688,13 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 
 ## HG-055 — Bank accounts (T3)
 
-- **Status:** OPEN PROPOSAL.
+- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق», together with HG-056 to HG-061 as written below). BUILT in T3 (`claude/t3-banks`).
+- **What was built:**
+  - `Cashbox.kind` (cash / bank, default cash) with `bank_name`, `account_number` and `iban`. The kind is locked once the cashbox has movements.
+  - A `bank_fee` operation and movement type: only from a bank account, never below zero, reversed like any operation.
+  - The projector puts a bank account's movements and opening balance in 1102 Banks, and a fee in 5212 Bank charges (control `bank_charges`; a ledger data migration gives the existing 5212 its key). The reconciliation's cash check compares cash + banks with every cashbox.
+  - A new `banking` app: upload the bank's statement (CSV or Excel, Arabic or English headers, an amount column or debit and credit columns). A line matches by itself when the amount is the same and the date is within 3 days; it can also be matched or unmatched by hand. A fee line not in the books is recorded as a bank fee and matched in one step. The page shows the books balance, what the bank has not shown yet, what the books do not have yet, what the statement should say, and the difference. Matching never changes an amount or a balance.
+  - Viewing needs `cashboxes.view_finance`; uploading and matching also need `cashboxes.move_cash`. Bank accounts follow the entity scope (HG-034).
 - **Why:** a cashbox today has no kind, so a bank account is just a cashbox with a bank's name. Bank fees, a statement match and the trial balance need to tell them apart.
 - **Proposed:**
   - add `Cashbox.kind` (cash / bank) with bank details (bank, account number, IBAN);
@@ -1703,6 +1709,7 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 
 ## HG-056 — Cheques: notes receivable and payable (T4)
 
+- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق»), as written below.
 - **Why:** wholesale and contracting in Egypt run on post-dated cheques. Today a cheque can only be recorded as cash on the day it is received.
 - **Proposed:**
   - a `Cheque` (in/out) with number, bank, due date and status (in hand → deposited → cleared, or bounced; issued → cleared);
@@ -1730,6 +1737,7 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 
 ## HG-057 — Promotions and coupons (T5)
 
+- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق»), as written below.
 - **Why:** an automatic promotion changes the invoice price. Sales posting must keep using the line amounts it is given.
 - **Proposed:**
   - a promotion engine that only fills each line's existing discount field before the draft is saved (rules: buy X get Y, % off a section, fixed off over an amount, coupon code, date and time window);
@@ -1744,6 +1752,7 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 
 ## HG-058 — Loyalty points (T6)
 
+- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق»), as written below.
 - **Why:** redeeming points is a discount that is paid for by the business. It touches the customer card and the sales totals.
 - **Proposed:**
   - points are earned on posted invoices (a rate per pound) into a points ledger per customer;
@@ -1756,6 +1765,7 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 
 ## HG-059 — E-invoice live and the credit note for returns (T7)
 
+- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق»), as written below.
 - **Why:** a sales return must be sent to the Tax Authority as a credit note that points to the original document. Signing must not block posting.
 - **Proposed:**
   - the return builds an ETA credit note from `einvoice.services` and queues it;
@@ -1768,6 +1778,7 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 
 ## HG-060 — Payroll (T12)
 
+- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق»), as written below.
 - **Why:** the salary run creates expenses and money movements, and it needs its own control accounts (salaries payable, social insurance, payroll tax).
 - **Why the expense service cannot be reused as it is:** `expenses.services.record_expense` pays cash out for exactly the expense amount at once. Gross pay would overpay the cash; net pay would understate the salary cost and leave no liability for what is withheld.
 - **Proposed: a payroll accrual and payment of its own.**
@@ -1797,6 +1808,7 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 
 ## HG-061 — Shipping companies and cash on delivery (T14)
 
+- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق»), as written below.
 - **Why:** with cash on delivery, the shipping company collects the money and settles it later minus its fees. That is a receivable from the courier, not cash.
 - **Proposed:**
   - the courier is a customer-like party with its own ledger;
