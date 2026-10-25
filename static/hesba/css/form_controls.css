@@ -112,3 +112,17 @@ a.hs-tile:hover{transform:translateY(-2px);box-shadow:var(--hs-shadow-md);border
 .hs-variant-pick__preview ul{margin:var(--hs-space-2) 0 0;padding-inline-start:var(--hs-space-5);columns:2;font-size:var(--hs-text-sm);color:var(--hs-muted)}
 @media (max-width:640px){.hs-variant-pick__preview ul{columns:1}}
 .hs-section[hidden],.hs-variant-pick__body[hidden],.md-field[hidden]{display:none}
+/* FB-25: a discount's "%" box beside its amount */
+.hs-pct-row{display:flex;align-items:center;gap:6px;width:100%}
+.hs-pct-row > input:first-child{flex:1 1 auto;min-width:0}
+.hs-pct{display:inline-flex;align-items:center;gap:4px;flex:0 0 auto}
+.hs-pct input{width:4.5em;min-width:0;text-align:center}
+.hs-pct span{color:var(--hs-muted);font-weight:600}
+.hs-pct[hidden],.hs-pct-row > input[hidden]{display:none}
+.hs-pct-row--compact{flex-wrap:wrap;gap:4px}
+.hs-pct-row--compact .hs-pct{flex:1 1 0;min-width:0}
+.hs-pct-row--compact .hs-pct input{width:100%;padding-inline:4px}
+.hs-pct-row--compact .hs-pct span{display:none}
+.hs-pct-toggle{flex:0 0 auto;min-width:28px;min-height:28px;border:1px solid var(--hs-line-strong);border-radius:8px;background:var(--hs-surface);color:var(--hs-navy);font:inherit;font-weight:700;cursor:pointer;padding:0 6px}
+.hs-pct-toggle[aria-pressed="true"]{background:var(--hs-teal);border-color:var(--hs-teal);color:var(--hs-on-teal)}
+.hs-pct-amount{flex:1 0 100%;color:var(--hs-muted);font-size:12px}
