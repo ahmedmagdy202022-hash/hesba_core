@@ -238,8 +238,7 @@ def import_statement(cashbox, uploaded, user, lang="ar", closing_balance=""):
         raise ValidationError(words["not_bank"])
     lines, printed = read_statement(uploaded, lang)
     first, last = min(line["date"] for line in lines), max(line["date"] for line in lines)
-    # Two uploads at once to the same account wait for each other, so the second sees the first's lines.
-    Cashbox.objects.select_for_update().filter(pk=cashbox.pk).first()
+    _lock_account(cashbox.pk)  # two uploads at once to the same account wait for each other, so the second sees the first's lines
     lines = _new_lines(cashbox, lines)
     if not lines:
         raise ValidationError(words["already"])
@@ -291,9 +290,16 @@ def candidates(line, exclude=(), days=MATCH_DAYS):
     return sorted(rows, key=lambda movement: (abs((movement.movement_date - line.line_date).days), movement.pk))
 
 
+def _lock_account(cashbox_id):
+    """Every upload and every match on one bank account runs one at a time, so no movement is picked by two lines."""
+
+    Cashbox.objects.select_for_update().filter(pk=cashbox_id).first()
+
+
 @transaction.atomic
 def auto_match(statement, user):
     _require_work(user)
+    _lock_account(statement.cashbox_id)
     taken, matched, now = set(), 0, timezone.now()
     for line in statement.lines.select_for_update().filter(movement__isnull=True).select_related("statement"):
         found = candidates(line, taken)
@@ -310,6 +316,7 @@ def auto_match(statement, user):
 def match(line, movement, user, lang="ar"):
     _require_work(user)
     words = MESSAGES[lang]
+    _lock_account(movement.cashbox_id)
     line = StatementLine.objects.select_for_update().select_related("statement").get(pk=line.pk)
     if line.movement_id:
         raise ValidationError(words["matched"])
