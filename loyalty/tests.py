@@ -195,3 +195,13 @@ class ScreenTests(LoyaltySetup):
         open_test_shift(self.owner, self.cashbox)
         self.assertNotContains(self.client.get(reverse("sales:pos") + "?lang=ar"), "data-pos-points")
         self.assertNotIn("points", self.client.get(reverse("parties:balance", args=["customer", self.customer.pk])).json())
+
+
+class OfflineTillTests(TestCase):
+    def test_an_offline_sale_with_points_is_not_kept_on_the_device(self):
+        from django.contrib.staticfiles import finders
+
+        with open(finders.find("hesba/js/pos_offline.js"), encoding="utf-8") as handle:
+            js = handle.read()
+        self.assertIn('[name="redeem_points"]', js)  # the sync spends no points, so the till refuses to keep such a sale offline
+        self.assertIn("render(T.points); return;", js)
