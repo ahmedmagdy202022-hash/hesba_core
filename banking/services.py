@@ -238,6 +238,8 @@ def import_statement(cashbox, uploaded, user, lang="ar", closing_balance=""):
         raise ValidationError(words["not_bank"])
     lines, printed = read_statement(uploaded, lang)
     first, last = min(line["date"] for line in lines), max(line["date"] for line in lines)
+    # Two uploads at once to the same account wait for each other, so the second sees the first's lines.
+    Cashbox.objects.select_for_update().filter(pk=cashbox.pk).first()
     lines = _new_lines(cashbox, lines)
     if not lines:
         raise ValidationError(words["already"])
