@@ -270,7 +270,7 @@ class ThirdReviewTests(SecondReviewTests):
         from django.contrib.staticfiles import finders
 
         js = open(finders.find("hesba/js/pos.js"), encoding="utf-8").read()
-        for needed in ("promoPending", "stopImmediatePropagation", "promo_wait", "seq !== promoSeq"):
+        for needed in ("promoPending", "stopImmediatePropagation", "promo_wait", "seq !== promoSeq", "controller.abort()", "4000"):
             self.assertIn(needed, js)
         self.assertIn("promotion_seen:", open(finders.find("hesba/js/pos_offline.js"), encoding="utf-8").read())
 

@@ -187,9 +187,14 @@
     if (key === promo.key) { promoPending = false; return; }
     var seq = promoSeq;
     var token = form.querySelector('input[name="csrfmiddlewaretoken"]');
-    fetch(promoRow.getAttribute('data-url'), { method: 'POST', body: body, credentials: 'same-origin', headers: { 'X-CSRFToken': token ? token.value : '' } })
+    // Codex #268: a stalled connection gives up after 4 seconds, so the till falls back to no promotion (and offline saving).
+    var controller = window.AbortController ? new AbortController() : null;
+    var timer = setTimeout(function () { if (controller) { controller.abort(); } else if (seq === promoSeq) { promoPending = false; noPromo(); } }, 4000);
+    fetch(promoRow.getAttribute('data-url'), { method: 'POST', body: body, credentials: 'same-origin', headers: { 'X-CSRFToken': token ? token.value : '' },
+                                               signal: controller ? controller.signal : undefined })
       .then(function (response) { return response.ok ? response.json() : null; })
       .then(function (answer) {
+        clearTimeout(timer);
         if (seq !== promoSeq) { return; }  // the cart changed again; a newer quote is on its way
         promoPending = false;
         if (!answer || !answer.ok) { noPromo(); return; }
@@ -200,7 +205,7 @@
         promoRow.querySelector('[data-pos-promo-name]').textContent = answer.name || '';
         totals();
       })
-      .catch(function () { if (seq === promoSeq) { promoPending = false; noPromo(); } });  // offline: no promotion shown, none applied on sync
+      .catch(function () { clearTimeout(timer); if (seq === promoSeq) { promoPending = false; noPromo(); } });  // offline or timed out: no promotion shown, none applied on sync
   }
   function requote() { if (promoRow) { promoSeq += 1; promoPending = true; promo.key = ''; promoSeen.value = ''; clearTimeout(promoTimer); promoTimer = setTimeout(quote, 250); } }
   if (coupon) { coupon.addEventListener('input', requote); }
