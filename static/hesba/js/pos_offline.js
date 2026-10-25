@@ -78,7 +78,8 @@
     return {
       key: newKey(), recorded_at: new Date().toISOString(), customer: data.get('customer'), location: data.get('location'), cashbox: data.get('cashbox'),
       discount: data.get('discount') || '0', tendered: data.get('tendered') || '0', method: data.get('pay_method') || 'cash', lines: lines,
-      coupon: data.get('coupon') || '', total: total - (parseFloat(data.get('promotion_seen')) || 0)  // T5: the sync applies the promotion of that moment
+      coupon: data.get('coupon') || '', promotion_seen: data.get('promotion_seen') || '',  // T5: the promotion the till confirmed, checked on sync
+      total: total - (parseFloat(data.get('promotion_seen')) || 0)
     };
   }
 

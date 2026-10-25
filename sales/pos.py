@@ -77,6 +77,7 @@ WORDS = {
         "walk_in": "عميل نقدي",
         "err_empty": "السلة فاضية.",
         "err_promo_changed": "العروض اتغيرت من ساعة ما السلة اتحسبت؛ راجع الإجمالي الجديد وادفع تاني.",
+        "promo_wait": "لحظة، العرض بيتحسب؛ راجع الإجمالي وادفع تاني.",
         "err_line": "في سطر فيه كمية أو سعر مش صحيح.",
         "err_item": "صنف مش موجود أو موقوف.",
         "err_walk_in_credit": "البيع الآجل محتاج عميل باسمه؛ اختار العميل أو خد المبلغ كامل.",
@@ -123,6 +124,7 @@ WORDS = {
         "walk_in": "Walk-in customer",
         "err_empty": "The cart is empty.",
         "err_promo_changed": "The promotions changed since the cart was totalled; check the new total and pay again.",
+        "promo_wait": "One moment, the promotion is being worked out; check the total and pay again.",
         "err_line": "A line has an invalid quantity or price.",
         "err_item": "An item is missing or inactive.",
         "err_walk_in_credit": "A credit sale needs a named customer; pick the customer or take the full amount.",
@@ -408,9 +410,11 @@ def pos(request):
 
             coupon = request.POST.get("coupon", "")
             lines, promotion, promotion_off = promotions.apply(lines, coupon=coupon, lang=lang)  # T5: the best running promotion
-            seen = _decimal(request.POST.get("promotion_seen", ""), 2) if request.POST.get("promotion_seen", "") != "" else None
-            if seen is not None and abs(seen - promotion_off) > Decimal("0.005"):
-                raise ValidationError("err_promo_changed")  # Codex #268: the payment was taken for the total the till showed
+            if "promotion_seen" in request.POST:  # the till shows promotions: the payment needs its confirmed quote (Codex #268)
+                raw_seen = request.POST.get("promotion_seen", "")
+                seen = _decimal(raw_seen, 2) if raw_seen != "" else None
+                if seen is None or abs(seen - promotion_off) > Decimal("0.005"):
+                    raise ValidationError("err_promo_changed")  # the payment was taken for the total the till showed
             invoice, change = checkout(lines=lines, customer=customer, location=location, cashbox=cashbox, discount=discount, tendered=tendered,
                                        user=request.user, card=card, promotion=(promotion, promotion_off, coupon) if promotion else None)
         except ValidationError as exc:
@@ -458,6 +462,6 @@ def pos(request):
             "cart_back": cart_back,
             "summary": today_summary(request.user),
             "last_invoice": entity_scope.scope(SalesInvoice.objects, entity_scope.SALES_INVOICE).filter(pk=last, created_by=request.user).first() if last.isdigit() else None,
-            "js_words": json.dumps({key: words[key] for key in ("not_found", "added", "remove", "empty_cart", "scan_serial", "serial_twice")}, ensure_ascii=False),
+            "js_words": json.dumps({key: words[key] for key in ("not_found", "added", "remove", "empty_cart", "scan_serial", "serial_twice", "promo_wait")}, ensure_ascii=False),
         },
     )

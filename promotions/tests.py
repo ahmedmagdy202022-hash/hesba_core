@@ -223,7 +223,7 @@ class CodexFixesTests(SellingTests):
 class SecondReviewTests(SellingTests):
     """Codex on #268 (second look): an offline sale syncs with the promotion of its moment, and the report follows the entity."""
 
-    def sync(self, when, coupon=""):
+    def sync(self, when, coupon="", seen="100.00", tendered="400"):
         import json
         import uuid
 
@@ -233,7 +233,7 @@ class SecondReviewTests(SellingTests):
             open_test_shift(self.cashier, self.cashbox)
         self.client.force_login(self.cashier)
         body = {"key": str(uuid.uuid4()), "recorded_at": when.isoformat(), "customer": "", "location": str(self.location.pk), "cashbox": str(self.cashbox.pk),
-                "discount": "0", "tendered": "400", "coupon": coupon, "lines": [{"id": self.sneaker.pk, "qty": "1", "price": "500.00", "unit": None, "serial": None}]}
+                "discount": "0", "tendered": tendered, "coupon": coupon, "promotion_seen": seen, "lines": [{"id": self.sneaker.pk, "qty": "1", "price": "500.00", "unit": None, "serial": None}]}
         return self.client.post(reverse("sales:pos_sync"), json.dumps(body), content_type="application/json").json()
 
     def test_an_offline_sale_syncs_with_the_promotion_running_when_it_was_rung_up(self):
@@ -255,3 +255,37 @@ class SecondReviewTests(SellingTests):
         self.assertEqual(services.report()[promo.pk]["invoices"], 1)
         with mock.patch("entities.scope.scope", side_effect=lambda queryset, path: queryset.none()):
             self.assertEqual(services.report(), {})
+
+
+class ThirdReviewTests(SecondReviewTests):
+    """Codex on #268 (third look): no payment without a confirmed quote, and an offline sale is never re-priced by an edited promotion."""
+
+    def test_the_till_takes_no_payment_before_the_quote_is_confirmed(self):
+        open_test_shift(self.cashier, self.cashbox)
+        self.client.force_login(self.cashier)
+        sale = {"line_count": "1", "item_0": str(self.sneaker.pk), "qty_0": "2", "price_0": "500.00", "customer": str(walk_in_customer().pk),
+                "location": str(self.location.pk), "cashbox": str(self.cashbox.pk), "discount": "0", "tendered": "900", "print": "0"}
+        self.assertContains(self.client.post(reverse("sales:pos"), dict(sale, promotion_seen=""), follow=True), "العروض اتغيرت")
+        self.assertFalse(SalesInvoice.objects.exists())
+        from django.contrib.staticfiles import finders
+
+        js = open(finders.find("hesba/js/pos.js"), encoding="utf-8").read()
+        for needed in ("promoPending", "stopImmediatePropagation", "promo_wait", "seq !== promoSeq"):
+            self.assertIn(needed, js)
+        self.assertIn("promotion_seen:", open(finders.find("hesba/js/pos_offline.js"), encoding="utf-8").read())
+
+    def test_an_offline_sale_is_refused_when_its_promotion_was_edited_or_switched_off(self):
+        Promotion.objects.update(percent=D("10"))
+        answer = self.sync(timezone.now() - timedelta(minutes=30))
+        self.assertEqual(answer["status"], "refused")
+        self.assertIn("100.00", answer["error"])
+        Promotion.objects.update(percent=D("20"), active=False)
+        self.assertEqual(self.sync(timezone.now() - timedelta(minutes=20))["status"], "refused")
+        self.assertFalse(SalesInvoice.objects.exists())
+
+    def test_an_offline_sale_without_a_quote_posts_at_the_full_price_shown(self):
+        answer = self.sync(timezone.now() - timedelta(minutes=30), seen="", tendered="500")
+        self.assertEqual(answer["status"], "posted")
+        invoice = SalesInvoice.objects.get()
+        self.assertEqual(invoice.total_amount, D("500.00"))
+        self.assertFalse(InvoicePromotion.objects.filter(invoice=invoice).exists())

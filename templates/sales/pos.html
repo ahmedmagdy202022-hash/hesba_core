@@ -24,7 +24,7 @@
 </aside>
 </form>
 {% if price_book %}{{ price_book|json_script:"hs-price-book" }}{% endif %}{% if tax_rates %}{{ tax_rates|json_script:"hs-tax-rates" }}{% endif %}{% if units %}{{ units|json_script:"hs-units" }}{% endif %}{{ customer_directory|json_script:"hs-customers" }}{% if serial_catalog %}{{ serial_catalog|json_script:"hs-serials" }}{% endif %}{{ catalog|json_script:"hs-item-catalog" }}{{ quick_picks|json_script:"hs-quick-picks" }}{{ cart_back|json_script:"pos-cart-back" }}
-<script src="{% static 'hesba/js/pos.js' %}?v=t5-quote2" defer></script><script src="{% static 'hesba/js/camera_scan.js' %}?v=cam-001" data-zxing="{% static 'hesba/vendor/zxing/zxing-0.23.0.min.js' %}" defer></script>
-<script src="{% static 'hesba/js/pos_offline.js' %}?v=t5-sync" defer></script>
+<script src="{% static 'hesba/js/pos.js' %}?v=t5-quote3" defer></script><script src="{% static 'hesba/js/camera_scan.js' %}?v=cam-001" data-zxing="{% static 'hesba/vendor/zxing/zxing-0.23.0.min.js' %}" defer></script>
+<script src="{% static 'hesba/js/pos_offline.js' %}?v=t5-sync2" defer></script>
 <link rel="stylesheet" href="{% static 'hesba/css/pos_quick.css' %}?v=an8-1"><script src="{% static 'hesba/js/pos_quick.js' %}?v=an8-1" defer></script>
 {% endblock %}

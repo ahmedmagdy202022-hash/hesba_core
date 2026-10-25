@@ -12,6 +12,7 @@ refused with the reason and stays on the device for the cashier to see.
 import json
 import uuid
 from datetime import datetime, timedelta
+from decimal import Decimal
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -36,9 +37,9 @@ def max_age_days():
 
 REFUSALS = {
     "ar": {"bad": "بيانات الفاتورة ناقصة أو مش صحيحة.", "future": "تاريخ الفاتورة في المستقبل.", "old": "الفاتورة أقدم من {days} أيام؛ سجّلها يدوي.",
-           "setup": "المخزن أو الخزنة مش موجودين أو موقوفين."},
+           "setup": "المخزن أو الخزنة مش موجودين أو موقوفين.", "promotion": "العرض اتغير من وقت البيعة (اتحسب خصم {seen})؛ سجّلها يدوي بالمبلغ اللي اتحصّل."},
     "en": {"bad": "The sale data is missing or invalid.", "future": "The sale is dated in the future.", "old": "The sale is older than {days} days; enter it by hand.",
-           "setup": "The location or cashbox is missing or inactive."},
+           "setup": "The location or cashbox is missing or inactive.", "promotion": "The promotion changed since the sale (it gave {seen} off); enter it by hand at the amount collected."},
 }
 
 
@@ -108,9 +109,20 @@ def sync_sale(request):
     try:
         from promotions import services as promotions
 
-        coupon = str(payload.get("coupon") or "")[:40]
-        # T5 (Codex #268): the promotion running when the sale was rung up, so the sale posts at the total shown and collected.
-        lines, promotion, promotion_off = promotions.apply(parse_cart(_cart_post(payload)), now=recorded_at, coupon=coupon, lang=lang)
+        # T5 (Codex #268): the sale posts at the total the till showed and collected. Without a confirmed quote the till
+        # showed no promotion, so none is applied; with one, the promotion of that moment must still give the same amount,
+        # else the promotion was edited since and the sale is refused for a person to enter by hand, never re-priced.
+        lines = parse_cart(_cart_post(payload))
+        promotion, promotion_off, coupon = None, Decimal("0"), ""
+        raw_seen = str(payload.get("promotion_seen") or "")
+        seen = _decimal(raw_seen, 2) if raw_seen else None
+        if raw_seen and seen is None:
+            return _answer("refused", error=refusals["bad"])
+        if seen is not None:
+            coupon = str(payload.get("coupon") or "")[:40]
+            lines, promotion, promotion_off = promotions.apply(lines, now=recorded_at, coupon=coupon, lang=lang)
+            if abs(seen - promotion_off) > Decimal("0.005"):
+                return _answer("refused", error=refusals["promotion"].format(seen=f"{seen:,.2f}"))
         lines = prepare_sale_serials(lines, lang)
         location = entity_scope.for_user(Location.objects, entity_scope.LOCATION, request.user).filter(pk=str(payload.get("location", "")), active=True, is_selling_location=True).first() if str(payload.get("location", "")).isdigit() else None
         cashbox = entity_scope.for_user(Cashbox.objects, entity_scope.CASHBOX, request.user).filter(pk=str(payload.get("cashbox", "")), active=True).first() if str(payload.get("cashbox", "")).isdigit() else None

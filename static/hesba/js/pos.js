@@ -171,9 +171,11 @@
   var promoRow = form.querySelector('[data-pos-promo-row]');
   var promoSeen = form.querySelector('[data-pos-promo-seen]');
   var coupon = form.querySelector('[data-pos-coupon]');
-  var promo = { off: 0, lines: [], key: '' }, promoTimer = null;
+  // Codex #268: while a quote is pending the total on screen may be stale, so payment waits for it (promoPending).
+  var promo = { off: 0, lines: [], key: '' }, promoTimer = null, promoPending = false, promoSeq = 0;
+  function noPromo() { promo = { off: 0, lines: [], key: '' }; promoSeen.value = ''; promoRow.hidden = true; totals(); }
   function quote() {
-    if (!promoRow || !window.fetch) { return; }
+    if (!promoRow || !window.fetch) { promoPending = false; return; }
     var body = new FormData();
     body.append('lang', document.body.dataset.lang === 'en' ? 'en' : 'ar');
     body.append('line_count', String(cart.length));
@@ -182,12 +184,15 @@
       body.append('item_' + index, row.id); body.append('qty_' + index, row.qty); body.append('price_' + index, row.price); body.append('unit_' + index, row.unit || '');
     });
     var key = JSON.stringify([coupon ? coupon.value : '', cart.map(function (row) { return [row.id, row.qty, row.price, row.unit || '']; })]);
-    if (key === promo.key) { return; }
+    if (key === promo.key) { promoPending = false; return; }
+    var seq = promoSeq;
     var token = form.querySelector('input[name="csrfmiddlewaretoken"]');
     fetch(promoRow.getAttribute('data-url'), { method: 'POST', body: body, credentials: 'same-origin', headers: { 'X-CSRFToken': token ? token.value : '' } })
       .then(function (response) { return response.ok ? response.json() : null; })
       .then(function (answer) {
-        if (!answer || !answer.ok) { promo = { off: 0, lines: [], key: '' }; promoSeen.value = ''; promoRow.hidden = true; totals(); return; }
+        if (seq !== promoSeq) { return; }  // the cart changed again; a newer quote is on its way
+        promoPending = false;
+        if (!answer || !answer.ok) { noPromo(); return; }
         promo = { off: num(answer.discount), lines: answer.lines || [], key: key };
         promoSeen.value = answer.discount;
         promoRow.hidden = !promo.off;
@@ -195,9 +200,9 @@
         promoRow.querySelector('[data-pos-promo-name]').textContent = answer.name || '';
         totals();
       })
-      .catch(function () { promoSeen.value = ''; });  // offline: the sale keeps the price shown, as before
+      .catch(function () { if (seq === promoSeq) { promoPending = false; noPromo(); } });  // offline: no promotion shown, none applied on sync
   }
-  function requote() { if (promoRow) { promo.key = ''; promoSeen.value = ''; clearTimeout(promoTimer); promoTimer = setTimeout(quote, 250); } }
+  function requote() { if (promoRow) { promoSeq += 1; promoPending = true; promo.key = ''; promoSeen.value = ''; clearTimeout(promoTimer); promoTimer = setTimeout(quote, 250); } }
   if (coupon) { coupon.addEventListener('input', requote); }
 
   function totals() {
@@ -278,6 +283,11 @@
   });
 
   form.addEventListener('submit', function (event) {
+    if (promoPending && cart.length) {  // the total is not confirmed yet: no payment, online or saved offline
+      event.preventDefault(); event.stopImmediatePropagation();
+      clearTimeout(promoTimer); quote(); say(words.promo_wait || '', true);
+      return;
+    }
     var submitter = event.submitter;
     form.querySelector('[data-print-flag]').value = submitter && submitter.getAttribute('data-pos-pay') === 'print' ? '1' : '0';
     form.querySelectorAll('input[data-cart-field]').forEach(function (node) { node.remove(); });
