@@ -266,7 +266,8 @@ def checkout(*, lines, customer, location, cashbox, discount, tendered, user, sa
 
 @require_permission("sales.create_sales_invoice")
 def promotion_quote(request):
-    """T5 (Codex #268): the promotion the cart would get, so the till shows it before the payment is taken."""
+    """T5 (Codex #268): the promotion the cart would get, so the till and the invoice form show it before the payment is
+    taken. The invoice form also sends each line's typed discount (``discount_N``): such a line takes no promotion."""
 
     from django.http import JsonResponse
 
@@ -277,6 +278,10 @@ def promotion_quote(request):
         return JsonResponse({"ok": True, "discount": "0.00", "name": "", "lines": []})
     try:
         lines = parse_cart(request.POST)
+        for index, line in enumerate(lines):
+            typed = _decimal(request.POST.get(f"discount_{index}") or "0", 2) or Decimal("0")
+            if typed > 0:
+                line["line_discount_amount"], line["typed_discount"] = line["line_discount_amount"] + typed, typed
         _lines, promotion, off = promotions.apply(lines, coupon=request.POST.get("coupon", ""), lang=lang)
     except ValidationError as exc:
         return JsonResponse({"ok": False, "error": _error_text(exc, WORDS[lang])})

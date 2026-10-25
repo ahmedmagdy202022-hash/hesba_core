@@ -308,3 +308,22 @@ class FourthReviewTests(PromotionSetup):
         self.client.force_login(self.owner)
         page = self.client.get(reverse("promotions:list"), {"lang": "ar", "edit": promo.pk})
         self.assertContains(page, f'<option value="{self.sock.pk}" selected>')
+
+
+class FifthReviewTests(SellingTests):
+    """Codex on #268 (fifth look): the invoice form quotes the promotion live, so its total and "paid now" match it."""
+
+    def test_the_invoice_form_quotes_the_promotion_before_saving(self):
+        self.client.force_login(self.owner)
+        form = self.client.get(reverse("sales:create"), {"lang": "ar"})
+        self.assertContains(form, f'data-url="{reverse("sales:promotion_quote")}"')
+        self.assertContains(form, "data-promo-line")
+        cart = {"line_count": "2", "item_0": str(self.sneaker.pk), "qty_0": "1", "price_0": "500.00", "item_1": str(self.sneaker.pk), "qty_1": "1",
+                "price_1": "500.00", "discount_1": "10"}
+        quote = self.client.post(reverse("sales:promotion_quote"), cart).json()
+        self.assertEqual((quote["discount"], quote["lines"]), ("100.00", ["100.00", "0.00"]))  # a line with a typed discount takes none
+        from django.contrib.staticfiles import finders
+
+        js = open(finders.find("hesba/js/invoice_form.js"), encoding="utf-8").read()
+        for needed in ("quotePromotion", "promo.byLine[i]", "seq !== promoSeq", "discount_"):
+            self.assertIn(needed, js)
