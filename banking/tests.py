@@ -102,6 +102,15 @@ class BankInTheBooksTests(BankSetup):
         self.assertEqual(reports.trial_balance()["totals"], before)
         self.assertTrue(reports.reconciliation()["ok"])
 
+    def test_a_bank_fee_counts_in_the_months_expenses_until_cancelled(self):
+        from expenses.services import expense_total
+
+        fee = self.fee("15.00", D3)
+        self.assertEqual(expense_total(D3, D3), D("15.00"))
+        self.assertEqual(expense_total(TODAY, TODAY), D("0.00"))
+        cancel_cashbox_operation(fee.pk, TODAY, "اتردت", self.owner)
+        self.assertEqual(expense_total(D3, D3), D("0.00"))
+
     def test_a_fee_is_only_taken_from_a_bank_and_never_below_zero(self):
         with self.assertRaisesMessage(ValidationError, "bank account only"):
             self.fee("10.00", D3, cashbox=self.cash)
@@ -140,6 +149,25 @@ class StatementTests(BankSetup):
             services.read_statement(csv_file("date,amount\nyesterday,10\n"))
         with self.assertRaisesMessage(ValidationError, "عمود التاريخ"):
             services.read_statement(csv_file("when,how much\n2026-01-01,10\n"))
+
+    def test_a_newest_first_file_takes_the_last_days_balance_and_a_bad_cell_is_refused(self):
+        newest_first = ("date,description,debit,credit,balance\n"
+                        f"{D3:%Y-%m-%d},interest,,3.00,11988.00\n{D3:%Y-%m-%d},fee,15.00,,11985.00\n{D2:%Y-%m-%d},deposit,,2000.00,12000.00\n")
+        _, closing = services.read_statement(csv_file(newest_first))
+        self.assertEqual(closing, D("11988.00"))
+        with self.assertRaisesMessage(ValidationError, "المبلغ مش مفهوم"):
+            services.read_statement(csv_file(f"date,debit,credit\n{D3:%Y-%m-%d},abc,\n"))
+        with self.assertRaisesMessage(ValidationError, "المبلغ مش مفهوم"):
+            services.read_statement(csv_file(f"date,debit,credit\n{D3:%Y-%m-%d},n/a,50.00\n"))
+
+    def test_an_older_uncleared_movement_carries_into_the_next_statement(self):
+        old_day = TODAY - timedelta(days=40)
+        services.import_statement(self.bank, csv_file(f"date,amount\n{old_day:%Y-%m-%d},1.00\n"), self.accountant)  # last month's statement
+        create_cashbox_operation("OLD-1", old_day + timedelta(days=1), CashboxOperationType.DIRECT_OUT, D("70.00"), "شيك قديم", self.owner,
+                                 source_cashbox=self.bank)
+        statement, _ = services.import_statement(self.bank, csv_file(STATEMENT), self.accountant)
+        outstanding = services.reconciliation(statement)["outstanding"]
+        self.assertIn("OLD-1", [movement.cashbox_operation.reference_number for movement in outstanding])
 
     def test_import_matches_by_itself_and_the_fee_is_recorded_from_its_line(self):
         balance_before = get_cashbox_balance(self.bank)

@@ -175,7 +175,7 @@ def read_statement(uploaded, lang="ar"):
         raise ValidationError(words["too_many"].format(n=MAX_LINES))
     if not _has(rows, "date") or not (_has(rows, "amount") or _has(rows, "debit") or _has(rows, "credit")):
         raise ValidationError(words["columns"])
-    lines, problems, closing = [], [], None
+    lines, problems, balances = [], [], []
     for number, row in enumerate(rows, start=2):  # row 1 is the header
         day = parse_date(_column(row, "date"))
         if day is None:
@@ -185,8 +185,10 @@ def read_statement(uploaded, lang="ar"):
             amount = parse_amount(_column(row, "amount"))
             raw = _column(row, "amount")
         else:
-            money_in, money_out = parse_amount(_column(row, "credit")) or ZERO, parse_amount(_column(row, "debit")) or ZERO
-            amount, raw = abs(money_in) - abs(money_out), f"{_column(row, 'credit')}/{_column(row, 'debit')}"
+            raw = f"{_column(row, 'credit')}/{_column(row, 'debit')}"
+            money_in, money_out = (parse_amount(_column(row, key)) if _column(row, key) else ZERO for key in ("credit", "debit"))
+            # A written cell that cannot be read is a bad row, never a zero.
+            amount = None if money_in is None or money_out is None else abs(money_in) - abs(money_out)
         if amount is None:
             problems.append(words["row"].format(n=number, problem=words["bad_amount"].format(value=raw)))
             continue
@@ -195,12 +197,23 @@ def read_statement(uploaded, lang="ar"):
         lines.append({"date": day, "description": str(_column(row, "description"))[:255], "reference": str(_column(row, "reference"))[:80], "amount": amount})
         printed = parse_amount(_column(row, "balance"))
         if printed is not None:
-            closing = printed
+            balances.append((day, printed))
     if problems:
         raise ValidationError(problems[:5])
     if not lines:
         raise ValidationError(words["empty"])
-    return lines, closing
+    return lines, _closing(lines, balances)
+
+
+def _closing(lines, balances):
+    """The printed balance of the statement's last day. A bank may list newest first: then that day's first row is its last."""
+
+    if not balances:
+        return None
+    last = max(day for day, _ in balances)
+    on_last = [printed for day, printed in balances if day == last]
+    newest_first = lines[0]["date"] > lines[-1]["date"]
+    return on_last[0] if newest_first else on_last[-1]
 
 
 # ---- importing and matching ----
@@ -336,7 +349,10 @@ def reconciliation(statement):
     first = min((line.line_date for line in lines), default=timezone.localdate())
     last = max((line.line_date for line in lines), default=timezone.localdate())
     book = balance(cashbox, last)
-    outstanding = list(_live(cashbox.movements.filter(movement_date__gte=first - timedelta(days=MATCH_DAYS), movement_date__lte=last,
+    # Outstanding items carry forward: anything unmatched since the account's first statement began, not only this one's
+    # days. What came before the first statement is already inside the bank's figures.
+    since = StatementLine.objects.filter(statement__cashbox=cashbox).order_by("line_date").values_list("line_date", flat=True).first() or first
+    outstanding = list(_live(cashbox.movements.filter(movement_date__gte=since - timedelta(days=MATCH_DAYS), movement_date__lte=last,
                                                       statement_line__isnull=True)).order_by("movement_date", "pk"))
     unrecorded = [line for line in lines if line.movement_id is None]
     outstanding_total = sum((signed(movement) for movement in outstanding), ZERO)
