@@ -1,0 +1,44 @@
+{% extends "operations/base.html" %}
+{% load hesba_format hesba_labels %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div></section>
+{% if invoice and can_ship and active_couriers %}<form class="op-form" method="post" data-ship-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="ship"><input type="hidden" name="invoice" value="{{ invoice.pk }}">
+<h2>{{ words.ship }} — <bdi>{{ invoice.invoice_number }}</bdi> · {{ invoice.customer.name }} · {{ invoice.remaining_due|money }}</h2><div class="op-form-grid">
+<div class="op-field"><label for="s-courier">{{ words.courier }}</label><select id="s-courier" name="courier">{% for courier in active_couriers %}<option value="{{ courier.pk }}">{{ courier.name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="s-track">{{ words.tracking }}</label><input id="s-track" name="tracking_number" dir="ltr" autocomplete="off"></div>
+<div class="op-field"><label for="s-cod">{{ words.cod }}</label><input id="s-cod" name="cod_amount" inputmode="decimal" dir="ltr" placeholder="{{ words.cod_hint }}"></div>
+<div class="op-field"><label for="s-fee">{{ words.fee }}</label><input id="s-fee" name="fee" inputmode="decimal" dir="ltr"></div>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.ship }}</button></div></form>{% endif %}
+
+<h2>{{ words.open }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-open-shipments><thead><tr><th>{{ words.invoice }}</th><th>{{ words.customer }}</th><th>{{ words.courier }}</th><th>{{ words.tracking }}</th><th>{{ words.cod }}</th><th>{{ words.date }}</th><th></th></tr></thead><tbody>
+{% for row in open %}<tr data-shipment="{{ row.pk }}"><td><a href="{% url 'sales:detail' row.invoice_id %}?lang={{ lang }}"><bdi>{{ row.invoice.invoice_number }}</bdi></a></td><td class="op-cell-text">{{ row.invoice.customer.name }}</td><td>{{ row.courier.name }}</td><td><bdi>{{ row.tracking_number|default:"—" }}</bdi></td><td>{{ row.cod_amount|money }}</td><td><bdi>{{ row.shipped_on|date:"Y-m-d" }}</bdi></td>
+<td><div class="op-form-actions"><form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="deliver"><input type="hidden" name="shipment" value="{{ row.pk }}"><button class="op-primary" type="submit" data-deliver>{{ words.deliver }}</button></form>
+<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="back"><input type="hidden" name="shipment" value="{{ row.pk }}"><button class="op-secondary" type="submit">{{ words.back }}</button></form>
+<form method="post" class="op-form-actions">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="lost"><input type="hidden" name="shipment" value="{{ row.pk }}"><input name="reason" required placeholder="{{ words.reason }}" aria-label="{{ words.reason }}"><button class="op-danger" type="submit">{{ words.lost }}</button></form></div></td></tr>
+{% empty %}<tr><td colspan="7" class="op-empty">{{ words.none }}</td></tr>{% endfor %}</tbody></table></div>
+
+<h2>{{ words.to_settle }}</h2>
+{% if delivered %}<form class="op-form" method="post" data-settle-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="settle">
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th></th><th>{{ words.invoice }}</th><th>{{ words.courier }}</th><th>{{ words.cod }}</th><th>{{ words.fee }}</th><th>{{ words.date }}</th></tr></thead><tbody>
+{% for row in delivered %}<tr data-delivered="{{ row.pk }}"><td><input type="checkbox" name="shipments" value="{{ row.pk }}" checked aria-label="{{ row.invoice.invoice_number }}"></td><td><bdi>{{ row.invoice.invoice_number }}</bdi></td><td>{{ row.courier.name }}</td><td>{{ row.cod_amount|money }}</td><td>{{ row.fee|money }}</td><td><bdi>{{ row.closed_on|date:"Y-m-d" }}</bdi></td></tr>{% endfor %}
+</tbody></table></div><div class="op-form-grid">
+<div class="op-field"><label for="st-dest">{{ words.destination }}</label><select id="st-dest" name="destination">{% for box in destinations %}<option value="{{ box.pk }}">{{ box }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="st-fees">{{ words.fees }}</label><input id="st-fees" name="fees" inputmode="decimal" dir="ltr"></div>
+<div class="op-field"><label for="st-date">{{ words.date }}</label><input id="st-date" type="date" name="settled_on" value="{{ today|date:'Y-m-d' }}"></div>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.settle }}</button></div></form>{% else %}<p class="op-muted">{{ words.none }}</p>{% endif %}
+
+<h2>{{ words.couriers }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-couriers><thead><tr><th>{{ words.name }}</th><th>{{ words.phone }}</th><th>{{ words.fee }}</th><th>{{ words.held }}</th><th>{{ words.out }}</th></tr></thead><tbody>
+{% for row in couriers %}<tr data-courier="{{ row.courier.pk }}"><td class="op-cell-text">{{ row.courier.name }}</td><td><bdi>{{ row.courier.phone|default:"—" }}</bdi></td><td>{{ row.courier.fee_per_parcel|money }}</td><td data-held>{{ row.held|money }}</td><td>{{ row.out|money }}</td></tr>
+{% empty %}<tr><td colspan="5" class="op-empty">{{ words.none }}</td></tr>{% endfor %}</tbody></table></div>
+<form class="op-form" method="post" data-courier-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="courier"><h2>{{ words.new_courier }}</h2><div class="op-form-grid">
+<div class="op-field"><label for="c-name">{{ words.name }}</label><input id="c-name" name="name" required></div>
+<div class="op-field"><label for="c-phone">{{ words.phone }}</label><input id="c-phone" name="phone" inputmode="tel" dir="ltr"></div>
+<div class="op-field"><label for="c-fee">{{ words.fee }}</label><input id="c-fee" name="fee_per_parcel" inputmode="decimal" dir="ltr"></div>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form>
+
+{% if settlements %}<h2>{{ words.settlements }}</h2><div class="op-table-wrap"><table class="op-table" data-settlements><thead><tr><th>{{ words.date }}</th><th>{{ words.courier }}</th><th>{{ words.collected }}</th><th>{{ words.fees }}</th><th>{{ words.net }}</th><th>{{ words.destination }}</th></tr></thead><tbody>
+{% for row in settlements %}<tr><td><bdi>{{ row.settled_on|date:"Y-m-d" }}</bdi></td><td>{{ row.courier.name }}</td><td>{{ row.collected|money }}</td><td>{{ row.fees|money }}</td><td>{{ row.net|money }}</td><td>{{ row.destination }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+{% if closed %}<h2>{{ words.back }} / {{ words.lost }}</h2><div class="op-table-wrap"><table class="op-table"><tbody>{% for row in closed %}<tr><td><a href="{% url 'sales:detail' row.invoice_id %}?lang={{ lang }}"><bdi>{{ row.invoice.invoice_number }}</bdi></a></td><td>{% choice_label row "status" %}</td><td>{{ row.note }}</td><td>{% if row.status == 'returned' %}<small class="op-muted">{{ words.return_hint }}</small>{% endif %}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+{% endblock %}

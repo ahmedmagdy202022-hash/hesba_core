@@ -810,6 +810,9 @@ def cancel_customer_payment(payment_id, user=None, reason=""):
     cheque = getattr(payment, "cheque", None)
     if cheque is not None and cheque.status != "cancelled":
         raise ValidationError("This payment is a cheque; cancel or bounce it from the cheques screen.")
+    if getattr(payment, "shipment", None) is not None:
+        # T14 (HG-061): money a courier collected is undone from the shipments screen, before the courier settles it.
+        raise ValidationError("This payment was collected by a courier; undo the delivery from the shipments screen.")
 
     CustomerLedgerEntry.objects.create(
         customer=payment.customer,

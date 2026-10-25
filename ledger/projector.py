@@ -119,7 +119,7 @@ class Projector:
         self.groups = {}
 
     #: T3/T4: where each kind of cashbox keeps its money in the chart.
-    KIND_CONTROLS = {"bank": "bank", "cheques_in": "notes_receivable", "cheques_out": "notes_payable"}
+    KIND_CONTROLS = {"bank": "bank", "cheques_in": "notes_receivable", "cheques_out": "notes_payable", "courier": "courier_receivable"}
 
     def money_account(self, cashbox):
         """T3 (HG-055): a bank account's money sits in the banks account, a cashbox's in cash on hand.
