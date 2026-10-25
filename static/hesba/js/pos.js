@@ -22,6 +22,23 @@
   var discount = form.querySelector('[data-pos-discount]');
   var tendered = form.querySelector('[data-pos-tendered]');
   var customer = form.querySelector('[data-pos-customer]');
+  // T6: points spent come off the total; the customer's points are shown when a customer is chosen.
+  var pointsBox = form.querySelector('[data-pos-points]');
+  var pointsRow = form.querySelector('[data-pos-points-row]');
+  function pointsOff() { return pointsBox ? Math.round(num(pointsBox.value) * num(pointsBox.getAttribute('data-point-value')) * 100) / 100 : 0; }
+  function showPoints() {
+    var hint = pointsRow && pointsRow.querySelector('[data-points-available]');
+    if (!hint || !customer || !window.fetch) { return; }
+    hint.hidden = true;
+    if (!customer.value || customer.value === customer.getAttribute('data-walk-in')) { return; }
+    var url = pointsRow.getAttribute('data-url').replace(/\/0\/balance\/$/, '/' + encodeURIComponent(customer.value) + '/balance/');
+    fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+      .then(function (response) { return response.ok ? response.json() : null; })
+      .then(function (data) { if (data && data.points !== undefined) { hint.textContent = hint.getAttribute('data-word').replace('{n}', data.points); hint.hidden = false; } })
+      .catch(function () {});
+  }
+  if (pointsBox) { pointsBox.addEventListener('input', function () { totals(); }); }
+  if (customer && pointsRow) { customer.addEventListener('change', showPoints); }
   var tenderedTouched = false;
   // PRICE-001: price from the chosen customer's list, when the shop uses them.
   var bookNode = document.getElementById('hs-price-book');
@@ -171,7 +188,7 @@
     var tax = cart.reduce(function (sum, row) { return sum + lineTax(row); }, 0);
     var taxCell = form.querySelector('[data-pos-tax]');
     if (taxCell) { taxCell.textContent = money(tax); }
-    var total = Math.max(0, subtotal - num(discount.value) + tax);
+    var total = Math.max(0, subtotal - num(discount.value) - pointsOff() + tax);
     if (!tenderedTouched) { tendered.value = total ? total.toFixed(2) : ''; }
     var paid = num(tendered.value);
     form.querySelector('[data-pos-subtotal]').textContent = money(subtotal);
@@ -239,7 +256,7 @@
   });
 
   form.querySelector('[data-pos-clear]').addEventListener('click', function () {
-    cart = []; discount.value = '0'; tenderedTouched = false; customer.value = customer.getAttribute('data-walk-in'); render(); scan.focus();
+    cart = []; discount.value = '0'; if (pointsBox) { pointsBox.value = ''; } tenderedTouched = false; customer.value = customer.getAttribute('data-walk-in'); render(); scan.focus();
   });
 
   form.addEventListener('submit', function (event) {

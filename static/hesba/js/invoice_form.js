@@ -152,7 +152,9 @@
   }
 
   function invoiceTotal(lines) {
-    return Math.max(lines - num(header('discount_amount')) + num(header('tax_amount')), 0);
+    var points = header('redeem_points');  // T6: points spent come off with the invoice's own discount
+    var pointsOff = points ? Math.round(num(points) * num({ value: points.getAttribute('data-point-value') || '0' }) * 100) / 100 : 0;
+    return Math.max(lines - num(header('discount_amount')) - pointsOff + num(header('tax_amount')), 0);
   }
 
   function recalc() {
@@ -198,7 +200,12 @@
     var url = balanceBox.getAttribute('data-url').replace(/\/0\/balance\/$/, '/' + encodeURIComponent(partySelect.value) + '/balance/');
     fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
       .then(function (response) { return response.ok ? response.json() : null; })
-      .then(function (data) { balanceBefore = data ? parseFloat(data.balance) : null; recalc(); })
+      .then(function (data) {
+        balanceBefore = data ? parseFloat(data.balance) : null;
+        var hint = form.querySelector('[data-points-available]');  // T6
+        if (hint) { hint.hidden = !(data && data.points !== undefined); if (!hint.hidden) { hint.textContent = hint.getAttribute('data-word').replace('{n}', data.points); } }
+        recalc();
+      })
       .catch(function () { balanceBefore = null; recalc(); });
   }
   if (partySelect) { partySelect.addEventListener('change', loadBalance); }

@@ -72,6 +72,12 @@ CAPABILITIES = {
         "about_en": "% off a section or an item, buy X get Y free, an amount off over a total, and coupons with a code. The single best promotion applies by itself on the invoice and at the till.",
         "available": True, "paths": ("/promotions/",),
     },
+    "loyalty": {
+        "ar": "نقاط الولاء", "en": "Loyalty points",
+        "about_ar": "كل فاتورة لعميل باسمه بتكسبه نقاط، ويصرفها خصم على فاتورة جاية أو في الكاشير. الإلغاء والمرتجع بيرجّعوا النقاط، والنقاط ممكن تخلص بعد مدة.",
+        "about_en": "Every invoice to a named customer earns points, spent as a discount on a later invoice or at the till. A cancellation or a return takes them back, and points can run out after a while.",
+        "available": True, "paths": ("/loyalty/",),
+    },
     "units": {
         "ar": "وحدات القياس", "en": "Units of measure",
         "about_ar": "بيع وشراء بالكرتونة أو العلبة أو القطعة مع تحويل تلقائي.",
@@ -217,8 +223,8 @@ ACTIVITY_PRESETS = {
 #: it at all (a builder never needs a quick till or sizes and colours). One that
 #: is already on still shows in Settings, so it can be switched off.
 NOT_FOR = {
-    catalog.CONTRACTING: {"pos", "shift_required", "barcode", "variants", "serials", "batches_expiry", "installments", "price_lists", "quotations", "promotions"},
-    catalog.EDUCATION: {"pos", "shift_required", "barcode", "variants", "serials", "batches_expiry", "units", "quotations", "promotions"},
+    catalog.CONTRACTING: {"pos", "shift_required", "barcode", "variants", "serials", "batches_expiry", "installments", "price_lists", "quotations", "promotions", "loyalty"},
+    catalog.EDUCATION: {"pos", "shift_required", "barcode", "variants", "serials", "batches_expiry", "units", "quotations", "promotions", "loyalty"},
     catalog.MEDICAL: {"variants", "serials", "quotations", "promotions"},
     catalog.RESTAURANTS: {"serials", "installments", "quotations"},
     catalog.SERVICES: {"variants", "batches_expiry"},
@@ -303,13 +309,13 @@ WORKS_BEST_WITH = {
 #: SETTINGS-DESIGN: how the features screen groups them, the icon of each, and where each one shows once on.
 #: "Where" is what the settings track saw appear when the feature was switched on.
 GROUPS = (
-    ("selling", ("البيع والكاشير", "Selling and the till"), ("pos", "shift_required", "price_lists", "promotions", "installments", "quotations")),
+    ("selling", ("البيع والكاشير", "Selling and the till"), ("pos", "shift_required", "price_lists", "promotions", "loyalty", "installments", "quotations")),
     ("goods", ("الأصناف والمخزون", "Items and stock"), ("barcode", "units", "variants", "batches_expiry", "serials", "drugs")),
     ("money", ("الحسابات والضرايب", "Accounts and tax"), ("vat", "e_invoice", "fixed_assets")),
 )
 ICONS = {"pos": "pos", "shift_required": "shift", "price_lists": "pricetag", "installments": "instalments", "barcode": "barcode",
          "units": "units", "variants": "variants", "batches_expiry": "expiry", "serials": "serial", "vat": "taxes",
-         "e_invoice": "einvoice", "fixed_assets": "assets", "quotations": "quotes", "drugs": "drugs", "promotions": "promotions"}
+         "e_invoice": "einvoice", "fixed_assets": "assets", "quotations": "quotes", "drugs": "drugs", "promotions": "promotions", "loyalty": "loyalty"}
 WHERE = {
     "pos": ("«الكاشير» في القايمة، وزرار في لوحة القيادة وفي قايمة الفواتير", "“Till” in the menu, with a button on the dashboard and the invoice list"),
     "shift_required": ("فاتورة البيع والكاشير بيطلبوا فتح وردية الأول", "The sales invoice and the till ask for an open shift first"),
@@ -322,6 +328,7 @@ WHERE = {
     "installments": ("«الأقساط» في المبيعات، وكارت في لوحة القيادة", "“Instalments” under sales, and a dashboard card"),
     "quotations": ("«عروض الأسعار والأوامر» في القايمة، وزرار «اعمل فاتورة بالباقي» على كل أمر", "“Quotations & orders” in the menu, and “Invoice what is left” on each order"),
     "promotions": ("«العروض» في القايمة، وخانة «كوبون» في الكاشير وفاتورة البيع، وتقرير العروض", "“Promotions” in the menu, a “Coupon” field at the till and on the sales invoice, and the promotions report"),
+    "loyalty": ("«نقاط الولاء» في القايمة، ورصيد النقاط في كارت العميل، وخانة «صرف نقاط» في الكاشير وفاتورة البيع", "“Loyalty points” in the menu, the points balance on the customer card, and a “Spend points” field at the till and on the sales invoice"),
     "drugs": ("«الأدوية والبدائل» في القايمة، وزرار «اصرف الروشتة» اللي بيفتح فاتورة البيع", "“Drugs & alternatives” in the menu, and “Dispense” opening the sales invoice"),
     "vat": ("«الضرايب» في القايمة، وضريبة كل صنف، وتقرير ضريبة المبيعات", "“Taxes” in the menu, a rate per item, and the sales VAT report"),
     "e_invoice": ("«الفاتورة الإلكترونية» في القايمة، وملف لكل فاتورة مترحّلة", "“E-invoicing” in the menu, and a document for each posted invoice"),

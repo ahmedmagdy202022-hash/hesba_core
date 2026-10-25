@@ -1,0 +1,18 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div></section>
+{% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
+<p class="op-muted" data-loyalty-example>{{ example }}</p>
+{% if can_manage %}<form class="op-form" method="post" data-loyalty-rules>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><h2>{{ words.rules }}</h2><div class="op-form-grid">
+<div class="op-field"><label for="lr-amount">{{ words.amount_per_point }}</label><input id="lr-amount" name="amount_per_point" inputmode="decimal" dir="ltr" required value="{% if form %}{{ form.amount_per_point }}{% else %}{{ rules.amount_per_point }}{% endif %}"></div>
+<div class="op-field"><label for="lr-value">{{ words.point_value }}</label><input id="lr-value" name="point_value" inputmode="decimal" dir="ltr" required value="{% if form %}{{ form.point_value }}{% else %}{{ rules.point_value }}{% endif %}"></div>
+<div class="op-field"><label for="lr-min">{{ words.min_points }}</label><input id="lr-min" name="min_points" inputmode="numeric" dir="ltr" required value="{% if form %}{{ form.min_points }}{% else %}{{ rules.min_points }}{% endif %}"></div>
+<div class="op-field"><label for="lr-exp">{{ words.expiry_months }}</label><input id="lr-exp" name="expiry_months" inputmode="numeric" dir="ltr" value="{% if form %}{{ form.expiry_months }}{% else %}{{ rules.expiry_months }}{% endif %}"></div>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form>{% endif %}
+<h2>{{ words.leaders }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-loyalty-leaders><thead><tr><th>{{ words.customer }}</th><th>{{ words.points }}</th><th>{{ words.worth }}</th><th></th></tr></thead><tbody>
+{% for row in leaders %}<tr data-loyalty-customer="{{ row.customer.pk }}"><td class="op-cell-text">{{ row.customer.name }}</td><td><bdi>{{ row.points }}</bdi></td><td>{{ row.value|money }}</td><td><a href="{% url 'parties:card' 'customer' row.customer.pk %}?lang={{ lang }}">{{ words.card }}</a></td></tr>
+{% empty %}<tr><td colspan="4" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

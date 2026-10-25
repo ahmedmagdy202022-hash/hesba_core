@@ -208,7 +208,7 @@ def _next_number(today):
     return f"{prefix}{sequence:04d}"
 
 
-def checkout(*, lines, customer, location, cashbox, discount, tendered, user, sale_date=None, notes="POS", card=False, promotion=None):
+def checkout(*, lines, customer, location, cashbox, discount, tendered, user, sale_date=None, notes="POS", card=False, promotion=None, points=None):
     """Create and post the sale. Returns (invoice, change).
 
     POS-003: an offline sale passes the day it was rung up as ``sale_date``;
@@ -252,6 +252,10 @@ def checkout(*, lines, customer, location, cashbox, discount, tendered, user, sa
                     from promotions.services import record
 
                     record(invoice, *promotion)
+                if points:  # T6: (points, amount) spent at the till, booked as spent when the sale is posted below
+                    from loyalty.services import remember
+
+                    remember(invoice, *points)
                 post_sales_invoice(invoice.pk, user)
             invoice.refresh_from_db()
             return invoice, change
@@ -270,6 +274,12 @@ def _running_promotions():
     from promotions.services import enabled, running
 
     return running() if enabled() else []
+
+
+def _loyalty_rules():
+    from loyalty.services import enabled, rules
+
+    return rules() if enabled() else None
 
 
 def today_summary(user):
@@ -386,8 +396,13 @@ def pos(request):
 
             coupon = request.POST.get("coupon", "")
             lines, promotion, promotion_off = promotions.apply(lines, coupon=coupon, lang=lang)  # T5: the best running promotion
+            from loyalty import services as loyalty
+
+            points, points_off = loyalty.redeem(customer, request.POST.get("redeem_points"), loyalty.lines_total(lines), lang)  # T6
+            discount += points_off
             invoice, change = checkout(lines=lines, customer=customer, location=location, cashbox=cashbox, discount=discount, tendered=tendered,
-                                       user=request.user, card=card, promotion=(promotion, promotion_off, coupon) if promotion else None)
+                                       user=request.user, card=card, promotion=(promotion, promotion_off, coupon) if promotion else None,
+                                       points=(points, points_off) if points else None)
         except ValidationError as exc:
             messages.error(request, _error_text(exc, words))
             cart_back = request.POST.get("cart_json", "[]")
@@ -418,6 +433,7 @@ def pos(request):
             "price_book": price_book(),
             "promotions_on": _promotions_on(),  # T5
             "running_promotions": _running_promotions(),
+            "loyalty_rules": _loyalty_rules(),  # T6: None when loyalty is off
             "tax_rates": rates_by_item(),
             "units": units_catalog(),
             "open_shift": open_shift_for(request.user),

@@ -8,7 +8,7 @@
 <section class="op-summary-grid">
 <article data-party-balance><small>{% if info.balance >= 0 %}{% if kind == 'customer' %}{{ words.balance_customer }}{% else %}{{ words.balance_supplier }}{% endif %}{% else %}{% if kind == 'customer' %}{{ words.credit_customer }}{% else %}{{ words.credit_supplier }}{% endif %}{% endif %}</small><strong>{{ info.balance|money }}</strong></article>
 <article><small>{% if kind == 'customer' %}{{ words.year_total }}{% else %}{{ words.year_total_supplier }}{% endif %}</small><strong>{{ info.year_total|money }}</strong></article>
-<article><small>{{ words.invoices }}</small><strong>{{ info.invoice_count }}</strong></article>
+<article><small>{{ words.invoices }}</small><strong>{{ info.invoice_count }}</strong></article>{% if points %}<article data-party-points><small>{% if lang == 'en' %}Loyalty points{% else %}نقاط الولاء{% endif %}</small><strong><bdi>{{ points.points }}</bdi></strong><small>{% if lang == 'en' %}worth{% else %}قيمتها{% endif %} {{ points.value|money }}{% if points.expired %} · {% if lang == 'en' %}{{ points.expired }} ran out{% else %}{{ points.expired }} خلصت{% endif %}{% endif %}</small></article>{% endif %}
 <article><small>{{ words.last_invoice }}</small><strong>{% if info.last_invoice %}<bdi>{{ info.last_invoice.invoice_date|date:"Y-m-d" }}</bdi>{% else %}{{ words.none }}{% endif %}</strong></article>
 <article><small>{{ words.last_payment }}</small><strong>{% if info.last_payment %}<bdi>{{ info.last_payment.payment_date|date:"Y-m-d" }}</bdi>{% else %}{{ words.none }}{% endif %}</strong></article>
 </section>
@@ -30,4 +30,7 @@
 <div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.number }}</th><th>{{ words.date }}</th><th>{{ words.amount }}</th></tr></thead><tbody>
 {% for payment in info.recent_payments %}<tr><td><bdi>{{ payment.payment_number }}</bdi></td><td><bdi>{{ payment.payment_date|date:"Y-m-d" }}</bdi></td><td>{{ payment.amount|money }}</td></tr>{% empty %}<tr><td colspan="3" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
 </tbody></table></div>
+{% if points_rows %}<h2>{% if lang == 'en' %}Points{% else %}حركة النقاط{% endif %}</h2><div class="op-table-wrap"><table class="op-table" data-points-rows><thead><tr><th>{% if lang == 'en' %}Date{% else %}التاريخ{% endif %}</th><th>{% if lang == 'en' %}What{% else %}الحركة{% endif %}</th><th>{% if lang == 'en' %}Points{% else %}النقاط{% endif %}</th><th>{% if lang == 'en' %}Invoice{% else %}الفاتورة{% endif %}</th></tr></thead><tbody>
+{% for row in points_rows %}<tr><td><bdi>{{ row.entry_date|date:"Y-m-d" }}</bdi></td><td>{% choice_label row "kind" %}</td><td><bdi>{{ row.points }}</bdi></td><td>{% if row.invoice %}<a href="{% url 'sales:detail' row.invoice.pk %}?lang={{ lang }}"><bdi>{{ row.invoice.invoice_number }}</bdi></a>{% elif row.sales_return %}<bdi>{{ row.sales_return.return_number }}</bdi>{% endif %}</td></tr>{% endfor %}
+</tbody></table></div>{% endif %}
 {% endblock %}
