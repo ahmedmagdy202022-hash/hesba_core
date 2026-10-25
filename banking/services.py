@@ -53,7 +53,7 @@ MESSAGES = {
         "row": "سطر {n}: {problem}", "bad_date": "التاريخ مش مفهوم ({value})", "bad_amount": "المبلغ مش مفهوم ({value})", "empty": "الكشف مفيهوش ولا سطر.",
         "too_many": "الكشف أكبر من {n} سطر؛ قسّمه على شهور.", "other_account": "الحركة دي على حساب تاني.", "amount": "المبلغ مش زي الكشف؛ لو فيه فرق سجّله الأول.",
         "taken": "الحركة دي متطابقة مع سطر تاني.", "matched": "السطر ده متطابق بالفعل.", "not_fee": "ده مش مبلغ اتخصم من الحساب.",
-        "fee_reason": "مصروفات بنكية", "closing": "رصيد آخر الكشف لازم رقم.",
+        "fee_reason": "مصروفات بنكية", "closing": "رصيد آخر الكشف لازم رقم.", "already": "كل سطور الكشف ده اترفعت قبل كده.",
     },
     "en": {
         "not_bank": "This is not a bank account.", "file": "Upload the statement as a CSV or Excel file.", "file_too_big": "The file is over 5 MB.",
@@ -64,6 +64,7 @@ MESSAGES = {
         "other_account": "This movement is on another account.", "amount": "The amount differs from the statement; record the difference first.",
         "taken": "This movement is already matched to another line.", "matched": "This line is already matched.",
         "not_fee": "This is not money taken from the account.", "fee_reason": "Bank charges", "closing": "The statement's closing balance must be a number.",
+        "already": "Every line of this statement was uploaded before.",
     },
 }
 
@@ -134,14 +135,15 @@ def parse_amount(raw):
     """A bank's way of writing money: thousands commas, a currency word, (brackets) or a minus sign for money out."""
 
     text = str(raw or "").translate(ARABIC_DIGITS).strip().replace(",", "")
-    found = re.search(r"\d+(?:\.\d+)?", text)
+    found = re.search(r"\d+(?:\.\d+)?(?:[eE][+-]?\d+)?", text)
     if not found:
         return None
     try:
         value = Decimal(found.group()).quantize(Decimal("0.01"))
     except InvalidOperation:
         return None
-    negative = (text.startswith("(") and text.endswith(")")) or "-" in text
+    around = text[:found.start()] + text[found.end():]  # an exponent's own sign is part of the number
+    negative = (text.startswith("(") and text.endswith(")")) or "-" in around
     return -value if negative else value
 
 
@@ -232,6 +234,9 @@ def import_statement(cashbox, uploaded, user, lang="ar", closing_balance=""):
     if cashbox.kind != CashboxKind.BANK:
         raise ValidationError(words["not_bank"])
     lines, printed = read_statement(uploaded, lang)
+    lines = _new_lines(cashbox, lines)
+    if not lines:
+        raise ValidationError(words["already"])
     if str(closing_balance or "").strip():
         printed = parse_amount(closing_balance)
         if printed is None:
@@ -244,6 +249,28 @@ def import_statement(cashbox, uploaded, user, lang="ar", closing_balance=""):
     _audit(user, "import_statement", statement, {"cashbox_id": cashbox.pk, "lines": len(lines), "matched": matched,
                                                   "closing_balance": str(printed) if printed is not None else None})
     return statement, matched
+
+
+def _new_lines(cashbox, lines):
+    """The lines not already on an earlier statement of this account: a file uploaded twice, or two exports that
+    overlap, bring each bank transaction once. Two identical lines in the same file stay two."""
+
+    from collections import Counter
+
+    def key(day, amount, reference, description):
+        return day, amount, reference.strip(), description.strip()
+
+    first, last = min(line["date"] for line in lines), max(line["date"] for line in lines)
+    known = Counter(key(*row) for row in StatementLine.objects.filter(statement__cashbox=cashbox, line_date__gte=first, line_date__lte=last)
+                    .values_list("line_date", "amount", "reference", "description"))
+    fresh = []
+    for line in lines:
+        k = key(line["date"], line["amount"], line["reference"], line["description"])
+        if known[k]:
+            known[k] -= 1
+            continue
+        fresh.append(line)
+    return fresh
 
 
 def candidates(line, exclude=(), days=MATCH_DAYS):
@@ -354,7 +381,9 @@ def reconciliation(statement):
     book = balance(cashbox, last)
     # What came before the account's first statement is already inside the bank's figures.
     since = StatementLine.objects.filter(statement__cashbox=cashbox).order_by("line_date").values_list("line_date", flat=True).first() or first
-    outstanding = list(_live(cashbox.movements.filter(movement_date__gte=since - timedelta(days=MATCH_DAYS), movement_date__lte=last))
+    # A movement and its reversal both by the cutoff net to nothing; a reversal after the cutoff leaves the movement standing then.
+    outstanding = list(cashbox.movements.filter(movement_date__gte=since - timedelta(days=MATCH_DAYS), movement_date__lte=last, reversal_of__isnull=True)
+                       .exclude(reversal_movements__movement_date__lte=last)
                        .exclude(statement_line__isnull=False, statement_line__line_date__lte=last).order_by("movement_date", "pk"))
     unrecorded = list(StatementLine.objects.filter(statement__cashbox=cashbox, line_date__lte=last)
                       .filter(Q(movement__isnull=True) | Q(movement__movement_date__gt=last)).order_by("line_date", "pk"))

@@ -210,6 +210,36 @@ class StatementTests(BankSetup):
         self.assertEqual(report["unrecorded_total"], D("-70.00"))  # matched, but booked the day after the statement ends
         self.assertEqual(report["difference"], D("0.00"))
 
+    def test_an_excel_statement_keeps_every_digit(self):
+        import io
+
+        from openpyxl import Workbook
+
+        book = Workbook()
+        sheet = book.active
+        sheet.append(["date", "description", "amount", "balance"])
+        sheet.append([D3, "big transfer", 1234567.89, 1244567.89])
+        data = io.BytesIO()
+        book.save(data)
+        lines, closing = services.read_statement(SimpleUploadedFile("statement.xlsx", data.getvalue()))
+        self.assertEqual((lines[0]["amount"], closing), (D("1234567.89"), D("1244567.89")))
+        self.assertEqual(services.parse_amount("1.23456789e+06"), D("1234567.89"))
+
+    def test_a_statement_uploaded_twice_or_overlapping_brings_each_line_once(self):
+        services.import_statement(self.bank, csv_file(STATEMENT), self.accountant)
+        with self.assertRaisesMessage(ValidationError, "اترفعت قبل كده"):
+            services.import_statement(self.bank, csv_file(STATEMENT), self.accountant)
+        later = STATEMENT + f"{TODAY:%d/%m/%Y},إيداع,,,50.00,\"12,038.00\"\n"
+        statement, _ = services.import_statement(self.bank, csv_file(later), self.accountant)
+        self.assertEqual([line.amount for line in statement.lines.all()], [D("50.00")])
+        self.assertEqual(StatementLine.objects.filter(amount=D("-15.00")).count(), 1)
+
+    def test_a_reversal_after_the_cutoff_leaves_the_statement_as_it_was(self):
+        a, _ = services.import_statement(self.bank, csv_file(f"date,amount\n{D2:%Y-%m-%d},2000.00\n"), self.accountant, closing_balance="12000.00")
+        self.assertEqual(services.reconciliation(a)["difference"], D("0.00"))  # the 500 cheque outstanding
+        cancel_cashbox_operation(self.cheque.pk, TODAY, "اتلغى بعدين", self.owner)
+        self.assertEqual(services.reconciliation(a)["difference"], D("0.00"))
+
     def test_manual_match_unmatch_and_the_refusals(self):
         statement, _ = services.import_statement(self.bank, csv_file(STATEMENT), self.accountant)
         deposit = statement.lines.get(amount=D("2000.00"))
