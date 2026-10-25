@@ -95,6 +95,7 @@ AR_LABELS = {
         "adjustment": "تسوية",
         "bank_fee": "مصروفات بنكية",
         "cheque_bounced": "شيك مرتد",
+        "payroll": "مرتبات",
     },
     ("cashboxes.cashboxmovement", "direction"): {"in": "وارد", "out": "صادر"},
     ("cashboxes.cashboxoperation", "operation_type"): {
@@ -102,6 +103,7 @@ AR_LABELS = {
         "direct_out": "صرف نقدي مباشر",
         "transfer": "تحويل بين الخزن",
         "bank_fee": "مصروفات بنكية",
+        "payroll": "صرف مرتبات",
     },
     ("cheques.cheque", "status"): {"in_hand": "في الإيد", "deposited": "اتودع في البنك", "issued": "صادر ولسه ماتصرفش", "cleared": "اتصرف",
                                    "bounced": "مرتد", "cancelled": "ملغي"},

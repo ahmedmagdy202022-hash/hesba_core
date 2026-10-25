@@ -1,0 +1,185 @@
+"""T12 (MARKET-PARITY): payroll — the accrual, its payments and its reversal, checked in the ledger (HG-060)."""
+
+from datetime import timedelta
+from decimal import Decimal as D
+
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.db.models import Sum
+from django.test import TestCase
+from django.urls import reverse
+from django.utils import timezone
+
+from cashboxes.models import Cashbox, CashboxOperation
+from cashboxes.services import get_cashbox_balance
+from hesba_testing.factories import make_seeded_role, make_user, make_user_profile
+from ledger import reports
+from ledger.models import JournalLine
+from ledger.projector import Projector
+from permissions.models import RoleCode
+from reports.tests_dashboard import prepared_client
+from staff.models import Employee
+
+from . import services
+from .models import PayrollRun, PayTo, RunStatus, SalaryProfile
+
+TODAY = timezone.localdate()
+LAST_MONTH = (TODAY.replace(day=1) - timedelta(days=1)).replace(day=1)
+
+
+def person(role, username):
+    user = make_user(username=username)
+    make_user_profile(user=user, role=make_seeded_role(role))
+    return user
+
+
+def bal(code):
+    agg = JournalLine.objects.filter(account__code=code).aggregate(d=Sum("debit"), c=Sum("credit"))
+    return (agg["d"] or D("0")) - (agg["c"] or D("0"))
+
+
+class PayrollSetup(TestCase):
+    def setUp(self):
+        prepared_client("commercial", "fashion", modules="customers,suppliers,items_services,sales_operations,purchases,inventory,cashboxes,expenses,employees_technicians,reports")
+        self.owner = person(RoleCode.OWNER, "py_owner")
+        self.cashier = person(RoleCode.CASHIER, "py_cashier")
+        self.cash = Cashbox.objects.create(cashbox_code="CASH-PY", name_ar="الخزنة", opening_balance=D("50000.00"))
+        self.mona = Employee.objects.create(code="E1", name="منى")
+        self.ali = Employee.objects.create(code="E2", name="علي")
+        SalaryProfile.objects.create(employee=self.mona, basic=D("10000.00"), allowances=D("2000.00"))
+        SalaryProfile.objects.create(employee=self.ali, basic=D("3000.00"), taxed=False)
+
+    def make_run(self):
+        return services.prepare(LAST_MONTH.strftime("%Y-%m"), self.owner)
+
+
+class CalculationTests(PayrollSetup):
+    def test_each_line_from_the_salary_insurance_and_brackets(self):
+        run = self.make_run()
+        mona = run.lines.get(employee=self.mona)
+        # gross 12,000; insurance on the 10,000 basic: 11% and 18.75%;
+        # tax: (12,000 − 1,100) × 12 − 20,000 = 110,800 → 1,500 + 2,250 + 8,160 = 11,910 a year → 992.50 a month.
+        self.assertEqual((mona.gross, mona.employee_insurance, mona.company_insurance, mona.income_tax, mona.net),
+                         (D("12000.00"), D("1100.00"), D("1875.00"), D("992.50"), D("9907.50")))
+        ali = run.lines.get(employee=self.ali)
+        self.assertEqual((ali.employee_insurance, ali.company_insurance, ali.income_tax, ali.net), (D("330.00"), D("562.50"), D("0.00"), D("2670.00")))
+        self.assertEqual(services.run_totals(run), {"gross": D("15000.00"), "employee_insurance": D("1430.00"), "company_insurance": D("2437.50"),
+                                                    "income_tax": D("992.50"), "net": D("12577.50")})
+
+    def test_the_insured_wage_stays_within_the_floor_and_the_ceiling(self):
+        SalaryProfile.objects.filter(employee=self.mona).update(basic=D("40000.00"))
+        SalaryProfile.objects.filter(employee=self.ali).update(basic=D("1500.00"))
+        run = self.make_run()
+        self.assertEqual(run.lines.get(employee=self.mona).employee_insurance, D("1595.00"))  # 11% of the 14,500 ceiling
+        self.assertEqual(run.lines.get(employee=self.ali).employee_insurance, D("253.00"))    # 11% of the 2,300 floor
+
+    def test_a_draft_line_changes_by_hand_and_a_posted_one_does_not(self):
+        run = self.make_run()
+        line = run.lines.get(employee=self.ali)
+        line = services.change_line(line, {"absence_deduction": "300", "other_deductions": "200"}, self.owner)
+        self.assertEqual((line.gross, line.net), (D("2500.00"), D("2170.00")))
+        services.post(run, self.owner)
+        with self.assertRaisesMessage(ValidationError, "اترحّل"):
+            services.change_line(line, {"basic": "1"}, self.owner)
+
+    def test_the_rules_are_data(self):
+        with self.assertRaisesMessage(ValidationError, "شرائح"):
+            services.save_rules({"tax_brackets": "40000:0\n30000:10\n:20"}, self.owner)
+        services.save_rules({"employee_insurance_percent": "10", "tax_brackets": "100000:0\n:10", "yearly_exemption": "0"}, self.owner)
+        line = self.make_run().lines.get(employee=self.mona)
+        self.assertEqual(line.employee_insurance, D("1000.00"))
+        self.assertEqual(line.income_tax, D("266.67"))  # (12,000 − 1,000) × 12 = 132,000 → 3,200 a year
+        with self.assertRaises(PermissionDenied):
+            services.save_rules({"yearly_exemption": "1"}, self.cashier)
+
+    def test_one_run_a_month_and_only_with_salaries(self):
+        self.make_run()
+        with self.assertRaisesMessage(ValidationError, "اتعملت قبل كده"):
+            self.make_run()
+        SalaryProfile.objects.update(basic=0)
+        with self.assertRaisesMessage(ValidationError, "مفيش موظفين"):
+            services.prepare(TODAY.strftime("%Y-%m"), self.owner)
+
+
+class LedgerTests(PayrollSetup):
+    def test_posting_books_the_cost_and_the_debts_without_moving_money(self):
+        run = services.post(self.make_run(), self.owner)
+        self.assertEqual(run.posted_on, (LAST_MONTH.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1))
+        Projector().rebuild()
+        self.assertEqual(bal("5201"), D("17437.50"))   # gross + the company's insurance
+        self.assertEqual(bal("2107"), D("-12577.50"))  # net pay owed
+        self.assertEqual(bal("2108"), D("-3867.50"))   # both insurance shares
+        self.assertEqual(bal("2109"), D("-992.50"))    # income tax
+        self.assertEqual(bal("1199"), D("0"))
+        self.assertEqual(get_cashbox_balance(self.cash), D("50000.00"))
+        self.assertTrue(reports.trial_balance()["balanced"])
+
+    def test_paying_moves_only_what_is_paid_and_clears_its_debt(self):
+        run = services.post(self.make_run(), self.owner)
+        services.pay(run, PayTo.NET, self.cash, "", self.owner)  # empty: all that is left
+        services.pay(run, PayTo.INSURANCE, self.cash, "2000", self.owner)
+        with self.assertRaisesMessage(ValidationError, "أكتر من المستحق"):
+            services.pay(run, PayTo.INSURANCE, self.cash, "5000", self.owner)
+        self.assertEqual(get_cashbox_balance(self.cash), D("50000.00") - D("12577.50") - D("2000.00"))
+        owed = services.owed(run)
+        self.assertEqual((owed[PayTo.NET]["left"], owed[PayTo.INSURANCE]["left"], owed[PayTo.TAX]["left"]), (D("0.00"), D("1867.50"), D("992.50")))
+        Projector().rebuild()
+        self.assertEqual(bal("2107"), D("0"))
+        self.assertEqual(bal("2108"), D("-1867.50"))
+        self.assertEqual(bal("5201"), D("17437.50"))  # paying is not a second cost
+        self.assertEqual(bal("1199"), D("0"))
+        self.assertTrue(reports.trial_balance()["balanced"])
+        self.assertTrue(reports.reconciliation()["ok"])
+
+    def test_a_payment_is_cancelled_and_the_run_reversed_append_only(self):
+        run = services.post(self.make_run(), self.owner)
+        payment = services.pay(run, PayTo.TAX, self.cash, "", self.owner)
+        with self.assertRaisesMessage(ValidationError, "ألغي الدفعات"):
+            services.reverse(run, self.owner, "غلط")
+        services.cancel_payment(payment, self.owner, "اتدفعت مرتين")
+        self.assertEqual(get_cashbox_balance(self.cash), D("50000.00"))
+        run = services.reverse(run, self.owner, "غلط في المرتبات")
+        self.assertEqual(run.status, RunStatus.REVERSED)
+        Projector().rebuild()
+        for code in ("5201", "2107", "2108", "2109", "1199"):
+            self.assertEqual(bal(code), D("0"), code)
+        self.assertEqual(JournalLine.objects.filter(entry__source_type="payroll_run").values("entry").distinct().count(), 2)  # the accrual and its reversal
+        self.assertTrue(reports.trial_balance()["balanced"])
+
+    def test_the_cashbox_screen_leaves_payroll_payments_alone(self):
+        run = services.post(self.make_run(), self.owner)
+        payment = services.pay(run, PayTo.NET, self.cash, "100", self.owner)
+        self.client.force_login(self.owner)
+        response = self.client.post(reverse("cashboxes:operation_cancel", args=[payment.operation_id]), {"reversal_date": TODAY.isoformat(), "reason": "x"}, follow=True)
+        self.assertContains(response, "تابعة للمرتبات")
+        self.assertEqual(CashboxOperation.objects.get(pk=payment.operation_id).status, "posted")
+        form = self.client.get(reverse("cashboxes:operation_create") + "?lang=ar")
+        self.assertNotContains(form, 'value="payroll"')
+
+    def test_only_who_may_record_expenses_runs_payroll(self):
+        with self.assertRaises(PermissionDenied):
+            services.prepare(LAST_MONTH.strftime("%Y-%m"), self.cashier)
+
+
+class ScreenTests(PayrollSetup):
+    def test_the_screens_in_both_languages(self):
+        self.client.force_login(self.owner)
+        for lang in ("ar", "en"):
+            self.assertContains(self.client.get(reverse("payroll:list") + f"?lang={lang}"), "data-payroll-prepare")
+            self.assertContains(self.client.get(reverse("payroll:salaries") + f"?lang={lang}"), f'data-salary-row="{self.mona.pk}"')
+            self.assertContains(self.client.get(reverse("payroll:rules") + f"?lang={lang}"), "data-payroll-rules-form")
+        response = self.client.post(reverse("payroll:list"), {"lang": "ar", "month": LAST_MONTH.strftime("%Y-%m")})
+        run = PayrollRun.objects.get()
+        self.assertRedirects(response, f"{reverse('payroll:detail', args=[run.pk])}?lang=ar", fetch_redirect_response=False)
+        url = reverse("payroll:detail", args=[run.pk])
+        self.assertContains(self.client.get(url + "?lang=ar"), 'data-run-line="%d"' % self.mona.pk)
+        self.client.post(url, {"lang": "ar", "action": "post"})
+        page = self.client.get(url + "?lang=ar")
+        self.assertContains(page, 'data-run-status="posted"')
+        self.assertContains(page, "data-run-pay")
+        self.client.post(url, {"lang": "ar", "action": "pay", "pay_to": "net", "cashbox": self.cash.pk, "amount": "", "paid_on": TODAY.isoformat()})
+        self.assertEqual(services.owed(run)[PayTo.NET]["left"], D("0.00"))
+        self.client.post(reverse("payroll:salaries"), {"lang": "ar", f"basic_{self.ali.pk}": "4000", f"allowances_{self.ali.pk}": "0", f"insured_{self.ali.pk}": "1"})
+        self.assertEqual(SalaryProfile.objects.get(employee=self.ali).basic, D("4000.00"))
+        self.assertFalse(SalaryProfile.objects.get(employee=self.ali).taxed)
+        self.client.force_login(self.cashier)
+        self.assertEqual(self.client.get(reverse("payroll:list")).status_code, 403)

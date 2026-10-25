@@ -284,7 +284,7 @@ def create_cashbox_operation(
     destination = locked.get(getattr(destination_cashbox, "pk", None))
     if len(locked) != len(cashbox_ids):
         raise ValidationError("Cash operations require active cashboxes.")
-    if operation_type in (CashboxOperationType.DIRECT_OUT, CashboxOperationType.TRANSFER, CashboxOperationType.BANK_FEE):
+    if operation_type in (CashboxOperationType.DIRECT_OUT, CashboxOperationType.TRANSFER, CashboxOperationType.BANK_FEE, CashboxOperationType.PAYROLL):
         if source is None or get_cashbox_balance(source) < amount:
             raise ValidationError("The source cashbox cannot become negative.")
     if operation_type == CashboxOperationType.TRANSFER:
@@ -331,6 +331,15 @@ def create_cashbox_operation(
             operation_date,
             source,
             CashboxMovementType.BANK_FEE,
+            CashboxDirection.OUT,
+            user,
+        )
+    elif operation_type == CashboxOperationType.PAYROLL:
+        _create_cash_operation_movement(
+            operation,
+            operation_date,
+            source,
+            CashboxMovementType.PAYROLL,
             CashboxDirection.OUT,
             user,
         )
@@ -420,6 +429,16 @@ def cancel_cashbox_operation(operation_id, reversal_date, reason, user):
             CashboxDirection.IN,
             user,
             reversal_of=originals[CashboxMovementType.BANK_FEE],
+        )
+    elif operation.operation_type == CashboxOperationType.PAYROLL:
+        _create_cash_operation_movement(
+            operation,
+            reversal_date,
+            source,
+            CashboxMovementType.PAYROLL,
+            CashboxDirection.IN,
+            user,
+            reversal_of=originals[CashboxMovementType.PAYROLL],
         )
     else:
         if get_cashbox_balance(destination) < operation.amount:
