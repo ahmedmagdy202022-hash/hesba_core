@@ -8,7 +8,7 @@ from config.numbering import AutoNumbered
 
 from settings_core.display_labels import localized_choices
 
-from .models import Cashbox, CashboxOperation, CashboxOperationType
+from .models import Cashbox, CashboxKind, CashboxOperation, CashboxOperationType
 from entities import scope as entity_scope
 
 
@@ -146,6 +146,13 @@ class CashboxOperationForm(Sectioned, AutoNumbered, forms.Form):
                 self.add_error(
                     "destination_cashbox", "Direct cash out does not use a destination cashbox."
                 )
+        elif operation_type == CashboxOperationType.BANK_FEE:
+            if not source:
+                self.add_error("source_cashbox", "Source cashbox is required.")
+            elif source.kind != CashboxKind.BANK:
+                self.add_error("source_cashbox", "Bank fees are taken from a bank account only.")
+            if destination:
+                self.add_error("destination_cashbox", "A bank fee requires only the bank account it was taken from.")
         elif operation_type == CashboxOperationType.TRANSFER:
             if not source:
                 self.add_error("source_cashbox", "Source cashbox is required.")

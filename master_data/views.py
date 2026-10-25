@@ -455,6 +455,8 @@ def _entity_form(request, entity, config, instance):
     kwargs = {"lang": lang, "instance": instance}
     if entity == "items":
         kwargs["can_view_cost"] = user_has_permission(request.user, "inventory.view_cost")
+    if entity == "cashboxes" and instance is None and request.GET.get("kind") == "bank":
+        kwargs["initial"] = {"kind": "bank"}  # T3: "new bank account" from the banks page
 
     if request.method == "POST":
         form = config["form"](request.POST, **kwargs)

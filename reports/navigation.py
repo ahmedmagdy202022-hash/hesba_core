@@ -76,6 +76,8 @@ NAV_ITEMS = (
     {"key": "items", "ar": "الأصناف والخدمات", "en": "Items & services", "url_name": "master_data:items", "module": "items_services",
      "permission": "master_data.view_master_data"},  # HG-048: a waiter or site engineer does not hold it
     {"key": "cashboxes", "ar": "الخزائن", "en": "Cashboxes", "url_name": "cashboxes:list", "module": "cashboxes", "permission": "cashboxes.view_cashboxes"},
+    # T3: bank accounts and matching their statements.
+    {"key": "banks", "ar": "البنوك", "en": "Banks", "url_name": "banking:list", "module": "cashboxes", "permission": "cashboxes.view_finance"},
     {"key": "manufacturing", "ar": "التصنيع", "en": "Manufacturing", "url_name": "manufacturing:home", "module": "manufacturing", "permission": "inventory.view_stock"},
     {"key": "projects", "ar": "المشاريع", "en": "Projects", "url_name": "projects:list", "module": "projects",
      "permission": ("sales.view_sales_invoices", "projects.view_projects")},
@@ -143,6 +145,7 @@ TAB_LABELS = {
     "drugs": {"ar": "الأدوية", "en": "Drugs"},
     "attendance": {"ar": "الحضور", "en": "Attendance"},
     "my_attendance": {"ar": "حضوري", "en": "Check in"},
+    "banks": {"ar": "البنوك", "en": "Banks"},
     "contracts": {"ar": "العقود", "en": "Contracts"},
     "packages": {"ar": "الباكدجات", "en": "Packages"},
     "hours": {"ar": "الساعات", "en": "Hours"},

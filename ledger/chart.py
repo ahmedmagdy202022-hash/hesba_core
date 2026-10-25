@@ -64,7 +64,7 @@ BASE = (
     ("5209", "رسوم وضرائب", "Fees & taxes", X, "", True, False),
     ("5210", "مصروف الإهلاك", "Depreciation expense", X, "depreciation", True, False),
     ("5211", "خسائر فروق الجرد", "Stock count losses", X, "stock_loss", True, False),
-    ("5212", "مصروفات بنكية", "Bank charges", X, "", True, False),
+    ("5212", "مصروفات بنكية", "Bank charges", X, "bank_charges", True, False),
     ("5299", "مصروفات عمومية أخرى", "Other general expenses", X, "general_expense", True, False),
 )
 
