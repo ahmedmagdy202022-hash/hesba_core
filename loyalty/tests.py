@@ -356,3 +356,37 @@ class LockOrderTests(LoyaltySetup):
         self.assertEqual(order[0], "stock")
         self.assertIn("customer", order)
         self.assertEqual(self.points(), 100 - 40 + 23)
+
+    def test_a_cancelled_return_locks_the_customer_after_the_stock_and_never_the_invoice(self):
+        """Codex #274: a new return locks its invoice then the stock; cancelling one locks the stock first. The
+        settlement locks neither the invoice nor anything before the stock, only the customer, last."""
+
+        from unittest import mock
+
+        from sales import services as sales_services
+        from sales.models import SalesInvoice
+
+        invoice = self.sell(quantity=4)
+        sales_return = create_sales_return("LY-L1", TODAY, invoice.pk, [{"source_line": invoice.lines.get(), "quantity": D("1")}], "مقاس", self.owner)
+        order = []
+        lock, stock = services._lock, sales_services.lock_items_for_stock_check
+        real = SalesInvoice.objects.select_for_update
+
+        def invoice_lock(*args, **kwargs):
+            order.append("invoice")
+            return real(*args, **kwargs)
+
+        with mock.patch.object(services, "_lock", side_effect=lambda customer: (order.append("customer"), lock(customer))[1]), \
+             mock.patch.object(sales_services, "lock_items_for_stock_check", side_effect=lambda ids: (order.append("stock"), stock(ids))[1]), \
+             mock.patch.object(SalesInvoice.objects, "select_for_update", side_effect=invoice_lock):
+            cancel_sales_return(sales_return.pk, TODAY, "رجع في كلامه", self.owner)
+        self.assertEqual(order, ["stock", "customer"])
+        self.assertEqual(self.points(), 100)
+
+    def test_a_return_with_no_points_takes_no_lock(self):
+        from unittest import mock
+
+        invoice = self.sell(quantity=1, customer=walk_in_customer())
+        with mock.patch.object(services, "_lock") as lock:
+            create_sales_return("LY-L2", TODAY, invoice.pk, [{"source_line": invoice.lines.get(), "quantity": D("1")}], "مقاس", self.owner)
+        lock.assert_not_called()

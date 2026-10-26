@@ -250,15 +250,16 @@ def _settle_returns(sales_return, user, day):
     """Codex #274: what the invoice's returns take back is worked out over all of its returns still standing, then
     rounded down once, so splitting a return never keeps points and cancelling one gives back just what it changes."""
 
-    from sales.models import SalesReturnStatus
+    from sales.models import SalesInvoice, SalesReturnStatus
 
-    from sales.models import SalesInvoice
-
-    # Codex #274: one settlement of an invoice's returns at a time, so each sees the one before it.
-    invoice = SalesInvoice.objects.select_for_update(of=("self",)).get(pk=sales_return.source_invoice_id)
+    invoice = SalesInvoice.objects.select_related("customer").get(pk=sales_return.source_invoice_id)
+    if not invoice.total_amount or not PointsEntry.objects.filter(invoice=invoice, kind=EntryKind.EARN).exists():
+        return  # nothing to settle, and no lock taken
+    # Codex #274: one settlement of the customer's points at a time, so each sees the one before it. The customer's row
+    # is locked last, after whatever the return locked (its invoice, lines and stock), as posting does; locking the
+    # invoice here would take it after the stock when a return is cancelled, the other way round from a new return.
+    _lock(invoice.customer)
     earned = PointsEntry.objects.filter(invoice=invoice, kind=EntryKind.EARN).first()
-    if earned is None or not invoice.total_amount:
-        return
     standing = invoice.returns.filter(status=SalesReturnStatus.POSTED).aggregate(n=Sum("total_amount"))["n"] or ZERO
     target = int((Decimal(earned.points) * min(standing, invoice.total_amount) / invoice.total_amount).to_integral_value(rounding=ROUND_FLOOR))
     taken = -(PointsEntry.objects.filter(reverses=earned, kind=EntryKind.BACK, sales_return__isnull=False).aggregate(n=Sum("points"))["n"] or 0)
