@@ -510,7 +510,9 @@ class Command(BaseCommand):
         off = (floor * Decimal("0.15")).quantize(Decimal("10"))  # more than the section's 10%, so the coupon is the best offer
         promos.save({"name": f"كوبون HESBA: {off:,.0f} جنيه خصم على {floor:,.0f} وأكتر", "kind": "amount_over", "amount": str(off), "min_total": str(floor),
                      "coupon_code": "HESBA", "active": "1"}, owner)
-        sales = ((9, ((0, 2),), ""), (5, ((2, 3),), ""), (2, ((1, 2),), "HESBA"))
+        # Codex #277: the coupon's basket reaches its minimum whatever the item costs (2 x price <= floor < 3 x price at most).
+        enough = int((floor / items[1].default_sale_price).to_integral_value(rounding="ROUND_CEILING")) if items[1].default_sale_price else 2
+        sales = ((9, ((0, 2),), ""), (5, ((2, 3),), ""), (2, ((1, max(enough, 2)),), "HESBA"))
         need = {}
         for _, lines, _ in sales:
             for index, quantity in lines:

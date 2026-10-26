@@ -167,6 +167,7 @@ class SampleBusinessPerActivityTests(TestCase):
 
         self.assert_a_working_business(self.fill("restaurants", "fast_food", capabilities="pos,shift_required,promotions,loyalty,shipping"))
         self.assertEqual(InvoicePromotion.objects.count(), 3)
+        self.assertTrue(InvoicePromotion.objects.filter(coupon_code="HESBA").exists())  # a cheap item still reaches the coupon's minimum
         self.assertEqual(Shipment.objects.count(), 3)
         self.assertTrue(PointsEntry.objects.filter(kind="earn").exists())
 
