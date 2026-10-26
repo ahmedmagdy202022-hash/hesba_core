@@ -127,10 +127,13 @@ def posted_expenses(date_from=None, date_to=None):
 
 
 def expense_total(date_from=None, date_to=None):
-    """Posted expenses in the window, and the bank fees taken in it (T3). Cancelled ones count as never spent."""
+    """Posted expenses in the window, and the bank fees taken in it (T3), and the payroll cost posted in it (T12).
+    Cancelled ones count as never spent."""
+
+    from payroll.services import cost_total
 
     total = posted_expenses(date_from, date_to).aggregate(total=Sum("amount"))["total"]
-    return money_round((total or 0) + bank_fee_total(date_from, date_to))
+    return money_round((total or 0) + bank_fee_total(date_from, date_to) + cost_total(date_from, date_to))
 
 
 def bank_fee_total(date_from=None, date_to=None):

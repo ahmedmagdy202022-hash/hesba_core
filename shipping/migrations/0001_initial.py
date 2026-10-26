@@ -11,7 +11,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ("cashboxes", "0015_courier_kind"),
+        ("cashboxes", "0016_courier_kind"),
         ("expenses", "0002_seed_default_categories"),
         ("sales", "0010_sales_rep"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),

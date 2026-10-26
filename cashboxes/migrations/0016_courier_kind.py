@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("cashboxes", "0014_cheque_kinds"),
+        ("cashboxes", "0015_payroll_operation"),
     ]
 
     operations = [

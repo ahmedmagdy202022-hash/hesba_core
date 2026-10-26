@@ -166,6 +166,7 @@ class Projector:
             self.group(*source, row.movement_date).add(self.acc.inventory(row.item_id), amount, row.location.entity_id or self.main_id, "stock", location_id=row.location_id)
         self._openings()
         self._fixed_assets()
+        self._payroll()
         self._contracts()
 
     def _contracts(self):
@@ -276,6 +277,31 @@ class Projector:
                 g.add(self.acc["fixed_assets"], -Decimal(asset.cost), self.main_id)
                 g.add(self.acc["accumulated_depreciation"], accumulated(asset, asset.disposed_on), self.main_id)
                 g.add(self.acc["asset_disposal"], -g.balance(), self.main_id)
+
+    #: T12: which debt each kind of payroll payment settles.
+    PAYROLL_DEBTS = {"net": "salaries_payable", "insurance": "insurance_payable", "tax": "payroll_tax_payable"}
+
+    def _payroll(self):
+        """T12 (HG-060): a posted run's accrual on its posting date, and the opposite entry on its reversal date.
+
+        Cost (gross + the company's insurance share) is owed as net pay, insurance (both shares) and income tax.
+        Each payment is a cashbox operation; ``_place_cashbox_operation`` puts it against its debt.
+        """
+
+        from payroll.models import PayrollPayment, PayrollRun, RunStatus
+        from payroll.services import run_totals
+
+        self._payroll_ops = dict(PayrollPayment.objects.values_list("operation_id", "pay_to"))
+        for run in PayrollRun.objects.exclude(status=RunStatus.DRAFT).exclude(posted_on__isnull=True):
+            totals = run_totals(run)
+            for day, sign in ((run.posted_on, 1), (run.reversed_on, -1)):
+                if day is None:
+                    continue
+                g = self.group("payroll_run", run.pk, day)
+                g.add(self.acc["salaries" if self.acc.has("salaries") else "general_expense"], sign * (totals["gross"] + totals["company_insurance"]), self.main_id)
+                g.add(self.acc["salaries_payable"], -sign * totals["net"], self.main_id)
+                g.add(self.acc["insurance_payable"], -sign * (totals["employee_insurance"] + totals["company_insurance"]), self.main_id)
+                g.add(self.acc["payroll_tax_payable"], -sign * totals["income_tax"], self.main_id)
 
     # ---- placing the balancing side ----
 
@@ -414,6 +440,8 @@ class Projector:
             g.add(self.acc["fixed_assets"], remainder, g.entity_id)
         elif asset is not None and asset[0] == "disposal":
             g.add(self.acc["asset_disposal"], remainder, g.entity_id)
+        elif op.pk in self._payroll_ops:  # T12: a payroll payment settles its debt
+            g.add(self.acc[self.PAYROLL_DEBTS[self._payroll_ops[op.pk]]], remainder, g.entity_id)
         elif op.operation_type == "bank_fee":
             g.add(self.acc["bank_charges" if self.acc.has("bank_charges") else "general_expense"], remainder, g.entity_id)
         elif remainder:
@@ -551,6 +579,11 @@ def fingerprint():
     parts.append(";".join(f"{a.pk}{a.status}{a.disposed_on}" for a in FixedAsset.objects.order_by("pk")))
     parts.append(timezone.localdate().strftime("%Y-%m"))  # depreciation months roll over
     parts.append(_contracts_fingerprint())
+    from payroll.models import PayrollPayment, PayrollRun
+
+    parts.append(";".join(f"{pk}{status}{posted}{reversed_on}" for pk, status, posted, reversed_on
+                          in PayrollRun.objects.order_by("pk").values_list("pk", "status", "posted_on", "reversed_on")))  # T12
+    parts.append(str(PayrollPayment.objects.aggregate(n=Max("pk"))["n"]))
     parts.append(str(Account.objects.count()))
     return "|".join(parts)
 
