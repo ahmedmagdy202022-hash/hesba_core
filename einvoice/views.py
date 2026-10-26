@@ -32,7 +32,7 @@ WORDS = {
         "search": "بحث", "filter": "بحث", "prev": "السابق", "next": "التالي", "item": "الصنف", "code_type": "نوع الكود", "code": "الكود", "unit": "الوحدة",
         "customer": "العميل", "type": "النوع", "tax_id": "الرقم (ضريبي / قومي / جواز)", "governate": "المحافظة", "city": "المدينة", "street": "الشارع", "building": "رقم المبنى",
         "view_only": "تقدر تشوف بس؛ التعديل لصاحب الصلاحية.", "doc": "ملف الفاتورة الإلكترونية", "ready": "الملف جاهز للتوقيع والإرسال.", "problems": "لازم تكمّل الحاجات دي قبل الإرسال:",
-        "download": "تنزيل ملف JSON", "back_invoice": "العودة للفاتورة", "items_hint": "كود EGS بتسجّله الأول على بوابة المنظومة، أو استخدم باركود GS1 الدولي. الوحدة من أكواد المنظومة (EA = قطعة، KGM = كيلو، LTR = لتر، BOX = علبة).",
+        "download": "تنزيل ملف JSON", "back_invoice": "العودة للفاتورة", "back_return": "العودة للمرتجع", "credit_note": "الإشعار الدائن (مرتجع)", "items_hint": "كود EGS بتسجّله الأول على بوابة المنظومة، أو استخدم باركود GS1 الدولي. الوحدة من أكواد المنظومة (EA = قطعة، KGM = كيلو، LTR = لتر، BOX = علبة).",
         "customers_hint": "الشركة (B) لازم رقمها الضريبي وعنوانها. الشخص (P) بياناته إجبارية لما الفاتورة توصل للحد المحدد بس. الأجنبي (F) رقم الجواز والعنوان.",
         "threshold_hint": "راجع الحد الحالي مع المصلحة أو محاسبك؛ القيمة الافتراضية 50,000 جنيه.",
         "portal": "الإرسال للمنظومة", "send": "وقّع وابعت للمنظومة", "refresh": "حدّث الحالة من المنظومة", "recheck": "اسأل المنظومة عن الفاتورة دي", "recheck_hint": "الإرسال ده متعرفش نتيجته. بعد 10 دقايق من الإرسال، الزرار ده بيسأل المنظومة: لو الفاتورة وصلت بتتسجل، ولو موصلتش بتتبعت تاني مرة واحدة.", "cancel": "إلغاء على المنظومة", "cancel_reason": "سبب الإلغاء",
@@ -51,7 +51,7 @@ WORDS = {
         "search": "Search", "filter": "Search", "prev": "Previous", "next": "Next", "item": "Item", "code_type": "Code type", "code": "Code", "unit": "Unit",
         "customer": "Customer", "type": "Type", "tax_id": "ID (tax / national / passport)", "governate": "Governorate", "city": "City", "street": "Street", "building": "Building no.",
         "view_only": "You can view; editing needs the right permission.", "doc": "E-invoice document", "ready": "The document is ready to sign and send.", "problems": "Complete these before sending:",
-        "download": "Download JSON", "back_invoice": "Back to the invoice", "items_hint": "Register an EGS code on the portal first, or use the international GS1 barcode. Units are portal codes (EA = piece, KGM = kilogram, LTR = litre, BOX = box).",
+        "download": "Download JSON", "back_invoice": "Back to the invoice", "back_return": "Back to the return", "credit_note": "Credit note (return)", "items_hint": "Register an EGS code on the portal first, or use the international GS1 barcode. Units are portal codes (EA = piece, KGM = kilogram, LTR = litre, BOX = box).",
         "customers_hint": "A business (B) needs its tax number and address. A person (P) only needs details from the set invoice amount. A foreigner (F) needs a passport number and address.",
         "threshold_hint": "Confirm the current threshold with the authority or your accountant; the default is EGP 50,000.",
         "portal": "Sending to the portal", "send": "Sign and send", "refresh": "Refresh the status", "recheck": "Ask the portal about this invoice", "recheck_hint": "This sending's outcome is unknown. From 10 minutes after it, this asks the portal: if the invoice arrived it is recorded, if not it is sent once more.", "cancel": "Cancel on the portal", "cancel_reason": "Cancellation reason",
@@ -243,5 +243,58 @@ def sales_document(request, pk):
     submission = current_submission(invoice)
     return render(request, "einvoice/document.html", _context(
         request, invoice=invoice, problems=problems, document_text=text, section="sales", can_send=can_send, missing=_missing(lang),
-        environment=portal.settings()["environment"], submission=submission, history=invoice.eta_submissions.exclude(pk=getattr(submission, "pk", None))[:5], public_url=public_url(submission),
+        environment=portal.settings()["environment"], submission=submission, public_url=public_url(submission),
+        history=invoice.eta_submissions.filter(sales_return__isnull=True).exclude(pk=getattr(submission, "pk", None))[:5],
+        back_url=reverse("sales:detail", args=[invoice.pk]), back_label=words["back_invoice"], doc_number=invoice.invoice_number,
+        doc_posted=invoice.status == "posted", doc_title=words["doc"],
+    ))
+
+
+@require_permission("sales.view_sales_invoices")
+def credit_note(request, pk):
+    """T7 (HG-059): a sales return's credit note — the document, sending it, and what the authority said."""
+
+    from django.core.exceptions import ValidationError
+
+    from sales.models import SalesReturn
+
+    from . import portal
+    from .services import build_credit_note, current_credit_note, public_url, refresh_submission, send_credit_note
+
+    lang = _lang(request)
+    words = WORDS[lang]
+    sales_return = get_object_or_404(entity_scope.scope(SalesReturn.objects.select_related("source_invoice__customer"), entity_scope.SALES_RETURN), pk=pk)
+    can_send = user_has_permission(request.user, SEND)
+    if request.method == "POST":
+        if not can_send:
+            raise PermissionDenied("Sending e-invoices needs sales.create_sales_invoice.")
+        try:
+            if request.POST.get("action") == "send":
+                submission = send_credit_note(sales_return, request.user, lang)
+                if submission.status == "rejected":
+                    messages.error(request, words["sent_rejected"].format(reason=submission.message))
+                else:
+                    messages.success(request, words["sent"])
+            elif request.POST.get("action") == "refresh":
+                submission = current_credit_note(sales_return)
+                if submission is None:
+                    raise ValidationError(words["not_sent"])
+                refresh_submission(submission, request.user, lang)
+                messages.success(request, words["refreshed"])
+        except ValidationError as exc:
+            messages.error(request, " ".join(exc.messages))
+        return redirect(f"{reverse('einvoice:credit_note', args=[sales_return.pk])}?lang={lang}")
+    document, problems = build_credit_note(sales_return, lang)
+    text = document_json(document)
+    if request.GET.get("format") == "json":
+        response = HttpResponse(text, content_type="application/json; charset=utf-8")
+        response["Content-Disposition"] = f'attachment; filename="credit-note-{sales_return.return_number}.json"'
+        return response
+    submission = current_credit_note(sales_return)
+    return render(request, "einvoice/document.html", _context(
+        request, invoice=sales_return.source_invoice, problems=problems, document_text=text, section="sales", can_send=can_send, missing=_missing(lang),
+        environment=portal.settings()["environment"], submission=submission, public_url=public_url(submission),
+        history=sales_return.eta_submissions.exclude(pk=getattr(submission, "pk", None))[:5], credit_note=True,
+        back_url=reverse("sales:return_detail", args=[sales_return.pk]), back_label=words["back_return"], doc_number=sales_return.return_number,
+        doc_posted=sales_return.status == "posted", doc_title=words["credit_note"],
     ))
