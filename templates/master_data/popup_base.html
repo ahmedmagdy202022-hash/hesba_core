@@ -1,0 +1,14 @@
+{% extends "base_app.html" %}
+{% load static %}
+{# FB-26: the full supplier / customer form inside the invoice's box: no menu, no header, just the form. #}
+{% block styles %}<link rel="stylesheet" href="{% static 'hesba/css/master_data.css' %}">{% endblock %}
+{% block body_class %}master-data-page hs-popup-page{% endblock %}
+{% block content %}
+<main class="md-shell hs-popup-shell" id="hs-main" tabindex="-1">{% block master_content %}{% endblock %}</main>
+<script src="{% static 'hesba/js/shell.js' %}" defer></script>
+<script>
+  document.addEventListener('click', function (event) {
+    if (event.target.closest('[data-popup-cancel]') && window.parent !== window) { window.parent.postMessage({ hesbaQuickAdd: 'cancel' }, window.location.origin); }
+  });
+</script>
+{% endblock %}
