@@ -337,3 +337,22 @@ class ReleaseTests(LoyaltySetup):
         with self.assertRaisesMessage(ValidationError, "مش مسودة"):
             services.release(redemption.pk, self.owner)
         self.assertEqual(PointsEntry.objects.get(invoice=invoice, kind=EntryKind.SPEND).points, -80)
+
+
+class LockOrderTests(LoyaltySetup):
+    def test_the_till_locks_the_stock_before_the_customer(self):
+        """Codex #274: posting a draft locks the stock, then the customer; the till must not take them the other way."""
+
+        from unittest import mock
+
+        from sales import services as sales_services
+
+        self.sell(quantity=4)  # 100
+        order = []
+        lock, stock = services._lock, sales_services._validate_stock_available
+        with mock.patch.object(services, "_lock", side_effect=lambda customer: (order.append("customer"), lock(customer))[1]), \
+             mock.patch.object(sales_services, "_validate_stock_available", side_effect=lambda *a, **k: (order.append("stock"), stock(*a, **k))[1]):
+            self.sell(quantity=1, points=(40, D("20.00")), discount="20.00")
+        self.assertEqual(order[0], "stock")
+        self.assertIn("customer", order)
+        self.assertEqual(self.points(), 100 - 40 + 23)

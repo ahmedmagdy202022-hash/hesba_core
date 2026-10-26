@@ -191,10 +191,15 @@ def lines_total(lines):
     return sum((money_round(Decimal(line["quantity"]) * Decimal(line["unit_sale_price"])) - Decimal(line.get("line_discount_amount") or 0) for line in lines), ZERO)
 
 
-def remember(invoice, points, amount):
+def remember(invoice, points, amount, posting=False):
+    """``posting``: the invoice is posted in the same transaction (the till). Its points are then checked again under
+    the customer's lock when it posts, after the stock is locked, so both paths take the locks in one order (Codex #274:
+    the customer first here and the stock first on posting could deadlock)."""
+
     if not points:
         return None
-    _lock(invoice.customer)  # the check in redeem() ran before; checked again under the customer's lock
+    if not posting:
+        _lock(invoice.customer)  # the check in redeem() ran before; checked again under the customer's lock
     have = balance(invoice.customer, besides=invoice)["points"]
     if points > have:
         raise ValidationError(MESSAGES["ar"]["spent"].format(have=max(have, 0)))

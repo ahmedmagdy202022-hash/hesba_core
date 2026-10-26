@@ -259,7 +259,7 @@ def checkout(*, lines, customer, location, cashbox, discount, tendered, user, sa
                 if points:  # T6: (points, amount) spent at the till, booked as spent when the sale is posted below
                     from loyalty.services import remember
 
-                    remember(invoice, *points)
+                    remember(invoice, *points, posting=True)  # checked under the customer's lock on posting
                 post_sales_invoice(invoice.pk, user)
             invoice.refresh_from_db()
             return invoice, change
