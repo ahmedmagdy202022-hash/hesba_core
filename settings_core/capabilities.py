@@ -122,6 +122,12 @@ CAPABILITIES = {
         "about_en": "Company, customer and item-code data, and each invoice's document in the portal format with a check of what is missing. Signing and sending come next.",
         "available": True, "paths": ("/einvoice/",),
     },
+    "e_receipt": {
+        "ar": "الإيصال الإلكتروني للمستهلك (B2C)", "en": "E-receipts for consumers (B2C)",
+        "about_ar": "كل بيعة من الكاشير بيطلعلها إيصال إلكتروني بصيغة المنظومة (v1.2) بسلسلة لكل جهاز وQR على الإيصال، وطابور 24 ساعة. الإرسال محتاج بيانات الجهاز على بوابة الإيصالات.",
+        "about_en": "Every till sale gets an e-receipt in the portal format (v1.2), chained per device, with a QR on the receipt and a 24-hour queue. Sending needs the device's details on the receipt portal.",
+        "available": True, "paths": ("/ereceipt/",),
+    },
     "fixed_assets": {
         "ar": "الأصول الثابتة والإهلاك", "en": "Fixed assets & depreciation",
         "about_ar": "سجل للأصول (عربيات، أجهزة، ديكور) وإهلاك شهري يدخل في صافي الربح.",
@@ -130,6 +136,10 @@ CAPABILITIES = {
     },
 }
 CAPABILITY_SLUGS = tuple(CAPABILITIES)
+
+#: Screens two capabilities share (Codex #271): the issuer, item-code and buyer-ID setup under /einvoice/ feed the
+#: e-receipt too, so either capability opens them. Matched exactly; the invoice documents stay with the e-invoice.
+SHARED_PATHS = {path: ("e_invoice", "e_receipt") for path in ("/einvoice/", "/einvoice/items/", "/einvoice/customers/")}
 
 #: Which capabilities start on for each commercial sub-activity. Anything not
 #: listed is OPTIONAL. Services activities suggest none of the trade ones.
@@ -217,7 +227,7 @@ ACTIVITY_PRESETS = {
 #: it at all (a builder never needs a quick till or sizes and colours). One that
 #: is already on still shows in Settings, so it can be switched off.
 NOT_FOR = {
-    catalog.CONTRACTING: {"pos", "shift_required", "barcode", "variants", "serials", "batches_expiry", "installments", "price_lists", "quotations", "promotions"},
+    catalog.CONTRACTING: {"e_receipt", "pos", "shift_required", "barcode", "variants", "serials", "batches_expiry", "installments", "price_lists", "quotations", "promotions"},
     catalog.EDUCATION: {"pos", "shift_required", "barcode", "variants", "serials", "batches_expiry", "units", "quotations", "promotions"},
     catalog.MEDICAL: {"variants", "serials", "quotations", "promotions"},
     catalog.RESTAURANTS: {"serials", "installments", "quotations"},
@@ -305,11 +315,11 @@ WORKS_BEST_WITH = {
 GROUPS = (
     ("selling", ("البيع والكاشير", "Selling and the till"), ("pos", "shift_required", "price_lists", "promotions", "installments", "quotations")),
     ("goods", ("الأصناف والمخزون", "Items and stock"), ("barcode", "units", "variants", "batches_expiry", "serials", "drugs")),
-    ("money", ("الحسابات والضرايب", "Accounts and tax"), ("vat", "e_invoice", "fixed_assets")),
+    ("money", ("الحسابات والضرايب", "Accounts and tax"), ("vat", "e_invoice", "e_receipt", "fixed_assets")),
 )
 ICONS = {"pos": "pos", "shift_required": "shift", "price_lists": "pricetag", "installments": "instalments", "barcode": "barcode",
          "units": "units", "variants": "variants", "batches_expiry": "expiry", "serials": "serial", "vat": "taxes",
-         "e_invoice": "einvoice", "fixed_assets": "assets", "quotations": "quotes", "drugs": "drugs", "promotions": "promotions"}
+         "e_invoice": "einvoice", "e_receipt": "ereceipt", "fixed_assets": "assets", "quotations": "quotes", "drugs": "drugs", "promotions": "promotions"}
 WHERE = {
     "pos": ("«الكاشير» في القايمة، وزرار في لوحة القيادة وفي قايمة الفواتير", "“Till” in the menu, with a button on the dashboard and the invoice list"),
     "shift_required": ("فاتورة البيع والكاشير بيطلبوا فتح وردية الأول", "The sales invoice and the till ask for an open shift first"),
@@ -325,6 +335,7 @@ WHERE = {
     "drugs": ("«الأدوية والبدائل» في القايمة، وزرار «اصرف الروشتة» اللي بيفتح فاتورة البيع", "“Drugs & alternatives” in the menu, and “Dispense” opening the sales invoice"),
     "vat": ("«الضرايب» في القايمة، وضريبة كل صنف، وتقرير ضريبة المبيعات", "“Taxes” in the menu, a rate per item, and the sales VAT report"),
     "e_invoice": ("«الفاتورة الإلكترونية» في القايمة، وملف لكل فاتورة مترحّلة", "“E-invoicing” in the menu, and a document for each posted invoice"),
+    "e_receipt": ("«الإيصال الإلكتروني» في القايمة، وQR على إيصال الكاشير المطبوع", "“E-receipts” in the menu, and a QR on the printed till receipt"),
     "fixed_assets": ("«الأصول الثابتة» في القايمة، والإهلاك في المصروفات وصافي الربح", "“Fixed assets” in the menu, and depreciation in expenses and net profit"),
 }
 
@@ -456,7 +467,9 @@ def closed_capability(path):
     profile = ClientProfile.get_active()
     if profile is None or not profile.setup_is_complete:
         return None
-    return None if capability_enabled(owner) else owner
+    if any(capability_enabled(slug) for slug in SHARED_PATHS.get(path, (owner,))):
+        return None
+    return owner
 
 
 def _write(slug, enabled):

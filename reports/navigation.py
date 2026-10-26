@@ -62,6 +62,9 @@ NAV_ITEMS = (
     # T1: quotations that become sales orders, invoiced on the ordinary invoice form.
     {"key": "quotes", "ar": "عروض الأسعار والأوامر", "en": "Quotations & orders", "url_name": "orders:list", "module": "sales_operations", "capability": "quotations",
      "permission": "sales.view_sales_invoices"},
+    # T8: e-receipts for till sales (B2C), chained per device and queued for 24 hours.
+    {"key": "ereceipt", "ar": "الإيصال الإلكتروني", "en": "E-receipts", "url_name": "ereceipt:board", "module": "sales_operations", "capability": "e_receipt",
+     "permission": "sales.view_sales_invoices"},
     # T5: promotions and coupons, filled into the line discounts on the invoice and at the till.
     {"key": "promotions", "ar": "العروض", "en": "Promotions", "url_name": "promotions:list", "module": "sales_operations", "capability": "promotions",
      "permission": "master_data.view_master_data"},
@@ -153,6 +156,7 @@ TAB_LABELS = {
     "classes": {"ar": "حصصي", "en": "Classes"},
     "workorders": {"ar": "الأوامر", "en": "Orders"},
     "quotes": {"ar": "العروض", "en": "Quotes"},
+    "ereceipt": {"ar": "الإيصالات", "en": "Receipts"},
     "promotions": {"ar": "الخصومات", "en": "Promos"},
     "drugs": {"ar": "الأدوية", "en": "Drugs"},
     "attendance": {"ar": "الحضور", "en": "Attendance"},

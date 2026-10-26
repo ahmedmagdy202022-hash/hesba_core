@@ -77,6 +77,7 @@ LOCAL_APPS = [
     "promotions",
     "banking",
     "cheques",
+    "ereceipt",
     "messaging",
     "feedback",
 ]
