@@ -466,6 +466,25 @@ class Command(BaseCommand):
             Seed().stock_in(master, number, day, master["suppliers"][0], lines, None, owner, scale=False, paid_share="1")
 
     @staticmethod
+    def _ready(master, owner, day, lines):
+        """Codex #277: a kitchen's dishes are cooked on the sale's day before they are sold, as the month's sales are."""
+
+        from reports.management.commands.seed_demo_business import Command as Seed
+
+        Seed()._cook(master, [(line["item"], line["quantity"]) for line in lines], day, owner)
+
+    @staticmethod
+    def _till_total(lines, discount=Decimal("0")):
+        """Codex #277: what the till charges for ``lines``, VAT included when it is on, as sales.pos.checkout works it out."""
+
+        from config.money import money_round
+        from taxes.services import compute_lines, vat_enabled
+
+        subtotal = money_round(sum((money_round(line["quantity"] * line["unit_sale_price"] - (line.get("line_discount_amount") or 0)) for line in lines), Decimal("0")))
+        tax = money_round(sum((line_tax for *_, line_tax in compute_lines(lines)), Decimal("0"))) if vat_enabled() else Decimal("0.00")
+        return money_round(subtotal - money_round(discount) + tax)
+
+    @staticmethod
     def _line(item, quantity):
         return {"item": item, "quantity": Decimal(quantity), "unit_sale_price": Decimal(item.default_sale_price),
                 "line_discount_amount": Decimal("0"), "description": ""}
@@ -501,9 +520,9 @@ class Command(BaseCommand):
             day = today - timedelta(days=days)
             filled, promotion, off = promos.apply([self._line(items[i], q) for i, q in lines],
                                                  now=timezone.make_aware(datetime.combine(day, time(13, 0))), coupon=coupon)
-            total = sum(((line["quantity"] * line["unit_sale_price"]).quantize(Decimal("0.01")) - line["line_discount_amount"] for line in filled), Decimal("0"))
+            self._ready(master, owner, day, filled)
             checkout(lines=filled, customer=walk_in, location=master["location"], cashbox=master["cashboxes"][0], discount=Decimal("0"),
-                     tendered=total, user=owner, sale_date=day, notes="POS", promotion=(promotion, off, coupon) if promotion else None)
+                     tendered=self._till_total(filled), user=owner, sale_date=day, notes="POS", promotion=(promotion, off, coupon) if promotion else None)
 
     def _loyalty(self, master, goods, owner, modules):
         """The named customers earned their points on the month's invoices; one spends some of them at the till."""
@@ -525,8 +544,9 @@ class Command(BaseCommand):
         day = timezone.localdate() - timedelta(days=1)
         self._restock(master, owner, "DEMO-PI-POINTS", day, [(1, 1)])
         points, off = loyalty.redeem(customer, str(points), loyalty.lines_total([line]))
+        self._ready(master, owner, day, [line])
         checkout(lines=[line], customer=customer, location=master["location"], cashbox=master["cashboxes"][0], discount=off,
-                 tendered=line["unit_sale_price"] - off, user=owner, sale_date=day, notes="POS", points=(points, off))
+                 tendered=self._till_total([line], off), user=owner, sale_date=day, notes="POS", points=(points, off))
 
     #: (name, phone, days ago shipped, ((item index, quantity), ...)): three cash-on-delivery orders.
     PARCELS = (("منة الله سامي", "01001112201", 6, ((0, 1), (2, 2))), ("كريم عادل", "01001112202", 4, ((1, 1),)),
@@ -555,8 +575,9 @@ class Command(BaseCommand):
             customer, _ = Customer.objects.get_or_create(customer_code=f"DEMO-WEB-{n:02d}", defaults={
                 "name": name, "phone": phone, "whatsapp": phone, "active": True, "import_batch_id": "DEMO-BUSINESS"})
             day = today - timedelta(days=days)
-            invoice = seed._post_sale(f"DEMO-SHP-{n:03d}", day, customer, master["location"], master["cashboxes"][0],
-                                      [(master["items"][i], Decimal(q)) for i, q in lines], Decimal("0.00"), owner)
+            sold = [(master["items"][i], Decimal(q)) for i, q in lines]
+            seed._cook(master, sold, day, owner)  # Codex #277: a kitchen's dishes, cooked before they go out
+            invoice = seed._post_sale(f"DEMO-SHP-{n:03d}", day, customer, master["location"], master["cashboxes"][0], sold, Decimal("0.00"), owner)
             shipped.append((couriers.ship(invoice, courier, owner, {"shipped_on": day.isoformat(), "tracking_number": f"BST{day:%m%d}{n:03d}"}), day))
         first, second = shipped[0], shipped[1]
         couriers.deliver(first[0], owner, day=(first[1] + timedelta(days=1)).isoformat())
