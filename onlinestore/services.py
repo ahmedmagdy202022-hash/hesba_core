@@ -18,7 +18,7 @@ import io
 import re
 from collections import OrderedDict, defaultdict
 from datetime import date
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_CEILING, Decimal, InvalidOperation
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
@@ -506,10 +506,17 @@ def _draft(source, order, location, user, words, phones, options):
         rate = Decimal((options.get("rates") or {}).get(str(item.pk), "0")) if options.get("with_vat") else ZERO
         gross.append(quantity * price)
         rates.append(rate)
-        price = money_round(price * HUNDRED / (HUNDRED + rate)) if rate else money_round(price)  # the store's price had the VAT in it
-        lines.append({"item": item, "quantity": quantity, "unit_sale_price": price, "line_discount_amount": ZERO, "description": "",
-                      "serials": line.get("serials", "")})
+        # Codex #273: the line's amount before tax is worked out on the whole line (the store's price had the VAT in it),
+        # not from a rounded unit price times the quantity; the unit price is rounded up to the piastre and the few
+        # piastres over come off as the line's discount, so the line still comes to what the store charged.
+        net = quantity * price * HUNDRED / (HUNDRED + rate) if rate else quantity * price
+        unit = (net / quantity).quantize(Decimal("0.01"), rounding=ROUND_CEILING)
+        lines.append({"item": item, "quantity": quantity, "unit_sale_price": unit, "line_discount_amount": ZERO, "description": "",
+                      "serials": line.get("serials", ""), "_over": money_round(quantity * unit) - money_round(net)})
     _spread_discount(lines, gross, rates, money_round(_decimal(order["discount"], words, ZERO)))
+    for line in lines:
+        over = line.pop("_over")
+        line["line_discount_amount"] = min(line["line_discount_amount"] + over, money_round(line["quantity"] * line["unit_sale_price"]))
     lines = prepare_sale_serials(lines)  # Codex #273: a serial-tracked item needs its serials, as on the invoice form
     customer, added = _customer(order, user, words, phones)
     notes = [words["notes"].format(source=StoreSource(source).label.split(" (")[0], number=order["number"])]

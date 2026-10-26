@@ -225,6 +225,23 @@ class OrderImportTests(StoreSetup):
         line = invoice.lines.get()
         self.assertEqual((line.unit_sale_price, line.line_discount_amount, invoice.discount_amount), (D("100.00"), D("10.00"), D("0")))
 
+    def test_a_vat_inclusive_line_keeps_the_stores_total_whatever_the_quantity(self):
+        from unittest import mock
+
+        from settings_core import capabilities as caps
+        from settings_core.models import ClientProfile
+        from taxes.services import rate_for
+
+        caps.set_capability_enabled(ClientProfile.get_active(), "vat", True, user=self.owner)
+        rate = str(rate_for(self.dress).rate)
+        self.assertGreater(D(rate), 0)
+        text = "order,sku,quantity,price\n81,DR-1,1000,1.00\n82,DR-1,3,1.00\n"
+        with mock.patch("taxes.services.rates_by_item", return_value={str(self.dress.pk): rate}):
+            made = services.import_orders(text.encode("utf-8"), self.shop, self.owner, with_vat=True)["made"]
+        # Codex #273: a rounded unit price times the quantity used to drift (1,003.20 and 3.01); the few piastres over
+        # come off as the line's discount, so each invoice comes to what the store charged.
+        self.assertEqual([row["invoice"].total_amount for row in made], [D("1000.00"), D("3.00")])
+
     def test_an_order_taken_by_an_upload_at_the_same_time_counts_as_imported(self):
         from unittest import mock
 
