@@ -477,6 +477,10 @@ def _spread_discount(lines, gross, rates, discount):
         line["line_discount_amount"] = min(pre_tax, money_round(line["quantity"] * line["unit_sale_price"]))
 
 
+class _AlreadyImported(Exception):
+    """The order was imported by an upload running at the same time."""
+
+
 def _draft(source, order, location, user, words, phones, options):
     from config.numbering import next_in_series
     from sales.models import SalesInvoice
@@ -533,7 +537,11 @@ def _draft(source, order, location, user, words, phones, options):
         raise ValidationError(words["taken"].format(number="WEB-"))
     attach_sale_serials(invoice, lines)
     store_total = _decimal(order["total"], words, ZERO) if order["total"] else None
-    StoreOrder.objects.create(source=source, order_number=order["number"][:60], invoice=invoice, store_total=store_total, imported_by=user)
+    try:
+        with transaction.atomic():
+            StoreOrder.objects.create(source=source, order_number=order["number"][:60], invoice=invoice, store_total=store_total, imported_by=user)
+    except IntegrityError:
+        raise _AlreadyImported  # Codex #273: another upload took this order meanwhile; this draft goes back with it
     return invoice, added
 
 
@@ -600,6 +608,8 @@ def import_orders(raw, location, user, lang="ar", shipping_item=None, with_vat=F
                 invoice, added = _draft(source, order, location, user, words, trial, options)
         except ValidationError as exc:
             skipped.append({"number": order["number"], "reason": " ".join(exc.messages)})
+        except _AlreadyImported:
+            again.append(order["number"])
         else:
             phones.update(trial)
             made.append({"number": order["number"], "invoice": invoice, "added_customer": added, "store_total": invoice.store_order.store_total,

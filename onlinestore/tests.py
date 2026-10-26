@@ -225,6 +225,18 @@ class OrderImportTests(StoreSetup):
         line = invoice.lines.get()
         self.assertEqual((line.unit_sale_price, line.line_discount_amount, invoice.discount_amount), (D("100.00"), D("10.00"), D("0")))
 
+    def test_an_order_taken_by_an_upload_at_the_same_time_counts_as_imported(self):
+        from unittest import mock
+
+        self.upload()
+        customers = Customer.objects.count()
+        # Codex #273: both uploads looked before either saved; the second meets the unique order and goes on with the file.
+        with mock.patch.object(StoreOrder.objects, "filter", return_value=StoreOrder.objects.none()):
+            result = self.upload()
+        self.assertEqual((result["made"], result["again"]), ([], ["1001", "1002"]))
+        self.assertEqual(SalesInvoice.objects.filter(invoice_number__startswith="WEB-").count(), 2)  # no draft left behind
+        self.assertEqual(Customer.objects.count(), customers)
+
     def test_an_order_in_another_currency_is_refused(self):
         text = SHOPIFY_ORDERS.replace(",EGP,", ",USD,", 1)
         result = self.upload(text)
