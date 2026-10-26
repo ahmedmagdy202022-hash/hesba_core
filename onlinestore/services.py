@@ -64,7 +64,7 @@ MESSAGES = {
     "ar": {
         "file": "اختار ملف الطلبات.", "big": "الملف أكبر من 2 ميجا؛ قسّمه.", "format": "الملف مش ملف طلبات Shopify ولا قالب حسبة: لازم أعمدة رقم الطلب والكود والكمية والسعر.",
         "location": "اختار المخزن اللي الطلبات هتطلع منه.", "sku": "الكود {sku} مش موجود في الأصناف.", "number": "سطر فيه كمية أو سعر مش مفهوم.",
-        "refunded": "الطلب اترد أو اتلغى في المتجر ({status}).", "taken": "رقم الفاتورة {number} مستخدم قبل كده.", "empty": "الطلب من غير أصناف.",
+        "refunded": "الطلب اترد أو اتلغى في المتجر ({status}).", "cancelled": "الطلب اتلغى في المتجر ({at}).", "taken": "رقم الفاتورة {number} مستخدم قبل كده.", "empty": "الطلب من غير أصناف.",
         "notes": "طلب من المتجر الأونلاين {source} رقم {number}.", "shipping": "مصاريف شحن اتحصّلت في المتجر: {amount}.", "who": "العميل: {who}.",
         "customer_note": "اتضاف من طلب المتجر الأونلاين.", "shipping_line": "مصاريف الشحن", "posted": "الطلب ده فاتورته اترحّلت؛ مينفعش يتبدّل.",
         "currency": "الطلب بعملة {currency} وحسبة شغالة بـ {own}؛ حوّله الأول أو سجّله يدوي.",
@@ -73,7 +73,7 @@ MESSAGES = {
     "en": {
         "file": "Choose the orders file.", "big": "The file is over 2 MB; split it.", "format": "This is neither a Shopify orders export nor the Hesba template: it needs order, SKU, quantity and price columns.",
         "location": "Choose the location the orders leave from.", "sku": "SKU {sku} is not an item code or barcode.", "number": "A line has a quantity or price that is not understood.",
-        "refunded": "The order was refunded or voided in the store ({status}).", "taken": "Invoice number {number} is taken already.", "empty": "The order has no lines.",
+        "refunded": "The order was refunded or voided in the store ({status}).", "cancelled": "The order was cancelled in the store ({at}).", "taken": "Invoice number {number} is taken already.", "empty": "The order has no lines.",
         "notes": "Online store order, {source} number {number}.", "shipping": "Shipping charged in the store: {amount}.", "who": "Customer: {who}.",
         "customer_note": "Added from an online store order.", "shipping_line": "Shipping", "posted": "This order's invoice is posted; it cannot be replaced.",
         "currency": "The order is in {currency} and Hesba works in {own}; convert it first or enter it by hand.",
@@ -357,10 +357,11 @@ def _shopify_orders(headers, rows):
         if not number:
             continue
         order = orders.setdefault(number, {"number": number, "lines": [], "date": "", "customer": "", "phone": "", "email": "", "address": "",
-                                           "discount": "", "shipping": "", "total": "", "status": "", "currency": ""})
+                                           "discount": "", "shipping": "", "total": "", "status": "", "currency": "", "cancelled": ""})
         for field, names in (("date", ("created at",)), ("customer", ("billing name", "shipping name")), ("phone", ("billing phone", "phone", "shipping phone")),
                              ("email", ("email",)), ("address", ("shipping address1", "billing address1")), ("discount", ("discount amount",)),
-                             ("shipping", ("shipping",)), ("total", ("total",)), ("status", ("financial status",)), ("currency", ("currency",))):
+                             ("shipping", ("shipping",)), ("total", ("total",)), ("status", ("financial status",)), ("currency", ("currency",)),
+                             ("cancelled", ("cancelled at",))):  # Codex #273: cancelled apart from its refund
             order[field] = order[field] or cell(row, *names)
         city = cell(row, "shipping city", "billing city")
         if city and city not in order["address"]:
@@ -386,7 +387,7 @@ def _template_orders(headers, rows):
         if not number:
             continue
         order = orders.setdefault(number, {"number": number, "lines": [], "date": "", "customer": "", "phone": "", "email": "", "address": "",
-                                           "discount": "", "shipping": "", "total": "", "status": "", "currency": ""})
+                                           "discount": "", "shipping": "", "total": "", "status": "", "currency": "", "cancelled": ""})
         for field in ("date", "customer", "phone", "email", "address", "discount", "total", "currency"):
             order[field] = order[field] or cell(row, field)
         order["lines"].append({"sku": cell(row, "sku"), "quantity": cell(row, "quantity"), "price": cell(row, "price"), "serials": cell(row, "serial")})
@@ -490,6 +491,8 @@ def _draft(source, order, location, user, words, phones, options):
 
     if order["status"].lower() in ("refunded", "voided", "partially_refunded"):
         raise ValidationError(words["refunded"].format(status=order["status"]))
+    if order.get("cancelled"):  # Codex #273: an order cancelled with "refund later" can still read paid
+        raise ValidationError(words["cancelled"].format(at=order["cancelled"]))
     if not order["lines"]:
         raise ValidationError(words["empty"])
     own = (options.get("currency") or "EGP").upper()

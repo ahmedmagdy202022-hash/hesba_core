@@ -225,6 +225,15 @@ class OrderImportTests(StoreSetup):
         line = invoice.lines.get()
         self.assertEqual((line.unit_sale_price, line.line_discount_amount, invoice.discount_amount), (D("100.00"), D("10.00"), D("0")))
 
+    def test_a_cancelled_order_is_refused_even_when_it_reads_paid(self):
+        text = SHOPIFY_ORDERS.replace("Shipping City\n", "Shipping City,Cancelled at\n", 1).replace(
+            "5 Nile St,Giza\n", "5 Nile St,Giza,2026-10-22 09:00:00 +0300\n", 1)
+        result = self.upload(text)
+        # Codex #273: cancelled with "refund later", so its financial status still reads paid.
+        self.assertIn("1002", {row["number"] for row in result["skipped"]})
+        self.assertIn("1001", [row["number"] for row in result["made"]])
+        self.assertFalse(StoreOrder.objects.filter(order_number="1002").exists())
+
     def test_a_vat_inclusive_line_keeps_the_stores_total_whatever_the_quantity(self):
         from unittest import mock
 
