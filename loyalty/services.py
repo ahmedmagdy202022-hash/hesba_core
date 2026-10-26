@@ -127,7 +127,18 @@ def balance(customer, today=None, besides=None):
 
 
 def statement(customer, limit=20):
-    return PointsEntry.objects.filter(customer=customer).select_related("invoice", "sales_return")[:limit]
+    """The customer's latest points movements whose documents belong to the entity being worked in (Codex #274); the
+    balance itself is the customer's across the group."""
+
+    from django.db.models import Q
+
+    from entities import scope as entity_scope
+
+    rows = PointsEntry.objects.filter(customer=customer).filter(
+        (Q(invoice__isnull=False) & entity_scope.q(entity_scope.SALES_INVOICE, "invoice__"))
+        | (Q(sales_return__isnull=False) & entity_scope.q(entity_scope.SALES_RETURN, "sales_return__"))
+        | Q(invoice__isnull=True, sales_return__isnull=True))
+    return rows.select_related("invoice", "sales_return")[:limit]
 
 
 # ---- spending on an invoice ----
@@ -295,6 +306,7 @@ def save_rules(data, user, lang="ar"):
         months = int(Decimal(str(data.get("expiry_months") or "0").strip()))
     except (InvalidOperation, ValueError):
         raise ValidationError(words["number"])
+    amount, value = money_round(amount), money_round(value)  # Codex #274: checked as stored, so 0.001 is not kept as 0.00
     if amount <= 0:
         raise ValidationError(words["amount"])
     if value <= 0:

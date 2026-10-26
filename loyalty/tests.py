@@ -269,3 +269,23 @@ class CodexReviewTests(LoyaltySetup):
         AuditLog.objects.create(event_type=AuditEventType.CREATE, actor=self.owner, module="sales", action="create_sales_return",
                                 object_type="sales.SalesReturn", object_id="", before_data={}, after_data={})
         self.assertFalse(PointsEntry.objects.exists())
+
+    def test_rules_too_small_to_keep_are_refused(self):
+        with self.assertRaises(ValidationError):
+            services.save_rules({"amount_per_point": "10", "point_value": "0.001", "min_points": "1", "expiry_months": "0"}, self.owner)
+        with self.assertRaises(ValidationError):
+            services.save_rules({"amount_per_point": "0.004", "point_value": "0.5", "min_points": "1", "expiry_months": "0"}, self.owner)
+        self.assertEqual(services.rules().point_value, D("0.50"))
+
+    def test_the_points_statement_shows_the_entitys_documents_only(self):
+        from entities.current import working_in
+        from entities.models import Entity
+        from entities.services import main_entity
+
+        main_entity()
+        branch = Entity.objects.create(code="BR-LY", name_ar="الفرع")
+        invoice = self.sell(quantity=2)
+        with working_in(main_entity()):
+            self.assertEqual([row.invoice_id for row in services.statement(self.customer)], [invoice.pk])
+        with working_in(branch):
+            self.assertEqual(list(services.statement(self.customer)), [])  # the main entity's sale stays out of sight
