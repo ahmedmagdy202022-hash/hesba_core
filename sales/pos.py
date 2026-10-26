@@ -76,6 +76,8 @@ WORDS = {
         "receipt": "طباعة الإيصال",
         "walk_in": "عميل نقدي",
         "err_empty": "السلة فاضية.",
+        "err_promo_changed": "العروض اتغيرت من ساعة ما السلة اتحسبت؛ راجع الإجمالي الجديد وادفع تاني.",
+        "promo_wait": "لحظة، العرض بيتحسب؛ راجع الإجمالي وادفع تاني.",
         "err_line": "في سطر فيه كمية أو سعر مش صحيح.",
         "err_item": "صنف مش موجود أو موقوف.",
         "err_walk_in_credit": "البيع الآجل محتاج عميل باسمه؛ اختار العميل أو خد المبلغ كامل.",
@@ -121,6 +123,8 @@ WORDS = {
         "receipt": "Print receipt",
         "walk_in": "Walk-in customer",
         "err_empty": "The cart is empty.",
+        "err_promo_changed": "The promotions changed since the cart was totalled; check the new total and pay again.",
+        "promo_wait": "One moment, the promotion is being worked out; check the total and pay again.",
         "err_line": "A line has an invalid quantity or price.",
         "err_item": "An item is missing or inactive.",
         "err_walk_in_credit": "A credit sale needs a named customer; pick the customer or take the full amount.",
@@ -264,6 +268,31 @@ def checkout(*, lines, customer, location, cashbox, discount, tendered, user, sa
     raise ValidationError("Could not allocate an invoice number; try again.")
 
 
+@require_permission("sales.create_sales_invoice")
+def promotion_quote(request):
+    """T5 (Codex #268): the promotion the cart would get, so the till and the invoice form show it before the payment is
+    taken. The invoice form also sends each line's typed discount (``discount_N``): such a line takes no promotion."""
+
+    from django.http import JsonResponse
+
+    from promotions import services as promotions
+
+    lang = "en" if request.POST.get("lang") == "en" else "ar"
+    if request.method != "POST" or not promotions.enabled():
+        return JsonResponse({"ok": True, "discount": "0.00", "name": "", "lines": []})
+    try:
+        lines = parse_cart(request.POST)
+        for index, line in enumerate(lines):
+            typed = _decimal(request.POST.get(f"discount_{index}") or "0", 2) or Decimal("0")
+            if typed > 0:
+                line["line_discount_amount"], line["typed_discount"] = line["line_discount_amount"] + typed, typed
+        _lines, promotion, off = promotions.apply(lines, coupon=request.POST.get("coupon", ""), lang=lang)
+    except ValidationError as exc:
+        return JsonResponse({"ok": False, "error": _error_text(exc, WORDS[lang])})
+    changed = [str(money_round(new["line_discount_amount"] - old["line_discount_amount"])) for old, new in zip(lines, _lines)]
+    return JsonResponse({"ok": True, "discount": str(money_round(off)), "name": promotion.name if promotion else "", "lines": changed})
+
+
 def _promotions_on():
     from promotions.services import enabled
 
@@ -396,6 +425,11 @@ def pos(request):
 
             coupon = request.POST.get("coupon", "")
             lines, promotion, promotion_off = promotions.apply(lines, coupon=coupon, lang=lang)  # T5: the best running promotion
+            if "promotion_seen" in request.POST:  # the till shows promotions: the payment needs its confirmed quote (Codex #268)
+                raw_seen = request.POST.get("promotion_seen", "")
+                seen = _decimal(raw_seen, 2) if raw_seen != "" else None
+                if seen is None or abs(seen - promotion_off) > Decimal("0.005"):
+                    raise ValidationError("err_promo_changed")  # the payment was taken for the total the till showed
             from loyalty import services as loyalty
 
             points, points_off = loyalty.redeem(customer, request.POST.get("redeem_points"), loyalty.lines_total(lines), lang)  # T6
@@ -449,6 +483,6 @@ def pos(request):
             "cart_back": cart_back,
             "summary": today_summary(request.user),
             "last_invoice": entity_scope.scope(SalesInvoice.objects, entity_scope.SALES_INVOICE).filter(pk=last, created_by=request.user).first() if last.isdigit() else None,
-            "js_words": json.dumps({key: words[key] for key in ("not_found", "added", "remove", "empty_cart", "scan_serial", "serial_twice")}, ensure_ascii=False),
+            "js_words": json.dumps({key: words[key] for key in ("not_found", "added", "remove", "empty_cart", "scan_serial", "serial_twice", "promo_wait")}, ensure_ascii=False),
         },
     )

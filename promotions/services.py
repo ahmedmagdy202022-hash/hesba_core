@@ -12,7 +12,7 @@ The rules:
 * a line with a discount typed by hand keeps it and takes no promotion;
 * the price on the line is whatever it already is (the item's price or the customer's price list).
 
-A sale made offline at the till keeps the price shown when it was made: syncing it applies nothing.
+A sale made offline at the till syncs with the promotion that was running when it was rung up (its recorded time).
 """
 
 from decimal import ROUND_FLOOR, Decimal, InvalidOperation
@@ -88,14 +88,25 @@ def _covers(promo, item):
     return True
 
 
+def _rounding(line):
+    """The cents a selling unit's price rounding put in the line's discount (units.services.convert_line)."""
+
+    if "typed_discount" not in line:
+        return ZERO
+    return money_round(Decimal(line.get("line_discount_amount") or 0) - Decimal(line["typed_discount"]))
+
+
 def _gross(line):
-    return money_round(Decimal(line["quantity"]) * Decimal(line["unit_sale_price"]))
+    """The line's own value, before any promotion (and without the unit rounding's cents)."""
+
+    return money_round(Decimal(line["quantity"]) * Decimal(line["unit_sale_price"])) - _rounding(line)
 
 
 def _open(line):
     """A line that may take a promotion: no discount typed by hand."""
 
-    return not (line.get("line_discount_amount") or ZERO)
+    typed = line["typed_discount"] if "typed_discount" in line else line.get("line_discount_amount")
+    return not (typed or ZERO)
 
 
 def discounts(promo, lines):
@@ -107,11 +118,18 @@ def discounts(promo, lines):
         for index in eligible:
             result[index] = money_round(_gross(lines[index]) * promo.percent / HUNDRED)
     elif promo.kind == PromotionKind.BUY_GET and promo.buy_quantity and promo.get_quantity:
+        # Counted over every line it covers (Codex #268: a serialized item comes one unit per line), and the free
+        # units are the cheapest ones, as shops do it.
         group = Decimal(promo.buy_quantity + promo.get_quantity)
-        for index in eligible:
+        units = sum((Decimal(lines[index]["quantity"]) for index in eligible), ZERO)
+        free = (units / group).to_integral_value(rounding=ROUND_FLOOR) * promo.get_quantity
+        for index in sorted(eligible, key=lambda i: (_gross(lines[i]) / Decimal(lines[i]["quantity"]), i)):
+            if free <= 0:
+                break
             line = lines[index]
-            free = (Decimal(line["quantity"]) / group).to_integral_value(rounding=ROUND_FLOOR) * promo.get_quantity
-            result[index] = min(money_round(free * Decimal(line["unit_sale_price"])), _gross(line))
+            take = min(free, Decimal(line["quantity"]))
+            result[index] = min(money_round(take * _gross(line) / Decimal(line["quantity"])), _gross(line))
+            free -= take
     elif promo.kind == PromotionKind.AMOUNT_OVER and promo.amount:
         base = sum((_gross(lines[index]) for index in eligible), ZERO)
         if eligible and base > 0 and base >= (promo.min_total or ZERO):
@@ -121,6 +139,12 @@ def discounts(promo, lines):
                 share = left if position == len(eligible) - 1 else money_round(off * _gross(lines[index]) / base)
                 share = min(share, _gross(lines[index]), left)
                 result[index], left = share, left - share
+            for index in eligible:  # Codex #268: a cent the last line could not hold goes to a line with room
+                if left <= 0:
+                    break
+                room = _gross(lines[index]) - result[index]
+                extra = min(room, left)
+                result[index], left = result[index] + extra, left - extra
     return [min(value, _gross(line)) for value, line in zip(result, lines)]
 
 
@@ -147,7 +171,7 @@ def apply(lines, now=None, coupon="", lang="ar"):
         return lines, None, ZERO
     filled = []
     for line, off in zip(lines, best_off):
-        filled.append(dict(line, line_discount_amount=off) if off else line)
+        filled.append(dict(line, line_discount_amount=off + _rounding(line)) if off else line)  # the unit rounding's cents stay
     return filled, best, best_total
 
 
@@ -265,10 +289,19 @@ def save(data, user, promo=None, lang="ar"):
     return promo
 
 
-def report(date_from=None, date_to=None):
-    """Each promotion's posted invoices and the discount it gave."""
+def report(date_from=None, date_to=None, user=None):
+    """Each promotion's posted invoices and the discount it gave. With ``user``: what that user's sales report shows them
+    (Codex #268): nothing without ``reports.view_sales_report``, their own invoices only without ``view_all_sales_report``."""
 
-    uses = InvoicePromotion.objects.filter(invoice__status="posted")
+    from entities import scope as entity_scope
+
+    # Codex #268: the entity being worked in only, through the invoice's selling location (HG-034).
+    uses = entity_scope.scope(InvoicePromotion.objects.filter(invoice__status="posted"), "invoice__" + entity_scope.SALES_INVOICE)
+    if user is not None:
+        if not user_has_permission(user, "reports.view_sales_report"):
+            return {}
+        if not user_has_permission(user, "reports.view_all_sales_report"):
+            uses = uses.filter(invoice__created_by=user)
     if date_from:
         uses = uses.filter(invoice__invoice_date__gte=date_from)
     if date_to:

@@ -451,9 +451,19 @@ def entity_edit(request, entity, pk):
 VARIANTS_MADE = {"ar": "اتعمل {n} صنف، كل مقاس ولون بكوده وباركوده.", "en": "{n} items made, each size and colour with its own code and barcode."}
 
 
+#: FB-26: the full form these open in a box from an invoice's "+ new …" choice
+POPUP_ENTITIES = {"suppliers", "customers"}
+
+
+def _popup(response):
+    response["X-Frame-Options"] = "SAMEORIGIN"  # framed only by Hesba's own invoice page
+    return response
+
+
 def _entity_form(request, entity, config, instance):
     lang = _lang(request)
     words = STRINGS[lang]
+    popup = instance is None and entity in POPUP_ENTITIES and request.GET.get("popup") == "1"
     kwargs = {"lang": lang, "instance": instance}
     if entity == "items":
         kwargs["can_view_cost"] = user_has_permission(request.user, "inventory.view_cost")
@@ -471,7 +481,9 @@ def _entity_form(request, entity, config, instance):
                 messages.success(request, VARIANTS_MADE[lang].format(n=len(created)))
                 return redirect(f"{reverse('variants:group', args=[group.pk])}?lang={lang}")
         elif form.is_valid():
-            form.save()
+            record = form.save()
+            if popup:  # FB-26: hand the new record back to the invoice that opened the box
+                return _popup(render(request, "master_data/popup_done.html", {"lang": lang, "record_id": record.pk, "label": str(record)}))
             messages.success(request, words["saved"])
             return redirect(f"{reverse('master_data:list', kwargs={'entity': entity})}?lang={lang}")
     else:
@@ -492,10 +504,11 @@ def _entity_form(request, entity, config, instance):
         request.user, "master_data.adjust_opening_balances"
     )
 
-    return render(
+    response = render(
         request,
         "master_data/form.html",
         {
+            "popup": popup,
             "lang": lang,
             "dir": "ltr" if lang == "en" else "rtl",
             "words": words,
@@ -509,6 +522,7 @@ def _entity_form(request, entity, config, instance):
             "page_title": f"{config['singular'][lang]} - {'Hesba' if lang == 'en' else 'حِسبة'}",
         },
     )
+    return _popup(response) if popup else response
 
 
 def _opening_target(entity, pk):

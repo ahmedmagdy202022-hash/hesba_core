@@ -142,10 +142,10 @@ class SellingTests(PromotionSetup):
         self.assertEqual(InvoicePromotion.objects.get(invoice=invoice).discount, D("100.00"))
         self.assertEqual(services.report()[InvoicePromotion.objects.get().promotion_id], {"invoices": 1, "discount": D("100.00")})
 
-    def test_an_offline_sale_syncs_at_the_price_it_was_rung_up_at(self):
+    def test_checkout_itself_applies_nothing(self):
         invoice, _change = checkout(lines=[line(self.sneaker, 1, "500.00")], customer=walk_in_customer(), location=self.location, cashbox=self.cashbox,
                                     discount=D("0"), tendered=D("500.00"), user=self.owner)
-        self.assertEqual(invoice.total_amount, D("500.00"))  # the sync path applies nothing
+        self.assertEqual(invoice.total_amount, D("500.00"))  # the views apply promotions before checkout, not checkout
         self.assertFalse(InvoicePromotion.objects.exists())
 
     def test_the_invoice_form_with_a_coupon(self):
@@ -179,3 +179,165 @@ class SellingTests(PromotionSetup):
         self.assertContains(self.client.get(reverse("dashboard_snapshot") + "?lang=ar"), 'href="/promotions/?lang=ar"')
         self.client.force_login(self.cashier)
         self.assertEqual(self.client.post(url, {"lang": "ar", "name": "x", "kind": "percent", "percent": "5"}).status_code, 403)
+
+
+class CodexFixesTests(SellingTests):
+    """Codex on #268: the till shows the promotion before payment, unit rounding is not a typed discount, buy X get Y
+    counts across lines, and a form with an error keeps the item or section it was for."""
+
+    def test_the_till_quotes_the_promotion_and_refuses_a_payment_for_another_total(self):
+        open_test_shift(self.cashier, self.cashbox)
+        self.client.force_login(self.cashier)
+        self.assertContains(self.client.get(reverse("sales:pos") + "?lang=ar"), "data-pos-promo-row")
+        cart = {"line_count": "1", "item_0": str(self.sneaker.pk), "qty_0": "1", "price_0": "500.00"}
+        quote = self.client.post(reverse("sales:pos_promotion"), cart).json()
+        self.assertEqual((quote["discount"], quote["name"], quote["lines"]), ("100.00", "الأحذية 20%", ["100.00"]))
+        sale = dict(cart, customer=str(walk_in_customer().pk), location=str(self.location.pk), cashbox=str(self.cashbox.pk), discount="0", tendered="500", print="0")
+        refused = self.client.post(reverse("sales:pos"), dict(sale, promotion_seen="0.00"), follow=True)
+        self.assertContains(refused, "العروض اتغيرت")
+        self.assertFalse(SalesInvoice.objects.exists())
+        self.assertEqual(self.client.post(reverse("sales:pos"), dict(sale, promotion_seen="100.00")).status_code, 302)
+        self.assertEqual(SalesInvoice.objects.get().total_amount, D("400.00"))
+
+    def test_a_unit_price_rounding_is_not_a_typed_discount(self):
+        converted = dict(line(self.sneaker, "3", "166.67", discount="0.01"), typed_discount=D("0.00"))  # a box of 3 at 500.00
+        lines, promo, off = services.apply([converted])
+        self.assertEqual(off, D("100.00"))  # 20% of the 500.00 the box costs
+        self.assertEqual(lines[0]["line_discount_amount"], D("100.01"))  # the rounding cent stays
+        typed = dict(line(self.sneaker, "3", "166.67", discount="5.01"), typed_discount=D("5.00"))
+        self.assertIsNone(services.apply([typed])[1])  # a discount typed by hand still keeps the line out
+
+    def test_buy_two_get_one_counts_across_lines(self):
+        Promotion.objects.update(active=False)
+        self.promo(kind=PromotionKind.BUY_GET, buy_quantity=2, get_quantity=1, item=self.sock)
+        lines, _promo, off = services.apply([line(self.sock, 1, "30.00"), line(self.sock, 1, "30.00"), line(self.sock, 1, "25.00")])
+        self.assertEqual(off, D("25.00"))  # three single serial lines: one free, the cheapest
+        self.assertEqual([l["line_discount_amount"] for l in lines], [D("0"), D("0"), D("25.00")])
+
+    def test_a_form_with_an_error_keeps_its_item(self):
+        self.client.force_login(self.owner)
+        page = self.client.post(reverse("promotions:list"), {"lang": "ar", "name": "x", "kind": "percent", "percent": "500", "item": str(self.sock.pk)})
+        self.assertContains(page, f'<option value="{self.sock.pk}" selected>')
+
+
+class SecondReviewTests(SellingTests):
+    """Codex on #268 (second look): an offline sale syncs with the promotion of its moment, and the report follows the entity."""
+
+    def sync(self, when, coupon="", seen="100.00", tendered="400"):
+        import json
+        import uuid
+
+        from shifts.services import open_shift_for
+
+        if open_shift_for(self.cashier) is None:
+            open_test_shift(self.cashier, self.cashbox)
+        self.client.force_login(self.cashier)
+        body = {"key": str(uuid.uuid4()), "recorded_at": when.isoformat(), "customer": "", "location": str(self.location.pk), "cashbox": str(self.cashbox.pk),
+                "discount": "0", "tendered": tendered, "coupon": coupon, "promotion_seen": seen, "lines": [{"id": self.sneaker.pk, "qty": "1", "price": "500.00", "unit": None, "serial": None}]}
+        return self.client.post(reverse("sales:pos_sync"), json.dumps(body), content_type="application/json").json()
+
+    def test_an_offline_sale_syncs_with_the_promotion_running_when_it_was_rung_up(self):
+        answer = self.sync(timezone.now() - timedelta(minutes=30))
+        self.assertEqual(answer["status"], "posted")
+        invoice = SalesInvoice.objects.get()
+        self.assertEqual(invoice.total_amount, D("400.00"))  # what the till showed and collected
+        self.assertEqual(InvoicePromotion.objects.get(invoice=invoice).discount, D("100.00"))
+        Promotion.objects.update(ends_on=TODAY - timedelta(days=3))
+        answer = self.sync(timezone.now() - timedelta(days=5))  # rung up while it still ran
+        self.assertEqual(answer["status"], "posted")
+        self.assertEqual(SalesInvoice.objects.latest("pk").total_amount, D("400.00"))
+
+    def test_the_report_follows_the_entity(self):
+        from unittest import mock
+
+        self.sync(timezone.now())
+        promo = Promotion.objects.get()
+        self.assertEqual(services.report()[promo.pk]["invoices"], 1)
+        with mock.patch("entities.scope.scope", side_effect=lambda queryset, path: queryset.none()):
+            self.assertEqual(services.report(), {})
+
+
+class ThirdReviewTests(SecondReviewTests):
+    """Codex on #268 (third look): no payment without a confirmed quote, and an offline sale is never re-priced by an edited promotion."""
+
+    def test_the_till_takes_no_payment_before_the_quote_is_confirmed(self):
+        open_test_shift(self.cashier, self.cashbox)
+        self.client.force_login(self.cashier)
+        sale = {"line_count": "1", "item_0": str(self.sneaker.pk), "qty_0": "2", "price_0": "500.00", "customer": str(walk_in_customer().pk),
+                "location": str(self.location.pk), "cashbox": str(self.cashbox.pk), "discount": "0", "tendered": "900", "print": "0"}
+        self.assertContains(self.client.post(reverse("sales:pos"), dict(sale, promotion_seen=""), follow=True), "العروض اتغيرت")
+        self.assertFalse(SalesInvoice.objects.exists())
+        from django.contrib.staticfiles import finders
+
+        js = open(finders.find("hesba/js/pos.js"), encoding="utf-8").read()
+        for needed in ("promoPending", "stopImmediatePropagation", "promo_wait", "seq !== promoSeq", "controller.abort()", "4000"):
+            self.assertIn(needed, js)
+        self.assertIn("promotion_seen:", open(finders.find("hesba/js/pos_offline.js"), encoding="utf-8").read())
+
+    def test_an_offline_sale_is_refused_when_its_promotion_was_edited_or_switched_off(self):
+        Promotion.objects.update(percent=D("10"))
+        answer = self.sync(timezone.now() - timedelta(minutes=30))
+        self.assertEqual(answer["status"], "refused")
+        self.assertIn("100.00", answer["error"])
+        Promotion.objects.update(percent=D("20"), active=False)
+        self.assertEqual(self.sync(timezone.now() - timedelta(minutes=20))["status"], "refused")
+        self.assertFalse(SalesInvoice.objects.exists())
+
+    def test_an_offline_sale_without_a_quote_posts_at_the_full_price_shown(self):
+        answer = self.sync(timezone.now() - timedelta(minutes=30), seen="", tendered="500")
+        self.assertEqual(answer["status"], "posted")
+        invoice = SalesInvoice.objects.get()
+        self.assertEqual(invoice.total_amount, D("500.00"))
+        self.assertFalse(InvoicePromotion.objects.filter(invoice=invoice).exists())
+
+
+class FourthReviewTests(PromotionSetup):
+    """Codex on #268 (fourth look): a fixed amount is taken off in full, and editing keeps the promotion's own target."""
+
+    def test_a_fixed_amount_is_taken_off_in_full_when_the_last_line_is_small(self):
+        self.promo(kind=PromotionKind.AMOUNT_OVER, amount=D("99.99"))
+        lines = [line(self.sneaker, 1, "100.00") for _ in range(6)] + [line(self.sock, 1, "0.01")]
+        lines, _promo, off = services.apply(lines)
+        self.assertEqual(off, D("99.99"))
+        self.assertEqual(sum(l["line_discount_amount"] for l in lines), D("99.99"))
+        self.assertTrue(all(l["line_discount_amount"] <= l["quantity"] * l["unit_sale_price"] for l in lines))
+
+    def test_editing_keeps_an_inactive_target(self):
+        promo = self.promo(percent=D("10"), item=self.sock)
+        type(self.sock).objects.filter(pk=self.sock.pk).update(active=False)
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("promotions:list"), {"lang": "ar", "edit": promo.pk})
+        self.assertContains(page, f'<option value="{self.sock.pk}" selected>')
+
+
+class FifthReviewTests(SellingTests):
+    """Codex on #268 (fifth look): the invoice form quotes the promotion live, so its total and "paid now" match it."""
+
+    def test_the_invoice_form_quotes_the_promotion_before_saving(self):
+        self.client.force_login(self.owner)
+        form = self.client.get(reverse("sales:create"), {"lang": "ar"})
+        self.assertContains(form, f'data-url="{reverse("sales:promotion_quote")}"')
+        self.assertContains(form, "data-promo-line")
+        cart = {"line_count": "2", "item_0": str(self.sneaker.pk), "qty_0": "1", "price_0": "500.00", "item_1": str(self.sneaker.pk), "qty_1": "1",
+                "price_1": "500.00", "discount_1": "10"}
+        quote = self.client.post(reverse("sales:promotion_quote"), cart).json()
+        self.assertEqual((quote["discount"], quote["lines"]), ("100.00", ["100.00", "0.00"]))  # a line with a typed discount takes none
+        from django.contrib.staticfiles import finders
+
+        js = open(finders.find("hesba/js/invoice_form.js"), encoding="utf-8").read()
+        for needed in ("quotePromotion", "promo.byLine[i]", "seq !== promoSeq", "discount_"):
+            self.assertIn(needed, js)
+
+
+class SixthReviewTests(SecondReviewTests):
+    """Codex on #268 (sixth look): the promotion usage figures follow the sales-report permissions."""
+
+    def test_usage_follows_the_sales_report_permissions(self):
+        self.sync(timezone.now())  # rung up by self.cashier
+        promo = Promotion.objects.get()
+        self.assertEqual(services.report(user=self.owner)[promo.pk]["invoices"], 1)
+        self.assertEqual(services.report(user=self.cashier)[promo.pk]["invoices"], 1)  # their own sale
+        other = person(RoleCode.CASHIER, "pr_other_cashier")
+        self.assertEqual(services.report(user=other), {})
+        keeper = person(RoleCode.STOCK_KEEPER, "pr_keeper")
+        self.assertEqual(services.report(user=keeper), {})

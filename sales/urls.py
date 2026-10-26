@@ -13,6 +13,8 @@ urlpatterns = [
     path("", views.invoice_list, name="list"),
     path("new/", views.invoice_create, name="create"),
     path("pos/", pos_views.pos, name="pos"),
+    path("pos/promotion/", pos_views.promotion_quote, name="pos_promotion"),  # T5
+    path("promotion-quote/", pos_views.promotion_quote, name="promotion_quote"),  # T5: the invoice form, with or without the till
     path("pos/customers/new/", pos_customers.pos_add_customer, name="pos_add_customer"),
     path("pos/buttons/", pos_buttons.pos_buttons, name="pos_buttons"),  # AN7 (G07)
     # POS-003: queued offline sales, posted once each when the till is back online.
