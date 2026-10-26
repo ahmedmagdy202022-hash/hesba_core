@@ -86,6 +86,32 @@ class Command(BaseCommand):
         seed.stock_in(master, "DEMO-PI-HIST", today - timedelta(days=29), master["suppliers"][0], sorted(need.items()), Decimal("0.00"), owner)
         for n, (days_ago, customer, lines, share) in enumerate(self.HISTORY_SALES, start=1):
             seed.sell(master, f"DEMO-SH-{n:03d}", today - timedelta(days=days_ago), customer, lines, owner, share=share)
+        self._walk_ins(seed, master, owner, today)
+
+    #: DEMO-SCALE: the sample month's walk-in trade is bought a week at a time, from the suppliers in turn, most of it paid.
+    WEEK_STARTS = (29, 22, 15, 8)
+
+    def _walk_ins(self, seed, master, owner, today):
+        """DEMO-SCALE (Ahmed, 26 Oct: «الارقام ... قليله جدا كقيمة»): the till's own trade across the month, sized for the
+        business (reports.demo_catalogs.TRADE): each week's baskets bought at the week's start, then sold day by day to
+        the walk-in customer through the real posting services."""
+
+        from reports.demo_catalogs import walk_in_baskets
+
+        for n, start in enumerate(self.WEEK_STARTS):
+            end = self.WEEK_STARTS[n + 1] if n + 1 < len(self.WEEK_STARTS) else 0
+            days = [(back, walk_in_baskets(master["catalog"], today - timedelta(days=back))) for back in range(start, end, -1)]
+            need = seed.walk_in_need([basket for _, baskets in days for basket in baskets])
+            if not need:
+                continue
+            seed.stock_in(master, f"DEMO-PI-WK{n + 1}", today - timedelta(days=start), master["suppliers"][n % 2], sorted(need.items()),
+                          None, owner, scale=False, paid_share="0.7")
+            for back, baskets in days:
+                day = today - timedelta(days=back)
+                # A kitchen cooks the day's plates in one run per dish, not one run per order.
+                seed._cook(master, [(master["items"][index], Decimal(quantity)) for index, quantity in seed.walk_in_need(baskets).items()], day, owner)
+                for number, basket in enumerate(baskets, start=1):
+                    seed.sell_walk_in(master, f"DEMO-WI-{day:%Y%m%d}-{number:02d}", day, basket, owner)
 
     @staticmethod
     def _dishes(master):

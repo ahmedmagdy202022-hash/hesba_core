@@ -1,5 +1,6 @@
 """R2-5: the sample business looks like the activity that chose it."""
 
+from datetime import timedelta
 from decimal import Decimal
 from io import StringIO
 
@@ -48,6 +49,23 @@ class CatalogShapeTests(TestCase):
                         self.assertGreater(product.purchase, 0, product.name)
                 codes = [supply.code for supply in catalog.raw]
                 self.assertEqual(len(codes), len(set(codes)))
+
+    def test_every_business_trades_at_its_own_size(self):
+        """DEMO-SCALE (Ahmed, 26 Oct: «الارقام ... قليله جدا كقيمة»): every catalog says how big it trades, and the
+        walk-in baskets only take items 1-3, so the planted low and sold-out items keep their roles."""
+
+        from .demo_catalogs import TRADE, trade_of, walk_in_baskets
+
+        keys = {catalog.key for catalog in all_catalogs()} - {"base"}
+        self.assertEqual(keys - set(TRADE), set())
+        self.assertEqual((trade_of(BASE).volume, trade_of(BASE).walk_ins), (1, 0))  # the base shop is the one it was
+        today = timezone.localdate()
+        for catalog in all_catalogs():
+            with self.subTest(catalog.key):
+                baskets = [basket for back in range(30) for basket in walk_in_baskets(catalog, today - timedelta(days=back))]
+                self.assertTrue(all(index in (0, 1, 2) and quantity >= 1 for basket in baskets for index, quantity in basket))
+                self.assertEqual(baskets, [basket for back in range(30) for basket in walk_in_baskets(catalog, today - timedelta(days=back))])
+                self.assertLessEqual(len(baskets), 260)  # each is posted through the real services: the sample month stays quick
 
     def test_the_names_fit_the_business(self):
         names = lambda activity, sub: " ".join(p.name for p in catalog_for(activity, sub).items)  # noqa: E731
@@ -114,6 +132,31 @@ class SampleBusinessPerActivityTests(TestCase):
         self.assertTrue(SalesInvoice.objects.filter(invoice_number__startswith="DEMO-SI-SH-").exists())  # the shelf's sales count too
         self.assertEqual(Expense.objects.get(category__code="rent").amount, (month * Decimal("0.08")).quantize(Decimal("1")))
         self.assertGreater(sum(row["balance"] for row in selectors.cashbox_report()), 0)  # paid from what the drawer holds
+
+    def test_the_sample_month_is_the_size_of_a_real_shop(self):
+        """DEMO-SCALE: a month of a few hundred thousand pounds, most of it at the till, and today busy too."""
+
+        from django.db.models import Sum
+
+        from sales.models import SalesInvoice
+
+        self.assert_a_working_business(self.fill("commercial", "retail"))
+        posted = SalesInvoice.objects.filter(status="posted")
+        month = posted.filter(invoice_date__gte=timezone.localdate() - timedelta(days=29)).aggregate(total=Sum("total_amount"))["total"]
+        self.assertGreater(month, Decimal("150000"))
+        self.assertGreater(posted.filter(invoice_number__startswith="DEMO-WI-").count(), 100)
+        self.assertGreaterEqual(posted.filter(invoice_date=timezone.localdate()).count(), 4)
+        self.assertTrue(PurchaseInvoice.objects.filter(invoice_number="DEMO-PI-WK1", status="posted").exists())
+
+    def test_a_wholesaler_sells_by_the_lorry(self):
+        from django.db.models import Sum
+
+        from sales.models import SalesInvoice
+
+        self.assert_a_working_business(self.fill("commercial", "wholesale"))
+        month = SalesInvoice.objects.filter(status="posted", invoice_date__gte=timezone.localdate() - timedelta(days=29)).aggregate(
+            total=Sum("total_amount"))["total"]
+        self.assertGreater(month, Decimal("800000"))
 
     def test_no_expenses_without_the_expenses_module(self):
         from expenses.models import Expense
