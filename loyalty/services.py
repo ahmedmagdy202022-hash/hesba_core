@@ -257,19 +257,23 @@ def _on_return_cancelled(sales_return, user):
 
 
 def _on_audit(sender, instance, created, **kwargs):
-    if not created or instance.module != "sales":
+    if not created or instance.module != "sales" or not str(instance.object_id or "").isdigit():
         return
     from sales.models import SalesInvoice, SalesReturn
 
-    action = instance.action
+    action, pk = instance.action, int(instance.object_id)
+    # A row that does not name a real document (an import, a test, a hand-written note) leaves the points alone.
     if action == "post_sales_invoice":
-        _on_posted(SalesInvoice(pk=int(instance.object_id)), instance.actor)
+        if SalesInvoice.objects.filter(pk=pk).exists():
+            _on_posted(SalesInvoice(pk=pk), instance.actor)
     elif action == "cancel_posted_sales_invoice":
-        _on_cancelled(SalesInvoice.objects.get(pk=int(instance.object_id)), instance.actor)
-    elif action == "create_sales_return":
-        _on_returned(SalesReturn.objects.select_related("source_invoice").get(pk=int(instance.object_id)), instance.actor)
-    elif action == "cancel_sales_return":
-        _on_return_cancelled(SalesReturn.objects.select_related("source_invoice").get(pk=int(instance.object_id)), instance.actor)
+        invoice = SalesInvoice.objects.filter(pk=pk).first()
+        if invoice is not None:
+            _on_cancelled(invoice, instance.actor)
+    elif action in ("create_sales_return", "cancel_sales_return"):
+        sales_return = SalesReturn.objects.select_related("source_invoice").filter(pk=pk).first()
+        if sales_return is not None:
+            (_on_returned if action == "create_sales_return" else _on_return_cancelled)(sales_return, instance.actor)
 
 
 def connect():

@@ -260,3 +260,12 @@ class CodexReviewTests(LoyaltySetup):
         self.assertEqual(self.points(), -5)  # 95 earned against 100 owed
         PointsEntry.objects.filter(kind=EntryKind.EARN).update(expires_on=TODAY - timedelta(days=1))  # everything runs out
         self.assertEqual(self.points(), -5)  # the debt is not counted again once the later points expire
+
+    def test_an_audit_row_without_its_document_leaves_points_alone(self):
+        from audit.models import AuditEventType, AuditLog
+
+        AuditLog.objects.create(event_type=AuditEventType.UPDATE, actor=self.owner, module="sales", action="cancel_posted_sales_invoice",
+                                object_type="sales.SalesInvoice", object_id="999999", before_data={}, after_data={})
+        AuditLog.objects.create(event_type=AuditEventType.CREATE, actor=self.owner, module="sales", action="create_sales_return",
+                                object_type="sales.SalesReturn", object_id="", before_data={}, after_data={})
+        self.assertFalse(PointsEntry.objects.exists())
