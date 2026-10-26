@@ -860,6 +860,87 @@ WORKSHOP = _factory(
     ("م. أحمد عبد الله", "سارة محمود", "محمد إبراهيم", "شركة النور للتطوير العقاري"),
 )
 
+@dataclass(frozen=True)
+class Trade:
+    """DEMO-SCALE (Ahmed, 26 Oct: «الارقام الي موجودة في البيانات التجريبية قليله جدا كقيمة»): how big this kind of
+    business trades. ``volume`` multiplies the quantities of the sample trade with named customers and suppliers (a
+    wholesaler sells by the dozen cartons, a builder by the lorry); ``walk_ins`` is how many sales a day go to the walk-in
+    customer, ``lines`` and ``most`` how many lines such a basket has at most and how many of each."""
+
+    volume: int = 1
+    walk_ins: int = 0
+    lines: int = 2
+    most: int = 2
+
+
+#: Sized for a business of this kind that would run Hesba: a month of a few hundred thousand pounds for a shop or a
+#: clinic, millions for a wholesaler, a builder or a factory. The walk-in sales are posted one by one through the real
+#: services, so their count is kept to what a sample month needs to look like a working one.
+TRADE = {
+    "commercial.retail": Trade(2, 5, 3, 3),
+    "commercial.grocery": Trade(3, 7, 3, 6),
+    "commercial.fashion": Trade(2, 5, 3, 2),
+    "commercial.electronics": Trade(2, 4, 2, 2),
+    "commercial.pharmacy": Trade(3, 7, 3, 4),
+    "commercial.wholesale": Trade(12, 2, 3, 10),
+    "commercial.online": Trade(2, 4, 3, 2),
+    "services.general": Trade(3, 4, 2, 1),
+    "services.maintenance": Trade(3, 4, 2, 2),
+    "services.beauty": Trade(3, 5, 3, 1),
+    "services.professional": Trade(3, 1, 2, 1),
+    "services.digital_marketing": Trade(3, 1, 2, 1),
+    "restaurants.restaurant": Trade(3, 7, 3, 3),
+    "restaurants.cafe": Trade(4, 8, 3, 4),
+    "restaurants.fast_food": Trade(4, 8, 3, 3),
+    "restaurants.bakery": Trade(3, 7, 3, 3),
+    "restaurants.cloud_kitchen": Trade(3, 7, 3, 3),
+    "medical.clinic": Trade(3, 7, 2, 1),
+    "medical.dental": Trade(3, 4, 2, 1),
+    "medical.medical_center": Trade(4, 8, 3, 1),
+    "medical.lab": Trade(4, 7, 3, 2),
+    "medical.physio": Trade(3, 5, 2, 1),
+    "medical.vet": Trade(3, 5, 2, 1),
+    "education.tutoring_center": Trade(4, 4, 2, 2),
+    "education.training": Trade(3, 2, 2, 1),
+    "education.languages": Trade(3, 2, 2, 1),
+    "education.nursery": Trade(3, 1, 2, 1),
+    "contracting.general": Trade(6, 0),
+    "contracting.finishing": Trade(15, 0),
+    "contracting.electromechanical": Trade(8, 0),
+    "contracting.infrastructure": Trade(25, 0),
+    "contracting.maintenance_contracts": Trade(6, 0),
+    "manufacturing.food": Trade(20, 2, 3, 6),
+    "manufacturing.garments": Trade(20, 2, 3, 6),
+    "manufacturing.furniture": Trade(6, 1, 2, 2),
+    "manufacturing.printing": Trade(12, 1, 2, 4),
+    "manufacturing.chemicals": Trade(20, 1, 3, 6),
+    "manufacturing.workshop": Trade(5, 1, 2, 2),
+}
+
+
+def trade_of(catalog):
+    return TRADE.get(catalog.key, Trade())
+
+
+#: How busy each weekday is (Monday first): Thursday and Friday are the week's peak, Sunday the quietest.
+WEEKDAY_SHARE = (0.9, 0.9, 1.0, 1.2, 1.3, 1.1, 0.8)
+
+
+def walk_in_baskets(catalog, day):
+    """The baskets the walk-in customer buys on ``day``: [((item index, quantity), ...), ...], from items 1-3 only, so
+    the planted low and sold-out items keep their roles. The same day always gives the same baskets."""
+
+    trade = trade_of(catalog)
+    count = round(trade.walk_ins * WEEKDAY_SHARE[day.weekday()])
+    seed = day.toordinal()
+    baskets = []
+    for n in range(count):
+        size = 1 + (seed + n) % max(trade.lines, 1)
+        start = (seed * 7 + n * 2) % 3
+        baskets.append(tuple(((start + k) % 3, 1 + (seed + n * 3 + k * 5) % max(trade.most, 1)) for k in range(min(size, 3))))
+    return baskets
+
+
 CATALOGS = {
     "commercial": {"retail": RETAIL, "grocery": GROCERY, "fashion": FASHION, "electronics": ELECTRONICS, "pharmacy": PHARMACY,
                    "wholesale": WHOLESALE, "online": ONLINE, None: RETAIL},

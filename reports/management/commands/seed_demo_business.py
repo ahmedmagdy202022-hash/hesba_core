@@ -24,7 +24,7 @@ from cashboxes.models import Cashbox
 from master_data.models import Category, Customer, Item, Location, Supplier
 from purchases.models import PurchaseInvoice, PurchaseLine, PurchasePaymentStatus
 from purchases.services import post_purchase_invoice, record_supplier_payment
-from reports.demo_catalogs import BASE, active_catalog
+from reports.demo_catalogs import BASE, active_catalog, trade_of, walk_in_baskets
 from sales.models import SalesInvoice, SalesLine, SalesPaymentStatus
 from sales.services import post_sales_invoice, record_customer_payment
 from staff.services import reps_in_use
@@ -163,6 +163,7 @@ class Command(BaseCommand):
             },
         )
 
+        volume = self._volume(catalog)
         items = []
         for index, (code, product) in enumerate(zip(ITEM_CODES, catalog.items)):
             values = {
@@ -171,7 +172,7 @@ class Command(BaseCommand):
                 "unit": product.unit,
                 "default_sale_price": product.sale,
                 "default_purchase_price": self._stocking_cost(catalog, index),
-                "min_stock": MIN_STOCK[index] if product.stock else D("0"),
+                "min_stock": MIN_STOCK[index] * volume if product.stock else D("0"),
                 "active": True,
                 "import_batch_id": "DEMO-BUSINESS",
             }
@@ -203,7 +204,7 @@ class Command(BaseCommand):
             if index == 2:
                 limit = self._over_limit(catalog)
             else:
-                limit = max(self._round(limit * sales_scale, 500), D("500.00"))
+                limit = max(self._round(limit * sales_scale * volume, 500), D("500.00"))
             customer, _ = Customer.objects.update_or_create(
                 customer_code=code,
                 defaults={
@@ -242,7 +243,7 @@ class Command(BaseCommand):
             cashbox, _ = Cashbox.objects.update_or_create(
                 cashbox_code=code,
                 defaults=values,
-                create_defaults={**values, "opening_balance": max(self._round(opening * cash_scale, 100), D("300.00"))},
+                create_defaults={**values, "opening_balance": max(self._round(opening * cash_scale * (volume if is_default else 1), 100), D("300.00"))},
             )
             cashboxes.append(cashbox)
 
@@ -257,6 +258,12 @@ class Command(BaseCommand):
         }
 
     # ---- what the catalog's prices make of the base amounts ----
+
+    @staticmethod
+    def _volume(catalog):
+        """DEMO-SCALE: how many times the base trade's quantities this kind of business deals in."""
+
+        return D(trade_of(catalog).volume)
 
     @staticmethod
     def _round(amount, step):
@@ -289,28 +296,31 @@ class Command(BaseCommand):
         catalog = master["catalog"]
         if catalog is BASE:
             return amount
-        return (amount * self._ratio(catalog, lines, kind)).quantize(D("0.01"))
+        return (amount * self._ratio(catalog, lines, kind) * self._volume(catalog)).quantize(D("0.01"))
 
     def _over_limit(self, catalog):
         """Customer 3's limit: below what their one credit invoice leaves them owing."""
 
-        owed = self._value(catalog, OVER_LIMIT_SALE, "sale")
+        owed = self._value(catalog, OVER_LIMIT_SALE, "sale") * self._volume(catalog)
         if owed > D("1600"):
             return D("1500.00")
         return max(self._round(owed * D("0.6"), 50), D("50.00"))
 
     # ---- stocking and selling, by item position ----
 
-    def stock_in(self, master, number, invoice_date, supplier, lines, paid_now, actor, base_amount=True):
+    def stock_in(self, master, number, invoice_date, supplier, lines, paid_now, actor, base_amount=True, scale=True, paid_share=None):
         """Put ``lines`` [(item index, quantity)] on the shelf: bought from the
         supplier, or, for goods with a recipe, made from bought materials.
         Services are never stocked. ``paid_now`` is for the base catalog's
-        prices unless ``base_amount`` is False."""
+        prices unless ``base_amount`` is False. ``scale``: the quantities are the
+        base trade's, multiplied by this business's volume (DEMO-SCALE).
+        ``paid_share``: pay that share of what is actually bought instead."""
 
         catalog = master["catalog"]
+        volume = self._volume(catalog) if scale else D("1")
         bought, made, materials, cooked = [], [], {}, {}
         for index, quantity in lines:
-            quantity = D(quantity)
+            quantity = D(quantity) * volume
             if index in catalog.recipes:
                 output, parts = catalog.recipes[index]
                 made.append((index, quantity))
@@ -329,7 +339,10 @@ class Command(BaseCommand):
         invoice = None
         if bought:
             total = sum((self._line_total(item.default_purchase_price, qty) for item, qty in bought), ZERO)
-            paid = self._scaled(master, paid_now, lines, "buy") if base_amount else paid_now
+            if paid_share is not None:
+                paid = (total * D(str(paid_share))).quantize(D("0.01"))
+            else:
+                paid = self._scaled(master, paid_now, lines, "buy") if base_amount else paid_now
             invoice = self._post_purchase(number=number, invoice_date=invoice_date, supplier=supplier, location=master["location"],
                                           cashbox=master["cashboxes"][0], lines=bought, paid_now=min(paid, total), actor=actor)
         for index, quantity in made:
@@ -337,9 +350,11 @@ class Command(BaseCommand):
         return invoice
 
     def sell(self, master, number, invoice_date, customer_index, lines, actor, paid_now=None, share=None):
-        """Sell ``lines`` [(item index, quantity)]; paid ``paid_now`` (base prices) or ``share`` of the total."""
+        """Sell ``lines`` [(item index, quantity)]; paid ``paid_now`` (base prices) or ``share`` of the total.
+        The quantities are the base trade's, multiplied by this business's volume (DEMO-SCALE)."""
 
-        items = [(master["items"][i], D(q)) for i, q in lines]
+        volume = self._volume(master["catalog"])
+        items = [(master["items"][i], D(q) * volume) for i, q in lines]
         if share is not None:
             total = sum((self._line_total(item.default_sale_price, qty) for item, qty in items), ZERO)
             paid = (total * D(str(share))).quantize(D("0.01"))
@@ -348,6 +363,27 @@ class Command(BaseCommand):
         self._cook(master, items, invoice_date, actor)
         return self._post_sale(number=number, invoice_date=invoice_date, customer=master["customers"][customer_index],
                                location=master["location"], cashbox=master["cashboxes"][0], lines=items, paid_now=paid, actor=actor)
+
+    def sell_walk_in(self, master, number, invoice_date, basket, actor):
+        """DEMO-SCALE: what the walk-in customer buys at the till, ``basket`` [(item index, quantity)], paid in full."""
+
+        from sales.pos import walk_in_customer
+
+        items = [(master["items"][i], D(q)) for i, q in basket]
+        total = sum((self._line_total(item.default_sale_price, qty) for item, qty in items), ZERO)
+        self._cook(master, items, invoice_date, actor)
+        return self._post_sale(number=number, invoice_date=invoice_date, customer=walk_in_customer(), location=master["location"],
+                               cashbox=master["cashboxes"][0], lines=items, paid_now=total, actor=actor)
+
+    @staticmethod
+    def walk_in_need(baskets):
+        """{item index: quantity} the baskets take off the shelf."""
+
+        need = {}
+        for basket in baskets:
+            for index, quantity in basket:
+                need[index] = need.get(index, 0) + quantity
+        return need
 
     @staticmethod
     def _kitchen_recipe(item):
@@ -457,12 +493,17 @@ class Command(BaseCommand):
         if SalesInvoice.objects.filter(invoice_number__startswith=f"DEMO-SI-{stamp}-").exists():
             return False
 
+        # DEMO-SCALE: the walk-in customer's baskets so far today (the day is half gone).
+        baskets = walk_in_baskets(master["catalog"], today)
+        baskets = baskets[: (len(baskets) + 1) // 2]
+
         # Buy back exactly what today will sell, so running this on many days in
         # a row neither drains the shelves nor quietly inflates them.
-        restock = {}
+        volume = self._volume(master["catalog"])
+        restock = {index: quantity for index, quantity in self.walk_in_need(baskets).items()}
         for _, _, lines, _ in self.DAILY_SALES:
             for index, quantity in lines:
-                restock[index] = restock.get(index, 0) + quantity
+                restock[index] = restock.get(index, 0) + quantity * volume
 
         restock_lines = sorted(restock.items())
         # Pay most of it, leaving a little on account. Derived from the lines
@@ -479,6 +520,7 @@ class Command(BaseCommand):
             (restock_total * D("0.6")).quantize(D("0.01")),
             actor,
             base_amount=False,
+            scale=False,
         )
 
         # One invoice on the cashier and one on the owner, so a cashier's
@@ -486,6 +528,9 @@ class Command(BaseCommand):
         for suffix, customer_index, lines, paid_now in self.DAILY_SALES:
             self.sell(master, f"DEMO-SI-{stamp}-{suffix}", today, customer_index, lines,
                       (cashier or actor) if suffix == "A" else actor, paid_now=paid_now)
+        self._cook(master, [(master["items"][index], D(quantity)) for index, quantity in self.walk_in_need(baskets).items()], today, actor)
+        for n, basket in enumerate(baskets, start=1):
+            self.sell_walk_in(master, f"DEMO-WI-{stamp}-{n:02d}", today, basket, (cashier or actor) if n % 2 else actor)
 
         self._seed_payments(master, actor, today, stamp)
         return True
