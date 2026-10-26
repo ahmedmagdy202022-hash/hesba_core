@@ -1,0 +1,16 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'inventory:stock' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ words.title }}</h1><p class="op-muted">{{ words.intro }}</p></div></section>
+<section class="op-detail-meta" data-sell-short-switch>
+  <p><strong>{{ words.title }}:</strong> <span class="op-status {% if enabled %}op-status-posted{% else %}op-status-draft{% endif %}" data-sell-short-state="{{ enabled|yesno:'on,off' }}">{% if enabled %}{{ words.on }}{% else %}{{ words.off }}{% endif %}</span></p>
+  <p class="op-muted">{{ words.how }}</p>
+  {% if owner %}<form method="post" class="op-form-actions">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="enabled" value="{% if enabled %}0{% else %}1{% endif %}"><button class="{% if enabled %}op-secondary{% else %}op-primary{% endif %}" type="submit" data-sell-short-toggle>{% if enabled %}{{ words.turn_off }}{% else %}{{ words.turn_on }}{% endif %}</button></form>
+  {% else %}<p class="op-muted">{{ words.owner_only }}</p>{% endif %}
+</section>
+<section class="op-title-row"><div><h2>{{ words.list }}</h2></div><div class="op-form-actions"><a class="{% if waiting_only %}op-primary{% else %}op-secondary{% endif %}" href="?lang={{ lang }}">{{ words.open_only }}</a><a class="{% if waiting_only %}op-secondary{% else %}op-primary{% endif %}" href="?lang={{ lang }}&show=all">{{ words.all }}</a></div></section>
+<div class="op-table-wrap"><table class="op-table" data-short-sales><thead><tr><th>{{ words.invoice }}</th><th>{{ words.date }}</th><th>{{ words.item }}</th><th>{{ words.warehouse }}</th><th>{{ words.short }}</th><th>{{ words.estimated }}</th>{% if can_view_cost %}<th>{{ words.estimate }}</th><th>{{ words.settled }}</th>{% endif %}<th>{{ words.open }}</th><th>{{ words.state }}</th><th>{{ words.agreed }}</th></tr></thead><tbody>
+{% for row in rows %}<tr data-short-sale="{{ row.sale.pk }}"><td><a href="{% url 'sales:detail' row.invoice.pk %}?lang={{ lang }}">{{ row.invoice.invoice_number }}</a></td><td>{{ row.invoice.invoice_date|date:"Y-m-d" }}</td><td>{{ row.sale.item|named:lang }}</td><td>{{ row.sale.location }}</td><td>{{ row.sale.location_short|qty }}</td><td>{{ row.sale.estimated_quantity|qty }}</td>{% if can_view_cost %}<td>{{ row.sale.estimated_unit_cost|unit_cost }}</td><td>{{ row.settled|money }}</td>{% endif %}<td>{% if row.open %}<strong class="op-below-zero">{{ row.open|qty }}</strong>{% else %}0{% endif %}</td><td><span class="op-status {% if row.open %}op-status-draft{% else %}op-status-posted{% endif %}">{% if row.open %}{{ words.waiting }}{% else %}{{ words.done }}{% endif %}</span></td><td>{{ row.sale.agreed_by|default:"—" }}</td></tr>
+{% empty %}<tr><td colspan="11" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

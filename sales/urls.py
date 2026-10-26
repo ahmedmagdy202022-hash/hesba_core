@@ -3,6 +3,7 @@ from django.urls import path
 from . import pos as pos_views
 from . import pos_customers
 from . import pos_buttons
+from . import short_sales_views
 from offline_pos import views as offline_views
 from . import views
 
@@ -19,6 +20,7 @@ urlpatterns = [
     path("pos/buttons/", pos_buttons.pos_buttons, name="pos_buttons"),  # AN7 (G07)
     # POS-003: queued offline sales, posted once each when the till is back online.
     path("pos/sync/", offline_views.sync_sale, name="pos_sync"),
+    path("short-sales/", short_sales_views.short_sales_page, name="short_sales"),  # HG-065
     path("collections/", views.payment_list, name="payments"),
     path("collections/new/", views.payment_create, name="payment_create"),
     path("collections/<int:pk>/cancel/", views.payment_cancel, name="payment_cancel"),

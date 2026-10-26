@@ -370,6 +370,27 @@ def profit_report(date_from=None, date_to=None):
                 "is_return": True,
             }
         )
+    settlements = (_short_settlements(date_from, date_to).values("short_sale__sales_line__invoice_id", "short_sale__sales_line__invoice__invoice_number",
+                                                                  "short_sale__item_id", "entry_date").annotate(total=Sum("amount")))
+    labels = {item.pk: item.search_label for item in Item.objects.filter(pk__in={row["short_sale__item_id"] for row in settlements})}
+    for row in settlements:  # HG-065: the cost settled when the stock of a sale made without it arrived
+        if not row["total"]:
+            continue
+        rows.append(
+            {
+                "invoice_id": row["short_sale__sales_line__invoice_id"],
+                "invoice_number": row["short_sale__sales_line__invoice__invoice_number"],
+                "invoice_date": row["entry_date"],
+                "item_id": row["short_sale__item_id"],
+                "item_label": labels.get(row["short_sale__item_id"], ""),
+                "quantity": Decimal("0"),
+                "sales_amount": Decimal("0.00"),
+                "cost_amount": row["total"],
+                "profit_amount": -row["total"],
+                "is_return": False,
+                "is_settlement": True,
+            }
+        )
     return sorted(rows, key=lambda row: (row["invoice_date"], row["invoice_number"]), reverse=True)
 
 
@@ -399,5 +420,16 @@ def profit_totals(date_from=None, date_to=None):
     returns["sales"] -= returned_tax
     totals["sales"] -= returns["sales"]
     totals["cost"] -= returns["cost"]
+    totals["cost"] += _short_settlements(date_from, date_to).aggregate(total=_zero_sum("amount", None, _MONEY))["total"]
     totals["profit"] = totals["sales"] - totals["cost"]
     return totals
+
+
+def _short_settlements(date_from=None, date_to=None):
+    """HG-065: the cost added to sales made before their stock arrived, on the day it arrived (net of reversals)."""
+
+    from sales.models import ShortSaleEntry
+
+    entries = ShortSaleEntry.objects.filter(entity_scope.q(entity_scope.SALES_INVOICE, "short_sale__sales_line__invoice__"),
+                                            kind=ShortSaleEntry.Kind.SETTLEMENT, short_sale__sales_line__invoice__status="posted")
+    return _date_filter(entries, "entry_date", date_from, date_to)

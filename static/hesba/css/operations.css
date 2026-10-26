@@ -255,3 +255,5 @@ html.hs-cam-open,html.hs-cam-open body{overflow:hidden}
 /* FB-26: a supplier's or customer's full form in a box over the invoice */
 .hs-quick-form{width:min(760px,calc(100% - 32px));height:min(720px,calc(100% - 48px))}
 .hs-quick-form iframe{display:block;width:100%;height:100%;border:0;border-radius:16px;background:var(--hs-surface)}
+/* HG-065: stock below zero, and the box that asks to sell what is not there */
+.op-below-zero{color:var(--op-danger);font-weight:700}.op-short-box ul{margin:8px 0;padding-inline-start:20px}.op-short-box form{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}

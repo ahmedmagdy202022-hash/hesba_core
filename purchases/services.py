@@ -147,9 +147,13 @@ def _purchase_line_unit_cost(line):
     return cost_round(allocations[line.pk] / line.quantity)
 
 
-def _recalculate_affected_items(items_by_id):
+def _recalculate_affected_items(items_by_id, day=None, user=None):
     for item in items_by_id.values():
         recalculate_item_average_cost(item)
+    if day is not None:
+        from sales.short_sales import rebalance_items
+
+        rebalance_items(items_by_id.values(), day, user)  # HG-065: settle what was sold before it arrived
 
 
 @transaction.atomic
@@ -216,7 +220,7 @@ def post_purchase_invoice(invoice_id, user=None):
         )
         affected_items[line.item_id] = line.item
 
-    _recalculate_affected_items(affected_items)
+    _recalculate_affected_items(affected_items, invoice.invoice_date, user)
     invoice.status = PurchaseInvoiceStatus.POSTED
     invoice.save(update_fields=["status", "updated_at"])
 
@@ -303,7 +307,7 @@ def cancel_posted_purchase_invoice(invoice_id, user=None, reason=""):
         )
         affected_items[line.item_id] = line.item
 
-    _recalculate_affected_items(affected_items)
+    _recalculate_affected_items(affected_items, invoice.invoice_date, user)
     invoice.status = PurchaseInvoiceStatus.CANCELLED
     invoice.save(update_fields=["status", "updated_at"])
 
@@ -601,7 +605,7 @@ def create_purchase_return(
             created_by=user,
         )
     record_purchase_return_taxes(returned_taxes)
-    _recalculate_affected_items(affected_items)
+    _recalculate_affected_items(affected_items, return_date, user)
     AuditLog.objects.create(
         event_type=AuditEventType.CREATE,
         actor=user,
@@ -697,7 +701,7 @@ def cancel_purchase_return(return_id, reversal_date, reason, user):
             description=f"Reverse purchase return {purchase_return.return_number}",
             created_by=user,
         )
-    _recalculate_affected_items(affected_items)
+    _recalculate_affected_items(affected_items, reversal_date, user)
     purchase_return.status = PurchaseReturnStatus.CANCELLED
     purchase_return.cancelled_by = user
     purchase_return.cancelled_at = timezone.now()

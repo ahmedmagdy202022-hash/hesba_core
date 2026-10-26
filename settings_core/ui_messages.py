@@ -23,6 +23,9 @@ EXACT = {
     "Retention from this bill was released at some point (even if that release was reversed later). A cancellation is dated back to the bill and would rewrite that history, so it is not allowed: make a purchase return instead.":
         "ضمان الأعمال بتاع المستخلص ده اتفرج عنه قبل كده (حتى لو الإفراج اتلغى بعدها). الإلغاء بيرجع لتاريخ الفاتورة وهيغيّر اللي حصل، فمش مسموح: اعمل مرتجع مشتريات بدله.",
     "A cancellation reason is required.": "اكتب سبب الإلغاء.",
+    # HG-065: selling without stock.
+    "A cost settlement of this sale is in a closed period; reopen it to cancel the sale.":
+        "تسوية تكلفة البيعة دي في فترة مقفولة؛ افتح الفترة الأول علشان تلغي البيعة.",
     "A cash operation with this reference already exists.": "فيه حركة نقدية بنفس رقم المرجع ده.",
     "A customer collection with this number already exists.": "فيه تحصيل بنفس الرقم ده.",
     "A destination cashbox is required.": "اختار الخزنة المستلمة.",
