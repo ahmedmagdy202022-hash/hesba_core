@@ -1,0 +1,34 @@
+{% extends "operations/base.html" %}
+{% load hesba_format hesba_labels %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div></section>
+{% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
+<div class="op-table-wrap"><table class="op-table" data-promotions><thead><tr><th>{{ words.name }}</th><th>{{ words.kind }}</th><th>{{ words.what }}</th><th>{{ words.when }}</th><th>{{ words.coupon }}</th><th>{{ words.state }}</th>{% if can_see_use %}<th>{{ words.invoices }}</th><th>{{ words.given }}</th>{% endif %}{% if can_manage %}<th></th>{% endif %}</tr></thead><tbody>
+{% for row in rows %}{% with promo=row.promo %}<tr data-promotion="{{ promo.pk }}"><td class="op-cell-text">{{ promo.name }}</td>
+<td>{% choice_label promo "kind" %}{% if promo.kind == 'percent' %} <bdi>{{ promo.percent|floatformat:"-2" }}%</bdi>{% elif promo.kind == 'buy_get' %} <bdi>{{ promo.buy_quantity }}+{{ promo.get_quantity }}</bdi>{% else %} <bdi>{{ promo.amount|money }} / {{ promo.min_total|money }}</bdi>{% endif %}</td>
+<td>{% if promo.item %}{{ promo.item.item_name }}{% elif promo.category %}{{ promo.category }}{% else %}{{ words.everything }}{% endif %}</td>
+<td><bdi>{% if promo.starts_on or promo.ends_on %}{{ promo.starts_on|date:"Y-m-d"|default:"…" }} → {{ promo.ends_on|date:"Y-m-d"|default:"…" }}{% else %}{{ words.always }}{% endif %}{% if promo.from_time %} · {{ promo.from_time|time:"H:i" }}–{{ promo.to_time|time:"H:i" }}{% endif %}</bdi></td>
+<td><bdi>{{ promo.coupon_code|default:"—" }}</bdi></td><td>{% if row.running %}<strong data-running>{{ words.running }}</strong>{% else %}<span class="op-muted">{{ words.stopped }}</span>{% endif %}</td>
+{% if can_see_use %}<td>{{ row.use.invoices }}</td><td>{{ row.use.discount|money }}</td>{% endif %}
+{% if can_manage %}<td><a class="op-secondary" href="?lang={{ lang }}&edit={{ promo.pk }}" data-edit="{{ promo.pk }}">{{ words.open }}</a></td>{% endif %}</tr>{% endwith %}
+{% empty %}<tr><td colspan="{% if can_see_use %}9{% else %}7{% endif %}" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_manage %}<form class="op-form" method="post" data-promotion-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">{% if editing %}<input type="hidden" name="promotion" value="{{ editing.pk }}">{% endif %}
+<h2>{% if editing %}{{ words.edit }}{% else %}{{ words.new }}{% endif %}</h2><div class="op-form-grid">
+<div class="op-field"><label for="id_name">{{ words.name }}</label><input id="id_name" name="name" required value="{% if form %}{{ form.name }}{% else %}{{ editing.name|default:'' }}{% endif %}"></div>
+<div class="op-field"><label for="id_kind">{{ words.kind }}</label><select id="id_kind" name="kind">{% for value, label in kinds %}<option value="{{ value }}"{% if form and form.kind == value or not form and editing.kind == value %} selected{% endif %}>{% if lang == 'en' %}{{ label }}{% else %}{% if value == 'percent' %}خصم %{% elif value == 'buy_get' %}اشتري وخد ببلاش{% else %}خصم مبلغ فوق حد{% endif %}{% endif %}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="id_percent">{{ words.percent }}</label><input id="id_percent" name="percent" inputmode="decimal" dir="ltr" value="{% if form %}{{ form.percent }}{% else %}{{ editing.percent|default_if_none:'' }}{% endif %}"></div>
+<div class="op-field"><label for="id_buy">{{ words.buy }}</label><input id="id_buy" name="buy_quantity" inputmode="numeric" dir="ltr" value="{% if form %}{{ form.buy_quantity }}{% else %}{{ editing.buy_quantity|default_if_none:'' }}{% endif %}"></div>
+<div class="op-field"><label for="id_get">{{ words.get }}</label><input id="id_get" name="get_quantity" inputmode="numeric" dir="ltr" value="{% if form %}{{ form.get_quantity }}{% else %}{{ editing.get_quantity|default_if_none:'' }}{% endif %}"></div>
+<div class="op-field"><label for="id_amount">{{ words.amount }}</label><input id="id_amount" name="amount" inputmode="decimal" dir="ltr" value="{% if form %}{{ form.amount }}{% else %}{{ editing.amount|default_if_none:'' }}{% endif %}"></div>
+<div class="op-field"><label for="id_min_total">{{ words.min_total }}</label><input id="id_min_total" name="min_total" inputmode="decimal" dir="ltr" value="{% if form %}{{ form.min_total }}{% else %}{{ editing.min_total|default_if_none:'' }}{% endif %}"></div>
+<div class="op-field"><label for="id_item">{{ words.item }}</label><select id="id_item" name="item"><option value="">{{ words.everything }}</option>{% for item in items %}<option value="{{ item.pk }}"{% if form %}{% if form.item == item.pk|stringformat:"s" %} selected{% endif %}{% elif editing.item_id == item.pk %} selected{% endif %}>{{ item.item_name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="id_category">{{ words.category }}</label><select id="id_category" name="category"><option value=""></option>{% for category in categories %}<option value="{{ category.pk }}"{% if form %}{% if form.category == category.pk|stringformat:"s" %} selected{% endif %}{% elif editing.category_id == category.pk %} selected{% endif %}>{{ category }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="id_coupon">{{ words.coupon }}</label><input id="id_coupon" name="coupon_code" dir="ltr" autocomplete="off" value="{% if form %}{{ form.coupon_code }}{% else %}{{ editing.coupon_code|default:'' }}{% endif %}"></div>
+<div class="op-field"><label for="id_starts">{{ words.starts }}</label><input id="id_starts" name="starts_on" type="date" value="{% if form %}{{ form.starts_on }}{% else %}{{ editing.starts_on|date:'Y-m-d' }}{% endif %}"></div>
+<div class="op-field"><label for="id_ends">{{ words.ends }}</label><input id="id_ends" name="ends_on" type="date" value="{% if form %}{{ form.ends_on }}{% else %}{{ editing.ends_on|date:'Y-m-d' }}{% endif %}"></div>
+<div class="op-field"><label for="id_from_time">{{ words.from_time }}</label><input id="id_from_time" name="from_time" type="time" value="{% if form %}{{ form.from_time }}{% else %}{{ editing.from_time|time:'H:i' }}{% endif %}"></div>
+<div class="op-field"><label for="id_to_time">{{ words.to_time }}</label><input id="id_to_time" name="to_time" type="time" value="{% if form %}{{ form.to_time }}{% else %}{{ editing.to_time|time:'H:i' }}{% endif %}"></div>
+<div class="op-field"><label><input type="checkbox" name="active" value="1"{% if not editing and not form or editing.active and not form or form.active %} checked{% endif %}> {{ words.active }}</label></div>
+</div><div class="op-form-actions"><button class="op-primary" type="submit" data-save-promotion>{{ words.save }}</button></div></form>{% endif %}
+{% endblock %}
