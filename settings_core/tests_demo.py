@@ -40,5 +40,44 @@ class DemoTests(TestCase):
         self.assertTrue(self.client.login(username="cashier", password="Demo-pass-1"))
         self.assertContains(self.client.get(reverse("login")), "data-demo-login")
 
+    @override_settings(DEMO_MODE=True, DEMO_PASSWORD="Demo-pass-1")
+    def test_the_showcase_shop_shows_the_market_parity_features(self):
+        """DEMO-NEW (Ahmed, 26 Oct): offers, points, couriers, store orders, the bank, cheques and payroll come with their
+        own sample, and the planted alerts stay as they were."""
+
+        from cashboxes.models import Cashbox
+        from cheques.models import Cheque
+        from loyalty.models import PointsEntry
+        from onlinestore.models import StoreOrder
+        from payroll.models import PayrollPayment, PayrollRun
+        from promotions.models import InvoicePromotion, Promotion
+        from reports import selectors
+        from reports.dashboard_data import SharedReads
+        from settings_core.capabilities import enabled_capabilities
+        from shipping.models import Shipment
+
+        call_command("prepare_demo", stdout=StringIO())
+        self.assertTrue({"promotions", "loyalty", "shipping", "online_store"} <= set(enabled_capabilities()))
+        self.assertEqual((Promotion.objects.count(), InvoicePromotion.objects.count()), (3, 3))
+        self.assertTrue(InvoicePromotion.objects.filter(coupon_code="HESBA").exists())
+        self.assertEqual(set(PointsEntry.objects.values_list("kind", flat=True)), {"earn", "spend"})
+        self.assertEqual(sorted(Shipment.objects.values_list("status", flat=True)), ["delivered", "settled", "with_courier"])
+        self.assertEqual(StoreOrder.objects.filter(invoice__status="draft").count(), 2)
+        self.assertTrue(Cashbox.objects.filter(kind="bank", cashbox_code="DEMO-BANK-01").exists())
+        self.assertEqual(sorted(Cheque.objects.values_list("status", flat=True)), ["cleared", "in_hand", "issued"])
+        run = PayrollRun.objects.get()
+        self.assertEqual(run.status, "posted")
+        self.assertGreaterEqual(run.lines.count(), 4)
+        self.assertFalse(run.lines.filter(absent_days__gt=3).exists())  # last month's attendance is there, not missing
+        self.assertTrue(PayrollPayment.objects.filter(run=run, pay_to="net").exists())
+        alerts = selectors.stock_alert_counts()
+        self.assertEqual((alerts["out_of_stock"], alerts["low_stock"]), (1, 1))
+        self.assertTrue(SharedReads().customers_over_limit())
+        self.assertTrue(all(row["balance"] >= 0 for row in selectors.cashbox_report() if row.get("kind", "cash") == "cash"))
+        self.assertTrue(self.client.login(username="owner", password="Demo-pass-1"))
+        for url in ("/promotions/", "/loyalty/", "/shipping/", "/store/", "/banks/", "/cheques/", "/staff/payroll/"):
+            with self.subTest(url=url):
+                self.assertEqual(self.client.get(url + "?lang=ar").status_code, 200)
+
     def test_no_demo_banner_on_a_real_install(self):
         self.assertNotContains(self.client.get(reverse("login")), "data-demo-login")

@@ -158,6 +158,42 @@ class SampleBusinessPerActivityTests(TestCase):
             total=Sum("total_amount"))["total"]
         self.assertGreater(month, Decimal("800000"))
 
+    def test_a_kitchen_with_promotions_points_and_couriers_gets_its_samples(self):
+        """Codex #277: the feature samples cook a kitchen's dishes before selling them."""
+
+        from loyalty.models import PointsEntry
+        from promotions.models import InvoicePromotion
+        from shipping.models import Shipment
+
+        self.assert_a_working_business(self.fill("restaurants", "fast_food", capabilities="pos,shift_required,promotions,loyalty,shipping"))
+        self.assertEqual(InvoicePromotion.objects.count(), 3)
+        self.assertTrue(InvoicePromotion.objects.filter(coupon_code="HESBA").exists())  # a cheap item still reaches the coupon's minimum
+        self.assertEqual(Shipment.objects.count(), 3)
+        self.assertTrue(PointsEntry.objects.filter(kind="earn").exists())
+
+    def test_a_courier_fee_leaves_the_running_costs_in(self):
+        """Codex #277: the courier's settlement records its fee as an expense; rent and the bills still come."""
+
+        from expenses.models import Expense
+
+        self.fill("commercial", "retail", modules="customers,suppliers,items_services,sales_operations,purchases,inventory,cashboxes,expenses,reports",
+                  capabilities="pos,barcode,shipping")
+        codes = set(Expense.objects.values_list("category__code", flat=True))
+        self.assertTrue({"rent", "utilities", "internet_phone", "supplies"} <= codes)
+        self.assertTrue(Expense.objects.exclude(category__code__in=["rent", "utilities", "internet_phone", "supplies"]).exists())  # the fee
+
+    def test_promotions_with_vat_charge_the_tax_at_the_till(self):
+        """Codex #277: the promotion sales pay their VAT too, so the walk-in customer owes nothing."""
+
+        from promotions.models import InvoicePromotion
+        from sales.models import SalesInvoice
+
+        self.assert_a_working_business(self.fill("commercial", "retail", capabilities="pos,barcode,vat,promotions,loyalty"))
+        used = InvoicePromotion.objects.select_related("invoice")
+        self.assertEqual(used.count(), 3)
+        self.assertTrue(all(row.invoice.status == "posted" and row.invoice.remaining_due == 0 for row in used))
+        self.assertTrue(SalesInvoice.objects.filter(pk__in=used.values("invoice"), tax_amount__gt=0).exists())
+
     def test_no_expenses_without_the_expenses_module(self):
         from expenses.models import Expense
 

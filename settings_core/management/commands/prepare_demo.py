@@ -45,7 +45,12 @@ class Command(BaseCommand):
 
         profile = ClientProfile.get_active()
         # The ready-made shop also shows employees and reps (FEEDBACK-R1 ties reps to that module).
-        complete_setup(profile, "commercial", "retail", ",".join(catalog.default_modules("commercial") + ("employees_technicians",)))
+        from settings_core import capabilities as caps
+
+        # DEMO-NEW: the showcase shop also has the market-parity features on, each with its own sample.
+        showcase = tuple(dict.fromkeys(caps.default_selection("commercial", "retail") + ("promotions", "loyalty", "shipping", "online_store")))
+        complete_setup(profile, "commercial", "retail", ",".join(catalog.default_modules("commercial") + ("employees_technicians",)),
+                       capabilities_raw=",".join(showcase))
         call_command("seed_demo_users", password=password, force=True, verbosity=0)
         self._history()
         call_command("seed_demo_business", username="owner", force=True, verbosity=0)
@@ -231,8 +236,12 @@ class Command(BaseCommand):
 
         if capability_enabled("drugs"):
             self._drugs(master, owner, modules)  # T10: after the shelf, whose brands are the alternatives
+        if "cashboxes" in modules:
+            self._banking(master, owner)  # DEMO-NEW: a bank account and cheques
         if "employees_technicians" in modules:
+            self._shop_staff(owner)  # DEMO-NEW: a shop's cashier and storekeeper, on the payroll too
             self._attendance(owner)  # T11: three weeks of attendance, a leave taken and one waiting
+            self._payroll(master, owner)  # DEMO-NEW: last month's payroll, net pay paid
         if "expenses" in modules:
             self._expenses(master, owner)  # last: a share of the whole month's sales, the shelf's included
         self._fit_users(modules)
@@ -260,12 +269,14 @@ class Command(BaseCommand):
             WorkSchedule.objects.update_or_create(employee=employee, defaults={
                 "start_time": clock(10, 0) if late_shift else clock(9, 0), "end_time": clock(18, 0) if late_shift else clock(17, 0),
                 "days_off": "4,5" if late_shift else "4", "device_id": str(n + 1)})
-        Employee.objects.filter(pk__in=[employee.pk for employee in employees]).update(created_at=timezone.now() - timedelta(days=40))
+        # DEMO-NEW: since the first of last month, so last month's payroll counts real absences, not missing days.
+        span = (today - (today.replace(day=1) - timedelta(days=1)).replace(day=1)).days
+        Employee.objects.filter(pk__in=[employee.pk for employee in employees]).update(created_at=timezone.now() - timedelta(days=span + 10))
         moment = timezone.localtime()
-        holidays = attendance.holidays_between(today - timedelta(days=21), today)
+        holidays = attendance.holidays_between(today - timedelta(days=span), today)
         for n, employee in enumerate(employees):
             schedule = attendance.schedule_for(employee)
-            for back in range(21, -1, -1):
+            for back in range(span, -1, -1):
                 day = today - timedelta(days=back)
                 if day.weekday() in schedule.off_weekdays() or day in holidays:
                     continue
@@ -305,7 +316,8 @@ class Command(BaseCommand):
         from expenses.services import record_expense
         from sales.models import SalesInvoice
 
-        if Expense.objects.exists():
+        # Codex #277: only the running costs themselves say they are there (a courier's fee is an expense too).
+        if Expense.objects.filter(category__code__in=[code for code, *_ in self.MONTH_EXPENSES]).exists():
             return
         today = timezone.localdate()
         first = today.replace(day=1)
@@ -431,6 +443,8 @@ class Command(BaseCommand):
             ("units", self._units), ("variants", self._variants), ("serials", self._serials),
             ("batches_expiry", self._batches_option), ("vat", self._vat), ("fixed_assets", self._asset), ("pos", self._shift),
             ("quotations", self._quotations),
+            # DEMO-NEW: the market-parity features, each with its own month to show.
+            ("promotions", self._promotions), ("loyalty", self._loyalty), ("shipping", self._shipping), ("online_store", self._store),
         )
         for slug, step in steps:
             if slug in on:
@@ -440,6 +454,237 @@ class Command(BaseCommand):
         profile = ClientProfile.get_active()
         if "purchases" in modules and getattr(profile, "activity_slug", "") == "commercial":  # T2: a trader's sample, not the clinic's or the factory's
             self._purchase_orders(master, goods, owner, modules)
+
+    # ---- DEMO-NEW: the market-parity features ----
+
+    @staticmethod
+    def _restock(master, owner, number, day, lines):
+        """Buy back, paid in full, what a feature's sample sells, so the shelf (and its planted alerts) stay as they were."""
+
+        from reports.management.commands.seed_demo_business import Command as Seed
+
+        if lines:
+            Seed().stock_in(master, number, day, master["suppliers"][0], lines, None, owner, scale=False, paid_share="1")
+
+    @staticmethod
+    def _ready(master, owner, day, lines):
+        """Codex #277: a kitchen's dishes are cooked on the sale's day before they are sold, as the month's sales are."""
+
+        from reports.management.commands.seed_demo_business import Command as Seed
+
+        Seed()._cook(master, [(line["item"], line["quantity"]) for line in lines], day, owner)
+
+    @staticmethod
+    def _till_total(lines, discount=Decimal("0")):
+        """Codex #277: what the till charges for ``lines``, VAT included when it is on, as sales.pos.checkout works it out."""
+
+        from config.money import money_round
+        from taxes.services import compute_lines, vat_enabled
+
+        subtotal = money_round(sum((money_round(line["quantity"] * line["unit_sale_price"] - (line.get("line_discount_amount") or 0)) for line in lines), Decimal("0")))
+        tax = money_round(sum((line_tax for *_, line_tax in compute_lines(lines)), Decimal("0"))) if vat_enabled() else Decimal("0.00")
+        return money_round(subtotal - money_round(discount) + tax)
+
+    @staticmethod
+    def _line(item, quantity):
+        return {"item": item, "quantity": Decimal(quantity), "unit_sale_price": Decimal(item.default_sale_price),
+                "line_discount_amount": Decimal("0"), "description": ""}
+
+    def _promotions(self, master, goods, owner, modules):
+        """A month's offer on the section, buy-two-get-one on an item, a coupon, and three till sales that used them."""
+
+        from promotions import services as promos
+        from promotions.models import Promotion
+        from sales.pos import checkout, walk_in_customer
+
+        if Promotion.objects.exists():
+            return
+        today = timezone.localdate()
+        items = master["items"]
+        category = items[0].category
+        window = {"starts_on": (today - timedelta(days=12)).isoformat(), "ends_on": (today + timedelta(days=18)).isoformat(), "active": "1"}
+        promos.save({"name": f"خصم 10% على {category.name_ar}", "kind": "percent", "percent": "10", "category": str(category.pk), **window}, owner)
+        promos.save({"name": f"اشتري 2 {items[2].item_name} وخد واحدة هدية", "kind": "buy_get", "buy_quantity": "2", "get_quantity": "1",
+                     "item": str(items[2].pk), **window}, owner)
+        floor = max(Decimal("500"), (items[1].default_sale_price * 2).quantize(Decimal("1")))
+        off = (floor * Decimal("0.15")).quantize(Decimal("10"))  # more than the section's 10%, so the coupon is the best offer
+        promos.save({"name": f"كوبون HESBA: {off:,.0f} جنيه خصم على {floor:,.0f} وأكتر", "kind": "amount_over", "amount": str(off), "min_total": str(floor),
+                     "coupon_code": "HESBA", "active": "1"}, owner)
+        # Codex #277: the coupon's basket reaches its minimum whatever the item costs (2 x price <= floor < 3 x price at most).
+        enough = int((floor / items[1].default_sale_price).to_integral_value(rounding="ROUND_CEILING")) if items[1].default_sale_price else 2
+        sales = ((9, ((0, 2),), ""), (5, ((2, 3),), ""), (2, ((1, max(enough, 2)),), "HESBA"))
+        need = {}
+        for _, lines, _ in sales:
+            for index, quantity in lines:
+                need[index] = need.get(index, 0) + quantity
+        self._restock(master, owner, "DEMO-PI-PROMO", today - timedelta(days=10), sorted(need.items()))
+        walk_in = walk_in_customer()
+        for days, lines, coupon in sales:
+            day = today - timedelta(days=days)
+            filled, promotion, off = promos.apply([self._line(items[i], q) for i, q in lines],
+                                                 now=timezone.make_aware(datetime.combine(day, time(13, 0))), coupon=coupon)
+            self._ready(master, owner, day, filled)
+            checkout(lines=filled, customer=walk_in, location=master["location"], cashbox=master["cashboxes"][0], discount=Decimal("0"),
+                     tendered=self._till_total(filled), user=owner, sale_date=day, notes="POS", promotion=(promotion, off, coupon) if promotion else None)
+
+    def _loyalty(self, master, goods, owner, modules):
+        """The named customers earned their points on the month's invoices; one spends some of them at the till."""
+
+        from loyalty import services as loyalty
+        from loyalty.models import PointsEntry
+        from sales.pos import checkout
+
+        if PointsEntry.objects.filter(kind="spend").exists():
+            return
+        settings_row = loyalty.rules()
+        customer = max(master["customers"][:2], key=lambda row: loyalty.balance(row)["points"])
+        have = loyalty.balance(customer)["points"]
+        item = master["items"][1]
+        line = self._line(item, 1)
+        points = min(have, int(item.default_sale_price / 2 / settings_row.point_value)) if settings_row.point_value else 0
+        if points < settings_row.min_points:
+            return
+        day = timezone.localdate() - timedelta(days=1)
+        self._restock(master, owner, "DEMO-PI-POINTS", day, [(1, 1)])
+        points, off = loyalty.redeem(customer, str(points), loyalty.lines_total([line]))
+        self._ready(master, owner, day, [line])
+        checkout(lines=[line], customer=customer, location=master["location"], cashbox=master["cashboxes"][0], discount=off,
+                 tendered=self._till_total([line], off), user=owner, sale_date=day, notes="POS", points=(points, off))
+
+    #: (name, phone, days ago shipped, ((item index, quantity), ...)): three cash-on-delivery orders.
+    PARCELS = (("منة الله سامي", "01001112201", 6, ((0, 1), (2, 2))), ("كريم عادل", "01001112202", 4, ((1, 1),)),
+               ("نورهان فتحي", "01001112203", 1, ((0, 2),)))
+
+    def _shipping(self, master, goods, owner, modules):
+        """A courier, three cash-on-delivery parcels: one delivered and settled less its fee, one delivered and still
+        held by the courier, one still out."""
+
+        from master_data.models import Customer
+        from reports.management.commands.seed_demo_business import Command as Seed
+        from shipping import services as couriers
+        from shipping.models import Courier
+
+        if Courier.objects.exists():
+            return
+        today = timezone.localdate()
+        courier = couriers.save_courier({"name": "بوسطة للشحن السريع", "phone": "01000000301", "fee_per_parcel": "45"}, owner)
+        need = {}
+        for *_, lines in self.PARCELS:
+            for index, quantity in lines:
+                need[index] = need.get(index, 0) + quantity
+        self._restock(master, owner, "DEMO-PI-SHIP", today - timedelta(days=7), sorted(need.items()))
+        seed, shipped = Seed(), []
+        for n, (name, phone, days, lines) in enumerate(self.PARCELS, start=1):
+            customer, _ = Customer.objects.get_or_create(customer_code=f"DEMO-WEB-{n:02d}", defaults={
+                "name": name, "phone": phone, "whatsapp": phone, "active": True, "import_batch_id": "DEMO-BUSINESS"})
+            day = today - timedelta(days=days)
+            sold = [(master["items"][i], Decimal(q)) for i, q in lines]
+            seed._cook(master, sold, day, owner)  # Codex #277: a kitchen's dishes, cooked before they go out
+            invoice = seed._post_sale(f"DEMO-SHP-{n:03d}", day, customer, master["location"], master["cashboxes"][0], sold, Decimal("0.00"), owner)
+            shipped.append((couriers.ship(invoice, courier, owner, {"shipped_on": day.isoformat(), "tracking_number": f"BST{day:%m%d}{n:03d}"}), day))
+        first, second = shipped[0], shipped[1]
+        couriers.deliver(first[0], owner, day=(first[1] + timedelta(days=1)).isoformat())
+        couriers.deliver(second[0], owner, day=(second[1] + timedelta(days=1)).isoformat())
+        couriers.settle([first[0]], master["cashboxes"][0], owner, {"settled_on": (first[1] + timedelta(days=3)).isoformat()})
+
+    def _store(self, master, goods, owner, modules):
+        """Two orders from the online store, uploaded with the store template, waiting as drafts to be checked."""
+
+        from onlinestore import services as store
+        from onlinestore.models import StoreOrder
+
+        if StoreOrder.objects.exists() or "sales_operations" not in modules:
+            return
+        items, today = master["items"], timezone.localdate()
+        rows = [("order", "date", "customer", "phone", "address", "sku", "quantity", "price"),
+                ("W-1201", today.isoformat(), "يوسف حمدي", "01001112301", "مدينة نصر، القاهرة", items[0].item_code, "2", items[0].default_sale_price),
+                ("W-1201", today.isoformat(), "يوسف حمدي", "01001112301", "مدينة نصر، القاهرة", items[2].item_code, "1", items[2].default_sale_price),
+                ("W-1202", today.isoformat(), "دينا مجدي", "01001112302", "سموحة، الإسكندرية", items[1].item_code, "1", items[1].default_sale_price)]
+        text = "\n".join(",".join(str(cell) for cell in row) for row in rows) + "\n"
+        store.import_orders(text.encode("utf-8"), master["location"], owner, "ar")
+
+    def _banking(self, master, owner):
+        """DEMO-NEW: the shop's bank account, the drawer's takings deposited in it twice, a bank fee, a customer's cheque
+        waiting in hand, one deposited and cleared, and a cheque issued to the supplier for next week."""
+
+        from datetime import datetime as moment_of
+
+        from cashboxes.models import Cashbox, CashboxKind, CashboxOperationType
+        from cashboxes.services import create_cashbox_operation, get_cashbox_balance
+        from cheques import services as cheques
+        from reports.services import get_customer_balance, get_supplier_balance
+
+        if Cashbox.objects.filter(kind=CashboxKind.BANK).exists():
+            return
+        today = timezone.localdate()
+        main = master["cashboxes"][0]
+        bank = Cashbox.objects.create(cashbox_code="DEMO-BANK-01", name_ar="البنك الأهلي — الحساب الجاري", name_en="NBE current account",
+                                      kind=CashboxKind.BANK, bank_name="البنك الأهلي المصري", account_number="1903-0123456-001",
+                                      opening_balance=Decimal("25000.00"), currency=main.currency, entity=main.entity, import_batch_id="DEMO-BUSINESS")
+        # As the other sample records (F28): the opening counts from before the month of history.
+        Cashbox.objects.filter(pk=bank.pk).update(created_at=timezone.make_aware(moment_of.combine(today - timedelta(days=31), time(9, 0))))
+        for n, days in enumerate((6, 2), start=1):
+            amount = (get_cashbox_balance(main) * Decimal("0.2")).quantize(Decimal("100"))
+            if amount > 0:
+                create_cashbox_operation(f"DEMO-DEP-{n}", today - timedelta(days=days), CashboxOperationType.TRANSFER, amount,
+                                         "إيداع إيراد الخزنة في البنك", owner, source_cashbox=main, destination_cashbox=bank)
+        create_cashbox_operation("DEMO-FEE-1", today - timedelta(days=1), CashboxOperationType.BANK_FEE, Decimal("35.00"),
+                                 "مصاريف كشف حساب", owner, source_cashbox=bank)
+        # Never the customer planted past their limit (index 2): a cheque from them would bring them back under it.
+        company = master["customers"][3]
+        person = max(master["customers"][:2], key=get_customer_balance)
+        due_company, due_person = get_customer_balance(company), get_customer_balance(person)
+        if due_company > 0:
+            cheques.receive(company, {"number": "100245", "bank_name": "بنك مصر", "due_date": (today + timedelta(days=10)).isoformat(),
+                                      "amount": str((due_company * Decimal("0.5")).quantize(Decimal("1"))), "received_on": (today - timedelta(days=3)).isoformat()}, owner)
+        if due_person > 0:
+            cheque = cheques.receive(person, {"number": "553810", "bank_name": "البنك التجاري الدولي", "due_date": (today - timedelta(days=2)).isoformat(),
+                                              "amount": str((due_person * Decimal("0.6")).quantize(Decimal("1"))), "received_on": (today - timedelta(days=8)).isoformat()}, owner)
+            cheques.deposit(cheque, bank, owner, on=today - timedelta(days=2))
+            cheques.clear(cheque, owner, on=today)
+        supplier = master["suppliers"][0]
+        owed = get_supplier_balance(supplier)
+        if owed > 0:
+            cheques.issue(supplier, bank, {"number": "000781", "due_date": (today + timedelta(days=9)).isoformat(),
+                                           "amount": str((min(owed, get_cashbox_balance(bank)) * Decimal("0.5")).quantize(Decimal("1"))),
+                                           "received_on": (today - timedelta(days=1)).isoformat()}, owner)
+
+    def _shop_staff(self, owner):
+        from settings_core.models import ClientProfile
+        from staff.models import Employee
+        from staff.services import save_employee
+
+        if getattr(ClientProfile.get_active(), "activity_slug", "") != "commercial" or Employee.objects.filter(code__startswith="DEMO-STAFF-").exists():
+            return
+        for n, (name, title) in enumerate((("نادر سعيد", "كاشير"), ("شيماء حسن", "مسؤولة المخزن")), start=1):
+            employee = save_employee({"name": name, "title": title, "commission_percent": "0"}, owner)
+            Employee.objects.filter(pk=employee.pk).update(code=f"DEMO-STAFF-{n}")
+
+    def _payroll(self, master, owner):
+        """DEMO-NEW: last month's payroll for the staff, posted, and the net pay paid from the main cashbox early this month;
+        the insurance and the tax are still owed."""
+
+        from payroll import services as payroll
+        from payroll.models import PayrollRun
+        from staff.models import Employee
+
+        if PayrollRun.objects.exists():
+            return
+        staff = list(Employee.objects.filter(active=True).order_by("pk")[:8])
+        if not staff:
+            return
+        for n, employee in enumerate(staff):
+            payroll.save_salary(employee, {"basic": str(6000 + 1500 * (n % 4)), "allowances": str(500 + 250 * (n % 3)), "insured": "1", "taxed": "1"}, owner)
+        today = timezone.localdate()
+        last_month = (today.replace(day=1) - timedelta(days=1)).replace(day=1)
+        run = payroll.prepare(last_month.strftime("%Y-%m"), owner)
+        payroll.post(run, owner)  # on the month's last day
+        from cashboxes.services import get_cashbox_balance
+
+        main = master["cashboxes"][0]
+        net = payroll.owed(run)["net"]["left"]
+        if 0 < net <= get_cashbox_balance(main):
+            payroll.pay(run, "net", main, "", owner, paid_on=today.replace(day=min(3, today.day)).isoformat())
 
     def _purchase_orders(self, master, goods, owner, modules):
         """T2: an order sent to a supplier, and one confirmed and partly received on a purchase invoice."""
