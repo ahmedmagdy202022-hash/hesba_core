@@ -111,6 +111,7 @@ AR_LABELS = {
     ("shipping.shipment", "status"): {"with_courier": "مع المندوب", "delivered": "اتسلّمت واتحصّلت", "settled": "اتسوّت", "returned": "رجعت", "lost": "ضاعت"},
     ("ereceipt.receipt", "status"): {"queued": "مستني الإرسال", "submitted": "اتبعت", "valid": "اتقبل", "invalid": "مرفوض", "not_issued": "متعملش: بيانات ناقصة"},
     ("cheques.cheque", "direction"): {"in": "وارد", "out": "صادر"},
+    ("onlinestore.storeorder", "source"): {"shopify": "Shopify", "template": "قالب حسبة"},
     ("cashboxes.cashbox", "kind"): {"cash": "خزنة", "bank": "حساب بنكي", "cheques_in": "شيكات في الإيد", "cheques_out": "شيكات صادرة", "courier": "تحصيلات شركة شحن"},
     ("cashboxes.cashboxoperation", "status"): DOCUMENT_STATUS,
     ("cashboxes.openingbalanceadjustment", "status"): DOCUMENT_STATUS,

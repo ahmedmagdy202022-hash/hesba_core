@@ -1959,6 +1959,25 @@ The entries below are the protected-logic decisions in the commercial gate, reco
   - an offline sale that syncs after stock ran out must follow the same rule.
 - **Tests:** off by default refuses as today; on, a short sale posts only with the agreement and logs it; the settling adjustment brings the cost of sales and the stock value to what they would be had the purchase come first; returns of a short sale; the trial balance stays balanced throughout.
 
+## HG-067 — Online store by file: a new table for imported orders (T13)
+
+- **Status:** RECORDED (Codex #273). This is a new, additive table in a new app. No existing model, migration, posting or report changed.
+- **Change:** `onlinestore.StoreOrder` (migration `onlinestore/0001_initial`) holds:
+  - `source` (`shopify` or `template`), `order_number`, a one-to-one link to the draft `sales.SalesInvoice` it made, `store_total`, `imported_by`, `imported_at`;
+  - a unique constraint on (`source`, `order_number`).
+- **Why:** the same orders file uploaded twice must not make the same invoices twice. The draft also needs to show the store's own total, to compare with what Hesba computed.
+- **Accounting:** none. Orders become **drafts** through `taxes.create_sales_draft_with_tax` (the invoice form's path). Stock, cash, the customer ledger and the ledger move only when someone posts the draft as usual.
+- **Correcting an order (Codex #273):** a draft has no edit screen. So the board can:
+  - put the store's shipping charge on a line of a chosen service item;
+  - take VAT-inclusive store prices back to before tax;
+  - when a corrected file is uploaded again with «بدّل الطلبات اللي لسه مسودة», delete the old **draft** with its `StoreOrder` and make it again. A draft has no stock, cash or ledger effect, and its lines, tax rows and serial links go with it. A posted invoice is never replaced.
+- Serial-tracked items go through `prepare_sale_serials` and `attach_sale_serials`, as on the invoice form, with the serials taken from the template's «السيريال» column. Invoice numbers are Hesba's own `WEB-` series; the store's number stays in the notes and on `StoreOrder`.
+- **Risk:**
+  - two branches with separate stores whose order numbers coincide share one namespace per source, so the second branch's order would be reported as imported already;
+  - the invoice link is `PROTECT`, so a draft that came from the store is cancelled, not deleted.
+- **Files:** `onlinestore/` (new app), `config/settings.py`, `config/urls.py`, capability wiring (`settings_core/capabilities.py`, `module_gate.py`, `operational_views.py`, `display_labels.py`, `reports/navigation.py`).
+- **Tests:** `onlinestore/tests.py`. They cover once-only import, drafts only (status `draft`), the phone match, the walk-in fallback, the template, and permissions.
+
 ## HG-066 — E-receipts for till sales (T8, offline part)
 
 - **Status:** BUILT in T8 (`claude/t8-ereceipt`); additive only. Sending to the authority still needs the device's credentials on the receipt portal.

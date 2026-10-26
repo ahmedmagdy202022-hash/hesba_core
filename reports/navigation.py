@@ -62,6 +62,9 @@ NAV_ITEMS = (
     # T1: quotations that become sales orders, invoiced on the ordinary invoice form.
     {"key": "quotes", "ar": "عروض الأسعار والأوامر", "en": "Quotations & orders", "url_name": "orders:list", "module": "sales_operations", "capability": "quotations",
      "permission": "sales.view_sales_invoices"},
+    # T13: the online store by file — the catalogue out, the orders in as drafts.
+    {"key": "store", "ar": "المتجر الأونلاين", "en": "Online store", "url_name": "onlinestore:board", "module": "sales_operations", "capability": "online_store",
+     "permission": "master_data.view_master_data"},
     # T14: couriers and cash on delivery — parcels out, collected, and settled by the courier.
     {"key": "shipping", "ar": "الشحن والتحصيل", "en": "Shipping & COD", "url_name": "shipping:board", "module": "sales_operations", "capability": "shipping",
      "permission": "sales.view_sales_invoices"},
@@ -159,6 +162,7 @@ TAB_LABELS = {
     "classes": {"ar": "حصصي", "en": "Classes"},
     "workorders": {"ar": "الأوامر", "en": "Orders"},
     "quotes": {"ar": "العروض", "en": "Quotes"},
+    "store": {"ar": "المتجر", "en": "Store"},
     "shipping": {"ar": "الشحن", "en": "Shipping"},
     "ereceipt": {"ar": "الإيصالات", "en": "Receipts"},
     "promotions": {"ar": "الخصومات", "en": "Promos"},
