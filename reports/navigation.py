@@ -65,6 +65,9 @@ NAV_ITEMS = (
     # T14: couriers and cash on delivery — parcels out, collected, and settled by the courier.
     {"key": "shipping", "ar": "الشحن والتحصيل", "en": "Shipping & COD", "url_name": "shipping:board", "module": "sales_operations", "capability": "shipping",
      "permission": "sales.view_sales_invoices"},
+    # T5: promotions and coupons, filled into the line discounts on the invoice and at the till.
+    {"key": "promotions", "ar": "العروض", "en": "Promotions", "url_name": "promotions:list", "module": "sales_operations", "capability": "promotions",
+     "permission": "master_data.view_master_data"},
     {"key": "pos", "ar": "الكاشير", "en": "Point of sale", "url_name": "sales:pos", "module": "sales_operations", "capability": "pos", "permission": "sales.create_sales_invoice"},
     {"key": "purchases", "ar": "المشتريات", "en": "Purchases", "url_name": "purchases:list", "module": "purchases", "permission": "purchases.view_purchase_invoices"},
     {"key": "inventory", "ar": "المخزون", "en": "Inventory", "url_name": "inventory:stock", "module": "inventory", "permission": "inventory.view_stock"},
@@ -152,6 +155,7 @@ TAB_LABELS = {
     "workorders": {"ar": "الأوامر", "en": "Orders"},
     "quotes": {"ar": "العروض", "en": "Quotes"},
     "shipping": {"ar": "الشحن", "en": "Shipping"},
+    "promotions": {"ar": "الخصومات", "en": "Promos"},
     "drugs": {"ar": "الأدوية", "en": "Drugs"},
     "attendance": {"ar": "الحضور", "en": "Attendance"},
     "messages": {"ar": "الرسائل", "en": "Messages"},

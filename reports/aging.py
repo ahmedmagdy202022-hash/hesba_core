@@ -133,7 +133,7 @@ def aging_totals(rows):
 def whatsapp_number(raw):
     """International digits for wa.me from what shops type (Egyptian 01… numbers)."""
 
-    digits = "".join(ch for ch in (raw or "") if ch.isdigit())
+    digits = "".join(str(int(ch)) for ch in (raw or "") if ch.isdecimal())  # FB-23: ٠١٠… typed in Arabic digits counts too
     if not digits:
         return ""
     if (raw or "").strip().startswith("+"):

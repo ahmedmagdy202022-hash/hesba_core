@@ -689,6 +689,9 @@ def cancel_sales_return(return_id, reversal_date, reason, user):
     )
     if sales_return.status != SalesReturnStatus.POSTED:
         raise ValidationError("Only posted sales returns can be reversed.")
+    from einvoice.guards import before_sales_return_cancel
+
+    before_sales_return_cancel(sales_return)  # T7 (HG-059): a return whose credit note the Tax Authority holds stays
     invoice = sales_return.source_invoice
     reversal_stock = {}
     for return_line in sales_return.lines.all():

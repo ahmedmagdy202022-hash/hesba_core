@@ -155,6 +155,58 @@
     return Math.max(lines - num(header('discount_amount')) + num(header('tax_amount')), 0);
   }
 
+  // T5 (Codex #268): the promotion the server takes off when the invoice is saved, quoted live, so the total, the
+  // remaining balance and "pay all" already show it before "paid now" is typed.
+  var couponBox = form.querySelector('[data-coupon][data-url]');
+  var couponInput = couponBox ? couponBox.querySelector('input[name="coupon"]') : null;
+  var promo = { off: 0, byLine: {}, key: '' }, promoTimer = null, promoSeq = 0;
+  function promoLines() {
+    var out = [];
+    for (var i = 0; i < count(); i += 1) {
+      var select = field(i, 'item');
+      if (!select || !select.value || num(field(i, 'quantity')) <= 0) { continue; }
+      var unit = field(i, 'unit');
+      out.push({ index: i, item: select.value, qty: num(field(i, 'quantity')), price: num(field(i, priceField)), unit: unit ? unit.value : '',
+                 discount: num(field(i, 'line_discount_amount')) });
+    }
+    return out;
+  }
+  function showPromo(answer) {
+    var row = couponBox.querySelector('[data-promo-line]');
+    row.hidden = !promo.off;
+    row.querySelector('[data-promo-off]').textContent = '-' + money(promo.off);
+    row.querySelector('[data-promo-name]').textContent = (answer && answer.name) || '';
+  }
+  function quotePromotion() {
+    if (!couponBox || !window.fetch) { return; }
+    var lines = promoLines();
+    var key = JSON.stringify([couponInput ? couponInput.value : '', lines]);
+    if (key === promo.key) { return; }
+    var seq = ++promoSeq;
+    if (!lines.length) { promo = { off: 0, byLine: {}, key: key }; showPromo(null); recalc(); return; }
+    var body = new FormData();
+    body.append('line_count', String(lines.length));
+    body.append('coupon', couponInput ? couponInput.value : '');
+    lines.forEach(function (line, n) {
+      body.append('item_' + n, line.item); body.append('qty_' + n, line.qty); body.append('price_' + n, line.price);
+      body.append('unit_' + n, line.unit); body.append('discount_' + n, line.discount);
+    });
+    var token = form.querySelector('input[name="csrfmiddlewaretoken"]');
+    fetch(couponBox.getAttribute('data-url'), { method: 'POST', body: body, credentials: 'same-origin', headers: { 'X-CSRFToken': token ? token.value : '' } })
+      .then(function (response) { return response.ok ? response.json() : null; })
+      .then(function (answer) {
+        if (seq !== promoSeq) { return; }  // the lines changed again; a newer quote is on its way
+        var byLine = {};
+        if (answer && answer.ok) { (answer.lines || []).forEach(function (value, n) { if (lines[n]) { byLine[lines[n].index] = num({ value: value }); } }); }
+        promo = { off: answer && answer.ok ? num({ value: answer.discount }) : 0, byLine: byLine, key: key };
+        showPromo(answer);
+        recalc();
+      })
+      .catch(function () { if (seq === promoSeq) { promo = { off: 0, byLine: {}, key: '' }; showPromo(null); recalc(); } });
+  }
+  function requotePromotion() { if (couponBox) { clearTimeout(promoTimer); promoTimer = setTimeout(quotePromotion, 300); } }
+  if (couponInput) { couponInput.addEventListener('input', requotePromotion); }
+
   function recalc() {
     if (!liveTotal) { return; }
     var sum = 0;
@@ -164,7 +216,7 @@
       var cell = row && row.querySelector('[data-line-total]');
       if (!select || !select.value) { if (cell) { cell.textContent = '0.00'; } continue; }
       // Each line rounded to cents (half up) before summing, like the server.
-      var net = cents(num(field(i, 'quantity')) * num(field(i, priceField)) - num(field(i, 'line_discount_amount')));
+      var net = cents(num(field(i, 'quantity')) * num(field(i, priceField)) - num(field(i, 'line_discount_amount')) - (promo.byLine[i] || 0));
       var line = net;
       // TAX-001: VAT at the item's rate, rounded per line like the server.
       if (taxRates) { line += Math.round(net * num({ value: taxRates[select.value] || '0' }) + 1e-9) / 100; }
@@ -176,6 +228,7 @@
     if (sumTotal) { sumTotal.textContent = money(totalValue); }
     if (sumRemaining) { sumRemaining.textContent = money(Math.max(totalValue - num(header('paid_now')), 0)); }
     showBalance(totalValue);
+    requotePromotion();
   }
 
   // AN3: the party's balance before this invoice, and where the invoice leaves it.
@@ -259,6 +312,8 @@
     }
     say((words.added || 'Added: ') + item.label + ' × ' + field(target, 'quantity').value, false);
     recalc();
+    // FB-25 (Codex #267): tell the page's other scripts the quantity changed, so a discount given as a percent follows a scan.
+    field(target, 'quantity').dispatchEvent(new Event('input', { bubbles: true }));
   }
 
   if (scan) {

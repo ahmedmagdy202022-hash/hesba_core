@@ -103,6 +103,7 @@ AR_LABELS = {
         "transfer": "تحويل بين الخزن",
         "bank_fee": "مصروفات بنكية",
     },
+    ("promotions.promotion", "kind"): {"percent": "خصم %", "buy_get": "اشتري وخد ببلاش", "amount_over": "خصم مبلغ فوق حد"},
     ("cheques.cheque", "status"): {"in_hand": "في الإيد", "deposited": "اتودع في البنك", "issued": "صادر ولسه ماتصرفش", "cleared": "اتصرف",
                                    "bounced": "مرتد", "cancelled": "ملغي"},
     ("shipping.shipment", "status"): {"with_courier": "مع المندوب", "delivered": "اتسلّمت واتحصّلت", "settled": "اتسوّت", "returned": "رجعت", "lost": "ضاعت"},

@@ -1,9 +1,9 @@
-{% extends "master_data/base.html" %}
+{% extends popup|yesno:"master_data/popup_base.html,master_data/base.html" %}
 {% load hesba_labels %}
 {% block master_content %}
 <section class="md-title-row">
   <div>
-    <a class="md-back-link" href="{% url 'master_data:list' entity=entity %}?lang={{ lang }}">← {{ words.back }}</a>
+    {% if not popup %}<a class="md-back-link" href="{% url 'master_data:list' entity=entity %}?lang={{ lang }}">← {{ words.back }}</a>{% endif %}
     <h1>{% if editing %}{{ words.edit }}{% else %}{{ words.new }}{% endif %} — {{ singular }}</h1>
   </div>
 </section>
@@ -20,7 +20,7 @@
   {% include "partials/form_sections.html" with prefix="md" %}
   <div class="md-form-actions">
     <button class="md-primary" type="submit">{{ words.save }}</button>
-    <a class="md-secondary" href="{% url 'master_data:list' entity=entity %}?lang={{ lang }}">{{ words.cancel }}</a>
+    {% if popup %}<button class="md-secondary" type="button" data-popup-cancel>{{ words.cancel }}</button>{% else %}<a class="md-secondary" href="{% url 'master_data:list' entity=entity %}?lang={{ lang }}">{{ words.cancel }}</a>{% endif %}
   </div>
 </form>
 {% endblock %}
