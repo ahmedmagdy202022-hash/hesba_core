@@ -65,6 +65,9 @@ NAV_ITEMS = (
     # T8: e-receipts for till sales (B2C), chained per device and queued for 24 hours.
     {"key": "ereceipt", "ar": "الإيصال الإلكتروني", "en": "E-receipts", "url_name": "ereceipt:board", "module": "sales_operations", "capability": "e_receipt",
      "permission": "sales.view_sales_invoices"},
+    # T5: promotions and coupons, filled into the line discounts on the invoice and at the till.
+    {"key": "promotions", "ar": "العروض", "en": "Promotions", "url_name": "promotions:list", "module": "sales_operations", "capability": "promotions",
+     "permission": "master_data.view_master_data"},
     {"key": "pos", "ar": "الكاشير", "en": "Point of sale", "url_name": "sales:pos", "module": "sales_operations", "capability": "pos", "permission": "sales.create_sales_invoice"},
     {"key": "purchases", "ar": "المشتريات", "en": "Purchases", "url_name": "purchases:list", "module": "purchases", "permission": "purchases.view_purchase_invoices"},
     {"key": "inventory", "ar": "المخزون", "en": "Inventory", "url_name": "inventory:stock", "module": "inventory", "permission": "inventory.view_stock"},
@@ -114,6 +117,8 @@ NAV_ITEMS = (
      "allow": "reports.navigation.sees_staff"},
     {"key": "my_attendance", "ar": "حضوري وانصرافي", "en": "My attendance", "url_name": "attendance:me", "module": "employees_technicians",
      "allow": "reports.navigation.checks_in_only"},
+    # T12: the month's payroll — salaries, insurance and income tax, posted as debts and paid from a cashbox.
+    {"key": "payroll", "ar": "المرتبات", "en": "Payroll", "url_name": "payroll:list", "module": "employees_technicians", "permission": "cashboxes.view_expenses"},
     {"key": "expenses", "ar": "المصروفات", "en": "Expenses", "url_name": "expenses:list", "module": "expenses", "permission": "cashboxes.view_expenses"},
     # R2: features switched on in Settings -> Features get their own place in the menu.
     {"key": "taxes", "ar": "الضرائب", "en": "Taxes", "url_name": "taxes:settings", "module": None, "capability": "vat", "permission": "master_data.view_master_data",
@@ -152,10 +157,12 @@ TAB_LABELS = {
     "workorders": {"ar": "الأوامر", "en": "Orders"},
     "quotes": {"ar": "العروض", "en": "Quotes"},
     "ereceipt": {"ar": "الإيصالات", "en": "Receipts"},
+    "promotions": {"ar": "الخصومات", "en": "Promos"},
     "drugs": {"ar": "الأدوية", "en": "Drugs"},
     "attendance": {"ar": "الحضور", "en": "Attendance"},
     "messages": {"ar": "الرسائل", "en": "Messages"},
     "my_attendance": {"ar": "حضوري", "en": "Check in"},
+    "payroll": {"ar": "المرتبات", "en": "Payroll"},
     "banks": {"ar": "البنوك", "en": "Banks"},
     "cheques": {"ar": "الشيكات", "en": "Cheques"},
     "contracts": {"ar": "العقود", "en": "Contracts"},

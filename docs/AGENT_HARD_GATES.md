@@ -1786,7 +1786,18 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 
 ## HG-057 — Promotions and coupons (T5)
 
-- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق»), as written below.
+- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق»), as written below. BUILT in T5 (`claude/t5-promotions`).
+- **What was built:**
+  - A `promotions` app and the capability «العروض والكوبونات». It is optional, and is not offered to contracting, education or medical.
+  - Three kinds:
+    - % off an item, a section or everything;
+    - buy X get Y free;
+    - an amount off once the eligible lines reach a total, spread over them.
+  - Each promotion can have dates, a time window (one that runs past midnight works), and a coupon code. A coupon counts only when typed; an unknown code is refused.
+  - `promotions.apply` fills the line discount fields before `create_sales_draft`, on the sales invoice form and at the till. The best single promotion wins. A line with a discount typed by hand keeps it. Posting is unchanged.
+  - `InvoicePromotion` records the promotion, discount and coupon of each invoice for the report on the promotions screen, and the invoice page shows it.
+  - The till asks the server for the cart's promotion before payment, and a payment for another total is refused. An offline sale syncs with the promotion that was running at its recorded time, so it posts at the total shown and collected (Codex #268). The report follows the entity scope.
+  - Managing promotions needs `master_data.manage_items`, the same as price lists. The manual discount stays open to invoice creators, as proposed.
 - **Why:** an automatic promotion changes the invoice price. Sales posting must keep using the line amounts it is given.
 - **Proposed:**
   - a promotion engine that only fills each line's existing discount field before the draft is saved (rules: buy X get Y, % off a section, fixed off over an amount, coupon code, date and time window);
@@ -1814,7 +1825,19 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 
 ## HG-059 — E-invoice live and the credit note for returns (T7)
 
-- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق»), as written below.
+- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق»), as written below. The part that needs no outside account is BUILT in T7 (`claude/t7-credit-note`). Going live still needs Ahmed's preprod credentials and the signing method (the `ETA_*` settings).
+- **What was built:**
+  - `build_credit_note(sales_return)`: an ETA credit note (`documentType` "c") with the issuer and receiver of the original invoice and `references` set to the original's accepted UUID. Each returned line gives back its refund:
+    - the price × quantity returned;
+    - less the line's own discount share: that is the VAT base (`netTotal`);
+    - plus the tax given back (HG-015).
+    The lines' share of the invoice discount is taken after tax, as on the invoice, in `extraDiscountAmount` (Codex #270). The total must equal the return's.
+  - `Submission.sales_return` (nullable, migration 0003) marks a credit note's sending. The invoice's own sending, history and the dashboard count ignore those rows.
+  - `send_credit_note` claims a `sending` row under the return's lock and goes through the same sign → submit → record path as an invoice. `send_invoice`'s tail became `_deliver`, shared by both, so their behaviour is unchanged. Refresh, reconciliation (by the return number) and the public link work as for an invoice; a credit note is not cancelled from Hesba.
+  - The queue: `credit_notes_due()` lists the posted returns of accepted invoices with no credit note yet, or with a sending cut off long enough ago to be checked again. `manage.py send_credit_notes` sends them, run from cron every few minutes; one that fails stays queued, and a rejected one waits for a manual send after its data is corrected.
+  - The return page links to its credit-note page (document, JSON, send, refresh) when e-invoicing is on.
+  - Posting a return is unchanged and never waits for the authority.
+  - **Protected change (Codex #270):** `sales.services.cancel_sales_return` now makes one call, `einvoice.guards.before_sales_return_cancel`, under the return's row lock. The call refuses to reverse a return whose credit note the authority holds (being sent, under review or accepted), as `before_sales_invoice_cancel` already does for invoices. A return never sent reverses as before. The invoice guard now looks at the invoice's own sendings only, never a return's credit note.
 - **Why:** a sales return must be sent to the Tax Authority as a credit note that points to the original document. Signing must not block posting.
 - **Proposed:**
   - the return builds an ETA credit note from `einvoice.services` and queues it;
@@ -1827,7 +1850,38 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 
 ## HG-060 — Payroll (T12)
 
-- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق»), as written below.
+- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق»), as written below. BUILT in T12 (`claude/t12-payroll`).
+- **What was built:**
+  - A new `payroll` app under the employees module (`/staff/payroll/`):
+    - each employee's salary (basic, allowances, insured wage, insured or not, taxed or not);
+    - the month's run, one line per employee;
+    - the rules screen.
+  - **Prepare:**
+    - gross = basic + allowances − absence − other deductions. Absent and unpaid-leave days come from the T11 attendance sheet, a day being a thirtieth;
+    - insurance is counted on the insured wage, held within the legal floor and ceiling;
+    - income tax is the yearly tax on (gross − employee insurance) × 12 − the exemption, through the brackets, divided by 12;
+    - net = gross − employee insurance − tax;
+    - a draft line can be changed by hand.
+  - **The rules are data** (`PayrollSettings`): 11% and 18.75%, the 2,300 / 14,500 wage floor and ceiling, the 20,000 exemption, and the brackets 0 / 10 / 15 / 20 / 22.5 / 25 / 27.5%. **They need an accountant's check every January.** The rule that drops the lower brackets for very high incomes is not modelled.
+  - **Posting** (no money moves):
+    - the projector books salary cost (5201, now keyed `salaries` by data migration 0005) = gross + company insurance;
+    - against it: salaries payable (2107), social insurance payable (2108, both shares) and payroll tax payable (2109). These are new accounts that `ensure_chart` adds by itself.
+  - **Paying:**
+    - each payment is a new cashbox operation of kind `payroll` (it pays out like a bank fee) against one debt, never more than is left, dated when paid;
+    - the projector puts it against that debt;
+    - a payment is cancelled from the payroll screen by a dated reversal of its operation. The cashbox screen refuses to cancel it, and its manual form does not offer the kind.
+  - **Reversal:** a posted run with nothing paid is reversed on a date of its own. Its accrual entry stays and the opposite one is added.
+  - **Permissions:** viewing needs `cashboxes.view_expenses`; preparing, posting, paying and the rules need `cashboxes.record_expenses`; paying also needs `cashboxes.move_cash`, through `create_cashbox_operation`. A closed month stays closed (HG-011).
+  - **Reports (Codex #269):** `expenses.services.expense_total`, behind the dashboard's expenses and net profit, the daily digest and the functional report, adds the payroll cost the ledger books: gross + company insurance on the posting date, less a reversed run on its reversal date (`payroll.services.cost_total`). Payroll belongs to the main entity.
+  - **Changed protected files:**
+    - `cashboxes/models.py` + migration 0015: the operation and movement kind;
+    - `cashboxes/services.py`: create and reverse that kind, like a bank fee;
+    - `cashboxes/forms.py` and `cashboxes/views.py`: the guards;
+    - `ledger/chart.py`, `ledger/projector.py` and ledger migration 0005;
+    - `expenses/services.py`: `expense_total` adds the payroll cost.
+  - **Corrections (Codex #269):**
+    - A run with a negative net pay is not posted; it would lower what the other employees are owed.
+    - A reversed month can be made again, corrected. `payroll/0002` replaces the unique month with "one run a month that is not reversed", and the reversed run stays for the record.
 - **Why:** the salary run creates expenses and money movements, and it needs its own control accounts (salaries payable, social insurance, payroll tax).
 - **Why the expense service cannot be reused as it is:** `expenses.services.record_expense` pays cash out for exactly the expense amount at once. Gross pay would overpay the cash; net pay would understate the salary cost and leave no liability for what is withheld.
 - **Proposed: a payroll accrual and payment of its own.**

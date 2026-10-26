@@ -1,0 +1,15 @@
+{% extends "operations/base.html" %}
+{% load l10n %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'payroll:list' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ words.salaries }}</h1></div></section>
+{% if rows %}<form method="post" data-payroll-salary-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.employee }}</th><th>{{ words.basic }}</th><th>{{ words.allowances }}</th><th>{{ words.insured_wage }}</th><th>{{ words.insured }}</th><th>{{ words.taxed }}</th></tr></thead><tbody>
+{% for employee, profile in rows %}<tr data-salary-row="{{ employee.pk }}"><td class="op-cell-text">{{ employee.name }}</td>
+<td><input name="basic_{{ employee.pk }}" inputmode="decimal" dir="ltr" value="{{ profile.basic|default:''|unlocalize }}" aria-label="{{ words.basic }} — {{ employee.name }}"{% if not can_manage %} disabled{% endif %}></td>
+<td><input name="allowances_{{ employee.pk }}" inputmode="decimal" dir="ltr" value="{{ profile.allowances|default:''|unlocalize }}" aria-label="{{ words.allowances }} — {{ employee.name }}"{% if not can_manage %} disabled{% endif %}></td>
+<td><input name="insured_wage_{{ employee.pk }}" inputmode="decimal" dir="ltr" value="{% if profile.insured_wage is not None %}{{ profile.insured_wage|unlocalize }}{% endif %}" aria-label="{{ words.insured_wage }} — {{ employee.name }}"{% if not can_manage %} disabled{% endif %}></td>
+<td><input type="checkbox" name="insured_{{ employee.pk }}" value="1"{% if not profile or profile.insured %} checked{% endif %} aria-label="{{ words.insured }} — {{ employee.name }}"{% if not can_manage %} disabled{% endif %}></td>
+<td><input type="checkbox" name="taxed_{{ employee.pk }}" value="1"{% if not profile or profile.taxed %} checked{% endif %} aria-label="{{ words.taxed }} — {{ employee.name }}"{% if not can_manage %} disabled{% endif %}></td></tr>{% endfor %}
+</tbody></table></div>{% if can_manage %}<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div>{% endif %}</form>
+{% else %}<p class="op-empty">{{ words.no_staff }}</p>{% endif %}
+{% endblock %}
