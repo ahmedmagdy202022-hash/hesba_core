@@ -100,7 +100,8 @@ class SwitchTests(ShortSaleCase):
         self.buy(2, "10.00")
         invoice = self.draft(5)
         self.assertFalse(short_sales.enabled())
-        with self.assertRaisesMessage(ValidationError, "Not enough stock for item Test item. Available: 2, required: 5.000."):
+        # The same message as before (the quantities print as the database returns them: 2 or 2.000).
+        with self.assertRaisesRegex(ValidationError, r"Not enough stock for item Test item\. Available: 2(\.000)?, required: 5\.000\."):
             post_sales_invoice(invoice.pk, self.owner)
         # The seller's agreement counts for nothing while the owner has not allowed it.
         with self.assertRaises(short_sales.StockShortage):
@@ -129,8 +130,9 @@ class SwitchTests(ShortSaleCase):
         invoice = self.draft(3)
         add_sales_line(invoice, self.item, 3, "30.00")
         recalculate_invoice_totals(invoice)
-        with self.assertRaisesMessage(ValidationError, "Available: 4, required: 6.000."):
+        with self.assertRaises(short_sales.StockShortage) as caught:
             post_sales_invoice(invoice.pk, self.owner)
+        self.assertEqual([(row["available"], row["required"]) for row in caught.exception.shortages], [(D("4"), D("6"))])
 
     def test_with_it_on_the_seller_must_still_agree(self):
         self.switch_on()
