@@ -106,6 +106,11 @@ def cancel_expense(expense_id, *, reversal_date, reason, user):
     expense = Expense.objects.select_for_update().select_related("cashbox_operation", "category").get(pk=expense_id)
     if expense.cashbox_operation.status != CashboxOperationStatus.POSTED:
         raise ValidationError("This expense is already cancelled.")
+    from shipping.models import Settlement, Shipment
+
+    if Settlement.objects.filter(fee_expense=expense).exists() or Shipment.objects.filter(loss=expense).exists():
+        # T14 (HG-061): a courier's fee or a lost parcel belongs to its settlement or shipment, so the two never disagree.
+        raise ValidationError("This expense belongs to a courier settlement or a lost shipment.")
     cancel_cashbox_operation(expense.cashbox_operation_id, reversal_date, reason, user)
     expense.cashbox_operation.refresh_from_db()
     _audit(expense, user, "cancel_expense", reason)

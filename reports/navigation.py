@@ -62,6 +62,9 @@ NAV_ITEMS = (
     # T1: quotations that become sales orders, invoiced on the ordinary invoice form.
     {"key": "quotes", "ar": "عروض الأسعار والأوامر", "en": "Quotations & orders", "url_name": "orders:list", "module": "sales_operations", "capability": "quotations",
      "permission": "sales.view_sales_invoices"},
+    # T14: couriers and cash on delivery — parcels out, collected, and settled by the courier.
+    {"key": "shipping", "ar": "الشحن والتحصيل", "en": "Shipping & COD", "url_name": "shipping:board", "module": "sales_operations", "capability": "shipping",
+     "permission": "sales.view_sales_invoices"},
     # T8: e-receipts for till sales (B2C), chained per device and queued for 24 hours.
     {"key": "ereceipt", "ar": "الإيصال الإلكتروني", "en": "E-receipts", "url_name": "ereceipt:board", "module": "sales_operations", "capability": "e_receipt",
      "permission": "sales.view_sales_invoices"},
@@ -156,6 +159,7 @@ TAB_LABELS = {
     "classes": {"ar": "حصصي", "en": "Classes"},
     "workorders": {"ar": "الأوامر", "en": "Orders"},
     "quotes": {"ar": "العروض", "en": "Quotes"},
+    "shipping": {"ar": "الشحن", "en": "Shipping"},
     "ereceipt": {"ar": "الإيصالات", "en": "Receipts"},
     "promotions": {"ar": "الخصومات", "en": "Promos"},
     "drugs": {"ar": "الأدوية", "en": "Drugs"},

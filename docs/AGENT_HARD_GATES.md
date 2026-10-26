@@ -1911,7 +1911,24 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 
 ## HG-061 — Shipping companies and cash on delivery (T14)
 
-- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق»), as written below.
+- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق»), as written below. The manual part (no courier API) is BUILT in T14 (`claude/t14-shipping`); a live link to Bosta or another courier still needs its account.
+- **What was built:**
+  - A new `shipping` app and the capability «الشحن والتحصيل عند الاستلام». It is not offered to contracting, education or medical.
+  - Each courier gets its own box of a new cashbox kind, `courier` (migration 0015), which the projector books in 1120, courier collections receivable. Like the cheque boxes, it is kept out of every cashbox picker (`entities.scope.cashboxes`).
+  - **Ship:** a posted invoice goes out with a courier. The amount to collect defaults to what is left on the invoice, never more; one open shipment per invoice.
+  - **Deliver:** the customer's payment is recorded into the courier's box (`record_customer_payment`, called, not changed), so the customer owes nothing and the courier owes the money. A delivery marked by mistake is undone from the shipments screen before settlement. The sales payment cancel refuses such a payment, the way it does a cheque's.
+  - **Settle:** the courier hands over the chosen delivered parcels, less the fees (the parcels' own, unless typed). The net is a transfer from its box to a cashbox or bank; the fees are an expense (transport, 5205) paid from its box. The cashbox screen will not cancel the transfer, and `cancel_expense` refuses the fee and loss expenses, so a settlement never disagrees with its parcels.
+  - **Came back:** the parcel is marked as returned, and the goods come back through the ordinary sales return.
+  - **Lost:** what should have been collected is recorded as collected and written off at once as an expense with the reason.
+  - **Permissions:** shipping needs `sales.create_sales_invoice`; delivery, undo and loss need `sales.receive_customer_payment`; couriers and settlements need `cashboxes.move_cash`. The expense steps also need `cashboxes.record_expenses`.
+  - The sales invoice page has «ابعت مع شركة شحن».
+  - **Entities (Codex #272):** a courier's box belongs to the entity it was added in. An invoice ships only with a courier of its own entity, and a settlement lands only in that entity's cashbox or bank. So a collection is credited in the same entity as the invoice's debt; a business whose branches use the same company adds it once per branch. Shipments are read and acted on only within the entity being worked in.
+  - **Second shipment, returns:** what earlier shipments of the invoice collected, and what its posted returns took off the debt, are subtracted from what is left to collect (neither a customer payment nor a return changes `remaining_due`).
+  - **Cancelled invoices (Codex #272):**
+    - **Protected change:** `sales.services.cancel_posted_sales_invoice` now refuses an invoice with a parcel still with a courier. It is marked came back or lost on the shipments screen first.
+    - Delivery and loss lock the invoice too, and refuse one that is no longer posted, so a cancelled sale is never collected.
+  - **Reconciliation:** the ledger check of cash against the cashbox report now counts `courier_receivable` with cash, bank and the cheque boxes, since the cashbox formula counts the courier boxes too.
+  - **Fees above what was collected** (a prepaid parcel, a small COD): the shortfall is paid into the courier's box from the chosen cashbox or bank, then the whole fee leaves the courier's box as before.
 - **Why:** with cash on delivery, the shipping company collects the money and settles it later minus its fees. That is a receivable from the courier, not cash.
 - **Proposed:**
   - the courier is a customer-like party with its own ledger;

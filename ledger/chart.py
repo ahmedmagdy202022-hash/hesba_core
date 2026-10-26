@@ -21,6 +21,8 @@ BASE = (
     ("1107", "مصروفات مدفوعة مقدمًا", "Prepaid expenses", A, "", True, False),
     ("1108", "أقساط مستحقة على العملاء", "Instalments receivable", A, "instalments", True, False),
     ("1109", "حسابات جارية بين الكيانات", "Due between entities", A, "intercompany", True, False),
+    # T14 (HG-061): cash on delivery a shipping company collected and still has to hand over.
+    ("1120", "تحصيلات لدى شركات الشحن", "Courier collections receivable", A, "courier_receivable", True, False),
     ("1199", "حساب معلّق (فروق تحت المراجعة)", "Suspense (differences under review)", A, "suspense", True, False),
     ("12", "الأصول الثابتة", "Fixed assets", A, "", False, False),
     ("1201", "الأصول الثابتة بالتكلفة", "Fixed assets at cost", A, "fixed_assets", True, False),

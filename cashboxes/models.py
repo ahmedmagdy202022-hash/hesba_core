@@ -10,9 +10,13 @@ class CashboxKind(models.TextChoices):
     #: cashbox picker and of cash on hand; the cheques screen moves them.
     CHEQUES_IN = "cheques_in", "Cheques in hand"
     CHEQUES_OUT = "cheques_out", "Cheques issued"
+    #: T14 (HG-061): cash a shipping company collected on delivery and has not handed over yet (a receivable from it).
+    COURIER = "courier", "Courier collections"
 
 
 CHEQUE_KINDS = (CashboxKind.CHEQUES_IN, CashboxKind.CHEQUES_OUT)
+#: Boxes only their own screens move (cheques, couriers): kept out of every cashbox picker and of cash on hand.
+HELD_KINDS = CHEQUE_KINDS + (CashboxKind.COURIER,)
 
 
 class Cashbox(models.Model):
