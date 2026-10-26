@@ -69,8 +69,8 @@ def lang_of(request):
 FEATURE_LANDING = {
     "pos": "sales:pos", "shift_required": "shifts:mine", "barcode": "barcode:labels", "price_lists": "pricing:list", "units": "units:index",
     "variants": "variants:index", "batches_expiry": "batches:index", "serials": "serials:index",
-    "installments": "installments:list", "vat": "taxes:settings", "e_invoice": "einvoice:issuer", "fixed_assets": "fixed_assets:list",
-    "quotations": "orders:list", "drugs": "pharmacy:lookup", "online_store": "onlinestore:board",
+    "installments": "installments:list", "vat": "taxes:settings", "e_invoice": "einvoice:issuer", "e_receipt": "ereceipt:board", "fixed_assets": "fixed_assets:list",
+    "quotations": "orders:list", "drugs": "pharmacy:lookup", "shipping": "shipping:board", "promotions": "promotions:list", "online_store": "onlinestore:board",
 }
 
 

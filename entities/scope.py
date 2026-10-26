@@ -73,9 +73,9 @@ def cashboxes(queryset):
     """The entity's cashboxes and bank accounts. T4 (HG-056): never the cheque boxes, which only the cheques screen moves,
     so no invoice, payment or report picks them and cash on hand never counts a cheque."""
 
-    from cashboxes.models import CHEQUE_KINDS
+    from cashboxes.models import HELD_KINDS
 
-    return scope(queryset, CASHBOX).exclude(kind__in=CHEQUE_KINDS)
+    return scope(queryset, CASHBOX).exclude(kind__in=HELD_KINDS)  # T14: nor a courier's collections
 
 
 def for_user(queryset, path, user):

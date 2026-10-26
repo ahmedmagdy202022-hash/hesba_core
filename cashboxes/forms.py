@@ -111,9 +111,10 @@ class CashboxOperationForm(Sectioned, AutoNumbered, forms.Form):
         self.fields["destination_cashbox"].queryset = cashboxes
         for name, field in self.fields.items():
             field.label = self.LABELS[lang][name]
-        self.fields["operation_type"].choices = localized_choices(
-            CashboxOperation, "operation_type", lang
-        )
+        # T12: a payroll payment is made from the payroll screen, against the run's debt.
+        self.fields["operation_type"].choices = [
+            choice for choice in localized_choices(CashboxOperation, "operation_type", lang) if choice[0] != CashboxOperationType.PAYROLL
+        ]
         if not self.is_bound:
             self.initial["operation_date"] = timezone.localdate()
         self.lang = "en" if lang == "en" else "ar"

@@ -86,6 +86,9 @@
   <section class="pr-signatures"><div>{{ words.signature_receiver }}</div><div>{% firstof doc.signature_second words.signature_cashier %}</div></section>
   {% endif %}
 
+  {% if doc.ereceipt_qr %}<section class="pr-ereceipt" data-ereceipt-qr><div data-qr-text="{{ doc.ereceipt_qr.text }}" style="width:120px;height:120px;margin:8px auto"></div><p style="text-align:center;font-size:10px;word-break:break-all" dir="ltr">{{ doc.ereceipt_qr.uuid }}</p></section>
+  <script src="{% static 'hesba/vendor/qrcode/qrcode-1.4.4.js' %}"></script>
+  <script>(function () { var box = document.querySelector('[data-qr-text]'); if (!box || !window.qrcode) { return; } var qr = window.qrcode(0, 'M'); qr.addData(box.getAttribute('data-qr-text')); qr.make(); box.innerHTML = qr.createSvgTag({ cellSize: 3, margin: 0, scalable: true }); }());</script>{% endif %}
   <footer class="pr-foot">
     {% if doc.kind == 'sales_invoice' or doc.kind == 'sales_return' %}<p class="pr-foot__note">{% if company.footer_note %}{{ company.footer_note|linebreaksbr }}{% else %}{{ words.thanks }}{% endif %}</p>{% endif %}
     {% if not public %}<p class="pr-foot__meta">{{ words.printed_by }} {{ printed_by }} · {% now "Y-m-d H:i" %}</p>{% endif %}
