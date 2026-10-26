@@ -63,6 +63,7 @@ urlpatterns = [
     path("sales/", include("sales.urls")),
     path("cashboxes/", include("cashboxes.urls")),
     path("promotions/", include("promotions.urls")),
+    path("loyalty/", include("loyalty.urls")),
     path("banks/", include("banking.urls")),
     path("cheques/", include("cheques.urls")),
     path("store/", include("onlinestore.urls")),

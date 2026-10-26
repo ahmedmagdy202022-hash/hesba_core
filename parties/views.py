@@ -99,7 +99,11 @@ def party_card(request, kind, pk):
     from settings_core.module_gate import closed_module
 
     sales_on, purchases_on = closed_module("/sales/") is None, closed_module("/purchases/") is None
+    from loyalty import services as loyalty
+
+    points = loyalty.balance(party) if kind == "customer" and loyalty.enabled() else None  # T6
     return render(request, "parties/card.html", {
+        "points": points, "points_rows": loyalty.statement(party, 10) if points is not None else [],
         "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": words, "page_title": party.name, "section": "customers" if kind == "customer" else "suppliers",
         "kind": kind, "party": party, "code": code, "info": info, "data": data, "date_from": date_from, "date_to": date_to, "reminder": reminder,
         # AUDIT-1: an action shows only when its screen opens: permission and module both.
@@ -135,4 +139,9 @@ def party_balance(request, kind, pk):
     if not (user_has_permission(request.user, PERMISSION[kind]) or user_has_permission(request.user, INVOICE_PERMISSION[kind])):
         raise PermissionDenied(f"The {kind} balance needs {PERMISSION[kind]}.")
     party = get_object_or_404(KINDS[kind]["model"], pk=pk)
-    return JsonResponse({"balance": str(balance(kind, party))})
+    answer = {"balance": str(balance(kind, party))}
+    from loyalty import services as loyalty
+
+    if kind == "customer" and loyalty.enabled():  # T6: the points the invoice can spend
+        answer["points"] = max(loyalty.balance(party)["points"], 0)
+    return JsonResponse(answer)

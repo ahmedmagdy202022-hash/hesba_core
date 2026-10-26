@@ -9,6 +9,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from barcode.services import item_catalog, scan_words
 from master_data.quick import offer_quick_add
 from pricing.services import price_book
+from loyalty import services as loyalty
 from promotions import services as promotions
 from taxes.services import create_sales_draft_with_tax, rates_by_item, vat_enabled
 from serials.services import attach_sale_serials, check_invoice_serials, prepare_sale_serials
@@ -168,10 +169,15 @@ def invoice_create(request):
                 line_data = convert_lines(line_data, "unit_sale_price", lang)  # UNITS-001
                 line_data = prepare_sale_serials(line_data, lang)  # SERIAL-001
                 line_data, promotion, promotion_off = promotions.apply(line_data, coupon=request.POST.get("coupon"), lang=lang)  # T5
+                # T6: points spent go on top of the invoice's own discount; the spending is booked when it is posted.
+                points, points_off = loyalty.redeem(form.cleaned_data.get("customer"), request.POST.get("redeem_points"), loyalty.lines_total(line_data), lang)
+                if points:
+                    form.cleaned_data["discount_amount"] = (form.cleaned_data.get("discount_amount") or 0) + points_off
                 def create():
                     invoice = create_sales_draft_with_tax(form.cleaned_data, line_data, request.user)
                     attach_sale_serials(invoice, line_data)
                     promotions.record(invoice, promotion, promotion_off, request.POST.get("coupon"))  # T5: for the promotions report
+                    loyalty.remember(invoice, points, points_off)  # T6
                     if from_order is not None:  # T1: this invoice takes its quantities off the order
                         link_invoice(from_order, invoice, request.user, lang)
                     if from_prescription is not None:  # T10: this invoice dispenses the prescription
@@ -211,7 +217,8 @@ def invoice_create(request):
     offer_quick_add(form, request.user, lang)  # FB2-QUICKPARTY: + new supplier / customer / warehouse
     return render(request, "sales/form.html", _context(request, form=form, line_formset=line_formset, can_post=True, item_catalog=item_catalog(sale_prices=True, purchase_prices=False), scan_words=scan_words(lang), price_book=price_book(), tax_rates=rates_by_item(), units=units_catalog(), from_order=from_order, from_prescription=from_prescription,
                                                       promotions_on=promotions.enabled(), running_promotions=promotions.running() if promotions.enabled() else [],
-                                                      coupon=request.POST.get("coupon", "")))
+                                                      coupon=request.POST.get("coupon", ""), loyalty_on=loyalty.enabled(), loyalty_rules=loyalty.rules() if loyalty.enabled() else None,
+                                                      redeem_points=request.POST.get("redeem_points", "")))
 
 
 @require_permission("sales.view_sales_invoices")

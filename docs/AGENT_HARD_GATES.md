@@ -1812,7 +1812,16 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 
 ## HG-058 — Loyalty points (T6)
 
-- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق»), as written below.
+- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق»), as written below. BUILT in T6 (`claude/t6-loyalty`).
+- **What was built:**
+  - A new `loyalty` app: the rules (pounds per point, a point's value, the fewest points spent at a time, months before points run out), a points ledger per customer (earned, spent, taken back), and the points a draft sets aside.
+  - Earning and taking back follow the sales audit rows (`post_sales_invoice`, `cancel_posted_sales_invoice`, `create_sales_return`, `cancel_sales_return`) through a signal on `AuditLog`; no posting, cancelling or return function was changed. The walk-in customer of the till earns nothing.
+  - Spending: a "Spend points" field on the sales invoice and at the till. The points are checked (whole number, the minimum, the customer's balance after other drafts, not more than the lines) and their value is added to the invoice's own discount before the draft is saved; the spending row is booked when the invoice is posted.
+  - A cancellation gives back what the invoice spent and takes back what it earned; a return takes back the earned points in proportion to what came back (rounded down), and cancelling the return gives them back. Every one is a new row.
+  - Expiry: the oldest points are spent first; what is left of points past their date no longer counts.
+  - The customer card shows the balance, its value and the last movements; the invoice's balance check shows the points too. The rules need `settings.manage_settings`; the screen needs `sales.view_sales_invoices`.
+  - A sale made offline at the till spends no points (the sync path applies none), as with promotions.
+  - Codex #274: a draft left unfinished gives its points back from "Drafts holding points" on the loyalty screen (needs `sales.create_sales_invoice`). The draft is left as it is, but posting it is refused, because its discount would have no points behind it; the sale is made again. No sales function was changed.
 - **Why:** redeeming points is a discount that is paid for by the business. It touches the customer card and the sales totals.
 - **Proposed:**
   - points are earned on posted invoices (a rate per pound) into a points ledger per customer;

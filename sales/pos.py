@@ -77,6 +77,7 @@ WORDS = {
         "walk_in": "عميل نقدي",
         "err_empty": "السلة فاضية.",
         "err_promo_changed": "العروض اتغيرت من ساعة ما السلة اتحسبت؛ راجع الإجمالي الجديد وادفع تاني.",
+        "err_points_changed": "قيمة النقطة اتغيرت من ساعة ما الصفحة اتفتحت؛ افتح الكاشير تاني وراجع الإجمالي.",
         "promo_wait": "لحظة، العرض بيتحسب؛ راجع الإجمالي وادفع تاني.",
         "err_line": "في سطر فيه كمية أو سعر مش صحيح.",
         "err_item": "صنف مش موجود أو موقوف.",
@@ -124,6 +125,7 @@ WORDS = {
         "walk_in": "Walk-in customer",
         "err_empty": "The cart is empty.",
         "err_promo_changed": "The promotions changed since the cart was totalled; check the new total and pay again.",
+        "err_points_changed": "A point's value changed since the till was opened; open the till again and check the total.",
         "promo_wait": "One moment, the promotion is being worked out; check the total and pay again.",
         "err_line": "A line has an invalid quantity or price.",
         "err_item": "An item is missing or inactive.",
@@ -212,7 +214,7 @@ def _next_number(today):
     return f"{prefix}{sequence:04d}"
 
 
-def checkout(*, lines, customer, location, cashbox, discount, tendered, user, sale_date=None, notes="POS", card=False, promotion=None):
+def checkout(*, lines, customer, location, cashbox, discount, tendered, user, sale_date=None, notes="POS", card=False, promotion=None, points=None):
     """Create and post the sale. Returns (invoice, change).
 
     POS-003: an offline sale passes the day it was rung up as ``sale_date``;
@@ -256,6 +258,10 @@ def checkout(*, lines, customer, location, cashbox, discount, tendered, user, sa
                     from promotions.services import record
 
                     record(invoice, *promotion)
+                if points:  # T6: (points, amount) spent at the till, booked as spent when the sale is posted below
+                    from loyalty.services import remember
+
+                    remember(invoice, *points, posting=True)  # checked under the customer's lock on posting
                 post_sales_invoice(invoice.pk, user)
             invoice.refresh_from_db()
             return invoice, change
@@ -299,6 +305,12 @@ def _running_promotions():
     from promotions.services import enabled, running
 
     return running() if enabled() else []
+
+
+def _loyalty_rules():
+    from loyalty.services import enabled, rules
+
+    return rules() if enabled() else None
 
 
 def today_summary(user):
@@ -420,8 +432,18 @@ def pos(request):
                 seen = _decimal(raw_seen, 2) if raw_seen != "" else None
                 if seen is None or abs(seen - promotion_off) > Decimal("0.005"):
                     raise ValidationError("err_promo_changed")  # the payment was taken for the total the till showed
+            from loyalty import services as loyalty
+
+            points, points_off = loyalty.redeem(customer, request.POST.get("redeem_points"), loyalty.lines_total(lines), lang)  # T6
+            if points and "points_seen" in request.POST:  # Codex #274: the payment was taken for the points discount the till showed
+                raw_seen = request.POST.get("points_seen", "")
+                seen = _decimal(raw_seen, 2) if raw_seen != "" else None
+                if seen is None or abs(seen - points_off) > Decimal("0.005"):
+                    raise ValidationError("err_points_changed")
+            discount += points_off
             invoice, change = checkout(lines=lines, customer=customer, location=location, cashbox=cashbox, discount=discount, tendered=tendered,
-                                       user=request.user, card=card, promotion=(promotion, promotion_off, coupon) if promotion else None)
+                                       user=request.user, card=card, promotion=(promotion, promotion_off, coupon) if promotion else None,
+                                       points=(points, points_off) if points else None)
         except ValidationError as exc:
             messages.error(request, _error_text(exc, words))
             cart_back = request.POST.get("cart_json", "[]")
@@ -452,6 +474,7 @@ def pos(request):
             "price_book": price_book(),
             "promotions_on": _promotions_on(),  # T5
             "running_promotions": _running_promotions(),
+            "loyalty_rules": _loyalty_rules(),  # T6: None when loyalty is off
             "tax_rates": rates_by_item(),
             "units": units_catalog(),
             "open_shift": open_shift_for(request.user),

@@ -7,6 +7,6 @@
 <section class="op-title-row"><div><a class="op-back" href="{% url 'purchases:list' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ words.new }}</h1></div></section>
 {% if from_order %}<div class="op-message" role="status" data-from-order-note>{% if lang == 'en' %}Receiving purchase order{% else %}استلام أمر الشراء{% endif %} <a href="{{ from_order_url }}?lang={{ lang }}"><bdi>{{ from_order.number }}</bdi></a> — {% if lang == 'en' %}what is still to come is filled in below. Change the quantities to what actually arrived.{% else %}الباقي منه متكتب تحت. غيّر الكميات للي وصل فعلًا.{% endif %}</div>{% endif %}
 {% url 'purchases:list' as list_url %}{% include "operations/_invoice_form.html" with price_field="unit_purchase_price" party="supplier" %}
-{% if tax_rates %}{{ tax_rates|json_script:"hs-tax-rates" }}{% endif %}{% if units %}{{ units|json_script:"hs-units" }}{% endif %}{{ item_catalog|json_script:"hs-item-catalog" }}<script src="{% static 'hesba/js/invoice_form.js' %}?v=t5-fb25" defer></script><script src="{% static 'hesba/js/camera_scan.js' %}?v=cam-001" data-zxing="{% static 'hesba/vendor/zxing/zxing-0.23.0.min.js' %}" defer></script>
+{% if tax_rates %}{{ tax_rates|json_script:"hs-tax-rates" }}{% endif %}{% if units %}{{ units|json_script:"hs-units" }}{% endif %}{{ item_catalog|json_script:"hs-item-catalog" }}<script src="{% static 'hesba/js/invoice_form.js' %}?v=t6-t5" defer></script><script src="{% static 'hesba/js/camera_scan.js' %}?v=cam-001" data-zxing="{% static 'hesba/vendor/zxing/zxing-0.23.0.min.js' %}" defer></script>
 {% endblock %}
 

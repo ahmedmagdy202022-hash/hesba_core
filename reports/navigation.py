@@ -74,6 +74,9 @@ NAV_ITEMS = (
     # T5: promotions and coupons, filled into the line discounts on the invoice and at the till.
     {"key": "promotions", "ar": "العروض", "en": "Promotions", "url_name": "promotions:list", "module": "sales_operations", "capability": "promotions",
      "permission": "master_data.view_master_data"},
+    # T6: loyalty points, earned on posted invoices and spent as a discount.
+    {"key": "loyalty", "ar": "نقاط الولاء", "en": "Loyalty points", "url_name": "loyalty:home", "module": "sales_operations", "capability": "loyalty",
+     "permission": "sales.view_sales_invoices"},
     {"key": "pos", "ar": "الكاشير", "en": "Point of sale", "url_name": "sales:pos", "module": "sales_operations", "capability": "pos", "permission": "sales.create_sales_invoice"},
     {"key": "purchases", "ar": "المشتريات", "en": "Purchases", "url_name": "purchases:list", "module": "purchases", "permission": "purchases.view_purchase_invoices"},
     {"key": "inventory", "ar": "المخزون", "en": "Inventory", "url_name": "inventory:stock", "module": "inventory", "permission": "inventory.view_stock"},
@@ -166,6 +169,7 @@ TAB_LABELS = {
     "shipping": {"ar": "الشحن", "en": "Shipping"},
     "ereceipt": {"ar": "الإيصالات", "en": "Receipts"},
     "promotions": {"ar": "الخصومات", "en": "Promos"},
+    "loyalty": {"ar": "النقاط", "en": "Points"},
     "drugs": {"ar": "الأدوية", "en": "Drugs"},
     "attendance": {"ar": "الحضور", "en": "Attendance"},
     "messages": {"ar": "الرسائل", "en": "Messages"},
