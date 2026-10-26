@@ -15,4 +15,8 @@
 {% for row in leaders %}<tr data-loyalty-customer="{{ row.customer.pk }}"><td class="op-cell-text">{{ row.customer.name }}</td><td><bdi>{{ row.points }}</bdi></td><td>{{ row.value|money }}</td><td><a href="{% url 'parties:card' 'customer' row.customer.pk %}?lang={{ lang }}">{{ words.card }}</a></td></tr>
 {% empty %}<tr><td colspan="4" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
 </tbody></table></div>
+{% if held %}<h2>{{ words.held }}</h2><p class="op-muted">{{ words.held_intro }}</p>
+<div class="op-table-wrap"><table class="op-table" data-loyalty-held><thead><tr><th>{{ words.invoice }}</th><th>{{ words.date }}</th><th>{{ words.customer }}</th><th>{{ words.points }}</th><th>{{ words.worth }}</th><th></th></tr></thead><tbody>
+{% for row in held %}<tr data-held-invoice="{{ row.invoice_id }}"><td><a href="{% url 'sales:detail' row.invoice_id %}?lang={{ lang }}"><bdi>{{ row.invoice.invoice_number }}</bdi></a></td><td>{{ row.invoice.invoice_date|date:"Y-m-d" }}</td><td class="op-cell-text">{{ row.invoice.customer.name }}</td><td><bdi>{{ row.points }}</bdi></td><td>{{ row.amount|money }}</td><td>{% if can_release %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><button class="op-danger" type="submit" name="release" value="{{ row.pk }}">{{ words.release }}</button></form>{% endif %}</td></tr>{% endfor %}
+</tbody></table></div>{% endif %}
 {% endblock %}

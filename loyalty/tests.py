@@ -289,3 +289,51 @@ class CodexReviewTests(LoyaltySetup):
             self.assertEqual([row.invoice_id for row in services.statement(self.customer)], [invoice.pk])
         with working_in(branch):
             self.assertEqual(list(services.statement(self.customer)), [])  # the main entity's sale stays out of sight
+
+
+class ReleaseTests(LoyaltySetup):
+    """Codex #274: an unfinished draft gives its points back, and can then no longer be posted with their discount."""
+
+    def draft(self, number="LY-R1", points=80, amount="40.00"):
+        from django.db import transaction
+
+        from sales.services import create_sales_draft
+
+        with transaction.atomic():
+            invoice = create_sales_draft({"invoice_number": number, "invoice_date": TODAY, "customer": self.customer, "selling_location": self.location,
+                                          "cashbox": self.cashbox, "paid_now": D("0"), "discount_amount": D(amount)}, [line(self.shirt, 1, "250.00")], self.owner)
+            services.remember(invoice, points, D(amount))
+        return invoice
+
+    def test_a_held_draft_gives_its_points_back_and_cannot_be_posted(self):
+        from sales.services import post_sales_invoice
+
+        self.sell(quantity=4)  # 100
+        invoice = self.draft()
+        self.assertEqual(self.points(), 20)
+        self.client.force_login(self.owner)
+        url = reverse("loyalty:home")
+        for lang in ("ar", "en"):
+            self.assertContains(self.client.get(url + f"?lang={lang}"), f'data-held-invoice="{invoice.pk}"')
+        redemption = InvoiceRedemption.objects.get(invoice=invoice)
+        self.assertEqual(self.client.post(url, {"lang": "ar", "release": redemption.pk}).status_code, 302)
+        self.assertEqual(self.points(), 100)
+        self.assertNotContains(self.client.get(url + "?lang=ar"), "data-held-invoice")
+        with self.assertRaisesMessage(ValidationError, "اترجّعت"):
+            post_sales_invoice(invoice.pk, self.owner)
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.status, "draft")
+        self.assertFalse(PointsEntry.objects.filter(invoice=invoice).exists())
+
+    def test_only_a_draft_and_only_who_may_sell(self):
+        from sales.services import post_sales_invoice
+
+        self.sell(quantity=4)
+        invoice = self.draft()
+        redemption = InvoiceRedemption.objects.get(invoice=invoice)
+        with self.assertRaises(PermissionDenied):
+            services.release(redemption.pk, make_user(username="ly_nobody"))
+        post_sales_invoice(invoice.pk, self.owner)
+        with self.assertRaisesMessage(ValidationError, "مش مسودة"):
+            services.release(redemption.pk, self.owner)
+        self.assertEqual(PointsEntry.objects.get(invoice=invoice, kind=EntryKind.SPEND).points, -80)

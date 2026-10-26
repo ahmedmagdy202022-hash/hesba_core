@@ -65,3 +65,6 @@ class InvoiceRedemption(models.Model):
     points = models.PositiveIntegerField()
     amount = models.DecimalField(max_digits=14, decimal_places=2)
     created_at = models.DateTimeField(auto_now_add=True)
+    #: Codex #274: a draft left unfinished gives its points back; it can then no longer be posted with that discount.
+    released_at = models.DateTimeField(null=True, blank=True)
+    released_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="+")

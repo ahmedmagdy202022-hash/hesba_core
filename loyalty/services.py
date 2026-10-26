@@ -37,12 +37,16 @@ MESSAGES = {
         "walk_in": "النقاط بتتحسب لعميل باسمه، مش للعميل النقدي.", "number": "اكتب عدد النقاط رقم صحيح.", "min": "أقل عدد نقاط يتصرف مرة واحدة {n}.",
         "short": "رصيد العميل {have} نقطة بس.", "over": "النقاط دي ({amount}) أكتر من قيمة الفاتورة.", "spent": "رصيد النقاط مبقاش يكفي للفاتورة دي ({have} نقطة).",
         "amount": "المبلغ لازم أكبر من صفر.", "value": "قيمة النقطة لازم أكبر من صفر.", "off": "نقاط الولاء مقفولة.",
+        "released": "النقاط اللي كانت محجوزة على المسودة دي اترجّعت للعميل؛ اعمل الفاتورة من جديد.",
+        "not_draft": "الفاتورة دي مش مسودة؛ نقاطها مش محجوزة.",
     },
     "en": {
         "walk_in": "Points are for a named customer, not the walk-in customer.", "number": "Type the points as a whole number.",
         "min": "At least {n} points are spent at a time.", "short": "The customer has only {have} points.", "over": "These points ({amount}) are more than the invoice.",
         "spent": "The points balance no longer covers this invoice ({have} points).", "amount": "The amount must be above zero.",
         "value": "A point's value must be above zero.", "off": "Loyalty points are switched off.",
+        "released": "The points this draft had set aside went back to the customer; make the invoice again.",
+        "not_draft": "This invoice is not a draft; its points are not set aside.",
     },
 }
 
@@ -118,7 +122,7 @@ def balance(customer, today=None, besides=None):
             short += need
     expired = sum(have for row, have in lots if row.expires_on and row.expires_on < today)
     left = sum(have for row, have in lots if not (row.expires_on and row.expires_on < today)) - short
-    drafts = InvoiceRedemption.objects.filter(invoice__customer=customer, invoice__status="draft")
+    drafts = InvoiceRedemption.objects.filter(invoice__customer=customer, invoice__status="draft", released_at__isnull=True)
     if besides is not None:
         drafts = drafts.exclude(invoice=besides)
     pending = drafts.aggregate(n=Sum("points"))["n"] or 0
@@ -210,6 +214,8 @@ def _on_posted(invoice, user):
     if _walk_in(invoice.customer):
         return
     redemption = InvoiceRedemption.objects.filter(invoice=invoice).first()
+    if redemption is not None and redemption.released_at is not None:
+        raise ValidationError(MESSAGES["ar"]["released"])  # Codex #274: its discount has no points behind it any more
     if redemption is not None:
         _lock(invoice.customer)
     if redemption is not None and not PointsEntry.objects.filter(invoice=invoice, kind=EntryKind.SPEND).exists():
@@ -322,6 +328,45 @@ def save_rules(data, user, lang="ar"):
                             object_id="1", before_data=before, after_data={"amount_per_point": str(settings.amount_per_point),
                                                                           "point_value": str(settings.point_value), "min_points": minimum, "expiry_months": months})
     return settings
+
+
+def held_drafts(limit=50):
+    """Codex #274: the drafts of the entity being worked in that still set points aside, oldest first."""
+
+    from entities import scope as entity_scope
+
+    rows = InvoiceRedemption.objects.filter(invoice__status="draft", released_at__isnull=True).filter(
+        entity_scope.q(entity_scope.SALES_INVOICE, "invoice__"))
+    return rows.select_related("invoice__customer").order_by("created_at", "pk")[:limit]
+
+
+def can_release(user):
+    return user_has_permission(user, "sales.create_sales_invoice")
+
+
+@transaction.atomic
+def release(redemption_id, user, lang="ar"):
+    """Codex #274: an unfinished draft gives its points back. The draft stays as it was, but posting it is refused,
+    since its discount would no longer have points behind it."""
+
+    from entities import scope as entity_scope
+
+    words = MESSAGES["en" if lang == "en" else "ar"]
+    if not can_release(user):
+        raise PermissionDenied("Releasing points needs sales.create_sales_invoice.")
+    redemption = (InvoiceRedemption.objects.select_for_update().filter(entity_scope.q(entity_scope.SALES_INVOICE, "invoice__"))
+                  .select_related("invoice").filter(pk=redemption_id).first())
+    if redemption is None:
+        raise ValidationError(words["not_draft"])
+    from sales.models import SalesInvoice
+
+    invoice = SalesInvoice.objects.select_for_update().get(pk=redemption.invoice_id)  # one posting or release at a time
+    if invoice.status != "draft":
+        raise ValidationError(words["not_draft"])
+    if redemption.released_at is None:
+        redemption.released_at, redemption.released_by = timezone.now(), user
+        redemption.save(update_fields=["released_at", "released_by"])
+    return redemption
 
 
 def leaders(limit=30):
