@@ -278,6 +278,32 @@ class FourthReviewTests(ShippingSetup):
         self.assertEqual(services.held(self.courier), D("0.00"))
 
 
+class FifthReviewTests(ShippingSetup):
+    """Codex on #272 (fifth look): an invoice is collected either by instalments or on delivery, never both."""
+
+    def test_an_invoice_on_instalments_is_not_collected_on_delivery(self):
+        from datetime import timedelta
+
+        from installments.services import create_plan
+
+        invoice = self.invoice()
+        create_plan(invoice, 3, TODAY + timedelta(days=30), self.owner)
+        with self.assertRaisesMessage(ValidationError, "خطة تقسيط"):
+            services.ship(invoice, self.courier, self.owner)
+        prepaid = services.ship(invoice, self.courier, self.owner, {"cod_amount": "0"})  # the parcel may still go out
+        self.assertEqual(prepaid.cod_amount, D("0.00"))
+
+    def test_an_invoice_out_for_cod_is_not_put_on_instalments(self):
+        from datetime import timedelta
+
+        from installments.services import create_plan
+
+        invoice = self.invoice()
+        services.ship(invoice, self.courier, self.owner)
+        with self.assertRaisesMessage(ValidationError, "شركة شحن"):
+            create_plan(invoice, 3, TODAY + timedelta(days=30), self.owner)
+
+
 class ScreenTests(ShippingSetup):
     def test_the_board_and_the_invoice_link(self):
         invoice = self.invoice()

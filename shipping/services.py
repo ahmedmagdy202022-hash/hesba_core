@@ -40,7 +40,7 @@ MESSAGES = {
         "other_courier": "كل الشحنات لازم تكون مع نفس شركة الشحن.", "short": "اللي مع شركة الشحن ({have}) أقل من المطلوب تسويته.",
         "paid": "تحصيل شحنة {number} عن طريق {courier}", "lost": "شحنة {number} ضاعت مع {courier}: {reason}", "fee": "مصاريف شحن {courier} — تسوية {count} شحنة",
         "settle": "تسوية {courier}: {count} شحنة", "active": "شركة الشحن دي متوقفة.", "dest": "اختار الخزنة أو البنك اللي هتستلم فيه.",
-        "twice": "الفاتورة دي معاها شحنة لسه مفتوحة.", "entity": "شركة الشحن دي متسجّلة لكيان تاني غير كيان الفاتورة أو الخزنة.",
+        "twice": "الفاتورة دي معاها شحنة لسه مفتوحة.", "instalments": "الفاتورة دي عليها خطة تقسيط؛ تحصيلها من الأقساط مش عند الاستلام.", "entity": "شركة الشحن دي متسجّلة لكيان تاني غير كيان الفاتورة أو الخزنة.",
         "shortfall": "فرق مصاريف شحن {courier} — تسوية {count} شحنة",
     },
     "en": {
@@ -51,7 +51,7 @@ MESSAGES = {
         "other_courier": "All shipments must be with the same courier.", "short": "What the courier holds ({have}) is less than what is being settled.",
         "paid": "Collection of shipment {number} through {courier}", "lost": "Shipment {number} lost by {courier}: {reason}",
         "fee": "{courier} shipping fees — settlement of {count} shipments", "settle": "Settlement with {courier}: {count} shipments",
-        "active": "This courier is switched off.", "dest": "Choose the cashbox or bank that receives it.", "twice": "This invoice already has an open shipment.",
+        "active": "This courier is switched off.", "dest": "Choose the cashbox or bank that receives it.", "twice": "This invoice already has an open shipment.", "instalments": "This invoice is on an instalment plan; it is collected through the instalments, not on delivery.",
         "entity": "This courier is set up for another entity than the invoice's or the cashbox's.",
         "shortfall": "{courier} shipping fees beyond what it collected — settlement of {count} shipments",
     },
@@ -218,6 +218,9 @@ def ship(invoice, courier, user, data=None, lang="ar"):
         raise ValidationError(words["entity"])  # Codex #272: the collection is credited in the courier box's entity
     if Shipment.objects.filter(invoice=invoice, status=ShipmentStatus.WITH_COURIER).exists():
         raise ValidationError(words["twice"])
+    plan = getattr(invoice, "instalment_plan", None)
+    if plan is not None and plan.status != "cancelled" and _amount(data.get("cod_amount"), words, None) != ZERO:
+        raise ValidationError(words["instalments"])  # Codex #272: the instalments collect it; a parcel may still go out prepaid
     # Codex #272: what earlier shipments of this invoice collected, and what posted returns took off its debt, are not due
     # any more (neither a payment nor a return touches remaining_due).
     from sales.models import SalesReturn, SalesReturnStatus
