@@ -205,3 +205,48 @@ class OfflineTillTests(TestCase):
             js = handle.read()
         self.assertIn('[name="redeem_points"]', js)  # the sync spends no points, so the till refuses to keep such a sale offline
         self.assertIn("render(T.points); return;", js)
+
+
+class CodexReviewTests(LoyaltySetup):
+    """Codex on #274: spending never uses points that had run out, split returns take back the full share, and a
+    second sale on the same points is refused under the customer's lock."""
+
+    def test_a_spend_never_uses_points_that_had_run_out(self):
+        LoyaltySettings.objects.filter(pk=1).update(expiry_months=6)
+        old = self.sell(quantity=4)  # 100
+        PointsEntry.objects.filter(invoice=old).update(entry_date=TODAY - timedelta(days=200), expires_on=TODAY - timedelta(days=20))
+        self.sell(quantity=2)  # 50, still good
+        PointsEntry.objects.create(customer=self.customer, kind=EntryKind.SPEND, points=-20, entry_date=TODAY)
+        now = services.balance(self.customer)
+        self.assertEqual((now["expired"], now["points"]), (100, 30))  # the 20 came out of the live 50
+
+    def test_split_returns_take_back_the_whole_share(self):
+        cheap = make_item(item_code="CH", item_name="جورب", default_sale_price="15.00")
+        stock_in(cheap, self.location, 10, "5.00", movement_date=TODAY)
+        recalculate_item_average_cost(cheap)
+        invoice, _change = checkout(lines=[line(cheap, 2, "15.00")], customer=self.customer, location=self.location, cashbox=self.cashbox,
+                                    discount=D("0"), tendered=D("100"), user=self.owner)  # 30.00 → 3 points
+        source = invoice.lines.get()
+        first = create_sales_return("LY-S1", TODAY, invoice.pk, [{"source_line": source, "quantity": D("1")}], "مقاس", self.owner)
+        self.assertEqual(self.points(), 2)  # 1.5 rounded down
+        create_sales_return("LY-S2", TODAY, invoice.pk, [{"source_line": source, "quantity": D("1")}], "مقاس", self.owner)
+        self.assertEqual(self.points(), 0)  # all of it came back: nothing kept
+        cancel_sales_return(first.pk, TODAY, "رجع في كلامه", self.owner)
+        self.assertEqual(self.points(), 2)  # one of the two kept again: 3 − floor(1.5)
+
+    def test_a_second_draft_cannot_set_aside_the_same_points(self):
+        from django.db import transaction
+
+        from sales.services import create_sales_draft
+
+        self.sell(quantity=4)  # 100
+
+        def draft(number):
+            return create_sales_draft({"invoice_number": number, "invoice_date": TODAY, "customer": self.customer, "selling_location": self.location,
+                                       "cashbox": self.cashbox, "paid_now": D("0"), "discount_amount": D("0")}, [line(self.shirt, 1, "250.00")], self.owner)
+
+        with transaction.atomic():
+            services.remember(draft("LY-D1"), 80, D("40.00"))
+        with self.assertRaisesMessage(ValidationError, "رصيد النقاط"):
+            with transaction.atomic():
+                services.remember(draft("LY-D2"), 40, D("20.00"))

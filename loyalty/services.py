@@ -5,11 +5,12 @@
 * Spending: on the invoice form or at the till the seller types the points to spend. ``redeem`` checks them and
   returns what they take off; the view adds that to the invoice's own discount before the draft is saved, and
   ``remember`` keeps the points with the draft. The spending row is booked when the invoice is posted.
-* A cancelled invoice gives back what it spent and takes back what it earned; a return takes back the earned points
-  in proportion to what came back (rounded down), and cancelling the return gives them back. Every one of these is
+* A cancelled invoice gives back what it spent and takes back what it earned; the invoice's returns take back the
+  earned points in proportion to what all of them brought back (rounded down once), and cancelling a return gives
+  back what that changes. Every one of these is
   a new row (append-only); the discount already given stays, as a return refunds the discounted amount anyway.
-* Expiry: with ``expiry_months`` set, earned points run out that many months later. Spending uses the oldest
-  points first, so what runs out is what was left of the oldest.
+* Expiry: with ``expiry_months`` set, earned points run out that many months later. Each spend uses the oldest
+  points still valid on its day, so what runs out is what was left of the oldest.
 """
 
 import calendar
@@ -96,16 +97,24 @@ def balance(customer, today=None, besides=None):
     for row in rows:
         if row.kind == EntryKind.BACK and row.reverses_id in net:
             net[row.reverses_id] += row.points
-    earns = [row for row in rows if row.kind == EntryKind.EARN]
-    used = -sum(net[row.pk] for row in rows if row.kind == EntryKind.SPEND)  # what was spent, net of what came back
-    expired = 0
-    for row in earns:  # the oldest points are spent first
-        have = max(net[row.pk], 0)
-        take = min(have, max(used, 0))
-        used -= take
-        if row.expires_on and row.expires_on < today:
-            expired += have - take
-    left = sum(net.values()) - expired
+    # Codex #274: replayed in date order, each spend uses the oldest points still valid on its own day, so points that
+    # had run out are never what a later spend uses up.
+    lots, short = [], 0  # [earn row, points left]; spend not covered by a valid lot
+    for row in rows:
+        if row.kind == EntryKind.EARN:
+            lots.append([row, max(net[row.pk], 0)])
+        elif row.kind == EntryKind.SPEND:
+            need = max(-net[row.pk], 0)
+            for lot in lots:
+                if need <= 0:
+                    break
+                if lot[0].expires_on and lot[0].expires_on < row.entry_date:
+                    continue
+                take = min(lot[1], need)
+                lot[1], need = lot[1] - take, need - take
+            short += need
+    expired = sum(have for row, have in lots if row.expires_on and row.expires_on < today)
+    left = sum(have for row, have in lots if not (row.expires_on and row.expires_on < today)) - short
     drafts = InvoiceRedemption.objects.filter(invoice__customer=customer, invoice__status="draft")
     if besides is not None:
         drafts = drafts.exclude(invoice=besides)
@@ -119,6 +128,16 @@ def statement(customer, limit=20):
 
 
 # ---- spending on an invoice ----
+
+def _lock(customer):
+    """Codex #274: one customer's points are checked and taken one sale at a time (the customer's row, under the
+    transaction the draft or the posting runs in)."""
+
+    from master_data.models import Customer
+
+    if customer is not None and transaction.get_connection().in_atomic_block:
+        Customer.objects.select_for_update().filter(pk=customer.pk).first()
+
 
 def redeem(customer, raw_points, lines_total, lang="ar"):
     """Check the points typed on an invoice; returns ``(points, amount)``, or ``(0, 0)`` when none were typed."""
@@ -157,6 +176,10 @@ def lines_total(lines):
 def remember(invoice, points, amount):
     if not points:
         return None
+    _lock(invoice.customer)  # the check in redeem() ran before; checked again under the customer's lock
+    have = balance(invoice.customer, besides=invoice)["points"]
+    if points > have:
+        raise ValidationError(MESSAGES["ar"]["spent"].format(have=max(have, 0)))
     return InvoiceRedemption.objects.create(invoice=invoice, points=points, amount=amount)
 
 
@@ -173,6 +196,8 @@ def _on_posted(invoice, user):
     if _walk_in(invoice.customer):
         return
     redemption = InvoiceRedemption.objects.filter(invoice=invoice).first()
+    if redemption is not None:
+        _lock(invoice.customer)
     if redemption is not None and not PointsEntry.objects.filter(invoice=invoice, kind=EntryKind.SPEND).exists():
         have = balance(invoice.customer, besides=invoice)["points"]
         if redemption.points > have:
@@ -196,25 +221,33 @@ def _on_cancelled(invoice, user):
             PointsEntry.objects.create(customer=row.customer, kind=EntryKind.BACK, points=-left, entry_date=today, invoice=invoice, reverses=row, created_by=user)
 
 
-def _on_returned(sales_return, user):
+def _settle_returns(sales_return, user, day):
+    """Codex #274: what the invoice's returns take back is worked out over all of its returns still standing, then
+    rounded down once, so splitting a return never keeps points and cancelling one gives back just what it changes."""
+
+    from sales.models import SalesReturnStatus
+
     invoice = sales_return.source_invoice
     earned = PointsEntry.objects.filter(invoice=invoice, kind=EntryKind.EARN).first()
     if earned is None or not invoice.total_amount:
         return
-    share = int((Decimal(earned.points) * sales_return.total_amount / invoice.total_amount).to_integral_value(rounding=ROUND_FLOOR))
-    take = min(share, max(_net(earned), 0))
-    if take:
-        PointsEntry.objects.create(customer=earned.customer, kind=EntryKind.BACK, points=-take, entry_date=sales_return.return_date,
+    standing = invoice.returns.filter(status=SalesReturnStatus.POSTED).aggregate(n=Sum("total_amount"))["n"] or ZERO
+    target = int((Decimal(earned.points) * min(standing, invoice.total_amount) / invoice.total_amount).to_integral_value(rounding=ROUND_FLOOR))
+    taken = -(PointsEntry.objects.filter(reverses=earned, kind=EntryKind.BACK, sales_return__isnull=False).aggregate(n=Sum("points"))["n"] or 0)
+    change = target - taken
+    if change > 0:
+        change = min(change, max(_net(earned), 0))
+    if change:
+        PointsEntry.objects.create(customer=earned.customer, kind=EntryKind.BACK, points=-change, entry_date=day,
                                    sales_return=sales_return, reverses=earned, created_by=user)
 
 
+def _on_returned(sales_return, user):
+    _settle_returns(sales_return, user, sales_return.return_date)
+
+
 def _on_return_cancelled(sales_return, user):
-    for earned_id, taken in (PointsEntry.objects.filter(sales_return=sales_return, kind=EntryKind.BACK).values("reverses").annotate(n=Sum("points"))
-                             .values_list("reverses", "n")):
-        if taken:
-            earned = PointsEntry.objects.get(pk=earned_id)
-            PointsEntry.objects.create(customer=earned.customer, kind=EntryKind.BACK, points=-taken, entry_date=timezone.localdate(),
-                                       sales_return=sales_return, reverses=earned, created_by=user)
+    _settle_returns(sales_return, user, timezone.localdate())
 
 
 def _on_audit(sender, instance, created, **kwargs):
@@ -230,7 +263,7 @@ def _on_audit(sender, instance, created, **kwargs):
     elif action == "create_sales_return":
         _on_returned(SalesReturn.objects.select_related("source_invoice").get(pk=int(instance.object_id)), instance.actor)
     elif action == "cancel_sales_return":
-        _on_return_cancelled(SalesReturn.objects.get(pk=int(instance.object_id)), instance.actor)
+        _on_return_cancelled(SalesReturn.objects.select_related("source_invoice").get(pk=int(instance.object_id)), instance.actor)
 
 
 def connect():
