@@ -42,6 +42,26 @@ class InterviewTests(TestCase):
         self.assertIn("مقاولين باطن", ask("contracting", "general")["suppliers"]["ask"])
         self.assertIn("أولياء الأمور", ask("education", "tutoring_center")["instal"]["ask"])
 
+    def test_the_new_features_are_asked_where_they_fit(self):
+        # MARKET-PARITY (Ahmed, 26 Oct: «تعدل الاسئله الي في البدايه»): offers, points, the store, couriers and e-receipts.
+        shop = ask("commercial", "retail")
+        for key, feature in (("promos", "promotions"), ("loyalty", "loyalty"), ("store", "online_store"), ("shipping", "shipping"), ("ereceipt", "e_receipt")):
+            with self.subTest(key=key):
+                self.assertEqual(shop[key]["features"], feature)
+        self.assertEqual(shop["ereceipt"]["parent"], "vat")
+        self.assertIn("الأطباق", ask("restaurants", "restaurant")["promos"]["ask"])
+        self.assertIn("زيارة", ask("services", "beauty")["loyalty"]["ask"])
+        for activity, sub in (("contracting", "general"), ("education", "tutoring_center")):
+            with self.subTest(activity=activity):
+                self.assertFalse({"promos", "loyalty", "store", "shipping"} & set(ask(activity, sub)))  # nothing there to switch on
+        self.assertTrue(ask("commercial", "online")["store"]["default"])
+        self.assertTrue(ask("commercial", "online")["shipping"]["default"])
+        self.assertFalse(ask("commercial", "electronics")["store"]["default"])
+        _, features = interview.resolve("commercial", "retail", ["ereceipt"])  # an e-receipt hangs on VAT
+        self.assertNotIn("e_receipt", features)
+        _, features = interview.resolve("commercial", "retail", ["vat", "ereceipt", "store", "shipping"])
+        self.assertTrue({"vat", "e_receipt", "online_store", "shipping"} <= set(features))
+
     def test_only_what_is_left_to_decide_is_asked(self):
         self.assertNotIn("expiry", ask("commercial", "fashion"))       # clothes do not expire
         self.assertNotIn("credit", ask("services", "maintenance"))     # its customers are always on

@@ -44,6 +44,12 @@ LIBRARY = {
     "vat": ((), ("vat",), None),
     "einv": ((), ("e_invoice",), "vat"),
     "assets": ((), ("fixed_assets",), None),
+    # MARKET-PARITY: the features that came after the interview was written (Ahmed, 26 Oct: «تعدل الاسئله الي في البدايه»).
+    "promos": ((), ("promotions",), None),
+    "loyalty": ((), ("loyalty",), None),
+    "store": ((), ("online_store",), None),
+    "shipping": ((), ("shipping",), None),
+    "ereceipt": ((), ("e_receipt",), "vat"),
 }
 
 #: The wording every activity starts from: (question, what it gives), each (ar, en). {customers} and the
@@ -97,6 +103,21 @@ BASE = {
              ("بيانات كل فاتورة بصيغة المنظومة، وفحص الناقص قبل ما تبعت.", "Each invoice in the portal's format, checked for missing data before it is sent.")),
     "assets": (("عندك عربية أو مكن أو أجهزة عايز تحسب إهلاكها؟", "Do you have vehicles, machines or equipment to depreciate?"),
                ("سجل للأصول، وإهلاك شهري بيدخل في صافي الربح.", "A register of assets, with monthly depreciation in the net profit.")),
+    "promos": (("بتعمل عروض وخصومات أو كوبونات للزباين؟", "Do you run offers, discounts or coupons?"),
+               ("خصم % على قسم أو صنف، اشتري كذا وخد كذا، خصم لما الفاتورة تعدي مبلغ، وكوبونات بكود. أحسن عرض بيتطبق لوحده في الكاشير والفاتورة.",
+                "% off a section or an item, buy X get Y, an amount off over a total, and coupons with a code. The best offer applies by itself at the till and on the invoice.")),
+    "loyalty": (("عايز زباينك يجمعوا نقاط على مشترياتهم ويصرفوها خصم؟", "Should customers collect points on what they buy and spend them as a discount?"),
+                ("كل فاتورة لعميل باسمه بتكسبه نقاط يصرفها في الكاشير أو الفاتورة، والإلغاء والمرتجع بيرجّعوها.",
+                 "Each invoice to a named customer earns points, spent at the till or on an invoice; a cancellation or a return takes them back.")),
+    "store": (("عندك متجر أونلاين (Shopify أو WooCommerce)؟", "Do you have an online store (Shopify or WooCommerce)?"),
+              ("ملف بأصنافك وأسعارك ورصيدك ترفعه على المتجر، وطلبات المتجر بتدخل هنا فواتير مسودة تراجعها وترحّلها.",
+               "A file of your items, prices and stock to upload to the store, and the store's orders come in here as draft invoices to check and post.")),
+    "shipping": (("بتبعت طلبات مع شركة شحن والمندوب بيحصّل من الزبون؟", "Do you send orders with a courier who collects the money from the customer?"),
+                 ("كل شحنة بحالتها، واللي حصّلته شركة الشحن بيبان مستحق عليها مش في خزنتك، لحد ما تسلّمه بعد مصاريفها.",
+                  "Each parcel and where it stands; what the courier collected shows as owed by it, not as cash, until it hands it over less its fees.")),
+    "ereceipt": (("ومطلوب منك الإيصال الإلكتروني لمبيعات الكاشير للمستهلك؟", "And must your till sales to consumers carry e-receipts?"),
+                 ("كل بيعة كاشير بيطلعلها إيصال بصيغة المنظومة وعليه QR، وبيستنى في الطابور لحد ما تربط الجهاز على بوابة الإيصالات.",
+                  "Every till sale gets a receipt in the portal's format with a QR, queued until the device is linked on the receipt portal.")),
 }
 
 #: Each activity's questions, in the order a person in that trade would think of them, and the words that
@@ -108,9 +129,12 @@ ACTIVITY_QUESTIONS = {
         ("variants", {"ask": ("بتبيع نفس الموديل بمقاسات وألوان؟", "Do you sell the same model in sizes and colours?")}),
         ("units", {"ask": ("بتشتري بالكرتونة وتبيع بالقطعة أو بالعلبة؟", "Do you buy by the carton and sell by the piece or the box?")}),
         ("suppliers", {}), ("credit", {}), ("quotes", {}), ("instal", {}), ("prices", {}),
+        ("promos", {}), ("loyalty", {}), ("store", {}), ("shipping", {}),
         ("expenses", {"ask": ("بتسجّل مصاريف المحل (إيجار، كهربا، مرتبات)؟", "Do you record the shop's running costs (rent, power, wages)?")}),
-        ("team", {"ask": ("فيه بيّاعين أو كاشيرين شغّالين معاك؟", "Do sales staff or cashiers work with you?")}),
-        ("print", {}), ("vat", {}), ("einv", {}), ("assets", {}),
+        ("team", {"ask": ("فيه بيّاعين أو كاشيرين شغّالين معاك؟", "Do sales staff or cashiers work with you?"),
+                  "gives": ("{employees} ومرتباتهم كل شهر، والحضور والإجازات، وكل عملية بتتسجّل باسم اللي عملها.",
+                            "{employees} and their monthly payroll, attendance and leave, with each operation recorded under who did it.")}),
+        ("print", {}), ("vat", {}), ("einv", {}), ("ereceipt", {}), ("assets", {}),
     ),
     catalog.RESTAURANTS: (
         ("till", {"ask": ("عندك كاشير بيحاسب الطلبات؟", "Does a cashier settle the orders?"),
@@ -126,8 +150,11 @@ ACTIVITY_QUESTIONS = {
         ("variants", {"ask": ("مشروباتك أو أصنافك بأحجام (صغير، وسط، كبير)؟", "Do your drinks or dishes come in sizes (small, medium, large)?")}),
         ("barcode", {"ask": ("بتبيع منتجات معبّأة عليها باركود؟", "Do you sell packaged products with barcodes?")}),
         ("credit", {"ask": ("عندك زباين أو شركات بتحاسبهم آخر الشهر؟", "Do some customers or companies settle at the end of the month?")}),
+        ("promos", {"ask": ("بتعمل عروض على الأطباق والمشروبات أو كوبونات خصم؟", "Do you run offers on dishes and drinks, or discount coupons?")}),
+        ("loyalty", {"ask": ("عايز زباينك الدايمين يجمعوا نقاط على كل طلب؟", "Should regular customers collect points on every order?")}),
         ("expenses", {"ask": ("بتسجّل مصاريف المطعم (إيجار، غاز، كهربا، مرتبات)؟", "Do you record running costs (rent, gas, power, wages)?")}),
         ("print", {}), ("vat", {}), ("einv", {}),
+        ("ereceipt", {"ask": ("ومطلوب منك الإيصال الإلكتروني لطلبات الكاشير؟", "And must the till's orders carry e-receipts?")}),
         ("assets", {"ask": ("عندك أفران أو ثلاجات أو عربية دليفري عايز تحسب إهلاكها؟", "Do you have ovens, fridges or a delivery van to depreciate?")}),
     ),
     catalog.MEDICAL: (
@@ -148,6 +175,7 @@ ACTIVITY_QUESTIONS = {
         ("expenses", {"ask": ("بتسجّل مصاريف العيادة (إيجار، مرتبات، صيانة أجهزة)؟", "Do you record running costs (rent, wages, equipment upkeep)?")}),
         ("print", {"ask": ("بتطبع الفاتورة أو الروشتة أو تبعتها للمريض PDF؟", "Do you print or send invoices and reports to patients as a PDF?")}),
         ("vat", {}), ("einv", {}),
+        ("ereceipt", {"ask": ("ومطلوب منك الإيصال الإلكتروني لمبيعات الاستقبال للمرضى؟", "And must reception's sales to patients carry e-receipts?")}),
         ("assets", {"ask": ("عندك أجهزة طبية عايز تحسب إهلاكها؟", "Do you have medical equipment to depreciate?")}),
     ),
     catalog.EDUCATION: (
@@ -174,7 +202,9 @@ ACTIVITY_QUESTIONS = {
         ("barcode", {"ask": ("بتبيع منتجات عليها باركود؟", "Do you sell products with barcodes?")}),
         ("quotes", {"ask": ("بتبعت عروض أسعار للعملاء قبل ما تبدأ الشغل؟", "Do you send customers a quotation before starting the work?")}),
         ("instal", {}), ("prices", {"ask": ("عندك أكتر من سعر لنفس الخدمة (عادي ومستعجل، أو عقود)؟", "Does one service have several prices (regular and urgent, or contracts)?")}),
-        ("expenses", {}), ("print", {}), ("vat", {}), ("einv", {}), ("assets", {}),
+        ("promos", {"ask": ("بتعمل عروض على الخدمات أو كوبونات خصم؟", "Do you run offers on your services, or discount coupons?")}),
+        ("loyalty", {"ask": ("عايز زباينك الدايمين يجمعوا نقاط على كل زيارة؟", "Should regular customers collect points on every visit?")}),
+        ("expenses", {}), ("print", {}), ("vat", {}), ("einv", {}), ("ereceipt", {}), ("assets", {}),
     ),
     catalog.MANUFACTURING: (
         ("credit", {"ask": ("بتبيع لموزعين أو تجار آجل وعايز تتابع حساباتهم؟", "Do you sell to distributors or traders on credit and want their accounts?")}),
@@ -191,8 +221,10 @@ ACTIVITY_QUESTIONS = {
         ("projects", {"ask": ("بتشتغل بطلبيات كبيرة لعملاء كأنها مشاريع؟", "Do you work on large customer orders as projects?")}),
         ("till", {"ask": ("عندك منفذ بيع بكاشير؟", "Do you have a shop with a till?")}),
         ("shift", {}), ("instal", {}),
+        ("store", {"ask": ("بتبيع منتجاتك على متجر أونلاين (Shopify أو WooCommerce)؟", "Do you sell your products in an online store (Shopify or WooCommerce)?")}),
+        ("shipping", {"ask": ("بتبعت الطلبيات مع شركة شحن بتحصّل من العميل؟", "Do you send orders with a courier who collects from the customer?")}),
         ("expenses", {"ask": ("بتسجّل مصاريف المصنع (إيجار، كهربا، مرتبات)؟", "Do you record running costs (rent, power, wages)?")}),
-        ("print", {}), ("vat", {}), ("einv", {}),
+        ("print", {}), ("vat", {}), ("einv", {}), ("ereceipt", {}),
         ("assets", {"ask": ("عندك مكن ومعدات عايز تحسب إهلاكها؟", "Do you have machines and equipment to depreciate?")}),
     ),
     catalog.CONTRACTING: (
