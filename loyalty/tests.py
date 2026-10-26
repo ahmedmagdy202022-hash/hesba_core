@@ -390,3 +390,24 @@ class LockOrderTests(LoyaltySetup):
         with mock.patch.object(services, "_lock") as lock:
             create_sales_return("LY-L2", TODAY, invoice.pk, [{"source_line": invoice.lines.get(), "quantity": D("1")}], "مقاس", self.owner)
         lock.assert_not_called()
+
+
+class PointsSeenTests(LoyaltySetup):
+    def test_the_till_refuses_a_points_discount_that_changed_since_it_was_shown(self):
+        """Codex #274: as with promotions, the payment was taken for the points discount the till showed."""
+
+        self.sell(quantity=4)  # 100
+        open_test_shift(self.cashier, self.cashbox)
+        self.client.force_login(self.cashier)
+        self.assertContains(self.client.get(reverse("sales:pos") + "?lang=ar"), "data-pos-points-seen")
+        sale = {"line_count": "1", "customer": str(self.customer.pk), "location": str(self.location.pk), "cashbox": str(self.cashbox.pk),
+                "discount": "0", "tendered": "200", "print": "0", "redeem_points": "100", "item_0": str(self.shirt.pk), "qty_0": "1", "price_0": "250.00"}
+        LoyaltySettings.objects.filter(pk=1).update(point_value=D("0.25"))  # lowered while the till showed 0.50 a point
+        before = SalesInvoice.objects.count()
+        response = self.client.post(reverse("sales:pos"), dict(sale, points_seen="50.00"), follow=True)
+        self.assertContains(response, "قيمة النقطة اتغيرت")
+        self.assertEqual(SalesInvoice.objects.count(), before)
+        self.assertEqual(self.points(), 100)
+        response = self.client.post(reverse("sales:pos"), dict(sale, points_seen="25.00", tendered="225"))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(SalesInvoice.objects.filter(customer=self.customer).latest("pk").total_amount, D("225.00"))

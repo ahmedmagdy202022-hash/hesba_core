@@ -77,6 +77,7 @@ WORDS = {
         "walk_in": "عميل نقدي",
         "err_empty": "السلة فاضية.",
         "err_promo_changed": "العروض اتغيرت من ساعة ما السلة اتحسبت؛ راجع الإجمالي الجديد وادفع تاني.",
+        "err_points_changed": "قيمة النقطة اتغيرت من ساعة ما الصفحة اتفتحت؛ افتح الكاشير تاني وراجع الإجمالي.",
         "promo_wait": "لحظة، العرض بيتحسب؛ راجع الإجمالي وادفع تاني.",
         "err_line": "في سطر فيه كمية أو سعر مش صحيح.",
         "err_item": "صنف مش موجود أو موقوف.",
@@ -124,6 +125,7 @@ WORDS = {
         "walk_in": "Walk-in customer",
         "err_empty": "The cart is empty.",
         "err_promo_changed": "The promotions changed since the cart was totalled; check the new total and pay again.",
+        "err_points_changed": "A point's value changed since the till was opened; open the till again and check the total.",
         "promo_wait": "One moment, the promotion is being worked out; check the total and pay again.",
         "err_line": "A line has an invalid quantity or price.",
         "err_item": "An item is missing or inactive.",
@@ -433,6 +435,11 @@ def pos(request):
             from loyalty import services as loyalty
 
             points, points_off = loyalty.redeem(customer, request.POST.get("redeem_points"), loyalty.lines_total(lines), lang)  # T6
+            if points and "points_seen" in request.POST:  # Codex #274: the payment was taken for the points discount the till showed
+                raw_seen = request.POST.get("points_seen", "")
+                seen = _decimal(raw_seen, 2) if raw_seen != "" else None
+                if seen is None or abs(seen - points_off) > Decimal("0.005"):
+                    raise ValidationError("err_points_changed")
             discount += points_off
             invoice, change = checkout(lines=lines, customer=customer, location=location, cashbox=cashbox, discount=discount, tendered=tendered,
                                        user=request.user, card=card, promotion=(promotion, promotion_off, coupon) if promotion else None,

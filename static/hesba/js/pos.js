@@ -25,7 +25,12 @@
   // T6: points spent come off the total; the customer's points are shown when a customer is chosen.
   var pointsBox = form.querySelector('[data-pos-points]');
   var pointsRow = form.querySelector('[data-pos-points-row]');
-  function pointsOff() { return pointsBox ? Math.round(num(pointsBox.value) * num(pointsBox.getAttribute('data-point-value')) * 100) / 100 : 0; }
+  var pointsSeen = form.querySelector('[data-pos-points-seen]');
+  function pointsOff() {
+    var off = pointsBox ? Math.round(num(pointsBox.value) * num(pointsBox.getAttribute('data-point-value')) * 100) / 100 : 0;
+    if (pointsSeen) { pointsSeen.value = off ? off.toFixed(2) : ''; }  // Codex #274: what the payment was taken for
+    return off;
+  }
   function showPoints() {
     var hint = pointsRow && pointsRow.querySelector('[data-points-available]');
     if (!hint || !customer || !window.fetch) { return; }
