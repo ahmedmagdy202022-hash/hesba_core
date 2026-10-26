@@ -132,8 +132,17 @@ def _state(shipment, allowed, words, lang):
         raise ValidationError(words["state"].format(state=choice_label(shipment, "status", lang)))
 
 
-def _locked(shipment):
-    return Shipment.objects.select_for_update(of=("self",)).select_related("invoice__customer", "courier__cashbox").get(pk=shipment.pk)
+def _locked(shipment, words=None):
+    """The shipment under its row lock, and its invoice under the invoice's (the lock cancelling takes): a parcel is never
+    delivered or written off against an invoice cancelled meanwhile (Codex #272)."""
+
+    from sales.models import SalesInvoice
+
+    shipment = Shipment.objects.select_for_update(of=("self",)).select_related("invoice__customer", "courier__cashbox").get(pk=shipment.pk)
+    invoice = SalesInvoice.objects.select_for_update(of=("self",)).get(pk=shipment.invoice_id)
+    if words is not None and invoice.status != "posted":
+        raise ValidationError(words["not_posted"])
+    return shipment
 
 
 def _expense_category():
@@ -229,7 +238,7 @@ def ship(invoice, courier, user, data=None, lang="ar"):
 def deliver(shipment, user, day=None, lang="ar"):
     _need(user, COLLECT)
     words = _words(lang)
-    shipment = _locked(shipment)
+    shipment = _locked(shipment, words)
     _state(shipment, (ShipmentStatus.WITH_COURIER,), words, lang)
     day = _day(day, words)
     if shipment.cod_amount > 0:
@@ -280,7 +289,7 @@ def lose(shipment, user, reason, day=None, lang="ar"):
 
     _need(user, COLLECT)
     words = _words(lang)
-    shipment = _locked(shipment)
+    shipment = _locked(shipment, words)
     _state(shipment, (ShipmentStatus.WITH_COURIER,), words, lang)
     reason = str(reason or "").strip()
     if not reason:

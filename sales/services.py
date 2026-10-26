@@ -290,6 +290,9 @@ def cancel_posted_sales_invoice(invoice_id, user=None, reason=""):
     from einvoice.guards import before_sales_invoice_cancel
 
     before_sales_invoice_cancel(invoice)  # HG-039: an invoice the Tax Authority holds is cancelled there first
+    if invoice.shipments.filter(status="with_courier").exists():
+        # T14 (HG-061): a parcel still out is brought back or written off on the shipments screen first.
+        raise ValidationError("This invoice has a parcel with a courier; mark it came back or lost on the shipments screen first.")
     if invoice.returns.filter(status=SalesReturnStatus.POSTED).exists():
         raise ValidationError(
             "A sales invoice with posted return documents cannot be cancelled."

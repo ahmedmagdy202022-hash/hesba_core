@@ -123,6 +123,7 @@ EXACT = {
     "Bank fees are taken from a bank account only.": "المصروفات البنكية بتتخصم من حساب بنكي بس، مش من خزنة.",
     "This payment is a cheque; cancel or bounce it from the cheques screen.": "الدفعة دي شيك؛ الغيه أو سجّله مرتد من شاشة الشيكات.",
     "This payment was collected by a courier; undo the delivery from the shipments screen.": "الدفعة دي حصّلتها شركة الشحن؛ لغي التسليم من شاشة الشحن.",
+    "This invoice has a parcel with a courier; mark it came back or lost on the shipments screen first.": "الفاتورة دي ليها شحنة لسه مع شركة الشحن؛ سجّل إنها رجعت أو ضاعت من شاشة الشحن الأول.",
     "This expense belongs to a courier settlement or a lost shipment.": "المصروف ده تابع لتسوية شركة شحن أو لشحنة ضاعت؛ مينفعش يتلغي من هنا.",
     "Transfer locations must be different.": "المخزنين لازم يكونوا مختلفين.",
     "Transfer quantity must be greater than zero.": "كمية التحويل لازم تكون أكبر من صفر.",

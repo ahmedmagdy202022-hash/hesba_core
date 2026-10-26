@@ -250,6 +250,34 @@ class ThirdReviewTests(ShippingSetup):
         self.assertEqual(balance("customer", self.customer), D("0.00"))
 
 
+class FourthReviewTests(ShippingSetup):
+    """Codex on #272 (fourth look): an invoice with a parcel out is not cancelled, and a cancelled one is never collected."""
+
+    def test_a_parcel_out_blocks_cancelling_its_invoice(self):
+        from sales.services import cancel_posted_sales_invoice
+
+        invoice = self.invoice()
+        shipment = services.ship(invoice, self.courier, self.owner)
+        with self.assertRaisesMessage(ValidationError, "parcel with a courier"):
+            cancel_posted_sales_invoice(invoice.pk, self.owner, "غلط")
+        services.came_back(shipment, self.owner, "العميل رفض")
+        cancel_posted_sales_invoice(invoice.pk, self.owner, "غلط")
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.status, "cancelled")
+
+    def test_a_cancelled_invoice_is_never_delivered_or_written_off(self):
+        from sales.models import SalesInvoice
+
+        invoice = self.invoice()
+        shipment = services.ship(invoice, self.courier, self.owner)
+        SalesInvoice.objects.filter(pk=invoice.pk).update(status="cancelled")  # as if cancelled before the guard existed
+        with self.assertRaisesMessage(ValidationError, "مترحّلة"):
+            services.deliver(shipment, self.owner)
+        with self.assertRaisesMessage(ValidationError, "مترحّلة"):
+            services.lose(shipment, self.owner, "ضاعت")
+        self.assertEqual(services.held(self.courier), D("0.00"))
+
+
 class ScreenTests(ShippingSetup):
     def test_the_board_and_the_invoice_link(self):
         invoice = self.invoice()
