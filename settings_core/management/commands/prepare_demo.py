@@ -316,7 +316,8 @@ class Command(BaseCommand):
         from expenses.services import record_expense
         from sales.models import SalesInvoice
 
-        if Expense.objects.exists():
+        # Codex #277: only the running costs themselves say they are there (a courier's fee is an expense too).
+        if Expense.objects.filter(category__code__in=[code for code, *_ in self.MONTH_EXPENSES]).exists():
             return
         today = timezone.localdate()
         first = today.replace(day=1)

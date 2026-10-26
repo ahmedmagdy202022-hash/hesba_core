@@ -170,6 +170,17 @@ class SampleBusinessPerActivityTests(TestCase):
         self.assertEqual(Shipment.objects.count(), 3)
         self.assertTrue(PointsEntry.objects.filter(kind="earn").exists())
 
+    def test_a_courier_fee_leaves_the_running_costs_in(self):
+        """Codex #277: the courier's settlement records its fee as an expense; rent and the bills still come."""
+
+        from expenses.models import Expense
+
+        self.fill("commercial", "retail", modules="customers,suppliers,items_services,sales_operations,purchases,inventory,cashboxes,expenses,reports",
+                  capabilities="pos,barcode,shipping")
+        codes = set(Expense.objects.values_list("category__code", flat=True))
+        self.assertTrue({"rent", "utilities", "internet_phone", "supplies"} <= codes)
+        self.assertTrue(Expense.objects.exclude(category__code__in=["rent", "utilities", "internet_phone", "supplies"]).exists())  # the fee
+
     def test_promotions_with_vat_charge_the_tax_at_the_till(self):
         """Codex #277: the promotion sales pay their VAT too, so the walk-in customer owes nothing."""
 
