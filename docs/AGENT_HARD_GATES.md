@@ -1958,3 +1958,16 @@ The entries below are the protected-logic decisions in the commercial gate, reco
   - a warehouse can show a negative quantity, which some reports and checks assume cannot happen; each must be checked;
   - an offline sale that syncs after stock ran out must follow the same rule.
 - **Tests:** off by default refuses as today; on, a short sale posts only with the agreement and logs it; the settling adjustment brings the cost of sales and the stock value to what they would be had the purchase come first; returns of a short sale; the trial balance stays balanced throughout.
+
+## HG-066 — E-receipts for till sales (T8, offline part)
+
+- **Status:** BUILT in T8 (`claude/t8-ereceipt`); additive only. Sending to the authority still needs the device's credentials on the receipt portal.
+- **What changed:**
+  - **Schema:** two new tables, nothing changed in existing ones:
+    - `ereceipt.Device`: the till's serial number, branch code and the last UUID of its chain;
+    - `ereceipt.Receipt`: one per till sale, holding its UUID, the previous UUID, its status and what is missing. `document_text` keeps the receipt exactly as it was hashed, because a JSON column may reorder keys.
+  - **Hook:** a `post_save` signal on `AuditLog`, for `post_sales_invoice` only. It issues the receipt of a till sale (`POS-…`) when the capability `e_receipt` is on. It runs inside the posting's transaction and reads the posted sale; the posting function itself is not changed. A receipt whose data is incomplete is kept as "not issued", never blocking the sale.
+  - **Chain:** the device row is locked while a receipt is issued, so two sales never take the same `previousUUID`.
+  - **Reads:** follow the entity scope (HG-034), through the invoice's selling location.
+- **Risk:** a sale posted while the device is missing or data is incomplete waits as "not issued". Issuing it later puts it at the end of the chain, with the issue time of its sale, so the 24 hours count from that time; the queue shows it as late.
+- **Tests:** `ereceipt.tests`.
