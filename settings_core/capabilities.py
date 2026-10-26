@@ -136,8 +136,8 @@ CAPABILITIES = {
     },
     "e_invoice": {
         "ar": "الفاتورة الإلكترونية (مصلحة الضرائب)", "en": "E-invoicing (Egyptian Tax Authority)",
-        "about_ar": "بيانات الشركة والعملاء وأكواد الأصناف، وملف كل فاتورة بصيغة المنظومة مع فحص الناقص. التوقيع والإرسال مرحلة جاية.",
-        "about_en": "Company, customer and item-code data, and each invoice's document in the portal format with a check of what is missing. Signing and sending come next.",
+        "about_ar": "بيانات الشركة والعملاء وأكواد الأصناف، وملف كل فاتورة بصيغة المنظومة مع فحص الناقص، وإشعار دائن لكل مرتجع، وطابور إرسال بيستنى بيانات البوابة والتوقيع.",
+        "about_en": "Company, customer and item-code data, each invoice's document in the portal format with a check of what is missing, a credit note for each return, and a sending queue that waits for the portal's credentials and signing.",
         "available": True, "paths": ("/einvoice/",),
     },
     "e_receipt": {
@@ -162,13 +162,14 @@ SHARED_PATHS = {path: ("e_invoice", "e_receipt") for path in ("/einvoice/", "/ei
 #: Which capabilities start on for each commercial sub-activity. Anything not
 #: listed is OPTIONAL. Services activities suggest none of the trade ones.
 PRESETS = {
-    "retail": {"pos": SUGGESTED, "barcode": SUGGESTED},
-    "grocery": {"pos": SUGGESTED, "barcode": SUGGESTED, "units": SUGGESTED, "batches_expiry": SUGGESTED},
-    "fashion": {"pos": SUGGESTED, "barcode": SUGGESTED, "variants": SUGGESTED},
+    "retail": {"pos": SUGGESTED, "barcode": SUGGESTED, "promotions": SUGGESTED},
+    "grocery": {"pos": SUGGESTED, "barcode": SUGGESTED, "units": SUGGESTED, "batches_expiry": SUGGESTED, "promotions": SUGGESTED},
+    "fashion": {"pos": SUGGESTED, "barcode": SUGGESTED, "variants": SUGGESTED, "promotions": SUGGESTED, "loyalty": SUGGESTED},
     "electronics": {"pos": SUGGESTED, "barcode": SUGGESTED, "serials": SUGGESTED, "installments": SUGGESTED},
-    "pharmacy": {"pos": SUGGESTED, "barcode": SUGGESTED, "batches_expiry": SUGGESTED, "units": SUGGESTED, "drugs": SUGGESTED},
+    "pharmacy": {"pos": SUGGESTED, "barcode": SUGGESTED, "batches_expiry": SUGGESTED, "units": SUGGESTED, "drugs": SUGGESTED, "loyalty": SUGGESTED},
     "wholesale": {"barcode": SUGGESTED, "price_lists": SUGGESTED, "units": SUGGESTED, "vat": SUGGESTED, "e_invoice": SUGGESTED, "quotations": SUGGESTED},
-    "online": {"barcode": SUGGESTED, "variants": SUGGESTED},
+    # MARKET-PARITY: a shop that sells online ships its orders and runs coupons (Ahmed, 26 Oct: «تعدل الخصائص»).
+    "online": {"barcode": SUGGESTED, "variants": SUGGESTED, "online_store": SUGGESTED, "shipping": SUGGESTED, "promotions": SUGGESTED},
     "other": {"pos": SUGGESTED, "barcode": SUGGESTED},
 }
 
@@ -211,10 +212,10 @@ MANUFACTURING_PRESETS = {
 ACTIVITY_PRESETS = {
     catalog.RESTAURANTS: {
         "*": {"units": SUGGESTED},
-        "cafe": {"pos": SUGGESTED, "variants": SUGGESTED},
-        "fast_food": {"pos": SUGGESTED},
+        "cafe": {"pos": SUGGESTED, "variants": SUGGESTED, "loyalty": SUGGESTED},
+        "fast_food": {"pos": SUGGESTED, "promotions": SUGGESTED},
         "bakery": {"pos": SUGGESTED, "barcode": SUGGESTED, "batches_expiry": SUGGESTED},
-        "cloud_kitchen": {"pos": SUGGESTED},
+        "cloud_kitchen": {"pos": SUGGESTED, "promotions": SUGGESTED},
     },
     catalog.MEDICAL: {
         "dental": {"installments": SUGGESTED},
@@ -232,7 +233,7 @@ ACTIVITY_PRESETS = {
     },
     catalog.SERVICES: {
         "maintenance": {"serials": SUGGESTED},
-        "beauty": {"pos": SUGGESTED},
+        "beauty": {"pos": SUGGESTED, "loyalty": SUGGESTED},
         "professional": {"quotations": SUGGESTED},
         "digital_marketing": {"quotations": SUGGESTED},
     },
@@ -268,6 +269,16 @@ ABOUT_FOR = {
                                         "Drink sizes (small, medium, large), each at its own price."),
     (catalog.SERVICES, "serials"): ("رقم كل جهاز داخل للصيانة وضمانه، من الاستلام للتسليم.",
                                     "Each device in for repair by its serial number and warranty, from intake to hand-back."),
+    (catalog.RESTAURANTS, "promotions"): ("عرض على طبق أو مشروب، وجبة ومعاها حاجة ببلاش، خصم لما الطلب يعدي مبلغ، وكوبونات بكود.",
+                                          "An offer on a dish or a drink, a meal with something free, an amount off over a total, and coupons with a code."),
+    (catalog.RESTAURANTS, "loyalty"): ("كل طلب لزبون باسمه بيكسبه نقاط يصرفها خصم على طلب جاي.",
+                                       "Each order by a named customer earns points spent as a discount on a later one."),
+    (catalog.SERVICES, "promotions"): ("خصم % على خدمة أو باكدج، خصم لما الفاتورة تعدي مبلغ، وكوبونات بكود.",
+                                       "% off a service or a package, an amount off over a total, and coupons with a code."),
+    (catalog.SERVICES, "loyalty"): ("كل زيارة لعميل باسمه بتكسبه نقاط يصرفها خصم على الزيارة الجاية.",
+                                    "Each visit by a named customer earns points spent as a discount on the next."),
+    (catalog.MANUFACTURING, "shipping"): ("ابعت الطلبية مع شركة شحن، وسجّل التسليم والتحصيل، واللي معاها بيبان مستحق عليها لحد ما تسلّمه بعد مصاريفها.",
+                                          "Send an order with a courier, record the delivery and collection; what it holds shows as owed by it until handed over less its fees."),
 }
 
 
