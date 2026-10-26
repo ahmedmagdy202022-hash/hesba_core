@@ -52,6 +52,9 @@ def convert_line(data, price_key, lang="ar"):
         "quantity": base_quantity,
         price_key: base_price,
         "line_discount_amount": base_discount,
+        # T5 (Codex #268): what was typed by hand, apart from the cent the unit price rounding adds, so a promotion
+        # still sees this line as one without a discount of its own.
+        "typed_discount": money_round(discount),
         # Printing shows the description in place of the item name, so keep the name in it.
         "description": f"{description or item.item_name} — {note}",
     })

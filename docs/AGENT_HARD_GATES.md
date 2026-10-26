@@ -1786,7 +1786,18 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 
 ## HG-057 — Promotions and coupons (T5)
 
-- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق»), as written below.
+- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق»), as written below. BUILT in T5 (`claude/t5-promotions`).
+- **What was built:**
+  - A `promotions` app and the capability «العروض والكوبونات». It is optional, and is not offered to contracting, education or medical.
+  - Three kinds:
+    - % off an item, a section or everything;
+    - buy X get Y free;
+    - an amount off once the eligible lines reach a total, spread over them.
+  - Each promotion can have dates, a time window (one that runs past midnight works), and a coupon code. A coupon counts only when typed; an unknown code is refused.
+  - `promotions.apply` fills the line discount fields before `create_sales_draft`, on the sales invoice form and at the till. The best single promotion wins. A line with a discount typed by hand keeps it. Posting is unchanged.
+  - `InvoicePromotion` records the promotion, discount and coupon of each invoice for the report on the promotions screen, and the invoice page shows it.
+  - The till asks the server for the cart's promotion before payment, and a payment for another total is refused. An offline sale syncs with the promotion that was running at its recorded time, so it posts at the total shown and collected (Codex #268). The report follows the entity scope.
+  - Managing promotions needs `master_data.manage_items`, the same as price lists. The manual discount stays open to invoice creators, as proposed.
 - **Why:** an automatic promotion changes the invoice price. Sales posting must keep using the line amounts it is given.
 - **Proposed:**
   - a promotion engine that only fills each line's existing discount field before the draft is saved (rules: buy X get Y, % off a section, fixed off over an amount, coupon code, date and time window);
@@ -1814,7 +1825,19 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 
 ## HG-059 — E-invoice live and the credit note for returns (T7)
 
-- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق»), as written below.
+- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق»), as written below. The part that needs no outside account is BUILT in T7 (`claude/t7-credit-note`). Going live still needs Ahmed's preprod credentials and the signing method (the `ETA_*` settings).
+- **What was built:**
+  - `build_credit_note(sales_return)`: an ETA credit note (`documentType` "c") with the issuer and receiver of the original invoice and `references` set to the original's accepted UUID. Each returned line gives back its refund:
+    - the price × quantity returned;
+    - less the line's own discount share: that is the VAT base (`netTotal`);
+    - plus the tax given back (HG-015).
+    The lines' share of the invoice discount is taken after tax, as on the invoice, in `extraDiscountAmount` (Codex #270). The total must equal the return's.
+  - `Submission.sales_return` (nullable, migration 0003) marks a credit note's sending. The invoice's own sending, history and the dashboard count ignore those rows.
+  - `send_credit_note` claims a `sending` row under the return's lock and goes through the same sign → submit → record path as an invoice. `send_invoice`'s tail became `_deliver`, shared by both, so their behaviour is unchanged. Refresh, reconciliation (by the return number) and the public link work as for an invoice; a credit note is not cancelled from Hesba.
+  - The queue: `credit_notes_due()` lists the posted returns of accepted invoices with no credit note yet, or with a sending cut off long enough ago to be checked again. `manage.py send_credit_notes` sends them, run from cron every few minutes; one that fails stays queued, and a rejected one waits for a manual send after its data is corrected.
+  - The return page links to its credit-note page (document, JSON, send, refresh) when e-invoicing is on.
+  - Posting a return is unchanged and never waits for the authority.
+  - **Protected change (Codex #270):** `sales.services.cancel_sales_return` now makes one call, `einvoice.guards.before_sales_return_cancel`, under the return's row lock. The call refuses to reverse a return whose credit note the authority holds (being sent, under review or accepted), as `before_sales_invoice_cancel` already does for invoices. A return never sent reverses as before. The invoice guard now looks at the invoice's own sendings only, never a return's credit note.
 - **Why:** a sales return must be sent to the Tax Authority as a credit note that points to the original document. Signing must not block posting.
 - **Proposed:**
   - the return builds an ETA credit note from `einvoice.services` and queues it;
@@ -1898,3 +1921,23 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 - **Files:** a new `shipping` app; `cashboxes` (kind `courier`); `sales.services` (called, not changed).
 - **Risk:** a parcel lost by the courier is written off as an expense with a reason.
 - **Tests:** COD sale → courier settles → bank; fee; returned parcel; lost parcel.
+
+## HG-065 — Selling an item that is not in stock (Ahmed's notes #20, #21, #24)
+
+- **Status:** PROPOSED, waiting for Ahmed's approval. Nothing is built.
+- **What Ahmed asked:** at the till and on the sales invoice, allow selling an item whose stock is not enough, with a box asking the seller to agree to selling what is not there.
+- **What happens today:** `sales.services._validate_stock_available` refuses to post a sale above the warehouse's stock, at the till, on the invoice, and on an offline sale when it syncs.
+- **Why this is protected:** it touches inventory movement and accounting, the average cost, and posted sales cost (HG-003). A sale below zero has no real cost to take: the authoritative cost comes from the stock movements that are not there yet.
+- **Proposed:**
+  - a setting "Allow selling without stock", off by default, that only the owner can switch on (`settings_core`);
+  - when it is on, the till and the invoice show a box naming each short item and how much is missing; posting goes ahead only after the seller agrees, and the agreement is written in the audit log with who agreed;
+  - the missing quantity takes the item's last known cost (the last purchase, else its default purchase price) and is marked "cost to settle";
+  - when stock arrives, a dated cost adjustment settles the difference between that cost and the real one, so the profit report ends up right; nothing already posted is rewritten;
+  - the stock report shows items below zero in red, with a "sold before it arrived" list;
+  - with the setting off, nothing changes.
+- **Files:** `sales/services.py` (the stock check), `sales/pos.py`, `inventory/services.py` (the settling adjustment), `settings_core` (the setting), `reports` (the below-zero list), and the till and invoice templates.
+- **Risk:**
+  - the average cost and the profit for the days between the sale and the purchase are estimates until settled;
+  - a warehouse can show a negative quantity, which some reports and checks assume cannot happen; each must be checked;
+  - an offline sale that syncs after stock ran out must follow the same rule.
+- **Tests:** off by default refuses as today; on, a short sale posts only with the agreement and logs it; the settling adjustment brings the cost of sales and the stock value to what they would be had the purchase come first; returns of a short sale; the trial balance stays balanced throughout.

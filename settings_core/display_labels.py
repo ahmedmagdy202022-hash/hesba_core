@@ -105,6 +105,7 @@ AR_LABELS = {
         "bank_fee": "مصروفات بنكية",
         "payroll": "صرف مرتبات",
     },
+    ("promotions.promotion", "kind"): {"percent": "خصم %", "buy_get": "اشتري وخد ببلاش", "amount_over": "خصم مبلغ فوق حد"},
     ("cheques.cheque", "status"): {"in_hand": "في الإيد", "deposited": "اتودع في البنك", "issued": "صادر ولسه ماتصرفش", "cleared": "اتصرف",
                                    "bounced": "مرتد", "cancelled": "ملغي"},
     ("cheques.cheque", "direction"): {"in": "وارد", "out": "صادر"},
