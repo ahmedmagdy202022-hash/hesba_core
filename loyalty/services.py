@@ -102,7 +102,10 @@ def balance(customer, today=None, besides=None):
     lots, short = [], 0  # [earn row, points left]; spend not covered by a valid lot
     for row in rows:
         if row.kind == EntryKind.EARN:
-            lots.append([row, max(net[row.pk], 0)])
+            have = max(net[row.pk], 0)
+            paid = min(have, short)  # Codex #274: points owed (spent, then clawed back) come out of the next earnings first
+            short -= paid
+            lots.append([row, have - paid])
         elif row.kind == EntryKind.SPEND:
             need = max(-net[row.pk], 0)
             for lot in lots:
@@ -227,7 +230,10 @@ def _settle_returns(sales_return, user, day):
 
     from sales.models import SalesReturnStatus
 
-    invoice = sales_return.source_invoice
+    from sales.models import SalesInvoice
+
+    # Codex #274: one settlement of an invoice's returns at a time, so each sees the one before it.
+    invoice = SalesInvoice.objects.select_for_update(of=("self",)).get(pk=sales_return.source_invoice_id)
     earned = PointsEntry.objects.filter(invoice=invoice, kind=EntryKind.EARN).first()
     if earned is None or not invoice.total_amount:
         return

@@ -250,3 +250,13 @@ class CodexReviewTests(LoyaltySetup):
         with self.assertRaisesMessage(ValidationError, "رصيد النقاط"):
             with transaction.atomic():
                 services.remember(draft("LY-D2"), 40, D("20.00"))
+
+    def test_points_owed_are_paid_from_the_next_earnings_once(self):
+        LoyaltySettings.objects.filter(pk=1).update(min_points=1, expiry_months=6)
+        first = self.sell(quantity=4)  # 100
+        points, off = services.redeem(self.customer, "100", D("1000.00"))
+        self.sell(quantity=4, points=(points, off), discount=str(off))  # spends the 100, earns 95 on 950.00
+        create_sales_return("LY-O1", TODAY, first.pk, [{"source_line": first.lines.get(), "quantity": D("4")}], "كله", self.owner)  # the 100 is clawed back
+        self.assertEqual(self.points(), -5)  # 95 earned against 100 owed
+        PointsEntry.objects.filter(kind=EntryKind.EARN).update(expires_on=TODAY - timedelta(days=1))  # everything runs out
+        self.assertEqual(self.points(), -5)  # the debt is not counted again once the later points expire
