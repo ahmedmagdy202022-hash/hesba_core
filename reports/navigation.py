@@ -62,6 +62,15 @@ NAV_ITEMS = (
     # T1: quotations that become sales orders, invoiced on the ordinary invoice form.
     {"key": "quotes", "ar": "عروض الأسعار والأوامر", "en": "Quotations & orders", "url_name": "orders:list", "module": "sales_operations", "capability": "quotations",
      "permission": "sales.view_sales_invoices"},
+    # T13: the online store by file — the catalogue out, the orders in as drafts.
+    {"key": "store", "ar": "المتجر الأونلاين", "en": "Online store", "url_name": "onlinestore:board", "module": "sales_operations", "capability": "online_store",
+     "permission": "master_data.view_master_data"},
+    # T14: couriers and cash on delivery — parcels out, collected, and settled by the courier.
+    {"key": "shipping", "ar": "الشحن والتحصيل", "en": "Shipping & COD", "url_name": "shipping:board", "module": "sales_operations", "capability": "shipping",
+     "permission": "sales.view_sales_invoices"},
+    # T8: e-receipts for till sales (B2C), chained per device and queued for 24 hours.
+    {"key": "ereceipt", "ar": "الإيصال الإلكتروني", "en": "E-receipts", "url_name": "ereceipt:board", "module": "sales_operations", "capability": "e_receipt",
+     "permission": "sales.view_sales_invoices"},
     # T5: promotions and coupons, filled into the line discounts on the invoice and at the till.
     {"key": "promotions", "ar": "العروض", "en": "Promotions", "url_name": "promotions:list", "module": "sales_operations", "capability": "promotions",
      "permission": "master_data.view_master_data"},
@@ -117,6 +126,8 @@ NAV_ITEMS = (
      "allow": "reports.navigation.sees_staff"},
     {"key": "my_attendance", "ar": "حضوري وانصرافي", "en": "My attendance", "url_name": "attendance:me", "module": "employees_technicians",
      "allow": "reports.navigation.checks_in_only"},
+    # T12: the month's payroll — salaries, insurance and income tax, posted as debts and paid from a cashbox.
+    {"key": "payroll", "ar": "المرتبات", "en": "Payroll", "url_name": "payroll:list", "module": "employees_technicians", "permission": "cashboxes.view_expenses"},
     {"key": "expenses", "ar": "المصروفات", "en": "Expenses", "url_name": "expenses:list", "module": "expenses", "permission": "cashboxes.view_expenses"},
     # R2: features switched on in Settings -> Features get their own place in the menu.
     {"key": "taxes", "ar": "الضرائب", "en": "Taxes", "url_name": "taxes:settings", "module": None, "capability": "vat", "permission": "master_data.view_master_data",
@@ -154,12 +165,16 @@ TAB_LABELS = {
     "classes": {"ar": "حصصي", "en": "Classes"},
     "workorders": {"ar": "الأوامر", "en": "Orders"},
     "quotes": {"ar": "العروض", "en": "Quotes"},
+    "store": {"ar": "المتجر", "en": "Store"},
+    "shipping": {"ar": "الشحن", "en": "Shipping"},
+    "ereceipt": {"ar": "الإيصالات", "en": "Receipts"},
     "promotions": {"ar": "الخصومات", "en": "Promos"},
     "loyalty": {"ar": "النقاط", "en": "Points"},
     "drugs": {"ar": "الأدوية", "en": "Drugs"},
     "attendance": {"ar": "الحضور", "en": "Attendance"},
     "messages": {"ar": "الرسائل", "en": "Messages"},
     "my_attendance": {"ar": "حضوري", "en": "Check in"},
+    "payroll": {"ar": "المرتبات", "en": "Payroll"},
     "banks": {"ar": "البنوك", "en": "Banks"},
     "cheques": {"ar": "الشيكات", "en": "Cheques"},
     "contracts": {"ar": "العقود", "en": "Contracts"},

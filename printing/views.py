@@ -298,7 +298,11 @@ def _voucher_doc(payment, kind, lang, party_kind):
 @require_permission("sales.view_sales_invoices")
 def sales_invoice(request, pk):
     invoice = get_object_or_404(entity_scope.scope(SalesInvoice.objects.select_related("customer", "cashbox"), entity_scope.SALES_INVOICE), pk=pk)
-    return _render(request, _invoice_doc(invoice, "sales_invoice", _lang(request), "customer", "unit_sale_price"), f"/sales/{pk}/")
+    doc = _invoice_doc(invoice, "sales_invoice", _lang(request), "customer", "unit_sale_price")
+    from ereceipt.services import printed_qr
+
+    doc["ereceipt_qr"] = printed_qr(invoice)  # T8: the e-receipt's QR, once it is issued
+    return _render(request, doc, f"/sales/{pk}/")
 
 
 @require_permission("purchases.view_purchase_invoices")

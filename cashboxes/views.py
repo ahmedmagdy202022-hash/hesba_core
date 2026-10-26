@@ -232,6 +232,14 @@ def operation_cancel(request, pk):
         return redirect(f"/cashboxes/operations/?lang={lang}")
     from cheques.services import owns_operation
 
+    if CashboxOperation.objects.filter(pk=pk, courier_settlement__isnull=False).exists():
+        # T14 (HG-061): a courier's settlement moves with the parcels it settled.
+        messages.error(request, "الحركة دي تسوية شركة شحن؛ مينفعش تتلغي من هنا." if lang == "ar" else "This operation is a courier settlement; it cannot be cancelled here.")
+        return redirect(f"/cashboxes/operations/?lang={lang}")
+    if CashboxOperation.objects.filter(pk=pk, payroll_payment__isnull=False).exists():
+        # T12 (HG-060): a payroll payment is cancelled from its payroll run, so the run's debts stay right.
+        messages.error(request, "الحركة دي تابعة للمرتبات؛ ألغيها من شاشة المرتبات." if lang == "ar" else "This operation belongs to payroll; cancel it from the payroll screen.")
+        return redirect(f"/cashboxes/operations/?lang={lang}")
     if owns_operation(pk):
         # T4 (HG-056): a cheque's deposit, payment or return moves with the cheque, so the two never disagree.
         messages.error(request, "الحركة دي تابعة لشيك؛ اتعامل معاها من شاشة الشيكات." if lang == "ar" else "This operation belongs to a cheque; handle it from the cheques screen.")

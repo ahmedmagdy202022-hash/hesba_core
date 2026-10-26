@@ -290,6 +290,9 @@ def cancel_posted_sales_invoice(invoice_id, user=None, reason=""):
     from einvoice.guards import before_sales_invoice_cancel
 
     before_sales_invoice_cancel(invoice)  # HG-039: an invoice the Tax Authority holds is cancelled there first
+    if invoice.shipments.filter(status="with_courier").exists():
+        # T14 (HG-061): a parcel still out is brought back or written off on the shipments screen first.
+        raise ValidationError("This invoice has a parcel with a courier; mark it came back or lost on the shipments screen first.")
     if invoice.returns.filter(status=SalesReturnStatus.POSTED).exists():
         raise ValidationError(
             "A sales invoice with posted return documents cannot be cancelled."
@@ -686,6 +689,9 @@ def cancel_sales_return(return_id, reversal_date, reason, user):
     )
     if sales_return.status != SalesReturnStatus.POSTED:
         raise ValidationError("Only posted sales returns can be reversed.")
+    from einvoice.guards import before_sales_return_cancel
+
+    before_sales_return_cancel(sales_return)  # T7 (HG-059): a return whose credit note the Tax Authority holds stays
     invoice = sales_return.source_invoice
     reversal_stock = {}
     for return_line in sales_return.lines.all():
@@ -810,6 +816,9 @@ def cancel_customer_payment(payment_id, user=None, reason=""):
     cheque = getattr(payment, "cheque", None)
     if cheque is not None and cheque.status != "cancelled":
         raise ValidationError("This payment is a cheque; cancel or bounce it from the cheques screen.")
+    if getattr(payment, "shipment", None) is not None:
+        # T14 (HG-061): money a courier collected is undone from the shipments screen, before the courier settles it.
+        raise ValidationError("This payment was collected by a courier; undo the delivery from the shipments screen.")
 
     CustomerLedgerEntry.objects.create(
         customer=payment.customer,

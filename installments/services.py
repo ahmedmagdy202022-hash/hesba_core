@@ -23,12 +23,12 @@ MESSAGES = {
     "ar": {
         "not_posted": "التقسيط على فاتورة مرحّلة بس.", "certificate": "دي فاتورة مستخلص مشروع: تحصيلها بيتسجل من شاشة دفعات المشروع عشان ضمان الأعمال والدفعة المقدمة يتخصموا صح، فمينفعش تتقسط.", "nothing_due": "مفيش مبلغ متبقي على الفاتورة يتقسط.", "exists": "الفاتورة دي عليها خطة تقسيط بالفعل.",
         "count": "عدد الأقساط لازم من 1 لـ {max}.", "first_due": "أول قسط لازم يكون بعد تاريخ الفاتورة.", "amount": "المبلغ لازم أكبر من صفر ومش أكبر من الباقي ({left}).",
-        "inactive": "الخطة ملغية أو الفاتورة اتلغت.", "has_payments": "مينفعش تلغي خطة عليها تحصيلات؛ الغي التحصيل الأول من شاشة التحصيلات.",
+        "inactive": "الخطة ملغية أو الفاتورة اتلغت.", "shipped": "الفاتورة دي اتبعتت مع شركة شحن تحصّلها عند الاستلام؛ مينفعش تتقسط كمان.", "has_payments": "مينفعش تلغي خطة عليها تحصيلات؛ الغي التحصيل الأول من شاشة التحصيلات.",
     },
     "en": {
         "not_posted": "Only a posted invoice can be put on instalments.", "certificate": "This is a project certificate's invoice: its collections are recorded on the project's payments tab so retention and the advance come off correctly, so it cannot be put on instalments.", "nothing_due": "Nothing is left to pay on this invoice.", "exists": "This invoice already has an instalment plan.",
         "count": "The number of instalments must be between 1 and {max}.", "first_due": "The first instalment must fall after the invoice date.", "amount": "The amount must be above zero and at most what is left ({left}).",
-        "inactive": "The plan is cancelled or its invoice was cancelled.", "has_payments": "A plan with collections cannot be cancelled; cancel the collection first from the collections screen.",
+        "inactive": "The plan is cancelled or its invoice was cancelled.", "shipped": "This invoice was sent with a courier to collect on delivery; it cannot be put on instalments too.", "has_payments": "A plan with collections cannot be cancelled; cancel the collection first from the collections screen.",
     },
 }
 
@@ -67,6 +67,9 @@ def create_plan(invoice, count, first_due_date, user, lang="ar", notes=""):
         raise ValidationError(words["exists"])
     if hasattr(invoice, "project_certificate"):
         raise ValidationError(words["certificate"])  # HG-038: its deductions and collections live on the project
+    # T14 (Codex #272): a courier collecting it at the door and a schedule of instalments would each collect the same debt.
+    if invoice.shipments.filter(cod_amount__gt=0).exclude(status__in=("returned",)).exists():
+        raise ValidationError(words["shipped"])
     # The plan covers what was left on the invoice; returns are credited against it in schedule().
     financed = money_round(invoice.remaining_due)
     if financed - returned_credit(invoice) <= 0:

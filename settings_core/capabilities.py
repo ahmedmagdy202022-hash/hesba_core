@@ -66,6 +66,18 @@ CAPABILITIES = {
         "about_en": "A quotation you print or send on WhatsApp; once accepted it becomes a sales order you invoice in one go or in parts, with a delivery note for each invoice.",
         "available": True, "paths": ("/orders/",),
     },
+    "online_store": {
+        "ar": "المتجر الأونلاين (بالملفات)", "en": "Online store (by file)",
+        "about_ar": "نزّل الأصناف بملف Shopify أو WooCommerce وارفعه في المتجر، وارفع ملف طلبات المتجر هنا تبقى فواتير مسودة. الربط المباشر محتاج حساب المتجر.",
+        "about_en": "Download the items as a Shopify or WooCommerce file for the store, and upload the store's orders file here as draft invoices. A live link needs the store's account.",
+        "available": True, "paths": ("/store/",),
+    },
+    "shipping": {
+        "ar": "الشحن والتحصيل عند الاستلام", "en": "Shipping & cash on delivery",
+        "about_ar": "ابعت الفاتورة مع شركة شحن، وسجّل التسليم والتحصيل، وسوّي مع الشركة لما تسلّمك الفلوس بعد مصاريفها. اللي معاها بيبان مستحق عليها مش في خزنتك.",
+        "about_en": "Send an invoice with a courier, record the delivery and collection, and settle with the courier when it hands the money over less its fees. What it holds shows as owed by it, not as cash.",
+        "available": True, "paths": ("/shipping/",),
+    },
     "promotions": {
         "ar": "العروض والكوبونات", "en": "Promotions & coupons",
         "about_ar": "خصم % على قسم أو صنف، اشتري كذا وخد كذا ببلاش، خصم مبلغ لما الفاتورة تعدي حد معين، وكوبونات بكود. أحسن عرض واحد بيتطبق لوحده في الفاتورة والكاشير.",
@@ -128,6 +140,12 @@ CAPABILITIES = {
         "about_en": "Company, customer and item-code data, and each invoice's document in the portal format with a check of what is missing. Signing and sending come next.",
         "available": True, "paths": ("/einvoice/",),
     },
+    "e_receipt": {
+        "ar": "الإيصال الإلكتروني للمستهلك (B2C)", "en": "E-receipts for consumers (B2C)",
+        "about_ar": "كل بيعة من الكاشير بيطلعلها إيصال إلكتروني بصيغة المنظومة (v1.2) بسلسلة لكل جهاز وQR على الإيصال، وطابور 24 ساعة. الإرسال محتاج بيانات الجهاز على بوابة الإيصالات.",
+        "about_en": "Every till sale gets an e-receipt in the portal format (v1.2), chained per device, with a QR on the receipt and a 24-hour queue. Sending needs the device's details on the receipt portal.",
+        "available": True, "paths": ("/ereceipt/",),
+    },
     "fixed_assets": {
         "ar": "الأصول الثابتة والإهلاك", "en": "Fixed assets & depreciation",
         "about_ar": "سجل للأصول (عربيات، أجهزة، ديكور) وإهلاك شهري يدخل في صافي الربح.",
@@ -136,6 +154,10 @@ CAPABILITIES = {
     },
 }
 CAPABILITY_SLUGS = tuple(CAPABILITIES)
+
+#: Screens two capabilities share (Codex #271): the issuer, item-code and buyer-ID setup under /einvoice/ feed the
+#: e-receipt too, so either capability opens them. Matched exactly; the invoice documents stay with the e-invoice.
+SHARED_PATHS = {path: ("e_invoice", "e_receipt") for path in ("/einvoice/", "/einvoice/items/", "/einvoice/customers/")}
 
 #: Which capabilities start on for each commercial sub-activity. Anything not
 #: listed is OPTIONAL. Services activities suggest none of the trade ones.
@@ -223,9 +245,9 @@ ACTIVITY_PRESETS = {
 #: it at all (a builder never needs a quick till or sizes and colours). One that
 #: is already on still shows in Settings, so it can be switched off.
 NOT_FOR = {
-    catalog.CONTRACTING: {"pos", "shift_required", "barcode", "variants", "serials", "batches_expiry", "installments", "price_lists", "quotations", "promotions", "loyalty"},
-    catalog.EDUCATION: {"pos", "shift_required", "barcode", "variants", "serials", "batches_expiry", "units", "quotations", "promotions", "loyalty"},
-    catalog.MEDICAL: {"variants", "serials", "quotations", "promotions"},
+    catalog.CONTRACTING: {"e_receipt", "pos", "shift_required", "barcode", "variants", "serials", "batches_expiry", "installments", "price_lists", "quotations", "promotions", "shipping", "online_store", "loyalty"},
+    catalog.EDUCATION: {"pos", "shift_required", "barcode", "variants", "serials", "batches_expiry", "units", "quotations", "promotions", "shipping", "online_store", "loyalty"},
+    catalog.MEDICAL: {"variants", "serials", "quotations", "promotions", "shipping", "online_store"},
     catalog.RESTAURANTS: {"serials", "installments", "quotations"},
     catalog.SERVICES: {"variants", "batches_expiry"},
 }
@@ -309,13 +331,13 @@ WORKS_BEST_WITH = {
 #: SETTINGS-DESIGN: how the features screen groups them, the icon of each, and where each one shows once on.
 #: "Where" is what the settings track saw appear when the feature was switched on.
 GROUPS = (
-    ("selling", ("البيع والكاشير", "Selling and the till"), ("pos", "shift_required", "price_lists", "promotions", "loyalty", "installments", "quotations")),
+    ("selling", ("البيع والكاشير", "Selling and the till"), ("pos", "shift_required", "price_lists", "promotions", "loyalty", "installments", "quotations", "shipping", "online_store")),
     ("goods", ("الأصناف والمخزون", "Items and stock"), ("barcode", "units", "variants", "batches_expiry", "serials", "drugs")),
-    ("money", ("الحسابات والضرايب", "Accounts and tax"), ("vat", "e_invoice", "fixed_assets")),
+    ("money", ("الحسابات والضرايب", "Accounts and tax"), ("vat", "e_invoice", "e_receipt", "fixed_assets")),
 )
 ICONS = {"pos": "pos", "shift_required": "shift", "price_lists": "pricetag", "installments": "instalments", "barcode": "barcode",
          "units": "units", "variants": "variants", "batches_expiry": "expiry", "serials": "serial", "vat": "taxes",
-         "e_invoice": "einvoice", "fixed_assets": "assets", "quotations": "quotes", "drugs": "drugs", "promotions": "promotions", "loyalty": "loyalty"}
+         "e_invoice": "einvoice", "e_receipt": "ereceipt", "fixed_assets": "assets", "quotations": "quotes", "drugs": "drugs", "promotions": "promotions", "shipping": "shipping", "online_store": "store", "loyalty": "loyalty"}
 WHERE = {
     "pos": ("«الكاشير» في القايمة، وزرار في لوحة القيادة وفي قايمة الفواتير", "“Till” in the menu, with a button on the dashboard and the invoice list"),
     "shift_required": ("فاتورة البيع والكاشير بيطلبوا فتح وردية الأول", "The sales invoice and the till ask for an open shift first"),
@@ -327,11 +349,14 @@ WHERE = {
     "serials": ("خانة السيريال في فواتير البيع والشراء، وشاشة في المخزون", "A serial number field on sales and purchase invoices, and a screen under stock"),
     "installments": ("«الأقساط» في المبيعات، وكارت في لوحة القيادة", "“Instalments” under sales, and a dashboard card"),
     "quotations": ("«عروض الأسعار والأوامر» في القايمة، وزرار «اعمل فاتورة بالباقي» على كل أمر", "“Quotations & orders” in the menu, and “Invoice what is left” on each order"),
+    "online_store": ("«المتجر الأونلاين» في القايمة: ملف الأصناف للمتجر، ورفع ملف الطلبات", "“Online store” in the menu: the items file for the store, and the orders upload"),
+    "shipping": ("«الشحن والتحصيل» في القايمة، وزرار «ابعت مع شركة شحن» على كل فاتورة مترحّلة", "“Shipping & COD” in the menu, and “Ship with a courier” on each posted invoice"),
     "promotions": ("«العروض» في القايمة، وخانة «كوبون» في الكاشير وفاتورة البيع، وتقرير العروض", "“Promotions” in the menu, a “Coupon” field at the till and on the sales invoice, and the promotions report"),
     "loyalty": ("«نقاط الولاء» في القايمة، ورصيد النقاط في كارت العميل، وخانة «صرف نقاط» في الكاشير وفاتورة البيع", "“Loyalty points” in the menu, the points balance on the customer card, and a “Spend points” field at the till and on the sales invoice"),
     "drugs": ("«الأدوية والبدائل» في القايمة، وزرار «اصرف الروشتة» اللي بيفتح فاتورة البيع", "“Drugs & alternatives” in the menu, and “Dispense” opening the sales invoice"),
     "vat": ("«الضرايب» في القايمة، وضريبة كل صنف، وتقرير ضريبة المبيعات", "“Taxes” in the menu, a rate per item, and the sales VAT report"),
     "e_invoice": ("«الفاتورة الإلكترونية» في القايمة، وملف لكل فاتورة مترحّلة", "“E-invoicing” in the menu, and a document for each posted invoice"),
+    "e_receipt": ("«الإيصال الإلكتروني» في القايمة، وQR على إيصال الكاشير المطبوع", "“E-receipts” in the menu, and a QR on the printed till receipt"),
     "fixed_assets": ("«الأصول الثابتة» في القايمة، والإهلاك في المصروفات وصافي الربح", "“Fixed assets” in the menu, and depreciation in expenses and net profit"),
 }
 
@@ -463,7 +488,9 @@ def closed_capability(path):
     profile = ClientProfile.get_active()
     if profile is None or not profile.setup_is_complete:
         return None
-    return None if capability_enabled(owner) else owner
+    if any(capability_enabled(slug) for slug in SHARED_PATHS.get(path, (owner,))):
+        return None
+    return owner
 
 
 def _write(slug, enabled):

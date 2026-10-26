@@ -60,6 +60,8 @@ class Submission(models.Model):
     sending again makes a new row. The invoice itself is never changed."""
 
     invoice = models.ForeignKey("sales.SalesInvoice", on_delete=models.PROTECT, related_name="eta_submissions")
+    #: T7 (HG-059): set for a credit note — the sending of this return, against ``invoice``, the original.
+    sales_return = models.ForeignKey("sales.SalesReturn", on_delete=models.PROTECT, null=True, blank=True, related_name="eta_submissions")
     environment = models.CharField(max_length=10)
     status = models.CharField(max_length=20, choices=SubmissionStatus.choices)
     submission_id = models.CharField(max_length=100, blank=True)

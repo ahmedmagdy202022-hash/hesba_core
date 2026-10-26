@@ -66,6 +66,9 @@ urlpatterns = [
     path("loyalty/", include("loyalty.urls")),
     path("banks/", include("banking.urls")),
     path("cheques/", include("cheques.urls")),
+    path("store/", include("onlinestore.urls")),
+    path("shipping/", include("shipping.urls")),
+    path("ereceipt/", include("ereceipt.urls")),
     path("expenses/", include("expenses.urls")),
     path("print/", include("printing.urls")),
     path("barcode/", include("barcode.urls")),
@@ -99,6 +102,7 @@ urlpatterns = [
     path("purchases/orders/", include("orders.purchase_urls")),  # T2
     path("pharmacy/", include("pharmacy.urls")),
     path("staff/attendance/", include("attendance.urls")),
+    path("staff/payroll/", include("payroll.urls")),
     path("messages/", include("messaging.urls")),  # T9: the daily outbox of customer messages  # T11: under /staff/, so the employees module opens and closes it
     # CONTRACT-001: projects for contractors.
     path("projects/", include("projects.urls")),

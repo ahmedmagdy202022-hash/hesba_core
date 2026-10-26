@@ -21,6 +21,8 @@ BASE = (
     ("1107", "مصروفات مدفوعة مقدمًا", "Prepaid expenses", A, "", True, False),
     ("1108", "أقساط مستحقة على العملاء", "Instalments receivable", A, "instalments", True, False),
     ("1109", "حسابات جارية بين الكيانات", "Due between entities", A, "intercompany", True, False),
+    # T14 (HG-061): cash on delivery a shipping company collected and still has to hand over.
+    ("1120", "تحصيلات لدى شركات الشحن", "Courier collections receivable", A, "courier_receivable", True, False),
     ("1199", "حساب معلّق (فروق تحت المراجعة)", "Suspense (differences under review)", A, "suspense", True, False),
     ("12", "الأصول الثابتة", "Fixed assets", A, "", False, False),
     ("1201", "الأصول الثابتة بالتكلفة", "Fixed assets at cost", A, "fixed_assets", True, False),
@@ -32,6 +34,10 @@ BASE = (
     ("2103", "ضريبة القيمة المضافة - مخرجات", "VAT output", L, "vat_out", True, False),
     ("2104", "مصروفات مستحقة", "Accrued expenses", L, "", True, False),
     ("2105", "دفعات مقدمة من العملاء", "Customer advances", L, "customer_advances", True, False),
+    # T12 (HG-060): what a posted payroll run owes until it is paid.
+    ("2107", "مرتبات مستحقة", "Salaries payable", L, "salaries_payable", True, False),
+    ("2108", "تأمينات اجتماعية مستحقة", "Social insurance payable", L, "insurance_payable", True, False),
+    ("2109", "ضريبة كسب عمل مستحقة", "Payroll tax payable", L, "payroll_tax_payable", True, False),
     ("22", "الخصوم طويلة الأجل", "Long-term liabilities", L, "", False, False),
     ("2201", "القروض", "Loans", L, "", True, False),
     ("3", "حقوق الملكية", "Equity", E, "", False, False),
@@ -53,7 +59,7 @@ BASE = (
     ("51", "تكلفة المبيعات", "Cost of sales", X, "", False, False),
     ("5101", "تكلفة البضاعة المباعة", "Cost of goods sold", X, "cogs", True, False),
     ("52", "المصروفات التشغيلية", "Operating expenses", X, "", False, False),
-    ("5201", "مرتبات وأجور", "Salaries & wages", X, "", True, False),
+    ("5201", "مرتبات وأجور", "Salaries & wages", X, "salaries", True, False),
     ("5202", "إيجار", "Rent", X, "", True, False),
     ("5203", "كهرباء ومياه وغاز", "Utilities", X, "", True, False),
     ("5204", "إنترنت وتليفون", "Internet & phone", X, "", True, False),

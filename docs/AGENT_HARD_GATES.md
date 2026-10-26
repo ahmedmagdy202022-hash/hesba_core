@@ -1834,7 +1834,19 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 
 ## HG-059 — E-invoice live and the credit note for returns (T7)
 
-- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق»), as written below.
+- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق»), as written below. The part that needs no outside account is BUILT in T7 (`claude/t7-credit-note`). Going live still needs Ahmed's preprod credentials and the signing method (the `ETA_*` settings).
+- **What was built:**
+  - `build_credit_note(sales_return)`: an ETA credit note (`documentType` "c") with the issuer and receiver of the original invoice and `references` set to the original's accepted UUID. Each returned line gives back its refund:
+    - the price × quantity returned;
+    - less the line's own discount share: that is the VAT base (`netTotal`);
+    - plus the tax given back (HG-015).
+    The lines' share of the invoice discount is taken after tax, as on the invoice, in `extraDiscountAmount` (Codex #270). The total must equal the return's.
+  - `Submission.sales_return` (nullable, migration 0003) marks a credit note's sending. The invoice's own sending, history and the dashboard count ignore those rows.
+  - `send_credit_note` claims a `sending` row under the return's lock and goes through the same sign → submit → record path as an invoice. `send_invoice`'s tail became `_deliver`, shared by both, so their behaviour is unchanged. Refresh, reconciliation (by the return number) and the public link work as for an invoice; a credit note is not cancelled from Hesba.
+  - The queue: `credit_notes_due()` lists the posted returns of accepted invoices with no credit note yet, or with a sending cut off long enough ago to be checked again. `manage.py send_credit_notes` sends them, run from cron every few minutes; one that fails stays queued, and a rejected one waits for a manual send after its data is corrected.
+  - The return page links to its credit-note page (document, JSON, send, refresh) when e-invoicing is on.
+  - Posting a return is unchanged and never waits for the authority.
+  - **Protected change (Codex #270):** `sales.services.cancel_sales_return` now makes one call, `einvoice.guards.before_sales_return_cancel`, under the return's row lock. The call refuses to reverse a return whose credit note the authority holds (being sent, under review or accepted), as `before_sales_invoice_cancel` already does for invoices. A return never sent reverses as before. The invoice guard now looks at the invoice's own sendings only, never a return's credit note.
 - **Why:** a sales return must be sent to the Tax Authority as a credit note that points to the original document. Signing must not block posting.
 - **Proposed:**
   - the return builds an ETA credit note from `einvoice.services` and queues it;
@@ -1847,7 +1859,38 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 
 ## HG-060 — Payroll (T12)
 
-- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق»), as written below.
+- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق»), as written below. BUILT in T12 (`claude/t12-payroll`).
+- **What was built:**
+  - A new `payroll` app under the employees module (`/staff/payroll/`):
+    - each employee's salary (basic, allowances, insured wage, insured or not, taxed or not);
+    - the month's run, one line per employee;
+    - the rules screen.
+  - **Prepare:**
+    - gross = basic + allowances − absence − other deductions. Absent and unpaid-leave days come from the T11 attendance sheet, a day being a thirtieth;
+    - insurance is counted on the insured wage, held within the legal floor and ceiling;
+    - income tax is the yearly tax on (gross − employee insurance) × 12 − the exemption, through the brackets, divided by 12;
+    - net = gross − employee insurance − tax;
+    - a draft line can be changed by hand.
+  - **The rules are data** (`PayrollSettings`): 11% and 18.75%, the 2,300 / 14,500 wage floor and ceiling, the 20,000 exemption, and the brackets 0 / 10 / 15 / 20 / 22.5 / 25 / 27.5%. **They need an accountant's check every January.** The rule that drops the lower brackets for very high incomes is not modelled.
+  - **Posting** (no money moves):
+    - the projector books salary cost (5201, now keyed `salaries` by data migration 0005) = gross + company insurance;
+    - against it: salaries payable (2107), social insurance payable (2108, both shares) and payroll tax payable (2109). These are new accounts that `ensure_chart` adds by itself.
+  - **Paying:**
+    - each payment is a new cashbox operation of kind `payroll` (it pays out like a bank fee) against one debt, never more than is left, dated when paid;
+    - the projector puts it against that debt;
+    - a payment is cancelled from the payroll screen by a dated reversal of its operation. The cashbox screen refuses to cancel it, and its manual form does not offer the kind.
+  - **Reversal:** a posted run with nothing paid is reversed on a date of its own. Its accrual entry stays and the opposite one is added.
+  - **Permissions:** viewing needs `cashboxes.view_expenses`; preparing, posting, paying and the rules need `cashboxes.record_expenses`; paying also needs `cashboxes.move_cash`, through `create_cashbox_operation`. A closed month stays closed (HG-011).
+  - **Reports (Codex #269):** `expenses.services.expense_total`, behind the dashboard's expenses and net profit, the daily digest and the functional report, adds the payroll cost the ledger books: gross + company insurance on the posting date, less a reversed run on its reversal date (`payroll.services.cost_total`). Payroll belongs to the main entity.
+  - **Changed protected files:**
+    - `cashboxes/models.py` + migration 0015: the operation and movement kind;
+    - `cashboxes/services.py`: create and reverse that kind, like a bank fee;
+    - `cashboxes/forms.py` and `cashboxes/views.py`: the guards;
+    - `ledger/chart.py`, `ledger/projector.py` and ledger migration 0005;
+    - `expenses/services.py`: `expense_total` adds the payroll cost.
+  - **Corrections (Codex #269):**
+    - A run with a negative net pay is not posted; it would lower what the other employees are owed.
+    - A reversed month can be made again, corrected. `payroll/0002` replaces the unique month with "one run a month that is not reversed", and the reversed run stays for the record.
 - **Why:** the salary run creates expenses and money movements, and it needs its own control accounts (salaries payable, social insurance, payroll tax).
 - **Why the expense service cannot be reused as it is:** `expenses.services.record_expense` pays cash out for exactly the expense amount at once. Gross pay would overpay the cash; net pay would understate the salary cost and leave no liability for what is withheld.
 - **Proposed: a payroll accrual and payment of its own.**
@@ -1877,7 +1920,24 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 
 ## HG-061 — Shipping companies and cash on delivery (T14)
 
-- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق»), as written below.
+- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق»), as written below. The manual part (no courier API) is BUILT in T14 (`claude/t14-shipping`); a live link to Bosta or another courier still needs its account.
+- **What was built:**
+  - A new `shipping` app and the capability «الشحن والتحصيل عند الاستلام». It is not offered to contracting, education or medical.
+  - Each courier gets its own box of a new cashbox kind, `courier` (migration 0015), which the projector books in 1120, courier collections receivable. Like the cheque boxes, it is kept out of every cashbox picker (`entities.scope.cashboxes`).
+  - **Ship:** a posted invoice goes out with a courier. The amount to collect defaults to what is left on the invoice, never more; one open shipment per invoice.
+  - **Deliver:** the customer's payment is recorded into the courier's box (`record_customer_payment`, called, not changed), so the customer owes nothing and the courier owes the money. A delivery marked by mistake is undone from the shipments screen before settlement. The sales payment cancel refuses such a payment, the way it does a cheque's.
+  - **Settle:** the courier hands over the chosen delivered parcels, less the fees (the parcels' own, unless typed). The net is a transfer from its box to a cashbox or bank; the fees are an expense (transport, 5205) paid from its box. The cashbox screen will not cancel the transfer, and `cancel_expense` refuses the fee and loss expenses, so a settlement never disagrees with its parcels.
+  - **Came back:** the parcel is marked as returned, and the goods come back through the ordinary sales return.
+  - **Lost:** what should have been collected is recorded as collected and written off at once as an expense with the reason.
+  - **Permissions:** shipping needs `sales.create_sales_invoice`; delivery, undo and loss need `sales.receive_customer_payment`; couriers and settlements need `cashboxes.move_cash`. The expense steps also need `cashboxes.record_expenses`.
+  - The sales invoice page has «ابعت مع شركة شحن».
+  - **Entities (Codex #272):** a courier's box belongs to the entity it was added in. An invoice ships only with a courier of its own entity, and a settlement lands only in that entity's cashbox or bank. So a collection is credited in the same entity as the invoice's debt; a business whose branches use the same company adds it once per branch. Shipments are read and acted on only within the entity being worked in.
+  - **Second shipment, returns:** what earlier shipments of the invoice collected, and what its posted returns took off the debt, are subtracted from what is left to collect (neither a customer payment nor a return changes `remaining_due`).
+  - **Cancelled invoices (Codex #272):**
+    - **Protected change:** `sales.services.cancel_posted_sales_invoice` now refuses an invoice with a parcel still with a courier. It is marked came back or lost on the shipments screen first.
+    - Delivery and loss lock the invoice too, and refuse one that is no longer posted, so a cancelled sale is never collected.
+  - **Reconciliation:** the ledger check of cash against the cashbox report now counts `courier_receivable` with cash, bank and the cheque boxes, since the cashbox formula counts the courier boxes too.
+  - **Fees above what was collected** (a prepaid parcel, a small COD): the shortfall is paid into the courier's box from the chosen cashbox or bank, then the whole fee leaves the courier's box as before.
 - **Why:** with cash on delivery, the shipping company collects the money and settles it later minus its fees. That is a receivable from the courier, not cash.
 - **Proposed:**
   - the courier is a customer-like party with its own ledger;
@@ -1907,3 +1967,35 @@ The entries below are the protected-logic decisions in the commercial gate, reco
   - a warehouse can show a negative quantity, which some reports and checks assume cannot happen; each must be checked;
   - an offline sale that syncs after stock ran out must follow the same rule.
 - **Tests:** off by default refuses as today; on, a short sale posts only with the agreement and logs it; the settling adjustment brings the cost of sales and the stock value to what they would be had the purchase come first; returns of a short sale; the trial balance stays balanced throughout.
+
+## HG-067 — Online store by file: a new table for imported orders (T13)
+
+- **Status:** RECORDED (Codex #273). This is a new, additive table in a new app. No existing model, migration, posting or report changed.
+- **Change:** `onlinestore.StoreOrder` (migration `onlinestore/0001_initial`) holds:
+  - `source` (`shopify` or `template`), `order_number`, a one-to-one link to the draft `sales.SalesInvoice` it made, `store_total`, `imported_by`, `imported_at`;
+  - a unique constraint on (`source`, `order_number`).
+- **Why:** the same orders file uploaded twice must not make the same invoices twice. The draft also needs to show the store's own total, to compare with what Hesba computed.
+- **Accounting:** none. Orders become **drafts** through `taxes.create_sales_draft_with_tax` (the invoice form's path). Stock, cash, the customer ledger and the ledger move only when someone posts the draft as usual.
+- **Correcting an order (Codex #273):** a draft has no edit screen. So the board can:
+  - put the store's shipping charge on a line of a chosen service item;
+  - take VAT-inclusive store prices back to before tax;
+  - when a corrected file is uploaded again with «بدّل الطلبات اللي لسه مسودة», delete the old **draft** with its `StoreOrder` and make it again. A draft has no stock, cash or ledger effect, and its lines, tax rows and serial links go with it. A posted invoice is never replaced.
+- Serial-tracked items go through `prepare_sale_serials` and `attach_sale_serials`, as on the invoice form, with the serials taken from the template's «السيريال» column. Invoice numbers are Hesba's own `WEB-` series; the store's number stays in the notes and on `StoreOrder`.
+- **Risk:**
+  - two branches with separate stores whose order numbers coincide share one namespace per source, so the second branch's order would be reported as imported already;
+  - the invoice link is `PROTECT`, so a draft that came from the store is cancelled, not deleted.
+- **Files:** `onlinestore/` (new app), `config/settings.py`, `config/urls.py`, capability wiring (`settings_core/capabilities.py`, `module_gate.py`, `operational_views.py`, `display_labels.py`, `reports/navigation.py`).
+- **Tests:** `onlinestore/tests.py`. They cover once-only import, drafts only (status `draft`), the phone match, the walk-in fallback, the template, and permissions.
+
+## HG-066 — E-receipts for till sales (T8, offline part)
+
+- **Status:** BUILT in T8 (`claude/t8-ereceipt`); additive only. Sending to the authority still needs the device's credentials on the receipt portal.
+- **What changed:**
+  - **Schema:** two new tables, nothing changed in existing ones:
+    - `ereceipt.Device`: the till's serial number, branch code and the last UUID of its chain;
+    - `ereceipt.Receipt`: one per till sale, holding its UUID, the previous UUID, its status and what is missing. `document_text` keeps the receipt exactly as it was hashed, because a JSON column may reorder keys.
+  - **Hook:** a `post_save` signal on `AuditLog`, for `post_sales_invoice` only. It issues the receipt of a till sale (`POS-…`) when the capability `e_receipt` is on. It runs inside the posting's transaction and reads the posted sale; the posting function itself is not changed. A receipt whose data is incomplete is kept as "not issued", never blocking the sale.
+  - **Chain:** the device row is locked while a receipt is issued, so two sales never take the same `previousUUID`.
+  - **Reads:** follow the entity scope (HG-034), through the invoice's selling location.
+- **Risk:** a sale posted while the device is missing or data is incomplete waits as "not issued". Issuing it later puts it at the end of the chain, with the issue time of its sale, so the 24 hours count from that time; the queue shows it as late.
+- **Tests:** `ereceipt.tests`.
