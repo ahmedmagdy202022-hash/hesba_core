@@ -1850,7 +1850,38 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 
 ## HG-060 — Payroll (T12)
 
-- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق»), as written below.
+- **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق»), as written below. BUILT in T12 (`claude/t12-payroll`).
+- **What was built:**
+  - A new `payroll` app under the employees module (`/staff/payroll/`):
+    - each employee's salary (basic, allowances, insured wage, insured or not, taxed or not);
+    - the month's run, one line per employee;
+    - the rules screen.
+  - **Prepare:**
+    - gross = basic + allowances − absence − other deductions. Absent and unpaid-leave days come from the T11 attendance sheet, a day being a thirtieth;
+    - insurance is counted on the insured wage, held within the legal floor and ceiling;
+    - income tax is the yearly tax on (gross − employee insurance) × 12 − the exemption, through the brackets, divided by 12;
+    - net = gross − employee insurance − tax;
+    - a draft line can be changed by hand.
+  - **The rules are data** (`PayrollSettings`): 11% and 18.75%, the 2,300 / 14,500 wage floor and ceiling, the 20,000 exemption, and the brackets 0 / 10 / 15 / 20 / 22.5 / 25 / 27.5%. **They need an accountant's check every January.** The rule that drops the lower brackets for very high incomes is not modelled.
+  - **Posting** (no money moves):
+    - the projector books salary cost (5201, now keyed `salaries` by data migration 0005) = gross + company insurance;
+    - against it: salaries payable (2107), social insurance payable (2108, both shares) and payroll tax payable (2109). These are new accounts that `ensure_chart` adds by itself.
+  - **Paying:**
+    - each payment is a new cashbox operation of kind `payroll` (it pays out like a bank fee) against one debt, never more than is left, dated when paid;
+    - the projector puts it against that debt;
+    - a payment is cancelled from the payroll screen by a dated reversal of its operation. The cashbox screen refuses to cancel it, and its manual form does not offer the kind.
+  - **Reversal:** a posted run with nothing paid is reversed on a date of its own. Its accrual entry stays and the opposite one is added.
+  - **Permissions:** viewing needs `cashboxes.view_expenses`; preparing, posting, paying and the rules need `cashboxes.record_expenses`; paying also needs `cashboxes.move_cash`, through `create_cashbox_operation`. A closed month stays closed (HG-011).
+  - **Reports (Codex #269):** `expenses.services.expense_total`, behind the dashboard's expenses and net profit, the daily digest and the functional report, adds the payroll cost the ledger books: gross + company insurance on the posting date, less a reversed run on its reversal date (`payroll.services.cost_total`). Payroll belongs to the main entity.
+  - **Changed protected files:**
+    - `cashboxes/models.py` + migration 0015: the operation and movement kind;
+    - `cashboxes/services.py`: create and reverse that kind, like a bank fee;
+    - `cashboxes/forms.py` and `cashboxes/views.py`: the guards;
+    - `ledger/chart.py`, `ledger/projector.py` and ledger migration 0005;
+    - `expenses/services.py`: `expense_total` adds the payroll cost.
+  - **Corrections (Codex #269):**
+    - A run with a negative net pay is not posted; it would lower what the other employees are owed.
+    - A reversed month can be made again, corrected. `payroll/0002` replaces the unique month with "one run a month that is not reversed", and the reversed run stays for the record.
 - **Why:** the salary run creates expenses and money movements, and it needs its own control accounts (salaries payable, social insurance, payroll tax).
 - **Why the expense service cannot be reused as it is:** `expenses.services.record_expense` pays cash out for exactly the expense amount at once. Gross pay would overpay the cash; net pay would understate the salary cost and leave no liability for what is withheld.
 - **Proposed: a payroll accrual and payment of its own.**

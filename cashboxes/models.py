@@ -76,6 +76,7 @@ class CashboxMovementType(models.TextChoices):
     ADJUSTMENT = "adjustment", "Adjustment"
     BANK_FEE = "bank_fee", "Bank fee"
     CHEQUE_BOUNCED = "cheque_bounced", "Cheque bounced"
+    PAYROLL = "payroll", "Payroll payment"
 
 
 class CashboxDirection(models.TextChoices):
@@ -192,6 +193,7 @@ class CashboxOperationType(models.TextChoices):
     DIRECT_OUT = "direct_out", "Direct cash out"
     TRANSFER = "transfer", "Cashbox transfer"
     BANK_FEE = "bank_fee", "Bank fee"
+    PAYROLL = "payroll", "Payroll payment"  # T12 (HG-060): paid against a payroll run's debt, from the payroll screen
 
 
 class CashboxOperationStatus(models.TextChoices):

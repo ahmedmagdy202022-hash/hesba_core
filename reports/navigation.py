@@ -114,6 +114,8 @@ NAV_ITEMS = (
      "allow": "reports.navigation.sees_staff"},
     {"key": "my_attendance", "ar": "حضوري وانصرافي", "en": "My attendance", "url_name": "attendance:me", "module": "employees_technicians",
      "allow": "reports.navigation.checks_in_only"},
+    # T12: the month's payroll — salaries, insurance and income tax, posted as debts and paid from a cashbox.
+    {"key": "payroll", "ar": "المرتبات", "en": "Payroll", "url_name": "payroll:list", "module": "employees_technicians", "permission": "cashboxes.view_expenses"},
     {"key": "expenses", "ar": "المصروفات", "en": "Expenses", "url_name": "expenses:list", "module": "expenses", "permission": "cashboxes.view_expenses"},
     # R2: features switched on in Settings -> Features get their own place in the menu.
     {"key": "taxes", "ar": "الضرائب", "en": "Taxes", "url_name": "taxes:settings", "module": None, "capability": "vat", "permission": "master_data.view_master_data",
@@ -156,6 +158,7 @@ TAB_LABELS = {
     "attendance": {"ar": "الحضور", "en": "Attendance"},
     "messages": {"ar": "الرسائل", "en": "Messages"},
     "my_attendance": {"ar": "حضوري", "en": "Check in"},
+    "payroll": {"ar": "المرتبات", "en": "Payroll"},
     "banks": {"ar": "البنوك", "en": "Banks"},
     "cheques": {"ar": "الشيكات", "en": "Cheques"},
     "contracts": {"ar": "العقود", "en": "Contracts"},
