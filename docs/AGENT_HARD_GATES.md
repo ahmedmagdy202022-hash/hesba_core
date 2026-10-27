@@ -2036,7 +2036,12 @@ The entries below are the protected-logic decisions in the commercial gate, reco
     - It keeps the once-only rule.
     - A WooCommerce order uses the template's source, so an order a shop uploaded before by file is not made twice.
     - Coupons come in as the order's discount.
-    - The store's own "prices include tax" flag is honoured when the shop charges VAT.
+    - VAT is each order's own (Codex #283). A Shopify order's `taxes_included` says whether its prices hold the VAT; when the shop charges VAT, the VAT is taken back out of that order only.
+    - WooCommerce's REST amounts (line subtotals, shipping, discount) are always before tax, so they come in tax-exclusive and the VAT goes on top (Codex #283).
+  - **Paging (Codex #283):**
+    - The board's button reads at most 20 pages, so the request stays short.
+    - When the store has more orders, the result says so and offers «كمّل السحب». That button carries on in the same window from the next page; nothing is cut silently.
+    - The command reads every page.
   - **Where:** the board gets «اسحب من Shopify / WooCommerce», and the command `pull_store_orders --location CODE` can run from cron.
   - **Tests:** `onlinestore/tests_connect.py`.
 

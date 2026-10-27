@@ -20,7 +20,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections import OrderedDict
-from datetime import timedelta
+from datetime import datetime, timedelta
+from datetime import timezone as dt_timezone
 
 from decouple import config
 from django.core.exceptions import ValidationError
@@ -122,7 +123,9 @@ def woocommerce_order(row):
         "status": "refunded" if status == "refunded" else status,
         "currency": _text(row.get("currency")),
         "cancelled": status if status in ("cancelled", "failed", "trash") else "",
-        "prices_include_tax": bool(row.get("prices_include_tax")),
+        # Codex #283: WooCommerce's REST amounts (line subtotals, shipping, discount) are always before tax, whatever the
+        # shop's "prices include tax" setting, so they come in as tax-exclusive and Hesba adds the VAT on top.
+        "prices_include_tax": False,
     })
     lines = []
     for line in row.get("line_items") or []:
@@ -134,51 +137,77 @@ def woocommerce_order(row):
     return order
 
 
-def _shopify(since):
+def _shopify(since, since_id=0, max_pages=MAX_PAGES):
+    """(orders, the since_id to carry on from, or None when every order was read)."""
+
     values = settings()
     base = f"https://{values['shopify_store']}/admin/api/{values['shopify_version']}/orders.json"
     headers = {"X-Shopify-Access-Token": values["shopify_token"]}
-    rows, since_id = [], 0
-    for _page in range(MAX_PAGES):
+    rows, pages = [], 0
+    while max_pages is None or pages < max_pages:
         query = urllib.parse.urlencode({"status": "any", "created_at_min": since.strftime("%Y-%m-%dT%H:%M:%SZ"), "limit": 250, "since_id": since_id})
         status, payload = _http(f"{base}?{query}", headers)
         if status != 200 or not isinstance(payload, dict):
             raise ValidationError(f"shopify:{status}")
         page = payload.get("orders") or []
         rows += page
+        pages += 1
         if len(page) < 250:
-            break
+            return [shopify_order(row) for row in rows], None
         since_id = max(int(row.get("id") or 0) for row in page)
-    return [shopify_order(row) for row in rows]
+    return [shopify_order(row) for row in rows], since_id
 
 
-def _woocommerce(since):
+def _woocommerce(since, page=1, max_pages=MAX_PAGES):
+    """(orders, the page to carry on from, or None when every order was read)."""
+
     values = settings()
     basic = base64.b64encode(f"{values['woo_key']}:{values['woo_secret']}".encode()).decode()
     headers = {"Authorization": f"Basic {basic}"}
-    rows = []
-    for page in range(1, MAX_PAGES + 1):
+    rows, pages = [], 0
+    while max_pages is None or pages < max_pages:
         query = urllib.parse.urlencode({"after": since.strftime("%Y-%m-%dT%H:%M:%S"), "per_page": 100, "page": page, "orderby": "date", "order": "asc"})
         status, payload = _http(f"{values['woo_url']}/wp-json/wc/v3/orders?{query}", headers)
         if status != 200 or not isinstance(payload, list):
             raise ValidationError(f"woocommerce:{status}")
         rows += payload
+        pages += 1
         if len(payload) < 100:
-            break
-    return [woocommerce_order(row) for row in rows]
+            return [woocommerce_order(row) for row in rows], None
+        page += 1
+    return [woocommerce_order(row) for row in rows], page
 
 
-def fetch(store, days=7):
-    """(source, {number: order}) for the store's orders of the last ``days`` days."""
+def _since(more, days):
+    """The window's start and where to carry on, from a ``more`` marker ("<start>|<position>") or afresh."""
 
-    since = timezone.now() - timedelta(days=days)
-    orders = _shopify(since) if store == "shopify" else _woocommerce(since)
+    start, _sep, position = (more or "").partition("|")
+    try:
+        since = datetime.strptime(start, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt_timezone.utc)
+        return since, max(int(position), 0)
+    except ValueError:
+        return timezone.now() - timedelta(days=days), None
+
+
+def fetch(store, days=7, more="", max_pages=MAX_PAGES):
+    """(source, {number: order}, more) for the store's orders of the last ``days`` days.
+
+    Codex #283: a pull reads at most ``max_pages`` pages (None: all of them). When the store has more, ``more`` says
+    where to carry on (the same window, from the next page), and "" once every order was read."""
+
+    since, position = _since(more, days)
+    if store == "shopify":
+        orders, next_position = _shopify(since, position or 0, max_pages)
+    else:
+        orders, next_position = _woocommerce(since, position or 1, max_pages)
     source = StoreSource.SHOPIFY if store == "shopify" else StoreSource.TEMPLATE
-    return source, OrderedDict((order["number"], order) for order in orders if order["number"])
+    more = f"{since.strftime('%Y-%m-%dT%H:%M:%SZ')}|{next_position}" if next_position is not None else ""
+    return source, OrderedDict((order["number"], order) for order in orders if order["number"]), more
 
 
-def pull(store, location, user, lang="ar", shipping_item=None, replace=False, days=7):
-    """Pull the store's recent orders into draft invoices, as an upload would. Same result shape as ``import_orders``."""
+def pull(store, location, user, lang="ar", shipping_item=None, replace=False, days=7, more="", max_pages=MAX_PAGES):
+    """Pull the store's recent orders into draft invoices, as an upload would. Same result shape as ``import_orders``,
+    plus ``more``: where a next pull carries on when the store had more orders than one pull reads ("" when none)."""
 
     from . import services
     from taxes.services import vat_enabled
@@ -191,7 +220,9 @@ def pull(store, location, user, lang="ar", shipping_item=None, replace=False, da
         raise PermissionDenied(f"Importing store orders needs {services.IMPORT}.")
     if location is None:
         raise ValidationError(services.MESSAGES[lang]["location"])
-    source, orders = fetch(store, days)
-    # The store says whether its prices include VAT; Hesba takes it back only when the shop charges VAT.
-    with_vat = vat_enabled() and any(order.get("prices_include_tax") for order in orders.values())
-    return services.import_parsed(source, orders, location, user, lang, services.import_options(shipping_item, with_vat), replace)
+    source, orders, more = fetch(store, days, more, max_pages)
+    # Codex #283: each order says whether its own prices include VAT (``prices_include_tax``); Hesba takes the VAT back
+    # out of that order only, and only when the shop charges VAT.
+    result = services.import_parsed(source, orders, location, user, lang, services.import_options(shipping_item, vat_enabled()), replace)
+    result["more"] = more
+    return result

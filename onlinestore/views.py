@@ -26,6 +26,8 @@ WORDS = {
         "replace": "بدّل الطلبات اللي اتسجلت قبل كده ولسه مسودة", "replaced": "اتبدّلت",
         "pull": "اسحب الطلبات من المتجر", "pull_intro": "حساب المتجر متربط: طلبات آخر 7 أيام بتتسحب على طول وتبقى فواتير مسودة، والطلب مش بيدخل مرتين.",
         "pull_shopify": "اسحب من Shopify", "pull_woocommerce": "اسحب من WooCommerce",
+        "more": "المتجر فيه طلبات أكتر من اللي بيتسحب مرة واحدة؛ اللي اتسحب دخل. دوس «كمّل السحب» عشان الباقي يدخل من مكان ما وقفنا.",
+        "pull_more": "كمّل السحب",
     },
     "en": {
         "title": "Online store", "intro": "Until a store account is linked: download the items in the store's own file and upload it there, and download the orders from the store and upload them here as draft invoices to check and post.",
@@ -41,6 +43,8 @@ WORDS = {
         "replace": "Replace orders imported before that are still drafts", "replaced": "Replaced",
         "pull": "Pull the orders from the store", "pull_intro": "The store's account is connected: the last 7 days' orders come straight in as draft invoices, each once.",
         "pull_shopify": "Pull from Shopify", "pull_woocommerce": "Pull from WooCommerce",
+        "more": "The store has more orders than one pull reads; those read are in. Press “Carry on pulling” for the rest, from where this pull stopped.",
+        "pull_more": "Carry on pulling",
     },
 }
 
@@ -83,7 +87,9 @@ def board(request):
             if store:  # T13 live: the store's recent orders straight from its API
                 from . import connect
 
-                result = connect.pull(store, location, request.user, lang, shipping_item=shipping_item, replace=request.POST.get("replace") == "1")
+                result = connect.pull(store, location, request.user, lang, shipping_item=shipping_item, replace=request.POST.get("replace") == "1",
+                                      more=request.POST.get("more", ""))
+                result["store"] = store
             else:
                 if upload is None:
                     raise ValidationError(services.MESSAGES[lang]["file"])

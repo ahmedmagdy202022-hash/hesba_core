@@ -498,6 +498,9 @@ def _draft(source, order, location, user, words, phones, options):
     own = (options.get("currency") or "EGP").upper()
     if order.get("currency") and order["currency"].strip().upper() != own:  # Codex #273: one company currency, no conversion
         raise ValidationError(words["currency"].format(currency=order["currency"].strip().upper(), own=own))
+    # Codex #283: an order pulled from the store's API says itself whether its prices include VAT; a file's orders
+    # follow the upload's "prices include VAT" box.
+    with_vat = options.get("with_vat") and order.get("prices_include_tax", True)
     lines, gross, rates = [], [], []
     for line in order["lines"]:
         item = _item(line["sku"])
@@ -506,7 +509,7 @@ def _draft(source, order, location, user, words, phones, options):
         quantity, price = _decimal(line["quantity"], words), _decimal(line["price"], words)
         if quantity <= 0 or price < 0:
             raise ValidationError(words["number"])
-        rate = Decimal((options.get("rates") or {}).get(str(item.pk), "0")) if options.get("with_vat") else ZERO
+        rate = Decimal((options.get("rates") or {}).get(str(item.pk), "0")) if with_vat else ZERO
         gross.append(quantity * price)
         rates.append(rate)
         # Codex #273: the line's amount before tax is worked out on the whole line (the store's price had the VAT in it),
@@ -526,7 +529,7 @@ def _draft(source, order, location, user, words, phones, options):
     shipping = _decimal(order["shipping"], words, ZERO)
     if shipping and options.get("shipping_item") is not None:
         fee = options["shipping_item"]
-        rate = Decimal((options.get("rates") or {}).get(str(fee.pk), "0")) if options.get("with_vat") else ZERO
+        rate = Decimal((options.get("rates") or {}).get(str(fee.pk), "0")) if with_vat else ZERO
         shipping = money_round(shipping * HUNDRED / (HUNDRED + rate)) if rate else money_round(shipping)  # Codex #273: as the prices
         lines.append({"item": fee, "quantity": Decimal("1"), "unit_sale_price": shipping, "line_discount_amount": ZERO,
                       "description": words["shipping_line"]})

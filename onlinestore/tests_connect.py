@@ -93,3 +93,85 @@ class PullTests(StoreSetup):
         with mock.patch.dict(os.environ, WOO_ENV), mock.patch.object(connect, "_http", FakeStore()):
             call_command("pull_store_orders", location="SHOP", user=self.owner.username, verbosity=0)
         self.assertTrue(StoreOrder.objects.filter(order_number="2044").exists())
+
+
+class PullReviewTests(StoreSetup):
+    """Codex #283: VAT is each order's own, WooCommerce amounts are before tax, and a long pull carries on, never cut."""
+
+    def setUp(self):
+        super().setUp()
+        from settings_core import capabilities as caps
+        from settings_core.models import ClientProfile
+
+        caps.set_capability_enabled(ClientProfile.get_active(), "vat", True, user=self.owner)
+
+    def pull_rows(self, env, store, rows):
+        def fake(url, headers):
+            return 200, ({"orders": rows} if "myshopify.com" in url else rows)
+
+        with mock.patch.dict(os.environ, env), mock.patch.object(connect, "_http", fake), \
+             mock.patch("taxes.services.rates_by_item", return_value={str(self.dress.pk): "14.00", str(self.scarf.pk): "14.00"}):
+            return connect.pull(store, self.shop, self.owner)
+
+    def test_each_order_says_whether_its_own_prices_include_vat(self):
+        inclusive = dict(SHOPIFY_ORDER, id=6001, name="#2001", taxes_included=True, total_discounts="0", shipping_lines=[],
+                         line_items=[{"sku": "DR-1", "quantity": 1, "price": "570.00"}])
+        exclusive = dict(SHOPIFY_ORDER, id=6002, name="#2002", taxes_included=False, total_discounts="0", shipping_lines=[],
+                         line_items=[{"sku": "DR-1", "quantity": 1, "price": "500.00"}])
+        result = self.pull_rows(SHOPIFY_ENV, "shopify", [inclusive, exclusive])
+        self.assertEqual([row["number"] for row in result["made"]], ["2001", "2002"])
+        prices = {row["number"]: row["invoice"].lines.get().unit_sale_price for row in result["made"]}
+        self.assertEqual(prices, {"2001": D("500.00"), "2002": D("500.00")})  # the VAT came out of the inclusive one only
+
+    def test_woocommerce_amounts_are_before_tax_whatever_the_shop_setting(self):
+        row = dict(WOO_ORDER, prices_include_tax=True)
+        invoice = self.pull_rows(WOO_ENV, "woocommerce", [row])["made"][0]["invoice"]
+        prices = list(invoice.lines.order_by("line_number").values_list("unit_sale_price", flat=True))
+        self.assertEqual(prices, [D("500.00"), D("100.00")])  # not cut down as if the VAT were inside
+        self.assertGreater(invoice.total_amount, D("550.00"))  # the VAT goes on top of the 550 before tax
+
+    def test_a_shopify_pull_past_the_page_limit_carries_on_from_where_it_stopped(self):
+        calls = []
+
+        def fake(url, headers):
+            calls.append(url)
+            if "since_id=0" in url:
+                return 200, {"orders": [{"id": 1000 + n, "name": f"#{n}", "line_items": []} for n in range(250)]}
+            return 200, {"orders": [{"id": 9000, "name": "#9000", "line_items": []}]}
+
+        with mock.patch.dict(os.environ, SHOPIFY_ENV), mock.patch.object(connect, "_http", fake):
+            _source, first, more = connect.fetch("shopify", max_pages=1)
+            self.assertEqual((len(first), more.split("|")[1]), (250, "1249"))
+            _source, rest, done = connect.fetch("shopify", more=more, max_pages=1)
+        self.assertEqual((list(rest), done), (["9000"], ""))
+        window = [part for part in calls[0].split("&") if part.startswith("created_at_min=")]
+        self.assertIn(window[0], calls[1])  # the same window, from the next order
+        self.assertIn("since_id=1249", calls[1])
+
+    def test_a_woocommerce_pull_carries_on_from_the_next_page(self):
+        def fake(url, headers):
+            if "page=1&" in url:
+                return 200, [{"id": n, "number": str(n), "line_items": []} for n in range(100)]
+            return 200, [{"id": 500, "number": "500", "line_items": []}]
+
+        with mock.patch.dict(os.environ, WOO_ENV), mock.patch.object(connect, "_http", fake):
+            _source, first, more = connect.fetch("woocommerce", max_pages=1)
+            self.assertEqual((len(first), more.split("|")[1]), (100, "2"))
+            self.assertEqual(list(connect.fetch("woocommerce", more=more)[1]), ["500"])
+            _source, every, done = connect.fetch("woocommerce", max_pages=None)
+        self.assertEqual((len(every), done), (101, ""))
+
+    def test_the_board_offers_to_carry_on_and_the_command_reads_every_page(self):
+        from collections import OrderedDict
+
+        self.client.force_login(self.owner)
+        with mock.patch.dict(os.environ, SHOPIFY_ENV), \
+             mock.patch.object(connect, "fetch", return_value=("shopify", OrderedDict(), "2026-10-20T00:00:00Z|77")) as fetch:
+            page = self.client.post("/store/", {"pull": "shopify", "location": self.shop.pk, "lang": "ar"})
+            self.assertContains(page, 'data-pull-more="shopify"')
+            self.assertContains(page, 'name="more" value="2026-10-20T00:00:00Z|77"')
+            self.client.post("/store/", {"pull": "shopify", "location": self.shop.pk, "more": "2026-10-20T00:00:00Z|77"})
+            self.assertEqual(fetch.call_args.args[2], "2026-10-20T00:00:00Z|77")
+        with mock.patch.dict(os.environ, SHOPIFY_ENV), mock.patch.object(connect, "pull", return_value={"made": [], "again": [], "skipped": [], "more": ""}) as pull:
+            call_command("pull_store_orders", location="SHOP", user=self.owner.username, verbosity=0)
+        self.assertIsNone(pull.call_args.kwargs["max_pages"])

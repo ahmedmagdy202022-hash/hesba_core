@@ -30,7 +30,7 @@ class Command(BaseCommand):
             raise CommandError("No user to make the drafts under; pass --user.")
         for store in stores:
             try:
-                result = connect.pull(store, location, user, days=options["days"])
+                result = connect.pull(store, location, user, days=options["days"], max_pages=None)  # every page, no request timeout here
             except ValidationError as exc:
                 self.stdout.write(f"{store}: {' '.join(exc.messages)}")
                 continue
