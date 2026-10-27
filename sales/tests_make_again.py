@@ -109,6 +109,16 @@ class MakeAgainKeepsTests(MakeAgainTests):
         self.assertEqual((row["batch_no"], row["expiry_date"]), ("LOT-7", date(2027, 5, 1)))
         self.assertEqual(page.context["form"].initial["tax_amount"], D("14.00"))
 
+    def test_a_promotions_discount_is_worked_out_again_not_copied(self):
+        from promotions.models import InvoicePromotion, Promotion, PromotionKind
+
+        invoice, item = self.cancelled_sale()
+        invoice.lines.update(line_discount_amount=D("10.00"))
+        promo = Promotion.objects.create(name="خصم الكوبون", kind=PromotionKind.values[0], coupon_code="EID10", percent=D("10"))
+        InvoicePromotion.objects.create(invoice=invoice, promotion=promo, discount=D("10.00"), coupon_code="EID10")
+        page = self.client.get(f"/sales/new/?copy={invoice.pk}")
+        self.assertEqual([row["line_discount_amount"] for row in page.context["line_formset"].initial], [0])  # not stacked on save
+        self.assertEqual(page.context["coupon"], "EID10")  # the same coupon applies it once again
 
 class MakeAgainNeedsViewTests(MakeAgainTests):
     def test_copying_needs_the_permission_to_see_invoices(self):
@@ -126,3 +136,4 @@ class MakeAgainNeedsViewTests(MakeAgainTests):
         page = self.client.get(f"/sales/new/?copy={invoice.pk}")
         self.assertEqual(page.context["line_formset"].initial, None)
         self.assertNotIn(invoice.invoice_number, page.context["form"].initial.get("notes", ""))
+
