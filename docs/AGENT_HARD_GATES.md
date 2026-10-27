@@ -2076,6 +2076,29 @@ The entries below are the protected-logic decisions in the commercial gate, reco
   - the invoice link is `PROTECT`, so a draft that came from the store is cancelled, not deleted.
 - **Files:** `onlinestore/` (new app), `config/settings.py`, `config/urls.py`, capability wiring (`settings_core/capabilities.py`, `module_gate.py`, `operational_views.py`, `display_labels.py`, `reports/navigation.py`).
 - **Tests:** `onlinestore/tests.py`. They cover once-only import, drafts only (status `draft`), the phone match, the walk-in fallback, the template, and permissions.
+- **Live part (pulling from the store's API), 27 Oct 2026:** after Ahmed said not to wait for him on what is plainly right. Nothing new is written beyond what an upload writes; orders still become drafts only.
+  - **Code:** `onlinestore/connect.py` reads the last days' orders from a connected store.
+  - **Shopify:** the Admin REST API (`orders.json`, token in `X-Shopify-Access-Token`, paged on `since_id`).
+  - **WooCommerce:** the REST API v3 (`wp-json/wc/v3/orders`, key and secret as HTTP Basic).
+  - **Secrets:** they come from the environment (`SHOPIFY_STORE`, `SHOPIFY_ACCESS_TOKEN`, `SHOPIFY_API_VERSION`, `WOOCOMMERCE_URL`, `WOOCOMMERCE_KEY`, `WOOCOMMERCE_SECRET`), never the database.
+  - **The import:** each order takes the same shape an upload makes and goes through the same loop (`services.import_parsed`).
+    - It keeps the once-only rule.
+    - A WooCommerce order uses the template's source, so an order a shop uploaded before by file is not made twice.
+    - Coupons come in as the order's discount.
+    - VAT is each order's own (Codex #283). A Shopify order's `taxes_included` says whether its prices hold the VAT; when the shop charges VAT, the VAT is taken back out of that order only.
+    - WooCommerce's REST amounts (line subtotals, shipping, discount) are always before tax, so they come in tax-exclusive and the VAT goes on top (Codex #283).
+    - A WooCommerce line keeps its exact subtotal (the unit price carries six decimals, and the import's rounding brings the line back to it). Each line's coupon is what WooCommerce took off it (`subtotal − total`); the order's coupon is not spread again over every line (Codex #283).
+    - A Shopify line takes its own `discount_allocations`, and its shipping is the `discounted_price`; the order's discount is spread only for orders that do not give them (Codex #283).
+    - A WooCommerce order with `fee_lines` (handling, payment surcharges) is skipped with the reason and tried again on the next pull, never imported short of its fees (Codex #283).
+    - A WooCommerce order with `refunds` is refused as partly refunded, as Shopify's `partially_refunded` is (Codex #283).
+    - A Shopify order edited after it was placed comes in as it is now: `current_quantity` per line (a line edited to nothing is left out, its discount scaled to what is left), and `current_total_price` / `current_total_discounts` (Codex #283).
+    - **A pulled order comes in only when Hesba's invoice comes to the store's total** (within 0.05; a shipping charge only noted on the invoice counts). Otherwise it is skipped with both totals and tried again on the next pull. This catches a tax or fee the store worked out differently (a tax-exempt customer, a surcharge), so none is imported silently (Codex #283). File uploads keep showing the two totals side by side for checking, as before.
+  - **Paging (Codex #283):**
+    - The board's button reads at most 20 pages, so the request stays short.
+    - When the store has more orders, the result says so and offers «كمّل السحب». That button carries on in the same window from the next page; nothing is cut silently. It keeps the location, shipping item and «بدّل» choice of the first pull.
+    - The command reads every page.
+  - **Where:** the board gets «اسحب من Shopify / WooCommerce», and the command `pull_store_orders --location CODE` can run from cron.
+  - **Tests:** `onlinestore/tests_connect.py`.
 
 ## HG-066 — E-receipts for till sales (T8, offline part)
 
