@@ -193,7 +193,9 @@ def follow_up(limit=BATCH):
         if missing(device):
             continue
         sent = Receipt.objects.filter(device=device, status=ReceiptStatus.SUBMITTED).exclude(submission_uuid="")
-        for submission in list(sent.values_list("submission_uuid", flat=True).distinct()[:limit]):
+        # Codex #281: the model's default ordering would put its columns in the DISTINCT and repeat each submission
+        # once per receipt; ordering by the submission alone makes each one a single call.
+        for submission in list(sent.order_by("submission_uuid").values_list("submission_uuid", flat=True).distinct()[:limit]):
             try:
                 status, payload = _api(device, "GET", f"/api/v1/receiptsubmissions/{urllib.parse.quote(submission)}/details?PageSize=100")
             except eta.PortalError:

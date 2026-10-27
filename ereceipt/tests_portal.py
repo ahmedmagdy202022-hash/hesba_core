@@ -129,3 +129,12 @@ class SendingTests(ReceiptSetup):
         self.assertEqual(receipt.status, ReceiptStatus.INVALID)
         self.assertEqual(receipt.message, "totalAmount: The total does not match the items")
 
+
+    def test_a_submission_of_many_receipts_is_followed_up_once(self):
+        for _ in range(3):
+            self.sale()
+        fake = FakePortal()
+        self.run_send(fake)
+        details = [call for call in fake.calls if "/details" in call["url"]]
+        self.assertEqual(len(details), 1)  # Codex #281: one call per submission, not one per receipt
+        self.assertEqual(set(Receipt.objects.values_list("status", flat=True)), {ReceiptStatus.VALID})
