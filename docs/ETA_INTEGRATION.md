@@ -58,8 +58,38 @@ The canonical text follows the authority's serialization rule (ETA SDK, "Documen
 
 Hesba computes it (`einvoice.portal.serialize`) from the exact document it sends, without the `signatures` property. The signer must sign that text as given: SHA-256, CAdES-BES with the signing-certificate-v2 attribute, as the authority requires. The ETA SDK's sample signer does exactly this with a USB token and can be wrapped behind this one endpoint.
 
+## E-receipts for till sales (B2C, receipt v1.2)
+
+Every till sale gets its receipt when it is posted (`ereceipt`, T8). The receipts wait on **E-receipts** (`/ereceipt/`) and must reach the authority within 24 hours of their issue.
+
+**Once, on the authority's side:** the taxpayer has the B2C tag, and the till is registered on the receipt portal. Registering gives the POS its own client ID, client secret and pre-shared key. It also records the device's serial number, OS version and model / framework.
+
+**On the server:** the till's secrets go in the environment, never in Hesba's screens. They sit next to `ETA_ENVIRONMENT`, which the e-invoice uses too:
+
+| Name | Value |
+|---|---|
+| `ETA_RECEIPT_CLIENT_ID` | the POS's client ID from the receipt portal |
+| `ETA_RECEIPT_CLIENT_SECRET` | its secret |
+| `ETA_RECEIPT_PRESHARED_KEY` | the POS's pre-shared key |
+
+**On the E-receipts screen:** type the device's serial number, OS version and model / framework exactly as the portal registered them. The **Receipt portal connection** box then reads **Ready to send**, or names what is still missing.
+
+**Sending:**
+- **Send what is waiting now** sends the queue at once, oldest first. Each receipt goes exactly as it was hashed, so the device's chain arrives in order.
+- On a schedule, `python manage.py send_ereceipts` (for example every 5 minutes from cron) sends the queue and follows up the receipts already sent.
+- What the authority does with each receipt:
+  - an accepted receipt shows **Sent**, then **Accepted** once its submission is checked;
+  - a rejected one shows **Invalid** with the authority's reason;
+  - a batch the authority refused, or could not be reached for, stays queued with the reason, for the next try.
+
+The API calls, from the ETA SDK (`sdk.invoicing.eta.gov.eg/ereceiptapi`):
+- `POST {identity}/connect/token`, with the device in the `posserial`, `pososversion`, `posmodelframework` and `presharedkey` headers;
+- `POST {api}/api/v1/receiptsubmissions` with `{"receipts": [...]}`;
+- `GET {api}/api/v1/receiptsubmissions/{submissionUuid}/details`.
+
+The SDK lists an issuer signature on a submission but says its validation is not deployed yet. When the e-invoice signer above is set up, each batch is signed the same way.
+
 ## Not yet covered
 
-- Credit and debit notes (document types `c` and `d`) for sales returns.
-- Receipts (the separate e-receipt system for retail sales).
-- Sending in batches or automatically on posting. Today it is one invoice at a time, by a person.
+- Sending e-invoices in batches or automatically on posting. Today it is one invoice at a time, by a person (credit notes for returns are sent by `send_credit_notes`).
+- Return receipts (receipt type `r`) for till returns.
