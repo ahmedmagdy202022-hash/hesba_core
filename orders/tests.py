@@ -237,3 +237,27 @@ class ScreensTests(OrdersSetup):
         self.assertFalse(caps.fits("restaurants", "quotations", "restaurant"))
         self.assertFalse(caps.fits("commercial", "quotations", "grocery"))
         self.assertEqual(caps.needs("quotations"), ("customers",))
+
+
+class MakeAgainKeepsTheOrderTests(OrdersSetup):
+    """Codex #284: a cancelled invoice made again takes its order's quantities again, so they are not left open twice."""
+
+    def test_the_copy_carries_the_order_and_saving_links_it(self):
+        order = self.quote()
+        services.move(order, Status.SENT, self.owner)
+        services.move(order, Status.CONFIRMED, self.owner)
+        invoice = self.invoice(order, {self.oil.pk: "10"})
+        cancel_posted_sales_invoice(invoice.pk, self.owner, "again")
+        self.client.force_login(self.owner)
+        page = self.client.get(f"/sales/new/?copy={invoice.pk}")
+        self.assertEqual(page.context["from_order"], order)
+        self.assertContains(page, f'name="order" value="{order.pk}"')
+        before = [row["left"] for row in services.quantities(order)]
+        self.client.post("/sales/new/", {
+            "invoice_date": TODAY.isoformat(), "customer": self.customer.pk, "selling_location": self.location.pk, "paid_now": "0",
+            "discount_amount": "0", "tax_amount": "0", "order": order.pk, "lang": "ar",
+            "lines-TOTAL_FORMS": "1", "lines-INITIAL_FORMS": "0", "lines-MIN_NUM_FORMS": "0", "lines-MAX_NUM_FORMS": "1000",
+            "lines-0-item": self.oil.pk, "lines-0-quantity": "10", "lines-0-unit_sale_price": "80.00", "lines-0-line_discount_amount": "40.00"})
+        self.assertEqual(OrderInvoiceLine.objects.exclude(sales_line__invoice=invoice).count(), 1)  # the new draft took the order's 10
+        self.assertEqual(before, [D("40"), D("10")])  # the cancelled invoice gave its 10 back
+        self.assertEqual([row["left"] for row in services.quantities(order)], [D("30"), D("10")])  # and the new draft holds them again
