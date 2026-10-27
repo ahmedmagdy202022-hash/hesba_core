@@ -224,11 +224,19 @@ def invoice_create(request):
     )
 
 
+def _fits_form(invoice):
+    """Codex #284: the invoice form takes a limited number of lines; a longer cancelled invoice (a big till sale) is not
+    offered to be made again here, as saving it would fail."""
+
+    return invoice.lines.count() <= PurchaseLineFormSet.max_num
+
+
 def _copy_of(request):
     raw = request.GET.get("copy", "")
     if not raw.isdigit() or not user_has_permission(request.user, "purchases.view_purchase_invoices"):  # Codex #284: copying shows the invoice
         return None
-    return entity_scope.scope(PurchaseInvoice.objects.prefetch_related("lines__item"), entity_scope.PURCHASE_INVOICE).filter(pk=raw, status="cancelled").first()
+    invoice = entity_scope.scope(PurchaseInvoice.objects.prefetch_related("lines__item"), entity_scope.PURCHASE_INVOICE).filter(pk=raw, status="cancelled").first()
+    return invoice if invoice is not None and _fits_form(invoice) else None
 
 
 def _copy_order(invoice):
@@ -275,6 +283,7 @@ def invoice_detail(request, pk):
             expiry_only=expiry_only(),  # AN8: a supermarket reads the expiry date, not a lot number
             invoice=invoice,
             can_post=user_has_permission(request.user, "purchases.create_purchase_invoice"),
+            can_copy=invoice.status == "cancelled" and _fits_form(invoice),
             can_return=user_has_permission(request.user, "purchases.return_purchase"),
             # FB2-LABELS: goods just received usually need their price labels.
             can_labels=capability_enabled("barcode") and user_has_permission(request.user, "barcode.print_labels"),

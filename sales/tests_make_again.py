@@ -123,6 +123,17 @@ class MakeAgainKeepsTests(MakeAgainTests):
         page = self.client.get(f"/sales/new/?copy={invoice.pk}")
         self.assertEqual([row["line_discount_amount"] for row in page.context["line_formset"].initial], [D("20.00")])
 
+    def test_an_invoice_longer_than_the_form_is_not_offered(self):
+        from .forms import SalesLineFormSet
+
+        invoice, _item = self.cancelled_sale()
+        line = invoice.lines.get()
+        for number in range(SalesLineFormSet.max_num):  # a big till sale, longer than the invoice form takes
+            line.pk, line.line_number = None, line.line_number + 1
+            line.save()
+        self.assertNotContains(self.client.get(f"/sales/{invoice.pk}/"), "data-make-again")
+        self.assertIsNone(self.client.get(f"/sales/new/?copy={invoice.pk}").context["line_formset"].initial)
+
 class MakeAgainNeedsViewTests(MakeAgainTests):
     def test_copying_needs_the_permission_to_see_invoices(self):
         from hesba_testing.factories import grant, make_role, make_user_profile

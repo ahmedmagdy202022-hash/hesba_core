@@ -229,11 +229,19 @@ def invoice_create(request):
                                                       redeem_points=request.POST.get("redeem_points", "") if request.method == "POST" else copy_points))
 
 
+def _fits_form(invoice):
+    """Codex #284: the invoice form takes a limited number of lines; a longer cancelled invoice (a big till sale) is not
+    offered to be made again here, as saving it would fail."""
+
+    return invoice.lines.count() <= SalesLineFormSet.max_num
+
+
 def _copy_of(request):
     raw = request.GET.get("copy", "")
     if not raw.isdigit() or not user_has_permission(request.user, "sales.view_sales_invoices"):  # Codex #284: copying shows the invoice
         return None
-    return entity_scope.scope(SalesInvoice.objects.prefetch_related("lines__item"), entity_scope.SALES_INVOICE).filter(pk=raw, status="cancelled").first()
+    invoice = entity_scope.scope(SalesInvoice.objects.prefetch_related("lines__item"), entity_scope.SALES_INVOICE).filter(pk=raw, status="cancelled").first()
+    return invoice if invoice is not None and _fits_form(invoice) else None
 
 
 def _copy_order(invoice):
@@ -303,6 +311,7 @@ def invoice_detail(request, pk):
             can_view_cost=user_has_permission(request.user, "inventory.view_cost"),
             can_view_profit=user_has_permission(request.user, "reports.view_profit_report"),
             can_post=user_has_permission(request.user, "sales.create_sales_invoice"),
+            can_copy=invoice.status == "cancelled" and _fits_form(invoice),
             can_return=user_has_permission(request.user, "sales.return_sale"),
             einvoice_problems=_einvoice_problems(invoice, _lang(request)),
             short_box=_short_box(invoice, request.user),
