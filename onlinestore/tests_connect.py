@@ -251,3 +251,12 @@ class AllocationTests(StoreSetup):
         self.assertEqual(result["made"], [])
         self.assertIn("partially_refunded", result["skipped"][0]["reason"])
         self.assertFalse(StoreOrder.objects.exists())
+
+    def test_an_edited_shopify_order_comes_in_as_it_is_now(self):
+        row = dict(SHOPIFY_ORDER, total_discounts="0", current_total_discounts="0", total_price="700.00", current_total_price="550.00",
+                   line_items=[{"sku": "DR-1", "quantity": 1, "current_quantity": 1, "price": "500.00", "discount_allocations": []},
+                               {"sku": "SC-1", "quantity": 2, "current_quantity": 0, "price": "100.00", "discount_allocations": []}])
+        result = self.pull(SHOPIFY_ENV, "shopify", [row])
+        invoice = result["made"][0]["invoice"]
+        self.assertEqual(list(invoice.lines.values_list("item__item_code", "quantity")), [("DR-1", D("1.000"))])  # the scarves were taken off
+        self.assertEqual(result["made"][0]["store_total"], D("550.00"))

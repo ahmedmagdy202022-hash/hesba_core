@@ -2042,6 +2042,7 @@ The entries below are the protected-logic decisions in the commercial gate, reco
     - A Shopify line takes its own `discount_allocations`, and its shipping is the `discounted_price`; the order's discount is spread only for orders that do not give them (Codex #283).
     - A WooCommerce order with `fee_lines` (handling, payment surcharges) is skipped with the reason and tried again on the next pull, never imported short of its fees (Codex #283).
     - A WooCommerce order with `refunds` is refused as partly refunded, as Shopify's `partially_refunded` is (Codex #283).
+    - A Shopify order edited after it was placed comes in as it is now: `current_quantity` per line (a line edited to nothing is left out, its discount scaled to what is left), and `current_total_price` / `current_total_discounts` (Codex #283).
   - **Paging (Codex #283):**
     - The board's button reads at most 20 pages, so the request stays short.
     - When the store has more orders, the result says so and offers «كمّل السحب». That button carries on in the same window from the next page; nothing is cut silently. It keeps the location, shipping item and «بدّل» choice of the first pull.

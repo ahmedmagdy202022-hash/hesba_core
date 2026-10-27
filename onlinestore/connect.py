@@ -101,11 +101,12 @@ def shopify_order(row):
         "phone": _text(row.get("phone")) or _text(billing.get("phone")) or _text(shipping_address.get("phone")) or _text(customer.get("phone")),
         "email": _text(row.get("email")),
         "address": "، ".join(part for part in (_text(shipping_address.get("address1")), _text(shipping_address.get("city"))) if part),
-        "discount": _text(row.get("total_discounts")),
+        # Codex #283: an order edited in Shopify keeps what it was first; ``current_*`` is what it is now
+        "discount": _text(row.get("current_total_discounts", row.get("total_discounts"))),
         # Codex #283: shipping after its own discounts (``discounted_price``), as the order charged it
         "shipping": str(sum((_number(line.get("discounted_price", line.get("price"))) for line in row.get("shipping_lines") or []), Decimal("0")))
                     if row.get("shipping_lines") else "",
-        "total": _text(row.get("total_price")),
+        "total": _text(row.get("current_total_price", row.get("total_price"))),
         "status": _text(row.get("financial_status")),
         "currency": _text(row.get("currency")),
         "cancelled": _text(row.get("cancelled_at")),
@@ -113,9 +114,15 @@ def shopify_order(row):
     })
     order["lines"] = []
     for line in row.get("line_items") or []:
-        mapped = {"sku": _text(line.get("sku")) or _text(line.get("title")), "quantity": _text(line.get("quantity")), "price": _text(line.get("price"))}
+        ordered = _number(line.get("quantity"))
+        # Codex #283: units taken off by editing the order are not sold; a line edited down to nothing goes
+        now = _number(line.get("current_quantity")) if line.get("current_quantity") is not None else ordered
+        if now <= 0:
+            continue
+        mapped = {"sku": _text(line.get("sku")) or _text(line.get("title")), "quantity": str(now), "price": _text(line.get("price"))}
         if "discount_allocations" in line:  # Codex #283: what Shopify took off this line itself, coupons for some products included
-            mapped["discount"] = str(sum((_number(part.get("amount")) for part in line.get("discount_allocations") or []), Decimal("0")))
+            given = sum((_number(part.get("amount")) for part in line.get("discount_allocations") or []), Decimal("0"))
+            mapped["discount"] = str((given * now / ordered).quantize(Decimal("0.01")) if ordered and now != ordered else given)
         order["lines"].append(mapped)
     return order
 
