@@ -1721,6 +1721,14 @@ The entries below are the protected-logic decisions in the commercial gate, reco
   - skip, templates in both languages, the menu item;
   - a stock keeper is refused.
 
+- **Live part (sending by WhatsApp Business), 27 Oct 2026:** after Ahmed said not to wait for him on what is plainly right. No balance, booking or posting is touched.
+  - **API:** `messaging/whatsapp.py` sends through the WhatsApp Cloud API (`POST graph.facebook.com/{version}/{phone_number_id}/messages`, a template message).
+  - **Secrets:** they come from the environment (`WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, optionally `WHATSAPP_API_VERSION` and `WHATSAPP_LANGUAGE`), never the database.
+  - **Templates:** a business may open a chat only with a template Meta approved. So each kind names its approved template on the outbox screen (`MessageTemplate.wa_template`). The template's body takes `{{1}}`, the company, and `{{2}}`, the message the shop wrote. Suggested wording: «رسالة من {{1}}: {{2}}».
+  - **Sending:** «ابعت أوتوماتيك» on the outbox, or the command `send_messages` each morning, sends today's waiting messages of those kinds.
+  - **Results:** a sent message keeps WhatsApp's id (`provider_id`, channel `api`). A refused one stays waiting with the reason (`error`), to go by a click. A kind with no template stays a one-click send, as before.
+  - **Files and tests:** migration `messaging/0002`; tests in `messaging.tests_whatsapp`.
+
 ## HG-055 — Bank accounts (T3)
 
 - **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق», together with HG-056 to HG-061 as written below). BUILT in T3 (`claude/t3-banks`).

@@ -45,9 +45,9 @@ KIND_LABELS = {
 }
 MESSAGES = {
     "ar": {"text": "نص الرسالة فاضي.", "placeholder": "النص فيه {bad} ومش معروف؛ المسموح: {allowed}.", "every": "التكرار من 1 لـ 90 يوم.",
-           "done": "الرسالة دي اتبعتت أو اتشالت قبل كده."},
+           "done": "الرسالة دي اتبعتت أو اتشالت قبل كده.", "wa_template": "اسم قالب واتساب: حروف إنجليزي صغيرة وأرقام و _ بس، زي ما اتسجل عند Meta."},
     "en": {"text": "The message is empty.", "placeholder": "The text has {bad}, which is unknown; allowed: {allowed}.", "every": "Repeat after 1 to 90 days.",
-           "done": "This message was already sent or skipped."},
+           "done": "This message was already sent or skipped.", "wa_template": "The WhatsApp template name: lower-case letters, digits and _ only, as registered with Meta."},
 }
 
 
@@ -64,9 +64,11 @@ def can_edit(user):
 
 
 def api_connected():
-    """Whether a WhatsApp Business account sends the messages by itself. Not yet: it needs the shop's own Meta account (T9 live part)."""
+    """Whether the shop's WhatsApp Business account is set up to send the messages by itself (T9 live part)."""
 
-    return False
+    from . import whatsapp
+
+    return not whatsapp.missing()
 
 
 # ---- templates ----
@@ -97,8 +99,11 @@ def save_template(kind, data, user, lang="ar"):
         raise ValidationError(words["every"])
     if not 1 <= every <= 90:
         raise ValidationError(words["every"])
+    wa_template = (data.get("wa_template") or "").strip()
+    if wa_template and not re.fullmatch(r"[a-z0-9_]{1,120}", wa_template):  # Meta's template names: lower case, digits, _
+        raise ValidationError(words["wa_template"])
     row, _created = MessageTemplate.objects.update_or_create(kind=kind, defaults={
-        "text": text, "active": data.get("active") in (True, "1", "on"), "every_days": every, "updated_by": user})
+        "text": text, "active": data.get("active") in (True, "1", "on"), "every_days": every, "wa_template": wa_template, "updated_by": user})
     AuditLog.objects.create(event_type=AuditEventType.UPDATE, actor=user, module="messaging", action="save_template", object_type="messaging.MessageTemplate",
                             object_id=str(row.pk), before_data={}, after_data={"kind": kind, "active": row.active, "every_days": every})
     return row
@@ -300,6 +305,43 @@ def mark(message, status, user, lang="ar"):
     AuditLog.objects.create(event_type=AuditEventType.UPDATE, actor=user, module="messaging", action=f"message_{status}", object_type="messaging.OutboxMessage",
                             object_id=str(message.pk), before_data={}, after_data={"kind": message.kind, "key": message.key, "day": str(message.day)})
     return message
+
+
+def send_by_api(user=None, messages=None):
+    """T9 live: send today's waiting messages whose kind has an approved template, through the shop's WhatsApp
+    Business account. Returns {"sent", "failed"}. A refused message stays waiting with the reason, to go by a click
+    or on the next run. ``messages`` narrows it (the outbox sends what its user may see)."""
+
+    from . import whatsapp
+
+    if whatsapp.missing():
+        return {"sent": 0, "failed": 0}
+    named = {row.kind: row.wa_template for row in MessageTemplate.objects.filter(active=True).exclude(wa_template="")}
+    if not named:
+        return {"sent": 0, "failed": 0}
+    company, _currency = _company()
+    rows = (messages if messages is not None else OutboxMessage.objects.all()).filter(
+        status=OutboxStatus.PENDING, day=timezone.localdate(), kind__in=list(named))
+    sent = failed = 0
+    for pk in list(rows.values_list("pk", flat=True)[:500]):
+        with transaction.atomic():
+            message = OutboxMessage.objects.select_for_update().filter(pk=pk, status=OutboxStatus.PENDING).first()
+            if message is None:
+                continue  # sent or skipped a moment ago
+            provider_id, error = whatsapp.send(message.phone, named[message.kind], company, message.text)
+            if not provider_id:
+                message.error = error
+                message.save(update_fields=["error"])
+                failed += 1
+                continue
+            message.status, message.channel, message.provider_id, message.error = OutboxStatus.SENT, "api", provider_id, ""
+            message.sent_at, message.sent_by = timezone.now(), user
+            message.save(update_fields=["status", "channel", "provider_id", "error", "sent_at", "sent_by"])
+            AuditLog.objects.create(event_type=AuditEventType.UPDATE, actor=user, module="messaging", action="message_sent_api",
+                                    object_type="messaging.OutboxMessage", object_id=str(message.pk), before_data={},
+                                    after_data={"kind": message.kind, "key": message.key, "day": str(message.day), "provider_id": provider_id})
+            sent += 1
+    return {"sent": sent, "failed": failed}
 
 
 def counts(user, today=None):

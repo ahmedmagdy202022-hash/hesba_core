@@ -21,6 +21,9 @@ WORDS = {
         "none": "مفيش رسائل هنا.", "templates": "نصوص الرسائل", "active": "تتبعت", "every": "متتكررش لنفس العميل قبل (يوم)", "save": "حفظ",
         "placeholders": "الكلمات اللي بتتغير لوحدها: {name} الاسم، {company} اسم الشركة، {amount} المبلغ، {date} التاريخ، {time} الوقت، {number} رقم الفاتورة أو الروشتة.",
         "api_off": "الإرسال الأوتوماتيك من غير ضغط محتاج حساب WhatsApp Business للمحل نفسه. لحد ما يتربط، الرسالة بتتبعت بضغطة من هنا.",
+        "api_on": "حساب WhatsApp Business متربط: الأنواع اللي ليها قالب متوافق عليه بتتبعت لوحدها.", "send_all": "ابعت أوتوماتيك",
+        "api_sent": "اتبعت {sent}، وماتبعتش {failed} (السبب جنب كل رسالة).", "wa_template": "اسم القالب المتوافق عليه عند Meta (فاضي: بضغطة بس)",
+        "wa_hint": "القالب بياخد متغيرين: {{1}} اسم الشركة و{{2}} نص الرسالة. مثال تسجّله: «رسالة من {{1}}: {{2}}».",
         "saved": "اتحفظ.", "day": "اليوم", "when": "اتبعتت", "gone": "الرسالة دي مبقتش لازمة: اتدفع المبلغ أو الميعاد اتلغى أو اتغير.",
     },
     "en": {
@@ -30,6 +33,9 @@ WORDS = {
         "none": "No messages here.", "templates": "Message wording", "active": "Send these", "every": "Not again to the same customer within (days)", "save": "Save",
         "placeholders": "Words filled in by themselves: {name} the name, {company} your company, {amount} the amount, {date} the date, {time} the time, {number} the invoice or prescription number.",
         "api_off": "Sending without a click needs the shop's own WhatsApp Business account. Until it is connected, each message goes with one click from here.",
+        "api_on": "The WhatsApp Business account is connected: the kinds with an approved template are sent by themselves.", "send_all": "Send automatically",
+        "api_sent": "{sent} sent, {failed} not sent (the reason is next to each).", "wa_template": "The template Meta approved (blank: by a click only)",
+        "wa_hint": "The template takes two parameters: {{1}} the company and {{2}} the message. Example to register: “Message from {{1}}: {{2}}”.",
         "saved": "Saved.", "day": "Day", "when": "Sent", "gone": "This message is no longer needed: the amount was paid, or the appointment was cancelled or moved.",
     },
 }
@@ -65,6 +71,10 @@ def outbox(request):
                 if action == "send":
                     return redirect(services.whatsapp_url(message))
                 flash.success(request, words["saved"])
+            elif action == "send_all":  # T9 live: the kinds with an approved template, through the WhatsApp Business account
+                services.build()
+                result = services.send_by_api(request.user, services.visible(request.user))
+                flash.success(request, words["api_sent"].format(sent=result["sent"], failed=result["failed"]))
             elif action == "refresh":
                 added = services.build()
                 flash.success(request, words["added"].format(n=added) if added else words["nothing_new"])
