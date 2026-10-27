@@ -197,8 +197,16 @@ def invoice_create(request):
                 return redirect(f"/sales/{invoice.pk}/?lang={lang}")
     else:
         initial = _party_initial(request, "customer") or {}
-        line_initial = []
-        if from_order is not None:  # T1: what is left on the order, at the order's prices
+        line_initial, copy_points, copy_coupon = [], "", ""
+        copy = _copy_of(request) if from_order is None and from_prescription is None else None
+        if copy is not None:  # FB-27 (undo): a cancelled invoice back as a new draft
+            copy_header, line_initial, copy_points, copy_coupon = _copy_initial(copy, lang)
+            initial.update(copy_header)
+            # Codex #284: the cancelled invoice gave its order's quantities back; the new one takes them again on saving
+            from_order = order_for_invoice(request.user, _copy_order(copy))
+            if from_order is None:  # Codex #284: likewise the prescription it dispensed, through the usual checks
+                from_prescription = pharmacy.prescription_for_invoice(request.user, _copy_prescription(copy))
+        elif from_order is not None:  # T1: what is left on the order, at the order's prices
             order_header, line_initial = invoice_initial(from_order, lang)
             initial.update({key: getattr(value, "pk", value) for key, value in order_header.items()})
         elif from_prescription is not None:  # T10: the prescription's drugs, at the customer's price
@@ -218,8 +226,75 @@ def invoice_create(request):
     offer_quick_add(form, request.user, lang)  # FB2-QUICKPARTY: + new supplier / customer / warehouse
     return render(request, "sales/form.html", _context(request, form=form, line_formset=line_formset, can_post=True, item_catalog=item_catalog(sale_prices=True, purchase_prices=False), scan_words=scan_words(lang), price_book=price_book(), tax_rates=rates_by_item(), units=units_catalog(), from_order=from_order, from_prescription=from_prescription,
                                                       promotions_on=promotions.enabled(), running_promotions=promotions.running() if promotions.enabled() else [],
-                                                      coupon=request.POST.get("coupon", ""), loyalty_on=loyalty.enabled(), loyalty_rules=loyalty.rules() if loyalty.enabled() else None,
-                                                      redeem_points=request.POST.get("redeem_points", "")))
+                                                      coupon=request.POST.get("coupon", "") if request.method == "POST" else copy_coupon, loyalty_on=loyalty.enabled(), loyalty_rules=loyalty.rules() if loyalty.enabled() else None,
+                                                      redeem_points=request.POST.get("redeem_points", "") if request.method == "POST" else copy_points))
+
+
+def _fits_form(invoice):
+    """Codex #284: the invoice form takes a limited number of lines; a longer cancelled invoice (a big till sale) is not
+    offered to be made again here, as saving it would fail."""
+
+    return invoice.lines.count() <= SalesLineFormSet.max_num
+
+
+def _copy_of(request):
+    raw = request.GET.get("copy", "")
+    if not raw.isdigit() or not user_has_permission(request.user, "sales.view_sales_invoices"):  # Codex #284: copying shows the invoice
+        return None
+    invoice = entity_scope.scope(SalesInvoice.objects.prefetch_related("lines__item"), entity_scope.SALES_INVOICE).filter(pk=raw, status="cancelled").first()
+    return invoice if invoice is not None and _fits_form(invoice) else None
+
+
+def _copy_order(invoice):
+    """The sales order the cancelled invoice delivered, if any."""
+
+    from orders.models import OrderInvoiceLine
+
+    return OrderInvoiceLine.objects.filter(sales_line__invoice=invoice).values_list("order_line__order_id", flat=True).first()
+
+
+def _copy_prescription(invoice):
+    """The prescription the cancelled invoice dispensed, if any."""
+
+    from pharmacy.models import PrescriptionInvoice
+
+    return PrescriptionInvoice.objects.filter(invoice=invoice).values_list("prescription_id", flat=True).first()
+
+
+def _copy_initial(invoice, lang):
+    """FB-27 (Ahmed's note #27, undo): a cancelled sale is never brought back to life, but it can be made again in one
+    step: the same customer, warehouse, cashbox, discount, payment and lines, as a new draft to check and save.
+
+    Returns ``(header, lines, points, coupon)``. Codex #284: the points the cancelled sale spent (given back when it was
+    cancelled) come apart from its discount, so the new draft spends them again through the usual check; a tax typed
+    by hand is kept; a tracked line keeps its serials, checked again when the draft is saved."""
+
+    from loyalty.models import InvoiceRedemption
+    from promotions.models import InvoicePromotion
+
+    redemption = InvoiceRedemption.objects.filter(invoice=invoice).first()
+    # Codex #284: a promotion's discount is worked out again when the copy is saved, once, as it was the first time;
+    # copying it onto the lines as well would let the promotion apply on top of itself. Its coupon is filled in again.
+    promotion = InvoicePromotion.objects.filter(invoice=invoice).first()
+    points_off = redemption.amount if redemption is not None else 0
+    header = {"customer": invoice.customer_id, "selling_location": invoice.selling_location_id, "cashbox": invoice.cashbox_id,
+              "discount_amount": max(invoice.discount_amount - points_off, 0), "tax_amount": invoice.tax_amount,
+              "paid_now": invoice.paid_now, "salesperson": invoice.salesperson_id,
+              "notes": (f"Made again from cancelled invoice {invoice.invoice_number}" if lang == "en" else f"معمولة تاني من الفاتورة الملغية {invoice.invoice_number}")}
+    lines = [{"item": line.item, "description": line.description, "quantity": line.quantity, "unit_sale_price": line.unit_sale_price,
+              "line_discount_amount": line.line_discount_amount,
+              "serials": ", ".join(row.serial.serial for row in line.serials.select_related("serial").order_by("pk"))}
+             for line in invoice.lines.order_by("line_number")]
+    if promotion is not None:
+        # Codex #284: only the promotion's own share comes off: a line whose discount is what the promotion gives it is
+        # cleared, and a discount typed by hand on another line stays (the promotion never touched those lines).
+        from promotions.services import discounts
+
+        offs = discounts(promotion.promotion, [dict(row, line_discount_amount=0) for row in lines])
+        for row, off in zip(lines, offs):
+            if off and row["line_discount_amount"] == off:
+                row["line_discount_amount"] = 0
+    return header, lines, (str(redemption.points) if redemption is not None else ""), (promotion.coupon_code if promotion is not None else "")
 
 
 @require_permission("sales.view_sales_invoices")
@@ -237,6 +312,7 @@ def invoice_detail(request, pk):
             can_view_cost=user_has_permission(request.user, "inventory.view_cost"),
             can_view_profit=user_has_permission(request.user, "reports.view_profit_report"),
             can_post=user_has_permission(request.user, "sales.create_sales_invoice"),
+            can_copy=invoice.status == "cancelled" and _fits_form(invoice),
             can_return=user_has_permission(request.user, "sales.return_sale"),
             einvoice_problems=_einvoice_problems(invoice, _lang(request)),
             short_box=_short_box(invoice, request.user),

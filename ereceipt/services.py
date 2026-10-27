@@ -53,7 +53,7 @@ def device():
 
 
 @transaction.atomic
-def register(serial, branch_code="0"):
+def register(serial, branch_code="0", os_version=None, model_framework=None):
     """The till in use now. A different serial is a different device (Codex #271): it gets its own row and its own
     chain, and the old device keeps its receipts and its last UUID; going back to an old serial picks up its chain."""
 
@@ -63,6 +63,10 @@ def register(serial, branch_code="0"):
     if till.branch_code != branch_code or not till.active:
         till.branch_code, till.active = branch_code, True
         till.save(update_fields=["branch_code", "active"])
+    if os_version is not None or model_framework is not None:  # T8 live: what the portal registered for this POS
+        till.os_version = str(os_version if os_version is not None else till.os_version).strip()[:100]
+        till.model_framework = str(model_framework if model_framework is not None else till.model_framework).strip()[:100]
+        till.save(update_fields=["os_version", "model_framework"])
     return till
 
 

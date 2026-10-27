@@ -1721,6 +1721,15 @@ The entries below are the protected-logic decisions in the commercial gate, reco
   - skip, templates in both languages, the menu item;
   - a stock keeper is refused.
 
+- **Live part (sending by WhatsApp Business), 27 Oct 2026:** after Ahmed said not to wait for him on what is plainly right. No balance, booking or posting is touched.
+  - **API:** `messaging/whatsapp.py` sends through the WhatsApp Cloud API (`POST graph.facebook.com/{version}/{phone_number_id}/messages`, a template message).
+  - **Secrets:** they come from the environment (`WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, optionally `WHATSAPP_API_VERSION` and `WHATSAPP_LANGUAGE`), never the database.
+  - **Templates:** a business may open a chat only with a template Meta approved. So each kind names its approved template on the outbox screen (`MessageTemplate.wa_template`). The template's body takes `{{1}}`, the company, and `{{2}}`, the message the shop wrote. Suggested wording: «رسالة من {{1}}: {{2}}».
+  - **Sending:** «ابعت أوتوماتيك» on the outbox, or the command `send_messages` each morning, sends today's waiting messages of those kinds.
+    - One click sends at most 40 messages or 25 seconds' worth, so the request ends inside the web server's timeout (Codex #282). It says how many are left; the next click starts with those never tried, and the command sends the rest unbounded.
+  - **Results:** a sent message keeps WhatsApp's id (`provider_id`, channel `api`). A refused one stays waiting with the reason (`error`), to go by a click. A kind with no template stays a one-click send, as before.
+  - **Files and tests:** migration `messaging/0002`; tests in `messaging.tests_whatsapp`.
+
 ## HG-055 — Bank accounts (T3)
 
 - **Status:** APPROVED by Ahmed on 21 Oct 2026 («موافق», together with HG-056 to HG-061 as written below). BUILT in T3 (`claude/t3-banks`).
@@ -2067,6 +2076,29 @@ The entries below are the protected-logic decisions in the commercial gate, reco
   - the invoice link is `PROTECT`, so a draft that came from the store is cancelled, not deleted.
 - **Files:** `onlinestore/` (new app), `config/settings.py`, `config/urls.py`, capability wiring (`settings_core/capabilities.py`, `module_gate.py`, `operational_views.py`, `display_labels.py`, `reports/navigation.py`).
 - **Tests:** `onlinestore/tests.py`. They cover once-only import, drafts only (status `draft`), the phone match, the walk-in fallback, the template, and permissions.
+- **Live part (pulling from the store's API), 27 Oct 2026:** after Ahmed said not to wait for him on what is plainly right. Nothing new is written beyond what an upload writes; orders still become drafts only.
+  - **Code:** `onlinestore/connect.py` reads the last days' orders from a connected store.
+  - **Shopify:** the Admin REST API (`orders.json`, token in `X-Shopify-Access-Token`, paged on `since_id`).
+  - **WooCommerce:** the REST API v3 (`wp-json/wc/v3/orders`, key and secret as HTTP Basic).
+  - **Secrets:** they come from the environment (`SHOPIFY_STORE`, `SHOPIFY_ACCESS_TOKEN`, `SHOPIFY_API_VERSION`, `WOOCOMMERCE_URL`, `WOOCOMMERCE_KEY`, `WOOCOMMERCE_SECRET`), never the database.
+  - **The import:** each order takes the same shape an upload makes and goes through the same loop (`services.import_parsed`).
+    - It keeps the once-only rule.
+    - A WooCommerce order uses the template's source, so an order a shop uploaded before by file is not made twice.
+    - Coupons come in as the order's discount.
+    - VAT is each order's own (Codex #283). A Shopify order's `taxes_included` says whether its prices hold the VAT; when the shop charges VAT, the VAT is taken back out of that order only.
+    - WooCommerce's REST amounts (line subtotals, shipping, discount) are always before tax, so they come in tax-exclusive and the VAT goes on top (Codex #283).
+    - A WooCommerce line keeps its exact subtotal (the unit price carries six decimals, and the import's rounding brings the line back to it). Each line's coupon is what WooCommerce took off it (`subtotal − total`); the order's coupon is not spread again over every line (Codex #283).
+    - A Shopify line takes its own `discount_allocations`, and its shipping is the `discounted_price`; the order's discount is spread only for orders that do not give them (Codex #283).
+    - A WooCommerce order with `fee_lines` (handling, payment surcharges) is skipped with the reason and tried again on the next pull, never imported short of its fees (Codex #283).
+    - A WooCommerce order with `refunds` is refused as partly refunded, as Shopify's `partially_refunded` is (Codex #283).
+    - A Shopify order edited after it was placed comes in as it is now: `current_quantity` per line (a line edited to nothing is left out, its discount scaled to what is left), and `current_total_price` / `current_total_discounts` (Codex #283).
+    - **A pulled order comes in only when Hesba's invoice comes to the store's total** (within 0.05; a shipping charge only noted on the invoice counts). Otherwise it is skipped with both totals and tried again on the next pull. This catches a tax or fee the store worked out differently (a tax-exempt customer, a surcharge), so none is imported silently (Codex #283). File uploads keep showing the two totals side by side for checking, as before.
+  - **Paging (Codex #283):**
+    - The board's button reads at most 20 pages, so the request stays short.
+    - When the store has more orders, the result says so and offers «كمّل السحب». That button carries on in the same window from the next page; nothing is cut silently. It keeps the location, shipping item and «بدّل» choice of the first pull.
+    - The command reads every page.
+  - **Where:** the board gets «اسحب من Shopify / WooCommerce», and the command `pull_store_orders --location CODE` can run from cron.
+  - **Tests:** `onlinestore/tests_connect.py`.
 
 ## HG-066 — E-receipts for till sales (T8, offline part)
 
@@ -2080,3 +2112,11 @@ The entries below are the protected-logic decisions in the commercial gate, reco
   - **Reads:** follow the entity scope (HG-034), through the invoice's selling location.
 - **Risk:** a sale posted while the device is missing or data is incomplete waits as "not issued". Issuing it later puts it at the end of the chain, with the issue time of its sale, so the 24 hours count from that time; the queue shows it as late.
 - **Tests:** `ereceipt.tests`.
+- **Live part (sending), 27 Oct 2026:** after Ahmed said not to wait for him on what is plainly right. No posting, chain or hashing changed; this only reads the queue and records the authority's answer.
+  - **Code:** `ereceipt/portal.py` and the command `send_ereceipts`.
+  - **API:** it follows the ETA eReceipt SDK: the POS login with the device in the headers, the batch submission, then the submission's details.
+  - **Secrets:** the POS client ID, secret and pre-shared key come from the environment (`ETA_RECEIPT_*`), never the database.
+  - **Device fields:** the OS version and model / framework are two new fields on the device (migration `ereceipt/0002`).
+  - **What is sent:** receipts go oldest first, as the exact text they were hashed from. `einvoice.portal._http` gained a `raw` argument for that.
+  - **Outcomes:** an accepted receipt keeps its submission UUID and long id; a rejected one keeps the authority's reason; a refused or unreachable batch stays queued.
+  - **Tests:** `ereceipt.tests_portal`.

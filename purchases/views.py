@@ -203,7 +203,13 @@ def invoice_create(request):
     else:
         initial = _party_initial(request, "supplier") or {}
         line_initial = _reorder_initial(request)
-        if from_order is not None:  # T2: what is still to come on the order, at the order's prices
+        copy = _copy_of(request) if from_order is None else None
+        if copy is not None:  # FB-27 (undo): a cancelled purchase back as a new draft
+            copy_header, line_initial = _copy_initial(copy, lang)
+            initial.update(copy_header)
+            # Codex #284: the cancelled purchase gave its order's quantities back; the new one receives them again
+            from_order = order_for_receipt(request.user, _copy_order(copy))
+        elif from_order is not None:  # T2: what is still to come on the order, at the order's prices
             order_header, line_initial = receipt_initial(from_order, lang)
             initial.update({key: getattr(value, "pk", value) for key, value in order_header.items()})
         form = PurchaseDraftForm(lang=lang, initial=initial)
@@ -217,6 +223,51 @@ def invoice_create(request):
         _context(request, form=form, line_formset=line_formset, can_post=True, item_catalog=item_catalog(sale_prices=False, purchase_prices=True), scan_words=scan_words(lang), tax_rates=rates_by_item(), units=units_catalog(purchase=True), from_order=from_order,
                  from_order_url=f"/purchases/orders/{from_order.pk}/" if from_order else ""),
     )
+
+
+def _fits_form(invoice):
+    """Codex #284: the invoice form takes a limited number of lines; a longer cancelled invoice (a big till sale) is not
+    offered to be made again here, as saving it would fail."""
+
+    return invoice.lines.count() <= PurchaseLineFormSet.max_num
+
+
+def _copy_of(request):
+    raw = request.GET.get("copy", "")
+    if not raw.isdigit() or not user_has_permission(request.user, "purchases.view_purchase_invoices"):  # Codex #284: copying shows the invoice
+        return None
+    invoice = entity_scope.scope(PurchaseInvoice.objects.prefetch_related("lines__item"), entity_scope.PURCHASE_INVOICE).filter(pk=raw, status="cancelled").first()
+    return invoice if invoice is not None and _fits_form(invoice) else None
+
+
+def _copy_order(invoice):
+    """The purchase order the cancelled purchase received, if any."""
+
+    from orders.models import OrderReceiptLine
+
+    return OrderReceiptLine.objects.filter(purchase_line__invoice=invoice).values_list("order_line__order_id", flat=True).first()
+
+
+def _copy_initial(invoice, lang):
+    """FB-27 (Ahmed's note #27, undo): a cancelled purchase made again in one step, as a new draft to check and save.
+
+    Codex #284: a tax typed by hand is kept, and each line keeps its batch number, expiry date and serials (the
+    cancelled purchase's no longer count, so the new one registers them again, checked when it is saved)."""
+
+    from batches.models import Batch
+
+    header = {"supplier": invoice.supplier_id, "receiving_location": invoice.receiving_location_id, "cashbox": invoice.cashbox_id,
+              "discount_amount": invoice.discount_amount, "tax_amount": invoice.tax_amount, "paid_now": invoice.paid_now,
+              "notes": (f"Made again from cancelled invoice {invoice.invoice_number}" if lang == "en" else f"معمولة تاني من الفاتورة الملغية {invoice.invoice_number}")}
+    batches = {batch.purchase_line_id: batch for batch in Batch.objects.filter(purchase_line__invoice=invoice)}
+    lines = []
+    for line in invoice.lines.order_by("line_number"):
+        batch = batches.get(line.pk)
+        lines.append({"item": line.item, "description": line.description, "quantity": line.quantity, "unit_purchase_price": line.unit_purchase_price,
+                      "line_discount_amount": line.line_discount_amount, "batch_no": batch.batch_no if batch else "",
+                      "expiry_date": batch.expiry_date if batch else None,
+                      "serials": ", ".join(line.serials.order_by("pk").values_list("serial", flat=True))})
+    return header, lines
 
 
 @require_permission("purchases.view_purchase_invoices")
@@ -233,6 +284,7 @@ def invoice_detail(request, pk):
             expiry_only=expiry_only(),  # AN8: a supermarket reads the expiry date, not a lot number
             invoice=invoice,
             can_post=user_has_permission(request.user, "purchases.create_purchase_invoice"),
+            can_copy=invoice.status == "cancelled" and _fits_form(invoice),
             can_return=user_has_permission(request.user, "purchases.return_purchase"),
             # FB2-LABELS: goods just received usually need their price labels.
             can_labels=capability_enabled("barcode") and user_has_permission(request.user, "barcode.print_labels"),

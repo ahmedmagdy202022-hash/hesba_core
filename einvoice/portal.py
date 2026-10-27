@@ -69,12 +69,17 @@ def missing():
             if not values[key]]
 
 
-def _http(method, url, *, body=None, form=None, headers=None):
-    """(status, parsed JSON or {}) for one HTTP call. Raises PortalError when unreachable."""
+def _http(method, url, *, body=None, form=None, headers=None, raw=None):
+    """(status, parsed JSON or {}) for one HTTP call. Raises PortalError when unreachable.
+
+    ``raw`` is JSON text already written, sent as it is: e-receipts go exactly as they were hashed (T8)."""
 
     headers = dict(headers or {})
     data = None
-    if form is not None:
+    if raw is not None:
+        data = raw.encode("utf-8")
+        headers["Content-Type"] = "application/json; charset=utf-8"
+    elif form is not None:
         data = urllib.parse.urlencode(form).encode()
         headers["Content-Type"] = "application/x-www-form-urlencoded"
     elif body is not None:

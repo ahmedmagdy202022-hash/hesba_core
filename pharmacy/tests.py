@@ -291,3 +291,16 @@ class ImportTests(PharmacySetup):
         self.assertEqual((item.drug.strength_key, item.drug.form, item.drug.prescription_only), ("1g", "tablet", True))
         caps.set_capability_enabled(self.profile, "drugs", False)
         self.assertNotIn("active_ingredient", [key for key, *_ in columns.fields("items")])
+
+
+class MakeAgainKeepsThePrescriptionTests(PharmacySetup):
+    """Codex #284: a cancelled sale that dispensed a prescription, made again, dispenses it again."""
+
+    def test_the_copy_carries_the_prescription(self):
+        prescription = self.prescription()
+        invoice = self.dispense(prescription)
+        cancel_posted_sales_invoice(invoice.pk, self.owner, "again")
+        self.client.force_login(self.owner)
+        page = self.client.get(f"/sales/new/?copy={invoice.pk}")
+        self.assertEqual(page.context["from_prescription"], prescription)
+        self.assertContains(page, f'name="prescription" value="{prescription.pk}"')
