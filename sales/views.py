@@ -273,9 +273,18 @@ def _copy_initial(invoice, lang):
               "paid_now": invoice.paid_now, "salesperson": invoice.salesperson_id,
               "notes": (f"Made again from cancelled invoice {invoice.invoice_number}" if lang == "en" else f"معمولة تاني من الفاتورة الملغية {invoice.invoice_number}")}
     lines = [{"item": line.item, "description": line.description, "quantity": line.quantity, "unit_sale_price": line.unit_sale_price,
-              "line_discount_amount": 0 if promotion is not None else line.line_discount_amount,
+              "line_discount_amount": line.line_discount_amount,
               "serials": ", ".join(row.serial.serial for row in line.serials.select_related("serial").order_by("pk"))}
              for line in invoice.lines.order_by("line_number")]
+    if promotion is not None:
+        # Codex #284: only the promotion's own share comes off: a line whose discount is what the promotion gives it is
+        # cleared, and a discount typed by hand on another line stays (the promotion never touched those lines).
+        from promotions.services import discounts
+
+        offs = discounts(promotion.promotion, [dict(row, line_discount_amount=0) for row in lines])
+        for row, off in zip(lines, offs):
+            if off and row["line_discount_amount"] == off:
+                row["line_discount_amount"] = 0
     return header, lines, (str(redemption.points) if redemption is not None else ""), (promotion.coupon_code if promotion is not None else "")
 
 

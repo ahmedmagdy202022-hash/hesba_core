@@ -113,12 +113,15 @@ class MakeAgainKeepsTests(MakeAgainTests):
         from promotions.models import InvoicePromotion, Promotion, PromotionKind
 
         invoice, item = self.cancelled_sale()
-        invoice.lines.update(line_discount_amount=D("10.00"))
-        promo = Promotion.objects.create(name="خصم الكوبون", kind=PromotionKind.values[0], coupon_code="EID10", percent=D("10"))
+        invoice.lines.update(line_discount_amount=D("6.00"))  # 10% of the line's 60: the promotion's share
+        promo = Promotion.objects.create(name="خصم الكوبون", kind=PromotionKind.PERCENT, coupon_code="EID10", percent=D("10"), item=item)
         InvoicePromotion.objects.create(invoice=invoice, promotion=promo, discount=D("10.00"), coupon_code="EID10")
         page = self.client.get(f"/sales/new/?copy={invoice.pk}")
         self.assertEqual([row["line_discount_amount"] for row in page.context["line_formset"].initial], [0])  # not stacked on save
         self.assertEqual(page.context["coupon"], "EID10")  # the same coupon applies it once again
+        invoice.lines.update(line_discount_amount=D("20.00"))  # typed by hand, not the promotion's 6
+        page = self.client.get(f"/sales/new/?copy={invoice.pk}")
+        self.assertEqual([row["line_discount_amount"] for row in page.context["line_formset"].initial], [D("20.00")])
 
 class MakeAgainNeedsViewTests(MakeAgainTests):
     def test_copying_needs_the_permission_to_see_invoices(self):
