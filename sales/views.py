@@ -196,7 +196,7 @@ def invoice_create(request):
                 return redirect(f"/sales/{invoice.pk}/?lang={lang}")
     else:
         initial = _party_initial(request, "customer") or {}
-        line_initial = []
+        line_initial, copy_points = [], ""
         if from_order is not None:  # T1: what is left on the order, at the order's prices
             order_header, line_initial = invoice_initial(from_order, lang)
             initial.update({key: getattr(value, "pk", value) for key, value in order_header.items()})
@@ -204,7 +204,7 @@ def invoice_create(request):
             rx_header, line_initial = pharmacy.invoice_initial(from_prescription, lang)
             initial.update({key: getattr(value, "pk", value) for key, value in rx_header.items()})
         elif _copy_of(request) is not None:  # FB-27 (undo): a cancelled invoice back as a new draft
-            copy_header, line_initial = _copy_initial(_copy_of(request), lang)
+            copy_header, line_initial, copy_points = _copy_initial(_copy_of(request), lang)
             initial.update(copy_header)
         if not initial.get("customer"):
             from settings_core.setup_services import enabled_modules
@@ -221,7 +221,7 @@ def invoice_create(request):
     return render(request, "sales/form.html", _context(request, form=form, line_formset=line_formset, can_post=True, item_catalog=item_catalog(sale_prices=True, purchase_prices=False), scan_words=scan_words(lang), price_book=price_book(), tax_rates=rates_by_item(), units=units_catalog(), from_order=from_order, from_prescription=from_prescription,
                                                       promotions_on=promotions.enabled(), running_promotions=promotions.running() if promotions.enabled() else [],
                                                       coupon=request.POST.get("coupon", ""), loyalty_on=loyalty.enabled(), loyalty_rules=loyalty.rules() if loyalty.enabled() else None,
-                                                      redeem_points=request.POST.get("redeem_points", "")))
+                                                      redeem_points=request.POST.get("redeem_points", "") if request.method == "POST" else copy_points))
 
 
 def _copy_of(request):
@@ -233,14 +233,25 @@ def _copy_of(request):
 
 def _copy_initial(invoice, lang):
     """FB-27 (Ahmed's note #27, undo): a cancelled sale is never brought back to life, but it can be made again in one
-    step: the same customer, warehouse, cashbox, discount, payment and lines, as a new draft to check and save."""
+    step: the same customer, warehouse, cashbox, discount, payment and lines, as a new draft to check and save.
 
+    Returns ``(header, lines, points)``. Codex #284: the points the cancelled sale spent (given back when it was
+    cancelled) come apart from its discount, so the new draft spends them again through the usual check; a tax typed
+    by hand is kept; a tracked line keeps its serials, checked again when the draft is saved."""
+
+    from loyalty.models import InvoiceRedemption
+
+    redemption = InvoiceRedemption.objects.filter(invoice=invoice).first()
+    points_off = redemption.amount if redemption is not None else 0
     header = {"customer": invoice.customer_id, "selling_location": invoice.selling_location_id, "cashbox": invoice.cashbox_id,
-              "discount_amount": invoice.discount_amount, "paid_now": invoice.paid_now, "salesperson": invoice.salesperson_id,
+              "discount_amount": max(invoice.discount_amount - points_off, 0), "tax_amount": invoice.tax_amount,
+              "paid_now": invoice.paid_now, "salesperson": invoice.salesperson_id,
               "notes": (f"Made again from cancelled invoice {invoice.invoice_number}" if lang == "en" else f"معمولة تاني من الفاتورة الملغية {invoice.invoice_number}")}
     lines = [{"item": line.item, "description": line.description, "quantity": line.quantity, "unit_sale_price": line.unit_sale_price,
-              "line_discount_amount": line.line_discount_amount} for line in invoice.lines.order_by("line_number")]
-    return header, lines
+              "line_discount_amount": line.line_discount_amount,
+              "serials": "\n".join(row.serial.serial for row in line.serials.select_related("serial").order_by("pk"))}
+             for line in invoice.lines.order_by("line_number")]
+    return header, lines, (str(redemption.points) if redemption is not None else "")
 
 
 @require_permission("sales.view_sales_invoices")

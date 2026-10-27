@@ -51,3 +51,57 @@ class MakeAgainTests(TestCase):
         self.assertEqual(page.context["form"].initial["supplier"], purchase.supplier_id)
         self.assertEqual([(row["item"], row["quantity"], row["unit_purchase_price"]) for row in page.context["line_formset"].initial],
                          [(item, D("4.000"), D("25.00"))])
+
+
+class MakeAgainKeepsTests(MakeAgainTests):
+    """Codex #284: the copy spends points again apart from its discount, keeps a hand-typed tax, serials and batches."""
+
+    def cancelled_sale(self):
+        invoice, item, *_ = posted_invoice_ready()
+        post_sales_invoice(invoice.pk, self.owner)
+        cancel_posted_sales_invoice(invoice.pk, self.owner, "again")
+        return type(invoice).objects.get(pk=invoice.pk), item
+
+    def test_points_spent_come_apart_from_the_discount(self):
+        from loyalty.models import InvoiceRedemption
+
+        invoice, _item = self.cancelled_sale()
+        type(invoice).objects.filter(pk=invoice.pk).update(discount_amount=D("15.00"))
+        InvoiceRedemption.objects.create(invoice=invoice, points=100, amount=D("10.00"))
+        page = self.client.get(f"/sales/new/?copy={invoice.pk}")
+        self.assertEqual(page.context["form"].initial["discount_amount"], D("5.00"))  # the ordinary discount only
+        self.assertEqual(page.context["redeem_points"], "100")  # spent again through the usual check on saving
+
+    def test_a_hand_typed_tax_and_the_serials_are_kept(self):
+        from django.utils import timezone
+
+        from serials.models import SerialNumber, SerialSale
+
+        invoice, item = self.cancelled_sale()
+        type(invoice).objects.filter(pk=invoice.pk).update(tax_amount=D("8.40"))
+        line = invoice.lines.get()
+        for serial in ("SN-1", "SN-2"):
+            SerialSale.objects.create(serial=SerialNumber.objects.create(item=item, serial=serial, received_on=timezone.localdate()), sales_line=line)
+        page = self.client.get(f"/sales/new/?copy={invoice.pk}")
+        self.assertEqual(page.context["form"].initial["tax_amount"], D("8.40"))
+        self.assertEqual(page.context["line_formset"].initial[0]["serials"], "SN-1\nSN-2")
+
+    def test_a_purchase_keeps_its_batch_expiry_and_tax(self):
+        from datetime import date
+
+        from batches.models import Batch
+        from hesba_testing.factories import make_item
+
+        purchase = make_draft_purchase_invoice(invoice_number="PI-BATCH")
+        item = make_item("BATCH-1")
+        line = add_purchase_line(purchase, item, 4, "25.00")
+        recalculate_purchase_totals(purchase)
+        post_purchase_invoice(purchase.pk, self.owner)
+        Batch.objects.create(item=item, location=purchase.receiving_location, batch_no="LOT-7", expiry_date=date(2027, 5, 1), quantity=4,
+                             received_on=purchase.invoice_date, purchase_line=line)
+        cancel_posted_purchase_invoice(purchase.pk, self.owner, "again")
+        type(purchase).objects.filter(pk=purchase.pk).update(tax_amount=D("14.00"))
+        page = self.client.get(f"/purchases/new/?copy={purchase.pk}")
+        row = page.context["line_formset"].initial[0]
+        self.assertEqual((row["batch_no"], row["expiry_date"]), ("LOT-7", date(2027, 5, 1)))
+        self.assertEqual(page.context["form"].initial["tax_amount"], D("14.00"))

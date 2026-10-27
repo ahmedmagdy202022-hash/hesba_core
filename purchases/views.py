@@ -229,13 +229,24 @@ def _copy_of(request):
 
 
 def _copy_initial(invoice, lang):
-    """FB-27 (Ahmed's note #27, undo): a cancelled purchase made again in one step, as a new draft to check and save."""
+    """FB-27 (Ahmed's note #27, undo): a cancelled purchase made again in one step, as a new draft to check and save.
+
+    Codex #284: a tax typed by hand is kept, and each line keeps its batch number, expiry date and serials (the
+    cancelled purchase's no longer count, so the new one registers them again, checked when it is saved)."""
+
+    from batches.models import Batch
 
     header = {"supplier": invoice.supplier_id, "receiving_location": invoice.receiving_location_id, "cashbox": invoice.cashbox_id,
-              "discount_amount": invoice.discount_amount, "paid_now": invoice.paid_now,
+              "discount_amount": invoice.discount_amount, "tax_amount": invoice.tax_amount, "paid_now": invoice.paid_now,
               "notes": (f"Made again from cancelled invoice {invoice.invoice_number}" if lang == "en" else f"معمولة تاني من الفاتورة الملغية {invoice.invoice_number}")}
-    lines = [{"item": line.item, "description": line.description, "quantity": line.quantity, "unit_purchase_price": line.unit_purchase_price,
-              "line_discount_amount": line.line_discount_amount} for line in invoice.lines.order_by("line_number")]
+    batches = {batch.purchase_line_id: batch for batch in Batch.objects.filter(purchase_line__invoice=invoice)}
+    lines = []
+    for line in invoice.lines.order_by("line_number"):
+        batch = batches.get(line.pk)
+        lines.append({"item": line.item, "description": line.description, "quantity": line.quantity, "unit_purchase_price": line.unit_purchase_price,
+                      "line_discount_amount": line.line_discount_amount, "batch_no": batch.batch_no if batch else "",
+                      "expiry_date": batch.expiry_date if batch else None,
+                      "serials": "\n".join(line.serials.order_by("pk").values_list("serial", flat=True))})
     return header, lines
 
 
