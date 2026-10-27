@@ -114,9 +114,9 @@ class PullReviewTests(StoreSetup):
             return connect.pull(store, self.shop, self.owner)
 
     def test_each_order_says_whether_its_own_prices_include_vat(self):
-        inclusive = dict(SHOPIFY_ORDER, id=6001, name="#2001", taxes_included=True, total_discounts="0", shipping_lines=[],
+        inclusive = dict(SHOPIFY_ORDER, id=6001, name="#2001", taxes_included=True, total_discounts="0", shipping_lines=[], total_price="570.00",
                          line_items=[{"sku": "DR-1", "quantity": 1, "price": "570.00"}])
-        exclusive = dict(SHOPIFY_ORDER, id=6002, name="#2002", taxes_included=False, total_discounts="0", shipping_lines=[],
+        exclusive = dict(SHOPIFY_ORDER, id=6002, name="#2002", taxes_included=False, total_discounts="0", shipping_lines=[], total_price="570.00",
                          line_items=[{"sku": "DR-1", "quantity": 1, "price": "500.00"}])
         result = self.pull_rows(SHOPIFY_ENV, "shopify", [inclusive, exclusive])
         self.assertEqual([row["number"] for row in result["made"]], ["2001", "2002"])
@@ -124,7 +124,7 @@ class PullReviewTests(StoreSetup):
         self.assertEqual(prices, {"2001": D("500.00"), "2002": D("500.00")})  # the VAT came out of the inclusive one only
 
     def test_woocommerce_amounts_are_before_tax_whatever_the_shop_setting(self):
-        row = dict(WOO_ORDER, prices_include_tax=True)
+        row = dict(WOO_ORDER, prices_include_tax=True, total="627.00", total_tax="77.00")  # 550 before tax, 14% on top
         invoice = self.pull_rows(WOO_ENV, "woocommerce", [row])["made"][0]["invoice"]
         prices = list(invoice.lines.order_by("line_number").values_list("unit_sale_price", flat=True))
         self.assertEqual(prices, [D("500.00"), D("100.00")])  # not cut down as if the VAT were inside
@@ -227,7 +227,7 @@ class AllocationTests(StoreSetup):
         from hesba_testing.factories import make_item
 
         fee = make_item(item_code="SHIP", item_name="شحن", default_sale_price="0", is_stock_tracked=False)
-        row = dict(SHOPIFY_ORDER, total_discounts="60.00", total_price="640.00",
+        row = dict(SHOPIFY_ORDER, total_discounts="60.00", total_price="690.00",
                    shipping_lines=[{"price": "50.00", "discounted_price": "40.00"}],
                    line_items=[{"sku": "DR-1", "quantity": 1, "price": "500.00", "discount_allocations": []},
                                {"sku": "SC-1", "quantity": 2, "price": "100.00", "discount_allocations": [{"amount": "50.00"}]}])
@@ -260,3 +260,14 @@ class AllocationTests(StoreSetup):
         invoice = result["made"][0]["invoice"]
         self.assertEqual(list(invoice.lines.values_list("item__item_code", "quantity")), [("DR-1", D("1.000"))])  # the scarves were taken off
         self.assertEqual(result["made"][0]["store_total"], D("550.00"))
+
+    def test_an_order_whose_total_hesba_cannot_reach_is_refused_with_both_totals(self):
+        from settings_core import capabilities as caps
+        from settings_core.models import ClientProfile
+
+        caps.set_capability_enabled(ClientProfile.get_active(), "vat", True, user=self.owner)
+        row = dict(WOO_ORDER, total="550.00", total_tax="0.00")  # a tax-exempt customer: the store charged no VAT
+        result = self.pull(WOO_ENV, "woocommerce", [row])
+        self.assertEqual(result["made"], [])
+        self.assertIn("550.00", result["skipped"][0]["reason"])
+        self.assertFalse(StoreOrder.objects.exists())  # tried again next time, never half right

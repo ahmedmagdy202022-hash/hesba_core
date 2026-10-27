@@ -251,6 +251,7 @@ def pull(store, location, user, lang="ar", shipping_item=None, replace=False, da
     source, orders, more = fetch(store, days, more, max_pages)
     # Codex #283: each order says whether its own prices include VAT (``prices_include_tax``); Hesba takes the VAT back
     # out of that order only, and only when the shop charges VAT.
-    result = services.import_parsed(source, orders, location, user, lang, services.import_options(shipping_item, vat_enabled()), replace)
+    options = dict(services.import_options(shipping_item, vat_enabled()), must_match=True)  # Codex #283: totals must agree
+    result = services.import_parsed(source, orders, location, user, lang, options, replace)
     result["more"] = more
     return result

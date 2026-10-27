@@ -70,6 +70,7 @@ MESSAGES = {
         "currency": "الطلب بعملة {currency} وحسبة شغالة بـ {own}؛ حوّله الأول أو سجّله يدوي.",
         "replaced": "اتبدّلت مسودته.", "elsewhere": "رقم الطلب ده متسجّل لكيان تاني؛ مش هيتبدّل من هنا.",
         "fees": "الطلب عليه رسوم إضافية من المتجر ({amount})؛ حسبة مش بتسحبها لوحدها، فسجّل الطلب ده يدوي.",
+        "mismatch": "إجمالي الطلب في المتجر {store} وحسبة طلّعته {ours} (غالبًا ضريبة أو رسوم محسوبة بشكل تاني)؛ سجّله يدوي.",
     },
     "en": {
         "file": "Choose the orders file.", "big": "The file is over 2 MB; split it.", "format": "This is neither a Shopify orders export nor the Hesba template: it needs order, SKU, quantity and price columns.",
@@ -80,6 +81,7 @@ MESSAGES = {
         "currency": "The order is in {currency} and Hesba works in {own}; convert it first or enter it by hand.",
         "replaced": "its draft was replaced.", "elsewhere": "This order number belongs to another entity; it is not replaced from here.",
         "fees": "The order carries extra store fees ({amount}); Hesba does not pull those, so enter this order by hand.",
+        "mismatch": "The store's total is {store} but Hesba's comes to {ours} (likely a tax or fee worked out differently); enter it by hand.",
     },
 }
 
@@ -480,6 +482,9 @@ def _spread_discount(lines, gross, rates, discount):
         line["line_discount_amount"] = min(pre_tax, money_round(line["quantity"] * line["unit_sale_price"]))
 
 
+MATCH_TOLERANCE = Decimal("0.05")  # piastres of rounding between the store's tax and Hesba's
+
+
 class _AlreadyImported(Exception):
     """The order was imported by an upload running at the same time."""
 
@@ -561,6 +566,14 @@ def _draft(source, order, location, user, words, phones, options):
         raise ValidationError(words["taken"].format(number="WEB-"))
     attach_sale_serials(invoice, lines)
     store_total = _decimal(order["total"], words, ZERO) if order["total"] else None
+    if options.get("must_match") and store_total is not None:
+        # Codex #283: an order pulled from the store's API comes in only when Hesba's invoice comes to what the store
+        # charged (a shipping charge only noted counts too); a tax or fee Hesba would work out differently is refused
+        # with both totals, never imported silently, and is tried again on the next pull.
+        noted = ZERO if options.get("shipping_item") is not None else shipping
+        ours = invoice.total_amount + noted
+        if abs(ours - store_total) > MATCH_TOLERANCE:
+            raise ValidationError(words["mismatch"].format(store=f"{store_total:,.2f}", ours=f"{ours:,.2f}"))
     try:
         with transaction.atomic():
             StoreOrder.objects.create(source=source, order_number=order["number"][:60], invoice=invoice, store_total=store_total, imported_by=user)

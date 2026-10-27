@@ -2043,6 +2043,7 @@ The entries below are the protected-logic decisions in the commercial gate, reco
     - A WooCommerce order with `fee_lines` (handling, payment surcharges) is skipped with the reason and tried again on the next pull, never imported short of its fees (Codex #283).
     - A WooCommerce order with `refunds` is refused as partly refunded, as Shopify's `partially_refunded` is (Codex #283).
     - A Shopify order edited after it was placed comes in as it is now: `current_quantity` per line (a line edited to nothing is left out, its discount scaled to what is left), and `current_total_price` / `current_total_discounts` (Codex #283).
+    - **A pulled order comes in only when Hesba's invoice comes to the store's total** (within 0.05; a shipping charge only noted on the invoice counts). Otherwise it is skipped with both totals and tried again on the next pull. This catches a tax or fee the store worked out differently (a tax-exempt customer, a surcharge), so none is imported silently (Codex #283). File uploads keep showing the two totals side by side for checking, as before.
   - **Paging (Codex #283):**
     - The board's button reads at most 20 pages, so the request stays short.
     - When the store has more orders, the result says so and offers «كمّل السحب». That button carries on in the same window from the next page; nothing is cut silently. It keeps the location, shipping item and «بدّل» choice of the first pull.
