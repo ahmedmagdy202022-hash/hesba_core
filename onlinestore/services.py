@@ -519,7 +519,13 @@ def _draft(source, order, location, user, words, phones, options):
         unit = (net / quantity).quantize(Decimal("0.01"), rounding=ROUND_CEILING)
         lines.append({"item": item, "quantity": quantity, "unit_sale_price": unit, "line_discount_amount": ZERO, "description": "",
                       "serials": line.get("serials", ""), "_over": money_round(quantity * unit) - money_round(net)})
-    _spread_discount(lines, gross, rates, money_round(_decimal(order["discount"], words, ZERO)))
+    if any("discount" in line for line in order["lines"]):  # Codex #283: the store says what came off each line itself
+        for line, given, rate in zip(lines, order["lines"], rates):
+            share = max(money_round(_decimal(given.get("discount"), words, ZERO)), ZERO)
+            pre_tax = money_round(share * HUNDRED / (HUNDRED + rate)) if rate else share
+            line["line_discount_amount"] = min(pre_tax, money_round(line["quantity"] * line["unit_sale_price"]))
+    else:
+        _spread_discount(lines, gross, rates, money_round(_decimal(order["discount"], words, ZERO)))
     for line in lines:
         over = line.pop("_over")
         line["line_discount_amount"] = min(line["line_discount_amount"] + over, money_round(line["quantity"] * line["unit_sale_price"]))

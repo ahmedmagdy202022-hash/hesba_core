@@ -23,6 +23,8 @@ from collections import OrderedDict
 from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
 
+from decimal import Decimal, InvalidOperation
+
 from decouple import config
 from django.core.exceptions import ValidationError
 from django.utils import timezone
@@ -77,6 +79,13 @@ def _text(value):
     return "" if value is None else str(value).strip()
 
 
+def _number(value):
+    try:
+        return Decimal(_text(value) or "0")
+    except InvalidOperation:
+        return Decimal("0")
+
+
 def _blank():
     return {"lines": [], "date": "", "customer": "", "phone": "", "email": "", "address": "", "discount": "", "shipping": "",
             "total": "", "status": "", "currency": "", "cancelled": ""}
@@ -129,10 +138,13 @@ def woocommerce_order(row):
     })
     lines = []
     for line in row.get("line_items") or []:
-        quantity = float(line.get("quantity") or 0)
-        subtotal = float(line.get("subtotal") or 0)  # before coupons; the coupons are the order's discount_total
+        quantity, subtotal, total = (_number(line.get(key)) for key in ("quantity", "subtotal", "total"))
+        # Codex #283: the unit price keeps the line's exact subtotal (before coupons), so the import's rounding can
+        # bring the line back to it; each line's own coupon is what WooCommerce took off it (subtotal - total), never
+        # the order's coupon spread again over lines it did not touch.
         lines.append({"sku": _text(line.get("sku")) or _text(line.get("name")), "quantity": _text(line.get("quantity")),
-                      "price": f"{subtotal / quantity:.2f}" if quantity else _text(line.get("price"))})
+                      "price": str((subtotal / quantity).quantize(Decimal("0.000001"))) if quantity else _text(line.get("price")),
+                      "discount": str(max(subtotal - total, Decimal("0"))) if line.get("total") not in (None, "") else "0"})
     order["lines"] = lines
     return order
 

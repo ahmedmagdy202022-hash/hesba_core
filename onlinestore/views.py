@@ -89,7 +89,9 @@ def board(request):
 
                 result = connect.pull(store, location, request.user, lang, shipping_item=shipping_item, replace=request.POST.get("replace") == "1",
                                       more=request.POST.get("more", ""))
-                result["store"] = store
+                # Codex #283: carrying on keeps the same location and shipping item for every page
+                result.update(store=store, location=location.pk if location else None, shipping_item=shipping_item.pk if shipping_item else None,
+                              replace=request.POST.get("replace") == "1")
             else:
                 if upload is None:
                     raise ValidationError(services.MESSAGES[lang]["file"])

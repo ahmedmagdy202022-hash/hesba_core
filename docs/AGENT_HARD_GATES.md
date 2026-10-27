@@ -2038,9 +2038,10 @@ The entries below are the protected-logic decisions in the commercial gate, reco
     - Coupons come in as the order's discount.
     - VAT is each order's own (Codex #283). A Shopify order's `taxes_included` says whether its prices hold the VAT; when the shop charges VAT, the VAT is taken back out of that order only.
     - WooCommerce's REST amounts (line subtotals, shipping, discount) are always before tax, so they come in tax-exclusive and the VAT goes on top (Codex #283).
+    - A WooCommerce line keeps its exact subtotal (the unit price carries six decimals, and the import's rounding brings the line back to it). Each line's coupon is what WooCommerce took off it (`subtotal − total`); the order's coupon is not spread again over every line (Codex #283).
   - **Paging (Codex #283):**
     - The board's button reads at most 20 pages, so the request stays short.
-    - When the store has more orders, the result says so and offers «كمّل السحب». That button carries on in the same window from the next page; nothing is cut silently.
+    - When the store has more orders, the result says so and offers «كمّل السحب». That button carries on in the same window from the next page; nothing is cut silently. It keeps the location, shipping item and «بدّل» choice of the first pull.
     - The command reads every page.
   - **Where:** the board gets «اسحب من Shopify / WooCommerce», and the command `pull_store_orders --location CODE` can run from cron.
   - **Tests:** `onlinestore/tests_connect.py`.

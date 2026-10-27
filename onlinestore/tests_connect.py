@@ -175,3 +175,38 @@ class PullReviewTests(StoreSetup):
         with mock.patch.dict(os.environ, SHOPIFY_ENV), mock.patch.object(connect, "pull", return_value={"made": [], "again": [], "skipped": [], "more": ""}) as pull:
             call_command("pull_store_orders", location="SHOP", user=self.owner.username, verbosity=0)
         self.assertIsNone(pull.call_args.kwargs["max_pages"])
+
+
+class WooLineTests(StoreSetup):
+    """Codex #283: a WooCommerce line keeps its exact amount and its own coupon; carrying a pull on keeps its settings."""
+
+    def pull(self, rows):
+        with mock.patch.dict(os.environ, WOO_ENV), mock.patch.object(connect, "_http", lambda url, headers: (200, rows)):
+            return connect.pull("woocommerce", self.shop, self.owner)
+
+    def test_a_subtotal_that_does_not_divide_evenly_is_kept(self):
+        row = dict(WOO_ORDER, discount_total="0", total="100.49", line_items=[{"sku": "SC-1", "quantity": 100, "subtotal": "100.49", "total": "100.49"}])
+        invoice = self.pull([row])["made"][0]["invoice"]
+        self.assertEqual(invoice.total_amount, D("100.49"))
+
+    def test_a_coupon_stays_on_the_lines_it_was_given_to(self):
+        row = dict(WOO_ORDER, line_items=[{"sku": "DR-1", "quantity": 1, "subtotal": "500.00", "total": "500.00"},
+                                          {"sku": "SC-1", "quantity": 1, "subtotal": "100.00", "total": "50.00"}])
+        invoice = self.pull([row])["made"][0]["invoice"]
+        discounts = list(invoice.lines.order_by("line_number").values_list("line_discount_amount", flat=True))
+        self.assertEqual(discounts, [D("0"), D("50.00")])  # not 41.67 / 8.33 spread over both
+        self.assertEqual(invoice.total_amount, D("550.00"))
+
+    def test_carrying_on_keeps_the_location_shipping_item_and_replace(self):
+        from collections import OrderedDict
+
+        from hesba_testing.factories import make_item, make_location
+
+        other = make_location(location_code="SHOP-2", is_selling_location=True)
+        fee = make_item(item_code="SHIP", item_name="شحن", default_sale_price="0", is_stock_tracked=False)
+        self.client.force_login(self.owner)
+        with mock.patch.dict(os.environ, WOO_ENV), mock.patch.object(connect, "fetch", return_value=("template", OrderedDict(), "2026-10-20T00:00:00Z|2")):
+            page = self.client.post("/store/", {"pull": "woocommerce", "location": other.pk, "shipping_item": fee.pk, "replace": "1", "lang": "ar"})
+        self.assertContains(page, f'<option value="{other.pk}" selected>')
+        self.assertContains(page, f'<option value="{fee.pk}" selected>')
+        self.assertContains(page, 'name="replace" value="1" checked')
