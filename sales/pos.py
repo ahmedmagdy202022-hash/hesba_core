@@ -214,11 +214,14 @@ def _next_number(today):
     return f"{prefix}{sequence:04d}"
 
 
-def checkout(*, lines, customer, location, cashbox, discount, tendered, user, sale_date=None, notes="POS", card=False, promotion=None, points=None):
+def checkout(*, lines, customer, location, cashbox, discount, tendered, user, sale_date=None, notes="POS", card=False, promotion=None, points=None,
+             allow_short=False, short_source="pos"):
     """Create and post the sale. Returns (invoice, change).
 
     POS-003: an offline sale passes the day it was rung up as ``sale_date``;
     posting then applies that day's period rules like any other entry.
+    HG-065: ``allow_short`` is the cashier's agreement to sell what is not in
+    stock; it counts only while the owner allows selling without stock.
     """
 
     # UNITS-001: a line entered in a bigger unit carries a few piastres of discount.
@@ -262,7 +265,7 @@ def checkout(*, lines, customer, location, cashbox, discount, tendered, user, sa
                     from loyalty.services import remember
 
                     remember(invoice, *points, posting=True)  # checked under the customer's lock on posting
-                post_sales_invoice(invoice.pk, user)
+                post_sales_invoice(invoice.pk, user, allow_short=allow_short, short_source=short_source)
             invoice.refresh_from_db()
             return invoice, change
         except IntegrityError:
@@ -350,6 +353,18 @@ def _clean_cart(raw):
     return clean[:MAX_LINES]
 
 
+def _short_box(exc, request):
+    """HG-065: when the owner allows selling without stock, a refusal for stock becomes a box naming the short items,
+    with the same sale ready to send again with the cashier's agreement."""
+
+    from . import short_sales
+
+    if not isinstance(exc, short_sales.StockShortage) or not short_sales.enabled():
+        return None
+    fields = [(key, value) for key, values in request.POST.lists() if key not in ("csrfmiddlewaretoken", "allow_short") for value in values]
+    return {"items": exc.shortages, "fields": fields}
+
+
 def _error_text(exc, words):
     parts = []
     for message in getattr(exc, "messages", [str(exc)]):
@@ -400,6 +415,7 @@ def pos(request):
     cashboxes = all_cashboxes.exclude(pk=machine.pk) if machine else all_cashboxes  # AN8: the card machine is never the drawer
     customer_default = walk_in_customer()
     cart_back = "[]"  # raw JSON from the form; cleaned before it is rendered
+    short_box = None
     selected = {
         "customer": str(customer_default.pk),
         "location": str((locations.filter(is_default=True).first() or locations.first() or Location()).pk or ""),
@@ -443,10 +459,11 @@ def pos(request):
             discount += points_off
             invoice, change = checkout(lines=lines, customer=customer, location=location, cashbox=cashbox, discount=discount, tendered=tendered,
                                        user=request.user, card=card, promotion=(promotion, promotion_off, coupon) if promotion else None,
-                                       points=(points, points_off) if points else None)
+                                       points=(points, points_off) if points else None, allow_short=request.POST.get("allow_short") == "1")
         except ValidationError as exc:
             messages.error(request, _error_text(exc, words))
             cart_back = request.POST.get("cart_json", "[]")
+            short_box = _short_box(exc, request)
         else:
             text = words["done"].format(number=invoice.invoice_number, total=f"{invoice.total_amount:,.2f}")
             if change:
@@ -488,6 +505,7 @@ def pos(request):
             "cashboxes": cashboxes,
             "selected": selected,
             "cart_back": cart_back,
+            "short_box": short_box,  # HG-065
             "summary": today_summary(request.user),
             "last_invoice": entity_scope.scope(SalesInvoice.objects, entity_scope.SALES_INVOICE).filter(pk=last, created_by=request.user).first() if last.isdigit() else None,
             "js_words": json.dumps({key: words[key] for key in ("not_found", "added", "remove", "empty_cart", "scan_serial", "serial_twice", "promo_wait")}, ensure_ascii=False),

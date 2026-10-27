@@ -234,8 +234,12 @@ def import_batch(batch_id, user):
         # Item.average_cost is a display cache (HG-003); refresh it from the new movements.
         from inventory.services import recalculate_item_average_cost
 
-        for item in Item.objects.filter(pk__in={movement.item_id for movement in applied}):
+        from sales.short_sales import rebalance
+
+        for item in Item.objects.filter(pk__in={movement.item_id for movement in applied}).order_by("pk"):
             recalculate_item_average_cost(item)
+            # HG-065: opening stock entered after a sale without stock settles that sale's cost
+            rebalance(item, max(movement.movement_date for movement in applied if movement.item_id == item.pk), user)
     batch.refresh_from_db()
     batch.status = "imported"
     batch.full_clean()

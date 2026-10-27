@@ -14,4 +14,8 @@
   <div class="set-screens" data-activity-features>{% for feature in activity_features %}{% if feature.url %}<a class="set-screen" href="{{ feature.url }}?lang={{ lang }}" data-activity-feature="{{ feature.slug }}"><strong>{{ feature.label }}</strong><span>{{ feature.about }}</span></a>{% else %}<div class="set-screen" data-activity-feature="{{ feature.slug }}"><strong>{{ feature.label }}</strong><span>{{ feature.about }}</span></div>{% endif %}{% endfor %}</div>
 </section>
 {% endif %}
+<section class="set-group" data-sell-short-setting>
+  <div class="set-group__head"><h2 class="set-section-title">{% if lang == 'en' %}Selling without stock{% else %}البيع من غير رصيد{% endif %}</h2><p>{% if lang == 'en' %}Let the till and the invoice sell an item that is not in stock, after the seller agrees. Only the account owner switches it.{% else %}الكاشير والفاتورة يبيعوا صنف مش موجود في المخزن بعد موافقة البايع. صاحب الحساب بس اللي يشغّله.{% endif %}</p></div>
+  <div class="set-screens"><a class="set-screen" href="{% url 'sales:short_sales' %}?lang={{ lang }}" data-sell-short-link><strong>{% if lang == 'en' %}Selling without stock{% else %}البيع من غير رصيد{% endif %}</strong><span>{% if lang == 'en' %}The switch, and what was sold before it arrived{% else %}المفتاح، واللي اتباع قبل ما يوصل{% endif %}</span></a></div>
+</section>
 {% endblock %}

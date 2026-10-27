@@ -238,8 +238,19 @@ def invoice_detail(request, pk):
             can_post=user_has_permission(request.user, "sales.create_sales_invoice"),
             can_return=user_has_permission(request.user, "sales.return_sale"),
             einvoice_problems=_einvoice_problems(invoice, _lang(request)),
+            short_box=_short_box(invoice, request.user),
         ),
     )
+
+
+def _short_box(invoice, user):
+    """HG-065: the items a draft would take below zero, for the box that asks the seller to agree (None: no box)."""
+
+    from . import short_sales
+
+    if invoice.status != "draft" or not user_has_permission(user, "sales.create_sales_invoice") or not short_sales.enabled():
+        return None
+    return short_sales.shortages(invoice, list(invoice.lines.all())) or None
 
 
 def _einvoice_problems(invoice, lang):
@@ -265,7 +276,8 @@ def _post_now(request, pk, lang, saved_first=False):
         require_open_shift(request.user, lang)  # AN4: no sale is posted without an open shift
         with transaction.atomic():
             check_invoice_serials(invoice, lang)  # SERIAL-001: still in stock?
-            post_sales_invoice(pk, request.user)
+            # HG-065: the seller ticked the box that agrees to sell what is not in stock
+            post_sales_invoice(pk, request.user, allow_short=request.POST.get("allow_short") == "1", short_source="invoice")
     except ValidationError as exc:
         # Codex #233: one message either way; after "save and post" it also says the draft was kept.
         reason = "; ".join(exc.messages)

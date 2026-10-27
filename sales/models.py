@@ -446,3 +446,82 @@ class CustomerLedgerEntry(models.Model):
 
     def __str__(self):
         return f"{self.customer} / {self.entry_date} / {self.entry_type}"
+
+
+class ShortSale(models.Model):
+    """HG-065: a posted sales line that took more than there was in stock.
+
+    ``location_short`` is how far the line took its warehouse below zero, with
+    the seller's agreement. ``estimated_quantity`` is the part no stock anywhere
+    stood behind: it was costed at ``estimated_unit_cost`` (the last purchase,
+    else the item's purchase price) and waits for stock to arrive. Each arrival
+    settles it with a dated entry; nothing on the posted line is rewritten.
+    """
+
+    class EstimateSource(models.TextChoices):
+        LAST_PURCHASE = "last_purchase", "Last purchase"
+        PURCHASE_PRICE = "purchase_price", "Purchase price"
+        NONE = "none", "No cost known"
+
+    sales_line = models.OneToOneField(SalesLine, on_delete=models.PROTECT, related_name="short_sale")
+    item = models.ForeignKey("master_data.Item", on_delete=models.PROTECT, related_name="short_sales")
+    location = models.ForeignKey("master_data.Location", on_delete=models.PROTECT, related_name="short_sales")
+    location_short = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    estimated_quantity = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    estimated_unit_cost = models.DecimalField(max_digits=14, decimal_places=4, default=0)
+    estimate_source = models.CharField(max_length=20, choices=EstimateSource.choices, default=EstimateSource.NONE)
+    agreed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="agreed_short_sales", null=True, blank=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["pk"]
+        indexes = [models.Index(fields=["item"])]
+
+    def __str__(self):
+        return f"{self.sales_line} / short {self.estimated_quantity}"
+
+
+class ShortSaleEntry(models.Model):
+    """HG-065: what happened to a short sale's estimated units, append-only.
+
+    A settlement replaces the estimate of ``quantity`` units by the cost they
+    really came in at: ``amount`` is the cost added to the sale, and the two
+    stock movements take the units back at the estimate and issue them again at
+    that cost. A release closes units a return gave back. A reversal row, for
+    all of a row or part of it, has the opposite signs and points at it."""
+
+    class Kind(models.TextChoices):
+        SETTLEMENT = "settlement", "Settlement"
+        RELEASE = "release", "Release"
+
+    short_sale = models.ForeignKey(ShortSale, on_delete=models.PROTECT, related_name="entries")
+    kind = models.CharField(max_length=20, choices=Kind.choices)
+    entry_date = models.DateField()
+    quantity = models.DecimalField(max_digits=14, decimal_places=3)
+    unit_cost = models.DecimalField(max_digits=14, decimal_places=4, default=0)
+    amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    movement_in = models.OneToOneField(
+        "inventory.StockMovement", on_delete=models.PROTECT, related_name="+", null=True, blank=True
+    )
+    movement_out = models.OneToOneField(
+        "inventory.StockMovement", on_delete=models.PROTECT, related_name="+", null=True, blank=True
+    )
+    sales_return = models.ForeignKey(
+        SalesReturn, on_delete=models.PROTECT, related_name="short_sale_entries", null=True, blank=True
+    )
+    reversal_of = models.ForeignKey(
+        "self", on_delete=models.PROTECT, related_name="reversals", null=True, blank=True
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+", null=True, blank=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["pk"]
+        indexes = [models.Index(fields=["entry_date"]), models.Index(fields=["kind"])]
+
+    def __str__(self):
+        return f"{self.short_sale_id} / {self.kind} / {self.quantity}"

@@ -1950,23 +1950,64 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 
 ## HG-065 — Selling an item that is not in stock (Ahmed's notes #20, #21, #24)
 
-- **Status:** PROPOSED, waiting for Ahmed's approval. Nothing is built.
-- **What Ahmed asked:** at the till and on the sales invoice, allow selling an item whose stock is not enough, with a box asking the seller to agree to selling what is not there.
-- **What happens today:** `sales.services._validate_stock_available` refuses to post a sale above the warehouse's stock, at the till, on the invoice, and on an offline sale when it syncs.
-- **Why this is protected:** it touches inventory movement and accounting, the average cost, and posted sales cost (HG-003). A sale below zero has no real cost to take: the authoritative cost comes from the stock movements that are not there yet.
-- **Proposed:**
-  - a setting "Allow selling without stock", off by default, that only the owner can switch on (`settings_core`);
-  - when it is on, the till and the invoice show a box naming each short item and how much is missing; posting goes ahead only after the seller agrees, and the agreement is written in the audit log with who agreed;
-  - the missing quantity takes the item's last known cost (the last purchase, else its default purchase price) and is marked "cost to settle";
-  - when stock arrives, a dated cost adjustment settles the difference between that cost and the real one, so the profit report ends up right; nothing already posted is rewritten;
-  - the stock report shows items below zero in red, with a "sold before it arrived" list;
-  - with the setting off, nothing changes.
-- **Files:** `sales/services.py` (the stock check), `sales/pos.py`, `inventory/services.py` (the settling adjustment), `settings_core` (the setting), `reports` (the below-zero list), and the till and invoice templates.
-- **Risk:**
-  - the average cost and the profit for the days between the sale and the purchase are estimates until settled;
-  - a warehouse can show a negative quantity, which some reports and checks assume cannot happen; each must be checked;
-  - an offline sale that syncs after stock ran out must follow the same rule.
-- **Tests:** off by default refuses as today; on, a short sale posts only with the agreement and logs it; the settling adjustment brings the cost of sales and the stock value to what they would be had the purchase come first; returns of a short sale; the trial balance stays balanced throughout.
+- **Status:** APPROVED by Ahmed on 26 Oct 2026 («موافق انك تعمل الصح بظبط») and BUILT (`claude/hg065-sell-short`).
+- **What Ahmed asked:** at the till and on the sales invoice, allow selling an item whose stock is not enough. A box asks the seller to agree to selling what is not there.
+- **The switch:** «البيع من غير رصيد» (`SystemSetting` `sales.sell_short`).
+  - Off by default. With it off, a short sale is refused with the same message as before.
+  - A forged `allow_short=1` does nothing while it is off.
+  - Only the account owner can switch it: the owner account, or a user with the owner role (`sales.short_sales.is_owner`). Each change is audited.
+  - Its page is `/sales/short-sales/`, linked from the capabilities page and the stock screen. The page also lists what was sold before it arrived.
+- **Selling:**
+  - `post_sales_invoice(..., allow_short=False, short_source=...)` raises `StockShortage`, a `ValidationError` that names every short item with what is there and what is needed.
+  - The lines of one item are now checked together. Before this, two lines that each fit could together take the stock below zero unnoticed.
+  - The till and the invoice turn the refusal into a box naming the short items. «أيوه، بيع من غير رصيد» sends the same sale again with the agreement.
+  - The agreement is written in the audit log (`sell_short`) with who agreed and where: `pos`, `invoice` or `offline`.
+  - An offline till sale that syncs after the stock ran out posts below zero while the switch is on, logged as `offline`, because the goods already left with the customer.
+  - Serial-tracked items still refuse: their serials must be in stock.
+- **Costing:**
+  - The part of a line that the item's stock covers takes the authoritative average. The stock counted is all warehouses, because the average is item-wide.
+  - The rest takes an estimate: the last purchase or opening-stock cost, else the item's purchase price.
+  - The line's unit cost is the blend of the two. The line keeps it; nothing posted is rewritten.
+  - `sales.ShortSale` (migration `sales/0011_short_sales`) records the line's location shortage and the estimated quantity and cost.
+  - A sale that is short only at its warehouse, while the item has stock elsewhere, needs no estimate. A transfer later fixes the warehouse.
+- **Settling** (`sales.short_sales.rebalance`):
+  - Runs after every stock change that can bring stock in or take it out: purchase posting and cancellation, purchase returns and their reversal, stock adjustments and their reversal, opening-stock import, and sales cancellations, returns and their reversal.
+  - The open estimated units should match the item's units below zero. When stock arrives beyond that, the oldest open units are settled at the cost of the stock really there: the stock value with the open estimates put back, over the quantity with the open units put back. That is the arriving cost when the item was at or below zero.
+  - A settlement is a dated pair of stock movements on the sale itself: `SALE_RETURN_IN` at the estimate and `SALE_OUT` at the real cost. Its net quantity is zero.
+  - The ledger's sales-invoice entry for that date books the difference to cost of sales, so `ledger/projector.py` is unchanged.
+  - The stock left is valued as if the purchase had come first. The difference is kept in `sales.ShortSaleEntry` (append-only).
+  - When stock leaves again and the hole grows back (for example, a purchase cancelled), the latest settlements are reopened with reversal pairs.
+  - A settlement is dated the later of the arrival and the sale. One that would fall in a closed month waits for the next stock change.
+- **Reversals:**
+  - Cancelling a short sale reverses its settlements on their own dates, then returns the stock at the line's cost. The books end as if it was never sold.
+  - A return of a short line comes back at its share of what the units still sold cost, settlements included. It closes the same share of the open estimate; reversing the return reopens it.
+- **Reports:**
+  - `profit_report` shows each settlement as a cost row on its date. `profit_totals` includes the settlements, so the ledger's cost-of-sales check stays reconciled.
+  - The stock screen shows quantities below zero in red.
+  - Other screens that read a line's cost (an invoice's own profit, item margins) show the estimate, because the line is never rewritten.
+- **Known limits:**
+  - Between the sale and the settlement, the cost and profit of that sale are an estimate.
+  - While an item is below zero overall, a stock-out adjustment at another warehouse is taken at a zero average (the existing rule for an empty item). The settlement later puts that value in cost of sales instead of stock loss.
+  - After a return of a partly settled line is reversed, the re-settlement uses the average of that moment. This is how an average-cost system works without re-costing history.
+  - A purchase cancellation already had no stock check before this change; that is unchanged.
+- **Files:**
+  - `sales/short_sales.py`, `sales/short_sales_views.py`, `sales/models.py` with migration `0011`, `sales/services.py`, `sales/pos.py`, `sales/views.py`, `sales/urls.py`;
+  - `purchases/services.py`, `inventory/services.py`, `imports/screen_services.py`, `offline_pos/views.py`, `reports/selectors.py`;
+  - templates: the till, invoice detail, stock, capabilities and the new page.
+- **Tests:** `sales/tests_short_sales.py` (27 tests). Every test that touches money checks that the ledger reconciles with the reports and that the trial balance balances. They cover:
+  - off by default refuses as before;
+  - only the owner switches it;
+  - lines of one item checked together;
+  - the agreement is logged;
+  - the estimate from the last purchase, else the purchase price;
+  - settlement by a purchase, a stock count and an opening-stock import;
+  - partial arrivals, oldest first;
+  - a warehouse-only shortage;
+  - a sale from stock while the item is short elsewhere;
+  - cancelling before and after settlement;
+  - partial and full returns, and reversing a return;
+  - cancelling the purchase that settled;
+  - the till box, the invoice box and the offline sync, each with the switch off and on.
 
 ## HG-067 — Online store by file: a new table for imported orders (T13)
 

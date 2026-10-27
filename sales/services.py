@@ -149,20 +149,26 @@ def _line_cost_amount(line, unit_cost):
     return money_round(line.quantity * unit_cost)
 
 
-def _validate_stock_available(invoice, lines):
+def _validate_stock_available(invoice, lines, allow_short=False):
+    """HG-065: the lines of one item are checked together. A shortage is refused unless the seller agreed and the
+    owner allows selling without stock; then the shortages are returned for the audit log."""
+
+    from . import short_sales
+
     lock_items_for_stock_check(line.item_id for line in lines if line.item.is_stock_tracked)
-    for line in lines:
-        if not line.item.is_stock_tracked:
-            continue
-        available = get_item_location_stock_quantity(line.item, invoice.selling_location)
-        if available < line.quantity:
-            raise ValidationError(
-                f"Not enough stock for item {line.item}. Available: {available}, required: {line.quantity}."
-            )
+    found = short_sales.shortages(invoice, lines)
+    if found and not allow_short:
+        raise short_sales.StockShortage(found)
+    return found
 
 
 @transaction.atomic
-def post_sales_invoice(invoice_id, user=None):
+def post_sales_invoice(invoice_id, user=None, allow_short=False, short_source="invoice"):
+    """Post a draft. ``allow_short`` is the seller's agreement to sell what is not in stock (HG-065); it counts only
+    while the owner allows selling without stock. ``short_source`` says where it was given: invoice, pos or offline."""
+
+    from . import short_sales
+
     invoice = (
         SalesInvoice.objects.select_for_update(of=("self",))
         .select_related("customer", "selling_location", "cashbox")
@@ -183,7 +189,9 @@ def post_sales_invoice(invoice_id, user=None):
     for line in lines:
         line.full_clean()
 
-    _validate_stock_available(invoice, lines)
+    found = _validate_stock_available(invoice, lines, allow_short=bool(allow_short) and short_sales.enabled())
+    if found:
+        short_sales.record_agreement(invoice, found, user, short_source)
 
     if invoice.remaining_due and invoice.remaining_due > 0:
         CustomerLedgerEntry.objects.create(
@@ -222,7 +230,12 @@ def post_sales_invoice(invoice_id, user=None):
 
     affected_items = {}
     for line, financial_amount in zip(lines, financial_allocations):
-        unit_cost = _line_unit_cost(line)
+        unit_cost, estimate = _line_unit_cost(line), None
+        if line.item.is_stock_tracked:
+            # HG-065: units no stock stands behind take an estimate; with stock on hand this is the average as before.
+            unit_cost, estimate = short_sales.line_cost(line.item, line.quantity)
+            on_shelf = get_item_location_stock_quantity(line.item, invoice.selling_location)
+            location_short = line.quantity - min(max(on_shelf, Decimal("0")), line.quantity)
         line_cost = _line_cost_amount(line, unit_cost)
         line_profit = money_round(financial_amount - taxes[line.pk] - line_cost)
 
@@ -246,6 +259,7 @@ def post_sales_invoice(invoice_id, user=None):
             notes=f"Sales invoice {invoice.invoice_number}",
             created_by=user,
         )
+        short_sales.record_line(line, invoice.selling_location, location_short, estimate, user)
         affected_items[line.item_id] = line.item
 
     for item in affected_items.values():
@@ -326,6 +340,9 @@ def cancel_posted_sales_invoice(invoice_id, user=None, reason=""):
             created_by=user,
         )
 
+    from . import short_sales
+
+    short_sales.reverse_for_cancel(invoice, user)  # HG-065: its cost settlements go first, each on its own date
     affected_items = {}
     for line in lines:
         if not line.item.is_stock_tracked:
@@ -350,6 +367,7 @@ def cancel_posted_sales_invoice(invoice_id, user=None, reason=""):
 
     invoice.status = SalesInvoiceStatus.CANCELLED
     invoice.save(update_fields=["status", "updated_at"])
+    short_sales.rebalance_items(affected_items.values(), invoice.invoice_date, user)  # the stock back may settle others
 
     AuditLog.objects.create(
         event_type=AuditEventType.UPDATE,
@@ -468,6 +486,8 @@ def _sales_source_allocations(invoice, source_lines, taxes=None):
 def _prepare_sales_return_lines(invoice, source_lines, requested_lines):
     from taxes.services import line_taxes, return_tax_share
 
+    from . import short_sales
+
     by_id = {line.pk: line for line in source_lines}
     taxes = line_taxes(invoice, source_lines)
     allocations = _sales_source_allocations(invoice, source_lines, taxes)
@@ -503,13 +523,18 @@ def _prepare_sales_return_lines(invoice, source_lines, requested_lines):
         else:
             amount = money_round(allocated_total * quantity / line.quantity)
             cost_amount = money_round(line.line_cost_amount * quantity / line.quantity)
+        unit_cost = line.unit_cost
+        short_cost = short_sales.return_cost(line, quantity, prior_quantity, prior_cost)
+        if short_cost is not None:  # HG-065: a short line's units come back at what they cost, settlements included
+            unit_cost, cost_amount = short_cost
         prepared.append(
             {
                 "source_line": line,
                 "quantity": quantity,
                 "amount": amount,
-                "unit_cost": line.unit_cost,
+                "unit_cost": unit_cost,
                 "cost_amount": cost_amount,
+                "prior_quantity": prior_quantity,
                 # HG-015: the refund above includes this much tax.
                 "tax_amount": return_tax_share(line, taxes[line.pk], quantity, cumulative_quantity),
             }
@@ -594,14 +619,18 @@ def create_sales_return(
 
     from taxes.services import record_return_taxes
 
+    from . import short_sales
+
     affected_items = {}
     returned_taxes = []
     for row in prepared:
         row = dict(row)
         tax_amount = row.pop("tax_amount", Decimal("0"))
+        prior_quantity = row.pop("prior_quantity")
         return_line = SalesReturnLine(sales_return=sales_return, **row)
         return_line.full_clean()
         return_line.save()
+        short_sales.release_for_return(return_line, sales_return, prior_quantity, user)  # HG-065
         returned_taxes.append((return_line, tax_amount))
         item = row["source_line"].item
         if not item.is_stock_tracked:
@@ -646,6 +675,7 @@ def create_sales_return(
     record_return_taxes(returned_taxes)
     for item in affected_items.values():
         recalculate_item_average_cost(item)
+    short_sales.rebalance_items(affected_items.values(), return_date, user)  # HG-065: the stock back may settle others
     AuditLog.objects.create(
         event_type=AuditEventType.CREATE,
         actor=user,
@@ -769,6 +799,10 @@ def cancel_sales_return(return_id, reversal_date, reason, user):
         )
     for item in affected_items.values():
         recalculate_item_average_cost(item)
+    from . import short_sales
+
+    short_sales.reopen_for_return_cancel(sales_return, reversal_date, user)  # HG-065: the units are sold again
+    short_sales.rebalance_items(affected_items.values(), reversal_date, user)
     sales_return.status = SalesReturnStatus.CANCELLED
     sales_return.cancelled_by = user
     sales_return.cancelled_at = timezone.now()

@@ -6,7 +6,9 @@ made. The server posts it through exactly the same path as a live POS sale
 was rung up, and records the key in the same transaction. A key seen before
 answers with the invoice it already made, so a retry can never post twice.
 A sale the server cannot post (stock gone, closed period, bad data) is
-refused with the reason and stays on the device for the cashier to see.
+refused with the reason and stays on the device for the cashier to see;
+while the owner allows selling without stock (HG-065), stock gone no longer
+refuses it.
 """
 
 import json
@@ -145,6 +147,9 @@ def sync_sale(request):
                 discount=discount, tendered=tendered, user=request.user, card=card,
                 sale_date=timezone.localtime(recorded_at).date(), notes="POS offline",
                 promotion=(promotion, promotion_off, coupon) if promotion else None,
+                # HG-065: the goods already left with the customer; while the owner allows selling without stock the
+                # sale posts below zero, logged as an offline sale, instead of being refused.
+                allow_short=True, short_source="offline",
             )
             OfflineSale.objects.create(sale_key=key, invoice=invoice, cashier=request.user, recorded_at=recorded_at)
     except IntegrityError:

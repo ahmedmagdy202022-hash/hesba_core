@@ -110,6 +110,14 @@ def recalculate_item_average_cost(item):
     return item.average_cost
 
 
+def _rebalance_short_sales(item, day, user):
+    """HG-065: stock that came in settles what was sold before it arrived; stock that left reopens it."""
+
+    from sales.short_sales import rebalance
+
+    rebalance(item, day, user)
+
+
 def _ensure_open_period(action_date):
     from closing.services import ensure_period_is_open
 
@@ -331,6 +339,7 @@ def adjust_stock(
         user,
     )
     recalculate_item_average_cost(locked_item)
+    _rebalance_short_sales(locked_item, operation_date, user)
     _audit_operation(operation, user, "adjust_stock", reason)
     return operation
 
@@ -416,6 +425,7 @@ def cancel_stock_operation(operation_id, reversal_date, reason, user):
 
     operation.item = locked_item
     recalculate_item_average_cost(locked_item)
+    _rebalance_short_sales(locked_item, reversal_date, user)
     operation.status = StockOperationStatus.CANCELLED
     operation.cancelled_by = user
     operation.cancelled_at = timezone.now()

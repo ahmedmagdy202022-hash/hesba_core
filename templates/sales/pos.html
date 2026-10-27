@@ -2,6 +2,10 @@
 {% load static hesba_format hesba_print %}
 {% load hesba_shifts %}{% block operation_content %}{% printing_enabled as can_print %}
 {% shift_gate %}
+{% if short_box %}<div class="op-notice op-short-box" role="alert" data-short-box><strong>{% if lang == 'en' %}Not enough in stock:{% else %}الكمية مش موجودة:{% endif %}</strong>
+<ul>{% for row in short_box.items %}<li data-short-item="{{ row.item.pk }}">{{ row.item|named:lang }}: {% if lang == 'en' %}needed {{ row.required|qty }}, there is {{ row.available|qty }}{% else %}المطلوب {{ row.required|qty }} والموجود {{ row.available|qty }}{% endif %}</li>{% endfor %}</ul>
+<p>{% if lang == 'en' %}Sell it anyway? The stock goes below zero, and its cost is settled when the goods arrive. Your agreement is recorded with your name.{% else %}تبيع برضه؟ المخزون هيبقى بالسالب، والتكلفة هتتسوّى لما البضاعة توصل. موافقتك هتتسجل باسمك.{% endif %}</p>
+<form method="post">{% csrf_token %}{% for key, value in short_box.fields %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}<input type="hidden" name="allow_short" value="1"><button class="op-primary" type="submit" data-sell-short>{% if lang == 'en' %}Yes, sell without stock{% else %}أيوه، بيع من غير رصيد{% endif %}</button></form></div>{% endif %}
 <form class="pos" method="post" data-pos data-words="{{ js_words }}" data-sync-url="{% url 'sales:pos_sync' %}" data-pos-user="{{ request.user.pk }}" novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="line_count" value="0" data-line-count><input type="hidden" name="cart_json" value="" data-cart-json><input type="hidden" name="print" value="0" data-print-flag>
 <section class="pos-main">
   <div class="pos-offline" data-pos-offline role="status" aria-live="polite" hidden></div>
