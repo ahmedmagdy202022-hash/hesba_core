@@ -205,6 +205,9 @@ def invoice_create(request):
         if from_order is not None:  # T2: what is still to come on the order, at the order's prices
             order_header, line_initial = receipt_initial(from_order, lang)
             initial.update({key: getattr(value, "pk", value) for key, value in order_header.items()})
+        elif _copy_of(request) is not None:  # FB-27 (undo): a cancelled purchase back as a new draft
+            copy_header, line_initial = _copy_initial(_copy_of(request), lang)
+            initial.update(copy_header)
         form = PurchaseDraftForm(lang=lang, initial=initial)
         if vat_enabled():
             del form.fields["tax_amount"]
@@ -216,6 +219,24 @@ def invoice_create(request):
         _context(request, form=form, line_formset=line_formset, can_post=True, item_catalog=item_catalog(sale_prices=False, purchase_prices=True), scan_words=scan_words(lang), tax_rates=rates_by_item(), units=units_catalog(purchase=True), from_order=from_order,
                  from_order_url=f"/purchases/orders/{from_order.pk}/" if from_order else ""),
     )
+
+
+def _copy_of(request):
+    raw = request.GET.get("copy", "")
+    if not raw.isdigit():
+        return None
+    return entity_scope.scope(PurchaseInvoice.objects.prefetch_related("lines__item"), entity_scope.PURCHASE_INVOICE).filter(pk=raw, status="cancelled").first()
+
+
+def _copy_initial(invoice, lang):
+    """FB-27 (Ahmed's note #27, undo): a cancelled purchase made again in one step, as a new draft to check and save."""
+
+    header = {"supplier": invoice.supplier_id, "receiving_location": invoice.receiving_location_id, "cashbox": invoice.cashbox_id,
+              "discount_amount": invoice.discount_amount, "paid_now": invoice.paid_now,
+              "notes": (f"Made again from cancelled invoice {invoice.invoice_number}" if lang == "en" else f"معمولة تاني من الفاتورة الملغية {invoice.invoice_number}")}
+    lines = [{"item": line.item, "description": line.description, "quantity": line.quantity, "unit_purchase_price": line.unit_purchase_price,
+              "line_discount_amount": line.line_discount_amount} for line in invoice.lines.order_by("line_number")]
+    return header, lines
 
 
 @require_permission("purchases.view_purchase_invoices")

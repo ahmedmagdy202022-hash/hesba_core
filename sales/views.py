@@ -203,6 +203,9 @@ def invoice_create(request):
         elif from_prescription is not None:  # T10: the prescription's drugs, at the customer's price
             rx_header, line_initial = pharmacy.invoice_initial(from_prescription, lang)
             initial.update({key: getattr(value, "pk", value) for key, value in rx_header.items()})
+        elif _copy_of(request) is not None:  # FB-27 (undo): a cancelled invoice back as a new draft
+            copy_header, line_initial = _copy_initial(_copy_of(request), lang)
+            initial.update(copy_header)
         if not initial.get("customer"):
             from settings_core.setup_services import enabled_modules
 
@@ -219,6 +222,25 @@ def invoice_create(request):
                                                       promotions_on=promotions.enabled(), running_promotions=promotions.running() if promotions.enabled() else [],
                                                       coupon=request.POST.get("coupon", ""), loyalty_on=loyalty.enabled(), loyalty_rules=loyalty.rules() if loyalty.enabled() else None,
                                                       redeem_points=request.POST.get("redeem_points", "")))
+
+
+def _copy_of(request):
+    raw = request.GET.get("copy", "")
+    if not raw.isdigit():
+        return None
+    return entity_scope.scope(SalesInvoice.objects.prefetch_related("lines__item"), entity_scope.SALES_INVOICE).filter(pk=raw, status="cancelled").first()
+
+
+def _copy_initial(invoice, lang):
+    """FB-27 (Ahmed's note #27, undo): a cancelled sale is never brought back to life, but it can be made again in one
+    step: the same customer, warehouse, cashbox, discount, payment and lines, as a new draft to check and save."""
+
+    header = {"customer": invoice.customer_id, "selling_location": invoice.selling_location_id, "cashbox": invoice.cashbox_id,
+              "discount_amount": invoice.discount_amount, "paid_now": invoice.paid_now, "salesperson": invoice.salesperson_id,
+              "notes": (f"Made again from cancelled invoice {invoice.invoice_number}" if lang == "en" else f"معمولة تاني من الفاتورة الملغية {invoice.invoice_number}")}
+    lines = [{"item": line.item, "description": line.description, "quantity": line.quantity, "unit_sale_price": line.unit_sale_price,
+              "line_discount_amount": line.line_discount_amount} for line in invoice.lines.order_by("line_number")]
+    return header, lines
 
 
 @require_permission("sales.view_sales_invoices")
