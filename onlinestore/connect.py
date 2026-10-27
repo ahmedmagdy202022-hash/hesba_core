@@ -135,7 +135,9 @@ def woocommerce_order(row):
         "discount": _text(row.get("discount_total")),
         "shipping": _text(row.get("shipping_total")),
         "total": _text(row.get("total")),
-        "status": "refunded" if status == "refunded" else status,
+        # Codex #283: a partly refunded order keeps its status and lists the refund in ``refunds``; it is refused like
+        # Shopify's partially_refunded rather than imported whole
+        "status": "refunded" if status == "refunded" else ("partially_refunded" if row.get("refunds") else status),
         "currency": _text(row.get("currency")),
         "cancelled": status if status in ("cancelled", "failed", "trash") else "",
         # Codex #283: WooCommerce's REST amounts (line subtotals, shipping, discount) are always before tax, whatever the

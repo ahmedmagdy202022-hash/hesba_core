@@ -244,3 +244,10 @@ class AllocationTests(StoreSetup):
         self.assertEqual(result["made"], [])
         self.assertIn("10.00", result["skipped"][0]["reason"])
         self.assertFalse(StoreOrder.objects.exists())  # tried again on the next pull, never marked imported
+
+    def test_a_partly_refunded_woocommerce_order_is_refused(self):
+        row = dict(WOO_ORDER, status="completed", refunds=[{"id": 9, "total": "-100.00"}])
+        result = self.pull(WOO_ENV, "woocommerce", [row])
+        self.assertEqual(result["made"], [])
+        self.assertIn("partially_refunded", result["skipped"][0]["reason"])
+        self.assertFalse(StoreOrder.objects.exists())

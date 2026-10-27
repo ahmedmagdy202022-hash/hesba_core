@@ -2041,6 +2041,7 @@ The entries below are the protected-logic decisions in the commercial gate, reco
     - A WooCommerce line keeps its exact subtotal (the unit price carries six decimals, and the import's rounding brings the line back to it). Each line's coupon is what WooCommerce took off it (`subtotal − total`); the order's coupon is not spread again over every line (Codex #283).
     - A Shopify line takes its own `discount_allocations`, and its shipping is the `discounted_price`; the order's discount is spread only for orders that do not give them (Codex #283).
     - A WooCommerce order with `fee_lines` (handling, payment surcharges) is skipped with the reason and tried again on the next pull, never imported short of its fees (Codex #283).
+    - A WooCommerce order with `refunds` is refused as partly refunded, as Shopify's `partially_refunded` is (Codex #283).
   - **Paging (Codex #283):**
     - The board's button reads at most 20 pages, so the request stays short.
     - When the store has more orders, the result says so and offers «كمّل السحب». That button carries on in the same window from the next page; nothing is cut silently. It keeps the location, shipping item and «بدّل» choice of the first pull.
