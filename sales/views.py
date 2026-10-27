@@ -203,6 +203,8 @@ def invoice_create(request):
             initial.update(copy_header)
             # Codex #284: the cancelled invoice gave its order's quantities back; the new one takes them again on saving
             from_order = order_for_invoice(request.user, _copy_order(copy))
+            if from_order is None:  # Codex #284: likewise the prescription it dispensed, through the usual checks
+                from_prescription = pharmacy.prescription_for_invoice(request.user, _copy_prescription(copy))
         elif from_order is not None:  # T1: what is left on the order, at the order's prices
             order_header, line_initial = invoice_initial(from_order, lang)
             initial.update({key: getattr(value, "pk", value) for key, value in order_header.items()})
@@ -240,6 +242,14 @@ def _copy_order(invoice):
     from orders.models import OrderInvoiceLine
 
     return OrderInvoiceLine.objects.filter(sales_line__invoice=invoice).values_list("order_line__order_id", flat=True).first()
+
+
+def _copy_prescription(invoice):
+    """The prescription the cancelled invoice dispensed, if any."""
+
+    from pharmacy.models import PrescriptionInvoice
+
+    return PrescriptionInvoice.objects.filter(invoice=invoice).values_list("prescription_id", flat=True).first()
 
 
 def _copy_initial(invoice, lang):
