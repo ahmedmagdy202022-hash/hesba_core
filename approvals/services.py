@@ -113,12 +113,30 @@ def _check_approver(request, user):
         raise ValidationError("approval_own_request")
 
 
+def _still_allowed(request):
+    """Why the held action may no longer run now, or "" (Codex #280): its screen's module was switched off, or the
+    requester may no longer do it (permission removed, account or profile switched off)."""
+
+    from settings_core.module_gate import closed_module
+
+    action = ACTIONS[request.action]
+    if closed_module(action.url(request.object_id)):
+        return "approval_module_closed"
+    requester = request.requested_by
+    if not requester.is_active or not any(user_has_permission(requester, code) for code in action.permissions):
+        return "approval_requester_not_allowed"
+    return ""
+
+
 def approve(request_id, user):
     """Carry out the held action now. Returns the request, done or failed with the reason."""
 
     with transaction.atomic():
         request = _locked(request_id)
         _check_approver(request, user)
+        refused = _still_allowed(request)
+        if refused:
+            return _decided(request, user, ApprovalStatus.FAILED, refused)
         try:
             with transaction.atomic():  # the action's own work is all or nothing
                 ACTIONS[request.action].run(request)
@@ -144,8 +162,16 @@ def withdraw(request_id, user):
 
 
 def waiting_for(user):
-    """The requests this person may decide: everyone's but their own."""
+    """The requests this person may decide: everyone's but their own, on documents of the entity being worked in.
+
+    The entity filter is part of the query (Codex #280), so a page or a count never loses older requests behind
+    newer ones of another entity."""
+
+    from django.db.models import Q
 
     if not can_approve(user):
         return ApprovalRequest.objects.none()
-    return ApprovalRequest.objects.filter(status=ApprovalStatus.PENDING).exclude(requested_by=user)
+    seen = Q(pk__in=[])
+    for code, action in ACTIONS.items():
+        seen |= Q(action=code, object_id__in=action.visible_ids())
+    return ApprovalRequest.objects.filter(seen, status=ApprovalStatus.PENDING).exclude(requested_by=user)

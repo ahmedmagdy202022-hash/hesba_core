@@ -18,14 +18,20 @@ class Action:
     run: Callable
     model: str  # "app.Model" of the document
     scope: str  # its entities.scope path, so a request is decided only where the document can be seen
+    permissions: tuple  # what the screen asks of the person acting (any one of them), checked again on approval
 
-    def visible(self, object_id):
+    def visible_ids(self):
+        """The documents of this kind the person working now can see (entities scope), as a subquery."""
+
         from django.apps import apps
 
         from entities import scope as entity_scope
 
         model = apps.get_model(self.model)
-        return entity_scope.scope(model.objects, getattr(entity_scope, self.scope)).filter(pk=object_id).exists()
+        return entity_scope.scope(model.objects, getattr(entity_scope, self.scope)).values("pk")
+
+    def visible(self, object_id):
+        return self.visible_ids().filter(pk=object_id).exists()
 
 
 def _day(data):
@@ -87,15 +93,15 @@ def _reverse_cash_operation(request):
 
 
 ACTIONS = {action.code: action for action in (
-    Action("sales.cancel_invoice", "إلغاء فاتورة بيع مترحّلة", "Cancel a posted sales invoice", lambda pk: f"/sales/{pk}/", _cancel_sales_invoice, "sales.SalesInvoice", "SALES_INVOICE"),
-    Action("sales.reverse_return", "عكس مرتجع مبيعات", "Reverse a sales return", lambda pk: f"/sales/returns/{pk}/", _reverse_sales_return, "sales.SalesReturn", "SALES_RETURN"),
-    Action("sales.cancel_payment", "إلغاء تحصيل من عميل", "Cancel a customer collection", lambda pk: "/sales/collections/", _cancel_customer_payment, "sales.CustomerPayment", "CUSTOMER_PAYMENT"),
-    Action("purchases.cancel_invoice", "إلغاء فاتورة شراء مترحّلة", "Cancel a posted purchase invoice", lambda pk: f"/purchases/{pk}/", _cancel_purchase_invoice, "purchases.PurchaseInvoice", "PURCHASE_INVOICE"),
-    Action("purchases.reverse_return", "عكس مرتجع مشتريات", "Reverse a purchase return", lambda pk: f"/purchases/returns/{pk}/", _reverse_purchase_return, "purchases.PurchaseReturn", "PURCHASE_RETURN"),
-    Action("purchases.cancel_payment", "إلغاء دفعة لمورد", "Cancel a supplier payment", lambda pk: "/purchases/payments/", _cancel_supplier_payment, "purchases.SupplierPayment", "SUPPLIER_PAYMENT"),
-    Action("expenses.cancel", "إلغاء مصروف", "Cancel an expense", lambda pk: "/expenses/", _cancel_expense, "expenses.Expense", "EXPENSE"),
-    Action("inventory.reverse_operation", "عكس تسوية أو تحويل مخزون", "Reverse a stock adjustment or transfer", lambda pk: "/inventory/operations/", _reverse_stock_operation, "inventory.StockOperation", "STOCK_OPERATION"),
-    Action("cashboxes.reverse_operation", "عكس حركة خزنة", "Reverse a cashbox operation", lambda pk: "/cashboxes/operations/", _reverse_cash_operation, "cashboxes.CashboxOperation", "CASHBOX_OPERATION"),
+    Action("sales.cancel_invoice", "إلغاء فاتورة بيع مترحّلة", "Cancel a posted sales invoice", lambda pk: f"/sales/{pk}/", _cancel_sales_invoice, "sales.SalesInvoice", "SALES_INVOICE", ("sales.return_sale",)),
+    Action("sales.reverse_return", "عكس مرتجع مبيعات", "Reverse a sales return", lambda pk: f"/sales/returns/{pk}/", _reverse_sales_return, "sales.SalesReturn", "SALES_RETURN", ("sales.return_sale",)),
+    Action("sales.cancel_payment", "إلغاء تحصيل من عميل", "Cancel a customer collection", lambda pk: "/sales/collections/", _cancel_customer_payment, "sales.CustomerPayment", "CUSTOMER_PAYMENT", ("sales.receive_customer_payment",)),
+    Action("purchases.cancel_invoice", "إلغاء فاتورة شراء مترحّلة", "Cancel a posted purchase invoice", lambda pk: f"/purchases/{pk}/", _cancel_purchase_invoice, "purchases.PurchaseInvoice", "PURCHASE_INVOICE", ("purchases.return_purchase",)),
+    Action("purchases.reverse_return", "عكس مرتجع مشتريات", "Reverse a purchase return", lambda pk: f"/purchases/returns/{pk}/", _reverse_purchase_return, "purchases.PurchaseReturn", "PURCHASE_RETURN", ("purchases.return_purchase",)),
+    Action("purchases.cancel_payment", "إلغاء دفعة لمورد", "Cancel a supplier payment", lambda pk: "/purchases/payments/", _cancel_supplier_payment, "purchases.SupplierPayment", "SUPPLIER_PAYMENT", ("purchases.pay_supplier",)),
+    Action("expenses.cancel", "إلغاء مصروف", "Cancel an expense", lambda pk: "/expenses/", _cancel_expense, "expenses.Expense", "EXPENSE", ("cashboxes.record_expenses",)),
+    Action("inventory.reverse_operation", "عكس تسوية أو تحويل مخزون", "Reverse a stock adjustment or transfer", lambda pk: "/inventory/operations/", _reverse_stock_operation, "inventory.StockOperation", "STOCK_OPERATION", ("inventory.transfer_stock", "inventory.adjust_stock")),
+    Action("cashboxes.reverse_operation", "عكس حركة خزنة", "Reverse a cashbox operation", lambda pk: "/cashboxes/operations/", _reverse_cash_operation, "cashboxes.CashboxOperation", "CASHBOX_OPERATION", ("cashboxes.move_cash",)),
 )}
 
 

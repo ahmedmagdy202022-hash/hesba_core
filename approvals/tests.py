@@ -173,3 +173,47 @@ class DatedReversalTests(ApprovalCase):
         operation = StockOperation.objects.get(pk=operation.pk)
         self.assertEqual((operation.status, operation.reversal_date, operation.cancelled_by), ("cancelled", asked_for, self.clerk))
         self.assertEqual(get_item_stock_quantity(item), D("5"))
+
+
+class StillAllowedTests(ApprovalCase):
+    """Codex #280: an approval runs only what may still be done, and an approver sees every request of their entity."""
+
+    def setUp(self):
+        super().setUp()
+        self.hold_cancellations()
+        self.ask_to_cancel()
+        self.request = ApprovalRequest.objects.get()
+
+    def test_a_requester_who_lost_the_permission_is_not_acted_for(self):
+        from permissions.models import RolePermission
+
+        RolePermission.objects.filter(role=self.clerk.hesba_profile.role, permission__code="sales.return_sale").delete()
+        request = services.approve(self.request.pk, self.manager)
+        self.assertEqual((request.status, request.note), ("failed", "approval_requester_not_allowed"))
+        self.assertEqual(self.status(), "posted")
+        self.client.force_login(self.clerk)
+        self.assertContains(self.client.get("/approvals/"), "مبقاش مسموح له")
+
+    def test_a_switched_off_account_is_not_acted_for(self):
+        self.clerk.is_active = False
+        self.clerk.save(update_fields=["is_active"])
+        self.assertEqual(services.approve(self.request.pk, self.manager).note, "approval_requester_not_allowed")
+        self.assertEqual(self.status(), "posted")
+
+    def test_a_module_switched_off_since_the_request_stops_it(self):
+        from unittest import mock
+
+        with mock.patch("settings_core.module_gate.closed_module", return_value="sales_operations"):
+            request = services.approve(self.request.pk, self.manager)
+        self.assertEqual((request.status, request.note), ("failed", "approval_module_closed"))
+        self.assertEqual(self.status(), "posted")
+
+    def test_the_entity_filter_is_part_of_the_query(self):
+        from unittest import mock
+
+        self.assertEqual(services.waiting_for(self.manager).count(), 1)
+        with mock.patch("entities.scope.scope", side_effect=lambda queryset, path: queryset.none()):
+            self.assertEqual(services.waiting_for(self.manager).count(), 0)  # another entity's document: not counted
+            self.client.force_login(self.manager)
+            self.assertNotContains(self.client.get("/approvals/"), f'data-approval="{self.request.pk}"')
+

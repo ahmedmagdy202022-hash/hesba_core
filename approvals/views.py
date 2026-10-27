@@ -19,6 +19,8 @@ WORDS = {
            "save": "احفظ", "saved": "اتحفظ اللي محتاج موافقة.", "done": "اتوافق واتنفّذ.", "failed": "اتوافق بس ماتنفّذش: {reason}",
            "rejected": "اترفض الطلب.", "withdrawn": "اتسحب الطلب.", "owner_only": "اختيار العمليات اللي محتاجة موافقة لصاحب الحساب بس.",
            "approval_not_waiting": "الطلب ده مش مستني موافقة دلوقتي.", "approval_own_request": "مينفعش توافق على طلبك؛ لازم حد تاني.",
+           "approval_module_closed": "الجزء ده من البرنامج اتقفل من وقت الطلب، فماتنفّذش.",
+           "approval_requester_not_allowed": "اللي طلب مبقاش مسموح له بالعملية دي (اتشالت صلاحيته أو حسابه اتقفل)، فماتنفّذش.",
            "open": "افتح المستند",
            "status": {"pending": "مستني", "done": "اتوافق واتنفّذ", "rejected": "اترفض", "failed": "اتوافق وماتنفّذش", "withdrawn": "اتسحب"}},
     "en": {"title": "Approvals", "intro": "The actions the account owner chose to need a second person: the one who asks is never the one who approves, and nothing changes before the approval.",
@@ -29,6 +31,8 @@ WORDS = {
            "save": "Save", "saved": "Saved what needs approval.", "done": "Approved and done.", "failed": "Approved, but it could not be done: {reason}",
            "rejected": "Request rejected.", "withdrawn": "Request withdrawn.", "owner_only": "Only the account owner chooses what needs approval.",
            "approval_not_waiting": "This request is not waiting for approval now.", "approval_own_request": "You cannot approve your own request; someone else must.",
+           "approval_module_closed": "That part of Hesba was switched off since the request, so it was not done.",
+           "approval_requester_not_allowed": "The requester may no longer do this (permission removed or account switched off), so it was not done.",
            "open": "Open the document",
            "status": {"pending": "Waiting", "done": "Approved and done", "rejected": "Rejected", "failed": "Approved, not done", "withdrawn": "Withdrawn"}},
 }
@@ -36,7 +40,13 @@ WORDS = {
 
 def _row(request, lang, words):
     return {"request": request, "action": label(request.action, lang), "url": ACTIONS[request.action].url(request.object_id) if request.action in ACTIONS else "",
-            "reason": request.data.get("reason", ""), "status": words["status"].get(request.status, request.status)}
+            "reason": request.data.get("reason", ""), "status": words["status"].get(request.status, request.status), "note": _note(request.note, lang, words)}
+
+
+def _note(note, lang, words):
+    from settings_core.ui_messages import translate
+
+    return words.get(note) or translate(note, lang) if note else ""
 
 
 def _visible(approval):
@@ -77,18 +87,21 @@ def inbox(request):
                     else:
                         from settings_core.ui_messages import translate
 
-                        messages.error(request, words["failed"].format(reason=translate(approval.note, lang)))
+                        messages.error(request, words["failed"].format(reason=words.get(approval.note) or translate(approval.note, lang)))
                 else:
                     services.reject(approval.pk, request.user, request.POST.get("note", ""))
                     messages.success(request, words["rejected"])
         except ValidationError as exc:
             messages.error(request, "; ".join(words.get(message, message) for message in exc.messages))
         return redirect(f"/approvals/?lang={lang}")
-    waiting = [_row(item, lang, words) for item in services.waiting_for(request.user).select_related("requested_by")[:200] if _visible(item)]
+    from config.paging import page_of
+
+    page = page_of(request, services.waiting_for(request.user).select_related("requested_by"))
+    waiting = [_row(item, lang, words) for item in page.object_list]
     mine = [_row(item, lang, words) for item in ApprovalRequest.objects.filter(requested_by=request.user).select_related("decided_by")[:50]]
     held = services.held_actions()
     choices = [{"code": code, "label": label(code, lang), "on": code in held} for code in ACTIONS]
     return render(request, "approvals/inbox.html", {
         "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": words, "page_title": words["title"], "section": "settings",
-        "waiting": waiting, "mine": mine, "can_approve": services.can_approve(request.user), "owner": owner, "choices": choices,
+        "waiting": waiting, "page": page, "mine": mine, "can_approve": services.can_approve(request.user), "owner": owner, "choices": choices,
     })
