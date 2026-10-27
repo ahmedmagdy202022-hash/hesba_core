@@ -2027,6 +2027,18 @@ The entries below are the protected-logic decisions in the commercial gate, reco
   - the invoice link is `PROTECT`, so a draft that came from the store is cancelled, not deleted.
 - **Files:** `onlinestore/` (new app), `config/settings.py`, `config/urls.py`, capability wiring (`settings_core/capabilities.py`, `module_gate.py`, `operational_views.py`, `display_labels.py`, `reports/navigation.py`).
 - **Tests:** `onlinestore/tests.py`. They cover once-only import, drafts only (status `draft`), the phone match, the walk-in fallback, the template, and permissions.
+- **Live part (pulling from the store's API), 27 Oct 2026:** after Ahmed said not to wait for him on what is plainly right. Nothing new is written beyond what an upload writes; orders still become drafts only.
+  - **Code:** `onlinestore/connect.py` reads the last days' orders from a connected store.
+  - **Shopify:** the Admin REST API (`orders.json`, token in `X-Shopify-Access-Token`, paged on `since_id`).
+  - **WooCommerce:** the REST API v3 (`wp-json/wc/v3/orders`, key and secret as HTTP Basic).
+  - **Secrets:** they come from the environment (`SHOPIFY_STORE`, `SHOPIFY_ACCESS_TOKEN`, `SHOPIFY_API_VERSION`, `WOOCOMMERCE_URL`, `WOOCOMMERCE_KEY`, `WOOCOMMERCE_SECRET`), never the database.
+  - **The import:** each order takes the same shape an upload makes and goes through the same loop (`services.import_parsed`).
+    - It keeps the once-only rule.
+    - A WooCommerce order uses the template's source, so an order a shop uploaded before by file is not made twice.
+    - Coupons come in as the order's discount.
+    - The store's own "prices include tax" flag is honoured when the shop charges VAT.
+  - **Where:** the board gets «اسحب من Shopify / WooCommerce», and the command `pull_store_orders --location CODE` can run from cron.
+  - **Tests:** `onlinestore/tests_connect.py`.
 
 ## HG-066 — E-receipts for till sales (T8, offline part)
 

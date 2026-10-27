@@ -63,7 +63,7 @@ TEMPLATE_ALIASES = {
 MESSAGES = {
     "ar": {
         "file": "اختار ملف الطلبات.", "big": "الملف أكبر من 2 ميجا؛ قسّمه.", "format": "الملف مش ملف طلبات Shopify ولا قالب حسبة: لازم أعمدة رقم الطلب والكود والكمية والسعر.",
-        "location": "اختار المخزن اللي الطلبات هتطلع منه.", "sku": "الكود {sku} مش موجود في الأصناف.", "number": "سطر فيه كمية أو سعر مش مفهوم.",
+        "location": "اختار المخزن اللي الطلبات هتطلع منه.", "not_connected": "حساب المتجر ده مش متربط.", "sku": "الكود {sku} مش موجود في الأصناف.", "number": "سطر فيه كمية أو سعر مش مفهوم.",
         "refunded": "الطلب اترد أو اتلغى في المتجر ({status}).", "cancelled": "الطلب اتلغى في المتجر ({at}).", "taken": "رقم الفاتورة {number} مستخدم قبل كده.", "empty": "الطلب من غير أصناف.",
         "notes": "طلب من المتجر الأونلاين {source} رقم {number}.", "shipping": "مصاريف شحن اتحصّلت في المتجر: {amount}.", "who": "العميل: {who}.",
         "customer_note": "اتضاف من طلب المتجر الأونلاين.", "shipping_line": "مصاريف الشحن", "posted": "الطلب ده فاتورته اترحّلت؛ مينفعش يتبدّل.",
@@ -72,7 +72,7 @@ MESSAGES = {
     },
     "en": {
         "file": "Choose the orders file.", "big": "The file is over 2 MB; split it.", "format": "This is neither a Shopify orders export nor the Hesba template: it needs order, SKU, quantity and price columns.",
-        "location": "Choose the location the orders leave from.", "sku": "SKU {sku} is not an item code or barcode.", "number": "A line has a quantity or price that is not understood.",
+        "location": "Choose the location the orders leave from.", "not_connected": "This store's account is not connected.", "sku": "SKU {sku} is not an item code or barcode.", "number": "A line has a quantity or price that is not understood.",
         "refunded": "The order was refunded or voided in the store ({status}).", "cancelled": "The order was cancelled in the store ({at}).", "taken": "Invoice number {number} is taken already.", "empty": "The order has no lines.",
         "notes": "Online store order, {source} number {number}.", "shipping": "Shipping charged in the store: {amount}.", "who": "Customer: {who}.",
         "customer_note": "Added from an online store order.", "shipping_line": "Shipping", "posted": "This order's invoice is posted; it cannot be replaced.",
@@ -589,13 +589,23 @@ def import_orders(raw, location, user, lang="ar", shipping_item=None, with_vat=F
     words = _words(lang)
     if location is None:
         raise ValidationError(words["location"])
+    source, orders = read_orders(raw, lang)
+    return import_parsed(source, orders, location, user, lang, import_options(shipping_item, with_vat), replace)
+
+
+def import_options(shipping_item=None, with_vat=False):
     from taxes.services import rates_by_item
 
     from settings_core.models import ClientProfile
 
-    options = {"shipping_item": shipping_item, "with_vat": with_vat, "rates": rates_by_item() if with_vat else None,
-               "currency": getattr(ClientProfile.get_active(), "default_currency", None) or "EGP"}
-    source, orders = read_orders(raw, lang)
+    return {"shipping_item": shipping_item, "with_vat": with_vat, "rates": rates_by_item() if with_vat else None,
+            "currency": getattr(ClientProfile.get_active(), "default_currency", None) or "EGP"}
+
+
+def import_parsed(source, orders, location, user, lang, options, replace=False):
+    """The loop shared by a file upload and a pull from the store's API (T13 live): ``orders`` is {number: order}."""
+
+    words = _words(lang)
     made, skipped, again = [], [], []
     phones = phone_index()
     from entities import scope as entity_scope

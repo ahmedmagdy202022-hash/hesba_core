@@ -24,6 +24,8 @@ WORDS = {
         "check": "راجع كل فاتورة قبل الترحيل: لو إجمالي المتجر مختلف، صحّح الملف وارفعه تاني مع «بدّل الطلبات اللي لسه مسودة».",
         "shipping_item": "صنف مصاريف الشحن (خدمة)", "no_shipping_item": "من غير — تتكتب في الملاحظات", "with_vat": "أسعار المتجر شاملة الضريبة",
         "replace": "بدّل الطلبات اللي اتسجلت قبل كده ولسه مسودة", "replaced": "اتبدّلت",
+        "pull": "اسحب الطلبات من المتجر", "pull_intro": "حساب المتجر متربط: طلبات آخر 7 أيام بتتسحب على طول وتبقى فواتير مسودة، والطلب مش بيدخل مرتين.",
+        "pull_shopify": "اسحب من Shopify", "pull_woocommerce": "اسحب من WooCommerce",
     },
     "en": {
         "title": "Online store", "intro": "Until a store account is linked: download the items in the store's own file and upload it there, and download the orders from the store and upload them here as draft invoices to check and post.",
@@ -37,8 +39,16 @@ WORDS = {
         "check": "Check each invoice before posting: if the store's total differs, correct the file and upload it again with “Replace orders still in draft”.",
         "shipping_item": "Shipping charge item (a service)", "no_shipping_item": "None — noted on the invoice", "with_vat": "Store prices include VAT",
         "replace": "Replace orders imported before that are still drafts", "replaced": "Replaced",
+        "pull": "Pull the orders from the store", "pull_intro": "The store's account is connected: the last 7 days' orders come straight in as draft invoices, each once.",
+        "pull_shopify": "Pull from Shopify", "pull_woocommerce": "Pull from WooCommerce",
     },
 }
+
+
+def _stores():
+    from . import connect
+
+    return connect.connected()
 
 
 def _lang(request):
@@ -68,22 +78,28 @@ def board(request):
         upload = request.FILES.get("file")
         location = locations.filter(pk=request.POST.get("location") or 0).first()
         try:
-            if upload is None:
-                raise ValidationError(services.MESSAGES[lang]["file"])
-            if upload.size > services.MAX_IMPORT_BYTES:
-                raise ValidationError(services.MESSAGES[lang]["big"])
+            store = request.POST.get("pull", "")
             shipping_item = services.shipping_items().filter(pk=request.POST.get("shipping_item") or 0).first()
-            result = services.import_orders(upload.read(), location, request.user, lang, shipping_item=shipping_item,
-                                            with_vat=request.POST.get("with_vat") == "1", replace=request.POST.get("replace") == "1")
+            if store:  # T13 live: the store's recent orders straight from its API
+                from . import connect
+
+                result = connect.pull(store, location, request.user, lang, shipping_item=shipping_item, replace=request.POST.get("replace") == "1")
+            else:
+                if upload is None:
+                    raise ValidationError(services.MESSAGES[lang]["file"])
+                if upload.size > services.MAX_IMPORT_BYTES:
+                    raise ValidationError(services.MESSAGES[lang]["big"])
+                result = services.import_orders(upload.read(), location, request.user, lang, shipping_item=shipping_item,
+                                                with_vat=request.POST.get("with_vat") == "1", replace=request.POST.get("replace") == "1")
         except ValidationError as exc:
             error = " ".join(exc.messages)
-        else:
+        if result is not None:
             result["made_text"] = words["made"].format(n=len(result["made"]))
             if result["again"]:
                 result["again_text"] = words["again"].format(numbers=("، " if lang == "ar" else ", ").join(result["again"][:30]))
     return render(request, "onlinestore/board.html", {
         "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": words, "page_title": words["title"], "error": error, "result": result,
         # Codex #273: the imported orders are sales (customers, totals): shown only to who may see sales invoices.
-        "locations": locations, "can_import": services.can_import(request.user), "shipping_items": services.shipping_items(),
+        "locations": locations, "can_import": services.can_import(request.user), "shipping_items": services.shipping_items(), "stores": _stores(),
         "recent": services.recent_orders() if user_has_permission(request.user, "sales.view_sales_invoices") else None,
     })
