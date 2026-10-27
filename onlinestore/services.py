@@ -549,7 +549,8 @@ def _draft(source, order, location, user, words, phones, options):
         shipping = money_round(shipping * HUNDRED / (HUNDRED + rate)) if rate else money_round(shipping)  # Codex #273: as the prices
         lines.append({"item": fee, "quantity": Decimal("1"), "unit_sale_price": shipping, "line_discount_amount": ZERO,
                       "description": words["shipping_line"]})
-    elif shipping:
+    elif shipping:  # Codex #283: noted as the store charged it, its tax included
+        shipping += _decimal(order.get("shipping_tax"), words, ZERO)
         notes.append(words["shipping"].format(amount=f"{shipping:,.2f}"))
     if customer.customer_code == WALK_IN_CODE and (order["customer"] or order["phone"]):
         notes.append(words["who"].format(who=" ".join(part for part in (order["customer"], order["phone"], order["address"]) if part)))

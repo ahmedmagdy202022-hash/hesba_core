@@ -111,6 +111,9 @@ def shopify_order(row):
         "currency": _text(row.get("currency")),
         "cancelled": _text(row.get("cancelled_at")),
         "prices_include_tax": bool(row.get("taxes_included")),
+        # Codex #283: shipping's own tax, when the shop's prices leave it out
+        "shipping_tax": "" if row.get("taxes_included") else str(sum((_number(tax.get("price")) for line in row.get("shipping_lines") or []
+                                                                      for tax in line.get("tax_lines") or []), Decimal("0"))),
     })
     order["lines"] = []
     for line in row.get("line_items") or []:
@@ -141,6 +144,7 @@ def woocommerce_order(row):
                                                 _text(shipping_address.get("city") or billing.get("city"))) if part),
         "discount": _text(row.get("discount_total")),
         "shipping": _text(row.get("shipping_total")),
+        "shipping_tax": _text(row.get("shipping_tax")),  # Codex #283: WooCommerce's shipping is before tax too
         "total": _text(row.get("total")),
         # Codex #283: a partly refunded order keeps its status and lists the refund in ``refunds``; it is refused like
         # Shopify's partially_refunded rather than imported whole

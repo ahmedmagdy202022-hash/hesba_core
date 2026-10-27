@@ -271,3 +271,14 @@ class AllocationTests(StoreSetup):
         self.assertEqual(result["made"], [])
         self.assertIn("550.00", result["skipped"][0]["reason"])
         self.assertFalse(StoreOrder.objects.exists())  # tried again next time, never half right
+
+    def test_noted_shipping_counts_with_its_tax(self):
+        from settings_core import capabilities as caps
+        from settings_core.models import ClientProfile
+
+        caps.set_capability_enabled(ClientProfile.get_active(), "vat", True, user=self.owner)
+        row = dict(WOO_ORDER, discount_total="0", shipping_total="10.00", shipping_tax="1.40", total="125.40", total_tax="15.40",
+                   line_items=[{"sku": "SC-1", "quantity": 1, "subtotal": "100.00", "total": "100.00"}])
+        result = self.pull(WOO_ENV, "woocommerce", [row])
+        self.assertEqual(len(result["made"]), 1, result["skipped"])
+        self.assertIn("11.40", result["made"][0]["invoice"].notes)
