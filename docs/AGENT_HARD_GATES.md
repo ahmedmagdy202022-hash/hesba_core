@@ -1871,7 +1871,14 @@ The entries below are the protected-logic decisions in the commercial gate, reco
     - income tax is the yearly tax on (gross − employee insurance) × 12 − the exemption, through the brackets, divided by 12;
     - net = gross − employee insurance − tax;
     - a draft line can be changed by hand.
-  - **The rules are data** (`PayrollSettings`): 11% and 18.75%, the 2,300 / 14,500 wage floor and ceiling, the 20,000 exemption, and the brackets 0 / 10 / 15 / 20 / 22.5 / 25 / 27.5%. **They need an accountant's check every January.** The rule that drops the lower brackets for very high incomes is not modelled.
+  - **The rules are data** (`PayrollSettings`): 11% and 18.75%, the wage floor and ceiling, the 20,000 exemption, and the brackets 0 / 10 / 15 / 20 / 22.5 / 25 / 27.5%.
+  - **Checked against the published figures on 27 Oct 2026**, after Ahmed said not to wait for him on what is plainly right (migration `payroll/0003_rules_2026`):
+    - **Insured wage:** from 1 January 2026 the floor is 2,700 and the ceiling 16,700, up from 2,300 and 14,500 (Law 148/2019 raises them every January; announced by the National Organization for Social Insurance). A shop still on the old figures moves to the new ones; a figure someone typed stays.
+    - **Shares:** 11% for the employee and 18.75% for the company, unchanged. The 9% / 12% sometimes quoted is only the old-age, disability and death part.
+    - **Exemption and brackets:** the 20,000 personal exemption and the brackets match Law 7/2024 (in force 1 March 2024).
+    - **Higher incomes:** the gazette's tables for taxable incomes above 600,000 are now modelled (`high_income_steps`, data like the brackets). Above 600,000, 700,000, 800,000, 900,000 and 1,200,000, one more of the lowest brackets is lost and its slice takes the next rate. So above 1,200,000 the first 1,200,000 is taxed at 25%.
+    - **Rounding:** the yearly taxable income is rounded down to ten pounds.
+    - **Still to check every January:** these figures change by law or decree.
   - **Posting** (no money moves):
     - the projector books salary cost (5201, now keyed `salaries` by data migration 0005) = gross + company insurance;
     - against it: salaries payable (2107), social insurance payable (2108, both shares) and payroll tax payable (2109). These are new accounts that `ensure_chart` adds by itself.
