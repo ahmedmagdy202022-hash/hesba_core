@@ -223,7 +223,7 @@ def invoice_create(request):
 
 def _copy_of(request):
     raw = request.GET.get("copy", "")
-    if not raw.isdigit():
+    if not raw.isdigit() or not user_has_permission(request.user, "purchases.view_purchase_invoices"):  # Codex #284: copying shows the invoice
         return None
     return entity_scope.scope(PurchaseInvoice.objects.prefetch_related("lines__item"), entity_scope.PURCHASE_INVOICE).filter(pk=raw, status="cancelled").first()
 
@@ -246,7 +246,7 @@ def _copy_initial(invoice, lang):
         lines.append({"item": line.item, "description": line.description, "quantity": line.quantity, "unit_purchase_price": line.unit_purchase_price,
                       "line_discount_amount": line.line_discount_amount, "batch_no": batch.batch_no if batch else "",
                       "expiry_date": batch.expiry_date if batch else None,
-                      "serials": "\n".join(line.serials.order_by("pk").values_list("serial", flat=True))})
+                      "serials": ", ".join(line.serials.order_by("pk").values_list("serial", flat=True))})
     return header, lines
 
 

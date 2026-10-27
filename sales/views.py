@@ -226,7 +226,7 @@ def invoice_create(request):
 
 def _copy_of(request):
     raw = request.GET.get("copy", "")
-    if not raw.isdigit():
+    if not raw.isdigit() or not user_has_permission(request.user, "sales.view_sales_invoices"):  # Codex #284: copying shows the invoice
         return None
     return entity_scope.scope(SalesInvoice.objects.prefetch_related("lines__item"), entity_scope.SALES_INVOICE).filter(pk=raw, status="cancelled").first()
 
@@ -249,7 +249,7 @@ def _copy_initial(invoice, lang):
               "notes": (f"Made again from cancelled invoice {invoice.invoice_number}" if lang == "en" else f"معمولة تاني من الفاتورة الملغية {invoice.invoice_number}")}
     lines = [{"item": line.item, "description": line.description, "quantity": line.quantity, "unit_sale_price": line.unit_sale_price,
               "line_discount_amount": line.line_discount_amount,
-              "serials": "\n".join(row.serial.serial for row in line.serials.select_related("serial").order_by("pk"))}
+              "serials": ", ".join(row.serial.serial for row in line.serials.select_related("serial").order_by("pk"))}
              for line in invoice.lines.order_by("line_number")]
     return header, lines, (str(redemption.points) if redemption is not None else "")
 

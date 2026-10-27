@@ -84,7 +84,10 @@ class MakeAgainKeepsTests(MakeAgainTests):
             SerialSale.objects.create(serial=SerialNumber.objects.create(item=item, serial=serial, received_on=timezone.localdate()), sales_line=line)
         page = self.client.get(f"/sales/new/?copy={invoice.pk}")
         self.assertEqual(page.context["form"].initial["tax_amount"], D("8.40"))
-        self.assertEqual(page.context["line_formset"].initial[0]["serials"], "SN-1\nSN-2")
+        self.assertEqual(page.context["line_formset"].initial[0]["serials"], "SN-1, SN-2")  # a one-line input keeps commas
+        from serials.services import parse_serials
+
+        self.assertEqual(parse_serials("SN-1, SN-2"), ["SN-1", "SN-2"])
 
     def test_a_purchase_keeps_its_batch_expiry_and_tax(self):
         from datetime import date
@@ -105,3 +108,21 @@ class MakeAgainKeepsTests(MakeAgainTests):
         row = page.context["line_formset"].initial[0]
         self.assertEqual((row["batch_no"], row["expiry_date"]), ("LOT-7", date(2027, 5, 1)))
         self.assertEqual(page.context["form"].initial["tax_amount"], D("14.00"))
+
+
+class MakeAgainNeedsViewTests(MakeAgainTests):
+    def test_copying_needs_the_permission_to_see_invoices(self):
+        from hesba_testing.factories import grant, make_role, make_user_profile
+        from permissions.models import Permission
+
+        invoice, *_ = posted_invoice_ready()
+        post_sales_invoice(invoice.pk, self.owner)
+        cancel_posted_sales_invoice(invoice.pk, self.owner, "again")
+        role = make_role(code="MAKER-ONLY", name_ar="بياع", name_en="Seller")
+        grant(role, Permission.objects.get(code="sales.create_sales_invoice"))
+        seller = make_user("maker_only")
+        make_user_profile(user=seller, role=role)
+        self.client.force_login(seller)
+        page = self.client.get(f"/sales/new/?copy={invoice.pk}")
+        self.assertEqual(page.context["line_formset"].initial, None)
+        self.assertNotIn(invoice.invoice_number, page.context["form"].initial.get("notes", ""))
