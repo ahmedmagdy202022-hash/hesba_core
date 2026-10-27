@@ -1,5 +1,5 @@
 {% extends "operations/base.html" %}
-{% load hesba_format %}
+{% load hesba_format hesba_labels %}
 {% block operation_content %}
 <section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div>{% if queue %}<div class="op-form-actions"><a class="op-secondary" href="?lang={{ lang }}&format=json" data-queue-json>{{ words.all_json }}</a></div>{% endif %}</section>
 <form class="op-form" method="post" data-device-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="device"><h2>{{ words.device }}</h2><div class="op-form-grid">
@@ -17,7 +17,7 @@
 {% for row in queue %}<tr data-receipt="{{ row.receipt.pk }}"{% if row.late %} data-late{% endif %}><td><a href="{% url 'sales:detail' row.receipt.invoice_id %}?lang={{ lang }}"><bdi>{{ row.receipt.invoice.invoice_number }}</bdi></a></td><td>{{ row.receipt.invoice.total_amount|money }}</td><td><bdi dir="ltr">{{ row.receipt.issued_at|date:"Y-m-d H:i" }}</bdi></td><td><bdi dir="ltr">{{ row.due|date:"Y-m-d H:i" }}</bdi>{% if row.late %} <span class="op-status op-status-cancelled">{{ words.late }}</span>{% endif %}</td><td><bdi dir="ltr">{{ row.receipt.uuid|slice:":16" }}…</bdi>{% if row.receipt.message %}<br><small class="op-muted">{{ row.receipt.message }}</small>{% endif %}</td><td><a href="{% url 'ereceipt:json' row.receipt.pk %}">{{ words.json }}</a></td></tr>
 {% empty %}<tr><td colspan="6" class="op-empty">{{ words.none }}</td></tr>{% endfor %}</tbody></table></div>
 {% if sent_rows %}<h2>{{ words.state }}</h2><div class="op-table-wrap"><table class="op-table" data-receipt-sent><tbody>
-{% for receipt in sent_rows %}<tr><td><bdi>{{ receipt.invoice.invoice_number }}</bdi></td><td><span class="op-status {% if receipt.status == 'valid' %}op-status-posted{% elif receipt.status == 'invalid' %}op-status-cancelled{% else %}op-status-draft{% endif %}">{{ receipt.get_status_display }}</span></td><td class="op-cell-text">{{ receipt.message }}</td></tr>{% endfor %}
+{% for receipt in sent_rows %}<tr><td><bdi>{{ receipt.invoice.invoice_number }}</bdi></td><td><span class="op-status {% if receipt.status == 'valid' %}op-status-posted{% elif receipt.status == 'invalid' %}op-status-cancelled{% else %}op-status-draft{% endif %}">{% choice_label receipt "status" %}</span></td><td class="op-cell-text">{{ receipt.message }}</td></tr>{% endfor %}
 </tbody></table></div>{% endif %}
 {% if missing %}<h2>{{ words.missing }}</h2><div class="op-table-wrap"><table class="op-table" data-receipt-missing><tbody>
 {% for receipt in missing %}<tr><td><bdi>{{ receipt.invoice.invoice_number }}</bdi></td><td class="op-cell-text"><ul>{% for problem in receipt.problems %}<li>{{ problem }}</li>{% endfor %}</ul></td><td>{% if can_manage %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="again"><input type="hidden" name="receipt" value="{{ receipt.pk }}"><button class="op-secondary" type="submit">{{ words.again }}</button></form>{% endif %}</td></tr>{% endfor %}
