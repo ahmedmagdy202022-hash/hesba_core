@@ -1,15 +1,22 @@
 """HG-065: the owner's switch for selling without stock, and the list of what was sold before it arrived."""
 
+from decimal import Decimal
+
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
+from django.db.models import DecimalField, ExpressionWrapper, F, Sum, Value
+from django.db.models.functions import Coalesce
 from django.shortcuts import redirect, render
 
+from config.paging import page_of
 from entities import scope as entity_scope
 from permissions.decorators import require_permission
 from permissions.services import user_has_permission
 
 from . import short_sales
 from .models import SalesInvoiceStatus, ShortSale
+
+ZERO_QTY = Decimal("0.000")
 
 WORDS = {
     "ar": {"title": "البيع من غير رصيد", "intro": "لما المفتاح ده شغال، الكاشير وفاتورة البيع يقدروا يبيعوا صنف الكمية بتاعته مش كفاية، بعد ما البايع يوافق في رسالة بتسمّي كل صنف ناقص. الموافقة بتتسجل في سجل المراجعة باسم اللي وافق.",
@@ -43,19 +50,20 @@ def short_sales_page(request):
         short_sales.set_enabled(on, request.user)
         messages.success(request, words["saved_on" if on else "saved_off"])
         return redirect(f"/sales/short-sales/?lang={lang}")
-    rows = []
     sales = (ShortSale.objects.filter(entity_scope.q(entity_scope.SALES_INVOICE, "sales_line__invoice__"),
                                       sales_line__invoice__status=SalesInvoiceStatus.POSTED)
+             .annotate(used=Coalesce(Sum("entries__quantity"), Value(ZERO_QTY)))
+             .annotate(left=ExpressionWrapper(F("estimated_quantity") - F("used"), output_field=DecimalField(max_digits=14, decimal_places=3)))
              .select_related("sales_line__invoice", "item", "location", "agreed_by").order_by("-pk"))
     waiting_only = request.GET.get("show") != "all"
-    for short_sale in sales[:300]:
-        left = short_sale.estimated_quantity and short_sales.open_quantity(short_sale)
-        if waiting_only and not left:
-            continue
-        rows.append({"sale": short_sale, "invoice": short_sale.sales_line.invoice, "open": left or 0,
-                     "settled": short_sales.settled_amount(short_sale) if short_sale.estimated_quantity else 0})
+    if waiting_only:  # filtered in the database, so an old sale still waiting is never cut off by newer ones (Codex #278)
+        sales = sales.filter(estimated_quantity__gt=0, left__gt=0)
+    page = page_of(request, sales)
+    rows = [{"sale": short_sale, "invoice": short_sale.sales_line.invoice, "open": max(short_sale.left, ZERO_QTY),
+             "settled": short_sales.settled_amount(short_sale) if short_sale.estimated_quantity else 0}
+            for short_sale in page.object_list]
     return render(request, "sales/short_sales.html", {
         "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": words, "page_title": words["title"], "section": "sales",
-        "enabled": short_sales.enabled(), "owner": owner, "rows": rows, "waiting_only": waiting_only,
+        "enabled": short_sales.enabled(), "owner": owner, "rows": rows, "page": page, "waiting_only": waiting_only,
         "can_view_cost": user_has_permission(request.user, "inventory.view_cost"),
     })

@@ -504,3 +504,23 @@ class ScreenTests(TestCase):
         self.assertContains(stock, "data-below-zero")
         self.assertContains(stock, "data-short-sales-link")
         self.assertContains(self.client.get("/settings/capabilities/"), "data-sell-short-link")
+
+
+class ListTests(ShortSaleCase):
+    def test_an_old_sale_still_waiting_is_listed_behind_many_newer_ones(self):
+        # Codex #278: the list is filtered in the database before it is cut into pages.
+        short_sales.set_enabled(True, self.owner)
+        waiting = self.sell(2)
+        filler = self.draft(1)
+        for _ in range(40):
+            add_sales_line(filler, self.item, 1, "30.00")
+        SalesInvoice.objects.filter(pk=filler.pk).update(status="posted")
+        for line in filler.lines.all():  # newer rows with nothing left to settle
+            ShortSale.objects.create(sales_line=line, item=self.item, location=self.location, location_short=D("1"))
+        self.client.force_login(self.owner)
+        page = self.client.get("/sales/short-sales/")
+        self.assertContains(page, waiting.invoice_number)
+        self.assertNotContains(page, filler.invoice_number)
+        everything = self.client.get("/sales/short-sales/?show=all")
+        self.assertContains(everything, filler.invoice_number)
+        self.assertEqual(everything.context["page"].paginator.count, 42)
