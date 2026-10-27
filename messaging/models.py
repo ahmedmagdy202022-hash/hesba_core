@@ -26,6 +26,9 @@ class MessageTemplate(models.Model):
     active = models.BooleanField(default=True)
     #: The same customer is not reminded of the same kind again for this many days.
     every_days = models.PositiveSmallIntegerField(default=7, validators=[MinValueValidator(1), MaxValueValidator(90)])
+    #: T9 live: the name of the template Meta approved for this kind (blank: this kind is sent by a click only).
+    #: Its body takes two parameters: {{1}} the company, {{2}} the message (see messaging.whatsapp).
+    wa_template = models.CharField(max_length=120, blank=True)
     updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -52,6 +55,9 @@ class OutboxMessage(models.Model):
     channel = models.CharField(max_length=10, blank=True)
     sent_at = models.DateTimeField(null=True, blank=True)
     sent_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    #: T9 live: the id WhatsApp gave a message it took, or why it refused the last try.
+    provider_id = models.CharField(max_length=120, blank=True)
+    error = models.CharField(max_length=500, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
