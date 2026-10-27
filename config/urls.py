@@ -68,6 +68,7 @@ urlpatterns = [
     path("cheques/", include("cheques.urls")),
     path("store/", include("onlinestore.urls")),
     path("shipping/", include("shipping.urls")),
+    path("approvals/", include("approvals.urls")),  # FB-27
     path("ereceipt/", include("ereceipt.urls")),
     path("expenses/", include("expenses.urls")),
     path("print/", include("printing.urls")),

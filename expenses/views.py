@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from cashboxes.models import Cashbox
+from approvals.gate import held
 from permissions.decorators import require_permission
 from permissions.services import user_has_permission
 
@@ -217,8 +218,11 @@ def expense_cancel(request, pk):
     lang = _lang(request)
     if request.method != "POST":
         return redirect(f"/expenses/?lang={lang}")
-    entity_scope.get_or_404(Expense, entity_scope.EXPENSE, pk=pk)
+    expense = entity_scope.get_or_404(Expense, entity_scope.EXPENSE, pk=pk)
     form = ExpenseCancelForm(request.POST)
+    if form.is_valid() and held(request, "expenses.cancel", pk, {"reversal_date": timezone.localdate(), "reason": form.cleaned_data["reason"]},
+                                expense.expense_number):  # FB-27
+        return redirect(f"/expenses/?lang={lang}")
     if form.is_valid():
         try:
             cancel_expense(pk, reversal_date=timezone.localdate(), reason=form.cleaned_data["reason"], user=request.user)

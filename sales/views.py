@@ -14,6 +14,7 @@ from promotions import services as promotions
 from taxes.services import create_sales_draft_with_tax, rates_by_item, vat_enabled
 from serials.services import attach_sale_serials, check_invoice_serials, prepare_sale_serials
 from units.services import convert_lines, units_catalog
+from approvals.gate import held
 from permissions.decorators import require_permission
 from entities import scope as entity_scope
 from permissions.services import user_has_permission
@@ -301,7 +302,9 @@ def invoice_cancel(request, pk):
     if request.method != "POST":
         return redirect("sales:detail", pk=pk)
     lang = _lang(request)
-    entity_scope.get_or_404(SalesInvoice, entity_scope.SALES_INVOICE, pk=pk)
+    invoice = entity_scope.get_or_404(SalesInvoice, entity_scope.SALES_INVOICE, pk=pk)
+    if held(request, "sales.cancel_invoice", pk, {"reason": request.POST.get("reason", "")}, invoice.invoice_number):  # FB-27
+        return redirect(f"/sales/{pk}/?lang={lang}")
     try:
         cancel_posted_sales_invoice(pk, request.user, request.POST.get("reason", ""))
     except ValidationError as exc:
@@ -367,8 +370,10 @@ def return_cancel(request, pk):
     if request.method != "POST":
         return redirect("sales:return_detail", pk=pk)
     lang = _lang(request)
-    entity_scope.get_or_404(SalesReturn, entity_scope.SALES_RETURN, pk=pk)
+    sales_return = entity_scope.get_or_404(SalesReturn, entity_scope.SALES_RETURN, pk=pk)
     form = SalesReturnReversalForm(request.POST, lang=lang)
+    if form.is_valid() and held(request, "sales.reverse_return", pk, form.cleaned_data, sales_return.return_number):  # FB-27
+        return redirect(f"/sales/returns/{pk}/?lang={lang}")
     if form.is_valid():
         try:
             cancel_sales_return(pk, user=request.user, **form.cleaned_data)
@@ -445,7 +450,9 @@ def payment_cancel(request, pk):
     if request.method != "POST":
         return redirect("sales:payments")
     lang = _lang(request)
-    entity_scope.get_or_404(CustomerPayment, entity_scope.CUSTOMER_PAYMENT, pk=pk)
+    payment = entity_scope.get_or_404(CustomerPayment, entity_scope.CUSTOMER_PAYMENT, pk=pk)
+    if held(request, "sales.cancel_payment", pk, {"reason": request.POST.get("reason", "")}, payment.payment_number):  # FB-27
+        return redirect(f"/sales/collections/?lang={lang}")
     try:
         cancel_customer_payment(pk, request.user, request.POST.get("reason", ""))
     except ValidationError as exc:

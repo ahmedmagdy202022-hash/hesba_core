@@ -2016,6 +2016,39 @@ The entries below are the protected-logic decisions in the commercial gate, reco
   - cancelling the purchase that settled;
   - the till box, the invoice box and the offline sync, each with the switch off and on.
 
+## HG-068 — Second-person approval for cancellations and reversals (Ahmed's note #27)
+
+- **Status:** BUILT (`claude/fb27-approvals`). Ahmed asked for «موافقة مستوى تاني» in note #27, and on 27 Oct 2026 said not to wait for him on what is plainly right («لو مهم وحاجة صح وهتنجح البرنامج اعمله علي طول»).
+- **Why it is recorded here:** it touches the permission layer. It adds the permission `approvals.approve` (seeded to the owner and manager roles), and nine screens now consult it before they act. No service, posting, ledger or report changed.
+- **What the owner holds:** the owner picks on `/approvals/` which actions wait for approval. Nothing is held at first. The actions on offer are:
+  - cancelling a posted sales or purchase invoice;
+  - reversing a sales or purchase return;
+  - cancelling a customer collection or a supplier payment;
+  - cancelling an expense;
+  - reversing a stock operation or a cashbox operation.
+- **How it works:**
+  - A person with `approvals.approve` does a held action directly, as before.
+  - Anyone else gets a waiting request (`approvals.ApprovalRequest`) holding the reason and the reversal date they chose. Nothing moves, and asking twice makes one request.
+  - Someone with `approvals.approve` approves or rejects it. The requester never decides their own request, and only the requester can withdraw it.
+  - On approval, the same service the screen calls runs then, in the requester's name and inside its own transaction. The request keeps who approved.
+  - If the service refuses (the document changed, the month closed), the request is marked as approved but not done, with the reason, and nothing moved.
+  - A request is decided only where its document can be seen (entities scope).
+  - Approvers get a dashboard alert with the count waiting for them. Each step is audited.
+- **Files:**
+  - `approvals/` (new app, migrations `0001` and `0002` for the permission seed), `config/settings.py`, `config/urls.py`;
+  - the cancel and reverse views in `sales`, `purchases`, `expenses`, `inventory` and `cashboxes`;
+  - `reports/dashboard_views.py`, `templates/approvals/inbox.html`, `templates/settings_core/capabilities.html`.
+- **Tests:** `approvals/tests.py` covers:
+  - nothing held by default;
+  - a held cancellation waits, with no duplicate request;
+  - approvers act directly;
+  - only the owner chooses what is held;
+  - approval runs in the requester's name and shows on the dashboard;
+  - no self-approval, and no approval without the permission;
+  - reject, and withdraw by the requester only;
+  - an approval that can no longer be done says why;
+  - a dated stock reversal keeps the date it was asked for.
+
 ## HG-067 — Online store by file: a new table for imported orders (T13)
 
 - **Status:** RECORDED (Codex #273). This is a new, additive table in a new app. No existing model, migration, posting or report changed.

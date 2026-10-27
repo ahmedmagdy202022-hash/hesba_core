@@ -83,6 +83,7 @@ LOCAL_APPS = [
     "ereceipt",
     "messaging",
     "feedback",
+    "approvals",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + LOCAL_APPS
