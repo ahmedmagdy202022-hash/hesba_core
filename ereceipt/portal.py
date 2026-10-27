@@ -97,19 +97,41 @@ def _batch_text(receipts):
     return body + "}"
 
 
+def _devices(status):
+    """Every device with receipts in ``status``: a till replaced by a new serial still sends and follows up its own
+    (Codex #281), not only the one issuing new sales."""
+
+    return list(Device.objects.filter(receipts__status=status).distinct().order_by("pk"))
+
+
 def send(limit=BATCH):
-    """Send the device's queued receipts, oldest first. Returns {"accepted", "rejected", "message"}.
+    """Send each device's queued receipts, oldest first. Returns {"accepted", "rejected", "message"}.
 
     Nothing is sent while a setting is missing. A refused or unreachable call leaves the receipts queued with the
     reason, to go with the next try inside their 24 hours."""
 
-    device = Device.objects.filter(active=True).order_by("pk").first()
-    needs = missing(device)
+    needs = missing()
     if needs:
         return {"accepted": 0, "rejected": 0, "message": "missing:" + ",".join(needs)}
+    total = {"accepted": 0, "rejected": 0, "message": ""}
+    for device in _devices(ReceiptStatus.QUEUED):
+        if missing(device):
+            total["message"] = "missing:" + ",".join(missing(device))
+            continue
+        result = _send_device(device, limit)
+        total["accepted"] += result["accepted"]
+        total["rejected"] += result["rejected"]
+        total["message"] = result["message"] or total["message"]
+    return total
+
+
+def _send_device(device, limit):
     with transaction.atomic():
-        receipts = list(Receipt.objects.select_for_update(skip_locked=True).filter(device=device, status=ReceiptStatus.QUEUED)
-                        .exclude(document_text="").order_by("issued_at", "pk")[:limit])
+        # One sending per device at a time (Codex #281): a second run waits here rather than sending later receipts
+        # ahead of a batch still on its way, so the chain always reaches the authority in order.
+        Device.objects.select_for_update().get(pk=device.pk)
+        receipts = list(Receipt.objects.filter(device=device, status=ReceiptStatus.QUEUED).exclude(document_text="")
+                        .order_by("issued_at", "pk")[:limit])
         if not receipts:
             return {"accepted": 0, "rejected": 0, "message": ""}
         try:
@@ -147,25 +169,42 @@ def _keep(receipts, message):
     return {"accepted": 0, "rejected": 0, "message": message}
 
 
+def submission_error_text(error):
+    """One line from a Get Receipt Submission error (Codex #281): its ``error`` text (or ``errorAr``), with the
+    ``propertyPath`` it names, then any ``innerError`` the same way."""
+
+    parts = []
+    while isinstance(error, dict) and len(parts) < 5:
+        text = str(error.get("error") or error.get("errorAr") or error.get("message") or error.get("errorCode") or "")
+        path = str(error.get("propertyPath") or "")
+        if text or path:
+            parts.append(f"{path}: {text}" if path and text else text or path)
+        error = error.get("innerError")
+    return " · ".join(parts)
+
+
 def follow_up(limit=BATCH):
     """Turn sent receipts into valid or invalid from their submission's details. Returns how many changed."""
 
-    device = Device.objects.filter(active=True).order_by("pk").first()
-    if missing(device):
+    if missing():
         return 0
     changed = 0
-    sent = Receipt.objects.filter(device=device, status=ReceiptStatus.SUBMITTED).exclude(submission_uuid="")
-    for submission in list(sent.values_list("submission_uuid", flat=True).distinct()[:limit]):
-        try:
-            status, payload = _api(device, "GET", f"/api/v1/receiptsubmissions/{urllib.parse.quote(submission)}/details?PageSize=100")
-        except eta.PortalError:
+    for device in _devices(ReceiptStatus.SUBMITTED):
+        if missing(device):
             continue
-        if status != 200:
-            continue
-        for row in payload.get("receipts") or []:
-            verdict = {"Valid": ReceiptStatus.VALID, "Invalid": ReceiptStatus.INVALID}.get(str(row.get("status")))
-            if verdict is None:
+        sent = Receipt.objects.filter(device=device, status=ReceiptStatus.SUBMITTED).exclude(submission_uuid="")
+        for submission in list(sent.values_list("submission_uuid", flat=True).distinct()[:limit]):
+            try:
+                status, payload = _api(device, "GET", f"/api/v1/receiptsubmissions/{urllib.parse.quote(submission)}/details?PageSize=100")
+            except eta.PortalError:
                 continue
-            errors = "; ".join(eta.error_text(error.get("error") or {}) or str(error.get("stepName") or "") for error in row.get("errors") or [] if isinstance(error, dict))
-            changed += sent.filter(submission_uuid=submission, uuid=row.get("uuid")).update(status=verdict, message=errors[:1000])
+            if status != 200:
+                continue
+            for row in payload.get("receipts") or []:
+                verdict = {"Valid": ReceiptStatus.VALID, "Invalid": ReceiptStatus.INVALID}.get(str(row.get("status")))
+                if verdict is None:
+                    continue
+                errors = "; ".join(submission_error_text(item.get("error")) or str(item.get("stepNameAr") or item.get("stepName") or "")
+                                   for item in row.get("errors") or [] if isinstance(item, dict))
+                changed += sent.filter(submission_uuid=submission, uuid=row.get("uuid")).update(status=verdict, message=errors[:1000])
     return changed

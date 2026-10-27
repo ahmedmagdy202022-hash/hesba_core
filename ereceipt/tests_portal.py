@@ -35,7 +35,9 @@ class FakePortal:
             return 202, {"submissionUUID": "SUB-1", "acceptedDocuments": accepted, "rejectedDocuments": rejected}
         if "/api/v1/receiptsubmissions/SUB-1/details" in url:
             sent = Receipt.objects.filter(submission_uuid="SUB-1")
-            return 200, {"status": self.details_status, "receipts": [{"uuid": r.uuid, "status": self.details_status, "errors": []} for r in sent]}
+            errors = [] if self.details_status == "Valid" else [{"stepName": "Validate", "error": {"propertyPath": "totalAmount", "errorCode": "TotalMismatch",
+                                                                                                 "error": "The total does not match the items", "innerError": None}}]
+            return 200, {"status": self.details_status, "receipts": [{"uuid": r.uuid, "status": self.details_status, "errors": errors} for r in sent]}
         return 404, {}
 
 
@@ -106,3 +108,24 @@ class SendingTests(ReceiptSetup):
         with mock.patch.dict(os.environ, ENV), mock.patch.object(eta, "_http", FakePortal()):
             call_command("send_ereceipts", verbosity=0)
         self.assertFalse(Receipt.objects.filter(status=ReceiptStatus.QUEUED).exists())
+
+    def test_a_replaced_till_still_sends_and_follows_up_its_own_receipts(self):
+        old = self.sale()
+        from . import services
+
+        services.register("POS-SN-2", "0", "Android 14", "Sunmi V3")  # the old device is now inactive
+        new = self.sale()
+        fake = FakePortal()
+        result, _ = self.run_send(fake)
+        self.assertEqual(result["accepted"], 2)
+        serials = [call["headers"]["posserial"] for call in fake.calls if call["url"].endswith("/receiptsubmissions")]
+        self.assertEqual(serials, ["POS-SN-1", "POS-SN-2"])
+        self.assertEqual({Receipt.objects.get(invoice=old).status, Receipt.objects.get(invoice=new).status}, {ReceiptStatus.VALID})
+
+    def test_an_invalid_receipt_keeps_the_authoritys_reason_from_the_follow_up(self):
+        invoice = self.sale()
+        self.run_send(FakePortal(details_status="Invalid"))
+        receipt = Receipt.objects.get(invoice=invoice)
+        self.assertEqual(receipt.status, ReceiptStatus.INVALID)
+        self.assertEqual(receipt.message, "totalAmount: The total does not match the items")
+
