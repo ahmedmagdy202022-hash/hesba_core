@@ -16,7 +16,7 @@ The rules (rates, floor and ceiling, exemption, brackets) are data on ``PayrollS
 """
 
 from datetime import date, timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_FLOOR, Decimal, InvalidOperation
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
@@ -40,7 +40,8 @@ MESSAGES = {
         "number": "الرقم ده مش مفهوم.", "negative": "المبالغ مينفعش تبقى بالسالب.", "month": "اختار الشهر.", "taken": "مرتبات الشهر ده اتعملت قبل كده.",
         "nobody": "مفيش موظفين ليهم مرتب. اكتب مرتب كل موظف الأول.", "not_draft": "الكشف ده اترحّل خلاص؛ مينفعش يتعدل.", "not_posted": "الكشف لازم يكون مترحّل.",
         "paid": "اتدفع من الكشف ده؛ ألغي الدفعات الأول.", "more": "المبلغ أكتر من المستحق ({left}).", "zero": "المبلغ لازم أكبر من صفر.",
-        "reason": "اكتب سبب الإلغاء.", "brackets": "شرائح الضريبة مش مفهومة: كل سطر «لحد:نسبة»، وآخر سطر من غير «لحد».", "date": "التاريخ مش مفهوم.",
+        "reason": "اكتب سبب الإلغاء.", "brackets": "شرائح الضريبة مش مفهومة: كل سطر «لحد:نسبة»، وآخر سطر من غير «لحد».",
+        "steps": "مبالغ الدخل الأعلى مش مفهومة: مبلغ في كل سطر، من الأصغر للأكبر.", "date": "التاريخ مش مفهوم.",
         "before": "التاريخ قبل تاريخ الترحيل.", "cancelled": "الدفعة دي اتلغت قبل كده.", "before_paid": "تاريخ الإلغاء قبل تاريخ الدفعة.",
         "entity": "المرتبات بتتدفع من خزنة أو بنك الشركة الرئيسية.", "before_cancel": "التاريخ قبل إلغاء دفعة من الكشف ده.",
         "net_negative": "صافي مرتب {name} بالسالب ({net})؛ قلّل الخصومات قبل الترحيل.",
@@ -51,6 +52,7 @@ MESSAGES = {
         "nobody": "No employee has a salary. Type each employee's salary first.", "not_draft": "This run is posted; it cannot be changed.", "not_posted": "The run must be posted.",
         "paid": "Payments were made from this run; cancel them first.", "more": "The amount is more than what is owed ({left}).", "zero": "The amount must be above zero.",
         "reason": "Type the reason.", "brackets": "The tax brackets are not understood: one “up to:rate” per line, the last with nothing before the colon.",
+        "steps": "The higher-income amounts are not understood: one amount per line, smallest first.",
         "date": "The date is not understood.", "before": "The date is before the posting date.", "cancelled": "This payment was cancelled already.", "before_paid": "The cancellation is dated before the payment.",
         "entity": "Payroll is paid from a cashbox or bank of the main entity.", "before_cancel": "The date is before a cancelled payment of this run.",
         "net_negative": "{name}'s net pay is negative ({net}); lower the deductions before posting.",
@@ -156,7 +158,37 @@ def brackets(text, lang="ar"):
     return rows
 
 
-def yearly_tax(taxable, table):
+def steps(text, lang="ar"):
+    """The higher-income amounts, ascending, from one amount per line (empty: no such rule)."""
+
+    words = _words(lang)
+    rows = []
+    for raw in str(text or "").splitlines():
+        line = raw.strip().replace(",", "")
+        if not line:
+            continue
+        try:
+            rows.append(Decimal(line))
+        except InvalidOperation:
+            raise ValidationError(words["steps"])
+    if any(amount <= 0 for amount in rows) or rows != sorted(set(rows)):
+        raise ValidationError(words["steps"])
+    return rows
+
+
+TEN = Decimal("10")
+
+
+def yearly_tax(taxable, table, high_income=()):
+    """Tax on a year's taxable salary (Law 91/2005, article 8, as amended by Law 7/2024).
+
+    The taxable income is rounded down to ten pounds. Above each ``high_income`` amount one more of the lowest
+    brackets is lost: its slice joins the next bracket and takes that bracket's rate."""
+
+    taxable = (Decimal(taxable) / TEN).to_integral_value(rounding=ROUND_FLOOR) * TEN if taxable > 0 else ZERO
+    lost = min(sum(1 for amount in high_income if taxable > amount), len(table) - 1)
+    if lost:
+        table = [(table[lost][0], table[lost][1])] + list(table[lost + 1:])
     tax, floor = ZERO, ZERO
     for top, rate in table:
         if taxable <= floor:
@@ -184,7 +216,7 @@ def compute(line, settings=None, profile=None):
         line.employee_insurance = line.company_insurance = ZERO
     if taxed:
         taxable = max((line.gross - line.employee_insurance) * 12 - settings.yearly_exemption, ZERO)
-        line.income_tax = money_round(yearly_tax(taxable, brackets(settings.tax_brackets)) / 12)
+        line.income_tax = money_round(yearly_tax(taxable, brackets(settings.tax_brackets), steps(settings.high_income_steps)) / 12)
     else:
         line.income_tax = ZERO
     line.net = money_round(line.gross - line.employee_insurance - line.income_tax)
@@ -204,6 +236,9 @@ def save_rules(data, user, lang="ar"):
     if data.get("tax_brackets") is not None:
         brackets(data.get("tax_brackets"), lang)
         settings.tax_brackets = str(data.get("tax_brackets")).strip()
+    if data.get("high_income_steps") is not None:
+        steps(data.get("high_income_steps"), lang)
+        settings.high_income_steps = str(data.get("high_income_steps")).strip()
     if settings.insurance_max_wage < settings.insurance_min_wage:
         raise ValidationError(words["number"])
     settings.updated_by = user

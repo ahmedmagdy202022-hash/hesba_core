@@ -9,5 +9,6 @@
 <div class="op-field"><label for="r-max">{{ words.max_wage }}</label><input id="r-max" name="insurance_max_wage" inputmode="decimal" dir="ltr" value="{{ rules.insurance_max_wage|unlocalize }}"{% if not can_manage %} disabled{% endif %}></div>
 <div class="op-field"><label for="r-ex">{{ words.exemption }}</label><input id="r-ex" name="yearly_exemption" inputmode="decimal" dir="ltr" value="{{ rules.yearly_exemption|unlocalize }}"{% if not can_manage %} disabled{% endif %}></div>
 <div class="op-field"><label for="r-br">{{ words.brackets }}</label><textarea id="r-br" name="tax_brackets" rows="8" dir="ltr"{% if not can_manage %} disabled{% endif %}>{{ rules.tax_brackets }}</textarea></div>
+<div class="op-field"><label for="r-st">{{ words.steps }}</label><textarea id="r-st" name="high_income_steps" rows="6" dir="ltr"{% if not can_manage %} disabled{% endif %}>{{ rules.high_income_steps }}</textarea></div>
 </div>{% if can_manage %}<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div>{% endif %}</form>
 {% endblock %}

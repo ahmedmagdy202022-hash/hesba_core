@@ -69,8 +69,8 @@ class CalculationTests(PayrollSetup):
         SalaryProfile.objects.filter(employee=self.mona).update(basic=D("40000.00"))
         SalaryProfile.objects.filter(employee=self.ali).update(basic=D("1500.00"))
         run = self.make_run()
-        self.assertEqual(run.lines.get(employee=self.mona).employee_insurance, D("1595.00"))  # 11% of the 14,500 ceiling
-        self.assertEqual(run.lines.get(employee=self.ali).employee_insurance, D("253.00"))    # 11% of the 2,300 floor
+        self.assertEqual(run.lines.get(employee=self.mona).employee_insurance, D("1837.00"))  # 11% of the 2026 ceiling, 16,700
+        self.assertEqual(run.lines.get(employee=self.ali).employee_insurance, D("297.00"))    # 11% of the 2026 floor, 2,700
 
     def test_a_draft_line_changes_by_hand_and_a_posted_one_does_not(self):
         run = self.make_run()
@@ -80,6 +80,32 @@ class CalculationTests(PayrollSetup):
         services.post(run, self.owner)
         with self.assertRaisesMessage(ValidationError, "اترحّل"):
             services.change_line(line, {"basic": "1"}, self.owner)
+
+    def test_higher_incomes_lose_the_lowest_brackets(self):
+        # Law 7/2024, article 8: the gazette's tables for incomes above 600,000.
+        table = services.brackets(services.rules().tax_brackets)
+        steps = services.steps(services.rules().high_income_steps)
+        self.assertEqual(services.yearly_tax(D("600000"), table, steps), D("124750.00"))  # at 600,000 every bracket counts
+        self.assertEqual(services.yearly_tax(D("650000"), table, steps), D("141250.00"))  # 10% from the first pound to 55,000
+        self.assertEqual(services.yearly_tax(D("750000"), table, steps), D("169000.00"))  # 15% to 70,000
+        self.assertEqual(services.yearly_tax(D("850000"), table, steps), D("197500.00"))  # 20% to 200,000
+        self.assertEqual(services.yearly_tax(D("1000000"), table, steps), D("240000.00"))  # 22.5% to 400,000
+        self.assertEqual(services.yearly_tax(D("1500000"), table, steps), D("382500.00"))  # 25% to 1.2m, then 27.5%
+        self.assertEqual(services.yearly_tax(D("650000"), table), D("137250.00"))  # no rule given: plain brackets
+
+    def test_the_taxable_income_is_rounded_down_to_ten_pounds(self):
+        table = services.brackets(services.rules().tax_brackets)
+        self.assertEqual(services.yearly_tax(D("41009.99"), table), services.yearly_tax(D("41000"), table))
+        self.assertEqual(services.yearly_tax(D("41009.99"), table), D("100.00"))
+
+    def test_the_2026_figures_are_the_defaults(self):
+        rules = services.rules()
+        self.assertEqual((rules.insurance_min_wage, rules.insurance_max_wage, rules.yearly_exemption, rules.employee_insurance_percent,
+                          rules.company_insurance_percent), (D("2700.00"), D("16700.00"), D("20000.00"), D("11.00"), D("18.75")))
+        with self.assertRaisesMessage(ValidationError, "الدخل الأعلى"):
+            services.save_rules({"high_income_steps": "700000\n600000"}, self.owner)
+        services.save_rules({"high_income_steps": ""}, self.owner)
+        self.assertEqual(services.steps(services.rules().high_income_steps), [])
 
     def test_the_rules_are_data(self):
         with self.assertRaisesMessage(ValidationError, "شرائح"):
