@@ -210,3 +210,37 @@ class WooLineTests(StoreSetup):
         self.assertContains(page, f'<option value="{other.pk}" selected>')
         self.assertContains(page, f'<option value="{fee.pk}" selected>')
         self.assertContains(page, 'name="replace" value="1" checked')
+
+
+class AllocationTests(StoreSetup):
+    """Codex #283: Shopify's own per-line discounts are kept, its shipping is after its discount, and a WooCommerce
+    order with extra fees is refused with the reason rather than imported short."""
+
+    def pull(self, env, store, rows):
+        def fake(url, headers):
+            return 200, ({"orders": rows} if "myshopify.com" in url else rows)
+
+        with mock.patch.dict(os.environ, env), mock.patch.object(connect, "_http", fake):
+            return connect.pull(store, self.shop, self.owner)
+
+    def test_a_shopify_coupon_stays_on_the_line_it_was_allocated_to(self):
+        from hesba_testing.factories import make_item
+
+        fee = make_item(item_code="SHIP", item_name="شحن", default_sale_price="0", is_stock_tracked=False)
+        row = dict(SHOPIFY_ORDER, total_discounts="60.00", total_price="640.00",
+                   shipping_lines=[{"price": "50.00", "discounted_price": "40.00"}],
+                   line_items=[{"sku": "DR-1", "quantity": 1, "price": "500.00", "discount_allocations": []},
+                               {"sku": "SC-1", "quantity": 2, "price": "100.00", "discount_allocations": [{"amount": "50.00"}]}])
+        with mock.patch.dict(os.environ, SHOPIFY_ENV), mock.patch.object(connect, "_http", lambda url, headers: (200, {"orders": [row]})):
+            invoice = connect.pull("shopify", self.shop, self.owner, shipping_item=fee)["made"][0]["invoice"]
+        lines = {line.item.item_code: line for line in invoice.lines.select_related("item")}
+        self.assertEqual((lines["DR-1"].line_discount_amount, lines["SC-1"].line_discount_amount), (D("0"), D("50.00")))
+        self.assertEqual(lines["SHIP"].unit_sale_price, D("40.00"))
+        self.assertEqual(invoice.total_amount, D("690.00"))  # 500 + 200 − 50 + 40
+
+    def test_a_woocommerce_order_with_fees_is_refused_with_the_reason(self):
+        row = dict(WOO_ORDER, fee_lines=[{"name": "Handling", "total": "10.00"}])
+        result = self.pull(WOO_ENV, "woocommerce", [row])
+        self.assertEqual(result["made"], [])
+        self.assertIn("10.00", result["skipped"][0]["reason"])
+        self.assertFalse(StoreOrder.objects.exists())  # tried again on the next pull, never marked imported

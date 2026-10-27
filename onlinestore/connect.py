@@ -102,15 +102,21 @@ def shopify_order(row):
         "email": _text(row.get("email")),
         "address": "، ".join(part for part in (_text(shipping_address.get("address1")), _text(shipping_address.get("city"))) if part),
         "discount": _text(row.get("total_discounts")),
-        "shipping": str(sum((float(line.get("price") or 0) for line in row.get("shipping_lines") or []), 0.0)) if row.get("shipping_lines") else "",
+        # Codex #283: shipping after its own discounts (``discounted_price``), as the order charged it
+        "shipping": str(sum((_number(line.get("discounted_price", line.get("price"))) for line in row.get("shipping_lines") or []), Decimal("0")))
+                    if row.get("shipping_lines") else "",
         "total": _text(row.get("total_price")),
         "status": _text(row.get("financial_status")),
         "currency": _text(row.get("currency")),
         "cancelled": _text(row.get("cancelled_at")),
         "prices_include_tax": bool(row.get("taxes_included")),
     })
-    order["lines"] = [{"sku": _text(line.get("sku")) or _text(line.get("title")), "quantity": _text(line.get("quantity")), "price": _text(line.get("price"))}
-                      for line in row.get("line_items") or []]
+    order["lines"] = []
+    for line in row.get("line_items") or []:
+        mapped = {"sku": _text(line.get("sku")) or _text(line.get("title")), "quantity": _text(line.get("quantity")), "price": _text(line.get("price"))}
+        if "discount_allocations" in line:  # Codex #283: what Shopify took off this line itself, coupons for some products included
+            mapped["discount"] = str(sum((_number(part.get("amount")) for part in line.get("discount_allocations") or []), Decimal("0")))
+        order["lines"].append(mapped)
     return order
 
 
@@ -135,6 +141,7 @@ def woocommerce_order(row):
         # Codex #283: WooCommerce's REST amounts (line subtotals, shipping, discount) are always before tax, whatever the
         # shop's "prices include tax" setting, so they come in as tax-exclusive and Hesba adds the VAT on top.
         "prices_include_tax": False,
+        "fees": str(sum((_number(fee.get("total")) for fee in row.get("fee_lines") or []), Decimal("0"))),
     })
     lines = []
     for line in row.get("line_items") or []:

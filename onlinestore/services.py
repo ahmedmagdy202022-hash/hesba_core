@@ -69,6 +69,7 @@ MESSAGES = {
         "customer_note": "اتضاف من طلب المتجر الأونلاين.", "shipping_line": "مصاريف الشحن", "posted": "الطلب ده فاتورته اترحّلت؛ مينفعش يتبدّل.",
         "currency": "الطلب بعملة {currency} وحسبة شغالة بـ {own}؛ حوّله الأول أو سجّله يدوي.",
         "replaced": "اتبدّلت مسودته.", "elsewhere": "رقم الطلب ده متسجّل لكيان تاني؛ مش هيتبدّل من هنا.",
+        "fees": "الطلب عليه رسوم إضافية من المتجر ({amount})؛ حسبة مش بتسحبها لوحدها، فسجّل الطلب ده يدوي.",
     },
     "en": {
         "file": "Choose the orders file.", "big": "The file is over 2 MB; split it.", "format": "This is neither a Shopify orders export nor the Hesba template: it needs order, SKU, quantity and price columns.",
@@ -78,6 +79,7 @@ MESSAGES = {
         "customer_note": "Added from an online store order.", "shipping_line": "Shipping", "posted": "This order's invoice is posted; it cannot be replaced.",
         "currency": "The order is in {currency} and Hesba works in {own}; convert it first or enter it by hand.",
         "replaced": "its draft was replaced.", "elsewhere": "This order number belongs to another entity; it is not replaced from here.",
+        "fees": "The order carries extra store fees ({amount}); Hesba does not pull those, so enter this order by hand.",
     },
 }
 
@@ -495,6 +497,9 @@ def _draft(source, order, location, user, words, phones, options):
         raise ValidationError(words["cancelled"].format(at=order["cancelled"]))
     if not order["lines"]:
         raise ValidationError(words["empty"])
+    fees = _decimal(order.get("fees"), words, ZERO)
+    if fees:  # Codex #283: a store fee (handling, payment surcharge) is never dropped silently from the invoice
+        raise ValidationError(words["fees"].format(amount=f"{fees:,.2f}"))
     own = (options.get("currency") or "EGP").upper()
     if order.get("currency") and order["currency"].strip().upper() != own:  # Codex #273: one company currency, no conversion
         raise ValidationError(words["currency"].format(currency=order["currency"].strip().upper(), own=own))
