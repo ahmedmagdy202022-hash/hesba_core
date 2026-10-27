@@ -2112,3 +2112,11 @@ The entries below are the protected-logic decisions in the commercial gate, reco
   - **Reads:** follow the entity scope (HG-034), through the invoice's selling location.
 - **Risk:** a sale posted while the device is missing or data is incomplete waits as "not issued". Issuing it later puts it at the end of the chain, with the issue time of its sale, so the 24 hours count from that time; the queue shows it as late.
 - **Tests:** `ereceipt.tests`.
+- **Live part (sending), 27 Oct 2026:** after Ahmed said not to wait for him on what is plainly right. No posting, chain or hashing changed; this only reads the queue and records the authority's answer.
+  - **Code:** `ereceipt/portal.py` and the command `send_ereceipts`.
+  - **API:** it follows the ETA eReceipt SDK: the POS login with the device in the headers, the batch submission, then the submission's details.
+  - **Secrets:** the POS client ID, secret and pre-shared key come from the environment (`ETA_RECEIPT_*`), never the database.
+  - **Device fields:** the OS version and model / framework are two new fields on the device (migration `ereceipt/0002`).
+  - **What is sent:** receipts go oldest first, as the exact text they were hashed from. `einvoice.portal._http` gained a `raw` argument for that.
+  - **Outcomes:** an accepted receipt keeps its submission UUID and long id; a rejected one keeps the authority's reason; a refused or unreachable batch stays queued.
+  - **Tests:** `ereceipt.tests_portal`.

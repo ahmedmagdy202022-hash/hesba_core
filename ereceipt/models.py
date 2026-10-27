@@ -14,6 +14,11 @@ class Device(models.Model):
 
     serial_number = models.CharField(max_length=100, unique=True)
     branch_code = models.CharField(max_length=50, default="0")
+    #: What the receipt portal registered for this POS, sent with its login (headers ``pososversion`` and
+    #: ``posmodelframework``). Its client id, secret and pre-shared key are secrets: they live in the deployment's
+    #: environment, never here (``ereceipt.portal``).
+    os_version = models.CharField(max_length=100, blank=True)
+    model_framework = models.CharField(max_length=100, blank=True)
     #: The UUID of the last receipt issued on this device: the next one's ``previousUUID`` (empty before the first).
     last_uuid = models.CharField(max_length=64, blank=True)
     active = models.BooleanField(default=True)
@@ -45,6 +50,9 @@ class Receipt(models.Model):
     problems = models.JSONField(default=list, blank=True)
     message = models.TextField(blank=True)
     submitted_at = models.DateTimeField(null=True, blank=True)
+    #: The authority's answer: the submission it went in, and the receipt's long id once accepted.
+    submission_uuid = models.CharField(max_length=64, blank=True)
+    long_id = models.CharField(max_length=200, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -21,14 +21,28 @@ WORDS = {
         "device": "جهاز الكاشير", "serial": "الرقم المسلسل للجهاز (من بوابة الإيصالات)", "branch": "كود الفرع", "save": "حفظ", "saved": "اتحفظ.",
         "queue": "مستنية الإرسال", "number": "رقم الإيصال", "issued": "اتعمل", "due": "آخر ميعاد", "late": "فات الـ 24 ساعة", "json": "JSON", "all_json": "تنزيل كله JSON",
         "missing": "متعملتش: بيانات ناقصة", "again": "اعمله تاني", "none": "مفيش.", "total": "الإجمالي", "last": "آخر إيصال في السلسلة",
+        "os_version": "إصدار نظام الجهاز (زي ما اتسجل على البوابة)", "model_framework": "موديل الجهاز / الإطار (زي ما اتسجل على البوابة)",
+        "connection": "الربط ببوابة الإيصالات", "ready": "جاهز للإرسال", "needs": "ناقص قبل الإرسال", "send": "ابعت المستني دلوقتي",
+        "sent": "اتقبل {accepted}، واترفض {rejected}.", "send_failed": "ماتبعتش: {reason}", "state": "الحالة",
+        "secrets_note": "بيانات الدخول السرية (Client ID وSecret وPre-shared key) بتتحط في إعدادات السيرفر، مش هنا.",
     },
     "en": {
         "title": "E-receipts (B2C)", "intro": "Every till sale gets an e-receipt in the Tax Authority's format (v1.2), chained per device, with a QR on the printed receipt. The authority accepts a receipt up to 24 hours after it is issued; sending needs the device's details on the receipt portal.",
         "device": "Till device", "serial": "Device serial number (from the receipt portal)", "branch": "Branch code", "save": "Save", "saved": "Saved.",
         "queue": "Waiting to be sent", "number": "Receipt number", "issued": "Issued", "due": "Due by", "late": "Past 24 hours", "json": "JSON", "all_json": "Download all as JSON",
         "missing": "Not issued: data missing", "again": "Issue it now", "none": "None.", "total": "Total", "last": "Last receipt in the chain",
+        "os_version": "Device OS version (as registered on the portal)", "model_framework": "Device model / framework (as registered on the portal)",
+        "connection": "Receipt portal connection", "ready": "Ready to send", "needs": "Still needed before sending", "send": "Send what is waiting now",
+        "sent": "{accepted} accepted, {rejected} rejected.", "send_failed": "Not sent: {reason}", "state": "State",
+        "secrets_note": "The secret login details (client ID, secret and pre-shared key) go in the server's settings, not here.",
     },
 }
+
+
+def _needs():
+    from . import portal
+
+    return portal.missing()
 
 
 def _lang(request):
@@ -46,7 +60,17 @@ def board(request):
         if request.POST.get("action") == "device":
             serial = (request.POST.get("serial_number") or "").strip()[:100]
             if serial:
-                services.register(serial, request.POST.get("branch_code"))
+                services.register(serial, request.POST.get("branch_code"), request.POST.get("os_version", ""), request.POST.get("model_framework", ""))
+        elif request.POST.get("action") == "send":  # T8 live: now, instead of waiting for the scheduled run
+            from . import portal
+
+            result = portal.send()
+            portal.follow_up()
+            if result["message"]:
+                flash.error(request, words["send_failed"].format(reason=result["message"]))
+            else:
+                flash.success(request, words["sent"].format(accepted=result["accepted"], rejected=result["rejected"]))
+            return redirect(f"{reverse('ereceipt:board')}?lang={lang}")
         elif request.POST.get("action") == "again":
             services.issue_again(get_object_or_404(services.scoped(Receipt.objects), pk=request.POST.get("receipt") or 0, status=ReceiptStatus.NOT_ISSUED,
                                                  invoice__status=SalesInvoiceStatus.POSTED), lang)
@@ -59,7 +83,8 @@ def board(request):
         return response
     return render(request, "ereceipt/board.html", {
         "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": words, "page_title": words["title"], "can_manage": can_manage,
-        "device": services.device(), "queue": services.queue(), "missing": services.scoped(Receipt.objects.filter(status=ReceiptStatus.NOT_ISSUED, invoice__status=SalesInvoiceStatus.POSTED)).select_related("invoice")[:50]})
+        "device": services.device(), "queue": services.queue(), "needs": _needs(), "sent_rows": services.scoped(Receipt.objects.filter(
+            status__in=[ReceiptStatus.SUBMITTED, ReceiptStatus.VALID, ReceiptStatus.INVALID])).select_related("invoice").order_by("-submitted_at", "-pk")[:30], "missing": services.scoped(Receipt.objects.filter(status=ReceiptStatus.NOT_ISSUED, invoice__status=SalesInvoiceStatus.POSTED)).select_related("invoice")[:50]})
 
 
 @require_permission("sales.view_sales_invoices")
