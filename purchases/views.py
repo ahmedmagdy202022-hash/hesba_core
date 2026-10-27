@@ -202,12 +202,15 @@ def invoice_create(request):
     else:
         initial = _party_initial(request, "supplier") or {}
         line_initial = _reorder_initial(request)
-        if from_order is not None:  # T2: what is still to come on the order, at the order's prices
+        copy = _copy_of(request) if from_order is None else None
+        if copy is not None:  # FB-27 (undo): a cancelled purchase back as a new draft
+            copy_header, line_initial = _copy_initial(copy, lang)
+            initial.update(copy_header)
+            # Codex #284: the cancelled purchase gave its order's quantities back; the new one receives them again
+            from_order = order_for_receipt(request.user, _copy_order(copy))
+        elif from_order is not None:  # T2: what is still to come on the order, at the order's prices
             order_header, line_initial = receipt_initial(from_order, lang)
             initial.update({key: getattr(value, "pk", value) for key, value in order_header.items()})
-        elif _copy_of(request) is not None:  # FB-27 (undo): a cancelled purchase back as a new draft
-            copy_header, line_initial = _copy_initial(_copy_of(request), lang)
-            initial.update(copy_header)
         form = PurchaseDraftForm(lang=lang, initial=initial)
         if vat_enabled():
             del form.fields["tax_amount"]
@@ -226,6 +229,14 @@ def _copy_of(request):
     if not raw.isdigit() or not user_has_permission(request.user, "purchases.view_purchase_invoices"):  # Codex #284: copying shows the invoice
         return None
     return entity_scope.scope(PurchaseInvoice.objects.prefetch_related("lines__item"), entity_scope.PURCHASE_INVOICE).filter(pk=raw, status="cancelled").first()
+
+
+def _copy_order(invoice):
+    """The purchase order the cancelled purchase received, if any."""
+
+    from orders.models import OrderReceiptLine
+
+    return OrderReceiptLine.objects.filter(purchase_line__invoice=invoice).values_list("order_line__order_id", flat=True).first()
 
 
 def _copy_initial(invoice, lang):

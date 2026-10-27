@@ -180,3 +180,16 @@ class PurchaseCodexFixesTests(PurchaseOrderSetup):
         self.assertNotContains(late, done.number)
         finished = self.client.get(reverse("purchase_orders:list") + "?lang=ar&show=done")
         self.assertContains(finished, done.number)
+
+
+class MakeAgainKeepsThePurchaseOrderTests(PurchaseOrderSetup):
+    """Codex #284: a cancelled purchase made again receives its purchase order's goods again."""
+
+    def test_the_copy_carries_the_purchase_order(self):
+        order = self.order()
+        invoice = self.receive(order, {self.sugar.pk: "5"})
+        cancel_posted_purchase_invoice(invoice.pk, self.owner, "again")
+        self.client.force_login(self.owner)
+        page = self.client.get(f"/purchases/new/?copy={invoice.pk}")
+        self.assertEqual(page.context["from_order"], order)
+        self.assertContains(page, f'name="order" value="{order.pk}"')

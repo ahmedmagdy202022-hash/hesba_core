@@ -197,15 +197,18 @@ def invoice_create(request):
     else:
         initial = _party_initial(request, "customer") or {}
         line_initial, copy_points = [], ""
-        if from_order is not None:  # T1: what is left on the order, at the order's prices
+        copy = _copy_of(request) if from_order is None and from_prescription is None else None
+        if copy is not None:  # FB-27 (undo): a cancelled invoice back as a new draft
+            copy_header, line_initial, copy_points = _copy_initial(copy, lang)
+            initial.update(copy_header)
+            # Codex #284: the cancelled invoice gave its order's quantities back; the new one takes them again on saving
+            from_order = order_for_invoice(request.user, _copy_order(copy))
+        elif from_order is not None:  # T1: what is left on the order, at the order's prices
             order_header, line_initial = invoice_initial(from_order, lang)
             initial.update({key: getattr(value, "pk", value) for key, value in order_header.items()})
         elif from_prescription is not None:  # T10: the prescription's drugs, at the customer's price
             rx_header, line_initial = pharmacy.invoice_initial(from_prescription, lang)
             initial.update({key: getattr(value, "pk", value) for key, value in rx_header.items()})
-        elif _copy_of(request) is not None:  # FB-27 (undo): a cancelled invoice back as a new draft
-            copy_header, line_initial, copy_points = _copy_initial(_copy_of(request), lang)
-            initial.update(copy_header)
         if not initial.get("customer"):
             from settings_core.setup_services import enabled_modules
 
@@ -229,6 +232,14 @@ def _copy_of(request):
     if not raw.isdigit() or not user_has_permission(request.user, "sales.view_sales_invoices"):  # Codex #284: copying shows the invoice
         return None
     return entity_scope.scope(SalesInvoice.objects.prefetch_related("lines__item"), entity_scope.SALES_INVOICE).filter(pk=raw, status="cancelled").first()
+
+
+def _copy_order(invoice):
+    """The sales order the cancelled invoice delivered, if any."""
+
+    from orders.models import OrderInvoiceLine
+
+    return OrderInvoiceLine.objects.filter(sales_line__invoice=invoice).values_list("order_line__order_id", flat=True).first()
 
 
 def _copy_initial(invoice, lang):
