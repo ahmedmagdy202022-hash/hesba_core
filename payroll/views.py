@@ -24,7 +24,8 @@ WORDS = {
         "payments": "الدفعات", "cancel": "إلغاء الدفعة", "reason": "السبب", "reverse": "إلغاء الكشف بقيد عكسي", "reversed": "اتلغى الكشف بقيد عكسي.",
         "cost": "تكلفة المرتبات على الشركة", "back": "المرتبات", "draft_note": "الكشف لسه مسودة: تقدر تعدّل أي سطر قبل الترحيل.", "no_staff": "مفيش موظفين. ضيفهم من «الموظفين».",
         "review": "الأرقام دي حسب القانون المنشور؛ راجعها مع المحاسب كل يناير.", "emp_pct": "تأمينات الموظف %", "co_pct": "تأمينات الشركة %", "min_wage": "أقل أجر تأميني",
-        "max_wage": "أقصى أجر تأميني", "exemption": "الإعفاء الشخصي في السنة", "brackets": "شرائح الضريبة في السنة (لحد:نسبة)", "line_saved": "اتعدّل السطر.",
+        "max_wage": "أقصى أجر تأميني", "exemption": "الإعفاء الشخصي في السنة", "brackets": "شرائح الضريبة في السنة (لحد:نسبة)",
+        "steps": "الدخل الأعلى: فوق كل مبلغ بتسقط شريحة من أول الجدول (مبلغ في كل سطر)", "line_saved": "اتعدّل السطر.",
         "pay_to": {"net": "صافي المرتبات للموظفين", "insurance": "التأمينات الاجتماعية", "tax": "ضريبة كسب العمل"},
     },
     "en": {
@@ -38,6 +39,7 @@ WORDS = {
         "cost": "Payroll cost to the company", "back": "Payroll", "draft_note": "This payroll is a draft: change any line before posting.", "no_staff": "No employees yet. Add them under “Staff”.",
         "review": "These follow the published law; check them with your accountant every January.", "emp_pct": "Employee insurance %", "co_pct": "Company insurance %",
         "min_wage": "Lowest insured wage", "max_wage": "Highest insured wage", "exemption": "Yearly personal exemption", "brackets": "Yearly tax brackets (up to:rate)",
+        "steps": "Higher incomes: above each amount the lowest remaining bracket is lost (one amount per line)",
         "line_saved": "Line changed.", "pay_to": {"net": "Net pay to the employees", "insurance": "Social insurance", "tax": "Income tax"},
     },
 }

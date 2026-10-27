@@ -12,8 +12,13 @@ from decimal import Decimal
 from django.conf import settings
 from django.db import models
 
-#: Egypt's income tax brackets on the yearly taxable salary, as (up to, rate %); the last has no top. Data to review.
+#: Egypt's income tax brackets on the yearly taxable salary, as (up to, rate %); the last has no top (Law 91/2005,
+#: article 8, as amended by Law 7/2024, in force from 1 March 2024). Data to review.
 DEFAULT_BRACKETS = "40000:0\n55000:10\n70000:15\n200000:20\n400000:22.5\n1200000:25\n:27.5"
+#: The same article's rule for higher incomes: above each amount, one more of the lowest brackets is lost and its
+#: slice is taxed at the next bracket's rate (above 600,000 the first 55,000 at 10%; above 1,200,000 the first
+#: 1,200,000 at 25%).
+DEFAULT_HIGH_INCOME_STEPS = "600000\n700000\n800000\n900000\n1200000"
 
 
 class PayrollSettings(models.Model):
@@ -22,11 +27,14 @@ class PayrollSettings(models.Model):
 
     employee_insurance_percent = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("11.00"))
     company_insurance_percent = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("18.75"))
-    insurance_min_wage = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("2300.00"))
-    insurance_max_wage = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("14500.00"))
+    #: The insured wage's floor and ceiling from 1 January 2026 (Law 148/2019: they rise every January).
+    insurance_min_wage = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("2700.00"))
+    insurance_max_wage = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("16700.00"))
     yearly_exemption = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("20000.00"))
     #: One bracket per line, "up to:rate"; the last line has nothing before the colon.
     tax_brackets = models.TextField(default=DEFAULT_BRACKETS)
+    #: One amount per line, ascending; empty for no such rule.
+    high_income_steps = models.TextField(default=DEFAULT_HIGH_INCOME_STEPS, blank=True)
     updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     updated_at = models.DateTimeField(auto_now=True)
 
