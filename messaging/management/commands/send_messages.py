@@ -19,4 +19,4 @@ class Command(BaseCommand):
             self.stdout.write(f"{added} messages added; WhatsApp Business is not connected (" + ", ".join(whatsapp.missing()) + "), nothing sent.")
             return
         result = send_by_api()
-        self.stdout.write(f"{added} messages added, {result['sent']} sent, {result['failed']} not sent.")
+        self.stdout.write(f"{added} messages added, {result['sent']} sent, {result['failed']} not sent.")  # no request timeout here: every message is tried

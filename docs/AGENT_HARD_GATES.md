@@ -1726,6 +1726,7 @@ The entries below are the protected-logic decisions in the commercial gate, reco
   - **Secrets:** they come from the environment (`WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, optionally `WHATSAPP_API_VERSION` and `WHATSAPP_LANGUAGE`), never the database.
   - **Templates:** a business may open a chat only with a template Meta approved. So each kind names its approved template on the outbox screen (`MessageTemplate.wa_template`). The template's body takes `{{1}}`, the company, and `{{2}}`, the message the shop wrote. Suggested wording: «رسالة من {{1}}: {{2}}».
   - **Sending:** «ابعت أوتوماتيك» on the outbox, or the command `send_messages` each morning, sends today's waiting messages of those kinds.
+    - One click sends at most 40 messages or 25 seconds' worth, so the request ends inside the web server's timeout (Codex #282). It says how many are left; the next click starts with those never tried, and the command sends the rest unbounded.
   - **Results:** a sent message keeps WhatsApp's id (`provider_id`, channel `api`). A refused one stays waiting with the reason (`error`), to go by a click. A kind with no template stays a one-click send, as before.
   - **Files and tests:** migration `messaging/0002`; tests in `messaging.tests_whatsapp`.
 

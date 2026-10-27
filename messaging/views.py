@@ -13,6 +13,10 @@ from reports.navigation import CUSTOMER_AUDIENCE
 from . import services
 from .models import MessageKind, OutboxMessage, OutboxStatus
 
+# Codex #282: one click on «ابعت» stops after this many messages or seconds. A call can take up to the API timeout
+# (20 s) more, so the request still ends inside gunicorn's 60 s; the scheduled command sends the rest unbounded.
+CLICK_LIMIT, CLICK_SECONDS = 40, 25
+
 WORDS = {
     "ar": {
         "title": "رسائل العملاء", "intro": "كل يوم بتتجمع هنا الرسائل اللي تستاهل تتبعت: اللي عليهم فلوس عدّت ميعادها، الأقساط القريبة والمتأخرة، مواعيد بكرة، والروشتات اللي ميعاد تجديدها جه. «ابعت» بيفتح الواتساب والرسالة مكتوبة.",
@@ -22,7 +26,7 @@ WORDS = {
         "placeholders": "الكلمات اللي بتتغير لوحدها: {name} الاسم، {company} اسم الشركة، {amount} المبلغ، {date} التاريخ، {time} الوقت، {number} رقم الفاتورة أو الروشتة.",
         "api_off": "الإرسال الأوتوماتيك من غير ضغط محتاج حساب WhatsApp Business للمحل نفسه. لحد ما يتربط، الرسالة بتتبعت بضغطة من هنا.",
         "api_on": "حساب WhatsApp Business متربط: الأنواع اللي ليها قالب متوافق عليه بتتبعت لوحدها.", "send_all": "ابعت أوتوماتيك",
-        "api_sent": "اتبعت {sent}، وماتبعتش {failed} (السبب جنب كل رسالة).", "wa_template": "اسم القالب المتوافق عليه عند Meta (فاضي: بضغطة بس)",
+        "api_sent": "اتبعت {sent}، وماتبعتش {failed} (السبب جنب كل رسالة).", "api_left": "فاضل {left} رسالة: دوس «ابعت» تاني، أو سيبها لأمر send_messages المجدول.", "wa_template": "اسم القالب المتوافق عليه عند Meta (فاضي: بضغطة بس)",
         "wa_hint": "القالب بياخد متغيرين: {{1}} اسم الشركة و{{2}} نص الرسالة. مثال تسجّله: «رسالة من {{1}}: {{2}}».",
         "saved": "اتحفظ.", "day": "اليوم", "when": "اتبعتت", "gone": "الرسالة دي مبقتش لازمة: اتدفع المبلغ أو الميعاد اتلغى أو اتغير.",
     },
@@ -34,7 +38,7 @@ WORDS = {
         "placeholders": "Words filled in by themselves: {name} the name, {company} your company, {amount} the amount, {date} the date, {time} the time, {number} the invoice or prescription number.",
         "api_off": "Sending without a click needs the shop's own WhatsApp Business account. Until it is connected, each message goes with one click from here.",
         "api_on": "The WhatsApp Business account is connected: the kinds with an approved template are sent by themselves.", "send_all": "Send automatically",
-        "api_sent": "{sent} sent, {failed} not sent (the reason is next to each).", "wa_template": "The template Meta approved (blank: by a click only)",
+        "api_sent": "{sent} sent, {failed} not sent (the reason is next to each).", "api_left": "{left} messages left: press “Send” again, or leave them to the scheduled send_messages command.", "wa_template": "The template Meta approved (blank: by a click only)",
         "wa_hint": "The template takes two parameters: {{1}} the company and {{2}} the message. Example to register: “Message from {{1}}: {{2}}”.",
         "saved": "Saved.", "day": "Day", "when": "Sent", "gone": "This message is no longer needed: the amount was paid, or the appointment was cancelled or moved.",
     },
@@ -73,8 +77,11 @@ def outbox(request):
                 flash.success(request, words["saved"])
             elif action == "send_all":  # T9 live: the kinds with an approved template, through the WhatsApp Business account
                 services.build()
-                result = services.send_by_api(request.user, services.visible(request.user))
+                # Codex #282: one click sends a bounded batch, well inside the web server's 60 s timeout.
+                result = services.send_by_api(request.user, services.visible(request.user), limit=CLICK_LIMIT, seconds=CLICK_SECONDS)
                 flash.success(request, words["api_sent"].format(sent=result["sent"], failed=result["failed"]))
+                if result["left"]:
+                    flash.warning(request, words["api_left"].format(left=result["left"]))
             elif action == "refresh":
                 added = services.build()
                 flash.success(request, words["added"].format(n=added) if added else words["nothing_new"])

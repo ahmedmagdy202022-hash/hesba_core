@@ -307,25 +307,37 @@ def mark(message, status, user, lang="ar"):
     return message
 
 
-def send_by_api(user=None, messages=None):
+def send_by_api(user=None, messages=None, limit=None, seconds=None):
     """T9 live: send today's waiting messages whose kind has an approved template, through the shop's WhatsApp
-    Business account. Returns {"sent", "failed"}. A refused message stays waiting with the reason, to go by a click
-    or on the next run. ``messages`` narrows it (the outbox sends what its user may see)."""
+    Business account. Returns {"sent", "failed", "left"}. A refused message stays waiting with the reason, to go by a
+    click or on the next run. ``messages`` narrows it (the outbox sends what its user may see).
+
+    Codex #282: ``limit`` (messages) and ``seconds`` bound one run, so a click on the outbox ends well inside the
+    web server's timeout; ``left`` is what that run did not reach, for the next click or the scheduled command."""
+
+    import time
+
+    from django.db.models import Case, IntegerField, Value, When
 
     from . import whatsapp
 
     if whatsapp.missing():
-        return {"sent": 0, "failed": 0}
+        return {"sent": 0, "failed": 0, "left": 0}
     named = {row.kind: row.wa_template for row in MessageTemplate.objects.filter(active=True).exclude(wa_template="")}
     if not named:
-        return {"sent": 0, "failed": 0}
+        return {"sent": 0, "failed": 0, "left": 0}
     company, _currency = _company()
     rows = (messages if messages is not None else OutboxMessage.objects.all()).filter(
         status=OutboxStatus.PENDING, day=timezone.localdate(), kind__in=list(named))
-    sent = failed = 0
     # Every eligible message is tried once per run (Codex #282): the ids are read up front, in order, so a run of
-    # failures never keeps the later ones from their turn.
-    for pk in list(rows.order_by("pk").values_list("pk", flat=True)):
+    # failures never keeps the later ones from their turn. Those never tried come before those refused already.
+    tried_first = Case(When(error="", then=Value(0)), default=Value(1), output_field=IntegerField())
+    ids = list(rows.order_by(tried_first, "pk").values_list("pk", flat=True))
+    started, sent, failed, done = time.monotonic(), 0, 0, 0
+    for pk in ids:
+        if (limit is not None and done >= limit) or (seconds is not None and time.monotonic() - started >= seconds):
+            break
+        done += 1
         with transaction.atomic():
             message = OutboxMessage.objects.select_for_update().filter(pk=pk, status=OutboxStatus.PENDING).first()
             if message is None:
@@ -343,7 +355,7 @@ def send_by_api(user=None, messages=None):
                                     object_type="messaging.OutboxMessage", object_id=str(message.pk), before_data={},
                                     after_data={"kind": message.kind, "key": message.key, "day": str(message.day), "provider_id": provider_id})
             sent += 1
-    return {"sent": sent, "failed": failed}
+    return {"sent": sent, "failed": failed, "left": len(ids) - done}
 
 
 def counts(user, today=None):
