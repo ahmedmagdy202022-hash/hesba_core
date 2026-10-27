@@ -98,7 +98,9 @@ def inbox(request):
 
     page = page_of(request, services.waiting_for(request.user).select_related("requested_by"))
     waiting = [_row(item, lang, words) for item in page.object_list]
-    mine = [_row(item, lang, words) for item in ApprovalRequest.objects.filter(requested_by=request.user).select_related("decided_by")[:50]]
+    # Every request still waiting, so each can be withdrawn (Codex #280), then the latest decided ones.
+    asked = ApprovalRequest.objects.filter(requested_by=request.user).select_related("decided_by")
+    mine = [_row(item, lang, words) for item in list(asked.filter(status="pending")) + list(asked.exclude(status="pending")[:30])]
     held = services.held_actions()
     choices = [{"code": code, "label": label(code, lang), "on": code in held} for code in ACTIONS]
     return render(request, "approvals/inbox.html", {

@@ -125,6 +125,8 @@ def _still_allowed(request):
     requester = request.requested_by
     if not requester.is_active or not any(user_has_permission(requester, code) for code in action.permissions):
         return "approval_requester_not_allowed"
+    if not action.reachable_by(request.object_id, requester):  # moved to another entity since asking
+        return "approval_requester_not_allowed"
     return ""
 
 

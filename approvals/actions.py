@@ -33,6 +33,18 @@ class Action:
     def visible(self, object_id):
         return self.visible_ids().filter(pk=object_id).exists()
 
+    def reachable_by(self, object_id, user):
+        """Whether ``user`` may still work on the document, in any entity they are allowed (Codex #280)."""
+
+        from django.apps import apps
+
+        from entities import scope as entity_scope
+
+        model = apps.get_model(self.model)
+        path = getattr(entity_scope, self.scope)
+        paths = path if isinstance(path, tuple) else (path,)  # an operation between two places: either side will do
+        return any(entity_scope.for_user(model.objects.all(), one, user).filter(pk=object_id).exists() for one in paths)
+
 
 def _day(data):
     return date.fromisoformat(data["reversal_date"])

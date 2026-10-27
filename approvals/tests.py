@@ -217,3 +217,19 @@ class StillAllowedTests(ApprovalCase):
             self.client.force_login(self.manager)
             self.assertNotContains(self.client.get("/approvals/"), f'data-approval="{self.request.pk}"')
 
+    def test_a_requester_moved_out_of_the_documents_entity_is_not_acted_for(self):
+        from unittest import mock
+
+        with mock.patch("entities.scope.for_user", side_effect=lambda queryset, path, user: queryset.none()):
+            request = services.approve(self.request.pk, self.manager)
+        self.assertEqual((request.status, request.note), ("failed", "approval_requester_not_allowed"))
+        self.assertEqual(self.status(), "posted")
+
+    def test_every_waiting_request_stays_on_the_requesters_list(self):
+        for number in range(40):  # many decided requests on top of the waiting one
+            ApprovalRequest.objects.create(action="sales.cancel_invoice", object_id=10_000 + number, status="rejected", requested_by=self.clerk)
+        self.client.force_login(self.clerk)
+        page = self.client.get("/approvals/")
+        self.assertContains(page, f'data-my-approval="{self.request.pk}"')
+        self.assertContains(page, "data-withdraw")
+
