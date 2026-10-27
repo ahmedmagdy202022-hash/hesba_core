@@ -91,3 +91,19 @@ class SendingTests(OutboxSetup):
             call_command("send_messages", verbosity=0)
         self.message.refresh_from_db()
         self.assertEqual(self.message.status, OutboxStatus.SENT)
+
+    def test_every_waiting_message_is_tried_even_after_many_failures(self):
+        self.name_template()
+        for number in range(3):
+            OutboxMessage.objects.create(kind=MessageKind.DUE, key=f"due:extra:{number}", day=self.message.day, name="x", phone=f"2010000000{number}", text="t")
+        refused_first = {"n": 0}
+
+        def flaky(url, body, token):
+            refused_first["n"] += 1
+            if refused_first["n"] <= 2:  # the first ones fail
+                return 400, {"error": {"code": 131026, "message": "Message undeliverable"}}
+            return 200, {"messages": [{"id": f"wamid.{refused_first['n']}"}]}
+
+        with mock.patch.dict(os.environ, ENV), mock.patch.object(whatsapp, "_http", flaky):
+            self.assertEqual(services.send_by_api(), {"sent": 2, "failed": 2})
+

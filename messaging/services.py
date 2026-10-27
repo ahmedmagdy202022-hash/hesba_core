@@ -323,7 +323,9 @@ def send_by_api(user=None, messages=None):
     rows = (messages if messages is not None else OutboxMessage.objects.all()).filter(
         status=OutboxStatus.PENDING, day=timezone.localdate(), kind__in=list(named))
     sent = failed = 0
-    for pk in list(rows.values_list("pk", flat=True)[:500]):
+    # Every eligible message is tried once per run (Codex #282): the ids are read up front, in order, so a run of
+    # failures never keeps the later ones from their turn.
+    for pk in list(rows.order_by("pk").values_list("pk", flat=True)):
         with transaction.atomic():
             message = OutboxMessage.objects.select_for_update().filter(pk=pk, status=OutboxStatus.PENDING).first()
             if message is None:
