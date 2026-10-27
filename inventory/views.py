@@ -7,6 +7,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from master_data.models import Item, Location
+from approvals.gate import held
 from permissions.decorators import require_any_permission, require_permission
 from permissions.services import user_has_permission
 from settings_core.display_labels import localized_choices
@@ -333,8 +334,10 @@ def operation_cancel(request, pk):
     if request.method != "POST":
         return redirect("inventory:operations")
     lang = _lang(request)
-    entity_scope.get_or_404(StockOperation.objects.distinct(), entity_scope.STOCK_OPERATION, pk=pk)
+    operation = entity_scope.get_or_404(StockOperation.objects.distinct(), entity_scope.STOCK_OPERATION, pk=pk)
     form = StockOperationReversalForm(request.POST, lang=lang)
+    if form.is_valid() and held(request, "inventory.reverse_operation", pk, form.cleaned_data, operation.reference_number):  # FB-27
+        return redirect(f"/inventory/operations/?lang={lang}")
     if form.is_valid():
         try:
             cancel_stock_operation(pk, user=request.user, **form.cleaned_data)

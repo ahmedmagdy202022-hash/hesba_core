@@ -18,4 +18,8 @@
   <div class="set-group__head"><h2 class="set-section-title">{% if lang == 'en' %}Selling without stock{% else %}البيع من غير رصيد{% endif %}</h2><p>{% if lang == 'en' %}Let the till and the invoice sell an item that is not in stock, after the seller agrees. Only the account owner switches it.{% else %}الكاشير والفاتورة يبيعوا صنف مش موجود في المخزن بعد موافقة البايع. صاحب الحساب بس اللي يشغّله.{% endif %}</p></div>
   <div class="set-screens"><a class="set-screen" href="{% url 'sales:short_sales' %}?lang={{ lang }}" data-sell-short-link><strong>{% if lang == 'en' %}Selling without stock{% else %}البيع من غير رصيد{% endif %}</strong><span>{% if lang == 'en' %}The switch, and what was sold before it arrived{% else %}المفتاح، واللي اتباع قبل ما يوصل{% endif %}</span></a></div>
 </section>
+<section class="set-group" data-approvals-setting>
+  <div class="set-group__head"><h2 class="set-section-title">{% if lang == 'en' %}Second-person approval{% else %}موافقة مستوى تاني{% endif %}</h2><p>{% if lang == 'en' %}Choose which cancellations and reversals wait for the owner's or the manager's approval. The one who asks never approves.{% else %}اختار أنهي إلغاء أو عكس يستنى موافقة المالك أو المدير. اللي بيطلب عمره ما يوافق على طلبه.{% endif %}</p></div>
+  <div class="set-screens"><a class="set-screen" href="{% url 'approvals:inbox' %}?lang={{ lang }}" data-approvals-link><strong>{% if lang == 'en' %}Approvals{% else %}الموافقات{% endif %}</strong><span>{% if lang == 'en' %}What waits for you, and what needs approval{% else %}اللي مستنيك، وإيه اللي محتاج موافقة{% endif %}</span></a></div>
+</section>
 {% endblock %}

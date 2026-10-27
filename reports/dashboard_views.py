@@ -396,6 +396,27 @@ def _transfer_alerts(user, lang, strings, modules):
     return rows
 
 
+def _approval_alerts(user, lang, strings):
+    """FB-27: the requests waiting for this person's approval."""
+
+    from approvals.services import waiting_for
+
+    count = sum(1 for item in waiting_for(user)[:100] if _approval_visible(item))
+    if not count:
+        return []
+    return [{"key": "approvals", "severity": "urgent", "severity_label": strings["severity_urgent"],
+             "title": f"{count} request(s) waiting for your approval" if lang == "en" else f"{count} طلب مستني موافقتك",
+             "detail": "A colleague asked to cancel or reverse something; nothing changes until you decide." if lang == "en"
+             else "زميل طلب إلغاء أو عكس حاجة؛ مفيش حاجة بتتغير قبل ما تقرر.", "amount": "", "path": "/approvals/"}]
+
+
+def _approval_visible(item):
+    from approvals.actions import ACTIONS
+
+    action = ACTIONS.get(item.action)
+    return action is not None and action.visible(item.object_id)
+
+
 def _onboarding(lang):
     """The four starting steps, with the ones already done marked off."""
 
@@ -488,7 +509,7 @@ def dashboard(request):
         "nav_items": nav_items(request.user, lang, modules),
         "cards": cards,
         "alerts": [alert for alert in _alerts(lang, strings, held, today, shared) if fit.shows_alert(alert["key"])]
-                  + _transfer_alerts(request.user, lang, strings, modules),
+                  + _transfer_alerts(request.user, lang, strings, modules) + _approval_alerts(request.user, lang, strings),
         "option_panel": option_panel(fit, request.user, lang),
         "quick_actions": _quick_actions(request.user, lang, modules, activity, sections),
         "activity_panel": build_activity_panel(activity, sections, lang, today, request.user),

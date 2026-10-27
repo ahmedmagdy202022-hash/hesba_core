@@ -3,6 +3,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 
+from approvals.gate import held
 from permissions.decorators import require_permission
 from permissions.services import user_has_permission
 from reports.selectors import cashbox_report
@@ -243,6 +244,9 @@ def operation_cancel(request, pk):
     if owns_operation(pk):
         # T4 (HG-056): a cheque's deposit, payment or return moves with the cheque, so the two never disagree.
         messages.error(request, "الحركة دي تابعة لشيك؛ اتعامل معاها من شاشة الشيكات." if lang == "ar" else "This operation belongs to a cheque; handle it from the cheques screen.")
+        return redirect(f"/cashboxes/operations/?lang={lang}")
+    if form.is_valid() and held(request, "cashboxes.reverse_operation", pk, form.cleaned_data,
+                                CashboxOperation.objects.filter(pk=pk).values_list("reference_number", flat=True).first() or ""):  # FB-27
         return redirect(f"/cashboxes/operations/?lang={lang}")
     if form.is_valid():
         try:
