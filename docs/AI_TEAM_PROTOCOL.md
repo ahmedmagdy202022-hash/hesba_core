@@ -71,3 +71,7 @@ Merge approved by Ahmed? NO (unless explicitly recorded)
 ## What would be needed for fully unattended switching
 
 Reliable, supported balance/usage signals for both services; programmatic permission to launch each cloud task; a durable orchestration process; error and retry handling; a budget limit; an approval gate; and account authorization. An API-key-based orchestrator can be designed separately but is **not** part of this subscription-only setup and can incur additional charges.
+
+## Model selection for both agents
+- Apply the tiered model-routing guidance in `docs/AI_TEAM_MODEL_POLICY.md` whenever assigning work or starting a resumed task. The receiving agent should recheck task risk and recommend the lightest capable model and effort supported by its actual UI.
+- The model and effort are session/runtime choices. GitHub task text cannot automatically switch models or launch the other cloud service. Avoid wasteful duplicate analysis and re-running tests that already have trustworthy evidence.
