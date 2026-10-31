@@ -108,3 +108,9 @@ Never auto-merge, even when automated checks pass.
 - Before handing off to the other agent, push work to a named branch with a PR, and provide exact scope, files, tests, risks and next action; neither tool automatically sees the other's conversations or uncommitted changes.
 - Codex Cloud onboarding and the reusable handoff template are in `docs/CODEX_CLOUD_SETUP.md`. This is optional reference material; **do not read it for unrelated coding tasks**.
 - Never use production credentials or deploy to real services merely to complete a development task.
+
+## Quota-aware AI team: Claude supervisor, Codex fallback
+- For tasks involving cross-agent work, or when the user reports either tool near its usage limit, follow `docs/AI_TEAM_PROTOCOL.md`. Do not load that file for unrelated tasks.
+- Use a pushed branch + task issue or PR as the only durable handoff. Never assume subscription quota values, that the other provider was invoked, or that a cloud session can start another provider's cloud task.
+- Checkpoint implementation before quota exhaustion; a session that has hit its limit cannot make a last-minute handoff. Never run both agents on the same branch concurrently.
+- If Claude is unavailable, Codex can continue a previously approved in-scope task and leave it awaiting review; no automatic merging, spending, or deployment.
