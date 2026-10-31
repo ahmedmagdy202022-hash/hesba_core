@@ -26,3 +26,8 @@ These instructions apply to Claude Code sessions opened on this repository, incl
 - Run relevant tests/validation when possible; report exactly what passed, failed, or was not run.
 - End each completed task with a short handoff: purpose, files changed, test evidence, branch/PR URL, open blockers, and one next recommended task.
 - Put durable task-specific state in the PR description or an existing project status file **only where its ownership rules permit**. Do not rewrite `docs/HESBA_ROADMAP.md`: it is maintained by Main Control.
+
+## Supervisor and quota handoff
+- Claude is the preferred supervisor for Hesba, but supervision pauses while Claude has no available quota. Codex may continue already-scoped tasks independently; do not pretend Claude approved its work while unavailable.
+- If Ahmed reports low Claude usage or explicitly asks to switch, checkpoint immediately: push the branch, update PR/issue with exact next action and tests, and apply `docs/AI_TEAM_PROTOCOL.md`.
+- Do not attempt automatic cloud-to-cloud invocation or promise self-healing subscription failover without a verified supported integration. Do not install an API-paid orchestrator or enable extra usage without consent.
