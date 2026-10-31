@@ -69,3 +69,16 @@ deploy, or merge. Reply in brief Egyptian Arabic.
 ```
 
 This first task is intentionally read-only so Ahmed can confirm that Codex can see the repository and obeys the rules without risking a regression.
+
+## 6. Verified Codex Cloud Python PATH fix (31 Oct 2026)
+
+GitHub issue [#289](https://github.com/ahmedmagdy202022-hash/hesba_core/issues/289) verified that the **published** cloud image has Python 3.12.14 and Django 5.2.18 at `/workspace/hesba-venv/bin/python`. Its default `python` command instead points to the Codex base runtime where Django isn't installed. Using the explicit venv interpreter, **all 11 targeted logout/CSRF and no-store tests passed**; this is a shell interpreter selection issue, not missing project dependencies.
+
+**Reliable immediate workaround in new Codex tasks:** run `/workspace/hesba-venv/bin/python -B manage.py check` and use the same interpreter for all `manage.py test` commands. `AGENTS.md` now reminds agents of this. Do not modify `PYTHONPATH` or pip-install a second copy of Django into the base runtime.
+
+**Optional environment-wide fix** (requires Ahmed's browser UI authorization and publication):
+1. Open **Settings > Codex Cloud > Environments > Hesba Core > Edit**.
+2. Ask the setup agent: *"Use the existing /workspace/hesba-venv/bin/python as the default interpreter for future Codex tasks; ensure its bin directory is on PATH in the agent phase, not just the setup shell. Preserve the existing install script, start skill, pinned runtime and requirements. Verify `python -c 'import sys, django; print(sys.executable, django.get_version())'` resolves to the existing venv, then run a targeted Django check. Do not change repository code or publish until I review."*
+3. Inspect the proposed environment changes and **Republish** when correct. New cloud tasks use the republished setup; old task VMs remain unchanged.
+
+Never blindly replace the entire PATH string with a hardcoded path list: it can hide the cloud runtime's other tools. The environment setup agent should use a supported persistent environment setting. Shell-only `export PATH=...` in the install script is not sufficient for the agent phase.
