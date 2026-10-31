@@ -118,3 +118,7 @@ Never auto-merge, even when automated checks pass.
 ## Select model and effort for the task
 - For cross-agent routing and non-trivial model recommendations, use `docs/AI_TEAM_MODEL_POLICY.md` (load it only when model selection is in scope). Classify task risk T0–T3, optimize quality after validation per unit of available subscription usage, and suggest a higher-capability model only when risk or evidence warrants it.
 - This instruction file cannot itself change a Codex Cloud model. Respect available UI model controls and current task model, do not make undocumented session API calls or force API-only model IDs.
+
+## Codex Cloud Python interpreter (verified in issue #289)
+- In the published Hesba Core Codex Cloud image, packages including Django are installed under `/workspace/hesba-venv/bin/python`; the default shell `python` may be a different interpreter without Django. Before reporting missing dependencies, check that venv. Use `/workspace/hesba-venv/bin/python -B manage.py ...` for Codex Cloud tests **when that path exists**; otherwise use the active project's verified Python interpreter.
+- This path is environment-specific and must not be assumed on Claude Code, developers' laptops or CI. Do not reinstall dependencies or modify production services just to work around a shell PATH mismatch.
