@@ -7,7 +7,7 @@ These instructions apply to Claude Code sessions opened on this repository, incl
 ## User's operating preference
 - Ahmed usually works from a phone. Respond in concise, plain Egyptian Arabic using one practical checkpoint at a time. Ask only for a genuinely blocked business decision.
 - Optimize for a correct completed task **per unit of weekly Pro usage**, not for the fewest tokens in one response.
-- The current request takes priority over AGENTS.md's older "immediately continue to the next Track" instruction: complete the explicitly requested task, verify it, then stop. Never autonomously start unrelated backlog tasks or expensive parallel runs.
+- Complete the explicitly requested task, verify it, then stop. Never autonomously start unrelated backlog tasks or expensive parallel runs.
 
 ## Scope and context discipline
 - At session start, read this file and the user's specific task. Do not automatically dump the whole repository or every document into context.
@@ -27,11 +27,34 @@ These instructions apply to Claude Code sessions opened on this repository, incl
 - End each completed task with a short handoff: purpose, files changed, test evidence, branch/PR URL, open blockers, and one next recommended task.
 - Put durable task-specific state in the PR description or an existing project status file **only where its ownership rules permit**. Do not rewrite `docs/HESBA_ROADMAP.md`: it is maintained by Main Control.
 
-## Supervisor and quota handoff
-- Claude is the preferred supervisor for Hesba, but supervision pauses while Claude has no available quota. Codex may continue already-scoped tasks independently; do not pretend Claude approved its work while unavailable.
-- If Ahmed reports low Claude usage or explicitly asks to switch, checkpoint immediately: push the branch, update PR/issue with exact next action and tests, and apply `docs/AI_TEAM_PROTOCOL.md`.
-- Do not attempt automatic cloud-to-cloud invocation or promise self-healing subscription failover without a verified supported integration. Do not install an API-paid orchestrator or enable extra usage without consent.
+## Budget control — Claude sets the level, Ahmed does not triage
 
-## Model decisions for the supervisor
-- When routing coding tasks or choosing execution strength, use `docs/AI_TEAM_MODEL_POLICY.md`: classify risk T0–T3 and use Sonnet for ordinary work; reserve Opus or selective advisor for complex or protected decisions. Do not blindly use Opus High for every turn.
-- A written model recommendation is not a guaranteed change of the cloud session's active model; verify the UI or a documented session control. Keep the existing project `model` and `effortLevel` defaults unless Ahmed approves a tested alternative.
+Ahmed never classifies a task. Claude classifies it itself (T0–T3 per
+`docs/AI_TEAM_MODEL_POLICY.md`), says so in one line before starting —
+`T<n> — tests: <target>` — and spends accordingly.
+
+Sonnet does the implementation. A task is T0/T1, whatever the diff size, unless
+one of these is present:
+
+- protected logic (posting, inventory movement/cost, ledgers, cashbox,
+  permissions, closing) or a migration/schema change;
+- a security, authentication or authorization decision;
+- a cross-app flow, a concurrency/race problem, or data integrity;
+- two genuine attempts at the same fix have already failed.
+
+Those are T2/T3, and Claude escalates by consulting the Opus advisor once at the
+decision point — not by asking for a stronger session. Claude cannot change a
+running session's model; it checks the session's model at the start and, if a
+T0/T1 task is running on Opus, says so once in a line and carries on.
+
+| Per task | T0/T1 | T2/T3 |
+| --- | --- | --- |
+| Opus advisor | none | at most one, before the final decision |
+| Subagents | none | only when the work genuinely splits |
+| Tests | smallest relevant target | focused tests, then the wider suite |
+| Reading | target files + direct dependencies | add the affected apps |
+
+Full-suite reruns, repository-wide scans, browser loops and unrelated backlog or
+parallel runs are never started without a stated reason. Checkpoint at each
+milestone (push, PR description, handoff block), not at the end: a session that
+has hit its limit cannot hand anything over.
