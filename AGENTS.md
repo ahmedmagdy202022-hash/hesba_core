@@ -9,9 +9,9 @@ The engineering benchmark and protected-logic rules below remain in force.
 ## Mission
 Complete Hesba functionally end-to-end with minimal interruption.
 
-Do not stop after each screen or Track.
+Finish the user's explicitly requested task end-to-end; do not autonomously start unrelated Tracks or backlog tasks.
 Do not ask Ahmed routine technical questions.
-Do not merge to `develop` or `main`.
+Do not merge to `develop` or `main` without Ahmed's explicit approval.
 
 ## Product direction
 Current phase is FUNCTIONAL-FIRST.
@@ -92,11 +92,19 @@ Current rule, from `docs/HESBA_ROADMAP.md`:
 - never merge without Ahmed's explicit approval;
 - one PR per task to `develop` for Main Control review.
 
-## Continuous execution rule
-After completing one Track:
-- run focused tests;
-- fix in-scope failures;
-- commit;
-- immediately continue to the next Track.
+## Continuous execution within a requested task
+For each task Ahmed explicitly requests:
+- understand the narrow scope, implement the requested change and run focused tests;
+- fix in-scope failures, commit on its own branch, and open a PR to `develop`;
+- report the evidence, PR, and next suggestion; then stop rather than starting an unrequested Track;
+- only pause for a genuine Hard Gate or necessary business decision.
 
-Do not return "waiting for approval" unless every remaining task is blocked by a true Hard Gate.
+Never auto-merge, even when automated checks pass.
+
+## Codex Cloud and Claude Code cross-agent handoff
+- This root `AGENTS.md` is read by Codex. Claude Code's `CLAUDE.md` includes it; the engineering and protected-logic rules apply to **both** tools.
+- Keep work mobile-friendly: concise Egyptian Arabic updates with one actionable checkpoint. Prefer scoped files and direct dependencies over repository-wide dumps. Read related project documents only as needed; `docs/HESBA_ROADMAP.md` may lag behind current code and merged PRs.
+- Use the smallest relevant validation first. Escalate to broader testing for sensitive accounting, inventory, authorization or cross-app changes.
+- Before handing off to the other agent, push work to a named branch with a PR, and provide exact scope, files, tests, risks and next action; neither tool automatically sees the other's conversations or uncommitted changes.
+- Codex Cloud onboarding and the reusable handoff template are in `docs/CODEX_CLOUD_SETUP.md`. This is optional reference material; **do not read it for unrelated coding tasks**.
+- Never use production credentials or deploy to real services merely to complete a development task.
