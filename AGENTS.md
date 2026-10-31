@@ -114,3 +114,7 @@ Never auto-merge, even when automated checks pass.
 - Use a pushed branch + task issue or PR as the only durable handoff. Never assume subscription quota values, that the other provider was invoked, or that a cloud session can start another provider's cloud task.
 - Checkpoint implementation before quota exhaustion; a session that has hit its limit cannot make a last-minute handoff. Never run both agents on the same branch concurrently.
 - If Claude is unavailable, Codex can continue a previously approved in-scope task and leave it awaiting review; no automatic merging, spending, or deployment.
+
+## Select model and effort for the task
+- For cross-agent routing and non-trivial model recommendations, use `docs/AI_TEAM_MODEL_POLICY.md` (load it only when model selection is in scope). Classify task risk T0–T3, optimize quality after validation per unit of available subscription usage, and suggest a higher-capability model only when risk or evidence warrants it.
+- This instruction file cannot itself change a Codex Cloud model. Respect available UI model controls and current task model, do not make undocumented session API calls or force API-only model IDs.
