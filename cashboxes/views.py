@@ -13,6 +13,7 @@ from .forms import CashboxOperationForm, CashboxOperationReversalForm
 from .models import Cashbox, CashboxMovement, CashboxOperation
 from .services import cancel_cashbox_operation, create_cashbox_operation
 from entities import scope as entity_scope
+from config.form_errors import add_form_error
 from config.paging import page_of
 
 
@@ -209,7 +210,7 @@ def operation_create(request):
         try:
             create_cashbox_operation(user=request.user, **form.cleaned_data)
         except (ValidationError, PermissionDenied) as exc:
-            form.add_error(None, exc)
+            add_form_error(form, exc)
         else:
             messages.success(request, STRINGS[lang]["saved"])
             return redirect(f"/cashboxes/operations/?lang={lang}")

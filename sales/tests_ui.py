@@ -230,3 +230,102 @@ class InvoiceRedesignSafetyTests(InvoiceRedesignTests):
                 self.assertLogs("hesba.einvoice", level="ERROR"):
             page = self.client.get(reverse("sales:detail", args=[invoice.pk]) + "?lang=ar")
         self.assertEqual(page.status_code, 200)
+
+
+class OverpaidInvoiceTests(TestCase):
+    """Paid now above the invoice total is a form error, not an HTTP 500 (the model's dict ValidationError)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from reports.tests_dashboard import prepared_client
+
+        prepared_client()
+        cls.owner = make_user(username="overpaid_owner")
+        make_user_profile(user=cls.owner, role=make_seeded_role(RoleCode.OWNER))
+        cls.customer = make_customer(customer_code="C-OVER")
+        cls.location = make_location(location_code="L-OVER", is_selling_location=True, is_receiving_location=True)
+        cls.cashbox = make_cashbox(cashbox_code="CB-OVER")
+        cls.item = make_item(item_code="IT-OVER", default_sale_price="184.68")
+
+    def post(self, paid_now, lang="ar", price="184.68", quantity="2"):
+        data = {"lang": lang, "invoice_number": "", "invoice_date": timezone.localdate().isoformat(), "customer": self.customer.pk,
+                "selling_location": self.location.pk, "cashbox": self.cashbox.pk, "discount_amount": "0", "tax_amount": "0",
+                "paid_now": paid_now, "lines-TOTAL_FORMS": "1", "lines-INITIAL_FORMS": "0", "lines-0-item": self.item.pk,
+                "lines-0-quantity": quantity, "lines-0-unit_sale_price": price}
+        self.client.force_login(self.owner)
+        return self.client.post(reverse("sales:create") + f"?lang={lang}", data)
+
+    def test_paid_far_above_the_total_rerenders_in_arabic_and_saves_nothing(self):
+        response = self.post("5000")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "المدفوع أكبر من إجمالي الفاتورة")
+        self.assertEqual(SalesInvoice.objects.count(), 0)
+
+    def test_paid_a_little_above_the_total_rerenders_in_english_and_saves_nothing(self):
+        response = self.post("370", lang="en")  # 2 x 184.68 = 369.36
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Paid now is more than the invoice total")
+        self.assertEqual(SalesInvoice.objects.count(), 0)
+        self.assertEqual(CashboxMovement.objects.count(), 0)
+
+    def test_the_message_is_shown_once(self):
+        response = self.post("370")
+        self.assertContains(response, "المدفوع أكبر من إجمالي الفاتورة", count=1)
+
+    def test_an_exactly_paid_invoice_still_saves(self):
+        response = self.post("369.36")
+        invoice = SalesInvoice.objects.get(customer=self.customer)
+        self.assertRedirects(response, f"/sales/{invoice.pk}/?lang=ar", fetch_redirect_response=False)
+        self.assertEqual((invoice.total_amount, invoice.paid_now, invoice.remaining_due), (Decimal("369.36"), Decimal("369.36"), Decimal("0.00")))
+
+
+class AddFormErrorTests(TestCase):
+    """config.form_errors.add_form_error: dict errors never raise, whatever the form's fields are."""
+
+    def make_form(self):
+        from django import forms
+
+        class Demo(forms.Form):
+            amount = forms.DecimalField()
+
+        form = Demo({"amount": "1"})
+        form.is_valid()
+        return form
+
+    def test_a_key_that_is_a_field_goes_to_the_field(self):
+        from django.core.exceptions import ValidationError
+
+        from config.form_errors import add_form_error
+
+        form = self.make_form()
+        add_form_error(form, ValidationError({"amount": "Amount must be greater than zero."}))
+        self.assertEqual(form.errors["amount"], ["Amount must be greater than zero."])
+
+    def test_a_key_that_is_not_a_field_becomes_a_non_field_error(self):
+        from django.core.exceptions import ValidationError
+
+        from config.form_errors import add_form_error
+
+        form = self.make_form()
+        add_form_error(form, ValidationError({"remaining_due": "Remaining due must equal total.", "amount": "Bad amount."}))
+        self.assertEqual(form.non_field_errors(), ["Remaining due must equal total."])
+        self.assertEqual(form.errors["amount"], ["Bad amount."])
+
+    def test_plain_and_list_errors_still_work(self):
+        from django.core.exceptions import ValidationError
+
+        from config.form_errors import add_form_error
+
+        form = self.make_form()
+        add_form_error(form, ValidationError("Plain."))
+        add_form_error(form, ValidationError(["One.", "Two."]))
+        self.assertEqual(form.non_field_errors(), ["Plain.", "One.", "Two."])
+
+    def test_an_override_replaces_the_text_and_is_added_once(self):
+        from django.core.exceptions import ValidationError
+
+        from config.form_errors import add_form_error
+
+        form = self.make_form()
+        add_form_error(form, ValidationError({"paid_now": "a", "remaining_due": "b"}), overrides={"paid_now": "Friendly", "remaining_due": "Friendly"})
+        self.assertEqual(form.non_field_errors(), ["Friendly"])

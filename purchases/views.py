@@ -33,6 +33,7 @@ from .services import (
     post_purchase_invoice,
     record_supplier_payment,
 )
+from config.form_errors import add_form_error
 from config.paging import page_of
 from batches.words import expiry_only
 
@@ -50,6 +51,7 @@ STRINGS = {
         "cancel": "إلغاء وعكس الفاتورة",
         "back": "العودة للمشتريات",
         "saved": "تم حفظ مسودة فاتورة الشراء.",
+        "overpaid": "المدفوع أكبر من إجمالي الفاتورة",
         "posted": "تم ترحيل فاتورة الشراء.",
         "cancelled": "تم إلغاء فاتورة الشراء وعكس آثارها.",
         "language": "English",
@@ -75,6 +77,7 @@ STRINGS = {
         "cancel": "Cancel and reverse invoice",
         "back": "Back to purchases",
         "saved": "Purchase draft saved.",
+        "overpaid": "Paid now is more than the invoice total",
         "posted": "Purchase invoice posted.",
         "cancelled": "Purchase invoice cancelled and reversed.",
         "language": "العربية",
@@ -192,7 +195,7 @@ def invoice_create(request):
 
                 invoice = form.create_with_fresh_number(create)  # UI-TRACK F12: atomic, retried on a taken PI- number
             except ValidationError as exc:
-                form.add_error(None, exc)
+                add_form_error(form, exc, overrides={"paid_now": STRINGS[lang]["overpaid"], "remaining_due": STRINGS[lang]["overpaid"]})
             else:
                 # R2-6: "save and post" in one press; UI-TRACK F23: one message, "posted", unless posting failed.
                 if request.POST.get("then") == "post":
@@ -353,7 +356,7 @@ def return_create(request, pk):
                 **form.cleaned_data,
             ))
         except ValidationError as exc:
-            form.add_error(None, exc)
+            add_form_error(form, exc)
         else:
             messages.success(request, STRINGS[lang]["return_saved"])
             return redirect(f"/purchases/returns/{purchase_return.pk}/?lang={lang}")
@@ -446,7 +449,7 @@ def payment_create(request):
             try:
                 form.create_with_fresh_number(lambda: record_supplier_payment(user=request.user, **form.cleaned_data))  # UI-TRACK F08
             except ValidationError as exc:
-                form.add_error(None, exc)
+                add_form_error(form, exc)
             else:
                 messages.success(request, STRINGS[lang]["payment_saved"])
                 return redirect(f"/purchases/payments/?lang={lang}")
