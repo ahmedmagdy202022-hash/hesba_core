@@ -195,7 +195,7 @@ def invoice_create(request):
 
                 invoice = form.create_with_fresh_number(create)  # UI-TRACK F12: atomic, retried on a taken PI- number
             except ValidationError as exc:
-                add_form_error(form, exc, overrides={"paid_now": STRINGS[lang]["overpaid"], "remaining_due": STRINGS[lang]["overpaid"]})
+                add_form_error(form, exc, overrides={"remaining_due": STRINGS[lang]["overpaid"]})
             else:
                 # R2-6: "save and post" in one press; UI-TRACK F23: one message, "posted", unless posting failed.
                 if request.POST.get("then") == "post":

@@ -190,7 +190,7 @@ def invoice_create(request):
 
                 invoice = form.create_with_fresh_number(create)  # AUTONUM: atomic, retried on a taken number
             except ValidationError as exc:
-                add_form_error(form, exc, overrides={"paid_now": STRINGS[lang]["overpaid"], "remaining_due": STRINGS[lang]["overpaid"]})  # a dict error would 500 with add_form_error(form, exc)
+                add_form_error(form, exc, overrides={"remaining_due": STRINGS[lang]["overpaid"]})  # remaining_due < 0 only when paid now is above the total; form.add_error(None, exc) used to 500 on it
             else:
                 # R2-6: "save and post" in one press; UI-TRACK F23: one message, "posted", unless posting failed.
                 if request.POST.get("then") == "post":

@@ -247,11 +247,13 @@ class OverpaidInvoiceTests(TestCase):
         cls.cashbox = make_cashbox(cashbox_code="CB-OVER")
         cls.item = make_item(item_code="IT-OVER", default_sale_price="184.68")
 
-    def post(self, paid_now, lang="ar", price="184.68", quantity="2"):
+    def post(self, paid_now, lang="ar", price="184.68", quantity="2", then=None):
         data = {"lang": lang, "invoice_number": "", "invoice_date": timezone.localdate().isoformat(), "customer": self.customer.pk,
                 "selling_location": self.location.pk, "cashbox": self.cashbox.pk, "discount_amount": "0", "tax_amount": "0",
                 "paid_now": paid_now, "lines-TOTAL_FORMS": "1", "lines-INITIAL_FORMS": "0", "lines-0-item": self.item.pk,
                 "lines-0-quantity": quantity, "lines-0-unit_sale_price": price}
+        if then:
+            data["then"] = then
         self.client.force_login(self.owner)
         return self.client.post(reverse("sales:create") + f"?lang={lang}", data)
 
@@ -259,14 +261,26 @@ class OverpaidInvoiceTests(TestCase):
         response = self.post("5000")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "المدفوع أكبر من إجمالي الفاتورة")
-        self.assertEqual(SalesInvoice.objects.count(), 0)
+        self.assert_nothing_moved()
 
     def test_paid_a_little_above_the_total_rerenders_in_english_and_saves_nothing(self):
         response = self.post("370", lang="en")  # 2 x 184.68 = 369.36
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Paid now is more than the invoice total")
+        self.assert_nothing_moved()
+
+    def test_save_and_post_while_overpaid_posts_nothing(self):
+        response = self.post("5000", then="post")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "المدفوع أكبر من إجمالي الفاتورة")
+        self.assert_nothing_moved()
+
+    def assert_nothing_moved(self):
+        """No invoice, and no money, stock or customer-balance movement."""
         self.assertEqual(SalesInvoice.objects.count(), 0)
         self.assertEqual(CashboxMovement.objects.count(), 0)
+        self.assertEqual(StockMovement.objects.filter(item=self.item).count(), 0)
+        self.assertEqual(CustomerLedgerEntry.objects.filter(customer=self.customer).count(), 0)
 
     def test_the_message_is_shown_once(self):
         response = self.post("370")

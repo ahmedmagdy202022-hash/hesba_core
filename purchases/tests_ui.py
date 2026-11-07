@@ -203,6 +203,8 @@ class PurchaseOverpaidTests(TestCase):
             self.assertContains(response, message)
         self.assertEqual(PurchaseInvoice.objects.count(), 0)
         self.assertEqual(CashboxMovement.objects.count(), 0)
+        self.assertEqual(StockMovement.objects.filter(item=self.item).count(), 0)
+        self.assertEqual(SupplierLedgerEntry.objects.filter(supplier=self.supplier).count(), 0)
 
     def test_an_exactly_paid_invoice_still_saves(self):
         response = self.post("100")
