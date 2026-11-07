@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal
 
 from django.core.management import call_command
@@ -208,13 +209,13 @@ class DashboardRealFigureTests(TestCase):
     def test_a_sale_on_another_day_is_left_out_of_today(self):
         sell(
             self.item, self.location, self.cashbox, "2", "50.00", "0.00",
-            self.seller, number="SI-OLD", when=timezone.localdate().replace(day=1),
+            self.seller, number="SI-OLD", when=timezone.localdate() - timedelta(days=1),  # never today, whatever the date is
         )
 
         self.client.force_login(self.seller)
         response = self.client.get(DASHBOARD)
 
-        self.assertLessEqual(self.card(response, "sales_today")["raw"], D("200.00"))
+        self.assertEqual(self.card(response, "sales_today")["raw"], D("200.00"))  # only the class-level 4 x 50 sale
 
     def test_the_profit_figure_never_reaches_a_cashier(self):
         """docs/permissions_map.md: menu hiding is not enough."""

@@ -23,6 +23,13 @@ def first_of_next_month():
     return (TODAY.replace(day=28) + timedelta(days=4)).replace(day=1)
 
 
+def default_move_up_day(today):
+    """The date the group page pre-fills for a move up (``views._next_first``): the first of next month, but
+    today itself when today already is the 1st, since a monthly move is only allowed on a 1st."""
+
+    return today if today.day == 1 else (today.replace(day=28) + timedelta(days=4)).replace(day=1)
+
+
 class LevelSetup(TestCase):
     sub = "languages"
 
@@ -135,10 +142,29 @@ class ScreenTests(LevelSetup):
         url = reverse("education:group", args=[self.one.pk])
         page = self.client.get(url)
         self.assertContains(page, "data-move-up")
-        self.assertContains(page, first_of_next_month().isoformat())
+        self.assertContains(page, f'name="on_date" value="{default_move_up_day(timezone.localdate()).isoformat()}"')
         self.client.post(url, {"action": "move_up", "students": [self.sara.pk], "target": self.two.pk, "on_date": first_of_next_month().isoformat()})
         self.assertEqual(list(Enrollment.objects.filter(group=self.two).values_list("student", flat=True)), [self.sara.pk])
         self.assertTrue(Enrollment.objects.filter(group=self.one, student=self.omar, status="active").exists())  # not ticked: stays
+
+    def test_the_prefilled_move_date_is_the_next_first_or_today_on_the_1st(self):
+        """The default is a valid monthly move day whatever today is (frozen here, so the date of the run cannot matter)."""
+
+        from datetime import datetime
+        from unittest import mock
+        from zoneinfo import ZoneInfo
+
+        start = date(2026, 1, 1)
+        services.enroll(self.sara, self.one, self.owner, start_date=start)
+        url = reverse("education:group", args=[self.one.pk])
+        for moment, expected in (
+            (datetime(2026, 12, 1, 1, 30, tzinfo=ZoneInfo("Africa/Cairo")), "2026-12-01"),  # on the 1st: today
+            (datetime(2026, 11, 17, 12, 0, tzinfo=ZoneInfo("Africa/Cairo")), "2026-12-01"),
+            (datetime(2026, 12, 31, 23, 30, tzinfo=ZoneInfo("Africa/Cairo")), "2027-01-01"),
+        ):
+            with self.subTest(now=moment.isoformat()), mock.patch("django.utils.timezone.now", return_value=moment):
+                self.client.force_login(self.owner)  # a fresh session: the frozen clock may be past the old one's expiry
+                self.assertContains(self.client.get(url), f'name="on_date" value="{expected}"')
 
 
 class NoLevelsTests(LevelSetup):
