@@ -271,6 +271,18 @@ def _notify_customer(order):
     transaction.on_commit(lambda: _queue_message(pk, status))
 
 
+def status_link(order, status, lang="ar"):
+    """S7: the S2 link a status message carries: none for DELIVERED, and none (with a warning) without PUBLIC_BASE_URL."""
+
+    if status == Status.DELIVERED:
+        return ""
+    try:
+        return customer_link(order, lang)
+    except ValidationError:
+        logger.warning("S7: PUBLIC_BASE_URL is not set; the %s message of work order %s goes without a link.", status, order.number)
+        return ""
+
+
 def _queue_message(pk, status):
     try:
         from messaging.services import queue_workorder, workorder_language
@@ -278,13 +290,8 @@ def _queue_message(pk, status):
         order = WorkOrder.objects.select_related("customer").get(pk=pk)
         if order.status != status:
             return  # moved on again before the first commit ran
-        lang, link = workorder_language(), ""
-        if status != Status.DELIVERED:
-            try:
-                link = customer_link(order, lang)
-            except ValidationError:
-                logger.warning("S7: PUBLIC_BASE_URL is not set; the %s message of work order %s is queued without a link.", status, order.number)
-        queue_workorder(order, status, link=link, lang=lang)
+        lang = workorder_language()
+        queue_workorder(order, status, link=status_link(order, status, lang), lang=lang)
     except Exception:  # noqa: BLE001 - messaging must never break a status move or a delivery
         logger.exception("S7: could not queue the %s message of work order %s.", status, pk)
 

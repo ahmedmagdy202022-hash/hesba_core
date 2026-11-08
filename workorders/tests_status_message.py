@@ -298,3 +298,64 @@ class StatusMessageTests(WorkshopSetup):
         self.go(Status.APPROVED)
         messaging.build()
         self.assertEqual(self.messages().count(), 1)
+
+    # -- review fixes --
+
+    @staticmethod
+    def url_in(text):
+        return [word for word in text.split() if word.startswith(BASE)][0]
+
+    @staticmethod
+    def token_of(url):
+        return url.split("?")[0].rstrip("/").split("/")[-1]
+
+    def test_the_untouched_arabic_default_is_swapped_for_the_english_one_in_an_english_business(self):
+        saved = messaging.save_template(MessageKind.WORKORDER, {"text": messaging.DEFAULT_TEXTS[MessageKind.WORKORDER], "active": "1", "every_days": "1"}, self.owner)
+        self.assertEqual(saved.text, messaging.DEFAULT_TEXTS[MessageKind.WORKORDER])
+        ClientProfile.objects.update(default_language="en")
+        self.go(Status.DIAGNOSED, Status.QUOTED)
+        self.assertTrue(self.one("quoted").text.startswith(f"Hello {self.customer.name}, from Demo Store: work order {self.order_.number} the quote is ready"))
+
+    def test_a_carried_message_gets_a_fresh_valid_link_when_the_old_one_expired(self):
+        from datetime import timedelta
+        from unittest.mock import patch
+
+        from django.utils import timezone
+
+        from printing.share import max_age, read_token
+
+        old = timezone.now().timestamp() - (max_age() + 5 * 86400)
+        self.go(Status.DIAGNOSED)
+        with patch("django.core.signing.time.time", return_value=old):
+            self.go(Status.QUOTED)
+        stale = self.one("quoted")
+        stale_url = self.url_in(stale.text)
+        self.assertIsNone(read_token(self.token_of(stale_url)))  # the link queued long ago no longer opens
+        OutboxMessage.objects.filter(pk=stale.pk).update(day=timezone.localdate() - timedelta(days=max_age() // 86400 + 5))
+        messaging.build()
+        fresh = self.one("quoted")
+        self.assertEqual(fresh.day, timezone.localdate())
+        fresh_url = self.url_in(fresh.text)
+        self.assertNotEqual(fresh_url, stale_url)
+        self.assertEqual(read_token(self.token_of(fresh_url)), ("work_order", self.order_.pk))
+        self.assertIn(self.order_.number, fresh.text)
+
+    def test_a_row_with_a_malformed_key_is_deleted_and_the_outbox_still_builds(self):
+        from django.utils import timezone
+
+        for index, key in enumerate(("workorder", "workorder:x:quoted", "workorder:1:2:3", f"workorder:{self.order_.pk}:bogus")):
+            OutboxMessage.objects.create(kind=MessageKind.WORKORDER, key=key, day=timezone.localdate(), name="x", phone=f"2010000000{index}", text="t")
+        messaging.build()
+        self.assertEqual(OutboxMessage.objects.filter(kind=MessageKind.WORKORDER).count(), 0)
+
+    def test_switching_the_workorder_kind_off_leaves_the_other_kinds_waiting_messages_alone(self):
+        from django.utils import timezone
+
+        today = timezone.localdate()
+        for kind in (MessageKind.DUE, MessageKind.INSTALMENT, MessageKind.APPOINTMENT, MessageKind.REFILL):
+            OutboxMessage.objects.create(kind=kind, key=f"{kind}:1", day=today, name="x", phone="201000000000", text="t")
+        self.go(Status.DIAGNOSED, Status.QUOTED)
+        messaging.save_template(MessageKind.WORKORDER, {"text": messaging.template(MessageKind.WORKORDER).text, "active": "", "every_days": "1"}, self.owner)
+        messaging._carry_workorders(today)
+        self.assertEqual(self.messages().count(), 0)
+        self.assertEqual(sorted(OutboxMessage.objects.values_list("kind", flat=True)), ["appointment", "due", "instalment", "refill"])

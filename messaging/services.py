@@ -263,12 +263,26 @@ def _carry_workorders(today):
     if not template(MessageKind.WORKORDER).active:
         waiting.delete()  # switched off: nothing of this kind is left to send
         return
+    row = template(MessageKind.WORKORDER)
     for message in list(waiting):
-        _kind, pk, status = message.key.split(":")
-        if not WorkOrder.objects.filter(pk=pk, status=status).exists():
+        parts = message.key.split(":")
+        if len(parts) != 3 or not parts[1].isdecimal() or parts[2] not in WORKORDER_STATUSES:
+            message.delete()  # not a key this module wrote: never let it break the outbox page
+            continue
+        order = WorkOrder.objects.select_related("customer").filter(pk=int(parts[1]), status=parts[2]).first()
+        if order is None:
             message.delete()
         elif message.day != today:
-            OutboxMessage.objects.filter(pk=message.pk, status=OutboxStatus.PENDING).update(day=today)
+            # Carried to today: the text is rebuilt from the order as it is now, with a fresh link (share links expire).
+            fields = {"day": today}
+            try:
+                from workorders.services import status_link
+
+                lang = workorder_language()
+                fields["text"] = _workorder_text(order, parts[2], status_link(order, parts[2], lang), lang, row)
+            except Exception:  # noqa: BLE001 - the old text still goes rather than the outbox page failing
+                logger.exception("S7: could not rebuild the %s message of work order %s.", parts[2], parts[1])
+            OutboxMessage.objects.filter(pk=message.pk, status=OutboxStatus.PENDING).update(**fields)
 
 
 def workorder_language():
@@ -278,6 +292,23 @@ def workorder_language():
 
     profile = ClientProfile.get_active()
     return "en" if profile and profile.default_language == "en" else "ar"
+
+
+def _workorder_text(order, status, link, lang, row):
+    """The words of one work-order message. An edited template is used as saved; the untouched Arabic default is
+    swapped for the English default when the business works in English."""
+
+    words = WORKORDER_STATUS_TEXTS[lang]
+    link = "" if status == "delivered" else (link or "")
+    if status == "delivered":
+        sentence = words["delivered_warranty"].format(days=order.warranty_days) if order.warranty_days else words["delivered"]
+    else:
+        sentence = words[status if link else f"{status}_nolink"]
+    text = row.text if row.pk else DEFAULT_TEXTS[MessageKind.WORKORDER]
+    if lang == "en" and text == DEFAULT_TEXTS[MessageKind.WORKORDER]:
+        text = DEFAULT_TEXTS_EN[MessageKind.WORKORDER]
+    company, _currency = _company()
+    return render(text, name=order.customer.name, company=company, number=order.number, status=sentence, link=link).strip()
 
 
 def queue_workorder(order, status, link="", lang=None):
@@ -303,17 +334,8 @@ def queue_workorder(order, status, link="", lang=None):
     key = f"workorder:{order.pk}:{status}"
     if OutboxMessage.objects.filter(kind=MessageKind.WORKORDER, key=key).exists():
         return None
-    lang = lang or workorder_language()
-    words = WORKORDER_STATUS_TEXTS[lang]
-    link = "" if status == "delivered" else (link or "")
-    if status == "delivered":
-        sentence = words["delivered_warranty"].format(days=order.warranty_days) if order.warranty_days else words["delivered"]
-    else:
-        sentence = words[status if link else f"{status}_nolink"]
-    text = row.text if row.pk else (DEFAULT_TEXTS_EN if lang == "en" else DEFAULT_TEXTS)[MessageKind.WORKORDER]
-    company, _currency = _company()
     fields = {"name": customer.name[:255], "phone": phone[:30], "link": f"/workorders/{order.pk}/", "entity": order.entity or main_entity(),
-              "text": render(text, name=customer.name, company=company, number=order.number, status=sentence, link=link).strip()}
+              "text": _workorder_text(order, status, link, lang or workorder_language(), row)}
     try:
         with transaction.atomic():
             return OutboxMessage.objects.create(kind=MessageKind.WORKORDER, key=key, day=timezone.localdate(), **fields)
