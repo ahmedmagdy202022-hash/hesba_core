@@ -23,7 +23,7 @@ WORDS = {
         "pending": "مستنية", "sent": "اتبعتت", "skipped": "اتشالت", "refresh": "جمّع رسائل النهارده", "added": "اتضاف {n} رسالة.", "nothing_new": "مفيش رسائل جديدة.",
         "kind": "النوع", "to": "لـ", "phone": "الموبايل", "text": "الرسالة", "send": "ابعت واتساب", "skip": "شيل", "open": "افتح",
         "none": "مفيش رسائل هنا.", "templates": "نصوص الرسائل", "active": "تتبعت", "every": "متتكررش لنفس العميل قبل (يوم)", "save": "حفظ",
-        "placeholders": "الكلمات اللي بتتغير لوحدها: {name} الاسم، {company} اسم الشركة، {amount} المبلغ، {date} التاريخ، {time} الوقت، {number} رقم الفاتورة أو الروشتة.",
+        "placeholders": "الكلمات اللي بتتغير لوحدها: {name} الاسم، {company} اسم الشركة، {amount} المبلغ، {date} التاريخ، {time} الوقت، {number} رقم الفاتورة أو الروشتة أو أمر الشغل، {status} جملة الحالة (عرض السعر جاهز / جاهز للاستلام / اتسلّم)، {link} لينك العميل الآمن.",
         "api_off": "الإرسال الأوتوماتيك من غير ضغط محتاج حساب WhatsApp Business للمحل نفسه. لحد ما يتربط، الرسالة بتتبعت بضغطة من هنا.",
         "api_on": "حساب WhatsApp Business متربط: الأنواع اللي ليها قالب متوافق عليه بتتبعت لوحدها.", "send_all": "ابعت أوتوماتيك",
         "api_sent": "اتبعت {sent}، وماتبعتش {failed} (السبب جنب كل رسالة).", "api_left": "فاضل {left} رسالة: دوس «ابعت» تاني، أو سيبها لأمر send_messages المجدول.", "wa_template": "اسم القالب المتوافق عليه عند Meta (فاضي: بضغطة بس)",
@@ -35,7 +35,7 @@ WORDS = {
         "pending": "Waiting", "sent": "Sent", "skipped": "Skipped", "refresh": "Gather today's messages", "added": "{n} messages added.", "nothing_new": "No new messages.",
         "kind": "Kind", "to": "To", "phone": "Mobile", "text": "Message", "send": "Send on WhatsApp", "skip": "Skip", "open": "Open",
         "none": "No messages here.", "templates": "Message wording", "active": "Send these", "every": "Not again to the same customer within (days)", "save": "Save",
-        "placeholders": "Words filled in by themselves: {name} the name, {company} your company, {amount} the amount, {date} the date, {time} the time, {number} the invoice or prescription number.",
+        "placeholders": "Words filled in by themselves: {name} the name, {company} your company, {amount} the amount, {date} the date, {time} the time, {number} the invoice, prescription or work order number, {status} the status sentence (quote ready / ready for pickup / delivered), {link} the customer's secure link.",
         "api_off": "Sending without a click needs the shop's own WhatsApp Business account. Until it is connected, each message goes with one click from here.",
         "api_on": "The WhatsApp Business account is connected: the kinds with an approved template are sent by themselves.", "send_all": "Send automatically",
         "api_sent": "{sent} sent, {failed} not sent (the reason is next to each).", "api_left": "{left} messages left: press “Send” again, or leave them to the scheduled send_messages command.", "wa_template": "The template Meta approved (blank: by a click only)",
@@ -78,7 +78,7 @@ def outbox(request):
             elif action == "send_all":  # T9 live: the kinds with an approved template, through the WhatsApp Business account
                 services.build()
                 # Codex #282: one click sends a bounded batch, well inside the web server's 60 s timeout.
-                result = services.send_by_api(request.user, services.visible(request.user), limit=CLICK_LIMIT, seconds=CLICK_SECONDS)
+                result = services.send_by_api(request.user, services.sendable(request.user, services.visible(request.user)), limit=CLICK_LIMIT, seconds=CLICK_SECONDS)
                 flash.success(request, words["api_sent"].format(sent=result["sent"], failed=result["failed"]))
                 if result["left"]:
                     flash.warning(request, words["api_left"].format(left=result["left"]))
@@ -98,7 +98,7 @@ def outbox(request):
         else:
             return redirect(f"{reverse('messaging:outbox')}?lang={lang}&show={request.POST.get('show') or 'pending'}")
     services.build()  # opening the outbox gathers what is new today
-    show = request.GET.get("show") if request.GET.get("show") in OutboxStatus.values else "pending"
+    show = request.GET.get("show") if request.GET.get("show") in (OutboxStatus.PENDING, OutboxStatus.SENT, OutboxStatus.SKIPPED) else "pending"
     today = timezone.localdate()
     rows = services.visible(request.user).filter(status=show)
     rows = rows.filter(day=today) if show == "pending" else rows.order_by("-sent_at", "-pk")
@@ -108,6 +108,7 @@ def outbox(request):
     sees_cards = user_has_permission(request.user, "reports.view_customer_report")  # the customer card checks it inside the view
     for row in rows:
         row.can_open = bool(row.link) and (sees_cards or not row.link.startswith("/parties/"))
+        row.text = services.shown_text(row, request.user, lang)  # for display only: never saved
     return render(request, "messaging/outbox.html", {
         "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": words, "page_title": words["title"], "rows": rows, "show": show,
         "counts": services.counts(request.user, today), "kinds": services.KIND_LABELS[lang], "templates": services.templates(), "can_edit": services.can_edit(request.user),

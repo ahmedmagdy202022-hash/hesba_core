@@ -10,6 +10,7 @@ customer from getting the same reminder twice. Sending by itself needs a
 WhatsApp Business account, which is not connected yet (see ``api_connected``).
 """
 
+import logging
 import re
 from datetime import timedelta
 from urllib.parse import quote
@@ -26,6 +27,8 @@ from permissions.services import user_has_permission
 
 from .models import MessageKind, MessageTemplate, OutboxMessage, OutboxStatus
 
+logger = logging.getLogger(__name__)
+
 EDIT = "settings.manage_settings"
 #: An instalment gets its message this many days before it falls due (and every day it is late, within ``every_days``).
 INSTALMENT_AHEAD_DAYS = 2
@@ -35,13 +38,27 @@ DEFAULT_TEXTS = {
     MessageKind.INSTALMENT: "أهلاً {name}، تذكير من {company}: القسط بتاع فاتورة {number} بمبلغ {amount} ميعاده {date}. شكرًا لحضرتك.",
     MessageKind.APPOINTMENT: "أهلاً {name}، تذكير من {company} بميعاد حضرتك بكرة {date} الساعة {time}. لو محتاج تغيّر الميعاد ابعتلنا.",
     MessageKind.REFILL: "أهلاً {name}، روشتة حضرتك {number} ميعاد تجديدها {date}. تحب نجهزهالك؟ — {company}",
+    MessageKind.WORKORDER: "أهلاً {name}، من {company}: أمر الشغل {number} {status} {link}",
 }
-DEFAULT_EVERY = {MessageKind.DUE: 7, MessageKind.INSTALMENT: 3, MessageKind.APPOINTMENT: 1, MessageKind.REFILL: 3}
-PLACEHOLDERS = ("{name}", "{company}", "{amount}", "{date}", "{time}", "{number}")
+#: S7: the same wording in English, used when the business's default language is English and the text was never edited.
+DEFAULT_TEXTS_EN = {MessageKind.WORKORDER: "Hello {name}, from {company}: work order {number} {status} {link}"}
+#: ``every_days`` is unused for work-order messages (one per order per status, whatever the day).
+DEFAULT_EVERY = {MessageKind.DUE: 7, MessageKind.INSTALMENT: 3, MessageKind.APPOINTMENT: 1, MessageKind.REFILL: 3, MessageKind.WORKORDER: 1}
+PLACEHOLDERS = ("{name}", "{company}", "{amount}", "{date}", "{time}", "{number}", "{status}", "{link}")
+#: S7: what each key status says to the customer ({days} is the order's warranty days).
+WORKORDER_STATUSES = ("quoted", "ready", "delivered")
+WORKORDER_STATUS_TEXTS = {
+    "ar": {"quoted": "عرض السعر جاهز. تقدر توافق عليه أو ترفضه من اللينك ده:", "quoted_nolink": "عرض السعر جاهز. كلمنا عشان توافق عليه.",
+           "ready": "جاهز للاستلام. تابع حالته من هنا:", "ready_nolink": "جاهز للاستلام.",
+           "delivered": "اتسلّم. شكرًا لثقة حضرتك.", "delivered_warranty": "اتسلّم. شكرًا لثقة حضرتك، والضمان {days} يوم."},
+    "en": {"quoted": "the quote is ready. You can approve or refuse it from this link:", "quoted_nolink": "the quote is ready. Contact us to approve it.",
+           "ready": "is ready for pickup. Follow it here:", "ready_nolink": "is ready for pickup.",
+           "delivered": "was delivered. Thank you for your trust.", "delivered_warranty": "was delivered. Thank you for your trust; the warranty is {days} days."},
+}
 
 KIND_LABELS = {
-    "ar": {"due": "مبلغ مستحق", "instalment": "قسط", "appointment": "ميعاد بكرة", "refill": "تجديد روشتة"},
-    "en": {"due": "Amount due", "instalment": "Instalment", "appointment": "Appointment tomorrow", "refill": "Prescription refill"},
+    "ar": {"due": "مبلغ مستحق", "instalment": "قسط", "appointment": "ميعاد بكرة", "refill": "تجديد روشتة", "workorder": "حالة أمر الشغل"},
+    "en": {"due": "Amount due", "instalment": "Instalment", "appointment": "Appointment tomorrow", "refill": "Prescription refill", "workorder": "Work order status"},
 }
 MESSAGES = {
     "ar": {"text": "نص الرسالة فاضي.", "placeholder": "النص فيه {bad} ومش معروف؛ المسموح: {allowed}.", "every": "التكرار من 1 لـ 90 يوم.",
@@ -110,7 +127,7 @@ def save_template(kind, data, user, lang="ar"):
 
 
 def render(text, **values):
-    for key in ("name", "company", "amount", "date", "time", "number"):
+    for key in ("name", "company", "amount", "date", "time", "number", "status", "link"):
         text = text.replace("{" + key + "}", str(values.get(key, "")))
     return text
 
@@ -223,6 +240,7 @@ def build(today=None):
     today = today or timezone.localdate()
     company, currency = _company()
     added = 0
+    _carry_workorders(today)
     for entity in _entities():
         with working_in(entity):
             for kind, source in SOURCES.items():
@@ -234,6 +252,108 @@ def build(today=None):
                 else:
                     _waiting(kind, entity).delete()  # switched off: nothing of this kind is left to send
     return added
+
+
+def _carry_workorders(today):
+    """S7: a work-order message still waiting is today's (the outbox and the API send only today's), goes to the
+    customer's current number, and is rebuilt when it moves to a new day. It is withdrawn (kept, never sendable, so
+    the order does not get a second message for the same status) when its order is no longer in the status it
+    announces, the customer has no valid number left, or the kind is off."""
+
+    from workorders.models import WorkOrder
+
+    waiting = OutboxMessage.objects.filter(kind=MessageKind.WORKORDER, status=OutboxStatus.PENDING)
+    row = template(MessageKind.WORKORDER)
+    if not row.active:
+        _withdraw(waiting)  # switched off: nothing of this kind is left to send
+        return
+    for message in list(waiting):
+        parts = message.key.split(":")
+        if len(parts) != 3 or not parts[1].isdecimal() or parts[2] not in WORKORDER_STATUSES:
+            message.delete()  # not a key this module wrote: never let it break the outbox page
+            continue
+        order = WorkOrder.objects.select_related("customer").filter(pk=int(parts[1]), status=parts[2]).first()
+        phone = _number(order.customer.whatsapp or order.customer.phone) if order else ""
+        if not phone:
+            _withdraw(OutboxMessage.objects.filter(pk=message.pk))  # moved on, or nobody to send it to
+            continue
+        fields = {"phone": phone[:30], "name": order.customer.name[:255]}
+        if message.day != today:
+            # Carried to today: the text is rebuilt from the order as it is now, with a fresh link (share links expire).
+            fields["day"] = today
+            try:
+                from workorders.services import status_link
+
+                lang = workorder_language()
+                fields["text"] = _workorder_text(order, parts[2], status_link(order, parts[2], lang), lang, row)
+            except Exception:  # noqa: BLE001 - the old text still goes rather than the outbox page failing
+                logger.exception("S7: could not rebuild the %s message of work order %s.", parts[2], parts[1])
+        OutboxMessage.objects.filter(pk=message.pk, status=OutboxStatus.PENDING).update(**fields)
+
+
+def _withdraw(messages):
+    """Make waiting work-order messages unsendable but keep the rows (the once-per-status record); the text, which may
+    hold the customer's link, is cleared."""
+
+    messages.filter(status=OutboxStatus.PENDING).update(status=OutboxStatus.WITHDRAWN, text="")
+
+
+def workorder_language():
+    """The language of what the customer is sent: the business's default language (Arabic unless it is English)."""
+
+    from settings_core.models import ClientProfile
+
+    profile = ClientProfile.get_active()
+    return "en" if profile and profile.default_language == "en" else "ar"
+
+
+def _workorder_text(order, status, link, lang, row):
+    """The words of one work-order message. An edited template is used as saved; the untouched Arabic default is
+    swapped for the English default when the business works in English."""
+
+    words = WORKORDER_STATUS_TEXTS[lang]
+    link = "" if status == "delivered" else (link or "")
+    if status == "delivered":
+        sentence = words["delivered_warranty"].format(days=order.warranty_days) if order.warranty_days else words["delivered"]
+    else:
+        sentence = words[status if link else f"{status}_nolink"]
+    text = row.text if row.pk else DEFAULT_TEXTS[MessageKind.WORKORDER]
+    if lang == "en" and text == DEFAULT_TEXTS[MessageKind.WORKORDER]:
+        text = DEFAULT_TEXTS_EN[MessageKind.WORKORDER]
+    company, _currency = _company()
+    return render(text, name=order.customer.name, company=company, number=order.number, status=sentence, link=link).strip()
+
+
+def queue_workorder(order, status, link="", lang=None):
+    """S7: queue the message for a work order that reached ``status`` (quoted, ready or delivered). Returns the
+    message, or None when nothing is queued (kind switched off, no phone, or this status already had its message).
+
+    One message per order per status, whatever the day, also if it was sent or skipped. ``link`` is the S2 customer
+    link (built by the caller from PUBLIC_BASE_URL; empty when it cannot be); DELIVERED never carries one.
+    Nothing here touches money, stock or a ledger."""
+
+    from entities.services import main_entity
+
+    status = str(status)
+    if status not in WORKORDER_STATUSES:
+        return None
+    row = template(MessageKind.WORKORDER)
+    if not row.active:
+        return None
+    customer = order.customer
+    phone = _number(customer.whatsapp or customer.phone)
+    if not phone:
+        return None
+    key = f"workorder:{order.pk}:{status}"
+    if OutboxMessage.objects.filter(kind=MessageKind.WORKORDER, key=key).exists():
+        return None
+    fields = {"name": customer.name[:255], "phone": phone[:30], "link": f"/workorders/{order.pk}/", "entity": order.entity or main_entity(),
+              "text": _workorder_text(order, status, link, lang or workorder_language(), row)}
+    try:
+        with transaction.atomic():
+            return OutboxMessage.objects.create(kind=MessageKind.WORKORDER, key=key, day=timezone.localdate(), **fields)
+    except IntegrityError:
+        return None  # queued by another request a moment ago
 
 
 def _gather(kind, source, row, entity, today, company, currency):
@@ -282,6 +402,42 @@ def visible(user):
     return entity_scope.for_user(entity_scope.scope(OutboxMessage.objects.all(), "entity"), "entity", user)
 
 
+# ---- the customer's link in a message (S7) ----
+
+LINK = re.compile(r"https?://\S+")
+LINK_MARKS = ("http://", "https://")
+LINK_MASK = {"ar": "[لينك العميل]", "en": "[customer link]"}
+
+
+def may_hold_link(user):
+    """Whoever holds a work-order message with the S2 link can approve the quote as the customer, so only the people
+    who may get the link by hand (``workorders.services.customer_link``) see or send it."""
+
+    from workorders.services import can_hold_customer_link
+
+    return can_hold_customer_link(user)
+
+
+def holds_link(message):
+    return message.kind == MessageKind.WORKORDER and any(mark in message.text for mark in LINK_MARKS)
+
+
+def shown_text(message, user, lang="ar"):
+    """The text this user sees: the customer link is replaced by a placeholder unless they may hold it."""
+
+    if holds_link(message) and not may_hold_link(user):
+        return LINK.sub(LINK_MASK[lang], message.text)
+    return message.text
+
+
+def sendable(user, messages):
+    """``messages`` without the link-bearing work-order ones when ``user`` may not hold the link."""
+
+    if may_hold_link(user):
+        return messages
+    return messages.exclude(Q(text__contains=LINK_MARKS[0]) | Q(text__contains=LINK_MARKS[1]), kind=MessageKind.WORKORDER)
+
+
 # ---- sending ----
 
 def whatsapp_url(message):
@@ -299,6 +455,8 @@ def mark(message, status, user, lang="ar"):
         raise PermissionDenied("This message belongs to another entity.")
     if message.status != OutboxStatus.PENDING:
         raise ValidationError(MESSAGES[lang]["done"])
+    if status == OutboxStatus.SENT and holds_link(message) and not may_hold_link(user):
+        raise PermissionDenied("This message carries the customer's link; only counter staff may send it.")
     message.status = status
     message.channel = "link" if status == OutboxStatus.SENT else ""
     message.sent_at, message.sent_by = timezone.now(), user
@@ -362,4 +520,4 @@ def send_by_api(user=None, messages=None, limit=None, seconds=None):
 def counts(user, today=None):
     today = today or timezone.localdate()
     rows = visible(user).filter(day=today)
-    return {status: rows.filter(status=status).count() for status in OutboxStatus.values}
+    return {status: rows.filter(status=status).count() for status in OutboxStatus.values if status != OutboxStatus.WITHDRAWN}
