@@ -65,8 +65,13 @@ class FindableTests(TestCase):
         self.assertContains(statement, "الأرباح والخسائر")
 
     def test_every_open_link_lands_on_a_working_screen(self):
+        from settings_core.models import ClientProfile
+        from settings_core.setup_services import set_module_enabled
+
         for slug in caps.CAPABILITIES:
             switch(slug, True)
+            for module in caps.needs(slug):  # as switching it on from Settings does (deposits need the appointments module)
+                set_module_enabled(ClientProfile.get_active(), module, True)
         self.client.force_login(self.owner)
         page = self.client.get(reverse("settings_core:overview") + "?lang=ar")
         from settings_core.operational_views import _features

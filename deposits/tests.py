@@ -734,3 +734,120 @@ class InsuredDepositTests(TestCase):
         response = self.client.post(f"{url}?lang=ar", {"lang": "ar", "action": "deposit_refund", "reason": "التأمين غطّى"}, follow=True)
         self.assertContains(response, 'data-deposit-status="refunded"')
         self.assertEqual((customer_balance(ali), cash_balance(self.cashbox), bal("2105")), (D("0.00"), D("0.00"), D("0.00")))
+
+
+# ---- Codex #313 (P1): what downstream collections may still ask for, and the cancel race ---------------------------------
+
+
+class DownstreamLimitTests(DepositSetup):
+    """A 300 invoice with a 100 deposit applied leaves 200: neither instalments nor a courier may collect more."""
+
+    def applied_invoice(self, deposit="100.00"):
+        appointment = self.book()
+        self.take(appointment, deposit)
+        invoice = self.bill_and_post(appointment)
+        self.assertEqual((invoice.total_amount, invoice.remaining_due, InvoiceSettlement.objects.get(invoice=invoice).amount), (D("300.00"), D("300.00"), D(deposit)))
+        return invoice
+
+    def test_an_instalment_plan_finances_only_what_the_deposit_left(self):
+        from installments.services import collect, create_plan, schedule
+
+        plan = create_plan(self.applied_invoice(), 2, TODAY + timedelta(days=30), self.owner)
+        self.assertEqual(plan.financed_amount, D("200.00"))
+        self.assertEqual([row.amount for row in plan.instalments.all()], [D("100.00"), D("100.00")])
+        self.assertEqual(schedule(plan)["remaining"], D("200.00"))
+        with self.assertRaisesMessage(ValidationError, "at most what is left (200.00)"):
+            collect(plan, "200.01", self.cashbox, TODAY, self.owner, lang="en")
+        collect(plan, "200.00", self.cashbox, TODAY, self.owner)
+        self.assertTrue(schedule(plan)["done"])
+        self.assertEqual((customer_balance(self.customer), cash_balance(self.cashbox)), (D("0.00"), D("300.00")))
+        self.assertEqual((bal("2105"), bal("1103")), (D("0.00"), D("0.00")))
+        self.assertTrue(ledger_reports.reconciliation()["ok"])
+
+    def test_a_deposit_covering_the_invoice_leaves_nothing_to_finance(self):
+        from installments.services import create_plan
+
+        invoice = self.applied_invoice("300.00")
+        with self.assertRaisesMessage(ValidationError, "Nothing is left to pay on this invoice."):
+            create_plan(invoice, 2, TODAY + timedelta(days=30), self.owner, lang="en")
+        with self.assertRaisesMessage(ValidationError, "مفيش مبلغ متبقي"):
+            create_plan(invoice, 2, TODAY + timedelta(days=30), self.owner)
+
+    def test_a_settlement_after_the_plan_comes_off_what_is_left(self):
+        from installments.services import collect, create_plan, schedule
+        from sales.services import record_customer_payment
+        from settlements import services as settlements
+
+        appointment = self.book()
+        invoice = self.bill_and_post(appointment)  # 300, no deposit
+        plan = create_plan(invoice, 3, TODAY + timedelta(days=30), self.owner)
+        self.assertEqual(plan.financed_amount, D("300.00"))
+        paid = record_customer_payment("LINK-1", TODAY, self.customer, self.cashbox, D("100.00"), self.owner)  # e.g. a paid online link (HG-070)
+        settlements.settle(invoice, paid, D("100.00"), "payment_link")
+        self.assertEqual(schedule(plan)["remaining"], D("200.00"))
+        with self.assertRaisesMessage(ValidationError, "(200.00)"):
+            collect(plan, "300.00", self.cashbox, TODAY, self.owner, lang="en")
+        collect(plan, "200.00", self.cashbox, TODAY, self.owner)
+        self.assertEqual(customer_balance(self.customer), D("0.00"))
+
+    def test_the_courier_collects_only_what_the_deposit_left(self):
+        from shipping import services as shipping
+
+        courier = shipping.save_courier({"name": "بوسطة", "phone": "0222222", "fee_per_parcel": "30"}, self.owner)
+        invoice = self.applied_invoice()
+        with self.assertRaisesMessage(ValidationError, "200.00"):
+            shipping.ship(invoice, courier, self.owner, {"cod_amount": "300"}, lang="en")
+        shipment = shipping.ship(invoice, courier, self.owner)  # by default the courier collects what is left
+        self.assertEqual(shipment.cod_amount, D("200.00"))
+        shipping.deliver(shipment, self.owner)
+        self.assertEqual(customer_balance(self.customer), D("0.00"))
+
+
+class CancelPolicyServiceTests(DepositSetup):
+    def test_cancelling_through_the_service_always_runs_the_policy(self):
+        set_capability_enabled(self.profile, "vat", True, user=self.owner)
+        early = self.book(starts_in=timedelta(days=5))
+        early_deposit = self.take(early, "100.00")
+        result = appointments.cancel_with_deposit_policy(early, AppointmentStatus.CANCELLED, self.owner)
+        early_deposit.refresh_from_db()
+        self.assertEqual((result["outcome"], result["appointment"].status, early_deposit.status), ("refunded", AppointmentStatus.CANCELLED, DepositStatus.REFUNDED))
+        late_customer = make_customer(customer_code="C-LATE", name="متأخر")
+        late = self.book(customer=late_customer, starts_in=timedelta(hours=1))
+        self.take(late, "100.00")
+        result = appointments.cancel_with_deposit_policy(late, AppointmentStatus.CANCELLED, self.owner)
+        self.assertEqual((result["outcome"], result["invoice"].total_amount, result["invoice"].tax_amount), ("forfeited", D("100.00"), D("12.28")))
+        gone_customer = make_customer(customer_code="C-GONE", name="مجاش")
+        gone = self.book(customer=gone_customer, starts_in=timedelta(days=9))
+        self.take(gone, "50.00")
+        self.assertEqual(appointments.cancel_with_deposit_policy(gone, AppointmentStatus.NO_SHOW, self.owner)["outcome"], "forfeited")
+        plain = self.book(customer=make_customer(customer_code="C-PLAIN", name="من غير عربون"))
+        self.assertIsNone(appointments.cancel_with_deposit_policy(plain, AppointmentStatus.CANCELLED, self.owner)["outcome"])
+        for customer in (self.customer, late_customer, gone_customer):
+            self.assertEqual(customer_balance(customer), D("0.00"))
+        self.assertEqual(bal("2105"), D("0.00"))
+        self.assertTrue(ledger_reports.reconciliation()["ok"])
+
+    def test_a_deposit_taken_just_before_the_cancel_gets_the_lock_is_still_settled(self):
+        from unittest import mock
+
+        appointment = self.book(starts_in=timedelta(days=5))
+        real = appointments._lock_booking
+
+        def take_wins_the_lock_first(booking):
+            self.take(booking, "100.00")  # the till's take() held the booking lock and committed just before the cancel's
+            return real(booking)
+
+        self.client.force_login(self.owner)
+        with mock.patch.object(appointments, "_lock_booking", side_effect=take_wins_the_lock_first):
+            response = self.client.post(self.detail_url(appointment), {"lang": "ar", "action": "status", "status": "cancelled"}, follow=True)
+        self.assertContains(response, "العربون اترد للعميل")
+        deposit = Deposit.objects.select_related("payment").get()
+        self.assertEqual((deposit.status, deposit.payment.status), (DepositStatus.REFUNDED, "cancelled"))
+        self.assertEqual((customer_balance(self.customer), cash_balance(self.cashbox), bal("2105")), (D("0.00"), D("0.00"), D("0.00")))
+
+    def test_a_take_after_the_cancel_is_refused(self):
+        appointment = self.book(starts_in=timedelta(days=5))
+        appointments.cancel_with_deposit_policy(appointment, AppointmentStatus.CANCELLED, self.owner)
+        with self.assertRaisesMessage(ValidationError, "still booked or confirmed"):
+            self.take(appointment, "100.00", lang="en")
+        self.assertFalse(CustomerPayment.objects.exists())
