@@ -32,6 +32,16 @@
   table.hs-cards tbody td:first-child { font-weight: 600; font-size: var(--hs-text-base, 15px); }
   table.hs-cards tbody td[data-card-full] { display: block; text-align: center; border-bottom: 0 !important; }
   table.hs-cards tbody td[data-card-full]::before { content: none; }
+  /* Totals footer (e.g. the invoice reports): its cells stay table cells inside a block row, which
+     forces the table wider than the phone and cuts the figures off. Lay it out as a wrapping row. */
+  table.hs-cards tfoot { display: block; }
+  table.hs-cards tfoot tr {
+    display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline;
+    gap: var(--hs-space-1, 4px) var(--hs-space-4, 16px); padding: var(--hs-space-3, 12px) var(--hs-space-1, 4px);
+  }
+  table.hs-cards tfoot th { display: block; min-width: 0; padding: 0; text-align: start; white-space: normal; }
+  table.hs-cards tfoot th[colspan="5"] { flex: 1 1 100%; }
+  table.hs-cards tfoot th:empty { display: none; }
   /* Links and buttons inside a card stay comfortably tappable. */
   table.hs-cards tbody td a, table.hs-cards tbody td button { min-height: var(--hs-control-height, 44px); display: inline-flex; align-items: center; }
 }
