@@ -1,6 +1,6 @@
 # Agent Hard Gates
 
-Status: HG-001–HG-037 RESOLVED. Later entries carry their own status: an OPEN PROPOSAL (HG-041–HG-044) is a decision still waiting, and an IMPLEMENTED note is built and waiting for review. Read each entry's status before protected work.
+Status: HG-001–HG-037 RESOLVED. Later entries carry their own status: an OPEN PROPOSAL (HG-041–HG-044, HG-069–HG-071) is a decision still waiting, and an IMPLEMENTED note is built and waiting for review. Read each entry's status before protected work.
 Decision source: Main Control decision comment on PR #54
 Implemented on: `agent/end-to-end-functional-cycle`, merged to `develop` via PR #54 (`c77c7e5`)
 Resolved: 2026-08-30
@@ -2120,3 +2120,122 @@ The entries below are the protected-logic decisions in the commercial gate, reco
   - **What is sent:** receipts go oldest first, as the exact text they were hashed from. `einvoice.portal._http` gained a `raw` argument for that.
   - **Outcomes:** an accepted receipt keeps its submission UUID and long id; a rejected one keeps the authority's reason; a refused or unreachable batch stays queued.
   - **Tests:** `ereceipt.tests_portal`.
+
+## HG-069 — Deposit at booking and the cancellation policy (S5)
+
+- **Status:** OPEN PROPOSAL. Nothing is built yet. This records the money decision before S5 (`docs/MARKET_PARITY_ROADMAP.md`, «بداية خدمي», PR order 8) touches the customer ledger.
+- **The question for Ahmed:** «العربون يتسجل دفعة من العميل يوم ما يتاخد ويتخصم من فاتورة الخدمة بعدين، ولو لغى متأخر نعمل فاتورة «رسوم إلغاء» بقيمته بدل ما نرجّعه. موافق؟»
+- **Why it is a gate:** a deposit is the customer's money held before any service is given. Today `appointments.Appointment` never moves money (its docstring says so) and `appointments.services.bill` makes the invoice on credit (`cashbox: None`, `paid_now: 0`). A deposit is a cash-in before the invoice, and its forfeit or refund are reversals: customer ledger, cashbox and the ledger projection, all protected.
+- **What the code does today (checked):**
+  - `sales.services.record_customer_payment` is a payment on account: customer due down, cashbox in, no invoice link. It is never applied to an invoice; `SalesInvoice.remaining_due` is fixed at posting. So "the invoice nets the deposit" can only mean: the service invoice posts on credit for its full price, and the customer's balance, already carrying the deposit as a credit, comes out at price minus deposit. A project owner's advance already works this way (HG-038).
+  - `sales.services.cancel_customer_payment` writes its reversal rows on the **original** `payment_date` and checks that month is open. A deposit taken in a month that has since closed cannot be refunded through it.
+  - `ledger/projector.py` already has the hook: the ids in `_advances` (`projects.ProjectPayment`, kind `advance`) make `_place_customer_payment` book the payment in `2105 دفعات مقدمة من العملاء` instead of receivables, and a certificate's `recovery_amount` moves it back on the invoice date. `ledger/reports.py` counts `customer_advances` with receivables in the reconciliation.
+  - `taxes/` knows nothing of prepayments: VAT rows exist only per invoice line (`SalesLineTax`, `taxes.services.compute_lines`). A customer payment carries no VAT, so VAT on the deposited service is charged when the service invoice posts, not when the deposit is taken.
+- **Proposed design (A, recommended): the deposit is a customer payment on account, linked by a new table and booked as a customer advance.**
+  - A new `deposits` app, generic: `Deposit` has a OneToOne to `sales.CustomerPayment` (the pattern of `projects.ProjectPayment`, `cheques.Cheque.customer_payment`, `shipping.Shipment.payment`), a generic link (content type + object id) to the booked thing (an `appointments.Appointment` now; a patient's online booking in M4 and a bakery pre-order in R10 later), a status (held / applied / forfeited / refunded), and the invoice it was applied to.
+  - **Take:** `record_customer_payment(..., cashbox=cash or bank)` called, not changed; the deposit row is written in the same transaction. Cash or bank up, customer balance down, the day it is taken. Taken only while the booking is `booked` or `confirmed`; one held deposit per booking.
+  - **Apply:** when `appointments.services.bill` makes the invoice and it posts, the deposit row records the invoice and becomes applied. Nothing is netted on the invoice itself: the customer's balance nets it. The booking screen and the invoice page show «عربون مدفوع» and the net due.
+  - **Late cancellation (forfeit):** a posted sales invoice for a non-stock service item «رسوم إلغاء» (`is_stock_tracked=False`), customer = the depositor, price = the forfeited amount, on credit, made through `taxes.services.create_sales_draft_with_tax` + `sales.services.post_sales_invoice`. The deposit on account settles it; the row becomes forfeited. The policy (free until N hours before, then forfeit) is one additive setting per activity.
+  - **Early cancellation (refund):** `cancel_customer_payment` called, not changed, from the deposits screen through `approvals.gate.held` with the existing action `sales.cancel_payment`, so HG-068 holds it when the owner has chosen to. The row becomes refunded.
+  - **Ledger:** the projector learns the deposit payment ids the way it learns `_advances`: a held deposit sits in 2105 from its payment date and moves to receivables on the date of the invoice it was applied to or forfeited into. Reconciliation already adds 2105 to receivables.
+- **Alternatives rejected:**
+  - **B — a deposit field on the invoice (`paid_now` at posting):** the cash would move on the invoice date, not the day it was taken, and a booking could be cancelled with cash in the drawer and nothing in the books. It also changes `post_sales_invoice`.
+  - **C — a new deposit movement type in `cashboxes`:** a second money path for the same thing; it would need its own reversal, approvals action, closed-period rule and report columns. The customer payment already has them all.
+  - **D — no projector change (the deposit stays a credit in 1103):** zero protected code, but the balance sheet shows customer money as negative receivables rather than a liability. The fallback if Ahmed wants nothing protected touched in S5.
+- **Files:** a new `deposits` app (models, migration, services, views, templates, tests); `appointments/views.py` and `templates/appointments/` (the deposit box and the cancel step); `ledger/projector.py` (one additive id set beside `_advances`, and the recovery line on the invoice date); `settings_core/capabilities.py` (the capability «عربون»); demo data. `sales.services`, `cashboxes.services`, `taxes`: called, not changed.
+- **Risks:**
+  - **Closed month:** a refund of a deposit taken in a closed month is refused by `cancel_customer_payment` (it reverses on the original date). The screen must say so and offer the forfeit invoice (dated today) instead; a dated refund service does not exist and would be its own gate.
+  - **Double posting:** one held deposit per booking; the OneToOne to the payment stops a second application.
+  - **VAT:** the deposit carries no VAT; the service invoice charges it in full later. Egyptian VAT treats an advance as a taxable event; charging it at receipt would be a `taxes` change and a separate gate. The cancellation-fee invoice is taxed at its item's rate unless the item gets a 0% `ItemTaxRate`; the accountant decides, the default is the item's rate.
+  - **Rounding:** none; whole amounts, no allocation.
+  - **Walk-in:** the till's walk-in customer cannot hold a deposit (as with loyalty).
+- **Tests to write:**
+  - take: customer balance −D, cashbox or bank +D on the payment date, the row held, trial balance balanced, 2105 = D;
+  - apply: the invoice posts on credit for P, customer balance = P − D, 2105 = 0 and receivables = P − D on the invoice date, no stock movement for the service item;
+  - forfeit: the fee invoice posts for D, customer balance 0, revenue +D (net of VAT when on), cashbox unchanged;
+  - refund: payment cancelled, customer balance 0, cashbox −D, 2105 = 0; held by HG-068 when the owner holds `sales.cancel_payment`;
+  - closed month: refund refused with the message, forfeit allowed today;
+  - a second deposit on the same booking refused; `ledger.reports.reconciliation()["ok"]` after every step; permissions (`sales.receive_customer_payment` to take and to refund, as for any collection).
+- **Out of scope:** paying the deposit online (HG-070 reuses this table), partial deposits per line, deposits on sales orders (T1), a refund service with its own date.
+
+## HG-070 — Online payment link, Paymob first (S4)
+
+- **Status:** OPEN PROPOSAL. Nothing is built yet. This records the money decision before S4 (PR order 9).
+- **The question for Ahmed:** «فلوس لينك الدفع تنزل في حساب بنكي اسمه «بوابة الدفع» لما Paymob تأكد بس، وعمولة البوابة تتسجل مصروف بنكي وقت التسوية. موافق؟»
+- **Why it is a gate:** money recorded from a message sent by a machine outside Hesba. If a webhook is forged, replayed or arrives twice, a customer's balance and a bank balance are wrong. The recording itself is a customer payment (a protected path, called).
+- **What the code does today (checked):**
+  - `cashboxes.CashboxKind.BANK` exists (T3, HG-055); the projector books a bank box in 1102 (`Projector.KIND_CONTROLS`). `banking.services.record_fee` records a fee the bank took as a `bank_fee` cashbox operation, booked in 5212 bank charges by `_place_cashbox_operation`. Nothing new is needed for the fee.
+  - `record_customer_payment` has no idempotency of its own; its unique `payment_number` is the hook.
+  - `PUBLIC_BASE_URL` exists (`config/settings.py`, `render.yaml`), and `settings_core/daily_email.py` already builds links from it.
+  - Secrets come from the environment through `config(...)` (`einvoice/portal.py`, `ETA_*`); `einvoice/tests_portal.py` tests against a `FakePortal` shaped like the real API, patched over `einvoice.portal._http`, the one HTTP helper.
+- **Proposed design (A, recommended): a gateway bank account; a payment only on a verified, confirmed webhook.**
+  - A new `payment_links` app: `Gateway` (Paymob now: name, the bank-kind `Cashbox` «بوابة الدفع – Paymob» it settles into, active), `PaymentLink` (customer, amount, what it pays: a posted invoice's remaining due, a deposit (HG-069) or on account; our order id; status new / paid / failed / expired; gateway order id; random token), `GatewayTransaction` (gateway, transaction id **unique**, raw payload, HMAC ok, outcome, OneToOne to the `CustomerPayment` it made).
+  - **Make a link:** the server creates the Paymob order and payment key through an adapter (`paymob.py`: `create_order`, `payment_key`, `verify_hmac`, `parse_callback`) and returns `PUBLIC_BASE_URL + /pay/<token>/`, never `request.get_host()`. The link goes out through the messaging outbox (T9).
+  - **Webhook (`POST /pay/webhook/paymob/`):** CSRF-exempt, no login. Verify the HMAC (SHA-512 over Paymob's documented field order with `PAYMOB_HMAC_SECRET`); on mismatch answer 400 and write an audit row. Then, in one transaction: `select_for_update` on the link; insert the `GatewayTransaction` (the unique id makes a duplicate a no-op 200); if `success` is false or `pending` is true, record the outcome and stop; else `record_customer_payment(payment_number=f"PAYMOB-{txn_id}", payment_date=today, customer, cashbox=gateway box, amount=amount_cents / 100)` called, not changed, and the link becomes paid. A deposit link writes the HG-069 row too.
+  - **Return page (`/pay/<token>/done/`):** reads status only; it never records anything, because the customer's browser is not trusted.
+  - **Settlement:** when Paymob pays out, from the banking screen: a cashbox transfer gateway box → real bank for the net, and a `bank_fee` operation on the gateway box for the fee (as `record_fee` does). The gateway box's balance is what Paymob still owes. Existing services, called.
+  - **Secrets:** `PAYMOB_API_KEY`, `PAYMOB_HMAC_SECRET`, `PAYMOB_INTEGRATION_ID`, `PAYMOB_IFRAME_ID` through `config()`, never a model field. With a key missing the capability shows «غير موصّلة» and no link is made.
+  - **Mocks:** a `FakePaymob` returning Paymob's real JSON shapes (auth token, order, payment key, callback) for every test; a live call needs Ahmed's account.
+- **Alternatives rejected:**
+  - **B — record the payment when the customer lands on the return page:** forgeable; a customer could mark their own invoice paid.
+  - **C — a cashbox kind `gateway`:** nothing distinguishes it from a bank account in the books; a bank box named per gateway gives the same report and reuses the T3 statement import for the payout.
+  - **D — book the fee per transaction:** Paymob states the fee at payout, and per-transaction fees would need a fee per webhook with rounding; at settlement the fee is one known figure.
+- **Files:** a new `payment_links` app (models, migration, adapter, services, views, urls, templates, tests); `config/urls.py`, `config/settings.py` (the four `config()` reads); `settings_core/capabilities.py`; `templates/sales/detail.html` («ابعت لينك دفع», beside «ابعت مع شركة شحن»); the messaging outbox for sending. `sales.services`, `cashboxes.services`, `banking.services`: called, not changed.
+- **Risks:**
+  - **Replay and duplicates:** the unique transaction id and the lock on the link; a second webhook for the same id returns 200 and does nothing. A webhook for an unknown order is recorded and ignored.
+  - **Amount mismatch:** Paymob confirms `amount_cents`; if it differs from the link, record what was taken, mark the link «مبلغ مختلف», never adjust the invoice.
+  - **Closed month:** the payment is dated the day the webhook arrives, so the month is open; an old webhook replayed after month end is a no-op, not a reversal. A refund is `cancel_customer_payment` (HG-068 can hold it), with the gateway refund done by hand from the Paymob dashboard.
+  - **VAT:** none here; the invoice was taxed when posted. Paymob's own fee invoice carries VAT the shop pays; it is booked inside the fee in 5212 unless the accountant wants the input VAT split (a `taxes` change, separate).
+  - **Rounding:** `amount_cents` is an integer, so none. **Currency:** EGP only in S4.
+  - **Public endpoints:** rate-limit the webhook and the pay page; the token in the URL is the only key, so a link expires (default 72 hours).
+- **Tests to write:**
+  - a valid confirmed webhook: customer balance −A, gateway bank box +A, one `CustomerPayment`, trial balance balanced, `ledger.reports.reconciliation()["ok"]`;
+  - the same webhook twice: one payment, 200 both times;
+  - bad HMAC: 400 and nothing recorded; `success=false`: link failed and nothing recorded; `pending`: nothing recorded;
+  - the link URL starts with `PUBLIC_BASE_URL`, not the request host, under `override_settings`;
+  - settlement: gateway box 0, real bank +net, 5212 +fee;
+  - a deposit link writes the HG-069 row; an invoice link refuses an amount above the remaining due;
+  - no secret in any model, migration or fixture (a grep in the test); permissions (`sales.receive_customer_payment` to make a link; the webhook needs none).
+- **Out of scope:** card-present terminals, instalment plans through the gateway, automatic refunds through the Paymob API, Fawry and other gateways (the adapter interface is written so they slot in), multi-currency.
+
+## HG-071 — Gift cards and memberships (S6)
+
+- **Status:** OPEN PROPOSAL. Nothing is built yet. This records the money decision before S6 (PR order 10).
+- **The question for Ahmed:** «كارت الهدية فلوسه التزام علينا مش إيراد، لحد ما حامله يصرفه على فاتورة كطريقة دفع، والعضوية عقد خدمة بخصم أوتوماتيك. موافق؟»
+- **Why it is a gate:** selling a gift card takes cash for nothing delivered yet; redeeming it pays an invoice without cash. Today every pound an invoice collects is `paid_now` into one cashbox (`post_sales_invoice`), and `agreements.Package` books a prepaid package as revenue the day it is sold (its docstring says so). A gift card must not be a sale, and its redemption must not be a discount (4103) or loyalty points (HG-058).
+- **What the code does today (checked):**
+  - A `Cashbox` kind decides which account its money sits in (`Projector.KIND_CONTROLS`): courier boxes in 1120, cheque boxes in notes. `entities.scope.cashboxes` hides `HELD_KINDS` from every picker. `ledger/reports.py` reconciliation sums those controls against the cashbox report.
+  - `cashboxes.services.create_cashbox_operation` refuses a transfer whose source would go negative («The source cashbox cannot become negative»). A direct in or out with nothing behind it is booked to the owner's current account (3102) by `_place_cashbox_operation`.
+  - `promotions.Promotion` has no customer or membership scope, and `promotions.services.apply(lines, now, coupon, lang)` does not take the customer. `agreements.ServiceContract` bills a fixed amount per period through the ordinary invoice.
+  - `taxes.services.compute_lines` taxes every invoice line at the item's rate (`ItemTaxRate` or the default). A card sold as an invoice line would be taxed at sale and again at redemption.
+- **Proposed design (A, recommended): a gift-card box whose negative balance is the liability.**
+  - A new cashbox kind `gift_card` (one box per entity, hidden like the courier boxes: added to `HELD_KINDS`), a chart row `2110 كروت هدايا غير مصروفة` with control `gift_card_liability`, and `KIND_CONTROLS["gift_card"] = "gift_card_liability"`.
+  - A new `giftcards` app: `GiftCard` (code, face value, buyer customer optional, holder name and phone, expiry, status) and `GiftCardEntry` (card; kind sold / redeemed / breakage / reversed; amount; the cashbox operation or customer payment behind it). A card's balance is its entries; the box balance must always equal minus the sum of live card balances.
+  - **Sell:** `create_cashbox_operation(TRANSFER, source=gift-card box, destination=cash or bank, amount=V)`: cash +V, box −V, which the projector books Dr 1101/1102, Cr 2110. No invoice, no revenue, no VAT.
+  - **Redeem:** the invoice posts with `paid_now` = the cash part only and the card part left as `remaining_due`; in the same transaction `record_customer_payment(cashbox=gift-card box, amount=R)`: customer due −R, box +R, booked Dr 2110, Cr 1103. Partial redemption is a smaller R; the rest stays on the card. The holder is whoever presents the code; the invoice's customer may be the walk-in.
+  - **Breakage** (expired or written off): `create_cashbox_operation(DIRECT_IN, gift-card box, reason)` with a breakage entry; the projector books its counter-line to 4201 sundry income instead of 3102 when the operation id is in the breakage set (the pattern of `_payroll_ops`). Manual only, with a reason, through `approvals.gate.held` under a new action `giftcards.breakage`, so HG-068 can hold it. Never automatic on expiry.
+  - **Reversals:** a mistaken redemption is `cancel_customer_payment`; a mistaken sale is `cancel_cashbox_operation`; both exist, both holdable.
+  - **Membership:** a `ServiceContract` (billed as today) plus a new nullable `Promotion.membership_service` (the contract's service item); `promotions.services.apply` gains an optional `customer` and counts such a promotion only for a customer with an active contract on that service. No new money path.
+- **The one protected change:** the negative-source rule in `create_cashbox_operation` skips boxes of kind `gift_card`, because for them a negative balance is the point. Everything else is additive: a kind, a chart row, one `KIND_CONTROLS` entry, one projector branch, one control in the reconciliation sum.
+- **Alternatives rejected:**
+  - **B — the card as a tax-exempt service item on an invoice, re-placed to 2110 by the projector:** the sales reports, the profit report and the e-invoice would still count it as a sale, and the projector would be fighting the sub-ledger.
+  - **C — redemption as a discount or as loyalty points:** 4103 falls while 2110 stays; the liability is never released and revenue is understated.
+  - **D — a customer payment from the buyer booked as an advance (the HG-038 pattern):** the buyer's card shows a credit they do not hold, and a holder who is not the buyer cannot use it without a ledger transfer between two customers, which no service does.
+  - **E — a brand-new money module with its own movement tables:** a second reversal, closed-period and report path for what the cashbox services already do.
+- **Files:** `cashboxes/models.py` (the kind, `HELD_KINDS`, migration), `cashboxes/services.py` (the guard), `ledger/chart.py` (2110), `ledger/projector.py` (`KIND_CONTROLS`, the breakage branch), `ledger/reports.py` (the "cash" sum gains `gift_card_liability`), a new `giftcards` app, `sales/pos.py` and `templates/sales/pos.html` (the card as a payment method), `sales/views.py` and `templates/sales/form.html` (the invoice form), `promotions/models.py` and `promotions/services.py` (the membership scope, migration), `approvals/actions.py` (`giftcards.breakage`), `settings_core/capabilities.py`.
+- **Risks:**
+  - **Double posting:** redeem and post are one transaction; the card row is locked (`select_for_update`), so two tills cannot spend the same balance, and a card is spent at most to its balance.
+  - **Closed month:** sale and redemption are dated today; a reversal follows its original's date rule, like every cancellation.
+  - **VAT:** none at sale (no invoice); the invoice at redemption is taxed as any sale. That is the usual treatment of a multi-purpose voucher; the accountant confirms it for the business. Breakage income carries no VAT.
+  - **Reports:** the cashbox report must not show the gift-card box as cash; wherever the courier boxes were kept out in T14 the gift-card box follows. The POS day totals count the card part as credit collected the same day.
+  - **Rounding:** none; whole piastres. **Expiry** is shown, not enforced, until breakage is approved.
+- **Tests to write:**
+  - sell V: cash +V, box −V, 2110 credit V, no revenue, no `SalesLineTax` row, trial balance balanced, `ledger.reports.reconciliation()["ok"]`;
+  - redeem R < V on an invoice of P with cash C = P − R: cashbox +C, box −(V − R), customer balance 0, 2110 credit V − R, revenue P net of VAT, stock out as usual;
+  - redeem above the balance refused; two tills on one card: one wins;
+  - breakage of the rest: box 0, 2110 = 0, 4201 +(V − R); held when the owner holds the action;
+  - cancel the redemption: box and customer due back; cancel the sale: cash back;
+  - the box never appears in a cashbox picker, as a sales invoice's `cashbox`, or in the cash total;
+  - membership: a customer with an active contract gets the promotion's discount; one without, or with a paused contract, does not; the invoice records it in `InvoicePromotion`;
+  - permissions: selling and redeeming need `sales.create_sales_invoice`; breakage needs `cashboxes.move_cash`.
+- **Out of scope:** physical card printing, buying a card online (HG-070 could sell one later), reloading a card, membership tiers, moving balance between cards, automatic expiry.
