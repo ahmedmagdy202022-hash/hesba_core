@@ -254,27 +254,32 @@ def build(today=None):
 
 
 def _carry_workorders(today):
-    """S7: a work-order message still waiting is today's (the outbox and the API send only today's), as long as its
-    order is still in the status it announces and the kind is on; otherwise it is withdrawn before anyone sends it."""
+    """S7: a work-order message still waiting is today's (the outbox and the API send only today's), goes to the
+    customer's current number, and is rebuilt when it moves to a new day. It is withdrawn (kept, never sendable, so
+    the order does not get a second message for the same status) when its order is no longer in the status it
+    announces, the customer has no valid number left, or the kind is off."""
 
     from workorders.models import WorkOrder
 
     waiting = OutboxMessage.objects.filter(kind=MessageKind.WORKORDER, status=OutboxStatus.PENDING)
-    if not template(MessageKind.WORKORDER).active:
-        waiting.delete()  # switched off: nothing of this kind is left to send
-        return
     row = template(MessageKind.WORKORDER)
+    if not row.active:
+        _withdraw(waiting)  # switched off: nothing of this kind is left to send
+        return
     for message in list(waiting):
         parts = message.key.split(":")
         if len(parts) != 3 or not parts[1].isdecimal() or parts[2] not in WORKORDER_STATUSES:
             message.delete()  # not a key this module wrote: never let it break the outbox page
             continue
         order = WorkOrder.objects.select_related("customer").filter(pk=int(parts[1]), status=parts[2]).first()
-        if order is None:
-            message.delete()
-        elif message.day != today:
+        phone = _number(order.customer.whatsapp or order.customer.phone) if order else ""
+        if not phone:
+            _withdraw(OutboxMessage.objects.filter(pk=message.pk))  # moved on, or nobody to send it to
+            continue
+        fields = {"phone": phone[:30], "name": order.customer.name[:255]}
+        if message.day != today:
             # Carried to today: the text is rebuilt from the order as it is now, with a fresh link (share links expire).
-            fields = {"day": today}
+            fields["day"] = today
             try:
                 from workorders.services import status_link
 
@@ -282,7 +287,14 @@ def _carry_workorders(today):
                 fields["text"] = _workorder_text(order, parts[2], status_link(order, parts[2], lang), lang, row)
             except Exception:  # noqa: BLE001 - the old text still goes rather than the outbox page failing
                 logger.exception("S7: could not rebuild the %s message of work order %s.", parts[2], parts[1])
-            OutboxMessage.objects.filter(pk=message.pk, status=OutboxStatus.PENDING).update(**fields)
+        OutboxMessage.objects.filter(pk=message.pk, status=OutboxStatus.PENDING).update(**fields)
+
+
+def _withdraw(messages):
+    """Make waiting work-order messages unsendable but keep the rows (the once-per-status record); the text, which may
+    hold the customer's link, is cleared."""
+
+    messages.filter(status=OutboxStatus.PENDING).update(status=OutboxStatus.WITHDRAWN, text="")
 
 
 def workorder_language():
@@ -389,6 +401,42 @@ def visible(user):
     return entity_scope.for_user(entity_scope.scope(OutboxMessage.objects.all(), "entity"), "entity", user)
 
 
+# ---- the customer's link in a message (S7) ----
+
+LINK = re.compile(r"https?://\S+")
+LINK_MARKS = ("http://", "https://")
+LINK_MASK = {"ar": "[لينك العميل]", "en": "[customer link]"}
+
+
+def may_hold_link(user):
+    """Whoever holds a work-order message with the S2 link can approve the quote as the customer, so only the people
+    who may get the link by hand (``workorders.services.customer_link``) see or send it."""
+
+    from workorders.services import can_hold_customer_link
+
+    return can_hold_customer_link(user)
+
+
+def holds_link(message):
+    return message.kind == MessageKind.WORKORDER and any(mark in message.text for mark in LINK_MARKS)
+
+
+def shown_text(message, user, lang="ar"):
+    """The text this user sees: the customer link is replaced by a placeholder unless they may hold it."""
+
+    if holds_link(message) and not may_hold_link(user):
+        return LINK.sub(LINK_MASK[lang], message.text)
+    return message.text
+
+
+def sendable(user, messages):
+    """``messages`` without the link-bearing work-order ones when ``user`` may not hold the link."""
+
+    if may_hold_link(user):
+        return messages
+    return messages.exclude(Q(text__contains=LINK_MARKS[0]) | Q(text__contains=LINK_MARKS[1]), kind=MessageKind.WORKORDER)
+
+
 # ---- sending ----
 
 def whatsapp_url(message):
@@ -406,6 +454,8 @@ def mark(message, status, user, lang="ar"):
         raise PermissionDenied("This message belongs to another entity.")
     if message.status != OutboxStatus.PENDING:
         raise ValidationError(MESSAGES[lang]["done"])
+    if status == OutboxStatus.SENT and holds_link(message) and not may_hold_link(user):
+        raise PermissionDenied("This message carries the customer's link; only counter staff may send it.")
     message.status = status
     message.channel = "link" if status == OutboxStatus.SENT else ""
     message.sent_at, message.sent_by = timezone.now(), user
@@ -469,4 +519,4 @@ def send_by_api(user=None, messages=None, limit=None, seconds=None):
 def counts(user, today=None):
     today = today or timezone.localdate()
     rows = visible(user).filter(day=today)
-    return {status: rows.filter(status=status).count() for status in OutboxStatus.values}
+    return {status: rows.filter(status=status).count() for status in OutboxStatus.values if status != OutboxStatus.WITHDRAWN}

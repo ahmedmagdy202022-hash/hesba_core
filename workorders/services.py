@@ -414,6 +414,14 @@ def totals(order):
 
 # ---- S2: the customer's secure link ----
 
+def can_hold_customer_link(user):
+    """Who may see or send the S2 link: counter staff only (the rule for approving a quote on the staff side).
+
+    A technician, even on the order, or a view-only user may not. S7's outbox applies the same check."""
+
+    return can_manage(user)
+
+
 def customer_link(order, lang="ar", user=None):
     """The link to send the customer for this order (S7 sends it). Built from PUBLIC_BASE_URL only.
 
@@ -423,8 +431,8 @@ def customer_link(order, lang="ar", user=None):
 
     from printing.share import public_url
 
-    if user is not None:
-        _may_work(user, order, MESSAGES[lang], counter_only=True)
+    if user is not None and not can_hold_customer_link(user):
+        raise PermissionDenied(MESSAGES[lang]["own"])
     url = public_url("work_order", order.pk, lang)
     if url is None:
         raise ValidationError(MESSAGES[lang]["no_base_url"])

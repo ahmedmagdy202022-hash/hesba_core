@@ -38,6 +38,9 @@ class OutboxStatus(models.TextChoices):
     PENDING = "pending", "Waiting"
     SENT = "sent", "Sent"
     SKIPPED = "skipped", "Skipped"
+    #: S7: a work-order message that stopped being true before it went out. Never sendable and never listed; it stays only
+    #: so the order does not get a second message for the same status (its text is cleared).
+    WITHDRAWN = "withdrawn", "Withdrawn"
 
 
 class OutboxMessage(models.Model):

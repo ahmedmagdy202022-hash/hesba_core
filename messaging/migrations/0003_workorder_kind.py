@@ -40,4 +40,14 @@ class Migration(migrations.Migration):
                 max_length=12,
             ),
         ),
+        migrations.AlterField(
+            model_name="outboxmessage",
+            name="status",
+            field=models.CharField(
+                choices=[("pending", "Waiting"), ("sent", "Sent"), ("skipped", "Skipped"), ("withdrawn", "Withdrawn")],
+                db_index=True,
+                default="pending",
+                max_length=10,
+            ),
+        ),
     ]

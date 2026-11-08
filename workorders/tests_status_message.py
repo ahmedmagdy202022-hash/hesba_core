@@ -5,6 +5,7 @@ from decimal import Decimal as D
 from unittest import mock
 
 from django.test import override_settings
+from django.urls import reverse
 
 from cashboxes.models import CashboxMovement
 from cashboxes.services import get_cashbox_balance
@@ -55,7 +56,8 @@ class StatusMessageTests(WorkshopSetup):
         return OutboxMessage.objects.filter(kind=MessageKind.WORKORDER, key__startswith=f"workorder:{(order or self.order_).pk}:")
 
     def keys(self, order=None):
-        return sorted(self.messages(order).values_list("key", flat=True))
+        """The keys of the messages that can still go out (a withdrawn one is kept only as the once-per-status record)."""
+        return sorted(self.messages(order).exclude(status=OutboxStatus.WITHDRAWN).values_list("key", flat=True))
 
     def one(self, status, order=None):
         return self.messages(order).get(key=f"workorder:{(order or self.order_).pk}:{status}")
@@ -196,7 +198,7 @@ class StatusMessageTests(WorkshopSetup):
         self.customer.save()
         self.go(Status.DIAGNOSED, Status.QUOTED, Status.APPROVED, Status.IN_REPAIR, Status.READY)
         self.deliver()
-        self.assertEqual(OutboxMessage.objects.count(), 0)
+        self.assertEqual(OutboxMessage.objects.exclude(status=OutboxStatus.WITHDRAWN).count(), 0)
 
     def test_the_whatsapp_number_is_preferred_over_the_phone(self):
         self.customer.whatsapp = "01112223334"
@@ -213,7 +215,7 @@ class StatusMessageTests(WorkshopSetup):
         self.assertEqual(len(self.keys()), 0)  # switched off: nothing of this kind is left to send
         self.go(Status.APPROVED, Status.IN_REPAIR, Status.READY)
         self.deliver()
-        self.assertEqual(OutboxMessage.objects.count(), 0)
+        self.assertEqual(OutboxMessage.objects.exclude(status=OutboxStatus.WITHDRAWN).count(), 0)
 
     # -- never breaks the move --
 
@@ -290,7 +292,8 @@ class StatusMessageTests(WorkshopSetup):
         self.assertEqual(self.one("quoted").day, timezone.localdate())  # still quoted: still worth sending, and visible today
         self.go(Status.APPROVED)
         messaging.build()
-        self.assertEqual(self.messages().count(), 0)  # the customer already approved: no "approve the quote" message left
+        self.assertEqual(self.keys(), [])  # the customer already approved: no "approve the quote" message left
+        self.assertEqual(self.one("quoted").status, OutboxStatus.WITHDRAWN)
 
     def test_a_message_already_sent_is_left_alone_by_the_housekeeping(self):
         self.go(Status.DIAGNOSED, Status.QUOTED)
@@ -357,5 +360,121 @@ class StatusMessageTests(WorkshopSetup):
         self.go(Status.DIAGNOSED, Status.QUOTED)
         messaging.save_template(MessageKind.WORKORDER, {"text": messaging.template(MessageKind.WORKORDER).text, "active": "", "every_days": "1"}, self.owner)
         messaging._carry_workorders(today)
-        self.assertEqual(self.messages().count(), 0)
-        self.assertEqual(sorted(OutboxMessage.objects.values_list("kind", flat=True)), ["appointment", "due", "instalment", "refill"])
+        self.assertEqual(self.keys(), [])
+        self.assertEqual(sorted(OutboxMessage.objects.exclude(status=OutboxStatus.WITHDRAWN).values_list("kind", flat=True)), ["appointment", "due", "instalment", "refill"])
+
+    # -- Codex review on #306 --
+
+    def test_withdrawing_an_obsolete_message_keeps_the_once_per_status_record(self):
+        self.go(Status.DIAGNOSED, Status.IN_REPAIR, Status.READY)
+        first = self.one("ready")
+        self.go(Status.IN_REPAIR)
+        messaging.build()  # the order moved on: the waiting READY message is withdrawn
+        first.refresh_from_db()
+        self.assertEqual((first.status, first.text), (OutboxStatus.WITHDRAWN, ""))
+        self.go(Status.READY)
+        messaging.build()
+        self.assertEqual(self.messages().filter(key=f"workorder:{self.order_.pk}:ready").count(), 1)  # never a second READY message
+        self.assertEqual(self.keys(), [])  # and the withdrawn one is not sendable
+        self.assertEqual(messaging.send_by_api(self.owner), {"sent": 0, "failed": 0, "left": 0})
+        with self.assertRaises(Exception):
+            messaging.mark(first, OutboxStatus.SENT, self.owner)
+
+    def test_a_withdrawn_message_is_not_listed_in_the_outbox(self):
+        self.go(Status.DIAGNOSED, Status.QUOTED)
+        self.go(Status.APPROVED)
+        self.client.force_login(self.owner)
+        for show in ("pending", "sent", "skipped", "withdrawn"):
+            page = self.client.get(reverse("messaging:outbox") + f"?lang=ar&show={show}")
+            self.assertEqual(page.status_code, 200)
+            self.assertNotContains(page, f'data-message="{self.one("quoted").pk}"')
+
+    def test_a_waiting_message_goes_to_the_customers_current_number_each_build(self):
+        self.go(Status.DIAGNOSED, Status.QUOTED)
+        self.assertEqual(self.one("quoted").phone, "201001234567")
+        self.customer.phone = "01255556666"
+        self.customer.save()
+        messaging.build()  # same day: the number is still refreshed
+        self.assertEqual(self.one("quoted").phone, "201255556666")
+        self.customer.whatsapp = "01112223334"
+        self.customer.save()
+        messaging.build()
+        self.assertEqual(self.one("quoted").phone, "201112223334")
+
+    def test_a_waiting_message_is_withdrawn_when_no_valid_number_remains(self):
+        self.go(Status.DIAGNOSED, Status.QUOTED)
+        self.customer.phone = ""
+        self.customer.whatsapp = ""
+        self.customer.save()
+        messaging.build()
+        message = self.one("quoted")
+        self.assertEqual((message.status, message.text), (OutboxStatus.WITHDRAWN, ""))
+        self.assertEqual(self.keys(), [])
+        self.customer.phone = "01001234567"
+        self.customer.save()
+        self.go(Status.APPROVED)  # the withdrawn record also stops a second QUOTED message from ever queuing
+        messaging.build()
+        self.assertEqual(self.messages().filter(key__endswith=":quoted").count(), 1)
+
+    # -- the customer link is counter-only, in the outbox too --
+
+    def outsider(self, code, username):
+        from hesba_testing.factories import grant, make_role, make_user, make_user_profile
+        from permissions.models import Permission
+
+        user = make_user(username=username)
+        role = make_role(f"ROLE-{username}")
+        grant(role, Permission.objects.get(code=code))
+        make_user_profile(user=user, role=role)
+        return user
+
+    def test_a_customer_facing_user_who_is_not_counter_staff_never_sees_or_sends_the_link(self):
+        viewer = self.outsider("sales.view_sales_invoices", "wo_outbox_viewer")
+        self.assertFalse(services.can_hold_customer_link(viewer))
+        self.assertTrue(services.can_hold_customer_link(self.owner))
+        self.go(Status.DIAGNOSED, Status.QUOTED)
+        message = self.one("quoted")
+        link = services.customer_link(self.order_)
+        self.assertIn(link, message.text)
+        url = reverse("messaging:outbox")
+        self.client.force_login(viewer)
+        for lang, mask in (("ar", "[لينك العميل]"), ("en", "[customer link]")):
+            page = self.client.get(url + f"?lang={lang}")
+            self.assertEqual(page.status_code, 200)
+            self.assertNotContains(page, link)
+            self.assertNotContains(page, self.token_of(link))
+            self.assertContains(page, mask)
+        self.assertEqual(self.client.post(url, {"lang": "ar", "action": "send", "message": message.pk}).status_code, 403)
+        self.assertEqual(OutboxMessage.objects.get(pk=message.pk).status, OutboxStatus.PENDING)
+        # The sent history masks it too.
+        OutboxMessage.objects.filter(pk=message.pk).update(status=OutboxStatus.SENT)
+        history = self.client.get(url + "?lang=ar&show=sent")
+        self.assertNotContains(history, link)
+        self.assertContains(history, "[لينك العميل]")
+        # Counter staff still read it whole and send it.
+        self.client.force_login(self.owner)
+        self.assertContains(self.client.get(url + "?lang=ar&show=sent"), link)
+
+    def test_counter_staff_still_send_it_and_an_outsider_cannot_send_it_in_bulk(self):
+        viewer = self.outsider("sales.receive_customer_payment", "wo_outbox_cashier")
+        self.go(Status.DIAGNOSED, Status.QUOTED)
+        messaging.save_template(MessageKind.WORKORDER, {"text": messaging.template(MessageKind.WORKORDER).text, "active": "1", "every_days": "1",
+                                                         "wa_template": "hesba_workorder"}, self.owner)
+        fake = FakeGraph()
+        with mock.patch.dict(os.environ, ENV), mock.patch.object(whatsapp, "_http", fake):
+            self.client.force_login(viewer)
+            self.client.post(reverse("messaging:outbox"), {"lang": "ar", "action": "send_all"})
+            self.assertEqual(fake.calls, [])
+            self.assertEqual(self.one("quoted").status, OutboxStatus.PENDING)
+            self.client.force_login(self.owner)
+            self.client.post(reverse("messaging:outbox"), {"lang": "ar", "action": "send_all"})
+            self.assertEqual(len(fake.calls), 1)
+
+    def test_a_message_without_a_link_is_not_hidden_from_a_customer_facing_user(self):
+        viewer = self.outsider("sales.view_sales_invoices", "wo_outbox_viewer2")
+        self.go(Status.DIAGNOSED, Status.IN_REPAIR, Status.READY)
+        self.deliver()
+        message = self.one("delivered")
+        self.assertNotIn("://", message.text)
+        self.client.force_login(viewer)
+        self.assertContains(self.client.get(reverse("messaging:outbox") + "?lang=ar"), message.text.split()[0])

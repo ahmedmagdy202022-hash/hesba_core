@@ -78,7 +78,7 @@ def outbox(request):
             elif action == "send_all":  # T9 live: the kinds with an approved template, through the WhatsApp Business account
                 services.build()
                 # Codex #282: one click sends a bounded batch, well inside the web server's 60 s timeout.
-                result = services.send_by_api(request.user, services.visible(request.user), limit=CLICK_LIMIT, seconds=CLICK_SECONDS)
+                result = services.send_by_api(request.user, services.sendable(request.user, services.visible(request.user)), limit=CLICK_LIMIT, seconds=CLICK_SECONDS)
                 flash.success(request, words["api_sent"].format(sent=result["sent"], failed=result["failed"]))
                 if result["left"]:
                     flash.warning(request, words["api_left"].format(left=result["left"]))
@@ -98,7 +98,7 @@ def outbox(request):
         else:
             return redirect(f"{reverse('messaging:outbox')}?lang={lang}&show={request.POST.get('show') or 'pending'}")
     services.build()  # opening the outbox gathers what is new today
-    show = request.GET.get("show") if request.GET.get("show") in OutboxStatus.values else "pending"
+    show = request.GET.get("show") if request.GET.get("show") in (OutboxStatus.PENDING, OutboxStatus.SENT, OutboxStatus.SKIPPED) else "pending"
     today = timezone.localdate()
     rows = services.visible(request.user).filter(status=show)
     rows = rows.filter(day=today) if show == "pending" else rows.order_by("-sent_at", "-pk")
@@ -108,6 +108,7 @@ def outbox(request):
     sees_cards = user_has_permission(request.user, "reports.view_customer_report")  # the customer card checks it inside the view
     for row in rows:
         row.can_open = bool(row.link) and (sees_cards or not row.link.startswith("/parties/"))
+        row.text = services.shown_text(row, request.user, lang)  # for display only: never saved
     return render(request, "messaging/outbox.html", {
         "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": words, "page_title": words["title"], "rows": rows, "show": show,
         "counts": services.counts(request.user, today), "kinds": services.KIND_LABELS[lang], "templates": services.templates(), "can_edit": services.can_edit(request.user),
