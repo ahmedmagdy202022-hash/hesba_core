@@ -53,18 +53,27 @@ def pinned_now(real):
 
 
 class _DatetimeMeta(type):
-    """Lets ``isinstance(x, timezone.datetime)`` keep working on the stand-in."""
+    """Lets ``isinstance(x, timezone.datetime)`` keep matching plain datetimes."""
 
     def __instancecheck__(cls, obj):
         return isinstance(obj, _real_datetime)
 
-    def __getattr__(cls, name):
-        return getattr(_real_datetime, name)
+    def __subclasscheck__(cls, sub):
+        return issubclass(sub, _real_datetime)
 
 
-class _PinnedDatetime(metaclass=_DatetimeMeta):
-    @staticmethod
-    def now(tz=None):
+class _PinnedDatetime(_real_datetime, metaclass=_DatetimeMeta):
+    """``datetime`` for ``django.utils.timezone`` whose only difference is ``now()``.
+
+    Construction and every classmethod (``combine``, ``fromisoformat``, ...) hand
+    back plain ``datetime`` objects, so nothing downstream ever sees this class.
+    """
+
+    def __new__(cls, *args, **kwargs):
+        return _real_datetime(*args, **kwargs)
+
+    @classmethod
+    def now(cls, tz=None):
         shifted = pinned_now(_clock(_utc.utc))
         if tz is None:
             return shifted.astimezone().replace(tzinfo=None)

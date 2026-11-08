@@ -100,6 +100,26 @@ class PinnedClockTests(ClockCase):
         self.assertIsInstance(received, timezone.datetime)
         self.assertIs(timezone.is_aware(received), True)
 
+    def test_timezone_datetime_still_constructs_plain_datetimes(self):
+        # attendance/tests.py builds ``timezone.datetime(2026, 1, 1)``.
+        self.start_clock(START)
+        built = timezone.datetime(2026, 1, 1)
+        self.assertIs(type(built), datetime)
+        self.assertEqual(built, datetime(2026, 1, 1))
+        aware = timezone.datetime(2026, 1, 1, 9, 30, tzinfo=utc.utc)
+        self.assertIs(type(aware), datetime)
+        combined = timezone.datetime.combine(START.date(), START.timetz())
+        self.assertIs(type(combined), datetime)
+        self.assertEqual(combined, START)
+        parsed = timezone.datetime.fromisoformat("2026-12-08T10:00:00+02:00")
+        self.assertIs(type(parsed), datetime)
+        self.assertEqual(parsed + timedelta(hours=1), datetime(2026, 12, 8, 11, 0, tzinfo=CAIRO))
+        self.assertEqual(timezone.datetime.min, datetime.min)
+        self.assertEqual(timezone.datetime.max, datetime.max)
+        self.assertEqual(timezone.datetime.strptime("2026-01-02", "%Y-%m-%d"), datetime(2026, 1, 2))
+        self.assertIs(type(timezone.now()), datetime)
+        self.assertIsInstance(built, timezone.datetime)
+
     def test_a_test_that_freezes_time_still_wins(self):
         self.start_clock(START)
         self.move_to(AFTER_MIDNIGHT)
