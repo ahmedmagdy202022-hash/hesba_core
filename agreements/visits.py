@@ -88,13 +88,29 @@ def plan_days(begin, end, count):
 def schedule(contract, user, *, employee=None, today=None, lang="ar"):
     """Book the current period's missing visits. Returns the appointments booked (an empty list when none were missing)."""
 
-    from appointments.models import AppointmentKind
-    from appointments.services import book
-
     words = _words(lang)
     if not user_has_permission(user, services.MANAGE):
         raise PermissionDenied(words["manage"])
     contract = ServiceContract.objects.select_for_update().select_related("customer", "service").get(pk=contract.pk)  # two clicks never double the visits
+    from entities.current import working_in
+
+    with working_in(_entity_of(contract)):  # HG-074: the visits belong to the contract's entity, whatever entity the user is working in
+        return _schedule(contract, user, employee, today, lang, words)
+
+
+def _entity_of(contract):
+    """The contract's entity: its selling location's, or the main entity's (HG-034) when it has none."""
+
+    from entities.services import main_entity
+
+    location = contract.location
+    return location.entity if location is not None and location.entity_id else main_entity()
+
+
+def _schedule(contract, user, employee, today, lang, words):
+    from appointments.models import AppointmentKind
+    from appointments.services import book
+
     if not contract.visits_per_period:
         raise ValidationError(words["no_visits"])
     if contract.status != ContractStatus.ACTIVE:
