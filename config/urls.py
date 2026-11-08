@@ -103,6 +103,7 @@ urlpatterns = [
     # RESTO-001: tables, orders and the kitchen ticket.
     path("restaurant/", include("restaurant.urls")),
     path("work-orders/", include("workorders.urls")),
+    path("attachments/", include("attachments.urls")),  # S1: photos, signature and files on a record
     path("orders/", include("orders.urls")),
     path("purchases/orders/", include("orders.purchase_urls")),  # T2
     path("pharmacy/", include("pharmacy.urls")),

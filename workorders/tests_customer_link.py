@@ -382,6 +382,31 @@ class CustomerLinkTests(WorkshopSetup):
         self.assertEqual(self.decide("approve", fingerprint=seen).status_code, 409)
         self.assertEqual(self.status(), Status.QUOTED)
 
+    def test_the_fingerprint_matches_the_lines_shown_even_if_the_quote_changes_mid_request(self):
+        real_totals, fresh = services.totals, services.quote_fingerprint(self.order_)
+
+        def totals_then_staff_edit(order):
+            snapshot = real_totals(order)
+            services.add_line(self.order_, self.labour, self.owner, quantity="2")  # staff edit right after the read
+            return snapshot
+
+        with patch.object(services, "totals", side_effect=totals_then_staff_edit):
+            body = self.page().json()
+        self.assertEqual(len(body["lines"]), 2)  # the old lines were shown ...
+        self.assertEqual(body["fingerprint"], fresh)  # ... and the fingerprint is theirs, not the new quote's
+        self.assertEqual(self.decide("approve", fingerprint=body["fingerprint"]).status_code, 409)  # so approving is refused
+        self.assertEqual(self.status(), Status.QUOTED)
+
+    def test_a_description_only_change_changes_the_fingerprint_and_the_answer_is_refused(self):
+        seen = self.page().json()["fingerprint"]
+        line = self.order_.lines.first()
+        line.description = "قطعة تانية خالص"
+        line.save()
+        self.assertNotEqual(self.page().json()["fingerprint"], seen)
+        response = self.decide("approve", fingerprint=seen)
+        self.assertEqual((response.status_code, response.json()["message"]), (409, "العرض اتغيّر، افتح اللينك تاني."))
+        self.assertEqual(self.status(), Status.QUOTED)
+
     def test_the_same_fingerprint_approves(self):
         seen = self.page().json()["fingerprint"]
         response = self.decide("approve", fingerprint=seen)

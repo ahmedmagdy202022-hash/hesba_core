@@ -79,5 +79,26 @@ class DemoTests(TestCase):
             with self.subTest(url=url):
                 self.assertEqual(self.client.get(url + "?lang=ar").status_code, 200)
 
+    @override_settings(DEMO_MODE=True, DEMO_PASSWORD="Demo-pass-1")
+    def test_the_showcase_shop_turns_on_quotations_and_e_documents(self):
+        """DEMO-CAPS: the demo's retail shop shows quotations, the e-invoice and the e-receipt; a real setup does not."""
+        from settings_core.capabilities import enabled_capabilities
+
+        call_command("prepare_demo", stdout=StringIO())
+        self.assertTrue({"quotations", "e_invoice", "e_receipt"} <= set(enabled_capabilities()))
+        self.assertTrue(self.client.login(username="owner", password="Demo-pass-1"))
+        self.assertEqual(self.client.get("/orders/?lang=ar").status_code, 200)
+
+    def test_a_real_setup_keeps_the_default_for_these_capabilities(self):
+        from settings_core import setup_catalog as catalog
+        from settings_core.capabilities import enabled_capabilities
+        from settings_core.setup_services import complete_setup
+
+        profile = ClientProfile.objects.create(client_code="REAL", legal_name="Real", display_name="Real shop")
+        complete_setup(profile, "commercial", "retail", ",".join(catalog.default_modules("commercial")))
+        enabled = set(enabled_capabilities())
+        self.assertFalse({"quotations", "e_invoice", "e_receipt"} & enabled)
+        self.assertTrue({"pos", "barcode", "promotions"} <= enabled)
+
     def test_no_demo_banner_on_a_real_install(self):
         self.assertNotContains(self.client.get(reverse("login")), "data-demo-login")
