@@ -501,3 +501,89 @@ class FormAndScreenTests(CampaignSetup):
             campaigns.delete_draft(queued, self.owner)
         with self.assertRaises(ValidationError):
             campaigns.save_draft(self.form(), self.owner, campaign=queued)
+
+
+class CapLockAndEarlySendTests(CampaignSetup):
+    """Codex #312: cap allocation is serialised per entity, and a message for a later day is never sent early."""
+
+    def postgres(self, events):
+        fake = mock.MagicMock()
+        fake.vendor = "postgresql"
+        fake.cursor.return_value.__enter__.return_value.execute.side_effect = lambda sql, params: events.append(("lock", sql, params))
+        return fake
+
+    @override_settings(MESSAGING_CAMPAIGN_DAILY_CAP=3)
+    def test_queuing_takes_the_entity_lock_before_it_reads_the_room(self):
+        from entities.services import main_entity
+
+        events = []
+        real_plan = campaigns.plan
+
+        def plan(*args, **kwargs):
+            events.append(("plan",))
+            return real_plan(*args, **kwargs)
+
+        with mock.patch.object(campaigns, "connection", self.postgres(events)), mock.patch.object(campaigns, "plan", side_effect=plan):
+            campaigns.queue(self.campaign(), self.owner)
+        self.assertEqual(events[0], ("lock", "SELECT pg_advisory_xact_lock(%s, %s)", [campaigns.CAP_LOCK_KEY, main_entity().pk]))
+        self.assertEqual([event[0] for event in events], ["lock", "plan"])
+        self.assertEqual(Counter(OutboxMessage.objects.filter(kind=MessageKind.CAMPAIGN).values_list("day", flat=True)), {TODAY: 3, TODAY + timedelta(days=1): 1})
+
+    @override_settings(MESSAGING_CAMPAIGN_DAILY_CAP=3)
+    def test_carrying_forward_takes_the_same_lock_per_entity(self):
+        from entities.services import main_entity
+
+        campaigns.queue(self.campaign(), self.owner)
+        events = []
+        tomorrow = TODAY + timedelta(days=1)
+        with mock.patch.object(campaigns, "connection", self.postgres(events)):
+            services.build(tomorrow)
+        self.assertEqual(events, [("lock", "SELECT pg_advisory_xact_lock(%s, %s)", [campaigns.CAP_LOCK_KEY, main_entity().pk])])
+        per_day = Counter(OutboxMessage.objects.filter(kind=MessageKind.CAMPAIGN).values_list("day", flat=True))
+        self.assertTrue(all(n <= 3 for n in per_day.values()), per_day)
+
+    def test_no_lock_is_issued_on_sqlite(self):
+        events = []
+        fake = self.postgres(events)
+        fake.vendor = "sqlite"
+        with mock.patch.object(campaigns, "connection", fake):
+            campaigns.queue(self.campaign(), self.owner)
+        self.assertEqual(events, [])
+
+    def test_a_message_for_a_later_day_cannot_be_sent_early(self):
+        later = TODAY + timedelta(days=2)
+        campaigns.queue(self.campaign(scheduled_day=later), self.owner)
+        message = OutboxMessage.objects.filter(kind=MessageKind.CAMPAIGN).first()
+        for lang, fragment in (("ar", "معادها يوم"), ("en", "cannot be sent before then")):
+            with self.assertRaises(ValidationError) as caught:
+                services.mark(message, OutboxStatus.SENT, self.owner, lang)
+            self.assertIn(fragment, " ".join(caught.exception.messages))
+            self.assertIn(later.isoformat(), " ".join(caught.exception.messages))
+        services.mark(message, OutboxStatus.SKIPPED, self.owner)  # skipping a deferred message stays possible
+
+    @override_settings(MESSAGING_CAMPAIGN_DAILY_CAP=1)
+    def test_a_stale_page_cannot_send_a_message_build_just_moved_to_tomorrow(self):
+        from entities.services import main_entity
+
+        def row(key, day, name):
+            return OutboxMessage.objects.create(kind=MessageKind.CAMPAIGN, key=key, day=day, name=name, phone="201001234567", text="مرحبا", entity=main_entity())
+
+        row("campaign:9:1", TODAY, "اليوم")  # today's one message already fills the cap
+        stale = row("campaign:9:2", ago(1), "متأخرة")  # on the page the cashier opened yesterday
+        self.client.force_login(self.owner)
+        for lang, fragment in (("ar", "معادها يوم"), ("en", "cannot be sent before then")):
+            response = self.client.post(reverse("messaging:outbox"), {"lang": lang, "action": "send", "message": stale.pk})
+            self.assertEqual(response.status_code, 200, "refused on the page, not redirected to WhatsApp")
+            self.assertContains(response, fragment)
+            stale.refresh_from_db()
+            self.assertEqual((stale.status, stale.day), (OutboxStatus.PENDING, TODAY + timedelta(days=1)))
+            self.assertIsNone(stale.sent_at)
+
+    def test_send_all_never_sends_a_deferred_message(self):
+        campaigns.save_settings({"active": "1", "wa_template": "hesba_campaign"}, self.owner)
+        campaigns.queue(self.campaign(scheduled_day=TODAY + timedelta(days=1)), self.owner)
+        self.client.force_login(self.owner)
+        with mock.patch.object(whatsapp, "missing", return_value=[]), mock.patch.object(whatsapp, "send", return_value=("wamid.1", "")) as send:
+            self.client.post(reverse("messaging:outbox"), {"lang": "ar", "action": "send_all"})
+        send.assert_not_called()
+        self.assertFalse(OutboxMessage.objects.filter(status=OutboxStatus.SENT).exists())

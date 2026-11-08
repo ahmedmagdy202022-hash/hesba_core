@@ -18,7 +18,7 @@ from datetime import date, timedelta
 
 from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import transaction
+from django.db import connection, transaction
 from django.db.models import Count, Exists, Max, OuterRef, Q, Sum
 from django.utils import timezone
 
@@ -35,6 +35,8 @@ PLACEHOLDERS = ("{name}", "{company}", "{points}", "{days}")
 DAY_AUDIENCES = (CampaignAudience.INACTIVE, CampaignAudience.CATEGORY, CampaignAudience.LAPSED)
 CATEGORY_AUDIENCES = (CampaignAudience.CATEGORY, CampaignAudience.LAPSED)
 BATCH = 500
+#: First key of the PostgreSQL advisory lock that serialises the daily-cap allocation of one entity (second key: its id).
+CAP_LOCK_KEY = 7208001
 
 MESSAGES = {
     "ar": {
@@ -322,6 +324,16 @@ def preview(campaign, result, lang="ar", today=None):
 
 # ---- the days ----
 
+def lock_cap(entity_id):
+    """Serialise cap allocation across the campaigns of one entity: each request only locks its own Campaign row, so on
+    PostgreSQL two campaigns could both read the same free room and together pass the cap. A transaction-level advisory
+    lock, taken before capacity is read and released at commit; a no-op on SQLite, where writes already serialise."""
+
+    if connection.vendor == "postgresql":
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT pg_advisory_xact_lock(%s, %s)", [CAP_LOCK_KEY, entity_id or 0])
+
+
 def _entity_rows(entity):
     rows = OutboxMessage.objects.filter(kind=MessageKind.CAMPAIGN).exclude(status=OutboxStatus.WITHDRAWN)
     return rows.filter(Q(entity=entity) | Q(entity__isnull=True)) if entity.is_main else rows.filter(entity=entity)
@@ -376,6 +388,7 @@ def queue(campaign, user, lang="ar", today=None):
     if not result.count:
         raise ValidationError(words["empty"])
     entity = campaign.entity or main_entity()
+    lock_cap(entity.pk)
     company, _currency = services._company()
     points, days = _values(campaign, result.rows, today)
     already = set(OutboxMessage.objects.filter(kind=MessageKind.CAMPAIGN, key__startswith=f"campaign:{campaign.pk}:").values_list("key", flat=True))
@@ -415,16 +428,23 @@ def carry(today):
     cap = daily_cap()
     stale = waiting.filter(day__lt=today)
     for entity_id in set(stale.values_list("entity_id", flat=True)):
-        used = Counter(OutboxMessage.objects.filter(kind=MessageKind.CAMPAIGN, entity_id=entity_id, day__gte=today)
-                       .exclude(status=OutboxStatus.WITHDRAWN).values_list("day", flat=True))
-        moved, day = [], today
-        for message in stale.filter(entity_id=entity_id).order_by("day", "pk"):
-            while used[day] >= cap:
-                day += timedelta(days=1)
-            message.day = day
-            used[day] += 1
-            moved.append(message)
-        OutboxMessage.objects.bulk_update(moved, ["day"], batch_size=BATCH)
+        with transaction.atomic():
+            _carry_entity(entity_id, today, cap)
+
+
+def _carry_entity(entity_id, today, cap):
+    lock_cap(entity_id)
+    stale = OutboxMessage.objects.filter(kind=MessageKind.CAMPAIGN, status=OutboxStatus.PENDING, day__lt=today)
+    used = Counter(OutboxMessage.objects.filter(kind=MessageKind.CAMPAIGN, entity_id=entity_id, day__gte=today)
+                   .exclude(status=OutboxStatus.WITHDRAWN).values_list("day", flat=True))
+    moved, day = [], today
+    for message in stale.filter(entity_id=entity_id).order_by("day", "pk"):
+        while used[day] >= cap:
+            day += timedelta(days=1)
+        message.day = day
+        used[day] += 1
+        moved.append(message)
+    OutboxMessage.objects.bulk_update(moved, ["day"], batch_size=BATCH)
 
 
 # ---- after queuing ----
