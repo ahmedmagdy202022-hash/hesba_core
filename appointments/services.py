@@ -80,6 +80,7 @@ def selling_location_of(appointment):
     from entities.services import main_entity
     from master_data.models import Location
 
+    # main_entity() creates the MAIN row on an install that has none yet; that is the HG-034 default, not new data.
     with working_in(appointment.entity or main_entity()):
         return entity_scope.locations(Location.objects).filter(active=True, is_selling_location=True).order_by("-is_default", "pk").first()
 

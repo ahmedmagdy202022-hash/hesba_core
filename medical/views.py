@@ -10,6 +10,8 @@ from django.utils import timezone
 
 from master_data.models import Customer
 
+from appointments.services import scoped as scoped_appointments
+
 from . import services
 from .models import BloodType, ClinicalVisit, Gender, InsuranceContract
 
@@ -199,7 +201,7 @@ def patient_file(request, pk):
             messages.success(request, words["saved"])
             return redirect(f"{reverse('medical:file', args=[patient.pk])}?lang={lang}")
     visits = list(ClinicalVisit.objects.filter(patient=patient).select_related("doctor", "created_by", "appointment", "animal"))
-    upcoming = patient.appointments.filter(starts_at__gte=timezone.now(), status__in=("booked", "confirmed")).select_related("employee").order_by("starts_at")[:5]
+    upcoming = scoped_appointments(patient.appointments).filter(starts_at__gte=timezone.now(), status__in=("booked", "confirmed")).select_related("employee").order_by("starts_at")[:5]
     from . import dental, insurance
 
     cover_context = {}
@@ -231,13 +233,13 @@ def visit_edit(request, pk=None, visit_pk=None):
     patient = visit.patient if visit else get_object_or_404(_patients(), pk=pk)
     appointment = None
     if not visit and request.GET.get("appointment"):
-        appointment = patient.appointments.filter(pk=request.GET.get("appointment")).select_related("employee").first()
+        appointment = scoped_appointments(patient.appointments).filter(pk=request.GET.get("appointment")).select_related("employee").first()
     error = ""
     if request.method == "POST":
         data = request.POST.dict()
         data["doctor"] = _doctors().filter(pk=_id(request.POST.get("doctor"))).first()
         if not visit and request.POST.get("appointment"):
-            data["appointment"] = patient.appointments.filter(pk=_id(request.POST.get("appointment"))).first()
+            data["appointment"] = scoped_appointments(patient.appointments).filter(pk=_id(request.POST.get("appointment"))).first()  # HG-074
         if _is_vet():
             from .models import Animal
 

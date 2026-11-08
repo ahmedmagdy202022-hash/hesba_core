@@ -316,3 +316,38 @@ class InsuranceFitTests(TestCase):
 
         self.assertIn("medical_insurance", {f["slug"] for f in activity_fit.features("medical", "dental")})
         self.assertNotIn("medical_insurance", {f["slug"] for f in activity_fit.features("medical", "vet")})
+
+
+class InsuredBillEntityTests(InsuranceSetup):
+    """HG-074: the insured bill, like the ordinary one, lands in the appointment's entity, not the biller's."""
+
+    def setUp(self):
+        from entities.services import save_entity
+
+        super().setUp()
+        self.branch = save_entity({"code": "BR2", "name_ar": "فرع المعادي"}, self.owner)
+        self.branch_store = make_location(location_code="BR-CLINIC", name_ar="عيادة الفرع", entity=self.branch, is_selling_location=True)
+
+    def test_both_drafts_take_the_appointments_entity_store(self):
+        from entities.current import working_in
+
+        for biller in (None, self.branch):  # the whole-group view, then the branch itself
+            with self.subTest(biller=biller):
+                appointment = self.appointment()
+                appointment.entity = self.branch
+                appointment.save(update_fields=["entity"])
+                with working_in(biller):
+                    bill = insurance.bill_insured(appointment, self.owner)
+                self.assertEqual((bill.insurer_invoice.selling_location, bill.patient_invoice.selling_location), (self.branch_store, self.branch_store))
+
+    def test_an_entity_without_a_selling_store_is_refused_in_both_languages(self):
+        self.branch_store.is_selling_location = False
+        self.branch_store.save(update_fields=["is_selling_location"])
+        appointment = self.appointment()
+        appointment.entity = self.branch
+        appointment.save(update_fields=["entity"])
+        with self.assertRaisesMessage(ValidationError, "فرع المعادي"):
+            insurance.bill_insured(appointment, self.owner)
+        with self.assertRaisesMessage(ValidationError, "has no active selling location"):
+            insurance.bill_insured(appointment, self.owner, lang="en")
+        self.assertFalse(InsuredBill.objects.exists())
