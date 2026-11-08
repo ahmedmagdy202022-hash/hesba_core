@@ -48,7 +48,10 @@ class Command(BaseCommand):
         from settings_core import capabilities as caps
 
         # DEMO-NEW: the showcase shop also has the market-parity features on, each with its own sample.
-        showcase = tuple(dict.fromkeys(caps.default_selection("commercial", "retail") + ("promotions", "loyalty", "shipping", "online_store")))
+        # DEMO-CAPS: quotations and the e-invoice / e-receipt are off by default for a retail shop; the demo turns them on
+        # so testers see them. Demo-only: the setup wizard and real installs keep the preset.
+        showcase = tuple(dict.fromkeys(caps.default_selection("commercial", "retail") + (
+            "promotions", "loyalty", "shipping", "online_store", "quotations", "e_invoice", "e_receipt")))
         complete_setup(profile, "commercial", "retail", ",".join(catalog.default_modules("commercial") + ("employees_technicians",)),
                        capabilities_raw=",".join(showcase))
         call_command("seed_demo_users", password=password, force=True, verbosity=0)
