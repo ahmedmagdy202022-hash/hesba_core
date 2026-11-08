@@ -6,6 +6,9 @@ and ``sales.services.post_sales_invoice``), so parts leave stock at their
 authoritative movement cost and the customer's account is that of any sale.
 """
 
+import hashlib
+import hmac
+import json
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 
@@ -56,7 +59,7 @@ MESSAGES = {
            "serial": "«{item}» بيتباع بالسيريال؛ بيعه من فاتورة البيع عشان يتسجّل السيريال.",
            "refused": "العميل رفض العرض؛ اتشالت بنود العرض. لو فيه رسم كشف، ضيفه كبند.",
            "link_approved": "العميل وافق على العرض من اللينك", "link_refused": "العميل رفض العرض من اللينك",
-           "link_closed": "العرض ده مبقاش مستني ردّك.", "link_decision": "الرد لازم يكون موافقة أو رفض.",
+           "link_closed": "العرض ده مبقاش مستني ردّك.", "link_changed": "العرض اتغيّر، افتح اللينك تاني.", "link_decision": "الرد لازم يكون موافقة أو رفض.",
            "link_done_approved": "تمام، موافقتك اتسجّلت.", "link_done_refused": "تمام، رفضك اتسجّل.", "link_same": "ردّك متسجّل قبل كده.",
            "no_base_url": "عنوان الموقع مش متظبط (PUBLIC_BASE_URL)؛ ظبّطه الأول عشان اللينك يتبعت."},
     "en": {"customer": "Choose the customer or type their name.", "device": "Enter the device or the service asked for.", "problem": "Enter the fault or what is needed.",
@@ -71,7 +74,7 @@ MESSAGES = {
            "serial": "“{item}” is sold by serial number; sell it on a sales invoice so its serial is recorded.",
            "refused": "The customer refused the quote; its lines were taken off. Add an inspection fee as a line if one is charged.",
            "link_approved": "Customer approved the quote via the link", "link_refused": "Customer refused the quote via the link",
-           "link_closed": "This quote is no longer waiting for your answer.", "link_decision": "The answer must be approve or refuse.",
+           "link_closed": "This quote is no longer waiting for your answer.", "link_changed": "The quote changed; open the link again.", "link_decision": "The answer must be approve or refuse.",
            "link_done_approved": "Done, your approval is recorded.", "link_done_refused": "Done, your refusal is recorded.", "link_same": "Your answer was already recorded.",
            "no_base_url": "The site address (PUBLIC_BASE_URL) is not set; set it first so the link can be sent."},
 }
@@ -366,23 +369,40 @@ def totals(order):
 
 # ---- S2: the customer's secure link ----
 
-def customer_link(order, lang="ar"):
-    """The link to send the customer for this order (S7 sends it). Built from PUBLIC_BASE_URL only."""
+def customer_link(order, lang="ar", user=None):
+    """The link to send the customer for this order (S7 sends it). Built from PUBLIC_BASE_URL only.
+
+    Whoever holds the link can approve the quote as the customer, so a ``user`` asking for it must be
+    counter staff, the same rule as approving the quote on the staff side (a technician or a view-only
+    user may not). A caller with no user is trusted server code (S7's sender)."""
 
     from printing.share import public_url
 
+    if user is not None:
+        _may_work(user, order, MESSAGES[lang], counter_only=True)
     url = public_url("work_order", order.pk, lang)
     if url is None:
         raise ValidationError(MESSAGES[lang]["no_base_url"])
     return url
 
 
+def quote_fingerprint(order):
+    """The quote as the customer sees it: the total and a hash of the lines (item, quantity, price)."""
+
+    numbers = totals(order)
+    rows = [[line.item_id, str(line.quantity), str(ZERO if line.is_warranty else line.unit_price)] for line in numbers["lines"]]
+    return hashlib.sha256(json.dumps([str(numbers["total"]), rows]).encode()).hexdigest()[:32]
+
+
 @transaction.atomic
-def customer_decide(order, decision, lang="ar"):
+def customer_decide(order, decision, lang="ar", fingerprint=None):
     """The customer approves or refuses a QUOTED order from the link. Returns ``(order, changed)``.
 
     No account and no staff permission: the signed link is the authority, and it can do only this.
-    The same answer twice is a no-op; any other answer once the order left QUOTED is refused. The order
+    ``fingerprint`` is the one the page showed: if the quote changed since, the answer is refused, so
+    the customer only ever approves the quote they saw.
+    The same answer twice is a no-op, but only when the customer gave it first (staff who decided it
+    get "no longer waiting"); any other answer once the order left QUOTED is refused. The order
     changes status only; no invoice, cash, stock or ledger row is written (the lines of a refused quote
     come off exactly as when staff mark it refused)."""
 
@@ -392,9 +412,14 @@ def customer_decide(order, decision, lang="ar"):
         raise ValidationError(words["link_decision"])
     order = WorkOrder.objects.select_for_update().get(pk=order.pk)
     if order.status == to:
-        return order, False
+        latest = order.events.filter(status=to).order_by("-at", "-pk").first()
+        if latest is not None and latest.by_customer:
+            return order, False
+        raise ValidationError(words["link_closed"])
     if order.status != Status.QUOTED or to not in NEXT[Status.QUOTED]:
         raise ValidationError(words["link_closed"])
+    if not fingerprint or not hmac.compare_digest(str(fingerprint), quote_fingerprint(order)):
+        raise ValidationError(words["link_changed"])
     order.status = to
     order.save(update_fields=["status"])
     WorkOrderEvent.objects.create(order=order, status=to, note=words["link_approved" if to == Status.APPROVED else "link_refused"], user=None, by_customer=True)
@@ -425,7 +450,7 @@ def public_state(order, lang="ar"):
         "timeline": timeline,
         "lines": [{"description": (line.description or line.item.item_name)[:255], "quantity": str(line.quantity),
                    "unit_price": str(ZERO if line.is_warranty else line.unit_price), "amount": str(line.amount)} for line in numbers["lines"]],
-        "tax": str(numbers["tax"]), "total": str(numbers["total"]),
+        "tax": str(numbers["tax"]), "total": str(numbers["total"]), "fingerprint": quote_fingerprint(order),
     }
 
 

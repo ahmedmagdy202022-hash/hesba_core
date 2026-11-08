@@ -5,6 +5,7 @@ from decimal import Decimal as D
 from unittest.mock import patch
 
 from django.core import signing
+from django.core.exceptions import PermissionDenied
 from django.test import Client, override_settings
 from django.urls import reverse
 
@@ -47,8 +48,12 @@ class CustomerLinkTests(WorkshopSetup):
     def page(self, order=None, lang="ar", client=None):
         return (client or self.public).get(reverse("share_document", args=[self.token(order)]), {"lang": lang})
 
-    def decide(self, action, order=None, lang="ar", client=None):
-        return (client or self.public).post(reverse(f"share_work_order_{action}", args=[self.token(order)]), {"lang": lang})
+    def decide(self, action, order=None, lang="ar", client=None, fingerprint=None):
+        """POST as the page would: echoing the fingerprint of the quote it showed (current unless given)."""
+
+        order = order or self.order_
+        fingerprint = services.quote_fingerprint(order) if fingerprint is None else fingerprint
+        return (client or self.public).post(reverse(f"share_work_order_{action}", args=[self.token(order)]), {"lang": lang, "fingerprint": fingerprint})
 
     def money(self):
         return {
@@ -201,7 +206,7 @@ class CustomerLinkTests(WorkshopSetup):
         opened = self.page(client=strict)
         self.assertIn("csrftoken", opened.cookies)
         token = opened.json()["csrf_token"]
-        self.assertEqual(strict.post(url, {"csrfmiddlewaretoken": token}).status_code, 200)
+        self.assertEqual(strict.post(url, {"csrfmiddlewaretoken": token, "fingerprint": opened.json()["fingerprint"]}).status_code, 200)
         self.assertEqual(self.status(), Status.APPROVED)
 
     def test_csrf_header_also_works_and_refuse_is_protected_too(self):
@@ -209,8 +214,8 @@ class CustomerLinkTests(WorkshopSetup):
         refuse = reverse("share_work_order_refuse", args=[self.token()])
         self.assertEqual(strict.post(refuse).status_code, 403)
         self.assertEqual(self.status(), Status.QUOTED)
-        token = self.page(client=strict).json()["csrf_token"]
-        self.assertEqual(strict.post(refuse, HTTP_X_CSRFTOKEN=token).status_code, 200)
+        opened = self.page(client=strict).json()
+        self.assertEqual(strict.post(refuse, {"fingerprint": opened["fingerprint"]}, HTTP_X_CSRFTOKEN=opened["csrf_token"]).status_code, 200)
         self.assertEqual(self.status(), Status.REFUSED)
 
     # -- event and audit --
@@ -302,14 +307,97 @@ class CustomerLinkTests(WorkshopSetup):
             services.customer_link(self.order_)
 
     @override_settings(PUBLIC_BASE_URL=BASE)
-    def test_the_staff_endpoint_is_permission_checked_like_viewing_the_order(self):
+    def test_only_counter_staff_get_the_link_because_it_can_approve_as_the_customer(self):
+        from hesba_testing.factories import grant, make_role, make_user, make_user_profile
+        from permissions.models import Permission
+        from permissions.services import user_has_permission
+
         url = reverse("workorders:customer_link", args=[self.order_.pk])
         self.assertEqual(self.public.get(url).status_code, 302)  # anonymous: sent to sign in
         self.client.force_login(person(RoleCode.STOCK_KEEPER, "wo_stock_link"))
         self.assertEqual(self.client.get(url).status_code, 403)  # cannot see work orders
-        self.client.force_login(person(RoleCode.CASHIER, "wo_cash_link"))
-        self.assertEqual(self.client.get(url).status_code, 200)
+        # A technician on the order: may see it, may not move a quote, so may not hold its approval link.
+        technician = make_user(username="wo_tech_link")
+        make_user_profile(user=technician, role=make_role("ROLE-TECH-LINK"))
+        self.tech.user = technician
+        self.tech.save()
+        WorkOrder.objects.filter(pk=self.order_.pk).update(technician=self.tech)
+        self.client.force_login(technician)
+        self.assertEqual(self.client.get(reverse("workorders:detail", args=[self.order_.pk])).status_code, 200)
+        self.assertEqual(self.client.get(url).status_code, 403)
+        # A user who can view orders but not manage them (the same rule that stops them approving a quote).
+        viewer = make_user(username="wo_viewer_link")
+        role = make_role("ROLE-VIEW-LINK")
+        grant(role, Permission.objects.get(code=services.VIEW))
+        make_user_profile(user=viewer, role=role)
+        self.assertTrue(services.can_view(viewer) and not services.can_manage(viewer))
+        self.client.force_login(viewer)
+        self.assertEqual(self.client.get(url).status_code, 403)
+        # Counter staff: whoever the staff rule lets approve a quote (cashier and manager hold sales.create_sales_invoice).
+        for role_code, name in ((RoleCode.CASHIER, "wo_cash_link"), (RoleCode.MANAGER, "wo_mgr_link")):
+            counter = person(role_code, name)
+            self.assertTrue(user_has_permission(counter, services.MANAGE), role_code)
+            self.client.force_login(counter)
+            self.assertEqual(self.client.get(url).status_code, 200, role_code)
         self.client.force_login(self.owner)
         self.assertEqual(self.client.get(url).status_code, 200)
         self.assertEqual(self.client.get(reverse("workorders:customer_link", args=[999999])).status_code, 404)
         self.assertEqual(self.client.get(url, {"lang": "en"}).json()["url"].rsplit("=", 1)[1], "en")
+        with self.assertRaises(PermissionDenied):
+            services.customer_link(self.order_, user=technician)
+        with override_settings(PUBLIC_BASE_URL=BASE):
+            self.assertTrue(services.customer_link(self.order_))  # server code (S7) passes no user
+
+    # -- the quote the customer saw --
+
+    def test_the_page_carries_a_fingerprint_that_follows_the_quote(self):
+        first = self.page().json()["fingerprint"]
+        self.assertEqual(first, self.page().json()["fingerprint"])
+        services.add_line(self.order_, self.labour, self.owner)
+        self.assertNotEqual(first, self.page().json()["fingerprint"])
+
+    def test_a_quote_changed_after_the_page_was_read_is_refused_and_the_status_stays(self):
+        seen = self.page().json()["fingerprint"]
+        services.add_line(self.order_, self.labour, self.owner, quantity="2")  # staff edit the quote meanwhile
+        events, audits = WorkOrderEvent.objects.count(), AuditLog.objects.count()
+        for action, lang, message in (("approve", "ar", "العرض اتغيّر، افتح اللينك تاني."), ("refuse", "en", "The quote changed; open the link again.")):
+            response = self.decide(action, lang=lang, fingerprint=seen)
+            self.assertEqual((response.status_code, response.json()["message"]), (409, message))
+            self.assertNotEqual(response.json()["fingerprint"], seen)  # the new one, for the reopened page
+            self.assertEqual(self.status(), Status.QUOTED)
+        self.assertEqual((WorkOrderEvent.objects.count(), AuditLog.objects.count()), (events, audits))
+        self.assertEqual(self.order_.lines.count(), 3)
+        self.assertEqual(self.decide("approve", fingerprint=response.json()["fingerprint"]).json()["status"], "approved")  # reopened: fine
+
+    def test_a_missing_or_wrong_fingerprint_is_refused_and_a_price_change_alone_changes_it(self):
+        for bad in ("", "0" * 32):
+            response = (self.public.post(reverse("share_work_order_approve", args=[self.token()]), {"fingerprint": bad}))
+            self.assertEqual(response.status_code, 409)
+        self.assertEqual(self.public.post(reverse("share_work_order_approve", args=[self.token()])).status_code, 409)
+        self.assertEqual(self.status(), Status.QUOTED)
+        seen = self.page().json()["fingerprint"]
+        line = self.order_.lines.first()
+        line.unit_price = D("1700.00")
+        line.save()
+        self.assertEqual(self.decide("approve", fingerprint=seen).status_code, 409)
+        self.assertEqual(self.status(), Status.QUOTED)
+
+    def test_the_same_fingerprint_approves(self):
+        seen = self.page().json()["fingerprint"]
+        response = self.decide("approve", fingerprint=seen)
+        self.assertEqual((response.status_code, response.json()["changed"], self.status()), (200, True, Status.APPROVED))
+
+    # -- a repeat is a no-op only when the customer gave the first answer --
+
+    def test_a_repeat_after_staff_decided_is_not_reported_as_already_recorded(self):
+        services.move(self.order_, Status.APPROVED, self.owner)  # the counter approved it
+        response = self.decide("approve")
+        self.assertEqual((response.status_code, response.json()["ok"]), (409, False))
+        self.assertEqual(response.json()["message"], "العرض ده مبقاش مستني ردّك.")
+        self.assertNotEqual(response.json().get("message"), "ردّك متسجّل قبل كده.")
+        self.assertFalse(self.order_.events.filter(by_customer=True).exists())
+        # Same for a quote staff refused.
+        other = self.order()
+        for status in (Status.DIAGNOSED, Status.QUOTED, Status.REFUSED):
+            services.move(other, status, self.owner)
+        self.assertEqual(self.decide("refuse", other).status_code, 409)

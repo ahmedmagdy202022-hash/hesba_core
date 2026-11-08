@@ -56,7 +56,7 @@ def decide(request, token, action):
         return _expired(request)
     lang = _lang(request)
     try:
-        order, changed = services.customer_decide(order, action, lang)
+        order, changed = services.customer_decide(order, action, lang, fingerprint=request.POST.get("fingerprint"))
     except ValidationError as error:
         order.refresh_from_db()
         return _json({"ok": False, "message": error.messages[0], **services.public_state(order, lang)}, status=409)

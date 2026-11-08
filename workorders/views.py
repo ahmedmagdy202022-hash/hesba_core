@@ -218,13 +218,13 @@ def detail(request, pk):
 
 
 def customer_link(request, pk):
-    """S2: the customer's link for this order, as JSON, for whoever may view the order (S7 will send it)."""
+    """S2: the customer's link for this order, as JSON, for counter staff who may view it (S7 will send it)."""
 
     _guard(request)
     lang = _lang(request)
     order = get_object_or_404(services.visible_to(request.user), pk=pk)
     try:
-        url = services.customer_link(order, lang)
+        url = services.customer_link(order, lang, user=request.user)  # counter staff only: the link can approve as the customer
     except ValidationError as error:
         return JsonResponse({"ok": False, "message": error.messages[0]}, status=409, json_dumps_params={"ensure_ascii": False})
     return JsonResponse({"ok": True, "url": url, "days": getattr(settings, "SHARE_LINK_DAYS", 60)}, json_dumps_params={"ensure_ascii": False})
