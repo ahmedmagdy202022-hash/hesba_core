@@ -297,6 +297,10 @@ def bill_insured(appointment, user, lang="ar"):
     bill = InsuredBill.objects.create(appointment=appointment, patient=appointment.customer, description=service[:255], contract=contract, member_number=cover.member_number, price=money_round(appointment.price),
                                       percent=percent, insurer_share=insurer_share, patient_share=patient_share, insurer_invoice=insurer_invoice,
                                       patient_invoice=patient_invoice, created_by=user)
+    if patient_invoice is not None:  # S5 (HG-069): a held deposit settles the patient's share when it posts; with no share it stays held
+        from deposits.services import attach
+
+        attach(appointment, patient_invoice)
     appointment.invoice = patient_invoice or insurer_invoice  # the appointment shows as billed, so it is never billed again
     fields = ["invoice"]
     if appointment.status != AppointmentStatus.DONE:

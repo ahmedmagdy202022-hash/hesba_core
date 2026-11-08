@@ -71,6 +71,7 @@ FEATURE_LANDING = {
     "variants": "variants:index", "batches_expiry": "batches:index", "serials": "serials:index",
     "installments": "installments:list", "vat": "taxes:settings", "e_invoice": "einvoice:issuer", "e_receipt": "ereceipt:board", "fixed_assets": "fixed_assets:list",
     "quotations": "orders:list", "drugs": "pharmacy:lookup", "shipping": "shipping:board", "promotions": "promotions:list", "online_store": "onlinestore:board", "loyalty": "loyalty:home",
+    "deposits": "appointments:agenda",
 }
 
 
@@ -110,7 +111,9 @@ def _features(lang, user):
             "label": label(slug, lang),
             "about": about(activity, slug, lang),
             "on": slug in on,
-            "url": url if url and _opens_for(user, url) else "",
+            # Only a feature at work opens anything: one switched on but paused (its module is off, as the appointments
+            # module for deposits) shows no chip on the overview, so it gets no link either.
+            "url": url if url and slug in on and _opens_for(user, url) else "",
         })
     return rows
 

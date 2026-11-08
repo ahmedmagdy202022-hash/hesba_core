@@ -17,6 +17,7 @@ from django.db.models import Sum
 from config.money import money_round
 from entities import scope as entity_scope
 from sales.models import CustomerPayment, SalesInvoice, SalesLine, SalesReturn
+from settlements.services import applied_total
 from staff.models import Employee
 from taxes.services import returns_tax
 
@@ -56,7 +57,9 @@ def _row(rep, date_from, date_to, base_invoices, base_returns, base_payments, ba
         "gross_profit": money_round(lines_profit - (returned - returned_cost)),
         "average_invoice": money_round(net / count) if count else ZERO,
         "collected": collected,
-        "credit_sold": money_round(_sum(invoices, "remaining_due")),
+        # HG-069: a deposit (or link / card) that settles an invoice comes off what is still due; its payment is
+        # already in ``collected`` on its own payment date, so it is never added here.
+        "credit_sold": money_round(_sum(invoices, "remaining_due") - applied_total(invoices)),
         "commission_rate": rate,
         "commission": money_round(net * rate / Decimal("100")),
         "return_rate": money_round(returned * 100 / gross) if gross else ZERO,

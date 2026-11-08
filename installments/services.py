@@ -70,8 +70,9 @@ def create_plan(invoice, count, first_due_date, user, lang="ar", notes=""):
     # T14 (Codex #272): a courier collecting it at the door and a schedule of instalments would each collect the same debt.
     if invoice.shipments.filter(cod_amount__gt=0).exclude(status__in=("returned",)).exists():
         raise ValidationError(words["shipped"])
-    # The plan covers what was left on the invoice; returns are credited against it in schedule().
-    financed = money_round(invoice.remaining_due)
+    # The plan covers what was left on the invoice; returns are credited against it in schedule(). HG-069: less what a
+    # deposit (or a paid link, a gift card) already settles, the same "due" the reports show.
+    financed = money_round(invoice.remaining_due - settled_on(invoice))
     if financed - returned_credit(invoice) <= 0:
         raise ValidationError(words["nothing_due"])
     if not 1 <= int(count) <= MAX_COUNT:
@@ -84,6 +85,20 @@ def create_plan(invoice, count, first_due_date, user, lang="ar", notes=""):
         Instalment.objects.create(plan=plan, number=number, due_date=add_months(first_due_date, number - 1), amount=amount)
     _audit(plan, user, "create_instalment_plan", {"invoice": invoice.invoice_number, "financed": str(financed), "count": int(count), "first_due_date": first_due_date.isoformat()})
     return plan
+
+
+def settled_on(invoice):
+    """HG-069: what posted payments on account already settle on this invoice (``settlements.services.applied``)."""
+
+    from settlements.services import applied_to
+
+    return applied_to(invoice)
+
+
+def settled_since(plan):
+    """HG-069: what was settled on the invoice after the plan financed it (the plan was made for remaining − applied)."""
+
+    return max(settled_on(plan.invoice) - (plan.invoice.remaining_due - plan.financed_amount), ZERO)
 
 
 def returned_credit(invoice):
@@ -106,7 +121,8 @@ def schedule(plan, today=None):
     today = today or timezone.localdate()
     paid = paid_amount(plan)
     credited = returned_credit(plan.invoice)
-    left_to_apply = paid + credited
+    settled_later = settled_since(plan)  # HG-069: a settlement made after the plan comes off it like a return
+    left_to_apply = paid + credited + settled_later
     rows, overdue, next_due = [], ZERO, None
     for instalment in plan.instalments.all():
         settled = min(instalment.amount, max(left_to_apply, ZERO))
@@ -124,8 +140,8 @@ def schedule(plan, today=None):
         if open_amount and next_due is None:
             next_due = instalment
         rows.append({"instalment": instalment, "settled": money_round(settled), "open": open_amount, "state": state, "partial": 0 < settled < instalment.amount})
-    remaining = money_round(max(plan.financed_amount - paid - credited, ZERO))
-    return {"rows": rows, "paid": money_round(paid), "credited": money_round(credited), "remaining": remaining, "overdue": money_round(overdue),
+    remaining = money_round(max(plan.financed_amount - paid - credited - settled_later, ZERO))
+    return {"rows": rows, "paid": money_round(paid), "credited": money_round(credited), "settled": money_round(settled_later), "remaining": remaining, "overdue": money_round(overdue),
             "next_due": next_due, "next_open": next((row["open"] for row in rows if row["open"]), ZERO), "done": remaining == 0}
 
 

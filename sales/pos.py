@@ -325,6 +325,12 @@ def today_summary(user):
     # AN8: what came by card is not cash in the drawer.
     summary["card"] = (rows.filter(cashbox=card).aggregate(paid=Sum("paid_now"))["paid"] or 0) if card else 0
     summary["cash"] -= summary["card"]
+    from settlements.services import applied_total
+
+    # HG-069: a deposit taken on another day (or a link / card) that settles one of today's invoices is not still
+    # owed; it is no cash in the drawer today either, so ``cash`` stays paid_now − card.
+    summary["applied"] = applied_total(rows)
+    summary["credit"] -= summary["applied"]
     return summary
 
 

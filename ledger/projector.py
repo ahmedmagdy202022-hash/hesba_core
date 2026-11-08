@@ -168,6 +168,27 @@ class Projector:
         self._fixed_assets()
         self._payroll()
         self._contracts()
+        self._deposits()
+
+    def _deposits(self):
+        """S5 (HG-069): a deposit at booking is the customer's money until its invoice posts.
+
+        The payment ids make ``_place_customer_payment`` book the deposit in customer advances (2105) from its payment
+        date, as a project owner's advance is. The settlement rows (source ``deposit``) move it to receivables on the
+        date of the posted invoice it settles or was forfeited into; when that invoice is cancelled the row is gone
+        and the deposit sits in 2105 again. Both sets are additive beside ``_advances`` and ``_certificates``.
+        """
+
+        from deposits.models import Deposit
+        from settlements.models import InvoiceSettlement, SettlementSource
+
+        self._deposit_payments = set(Deposit.objects.values_list("payment_id", flat=True))
+        self._settled = {}
+        # Only rows backed by a posted payment, as ``settlements.services.applied`` reads them: a cancelled payment's
+        # money went back to the customer, so its row (if one were left) moves nothing between 2105 and 1103.
+        rows = InvoiceSettlement.objects.filter(source=SettlementSource.DEPOSIT, customer_payment__status="posted")
+        for invoice_id, amount in rows.values_list("invoice_id", "amount"):
+            self._settled[invoice_id] = self._settled.get(invoice_id, ZERO) + Decimal(amount)
 
     def _contracts(self):
         """CONTRACT-002 (HG-038): what the project screens add to the journal.
@@ -340,11 +361,19 @@ class Projector:
             if recovery and self.acc.has("customer_advances"):
                 g.add(self.acc["customer_advances"], sign * recovery, g.entity_id)
                 g.add(self.acc["receivable"], -sign * recovery, g.entity_id, customer_id=customer)
+        settled = self._settled.get(g.source_id)
+        if settled and g.money and self.acc.has("customer_advances"):
+            # S5 (HG-069): the deposit held in 2105 pays this invoice on its date. A cancelled invoice has no
+            # settlement row left, so this line never appears with the cancellation's opposite sign.
+            sign = 1 if g.money > 0 else -1
+            customer = self._party(g, "customer_id") or inv.customer_id
+            g.add(self.acc["customer_advances"], sign * settled, g.entity_id)
+            g.add(self.acc["receivable"], -sign * settled, g.entity_id, customer_id=customer)
 
     def _place_customer_payment(self, g):
-        """HG-038: an owner's advance is a liability until certificates recover it."""
+        """HG-038: an owner's advance is a liability until certificates recover it; S5 (HG-069): so is a deposit."""
 
-        if g.source_id not in self._advances or not self.acc.has("customer_advances"):
+        if (g.source_id not in self._advances and g.source_id not in self._deposit_payments) or not self.acc.has("customer_advances"):
             return
         for line in g.lines:
             if line["account"] == self.acc["receivable"]:
@@ -585,6 +614,12 @@ def fingerprint():
                           in PayrollRun.objects.order_by("pk").values_list("pk", "status", "posted_on", "reversed_on")))  # T12
     parts.append(str(PayrollPayment.objects.aggregate(n=Max("pk"))["n"]))
     parts.append(str(Account.objects.count()))
+    from deposits.models import Deposit
+    from settlements.models import InvoiceSettlement
+
+    # S5 (HG-069): a settlement row added or removed, or a deposit changing hands, moves money between 2105 and 1103.
+    parts.append(";".join(f"{pk}{status}" for pk, status in Deposit.objects.order_by("pk").values_list("pk", "status")))
+    parts.append(f"{InvoiceSettlement.objects.count()}:{InvoiceSettlement.objects.aggregate(n=Max('pk'))['n'] or 0}")
     return "|".join(parts)
 
 

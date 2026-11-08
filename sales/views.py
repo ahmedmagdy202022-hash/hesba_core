@@ -337,8 +337,20 @@ def invoice_detail(request, pk):
             can_return=user_has_permission(request.user, "sales.return_sale"),
             einvoice_problems=_einvoice_problems(invoice, _lang(request)),
             short_box=_short_box(invoice, request.user),
+            applied=_applied(invoice),
         ),
     )
+
+
+def _applied(invoice):
+    """HG-069: what a deposit, paid link or gift card already settled on a posted invoice (None when nothing)."""
+
+    from settlements.services import applied_to
+
+    if invoice.status != "posted":
+        return None
+    amount = applied_to(invoice)
+    return {"amount": amount, "remaining": money_round(invoice.remaining_due - amount)} if amount else None
 
 
 def _short_box(invoice, user):

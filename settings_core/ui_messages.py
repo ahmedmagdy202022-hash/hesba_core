@@ -11,6 +11,9 @@ import re
 
 
 EXACT = {
+    # HG-069 (S5): a deposit already applied to an invoice is released by cancelling that invoice.
+    "This payment is a deposit applied to an invoice; cancel that invoice first.":
+        "الدفعة دي عربون اتخصم من فاتورة؛ ألغِ الفاتورة دي الأول.",
     # HG-038: a project's contract figures stay possible.
     "This would leave more retention released than is held on the project; reverse the release first.":
         "كده الإفراج عن ضمان الأعمال هيبقى أكبر من المحتجز في المشروع؛ ألغِ الإفراج الأول.",

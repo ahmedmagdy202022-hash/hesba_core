@@ -68,7 +68,8 @@
       <div class="pr-totals__grand"><dt>{{ words.grand_total }}</dt><dd data-print-total>{{ doc.grand_total|money }} <small>{{ company.currency }}</small></dd></div>
       {% if doc.kind == 'sales_invoice' or doc.kind == 'purchase_invoice' %}
       <div><dt>{{ words.paid }}</dt><dd>{{ doc.paid|money }}</dd></div>
-      {% if doc.remaining %}<div class="pr-totals__due"><dt>{{ words.remaining }}</dt><dd>{{ doc.remaining|money }}</dd></div>{% endif %}
+      {% if doc.applied %}<div data-print-applied><dt>{{ words.paid_in_advance }}</dt><dd>{{ doc.applied|money }}</dd></div><div class="pr-totals__due" data-print-to-collect><dt>{{ words.to_collect }}</dt><dd>{{ doc.to_collect|money }}</dd></div>
+      {% elif doc.remaining %}<div class="pr-totals__due"><dt>{{ words.remaining }}</dt><dd>{{ doc.remaining|money }}</dd></div>{% endif %}
       {% else %}
       {% if doc.refund_cash %}<div><dt>{{ words.refund_cash }}</dt><dd>{{ doc.refund_cash|money }}</dd></div>{% endif %}
       {% if doc.refund_due %}<div><dt>{{ words.refund_due }}</dt><dd>{{ doc.refund_due|money }}</dd></div>{% endif %}
