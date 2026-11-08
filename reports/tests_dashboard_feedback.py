@@ -105,7 +105,10 @@ class ScreenTests(FeedbackSetup):
                 self.assertRegex(value, r"^-?\d+(\.\d+)?( -?\d+(\.\d+)?)?$")
 
     def test_period_switch_sits_in_the_analytics_section(self):
-        body = self.client.get(reverse("dashboard_snapshot")).content.decode()
+        # The default period is month-to-date, which on the 1st of a month is a single day: the hero
+        # then has no trend line to draw (needs 2+ days). A 7-day window always holds the seeded sales
+        # (today and 3 days ago), so this assertion does not depend on the calendar date.
+        body = self.client.get(reverse("dashboard_snapshot"), {"period": "7d"}).content.decode()
         start = body.index('<section class="dash-hero')
         hero = body[start: body.index("</section>", start)]
         self.assertNotIn("dash-periods", hero)

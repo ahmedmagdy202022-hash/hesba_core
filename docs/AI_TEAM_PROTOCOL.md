@@ -3,6 +3,24 @@
 Status: **coordination protocol, not a connected automatic failover service**.
 Goal: preserve delivery continuity when Claude Pro or ChatGPT/Codex usage limits are close to being reached, using the existing subscriptions and GitHub, without API billing or an always-on computer.
 
+## تفويض أحمد — 7 نوفمبر 2026
+
+كلام أحمد: «انا مش عايز اشغل بالي ... عايز ده agent يعمل دوري».
+
+**المتفوَّض فيه للمايسترو (المهمة اللي بتشتغل كل ليلة):**
+- يجرّب كل نشاط على الديمو بداله.
+- يدّي أوكي النشاط، ويتكتب كده: «أوكي <النشاط> — من المايسترو بتفويض أحمد»، ومعاه الدليل. عمره ما يتكتب كأن أحمد نفسه اللي جرّب.
+- يدمج الـ PRs اللي مش فيها منطق محمي، لما الـ CI يخضر ومفيش تعليق مفتوح.
+
+**مش متفوَّض فيه (بيفضل لأحمد):**
+- المنطق المحمي (Hard Gates): أي حاجة بتلمس الخزن، أو القيود ودفتر الحسابات، أو الترحيل، أو تقييم المخزون ومتوسط التكلفة، أو قيود المرتبات، أو تحصيل الفلوس.
+  - وكمان باقي المنطق المحمي في `AGENTS.md`: الجداول والـ migrations، وقلب الصلاحيات، وحسابات التقارير، ومنطق الإقفال.
+  - المايسترو بيجهّز الاقتراح في `docs/AGENT_HARD_GATES.md` والـ PR بتاعه، ومابيدمجهوش.
+  - بيكمّل باقي الشغل، وبيحط الاقتراح في تقرير الخميس علشان أحمد يوافق عليهم مرة واحدة.
+- التصميمات والصور المعتمدة: مفيش تغيير في شكل شاشة معتمدة من غير «موافق» من أحمد.
+
+**المتابعة:** كل ليلة ليها سجل في `docs/MAESTRO_LOG.md` بالتاريخ والدليل.
+
 ## Roles
 
 - **Claude Code — preferred supervisor:** scope and acceptance criteria, handle complex architecture/business-risk decisions, distribute self-contained implementation tasks, review pull requests when capacity is available.
