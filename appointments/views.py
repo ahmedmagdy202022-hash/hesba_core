@@ -4,10 +4,11 @@ from datetime import date, datetime, timedelta
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
+from entities import scope as entity_scope
 from master_data.models import Customer, Item
 from permissions.decorators import require_permission
 from permissions.services import user_has_permission
@@ -160,7 +161,8 @@ def _insured(appointment, lang):
 def detail(request, pk):
     lang = _lang(request)
     words = WORDS[lang]
-    appointment = get_object_or_404(Appointment.objects.select_related("customer", "employee", "service", "invoice"), pk=pk)
+    # HG-074: another entity's appointment answers 404 before any action runs, as every scoped document does (HG-034).
+    appointment = entity_scope.get_or_404(Appointment.objects.select_related("customer", "employee", "service", "invoice"), "entity", pk=pk)
     error = ""
     if request.method == "POST":
         if not user_has_permission(request.user, BOOK):

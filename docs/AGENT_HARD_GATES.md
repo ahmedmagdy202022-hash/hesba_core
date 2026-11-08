@@ -1703,7 +1703,7 @@ The entries below are the protected-logic decisions in the commercial gate, reco
     - chronic prescriptions due for a refill.
   - `key` + day is unique, so nothing is queued twice. A customer reminded of a kind is not reminded again within that kind's `every_days`.
   - A message left waiting moves to the next day with that day's figures; the `every_days` wait starts only once it is sent.
-  - Each entity is gathered on its own and every message keeps its `entity`; the outbox, the counts and send/skip show only the entity being worked in (HG-034). Appointments have no entity, so their messages belong to the main entity. The main entity is gathered as itself from the start, so adding a second entity changes no existing key.
+  - Each entity is gathered on its own and every message keeps its `entity`; the outbox, the counts and send/skip show only the entity being worked in (HG-034). Appointments had no entity then, so their messages belonged to the main entity; since HG-074 each entity's appointments are gathered as its own, and the main entity's keys are unchanged. The main entity is gathered as itself from the start, so adding a second entity changes no existing key.
   - A message still waiting is rewritten with each day's figures. One whose source no longer qualifies (paid, cancelled, moved) is withdrawn; send and skip gather first, so a stale page cannot send it.
   - "Send" marks the message sent and opens WhatsApp with the text written. "Skip" moves it aside.
   - Each message moves once. A second click is refused.
@@ -2024,6 +2024,37 @@ The entries below are the protected-logic decisions in the commercial gate, reco
   - partial and full returns, and reversing a return;
   - cancelling the purchase that settled;
   - the till box, the invoice box and the offline sync, each with the switch off and on.
+
+## HG-074 — Appointments carry their entity (HG-034 gap)
+
+- **Status:** IMPLEMENTED (`claude/maestro-appointments-entity`, 8 Nov 2026) under Ahmed's 8 Nov standing go-ahead to build and merge with an independent review; pending his review.
+- **Problem:** `appointments.Appointment` had no entity, so HG-034's one rule did not reach it:
+  - **wrong books:** `bill()` took the selling store of the entity the *biller* was working in. The owner, working in the main shop, billing a branch's visit put the invoice, its stock movement, its cash and its customer ledger row in the main shop's books, and the branch's performance report never saw the sale;
+  - **URL leak:** the agenda, the detail page and every action on it (`/appointments/<pk>/`), the dashboard's bookings panel, the follow-up digest, the clinic's queue and insights, and the service contracts' visit counts read every appointment whatever entity was chosen, so a branch member saw and could move, bill or reschedule another entity's appointments by their number;
+  - the messages outbox worked around it by gathering appointments for the main entity only (`UNSCOPED`).
+- **Change:**
+  - **Schema:** `Appointment.entity`, a nullable `PROTECT` FK to `entities.Entity` (migration `appointments/0002_appointment_entity`, after `entities/0001` and `master_data/0002`), as `workorders.WorkOrder.entity` is. NULL belongs to the main entity (HG-034), so a single-entity install and every pre-HG-074 row read exactly as before and no back-fill is needed. The migration also copies, for **billed** rows only, the entity of the invoice's selling store (where the bill actually landed), with a no-op reverse; unbilled rows stay NULL.
+  - **Services** (`appointments/services.py`): `scoped()`; `book()` stamps `entity_scope.entity() or None`; `day_agenda()` and `performance()` read through `scoped()`; **`bill()` takes a selling store of the appointment's own entity** (`selling_location_of`, which reads with `working_in(appointment.entity or main_entity())` so NULL takes a main-entity store), whatever entity the biller is working in. An entity with no active selling store refuses with a bilingual message naming the entity, and nothing is made.
+  - **Unchanged by design:** the overlap check and the day's numbering stay group-wide, so one employee has one diary across the group; customers and employees stay shared (HG-034); posting, stock, cost and the ledgers are untouched.
+  - **Views:** `detail` (and so every POST on it: status, bill, insured bill, reschedule) reads through `entity_scope.get_or_404(Appointment, "entity", pk=pk)` before any action runs, so another entity's appointment answers 404, as every scoped document does. There are no other appointment endpoints on `develop`.
+  - **Other readers**, each now through `scoped()` / `entity_scope.scope(..., "entity")`: `reports/activity_panel.py` (today's bookings, the 30-day no-show rate), `reports/followup.py` (today's and tomorrow's appointments), `medical/views.py` (queue check-in from an appointment, the desk's list), `medical/insights.py` (`_booked_patients`), `agreements/visits.py` (`booked_in`), `agreements/services.py` (`visits_in`).
+  - **Messaging:** `UNSCOPED` is empty; `day_agenda()` is scoped, so each entity's appointments are gathered as its own under `working_in(entity)`. The main entity's keys are unchanged (`appointment:<pk>`); a branch's carry `@<entity pk>` as every other kind does.
+  - **Cross-entity visibility** stays exactly what `entities/current.py` allows: the owner sees the whole group or one entity; a member never leaves their entities.
+- **Risk:**
+  - a billed appointment and its invoice now agree on the entity by construction; `medical/insights.py` still reads done appointments by the *invoice's* entity, which is the same answer;
+  - a branch's appointment billed while the branch has no selling store is refused rather than put in the main shop's books, so a new branch must get a selling store before its first bill;
+  - `agreements` visit counts are now per entity: a contract viewed in the whole group counts every visit as before; viewed in one entity, only that entity's.
+- **Follow-ups (out of scope here, recorded for the next task):** the same "store of the entity the user is working in, not the document's" pattern remains in `workorders/services.py` (`_location()` in `deliver`, ~368), `medical/insurance.py` (`bill_insured`, ~272) and `agreements/services.py` (`selling_location()`, ~238). Each should take the store of its own record's entity the way `selling_location_of` does here.
+- **Tests:** `appointments.tests.EntityScopeTests` (8 tests, two entities with their own store and cashbox, a branch member and the owner):
+  - booking stamps the entity; the agenda per entity (service and screen), NULL rows under the main entity, the whole group sees all; booking from the branch's screen is the branch's;
+  - the detail page and every POST action on another entity's appointment answer 404 and leave it unchanged, for the branch member and the owner working in the branch; the whole group and the main entity see it;
+  - billing a branch appointment while working in the main shop: the invoice's selling location and its entity are the branch's; after posting with cash in the branch till, the stock movement's location, the cash movement's cashbox, the customer ledger row (in the branch's `customer_entries_q`, not the main shop's) and every projected journal line are the branch's; a NULL row billed from the branch takes a main-entity store;
+  - an appointment in an entity with no selling store is refused in Arabic and English, and no invoice is made;
+  - performance per entity (main 2 / 600, branch 1 / 300) adds up to the group (3 / 900), and the branch manager's report shows the branch's total;
+  - the same employee still clashes across entities, and numbering runs group-wide;
+  - messaging gathers the main entity's appointments with unchanged keys and the branch's with `@<pk>` under the branch;
+  - the migration's back-fill copies the entity from the bill for billed rows and leaves unbilled rows NULL.
+  - Existing suites `appointments`, `entities`, `messaging`, `reports`, `medical`, `agreements`, `sales` stay green: a single-entity install is unchanged.
 
 ## HG-068 — Second-person approval for cancellations and reversals (Ahmed's note #27)
 

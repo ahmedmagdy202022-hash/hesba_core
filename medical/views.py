@@ -734,7 +734,8 @@ def _queue_guard(request):
 def queue_desk(request):
     from datetime import timedelta
 
-    from appointments.models import Appointment, AppointmentStatus
+    from appointments.models import AppointmentStatus
+    from appointments.services import scoped as scoped_appointments
 
     from . import queue
     from .models import QueueTicket, TicketStatus
@@ -748,7 +749,7 @@ def queue_desk(request):
         action = request.POST.get("action")
         try:
             if action == "check_in":
-                appointment = Appointment.objects.filter(pk=_id(request.POST.get("appointment"))).select_related("employee").first()
+                appointment = scoped_appointments().filter(pk=_id(request.POST.get("appointment"))).select_related("employee").first()  # HG-074
                 patient = appointment.customer if appointment else _patients().filter(pk=_id(request.POST.get("patient"))).first()
                 ticket = queue.check_in(patient, request.user, appointment=appointment, doctor=_doctors().filter(pk=_id(request.POST.get("doctor"))).first(), lang=lang)
                 messages.success(request, words["checked"].format(name=ticket.patient.name, number=ticket.number))
@@ -774,8 +775,8 @@ def queue_desk(request):
         ticket.waited = int((now - ticket.arrived_at).total_seconds() // 60) if ticket.status == TicketStatus.WAITING else None
     in_queue = {ticket.appointment_id for ticket in tickets if ticket.appointment_id}
     start = timezone.make_aware(timezone.datetime.combine(today, timezone.datetime.min.time()))
-    appointments = [a for a in Appointment.objects.filter(starts_at__gte=start, starts_at__lt=start + timedelta(days=1),
-                                                          status__in=(AppointmentStatus.BOOKED, AppointmentStatus.CONFIRMED, AppointmentStatus.ARRIVED))
+    appointments = [a for a in scoped_appointments().filter(starts_at__gte=start, starts_at__lt=start + timedelta(days=1),  # HG-074
+                                                            status__in=(AppointmentStatus.BOOKED, AppointmentStatus.CONFIRMED, AppointmentStatus.ARRIVED))
                     .select_related("customer", "employee").order_by("starts_at") if a.pk not in in_queue]
     query = (request.GET.get("q") or "").strip()
     found = list(_patients().filter(active=True).filter(Q(name__icontains=query) | Q(phone__icontains=query))[:20]) if query else []

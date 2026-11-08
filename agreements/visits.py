@@ -50,11 +50,12 @@ def _bounds(start, end):
 def booked_in(contract, start):
     """The contract's live visits in the period starting ``start``: its customer's appointments for its service that hold time."""
 
-    from appointments.models import HOLDS_TIME, Appointment
+    from appointments.models import HOLDS_TIME
+    from appointments.services import scoped as scoped_appointments
 
     first, last = _bounds(start, services.period_end(contract, start))
-    return Appointment.objects.filter(customer=contract.customer, service=contract.service, status__in=HOLDS_TIME,
-                                      starts_at__gte=first, starts_at__lt=last)
+    return scoped_appointments().filter(customer=contract.customer, service=contract.service, status__in=HOLDS_TIME,  # HG-074
+                                        starts_at__gte=first, starts_at__lt=last)
 
 
 def missing(contract, today=None):
