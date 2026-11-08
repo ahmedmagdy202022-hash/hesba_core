@@ -107,9 +107,7 @@ class StatusMessageTests(WorkshopSetup):
     def test_quoted_message_has_the_shop_the_number_and_the_public_link(self):
         self.go(Status.DIAGNOSED, Status.QUOTED)
         message = self.one("quoted")
-        link = services.customer_link(self.order_)
-        self.assertTrue(link.startswith(f"{BASE}/"))
-        self.assertIn(link, message.text)
+        link = self.link_in(message.text)
         self.assertTrue(message.text.endswith(link))
         self.assertIn(self.order_.number, message.text)
         self.assertIn("Demo Store", message.text)
@@ -120,7 +118,7 @@ class StatusMessageTests(WorkshopSetup):
     def test_ready_message_carries_the_link_too(self):
         self.go(Status.IN_REPAIR, Status.READY)
         message = self.one("ready")
-        self.assertIn(services.customer_link(self.order_), message.text)
+        self.link_in(message.text)
         self.assertIn("جاهز للاستلام", message.text)
 
     def test_delivered_message_has_no_link_and_the_warranty_days(self):
@@ -277,7 +275,7 @@ class StatusMessageTests(WorkshopSetup):
         call = fake.calls[0]
         self.assertEqual((call["body"]["to"], call["body"]["template"]["name"]), ("201001234567", "hesba_workorder"))
         sent_text = call["body"]["template"]["components"][0]["parameters"][1]["text"]
-        self.assertIn(services.customer_link(self.order_), sent_text)
+        self.link_in(sent_text)
         message = self.one("quoted")
         self.assertEqual((message.status, message.channel, message.provider_id), (OutboxStatus.SENT, "api", "wamid.ABC"))
 
@@ -311,6 +309,20 @@ class StatusMessageTests(WorkshopSetup):
     @staticmethod
     def token_of(url):
         return url.split("?")[0].rstrip("/").split("/")[-1]
+
+    def link_in(self, text, order=None):
+        """The customer link in ``text``, checked to open this order.
+
+        A fresh ``customer_link()`` is not compared as a string: the signed token carries the second it was made, so
+        a link built a moment later can differ (seen on CI). The link must start at PUBLIC_BASE_URL and read back
+        as this order's work-order token."""
+
+        from printing.share import read_token
+
+        link = self.url_in(text)
+        self.assertTrue(link.startswith(f"{BASE}/share/"), link)
+        self.assertEqual(read_token(self.token_of(link)), ("work_order", (order or self.order_).pk))
+        return link
 
     def test_the_untouched_arabic_default_is_swapped_for_the_english_one_in_an_english_business(self):
         saved = messaging.save_template(MessageKind.WORKORDER, {"text": messaging.DEFAULT_TEXTS[MessageKind.WORKORDER], "active": "1", "every_days": "1"}, self.owner)
@@ -434,8 +446,7 @@ class StatusMessageTests(WorkshopSetup):
         self.assertTrue(services.can_hold_customer_link(self.owner))
         self.go(Status.DIAGNOSED, Status.QUOTED)
         message = self.one("quoted")
-        link = services.customer_link(self.order_)
-        self.assertIn(link, message.text)
+        link = self.link_in(message.text)
         url = reverse("messaging:outbox")
         self.client.force_login(viewer)
         for lang, mask in (("ar", "[لينك العميل]"), ("en", "[customer link]")):
