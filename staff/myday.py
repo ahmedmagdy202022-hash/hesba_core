@@ -216,7 +216,7 @@ def act(user, kind, pk, to, lang="ar"):
     if kind == "appointment":
         if not can_change_appointments(user):
             raise PermissionDenied(MESSAGES[lang]["forbidden"])
-        appointment = get_object_or_404(Appointment.objects.filter(employee=employee), pk=pk)
+        appointment = get_object_or_404(appt.scoped(Appointment.objects.filter(employee=employee)), pk=pk)
         if to not in APPOINTMENT_MOVES:
             _fail(lang, "bad_move")
         return appt.set_status(appointment, to, user, lang).number
