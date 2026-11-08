@@ -5,9 +5,11 @@ import hashlib
 import struct
 import zlib
 from decimal import Decimal as D
+from unittest import mock, skipUnless
 
 from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import connection
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
 from django.urls import reverse
@@ -38,6 +40,10 @@ def make_png(width=2, height=2):
     rows = b"".join(b"\x00" + b"\x10\x20\x30" * width for _ in range(height))
     header = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
     return b"\x89PNG\r\n\x1a\n" + _chunk(b"IHDR", header) + _chunk(b"IDAT", zlib.compress(rows)) + _chunk(b"IEND", b"")
+
+
+def png_from_chunks(header, *chunks):
+    return b"\x89PNG\r\n\x1a\n" + _chunk(b"IHDR", header) + b"".join(chunks) + _chunk(b"IEND", b"")
 
 
 JPEG = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00" + b"\x00" * 64 + b"\xff\xd9"
@@ -172,6 +178,49 @@ class SignatureTests(AttachmentSetup):
             services.add_signature_png(self.wo, data_url(JPEG), self.owner)
         self.assertEqual(ctx.exception.messages[0], "التوقيع لازم يكون صورة PNG حقيقية.")
         self.assertEqual(Attachment.objects.count(), 0)
+
+    def test_a_png_that_cannot_be_displayed_is_refused_on_both_signature_paths(self):
+        header = struct.pack(">IIBBBBB", 2, 2, 8, 6, 0, 0, 0)  # 2x2 RGBA
+        rgba = b"".join(b"\x00" + b"\xff\x00\x00\xff" * 2 for _ in range(2))
+        canvas = png_from_chunks(header, _chunk(b"IDAT", zlib.compress(rgba)))
+        good_idat = _chunk(b"IDAT", zlib.compress(rgba))
+        bad = {
+            "ihdr and iend only": png_from_chunks(header),
+            "corrupt idat": png_from_chunks(header, _chunk(b"IDAT", b"this is not zlib data at all")),
+            "idat cut short": png_from_chunks(header, _chunk(b"IDAT", zlib.compress(rgba)[:-6])),
+            "too few rows": png_from_chunks(header, _chunk(b"IDAT", zlib.compress(rgba[:-9]))),
+            "too many rows": png_from_chunks(header, _chunk(b"IDAT", zlib.compress(rgba + b"\x00" * 9))),
+            "bad crc": png_from_chunks(header, good_idat[:-1] + b"\x00" if good_idat[-1] else good_idat[:-1] + b"\x01"),
+            "oversize": png_from_chunks(struct.pack(">IIBBBBB", 4001, 2, 8, 6, 0, 0, 0), _chunk(b"IDAT", zlib.compress(b"\x00" * 100))),
+            "zero width": png_from_chunks(struct.pack(">IIBBBBB", 0, 2, 8, 6, 0, 0, 0), _chunk(b"IDAT", zlib.compress(rgba))),
+            "bad depth for colour": png_from_chunks(struct.pack(">IIBBBBB", 2, 2, 4, 6, 0, 0, 0), _chunk(b"IDAT", zlib.compress(rgba))),
+        }
+        self.assertTrue(services._valid_png(canvas))
+        self.assertTrue(services._valid_png(make_png(2, 2)))
+        for label, raw in bad.items():
+            self.assertTrue(raw.startswith(services.PNG) and raw.endswith(services.PNG_END), label)  # passes the old, shallow check
+            self.assertFalse(services._valid_png(raw), label)
+            with self.assertRaises(ValidationError, msg=label):
+                services.add_signature_png(self.wo, data_url(raw), self.owner)
+            with self.assertRaises(ValidationError, msg=label):
+                services.add_attachment(self.wo, raw, self.owner, kind=Kind.SIGNATURE)
+        self.assertEqual(Attachment.objects.count(), 0)
+        for path in (lambda: services.add_signature_png(self.wo, data_url(canvas), self.owner),
+                     lambda: services.add_attachment(self.wo, canvas, self.owner, kind=Kind.SIGNATURE)):
+            self.assertEqual(path().kind, Kind.SIGNATURE)
+        self.assertEqual(Attachment.objects.count(), 2)
+
+    def test_png_checks_cover_depths_palettes_and_interlacing(self):
+        def png(width, height, depth, colour, interlace, rows_size):
+            header = struct.pack(">IIBBBBB", width, height, depth, colour, 0, 0, interlace)
+            return png_from_chunks(header, _chunk(b"IDAT", zlib.compress(b"\x00" * rows_size)))
+        self.assertTrue(services._valid_png(png(5, 3, 1, 0, 0, 3 * (1 + 1))))  # 1-bit grey, 5 px = 1 byte a row
+        self.assertTrue(services._valid_png(png(3, 3, 8, 3, 0, 3 * (1 + 3))))  # palette
+        self.assertTrue(services._valid_png(png(2, 2, 16, 6, 0, 2 * (1 + 16))))
+        self.assertTrue(services._valid_png(png(1, 1, 8, 6, 1, 5)))  # Adam7: only pass 1 has a pixel
+        self.assertFalse(services._valid_png(png(5, 3, 1, 0, 0, 3 * 3)))  # wrong row length for 1-bit
+        self.assertFalse(services._valid_png(png(1, 1, 8, 6, 1, 6)))
+        self.assertTrue(services._valid_png(png(4000, 4000, 1, 0, 0, 4000 * (1 + 500))))  # the bound itself is allowed
 
     def test_the_signature_size_is_capped_before_decoding(self):
         big = make_png(120, 120)
@@ -493,6 +542,38 @@ class CapTests(AttachmentSetup):
         with override_settings(DATABASE_SIZE_LIMIT_MB=1, ATTACHMENTS_GLOBAL_SHARE=0):  # 0 switches the guard off
             services.add_attachment(self.wo, PNG, self.owner)
         self.assertEqual(Attachment.objects.count(), 2)
+
+    def test_the_global_check_takes_a_postgres_advisory_lock_and_still_refuses(self):
+        """On PostgreSQL the global check and the insert are serialized across owners (the SQL is mocked here; the
+        real thing runs in the next test when the database is PostgreSQL)."""
+
+        fake = mock.MagicMock()
+        fake.vendor = "postgresql"
+        room = len(JPEG) * 1.5 / (1024 * 1024)
+        with mock.patch.object(services, "connection", fake), override_settings(DATABASE_SIZE_LIMIT_MB=1, ATTACHMENTS_GLOBAL_SHARE=room):
+            services.add_attachment(self.wo, JPEG, self.owner)
+            with self.assertRaises(ValidationError) as ctx:
+                services.add_attachment(self.order(), JPEG + b"\x01", self.owner, lang="en")
+        self.assertEqual(ctx.exception.messages[0], services.MESSAGES["en"]["global_full"])
+        calls = [c.args for c in fake.cursor.return_value.__enter__.return_value.execute.call_args_list]
+        self.assertEqual(calls, [("SELECT pg_advisory_xact_lock(%s)", [services.GLOBAL_LOCK_KEY])] * 2)  # once per attempt, refused ones too
+        self.assertEqual(Attachment.objects.count(), 1)
+
+    def test_no_advisory_lock_is_issued_off_postgres(self):
+        fake = mock.MagicMock()
+        fake.vendor = "sqlite"
+        with mock.patch.object(services, "connection", fake):
+            services.add_attachment(self.wo, JPEG, self.owner)
+        fake.cursor.assert_not_called()
+
+    @skipUnless(connection.vendor == "postgresql", "advisory locks exist only on PostgreSQL")
+    def test_the_real_advisory_lock_is_taken_on_postgres(self):
+        # (the test case's own transaction keeps the lock until the test ends, so release at commit is not asserted here)
+        services.add_attachment(self.wo, JPEG, self.owner)
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND granted AND pid = pg_backend_pid() AND objid = %s", [services.GLOBAL_LOCK_KEY])
+            self.assertEqual(cursor.fetchone()[0], 1)
+        self.assertEqual(Attachment.objects.count(), 1)
 
 
 class DeleteTests(AttachmentSetup):

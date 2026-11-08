@@ -14,11 +14,13 @@ import base64
 import binascii
 import hashlib
 import re
+import struct
+import zlib
 
 from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import transaction
+from django.db import connection, transaction
 
 from audit.models import AuditEventType, AuditLog
 from entities import scope as entity_scope
@@ -27,6 +29,12 @@ from .models import Attachment, Kind, Stage
 
 PNG = b"\x89PNG\r\n\x1a\n"
 PNG_END = b"\x00\x00\x00\x00IEND\xaeB`\x82"
+PNG_MAX_SIDE = 4000  # a signature pad is a few hundred pixels; refuse anything that would inflate to tens of MB
+# bit depths each colour type may use, and its channel count (PNG spec table 11.1)
+PNG_DEPTHS = {0: (1, 2, 4, 8, 16), 2: (8, 16), 3: (1, 2, 4, 8), 4: (8, 16), 6: (8, 16)}
+PNG_CHANNELS = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}
+ADAM7 = ((0, 0, 8, 8), (4, 0, 8, 8), (0, 4, 4, 8), (2, 0, 4, 4), (0, 2, 2, 4), (1, 0, 2, 2), (0, 1, 1, 2))
+GLOBAL_LOCK_KEY = 7207201  # fixed key of the PostgreSQL advisory lock that serializes the global storage check (HG-072)
 DATA_URL = re.compile(r"^data:image/png;base64,", re.IGNORECASE)
 #: What the code can verify by magic bytes. The settings list can only narrow this.
 SNIFFABLE = ("image/jpeg", "image/png", "image/webp", "application/pdf")
@@ -197,10 +205,70 @@ def _looks_like_markup(raw):
     return head.startswith(b"<") or b"<svg" in head or b"<html" in head or b"<script" in head
 
 
-def _valid_png(raw):
-    """A whole PNG, not just its signature: IHDR first, IEND last."""
+def _png_rows_size(width, height, colour, depth, interlace):
+    """The exact number of bytes the decompressed scanlines of this PNG must have (filter byte included)."""
 
-    return len(raw) > 33 and raw[:8] == PNG and raw[8:16] == b"\x00\x00\x00\rIHDR" and raw.endswith(PNG_END)
+    bits = PNG_CHANNELS[colour] * depth
+    if not interlace:
+        return height * (1 + (width * bits + 7) // 8)
+    total = 0
+    for x0, y0, dx, dy in ADAM7:
+        pass_w, pass_h = (width - x0 + dx - 1) // dx, (height - y0 + dy - 1) // dy
+        if pass_w > 0 and pass_h > 0:
+            total += pass_h * (1 + (pass_w * bits + 7) // 8)
+    return total
+
+
+def _valid_png(raw):
+    """A whole, displayable PNG, checked with the standard library only (no Pillow): signature, IHDR first, IEND
+    last, every chunk's CRC, at least one IDAT, bounded dimensions, and the IDAT stream must inflate (never past
+    the size it has to have) to exactly the number of bytes the header promises."""
+
+    if len(raw) <= 33 or raw[:8] != PNG or not raw.endswith(PNG_END):
+        return False
+    pos, first, header, idat, ended = 8, True, None, [], False
+    while pos + 12 <= len(raw):
+        length, kind = struct.unpack(">I4s", raw[pos:pos + 8])
+        end = pos + 12 + length
+        if end > len(raw):
+            return False
+        body = raw[pos + 8:pos + 8 + length]
+        if zlib.crc32(kind + body) & 0xFFFFFFFF != struct.unpack(">I", raw[end - 4:end])[0]:
+            return False
+        if first:
+            if kind != b"IHDR" or length != 13:
+                return False
+            header, first = body, False
+        elif kind == b"IHDR" or ended:
+            return False
+        elif kind == b"IDAT":
+            idat.append(body)
+        elif kind == b"IEND":
+            ended = True
+            if length != 0:
+                return False
+        pos = end
+    if not ended or pos != len(raw) or not idat:
+        return False
+    width, height, depth, colour, compression, filtering, interlace = struct.unpack(">IIBBBBB", header)
+    if not (0 < width <= PNG_MAX_SIDE and 0 < height <= PNG_MAX_SIDE):
+        return False
+    if depth not in PNG_DEPTHS.get(colour, ()) or compression != 0 or filtering != 0 or interlace not in (0, 1):
+        return False
+    expected = _png_rows_size(width, height, colour, depth, interlace)
+    inflater, buffer, total = zlib.decompressobj(), b"".join(idat), 0
+    try:
+        while buffer and not inflater.eof:
+            out = inflater.decompress(buffer, 65536)
+            total += len(out)
+            if total > expected:
+                return False
+            if not out and len(inflater.unconsumed_tail) == len(buffer):
+                return False  # no progress
+            buffer = inflater.unconsumed_tail
+    except zlib.error:
+        return False
+    return inflater.eof and not inflater.unused_data and total == expected
 
 
 def _clean_name(name):
@@ -255,6 +323,20 @@ def _setting(name, default):
     return getattr(settings, name, default)
 
 
+def _serialize_global_check():
+    """Make the global storage check and the insert that follows one step across ALL owners.
+
+    The per-owner row lock only serializes uploads to the same record; two uploads to different work orders could
+    both pass ``Sum(size)`` and together pass ATTACHMENTS_GLOBAL_SHARE. On PostgreSQL a transaction-scoped advisory
+    lock (released at commit or rollback) closes that gap. SQLite takes one writer lock for the whole database, so
+    writes are already serialized there and nothing more is needed. Always taken after the owner row lock, so the
+    lock order is the same everywhere and cannot deadlock."""
+
+    if connection.vendor == "postgresql":
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT pg_advisory_xact_lock(%s)", [GLOBAL_LOCK_KEY])
+
+
 def _check_room(owner, size, words, lang):
     """Per-record count and bytes, then the share of the database plan all attachments together may take."""
 
@@ -289,6 +371,7 @@ def _store(owner, raw, name, user, kind, stage, words, lang="ar"):
         type(owner).objects.select_for_update().filter(pk=owner.pk).first()  # one upload at a time per record, so the caps hold
         if _rules(owner_label(owner))["closed"](owner):
             raise ValidationError(words["closed"])
+        _serialize_global_check()
         _check_room(owner, len(raw), words, lang)
         attachment = Attachment.objects.create(
             content_type=ContentType.objects.get_for_model(owner), object_id=owner.pk, entity=getattr(owner, "entity", None),
