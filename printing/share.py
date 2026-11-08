@@ -17,7 +17,7 @@ from reports.aging import whatsapp_number
 
 
 SALT = "hesba.share.v1"
-KINDS = ("sales_invoice", "sales_return", "customer_payment", "customer_statement", "sales_quote")
+KINDS = ("sales_invoice", "sales_return", "customer_payment", "customer_statement", "sales_quote", "work_order")
 
 
 def max_age():
@@ -47,6 +47,33 @@ def share_url(request, kind, pk, lang="ar"):
     return request.build_absolute_uri(f"{reverse('share_document', args=[make_token(kind, pk)])}?lang={lang}")
 
 
+def public_url(kind, pk, lang="ar"):
+    """The link built from settings.PUBLIC_BASE_URL (Ahmed's standing rule), never from the request's host.
+
+    ``None`` when PUBLIC_BASE_URL is not set: a link with no address is not one to send."""
+
+    base = getattr(settings, "PUBLIC_BASE_URL", "")
+    if not base:
+        return None
+    return f"{base.rstrip('/')}{reverse('share_document', args=[make_token(kind, pk)])}?lang={lang}"
+
+
 def whatsapp_link(phone, text):
     number = whatsapp_number(phone)
     return f"https://wa.me/{number}?text={quote(text)}" if number else f"https://wa.me/?text={quote(text)}"
+
+
+def expired_page(request, lang="ar"):
+    """The page for a link that is forged, altered or past its days. It knows no order, so it shows only the shop's own identity."""
+
+    from django.shortcuts import render
+
+    from .company import company_details
+
+    company = company_details()
+    response = render(request, "printing/share_expired.html", {"lang": lang, "dir": "ltr" if lang == "en" else "rtl", "company": company,
+                                                              "phone": company["phone"], "whatsapp": whatsapp_number(company["phone"])}, status=404)
+    response["X-Robots-Tag"] = "noindex, nofollow"
+    response["Cache-Control"] = "no-store"
+    response["Referrer-Policy"] = "no-referrer"
+    return response

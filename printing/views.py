@@ -414,9 +414,16 @@ def shared_document(request, token):
 
     found = read_token(token)
     if found is None:
-        return render(request, "printing/share_expired.html", {"lang": _lang(request), "dir": "ltr" if _lang(request) == "en" else "rtl"}, status=404)
+        from .share import expired_page
+
+        return expired_page(request, _lang(request))
     kind, pk = found
     lang = _lang(request)
+    if kind == "work_order":  # S2: status and quote of a work order; approve / refuse have their own endpoints
+        from workorders.models import WorkOrder
+        from workorders.public import page
+
+        return page(request, get_object_or_404(WorkOrder, pk=pk))
     if kind == "sales_invoice":
         invoice = get_object_or_404(SalesInvoice.objects.select_related("customer", "cashbox"), pk=pk)
         doc = _invoice_doc(invoice, "sales_invoice", lang, "customer", "unit_sale_price")

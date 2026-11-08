@@ -6,6 +6,10 @@ and ``sales.services.post_sales_invoice``), so parts leave stock at their
 authoritative movement cost and the customer's account is that of any sale.
 """
 
+import hashlib
+import hmac
+import json
+import logging
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 
@@ -19,6 +23,8 @@ from entities import scope as entity_scope
 from permissions.services import user_has_permission
 
 from .models import OPEN, Status, WorkOrder, WorkOrderEvent, WorkOrderLine
+
+logger = logging.getLogger(__name__)
 
 ZERO = Decimal("0")
 VIEW, MANAGE = "sales.view_sales_invoices", "sales.create_sales_invoice"
@@ -54,7 +60,11 @@ MESSAGES = {
            "warranty_of": "الضمان ده خلص أو الأمر مش متسلّم.", "note_invoice": "أمر شغل {number}: {device}",
            "no_new_customer": "إضافة عميل جديد محتاجة صلاحية إدارة العملاء؛ اختار عميل موجود.", "reopened": "فاتورة التسليم {invoice} اتلغت؛ الأمر رجع جاهز للتسليم.",
            "serial": "«{item}» بيتباع بالسيريال؛ بيعه من فاتورة البيع عشان يتسجّل السيريال.",
-           "refused": "العميل رفض العرض؛ اتشالت بنود العرض. لو فيه رسم كشف، ضيفه كبند."},
+           "refused": "العميل رفض العرض؛ اتشالت بنود العرض. لو فيه رسم كشف، ضيفه كبند.",
+           "link_approved": "العميل وافق على العرض من اللينك", "link_refused": "العميل رفض العرض من اللينك",
+           "link_closed": "العرض ده مبقاش مستني ردّك.", "link_changed": "العرض اتغيّر، افتح اللينك تاني.", "link_decision": "الرد لازم يكون موافقة أو رفض.",
+           "link_done_approved": "تمام، موافقتك اتسجّلت.", "link_done_refused": "تمام، رفضك اتسجّل.", "link_same": "ردّك متسجّل قبل كده.",
+           "no_base_url": "عنوان الموقع مش متظبط (PUBLIC_BASE_URL)؛ ظبّطه الأول عشان اللينك يتبعت."},
     "en": {"customer": "Choose the customer or type their name.", "device": "Enter the device or the service asked for.", "problem": "Enter the fault or what is needed.",
            "date": "The date is not valid.", "days": "Warranty days must be a number from 0 to 3650.", "move": "The order cannot go from “{from_}” to “{to}”.",
            "closed": "This order is closed and cannot change.", "item": "Choose the item or service.", "quantity": "The quantity must be more than zero.",
@@ -65,7 +75,11 @@ MESSAGES = {
            "no_new_customer": "Adding a new customer needs the customer-management permission; choose an existing customer.",
            "reopened": "Delivery invoice {invoice} was cancelled; the order is back to ready for pickup.",
            "serial": "“{item}” is sold by serial number; sell it on a sales invoice so its serial is recorded.",
-           "refused": "The customer refused the quote; its lines were taken off. Add an inspection fee as a line if one is charged."},
+           "refused": "The customer refused the quote; its lines were taken off. Add an inspection fee as a line if one is charged.",
+           "link_approved": "Customer approved the quote via the link", "link_refused": "Customer refused the quote via the link",
+           "link_closed": "This quote is no longer waiting for your answer.", "link_changed": "The quote changed; open the link again.", "link_decision": "The answer must be approve or refuse.",
+           "link_done_approved": "Done, your approval is recorded.", "link_done_refused": "Done, your refusal is recorded.", "link_same": "Your answer was already recorded.",
+           "no_base_url": "The site address (PUBLIC_BASE_URL) is not set; set it first so the link can be sent."},
 }
 
 
@@ -237,10 +251,58 @@ def move(order, to, user, note="", lang="ar"):
         _drop_quote(order, user, lang)
     _event(order, user, note)
     _audit(user, "move", order, {"status": to, "note": note[:255]}, before={"status": before})
+    _notify_customer(order)
     return order
 
 
-def _drop_quote(order, user, lang):
+#: S7: the statuses the customer is messaged about (quote ready, ready for pickup, delivered).
+NOTIFY = (Status.QUOTED, Status.READY, Status.DELIVERED)
+
+
+def _notify_customer(order):
+    """S7: queue the customer's message for the status the order just reached, once the move has committed.
+
+    The message goes through the T9 outbox (messaging.queue_workorder) and carries the S2 link built from
+    PUBLIC_BASE_URL (none when it is not set, or for DELIVERED). A failure here is logged and never breaks the move."""
+
+    if order.status not in NOTIFY:
+        return
+    pk, status = order.pk, order.status
+    transaction.on_commit(lambda: _queue_message(pk, status))
+
+
+def status_link(order, status, lang="ar"):
+    """S7: the S2 link a status message carries: none for DELIVERED, and none (with a warning) without PUBLIC_BASE_URL."""
+
+    if status == Status.DELIVERED:
+        return ""
+    try:
+        return customer_link(order, lang)
+    except ValidationError:
+        logger.warning("S7: PUBLIC_BASE_URL is not set; the %s message of work order %s goes without a link.", status, order.number)
+        return ""
+
+
+def _queue_message(pk, status):
+    try:
+        from messaging.services import queue_workorder, workorder_language
+
+        order = WorkOrder.objects.select_related("customer").get(pk=pk)
+        if order.status != status:
+            return  # moved on again before the first commit ran
+        lang = workorder_language()
+        queue_workorder(order, status, link=status_link(order, status, lang), lang=lang)
+    except Exception:  # noqa: BLE001 - messaging must never break a status move or a delivery
+        logger.exception("S7: could not queue the %s message of work order %s.", status, pk)
+
+
+def by_customer(event):
+    """True for a timeline event the customer made through the S2 link (its ``user`` is None; HG-073)."""
+
+    return bool(event.by_customer)
+
+
+def _drop_quote(order, user, lang, *, customer=False):
     """A refused quote is not charged on pickup: its lines come off, kept in the audit (Codex on #190).
 
     An inspection fee, if the shop charges one, is added afterwards as its own line."""
@@ -251,7 +313,7 @@ def _drop_quote(order, user, lang):
     _audit(user, "drop_quote", order, {}, before={"lines": [{"item": line.item.item_code, "quantity": str(line.quantity), "price": str(line.unit_price),
                                                                "warranty": line.is_warranty} for line in lines]})
     order.lines.all().delete()
-    WorkOrderEvent.objects.create(order=order, status=order.status, note=MESSAGES[lang]["refused"][:255], user=user)
+    WorkOrderEvent.objects.create(order=order, status=order.status, note=MESSAGES[lang]["refused"][:255], user=None if customer else user, by_customer=customer)
 
 
 @transaction.atomic
@@ -350,6 +412,118 @@ def totals(order):
     return {"lines": lines, "parts": parts, "labour": labour, "tax": tax, "total": parts + labour + tax}
 
 
+# ---- S2: the customer's secure link ----
+
+def can_hold_customer_link(user):
+    """Who may see or send the S2 link: counter staff only (the rule for approving a quote on the staff side).
+
+    A technician, even on the order, or a view-only user may not. S7's outbox applies the same check."""
+
+    return can_manage(user)
+
+
+def customer_link(order, lang="ar", user=None):
+    """The link to send the customer for this order (S7 sends it). Built from PUBLIC_BASE_URL only.
+
+    Whoever holds the link can approve the quote as the customer, so a ``user`` asking for it must be
+    counter staff, the same rule as approving the quote on the staff side (a technician or a view-only
+    user may not). A caller with no user is trusted server code (S7's sender)."""
+
+    from printing.share import public_url
+
+    if user is not None and not can_hold_customer_link(user):
+        raise PermissionDenied(MESSAGES[lang]["own"])
+    url = public_url("work_order", order.pk, lang)
+    if url is None:
+        raise ValidationError(MESSAGES[lang]["no_base_url"])
+    return url
+
+
+def _line_text(line):
+    """The description the customer sees for a line (its own text, else the item name)."""
+
+    return (line.description or line.item.item_name)[:255]
+
+
+def _line_price(line):
+    return ZERO if line.is_warranty else line.unit_price
+
+
+def _fingerprint(numbers):
+    """Hash of one snapshot of the quote (``totals()``): the total and each line's item, text, quantity and price.
+
+    It reads only ``numbers``, so the lines a page shows and the fingerprint it carries cannot differ."""
+
+    rows = [[line.item_id, _line_text(line), str(line.quantity), str(_line_price(line))] for line in numbers["lines"]]
+    return hashlib.sha256(json.dumps([str(numbers["total"]), rows]).encode()).hexdigest()[:32]
+
+
+def quote_fingerprint(order):
+    """The quote as the customer sees it: the total and a hash of the lines (item, shown text, quantity, price)."""
+
+    return _fingerprint(totals(order))
+
+
+@transaction.atomic
+def customer_decide(order, decision, lang="ar", fingerprint=None):
+    """The customer approves or refuses a QUOTED order from the link. Returns ``(order, changed)``.
+
+    No account and no staff permission: the signed link is the authority, and it can do only this.
+    ``fingerprint`` is the one the page showed: if the quote changed since, the answer is refused, so
+    the customer only ever approves the quote they saw.
+    The same answer twice is a no-op, but only when the customer gave it first (staff who decided it
+    get "no longer waiting"); any other answer once the order left QUOTED is refused. The order
+    changes status only; no invoice, cash, stock or ledger row is written (the lines of a refused quote
+    come off exactly as when staff mark it refused)."""
+
+    words = MESSAGES[lang]
+    to = {"approve": Status.APPROVED, "refuse": Status.REFUSED}.get(decision)
+    if to is None:
+        raise ValidationError(words["link_decision"])
+    order = WorkOrder.objects.select_for_update().get(pk=order.pk)
+    if order.status == to:
+        latest = order.events.filter(status=to).order_by("-at", "-pk").first()
+        if latest is not None and latest.by_customer:
+            return order, False
+        raise ValidationError(words["link_closed"])
+    if order.status != Status.QUOTED or to not in NEXT[Status.QUOTED]:
+        raise ValidationError(words["link_closed"])
+    if not fingerprint or not hmac.compare_digest(str(fingerprint), quote_fingerprint(order)):
+        raise ValidationError(words["link_changed"])
+    order.status = to
+    order.save(update_fields=["status"])
+    WorkOrderEvent.objects.create(order=order, status=to, note=words["link_approved" if to == Status.APPROVED else "link_refused"], user=None, by_customer=True)
+    if to == Status.REFUSED:
+        _drop_quote(order, None, lang, customer=True)
+    # No personal data: the order id only, no name, phone, IP or user agent.
+    AuditLog.objects.create(event_type=AuditEventType.UPDATE, actor=None, module="workorders", action=f"customer_{decision}",
+                            object_type="workorders.WorkOrder", object_id=str(order.pk), before_data={"status": Status.QUOTED},
+                            after_data={"status": to, "via": "customer_link"})
+    return order, True
+
+
+def public_state(order, lang="ar"):
+    """What the customer's page may show: never cost, notes, technician pay or other orders."""
+
+    from printing.company import company_details
+
+    labels = STATUS_LABELS[lang]
+    timeline = []
+    for event in order.events.all():
+        if timeline and timeline[-1]["status"] == event.status:  # a refused quote writes two entries in a row
+            continue
+        timeline.append({"status": event.status, "label": labels.get(event.status, event.status), "at": event.at.isoformat(), "by_customer": by_customer(event)})
+    numbers = totals(order)  # the one read of the lines: the page, the total and the fingerprint all come from it
+    return {
+        "shop": company_details()["name"], "number": order.number, "device": order.device,
+        "status": order.status, "status_label": labels.get(order.status, order.status), "can_decide": order.status == Status.QUOTED,
+        "timeline": timeline,
+        "lines": [{"description": _line_text(line), "quantity": str(line.quantity),
+                   "unit_price": str(_line_price(line)), "amount": str(line.amount)} for line in numbers["lines"]],
+        "tax": str(numbers["tax"]), "total": str(numbers["total"]), "fingerprint": _fingerprint(numbers),
+    }
+
+
 def reserved_parts():
     """{item id: quantity} planned on open orders: stock that is spoken for until those jobs are delivered."""
 
@@ -421,6 +595,7 @@ def deliver(order, user, *, paid_now="0", cashbox=None, invoice_date=None, lang=
     _event(order, user, invoice.invoice_number if invoice else "")
     _audit(user, "deliver", order, {"invoice": invoice.invoice_number if invoice else "", "total": str(invoice.total_amount if invoice else ZERO),
                                      "warranty_until": str(order.warranty_until or "")})
+    _notify_customer(order)
     return order
 
 

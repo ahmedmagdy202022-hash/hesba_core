@@ -1,0 +1,23 @@
+{% load static %}<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex, nofollow"><meta name="referrer" content="no-referrer">
+<title>{% block title %}{{ company.name }}{% endblock %}</title>
+{% include "partials/brand_icons.html" %}<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}"><link rel="stylesheet" href="{% static 'hesba/css/customer_link.css' %}?v=cl-001">
+</head>
+<body class="cl-body">
+<header class="cl-head"><div class="cl-wrap cl-shop">
+  {% if company.logo %}<img class="cl-logo" src="{{ company.logo }}" alt="" data-company-logo>{% endif %}
+  <div class="cl-shopmain"><div class="cl-shopname">{{ company.name }}</div>{% block sub %}{% endblock %}</div>
+  <nav class="cl-tools" aria-label="{% if lang == 'en' %}Contact and language{% else %}التواصل واللغة{% endif %}">
+    {% if phone %}<a class="cl-chip" href="tel:{{ phone }}">{% if lang == 'en' %}Call{% else %}اتصال{% endif %}</a>{% endif %}
+    {% if whatsapp %}<a class="cl-chip" href="https://wa.me/{{ whatsapp }}">{% if lang == 'en' %}WhatsApp{% else %}واتساب{% endif %}</a>{% endif %}
+    <a class="cl-chip" href="{% if switch_url %}{{ switch_url }}{% else %}?lang={% if lang == 'en' %}ar{% else %}en{% endif %}{% endif %}" hreflang="{% if lang == 'en' %}ar{% else %}en{% endif %}" lang="{% if lang == 'en' %}ar{% else %}en{% endif %}" data-lang-switch>{% if lang == 'en' %}العربية{% else %}English{% endif %}</a>
+  </nav>
+</div></header>
+<div class="cl-wrap">{% block content %}{% endblock %}</div>
+<footer class="cl-foot"><div class="cl-wrap">
+  <p>{% if lang == 'en' %}This link is private to you. Please do not share it.{% else %}اللينك ده خاص بيك. بلاش تشاركه مع حد.{% endif %}</p>
+  {% if company.show_hesba_brand %}<p class="cl-by" data-hesba-brand><img src="{% static 'hesba/brand/hesba-logo.png' %}" alt="Hesba"></p>{% endif %}
+</div></footer>
+</body>
+</html>

@@ -1,5 +1,6 @@
 {% extends "operations/base.html" %}
-{% load hesba_format l10n %}
+{% load hesba_format l10n static %}
+{% block styles %}{{ block.super }}{% if attachments %}<link rel="stylesheet" href="{% static 'hesba/css/attachments.css' %}?v=s1-ui-1">{% endif %}{% endblock %}
 {% block operation_content %}
 <section class="op-title-row"><div><a class="op-back" href="{% url 'workorders:list' %}?lang={{ lang }}">← {{ words.back }}</a>
 <h1><bdi>{{ order.number }}</bdi> — {{ order.device }}</h1>
@@ -44,6 +45,8 @@
 <label class="op-check"><input type="checkbox" name="is_warranty" value="1"{% if order.warranty_of_id %} checked{% endif %}> {{ words.warranty }}</label>
 </div><div class="op-form-actions"><button class="op-secondary" type="submit">{{ words.add }}</button></div></form>{% endif %}
 
+{% include "workorders/_attachments.html" %}
+
 {% if order.status == 'ready' and can_manage %}<h2>{{ words.deliver }}</h2>
 <form class="op-form" method="post" data-deliver>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="deliver"><div class="op-form-grid">
 <div class="op-field"><label for="wo-paid">{{ words.paid_now }}</label><input id="wo-paid" name="paid_now" inputmode="decimal" value="{{ numbers.total|unlocalize }}"></div>
@@ -51,6 +54,7 @@
 </div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.deliver_btn }}</button></div></form>{% endif %}
 
 <h2>{{ words.timeline }}</h2>
-<ul class="wo-timeline" data-timeline>{% for event in events %}<li><bdi>{{ event.at|date:"Y-m-d H:i" }}</bdi> · <strong>{% for key, label in labels.items %}{% if key == event.status %}{{ label }}{% endif %}{% endfor %}</strong> · {{ event.user|person }}{% if event.note %} — {{ event.note }}{% endif %}</li>{% endfor %}</ul>
+<ul class="wo-timeline" data-timeline>{% for event in events %}<li><bdi>{{ event.at|date:"Y-m-d H:i" }}</bdi> · <strong>{% for key, label in labels.items %}{% if key == event.status %}{{ label }}{% endif %}{% endfor %}</strong> · {% if event.by_customer %}{{ words.via_link }}{% else %}{{ event.user|person }}{% endif %}{% if event.note %} — {{ event.note }}{% endif %}</li>{% endfor %}</ul>
 {% if returns %}<h2>{{ words.warranty_return }}</h2><ul>{% for back in returns %}<li><a href="{% url 'workorders:detail' back.pk %}?lang={{ lang }}"><bdi>{{ back.number }}</bdi></a> · <bdi>{{ back.received_at|date:"Y-m-d" }}</bdi></li>{% endfor %}</ul>{% endif %}
+{% if attachments %}<script src="{% static 'hesba/js/attachments.js' %}?v=s1-ui-1" defer></script>{% endif %}
 {% endblock %}

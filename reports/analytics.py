@@ -278,7 +278,12 @@ def build_analytics(held, period_key, today=None, lang="ar"):
     out["daily"] = _chart(days, previous_days)
     out["daily"]["previous_range"] = (previous_days[0][0], previous_days[-1][0]) if previous_days else None
     out["spark"] = {"net_sales": _spark([value for _, value in days])}
-    out["hero"] = _hero(days, today)
+    # The hero needs 2+ days to draw its line and an average day to compare with. On the 1st of the
+    # month "month to date" is one day, so the hero alone falls back to the last 7 days; the cards and
+    # the rest of this section keep the selected period.
+    hero_fallback = len(days) < 2
+    out["hero"] = _hero(daily_sales(today - timedelta(days=6), today) if hero_fallback else days, today)
+    out["hero"]["fallback"] = hero_fallback
     if can("reports.view_profit_report"):
         profit_window = (start, end) if period_key != "today" else (today - timedelta(days=6), today)
         profit_days = daily_profit(*profit_window)

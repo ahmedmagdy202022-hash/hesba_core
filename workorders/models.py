@@ -87,7 +87,9 @@ class WorkOrderEvent(models.Model):
     order = models.ForeignKey(WorkOrder, on_delete=models.CASCADE, related_name="events")
     status = models.CharField(max_length=12, choices=Status.choices)
     note = models.CharField(max_length=255, blank=True)
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+", null=True, blank=True,
+                             help_text="Who moved the order; empty when the customer answered through the link (by_customer).")
+    by_customer = models.BooleanField(default=False, help_text="The customer's own answer through the secure link (S2, HG-073).")
     at = models.DateTimeField(default=timezone.now)
 
     class Meta:

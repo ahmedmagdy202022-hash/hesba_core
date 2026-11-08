@@ -4,10 +4,14 @@ from datetime import date, datetime, timedelta
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.shortcuts import get_object_or_404, redirect, render
+from django.http import JsonResponse
+from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
+from django.views.decorators.http import require_GET, require_POST
 
+from entities import scope as entity_scope
 from master_data.models import Customer, Item
 from permissions.decorators import require_permission
 from permissions.services import user_has_permission
@@ -160,7 +164,8 @@ def _insured(appointment, lang):
 def detail(request, pk):
     lang = _lang(request)
     words = WORDS[lang]
-    appointment = get_object_or_404(Appointment.objects.select_related("customer", "employee", "service", "invoice"), pk=pk)
+    # HG-074: another entity's appointment answers 404 before any action runs, as every scoped document does (HG-034).
+    appointment = entity_scope.get_or_404(Appointment.objects.select_related("customer", "employee", "service", "invoice"), "entity", pk=pk)
     error = ""
     if request.method == "POST":
         if not user_has_permission(request.user, BOOK):
@@ -217,3 +222,66 @@ def performance(request):
     rows = services.performance(date_from, date_to)
     return render(request, "appointments/performance.html", _base(request, rows=rows, date_from=date_from, date_to=date_to,
                                                                   totals={key: sum(row[key] for row in rows) for key in ("done", "sales", "commission")}))
+
+
+def _iso(moment):
+    return timezone.localtime(moment).isoformat()
+
+
+def _json_error(message, status):
+    return JsonResponse({"ok": False, "error": message}, status=status)
+
+
+@require_POST
+@require_permission(VIEW)
+def move(request, pk):
+    """S10: JSON backend of drag-to-reschedule. Same rule as changing an appointment on the detail screen."""
+
+    lang = _lang(request)
+    words = services.MESSAGES[lang]
+    if not user_has_permission(request.user, BOOK):
+        return _json_error(words["forbidden"], 403)
+    appointment = entity_scope.get_or_404(Appointment.objects.all(), "entity", pk=pk)  # HG-074: another entity's appointment answers 404
+    try:
+        new_start = parse_datetime((request.POST.get("start") or "").strip())
+    except ValueError:
+        new_start = None
+    if new_start is None:
+        return _json_error(words["bad_start"], 400)
+    if timezone.is_naive(new_start):
+        new_start = timezone.make_aware(new_start)
+    new_staff = None
+    raw_staff = (request.POST.get("staff") or "").strip()
+    if raw_staff:
+        new_staff = _pick(Employee, raw_staff, active=True)
+        if new_staff is None:
+            return _json_error(words["bad_staff"], 400)
+    try:
+        appointment = services.move(appointment, request.user, new_start, new_staff, lang)
+    except ValidationError as exc:
+        return _json_error(" ".join(exc.messages), 409 if exc.code == "overlap" else 400)
+    return JsonResponse({"ok": True, "id": appointment.pk, "staff": appointment.employee_id, "start": _iso(appointment.starts_at),
+                         "end": _iso(appointment.ends_at), "duration_minutes": appointment.duration_minutes})
+
+
+@require_GET
+@require_permission(VIEW)
+def week_json(request):
+    """S10: the week's appointments per employee for the future drag calendar. No money fields."""
+
+    lang = _lang(request)
+    raw = request.GET.get("start", "")
+    try:
+        first_day = date.fromisoformat(raw) if raw else timezone.localdate()
+    except ValueError:
+        return _json_error(services.MESSAGES[lang]["bad_start"], 400)
+    groups = {}
+    for appointment in services.week_agenda(first_day):
+        key = appointment.employee_id
+        group = groups.setdefault(key, {"staff": key, "name": appointment.employee.name if appointment.employee else "", "appointments": []})
+        group["appointments"].append({
+            "id": appointment.pk, "staff": key, "start": _iso(appointment.starts_at), "end": _iso(appointment.ends_at),
+            "customer": appointment.customer.name, "service": appointment.service.item_name if appointment.service else "",
+            "status": appointment.status, "status_label": choice_label(appointment, "status", lang),
+        })
+    return JsonResponse({"start": first_day.isoformat(), "end": (first_day + timedelta(days=6)).isoformat(), "staff": list(groups.values())})
