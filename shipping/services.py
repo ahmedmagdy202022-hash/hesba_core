@@ -227,7 +227,10 @@ def ship(invoice, courier, user, data=None, lang="ar"):
 
     earlier = Shipment.objects.filter(invoice=invoice, payment__isnull=False).aggregate(total=Sum("cod_amount"))["total"] or ZERO
     returned = SalesReturn.objects.filter(source_invoice=invoice, status=SalesReturnStatus.POSTED).aggregate(total=Sum("due_amount"))["total"] or ZERO
-    left = max(ZERO, invoice.remaining_due - earlier - returned)
+    from settlements.services import applied_to
+
+    # HG-069: nor what a deposit (or a paid link, a gift card) already settles, the same "due" the reports show.
+    left = max(ZERO, invoice.remaining_due - applied_to(invoice) - earlier - returned)
     cod = _amount(data.get("cod_amount"), words, left)
     if cod > left:
         raise ValidationError(words["more"].format(left=f"{left:,.2f}"))

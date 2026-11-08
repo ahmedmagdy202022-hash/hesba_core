@@ -225,6 +225,62 @@ def set_status(appointment, status, user, lang="ar"):
     return appointment
 
 
+def _lock_booking(appointment):
+    return Appointment.objects.select_for_update().get(pk=appointment.pk)
+
+
+@transaction.atomic
+def cancel_with_deposit_policy(appointment, status, user, lang="ar"):
+    """S5 (HG-069): cancel (or mark a no-show) and run the cancellation policy on the booking's deposit, in one transaction.
+
+    The booking row is locked *first*, then its held deposit is read: ``deposits.services.take`` locks the same row, so
+    a deposit taken at the same moment is either committed before this lock (and read here) or waits for it and then
+    finds the booking cancelled and refuses. The status is set before the policy runs (an invalid move touches no
+    money, and a no-show forfeits whatever the hours); late → forfeit into a fee invoice, early → refund through HG-068.
+
+    Returns {"appointment", "deposit", "outcome", "invoice", "detail"}; ``outcome`` is None (no held deposit),
+    "forfeited", "refunded", "refund_pending" (waits for a second person), or one of the refusals that leave the
+    deposit held as the customer's credit: "forfeit_not_allowed", "forfeit_refused" (``detail`` says why),
+    "refund_not_allowed", "refund_blocked" (closed month, ``detail``).
+    """
+
+    from approvals.gate import hold
+    from deposits import services as deposits
+    from permissions.services import user_has_permission
+
+    appointment = _lock_booking(appointment)
+    deposit = deposits.held_for(appointment) if status in (AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW) and deposits.enabled() else None
+    appointment = set_status(appointment, status, user, lang)
+    result = {"appointment": appointment, "deposit": deposit, "outcome": None, "invoice": None, "detail": ""}
+    if deposit is None:
+        return result
+    reason = (f"Booking {appointment.number} cancelled" if lang == "en" else f"إلغاء الحجز {appointment.number}")
+    if deposits.policy(appointment) == "forfeit":
+        if not user_has_permission(user, deposits.SELL):
+            result["outcome"] = "forfeit_not_allowed"
+            return result
+        try:
+            result["invoice"] = deposits.forfeit(deposit, user, lang, reason)  # its own savepoint: a refusal keeps the cancel
+        except ValidationError as exc:
+            result.update(outcome="forfeit_refused", detail=" ".join(exc.messages))
+        else:
+            result["outcome"] = "forfeited"
+        return result
+    if not user_has_permission(user, deposits.RECEIVE):
+        result["outcome"] = "refund_not_allowed"
+        return result
+    blocker = deposits.refund_blocker(deposit, lang)
+    if blocker:
+        result.update(outcome="refund_blocked", detail=blocker)
+        return result
+    if hold(user, "sales.cancel_payment", deposit.payment_id, {"reason": reason}, deposit.payment.payment_number) is not None:  # HG-068
+        result["outcome"] = "refund_pending"
+        return result
+    deposits.refund(deposit, user, reason, lang)
+    result["outcome"] = "refunded"
+    return result
+
+
 @transaction.atomic
 def bill(appointment, user, lang="ar"):
     """The draft sales invoice for a done (or in-progress) appointment; made once."""

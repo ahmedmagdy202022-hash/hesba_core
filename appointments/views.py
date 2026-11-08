@@ -212,14 +212,10 @@ def detail(request, pk):
         action = request.POST.get("action", "")
         try:
             if action == "status":
-                status = request.POST.get("status", "")
-                # Off, the policy does not run: a held deposit stays the customer's credit (HG-069).
-                deposit = deposits.held_for(appointment) if status in (AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW) and deposits.enabled() else None
-                services.set_status(appointment, status, request.user, lang)
+                # S5 (HG-069): the service locks the booking, reads its deposit, moves the status and runs the policy.
+                result = services.cancel_with_deposit_policy(appointment, request.POST.get("status", ""), request.user, lang)
                 messages.success(request, words["moved"])
-                if deposit is not None:  # S5 (HG-069): the cancellation policy decides what happens to the deposit
-                    appointment.refresh_from_db()
-                    _settle_cancelled_deposit(request, appointment, deposit, lang, words)
+                _policy_messages(request, result, lang, words)
             elif action in ("deposit", "deposit_forfeit", "deposit_refund") and not deposits.enabled():
                 raise PermissionDenied("Deposits are switched off.")
             elif action == "deposit":  # S5 (HG-069): a payment on account, linked to this booking
@@ -339,22 +335,26 @@ def _refund(request, deposit, reason, lang, words, refuse):
     messages.success(request, words["refunded"].format(payment=deposit.payment.payment_number))
 
 
-def _settle_cancelled_deposit(request, appointment, deposit, lang, words):
-    """The policy: late (or no-show) forfeits into a fee invoice; early refunds. Either refusal leaves the deposit held."""
+def _policy_messages(request, result, lang, words):
+    """What the cancel button says about the deposit (the service already did the work)."""
 
-    reason = words["cancel_reason"].format(number=appointment.number)
-    if deposits.policy(appointment) == "forfeit":
-        if not user_has_permission(request.user, BOOK):
-            messages.info(request, words["credit_left"])
-            return
-        try:
-            invoice = deposits.forfeit(deposit, request.user, lang, reason)
-        except ValidationError as exc:
-            messages.warning(request, " ".join(exc.messages) + " " + words["credit_left"])
-            return
-        messages.success(request, words["forfeited"].format(number=invoice.invoice_number, amount=invoice.total_amount))
-        return
-    _refund(request, deposit, reason, lang, words, refuse=False)
+    from approvals.gate import SENT
+
+    outcome, deposit = result["outcome"], result["deposit"]
+    if outcome == "forfeited":
+        messages.success(request, words["forfeited"].format(number=result["invoice"].invoice_number, amount=result["invoice"].total_amount))
+    elif outcome == "refunded":
+        messages.success(request, words["refunded"].format(payment=deposit.payment.payment_number))
+    elif outcome == "refund_pending":
+        messages.info(request, SENT[lang])
+    elif outcome == "forfeit_not_allowed":
+        messages.info(request, words["credit_left"])
+    elif outcome == "forfeit_refused":
+        messages.warning(request, result["detail"] + " " + words["credit_left"])
+    elif outcome == "refund_not_allowed":
+        messages.info(request, words["refund_needs_permission"])
+    elif outcome == "refund_blocked":
+        messages.warning(request, result["detail"])
 
 
 @require_permission(REPORT)
