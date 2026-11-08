@@ -2359,3 +2359,14 @@ The entries below are the protected-logic decisions in the commercial gate, reco
   - the extension forced to the detected type, active PDFs refused, an oversize `Content-Length` and a streaming overrun refused with 413, CSRF still enforced;
   - the serve headers, the audit entry, and the unchanged money, stock and ledger counts;
   - Arabic and English error messages.
+
+## HG-076 — Commission on delivered work orders in the technicians' report (S9)
+
+- **Status:** implemented (S9); merged under Ahmed's 8 Nov go-ahead after Codex review; pending his review. A report calculation only: no schema, posting, stock, cashbox or ledger change.
+- **Reason:** the technicians' report (`workorders:report`) showed productivity but no commission for the workshop technician; commission existed only for appointments (`docs/MARKET_PARITY_ROADMAP.md`, item 5). Report calculations are protected logic, so the change is recorded here.
+- **Files:** `workorders/services.py` (`technician_report`), `workorders/views.py` and `templates/workorders/report.html` (three new columns and a note), `workorders/tests_technician_report.py`.
+- **Design:** per technician, for orders delivered in the month, `commission = money_round(Σ appointments.services.net_sales(delivery invoice) × Employee.commission_percent / 100)`. `net_sales` is the helper appointments already use: the posted invoice before tax, less its posted returns (at the invoice's own tax rate). Only posted invoices count; a cancelled delivery reopens the order and earns nothing. An order with no technician is its own row and earns no commission. New row keys: `net_sales`, `rate`, `commission`. The existing keys (`count`, `billed`, `avg_days`, `returns`) are untouched; `billed` still does not net returns.
+- **Open question for Ahmed:** the base is the whole delivery invoice, so parts are included, not only labour. Should commission be on labour (non-stock lines) only? Changing it later is local to `technician_report`.
+- **Risk:** low and display-only. Nothing is paid or posted from this figure (payroll is separate). The overstatement risk is the parts-in-base question above.
+- **Characterization tests (written first, passing before and after):** `ExistingFiguresAreUnchangedTests` pins count, billed before VAT, average days, warranty returns, that billed ignores a posted return, and the no-technician row.
+- **New tests:** `CommissionColumnTests` with explicit amounts at 10 %: 2100 gives 210.00 and 300 gives 30.00; a posted return of a 300 labour line gives net 1800.00 and commission 180.00 with billed still 2100.00; a 0 % employee earns 0.00; no technician earns none; a cancelled delivery earns nothing; the page and its English version show the column.

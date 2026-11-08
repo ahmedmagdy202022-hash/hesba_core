@@ -24,7 +24,7 @@ ACTIVITY_LEAD = {
     "restaurants": ("restaurant", "pos"),
     "medical": ("appointments", "medical"),
     "education": ("education", "classes", "appointments"),
-    "services": ("workorders", "appointments", "packages", "hours", "contracts"),
+    "services": ("my_day", "workorders", "appointments", "packages", "hours", "contracts"),
     "manufacturing": ("manufacturing",),
     "contracting": ("projects",),
 }
@@ -109,6 +109,9 @@ NAV_ITEMS = (
     # SVC-001: a workshop works from its work orders (a technician who has orders sees them too).
     {"key": "workorders", "ar": "أوامر الشغل", "en": "Work orders", "url_name": "workorders:list", "module": "sales_operations", "activity": "services",
      "allow": "workorders.services.sees_work_orders"},
+    # S9: a technician who does not run the counter lands on their own jobs of the day.
+    {"key": "my_day", "ar": "شغلي النهارده", "en": "My jobs today", "url_name": "staff:my_day", "module": "employees_technicians", "activity": "services",
+     "allow": "staff.myday.sees_my_day"},
     {"key": "medical", "ar": "الملفات الطبية", "en": "Patient files", "url_name": "medical:patients", "module": "customers", "activity": "medical", "allow": "medical.services.can_view"},
     {"key": "appointments", "ar": "المواعيد", "en": "Appointments", "url_name": "appointments:agenda", "module": "appointments_visits", "permission": "sales.view_sales_invoices"},
     # MED-007: reception's waiting list, for clinics and medical centres.
@@ -164,6 +167,7 @@ TAB_LABELS = {
     "education": {"ar": "الطلاب", "en": "Students"},
     "classes": {"ar": "حصصي", "en": "Classes"},
     "workorders": {"ar": "الأوامر", "en": "Orders"},
+    "my_day": {"ar": "شغلي", "en": "My jobs"},
     "quotes": {"ar": "العروض", "en": "Quotes"},
     "store": {"ar": "المتجر", "en": "Store"},
     "shipping": {"ar": "الشحن", "en": "Shipping"},
