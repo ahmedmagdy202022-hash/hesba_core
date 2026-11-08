@@ -116,7 +116,16 @@ def _view_model(request, order, lang, message="", message_ok=False):
         "phone": company["phone"], "whatsapp": whatsapp_number(company["phone"]),
         "approve_url": reverse("share_work_order_approve", args=[token]), "refuse_url": reverse("share_work_order_refuse", args=[token]),
         "switch_url": f"{here}?lang={other}", "other_lang": other, "message": message, "message_ok": message_ok,
+        "pay_url": _pay_url(order, lang),
     }
+
+
+def _pay_url(order, lang):
+    """S4 (HG-070): the live payment link of the order's invoice, when the shop sent one (the page never makes one)."""
+
+    from payments.templatetags.hesba_payments import public_pay_url
+
+    return public_pay_url(order.invoice, lang) if order.invoice_id else ""
 
 
 def _html(request, order, lang, message="", status=200):

@@ -17,6 +17,7 @@ from reports.views import home
 from accounts.login_guard import GuardedLoginView, login_verify
 from printing import views as printing_views
 from workorders import public as workorders_public
+from payments import views as payments_views
 from settings_core.setup_views import after_login, root_redirect, setup_complete, setup_modules, setup_questions, setup_review, sub_activity_step
 
 
@@ -38,6 +39,13 @@ urlpatterns = [
     # S2: the customer approves or refuses a work order's quote from the same signed link (public, CSRF-protected).
     path("share/<str:token>/approve/", login_not_required(workorders_public.decide), {"action": "approve"}, name="share_work_order_approve"),
     path("share/<str:token>/refuse/", login_not_required(workorders_public.decide), {"action": "refuse"}, name="share_work_order_refuse"),
+    # S4 (HG-070): the online payment link. Public, gated by a signed token; only the webhook is CSRF-exempt (HMAC-verified).
+    path("pay/webhook/paymob/", login_not_required(payments_views.webhook), name="pay_webhook_paymob"),
+    path("pay/return/paymob/", login_not_required(payments_views.pay_return), name="pay_return_paymob"),
+    path("pay/mock/<str:reference>/", login_not_required(payments_views.mock_checkout), name="pay_mock_checkout"),
+    path("pay/<str:token>/", login_not_required(payments_views.pay_page), name="pay_page"),
+    path("pay/<str:token>/go/", login_not_required(payments_views.pay_go), name="pay_go"),
+    path("pay/<str:token>/done/", login_not_required(payments_views.pay_done), name="pay_done"),
     path("start/", after_login, name="after_login"),
     path("setup/", TemplateView.as_view(template_name="setup/setup_gate.html"), name="setup_gate"),
     path("setup/activity/", TemplateView.as_view(template_name="setup/activity_selection.html"), name="setup_activity"),
@@ -72,6 +80,7 @@ urlpatterns = [
     path("cheques/", include("cheques.urls")),
     path("store/", include("onlinestore.urls")),
     path("shipping/", include("shipping.urls")),
+    path("payments/", include("payments.urls")),  # S4 (HG-070): the staff side of payment links
     path("approvals/", include("approvals.urls")),  # FB-27
     path("ereceipt/", include("ereceipt.urls")),
     path("expenses/", include("expenses.urls")),
