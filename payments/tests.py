@@ -346,23 +346,81 @@ class CallbackTests(PayLinkSetup):
         self.assertEqual((summary["credit"], summary["applied"]), (D("600.00"), D("400.00")))
         self.assertTrue(ledger_reports.reconciliation()["ok"])
 
-    def test_an_amount_different_from_the_link_records_what_was_taken(self):
+    def test_an_amount_different_from_the_link_is_flagged_and_posts_no_money(self):
         invoice = self.invoice("1000.00")
         link = services.create_link(invoice, self.owner, "400")
-        response, _ = self.callback(link, amount_cents=45000)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(self.money(invoice), {"customer": D("550.00"), "gateway": D("450.00"), "payments": 1, "settled": D("450.00"), "outstanding": D("550.00")})
+        for cents in (45000, 39999, 120000):
+            with self.subTest(cents=cents):
+                response, _ = self.callback(link, amount_cents=cents)
+                self.assertEqual((response.status_code, response.json()["result"]), (200, "amount_mismatch"))
+        self.assertEqual(self.money(invoice), {"customer": D("1000.00"), "gateway": ZERO, "payments": 0, "settled": ZERO, "outstanding": D("1000.00")})
         link.refresh_from_db()
-        self.assertEqual((link.status, link.paid_amount), (LinkStatus.MISMATCH, D("450.00")))
-        self.assertTrue(GatewayTransaction.objects.get().needs_review)
-        self.assertTrue(ledger_reports.reconciliation()["ok"])
+        self.assertEqual((link.status, link.paid_amount), (LinkStatus.NEW, None))
+        self.assertEqual(GatewayTransaction.objects.filter(needs_review=True, customer_payment=None).count(), 3)
 
-    def test_more_than_the_outstanding_settles_the_invoice_and_leaves_the_rest_on_account(self):
+    def test_another_currency_is_flagged_and_posts_no_money(self):
+        invoice = self.invoice("400.00")
+        link = services.create_link(invoice, self.owner)
+        response, _ = self.callback(link, currency="USD")
+        self.assertEqual((response.status_code, response.json()["result"]), (200, "currency"))
+        self.assertEqual(self.money(invoice)["payments"], 0)
+        self.assertTrue(GatewayTransaction.objects.get().needs_review)
+
+    def test_a_signed_callback_for_another_order_cannot_be_steered_by_merchant_order_id(self):
+        """``order.merchant_order_id`` is not covered by Paymob's HMAC: only the signed ``order.id`` picks the link."""
+
+        target = self.invoice("400.00")
+        link = services.create_link(target, self.owner)
+        payload, signature = self.provider().callback(987654321, services.to_cents(link.amount), transaction_id=1717, merchant_reference=link.reference)
+        response = self.post_callback(payload, signature)
+        self.assertEqual((response.status_code, response.json()["result"]), (200, "unknown_order"))
+        txn = GatewayTransaction.objects.get()
+        self.assertEqual((txn.link, txn.customer_payment, txn.needs_review), (None, None, True))
+        self.assertEqual(self.money(target), {"customer": D("400.00"), "gateway": ZERO, "payments": 0, "settled": ZERO, "outstanding": D("400.00")})
+        link.refresh_from_db()
+        self.assertEqual(link.status, LinkStatus.NEW)
+
+    def test_a_link_above_what_is_left_at_confirmation_settles_the_rest_and_leaves_the_excess_on_account(self):
+        from sales.services import record_customer_payment
+        from settlements.services import settle
+
         invoice = self.invoice("1000.00")
         link = services.create_link(invoice, self.owner)
-        self.callback(link, amount_cents=120000)
-        self.assertEqual(self.money(invoice), {"customer": D("-200.00"), "gateway": D("1200.00"), "payments": 1, "settled": D("1000.00"), "outstanding": ZERO})
+        counter = record_customer_payment("CP-COUNTER", TODAY, self.customer, self.cash, D("200.00"), self.owner)
+        settle(invoice, counter, D("200.00"), "deposit")  # collected at the counter after the link went out
+        response, _ = self.callback(link)
+        self.assertEqual(response.json()["result"], "posted_settled_800.00")
+        self.assertEqual(self.money(invoice), {"customer": D("-200.00"), "gateway": D("1000.00"), "payments": 2, "settled": D("1000.00"), "outstanding": ZERO})
+        self.assertEqual(InvoiceSettlement.objects.get(customer_payment__payment_number__startswith="MOCKPAY-").amount, D("800.00"))
         self.assertTrue(ledger_reports.reconciliation()["ok"])
+
+    def test_expiry_never_overwrites_a_link_paid_meanwhile(self):
+        invoice = self.invoice("300.00")
+        link = services.create_link(invoice, self.owner)
+        PaymentLink.objects.filter(pk=link.pk).update(expires_at=timezone.now() - timedelta(minutes=1))
+        stale = PaymentLink.objects.get(pk=link.pk)  # read as "new" by expiry...
+        self.callback(link)  # ...while the confirmation commits "paid"
+        real_filter, calls = PaymentLink.objects.filter, []
+
+        def first_read_is_stale(*args, **kwargs):
+            if not calls:
+                calls.append(1)
+                return [stale]
+            return real_filter(*args, **kwargs)
+
+        with patch.object(PaymentLink.objects, "filter", side_effect=first_read_is_stale):
+            services.expire_stale()
+        link.refresh_from_db()
+        self.assertEqual((link.status, link.paid_amount), (LinkStatus.PAID, D("300.00")))
+        self.assertFalse(AuditLog.objects.filter(module="payments", action="expire_link", object_id=str(link.pk)).exists())
+        # A link that really is stale is still expired, and audited once.
+        other = services.create_link(self.invoice("50.00"), self.owner)
+        PaymentLink.objects.filter(pk=other.pk).update(expires_at=timezone.now() - timedelta(minutes=1))
+        services.expire_stale()
+        services.expire_stale()
+        other.refresh_from_db()
+        self.assertEqual(other.status, LinkStatus.EXPIRED)
+        self.assertEqual(AuditLog.objects.filter(module="payments", action="expire_link", object_id=str(other.pk)).count(), 1)
 
     def test_a_link_paid_after_the_invoice_was_settled_otherwise_stays_on_account(self):
         invoice = self.invoice("500.00")

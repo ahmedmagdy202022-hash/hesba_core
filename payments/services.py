@@ -155,13 +155,16 @@ def gateway_boxes(entity=None):
 
 
 def expire_stale(invoice=None, now=None):
-    rows = PaymentLink.objects.filter(status=LinkStatus.NEW, expires_at__lte=now or timezone.now())
+    """Expire live links past their time. Each one by a conditional update (``status = new`` in the WHERE), so a link
+    a confirmation marked paid in the meantime is never overwritten; only a link actually expired is audited."""
+
+    now = now or timezone.now()
+    lookup = {"status": LinkStatus.NEW, "expires_at__lte": now}
     if invoice is not None:
-        rows = rows.filter(invoice=invoice)
-    for link in rows:
-        link.status = LinkStatus.EXPIRED
-        link.save(update_fields=["status", "updated_at"])
-        _audit("expire_link", "payments.PaymentLink", link.pk, {"status": LinkStatus.EXPIRED, "why": "time"}, before={"status": LinkStatus.NEW})
+        lookup["invoice"] = invoice
+    for link in list(PaymentLink.objects.filter(**lookup)):
+        if PaymentLink.objects.filter(pk=link.pk, status=LinkStatus.NEW).update(status=LinkStatus.EXPIRED, updated_at=now):
+            _audit("expire_link", "payments.PaymentLink", link.pk, {"status": LinkStatus.EXPIRED, "why": "time"}, before={"status": LinkStatus.NEW})
 
 
 def live_link(invoice):
@@ -319,11 +322,12 @@ def handle_callback(payload, received_hmac, provider=None):
 
 
 def _find_link(provider, callback):
-    rows = PaymentLink.objects.filter(provider=provider.code)
-    link = rows.filter(gateway_order_id=callback.order_id).first() if callback.order_id else None
-    if link is None and callback.merchant_reference:
-        link = rows.filter(reference=callback.merchant_reference).first()
-    return link
+    """Only the gateway's own order id (``order.id``, covered by the HMAC) picks the link. ``merchant_order_id`` is not
+    signed, so it never steers a callback for another order to one of our invoices (Codex #315 P1)."""
+
+    if not callback.order_id:
+        return None
+    return PaymentLink.objects.filter(provider=provider.code, gateway_order_id=callback.order_id).exclude(gateway_order_id="").first()
 
 
 def _transaction_row(provider, callback, link):
@@ -401,6 +405,10 @@ def _transition(provider, txn, link, callback, created):
     if callback.currency.upper() != link.currency:
         _flag(txn, f"currency {callback.currency} is not taken: nothing recorded")
         return "currency"
+    if int(callback.amount_cents) != to_cents(link.amount):
+        # Codex #315 P1: the gateway's order was made for exactly the link's amount; anything else is a person's job.
+        _flag(txn, f"confirmed {from_cents(callback.amount_cents)} for a link of {link.amount}: nothing recorded, check by hand")
+        return "amount_mismatch"
     return _post(provider, txn, link, callback)
 
 
@@ -420,7 +428,7 @@ def _post(provider, txn, link, callback):
             txn.save()
             settled = _settle(link, payment, amount)
             if not already_paid:
-                link.status = LinkStatus.PAID if amount == link.amount else LinkStatus.MISMATCH
+                link.status = LinkStatus.PAID  # the amount equals the link's: a different one never reaches here
                 link.paid_amount = amount
                 link.save(update_fields=["status", "paid_amount", "updated_at"])
     except (ValidationError, IntegrityError) as error:
@@ -430,8 +438,6 @@ def _post(provider, txn, link, callback):
         return "posting_failed"
     if already_paid:
         _flag(txn, "a second confirmed payment on a link already paid: recorded on account")
-    elif amount != link.amount:
-        _flag(txn, f"confirmed {amount} for a link of {link.amount}: recorded what was taken")
     return "posted" if settled == amount else f"posted_settled_{settled}"
 
 
