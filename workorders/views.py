@@ -1,9 +1,10 @@
 """SVC-001 screens: the orders board, receiving a device, one order, the intake receipt, and the technicians' report."""
 
+from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import Count, Q
-from django.http import Http404
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -32,7 +33,7 @@ WORDS = {
         "report": "تقرير الفنيين", "report_intro": "الأوامر اللي اتسلمت في الشهر لكل فني: عددها، وإيرادها قبل الضريبة، ومتوسط الأيام في المحل، واللي رجع في الضمان.",
         "month": "الشهر", "go": "عرض", "count": "اتسلّم", "billed": "الإيراد", "avg_days": "متوسط الأيام", "returns": "رجع في الضمان",
         "late_list": "متأخر عن ميعاده", "nobody": "من غير فني", "terms": "الجهاز بيتسلّم بالإيصال ده. الأجهزة اللي متستلمش خلال 90 يوم من «جاهز» المحل مش مسؤول عنها.",
-        "signature": "توقيع العميل", "note": "ملاحظة", "view_only": "تقدر تشوف الأمر بس.",
+        "signature": "توقيع العميل", "note": "ملاحظة", "via_link": "العميل من اللينك", "view_only": "تقدر تشوف الأمر بس.",
     },
     "en": {
         "title": "Work orders", "intro": "Every device or request that comes in: when it was received, who has it, where it stands, and who collects it.",
@@ -52,7 +53,7 @@ WORDS = {
         "report": "Technicians", "report_intro": "Orders delivered in the month per technician: how many, revenue before VAT, average days in the shop, and warranty returns.",
         "month": "Month", "go": "Show", "count": "Delivered", "billed": "Revenue", "avg_days": "Avg. days", "returns": "Warranty returns",
         "late_list": "Past the promised date", "nobody": "No technician", "terms": "The device is collected with this receipt. The shop is not responsible for devices left more than 90 days after they are ready.",
-        "signature": "Customer's signature", "note": "Note", "view_only": "You can view this order only.",
+        "signature": "Customer's signature", "note": "Note", "via_link": "Customer (via link)", "view_only": "You can view this order only.",
     },
 }
 
@@ -214,6 +215,19 @@ def detail(request, pk):
         can_work=services.can_manage(request.user) or is_own,
         under_warranty=order.status == Status.DELIVERED and order.warranty_until and order.warranty_until >= today,
         returns=order.warranty_returns.all()))
+
+
+def customer_link(request, pk):
+    """S2: the customer's link for this order, as JSON, for counter staff who may view it (S7 will send it)."""
+
+    _guard(request)
+    lang = _lang(request)
+    order = get_object_or_404(services.visible_to(request.user), pk=pk)
+    try:
+        url = services.customer_link(order, lang, user=request.user)  # counter staff only: the link can approve as the customer
+    except ValidationError as error:
+        return JsonResponse({"ok": False, "message": error.messages[0]}, status=409, json_dumps_params={"ensure_ascii": False})
+    return JsonResponse({"ok": True, "url": url, "days": getattr(settings, "SHARE_LINK_DAYS", 60)}, json_dumps_params={"ensure_ascii": False})
 
 
 def receipt(request, pk):

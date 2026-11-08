@@ -17,7 +17,7 @@ from reports.aging import whatsapp_number
 
 
 SALT = "hesba.share.v1"
-KINDS = ("sales_invoice", "sales_return", "customer_payment", "customer_statement", "sales_quote")
+KINDS = ("sales_invoice", "sales_return", "customer_payment", "customer_statement", "sales_quote", "work_order")
 
 
 def max_age():
@@ -45,6 +45,17 @@ def read_token(token):
 
 def share_url(request, kind, pk, lang="ar"):
     return request.build_absolute_uri(f"{reverse('share_document', args=[make_token(kind, pk)])}?lang={lang}")
+
+
+def public_url(kind, pk, lang="ar"):
+    """The link built from settings.PUBLIC_BASE_URL (Ahmed's standing rule), never from the request's host.
+
+    ``None`` when PUBLIC_BASE_URL is not set: a link with no address is not one to send."""
+
+    base = getattr(settings, "PUBLIC_BASE_URL", "")
+    if not base:
+        return None
+    return f"{base.rstrip('/')}{reverse('share_document', args=[make_token(kind, pk)])}?lang={lang}"
 
 
 def whatsapp_link(phone, text):

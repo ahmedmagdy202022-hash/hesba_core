@@ -2,6 +2,7 @@
 
 from datetime import time, timedelta
 from decimal import Decimal as D
+from unittest import mock
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.test import TestCase
@@ -341,3 +342,151 @@ class SixthReviewTests(SecondReviewTests):
         self.assertEqual(services.report(user=other), {})
         keeper = person(RoleCode.STOCK_KEEPER, "pr_keeper")
         self.assertEqual(services.report(user=keeper), {})
+
+
+class PayItAllTests(PromotionSetup):
+    """The invoice form's "pay it all": paid now follows the total the server charges after the promotion, the coupon
+    and the invoice discount, however old the figure on the page is. A typed amount (no flag) is never changed."""
+
+    def setUp(self):
+        super().setUp()
+        self.location = make_location(location_code="SHOP", is_default=True, is_selling_location=True)
+        self.cashbox = make_cashbox(cashbox_code="TILL", is_default=True)
+        for item in (self.sneaker, self.sock):
+            stock_in(item, self.location, 20, "10.00", movement_date=TODAY)
+            recalculate_item_average_cost(item)
+        self.promo(name="الأحذية 20%", percent=D("20"), category=self.shoes)
+        self.customer = make_customer(customer_code="PR-PAY", name="عميل")
+        self.client.force_login(self.owner)
+        open_test_shift(self.owner, self.cashbox)
+
+    def data(self, **fields):
+        return {"lang": "ar", "invoice_number": "", "invoice_date": TODAY.isoformat(), "customer": self.customer.pk, "selling_location": self.location.pk,
+                "cashbox": self.cashbox.pk, "paid_now": "500.00", "discount_amount": "0", "tax_amount": "0",
+                "lines-TOTAL_FORMS": "1", "lines-INITIAL_FORMS": "0", "lines-MIN_NUM_FORMS": "0", "lines-MAX_NUM_FORMS": "1000",
+                "lines-0-item": self.sneaker.pk, "lines-0-quantity": "1", "lines-0-unit_sale_price": "500.00", "lines-0-line_discount_amount": "0", **fields}
+
+    def pay_all_invoice(self, **fields):
+        response = self.client.post(reverse("sales:create"), self.data(**{"pay_full": "1", "paid_now": "9999.00", **fields}))
+        self.assertEqual(response.status_code, 302, getattr(response, "context", None) and response.context.get("form") and response.context["form"].errors)
+        return SalesInvoice.objects.get()
+
+    def test_the_page_carries_the_flag_and_the_script_follows_the_quote(self):
+        from django.contrib.staticfiles import finders
+
+        page = self.client.get(reverse("sales:create") + "?lang=ar")
+        self.assertContains(page, 'name="pay_full"')
+        self.assertContains(page, "hesba/js/invoice_form.js?v=t5-payfull2")
+        js = open(finders.find("hesba/js/invoice_form.js"), encoding="utf-8").read()
+        for needed in ("if (payAllOn) {", "event.isTrusted", "payAll(false)", "quotePromotion();  // ask for the promotion now"):
+            self.assertIn(needed, js)
+        self.assertNotContains(self.client.get(reverse("purchases:create") + "?lang=ar"), 'name="pay_full"')
+
+    def test_pay_all_with_a_stale_total_saves_paid_equal_to_the_discounted_total(self):
+        response = self.client.post(reverse("sales:create"), self.data(pay_full="1"))  # 500 is the total before the 20% promotion
+        self.assertEqual(response.status_code, 302)
+        invoice = SalesInvoice.objects.get()
+        self.assertEqual((invoice.total_amount, invoice.paid_now, invoice.remaining_due), (D("400.00"), D("400.00"), D("0.00")))
+        self.assertEqual(invoice.promotion_use.discount, D("100.00"))
+
+    def test_pay_all_with_a_coupon(self):
+        Promotion.objects.create(name="كوبون", kind=PromotionKind.AMOUNT_OVER, amount=D("150.00"), min_total=D("300.00"), coupon_code="VIP")
+        invoice = self.pay_all_invoice(coupon="VIP")  # the coupon beats the 20%: 500 - 150
+        self.assertEqual((invoice.total_amount, invoice.paid_now, invoice.remaining_due), (D("350.00"), D("350.00"), D("0.00")))
+
+    def test_pay_all_with_an_invoice_discount(self):
+        invoice = self.pay_all_invoice(discount_amount="50.00")
+        self.assertEqual((invoice.total_amount, invoice.paid_now, invoice.remaining_due), (D("350.00"), D("350.00"), D("0.00")))
+
+    def test_pay_all_with_vat(self):
+        from settings_core import capabilities as caps
+        from settings_core.models import ClientProfile
+
+        caps.set_capability_enabled(ClientProfile.get_active(), "vat", True)
+        invoice = self.pay_all_invoice()
+        self.assertGreater(invoice.tax_amount, 0)
+        self.assertEqual((invoice.total_amount, invoice.paid_now, invoice.remaining_due), (D("400.00") + invoice.tax_amount, D("400.00") + invoice.tax_amount, D("0.00")))
+
+    def test_without_the_flag_nothing_changes(self):
+        too_much = self.client.post(reverse("sales:create"), self.data())  # still the overpaid message
+        self.assertEqual(too_much.status_code, 200)
+        self.assertContains(too_much, "المدفوع أكبر من إجمالي الفاتورة")
+        self.assertFalse(SalesInvoice.objects.exists())
+        partly = self.client.post(reverse("sales:create"), self.data(paid_now="150.00", pay_full=""))  # a typed part payment stays
+        self.assertEqual(partly.status_code, 302)
+        invoice = SalesInvoice.objects.get()
+        self.assertEqual((invoice.total_amount, invoice.paid_now, invoice.remaining_due), (D("400.00"), D("150.00"), D("250.00")))
+
+    def test_a_sale_without_a_promotion_pays_in_full_as_before(self):
+        Promotion.objects.all().delete()
+        invoice = self.pay_all_invoice()
+        self.assertEqual((invoice.total_amount, invoice.paid_now, invoice.remaining_due), (D("500.00"), D("500.00"), D("0.00")))
+
+    def test_a_failed_save_keeps_pay_all_on(self):
+        from django.contrib.staticfiles import finders
+
+        bad = self.client.post(reverse("sales:create"), self.data(pay_full="1", coupon="WRONG"))
+        self.assertEqual(bad.status_code, 200)
+        self.assertContains(bad, 'name="pay_full" value="1"')
+        self.assertFalse(SalesInvoice.objects.exists())
+        self.assertContains(self.client.get(reverse("sales:create") + "?lang=ar"), 'name="pay_full" value=""')  # a fresh form starts off
+        js = open(finders.find("hesba/js/invoice_form.js"), encoding="utf-8").read()
+        self.assertIn("var payAllOn = !!payFull && payFull.value === '1';", js)  # and the script picks it up on load
+
+    def test_pay_full_matches_the_service_total_in_every_case(self):
+        """Guards drift between the view's ``_pay_full_amount`` and the total ``sales/services.py`` computes: for each case
+        the amount the view works out (recorded as it returns) must be what the draft really totals, so paid now equals
+        the total and nothing is left due. If the service's arithmetic ever changes, this fails."""
+        from sales import views
+        from settings_core import capabilities as caps
+        from settings_core.models import ClientProfile
+        from units.models import ItemUnit
+        from loyalty.models import EntryKind, LoyaltySettings, PointsEntry
+
+        caps.set_capability_enabled(ClientProfile.get_active(), "loyalty", True)
+        LoyaltySettings.objects.update_or_create(pk=1, defaults={"amount_per_point": D("10.00"), "point_value": D("0.50"), "min_points": 20, "expiry_months": 0})
+        PointsEntry.objects.create(customer=self.customer, kind=EntryKind.EARN, points=1000, entry_date=TODAY)
+        Promotion.objects.create(name="كوبون", kind=PromotionKind.AMOUNT_OVER, amount=D("150.00"), min_total=D("300.00"), coupon_code="VIP")
+        carton = ItemUnit.objects.create(item=self.sneaker, name_ar="كرتونة", name_en="Carton", factor=D("12"), sale_price=D("5000.00"))
+        many = {"lines-TOTAL_FORMS": "3",
+                "lines-0-item": self.sock.pk, "lines-0-quantity": "3", "lines-0-unit_sale_price": "33.33", "lines-0-line_discount_amount": "0",
+                "lines-1-item": self.sock.pk, "lines-1-quantity": "0.333", "lines-1-unit_sale_price": "33.33", "lines-1-line_discount_amount": "0",
+                "lines-2-item": self.sneaker.pk, "lines-2-quantity": "1.5", "lines-2-unit_sale_price": "99.99", "lines-2-line_discount_amount": "0.01"}
+        unit = {"lines-0-unit": carton.pk, "lines-0-quantity": "3", "lines-0-unit_sale_price": "5000.00"}
+        cases = {
+            "plain": {},
+            "invoice discount": {"discount_amount": "33.33"},
+            "coupon": {"coupon": "VIP"},
+            "points": {"redeem_points": "40"},
+            "points and coupon": {"redeem_points": "40", "coupon": "VIP", "discount_amount": "10.00"},
+            "unit conversion": unit,
+            "unit conversion and discount": dict(unit, discount_amount="12.34"),
+            "rounded lines": many,
+            "rounded lines and discount": dict(many, discount_amount="7.77"),
+        }
+        recorded = []
+        real = views._pay_full_amount
+
+        def spy(header, lines):
+            recorded.append(real(header, lines))
+            return recorded[-1]
+
+        for promotion in (False, True):
+            Promotion.objects.filter(coupon_code="").update(active=promotion)
+            for vat in (False, True):
+                caps.set_capability_enabled(ClientProfile.get_active(), "vat", vat)
+                for name, fields in cases.items():
+                    with self.subTest(case=name, promotion=promotion, vat=vat):
+                        recorded.clear()
+                        before = set(SalesInvoice.objects.values_list("pk", flat=True))
+                        with mock.patch("sales.views._pay_full_amount", spy):
+                            response = self.client.post(reverse("sales:create"), self.data(**{"pay_full": "1", "paid_now": "99999.00", **fields}))
+                        errors = getattr(response, "context", None) and response.context.get("form") and response.context["form"].errors
+                        self.assertEqual(response.status_code, 302, errors)
+                        invoice = SalesInvoice.objects.exclude(pk__in=before).get()
+                        self.assertEqual(len(recorded), 1)
+                        self.assertEqual(recorded[0], invoice.total_amount)
+                        self.assertEqual(invoice.paid_now, invoice.total_amount)
+                        self.assertEqual(invoice.remaining_due, D("0.00"))
+                        if vat:
+                            self.assertGreater(invoice.tax_amount, 0)

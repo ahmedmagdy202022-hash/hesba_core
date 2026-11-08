@@ -1,4 +1,5 @@
 import logging
+from decimal import Decimal
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
@@ -39,6 +40,7 @@ from .services import (
     record_customer_payment,
 )
 from config.form_errors import add_form_error
+from config.money import money_round
 from config.paging import page_of
 
 
@@ -153,6 +155,20 @@ def invoice_list(request):
                                                       can_create=user_has_permission(request.user, "sales.create_sales_invoice")))
 
 
+def _pay_full_amount(header, lines):
+    """The total the draft below will charge (lines after the promotion, less the discount and points, plus VAT), for
+    the "pay it all" button. Reads the figures only; ``create_sales_draft`` still works out and checks its own."""
+
+    subtotal = sum((money_round(line["quantity"] * line["unit_sale_price"] - (line.get("line_discount_amount") or 0)) for line in lines), Decimal("0"))
+    if vat_enabled():
+        from taxes.services import compute_lines
+
+        tax = money_round(sum((row[3] for row in compute_lines(lines)), Decimal("0")))
+    else:
+        tax = header.get("tax_amount") or Decimal("0")
+    return max(money_round(subtotal - (header.get("discount_amount") or 0) + tax), Decimal("0"))
+
+
 @require_permission("sales.create_sales_invoice")
 def invoice_create(request):
     from orders.services import invoice_initial, link_invoice, order_for_invoice
@@ -177,6 +193,8 @@ def invoice_create(request):
                 points, points_off = loyalty.redeem(form.cleaned_data.get("customer"), request.POST.get("redeem_points"), loyalty.lines_total(line_data), lang)
                 if points:
                     form.cleaned_data["discount_amount"] = (form.cleaned_data.get("discount_amount") or 0) + points_off
+                if request.POST.get("pay_full") == "1":  # "pay it all": the page's figure may predate the promotion, so paid now follows the server's total
+                    form.cleaned_data["paid_now"] = _pay_full_amount(form.cleaned_data, line_data)
                 def create():
                     invoice = create_sales_draft_with_tax(form.cleaned_data, line_data, request.user)
                     attach_sale_serials(invoice, line_data)
@@ -229,7 +247,7 @@ def invoice_create(request):
     offer_quick_add(form, request.user, lang)  # FB2-QUICKPARTY: + new supplier / customer / warehouse
     return render(request, "sales/form.html", _context(request, form=form, line_formset=line_formset, can_post=True, item_catalog=item_catalog(sale_prices=True, purchase_prices=False), scan_words=scan_words(lang), price_book=price_book(), tax_rates=rates_by_item(), units=units_catalog(), from_order=from_order, from_prescription=from_prescription,
                                                       promotions_on=promotions.enabled(), running_promotions=promotions.running() if promotions.enabled() else [],
-                                                      coupon=request.POST.get("coupon", "") if request.method == "POST" else copy_coupon, loyalty_on=loyalty.enabled(), loyalty_rules=loyalty.rules() if loyalty.enabled() else None,
+                                                      coupon=request.POST.get("coupon", "") if request.method == "POST" else copy_coupon, pay_full="1" if request.method == "POST" and request.POST.get("pay_full") == "1" else "", loyalty_on=loyalty.enabled(), loyalty_rules=loyalty.rules() if loyalty.enabled() else None,
                                                       redeem_points=request.POST.get("redeem_points", "") if request.method == "POST" else copy_points))
 
 

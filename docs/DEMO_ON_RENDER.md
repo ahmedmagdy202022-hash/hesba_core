@@ -41,7 +41,7 @@
    | `FEEDBACK_NOTIFY_EMAIL` | إيميلك | يوصلك إيميل بكل ملاحظة. محتاج كمان `EMAIL_HOST` و `EMAIL_HOST_USER` و `EMAIL_HOST_PASSWORD` (شوف `docs/DAILY_EMAIL_SETUP.md`). |
 
 5. **Create Web Service** واستنى لحد ما يكتب **Live** (أول مرة 3–5 دقايق).
-6. افتح الرابط اللي فوق (زي `https://hesba-demo.onrender.com`). صفحة الدخول بتقول البيانات: `owner` أو `cashier`، والباسورد `Demo-pass-1`.
+6. افتح الرابط اللي فوق (زي `https://hesba-demo.onrender.com`). الرابط الرسمي بعدين `https://demo.hesba.nuzmtech.com` (خطوات الربط في `docs/DOMAINS.md`). صفحة الدخول بتقول البيانات: `owner` أو `cashier`، والباسورد `Demo-pass-1`.
 
 ## تقرا الملاحظات منين
 - افتح: `https://<اسم-الخدمة>.onrender.com/demo/feedback/inbox/?key=<FEEDBACK_VIEW_TOKEN>`

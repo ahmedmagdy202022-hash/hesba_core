@@ -10,4 +10,5 @@ urlpatterns = [
     path("report/", views.report, name="report"),
     path("<int:pk>/", views.detail, name="detail"),
     path("<int:pk>/receipt/", views.receipt, name="receipt"),
+    path("<int:pk>/link/", views.customer_link, name="customer_link"),
 ]

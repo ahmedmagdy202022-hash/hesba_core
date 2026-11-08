@@ -10,7 +10,7 @@ Copy `.env.example` to `.env` on the server and fill it in. Never commit `.env`.
 |---|---|
 | `SECRET_KEY` | long random string (`python -c "import secrets; print(secrets.token_urlsafe(50))"`) |
 | `DEBUG` | `False` in production |
-| `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS` | your domain |
+| `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`, `PUBLIC_BASE_URL` | your domain under `nuzmtech.com` (see `docs/DOMAINS.md`), e.g. `client.hesba.nuzmtech.com` |
 | `DATABASE_BACKEND` + `POSTGRES_*` | or leave SQLite and set `SQLITE_PATH` |
 | `ADMIN_URL` | a private path for the Django admin (superusers only); not `admin/` |
 | `BACKUP_DIR`, `BACKUP_KEEP` | where nightly backups go, and how many to keep (default 14) |
