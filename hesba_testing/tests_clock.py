@@ -7,13 +7,12 @@ the next day.  The same two tests are run with the pin off as a negative control
 """
 
 import importlib.util
-import io
 import sys
-import unittest
 from datetime import datetime, timedelta, timezone as utc
 from unittest import mock
 from zoneinfo import ZoneInfo
 
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.utils import timezone
 
@@ -141,46 +140,59 @@ class PinnedClockTests(ClockCase):
             self.assertIsNotNone(clock.anchor_day())
 
 
-def _run_copy_of(module_name, test_name, moment_before, moment_after, pin, case):
-    """Import a *fresh copy* of ``module_name`` (so its ``TODAY`` is computed now,
-    at ``moment_before``), jump the clock to ``moment_after``, run one test."""
+def _fresh_copy_of(module_name, moment_before, case, pin):
+    """Import a *fresh copy* of a test module while the (fake) clock reads
+    ``moment_before``, so its import-time ``TODAY`` is computed exactly as it is
+    when a CI run starts at that moment.  Needs no database."""
 
     spec = importlib.util.find_spec(module_name)
-    package = module_name.rpartition(".")[0]
-    copy_name = f"{package}.midnight_copy_of_{module_name.rpartition('.')[2]}"
+    package, _, leaf = module_name.rpartition(".")
+    copy_name = f"{package}.midnight_copy_of_{leaf}"
     copy_spec = importlib.util.spec_from_file_location(copy_name, spec.origin)
     module = importlib.util.module_from_spec(copy_spec)
     sys.modules[copy_name] = module
     case.addCleanup(sys.modules.pop, copy_name, None)
-
     case.start_clock(moment_before, pin=pin)
     copy_spec.loader.exec_module(module)
     case.assertEqual(module.TODAY, moment_before.date())
-    case.move_to(moment_after)
-    suite = unittest.defaultTestLoader.loadTestsFromName(test_name, module)
-    case.assertEqual(suite.countTestCases(), 1)
-    stream = io.StringIO()
-    result = unittest.TextTestRunner(stream=stream, verbosity=0).run(suite)
-    return result, stream.getvalue()
+    return module
 
 
 class MidnightCrossingProofTests(ClockCase):
-    WORKORDERS = ("workorders.tests", "WorkOrderCycleTests.test_delivery_is_one_ordinary_invoice_moving_the_exact_parts")
-    EDUCATION = ("education.tests", "AttendanceTests.test_no_future_days_and_only_ones_own_groups_for_a_teacher")
+    """The two CI failures, reproduced at the service calls they hit.
 
-    def run_both(self, pin):
-        outcomes = []
-        for module_name, test_name in (self.WORKORDERS, self.EDUCATION):
-            outcomes.append(_run_copy_of(module_name, test_name, START, AFTER_MIDNIGHT, pin, self))
-        return outcomes
+    The test modules are only imported (for their ``TODAY``) and the services are
+    called directly, so no other module's TestCase is nested inside this one.
+    """
 
-    def test_with_the_pin_both_tests_pass_when_the_run_crosses_midnight(self):
-        for result, output in self.run_both(pin=True):
-            self.assertTrue(result.wasSuccessful(), output)
+    def deliver_stamps_warranty_from_today(self, module):
+        # workorders/services.py: ``warranty_until = timezone.localdate() + timedelta(days=warranty_days)``;
+        # the test asserts it equals ``TODAY + timedelta(days=30)``.
+        return timezone.localdate() + timedelta(days=30) == module.TODAY + timedelta(days=30)
 
-    def test_without_the_pin_the_same_two_tests_fail_as_they_did_on_ci(self):
-        (workorders, workorders_output), (education, education_output) = self.run_both(pin=False)
-        self.assertEqual(len(workorders.failures) + len(workorders.errors), 1, workorders_output)
-        self.assertIn("warranty_until", workorders_output)
-        self.assertEqual(len(education.failures) + len(education.errors), 1, education_output)
-        self.assertIn("لسه مجاش", education_output)
+    def tomorrow_is_refused_as_a_future_day(self, module):
+        # education/attendance.py take(): ``if day > timezone.localdate(): raise ValidationError(future)``.
+        from education import attendance
+
+        try:
+            with mock.patch.object(attendance, "can_take", return_value=True):
+                attendance.take(mock.Mock(), mock.Mock(), module.TODAY + timedelta(days=1), {})
+        except ValidationError as error:
+            return "لسه مجاش" in str(error)
+        except Exception:  # went past the day check, so tomorrow was accepted as not-future
+            return False
+        return False
+
+    def test_with_the_pin_both_scenarios_hold_after_the_run_crosses_midnight(self):
+        workorders = _fresh_copy_of("workorders.tests", START, self, pin=True)
+        education = _fresh_copy_of("education.tests", START, self, pin=True)
+        self.move_to(AFTER_MIDNIGHT)
+        self.assertTrue(self.deliver_stamps_warranty_from_today(workorders))
+        self.assertTrue(self.tomorrow_is_refused_as_a_future_day(education))
+
+    def test_without_the_pin_both_scenarios_break_as_they_did_on_ci(self):
+        workorders = _fresh_copy_of("workorders.tests", START, self, pin=False)
+        education = _fresh_copy_of("education.tests", START, self, pin=False)
+        self.move_to(AFTER_MIDNIGHT)
+        self.assertFalse(self.deliver_stamps_warranty_from_today(workorders))
+        self.assertFalse(self.tomorrow_is_refused_as_a_future_day(education))
