@@ -2100,6 +2100,23 @@ The entries below are the protected-logic decisions in the commercial gate, reco
   - **Where:** the board gets «اسحب من Shopify / WooCommerce», and the command `pull_store_orders --location CODE` can run from cron.
   - **Tests:** `onlinestore/tests_connect.py`.
 
+## HG-073 — S2: the customer's decision on a work order, from a secure link
+
+- **Status:** OPEN PROPOSAL (needs Main Control's review before merge). It is additive: two column changes on one table, no data moved.
+- **Change:** `workorders.WorkOrderEvent` (migration `workorders/0002_workorderevent_by_customer`):
+  - `user` becomes nullable (`null=True, blank=True`, still `PROTECT`);
+  - `by_customer` is a new `BooleanField(default=False)`.
+- **Why:** the customer approves or refuses a QUOTED order from a signed link, with no account. `WorkOrderEvent.user` was required and the repo has no system-actor pattern. The alternative was to file the event under the order's creator, which states a false actor in the audit trail and shows that employee's name on the staff timeline. So the customer's event is saved with `user=None, by_customer=True`, and the staff timeline shows «العميل من اللينك» / "Customer (via link)".
+- **Accounting:** none. A decision changes the order's status only, through `workorders.services.customer_decide()`. No invoice, cash, stock or ledger row is written. A refusal takes the quote's lines off, as a staff refusal does; the lines are kept in the audit.
+- **Audit:** an `AuditLog` row with `actor=None`, the order id and the status change only (no name, phone, IP or user agent).
+- **Risk:**
+  - code that assumes `event.user` is set. The only reader today is the staff timeline (`templates/workorders/detail.html`, through the `person` filter, which already returns an empty text for no user); the other writers always pass a user. Any new reader must check `by_customer` first;
+  - existing rows keep their user and `by_customer=False`; the migration changes nothing in them;
+  - the public link can only approve or refuse a QUOTED order. It is signed, expires after `SHARE_LINK_DAYS`, and is built from `PUBLIC_BASE_URL`, never the request host.
+- **Rate limiting:** none added; the repo has no reusable helper, the token is signed and a repeated answer is a no-op.
+- **Files:** `workorders/models.py`, `workorders/migrations/0002_workorderevent_by_customer.py`, `workorders/services.py`, `workorders/public.py` (new), `workorders/views.py`, `workorders/urls.py`, `templates/workorders/detail.html` (one label), `printing/share.py`, `printing/views.py`, `config/urls.py`.
+- **Tests:** `workorders/tests_customer_link.py`. They cover wrong-kind, other-order, forged and expired tokens; no cost or notes on the page; approve once and idempotent; refuse only from QUOTED; no other status allowed; CSRF enforced; `user=None` and `by_customer=True` on the event; the staff timeline label in both languages; existing staff events unchanged; the audit row with the order id only; no invoice, cash, stock or ledger row; the link from `PUBLIC_BASE_URL`; Arabic and English messages. Added after the security review: only counter staff (the staff approval rule, `can_manage`) get the link (technician and view-only user: 403; cashier, manager and owner: 200); the quote fingerprint (total plus a hash of item, quantity and price per line) that the POST must echo, so a quote changed after the page was read is refused and the status stays; and a repeat is "already recorded" only when the customer gave the first answer, otherwise "no longer waiting".
+
 ## HG-066 — E-receipts for till sales (T8, offline part)
 
 - **Status:** BUILT in T8 (`claude/t8-ereceipt`); additive only. Sending to the authority still needs the device's credentials on the receipt portal.
