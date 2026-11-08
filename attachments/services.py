@@ -42,14 +42,23 @@ MESSAGES = {
            "size": "حجم الملف أكبر من المسموح ({limit}).", "type": "نوع الملف مش مسموح. المسموح: صور JPG أو PNG أو WEBP وملفات PDF.",
            "markup": "ملفات SVG وHTML مش مسموحة.", "photo": "الصورة لازم تكون ملف صورة (JPG أو PNG أو WEBP).",
            "signature": "التوقيع لازم يكون صورة PNG حقيقية.", "data_url": "بيانات التوقيع مش صحيحة؛ لازم تكون صورة PNG مشفرة base64.",
-           "no_file": "اختار ملف الأول.", "no_signature": "ارسم التوقيع الأول."},
+           "no_file": "اختار ملف الأول.", "no_signature": "ارسم التوقيع الأول.",
+           "read_only": "إضافة المرفقات للكاونتر أو للفني صاحب الأمر بس.", "closed": "الأمر ده اتقفل؛ مينفعش يتضاف عليه مرفقات.",
+           "max_count": "وصلت للحد الأقصى من المرفقات على السجل ده ({count}).", "max_owner_bytes": "مجموع حجم مرفقات السجل ده هيعدّي الحد ({limit}).",
+           "global_full": "مساحة المرفقات في قاعدة البيانات امتلت؛ كلّم صاحب الحساب.", "pdf_active": "ملف PDF فيه سكربت أو ملف مدمج أو أمر تشغيل تلقائي، ومش مسموح.",
+           "delete_denied": "مسح المرفقات للمدير أو الكاونتر بس.", "signature_kept": "توقيع أمر اتسلّم مينفعش يتمسح."},
     "en": {"denied": "You may not use attachments on this record.", "not_found": "The attachment or the record was not found.",
            "kind": "The attachment kind must be photo, document or signature.", "stage": "The attachment stage must be receive, deliver or other.",
            "empty": "The file is empty or was not sent.", "size": "The file is larger than allowed ({limit}).",
            "type": "This file type is not allowed. Allowed: JPG, PNG or WEBP images and PDF files.", "markup": "SVG and HTML files are not allowed.",
            "photo": "A photo must be an image file (JPG, PNG or WEBP).", "signature": "A signature must be a real PNG image.",
            "data_url": "The signature data is not valid; it must be a base64 PNG image.", "no_file": "Choose a file first.",
-           "no_signature": "Draw the signature first."},
+           "no_signature": "Draw the signature first.",
+           "read_only": "Only the counter, or the technician who owns the order, may add attachments.", "closed": "This order is closed; attachments can no longer be added.",
+           "max_count": "This record has reached the most attachments allowed ({count}).", "max_owner_bytes": "The attachments on this record would pass the size limit ({limit}).",
+           "global_full": "The space for attachments in the database is full; tell the account owner.",
+           "pdf_active": "This PDF contains a script, an embedded file or an auto-run action, and is not allowed.",
+           "delete_denied": "Only a manager or the counter may delete attachments.", "signature_kept": "The signature of a delivered order cannot be deleted."},
 }
 
 
@@ -58,6 +67,8 @@ class OwnerNotFound(LookupError):
 
 
 # ---- who owns what: a small registry, so appointments and customers can join later ----
+# Each owner type gives: who SEES it, who may ADD/DELETE (the rule its own screens use for changes), whether it is CLOSED
+# (no more attachments) and whether a signature on it is final.
 
 def _work_orders(user):
     from workorders import services as work
@@ -70,8 +81,38 @@ def _work_orders(user):
     return work.visible_to(user)
 
 
-#: ``app_label.modelname`` -> function(user) giving the owners that user may see (it raises PermissionDenied for no right at all).
-OWNERS = {"workorders.workorder": _work_orders}
+def _work_order_can_attach(user, order):
+    """The work orders' own rule for any change: the counter, or the technician who owns the order."""
+
+    from workorders import services as work
+
+    technician = work.technician_of(user)
+    return work.can_manage(user) or (technician is not None and order.technician_id == technician.pk)
+
+
+def _work_order_closed(order):
+    """Delivered or cancelled. An order still open, a ready one waiting to be handed over included, takes attachments,
+    so the delivery-stage photo and signature are taken before the hand-over."""
+
+    from workorders.models import OPEN, WorkOrder
+
+    return not WorkOrder.objects.filter(pk=order.pk, status__in=OPEN).exists()  # fresh from the database, not the caller's copy
+
+
+def _work_order_signature_final(order):
+    from workorders.models import Status, WorkOrder
+
+    return WorkOrder.objects.filter(pk=order.pk, status=Status.DELIVERED).exists()
+
+
+def _work_order_can_delete(user, order):
+    from workorders import services as work
+
+    return work.can_manage(user)
+
+
+OWNERS = {"workorders.workorder": {"visible": _work_orders, "can_attach": _work_order_can_attach, "closed": _work_order_closed,
+                                   "can_delete": _work_order_can_delete, "signature_final": _work_order_signature_final}}
 
 
 def owner_label(owner_or_model):
@@ -79,10 +120,14 @@ def owner_label(owner_or_model):
     return f"{meta.app_label}.{meta.model_name}"
 
 
-def visible_owners(label, user):
+def _rules(label):
     if label not in OWNERS:
         raise OwnerNotFound(label)
-    return OWNERS[label](user)
+    return OWNERS[label]
+
+
+def visible_owners(label, user):
+    return _rules(label)["visible"](user)
 
 
 def get_owner(label, pk, user):
@@ -94,13 +139,17 @@ def get_owner(label, pk, user):
     return owner
 
 
-def _check_owner(owner, user, words):
+def _check_owner(owner, user, words, write=False):
+    """Seeing is not enough to change: a write also needs the owner's own change right."""
+
     try:
         allowed = visible_owners(owner_label(owner), user).filter(pk=owner.pk).exists()
     except OwnerNotFound:
         allowed = False
     if not allowed:
         raise PermissionDenied(words["denied"])
+    if write and not _rules(owner_label(owner))["can_attach"](user, owner):
+        raise PermissionDenied(words["read_only"])
 
 
 # ---- reading the file ----
@@ -160,6 +209,18 @@ def _clean_name(name):
     return name[:255]
 
 
+def _final_name(name, real, sha, kind):
+    """The stored name always carries the extension of the DETECTED type, whatever the client called it."""
+
+    stem = name.rsplit(".", 1)[0] if "." in name else name
+    stem = stem.strip(". ")[:200] or f"{kind}-{sha[:8]}"
+    return f"{stem}.{EXTENSIONS[real]}"
+
+
+#: PDF names that run something or hide a file. A plain, case-sensitive bytes search (the PDF spec's names are case-sensitive).
+PDF_ACTIVE = (b"/JavaScript", b"/JS", b"/OpenAction", b"/Launch", b"/EmbeddedFile")
+
+
 def _read(upload, limit, words, lang):
     """(bytes, filename, declared mime) from bytes or an uploaded file, never reading past the cap."""
 
@@ -187,7 +248,30 @@ def _check_kind_stage(kind, stage, words):
         raise ValidationError(words["stage"])
 
 
-def _store(owner, raw, name, user, kind, stage, words):
+def _setting(name, default):
+    return getattr(settings, name, default)
+
+
+def _check_room(owner, size, words, lang):
+    """Per-record count and bytes, then the share of the database plan all attachments together may take."""
+
+    from django.db.models import Count, Sum
+
+    mine = Attachment.objects.filter(content_type=ContentType.objects.get_for_model(owner), object_id=owner.pk).aggregate(n=Count("id"), total=Sum("size"))
+    max_count = int(_setting("ATTACHMENTS_MAX_PER_OWNER", 20))
+    if mine["n"] >= max_count:
+        raise ValidationError(words["max_count"].format(count=max_count))
+    max_owner = int(_setting("ATTACHMENTS_MAX_BYTES_PER_OWNER", 25 * 1024 * 1024))
+    if (mine["total"] or 0) + size > max_owner:
+        raise ValidationError(words["max_owner_bytes"].format(limit=_human(max_owner, lang)))
+    limit_mb, share = _setting("DATABASE_SIZE_LIMIT_MB", None), float(_setting("ATTACHMENTS_GLOBAL_SHARE", 0.2))
+    if limit_mb and share > 0:
+        used = Attachment.objects.aggregate(total=Sum("size"))["total"] or 0
+        if used + size > int(limit_mb) * 1024 * 1024 * share:
+            raise ValidationError(words["global_full"])
+
+
+def _store(owner, raw, name, user, kind, stage, words, lang="ar"):
     real = sniff(raw)
     if real is None or real not in allowed_types():
         raise ValidationError(words["markup"] if _looks_like_markup(raw) else words["type"])
@@ -195,11 +279,17 @@ def _store(owner, raw, name, user, kind, stage, words):
         raise ValidationError(words["photo"])
     if kind == Kind.SIGNATURE and (real != "image/png" or not _valid_png(raw)):
         raise ValidationError(words["signature"])
+    if real == "application/pdf" and any(token in raw for token in PDF_ACTIVE):
+        raise ValidationError(words["pdf_active"])
     sha = hashlib.sha256(raw).hexdigest()
     with transaction.atomic():
+        type(owner).objects.select_for_update().filter(pk=owner.pk).first()  # one upload at a time per record, so the caps hold
+        if _rules(owner_label(owner))["closed"](owner):
+            raise ValidationError(words["closed"])
+        _check_room(owner, len(raw), words, lang)
         attachment = Attachment.objects.create(
             content_type=ContentType.objects.get_for_model(owner), object_id=owner.pk, entity=getattr(owner, "entity", None),
-            kind=kind, stage=stage, original_filename=name or f"{kind}-{sha[:8]}.{EXTENSIONS[real]}", content_type_name=real,
+            kind=kind, stage=stage, original_filename=_final_name(name, real, sha, kind), content_type_name=real,
             size=len(raw), sha256=sha, data=raw, uploaded_by=user)
         AuditLog.objects.create(
             event_type=AuditEventType.CREATE, actor=user, module="attachments", action="add_attachment", object_type="attachments.Attachment",
@@ -215,19 +305,19 @@ def add_attachment(owner, uploaded_file_or_bytes, user, kind=Kind.PHOTO, stage=S
     """Keep a photo, a document or a signature on ``owner``. Returns the Attachment."""
 
     words = _words(lang)
-    _check_owner(owner, user, words)
+    _check_owner(owner, user, words, write=True)
     _check_kind_stage(kind, stage, words)
     raw, name, declared = _read(uploaded_file_or_bytes, max_bytes(kind), words, lang)
     if declared in MARKUP_TYPES or name.lower().endswith(MARKUP_EXTENSIONS):
         raise ValidationError(words["markup"])
-    return _store(owner, raw, name, user, kind, stage, words)
+    return _store(owner, raw, name, user, kind, stage, words, lang)
 
 
 def add_signature_png(owner, data_url, user, stage=Stage.OTHER, lang="ar"):
     """Keep the customer's signature, drawn on a canvas and sent as a ``data:image/png;base64,`` URL."""
 
     words = _words(lang)
-    _check_owner(owner, user, words)
+    _check_owner(owner, user, words, write=True)
     _check_kind_stage(Kind.SIGNATURE, stage, words)
     text = str(data_url or "").strip()
     if not text:
@@ -247,7 +337,7 @@ def add_signature_png(owner, data_url, user, stage=Stage.OTHER, lang="ar"):
         raise ValidationError(words["size"].format(limit=_human(limit, lang)))
     if not raw:
         raise ValidationError(words["no_signature"])
-    return _store(owner, raw, "", user, Kind.SIGNATURE, stage, words)
+    return _store(owner, raw, "", user, Kind.SIGNATURE, stage, words, lang)
 
 
 def attachments_for(owner, user, lang="ar"):
@@ -258,13 +348,38 @@ def attachments_for(owner, user, lang="ar"):
     return entity_scope.scope(rows, "entity").select_related("uploaded_by").defer("data")
 
 
-def get_attachment(pk, user):
-    """One attachment with its bytes, only if the user may see its owner and its entity. Else OwnerNotFound / PermissionDenied."""
+def get_attachment(pk, user, with_data=True):
+    """One attachment (with its bytes unless ``with_data`` is False), only if the user may see its owner and its entity.
+    Else OwnerNotFound / PermissionDenied."""
 
-    attachment = entity_scope.scope(Attachment.objects.filter(pk=pk), "entity").select_related("content_type").first()
+    rows = entity_scope.scope(Attachment.objects.filter(pk=pk), "entity").select_related("content_type")
+    attachment = (rows if with_data else rows.defer("data")).first()
     if attachment is None:
         raise OwnerNotFound(f"attachment {pk}")
     model = attachment.content_type.model_class()
     if model is None or not visible_owners(owner_label(model), user).filter(pk=attachment.object_id).exists():
         raise OwnerNotFound(f"attachment {pk}")
     return attachment
+
+
+def delete_attachment(pk, user, lang="ar"):
+    """Delete one attachment, audited. Managers only (the owner's own right for deleting); the signature of a
+    delivered order is final. Returns the audit entry."""
+
+    words = _words(lang)
+    attachment = get_attachment(pk, user, with_data=False)
+    model = attachment.content_type.model_class()
+    owner = model.objects.get(pk=attachment.object_id)
+    rules = _rules(owner_label(model))
+    if not rules["can_delete"](user, owner):
+        raise PermissionDenied(words["delete_denied"])
+    with transaction.atomic():
+        if attachment.kind == Kind.SIGNATURE and rules["signature_final"](owner):
+            raise ValidationError(words["signature_kept"])
+        before = {"owner": owner_label(model), "owner_id": owner.pk, "kind": attachment.kind, "stage": attachment.stage,
+                  "filename": attachment.original_filename, "content_type": attachment.content_type_name, "size": attachment.size,
+                  "sha256": attachment.sha256}
+        entry = AuditLog.objects.create(event_type=AuditEventType.DELETE, actor=user, module="attachments", action="delete_attachment",
+                                        object_type="attachments.Attachment", object_id=str(attachment.pk), before_data=before, after_data={})
+        attachment.delete()
+    return entry

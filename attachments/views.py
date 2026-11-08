@@ -12,9 +12,11 @@ from django.http import HttpResponse, HttpResponseNotModified, JsonResponse
 from django.urls import reverse
 from django.utils.cache import patch_cache_control
 from django.utils.http import content_disposition_header
+from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.views.decorators.http import require_http_methods, require_POST
 
 from . import services
+from .handlers import CapUploadHandler, too_big_for_the_cap
 from .models import Kind, Stage
 
 WORK_ORDER = "workorders.workorder"
@@ -36,6 +38,13 @@ def _describe(attachment):
             "created_at": attachment.created_at.isoformat(), "url": reverse("attachments:file", args=[attachment.pk])}
 
 
+def _denied(exc, lang):
+    """403 with the service's own reason when it gave one in the user's language (read-only, delete), else the general one."""
+
+    text = str(exc)
+    return _fail(lang, text if text in services.MESSAGES[lang].values() else "denied", 403)
+
+
 def _owner(request, pk, lang):
     """(owner, None) or (None, error response)."""
 
@@ -54,17 +63,39 @@ def _guarded(request, pk, action):
         return error
     try:
         return action(owner, lang)
-    except PermissionDenied:
-        return _fail(lang, "denied", 403)
+    except PermissionDenied as exc:
+        return _denied(exc, lang)
     except ValidationError as exc:
         return _fail(lang, " ".join(exc.messages), 400)
 
 
+def _too_big(request, lang=None):
+    lang = lang or ("en" if request.GET.get("lang") == "en" else "ar")
+    limit = services._human(services.max_bytes(), lang)
+    return JsonResponse({"ok": False, "error": services.MESSAGES[lang]["size"].format(limit=limit)}, status=413)
+
+
+@csrf_exempt  # CSRF is checked by ``_upload`` below: the cap handler must be in place before anything reads the body
 @require_POST
 def work_order_upload(request, pk):
-    """A photo or document on a work order. Fields: ``file``, ``kind`` (photo|document), ``stage`` (receive|deliver|other)."""
+    """A photo or document on a work order. Fields: ``file``, ``kind`` (photo|document), ``stage`` (receive|deliver|other).
+
+    An upload larger than ATTACHMENTS_MAX_BYTES is refused (413) from its Content-Length, or stopped while it streams."""
+
+    if too_big_for_the_cap(request.META.get("CONTENT_LENGTH")):
+        return _too_big(request)
+    handler = CapUploadHandler(request)
+    request.upload_handlers.insert(0, handler)
+    return _upload(request, pk, handler)
+
+
+@csrf_protect
+def _upload(request, pk, handler):
+    request.POST  # parse the body now, so the cap handler has run before anything is decided
 
     def action(order, lang):
+        if handler.exceeded:
+            return _too_big(request, lang)
         kind = request.POST.get("kind") or Kind.PHOTO
         if kind == Kind.SIGNATURE:  # the signature has its own endpoint and its own checks
             raise ValidationError(services.MESSAGES[lang]["kind"])
@@ -127,3 +158,19 @@ def file(request, pk):
     response["Content-Security-Policy"] = "default-src 'none'; sandbox"
     patch_cache_control(response, private=True, no_cache=True, max_age=0)  # revalidated on every use, kept by no shared cache
     return response
+
+
+@require_POST
+def delete(request, pk):
+    """Delete one attachment (managers only; a delivered order's signature stays). Audited."""
+
+    lang = _lang(request)
+    try:
+        services.delete_attachment(pk, request.user, lang)
+    except services.OwnerNotFound:
+        return _fail(lang, "not_found", 404)
+    except PermissionDenied as exc:
+        return _denied(exc, lang)
+    except ValidationError as exc:
+        return _fail(lang, " ".join(exc.messages), 400)
+    return JsonResponse({"ok": True})

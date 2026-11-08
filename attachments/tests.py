@@ -23,6 +23,7 @@ from permissions.models import RoleCode
 from purchases.models import SupplierLedgerEntry
 from sales.models import CustomerLedgerEntry, SalesInvoice
 from workorders import services as work
+from workorders.models import Status, WorkOrder as WorkOrderModel
 from workorders.tests import WorkshopSetup, person
 
 from . import services
@@ -334,7 +335,7 @@ class EndpointTests(AttachmentSetup):
         self.assertEqual(self.client.post(url, {"file": upload(JPEG, "a.jpg", "image/jpeg"), "stage": "never"}).status_code, 400)
         with override_settings(ATTACHMENTS_MAX_BYTES=1024):
             big = self.client.post(url + "?lang=en", {"file": upload(JPEG + b"\x00" * 2000, "big.jpg", "image/jpeg")})
-        self.assertEqual(big.status_code, 400)
+        self.assertEqual(big.status_code, 413)
         self.assertIn("larger than allowed (1 KB)", big.json()["error"])
         signature = self.client.post(self.url("work_order_signature", self.wo.pk), {"data_url": data_url(JPEG)})
         self.assertEqual((signature.status_code, signature.json()["error"]), (400, "التوقيع لازم يكون صورة PNG حقيقية."))
@@ -384,3 +385,232 @@ class AuditAndMoneyTests(AttachmentSetup):
         self.assertEqual(get_item_stock_quantity(self.part), D("5"))
         self.wo.refresh_from_db()
         self.assertEqual((self.wo.status, self.wo.invoice), ("received", None))
+
+
+def view_only_user(owner, username="at_viewer"):
+    from permissions.role_services import create_role
+
+    role = create_role(name_ar="مراجع مبيعات", codes=["sales.view_sales_invoices"], actor=owner)
+    user = make_user(username=username)
+    make_user_profile(user=user, role=role)
+    return user
+
+
+class WriteRuleTests(AttachmentSetup):
+    """Seeing an order is not the right to change it: the same rule the work-order screens use (counter, or the owning technician)."""
+
+    def test_a_view_only_user_can_see_but_not_upload_or_sign(self):
+        viewer = view_only_user(self.owner)
+        self.assertTrue(work.can_view(viewer) and not work.can_manage(viewer))
+        row = services.add_attachment(self.wo, JPEG, self.owner)
+        for call in (lambda: services.add_attachment(self.wo, JPEG, viewer), lambda: services.add_signature_png(self.wo, data_url(PNG), viewer)):
+            with self.assertRaises(PermissionDenied) as ctx:
+                call()
+            self.assertEqual(str(ctx.exception), services.MESSAGES["ar"]["read_only"])
+        self.assertEqual(list(services.attachments_for(self.wo, viewer)), [row])  # reading still works
+        self.client.force_login(viewer)
+        self.assertEqual(self.client.get(self.url("file", row.pk)).status_code, 200)
+        self.assertEqual(self.client.get(self.url("work_order_list", self.wo.pk)).status_code, 200)
+        up = self.client.post(self.url("work_order_upload", self.wo.pk) + "?lang=en", {"file": upload(JPEG, "a.jpg", "image/jpeg")})
+        self.assertEqual((up.status_code, up.json()["error"]), (403, services.MESSAGES["en"]["read_only"]))
+        sign = self.client.post(self.url("work_order_signature", self.wo.pk), {"data_url": data_url(PNG)})
+        self.assertEqual((sign.status_code, sign.json()["error"]), (403, services.MESSAGES["ar"]["read_only"]))
+        self.assertEqual(Attachment.objects.count(), 1)
+        # positive control: same order, same endpoints, a user who may change it
+        self.client.force_login(self.owner)
+        self.assertEqual(self.client.post(self.url("work_order_upload", self.wo.pk), {"file": upload(JPEG, "a.jpg", "image/jpeg")}).status_code, 201)
+        self.assertEqual(self.client.post(self.url("work_order_signature", self.wo.pk), {"data_url": data_url(PNG)}).status_code, 201)
+
+    def test_the_owning_technician_may_attach_to_their_open_order(self):
+        tech_user = self.technician()
+        self.assertEqual(services.add_attachment(self.wo, JPEG, tech_user).uploaded_by, tech_user)
+
+    def test_a_delivered_or_cancelled_order_takes_no_more_attachments(self):
+        ready = self.to_ready(self.order())
+        photo = services.add_attachment(ready, JPEG, self.owner, stage=Stage.DELIVER)  # the hand-over photo is taken while it is ready
+        services.add_signature_png(ready, data_url(PNG), self.owner, stage=Stage.DELIVER)
+        work.deliver(ready, self.owner)
+        cancelled = self.order()
+        work.move(cancelled, Status.CANCELLED, self.owner)
+        for order in (ready, cancelled):
+            for call in (lambda: services.add_attachment(order, PNG, self.owner, stage=Stage.DELIVER, lang="en"),
+                         lambda: services.add_signature_png(order, data_url(PNG), self.owner, stage=Stage.DELIVER, lang="en")):
+                with self.assertRaises(ValidationError) as ctx:
+                    call()
+                self.assertEqual(ctx.exception.messages[0], services.MESSAGES["en"]["closed"])
+        self.client.force_login(self.owner)
+        closed = self.client.post(self.url("work_order_upload", ready.pk), {"file": upload(JPEG, "a.jpg", "image/jpeg"), "stage": "deliver"})
+        self.assertEqual((closed.status_code, closed.json()["error"]), (400, services.MESSAGES["ar"]["closed"]))
+        self.assertEqual(self.client.get(self.url("file", photo.pk)).status_code, 200)  # reading stays open
+        self.assertEqual(Attachment.objects.filter(object_id=ready.pk).count(), 2)
+
+    def test_a_stale_copy_of_the_order_cannot_sneak_past_the_closed_check(self):
+        stale = self.to_ready(self.order())
+        work.deliver(WorkOrderModel.objects.get(pk=stale.pk), self.owner)
+        self.assertEqual(stale.status, Status.READY)  # the caller's copy still says ready
+        with self.assertRaises(ValidationError):
+            services.add_attachment(stale, JPEG, self.owner)
+
+
+class CapTests(AttachmentSetup):
+    def test_the_count_per_record_is_capped(self):
+        other = self.order()
+        with override_settings(ATTACHMENTS_MAX_PER_OWNER=2):
+            services.add_attachment(self.wo, JPEG, self.owner)
+            services.add_attachment(self.wo, PNG, self.owner)
+            with self.assertRaises(ValidationError) as en:
+                services.add_attachment(self.wo, WEBP, self.owner, lang="en")
+            with self.assertRaises(ValidationError) as ar:
+                services.add_signature_png(self.wo, data_url(PNG), self.owner)
+            services.add_attachment(other, JPEG, self.owner)  # another record has its own room
+        self.assertEqual(en.exception.messages[0], "This record has reached the most attachments allowed (2).")
+        self.assertIn("للحد الأقصى من المرفقات", ar.exception.messages[0])
+        self.assertEqual(Attachment.objects.filter(object_id=self.wo.pk).count(), 2)
+        self.assertEqual(settings.ATTACHMENTS_MAX_PER_OWNER, 20)
+
+    def test_the_bytes_per_record_are_capped(self):
+        with override_settings(ATTACHMENTS_MAX_BYTES_PER_OWNER=len(JPEG) * 2 + 10):
+            services.add_attachment(self.wo, JPEG, self.owner)
+            services.add_attachment(self.wo, JPEG + b"\x01", self.owner)
+            with self.assertRaises(ValidationError) as en:
+                services.add_attachment(self.wo, JPEG + b"\x02", self.owner, lang="en")
+            with self.assertRaises(ValidationError) as ar:
+                services.add_attachment(self.wo, JPEG + b"\x03", self.owner)
+        self.assertIn("would pass the size limit", en.exception.messages[0])
+        self.assertIn("هيعدّي الحد", ar.exception.messages[0])
+        self.assertEqual(Attachment.objects.count(), 2)
+        self.assertEqual(settings.ATTACHMENTS_MAX_BYTES_PER_OWNER, 25 * 1024 * 1024)
+
+    def test_all_attachments_together_may_take_only_a_share_of_the_database_plan(self):
+        self.assertEqual((settings.DATABASE_SIZE_LIMIT_MB, settings.ATTACHMENTS_GLOBAL_SHARE), (500, 0.2))
+        room = len(JPEG) * 1.5 / (1024 * 1024)  # MB of room for one and a half files
+        with override_settings(DATABASE_SIZE_LIMIT_MB=1, ATTACHMENTS_GLOBAL_SHARE=room):
+            services.add_attachment(self.wo, JPEG, self.owner)
+            for lang in ("en", "ar"):
+                with self.assertRaises(ValidationError) as ctx:
+                    services.add_attachment(self.order(), JPEG + b"\x01", self.owner, lang=lang)
+                self.assertEqual(ctx.exception.messages[0], services.MESSAGES[lang]["global_full"])
+        with override_settings(DATABASE_SIZE_LIMIT_MB=1, ATTACHMENTS_GLOBAL_SHARE=0):  # 0 switches the guard off
+            services.add_attachment(self.wo, PNG, self.owner)
+        self.assertEqual(Attachment.objects.count(), 2)
+
+
+class DeleteTests(AttachmentSetup):
+    def test_a_manager_deletes_with_an_audit_entry(self):
+        row = services.add_attachment(self.wo, upload(JPEG, "a.jpg", "image/jpeg"), self.owner)
+        self.client.force_login(self.owner)
+        response = self.client.post(self.url("delete", row.pk))
+        self.assertEqual((response.status_code, response.json()), (200, {"ok": True}))
+        self.assertFalse(Attachment.objects.filter(pk=row.pk).exists())
+        entry = AuditLog.objects.get(module="attachments", action="delete_attachment")
+        self.assertEqual((entry.actor, entry.event_type, entry.object_id), (self.owner, "delete", str(row.pk)))
+        self.assertEqual((entry.before_data["sha256"], entry.before_data["owner_id"], entry.before_data["filename"]), (row.sha256, self.wo.pk, "a.jpg"))
+        self.assertEqual(self.client.post(self.url("delete", row.pk)).status_code, 404)  # already gone
+
+    def test_only_the_counter_may_delete(self):
+        row = services.add_attachment(self.wo, JPEG, self.owner)
+        tech_user = self.technician()
+        viewer = view_only_user(self.owner)
+        for user in (tech_user, viewer):  # the technician may add to their own order but not remove
+            with self.assertRaises(PermissionDenied):
+                services.delete_attachment(row.pk, user)
+            self.client.force_login(user)
+            denied = self.client.post(self.url("delete", row.pk) + "?lang=en")
+            self.assertEqual((denied.status_code, denied.json()["error"]), (403, services.MESSAGES["en"]["delete_denied"]))
+        self.assertTrue(Attachment.objects.filter(pk=row.pk).exists())
+        self.assertEqual(AuditLog.objects.filter(action="delete_attachment").count(), 0)
+        self.client.force_login(self.owner)  # positive control
+        self.assertEqual(self.client.post(self.url("delete", row.pk)).status_code, 200)
+
+    def test_delete_needs_post_and_login_and_a_visible_owner(self):
+        row = services.add_attachment(self.wo, JPEG, self.owner)
+        self.assertEqual(self.client.post(self.url("delete", row.pk)).status_code, 302)  # anonymous
+        self.client.force_login(self.owner)
+        self.assertEqual(self.client.get(self.url("delete", row.pk)).status_code, 405)
+        stock_keeper = person(RoleCode.STOCK_KEEPER, "at_stock_del")
+        self.client.force_login(stock_keeper)
+        self.assertEqual(self.client.post(self.url("delete", row.pk)).status_code, 403)
+        self.assertTrue(Attachment.objects.filter(pk=row.pk).exists())
+
+    def test_the_signature_of_a_delivered_order_is_never_deleted(self):
+        order = self.to_ready(self.order())
+        sign = services.add_signature_png(order, data_url(PNG), self.owner, stage=Stage.DELIVER)
+        photo = services.add_attachment(order, JPEG, self.owner, stage=Stage.DELIVER)
+        spare = services.add_signature_png(self.wo, data_url(PNG), self.owner)
+        services.delete_attachment(spare.pk, self.owner)  # on an open order a signature taken wrongly can go
+        work.deliver(order, self.owner)
+        with self.assertRaises(ValidationError) as ctx:
+            services.delete_attachment(sign.pk, self.owner, lang="en")
+        self.assertEqual(ctx.exception.messages[0], services.MESSAGES["en"]["signature_kept"])
+        self.client.force_login(self.owner)
+        refused = self.client.post(self.url("delete", sign.pk))
+        self.assertEqual((refused.status_code, refused.json()["error"]), (400, services.MESSAGES["ar"]["signature_kept"]))
+        self.assertTrue(Attachment.objects.filter(pk=sign.pk).exists())
+        services.delete_attachment(photo.pk, self.owner)  # a photo on a delivered order may go, with its audit entry
+        self.assertEqual(AuditLog.objects.filter(action="delete_attachment").count(), 2)
+
+
+class HardeningTests(AttachmentSetup):
+    def test_the_stored_name_carries_the_detected_types_extension(self):
+        pdf = services.add_attachment(self.wo, upload(PDF, "report.hta", "application/x-hta"), self.owner, kind=Kind.DOCUMENT)
+        self.assertEqual(pdf.original_filename, "report.pdf")
+        png = services.add_attachment(self.wo, upload(PNG, "evil.exe", "application/octet-stream"), self.owner)
+        self.assertEqual(png.original_filename, "evil.png")
+        noext = services.add_attachment(self.wo, upload(JPEG, "photo", "image/jpeg"), self.owner)
+        self.assertEqual(noext.original_filename, "photo.jpg")
+        self.client.force_login(self.owner)
+        served = self.client.get(self.url("file", pdf.pk))
+        self.assertIn("report.pdf", served["Content-Disposition"])
+        self.assertNotIn(".hta", served["Content-Disposition"])
+
+    def test_a_pdf_with_script_or_an_embedded_file_is_refused(self):
+        for token in (b"/JavaScript", b"/JS", b"/OpenAction", b"/Launch", b"/EmbeddedFile"):
+            bad = PDF.replace(b"<< /Root 1 0 R >>", b"<< /Root 1 0 R " + token + b" 2 0 R >>")
+            self.assertNotEqual(bad, PDF)
+            with self.assertRaises(ValidationError, msg=token) as ctx:
+                services.add_attachment(self.wo, upload(bad, "a.pdf", "application/pdf"), self.owner, kind=Kind.DOCUMENT, lang="en")
+            self.assertEqual(ctx.exception.messages[0], services.MESSAGES["en"]["pdf_active"])
+        with self.assertRaises(ValidationError) as ar:
+            services.add_attachment(self.wo, PDF + b"/OpenAction", self.owner, kind=Kind.DOCUMENT)
+        self.assertIn("PDF", ar.exception.messages[0])
+        self.assertEqual(Attachment.objects.count(), 0)
+        self.assertEqual(services.add_attachment(self.wo, PDF, self.owner, kind=Kind.DOCUMENT).content_type_name, "application/pdf")  # a plain one passes
+
+    def test_an_oversize_content_length_is_refused_before_the_body_is_read(self):
+        self.client.force_login(self.owner)
+        url = self.url("work_order_upload", self.wo.pk)
+        huge = self.client.post(url + "?lang=en", {"file": upload(JPEG, "a.jpg", "image/jpeg")}, CONTENT_LENGTH=str(settings.ATTACHMENTS_MAX_BYTES + 10 * 1024 * 1024))
+        self.assertEqual((huge.status_code, huge.json()["error"]), (413, "The file is larger than allowed (5 MB)."))
+        self.assertEqual(self.client.post(url, {"file": upload(JPEG, "a.jpg", "image/jpeg")}, CONTENT_LENGTH=str(10**9)).status_code, 413)
+        self.assertEqual(Attachment.objects.count(), 0)
+        self.assertEqual(self.client.post(url, {"file": upload(JPEG, "a.jpg", "image/jpeg")}).status_code, 201)  # control: a normal one
+
+    def test_an_upload_that_passes_the_cap_while_streaming_is_stopped(self):
+        from django.core.files.uploadhandler import StopUpload
+
+        from .handlers import CapUploadHandler
+
+        self.client.force_login(self.owner)
+        with override_settings(ATTACHMENTS_MAX_BYTES=1024):
+            big = self.client.post(self.url("work_order_upload", self.wo.pk), {"file": upload(JPEG + b"\x00" * 5000, "big.jpg", "image/jpeg")})  # Content-Length is honest and small
+            ok = self.client.post(self.url("work_order_upload", self.wo.pk), {"file": upload(JPEG, "a.jpg", "image/jpeg")})
+            handler = CapUploadHandler()
+            handler.new_file("file", "a.jpg", "image/jpeg", 9000)
+            with self.assertRaises(StopUpload):
+                handler.receive_data_chunk(b"x" * 2000, 0)
+            self.assertTrue(handler.exceeded)
+        self.assertEqual((big.status_code, ok.status_code), (413, 201))
+        self.assertEqual(Attachment.objects.count(), 1)
+
+    def test_csrf_is_still_enforced_on_upload(self):
+        from django.test import Client
+
+        strict = Client(enforce_csrf_checks=True)
+        strict.force_login(self.owner)
+        url = self.url("work_order_upload", self.wo.pk)
+        self.assertEqual(strict.post(url, {"file": upload(JPEG, "a.jpg", "image/jpeg")}).status_code, 403)
+        token = "a" * 32
+        strict.cookies[settings.CSRF_COOKIE_NAME] = token
+        ok = strict.post(url, {"file": upload(JPEG, "a.jpg", "image/jpeg"), "csrfmiddlewaretoken": token})
+        self.assertEqual(ok.status_code, 201)
+        self.assertEqual(Attachment.objects.count(), 1)

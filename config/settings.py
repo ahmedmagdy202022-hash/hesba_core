@@ -253,6 +253,10 @@ POS_OFFLINE_MAX_DAYS = config("POS_OFFLINE_MAX_DAYS", default=7, cast=int)
 # narrow what the code can verify by magic bytes (jpeg, png, webp, pdf), never widen it. SVG and HTML never pass.
 ATTACHMENTS_MAX_BYTES = config("ATTACHMENTS_MAX_BYTES", default=5 * 1024 * 1024, cast=int)
 ATTACHMENTS_SIGNATURE_MAX_BYTES = config("ATTACHMENTS_SIGNATURE_MAX_BYTES", default=512 * 1024, cast=int)
+ATTACHMENTS_MAX_PER_OWNER = config("ATTACHMENTS_MAX_PER_OWNER", default=20, cast=int)
+ATTACHMENTS_MAX_BYTES_PER_OWNER = config("ATTACHMENTS_MAX_BYTES_PER_OWNER", default=25 * 1024 * 1024, cast=int)
+# All attachments together may take at most this share of DATABASE_SIZE_LIMIT_MB (0 turns the guard off).
+ATTACHMENTS_GLOBAL_SHARE = config("ATTACHMENTS_GLOBAL_SHARE", default=0.2, cast=float)
 ATTACHMENTS_ALLOWED_TYPES = config("ATTACHMENTS_ALLOWED_TYPES", default="image/jpeg,image/png,image/webp,application/pdf", cast=Csv())
 # USAGE-002: the client's database plan limit (Supabase free plan: 500 MB).
 DATABASE_SIZE_LIMIT_MB = config("DATABASE_SIZE_LIMIT_MB", default=500, cast=int)
