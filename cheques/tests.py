@@ -118,7 +118,9 @@ class ReceivedChequeTests(ChequeSetup):
         self.assertEqual(bal("1102"), D("10000.00"))
 
     def test_a_bounce_after_the_payments_period_closed_is_dated_today_and_accepted(self):
-        old = TODAY - timedelta(days=40)
+        # The 10th of a month at least 30 days back, so old and old + 1 day sit in the same closed month whatever today is
+        # (TODAY - 40 days alone fails when it lands on a month end: the next day is in an open month).
+        old = (TODAY - timedelta(days=40)).replace(day=10)
         cheque = self.receive(on=old)
         period = provision_period_for(old)
         period.status, period.closed_at = PeriodStatus.CLOSED, timezone.now()
