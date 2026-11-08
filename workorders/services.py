@@ -9,6 +9,7 @@ authoritative movement cost and the customer's account is that of any sale.
 import hashlib
 import hmac
 import json
+import logging
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 
@@ -22,6 +23,8 @@ from entities import scope as entity_scope
 from permissions.services import user_has_permission
 
 from .models import OPEN, Status, WorkOrder, WorkOrderEvent, WorkOrderLine
+
+logger = logging.getLogger(__name__)
 
 ZERO = Decimal("0")
 VIEW, MANAGE = "sales.view_sales_invoices", "sales.create_sales_invoice"
@@ -248,7 +251,42 @@ def move(order, to, user, note="", lang="ar"):
         _drop_quote(order, user, lang)
     _event(order, user, note)
     _audit(user, "move", order, {"status": to, "note": note[:255]}, before={"status": before})
+    _notify_customer(order)
     return order
+
+
+#: S7: the statuses the customer is messaged about (quote ready, ready for pickup, delivered).
+NOTIFY = (Status.QUOTED, Status.READY, Status.DELIVERED)
+
+
+def _notify_customer(order):
+    """S7: queue the customer's message for the status the order just reached, once the move has committed.
+
+    The message goes through the T9 outbox (messaging.queue_workorder) and carries the S2 link built from
+    PUBLIC_BASE_URL (none when it is not set, or for DELIVERED). A failure here is logged and never breaks the move."""
+
+    if order.status not in NOTIFY:
+        return
+    pk, status = order.pk, order.status
+    transaction.on_commit(lambda: _queue_message(pk, status))
+
+
+def _queue_message(pk, status):
+    try:
+        from messaging.services import queue_workorder, workorder_language
+
+        order = WorkOrder.objects.select_related("customer").get(pk=pk)
+        if order.status != status:
+            return  # moved on again before the first commit ran
+        lang, link = workorder_language(), ""
+        if status != Status.DELIVERED:
+            try:
+                link = customer_link(order, lang)
+            except ValidationError:
+                logger.warning("S7: PUBLIC_BASE_URL is not set; the %s message of work order %s is queued without a link.", status, order.number)
+        queue_workorder(order, status, link=link, lang=lang)
+    except Exception:  # noqa: BLE001 - messaging must never break a status move or a delivery
+        logger.exception("S7: could not queue the %s message of work order %s.", status, pk)
 
 
 def by_customer(event):
@@ -525,6 +563,7 @@ def deliver(order, user, *, paid_now="0", cashbox=None, invoice_date=None, lang=
     _event(order, user, invoice.invoice_number if invoice else "")
     _audit(user, "deliver", order, {"invoice": invoice.invoice_number if invoice else "", "total": str(invoice.total_amount if invoice else ZERO),
                                      "warranty_until": str(order.warranty_until or "")})
+    _notify_customer(order)
     return order
 
 

@@ -10,6 +10,7 @@ customer from getting the same reminder twice. Sending by itself needs a
 WhatsApp Business account, which is not connected yet (see ``api_connected``).
 """
 
+import logging
 import re
 from datetime import timedelta
 from urllib.parse import quote
@@ -26,6 +27,8 @@ from permissions.services import user_has_permission
 
 from .models import MessageKind, MessageTemplate, OutboxMessage, OutboxStatus
 
+logger = logging.getLogger(__name__)
+
 EDIT = "settings.manage_settings"
 #: An instalment gets its message this many days before it falls due (and every day it is late, within ``every_days``).
 INSTALMENT_AHEAD_DAYS = 2
@@ -35,13 +38,27 @@ DEFAULT_TEXTS = {
     MessageKind.INSTALMENT: "أهلاً {name}، تذكير من {company}: القسط بتاع فاتورة {number} بمبلغ {amount} ميعاده {date}. شكرًا لحضرتك.",
     MessageKind.APPOINTMENT: "أهلاً {name}، تذكير من {company} بميعاد حضرتك بكرة {date} الساعة {time}. لو محتاج تغيّر الميعاد ابعتلنا.",
     MessageKind.REFILL: "أهلاً {name}، روشتة حضرتك {number} ميعاد تجديدها {date}. تحب نجهزهالك؟ — {company}",
+    MessageKind.WORKORDER: "أهلاً {name}، من {company}: أمر الشغل {number} {status} {link}",
 }
-DEFAULT_EVERY = {MessageKind.DUE: 7, MessageKind.INSTALMENT: 3, MessageKind.APPOINTMENT: 1, MessageKind.REFILL: 3}
-PLACEHOLDERS = ("{name}", "{company}", "{amount}", "{date}", "{time}", "{number}")
+#: S7: the same wording in English, used when the business's default language is English and the text was never edited.
+DEFAULT_TEXTS_EN = {MessageKind.WORKORDER: "Hello {name}, from {company}: work order {number} {status} {link}"}
+#: ``every_days`` is unused for work-order messages (one per order per status, whatever the day).
+DEFAULT_EVERY = {MessageKind.DUE: 7, MessageKind.INSTALMENT: 3, MessageKind.APPOINTMENT: 1, MessageKind.REFILL: 3, MessageKind.WORKORDER: 1}
+PLACEHOLDERS = ("{name}", "{company}", "{amount}", "{date}", "{time}", "{number}", "{status}", "{link}")
+#: S7: what each key status says to the customer ({days} is the order's warranty days).
+WORKORDER_STATUSES = ("quoted", "ready", "delivered")
+WORKORDER_STATUS_TEXTS = {
+    "ar": {"quoted": "عرض السعر جاهز. تقدر توافق عليه أو ترفضه من اللينك ده:", "quoted_nolink": "عرض السعر جاهز. كلمنا عشان توافق عليه.",
+           "ready": "جاهز للاستلام. تابع حالته من هنا:", "ready_nolink": "جاهز للاستلام.",
+           "delivered": "اتسلّم. شكرًا لثقة حضرتك.", "delivered_warranty": "اتسلّم. شكرًا لثقة حضرتك، والضمان {days} يوم."},
+    "en": {"quoted": "the quote is ready. You can approve or refuse it from this link:", "quoted_nolink": "the quote is ready. Contact us to approve it.",
+           "ready": "is ready for pickup. Follow it here:", "ready_nolink": "is ready for pickup.",
+           "delivered": "was delivered. Thank you for your trust.", "delivered_warranty": "was delivered. Thank you for your trust; the warranty is {days} days."},
+}
 
 KIND_LABELS = {
-    "ar": {"due": "مبلغ مستحق", "instalment": "قسط", "appointment": "ميعاد بكرة", "refill": "تجديد روشتة"},
-    "en": {"due": "Amount due", "instalment": "Instalment", "appointment": "Appointment tomorrow", "refill": "Prescription refill"},
+    "ar": {"due": "مبلغ مستحق", "instalment": "قسط", "appointment": "ميعاد بكرة", "refill": "تجديد روشتة", "workorder": "حالة أمر الشغل"},
+    "en": {"due": "Amount due", "instalment": "Instalment", "appointment": "Appointment tomorrow", "refill": "Prescription refill", "workorder": "Work order status"},
 }
 MESSAGES = {
     "ar": {"text": "نص الرسالة فاضي.", "placeholder": "النص فيه {bad} ومش معروف؛ المسموح: {allowed}.", "every": "التكرار من 1 لـ 90 يوم.",
@@ -110,7 +127,7 @@ def save_template(kind, data, user, lang="ar"):
 
 
 def render(text, **values):
-    for key in ("name", "company", "amount", "date", "time", "number"):
+    for key in ("name", "company", "amount", "date", "time", "number", "status", "link"):
         text = text.replace("{" + key + "}", str(values.get(key, "")))
     return text
 
@@ -222,6 +239,7 @@ def build(today=None):
     today = today or timezone.localdate()
     company, currency = _company()
     added = 0
+    _carry_workorders(today)
     for entity in _entities():
         with working_in(entity):
             for kind, source in SOURCES.items():
@@ -233,6 +251,74 @@ def build(today=None):
                 else:
                     _waiting(kind, entity).delete()  # switched off: nothing of this kind is left to send
     return added
+
+
+def _carry_workorders(today):
+    """S7: a work-order message still waiting is today's (the outbox and the API send only today's), as long as its
+    order is still in the status it announces and the kind is on; otherwise it is withdrawn before anyone sends it."""
+
+    from workorders.models import WorkOrder
+
+    waiting = OutboxMessage.objects.filter(kind=MessageKind.WORKORDER, status=OutboxStatus.PENDING)
+    if not template(MessageKind.WORKORDER).active:
+        waiting.delete()  # switched off: nothing of this kind is left to send
+        return
+    for message in list(waiting):
+        _kind, pk, status = message.key.split(":")
+        if not WorkOrder.objects.filter(pk=pk, status=status).exists():
+            message.delete()
+        elif message.day != today:
+            OutboxMessage.objects.filter(pk=message.pk, status=OutboxStatus.PENDING).update(day=today)
+
+
+def workorder_language():
+    """The language of what the customer is sent: the business's default language (Arabic unless it is English)."""
+
+    from settings_core.models import ClientProfile
+
+    profile = ClientProfile.get_active()
+    return "en" if profile and profile.default_language == "en" else "ar"
+
+
+def queue_workorder(order, status, link="", lang=None):
+    """S7: queue the message for a work order that reached ``status`` (quoted, ready or delivered). Returns the
+    message, or None when nothing is queued (kind switched off, no phone, or this status already had its message).
+
+    One message per order per status, whatever the day, also if it was sent or skipped. ``link`` is the S2 customer
+    link (built by the caller from PUBLIC_BASE_URL; empty when it cannot be); DELIVERED never carries one.
+    Nothing here touches money, stock or a ledger."""
+
+    from entities.services import main_entity
+
+    status = str(status)
+    if status not in WORKORDER_STATUSES:
+        return None
+    row = template(MessageKind.WORKORDER)
+    if not row.active:
+        return None
+    customer = order.customer
+    phone = _number(customer.whatsapp or customer.phone)
+    if not phone:
+        return None
+    key = f"workorder:{order.pk}:{status}"
+    if OutboxMessage.objects.filter(kind=MessageKind.WORKORDER, key=key).exists():
+        return None
+    lang = lang or workorder_language()
+    words = WORKORDER_STATUS_TEXTS[lang]
+    link = "" if status == "delivered" else (link or "")
+    if status == "delivered":
+        sentence = words["delivered_warranty"].format(days=order.warranty_days) if order.warranty_days else words["delivered"]
+    else:
+        sentence = words[status if link else f"{status}_nolink"]
+    text = row.text if row.pk else (DEFAULT_TEXTS_EN if lang == "en" else DEFAULT_TEXTS)[MessageKind.WORKORDER]
+    company, _currency = _company()
+    fields = {"name": customer.name[:255], "phone": phone[:30], "link": f"/workorders/{order.pk}/", "entity": order.entity or main_entity(),
+              "text": render(text, name=customer.name, company=company, number=order.number, status=sentence, link=link).strip()}
+    try:
+        with transaction.atomic():
+            return OutboxMessage.objects.create(kind=MessageKind.WORKORDER, key=key, day=timezone.localdate(), **fields)
+    except IntegrityError:
+        return None  # queued by another request a moment ago
 
 
 def _gather(kind, source, row, entity, today, company, currency):

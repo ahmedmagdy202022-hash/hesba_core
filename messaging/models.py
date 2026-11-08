@@ -18,6 +18,7 @@ class MessageKind(models.TextChoices):
     INSTALMENT = "instalment", "Instalment"
     APPOINTMENT = "appointment", "Appointment tomorrow"
     REFILL = "refill", "Prescription refill"
+    WORKORDER = "workorder", "Work order status"
 
 
 class MessageTemplate(models.Model):
