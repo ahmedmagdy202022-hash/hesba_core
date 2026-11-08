@@ -1,0 +1,70 @@
+{% extends "operations/base.html" %}
+{% load static %}
+{% block styles %}{{ block.super }}
+<link rel="stylesheet" href="{% static 'hesba/css/calendar.css' %}?v=s10-1">{% endblock %}
+{% block operation_content %}
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+<symbol id="cal-i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></symbol>
+<symbol id="cal-i-grip" viewBox="0 0 24 24"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></symbol>
+<symbol id="cal-i-move" viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/></symbol>
+<symbol id="cal-i-chev-r" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+<symbol id="cal-i-chev-l" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
+<symbol id="cal-i-alert" viewBox="0 0 24 24"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18h.01"/></symbol>
+<symbol id="cal-i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+</defs></svg>
+<div class="cal-root" data-week-calendar data-lang="{{ lang }}" data-can-move="{% if can_move %}1{% else %}0{% endif %}" data-day="{{ day|date:'Y-m-d' }}" data-week-start="{{ week_start|date:'Y-m-d' }}" data-today="{{ today|date:'Y-m-d' }}" data-now="{{ now_minutes }}" data-week-url="{{ week_json_url }}" data-move-url="{{ move_url_template }}" data-detail-url="{{ detail_url_template }}">
+{% csrf_token %}
+<section class="op-title-row">
+<div><h1>{{ words.title }} · {{ week_words.week }}</h1><p data-cal-sub aria-live="polite">{{ week_words.loading }}</p></div>
+<div class="cal-actions">
+<a class="op-secondary" href="{{ agenda_url }}?lang={{ lang }}&day={{ day|date:'Y-m-d' }}" data-week-agenda-link>{{ week_words.agenda }}</a>
+{% if can_book %}<a class="op-primary" href="{{ agenda_url }}?lang={{ lang }}&day={{ day|date:'Y-m-d' }}" data-week-new>{{ week_words.new }}</a>{% endif %}
+</div>
+</section>
+<div class="cal-nav" role="group" aria-label="{{ week_words.week }}">
+<button type="button" class="op-secondary cal-navbtn" data-cal-prev aria-label="{{ week_words.prev }}"><svg class="cal-ico" aria-hidden="true"><use href="#cal-i-chev-{% if lang == 'en' %}l{% else %}r{% endif %}"></use></svg></button>
+<button type="button" class="op-secondary" data-cal-today>{{ week_words.today }}</button>
+<button type="button" class="op-secondary cal-navbtn" data-cal-next aria-label="{{ week_words.next }}"><svg class="cal-ico" aria-hidden="true"><use href="#cal-i-chev-{% if lang == 'en' %}r{% else %}l{% endif %}"></use></svg></button>
+<strong class="cal-range" data-cal-range></strong>
+</div>
+<div class="op-message op-message-error cal-toast" role="alert" data-cal-error hidden></div>
+<div class="op-message op-message-success cal-toast" role="status" data-cal-ok hidden></div>
+<div class="cal-help">
+<p><svg class="cal-ico" aria-hidden="true"><use href="#cal-i-move"></use></svg><span class="cal-help__desk">{% if can_move %}{{ week_words.help_move }}{% else %}{{ week_words.help_read }}{% endif %}</span><span class="cal-help__phone">{% if can_move %}{{ week_words.help_phone }}{% else %}{{ week_words.help_read }}{% endif %}</span></p>
+<ul class="cal-legend" aria-label="{{ week_words.legend }}">
+<li><span class="cal-sw k-booked"></span>{{ week_words.booked }}</li>
+<li><span class="cal-sw k-confirmed"></span>{{ week_words.confirmed }}</li>
+<li><span class="cal-sw k-arrived"></span>{{ week_words.arrived }}</li>
+<li><span class="cal-sw k-done"></span>{{ week_words.done }}</li>
+<li><svg class="cal-ico" aria-hidden="true"><use href="#cal-i-lock"></use></svg>{{ week_words.locked }}</li>
+</ul>
+</div>
+<div class="cal-week" role="tablist" aria-label="{{ week_words.week_days }}" data-cal-strip></div>
+<div class="cal-chips" role="group" aria-label="{{ week_words.staff }}" data-cal-chips></div>
+<div class="cal-state" data-cal-state hidden><p data-cal-state-text></p><button type="button" class="op-secondary" data-cal-retry>{{ week_words.retry }}</button></div>
+<section class="cal-grid" aria-label="{{ week_words.grid }}" data-cal-grid aria-busy="true"></section>
+<ul class="cal-list" data-cal-list></ul>
+<div class="cal-scrim" data-cal-scrim hidden></div>
+<section class="cal-sheet" role="dialog" aria-modal="true" aria-labelledby="cal-sheet-title" data-cal-sheet hidden>
+<div class="cal-grab" aria-hidden="true"></div>
+<div><h2 id="cal-sheet-title">{{ week_words.move_title }}</h2><p class="cal-sheet__sub" data-cal-sheet-sub></p></div>
+<div class="cal-sheetline"><small>{{ week_words.now }}</small><strong data-cal-sheet-now></strong></div>
+<div class="cal-fields">
+<div class="op-field"><label for="cal-mv-staff">{{ week_words.staff }}</label><select id="cal-mv-staff" data-cal-mv-staff></select></div>
+<div class="cal-two">
+<div class="op-field"><label for="cal-mv-day">{{ words.day }}</label><select id="cal-mv-day" data-cal-mv-day></select></div>
+<div class="op-field"><label for="cal-mv-time">{{ week_words.time }}</label><input id="cal-mv-time" type="time" step="300" dir="ltr" data-cal-mv-time></div>
+</div>
+<small class="cal-sheet__sub" data-cal-sheet-dur></small>
+</div>
+<div class="op-message op-message-error" role="alert" data-cal-sheet-error hidden></div>
+<div class="cal-btnrow">
+<button type="button" class="op-primary" data-cal-mv-go>{{ week_words.move }}</button>
+<button type="button" class="op-secondary" data-cal-mv-cancel>{{ week_words.keep }}</button>
+</div>
+</section>
+</div>
+{{ week_words|json_script:"cal-words" }}
+{{ staff|json_script:"cal-staff" }}
+<script src="{% static 'hesba/js/week_calendar.js' %}?v=s10-1" defer></script>
+{% endblock %}

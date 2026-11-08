@@ -156,7 +156,8 @@ def _booked_patients(today):
     from appointments.models import Appointment, AppointmentStatus
 
     start, _ = _span(today, today)
-    return set(Appointment.objects.filter(starts_at__gte=start, status__in=[AppointmentStatus.BOOKED, AppointmentStatus.CONFIRMED, AppointmentStatus.ARRIVED])
+    return set(entity_scope.scope(Appointment.objects, "entity")  # HG-074
+               .filter(starts_at__gte=start, status__in=[AppointmentStatus.BOOKED, AppointmentStatus.CONFIRMED, AppointmentStatus.ARRIVED])
                .values_list("customer_id", flat=True))
 
 

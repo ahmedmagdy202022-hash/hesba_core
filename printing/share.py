@@ -61,3 +61,19 @@ def public_url(kind, pk, lang="ar"):
 def whatsapp_link(phone, text):
     number = whatsapp_number(phone)
     return f"https://wa.me/{number}?text={quote(text)}" if number else f"https://wa.me/?text={quote(text)}"
+
+
+def expired_page(request, lang="ar"):
+    """The page for a link that is forged, altered or past its days. It knows no order, so it shows only the shop's own identity."""
+
+    from django.shortcuts import render
+
+    from .company import company_details
+
+    company = company_details()
+    response = render(request, "printing/share_expired.html", {"lang": lang, "dir": "ltr" if lang == "en" else "rtl", "company": company,
+                                                              "phone": company["phone"], "whatsapp": whatsapp_number(company["phone"])}, status=404)
+    response["X-Robots-Tag"] = "noindex, nofollow"
+    response["Cache-Control"] = "no-store"
+    response["Referrer-Policy"] = "no-referrer"
+    return response
