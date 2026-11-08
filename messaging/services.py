@@ -39,11 +39,13 @@ DEFAULT_TEXTS = {
     MessageKind.APPOINTMENT: "أهلاً {name}، تذكير من {company} بميعاد حضرتك بكرة {date} الساعة {time}. لو محتاج تغيّر الميعاد ابعتلنا.",
     MessageKind.REFILL: "أهلاً {name}، روشتة حضرتك {number} ميعاد تجديدها {date}. تحب نجهزهالك؟ — {company}",
     MessageKind.WORKORDER: "أهلاً {name}، من {company}: أمر الشغل {number} {status} {link}",
+    MessageKind.CAMPAIGN: "أهلاً {name}، وحشتنا في {company}! عندنا ليك جديد، ننتظرك قريب.",  # S8: only the starting text of a new campaign
 }
 #: S7: the same wording in English, used when the business's default language is English and the text was never edited.
-DEFAULT_TEXTS_EN = {MessageKind.WORKORDER: "Hello {name}, from {company}: work order {number} {status} {link}"}
+DEFAULT_TEXTS_EN = {MessageKind.WORKORDER: "Hello {name}, from {company}: work order {number} {status} {link}",
+                    MessageKind.CAMPAIGN: "Hello {name}, we miss you at {company}! We have something new for you; see you soon."}
 #: ``every_days`` is unused for work-order messages (one per order per status, whatever the day).
-DEFAULT_EVERY = {MessageKind.DUE: 7, MessageKind.INSTALMENT: 3, MessageKind.APPOINTMENT: 1, MessageKind.REFILL: 3, MessageKind.WORKORDER: 1}
+DEFAULT_EVERY = {MessageKind.DUE: 7, MessageKind.INSTALMENT: 3, MessageKind.APPOINTMENT: 1, MessageKind.REFILL: 3, MessageKind.WORKORDER: 1, MessageKind.CAMPAIGN: 1}
 PLACEHOLDERS = ("{name}", "{company}", "{amount}", "{date}", "{time}", "{number}", "{status}", "{link}")
 #: S7: what each key status says to the customer ({days} is the order's warranty days).
 WORKORDER_STATUSES = ("quoted", "ready", "delivered")
@@ -57,8 +59,8 @@ WORKORDER_STATUS_TEXTS = {
 }
 
 KIND_LABELS = {
-    "ar": {"due": "مبلغ مستحق", "instalment": "قسط", "appointment": "ميعاد بكرة", "refill": "تجديد روشتة", "workorder": "حالة أمر الشغل"},
-    "en": {"due": "Amount due", "instalment": "Instalment", "appointment": "Appointment tomorrow", "refill": "Prescription refill", "workorder": "Work order status"},
+    "ar": {"due": "مبلغ مستحق", "instalment": "قسط", "appointment": "ميعاد بكرة", "refill": "تجديد روشتة", "workorder": "حالة أمر الشغل", "campaign": "حملة"},
+    "en": {"due": "Amount due", "instalment": "Instalment", "appointment": "Appointment tomorrow", "refill": "Prescription refill", "workorder": "Work order status", "campaign": "Campaign"},
 }
 MESSAGES = {
     "ar": {"text": "نص الرسالة فاضي.", "placeholder": "النص فيه {bad} ومش معروف؛ المسموح: {allowed}.", "every": "التكرار من 1 لـ 90 يوم.",
@@ -96,7 +98,10 @@ def template(kind):
 
 
 def templates():
-    return [template(kind) for kind in MessageKind.values]
+    """The wording the outbox lets an owner edit. A campaign's words belong to the campaign itself (S8), so its kind is
+    not listed here; its on/off switch and WhatsApp template are on the campaigns screen."""
+
+    return [template(kind) for kind in MessageKind.values if kind != MessageKind.CAMPAIGN]
 
 
 @transaction.atomic
@@ -241,6 +246,9 @@ def build(today=None):
     company, currency = _company()
     added = 0
     _carry_workorders(today)
+    from . import campaigns
+
+    campaigns.carry(today)
     for entity in _entities():
         with working_in(entity):
             for kind, source in SOURCES.items():
