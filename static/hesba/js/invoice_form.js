@@ -145,6 +145,9 @@
   function header(name) { return form.querySelector('[name="' + name + '"]'); }
   var sumTotal = form.querySelector('[data-sum-total]');
   var sumRemaining = form.querySelector('[data-sum-remaining]');
+  var payFull = form.querySelector('[data-pay-full]');  // sales only: sent as pay_full=1, so the server takes paid now from its own total
+  var payAllOn = false;
+  function payAll(on) { payAllOn = on; if (payFull) { payFull.value = on ? '1' : ''; } }
 
   function lineRow(index) {
     var select = field(index, 'item');
@@ -228,6 +231,8 @@
     liveTotal.textContent = money(sum);
     var totalValue = invoiceTotal(sum);
     if (sumTotal) { sumTotal.textContent = money(totalValue); }
+    // "Pay all" stays on until paid now is typed by hand: a promotion quote that lands later moves it to the new total.
+    if (payAllOn) { var paidField = header('paid_now'); if (paidField) { paidField.value = totalValue.toFixed(2); } }
     if (sumRemaining) { sumRemaining.textContent = money(Math.max(totalValue - num(header('paid_now')), 0)); }
     showBalance(totalValue);
     requotePromotion();
@@ -277,11 +282,10 @@
       return;
     }
     if (event.target.closest('[data-pay-all]')) {
-      var paid = header('paid_now');
-      var lines = 0;
+      payAll(true);
+      clearTimeout(promoTimer);
+      quotePromotion();  // ask for the promotion now, not after the typing delay; the answer re-runs recalc and moves paid now
       recalc();
-      lines = num({ value: (liveTotal.textContent || '0').replace(/,/g, '') });
-      if (paid) { paid.value = invoiceTotal(lines).toFixed(2); paid.dispatchEvent(new Event('input', { bubbles: true })); }
     }
   });
 
@@ -352,7 +356,11 @@
     if (unitMatch) { fillPrice(parseInt(unitMatch[1], 10), true); }
     recalc();
   });
-  form.addEventListener('input', recalc);
+  form.addEventListener('input', function (event) {
+    // A person typing in paid now takes "pay all" off (isTrusted: our own events never do).
+    if (payAllOn && event.isTrusted && event.target === header('paid_now')) { payAll(false); }
+    recalc();
+  });
   // FB-QUICKADD: a new item from inside the invoice. Saved through the items screen's own form (automatic code,
   // same checks), then offered on every line and put on the next empty one.
   var quick = form.querySelector('[data-quick-item]');
