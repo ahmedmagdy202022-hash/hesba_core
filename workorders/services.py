@@ -386,12 +386,29 @@ def customer_link(order, lang="ar", user=None):
     return url
 
 
-def quote_fingerprint(order):
-    """The quote as the customer sees it: the total and a hash of the lines (item, quantity, price)."""
+def _line_text(line):
+    """The description the customer sees for a line (its own text, else the item name)."""
 
-    numbers = totals(order)
-    rows = [[line.item_id, str(line.quantity), str(ZERO if line.is_warranty else line.unit_price)] for line in numbers["lines"]]
+    return (line.description or line.item.item_name)[:255]
+
+
+def _line_price(line):
+    return ZERO if line.is_warranty else line.unit_price
+
+
+def _fingerprint(numbers):
+    """Hash of one snapshot of the quote (``totals()``): the total and each line's item, text, quantity and price.
+
+    It reads only ``numbers``, so the lines a page shows and the fingerprint it carries cannot differ."""
+
+    rows = [[line.item_id, _line_text(line), str(line.quantity), str(_line_price(line))] for line in numbers["lines"]]
     return hashlib.sha256(json.dumps([str(numbers["total"]), rows]).encode()).hexdigest()[:32]
+
+
+def quote_fingerprint(order):
+    """The quote as the customer sees it: the total and a hash of the lines (item, shown text, quantity, price)."""
+
+    return _fingerprint(totals(order))
 
 
 @transaction.atomic
@@ -443,14 +460,14 @@ def public_state(order, lang="ar"):
         if timeline and timeline[-1]["status"] == event.status:  # a refused quote writes two entries in a row
             continue
         timeline.append({"status": event.status, "label": labels.get(event.status, event.status), "at": event.at.isoformat(), "by_customer": by_customer(event)})
-    numbers = totals(order)
+    numbers = totals(order)  # the one read of the lines: the page, the total and the fingerprint all come from it
     return {
         "shop": company_details()["name"], "number": order.number, "device": order.device,
         "status": order.status, "status_label": labels.get(order.status, order.status), "can_decide": order.status == Status.QUOTED,
         "timeline": timeline,
-        "lines": [{"description": (line.description or line.item.item_name)[:255], "quantity": str(line.quantity),
-                   "unit_price": str(ZERO if line.is_warranty else line.unit_price), "amount": str(line.amount)} for line in numbers["lines"]],
-        "tax": str(numbers["tax"]), "total": str(numbers["total"]), "fingerprint": quote_fingerprint(order),
+        "lines": [{"description": _line_text(line), "quantity": str(line.quantity),
+                   "unit_price": str(_line_price(line)), "amount": str(line.amount)} for line in numbers["lines"]],
+        "tax": str(numbers["tax"]), "total": str(numbers["total"]), "fingerprint": _fingerprint(numbers),
     }
 
 
