@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
+from attachments import ui as attachments_ui
 from master_data.models import Customer, Item
 
 from . import services
@@ -213,7 +214,7 @@ def detail(request, pk):
         cashboxes=entity_scope.cashboxes(Cashbox.objects).filter(active=True), technicians=_technicians(),
         can_work=services.can_manage(request.user) or is_own,
         under_warranty=order.status == Status.DELIVERED and order.warranty_until and order.warranty_until >= today,
-        returns=order.warranty_returns.all()))
+        returns=order.warranty_returns.all(), attachments=attachments_ui.card(order, request.user, lang)))
 
 
 def receipt(request, pk):
