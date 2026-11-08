@@ -33,7 +33,7 @@ WORDS = {
         "report": "تقرير الفنيين", "report_intro": "الأوامر اللي اتسلمت في الشهر لكل فني: عددها، وإيرادها قبل الضريبة، ومتوسط الأيام في المحل، واللي رجع في الضمان.",
         "month": "الشهر", "go": "عرض", "count": "اتسلّم", "billed": "الإيراد", "avg_days": "متوسط الأيام", "returns": "رجع في الضمان",
         "late_list": "متأخر عن ميعاده", "nobody": "من غير فني", "terms": "الجهاز بيتسلّم بالإيصال ده. الأجهزة اللي متستلمش خلال 90 يوم من «جاهز» المحل مش مسؤول عنها.",
-        "signature": "توقيع العميل", "note": "ملاحظة", "view_only": "تقدر تشوف الأمر بس.",
+        "signature": "توقيع العميل", "note": "ملاحظة", "via_link": "العميل من اللينك", "view_only": "تقدر تشوف الأمر بس.",
     },
     "en": {
         "title": "Work orders", "intro": "Every device or request that comes in: when it was received, who has it, where it stands, and who collects it.",
@@ -53,7 +53,7 @@ WORDS = {
         "report": "Technicians", "report_intro": "Orders delivered in the month per technician: how many, revenue before VAT, average days in the shop, and warranty returns.",
         "month": "Month", "go": "Show", "count": "Delivered", "billed": "Revenue", "avg_days": "Avg. days", "returns": "Warranty returns",
         "late_list": "Past the promised date", "nobody": "No technician", "terms": "The device is collected with this receipt. The shop is not responsible for devices left more than 90 days after they are ready.",
-        "signature": "Customer's signature", "note": "Note", "view_only": "You can view this order only.",
+        "signature": "Customer's signature", "note": "Note", "via_link": "Customer (via link)", "view_only": "You can view this order only.",
     },
 }
 

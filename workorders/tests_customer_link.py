@@ -175,7 +175,7 @@ class CustomerLinkTests(WorkshopSetup):
                     response = self.decide(action, order)
                     self.assertEqual(response.status_code, 409)
                     self.assertEqual(WorkOrder.objects.get(pk=order.pk).status, status)
-                    self.assertFalse(order.events.filter(note__startswith=services.CUSTOMER_LINK_TAG).exists())
+                    self.assertFalse(order.events.filter(by_customer=True).exists())
 
     def test_the_service_itself_refuses_a_bad_decision_and_an_unquoted_order(self):
         with self.assertRaises(services.ValidationError):
@@ -221,8 +221,7 @@ class CustomerLinkTests(WorkshopSetup):
         event = self.order_.events.latest("pk")
         self.assertEqual(event.status, Status.APPROVED)
         self.assertTrue(services.by_customer(event))
-        self.assertTrue(event.note.startswith(services.CUSTOMER_LINK_TAG))
-        self.assertEqual(event.user, self.order_.created_by)  # the required FK; the tag says the customer acted
+        self.assertEqual((event.user, event.by_customer), (None, True))  # no fake actor (HG-073)
         self.assertEqual([step["by_customer"] for step in self.page().json()["timeline"]], [False, False, False, True])
         audit = AuditLog.objects.exclude(pk__in=before_audit).get()
         self.assertEqual((audit.module, audit.action, audit.object_type, audit.object_id, audit.actor), ("workorders", "customer_approve", "workorders.WorkOrder", str(self.order_.pk), None))
@@ -232,10 +231,26 @@ class CustomerLinkTests(WorkshopSetup):
         for personal in ("محمد علي", "01001234567", self.order_.number, self.order_.device):
             self.assertNotIn(personal, blob)
 
+    def test_the_staff_timeline_names_the_customer_and_staff_events_are_unchanged(self):
+        staff_before = list(self.order_.events.values_list("pk", "user_id", "by_customer", "note"))
+        self.assertTrue(all(user == self.owner.pk and not flag for _, user, flag, _ in staff_before))
+        self.decide("approve")
+        self.assertEqual(list(self.order_.events.values_list("pk", "user_id", "by_customer", "note"))[:len(staff_before)], staff_before)
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("workorders:detail", args=[self.order_.pk]))
+        self.assertContains(page, "العميل من اللينك")
+        self.assertContains(page, "العميل وافق على العرض من اللينك")
+        english = self.client.get(reverse("workorders:detail", args=[self.order_.pk]), {"lang": "en"})
+        self.assertContains(english, "Customer (via link)")
+        self.assertEqual(english.content.decode().count("Customer (via link)"), 1)  # only the customer's event
+
     def test_refuse_writes_the_event_and_audit_too(self):
         before_audit = set(AuditLog.objects.values_list("pk", flat=True))
         self.decide("refuse")
-        self.assertTrue(services.by_customer(self.order_.events.filter(status=Status.REFUSED).first()))
+        refused = list(self.order_.events.filter(status=Status.REFUSED))
+        self.assertTrue(refused and all((event.user, event.by_customer) == (None, True) for event in refused))  # incl. the quote-dropped entry
+        self.client.force_login(self.owner)
+        self.assertEqual(self.client.get(reverse("workorders:detail", args=[self.order_.pk])).status_code, 200)  # a null user renders
         actions = sorted(AuditLog.objects.exclude(pk__in=before_audit).values_list("action", flat=True))
         self.assertEqual(actions, ["customer_refuse", "drop_quote"])
         self.assertTrue(all(row.actor is None for row in AuditLog.objects.exclude(pk__in=before_audit)))

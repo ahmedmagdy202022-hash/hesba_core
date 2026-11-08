@@ -248,17 +248,13 @@ def move(order, to, user, note="", lang="ar"):
     return order
 
 
-#: Marks a timeline event made by the customer through the S2 link. ``WorkOrderEvent.user`` is a required
-#: user and the repo has no system-actor pattern, so the event is filed under the order's creator (no
-#: schema change) and this language-free tag in the note says who really acted.
-CUSTOMER_LINK_TAG = "[customer-link]"
-
-
 def by_customer(event):
-    return (event.note or "").startswith(CUSTOMER_LINK_TAG)
+    """True for a timeline event the customer made through the S2 link (its ``user`` is None; HG-073)."""
+
+    return bool(event.by_customer)
 
 
-def _drop_quote(order, user, lang, *, event_user=None):
+def _drop_quote(order, user, lang, *, customer=False):
     """A refused quote is not charged on pickup: its lines come off, kept in the audit (Codex on #190).
 
     An inspection fee, if the shop charges one, is added afterwards as its own line."""
@@ -269,7 +265,7 @@ def _drop_quote(order, user, lang, *, event_user=None):
     _audit(user, "drop_quote", order, {}, before={"lines": [{"item": line.item.item_code, "quantity": str(line.quantity), "price": str(line.unit_price),
                                                                "warranty": line.is_warranty} for line in lines]})
     order.lines.all().delete()
-    WorkOrderEvent.objects.create(order=order, status=order.status, note=MESSAGES[lang]["refused"][:255], user=event_user or user)
+    WorkOrderEvent.objects.create(order=order, status=order.status, note=MESSAGES[lang]["refused"][:255], user=None if customer else user, by_customer=customer)
 
 
 @transaction.atomic
@@ -401,9 +397,9 @@ def customer_decide(order, decision, lang="ar"):
         raise ValidationError(words["link_closed"])
     order.status = to
     order.save(update_fields=["status"])
-    _event(order, order.created_by, f'{CUSTOMER_LINK_TAG} {words["link_approved" if to == Status.APPROVED else "link_refused"]}')
+    WorkOrderEvent.objects.create(order=order, status=to, note=words["link_approved" if to == Status.APPROVED else "link_refused"], user=None, by_customer=True)
     if to == Status.REFUSED:
-        _drop_quote(order, None, lang, event_user=order.created_by)
+        _drop_quote(order, None, lang, customer=True)
     # No personal data: the order id only, no name, phone, IP or user agent.
     AuditLog.objects.create(event_type=AuditEventType.UPDATE, actor=None, module="workorders", action=f"customer_{decision}",
                             object_type="workorders.WorkOrder", object_id=str(order.pk), before_data={"status": Status.QUOTED},
