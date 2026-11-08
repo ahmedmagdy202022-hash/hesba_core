@@ -5,7 +5,9 @@ from decimal import Decimal as D
 from urllib.parse import unquote
 
 from django.core.exceptions import ValidationError
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -299,6 +301,46 @@ class MoveTests(AppointmentSetup):
         self.assertEqual((appointment.price, appointment.invoice_id), (D("300.00"), None))
         self.assertFalse(SalesInvoice.objects.exists())
 
+    def test_a_viewer_without_book_gets_a_json_403_and_nothing_moves(self):
+        from permissions.services import user_has_permission
+
+        from .views import BOOK, VIEW
+
+        appointment = self.book(hour=10)
+        accountant = person(RoleCode.ACCOUNTANT, "move_accountant")
+        self.assertTrue(user_has_permission(accountant, VIEW) and not user_has_permission(accountant, BOOK))
+        self.client.force_login(accountant)
+        for lang, text in (("ar", "تعديل المواعيد لصاحب الصلاحية بس"), ("en", "Only users with the permission can change appointments")):
+            with self.subTest(lang=lang):
+                response = self.move(appointment, at(15), lang=lang)
+                self.assertEqual(response.status_code, 403)
+                self.assertEqual(response["Content-Type"], "application/json")
+                self.assertFalse(response.json()["ok"])
+                self.assertIn(text, response.json()["error"])
+        appointment.refresh_from_db()
+        self.assertEqual(appointment.starts_at, at(10))
+
+    def test_an_arrived_appointment_that_is_already_billed_cannot_move(self):
+        appointment = self.book(hour=10)
+        services.set_status(appointment, AppointmentStatus.ARRIVED, self.owner)
+        services.bill(appointment, self.owner)
+        Appointment.objects.filter(pk=appointment.pk).update(status=AppointmentStatus.ARRIVED)  # in progress, yet invoiced
+        response = self.move(appointment, at(15), lang="en")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("done or cancelled", response.json()["error"])
+        appointment.refresh_from_db()
+        self.assertEqual(appointment.starts_at, at(10))
+
+    def test_a_naive_start_is_read_as_cairo_time(self):
+        appointment = self.book(hour=10)
+        response = self.move(appointment, f"{TODAY.isoformat()}T15:30:00")
+        appointment.refresh_from_db()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(str(appointment.starts_at.tzinfo), "UTC")
+        self.assertEqual(appointment.starts_at, at(15, 30))
+        self.assertEqual(timezone.localtime(appointment.starts_at).strftime("%H:%M %Z"), "15:30 EET")
+        self.assertEqual(response.json()["start"], at(15, 30).isoformat())
+
 
 class WeekJsonTests(AppointmentSetup):
     def setUp(self):
@@ -343,3 +385,16 @@ class WeekJsonTests(AppointmentSetup):
     def test_it_needs_the_view_permission(self):
         self.client.force_login(person(RoleCode.STOCK_KEEPER, "week_keeper"))
         self.assertEqual(self.get().status_code, 403)
+
+    def test_the_query_count_does_not_grow_with_the_rows(self):
+        day = self.monday + timedelta(days=1)
+        for hour in (8, 9):
+            self.book(hour=hour, minutes=30, starts_at=at(hour, day=day))
+        with CaptureQueriesContext(connection) as queries:
+            self.assertEqual(len(self.get().json()["staff"][0]["appointments"]), 2)
+        for hour in (10, 11, 12, 13):
+            self.book(hour=hour, minutes=30, employee=None, starts_at=at(hour, day=day))
+        other = save_employee({"name": "منى الفنية"}, self.owner)
+        self.book(hour=14, employee=other, starts_at=at(14, day=day))
+        with self.assertNumQueries(len(queries)):
+            self.assertEqual(sum(len(group["appointments"]) for group in self.get().json()["staff"]), 7)

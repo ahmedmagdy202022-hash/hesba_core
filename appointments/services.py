@@ -44,14 +44,14 @@ MESSAGES = {
         "address": "الزيارة محتاجة عنوان.", "overlap": "{employee} عنده ميعاد تاني من {start} لـ {end}.", "status": "مينفعش تنقل الميعاد من «{old}» لـ «{new}».",
         "closed": "الميعاد ده خلص أو اتلغى؛ مينفعش يتعدّل.", "no_service": "اختار الخدمة الأول عشان تعمل الفاتورة.", "setup": "لازم يكون فيه مخزن بيع نشط.",
         "billed": "الميعاد ده عليه فاتورة بالفعل.", "not_done": "الميعاد لازم يكون خلص أو جاري عشان تعمل فاتورته.",
-        "bad_start": "اكتب ميعاد جديد صحيح.", "bad_staff": "الموظف ده مش موجود أو مش شغال.",
+        "forbidden": "تعديل المواعيد لصاحب الصلاحية بس.", "bad_start": "اكتب ميعاد جديد صحيح.", "bad_staff": "الموظف ده مش موجود أو مش شغال.",
     },
     "en": {
         "customer": "Choose the customer.", "when": "Enter a valid date and time.", "minutes": "The duration must be {a} to {b} minutes.", "price": "Invalid price.",
         "address": "A visit needs an address.", "overlap": "{employee} already has an appointment from {start} to {end}.", "status": "The appointment cannot move from “{old}” to “{new}”.",
         "closed": "This appointment is done or cancelled; it cannot be changed.", "no_service": "Choose the service first to make the invoice.", "setup": "An active selling location is needed.",
         "billed": "This appointment already has an invoice.", "not_done": "The appointment must be in progress or done to be billed.",
-        "bad_start": "Enter a valid new date and time.", "bad_staff": "That employee does not exist or is not active.",
+        "forbidden": "Only users with the permission can change appointments.", "bad_start": "Enter a valid new date and time.", "bad_staff": "That employee does not exist or is not active.",
     },
 }
 

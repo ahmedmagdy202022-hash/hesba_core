@@ -238,7 +238,7 @@ def move(request, pk):
     lang = _lang(request)
     words = services.MESSAGES[lang]
     if not user_has_permission(request.user, BOOK):
-        raise PermissionDenied("Moving appointments needs sales.create_sales_invoice.")
+        return _json_error(words["forbidden"], 403)
     appointment = get_object_or_404(Appointment, pk=pk)
     try:
         new_start = parse_datetime((request.POST.get("start") or "").strip())
