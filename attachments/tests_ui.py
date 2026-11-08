@@ -165,6 +165,16 @@ class CardVisibilityTests(CardSetup):
         self.assertNotContains(page, "data-att-signature")
         self.assertContains(page, f'data-url="{reverse("attachments:delete", args=[photo.pk])}?lang=ar"')  # a photo can still go, as the service allows
         self.assertNotContains(page, f'data-url="{reverse("attachments:delete", args=[sign.pk])}')  # the signature of a delivered order stays
+        # The delete button still has a token to send with no add form on the page, and the server takes it.
+        from django.test import Client
+
+        strict = Client(enforce_csrf_checks=True)
+        strict.force_login(self.owner)
+        card = strict.get(reverse("workorders:detail", args=[self.wo.pk]) + "?lang=ar").content.decode().split('id="wo-attachments"')[1]
+        token = re.search(r'name="csrfmiddlewaretoken" value="([^"]+)"', card).group(1)
+        url = reverse("attachments:delete", args=[photo.pk]) + "?lang=ar"
+        self.assertEqual(strict.post(url).status_code, 403)  # no token: refused
+        self.assertLess(strict.post(url, HTTP_X_CSRFTOKEN=token).status_code, 400)
 
 
 class CardContextTests(CardSetup):

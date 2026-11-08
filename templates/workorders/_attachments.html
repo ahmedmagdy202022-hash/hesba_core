@@ -3,6 +3,7 @@
 <section class="att-card" id="wo-attachments" data-attachments data-signature-stage="{{ att.default_signature_stage }}"
  data-msg-failed="{{ aw.failed }}" data-msg-network="{{ aw.network }}" data-msg-uploading="{{ aw.uploading }}" data-msg-uploaded="{{ aw.uploaded }}"
  data-msg-deleting="{{ aw.deleting }}" data-msg-confirm="{{ aw.delete_confirm }}" data-msg-empty-signature="{{ att.empty_signature }}">
+{% csrf_token %}{# delete needs a token even when no add form is shown (a closed order) #}
 <p class="att-help">{{ aw.intro }}</p>
 {% if att.blocked %}<div class="op-message" data-att-blocked>{{ att.blocked }}</div>{% endif %}
 <div class="op-message op-message-error" role="alert" data-att-error hidden></div>
