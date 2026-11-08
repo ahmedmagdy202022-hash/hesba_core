@@ -296,6 +296,19 @@ class CallbackTests(PayLinkSetup):
         txn = GatewayTransaction.objects.get(transaction_id="904")
         self.assertEqual((txn.outcome, txn.needs_review), (TransactionOutcome.CONFIRMED, True))
 
+    def test_failed_then_confirmed_on_the_same_transaction_is_flagged_not_posted(self):
+        invoice = self.invoice("300.00")
+        link = services.create_link(invoice, self.owner)
+        provider = self.provider()
+        self.post_callback(*provider.callback(link.gateway_order_id, 30000, transaction_id=906, success=False, pending=False))
+        pending = self.post_callback(*provider.callback(link.gateway_order_id, 30000, transaction_id=906, success=False, pending=True))
+        self.assertEqual(pending.json()["result"], "late_pending_ignored")
+        confirmed = self.post_callback(*provider.callback(link.gateway_order_id, 30000, transaction_id=906))
+        self.assertEqual((confirmed.status_code, confirmed.json()["result"]), (200, "flagged_after_failed"))
+        txn = GatewayTransaction.objects.get()
+        self.assertEqual((txn.outcome, txn.customer_payment, txn.needs_review), (TransactionOutcome.FAILED, None, True))
+        self.assertEqual(self.money(invoice), {"customer": D("300.00"), "gateway": ZERO, "payments": 0, "settled": ZERO, "outstanding": D("300.00")})
+
     def test_a_forged_or_unsigned_callback_is_refused_and_writes_no_row(self):
         invoice = self.invoice("300.00")
         link = services.create_link(invoice, self.owner)
@@ -401,7 +414,8 @@ class CallbackTests(PayLinkSetup):
         done = public.get(back["Location"])
         self.assertContains(done, 'data-banner="waiting"')
         self.assertFalse(CustomerPayment.objects.exists())
-        self.assertEqual(public.get(reverse("pay_return_paymob"), {"merchant_order_id": "HSB-unknown"}).status_code, 404)
+        self.assertContains(public.get(reverse("pay_return_paymob"), {"merchant_order_id": "HSB-unknown"}), 'data-banner="waiting"')
+        self.assertFalse(CustomerPayment.objects.exists())
         self.callback(link)
         self.assertContains(public.get(reverse("pay_done", args=[services.sign_token(link)]), {"lang": "en"}), "Your payment reached the shop")
 
@@ -630,3 +644,29 @@ class WorkOrderTests(PayLinkSetup):
         page = public.get(reverse("share_document", args=[make_token("work_order", order.pk)]), HTTP_ACCEPT="text/html")
         self.assertContains(page, "data-pay-online")
         self.assertFalse(CustomerPayment.objects.exists())
+
+
+
+class RepTests(PayLinkSetup):
+    modules = PayLinkSetup.modules + ",employees_technicians"  # reps are used only with the employees module
+
+    def test_rep_report_and_digest_count_the_link_payment_once(self):
+        from reports.reps import rep_performance
+        from staff.services import save_employee
+
+        rep = save_employee({"name": "سمير المندوب", "commission_percent": "5"}, self.owner)
+        self.customer.sales_rep = rep
+        self.customer.save()
+        day_one = TODAY - timedelta(days=2)
+        draft = create_sales_draft({"invoice_number": "SI-REP", "invoice_date": day_one, "customer": self.customer, "selling_location": self.location,
+                                    "cashbox": None, "discount_amount": ZERO, "tax_amount": ZERO, "paid_now": ZERO, "salesperson": rep},
+                                   [{"item": self.service, "quantity": D("1"), "unit_sale_price": D("1000"), "line_discount_amount": ZERO}], self.owner)
+        post_sales_invoice(draft.pk, self.owner)
+        draft.refresh_from_db()
+        self.callback(services.create_link(draft, self.owner, "400"))  # paid today, the day the webhook arrives
+        whole = {row["rep"]: row for row in rep_performance(day_one, TODAY)[0]}[rep]
+        self.assertEqual((whole["collected"], whole["credit_sold"]), (D("400.00"), D("600.00")))  # the link payment once
+        first_day = {row["rep"]: row for row in rep_performance(day_one, day_one)[0]}[rep]
+        self.assertEqual((first_day["collected"], first_day["credit_sold"]), (ZERO, D("600.00")))  # collected today, not on day one
+        self.assertEqual(daily_digest(self.owner, TODAY)["customers"]["collected"], D("400.00"))
+        self.assertEqual(daily_digest(self.owner, day_one)["sales"]["credit"], D("600.00"))

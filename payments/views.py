@@ -134,8 +134,14 @@ def pay_return(request):
         return _too_many()
     reference = (request.GET.get("merchant_order_id") or "")[:40]
     link = PaymentLink.objects.filter(reference=reference).first() if reference else None
-    if link is None:
-        return _expired(request)
+    if link is None:  # the gateway's return did not name our order: a neutral page, never "expired" after a payment
+        from printing.company import company_details
+        from reports.aging import whatsapp_number
+
+        lang = _lang(request)
+        company = company_details()
+        return _private(render(request, "payments/checking.html", {"lang": lang, "dir": "ltr" if lang == "en" else "rtl", "company": company,
+                                                                   "phone": company["phone"], "whatsapp": whatsapp_number(company["phone"])}))
     return _private(HttpResponseRedirect(f"{reverse('pay_done', args=[services.sign_token(link)])}?lang={_lang(request)}", status=303))
 
 

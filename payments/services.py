@@ -371,6 +371,13 @@ def _transition(provider, txn, link, callback, created):
             _flag(txn, "failed, void or refund after confirmation: check by hand, nothing reversed")
             return "flagged_after_confirmed"
         return "repeat_confirmed" if callback.outcome == Outcome.CONFIRMED else "late_pending_ignored"
+    if txn.outcome == TransactionOutcome.FAILED and not created:
+        # HG-070: money moves only on new or pending → confirmed. A failed transaction that later says pending or
+        # confirmed is logged and flagged for a person, never posted by the machine.
+        if callback.outcome == Outcome.CONFIRMED:
+            _flag(txn, "confirmed after failed for the same transaction: check by hand, nothing recorded")
+            return "flagged_after_failed"
+        return "repeat_failed" if callback.outcome == Outcome.FAILED else "late_pending_ignored"
     if callback.outcome == Outcome.PENDING:
         if txn.outcome == TransactionOutcome.PENDING and not created:
             return "repeat_pending"

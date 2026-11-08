@@ -1,0 +1,5 @@
+{% extends "printing/share_base.html" %}
+{% block title %}{% if lang == 'en' %}Payment{% else %}الدفع{% endif %} · {{ company.name }}{% endblock %}
+{% block content %}<main class="cl-main" data-pay-checking>
+<div class="cl-msg cl-msg--info" data-banner="waiting">{% if lang == 'en' %}Thank you. The shop records your payment once the payment company confirms it. Open the link the shop sent you to see its status.{% else %}شكرًا ليك. المحل بيسجّل دفعتك أول ما شركة الدفع تأكدها. افتح اللينك اللي المحل بعتهولك عشان تشوف حالتها.{% endif %}</div>
+</main>{% endblock %}
