@@ -227,6 +227,8 @@ LANGUAGE_CODE = "ar"
 TIME_ZONE = "Africa/Cairo"
 USE_I18N = True
 USE_TZ = True
+# TEST-002: keeps a test run on one Cairo calendar day even if it crosses midnight.
+TEST_RUNNER = "hesba_testing.runner.HesbaTestRunner"
 STATIC_URL = "/static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / config("STATIC_ROOT", default="staticfiles")
