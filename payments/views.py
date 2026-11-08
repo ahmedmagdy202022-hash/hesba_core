@@ -185,6 +185,10 @@ def mock_checkout(request, reference):
 
     provider = _mock_provider()
     link = get_object_or_404(PaymentLink.objects.select_related("invoice"), reference=reference, provider=provider.code)
+    services.expire_stale(link.invoice)
+    link.refresh_from_db()
+    if not services.is_payable(link):  # paid, failed, expired, or the invoice changed: nothing to pay here
+        raise Http404()
     lang = _lang(request)
     signed = services.sign_token(link)
     if request.method == "POST":
@@ -193,7 +197,9 @@ def mock_checkout(request, reference):
                  "failed": {"success": False, "pending": False}}.get(outcome)
         if flags is None:
             raise Http404()
-        payload, signature = provider.callback(link.gateway_order_id, services.to_cents(link.amount), merchant_reference=link.reference, **flags)
+        # One transaction id per link, as one card payment is at Paymob: a second press is a repeat, never a second payment.
+        payload, signature = provider.callback(link.gateway_order_id, services.to_cents(link.amount), transaction_id=900_000_000 + link.pk,
+                                               merchant_reference=link.reference, **flags)
         services.handle_callback(payload, signature, provider)
         return HttpResponseRedirect(f"{reverse('pay_done', args=[signed])}?lang={lang}", status=303)
     return _page(request, "payments/mock_checkout.html", link, lang, signed)

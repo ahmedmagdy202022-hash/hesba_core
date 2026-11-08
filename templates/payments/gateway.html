@@ -16,7 +16,7 @@
 <div class="op-field"><label for="p-bank">{% if lang == 'en' %}Into bank{% else %}للحساب البنكي{% endif %}</label><select id="p-bank" name="bank">{% for bank in banks %}<option value="{{ bank.pk }}">{{ bank }}</option>{% endfor %}</select></div>
 <div class="op-field"><label for="p-net">{% if lang == 'en' %}Net received{% else %}الصافي اللي وصل{% endif %}</label><input id="p-net" name="net" inputmode="decimal" dir="ltr" required></div>
 <div class="op-field"><label for="p-fee">{% if lang == 'en' %}Gateway fee{% else %}عمولة البوابة{% endif %}</label><input id="p-fee" name="fee" inputmode="decimal" dir="ltr"></div>
-<div class="op-field"><label for="p-ref">{% if lang == 'en' %}Payout reference{% else %}رقم التحويل{% endif %}</label><input id="p-ref" name="reference" dir="ltr" autocomplete="off"></div>
+<div class="op-field"><label for="p-ref">{% if lang == 'en' %}Payout reference{% else %}رقم التحويل{% endif %}</label><input id="p-ref" name="reference" dir="ltr" autocomplete="off" required></div>
 </div><div class="op-form-actions"><button class="op-primary" type="submit">{% if lang == 'en' %}Record the payout{% else %}سجّل التحويل{% endif %}</button></div></form>{% endif %}
 
 {% if review %}<h2>{% if lang == 'en' %}Needs a look{% else %}محتاج مراجعة{% endif %}</h2>

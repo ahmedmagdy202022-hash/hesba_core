@@ -65,6 +65,7 @@ MESSAGES = {
         "not_new": "اللينك ده مش شغال خلاص.",
         "payout_box": "اختار حساب «بوابة الدفع» والحساب البنكي اللي استلم التحويل، في نفس الفرع.",
         "payout_amount": "اكتب صافي التحويل والعمولة كأرقام صحيحة.",
+        "payout_ref": "اكتب رقم التحويل اللي في كشف البوابة.", "payout_twice": "التحويل رقم {ref} اتسجّل قبل كده.",
         "payout_reason": "تحويل بوابة الدفع {ref}", "fee_reason": "عمولة بوابة الدفع {ref}",
         "statuses": {"new": "مستني الدفع", "paid": "اتدفع", "mismatch": "مبلغ مختلف", "failed": "الدفع ما تمّش", "expired": "انتهى"},
     },
@@ -84,6 +85,7 @@ MESSAGES = {
         "not_new": "This link is no longer live.",
         "payout_box": "Choose the payment-gateway account and the bank account that received the payout, in one entity.",
         "payout_amount": "Enter the net payout and the fee as valid numbers.",
+        "payout_ref": "Enter the payout reference from the gateway's statement.", "payout_twice": "Payout {ref} was already recorded.",
         "payout_reason": "Payment gateway payout {ref}", "fee_reason": "Payment gateway fee {ref}",
         "statuses": {"new": "Waiting for payment", "paid": "Paid", "mismatch": "Paid, different amount", "failed": "Payment failed", "expired": "Expired"},
     },
@@ -327,7 +329,10 @@ def _find_link(provider, callback):
 
     if not callback.order_id:
         return None
-    return PaymentLink.objects.filter(provider=provider.code, gateway_order_id=callback.order_id).exclude(gateway_order_id="").first()
+    link = PaymentLink.objects.filter(provider=provider.code, gateway_order_id=callback.order_id).exclude(gateway_order_id="").first()
+    if link is not None and callback.merchant_reference and callback.merchant_reference != link.reference:
+        return None  # a reference is present but not this link's own: treated as an unknown order (review)
+    return link
 
 
 def _transaction_row(provider, callback, link):
@@ -375,6 +380,15 @@ def _transition(provider, txn, link, callback, created):
             _flag(txn, "failed, void or refund after confirmation: check by hand, nothing reversed")
             return "flagged_after_confirmed"
         return "repeat_confirmed" if callback.outcome == Outcome.CONFIRMED else "late_pending_ignored"
+    if not created and txn.link_id != getattr(link, "pk", None):
+        # The row was first logged for another link, or as an unknown order: a replay never posts, whatever the
+        # unsigned fields say now.
+        if callback.outcome == Outcome.CONFIRMED:
+            _flag(txn, "replay that names a different link than the first callback: check by hand, nothing recorded")
+        return "unknown_order" if txn.link_id is None else "link_changed"
+    if callback.child:
+        _flag(txn, "child transaction (refund, void or capture): check by hand, nothing recorded or reversed")
+        return "flagged_child"
     if txn.outcome == TransactionOutcome.FAILED and not created:
         # HG-070: money moves only on new or pending → confirmed. A failed transaction that later says pending or
         # confirmed is logged and flagged for a person, never posted by the machine.
@@ -394,6 +408,10 @@ def _transition(provider, txn, link, callback, created):
         if link is not None and link.status == LinkStatus.NEW:
             link.status = LinkStatus.FAILED
             link.save(update_fields=["status", "updated_at"])
+        elif link is not None and (link.status in (LinkStatus.PAID, LinkStatus.MISMATCH)
+                                   or link.transactions.filter(customer_payment__isnull=False).exists()):
+            _flag(txn, "a failure on a link already paid: check by hand, nothing reversed")
+            return "flagged_after_paid"
         return "failed"
     # confirmed, and nothing recorded yet: the one transition that moves money
     txn.outcome, txn.payload, txn.amount_cents, txn.currency = TransactionOutcome.CONFIRMED, callback.raw, callback.amount_cents, callback.currency[:3]
@@ -474,8 +492,14 @@ def book_payout(gateway, bank, net, fee, user, reference="", lang="ar", day=None
         raise ValidationError(words["payout_amount"])
     day = day or timezone.localdate()
     reference = (reference or "").strip()[:60]
+    if not reference:  # the gateway's payout reference is what stops the same payout being booked twice
+        raise ValidationError(words["payout_ref"])
     # ``CashboxOperation.reference_number`` is unique: the transfer and the fee each get their own.
-    base = f"GW-{reference}" if reference else f"GW-{gateway.pk}-{timezone.now():%Y%m%d%H%M%S%f}"
+    base = f"GW-{reference}"
+    from cashboxes.models import CashboxOperation
+
+    if CashboxOperation.objects.filter(reference_number__in=(f"{base}-NET", f"{base}-FEE")).exists():
+        raise ValidationError(words["payout_twice"].format(ref=reference))
     operations = []
     if net > 0:
         operations.append(create_cashbox_operation(f"{base}-NET", day, CashboxOperationType.TRANSFER, net, words["payout_reason"].format(ref=reference).strip(),

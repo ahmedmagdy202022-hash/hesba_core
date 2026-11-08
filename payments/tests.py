@@ -635,7 +635,7 @@ class CapabilityAndPermissionTests(PayLinkSetup):
         self.assertTrue(ledger_reports.reconciliation()["ok"])
         self.assertTrue(AuditLog.objects.filter(module="payments", action="book_payout").exists())
         with self.assertRaisesMessage(ValidationError, "cannot become negative"):
-            services.book_payout(self.gateway, self.bank, "1", "0", self.owner)
+            services.book_payout(self.gateway, self.bank, "1", "0", self.owner, reference="PO-2")
         with self.assertRaisesMessage(ValidationError, "payment-gateway account"):
             services.book_payout(self.bank, self.gateway, "1", "0", self.owner, lang="en")
 
@@ -728,3 +728,82 @@ class RepTests(PayLinkSetup):
         self.assertEqual((first_day["collected"], first_day["credit_sold"]), (ZERO, D("600.00")))  # collected today, not on day one
         self.assertEqual(daily_digest(self.owner, TODAY)["customers"]["collected"], D("400.00"))
         self.assertEqual(daily_digest(self.owner, day_one)["sales"]["credit"], D("600.00"))
+
+
+class ReviewHardeningTests(PayLinkSetup):
+    """The independent review of PR #315: each test failed before its fix."""
+
+    def test_system_check_refuses_the_mock_without_debug_and_a_half_configured_live_gateway(self):
+        from .checks import gateway_settings
+
+        keys = {"PAYMOB_API_KEY": "k", "PAYMOB_HMAC_SECRET": "s", "PAYMOB_INTEGRATION_ID": "1", "PAYMOB_IFRAME_ID": "2"}
+        with override_settings(DEBUG=False, PAYMENT_GATEWAY_MOCK=True):
+            self.assertEqual([error.id for error in gateway_settings(None)], ["payments.E001"])
+        with override_settings(DEBUG=True, PAYMENT_GATEWAY_MOCK=True):
+            self.assertEqual(gateway_settings(None), [])
+        with override_settings(PAYMENT_GATEWAY_MOCK=False, PAYMOB_LIVE=True, **dict(keys, PAYMOB_IFRAME_ID="")):
+            self.assertEqual([error.id for error in gateway_settings(None)], ["payments.E002"])
+        with override_settings(PAYMENT_GATEWAY_MOCK=False, PAYMOB_LIVE=True, **keys):
+            self.assertEqual(gateway_settings(None), [])
+
+    def test_the_mock_checkout_refuses_a_link_that_is_not_payable_and_never_mints_twice(self):
+        invoice = self.invoice("1000.00")
+        link = services.create_link(invoice, self.owner)
+        public = Client()
+        url = reverse("pay_mock_checkout", args=[link.reference])
+        self.assertEqual(public.get(url).status_code, 200)
+        public.post(url, {"outcome": "success"})
+        second = public.post(url, {"outcome": "success"})
+        self.assertEqual(second.status_code, 404)
+        self.assertEqual(self.money(invoice), {"customer": ZERO, "gateway": D("1000.00"), "payments": 1, "settled": D("1000.00"), "outstanding": ZERO})
+        self.assertEqual(public.get(url).status_code, 404)  # paid: no longer payable
+        stale = services.create_link(self.invoice("50.00"), self.owner)
+        PaymentLink.objects.filter(pk=stale.pk).update(expires_at=timezone.now() - timedelta(minutes=1))
+        self.assertEqual(public.post(reverse("pay_mock_checkout", args=[stale.reference]), {"outcome": "success"}).status_code, 404)
+        self.assertEqual(CustomerPayment.objects.count(), 1)
+
+    def test_a_reference_that_is_not_the_links_own_is_unknown_and_its_replay_never_posts(self):
+        invoice = self.invoice("400.00")
+        link = services.create_link(invoice, self.owner)
+        provider = self.provider()
+        wrong = self.post_callback(*provider.callback(link.gateway_order_id, 40000, transaction_id=2020, merchant_reference="HSB-someone-else"))
+        self.assertEqual(wrong.json()["result"], "unknown_order")
+        replay = self.post_callback(*provider.callback(link.gateway_order_id, 40000, transaction_id=2020, merchant_reference=link.reference))
+        self.assertEqual((replay.status_code, replay.json()["result"]), (200, "unknown_order"))
+        self.assertEqual(self.money(invoice)["payments"], 0)
+        txn = GatewayTransaction.objects.get()
+        self.assertEqual((txn.link, txn.customer_payment, txn.needs_review), (None, None, True))
+
+    def test_a_child_refund_or_a_failure_after_payment_is_flagged(self):
+        invoice = self.invoice("300.00")
+        link = services.create_link(invoice, self.owner)
+        provider = self.provider()
+        self.post_callback(*provider.callback(link.gateway_order_id, 30000, transaction_id=3001))
+        before = self.money(invoice)
+        refund = self.post_callback(*provider.callback(link.gateway_order_id, 30000, transaction_id=3002,
+                                                       extra={"has_parent_transaction": True, "is_refunded": True}))
+        self.assertEqual(refund.status_code, 200)
+        failed = self.post_callback(*provider.callback(link.gateway_order_id, 30000, transaction_id=3003, success=False))
+        self.assertEqual(failed.status_code, 200)
+        self.assertEqual(self.money(invoice), before)
+        self.assertTrue(GatewayTransaction.objects.get(transaction_id="3002").needs_review)
+        self.assertTrue(GatewayTransaction.objects.get(transaction_id="3003").needs_review)
+        link.refresh_from_db()
+        self.assertEqual(link.status, LinkStatus.PAID)
+
+    def test_an_authorisation_without_capture_is_pending_not_money(self):
+        invoice = self.invoice("300.00")
+        link = services.create_link(invoice, self.owner)
+        response, _ = self.callback(link, extra={"is_auth": True, "is_capture": False})
+        self.assertEqual(response.json()["result"], "pending")
+        self.assertEqual(self.money(invoice)["payments"], 0)
+
+    def test_a_payout_needs_a_reference_and_is_booked_once(self):
+        invoice = self.invoice("1000.00")
+        self.callback(services.create_link(invoice, self.owner))
+        with self.assertRaisesMessage(ValidationError, "رقم التحويل"):
+            services.book_payout(self.gateway, self.bank, "100", "0", self.owner)
+        services.book_payout(self.gateway, self.bank, "100", "5", self.owner, reference="PO-7")
+        with self.assertRaises(ValidationError):
+            services.book_payout(self.gateway, self.bank, "100", "5", self.owner, reference="PO-7")
+        self.assertEqual((box_balance(self.gateway), box_balance(self.bank)), (D("895.00"), D("100.00")))

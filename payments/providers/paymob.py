@@ -150,6 +150,8 @@ class PaymobProvider(PaymentProvider):
         success, pending = _truthy(obj.get("success")), _truthy(obj.get("pending"))
         if any(_truthy(obj.get(key)) for key in ("is_voided", "is_refunded", "has_parent_transaction")):
             outcome = Outcome.FAILED  # a void, refund or child transaction never posts money; after a confirmation it is flagged
+        elif success and _truthy(obj.get("is_auth")) and not _truthy(obj.get("is_capture")):
+            outcome = Outcome.PENDING  # authorised, not captured: no money has moved yet
         elif success and not pending:
             outcome = Outcome.CONFIRMED
         elif pending:
@@ -157,4 +159,5 @@ class PaymobProvider(PaymentProvider):
         else:
             outcome = Outcome.FAILED
         return Callback(transaction_id=transaction_id, order_id=order_id, merchant_reference=_text(_dig(obj, "order.merchant_order_id")),
-                        amount_cents=amount_cents, currency=_text(obj.get("currency")) or "EGP", outcome=outcome, raw=obj)
+                        amount_cents=amount_cents, currency=_text(obj.get("currency")) or "EGP", outcome=outcome, raw=obj,
+                        child=_truthy(obj.get("has_parent_transaction")))

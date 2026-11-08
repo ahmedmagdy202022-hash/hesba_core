@@ -34,6 +34,8 @@ class Callback:
     currency: str
     outcome: str
     raw: dict = field(default_factory=dict)
+    #: A transaction that follows another one (a refund, void or capture): never money by itself; a person looks.
+    child: bool = False
 
 
 class PaymentProvider:
