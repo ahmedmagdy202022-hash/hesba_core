@@ -247,7 +247,7 @@ def invoice_create(request):
     offer_quick_add(form, request.user, lang)  # FB2-QUICKPARTY: + new supplier / customer / warehouse
     return render(request, "sales/form.html", _context(request, form=form, line_formset=line_formset, can_post=True, item_catalog=item_catalog(sale_prices=True, purchase_prices=False), scan_words=scan_words(lang), price_book=price_book(), tax_rates=rates_by_item(), units=units_catalog(), from_order=from_order, from_prescription=from_prescription,
                                                       promotions_on=promotions.enabled(), running_promotions=promotions.running() if promotions.enabled() else [],
-                                                      coupon=request.POST.get("coupon", "") if request.method == "POST" else copy_coupon, loyalty_on=loyalty.enabled(), loyalty_rules=loyalty.rules() if loyalty.enabled() else None,
+                                                      coupon=request.POST.get("coupon", "") if request.method == "POST" else copy_coupon, pay_full="1" if request.method == "POST" and request.POST.get("pay_full") == "1" else "", loyalty_on=loyalty.enabled(), loyalty_rules=loyalty.rules() if loyalty.enabled() else None,
                                                       redeem_points=request.POST.get("redeem_points", "") if request.method == "POST" else copy_points))
 
 

@@ -146,7 +146,7 @@
   var sumTotal = form.querySelector('[data-sum-total]');
   var sumRemaining = form.querySelector('[data-sum-remaining]');
   var payFull = form.querySelector('[data-pay-full]');  // sales only: sent as pay_full=1, so the server takes paid now from its own total
-  var payAllOn = false;
+  var payAllOn = !!payFull && payFull.value === '1';  // a form shown again after a failed save keeps "pay all" on
   function payAll(on) { payAllOn = on; if (payFull) { payFull.value = on ? '1' : ''; } }
 
   function lineRow(index) {
