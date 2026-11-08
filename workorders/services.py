@@ -628,19 +628,27 @@ def late(today=None):
 
 
 def technician_report(first, last):
-    """Per technician, orders delivered in [first, last]: count, billed (before VAT), average days in the shop, warranty returns."""
+    """Per technician, orders delivered in [first, last]: count, billed (before VAT), average days in the shop, warranty returns.
+
+    S9 (roadmap item 5) adds ``net_sales`` and ``commission``, taken exactly as appointments take them
+    (``appointments.services.net_sales``): the posted delivery invoice before tax, less its posted returns, times the
+    technician's ``commission_percent``. ``billed`` is unchanged (it never netted returns); orders with no technician earn none.
+    """
 
     from collections import OrderedDict
+
+    from appointments.services import net_sales
 
     delivered = (scoped(WorkOrder.objects).filter(status=Status.DELIVERED, delivered_at__date__gte=first, delivered_at__date__lte=last)
                  .select_related("technician", "invoice"))
     rows = OrderedDict()
     for order in delivered:
         key = order.technician_id or 0
-        row = rows.setdefault(key, {"technician": order.technician, "count": 0, "billed": ZERO, "days": 0, "returns": 0})
+        row = rows.setdefault(key, {"technician": order.technician, "count": 0, "billed": ZERO, "net_sales": ZERO, "days": 0, "returns": 0})
         row["count"] += 1
         if order.invoice is not None and order.invoice.status == "posted":
             row["billed"] += order.invoice.total_amount - (order.invoice.tax_amount or ZERO)
+            row["net_sales"] += net_sales(order.invoice)
         row["days"] += max((order.delivered_at - order.received_at).days, 0)
     returns = scoped(WorkOrder.objects).filter(warranty_of__isnull=False, received_at__date__gte=first, received_at__date__lte=last).select_related("warranty_of")
     for order in returns:
@@ -650,4 +658,6 @@ def technician_report(first, last):
     out = list(rows.values())
     for row in out:
         row["avg_days"] = round(row["days"] / row["count"], 1) if row["count"] else None
+        row["rate"] = row["technician"].commission_percent if row["technician"] is not None else None
+        row["commission"] = money_round(row["net_sales"] * row["rate"] / Decimal("100")) if row["rate"] is not None else ZERO
     return sorted(out, key=lambda row: -row["count"])
