@@ -8,6 +8,8 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
 
 from django.conf import settings
 from django.test import SimpleTestCase, TestCase, override_settings
@@ -169,8 +171,10 @@ class SwitchTests(TestCase):
         if settings.DATABASES["default"]["ENGINE"].endswith("sqlite3"):
             with override_settings(DEMO_MODE=True, DEMO_SANDBOXES=True):
                 self.assertTrue(enabled())
-        postgres = {**settings.DATABASES, "default": {**settings.DATABASES["default"], "ENGINE": "django.db.backends.postgresql"}}
-        with override_settings(DEMO_MODE=True, DEMO_SANDBOXES=True, DATABASES=postgres):
+        # Only the ENGINE value that enabled() reads is changed, and put back after. Overriding the DATABASES
+        # setting itself would close the connections, in the middle of this test's transaction.
+        with override_settings(DEMO_MODE=True, DEMO_SANDBOXES=True), \
+                mock.patch.dict(settings.DATABASES["default"], {"ENGINE": "django.db.backends.postgresql"}):
             self.assertFalse(enabled())
 
     def test_a_real_install_never_gets_a_copy(self):
@@ -289,11 +293,13 @@ class PrepareFreshCommandTests(SimpleTestCase):
 
         from django.core.management import CommandError, call_command
 
-        with self.assertRaisesMessage(CommandError, "DEMO_MODE"):
+        with override_settings(DEMO_MODE=False), self.assertRaisesMessage(CommandError, "DEMO_MODE"):
             call_command("prepare_demo_fresh")
         # A PostgreSQL demo's build must not fail on it (build.sh runs it on every showcase).
-        postgres = {**settings.DATABASES, "default": {**settings.DATABASES["default"], "ENGINE": "django.db.backends.postgresql"}}
+        # Only what the command reads is replaced, in its own module: overriding the DATABASES setting
+        # would reset the process's connections (under --parallel, the worker's test database with them).
+        postgres = SimpleNamespace(DEMO_MODE=True, DATABASES={"default": {"ENGINE": "django.db.backends.postgresql", "NAME": "demo"}})
         out = StringIO()
-        with override_settings(DEMO_MODE=True, DATABASES=postgres):
+        with mock.patch("settings_core.management.commands.prepare_demo_fresh.settings", postgres):
             call_command("prepare_demo_fresh", "--force", stdout=out)
         self.assertIn("nothing to build", out.getvalue())

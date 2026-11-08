@@ -3,6 +3,7 @@
 from datetime import timedelta
 from unittest import mock
 
+from django.conf import settings
 from django.core import mail
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -336,7 +337,9 @@ class VisitTrackingTests(TestCase):
         record, thread = stored[0]
         self.assertEqual((record["path"], record["lang"], thread), ("/login/?lang=en", "en", "hesba-demo-track"))
         # A Supabase feedback database is written in the background; the local file is not.
-        with override_settings(DATABASES={"feedback": {"ENGINE": "django.db.backends.postgresql"}}):
+        # Only the ENGINE value that in_background() reads is changed: overriding DATABASES itself would close
+        # (and, replaced whole, forget) the connections in the middle of the test.
+        with mock.patch.dict(settings.DATABASES["feedback"], {"ENGINE": "django.db.backends.postgresql"}):
             self.assertTrue(tracking.in_background())
         self.assertFalse(tracking.in_background())
 
