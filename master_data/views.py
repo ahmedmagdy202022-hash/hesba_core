@@ -18,6 +18,7 @@ from settings_core.templatetags.hesba_format import money as display_money, unit
 
 from .forms import CashboxForm, CategoryForm, CustomerForm, ItemForm, LocationForm, SupplierForm
 from .models import Category, Customer, Item, Location, Supplier
+from config.form_errors import add_form_error
 from config.paging import page_of
 
 
@@ -476,7 +477,7 @@ def _entity_form(request, entity, config, instance):
             try:
                 group, created = form.create_variants(request.user)  # AN5: one item per size and colour
             except ValidationError as exc:
-                form.add_error(None, exc)
+                add_form_error(form, exc)
             else:
                 messages.success(request, VARIANTS_MADE[lang].format(n=len(created)))
                 return redirect(f"{reverse('variants:group', args=[group.pk])}?lang={lang}")
@@ -567,7 +568,7 @@ def opening_balance_adjustment(request, entity, pk):
                     **form.cleaned_data,
                 )
             except ValidationError as exc:
-                form.add_error(None, exc)
+                add_form_error(form, exc)
             else:
                 messages.success(request, words["adjustment_saved"])
                 return redirect(request.get_full_path())

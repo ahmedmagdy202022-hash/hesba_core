@@ -170,3 +170,44 @@ class PurchaseSaveAndPostTests(TestCase):
         invoice = PurchaseInvoice.objects.get(invoice_number="PI-R2-1")
         self.assertEqual((invoice.status, invoice.total_amount), ("posted", Decimal("100.00")))
         self.assertEqual(StockMovement.objects.filter(item=item).count(), 1)
+
+
+class PurchaseOverpaidTests(TestCase):
+    """Paid now above the invoice total is a form error, not an HTTP 500."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from reports.tests_dashboard import prepared_client
+
+        prepared_client()
+        cls.owner = make_user(username="poverpaid_owner")
+        make_user_profile(user=cls.owner, role=make_seeded_role(RoleCode.OWNER))
+        cls.supplier = make_supplier(supplier_code="S-OVER")
+        cls.location = make_location(location_code="L-POVER", is_receiving_location=True)
+        cls.cashbox = make_cashbox(cashbox_code="CB-POVER")
+        cls.item = make_item(item_code="IT-POVER")
+
+    def post(self, paid_now, lang="ar"):
+        from django.utils import timezone
+
+        data = {"lang": lang, "invoice_number": "PI-OVER-1", "invoice_date": timezone.localdate().isoformat(), "supplier": self.supplier.pk,
+                "receiving_location": self.location.pk, "cashbox": self.cashbox.pk, "discount_amount": "0", "tax_amount": "0", "paid_now": paid_now,
+                "lines-TOTAL_FORMS": "1", "lines-INITIAL_FORMS": "0", "lines-0-item": self.item.pk, "lines-0-quantity": "4", "lines-0-unit_purchase_price": "25"}
+        self.client.force_login(self.owner)
+        return self.client.post(reverse("purchases:create") + f"?lang={lang}", data)
+
+    def test_overpaid_rerenders_in_arabic_and_english_and_saves_nothing(self):
+        for lang, message in (("ar", "المدفوع أكبر من إجمالي الفاتورة"), ("en", "Paid now is more than the invoice total")):
+            response = self.post("100.01", lang=lang)
+            self.assertEqual(response.status_code, 200)
+            self.assertContains(response, message)
+        self.assertEqual(PurchaseInvoice.objects.count(), 0)
+        self.assertEqual(CashboxMovement.objects.count(), 0)
+        self.assertEqual(StockMovement.objects.filter(item=self.item).count(), 0)
+        self.assertEqual(SupplierLedgerEntry.objects.filter(supplier=self.supplier).count(), 0)
+
+    def test_an_exactly_paid_invoice_still_saves(self):
+        response = self.post("100")
+        invoice = PurchaseInvoice.objects.get(invoice_number="PI-OVER-1")
+        self.assertRedirects(response, f"/purchases/{invoice.pk}/?lang=ar", fetch_redirect_response=False)
+        self.assertEqual((invoice.total_amount, invoice.paid_now), (Decimal("100.00"), Decimal("100.00")))

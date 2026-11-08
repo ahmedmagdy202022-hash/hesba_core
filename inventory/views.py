@@ -22,6 +22,7 @@ from .services import (
     transfer_stock,
 )
 from entities import scope as entity_scope
+from config.form_errors import add_form_error
 from config.paging import page_of
 
 
@@ -296,7 +297,7 @@ def transfer_create(request):
         try:
             form.create_with_fresh_number(lambda: transfer_stock(user=request.user, **form.cleaned_data))  # UI-TRACK F10
         except ValidationError as exc:
-            form.add_error(None, exc)
+            add_form_error(form, exc)
         else:
             messages.success(request, STRINGS[lang]["saved"])
             return redirect(f"/inventory/operations/?lang={lang}")
@@ -318,7 +319,7 @@ def adjustment_create(request):
         try:
             form.create_with_fresh_number(lambda: adjust_stock(user=request.user, **form.cleaned_data))  # UI-TRACK F10
         except ValidationError as exc:
-            form.add_error(None, exc)
+            add_form_error(form, exc)
         else:
             messages.success(request, STRINGS[lang]["saved"])
             return redirect(f"/inventory/operations/?lang={lang}")

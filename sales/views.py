@@ -38,6 +38,7 @@ from .services import (
     post_sales_invoice,
     record_customer_payment,
 )
+from config.form_errors import add_form_error
 from config.paging import page_of
 
 
@@ -54,6 +55,7 @@ STRINGS = {
         "cancel": "إلغاء وعكس الفاتورة",
         "back": "العودة للمبيعات",
         "saved": "تم حفظ مسودة فاتورة البيع.",
+        "overpaid": "المدفوع أكبر من إجمالي الفاتورة",
         "posted": "تم ترحيل فاتورة البيع.",
         "cancelled": "تم إلغاء فاتورة البيع وعكس آثارها.",
         "language": "English",
@@ -79,6 +81,7 @@ STRINGS = {
         "cancel": "Cancel and reverse invoice",
         "back": "Back to sales",
         "saved": "Sales draft saved.",
+        "overpaid": "Paid now is more than the invoice total",
         "posted": "Sales invoice posted.",
         "cancelled": "Sales invoice cancelled and reversed.",
         "language": "العربية",
@@ -187,7 +190,7 @@ def invoice_create(request):
 
                 invoice = form.create_with_fresh_number(create)  # AUTONUM: atomic, retried on a taken number
             except ValidationError as exc:
-                form.add_error(None, exc)
+                add_form_error(form, exc, overrides={"remaining_due": STRINGS[lang]["overpaid"]})  # remaining_due < 0 only when paid now is above the total; form.add_error(None, exc) used to 500 on it
             else:
                 # R2-6: "save and post" in one press; UI-TRACK F23: one message, "posted", unless posting failed.
                 if request.POST.get("then") == "post":
@@ -410,7 +413,7 @@ def return_create(request, pk):
                 **form.cleaned_data,
             ))
         except ValidationError as exc:
-            form.add_error(None, exc)
+            add_form_error(form, exc)
         else:
             messages.success(request, STRINGS[lang]["return_saved"])
             return redirect(f"/sales/returns/{sales_return.pk}/?lang={lang}")
@@ -503,7 +506,7 @@ def payment_create(request):
             try:
                 form.create_with_fresh_number(lambda: record_customer_payment(user=request.user, **form.cleaned_data))
             except ValidationError as exc:
-                form.add_error(None, exc)
+                add_form_error(form, exc)
             else:
                 messages.success(request, STRINGS[lang]["collection_saved"])
                 return redirect(f"/sales/collections/?lang={lang}")
