@@ -218,7 +218,10 @@ def _final_name(name, real, sha, kind):
 
 
 #: PDF names that run something or hide a file. A plain, case-sensitive bytes search (the PDF spec's names are case-sensitive).
-PDF_ACTIVE = (b"/JavaScript", b"/JS", b"/OpenAction", b"/Launch", b"/EmbeddedFile")
+# Long names only: a short one like /JS turns up by chance inside compressed image data and would refuse real scans.
+# A plain byte search misses names hidden with #xx escapes or in object streams; PDFs are served as downloads under a
+# sandbox CSP, so this is a first filter, not the only defence (HG-072).
+PDF_ACTIVE = (b"/JavaScript", b"/OpenAction", b"/Launch", b"/EmbeddedFile")
 
 
 def _read(upload, limit, words, lang):
@@ -374,6 +377,7 @@ def delete_attachment(pk, user, lang="ar"):
     if not rules["can_delete"](user, owner):
         raise PermissionDenied(words["delete_denied"])
     with transaction.atomic():
+        owner = model.objects.select_for_update().get(pk=owner.pk)  # a delivery committing now is seen before the check
         if attachment.kind == Kind.SIGNATURE and rules["signature_final"](owner):
             raise ValidationError(words["signature_kept"])
         before = {"owner": owner_label(model), "owner_id": owner.pk, "kind": attachment.kind, "stage": attachment.stage,

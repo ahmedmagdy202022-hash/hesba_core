@@ -564,7 +564,7 @@ class HardeningTests(AttachmentSetup):
         self.assertNotIn(".hta", served["Content-Disposition"])
 
     def test_a_pdf_with_script_or_an_embedded_file_is_refused(self):
-        for token in (b"/JavaScript", b"/JS", b"/OpenAction", b"/Launch", b"/EmbeddedFile"):
+        for token in (b"/JavaScript", b"/OpenAction", b"/Launch", b"/EmbeddedFile"):
             bad = PDF.replace(b"<< /Root 1 0 R >>", b"<< /Root 1 0 R " + token + b" 2 0 R >>")
             self.assertNotEqual(bad, PDF)
             with self.assertRaises(ValidationError, msg=token) as ctx:
@@ -575,6 +575,11 @@ class HardeningTests(AttachmentSetup):
         self.assertIn("PDF", ar.exception.messages[0])
         self.assertEqual(Attachment.objects.count(), 0)
         self.assertEqual(services.add_attachment(self.wo, PDF, self.owner, kind=Kind.DOCUMENT).content_type_name, "application/pdf")  # a plain one passes
+
+    def test_a_scan_whose_compressed_data_happens_to_hold_js_is_accepted(self):
+        scan = PDF.replace(b"<< /Root 1 0 R >>", b"<< /Root 1 0 R >>\nstream\n\x8a/JS\x03\x91\nendstream")
+        self.assertIn(b"/JS", scan)
+        self.assertEqual(services.add_attachment(self.wo, scan, self.owner, kind=Kind.DOCUMENT).content_type_name, "application/pdf")
 
     def test_an_oversize_content_length_is_refused_before_the_body_is_read(self):
         self.client.force_login(self.owner)
