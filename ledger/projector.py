@@ -184,7 +184,10 @@ class Projector:
 
         self._deposit_payments = set(Deposit.objects.values_list("payment_id", flat=True))
         self._settled = {}
-        for invoice_id, amount in InvoiceSettlement.objects.filter(source=SettlementSource.DEPOSIT).values_list("invoice_id", "amount"):
+        # Only rows backed by a posted payment, as ``settlements.services.applied`` reads them: a cancelled payment's
+        # money went back to the customer, so its row (if one were left) moves nothing between 2105 and 1103.
+        rows = InvoiceSettlement.objects.filter(source=SettlementSource.DEPOSIT, customer_payment__status="posted")
+        for invoice_id, amount in rows.values_list("invoice_id", "amount"):
             self._settled[invoice_id] = self._settled.get(invoice_id, ZERO) + Decimal(amount)
 
     def _contracts(self):

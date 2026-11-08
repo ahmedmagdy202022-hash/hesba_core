@@ -85,6 +85,7 @@ class DepositSetup(TestCase):
         self.customer = make_customer(customer_code="C-DEP", name="مدام سعاد", phone="01001234567")
         self.service = make_item(item_code="SRV-AC", item_name="صيانة تكييف", default_sale_price="300.00", is_stock_tracked=False)
         self.tech = save_employee({"name": "أحمد الفني", "commission_percent": "10"}, self.owner)
+        set_capability_enabled(self.profile, "deposits", True, user=self.owner)  # the «العربون» capability is off by default
 
     def book(self, starts_in=timedelta(days=3), customer=None, **extra):
         data = {"customer": customer or self.customer, "employee": self.tech, "service": self.service,
@@ -383,10 +384,19 @@ class ScreenTests(DepositSetup):
         from permissions.services import user_has_permission
 
         self.assertFalse(user_has_permission(keeper, "sales.receive_customer_payment"))
-        viewer = person(RoleCode.ACCOUNTANT, "ui_viewer")
+        from hesba_testing.factories import grant, make_role
+        from permissions.models import Permission
+
+        viewer = make_user(username="ui_viewer")  # every seeded role that sees invoices also collects, so a role of its own
+        viewing = make_role(code="INVOICE-VIEWER")
+        grant(viewing, Permission.objects.get(code="sales.view_sales_invoices"))
+        make_user_profile(user=viewer, role=viewing)
+        self.assertTrue(user_has_permission(viewer, "sales.view_sales_invoices"))  # sees the booking...
+        self.assertFalse(user_has_permission(viewer, "sales.receive_customer_payment"))  # ...but may not collect
+        self.assertTrue(services.enabled())  # so the 403 below is the permission's, not the capability's
         self.client.force_login(viewer)
-        if user_has_permission(viewer, "sales.view_sales_invoices") and not user_has_permission(viewer, "sales.receive_customer_payment"):
-            self.assertEqual(self.client.post(self.detail_url(appointment), {"lang": "ar", "action": "deposit", "amount": "10", "cashbox": str(self.cashbox.pk)}).status_code, 403)
+        self.assertEqual(self.client.post(self.detail_url(appointment), {"lang": "ar", "action": "deposit", "amount": "10", "cashbox": str(self.cashbox.pk)}).status_code, 403)
+        self.assertFalse(Deposit.objects.exists())
         self.client.force_login(self.cashier)
         agenda = reverse("appointments:agenda")
         self.assertEqual(self.client.post(agenda, {"lang": "ar", "action": "policy", "hours": "48"}).status_code, 403)
@@ -480,3 +490,214 @@ class ScreenTests(DepositSetup):
         deposit.refresh_from_db()
         self.assertEqual(deposit.payment.status, "cancelled")
         self.assertEqual(customer_balance(self.customer), D("0.00"))
+
+
+# ---- the independent review's findings (Fable, 8 Nov) ------------------------------------------------------------------
+
+
+class PaymentNumberTests(DepositSetup):
+    def test_a_number_taken_in_the_same_instant_moves_to_the_next_instead_of_a_500(self):
+        from unittest import mock
+
+        real = services._next_payment_number
+        rival = make_customer(customer_code="C-RIVAL", name="حجز تاني")
+        taken = []
+
+        def racing(day):
+            number = real(day)
+            if not taken:  # another booking's deposit commits this very number between our read and our insert
+                CustomerPayment.objects.create(payment_number=number, payment_date=day, customer=rival, cashbox=self.cashbox, amount=D("50.00"))
+                taken.append(number)
+            return number
+
+        with mock.patch.object(services, "_next_payment_number", side_effect=racing):
+            deposit = self.take(self.book(), "100.00")
+        self.assertEqual(taken, [f"DEP-{TODAY:%Y%m%d}-001"])
+        self.assertEqual(deposit.payment.payment_number, f"DEP-{TODAY:%Y%m%d}-002")
+        self.assertEqual((deposit.status, deposit.payment.amount, deposit.payment.customer), (DepositStatus.HELD, D("100.00"), self.customer))
+        self.assertEqual(customer_balance(self.customer), D("-100.00"))
+        self.assertEqual(cash_balance(self.cashbox), D("100.00"))  # one cash movement: the retry left nothing behind
+        self.assertEqual(CustomerPayment.objects.filter(customer=self.customer).count(), 1)
+
+    def test_the_series_follows_the_highest_number_not_the_count(self):
+        CustomerPayment.objects.create(payment_number=f"DEP-{TODAY:%Y%m%d}-007", payment_date=TODAY, customer=self.customer, cashbox=self.cashbox, amount=D("1.00"))
+        self.assertEqual(self.take(self.book(), "100.00").payment.payment_number, f"DEP-{TODAY:%Y%m%d}-008")
+
+
+class ProjectorStatusTests(DepositSetup):
+    def test_a_settlement_behind_a_cancelled_payment_moves_nothing_between_2105_and_1103(self):
+        deposit = self.take(self.book(), "100.00")
+        services.refund(deposit, self.owner, "لغى بدري")
+        invoice = self.bill_and_post(self.book(starts_in=timedelta(days=4)))
+        # A stray row left behind a cancelled payment (the screens' helper already ignores it; the ledger must too).
+        InvoiceSettlement.objects.create(invoice=invoice, customer_payment=deposit.payment, amount=D("100.00"), source="deposit")
+        deposit = Deposit.objects.select_related("payment").get(pk=deposit.pk)
+        self.assertEqual((deposit.status, deposit.payment.status), (DepositStatus.REFUNDED, "cancelled"))
+        self.assertEqual(customer_balance(self.customer), D("300.00"))
+        self.assertEqual(bal("2105"), D("0.00"))
+        self.assertEqual(bal("1103"), D("300.00"))
+        self.assertTrue(ledger_reports.reconciliation()["ok"])
+        self.assertEqual(_posted_totals(SalesInvoice.objects.filter(pk=invoice.pk))["due"], D("300.00"))
+
+
+class CashboxScopeTests(DepositSetup):
+    def test_a_crafted_post_cannot_use_another_entitys_box_or_a_cheque_box(self):
+        from entities.models import Entity
+        from entities.services import save_entity
+
+        main = Entity.objects.get(is_main=True)
+        branch = save_entity({"code": "BR2", "name_ar": "فرع المعادي"}, self.owner)
+        branch_cash = make_cashbox(cashbox_code="BR-CASH", name_ar="خزنة الفرع", entity=branch)
+        cheques = make_cashbox(cashbox_code="CHQ-IN", name_ar="شيكات تحت التحصيل", kind="cheques_in")
+        appointment = self.book()
+        self.client.force_login(self.owner)
+        self.client.post(reverse("entities:switch"), {"entity": main.pk, "next": "/dashboard/"})
+        page = self.client.get(self.detail_url(appointment))
+        self.assertEqual(list(page.context["deposit_cashboxes"]), [self.cashbox])
+        for box in (branch_cash, cheques):
+            with self.subTest(box=box.cashbox_code):
+                response = self.client.post(self.detail_url(appointment, "en"), {"lang": "en", "action": "deposit", "amount": "50", "cashbox": str(box.pk)})
+                self.assertContains(response, "Choose the cashbox")
+        self.assertFalse(Deposit.objects.exists())
+        self.assertFalse(CustomerPayment.objects.exists())
+        self.assertEqual((cash_balance(branch_cash), cash_balance(cheques)), (D("0"), D("0")))
+        self.client.post(self.detail_url(appointment), {"lang": "ar", "action": "deposit", "amount": "50", "cashbox": str(self.cashbox.pk)})
+        self.assertEqual(Deposit.objects.get().payment.cashbox, self.cashbox)
+
+
+class CapabilityTests(DepositSetup):
+    def test_the_capability_is_optional_off_by_default_and_rides_on_appointments(self):
+        from settings_core import capabilities as caps
+
+        self.assertTrue(caps.is_available("deposits"))
+        self.assertEqual(caps.needs("deposits"), ("appointments_visits",))
+        for activity, sub in (("services", "beauty"), ("services", "maintenance"), ("medical", "clinic")):
+            with self.subTest(activity=activity, sub=sub):
+                self.assertEqual(caps.preset_state(activity, sub, "deposits"), caps.OPTIONAL)
+        self.assertNotIn("deposits", caps.default_selection("services", "maintenance"))
+        self.assertEqual(caps.label("deposits", "en"), "Deposits & cancellation policy")
+        self.assertEqual(caps.label("deposits", "ar"), "العربون وسياسة الإلغاء")
+
+    def test_switched_off_the_box_is_hidden_the_actions_refused_and_a_held_deposit_stays_credit(self):
+        appointment = self.book(starts_in=timedelta(hours=2))  # inside the window: the policy would forfeit
+        deposit = self.take(appointment, "100.00")
+        set_capability_enabled(self.profile, "deposits", False, user=self.owner)
+        self.assertFalse(services.enabled())
+        with self.assertRaisesMessage(ValidationError, "العربون مقفول"):
+            self.take(self.book(starts_in=timedelta(days=4)), "10.00")
+        with self.assertRaisesMessage(ValidationError, "Deposits are switched off"):
+            self.take(self.book(starts_in=timedelta(days=5)), "10.00", lang="en")
+        self.client.force_login(self.owner)
+        page = self.client.get(self.detail_url(appointment))
+        self.assertNotContains(page, "data-deposit-box")
+        self.assertNotContains(page, "data-deposit-form")
+        agenda = self.client.get(f"{reverse('appointments:agenda')}?lang=ar&day={timezone.localtime(appointment.starts_at).date().isoformat()}")
+        self.assertNotContains(agenda, "data-agenda-deposit")
+        self.assertNotContains(agenda, "data-deposit-policy")
+        self.assertEqual(self.client.post(reverse("appointments:agenda"), {"lang": "ar", "action": "policy", "hours": "48"}).status_code, 403)
+        self.assertEqual(services.cancel_hours(), 24)
+        for action in ("deposit", "deposit_forfeit", "deposit_refund"):
+            with self.subTest(action=action):
+                response = self.client.post(self.detail_url(appointment), {"lang": "ar", "action": action, "amount": "10", "cashbox": str(self.cashbox.pk), "reason": "x"})
+                self.assertEqual(response.status_code, 403)
+        # The cancel button runs no policy while it is off: the deposit stays held as the customer's credit.
+        self.client.post(self.detail_url(appointment), {"lang": "ar", "action": "status", "status": "cancelled"})
+        appointment.refresh_from_db()
+        deposit.refresh_from_db()
+        self.assertEqual((appointment.status, deposit.status, deposit.payment.status), (AppointmentStatus.CANCELLED, DepositStatus.HELD, "posted"))
+        self.assertFalse(SalesInvoice.objects.exists())
+        self.assertEqual(CustomerPayment.objects.count(), 1)
+        self.assertEqual((customer_balance(self.customer), cash_balance(self.cashbox), bal("2105")), (D("-100.00"), D("100.00"), D("-100.00")))
+
+    def test_switched_off_a_held_deposit_is_still_applied_when_its_booking_is_billed(self):
+        appointment = self.book()
+        deposit = self.take(appointment, "100.00")
+        set_capability_enabled(self.profile, "deposits", False, user=self.owner)
+        invoice = self.bill_and_post(appointment)
+        deposit.refresh_from_db()
+        self.assertEqual((deposit.status, InvoiceSettlement.objects.get(invoice=invoice).amount), (DepositStatus.APPLIED, D("100.00")))
+        self.assertEqual((customer_balance(self.customer), bal("2105"), bal("1103")), (D("200.00"), D("0.00"), D("200.00")))
+
+
+class InsuredDepositTests(TestCase):
+    """MED-008 + S5: an insured visit's patient invoice is settled by the booking's deposit like an ordinary bill."""
+
+    def setUp(self):
+        from medical import insurance
+        from medical.tests import CLINIC
+
+        self.profile = prepared_client("medical", "clinic", CLINIC)
+        self.owner = person(RoleCode.OWNER, "insdep_owner")
+        set_capability_enabled(self.profile, "deposits", True, user=self.owner)
+        make_location(location_code="CLINIC", is_default=True, is_selling_location=True)
+        self.cashbox = make_cashbox(cashbox_code="CLINIC-CASH", is_default=True)
+        self.doctor = save_employee({"name": "د. سارة"}, self.owner)
+        self.checkup = make_item(item_code="SRV-CHK", item_name="كشف", is_stock_tracked=False, default_sale_price="300")
+        self.mona = make_customer(customer_code="P-1", name="منى", phone="01001234567")
+        self.contract = insurance.save_contract({"name": "شركة الأمان للتأمين", "coverage_percent": "80", "claim_day": "5"}, self.owner)
+        insurance.set_cover(self.mona, {"contract": self.contract, "member_number": "AM-7781"}, self.owner)
+
+    def booked_with_deposit(self, patient, amount="100.00"):
+        from appointments.models import Appointment
+
+        appointment = Appointment.objects.create(number=f"AP-{Appointment.objects.count() + 1}", customer=patient, employee=self.doctor, service=self.checkup,
+                                                 price="300", starts_at=timezone.now() + timedelta(days=2), status="booked", created_by=self.owner)
+        deposit = services.take(appointment, patient, self.cashbox, D(amount), self.owner)
+        appointments.set_status(appointment, AppointmentStatus.ARRIVED, self.owner)
+        return appointment, deposit
+
+    def bill_and_post(self, appointment):
+        from medical import insurance
+
+        bill = insurance.bill_insured(appointment, self.owner)
+        for invoice in (bill.patient_invoice, bill.insurer_invoice):
+            if invoice is not None:
+                post_sales_invoice(invoice.pk, self.owner)
+        bill.refresh_from_db()
+        return bill
+
+    def test_the_deposit_settles_the_patient_share_and_the_rest_stays_on_account(self):
+        appointment, deposit = self.booked_with_deposit(self.mona, "100.00")
+        bill = self.bill_and_post(appointment)
+        deposit.refresh_from_db()
+        patient_invoice = bill.patient_invoice
+        self.assertEqual((bill.patient_share, bill.insurer_share, patient_invoice.total_amount), (D("60.00"), D("240.00"), D("60.00")))
+        self.assertEqual((deposit.status, deposit.invoice), (DepositStatus.APPLIED, patient_invoice))
+        row = InvoiceSettlement.objects.get(customer_payment=deposit.payment)
+        self.assertEqual((row.invoice, row.amount, row.source), (patient_invoice, D("60.00"), "deposit"))  # capped at the patient's share
+        self.assertFalse(InvoiceSettlement.objects.filter(invoice=bill.insurer_invoice).exists())
+        self.assertEqual((patient_invoice.paid_now, patient_invoice.remaining_due), (D("0.00"), D("60.00")))  # the posted figures stay frozen
+        self.assertEqual(customer_balance(self.mona), D("-40.00"))  # 60 billed − 100 deposited: 40 left as her credit
+        self.assertEqual(customer_balance(self.contract.insurer), D("240.00"))
+        self.assertEqual(cash_balance(self.cashbox), D("100.00"))
+        self.assertEqual(bal("2105"), D("-40.00"))  # the unused 40 is still the customer's money held
+        self.assertEqual(bal("1103"), D("240.00"))  # only the insurer owes
+        self.assertTrue(ledger_reports.reconciliation()["ok"])
+        self.assertEqual(_posted_totals(SalesInvoice.objects.filter(pk=patient_invoice.pk))["due"], D("0.00"))
+
+    def test_a_full_cover_leaves_the_deposit_held_and_refundable_on_the_page(self):
+        from medical import insurance
+
+        full = insurance.save_contract({"name": "شركة الشفاء", "coverage_percent": "100", "claim_day": "5"}, self.owner)
+        ali = make_customer(customer_code="P-2", name="علي", phone="01009876543")
+        insurance.set_cover(ali, {"contract": full, "member_number": "SH-1"}, self.owner)
+        appointment, deposit = self.booked_with_deposit(ali, "100.00")
+        bill = self.bill_and_post(appointment)
+        deposit.refresh_from_db()
+        self.assertIsNone(bill.patient_invoice)
+        self.assertEqual((deposit.status, deposit.invoice), (DepositStatus.HELD, None))
+        self.assertFalse(InvoiceSettlement.objects.exists())
+        self.assertEqual(customer_balance(ali), D("-100.00"))
+        self.assertEqual((bal("2105"), bal("1103")), (D("-100.00"), D("300.00")))  # held for Ali; the insurer owes the whole 300
+        self.assertTrue(ledger_reports.reconciliation()["ok"])
+        self.client.force_login(self.owner)
+        url = reverse("appointments:detail", args=[appointment.pk])
+        page = self.client.get(f"{url}?lang=ar")
+        self.assertContains(page, 'data-deposit-status="held"')
+        self.assertContains(page, "data-deposit-held-after-bill")
+        self.assertContains(page, "التأمين غطّى الخدمة كلها")
+        self.assertContains(page, "data-deposit-refund")
+        self.assertContains(self.client.get(f"{url}?lang=en"), "The insurance covered the whole service")
+        response = self.client.post(f"{url}?lang=ar", {"lang": "ar", "action": "deposit_refund", "reason": "التأمين غطّى"}, follow=True)
+        self.assertContains(response, 'data-deposit-status="refunded"')
+        self.assertEqual((customer_balance(ali), cash_balance(self.cashbox), bal("2105")), (D("0.00"), D("0.00"), D("0.00")))

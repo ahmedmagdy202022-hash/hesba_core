@@ -51,6 +51,7 @@ WORDS = {
         "credit_left": "العربون لسه محجوز رصيد للعميل؛ حوّله لرسوم إلغاء أو رده من هنا.", "cancel_reason": "إلغاء الحجز {number}",
         "policy": "سياسة الإلغاء", "policy_hours": "الإلغاء قبل الميعاد بأقل من كام ساعة يضيّع العربون؟", "policy_saved": "اتحفظت سياسة الإلغاء: {hours} ساعة.",
         "policy_note": "لو العميل لغى قبل الميعاد بأقل من {hours} ساعة (أو مجاش) العربون يتحوّل لفاتورة رسوم إلغاء؛ قبل كده يترد له.",
+        "held_after_bill": "التأمين غطّى الخدمة كلها، فمفيش فاتورة على العميل يتخصم منها العربون: لسه محجوز رصيد له، تقدر ترده من هنا.",
     },
     "en": {
         "page_title": "Appointments", "title": "Appointments & visits", "intro": "Book a slot at the shop or a visit at the customer's, with the service and the employee. When the work is done, bill it in one click.",
@@ -72,6 +73,7 @@ WORDS = {
         "credit_left": "The deposit stays held as the customer's credit; forfeit or refund it from here.", "cancel_reason": "Booking {number} cancelled",
         "policy": "Cancellation policy", "policy_hours": "Cancelling fewer than how many hours before the booking forfeits the deposit?", "policy_saved": "Cancellation policy saved: {hours} hours.",
         "policy_note": "A cancellation fewer than {hours} hours before the booking (or a no-show) turns the deposit into a cancellation-fee invoice; earlier than that it is refunded.",
+        "held_after_bill": "The insurance covered the whole service, so there is no customer invoice for the deposit to settle: it is still held as the customer's credit and can be refunded from here.",
     },
 }
 
@@ -134,6 +136,8 @@ def agenda(request):
     employee = _pick(Employee, request.GET.get("employee"))
     error, form = "", {"day": day.isoformat(), "time": "10:00", "duration_minutes": 30, "kind": AppointmentKind.APPOINTMENT}
     if request.method == "POST" and request.POST.get("action") == "policy":  # S5 (HG-069): the owner sets the cancellation window
+        if not deposits.enabled():
+            raise PermissionDenied("Deposits are switched off.")
         if not is_owner(request.user):
             raise PermissionDenied("Only the account owner sets the cancellation policy.")
         try:
@@ -155,11 +159,13 @@ def agenda(request):
             messages.success(request, words["booked"].format(number=appointment.number))
             return redirect(f"{reverse('appointments:agenda')}?lang={lang}&day={timezone.localtime(appointment.starts_at).date().isoformat()}")
     agenda_rows = list(services.day_agenda(day, employee))
-    held_deposits = deposits.held_amounts(agenda_rows)
+    deposits_on = deposits.enabled()
+    held_deposits = deposits.held_amounts(agenda_rows) if deposits_on else {}
     rows = [{"appointment": appointment, "status_label": choice_label(appointment, "status", lang), "deposit": held_deposits.get(appointment.pk)} for appointment in agenda_rows]
     return render(request, "appointments/agenda.html", _base(
         request, day=day, prev_day=day - timedelta(days=1), next_day=day + timedelta(days=1), today=timezone.localdate(),
-        rows=rows, employee=employee, form=form, error=error, cancel_hours=deposits.cancel_hours(), can_set_policy=is_owner(request.user), **_choices(lang),
+        rows=rows, employee=employee, form=form, error=error, cancel_hours=deposits.cancel_hours(), deposits_on=deposits_on,
+        can_set_policy=deposits_on and is_owner(request.user), **_choices(lang),
     ))
 
 
@@ -207,16 +213,20 @@ def detail(request, pk):
         try:
             if action == "status":
                 status = request.POST.get("status", "")
-                deposit = deposits.held_for(appointment) if status in (AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW) else None
+                # Off, the policy does not run: a held deposit stays the customer's credit (HG-069).
+                deposit = deposits.held_for(appointment) if status in (AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW) and deposits.enabled() else None
                 services.set_status(appointment, status, request.user, lang)
                 messages.success(request, words["moved"])
                 if deposit is not None:  # S5 (HG-069): the cancellation policy decides what happens to the deposit
                     appointment.refresh_from_db()
                     _settle_cancelled_deposit(request, appointment, deposit, lang, words)
+            elif action in ("deposit", "deposit_forfeit", "deposit_refund") and not deposits.enabled():
+                raise PermissionDenied("Deposits are switched off.")
             elif action == "deposit":  # S5 (HG-069): a payment on account, linked to this booking
                 if not user_has_permission(request.user, RECEIVE):
                     raise PermissionDenied("Taking a deposit needs sales.receive_customer_payment.")
-                deposit = deposits.take(appointment, appointment.customer, _pick(Cashbox, request.POST.get("cashbox"), active=True), request.POST.get("amount", ""), request.user, lang)
+                cashbox = _deposit_cashboxes().filter(pk=request.POST.get("cashbox")).first() if str(request.POST.get("cashbox") or "").isdigit() else None
+                deposit = deposits.take(appointment, appointment.customer, cashbox, request.POST.get("amount", ""), request.user, lang)
                 messages.success(request, words["deposit_taken"].format(amount=deposit.payment.amount, payment=deposit.payment.payment_number))
             elif action in ("deposit_forfeit", "deposit_refund"):
                 deposit = deposits.held_for(appointment)
@@ -269,17 +279,33 @@ def detail(request, pk):
 # ---- S5 (HG-069): the deposit box and the cancellation policy -------------------------------------------------------
 
 
+def _deposit_cashboxes():
+    """The boxes a deposit may land in: this entity's active cash and bank boxes (never another entity's, a cheque or a
+    courier box). The form lists them and the action accepts only them."""
+
+    return entity_scope.cashboxes(Cashbox.objects.filter(active=True, kind__in=(CashboxKind.CASH, CashboxKind.BANK))).order_by("-is_default", "pk")
+
+
+def _insurer_only(appointment):
+    from medical.models import InsuredBill
+
+    return InsuredBill.objects.filter(appointment=appointment, patient_invoice__isnull=True).exists()
+
+
 def _deposit_box(request, appointment, lang):
     """What the detail page shows about the booking's deposit, and which of the three actions it may offer."""
 
+    if not deposits.enabled():  # the «العربون» capability is off: no box at all
+        return {"deposits_on": False}
     deposit = deposits.latest_for(appointment)
     held_deposit = deposit if deposit is not None and deposit.status == "held" else None
     open_booking = appointment.status in (AppointmentStatus.BOOKED, AppointmentStatus.CONFIRMED)
     can_receive = user_has_permission(request.user, RECEIVE)
-    cashboxes = entity_scope.cashboxes(Cashbox.objects.filter(active=True, kind__in=(CashboxKind.CASH, CashboxKind.BANK))).order_by("-is_default", "pk")
     return {
-        "deposit": deposit, "deposit_status_label": deposits.status_label(deposit, lang) if deposit is not None else "",
-        "can_take_deposit": held_deposit is None and open_booking and can_receive, "deposit_cashboxes": cashboxes,
+        "deposits_on": True, "deposit": deposit, "deposit_status_label": deposits.status_label(deposit, lang) if deposit is not None else "",
+        "can_take_deposit": held_deposit is None and open_booking and can_receive, "deposit_cashboxes": _deposit_cashboxes(),
+        # Billed to the insurer alone (100% cover, no patient invoice): the deposit has nothing to settle and stays held.
+        "deposit_held_after_bill": held_deposit is not None and _insurer_only(appointment),
         # A held deposit on a booking that will not be billed any more (cancelled elsewhere, refund refused, invoice cancelled) is settled from here.
         "can_forfeit_deposit": held_deposit is not None and not open_booking and appointment.status != AppointmentStatus.ARRIVED and user_has_permission(request.user, BOOK),
         "can_refund_deposit": held_deposit is not None and not open_booking and appointment.status != AppointmentStatus.ARRIVED and can_receive,

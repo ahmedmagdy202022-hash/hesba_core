@@ -18,7 +18,7 @@ from decimal import Decimal, InvalidOperation
 
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models.signals import post_save
 from django.utils import timezone
 
@@ -45,6 +45,7 @@ MESSAGES = {
         "amount": "مبلغ العربون مش صحيح.", "cashbox": "اختار الخزنة أو الحساب البنكي اللي استلم العربون.", "walk_in": "العميل النقدي مينفعش يدفع عربون؛ اختار عميل باسمه.",
         "already": "الحجز ده عليه عربون بالفعل.", "status": "العربون يتاخد على حجز لسه محجوز أو مؤكد بس.", "not_held": "العربون ده اتصرف فيه خلاص ({status}).",
         "closed_month": "العربون اتاخد في شهر اتقفل، فمينفعش يترد على تاريخه. يا تتعمل له فاتورة رسوم إلغاء بتاريخ النهارده، يا يفضل رصيد للعميل.",
+        "off": "العربون مقفول؛ شغّله من الإعدادات ← الخصائص («العربون وسياسة الإلغاء»).",
         "setup": "لازم يكون فيه مخزن بيع نشط.", "hours": "عدد الساعات لازم يكون رقم من 0 لـ {max}.", "reason": "اكتب سبب الرد.",
         "fee_item": "رسوم إلغاء", "fee_notes": "رسوم إلغاء حجز {number} — العربون {payment}", "deposit_notes": "عربون حجز {number}",
         "statuses": {"held": "محجوز", "applied": "اتخصم من الفاتورة", "forfeited": "اتحوّل لرسوم إلغاء", "refunded": "اترد"},
@@ -53,11 +54,26 @@ MESSAGES = {
         "amount": "Invalid deposit amount.", "cashbox": "Choose the cashbox or bank account that received the deposit.", "walk_in": "The walk-in customer cannot pay a deposit; choose a named customer.",
         "already": "This booking already holds a deposit.", "status": "A deposit is taken only on a booking that is still booked or confirmed.", "not_held": "This deposit was already settled ({status}).",
         "closed_month": "The deposit was taken in a month that has closed, so it cannot be refunded on its date. Either post a cancellation-fee invoice dated today, or leave it as the customer's credit.",
+        "off": "Deposits are switched off; switch them on from Settings → Features (“Deposits & cancellation policy”).",
         "setup": "An active selling location is needed.", "hours": "The hours must be a number from 0 to {max}.", "reason": "Enter the refund reason.",
         "fee_item": "Cancellation fee", "fee_notes": "Cancellation fee for booking {number} — deposit {payment}", "deposit_notes": "Deposit for booking {number}",
         "statuses": {"held": "Held", "applied": "Applied to the invoice", "forfeited": "Forfeited as a cancellation fee", "refunded": "Refunded"},
     },
 }
+
+
+CAPABILITY = "deposits"
+NUMBER_ATTEMPTS = 5
+
+
+def enabled():
+    """Whether the «العربون» capability is at work (CAP-001). Off: no new deposit and no deposit screen. What follows the
+    sales engine (apply on posting, release on cancelling, refund on a cancelled payment) runs whatever the switch says,
+    so a deposit already held keeps being booked right."""
+
+    from settings_core.capabilities import capability_enabled
+
+    return capability_enabled(CAPABILITY)
 
 
 def status_label(deposit, lang="ar"):
@@ -172,13 +188,29 @@ def _amount(value, words):
 
 
 def _next_payment_number(day):
+    """The next free ``DEP-YYYYMMDD-NNN`` (the highest used + 1, AUTONUM's ``next_in_series``)."""
+
+    from config.numbering import next_in_series
     from sales.models import CustomerPayment
 
-    prefix = f"DEP-{day:%Y%m%d}-"
-    number = CustomerPayment.objects.filter(payment_number__startswith=prefix).count() + 1
-    while CustomerPayment.objects.filter(payment_number=f"{prefix}{number:03d}").exists():
-        number += 1
-    return f"{prefix}{number:03d}"
+    return next_in_series(CustomerPayment, "payment_number", f"DEP-{day:%Y%m%d}-", width=3)
+
+
+def _record_payment(day, customer, cashbox, amount, user, notes):
+    """``record_customer_payment`` under a fresh number. Two deposits taken in the same instant can compute the same
+    number; the second then hits the UNIQUE ``payment_number``, its savepoint rolls back and it takes the next one."""
+
+    from sales.models import CustomerPayment
+    from sales.services import record_customer_payment
+
+    for attempt in range(NUMBER_ATTEMPTS):
+        number = _next_payment_number(day)
+        try:
+            with transaction.atomic():
+                return record_customer_payment(number, day, customer, cashbox, amount, user, notes=notes)
+        except IntegrityError:
+            if attempt == NUMBER_ATTEMPTS - 1 or not CustomerPayment.objects.filter(payment_number=number).exists():
+                raise
 
 
 def _unique_invoice_number(base):
@@ -192,7 +224,8 @@ def _unique_invoice_number(base):
 
 
 def _lock(deposit):
-    return Deposit.objects.select_for_update().select_related("payment", "payment__customer", "invoice").get(pk=deposit.pk)
+    # ``of=self``: PostgreSQL refuses FOR UPDATE on the nullable side of the outer join to ``invoice``.
+    return Deposit.objects.select_for_update(of=("self",)).select_related("payment", "payment__customer", "invoice").get(pk=deposit.pk)
 
 
 def _selling_location(words):
@@ -213,9 +246,10 @@ def take(target, customer, cashbox, amount, user, lang="ar", payment_date=None, 
     """Take a deposit on ``target`` for ``customer``: a customer payment on account, linked to the booking."""
 
     from sales.pos import WALK_IN_CODE
-    from sales.services import record_customer_payment
 
     words = MESSAGES[lang]
+    if not enabled():
+        raise ValidationError(words["off"])
     _require(user, RECEIVE)
     amount = _amount(amount, words)
     if cashbox is None:
@@ -228,8 +262,7 @@ def take(target, customer, cashbox, amount, user, lang="ar", payment_date=None, 
     if held_for(target) is not None:
         raise ValidationError(words["already"])
     day = payment_date or timezone.localdate()
-    payment = record_customer_payment(_next_payment_number(day), day, customer, cashbox, amount, user,
-                                      notes=notes or words["deposit_notes"].format(number=getattr(target, "number", target.pk)))
+    payment = _record_payment(day, customer, cashbox, amount, user, notes or words["deposit_notes"].format(number=getattr(target, "number", target.pk)))
     deposit = Deposit.objects.create(payment=payment, content_type=_type(target), object_id=target.pk, created_by=user)
     _audit(deposit, user, "take_deposit", {"payment": payment.payment_number, "amount": str(amount), "target": f"{deposit.content_type.app_label}.{deposit.content_type.model}:{target.pk}"})
     return deposit
