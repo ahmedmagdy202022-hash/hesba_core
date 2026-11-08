@@ -5,6 +5,8 @@ PDF, so no PDF library is needed. Every document is read-only: nothing here
 posts, moves stock or touches a balance. Cost and profit are never printed.
 """
 
+from decimal import Decimal
+
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect, render
 
@@ -41,6 +43,8 @@ WORDS = {
         "grand_total": "الصافي",
         "paid": "المدفوع",
         "remaining": "المتبقي (آجل)",
+        "paid_in_advance": "مدفوع مقدم (عربون)",
+        "to_collect": "الباقي للتحصيل",
         "cashbox": "الخزنة",
         "notes": "ملاحظات",
         "amount": "المبلغ",
@@ -99,6 +103,8 @@ WORDS = {
         "grand_total": "Net total",
         "paid": "Paid",
         "remaining": "Remaining (credit)",
+        "paid_in_advance": "Paid in advance (deposit)",
+        "to_collect": "Still to collect",
         "cashbox": "Cashbox",
         "notes": "Notes",
         "amount": "Amount",
@@ -214,6 +220,11 @@ def _invoice_doc(invoice, kind, lang, party_kind, price_field):
     if invoice.tax_amount:
         totals.append((words["tax"], invoice.tax_amount))
     party = invoice.customer if party_kind == "customer" else invoice.supplier
+    applied = Decimal("0.00")
+    if party_kind == "customer" and invoice.status == "posted":
+        from settlements.services import applied_to
+
+        applied = applied_to(invoice)  # HG-069: a deposit / link / card shown as a note, never as paid_now
     return {
         "kind": kind,
         "object_pk": invoice.pk,
@@ -230,6 +241,8 @@ def _invoice_doc(invoice, kind, lang, party_kind, price_field):
         "grand_total": invoice.total_amount,
         "paid": invoice.paid_now,
         "remaining": invoice.remaining_due,
+        "applied": applied,
+        "to_collect": invoice.remaining_due - applied,
         "cashbox": invoice.cashbox,
         "salesperson": getattr(invoice, "salesperson", None),  # PERF-001
         "notes": invoice.notes,

@@ -197,6 +197,9 @@ def bill(appointment, user, lang="ar"):
         appointment.status = AppointmentStatus.DONE
         fields.append("status")
     appointment.save(update_fields=fields)
+    from deposits.services import attach
+
+    attach(appointment, invoice)  # S5 (HG-069): a held deposit settles this invoice when it posts
     _audit(appointment, user, "bill_appointment", {"invoice": invoice.invoice_number, "amount": str(invoice.total_amount)})
     return invoice
 

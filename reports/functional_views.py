@@ -128,8 +128,19 @@ def purchase_report_view(request):
 def _posted_totals(rows):
     """TRACK-START: a total under the invoice list, posted invoices only (drafts and cancelled carry no money)."""
 
-    totals = rows.filter(status="posted").aggregate(count=Count("id"), total=Sum("total_amount"), paid=Sum("paid_now"), due=Sum("remaining_due"))
-    return {key: value if value is not None else Decimal("0") for key, value in totals.items()}
+    posted = rows.filter(status="posted")
+    totals = posted.aggregate(count=Count("id"), total=Sum("total_amount"), paid=Sum("paid_now"), due=Sum("remaining_due"))
+    totals = {key: value if value is not None else Decimal("0") for key, value in totals.items()}
+    from sales.models import SalesInvoice
+
+    if posted.model is SalesInvoice:
+        # HG-069: what a deposit, paid link or gift card settled is shown on its own and taken off what is due, so
+        # total = paid + applied + due still holds under the list; ``paid`` stays paid_now.
+        from settlements.services import applied_total
+
+        totals["applied"] = applied_total(posted)
+        totals["due"] -= totals["applied"]
+    return totals
 
 
 @require_permission("reports.view_inventory_report")

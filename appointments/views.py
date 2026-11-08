@@ -8,11 +8,16 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
+from approvals.gate import held
+from cashboxes.models import Cashbox, CashboxKind
+from deposits import services as deposits
+from entities import scope as entity_scope
 from master_data.models import Customer, Item
 from permissions.decorators import require_permission
 from permissions.services import user_has_permission
 from printing.company import company_details
 from printing.share import whatsapp_link
+from sales.short_sales import is_owner
 from settings_core.display_labels import choice_label
 from staff.models import Employee
 
@@ -21,6 +26,7 @@ from .models import Appointment, AppointmentKind, AppointmentStatus
 
 
 VIEW, BOOK, REPORT = "sales.view_sales_invoices", "sales.create_sales_invoice", "reports.view_all_sales_report"
+RECEIVE = deposits.RECEIVE  # S5: taking and refunding a deposit is a collection
 WORDS = {
     "ar": {
         "page_title": "المواعيد", "title": "المواعيد والزيارات", "intro": "احجز ميعاد في المحل أو زيارة عند العميل، واربطه بالخدمة والموظف. لما الشغل يخلص، اعمل فاتورته بدوسة.",
@@ -34,6 +40,14 @@ WORDS = {
         "commission": "العمولة", "rate": "النسبة", "perf_note": "المبيعات من الفواتير المرحّلة بس. صرف العمولة بيتسجل كمصروف من شاشة المصروفات.",
         "actions": {"confirmed": "تأكيد", "arrived": "بدأ الشغل", "done": "خلص", "cancelled": "إلغاء", "no_show": "مجاش"},
         "bad_when": "اكتب تاريخ وساعة صحيحين.",
+        # S5 (HG-069): the deposit box and the cancellation policy.
+        "deposit": "العربون", "take_deposit": "خد عربون", "deposit_amount": "مبلغ العربون", "deposit_cashbox": "استلمته في", "deposit_taken": "اتسجل عربون {amount} ({payment}).",
+        "deposit_payment": "إيصال", "deposit_invoice": "فاتورته", "deposit_rounding": "فرق تقريب فضل رصيد للعميل", "forfeit": "حوّله لرسوم إلغاء", "refund": "رد العربون",
+        "refund_reason": "سبب الرد", "forfeited": "العميل لغى متأخر: العربون اتحوّل لفاتورة رسوم إلغاء {number} بقيمة {amount}.",
+        "refunded": "العربون اترد للعميل ({payment}).", "refund_needs_permission": "رد العربون محتاج صلاحية تسجيل التحصيل؛ العربون لسه محجوز رصيد للعميل.",
+        "credit_left": "العربون لسه محجوز رصيد للعميل؛ حوّله لرسوم إلغاء أو رده من هنا.", "cancel_reason": "إلغاء الحجز {number}",
+        "policy": "سياسة الإلغاء", "policy_hours": "الإلغاء قبل الميعاد بأقل من كام ساعة يضيّع العربون؟", "policy_saved": "اتحفظت سياسة الإلغاء: {hours} ساعة.",
+        "policy_note": "لو العميل لغى قبل الميعاد بأقل من {hours} ساعة (أو مجاش) العربون يتحوّل لفاتورة رسوم إلغاء؛ قبل كده يترد له.",
     },
     "en": {
         "page_title": "Appointments", "title": "Appointments & visits", "intro": "Book a slot at the shop or a visit at the customer's, with the service and the employee. When the work is done, bill it in one click.",
@@ -47,6 +61,14 @@ WORDS = {
         "commission": "Commission", "rate": "Rate", "perf_note": "Sales come from posted invoices only. Paying a commission is recorded as an expense from the expenses screen.",
         "actions": {"confirmed": "Confirm", "arrived": "Start", "done": "Done", "cancelled": "Cancel", "no_show": "No show"},
         "bad_when": "Enter a valid date and time.",
+        # S5 (HG-069): the deposit box and the cancellation policy.
+        "deposit": "Deposit", "take_deposit": "Take a deposit", "deposit_amount": "Deposit amount", "deposit_cashbox": "Received in", "deposit_taken": "Deposit {amount} recorded ({payment}).",
+        "deposit_payment": "Receipt", "deposit_invoice": "Its invoice", "deposit_rounding": "Rounding left as the customer's credit", "forfeit": "Forfeit as a cancellation fee", "refund": "Refund the deposit",
+        "refund_reason": "Refund reason", "forfeited": "Late cancellation: the deposit became cancellation-fee invoice {number} for {amount}.",
+        "refunded": "The deposit was refunded ({payment}).", "refund_needs_permission": "Refunding needs the collection permission; the deposit stays held as the customer's credit.",
+        "credit_left": "The deposit stays held as the customer's credit; forfeit or refund it from here.", "cancel_reason": "Booking {number} cancelled",
+        "policy": "Cancellation policy", "policy_hours": "Cancelling fewer than how many hours before the booking forfeits the deposit?", "policy_saved": "Cancellation policy saved: {hours} hours.",
+        "policy_note": "A cancellation fewer than {hours} hours before the booking (or a no-show) turns the deposit into a cancellation-fee invoice; earlier than that it is refunded.",
     },
 }
 
@@ -108,6 +130,16 @@ def agenda(request):
     day = _day(request.GET.get("day") or request.POST.get("day"))
     employee = _pick(Employee, request.GET.get("employee"))
     error, form = "", {"day": day.isoformat(), "time": "10:00", "duration_minutes": 30, "kind": AppointmentKind.APPOINTMENT}
+    if request.method == "POST" and request.POST.get("action") == "policy":  # S5 (HG-069): the owner sets the cancellation window
+        if not is_owner(request.user):
+            raise PermissionDenied("Only the account owner sets the cancellation policy.")
+        try:
+            hours = deposits.set_cancel_hours(request.POST.get("hours", ""), request.user, lang)
+        except ValidationError as exc:
+            messages.error(request, " ".join(exc.messages))
+        else:
+            messages.success(request, words["policy_saved"].format(hours=hours))
+        return redirect(f"{reverse('appointments:agenda')}?lang={lang}&day={day.isoformat()}")
     if request.method == "POST":
         if not user_has_permission(request.user, BOOK):
             raise PermissionDenied("Booking needs sales.create_sales_invoice.")
@@ -119,10 +151,12 @@ def agenda(request):
         else:
             messages.success(request, words["booked"].format(number=appointment.number))
             return redirect(f"{reverse('appointments:agenda')}?lang={lang}&day={timezone.localtime(appointment.starts_at).date().isoformat()}")
-    rows = [{"appointment": appointment, "status_label": choice_label(appointment, "status", lang)} for appointment in services.day_agenda(day, employee)]
+    agenda_rows = list(services.day_agenda(day, employee))
+    held_deposits = deposits.held_amounts(agenda_rows)
+    rows = [{"appointment": appointment, "status_label": choice_label(appointment, "status", lang), "deposit": held_deposits.get(appointment.pk)} for appointment in agenda_rows]
     return render(request, "appointments/agenda.html", _base(
         request, day=day, prev_day=day - timedelta(days=1), next_day=day + timedelta(days=1), today=timezone.localdate(),
-        rows=rows, employee=employee, form=form, error=error, **_choices(lang),
+        rows=rows, employee=employee, form=form, error=error, cancel_hours=deposits.cancel_hours(), can_set_policy=is_owner(request.user), **_choices(lang),
     ))
 
 
@@ -168,8 +202,27 @@ def detail(request, pk):
         action = request.POST.get("action", "")
         try:
             if action == "status":
-                services.set_status(appointment, request.POST.get("status", ""), request.user, lang)
+                status = request.POST.get("status", "")
+                deposit = deposits.held_for(appointment) if status in (AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW) else None
+                services.set_status(appointment, status, request.user, lang)
                 messages.success(request, words["moved"])
+                if deposit is not None:  # S5 (HG-069): the cancellation policy decides what happens to the deposit
+                    appointment.refresh_from_db()
+                    _settle_cancelled_deposit(request, appointment, deposit, lang, words)
+            elif action == "deposit":  # S5 (HG-069): a payment on account, linked to this booking
+                if not user_has_permission(request.user, RECEIVE):
+                    raise PermissionDenied("Taking a deposit needs sales.receive_customer_payment.")
+                deposit = deposits.take(appointment, appointment.customer, _pick(Cashbox, request.POST.get("cashbox"), active=True), request.POST.get("amount", ""), request.user, lang)
+                messages.success(request, words["deposit_taken"].format(amount=deposit.payment.amount, payment=deposit.payment.payment_number))
+            elif action in ("deposit_forfeit", "deposit_refund"):
+                deposit = deposits.held_for(appointment)
+                if deposit is None:
+                    raise ValidationError(deposits.MESSAGES[lang]["not_held"].format(status=""))
+                if action == "deposit_forfeit":
+                    invoice = deposits.forfeit(deposit, request.user, lang, request.POST.get("reason", ""))
+                    messages.success(request, words["forfeited"].format(number=invoice.invoice_number, amount=invoice.total_amount))
+                else:
+                    _refund(request, deposit, request.POST.get("reason", ""), lang, words, refuse=True)
             elif action == "bill":
                 invoice = services.bill(appointment, request.user, lang)
                 messages.success(request, words["billed"].format(number=invoice.invoice_number))
@@ -205,8 +258,68 @@ def detail(request, pk):
     return render(request, "appointments/detail.html", _base(
         request, appointment=appointment, **insured, local=local, status_label=choice_label(appointment, "status", lang), reminder=reminder, actions=actions,
         form=form, editable=editable, error=error, medical_file=_medical_file(request.user), can_bill=appointment.status in (AppointmentStatus.ARRIVED, AppointmentStatus.DONE) and not appointment.invoice_id,
-        **_choices(lang),
+        **_deposit_box(request, appointment, lang), **_choices(lang),
     ))
+
+
+# ---- S5 (HG-069): the deposit box and the cancellation policy -------------------------------------------------------
+
+
+def _deposit_box(request, appointment, lang):
+    """What the detail page shows about the booking's deposit, and which of the three actions it may offer."""
+
+    deposit = deposits.latest_for(appointment)
+    held_deposit = deposit if deposit is not None and deposit.status == "held" else None
+    open_booking = appointment.status in (AppointmentStatus.BOOKED, AppointmentStatus.CONFIRMED)
+    can_receive = user_has_permission(request.user, RECEIVE)
+    cashboxes = entity_scope.cashboxes(Cashbox.objects.filter(active=True, kind__in=(CashboxKind.CASH, CashboxKind.BANK))).order_by("-is_default", "pk")
+    return {
+        "deposit": deposit, "deposit_status_label": deposits.status_label(deposit, lang) if deposit is not None else "",
+        "can_take_deposit": held_deposit is None and open_booking and can_receive, "deposit_cashboxes": cashboxes,
+        # A held deposit on a booking that will not be billed any more (cancelled elsewhere, refund refused, invoice cancelled) is settled from here.
+        "can_forfeit_deposit": held_deposit is not None and not open_booking and appointment.status != AppointmentStatus.ARRIVED and user_has_permission(request.user, BOOK),
+        "can_refund_deposit": held_deposit is not None and not open_booking and appointment.status != AppointmentStatus.ARRIVED and can_receive,
+        "refund_blocker": deposits.refund_blocker(held_deposit, lang) if held_deposit is not None else None,
+        "cancel_hours": deposits.cancel_hours(), "policy_text": WORDS[lang]["policy_note"].format(hours=deposits.cancel_hours()),
+    }
+
+
+def _refund(request, deposit, reason, lang, words, refuse):
+    """Refund through HG-068's gate. With ``refuse`` False (the cancel button) a refusal is a note, not an error."""
+
+    if not user_has_permission(request.user, RECEIVE):
+        if refuse:
+            raise PermissionDenied("Refunding a deposit needs sales.receive_customer_payment.")
+        messages.info(request, words["refund_needs_permission"])
+        return
+    blocker = deposits.refund_blocker(deposit, lang)
+    if blocker:
+        if refuse:
+            raise ValidationError(blocker)
+        messages.warning(request, blocker)
+        return
+    if held(request, "sales.cancel_payment", deposit.payment_id, {"reason": reason}, deposit.payment.payment_number):  # FB-27
+        return
+    deposits.refund(deposit, request.user, reason, lang)
+    messages.success(request, words["refunded"].format(payment=deposit.payment.payment_number))
+
+
+def _settle_cancelled_deposit(request, appointment, deposit, lang, words):
+    """The policy: late (or no-show) forfeits into a fee invoice; early refunds. Either refusal leaves the deposit held."""
+
+    reason = words["cancel_reason"].format(number=appointment.number)
+    if deposits.policy(appointment) == "forfeit":
+        if not user_has_permission(request.user, BOOK):
+            messages.info(request, words["credit_left"])
+            return
+        try:
+            invoice = deposits.forfeit(deposit, request.user, lang, reason)
+        except ValidationError as exc:
+            messages.warning(request, " ".join(exc.messages) + " " + words["credit_left"])
+            return
+        messages.success(request, words["forfeited"].format(number=invoice.invoice_number, amount=invoice.total_amount))
+        return
+    _refund(request, deposit, reason, lang, words, refuse=False)
 
 
 @require_permission(REPORT)

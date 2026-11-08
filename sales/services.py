@@ -853,6 +853,10 @@ def cancel_customer_payment(payment_id, user=None, reason=""):
     if getattr(payment, "shipment", None) is not None:
         # T14 (HG-061): money a courier collected is undone from the shipments screen, before the courier settles it.
         raise ValidationError("This payment was collected by a courier; undo the delivery from the shipments screen.")
+    deposit = getattr(payment, "deposit", None)
+    if deposit is not None and deposit.status in ("applied", "forfeited"):
+        # S5 (HG-069): a deposit that already settles a posted invoice is freed by cancelling that invoice first.
+        raise ValidationError("This payment is a deposit applied to an invoice; cancel that invoice first.")
 
     CustomerLedgerEntry.objects.create(
         customer=payment.customer,

@@ -32,8 +32,13 @@ def daily_digest(user, day):
         totals = invoices.aggregate(count=Count("id"), total=Sum("total_amount"), cash=Sum("paid_now"), credit=Sum("remaining_due"))
         returns = SalesReturn.objects.filter(status="posted", return_date=day).aggregate(total=Sum("total_amount"))["total"] or ZERO
         top = list(SalesLine.objects.filter(invoice__in=invoices).values("item__item_name").annotate(qty=Sum("quantity"), amount=Sum("line_total_amount")).order_by("-amount")[:5])
-        data["sales"] = {"count": totals["count"] or 0, "total": totals["total"] or ZERO, "cash": totals["cash"] or ZERO, "credit": totals["credit"] or ZERO,
-                         "returns": returns, "top": top}
+        from settlements.services import applied_total
+
+        # HG-069: what a deposit (or link / card) settled is not still due; ``cash`` stays paid_now and the day's
+        # ``customers.collected`` below already holds that payment on the day it was taken.
+        applied = applied_total(invoices)
+        data["sales"] = {"count": totals["count"] or 0, "total": totals["total"] or ZERO, "cash": totals["cash"] or ZERO,
+                         "credit": (totals["credit"] or ZERO) - applied, "applied": applied, "returns": returns, "top": top}
     if _can(user, "reports.view_profit_report"):
         profit = profit_totals(day, day)
         data["profit"] = {"sales": profit["sales"], "cost": profit["cost"], "gross": profit["profit"]}

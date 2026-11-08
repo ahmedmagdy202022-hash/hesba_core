@@ -84,6 +84,8 @@ LOCAL_APPS = [
     "messaging",
     "feedback",
     "approvals",
+    "settlements",  # HG-069: which payment settles which invoice
+    "deposits",  # HG-069 (S5): deposits at booking
 ]
 
 INSTALLED_APPS = DJANGO_APPS + LOCAL_APPS
