@@ -343,6 +343,8 @@ def _quick_actions(user, lang, modules, activity="", sections=frozenset()):
     lead = ACTIVITY_ACTIONS.get(activity)
     if activity == "services" and "workorders" in sections and user_has_permission(user, "sales.create_sales_invoice"):  # SVC-001: a workshop's day starts at the counter
         lead = {"key": "workorders", "section": "workorders", "url_name": "workorders:new", "ar": "استلام جهاز / طلب", "en": "Receive a device"}
+    if activity == "services" and "my_day" in sections:  # S9: a technician's day starts with their own jobs
+        lead = {"key": "my_day", "section": "my_day", "url_name": "staff:my_day", "ar": "شغلي النهارده", "en": "My jobs today"}
     if lead and lead["section"] in sections:
         actions.append({"key": lead["key"], "label": lead[lang], "primary": True, "url_name": lead["url_name"], "hint": ""})
     for action in QUICK_ACTIONS:
