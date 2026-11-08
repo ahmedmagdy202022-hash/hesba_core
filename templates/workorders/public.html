@@ -35,8 +35,9 @@
   <p>{% if lang == 'en' %}The quote lines were removed and no repair will be done on this quote. Contact the shop for anything else.{% else %}بنود العرض اتشالت ومفيش إصلاح هيتعمل على العرض ده. كلّم المحل لو محتاج أي حاجة.{% endif %}</p>
 </section>{% endif %}
 
-{% if shows_quote %}<section class="cl-card" id="ask" aria-labelledby="cl-q-t" data-quote>
-  <h2 class="cl-h" id="cl-q-t">{% if lang == 'en' %}Repair quote{% else %}عرض الإصلاح{% endif %}</h2>
+{% if shows_quote or state.can_decide %}<section class="cl-card" id="ask" aria-labelledby="cl-q-t" data-quote>
+  {# the decision stays reachable even for a quote with no lines: the backend still accepts an answer #}
+  {% if shows_quote %}<h2 class="cl-h" id="cl-q-t">{% if lang == 'en' %}Repair quote{% else %}عرض الإصلاح{% endif %}</h2>
   <div class="cl-lines" role="table" aria-label="{% if lang == 'en' %}Quote lines{% else %}بنود العرض{% endif %}">
     <div class="cl-line cl-line--head" role="row"><span role="columnheader">{% if lang == 'en' %}Item{% else %}البند{% endif %}</span><span role="columnheader">{% if lang == 'en' %}Amount{% else %}القيمة{% endif %}</span></div>
     {% for line in lines %}<div class="cl-line" role="row" data-quote-line>
@@ -48,7 +49,7 @@
     {% if has_tax %}<div><span>{% if lang == 'en' %}Subtotal{% else %}قبل الضريبة{% endif %}</span><span><bdi>{{ subtotal }}</bdi></span></div>
     <div><span>{% if lang == 'en' %}VAT{% else %}الضريبة{% endif %}</span><span><bdi>{{ tax }}</bdi></span></div>{% endif %}
     <div class="cl-grand"><span>{% if lang == 'en' %}Total{% else %}الإجمالي{% endif %}</span><strong data-quote-total><bdi>{{ total }}</bdi> <small>{{ currency }}</small></strong></div>
-  </div>
+  </div>{% endif %}
 
   {% if state.can_decide %}<div class="cl-ask" data-decision>
     <h2 class="cl-h">{% if lang == 'en' %}Approve the quote?{% else %}موافق على العرض؟{% endif %}</h2>

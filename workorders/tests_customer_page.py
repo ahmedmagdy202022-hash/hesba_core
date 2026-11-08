@@ -160,6 +160,17 @@ class CustomerPageTests(WorkshopSetup):
         self.assertNotContains(response, "data-quote")
         self.assertNotContains(response, "<form")
 
+    def test_a_quoted_order_with_no_lines_still_offers_both_answers(self):
+        empty = self.order()
+        for status in (Status.DIAGNOSED, Status.QUOTED):
+            services.move(empty, status, self.owner)
+        response = self.public.get(reverse("share_document", args=[make_token("work_order", empty.pk)]), **HTML)
+        self.assertContains(response, 'data-status="quoted"')
+        self.assertContains(response, "data-decision")
+        self.assertContains(response, 'id="confirm-approve"')
+        self.assertContains(response, 'id="confirm-refuse"')
+        self.assertNotContains(response, "data-quote-line")
+
     # -- the answer can be stale --
 
     def test_a_changed_quote_re_shows_the_page_with_the_message_and_the_new_fingerprint(self):
