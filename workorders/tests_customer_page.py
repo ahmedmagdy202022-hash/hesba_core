@@ -33,7 +33,10 @@ class CustomerPageTests(WorkshopSetup):
         self.other = self.order(customer=make_customer(customer_code="CUS-OTHER", name="عميل تاني خالص", phone="01110000000"), device="OTHER-DEVICE-XYZ")
 
     def token(self):
-        return make_token("work_order", self.order_.pk)
+        # Made once per test: a signed token carries the second it was made, so a second call can differ (seen on CI).
+        if not hasattr(self, "_token"):
+            self._token = make_token("work_order", self.order_.pk)
+        return self._token
 
     def get(self, lang="ar", client=None):
         return (client or self.public).get(reverse("share_document", args=[self.token()]), {"lang": lang}, **HTML)
@@ -85,11 +88,12 @@ class CustomerPageTests(WorkshopSetup):
 
     def test_forms_carry_csrf_the_current_fingerprint_and_the_language(self):
         for lang in ("ar", "en"):
-            body = self.get(lang).content.decode()
+            token = self.token()  # one token for the page and the check: a signed token carries the second it was made
+            body = self.public.get(reverse("share_document", args=[token]), {"lang": lang}, **HTML).content.decode()
             fingerprint = services.quote_fingerprint(self.order_)
             for action in ("approve", "refuse"):
                 with self.subTest(lang=lang, action=action):
-                    url = reverse(f"share_work_order_{action}", args=[self.token()])
+                    url = reverse(f"share_work_order_{action}", args=[token])
                     form = re.search(rf'<form[^>]*method="post"[^>]*action="{re.escape(url)}">(.*?)</form>', body, re.S)
                     self.assertIsNotNone(form)
                     self.assertIn('name="csrfmiddlewaretoken"', form.group(1))
