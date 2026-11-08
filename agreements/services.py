@@ -126,13 +126,14 @@ def current_period(contract, today=None):
 def visits_in(contract, start):
     """Done appointments of the contract's customer for its service in the period."""
 
-    from appointments.models import Appointment, AppointmentStatus
+    from appointments.models import AppointmentStatus
+    from appointments.services import scoped as scoped_appointments
 
     end = period_end(contract, start)
     first = timezone.make_aware(timezone.datetime.combine(start, timezone.datetime.min.time()))
     last = timezone.make_aware(timezone.datetime.combine(end + timedelta(days=1), timezone.datetime.min.time()))
-    return Appointment.objects.filter(customer=contract.customer, service=contract.service, status=AppointmentStatus.DONE,
-                                      starts_at__gte=first, starts_at__lt=last).count()
+    return scoped_appointments().filter(customer=contract.customer, service=contract.service, status=AppointmentStatus.DONE,  # HG-074
+                                        starts_at__gte=first, starts_at__lt=last).count()
 
 
 def _date(raw, words, allow_blank=False):

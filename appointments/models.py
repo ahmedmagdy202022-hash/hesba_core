@@ -43,6 +43,9 @@ class Appointment(models.Model):
     status = models.CharField(max_length=20, choices=AppointmentStatus.choices, default=AppointmentStatus.BOOKED, db_index=True)
     notes = models.CharField(max_length=255, blank=True)
     invoice = models.OneToOneField("sales.SalesInvoice", on_delete=models.PROTECT, null=True, blank=True, related_name="appointment")
+    # HG-074: the entity the appointment was booked in; its bill lands in that entity's store and books.
+    # NULL (booked before HG-074) belongs to the main entity, as every record without one (HG-034).
+    entity = models.ForeignKey("entities.Entity", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="created_appointments")
     created_at = models.DateTimeField(auto_now_add=True)
 

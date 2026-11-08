@@ -139,3 +139,27 @@ class ScreenTests(VisitSetup):
         self.assertContains(page, "data-period-visits")
         self.assertContains(page, "م. كريم")
         self.assertNotContains(page, ">Booked<")
+
+
+class VisitEntityTests(VisitSetup):
+    """HG-074: a contract's visits belong to the contract's entity, even when booked from the whole-group view."""
+
+    def test_group_view_scheduling_stamps_the_contracts_entity_and_never_doubles(self):
+        from entities.current import working_in
+        from entities.services import save_entity
+        from hesba_testing.factories import make_location
+        from agreements.models import ServiceContract
+
+        branch = save_entity({"code": "BR2", "name_ar": "فرع المعادي"}, self.owner)
+        store = make_location(location_code="BR-SHOP", name_ar="مخزن الفرع", entity=branch, is_selling_location=True)
+        contract = self.visits_contract(2)
+        ServiceContract.objects.filter(pk=contract.pk).update(location=store)
+        with working_in(None):  # the owner, working group-wide
+            booked = visits.schedule(contract, self.owner, today=FIRST)
+        self.assertEqual({appointment.entity for appointment in booked}, {branch})
+        with working_in(branch):
+            self.assertEqual(visits.missing(contract, FIRST), 0)
+            self.assertEqual(visits.schedule(contract, self.owner, today=FIRST), [])  # the branch sees them: nothing booked twice
+        with working_in(None):
+            self.assertEqual(visits.schedule(contract, self.owner, today=FIRST), [])
+        self.assertEqual(Appointment.objects.count(), 2)

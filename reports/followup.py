@@ -117,11 +117,12 @@ def todo(user, today, slot, lang="ar"):
                 said = {**words, "expiring": expiry_words(lang).get("followup") or words["expiring"]}  # AN8
                 items.append(_item("expiring", said, len(batches), (str(batch) for batch in batches), path="/batches/"))
     if _module("appointments_visits") and _can(user, "sales.view_sales_invoices"):
-        from appointments.models import HOLDS_TIME, Appointment
+        from appointments.models import HOLDS_TIME
+        from appointments.services import scoped as scoped_appointments
 
         day = today if slot == MORNING else today + timedelta(days=1)
         start, end = _day_bounds(day)
-        rows = Appointment.objects.filter(starts_at__gte=start, starts_at__lt=end, status__in=HOLDS_TIME).select_related("customer", "employee")
+        rows = scoped_appointments().filter(starts_at__gte=start, starts_at__lt=end, status__in=HOLDS_TIME).select_related("customer", "employee")  # HG-074
         if rows:
             key = "appointments_today" if slot == MORNING else "appointments_tomorrow"
             lines = (f"{timezone.localtime(row.starts_at):%H:%M} {row.customer.name}" + (f" — {row.employee.name}" if row.employee else "") for row in rows)

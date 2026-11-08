@@ -255,7 +255,7 @@ def bill_insured(appointment, user, lang="ar"):
     words = _words(lang)
     if not can_manage(user):
         raise PermissionDenied(words["manage"])
-    appointment = Appointment.objects.select_for_update(of=("self",)).select_related("service", "customer").get(pk=appointment.pk)
+    appointment = Appointment.objects.select_for_update(of=("self",)).select_related("service", "customer", "entity").get(pk=appointment.pk)
     if appointment.invoice_id:  # two clicks never make four invoices
         raise ValidationError(words["billed"])
     if appointment.status not in (AppointmentStatus.ARRIVED, AppointmentStatus.DONE):
@@ -269,8 +269,12 @@ def bill_insured(appointment, user, lang="ar"):
     insurer_share, patient_share = split(appointment.price, percent)
     if insurer_share <= 0:
         raise ValidationError(words["not_covered"].format(insurer=contract.insurer.name))
-    location = entity_scope.locations(Location.objects).filter(active=True, is_selling_location=True).order_by("-is_default", "pk").first()
+    from appointments.services import MESSAGES as APPOINTMENT_MESSAGES, selling_location_of
+
+    location = selling_location_of(appointment)  # HG-074: the appointment's entity's store, not the biller's, so both drafts land in its books
     if location is None:
+        if appointment.entity is not None:
+            raise ValidationError(APPOINTMENT_MESSAGES[lang]["setup_entity"].format(entity=appointment.entity.display(lang)))
         raise ValidationError(words["setup"])
     service = appointment.service.item_name
     member = words["member"].format(member=cover.member_number) if cover.member_number else ""
