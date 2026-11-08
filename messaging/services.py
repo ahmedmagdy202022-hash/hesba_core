@@ -197,8 +197,9 @@ def _refills(today, company, currency):
 
 
 SOURCES = {MessageKind.DUE: _due, MessageKind.INSTALMENT: _instalments, MessageKind.APPOINTMENT: _appointments, MessageKind.REFILL: _refills}
-#: Appointments carry no entity of their own; like every record without one, they belong to the main entity (HG-034).
-UNSCOPED = {MessageKind.APPOINTMENT}
+#: Kinds whose records carry no entity; gathered for the main entity only. Empty since HG-074 gave appointments
+#: their entity: each entity's appointments are gathered as its own, and the main entity's keys are unchanged.
+UNSCOPED = set()
 
 
 def _entities():

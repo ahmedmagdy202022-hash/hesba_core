@@ -11,7 +11,13 @@ Rules, stated once:
 * billing makes a *draft* sales invoice through ``create_sales_draft_with_tax``
   with the service at the appointment's price. Nothing is posted here: the
   invoice is posted, collected and printed from the sales screen like any
-  other, so stock, cashbox and customer ledger stay the sales engine's own.
+  other, so stock, cashbox and customer ledger stay the sales engine's own;
+* HG-074: an appointment belongs to the entity it was booked in (NULL: the
+  main entity, HG-034). The agenda, the performance report and every reader
+  narrow to the entity being worked in, and the bill is made on a selling
+  store of the *appointment's* entity, whatever entity the biller is working
+  in, so it lands in the right books. The employee's diary stays one across
+  the group: the overlap check and the day's numbering are group-wide.
 """
 
 from datetime import timedelta
@@ -44,6 +50,7 @@ MESSAGES = {
         "address": "الزيارة محتاجة عنوان.", "overlap": "{employee} عنده ميعاد تاني من {start} لـ {end}.", "status": "مينفعش تنقل الميعاد من «{old}» لـ «{new}».",
         "closed": "الميعاد ده خلص أو اتلغى؛ مينفعش يتعدّل.", "no_service": "اختار الخدمة الأول عشان تعمل الفاتورة.", "setup": "لازم يكون فيه مخزن بيع نشط.",
         "billed": "الميعاد ده عليه فاتورة بالفعل.", "not_done": "الميعاد لازم يكون خلص أو جاري عشان تعمل فاتورته.",
+        "setup_entity": "مفيش مخزن بيع نشط في كيان الميعاد ({entity})؛ ضيف مخزن بيع للكيان ده الأول.",
         "forbidden": "تعديل المواعيد لصاحب الصلاحية بس.", "bad_start": "اكتب ميعاد جديد صحيح.", "bad_staff": "الموظف ده مش موجود أو مش شغال.",
     },
     "en": {
@@ -51,9 +58,33 @@ MESSAGES = {
         "address": "A visit needs an address.", "overlap": "{employee} already has an appointment from {start} to {end}.", "status": "The appointment cannot move from “{old}” to “{new}”.",
         "closed": "This appointment is done or cancelled; it cannot be changed.", "no_service": "Choose the service first to make the invoice.", "setup": "An active selling location is needed.",
         "billed": "This appointment already has an invoice.", "not_done": "The appointment must be in progress or done to be billed.",
+        "setup_entity": "The appointment's entity ({entity}) has no active selling location; add one to that entity first.",
         "forbidden": "Only users with the permission can change appointments.", "bad_start": "Enter a valid new date and time.", "bad_staff": "That employee does not exist or is not active.",
     },
 }
+
+
+def scoped(queryset=None):
+    """The appointments of the entity being worked in (all of them in the whole-group view). HG-074."""
+
+    return entity_scope.scope((queryset if queryset is not None else Appointment.objects).all(), "entity")
+
+
+def selling_location_of(appointment):
+    """The selling store of the *appointment's* entity, not the biller's (HG-074).
+
+    An appointment with no entity belongs to the main entity (HG-034), so it
+    takes a main-entity store (or a pre-entity store with none). Read exactly
+    as ``entities.scope`` reads, by working in that entity for the lookup.
+    """
+
+    from entities.current import working_in
+    from entities.services import main_entity
+    from master_data.models import Location
+
+    # main_entity() creates the MAIN row on an install that has none yet; that is the HG-034 default, not new data.
+    with working_in(appointment.entity or main_entity()):
+        return entity_scope.locations(Location.objects).filter(active=True, is_selling_location=True).order_by("-is_default", "pk").first()
 
 
 def _audit(appointment, user, action, after, before=None):
@@ -133,7 +164,8 @@ def book(data, user, lang="ar"):
     words = MESSAGES[lang]
     values = _clean(data, words)
     _check_overlap(values["employee"], values["starts_at"], values["duration_minutes"], words)
-    appointment = Appointment.objects.create(number=_next_number(timezone.localtime(values["starts_at"]).date()), created_by=user, **values)
+    appointment = Appointment.objects.create(number=_next_number(timezone.localtime(values["starts_at"]).date()), created_by=user,
+                                             entity=entity_scope.entity() or None, **values)  # HG-074: booked in this entity
     _audit(appointment, user, "book_appointment", _snapshot(values))
     return appointment
 
@@ -197,19 +229,20 @@ def set_status(appointment, status, user, lang="ar"):
 def bill(appointment, user, lang="ar"):
     """The draft sales invoice for a done (or in-progress) appointment; made once."""
 
-    from master_data.models import Location
     from taxes.services import create_sales_draft_with_tax
 
     words = MESSAGES[lang]
-    appointment = Appointment.objects.select_for_update(of=("self",)).select_related("service", "customer").get(pk=appointment.pk)
+    appointment = Appointment.objects.select_for_update(of=("self",)).select_related("service", "customer", "entity").get(pk=appointment.pk)
     if appointment.invoice_id:
         return appointment.invoice
     if appointment.status not in (AppointmentStatus.ARRIVED, AppointmentStatus.DONE):
         raise ValidationError(words["not_done"])
     if appointment.service is None:
         raise ValidationError(words["no_service"])
-    location = entity_scope.locations(Location.objects).filter(active=True, is_selling_location=True).order_by("-is_default", "pk").first()
+    location = selling_location_of(appointment)  # HG-074: the appointment's entity's store, so the bill lands in its books
     if location is None:
+        if appointment.entity is not None:
+            raise ValidationError(words["setup_entity"].format(entity=appointment.entity.display(lang)))
         raise ValidationError(words["setup"])
     invoice = create_sales_draft_with_tax(
         {"invoice_number": f"INV-{appointment.number}", "invoice_date": timezone.localdate(), "customer": appointment.customer,
@@ -234,7 +267,7 @@ def bill(appointment, user, lang="ar"):
 
 def day_agenda(day, employee=None):
     start = timezone.make_aware(timezone.datetime.combine(day, timezone.datetime.min.time()))
-    rows = Appointment.objects.filter(starts_at__gte=start, starts_at__lt=start + timedelta(days=1)).select_related("customer", "employee", "service", "invoice")
+    rows = scoped().filter(starts_at__gte=start, starts_at__lt=start + timedelta(days=1)).select_related("customer", "employee", "service", "invoice")
     if employee is not None:
         rows = rows.filter(employee=employee)
     return rows
@@ -249,7 +282,7 @@ def week_agenda(first_day):
     """The 7 days from ``first_day`` as the future drag calendar needs them: per employee, no money fields."""
 
     start, end = week_window(first_day)
-    rows = Appointment.objects.filter(starts_at__gte=start, starts_at__lt=end).select_related("customer", "employee", "service")
+    rows = scoped().filter(starts_at__gte=start, starts_at__lt=end).select_related("customer", "employee", "service")  # HG-074
     return rows
 
 
@@ -278,7 +311,7 @@ def performance(date_from, date_to):
 
     start = timezone.make_aware(timezone.datetime.combine(date_from, timezone.datetime.min.time()))
     end = timezone.make_aware(timezone.datetime.combine(date_to + timedelta(days=1), timezone.datetime.min.time()))
-    done = Appointment.objects.filter(status=AppointmentStatus.DONE, starts_at__gte=start, starts_at__lt=end)
+    done = scoped().filter(status=AppointmentStatus.DONE, starts_at__gte=start, starts_at__lt=end)
     rows = []
     for employee in Employee.objects.all():
         mine = done.filter(employee=employee)

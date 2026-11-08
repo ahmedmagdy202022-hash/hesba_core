@@ -90,15 +90,15 @@ def _kitchen(words, today):
 def _bookings(words, today, lang):
     from appointments.models import Appointment, AppointmentStatus as S
 
-    day = Appointment.objects.filter(starts_at__date=today)
+    day = entity_scope.scope(Appointment.objects, "entity").filter(starts_at__date=today)  # HG-074
     counts = day.aggregate(
         total=Count("id", filter=~Q(status=S.CANCELLED)),
         waiting=Count("id", filter=Q(status__in=[S.BOOKED, S.CONFIRMED, S.ARRIVED])),
         done=Count("id", filter=Q(status=S.DONE)),
         no_show=Count("id", filter=Q(status=S.NO_SHOW)),
     )
-    window = Appointment.objects.filter(starts_at__date__gte=today - timedelta(days=29), starts_at__date__lte=today,
-                                        status__in=[S.DONE, S.NO_SHOW])
+    window = entity_scope.scope(Appointment.objects, "entity").filter(starts_at__date__gte=today - timedelta(days=29), starts_at__date__lte=today,
+                                                                        status__in=[S.DONE, S.NO_SHOW])
     closed = window.count()
     rate = round(window.filter(status=S.NO_SHOW).count() / closed * 100) if closed else None
     upcoming = day.filter(status__in=[S.BOOKED, S.CONFIRMED], starts_at__gte=timezone.now()).select_related("customer").order_by("starts_at").first()
