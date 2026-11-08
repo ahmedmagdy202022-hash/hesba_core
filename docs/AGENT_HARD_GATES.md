@@ -2131,6 +2131,23 @@ The entries below are the protected-logic decisions in the commercial gate, reco
   - **Where:** the board gets «اسحب من Shopify / WooCommerce», and the command `pull_store_orders --location CODE` can run from cron.
   - **Tests:** `onlinestore/tests_connect.py`.
 
+## HG-073 — S2: the customer's decision on a work order, from a secure link
+
+- **Status:** OPEN PROPOSAL (needs Main Control's review before merge). It is additive: two column changes on one table, no data moved.
+- **Change:** `workorders.WorkOrderEvent` (migration `workorders/0002_workorderevent_by_customer`):
+  - `user` becomes nullable (`null=True, blank=True`, still `PROTECT`);
+  - `by_customer` is a new `BooleanField(default=False)`.
+- **Why:** the customer approves or refuses a QUOTED order from a signed link, with no account. `WorkOrderEvent.user` was required and the repo has no system-actor pattern. The alternative was to file the event under the order's creator, which states a false actor in the audit trail and shows that employee's name on the staff timeline. So the customer's event is saved with `user=None, by_customer=True`, and the staff timeline shows «العميل من اللينك» / "Customer (via link)".
+- **Accounting:** none. A decision changes the order's status only, through `workorders.services.customer_decide()`. No invoice, cash, stock or ledger row is written. A refusal takes the quote's lines off, as a staff refusal does; the lines are kept in the audit.
+- **Audit:** an `AuditLog` row with `actor=None`, the order id and the status change only (no name, phone, IP or user agent).
+- **Risk:**
+  - code that assumes `event.user` is set. The only reader today is the staff timeline (`templates/workorders/detail.html`, through the `person` filter, which already returns an empty text for no user); the other writers always pass a user. Any new reader must check `by_customer` first;
+  - existing rows keep their user and `by_customer=False`; the migration changes nothing in them;
+  - the public link can only approve or refuse a QUOTED order. It is signed, expires after `SHARE_LINK_DAYS`, and is built from `PUBLIC_BASE_URL`, never the request host.
+- **Rate limiting:** none added; the repo has no reusable helper, the token is signed and a repeated answer is a no-op.
+- **Files:** `workorders/models.py`, `workorders/migrations/0002_workorderevent_by_customer.py`, `workorders/services.py`, `workorders/public.py` (new), `workorders/views.py`, `workorders/urls.py`, `templates/workorders/detail.html` (one label), `printing/share.py`, `printing/views.py`, `config/urls.py`.
+- **Tests:** `workorders/tests_customer_link.py`. They cover wrong-kind, other-order, forged and expired tokens; no cost or notes on the page; approve once and idempotent; refuse only from QUOTED; no other status allowed; CSRF enforced; `user=None` and `by_customer=True` on the event; the staff timeline label in both languages; existing staff events unchanged; the audit row with the order id only; no invoice, cash, stock or ledger row; the link from `PUBLIC_BASE_URL`; Arabic and English messages. Added after the security review: only counter staff (the staff approval rule, `can_manage`) get the link (technician and view-only user: 403; cashier, manager and owner: 200); the quote fingerprint (total plus a hash of item, quantity and price per line) that the POST must echo, so a quote changed after the page was read is refused and the status stays; and a repeat is "already recorded" only when the customer gave the first answer, otherwise "no longer waiting".
+
 ## HG-066 — E-receipts for till sales (T8, offline part)
 
 - **Status:** BUILT in T8 (`claude/t8-ereceipt`); additive only. Sending to the authority still needs the device's credentials on the receipt portal.
@@ -2151,3 +2168,47 @@ The entries below are the protected-logic decisions in the commercial gate, reco
   - **What is sent:** receipts go oldest first, as the exact text they were hashed from. `einvoice.portal._http` gained a `raw` argument for that.
   - **Outcomes:** an accepted receipt keeps its submission UUID and long id; a rejected one keeps the authority's reason; a refused or unreachable batch stays queued.
   - **Tests:** `ereceipt.tests_portal`.
+
+## HG-072 — S1 attachments, a new table for photos, signatures and files
+
+- **Status:** OPEN PROPOSAL. Built on `claude/maestro-s1-attachments` and waiting for Ahmed's approval of the storage decision. It is additive only: one new table in a new app. No existing table, model, posting or report changed.
+- **Schema (`attachments.Attachment`, migration `attachments/0001_initial`):**
+  - owner: `content_type` (FK to `ContentType`, PROTECT) + `object_id` (`PositiveBigIntegerField`), with an index on both; a generic owner, so appointments and customers can use it later. Only work orders are wired now.
+  - `entity` (FK to `entities.Entity`, null, PROTECT): copied from the owner, so the entity scope (HG-034) holds on the attachment itself.
+  - `kind` (`photo` / `signature` / `document`), `stage` (`receive` / `deliver` / `other`).
+  - `original_filename` (255, path parts stripped), `content_type_name` (sniffed from the bytes, never the client's claim), `size`, `sha256` (indexed).
+  - `data`: `BinaryField`, the file's bytes.
+  - `uploaded_by` (FK to user, PROTECT), `created_at`.
+- **Why the bytes are in the database:** Render's disk is ephemeral and wiped on every deploy, so files on disk would vanish. Keeping them in the database needs no external account and is backed up with everything else. The admin shows metadata only (`data` excluded, no add/change/delete there).
+- **Limits:**
+  - `ATTACHMENTS_MAX_BYTES` (env, default 5 MB) per file; `ATTACHMENTS_SIGNATURE_MAX_BYTES` (default 512 KB) for a signature. Both are read at call time.
+  - `ATTACHMENTS_ALLOWED_TYPES` (env, default `image/jpeg,image/png,image/webp,application/pdf`) can only narrow what the code can verify by magic bytes; it can never add a type.
+  - Magic bytes are checked (JPEG, PNG with IHDR and IEND for a signature, WEBP, `%PDF-`). SVG and HTML are refused by name, declared mime and content.
+  - **Review fix, signature PNG:** a signature must now be a displayable PNG, checked with the standard library only (Pillow is not a dependency): every chunk CRC, IHDR first and IEND last, at least one IDAT, width and height within 1 to 4000, and the IDAT stream inflating (capped at the expected size) to exactly the scanline bytes the header implies. Both signature paths (`add_signature_png` and `add_attachment` with kind signature) go through it, so an IHDR+IEND-only or corrupt-IDAT file is refused instead of becoming an undeletable, undisplayable signature.
+  - A PDF containing `/JavaScript`, `/OpenAction`, `/Launch` or `/EmbeddedFile` is refused. `/JS` is left out, because it turns up by chance in compressed image data and would refuse real scans (a plain, case-sensitive bytes search; a name hidden with `#xx` escapes is not caught, which is why a PDF is only ever served as a sandboxed download).
+  - The stored filename always takes the extension of the detected type (`report.hta` holding a PDF is kept and served as `report.pdf`).
+  - The upload is capped before it is spooled: a `Content-Length` above the cap (plus 64 KB of framing) answers 413 without reading the body, and an upload handler stops one that passes the cap while streaming. CSRF is still enforced (the upload view is exempt only to install the handler, then checked by an inner `csrf_protect`).
+  - **Storage caps:** `ATTACHMENTS_MAX_PER_OWNER` (default 20 files per record), `ATTACHMENTS_MAX_BYTES_PER_OWNER` (default 25 MB per record), and `ATTACHMENTS_GLOBAL_SHARE` (default 0.2): all attachments together may not pass that share of `DATABASE_SIZE_LIMIT_MB` (0 switches the guard off). The caps are checked under a lock on the owner row, in the same transaction as the insert.
+  - **Review fix, global cap across owners:** on PostgreSQL the global check and insert also take `pg_advisory_xact_lock(7207201)` (after the owner row lock, released at commit), so concurrent uploads to different records can no longer both pass `Sum(size)`; SQLite already serializes writers, noted in the code.
+- **Access:**
+  - **See / list / read:** the user must be able to see the owner. For a work order this is `workorders.services.visible_to` (the sales-view permission, the technician scoping, the entity scope) in a workshop.
+  - **Add (upload, signature):** seeing is not enough. It needs the work orders' own rule for any change: `sales.create_sales_invoice` (the counter), or the technician who owns the order. A view-only user gets 403.
+  - **Closed orders:** a delivered or cancelled order takes no more attachments. An order that is still open, a ready one waiting to be handed over included, does, so the hand-over photo and signature (stage `deliver`) are taken before the delivery.
+  - **Delete:** managers only (`sales.create_sales_invoice`); the owning technician may add but not delete. It is audited (`attachments / delete_attachment`, with the file's metadata and sha256 in `before_data`). The signature of a delivered order is never deleted.
+  - Anyone else gets 404 (not found for them) or 403 (no right at all); anonymous is sent to login. The file is served with `nosniff`, `Content-Security-Policy: default-src 'none'; sandbox`, `Cache-Control: private, no-cache`, an ETag of the sha256, inline for images and as a download for PDF. Every upload writes an audit entry (`attachments / add_attachment`).
+- **Money, stock, balances:** none. No invoice, cashbox movement, stock movement, journal entry or customer/supplier ledger row is created or changed. The tests assert the counts of all six are unchanged.
+- **Risks:**
+  - **Database growth.** At up to 5 MB a file, photos eat the plan fast: `DATABASE_SIZE_LIMIT_MB` is 500 by default, and `settings_core/storage.py` already shows usage, so 100 full-size photos is the whole plan. Phones should send downsized images (the later UI should resize on the client). The caps above (20 files and 25 MB per record, 20% of the plan overall) bound it, and the global guard measures `Sum(size)` of this table only. Recommended next step: a later move to object storage chosen from the environment (the service layer is the only code that touches `data`, so the switch is local).
+  - There is no retention rule yet (only the audited manager delete), to be decided with the UI.
+  - Postgres returns `data` as a `memoryview`; the serve view converts it with `bytes()`.
+  - A PDF is served as a download with a sandboxing CSP, never rendered inside the app's origin.
+- **Files:** `attachments/` (new app: models, services, views, urls, admin, migration, tests), `config/settings.py` (app and the `ATTACHMENTS_*` settings), `config/urls.py` (`/attachments/`).
+- **Tests:** `attachments/tests.py`. They cover:
+  - jpeg, png, webp and pdf kept with the right sha256, size and type;
+  - oversize, a `.png` that is really HTML, SVG under any name, and a settings list that tries to allow SVG, all refused;
+  - the signature data URL decoded, a non-PNG, truncated PNG or bad base64 refused, and the signature size cap;
+  - another entity's order and file answer 404 (with a positive control for the user's own entity), a technician reaches only their own orders, a user with no right gets 403, an anonymous request goes to login;
+  - a view-only user refused on upload and signature (with a positive control), a delivered or cancelled order refused, each storage cap, the audited delete and who may do it, the delivered order's signature kept;
+  - the extension forced to the detected type, active PDFs refused, an oversize `Content-Length` and a streaming overrun refused with 413, CSRF still enforced;
+  - the serve headers, the audit entry, and the unchanged money, stock and ledger counts;
+  - Arabic and English error messages.
