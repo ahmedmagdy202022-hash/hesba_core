@@ -39,9 +39,11 @@ ACTION_LABELS = {
 }
 MESSAGES = {
     "ar": {"not_linked": "الحساب ده مش مربوط بفني؛ شاشة «شغلي النهارده» للفنيين بس.", "forbidden": "تعديل المواعيد لصاحب الصلاحية بس.",
-           "moved": "اتحدّثت حالة {ref}.", "bad_move": "الحالة دي مش متاحة من الموبايل.", "bad_kind": "طلب غلط."},
+           "moved": "اتحدّثت حالة {ref}.", "bad_move": "الحالة دي مش متاحة من الموبايل.", "bad_kind": "طلب غلط.",
+           "module_off": "المواعيد والزيارات مش شغّالة في الإعداد الحالي."},
     "en": {"not_linked": "This account is not linked to a technician; “My jobs today” is for technicians.", "forbidden": "Only users with the permission can change appointments.",
-           "moved": "{ref} was updated.", "bad_move": "That status is not available from the phone.", "bad_kind": "Invalid request."},
+           "moved": "{ref} was updated.", "bad_move": "That status is not available from the phone.", "bad_kind": "Invalid request.",
+           "module_off": "Appointments and visits are not switched on."},
 }
 
 
@@ -214,6 +216,8 @@ def act(user, kind, pk, to, lang="ar"):
             _fail(lang, "bad_move")
         return wo.move(order, to, user, lang=lang).number
     if kind == "appointment":
+        if not _appointments_on():  # the screen hides them with the module; the POST closes with it too
+            raise PermissionDenied(MESSAGES[lang]["module_off"])
         if not can_change_appointments(user):
             raise PermissionDenied(MESSAGES[lang]["forbidden"])
         appointment = get_object_or_404(appt.scoped(Appointment.objects.filter(employee=employee)), pk=pk)

@@ -335,6 +335,23 @@ class QuickActionTests(MyDaySetup):
         self.assertEqual(mine.invoice_id, None)  # nothing is billed from here
 
 
+class AppointmentsModuleOffTests(MyDaySetup):
+    def test_appointment_actions_are_closed_with_the_module_like_the_screen_hides_them(self):
+        from settings_core.setup_services import set_module_enabled
+
+        boss = save_employee({"name": "المعلم", "user": str(self.owner.pk)}, self.owner)
+        mine = self.visit(9, employee=boss, address="12 شارع الهرم")
+        set_module_enabled(self.profile, "appointments_visits", False, self.owner)
+        self.assertNotContains(self.get(self.owner), 'data-action="arrived"')
+        self.assertEqual(self.post(self.owner, kind="appointment", pk=mine.pk, to="arrived").status_code, 403)
+        mine.refresh_from_db()
+        self.assertEqual(mine.status, AppointmentStatus.BOOKED)
+        set_module_enabled(self.profile, "appointments_visits", True, self.owner)  # the same request works once the module is back
+        self.post(self.owner, kind="appointment", pk=mine.pk, to="arrived")
+        mine.refresh_from_db()
+        self.assertEqual(mine.status, AppointmentStatus.ARRIVED)
+
+
 class MenuAndDashboardTests(MyDaySetup):
     def test_the_technician_menu_and_dashboard_lead_to_the_screen_and_the_owners_do_not(self):
         url = reverse("staff:my_day")
