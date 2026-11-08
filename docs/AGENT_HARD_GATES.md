@@ -1,6 +1,6 @@
 # Agent Hard Gates
 
-Status: HG-001–HG-037 RESOLVED. Later entries carry their own status: an OPEN PROPOSAL (HG-041–HG-044, HG-069–HG-071) is a decision still waiting, and an IMPLEMENTED note is built and waiting for review. Read each entry's status before protected work.
+Status: HG-001–HG-037 RESOLVED. Later entries carry their own status: an OPEN PROPOSAL (HG-041–HG-044) is a decision still waiting, APPROVED UNDER DELEGATION (HG-069–HG-071) was approved by the Maestro under Ahmed's 8 Nov go-ahead and waits for his review, and an IMPLEMENTED note is built and waiting for review. Read each entry's status before protected work.
 Decision source: Main Control decision comment on PR #54
 Implemented on: `agent/end-to-end-functional-cycle`, merged to `develop` via PR #54 (`c77c7e5`)
 Resolved: 2026-08-30
@@ -2123,7 +2123,7 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 
 ## HG-069 — Deposit at booking and the cancellation policy (S5)
 
-- **Status:** OPEN PROPOSAL. Nothing is built yet. This records the money decision before S5 (`docs/MARKET_PARITY_ROADMAP.md`, «بداية خدمي», PR order 8) touches the customer ledger. It also defines the one shared table (`settlements.InvoiceSettlement`) that HG-070 and HG-071 reuse.
+- **Status:** APPROVED UNDER DELEGATION, being built (S5). Approved on 8 Nov 2026 under Ahmed's blanket go-ahead («متساناش علي موافقتي خالص واعمل الصح كله … وبعد كدة هنبقي نراجع واحدة واحدة»), after independent review by Fable and Codex; listed for Ahmed's later review in `docs/MAESTRO_LOG.md`. This records the money decision before S5 (`docs/MARKET_PARITY_ROADMAP.md`, «بداية خدمي», PR order 8) touches the customer ledger. It also defines the one shared table (`settlements.InvoiceSettlement`) that HG-070 and HG-071 reuse.
 - **The question for Ahmed:** «العربون يتسجل فلوس داخلة من العميل يوم ما يتاخد، ويظهر على فاتورة الخدمة كمبلغ مدفوع مقدم والباقي بس هو اللي يتحصل؛ ولو العميل لغى متأخر العربون يتحوّل لفاتورة «رسوم إلغاء» بدل ما يرجع له. موافق؟»
 - **Why it is a gate:** a deposit is the customer's money held before any service is given. Today `appointments.Appointment` never moves money (its docstring says so) and `appointments.services.bill` makes the invoice on credit (`cashbox: None`, `paid_now: 0`). A deposit is a cash-in before the invoice, and its forfeit or refund are reversals: customer ledger, cashbox and the ledger projection, all protected.
 - **What the code does today (checked):**
@@ -2169,7 +2169,7 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 
 ## HG-070 — Online payment link, Paymob first (S4)
 
-- **Status:** OPEN PROPOSAL. Nothing is built yet. This records the money decision before S4 (PR order 9). It reuses `settlements.InvoiceSettlement` from HG-069.
+- **Status:** APPROVED UNDER DELEGATION, not built yet (S4). Approved on 8 Nov 2026 under Ahmed's blanket go-ahead («متساناش علي موافقتي خالص واعمل الصح كله … وبعد كدة هنبقي نراجع واحدة واحدة»), after independent review by Fable and Codex; listed for Ahmed's later review in `docs/MAESTRO_LOG.md`. This records the money decision before S4 (PR order 9). It reuses `settlements.InvoiceSettlement` from HG-069.
 - **The question for Ahmed:** «فلوس لينك الدفع تتسجل بس لما Paymob تأكد إنها اتدفعت، وتنزل في حساب بنكي اسمه «بوابة الدفع»؛ ولما Paymob تحوّل لنا الفلوس نسجل عمولتها مصروف بنكي. موافق؟»
 - **Why it is a gate:** money recorded from a message sent by a machine outside Hesba. If a webhook is forged, replayed or arrives twice, a customer's balance and a bank balance are wrong. The recording itself is a customer payment (a protected path, called).
 - **What the code does today (checked):**
@@ -2217,7 +2217,7 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 
 ## HG-071 — Gift cards and memberships (S6)
 
-- **Status:** OPEN PROPOSAL. Nothing is built yet. This records the money decision before S6 (PR order 10). It reuses `settlements.InvoiceSettlement` from HG-069. It is the only one of the three that asks for changes inside protected services: three of them, listed below.
+- **Status:** APPROVED UNDER DELEGATION, not built yet (S6). Approved on 8 Nov 2026 under Ahmed's blanket go-ahead («متساناش علي موافقتي خالص واعمل الصح كله … وبعد كدة هنبقي نراجع واحدة واحدة»), after independent review by Fable and Codex; listed for Ahmed's later review in `docs/MAESTRO_LOG.md`. This records the money decision before S6 (PR order 10). It reuses `settlements.InvoiceSettlement` from HG-069. It is the only one of the three that asks for changes inside protected services: three of them, listed below.
 - **The question for Ahmed:** «فلوس كارت الهدية مش مبيعات يوم البيع، بتتحسب لما حامله يدفع بيه فاتورة؛ والكارت اللي ميعاده عدّى مش بيتحول إيراد غير بقرار منك. موافق؟»
 - **Why it is a gate:** selling a gift card takes cash for nothing delivered yet; redeeming it pays an invoice without cash. Today every pound an invoice collects is `paid_now` into one cashbox (`post_sales_invoice`), and `agreements.Package` books a prepaid package as revenue the day it is sold (its docstring says so). A gift card must not be a sale, and its redemption must not be a discount (4103) or loyalty points (HG-058).
 - **What the code does today (checked):**
