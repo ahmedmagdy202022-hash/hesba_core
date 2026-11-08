@@ -38,7 +38,7 @@
     list: $('[data-cal-list]'), state: $('[data-cal-state]'), stateText: $('[data-cal-state-text]'), err: $('[data-cal-error]'), ok: $('[data-cal-ok]'),
     scrim: $('[data-cal-scrim]'), sheet: $('[data-cal-sheet]'), sheetSub: $('[data-cal-sheet-sub]'), sheetNow: $('[data-cal-sheet-now]'),
     sheetDur: $('[data-cal-sheet-dur]'), sheetErr: $('[data-cal-sheet-error]'), mvStaff: $('[data-cal-mv-staff]'), mvDay: $('[data-cal-mv-day]'),
-    mvTime: $('[data-cal-mv-time]')
+    mvTime: $('[data-cal-mv-time]'), agendaLink: $('[data-week-agenda-link]'), newLink: $('[data-week-new]')
   };
 
   /* ---------- small helpers ---------- */
@@ -148,12 +148,7 @@
       if (items.some(function (a) { return a.staff === null; })) { columns.push({ id: null, name: W.unassigned }); }
       state.columns = columns;
       state.loaded = true;
-      var min = DEFAULT_FROM, max = DEFAULT_TO;
-      items.forEach(function (a) {
-        min = Math.min(min, Math.floor(a.startMin / 60) * 60);
-        max = Math.max(max, Math.min(24 * 60, Math.ceil((a.startMin + a.dur) / 60) * 60));
-      });
-      state.from = min; state.to = max;
+      computeBounds();
       el.grid.setAttribute('aria-busy', 'false');
       render();
     }).catch(function (error) {
@@ -162,6 +157,16 @@
       el.stateText.textContent = (error && error.message && error.message !== 'Failed to fetch') ? error.message : W.load_failed;
       el.state.hidden = false;
     });
+  }
+
+  /* The hours shown: the default working day, stretched to hold every appointment of the week (also after a move). */
+  function computeBounds() {
+    var min = DEFAULT_FROM, max = DEFAULT_TO;
+    state.items.forEach(function (a) {
+      min = Math.min(min, Math.floor(a.startMin / 60) * 60);
+      max = Math.max(max, Math.min(24 * 60, Math.ceil((a.startMin + a.dur) / 60) * 60));
+    });
+    state.from = min; state.to = max;
   }
 
   /* ---------- rendering ---------- */
@@ -178,6 +183,13 @@
     el.range.textContent = fill(W.week_of, { a: shortDate(state.weekStart), b: shortDate(end) });
     var count = state.loaded ? ' · ' + countText(dayItems(state.day).length) : '';
     el.sub.textContent = longDate(state.day, true) + count;
+    // "New appointment" and "Day list" must open on the day being looked at, not the one the page was rendered for.
+    [el.agendaLink, el.newLink].forEach(function (link) {
+      if (!link) { return; }
+      var url = new URL(link.getAttribute('href'), window.location.href);
+      url.searchParams.set('day', state.day);
+      link.setAttribute('href', url.pathname + url.search);
+    });
   }
 
   function renderStrip() {
@@ -387,6 +399,7 @@
   function afterMove(a, result) {
     if (result.ok) {
       applyMoved(a, result.body);
+      computeBounds();
       render();
       markLanded(a.id);
       showOk(W.moved);
@@ -422,7 +435,6 @@
       col0: Number(col.getAttribute('data-col')), colEl0: col, rects: null, target: null, ghost: null, zone: null, label: null,
       top0: (a.startMin - state.from) * PX
     };
-    try { blk.setPointerCapture(ev.pointerId); } catch (e) { /* not supported: the document listeners below still work */ }
     document.addEventListener('pointermove', dragMove);
     document.addEventListener('pointerup', dragEnd);
     document.addEventListener('pointercancel', dragCancel);
@@ -430,6 +442,8 @@
   function dragActivate() {
     var d = drag;
     d.active = true;
+    // Captured only once it really is a drag: capturing at pointerdown would retarget a plain click away from the grip button.
+    try { d.blk.setPointerCapture(d.id); } catch (e) { /* the document listeners still work */ }
     d.rects = colRects();
     d.ghost = d.blk.cloneNode(true);
     d.ghost.className = d.blk.className.replace('is-movable', '') + ' is-ghost';

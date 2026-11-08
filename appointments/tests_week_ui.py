@@ -125,4 +125,16 @@ class CalendarAssetsTests(SimpleTestCase):
         for needed in ("X-CSRFToken", "pointerdown", "pointermove", "pointerup", "setPointerCapture", "status === 403", "result.message", "week_of", "data-can-move"):
             with self.subTest(needed=needed):
                 self.assertIn(needed, js)
-        self.assertNotIn("innerHTML", js)  # names come from the database: text nodes only
+        self.assertNotIn("innerHTML", js)
+
+    def test_the_hours_are_recomputed_after_a_move_and_the_links_follow_the_day(self):
+        js = self.read("hesba/js/week_calendar.js")
+        self.assertIn("function computeBounds()", js)
+        self.assertRegex(js, r"applyMoved\(a, result\.body\);\s*computeBounds\(\);")  # a move to 07:00 must widen the grid before the re-render
+        self.assertEqual(js.count("computeBounds();"), 2)  # load() and afterMove()
+        start = js[js.index("function dragStart("):js.index("function dragActivate()")]
+        self.assertNotIn("setPointerCapture", start)  # capturing at pointerdown would send a plain click on the grip elsewhere
+        header = js[js.index("function renderHeader()"):js.index("function renderStrip()")]
+        for needed in ("el.agendaLink", "el.newLink", "searchParams.set('day', state.day)"):
+            with self.subTest(needed=needed):
+                self.assertIn(needed, header)  # names come from the database: text nodes only
