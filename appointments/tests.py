@@ -8,6 +8,7 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 
 from audit.models import AuditLog
 from hesba_testing.factories import make_customer, make_item, make_location, make_seeded_role, make_user, make_user_profile
@@ -164,3 +165,181 @@ class ScreenTests(AppointmentSetup):
 
         set_module_enabled(self.profile, "appointments_visits", False, self.owner)
         self.assertNotEqual(self.client.get(reverse("appointments:agenda")).status_code, 200)
+
+
+class MoveTests(AppointmentSetup):
+    """S10: the JSON backend of drag-to-reschedule."""
+
+    def setUp(self):
+        super().setUp()
+        self.other_tech = save_employee({"name": "منى الفنية"}, self.owner)
+        self.client.force_login(self.owner)
+
+    def move(self, appointment, start, staff=None, client=None, **extra):
+        data = {"start": start.isoformat() if hasattr(start, "isoformat") else start, **extra}
+        if staff is not None:
+            data["staff"] = str(staff.pk)
+        return (client or self.client).post(reverse("appointments:move", args=[appointment.pk]), data)
+
+    def test_move_keeps_the_duration_and_answers_with_the_new_times(self):
+        appointment = self.book(hour=10, minutes=45)
+        response = self.move(appointment, at(14))
+        body = response.json()
+        appointment.refresh_from_db()
+        self.assertEqual((response.status_code, body["ok"], body["id"], body["staff"]), (200, True, appointment.pk, self.tech.pk))
+        self.assertEqual((appointment.starts_at, appointment.duration_minutes, appointment.employee), (at(14), 45, self.tech))
+        self.assertEqual((body["start"], body["end"]), (at(14).isoformat(), at(14, 45).isoformat()))
+        self.assertNotIn("price", body)
+
+    def test_overlap_is_409_in_arabic_and_english_and_changes_nothing(self):
+        self.book(hour=10, minutes=60)
+        appointment = self.book(hour=13)
+        for lang, text in (("ar", "عنده ميعاد تاني من 10:00 لـ 11:00"), ("en", "already has an appointment from 10:00 to 11:00")):
+            with self.subTest(lang=lang):
+                response = self.move(appointment, at(10, 30), lang=lang)
+                self.assertEqual(response.status_code, 409)
+                self.assertFalse(response.json()["ok"])
+                self.assertIn(text, response.json()["error"])
+        appointment.refresh_from_db()
+        self.assertEqual((appointment.starts_at, appointment.employee), (at(13), self.tech))
+        self.assertFalse(AuditLog.objects.filter(action="move_appointment").exists())
+
+    def test_it_never_clashes_with_itself(self):
+        appointment = self.book(hour=10, minutes=60)
+        self.assertEqual(self.move(appointment, at(10, 30)).status_code, 200)
+
+    def test_changing_the_employee(self):
+        appointment = self.book(hour=10)
+        response = self.move(appointment, at(10), staff=self.other_tech)
+        appointment.refresh_from_db()
+        self.assertEqual((response.status_code, response.json()["staff"], appointment.employee), (200, self.other_tech.pk, self.other_tech))
+
+    def test_changing_the_employee_into_an_overlap_is_refused(self):
+        services.book({"customer": self.customer, "employee": self.other_tech, "service": self.service, "starts_at": at(10), "duration_minutes": 60}, self.owner)
+        appointment = self.book(hour=10)
+        response = self.move(appointment, at(10, 15), staff=self.other_tech)
+        appointment.refresh_from_db()
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("منى الفنية", response.json()["error"])
+        self.assertEqual((appointment.starts_at, appointment.employee), (at(10), self.tech))
+
+    def test_a_past_time_is_accepted_exactly_as_booking_accepts_it(self):
+        yesterday = at(10, day=TODAY - timedelta(days=1))
+        self.assertEqual(self.book(hour=10, starts_at=yesterday).starts_at, yesterday)  # booking has no past-time rule
+        appointment = self.book(hour=12)
+        self.assertEqual(self.move(appointment, yesterday.replace(hour=12)).status_code, 200)
+
+    def test_done_cancelled_and_no_show_cannot_move(self):
+        for status in (AppointmentStatus.DONE, AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW):
+            with self.subTest(status=status):
+                appointment = self.book(hour=8, employee=None)
+                Appointment.objects.filter(pk=appointment.pk).update(status=status)
+                response = self.move(appointment, at(16), lang="en")
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("done or cancelled", response.json()["error"])
+                appointment.refresh_from_db()
+                self.assertEqual(appointment.starts_at, at(8))
+                appointment.delete()
+
+    def test_bad_input_is_400_and_bilingual(self):
+        appointment = self.book(hour=10)
+        for start, lang, text in (("", "ar", "اكتب ميعاد جديد صحيح"), ("not-a-date", "en", "Enter a valid new date and time"),
+                                  ("2026-13-45T10:00", "en", "Enter a valid new date and time")):
+            with self.subTest(start=start):
+                response = self.move(appointment, start, lang=lang)
+                self.assertEqual(response.status_code, 400)
+                self.assertIn(text, response.json()["error"])
+        url = reverse("appointments:move", args=[appointment.pk])
+        response = self.client.post(url, {"start": at(11).isoformat(), "staff": "9999", "lang": "en"})
+        self.assertEqual((response.status_code, response.json()["error"]), (400, "That employee does not exist or is not active."))
+        self.tech.active = False
+        self.tech.save()
+        self.assertEqual(self.client.post(url, {"start": at(11).isoformat(), "staff": str(self.tech.pk)}).status_code, 400)
+        appointment.refresh_from_db()
+        self.assertEqual(appointment.starts_at, at(10))
+        self.assertEqual(self.client.post(reverse("appointments:move", args=[99999]), {"start": at(11).isoformat()}).status_code, 404)
+
+    def test_only_post_is_allowed(self):
+        appointment = self.book()
+        self.assertEqual(self.client.get(reverse("appointments:move", args=[appointment.pk])).status_code, 405)
+
+    def test_without_the_permission_it_is_403_and_nothing_moves(self):
+        appointment = self.book(hour=10)
+        self.client.force_login(person(RoleCode.STOCK_KEEPER, "move_keeper"))
+        response = self.move(appointment, at(15))
+        self.assertEqual(response.status_code, 403)
+        appointment.refresh_from_db()
+        self.assertEqual(appointment.starts_at, at(10))
+
+    def test_csrf_is_enforced(self):
+        from django.test import Client
+
+        appointment = self.book(hour=10)
+        strict = Client(enforce_csrf_checks=True)
+        strict.force_login(self.owner)
+        self.assertEqual(self.move(appointment, at(15), client=strict).status_code, 403)
+        appointment.refresh_from_db()
+        self.assertEqual(appointment.starts_at, at(10))
+        token = strict.get(reverse("appointments:agenda")).cookies["csrftoken"].value
+        response = strict.post(reverse("appointments:move", args=[appointment.pk]), {"start": at(15).isoformat()}, HTTP_X_CSRFTOKEN=token)
+        self.assertEqual(response.status_code, 200)
+
+    def test_an_audit_entry_records_before_and_after(self):
+        appointment = self.book(hour=10)
+        self.move(appointment, at(15), staff=self.other_tech)
+        entry = AuditLog.objects.get(action="move_appointment")
+        self.assertEqual((entry.actor, entry.module, entry.object_id), (self.owner, "appointments", str(appointment.pk)))
+        self.assertEqual((parse_datetime(entry.before_data["starts_at"]), entry.before_data["employee"]), (at(10), str(self.tech.pk)))
+        self.assertEqual((parse_datetime(entry.after_data["starts_at"]), entry.after_data["employee"]), (at(15), str(self.other_tech.pk)))
+
+    def test_moving_touches_no_money(self):
+        appointment = self.book(hour=10)
+        self.move(appointment, at(15))
+        appointment.refresh_from_db()
+        self.assertEqual((appointment.price, appointment.invoice_id), (D("300.00"), None))
+        self.assertFalse(SalesInvoice.objects.exists())
+
+
+class WeekJsonTests(AppointmentSetup):
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.owner)
+        self.monday = TODAY - timedelta(days=TODAY.weekday())
+
+    def get(self, **params):
+        return self.client.get(reverse("appointments:week_json"), {"start": self.monday.isoformat(), **params})
+
+    def test_groups_the_week_per_employee_without_money(self):
+        other = save_employee({"name": "منى الفنية"}, self.owner)
+        inside = self.book(hour=10, starts_at=at(10, day=self.monday + timedelta(days=2)))
+        self.book(hour=9, employee=other, starts_at=at(9, day=self.monday))
+        self.book(hour=9, employee=None, starts_at=at(9, day=self.monday + timedelta(days=6)))
+        self.book(hour=9, starts_at=at(9, day=self.monday + timedelta(days=7)))  # next week
+        self.book(hour=9, starts_at=at(9, day=self.monday - timedelta(days=1)))  # last week
+        body = self.get().json()
+        self.assertEqual((body["start"], body["end"]), (self.monday.isoformat(), (self.monday + timedelta(days=6)).isoformat()))
+        by_staff = {group["staff"]: group for group in body["staff"]}
+        self.assertEqual(set(by_staff), {self.tech.pk, other.pk, None})
+        row = by_staff[self.tech.pk]["appointments"]
+        self.assertEqual(len(row), 1)
+        day = self.monday + timedelta(days=2)
+        self.assertEqual(row[0], {"id": inside.pk, "staff": self.tech.pk, "start": at(10, day=day).isoformat(), "end": at(11, day=day).isoformat(),
+                                  "customer": "مدام سعاد", "service": "صيانة تكييف", "status": "booked", "status_label": "محجوز"})
+        self.assertEqual(len(by_staff[None]["appointments"]), 1)
+        text = self.get().content.decode()
+        for forbidden in ("price", "invoice", "300"):
+            self.assertNotIn(forbidden, text)
+
+    def test_english_labels_and_a_cancelled_one_still_shows_its_status(self):
+        appointment = self.book(hour=10, starts_at=at(10, day=self.monday))
+        services.set_status(appointment, AppointmentStatus.CANCELLED, self.owner)
+        row = self.get(lang="en").json()["staff"][0]["appointments"][0]
+        self.assertEqual((row["status"], row["status_label"]), ("cancelled", "Cancelled"))
+
+    def test_bad_start_is_400_and_a_missing_one_means_this_week(self):
+        self.assertEqual(self.get(start="2026-13-99").status_code, 400)
+        self.assertEqual(self.client.get(reverse("appointments:week_json")).json()["start"], TODAY.isoformat())
+
+    def test_it_needs_the_view_permission(self):
+        self.client.force_login(person(RoleCode.STOCK_KEEPER, "week_keeper"))
+        self.assertEqual(self.get().status_code, 403)
