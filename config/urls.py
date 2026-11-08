@@ -16,6 +16,7 @@ from reports.functional_views import report_hub
 from reports.views import home
 from accounts.login_guard import GuardedLoginView, login_verify
 from printing import views as printing_views
+from workorders import public as workorders_public
 from settings_core.setup_views import after_login, root_redirect, setup_complete, setup_modules, setup_questions, setup_review, sub_activity_step
 
 
@@ -34,6 +35,9 @@ urlpatterns = [
     path("logout/", login_not_required(LogoutView.as_view(next_page="login")), name="logout"),
     # SHARE-001: signed, expiring, read-only document links for customers (no account).
     path("share/<str:token>/", login_not_required(printing_views.shared_document), name="share_document"),
+    # S2: the customer approves or refuses a work order's quote from the same signed link (public, CSRF-protected).
+    path("share/<str:token>/approve/", login_not_required(workorders_public.decide), {"action": "approve"}, name="share_work_order_approve"),
+    path("share/<str:token>/refuse/", login_not_required(workorders_public.decide), {"action": "refuse"}, name="share_work_order_refuse"),
     path("start/", after_login, name="after_login"),
     path("setup/", TemplateView.as_view(template_name="setup/setup_gate.html"), name="setup_gate"),
     path("setup/activity/", TemplateView.as_view(template_name="setup/activity_selection.html"), name="setup_activity"),
