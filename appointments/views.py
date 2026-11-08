@@ -225,7 +225,7 @@ def detail(request, pk):
             elif action == "deposit":  # S5 (HG-069): a payment on account, linked to this booking
                 if not user_has_permission(request.user, RECEIVE):
                     raise PermissionDenied("Taking a deposit needs sales.receive_customer_payment.")
-                cashbox = _deposit_cashboxes().filter(pk=request.POST.get("cashbox")).first() if str(request.POST.get("cashbox") or "").isdigit() else None
+                cashbox = _deposit_cashboxes(appointment).filter(pk=request.POST.get("cashbox")).first() if str(request.POST.get("cashbox") or "").isdigit() else None
                 deposit = deposits.take(appointment, appointment.customer, cashbox, request.POST.get("amount", ""), request.user, lang)
                 messages.success(request, words["deposit_taken"].format(amount=deposit.payment.amount, payment=deposit.payment.payment_number))
             elif action in ("deposit_forfeit", "deposit_refund"):
@@ -279,11 +279,16 @@ def detail(request, pk):
 # ---- S5 (HG-069): the deposit box and the cancellation policy -------------------------------------------------------
 
 
-def _deposit_cashboxes():
-    """The boxes a deposit may land in: this entity's active cash and bank boxes (never another entity's, a cheque or a
-    courier box). The form lists them and the action accepts only them."""
+def _deposit_cashboxes(appointment):
+    """The boxes a deposit may land in: the *appointment's* entity's active cash and bank boxes (HG-074; never another
+    entity's, a cheque or a courier box), even for an owner working group-wide, so the deposit and the bill it settles
+    land in the same books. The form lists them and the action accepts only them."""
 
-    return entity_scope.cashboxes(Cashbox.objects.filter(active=True, kind__in=(CashboxKind.CASH, CashboxKind.BANK))).order_by("-is_default", "pk")
+    from entities.current import working_in
+    from entities.services import main_entity
+
+    with working_in(appointment.entity or main_entity()):  # the scope filter is built here, so it holds when evaluated later
+        return entity_scope.cashboxes(Cashbox.objects.filter(active=True, kind__in=(CashboxKind.CASH, CashboxKind.BANK))).order_by("-is_default", "pk")
 
 
 def _insurer_only(appointment):
@@ -303,7 +308,7 @@ def _deposit_box(request, appointment, lang):
     can_receive = user_has_permission(request.user, RECEIVE)
     return {
         "deposits_on": True, "deposit": deposit, "deposit_status_label": deposits.status_label(deposit, lang) if deposit is not None else "",
-        "can_take_deposit": held_deposit is None and open_booking and can_receive, "deposit_cashboxes": _deposit_cashboxes(),
+        "can_take_deposit": held_deposit is None and open_booking and can_receive, "deposit_cashboxes": _deposit_cashboxes(appointment),
         # Billed to the insurer alone (100% cover, no patient invoice): the deposit has nothing to settle and stays held.
         "deposit_held_after_bill": held_deposit is not None and _insurer_only(appointment),
         # A held deposit on a booking that will not be billed any more (cancelled elsewhere, refund refused, invoice cancelled) is settled from here.

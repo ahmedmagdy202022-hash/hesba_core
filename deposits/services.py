@@ -228,11 +228,16 @@ def _lock(deposit):
     return Deposit.objects.select_for_update(of=("self",)).select_related("payment", "payment__customer", "invoice").get(pk=deposit.pk)
 
 
-def _selling_location(words):
+def _selling_location(words, target=None):
+    """The store the fee invoice is billed from: the booked thing's entity's (HG-074), whatever entity the user works in."""
+
     from entities import scope as entity_scope
+    from entities.current import working_in
+    from entities.services import main_entity
     from master_data.models import Location
 
-    location = entity_scope.locations(Location.objects).filter(active=True, is_selling_location=True).order_by("-is_default", "pk").first()
+    with working_in(getattr(target, "entity", None) or main_entity()):
+        location = entity_scope.locations(Location.objects).filter(active=True, is_selling_location=True).order_by("-is_default", "pk").first()
     if location is None:
         raise ValidationError(words["setup"])
     return location
@@ -383,7 +388,7 @@ def forfeit(deposit, user, lang="ar", reason=""):
     deposit = _lock(deposit)
     if deposit.status != DepositStatus.HELD:
         raise ValidationError(words["not_held"].format(status=status_label(deposit, lang)))
-    location = _selling_location(words)
+    location = _selling_location(words, deposit.target)
     item = fee_item(lang)
     amount = deposit.payment.amount
     net, total = fee_line(amount, fee_rate(item))

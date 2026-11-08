@@ -561,8 +561,41 @@ class CashboxScopeTests(DepositSetup):
         self.assertFalse(Deposit.objects.exists())
         self.assertFalse(CustomerPayment.objects.exists())
         self.assertEqual((cash_balance(branch_cash), cash_balance(cheques)), (D("0"), D("0")))
+        # Working group-wide does not widen it: the main-entity booking still takes main-entity boxes only.
+        self.client.post(reverse("entities:switch"), {"entity": "", "next": "/dashboard/"})
+        response = self.client.post(self.detail_url(appointment, "en"), {"lang": "en", "action": "deposit", "amount": "50", "cashbox": str(branch_cash.pk)})
+        self.assertContains(response, "Choose the cashbox")
+        self.assertFalse(CustomerPayment.objects.exists())
         self.client.post(self.detail_url(appointment), {"lang": "ar", "action": "deposit", "amount": "50", "cashbox": str(self.cashbox.pk)})
         self.assertEqual(Deposit.objects.get().payment.cashbox, self.cashbox)
+
+    def test_a_branch_booking_takes_the_branchs_box_and_forfeits_from_the_branchs_store(self):
+        from entities.current import working_in
+        from entities.models import Entity
+        from entities.services import save_entity
+
+        main = Entity.objects.get(is_main=True)
+        branch = save_entity({"code": "BR2", "name_ar": "فرع المعادي"}, self.owner)
+        branch_cash = make_cashbox(cashbox_code="BR-CASH", name_ar="خزنة الفرع", entity=branch)
+        branch_store = make_location(location_code="BR-SHOP", name_ar="محل الفرع", entity=branch, is_selling_location=True)
+        with working_in(branch):
+            appointment = self.book(starts_in=timedelta(hours=1))
+        self.assertEqual(appointment.entity, branch)
+        self.client.force_login(self.owner)
+        self.client.post(reverse("entities:switch"), {"entity": "", "next": "/dashboard/"})  # the owner, group-wide
+        page = self.client.get(self.detail_url(appointment))
+        self.assertEqual(list(page.context["deposit_cashboxes"]), [branch_cash])
+        refused = self.client.post(self.detail_url(appointment, "en"), {"lang": "en", "action": "deposit", "amount": "100", "cashbox": str(self.cashbox.pk)})
+        self.assertContains(refused, "Choose the cashbox")
+        self.client.post(self.detail_url(appointment), {"lang": "ar", "action": "deposit", "amount": "100", "cashbox": str(branch_cash.pk)})
+        deposit = Deposit.objects.get()
+        self.assertEqual((deposit.payment.cashbox, cash_balance(branch_cash), cash_balance(self.cashbox)), (branch_cash, D("100.00"), D("0")))
+        self.client.post(reverse("entities:switch"), {"entity": main.pk, "next": "/dashboard/"})  # now working in the main shop
+        appointments.set_status(appointment, AppointmentStatus.CANCELLED, self.owner)
+        invoice = services.forfeit(deposit, self.owner)
+        self.assertEqual((invoice.selling_location, invoice.total_amount), (branch_store, D("100.00")))  # the fee lands in the branch's books
+        self.assertEqual(customer_balance(self.customer), D("0.00"))
+        self.assertTrue(ledger_reports.reconciliation()["ok"])
 
 
 class CapabilityTests(DepositSetup):
