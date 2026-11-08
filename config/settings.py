@@ -84,6 +84,7 @@ LOCAL_APPS = [
     "messaging",
     "feedback",
     "approvals",
+    "attachments",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + LOCAL_APPS
@@ -247,6 +248,12 @@ BACKUP_DIR = Path(config("BACKUP_DIR", default=str(BASE_DIR / "backups")))
 BACKUP_KEEP = config("BACKUP_KEEP", default=14, cast=int)
 # POS-003: an offline sale older than this is refused at sync (enter it by hand).
 POS_OFFLINE_MAX_DAYS = config("POS_OFFLINE_MAX_DAYS", default=7, cast=int)
+
+# S1 (HG-072): attachments are stored in the database. The size cap is per file; the content-type list can only
+# narrow what the code can verify by magic bytes (jpeg, png, webp, pdf), never widen it. SVG and HTML never pass.
+ATTACHMENTS_MAX_BYTES = config("ATTACHMENTS_MAX_BYTES", default=5 * 1024 * 1024, cast=int)
+ATTACHMENTS_SIGNATURE_MAX_BYTES = config("ATTACHMENTS_SIGNATURE_MAX_BYTES", default=512 * 1024, cast=int)
+ATTACHMENTS_ALLOWED_TYPES = config("ATTACHMENTS_ALLOWED_TYPES", default="image/jpeg,image/png,image/webp,application/pdf", cast=Csv())
 # USAGE-002: the client's database plan limit (Supabase free plan: 500 MB).
 DATABASE_SIZE_LIMIT_MB = config("DATABASE_SIZE_LIMIT_MB", default=500, cast=int)
 # BACKUP-003: the nightly encrypted backup goes to the client's own Google Drive.

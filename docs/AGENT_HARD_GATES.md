@@ -2120,3 +2120,34 @@ The entries below are the protected-logic decisions in the commercial gate, reco
   - **What is sent:** receipts go oldest first, as the exact text they were hashed from. `einvoice.portal._http` gained a `raw` argument for that.
   - **Outcomes:** an accepted receipt keeps its submission UUID and long id; a rejected one keeps the authority's reason; a refused or unreachable batch stays queued.
   - **Tests:** `ereceipt.tests_portal`.
+
+## HG-072 — S1 attachments, a new table for photos, signatures and files
+
+- **Status:** OPEN PROPOSAL. Built on `claude/maestro-s1-attachments` and waiting for Ahmed's approval of the storage decision. It is additive only: one new table in a new app. No existing table, model, posting or report changed.
+- **Schema (`attachments.Attachment`, migration `attachments/0001_initial`):**
+  - owner: `content_type` (FK to `ContentType`, PROTECT) + `object_id` (`PositiveBigIntegerField`), with an index on both; a generic owner, so appointments and customers can use it later. Only work orders are wired now.
+  - `entity` (FK to `entities.Entity`, null, PROTECT): copied from the owner, so the entity scope (HG-034) holds on the attachment itself.
+  - `kind` (`photo` / `signature` / `document`), `stage` (`receive` / `deliver` / `other`).
+  - `original_filename` (255, path parts stripped), `content_type_name` (sniffed from the bytes, never the client's claim), `size`, `sha256` (indexed).
+  - `data`: `BinaryField`, the file's bytes.
+  - `uploaded_by` (FK to user, PROTECT), `created_at`.
+- **Why the bytes are in the database:** Render's disk is ephemeral and wiped on every deploy, so files on disk would vanish. Keeping them in the database needs no external account and is backed up with everything else. The admin shows metadata only (`data` excluded, no add/change/delete there).
+- **Limits:**
+  - `ATTACHMENTS_MAX_BYTES` (env, default 5 MB) per file; `ATTACHMENTS_SIGNATURE_MAX_BYTES` (default 512 KB) for a signature. Both are read at call time.
+  - `ATTACHMENTS_ALLOWED_TYPES` (env, default `image/jpeg,image/png,image/webp,application/pdf`) can only narrow what the code can verify by magic bytes; it can never add a type.
+  - Magic bytes are checked (JPEG, PNG with IHDR and IEND for a signature, WEBP, `%PDF-`). SVG and HTML are refused by name, declared mime and content.
+- **Access:** to attach, list or read, the user must be able to see the owner. For a work order this is `workorders.services.visible_to` (the sales-view permission, the technician scoping, the entity scope) in a workshop. Anyone else gets 404 (not found for them) or 403 (no right at all); anonymous is sent to login. The file is served with `nosniff`, `Content-Security-Policy: default-src 'none'; sandbox`, `Cache-Control: private, no-cache`, an ETag of the sha256, inline for images and as a download for PDF. Every upload writes an audit entry (`attachments / add_attachment`).
+- **Money, stock, balances:** none. No invoice, cashbox movement, stock movement, journal entry or customer/supplier ledger row is created or changed. The tests assert the counts of all six are unchanged.
+- **Risks:**
+  - **Database growth.** At up to 5 MB a file, photos eat the plan fast: `DATABASE_SIZE_LIMIT_MB` is 500 by default, and `settings_core/storage.py` already shows usage, so 100 full-size photos is the whole plan. Phones should send downsized images (the later UI should resize on the client). Recommended next step: a later move to object storage chosen from the environment (the service layer is the only code that touches `data`, so the switch is local), and a cap on files per record.
+  - Rows are append-only today; there is no delete or retention rule, to be decided with the UI.
+  - Postgres returns `data` as a `memoryview`; the serve view converts it with `bytes()`.
+  - A PDF is served as a download with a sandboxing CSP, never rendered inside the app's origin.
+- **Files:** `attachments/` (new app: models, services, views, urls, admin, migration, tests), `config/settings.py` (app and three settings), `config/urls.py` (`/attachments/`).
+- **Tests:** `attachments/tests.py`. They cover:
+  - jpeg, png, webp and pdf kept with the right sha256, size and type;
+  - oversize, a `.png` that is really HTML, SVG under any name, and a settings list that tries to allow SVG, all refused;
+  - the signature data URL decoded, a non-PNG, truncated PNG or bad base64 refused, and the signature size cap;
+  - another entity's order and file answer 404 (with a positive control for the user's own entity), a technician reaches only their own orders, a user with no right gets 403, an anonymous request goes to login;
+  - the serve headers, the audit entry, and the unchanged money, stock and ledger counts;
+  - Arabic and English error messages.
