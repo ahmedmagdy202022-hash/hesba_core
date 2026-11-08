@@ -10,6 +10,12 @@
 {% elif state.status == 'refused' %}<div class="cl-msg" data-banner="refused">{% if decided_at %}{% if lang == 'en' %}You declined the quote on{% else %}اتسجّل إنك رفضت العرض يوم{% endif %} <bdi>{{ decided_at }}</bdi>{% else %}{{ state.status_label }}{% endif %}</div>
 {% elif state.status == 'ready' or state.status == 'delivered' %}<div class="cl-msg cl-msg--ok" data-banner="{{ state.status }}">{{ state.status_label }}{% if status_at %} · <bdi>{{ status_at }}</bdi>{% endif %}</div>{% endif %}
 
+{% if pay_url %}<section class="cl-card cl-ask" data-pay-online>
+  <h2 class="cl-h">{% if lang == 'en' %}Pay online{% else %}ادفع أونلاين{% endif %}</h2>
+  <p>{% if lang == 'en' %}The shop sent you a link to pay this order's invoice by card or wallet.{% else %}المحل بعتلك لينك تدفع بيه فاتورة الأمر ده بالكارت أو المحفظة.{% endif %}</p>
+  <div class="cl-actions"><a class="cl-btn cl-btn--primary" href="{{ pay_url }}" rel="nofollow">{% if lang == 'en' %}Pay online{% else %}ادفع أونلاين{% endif %}</a></div>
+</section>{% endif %}
+
 <section class="cl-card" aria-labelledby="cl-order-t">
   <div class="cl-orderhead">
     <div><div class="cl-eyebrow" id="cl-order-t">{% if lang == 'en' %}Work order{% else %}أمر شغل رقم{% endif %}</div><div class="cl-number"><bdi>{{ state.number }}</bdi></div></div>

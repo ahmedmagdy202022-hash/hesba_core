@@ -27,6 +27,11 @@ PUBLIC_ROUTE_NAMES = frozenset(
         # DEMO-RESTART: offered on the demo login page. 404 unless DEMO_MODE, POST
         # only and CSRF-protected; a demo's logins and password are public anyway.
         "demo_restart",
+        # S4 / HG-070: Paymob's server calls the webhook with no session; only an HMAC-verified
+        # callback can record money (a forged one gets 400 and an audit row). POST only.
+        "pay_webhook_paymob",
+        # S4 / HG-070: where Paymob sends the customer back; reads a status only and never moves money.
+        "pay_return_paymob",
     }
 )
 

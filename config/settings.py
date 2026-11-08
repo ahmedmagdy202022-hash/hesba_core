@@ -87,6 +87,7 @@ LOCAL_APPS = [
     "attachments",
     "settlements",  # HG-069: which payment settles which invoice
     "deposits",  # HG-069 (S5): deposits at booking
+    "payments",  # HG-070 (S4): online payment links (Paymob first)
 ]
 
 INSTALLED_APPS = DJANGO_APPS + LOCAL_APPS
@@ -285,6 +286,17 @@ EMAIL_TIMEOUT = 20
 DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default=EMAIL_HOST_USER or "hesba@localhost")
 # The address the app is reached at, for links inside emails (e.g. https://shop.onrender.com).
 PUBLIC_BASE_URL = config("PUBLIC_BASE_URL", default="").rstrip("/")
+
+# S4 (HG-070): the online payment gateway. Keys live in the server's environment only, never in the database or the
+# repository. A real Paymob call needs PAYMOB_LIVE=True *and* all four keys; with a key missing nothing is connected.
+# PAYMENT_GATEWAY_MOCK uses Paymob's own code with in-process answers (no network, no money) for development.
+PAYMOB_LIVE = config("PAYMOB_LIVE", default=False, cast=bool)
+PAYMOB_API_KEY = config("PAYMOB_API_KEY", default="")
+PAYMOB_HMAC_SECRET = config("PAYMOB_HMAC_SECRET", default="")
+PAYMOB_INTEGRATION_ID = config("PAYMOB_INTEGRATION_ID", default="")
+PAYMOB_IFRAME_ID = config("PAYMOB_IFRAME_ID", default="")
+PAYMENT_GATEWAY_MOCK = config("PAYMENT_GATEWAY_MOCK", default=False, cast=bool)
+PAYMENT_LINK_HOURS = config("PAYMENT_LINK_HOURS", default=72, cast=int)
 
 LOGGING = {
     "version": 1,

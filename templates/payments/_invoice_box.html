@@ -1,0 +1,12 @@
+{% load hesba_format %}{% if shown %}<section class="op-form" data-pay-link-box>
+<h2>{% if lang == 'en' %}Online payment link{% else %}لينك دفع أونلاين{% endif %}</h2>
+{% if live %}<p data-pay-link-live>{% if lang == 'en' %}A link for{% else %}فيه لينك بمبلغ{% endif %} <strong>{{ live.amount|money }}</strong> {% if lang == 'en' %}is waiting until{% else %}شغال لحد{% endif %} <bdi>{{ live.expires_at|date:"Y-m-d H:i" }}</bdi>.</p>
+<div class="op-form-actions">{% if url %}<a class="op-secondary" href="{{ whatsapp }}" target="_blank" rel="noopener" data-pay-link-whatsapp>{% if lang == 'en' %}Send on WhatsApp{% else %}ابعته واتساب{% endif %}</a><button class="op-secondary" type="button" data-copy-link="{{ url }}">{% if lang == 'en' %}Copy link{% else %}نسخ اللينك{% endif %}</button>{% endif %}
+{% if can_make %}<form method="post" action="{% url 'payments:cancel' live.pk %}">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="next" value="{{ next }}"><button class="op-danger" type="submit" data-pay-link-cancel>{% if lang == 'en' %}Cancel the link{% else %}الغي اللينك{% endif %}</button></form>{% endif %}</div>
+{% elif due > 0 %}{% if problem %}<p class="op-message op-message-error" data-pay-link-problem>{{ problem }}</p>
+{% elif can_make %}<form method="post" action="{% url 'payments:create' invoice.pk %}" data-pay-link-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="next" value="{{ next }}">
+<div class="op-form-grid"><div class="op-field"><label for="pl-amount">{% if lang == 'en' %}Amount (up to what is left){% else %}المبلغ (لحد الباقي){% endif %}</label><input id="pl-amount" name="amount" inputmode="decimal" dir="ltr" value="{{ due|stringformat:'s' }}"></div></div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{% if lang == 'en' %}Send payment link{% else %}ابعت لينك دفع{% endif %}</button></div></form>{% endif %}
+{% else %}<p>{% if lang == 'en' %}Nothing is left to pay on this invoice.{% else %}مفيش باقي على الفاتورة دي.{% endif %}</p>{% endif %}
+{% if history %}<ul class="op-cell-text" data-pay-link-history>{% for link, label in history %}<li>{{ link.amount|money }}{% if link.paid_amount is not None and link.paid_amount != link.amount %} → {{ link.paid_amount|money }}{% endif %} · {{ label }} · <bdi>{{ link.created_at|date:"Y-m-d" }}</bdi></li>{% endfor %}</ul>{% endif %}
+</section>{% endif %}

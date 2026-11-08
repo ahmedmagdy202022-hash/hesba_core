@@ -1,0 +1,30 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{% if lang == 'en' %}Online payment links{% else %}لينكات الدفع أونلاين{% endif %}</h1>
+<p>{% if lang == 'en' %}Money paid by link sits in the “بوابة الدفع” bank account until the gateway pays it out.{% else %}الفلوس المدفوعة باللينك بتفضل في حساب «بوابة الدفع» لحد ما البوابة تحوّلها.{% endif %}
+{% if not connected %} · <strong data-not-connected>{% if lang == 'en' %}Gateway not connected{% else %}البوابة غير موصّلة{% endif %}</strong>{% endif %}</p></div></section>
+
+<h2>{% if lang == 'en' %}Gateway accounts{% else %}حسابات البوابة{% endif %}</h2>
+<div class="op-table-wrap"><table class="op-table" data-gateway-boxes><thead><tr><th>{% if lang == 'en' %}Account{% else %}الحساب{% endif %}</th><th>{% if lang == 'en' %}Still owed by the gateway{% else %}لسه عند البوابة{% endif %}</th></tr></thead><tbody>
+{% for box, balance in boxes %}<tr><td class="op-cell-text">{{ box.name_ar }}</td><td>{{ balance|money }}</td></tr>
+{% empty %}<tr><td colspan="2" class="op-empty">{% if lang == 'en' %}Add a bank account named “بوابة الدفع” in Cashboxes first.{% else %}ضيف حساب بنكي اسمه «بوابة الدفع» من الخزن الأول.{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+
+{% if can_settle and boxes %}<form class="op-form" method="post" data-payout-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+<h2>{% if lang == 'en' %}The gateway paid out{% else %}البوابة حوّلت{% endif %}</h2><div class="op-form-grid">
+<div class="op-field"><label for="p-gw">{% if lang == 'en' %}From{% else %}من{% endif %}</label><select id="p-gw" name="gateway">{% for box, balance in boxes %}<option value="{{ box.pk }}">{{ box.name_ar }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="p-bank">{% if lang == 'en' %}Into bank{% else %}للحساب البنكي{% endif %}</label><select id="p-bank" name="bank">{% for bank in banks %}<option value="{{ bank.pk }}">{{ bank }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="p-net">{% if lang == 'en' %}Net received{% else %}الصافي اللي وصل{% endif %}</label><input id="p-net" name="net" inputmode="decimal" dir="ltr" required></div>
+<div class="op-field"><label for="p-fee">{% if lang == 'en' %}Gateway fee{% else %}عمولة البوابة{% endif %}</label><input id="p-fee" name="fee" inputmode="decimal" dir="ltr"></div>
+<div class="op-field"><label for="p-ref">{% if lang == 'en' %}Payout reference{% else %}رقم التحويل{% endif %}</label><input id="p-ref" name="reference" dir="ltr" autocomplete="off" required></div>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{% if lang == 'en' %}Record the payout{% else %}سجّل التحويل{% endif %}</button></div></form>{% endif %}
+
+{% if review %}<h2>{% if lang == 'en' %}Needs a look{% else %}محتاج مراجعة{% endif %}</h2>
+<div class="op-table-wrap"><table class="op-table" data-review><thead><tr><th>{% if lang == 'en' %}Transaction{% else %}العملية{% endif %}</th><th>{% if lang == 'en' %}Invoice{% else %}الفاتورة{% endif %}</th><th>{% if lang == 'en' %}Note{% else %}ملاحظة{% endif %}</th></tr></thead><tbody>
+{% for row in review %}<tr><td><bdi>{{ row.transaction_id }}</bdi></td><td>{% if row.link %}<bdi>{{ row.link.invoice.invoice_number }}</bdi>{% endif %}</td><td class="op-cell-text" dir="ltr">{{ row.note }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+
+<h2>{% if lang == 'en' %}Links{% else %}اللينكات{% endif %}</h2>
+<div class="op-table-wrap"><table class="op-table" data-links><thead><tr><th>{% if lang == 'en' %}Invoice{% else %}الفاتورة{% endif %}</th><th>{% if lang == 'en' %}Customer{% else %}العميل{% endif %}</th><th>{% if lang == 'en' %}Amount{% else %}المبلغ{% endif %}</th><th>{% if lang == 'en' %}Status{% else %}الحالة{% endif %}</th><th>{% if lang == 'en' %}Made{% else %}اتعمل{% endif %}</th></tr></thead><tbody>
+{% for link, label in links %}<tr data-link="{{ link.pk }}"><td><a href="{% url 'sales:detail' link.invoice_id %}?lang={{ lang }}"><bdi>{{ link.invoice.invoice_number }}</bdi></a></td><td class="op-cell-text">{{ link.customer.name }}</td><td>{{ link.amount|money }}{% if link.paid_amount is not None and link.paid_amount != link.amount %} → {{ link.paid_amount|money }}{% endif %}</td><td>{{ label }}</td><td><bdi>{{ link.created_at|date:"Y-m-d H:i" }}</bdi></td></tr>
+{% empty %}<tr><td colspan="5" class="op-empty">{% if lang == 'en' %}No links yet.{% else %}مفيش لينكات لسه.{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

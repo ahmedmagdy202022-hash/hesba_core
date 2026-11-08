@@ -96,6 +96,12 @@ CAPABILITIES = {
         "about_en": "Take a deposit on a booking: it reaches the cashbox that day and comes off the service invoice. A late cancellation or a no-show turns it into a cancellation-fee invoice; an early one refunds it.",
         "available": True, "paths": (),
     },
+    "payment_links": {
+        "ar": "لينك الدفع أونلاين", "en": "Online payment link",
+        "about_ar": "ابعت للعميل لينك يدفع بيه الفاتورة بالكارت أو المحفظة (Paymob). الفلوس بتتسجل بس لما البوابة تأكد الدفع، وبتنزل في حساب بنكي اسمه «بوابة الدفع» لحد ما البوابة تحوّلها.",
+        "about_en": "Send the customer a link to pay the invoice by card or wallet (Paymob). The money is recorded only when the gateway confirms it, into a bank account named “بوابة الدفع” until the gateway pays out.",
+        "available": True, "paths": ("/payments/",),
+    },
     "units": {
         "ar": "وحدات القياس", "en": "Units of measure",
         "about_ar": "بيع وشراء بالكرتونة أو العلبة أو القطعة مع تحويل تلقائي.",
@@ -349,13 +355,13 @@ WORKS_BEST_WITH = {
 #: SETTINGS-DESIGN: how the features screen groups them, the icon of each, and where each one shows once on.
 #: "Where" is what the settings track saw appear when the feature was switched on.
 GROUPS = (
-    ("selling", ("البيع والكاشير", "Selling and the till"), ("pos", "shift_required", "price_lists", "promotions", "loyalty", "installments", "quotations", "shipping", "online_store", "deposits")),
+    ("selling", ("البيع والكاشير", "Selling and the till"), ("pos", "shift_required", "price_lists", "promotions", "loyalty", "installments", "quotations", "shipping", "online_store", "deposits", "payment_links")),
     ("goods", ("الأصناف والمخزون", "Items and stock"), ("barcode", "units", "variants", "batches_expiry", "serials", "drugs")),
     ("money", ("الحسابات والضرايب", "Accounts and tax"), ("vat", "e_invoice", "e_receipt", "fixed_assets")),
 )
 ICONS = {"pos": "pos", "shift_required": "shift", "price_lists": "pricetag", "installments": "instalments", "barcode": "barcode",
          "units": "units", "variants": "variants", "batches_expiry": "expiry", "serials": "serial", "vat": "taxes",
-         "e_invoice": "einvoice", "e_receipt": "ereceipt", "fixed_assets": "assets", "quotations": "quotes", "drugs": "drugs", "promotions": "promotions", "shipping": "shipping", "online_store": "store", "loyalty": "loyalty", "deposits": "appointments"}
+         "e_invoice": "einvoice", "e_receipt": "ereceipt", "fixed_assets": "assets", "quotations": "quotes", "drugs": "drugs", "promotions": "promotions", "shipping": "shipping", "online_store": "store", "loyalty": "loyalty", "deposits": "appointments", "payment_links": "banks"}
 WHERE = {
     "pos": ("«الكاشير» في القايمة، وزرار في لوحة القيادة وفي قايمة الفواتير", "“Till” in the menu, with a button on the dashboard and the invoice list"),
     "shift_required": ("فاتورة البيع والكاشير بيطلبوا فتح وردية الأول", "The sales invoice and the till ask for an open shift first"),
@@ -371,6 +377,7 @@ WHERE = {
     "shipping": ("«الشحن والتحصيل» في القايمة، وزرار «ابعت مع شركة شحن» على كل فاتورة مترحّلة", "“Shipping & COD” in the menu, and “Ship with a courier” on each posted invoice"),
     "promotions": ("«العروض» في القايمة، وخانة «كوبون» في الكاشير وفاتورة البيع، وتقرير العروض", "“Promotions” in the menu, a “Coupon” field at the till and on the sales invoice, and the promotions report"),
     "loyalty": ("«نقاط الولاء» في القايمة، ورصيد النقاط في كارت العميل، وخانة «صرف نقاط» في الكاشير وفاتورة البيع", "“Loyalty points” in the menu, the points balance on the customer card, and a “Spend points” field at the till and on the sales invoice"),
+    "payment_links": ("خانة «لينك دفع أونلاين» في الفاتورة المترحّلة وفي أمر الشغل، وشاشة «لينكات الدفع أونلاين»", "An “Online payment link” box on each posted invoice and work order, and the “Online payment links” screen"),
     "deposits": ("خانة «خد عربون» في صفحة الميعاد، وعمود العربون وسياسة الإلغاء في المواعيد", "“Take a deposit” on the appointment page, and the deposit column and cancellation policy on the agenda"),
     "drugs": ("«الأدوية والبدائل» في القايمة، وزرار «اصرف الروشتة» اللي بيفتح فاتورة البيع", "“Drugs & alternatives” in the menu, and “Dispense” opening the sales invoice"),
     "vat": ("«الضرايب» في القايمة، وضريبة كل صنف، وتقرير ضريبة المبيعات", "“Taxes” in the menu, a rate per item, and the sales VAT report"),

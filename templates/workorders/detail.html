@@ -1,5 +1,5 @@
 {% extends "operations/base.html" %}
-{% load hesba_format l10n static %}
+{% load hesba_format l10n static hesba_payments %}
 {% block styles %}{{ block.super }}{% if attachments %}<link rel="stylesheet" href="{% static 'hesba/css/attachments.css' %}?v=s1-ui-1">{% endif %}{% endblock %}
 {% block operation_content %}
 <section class="op-title-row"><div><a class="op-back" href="{% url 'workorders:list' %}?lang={{ lang }}">← {{ words.back }}</a>
@@ -10,6 +10,7 @@
 {% if order.invoice %}<a class="op-secondary" href="{% url 'sales:detail' order.invoice.pk %}?lang={{ lang }}" data-invoice>{{ words.invoice }} <bdi>{{ order.invoice.invoice_number }}</bdi></a>{% endif %}
 {% if under_warranty and can_manage %}<a class="op-secondary" href="{% url 'workorders:new' %}?lang={{ lang }}&warranty_of={{ order.pk }}" data-warranty-return>{{ words.warranty_return }}</a>{% endif %}</div></section>
 {% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
+{% if order.invoice %}{% payment_link_box order.invoice request.get_full_path %}{% endif %}
 <section class="op-summary-grid">
 <article><small>{{ words.received }}</small><strong><bdi>{{ order.received_at|date:"Y-m-d" }}</bdi></strong></article>
 <article><small>{{ words.promised }}</small><strong class="{% if order.is_open and order.promised_on and order.promised_on < today and order.status != 'ready' %}wo-low{% endif %}"><bdi>{{ order.promised_on|date:"Y-m-d"|default:'—' }}</bdi></strong></article>
