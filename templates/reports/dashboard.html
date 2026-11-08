@@ -85,7 +85,7 @@
         <div class="dash-hero__art">
           {% if analytics.available and analytics.hero.line %}
           <div class="dash-glass dash-glass--trend">
-            <p class="dash-glass__title">{{ hero_trend }} <small>{{ hero_headline_text }}</small></p>
+            <p class="dash-glass__title">{{ hero_trend }} <small>{% if analytics.hero.fallback %}{{ hero_last_7_days }}{% else %}{{ hero_headline_text }}{% endif %}</small></p>
             <svg class="dash-glass__chart" viewBox="0 0 {{ analytics.hero.width }} {{ analytics.hero.height }}" preserveAspectRatio="none" aria-hidden="true">
               <defs><linearGradient id="dh-area" x1="0" y1="0" x2="0" y2="1"><stop class="dh-stop" offset="0"/><stop class="dh-stop dh-stop--end" offset="1"/></linearGradient></defs>
               <path class="dash-glass__area" d="{{ analytics.hero.area }}" fill="url(#dh-area)"/>
