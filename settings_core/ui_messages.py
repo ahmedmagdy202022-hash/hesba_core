@@ -11,6 +11,12 @@ import re
 
 
 EXACT = {
+    # A0 (HG-078): the AI provider layer's refusals (ai/services.py).
+    "AI features are switched off for this company.": "مزايا الذكاء الاصطناعي متوقفة للشركة دي.",
+    "This AI feature is not switched on.": "ميزة الذكاء الاصطناعي دي مش متشغّلة. شغّلها من الإعدادات الأول.",
+    "The AI service is not connected on this server.": "خدمة الذكاء الاصطناعي مش موصّلة على السيرفر ده.",
+    "There is no text to read aloud.": "مفيش نص يتقري بالصوت.",
+    "The AI service did not answer. Try again later.": "خدمة الذكاء الاصطناعي مردّتش. جرّب تاني بعد شوية.",
     # HG-071 (S6) D7: a card-paid invoice is not returned until a return-to-card path exists.
     "This invoice was paid partly by gift card, and a return to the card is not possible yet. Cancel the card payment or the whole invoice instead.":
         "الفاتورة دي اتدفع جزء منها بكارت هدية، والمرتجع على الكارت لسه مش متاح. ألغِ دفعة الكارت أو الفاتورة كلها بدل كده.",
@@ -167,6 +173,9 @@ PATTERNS = (
     (r"^Return quantity exceeds the remaining quantity for line (?P<line>\d+)\.$", "كمية المرتجع أكبر من الباقي في السطر {line}."),
     (r"^Payment status must be (?P<status>\w+)\.$", "حالة السداد مش متطابقة مع المبالغ."),
     (r"^This screen needs the (?P<perm>[\w.]+) permission\.$", "الشاشة دي محتاجة صلاحية مش عندك."),
+    # A0 (HG-078): the AI layer's daily cap and text size.
+    (r"^Today's AI call limit is reached \((?P<cap>\d+) calls\)\. Try again tomorrow\.$", "وصلت لحد مكالمات الذكاء الاصطناعي النهارده ({cap} مكالمة). جرّب تاني بكرة."),
+    (r"^The text is too long to read aloud \(at most (?P<limit>\d+) characters\)\.$", "النص طويل أوي على القراية بالصوت (الحد {limit} حرف)."),
 )
 _COMPILED = tuple((re.compile(pattern), template) for pattern, template in PATTERNS)
 

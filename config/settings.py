@@ -89,6 +89,7 @@ LOCAL_APPS = [
     "deposits",  # HG-069 (S5): deposits at booking
     "payments",  # HG-070 (S4): online payment links (Paymob first)
     "giftcards",  # HG-071 (S6): gift cards (a liability until spent)
+    "ai",  # HG-078 (A0): one AI provider layer, mock unless a server sets it live
 ]
 
 INSTALLED_APPS = DJANGO_APPS + LOCAL_APPS
@@ -302,6 +303,15 @@ PAYMOB_INTEGRATION_ID = config("PAYMOB_INTEGRATION_ID", default="")
 PAYMOB_IFRAME_ID = config("PAYMOB_IFRAME_ID", default="")
 PAYMENT_GATEWAY_MOCK = config("PAYMENT_GATEWAY_MOCK", default=False, cast=bool)
 PAYMENT_LINK_HOURS = config("PAYMENT_LINK_HOURS", default=72, cast=int)
+
+# A0 (HG-078): the AI provider layer. AI_MODE is mock, live or off. Left empty it is mock while DEBUG is on and off
+# (nothing connected, every call refused) once DEBUG is off; an explicit mock with DEBUG off refuses to start
+# (ai.E001), and live without the key refuses too (ai.E002). Keys live in the server's environment only, never in the
+# database or the repository. The voice is Ahmed's choice: the default below is a placeholder that live refuses.
+AI_MODE = config("AI_MODE", default="").strip().lower()
+ELEVENLABS_API_KEY = config("ELEVENLABS_API_KEY", default="")
+ELEVENLABS_VOICE_ID = config("ELEVENLABS_VOICE_ID", default="hesba-placeholder-voice")
+ELEVENLABS_MODEL_ID = config("ELEVENLABS_MODEL_ID", default="eleven_multilingual_v2")
 
 LOGGING = {
     "version": 1,

@@ -176,6 +176,15 @@ CAPABILITIES = {
         "about_en": "An asset register (vehicles, equipment, fit-out) with monthly depreciation in net profit.",
         "available": True, "paths": ("/assets/",),
     },
+    # A0 (HG-078): the switch A1's voice summary calls the AI layer (ai/services.py) under. Not built yet, so it cannot
+    # be switched on (available=False) and is offered to no activity (ONLY_FOR below): no screen shows it.
+    # A1 makes it available and gives it its group, icon and landing page.
+    "ai_voice_summary": {
+        "ar": "ملخص اليوم بالصوت", "en": "Voice summary of the day",
+        "about_ar": "ملخص مبيعات وتحصيل اليوم والأصناف اللي قربت تخلص، مقروء بصوت. النص بيتبني من تقارير السيستم، والصوت بس بيتعمل برّه.",
+        "about_en": "The day's sales, collections and low-stock items, read aloud. The text comes from the system's own reports; only the voice is made outside.",
+        "available": False, "paths": (),
+    },
 }
 CAPABILITY_SLUGS = tuple(CAPABILITIES)
 
@@ -340,6 +349,7 @@ NOT_FOR_SUB = {
 #: A drug database is a pharmacy's (or a medical centre's own pharmacy's); a shop or a café never needs one.
 ONLY_FOR = {
     "drugs": {(catalog.COMMERCIAL, "pharmacy"), (catalog.MEDICAL, "*")},
+    "ai_voice_summary": set(),  # A0 (HG-078): offered nowhere until A1 builds it
 }
 
 #: SETTINGS-TRACK: a capability that rides on a module works only while that module is on: expiry dates and serial

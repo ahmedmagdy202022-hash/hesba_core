@@ -2428,7 +2428,32 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 
 ## HG-078 — AI track: one provider layer, data leaving the server, spend and caps (A0)
 
-- **Status:** OPEN — proposed, not built. Code waits until the services OK is on `develop`.
+- **Status:** IMPLEMENTED on claude/maestro-ai-a0-provider, pending review. A0 only: no A1–A3 feature and no language-model client (A2 adds `ANTHROPIC_API_KEY` and its provider). No model, no migration: it uses `AuditLog`, `SystemSetting` and `FeatureFlag`. No protected logic touched.
+- **Files (A0):**
+  - `ai/apps.py`, `ai/checks.py` (system checks `ai.E001`–`ai.E004`);
+  - `ai/providers/__init__.py` (mode and the provider registry), `ai/providers/base.py`, `ai/providers/elevenlabs.py` (the live client), `ai/providers/mock.py`;
+  - `ai/services.py` (the one door: kill switch, capability, request size, connection, daily cap, audit);
+  - `ai/no_network.py` (the test base that fails on any socket or URL), `ai/tests.py`;
+  - `config/settings.py` (`"ai"` in `LOCAL_APPS`; `AI_MODE`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_MODEL_ID` via `config()`), `.env.example`;
+  - `settings_core/capabilities.py` (`ai_voice_summary`), `settings_core/ui_messages.py` (Arabic refusals);
+  - `settings_core/tests_ui_messages.py` (`ai` added to the scanned service apps), `settings_core/tests_capabilities.py` (one assertion).
+- **As built:**
+  - **Mode:** `AI_MODE` = `mock` | `live` | `off`. Empty means `mock` while `DEBUG` is on and `off` once it is off. `live` with the key or a real voice missing connects nothing (never the mock), as Paymob does.
+  - **Checks:** `ai.E001` an explicit `AI_MODE=mock` with `DEBUG` off (the production signal payments uses); `ai.E002` live without `ELEVENLABS_API_KEY`; `ai.E003` an unknown mode; `ai.E004` live with the voice empty or still the placeholder.
+  - **One door (`ai.services.text_to_speech(text, feature=..., user=..., entity=...)`):** refusals in order: kill switch (`SystemSetting ai_disabled`), the feature's capability, an empty text or one over 5000 characters, no provider connected, today's cap reached. Every refusal is a `ValidationError` in English with its Arabic in `ui_messages`. A provider failure is a `ValidationError` too («خدمة الذكاء الاصطناعي مردّتش»).
+  - **Registry:** `ai.services.FEATURES` maps each feature to the capability every one of its calls requires and to its provider; `ai.providers.PROVIDERS` maps each provider to its mock/live factory.
+  - **Daily cap:** `SystemSetting ai_daily_call_cap`, default 50 (a bad value falls back to 50, a negative one to 0). Counted over the Cairo calendar day from the audit rows. Only calls that reached the provider (ok or error) count; refusals do not.
+  - **Audit:** one `AuditLog` row per call: `event_type=export`, module `ai`, action `call_ok` / `call_refused` / `call_error`, actor, the entity in `object_type` / `object_id`, and in `after_data` the feature, provider, mode, entity, request size in characters and bytes, result, refusal reason, provider status, response size and duration in ms. Never the text, the audio, names, phones or amounts.
+  - **ElevenLabs:** `POST https://api.elevenlabs.io/v1/text-to-speech/{voice_id}` (voice quoted), header `xi-api-key`, JSON `{text, model_id, voice_settings?}`, `Accept: audio/mpeg`, urllib with a 30 s timeout. An HTTP error becomes `ProviderError("ElevenLabs answered <code>.")`, never quoting the key, the text or the body. An answer that is not audio, or is over 10 MB, is refused. The mock is the same class with only `_http` swapped, answering a fixed 1440-byte silent MP3 (ten MPEG-1 Layer III frames, 0.36 s; checked once with ffprobe).
+  - **Capability:** `ai_voice_summary`, off by default, `available=False` and offered to no activity (`ONLY_FOR` empty), so no screen shows it and every A0 call is refused until A1 makes it available.
+- **Deviations from the brief and the proposal:**
+  1. **Mock is the default only while `DEBUG` is on.** An unconditional mock default plus "refuse mock in production" would stop every Render build (`build.sh` runs `check --deploy` with `DEBUG=False`) and the test suite (Django's runner turns `DEBUG` off before the checks). So an empty `AI_MODE` is `off` in production, and only an explicit `mock` is refused there. The AI tests set `AI_MODE=mock`.
+  2. A fourth check, `ai.E004`, refuses live with the placeholder voice, as payments refuses live with any Paymob key missing.
+  3. The cap is **per installation** (one client company, one key), not per entity; each row records the entity, so a per-entity cap is a filter away. See open question 1.
+  4. `ai_voice_summary` is `available=False`, so `settings_core/tests_capabilities.py`'s "every capability is available" assertion now excludes it.
+  5. A refusal's audit row is written in the caller's transaction: a caller that rolls back loses it.
+  6. Two calls racing at the cap can both pass (the provider call is not held under a lock), so the cap can be overshot by the calls in flight.
+- **Tests (`ai/tests.py`, all on `ai.no_network.AiTestCase` / `AiSimpleTestCase`):** the checks (mock in production, live without a key or with the placeholder voice, unknown mode, registered); provider choice per mode; the mock's audio (type, length, frames, determinism); the live request with urllib mocked (method, URL with a quoted voice, `xi-api-key`, content type, accept, body, timeout); HTTP and network errors mapped without the key or text; non-audio answers refused; the guard refuses and records urlopen, `create_connection` and `socket.connect`, and the live client cannot swallow it; capability off, unavailable in A0; kill switch, and that it comes first; not connected (`off`, half-configured live); empty and long text; the provider error audited and counted; live end to end with urllib mocked; the audit row with a sentinel name, phone and amount found in no field; the cap reached, refusals not counted, cap 0, the reset the next Cairo day, and a Cairo-versus-UTC boundary; the Arabic of every refusal.
 - **Reason:** A1–A3 send business data to outside services (ElevenLabs for speech; Anthropic for A2/A3) and can cost money per call. Both are outside every earlier decision, so they are recorded here before any code.
 - **Proposal (the S4/Paymob pattern):**
   - one `ai` provider layer with a mock mode (fake responses in the real API's shape) and a live mode;
