@@ -429,7 +429,8 @@ def _onboarding(lang):
 
 
 def _demo_bar(request, lang, profile):
-    """DEMO-FIRST-RUN (D3): the one-line demo bar, for the owner of a showcase copy only (a cashier sees the plain shop)."""
+    """DEMO-FIRST-RUN (D3): the one-line demo bar on a showcase. Everyone signed in sees it (it names the business and
+    offers «غيّر النشاط» and the other login); only the owner gets «ابدأ فاضي» (``demo_bar`` decides, for «ابدأ من هنا» too)."""
 
     from django.conf import settings
 
@@ -439,10 +440,7 @@ def _demo_bar(request, lang, profile):
 
     # TRACK-START S01: the bar names the shop's own activity; «غيّر النشاط» opens a copy of another ready shop,
     # so the words, the menu and the sample data always belong to the same business.
-    bar = demo_bar(request, lang, profile)
-    if bar and not user_has_permission(request.user, "settings.view_settings"):
-        bar = dict(bar, known=False)  # a cashier may switch back to the owner, not wipe the shop
-    return bar
+    return demo_bar(request, lang, profile)
 
 
 def _demo_mode():
@@ -502,8 +500,9 @@ def dashboard(request):
     now = timezone.localtime()
     today = now.date()
     profile = ClientProfile.get_active()
-    if profile is not None and not profile.setup_is_complete:
-        # DEMO-FIRST-RUN §7: no half-set-up dashboard; the gate sends them to the wizard step they are at.
+    if profile is not None and not profile.setup_is_complete and (_demo_mode() or request.user.is_superuser):
+        # DEMO-FIRST-RUN §7: no half-set-up dashboard for whoever can finish the setup (the owner, or anyone on a
+        # showcase); the gate sends them to the wizard step they are at. Anyone else keeps the dashboard they may see.
         from django.shortcuts import redirect
 
         return redirect("after_login")

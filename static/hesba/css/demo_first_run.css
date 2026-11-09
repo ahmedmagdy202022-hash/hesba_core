@@ -58,16 +58,16 @@
 @keyframes fr-spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.fr-spin{animation:none}}
 
-/* D3: the one-line demo bar. Gold wash, small, never taller than one line on a phone. */
-.fr-demobar{display:flex;align-items:center;gap:10px;padding:6px var(--hs-space-4);border-radius:var(--hs-radius-md);background:var(--hs-gold-wash);color:var(--hs-warning);font-size:var(--hs-text-xs);line-height:1.4;overflow-x:auto;white-space:nowrap;scrollbar-width:none;max-width:100%;box-sizing:border-box}
+/* D3: the one-line demo bar. Gold wash, small, never taller than one line on a phone; every link and button a full touch target. */
+.fr-demobar{display:flex;align-items:center;gap:10px;padding:0 var(--hs-space-4);border-radius:var(--hs-radius-md);background:var(--hs-gold-wash);color:var(--hs-warning);font-size:var(--hs-text-xs);line-height:1.4;overflow-x:auto;white-space:nowrap;scrollbar-width:none;max-width:100%;box-sizing:border-box}
 .fr-demobar::-webkit-scrollbar{display:none}
 .fr-demobar strong{font-weight:700;color:var(--hs-gold)}
-.fr-demobar a,.fr-demobar button{color:var(--hs-warning);text-decoration:underline;min-height:32px;display:inline-flex;align-items:center;background:none;border:0;padding:0;font:inherit;cursor:pointer;white-space:nowrap}
+.fr-demobar a,.fr-demobar button{color:var(--hs-warning);text-decoration:underline;min-height:var(--hs-control-height);display:inline-flex;align-items:center;background:none;border:0;padding:0;font:inherit;cursor:pointer;white-space:nowrap}
 .fr-demobar a:hover,.fr-demobar button:hover{color:var(--hs-gold)}
 .fr-demobar form{display:contents}
 .fr-demobar__end{margin-inline-start:auto;display:inline-flex;gap:10px}
 .fr-demobar details{display:inline-block;position:relative}
-.fr-demobar summary{list-style:none;cursor:pointer;text-decoration:underline;min-height:32px;display:inline-flex;align-items:center}
+.fr-demobar summary{list-style:none;cursor:pointer;text-decoration:underline;min-height:var(--hs-control-height);min-width:var(--hs-control-height);justify-content:center;display:inline-flex;align-items:center}
 .fr-demobar summary::-webkit-details-marker{display:none}
 .fr-demobar details[open] > div{position:absolute;inset-inline-end:0;top:100%;z-index:40;padding:var(--hs-space-2) var(--hs-space-3);border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);background:var(--hs-surface);box-shadow:var(--hs-shadow-md);white-space:nowrap}
 .fr-demobar details[open] > div button{color:var(--hs-teal-deep);text-decoration:none;font-weight:600}

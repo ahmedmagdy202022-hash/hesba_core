@@ -11,12 +11,17 @@ dashboard. «ابدأ فاضي» copies the emptied demo instead and lands on «
 its login page and wizard untouched.
 """
 
+import functools
+import secrets
+
 from django.conf import settings
 from django.contrib.auth import get_user_model, login
 from django.contrib.auth.decorators import login_not_required
 from django.http import Http404, HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.utils.crypto import constant_time_compare
+from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 
 from . import demo as showcase
@@ -26,6 +31,17 @@ from . import demo_templates as templates
 def _demo_only():
     if not getattr(settings, "DEMO_MODE", False):
         raise Http404("Demo only.")
+
+
+def demo_view(view):
+    """404 off a showcase before anything else is checked (a GET to a POST-only demo URL is a 404, not a 405)."""
+
+    @functools.wraps(view)
+    def wrapped(request, *args, **kwargs):
+        _demo_only()
+        return view(request, *args, **kwargs)
+
+    return wrapped
 
 
 def _lang(request):
@@ -41,6 +57,14 @@ def _label(activity, sub_activity, lang):
     from settings_core import setup_catalog as catalog
 
     return catalog.sub_activity_label(activity, sub_activity, lang) if sub_activity else catalog.activity_label(activity, lang)
+
+
+def _noun(activity, sub_activity, lang):
+    """The business inside a sentence: the Arabic label reads well; in English, "pharmacy", not "Pharmacy" or "General building"."""
+
+    if lang == "en":
+        return showcase.DEMO_NOUNS_EN.get((activity, sub_activity)) or _label(activity, sub_activity, lang).lower()
+    return _label(activity, sub_activity, lang)
 
 
 def tiles(lang):
@@ -80,6 +104,9 @@ WORDS = {
         "change_later": "تقدر تغيّر النشاط في أي وقت من شريط الديمو.",
         "preparing_title": "بنجهّز نسختك…", "preparing": "أول مرة حد يفتح {label} على السيرفر ده؛ بنجهّز نسخته، وده بياخد لحظات. الصفحة هتتحدث لوحدها.",
         "ready": "نسختك جاهزة.", "open": "افتح {label}", "too_many": "جرّبت كتير الساعة دي. استنى شوية وجرّب تاني، أو كمّل في تجربتك الحالية.",
+        "failed_title": "معرفناش نجهّز النسخة دي", "failed": "حصلت مشكلة وإحنا بنجهّز {label}. جرّب المحل الجاهز، أو اختار نشاط تاني.",
+        "default_shop": "افتح محل التجزئة الجاهز", "choose_other": "اختار نشاط تاني", "opened": "النسخة دي اتفتحت قبل كده.",
+        "to_dashboard": "افتح لوحة التحكم", "not_built": "الديمو الفاضي لسه بيتجهّز. جرّب كمان دقيقة.",
     },
     "en": {
         "page_title": "Try Hesba on your business - Hesba", "title": "Try Hesba on your business",
@@ -89,6 +116,9 @@ WORDS = {
         "change_later": "You can change the activity any time from the demo bar.",
         "preparing_title": "Preparing your copy…", "preparing": "Nobody has opened a {label} on this server yet; its copy is being prepared, which takes a moment. This page refreshes by itself.",
         "ready": "Your copy is ready.", "open": "Open the {label}", "too_many": "Too many fresh starts from here this hour. Please wait a little, or carry on in your current demo.",
+        "failed_title": "We could not prepare this copy", "failed": "Something went wrong while preparing the {label}. Try the ready-made shop, or pick another business.",
+        "default_shop": "Open the ready-made retail shop", "choose_other": "Pick another business", "opened": "This copy was opened already.",
+        "to_dashboard": "Open the dashboard", "not_built": "The empty demo is still being prepared. Please try again in a minute.",
     },
 }
 
@@ -125,7 +155,7 @@ def sub_activities(request, activity):
     return render(request, "demo/sub_activities.html", {
         **_base_context(request, lang), "activity": activity, "rows": rows,
         "title": words["sub_title"].format(activity=catalog.activity_label(activity, lang)),
-        "default": default, "not_sure": words["not_sure"].format(default=catalog.sub_activity_label(*default, lang)),
+        "default": default, "not_sure": words["not_sure"].format(default=_noun(*default, lang)),
     })
 
 
@@ -145,21 +175,83 @@ def _sign_in(request, user):
     login(request, user, backend="django.contrib.auth.backends.ModelBackend")
 
 
+#: DEMO-FIRST-RUN: the preparing page opens the shop by POSTing to ``start`` on its own. A Back to that page
+#: (or a replay of its POST) must not do it again and silently replace the shop the visitor has been working in,
+#: so the auto-POST carries a one-shot token: set in this signed cookie when ``start`` sends the visitor to wait,
+#: spent by the ``start`` that opens the shop. A cookie, not the session: the waiting visitor usually has no copy
+#: yet (the session table they see is the read-only template), and ``start`` flushes the session anyway.
+PREPARE_COOKIE = "hesba_demo_prepare"
+PREPARE_SALT = "hesba.demo-prepare"
+PREPARE_MAX_AGE = 3600
+
+
+def _prepare_token(request, activity, sub):
+    """This visitor's unspent token for opening (activity, sub) from the preparing page, or ""."""
+
+    value = request.get_signed_cookie(PREPARE_COOKIE, default="", salt=PREPARE_SALT, max_age=PREPARE_MAX_AGE)
+    cookie_activity, cookie_sub, nonce = (value.split(":") + ["", "", ""])[:3]
+    return nonce if (cookie_activity, cookie_sub) == (activity, sub) else ""
+
+
+def _where_they_were(request, lang):
+    """Where a spent (or forged) preparing replay goes instead of replacing anything."""
+
+    if request.user.is_authenticated:
+        return redirect(f"{reverse('dashboard_snapshot')}?lang={lang}")
+    return redirect(f"{reverse('demo_landing')}?lang={lang}")
+
+
+def _replace_in_place(activity, sub, empty):
+    """Empty this database and open the chosen shop in it: what a private copy of a ready shop gives. Returns
+    whether the shop is left empty. Only ever run on a database with no demo in it (nothing to wipe)."""
+
+    from .demo_restart import restart_demo
+
+    restart_demo()
+    templates.complete_demo_setup(activity, sub)
+    if not empty:
+        templates.seed_sample_business()
+    return empty
+
+
+def _start_shared(activity, sub, empty):
+    """No private copies (DEMO_SANDBOXES off, or PostgreSQL): one demo everyone shares, so a tap never wipes it.
+
+    The setup is switched in place, as the old «غيّر النشاط» did, and a shop with no trade gets its sample month;
+    what other testers entered stays. Only a database with no demo in it yet is set up from scratch. Returns
+    whether the shop is left empty (then the visitor lands on «ابدأ من هنا»)."""
+
+    from sales.models import SalesInvoice
+    from settings_core.models import ClientProfile
+
+    if ClientProfile.get_active() is None or not get_user_model().objects.filter(username="owner").exists():
+        return _replace_in_place(activity, sub, empty)
+    templates.complete_demo_setup(activity, sub)
+    if not empty:
+        templates.seed_sample_business()
+    return not SalesInvoice.objects.filter(status="posted").exists()
+
+
 @login_not_required
+@demo_view
 @require_POST
 def start(request):
     """POST activity, sub_activity, mode (sample|empty): open that ready shop for this visitor, signed in as the owner.
 
     With private copies (DEMO-SANDBOX) the visitor's copy is replaced by a copy of the ready template: a file copy,
     well under a second. A missing template is built in the background behind a refreshing page. Without private
-    copies (a demo on PostgreSQL) the one shared demo is emptied and seeded in place, as «start over» always did."""
+    copies the one shared demo is switched in place and never wiped (``_start_shared``)."""
 
-    _demo_only()
     lang = _lang(request)
     choice = _choice(request)
     if choice is None:
         return HttpResponse("Unknown demo activity.", status=400)
     activity, sub = choice
+    if "prepared" in request.POST:
+        # The preparing page's own POST: only with this visitor's unspent token for this shop (see PREPARE_COOKIE).
+        token = _prepare_token(request, activity, sub)
+        if not token or not constant_time_compare(token, request.POST.get("prepared", "")):
+            return _where_they_were(request, lang)
     empty = request.POST.get("mode") == "empty"
     switch = getattr(request, "demo_switch", None)
     if switch is not None:
@@ -168,9 +260,12 @@ def start(request):
         source = templates.fresh_template() if empty else templates.populated_template(activity, sub)
         if not source.is_file():
             if empty:
-                return HttpResponse("The emptied demo is not built yet.", status=503)
+                return HttpResponse(WORDS[lang]["not_built"], status=503, content_type="text/plain; charset=utf-8")
             templates.builder.request(activity, sub)
-            return redirect(f"{reverse('demo_preparing')}?lang={lang}&activity={activity}&sub_activity={sub}")
+            response = redirect(f"{reverse('demo_preparing')}?lang={lang}&activity={activity}&sub_activity={sub}")
+            response.set_signed_cookie(PREPARE_COOKIE, f"{activity}:{sub}:{secrets.token_urlsafe(16)}", salt=PREPARE_SALT,
+                                       max_age=PREPARE_MAX_AGE, httponly=True, samesite="Lax", secure=not settings.DEBUG)
+            return response
         try:
             switch(source)
         except TooManyFreshStarts:
@@ -178,49 +273,75 @@ def start(request):
         if empty:
             templates.complete_demo_setup(activity, sub)
     else:
-        from .demo_restart import restart_demo
-
-        restart_demo()
-        templates.complete_demo_setup(activity, sub)
-        if not empty:
-            templates.seed_sample_business()
+        empty = _start_shared(activity, sub, empty)
     # The visitor's session row lived in the copy that was just replaced (or flushed). A signed-in owner switching
     # activity is the same user id, so login() would keep that key and the save at the end would find no row
     # (SessionInterrupted, a 400). Start a fresh session in the new copy instead.
     request.session.flush()
     _sign_in(request, _owner())
     if empty:
-        return redirect(f"{reverse('demo_begin')}?lang={lang}")
-    return redirect(f"{reverse('dashboard_snapshot')}?lang={lang}")
-
-
-@login_not_required
-def preparing(request):
-    """The short wait while a missing template is built: refreshes until the file exists, then opens it."""
-
-    _demo_only()
-    lang = _lang(request)
-    activity, sub = request.GET.get("activity", ""), request.GET.get("sub_activity", "")
-    if not templates.is_known(activity, sub):
-        return redirect(f"{reverse('demo_landing')}?lang={lang}")
-    ready = templates.populated_template(activity, sub).is_file()
-    if not ready:
-        templates.builder.request(activity, sub)
-    words = WORDS[lang]
-    label = _label(activity, sub, lang)
-    context = {**_base_context(request, lang), "activity": activity, "sub_activity": sub, "ready": ready, "label": label,
-               "message": words["ready"] if ready else words["preparing"].format(label=label), "open": words["open"].format(label=label)}
-    response = render(request, "demo/preparing.html", context)
-    if not ready:
-        response["Refresh"] = "3"
+        response = redirect(f"{reverse('demo_begin')}?lang={lang}")
+    else:
+        response = redirect(f"{reverse('dashboard_snapshot')}?lang={lang}")
+    if PREPARE_COOKIE in request.COOKIES:
+        response.delete_cookie(PREPARE_COOKIE, samesite="Lax")  # spent: a Back to the preparing page opens nothing
     return response
 
 
+@login_not_required
+@never_cache
+def preparing(request):
+    """The short wait while a missing template is built: refreshes until the file exists, then opens it once.
+
+    Stops refreshing, with a way out, when the build keeps failing or takes far too long. Only a demo with private
+    copies ever sends anyone here; without them it is the landing."""
+
+    _demo_only()
+    import time
+
+    from .demo_sandbox import enabled as sandboxes_enabled
+
+    lang = _lang(request)
+    activity, sub = request.GET.get("activity", ""), request.GET.get("sub_activity", "")
+    if not sandboxes_enabled() or not templates.is_known(activity, sub):
+        return redirect(f"{reverse('demo_landing')}?lang={lang}")
+    ready = templates.populated_template(activity, sub).is_file()
+    failed, since = False, 0.0
+    if not ready:
+        try:
+            since = float(request.GET.get("since", ""))
+        except ValueError:
+            since = 0.0
+        failed = templates.builder.gave_up(activity, sub) or bool(since and time.time() - since > templates.MAX_WAIT_SECONDS)
+        if not failed:
+            templates.builder.request(activity, sub)
+            failed = templates.builder.gave_up(activity, sub)
+    words = WORDS[lang]
+    label = _noun(activity, sub, lang)
+    token = _prepare_token(request, activity, sub) if ready else ""
+    if failed:
+        message = words["failed"].format(label=label)
+    elif ready:
+        message = words["ready"] if token or not request.user.is_authenticated else words["opened"]
+    else:
+        message = words["preparing"].format(label=label)
+    context = {**_base_context(request, lang), "activity": activity, "sub_activity": sub, "ready": ready, "failed": failed,
+               "token": token, "signed_in": request.user.is_authenticated, "label": label, "message": message,
+               "open": words["open"].format(label=label), "default": showcase.DEMO_DEFAULT,
+               "dashboard_url": f"{reverse('dashboard_snapshot')}?lang={lang}",
+               "refresh_url": f"{reverse('demo_preparing')}?lang={lang}&activity={activity}&sub_activity={sub}&since={int(since or time.time())}"
+               if not ready and not failed else ""}
+    response = render(request, "demo/preparing.html", context)
+    if not ready and not failed:
+        response["Refresh"] = f"3; url={context['refresh_url']}"
+    return response
+
+
+@demo_view
 @require_POST
 def login_as(request):
     """The demo bar's «ادخل كموظف (كاشير)» / «ارجع كمالك»: another demo login in the same copy."""
 
-    _demo_only()
     lang = _lang(request)
     username = request.POST.get("username", "")
     if username not in ("owner", "cashier"):
@@ -275,10 +396,10 @@ def begin_steps(lang, modules):
     return rows
 
 
+@demo_view
 def begin(request):
     """D4: «ابدأ من هنا» after «ابدأ فاضي»: four steps to the first sale, and the card that fills it instead."""
 
-    _demo_only()
     lang = _lang(request)
     from settings_core.models import ClientProfile
     from settings_core.setup_services import usable_modules
@@ -287,7 +408,7 @@ def begin(request):
     if profile is None or not profile.setup_is_complete:
         return redirect("after_login")
     words = BEGIN_WORDS[lang]
-    label = _label(profile.activity_slug, profile.sub_activity_slug, lang)
+    label = _noun(profile.activity_slug, profile.sub_activity_slug, lang)
     return render(request, "demo/begin.html", {
         "lang": lang, "dir": _dir(lang), "words": words, "page_title": words["page_title"], "client_name": profile.display_name,
         "steps": begin_steps(lang, set(usable_modules())), "fill_lead": words["fill_lead"].format(label=label),
@@ -297,7 +418,12 @@ def begin(request):
 
 
 def demo_bar(request, lang, profile, empty=False):
-    """D3's one-line demo bar: what this demo is, «غيّر النشاط», «ابدأ فاضي», «ملاحظاتك», and the other login."""
+    """D3's one-line demo bar: what this demo is, «غيّر النشاط», «ابدأ فاضي», «ملاحظاتك», and the other login.
+
+    ``known`` (the empty / fill buttons, and «ابدأ من هنا»'s fill card) only for someone who may see the settings,
+    the owner: a cashier trying permissions may switch back to the owner, not wipe or refill the shop."""
+
+    from permissions.services import user_has_permission
 
     if not getattr(settings, "DEMO_MODE", False) or profile is None:
         return None
@@ -309,7 +435,8 @@ def demo_bar(request, lang, profile, empty=False):
     return {
         "label": ("Demo · " if lang == "en" else "ديمو · ") + label + ((" · empty" if lang == "en" else " · فاضي") if empty else ""),
         "change_url": f"{reverse('demo_landing')}?lang={lang}", "start_url": reverse("demo_start"), "login_as_url": reverse("demo_login_as"),
-        "activity": activity, "sub_activity": sub, "known": templates.is_known(activity, sub), "empty": empty,
+        "activity": activity, "sub_activity": sub, "empty": empty,
+        "known": templates.is_known(activity, sub) and user_has_permission(user, "settings.view_settings"),
         "other_user": other if other_exists else "",
         "words": {
             "change": "Change activity" if lang == "en" else "غيّر النشاط", "empty": "Start empty" if lang == "en" else "ابدأ فاضي",
@@ -342,11 +469,27 @@ def tour_card(request, lang, profile):
         steps.append({"n": len(steps) + 1, "title": ar if lang == "ar" else en, "hint": hint_ar if lang == "ar" else hint_en, "url": f"{path}?lang={lang}"})
     if not steps:
         return None
-    label = _label(activity, sub, lang)
+    if lang == "en":
+        lead = f"Your {_noun(activity, sub, lang)} has a full month of trade."
+    else:
+        lead = f"عندك شهر شغل كامل في {_label(activity, sub, lang)}."
+    if _can_sell_now(request.user):
+        lead += " The shift is open, so you can sell straight away." if lang == "en" else " الوردية مفتوحة، فتقدر تبيع على طول."
     return {
         "key": f"{activity}:{sub}", "steps": steps,
         "title": "Try it now" if lang == "en" else "جرّب دلوقتي",
-        "lead": (f"This {label} has a full month of trade. The shift is open, so you can sell straight away." if lang == "en"
-                 else f"{label} فيها شهر شغل كامل. الوردية مفتوحة، فتقدر تبيع على طول."),
+        "lead": lead,
         "dismiss": "Hide" if lang == "en" else "إخفاء",
     }
+
+
+def _can_sell_now(user):
+    """Only say «الوردية مفتوحة، فتقدر تبيع على طول» where it is true: this business sells at a till and the shift is open."""
+
+    from settings_core.capabilities import capability_enabled
+    from settings_core.setup_services import usable_modules
+    from shifts.services import open_shift_for
+
+    if not capability_enabled("pos") or not {"cashboxes", "sales_operations"} <= set(usable_modules()):
+        return False
+    return open_shift_for(user) is not None

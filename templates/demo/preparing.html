@@ -4,27 +4,55 @@
 <meta charset="utf-8">
 {% include "partials/brand_icons.html" %}
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>{{ words.preparing_title }} - {% if lang == 'en' %}Hesba{% else %}حِسْبَة{% endif %}</title>
-{% if not ready %}<meta http-equiv="refresh" content="3">{% endif %}
+<title>{% if failed %}{{ words.failed_title }}{% else %}{{ words.preparing_title }}{% endif %} - {% if lang == 'en' %}Hesba{% else %}حِسْبَة{% endif %}</title>
+{% if refresh_url %}<meta http-equiv="refresh" content="3; url={{ refresh_url }}">{% endif %}
 <link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
-<link rel="stylesheet" href="{% static 'hesba/css/demo_first_run.css' %}?v=fr-1">
+<link rel="stylesheet" href="{% static 'hesba/css/demo_first_run.css' %}?v=fr-2">
 </head>
 <body class="fr-body" data-lang="{{ lang }}">
-{# DEMO-FIRST-RUN: a template still being built; the page refreshes until the file exists, then opens it. #}
+{# DEMO-FIRST-RUN: a template still being built; the page refreshes until the file exists, then opens it once. #}
 <div class="fr-page">
   <main class="fr-main" style="display:flex">
-    <section class="fr-wait" data-demo-preparing="{% if ready %}ready{% else %}building{% endif %}">
-      {% if not ready %}<span class="fr-spin" aria-hidden="true"></span>{% endif %}
-      <h1>{% if ready %}{{ words.ready }}{% else %}{{ words.preparing_title }}{% endif %}</h1>
+    <section class="fr-wait" data-demo-preparing="{% if failed %}failed{% elif ready %}ready{% else %}building{% endif %}">
+      {% if failed %}
+      <h1>{{ words.failed_title }}</h1>
       <p>{{ message }}</p>
-      {% if ready %}
+      <form method="post" action="{{ start_url }}" data-demo-default-shop>{% csrf_token %}
+        <input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="activity" value="{{ default.0 }}"><input type="hidden" name="sub_activity" value="{{ default.1 }}"><input type="hidden" name="mode" value="sample">
+        <button class="fr-primary" type="submit">{{ words.default_shop }}</button>
+      </form>
+      <a href="{{ landing_url }}">{{ words.choose_other }}</a>
+      {% elif ready %}
+      <h1>{{ words.ready }}</h1>
+      <p>{{ message }}</p>
+      {% if token %}
+      {# The one-shot token: a Back to this page, or a replay of this POST, opens nothing and wipes nothing. #}
       <form method="post" action="{{ start_url }}" data-demo-continue>{% csrf_token %}
+        <input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="activity" value="{{ activity }}"><input type="hidden" name="sub_activity" value="{{ sub_activity }}"><input type="hidden" name="mode" value="sample"><input type="hidden" name="prepared" value="{{ token }}">
+        <button class="fr-primary" type="submit">{{ open }}</button>
+      </form>
+      <script>
+        (function () {
+          var nav = window.performance && performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
+          if (nav && nav.type === 'back_forward') return;  // came back here: never open (and replace) the shop again by itself
+          document.querySelector('[data-demo-continue]').submit();
+        })();
+      </script>
+      {% elif signed_in %}
+      <a class="fr-primary" href="{{ dashboard_url }}" data-demo-to-dashboard>{{ words.to_dashboard }}</a>
+      {% else %}
+      <form method="post" action="{{ start_url }}" data-demo-open>{% csrf_token %}
         <input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="activity" value="{{ activity }}"><input type="hidden" name="sub_activity" value="{{ sub_activity }}"><input type="hidden" name="mode" value="sample">
         <button class="fr-primary" type="submit">{{ open }}</button>
       </form>
-      <script>document.querySelector('[data-demo-continue]').submit();</script>
       {% endif %}
       <a href="{{ landing_url }}">{{ words.back }}</a>
+      {% else %}
+      <span class="fr-spin" aria-hidden="true"></span>
+      <h1>{{ words.preparing_title }}</h1>
+      <p>{{ message }}</p>
+      <a href="{{ landing_url }}">{{ words.back }}</a>
+      {% endif %}
     </section>
   </main>
 </div>

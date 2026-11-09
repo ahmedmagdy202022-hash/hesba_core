@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{{ words.page_title }}</title>
 <link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
-<link rel="stylesheet" href="{% static 'hesba/css/demo_first_run.css' %}?v=fr-1">
+<link rel="stylesheet" href="{% static 'hesba/css/demo_first_run.css' %}?v=fr-2">
 <script>{# The remembered language wins when the address names none, as every signed-in page does. #}
 (function(){try{var p=new URLSearchParams(location.search);var s=localStorage.getItem('hesba_lang');if(!p.get('lang')&&s==='en'&&document.documentElement.lang!=='en'){p.set('lang','en');location.replace(location.pathname+'?'+p.toString());return;}localStorage.setItem('hesba_lang',document.documentElement.lang);}catch(e){}})();
 </script>

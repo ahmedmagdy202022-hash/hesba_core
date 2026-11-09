@@ -63,10 +63,10 @@ body.login-page .hs-feedback-fab{bottom:calc(64px + env(safe-area-inset-bottom))
 .hs-hello[hidden]{display:none}
 .hs-hello p{flex:1;margin:0;color:var(--hs-muted);font-size:var(--hs-text-sm);line-height:1.6}
 .hs-hello__actions{display:flex;align-items:center;gap:var(--hs-space-2);flex-shrink:0}
-.hs-hello__send,.hs-hello__skip{min-height:40px;border-radius:var(--hs-radius-md);font:inherit;font-weight:700;cursor:pointer}
+.hs-hello__send,.hs-hello__skip{min-height:var(--hs-control-height);border-radius:var(--hs-radius-md);font:inherit;font-weight:700;cursor:pointer}
 .hs-hello__send{padding:0 12px;border:1px solid var(--hs-line-strong);background:var(--hs-surface);color:var(--hs-teal-deep);font-size:var(--hs-text-sm)}
 .hs-hello__send:hover{background:var(--hs-teal-wash)}
-.hs-hello__skip{width:40px;border:0;background:transparent;color:var(--hs-muted);font-size:20px;line-height:1}
+.hs-hello__skip{width:var(--hs-control-height);border:0;background:transparent;color:var(--hs-muted);font-size:20px;line-height:1}
 @media (min-width:1024px){.hs-hello{inset-inline-start:auto;inset-inline-end:18px;bottom:18px;width:min(560px,calc(100vw - 36px));border:1px solid var(--hs-line);border-radius:var(--hs-radius-xl)}}
 /* On a phone the tab bar owns the very bottom; the banner sits just above it, and the floating button moves up. */
 @media (max-width:700px){

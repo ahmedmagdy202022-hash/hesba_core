@@ -50,6 +50,16 @@ DEMO_HINTS = {
     ("contracting", "general"): ("مقايسات ومستخلصات", "Bills of quantities and progress bills"),
 }
 
+#: What each demo business is called inside an English sentence ("your pharmacy", "a repair workshop"); the
+#: catalogue's English labels are titles ("General building", "Courses & training") and read badly mid-sentence.
+DEMO_NOUNS_EN = {
+    ("commercial", "retail"): "retail shop", ("commercial", "pharmacy"): "pharmacy", ("commercial", "grocery"): "supermarket",
+    ("commercial", "fashion"): "clothing store", ("commercial", "electronics"): "mobile and electronics shop",
+    ("restaurants", "restaurant"): "restaurant", ("medical", "clinic"): "clinic", ("education", "training"): "training centre",
+    ("services", "maintenance"): "repair workshop", ("services", "beauty"): "beauty salon", ("manufacturing", "food"): "food factory",
+    ("contracting", "general"): "contracting firm",
+}
+
 
 def demo_subs(activity):
     """The sub-activities the demo offers for ``activity``, in landing order."""
