@@ -208,6 +208,7 @@ class Command(BaseCommand):
             for name in ("1", "2", "3", "4", "5", "6"):
                 tables.save_table({"name": name, "seats": 4}, owner)
             self._floor(master, catalog, owner)
+        staff = None
         if extras & {"appointments", "patients", "orders", "projects", "workorders"}:
             staff = save_employee({"name": catalog.staff[0], "title": catalog.staff[1], "commission_percent": "10"}, owner)
         if "appointments" in extras:
@@ -245,9 +246,20 @@ class Command(BaseCommand):
             self._shop_staff(owner)  # DEMO-NEW: a shop's cashier and storekeeper, on the payroll too
             self._attendance(owner)  # T11: three weeks of attendance, a leave taken and one waiting
             self._payroll(master, owner)  # DEMO-NEW: last month's payroll, net pay paid
+        self._services_showcase(master, staff, owner, catalog, extras)  # DEMO-SVC: after payroll, so the new technicians are not paid by it
         if "expenses" in modules:
             self._expenses(master, owner)  # last: a share of the whole month's sales, the shelf's included
         self._fit_users(modules)
+
+    @staticmethod
+    def _services_showcase(master, staff, owner, catalog, extras):
+        """DEMO-SVC: the workshop's and the salon's own sample: technicians on commission, extra services, work orders with
+        customer links, a calendar of appointments and a campaign draft. Services only; nothing for any other activity."""
+
+        from settings_core import demo_services
+
+        if demo_services.applies(catalog):
+            demo_services.seed(master, staff, owner, catalog, extras)
 
     #: T11: when each demo employee came in, in minutes after their start, by day (a few late, one absent day).
     ARRIVALS = (-5, 3, 25, -10, 0, 40, 8, -2, 12, 55, 1, -8, 6, 30)
