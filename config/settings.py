@@ -312,6 +312,8 @@ AI_MODE = config("AI_MODE", default="").strip().lower()
 ELEVENLABS_API_KEY = config("ELEVENLABS_API_KEY", default="")
 ELEVENLABS_VOICE_ID = config("ELEVENLABS_VOICE_ID", default="hesba-placeholder-voice")
 ELEVENLABS_MODEL_ID = config("ELEVENLABS_MODEL_ID", default="eleven_multilingual_v2")
+# The daily AI call cap is a setting each company can change (SystemSetting ai_daily_call_cap); this caps it from above.
+AI_DAILY_CALL_CAP_MAX = config("AI_DAILY_CALL_CAP_MAX", default=500, cast=int)
 
 LOGGING = {
     "version": 1,

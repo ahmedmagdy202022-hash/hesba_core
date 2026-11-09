@@ -30,4 +30,7 @@ def ai_settings(app_configs, **kwargs):
         if not voice or voice == PLACEHOLDER_VOICE:
             errors.append(Error("AI_MODE is live but ELEVENLABS_VOICE_ID is empty or still the placeholder.",
                                 hint="Set ELEVENLABS_VOICE_ID to the chosen ElevenLabs voice, or switch AI_MODE off.", id="ai.E004"))
+        if not str(getattr(settings, "ELEVENLABS_MODEL_ID", "") or "").strip():
+            errors.append(Error("AI_MODE is live but ELEVENLABS_MODEL_ID is empty.",
+                                hint="Set ELEVENLABS_MODEL_ID (for example eleven_multilingual_v2), or switch AI_MODE off.", id="ai.E005"))
     return errors

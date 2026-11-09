@@ -10,6 +10,7 @@ from unittest import mock
 
 from django.core.checks import run_checks
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.test import override_settings
 from django.utils import timezone
 
@@ -37,12 +38,17 @@ def ids(errors):
     return sorted(error.id for error in errors)
 
 
+#: The live client's one way out (an opener that refuses redirects); tests replace it, never the network.
+OPEN = "ai.providers.elevenlabs._open"
+
+
 class FakeResponse:
     def __init__(self, body=SILENT_MP3, content_type="audio/mpeg"):
         self.body, self.headers = body, {"Content-Type": content_type}
+        self.stream = io.BytesIO(body)
 
     def read(self, limit=-1):
-        return self.body if limit is None or limit < 0 else self.body[:limit]
+        return self.stream.read(limit)
 
     def __enter__(self):
         return self
@@ -72,6 +78,13 @@ class CheckTests(AiSimpleTestCase):
             self.assertEqual(ids(ai_settings(None)), ["ai.E004"])
         with override_settings(DEBUG=False, **LIVE_KEYS):
             self.assertEqual(ids(ai_settings(None)), [])
+
+    def test_live_needs_a_model(self):
+        with override_settings(DEBUG=False, ELEVENLABS_MODEL_ID="  ", **LIVE_KEYS):
+            self.assertEqual(ids(ai_settings(None)), ["ai.E005"])
+            self.assertIsNone(providers.get(providers.ELEVENLABS_TTS))
+        with override_settings(DEBUG=False, AI_MODE="mock", ELEVENLABS_MODEL_ID=""):
+            self.assertEqual(ids(ai_settings(None)), ["ai.E001"])  # the model is checked for live only
 
     def test_unknown_mode_is_refused_and_connects_nothing(self):
         with override_settings(AI_MODE="maybe"):
@@ -113,10 +126,10 @@ class LiveClientRequestTests(AiSimpleTestCase):
         return ElevenLabsTTS(api_key="test-key-not-real", voice_id=voice, model_id="eleven_multilingual_v2")
 
     def test_the_request_matches_the_public_api(self):
-        with mock.patch("urllib.request.urlopen", return_value=FakeResponse()) as urlopen:
+        with mock.patch(OPEN, return_value=FakeResponse()) as urlopen:
             speech = self.tts("a b/c").synthesize("ملخص اليوم", voice_settings={"stability": 0.5, "similarity_boost": 0.75})
         request = urlopen.call_args.args[0]
-        self.assertEqual(urlopen.call_args.kwargs, {"timeout": 30})
+        self.assertEqual(urlopen.call_args.kwargs, {"timeout": 10})
         self.assertEqual(request.get_method(), "POST")
         self.assertEqual(request.full_url, "https://api.elevenlabs.io/v1/text-to-speech/a%20b%2Fc")
         self.assertEqual(request.get_header("Xi-api-key"), "test-key-not-real")
@@ -127,19 +140,19 @@ class LiveClientRequestTests(AiSimpleTestCase):
         self.assertEqual((speech.content_type, speech.audio), ("audio/mpeg", SILENT_MP3))
 
     def test_voice_settings_are_left_out_when_not_given(self):
-        with mock.patch("urllib.request.urlopen", return_value=FakeResponse()) as urlopen:
+        with mock.patch(OPEN, return_value=FakeResponse()) as urlopen:
             self.tts().synthesize("hello")
         self.assertEqual(json.loads(urlopen.call_args.args[0].data), {"text": "hello", "model_id": "eleven_multilingual_v2"})
 
     def test_http_errors_become_provider_errors_without_the_key_or_text(self):
         error = urllib.error.HTTPError("https://api.elevenlabs.io/v1/text-to-speech/test-voice", 401, "Unauthorized", {},
                                        io.BytesIO(b'{"detail": "invalid key test-key-not-real"}'))
-        with mock.patch("urllib.request.urlopen", side_effect=error), self.assertRaises(ProviderError) as caught:
+        with mock.patch(OPEN, side_effect=error), self.assertRaises(ProviderError) as caught:
             self.tts().synthesize(SENTINEL)
         self.assertEqual(caught.exception.status, 401)
         self.assertEqual(str(caught.exception), "ElevenLabs answered 401.")
         for outcome in (urllib.error.URLError("down"), TimeoutError(), ConnectionResetError()):
-            with self.subTest(outcome=type(outcome).__name__), mock.patch("urllib.request.urlopen", side_effect=outcome), \
+            with self.subTest(outcome=type(outcome).__name__), mock.patch(OPEN, side_effect=outcome), \
                     self.assertRaisesMessage(ProviderError, "ElevenLabs could not be reached."):
                 self.tts().synthesize("hello")
 
@@ -150,15 +163,60 @@ class LiveClientRequestTests(AiSimpleTestCase):
             def read(self, limit=-1):
                 raise http.client.IncompleteRead(b"partial", 1000)
 
-        with mock.patch("urllib.request.urlopen", return_value=CutOff()), \
+        with mock.patch(OPEN, return_value=CutOff()), \
                 self.assertRaisesMessage(ProviderError, "ElevenLabs could not be reached."):
             self.tts().synthesize("hello")
 
     def test_an_answer_that_is_not_audio_is_refused(self):
         for response in (FakeResponse(b'{"ok": true}', "application/json"), FakeResponse(b"", "audio/mpeg")):
-            with self.subTest(content_type=response.headers["Content-Type"]), mock.patch("urllib.request.urlopen", return_value=response), \
+            with self.subTest(content_type=response.headers["Content-Type"]), mock.patch(OPEN, return_value=response), \
                     self.assertRaisesMessage(ProviderError, "ElevenLabs gave no audio."):
                 self.tts().synthesize("hello")
+
+    def test_a_trickling_answer_hits_the_total_deadline(self):
+        clock = {"now": 1000.0}
+
+        class Trickle(FakeResponse):
+            def read(self, limit=-1):
+                clock["now"] += 3  # each chunk arrives inside the per-read timeout, but they add up
+                return b"\x00"
+
+        with mock.patch(OPEN, return_value=Trickle()), mock.patch("ai.providers.elevenlabs.time.monotonic", side_effect=lambda: clock["now"]), \
+                self.assertRaisesMessage(ProviderError, "ElevenLabs took too long to answer."):
+            self.tts().synthesize("hello")
+        self.assertLessEqual(clock["now"] - 1000.0, 21 + 3)  # stopped at the 20 s deadline, not after the whole body
+
+    def test_the_body_is_read_in_chunks_and_capped(self):
+        with mock.patch(OPEN, return_value=FakeResponse(SILENT_MP3 * 100)):  # several 64 KB chunks
+            self.assertEqual(self.tts().synthesize("hello").size, len(SILENT_MP3) * 100)
+        with mock.patch("ai.providers.elevenlabs.MAX_AUDIO_BYTES", 1000), mock.patch(OPEN, return_value=FakeResponse()), \
+                self.assertRaisesMessage(ProviderError, "ElevenLabs answered with more audio than allowed."):
+            self.tts().synthesize("hello")
+
+    def test_a_redirect_is_refused_and_the_key_is_not_sent_on(self):
+        import email.message
+        import urllib.response
+
+        from .providers import elevenlabs
+
+        seen = []
+
+        class Redirecting(urllib.request.HTTPSHandler):
+            """Stands in for the network: answers every request with a 302 to another host."""
+
+            def https_open(self, req):
+                seen.append((req.full_url, req.get_header("Xi-api-key")))
+                headers = email.message.Message()
+                headers["Location"] = "https://elsewhere.invalid/steal"
+                response = urllib.response.addinfourl(io.BytesIO(b""), headers, req.full_url, code=302)
+                response.msg = "Found"
+                return response
+
+        with mock.patch.object(elevenlabs, "_OPENER", elevenlabs._build_opener(Redirecting)), \
+                self.assertRaises(ProviderError) as caught:
+            self.tts().synthesize("hello")
+        self.assertEqual((str(caught.exception), caught.exception.status), ("ElevenLabs answered 302.", 302))
+        self.assertEqual(seen, [("https://api.elevenlabs.io/v1/text-to-speech/test-voice", "test-key-not-real")])  # never followed
 
 
 class NoNetworkGuardTests(AiSimpleTestCase):
@@ -285,7 +343,7 @@ class CallTests(AiCallTestBase):
     @override_settings(**LIVE_KEYS)
     def test_live_mode_end_to_end_with_urllib_mocked(self):
         with mock.patch.dict(providers.PROVIDERS, {providers.ELEVENLABS_TTS: providers._elevenlabs_tts}), \
-                mock.patch("urllib.request.urlopen", return_value=FakeResponse()) as urlopen:
+                mock.patch(OPEN, return_value=FakeResponse()) as urlopen:
             speech = self.speak("hello")
         self.assertEqual(urlopen.call_args.args[0].full_url, "https://api.elevenlabs.io/v1/text-to-speech/test-voice")
         self.assertEqual(urlopen.call_args.args[0].get_header("Xi-api-key"), "test-key-not-real")
@@ -293,6 +351,28 @@ class CallTests(AiCallTestBase):
         data = self.rows().get().after_data
         self.assertEqual((data["provider"], data["mode"]), ("elevenlabs_tts", "live"))
         self.assertNotIn("test-key-not-real", json.dumps(data))
+
+    def test_any_exception_from_the_provider_is_audited_then_raised(self):
+        with mock.patch.object(self.provider, "synthesize", side_effect=RuntimeError("boom")), self.assertRaisesMessage(RuntimeError, "boom"):
+            self.speak(SENTINEL)
+        row = self.rows().get()
+        self.assertEqual((row.action, row.after_data["result"], row.after_data["error_status"]), (services.CALL_ERROR, "error", None))
+        self.assertIsInstance(row.after_data["duration_ms"], int)
+        self.assertNotIn("Mona", json.dumps(row.after_data))
+        self.assertEqual(services.calls_today(), 1)
+
+    def test_a_call_inside_a_transaction_is_refused_before_anything(self):
+        with transaction.atomic(), self.assertRaisesMessage(services.AiCallInTransaction, "must not run inside transaction.atomic()"):
+            self.speak()
+        self.assertEqual(self.provider.calls, [])
+        self.assertFalse(self.rows().exists())
+        self.assertFalse(services.in_outer_transaction())  # the test case's own wrapping does not count
+        self.assertEqual(self.speak().content_type, "audio/mpeg")
+
+    @override_settings(AI_MODE="live")
+    def test_the_mode_recorded_is_the_provider_actually_used(self):
+        self.speak()  # the registry hands back the mock although AI_MODE says live
+        self.assertEqual(self.rows().get().after_data["mode"], "mock")
 
 
 class CapabilityRegistrationTests(AiTestCase):
@@ -322,6 +402,76 @@ class DailyCapTests(AiCallTestBase):
         self.assertEqual(services.daily_cap(), 50)
         SystemSetting.objects.filter(key=services.DAILY_CAP_KEY).update(value="-3")
         self.assertEqual(services.daily_cap(), 0)
+
+    def test_the_server_bounds_the_cap_from_above(self):
+        services.set_daily_cap(100000)
+        self.assertEqual(services.daily_cap(), 500)  # AI_DAILY_CALL_CAP_MAX's default
+        with override_settings(AI_DAILY_CALL_CAP_MAX=20):
+            self.assertEqual(services.daily_cap(), 20)
+            services.set_daily_cap(5)
+            self.assertEqual(services.daily_cap(), 5)
+        with override_settings(AI_DAILY_CALL_CAP_MAX=10):
+            from settings_core.models import SystemSetting
+
+            SystemSetting.objects.filter(key=services.DAILY_CAP_KEY).delete()
+            self.assertEqual(services.daily_cap(), 10)  # the default of 50 is bounded too
+
+    def test_a_call_still_in_flight_counts_toward_the_cap(self):
+        services.set_daily_cap(1)
+        seen = {}
+        real = self.provider.synthesize
+
+        def in_flight(text, voice_settings=None):
+            seen["count"] = services.calls_today()
+            seen["action"] = self.rows().exclude(action=services.CALL_REFUSED).get().action
+            with self.assertRaisesMessage(ValidationError, "Today's AI call limit is reached (1 calls)."):
+                self.speak()  # a second call while the first is still talking to the provider
+            return real(text, voice_settings)
+
+        with mock.patch.object(self.provider, "synthesize", side_effect=in_flight):
+            self.speak()
+        self.assertEqual(seen, {"count": 1, "action": services.CALL_STARTED})
+        self.assertEqual(sorted(self.rows().values_list("action", flat=True)), [services.CALL_OK, services.CALL_REFUSED])
+        self.assertEqual(services.calls_today(), 1)
+
+    def test_check_and_reserve_run_under_the_lock_row(self):
+        from django.db.models.query import QuerySet
+
+        steps, real = [], QuerySet.select_for_update
+
+        def spy(queryset, *args, **kwargs):
+            steps.append(("lock", queryset.model._meta.label))
+            return real(queryset, *args, **kwargs)
+
+        real_count = services.calls_today
+
+        def counted(now=None):
+            steps.append(("count", transaction.get_connection().in_atomic_block))
+            return real_count(now)
+
+        with mock.patch.object(QuerySet, "select_for_update", spy), mock.patch.object(services, "calls_today", counted):
+            self.speak()
+        self.assertEqual(steps, [("lock", "settings_core.SystemSetting"), ("count", True)])
+        from settings_core.models import SystemSetting
+
+        lock = SystemSetting.objects.get(key=services.LOCK_KEY)
+        self.assertFalse(lock.active)  # not a setting: hidden from the settings screen
+        self.assertEqual(lock.value, "")
+
+    def test_the_lock_is_a_real_row_lock_on_postgres(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        if connection.vendor != "postgresql":
+            self.skipTest("SQLite has no row locks (and serialises writers anyway); CI runs this on PostgreSQL.")
+        with CaptureQueriesContext(connection) as queries:
+            self.speak()
+        locks = [query["sql"] for query in queries if "FOR UPDATE" in query["sql"]]
+        self.assertEqual(len(locks), 1)
+        self.assertIn("settings_core_systemsetting", locks[0])
+        lock_at = next(index for index, query in enumerate(queries) if "FOR UPDATE" in query["sql"])
+        started_at = next(index for index, query in enumerate(queries) if "INSERT" in query["sql"] and "audit_auditlog" in query["sql"])
+        self.assertLess(lock_at, started_at)
 
     def test_cap_reached_is_refused_and_refusals_do_not_count(self):
         services.set_daily_cap(2)
@@ -358,10 +508,26 @@ class DailyCapTests(AiCallTestBase):
         refused = AuditLog.objects.create(event_type=AuditEventType.EXPORT, module="ai", action=services.CALL_REFUSED)
         AuditLog.objects.filter(pk=refused.pk).update(created_at=cairo(9, 12, 0))
         self.assertEqual(services.calls_today(cairo(9, 23, 45)), 1)  # the late call only; the refusal never counts
+        unfinished = AuditLog.objects.create(event_type=AuditEventType.EXPORT, module="ai", action=services.CALL_STARTED)
+        AuditLog.objects.filter(pk=unfinished.pk).update(created_at=cairo(9, 13, 0))
+        self.assertEqual(services.calls_today(cairo(9, 23, 45)), 2)  # a call that never finished keeps counting
         self.assertEqual(services.calls_today(cairo(10, 0, 45)), 1)  # a new Cairo day on the same UTC date: the early call only
         self.assertEqual(services.calls_today(cairo(11, 9, 0)), 0)
         start, end = services.cairo_day_bounds(cairo(10, 0, 45))
         self.assertEqual((start, end), (cairo(10, 0, 0), cairo(11, 0, 0)))
+
+
+class EveryAiTestIsGuardedTests(AiSimpleTestCase):
+    def test_every_test_case_in_this_module_uses_the_no_network_base(self):
+        import inspect
+        import sys
+        import unittest
+
+        from .no_network import NoNetworkMixin
+
+        cases = [obj for obj in vars(sys.modules[__name__]).values() if inspect.isclass(obj) and issubclass(obj, unittest.TestCase)]
+        self.assertGreater(len(cases), 5)
+        self.assertEqual([case.__name__ for case in cases if not issubclass(case, NoNetworkMixin)], [])
 
 
 class MessageTests(AiSimpleTestCase):
