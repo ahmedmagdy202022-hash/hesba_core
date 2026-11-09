@@ -12,6 +12,9 @@ from django.conf import settings
 from django.test import SimpleTestCase
 
 
+SKIP = {"node_modules", "staticfiles", "env", "lib", "Lib"}
+
+
 class NoReferrerPolicyTests(SimpleTestCase):
     def test_no_page_or_view_asks_for_no_referrer(self):
         root = Path(settings.BASE_DIR)
@@ -19,7 +22,10 @@ class NoReferrerPolicyTests(SimpleTestCase):
         for pattern in ("**/*.py", "**/*.html"):
             for path in root.glob(pattern):
                 parts = path.relative_to(root).parts
-                if parts[0] in {"node_modules", "staticfiles", ".git", ".claude"} or path.name.startswith("tests"):
+                # The app's own code only: no hidden folders (.venv, .git), virtual environments or third-party packages,
+                # where Django itself spells the policy out (Codex on #325).
+                if (any(part.startswith(".") or part in SKIP or "venv" in part or part == "site-packages" for part in parts[:-1])
+                        or path.name.startswith("tests")):
                     continue
                 if "no-referrer" in path.read_text(encoding="utf-8", errors="ignore"):
                     offenders.append(str(path.relative_to(root)))
