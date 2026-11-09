@@ -5,7 +5,9 @@
      too (no range requests needed).
    - If the browser refuses to play after the round trip (the press no longer counts as a gesture), the card says the
      audio is ready and the next press plays it.
-   - A refusal (feature off, cap reached, not connected, being prepared) is shown on the card in the page's language. */
+   - A refusal (feature off, cap reached, not connected, being prepared) is shown on the card in the page's language.
+   - A cached URL that no longer matches the summary (a figure changed while the page stayed open) is dropped, and the
+     next press voices the current text. */
 (function () {
   'use strict';
 
@@ -21,6 +23,7 @@
   var status = card.querySelector('[data-voice-status]');
   var iconPlay = card.querySelector('[data-voice-icon="play"]');
   var iconPause = card.querySelector('[data-voice-icon="pause"]');
+  var textBox = card.querySelector('[data-voice-text]');
   var tokenInput = card.querySelector('input[name="csrfmiddlewaretoken"]');
   var audioUrl = card.getAttribute('data-audio-url') || '';
   var loaded = false;
@@ -64,7 +67,9 @@
 
   function load(url) {
     return fetch(url, { credentials: 'same-origin', cache: 'no-store' }).then(function (response) {
-      if (!response.ok) throw new Error('audio ' + response.status);
+      // A figure changed since the page loaded (a new text, a new hash): forget the old URL so the next press voices
+      // the current summary.
+      if (!response.ok) { audioUrl = ''; throw new Error('audio ' + response.status); }
       return response.blob();
     }).then(function (blob) {
       audio.src = URL.createObjectURL(blob);
@@ -88,6 +93,7 @@
         error.refusal = true;
         throw error;
       }
+      if (data.text && textBox) textBox.textContent = '«' + data.text + '»';  // what will actually be heard
       audioUrl = data.audio_url;
       return audioUrl;
     });

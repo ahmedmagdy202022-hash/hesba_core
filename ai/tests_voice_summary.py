@@ -373,6 +373,16 @@ class AudioEndpointTests(VoiceSummaryBase):
         self.assertEqual(self.client.get(url).status_code, 404)
 
 
+    def test_a_cached_url_stops_working_once_the_text_changes(self):
+        url = self.voiced()
+        record_customer_payment("CP-Y3", self.yesterday, make_customer(), self.cashbox, D("1.00"), user=self.owner)
+        self.assertEqual(self.client.get(url).status_code, 404)  # the card then POSTs again and voices the new text
+        fresh = self.post().json()
+        self.assertIn("76.25", fresh["text"])
+        self.assertNotEqual(fresh["audio_url"], url)
+        self.assertEqual(self.client.get(fresh["audio_url"]).status_code, 200)
+
+
 class CardTests(VoiceSummaryBase):
     def test_the_card_is_hidden_while_the_capability_is_off(self):
         self.switch(False)

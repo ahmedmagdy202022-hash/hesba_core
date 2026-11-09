@@ -2455,7 +2455,7 @@ The entries below are the protected-logic decisions in the commercial gate, reco
     - A 10 s timeout per socket operation, and a 20 s deadline checked against `time.monotonic()` after each read of the body. The body is read with `read1` (at most one socket read, whatever has arrived, up to 64 KB), so a slow drip cannot keep a read waiting for a full chunk. The clock starts before connecting, but the connect and the headers come before the body loop and are bounded only by the per-operation timeout, not by the deadline. With headers that arrive promptly the worst case is about 30 s (the deadline plus one read), under gunicorn's 60 s.
     - HTTP errors, network errors and cut-off answers (`http.client.HTTPException`) become `ProviderError` without the key, the text or the body. An answer that is not audio, or is over 10 MB, is refused.
     - The mock is the same class with only `_http` swapped, answering a fixed 1440-byte silent MP3 (ten MPEG-1 Layer III frames, 0.36 s; checked once with ffprobe).
-  - **Capability:** `ai_voice_summary`, off by default, `available=False` and offered to no activity (`ONLY_FOR` empty), so no screen shows it and every A0 call is refused until A1 makes it available.
+  - **Capability:** `ai_voice_summary`, off by default, `available=False` and offered to no activity (`ONLY_FOR` empty), so no screen shows it and every A0 call is refused until A1 makes it available. *(Superseded by A1, HG-079: now `available=True`, still off by default, offered to every activity.)*
   - **Tests and the network:**
     - The whole run (`hesba_testing/runner.py`) installs a guard that makes `socket.create_connection`, `socket.socket.connect` / `connect_ex` and `urllib.request.urlopen` raise `ExternalNetworkBlocked` (not an `OSError`) for anything but loopback. It is installed again in each spawned parallel worker (`_pin_worker`); forked workers inherit it.
     - After the system checks, the run is put on `AI_MODE=mock` with an empty `ELEVENLABS_API_KEY` (settings overridden, and the environment set for spawned workers). The checks themselves still see the server's real settings, so `ai.E001` does not fire on the runner's own `DEBUG=False`.
@@ -2604,7 +2604,8 @@ The entries below are the protected-logic decisions in the commercial gate, reco
     - voicing inside `transaction.atomic()` is refused and leaves no claim.
   - **Audio:**
     - the type, body, length, `nosniff`, and `private` / `no-store`; streaming makes no call;
-    - other permissions or no figures get a 404, and so do the wrong language, a wrong digest, another day and the capability off; signed out redirects to the login page.
+    - other permissions or no figures get a 404, and so do the wrong language, a wrong digest, another day and the capability off; signed out redirects to the login page;
+    - a cached URL stops working once a figure changes the text. The card then drops it, POSTs again and shows the new text.
   - **The card:** hidden (no markup, no script, endpoint 404) while off; shown in Arabic and English with the title, the text, the note, the play label and the figures, and no call.
   - **Refusals:** the kill switch, the cap, not connected, a provider failure (the next press then works) and the feature switched off after load each give their message in Arabic and English, and leave no claim.
   - **Pruning:**
@@ -2619,7 +2620,8 @@ The entries below are the protected-logic decisions in the commercial gate, reco
   1. **The voice:** which ElevenLabs voice (`ELEVENLABS_VOICE_ID`; live refuses the placeholder). An Egyptian-Arabic-sounding voice that also reads English?
   2. **Auto-play:** today nothing plays, and nothing is paid for, until play is pressed. Should the card play by itself on the first dashboard visit of the day? That would spend a call per entity per language every day whether or not anyone listens, and browsers often block auto-play anyway.
   3. **The spoken currency:** «جنيه مصري» / "Egyptian pounds", or the shorter «جنيه»?
-  4. **The greeting:** keep the neutral «أهلاً، ده ملخص النهارده.», or have «صباح الخير» (stable all day, but odd in the evening)?
+  4. **Arabic counts:** «2 فاتورة» is said as written, not in the dual («فاتورتين»). Fine, or worth a rule for two?
+  5. **The greeting:** keep the neutral «أهلاً، ده ملخص النهارده.», or have «صباح الخير» (stable all day, but odd in the evening)?
 
 ## HG-080 — A2 «اسأل حسبة» (questions answered from the system's own reports)
 
