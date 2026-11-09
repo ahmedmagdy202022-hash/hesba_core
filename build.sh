@@ -13,7 +13,10 @@ case "$(echo "${DEMO_MODE:-}" | tr '[:upper:]' '[:lower:]')" in
     true|1|yes|on)
         python manage.py prepare_demo
         python manage.py prepare_demo_fresh --force
-        python manage.py migrate --database feedback --noinput
+        # The notes database is a separate free project that can be paused. A paused
+        # one must not stop the demo: notes then fail softly (feedback/views.py).
+        python manage.py migrate --database feedback --noinput \
+            || echo "WARNING: the feedback database is unreachable; the demo runs without saving testers' notes." >&2
         ;;
 esac
 python manage.py check --deploy --fail-level ERROR

@@ -14,6 +14,9 @@ python manage.py migrate --noinput
 python manage.py prepare_demo
 # What "start over" copies (DEMO-FAST); already built by build.sh on Render.
 python manage.py prepare_demo_fresh
-python manage.py migrate --database feedback --noinput
+# The notes database is a separate free project that can be paused. A paused
+# one must not stop the demo: notes then fail softly (feedback/views.py).
+python manage.py migrate --database feedback --noinput \
+    || echo "WARNING: the feedback database is unreachable; the demo runs without saving testers' notes." >&2
 # Threads, so one tester's slow page never holds up another's.
 exec gunicorn config.wsgi:application --bind 0.0.0.0:"${PORT:-8000}" --workers 2 --threads 4 --worker-class gthread --timeout 90 --access-logfile -
