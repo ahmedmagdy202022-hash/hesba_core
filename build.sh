@@ -13,6 +13,9 @@ case "$(echo "${DEMO_MODE:-}" | tr '[:upper:]' '[:lower:]')" in
     true|1|yes|on)
         python manage.py prepare_demo
         python manage.py prepare_demo_fresh --force
+        # DEMO-FIRST-RUN: one ready shop per demo activity (~10 s and ~5 MB each), so a
+        # tap on the landing page copies a file instead of seeding while the visitor waits.
+        python manage.py prepare_demo_templates --force
         python manage.py migrate --database feedback --noinput
         ;;
 esac

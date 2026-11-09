@@ -62,6 +62,11 @@ class Command(BaseCommand):
         call_command("seed_demo_business", username="owner", force=True, verbosity=0)
         self._spread_sale_times()
         self._extras()
+        # DEMO-FIRST-RUN: the dashboard greets a person, and the owner's till works on the first tap.
+        from config.demo_templates import name_the_demo_owner, open_owner_shift
+
+        name_the_demo_owner("commercial", "retail")
+        open_owner_shift()
         self.stdout.write(self.style.SUCCESS(f"Demo shop ready. Sign in as owner / {password}"))
 
     #: (days ago, customer index, ((item index, quantity), ...), share paid now)
