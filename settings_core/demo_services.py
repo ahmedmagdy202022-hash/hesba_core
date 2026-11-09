@@ -98,6 +98,7 @@ def seed(master, staff, owner, catalog, extras):
             # Only the new crew: the catalog's own technician already holds the old sample's relative-date slots,
             # and a clash there would fail the whole sample on some weekdays.
             _appointments(catalog, crew, customers, services, owner)
+            _online_booking(catalog, crew, services, owner)
         _campaign(catalog, owner)
     return True
 
@@ -230,6 +231,36 @@ def _bill_done(made, owner):
             billed += 1
         except ValidationError:
             continue
+
+
+# ---- online booking (S3) ----
+
+#: (opens, closes, show prices) for the public booking page; Friday closed, the others open.
+BOOKING_HOURS = {"services.maintenance": ("09:00", "18:00", False), "services.beauty": ("11:00", "21:00", True)}
+
+
+def _online_booking(catalog, crew, services, owner):
+    """The public booking page set up and open: the shop's hours, the showcase services with their length, the new crew.
+
+    Saved through the settings screen's own service; the page still answers only once the owner turns the
+    «الحجز أونلاين» capability on (it is off by default)."""
+
+    from appointments import booking
+    from appointments.models import Weekday
+    from entities.services import main_entity
+
+    opens, closes, show_prices = BOOKING_HOURS[catalog.key]
+    data = {"accepting": "1", "slot_minutes": "30", "min_notice_minutes": "120", "max_days_ahead": "14"}
+    if show_prices:
+        data["show_prices"] = "1"
+    for weekday in Weekday.values:
+        if weekday != Weekday.FRIDAY:
+            data.update({f"day_{weekday}_on": "1", f"day_{weekday}_opens": opens, f"day_{weekday}_closes": closes})
+    for item in services[-len(SERVICES[catalog.key]):]:  # the showcase's own services
+        data.update({f"service_{item.pk}": "1", f"duration_{item.pk}": "60"})
+    for person in crew:
+        data[f"staff_{person.pk}"] = "1"
+    booking.save_settings(main_entity(), data, owner)
 
 
 # ---- campaigns (S8) ----
