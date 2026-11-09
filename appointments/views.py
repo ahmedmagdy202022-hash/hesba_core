@@ -165,8 +165,16 @@ def agenda(request):
     return render(request, "appointments/agenda.html", _base(
         request, day=day, prev_day=day - timedelta(days=1), next_day=day + timedelta(days=1), today=timezone.localdate(),
         rows=rows, employee=employee, form=form, error=error, cancel_hours=deposits.cancel_hours(), deposits_on=deposits_on,
-        can_set_policy=deposits_on and is_owner(request.user), **_choices(lang),
+        can_set_policy=deposits_on and is_owner(request.user), can_online_booking=_can_online_booking(request.user), **_choices(lang),
     ))
+
+
+def _can_online_booking(user):
+    """S3 (HG-077): the agenda links to the online booking settings for who may change them, while the feature is on."""
+
+    from . import booking, views_booking
+
+    return booking.enabled() and views_booking.can_manage(user)
 
 
 def _medical_file(user):
