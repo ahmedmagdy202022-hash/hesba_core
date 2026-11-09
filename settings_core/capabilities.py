@@ -185,6 +185,14 @@ CAPABILITIES = {
         "about_en": "A dashboard card that reads out yesterday's sales and collections, the items running low and today's appointments. The figures come from Hesba's own reports; only the voice is made outside, and it needs a key on the server.",
         "available": True, "paths": (),
     },
+    # A2 (HG-080): a question box answered from Hesba's own reports. The model only picks which report; the figures come
+    # from the existing selectors, under the asker's permissions and entity. Off by default.
+    "ai_ask": {
+        "ar": "اسأل حسبة", "en": "Ask Hesba",
+        "about_ar": "اكتب سؤال زي «مبيعات النهارده؟» أو «مين عليه فلوس؟»، والإجابة بتيجي من تقارير حسبة نفسها، في حدود صلاحياتك وفرعك. السؤال بس بيتبعت برّه عشان يتحدد التقرير، ومحتاج مفتاح على السيرفر.",
+        "about_en": "Type a question such as “Sales today?” or “Who owes us?” and get the answer from Hesba's own reports, within your permissions and branch. Only the question is sent out, to pick the report, and it needs a key on the server.",
+        "available": True, "paths": ("/ai/ask/",),
+    },
 }
 CAPABILITY_SLUGS = tuple(CAPABILITIES)
 
@@ -380,11 +388,11 @@ GROUPS = (
     ("selling", ("البيع والكاشير", "Selling and the till"), ("pos", "shift_required", "price_lists", "promotions", "loyalty", "installments", "quotations", "shipping", "online_store", "deposits", "online_booking", "payment_links", "gift_cards")),
     ("goods", ("الأصناف والمخزون", "Items and stock"), ("barcode", "units", "variants", "batches_expiry", "serials", "drugs")),
     ("money", ("الحسابات والضرايب", "Accounts and tax"), ("vat", "e_invoice", "e_receipt", "fixed_assets")),
-    ("ai", ("الذكاء الاصطناعي", "AI"), ("ai_voice_summary",)),  # A1 (HG-079): the AI track's features
+    ("ai", ("الذكاء الاصطناعي", "AI"), ("ai_voice_summary", "ai_ask")),  # A1 (HG-079), A2 (HG-080): the AI track's features
 )
 ICONS = {"pos": "pos", "shift_required": "shift", "price_lists": "pricetag", "installments": "instalments", "barcode": "barcode",
          "units": "units", "variants": "variants", "batches_expiry": "expiry", "serials": "serial", "vat": "taxes",
-         "e_invoice": "einvoice", "e_receipt": "ereceipt", "fixed_assets": "assets", "quotations": "quotes", "drugs": "drugs", "promotions": "promotions", "shipping": "shipping", "online_store": "store", "loyalty": "loyalty", "deposits": "appointments", "online_booking": "appointments", "payment_links": "banks", "gift_cards": "loyalty", "ai_voice_summary": "dashboard"}
+         "e_invoice": "einvoice", "e_receipt": "ereceipt", "fixed_assets": "assets", "quotations": "quotes", "drugs": "drugs", "promotions": "promotions", "shipping": "shipping", "online_store": "store", "loyalty": "loyalty", "deposits": "appointments", "online_booking": "appointments", "payment_links": "banks", "gift_cards": "loyalty", "ai_voice_summary": "dashboard", "ai_ask": "reports"}
 WHERE = {
     "pos": ("«الكاشير» في القايمة، وزرار في لوحة القيادة وفي قايمة الفواتير", "“Till” in the menu, with a button on the dashboard and the invoice list"),
     "shift_required": ("فاتورة البيع والكاشير بيطلبوا فتح وردية الأول", "The sales invoice and the till ask for an open shift first"),
@@ -411,6 +419,7 @@ WHERE = {
     "e_receipt": ("«الإيصال الإلكتروني» في القايمة، وQR على إيصال الكاشير المطبوع", "“E-receipts” in the menu, and a QR on the printed till receipt"),
     "fixed_assets": ("«الأصول الثابتة» في القايمة، والإهلاك في المصروفات وصافي الربح", "“Fixed assets” in the menu, and depreciation in expenses and net profit"),
     "ai_voice_summary": ("كارت «ملخص النهارده بالصوت» في لوحة القيادة، تحت الترحيب", "A “Today's summary, read aloud” card on the dashboard, under the greeting"),
+    "ai_ask": ("زرار «اسأل حسبة» في لوحة القيادة، بيفتح صفحة السؤال", "An “Ask Hesba” button on the dashboard, opening the question page"),
 }
 
 

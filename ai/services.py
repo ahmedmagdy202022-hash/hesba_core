@@ -25,9 +25,21 @@ English, with the Arabic in ``settings_core/ui_messages.py``.
 The cap is per installation (one client company, one key): every entity's calls count. Only ``call_started`` rows
 count, one per call; refusals and outcome rows do not. A call cut off before it finishes (the process killed mid-call)
 is a started row with no outcome row, and keeps counting for that day.
+
+Two doors share every step above:
+
+* ``text_to_speech`` (A1, HG-079): text in, audio out;
+* ``route_question`` (A2, HG-080): a question in, **one tool name and its enum arguments** out. Before it reaches the
+  gate the question is cleaned (control and invisible characters dropped, spaces collapsed) and must be 1 to
+  ``QUESTION_MAX_CHARS`` characters. A per-person daily limit is checked under the same lock as the company cap. The
+  provider's choice is checked again here against the very tools that were sent (``check_tool_call``): an unknown name,
+  a missing or extra argument, or a value outside its enum (``True`` is not ``1``) is ``invalid_*``, never run. The
+  outcome row adds the routing status and, only when valid, the tool name, period and limit: server constants, never
+  anything the model wrote, and never the question.
 """
 
 import time
+import unicodedata
 from dataclasses import dataclass
 from datetime import datetime, time as dt_time, timedelta
 from zoneinfo import ZoneInfo
@@ -41,7 +53,8 @@ from audit.models import AuditEventType, AuditLog
 from settings_core.models import SystemSetting
 
 from . import providers
-from .providers import ProviderError
+from .providers import ProviderError, Routing
+from .providers.base import INVALID_ARGUMENTS, INVALID_TOOL
 
 CAIRO = ZoneInfo("Africa/Cairo")
 
@@ -52,6 +65,8 @@ LOCK_KEY = "ai_call_lock"
 DEFAULT_DAILY_CAP = 50
 #: The most characters one text-to-speech call may send (a day's summary is a few hundred).
 TTS_MAX_CHARS = 5000
+#: A2 (HG-080): the most characters one question may have, after cleaning (a question is a sentence).
+QUESTION_MAX_CHARS = 300
 
 MODULE = "ai"
 CALL_STARTED, CALL_OK, CALL_REFUSED, CALL_ERROR = "call_started", "call_ok", "call_refused", "call_error"
@@ -61,6 +76,7 @@ RESULTS = {CALL_STARTED: "started", CALL_OK: "ok", CALL_REFUSED: "refused", CALL
 
 # Why a call was refused, as recorded in the audit row.
 DISABLED, CAPABILITY_OFF, INVALID, NOT_CONNECTED, DAILY_CAP = "disabled", "capability_off", "invalid_request", "not_connected", "daily_cap"
+USER_DAILY_CAP = "user_daily_cap"  # A2 (HG-080): one person's own limit for a feature
 
 
 class AiCallInTransaction(RuntimeError):
@@ -77,6 +93,7 @@ class Feature:
 #: The registry of AI features: each names the capability that must be on for every one of its calls, and its provider.
 FEATURES = {
     "voice_summary": Feature(code="voice_summary", capability="ai_voice_summary", provider=providers.ELEVENLABS_TTS),
+    "ask": Feature(code="ask", capability="ai_ask", provider=providers.CLAUDE_ROUTER),  # A2 (HG-080)
 }
 
 
@@ -131,6 +148,16 @@ def cairo_day_bounds(now=None):
 def calls_today(now=None):
     start, end = cairo_day_bounds(now)
     return AuditLog.objects.filter(module=MODULE, action__in=COUNTED, created_at__gte=start, created_at__lt=end).count()
+
+
+def user_calls_today(user, feature_code, now=None):
+    """The calls of ``feature_code`` that ``user`` started this Cairo day (their ``call_started`` rows)."""
+
+    start, end = cairo_day_bounds(now)
+    rows = AuditLog.objects.filter(module=MODULE, action__in=COUNTED, after_data__feature=feature_code, created_at__gte=start, created_at__lt=end)
+    if user is not None and getattr(user, "is_authenticated", False):
+        return rows.filter(actor=user).count()
+    return rows.filter(actor__isnull=True).count()
 
 
 # ---- transactions ----
@@ -215,16 +242,21 @@ def _gate(feature, size, user, entity, *, valid, invalid_error):
     return provider
 
 
-def _reserve(feature, provider, size, user, entity):
-    """Refusal 5 and the reservation, under the lock. Returns ``(started row or None, cap)``."""
+def _reserve(feature, provider, size, user, entity, user_cap=None):
+    """Refusal 5 (and, with ``user_cap``, the person's own daily limit) and the reservation, under the lock.
+
+    Returns ``(started row, None)``, or ``(None, (refusal code, error))``.
+    """
 
     with transaction.atomic(durable=True):
         _lock()
         cap = daily_cap()
         if calls_today() >= cap:
-            return None, cap
+            return None, (DAILY_CAP, ValidationError(f"Today's AI call limit is reached ({cap} calls). Try again tomorrow."))
+        if user_cap is not None and user_calls_today(user, feature.code) >= user_cap:
+            return None, (USER_DAILY_CAP, ValidationError(f"You have reached today's question limit ({user_cap} per person). Try again tomorrow."))
         mode = providers.LIVE if provider.live else providers.MOCK
-        return _write(CALL_STARTED, user, entity, _data(feature, provider.code, mode, entity, size, "started")), cap
+        return _write(CALL_STARTED, user, entity, _data(feature, provider.code, mode, entity, size, "started")), None
 
 
 # ---- the calls ----
@@ -244,9 +276,9 @@ def text_to_speech(text, *, feature, user=None, entity=None, voice_settings=None
     else:
         invalid = ValidationError(f"The text is too long to read aloud (at most {TTS_MAX_CHARS} characters).")
     provider = _gate(feature, size, user, entity, valid=bool(text) and len(text) <= TTS_MAX_CHARS, invalid_error=invalid)
-    row, cap = _reserve(feature, provider, size, user, entity)
+    row, refusal = _reserve(feature, provider, size, user, entity)
     if row is None:
-        _refuse(feature, user, entity, size, DAILY_CAP, ValidationError(f"Today's AI call limit is reached ({cap} calls). Try again tomorrow."))
+        _refuse(feature, user, entity, size, *refusal)
     started = time.monotonic()
     try:
         speech = provider.synthesize(text, voice_settings=voice_settings)
@@ -258,3 +290,88 @@ def text_to_speech(text, *, feature, user=None, entity=None, voice_settings=None
         raise
     _finish(row, CALL_OK, started, user, entity, response_bytes=speech.size)
     return speech
+
+
+# ---- A2 (HG-080): a question routed to one tool ----
+
+#: Unicode categories dropped from a question: control (newlines, escapes), format (bidi overrides, zero-width marks),
+#: surrogate, private use and unassigned characters.
+_DROPPED_CATEGORIES = ("Cc", "Cf", "Cs", "Co", "Cn")
+
+
+def clean_question(question):
+    """The question with control and invisible characters dropped (each becomes a space) and spaces collapsed."""
+
+    text = unicodedata.normalize("NFC", str(question or ""))
+    text = "".join(" " if unicodedata.category(char) in _DROPPED_CATEGORIES else char for char in text)
+    return " ".join(text.split())
+
+
+def check_tool_call(routing, tools):
+    """``routing`` checked against the ``tools`` that were sent; never trusts the provider.
+
+    A tool chosen must be one of ``tools`` by name, its arguments a dict with exactly the schema's required keys and no
+    other, and each value one of its ``enum`` options **of the same type** (``True`` is not ``1``, ``1.0`` is not ``1``).
+    The result carries the schema's own name and enum values, never the provider's objects.
+    """
+
+    if not routing.routed:
+        return routing
+    by_name = {tool["name"]: tool for tool in tools}
+    tool = by_name.get(routing.tool) if isinstance(routing.tool, str) else None
+    if tool is None:
+        return Routing(status=INVALID_TOOL, stop_reason=routing.stop_reason)
+    schema = tool["input_schema"]
+    properties = schema.get("properties", {})
+    arguments = routing.arguments
+    invalid = Routing(status=INVALID_ARGUMENTS, stop_reason=routing.stop_reason)
+    if type(arguments) is not dict or set(arguments) != set(schema.get("required", ())) or not set(arguments) <= set(properties):
+        return invalid
+    clean = {}
+    for key, value in arguments.items():
+        options = properties[key].get("enum")
+        if not options:
+            return invalid  # every argument is an enum; anything else is refused
+        match = [option for option in options if type(option) is type(value) and option == value]
+        if not match:
+            return invalid
+        clean[key] = match[0]
+    return Routing(status=routing.status, tool=tool["name"], arguments=clean, stop_reason=routing.stop_reason)
+
+
+def route_question(question, *, feature, system, tools, user=None, entity=None, user_daily_cap=None):
+    """Ask the provider which one of ``tools`` answers ``question``; return the checked ``providers.Routing``.
+
+    The same door as ``text_to_speech``: transaction guard, kill switch, capability, size, connection, the locked cap
+    reservation (plus ``user_daily_cap`` when given), and the audit. ``system`` and ``tools`` are the feature's
+    constants; the question is the only thing that varies. Raises ValidationError.
+    """
+
+    feature = _feature(feature)
+    if in_outer_transaction():
+        raise AiCallInTransaction(
+            "AI calls must not run inside transaction.atomic(): a rollback would erase the audit row of a call that may "
+            "have been paid for. Call ai.services outside the transaction.")
+    question = clean_question(question)
+    size = (len(question), len(question.encode("utf-8")))
+    if not question:
+        invalid = ValidationError("There is no question to answer.")
+    else:
+        invalid = ValidationError(f"The question is too long (at most {QUESTION_MAX_CHARS} characters).")
+    provider = _gate(feature, size, user, entity, valid=bool(question) and len(question) <= QUESTION_MAX_CHARS, invalid_error=invalid)
+    row, refusal = _reserve(feature, provider, size, user, entity, user_cap=user_daily_cap)
+    if row is None:
+        _refuse(feature, user, entity, size, *refusal)
+    started = time.monotonic()
+    try:
+        routing = check_tool_call(provider.route(question, system=system, tools=tools), tools)
+    except ProviderError as exc:
+        _finish(row, CALL_ERROR, started, user, entity, error_status=exc.status)
+        raise ValidationError("The AI service did not answer. Try again later.") from exc
+    except Exception:
+        _finish(row, CALL_ERROR, started, user, entity)
+        raise
+    arguments = routing.arguments if routing.routed else {}
+    _finish(row, CALL_OK, started, user, entity, routing=routing.status, tool=routing.tool if routing.routed else "",
+            period=arguments.get("period", ""), limit=arguments.get("limit"))
+    return routing

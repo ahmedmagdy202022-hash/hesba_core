@@ -9,18 +9,22 @@
 * empty: ``mock`` while ``DEBUG`` is on, ``off`` once it is off, so a production server that never set AI connects
   nothing. An explicit ``mock`` with ``DEBUG`` off refuses to start (``ai.checks``).
 
-``PROVIDERS`` is the registry: one factory per provider code. A2 adds its language-model provider here.
+``PROVIDERS`` is the registry: one factory per provider code.
+
+A2 (HG-080) adds ``claude_router``, the language model that routes «اسأل حسبة» questions: live only with
+``ANTHROPIC_API_KEY`` and a model (``ANTHROPIC_MODEL``, default ``claude-opus-5-5``); the mock never builds the SDK client.
 """
 
 from django.conf import settings
 
-from .base import ProviderError, Speech, TextToSpeechProvider  # noqa: F401 - the interface, re-exported
+from .base import ProviderError, QuestionRouter, Routing, Speech, TextToSpeechProvider  # noqa: F401 - the interface, re-exported
 
 MOCK, LIVE, OFF = "mock", "live", "off"
 KNOWN_MODES = (MOCK, LIVE, OFF)
 PLACEHOLDER_VOICE = "hesba-placeholder-voice"
 
 ELEVENLABS_TTS = "elevenlabs_tts"
+CLAUDE_ROUTER = "claude_router"  # A2 (HG-080)
 
 
 def mode():
@@ -54,7 +58,31 @@ def _elevenlabs_tts():
     return None
 
 
-PROVIDERS = {ELEVENLABS_TTS: _elevenlabs_tts}
+def _anthropic_settings():
+    return (str(getattr(settings, "ANTHROPIC_API_KEY", "") or "").strip(),
+            str(getattr(settings, "ANTHROPIC_MODEL", "") or "").strip())
+
+
+def _claude_router():
+    """A2 (HG-080). Live needs the key and a model; a key missing connects nothing (never the mock). The mock is built
+    without touching the SDK."""
+
+    key, model = _anthropic_settings()
+    current = mode()
+    if current == LIVE:
+        if key and model:
+            from .claude import ClaudeRouter
+
+            return ClaudeRouter(api_key=key, model=model)
+        return None
+    if current == MOCK:
+        from .mock import MockClaudeRouter
+
+        return MockClaudeRouter(model=model or "mock-model")
+    return None
+
+
+PROVIDERS = {ELEVENLABS_TTS: _elevenlabs_tts, CLAUDE_ROUTER: _claude_router}
 
 
 def get(code):

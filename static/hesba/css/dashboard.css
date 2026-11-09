@@ -486,3 +486,9 @@ a.dash-atile:hover,a.dash-atile:focus-visible{background:var(--teal-wash)}
 .dash-voice__text{margin:0;font-size:14px;color:var(--navy-soft)}
 .dash-voice__tiles{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
 .dash-voice__note{margin:0;font-size:12px;color:var(--muted)}
+/* A2 (HG-080): the «اسأل حسبة» button, shown only while ai_ask is on. Tokens only. */
+.dash-ask{display:flex;align-items:center;gap:12px;min-height:56px;padding:12px 16px;border:1px solid var(--hs-line);border-radius:var(--hs-radius-lg);background:var(--hs-surface);color:var(--hs-navy);text-decoration:none}
+.dash-ask:hover{border-color:var(--hs-teal)}
+.dash-ask svg{flex-shrink:0;width:28px;height:28px;fill:none;stroke:var(--hs-teal-deep);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.dash-ask__text{display:flex;flex-direction:column;gap:2px}
+.dash-ask__text small{font-size:12.5px;color:var(--hs-muted)}

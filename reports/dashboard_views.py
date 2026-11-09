@@ -455,6 +455,17 @@ def _voice_card(user, lang, today, shared, sections, fit):
         return None
 
 
+def _ask_link(lang, fit):
+    """A2 (HG-080): the «اسأل حسبة» button, only while its capability is on (read from the set already loaded)."""
+
+    if "ai_ask" not in fit.capabilities:
+        return None
+    from django.urls import reverse
+
+    return {"url": f"{reverse('ai:ask')}?lang={lang}", "label": "Ask Hesba" if lang == "en" else "اسأل حسبة",
+            "hint": "Ask about your sales, stock, cash or customers" if lang == "en" else "اسأل عن مبيعاتك ومخزونك وخزنتك وعملاءك"}
+
+
 def dashboard(request):
     """Render whatever this viewer is allowed to see, which may be nothing.
 
@@ -528,6 +539,7 @@ def dashboard(request):
         "activity_panel": build_activity_panel(activity, sections, lang, today, request.user),
         # A1 (HG-079): the voice summary card, only while its capability is on (read from the set already loaded).
         "voice_summary": _voice_card(request.user, lang, today, shared, sections, fit),
+        "ask_link": _ask_link(lang, fit),  # A2 (HG-080)
         "demo_activities": _demo_activities(request.user, lang, profile),
         "onboarding_steps": _onboarding(lang),
         # Guide someone whose installation has seen no trade yet, and anyone who

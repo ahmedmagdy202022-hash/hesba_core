@@ -1,0 +1,56 @@
+{% extends "operations/base.html" %}
+{% load static %}
+{% comment %}A2 (HG-080): «اسأل حسبة», after the approved artboard «A2 · اسأل حسبة». GET shows the box and the suggestions and
+calls nothing; each question is a POST (CSRF). Every figure on the card comes from an existing report, never from the model.{% endcomment %}
+{% block styles %}{{ block.super }}
+<link rel="stylesheet" href="{% static 'hesba/css/ask.css' %}?v=a2-1">{% endblock %}
+{% block operation_content %}
+<section class="ask" data-ask>
+  <header class="ask__head">
+    <h1 class="ask__title">{{ w.title }}</h1>
+    <p class="ask__subtitle">{{ w.subtitle }}</p>
+  </header>
+
+  <div class="ask__thread" aria-live="polite">
+    {% if question %}<p class="ask__bubble" dir="auto" data-ask-question>{{ question }}</p>{% endif %}
+    {% if answer %}
+    {% if answer.kind == "figure" %}
+    <article class="ask-card" data-ask-card="figure" data-ask-tool="{{ answer.tool }}">
+      <span class="ask-card__label">{{ answer.title }}</span>
+      {% if answer.headline %}<strong class="ask-card__headline">{{ answer.headline }}</strong>{% endif %}
+      {% if answer.value %}<bdi class="ask-card__value" data-ask-value>{{ answer.value }}</bdi>{% endif %}
+      {% if answer.sub %}<span class="ask-card__sub">{{ answer.sub }}</span>{% endif %}
+      {% if answer.lines %}<ol class="ask-card__lines">{% for label, value in answer.lines %}<li><span>{{ label }}</span><bdi>{{ value }}</bdi></li>{% endfor %}</ol>{% endif %}
+      {% if answer.link %}<a class="ask-card__link" href="{{ answer.link }}" data-ask-link>{{ answer.link_label }}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></a>{% endif %}
+      <span class="ask-card__source" data-ask-source>{{ answer.source }}</span>
+    </article>
+    {% elif answer.kind == "refused" %}
+    <article class="ask-card ask-card--refused" data-ask-card="refused" data-ask-tool="{{ answer.tool }}" role="status">
+      <strong>{{ answer.title }}</strong>
+      <span>{{ answer.message }}</span>
+    </article>
+    {% else %}
+    <article class="ask-card ask-card--note" data-ask-card="{{ answer.kind }}" role="status">
+      {% if answer.title %}<strong>{{ answer.title }}</strong>{% endif %}
+      <span>{{ answer.message }}</span>
+    </article>
+    {% endif %}
+    {% endif %}
+  </div>
+
+  {% if suggestions %}
+  <div class="ask__chips" role="group" aria-label="{{ w.suggestions }}">
+    {% for text in suggestions %}<form method="post" action="{% url 'ai:ask' %}?lang={{ lang }}">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><button type="submit" class="ask-chip" name="q" value="{{ text }}" data-ask-chip>{{ text }}</button></form>{% endfor %}
+  </div>
+  {% endif %}
+
+  <form class="ask__form" method="post" action="{% url 'ai:ask' %}?lang={{ lang }}" data-ask-form>
+    {% csrf_token %}
+    <input type="hidden" name="lang" value="{{ lang }}">
+    <label for="ask-q" class="ask__sr">{{ w.label }}</label>
+    <input id="ask-q" name="q" type="text" maxlength="{{ max_chars }}" placeholder="{{ w.placeholder }}" required autocomplete="off" dir="auto">
+    <button type="submit" class="ask__send" aria-label="{{ w.submit }}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H4M10 6l-6 6 6 6"/></svg></button>
+  </form>
+  <p class="ask__note">{{ w.note }}</p>
+</section>
+{% endblock %}

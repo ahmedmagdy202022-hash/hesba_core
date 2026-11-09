@@ -2,6 +2,7 @@
 
 Mirrors ``payments/checks.py``. The production signal is the same one payments uses: ``DEBUG`` off.
 ``ai.E006`` refuses live calls on a sandboxed showcase (``DEMO_SANDBOXES``), where every visitor's copy has its own cap.
+``ai.E007`` (A2, HG-080) refuses live with ``ANTHROPIC_API_KEY`` set and ``ANTHROPIC_MODEL`` empty.
 Only an **explicit** ``AI_MODE=mock`` is refused there; an empty ``AI_MODE`` resolves to ``off`` once ``DEBUG`` is off
 (``ai.providers.mode``), so a server that never configured AI starts with nothing connected.
 """
@@ -34,6 +35,10 @@ def ai_settings(app_configs, **kwargs):
         if not str(getattr(settings, "ELEVENLABS_MODEL_ID", "") or "").strip():
             errors.append(Error("AI_MODE is live but ELEVENLABS_MODEL_ID is empty.",
                                 hint="Set ELEVENLABS_MODEL_ID (for example eleven_multilingual_v2), or switch AI_MODE off.", id="ai.E005"))
+        if str(getattr(settings, "ANTHROPIC_API_KEY", "") or "").strip() and not str(getattr(settings, "ANTHROPIC_MODEL", "") or "").strip():
+            # A2 (HG-080): a key with no model is half-configured; «اسأل حسبة» would connect nothing.
+            errors.append(Error("AI_MODE is live and ANTHROPIC_API_KEY is set, but ANTHROPIC_MODEL is empty.",
+                                hint="Set ANTHROPIC_MODEL (default claude-opus-5-5), or remove ANTHROPIC_API_KEY.", id="ai.E007"))
         if getattr(settings, "DEMO_SANDBOXES", False):
             # A1 review (HG-078 OQ5, HG-079): each visitor's sandbox is its own database, with its own audit log and so its
             # own daily cap. Live calls there would be capped per visitor, not per company: effectively uncapped spend.
