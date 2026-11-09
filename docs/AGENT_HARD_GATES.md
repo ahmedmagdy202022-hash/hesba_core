@@ -2425,3 +2425,79 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 - **Open questions for Ahmed:** (1) show service prices on the public page? Default hidden; one tick per entity. (2) Offer every non-stock service, or keep the explicit per-entity list (built)? (3) Add a confirmation-message kind to the outbox (an additive choice)?
 - **Risk:** low. New tables only; the slot engine reads appointments; writes go through the existing booking service and its lock.
 - **Tests:** `appointments/tests_booking.py` (36): slot engine (grid, closed day, overlaps by status, group-wide, previous-evening appointment, notice, window, employee hours, any, Cairo midnight, DB constraints), the booking service (entity, customer reuse and creation, walk-in, crafted times, stale slot under the lock), the public flow (404s, steps, prices hidden, end-to-end, race, any, crafted time, honeypot, CSRF, throttles, ar/en, no staff links or other customers' data, signed confirmation, deposit text only, next free time) and the settings screen (roles, save, refusals, link from PUBLIC_BASE_URL and renewal, feature off, branch picker).
+
+## HG-078 — AI track: one provider layer, data leaving the server, spend and caps (A0)
+
+- **Status:** OPEN — proposed, not built. Code waits until the services OK is on `develop`.
+- **Reason:** A1–A3 send business data to outside services (ElevenLabs for speech; Anthropic for A2/A3) and can cost money per call. Both are outside every earlier decision, so they are recorded here before any code.
+- **Proposal (the S4/Paymob pattern):**
+  - one `ai` provider layer with a mock mode (fake responses in the real API's shape) and a live mode;
+  - system checks refuse live without a key and refuse mock in production;
+  - keys only in server env (`ELEVENLABS_API_KEY`, `ANTHROPIC_API_KEY`), never in the DB or the repo;
+  - each feature behind its own capability, off by default;
+  - a per-company daily call cap and a kill switch in settings;
+  - one audit row per call (feature, user, entity, size, result), with no customer names, phones or amounts;
+  - a test that fails on any outbound HTTP during the test run.
+- **What leaves the server:**
+  - A1: only the summary text, which holds totals with no customer names.
+  - A2: the question and the selected report's figures for that answer.
+  - A3: the invoice photo.
+  - Nothing is sent while the capability is off.
+- **Recommendation:** approve the layer as above. Live use stays Ahmed's decision per company: the key, the spend, and the provider's data-retention terms.
+- **Open questions for Ahmed:**
+  1. The default daily cap per company.
+  2. Is sending invoice photos (A3) to an outside model acceptable, or only after each company opts in?
+  3. Which ElevenLabs voice to use.
+- **Risk:** medium (data leaving the server, cost). It is mitigated by off-by-default switches, caps, mock in tests, and the audit.
+
+## HG-079 — A1 voice summary of the day
+
+- **Status:** OPEN — proposed, not built.
+- **Proposal:**
+  - The text is built deterministically from existing report selectors, with no language model, so figures can never be invented.
+  - The day is the Cairo day. The summary is scoped to the listener's entity and permissions.
+  - ElevenLabs only voices the text. The audio is cached per entity per day, kept 7 days, then deleted.
+- **Protected logic:** none changed; it only reads existing report selectors.
+- **Tests (planned):**
+  - the text matches the report figures exactly;
+  - entity scoping and permissions;
+  - the mock returns audio;
+  - no outbound HTTP.
+
+## HG-080 — A2 «اسأل حسبة» (questions answered from the system's own reports)
+
+- **Status:** OPEN — proposed, not built. T3.
+- **Proposal:**
+  - The model never produces a figure.
+  - It may only choose one tool from a fixed list of read-only tools, each wrapping an existing report or selector. The tool runs as the asking user, under their permissions and HG-034 entity scope.
+  - The answer shows the figure from the tool, plus a link to the source screen.
+  - No write tool exists.
+  - The question text is untrusted: no tool takes free text into a query, and tool arguments are validated against fixed choices (period, branch the user can see, report name).
+- **Risks:**
+  - prompt injection;
+  - cross-entity or cross-user leakage;
+  - wrong-figure answers.
+  The independent review targets these three.
+- **Tests (planned):**
+  - each tool against its report;
+  - a user without a permission gets a refusal, not data;
+  - another branch's data never appears;
+  - injected instructions in the question change nothing;
+  - mock only.
+
+## HG-081 — A3 invoice photo to a draft purchase invoice
+
+- **Status:** OPEN — proposed, not built. T3 (purchases are protected).
+- **Proposal:**
+  - The photo is stored through S1 attachments.
+  - The model's reading is mapped onto the existing purchase-draft service and produces a **draft only**: never posted, so no stock, cost, cashbox or ledger movement until a person posts it through the usual screen.
+  - No item or supplier is created automatically. Unmatched lines are shown for the user to map.
+  - Text read from the photo is untrusted data, never instructions.
+  - Totals are recomputed by the existing service; the model's totals are only compared and flagged.
+- **Protected logic:** purchase posting unchanged. Only the existing draft service is called.
+- **Tests (planned):**
+  - the draft matches the mock reading;
+  - nothing is posted;
+  - unmatched lines are not auto-created;
+  - an injected instruction in the photo text has no effect;
+  - permissions and entity.
