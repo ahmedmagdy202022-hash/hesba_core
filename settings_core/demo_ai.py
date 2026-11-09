@@ -18,7 +18,7 @@ demo seed's own ``_post_purchase``) and the collection by ``sales.services.recor
 posting, a ledger or a cashbox row by hand.
 
 Only when the capability is on (``ai_invoice_photo``, with purchases on, for the A3 records; ``ai_voice_summary`` for the
-collection), and only once: the item ``DEMO-AI-01`` is the sentinel, created in the same transaction as the rest.
+collection), and only once: the item ``DEMO-AI-01`` and the payment ``DEMO-CR-AI`` say each part is already there.
 """
 
 from datetime import timedelta
@@ -48,25 +48,22 @@ BOUGHT_DAYS_AGO = 20
 COLLECTION_NUMBER = "DEMO-CR-AI"
 
 
-def applies():
-    from settings_core.capabilities import capability_enabled
-
-    return any(capability_enabled(slug) for slug in CAPABILITIES)
-
-
 def seed(master, owner, modules=()):
     """Add the AI showcase once. Returns True when it was added, False when it was already there or nothing applies.
     ``modules`` are the sections switched on: the A3 records need purchases."""
 
     from master_data.models import Item
+    from sales.models import CustomerPayment
     from settings_core.capabilities import capability_enabled
 
-    if Item.objects.filter(item_code=SENTINEL).exists() or not applies():
+    photo = capability_enabled("ai_invoice_photo") and "purchases" in modules and not Item.objects.filter(item_code=SENTINEL).exists()
+    collection = capability_enabled("ai_voice_summary") and not CustomerPayment.objects.filter(payment_number=COLLECTION_NUMBER).exists()
+    if not (photo or collection):
         return False
     with transaction.atomic():
-        if capability_enabled("ai_invoice_photo") and "purchases" in modules:
+        if photo:
             _invoice_photo_records(master, owner)
-        if capability_enabled("ai_voice_summary"):
+        if collection:
             _yesterday_collection(master, owner)
     return True
 
