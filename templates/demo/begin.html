@@ -1,0 +1,37 @@
+{% extends "base_app.html" %}
+{% load static %}
+{% block body_class %}demo-begin-page{% endblock %}
+{% block styles %}
+<link rel="stylesheet" href="{% static 'hesba/css/shell.css' %}">
+<link rel="stylesheet" href="{% static 'hesba/css/demo_first_run.css' %}?v=fr-1">
+{% endblock %}
+{% block content %}
+{# DEMO-FIRST-RUN (D4): after «ابدأ فاضي», four steps to the first sale, and the card that fills the shop instead. #}
+<div class="hs-app">
+{% include "partials/app_shell.html" %}
+<div class="hs-main">
+  {% include "partials/demo_bar.html" %}
+  <div class="fr-begin">
+    <header class="fr-begin__head"><strong>{{ client_name }}</strong><span>{{ words.empty_line }}</span></header>
+    <main id="hs-main" tabindex="-1" style="display:flex;flex-direction:column;gap:16px">
+      <section class="fr-tour" aria-labelledby="begin-title" data-demo-begin>
+        <div class="fr-tour__head"><h2 id="begin-title">{{ words.title }}</h2></div>
+        <p class="fr-tour__lead">{{ words.lead }}</p>
+        <ol class="fr-steps fr-steps--4">
+          {% for step in steps %}<li><a class="fr-step{% if step.done %} is-done{% endif %}" href="{{ step.url }}" data-begin-step="{{ step.key }}"><span class="fr-step__n" aria-hidden="true">{% if step.done %}&#10003;{% else %}{{ forloop.counter }}{% endif %}</span><span class="fr-step__text"><strong>{{ step.title }}</strong><span>{{ step.hint }}</span></span>{% if step.done %}<span class="fr-step__done">{{ words.done }}</span>{% else %}<span class="fr-step__arrow" aria-hidden="true">{% if dir == 'rtl' %}‹{% else %}›{% endif %}</span>{% endif %}</a></li>{% endfor %}
+        </ol>
+      </section>
+      {% if demo_bar.known %}
+      <section class="fr-fill" aria-label="{{ words.fill_title }}">
+        <strong>{{ words.fill_title }}</strong>
+        <span>{{ fill_lead }}</span>
+        <form method="post" action="{{ demo_bar.start_url }}" data-demo-fill-card>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="activity" value="{{ demo_bar.activity }}"><input type="hidden" name="sub_activity" value="{{ demo_bar.sub_activity }}"><input type="hidden" name="mode" value="sample"><button class="fr-primary" type="submit">{{ words.fill }}</button></form>
+      </section>
+      {% endif %}
+      <a class="fr-begin__details" href="{{ details_url }}" data-demo-details>{{ words.details }}</a>
+    </main>
+  </div>
+</div>
+</div>
+<script src="{% static 'hesba/js/shell.js' %}" defer></script>
+{% endblock %}
