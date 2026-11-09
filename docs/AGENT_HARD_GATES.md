@@ -2482,6 +2482,8 @@ The entries below are the protected-logic decisions in the commercial gate, reco
   - The deadline is checked between reads, so a single read can overrun it by up to one per-read timeout (worst case about 30 s, not 20).
   - The serialisation is proven by a query-shape test on PostgreSQL (CI) and a lock-path unit test on SQLite. There is no two-connection race test.
   - The run-wide guard covers Python sockets and urllib. A C extension opening its own sockets would not be caught; the only one in the requirements is libpq, which reaches only the test database.
+  - DNS is not guarded: the patched paths refuse before resolving, but a client that calls `getaddrinfo` itself first (urllib3, requests) could still send one DNS lookup before its connect is refused.
+  - A1 must call the AI layer outside any `transaction.atomic()`. Today no middleware wraps requests in a transaction (`ATOMIC_REQUESTS` is not set), so a view can call it directly.
 - **Tests:**
   - `ai/tests.py`, all on `ai.no_network.AiTestCase` / `AiSimpleTestCase`:
     - the checks: mock in production; live without a key, with the placeholder voice or with no model; unknown mode; registered. Provider choice per mode.
