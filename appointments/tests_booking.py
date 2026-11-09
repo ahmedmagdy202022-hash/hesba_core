@@ -296,6 +296,18 @@ class PublicPageTests(BookingSetup):
         self.booking.save()
         self.assertContains(self.client.get(self.url()), "data-booking-price")
 
+    def test_the_confirmation_shows_the_booked_price_not_todays_list_price(self):
+        self.booking.show_prices = True
+        self.booking.save()
+        response = self.post(open_day())
+        self.assertEqual(response.status_code, 303)
+        self.assertEqual(Appointment.objects.get().price, Decimal("250.00"))
+        self.item.default_sale_price = Decimal("300.00")  # the list price moves after the booking
+        self.item.save()
+        done = self.client.get(response["Location"])
+        self.assertContains(done, "250")
+        self.assertNotContains(done, "300")
+
     def test_end_to_end_books_and_confirms(self):
         day = open_day()
         response = self.post(day)
@@ -458,6 +470,15 @@ class BookingSettingsScreenTests(BookingSetup):
         page = self.client.get(reverse("appointments:booking_settings") + "?lang=en")
         self.assertContains(page, "Online booking")
         self.assertContains(page, 'name="service_%d" value="1" checked' % self.item.pk)
+
+    def test_a_kept_service_keeps_its_id_so_open_booking_links_still_work(self):
+        second = make_item(item_code="SRV-CLR", item_name="صبغة", default_sale_price="400.00", is_stock_tracked=False)
+        dropped = BookableService.objects.create(entity=self.entity, item=second, duration_minutes=90)
+        self.client.force_login(self.owner)
+        self.client.post(reverse("appointments:booking_settings"), self.form())  # keeps the cut (now 60 min), drops the colour
+        self.assertEqual(BookableService.objects.get(entity=self.entity, item=self.item).pk, self.service.pk)
+        self.assertEqual(BookableService.objects.get(pk=self.service.pk).duration_minutes, 60)
+        self.assertFalse(BookableService.objects.filter(pk=dropped.pk).exists())
 
     def test_refusals_keep_what_was_there(self):
         self.client.force_login(self.owner)

@@ -123,7 +123,9 @@ def _deposit_text(words):
     return words["deposit"].format(hours=deposits.cancel_hours()) if deposits.enabled() else ""
 
 
-def _price(service, booking, lang):
+def _price(service, booking, lang, amount=None):
+    """The shown price: the item's list price, or `amount` (the booked appointment's saved price) when given."""
+
     if not booking.show_prices:
         return ""
     from settings_core.templatetags.hesba_format import money
@@ -131,7 +133,8 @@ def _price(service, booking, lang):
     from workorders.public import CURRENCY_WORDS
 
     company, _, _ = _company()
-    return f"{money(service.item.default_sale_price)} {CURRENCY_WORDS.get(company['currency'], {}).get(lang, company['currency'])}"
+    value = service.item.default_sale_price if amount is None else amount
+    return f"{money(value)} {CURRENCY_WORDS.get(company['currency'], {}).get(lang, company['currency'])}"
 
 
 class _Choices:
@@ -336,7 +339,7 @@ def done(request, key, token):
             (words["k_when"], f"{engine.day_label(local_day, lang)} · {label} {suffix}"),
             (words["k_dur"], f"{appointment.duration_minutes} {words['min']}")]
     if service is not None and booking.show_prices:
-        rows.append((words["k_price"], _price(service, booking, lang)))
+        rows.append((words["k_price"], _price(service, booking, lang, amount=appointment.price)))
     if company.get("address"):
         rows.append((words["k_addr"], company["address"]))
     other = "en" if lang == "ar" else "ar"

@@ -468,8 +468,16 @@ def save_settings(entity, data, user, lang="ar"):
     WorkingHours.objects.bulk_create([WorkingHours(entity=entity, weekday=weekday, opens=span[0], closes=span[1]) for weekday, span in shop_hours.items()]
                                      + [WorkingHours(entity=entity, employee_id=key[0], weekday=key[1], opens=span[0], closes=span[1])
                                         for key, span in staff_hours.items()])
-    BookableService.objects.filter(entity=entity).delete()
-    BookableService.objects.bulk_create([BookableService(entity=entity, item=item, duration_minutes=minutes) for item, minutes in chosen_services])
+    # Kept rows are updated in place so their ids (in customers' half-finished booking links) stay valid.
+    kept = {row.item_id: row for row in BookableService.objects.filter(entity=entity)}
+    BookableService.objects.filter(entity=entity).exclude(item_id__in=[item.pk for item, _ in chosen_services]).delete()
+    for item, minutes in chosen_services:
+        row = kept.get(item.pk)
+        if row is None:
+            BookableService.objects.create(entity=entity, item=item, duration_minutes=minutes)
+        elif row.duration_minutes != minutes:
+            row.duration_minutes = minutes
+            row.save(update_fields=["duration_minutes"])
     BookingStaff.objects.filter(entity=entity).delete()
     BookingStaff.objects.bulk_create([BookingStaff(entity=entity, employee=person) for person in chosen_staff])
     after = {"accepting": booking.accepting, "slot_minutes": slot, "min_notice_minutes": notice, "max_days_ahead": ahead,
