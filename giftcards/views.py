@@ -8,6 +8,7 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_date
+from django.views.decorators.cache import never_cache
 
 from approvals.gate import held
 from audit.models import AuditEventType, AuditLog
@@ -109,7 +110,8 @@ def card_list(request):
             _error(request, exc, lang)
         else:
             messages.success(request, words["sold"].format(number=card.number, value=f"{card.face_value:,.2f}"))
-            request.session[RECEIPT_ONCE] = card.pk  # the full code is shown once, on the receipt that follows
+            # The full code is shown once, on the receipt that follows; a set, so two sales in two tabs each get theirs.
+            request.session[RECEIPT_ONCE] = sorted(set(request.session.get(RECEIPT_ONCE) or []) | {card.pk})
             return redirect(f"{reverse('giftcards:receipt', args=[card.pk])}?lang={lang}")
     query = services.normalize(request.GET.get("q", ""))
     cards = _cards()
@@ -172,6 +174,7 @@ def card_detail(request, pk):
         can_manage=user_has_permission(request.user, services.BREAKAGE)))
 
 
+@never_cache  # the full code must not come back from the browser's cache or back button
 @require_permission(services.SELL)
 def receipt(request, pk):
     """The card's receipt. The full code shows once, right after the sale (a one-time session flag); later, only a
@@ -179,9 +182,11 @@ def receipt(request, pk):
 
     _gate()
     card = _card_or_404(pk)
-    full = request.session.get(RECEIPT_ONCE) == card.pk
+    pending = list(request.session.get(RECEIPT_ONCE) or [])
+    full = card.pk in pending
     if full:
-        del request.session[RECEIPT_ONCE]
+        pending.remove(card.pk)
+        request.session[RECEIPT_ONCE] = pending
     elif request.GET.get("reveal") == "1" and user_has_permission(request.user, services.BREAKAGE):
         full = True
         AuditLog.objects.create(event_type=AuditEventType.EXPORT, actor=request.user,

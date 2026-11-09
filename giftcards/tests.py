@@ -809,6 +809,17 @@ class ReviewFixTests(GiftSetup):
         self.assertEqual(services.balance(card), D("80.00"))
 
     # ---- 8: the receipt follows the capability
+    def test_two_sales_in_two_tabs_each_show_their_code_once_and_the_receipt_is_never_cached(self):
+        self.client.force_login(self.cashier)
+        for value in ("100", "200"):
+            self.client.post(reverse("giftcards:list"), {"lang": "ar", "face_value": value, "cashbox": str(self.cash.pk)})
+        first, second = GiftCard.objects.order_by("pk")
+        for card in (first, second):
+            response = self.client.get(reverse("giftcards:receipt", args=[card.pk]))
+            self.assertContains(response, services.pretty(card.code))
+            self.assertIn("no-store", response["Cache-Control"])
+            self.assertNotContains(self.client.get(reverse("giftcards:receipt", args=[card.pk])), services.pretty(card.code))
+
     def test_the_receipt_is_closed_with_the_capability(self):
         card = self.sell("50.00")
         set_capability_enabled(self.profile, "gift_cards", False, user=self.owner)
