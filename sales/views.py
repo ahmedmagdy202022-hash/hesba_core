@@ -151,7 +151,11 @@ def invoice_list(request):
     else:
         status = ""
     page = page_of(request, queryset)
-    return render(request, "sales/list.html", _context(request, page=page, query=query, status_filter=status,
+    invoices = list(page.object_list)
+    settled = _settled_on(invoices)
+    for invoice in invoices:  # display only: what is still to collect after a deposit / paid link / gift card (HG-069); nothing is stored
+        invoice.outstanding = money_round(invoice.remaining_due - settled.get(invoice.pk, 0)) if invoice.status == "posted" else invoice.remaining_due
+    return render(request, "sales/list.html", _context(request, page=page, invoices=invoices, query=query, status_filter=status,
                                                       can_create=user_has_permission(request.user, "sales.create_sales_invoice")))
 
 
@@ -342,6 +346,14 @@ def invoice_detail(request, pk):
             applied=_applied(invoice),
         ),
     )
+
+
+def _settled_on(invoices):
+    """HG-069: {invoice_id: amount settled by posted payments} for the posted invoices of a page."""
+
+    from settlements.services import applied
+
+    return applied([invoice.pk for invoice in invoices if invoice.status == "posted"])
 
 
 def _applied(invoice):

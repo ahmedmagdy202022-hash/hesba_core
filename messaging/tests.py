@@ -152,6 +152,24 @@ class BuildTests(OutboxSetup):
 
 
 class ScreenTests(OutboxSetup):
+    def test_long_message_text_wraps_instead_of_widening_the_phone_page(self):
+        """A pending row carrying a long /share/<token>/ link must not scroll the page sideways at 390px."""
+
+        from django.contrib.staticfiles import finders
+
+        services.build()
+        message = OutboxMessage.objects.get()
+        message.text += " https://hesba.example/share/" + "A" * 120 + "/"
+        message.save(update_fields=["text"])
+        self.client.force_login(self.cashier)
+        with mock.patch.object(services, "build", return_value=0):  # the page would otherwise rewrite the waiting text
+            page = self.client.get(reverse("messaging:outbox") + "?lang=ar")
+        self.assertContains(page, "A" * 120)
+        self.assertContains(page, '<td class="op-cell-text"><small>')  # the text cell carries the class the wrapping rule targets
+        with open(finders.find("hesba/css/operations.css"), encoding="utf-8") as handle:
+            css = handle.read()
+        self.assertRegex(css, r"\.op-table td\.op-cell-text\{[^}]*overflow-wrap:anywhere")
+
     def test_sending_opens_whatsapp_with_the_text_and_marks_it_sent(self):
         self.client.force_login(self.cashier)
         page = self.client.get(reverse("messaging:outbox") + "?lang=ar")

@@ -526,7 +526,10 @@ def pos(request):
                 return redirect(f"/print/sales/{invoice.pk}/?lang={lang}&format=receipt&autoprint=1&next=pos")
             return redirect(f"/sales/pos/?lang={lang}&last={invoice.pk}")
     cart_back = _clean_cart(cart_back)
-    catalog = item_catalog(sale_prices=True)
+    from deposits.services import FEE_ITEM_CODE
+
+    # The internal late-cancellation fee item is billed by the deposits service, never rung up at the till.
+    catalog = [row for row in item_catalog(sale_prices=True) if row["code"] != FEE_ITEM_CODE]
     last = request.GET.get("last", "")
     return render(
         request,
