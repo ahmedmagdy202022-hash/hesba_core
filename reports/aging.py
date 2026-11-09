@@ -8,9 +8,10 @@ read the same opening balance and ledger rows.
 """
 
 from collections import defaultdict
-from datetime import date
 from decimal import Decimal
 from urllib.parse import quote
+
+from django.utils import timezone
 
 from config.money import money_round
 from entities import scope as entity_scope
@@ -77,7 +78,7 @@ def _bucket_of(age):
 def aging_rows(kind="customers", as_of=None):
     """One row per party with a balance: buckets, overdue, oldest date, contact."""
 
-    as_of = as_of or date.today()
+    as_of = as_of or timezone.localdate()
     terms = credit_days()
     if kind == "suppliers":
         parties = Supplier.objects.filter(active=True)

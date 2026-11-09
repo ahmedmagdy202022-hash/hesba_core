@@ -1,0 +1,22 @@
+{% extends "printing/share_base.html" %}
+{% load static %}
+{% block title %}{{ words.done_h }} · {{ company.name }}{% endblock %}
+{% block head_extra %}<link rel="stylesheet" href="{% static 'hesba/css/booking.css' %}?v=bk-001">{% endblock %}
+{% block sub %}<div class="cl-shopsub">{% if entity_name %}{{ entity_name }} · {% endif %}{{ words.title }}</div>{% endblock %}
+{% block content %}<main class="bk-main bk-main--done" data-booking-done>
+<div class="bk-done">
+  <span class="bk-okic" aria-hidden="true"><svg class="bk-icon" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
+  <h1 class="bk-h1">{{ words.done_h }}</h1>
+  <p class="bk-lead">{{ done_p }}</p>
+  <div class="bk-ref"><span>{{ words.ref }}</span><bdi dir="ltr" data-booking-number>{{ appointment.number }}</bdi></div>
+  <div class="bk-sum bk-ticket"><dl class="bk-dl">{% for k, v in rows %}<div><dt>{{ k }}</dt><dd><bdi>{{ v }}</bdi></dd></div>{% endfor %}</dl></div>
+  {% if deposit_text %}<p class="bk-note bk-ticket" data-booking-deposit>{{ deposit_text }}</p>{% endif %}
+  <p class="bk-note bk-ticket">{{ words.remind }}</p>
+  <div class="bk-btns">
+    {% if phone %}<a class="cl-btn" href="tel:{{ phone }}">{{ words.call }}</a>{% endif %}
+    {% if whatsapp %}<a class="cl-btn" href="https://wa.me/{{ whatsapp }}">{{ words.wa }}</a>{% endif %}
+    <a class="cl-btn cl-btn--primary" href="{{ again_url }}">{{ words.book_another }}</a>
+  </div>
+</div>
+</main>{% endblock %}
+{% block foot_note %}<p>{{ words.foot }}</p>{% endblock %}

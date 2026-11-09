@@ -18,6 +18,7 @@ from accounts.login_guard import GuardedLoginView, login_verify
 from printing import views as printing_views
 from workorders import public as workorders_public
 from payments import views as payments_views
+from appointments import views_booking as booking_views
 from settings_core.setup_views import after_login, root_redirect, setup_complete, setup_modules, setup_questions, setup_review, sub_activity_step
 
 
@@ -46,6 +47,10 @@ urlpatterns = [
     path("pay/<str:token>/", login_not_required(payments_views.pay_page), name="pay_page"),
     path("pay/<str:token>/go/", login_not_required(payments_views.pay_go), name="pay_go"),
     path("pay/<str:token>/done/", login_not_required(payments_views.pay_done), name="pay_done"),
+    # S3 (HG-077): the public online booking page of one entity (random key), and its signed confirmation. CSRF-protected,
+    # throttled, 404 unless the «الحجز أونلاين» capability is on and the entity takes bookings.
+    path("book/<str:key>/", login_not_required(booking_views.page), name="book_page"),
+    path("book/<str:key>/done/<str:token>/", login_not_required(booking_views.done), name="book_done"),
     path("start/", after_login, name="after_login"),
     path("setup/", TemplateView.as_view(template_name="setup/setup_gate.html"), name="setup_gate"),
     path("setup/activity/", TemplateView.as_view(template_name="setup/activity_selection.html"), name="setup_activity"),

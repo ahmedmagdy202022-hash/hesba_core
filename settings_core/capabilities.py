@@ -96,6 +96,12 @@ CAPABILITIES = {
         "about_en": "Take a deposit on a booking: it reaches the cashbox that day and comes off the service invoice. A late cancellation or a no-show turns it into a cancellation-fee invoice; an early one refunds it.",
         "available": True, "paths": (),
     },
+    "online_booking": {
+        "ar": "الحجز أونلاين", "en": "Online booking",
+        "about_ar": "صفحة عامة لكل فرع: العميل يختار الخدمة والموظف واليوم من المواعيد الفاضية فعلاً ويحجز بالاسم والموبايل، من غير حساب. مواعيد العمل والمدة بتتحدد من الإعدادات، ومفيش دفع أونلاين.",
+        "about_en": "A public page for each branch: the customer picks the service, the employee and a really free time and books with a name and mobile number, no account. Working hours and durations are set in the settings; nothing is paid online.",
+        "available": True, "paths": ("/appointments/booking/",),
+    },
     "payment_links": {
         "ar": "لينك الدفع أونلاين", "en": "Online payment link",
         "about_ar": "ابعت للعميل لينك يدفع بيه الفاتورة بالكارت أو المحفظة (Paymob). الفلوس بتتسجل بس لما البوابة تأكد الدفع، وبتنزل في حساب بنكي اسمه «بوابة الدفع» لحد ما البوابة تحوّلها.",
@@ -347,6 +353,7 @@ NEEDS = {
     "quotations": ("customers",),
     "drugs": ("inventory",),
     "deposits": ("appointments_visits",),  # S5 (HG-069): a deposit is taken on a booking
+    "online_booking": ("appointments_visits",),  # S3 (HG-077): an online booking is an appointment
 }
 
 #: ... and what it works best with, said on its card but never enforced.
@@ -361,13 +368,13 @@ WORKS_BEST_WITH = {
 #: SETTINGS-DESIGN: how the features screen groups them, the icon of each, and where each one shows once on.
 #: "Where" is what the settings track saw appear when the feature was switched on.
 GROUPS = (
-    ("selling", ("البيع والكاشير", "Selling and the till"), ("pos", "shift_required", "price_lists", "promotions", "loyalty", "installments", "quotations", "shipping", "online_store", "deposits", "payment_links", "gift_cards")),
+    ("selling", ("البيع والكاشير", "Selling and the till"), ("pos", "shift_required", "price_lists", "promotions", "loyalty", "installments", "quotations", "shipping", "online_store", "deposits", "online_booking", "payment_links", "gift_cards")),
     ("goods", ("الأصناف والمخزون", "Items and stock"), ("barcode", "units", "variants", "batches_expiry", "serials", "drugs")),
     ("money", ("الحسابات والضرايب", "Accounts and tax"), ("vat", "e_invoice", "e_receipt", "fixed_assets")),
 )
 ICONS = {"pos": "pos", "shift_required": "shift", "price_lists": "pricetag", "installments": "instalments", "barcode": "barcode",
          "units": "units", "variants": "variants", "batches_expiry": "expiry", "serials": "serial", "vat": "taxes",
-         "e_invoice": "einvoice", "e_receipt": "ereceipt", "fixed_assets": "assets", "quotations": "quotes", "drugs": "drugs", "promotions": "promotions", "shipping": "shipping", "online_store": "store", "loyalty": "loyalty", "deposits": "appointments", "payment_links": "banks", "gift_cards": "loyalty"}
+         "e_invoice": "einvoice", "e_receipt": "ereceipt", "fixed_assets": "assets", "quotations": "quotes", "drugs": "drugs", "promotions": "promotions", "shipping": "shipping", "online_store": "store", "loyalty": "loyalty", "deposits": "appointments", "online_booking": "appointments", "payment_links": "banks", "gift_cards": "loyalty"}
 WHERE = {
     "pos": ("«الكاشير» في القايمة، وزرار في لوحة القيادة وفي قايمة الفواتير", "“Till” in the menu, with a button on the dashboard and the invoice list"),
     "shift_required": ("فاتورة البيع والكاشير بيطلبوا فتح وردية الأول", "The sales invoice and the till ask for an open shift first"),
@@ -386,6 +393,7 @@ WHERE = {
     "payment_links": ("خانة «لينك دفع أونلاين» في الفاتورة المترحّلة وفي أمر الشغل، وشاشة «لينكات الدفع أونلاين»", "An “Online payment link” box on each posted invoice and work order, and the “Online payment links” screen"),
     "gift_cards": ("«كروت الهدايا» في القايمة، وخانة «كارت هدية» في الكاشير وفي الفاتورة المترحّلة، وخانة «للأعضاء بس» في العرض",
                    "“Gift cards” in the menu, a “Gift card” box at the till and on each posted invoice, and “Members only” on a promotion"),
+    "online_booking": ("«الحجز أونلاين» في المواعيد: مواعيد العمل والخدمات والموظفين ولينك الصفحة العامة", "“Online booking” on the appointments screen: working hours, services, employees and the public page's link"),
     "deposits": ("خانة «خد عربون» في صفحة الميعاد، وعمود العربون وسياسة الإلغاء في المواعيد", "“Take a deposit” on the appointment page, and the deposit column and cancellation policy on the agenda"),
     "drugs": ("«الأدوية والبدائل» في القايمة، وزرار «اصرف الروشتة» اللي بيفتح فاتورة البيع", "“Drugs & alternatives” in the menu, and “Dispense” opening the sales invoice"),
     "vat": ("«الضرايب» في القايمة، وضريبة كل صنف، وتقرير ضريبة المبيعات", "“Taxes” in the menu, a rate per item, and the sales VAT report"),

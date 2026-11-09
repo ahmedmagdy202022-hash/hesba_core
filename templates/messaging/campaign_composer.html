@@ -1,0 +1,58 @@
+{% extends "operations/base.html" %}
+{% load static %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/campaigns.css' %}?v=s8-1">{% endblock %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{% if campaign %}{{ campaign.name }}{% else %}{{ words.new }}{% endif %}</h1><p>{{ words.intro }}</p></div>
+<div class="op-form-actions"><a class="op-secondary" href="{{ list_url }}">{{ words.campaigns }}</a></div></section>
+{% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
+{% if not kind_on %}<div class="op-message" role="status" data-kind-off>{{ words.off_note }}</div>{% endif %}
+<form method="post" class="cp" data-composer data-audience-url="{{ audience_url }}" data-lang="{{ lang }}"{% if campaign %} data-campaign="{{ campaign.pk }}"{% endif %}>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+<div class="cp-grid">
+<div class="cp-col">
+<section class="cp-card" aria-labelledby="cp-h1">
+<div class="cp-sech"><span class="cp-no">1</span><h2 id="cp-h1">{{ words.step1 }}</h2></div>
+<div class="op-field"><label for="cp-name">{{ words.name }}</label><input id="cp-name" name="name" maxlength="120" required value="{{ form.name }}"></div>
+<div class="cp-segs" role="radiogroup" aria-label="{{ words.audience }}">
+{% for seg in segments %}<label class="cp-seg{% if seg.selected %} is-sel{% endif %}" data-segment="{{ seg.value }}"><input type="radio" name="audience" value="{{ seg.value }}"{% if seg.selected %} checked{% endif %} data-label="{{ seg.label }}" data-chips="{{ seg.chips|join:',' }}" data-param="{% if seg.value != 'all' %}1{% endif %}" data-category="{% if seg.value == 'category' or seg.value == 'lapsed' %}1{% endif %}"><span class="cp-seg__main"><b>{{ seg.title }}</b><small>{{ seg.desc }}</small></span></label>{% endfor %}
+</div>
+<div class="cp-param" data-param-box{% if not needs_param %} hidden{% endif %}>
+<div class="op-field"><label for="cp-threshold" data-param-label>{{ param_label }}</label>
+<input id="cp-threshold" name="threshold" inputmode="numeric" dir="ltr" value="{{ form.threshold }}"></div>
+<div class="cp-chips" data-chip-list>{% for chip in chips %}<button type="button" class="cp-chip" data-chip="{{ chip }}">{{ chip }}</button>{% endfor %}</div>
+<div class="op-field" data-category-box{% if not needs_category %} hidden{% endif %}><label for="cp-category">{{ words.category }}</label>
+<select id="cp-category" name="category"><option value="">{{ words.choose }}</option>{% for category in categories %}<option value="{{ category.pk }}"{% if form.category|stringformat:"s" == category.pk|stringformat:"s" %} selected{% endif %}>{% if lang == 'en' and category.name_en %}{{ category.name_en }}{% else %}{{ category.name_ar }}{% endif %}</option>{% endfor %}</select></div>
+</div>
+<div class="op-field"><label for="cp-day">{{ words.when }}</label><input id="cp-day" type="date" name="scheduled_day" dir="ltr" value="{{ form.scheduled_day }}"></div>
+<div class="cp-live" aria-live="polite"><b><bdi data-count>{{ summary.count }}</bdi></b><span>{{ words.reach }}</span></div>
+</section>
+<section class="cp-card cp-msg" aria-labelledby="cp-h2">
+<div class="cp-sech"><span class="cp-no">2</span><h2 id="cp-h2">{{ words.step2 }}</h2></div>
+<div class="op-field"><label for="cp-text">{{ words.text }}</label><textarea id="cp-text" name="text" rows="4" maxlength="1000" required>{{ form.text }}</textarea><small class="cp-len"><bdi data-len>{{ form.text|length }}</bdi> {{ words.chars }}</small></div>
+<div class="cp-vars"><span>{{ words.insert }}</span>{% for placeholder in placeholders %}<button type="button" class="cp-var" data-insert="{{ placeholder }}"><bdi>{{ placeholder }}</bdi></button>{% endfor %}</div>
+<small class="op-muted">{{ words.placeholders }}</small>
+</section>
+</div>
+<div class="cp-col">
+<section class="cp-card" aria-labelledby="cp-h3"><h2 id="cp-h3">{{ words.who }}</h2>
+<div class="cp-count"><div class="cp-count__n"><bdi data-count>{{ summary.count }}</bdi></div><div class="cp-count__l">{{ words.reach }}</div></div>
+<dl class="cp-break">
+<div><dt>{{ words.match }}</dt><dd><bdi data-match>{{ summary.match }}</bdi></dd></div>
+<div class="is-minus"><dt>{{ words.no_phone }}</dt><dd><bdi data-no-phone>{{ summary.no_phone }}</bdi></dd></div>
+<div class="is-minus"><dt>{{ words.dups }}</dt><dd><bdi data-dups>{{ summary.duplicates }}</bdi></dd></div>
+</dl></section>
+<section class="cp-card" aria-labelledby="cp-h4"><h2 id="cp-h4">{{ words.preview }}</h2>
+<div class="cp-phone"><div class="cp-chat"><div class="cp-bubble"><p dir="auto" data-preview>{{ summary.preview }}</p></div></div></div>
+<p class="cp-sub">{{ words.preview_note }}</p></section>
+<div class="op-message cp-cap{% if not summary.cap_over %} op-message-success{% endif %}" role="status" data-cap-note>{{ summary.cap_note }}</div>
+<div class="op-message op-message-error" role="alert" data-live-error hidden></div>
+<section class="cp-card">
+<button class="op-primary" type="submit" name="action" value="queue" data-queue data-confirm="{{ confirm }}"{% if not kind_on %} disabled{% endif %} onclick="return confirm(this.getAttribute('data-confirm'))">{{ cta }}</button>
+<button class="op-secondary" type="submit" name="action" value="save" data-save>{{ words.save }}</button>
+<div class="cp-fine"><span>{{ words.fine1 }}</span></div><div class="cp-fine"><span>{{ words.fine2 }}</span></div><div class="cp-fine"><span>{{ words.fine3 }}</span></div>
+</section>
+</div>
+</div>
+</form>
+{% if campaign %}<form method="post" action="{% url 'messaging:campaign_delete' campaign.pk %}" class="cp-delete" data-no-confirm onsubmit="return confirm('{{ words.delete|escapejs }}?')">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><button class="op-danger" type="submit" data-delete>{{ words.delete }}</button></form>{% endif %}
+<script src="{% static 'hesba/js/campaign_composer.js' %}?v=s8-1" defer></script>
+{% endblock %}
