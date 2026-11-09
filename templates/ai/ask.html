@@ -3,7 +3,7 @@
 {% comment %}A2 (HG-080): «اسأل حسبة», after the approved artboard «A2 · اسأل حسبة». GET shows the box and the suggestions and
 calls nothing; each question is a POST (CSRF). Every figure on the card comes from an existing report, never from the model.{% endcomment %}
 {% block styles %}{{ block.super }}
-<link rel="stylesheet" href="{% static 'hesba/css/ask.css' %}?v=a2-1">{% endblock %}
+<link rel="stylesheet" href="{% static 'hesba/css/ask.css' %}?v=a2-2">{% endblock %}
 {% block operation_content %}
 <section class="ask" data-ask>
   <header class="ask__head">
@@ -36,6 +36,7 @@ calls nothing; each question is a POST (CSRF). Every figure on the card comes fr
     </article>
     {% endif %}
     {% endif %}
+    {% if sample and can_ask %}<p class="ai-sample" role="note" data-ai-sample="ask"><strong>{{ sample.title }}</strong> <span>{{ sample.detail }}</span></p>{% endif %}
   </div>
 
   {% if suggestions %}

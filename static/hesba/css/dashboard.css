@@ -492,3 +492,7 @@ a.dash-atile:hover,a.dash-atile:focus-visible{background:var(--teal-wash)}
 .dash-ask svg{flex-shrink:0;width:28px;height:28px;fill:none;stroke:var(--hs-teal-deep);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .dash-ask__text{display:flex;flex-direction:column;gap:2px}
 .dash-ask__text small{font-size:12.5px;color:var(--hs-muted)}
+/* HG-078 dev. 7: a mock answer is labelled as a sample (the AI demo). */
+.ai-sample{margin:0;padding:var(--hs-space-2) var(--hs-space-3);border:1px solid var(--hs-warning-line);border-radius:var(--hs-radius-md);background:var(--hs-warning-wash);color:var(--hs-warning);font-size:var(--hs-text-xs);line-height:1.6;overflow-wrap:anywhere}
+.ai-sample strong{font-weight:var(--hs-weight-bold)}
+.ai-sample a{color:var(--hs-teal-deep);font-weight:var(--hs-weight-bold)}

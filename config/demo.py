@@ -72,11 +72,18 @@ def switch_activity(request):
         # NAV-ACT: switch the modules and capabilities too, exactly as the setup
         # wizard would for this activity, so the menu shows what it would use.
         from settings_core import activity_fit
+        from settings_core import capabilities as caps
+        from settings_core.demo_ai import CAPABILITIES as AI_CAPABILITIES
         from settings_core.setup_services import complete_setup
 
         profile = ClientProfile.get_active()
         # DEMO-FIT: the sub-activity's own suggestions too (a salon starts with appointments on).
-        complete_setup(profile, activity, sub, ",".join(activity_fit.default_modules(activity, sub)), user=request.user)
+        # AI demo (HG-078 dev. 7): the showcase keeps its AI features (on the mock, labelled as samples) on every activity,
+        # each only where the activity already has the sections it needs (a clinic gets no purchases for the invoice photo).
+        modules = activity_fit.default_modules(activity, sub)
+        ai = tuple(slug for slug in AI_CAPABILITIES if set(caps.needs(slug)) <= set(modules))
+        chosen = tuple(dict.fromkeys(caps.default_selection(activity, sub) + ai))
+        complete_setup(profile, activity, sub, ",".join(modules), user=request.user, capabilities_raw=",".join(chosen))
     lang = "en" if request.POST.get("lang") == "en" else "ar"
     return redirect(f"/dashboard/?lang={lang}")
 

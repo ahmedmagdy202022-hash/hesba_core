@@ -35,3 +35,7 @@
 .ask__sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .ask__note{margin:0;font-size:var(--hs-text-xs);color:var(--hs-muted)}
 @media (max-width:480px){.ask-card__value{font-size:26px}.ask__bubble{max-width:100%}}
+/* HG-078 dev. 7: a mock answer is labelled as a sample (the AI demo). */
+.ai-sample{margin:0;padding:var(--hs-space-2) var(--hs-space-3);border:1px solid var(--hs-warning-line);border-radius:var(--hs-radius-md);background:var(--hs-warning-wash);color:var(--hs-warning);font-size:var(--hs-text-xs);line-height:1.6;overflow-wrap:anywhere}
+.ai-sample strong{font-weight:var(--hs-weight-bold)}
+.ai-sample a{color:var(--hs-teal-deep);font-weight:var(--hs-weight-bold)}

@@ -308,6 +308,8 @@ PAYMENT_LINK_HOURS = config("PAYMENT_LINK_HOURS", default=72, cast=int)
 # (nothing connected, every call refused) once DEBUG is off; an explicit mock with DEBUG off refuses to start
 # (ai.E001), and live without the key refuses too (ai.E002). Keys live in the server's environment only, never in the
 # database or the repository. The voice is Ahmed's choice: the default below is a placeholder that live refuses.
+# A showcase (DEMO_MODE) is the one exception: there an empty AI_MODE is mock even with DEBUG off, and every mock answer
+# is labelled as a sample (HG-078 deviation 7). Live on a sandboxed showcase is still refused (ai.E006).
 AI_MODE = config("AI_MODE", default="").strip().lower()
 ELEVENLABS_API_KEY = config("ELEVENLABS_API_KEY", default="")
 ELEVENLABS_VOICE_ID = config("ELEVENLABS_VOICE_ID", default="hesba-placeholder-voice")
