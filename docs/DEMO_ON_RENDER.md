@@ -39,6 +39,7 @@
    |---|---|---|
    | `FEEDBACK_DATABASE_URL` | رابط Postgres، زي مشروع Supabase مجاني (Connect → Session pooler) | من غيره الملاحظات بتتمسح مع أي Deploy جديد. معاه بتفضل محفوظة على طول. |
    | `FEEDBACK_NOTIFY_EMAIL` | إيميلك | يوصلك إيميل بكل ملاحظة. محتاج كمان `EMAIL_HOST` و `EMAIL_HOST_USER` و `EMAIL_HOST_PASSWORD` (شوف `docs/DAILY_EMAIL_SETUP.md`). |
+   | `AI_MODE` | سيبه فاضي، أو `off` | فاضي: ميزات الذكاء الاصطناعي بتشتغل على الردود المزيفة، وكل رد عليه لافتة «رد تجريبي». `off` بيقفلها في الديمو. ماتحطش `live` هنا: النسخ الخاصة بترفضه (HG-078). |
 
 5. **Create Web Service** واستنى لحد ما يكتب **Live** (أول مرة 3–5 دقايق).
 6. افتح الرابط اللي فوق (زي `https://hesba-demo.onrender.com`). الرابط الرسمي بعدين `https://demo.hesba.nuzmtech.com` (خطوات الربط في `docs/DOMAINS.md`). صفحة الدخول بتقول البيانات: `owner` أو `cashier`، والباسورد `Demo-pass-1`.
