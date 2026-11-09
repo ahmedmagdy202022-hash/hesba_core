@@ -30,7 +30,6 @@
       <h1 data-i18n="title">تسجيل الدخول</h1>
       <p class="login-subtitle" data-i18n="subtitle">استخدم حسابك للدخول حسب الدور والصلاحيات.</p>
       {% if login_locked %}<div class="error" role="alert" data-i18n="locked" data-login-locked>محاولات دخول غلط كتير. استنى {{ lock_minutes }} دقيقة وجرّب تاني، أو كلّم صاحب الحساب يغيّر كلمة المرور.</div>{% elif form.errors %}<div class="error" role="alert" data-i18n="error">بيانات الدخول غير صحيحة. راجع اسم المستخدم وكلمة المرور.</div>{% endif %}
-      {% if demo_mode %}<div class="login-demo" role="note" data-demo-login style="margin:0 0 14px;padding:10px 12px;border:1px solid var(--hs-teal);border-radius:10px;background:var(--hs-teal-wash);color:var(--hs-navy);font-size:14px;line-height:1.6"><span class="t-ar">نسخة تجريبية بداتا وهمية — ادخل بـ <b dir="ltr">owner</b> (المالك) أو <b dir="ltr">cashier</b> (الكاشير)، والباسورد <b dir="ltr">{{ demo_password }}</b>. {% if demo_sandboxes %}النسخة دي خاصة بيك: اللي بتعمله محدش غيرك بيشوفه، ومحدش يقدر يمسحه غيرك.{% else %}الداتا بترجع زي ما كانت كل ما السيرفر يعيد التشغيل.{% endif %}</span><span class="t-en">A demo with made-up data. Sign in as <b>owner</b> or <b>cashier</b>, password <b>{{ demo_password }}</b>. {% if demo_sandboxes %}This copy is yours alone: nobody else sees what you do, and nobody else can wipe it.{% else %}The data goes back to the start whenever the server restarts.{% endif %}</span><form method="post" action="{% url 'demo_restart' %}" data-demo-restart style="margin:10px 0 0" data-confirm-ar="{% if demo_sandboxes %}هيتمسح كل اللي عملته إنت في تجربتك (ومش هيأثر على حد تاني) وتبدأ من اختيار النشاط. متأكد؟{% else %}هيتمسح كل اللي اتسجل في التجربة وتبدأ من اختيار النشاط. متأكد؟{% endif %}" data-confirm-en="{% if demo_sandboxes %}Everything you did in your demo is wiped (nobody else is affected) and you start again from choosing the activity. Sure?{% else %}Everything recorded in the demo is wiped and you start again from choosing the activity. Sure?{% endif %}" onsubmit="var en=document.body.dataset.lang==='en';this.elements.lang.value=en?'en':'ar';return confirm(en?this.dataset.confirmEn:this.dataset.confirmAr)">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang|default:'ar' }}"><button type="submit" style="width:100%;min-height:44px;border:0;border-radius:10px;background:var(--hs-navy);color:var(--hs-surface);font:inherit;font-weight:700;cursor:pointer"><span class="t-ar">ابدأ تجربة جديدة من الأول (من اختيار النشاط)</span><span class="t-en">Start a fresh demo (from choosing the activity)</span></button></form></div>{% endif %}
       <form method="post" class="login-form">
         {% csrf_token %}
         <input type="hidden" name="next" value="{{ next }}">
@@ -40,6 +39,13 @@
         <button type="submit" class="login-btn" data-i18n="button">الدخول إلى حسبة</button>
       </form>
     </div>
+    {% if demo_mode %}{# DEMO-FIRST-RUN (D5): a plain sign-in, and the way into the demo without an account. #}
+    <section class="login-try" data-demo-try>
+      <strong data-i18n="tryTitle">لسه مجرّب؟</strong>
+      <span data-i18n="tryLead">افتح نسخة تجريبية على نشاطك من غير حساب ولا كلمة سر.</span>
+      <a class="login-try__btn" href="{% url 'demo_landing' %}?lang=ar" data-demo-try-link data-i18n="tryButton">جرّب حِسبة دلوقتي</a>
+    </section>
+    {% endif %}
     <p class="login-panel__credit"><span class="t-ar">تطوير <strong>أحمد مجدي</strong></span><span class="t-en">Developed by <strong>Ahmed Magdy</strong></span></p>
   </section>
 </main>
@@ -49,8 +55,8 @@
   var saved=localStorage.getItem('hesba_lang');
   var lang=params.get('lang')==='en'?'en':(params.get('lang')==='ar'?'ar':(saved==='en'?'en':'ar'));
   var dict={
-    ar:{title:'تسجيل الدخول',tagline:'إدارة أسهل… قرارات أوضح',point1:'البيع والمشتريات والمخزون والخزن في مكان واحد.',point2:'شغّال من الكمبيوتر والتابلت والموبايل.',point3:'كل مستخدم يشوف اللي يخصه بس.',subtitle:'استخدم حسابك للدخول حسب الدور والصلاحيات.',username:'اسم المستخدم',password:'كلمة المرور',button:'الدخول إلى حسبة',error:'بيانات الدخول غير صحيحة. راجع اسم المستخدم وكلمة المرور.',locked:'محاولات دخول غلط كتير. استنى {{ lock_minutes }} دقيقة وجرّب تاني، أو كلّم صاحب الحساب يغيّر كلمة المرور.',userPh:'أدخل اسم المستخدم',passPh:'أدخل كلمة المرور'},
-    en:{title:'Sign in',tagline:'Easier management, clearer decisions',point1:'Sales, purchases, stock and cash in one place.',point2:'Works on desktop, tablet and phone.',point3:'Every user sees only what is theirs.',subtitle:'Use your account according to role and permissions.',username:'Username',password:'Password',button:'Sign in to Hesba',error:'Invalid username or password.',locked:'Too many wrong attempts. Wait {{ lock_minutes }} minutes and try again, or ask the account owner to reset the password.',userPh:'Enter username',passPh:'Enter password'}
+    ar:{title:'تسجيل الدخول',tagline:'إدارة أسهل… قرارات أوضح',point1:'البيع والمشتريات والمخزون والخزن في مكان واحد.',point2:'شغّال من الكمبيوتر والتابلت والموبايل.',point3:'كل مستخدم يشوف اللي يخصه بس.',subtitle:'استخدم حسابك للدخول حسب الدور والصلاحيات.',username:'اسم المستخدم',password:'كلمة المرور',button:'الدخول إلى حسبة',error:'بيانات الدخول غير صحيحة. راجع اسم المستخدم وكلمة المرور.',locked:'محاولات دخول غلط كتير. استنى {{ lock_minutes }} دقيقة وجرّب تاني، أو كلّم صاحب الحساب يغيّر كلمة المرور.',userPh:'أدخل اسم المستخدم',passPh:'أدخل كلمة المرور',tryTitle:'لسه مجرّب؟',tryLead:'افتح نسخة تجريبية على نشاطك من غير حساب ولا كلمة سر.',tryButton:'جرّب حِسبة دلوقتي'},
+    en:{title:'Sign in',tagline:'Easier management, clearer decisions',point1:'Sales, purchases, stock and cash in one place.',point2:'Works on desktop, tablet and phone.',point3:'Every user sees only what is theirs.',subtitle:'Use your account according to role and permissions.',username:'Username',password:'Password',button:'Sign in to Hesba',error:'Invalid username or password.',locked:'Too many wrong attempts. Wait {{ lock_minutes }} minutes and try again, or ask the account owner to reset the password.',userPh:'Enter username',passPh:'Enter password',tryTitle:'Just looking?',tryLead:'Open a demo of your kind of business, no account or password needed.',tryButton:'Try Hesba now'}
   };
   localStorage.setItem('hesba_lang',lang);
   document.documentElement.lang=lang;
@@ -70,6 +76,8 @@
   var pass=document.getElementById('id_password');
   if(user)user.setAttribute('placeholder',dict[lang].userPh);
   if(pass)pass.setAttribute('placeholder',dict[lang].passPh);
+  var tryLink=document.querySelector('.login-try__btn');
+  if(tryLink){var t=new URL(tryLink.getAttribute('href'),window.location.origin);t.searchParams.set('lang',lang);tryLink.href=t.pathname+t.search;}
 })();
 </script>
 {% include "partials/demo_feedback.html" %}

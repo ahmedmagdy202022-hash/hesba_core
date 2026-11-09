@@ -69,6 +69,15 @@ body.login-page{
   .login-panel{flex-direction:column;align-items:center;justify-content:flex-start;gap:var(--hs-space-4);padding:var(--hs-space-5) var(--hs-space-4) var(--hs-space-10)}
 }
 
+/* DEMO-FIRST-RUN (D5): the way into the demo without an account, under the sign-in card. */
+.login-try{width:min(420px,100%);box-sizing:border-box;margin-top:var(--hs-space-4);padding:var(--hs-space-4);display:flex;flex-direction:column;gap:var(--hs-space-2);border:1px solid var(--hs-line);border-radius:var(--hs-radius-xl);background:var(--hs-surface);box-shadow:var(--hs-shadow-sm)}
+.login-try strong{font-size:var(--hs-text-base);color:var(--hs-navy)}
+.login-try span{font-size:var(--hs-text-sm);color:var(--hs-muted)}
+.login-try__btn{min-height:var(--hs-control-height);display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--hs-teal-deep);border-radius:var(--hs-radius-md);color:var(--hs-teal-deep);font-weight:700;text-decoration:none}
+.login-try__btn:hover{background:var(--hs-teal-wash)}
+.login-try__btn:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
+@media (min-width:900px){.login-panel{flex-direction:column}}
+
 /* The credit sits in the brand half on wide screens and under the card on small ones. */
 .login-panel__credit{display:none;margin:0;font-size:var(--hs-text-xs);color:var(--hs-muted);direction:ltr}
 .login-panel__credit strong{color:var(--hs-teal-deep);font-weight:600}
