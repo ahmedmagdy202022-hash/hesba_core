@@ -12,16 +12,19 @@ and this module, in order:
 5. under a row lock that serialises every reservation, refuses once today's calls (Cairo day) reach the cap in
    ``SystemSetting ai_daily_call_cap`` (default 50, never above ``settings.AI_DAILY_CALL_CAP_MAX``), or else writes a
    ``call_started`` audit row, which counts at once;
-6. calls the provider, mock or live, outside any transaction, and turns that same row into ``call_ok`` or
-   ``call_error``. Any exception from the provider is recorded as an error before it propagates.
+6. calls the provider, mock or live, outside any transaction, and appends a ``call_ok`` or ``call_error`` row whose
+   ``before_data`` is ``{"started": <started row id>}``. Any exception from the provider is recorded as an error before
+   it propagates.
 
-Each call, refused or not, leaves one ``AuditLog`` row (module ``ai``) with the feature, provider, mode, entity, request
-size, result and duration, and **never** the text sent, the audio, customer names, phones or amounts. Refusals are
-``ValidationError`` in English, with the Arabic in ``settings_core/ui_messages.py``.
+Audit rows are append-only (``audit.models.AuditLog``): nothing here updates one. A refused call leaves one
+``call_refused`` row; a call that reached the provider leaves its ``call_started`` row plus one outcome row. Each row
+holds the feature, provider, mode, entity, request size and result (outcome rows add the duration and response size),
+and **never** the text sent, the audio, customer names, phones or amounts. Refusals are ``ValidationError`` in
+English, with the Arabic in ``settings_core/ui_messages.py``.
 
-The cap is per installation (one client company, one key): every entity's calls count. Started, ok and error rows
-count; refusals do not. A call cut off before it finishes (the process killed mid-call) stays ``call_started`` and
-keeps counting for that day.
+The cap is per installation (one client company, one key): every entity's calls count. Only ``call_started`` rows
+count, one per call; refusals and outcome rows do not. A call cut off before it finishes (the process killed mid-call)
+is a started row with no outcome row, and keeps counting for that day.
 """
 
 import time
@@ -52,7 +55,8 @@ TTS_MAX_CHARS = 5000
 
 MODULE = "ai"
 CALL_STARTED, CALL_OK, CALL_REFUSED, CALL_ERROR = "call_started", "call_ok", "call_refused", "call_error"
-COUNTED = (CALL_STARTED, CALL_OK, CALL_ERROR)
+#: One started row per call reached the provider; the outcome rows (ok / error) point back to it and are not counted.
+COUNTED = (CALL_STARTED,)
 RESULTS = {CALL_STARTED: "started", CALL_OK: "ok", CALL_REFUSED: "refused", CALL_ERROR: "error"}
 
 # Why a call was refused, as recorded in the audit row.
@@ -156,7 +160,7 @@ def _data(feature, provider_code, mode, entity, size, result, refusal="", status
     }
 
 
-def _write(action, user, entity, data):
+def _write(action, user, entity, data, before_data=None):
     return AuditLog.objects.create(
         event_type=AuditEventType.EXPORT,
         actor=user if user is not None and getattr(user, "is_authenticated", False) else None,
@@ -164,18 +168,18 @@ def _write(action, user, entity, data):
         action=action,
         object_type="entities.Entity" if entity is not None else "",
         object_id=str(entity.pk) if entity is not None else "",
+        before_data=before_data,
         after_data=data,
         reason=f"AI call for {data['feature']}: {data['result']}.",
     )
 
 
-def _finish(row, action, started, **fields):
-    """Turn the reserved ``call_started`` row into the call's outcome (the one update an AI audit row ever gets)."""
+def _finish(started_row, action, started, user, entity, **fields):
+    """Append the call's outcome as its own row, pointing back to the ``call_started`` row (audit rows are append-only:
+    the started row is never changed)."""
 
-    row.action = action
-    row.after_data = dict(row.after_data, result=RESULTS[action], duration_ms=int((time.monotonic() - started) * 1000), **fields)
-    row.reason = f"AI call for {row.after_data['feature']}: {row.after_data['result']}."
-    row.save(update_fields=["action", "after_data", "reason"])
+    data = dict(started_row.after_data, result=RESULTS[action], duration_ms=int((time.monotonic() - started) * 1000), **fields)
+    return _write(action, user, entity, data, before_data={"started": started_row.pk})
 
 
 def _feature(code):
@@ -247,10 +251,10 @@ def text_to_speech(text, *, feature, user=None, entity=None, voice_settings=None
     try:
         speech = provider.synthesize(text, voice_settings=voice_settings)
     except ProviderError as exc:
-        _finish(row, CALL_ERROR, started, error_status=exc.status)
+        _finish(row, CALL_ERROR, started, user, entity, error_status=exc.status)
         raise ValidationError("The AI service did not answer. Try again later.") from exc
     except Exception:
-        _finish(row, CALL_ERROR, started)  # recorded, then raised as it came (a test's network guard stays visible)
+        _finish(row, CALL_ERROR, started, user, entity)  # recorded, then raised as it came (a test's network guard stays visible)
         raise
-    _finish(row, CALL_OK, started, response_bytes=speech.size)
+    _finish(row, CALL_OK, started, user, entity, response_bytes=speech.size)
     return speech

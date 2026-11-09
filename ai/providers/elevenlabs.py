@@ -12,9 +12,12 @@ Two limits keep a slow or misdirected answer from hurting the server:
 
 * **No redirects.** The opener refuses every 3xx, so the ``xi-api-key`` header is never re-sent to another address;
   the refusal is ``ProviderError("ElevenLabs answered 3xx.")``.
-* **A total deadline.** Each socket operation (connect, each read) waits at most ``TIMEOUT`` seconds, and the body is
-  read in chunks against a ``DEADLINE`` for the whole call. Worst case is about ``DEADLINE + TIMEOUT`` (30 s), well
-  under gunicorn's 60 s worker timeout.
+* **A deadline on the body.** Each socket operation waits at most ``TIMEOUT`` seconds. The body is read with
+  ``read1``, which does at most one socket read and returns whatever arrived (``read(n)`` would block until it had
+  ``n`` bytes, so a slow drip could outlive any deadline). After each read the elapsed time is checked against
+  ``DEADLINE``. The clock starts before connecting, but the connect and the status line and headers are bounded only
+  by the per-operation ``TIMEOUT``, not by the deadline: they finish before the body loop starts. For an answer whose
+  headers arrive promptly the worst case is about ``DEADLINE + TIMEOUT`` (30 s), under gunicorn's 60 s worker timeout.
 """
 
 import http.client
@@ -29,7 +32,7 @@ from .base import ProviderError, Speech, TextToSpeechProvider
 BASE_URL = "https://api.elevenlabs.io"
 #: Seconds one socket operation may wait (the connect, and each read of the body).
 TIMEOUT = 10
-#: Seconds the whole call may take, from opening the connection to the last byte of audio.
+#: Seconds from opening the connection to the last byte of audio, checked after each read of the body.
 DEADLINE = 20
 CHUNK_BYTES = 64 * 1024
 #: An answer larger than this is refused rather than held in memory (a day's summary is well under 1 MB).
@@ -89,7 +92,7 @@ class ElevenLabsTTS(TextToSpeechProvider):
                 content_type = response.headers.get("Content-Type", "") if response.headers else ""
                 chunks, total = [], 0
                 while True:
-                    chunk = response.read(CHUNK_BYTES)
+                    chunk = response.read1(CHUNK_BYTES)  # at most one socket read: a drip cannot outlive the deadline
                     if not chunk:
                         break
                     total += len(chunk)

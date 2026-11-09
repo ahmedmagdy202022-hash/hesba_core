@@ -3,6 +3,7 @@
 import io
 import json
 import socket
+import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta
@@ -49,6 +50,9 @@ class FakeResponse:
 
     def read(self, limit=-1):
         return self.stream.read(limit)
+
+    def read1(self, limit=-1):  # what the client calls; a subclass that changes read() changes this too
+        return self.read(limit)
 
     def __enter__(self):
         return self
@@ -186,6 +190,42 @@ class LiveClientRequestTests(AiSimpleTestCase):
             self.tts().synthesize("hello")
         self.assertLessEqual(clock["now"] - 1000.0, 21 + 3)  # stopped at the 20 s deadline, not after the whole body
 
+    def test_a_real_slow_drip_is_stopped_at_the_deadline(self):
+        """A real ``http.client.HTTPResponse`` over a socket pair (no network): the server sends its headers, then one
+        byte every 50 ms of a 100 KB body. ``read(64 KB)`` would sit there for over an hour; ``read1`` lets the deadline
+        bite."""
+
+        import http.client
+        import threading
+
+        client, server = socket.socketpair()
+        self.addCleanup(client.close)
+        self.addCleanup(server.close)
+        client.settimeout(2)  # the per-read timeout: each byte arrives well inside it
+        stop = threading.Event()
+
+        def drip():
+            try:
+                server.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: audio/mpeg\r\nContent-Length: 100000\r\n\r\n")
+                while not stop.wait(0.05):
+                    server.sendall(b"\x00")
+            except OSError:
+                pass  # the client hung up
+
+        dripper = threading.Thread(target=drip, daemon=True)
+        dripper.start()
+        self.addCleanup(dripper.join, 2)
+        self.addCleanup(stop.set)
+        response = http.client.HTTPResponse(client, method="POST")
+        response.begin()  # the headers come first, before the deadline loop
+        tts = ElevenLabsTTS(api_key="k", voice_id="v", model_id="m", timeout=2, deadline=0.5)
+        started = time.monotonic()
+        with mock.patch(OPEN, return_value=response), self.assertRaisesMessage(ProviderError, "ElevenLabs took too long to answer."):
+            tts.synthesize("hello")
+        elapsed = time.monotonic() - started
+        self.assertLess(elapsed, 1.5)  # the 0.5 s deadline plus at most one 50 ms drip, with room for a slow CI box
+        self.assertGreaterEqual(elapsed, 0.5)
+
     def test_the_body_is_read_in_chunks_and_capped(self):
         with mock.patch(OPEN, return_value=FakeResponse(SILENT_MP3 * 100)):  # several 64 KB chunks
             self.assertEqual(self.tts().synthesize("hello").size, len(SILENT_MP3) * 100)
@@ -267,29 +307,59 @@ class AiCallTestBase(AiTestCase):
         self.assertEqual((row.after_data["result"], row.after_data["refusal"]), ("refused", refusal))
         return row
 
+    def call_rows(self):
+        """A call that reached the provider: its ``call_started`` row and the one outcome row pointing back to it."""
+
+        started = self.rows(services.CALL_STARTED).get()
+        outcome = self.rows().filter(action__in=(services.CALL_OK, services.CALL_ERROR)).get()
+        self.assertEqual(outcome.before_data, {"started": started.pk})
+        self.assertGreater(outcome.pk, started.pk)
+        return started, outcome
+
 
 class CallTests(AiCallTestBase):
-    def test_a_call_returns_audio_and_writes_one_audit_row_without_the_text(self):
+    def test_a_call_returns_audio_and_writes_its_audit_rows_without_the_text(self):
         speech = self.speak(SENTINEL)
         self.assertEqual((speech.content_type, speech.size), ("audio/mpeg", len(SILENT_MP3)))
         self.assertEqual(self.provider.calls[0]["body"]["text"], SENTINEL)  # the provider got it ...
-        row = self.rows().get()  # ... and the audit row did not
-        self.assertEqual((row.event_type, row.action, row.actor, row.object_type, row.object_id),
-                         (AuditEventType.EXPORT, services.CALL_OK, self.user, "entities.Entity", str(self.entity.pk)))
-        data = row.after_data
-        self.assertEqual({key: data[key] for key in ("feature", "provider", "mode", "entity", "request_chars", "request_bytes", "result", "refusal", "response_bytes")},
-                         {"feature": "voice_summary", "provider": "elevenlabs_tts_mock", "mode": "mock", "entity": self.entity.pk,
-                          "request_chars": len(SENTINEL), "request_bytes": len(SENTINEL.encode()), "result": "ok", "refusal": "", "response_bytes": 1440})
-        self.assertIsInstance(data["duration_ms"], int)
-        self.assertGreaterEqual(data["duration_ms"], 0)
-        stored = " ".join((row.reason, row.object_type, row.object_id, row.user_agent, json.dumps(row.after_data, ensure_ascii=False), json.dumps(row.before_data)))
-        for fragment in ("Mona", "Hassan", "01001234567", "98765.43", "98765"):
-            self.assertNotIn(fragment, stored)
+        self.assertEqual(self.rows().count(), 2)  # ... and the audit rows did not: the started row and the outcome row
+        started, row = self.call_rows()
+        for audit in (started, row):
+            self.assertEqual((audit.event_type, audit.actor, audit.object_type, audit.object_id),
+                             (AuditEventType.EXPORT, self.user, "entities.Entity", str(self.entity.pk)))
+        self.assertEqual(row.action, services.CALL_OK)
+        expected = {"feature": "voice_summary", "provider": "elevenlabs_tts_mock", "mode": "mock", "entity": self.entity.pk,
+                    "request_chars": len(SENTINEL), "request_bytes": len(SENTINEL.encode()), "refusal": ""}
+        keys = ("feature", "provider", "mode", "entity", "request_chars", "request_bytes", "result", "refusal", "response_bytes")
+        self.assertEqual({key: row.after_data[key] for key in keys}, dict(expected, result="ok", response_bytes=1440))
+        self.assertEqual({key: started.after_data[key] for key in keys}, dict(expected, result="started", response_bytes=0))
+        self.assertIsInstance(row.after_data["duration_ms"], int)
+        self.assertGreaterEqual(row.after_data["duration_ms"], 0)
+        self.assertIsNone(started.before_data)
+        for audit in (started, row):
+            stored = " ".join((audit.reason, audit.object_type, audit.object_id, audit.user_agent,
+                               json.dumps(audit.after_data, ensure_ascii=False), json.dumps(audit.before_data)))
+            for fragment in ("Mona", "Hassan", "01001234567", "98765.43", "98765"):
+                self.assertNotIn(fragment, stored)
+
+    def test_the_started_row_is_never_changed(self):
+        snapshot = {}
+        real = self.provider.synthesize
+
+        def remember(text, voice_settings=None):
+            started = self.rows(services.CALL_STARTED).get()
+            snapshot.update(pk=started.pk, values=AuditLog.objects.filter(pk=started.pk).values().get())
+            return real(text, voice_settings)
+
+        with mock.patch.object(self.provider, "synthesize", side_effect=remember):
+            self.speak()
+        self.assertEqual(AuditLog.objects.filter(pk=snapshot["pk"]).values().get(), snapshot["values"])  # append-only
+        self.call_rows()
 
     def test_no_entity_is_recorded_as_none(self):
         services.text_to_speech("hello", feature="voice_summary")
-        row = self.rows().get()
-        self.assertEqual((row.actor, row.object_type, row.object_id, row.after_data["entity"]), (None, "", "", None))
+        for row in self.call_rows():
+            self.assertEqual((row.actor, row.object_type, row.object_id, row.after_data["entity"]), (None, "", "", None))
 
     def test_unknown_feature_is_a_programming_error(self):
         with self.assertRaises(ValueError):
@@ -335,9 +405,9 @@ class CallTests(AiCallTestBase):
         self.provider.fail_with = "ElevenLabs answered 500."
         with self.assertRaisesMessage(ValidationError, "The AI service did not answer. Try again later."):
             self.speak(SENTINEL)
-        row = self.rows().get()
+        started, row = self.call_rows()
         self.assertEqual((row.action, row.after_data["result"]), (services.CALL_ERROR, "error"))
-        self.assertNotIn("Mona", json.dumps(row.after_data))
+        self.assertNotIn("Mona", json.dumps(row.after_data) + json.dumps(started.after_data))
         self.assertEqual(services.calls_today(), 1)
 
     @override_settings(**LIVE_KEYS)
@@ -348,14 +418,14 @@ class CallTests(AiCallTestBase):
         self.assertEqual(urlopen.call_args.args[0].full_url, "https://api.elevenlabs.io/v1/text-to-speech/test-voice")
         self.assertEqual(urlopen.call_args.args[0].get_header("Xi-api-key"), "test-key-not-real")
         self.assertEqual(speech.audio, SILENT_MP3)
-        data = self.rows().get().after_data
-        self.assertEqual((data["provider"], data["mode"]), ("elevenlabs_tts", "live"))
-        self.assertNotIn("test-key-not-real", json.dumps(data))
+        for row in self.call_rows():
+            self.assertEqual((row.after_data["provider"], row.after_data["mode"]), ("elevenlabs_tts", "live"))
+            self.assertNotIn("test-key-not-real", json.dumps(row.after_data))
 
     def test_any_exception_from_the_provider_is_audited_then_raised(self):
         with mock.patch.object(self.provider, "synthesize", side_effect=RuntimeError("boom")), self.assertRaisesMessage(RuntimeError, "boom"):
             self.speak(SENTINEL)
-        row = self.rows().get()
+        _, row = self.call_rows()
         self.assertEqual((row.action, row.after_data["result"], row.after_data["error_status"]), (services.CALL_ERROR, "error", None))
         self.assertIsInstance(row.after_data["duration_ms"], int)
         self.assertNotIn("Mona", json.dumps(row.after_data))
@@ -372,7 +442,7 @@ class CallTests(AiCallTestBase):
     @override_settings(AI_MODE="live")
     def test_the_mode_recorded_is_the_provider_actually_used(self):
         self.speak()  # the registry hands back the mock although AI_MODE says live
-        self.assertEqual(self.rows().get().after_data["mode"], "mock")
+        self.assertEqual([row.after_data["mode"] for row in self.call_rows()], ["mock", "mock"])
 
 
 class CapabilityRegistrationTests(AiTestCase):
@@ -431,7 +501,7 @@ class DailyCapTests(AiCallTestBase):
         with mock.patch.object(self.provider, "synthesize", side_effect=in_flight):
             self.speak()
         self.assertEqual(seen, {"count": 1, "action": services.CALL_STARTED})
-        self.assertEqual(sorted(self.rows().values_list("action", flat=True)), [services.CALL_OK, services.CALL_REFUSED])
+        self.assertEqual(sorted(self.rows().values_list("action", flat=True)), [services.CALL_OK, services.CALL_REFUSED, services.CALL_STARTED])
         self.assertEqual(services.calls_today(), 1)
 
     def test_check_and_reserve_run_under_the_lock_row(self):
@@ -501,16 +571,20 @@ class DailyCapTests(AiCallTestBase):
         def cairo(day, hour, minute):
             return datetime(2026, 11, day, hour, minute, tzinfo=CAIRO)
 
-        late = AuditLog.objects.create(event_type=AuditEventType.EXPORT, module="ai", action=services.CALL_OK)
-        AuditLog.objects.filter(pk=late.pk).update(created_at=cairo(9, 23, 30))  # 21:30 UTC on the 9th
-        early = AuditLog.objects.create(event_type=AuditEventType.EXPORT, module="ai", action=services.CALL_ERROR)
-        AuditLog.objects.filter(pk=early.pk).update(created_at=cairo(10, 0, 30))  # 22:30 UTC, still the 9th in UTC
-        refused = AuditLog.objects.create(event_type=AuditEventType.EXPORT, module="ai", action=services.CALL_REFUSED)
-        AuditLog.objects.filter(pk=refused.pk).update(created_at=cairo(9, 12, 0))
-        self.assertEqual(services.calls_today(cairo(9, 23, 45)), 1)  # the late call only; the refusal never counts
-        unfinished = AuditLog.objects.create(event_type=AuditEventType.EXPORT, module="ai", action=services.CALL_STARTED)
-        AuditLog.objects.filter(pk=unfinished.pk).update(created_at=cairo(9, 13, 0))
-        self.assertEqual(services.calls_today(cairo(9, 23, 45)), 2)  # a call that never finished keeps counting
+        def row(action, at):
+            made = AuditLog.objects.create(event_type=AuditEventType.EXPORT, module="ai", action=action)
+            AuditLog.objects.filter(pk=made.pk).update(created_at=at)  # auto_now_add ignores a value given to create()
+            return made
+
+        late = row(services.CALL_STARTED, cairo(9, 23, 30))  # 21:30 UTC on the 9th
+        row(services.CALL_OK, cairo(9, 23, 31))  # its outcome: not counted again
+        row(services.CALL_STARTED, cairo(10, 0, 30))  # 22:30 UTC, still the 9th in UTC
+        row(services.CALL_ERROR, cairo(10, 0, 31))
+        row(services.CALL_REFUSED, cairo(9, 12, 0))
+        self.assertTrue(late.pk)
+        self.assertEqual(services.calls_today(cairo(9, 23, 45)), 1)  # the late call only; outcomes and refusals never count
+        row(services.CALL_STARTED, cairo(9, 13, 0))  # a call that never finished: a started row with no outcome
+        self.assertEqual(services.calls_today(cairo(9, 23, 45)), 2)  # keeps counting
         self.assertEqual(services.calls_today(cairo(10, 0, 45)), 1)  # a new Cairo day on the same UTC date: the early call only
         self.assertEqual(services.calls_today(cairo(11, 9, 0)), 0)
         start, end = services.cairo_day_bounds(cairo(10, 0, 45))
