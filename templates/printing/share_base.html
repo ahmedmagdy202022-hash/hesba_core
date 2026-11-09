@@ -1,6 +1,6 @@
 {% load static %}<!doctype html>
 <html lang="{{ lang }}" dir="{{ dir }}">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex, nofollow"><meta name="referrer" content="no-referrer">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex, nofollow"><meta name="referrer" content="same-origin">
 <title>{% block title %}{{ company.name }}{% endblock %}</title>
 {% include "partials/brand_icons.html" %}<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}"><link rel="stylesheet" href="{% static 'hesba/css/customer_link.css' %}?v=cl-001">{% block head_extra %}{% endblock %}
 </head>

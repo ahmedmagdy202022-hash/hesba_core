@@ -43,7 +43,7 @@ def _private(response):
 
     response["X-Robots-Tag"] = "noindex, nofollow"
     response["Cache-Control"] = "no-store"
-    response["Referrer-Policy"] = "no-referrer"
+    response["Referrer-Policy"] = "same-origin"  # the stricter "no referrer" policy makes browsers post "Origin: null" (CSRF 403)
     patch_vary_headers(response, ("Accept",))
     return response
 
