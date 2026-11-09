@@ -28,7 +28,7 @@ WORDS = {
         "api_on": "حساب WhatsApp Business متربط: الأنواع اللي ليها قالب متوافق عليه بتتبعت لوحدها.", "send_all": "ابعت أوتوماتيك",
         "api_sent": "اتبعت {sent}، وماتبعتش {failed} (السبب جنب كل رسالة).", "api_left": "فاضل {left} رسالة: دوس «ابعت» تاني، أو سيبها لأمر send_messages المجدول.", "wa_template": "اسم القالب المتوافق عليه عند Meta (فاضي: بضغطة بس)",
         "wa_hint": "القالب بياخد متغيرين: {{1}} اسم الشركة و{{2}} نص الرسالة. مثال تسجّله: «رسالة من {{1}}: {{2}}».",
-        "saved": "اتحفظ.", "day": "اليوم", "when": "اتبعتت", "campaigns": "حملات الولاء والرسائل", "gone": "الرسالة دي مبقتش لازمة: اتدفع المبلغ أو الميعاد اتلغى أو اتغير.",
+        "saved": "اتحفظ.", "day": "اليوم", "when": "اتبعتت", "gone": "الرسالة دي مبقتش لازمة: اتدفع المبلغ أو الميعاد اتلغى أو اتغير.",
     },
     "en": {
         "title": "Customer messages", "intro": "Every day the messages worth sending gather here: customers past their credit days, instalments coming up or late, tomorrow's appointments, and prescriptions due for a refill. “Send” opens WhatsApp with the message written.",
@@ -40,7 +40,7 @@ WORDS = {
         "api_on": "The WhatsApp Business account is connected: the kinds with an approved template are sent by themselves.", "send_all": "Send automatically",
         "api_sent": "{sent} sent, {failed} not sent (the reason is next to each).", "api_left": "{left} messages left: press “Send” again, or leave them to the scheduled send_messages command.", "wa_template": "The template Meta approved (blank: by a click only)",
         "wa_hint": "The template takes two parameters: {{1}} the company and {{2}} the message. Example to register: “Message from {{1}}: {{2}}”.",
-        "saved": "Saved.", "day": "Day", "when": "Sent", "campaigns": "Loyalty and message campaigns", "gone": "This message is no longer needed: the amount was paid, or the appointment was cancelled or moved.",
+        "saved": "Saved.", "day": "Day", "when": "Sent", "gone": "This message is no longer needed: the amount was paid, or the appointment was cancelled or moved.",
     },
 }
 

@@ -1,0 +1,74 @@
+{% extends "printing/share_base.html" %}
+{% load static %}
+{% block title %}{{ words.title }} · {{ company.name }}{% endblock %}
+{% block head_extra %}<link rel="stylesheet" href="{% static 'hesba/css/booking.css' %}?v=bk-001">{% endblock %}
+{% block sub %}<div class="cl-shopsub">{% if entity_name %}{{ entity_name }} · {% endif %}{{ words.title }}</div>{% endblock %}
+{% block content %}<main class="bk-main" data-booking-page data-step="{{ step }}">
+<div class="bk-col">
+  <div>
+    <div class="bk-eyebrow">{{ step_of }}</div>
+    <ol class="bk-steps" aria-label="{{ step_of }}">{% for s in steps %}<li class="{% if s.state == 'done' %}is-done{% elif s.state == 'now' %}is-now{% endif %}"{% if s.state == 'now' %} aria-current="step"{% endif %}><span class="bk-seg"></span><span class="bk-seglbl">{{ s.label }}</span></li>{% endfor %}</ol>
+  </div>
+  <div>
+    <h1 class="bk-h1">{% if step == 1 %}{{ words.title }}{% elif step == 2 %}{{ words.sec_staff }}{% elif step == 3 %}{{ words.sec_time }}{% else %}{{ words.sec_details }}{% endif %}</h1>
+    <p class="bk-lead">{% if step == 1 %}{{ words.lead }}{% elif step == 2 %}{{ words.head_staff }}{% elif step == 3 %}{{ words.head_time }}{% else %}{{ words.head_details }}{% endif %}</p>
+  </div>
+  {% if chips %}<div class="bk-chips">{% for chip in chips %}<a class="bk-chip" href="{{ chip.url }}" data-booking-chip><span>{{ chip.text }}</span><em>{{ words.change }}</em></a>{% endfor %}</div>{% endif %}
+  {% if error %}<div class="cl-msg cl-msg--danger" role="alert" data-booking-error>{{ error }}</div>{% endif %}
+
+  {% if step == 1 %}<section class="bk-sec" aria-labelledby="bk-h-service">
+    <div class="bk-sech"><span class="bk-secno" aria-hidden="true">1</span><h2 class="bk-h2" id="bk-h-service">{{ words.sec_service }}</h2></div>
+    {% if services %}<ul class="bk-list bk-list--2">{% for s in services %}<li><a class="bk-opt{% if s.selected %} is-sel{% endif %}" href="{{ s.url }}" data-booking-service="{{ s.row.pk }}"><span class="bk-opt__main"><span class="bk-opt__name">{{ s.row.item.item_name }}</span><span class="bk-opt__sub"><bdi>{{ s.row.duration_minutes }}</bdi> {{ words.min }}</span></span>{% if s.price %}<span class="bk-opt__end" data-booking-price><bdi>{{ s.price }}</bdi></span>{% endif %}</a></li>{% endfor %}</ul>
+    {% else %}<p class="bk-hint">{{ words.no_services }}</p>{% endif %}
+  </section>{% endif %}
+
+  {% if step == 2 %}<section class="bk-sec" aria-labelledby="bk-h-staff">
+    <div class="bk-sech"><span class="bk-secno" aria-hidden="true">2</span><h2 class="bk-h2" id="bk-h-staff">{{ words.sec_staff }}</h2></div>
+    <ul class="bk-list bk-list--2">{% for p in staff %}<li><a class="bk-opt{% if p.selected %} is-sel{% endif %}" href="{{ p.url }}" data-booking-staff="{{ p.pk }}"><span class="bk-av{% if p.any %} bk-av--any{% endif %}" aria-hidden="true">{% if p.any %}<svg class="bk-icon" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><path d="M16 4.6a3.5 3.5 0 010 6.8M18 14.4c2.2.7 3.5 2.6 3.5 5.6"/></svg>{% else %}{{ p.initial }}{% endif %}</span><span class="bk-opt__main"><span class="bk-opt__name">{{ p.name }}</span>{% if p.sub %}<span class="bk-opt__sub">{{ p.sub }}</span>{% endif %}</span></a></li>{% endfor %}</ul>
+  </section>{% endif %}
+
+  {% if step == 3 %}<section class="bk-sec" aria-labelledby="bk-h-time">
+    <div class="bk-sech"><span class="bk-secno" aria-hidden="true">3</span><h2 class="bk-h2" id="bk-h-time">{{ words.sec_time }}</h2></div>
+    <div class="bk-month"><strong>{{ month }}</strong><div class="bk-mnav">
+      {% if prev_url %}<a href="{{ prev_url }}" aria-label="{{ words.prev }}" data-booking-prev>{% if dir == 'rtl' %}›{% else %}‹{% endif %}</a>{% else %}<span aria-hidden="true">{% if dir == 'rtl' %}›{% else %}‹{% endif %}</span>{% endif %}
+      {% if next_url %}<a href="{{ next_url }}" aria-label="{{ words.next }}" data-booking-next>{% if dir == 'rtl' %}‹{% else %}›{% endif %}</a>{% else %}<span aria-hidden="true">{% if dir == 'rtl' %}‹{% else %}›{% endif %}</span>{% endif %}
+    </div></div>
+    <div class="bk-days">{% for d in days %}<a class="bk-day{% if d.selected %} is-sel{% endif %}{% if d.closed %} is-off{% elif not d.free %} is-full{% endif %}" href="{{ d.url }}" aria-label="{{ d.label }} — {{ d.tag }}"{% if d.selected %} aria-current="date"{% endif %} data-booking-day="{{ d.day|date:'Y-m-d' }}"><span class="bk-day__w">{{ d.w }}</span><span class="bk-day__n"><bdi>{{ d.n }}</bdi></span><span class="bk-day__t">{{ d.tag }}</span></a>{% endfor %}</div>
+    {% if has_slots %}{% for g in groups %}<div class="bk-col">
+      <div class="bk-grp">{{ g.title }}</div>
+      <div class="bk-slots">{% for sl in g.slots %}<a class="bk-slot" href="{{ slot_base }}&amp;time={{ sl.time }}" data-booking-slot="{{ sl.time }}"><bdi>{{ sl.label }}</bdi><small>{{ sl.suffix }}</small></a>{% endfor %}</div>
+    </div>{% endfor %}
+    <p class="bk-hint">{{ slots_hint }}</p>
+    {% else %}<div class="bk-empty" data-booking-empty>
+      <h2 class="bk-h2">{{ words.empty_h }}</h2>
+      <p>{{ words.empty_p }}</p>
+      {% if suggestion %}<div class="bk-sugg"><span>{{ words.sugg }}</span><strong><bdi>{{ suggestion.label }}</bdi></strong><a class="cl-btn cl-btn--primary" href="{{ suggestion.url }}" data-booking-suggestion>{{ words.sugg_book }}</a></div>
+      {% else %}<p>{{ words.none_left }}</p>{% endif %}
+      {% if any_url %}<a class="cl-btn" href="{{ any_url }}">{{ words.empty_any }}</a>{% endif %}
+      {% if whatsapp %}<a class="cl-btn" href="https://wa.me/{{ whatsapp }}">{{ words.wa }}</a>{% endif %}
+    </div>{% endif %}
+  </section>{% endif %}
+
+  {% if step == 4 %}<section class="bk-sec" aria-labelledby="bk-h-details">
+    <div class="bk-sech"><span class="bk-secno" aria-hidden="true">4</span><h2 class="bk-h2" id="bk-h-details">{{ words.sec_details }}</h2></div>
+    <form class="bk-form" method="post" action="{{ base }}" data-booking-form>{% csrf_token %}
+      <input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="service" value="{{ choices.service.pk }}">
+      <input type="hidden" name="staff" value="{% if choices.any %}any{% else %}{{ choices.employee.pk }}{% endif %}">
+      <input type="hidden" name="day" value="{{ choices.day|date:'Y-m-d' }}"><input type="hidden" name="time" value="{{ choices.time }}">
+      <div class="bk-field"><label for="bk-name">{{ words.name }}</label><input id="bk-name" name="name" type="text" maxlength="120" autocomplete="name" required value="{{ form.name }}"></div>
+      <div class="bk-field"><label for="bk-phone">{{ words.phone }}</label><input id="bk-phone" class="bk-ltr" name="phone" type="tel" dir="ltr" inputmode="tel" maxlength="30" autocomplete="tel" required value="{{ form.phone }}" aria-describedby="bk-phone-hint"><small id="bk-phone-hint">{{ words.phone_hint }}</small></div>
+      <div class="bk-field"><label for="bk-notes">{{ words.notes }} <small>({{ words.optional }})</small></label><textarea id="bk-notes" name="notes" rows="2" maxlength="200">{{ form.notes }}</textarea></div>
+      <div class="bk-hp" aria-hidden="true"><label for="bk-website">{{ words.honeypot }}</label><input id="bk-website" name="website" type="text" tabindex="-1" autocomplete="off" value=""></div>
+      {% if deposit_text %}<p class="bk-note" data-booking-deposit>{{ deposit_text }}</p>{% endif %}
+      <button class="cl-btn cl-btn--primary bk-submit" type="submit" data-booking-submit>{{ words.confirm }}</button>
+      <p class="bk-nopay">{{ words.nopay }}</p>
+    </form>
+  </section>{% endif %}
+</div>
+{% if summary %}<aside class="bk-sum" aria-labelledby="bk-h-sum" data-booking-summary>
+  <h2 class="bk-h2" id="bk-h-sum">{{ words.sum }}</h2>
+  <dl class="bk-dl">{% for k, v in summary %}<div><dt>{{ k }}</dt><dd><bdi>{{ v }}</bdi></dd></div>{% endfor %}</dl>
+</aside>{% endif %}
+</main>
+<script src="{% static 'hesba/js/submit_once.js' %}" defer></script>{% endblock %}
+{% block foot_note %}<p>{{ words.foot }}</p>{% endblock %}
