@@ -178,6 +178,9 @@ PATTERNS = (
     (r"^This screen needs the (?P<perm>[\w.]+) permission\.$", "الشاشة دي محتاجة صلاحية مش عندك."),
     # A0 (HG-078): the AI layer's daily cap and text size.
     (r"^Today's AI call limit is reached \((?P<cap>\d+) calls\)\. Try again tomorrow\.$", "وصلت لحد مكالمات الذكاء الاصطناعي النهارده ({cap} مكالمة). جرّب تاني بكرة."),
+    # A1 (HG-079): one person's daily voicings of the summary.
+    (r"^You have reached today's voice summary limit \((?P<cap>\d+) per person\)\. Try again tomorrow\.$",
+     "وصلت لحد تشغيل ملخص الصوت النهارده ({cap} مرات للشخص). جرّب تاني بكرة."),
     (r"^The text is too long to read aloud \(at most (?P<limit>\d+) characters\)\.$", "النص طويل أوي على القراية بالصوت (الحد {limit} حرف)."),
 )
 _COMPILED = tuple((re.compile(pattern), template) for pattern, template in PATTERNS)

@@ -9,6 +9,8 @@ Run seed_demo_business to fill a local database with enough trade for this
 screen to look like a working business.
 """
 
+import logging
+
 from django.shortcuts import render
 from django.utils import timezone, translation
 from django.utils.formats import date_format
@@ -40,6 +42,8 @@ from .activity_panel import build_activity_panel
 from .navigation import display_name, nav_items
 from settings_core.currency import currency_label
 
+
+logger = logging.getLogger(__name__)
 
 CHECKPOINT_CODE = "120F_DASHBOARD_LIVE_DATA"
 
@@ -439,6 +443,18 @@ def _demo_activities(user, lang, profile):
     return {"current": current, "label": "Your activity" if lang == "en" else "نشاطك"}
 
 
+def _voice_card(user, lang, today, shared, sections, fit):
+    """A1 (HG-079): the optional voice summary card. It must never break the dashboard: any error drops the card only."""
+
+    from ai.voice_summary import card_context
+
+    try:
+        return card_context(user, lang, today, shared=shared, sections=sections, capabilities=fit.capabilities)
+    except Exception:
+        logger.exception("A1 (HG-079): the voice summary card failed; the dashboard is shown without it.")
+        return None
+
+
 def dashboard(request):
     """Render whatever this viewer is allowed to see, which may be nothing.
 
@@ -465,7 +481,6 @@ def dashboard(request):
     fit = Fit.current(today)  # DASH-FIT: only what this business is and chose in setup
     cards = [card for card in _build_cards(request.user, lang, held, figures) if fit.shows(f"kpi.{card['key']}")]
 
-    from ai.voice_summary import card_context as voice_card
     from entities.current import effective_activity
 
     activity = effective_activity()[0] or ""
@@ -512,7 +527,7 @@ def dashboard(request):
         "quick_actions": _quick_actions(request.user, lang, modules, activity, sections),
         "activity_panel": build_activity_panel(activity, sections, lang, today, request.user),
         # A1 (HG-079): the voice summary card, only while its capability is on (read from the set already loaded).
-        "voice_summary": voice_card(request.user, lang, today, shared=shared, sections=sections, capabilities=fit.capabilities),
+        "voice_summary": _voice_card(request.user, lang, today, shared, sections, fit),
         "demo_activities": _demo_activities(request.user, lang, profile),
         "onboarding_steps": _onboarding(lang),
         # Guide someone whose installation has seen no trade yet, and anyone who

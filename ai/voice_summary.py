@@ -8,15 +8,18 @@
    constraint lets one request in; a second one arriving meanwhile is told the audio is being prepared (``Busy``)
    instead of paying for the same text again. A claim left behind by a process that died is taken over after
    ``STALE_CLAIM``;
-4. ``ai.services.text_to_speech`` is called **outside any transaction** (A0 refuses it inside one), and the audio is
+4. unless the listener has already started ``user_daily_cap()`` voicings today (listening to cached audio never counts),
+   ``ai.services.text_to_speech`` is called **outside any transaction** (A0 refuses it inside one), and the audio is
    stored on the row, which becomes ready. If the call is refused or fails, the claim is deleted and the error raised,
    so the next press can try again.
 
 The AI layer writes the audit rows (HG-078): the feature, entity and sizes, never the text.
 """
 
+import logging
 from datetime import timedelta
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.utils import timezone
@@ -24,12 +27,19 @@ from django.utils import timezone
 from . import services as ai_services
 from .models import VoiceSummaryAudio
 
+logger = logging.getLogger(__name__)
+
 FEATURE = "voice_summary"
 CAPABILITY = "ai_voice_summary"
 #: Today and the six days before.
 KEEP_DAYS = 7
 #: A claim older than this belongs to a request that never finished (the provider's own deadline is ~30 s).
 STALE_CLAIM = timedelta(minutes=2)
+#: The most voicings (paid calls) one person may start in a Cairo day, inside the company's cap. Listening to audio that
+#: is already cached is free and never counted. ``AI_VOICE_SUMMARY_USER_DAILY_CAP`` in the server's settings overrides it.
+DEFAULT_USER_DAILY_CAP = 5
+#: ``VoiceSummaryAudio.content_type`` holds at most this many characters.
+CONTENT_TYPE_MAX = 60
 
 
 class Busy(ValidationError):
@@ -60,12 +70,56 @@ def prune(today=None):
     return deleted
 
 
+def _ready(summary):
+    return VoiceSummaryAudio.objects.filter(ready=True, **_key(summary))
+
+
+def is_cached(summary):
+    """Whether this summary's audio is ready. One ``EXISTS`` query; the bytes are never read."""
+
+    return bool(summary.text) and _ready(summary).exists()
+
+
 def cached(summary):
-    """The ready audio for exactly this summary (scope, language, Cairo day and text), or None."""
+    """The ready row for exactly this summary (scope, language, Cairo day and text), or None, without its bytes."""
 
     if not summary.text:
         return None
-    return VoiceSummaryAudio.objects.filter(ready=True, **_key(summary)).first()
+    return _ready(summary).defer("audio").first()
+
+
+def cached_audio(summary):
+    """The ready row with its bytes, for streaming (the only place that reads them), or None."""
+
+    if not summary.text:
+        return None
+    return _ready(summary).only("audio", "content_type", "size").first()
+
+
+def user_daily_cap():
+    try:
+        return max(0, int(getattr(settings, "AI_VOICE_SUMMARY_USER_DAILY_CAP", DEFAULT_USER_DAILY_CAP)))
+    except (TypeError, ValueError):
+        return DEFAULT_USER_DAILY_CAP
+
+
+def voicings_today(user, now=None):
+    """The voice summary calls ``user`` started this Cairo day: their ``call_started`` rows for this feature (HG-078)."""
+
+    from audit.models import AuditLog
+
+    start, end = ai_services.cairo_day_bounds(now)
+    return AuditLog.objects.filter(module=ai_services.MODULE, action=ai_services.CALL_STARTED, actor=user,
+                                   after_data__feature=FEATURE, created_at__gte=start, created_at__lt=end).count()
+
+
+def _clean_content_type(value):
+    """The provider's type, cut to what the column holds; anything that is not audio is stored as MP3."""
+
+    value = str(value or "").split(";")[0].strip().lower()
+    if not value.startswith("audio/") or len(value) > CONTENT_TYPE_MAX:
+        return "audio/mpeg"
+    return value
 
 
 def _claim(summary, user):
@@ -83,7 +137,7 @@ def _claim(summary, user):
         return insert(), True
     except IntegrityError:
         pass
-    row = VoiceSummaryAudio.objects.filter(**key).first()
+    row = VoiceSummaryAudio.objects.filter(**key).defer("audio").first()
     if row is None:  # the other claim failed and was deleted in between: one more try
         return insert(), True
     if row.ready:
@@ -106,14 +160,26 @@ def speak(summary, user):
     prune(summary.day)
     row, claimed = _claim(summary, user)
     if not claimed:
-        return row
+        return row  # cached: free, and not counted against anyone
+    cap = user_daily_cap()
+    if voicings_today(user) >= cap:
+        VoiceSummaryAudio.objects.filter(pk=row.pk, ready=False).delete()
+        raise ValidationError(f"You have reached today's voice summary limit ({cap} per person). Try again tomorrow.")
     try:
         speech = ai_services.text_to_speech(summary.text, feature=FEATURE, user=user, entity=summary.entity)
     except BaseException:
         VoiceSummaryAudio.objects.filter(pk=row.pk, ready=False).delete()
         raise
-    VoiceSummaryAudio.objects.filter(pk=row.pk).update(audio=speech.audio, content_type=speech.content_type, size=speech.size, ready=True)
-    row.refresh_from_db()
+    content_type = _clean_content_type(speech.content_type)
+    try:
+        VoiceSummaryAudio.objects.filter(pk=row.pk).update(audio=speech.audio, content_type=content_type, size=speech.size, ready=True)
+    except Exception:
+        # The call was paid for (its audit rows are written), but the audio could not be kept. Free the claim at once, so
+        # the next press is not told "being prepared" for two minutes, and say so in the log.
+        logger.exception("A1 (HG-079): the voice summary audio could not be saved (row %s, %s bytes).", row.pk, speech.size)
+        VoiceSummaryAudio.objects.filter(pk=row.pk, ready=False).delete()
+        raise
+    row.ready, row.content_type, row.size = True, content_type, speech.size
     return row
 
 
@@ -131,8 +197,7 @@ def card_context(user, lang, today=None, shared=None, sections=None, capabilitie
     summary = build_summary(user, lang, today=today, shared=shared, sections=sections)
     if not summary.has_figures:
         return None
-    row = cached(summary)
-    return {"summary": summary, "words": WORDS[summary.lang], "audio_url": audio_url(summary) if row else "",
+    return {"summary": summary, "words": WORDS[summary.lang], "audio_url": audio_url(summary) if is_cached(summary) else "",
             "endpoint": reverse("ai:voice_summary")}
 
 

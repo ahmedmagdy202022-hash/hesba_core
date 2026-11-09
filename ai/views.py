@@ -45,13 +45,14 @@ def summary(request):
     built = build_summary(request.user, lang)
     if not built.has_figures:
         return _json({"ok": False, "error": translate("There is nothing to summarise for you yet.", lang)}, status=403)
-    row = voice_summary.cached(built)
-    if request.method == "POST" and row is None:
+    ready = voice_summary.is_cached(built)  # an EXISTS query: the bytes are read only by ``audio`` below
+    if request.method == "POST" and not ready:
         try:
-            row = voice_summary.speak(built, request.user)
+            voice_summary.speak(built, request.user)
         except ValidationError as exc:
             return _json({"ok": False, **built.as_dict(), "audio_url": "", "error": translate(exc.messages[0], lang)}, status=409)
-    return _json({"ok": True, **built.as_dict(), "audio_url": voice_summary.audio_url(built) if row else ""})
+        ready = True
+    return _json({"ok": True, **built.as_dict(), "audio_url": voice_summary.audio_url(built) if ready else ""})
 
 
 @require_GET
@@ -61,7 +62,7 @@ def audio(request, digest):
     built = build_summary(request.user, _lang(request))
     if not built.has_figures or digest != built.text_sha256:
         raise Http404("No audio for this summary.")
-    row = voice_summary.cached(built)
+    row = voice_summary.cached_audio(built)
     if row is None:
         raise Http404("No audio for this summary.")
     response = HttpResponse(bytes(row.audio), content_type=row.content_type or "audio/mpeg")

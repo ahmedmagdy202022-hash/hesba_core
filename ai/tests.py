@@ -90,6 +90,15 @@ class CheckTests(AiSimpleTestCase):
         with override_settings(DEBUG=False, AI_MODE="mock", ELEVENLABS_MODEL_ID=""):
             self.assertEqual(ids(ai_settings(None)), ["ai.E001"])  # the model is checked for live only
 
+    def test_live_is_refused_on_a_sandboxed_showcase(self):
+        # A1 review: every sandbox has its own audit log and so its own cap; live there is effectively uncapped spend.
+        with override_settings(DEBUG=False, DEMO_SANDBOXES=True, **LIVE_KEYS):
+            self.assertEqual(ids(ai_settings(None)), ["ai.E006"])
+        with override_settings(DEBUG=False, DEMO_SANDBOXES=False, **LIVE_KEYS):
+            self.assertEqual(ids(ai_settings(None)), [])
+        with override_settings(DEBUG=False, DEMO_SANDBOXES=True, AI_MODE="off"):
+            self.assertEqual(ids(ai_settings(None)), [])
+
     def test_unknown_mode_is_refused_and_connects_nothing(self):
         with override_settings(AI_MODE="maybe"):
             self.assertEqual(ids(ai_settings(None)), ["ai.E003"])

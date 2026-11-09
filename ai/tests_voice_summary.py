@@ -250,6 +250,23 @@ class EntityScopeTests(VoiceSummaryBase):
         self.assertEqual(VoiceSummaryAudio.objects.get(scope_key=f"entity:{self.branch.pk}").entity, self.branch)
         self.assertEqual(self.calls(), 2)
 
+    def test_appointments_are_the_branch_s_own(self):
+        from appointments.models import Appointment
+        from settings_core.models import ClientProfile
+        from settings_core.setup_services import set_module_enabled
+
+        set_module_enabled(ClientProfile.get_active(), "appointments_visits", True)
+        noon = timezone.make_aware(datetime.combine(self.today, dt_time(12, 0)))
+        customer = make_customer()
+        Appointment.objects.create(number="AP-BR", customer=customer, starts_at=noon, entity=self.branch, created_by=self.owner)
+        for number in ("AP-M1", "AP-M2"):
+            Appointment.objects.create(number=number, customer=customer, starts_at=noon, created_by=self.owner)  # main (no entity)
+        self.login(self.manager)
+        self.assertTrue(self.client.get(ENDPOINT + "?lang=ar").json()["text"].endswith("والنهارده عندك 1 ميعاد."))
+        with working_in(self.main):
+            self.assertTrue(build_summary(self.owner, "ar").text.endswith("والنهارده عندك 2 ميعاد."))
+        self.assertTrue(build_summary(self.owner, "ar").text.endswith("والنهارده عندك 3 مواعيد."))
+
 
 class CallTests(VoiceSummaryBase):
     def test_visiting_the_dashboard_and_reading_the_summary_never_calls_the_provider(self):
@@ -500,3 +517,218 @@ class NoNetworkBaseTests(AiTestCase):
         cases = [obj for obj in vars(sys.modules[__name__]).values() if inspect.isclass(obj) and issubclass(obj, unittest.TestCase)]
         self.assertGreater(len(cases), 5)
         self.assertEqual([case.__name__ for case in cases if not issubclass(case, NoNetworkMixin)], [])
+
+
+# ---- A1 independent review (APPROVE WITH FIXES): the fixes and the missing tests ----
+
+AUDIO_COLUMN = '"ai_voicesummaryaudio"."audio"'
+
+
+def queried(run):
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    with CaptureQueriesContext(connection) as queries:
+        result = run()
+    return result, [query["sql"] for query in queries]
+
+
+class AudioBytesTests(VoiceSummaryBase):
+    """Review 1: the MP3 is read only to stream it, never to decide whether a URL exists."""
+
+    def test_the_card_the_lookup_and_the_json_never_read_the_audio_column(self):
+        self.login()
+        self.post()
+        summary = build_summary(self.owner, "ar")
+        context, sql = queried(lambda: voice_summary.card_context(self.owner, "ar"))
+        self.assertTrue(context["audio_url"])
+        self.assertTrue(any("ai_voicesummaryaudio" in query for query in sql))
+        self.assertFalse(any(AUDIO_COLUMN in query for query in sql))
+        row, sql = queried(lambda: voice_summary.cached(summary))
+        self.assertTrue(row.ready)
+        self.assertFalse(any(AUDIO_COLUMN in query for query in sql))
+        for method in (self.client.get, self.client.post):
+            response, sql = queried(lambda: method(ENDPOINT, {"lang": "ar"}))
+            self.assertTrue(response.json()["audio_url"])
+            self.assertFalse(any(AUDIO_COLUMN in query for query in sql), method)
+        response, sql = queried(lambda: self.client.get(response.json()["audio_url"]))
+        self.assertEqual(response.content, SILENT_MP3)
+        self.assertTrue(any(AUDIO_COLUMN in query for query in sql))  # streaming is the one place that reads it
+
+    def test_voicing_does_not_read_the_bytes_back(self):
+        _, sql = queried(lambda: voice_summary.speak(build_summary(self.owner, "ar"), self.owner))
+        self.assertFalse(any(query.lstrip().upper().startswith("SELECT") and AUDIO_COLUMN in query for query in sql))
+
+
+class UserCapTests(VoiceSummaryBase):
+    """Review 3: a per-person daily limit on voicings; cached audio stays free."""
+
+    def test_the_limit_counts_voicings_only(self):
+        from django.test import override_settings
+
+        self.login()
+        with override_settings(AI_VOICE_SUMMARY_USER_DAILY_CAP=1):
+            first = self.post().json()
+            self.assertTrue(first["ok"])
+            self.assertTrue(self.post().json()["ok"])  # the same text again: cached, free, not counted
+            self.assertEqual(self.client.get(first["audio_url"]).status_code, 200)
+            self.assertEqual((self.calls(), voice_summary.voicings_today(self.owner)), (1, 1))
+            record_customer_payment("CP-Y4", self.yesterday, make_customer(), self.cashbox, D("1.00"), user=self.owner)
+            refused = self.post()
+            self.assertEqual(refused.status_code, 409)
+            self.assertEqual(refused.json()["error"], "وصلت لحد تشغيل ملخص الصوت النهارده (1 مرات للشخص). جرّب تاني بكرة.")
+            self.assertEqual(self.post("en").json()["error"], "You have reached today's voice summary limit (1 per person). Try again tomorrow.")
+            self.assertEqual(self.calls(), 1)
+            self.assertFalse(VoiceSummaryAudio.objects.filter(ready=False).exists())  # no claim left behind
+            other = person(RoleCode.OWNER, "voice_owner_two")
+            self.login(other)
+            self.assertTrue(self.post().json()["ok"])  # the limit is per person
+            self.assertEqual(self.calls(), 2)
+
+    def test_the_default_is_five_and_only_this_feature_s_started_rows_count(self):
+        self.assertEqual(voice_summary.user_daily_cap(), 5)
+        self.login()
+        self.post()
+        AuditLog.objects.create(event_type="export", actor=self.owner, module="ai", action=services.CALL_STARTED,
+                                after_data={"feature": "another_feature"}, reason="x")
+        self.assertEqual(voice_summary.voicings_today(self.owner), 1)
+
+
+class SaveTests(VoiceSummaryBase):
+    """Review 4: the save after a paid call."""
+
+    def test_the_content_type_is_cut_to_fit(self):
+        from .providers.base import Speech
+
+        for given, stored in (("audio/mpeg; charset=binary", "audio/mpeg"), ("audio/" + "x" * 80, "audio/mpeg"),
+                              ("text/html", "audio/mpeg"), ("audio/ogg", "audio/ogg"), ("", "audio/mpeg")):
+            VoiceSummaryAudio.objects.all().delete()
+            with self.subTest(given=given), mock.patch.object(self.provider, "synthesize", return_value=Speech(audio=SILENT_MP3, content_type=given)):
+                row = voice_summary.speak(build_summary(self.owner, "ar"), self.owner)
+                self.assertEqual(VoiceSummaryAudio.objects.get(pk=row.pk).content_type, stored)
+
+    def test_a_failed_save_frees_the_claim_at_once_and_is_logged(self):
+        from django.db import DatabaseError
+        from django.db.models.query import QuerySet
+
+        real_update = QuerySet.update
+
+        def update(queryset, **kwargs):
+            if "audio" in kwargs:
+                raise DatabaseError("disk full")
+            return real_update(queryset, **kwargs)
+
+        with mock.patch.object(QuerySet, "update", update), self.assertLogs("ai.voice_summary", "ERROR") as logs, \
+                self.assertRaises(DatabaseError):
+            voice_summary.speak(build_summary(self.owner, "ar"), self.owner)
+        self.assertIn("could not be saved", logs.output[0])
+        self.assertEqual(VoiceSummaryAudio.objects.count(), 0)  # no "being prepared" for the next press
+        self.assertEqual(AuditLog.objects.filter(module="ai", action=services.CALL_OK).count(), 1)  # the paid call is on record
+        self.assertTrue(voice_summary.speak(build_summary(self.owner, "ar"), self.owner).ready)
+
+
+class DashboardSafetyTests(VoiceSummaryBase):
+    def test_a_failing_card_never_breaks_the_dashboard(self):
+        self.login()
+        with mock.patch("ai.summary.build_summary", side_effect=RuntimeError("boom")), \
+                self.assertLogs("reports.dashboard_views", "ERROR"):
+            page = self.client.get("/dashboard/?lang=ar")
+        self.assertEqual(page.status_code, 200)
+        self.assertIsNone(page.context["voice_summary"])
+        self.assertNotContains(page, "data-voice-summary")
+        self.assertContains(page, 'data-kpi="sales_today"')  # the rest of the dashboard is there
+
+
+class TileLinkTests(VoiceSummaryBase):
+    def test_the_collections_tile_says_it_opens_the_whole_list(self):
+        tiles = {tile["key"]: tile for tile in build_summary(self.owner, "ar").tiles}
+        self.assertEqual(tiles["receipts"]["sub"], "افتح قايمة التحصيلات كلها")
+        tiles = {tile["key"]: tile for tile in build_summary(self.owner, "en").tiles}
+        self.assertEqual(tiles["receipts"]["sub"], "Open the full collections list")
+
+
+class BranchTests(VoiceSummaryBase):
+    """Review 8: the branches the first round did not reach."""
+
+    def role_with(self, username, *codes):
+        from hesba_testing.factories import grant
+        from permissions.models import Permission
+
+        role = make_role(code=f"R-{username}")
+        for code in codes:
+            grant(role, Permission.objects.get(code=code))
+        user = make_user(username=username)
+        make_user_profile(user=user, role=role)
+        return user
+
+    def test_the_invoice_count_without_the_sales_total(self):
+        everyone = self.role_with("voice_counter", "sales.view_sales_invoices", "reports.view_all_sales_report")
+        summary = build_summary(everyone, "ar")
+        self.assertEqual(summary.text, "أهلاً، ده ملخص النهارده. امبارح اتعمل 2 فاتورة بيع.")
+        self.assertEqual([(tile["key"], tile["label"], tile["value"], tile["url"]) for tile in summary.tiles],
+                         [("invoices", "فواتير امبارح", "2", "")])  # no link: the sales report needs a permission they lack
+        self.assertEqual(build_summary(everyone, "en").text, "Hello, here is today's summary. There were 2 sales invoices yesterday.")
+        mine = self.role_with("voice_counter_own", "sales.view_sales_invoices")
+        summary = build_summary(mine, "ar")
+        self.assertEqual(summary.text, "أهلاً، ده ملخص النهارده. امبارح عملت 0 فاتورة بيع.")  # their own: none
+        self.assertEqual(summary.tiles[0]["label"], "فواتيري امبارح")
+
+    def test_collections_are_the_shop_s_as_on_the_dashboard_card(self):
+        # receipts_today has no scope permission, so a cashier's card (and summary) shows the whole shop's collections.
+        cashier = person(RoleCode.CASHIER, "voice_cashier_receipts")
+        record_customer_payment("CP-C1", self.yesterday, make_customer(), self.cashbox, D("3.00"), user=cashier)
+        self.assertEqual(DashboardFigures(cashier, self.yesterday).value_for("receipts_today", "all"), D("78.25"))
+        self.assertIn("والتحصيل كان 78.25 جنيه مصري.", build_summary(cashier, "ar").text)
+
+    def test_a_claim_deleted_in_between_is_claimed_again(self):
+        from django.db import IntegrityError
+
+        real_create = VoiceSummaryAudio.objects.create
+        attempts = []
+
+        def create(**kwargs):
+            attempts.append(1)
+            if len(attempts) == 1:
+                raise IntegrityError("another request held it, then gave up")
+            return real_create(**kwargs)
+
+        with mock.patch.object(VoiceSummaryAudio.objects, "create", side_effect=create):
+            row = voice_summary.speak(build_summary(self.owner, "ar"), self.owner)
+        self.assertEqual((len(attempts), row.ready, self.calls()), (2, True, 1))
+
+    def test_a_row_made_ready_in_between_is_returned_unpaid(self):
+        summary = build_summary(self.owner, "ar")
+        ready = VoiceSummaryAudio.objects.create(scope_key="group", language="ar", day=self.today, text_sha256=summary.text_sha256,
+                                                 text=summary.text, ready=True, audio=SILENT_MP3, content_type="audio/mpeg", size=len(SILENT_MP3))
+        self.assertEqual(voice_summary.speak(summary, self.owner).pk, ready.pk)
+        self.assertEqual((self.calls(), AuditLog.objects.filter(module="ai").count()), (0, 0))
+
+    def test_any_other_exception_deletes_the_claim(self):
+        with mock.patch.object(self.provider, "synthesize", side_effect=RuntimeError("unexpected")), self.assertRaises(RuntimeError):
+            voice_summary.speak(build_summary(self.owner, "ar"), self.owner)
+        self.assertEqual(VoiceSummaryAudio.objects.count(), 0)
+        self.assertEqual(AuditLog.objects.filter(module="ai", action=services.CALL_ERROR).count(), 1)
+
+    def test_counting_words(self):
+        from .summary import _ar_count, _en_count
+
+        self.assertEqual([_ar_count(n, "صنف", "أصناف") for n in (1, 2, 3, 10, 11)], ["1 صنف", "2 صنف", "3 أصناف", "10 أصناف", "11 صنف"])
+        self.assertEqual([_en_count(n, "item") for n in (0, 1, 2)], ["0 items", "1 item", "2 items"])
+
+    def test_a_page_left_open_across_cairo_midnight(self):
+        before = datetime.combine(self.yesterday, dt_time(23, 59), tzinfo=CAIRO)
+        after = datetime.combine(self.today, dt_time(0, 1), tzinfo=CAIRO)
+        self.login()
+        with mock.patch("django.utils.timezone.now", return_value=before):
+            old = self.post().json()
+            self.assertTrue(old["ok"])
+            self.assertEqual(self.client.get(old["audio_url"]).status_code, 200)
+        with mock.patch("django.utils.timezone.now", return_value=after):
+            self.assertEqual(self.client.get(old["audio_url"]).status_code, 404)  # yesterday's audio on today's page: the card POSTs again
+            new = self.post().json()
+            self.assertEqual(new["text"], AR_TEXT)
+            self.assertNotEqual(new["audio_url"], old["audio_url"])
+            self.assertEqual(self.client.get(new["audio_url"]).status_code, 200)
+        self.assertEqual(sorted(VoiceSummaryAudio.objects.values_list("day", flat=True)), [self.yesterday, self.today])
+        self.assertEqual(self.calls(), 2)
+

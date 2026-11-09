@@ -2522,20 +2522,22 @@ The entries below are the protected-logic decisions in the commercial gate, reco
   3. Which ElevenLabs voice to use (`ELEVENLABS_VOICE_ID`; live refuses the placeholder).
   4. (A0) Cap scope: per installation, as built, or per entity?
   5. (A0) Showcase and demo: a demo server runs with `DEBUG` off, where `ai.E001` refuses mock and an empty `AI_MODE` means off. A1's demo data and «جرّب» steps need a choice: exempt `DEMO_MODE` from the check, or use a live key on the demo.
+     - **A1 review:** a live key on a **sandboxed** showcase is now refused at start (`ai.E006`, `AI_MODE=live` with `DEMO_SANDBOXES` on). Each visitor's sandbox is its own database, with its own audit log and so its own daily cap: spend there would be effectively uncapped. A live key on a non-sandboxed demo is still allowed and remains Ahmed's call.
 - **Risk:** medium (data leaving the server, cost). It is mitigated by off-by-default switches, caps, mock in tests, and the audit.
 
 ## HG-079 — A1 voice summary of the day
 
-- **Status:** IMPLEMENTED on `claude/maestro-ai-a1-voice-summary`, pending review. Built on A0 (HG-078). No protected logic touched: no report calculation, posting, stock, cashbox or ledger code changed. The summary only reads the dashboard's existing figures.
+- **Status:** IMPLEMENTED on `claude/maestro-ai-a1-voice-summary`, pending review. Independent review round 1 (APPROVE WITH FIXES) is addressed; see below. Built on A0 (HG-078). No protected logic touched: no report calculation, posting, stock, cashbox or ledger code changed. The summary only reads the dashboard's existing figures.
 - **Migration:** `ai/migrations/0001_initial.py`, the AI app's first. It creates `ai.VoiceSummaryAudio`, the audio cache, and nothing else.
 - **Files:**
   - `ai/summary.py`: builds the text and the figures (no language model);
   - `ai/voice_summary.py`: the cache, the claim, the call through `ai.services.text_to_speech`, pruning, and the card's context;
   - `ai/models.py`, `ai/migrations/0001_initial.py`;
+  - `ai/checks.py` (`ai.E006`, live refused on a sandboxed showcase);
   - `ai/views.py`, `ai/urls.py` (`/ai/voice-summary/`, `/ai/voice-summary/audio/<sha256>.mp3`), and `config/urls.py` (`path("ai/", …)`);
   - `ai/management/commands/prune_voice_summaries.py`;
   - `templates/ai/voice_summary_card.html`, `static/hesba/js/voice_summary.js`, `static/hesba/css/dashboard.css` (additive `.dash-voice*` rules, tokens only);
-  - `reports/dashboard_views.py` (one context key), `templates/reports/dashboard.html` (one include after the hero, one script tag, and the CSS version bump);
+  - `reports/dashboard_views.py` (one context key, built by `_voice_card`, which can never break the page), `templates/reports/dashboard.html` (one include after the hero, one script tag, and the CSS version bump);
   - `settings_core/capabilities.py` (`ai_voice_summary` available, offered to every activity, in a new «الذكاء الاصطناعي» group, with its icon and "where"), `settings_core/operational_views.py` (`FEATURE_LANDING` → the dashboard), `settings_core/ui_messages.py` (two Arabic messages);
   - tests: `ai/tests_voice_summary.py` (new), plus `ai/tests.py`, `settings_core/tests_capabilities.py` and `settings_core/tests_setup_wizard.py`, updated for the capability now being available and the new group.
 - **As built:**
@@ -2556,6 +2558,8 @@ The entries below are the protected-logic decisions in the commercial gate, reco
     4. it calls `ai.services.text_to_speech(text, feature="voice_summary", user=…, entity=…)` outside any transaction (it refuses up front inside one), then stores the audio;
     5. on any refusal or error it deletes the claim and re-raises, so the next press can try again.
     A1 adds no audit rows of its own: A0 writes the started and outcome rows, without the text.
+  - **Storage is bounded:** at most the company's daily cap of rows a day (each paid call stores one MP3, a few hundred KB for a summary), times 7 days, then pruned. With the default cap of 50, that is at most 350 rows.
+  - **Per-person limit:** a person may start at most 5 voicings (paid calls) a Cairo day (`AI_VOICE_SUMMARY_USER_DAILY_CAP` overrides it), inside the company cap. It is counted from that person's `call_started` rows for `voice_summary`. Listening to audio already cached is free and never counted. The refusal is «وصلت لحد تشغيل ملخص الصوت النهارده (5 مرات للشخص). جرّب تاني بكرة.».
   - **Keep 7 days:** today and the six Cairo days before. Old rows are pruned on access (every new voicing) and by `manage.py prune_voice_summaries`.
   - **The endpoints:**
     - `GET /ai/voice-summary/` returns JSON: the text, the figures with their links, and the audio URL if already cached. It never calls the provider.
@@ -2572,6 +2576,23 @@ The entries below are the protected-logic decisions in the commercial gate, reco
   3. **Out of stock is said as a second figure** next to "running low" when it is not zero, exactly as the dashboard's two stock cards; the tiles keep the design's four (sales, collections, running low, appointments). A listener with the invoice count but not the sales total gets an invoice tile instead of the sales tile.
   4. **No time-of-day greeting:** the artboard's «صباح الخير» became «أهلاً، ده ملخص النهارده.». A greeting that changes at noon would change the hash and pay for a second call.
   5. `reports/digest.py` (DIGEST-001's daily summary) was **not** reused. It reads `SalesInvoice.objects` and `CustomerPayment.objects` with no entity scope, so it would let one branch hear another's figures. That pre-existing gap is left as it is (out of scope); see risks.
+- **Independent review round 1 (APPROVE WITH FIXES at `71fa16d`; no leak, no spend without a press), as addressed:**
+  1. **The MP3 is read only to stream it.** The card and the JSON use `is_cached()` (an `EXISTS`). `cached()` and `_claim` defer `audio`. `speak` no longer reads the row back. Only `views.audio` reads the bytes (`cached_audio()`, `.only(...)`). Tested on the SQL.
+  2. **`ai.E006`:** live is refused while `DEMO_SANDBOXES` is on (see HG-078 open question 5).
+  3. **Per-person daily limit** (5), as above. Cached audio stays free.
+  4. **The save after a paid call:** `content_type` is cut to its type, and anything that is not `audio/…` or is longer than 60 characters is stored as `audio/mpeg`. If the save fails, the claim is deleted at once and the error logged (`ai.voice_summary`), then raised. The paid call stays on record in the audit.
+  5. **Tile links:** the invoices-only tile now opens the sales report for yesterday's date range, like the sales tile. No screen lists collections by date, so that tile keeps the collections list and says so: «افتح قايمة التحصيلات كلها» / "Open the full collections list". No list filters were added.
+  6. **The dashboard never breaks for the card:** `reports/dashboard_views._voice_card` logs any exception and drops only the card.
+  7. **Storage growth:** the line above.
+  8. **The missing tests:**
+     - the invoices-only branch;
+     - collections as the shop's figure;
+     - both race branches of `_claim`;
+     - a non-`ValidationError` deleting the claim;
+     - appointments by entity;
+     - the counting words;
+     - a page left open across Cairo midnight.
+     **Deviation:** there is no test for «تحصيلاتك» because that branch could never run. `receipts_today` has no scope permission, so the dashboard's receipts card (and the summary) is always the whole shop's figure. The dead branch was removed and the behaviour is pinned by a test instead.
 - **Remaining risks:**
   - `reports/digest.py` (the WhatsApp daily summary) is not entity-scoped (HG-034). Pre-existing, not changed here.
   - Two simultaneous first presses: one voices and the other gets "being prepared". A process killed mid-call leaves a claim that blocks that text for 2 minutes. On SQLite, the claim insert can meet «database is locked» under contention, as A0's reservation can.

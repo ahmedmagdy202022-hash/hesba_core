@@ -40,15 +40,17 @@ WORDS = {
         "title": "ملخص النهارده بالصوت", "play": "شغّل الملخص", "pause": "وقّف الملخص", "loading": "بنجهّز الصوت…",
         "note": "الأرقام من تقارير حسبة نفسها. الصوت بس اللي متولّد.",
         "sales": "مبيعات امبارح", "my_sales": "مبيعاتي امبارح", "invoices": "فواتير امبارح", "my_invoices": "فواتيري امبارح",
-        "receipts": "التحصيل", "my_receipts": "تحصيلاتي", "low": "قربت تخلص", "appointments": "مواعيد النهارده",
+        "receipts": "التحصيل", "low": "قربت تخلص", "appointments": "مواعيد النهارده",
         "press_again": "الصوت جاهز. دوس تشغيل تاني.", "failed": "الصوت مااشتغلش. جرّب تاني.",
+        "all_collections": "افتح قايمة التحصيلات كلها",
     },
     "en": {
         "title": "Today's summary, read aloud", "play": "Play the summary", "pause": "Pause the summary", "loading": "Preparing the audio…",
         "note": "The figures come from Hesba's own reports. Only the voice is generated.",
         "sales": "Yesterday's sales", "my_sales": "My sales yesterday", "invoices": "Invoices yesterday", "my_invoices": "My invoices yesterday",
-        "receipts": "Collections", "my_receipts": "My collections", "low": "Running low", "appointments": "Today's appointments",
+        "receipts": "Collections", "low": "Running low", "appointments": "Today's appointments",
         "press_again": "The audio is ready. Press play again.", "failed": "The audio did not play. Try again.",
+        "all_collections": "Open the full collections list",
     },
 }
 
@@ -208,17 +210,20 @@ def build_summary(user, lang="ar", today=None, shared=None, sections=None):
             sentences.append(f"{'You made' if own[INVOICES] else 'There were'} {_en_count(count, 'sales invoice')} yesterday.")
         else:
             sentences.append(f"امبارح {'عملت' if own[INVOICES] else 'اتعمل'} {_ar_count(count, 'فاتورة بيع', 'فواتير بيع')}.")
-        tiles.append(_tile("invoices", words["my_invoices" if own[INVOICES] else "invoices"], str(count),
-                           _link(user, "sales:list", lang, status="posted")))
+        # The sales report is the screen that takes yesterday's date range (the invoice list has no date filter).
+        tiles.append(_tile("invoices", words["my_invoices" if own[INVOICES] else "invoices"], str(count), sales_link))
 
-    # Yesterday's collections.
+    # Yesterday's collections. The dashboard's receipts card has no own scope (no scope permission): whoever may see it
+    # sees the whole shop's, so the summary says the same.
     if RECEIPTS in figures:
         if lang == "en":
-            sentences.append(f"{'Your collections' if own[RECEIPTS] else 'Collections'} came to {said(figures[RECEIPTS])}.")
+            sentences.append(f"Collections came to {said(figures[RECEIPTS])}.")
         else:
-            sentences.append(f"{'وتحصيلاتك' if own[RECEIPTS] else 'والتحصيل'} كان {said(figures[RECEIPTS])}.")
-        tiles.append(_tile("receipts", words["my_receipts" if own[RECEIPTS] else "receipts"], shown(figures[RECEIPTS]),
-                           _link(user, "sales:payments", lang, status="posted")))
+            sentences.append(f"والتحصيل كان {said(figures[RECEIPTS])}.")
+        # No screen lists collections by date, so the link says it opens the whole list, not yesterday's.
+        receipts_link = _link(user, "sales:payments", lang, status="posted")
+        tiles.append(_tile("receipts", words["receipts"], shown(figures[RECEIPTS]),
+                           receipts_link, words["all_collections"] if receipts_link else ""))
 
     # Stock running low (and out), today. Two figures, never added together.
     if LOW in figures:
