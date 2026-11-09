@@ -314,6 +314,12 @@ ELEVENLABS_VOICE_ID = config("ELEVENLABS_VOICE_ID", default="hesba-placeholder-v
 ELEVENLABS_MODEL_ID = config("ELEVENLABS_MODEL_ID", default="eleven_multilingual_v2")
 # The daily AI call cap is a setting each company can change (SystemSetting ai_daily_call_cap); this caps it from above.
 AI_DAILY_CALL_CAP_MAX = config("AI_DAILY_CALL_CAP_MAX", default=500, cast=int)
+# A2 (HG-080): «اسأل حسبة» routes each question with Anthropic's model (the official SDK, built in live mode only).
+# Live without ANTHROPIC_API_KEY connects nothing for it. The model stays the default unless Ahmed decides otherwise.
+ANTHROPIC_API_KEY = config("ANTHROPIC_API_KEY", default="")
+ANTHROPIC_MODEL = config("ANTHROPIC_MODEL", default="claude-opus-5-5").strip()
+# The most questions one person may ask in a Cairo day, inside the company's daily cap.
+AI_ASK_USER_DAILY_CAP = config("AI_ASK_USER_DAILY_CAP", default=20, cast=int)
 
 LOGGING = {
     "version": 1,

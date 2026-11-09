@@ -4,7 +4,7 @@
 {% block body_class %}dashboard-page{% endblock %}
 
 {% block styles %}
-<link rel="stylesheet" href="{% static 'hesba/css/dashboard.css' %}?v=a1-1">
+<link rel="stylesheet" href="{% static 'hesba/css/dashboard.css' %}?v=a2-1">
 <link rel="stylesheet" href="{% static 'hesba/css/shell.css' %}">
 {% endblock %}
 
@@ -107,6 +107,7 @@
       </section>
 
       {% if voice_summary %}{% include "ai/voice_summary_card.html" %}{% endif %}
+      {% if ask_link %}<a class="dash-ask" href="{{ ask_link.url }}" data-ask-link><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5M12 16.5h.01"/></svg><span class="dash-ask__text"><strong>{{ ask_link.label }}</strong><small>{{ ask_link.hint }}</small></span></a>{% endif %}
 
       {% if activity_panel %}
       <section class="dash-section dash-activity dash-activity--{{ activity_panel.kind }}" aria-label="{{ activity_panel.title }}" data-activity-panel="{{ activity_panel.kind }}">

@@ -11,10 +11,13 @@
   another entity, has a different text and so gets a 404. The answer is private and never stored by the browser.
 
 Both answer 404 while the capability is off, and 403 to a listener who may see none of the figures.
+
+A2 (HG-080): ``ask`` is the «اسأل حسبة» page (``ai.ask``).
 """
 
 from django.core.exceptions import ValidationError
 from django.http import Http404, HttpResponse, JsonResponse
+from django.shortcuts import render
 from django.utils.cache import patch_cache_control
 from django.views.decorators.http import require_GET, require_http_methods
 
@@ -53,6 +56,32 @@ def summary(request):
             return _json({"ok": False, **built.as_dict(), "audio_url": "", "error": translate(exc.messages[0], lang)}, status=409)
         ready = True
     return _json({"ok": True, **built.as_dict(), "audio_url": voice_summary.audio_url(built) if ready else ""})
+
+
+@require_http_methods(["GET", "POST"])
+def ask(request):
+    """A2 (HG-080): «اسأل حسبة». GET shows the box and the suggestions and never calls the model. POST (CSRF) asks one
+    question and shows its card. 404 while the capability is off (the module gate also closes ``/ai/ask/``)."""
+
+    from . import ask as ask_feature
+    from .services import QUESTION_MAX_CHARS, clean_question
+
+    lang = _lang(request)
+    if not ask_feature.is_on():
+        raise Http404("Ask Hesba is not switched on.")
+    words = ask_feature.WORDS[lang]
+    context = {"lang": lang, "dir": "ltr" if lang == "en" else "rtl", "page_title": words["title"], "w": words,
+               "suggestions": ask_feature.suggestions(request.user, lang), "max_chars": QUESTION_MAX_CHARS,
+               "can_ask": ask_feature.can_ask(request.user)}
+    if not context["can_ask"]:  # no tool this person may use: no box, and a POST never reaches the model
+        context["answer"] = ask_feature.answer("", request.user, lang)
+        return _private(render(request, "ai/ask.html", context, status=403))
+    if request.method == "POST":
+        question = request.POST.get("q", "")
+        context["answer"] = ask_feature.answer(question, request.user, lang)
+        # shown back to its own asker only
+        context["question"] = clean_question(question[:ask_feature.RAW_MAX_CHARS])[:QUESTION_MAX_CHARS]
+    return _private(render(request, "ai/ask.html", context))
 
 
 @require_GET

@@ -42,7 +42,7 @@ class NoNetworkMixin:
 
 #: Mock by default (tests run with DEBUG off, where an empty AI_MODE means off), and no key from the environment.
 AI_TEST_SETTINGS = {"AI_MODE": "mock", "ELEVENLABS_API_KEY": "", "ELEVENLABS_VOICE_ID": "hesba-placeholder-voice",
-                    "ELEVENLABS_MODEL_ID": "eleven_multilingual_v2"}
+                    "ELEVENLABS_MODEL_ID": "eleven_multilingual_v2", "ANTHROPIC_API_KEY": "", "ANTHROPIC_MODEL": "claude-opus-5-5"}
 
 
 @override_settings(**AI_TEST_SETTINGS)

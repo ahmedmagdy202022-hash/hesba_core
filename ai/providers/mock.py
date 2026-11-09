@@ -2,11 +2,17 @@
 
 ``MockElevenLabsTTS`` *is* ``ElevenLabsTTS``: only ``_http`` differs, so the request it records is the one the live
 client builds. Nothing here opens a socket. The answer is always the same small, valid, silent MP3.
+
+A2 (HG-080): ``MockClaudeRouter`` *is* ``ClaudeRouter`` with only ``_create`` swapped: it routes a question to a tool
+by its words, deterministically, and answers in the Messages API's shape. It never imports or builds the SDK client.
 """
 
 import json
+import re
+import unicodedata
 
 from .base import ProviderError
+from .claude import ClaudeRouter
 from .elevenlabs import ElevenLabsTTS
 
 #: One MPEG-1 Layer III frame: 32 kbit/s, 32 kHz, mono, no CRC (header FF FB 18 C0), zero side information and zero
@@ -31,3 +37,84 @@ class MockElevenLabsTTS(ElevenLabsTTS):
         if self.fail_with:
             raise ProviderError(self.fail_with)
         return "audio/mpeg", SILENT_MP3
+
+
+# ---- A2 (HG-080): the question router, routing on keywords ----
+
+#: Which tool a question asks for, by its words after ``normalise``, first match wins (Arabic and English). The order
+#: matters: «كام ربحت من المبيعات» is profit, «مين عليه فلوس» is aging, «المخزون» is stock and not the cashbox.
+TOOL_WORDS = (
+    ("profit_total", ("ربح", "ارباح", "مكسب", "كسبت", "profit")),
+    ("top_debtors", ("مين عليه", "عليه فلوس", "عليهم فلوس", "مديون", "اعمار الديون", " owes", " owe ", "debtor", "debt")),
+    ("collections_total", ("تحصيل", "حصلت", "اتحصل", "collect", "receipts")),
+    ("low_stock", ("ناقص", "قرب يخلص", "قربت تخلص", "يخلص", "مخزون", "نفد", "stock", "running low", "running out")),
+    ("cashbox_balances", ("خزنه", " الخزن ", "خزينه", "cashbox", "cash box", " cash", " till")),
+    ("appointments_today", ("مواعيد", "ميعاد", "حجوزات", "appointment", "booking")),
+    ("top_items", ("اكتر صنف", "اكثر صنف", "الاكثر مبيع", "الاكتر مبيع", "اكتر حاجه", "best sell", "best-sell", "top item", "top sell", "best item")),
+    ("invoice_count", ("كام فاتوره", "عدد الفواتير", "فواتير", "invoice")),
+    ("sales_total", ("مبيعات", "بعت", "بيع", "sales", " sold", "revenue")),
+)
+#: The period, by its words, first match wins («الشهر اللي فات» before «الشهر»). No period word means today.
+PERIOD_WORDS = (
+    ("yesterday", ("امبارح", "امس", "yesterday")),
+    ("last_month", ("الشهر اللي فات", "الشهر الماضي", "الشهر السابق", "last month", "previous month")),
+    ("this_week", ("الاسبوع", "week")),
+    ("this_month", ("الشهر", "month")),
+    ("today", ("النهارده", "اليوم", "today")),
+)
+PERIOD_TOOLS = ("sales_total", "invoice_count", "collections_total", "profit_total", "top_items")
+#: Each tool that takes a ``limit``, and the one it uses when the question names none.
+LIMIT_TOOLS = {"top_debtors": 1, "low_stock": 5, "top_items": 3}
+_DIACRITICS = re.compile("[ً-ْـ]")  # harakat and tatweel
+
+
+def normalise(text):
+    """Lower case, Arabic letters folded (أ إ آ → ا, ى → ي, ة → ه), harakat and tatweel dropped, Arabic digits read,
+    spaces collapsed, with one space at each end so a word can be matched at its start."""
+
+    text = unicodedata.normalize("NFKC", str(text or "")).lower()
+    text = _DIACRITICS.sub("", text)
+    text = text.translate(str.maketrans("أإآىة٠١٢٣٤٥٦٧٨٩", "ااايه0123456789"))
+    return f" {' '.join(text.split())} "
+
+
+def keyword_route(question):
+    """``(tool, arguments)`` for ``question`` by its words, or ``(None, None)`` when no tool's words are in it."""
+
+    text = normalise(question)
+    tool = next((name for name, words in TOOL_WORDS if any(word in text for word in words)), None)
+    if tool is None:
+        return None, None
+    arguments = {}
+    if tool in PERIOD_TOOLS:
+        arguments["period"] = next((period for period, words in PERIOD_WORDS if any(word in text for word in words)), "today")
+    if tool in LIMIT_TOOLS:
+        limit = next((n for n in (5, 3, 1) if re.search(rf"(?<!\d){n}(?!\d)", text)), None)
+        arguments["limit"] = limit or LIMIT_TOOLS[tool]
+    return tool, arguments
+
+
+class MockClaudeRouter(ClaudeRouter):
+    """``ClaudeRouter`` with only ``_create`` swapped. ``answer`` lets a test make the "model" say anything (a dict shaped
+    like a response: a refusal, a tool that does not exist, an argument outside its enum); ``fail_with`` makes it fail."""
+
+    code = "claude_router_mock"
+    live = False
+
+    def __init__(self, model="mock-model", answer=None, fail_with=None):
+        super().__init__(api_key="mock-api-key", model=model)
+        self.answer = answer
+        self.fail_with = fail_with
+        self.calls = []
+
+    def _create(self, request):
+        self.calls.append(request)
+        if self.fail_with:
+            raise ProviderError(self.fail_with)
+        if self.answer is not None:
+            return self.answer(request) if callable(self.answer) else self.answer
+        tool, arguments = keyword_route(request["messages"][0]["content"])
+        if tool is None:
+            return {"stop_reason": "end_turn", "content": [{"type": "text", "text": "Mock: no tool matched."}]}
+        return {"stop_reason": "tool_use",
+                "content": [{"type": "tool_use", "id": "toolu_mock", "name": tool, "input": arguments}]}

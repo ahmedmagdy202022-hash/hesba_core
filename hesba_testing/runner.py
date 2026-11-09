@@ -13,7 +13,7 @@ from django.test.utils import override_settings
 from . import clock, network
 
 #: Whatever the developer's environment says, a test run never holds an AI key and never talks to a live AI provider.
-AI_TEST_SETTINGS = {"AI_MODE": "mock", "ELEVENLABS_API_KEY": ""}
+AI_TEST_SETTINGS = {"AI_MODE": "mock", "ELEVENLABS_API_KEY": "", "ANTHROPIC_API_KEY": ""}  # A2 (HG-080): no Anthropic key either
 
 
 def _ai_env():

@@ -6,3 +6,5 @@ gunicorn>=22.0,<24.0
 whitenoise>=6.6,<7.0
 # BACKUP-002: backups encrypted to the client's own key (X25519 + AES-GCM).
 cryptography>=42.0,<47.0
+# A2 (HG-080): «اسأل حسبة» routes questions with Anthropic's official SDK (the client is built in live mode only).
+anthropic>=2.6,<3.0

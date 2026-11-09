@@ -47,14 +47,14 @@ class RunWideGuardTests(SimpleTestCase):
         self.assertFalse(issubclass(network.ExternalNetworkBlocked, OSError))
 
     def test_the_run_is_on_the_ai_mock_with_no_key(self):
-        self.assertEqual((settings.AI_MODE, settings.ELEVENLABS_API_KEY), ("mock", ""))
-        self.assertEqual((os.environ.get("AI_MODE"), os.environ.get("ELEVENLABS_API_KEY")), ("mock", ""))
+        self.assertEqual((settings.AI_MODE, settings.ELEVENLABS_API_KEY, settings.ANTHROPIC_API_KEY), ("mock", "", ""))
+        self.assertEqual((os.environ.get("AI_MODE"), os.environ.get("ELEVENLABS_API_KEY"), os.environ.get("ANTHROPIC_API_KEY")), ("mock", "", ""))
 
     def test_spawned_workers_install_the_guard_and_the_ai_env(self):
         # Forked workers inherit the patches; a spawned worker starts clean and runs _pin_worker before Django.
-        with mock.patch.object(network, "install") as install, mock.patch.dict(os.environ, {"AI_MODE": "live", "ELEVENLABS_API_KEY": "real"}):
+        with mock.patch.object(network, "install") as install, mock.patch.dict(os.environ, {"AI_MODE": "live", "ELEVENLABS_API_KEY": "real", "ANTHROPIC_API_KEY": "real"}):
             runner._pin_worker("")
-            self.assertEqual((os.environ["AI_MODE"], os.environ["ELEVENLABS_API_KEY"]), ("mock", ""))
+            self.assertEqual((os.environ["AI_MODE"], os.environ["ELEVENLABS_API_KEY"], os.environ["ANTHROPIC_API_KEY"]), ("mock", "", ""))
         install.assert_called_once_with()
         self.assertIs(runner.PinnedParallelTestSuite.process_setup, runner._pin_worker)
 
