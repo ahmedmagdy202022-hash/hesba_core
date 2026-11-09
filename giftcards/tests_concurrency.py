@@ -21,6 +21,10 @@ from permissions.models import RoleCode
 
 @unittest.skipUnless(connection.vendor == "postgresql", "row locks only matter on PostgreSQL")
 class TwoTillsOneCardTests(TransactionTestCase):
+    # A TransactionTestCase flushes every table when it ends, migration-seeded rows (roles, settings) included, so a
+    # sibling that ran earlier in the same worker leaves this one without them. Restore the seed before each test.
+    serialized_rollback = True
+
     def test_two_redemptions_racing_on_one_card_spend_it_once(self):
         from closing.services import ensure_period_is_open
         from reports.tests_dashboard import prepared_client
