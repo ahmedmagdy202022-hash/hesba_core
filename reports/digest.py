@@ -9,6 +9,7 @@ from decimal import Decimal
 
 from django.db.models import Count, Sum
 
+from entities import scope as entity_scope
 from permissions.services import user_has_permission
 from settings_core.capabilities import capability_enabled
 from settings_core.templatetags.hesba_format import money
@@ -28,9 +29,9 @@ def daily_digest(user, day):
 
     data = {"day": day, "sections": []}
     if _can(user, "reports.view_sales_report", "reports.view_all_sales_report"):
-        invoices = SalesInvoice.objects.filter(status="posted", invoice_date=day)
+        invoices = entity_scope.scope(SalesInvoice.objects, entity_scope.SALES_INVOICE).filter(status="posted", invoice_date=day)  # HG-034
         totals = invoices.aggregate(count=Count("id"), total=Sum("total_amount"), cash=Sum("paid_now"), credit=Sum("remaining_due"))
-        returns = SalesReturn.objects.filter(status="posted", return_date=day).aggregate(total=Sum("total_amount"))["total"] or ZERO
+        returns = entity_scope.scope(SalesReturn.objects, entity_scope.SALES_RETURN).filter(status="posted", return_date=day).aggregate(total=Sum("total_amount"))["total"] or ZERO
         top = list(SalesLine.objects.filter(invoice__in=invoices).values("item__item_name").annotate(qty=Sum("quantity"), amount=Sum("line_total_amount")).order_by("-amount")[:5])
         from settlements.services import applied_total
 
@@ -54,7 +55,7 @@ def daily_digest(user, day):
     if _can(user, "reports.view_customer_report"):
         from reports.aging import aging_rows
 
-        collected = CustomerPayment.objects.filter(status="posted", payment_date=day).aggregate(total=Sum("amount"))["total"] or ZERO
+        collected = entity_scope.scope(CustomerPayment.objects, entity_scope.CUSTOMER_PAYMENT).filter(status="posted", payment_date=day).aggregate(total=Sum("amount"))["total"] or ZERO
         aging = aging_rows("customers", day)
         data["customers"] = {"collected": collected, "owed": sum((row["total"] for row in aging), ZERO), "overdue": sum((row["overdue"] for row in aging), ZERO),
                              "overdue_count": sum(1 for row in aging if row["overdue"] > 0)}
@@ -73,7 +74,7 @@ def daily_digest(user, day):
     if _can(user, "cashboxes.view_finance"):
         from shifts.models import Shift
 
-        shifts = Shift.objects.filter(status="closed", closed_at__date=day).select_related("cashier")
+        shifts = entity_scope.scope(Shift.objects, "cashbox__entity").filter(status="closed", closed_at__date=day).select_related("cashier")
         data["shifts"] = [{"cashier": shift.cashier.get_username(), "difference": shift.difference} for shift in shifts if shift.difference]
     return data
 

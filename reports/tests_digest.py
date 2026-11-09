@@ -62,6 +62,28 @@ class DigestTests(TestCase):
         sell(self.item, self.location, self.cashbox, 1, "50.00", "50.00", self.owner, number="SI-D3", when=TODAY)       # another day
         record_customer_payment("CP-D", YESTERDAY, make_customer(customer_code="C-D"), self.cashbox, D("20.00"), self.owner)
 
+    def test_a_branch_sees_only_its_own_day(self):
+        """HG-034: the digest (and the WhatsApp text built from it) never mixes another branch's sales or collections."""
+
+        from entities.current import working_in
+        from entities.models import Entity
+        from entities.services import main_entity
+
+        branch = Entity.objects.create(code="BR-DG", name_ar="فرع الدقي")
+        shop = make_location(location_code="SHOP-DG", is_selling_location=True, entity=branch)
+        till = make_cashbox(cashbox_code="TILL-DG", entity=branch)
+        stock_in(self.item, shop, 10, "30.00", movement_date=TODAY - timedelta(days=10))
+        sell(self.item, shop, till, 3, "50.00", "150.00", self.owner, number="SI-DG1", when=YESTERDAY)  # 150, all paid
+        record_customer_payment("CP-DG", YESTERDAY, make_customer(customer_code="C-DG"), till, D("70.00"), self.owner)
+        with working_in(branch):
+            data = daily_digest(self.owner, YESTERDAY)
+        self.assertEqual((data["sales"]["count"], data["sales"]["total"]), (1, D("150.00")))
+        self.assertEqual(data["customers"]["collected"], D("70.00"))
+        with working_in(main_entity()):
+            data = daily_digest(self.owner, YESTERDAY)
+        self.assertEqual((data["sales"]["count"], data["sales"]["total"]), (2, D("300.00")))
+        self.assertEqual(data["customers"]["collected"], D("20.00"))
+
     def test_figures_match_the_reports(self):
         data = daily_digest(self.owner, YESTERDAY)
         self.assertEqual((data["sales"]["count"], data["sales"]["total"], data["sales"]["cash"], data["sales"]["credit"]), (2, D("300.00"), D("250.00"), D("50.00")))
