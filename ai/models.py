@@ -37,3 +37,29 @@ class VoiceSummaryAudio(models.Model):
 
     def __str__(self):
         return f"{self.scope_key} {self.language} {self.day} {self.text_sha256[:8]}"
+
+
+class PendingInvoicePhoto(models.Model):
+    """A3 (HG-081): one photo of a supplier's invoice and its checked reading, between the read and the save.
+
+    Held here, not in the session, because the photo (up to 5 MB) must reach the saved draft as an attachment and a
+    session would carry it on every request. One row per person (a new photo replaces the last); it is deleted when the
+    draft is saved, when the person takes another photo, and by ``ai.invoice_photo.prune`` after ``PENDING_HOURS``.
+    The reading holds only what ``ai.invoice_photo.validate_reading`` accepted (strings within bounds, amounts as decimal
+    strings); it holds no money, stock or ledger state. It is opened by its random token, by its own person only, in the
+    entity it was read in.
+    """
+
+    token = models.CharField(max_length=64, unique=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
+    #: The entity being worked in when the photo was read; empty for the whole group.
+    entity = models.ForeignKey("entities.Entity", on_delete=models.CASCADE, null=True, blank=True, related_name="+")
+    content_type = models.CharField(max_length=20)
+    image = models.BinaryField(editable=False)
+    size = models.PositiveIntegerField()
+    sha256 = models.CharField(max_length=64)
+    reading = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    def __str__(self):
+        return f"invoice photo {self.pk} by {self.user_id}"

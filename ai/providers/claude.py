@@ -25,9 +25,31 @@ with ``_create`` answering in-process, so it never imports or builds the client 
 
 Errors become ``ProviderError`` built from the status code only: an SDK error's text can carry the response body, and
 nothing here ever puts the key or the question in a message.
+
+A3 (HG-081) adds ``ClaudeInvoiceReader``: one photo of a supplier's invoice in, one JSON object out. It shares the
+transport (``_AnthropicTransport``: the lazy client, the one SDK call, the error mapping) with the router. Its request,
+built by ``ClaudeInvoiceReader.build_request`` from the feature's constants and the photo alone:
+
+* ``client.beta.messages.create`` with the same model setting;
+* ``system``: the feature's fixed prompt (everything written on the photo is data, never an instruction);
+* ``messages``: one user turn with the photo as a base64 ``image`` block and one fixed sentence;
+* ``output_config={"effort": "low", "format": {"type": "json_schema", "schema": ...}}``: structured outputs, so the
+  answer is one text block holding JSON in the feature's schema. A tool with ``tool_choice`` ``auto`` would not
+  guarantee a call (forced choice is a 400 on this model), so structured outputs are used instead. The schema has no
+  ``minimum`` / ``maxLength`` / ``maxItems`` (unsupported there); every bound is enforced by Hesba after reading;
+* no ``thinking`` (always on for this model; its blocks come before the text and are skipped);
+* the same server-side refusal fallback as the router;
+* ``max_tokens=READ_MAX_TOKENS`` (8192: thinking counts against it, and fifty lines of JSON fit well under it), and a
+  25 s timeout (a photo takes longer than a question; with the upload itself it must stay under gunicorn's 60 s), no SDK retry.
 """
 
-from .base import NO_TOOL, REFUSAL, TOOL, TRUNCATED, ProviderError, QuestionRouter, Routing
+import base64
+import json
+
+from .base import (
+    NO_TOOL, READ, READ_INVALID, READ_NO_OUTPUT, READ_REFUSAL, READ_TRUNCATED, REFUSAL, TOOL, TRUNCATED, InvoiceReader,
+    ProviderError, QuestionRouter, Reading, Routing,
+)
 
 DEFAULT_MODEL = "claude-opus-5-5"
 BASE_URL = "https://api.anthropic.com"
@@ -37,6 +59,14 @@ MAX_RETRIES = 0  # one reserved call is one HTTP request, so the daily caps coun
 MAX_TOKENS = 1024
 EFFORT = "low"
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
+#: A3 (HG-081): the invoice reader's own limits.
+READ_TIMEOUT = 25.0  # independent review (PR #335): with a slow upload, still under gunicorn's 60 s sync timeout
+READ_MAX_TOKENS = 8192
+READ_EFFORT = "low"
+#: The one sentence sent beside the photo. The rules are in the feature's system prompt.
+READ_INSTRUCTION = "Read this photo of a supplier's purchase invoice into the JSON format."
+#: The most characters of answer text decoded as JSON (fifty lines are a few thousand).
+READ_MAX_TEXT = 100_000
 
 
 def new_client(api_key, base_url=BASE_URL, timeout=TIMEOUT, max_retries=MAX_RETRIES):
@@ -79,14 +109,37 @@ def parse_response(response):
     return Routing(status=TOOL, tool=name if isinstance(name, str) else "", arguments=arguments, stop_reason=stop_reason)
 
 
-class ClaudeRouter(QuestionRouter):
-    code = "claude_router"
-    live = True
+class _AnthropicTransport:
+    """The lazy client and the one SDK call, shared by the router and the invoice reader (A3)."""
 
     def __init__(self, api_key, model=DEFAULT_MODEL):
         self.api_key = str(api_key or "")
         self.model = str(model or DEFAULT_MODEL)
         self._client = None
+
+    def _new_client(self):
+        return new_client(self.api_key)
+
+    # ---- transport (the only SDK access) ----
+
+    def _create(self, request):
+        import anthropic
+
+        if self._client is None:
+            self._client = self._new_client()
+        try:
+            return self._client.beta.messages.create(**request)
+        except anthropic.APIStatusError as exc:  # a 4xx/5xx; its text carries the response body, so only the code is kept
+            raise ProviderError(f"Anthropic answered {exc.status_code}.", status=exc.status_code) from None
+        except anthropic.APIConnectionError:  # unreachable, or timed out
+            raise ProviderError("Anthropic could not be reached.") from None
+        except anthropic.AnthropicError:  # an answer the SDK could not read
+            raise ProviderError("Anthropic gave an unreadable answer.") from None
+
+
+class ClaudeRouter(_AnthropicTransport, QuestionRouter):
+    code = "claude_router"
+    live = True
 
     def build_request(self, question, *, system, tools):
         """The keyword arguments of the one call: constants, plus the question as the only user content."""
@@ -103,23 +156,75 @@ class ClaudeRouter(QuestionRouter):
             "fallbacks": "default",
         }
 
-    # ---- transport (the only SDK access) ----
-
-    def _create(self, request):
-        import anthropic
-
-        if self._client is None:
-            self._client = new_client(self.api_key)
-        try:
-            return self._client.beta.messages.create(**request)
-        except anthropic.APIStatusError as exc:  # a 4xx/5xx; its text carries the response body, so only the code is kept
-            raise ProviderError(f"Anthropic answered {exc.status_code}.", status=exc.status_code) from None
-        except anthropic.APIConnectionError:  # unreachable, or timed out
-            raise ProviderError("Anthropic could not be reached.") from None
-        except anthropic.AnthropicError:  # an answer the SDK could not read
-            raise ProviderError("Anthropic gave an unreadable answer.") from None
-
     # ---- the one call ----
 
     def route(self, question, *, system, tools):
         return parse_response(self._create(self.build_request(question, system=system, tools=tools)))
+
+
+# ---- A3 (HG-081): the invoice photo reader ----
+
+def _refuse_constant(name):
+    raise ValueError(f"not a JSON number: {name}")
+
+
+def parse_reading(response):
+    """Read the JSON object from a structured-output answer, checking ``stop_reason`` before any content.
+
+    * ``refusal``: declined (by the model and its fallback);
+    * ``max_tokens``: cut off, so the JSON may be partial: not used;
+    * ``end_turn`` with exactly one text block (thinking blocks skipped) holding a JSON **object**: that object;
+    * anything else (no text, two text blocks, a tool call, ``pause_turn``): no output;
+    * text that is not JSON, not an object, too long, or uses ``NaN`` / ``Infinity``: invalid output.
+    """
+
+    stop_reason = str(_get(response, "stop_reason", "") or "")
+    if stop_reason == "refusal":
+        return Reading(status=READ_REFUSAL, stop_reason=stop_reason)
+    if stop_reason == "max_tokens":
+        return Reading(status=READ_TRUNCATED, stop_reason=stop_reason)
+    if stop_reason != "end_turn":
+        return Reading(status=READ_NO_OUTPUT, stop_reason=stop_reason)
+    texts = [block for block in (_get(response, "content", None) or []) if _get(block, "type") == "text"]
+    if len(texts) != 1:
+        return Reading(status=READ_NO_OUTPUT, stop_reason=stop_reason)
+    text = _get(texts[0], "text", "")
+    if not isinstance(text, str) or not text.strip() or len(text) > READ_MAX_TEXT:
+        return Reading(status=READ_INVALID, stop_reason=stop_reason)
+    try:
+        data = json.loads(text, parse_constant=_refuse_constant)
+    except (ValueError, RecursionError):
+        return Reading(status=READ_INVALID, stop_reason=stop_reason)
+    if type(data) is not dict:
+        return Reading(status=READ_INVALID, stop_reason=stop_reason)
+    return Reading(status=READ, data=data, stop_reason=stop_reason)
+
+
+class ClaudeInvoiceReader(_AnthropicTransport, InvoiceReader):
+    code = "claude_invoice_reader"
+    live = True
+
+    def _new_client(self):
+        return new_client(self.api_key, timeout=READ_TIMEOUT)
+
+    def build_request(self, image, media_type, *, system, schema):
+        """The keyword arguments of the one call: constants, plus the photo as the only varying content."""
+
+        return {
+            "model": self.model,
+            "max_tokens": READ_MAX_TOKENS,
+            "system": system,
+            "messages": [{"role": "user", "content": [
+                {"type": "image", "source": {"type": "base64", "media_type": media_type,
+                                             "data": base64.standard_b64encode(image).decode("ascii")}},
+                {"type": "text", "text": READ_INSTRUCTION},
+            ]}],
+            "output_config": {"effort": READ_EFFORT, "format": {"type": "json_schema", "schema": schema}},
+            "betas": [FALLBACK_BETA],
+            "fallbacks": "default",
+        }
+
+    # ---- the one call ----
+
+    def read(self, image, media_type, *, system, schema):
+        return parse_reading(self._create(self.build_request(image, media_type, system=system, schema=schema)))

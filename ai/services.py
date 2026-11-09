@@ -36,6 +36,11 @@ Two doors share every step above:
   a missing or extra argument, or a value outside its enum (``True`` is not ``1``) is ``invalid_*``, never run. The
   outcome row adds the routing status and, only when valid, the tool name, period and limit: server constants, never
   anything the model wrote, and never the question.
+* ``read_invoice_image`` (A3, HG-081): a photo in (JPEG, PNG or WebP, its type taken from its first bytes and matching
+  the type declared, 1 byte to ``IMAGE_MAX_BYTES``), the model's decoded JSON out, **unchecked**: the feature
+  (``ai.invoice_photo``) validates every field. The request size is the photo's bytes (no characters). A per-person daily
+  limit is checked under the lock, as for questions. The outcome row adds the reading status and how many lines the
+  answer had: never the photo, a supplier's name, a line's text or an amount.
 """
 
 import time
@@ -54,7 +59,7 @@ from settings_core.models import SystemSetting
 
 from . import providers
 from .providers import ProviderError, Routing
-from .providers.base import INVALID_ARGUMENTS, INVALID_TOOL
+from .providers.base import INVALID_ARGUMENTS, INVALID_TOOL, READ
 
 CAIRO = ZoneInfo("Africa/Cairo")
 
@@ -67,6 +72,11 @@ DEFAULT_DAILY_CAP = 50
 TTS_MAX_CHARS = 5000
 #: A2 (HG-080): the most characters one question may have, after cleaning (a question is a sentence).
 QUESTION_MAX_CHARS = 300
+#: A3 (HG-081): the largest photo one call may send. The API takes up to 10 MB of base64 per image (about 7.5 MB of
+#: bytes); 5 MB of bytes stays well inside it, and is S1's own per-file default, so a photo read can always be attached.
+IMAGE_MAX_BYTES = 5 * 1024 * 1024
+#: The image types the door sends: what the API reads and what S1 can verify by magic bytes (no GIF: S1 cannot keep it).
+IMAGE_TYPES = ("image/jpeg", "image/png", "image/webp")
 
 MODULE = "ai"
 CALL_STARTED, CALL_OK, CALL_REFUSED, CALL_ERROR = "call_started", "call_ok", "call_refused", "call_error"
@@ -94,6 +104,8 @@ class Feature:
 FEATURES = {
     "voice_summary": Feature(code="voice_summary", capability="ai_voice_summary", provider=providers.ELEVENLABS_TTS),
     "ask": Feature(code="ask", capability="ai_ask", provider=providers.CLAUDE_ROUTER),  # A2 (HG-080)
+    # A3 (HG-081): a supplier's invoice photo read into a draft purchase invoice.
+    "invoice_photo": Feature(code="invoice_photo", capability="ai_invoice_photo", provider=providers.CLAUDE_INVOICE_READER),
 }
 
 
@@ -242,6 +254,13 @@ def _gate(feature, size, user, entity, *, valid, invalid_error):
     return provider
 
 
+#: The per-person refusal of each feature that has one (``{cap}`` is the limit). A2's question limit is the default.
+USER_CAP_MESSAGES = {
+    "invoice_photo": "You have reached today's invoice photo limit ({cap} per person). Try again tomorrow.",  # A3 (HG-081)
+}
+QUESTION_CAP_MESSAGE = "You have reached today's question limit ({cap} per person). Try again tomorrow."
+
+
 def _reserve(feature, provider, size, user, entity, user_cap=None):
     """Refusal 5 (and, with ``user_cap``, the person's own daily limit) and the reservation, under the lock.
 
@@ -254,7 +273,8 @@ def _reserve(feature, provider, size, user, entity, user_cap=None):
         if calls_today() >= cap:
             return None, (DAILY_CAP, ValidationError(f"Today's AI call limit is reached ({cap} calls). Try again tomorrow."))
         if user_cap is not None and user_calls_today(user, feature.code) >= user_cap:
-            return None, (USER_DAILY_CAP, ValidationError(f"You have reached today's question limit ({user_cap} per person). Try again tomorrow."))
+            message = USER_CAP_MESSAGES.get(feature.code, QUESTION_CAP_MESSAGE).format(cap=user_cap)
+            return None, (USER_DAILY_CAP, ValidationError(message))
         mode = providers.LIVE if provider.live else providers.MOCK
         return _write(CALL_STARTED, user, entity, _data(feature, provider.code, mode, entity, size, "started")), None
 
@@ -375,3 +395,55 @@ def route_question(question, *, feature, system, tools, user=None, entity=None, 
     _finish(row, CALL_OK, started, user, entity, routing=routing.status, tool=routing.tool if routing.routed else "",
             period=arguments.get("period", ""), limit=arguments.get("limit"))
     return routing
+
+
+# ---- A3 (HG-081): a photo of a supplier's invoice read into JSON ----
+
+def image_type(image):
+    """The photo's real type from its first bytes (S1's own sniffing), when it is one the door sends; else None."""
+
+    from attachments.services import sniff
+
+    real = sniff(bytes(image[:16]))
+    return real if real in IMAGE_TYPES else None
+
+
+def read_invoice_image(image, media_type, *, feature, system, schema, user=None, entity=None, user_daily_cap=None):
+    """Read ``image`` (bytes) with the provider; return its ``providers.Reading``, whose data is still unchecked.
+
+    The same door as the others: transaction guard, kill switch, capability, size and type, connection, the locked cap
+    reservation (plus ``user_daily_cap`` when given), and the audit. ``system`` and ``schema`` are the feature's
+    constants; the photo is the only thing that varies. Raises ValidationError.
+    """
+
+    feature = _feature(feature)
+    if in_outer_transaction():
+        raise AiCallInTransaction(
+            "AI calls must not run inside transaction.atomic(): a rollback would erase the audit row of a call that may "
+            "have been paid for. Call ai.services outside the transaction.")
+    image = bytes(image or b"")
+    size = (0, len(image))
+    if not image:
+        valid, invalid = False, ValidationError("There is no photo to read.")
+    elif len(image) > IMAGE_MAX_BYTES:
+        valid, invalid = False, ValidationError(f"The photo is too large (at most {IMAGE_MAX_BYTES // (1024 * 1024)} MB).")
+    elif media_type not in IMAGE_TYPES or image_type(image) != media_type:
+        valid, invalid = False, ValidationError("The photo must be a JPEG, PNG or WebP image.")
+    else:
+        valid, invalid = True, None
+    provider = _gate(feature, size, user, entity, valid=valid, invalid_error=invalid)
+    row, refusal = _reserve(feature, provider, size, user, entity, user_cap=user_daily_cap)
+    if row is None:
+        _refuse(feature, user, entity, size, *refusal)
+    started = time.monotonic()
+    try:
+        reading = provider.read(image, media_type, system=system, schema=schema)
+    except ProviderError as exc:
+        _finish(row, CALL_ERROR, started, user, entity, error_status=exc.status)
+        raise ValidationError("The AI service did not answer. Try again later.") from exc
+    except Exception:
+        _finish(row, CALL_ERROR, started, user, entity)
+        raise
+    lines = reading.data.get("lines") if reading.status == READ else None
+    _finish(row, CALL_OK, started, user, entity, reading=reading.status, line_count=len(lines) if isinstance(lines, list) else 0)
+    return reading

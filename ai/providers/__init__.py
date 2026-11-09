@@ -13,11 +13,16 @@
 
 A2 (HG-080) adds ``claude_router``, the language model that routes «اسأل حسبة» questions: live only with
 ``ANTHROPIC_API_KEY`` and a model (``ANTHROPIC_MODEL``, default ``claude-opus-5-5``); the mock never builds the SDK client.
+
+A3 (HG-081) adds ``claude_invoice_reader``, the same model reading a photo of a supplier's invoice, under the same two
+settings; its mock answers with a fixed sample and never builds the SDK client either.
 """
 
 from django.conf import settings
 
-from .base import ProviderError, QuestionRouter, Routing, Speech, TextToSpeechProvider  # noqa: F401 - the interface, re-exported
+from .base import (  # noqa: F401 - the interface, re-exported
+    InvoiceReader, ProviderError, QuestionRouter, Reading, Routing, Speech, TextToSpeechProvider,
+)
 
 MOCK, LIVE, OFF = "mock", "live", "off"
 KNOWN_MODES = (MOCK, LIVE, OFF)
@@ -25,6 +30,7 @@ PLACEHOLDER_VOICE = "hesba-placeholder-voice"
 
 ELEVENLABS_TTS = "elevenlabs_tts"
 CLAUDE_ROUTER = "claude_router"  # A2 (HG-080)
+CLAUDE_INVOICE_READER = "claude_invoice_reader"  # A3 (HG-081)
 
 
 def mode():
@@ -82,7 +88,26 @@ def _claude_router():
     return None
 
 
-PROVIDERS = {ELEVENLABS_TTS: _elevenlabs_tts, CLAUDE_ROUTER: _claude_router}
+def _claude_invoice_reader():
+    """A3 (HG-081). The same rules as the router: live needs the key and a model (a key missing connects nothing, never
+    the mock); the mock is built without touching the SDK."""
+
+    key, model = _anthropic_settings()
+    current = mode()
+    if current == LIVE:
+        if key and model:
+            from .claude import ClaudeInvoiceReader
+
+            return ClaudeInvoiceReader(api_key=key, model=model)
+        return None
+    if current == MOCK:
+        from .mock import MockClaudeInvoiceReader
+
+        return MockClaudeInvoiceReader(model=model or "mock-model")
+    return None
+
+
+PROVIDERS = {ELEVENLABS_TTS: _elevenlabs_tts, CLAUDE_ROUTER: _claude_router, CLAUDE_INVOICE_READER: _claude_invoice_reader}
 
 
 def get(code):

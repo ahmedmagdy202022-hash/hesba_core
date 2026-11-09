@@ -69,3 +69,37 @@ class QuestionRouter:
 
     def route(self, question, *, system, tools):  # pragma: no cover - the interface
         raise NotImplementedError
+
+
+# ---- A3 (HG-081): a photo of a supplier's invoice read into fields ----
+
+#: What a reading call can come back as. Only ``READ`` carries data, and that data is untrusted until
+#: ``ai.invoice_photo.validate_reading`` has checked every field.
+READ, READ_REFUSAL, READ_TRUNCATED, READ_NO_OUTPUT, READ_INVALID = ("read", "refusal", "truncated", "no_output", "invalid_output")
+
+
+@dataclass(frozen=True)
+class Reading:
+    """The model's reading of a photo, as parsed from its answer: ``status`` and, for ``READ``, the decoded JSON object.
+
+    ``data`` is exactly what the model wrote, decoded and nothing more: no field is trusted, typed or bounded here.
+    """
+
+    status: str
+    data: dict = None
+    stop_reason: str = ""
+
+    @property
+    def ok(self):
+        return self.status == READ
+
+
+class InvoiceReader:
+    """Reads a photo of an invoice into a fixed JSON shape. ``live`` is False for the mock."""
+
+    code = ""
+    kind = "vision"
+    live = False
+
+    def read(self, image, media_type, *, system, schema):  # pragma: no cover - the interface
+        raise NotImplementedError

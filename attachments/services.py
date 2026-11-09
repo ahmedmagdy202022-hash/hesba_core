@@ -54,7 +54,8 @@ MESSAGES = {
            "read_only": "إضافة المرفقات للكاونتر أو للفني صاحب الأمر بس.", "closed": "الأمر ده اتقفل؛ مينفعش يتضاف عليه مرفقات.",
            "max_count": "وصلت للحد الأقصى من المرفقات على السجل ده ({count}).", "max_owner_bytes": "مجموع حجم مرفقات السجل ده هيعدّي الحد ({limit}).",
            "global_full": "مساحة المرفقات في قاعدة البيانات امتلت؛ كلّم صاحب الحساب.", "pdf_active": "ملف PDF فيه سكربت أو ملف مدمج أو أمر تشغيل تلقائي، ومش مسموح.",
-           "delete_denied": "مسح المرفقات للمدير أو الكاونتر بس.", "signature_kept": "توقيع أمر اتسلّم مينفعش يتمسح."},
+           "delete_denied": "مسح المرفقات للمدير أو الكاونتر بس.", "signature_kept": "توقيع أمر اتسلّم مينفعش يتمسح.",
+           "purchase_delete_denied": "صورة فاتورة الشراء بتتمسح بس طول ما الفاتورة مسودة، ولصاحب صلاحية إنشاء فواتير الشراء."},
     "en": {"denied": "You may not use attachments on this record.", "not_found": "The attachment or the record was not found.",
            "kind": "The attachment kind must be photo, document or signature.", "stage": "The attachment stage must be receive, deliver or other.",
            "empty": "The file is empty or was not sent.", "size": "The file is larger than allowed ({limit}).",
@@ -66,7 +67,8 @@ MESSAGES = {
            "max_count": "This record has reached the most attachments allowed ({count}).", "max_owner_bytes": "The attachments on this record would pass the size limit ({limit}).",
            "global_full": "The space for attachments in the database is full; tell the account owner.",
            "pdf_active": "This PDF contains a script, an embedded file or an auto-run action, and is not allowed.",
-           "delete_denied": "Only a manager or the counter may delete attachments.", "signature_kept": "The signature of a delivered order cannot be deleted."},
+           "delete_denied": "Only a manager or the counter may delete attachments.", "signature_kept": "The signature of a delivered order cannot be deleted.",
+           "purchase_delete_denied": "A purchase invoice's photo can be deleted only while the invoice is a draft, by someone who may create purchase invoices."},
 }
 
 
@@ -119,8 +121,55 @@ def _work_order_can_delete(user, order):
     return work.can_manage(user)
 
 
+def _purchase_invoices(user):
+    """A3 (HG-081): purchase invoices, seen exactly as the purchase screens show them: the view permission and the entity
+    scope (HG-034, through the receiving location)."""
+
+    from permissions.services import user_has_permission
+    from purchases.models import PurchaseInvoice
+
+    if not user_has_permission(user, "purchases.view_purchase_invoices"):
+        raise PermissionDenied("Purchase invoices need purchases.view_purchase_invoices.")
+    return entity_scope.scope(PurchaseInvoice.objects.all(), entity_scope.PURCHASE_INVOICE)
+
+
+def _purchase_invoice_can_change(user, invoice):
+    """The purchase screens' own rule for a change: the purchase-create permission."""
+
+    from permissions.services import user_has_permission
+
+    return user_has_permission(user, "purchases.create_purchase_invoice")
+
+
+def _purchase_invoice_can_delete(user, invoice):
+    """Independent review (PR #335): the photo goes with the draft's own changes only; once posted or cancelled, the
+    supplier's invoice it was made from stays with the record."""
+
+    from purchases.models import PurchaseInvoice, PurchaseInvoiceStatus
+
+    return _purchase_invoice_can_change(user, invoice) and PurchaseInvoice.objects.filter(
+        pk=invoice.pk, status=PurchaseInvoiceStatus.DRAFT).exists()  # fresh from the database, not the caller's copy
+
+
+def _purchase_invoice_closed(invoice):
+    from purchases.models import PurchaseInvoice, PurchaseInvoiceStatus
+
+    return PurchaseInvoice.objects.filter(pk=invoice.pk, status=PurchaseInvoiceStatus.CANCELLED).exists()
+
+
+def _purchase_invoice_entity(invoice):
+    """The entity of a purchase invoice is its receiving location's (``entities.scope.PURCHASE_INVOICE``)."""
+
+    return invoice.receiving_location.entity
+
+
 OWNERS = {"workorders.workorder": {"visible": _work_orders, "can_attach": _work_order_can_attach, "closed": _work_order_closed,
-                                   "can_delete": _work_order_can_delete, "signature_final": _work_order_signature_final}}
+                                   "can_delete": _work_order_can_delete, "signature_final": _work_order_signature_final},
+          # A3 (HG-081): the supplier's invoice photo kept on the draft it became. No upload screen of its own yet.
+          "purchases.purchaseinvoice": {"visible": _purchase_invoices, "can_attach": _purchase_invoice_can_change,
+                                        "closed": _purchase_invoice_closed, "can_delete": _purchase_invoice_can_delete,
+                                        "signature_final": lambda invoice: False, "entity": _purchase_invoice_entity,
+                                        "delete_denied": "purchase_delete_denied"}}
 
 
 def owner_label(owner_or_model):
@@ -373,8 +422,10 @@ def _store(owner, raw, name, user, kind, stage, words, lang="ar"):
             raise ValidationError(words["closed"])
         _serialize_global_check()
         _check_room(owner, len(raw), words, lang)
+        # A3 (HG-081): an owner without an ``entity`` field names it through its rules (a purchase invoice: its location's).
+        entity_of = _rules(owner_label(owner)).get("entity") or (lambda record: getattr(record, "entity", None))
         attachment = Attachment.objects.create(
-            content_type=ContentType.objects.get_for_model(owner), object_id=owner.pk, entity=getattr(owner, "entity", None),
+            content_type=ContentType.objects.get_for_model(owner), object_id=owner.pk, entity=entity_of(owner),
             kind=kind, stage=stage, original_filename=_final_name(name, real, sha, kind), content_type_name=real,
             size=len(raw), sha256=sha, data=raw, uploaded_by=user)
         AuditLog.objects.create(
@@ -458,7 +509,7 @@ def delete_attachment(pk, user, lang="ar"):
     owner = model.objects.get(pk=attachment.object_id)
     rules = _rules(owner_label(model))
     if not rules["can_delete"](user, owner):
-        raise PermissionDenied(words["delete_denied"])
+        raise PermissionDenied(words[rules.get("delete_denied", "delete_denied")])  # A3: an owner may give its own reason
     with transaction.atomic():
         owner = model.objects.select_for_update().get(pk=owner.pk)  # a delivery committing now is seen before the check
         if attachment.kind == Kind.SIGNATURE and rules["signature_final"](owner):

@@ -22,6 +22,9 @@ EXACT = {
     "There is nothing to summarise for you yet.": "لسه مفيش أرقام نلخّصها لك.",
     # A2 (HG-080): «اسأل حسبة» (ai/services.py).
     "There is no question to answer.": "اكتب سؤالك الأول.",
+    # A3 (HG-081): the invoice photo (ai/services.py).
+    "There is no photo to read.": "مفيش صورة نقراها. صوّر الفاتورة الأول.",
+    "The photo must be a JPEG, PNG or WebP image.": "الصورة لازم تكون JPG أو PNG أو WebP.",
     # HG-071 (S6) D7: a card-paid invoice is not returned until a return-to-card path exists.
     "This invoice was paid partly by gift card, and a return to the card is not possible yet. Cancel the card payment or the whole invoice instead.":
         "الفاتورة دي اتدفع جزء منها بكارت هدية، والمرتجع على الكارت لسه مش متاح. ألغِ دفعة الكارت أو الفاتورة كلها بدل كده.",
@@ -188,6 +191,10 @@ PATTERNS = (
     (r"^The question is too long \(at most (?P<limit>\d+) characters\)\.$", "السؤال طويل أوي (الحد {limit} حرف). اختصره شوية."),
     (r"^You have reached today's question limit \((?P<cap>\d+) per person\)\. Try again tomorrow\.$",
      "وصلت لحد الأسئلة النهارده ({cap} سؤال للشخص). جرّب تاني بكرة."),
+    # A3 (HG-081): the invoice photo's size and one person's daily photos.
+    (r"^The photo is too large \(at most (?P<limit>\d+) MB\)\.$", "الصورة كبيرة أوي (الحد {limit} ميجا). صوّرها تاني بحجم أصغر."),
+    (r"^You have reached today's invoice photo limit \((?P<cap>\d+) per person\)\. Try again tomorrow\.$",
+     "وصلت لحد صور الفواتير النهارده ({cap} صور للشخص). جرّب تاني بكرة."),
 )
 _COMPILED = tuple((re.compile(pattern), template) for pattern, template in PATTERNS)
 

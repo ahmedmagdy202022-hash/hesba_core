@@ -161,8 +161,19 @@ def invoice_list(request):
         request,
         "purchases/list.html",
         _context(request, page=page, query=query, status_filter=status,
-                 can_create=user_has_permission(request.user, "purchases.create_purchase_invoice")),
+                 can_create=user_has_permission(request.user, "purchases.create_purchase_invoice"),
+                 photo_link=_photo_link(request.user)),
     )
+
+
+def _photo_link(user):
+    """A3 (HG-081): «فاتورة من صورة», only while its capability is on and only for someone who may use it. Expired waiting
+    photos are pruned here too (one indexed delete), so they go even while the feature is switched off."""
+
+    from ai import invoice_photo
+
+    invoice_photo.prune()
+    return invoice_photo.is_on() and invoice_photo.can_use(user)
 
 
 @require_permission("purchases.create_purchase_invoice")
@@ -291,8 +302,22 @@ def invoice_detail(request, pk):
             can_return=user_has_permission(request.user, "purchases.return_purchase"),
             # FB2-LABELS: goods just received usually need their price labels.
             can_labels=capability_enabled("barcode") and user_has_permission(request.user, "barcode.print_labels"),
+            photos=_photos(invoice, request.user),  # A3 (HG-081): the supplier's invoice photo it was made from
         ),
     )
+
+
+def _photos(invoice, user):
+    """A3 (HG-081): the photos kept on this invoice (S1 attachments, without their bytes), as far as ``user`` may see them."""
+
+    from django.core.exceptions import PermissionDenied
+
+    from attachments.services import OwnerNotFound, attachments_for
+
+    try:
+        return list(attachments_for(invoice, user))
+    except (PermissionDenied, OwnerNotFound):
+        return []
 
 
 @require_permission("purchases.create_purchase_invoice")
