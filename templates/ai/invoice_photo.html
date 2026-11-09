@@ -4,13 +4,14 @@
 the review is a CSRF POST that saves a DRAFT only. Every text read from the photo is escaped and shown for mapping only;
 every amount on the card is computed by Hesba from the lines. No JavaScript.{% endcomment %}
 {% block styles %}{{ block.super }}
-<link rel="stylesheet" href="{% static 'hesba/css/invoice_photo.css' %}?v=a3-2">{% endblock %}
+<link rel="stylesheet" href="{% static 'hesba/css/invoice_photo.css' %}?v=a3-3">{% endblock %}
 {% block operation_content %}
 <section class="iph" data-invoice-photo>
   <header class="iph__head">
     <h1 class="iph__title">{{ w.title }}</h1>
     <p class="iph__subtitle">{{ w.subtitle }}</p>
   </header>
+  {% if sample and not refused %}<p class="ai-sample" role="note" data-ai-sample="invoice_photo"><strong>{{ sample.title }}</strong> <span>{{ sample.detail }}</span>{% if not review %} <a href="{{ sample.image_url }}" download data-ai-sample-image>{{ sample.image_label }}</a>{% endif %}</p>{% endif %}
 
   {% if refused %}
   <article class="iph-card iph-card--refused" role="status" data-iph-refused>

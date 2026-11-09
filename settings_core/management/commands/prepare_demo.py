@@ -50,8 +50,11 @@ class Command(BaseCommand):
         # DEMO-NEW: the showcase shop also has the market-parity features on, each with its own sample.
         # DEMO-CAPS: quotations and the e-invoice / e-receipt are off by default for a retail shop; the demo turns them on
         # so testers see them. Demo-only: the setup wizard and real installs keep the preset.
+        # AI demo (HG-078 dev. 7): the three AI features too, on the mock (no key, no call out), labelled as samples.
+        from settings_core.demo_ai import CAPABILITIES as AI_CAPABILITIES
+
         showcase = tuple(dict.fromkeys(caps.default_selection("commercial", "retail") + (
-            "promotions", "loyalty", "shipping", "online_store", "quotations", "e_invoice", "e_receipt")))
+            "promotions", "loyalty", "shipping", "online_store", "quotations", "e_invoice", "e_receipt") + AI_CAPABILITIES))
         complete_setup(profile, "commercial", "retail", ",".join(catalog.default_modules("commercial") + ("employees_technicians",)),
                        capabilities_raw=",".join(showcase))
         call_command("seed_demo_users", password=password, force=True, verbosity=0)
@@ -247,6 +250,9 @@ class Command(BaseCommand):
             self._attendance(owner)  # T11: three weeks of attendance, a leave taken and one waiting
             self._payroll(master, owner)  # DEMO-NEW: last month's payroll, net pay paid
         self._services_showcase(master, staff, owner, catalog, extras)  # DEMO-SVC: after payroll, so the new technicians are not paid by it
+        from settings_core import demo_ai
+
+        demo_ai.seed(master, owner, modules)  # AI demo: the invoice photo's supplier and parts, and yesterday's collection
         if "expenses" in modules:
             self._expenses(master, owner)  # last: a share of the whole month's sales, the shelf's included
         self._fit_users(modules)

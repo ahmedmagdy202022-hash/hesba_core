@@ -30,6 +30,7 @@ from permissions.decorators import require_permission
 from settings_core.ui_messages import translate
 
 from . import voice_summary
+from .sample import notice
 from .summary import build_summary
 
 
@@ -78,7 +79,7 @@ def ask(request):
     words = ask_feature.WORDS[lang]
     context = {"lang": lang, "dir": "ltr" if lang == "en" else "rtl", "page_title": words["title"], "w": words,
                "suggestions": ask_feature.suggestions(request.user, lang), "max_chars": QUESTION_MAX_CHARS,
-               "can_ask": ask_feature.can_ask(request.user)}
+               "can_ask": ask_feature.can_ask(request.user), "sample": notice(ask_feature.FEATURE, lang)}
     if not context["can_ask"]:  # no tool this person may use: no box, and a POST never reaches the model
         context["answer"] = ask_feature.answer("", request.user, lang)
         return _private(render(request, "ai/ask.html", context, status=403))
@@ -124,7 +125,7 @@ def _photo_page(request, lang, status=200, **extra):
     w = feature.words(lang)
     context = {"lang": lang, "dir": "ltr" if lang == "en" else "rtl", "page_title": w["title"], "w": w,
                "upload_hint": w["upload_hint"].format(limit=feature.human_size(feature.max_photo_bytes(), lang)),
-               "accept": ",".join(feature.photo_types()), **extra}
+               "accept": ",".join(feature.photo_types()), "sample": notice(feature.FEATURE, lang), **extra}
     return _private(render(request, PHOTO_TEMPLATE, context, status=status))
 
 

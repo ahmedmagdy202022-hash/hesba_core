@@ -5,12 +5,14 @@ Mirrors ``payments/checks.py``. The production signal is the same one payments u
 ``ai.E007`` (A2, HG-080) refuses live with ``ANTHROPIC_API_KEY`` set and ``ANTHROPIC_MODEL`` empty.
 Only an **explicit** ``AI_MODE=mock`` is refused there; an empty ``AI_MODE`` resolves to ``off`` once ``DEBUG`` is off
 (``ai.providers.mode``), so a server that never configured AI starts with nothing connected.
+A showcase install (``DEMO_MODE``) may run the mock with ``DEBUG`` off (HG-078 deviation 7): its answers are labelled as
+samples, and ``ai.E006`` still refuses live there when it is sandboxed.
 """
 
 from django.conf import settings
 from django.core.checks import Error, register
 
-from .providers import KNOWN_MODES, LIVE, MOCK, PLACEHOLDER_VOICE
+from .providers import KNOWN_MODES, LIVE, MOCK, PLACEHOLDER_VOICE, mock_allowed
 
 
 @register()
@@ -20,10 +22,10 @@ def ai_settings(app_configs, **kwargs):
     if raw and raw not in KNOWN_MODES:
         errors.append(Error(f"AI_MODE is {raw!r}; it must be mock, live or off.",
                             hint="Set AI_MODE to mock, live or off, or leave it empty.", id="ai.E003"))
-    if raw == MOCK and not settings.DEBUG:
+    if raw == MOCK and not mock_allowed():
         errors.append(Error(
             "AI_MODE is mock while DEBUG is off: the mock answers with fake audio, which must not reach real users.",
-            hint="Set AI_MODE=live with its keys, or AI_MODE=off (or leave it empty) on a real server.", id="ai.E001"))
+            hint="Set AI_MODE=live with its keys, or AI_MODE=off (or leave it empty) on a real server. Only a showcase (DEMO_MODE) may run the mock.", id="ai.E001"))
     if raw == LIVE:
         if not str(getattr(settings, "ELEVENLABS_API_KEY", "") or "").strip():
             errors.append(Error("AI_MODE is live but ELEVENLABS_API_KEY is missing from the server's environment.",

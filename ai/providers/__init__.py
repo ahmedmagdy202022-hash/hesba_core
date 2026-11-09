@@ -8,6 +8,10 @@
 * ``off``: none. Every call is refused as not connected.
 * empty: ``mock`` while ``DEBUG`` is on, ``off`` once it is off, so a production server that never set AI connects
   nothing. An explicit ``mock`` with ``DEBUG`` off refuses to start (``ai.checks``).
+* AI demo (HG-078 deviation 7): on a showcase install (``DEMO_MODE``) an empty ``AI_MODE`` is ``mock`` even with ``DEBUG``
+  off, and ``ai.E001`` lets an explicit ``mock`` start there, so visitors can try the AI features with no key and no call
+  out. Every mock answer a person sees is labelled as a sample (``ai.sample``). ``live`` on a sandboxed showcase is
+  still refused (``ai.E006``).
 
 ``PROVIDERS`` is the registry: one factory per provider code.
 
@@ -33,13 +37,25 @@ CLAUDE_ROUTER = "claude_router"  # A2 (HG-080)
 CLAUDE_INVOICE_READER = "claude_invoice_reader"  # A3 (HG-081)
 
 
+def mock_allowed():
+    """Where the mock may run: development (``DEBUG`` on) or a showcase install (``DEMO_MODE``), never a real server."""
+
+    return bool(settings.DEBUG or getattr(settings, "DEMO_MODE", False))
+
+
 def mode():
     raw = str(getattr(settings, "AI_MODE", "") or "").strip().lower()
     if raw in KNOWN_MODES:
         return raw
     if raw:
         return OFF  # an unknown value connects nothing (ai.E003 refuses to start anyway)
-    return MOCK if settings.DEBUG else OFF
+    return MOCK if mock_allowed() else OFF
+
+
+def is_mock():
+    """True when this server answers with the in-process mock: what a person sees is a sample, never a real AI answer."""
+
+    return mode() == MOCK
 
 
 def _elevenlabs_settings():

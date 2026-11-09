@@ -53,3 +53,7 @@
 .iph-btn--primary{min-height:48px;border:0;background:var(--hs-teal);color:var(--hs-on-teal)}
 .iph-btn--secondary{border:1px solid var(--hs-line-strong);background:var(--hs-surface);color:var(--hs-teal-deep)}
 @media (max-width:480px){.iph-header-fields{grid-template-columns:1fr}}
+/* HG-078 dev. 7: a mock answer is labelled as a sample (the AI demo). */
+.ai-sample{margin:0;padding:var(--hs-space-2) var(--hs-space-3);border:1px solid var(--hs-warning-line);border-radius:var(--hs-radius-md);background:var(--hs-warning-wash);color:var(--hs-warning);font-size:var(--hs-text-xs);line-height:1.6;overflow-wrap:anywhere}
+.ai-sample strong{font-weight:var(--hs-weight-bold)}
+.ai-sample a{color:var(--hs-teal-deep);font-weight:var(--hs-weight-bold)}
