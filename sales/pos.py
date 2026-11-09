@@ -82,6 +82,7 @@ WORDS = {
         "err_line": "في سطر فيه كمية أو سعر مش صحيح.",
         "err_item": "صنف مش موجود أو موقوف.",
         "err_walk_in_credit": "البيع الآجل محتاج عميل باسمه؛ اختار العميل أو خد المبلغ كامل.",
+        "err_gift_amount": "المبلغ اللي هيتدفع بكارت الهدية مش صحيح أو أكبر من المطلوب.",
         "err_discount": "الخصم أكبر من المجموع.",
         "err_setup": "لازم يكون فيه مخزن بيع وخزنة نشطين قبل البيع.",
         "scan_serial": "الصنف ده بيتباع بالسيريال؛ امسح السيريال / IMEI بتاع القطعة: ",
@@ -130,6 +131,7 @@ WORDS = {
         "err_line": "A line has an invalid quantity or price.",
         "err_item": "An item is missing or inactive.",
         "err_walk_in_credit": "A credit sale needs a named customer; pick the customer or take the full amount.",
+        "err_gift_amount": "The amount to pay by gift card is not valid or is more than the total.",
         "err_discount": "The discount is larger than the subtotal.",
         "err_setup": "A selling location and an active cashbox are needed before selling.",
         "scan_serial": "This item is sold by serial; scan the unit's serial / IMEI: ",
@@ -215,13 +217,15 @@ def _next_number(today):
 
 
 def checkout(*, lines, customer, location, cashbox, discount, tendered, user, sale_date=None, notes="POS", card=False, promotion=None, points=None,
-             allow_short=False, short_source="pos"):
+             allow_short=False, short_source="pos", gift=None, lang="ar"):
     """Create and post the sale. Returns (invoice, change).
 
     POS-003: an offline sale passes the day it was rung up as ``sale_date``;
     posting then applies that day's period rules like any other entry.
     HG-065: ``allow_short`` is the cashier's agreement to sell what is not in
     stock; it counts only while the owner allows selling without stock.
+    S6 (HG-071): ``gift`` is (card, amount): that part is left as ``remaining_due`` and redeemed from the card in the
+    same transaction (``giftcards.services.redeem``), so the walk-in still owes nothing once the checkout is done.
     """
 
     # UNITS-001: a line entered in a bigger unit carries a few piastres of discount.
@@ -232,11 +236,16 @@ def checkout(*, lines, customer, location, cashbox, discount, tendered, user, sa
     # TAX-001: VAT per line from item rates; the invoice discount comes after tax.
     tax = money_round(sum((line_tax for *_, line_tax in compute_lines(lines)), Decimal("0"))) if vat_enabled() else Decimal("0.00")
     total = money_round(subtotal - discount + tax)
-    tendered = total if card else money_round(tendered or 0)  # AN8: a card pays the total exactly, no change
-    paid_now = min(tendered, total)
-    if paid_now < total and customer.customer_code == WALK_IN_CODE:
+    gift_card, gift_part = gift if gift is not None else (None, Decimal("0.00"))
+    gift_part = money_round(gift_part or 0)
+    if gift is not None and not Decimal("0") < gift_part <= total:
+        raise ValidationError("err_gift_amount")
+    cash_due = total - gift_part  # S6 (HG-071): what is left for the drawer or the card machine after the gift card
+    tendered = cash_due if card else money_round(tendered or 0)  # AN8: a card pays the total exactly, no change
+    paid_now = min(tendered, cash_due)
+    if paid_now + gift_part < total and customer.customer_code == WALK_IN_CODE:  # HG-071: loosened by the card part only
         raise ValidationError("err_walk_in_credit")
-    change = money_round(tendered - total) if tendered > total else Decimal("0.00")
+    change = money_round(tendered - cash_due) if tendered > cash_due else Decimal("0.00")
     today = sale_date or timezone.localdate()
     for _attempt in range(5):
         try:
@@ -266,6 +275,10 @@ def checkout(*, lines, customer, location, cashbox, discount, tendered, user, sa
 
                     remember(invoice, *points, posting=True)  # checked under the customer's lock on posting
                 post_sales_invoice(invoice.pk, user, allow_short=allow_short, short_source=short_source)
+                if gift is not None:  # S6 (HG-071): refused (balance, entity, expiry of the sale) means nothing is kept
+                    from giftcards.services import redeem
+
+                    redeem(gift_card, invoice, gift_part, user, lang)
             invoice.refresh_from_db()
             return invoice, change
         except IntegrityError:
@@ -291,11 +304,42 @@ def promotion_quote(request):
             typed = _decimal(request.POST.get(f"discount_{index}") or "0", 2) or Decimal("0")
             if typed > 0:
                 line["line_discount_amount"], line["typed_discount"] = line["line_discount_amount"] + typed, typed
-        _lines, promotion, off = promotions.apply(lines, coupon=request.POST.get("coupon", ""), lang=lang)
+        customer = None  # S6 (HG-071): a members-only promotion is quoted for the chosen customer
+        if (request.POST.get("customer") or "").isdigit():
+            customer = Customer.objects.filter(pk=request.POST["customer"], active=True).first()
+        _lines, promotion, off = promotions.apply(lines, coupon=request.POST.get("coupon", ""), lang=lang, customer=customer)
     except ValidationError as exc:
         return JsonResponse({"ok": False, "error": _error_text(exc, WORDS[lang])})
     changed = [str(money_round(new["line_discount_amount"] - old["line_discount_amount"])) for old, new in zip(lines, _lines)]
     return JsonResponse({"ok": True, "discount": str(money_round(off)), "name": promotion.name if promotion else "", "lines": changed})
+
+
+def _gift_card_part(post, lang, user=None):
+    """S6 (HG-071): (card, amount) from the till's «كارت هدية» row, or None when it is empty."""
+
+    code = (post.get("gift_code") or "").strip()
+    if not code:
+        return None
+    from giftcards import services as giftcards
+
+    words = giftcards.MESSAGES[lang]
+    if not giftcards.enabled():
+        raise ValidationError(words["off"])
+    if not user_has_permission(user, giftcards.SELL):
+        raise ValidationError(words["no_permission"])
+    card = giftcards.find(code)
+    if card is None:
+        raise ValidationError(words["not_found"])
+    amount = _decimal(post.get("gift_amount") or "", 2)
+    if amount is None or amount <= 0:
+        raise ValidationError("err_gift_amount")
+    return card, amount
+
+
+def _gift_cards_on(user=None):
+    from giftcards.services import SELL, enabled
+
+    return enabled() and (user is None or user_has_permission(user, SELL))
 
 
 def _promotions_on():
@@ -448,7 +492,8 @@ def pos(request):
             from promotions import services as promotions
 
             coupon = request.POST.get("coupon", "")
-            lines, promotion, promotion_off = promotions.apply(lines, coupon=coupon, lang=lang)  # T5: the best running promotion
+            # T5: the best running promotion; S6 (HG-071): a members-only one counts for this customer's active contract
+            lines, promotion, promotion_off = promotions.apply(lines, coupon=coupon, lang=lang, customer=customer)
             if "promotion_seen" in request.POST:  # the till shows promotions: the payment needs its confirmed quote (Codex #268)
                 raw_seen = request.POST.get("promotion_seen", "")
                 seen = _decimal(raw_seen, 2) if raw_seen != "" else None
@@ -463,9 +508,11 @@ def pos(request):
                 if seen is None or abs(seen - points_off) > Decimal("0.005"):
                     raise ValidationError("err_points_changed")
             discount += points_off
+            gift = _gift_card_part(request.POST, lang, request.user)  # S6 (HG-071)
             invoice, change = checkout(lines=lines, customer=customer, location=location, cashbox=cashbox, discount=discount, tendered=tendered,
                                        user=request.user, card=card, promotion=(promotion, promotion_off, coupon) if promotion else None,
-                                       points=(points, points_off) if points else None, allow_short=request.POST.get("allow_short") == "1")
+                                       points=(points, points_off) if points else None, allow_short=request.POST.get("allow_short") == "1",
+                                       gift=gift, lang=lang)
         except ValidationError as exc:
             messages.error(request, _error_text(exc, words))
             cart_back = request.POST.get("cart_json", "[]")
@@ -496,6 +543,7 @@ def pos(request):
             "card_cashbox": machine,  # AN8
             "price_book": price_book(),
             "promotions_on": _promotions_on(),  # T5
+            "gift_cards_on": _gift_cards_on(request.user),  # S6 (HG-071): only for who may take a card
             "running_promotions": _running_promotions(),
             "loyalty_rules": _loyalty_rules(),  # T6: None when loyalty is off
             "tax_rates": rates_by_item(),

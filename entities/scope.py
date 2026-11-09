@@ -30,6 +30,8 @@ LOCATION = "entity"
 CASHBOX_MOVEMENT = "cashbox__entity"
 STOCK_MOVEMENT = "location__entity"
 EXPENSE = "cashbox__entity"
+#: S6 (HG-071): a gift card belongs to the entity it was sold in, and so does its money.
+GIFT_CARD = "entity"
 #: Two-sided documents belong to every entity they touch.
 CASHBOX_OPERATION = ("source_cashbox__entity", "destination_cashbox__entity")
 STOCK_OPERATION = ("source_location__entity", "destination_location__entity")

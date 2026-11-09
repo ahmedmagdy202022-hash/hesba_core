@@ -104,6 +104,21 @@ def _reverse_cash_operation(request):
     cancel_cashbox_operation(request.object_id, reversal_date=_day(request.data), reason=request.data.get("reason", ""), user=request.requested_by)
 
 
+def _gift_card_breakage(request):
+    from giftcards.models import GiftCard
+    from giftcards.services import breakage
+
+    breakage(GiftCard.objects.get(pk=request.object_id), request.requested_by, request.data.get("reason", ""))
+
+
+def _gift_card_reverse(request):
+    from giftcards.models import GiftCardEntry
+    from giftcards.services import reverse
+
+    entry = GiftCardEntry.objects.get(pk=request.data["entry"], card_id=request.object_id)
+    reverse(entry, _day(request.data), request.data.get("reason", ""), request.requested_by)
+
+
 ACTIONS = {action.code: action for action in (
     Action("sales.cancel_invoice", "إلغاء فاتورة بيع مترحّلة", "Cancel a posted sales invoice", lambda pk: f"/sales/{pk}/", _cancel_sales_invoice, "sales.SalesInvoice", "SALES_INVOICE", ("sales.return_sale",)),
     Action("sales.reverse_return", "عكس مرتجع مبيعات", "Reverse a sales return", lambda pk: f"/sales/returns/{pk}/", _reverse_sales_return, "sales.SalesReturn", "SALES_RETURN", ("sales.return_sale",)),
@@ -114,6 +129,9 @@ ACTIONS = {action.code: action for action in (
     Action("expenses.cancel", "إلغاء مصروف", "Cancel an expense", lambda pk: "/expenses/", _cancel_expense, "expenses.Expense", "EXPENSE", ("cashboxes.record_expenses",)),
     Action("inventory.reverse_operation", "عكس تسوية أو تحويل مخزون", "Reverse a stock adjustment or transfer", lambda pk: "/inventory/operations/", _reverse_stock_operation, "inventory.StockOperation", "STOCK_OPERATION", ("inventory.transfer_stock", "inventory.adjust_stock")),
     Action("cashboxes.reverse_operation", "عكس حركة خزنة", "Reverse a cashbox operation", lambda pk: "/cashboxes/operations/", _reverse_cash_operation, "cashboxes.CashboxOperation", "CASHBOX_OPERATION", ("cashboxes.move_cash",)),
+    # S6 (HG-071): writing off a gift card's unspent rest, and reversing a card's sale or write-off.
+    Action("giftcards.breakage", "شطب باقي كارت هدية (إيراد متنوع)", "Write off a gift card's rest (sundry income)", lambda pk: f"/giftcards/{pk}/", _gift_card_breakage, "giftcards.GiftCard", "GIFT_CARD", ("giftcards.breakage",)),
+    Action("giftcards.reverse", "عكس بيع كارت هدية أو شطبه", "Reverse a gift card's sale or write-off", lambda pk: f"/giftcards/{pk}/", _gift_card_reverse, "giftcards.GiftCard", "GIFT_CARD", ("giftcards.breakage",)),
 )}
 
 

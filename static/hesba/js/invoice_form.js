@@ -185,13 +185,14 @@
   function quotePromotion() {
     if (!couponBox || !window.fetch) { return; }
     var lines = promoLines();
-    var key = JSON.stringify([couponInput ? couponInput.value : '', lines]);
+    var key = JSON.stringify([couponInput ? couponInput.value : '', customerSelect ? customerSelect.value : '', lines]);
     if (key === promo.key) { return; }
     var seq = ++promoSeq;
     if (!lines.length) { promo = { off: 0, byLine: {}, key: key }; showPromo(null); recalc(); return; }
     var body = new FormData();
     body.append('line_count', String(lines.length));
     body.append('coupon', couponInput ? couponInput.value : '');
+    body.append('customer', customerSelect ? customerSelect.value : '');  // S6 (HG-071): members-only promotions
     lines.forEach(function (line, n) {
       body.append('item_' + n, line.item); body.append('qty_' + n, line.qty); body.append('price_' + n, line.price);
       body.append('unit_' + n, line.unit); body.append('discount_' + n, line.discount);
@@ -349,6 +350,7 @@
         if (price && (!price.value || price.value === price.getAttribute('data-auto'))) { fillPrice(i, true); }
       }
       showList();
+      quotePromotion();  // S6 (HG-071): a members-only promotion follows the customer
     }
     var match = /^lines-(\d+)-item$/.exec(event.target.name || '');
     if (match) { fillUnits(parseInt(match[1], 10)); fillPrice(parseInt(match[1], 10), false); }

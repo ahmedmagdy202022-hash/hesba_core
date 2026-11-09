@@ -202,10 +202,11 @@
     body.append('lang', document.body.dataset.lang === 'en' ? 'en' : 'ar');
     body.append('line_count', String(cart.length));
     body.append('coupon', coupon ? coupon.value : '');
+    body.append('customer', customer ? customer.value : '');  // S6 (HG-071): a members-only promotion depends on the customer
     cart.forEach(function (row, index) {
       body.append('item_' + index, row.id); body.append('qty_' + index, row.qty); body.append('price_' + index, row.price); body.append('unit_' + index, row.unit || '');
     });
-    var key = JSON.stringify([coupon ? coupon.value : '', cart.map(function (row) { return [row.id, row.qty, row.price, row.unit || '']; })]);
+    var key = JSON.stringify([coupon ? coupon.value : '', customer ? customer.value : '', cart.map(function (row) { return [row.id, row.qty, row.price, row.unit || '']; })]);
     if (key === promo.key) { promoPending = false; return; }
     var seq = promoSeq;
     var token = form.querySelector('input[name="csrfmiddlewaretoken"]');
@@ -238,11 +239,12 @@
     var taxCell = form.querySelector('[data-pos-tax]');
     if (taxCell) { taxCell.textContent = money(tax); }
     var total = Math.max(0, subtotal - num(discount.value) - promo.off - pointsOff() + tax);
-    if (!tenderedTouched) { tendered.value = total ? total.toFixed(2) : ''; }
+    var cashDue = Math.max(0, total - (giftAmount ? num(giftAmount.value) : 0));  // S6 (HG-071): the card pays its part
+    if (!tenderedTouched) { tendered.value = cashDue ? cashDue.toFixed(2) : ''; }
     var paid = num(tendered.value);
     form.querySelector('[data-pos-subtotal]').textContent = money(subtotal);
     form.querySelector('[data-pos-total]').textContent = money(total);
-    var change = paid - total, credit = total - paid;
+    var change = paid - cashDue, credit = cashDue - paid;
     form.querySelector('[data-pos-change-row]').hidden = !(change > 0.004);
     form.querySelector('[data-pos-change]').textContent = money(Math.max(0, change));
     form.querySelector('[data-pos-credit-row]').hidden = !(credit > 0.004);
@@ -282,6 +284,8 @@
     render();
   });
   discount.addEventListener('input', totals);
+  var giftAmount = form.querySelector('[data-pos-gift-amount]');
+  if (giftAmount) { giftAmount.addEventListener('input', totals); }
   tendered.addEventListener('input', function () { tenderedTouched = tendered.value !== ''; totals(); });
 
   scan.addEventListener('keydown', function (event) {

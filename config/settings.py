@@ -88,6 +88,7 @@ LOCAL_APPS = [
     "settlements",  # HG-069: which payment settles which invoice
     "deposits",  # HG-069 (S5): deposits at booking
     "payments",  # HG-070 (S4): online payment links (Paymob first)
+    "giftcards",  # HG-071 (S6): gift cards (a liability until spent)
 ]
 
 INSTALLED_APPS = DJANGO_APPS + LOCAL_APPS

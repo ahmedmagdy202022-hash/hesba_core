@@ -313,7 +313,8 @@ class CashboxForm(ZeroWhenBlank, AutoNumbered, _EntityField, HesbaModelForm):
         for name in ("kind", "bank_name", "account_number", "iban"):
             self.fields[name].label = words[name]
         self.fields["kind"].help_text = words["kind_help"]
-        self.fields["kind"].choices = localized_choices(Cashbox, "kind", self.lang)
+        # S6 (HG-071): a gift-card box is made by the gift-card screens only, one per entity.
+        self.fields["kind"].choices = [choice for choice in localized_choices(Cashbox, "kind", self.lang) if choice[0] != CashboxKind.GIFT_CARD]
         self.fields["kind"].required = False  # left out (an older screen, an import): a cash cashbox, as before T3
 
     def clean_kind(self):

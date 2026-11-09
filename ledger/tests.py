@@ -65,7 +65,7 @@ class EnsureChartTests(TestCase):
         self.assertEqual(services.ensure_chart(), count)  # idempotent
         held = services.account_for("retention_receivable")
         self.assertEqual((held.code, held.parent.code, held.account_type), ("1113", "11", "asset"))
-        self.assertEqual(services.account_for("retention_payable").code, "2110")  # 2107-2109 are the payroll debts (T12)
+        self.assertEqual(services.account_for("retention_payable").code, "2111")  # 2107-2109 are the payroll debts (T12), 2110 unspent gift cards (S6)
         mine.refresh_from_db()
         self.assertEqual((mine.name_ar, mine.control), ("سلف العاملين", ""))  # the user's own account is untouched
 

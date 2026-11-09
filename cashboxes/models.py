@@ -12,11 +12,16 @@ class CashboxKind(models.TextChoices):
     CHEQUES_OUT = "cheques_out", "Cheques issued"
     #: T14 (HG-061): cash a shipping company collected on delivery and has not handed over yet (a receivable from it).
     COURIER = "courier", "Courier collections"
+    #: S6 (HG-071): unspent gift cards, one box per entity. Its balance runs negative by design: minus the sum of the
+    #: live cards' balances, the liability to their holders (2110). Only the gift-card screens move it.
+    GIFT_CARD = "gift_card", "Gift cards (unspent)"
 
 
 CHEQUE_KINDS = (CashboxKind.CHEQUES_IN, CashboxKind.CHEQUES_OUT)
 #: Boxes only their own screens move (cheques, couriers): kept out of every cashbox picker and of cash on hand.
-HELD_KINDS = CHEQUE_KINDS + (CashboxKind.COURIER,)
+HELD_KINDS = CHEQUE_KINDS + (CashboxKind.COURIER, CashboxKind.GIFT_CARD)
+#: S6 (HG-071): boxes whose negative balance is the point (a liability), so the negative-balance guards skip them.
+LIABILITY_KINDS = (CashboxKind.GIFT_CARD,)
 
 
 class Cashbox(models.Model):

@@ -38,6 +38,8 @@ BASE = (
     ("2107", "مرتبات مستحقة", "Salaries payable", L, "salaries_payable", True, False),
     ("2108", "تأمينات اجتماعية مستحقة", "Social insurance payable", L, "insurance_payable", True, False),
     ("2109", "ضريبة كسب عمل مستحقة", "Payroll tax payable", L, "payroll_tax_payable", True, False),
+    # S6 (HG-071): what gift-card holders may still spend; the gift-card box's negative balance.
+    ("2110", "كروت هدايا غير مصروفة", "Unspent gift cards", L, "gift_card_liability", True, False),
     ("22", "الخصوم طويلة الأجل", "Long-term liabilities", L, "", False, False),
     ("2201", "القروض", "Loans", L, "", True, False),
     ("3", "حقوق الملكية", "Equity", E, "", False, False),

@@ -113,7 +113,7 @@ AR_LABELS = {
     ("ereceipt.receipt", "status"): {"queued": "مستني الإرسال", "submitted": "اتبعت", "valid": "اتقبل", "invalid": "مرفوض", "not_issued": "متعملش: بيانات ناقصة"},
     ("cheques.cheque", "direction"): {"in": "وارد", "out": "صادر"},
     ("onlinestore.storeorder", "source"): {"shopify": "Shopify", "template": "قالب حسبة"},
-    ("cashboxes.cashbox", "kind"): {"cash": "خزنة", "bank": "حساب بنكي", "cheques_in": "شيكات في الإيد", "cheques_out": "شيكات صادرة", "courier": "تحصيلات شركة شحن"},
+    ("cashboxes.cashbox", "kind"): {"cash": "خزنة", "bank": "حساب بنكي", "cheques_in": "شيكات في الإيد", "cheques_out": "شيكات صادرة", "courier": "تحصيلات شركة شحن", "gift_card": "كروت هدايا غير مصروفة"},
     ("cashboxes.cashboxoperation", "status"): DOCUMENT_STATUS,
     ("cashboxes.openingbalanceadjustment", "status"): DOCUMENT_STATUS,
     ("closing.period", "frequency"): FREQUENCY,

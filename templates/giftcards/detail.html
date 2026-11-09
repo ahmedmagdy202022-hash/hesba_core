@@ -1,0 +1,21 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'giftcards:list' %}?lang={{ lang }}">← {{ words.back }}</a><h1><bdi>{{ card.number }}</bdi></h1><p><bdi dir="ltr" data-code>{{ code }}</bdi> · {{ card.holder_name|default:"—" }}</p></div>
+<div class="op-form-actions"><a class="op-secondary" href="{% url 'giftcards:receipt' card.pk %}?lang={{ lang }}">{{ words.receipt }}</a><span class="op-status{% if card.status == 'cancelled' %} op-status-cancelled{% else %} op-status-posted{% endif %}">{{ status }}</span></div></section>
+<div class="op-summary-grid op-summary-grid--compact">
+<article><small>{{ words.face }}</small><strong><bdi>{{ card.face_value|money }}</bdi></strong></article>
+<article data-balance><small>{{ words.balance }}</small><strong><bdi>{{ figures.balance|money }}</bdi></strong></article>
+<article><small>{{ words.expires }}</small><strong><bdi>{{ card.expires_on|date:"Y-m-d"|default:"—" }}</bdi></strong>{% if expired %}<span class="op-status op-status-draft">{{ words.expired }}</span>{% endif %}</article>
+</div>
+<h2>{{ words.entries }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-entries><thead><tr><th>{{ words.date }}</th><th>{{ words.kind }}</th><th>{{ words.amount }}</th><th>{{ words.invoice }}</th><th>{{ words.reason }}</th><th></th></tr></thead><tbody>
+{% for row in rows %}{% with entry=row.entry %}<tr data-entry="{{ entry.pk }}" data-kind="{{ entry.kind }}"><td><bdi>{{ entry.entry_date|date:"Y-m-d" }}</bdi></td><td>{{ row.label }}</td><td>{{ entry.amount|money }}</td>
+<td>{% if entry.invoice %}<a href="{% url 'sales:detail' entry.invoice_id %}?lang={{ lang }}"><bdi>{{ entry.invoice.invoice_number }}</bdi></a>{% else %}—{% endif %}</td><td class="op-cell-text">{{ entry.reason|default:"" }}</td>
+<td class="op-cell-actions">{% if row.live %}{% if entry.kind == 'redeemed' %}<details class="op-row-cancel"><summary>{{ words.cancel_redemption }}…</summary><form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="cancel_redemption"><input type="hidden" name="entry" value="{{ entry.pk }}"><input name="reason" required aria-label="{{ words.reason }}" placeholder="{{ words.reason }}"><button class="op-danger" type="submit">{{ words.cancel_redemption }}</button></form></details>
+{% elif can_manage %}<details class="op-row-cancel"><summary>{{ words.reverse }}…</summary><form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="reverse"><input type="hidden" name="entry" value="{{ entry.pk }}"><input type="date" name="reversal_date" value="{{ today|date:'Y-m-d' }}" aria-label="{{ words.reverse_date }}"><input name="reason" required aria-label="{{ words.reason }}" placeholder="{{ words.reason }}"><button class="op-danger" type="submit">{{ words.reverse }}</button></form></details>{% endif %}{% endif %}</td></tr>{% endwith %}
+{% endfor %}</tbody></table></div>
+{% if can_manage and card.status == 'active' and figures.balance > 0 %}<form class="op-form" method="post" data-breakage-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="breakage">
+<h2>{{ words.breakage }}</h2><p class="op-muted">{{ words.breakage_hint }}</p><div class="op-form-grid"><div class="op-field"><label for="id_reason">{{ words.reason }}</label><input id="id_reason" name="reason" required maxlength="200"></div></div>
+<div class="op-form-actions"><button class="op-danger" type="submit" data-breakage>{{ words.breakage }}</button></div></form>{% endif %}
+{% endblock %}

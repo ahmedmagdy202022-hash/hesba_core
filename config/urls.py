@@ -81,6 +81,7 @@ urlpatterns = [
     path("store/", include("onlinestore.urls")),
     path("shipping/", include("shipping.urls")),
     path("payments/", include("payments.urls")),  # S4 (HG-070): the staff side of payment links
+    path("giftcards/", include("giftcards.urls")),  # S6 (HG-071): gift cards
     path("approvals/", include("approvals.urls")),  # FB-27
     path("ereceipt/", include("ereceipt.urls")),
     path("expenses/", include("expenses.urls")),

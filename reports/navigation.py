@@ -77,6 +77,9 @@ NAV_ITEMS = (
     # T6: loyalty points, earned on posted invoices and spent as a discount.
     {"key": "loyalty", "ar": "نقاط الولاء", "en": "Loyalty points", "url_name": "loyalty:home", "module": "sales_operations", "capability": "loyalty",
      "permission": "sales.view_sales_invoices"},
+    # S6 (HG-071): gift cards, sold as a liability and spent as a payment.
+    {"key": "giftcards", "ar": "كروت الهدايا", "en": "Gift cards", "url_name": "giftcards:list", "module": "sales_operations", "capability": "gift_cards",
+     "permission": "giftcards.sell"},
     {"key": "pos", "ar": "الكاشير", "en": "Point of sale", "url_name": "sales:pos", "module": "sales_operations", "capability": "pos", "permission": "sales.create_sales_invoice"},
     {"key": "purchases", "ar": "المشتريات", "en": "Purchases", "url_name": "purchases:list", "module": "purchases", "permission": "purchases.view_purchase_invoices"},
     {"key": "inventory", "ar": "المخزون", "en": "Inventory", "url_name": "inventory:stock", "module": "inventory", "permission": "inventory.view_stock"},
@@ -174,6 +177,7 @@ TAB_LABELS = {
     "ereceipt": {"ar": "الإيصالات", "en": "Receipts"},
     "promotions": {"ar": "الخصومات", "en": "Promos"},
     "loyalty": {"ar": "النقاط", "en": "Points"},
+    "giftcards": {"ar": "الكروت", "en": "Gift cards"},
     "drugs": {"ar": "الأدوية", "en": "Drugs"},
     "attendance": {"ar": "الحضور", "en": "Attendance"},
     "messages": {"ar": "الرسائل", "en": "Messages"},
