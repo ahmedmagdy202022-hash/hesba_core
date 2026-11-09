@@ -320,6 +320,9 @@ ANTHROPIC_API_KEY = config("ANTHROPIC_API_KEY", default="")
 ANTHROPIC_MODEL = config("ANTHROPIC_MODEL", default="claude-opus-5-5").strip()
 # The most questions one person may ask in a Cairo day, inside the company's daily cap.
 AI_ASK_USER_DAILY_CAP = config("AI_ASK_USER_DAILY_CAP", default=20, cast=int)
+# A3 (HG-081): the most invoice photos one person may have read in a Cairo day, inside the company's daily cap. The
+# reader uses the same ANTHROPIC_API_KEY and ANTHROPIC_MODEL as «اسأل حسبة»; no other setting is needed.
+AI_INVOICE_PHOTO_USER_DAILY_CAP = config("AI_INVOICE_PHOTO_USER_DAILY_CAP", default=10, cast=int)
 
 LOGGING = {
     "version": 1,

@@ -7,20 +7,24 @@ from django.core.files.uploadhandler import FileUploadHandler, StopUpload
 OVERHEAD = 64 * 1024
 
 
-def too_big_for_the_cap(content_length):
+def too_big_for_the_cap(content_length, limit=None):
+    """``limit`` (A3, HG-081) is a lower cap of the caller's own; ``ATTACHMENTS_MAX_BYTES`` when not given."""
+
     try:
-        return int(content_length or 0) > int(settings.ATTACHMENTS_MAX_BYTES) + OVERHEAD
+        return int(content_length or 0) > int(limit if limit is not None else settings.ATTACHMENTS_MAX_BYTES) + OVERHEAD
     except (TypeError, ValueError):
         return False
 
 
 class CapUploadHandler(FileUploadHandler):
-    """First in the list: counts the file's bytes and stops the upload once they pass ``ATTACHMENTS_MAX_BYTES``."""
+    """First in the list: counts the file's bytes and stops the upload once they pass ``ATTACHMENTS_MAX_BYTES`` (or the
+    lower ``limit`` given, A3)."""
 
-    def __init__(self, request=None):
+    def __init__(self, request=None, limit=None):
         super().__init__(request)
         self.exceeded = False
         self.seen = 0
+        self.limit = limit
 
     def new_file(self, *args, **kwargs):
         super().new_file(*args, **kwargs)
@@ -28,7 +32,7 @@ class CapUploadHandler(FileUploadHandler):
 
     def receive_data_chunk(self, raw_data, start):
         self.seen += len(raw_data)
-        if self.seen > int(settings.ATTACHMENTS_MAX_BYTES):
+        if self.seen > int(self.limit if self.limit is not None else settings.ATTACHMENTS_MAX_BYTES):
             self.exceeded = True
             raise StopUpload(connection_reset=False)  # the rest is read and dropped, never kept
         return raw_data

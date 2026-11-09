@@ -74,6 +74,7 @@ FEATURE_LANDING = {
     "deposits": "appointments:agenda", "online_booking": "appointments:booking_settings", "payment_links": "payments:gateway", "gift_cards": "giftcards:list",
     "ai_voice_summary": "dashboard_snapshot",  # A1 (HG-079): the card lives on the dashboard
     "ai_ask": "ai:ask",  # A2 (HG-080)
+    "ai_invoice_photo": "ai:invoice_photo",  # A3 (HG-081)
 }
 
 

@@ -1,0 +1,109 @@
+{% extends "operations/base.html" %}
+{% load static %}
+{% comment %}A3 (HG-081): «فاتورة شراء من صورة», after the approved artboard «InvoicePhoto». The upload is a CSRF multipart POST;
+the review is a CSRF POST that saves a DRAFT only. Every text read from the photo is escaped and shown for mapping only;
+every amount on the card is computed by Hesba from the lines. No JavaScript.{% endcomment %}
+{% block styles %}{{ block.super }}
+<link rel="stylesheet" href="{% static 'hesba/css/invoice_photo.css' %}?v=a3-1">{% endblock %}
+{% block operation_content %}
+<section class="iph" data-invoice-photo>
+  <header class="iph__head">
+    <h1 class="iph__title">{{ w.title }}</h1>
+    <p class="iph__subtitle">{{ w.subtitle }}</p>
+  </header>
+
+  {% if refused %}
+  <article class="iph-card iph-card--refused" role="status" data-iph-refused>
+    <strong>{{ refused.title }}</strong>
+    <span>{{ refused.message }}</span>
+  </article>
+  {% else %}
+
+  {% if error %}
+  <article class="iph-card iph-card--error" role="alert" data-iph-error>
+    <strong>{{ w.error_title }}</strong>
+    <span>{{ error }}</span>
+  </article>
+  {% endif %}
+
+  {% if review %}
+  <form class="iph__review" method="post" action="{% url 'ai:invoice_photo_review' review.pending.token %}?lang={{ lang }}" data-iph-review>
+    {% csrf_token %}
+    <input type="hidden" name="lang" value="{{ lang }}">
+
+    <section class="iph-supplier">
+      <img class="iph-supplier__photo" src="{% url 'ai:invoice_photo_image' review.pending.token %}?lang={{ lang }}" alt="{{ w.photo }}" width="72" height="96">
+      <div class="iph-supplier__body">
+        <strong class="iph-supplier__name">{{ w.supplier }}: <bdi dir="auto" data-iph-supplier-read>{{ review.pending.reading.supplier_name|default:"—" }}</bdi></strong>
+        {% if review.pending.reading.supplier_id %}<span class="iph-chip iph-chip--ok" data-iph-supplier-chip="matched">{{ w.supplier_ok }}</span>
+        {% else %}<span class="iph-chip iph-chip--map" data-iph-supplier-chip="needs">{{ w.needs_map }}</span>{% endif %}
+        <label class="iph-field__label" for="iph-supplier">{{ w.supplier_map }}</label>
+        <select id="iph-supplier" name="supplier" required data-iph-supplier>
+          <option value="">{{ w.choose }}</option>
+          {% for pk, name, code in choices.suppliers %}<option value="{{ pk }}"{% if pk == review.supplier_id %} selected{% endif %}>{{ name }}{% if code %} ({{ code }}){% endif %}</option>{% endfor %}
+        </select>
+        {% if not review.pending.reading.supplier_id %}<span class="iph-hint">{{ w.no_create_supplier }}</span>{% endif %}
+      </div>
+    </section>
+
+    <section class="iph-header-fields">
+      <label class="iph-field"><span class="iph-field__label">{{ w.number }}</span><input name="invoice_number" value="{{ review.invoice_number }}" maxlength="80" dir="auto" autocomplete="off" data-iph-number></label>
+      <label class="iph-field"><span class="iph-field__label">{{ w.date }}</span><input name="invoice_date" type="date" value="{{ review.invoice_date }}" data-iph-date></label>
+      <label class="iph-field iph-field--wide"><span class="iph-field__label">{{ w.store }}</span>
+        <select name="receiving_location" required data-iph-store>
+          <option value="">{{ w.choose }}</option>
+          {% for pk, name in choices.stores %}<option value="{{ pk }}"{% if pk == review.store_id %} selected{% endif %}>{{ name }}</option>{% endfor %}
+        </select>
+      </label>
+    </section>
+
+    <h2 class="iph__section">{{ w.lines }}</h2>
+    {% for line in review.lines %}
+    <article class="iph-line{% if not line.matched %} iph-line--map{% endif %}" data-iph-line="{{ line.index }}">
+      <div class="iph-line__top">
+        <strong class="iph-line__name" dir="auto">{% if line.matched %}{{ line.name }}{% else %}«{{ line.name }}»{% endif %}{% if line.code %} <bdi class="iph-line__code">{{ line.code }}</bdi>{% endif %}</strong>
+        {% if line.matched %}<span class="iph-chip iph-chip--ok" data-iph-chip="matched">{{ w.matched }}</span>{% else %}<span class="iph-chip iph-chip--map" data-iph-chip="needs">{{ w.needs_map }}</span>{% endif %}
+      </div>
+      <span class="iph-line__sum"><bdi>{{ line.quantity }}</bdi> × <bdi>{{ line.price }}</bdi> = <bdi data-iph-line-total>{{ line.total }}</bdi></span>
+      <div class="iph-line__amounts">
+        <label class="iph-field"><span class="iph-field__label">{{ w.quantity }}</span><input name="line-{{ line.index }}-quantity" value="{{ line.quantity }}" inputmode="decimal" required></label>
+        <label class="iph-field"><span class="iph-field__label">{{ w.price }}</span><input name="line-{{ line.index }}-price" value="{{ line.price }}" inputmode="decimal" required></label>
+      </div>
+      <label class="iph-field__label" for="iph-item-{{ line.index }}">{{ w.map_label }}</label>
+      <select id="iph-item-{{ line.index }}" name="line-{{ line.index }}-item" data-iph-item>
+        <option value="">{{ w.choose }}</option>
+        {% for pk, name, code in choices.items %}<option value="{{ pk }}"{% if pk == line.item_id %} selected{% endif %}>{{ name }} ({{ code }})</option>{% endfor %}
+      </select>
+      {% if not line.matched %}<span class="iph-hint">{{ w.no_create }}</span>{% endif %}
+      <label class="iph-include"><input type="checkbox" name="line-{{ line.index }}-include" value="1"{% if line.included %} checked{% endif %}> {{ w.include }}</label>
+    </article>
+    {% endfor %}
+
+    <section class="iph-totals" data-iph-totals>
+      <div class="iph-totals__row"><span>{{ w.computed }}</span><bdi class="iph-totals__computed" data-iph-computed>{{ review.computed }}</bdi></div>
+      {% if review.written %}<div class="iph-totals__row"><span>{{ w.written }}</span><bdi class="iph-totals__written{% if review.difference %} iph-totals__written--off{% endif %}" data-iph-written>{{ review.written }}</bdi></div>
+      {% if review.difference %}<span class="iph-totals__warn" data-iph-difference>{{ review.difference_text }}</span>{% endif %}{% endif %}
+    </section>
+
+    <div class="iph__actions">
+      <button type="submit" class="iph-btn iph-btn--primary" data-iph-save>{{ w.save }}</button>
+    </div>
+  </form>
+  <form class="iph__again" method="post" action="{% url 'ai:invoice_photo_discard' review.pending.token %}?lang={{ lang }}">
+    {% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+    <button type="submit" class="iph-btn iph-btn--secondary" data-iph-again>{{ w.again }}</button>
+  </form>
+
+  {% else %}
+  <form class="iph__upload" method="post" enctype="multipart/form-data" action="{% url 'ai:invoice_photo' %}?lang={{ lang }}" data-iph-upload>
+    {% csrf_token %}
+    <label class="iph-field__label" for="iph-photo">{{ w.upload_label }}</label>
+    <input id="iph-photo" name="photo" type="file" accept="{{ accept }}" capture="environment" required>
+    <span class="iph-hint">{{ upload_hint }}</span>
+    <button type="submit" class="iph-btn iph-btn--primary" data-iph-read>{{ w.read }}</button>
+  </form>
+  {% endif %}
+  <p class="iph__note">{{ w.note }}</p>
+  {% endif %}
+</section>
+{% endblock %}

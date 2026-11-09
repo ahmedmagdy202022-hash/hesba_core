@@ -193,6 +193,14 @@ CAPABILITIES = {
         "about_en": "Type a question such as “Sales today?” or “Who owes us?” and get the answer from Hesba's own reports, within your permissions and branch. Only the question is sent out, to pick the report, and it needs a key on the server.",
         "available": True, "paths": ("/ai/ask/",),
     },
+    # A3 (HG-081): a photo of a supplier's invoice read into a DRAFT purchase invoice. Nothing is posted and no item or
+    # supplier is created; the person maps, checks and posts it. Off by default; needs the purchases section.
+    "ai_invoice_photo": {
+        "ar": "فاتورة شراء من صورة", "en": "Purchase invoice from a photo",
+        "about_ar": "صوّر فاتورة المورد، وحسبة تجهّزها مسودة فاتورة شراء تراجعها وتربط أصنافها بأصنافك قبل ما ترحّلها بنفسك. الصورة بتتبعت برّه عشان تتقري، ومحتاج مفتاح على السيرفر.",
+        "about_en": "Photograph a supplier's invoice and Hesba prepares a draft purchase invoice for you to check and map to your items before you post it yourself. The photo is sent out to be read, and it needs a key on the server.",
+        "available": True, "paths": ("/ai/invoice-photo/",),
+    },
 }
 CAPABILITY_SLUGS = tuple(CAPABILITIES)
 
@@ -371,6 +379,7 @@ NEEDS = {
     "drugs": ("inventory",),
     "deposits": ("appointments_visits",),  # S5 (HG-069): a deposit is taken on a booking
     "online_booking": ("appointments_visits",),  # S3 (HG-077): an online booking is an appointment
+    "ai_invoice_photo": ("purchases",),  # A3 (HG-081): the photo becomes a purchase draft
 }
 
 #: ... and what it works best with, said on its card but never enforced.
@@ -388,11 +397,11 @@ GROUPS = (
     ("selling", ("البيع والكاشير", "Selling and the till"), ("pos", "shift_required", "price_lists", "promotions", "loyalty", "installments", "quotations", "shipping", "online_store", "deposits", "online_booking", "payment_links", "gift_cards")),
     ("goods", ("الأصناف والمخزون", "Items and stock"), ("barcode", "units", "variants", "batches_expiry", "serials", "drugs")),
     ("money", ("الحسابات والضرايب", "Accounts and tax"), ("vat", "e_invoice", "e_receipt", "fixed_assets")),
-    ("ai", ("الذكاء الاصطناعي", "AI"), ("ai_voice_summary", "ai_ask")),  # A1 (HG-079), A2 (HG-080): the AI track's features
+    ("ai", ("الذكاء الاصطناعي", "AI"), ("ai_voice_summary", "ai_ask", "ai_invoice_photo")),  # A1 (HG-079), A2 (HG-080), A3 (HG-081): the AI track's features
 )
 ICONS = {"pos": "pos", "shift_required": "shift", "price_lists": "pricetag", "installments": "instalments", "barcode": "barcode",
          "units": "units", "variants": "variants", "batches_expiry": "expiry", "serials": "serial", "vat": "taxes",
-         "e_invoice": "einvoice", "e_receipt": "ereceipt", "fixed_assets": "assets", "quotations": "quotes", "drugs": "drugs", "promotions": "promotions", "shipping": "shipping", "online_store": "store", "loyalty": "loyalty", "deposits": "appointments", "online_booking": "appointments", "payment_links": "banks", "gift_cards": "loyalty", "ai_voice_summary": "dashboard", "ai_ask": "reports"}
+         "e_invoice": "einvoice", "e_receipt": "ereceipt", "fixed_assets": "assets", "quotations": "quotes", "drugs": "drugs", "promotions": "promotions", "shipping": "shipping", "online_store": "store", "loyalty": "loyalty", "deposits": "appointments", "online_booking": "appointments", "payment_links": "banks", "gift_cards": "loyalty", "ai_voice_summary": "dashboard", "ai_ask": "reports", "ai_invoice_photo": "purchases"}
 WHERE = {
     "pos": ("«الكاشير» في القايمة، وزرار في لوحة القيادة وفي قايمة الفواتير", "“Till” in the menu, with a button on the dashboard and the invoice list"),
     "shift_required": ("فاتورة البيع والكاشير بيطلبوا فتح وردية الأول", "The sales invoice and the till ask for an open shift first"),
@@ -420,6 +429,7 @@ WHERE = {
     "fixed_assets": ("«الأصول الثابتة» في القايمة، والإهلاك في المصروفات وصافي الربح", "“Fixed assets” in the menu, and depreciation in expenses and net profit"),
     "ai_voice_summary": ("كارت «ملخص النهارده بالصوت» في لوحة القيادة، تحت الترحيب", "A “Today's summary, read aloud” card on the dashboard, under the greeting"),
     "ai_ask": ("زرار «اسأل حسبة» في لوحة القيادة، بيفتح صفحة السؤال", "An “Ask Hesba” button on the dashboard, opening the question page"),
+    "ai_invoice_photo": ("زرار «فاتورة من صورة» في قايمة فواتير الشراء، بيفتح صفحة التصوير", "An “Invoice from a photo” button on the purchase invoices list, opening the photo page"),
 }
 
 

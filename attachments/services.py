@@ -119,8 +119,44 @@ def _work_order_can_delete(user, order):
     return work.can_manage(user)
 
 
+def _purchase_invoices(user):
+    """A3 (HG-081): purchase invoices, seen exactly as the purchase screens show them: the view permission and the entity
+    scope (HG-034, through the receiving location)."""
+
+    from permissions.services import user_has_permission
+    from purchases.models import PurchaseInvoice
+
+    if not user_has_permission(user, "purchases.view_purchase_invoices"):
+        raise PermissionDenied("Purchase invoices need purchases.view_purchase_invoices.")
+    return entity_scope.scope(PurchaseInvoice.objects.all(), entity_scope.PURCHASE_INVOICE)
+
+
+def _purchase_invoice_can_change(user, invoice):
+    """The purchase screens' own rule for a change: the purchase-create permission."""
+
+    from permissions.services import user_has_permission
+
+    return user_has_permission(user, "purchases.create_purchase_invoice")
+
+
+def _purchase_invoice_closed(invoice):
+    from purchases.models import PurchaseInvoice, PurchaseInvoiceStatus
+
+    return PurchaseInvoice.objects.filter(pk=invoice.pk, status=PurchaseInvoiceStatus.CANCELLED).exists()
+
+
+def _purchase_invoice_entity(invoice):
+    """The entity of a purchase invoice is its receiving location's (``entities.scope.PURCHASE_INVOICE``)."""
+
+    return invoice.receiving_location.entity
+
+
 OWNERS = {"workorders.workorder": {"visible": _work_orders, "can_attach": _work_order_can_attach, "closed": _work_order_closed,
-                                   "can_delete": _work_order_can_delete, "signature_final": _work_order_signature_final}}
+                                   "can_delete": _work_order_can_delete, "signature_final": _work_order_signature_final},
+          # A3 (HG-081): the supplier's invoice photo kept on the draft it became. No upload screen of its own yet.
+          "purchases.purchaseinvoice": {"visible": _purchase_invoices, "can_attach": _purchase_invoice_can_change,
+                                        "closed": _purchase_invoice_closed, "can_delete": _purchase_invoice_can_change,
+                                        "signature_final": lambda invoice: False, "entity": _purchase_invoice_entity}}
 
 
 def owner_label(owner_or_model):
@@ -373,8 +409,10 @@ def _store(owner, raw, name, user, kind, stage, words, lang="ar"):
             raise ValidationError(words["closed"])
         _serialize_global_check()
         _check_room(owner, len(raw), words, lang)
+        # A3 (HG-081): an owner without an ``entity`` field names it through its rules (a purchase invoice: its location's).
+        entity_of = _rules(owner_label(owner)).get("entity") or (lambda record: getattr(record, "entity", None))
         attachment = Attachment.objects.create(
-            content_type=ContentType.objects.get_for_model(owner), object_id=owner.pk, entity=getattr(owner, "entity", None),
+            content_type=ContentType.objects.get_for_model(owner), object_id=owner.pk, entity=entity_of(owner),
             kind=kind, stage=stage, original_filename=_final_name(name, real, sha, kind), content_type_name=real,
             size=len(raw), sha256=sha, data=raw, uploaded_by=user)
         AuditLog.objects.create(

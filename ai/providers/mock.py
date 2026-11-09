@@ -5,6 +5,9 @@ client builds. Nothing here opens a socket. The answer is always the same small,
 
 A2 (HG-080): ``MockClaudeRouter`` *is* ``ClaudeRouter`` with only ``_create`` swapped: it routes a question to a tool
 by its words, deterministically, and answers in the Messages API's shape. It never imports or builds the SDK client.
+
+A3 (HG-081): ``MockClaudeInvoiceReader`` *is* ``ClaudeInvoiceReader`` with only ``_create`` swapped: whatever the photo,
+it answers with the approved artboard's sample reading, as a structured-output answer. It never builds the SDK client.
 """
 
 import json
@@ -12,7 +15,7 @@ import re
 import unicodedata
 
 from .base import ProviderError
-from .claude import ClaudeRouter
+from .claude import ClaudeInvoiceReader, ClaudeRouter
 from .elevenlabs import ElevenLabsTTS
 
 #: One MPEG-1 Layer III frame: 32 kbit/s, 32 kHz, mono, no CRC (header FF FB 18 C0), zero side information and zero
@@ -118,3 +121,51 @@ class MockClaudeRouter(ClaudeRouter):
             return {"stop_reason": "end_turn", "content": [{"type": "text", "text": "Mock: no tool matched."}]}
         return {"stop_reason": "tool_use",
                 "content": [{"type": "tool_use", "id": "toolu_mock", "name": tool, "input": arguments}]}
+
+
+# ---- A3 (HG-081): the invoice photo reader, answering with one fixed reading ----
+
+#: The approved artboard's sample: a car-parts supplier's invoice with three lines, the third a part the shop keeps under
+#: another name (so it needs mapping), and a total written on the paper 100.00 above the sum of its lines (8,440.00).
+SAMPLE_READING = {
+    "supplier_name": "مؤسسة الأمل للتوريدات",
+    "supplier_code": "",
+    "invoice_number": "INV-5531",
+    "invoice_date": "2026-11-08",
+    "written_total": "8540.00",
+    "lines": [
+        {"item_code": "", "name": "زيت محرك 4 لتر", "quantity": "12", "unit_price": "385.00"},
+        {"item_code": "", "name": "فلتر زيت تويوتا", "quantity": "20", "unit_price": "95.00"},
+        {"item_code": "", "name": "تيل فرامل أمامي K-22", "quantity": "8", "unit_price": "240.00"},
+    ],
+}
+
+
+def reading_response(data, stop_reason="end_turn"):
+    """A structured-output answer in the Messages API's shape: an (empty) thinking block, then the JSON text."""
+
+    text = data if isinstance(data, str) else json.dumps(data, ensure_ascii=False)
+    return {"stop_reason": stop_reason, "content": [{"type": "thinking", "thinking": ""}, {"type": "text", "text": text}]}
+
+
+class MockClaudeInvoiceReader(ClaudeInvoiceReader):
+    """``ClaudeInvoiceReader`` with only ``_create`` swapped: it answers with ``SAMPLE_READING`` whatever the photo.
+    ``answer`` lets a test make the "model" say anything (a response-shaped dict, or a callable taking the request);
+    ``fail_with`` makes it fail. It never imports or builds the SDK client."""
+
+    code = "claude_invoice_reader_mock"
+    live = False
+
+    def __init__(self, model="mock-model", answer=None, fail_with=None):
+        super().__init__(api_key="mock-api-key", model=model)
+        self.answer = answer
+        self.fail_with = fail_with
+        self.calls = []
+
+    def _create(self, request):
+        self.calls.append(request)
+        if self.fail_with:
+            raise ProviderError(self.fail_with)
+        if self.answer is not None:
+            return self.answer(request) if callable(self.answer) else self.answer
+        return reading_response(SAMPLE_READING)
