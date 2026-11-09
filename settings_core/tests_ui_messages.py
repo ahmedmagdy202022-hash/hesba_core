@@ -16,7 +16,7 @@ from permissions.models import RoleCode
 from .ui_messages import EXACT, translate
 
 
-SERVICE_APPS = ("sales", "purchases", "cashboxes", "inventory", "closing", "expenses", "master_data")
+SERVICE_APPS = ("sales", "purchases", "cashboxes", "inventory", "closing", "expenses", "master_data", "ai")
 LITERAL = re.compile(r'ValidationError\(\s*"([^"]{8,})"')
 
 

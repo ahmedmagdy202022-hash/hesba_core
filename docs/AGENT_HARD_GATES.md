@@ -2428,7 +2428,79 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 
 ## HG-078 — AI track: one provider layer, data leaving the server, spend and caps (A0)
 
-- **Status:** OPEN — proposed, not built. Code waits until the services OK is on `develop`.
+- **Status:** IMPLEMENTED on claude/maestro-ai-a0-provider, pending review (independent review round 1 addressed, see below). A0 only: no A1–A3 feature and no language-model client (A2 adds `ANTHROPIC_API_KEY` and its provider). No model, no migration: it uses `AuditLog`, `SystemSetting` and `FeatureFlag`. No protected logic touched.
+- **Files (A0):**
+  - `ai/apps.py`, `ai/checks.py` (system checks `ai.E001`–`ai.E005`);
+  - `ai/providers/__init__.py` (mode and the provider registry), `ai/providers/base.py`, `ai/providers/elevenlabs.py` (the live client), `ai/providers/mock.py`;
+  - `ai/services.py` (the one door: transaction guard, kill switch, capability, request size, connection, locked cap reservation, audit);
+  - `ai/no_network.py` (the AI tests' strict guard, loopback included), `ai/tests.py`;
+  - `hesba_testing/network.py` (the run-wide guard: nothing but loopback), `hesba_testing/runner.py` (installs it, in spawned workers too, and puts the run on the AI mock with no key), `hesba_testing/tests_network.py`;
+  - `config/settings.py` (`"ai"` in `LOCAL_APPS`; `AI_MODE`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_MODEL_ID`, `AI_DAILY_CALL_CAP_MAX` via `config()`), `.env.example`;
+  - `settings_core/capabilities.py` (`ai_voice_summary`), `settings_core/ui_messages.py` (Arabic refusals);
+  - `settings_core/tests_ui_messages.py` (`ai` added to the scanned service apps), `settings_core/tests_capabilities.py` (one assertion).
+- **As built:**
+  - **Mode:** `AI_MODE` = `mock` | `live` | `off`. Empty means `mock` while `DEBUG` is on and `off` once it is off. `live` with the key, a real voice or the model missing connects nothing (never the mock), as Paymob does.
+  - **Checks:** `ai.E001` an explicit `AI_MODE=mock` with `DEBUG` off (the production signal payments uses); `ai.E002` live without `ELEVENLABS_API_KEY`; `ai.E003` an unknown mode; `ai.E004` live with the voice empty or still the placeholder; `ai.E005` live with `ELEVENLABS_MODEL_ID` empty.
+  - **One door (`ai.services.text_to_speech(text, feature=..., user=..., entity=...)`):**
+    1. Inside a caller's `transaction.atomic()` it raises `AiCallInTransaction` (a developer error, no audit row), so a rollback can never erase the row of a call that may have been paid for. A Django `TestCase`'s own wrapping blocks are exempt, as Django exempts them for durable blocks.
+    2. It refuses, in order: the kill switch (`SystemSetting ai_disabled`), the feature's capability, an empty text or one over 5000 characters, no provider connected.
+    3. In a durable transaction holding `SELECT … FOR UPDATE` on a dedicated lock row (`SystemSetting ai_call_lock`, inactive, no value, created on demand), it reads today's count and either refuses at the cap or writes a `call_started` row. Check-and-reserve is therefore one at a time.
+    4. The provider is called outside any transaction; then a separate `call_ok` or `call_error` row is appended, with `before_data={"started": <started row id>}`. **Any** exception from the provider is recorded as `call_error` first: a `ProviderError` becomes the user-facing `ValidationError` («خدمة الذكاء الاصطناعي مردّتش»), anything else is re-raised as it came.
+    Every refusal is a `ValidationError` in English with its Arabic in `ui_messages`, and writes its own `call_refused` row.
+  - **Registry:** `ai.services.FEATURES` maps each feature to the capability every one of its calls requires and to its provider; `ai.providers.PROVIDERS` maps each provider to its mock/live factory.
+  - **Daily cap:** `SystemSetting ai_daily_call_cap`, default 50 (a bad value falls back to 50, a negative one to 0), never above `AI_DAILY_CALL_CAP_MAX` from the server's environment (default 500). Counted over the Cairo calendar day from the audit rows: only `call_started` rows count, one per call that reached the provider, so a call still in flight counts. Outcome rows and refusals do not.
+  - **Audit (append-only, as `AuditLog` requires):** a refused call leaves one `call_refused` row. A call that reached the provider leaves its `call_started` row, never changed afterwards, plus one `call_ok` / `call_error` row pointing back to it (`before_data={"started": <id>}`). An unfinished call is a started row with no outcome row. Every row has `event_type=export`, module `ai`; actor; the entity in `object_type` / `object_id`; and in `after_data` the feature, provider, mode, entity, request size in characters and bytes, result and refusal reason; the outcome row adds the provider status, response size and duration in ms. The mode on started/ok/error rows is the provider actually used (`provider.live`), not the setting. Never the text, the audio, names, phones or amounts. No AI audit row is ever updated.
+  - **ElevenLabs:** `POST https://api.elevenlabs.io/v1/text-to-speech/{voice_id}` (voice quoted), header `xi-api-key`, JSON `{text, model_id, voice_settings?}`, `Accept: audio/mpeg`, over the standard library.
+    - An opener that refuses every redirect: a 3xx becomes `ProviderError("ElevenLabs answered 3xx.")`, and the key is never re-sent elsewhere.
+    - A 10 s timeout per socket operation, and a 20 s deadline checked against `time.monotonic()` after each read of the body. The body is read with `read1` (at most one socket read, whatever has arrived, up to 64 KB), so a slow drip cannot keep a read waiting for a full chunk. The clock starts before connecting, but the connect and the headers come before the body loop and are bounded only by the per-operation timeout, not by the deadline. With headers that arrive promptly the worst case is about 30 s (the deadline plus one read), under gunicorn's 60 s.
+    - HTTP errors, network errors and cut-off answers (`http.client.HTTPException`) become `ProviderError` without the key, the text or the body. An answer that is not audio, or is over 10 MB, is refused.
+    - The mock is the same class with only `_http` swapped, answering a fixed 1440-byte silent MP3 (ten MPEG-1 Layer III frames, 0.36 s; checked once with ffprobe).
+  - **Capability:** `ai_voice_summary`, off by default, `available=False` and offered to no activity (`ONLY_FOR` empty), so no screen shows it and every A0 call is refused until A1 makes it available.
+  - **Tests and the network:**
+    - The whole run (`hesba_testing/runner.py`) installs a guard that makes `socket.create_connection`, `socket.socket.connect` / `connect_ex` and `urllib.request.urlopen` raise `ExternalNetworkBlocked` (not an `OSError`) for anything but loopback. It is installed again in each spawned parallel worker (`_pin_worker`); forked workers inherit it.
+    - After the system checks, the run is put on `AI_MODE=mock` with an empty `ELEVENLABS_API_KEY` (settings overridden, and the environment set for spawned workers). The checks themselves still see the server's real settings, so `ai.E001` does not fire on the runner's own `DEBUG=False`.
+    - Every AI test also runs under `ai/no_network.py`, which refuses loopback too and fails the test at cleanup if any attempt was made, even a caught one. A meta-test checks that every test case in `ai/tests.py` uses it.
+- **Deviations from the brief and the proposal:**
+  1. **Mock is the default only while `DEBUG` is on.** An unconditional mock default plus "refuse mock in production" would stop every Render build (`build.sh` runs `check --deploy` with `DEBUG=False`) and the test suite (Django's runner turns `DEBUG` off before the checks). So an empty `AI_MODE` is `off` in production, and only an explicit `mock` is refused there. The AI tests set `AI_MODE=mock`.
+  2. Two extra checks: `ai.E004` refuses live with the placeholder voice and `ai.E005` with no model, as payments refuses live with any Paymob key missing.
+  3. The cap is **per installation** (one client company, one key), not per entity. Each row records the entity, so a per-entity cap is a filter away. See open questions 1 and 4 below.
+  4. `ai_voice_summary` is `available=False`, so `settings_core/tests_capabilities.py`'s "every capability is available" assertion now excludes it.
+  5. ~~A refusal's audit row is written in the caller's transaction.~~ Resolved: a call inside a caller's `transaction.atomic()` is refused outright (`AiCallInTransaction`), and the reservation is its own durable transaction, so no caller can roll back an AI audit row.
+  6. ~~Two calls racing at the cap can both pass.~~ Resolved on PostgreSQL: check-and-reserve runs under a row lock, and the started row counts at once. SQLite has no row locks and uses deferred transactions, so of two simultaneous reservations the second fails with «database is locked» (a 500 for that request) instead of a clean refusal. There is still no overshoot. Only the demo and the codespace run on SQLite; the database settings are unchanged.
+- **Independent review round 1 (Opus, REQUEST CHANGES at `3861cbe`), as addressed:**
+  1. HIGH, every call that reached the provider leaves a row: fixed (`except Exception` records `call_error`, then re-raises).
+  2. MEDIUM, a bounded cap: fixed (locked reservation, `call_started` counted, refusal inside an outer atomic).
+  3. MEDIUM, a total deadline: fixed (10 s per operation, 20 s total, chunked read).
+  4. MEDIUM, a run-wide guard: fixed (`hesba_testing/network.py` and `runner.py`).
+  5. LOW–MEDIUM, redirects: fixed (an opener that refuses every 3xx).
+  6. LOW, the model id: fixed (`ai.E005`; live without a model connects nothing).
+  7. Empty `AI_MODE` means mock while `DEBUG` is on: **accepted**, kept as designed (development only; production is `off`).
+  8. NIT: the mode is recorded from the provider used; the cap has a server ceiling (`AI_DAILY_CALL_CAP_MAX`).
+- **Re-review (APPROVE WITH FIXES at `cff6686`), as addressed:**
+  - A. MEDIUM, audit rows are append-only: fixed. The started row is never changed; the outcome is a separate row pointing back to it; only started rows count.
+  - B. LOW–MEDIUM, the deadline against a slow drip: fixed with `read1`, proven by a real `http.client.HTTPResponse` over a socket pair (with `read` the same test hangs).
+  - C. LOW: deviation 6 reworded for SQLite («database is locked», no overshoot).
+  Also from Codex on #329: a cut-off answer (`http.client.IncompleteRead`) is a `ProviderError` (`c81acf1`).
+- **Remaining risks:**
+  - A process killed mid-call leaves a `call_started` row with no outcome row. It keeps counting for that day (the safe direction).
+  - The deadline is checked after each read, so one read can overrun it by up to the 10 s per-read timeout. The connect and the headers are bounded only per operation: a server that drips its headers is limited by `http.client`'s header limits and the per-read timeout, not by the deadline.
+  - The serialisation is proven by a query-shape test on PostgreSQL (CI) and a lock-path unit test on SQLite. There is no two-connection race test.
+  - The run-wide guard covers Python sockets and urllib. A C extension opening its own sockets would not be caught; the only one in the requirements is libpq, which reaches only the test database.
+  - DNS is not guarded: the patched paths refuse before resolving, but a client that calls `getaddrinfo` itself first (urllib3, requests) could still send one DNS lookup before its connect is refused.
+  - A1 must call the AI layer outside any `transaction.atomic()`. Today no middleware wraps requests in a transaction (`ATOMIC_REQUESTS` is not set), so a view can call it directly.
+- **Tests:**
+  - `ai/tests.py`, all on `ai.no_network.AiTestCase` / `AiSimpleTestCase`:
+    - the checks: mock in production; live without a key, with the placeholder voice or with no model; unknown mode; registered. Provider choice per mode.
+    - the mock's audio: type, length, frames, determinism;
+    - the live request with the opener mocked: method, URL with a quoted voice, `xi-api-key`, content type, accept, body, timeout;
+    - HTTP, network and cut-off errors mapped without the key or text; non-audio answers refused; chunked read and size cap; a trickling answer stopped at the deadline, including a real `http.client.HTTPResponse` over a socket pair dripping one byte every 50 ms (stopped within 0.5–1.5 s of a 0.5 s deadline); a 302 refused and never followed, with the key sent only to ElevenLabs;
+    - the guard refuses and records, and the live client cannot swallow it;
+    - capability off, and unavailable in A0; the kill switch, and that it comes first; not connected (`off`, half-configured live); empty and long text;
+    - a provider error audited and counted; any other exception audited, then re-raised; a call inside `transaction.atomic()` refused with no row; the mode taken from the provider used; live end to end with the opener mocked;
+    - the started and outcome rows, linked by `before_data`, with a sentinel name, phone and amount found in no field of either; the started row unchanged after the call;
+    - the cap: reached; refusals not counted; cap 0; the server ceiling; a call in flight counted (a second call made during the first is refused); check-and-reserve under the lock row; `FOR UPDATE` before the started row (PostgreSQL only); the reset the next Cairo day; a Cairo-versus-UTC boundary; outcome rows not counted; an unfinished started row counted;
+    - the Arabic of every refusal; every test case uses the no-network base.
+  - `hesba_testing/tests_network.py`: the guard installed for the run; external addresses refused through every path; loopback allowed; what counts as loopback; not an `OSError`; the run on the AI mock with no key; spawned workers set up; idempotent install.
 - **Reason:** A1–A3 send business data to outside services (ElevenLabs for speech; Anthropic for A2/A3) and can cost money per call. Both are outside every earlier decision, so they are recorded here before any code.
 - **Proposal (the S4/Paymob pattern):**
   - one `ai` provider layer with a mock mode (fake responses in the real API's shape) and a live mode;
@@ -2447,7 +2519,9 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 - **Open questions for Ahmed:**
   1. The default daily cap per company.
   2. Is sending invoice photos (A3) to an outside model acceptable, or only after each company opts in?
-  3. Which ElevenLabs voice to use.
+  3. Which ElevenLabs voice to use (`ELEVENLABS_VOICE_ID`; live refuses the placeholder).
+  4. (A0) Cap scope: per installation, as built, or per entity?
+  5. (A0) Showcase and demo: a demo server runs with `DEBUG` off, where `ai.E001` refuses mock and an empty `AI_MODE` means off. A1's demo data and «جرّب» steps need a choice: exempt `DEMO_MODE` from the check, or use a live key on the demo.
 - **Risk:** medium (data leaving the server, cost). It is mitigated by off-by-default switches, caps, mock in tests, and the audit.
 
 ## HG-079 — A1 voice summary of the day
