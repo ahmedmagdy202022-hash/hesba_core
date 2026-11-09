@@ -17,6 +17,9 @@ EXACT = {
     "The AI service is not connected on this server.": "خدمة الذكاء الاصطناعي مش موصّلة على السيرفر ده.",
     "There is no text to read aloud.": "مفيش نص يتقري بالصوت.",
     "The AI service did not answer. Try again later.": "خدمة الذكاء الاصطناعي مردّتش. جرّب تاني بعد شوية.",
+    # A1 (HG-079): the voice summary (ai/voice_summary.py, ai/views.py).
+    "The audio for this summary is being prepared. Try again in a moment.": "صوت الملخص بيتجهّز دلوقتي. جرّب تاني كمان شوية.",
+    "There is nothing to summarise for you yet.": "لسه مفيش أرقام نلخّصها لك.",
     # HG-071 (S6) D7: a card-paid invoice is not returned until a return-to-card path exists.
     "This invoice was paid partly by gift card, and a return to the card is not possible yet. Cancel the card payment or the whole invoice instead.":
         "الفاتورة دي اتدفع جزء منها بكارت هدية، والمرتجع على الكارت لسه مش متاح. ألغِ دفعة الكارت أو الفاتورة كلها بدل كده.",
@@ -175,6 +178,9 @@ PATTERNS = (
     (r"^This screen needs the (?P<perm>[\w.]+) permission\.$", "الشاشة دي محتاجة صلاحية مش عندك."),
     # A0 (HG-078): the AI layer's daily cap and text size.
     (r"^Today's AI call limit is reached \((?P<cap>\d+) calls\)\. Try again tomorrow\.$", "وصلت لحد مكالمات الذكاء الاصطناعي النهارده ({cap} مكالمة). جرّب تاني بكرة."),
+    # A1 (HG-079): one person's daily voicings of the summary.
+    (r"^You have reached today's voice summary limit \((?P<cap>\d+) per person\)\. Try again tomorrow\.$",
+     "وصلت لحد تشغيل ملخص الصوت النهارده ({cap} مرات للشخص). جرّب تاني بكرة."),
     (r"^The text is too long to read aloud \(at most (?P<limit>\d+) characters\)\.$", "النص طويل أوي على القراية بالصوت (الحد {limit} حرف)."),
 )
 _COMPILED = tuple((re.compile(pattern), template) for pattern, template in PATTERNS)

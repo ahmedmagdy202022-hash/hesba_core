@@ -134,6 +134,7 @@ urlpatterns = [
     path("reports/", report_hub, name="report_hub"),
     path("reports/", include("reports.urls")),
     path("status/", status_counts_report, name="status_counts_report"),
+    path("ai/", include("ai.urls")),  # A1 (HG-079): the dashboard's voice summary
     path(settings.ADMIN_URL, django_admin.site.urls),
 ]
 

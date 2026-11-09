@@ -51,9 +51,8 @@ class CatalogTests(SimpleTestCase):
     def test_only_shipped_capabilities_are_ticked_or_accepted(self):
         self.assertEqual(caps.default_selection("commercial", "pharmacy"), ("pos", "shift_required", "barcode", "loyalty", "units", "batches_expiry", "drugs"))
         self.assertEqual(caps.parse("pos, future_cap, bogus,barcode, fixed_assets"), ("pos", "barcode", "fixed_assets"))
-        # A0 (HG-078): the AI voice summary is registered ahead of A1 and stays unavailable until A1 ships it.
-        self.assertTrue(all(caps.is_available(slug) for slug in caps.CAPABILITY_SLUGS if slug not in ("future_cap", "ai_voice_summary")))
-        self.assertFalse(caps.is_available("ai_voice_summary"))
+        # A1 (HG-079): the AI voice summary, registered in A0, is available now (still off by default).
+        self.assertTrue(all(caps.is_available(slug) for slug in caps.CAPABILITY_SLUGS if slug != "future_cap"))
         self.assertFalse(caps.is_available("future_cap"))
 
     def test_every_capability_is_described_in_both_languages(self):

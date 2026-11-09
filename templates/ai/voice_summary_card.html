@@ -1,0 +1,35 @@
+{% comment %}A1 (HG-079): the dashboard's voice summary card. Shown only while the ai_voice_summary capability is on and
+the viewer may see at least one of its figures. The audio is voiced on the first press of play (a POST), never on page load.{% endcomment %}
+{% with s=voice_summary.summary w=voice_summary.words %}
+<section class="dash-section dash-voice" aria-labelledby="dash-voice-title" data-voice-summary
+         data-endpoint="{{ voice_summary.endpoint }}" data-lang="{{ s.lang }}" data-audio-url="{{ voice_summary.audio_url }}"
+         data-word-play="{{ w.play }}" data-word-pause="{{ w.pause }}" data-word-loading="{{ w.loading }}"
+         data-word-again="{{ w.press_again }}" data-word-failed="{{ w.failed }}">
+  {% csrf_token %}
+  <div class="dash-section__head">
+    <h2 class="dash-section__title" id="dash-voice-title">{{ w.title }}</h2>
+    <span class="dash-voice__day">{{ s.day_label }}</span>
+  </div>
+  <div class="dash-voice__player">
+    <button type="button" class="dash-voice__play" data-voice-play aria-label="{{ w.play }}">
+      <svg viewBox="0 0 24 24" aria-hidden="true" data-voice-icon="play"><path d="M8 5v14l11-7z"/></svg>
+      <svg viewBox="0 0 24 24" aria-hidden="true" data-voice-icon="pause" hidden><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>
+    </button>
+    <div class="dash-voice__track">
+      <div class="dash-voice__bar" role="progressbar" aria-label="{{ w.title }}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-voice-bar><span class="dash-voice__fill" data-voice-fill></span></div>
+      <div class="dash-voice__times"><bdi data-voice-current>0:00</bdi><bdi data-voice-total>-:--</bdi></div>
+    </div>
+    <audio preload="none" hidden data-voice-audio></audio>
+  </div>
+  <p class="dash-voice__status" role="status" aria-live="polite" data-voice-status hidden></p>
+  <p class="dash-voice__text" data-voice-text>«{{ s.text }}»</p>
+  <div class="dash-activity__tiles dash-voice__tiles">
+    {% for t in s.tiles %}{% if t.url %}<a class="dash-atile{% if t.tone %} is-{{ t.tone }}{% endif %}" href="{{ t.url }}" data-voice-figure="{{ t.key }}">{% else %}<div class="dash-atile{% if t.tone %} is-{{ t.tone }}{% endif %}" data-voice-figure="{{ t.key }}">{% endif %}
+      <span class="dash-atile__label">{{ t.label }}</span>
+      <bdi class="dash-atile__value">{{ t.value }}</bdi>
+      {% if t.sub %}<span class="dash-atile__sub">{{ t.sub }}</span>{% endif %}
+    {% if t.url %}</a>{% else %}</div>{% endif %}{% endfor %}
+  </div>
+  <p class="dash-voice__note">{{ w.note }}</p>
+</section>
+{% endwith %}
