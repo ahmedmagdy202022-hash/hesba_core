@@ -122,6 +122,19 @@ class DemoAiTests(AiTestCase):
         self.assertFalse(any("DEMO-AI" in label for label, _ in answer.lines))
         self.assertEqual(PurchaseInvoice.objects.get(invoice_number=demo_ai.EARLIER_PURCHASE).status, "posted")
 
+    def test_switching_activity_keeps_the_ai_features_that_fit_it(self):
+        from settings_core.setup_services import usable_modules
+
+        self.client.force_login(self.owner)
+        self.client.post("/demo/activity/", {"activity": "medical:clinic", "lang": "ar"})
+        self.assertTrue(capability_enabled("ai_voice_summary"))
+        self.assertTrue(capability_enabled("ai_ask"))
+        self.assertFalse(capability_enabled("ai_invoice_photo"))  # a clinic has no purchases: never switched on for it
+        self.assertNotIn("purchases", usable_modules())
+        self.client.post("/demo/activity/", {"activity": "commercial:retail", "lang": "ar"})
+        for slug in demo_ai.CAPABILITIES:
+            self.assertTrue(capability_enabled(slug), slug)
+
     def test_seeding_again_adds_nothing(self):
         from reports.management.commands.seed_demo_business import Command as Seed
 
