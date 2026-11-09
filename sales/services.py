@@ -586,6 +586,9 @@ def create_sales_return(
     )
     if invoice.status != SalesInvoiceStatus.POSTED:
         raise ValidationError("Sales returns require a posted source invoice.")
+    from giftcards.guards import before_sales_return
+
+    before_sales_return(invoice)  # HG-071 D7: no return-to-card path yet; a card-paid invoice is not returned here
     source_lines = list(
         SalesLine.objects.select_for_update()
         .filter(invoice=invoice)
@@ -857,6 +860,9 @@ def cancel_customer_payment(payment_id, user=None, reason=""):
     if deposit is not None and deposit.status in ("applied", "forfeited"):
         # S5 (HG-069): a deposit that already settles a posted invoice is freed by cancelling that invoice first.
         raise ValidationError("This payment is a deposit applied to an invoice; cancel that invoice first.")
+    from giftcards.guards import before_customer_payment_cancel
+
+    before_customer_payment_cancel(payment)  # HG-071: a walk-in's card payment goes only with its invoice
 
     CustomerLedgerEntry.objects.create(
         customer=payment.customer,

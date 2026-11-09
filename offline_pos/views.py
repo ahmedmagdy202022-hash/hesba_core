@@ -129,7 +129,10 @@ def sync_sale(request):
                 return _answer("refused", error=refusals["promotion"].format(seen=f"{seen:,.2f}"))
         lines = prepare_sale_serials(lines, lang)
         location = entity_scope.for_user(Location.objects, entity_scope.LOCATION, request.user).filter(pk=str(payload.get("location", "")), active=True, is_selling_location=True).first() if str(payload.get("location", "")).isdigit() else None
-        cashbox = entity_scope.for_user(Cashbox.objects, entity_scope.CASHBOX, request.user).filter(pk=str(payload.get("cashbox", "")), active=True).first() if str(payload.get("cashbox", "")).isdigit() else None
+        from cashboxes.models import HELD_KINDS
+
+        # HG-071: never a cheque, courier or gift-card box, whatever the payload names (as the till's own picker).
+        cashbox = entity_scope.for_user(Cashbox.objects, entity_scope.CASHBOX, request.user).exclude(kind__in=HELD_KINDS).filter(pk=str(payload.get("cashbox", "")), active=True).first() if str(payload.get("cashbox", "")).isdigit() else None
         card = payload.get("method") == "card"  # AN8: a card sale lands in the card machine's cashbox
         if card:
             from sales.pos_buttons import card_cashbox

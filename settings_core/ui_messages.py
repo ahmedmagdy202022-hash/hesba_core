@@ -11,6 +11,14 @@ import re
 
 
 EXACT = {
+    # HG-071 (S6) D7: a card-paid invoice is not returned until a return-to-card path exists.
+    "This invoice was paid partly by gift card, and a return to the card is not possible yet. Cancel the card payment or the whole invoice instead.":
+        "الفاتورة دي اتدفع جزء منها بكارت هدية، والمرتجع على الكارت لسه مش متاح. ألغِ دفعة الكارت أو الفاتورة كلها بدل كده.",
+    "This is a gift-card payment on a walk-in sale; cancel the whole invoice instead, and the card gets its money back.":
+        "دي دفعة بكارت هدية على بيع لعميل نقدي؛ ألغِ الفاتورة كلها بدل كده، والكارت هيرجع له رصيده.",
+    # HG-071 (S6): a held box (cheques, couriers, gift cards) is not changed from an import file.
+    "This cashbox is moved only by its own screen (cheques, couriers or gift cards); it cannot be changed from an import file.":
+        "الخزنة دي بتتحرك من شاشتها بس (شيكات أو شحن أو كروت هدايا)؛ مينفعش تتغير من ملف استيراد.",
     # HG-069 (S5): a deposit already applied to an invoice is released by cancelling that invoice.
     "This payment is a deposit applied to an invoice; cancel that invoice first.":
         "الدفعة دي عربون اتخصم من فاتورة؛ ألغِ الفاتورة دي الأول.",

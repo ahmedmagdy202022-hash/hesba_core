@@ -115,7 +115,7 @@ def _gift_card_reverse(request):
     from giftcards.models import GiftCardEntry
     from giftcards.services import reverse
 
-    entry = GiftCardEntry.objects.get(pk=request.data["entry"], card_id=request.object_id)
+    entry = GiftCardEntry.objects.get(pk=request.object_id)  # the request is held per entry (a card has a sale and write-offs)
     reverse(entry, _day(request.data), request.data.get("reason", ""), request.requested_by)
 
 
@@ -131,7 +131,7 @@ ACTIONS = {action.code: action for action in (
     Action("cashboxes.reverse_operation", "عكس حركة خزنة", "Reverse a cashbox operation", lambda pk: "/cashboxes/operations/", _reverse_cash_operation, "cashboxes.CashboxOperation", "CASHBOX_OPERATION", ("cashboxes.move_cash",)),
     # S6 (HG-071): writing off a gift card's unspent rest, and reversing a card's sale or write-off.
     Action("giftcards.breakage", "شطب باقي كارت هدية (إيراد متنوع)", "Write off a gift card's rest (sundry income)", lambda pk: f"/giftcards/{pk}/", _gift_card_breakage, "giftcards.GiftCard", "GIFT_CARD", ("giftcards.breakage",)),
-    Action("giftcards.reverse", "عكس بيع كارت هدية أو شطبه", "Reverse a gift card's sale or write-off", lambda pk: f"/giftcards/{pk}/", _gift_card_reverse, "giftcards.GiftCard", "GIFT_CARD", ("giftcards.breakage",)),
+    Action("giftcards.reverse", "عكس بيع كارت هدية أو شطبه", "Reverse a gift card's sale or write-off", lambda pk: f"/giftcards/entry/{pk}/", _gift_card_reverse, "giftcards.GiftCardEntry", "GIFT_CARD_ENTRY", ("giftcards.breakage",)),
 )}
 
 

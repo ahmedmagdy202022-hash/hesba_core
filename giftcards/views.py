@@ -10,6 +10,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 
 from approvals.gate import held
+from audit.models import AuditEventType, AuditLog
 from cashboxes.models import Cashbox
 from entities import scope as entity_scope
 from master_data.models import Customer
@@ -19,9 +20,11 @@ from permissions.services import user_has_permission
 from . import services
 from .models import EntryKind, GiftCard, GiftCardEntry
 
+RECEIPT_ONCE = "giftcards.receipt_once"
+
 WORDS = {
     "ar": {
-        "title": "كروت الهدايا", "intro": "فلوس الكارت بتدخل الخزنة يوم البيع، بس متتحسبش مبيعات: بتفضل التزام لحامل الكارت (2110) لحد ما يدفع بيه فاتورة أو في الكاشير. الكارت اللي ميعاده عدّى بيفضل شغال لحد ما مدير يشطب باقيه بسبب.",
+        "title": "كروت الهدايا", "intro": "فلوس الكارت بتدخل الخزنة يوم البيع، بس متتحسبش مبيعات: بتفضل التزام لحامل الكارت ({account}) لحد ما يدفع بيه فاتورة أو في الكاشير. الكارت اللي ميعاده عدّى بيفضل شغال لحد ما مدير يشطب باقيه بسبب.",
         "sell": "بيع كارت هدية", "value": "قيمة الكارت", "cashbox": "الخزنة اللي استلمت الفلوس", "holder": "اسم حامل الكارت (اختياري)", "phone": "موبايل حامل الكارت (اختياري)",
         "buyer": "العميل اللي اشترى (اختياري)", "nobody": "—", "expires": "ينتهي يوم (اختياري)", "save_sell": "بيع واطبع الإيصال",
         "number": "رقم الكارت", "code": "كود الصرف", "balance": "الرصيد", "status": "الحالة", "sold_on": "اتباع يوم", "none": "مفيش كروت لسه.",
@@ -30,10 +33,10 @@ WORDS = {
         "breakage": "اشطب الباقي (إيراد متنوع)", "breakage_hint": "بقرار منك بس: الباقي على الكارت هيتحوّل إيراد متنوع (4201) والكارت مش هيدفع تاني.",
         "reverse": "اعكس", "reverse_date": "تاريخ العكس", "cancel_redemption": "الغِ الصرف", "receipt": "إيصال الكارت", "print": "اطبع",
         "sold": "اتباع كارت {number} بمبلغ {value}.", "done": "تم.", "face": "القيمة", "receipt_note": "الكارت ده بيدفع بيه حامله في نفس الفرع. مش فاتورة ضريبية.",
-        "back": "رجوع لكروت الهدايا", "nothing": "مفيش حاجة تتعمل.",
+        "back": "رجوع لكروت الهدايا", "nothing": "مفيش حاجة تتعمل.", "reveal": "اطبع بالكود كامل (بيتسجّل)",
     },
     "en": {
-        "title": "Gift cards", "intro": "A card's money reaches the cashbox the day it is sold but is not counted as sales: it stays owed to the holder (2110) until they pay an invoice or at the till with it. An expired card keeps working until a manager writes its rest off with a reason.",
+        "title": "Gift cards", "intro": "A card's money reaches the cashbox the day it is sold but is not counted as sales: it stays owed to the holder ({account}) until they pay an invoice or at the till with it. An expired card keeps working until a manager writes its rest off with a reason.",
         "sell": "Sell a gift card", "value": "Card value", "cashbox": "Cashbox that took the money", "holder": "Holder's name (optional)", "phone": "Holder's mobile (optional)",
         "buyer": "Customer who bought it (optional)", "nobody": "—", "expires": "Expires on (optional)", "save_sell": "Sell and print the receipt",
         "number": "Card number", "code": "Code to spend", "balance": "Balance", "status": "Status", "sold_on": "Sold on", "none": "No cards yet.",
@@ -42,7 +45,7 @@ WORDS = {
         "breakage": "Write the rest off (sundry income)", "breakage_hint": "Only by your decision: the rest on the card becomes sundry income (4201) and the card pays no more.",
         "reverse": "Reverse", "reverse_date": "Reversal date", "cancel_redemption": "Cancel the payment", "receipt": "Card receipt", "print": "Print",
         "sold": "Card {number} sold for {value}.", "done": "Done.", "face": "Value", "receipt_note": "The holder pays with this card in the same entity. Not a tax invoice.",
-        "back": "Back to gift cards", "nothing": "Nothing to do.",
+        "back": "Back to gift cards", "nothing": "Nothing to do.", "reveal": "Reprint with the full code (audited)",
     },
 }
 
@@ -51,9 +54,16 @@ def _lang(request):
     return "en" if request.GET.get("lang") == "en" or request.POST.get("lang") == "en" else "ar"
 
 
+def _liability_code():
+    from ledger.models import Account
+
+    return Account.objects.filter(control="gift_card_liability").values_list("code", flat=True).first() or "—"
+
+
 def _context(request, **extra):
     lang = _lang(request)
-    words = WORDS[lang]
+    words = dict(WORDS[lang])
+    words["intro"] = words["intro"].format(account=_liability_code())
     return {"lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": words, "page_title": words["title"], "section": "sales", **extra}
 
 
@@ -99,6 +109,7 @@ def card_list(request):
             _error(request, exc, lang)
         else:
             messages.success(request, words["sold"].format(number=card.number, value=f"{card.face_value:,.2f}"))
+            request.session[RECEIPT_ONCE] = card.pk  # the full code is shown once, on the receipt that follows
             return redirect(f"{reverse('giftcards:receipt', args=[card.pk])}?lang={lang}")
     query = services.normalize(request.GET.get("q", ""))
     cards = _cards()
@@ -107,7 +118,7 @@ def card_list(request):
     cards = list(cards[:200])
     held_on = services.balances(cards)
     today = timezone.localdate()
-    rows = [{"card": card, "balance": held_on.get(card.pk), "expired": bool(card.expires_on and card.expires_on < today), "code": services.pretty(card.code)} for card in cards]
+    rows = [{"card": card, "balance": held_on.get(card.pk), "expired": bool(card.expires_on and card.expires_on < today), "code": services.masked(card.code)} for card in cards]
     return render(request, "giftcards/list.html", _context(
         request, rows=rows, cashboxes=cashboxes, query=request.GET.get("q", ""), customers=Customer.objects.filter(active=True).order_by("name")[:500],
         outstanding=sum(services.balances(_cards()).values(), services.ZERO), statuses=services.MESSAGES[lang]["statuses"]))
@@ -123,6 +134,8 @@ def card_detail(request, pk):
         action = request.POST.get("action", "")
         reason = request.POST.get("reason", "")
         try:
+            if action in ("breakage", "reverse"):
+                services._require(request.user, services.BREAKAGE)  # before a request is held, not only when it runs
             if action == "breakage":
                 if not held(request, "giftcards.breakage", card.pk, {"reason": reason}, card.number):
                     services.breakage(card, request.user, reason, lang)
@@ -132,7 +145,7 @@ def card_detail(request, pk):
                 day = parse_date(request.POST.get("reversal_date") or "") or timezone.localdate()
                 if entry is None:
                     raise ValidationError(services.MESSAGES[lang]["wrong_entry"])
-                if not held(request, "giftcards.reverse", card.pk, {"entry": entry.pk, "reversal_date": day, "reason": reason}, card.number):
+                if not held(request, "giftcards.reverse", entry.pk, {"reversal_date": day, "reason": reason}, f"{card.number} · {entry.get_kind_display()}"):
                     services.reverse(entry, day, reason, request.user, lang)
                     messages.success(request, words["done"])
             elif action == "cancel_redemption":
@@ -154,15 +167,40 @@ def card_detail(request, pk):
             (entry.operation_id and entry.operation.status == "posted") or (entry.payment_id and entry.payment.status == "posted"))
         rows.append({"entry": entry, "label": services.kind_label(entry, lang), "live": live})
     return render(request, "giftcards/detail.html", _context(
-        request, card=card, code=services.pretty(card.code), figures=services.figures(card), rows=rows, status=services.status_label(card, lang),
+        request, card=card, code=services.masked(card.code), figures=services.figures(card), rows=rows, status=services.status_label(card, lang),
         expired=bool(card.expires_on and card.expires_on < timezone.localdate()), today=timezone.localdate(),
         can_manage=user_has_permission(request.user, services.BREAKAGE)))
 
 
 @require_permission(services.SELL)
 def receipt(request, pk):
+    """The card's receipt. The full code shows once, right after the sale (a one-time session flag); later, only a
+    manager (``giftcards.breakage``) asking for it sees it, and that is audited. Everyone else sees the last four."""
+
+    _gate()
     card = _card_or_404(pk)
-    return render(request, "giftcards/receipt.html", _context(request, card=card, code=services.pretty(card.code), balance=services.balance(card)))
+    full = request.session.get(RECEIPT_ONCE) == card.pk
+    if full:
+        del request.session[RECEIPT_ONCE]
+    elif request.GET.get("reveal") == "1" and user_has_permission(request.user, services.BREAKAGE):
+        full = True
+        AuditLog.objects.create(event_type=AuditEventType.EXPORT, actor=request.user,
+                                module="giftcards", action="reveal_gift_card_code", object_type="giftcards.GiftCard", object_id=str(card.pk),
+                                after_data={"number": card.number})
+    code = services.pretty(card.code) if full else services.masked(card.code)
+    return render(request, "giftcards/receipt.html", _context(request, card=card, code=code, full=full, balance=services.balance(card),
+                                                              can_reveal=user_has_permission(request.user, services.BREAKAGE)))
+
+
+@require_permission(services.BREAKAGE)
+def entry_detail(request, pk):
+    """Where an approval request held per entry points: the entry's card page."""
+
+    _gate()
+    entry = GiftCardEntry.objects.filter(pk=pk, card__in=_cards()).first()
+    if entry is None:
+        raise Http404
+    return redirect(f"{reverse('giftcards:detail', args=[entry.card_id])}?lang={_lang(request)}")
 
 
 @require_permission(services.SELL)

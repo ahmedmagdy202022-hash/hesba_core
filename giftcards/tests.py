@@ -636,19 +636,206 @@ class TillEdgeTests(GiftSetup):
         self.assertFalse(SalesInvoice.objects.exists())
         self.assertEqual(services.balance(card), D("500.00"))
 
-    def test_characterization_a_return_on_a_walk_in_sale_paid_partly_by_card(self):
-        """HG-071 open question: the ordinary return refunds the cash share and credits the walk-in with the card share;
-        the card is not refilled. Pinned here so a later decision changes it on purpose."""
 
+
+class ReviewFixTests(GiftSetup):
+    """Independent review of 7a4e15a: each finding pinned with the money it protects."""
+
+    def snapshot(self, card, customer):
+        return {"cash": box_balance(self.cash), "box": box_balance(self.box()), "card": services.balance(card), "customer": customer_balance(customer)}
+
+    def ret(self, invoice, quantity="1", number="SR-GC-1"):
+        from sales.services import create_sales_return
+
+        return create_sales_return(number, TODAY, invoice.pk, [{"source_line": invoice.lines.get(), "quantity": D(quantity)}], "رجّع", self.owner)
+
+    # ---- 1a: no return on a card-paid invoice (D7)
+    def test_returns_on_card_paid_invoices_are_refused_for_walk_in_and_named_full_and_partial(self):
+        from sales.models import SalesReturn
+
+        card = self.sell("1000.00")
+        walk_in = walk_in_customer()
+        walk_sale, _ = self.till("300.00", "100.00", gift=(card, D("200.00")), item=self.item)
+        named_sale, _ = checkout(lines=[self.line("300.00", quantity="2")], customer=self.customer, location=self.location, cashbox=self.cash, discount=ZERO,
+                                 tendered=D("100.00"), user=self.owner, gift=(card, D("500.00")))
+        before_walk, before_named = self.snapshot(card, walk_in), self.snapshot(card, self.customer)
+        self.assertEqual(before_named, {"cash": D("1200.00"), "box": D("-300.00"), "card": D("300.00"), "customer": ZERO})
+        for invoice, quantity in ((walk_sale, "1"), (named_sale, "2"), (named_sale, "1")):
+            with self.subTest(invoice=invoice.invoice_number, quantity=quantity):
+                with self.assertRaisesMessage(ValidationError, "a return to the card is not possible yet"):
+                    self.ret(invoice, quantity, f"SR-{invoice.pk}-{quantity}")
+        self.assertFalse(SalesReturn.objects.exists())
+        self.assertEqual(self.snapshot(card, walk_in), before_walk)
+        self.assertEqual(self.snapshot(card, self.customer), before_named)
+        from settings_core.ui_messages import translate
+
+        self.assertIn("المرتجع على الكارت", translate("This invoice was paid partly by gift card, and a return to the card is not possible yet. Cancel the card payment or the whole invoice instead."))
+        # A named customer's route: cancel the card payment, then the return goes through as for any credit sale.
+        services.cancel_redemption(GiftCardEntry.objects.get(invoice=named_sale, kind=EntryKind.REDEEMED), self.owner, "هيرجّع")
+        self.ret(named_sale, "1", "SR-NAMED-OK")
+        self.assertEqual(services.balance(card), D("800.00"))
+        self.assertEqual(customer_balance(self.customer), D("500.00") - D("250.00"))  # 500 due again, less the return's credit share
+        self.assertTrue(ledger_reports.reconciliation()["ok"])
+
+    # ---- 1b: the redeemable due subtracts posted returns; the box hides when nothing is due
+    def test_redeem_on_a_returned_invoice_is_capped_by_the_return(self):
         from sales.services import create_sales_return
 
         card = self.sell("500.00")
+        invoice = self.invoice("300.00")  # named customer, all on credit
+        create_sales_return("SR-RB-1", TODAY, invoice.pk, [{"source_line": invoice.lines.get(), "quantity": D("1")}], "رجّع", self.owner)
+        self.assertEqual(customer_balance(self.customer), ZERO)
+        self.assertEqual(services.redeemable_due(invoice), ZERO)
+        with self.assertRaisesMessage(ValidationError, "more than what is left on the invoice (0.00)"):
+            services.redeem(card, invoice, D("100.00"), self.owner, lang="en")
+        self.assertEqual((services.balance(card), customer_balance(self.customer), box_balance(self.box())), (D("500.00"), ZERO, D("-500.00")))
+        self.client.force_login(self.cashier)
+        self.assertNotContains(self.client.get(reverse("sales:detail", args=[invoice.pk])), "data-gift-card-box")
+
+    # ---- 1c and 3: cancel_redemption refused after a return, on a walk-in, and without the collection permission
+    def test_cancel_redemption_refused_after_a_return(self):
+        from sales.models import SalesReturn, SalesReturnStatus
+
+        card = self.sell("500.00")
+        invoice = self.invoice("300.00")
+        entry = services.redeem(card, invoice, D("100.00"), self.owner)
+        # a return that predates the D7 guard (or one a future return-to-card path posts) blocks the cancellation
+        SalesReturn.objects.create(return_number="SR-OLD", return_date=TODAY, source_invoice=invoice, total_amount=D("50.00"), cash_amount=ZERO,
+                                   due_amount=D("50.00"), status=SalesReturnStatus.POSTED, reason="قديم", created_by=self.owner)
+        with self.assertRaisesMessage(ValidationError, "posted return"):
+            services.cancel_redemption(entry, self.owner, "x", lang="en")
+        self.assertEqual((services.balance(card), box_balance(self.box())), (D("400.00"), D("-400.00")))
+
+    def test_the_reviewers_scenario_a_returned_walk_in_sale_cannot_be_drained_twice(self):
+        card = self.sell("500.00")
+        second = self.sell("500.00")
         walk_in = walk_in_customer()
-        invoice, _ = self.till("300.00", "100.00", gift=(card, D("200.00")))
-        cash_before = box_balance(self.cash)
-        sales_return = create_sales_return("SR-GC-1", TODAY, invoice.pk, [{"source_line": invoice.lines.get(), "quantity": D("1")}], "رجّع القميص", self.owner)
-        self.assertEqual((sales_return.total_amount, sales_return.cash_amount, sales_return.due_amount), (D("300.00"), D("100.00"), D("200.00")))
-        self.assertEqual(box_balance(self.cash), cash_before - D("100.00"))
-        self.assertEqual(customer_balance(walk_in), D("-200.00"))  # a credit on the walk-in, which nobody can spend
-        self.assertEqual(services.balance(card), D("300.00"))
+        invoice, _ = self.till("300.00", "0", gift=(card, D("300.00")))
+        with self.assertRaises(ValidationError):  # step 1: the return is refused (D7)
+            self.ret(invoice)
+        entry = GiftCardEntry.objects.get(invoice=invoice, kind=EntryKind.REDEEMED)
+        with self.assertRaisesMessage(ValidationError, "walk-in sale"):  # step 2: the walk-in's card payment stays with its invoice
+            services.cancel_redemption(entry, self.owner, "x", lang="en")
+        with self.assertRaisesMessage(ValidationError, "walk-in sale"):  # nor from the collections screen
+            cancel_customer_payment(entry.payment_id, self.owner, "x")
+        with self.assertRaises(ValidationError):  # step 3: the second card finds nothing due
+            services.redeem(second, invoice, D("300.00"), self.owner)
+        self.assertEqual(self.snapshot(card, walk_in), {"cash": D("1000.00"), "box": D("-700.00"), "card": D("200.00"), "customer": ZERO})
+        self.assertEqual(services.balance(second), D("500.00"))
+        # The route is cancelling the whole invoice: the card gets its 300 back, the walk-in owes nothing.
+        cancel_posted_sales_invoice(invoice.pk, self.owner, "رجّع كله")
+        self.assertEqual(self.snapshot(card, walk_in), {"cash": D("1000.00"), "box": D("-1000.00"), "card": D("500.00"), "customer": ZERO})
         self.assertTrue(ledger_reports.reconciliation()["ok"])
+
+    def test_cancel_redemption_needs_the_collection_permission_too(self):
+        card = self.sell("500.00")
+        entry = services.redeem(card, self.invoice("300.00"), D("100.00"), self.owner)
+        role = make_role(code="CARD-ONLY", name_ar="كروت", name_en="Cards")
+        grant(role, Permission.objects.get(code="giftcards.sell"))
+        clerk = make_user(username="gc_cardonly")
+        make_user_profile(user=clerk, role=role)
+        with self.assertRaises(PermissionDenied):
+            services.cancel_redemption(entry, clerk, "x")
+        self.assertEqual((services.balance(card), customer_balance(self.customer)), (D("400.00"), D("200.00")))
+
+    # ---- 2: the code is masked everywhere but once, right after the sale
+    def test_the_full_code_shows_once_after_the_sale_and_then_only_audited_to_a_manager(self):
+        self.client.force_login(self.cashier)
+        page = self.client.post(reverse("giftcards:list"), {"lang": "ar", "face_value": "250", "cashbox": str(self.cash.pk)}, follow=True)
+        card = GiftCard.objects.get()
+        full = services.pretty(card.code)
+        self.assertContains(page, full)
+        for url in (reverse("giftcards:list"), reverse("giftcards:detail", args=[card.pk]), reverse("giftcards:receipt", args=[card.pk]),
+                    reverse("giftcards:receipt", args=[card.pk]) + "?reveal=1"):
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 200)
+                self.assertNotContains(response, full)
+                self.assertNotContains(response, card.code)
+                self.assertContains(response, card.code[-4:])
+        self.assertFalse(AuditLog.objects.filter(action="reveal_gift_card_code").exists())
+        self.client.force_login(self.owner)
+        self.assertNotContains(self.client.get(reverse("giftcards:receipt", args=[card.pk])), full)
+        revealed = self.client.get(reverse("giftcards:receipt", args=[card.pk]) + "?reveal=1")
+        self.assertContains(revealed, full)
+        self.assertEqual(AuditLog.objects.filter(action="reveal_gift_card_code", object_id=str(card.pk), actor=self.owner).count(), 1)
+        self.assertEqual(box_balance(self.cash), D("250.00"))
+
+    # ---- 4: the offline sync never posts into a held box
+    def test_an_offline_sync_naming_the_gift_card_box_is_refused(self):
+        import json
+
+        from shifts.services import open_shift
+
+        self.sell("100.00")
+        open_shift(self.owner, self.cash, "0")
+        self.client.force_login(self.owner)
+        import uuid
+
+        payload = {"key": str(uuid.uuid4()), "recorded_at": timezone.now().isoformat(), "customer": "", "location": str(self.location.pk),
+                   "cashbox": str(self.box().pk), "discount": "0", "tendered": "300",
+                   "lines": [{"id": self.item.pk, "qty": "1", "price": "300.00", "unit": None, "serial": None}]}
+        response = self.client.post(reverse("sales:pos_sync"), data=json.dumps(payload), content_type="application/json")
+        self.assertEqual(response.json().get("status"), "refused", response.content[:300])
+        self.assertFalse(SalesInvoice.objects.exists())
+        self.assertEqual((box_balance(self.box()), box_balance(self.cash)), (D("-100.00"), D("100.00")))
+        control = self.client.post(reverse("sales:pos_sync"), data=json.dumps({**payload, "key": str(uuid.uuid4()), "cashbox": str(self.cash.pk)}), content_type="application/json")
+        self.assertEqual(control.json().get("status"), "posted", control.content.decode()[:300])  # the same sale into the drawer goes through
+        self.assertEqual((box_balance(self.box()), box_balance(self.cash)), (D("-100.00"), D("400.00")))
+
+    # ---- 6, 7: one held reversal per entry; the permission is checked before a request is held
+    def test_reversal_requests_are_held_per_entry_and_need_the_breakage_permission(self):
+        card = self.sell("80.00")
+        breakage_entry = services.breakage(card, self.owner, "منتهي")
+        sold_entry = card.entries.get(kind=EntryKind.SOLD)
+        set_held_actions(["giftcards.reverse", "giftcards.breakage"], self.owner)
+        role = make_role(code="CLERK-REV", name_ar="مسؤول", name_en="Clerk")
+        for code in ("giftcards.sell", "giftcards.breakage"):
+            grant(role, Permission.objects.get(code=code))
+        clerk = make_user(username="gc_rev")
+        make_user_profile(user=clerk, role=role)
+        self.client.force_login(clerk)
+        for entry in (breakage_entry, sold_entry):
+            self.client.post(reverse("giftcards:detail", args=[card.pk]), {"lang": "en", "action": "reverse", "entry": str(entry.pk),
+                                                                           "reversal_date": TODAY.isoformat(), "reason": "غلط"})
+        held_ids = set(ApprovalRequest.objects.filter(action="giftcards.reverse", status=ApprovalStatus.PENDING).values_list("object_id", flat=True))
+        self.assertEqual(held_ids, {breakage_entry.pk, sold_entry.pk})
+        approve(ApprovalRequest.objects.get(action="giftcards.reverse", object_id=breakage_entry.pk).pk, self.owner)
+        self.assertEqual((services.balance(card), box_balance(self.box())), (D("80.00"), D("-80.00")))
+        # A cashier (no giftcards.breakage) leaves no request behind.
+        self.client.force_login(self.cashier)
+        self.client.post(reverse("giftcards:detail", args=[card.pk]), {"lang": "en", "action": "breakage", "reason": "x"})
+        self.assertFalse(ApprovalRequest.objects.filter(action="giftcards.breakage").exists())
+        self.assertEqual(services.balance(card), D("80.00"))
+
+    # ---- 8: the receipt follows the capability
+    def test_the_receipt_is_closed_with_the_capability(self):
+        card = self.sell("50.00")
+        set_capability_enabled(self.profile, "gift_cards", False, user=self.owner)
+        self.client.force_login(self.owner)
+        self.assertNotEqual(self.client.get(reverse("giftcards:receipt", args=[card.pk])).status_code, 200)
+
+    # ---- 10: the liability account's code comes from the chart
+    def test_the_screen_names_the_liability_account_from_the_chart(self):
+        Projector().rebuild()
+        Account.objects.filter(control="gift_card_liability").update(code="2190")
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("giftcards:list") + "?lang=en")
+        self.assertContains(page, "(2190)")
+        self.assertNotContains(page, "(2110)")
+
+    # ---- 11: an import file never changes a held box
+    def test_an_import_row_cannot_change_a_gift_card_box(self):
+        from types import SimpleNamespace
+
+        from imports.apply_services import apply_cashbox_row, apply_opening_balance_row
+
+        self.sell("100.00")
+        box = self.box()
+        batch = SimpleNamespace(batch_code="IMP-1", go_live_date=TODAY)
+        with self.assertRaisesMessage(ValidationError, "cannot be changed from an import file"):
+            apply_cashbox_row({"cashbox_code": box.cashbox_code, "name_ar": "خزنة", "opening_balance": "500"}, batch)
+        with self.assertRaisesMessage(ValidationError, "cannot be changed from an import file"):
+            apply_opening_balance_row({"entity_type": "cashbox", "entity_code": box.cashbox_code, "opening_balance": "500"}, batch)
+        box.refresh_from_db()
+        self.assertEqual((box.opening_balance, box.name_ar, box_balance(box)), (ZERO, "كروت هدايا غير مصروفة", D("-100.00")))

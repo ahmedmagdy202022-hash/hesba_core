@@ -35,6 +35,7 @@ from .models import EntryKind, GiftCard, GiftCardEntry, GiftCardStatus
 ZERO = Decimal("0.00")
 CAPABILITY = "gift_cards"
 SELL = "giftcards.sell"  # to sell and to redeem (owner, manager, cashier)
+RECEIVE = "sales.receive_customer_payment"  # with SELL, to cancel a redemption (it is a collection undone)
 BREAKAGE = "giftcards.breakage"  # to write off, and to reverse a sale or a write-off (owner, manager)
 CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no 0/O, 1/I: read aloud at a till
 CODE_LENGTH = 12
@@ -56,6 +57,8 @@ MESSAGES = {
         "redeem_notes": "دفع بكارت هدية {number} — فاتورة {invoice}", "invoice_cancelled": "إلغاء الفاتورة {invoice} اللي اتدفعت بالكارت",
         "walk_in_short": "الكاش والكارت مع بعض أقل من المطلوب؛ البيع الآجل محتاج عميل باسمه.",
         "no_permission": "مش معاك صلاحية الدفع بكارت الهدية.",
+        "returned": "الفاتورة دي عليها مرتجع؛ مينفعش تتلغي دفعة الكارت منها.",
+        "walk_in_redemption": "دي دفعة كارت على بيع لعميل نقدي؛ ألغِ الفاتورة كلها، والكارت هيرجع له رصيده.",
         "statuses": {"active": "شغال", "cancelled": "بيعه اتلغى"},
         "kinds": {"sold": "اتباع", "redeemed": "اتصرف في فاتورة", "breakage": "اتشطب الباقي", "reversed": "اتلغت حركة"},
     },
@@ -74,6 +77,8 @@ MESSAGES = {
         "redeem_notes": "Paid by gift card {number} — invoice {invoice}", "invoice_cancelled": "Invoice {invoice} paid by the card was cancelled",
         "walk_in_short": "Cash and card together are less than the total; a credit sale needs a named customer.",
         "no_permission": "You may not take payment by gift card.",
+        "returned": "This invoice has a posted return; its card payment cannot be cancelled.",
+        "walk_in_redemption": "This card payment is on a walk-in sale; cancel the whole invoice, and the card gets its money back.",
         "statuses": {"active": "Active", "cancelled": "Sale cancelled"},
         "kinds": {"sold": "Sold", "redeemed": "Spent on an invoice", "breakage": "Rest written off", "reversed": "Reversed"},
     },
@@ -184,6 +189,29 @@ def outstanding_for(entity):
     """What the entity's live cards still hold: the 2110 figure the gift-card box mirrors (negated)."""
 
     return sum(balances(GiftCard.objects.filter(entity=entity)).values(), ZERO)
+
+
+def returned_due(invoice):
+    """What posted returns took off the customer's due on this invoice."""
+
+    from sales.models import SalesReturn
+
+    total = SalesReturn.objects.filter(source_invoice=invoice, status="posted").aggregate(t=Sum("due_amount"))["t"]
+    return money_round(total or ZERO)
+
+
+def redeemable_due(invoice):
+    """What a card may still pay on a posted invoice: ``remaining_due − applied − posted returns' due``, never below 0."""
+
+    if invoice.status != "posted":
+        return ZERO
+    return max(money_round(Decimal(invoice.remaining_due) - settlements.applied_to(invoice) - returned_due(invoice)), ZERO)
+
+
+def masked(code):
+    """The code as every screen shows it: the last four characters only (HG-071 review: the holder is whoever has it)."""
+
+    return f"••••-••••-{code[-4:]}" if code else ""
 
 
 def entity_of_invoice(invoice):
@@ -329,7 +357,7 @@ def redeem(card, invoice, amount, user, lang="ar"):
     card = GiftCard.objects.select_for_update(of=("self",)).get(pk=card.pk)
     check_card(card, entity_of_invoice(invoice), words)
     amount = _amount(amount, words["redeem_amount"])
-    due = money_round(Decimal(invoice.remaining_due) - settlements.applied_to(invoice))
+    due = redeemable_due(invoice)
     if amount > due:
         raise ValidationError(words["above_due"].format(due=f"{max(due, ZERO):,.2f}"))
     held = balance(card)
@@ -352,13 +380,22 @@ def cancel_redemption(entry, user, reason, lang="ar"):
 
     from sales.services import cancel_customer_payment
 
+    from sales.pos import WALK_IN_CODE
+
     words = MESSAGES[lang]
     _require(user, SELL)
+    _require(user, RECEIVE)
     reason = _reason(reason, words)
     if entry.kind != EntryKind.REDEEMED or entry.payment_id is None:
         raise ValidationError(words["wrong_entry"])
     if entry.payment.status != "posted":
         raise ValidationError(words["not_live"])
+    invoice = entry.invoice
+    if invoice is not None and invoice.status == "posted":
+        if invoice.customer.customer_code == WALK_IN_CODE:  # the walk-in never owes: its card payment goes with the invoice
+            raise ValidationError(words["walk_in_redemption"])
+        if returned_due(invoice) > 0 or invoice.returns.filter(status="posted").exists():
+            raise ValidationError(words["returned"])
     cancel_customer_payment(entry.payment_id, user, reason)  # the audit hook writes the reversed entry
     return entry
 
