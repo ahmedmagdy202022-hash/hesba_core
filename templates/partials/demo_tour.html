@@ -1,0 +1,12 @@
+{% if demo_tour %}{# DEMO-FIRST-RUN (D3): «جرّب دلوقتي», three real screens in this trade's words; hidden once dismissed (this browser). #}
+<section class="fr-tour" data-demo-tour="{{ demo_tour.key }}" aria-labelledby="demo-tour-title">
+  <div class="fr-tour__head">
+    <h2 id="demo-tour-title">{{ demo_tour.title }}</h2>
+    <button class="fr-tour__close" type="button" aria-label="{{ demo_tour.dismiss }}" data-demo-tour-dismiss>&times;</button>
+  </div>
+  <p class="fr-tour__lead">{{ demo_tour.lead }}</p>
+  <ol class="fr-steps">
+    {% for step in demo_tour.steps %}<li><a class="fr-step" href="{{ step.url }}" data-demo-tour-step="{{ step.n }}"><span class="fr-step__n" aria-hidden="true">{{ step.n }}</span><span class="fr-step__text"><strong>{{ step.title }}</strong><span>{{ step.hint }}</span></span></a></li>{% endfor %}
+  </ol>
+</section>
+{% endif %}

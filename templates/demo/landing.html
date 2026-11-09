@@ -1,0 +1,45 @@
+{% load static %}<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+{% include "partials/brand_icons.html" %}
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{{ words.page_title }}</title>
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
+<link rel="stylesheet" href="{% static 'hesba/css/demo_first_run.css' %}?v=fr-1">
+<script>{# The remembered language wins when the address names none, as every signed-in page does. #}
+(function(){try{var p=new URLSearchParams(location.search);var s=localStorage.getItem('hesba_lang');if(!p.get('lang')&&s==='en'&&document.documentElement.lang!=='en'){p.set('lang','en');location.replace(location.pathname+'?'+p.toString());return;}localStorage.setItem('hesba_lang',document.documentElement.lang);}catch(e){}})();
+</script>
+</head>
+<body class="fr-body" data-lang="{{ lang }}">
+{# DEMO-FIRST-RUN (D1): one tap on the kind of business opens a ready shop. #}
+<div class="fr-page">
+  <header class="fr-head">
+    <div class="fr-head__row">
+      <img class="fr-head__brand" src="{% static 'hesba/brand/hesba-logo-reversed.png' %}" alt="حِسبة — Hesba" width="642" height="225">
+      <a class="fr-head__lang" href="?lang={{ other_lang }}" data-lang-link>{{ words.language }}</a>
+    </div>
+    <h1>{{ words.title }}</h1>
+    <p>{{ words.lead }}</p>
+  </header>
+  <main class="fr-main">
+    <div class="fr-tiles" role="list" aria-label="{{ words.title }}">
+      {% for tile in tiles %}
+        {% if tile.start %}
+        <form method="post" action="{{ start_url }}" role="listitem" data-demo-tile="{{ tile.key }}">{% csrf_token %}
+          <input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="activity" value="{{ tile.start.0 }}"><input type="hidden" name="sub_activity" value="{{ tile.start.1 }}"><input type="hidden" name="mode" value="sample">
+          <button class="fr-tile" type="submit"><img class="fr-tile__icon" src="{% static tile.icon %}" alt="" aria-hidden="true"><strong>{{ tile.label }}</strong><span>{{ tile.hint }}</span></button>
+        </form>
+        {% else %}
+        <a class="fr-tile" role="listitem" href="{{ tile.href }}" data-demo-tile="{{ tile.key }}"><img class="fr-tile__icon" src="{% static tile.icon %}" alt="" aria-hidden="true"><strong>{{ tile.label }}</strong><span>{{ tile.hint }}</span></a>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </main>
+  <footer class="fr-foot">
+    <small>{{ words.foot }}</small>
+    <a href="{{ login_url }}" data-demo-login-link>{{ words.have_account }}</a>
+  </footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,32 @@
+{% load static %}<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+{% include "partials/brand_icons.html" %}
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{{ words.preparing_title }} - {% if lang == 'en' %}Hesba{% else %}حِسْبَة{% endif %}</title>
+{% if not ready %}<meta http-equiv="refresh" content="3">{% endif %}
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
+<link rel="stylesheet" href="{% static 'hesba/css/demo_first_run.css' %}?v=fr-1">
+</head>
+<body class="fr-body" data-lang="{{ lang }}">
+{# DEMO-FIRST-RUN: a template still being built; the page refreshes until the file exists, then opens it. #}
+<div class="fr-page">
+  <main class="fr-main" style="display:flex">
+    <section class="fr-wait" data-demo-preparing="{% if ready %}ready{% else %}building{% endif %}">
+      {% if not ready %}<span class="fr-spin" aria-hidden="true"></span>{% endif %}
+      <h1>{% if ready %}{{ words.ready }}{% else %}{{ words.preparing_title }}{% endif %}</h1>
+      <p>{{ message }}</p>
+      {% if ready %}
+      <form method="post" action="{{ start_url }}" data-demo-continue>{% csrf_token %}
+        <input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="activity" value="{{ activity }}"><input type="hidden" name="sub_activity" value="{{ sub_activity }}"><input type="hidden" name="mode" value="sample">
+        <button class="fr-primary" type="submit">{{ open }}</button>
+      </form>
+      <script>document.querySelector('[data-demo-continue]').submit();</script>
+      {% endif %}
+      <a href="{{ landing_url }}">{{ words.back }}</a>
+    </section>
+  </main>
+</div>
+</body>
+</html>
