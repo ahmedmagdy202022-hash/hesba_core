@@ -4,7 +4,7 @@ import base64
 import re
 from unittest import mock
 
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.test import SimpleTestCase
 from django.urls import reverse
 
@@ -160,7 +160,8 @@ class CardVisibilityTests(CardSetup):
         self.assertEqual(self.wo.status, Status.DELIVERED)
         page = self.page()
         self.assertContains(page, 'id="wo-attachments"')
-        self.assertContains(page, services.MESSAGES["ar"]["closed"])
+        self.assertNotContains(page, services.MESSAGES["ar"]["closed"])  # no error-like notice under the delivery success message
+        self.assertNotContains(page, "data-att-blocked")
         self.assertNotContains(page, "data-att-upload")
         self.assertNotContains(page, "data-att-signature")
         self.assertContains(page, f'data-url="{reverse("attachments:delete", args=[photo.pk])}?lang=ar"')  # a photo can still go, as the service allows
@@ -186,6 +187,17 @@ class CardContextTests(CardSetup):
         self.assertEqual(context["words"]["title"], "Photos & signature")
         self.assertTrue(context["upload_url"].endswith("/upload/?lang=en"))
         self.assertTrue(context["signature_url"].endswith("/signature/?lang=en"))
+
+    def test_a_closed_order_shows_no_notice_but_still_refuses_an_add(self):
+        work.deliver(self.to_ready(self.wo), self.owner)
+        context = ui.card(self.wo, self.owner, "ar")
+        self.assertFalse(context["can_add"])
+        self.assertEqual(context["blocked"], "")  # the «closed» refusal belongs to an actual add attempt, not to the page after delivery
+        with self.assertRaises(ValidationError) as caught:
+            services.add_attachment(self.wo, JPEG, self.owner, kind=Kind.PHOTO, stage=Stage.DELIVER)
+        self.assertEqual(caught.exception.messages[0], services.MESSAGES["ar"]["closed"])
+        viewer_context = ui.card(self.wo, self.viewer(), "ar")
+        self.assertEqual(viewer_context["blocked"], services.MESSAGES["ar"]["read_only"])  # a user who may never add is still told so
 
     def test_other_stage_files_are_listed_only_when_they_exist(self):
         services.add_attachment(self.wo, JPEG, self.owner, kind=Kind.PHOTO, stage=Stage.OTHER)

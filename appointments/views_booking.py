@@ -84,7 +84,7 @@ def _lang(request):
 def _private(response):
     response["X-Robots-Tag"] = "noindex, nofollow"
     response["Cache-Control"] = "no-store"
-    response["Referrer-Policy"] = "no-referrer"
+    response["Referrer-Policy"] = "same-origin"  # the stricter "no referrer" policy makes browsers post "Origin: null" (CSRF 403)
     patch_vary_headers(response, ("Accept-Language",))
     return response
 
@@ -361,7 +361,7 @@ SETTINGS_WORDS = {
         "entity": "الفرع", "show": "عرض", "accepting": "الصفحة العامة بتاخد حجوزات", "link": "لينك الصفحة العامة", "copy": "انسخ اللينك",
         "no_base": "اللينك بيتعمل من عنوان الموقع الرسمي (PUBLIC_BASE_URL)، ولسه مش متحدد. اطلبه من الدعم.", "new_link": "اعمل لينك جديد (اللينك القديم يبطّل)",
         "rules": "قواعد المواعيد", "slot": "المواعيد كل (دقيقة)", "notice": "أقل وقت قبل الميعاد (دقيقة)", "ahead": "الحجز لحد كام يوم قدام",
-        "show_prices": "اعرض سعر الخدمة في الصفحة العامة", "prices_note": "مقفول افتراضيًا لحد ما أحمد يقرر.",
+        "show_prices": "اعرض سعر الخدمة في الصفحة العامة", "prices_note": "مقفول لحد ما تفعّله.",
         "hours": "مواعيد العمل", "hours_note": "اليوم اللي مش متعلّم عليه إجازة. من غير مواعيد بعد نص الليل.", "open": "شغال", "opens": "من", "closes": "لحد",
         "services": "الخدمات اللي بتتحجز أونلاين", "services_note": "الخدمات بس (مش أصناف المخزن). المدة هي مدة الميعاد.", "duration": "المدة (دقيقة)",
         "no_items": "مفيش خدمات لسه. ضيف صنف خدمة (من غير مخزون) من الأصناف.",
@@ -374,7 +374,7 @@ SETTINGS_WORDS = {
         "entity": "Branch", "show": "Show", "accepting": "The public page takes bookings", "link": "Public page link", "copy": "Copy link",
         "no_base": "The link is built from the site's official address (PUBLIC_BASE_URL), which is not set yet. Ask support.", "new_link": "Make a new link (the old one stops working)",
         "rules": "Time rules", "slot": "Times every (minutes)", "notice": "Minimum notice (minutes)", "ahead": "Book up to how many days ahead",
-        "show_prices": "Show service prices on the public page", "prices_note": "Off by default until Ahmed decides.",
+        "show_prices": "Show service prices on the public page", "prices_note": "Off until you switch it on.",
         "hours": "Working hours", "hours_note": "An unticked day is closed. No hours past midnight.", "open": "Open", "opens": "From", "closes": "To",
         "services": "Services bookable online", "services_note": "Services only (not stock items). The duration is the appointment's length.", "duration": "Duration (min)",
         "no_items": "No services yet. Add a service item (not stock-tracked) from the items screen.",

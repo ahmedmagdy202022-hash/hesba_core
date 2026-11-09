@@ -137,3 +137,16 @@ class DemoSwitchTests(PanelSetup):
             self.assertContains(self.page(), ">المرضى<")  # unknown choices are ignored
             self.client.force_login(person(RoleCode.CASHIER, "ap_demo_cashier"))
             self.assertEqual(self.client.post(reverse("demo_activity"), {"activity": "commercial:retail"}).status_code, 403)
+
+    def test_the_salon_is_one_of_the_demo_choices_and_switching_to_it_works(self):
+        from django.test import override_settings
+
+        from config.demo import DEMO_ACTIVITIES, demo_activity_choices
+        from settings_core.models import ClientProfile
+
+        self.assertIn(("services", "beauty"), DEMO_ACTIVITIES)
+        self.assertIn("services:beauty", [value for value, _label in demo_activity_choices("ar")])
+        with override_settings(DEMO_MODE=True):
+            self.client.post(reverse("demo_activity"), {"activity": "services:beauty"})
+        profile = ClientProfile.get_active()
+        self.assertEqual((profile.activity_slug, profile.sub_activity_slug), ("services", "beauty"))

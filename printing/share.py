@@ -75,5 +75,5 @@ def expired_page(request, lang="ar"):
                                                               "phone": company["phone"], "whatsapp": whatsapp_number(company["phone"])}, status=404)
     response["X-Robots-Tag"] = "noindex, nofollow"
     response["Cache-Control"] = "no-store"
-    response["Referrer-Policy"] = "no-referrer"
+    response["Referrer-Policy"] = "same-origin"  # the stricter "no referrer" policy makes browsers post "Origin: null" (CSRF 403)
     return response

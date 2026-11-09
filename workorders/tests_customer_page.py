@@ -55,7 +55,7 @@ class CustomerPageTests(WorkshopSetup):
                 self.assertNotIn(staff, body)
         self.assertEqual(response["X-Robots-Tag"], "noindex, nofollow")
         self.assertIn("no-store", response["Cache-Control"])
-        self.assertEqual(response["Referrer-Policy"], "no-referrer")
+        self.assertEqual(response["Referrer-Policy"], "same-origin")  # no-referrer makes browsers post "Origin: null" (CSRF 403)
         if varies:  # the order page answers JSON or HTML by Accept; the expired page is always HTML
             self.assertIn("Accept", response["Vary"])
 

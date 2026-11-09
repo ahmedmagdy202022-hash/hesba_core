@@ -19,6 +19,8 @@ body a:focus-visible,body button:focus-visible,body input:focus-visible,body sel
   .op-table td.op-cell-actions input{width:150px;min-width:0}
 }
 
+/* Long unbreakable text (a /share/<token>/ link in the outbox) wraps instead of widening the phone layout. */
+.op-table td.op-cell-text{overflow-wrap:anywhere}
 /* LIST-001: the inline cancel-reason field matches the other inputs. */
 .op-table td.op-cell-actions input{min-height:36px;padding:0 10px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-sm);background:var(--hs-surface);color:var(--hs-ink);font:inherit}
 /* SETTINGS-001: module switches. State is shown in words and in the edge colour. */

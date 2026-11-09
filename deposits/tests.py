@@ -269,6 +269,19 @@ class ForfeitTests(DepositSetup):
         self.assertEqual(services.fee_line(D("100.03"), D("14")), (D("87.74"), D("100.02")))  # no exact line: the nearest below
         self.assertEqual(services.fee_line(D("50.00"), D("0")), (D("50.00"), D("50.00")))
 
+    def test_the_fee_invoice_list_shows_what_is_still_to_collect_not_the_frozen_remaining(self):
+        customer, deposit, invoice = self.forfeit("100.00", "C-LIST")
+        invoice.refresh_from_db()
+        self.assertGreater(invoice.remaining_due, 0)  # stored at posting, never changed by the deposit
+        self.client.force_login(self.owner)
+        page = self.client.get(f"{reverse('sales:list')}?lang=ar")
+        row = [i for i in page.context["invoices"] if i.pk == invoice.pk][0]
+        self.assertEqual(row.outstanding, D("0.00"))
+        self.assertContains(page, "data-invoice-outstanding")
+        detail = self.client.get(f"{reverse('sales:detail', args=[invoice.pk])}?lang=ar")
+        self.assertContains(detail, "آجل وقت الفاتورة")  # the frozen figure is no longer labelled as the remaining
+        self.assertContains(detail, "الباقي للتحصيل")
+
     def test_a_late_cancel_posts_a_fee_invoice_equal_to_the_deposit_with_vat_inside(self):
         for amount, net, tax in (("100.00", "87.72", "12.28"), ("99.99", "87.71", "12.28")):
             with self.subTest(amount=amount):
