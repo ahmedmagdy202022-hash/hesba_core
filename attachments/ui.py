@@ -70,7 +70,9 @@ def card(order, user, lang):
     can_add = can_attach and not closed
     return {
         "groups": groups, "can_add": can_add, "total": len(rows), "words": WORDS[lang],
-        "blocked": "" if can_add else (words["closed"] if can_attach else words["read_only"]),
+        # A closed order just has no add controls: its «closed» refusal comes from the service when someone actually tries to add
+        # (it used to sit under the delivery success message and read like an error). Only a user who may never add is told so.
+        "blocked": "" if (can_add or (can_attach and closed)) else words["read_only"],
         "upload_url": f"{reverse('attachments:work_order_upload', args=[order.pk])}?lang={lang}",
         "signature_url": f"{reverse('attachments:work_order_signature', args=[order.pk])}?lang={lang}",
         "default_signature_stage": (Stage.DELIVER if order.status == "ready" else Stage.RECEIVE).value,

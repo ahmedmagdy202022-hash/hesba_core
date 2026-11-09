@@ -41,6 +41,20 @@ class TillButtonsTests(TestCase):
     def picks(self):
         return [pick["id"] for pick in self.client.get(reverse("sales:pos"), {"lang": "ar"}).context["quick_picks"]]
 
+    def test_the_internal_cancellation_fee_item_is_never_a_till_item(self):
+        from deposits.services import fee_item
+
+        fee = fee_item()  # the non-stock item the deposits service makes; price 0.00
+        page = self.client.get(reverse("sales:pos"), {"lang": "ar"})
+        self.assertNotIn(fee.pk, [row["id"] for row in page.context["catalog"]])
+        self.assertNotIn(fee.pk, [row["id"] for row in page.context["quick_picks"]])
+        self.assertNotContains(page, fee.item_name)
+        self.assertIn(self.rice.pk, [row["id"] for row in page.context["catalog"]])  # the shop's own items still list
+        listing = self.client.get(BUTTONS, {"lang": "ar", "q": fee.item_code})
+        self.assertNotIn(fee, listing.context["others"])
+        self.client.post(BUTTONS, {"action": "add", "item": fee.pk, "lang": "ar"})
+        self.assertEqual(pinned_ids(), [])  # it cannot be pinned by hand either
+
     def test_what_sells_without_a_barcode_comes_before_what_scans(self):
         self.sell(self.rice, "9")
         self.sell(self.tomato, "2")

@@ -40,7 +40,7 @@ WORDS = {
         "bill": "اعمل الفاتورة", "billed": "اتعملت مسودة الفاتورة {number}؛ رحّلها وحصّل من شاشة الفاتورة.", "remind": "تذكير واتساب",
         "reminder": "أهلاً {customer}، بنفكّرك بميعادك {service}يوم {date} الساعة {time}. {company}", "view_only": "الحجز والتعديل لصاحب الصلاحية بس.",
         "performance": "أداء الموظفين", "from": "من", "to": "لحد", "show": "عرض", "done": "مواعيد خلصت", "sales": "المبيعات (من غير ضريبة وبعد المرتجع)",
-        "commission": "العمولة", "rate": "النسبة", "perf_note": "المبيعات من الفواتير المرحّلة بس. صرف العمولة بيتسجل كمصروف من شاشة المصروفات.",
+        "commission": "العمولة", "rate": "النسبة", "total": "الإجمالي", "perf_note": "المبيعات من الفواتير المرحّلة بس. صرف العمولة بيتسجل كمصروف من شاشة المصروفات.",
         "actions": {"confirmed": "تأكيد", "arrived": "بدأ الشغل", "done": "خلص", "cancelled": "إلغاء", "no_show": "مجاش"},
         "bad_when": "اكتب تاريخ وساعة صحيحين.",
         # S5 (HG-069): the deposit box and the cancellation policy.
@@ -62,7 +62,7 @@ WORDS = {
         "bill": "Make the invoice", "billed": "Draft invoice {number} made; post it and collect from the invoice screen.", "remind": "WhatsApp reminder",
         "reminder": "Hello {customer}, a reminder of your appointment {service}on {date} at {time}. {company}", "view_only": "Only users with the permission can book or change appointments.",
         "performance": "Team performance", "from": "From", "to": "To", "show": "Show", "done": "Done appointments", "sales": "Sales (before tax, after returns)",
-        "commission": "Commission", "rate": "Rate", "perf_note": "Sales come from posted invoices only. Paying a commission is recorded as an expense from the expenses screen.",
+        "commission": "Commission", "rate": "Rate", "total": "Total", "perf_note": "Sales come from posted invoices only. Paying a commission is recorded as an expense from the expenses screen.",
         "actions": {"confirmed": "Confirm", "arrived": "Start", "done": "Done", "cancelled": "Cancel", "no_show": "No show"},
         "bad_when": "Enter a valid date and time.",
         # S5 (HG-069): the deposit box and the cancellation policy.

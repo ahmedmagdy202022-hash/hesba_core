@@ -454,6 +454,36 @@ class BookingSettingsScreenTests(BookingSetup):
                 self.assertEqual(self.client.get(url).status_code, status)
                 self.assertEqual(self.client.post(url, self.form()).status_code, status if status != 200 else 302)
 
+    def test_the_settings_page_carries_no_internal_note_in_either_language(self):
+        self.client.force_login(self.owner)
+        for lang, note in (("ar", "مقفول لحد ما تفعّله"), ("en", "Off until you switch it on")):
+            page = self.client.get(reverse("appointments:booking_settings") + f"?lang={lang}")
+            self.assertContains(page, note)
+            self.assertNotContains(page, "أحمد")
+            self.assertNotContains(page, "Ahmed")
+
+    def test_no_user_facing_word_list_names_the_developer_as_a_decision_maker(self):
+        from appointments import booking, services
+        from appointments.views_booking import SETTINGS_WORDS
+
+        for table in (SETTINGS_WORDS, booking.MESSAGES, services.MESSAGES):
+            for lang, words in table.items():
+                for key, text in words.items():
+                    if isinstance(text, str):
+                        self.assertNotRegex(text, r"أحمد\s+يقرر|until Ahmed|Ahmed decides", f"{lang}.{key}")
+
+    def test_no_template_names_ahmed_except_the_developer_credit(self):
+        import pathlib
+
+        from django.conf import settings
+
+        offenders = []
+        for path in (pathlib.Path(settings.BASE_DIR) / "templates").rglob("*.html"):
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                if ("أحمد" in line or "Ahmed" in line) and "credit" not in line:
+                    offenders.append(f"{path.name}:{number}")
+        self.assertEqual(offenders, [])
+
     def test_saves_hours_services_and_staff(self):
         self.client.force_login(self.owner)
         response = self.client.post(reverse("appointments:booking_settings"), self.form(**{"show_prices": "1"}))

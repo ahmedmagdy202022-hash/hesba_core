@@ -15,7 +15,7 @@ def demo_context(request):
 # how the words, the menu and the dashboard change. Never on a real install.
 DEMO_ACTIVITIES = (
     ("commercial", "retail"), ("commercial", "pharmacy"), ("restaurants", "restaurant"), ("medical", "clinic"),
-    ("education", "training"), ("services", "maintenance"), ("manufacturing", "food"), ("contracting", "general"),
+    ("education", "training"), ("services", "maintenance"), ("services", "beauty"), ("manufacturing", "food"), ("contracting", "general"),
 )
 
 

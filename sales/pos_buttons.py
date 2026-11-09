@@ -81,6 +81,12 @@ WORDS = {
 }
 
 
+def _fee_code():
+    from deposits.services import FEE_ITEM_CODE
+
+    return FEE_ITEM_CODE
+
+
 @require_permission("master_data.manage_items")
 def pos_buttons(request):
     lang = "en" if (request.POST.get("lang") or request.GET.get("lang")) == "en" else "ar"
@@ -104,7 +110,7 @@ def pos_buttons(request):
         action = request.POST.get("action", "")
         if item_id.isdigit():
             item_id = int(item_id)
-            if action == "add" and item_id not in pinned and Item.objects.filter(pk=item_id, active=True).exists():
+            if action == "add" and item_id not in pinned and Item.objects.filter(pk=item_id, active=True).exclude(item_code=_fee_code()).exists():
                 if len(pinned) >= MAX_PINNED:
                     messages.error(request, words["full"])
                 else:
@@ -123,7 +129,7 @@ def pos_buttons(request):
     by_id = Item.objects.filter(pk__in=pinned, active=True).in_bulk()
     chosen = [by_id[pk] for pk in pinned if pk in by_id]
     query = request.GET.get("q", "").strip()[:80]
-    others = Item.objects.filter(active=True).exclude(pk__in=pinned)
+    others = Item.objects.filter(active=True).exclude(pk__in=pinned).exclude(item_code=_fee_code())  # the internal fee item is never a till button
     if query:
         from django.db.models import Q
 

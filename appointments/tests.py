@@ -149,6 +149,12 @@ class ScreenTests(AppointmentSetup):
         self.assertRedirects(billed, f"{reverse('sales:detail', args=[appointment.invoice.pk])}?lang=ar", fetch_redirect_response=False)
         self.assertContains(self.client.get(reverse("appointments:performance")), 'data-performance-row="E-0001"')
 
+    def test_performance_total_row_is_labelled(self):
+        self.client.force_login(self.owner)
+        for lang, label in (("ar", "الإجمالي"), ("en", "Total")):
+            page = self.client.get(reverse("appointments:performance") + f"?lang={lang}")
+            self.assertContains(page, f"<tr data-performance-total><th>{label}</th>", html=False)
+
     def test_overlap_shows_on_the_form(self):
         self.book(hour=14)
         self.client.force_login(self.owner)
