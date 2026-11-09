@@ -1,0 +1,8 @@
+{# SETUP-STEPS (DEMO-FIRST-RUN §7): the one source of the wizard's step names, the same four the rail (setup_rail.html) shows.
+   Both languages are rendered; body[data-lang] shows one, so the page's language switch needs no dictionary for these. #}
+<nav class="activity-stepper" aria-label="Setup steps" data-setup-stepper="{{ step }}">
+  <div class="activity-step{% if step == 1 %} is-current{% elif step > 1 %} is-done{% endif %}"><span class="activity-step__number">1</span><span><span class="t-ar">النشاط العام</span><span class="t-en">General activity</span></span></div>
+  <div class="activity-step{% if step == 2 %} is-current{% elif step > 2 %} is-done{% endif %}"><span class="activity-step__number">2</span><span><span class="t-ar">النشاط الفرعي</span><span class="t-en">Sub-activity</span></span></div>
+  <div class="activity-step{% if step == 3 %} is-current{% elif step > 3 %} is-done{% endif %}"><span class="activity-step__number">3</span><span><span class="t-ar">شغلك</span><span class="t-en">How you work</span></span></div>
+  <div class="activity-step{% if step == 4 %} is-current{% elif step > 4 %} is-done{% endif %}"><span class="activity-step__number">4</span><span><span class="t-ar">جاهز</span><span class="t-en">Ready</span></span></div>
+</nav>

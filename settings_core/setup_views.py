@@ -99,31 +99,31 @@ REVIEW_STRINGS = {
 
 COMPLETE_STRINGS = {
     "ar": {
-        "page_title": "اكتمال الإعداد - حِسْبَة",
+        "page_title": "حِسبة جاهزة - حِسْبَة",
         "logout": "تسجيل الخروج",
         "language": "العربية",
         "step_general": "النشاط العام",
         "step_sub": "النشاط الفرعي",
         "step_modules": "الأقسام",
         "step_review": "المراجعة",
-        "title": "تم إنهاء الإعداد",
-        "subtitle": "اتحفظت إعدادات نشاطك، وحِسبة جاهزة.",
+        "title": "حِسبة جاهزة لشغلك",
+        "subtitle": "اتحفظت إعدادات نشاطك.",
         "message": "اتسجل نشاطك والأقسام اللي اخترتها. تقدر تغيّرهم بعدين من الإعدادات من غير ما بيانات تتمسح.",
-        "back": "الرجوع إلى المراجعة",
+        "back": "الرجوع للأسئلة",
         "next": "الانتقال إلى لوحة القيادة",
     },
     "en": {
-        "page_title": "Setup complete - Hesba",
+        "page_title": "Hesba is ready - Hesba",
         "logout": "Logout",
         "language": "English",
         "step_general": "General activity",
         "step_sub": "Sub activity",
         "step_modules": "Modules",
         "step_review": "Review",
-        "title": "Setup complete",
-        "subtitle": "Your activity settings are saved and Hesba is ready to use.",
+        "title": "Hesba is ready for your business",
+        "subtitle": "Your activity settings are saved.",
         "message": "Your activity and selected modules are recorded. You can adjust them later from Settings without deleting any data.",
-        "back": "Back to review",
+        "back": "Back to the questions",
         "next": "Go to the dashboard",
     },
 }
@@ -306,9 +306,9 @@ def setup_complete(request):
     context = {
         "lang": lang,
         "dir": "ltr" if lang == "en" else "rtl",
-        "review_href": _setup_review_href(
-            lang, profile.activity_slug, profile.sub_activity_slug, ",".join(enabled_modules())
-        ),
+        # §7: back goes to the step the person actually saw (the questions), never to the review they skipped.
+        "review_href": f"{reverse('setup_questions')}?lang={_query_value(lang)}&activity={_query_value(profile.activity_slug)}"
+                       f"&sub_activity={_query_value(profile.sub_activity_slug)}",
         "dashboard_url": reverse("dashboard_snapshot"),
         **COMPLETE_STRINGS[lang],
     }
@@ -380,7 +380,13 @@ def _role_home(user):
 def root_redirect(request):
     if request.user.is_authenticated:
         return redirect("after_login")
+    from django.conf import settings
 
+    if getattr(settings, "DEMO_MODE", False):
+        # DEMO-FIRST-RUN: a visitor's first page is the choice of business, not a login wall.
+        from config.demo_first_run import landing
+
+        return landing(request)
     return redirect("login")
 
 

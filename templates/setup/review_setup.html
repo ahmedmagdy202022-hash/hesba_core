@@ -38,12 +38,7 @@
     </header>
 
     <section class="activity-panel" aria-labelledby="activity-title">
-      <nav class="activity-stepper" aria-label="Setup steps">
-        <div class="activity-step"><span class="activity-step__number">1</span><span data-i18n="stepGeneral">{{ step_general }}</span></div>
-        <div class="activity-step"><span class="activity-step__number">2</span><span data-i18n="stepSub">{{ step_sub }}</span></div>
-        <div class="activity-step"><span class="activity-step__number">3</span><span data-i18n="stepModules">{{ step_modules }}</span></div>
-        <div class="activity-step is-current"><span class="activity-step__number">4</span><span data-i18n="stepReview">{{ step_review }}</span></div>
-      </nav>
+      {% include "partials/setup_stepper.html" with step=4 %}
 
       <div class="activity-copy review-copy">
         <h1 class="activity-title" id="activity-title" data-i18n="title">{{ title }}</h1>

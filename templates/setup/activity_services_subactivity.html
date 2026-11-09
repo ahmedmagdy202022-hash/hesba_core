@@ -44,12 +44,7 @@
     </header>
 
     <section class="activity-panel" aria-labelledby="activity-title">
-      <nav class="activity-stepper" aria-label="Setup steps">
-        <div class="activity-step"><span class="activity-step__number">1</span><span data-i18n="stepGeneral">النشاط العام</span></div>
-        <div class="activity-step is-current"><span class="activity-step__number">2</span><span data-i18n="stepSub">النشاط الفرعي</span></div>
-        <div class="activity-step"><span class="activity-step__number">3</span><span data-i18n="stepModules">الأقسام</span></div>
-        <div class="activity-step"><span class="activity-step__number">4</span><span data-i18n="stepReview">المراجعة</span></div>
-      </nav>
+      {% include "partials/setup_stepper.html" with step=2 %}
 
       <div class="activity-copy">
         <h1 class="activity-title" id="activity-title" data-i18n="title">اختر نوع النشاط الخدمي</h1>
@@ -69,7 +64,7 @@
 
       <footer class="activity-footer" aria-label="Activity navigation">
         <button class="activity-action activity-next" type="button" disabled data-next-button>
-          <span data-i18n="next">التالي: الأقسام</span>
+          <span data-i18n="next">التالي</span>
           <span class="activity-action__circle" aria-hidden="true">←</span>
         </button>
         <a class="activity-action activity-back" href="/setup/activity/?lang=ar" data-back-link>
@@ -107,7 +102,7 @@
       professional: 'مكتب مهني',
       digitalMarketing: 'تسويق وتصميم وخدمات رقمية',
       otherService: 'نشاط خدمي آخر',
-      next: 'التالي: الأقسام',
+      next: 'التالي',
       back: 'الرجوع',
       changeLanguage: 'تغيير اللغة'
     },
@@ -129,7 +124,7 @@
       professional: 'Professional Office',
       digitalMarketing: 'Marketing, Design & Digital Services',
       otherService: 'Other Service Activity',
-      next: 'Next: modules',
+      next: 'Next',
       back: 'Back',
       changeLanguage: 'Change language'
     }

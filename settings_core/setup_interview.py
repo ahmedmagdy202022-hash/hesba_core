@@ -56,7 +56,7 @@ LIBRARY = {
 #: like are the activity's own names for its modules (activity_fit.module_text).
 BASE = {
     "till": (("بتبيع للزبون اللي واقف قدامك على الكاشير؟", "Do you sell to customers standing at a till?"),
-             ("شاشة كاشير سريعة بالباركود، وحساب الباقي، وإيصال 80mm.", "A fast till screen with barcodes, change and an 80mm receipt.")),
+             ("شاشة كاشير سريعة بالباركود، وحساب الباقي، وإيصال 8 سم.", "A fast till screen with barcodes, change and an 80mm receipt.")),
     "shift": (("عايز كل كاشير يفتح وردية ويقفلها بحساب درجه؟", "Should each cashier open and close a shift, counting their drawer?"),
               ("مفيش بيع من غير وردية مفتوحة، وكل وردية بتتقفل بعدّ الفلوس اللي في الدرج.", "No sale without an open shift; each shift closes with a count of its drawer.")),
     "barcode": (("أصنافك عليها باركود، أو عايز تطبعلها باركود؟", "Do your items carry barcodes, or should Hesba print them?"),
@@ -79,7 +79,7 @@ BASE = {
                "A drug database by active ingredient and strength, the alternatives in stock, prescriptions dispensed on a sales invoice, and chronic refills on time.")),
     "expiry": (("بضاعتك ليها تاريخ صلاحية؟", "Do your goods have expiry dates?"),
                ("تاريخ صلاحية لكل كمية داخلة، والبيع بيبدأ بالأقرب، وتنبيه قبل ما حاجة تخلص صلاحيتها.", "An expiry date for each batch in, sales take the nearest first, and a warning before anything expires.")),
-    "serials": (("القطع اللي بتبيعها ليها سيريال أو IMEI وضمان؟", "Do the pieces you sell have a serial or IMEI and a warranty?"),
+    "serials": (("القطع اللي بتبيعها ليها رقم تسلسلي (سيريال) وضمان؟", "Do the pieces you sell have a serial or IMEI and a warranty?"),
                 ("كل قطعة برقمها من الشراء للبيع، وفترة الضمان على الفاتورة.", "Each piece followed by its number from purchase to sale, with its warranty on the invoice.")),
     "variants": (("بتبيع نفس الصنف بمقاسات أو ألوان؟", "Do you sell the same item in sizes or colours?"),
                  ("صنف واحد بمقاساته وألوانه، وكل مقاس ليه رصيده وباركوده.", "One item with its sizes and colours, each with its own stock and barcode.")),
@@ -95,8 +95,8 @@ BASE = {
                  ("كل مشروع بخاماته ومصاريفه ومستخلصاته، وربحه لوحده.", "Each project with its materials, costs and progress bills, and its own profit.")),
     "expenses": (("بتسجّل مصاريف الشغل (إيجار، كهربا، مرتبات)؟", "Do you record running costs (rent, power, wages)?"),
                  ("المصروفات بأنواعها، وبتطلع في صافي الربح.", "Expenses by type, counted in the net profit.")),
-    "print": (("بتطبع الفاتورة أو تبعتها للزبون PDF على الواتساب؟", "Do you print invoices or send them as a PDF on WhatsApp?"),
-              ("فاتورة A4 وإيصال 80mm وكشوف حساب جاهزة للطباعة والمشاركة.", "An A4 invoice, an 80mm receipt and statements ready to print or share.")),
+    "print": (("بتطبع الفاتورة أو تبعتها للزبون ملف PDF على الواتساب؟", "Do you print invoices or send them as a PDF on WhatsApp?"),
+              ("فاتورة A4 وإيصال 8 سم وكشوف حساب جاهزة للطباعة والمشاركة.", "An A4 invoice, an 80mm receipt and statements ready to print or share.")),
     "vat": (("مسجّل في ضريبة القيمة المضافة؟", "Are you registered for VAT?"),
             ("نسبة ضريبة لكل صنف، تتحسب لوحدها في الفاتورة، وتقرير ضريبة المبيعات والمشتريات.", "A VAT rate per item, worked out on each invoice, and the sales and purchases tax report.")),
     "einv": (("ومطلوب منك الفاتورة الإلكترونية (مصلحة الضرائب)؟", "And are you required to issue e-invoices (Tax Authority)?"),
@@ -125,7 +125,7 @@ BASE = {
 ACTIVITY_QUESTIONS = {
     catalog.COMMERCIAL: (
         ("till", {}), ("shift", {}), ("barcode", {}),
-        ("stock", {}), ("expiry", {}), ("drugs", {}), ("serials", {"ask": ("الأجهزة اللي بتبيعها ليها سيريال أو IMEI وضمان؟", "Do the devices you sell have a serial or IMEI and a warranty?")}),
+        ("stock", {}), ("expiry", {}), ("drugs", {}), ("serials", {"ask": ("الأجهزة اللي بتبيعها ليها الرقم التسلسلي للموبايل (IMEI) وضمان؟", "Do the devices you sell have a serial or IMEI and a warranty?")}),
         ("variants", {"ask": ("بتبيع نفس الموديل بمقاسات وألوان؟", "Do you sell the same model in sizes and colours?")}),
         ("units", {"ask": ("بتشتري بالكرتونة وتبيع بالقطعة أو بالعلبة؟", "Do you buy by the carton and sell by the piece or the box?")}),
         ("suppliers", {}), ("credit", {}), ("quotes", {}), ("instal", {}), ("prices", {}),
@@ -138,7 +138,7 @@ ACTIVITY_QUESTIONS = {
     ),
     catalog.RESTAURANTS: (
         ("till", {"ask": ("عندك كاشير بيحاسب الطلبات؟", "Does a cashier settle the orders?"),
-                  "gives": ("شاشة كاشير بأزرار الأصناف، والدفع كاش أو فيزا، وإيصال 80mm.", "A till with item buttons, cash or card, and an 80mm receipt.")}),
+                  "gives": ("شاشة كاشير بأزرار الأصناف، والدفع كاش أو فيزا، وإيصال 8 سم.", "A till with item buttons, cash or card, and an 80mm receipt.")}),
         ("shift", {}),
         ("stock", {"ask": ("عايز المكونات تتخصم من المخزن مع كل طبق، وتعرف الطبق بيتكلف كام؟", "Should ingredients come off stock with every dish, so you know what a dish costs?"),
                    "gives": ("مكونات لكل طبق، وتكلفته وهامشه، والمخزن بيتخصم منه مع كل طلب.", "Ingredients per dish, its cost and margin, with stock taken off at each order.")}),
@@ -173,7 +173,7 @@ ACTIVITY_QUESTIONS = {
         ("instal", {"ask": ("بتقسّط خطط العلاج على المرضى؟", "Do patients pay treatment plans in instalments?")}),
         ("prices", {"ask": ("عندك أسعار مختلفة لنفس الخدمة (كشف عادي ومستعجل، أو تعاقدات)؟", "Does one service have several prices (regular and urgent, or contracts)?")}),
         ("expenses", {"ask": ("بتسجّل مصاريف العيادة (إيجار، مرتبات، صيانة أجهزة)؟", "Do you record running costs (rent, wages, equipment upkeep)?")}),
-        ("print", {"ask": ("بتطبع الفاتورة أو الروشتة أو تبعتها للمريض PDF؟", "Do you print or send invoices and reports to patients as a PDF?")}),
+        ("print", {"ask": ("بتطبع الفاتورة أو الروشتة أو تبعتها للمريض ملف PDF؟", "Do you print or send invoices and reports to patients as a PDF?")}),
         ("vat", {}), ("einv", {}),
         ("ereceipt", {"ask": ("ومطلوب منك الإيصال الإلكتروني لمبيعات الاستقبال للمرضى؟", "And must reception's sales to patients carry e-receipts?")}),
         ("assets", {"ask": ("عندك أجهزة طبية عايز تحسب إهلاكها؟", "Do you have medical equipment to depreciate?")}),
@@ -187,7 +187,7 @@ ACTIVITY_QUESTIONS = {
         ("stock", {"ask": ("بتبيع كتب أو مذكرات وعايز تعرف رصيدها؟", "Do you sell books or notes and want to know their stock?")}),
         ("suppliers", {"ask": ("بتشتري الكتب والأدوات من موردين أو مطابع؟", "Do you buy books and supplies from suppliers or printers?")}),
         ("expenses", {"ask": ("بتسجّل مصاريف السنتر (إيجار، كهربا، مرتبات)؟", "Do you record running costs (rent, power, wages)?")}),
-        ("print", {"ask": ("بتطبع إيصالات المصاريف أو تبعتها لولي الأمر PDF؟", "Do you print fee receipts or send them to parents as a PDF?")}),
+        ("print", {"ask": ("بتطبع إيصالات المصاريف أو تبعتها لولي الأمر ملف PDF؟", "Do you print fee receipts or send them to parents as a PDF?")}),
         ("vat", {}), ("einv", {}), ("assets", {}),
     ),
     catalog.SERVICES: (
@@ -235,7 +235,7 @@ ACTIVITY_QUESTIONS = {
         ("team", {"ask": ("عندك مهندسين ومشرفين وعمال بتتابع شغلهم؟", "Do engineers, supervisors and workers work with you?")}),
         ("booking", {"ask": ("عندك زيارات صيانة أو معاينات بمواعيد؟", "Do you have maintenance visits or site surveys by appointment?")}),
         ("expenses", {"ask": ("بتسجّل مصاريف الشركة والمواقع (إيجار، نقل، مرتبات)؟", "Do you record company and site costs (rent, transport, wages)?")}),
-        ("print", {"ask": ("بتطبع المستخلصات والفواتير أو تبعتها PDF؟", "Do you print progress bills and invoices or send them as a PDF?")}),
+        ("print", {"ask": ("بتطبع المستخلصات والفواتير أو تبعتها ملف PDF؟", "Do you print progress bills and invoices or send them as a PDF?")}),
         ("vat", {}), ("einv", {}),
         ("assets", {"ask": ("عندك معدات (لودر، خلاطة، سقالات) عايز تحسب إهلاكها؟", "Do you have equipment (loaders, mixers, scaffolding) to depreciate?")}),
     ),
