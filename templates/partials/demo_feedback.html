@@ -1,5 +1,5 @@
 {% load static %}{% if demo_mode %}{# DEMO-FEEDBACK: the tester's note, from any page. #}
-<link rel="stylesheet" href="{% static 'hesba/css/demo_feedback.css' %}?v=demo-feedback-4">
+<link rel="stylesheet" href="{% static 'hesba/css/demo_feedback.css' %}?v=demo-feedback-5">
 <button class="hs-feedback-fab" type="button" data-feedback-open aria-haspopup="dialog">
   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H8l-4 4z"></path><path d="M8 9h8M8 12.5h5"></path></svg>
   <span class="t-ar">ملاحظاتك</span><span class="t-en">Feedback</span>
@@ -33,22 +33,15 @@
     </footer>
   </form>
 </dialog>
-<section class="hs-hello" data-hello hidden aria-labelledby="hs-hello-title">
-  <form method="post" action="{% url 'feedback:hello' %}" data-hello-form>
-    {% csrf_token %}
-    <h2 id="hs-hello-title"><span class="t-ar">أهلًا بيك في ديمو حِسبة 👋</span><span class="t-en">Welcome to the Hesba demo 👋</span></h2>
-    <p data-demo-notice><span class="t-ar">الصفحات اللي بتفتحها هنا بتتسجل عشان نحسّن البرنامج. لو حابب، سيب اسمك أو رقمك عشان نعرف نشكرك ونرجعلك.</span><span class="t-en">The pages you open here are recorded to help us improve Hesba. If you like, leave your name or phone so we can thank you and follow up.</span></p>
-    <div class="hs-hello__fields">
-      <label><span class="t-ar">الاسم</span><span class="t-en">Name</span><input type="text" name="name" maxlength="120" autocomplete="name"></label>
-      <label><span class="t-ar">الموبايل</span><span class="t-en">Phone</span><input type="tel" name="phone" maxlength="40" autocomplete="tel" dir="ltr"></label>
-    </div>
-    <input type="hidden" name="lang" data-hello-lang>
-    <p class="hs-hello__status" data-hello-status role="status" aria-live="polite"></p>
-    <div class="hs-hello__actions">
-      <button class="hs-hello__send" type="submit"><span class="t-ar">تمام</span><span class="t-en">Save</span></button>
-      <button class="hs-hello__skip" type="button" data-hello-skip><span class="t-ar">مش دلوقتي</span><span class="t-en">Not now</span></button>
-    </div>
-  </form>
-</section>
-<script src="{% static 'hesba/js/demo_feedback.js' %}?v=demo-feedback-4" defer></script>
+{% if demo_hello %}{# DEMO-TRACK + DEMO-FIRST-RUN (D3): the one-time hello, a bottom banner on the first content page only, never over a form.
+   One line says pages are recorded (docs/DEMO_FEEDBACK.md); the note dialog takes an optional name or phone. #}
+<aside class="hs-hello" data-hello hidden aria-label="ملاحظاتك / Feedback">
+  <p data-demo-notice><span class="t-ar">أهلًا بيك 👋 الصفحات اللي بتفتحها هنا بتتسجل عشان نحسّن البرنامج. لو حبيت تقول رأيك أو تسيب رقمك نكلمك، من هنا. مش لازم.</span><span class="t-en">Welcome 👋 The pages you open here are recorded to help us improve Hesba. If you like, leave a note or your number here. No pressure.</span></p>
+  <div class="hs-hello__actions">
+    <button class="hs-hello__send" type="button" data-feedback-open data-hello-open><span class="t-ar">ملاحظاتك</span><span class="t-en">Feedback</span></button>
+    <button class="hs-hello__skip" type="button" data-hello-skip aria-label="إخفاء / Hide">×</button>
+  </div>
+</aside>
+{% endif %}
+<script src="{% static 'hesba/js/demo_feedback.js' %}?v=demo-feedback-5" defer></script>
 {% endif %}

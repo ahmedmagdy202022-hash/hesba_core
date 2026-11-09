@@ -6,6 +6,7 @@
 {% block styles %}
 <link rel="stylesheet" href="{% static 'hesba/css/dashboard.css' %}?v=a2-2">
 <link rel="stylesheet" href="{% static 'hesba/css/shell.css' %}">
+{% if demo_bar or demo_tour %}<link rel="stylesheet" href="{% static 'hesba/css/demo_first_run.css' %}?v=fr-1">{% endif %}
 {% endblock %}
 
 {% block content %}
@@ -13,6 +14,7 @@
 {% include "partials/app_shell.html" %}
 <div class="hs-main">
 <div class="dash-shell">
+{% include "partials/demo_bar.html" %}
 <svg width="0" height="0" class="dash-defs" aria-hidden="true" focusable="false">
   <symbol id="dm-net_sales" viewBox="0 0 24 24"><path d="M3 17l5-5 4 4 8-8"/><path d="M14 8h6v6"/></symbol>
   <symbol id="dm-avg_invoice" viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></symbol>
@@ -34,7 +36,6 @@
         <span class="dash-clock__date">{{ now_parts.date }}</span>
         <span class="dash-clock__time">{{ now_parts.time }}</span>
       </time>
-      {% if demo_activities %}<div class="dash-demo" data-demo-activity><span class="dash-demo__label">{{ demo_activities.label }}</span><strong class="dash-demo__current">{{ demo_activities.current }}</strong></div><form class="dash-demo" method="post" action="{% url 'demo_restart' %}" data-demo-restart onsubmit="return confirm('{% if lang == 'en' %}Everything recorded in this demo will be erased and you start again from choosing the activity. Continue?{% else %}هيتمسح كل اللي اتسجل في التجربة وتبدأ من اختيار النشاط. متأكد؟{% endif %}')">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><button type="submit" class="dash-demo__restart">{% if lang == 'en' %}Try another activity (start over){% else %}جرّب نشاط تاني (من الأول){% endif %}</button></form>{% endif %}
       <button class="dash-lang" type="button" data-lang-toggle data-dash-lang>{{ language }}</button>
       <div class="dash-bell-wrap" data-bell>
         <button class="dash-icon-button" type="button" aria-label="{{ notifications }}{% if alerts %} ({{ alerts|length }}){% endif %}" aria-expanded="false" aria-controls="dash-bell-panel" data-bell-toggle>
@@ -63,6 +64,7 @@
 
   <main class="dash-main" id="hs-main" tabindex="-1">
   {% include "partials/entity_bar.html" %}
+  {% include "partials/demo_tour.html" %}{# DEMO-FIRST-RUN (D3): what to try first, before the figures #}
 
       <section class="dash-hero is-{{ day_part }}" aria-label="{{ greeting }}">
         <div class="dash-hero__fx" aria-hidden="true"><span class="dash-hero__glow dash-hero__glow--a"></span><span class="dash-hero__glow dash-hero__glow--b"></span><span class="dash-hero__glow dash-hero__glow--c"></span><span class="dash-hero__grid"></span></div>
@@ -333,5 +335,6 @@
 </div>
 <script src="{% static 'hesba/js/shell.js' %}" defer></script>
 <script src="{% static 'hesba/js/dashboard.js' %}?v=bell-001" defer></script>
+{% if demo_tour %}<script src="{% static 'hesba/js/demo_first_run.js' %}?v=fr-1" defer></script>{% endif %}
 {% if voice_summary %}<script src="{% static 'hesba/js/voice_summary.js' %}?v=a1-2" defer></script>{% endif %}
 {% endblock %}
