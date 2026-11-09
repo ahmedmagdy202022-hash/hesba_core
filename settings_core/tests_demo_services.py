@@ -5,6 +5,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.core.management import call_command
+from django.db import transaction
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
@@ -54,6 +55,22 @@ class DemoServicesTests(TestCase):
     def counts(self):
         return {"employees": Employee.objects.count(), "items": Item.objects.count(), "orders": WorkOrder.objects.count(),
                 "appointments": Appointment.objects.count(), "campaigns": Campaign.objects.count(), "outbox": OutboxMessage.objects.count()}
+
+    def test_the_salon_sample_works_on_every_weekday(self):
+        """The old sample books the catalog's technician on days relative to today; the showcase must never clash with it."""
+
+        from datetime import datetime, time
+        from unittest import mock
+
+        start = timezone.localdate()
+        for shift in range(7):
+            day = start + timedelta(days=shift)
+            moment = timezone.make_aware(datetime.combine(day, time(9)))
+            with self.subTest(weekday=day.strftime("%A")), mock.patch("django.utils.timezone.now", return_value=moment):
+                sid = transaction.savepoint()
+                self.fill("services", "beauty")
+                self.assertEqual(Appointment.objects.filter(notes="ميك أب خطوبة").count(), 1)
+                transaction.savepoint_rollback(sid)
 
     @override_settings(PUBLIC_BASE_URL=PUBLIC)
     def test_a_repair_workshop_gets_its_service_features(self):

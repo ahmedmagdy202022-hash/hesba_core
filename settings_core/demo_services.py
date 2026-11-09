@@ -42,7 +42,7 @@ ADDRESSES = ("15 شارع مصطفى النحاس، مدينة نصر", "برج 
              "22 شارع عباس العقاد، مدينة نصر", "الحي الثالث، الشيخ زايد")
 
 #: (days after the week's first day, hour, crew index, customer index, service index, minutes, status once past, status still to come, note).
-#: The crew's last index is the catalog's own technician, who already holds the slots of the old sample.
+#: Crew index 3 wraps to the first new technician (the catalog's own technician is never booked here).
 APPOINTMENTS = {
     "services.maintenance": (
         (0, 10, 0, 0, 0, 60, "done", "confirmed", "كشف على تكييف الريسبشن"), (0, 13, 1, 1, 1, 90, "done", "confirmed", "الغسالة بتفصل في النص"),
@@ -95,7 +95,9 @@ def seed(master, staff, owner, catalog, extras):
         if "workorders" in extras:
             _work_orders(master, crew, customers, owner)
         if "appointments" in extras:
-            _appointments(catalog, crew + ([staff] if staff is not None else []), customers, services, owner)
+            # Only the new crew: the catalog's own technician already holds the old sample's relative-date slots,
+            # and a clash there would fail the whole sample on some weekdays.
+            _appointments(catalog, crew, customers, services, owner)
         _campaign(catalog, owner)
     return True
 
