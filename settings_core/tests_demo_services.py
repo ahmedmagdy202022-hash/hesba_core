@@ -138,6 +138,24 @@ class DemoServicesTests(TestCase):
         rows = appointments.performance(first, first + timedelta(days=13))
         self.assertEqual(any(row["commission"] > 0 for row in rows), finished > 0)
         self.assertEqual(Campaign.objects.get().status, CampaignStatus.DRAFT)
+        # The public booking page is set up (S3) but answers only once the owner turns the capability on.
+        from django.contrib.auth import get_user_model
+        from django.urls import reverse
+
+        from appointments import booking
+        from appointments.models import BookableService, BookingStaff, WorkingHours
+        from entities.services import main_entity
+        from settings_core.capabilities import set_capability_enabled
+
+        page = booking.settings_for(main_entity())
+        self.assertTrue(page.accepting and page.show_prices)
+        self.assertEqual(WorkingHours.objects.filter(employee__isnull=True).count(), 6)
+        self.assertEqual(BookableService.objects.count(), 4)
+        self.assertEqual(set(BookingStaff.objects.values_list("employee__name", flat=True)), {"نهى سمير", "دينا فتحي", "ياسمين طارق"})
+        url = reverse("book_page", args=[page.public_key])
+        self.assertEqual(self.client.get(url).status_code, 404)
+        set_capability_enabled(ClientProfile.get_active(), "online_booking", True, user=get_user_model().objects.get(username="owner"))
+        self.assertContains(self.client.get(url), "ميك أب سواريه")
         before = self.counts()
         self.assertFalse(self.seed_again(catalog_for("services", "beauty")))
         self.assertEqual(self.counts(), before)
