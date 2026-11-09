@@ -316,7 +316,7 @@ class ModulesSelectionScreenTests(AuthenticatedTestCase):
         self.assertIn('activity-bg-frame', template)
         self.assertIn('activity-ui-layer', template)
         self.assertIn('activity-panel', template)
-        self.assertIn('activity-stepper', template)
+        self.assertIn('partials/setup_stepper.html', template)  # DEMO-FIRST-RUN §7: the one stepper partial
         self.assertIn('activity-footer', template)
         self.assertIn('activity-action', template)
         self.assertIn('setup_gate_logo_approved.png', template)
@@ -451,7 +451,7 @@ class ReviewSetupScreenTests(AuthenticatedTestCase):
         self.assertIn('activity-bg-frame', template)
         self.assertIn('activity-ui-layer', template)
         self.assertIn('activity-panel', template)
-        self.assertIn('activity-stepper', template)
+        self.assertIn('partials/setup_stepper.html', template)  # DEMO-FIRST-RUN §7: the one stepper partial
         self.assertIn('activity-footer', template)
         self.assertIn('activity-action', template)
         self.assertIn('setup_gate_logo_approved.png', template)

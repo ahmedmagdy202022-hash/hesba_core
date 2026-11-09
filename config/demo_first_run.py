@@ -327,13 +327,21 @@ def tour_card(request, lang, profile):
 
     if not getattr(settings, "DEMO_MODE", False) or profile is None or not profile.activity_slug:
         return None
-    from permissions.services import user_has_permission
-
-    if not user_has_permission(request.user, "settings.view_settings"):
+    # The tester's owner is a superuser of their own copy; a manager or cashier trying permissions sees the plain shop.
+    if not request.user.is_superuser:
         return None
+    from settings_core.capabilities import closed_capability
+    from settings_core.module_gate import closed_module
+
     activity, sub = profile.activity_slug, profile.sub_activity_slug or ""
-    steps = [{"n": n, "title": ar if lang == "ar" else en, "hint": hint_ar if lang == "ar" else hint_en, "url": f"{reverse(url_name)}?lang={lang}"}
-             for n, (ar, en, hint_ar, hint_en, url_name) in enumerate(showcase.demo_tour(activity, sub), start=1)]
+    steps = []
+    for ar, en, hint_ar, hint_en, url_name in showcase.demo_tour(activity, sub):
+        path = reverse(url_name)
+        if closed_module(path) or closed_capability(path):  # a screen this business switched off is no step to take
+            continue
+        steps.append({"n": len(steps) + 1, "title": ar if lang == "ar" else en, "hint": hint_ar if lang == "ar" else hint_en, "url": f"{path}?lang={lang}"})
+    if not steps:
+        return None
     label = _label(activity, sub, lang)
     return {
         "key": f"{activity}:{sub}", "steps": steps,
