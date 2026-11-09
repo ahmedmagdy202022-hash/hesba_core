@@ -6,10 +6,10 @@ read the same ledger rows; a statement for a period starts from the balance
 brought forward to its first day.
 """
 
-from datetime import date
 from decimal import Decimal
 
 from django.db.models import Max, Sum
+from django.utils import timezone
 
 from config.money import money_round
 from entities import scope as entity_scope
@@ -93,7 +93,7 @@ def statement(kind, party, date_from=None, date_to=None):
 def card(kind, party, today=None):
     """What the card shows at a glance."""
 
-    today = today or date.today()
+    today = today or timezone.localdate()
     if kind == "customer":
         documents = entity_scope.scope(SalesInvoice.objects, entity_scope.SALES_INVOICE).filter(customer=party, status="posted")
         payments = entity_scope.scope(CustomerPayment.objects, entity_scope.CUSTOMER_PAYMENT).filter(customer=party, status="posted")
