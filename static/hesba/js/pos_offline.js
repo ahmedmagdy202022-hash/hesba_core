@@ -19,12 +19,14 @@
     offline: 'No connection — sales are kept on this device.', pending: 'waiting to sync', syncing: 'Syncing…',
     synced: 'Synced: ', refused: 'Refused', discard: 'Remove', keep: 'Do not reload or close this page until the sales sync.',
     saved: 'Saved on this device. It will be posted when the connection is back.', login: 'Sign in again to sync the saved sales.', back: 'Connection is back.',
-    points: 'Points need the connection: clear “Spend points” to save this sale on the device.'
+    points: 'Points need the connection: clear “Spend points” to save this sale on the device.',
+    gift: 'A gift card needs the connection: clear “Gift card” to save this sale on the device.'
   } : {
     offline: 'مفيش اتصال — الفواتير بتتحفظ على الجهاز ده.', pending: 'مستنية المزامنة', syncing: 'بنزامن…',
     synced: 'اتزامنت: ', refused: 'اترفضت', discard: 'شيلها', keep: 'متعملش Refresh ومتقفلش الصفحة لحد ما الفواتير تتزامن.',
     saved: 'اتحفظت على الجهاز، وهتترحّل أول ما النت يرجع.', login: 'سجّل دخول تاني عشان الفواتير المحفوظة تتزامن.', back: 'النت رجع.',
-    points: 'صرف النقاط محتاج نت: امسح خانة «صرف نقاط» عشان الفاتورة تتحفظ على الجهاز.'
+    points: 'صرف النقاط محتاج نت: امسح خانة «صرف نقاط» عشان الفاتورة تتحفظ على الجهاز.',
+    gift: 'كارت الهدية محتاج نت: امسح خانة «كارت هدية» عشان الفاتورة تتحفظ على الجهاز.'
   };
   var reachable = navigator.onLine;
   var syncing = false;
@@ -91,6 +93,8 @@
     event.preventDefault();
     var points = form.querySelector('[name="redeem_points"]');
     if (points && points.value.trim() && points.value.trim() !== '0') { render(T.points); return; }  // T6: the sync spends no points
+    var gift = form.querySelector('[name="gift_code"]');
+    if (gift && gift.value.trim()) { render(T.gift); return; }  // S6 (HG-071): a card is spent under its lock, online only
     var sale = payloadFromForm();
     if (!sale.lines.length) { return; }
     var queue = load(); queue.push(sale); save(queue);

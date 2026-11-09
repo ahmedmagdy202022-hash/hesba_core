@@ -21,6 +21,7 @@ WORDS = {
         "starts": "من يوم", "ends": "لحد يوم", "from_time": "من الساعة", "to_time": "لحد الساعة", "active": "شغال", "save": "حفظ", "saved": "اتحفظ.",
         "state": "الحالة", "running": "شغال دلوقتي", "stopped": "واقف", "invoices": "فواتير", "given": "الخصم اللي اتعمل", "none": "مفيش عروض لسه.",
         "what": "على", "when": "إمتى", "always": "على طول", "open": "تعديل",
+        "members": "للأعضاء بس (عقد اشتراك شغال على الخدمة)", "everyone": "لكل العملاء",
     },
     "en": {
         "title": "Promotions & coupons", "intro": "A running promotion applies by itself on the sales invoice and at the till: only the single best one, and only on lines without a discount typed by hand. A coupon works when its code is typed.",
@@ -29,6 +30,7 @@ WORDS = {
         "starts": "From", "ends": "Until", "from_time": "From time", "to_time": "To time", "active": "On", "save": "Save", "saved": "Saved.",
         "state": "State", "running": "Running now", "stopped": "Off", "invoices": "Invoices", "given": "Discount given", "none": "No promotions yet.",
         "what": "On", "when": "When", "always": "Always", "open": "Edit",
+        "members": "Members only (an active subscription contract on the service)", "everyone": "Every customer",
     },
 }
 
@@ -66,7 +68,16 @@ def promotion_list(request):
         "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": words, "page_title": words["title"], "rows": rows, "error": error,
         "can_manage": can_manage, "can_see_use": can_see_use, "editing": editing, "form": form, "kinds": PromotionKind.choices, "today": timezone.localdate(),
         "items": _with(list(Item.objects.filter(active=True).order_by("item_name")[:800]), editing and editing.item) if can_manage else [],
-        "categories": _with(list(Category.objects.filter(active=True).order_by("name_ar")), editing and editing.category) if can_manage else []})
+        "categories": _with(list(Category.objects.filter(active=True).order_by("name_ar")), editing and editing.category) if can_manage else [],
+        "gift_cards_on": _gift_cards_on(),  # S6 (HG-071): «كروت الهدايا والعضويات» brings the members-only choice
+        "services": _with(list(Item.objects.filter(active=True, is_stock_tracked=False).order_by("item_name")[:400]), editing and editing.membership_service)
+        if can_manage else []})
+
+
+def _gift_cards_on():
+    from giftcards.services import enabled
+
+    return enabled()
 
 
 def _with(options, current):

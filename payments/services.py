@@ -460,7 +460,10 @@ def _post(provider, txn, link, callback):
 
 
 def _settle(link, payment, amount):
-    invoice = link.invoice
+    from sales.models import SalesInvoice
+
+    # The invoice's row lock, as gift-card redemption takes it, so a link and a card cannot both settle the same due.
+    invoice = SalesInvoice.objects.select_for_update(of=("self",)).get(pk=link.invoice_id)
     room = outstanding(invoice)
     settled = min(amount, room) if invoice.status == "posted" else ZERO
     if settled > 0:

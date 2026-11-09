@@ -188,7 +188,9 @@ def invoice_create(request):
             try:
                 line_data = convert_lines(line_data, "unit_sale_price", lang)  # UNITS-001
                 line_data = prepare_sale_serials(line_data, lang)  # SERIAL-001
-                line_data, promotion, promotion_off = promotions.apply(line_data, coupon=request.POST.get("coupon"), lang=lang)  # T5
+                # T5; S6 (HG-071): a members-only promotion counts for the invoice's customer's active contract
+                line_data, promotion, promotion_off = promotions.apply(line_data, coupon=request.POST.get("coupon"), lang=lang,
+                                                                       customer=form.cleaned_data.get("customer"))
                 # T6: points spent go on top of the invoice's own discount; the spending is booked when it is posted.
                 points, points_off = loyalty.redeem(form.cleaned_data.get("customer"), request.POST.get("redeem_points"), loyalty.lines_total(line_data), lang)
                 if points:

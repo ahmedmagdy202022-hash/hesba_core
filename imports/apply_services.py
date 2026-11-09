@@ -206,9 +206,22 @@ def apply_supplier_row(data, batch):
     return _save_model(obj), MODEL_LABELS["suppliers"]
 
 
+HELD_BOX_MESSAGE = "This cashbox is moved only by its own screen (cheques, couriers or gift cards); it cannot be changed from an import file."
+
+
+def _refuse_held_box(obj):
+    """HG-071: a cheque, courier or gift-card box (``HELD_KINDS``) is never renamed, re-opened or re-balanced by a file."""
+
+    from cashboxes.models import HELD_KINDS
+
+    if obj.pk and obj.kind in HELD_KINDS:
+        raise ValidationError(HELD_BOX_MESSAGE)
+
+
 def apply_cashbox_row(data, batch):
     cashbox_code = _required_text(data, "cashbox_code", "code")
     obj = Cashbox.objects.filter(cashbox_code=cashbox_code).first() or Cashbox(cashbox_code=cashbox_code)
+    _refuse_held_box(obj)
     obj.name_ar = _required_text(data, "name_ar", "name", "cashbox_name")
     obj.name_en = _text(data, "name_en", "english_name")
     obj.opening_balance = _decimal(data, "opening_balance", default="0")
@@ -249,6 +262,7 @@ def apply_opening_balance_row(data, batch):
         obj = Supplier.objects.get(supplier_code=entity_code)
     elif entity_type == "cashbox":
         obj = Cashbox.objects.get(cashbox_code=entity_code)
+        _refuse_held_box(obj)
     else:
         raise ValidationError("Opening balance entity_type must be customer, supplier, or cashbox.")
 

@@ -1,0 +1,29 @@
+{% load static hesba_format %}<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ words.receipt }} {{ card.number }}</title>
+{% include "partials/brand_icons.html" %}
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
+<link rel="stylesheet" href="{% static 'hesba/css/print.css' %}?v=print-002">
+</head>
+<body class="pr-body pr-receipt" data-format="receipt">
+<nav class="pr-toolbar" aria-label="{{ words.print }}"><a class="pr-button" href="{% url 'giftcards:detail' card.pk %}?lang={{ lang }}">{{ words.back }}</a>{% if can_reveal and not full %}<a class="pr-button" href="?lang={{ lang }}&amp;reveal=1" data-reveal>{{ words.reveal }}</a>{% endif %}<button class="pr-button pr-button--primary" type="button" data-print>{{ words.print }}</button></nav>
+<main class="pr-sheet" data-gift-receipt>
+  <h1>{{ words.receipt }}</h1>
+  <dl class="pr-totals">
+    <div><dt>{{ words.number }}</dt><dd><bdi>{{ card.number }}</bdi></dd></div>
+    <div><dt>{{ words.code }}</dt><dd><bdi dir="ltr" data-receipt-code>{{ code }}</bdi></dd></div>
+    <div class="pr-totals__grand"><dt>{{ words.face }}</dt><dd data-receipt-value>{{ card.face_value|money }}</dd></div>
+    <div><dt>{{ words.balance }}</dt><dd>{{ balance|money }}</dd></div>
+    <div><dt>{{ words.expires }}</dt><dd><bdi>{{ card.expires_on|date:"Y-m-d"|default:"—" }}</bdi></dd></div>
+    <div><dt>{{ words.sold_on }}</dt><dd><bdi>{{ card.created_at|date:"Y-m-d" }}</bdi></dd></div>
+  </dl>
+  <p>{{ words.receipt_note }}</p>
+</main>
+<script>
+document.querySelector('[data-print]').addEventListener('click', function(){ window.print(); });
+</script>
+</body>
+</html>

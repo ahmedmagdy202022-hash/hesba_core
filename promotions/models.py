@@ -35,6 +35,9 @@ class Promotion(models.Model):
     min_total = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     buy_quantity = models.PositiveIntegerField(null=True, blank=True, validators=[MinValueValidator(1)])
     get_quantity = models.PositiveIntegerField(null=True, blank=True, validators=[MinValueValidator(1)])
+    #: S6 (HG-071): members only. Counts only for a customer with an active service contract (``agreements``) on this
+    #: service item, inside the contract's dates: a membership is that periodic subscription plus this discount.
+    membership_service = models.ForeignKey("master_data.Item", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
 

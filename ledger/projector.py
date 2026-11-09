@@ -119,7 +119,9 @@ class Projector:
         self.groups = {}
 
     #: T3/T4: where each kind of cashbox keeps its money in the chart.
-    KIND_CONTROLS = {"bank": "bank", "cheques_in": "notes_receivable", "cheques_out": "notes_payable", "courier": "courier_receivable"}
+    #: S6 (HG-071): a gift-card box's (negative) balance is the liability to the cards' holders.
+    KIND_CONTROLS = {"bank": "bank", "cheques_in": "notes_receivable", "cheques_out": "notes_payable", "courier": "courier_receivable",
+                     "gift_card": "gift_card_liability"}
 
     def money_account(self, cashbox):
         """T3 (HG-055): a bank account's money sits in the banks account, a cashbox's in cash on hand.
@@ -169,6 +171,7 @@ class Projector:
         self._payroll()
         self._contracts()
         self._deposits()
+        self._gift_cards()
 
     def _deposits(self):
         """S5 (HG-069): a deposit at booking is the customer's money until its invoice posts.
@@ -189,6 +192,15 @@ class Projector:
         rows = InvoiceSettlement.objects.filter(source=SettlementSource.DEPOSIT, customer_payment__status="posted")
         for invoice_id, amount in rows.values_list("invoice_id", "amount"):
             self._settled[invoice_id] = self._settled.get(invoice_id, ZERO) + Decimal(amount)
+
+    def _gift_cards(self):
+        """S6 (HG-071): a breakage (the unspent rest of a card written off, approved by hand) is a direct cash in to the
+        gift-card box; its counter-line is sundry income (4201), not the owner's account. Keyed on the operation id
+        whatever its status, so a reversed breakage's entry on its reversal date lands in 4201 too."""
+
+        from giftcards.models import EntryKind, GiftCardEntry
+
+        self._breakage_ops = set(GiftCardEntry.objects.filter(kind=EntryKind.BREAKAGE, operation__isnull=False).values_list("operation_id", flat=True))
 
     def _contracts(self):
         """CONTRACT-002 (HG-038): what the project screens add to the journal.
@@ -471,6 +483,8 @@ class Projector:
             g.add(self.acc["asset_disposal"], remainder, g.entity_id)
         elif op.pk in self._payroll_ops:  # T12: a payroll payment settles its debt
             g.add(self.acc[self.PAYROLL_DEBTS[self._payroll_ops[op.pk]]], remainder, g.entity_id)
+        elif op.pk in self._breakage_ops:  # S6 (HG-071): a gift card's unspent rest becomes sundry income
+            g.add(self.acc["other_income"], remainder, g.entity_id)
         elif op.operation_type == "bank_fee":
             g.add(self.acc["bank_charges" if self.acc.has("bank_charges") else "general_expense"], remainder, g.entity_id)
         elif remainder:
@@ -620,6 +634,10 @@ def fingerprint():
     # S5 (HG-069): a settlement row added or removed, or a deposit changing hands, moves money between 2105 and 1103.
     parts.append(";".join(f"{pk}{status}" for pk, status in Deposit.objects.order_by("pk").values_list("pk", "status")))
     parts.append(f"{InvoiceSettlement.objects.count()}:{InvoiceSettlement.objects.aggregate(n=Max('pk'))['n'] or 0}")
+    from giftcards.models import EntryKind, GiftCardEntry
+
+    # S6 (HG-071): a breakage moves its counter-line from the owner's account to sundry income.
+    parts.append(str(GiftCardEntry.objects.filter(kind=EntryKind.BREAKAGE).aggregate(n=Max("pk"))["n"] or 0))
     return "|".join(parts)
 
 

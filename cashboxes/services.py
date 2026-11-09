@@ -10,6 +10,7 @@ from config.money import money_round
 from permissions.services import user_has_permission
 
 from .models import (
+    LIABILITY_KINDS,
     Cashbox,
     CashboxDirection,
     CashboxMovement,
@@ -257,10 +258,17 @@ def create_cashbox_operation(
     user,
     source_cashbox=None,
     destination_cashbox=None,
+    *,
+    permission_checked=False,
 ):
-    """Post direct cash in/out or a linked, atomic cashbox transfer."""
+    """Post direct cash in/out or a linked, atomic cashbox transfer.
 
-    _require_move_cash_permission(user)
+    S6 (HG-071): ``permission_checked`` is passed only by ``giftcards.services``, after it checked its own
+    permission (``giftcards.sell`` / ``giftcards.breakage``), so a cashier sells a card without ``cashboxes.move_cash``.
+    """
+
+    if not permission_checked:
+        _require_move_cash_permission(user)
     _ensure_open_period(operation_date)
     reason = (reason or "").strip()
     if not reason:
@@ -285,7 +293,9 @@ def create_cashbox_operation(
     if len(locked) != len(cashbox_ids):
         raise ValidationError("Cash operations require active cashboxes.")
     if operation_type in (CashboxOperationType.DIRECT_OUT, CashboxOperationType.TRANSFER, CashboxOperationType.BANK_FEE, CashboxOperationType.PAYROLL):
-        if source is None or get_cashbox_balance(source) < amount:
+        # S6 (HG-071): a gift-card box is the transfer source of every card sale; its negative balance is the liability.
+        liability_source = operation_type == CashboxOperationType.TRANSFER and source is not None and source.kind in LIABILITY_KINDS
+        if source is None or (not liability_source and get_cashbox_balance(source) < amount):
             raise ValidationError("The source cashbox cannot become negative.")
     if operation_type == CashboxOperationType.TRANSFER:
         if destination is None:
@@ -365,10 +375,11 @@ def create_cashbox_operation(
 
 
 @transaction.atomic
-def cancel_cashbox_operation(operation_id, reversal_date, reason, user):
-    """Reverse a cash operation with append-only inverse rows."""
+def cancel_cashbox_operation(operation_id, reversal_date, reason, user, *, permission_checked=False):
+    """Reverse a cash operation with append-only inverse rows. ``permission_checked``: see ``create_cashbox_operation``."""
 
-    _require_move_cash_permission(user)
+    if not permission_checked:
+        _require_move_cash_permission(user)
     _ensure_open_period(reversal_date)
     reason = (reason or "").strip()
     if not reason:
@@ -399,7 +410,8 @@ def cancel_cashbox_operation(operation_id, reversal_date, reason, user):
         for movement in operation.movements.filter(reversal_of__isnull=True)
     }
     if operation.operation_type == CashboxOperationType.DIRECT_IN:
-        if get_cashbox_balance(destination) < operation.amount:
+        # S6 (HG-071): reversing a gift-card breakage puts the liability back, so that box may go (further) negative.
+        if destination.kind not in LIABILITY_KINDS and get_cashbox_balance(destination) < operation.amount:
             raise ValidationError("The cashbox cannot become negative when reversing this cash in.")
         _create_cash_operation_movement(
             operation,

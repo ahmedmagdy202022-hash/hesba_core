@@ -13,6 +13,9 @@ The rules:
 * the price on the line is whatever it already is (the item's price or the customer's price list).
 
 A sale made offline at the till syncs with the promotion that was running when it was rung up (its recorded time).
+
+S6 (HG-071): a promotion with ``membership_service`` counts only when ``apply`` is given a customer with an active
+service contract on that service on the day (a membership); without a customer it never counts.
 """
 
 from decimal import ROUND_FLOOR, Decimal, InvalidOperation
@@ -38,6 +41,7 @@ MESSAGES = {
         "min_total": "اكتب الحد الأدنى للفاتورة.", "buy_get": "اكتب «اشتري كام» و«خد كام ببلاش» (أرقام صحيحة).", "dates": "تاريخ النهاية قبل البداية.",
         "times": "اكتب الوقتين (من وإلى) أو سيبهم فاضيين.", "coupon_taken": "الكود ده مستخدم في عرض تاني شغال.", "coupon": "الكوبون «{code}» مش موجود أو مش شغال دلوقتي.",
         "number": "الرقم ده مش مفهوم.", "date": "التاريخ مش مفهوم.", "time": "الوقت مش مفهوم.", "target": "اختار صنف أو قسم، مش الاتنين.",
+        "membership": "اختار خدمة الاشتراك من الأصناف (صنف خدمة).",
     },
     "en": {
         "name": "Type the promotion's name.", "kind": "Choose the kind of promotion.", "percent": "The percentage must be from 1 to 100.",
@@ -45,6 +49,7 @@ MESSAGES = {
         "dates": "The end date is before the start.", "times": "Type both times (from and to) or leave both empty.", "coupon_taken": "This code is used by another active promotion.",
         "coupon": "The coupon “{code}” does not exist or is not running now.", "number": "This number is not understood.", "date": "The date is not understood.",
         "time": "The time is not understood.", "target": "Choose an item or a section, not both.",
+        "membership": "Choose the subscription's service from the items (a service item).",
     },
 }
 
@@ -148,17 +153,34 @@ def discounts(promo, lines):
     return [min(value, _gross(line)) for value, line in zip(result, lines)]
 
 
-def apply(lines, now=None, coupon="", lang="ar"):
+def member_services(customer, day=None):
+    """S6 (HG-071): the service items ``customer`` holds an active contract on at ``day`` (their memberships)."""
+
+    from agreements.models import ContractStatus, ServiceContract
+
+    if customer is None or getattr(customer, "pk", None) is None:
+        return set()
+    day = day or timezone.localdate()
+    rows = ServiceContract.objects.filter(customer=customer, status=ContractStatus.ACTIVE, starts_on__lte=day).filter(Q(ends_on__isnull=True) | Q(ends_on__gte=day))
+    return set(rows.values_list("service_id", flat=True))
+
+
+def apply(lines, now=None, coupon="", lang="ar", customer=None):
     """Fill the best promotion's discount into ``lines`` (dicts as the invoice and the till build them).
 
     Returns ``(lines, promotion, discount)``; ``promotion`` is None when nothing applies. An unknown or stopped
-    coupon is refused, so the cashier knows it did not count.
+    coupon is refused, so the cashier knows it did not count. S6 (HG-071): a members-only promotion counts only for
+    ``customer``'s active contract on its service.
     """
 
     if not enabled():
         return lines, None, ZERO
     code = str(coupon or "").strip()
-    candidates = [promo for promo in running(now) if not promo.coupon_code or (code and promo.coupon_code.lower() == code.lower())]
+    running_now = running(now)
+    if any(promo.membership_service_id for promo in running_now):
+        memberships = member_services(customer, timezone.localtime(now).date() if now is not None else None)
+        running_now = [promo for promo in running_now if not promo.membership_service_id or promo.membership_service_id in memberships]
+    candidates = [promo for promo in running_now if not promo.coupon_code or (code and promo.coupon_code.lower() == code.lower())]
     if code and not any(promo.coupon_code and promo.coupon_code.lower() == code.lower() for promo in candidates):
         raise ValidationError(MESSAGES[lang]["coupon"].format(code=code))
     best, best_off, best_total = None, None, ZERO
@@ -246,7 +268,12 @@ def save(data, user, promo=None, lang="ar"):
     category = Category.objects.filter(pk=data.get("category")).first() if str(data.get("category") or "").isdigit() else None
     if item and category:
         raise ValidationError(words["target"])
-    fields = {"name": name, "kind": kind, "item": item, "category": category, "active": data.get("active") in (True, "1", "on"),
+    membership = None
+    if str(data.get("membership_service") or "").isdigit():
+        membership = Item.objects.filter(pk=data.get("membership_service"), is_stock_tracked=False).first()
+        if membership is None:
+            raise ValidationError(words["membership"])
+    fields = {"name": name, "kind": kind, "item": item, "category": category, "membership_service": membership, "active": data.get("active") in (True, "1", "on"),
               "coupon_code": str(data.get("coupon_code") or "").strip()[:40], "starts_on": _date(data.get("starts_on"), words),
               "ends_on": _date(data.get("ends_on"), words), "from_time": _time(data.get("from_time"), words), "to_time": _time(data.get("to_time"), words),
               "percent": None, "amount": None, "min_total": None, "buy_quantity": None, "get_quantity": None}

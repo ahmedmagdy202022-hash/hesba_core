@@ -376,7 +376,7 @@ class PayItAllTests(PromotionSetup):
 
         page = self.client.get(reverse("sales:create") + "?lang=ar")
         self.assertContains(page, 'name="pay_full"')
-        self.assertContains(page, "hesba/js/invoice_form.js?v=t5-payfull2")
+        self.assertContains(page, "hesba/js/invoice_form.js?v=s6-member")
         js = open(finders.find("hesba/js/invoice_form.js"), encoding="utf-8").read()
         for needed in ("if (payAllOn) {", "event.isTrusted", "payAll(false)", "quotePromotion();  // ask for the promotion now"):
             self.assertIn(needed, js)
