@@ -167,10 +167,12 @@ def invoice_list(request):
 
 
 def _photo_link(user):
-    """A3 (HG-081): «فاتورة من صورة», only while its capability is on and only for someone who may use it."""
+    """A3 (HG-081): «فاتورة من صورة», only while its capability is on and only for someone who may use it. Expired waiting
+    photos are pruned here too (one indexed delete), so they go even while the feature is switched off."""
 
     from ai import invoice_photo
 
+    invoice_photo.prune()
     return invoice_photo.is_on() and invoice_photo.can_use(user)
 
 

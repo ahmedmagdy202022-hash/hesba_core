@@ -40,7 +40,7 @@ built by ``ClaudeInvoiceReader.build_request`` from the feature's constants and 
 * no ``thinking`` (always on for this model; its blocks come before the text and are skipped);
 * the same server-side refusal fallback as the router;
 * ``max_tokens=READ_MAX_TOKENS`` (8192: thinking counts against it, and fifty lines of JSON fit well under it), and a
-  45 s timeout (a photo takes longer than a question; still under gunicorn's 60 s), no SDK retry.
+  25 s timeout (a photo takes longer than a question; with the upload itself it must stay under gunicorn's 60 s), no SDK retry.
 """
 
 import base64
@@ -60,7 +60,7 @@ MAX_TOKENS = 1024
 EFFORT = "low"
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 #: A3 (HG-081): the invoice reader's own limits.
-READ_TIMEOUT = 45.0
+READ_TIMEOUT = 25.0  # independent review (PR #335): with a slow upload, still under gunicorn's 60 s sync timeout
 READ_MAX_TOKENS = 8192
 READ_EFFORT = "low"
 #: The one sentence sent beside the photo. The rules are in the feature's system prompt.

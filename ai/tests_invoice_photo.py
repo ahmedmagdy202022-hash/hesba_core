@@ -50,7 +50,15 @@ from .providers.mock import SAMPLE_READING, MockClaudeInvoiceReader, reading_res
 
 MODULES = "customers,suppliers,items_services,sales_operations,purchases,inventory,cashboxes,reports"
 URL = "/ai/invoice-photo/"
-JPEG = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01" + bytes(range(256)) * 4 + b"\xff\xd9"
+#: A well-formed JPEG's structure: SOI, APP0 (JFIF), a quantisation table, start of scan, scan data, EOI.
+JFIF = b"\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
+DQT = b"\xff\xdb\x00\x43\x00" + bytes(range(1, 65))
+SCAN = b"\xff\xda\x00\x08\x01\x01\x00\x00\x3f\x00" + bytes(range(256)) * 4 + b"\xff\xd9"
+JPEG = b"\xff\xd8" + JFIF + DQT + SCAN
+#: An APP1 EXIF segment carrying a camera and a GPS position, and an APP13 IPTC one.
+EXIF = b"Exif\x00\x00MM\x00\x2aCanon EOS GPSLatitude 30.0444 GPSLongitude 31.2357"
+APP1 = b"\xff\xe1" + (len(EXIF) + 2).to_bytes(2, "big") + EXIF
+APP13 = b"\xff\xed\x00\x10Photoshop 3.0\x00"
 PNG = b"\x89PNG\r\n\x1a\n" + bytes(300)
 WEBP = b"RIFF" + (300).to_bytes(4, "little") + b"WEBPVP8 " + bytes(300)
 GIF = b"GIF89a" + bytes(300)
@@ -797,17 +805,17 @@ class LiveClientTests(AiSimpleTestCase):
                 self.assertNotIn("sk-ant", str(raised.exception))
                 self.assertIsNone(raised.exception.__cause__)
 
-    def test_the_reader_builds_its_client_lazily_with_its_own_timeout(self):
+    def test_the_reader_builds_its_client_lazily_with_its_own_25_second_timeout(self):
         reader = claude.ClaudeInvoiceReader(api_key="sk-ant-test-key-123")
         self.assertIsNone(reader._client)
         with mock.patch.object(claude, "new_client", return_value=fake_client(sdk_reading(SAMPLE_READING))) as built:
             reader.read(JPEG, "image/jpeg", system="s", schema={})
             reader.read(JPEG, "image/jpeg", system="s", schema={})
-        built.assert_called_once_with("sk-ant-test-key-123", timeout=45.0)
+        built.assert_called_once_with("sk-ant-test-key-123", timeout=25.0)
         with mock.patch.dict("os.environ", {"ANTHROPIC_BASE_URL": "https://attacker.invalid"}):
             client = claude.new_client("sk-ant-test-key-123", timeout=claude.READ_TIMEOUT)
         self.assertEqual(str(client.base_url).rstrip("/"), "https://api.anthropic.com")
-        self.assertEqual((client.timeout, client.max_retries), (45.0, 0))
+        self.assertEqual((client.timeout, client.max_retries), (25.0, 0))
 
     def test_the_mock_never_builds_or_calls_the_sdk_client(self):
         with mock.patch.object(claude, "new_client", side_effect=AssertionError("the mock built a client")):
@@ -882,3 +890,158 @@ class AttachmentOwnerTests(PhotoBase):
         PurchaseInvoice.objects.filter(pk=invoice.pk).update(status=PurchaseInvoiceStatus.CANCELLED)
         with self.assertRaises(ValidationError):
             attach.add_attachment(invoice, PNG, self.owner)  # a cancelled invoice takes no more
+
+    def test_the_photo_is_deleted_only_while_the_invoice_is_a_draft_with_its_own_reason(self):
+        from django.core.exceptions import PermissionDenied
+
+        from attachments import services as attach
+
+        self.save(self.token_of(self.upload()))
+        invoice, photo = PurchaseInvoice.objects.get(), Attachment.objects.get()
+        PurchaseInvoice.objects.filter(pk=invoice.pk).update(status=PurchaseInvoiceStatus.POSTED)
+        for lang, text in (("ar", "صورة فاتورة الشراء بتتمسح بس طول ما الفاتورة مسودة"), ("en", "can be deleted only while the invoice is a draft")):
+            with self.subTest(lang=lang):
+                with self.assertRaises(PermissionDenied) as refused:
+                    attach.delete_attachment(photo.pk, self.owner, lang)
+                self.assertIn(text, str(refused.exception))
+                self.assertNotIn("الكاونتر", str(refused.exception))
+        self.client.force_login(self.owner)
+        response = self.client.post(f"/attachments/file/{photo.pk}/delete/?lang=en")
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("only while the invoice is a draft", response.json()["error"])
+        self.assertTrue(Attachment.objects.filter(pk=photo.pk).exists())
+        with self.assertRaises(PermissionDenied):
+            attach.delete_attachment(photo.pk, self.accountant)  # never without the create permission
+        PurchaseInvoice.objects.filter(pk=invoice.pk).update(status=PurchaseInvoiceStatus.DRAFT)
+        attach.delete_attachment(photo.pk, self.owner)  # a draft's photo may go, audited
+        self.assertFalse(Attachment.objects.exists())
+        self.assertTrue(AuditLog.objects.filter(module="attachments", action="delete_attachment", object_id=str(photo.pk)).exists())
+
+
+# ---- independent review (PR #335) ----
+
+class SerialAndBatchTests(PhotoBase):
+    def turn_on(self, slug):
+        FeatureFlag.objects.update_or_create(code=caps.flag_code(slug), defaults={"name": slug, "enabled": True})
+
+    def test_a_serial_tracked_line_needs_its_serials_and_saves_with_them(self):
+        from serials.models import SerialNumber, SerialSetting
+
+        self.turn_on("serials")
+        SerialSetting.objects.create(item=self.oil, tracked=True)
+        token = self.token_of(self.upload())
+        page = self.client.get(f"{URL}{token}/")
+        self.assertEqual(page.content.decode().count("data-iph-needs-serials"), 1)  # the oil line, flagged on the card
+        self.assertContains(page, 'name="line-0-serials"')
+        self.assertContains(page, "عددهم لازم يساوي الكمية")
+        refused = self.save(token)
+        self.assertContains(refused, "عدد السيريالات (0) لازم يساوي الكمية (12)", status_code=400)
+        self.assertFalse(PurchaseInvoice.objects.exists())
+        serials = ", ".join(f"OIL-SN-{n:02d}" for n in range(12))
+        self.assertEqual(self.save(token, **{"line-0-serials": serials}).status_code, 302)
+        line = PurchaseInvoice.objects.get().lines.get(line_number=1)
+        self.assertEqual(sorted(SerialNumber.objects.filter(purchase_line=line).values_list("serial", flat=True)),
+                         [f"OIL-SN-{n:02d}" for n in range(12)])
+
+    def test_serials_on_an_untracked_line_are_refused_as_the_purchase_form_refuses_them(self):
+        self.turn_on("serials")
+        token = self.token_of(self.upload())
+        self.assertContains(self.save(token, **{"line-1-serials": "X1"}), "مش متتبع بالسيريال", status_code=400)
+        self.assertContains(self.save(token, **{"line-0-serials": "x" * 20001}), "السيريالات في السطر 1 مش صحيحة.", status_code=400)
+
+    def test_a_batch_line_keeps_its_batch_and_expiry(self):
+        from batches.models import Batch
+
+        self.turn_on("batches_expiry")
+        token = self.token_of(self.upload())
+        page = self.client.get(f"{URL}{token}/")
+        self.assertContains(page, 'name="line-0-expiry_date"')
+        self.assertContains(self.save(token, **{"line-0-expiry_date": "2027-13-40"}), "تاريخ الصلاحية في السطر 1 مش صحيح.", status_code=400)
+        extra = {"line-0-expiry_date": "2027-05-01"}
+        if 'name="line-0-batch_no"' in page.content.decode():
+            extra["line-0-batch_no"] = "B-77"
+            self.assertContains(self.save(token, **{"line-0-batch_no": "b" * 61}), "رقم التشغيلة في السطر 1 مش صحيح.", status_code=400)
+        self.save(token, **extra)
+        line = PurchaseInvoice.objects.get().lines.get(line_number=1)
+        batch = Batch.objects.get(purchase_line=line)
+        self.assertEqual((batch.expiry_date, batch.batch_no, batch.location), (date(2027, 5, 1), extra.get("line-0-batch_no", ""), self.store))
+        self.assertEqual(Batch.objects.count(), 1)  # the lines left empty register none
+
+    def test_the_extra_fields_are_absent_while_their_features_are_off(self):
+        token = self.token_of(self.upload())
+        page = self.client.get(f"{URL}{token}/")
+        self.assertNotContains(page, "data-iph-extra")
+        self.save(token, **{"line-0-serials": "ignored", "line-0-batch_no": "ignored"})
+        self.assertTrue(PurchaseInvoice.objects.exists())
+
+
+class ReviewFixTests(PhotoBase):
+    def test_lines_adding_up_past_the_ceiling_are_refused_as_too_large(self):
+        token = self.token_of(self.upload())
+        big = {f"line-{index}-quantity": "99999999" for index in range(3)}
+        big.update({f"line-{index}-price": "5000.00" for index in range(3)})  # 3 × 499,999,995,000.00
+        self.assertContains(self.save(token, **big), "إجمالي السطور كبير أوي على فاتورة واحدة", status_code=400)
+        self.assertContains(self.save(token, lang="en", **big), "The lines add up to too much for one invoice.", status_code=400)
+        self.assertContains(self.save(token, **{"line-0-quantity": "99999999999", "line-0-price": "99999"}), "إجمالي السطر 1 كبير أوي.", status_code=400)
+        self.assertFalse(PurchaseInvoice.objects.exists())
+
+    def test_a_number_taken_at_the_same_moment_is_refused_and_rolled_back(self):
+        from django.db import IntegrityError
+
+        token = self.token_of(self.upload())
+        with mock.patch("taxes.services.create_purchase_draft_with_tax", side_effect=IntegrityError("unique invoice_number")):
+            refused = self.save(token)
+        self.assertContains(refused, "فيه فاتورة شراء بالرقم ده قبل كده", status_code=400)
+        self.assertFalse(PurchaseInvoice.objects.exists())
+        self.assertFalse(Attachment.objects.exists())
+        self.assertTrue(PendingInvoicePhoto.objects.filter(token=token).exists())
+
+    def test_keep_replaces_the_person_s_waiting_photo_in_one_transaction(self):
+        first = invoice_photo.keep(self.owner, None, JPEG, "image/jpeg", {"lines": []})
+        second = invoice_photo.keep(self.owner, None, JPEG, "image/jpeg", {"lines": []})
+        self.assertEqual(list(PendingInvoicePhoto.objects.values_list("pk", flat=True)), [second.pk])
+        self.assertNotEqual(first.token, second.token)
+        self.assertIn("select_for_update", inspect.getsource(invoice_photo.keep))
+
+    def test_exif_and_gps_are_stripped_before_the_photo_is_sent_or_kept(self):
+        tagged = b"\xff\xd8" + JFIF + APP1 + APP13 + DQT + SCAN
+        self.assertEqual(invoice_photo.strip_jpeg_metadata(tagged), JPEG)
+        token = self.token_of(self.upload(image=tagged))
+        sent = base64.standard_b64decode(self.reader.calls[0]["messages"][0]["content"][0]["source"]["data"])
+        kept = bytes(PendingInvoicePhoto.objects.get(token=token).image)
+        for image in (sent, kept):
+            self.assertTrue(image.startswith(b"\xff\xd8\xff\xe0"))
+            self.assertEqual(image, JPEG)  # everything else byte for byte
+            for secret in (b"Exif", b"GPSLatitude", b"Canon", b"Photoshop"):
+                self.assertNotIn(secret, image)
+        self.assertEqual(self.ai_rows().first().after_data["request_bytes"], len(JPEG))
+        self.save(token)
+        stored = Attachment.objects.get()
+        self.assertEqual((bytes(stored.data), stored.size), (JPEG, len(JPEG)))
+
+    def test_a_jpeg_whose_segments_cannot_be_walked_is_refused_before_the_door(self):
+        for broken in (b"\xff\xd8" + b"\x00" * 50, b"\xff\xd8\xff\xe1\xff\xff", b"\xff\xd8" + JFIF[:6], b"\xff\xd8\xff\xe0\x00\x01"):
+            with self.subTest(head=broken[:8]):
+                self.assertIsNone(invoice_photo.strip_jpeg_metadata(broken))
+        self.assertContains(self.upload(image=b"\xff\xd8\xff" + bytes(100)), "الصورة لازم تكون JPG أو PNG أو WebP", status_code=400)
+        self.assertEqual(self.calls(), 0)
+        self.assertFalse(self.ai_rows().exists())
+
+    def test_the_prune_command_and_the_purchases_list_prune_while_the_feature_is_off(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        old = invoice_photo.keep(self.owner, None, JPEG, "image/jpeg", {"lines": []})
+        fresh = invoice_photo.keep(self.keeper, None, JPEG, "image/jpeg", {"lines": []})
+        hours_ago = old.created_at - invoice_photo.timedelta(hours=invoice_photo.PENDING_HOURS + 1)
+        PendingInvoicePhoto.objects.filter(pk=old.pk).update(created_at=hours_ago)
+        self.switch(False)
+        out = StringIO()
+        call_command("prune_invoice_photos", stdout=out)
+        self.assertEqual(out.getvalue().strip(), "Deleted 1 waiting invoice photo(s).")
+        self.assertEqual(list(PendingInvoicePhoto.objects.values_list("pk", flat=True)), [fresh.pk])
+        PendingInvoicePhoto.objects.filter(pk=fresh.pk).update(created_at=hours_ago)
+        self.client.force_login(self.owner)
+        self.assertEqual(self.client.get("/purchases/?lang=ar").status_code, 200)
+        self.assertFalse(PendingInvoicePhoto.objects.exists())

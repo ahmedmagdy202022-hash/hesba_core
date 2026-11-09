@@ -35,7 +35,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from config.money import money_round
@@ -142,6 +142,11 @@ WORDS = {
         "bad_quantity": "الكمية في السطر {n} لازم تكون رقم أكبر من صفر.",
         "bad_price": "السعر في السطر {n} لازم يكون رقم صفر أو أكبر.",
         "no_lines": "لازم يفضل سطر واحد على الأقل.",
+        "too_large": "إجمالي السطور كبير أوي على فاتورة واحدة. قسّمها على أكتر من فاتورة.",
+        "line_too_large": "إجمالي السطر {n} كبير أوي.",
+        "needs_serials": "محتاج سيريال", "serials_hint": "اكتب سيريال كل قطعة، وافصل بينهم بفاصلة. عددهم لازم يساوي الكمية.",
+        "bad_serials": "السيريالات في السطر {n} مش صحيحة.", "bad_batch_no": "رقم التشغيلة في السطر {n} مش صحيح.",
+        "bad_expiry_date": "تاريخ الصلاحية في السطر {n} مش صحيح.",
         "bad_supplier": "اختار المورد من مورّدينك.",
         "bad_store": "اختار مخزن الاستلام من مخازن الفرع ده.",
         "bad_number": "فيه فاتورة شراء بالرقم ده قبل كده. غيّر الرقم أو سيبه فاضي.",
@@ -176,6 +181,11 @@ WORDS = {
         "bad_quantity": "The quantity on line {n} must be a number above zero.",
         "bad_price": "The price on line {n} must be a number of zero or more.",
         "no_lines": "At least one line must stay.",
+        "too_large": "The lines add up to too much for one invoice. Split it into several invoices.",
+        "line_too_large": "The total of line {n} is too large.",
+        "needs_serials": "Needs serials", "serials_hint": "Type each unit's serial, separated by commas. Their count must equal the quantity.",
+        "bad_serials": "The serials on line {n} are not valid.", "bad_batch_no": "The batch number on line {n} is not valid.",
+        "bad_expiry_date": "The expiry date on line {n} is not valid.",
         "bad_supplier": "Choose the supplier from your suppliers.",
         "bad_store": "Choose the receiving store from this branch's stores.",
         "bad_number": "A purchase invoice with this number already exists. Change the number or leave it empty.",
@@ -418,19 +428,76 @@ def match_reading(reading):
 # ---- the waiting reading ----
 
 def prune(now=None):
-    """Delete every waiting photo older than ``PENDING_HOURS``."""
+    """Delete every waiting photo older than ``PENDING_HOURS``; return how many went. Runs on each use of the feature, on
+    each opening of the purchase invoices list (switched on or not), and from ``manage.py prune_invoice_photos``."""
 
     cutoff = (now or timezone.now()) - timedelta(hours=PENDING_HOURS)
-    PendingInvoicePhoto.objects.filter(created_at__lt=cutoff).delete()
+    deleted, _ = PendingInvoicePhoto.objects.filter(created_at__lt=cutoff).delete()
+    return deleted
+
+
+# ---- the photo's own metadata ----
+
+#: JPEG segments dropped before the photo is sent or kept: APP1 (EXIF and XMP: the camera, the time, GPS) and APP13
+#: (IPTC). Every other segment and the image data are copied byte for byte.
+DROPPED_JPEG_SEGMENTS = (0xE1, 0xED)
+
+
+def strip_jpeg_metadata(raw):
+    """``raw`` (a JPEG) without its APP1 / APP13 segments, or None when its header segments cannot be walked.
+
+    The markers are read up to the first start-of-scan (SOS); from there the rest is copied as it is.
+    """
+
+    if raw[:2] != b"\xff\xd8":
+        return None
+    out, i, n = bytearray(b"\xff\xd8"), 2, len(raw)
+    while i < n:
+        if raw[i] != 0xFF:
+            return None
+        while i < n and raw[i] == 0xFF:  # fill bytes
+            i += 1
+        if i >= n:
+            return None
+        marker = raw[i]
+        i += 1
+        if marker == 0xD9:  # end of image before any scan
+            out += b"\xff\xd9"
+            return bytes(out)
+        if marker == 0x01 or 0xD0 <= marker <= 0xD7:  # markers without a length
+            out += bytes((0xFF, marker))
+            continue
+        if i + 2 > n:
+            return None
+        length = int.from_bytes(raw[i:i + 2], "big")
+        if length < 2 or i + length > n:
+            return None
+        segment = raw[i:i + length]
+        i += length
+        if marker == 0xDA:  # start of scan: its header, then the image data as it is
+            out += bytes((0xFF, marker)) + segment + raw[i:]
+            return bytes(out)
+        if marker in DROPPED_JPEG_SEGMENTS:
+            continue
+        out += bytes((0xFF, marker)) + segment
+    return None
 
 
 def keep(user, entity, image, media_type, reading):
-    """Keep the photo and its matched reading for ``user`` (replacing any earlier one); return the row."""
+    """Keep the photo and its matched reading for ``user`` (replacing any earlier one); return the row.
 
-    PendingInvoicePhoto.objects.filter(user=user).delete()
-    return PendingInvoicePhoto.objects.create(
-        token=secrets.token_urlsafe(32), user=user, entity=entity, content_type=media_type, image=image, size=len(image),
-        sha256=hashlib.sha256(image).hexdigest(), reading=reading)
+    One transaction with the person's own user row locked, so two uploads at once still leave one waiting row. Called
+    after the paid call, never around it.
+    """
+
+    from django.contrib.auth import get_user_model
+
+    with transaction.atomic():
+        get_user_model().objects.select_for_update().filter(pk=user.pk).first()
+        PendingInvoicePhoto.objects.filter(user=user).delete()
+        return PendingInvoicePhoto.objects.create(
+            token=secrets.token_urlsafe(32), user=user, entity=entity, content_type=media_type, image=image, size=len(image),
+            sha256=hashlib.sha256(image).hexdigest(), reading=reading)
 
 
 def pending_for(token, user, lang="ar"):
@@ -485,6 +552,10 @@ def read_photo(upload, user, lang="ar"):
     media_type = services.image_type(image)
     if media_type is None or media_type not in photo_types():
         return Outcome(message=w["bad_type"], status=400)
+    if media_type == "image/jpeg":  # the camera, the time and GPS are neither sent nor kept
+        image = strip_jpeg_metadata(image)
+        if image is None:
+            return Outcome(message=w["bad_type"], status=400)
     prune()
     entity = current_entity()
     try:
@@ -526,6 +597,8 @@ class Review:
     written: str = ""
     difference: str = ""
     difference_text: str = ""
+    #: The purchase line form's serial / batch / expiry fields switched on now: ``(name, label)``.
+    extras: list = field(default_factory=list)
 
 
 def _default_store():
@@ -539,11 +612,30 @@ def _default_store():
     return pick.pk if pick is not None else None
 
 
+def line_extras(lang="ar"):
+    """The serial / batch / expiry fields the purchase form's own line form (``PurchaseLineInputForm``) has now, by the
+    capabilities switched on, with its labels: the review offers exactly these and parses them with these fields."""
+
+    from purchases.forms import PurchaseLineInputForm
+
+    fields = PurchaseLineInputForm(lang=lang).fields
+    return {name: fields[name] for name in ("serials", "batch_no", "expiry_date") if name in fields}
+
+
+def _serial_tracked(item_ids):
+    from serials.services import serials_enabled, tracked_settings
+
+    if not serials_enabled():
+        return set()
+    return set(tracked_settings([pk for pk in item_ids if pk is not None]))
+
+
 def review(pending, post=None, lang="ar"):
     """The review card's content: the waiting reading, or the person's own choices when ``post`` is given (after a
     refused save). Amounts shown are computed here from the lines, never the model's."""
 
     reading = pending.reading
+    extras = line_extras(lang)
     lines = []
     computed = Decimal("0")
     for index, line in enumerate(reading["lines"]):
@@ -560,9 +652,15 @@ def review(pending, post=None, lang="ar"):
         total = money_round(q * p) if q is not None and p is not None else None
         if total is not None and included:
             computed += total
+        values = [(name, form_field.label, "date" if name == "expiry_date" else "text",
+                   str(post.get(f"line-{index}-{name}", "") or "")[:20000] if post is not None else "")
+                  for name, form_field in extras.items()]
         lines.append({"index": index, "name": line["name"], "code": line["item_code"], "quantity": quantity, "price": price,
                       "total": _money(total) if total is not None else "", "item_id": item_id, "matched": line.get("item_id") is not None,
-                      "included": included})
+                      "included": included, "extras": values})
+    tracked = _serial_tracked([line["item_id"] for line in lines])
+    for line in lines:
+        line["needs_serials"] = line["item_id"] in tracked
     written = Decimal(reading["written_total"]) if reading.get("written_total") else None
     difference = abs(written - computed) if written is not None else None
     supplier_id = reading.get("supplier_id")
@@ -576,7 +674,8 @@ def review(pending, post=None, lang="ar"):
     diff = _money(difference) if difference else ""
     return Review(pending=pending, supplier_id=supplier_id, invoice_number=number, invoice_date=day, store_id=store, lines=lines,
                   computed=_money(computed), written=_money(written) if written is not None else "",
-                  difference=diff, difference_text=words(lang)["difference"].format(diff=diff) if diff else "")
+                  difference=diff, difference_text=words(lang)["difference"].format(diff=diff) if diff else "",
+                  extras=[(name, form_field.label) for name, form_field in extras.items()])
 
 
 def choices():
@@ -598,10 +697,11 @@ def _form_error(form, w):
     return w["save_failed"].format(reason=" ".join(str(message) for messages in errors.values() for message in messages))
 
 
-def _chosen_lines(pending, post, w):
+def _chosen_lines(pending, post, w, lang="ar"):
     from master_data.models import Item
 
     allowed = _items()
+    extras = line_extras(lang)
     lines = []
     for index, _line in enumerate(pending.reading["lines"]):
         if post.get(f"line-{index}-include") != "1":
@@ -621,13 +721,19 @@ def _chosen_lines(pending, post, w):
         if price is None:
             raise Refused(w["bad_price"].format(n=n))
         if money_round(quantity * price) >= AMOUNT_CEILING:
-            raise Refused(w["bad_quantity"].format(n=n))
-        lines.append({"item": item, "description": "", "quantity": quantity, "unit_purchase_price": price,
-                      "line_discount_amount": Decimal("0")})
+            raise Refused(w["line_too_large"].format(n=n))
+        line = {"item": item, "description": "", "quantity": quantity, "unit_purchase_price": price,
+                "line_discount_amount": Decimal("0")}
+        for name, form_field in extras.items():  # parsed by the purchase line form's own fields, as invoice_create gets them
+            try:
+                line[name] = form_field.clean(post.get(f"line-{index}-{name}", ""))
+            except ValidationError:
+                raise Refused(w[f"bad_{name}"].format(n=n)) from None
+        lines.append(line)
     if not lines:
         raise Refused(w["no_lines"])
     if sum((money_round(line["quantity"] * line["unit_purchase_price"]) for line in lines), Decimal("0")) >= AMOUNT_CEILING:
-        raise Refused(w["no_lines"])
+        raise Refused(w["too_large"])
     return lines
 
 
@@ -656,7 +762,7 @@ def save_draft(token, post, user, lang="ar"):
             row = PendingInvoicePhoto.objects.select_for_update().filter(pk=pending.pk, user=user).first()
             if row is None:
                 raise Refused(w["expired"], status=404)
-            line_data = _chosen_lines(row, post, w)
+            line_data = _chosen_lines(row, post, w, lang)
             form = PurchaseDraftForm(data={
                 "invoice_number": str(post.get("invoice_number", "") or "").strip()[:NUMBER_MAX],
                 "invoice_date": str(post.get("invoice_date", "") or "").strip()[:10] or timezone.localdate().isoformat(),
@@ -682,4 +788,6 @@ def save_draft(token, post, user, lang="ar"):
             row.delete()
     except ValidationError as exc:
         raise Refused(w["save_failed"].format(reason=translate(" ".join(exc.messages), lang))) from None
+    except IntegrityError:  # the typed number taken by a save at the same moment: everything above was rolled back
+        raise Refused(w["bad_number"]) from None
     return invoice

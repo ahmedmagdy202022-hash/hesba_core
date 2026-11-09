@@ -4,7 +4,7 @@
 the review is a CSRF POST that saves a DRAFT only. Every text read from the photo is escaped and shown for mapping only;
 every amount on the card is computed by Hesba from the lines. No JavaScript.{% endcomment %}
 {% block styles %}{{ block.super }}
-<link rel="stylesheet" href="{% static 'hesba/css/invoice_photo.css' %}?v=a3-1">{% endblock %}
+<link rel="stylesheet" href="{% static 'hesba/css/invoice_photo.css' %}?v=a3-2">{% endblock %}
 {% block operation_content %}
 <section class="iph" data-invoice-photo>
   <header class="iph__head">
@@ -75,6 +75,11 @@ every amount on the card is computed by Hesba from the lines. No JavaScript.{% e
         {% for pk, name, code in choices.items %}<option value="{{ pk }}"{% if pk == line.item_id %} selected{% endif %}>{{ name }} ({{ code }})</option>{% endfor %}
       </select>
       {% if not line.matched %}<span class="iph-hint">{{ w.no_create }}</span>{% endif %}
+      {% if line.needs_serials %}<span class="iph-chip iph-chip--map" data-iph-needs-serials>{{ w.needs_serials }}</span>{% endif %}
+      {% if line.extras %}<div class="iph-line__extras">{% for name, label, kind, value in line.extras %}
+        <label class="iph-field"><span class="iph-field__label">{{ label }}</span><input name="line-{{ line.index }}-{{ name }}" type="{{ kind }}" value="{{ value }}" dir="auto" autocomplete="off" data-iph-extra="{{ name }}"></label>
+        {% if name == "serials" %}<span class="iph-hint">{{ w.serials_hint }}</span>{% endif %}
+      {% endfor %}</div>{% endif %}
       <label class="iph-include"><input type="checkbox" name="line-{{ line.index }}-include" value="1"{% if line.included %} checked{% endif %}> {{ w.include }}</label>
     </article>
     {% endfor %}
