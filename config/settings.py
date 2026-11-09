@@ -230,6 +230,8 @@ LANGUAGE_CODE = "ar"
 TIME_ZONE = "Africa/Cairo"
 USE_I18N = True
 USE_TZ = True
+# TEST-002: keeps a test run on one Cairo calendar day even if it crosses midnight.
+TEST_RUNNER = "hesba_testing.runner.HesbaTestRunner"
 STATIC_URL = "/static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / config("STATIC_ROOT", default="staticfiles")
@@ -286,6 +288,8 @@ EMAIL_TIMEOUT = 20
 DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default=EMAIL_HOST_USER or "hesba@localhost")
 # The address the app is reached at, for links inside emails (e.g. https://shop.onrender.com).
 PUBLIC_BASE_URL = config("PUBLIC_BASE_URL", default="").rstrip("/")
+# S8: the most campaign messages that reach the outbox in one day (placeholder default; the rest waits for the next days).
+MESSAGING_CAMPAIGN_DAILY_CAP = config("MESSAGING_CAMPAIGN_DAILY_CAP", default=50, cast=int)
 
 # S4 (HG-070): the online payment gateway. Keys live in the server's environment only, never in the database or the
 # repository. A real Paymob call needs PAYMOB_LIVE=True *and* all four keys; with a key missing nothing is connected.
