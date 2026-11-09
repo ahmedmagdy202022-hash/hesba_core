@@ -205,6 +205,12 @@ def redeemable_due(invoice):
 
     if invoice.status != "posted":
         return ZERO
+    # HG-071 D8: an instalment plan collects through its own payments, which neither change remaining_due nor settle
+    # the invoice; a card there could pay what was already collected. Such invoices are paid by their instalments.
+    from installments.models import InstalmentPlan, PlanStatus
+
+    if InstalmentPlan.objects.filter(invoice=invoice, status=PlanStatus.ACTIVE).exists():
+        return ZERO
     return max(money_round(Decimal(invoice.remaining_due) - settlements.applied_to(invoice) - returned_due(invoice)), ZERO)
 
 

@@ -310,7 +310,10 @@
   });
 
   form.querySelector('[data-pos-clear]').addEventListener('click', function () {
-    cart = []; discount.value = '0'; if (pointsBox) { pointsBox.value = ''; } tenderedTouched = false; customer.value = customer.getAttribute('data-walk-in'); render(); scan.focus();
+    cart = []; discount.value = '0'; if (pointsBox) { pointsBox.value = ''; } tenderedTouched = false;
+    var giftCode = form.querySelector('[data-pos-gift-code]');  // S6: never carry one holder's card into the next sale
+    if (giftCode) { giftCode.value = ''; } if (giftAmount) { giftAmount.value = ''; }
+    customer.value = customer.getAttribute('data-walk-in'); render(); scan.focus();
   });
 
   form.addEventListener('submit', function (event) {

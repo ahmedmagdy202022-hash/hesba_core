@@ -692,6 +692,20 @@ class ReviewFixTests(GiftSetup):
         self.client.force_login(self.cashier)
         self.assertNotContains(self.client.get(reverse("sales:detail", args=[invoice.pk])), "data-gift-card-box")
 
+    # ---- Codex #323: an invoice on an instalment plan is paid by its instalments, never by a card (HG-071 D8)
+    def test_a_card_cannot_pay_an_invoice_on_an_instalment_plan(self):
+        from installments.services import create_plan
+
+        card = self.sell("500.00")
+        invoice = self.invoice("300.00")
+        create_plan(invoice, 3, TODAY + timedelta(days=30), self.owner)
+        self.assertEqual(services.redeemable_due(invoice), ZERO)
+        with self.assertRaisesMessage(ValidationError, "more than what is left on the invoice (0.00)"):
+            services.redeem(card, invoice, D("100.00"), self.owner, lang="en")
+        self.assertEqual((services.balance(card), customer_balance(self.customer), box_balance(self.box())), (D("500.00"), D("300.00"), D("-500.00")))
+        self.client.force_login(self.cashier)
+        self.assertNotContains(self.client.get(reverse("sales:detail", args=[invoice.pk])), "data-gift-card-box")
+
     # ---- 1c and 3: cancel_redemption refused after a return, on a walk-in, and without the collection permission
     def test_cancel_redemption_refused_after_a_return(self):
         from sales.models import SalesReturn, SalesReturnStatus
