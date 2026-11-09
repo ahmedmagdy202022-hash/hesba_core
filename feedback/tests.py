@@ -379,12 +379,28 @@ class VisitTrackingTests(TestCase):
         self.assertEqual((response.status_code, response.json()["error"]), (400, "Reload the page first."))
         self.assertFalse(Visit.objects.exists())
 
-    def test_the_welcome_card_and_the_notice_are_on_demo_pages(self):
-        page = self.client.get(reverse("login"))
-        self.assertContains(page, "data-hello")
-        self.assertContains(page, reverse("feedback:hello"))
+    def test_the_welcome_banner_and_the_notice_are_on_the_dashboard_not_the_login(self):
+        # DEMO-FIRST-RUN: the hello shows once, as a bottom banner of the first content page; never on the login,
+        # the landing or the setup, and never over a form. The notice stays, in it and in the note dialog.
+        from hesba_testing.factories import make_seeded_role, make_user, make_user_profile
+        from permissions.models import RoleCode
+        from reports.tests_dashboard import prepared_client
+
+        login = self.client.get(reverse("login"))
+        self.assertNotContains(login, "data-hello")
+        self.assertContains(login, "data-demo-notice", count=1)  # the note dialog's line
+        self.assertNotContains(self.client.get("/"), "data-hello")
+        prepared_client()
+        owner = make_user(username="hello_owner", is_superuser=True)
+        make_user_profile(user=owner, role=make_seeded_role(RoleCode.OWNER))
+        self.client.force_login(owner)
+        page = self.client.get("/dashboard/?lang=ar")
+        html = page.content.decode()
+        self.assertEqual(html.count("<aside class=\"hs-hello\" data-hello"), 1)
         self.assertContains(page, "data-demo-notice", count=2)
         self.assertContains(page, "بتتسجل عشان نحسّن البرنامج")
+        self.assertContains(page, "data-hello-skip")
+        self.assertNotContains(self.client.get("/setup/activity/?lang=ar"), "data-hello")
 
 
 @override_settings(DEMO_MODE=True, FEEDBACK_VIEW_TOKEN=KEY)

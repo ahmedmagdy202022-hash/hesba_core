@@ -132,6 +132,7 @@ DEMO_NAME = "محل حِسبة التجريبي"
 DEMO_NAMES = {
     ("commercial", "grocery"): "سوبر ماركت حِسبة التجريبي", ("commercial", "pharmacy"): "صيدلية حِسبة التجريبية",
     ("commercial", "wholesale"): "حِسبة لتجارة الجملة (تجريبي)", ("commercial", "online"): "متجر حِسبة أونلاين (تجريبي)",
+    ("commercial", "fashion"): "حِسبة للملابس والأحذية (تجريبي)", ("commercial", "electronics"): "حِسبة للموبايلات والإلكترونيات (تجريبي)",
     ("restaurants", "cafe"): "كافيه حِسبة التجريبي", ("restaurants", "bakery"): "مخبز حِسبة التجريبي",
     ("medical", "dental"): "عيادة حِسبة للأسنان (تجريبي)", ("medical", "lab"): "معمل حِسبة للتحاليل (تجريبي)",
     ("medical", "medical_center"): "مركز حِسبة الطبي (تجريبي)", ("medical", "physio"): "مركز حِسبة للعلاج الطبيعي (تجريبي)",

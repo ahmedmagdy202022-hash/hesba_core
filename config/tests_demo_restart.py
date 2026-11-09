@@ -44,11 +44,14 @@ class DemoRestartTests(TestCase):
         self.client.logout()
         self.assertTrue(self.client.login(username="cashier", password="Demo-pass-1"))
 
-    def test_the_login_page_offers_it_and_get_does_nothing(self):
+    def test_the_login_page_no_longer_offers_it_and_get_does_nothing(self):
+        # DEMO-FIRST-RUN: the login page leads to the activity tiles instead; the endpoint stays for the wizard path.
         from django.core.management import call_command
 
         call_command("prepare_demo", verbosity=0)
-        self.assertContains(self.client.get(reverse("login")), "data-demo-restart")
+        login = self.client.get(reverse("login"))
+        self.assertNotContains(login, "data-demo-restart")
+        self.assertContains(login, "data-demo-try")
         self.client.get(reverse("demo_restart"))
         self.assertTrue(ClientProfile.get_active().setup_is_complete)
 
@@ -74,7 +77,8 @@ class DemoRestartTests(TestCase):
         from config.demo import DEMO_NAME, demo_name
 
         self.assertEqual(demo_name("commercial", "pharmacy"), "صيدلية حِسبة التجريبية")
-        self.assertEqual(demo_name("commercial", "fashion"), DEMO_NAME)
+        self.assertEqual(demo_name("commercial", "fashion"), "حِسبة للملابس والأحذية (تجريبي)")  # DEMO-FIRST-RUN: a tile of its own
+        self.assertEqual(demo_name("commercial", "other"), DEMO_NAME)
         self.assertEqual(demo_name("restaurants", "fast_food"), "مطعم حِسبة التجريبي")
         self.assertEqual(demo_name("other", "general"), DEMO_NAME)
 
