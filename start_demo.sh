@@ -14,7 +14,10 @@ python manage.py migrate --noinput
 python manage.py prepare_demo
 # What "start over" copies (DEMO-FAST); already built by build.sh on Render.
 python manage.py prepare_demo_fresh
-python manage.py migrate --database feedback --noinput
+# The notes database is a separate free project that can be paused. A paused
+# one must not stop the demo: notes then fail softly (feedback/views.py).
+python manage.py migrate --database feedback --noinput \
+    || echo "WARNING: the feedback database is unreachable; the demo runs without saving testers' notes." >&2
 # DEMO-FIRST-RUN: the ready shop of every demo activity. build.sh built them on Render;
 # anything still missing is built here in the background, after the server is up, and a
 # visitor who asks for one before it is done sees a short "بنجهّز نسختك…" page instead.

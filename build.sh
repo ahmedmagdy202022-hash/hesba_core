@@ -16,7 +16,10 @@ case "$(echo "${DEMO_MODE:-}" | tr '[:upper:]' '[:lower:]')" in
         # DEMO-FIRST-RUN: one ready shop per demo activity (~10 s and ~5 MB each), so a
         # tap on the landing page copies a file instead of seeding while the visitor waits.
         python manage.py prepare_demo_templates --force
-        python manage.py migrate --database feedback --noinput
+        # The notes database is a separate free project that can be paused. A paused
+        # one must not stop the demo: notes then fail softly (feedback/views.py).
+        python manage.py migrate --database feedback --noinput \
+            || echo "WARNING: the feedback database is unreachable; the demo runs without saving testers' notes." >&2
         ;;
 esac
 python manage.py check --deploy --fail-level ERROR
