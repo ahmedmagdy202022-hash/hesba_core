@@ -97,6 +97,21 @@ class AgingMathTests(TestCase):
         self.assertEqual((row["b90_plus"], row["total"]), (D("900.00"), D("900.00")))
 
 
+class CairoDayTests(TestCase):
+    """With no date given, the report runs on Cairo's day, not the server's (UTC) day."""
+
+    def test_default_as_of_is_the_cairo_date(self):
+        from datetime import date, datetime, timezone as dt_timezone
+        from unittest import mock
+
+        bob = make_customer(customer_code="BOB", name="Bob")
+        cairo_day = date(2030, 1, 2)  # 23:30 UTC on 1 Jan is 01:30 on 2 Jan in Cairo
+        owe(bob, "75.00", cairo_day)
+        with mock.patch("django.utils.timezone.now", return_value=datetime(2030, 1, 1, 23, 30, tzinfo=dt_timezone.utc)):
+            rows = aging_rows("customers")
+        self.assertEqual([row["total"] for row in rows if row["party"] == bob], [D("75.00")])
+
+
 class WhatsappTests(SimpleTestCase):
     def test_numbers(self):
         self.assertEqual(whatsapp_number("01001234567"), "201001234567")
