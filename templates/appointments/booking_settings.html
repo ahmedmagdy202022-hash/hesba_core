@@ -1,0 +1,56 @@
+{% extends "operations/base.html" %}
+{% load static %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/booking.css' %}?v=bk-001">{% endblock %}
+{% block operation_content %}<div class="bk-set" data-booking-settings>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'appointments:agenda' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div></section>
+{% if not feature_on %}<p class="op-message" data-booking-off>{{ words.off }}</p>{% endif %}
+{% if entity_choices %}<form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><select name="entity" aria-label="{{ words.entity }}">{% for one in entity_choices %}<option value="{{ one.pk }}"{% if one.pk == entity.pk %} selected{% endif %}>{% if lang == 'en' %}{{ one.name_en|default:one.name_ar }}{% else %}{{ one.name_ar }}{% endif %}</option>{% endfor %}</select><button type="submit">{{ words.show }}</button></form>{% endif %}
+{% if error %}<div class="op-message op-message-error" role="alert" data-booking-settings-error>{{ error }}</div>{% endif %}
+<form method="post" data-booking-settings-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="entity" value="{{ entity.pk }}">
+<section class="op-form">
+  <h2>{{ words.link }}</h2>
+  <div class="op-field"><label class="op-check"><input type="checkbox" name="accepting" value="1"{% if values.accepting %} checked{% endif %} data-booking-accepting> {{ words.accepting }}</label></div>
+  {% if public_url %}<div class="bk-link"><code data-booking-public-url>{{ public_url }}</code></div>{% else %}<p class="bk-muted" data-booking-no-base>{{ words.no_base }}</p>{% endif %}
+  <div class="op-field"><label class="op-check"><input type="checkbox" name="new_link" value="1"> {{ words.new_link }}</label></div>
+</section>
+<section class="op-form">
+  <h2>{{ words.rules }}</h2>
+  <div class="op-form-grid">
+    <div class="op-field"><label for="bk-slot">{{ words.slot }}</label><select id="bk-slot" name="slot_minutes">{% for n in slot_choices %}<option value="{{ n }}"{% if values.slot_minutes|stringformat:'s' == n|stringformat:'s' %} selected{% endif %}>{{ n }}</option>{% endfor %}</select></div>
+    <div class="op-field"><label for="bk-notice">{{ words.notice }}</label><input id="bk-notice" name="min_notice_minutes" type="number" min="0" max="10080" step="5" dir="ltr" value="{{ values.min_notice_minutes }}"></div>
+    <div class="op-field"><label for="bk-ahead">{{ words.ahead }}</label><input id="bk-ahead" name="max_days_ahead" type="number" min="1" max="365" dir="ltr" value="{{ values.max_days_ahead }}"></div>
+    <div class="op-field"><label class="op-check"><input type="checkbox" name="show_prices" value="1"{% if values.show_prices %} checked{% endif %}> {{ words.show_prices }}</label><small class="bk-muted">{{ words.prices_note }}</small></div>
+  </div>
+</section>
+<section class="op-form">
+  <h2>{{ words.hours }}</h2>
+  <p class="bk-muted">{{ words.hours_note }}</p>
+  <div class="bk-week">{% for d in days %}<div class="bk-dayrow" data-booking-day="{{ d.weekday }}">
+    <label class="op-check"><input type="checkbox" name="{{ d.prefix }}_on" value="1"{% if d.on %} checked{% endif %}> {{ d.name }}</label>
+    <input type="time" name="{{ d.prefix }}_opens" value="{{ d.opens }}" aria-label="{{ d.name }} — {{ words.opens }}">
+    <input type="time" name="{{ d.prefix }}_closes" value="{{ d.closes }}" aria-label="{{ d.name }} — {{ words.closes }}">
+  </div>{% endfor %}</div>
+</section>
+<section class="op-form">
+  <h2>{{ words.services }}</h2>
+  <p class="bk-muted">{{ words.services_note }}</p>
+  {% if items %}<div class="bk-pick">{% for row in items %}<div class="bk-pickrow" data-booking-item="{{ row.item.pk }}">
+    <label class="op-check"><input type="checkbox" name="service_{{ row.item.pk }}" value="1"{% if row.on %} checked{% endif %}> {{ row.item.item_name }}</label>
+    <input type="number" name="duration_{{ row.item.pk }}" min="5" max="720" step="5" dir="ltr" value="{{ row.duration }}" aria-label="{{ row.item.item_name }} — {{ words.duration }}">
+  </div>{% endfor %}</div>{% else %}<p class="op-message">{{ words.no_items }}</p>{% endif %}
+</section>
+<section class="op-form">
+  <h2>{{ words.staff }}</h2>
+  <p class="bk-muted">{{ words.staff_note }}</p>
+  {% for row in people %}<div class="bk-person" data-booking-person="{{ row.employee.pk }}">
+    <label class="op-check"><input type="checkbox" name="staff_{{ row.employee.pk }}" value="1"{% if row.on %} checked{% endif %}> {{ row.employee.name }}{% if row.employee.title %} — {{ row.employee.title }}{% endif %}</label>
+    <details{% if row.own %} open{% endif %}><summary>{{ words.own_hours }}</summary><div class="bk-week">{% for d in row.days %}<div class="bk-dayrow">
+      <label class="op-check"><input type="checkbox" name="{{ d.prefix }}_on" value="1"{% if d.on %} checked{% endif %}> {{ d.name }}</label>
+      <input type="time" name="{{ d.prefix }}_opens" value="{{ d.opens }}" aria-label="{{ row.employee.name }} — {{ d.name }} — {{ words.opens }}">
+      <input type="time" name="{{ d.prefix }}_closes" value="{{ d.closes }}" aria-label="{{ row.employee.name }} — {{ d.name }} — {{ words.closes }}">
+    </div>{% endfor %}</div></details>
+  </div>{% empty %}<p class="op-message">{{ words.no_staff }}</p>{% endfor %}
+  <div class="op-form-actions"><button class="op-primary" type="submit" data-booking-save>{{ words.save }}</button></div>
+</section>
+</form>
+</div>{% endblock %}

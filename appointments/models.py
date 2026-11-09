@@ -59,3 +59,82 @@ class Appointment(models.Model):
 
     def __str__(self):
         return self.number
+
+
+# ---- S3 (HG-077): online booking and working hours. Additive tables only; nothing here moves money or stock. ----
+
+
+class Weekday(models.IntegerChoices):
+    """Python's numbering (``date.weekday()``): Monday is 0. Egypt's week starts on Saturday (5)."""
+
+    MONDAY = 0, "Monday"
+    TUESDAY = 1, "Tuesday"
+    WEDNESDAY = 2, "Wednesday"
+    THURSDAY = 3, "Thursday"
+    FRIDAY = 4, "Friday"
+    SATURDAY = 5, "Saturday"
+    SUNDAY = 6, "Sunday"
+
+
+class BookingSettings(models.Model):
+    """One per entity: whether its public booking page takes bookings, and the slot rules.
+
+    ``public_key`` is the random part of the entity's public link (``/book/<key>/``); changing it retires the old link.
+    """
+
+    entity = models.OneToOneField("entities.Entity", on_delete=models.PROTECT, related_name="booking_settings")
+    public_key = models.CharField(max_length=40, unique=True)
+    accepting = models.BooleanField(default=False, help_text="The entity's public page takes bookings.")
+    slot_minutes = models.PositiveSmallIntegerField(default=30)
+    min_notice_minutes = models.PositiveIntegerField(default=60)
+    max_days_ahead = models.PositiveSmallIntegerField(default=30)
+    #: Ahmed's open question (S3): prices stay off the public page unless the owner shows them.
+    show_prices = models.BooleanField(default=False)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"booking:{self.entity_id}"
+
+
+class WorkingHours(models.Model):
+    """One opening window per weekday. ``employee`` empty: the entity's opening hours; set: that employee's own hours
+    there (always inside the entity's). A weekday with no entity row is closed. No overnight windows: closes > opens."""
+
+    entity = models.ForeignKey("entities.Entity", on_delete=models.CASCADE, related_name="+")
+    employee = models.ForeignKey("staff.Employee", on_delete=models.CASCADE, null=True, blank=True, related_name="+")
+    weekday = models.PositiveSmallIntegerField(choices=Weekday.choices)
+    opens = models.TimeField()
+    closes = models.TimeField()
+
+    class Meta:
+        ordering = ["entity", "employee", "weekday"]
+        constraints = [
+            models.UniqueConstraint(fields=["entity", "employee", "weekday"], name="appt_hours_one_per_employee_day"),
+            # NULLs are distinct in a unique index: the entity's own row needs its own rule.
+            models.UniqueConstraint(fields=["entity", "weekday"], condition=models.Q(employee__isnull=True), name="appt_hours_one_per_entity_day"),
+            models.CheckConstraint(condition=models.Q(closes__gt=models.F("opens")), name="appt_hours_close_after_open"),
+        ]
+
+
+class BookableService(models.Model):
+    """A service the entity's public page offers, with how long it takes (the appointment's duration)."""
+
+    entity = models.ForeignKey("entities.Entity", on_delete=models.CASCADE, related_name="+")
+    item = models.ForeignKey("master_data.Item", on_delete=models.CASCADE, related_name="+")
+    duration_minutes = models.PositiveIntegerField(default=30)
+
+    class Meta:
+        ordering = ["entity", "item__item_name"]
+        constraints = [models.UniqueConstraint(fields=["entity", "item"], name="appt_bookable_service_once")]
+
+
+class BookingStaff(models.Model):
+    """An employee who takes online bookings in this entity."""
+
+    entity = models.ForeignKey("entities.Entity", on_delete=models.CASCADE, related_name="+")
+    employee = models.ForeignKey("staff.Employee", on_delete=models.CASCADE, related_name="+")
+
+    class Meta:
+        ordering = ["entity", "employee__name"]
+        constraints = [models.UniqueConstraint(fields=["entity", "employee"], name="appt_booking_staff_once")]
