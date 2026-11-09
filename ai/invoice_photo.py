@@ -63,10 +63,11 @@ NUMBER_MAX = 80
 CODE_MAX = 120
 #: Amounts: the purchase tables keep 14 digits, 3 decimals for a quantity and 2 for a price; a line or the whole invoice
 #: must stay under 10^12 so its total fits too.
-QUANTITY = re.compile(r"^\d{1,11}(\.\d{1,3})?$")
-PRICE = re.compile(r"^\d{1,12}(\.\d{1,2})?$")
-GROUPED = re.compile(r"^\d{1,3}(,\d{3})+(\.\d+)?$")
-DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+QUANTITY = re.compile(r"\d{1,11}(\.\d{1,3})?", re.ASCII)  # always used with fullmatch; ASCII digits only
+PRICE = re.compile(r"\d{1,12}(\.\d{1,2})?", re.ASCII)
+GROUPED = re.compile(r"\d{1,3}(,\d{3})+(\.\d+)?", re.ASCII)
+DATE = re.compile(r"\d{4}-\d{2}-\d{2}", re.ASCII)
+RECORD_ID = re.compile(r"[0-9]{1,18}")
 AMOUNT_CEILING = Decimal("1000000000000")
 
 KEYS = {"supplier_name", "supplier_code", "invoice_number", "invoice_date", "written_total", "lines"}
@@ -269,11 +270,18 @@ def parse_amount(value, pattern):
     if type(value) is not str:
         return None
     text = value.strip().translate(str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹٫٬", "01234567890123456789.,"))
-    if GROUPED.match(text):
+    if GROUPED.fullmatch(text):
         text = text.replace(",", "")
-    if not pattern.match(text):
+    if not pattern.fullmatch(text):
         return None
     return Decimal(text)
+
+
+def record_id(raw):
+    """A record id posted back from a select: 1 to 18 ASCII digits, else None (never ``int()`` on ``"²"`` or 5,000 digits)."""
+
+    raw = str(raw or "").strip()
+    return int(raw) if RECORD_ID.fullmatch(raw) else None
 
 
 def _date(value):
@@ -282,7 +290,7 @@ def _date(value):
     value = value.strip()
     if not value:
         return ""
-    if not DATE.match(value):
+    if not DATE.fullmatch(value):
         raise InvalidReading("invoice_date is not YYYY-MM-DD")
     try:
         return date.fromisoformat(value).isoformat()
@@ -429,7 +437,8 @@ def pending_for(token, user, lang="ar"):
     """The waiting photo with ``token``, only for its own person and only in the entity it was read in."""
 
     prune()
-    row = PendingInvoicePhoto.objects.filter(token=str(token or "")[:64], user=user).first() if user.is_authenticated else None
+    rows = PendingInvoicePhoto.objects.filter(token=str(token or "")[:64], user=user).defer("image")  # the bytes only where served or saved
+    row = rows.first() if user.is_authenticated else None
     if row is None:
         raise Refused(words(lang)["expired"], status=404)
     entity = current_entity()
@@ -545,7 +554,7 @@ def review(pending, post=None, lang="ar"):
             quantity = str(post.get(f"line-{index}-quantity", quantity))[:32]
             price = str(post.get(f"line-{index}-price", price))[:32]
             raw = str(post.get(f"line-{index}-item", "") or "")
-            item_id = int(raw) if raw.isdigit() else None
+            item_id = record_id(raw)
             included = post.get(f"line-{index}-include") == "1"
         q, p = parse_amount(quantity, QUANTITY), parse_amount(price, PRICE)
         total = money_round(q * p) if q is not None and p is not None else None
@@ -560,10 +569,10 @@ def review(pending, post=None, lang="ar"):
     number, day, store = reading["invoice_number"], reading["invoice_date"], _default_store()
     if post is not None:
         raw = str(post.get("supplier", "") or "")
-        supplier_id = int(raw) if raw.isdigit() else None
+        supplier_id = record_id(raw)
         number, day = str(post.get("invoice_number", ""))[:NUMBER_MAX], str(post.get("invoice_date", ""))[:10]
         raw = str(post.get("receiving_location", "") or "")
-        store = int(raw) if raw.isdigit() else None
+        store = record_id(raw)
     diff = _money(difference) if difference else ""
     return Review(pending=pending, supplier_id=supplier_id, invoice_number=number, invoice_date=day, store_id=store, lines=lines,
                   computed=_money(computed), written=_money(written) if written is not None else "",
@@ -601,7 +610,8 @@ def _chosen_lines(pending, post, w):
         raw = str(post.get(f"line-{index}-item", "") or "").strip()
         if not raw:
             raise Refused(w["unmapped"].format(n=n))
-        item = allowed.filter(pk=int(raw)).first() if raw.isdigit() else None
+        pk = record_id(raw)
+        item = allowed.filter(pk=pk).first() if pk is not None else None
         if not isinstance(item, Item):
             raise Refused(w["bad_item"].format(n=n))
         quantity = parse_amount(str(post.get(f"line-{index}-quantity", ""))[:32], QUANTITY)
@@ -650,8 +660,8 @@ def save_draft(token, post, user, lang="ar"):
             form = PurchaseDraftForm(data={
                 "invoice_number": str(post.get("invoice_number", "") or "").strip()[:NUMBER_MAX],
                 "invoice_date": str(post.get("invoice_date", "") or "").strip()[:10] or timezone.localdate().isoformat(),
-                "supplier": str(post.get("supplier", "") or ""),
-                "receiving_location": str(post.get("receiving_location", "") or ""),
+                "supplier": str(record_id(post.get("supplier")) or ""),
+                "receiving_location": str(record_id(post.get("receiving_location")) or ""),
                 "cashbox": "", "discount_amount": "0", "tax_amount": "0", "paid_now": "0", "notes": NOTES["en" if lang == "en" else "ar"],
             }, lang=lang)
             if vat_enabled():

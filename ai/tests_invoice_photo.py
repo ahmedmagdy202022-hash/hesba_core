@@ -242,7 +242,7 @@ class DraftTests(PhotoBase):
 
     def test_a_mapping_outside_the_offered_items_is_refused(self):
         token = self.token_of(self.upload())
-        for value in (str(self.retired.pk), "999999", "abc", "-1", f"{self.oil.pk} OR 1=1"):
+        for value in (str(self.retired.pk), "999999", "abc", "-1", f"{self.oil.pk} OR 1=1", "²", "٣", "9" * 30, "9" * 5000):
             with self.subTest(value=value):
                 refused = self.save(token, **{"line-2-item": value})
                 self.assertContains(refused, "الصنف المختار في السطر 3 مش من أصنافك المتاحة.", status_code=400)
@@ -250,7 +250,7 @@ class DraftTests(PhotoBase):
 
     def test_the_person_s_own_edits_are_checked_by_the_same_strict_parser(self):
         token = self.token_of(self.upload())
-        for quantity in ("0", "-1", "1e3", "NaN", "Infinity", "12.3456", " ", "١٢x"):
+        for quantity in ("0", "-1", "1e3", "NaN", "Infinity", "12.3456", " ", "١٢x", "１２", "१२", "²"):
             with self.subTest(quantity=quantity):
                 self.assertContains(self.save(token, **{"line-0-quantity": quantity}), "الكمية في السطر 1", status_code=400)
         for price in ("-5", "1e2", "9999999999999", "3.141"):
@@ -270,9 +270,12 @@ class DraftTests(PhotoBase):
         self.assertContains(page, "مش هنعمل مورد جديد من نفسنا.")
         self.assertIsNone(page.context["review"].supplier_id)
         inactive = Supplier.objects.get(supplier_code="SUP-OLD")
-        for value in ("", str(inactive.pk), "999999"):
+        for value in ("", str(inactive.pk), "999999", "²", "9" * 30, "9" * 5000):
             with self.subTest(value=value):
                 self.assertContains(self.save(token, supplier=value), "اختار المورد من مورّدينك.", status_code=400)
+        for value in ("²", "9" * 30, "9" * 5000):
+            with self.subTest(store=value):
+                self.assertContains(self.save(token, receiving_location=value), "اختار مخزن الاستلام من مخازن الفرع ده.", status_code=400)
         self.assertEqual(Supplier.objects.count(), suppliers)
         self.save(token)
         self.assertEqual(PurchaseInvoice.objects.get().supplier, self.supplier)
