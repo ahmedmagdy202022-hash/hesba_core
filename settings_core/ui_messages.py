@@ -13,7 +13,7 @@ import re
 EXACT = {
     # A0 (HG-078): the AI provider layer's refusals (ai/services.py).
     "AI features are switched off for this company.": "مزايا الذكاء الاصطناعي متوقفة للشركة دي.",
-    "This AI feature is not switched on.": "ميزة الذكاء الاصطناعي دي مش متشغّلة. شغّلها من الإعدادات الأول.",
+    "This AI feature is not switched on.": "ميزة الذكاء الاصطناعي دي مش متشغّلة.",
     "The AI service is not connected on this server.": "خدمة الذكاء الاصطناعي مش موصّلة على السيرفر ده.",
     "There is no text to read aloud.": "مفيش نص يتقري بالصوت.",
     "The AI service did not answer. Try again later.": "خدمة الذكاء الاصطناعي مردّتش. جرّب تاني بعد شوية.",

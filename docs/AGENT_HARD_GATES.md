@@ -2449,7 +2449,7 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 - **Deviations from the brief and the proposal:**
   1. **Mock is the default only while `DEBUG` is on.** An unconditional mock default plus "refuse mock in production" would stop every Render build (`build.sh` runs `check --deploy` with `DEBUG=False`) and the test suite (Django's runner turns `DEBUG` off before the checks). So an empty `AI_MODE` is `off` in production, and only an explicit `mock` is refused there. The AI tests set `AI_MODE=mock`.
   2. A fourth check, `ai.E004`, refuses live with the placeholder voice, as payments refuses live with any Paymob key missing.
-  3. The cap is **per installation** (one client company, one key), not per entity; each row records the entity, so a per-entity cap is a filter away. See open question 1.
+  3. The cap is **per installation** (one client company, one key), not per entity; each row records the entity, so a per-entity cap is a filter away. See open questions 1 and 4 below.
   4. `ai_voice_summary` is `available=False`, so `settings_core/tests_capabilities.py`'s "every capability is available" assertion now excludes it.
   5. A refusal's audit row is written in the caller's transaction: a caller that rolls back loses it.
   6. Two calls racing at the cap can both pass (the provider call is not held under a lock), so the cap can be overshot by the calls in flight.
@@ -2472,7 +2472,9 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 - **Open questions for Ahmed:**
   1. The default daily cap per company.
   2. Is sending invoice photos (A3) to an outside model acceptable, or only after each company opts in?
-  3. Which ElevenLabs voice to use.
+  3. Which ElevenLabs voice to use (`ELEVENLABS_VOICE_ID`; live refuses the placeholder).
+  4. (A0) Cap scope: per installation, as built, or per entity?
+  5. (A0) Showcase and demo: a demo server runs with `DEBUG` off, where `ai.E001` refuses mock and an empty `AI_MODE` means off. A1's demo data and «جرّب» steps need a choice: exempt `DEMO_MODE` from the check, or use a live key on the demo.
 - **Risk:** medium (data leaving the server, cost). It is mitigated by off-by-default switches, caps, mock in tests, and the audit.
 
 ## HG-079 — A1 voice summary of the day
