@@ -44,6 +44,7 @@ calls nothing; each question is a POST (CSRF). Every figure on the card comes fr
   </div>
   {% endif %}
 
+  {% if can_ask %}
   <form class="ask__form" method="post" action="{% url 'ai:ask' %}?lang={{ lang }}" data-ask-form>
     {% csrf_token %}
     <input type="hidden" name="lang" value="{{ lang }}">
@@ -51,6 +52,7 @@ calls nothing; each question is a POST (CSRF). Every figure on the card comes fr
     <input id="ask-q" name="q" type="text" maxlength="{{ max_chars }}" placeholder="{{ w.placeholder }}" required autocomplete="off" dir="auto">
     <button type="submit" class="ask__send" aria-label="{{ w.submit }}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H4M10 6l-6 6 6 6"/></svg></button>
   </form>
+  {% endif %}
   <p class="ask__note">{{ w.note }}</p>
 </section>
 {% endblock %}

@@ -33,7 +33,7 @@ DEFAULT_MODEL = "claude-opus-5-5"
 BASE_URL = "https://api.anthropic.com"
 #: Seconds the SDK waits for one attempt, and how many times it retries (a 429/5xx or a dropped connection).
 TIMEOUT = 20.0
-MAX_RETRIES = 1
+MAX_RETRIES = 0  # one reserved call is one HTTP request, so the daily caps count what is sent
 MAX_TOKENS = 1024
 EFFORT = "low"
 FALLBACK_BETA = "server-side-fallback-2026-07-01"

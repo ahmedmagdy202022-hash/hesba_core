@@ -71,11 +71,16 @@ def ask(request):
         raise Http404("Ask Hesba is not switched on.")
     words = ask_feature.WORDS[lang]
     context = {"lang": lang, "dir": "ltr" if lang == "en" else "rtl", "page_title": words["title"], "w": words,
-               "suggestions": ask_feature.suggestions(request.user, lang), "max_chars": QUESTION_MAX_CHARS}
+               "suggestions": ask_feature.suggestions(request.user, lang), "max_chars": QUESTION_MAX_CHARS,
+               "can_ask": ask_feature.can_ask(request.user)}
+    if not context["can_ask"]:  # no tool this person may use: no box, and a POST never reaches the model
+        context["answer"] = ask_feature.answer("", request.user, lang)
+        return _private(render(request, "ai/ask.html", context, status=403))
     if request.method == "POST":
         question = request.POST.get("q", "")
         context["answer"] = ask_feature.answer(question, request.user, lang)
-        context["question"] = clean_question(question)[:QUESTION_MAX_CHARS]  # shown back to its own asker only
+        # shown back to its own asker only
+        context["question"] = clean_question(question[:ask_feature.RAW_MAX_CHARS])[:QUESTION_MAX_CHARS]
     return _private(render(request, "ai/ask.html", context))
 
 

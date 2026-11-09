@@ -628,6 +628,39 @@ class PageTests(AskBase):
         self.assertNotContains(self.client.get("/dashboard/?lang=ar"), "/ai/ask/")
         self.assertEqual(self.calls(), 0)
 
+    def test_someone_who_may_use_no_tool_is_never_sent_to_the_model(self):
+        # Independent review of PR #333: every answer would be a refusal after a paid call that counts against the
+        # company's cap. The page says so with no box, a POST calls nothing and leaves no row, and the dashboard hides
+        # the button.
+        nobody = person(RoleCode.SITE_ENGINEER, "ask_no_tools")
+        self.assertFalse(ask.can_ask(nobody))
+        self.client.force_login(nobody)
+        page = self.client.get(URL)
+        self.assertEqual(page.status_code, 403)
+        self.assertContains(page, "مفيش تقرير متاح ليك تسأل عنه", status_code=403)
+        self.assertNotContains(page, "data-ask-form", status_code=403)
+        self.assertNotContains(page, "data-ask-chip", status_code=403)
+        posted = self.ask("مبيعات النهارده", user=nobody)
+        self.assertEqual(posted.status_code, 403)
+        self.assertEqual(posted.context["answer"].kind, "refused")
+        self.assertEqual(ask.answer("مبيعات النهارده", nobody).kind, "refused")
+        self.assertEqual(self.calls(), 0)
+        self.assertFalse(AuditLog.objects.filter(module="ai").exists())
+        self.assertNotContains(self.client.get("/dashboard/?lang=ar"), "/ai/ask/")
+        self.assertTrue(ask.can_ask(self.cashier))
+
+    def test_a_huge_question_is_refused_before_cleaning_with_no_call_and_no_row(self):
+        response = self.ask("م" * (ask.RAW_MAX_CHARS + 1))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["answer"].kind, "error")
+        self.assertContains(response, "السؤال طويل أوي (الحد 300 حرف)")
+        self.assertEqual(len(response.context["question"]), 300)
+        self.assertEqual(self.calls(), 0)
+        self.assertFalse(AuditLog.objects.filter(module="ai").exists())
+        # a merely long one (over 300, within the raw bound) is still refused and audited by A0's door, as before
+        self.ask("م" * 400)
+        self.assertEqual(AuditLog.objects.filter(module="ai", action=services.CALL_REFUSED).count(), 1)
+
     def test_every_chip_routes_to_its_tool(self):
         for lang in ("ar", "en"):
             for name, text in ask.SUGGESTIONS[lang]:
@@ -778,7 +811,7 @@ class LiveClientTests(AiSimpleTestCase):
             client = claude.new_client("sk-ant-test-key-123")
         self.assertEqual(str(client.base_url).rstrip("/"), "https://api.anthropic.com")
         self.assertEqual(client.api_key, "sk-ant-test-key-123")
-        self.assertEqual((client.timeout, client.max_retries), (20.0, 1))
+        self.assertEqual((client.timeout, client.max_retries), (20.0, 0))
 
     def test_the_live_router_builds_its_client_once_and_lazily(self):
         router = claude.ClaudeRouter(api_key="sk-ant-test-key-123")

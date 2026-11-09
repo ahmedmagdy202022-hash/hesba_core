@@ -2670,7 +2670,7 @@ The entries below are the protected-logic decisions in the commercial gate, reco
     - `tool_choice={"type": "auto", "disable_parallel_tool_use": true}` (forced tool choice is a 400 on this model);
     - `output_config={"effort": "low"}`; no `thinking` (it cannot be disabled on this model);
     - **server-side refusal fallback:** `betas=["server-side-fallback-2026-07-01"]`, `fallbacks="default"`.
-  - **The client** is built only in live mode, lazily on the first question (`new_client`), with the key from the server's environment, an explicit `base_url` (`https://api.anthropic.com`: the SDK would otherwise follow an `ANTHROPIC_BASE_URL` variable and could send the key elsewhere), a 20 s timeout and one retry. The mock overrides `_create` only: it never imports or builds the client.
+  - **The client** is built only in live mode, lazily on the first question (`new_client`), with the key from the server's environment, an explicit `base_url` (`https://api.anthropic.com`: the SDK would otherwise follow an `ANTHROPIC_BASE_URL` variable and could send the key elsewhere), a 20 s timeout and no SDK retry (`max_retries=0`, so one reserved call is one request and the caps count what is sent; independent review of PR #333). The mock overrides `_create` only: it never imports or builds the client.
   - **Reading the answer** (`parse_response`) checks `stop_reason` before any content:
     - `refusal` → «مقدرش أجاوب على السؤال ده. جرّب واحد من الاقتراحات.» / "I can't answer that. Try one of the suggestions.";
     - `max_tokens` → not understood, even with a `tool_use` block in it (it may be partial);
@@ -2709,6 +2709,7 @@ The entries below are the protected-logic decisions in the commercial gate, reco
   6. **`unsupported_question`**, a tenth tool with no arguments, gives an off-topic question a legal route, since a forced tool choice is not available.
   7. **The source line** adds the period and the branch to the design's "source · branch".
   8. The SDK's own transport is `httpx2` in `anthropic` 2.x; the error-mapping tests build its exceptions with it.
+- **Independent review (PR #333):** no cross-entity or cross-user leak, permission bypass, injection path or XSS found; each tool's permissions checked against its source view. Two findings, both fixed: (1) someone who may use none of the tools was still sent to the model on every question (a paid call ending in a refusal, counted against the shared company cap): `ai.ask.can_ask` now stops it before any call or row, the page answers 403 with no box, and the dashboard hides the button; (2) a huge raw question (megabytes) was cleaned twice and wrote an uncapped refusal row: over `RAW_MAX_CHARS` (4 × 300) it is refused before cleaning with no call and no row. Also, the SDK's own retry is off (`max_retries=0`), so one reserved call is one request.
 - **Risks remaining:**
   - Only the question leaves the server (no figures). A question can still carry whatever the user types (a customer's name, say). It goes to Anthropic under the company's key and retention terms.
   - A wrong route gives a correct figure for the wrong question; the card's title, period and source say what was answered.

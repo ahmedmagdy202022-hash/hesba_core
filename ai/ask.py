@@ -108,6 +108,7 @@ WORDS = {
         "error_title": "مقدرناش نجاوب دلوقتي",
         "needs": "{report} محتاج صلاحية {names}. اطلبها من صاحب الحساب.",
         "unavailable": "المواعيد مش متشغّلة عندك.",
+        "no_tools": "مفيش تقرير متاح ليك تسأل عنه. اطلب صلاحية تقرير من صاحب الحساب.",
         "note": "الموديل بيختار التقرير بس. الأرقام نفسها من تقارير حسبة.",
     },
     "en": {
@@ -119,6 +120,7 @@ WORDS = {
         "error_title": "We couldn't answer right now",
         "needs": "The {report} needs the {names} permission. Ask the account owner for it.",
         "unavailable": "Appointments are not switched on for you.",
+        "no_tools": "There is no report you may ask about. Ask the account owner for a report permission.",
         "note": "The model only picks the report. The figures come from Hesba's own reports.",
     },
 }
@@ -495,11 +497,26 @@ def run_tool(name, arguments, user, lang="ar", today=None):
     return answer
 
 
+RAW_MAX_CHARS = 4 * services.QUESTION_MAX_CHARS  # longer than this is refused before cleaning, with no audit row
+
+
+def can_ask(user):
+    """True when ``user`` may use at least one tool. Someone who may use none is never sent to the model: every answer
+    would be a refusal after a paid call (independent review of PR #333)."""
+
+    return any(not missing_permissions(user, tool) for tool in REGISTRY.values())
+
+
 def answer(question, user, lang="ar", today=None):
     """The card for ``question`` asked by ``user`` in ``lang``. Must be called outside ``transaction.atomic()``."""
 
     lang = "en" if lang == "en" else "ar"
     words = WORDS[lang]
+    if not can_ask(user):
+        return Answer(kind="refused", title=words["not_allowed"], message=words["no_tools"])  # no call, no row
+    if len(question) > RAW_MAX_CHARS:  # no call and no row: cleaning megabytes and auditing each would cost for nothing
+        message = f"The question is too long (at most {services.QUESTION_MAX_CHARS} characters)."
+        return Answer(kind="error", title=words["error_title"], message=translate(message, lang))
     try:
         routing = services.route_question(question, feature=FEATURE, system=SYSTEM_PROMPT, tools=TOOLS, user=user,
                                           entity=current_entity(), user_daily_cap=user_daily_cap())
