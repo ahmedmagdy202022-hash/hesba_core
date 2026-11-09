@@ -381,8 +381,11 @@ def run_low_stock(user, args, lang, today):
     counts = stock_alert_counts()
     low, out = stock_alert_items()
     value = _count(counts["low_stock"], lang, "صنف", "أصناف", "item")
-    sub = (f"Running low; {_count(counts['out_of_stock'], lang, '', '', 'item')} out of stock." if lang == "en"
-           else f"قربت تخلص، و{_count(counts['out_of_stock'], lang, 'صنف', 'أصناف', '')} خلصت.")
+    out_count = counts["out_of_stock"]
+    if lang == "en":
+        sub = f"Running low; {_count(out_count, lang, '', '', 'item')} out of stock." if out_count else "Running low; none out of stock."
+    else:
+        sub = f"قربت تخلص، و{_count(out_count, lang, 'صنف', 'أصناف', '')} خلصت." if out_count else "قربت تخلص، ومفيش حاجة خلصت."
     quantity = (lambda q: f"{q.normalize():f}")
     lines = [(row["item_label"], quantity(row["quantity"])) for row in low] + [(row["item_label"], quantity(row["quantity"])) for row in out]
     return Answer(kind="figure", title="Stock running low" if lang == "en" else "اللي قرب يخلص", value=value, sub=sub,
@@ -513,4 +516,11 @@ def suggestions(user, lang="ar"):
     """The suggested questions this user may ask (a chip for a tool they may not use is not offered)."""
 
     lang = "en" if lang == "en" else "ar"
-    return [text for name, text in SUGGESTIONS[lang] if not missing_permissions(user, REGISTRY[name])]
+    shown = []
+    for name, text in SUGGESTIONS[lang]:
+        if missing_permissions(user, REGISTRY[name]):
+            continue
+        if name == "appointments_today" and not _appointments_open(user, lang):
+            continue  # the section is off: the chip would only be answered "not switched on"
+        shown.append(text)
+    return shown

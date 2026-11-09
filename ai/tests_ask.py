@@ -220,6 +220,11 @@ class ToolFigureTests(AskBase):
         self.assertEqual([quantity for _, quantity in answer.lines], ["2", "0"])
         self.assertEqual(answer.link, "/reports/inventory/?lang=ar")
 
+    def test_nothing_out_of_stock_is_said_plainly(self):
+        with mock.patch("reports.selectors.stock_alert_counts", return_value={"low_stock": 1, "out_of_stock": 0}):
+            self.assertEqual(ask.run_tool("low_stock", {"limit": 5}, self.owner, "ar", TODAY).sub, "قربت تخلص، ومفيش حاجة خلصت.")
+            self.assertEqual(ask.run_tool("low_stock", {"limit": 5}, self.owner, "en", TODAY).sub, "Running low; none out of stock.")
+
     def test_cashbox_balances_equal_the_cashbox_report(self):
         rows = self.report("reports:cashboxes")["rows"]
         self.assertEqual(sum((row["balance"] for row in rows), D("0")), D("85.25"))
@@ -302,7 +307,13 @@ class PermissionTests(AskBase):
         self.assertIn("مبيعات النهارده", cashier)
         self.assertNotIn("كام ربحت الشهر ده؟", cashier)
         self.assertNotIn("الخزنة فيها كام؟", cashier)
-        self.assertEqual(len(ask.suggestions(self.owner, "ar")), 8)
+        self.assertEqual(len(ask.suggestions(self.owner, "ar")), 7)
+        self.assertNotIn("مواعيد النهارده", ask.suggestions(self.owner, "ar"))  # the appointments section is off
+        from settings_core.models import ClientProfile
+        from settings_core.setup_services import set_module_enabled
+
+        set_module_enabled(ClientProfile.get_active(), "appointments_visits", True)
+        self.assertIn("مواعيد النهارده", ask.suggestions(self.owner, "ar"))
 
     def test_every_tool_declares_the_permissions_of_its_source_report_view(self):
         from appointments import views as appointment_views
@@ -562,7 +573,7 @@ class PageTests(AskBase):
         self.assertContains(response, "اسأل حسبة")
         self.assertContains(response, "الإجابة من تقاريرك، وفي حدود صلاحياتك وفرعك")
         self.assertContains(response, 'maxlength="300"')
-        self.assertContains(response, "data-ask-chip", count=8)
+        self.assertContains(response, "data-ask-chip", count=7)  # no appointments chip: that section is off
         self.assertContains(response, "csrfmiddlewaretoken")
         self.assertEqual(self.calls(), 0)
         self.assertFalse(AuditLog.objects.filter(module="ai").exists())
@@ -776,6 +787,71 @@ class LiveClientTests(AiSimpleTestCase):
             router.route("q", system="s", tools=[])
             router.route("q", system="s", tools=[])
         built.assert_called_once_with("sk-ant-test-key-123")
+
+
+def sdk_tool_use(name, arguments):
+    """A response shaped like the SDK's objects (attributes, not dict keys)."""
+
+    block = mock.Mock(type="tool_use", input=arguments)
+    block.name = name
+    return mock.Mock(stop_reason="tool_use", content=[mock.Mock(type="thinking"), block])
+
+
+class LiveEndToEndTests(AskBase):
+    """The live router (``ClaudeRouter``, not the mock) through ``ask.answer`` and A0's door, with only the SDK's
+    ``create`` replaced: the audit says live, a bad name or argument runs nothing, and a good one gives the figure."""
+
+    def setUp(self):
+        super().setUp()
+        self.live = claude.ClaudeRouter(api_key="sk-ant-test-key-123", model="claude-opus-5-5")
+        self.live._client = fake_client(None)
+        registry = mock.patch.dict(providers.PROVIDERS, {providers.CLAUDE_ROUTER: lambda: self.live})
+        registry.start()
+        self.addCleanup(registry.stop)
+
+    def respond(self, response):
+        self.live._client.beta.messages.create.return_value = response
+
+    def outcome(self):
+        return AuditLog.objects.filter(module="ai", action=services.CALL_OK).latest("id").after_data
+
+    def test_a_good_route_gives_the_report_figure_and_the_audit_says_live(self):
+        self.respond(sdk_tool_use("sales_total", {"period": "yesterday"}))
+        answer = ask.answer("مبيعات امبارح", self.owner)
+        self.assertEqual((answer.kind, answer.value), ("figure", "250.50 ج.م"))
+        started = AuditLog.objects.get(module="ai", action=services.CALL_STARTED).after_data
+        self.assertEqual((started["mode"], started["provider"]), ("live", "claude_router"))
+        self.assertEqual((self.outcome()["routing"], self.outcome()["tool"], self.outcome()["period"]), (TOOL, "sales_total", "yesterday"))
+        kwargs = self.live._client.beta.messages.create.call_args.kwargs
+        self.assertEqual(kwargs["messages"], [{"role": "user", "content": "مبيعات امبارح"}])
+        self.assertEqual((kwargs["system"], kwargs["tools"], kwargs["fallbacks"]), (ask.SYSTEM_PROMPT, ask.TOOLS, "default"))
+
+    def test_a_bad_tool_name_from_the_live_model_runs_nothing(self):
+        self.respond(sdk_tool_use("export_all_customers", {"period": "today"}))
+        with mock.patch("reports.selectors.sales_report", side_effect=AssertionError("a tool ran")):
+            self.assertEqual(ask.answer("x", self.owner).kind, "unknown")
+        self.assertEqual((self.outcome()["routing"], self.outcome()["tool"]), (INVALID_TOOL, ""))
+
+    def test_an_out_of_enum_argument_from_the_live_model_runs_nothing(self):
+        for arguments in ({"limit": True}, {"limit": 10}, {"limit": 1, "customer": "x"}):
+            with self.subTest(arguments=arguments):
+                self.respond(sdk_tool_use("top_debtors", arguments))
+                with mock.patch("reports.aging.aging_rows", side_effect=AssertionError("a tool ran")):
+                    self.assertEqual(ask.answer("x", self.owner).kind, "unknown")
+                self.assertEqual(self.outcome()["routing"], INVALID_ARGUMENTS)
+
+    def test_a_live_refusal_and_a_live_failure(self):
+        self.respond(mock.Mock(stop_reason="refusal", content=[]))
+        self.assertEqual(ask.answer("x", self.owner).kind, "declined")
+        import anthropic
+        import httpx2
+
+        request = httpx2.Request("POST", "https://api.anthropic.com/v1/messages")
+        self.live._client.beta.messages.create.side_effect = anthropic.APIConnectionError(request=request)
+        failed = ask.answer("x", self.owner)
+        self.assertEqual((failed.kind, failed.message), ("error", "خدمة الذكاء الاصطناعي مردّتش. جرّب تاني بعد شوية."))
+        error = AuditLog.objects.filter(module="ai", action=services.CALL_ERROR).get().after_data
+        self.assertEqual((error["mode"], error["error_status"]), ("live", None))
 
 
 class RegistryTests(AiSimpleTestCase):
