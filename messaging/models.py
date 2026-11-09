@@ -19,6 +19,8 @@ class MessageKind(models.TextChoices):
     APPOINTMENT = "appointment", "Appointment tomorrow"
     REFILL = "refill", "Prescription refill"
     WORKORDER = "workorder", "Work order status"
+    #: S8: a loyalty / marketing campaign message (see ``Campaign`` and messaging/campaigns.py).
+    CAMPAIGN = "campaign", "Campaign"
 
 
 class MessageTemplate(models.Model):
@@ -67,3 +69,46 @@ class OutboxMessage(models.Model):
     class Meta:
         ordering = ["-day", "kind", "pk"]
         constraints = [models.UniqueConstraint(fields=["key", "day"], name="messaging_one_per_key_per_day")]
+
+
+class CampaignAudience(models.TextChoices):
+    ALL = "all", "Every customer with a mobile"
+    POINTS = "points", "Loyalty points at least N"
+    INACTIVE = "inactive", "No purchase in the last N days"
+    CATEGORY = "category", "Bought the category in the last N days"
+    LAPSED = "lapsed", "Bought the category, but not in the last N days"
+
+
+class CampaignStatus(models.TextChoices):
+    DRAFT = "draft", "Draft"
+    QUEUED = "queued", "Queued"
+    DONE = "done", "Done"
+
+
+class Campaign(models.Model):
+    """S8 (HG-064 area, additive table): one message to a slice of customers, put on the outbox when queued.
+
+    Queuing writes one ``OutboxMessage`` (kind CAMPAIGN, key ``campaign:<id>:<customer id>``) per customer; sending
+    stays the outbox's job. ``threshold`` is N of the audience (points, or days); ``category`` is used by the two
+    category audiences. A queued campaign is never edited or queued again.
+    """
+
+    name = models.CharField(max_length=120)
+    text = models.TextField(max_length=1000)
+    audience = models.CharField(max_length=10, choices=CampaignAudience.choices, default=CampaignAudience.ALL)
+    threshold = models.PositiveIntegerField(default=0)
+    category = models.ForeignKey("master_data.Category", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    #: The first day its messages may reach the outbox; a daily cap spreads the rest over the next days.
+    scheduled_day = models.DateField()
+    status = models.CharField(max_length=10, choices=CampaignStatus.choices, default=CampaignStatus.DRAFT, db_index=True)
+    #: The entity it was made in (HG-034); its messages carry it and only people working in it see it.
+    entity = models.ForeignKey("entities.Entity", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    queued_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    queued_at = models.DateTimeField(null=True, blank=True)
+    queued_count = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]

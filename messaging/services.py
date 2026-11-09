@@ -39,11 +39,13 @@ DEFAULT_TEXTS = {
     MessageKind.APPOINTMENT: "أهلاً {name}، تذكير من {company} بميعاد حضرتك بكرة {date} الساعة {time}. لو محتاج تغيّر الميعاد ابعتلنا.",
     MessageKind.REFILL: "أهلاً {name}، روشتة حضرتك {number} ميعاد تجديدها {date}. تحب نجهزهالك؟ — {company}",
     MessageKind.WORKORDER: "أهلاً {name}، من {company}: أمر الشغل {number} {status} {link}",
+    MessageKind.CAMPAIGN: "أهلاً {name}، وحشتنا في {company}! عندنا ليك جديد، ننتظرك قريب.",  # S8: only the starting text of a new campaign
 }
 #: S7: the same wording in English, used when the business's default language is English and the text was never edited.
-DEFAULT_TEXTS_EN = {MessageKind.WORKORDER: "Hello {name}, from {company}: work order {number} {status} {link}"}
+DEFAULT_TEXTS_EN = {MessageKind.WORKORDER: "Hello {name}, from {company}: work order {number} {status} {link}",
+                    MessageKind.CAMPAIGN: "Hello {name}, we miss you at {company}! We have something new for you; see you soon."}
 #: ``every_days`` is unused for work-order messages (one per order per status, whatever the day).
-DEFAULT_EVERY = {MessageKind.DUE: 7, MessageKind.INSTALMENT: 3, MessageKind.APPOINTMENT: 1, MessageKind.REFILL: 3, MessageKind.WORKORDER: 1}
+DEFAULT_EVERY = {MessageKind.DUE: 7, MessageKind.INSTALMENT: 3, MessageKind.APPOINTMENT: 1, MessageKind.REFILL: 3, MessageKind.WORKORDER: 1, MessageKind.CAMPAIGN: 1}
 PLACEHOLDERS = ("{name}", "{company}", "{amount}", "{date}", "{time}", "{number}", "{status}", "{link}")
 #: S7: what each key status says to the customer ({days} is the order's warranty days).
 WORKORDER_STATUSES = ("quoted", "ready", "delivered")
@@ -57,14 +59,14 @@ WORKORDER_STATUS_TEXTS = {
 }
 
 KIND_LABELS = {
-    "ar": {"due": "مبلغ مستحق", "instalment": "قسط", "appointment": "ميعاد بكرة", "refill": "تجديد روشتة", "workorder": "حالة أمر الشغل"},
-    "en": {"due": "Amount due", "instalment": "Instalment", "appointment": "Appointment tomorrow", "refill": "Prescription refill", "workorder": "Work order status"},
+    "ar": {"due": "مبلغ مستحق", "instalment": "قسط", "appointment": "ميعاد بكرة", "refill": "تجديد روشتة", "workorder": "حالة أمر الشغل", "campaign": "حملة"},
+    "en": {"due": "Amount due", "instalment": "Instalment", "appointment": "Appointment tomorrow", "refill": "Prescription refill", "workorder": "Work order status", "campaign": "Campaign"},
 }
 MESSAGES = {
     "ar": {"text": "نص الرسالة فاضي.", "placeholder": "النص فيه {bad} ومش معروف؛ المسموح: {allowed}.", "every": "التكرار من 1 لـ 90 يوم.",
-           "done": "الرسالة دي اتبعتت أو اتشالت قبل كده.", "wa_template": "اسم قالب واتساب: حروف إنجليزي صغيرة وأرقام و _ بس، زي ما اتسجل عند Meta."},
+           "done": "الرسالة دي اتبعتت أو اتشالت قبل كده.", "later": "الرسالة دي معادها يوم {day}؛ مينفعش تتبعت قبله.", "wa_template": "اسم قالب واتساب: حروف إنجليزي صغيرة وأرقام و _ بس، زي ما اتسجل عند Meta."},
     "en": {"text": "The message is empty.", "placeholder": "The text has {bad}, which is unknown; allowed: {allowed}.", "every": "Repeat after 1 to 90 days.",
-           "done": "This message was already sent or skipped.", "wa_template": "The WhatsApp template name: lower-case letters, digits and _ only, as registered with Meta."},
+           "done": "This message was already sent or skipped.", "later": "This message is for {day}; it cannot be sent before then.", "wa_template": "The WhatsApp template name: lower-case letters, digits and _ only, as registered with Meta."},
 }
 
 
@@ -96,7 +98,10 @@ def template(kind):
 
 
 def templates():
-    return [template(kind) for kind in MessageKind.values]
+    """The wording the outbox lets an owner edit. A campaign's words belong to the campaign itself (S8), so its kind is
+    not listed here; its on/off switch and WhatsApp template are on the campaigns screen."""
+
+    return [template(kind) for kind in MessageKind.values if kind != MessageKind.CAMPAIGN]
 
 
 @transaction.atomic
@@ -241,6 +246,9 @@ def build(today=None):
     company, currency = _company()
     added = 0
     _carry_workorders(today)
+    from . import campaigns
+
+    campaigns.carry(today)
     for entity in _entities():
         with working_in(entity):
             for kind, source in SOURCES.items():
@@ -455,6 +463,9 @@ def mark(message, status, user, lang="ar"):
         raise PermissionDenied("This message belongs to another entity.")
     if message.status != OutboxStatus.PENDING:
         raise ValidationError(MESSAGES[lang]["done"])
+    if status == OutboxStatus.SENT and message.kind == MessageKind.CAMPAIGN and message.day > timezone.localdate():
+        # S8: a campaign message deferred by the daily cap (or moved forward by build() since the page opened) waits for its day
+        raise ValidationError(MESSAGES[lang]["later"].format(day=message.day.isoformat()))
     if status == OutboxStatus.SENT and holds_link(message) and not may_hold_link(user):
         raise PermissionDenied("This message carries the customer's link; only counter staff may send it.")
     message.status = status
