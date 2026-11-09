@@ -17,6 +17,9 @@ EXACT = {
     "The AI service is not connected on this server.": "خدمة الذكاء الاصطناعي مش موصّلة على السيرفر ده.",
     "There is no text to read aloud.": "مفيش نص يتقري بالصوت.",
     "The AI service did not answer. Try again later.": "خدمة الذكاء الاصطناعي مردّتش. جرّب تاني بعد شوية.",
+    # A1 (HG-079): the voice summary (ai/voice_summary.py, ai/views.py).
+    "The audio for this summary is being prepared. Try again in a moment.": "صوت الملخص بيتجهّز دلوقتي. جرّب تاني كمان شوية.",
+    "There is nothing to summarise for you yet.": "لسه مفيش أرقام نلخّصها لك.",
     # HG-071 (S6) D7: a card-paid invoice is not returned until a return-to-card path exists.
     "This invoice was paid partly by gift card, and a return to the card is not possible yet. Cancel the card payment or the whole invoice instead.":
         "الفاتورة دي اتدفع جزء منها بكارت هدية، والمرتجع على الكارت لسه مش متاح. ألغِ دفعة الكارت أو الفاتورة كلها بدل كده.",

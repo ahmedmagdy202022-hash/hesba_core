@@ -465,6 +465,7 @@ def dashboard(request):
     fit = Fit.current(today)  # DASH-FIT: only what this business is and chose in setup
     cards = [card for card in _build_cards(request.user, lang, held, figures) if fit.shows(f"kpi.{card['key']}")]
 
+    from ai.voice_summary import card_context as voice_card
     from entities.current import effective_activity
 
     activity = effective_activity()[0] or ""
@@ -510,6 +511,8 @@ def dashboard(request):
         "option_panel": option_panel(fit, request.user, lang),
         "quick_actions": _quick_actions(request.user, lang, modules, activity, sections),
         "activity_panel": build_activity_panel(activity, sections, lang, today, request.user),
+        # A1 (HG-079): the voice summary card, only while its capability is on (read from the set already loaded).
+        "voice_summary": voice_card(request.user, lang, today, shared=shared, sections=sections, capabilities=fit.capabilities),
         "demo_activities": _demo_activities(request.user, lang, profile),
         "onboarding_steps": _onboarding(lang),
         # Guide someone whose installation has seen no trade yet, and anyone who

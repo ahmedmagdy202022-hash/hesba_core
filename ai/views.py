@@ -1,0 +1,71 @@
+"""A1 (HG-079): the voice summary's two endpoints.
+
+* ``voice_summary``:
+  * GET returns the listener's summary as JSON: the text, the figures with their links, and the audio URL when the audio
+    is already cached. It never calls the provider, so opening the dashboard never spends a call.
+  * POST (CSRF-protected, sent on the first press of play) voices the summary through the AI layer, or reuses the cached
+    audio, and returns the same JSON with the audio URL. A refusal (feature off, kill switch, not connected, daily cap,
+    being prepared) comes back as a friendly message in the listener's language.
+* ``voice_summary_audio`` streams the cached MP3. It rebuilds the listener's own summary and serves the audio only when
+  the requested hash is that summary's hash, in the entity being worked in: a user who may not see a figure, or works in
+  another entity, has a different text and so gets a 404. The answer is private and never stored by the browser.
+
+Both answer 404 while the capability is off, and 403 to a listener who may see none of the figures.
+"""
+
+from django.core.exceptions import ValidationError
+from django.http import Http404, HttpResponse, JsonResponse
+from django.utils.cache import patch_cache_control
+from django.views.decorators.http import require_GET, require_http_methods
+
+from settings_core.ui_messages import translate
+
+from . import voice_summary
+from .summary import build_summary
+
+
+def _lang(request):
+    return "en" if (request.GET.get("lang") or request.POST.get("lang")) == "en" else "ar"
+
+
+def _private(response):
+    patch_cache_control(response, private=True, no_store=True, max_age=0)
+    return response
+
+
+def _json(data, status=200):
+    return _private(JsonResponse(data, status=status, json_dumps_params={"ensure_ascii": False}))
+
+
+@require_http_methods(["GET", "POST"])
+def summary(request):
+    lang = _lang(request)
+    if not voice_summary.is_on():
+        return _json({"ok": False, "error": translate("This AI feature is not switched on.", lang)}, status=404)
+    built = build_summary(request.user, lang)
+    if not built.has_figures:
+        return _json({"ok": False, "error": translate("There is nothing to summarise for you yet.", lang)}, status=403)
+    row = voice_summary.cached(built)
+    if request.method == "POST" and row is None:
+        try:
+            row = voice_summary.speak(built, request.user)
+        except ValidationError as exc:
+            return _json({"ok": False, **built.as_dict(), "audio_url": "", "error": translate(exc.messages[0], lang)}, status=409)
+    return _json({"ok": True, **built.as_dict(), "audio_url": voice_summary.audio_url(built) if row else ""})
+
+
+@require_GET
+def audio(request, digest):
+    if not voice_summary.is_on():
+        raise Http404("The voice summary is not switched on.")
+    built = build_summary(request.user, _lang(request))
+    if not built.has_figures or digest != built.text_sha256:
+        raise Http404("No audio for this summary.")
+    row = voice_summary.cached(built)
+    if row is None:
+        raise Http404("No audio for this summary.")
+    response = HttpResponse(bytes(row.audio), content_type=row.content_type or "audio/mpeg")
+    response["Content-Length"] = str(row.size)
+    response["Content-Disposition"] = 'inline; filename="hesba-summary.mp3"'
+    response["X-Content-Type-Options"] = "nosniff"
+    return _private(response)

@@ -2526,17 +2526,100 @@ The entries below are the protected-logic decisions in the commercial gate, reco
 
 ## HG-079 — A1 voice summary of the day
 
-- **Status:** OPEN — proposed, not built.
-- **Proposal:**
-  - The text is built deterministically from existing report selectors, with no language model, so figures can never be invented.
-  - The day is the Cairo day. The summary is scoped to the listener's entity and permissions.
-  - ElevenLabs only voices the text. The audio is cached per entity per day, kept 7 days, then deleted.
-- **Protected logic:** none changed; it only reads existing report selectors.
-- **Tests (planned):**
-  - the text matches the report figures exactly;
-  - entity scoping and permissions;
-  - the mock returns audio;
-  - no outbound HTTP.
+- **Status:** IMPLEMENTED on `claude/maestro-ai-a1-voice-summary`, pending review. Built on A0 (HG-078). No protected logic touched: no report calculation, posting, stock, cashbox or ledger code changed. The summary only reads the dashboard's existing figures.
+- **Migration:** `ai/migrations/0001_initial.py`, the AI app's first. It creates `ai.VoiceSummaryAudio`, the audio cache, and nothing else.
+- **Files:**
+  - `ai/summary.py`: builds the text and the figures (no language model);
+  - `ai/voice_summary.py`: the cache, the claim, the call through `ai.services.text_to_speech`, pruning, and the card's context;
+  - `ai/models.py`, `ai/migrations/0001_initial.py`;
+  - `ai/views.py`, `ai/urls.py` (`/ai/voice-summary/`, `/ai/voice-summary/audio/<sha256>.mp3`), and `config/urls.py` (`path("ai/", …)`);
+  - `ai/management/commands/prune_voice_summaries.py`;
+  - `templates/ai/voice_summary_card.html`, `static/hesba/js/voice_summary.js`, `static/hesba/css/dashboard.css` (additive `.dash-voice*` rules, tokens only);
+  - `reports/dashboard_views.py` (one context key), `templates/reports/dashboard.html` (one include after the hero, one script tag, and the CSS version bump);
+  - `settings_core/capabilities.py` (`ai_voice_summary` available, offered to every activity, in a new «الذكاء الاصطناعي» group, with its icon and "where"), `settings_core/operational_views.py` (`FEATURE_LANDING` → the dashboard), `settings_core/ui_messages.py` (two Arabic messages);
+  - tests: `ai/tests_voice_summary.py` (new), plus `ai/tests.py`, `settings_core/tests_capabilities.py` and `settings_core/tests_setup_wizard.py`, updated for the capability now being available and the new group.
+- **As built:**
+  - **The text** (`ai.summary.build_summary(user, lang)`) is built only from the dashboard's own code. It uses `reports.dashboard_data.DashboardFigures` for yesterday's date, the permissions in `reports.dashboard_kpis`, and `reports.dashboard_fit.Fit`. All of these go through `reports.selectors` and `entities.scope` (HG-034). It covers:
+    - yesterday's posted sales and their count (the "Sales today" / "Invoices today" cards for yesterday; only the listener's own invoices without `reports.view_all_sales_report`);
+    - yesterday's collections (the "Receipts today" card, `sales.receive_customer_payment`);
+    - the items at or below their minimum and, when there are any, the items out of stock (the two stock cards, never added together);
+    - today's appointments, not counting cancelled ones, when the listener has the appointments section (`appointments.services.day_agenda`, the bookings panel's count).
+  - A figure the listener may not see is left out of the text and the tiles, never said as zero. A listener who may see none gets no card, and a 403 from the endpoints.
+  - The day is `timezone.localdate()` (Cairo). The text has no clock time and no time-of-day greeting («أهلاً، ده ملخص النهارده.»), so it stays the same all day unless a figure changes. Egyptian Arabic, or English on `?lang=en`.
+  - Amounts use `hesba_format.money`. The voice says the currency's name (`settings_core.currency.CURRENCIES`: «جنيه مصري», "Egyptian pounds"). The tiles show the screen's symbol (`currency_label`: «ج.م», "EGP").
+  - Each tile links to its report (the sales report filtered to yesterday's posted invoices, the collections list, the stock report, the agenda). A link the listener could not open (`operational_views._opens_for`) is left empty.
+  - **The cache** (`ai.VoiceSummaryAudio`) has one row per entity scope (`group` or `entity:<id>`), language, Cairo day and SHA-256 of the text, under a unique constraint. The bytes are kept in the database, as S1 does, because the host's disk is ephemeral. The text is stored with its audio for display, never in the audit.
+  - **The call** (`ai.voice_summary.speak`):
+    1. it prunes old rows;
+    2. it returns a ready row for the same key as it is;
+    3. otherwise it claims the key by inserting a not-ready row in its own committed transaction. A second request meanwhile gets «صوت الملخص بيتجهّز دلوقتي» rather than a second paid call, and a claim older than 2 minutes is taken over;
+    4. it calls `ai.services.text_to_speech(text, feature="voice_summary", user=…, entity=…)` outside any transaction (it refuses up front inside one), then stores the audio;
+    5. on any refusal or error it deletes the claim and re-raises, so the next press can try again.
+    A1 adds no audit rows of its own: A0 writes the started and outcome rows, without the text.
+  - **Keep 7 days:** today and the six Cairo days before. Old rows are pruned on access (every new voicing) and by `manage.py prune_voice_summaries`.
+  - **The endpoints:**
+    - `GET /ai/voice-summary/` returns JSON: the text, the figures with their links, and the audio URL if already cached. It never calls the provider.
+    - `POST` (CSRF, sent on the first press of play) voices the summary or reuses the cache. A refusal returns 409 with the message in the page's language (`ui_messages.translate`): kill switch, daily cap, not connected, provider failure, being prepared. While the capability is off, both answer 404 with «ميزة الذكاء الاصطناعي دي مش متشغّلة».
+    - `GET /ai/voice-summary/audio/<sha256>.mp3` rebuilds the listener's own summary and serves the audio only if the hash is that summary's, in the entity being worked in, today. So another entity, other permissions, another language or another day gets a 404. It sends `Content-Type` from the provider (`audio/mpeg`), `Cache-Control: private, no-store, max-age=0`, `X-Content-Type-Options: nosniff` and `Content-Length`.
+  - **The card:** a section after the dashboard's hero, as in the approved artboard: title and date, a play button with progress and times, the quoted text, the figure tiles (`.dash-atile`, a link each; running low uses `is-warn`), and the note «الأرقام من تقارير حسبة نفسها. الصوت بس اللي متولّد.». It is shown only while `ai_voice_summary` is on, read from the set the dashboard already loads, so it adds no query when off. Nothing is fetched on page load.
+    - On press, the JS POSTs if the page has no cached audio URL, then fetches the MP3 as a blob and plays it from an object URL. This works on iOS Safari without range requests.
+    - If the browser refuses to play after the round trip, the card says the audio is ready and the next press plays it.
+    - Refusals show in a status line on the card.
+  - **Capability:** `available=True`, still off by default, offered to every activity. It sits in a new group «الذكاء الاصطناعي» / "AI" on «خصائص الشغل» and the setup review. Its "Open" link is the dashboard.
+- **Deviations:**
+  1. **A new capability group** («الذكاء الاصطناعي»). `grouped_rows` lists only grouped slugs, and none of the three existing groups fits. As a result, `settings_core/tests_setup_wizard.py`'s two exact group lists now end with `ai` / "AI".
+  2. **The cache is per entity scope, language, day *and text*,** not per entity per day alone. Two listeners with different permissions hear different texts, so they get different rows. A figure that changes during the day (a new booking, an item running low) gives a new text and one more call, bounded by the daily cap.
+  3. **Out of stock is said as a second figure** next to "running low" when it is not zero, exactly as the dashboard's two stock cards; the tiles keep the design's four (sales, collections, running low, appointments). A listener with the invoice count but not the sales total gets an invoice tile instead of the sales tile.
+  4. **No time-of-day greeting:** the artboard's «صباح الخير» became «أهلاً، ده ملخص النهارده.». A greeting that changes at noon would change the hash and pay for a second call.
+  5. `reports/digest.py` (DIGEST-001's daily summary) was **not** reused. It reads `SalesInvoice.objects` and `CustomerPayment.objects` with no entity scope, so it would let one branch hear another's figures. That pre-existing gap is left as it is (out of scope); see risks.
+- **Remaining risks:**
+  - `reports/digest.py` (the WhatsApp daily summary) is not entity-scoped (HG-034). Pre-existing, not changed here.
+  - Two simultaneous first presses: one voices and the other gets "being prepared". A process killed mid-call leaves a claim that blocks that text for 2 minutes. On SQLite, the claim insert can meet «database is locked» under contention, as A0's reservation can.
+  - The audio endpoint rebuilds the summary on each fetch (the same queries as the GET), once per play.
+  - A demo server runs with `DEBUG` off, where `AI_MODE=mock` is refused (HG-078 open question 5). The card shows there but every press is refused as "not connected" until that is decided.
+  - Not done in this PR: demo data and the «جرّب» steps that the roadmap's closing conditions ask for.
+- **Tests** (`ai/tests_voice_summary.py`, all on `ai.no_network.AiTestCase`, mock mode):
+  - **The text:**
+    - the text equals the report figures exactly, in Arabic and English (250.50 from 2 invoices; 75.25 collected; 1 running low, 1 out), checked against `selectors.sales_report`, `DashboardFigures` and `stock_alert_counts`; today's sale and collection are absent;
+    - the tiles' values and links;
+    - the text is the same at 08:00 and 21:00;
+    - today's appointments (cancelled and tomorrow's not counted; left out while the module is off).
+  - **Permissions:**
+    - a stock keeper hears stock only, with no 0.00 for the hidden money;
+    - a cashier hears their own sales («مبيعاتك»);
+    - a user with no figure gets no card and a 403.
+  - **The Cairo day:** at 23:59 Cairo "yesterday" is the day before; at 00:30 Cairo (still the previous day in UTC) it moves.
+  - **Entities:**
+    - a branch member hears the branch only (and a real 0.00 for its collections);
+    - main, branch and group each have their own text and scope key;
+    - another entity's audio URL is a 404.
+  - **Calls:**
+    - visiting the dashboard and GET make no call and leave no audit row and no cache row;
+    - the first POST makes one call, and the second POST uses the cache (one call, one `call_started` row, `calls_today()` = 1);
+    - once cached, the dashboard hands the card the audio URL;
+    - each language and each new text is its own call;
+    - the text is never in the audit;
+    - POST is refused without the CSRF token (`enforce_csrf_checks=True`) and accepted with the page's token;
+    - a fresh claim gives "being prepared" with no call, and a stale one is taken over;
+    - voicing inside `transaction.atomic()` is refused and leaves no claim.
+  - **Audio:**
+    - the type, body, length, `nosniff`, and `private` / `no-store`; streaming makes no call;
+    - other permissions or no figures get a 404, and so do the wrong language, a wrong digest, another day and the capability off; signed out redirects to the login page.
+  - **The card:** hidden (no markup, no script, endpoint 404) while off; shown in Arabic and English with the title, the text, the note, the play label and the figures, and no call.
+  - **Refusals:** the kill switch, the cap, not connected, a provider failure (the next press then works) and the feature switched off after load each give their message in Arabic and English, and leave no claim.
+  - **Pruning:**
+    - the 7th day back is kept and the 8th goes;
+    - pruning on access and the command;
+    - every test case uses the no-network base.
+  - **Updated tests:**
+    - `ai/tests.py`: the capability is available, off by default and in every activity; "unavailable is refused" is kept by patching `available=False`; "off is refused" is added;
+    - `settings_core/tests_capabilities.py`: every capability is available;
+    - `settings_core/tests_setup_wizard.py`: the fourth group.
+- **Open questions for Ahmed:**
+  1. **The voice:** which ElevenLabs voice (`ELEVENLABS_VOICE_ID`; live refuses the placeholder). An Egyptian-Arabic-sounding voice that also reads English?
+  2. **Auto-play:** today nothing plays, and nothing is paid for, until play is pressed. Should the card play by itself on the first dashboard visit of the day? That would spend a call per entity per language every day whether or not anyone listens, and browsers often block auto-play anyway.
+  3. **The spoken currency:** «جنيه مصري» / "Egyptian pounds", or the shorter «جنيه»?
+  4. **The greeting:** keep the neutral «أهلاً، ده ملخص النهارده.», or have «صباح الخير» (stable all day, but odd in the evening)?
 
 ## HG-080 — A2 «اسأل حسبة» (questions answered from the system's own reports)
 

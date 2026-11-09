@@ -446,16 +446,25 @@ class CallTests(AiCallTestBase):
 
 
 class CapabilityRegistrationTests(AiTestCase):
-    def test_voice_summary_is_registered_off_and_cannot_be_switched_on_in_a0(self):
+    def test_voice_summary_is_available_from_a1_off_by_default_and_offered_to_every_activity(self):
         self.assertIn("ai_voice_summary", caps.CAPABILITY_SLUGS)
-        self.assertFalse(caps.is_available("ai_voice_summary"))
-        FeatureFlag.objects.create(code=caps.flag_code("ai_voice_summary"), name="Voice summary", enabled=True)
-        self.assertNotIn("ai_voice_summary", caps.enabled_capabilities())  # even with its flag row set on
-        self.assertFalse(any(caps.fits(activity, "ai_voice_summary") for activity in ("commercial", "services", "medical")))
+        self.assertTrue(caps.is_available("ai_voice_summary"))  # A1 (HG-079) built it
+        self.assertNotIn("ai_voice_summary", caps.enabled_capabilities())  # off until someone switches it on
+        self.assertTrue(all(caps.fits(activity, "ai_voice_summary") for activity in ("commercial", "services", "medical", "restaurants")))
+        self.assertEqual(caps.group_of("ai_voice_summary"), "ai")
         self.assertEqual(services.FEATURES["voice_summary"].capability, "ai_voice_summary")
+        FeatureFlag.objects.create(code=caps.flag_code("ai_voice_summary"), name="Voice summary", enabled=True)
+        self.assertIn("ai_voice_summary", caps.enabled_capabilities())
 
     def test_a_call_is_refused_while_the_capability_is_unavailable(self):
         FeatureFlag.objects.create(code=caps.flag_code("ai_voice_summary"), name="Voice summary", enabled=True)
+        with mock.patch.dict(caps.CAPABILITIES["ai_voice_summary"], {"available": False}):
+            self.assertNotIn("ai_voice_summary", caps.enabled_capabilities())  # even with its flag row set on
+            with self.assertRaisesMessage(ValidationError, "This AI feature is not switched on."):
+                services.text_to_speech("hello", feature="voice_summary")
+        self.assertEqual(AuditLog.objects.get(module="ai").after_data["refusal"], services.CAPABILITY_OFF)
+
+    def test_a_call_is_refused_while_the_capability_is_off(self):
         with self.assertRaisesMessage(ValidationError, "This AI feature is not switched on."):
             services.text_to_speech("hello", feature="voice_summary")
         self.assertEqual(AuditLog.objects.get(module="ai").after_data["refusal"], services.CAPABILITY_OFF)

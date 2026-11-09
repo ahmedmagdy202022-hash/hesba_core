@@ -31,7 +31,7 @@ class WizardLinksTests(TestCase):
         page = self.client.get(reverse("setup_review"), {"lang": "ar", "activity": "commercial", "sub_activity": "retail",
                                                         "modules": "customers,items_services,sales_operations,cashboxes,reports"})
         body = page.content.decode()
-        self.assertEqual([group["key"] for group in page.context["capability_groups"]], ["selling", "goods", "money"])
+        self.assertEqual([group["key"] for group in page.context["capability_groups"]], ["selling", "goods", "money", "ai"])  # A1 (HG-079): the AI group
         self.assertIn('data-capability="batches_expiry" data-needs="inventory"', body)
         self.assertIn('data-need-module="inventory" data-need-name="المخزون"', body)
         self.assertIn('data-capability="shift_required" data-needs="" data-needs-cap="pos"', body)
@@ -47,7 +47,7 @@ class WizardLinksTests(TestCase):
         page = self.client.get(reverse("setup_review"), {"lang": "en", **params})
         ticked = {row["slug"] for row in page.context["capability_rows"] if row["checked"]}
         self.assertEqual(ticked, {"units", "vat"})
-        self.assertEqual([group["title"] for group in page.context["capability_groups"]], ["Selling and the till", "Items and stock", "Accounts and tax"])
+        self.assertEqual([group["title"] for group in page.context["capability_groups"]], ["Selling and the till", "Items and stock", "Accounts and tax", "AI"])
         self.assertContains(page, "Where you find it")
         self.assertNotContains(page, "هتلاقيها في")
         self.assertIn("url.searchParams.set('caps'", page.content.decode())

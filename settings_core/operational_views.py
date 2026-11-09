@@ -72,6 +72,7 @@ FEATURE_LANDING = {
     "installments": "installments:list", "vat": "taxes:settings", "e_invoice": "einvoice:issuer", "e_receipt": "ereceipt:board", "fixed_assets": "fixed_assets:list",
     "quotations": "orders:list", "drugs": "pharmacy:lookup", "shipping": "shipping:board", "promotions": "promotions:list", "online_store": "onlinestore:board", "loyalty": "loyalty:home",
     "deposits": "appointments:agenda", "online_booking": "appointments:booking_settings", "payment_links": "payments:gateway", "gift_cards": "giftcards:list",
+    "ai_voice_summary": "dashboard_snapshot",  # A1 (HG-079): the card lives on the dashboard
 }
 
 

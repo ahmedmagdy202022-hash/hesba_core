@@ -176,14 +176,14 @@ CAPABILITIES = {
         "about_en": "An asset register (vehicles, equipment, fit-out) with monthly depreciation in net profit.",
         "available": True, "paths": ("/assets/",),
     },
-    # A0 (HG-078): the switch A1's voice summary calls the AI layer (ai/services.py) under. Not built yet, so it cannot
-    # be switched on (available=False) and is offered to no activity (ONLY_FOR below): no screen shows it.
-    # A1 makes it available and gives it its group, icon and landing page.
+    # A0 (HG-078) registered it; A1 (HG-079) builds it: a card on the dashboard that reads yesterday's sales and
+    # collections, the items running low and today's appointments aloud. Off by default; the AI layer
+    # (ai/services.py) refuses every call while it is off.
     "ai_voice_summary": {
         "ar": "ملخص اليوم بالصوت", "en": "Voice summary of the day",
-        "about_ar": "ملخص مبيعات وتحصيل اليوم والأصناف اللي قربت تخلص، مقروء بصوت. النص بيتبني من تقارير السيستم، والصوت بس بيتعمل برّه.",
-        "about_en": "The day's sales, collections and low-stock items, read aloud. The text comes from the system's own reports; only the voice is made outside.",
-        "available": False, "paths": (),
+        "about_ar": "كارت في لوحة القيادة بيقرالك مبيعات وتحصيل امبارح، والأصناف اللي قربت تخلص، ومواعيد النهارده. الأرقام من تقارير حسبة نفسها، والصوت بس بيتعمل برّه، ومحتاج مفتاح على السيرفر.",
+        "about_en": "A dashboard card that reads out yesterday's sales and collections, the items running low and today's appointments. The figures come from Hesba's own reports; only the voice is made outside, and it needs a key on the server.",
+        "available": True, "paths": (),
     },
 }
 CAPABILITY_SLUGS = tuple(CAPABILITIES)
@@ -349,7 +349,6 @@ NOT_FOR_SUB = {
 #: A drug database is a pharmacy's (or a medical centre's own pharmacy's); a shop or a café never needs one.
 ONLY_FOR = {
     "drugs": {(catalog.COMMERCIAL, "pharmacy"), (catalog.MEDICAL, "*")},
-    "ai_voice_summary": set(),  # A0 (HG-078): offered nowhere until A1 builds it
 }
 
 #: SETTINGS-TRACK: a capability that rides on a module works only while that module is on: expiry dates and serial
@@ -381,10 +380,11 @@ GROUPS = (
     ("selling", ("البيع والكاشير", "Selling and the till"), ("pos", "shift_required", "price_lists", "promotions", "loyalty", "installments", "quotations", "shipping", "online_store", "deposits", "online_booking", "payment_links", "gift_cards")),
     ("goods", ("الأصناف والمخزون", "Items and stock"), ("barcode", "units", "variants", "batches_expiry", "serials", "drugs")),
     ("money", ("الحسابات والضرايب", "Accounts and tax"), ("vat", "e_invoice", "e_receipt", "fixed_assets")),
+    ("ai", ("الذكاء الاصطناعي", "AI"), ("ai_voice_summary",)),  # A1 (HG-079): the AI track's features
 )
 ICONS = {"pos": "pos", "shift_required": "shift", "price_lists": "pricetag", "installments": "instalments", "barcode": "barcode",
          "units": "units", "variants": "variants", "batches_expiry": "expiry", "serials": "serial", "vat": "taxes",
-         "e_invoice": "einvoice", "e_receipt": "ereceipt", "fixed_assets": "assets", "quotations": "quotes", "drugs": "drugs", "promotions": "promotions", "shipping": "shipping", "online_store": "store", "loyalty": "loyalty", "deposits": "appointments", "online_booking": "appointments", "payment_links": "banks", "gift_cards": "loyalty"}
+         "e_invoice": "einvoice", "e_receipt": "ereceipt", "fixed_assets": "assets", "quotations": "quotes", "drugs": "drugs", "promotions": "promotions", "shipping": "shipping", "online_store": "store", "loyalty": "loyalty", "deposits": "appointments", "online_booking": "appointments", "payment_links": "banks", "gift_cards": "loyalty", "ai_voice_summary": "dashboard"}
 WHERE = {
     "pos": ("«الكاشير» في القايمة، وزرار في لوحة القيادة وفي قايمة الفواتير", "“Till” in the menu, with a button on the dashboard and the invoice list"),
     "shift_required": ("فاتورة البيع والكاشير بيطلبوا فتح وردية الأول", "The sales invoice and the till ask for an open shift first"),
@@ -410,6 +410,7 @@ WHERE = {
     "e_invoice": ("«الفاتورة الإلكترونية» في القايمة، وملف لكل فاتورة مترحّلة", "“E-invoicing” in the menu, and a document for each posted invoice"),
     "e_receipt": ("«الإيصال الإلكتروني» في القايمة، وQR على إيصال الكاشير المطبوع", "“E-receipts” in the menu, and a QR on the printed till receipt"),
     "fixed_assets": ("«الأصول الثابتة» في القايمة، والإهلاك في المصروفات وصافي الربح", "“Fixed assets” in the menu, and depreciation in expenses and net profit"),
+    "ai_voice_summary": ("كارت «ملخص النهارده بالصوت» في لوحة القيادة، تحت الترحيب", "A “Today's summary, read aloud” card on the dashboard, under the greeting"),
 }
 
 
