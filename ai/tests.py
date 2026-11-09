@@ -143,6 +143,17 @@ class LiveClientRequestTests(AiSimpleTestCase):
                     self.assertRaisesMessage(ProviderError, "ElevenLabs could not be reached."):
                 self.tts().synthesize("hello")
 
+    def test_an_answer_cut_off_midway_is_a_provider_error(self):
+        import http.client
+
+        class CutOff(FakeResponse):
+            def read(self, limit=-1):
+                raise http.client.IncompleteRead(b"partial", 1000)
+
+        with mock.patch("urllib.request.urlopen", return_value=CutOff()), \
+                self.assertRaisesMessage(ProviderError, "ElevenLabs could not be reached."):
+            self.tts().synthesize("hello")
+
     def test_an_answer_that_is_not_audio_is_refused(self):
         for response in (FakeResponse(b'{"ok": true}', "application/json"), FakeResponse(b"", "audio/mpeg")):
             with self.subTest(content_type=response.headers["Content-Type"]), mock.patch("urllib.request.urlopen", return_value=response), \

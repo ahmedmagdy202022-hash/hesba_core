@@ -9,6 +9,7 @@ inspects is the one the live client would send. The key comes from the server's 
 (``settings.ELEVENLABS_API_KEY``, read with ``config()``), never from a model.
 """
 
+import http.client
 import json
 import urllib.error
 import urllib.parse
@@ -56,7 +57,7 @@ class ElevenLabsTTS(TextToSpeechProvider):
                 audio = response.read(MAX_AUDIO_BYTES + 1)
         except urllib.error.HTTPError as exc:
             raise ProviderError(f"ElevenLabs answered {exc.code}.", status=exc.code) from None
-        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        except (urllib.error.URLError, TimeoutError, OSError, http.client.HTTPException) as exc:  # HTTPException: a cut-off answer (IncompleteRead)
             raise ProviderError("ElevenLabs could not be reached.") from exc
         if len(audio) > MAX_AUDIO_BYTES:
             raise ProviderError("ElevenLabs answered with more audio than allowed.")
