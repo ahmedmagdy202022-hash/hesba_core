@@ -82,7 +82,7 @@ def _guard(request, write=False):
         raise Http404("Patient files are for medical activities.")
     allowed = services.can_write(request.user) if write else services.can_view(request.user)
     if not allowed:
-        raise PermissionDenied("Patient files need medical.view_records.")
+        raise PermissionDenied("Patient files need a clinical permission (medical.treat_patients or medical.view_records).")
 
 
 def _base(lang, **extra):
@@ -735,7 +735,7 @@ def _queue_guard(request):
     if not queue.has_queue():
         raise Http404("The waiting list is for clinics and medical centres.")
     if not queue.can_use(request.user):
-        raise PermissionDenied("The waiting list needs the booking permission, or being a doctor.")
+        raise PermissionDenied("The waiting list needs the booking permission, or being a doctor with a clinical permission.")
 
 
 def queue_desk(request):

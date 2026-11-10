@@ -42,11 +42,11 @@ class ClinicSetup(TestCase):
         self.file = med.file_for(self.patient)
         self.visit = med.save_visit(self.patient, {"complaint": "كحة", "diagnosis": "التهاب"}, self.owner)
         self.doctor = self.doctor_user("m5_doctor")
-        self.nobody = person(RoleCode.CASHIER, "m5_nobody")  # no records right and no employee: not a doctor
+        self.nobody = person(RoleCode.CASHIER, "m5_nobody")  # no clinical permission: not a doctor
         self.viewer = self.view_only("m5_viewer")
 
     def doctor_user(self, username):
-        user = person(RoleCode.CASHIER, username)
+        user = person(RoleCode.DOCTOR, username)  # HG-084: the clinical role, not the employee link, opens the records
         employee = save_employee({"name": f"د. {username}"}, self.owner)
         employee.user = user
         employee.save()
@@ -85,6 +85,24 @@ class AccessMatrixTests(ClinicSetup):
                     self.assertEqual(self.client.get(self.url("file", row.pk)).status_code, 200)
             self.assertEqual(self.client.get(self.url("visit_list", self.visit.pk)).status_code, 200)
             self.assertEqual(self.client.get(self.url("patient_file_list", self.file.pk)).status_code, 200)
+
+    def test_an_employee_link_alone_opens_no_patient_attachment(self):
+        """HG-084: reception and cashiers are on the payroll too. A login linked to an employee, with no clinical
+        permission, reads and adds nothing here; the owners' rules call ``medical.services.can_view`` / ``can_write``."""
+
+        desk = person(RoleCode.CASHIER, "m5_desk")
+        employee = save_employee({"name": "موظفة الاستقبال"}, self.owner)
+        employee.user = desk
+        employee.save()
+        row = services.add_attachment(self.visit, JPEG, self.owner, stage=Stage.SCAN)
+        self.client.force_login(desk)
+        for url in (self.url("visit_list", self.visit.pk), self.url("patient_file_list", self.file.pk), self.url("file", row.pk)):
+            self.assertEqual(self.client.get(url).status_code, 403, url)
+        self.assertEqual(self.post_visit().status_code, 403)
+        self.assertEqual(self.client.post(self.url("delete", row.pk)).status_code, 403)
+        with self.assertRaises(PermissionDenied):
+            services.add_attachment(self.visit, JPEG, desk, stage=Stage.SCAN)
+        self.assertEqual(Attachment.objects.count(), 1)
 
     def test_a_user_without_records_rights_gets_403_everywhere(self):
         row = services.add_attachment(self.visit, JPEG, self.owner, stage=Stage.SCAN)

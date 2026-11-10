@@ -12,8 +12,12 @@ from permissions.services import user_has_permission
 
 from .models import BloodType, ClinicalVisit, Gender, PatientFile
 
+#: Practice-wide (owner and manager): every file, the clinic report, every doctor's follow-ups.
 VIEW = "medical.view_records"
+#: Practice-wide: change any visit or file, another doctor's included.
 WRITE = "medical.write_records"
+#: HG-084: clinical staff (the seeded «الدكتور أو الأخصائي» role): read the files and record visits.
+TREAT = "medical.treat_patients"
 
 
 def is_medical_install():
@@ -24,20 +28,17 @@ def is_medical_install():
     return effective_activity()[0] == "medical"
 
 
-def _is_doctor(user):
-    employee = getattr(user, "employee", None) if getattr(user, "is_authenticated", False) else None
-    return employee is not None and employee.active
-
-
 def can_view(user):
-    """Owners and managers by role; a doctor (a user linked to an active
-    employee) reads the files of the patients they treat."""
+    """HG-084: clinical records are read by those who hold a clinical permission by role: the practice-wide
+    one (owner, manager) or ``medical.treat_patients`` (the doctor's role). Being linked to an employee is
+    no longer enough: a receptionist or a cashier on the payroll is linked too. The employee link only
+    narrows what a doctor sees as theirs (their follow-ups, their turn in the queue)."""
 
-    return user_has_permission(user, VIEW) or _is_doctor(user)
+    return user_has_permission(user, VIEW) or user_has_permission(user, TREAT)
 
 
 def can_write(user):
-    return user_has_permission(user, WRITE) or _is_doctor(user)
+    return user_has_permission(user, WRITE) or user_has_permission(user, TREAT)
 
 
 def age(file, today=None):
