@@ -99,3 +99,30 @@ class TillButtonsTests(TestCase):
         self.assertEqual(pinned_ids(), [])
         open_test_shift(cashier, self.cashbox)
         self.assertNotIn("data-pos-pick-buttons", self.client.get(reverse("sales:pos"), {"lang": "ar"}).content.decode())
+
+
+class MoreButtonsKeepsThePickersTests(TestCase):
+    """The tiles' «المزيد» button once shared a `var` name with the «المخزن والخزنة» block, so a tap on it wrote its
+    label over the warehouse and cashbox pickers and the next sale was refused ("لازم يكون فيه مخزن بيع وخزنة")."""
+
+    def script(self):
+        import re
+
+        from django.contrib.staticfiles import finders
+
+        with open(finders.find("hesba/js/pos_quick.js"), encoding="utf-8") as handle:
+            return re.sub(r"//[^\n]*", "", handle.read())  # the code, without its comments
+
+    def test_the_button_and_the_pickers_block_are_two_variables(self):
+        import re
+
+        script = self.script()
+        self.assertEqual(len(re.findall(r"\bvar more\b", script)), 1)
+        self.assertIn("var more = form.querySelector('.pos-more')", script)
+
+    def test_the_button_only_rewrites_its_own_label(self):
+        script = self.script()
+        tiles = script[script.index("grid.children.length > 6"):script.index("var tendered")]
+        self.assertIn("data-pos-quick-more", tiles)
+        self.assertNotIn("more.textContent", tiles)
+        self.assertIn("toggle.textContent", tiles)
