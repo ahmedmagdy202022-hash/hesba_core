@@ -581,7 +581,7 @@ def payment_create(request):
             # UX Wave 2: «مستحق عليه …» with a «المبلغ كله» chip; the figure comes from the party's ledger (read-only).
             party_kind="customer",
             show_due=may_see_balance(request.user, "customer"),
-            due=due_on_form(request.user, "customer", form["customer"].value()),
+            due=due_on_form(request.user, "customer", form["customer"].value(), form.fields["customer"].queryset),
             submit_label="Record the collection" if lang == "en" else "سجّل التحصيل",
         ),
     )

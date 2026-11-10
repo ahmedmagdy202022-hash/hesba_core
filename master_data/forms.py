@@ -365,7 +365,7 @@ class CategoryForm(AutoNumbered, HesbaModelForm):
 
 
 class ItemForm(ZeroWhenBlank, AutoNumbered, HesbaModelForm):
-    # UX Wave 2: the prices are optional (empty counts as 0, as the model's default) and a new item starts with them empty, not 0.
+    # UX Wave 2: on a new item the prices are optional (empty counts as 0, as the model's default) and start empty, not 0.
     zero_when_blank = ("min_stock", "default_sale_price", "default_purchase_price")
     sections_spec = (
         ("main", "الصنف", "The item", "الاسم والتصنيف. الكود بيتعمل لوحده، والباركود لو موجود.", "Name and category. The code is made for you; add the barcode if it has one.", ("item_name", "category", "unit", "item_code", "barcode")),
@@ -396,6 +396,11 @@ class ItemForm(ZeroWhenBlank, AutoNumbered, HesbaModelForm):
     def __init__(self, *args, can_view_cost=False, **kwargs):
         super().__init__(*args, **kwargs)
         self.offer_auto_number(self.lang)
+        if self.instance.pk:  # empty means 0 for a new item only; on edit a cleared price is refused as before
+            self.zero_when_blank = ("min_stock",)
+            for name in ("default_sale_price", "default_purchase_price"):
+                if name in self.fields:
+                    self.fields[name].required = True
         if not self.instance.pk and not self.is_bound:
             for name in self.zero_when_blank:
                 if not self.initial.get(name):

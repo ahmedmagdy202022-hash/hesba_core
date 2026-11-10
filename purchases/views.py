@@ -498,7 +498,7 @@ def payment_create(request):
             # UX Wave 2: «مستحق ليه …» with a «المبلغ كله» chip, as on the collection form.
             party_kind="supplier",
             show_due=may_see_balance(request.user, "supplier"),
-            due=due_on_form(request.user, "supplier", form["supplier"].value()),
+            due=due_on_form(request.user, "supplier", form["supplier"].value(), form.fields["supplier"].queryset),
             submit_label="Record the payment" if lang == "en" else "سجّل الدفعة",
         ),
     )

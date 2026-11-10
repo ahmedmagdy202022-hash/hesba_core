@@ -565,7 +565,7 @@ def pos(request):
             "customers": Customer.objects.filter(active=True).order_by("name"),
             "customer_directory": customer_directory(),  # POS-002
             "can_add_customer": user_has_permission(request.user, "master_data.manage_parties"),
-            "can_return": user_has_permission(request.user, "sales.return_sale"),  # UX Wave 2: «مرتجع» at the till picks the invoice first
+            "can_return": user_has_permission(request.user, "sales.return_sale") and user_has_permission(request.user, "sales.view_sales_invoices"),  # UX Wave 2: «مرتجع» at the till picks the invoice first, on the sales list
             "walk_in": customer_default,
             "locations": locations,
             "cashboxes": cashboxes,

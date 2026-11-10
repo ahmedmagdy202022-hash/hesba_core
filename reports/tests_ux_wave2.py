@@ -342,3 +342,245 @@ class PagedMovementsTests(TestCase):
         html = self.client.get(reverse("cashboxes:detail", args=[cashbox.pk]), {"lang": "ar"}).content.decode()
         self.assertIn("1–20 من 23 سطر", html)
         self.assertIn("page=2", html)
+
+
+class ReviewFixesTests(TestCase):
+    """PR #344 review: the paged export, the chip that forgets a switched party, inactive parties, print, item edit,
+    phone cost words, the till's «مرتجع», the empty «⋯» menu and the payment forms' balance line."""
+
+    def setUp(self):
+        prepared_client()
+        self.owner = person(RoleCode.OWNER, "ux2_review")
+        self.client.force_login(self.owner)
+
+    def test_only_the_paged_table_is_gathered_from_every_page(self):
+        location = make_location(location_code="SHOP", is_default=True, is_receiving_location=True)
+        item = make_item(item_code="PAGED2", item_name="Paged two")
+        for n in range(3):
+            make_stock_movement(item, location, StockMovementType.PURCHASE_IN, "1", "5.00", movement_date=TODAY - timedelta(days=n))
+        html = self.client.get(reverse("inventory:item_detail", args=[item.pk]), {"lang": "ar"}).content.decode()
+        tables = re.findall(r"<table[^>]*>", html)
+        paged = [tag for tag in tables if "data-paged" in tag]
+        self.assertEqual(len(paged), 1)  # the movements, not the stock by location (nor the batches)
+        self.assertLess(html.index("المخزون حسب الموقع"), html.index(paged[0]))
+        cashbox = make_cashbox(cashbox_code="PAGED-BOX")
+        box = self.client.get(reverse("cashboxes:detail", args=[cashbox.pk]), {"lang": "ar"}).content.decode()
+        self.assertEqual(len([tag for tag in re.findall(r"<table[^>]*>", box) if "data-paged" in tag]), 1)
+        tools = read_static("hesba/js/report_tools.js")
+        self.assertIn("table[data-paged]", tools)
+        self.assertIn("if (pagedOnly && !table.hasAttribute('data-paged')) return;", tools)
+
+    def test_the_chip_amount_is_cleared_when_the_party_changes(self):
+        script = read_static("hesba/js/party_due.js")
+        self.assertIn("filled = amount.value;", script)
+        self.assertIn("if (filled !== null && amount.value === filled)", script)
+
+    def test_an_inactive_party_in_the_address_shows_no_balance(self):
+        gone = make_customer(customer_code="GONE", name="Gone Co", opening_balance=D("900.00"), active=False)
+        html = self.client.get(reverse("sales:payment_create"), {"lang": "ar", "customer": gone.pk}).content.decode()
+        self.assertNotIn("900.00", html)
+        self.assertRegex(html, r"data-party-due [^>]*hidden")
+        supplier = make_supplier(supplier_code="GONE-S", name="Gone Supplier", opening_balance=D("800.00"), active=False)
+        page = self.client.get(reverse("purchases:payment_create"), {"lang": "ar", "supplier": supplier.pk}).content.decode()
+        self.assertNotIn("800.00", page)
+
+    def test_the_supplier_payment_form_shows_what_is_owed_to_the_supplier(self):
+        make_cashbox(cashbox_code="TILL", is_default=True)
+        supplier = make_supplier(supplier_code="OWED-P", name="Owed Supplier", opening_balance=D("320.50"))
+        html = self.client.get(reverse("purchases:payment_create"), {"lang": "ar", "supplier": supplier.pk}).content.decode()
+        self.assertIn('data-kind="supplier"', html)
+        self.assertIn("مستحق ليه", html)
+        self.assertIn("320.50", html)
+        self.assertIn('data-due-fill data-amount="320.50"', html)
+        self.assertIn(f'data-url="{reverse("parties:balance", args=["supplier", 0])}"', html)
+        self.assertIn("سجّل الدفعة", html)
+
+    def test_a_credit_balance_reads_in_their_favour_and_hides_the_chip(self):
+        make_cashbox(cashbox_code="TILL", is_default=True)
+        customer = make_customer(customer_code="CREDIT", name="Credit Co", opening_balance=D("-150.00"))
+        html = self.client.get(reverse("sales:payment_create"), {"lang": "ar", "customer": customer.pk}).content.decode()
+        due = re.search(r"<div class=\"hs-due\" data-party-due.*?</div>", html, re.S).group(0)
+        self.assertNotRegex(due, r"data-party-due [^>]*hidden")
+        self.assertIn("ليه عندك <b><bdi>150.00", due)
+        self.assertNotIn("مستحق عليه <b>", due)
+        self.assertNotIn("-150", due)
+        self.assertRegex(due, r'data-due-fill data-amount=""\s*hidden')
+        supplier = make_supplier(supplier_code="CREDIT-S", name="Credit Supplier", opening_balance=D("-40.00"))
+        page = self.client.get(reverse("purchases:payment_create"), {"lang": "ar", "supplier": supplier.pk}).content.decode()
+        self.assertIn("ليك عنده <b><bdi>40.00", page)
+        self.assertRegex(page, r'data-due-fill data-amount=""\s*hidden')
+
+    def test_paper_hides_the_menu_the_filter_button_and_the_header_actions(self):
+        css = read_static("hesba/css/report_tools.css")
+        hidden = css[css.index("@media print"):].split("{display:none !important}")[0]
+        for selector in (".hs-more", ".hs-filter>summary", ".hs-head__actions", "[data-pick-return]"):
+            self.assertIn(selector, hidden)
+
+    def test_empty_means_zero_on_a_new_item_only(self):
+        item = make_item(item_code="EDIT-P", item_name="Priced", unit="قطعة", default_sale_price=D("12.00"), default_purchase_price=D("7.00"))
+        url = reverse("master_data:edit", kwargs={"entity": "items", "pk": item.pk}) + "?lang=ar"
+        page = self.client.get(url).content.decode()
+        sale = re.search(r'<input[^>]*name="default_sale_price"[^>]*>', page).group(0)
+        self.assertIn("required", sale)  # on edit the price is required, as before
+        response = self.client.post(url, {"item_code": "EDIT-P", "item_name": "Priced", "unit": "قطعة", "default_sale_price": "",
+                                          "default_purchase_price": "", "min_stock": "", "is_stock_tracked": "on", "active": "on"})
+        self.assertEqual(response.status_code, 200)
+        form = response.context["form"]
+        self.assertIn("default_sale_price", form.errors)
+        self.assertIn("default_purchase_price", form.errors)
+        self.assertNotIn("min_stock", form.errors)
+        item.refresh_from_db()
+        self.assertEqual((item.default_sale_price, item.default_purchase_price), (D("12.00"), D("7.00")))
+        created = self.client.post(reverse("master_data:create", kwargs={"entity": "items"}) + "?lang=ar",
+                                   {"item_name": "Fresh UX2", "unit": "قطعة", "default_sale_price": "", "default_purchase_price": "",
+                                    "is_stock_tracked": "on", "active": "on"})
+        self.assertEqual(created.status_code, 302)
+        fresh = Item.objects.get(item_name="Fresh UX2")
+        self.assertEqual((fresh.default_sale_price, fresh.default_purchase_price), (D("0"), D("0")))
+
+    def test_sales_lines_keep_their_cost_on_a_phone_for_cost_readers(self):
+        Period.objects.create(period_code="P", name="p", start_date=TODAY - timedelta(days=30), end_date=TODAY + timedelta(days=5))
+        location = make_location(location_code="SHOP", is_default=True, is_receiving_location=True)
+        cashbox = make_cashbox(cashbox_code="TILL", is_default=True)
+        item = make_item(item_code="RICE", item_name="Rice", default_sale_price=D("100.00"))
+        stock_in(item, location, 20, "60.00", movement_date=TODAY - timedelta(days=10))
+        recalculate_item_average_cost(item)
+        invoice = create_sales_draft({"invoice_number": "SI-COST", "invoice_date": TODAY, "customer": make_customer(customer_code="K"), "selling_location": location,
+                                      "cashbox": cashbox, "paid_now": D("0")}, [{"item": item, "quantity": D("2"), "unit_sale_price": D("100.00")}], self.owner)
+        post_sales_invoice(invoice.pk, self.owner)
+        html = self.client.get(reverse("sales:detail", args=[invoice.pk]), {"lang": "ar"}).content.decode()
+        self.assertIn('<td data-row="meta"><span class="hs-phone-only">تكلفة الوحدة</span>60', html)
+        self.assertIn('<td data-row="meta"><span class="hs-phone-only">تكلفة</span>120.00</td>', html)
+        seller = granted("ux2_no_cost", "sales.view_sales_invoices")
+        self.client.force_login(seller)
+        self.assertNotContains(self.client.get(reverse("sales:detail", args=[invoice.pk]), {"lang": "ar"}), "تكلفة الوحدة")
+
+    def test_the_till_return_link_needs_the_sales_list_too(self):
+        make_location(location_code="SHOP", is_default=True, is_selling_location=True)
+        make_cashbox(cashbox_code="TILL", is_default=True)
+        returner = granted("ux2_till_return", "sales.create_sales_invoice", "sales.return_sale")
+        self.client.force_login(returner)
+        till = self.client.get(reverse("sales:pos"), {"lang": "ar"})
+        self.assertEqual(till.status_code, 200)
+        self.assertNotContains(till, "data-pos-return")  # the link would open a list this cashier may not read
+        both = granted("ux2_till_return_list", "sales.create_sales_invoice", "sales.return_sale", "sales.view_sales_invoices")
+        self.client.force_login(both)
+        till = self.client.get(reverse("sales:pos"), {"lang": "ar"})
+        self.assertContains(till, "data-pos-return")
+        self.assertContains(till, "pick=return")
+
+    def test_a_menu_with_only_print_and_excel_waits_hidden_for_the_script(self):
+        for name in ("customers", "suppliers", "categories", "cashboxes"):
+            with self.subTest(name=name):
+                html = self.client.get(reverse("master_data:list", kwargs={"entity": name}), {"lang": "ar"}).content.decode()
+                self.assertIn('<details class="hs-more" data-more-actions hidden>', html)
+        self.assertIn("more.hidden = false", read_static("hesba/js/report_tools.js"))
+        self.assertIn(".hs-more[hidden]{display:none}", read_static("hesba/css/lists.css"))
+        sales = self.client.get(reverse("sales:list"), {"lang": "ar"}).content.decode()
+        self.assertIn('<details class="hs-more" data-more-actions>', sales)  # it has server links (the till, return)
+
+    def test_messages_say_final_not_posted(self):
+        from settings_core.ui_messages import EXACT
+
+        for english in ("A sales invoice with posted return documents cannot be cancelled.", "Only posted sales invoices can be cancelled.",
+                        "Sales returns require a posted source invoice.", "Purchase returns require a posted source invoice."):
+            self.assertIn("نهائية", EXACT[english])
+            self.assertNotIn("مرحّل", EXACT[english])
+
+
+class ListFiguresAtOneQueryTests(TestCase):
+    """PR #344 review: the balance and stock columns are read for the whole page at once, so a bigger page costs no more queries."""
+
+    def setUp(self):
+        prepared_client()
+        self.client.force_login(person(RoleCode.OWNER, "ux2_queries"))
+        location = make_location(location_code="SHOP", is_default=True, is_receiving_location=True)
+        for n in range(15):
+            make_customer(customer_code=f"QC-{n:02}", name=f"Customer {n:02}", opening_balance=D(n))
+            make_supplier(supplier_code=f"QS-{n:02}", name=f"Supplier {n:02}", opening_balance=D(n))
+            stock_in(make_item(item_code=f"QI-{n:02}", item_name=f"Item {n:02}"), location, n + 1, "2.00")
+
+    def count(self, url, per):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        self.client.get(url, {"lang": "ar", "per": per})  # the page size is remembered once; measure the next look
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.get(url, {"lang": "ar", "per": per})
+        return len(queries.captured_queries), len(response.context["rows"])
+
+    def test_the_same_queries_for_ten_rows_or_a_hundred(self):
+        for name, column in (("customers", "show_balance"), ("suppliers", "show_balance"), ("items", "show_stock")):
+            with self.subTest(name=name):
+                url = reverse("master_data:list", kwargs={"entity": name})
+                self.assertTrue(self.client.get(url, {"lang": "ar"}).context[column])
+                small, small_rows = self.count(url, 10)
+                large, large_rows = self.count(url, 100)
+                self.assertEqual(small_rows, 10)
+                self.assertGreaterEqual(large_rows, 15)
+                self.assertEqual(small, large)
+
+
+from entities.tests_scope import _Group  # noqa: E402  (the two-entity group: a main shop and a branch)
+
+
+class BranchListFiguresTests(_Group):
+    """PR #344 review: the list figures are the account card's and the stock page's, entity by entity."""
+
+    def in_entity(self, entity, fn):
+        from entities import current
+
+        token = current._current.set(entity)
+        try:
+            return fn()
+        finally:
+            current._current.reset(token)
+
+    def test_page_balances_equal_the_card_balance_in_each_entity(self):
+        from master_data.models import Customer, Supplier
+        from parties.services import balance, balances
+
+        idle = make_customer(customer_code="C-IDLE", name="بدون حركة", opening_balance=D("7.00"))
+        for entity in (None, self.main, self.branch):
+            with self.subTest(entity=entity):
+                for kind, parties in (("customer", list(Customer.objects.all())), ("supplier", list(Supplier.objects.all()))):
+                    page = self.in_entity(entity, lambda: balances(kind, parties))
+                    one_by_one = self.in_entity(entity, lambda: {party.pk: balance(kind, party) for party in parties})
+                    self.assertEqual(page, one_by_one)
+                self.assertIn(idle.pk, page if kind == "customer" else self.in_entity(entity, lambda: balances("customer", [idle])))
+        self.assertEqual(self.in_entity(self.branch, lambda: balances("customer", [self.customer]))[self.customer.pk], D("40.00"))
+
+    def test_page_stock_equals_the_stock_read_in_each_entity(self):
+        from inventory.models import StockMovement
+        from inventory.services import get_item_location_stock_quantity, get_item_stock_quantity, get_items_stock_quantities
+        from entities import scope as entity_scope
+
+        spare = make_item(item_code="IT-NONE", item_name="بدون حركة")
+        group = self.in_entity(None, lambda: get_items_stock_quantities([self.item, spare], entity_scope.scope(StockMovement.objects.all(), entity_scope.STOCK_MOVEMENT)))
+        self.assertEqual(group, {self.item.pk: get_item_stock_quantity(self.item), spare.pk: get_item_stock_quantity(spare)})
+        self.assertEqual(group[self.item.pk], D("40"))
+        for key in ("main", "branch"):
+            side = self.side[key]
+            here = self.in_entity(side["entity"], lambda: get_items_stock_quantities([self.item], entity_scope.scope(StockMovement.objects.all(), entity_scope.STOCK_MOVEMENT)))
+            self.assertEqual(here[self.item.pk], get_item_location_stock_quantity(self.item, side["location"]))
+            self.assertEqual(here[self.item.pk], D("20"))
+
+    def test_a_branch_user_sees_the_branch_balance_and_stock_on_the_lists(self):
+        self.as_manager()
+        items = self.client.get(reverse("master_data:items"), {"lang": "ar"})
+        self.assertTrue(items.context["show_stock"])
+        row = next(row for row in items.context["rows"] if row["object"].pk == self.item.pk)
+        self.assertEqual(row["stock"], D("20"))  # the branch's store only, as on the item's stock page
+        customers = self.client.get(reverse("master_data:customers"), {"lang": "ar"})
+        self.assertTrue(customers.context["show_balance"])
+        row = next(row for row in customers.context["rows"] if row["object"].pk == self.customer.pk)
+        self.assertEqual(row["balance"], D("40.00"))  # the branch's ledger rows, no opening balance
+        self.as_owner()
+        items = self.client.get(reverse("master_data:items"), {"lang": "ar"})
+        row = next(row for row in items.context["rows"] if row["object"].pk == self.item.pk)
+        self.assertEqual(row["stock"], D("40"))  # the whole group
+        self.assertEqual(next(row for row in self.client.get(reverse("master_data:customers"), {"lang": "ar"}).context["rows"]
+                              if row["object"].pk == self.customer.pk)["balance"], D("100.00") + D("40.00") + D("60.00") - D("10.00") - D("5.00") - D("25.00"))
+        self.as_owner(self.branch)
+        row = next(row for row in self.client.get(reverse("master_data:customers"), {"lang": "ar"}).context["rows"] if row["object"].pk == self.customer.pk)
+        self.assertEqual(row["balance"], D("40.00"))

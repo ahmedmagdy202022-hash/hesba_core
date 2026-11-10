@@ -5,7 +5,8 @@
 .hs-print-head{display:none}
 @media print{
   .hs-report-tools,.op-filters,.op-subnav,.op-messages,.op-form,.op-form-actions,.dash-bell,.hs-entity-bar,.op-back,
-  form button,a.op-primary,a.op-secondary,button.op-primary,button.op-secondary{display:none !important}
+  form button,a.op-primary,a.op-secondary,button.op-primary,button.op-secondary,
+  .hs-more,.hs-filter>summary,.hs-head__actions,[data-pick-return]{display:none !important}
   .hs-print-head{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;margin:0 0 12px;padding:0 0 8px;border-bottom:1px solid #000;font-size:12px}
   .op-shell{padding:0 !important}
   .op-table-wrap{border:0;overflow:visible}

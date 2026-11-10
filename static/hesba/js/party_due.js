@@ -54,12 +54,21 @@
       })
       .catch(function () { if (mine === asked) show(null); });
   }
+  var filled = null;  // the amount the chip put in the box, so a switch to another party does not keep the old one
   chip.addEventListener('click', function () {
     if (!chip.dataset.amount) return;
     amount.value = chip.dataset.amount;
+    filled = amount.value;
     amount.dispatchEvent(new Event('input', { bubbles: true }));
     amount.focus();
   });
-  select.addEventListener('change', load);
+  select.addEventListener('change', function () {
+    if (filled !== null && amount.value === filled) {  // untouched since the chip filled it: it was the other party's figure
+      amount.value = '';
+      amount.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    filled = null;
+    load();
+  });
   if (select.value && box.hidden) load();
 })();

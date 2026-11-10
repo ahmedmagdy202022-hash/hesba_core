@@ -137,14 +137,15 @@ def may_see_balance(user, kind):
     return user_has_permission(user, PERMISSION[kind]) or user_has_permission(user, INVOICE_PERMISSION[kind])
 
 
-def due_on_form(user, kind, party_id):
+def due_on_form(user, kind, party_id, choices):
     """UX Wave 2: the balance a payment form shows for the party it opened with («مستحق عليه …»), or None.
 
-    Read-only, the same figure as the party card and the balance endpoint; None when the reader may not see it."""
+    Read-only, the same figure as the party card and the balance endpoint; None when the reader may not see it.
+    ``choices`` is the form's own party queryset (active parties only): a party the form would not accept shows nothing."""
 
     if kind not in KINDS or not str(party_id or "").isdigit() or not may_see_balance(user, kind):
         return None
-    party = KINDS[kind]["model"].objects.filter(pk=party_id).first()
+    party = choices.filter(pk=party_id).first()
     return balance(kind, party) if party is not None else None
 
 

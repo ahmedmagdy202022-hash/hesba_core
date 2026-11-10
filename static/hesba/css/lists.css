@@ -11,6 +11,7 @@
 .hs-head__actions>form{display:contents}
 .hs-head p{margin-top:var(--hs-space-1)}
 .hs-more{position:relative}
+.hs-more[hidden]{display:none}
 .hs-more>summary{list-style:none;display:inline-flex;align-items:center;justify-content:center;min-width:var(--hs-control-height);min-height:var(--hs-control-height);padding:0 var(--hs-space-3);border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);background:var(--hs-surface);color:var(--hs-navy);font:inherit;font-size:var(--hs-text-xl);font-weight:var(--hs-weight-bold);line-height:1;cursor:pointer}
 .hs-more>summary::-webkit-details-marker{display:none}
 .hs-more>summary:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}

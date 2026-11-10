@@ -18,20 +18,20 @@ not be dropped.
 <link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
 <link rel="stylesheet" href="{% static 'hesba/css/buttons.css' %}?v=ux2-1">
 {% block styles %}{% endblock %}
-<link rel="stylesheet" href="{% static 'hesba/css/lists.css' %}?v=ux2-1">
+<link rel="stylesheet" href="{% static 'hesba/css/lists.css' %}?v=ux2-2">
 <link rel="stylesheet" href="{% static 'hesba/css/table_cards.css' %}?v=ux2-1">
 <link rel="stylesheet" href="{% static 'hesba/css/form_required.css' %}?v=req-2">
 <link rel="stylesheet" href="{% static 'hesba/css/form_controls.css' %}?v=fb27-1">
 <link rel="stylesheet" href="{% static 'hesba/css/datepicker.css' %}?v=ux2-1">
 <link rel="stylesheet" href="{% static 'hesba/css/pager.css' %}?v=ux2-1">
-{% if report_tools %}<link rel="stylesheet" href="{% static 'hesba/css/report_tools.css' %}?v=fb-reports-2">{% endif %}
+{% if report_tools %}<link rel="stylesheet" href="{% static 'hesba/css/report_tools.css' %}?v=ux2-3">{% endif %}
 </head>
 <body class="{% block body_class %}{% endblock %}" data-lang="{{ lang|default:'ar' }}">
 {% block content %}{% endblock %}
 <script src="{% static 'hesba/js/quick_option.js' %}?v=fb26-form" defer></script>
 <script src="{% static 'hesba/js/price_markup.js' %}?v=fb2-price" defer></script>
 <script src="{% static 'hesba/js/discount_percent.js' %}?v=ux1-2" defer></script>
-{% if report_tools %}{% include "partials/report_tools.html" %}<script src="{% static 'hesba/js/report_tools.js' %}?v=ux2-2" defer></script>{% endif %}
+{% if report_tools %}{% include "partials/report_tools.html" %}<script src="{% static 'hesba/js/report_tools.js' %}?v=ux2-3" defer></script>{% endif %}
 
 <script>
 (function(){
