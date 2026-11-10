@@ -10,10 +10,10 @@ they are when the cashier picks that item by hand. Nothing here posts, prices, m
 from decimal import Decimal
 
 from entities import scope as entity_scope
-from master_data.models import Customer, Item, Location
+from master_data.models import Customer, Location
 
 from . import services
-from .models import DrugInfo, DrugReference
+from .models import DrugInfo
 from .reference import fold
 
 #: The till's own permission (``sales.pos.pos``): whoever may ring up a sale may see what else is on the shelf.
@@ -84,31 +84,17 @@ def _quantity(value):
     return format((value or Decimal("0")).quantize(Decimal("0.001")).normalize(), "f")
 
 
-def known_to_shop(rows, items):
-    """The reference rows that are already one of the shop's ``items``.
-
-    A reference row is "already an item" when its barcode is the barcode of any active item, or when its English or
-    Arabic trade name, folded as the reference list folds names (case, hamza forms, ة/ى, digits, spaces), equals the
-    folded name of one of ``items`` (the item asked about and the items with the same active ingredient)."""
-
-    names = {fold(item.item_name) for item in items} - {""}
-    barcodes = {row["barcode"] for row in rows if row["barcode"]}
-    taken = set(Item.objects.filter(active=True, barcode__in=barcodes).values_list("barcode", flat=True)) if barcodes else set()
-    return [row for row in rows if (row["barcode"] and row["barcode"] in taken) or fold(row["name_en"]) in names or fold(row["name_ar"]) in names]
-
-
-def missing_from_shop(drug, items, lang="ar"):
-    """(count, up to NAMES names) of the active reference rows with the drug's ingredient that are not one of ``items``,
-    the same strength first."""
+def missing_from_shop(drug, lang="ar"):
+    """(count, up to NAMES names) of the reference rows with the drug's ingredient that the pharmacy does not have, the
+    same strength first. "Does not have" is the drug page's rule (``picker.unstocked_rows``), so the two screens agree."""
 
     if drug is None or not drug.ingredient_key:
         return 0, []
-    rows = list(DrugReference.objects.filter(is_active=True, ingredient_key=drug.ingredient_key)
-                .values("pk", "name_en", "name_ar", "strength_key", "barcode")[:REFERENCE_ROWS])
-    known = {row["pk"] for row in known_to_shop(rows, items)}
-    left = [row for row in rows if row["pk"] not in known]
+    from .picker import unstocked_rows
+
+    left = list(unstocked_rows(drug).values("pk", "name_en", "name_ar", "strength_rank")[:REFERENCE_ROWS])
     first, second = ("name_en", "name_ar") if lang == "en" else ("name_ar", "name_en")
-    left.sort(key=lambda row: (row["strength_key"] != drug.strength_key, fold(row[first] or row[second]), row["pk"]))
+    left.sort(key=lambda row: (row["strength_rank"], fold(row[first] or row[second]), row["pk"]))
     return len(left), [row[first] or row[second] for row in left[:NAMES]]
 
 
@@ -131,7 +117,7 @@ def alternatives_for(item, *, location=None, customer=None, lang="ar"):
     price_list = customer_list(customer) if shelf else None
     prices = list_prices(price_list, [row["item"] for row in shelf]) if price_list is not None else {}
     labels = services.FORM_LABELS[lang]
-    count, names = missing_from_shop(drug, [item] + [row["item"] for row in rows], lang)
+    count, names = missing_from_shop(drug, lang)
     return {
         "ok": True,
         "item": {"id": item.pk, "name": item.display_name, "drug": drug is not None, "on_hand": _quantity(stock.get(item.pk)),

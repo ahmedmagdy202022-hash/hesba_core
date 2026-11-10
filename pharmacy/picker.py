@@ -326,25 +326,32 @@ def for_new_item(request, lang="ar"):
 
 # ---- «بدائل مش عندك» on the drug page ----
 
+def unstocked_rows(drug):
+    """The one rule for «مش عندك», shared by the drug page and the till's «بدائل» sheet, as a queryset: the active
+    reference rows with ``drug``'s active ingredient that match no item the pharmacy has (by barcode, or by the folded
+    English or Arabic name), the same strength first. ``strength_rank`` is 0 for the same strength.
+
+    Known limitation (kept on purpose): "the pharmacy has it" means the same barcode or exactly the same folded name,
+    so a stocked product spelt differently (another word order, a pack in the name) still counts as not there."""
+
+    barcodes = Item.objects.exclude(barcode="").values("barcode")
+    names = Item.objects.annotate(folded=db_fold(F("item_name"))).values("folded")
+    same = When(strength_key=drug.strength_key, then=Value(0)) if drug.strength_key else When(pk__isnull=True, then=Value(0))
+    return (DrugReference.objects.filter(is_active=True, ingredient_key=drug.ingredient_key)
+            .annotate(ar_key=db_fold(F("name_ar")), strength_rank=Case(same, default=Value(1), output_field=IntegerField()))
+            .exclude(barcode__in=barcodes).exclude(name_key__in=names).exclude(Q(ar_key__in=names) & ~Q(name_ar=""))
+            .order_by("strength_rank", "name_key", "pk"))
+
+
 def unstocked_alternatives(item, limit=ALTERNATIVES_LIMIT):
-    """Active reference rows with ``item``'s active ingredient that match no item the pharmacy has (by barcode, or by the
-    folded English or Arabic name): the same strength first, then the others. One query; [] without drug data.
+    """``unstocked_rows`` for ``item``'s drug data, the first ``limit``. One query; [] without drug data.
 
-    Each row carries ``same`` (True for the same strength).
-
-    Known limitation (kept on purpose in this step): "the pharmacy has it" means the same barcode or exactly the same
-    folded name, so a stocked product spelt differently (another word order, a pack in the name) still shows here."""
+    Each row carries ``same`` (True for the same strength)."""
 
     drug = getattr(item, "drug", None) if item is not None else None
     if drug is None or not drug.ingredient_key:
         return []
-    barcodes = Item.objects.exclude(barcode="").values("barcode")
-    names = Item.objects.annotate(folded=db_fold(F("item_name"))).values("folded")
-    same = When(strength_key=drug.strength_key, then=Value(0)) if drug.strength_key else When(pk__isnull=True, then=Value(0))
-    rows = (DrugReference.objects.filter(is_active=True, ingredient_key=drug.ingredient_key)
-            .annotate(ar_key=db_fold(F("name_ar")), strength_rank=Case(same, default=Value(1), output_field=IntegerField()))
-            .exclude(barcode__in=barcodes).exclude(name_key__in=names).exclude(Q(ar_key__in=names) & ~Q(name_ar=""))
-            .order_by("strength_rank", "name_key", "pk")[:limit])
+    rows = unstocked_rows(drug)[:limit]
     rows = list(rows)
     for row in rows:
         row.same = row.strength_rank == 0
