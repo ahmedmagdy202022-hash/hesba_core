@@ -1,6 +1,6 @@
 {% extends "operations/base.html" %}
 {% load hesba_format l10n static hesba_payments %}
-{% block styles %}{{ block.super }}{% if attachments %}<link rel="stylesheet" href="{% static 'hesba/css/attachments.css' %}?v=s1-ui-1">{% endif %}{% endblock %}
+{% block styles %}{{ block.super }}{% if attachments %}<link rel="stylesheet" href="{% static 'hesba/css/attachments.css' %}?v=m5-1">{% endif %}{% endblock %}
 {% block operation_content %}
 <section class="op-title-row"><div><a class="op-back" href="{% url 'workorders:list' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.back }}</a>
 <h1><bdi>{{ order.number }}</bdi> — {{ order.device }}</h1>
@@ -57,5 +57,5 @@
 <h2>{{ words.timeline }}</h2>
 <ul class="wo-timeline" data-timeline>{% for event in events %}<li><bdi>{{ event.at|date:"Y-m-d H:i" }}</bdi> · <strong>{% for key, label in labels.items %}{% if key == event.status %}{{ label }}{% endif %}{% endfor %}</strong> · {% if event.by_customer %}{{ words.via_link }}{% else %}{{ event.user|person }}{% endif %}{% if event.note %} — {{ event.note }}{% endif %}</li>{% endfor %}</ul>
 {% if returns %}<h2>{{ words.warranty_return }}</h2><ul>{% for back in returns %}<li><a href="{% url 'workorders:detail' back.pk %}?lang={{ lang }}"><bdi>{{ back.number }}</bdi></a> · <bdi>{{ back.received_at|date:"Y-m-d" }}</bdi></li>{% endfor %}</ul>{% endif %}
-{% if attachments %}<script src="{% static 'hesba/js/attachments.js' %}?v=s1-ui-1" defer></script>{% endif %}
+{% if attachments %}<script src="{% static 'hesba/js/attachments.js' %}?v=m5-1" defer></script>{% endif %}
 {% endblock %}

@@ -49,3 +49,30 @@
 .att-card.is-busy .att-add,.att-card.is-busy .att-x,.att-card.is-busy .att-del,.att-card.is-busy [data-att-save]{opacity:.55;pointer-events:none}
 @media(min-width:1000px){.att-card{padding:var(--hs-space-6)}.att-pad{height:200px}}
 @media(max-width:700px){.att-card{padding:var(--hs-space-4)}.att-docs li{flex-direction:column;align-items:stretch}.att-del{width:100%}}
+
+/* M5 (HG-083): the clinic's card: a category picker, then a list with a thumbnail, category, date and uploader. */
+.att-med .att-upload{display:grid;gap:var(--hs-space-3)}
+.att-formats{font-size:var(--hs-text-sm)}
+.att-cats{border:0;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:var(--hs-space-2)}
+.att-cats legend{float:none;display:block;width:100%;padding:0;margin-bottom:var(--hs-space-2);font-weight:var(--hs-weight-bold);color:var(--hs-navy);font-size:var(--hs-text-md)}
+.att-chip{position:relative;display:inline-flex}
+.att-chip input{position:absolute;opacity:0;inset:0;width:100%;height:100%;margin:0;cursor:pointer}
+.att-chip span{display:inline-flex;align-items:center;justify-content:center;min-height:44px;min-width:76px;padding:0 var(--hs-space-4);border:1.5px solid var(--hs-line-strong);border-radius:var(--hs-radius-pill);background:var(--hs-surface);color:var(--hs-navy);font-weight:var(--hs-weight-semibold);font-size:var(--hs-text-md)}
+.att-chip input:checked+span{background:var(--hs-teal-wash);border-color:var(--hs-teal-deep);color:var(--hs-teal-deep);font-weight:var(--hs-weight-bold)}
+.att-chip input:focus-visible+span{box-shadow:var(--hs-focus-ring)}
+.att-list{list-style:none;margin:0;padding:0;display:grid;gap:var(--hs-space-3)}
+.att-item{display:flex;align-items:center;gap:var(--hs-space-3);padding:var(--hs-space-3);border:1px solid var(--hs-line);border-radius:var(--hs-radius-lg);background:var(--hs-ground)}
+.att-item-thumb{flex:none;width:72px;height:72px;border-radius:var(--hs-radius-md);overflow:hidden;background:var(--hs-neutral-wash);border:1px solid var(--hs-line);display:grid;place-items:center}
+.att-item-thumb img{display:block;width:100%;height:100%;object-fit:cover}
+.att-pdf{display:grid;justify-items:center;gap:2px;color:var(--hs-navy)}
+.att-pdf b{font-size:var(--hs-text-sm)}
+.att-item-body{flex:1 1 auto;min-width:0;display:grid;gap:4px;justify-items:start}
+.att-cat{display:inline-block;padding:2px 10px;border-radius:var(--hs-radius-pill);background:var(--hs-teal-wash);color:var(--hs-teal-deep);font-weight:var(--hs-weight-bold);font-size:var(--hs-text-sm)}
+.att-item-name{color:var(--hs-navy);font-weight:var(--hs-weight-bold);overflow-wrap:anywhere;min-height:24px}
+.att-item-meta{color:var(--hs-muted);font-size:var(--hs-text-sm);line-height:1.5}
+.att-item-meta a{color:var(--hs-teal-deep);font-weight:var(--hs-weight-semibold)}
+.att-item-name,.att-item-meta a{position:relative}
+.att-item-name::after,.att-item-meta a::after{content:"";position:absolute;inset:-10px 0}/* a 44px tap area without a taller row */
+.att-item .att-item-x{position:static;flex:none;align-self:flex-start}
+@media(max-width:700px){.att-item-thumb{width:64px;height:64px}}
+.att-more-link{display:inline-flex;align-items:center;min-height:var(--hs-control-height);padding:0 var(--hs-space-2);color:var(--hs-teal-deep);font-weight:600}

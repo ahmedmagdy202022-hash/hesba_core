@@ -39,8 +39,27 @@
   };
   Card.prototype.status = function (text) { this.statusBox.textContent = text || ''; };
   Card.prototype.busy = function (on) { this.root.classList.toggle('is-busy', !!on); };
+  // After a change the card is re-read from the server. A card marked data-refresh="inline" (the clinic's, next to a visit form
+  // with unsaved typing) swaps only its own content; the work order's reloads the page, as before.
   Card.prototype.reload = function () {
-    try { history.replaceState(null, '', location.pathname + location.search + '#wo-attachments'); } catch (e) { /* ignore */ }
+    var root = this.root, anchor = root.id || 'wo-attachments', self = this;
+    if (root.getAttribute('data-refresh') === 'inline' && window.fetch && window.DOMParser) {
+      this.busy(true);
+      fetch(location.pathname + location.search, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function (response) { if (!response.ok) { throw new Error('refresh'); } return response.text(); })
+        .then(function (html) {
+          var fresh = new DOMParser().parseFromString(html, 'text/html').getElementById(anchor);
+          if (!fresh) { throw new Error('refresh'); }
+          root.innerHTML = fresh.innerHTML;
+          self.busy(false);
+          bind(root);
+          var text = flashTake();
+          if (text) { new Card(root).error(text); }
+        })
+        .catch(function () { location.reload(); });
+      return;
+    }
+    try { history.replaceState(null, '', location.pathname + location.search + '#' + anchor); } catch (e) { /* ignore */ }
     location.reload();
   };
 
@@ -282,21 +301,30 @@
     });
   };
 
-  document.querySelectorAll('[data-attachments]').forEach(function (root) {
+  // Wires one card. Safe to call again after the card's content was replaced: the click listener on the root stays.
+  function bind(root) {
     var card = new Card(root);
-    var flash = flashTake();
-    if (flash) { card.error(flash); }
     root.querySelectorAll('[data-att-upload]').forEach(function (form) {
       form.addEventListener('submit', function (event) { event.preventDefault(); });
       form.querySelectorAll('[data-att-file]').forEach(function (input) {
         input.addEventListener('change', function () { card.upload(form, input); });
       });
     });
-    root.addEventListener('click', function (event) {
-      var button = event.target.closest ? event.target.closest('[data-att-delete]') : null;
-      if (button && root.contains(button)) { card.remove(button); }
-    });
+    if (!root.hasAttribute('data-att-bound')) {
+      root.setAttribute('data-att-bound', '');
+      root.addEventListener('click', function (event) {
+        var button = event.target.closest ? event.target.closest('[data-att-delete]') : null;
+        if (button && root.contains(button)) { new Card(root).remove(button); }
+      });
+    }
     var signature = root.querySelector('[data-att-signature]');
     if (signature) { card.initSignature(signature); }
+    return card;
+  }
+
+  document.querySelectorAll('[data-attachments]').forEach(function (root) {
+    var card = bind(root);
+    var flash = flashTake();
+    if (flash) { card.error(flash); }
   });
 })();
