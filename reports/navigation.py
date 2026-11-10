@@ -155,7 +155,7 @@ NAV_GROUPS = (
     {"key": "sales", "ar": "البيع", "en": "Sales",
      "keys": ("pos", "operations", "quotes", "restaurant", "workorders", "appointments", "queue", "projects", "contracts", "packages", "hours")},
     {"key": "stock", "ar": "المخزون", "en": "Stock",
-     "keys": ("items", "inventory", "purchases", "suppliers", "warehouses", "drugs", "manufacturing")},
+     "keys": ("items", "inventory", "warehouses", "purchases", "suppliers", "drugs", "manufacturing")},
     {"key": "people", "ar": "الناس", "en": "People",
      "keys": ("customers", "education", "classes", "medical", "messages", "staff", "attendance", "my_attendance", "my_day")},
     {"key": "money", "ar": "الفلوس", "en": "Money",
