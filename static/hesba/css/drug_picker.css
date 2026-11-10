@@ -1,0 +1,110 @@
+/* R1 step 2: «اختار من القايمة» (the reference drug list) on a pharmacy's new item, and «بدائل مش عندك» on the drug page.
+   Tokens only: no colour literals. A bottom sheet on a phone, a centred dialog from 720px. */
+.hs-drug-ico{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.hs-drug-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+[data-drug-picker-open][hidden],.hs-drug-hint[hidden],.hs-drug-banner[hidden],.hs-drug-price[hidden]{display:none}
+
+/* the opener beside the name */
+.hs-drug-name-row{display:flex;gap:var(--hs-space-2);align-items:stretch;min-width:0}
+.hs-drug-name-row > input{flex:1 1 auto;min-width:0}
+.hs-drug-open{display:inline-flex;align-items:center;justify-content:center;gap:var(--hs-space-2);flex:none;min-height:var(--hs-control-height);padding:0 var(--hs-space-3);border:1px solid var(--hs-teal-deep);border-radius:var(--hs-radius-md);background:var(--hs-surface);color:var(--hs-teal-deep);font:inherit;font-size:var(--hs-text-sm);font-weight:700;white-space:nowrap;cursor:pointer}
+.hs-drug-open:hover{background:var(--hs-teal-wash)}
+.hs-drug-open:focus-visible,.hs-drug-link:focus-visible,.hs-drug-row:focus-visible,.hs-drug-sheet__x:focus-visible,.hs-drug-retry:focus-visible,.hs-drug-add:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
+@media (max-width:380px){.hs-drug-open span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}}
+.hs-drug-link{display:inline-flex;align-items:center;gap:6px;min-height:var(--hs-control-height);padding:0 6px;border:0;border-radius:var(--hs-radius-sm);background:transparent;color:var(--hs-teal-deep);font:inherit;font-size:var(--hs-text-md);font-weight:600;cursor:pointer;text-decoration:none}
+
+/* fields filled from the list, until edited */
+.hs-section__grid .hs-from-list:is(input,select,textarea):not([type=checkbox]):not([type=radio]){background-color:var(--hs-teal-wash);border-color:var(--hs-teal)}
+
+/* the "filled from the list" note above the form */
+.hs-drug-banner{display:flex;gap:var(--hs-space-3);align-items:flex-start;margin:0 0 var(--hs-space-4);padding:var(--hs-space-3) var(--hs-space-4);border:1px solid var(--hs-teal);border-radius:var(--hs-radius-md);background:var(--hs-teal-wash);color:var(--hs-ink);font-size:var(--hs-text-sm);line-height:1.6}
+.hs-drug-banner > .hs-drug-ico{color:var(--hs-teal-deep);margin-top:2px}
+.hs-drug-banner > div{display:flex;flex-direction:column;align-items:flex-start;min-width:0}
+.hs-drug-banner b{font-size:var(--hs-text-md);color:var(--hs-navy)}
+.hs-drug-banner__price:empty{display:none}
+.hs-drug-banner .hs-drug-link{margin-inline-start:-6px}
+
+/* the suggested price under the sale price */
+.hs-drug-price{display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin:6px 0 0;font-size:var(--hs-text-xs);line-height:1.6;color:var(--hs-teal-deep)}
+.hs-drug-price__note{color:var(--hs-muted)}
+.hs-drug-price--own{color:var(--hs-ink)}
+.hs-drug-price--own .hs-drug-link{margin-inline-start:-6px;font-size:var(--hs-text-sm)}
+.hs-drug-price--stale{padding:var(--hs-space-2) 10px;border:1px solid var(--hs-warning-line);border-radius:var(--hs-radius-sm);background:var(--hs-warning-wash);color:var(--hs-warning)}
+.hs-drug-price--stale .hs-drug-price__note{color:var(--hs-warning)}
+.hs-drug-part__check{padding:0 20px 20px}
+@media (max-width:760px){.hs-drug-part__check{padding:0 16px 16px}}
+
+/* the sheet */
+html.hs-drug-locked{overflow:hidden}
+.hs-drug-sheet{box-sizing:border-box;width:100%;max-width:100%;height:min(88dvh,760px);max-height:none;margin:auto 0 0;padding:0;border:0;border-radius:var(--hs-radius-xl) var(--hs-radius-xl) 0 0;background:var(--hs-ground);color:var(--hs-ink);font-family:var(--hs-font-body);box-shadow:var(--hs-shadow-lg);overflow:hidden}
+.hs-drug-sheet[open]{display:flex;flex-direction:column}
+.hs-drug-sheet::backdrop{background:var(--hs-scrim)}
+.hs-drug-sheet__grab{flex:none;width:40px;height:4px;margin:10px auto 2px;border-radius:var(--hs-radius-pill);background:var(--hs-line-strong)}
+.hs-drug-sheet__head{flex:none;display:flex;align-items:center;gap:var(--hs-space-2);padding:2px 8px 0 16px;padding-inline:16px 8px}
+.hs-drug-sheet__head h2{flex:1;margin:0;font-family:var(--hs-font-head);font-size:17px;font-weight:700;color:var(--hs-navy);line-height:1.4}
+.hs-drug-sheet__x{display:inline-grid;place-items:center;width:var(--hs-control-height);height:var(--hs-control-height);border:0;border-radius:var(--hs-radius-md);background:transparent;color:var(--hs-ink);cursor:pointer}
+.hs-drug-sheet__search{flex:none;position:relative;padding:6px 16px 8px}
+.hs-drug-sheet__search > .hs-drug-ico{position:absolute;inset-inline-start:30px;top:20px;color:var(--hs-muted);pointer-events:none}
+.hs-drug-sheet__search input{box-sizing:border-box;width:100%;height:var(--hs-control-height-lg);padding:0 14px;padding-inline-start:44px;border:1px solid var(--hs-teal-deep);border-radius:var(--hs-radius-md);background:var(--hs-surface);color:var(--hs-ink);font:inherit;font-size:var(--hs-text-base)}
+.hs-drug-sheet__search input:focus{outline:0;box-shadow:var(--hs-focus-ring)}
+.hs-drug-sheet__search input::placeholder{color:var(--hs-muted)}
+.hs-drug-sheet__meta{flex:none;display:flex;justify-content:space-between;gap:var(--hs-space-2);min-height:20px;padding:0 16px 6px;font-size:var(--hs-text-xs);color:var(--hs-muted)}
+.hs-drug-sheet__body{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain}
+.hs-drug-sheet__foot{flex:none;display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:10px 16px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--hs-line);background:var(--hs-ground);font-size:var(--hs-text-xs);color:var(--hs-muted)}
+.hs-drug-sheet__foot .hs-drug-link{margin-inline-start:-6px}
+@media (min-width:720px){
+  .hs-drug-sheet{width:min(640px,calc(100% - 48px));height:min(720px,calc(100dvh - 64px));margin:auto;border-radius:var(--hs-radius-xl)}
+  .hs-drug-sheet__grab{visibility:hidden;height:0;margin:6px auto 0}
+}
+
+/* the results: two lines, at least 56px, the price at the end */
+.hs-drug-list{margin:0;padding:0;list-style:none;background:var(--hs-surface);border-block:1px solid var(--hs-line)}
+.hs-drug-list[hidden]{display:none}
+.hs-drug-list li + li{border-top:1px solid var(--hs-line)}
+.hs-drug-row{display:flex;gap:var(--hs-space-3);align-items:flex-start;justify-content:space-between;box-sizing:border-box;width:100%;min-height:64px;padding:10px 16px;border:0;background:var(--hs-surface);color:var(--hs-ink);font:inherit;text-align:start;cursor:pointer}
+.hs-drug-row:hover,.hs-drug-row:active{background:var(--hs-teal-wash)}
+.hs-drug-row__main{display:flex;flex-direction:column;flex:1;min-width:0}
+.hs-drug-row__l1{display:flex;flex-wrap:wrap;column-gap:var(--hs-space-2);align-items:baseline;line-height:1.5}
+.hs-drug-row__l1 strong{font-size:var(--hs-text-base)}
+.hs-drug-row__en{font-size:var(--hs-text-xs);color:var(--hs-muted)}
+.hs-drug-row__l2{font-size:var(--hs-text-sm);color:var(--hs-muted);line-height:1.5}
+.hs-drug-row__side{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex:none;padding-top:1px}
+.hs-drug-row__price{font-weight:700;font-size:var(--hs-text-base);font-variant-numeric:tabular-nums;white-space:nowrap}
+.hs-drug-row__price small{font-weight:400;font-size:var(--hs-text-xs);color:var(--hs-muted)}
+.hs-drug-chip{display:inline-flex;align-items:center;padding:4px 8px;border:1px solid transparent;border-radius:var(--hs-radius-pill);font-size:var(--hs-text-xs);font-weight:700;line-height:1;white-space:nowrap}
+.hs-drug-chip--rx{border-color:var(--hs-danger-line);background:var(--hs-danger-wash);color:var(--hs-danger)}
+.hs-drug-chip--same{border-color:var(--hs-teal);background:var(--hs-teal-wash);color:var(--hs-teal-deep)}
+.hs-drug-chip--other{border-color:var(--hs-line);background:var(--hs-neutral-wash);color:var(--hs-muted)}
+
+/* states: fewer than two letters, loading, nothing found, no connection */
+.hs-drug-state{display:flex;flex-direction:column;align-items:center;gap:10px;padding:28px 24px;text-align:center;background:var(--hs-surface);border-block:1px solid var(--hs-line)}
+.hs-drug-state[hidden],.hs-drug-skel[hidden]{display:none}
+.hs-drug-state b{font-size:var(--hs-text-base)}
+.hs-drug-state p{margin:0;max-width:32ch;font-size:var(--hs-text-sm);color:var(--hs-muted)}
+.hs-drug-state__badge{display:grid;place-items:center;width:48px;height:48px;border-radius:var(--hs-radius-pill);background:var(--hs-neutral-wash);color:var(--hs-muted)}
+.hs-drug-state--error .hs-drug-state__badge{background:var(--hs-danger-wash);color:var(--hs-danger)}
+.hs-drug-retry{min-height:var(--hs-control-height);padding:0 var(--hs-space-4);border:1px solid var(--hs-teal-deep);border-radius:var(--hs-radius-md);background:var(--hs-surface);color:var(--hs-teal-deep);font:inherit;font-weight:700;cursor:pointer}
+.hs-drug-skel{background:var(--hs-surface);border-block:1px solid var(--hs-line)}
+.hs-drug-skel__row{display:flex;justify-content:space-between;gap:var(--hs-space-4);min-height:64px;box-sizing:border-box;padding:12px 16px}
+.hs-drug-skel__row + .hs-drug-skel__row{border-top:1px solid var(--hs-line)}
+.hs-drug-skel__row > div{display:flex;flex-direction:column;gap:var(--hs-space-2);flex:1}
+.hs-drug-skel i{display:block;height:12px;border-radius:6px;background:linear-gradient(90deg,var(--hs-neutral-wash),var(--hs-line),var(--hs-neutral-wash));background-size:200% 100%;animation:hs-drug-shimmer 1.3s linear infinite}
+.hs-drug-skel__row > div i:first-child{width:60%}
+.hs-drug-skel__row > div i:last-child{width:85%}
+.hs-drug-skel__row > i{width:16%;align-self:flex-start}
+@keyframes hs-drug-shimmer{to{background-position:-200% 0}}
+@media (prefers-reduced-motion:reduce){.hs-drug-skel i{animation:none}}
+
+/* «بدائل مش عندك» on the drug page: dashed cards, no stock */
+.hs-drug-missing{display:flex;flex-direction:column;gap:var(--hs-space-2);margin:var(--hs-space-5) 0}
+.hs-drug-missing h2{display:flex;align-items:center;gap:var(--hs-space-2);margin:0}
+.hs-drug-missing__count{min-width:22px;padding:0 6px;border-radius:var(--hs-radius-pill);background:var(--hs-neutral-wash);color:var(--hs-muted);font-family:var(--hs-font-body);font-size:var(--hs-text-xs);font-weight:700;text-align:center}
+.hs-drug-missing p{margin:0;font-size:var(--hs-text-sm);color:var(--hs-muted)}
+.hs-drug-missing ul{display:flex;flex-direction:column;gap:var(--hs-space-2);margin:0;padding:0;list-style:none}
+.hs-drug-miss{display:flex;gap:var(--hs-space-3);align-items:center;justify-content:space-between;min-height:64px;box-sizing:border-box;padding:10px 14px;border:1.5px dashed var(--hs-line-strong);border-radius:var(--hs-radius-lg)}
+.hs-drug-miss__main{display:flex;flex-direction:column;min-width:0}
+.hs-drug-miss__main .hs-drug-row__l1 strong{font-weight:600}
+.hs-drug-miss__ref{font-size:var(--hs-text-xs);color:var(--hs-muted)}
+.hs-drug-miss__main .hs-drug-chip{align-self:flex-start;margin-top:4px}
+.hs-drug-add{display:inline-flex;align-items:center;gap:6px;flex:none;min-height:var(--hs-control-height);padding:0 10px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-sm);background:var(--hs-surface);color:var(--hs-teal-deep);font-size:var(--hs-text-sm);font-weight:600;text-decoration:none}
+.hs-drug-add:hover{border-color:var(--hs-teal-deep)}

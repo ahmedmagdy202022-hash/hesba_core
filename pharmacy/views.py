@@ -285,3 +285,28 @@ def print_prescription(request, pk):
            "reference": (own["doctor"], prescription.doctor_name) if prescription.doctor_name else None, "lines": lines, "no_prices": True,
            "notes": prescription.notes}
     return _render(request, doc, f"/pharmacy/prescriptions/{pk}/")
+
+
+# ---- R1 step 2: the reference drug list on the new-item form ----
+
+def reference_search(request):
+    """GET ``q``: the reference rows for the «اختار من القايمة» picker, as JSON (at most 20).
+
+    Open to whoever may create items (``master_data.manage_items``) while the ``drugs`` capability is on; anyone else
+    gets a JSON 403. A signed-out visitor is sent to the login page first, as on every Hesba route."""
+
+    from django.http import JsonResponse
+
+    from . import picker
+
+    lang = _lang(request)
+    if request.method != "GET":
+        return JsonResponse({"ok": False, "error": "GET only"}, status=405)
+    if not services.enabled() or not services.can_edit(request.user):
+        denied = "Choosing from the list needs the drug database and the manage-items permission." if lang == "en" else "الاختيار من القايمة محتاج قاعدة الأدوية وصلاحية إدارة الأصناف."
+        return JsonResponse({"ok": False, "error": denied}, status=403)
+    query, rows = picker.search_reference(request.GET.get("q"))
+    today = timezone.localdate()
+    return JsonResponse({"ok": True, "query": query, "too_short": len(query) < picker.MIN_QUERY, "limit": picker.SEARCH_LIMIT,
+                         "count": len(rows), "results": [picker.as_json(row, lang, today) for row in rows]},
+                        json_dumps_params={"ensure_ascii": False})
