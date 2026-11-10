@@ -12,7 +12,7 @@ from django.utils.module_loading import import_string
 from permissions.services import user_has_permission
 
 from settings_core.capabilities import capability_enabled
-from settings_core.vocabulary import active_vocabulary, term
+from settings_core.vocabulary import BASE as BASE_TERMS, active_vocabulary, term
 
 # ACT-PROFILE-001: sections whose name follows the activity's own words.
 NAV_TERMS = {"operations": "operations", "customers": "customers", "suppliers": "suppliers", "items": "items", "staff": "staff", "appointments": "appointments"}
@@ -197,8 +197,9 @@ SHORTCUTS = {
     "new_purchase": {"ar": "فاتورة شراء", "en": "Purchase invoice", "url_name": "purchases:create", "icon": "purchases", "module": "purchases",
                      "permission": "purchases.create_purchase_invoice"},
 }
-#: The activity's words for a shortcut (a school's «كورس جديد», a clinic's «تحصيل من مريض»), read through term() exactly
-#: as the dashboard's quick actions read QUICK_ACTION_TERMS, so «ابدأ من هنا» and these rows say the same thing.
+#: The activity's words for a shortcut (a school's «كورس جديد», a clinic's «تحصيل من مريض»), read through term() as the
+#: dashboard's quick actions read QUICK_ACTION_TERMS, so «ابدأ من هنا» and these rows say the same thing. Only an activity
+#: that has its own word changes a chip: otherwise it keeps its short label («تحصيل», not the base «تحصيل من عميل»).
 SHORTCUT_TERMS = {"new_sale": "new_sale", "collect": "collect", "new_item": "new_item"}
 DRAWER_SHORTCUTS = ("pos", "new_sale", "collect", "new_item")
 DASHBOARD_SHORTCUTS = ("pos", "collect", "new_item", "new_purchase")
@@ -220,10 +221,11 @@ def shortcut_actions(user, lang, modules, sections, keys=DRAWER_SHORTCUTS, dashb
         url = reverse(spec["url_name"])
         if closed_module(url) is not None:
             continue
+        label = spec.get(f"dash_{lang}", spec[lang]) if dashboard else spec[lang]
         if key in SHORTCUT_TERMS:
-            label = term(SHORTCUT_TERMS[key], lang, words)
-        else:
-            label = spec.get(f"dash_{lang}", spec[lang]) if dashboard else spec[lang]
+            word = term(SHORTCUT_TERMS[key], lang, words)
+            if word != BASE_TERMS[SHORTCUT_TERMS[key]]["en" if lang == "en" else "ar"]:  # this activity has its own word
+                label = word
         rows.append({"key": key, "label": label, "url": url, "url_name": spec["url_name"], "icon": spec["icon"]})
     return rows
 

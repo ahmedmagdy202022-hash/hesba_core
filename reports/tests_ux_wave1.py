@@ -116,11 +116,14 @@ class ShortcutVocabularyTests(TestCase):
         self.assertEqual(top["new_item"], "خدمة طبية جديدة")
         self.assertEqual(drawer["new_sale"], "كشف / فاتورة جديدة")
 
-    def test_a_shop_reads_the_base_words(self):
-        drawer, top = self.labels("commercial", "retail", "ux_short_shop")
-        self.assertEqual(drawer["collect"], "تحصيل من عميل")
-        self.assertEqual(top["new_item"], "صنف / خدمة جديدة")
-        self.assertEqual(top["pos"], "بيع من الكاشير")  # no activity word for the till: its own label stays
+    def test_a_shop_keeps_the_short_labels(self):
+        drawer, top = self.labels("commercial", "retail", "ux_short_shop")  # no activity word: the chips stay short
+        self.assertEqual(drawer["new_sale"], "فاتورة جديدة")
+        self.assertEqual(drawer["collect"], "تحصيل")
+        self.assertEqual(drawer["new_item"], "صنف جديد")
+        self.assertEqual(top["collect"], "تحصيل")
+        self.assertEqual(top["new_item"], "صنف جديد")
+        self.assertEqual(top["pos"], "بيع من الكاشير")  # no vocabulary key for the till: its own label stays
 
 
 class TabBarTests(TestCase):
