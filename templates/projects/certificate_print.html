@@ -6,12 +6,12 @@
 <title>{% if lang == 'en' %}Certificate {{ certificate.number }}{% else %}مستخلص رقم {{ certificate.number }}{% endif %} — {{ project.name }}</title>
 {% include "partials/brand_icons.html" %}
 <link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
-<link rel="stylesheet" href="{% static 'hesba/css/print.css' %}?v=print-003">
+<link rel="stylesheet" href="{% static 'hesba/css/print.css' %}?v=print-004">
 </head>
 <body class="pr-body pr-a4" data-format="a4">
 {% with invoice=certificate.invoice %}
 <nav class="pr-toolbar" aria-label="{% if lang == 'en' %}Print{% else %}طباعة{% endif %}">
-  <a class="pr-button pr-button--ghost" href="{% url 'projects:certificate' project.pk certificate.number %}?lang={{ lang }}">← {% if lang == 'en' %}Back{% else %}رجوع{% endif %}</a>
+  <a class="pr-button pr-button--ghost" href="{% url 'projects:certificate' project.pk certificate.number %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{% if lang == 'en' %}Back{% else %}رجوع{% endif %}</a>
   <button class="pr-button pr-button--primary" type="button" data-print>{% if lang == 'en' %}Print{% else %}اطبع{% endif %}</button>
   <p class="pr-toolbar__hint">{% if lang == 'en' %}To save a PDF, choose "Save as PDF" in the print window.{% else %}عشان تحفظه PDF اختار "حفظ كـ PDF" من شاشة الطباعة.{% endif %}</p>
 </nav>

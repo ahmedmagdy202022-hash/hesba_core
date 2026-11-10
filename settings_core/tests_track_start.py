@@ -121,7 +121,7 @@ class SalesReportTotalTests(TestCase):
         self.client.force_login(user)
         html = self.client.get("/reports/sales/", {"lang": "ar"}).content.decode()
         total = html[html.index("data-invoices-total"):html.index("</tfoot>")]
-        self.assertIn("المرحّل · 1 فاتورة", total)
+        self.assertIn("النهائية · 1 فاتورة", total)
         self.assertIn("60.00", total)  # 2 × 30.00, the draft's 999.00 is not money yet
         self.assertIn("20.00", total)
         self.assertIn("40.00", total)

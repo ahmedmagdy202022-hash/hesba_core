@@ -1,7 +1,7 @@
 {% extends "operations/base.html" %}
 {% load hesba_paging %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'einvoice:issuer' %}?lang={{ lang }}">← {{ words.title }}</a><h1>{{ words.customers }}</h1><p>{{ words.customers_hint }}</p></div>{% include "einvoice/_nav.html" %}</section>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'einvoice:issuer' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.title }}</a><h1>{{ words.customers }}</h1><p>{{ words.customers_hint }}</p></div>{% include "einvoice/_nav.html" %}</section>
 {% if not can_manage %}<p class="op-message op-message-info">{{ words.view_only }}</p>{% endif %}
 <form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><input type="search" name="q" value="{{ q }}" placeholder="{{ words.search }}" aria-label="{{ words.search }}"><button type="submit">{{ words.filter }}</button></form>
 <form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="q" value="{{ q }}"><input type="hidden" name="page" value="{{ page.number }}">

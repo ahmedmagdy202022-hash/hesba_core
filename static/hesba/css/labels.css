@@ -3,7 +3,7 @@
 body.lb-body{margin:0;background:var(--hs-ground);color:var(--hs-ink);font-family:var(--hs-font-body)}
 .lb-toolbar{position:sticky;top:0;display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 16px;background:var(--hs-surface);border-bottom:1px solid var(--hs-line)}
 .lb-toolbar p{flex-basis:100%;margin:0;color:var(--hs-muted);font-size:12px}
-.lb-button{display:inline-flex;align-items:center;min-height:40px;padding:0 14px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-md);background:var(--hs-surface);color:var(--hs-navy);font:inherit;font-weight:600;text-decoration:none;cursor:pointer}
+.lb-button{display:inline-flex;align-items:center;min-height:var(--hs-control-height);padding:0 14px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-md);background:var(--hs-surface);color:var(--hs-navy);font:inherit;font-weight:600;text-decoration:none;cursor:pointer}
 .lb-button--primary{border:0;background:var(--hs-teal);color:var(--hs-on-teal);margin-inline-start:auto}
 .lb-button:focus-visible{outline:none;box-shadow:var(--hs-focus-ring)}
 .lb-label{display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;background:var(--hs-surface);text-align:center}
@@ -36,3 +36,7 @@ body.lb-body{margin:0;background:var(--hs-ground);color:var(--hs-ink);font-famil
   .lb-roll .lb-sheet{padding:0;gap:0}
   .lb-roll .lb-label{break-after:page}
 }
+
+/* UX Wave 3: the toolbar's back link carries the one back arrow (partials/back_arrow.html), turned for Arabic. */
+.hs-back-arrow{flex:none;width:18px;height:18px;margin-inline-end:var(--hs-space-2)}
+[dir="rtl"] .hs-back-arrow{transform:scaleX(-1)}

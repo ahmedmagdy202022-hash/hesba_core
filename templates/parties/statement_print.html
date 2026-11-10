@@ -6,11 +6,11 @@
 <title>{{ words.statement }} · {{ party.name }}</title>
 {% include "partials/brand_icons.html" %}
 <link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
-<link rel="stylesheet" href="{% static 'hesba/css/print.css' %}?v=print-002">
+<link rel="stylesheet" href="{% static 'hesba/css/print.css' %}?v=print-004">
 </head>
 <body class="pr-body pr-a4" data-format="a4">
 <nav class="pr-toolbar" aria-label="{{ words.print }}">
-  {% if not public %}<a class="pr-button pr-button--ghost" href="{% url 'parties:card' kind party.pk %}?lang={{ lang }}{% if date_from %}&from={{ date_from|date:'Y-m-d' }}{% endif %}{% if date_to %}&to={{ date_to|date:'Y-m-d' }}{% endif %}">← {{ words.back }}</a>{% endif %}
+  {% if not public %}<a class="pr-button pr-button--ghost" href="{% url 'parties:card' kind party.pk %}?lang={{ lang }}{% if date_from %}&from={{ date_from|date:'Y-m-d' }}{% endif %}{% if date_to %}&to={{ date_to|date:'Y-m-d' }}{% endif %}">{% include "partials/back_arrow.html" %}{{ words.back }}</a>{% endif %}
   <button class="pr-button pr-button--primary" type="button" data-print>{{ words.print }}</button>
 </nav>
 <article class="pr-sheet" data-kind="statement">

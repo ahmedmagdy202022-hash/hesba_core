@@ -40,7 +40,7 @@ STRINGS = {
         "back": "رجوع",
         "dashboard": "لوحة القيادة",
         "language": "English",
-        "empty": "لا توجد بيانات حتى الآن.",
+        "empty": "لسه مفيش بيانات.",
         "readonly": "عرض فقط",
         "yes": "نعم",
         "no": "لا",

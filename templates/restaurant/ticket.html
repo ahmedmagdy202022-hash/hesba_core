@@ -10,7 +10,10 @@
 @page{size:80mm auto;margin:3mm}
 body{margin:0;background:var(--hs-ground);color:#000;font-family:var(--hs-font-body)}
 .kt-bar{display:flex;gap:8px;justify-content:center;padding:10px}
-.kt-bar a,.kt-bar button{min-height:40px;padding:0 14px;border-radius:10px;border:1px solid var(--hs-line);background:var(--hs-surface);color:var(--hs-navy);font:inherit;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;cursor:pointer}
+.kt-bar a{display:inline-flex;align-items:center}
+.hs-back-arrow{flex:none;width:18px;height:18px;margin-inline-end:8px}
+[dir="rtl"] .hs-back-arrow{transform:scaleX(-1)}
+.kt-bar a,.kt-bar button{min-height:44px;padding:0 14px;border-radius:10px;border:1px solid var(--hs-line);background:var(--hs-surface);color:var(--hs-navy);font:inherit;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;cursor:pointer}
 .kt{width:72mm;margin:0 auto 20px;background:#fff;padding:4mm;box-sizing:border-box}
 .kt h1{font-size:20px;margin:0;text-align:center}
 .kt .kt-where{font-size:26px;font-weight:800;text-align:center;margin:4px 0}
@@ -24,7 +27,7 @@ body{margin:0;background:var(--hs-ground);color:#000;font-family:var(--hs-font-b
 </style>
 </head>
 <body>
-<nav class="kt-bar"><a href="{% url 'restaurant:order' order.pk %}?lang={{ lang }}">← {{ order.number }}</a><button type="button" data-print>{{ words.reprint }}</button></nav>
+<nav class="kt-bar"><a href="{% url 'restaurant:order' order.pk %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ order.number }}</a><button type="button" data-print>{{ words.reprint }}</button></nav>
 <article class="kt" data-kitchen-ticket="{{ order.number }}-{{ ticket.sequence }}">
   <h1>{{ words.kitchen }} · {{ words.ticket }} {{ ticket.sequence }}</h1>
   <p class="kt-where">{% if order.table %}{{ words.table }} {{ order.table.name }}{% else %}{{ kind_label }}{% endif %}</p>

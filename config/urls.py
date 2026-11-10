@@ -6,7 +6,7 @@ from django.urls import include, path
 
 from config import demo as demo_views
 from config import demo_first_run as first_run
-from django.views.generic import TemplateView
+from django.views.generic import RedirectView, TemplateView
 
 from config.health import healthz
 from config.nightly import digest, nightly
@@ -14,7 +14,6 @@ from config.nightly import digest, nightly
 from reports.dashboard_views import dashboard
 from reports.status_views import status_counts_report
 from reports.functional_views import report_hub
-from reports.views import home
 from accounts.login_guard import GuardedLoginView, login_verify
 from printing import views as printing_views
 from workorders import public as workorders_public
@@ -69,7 +68,8 @@ urlpatterns = [
     path("setup/modules/", setup_modules, name="setup_modules"),
     path("setup/review/", setup_review, name="setup_review"),
     path("setup/complete/", setup_complete, name="setup_complete"),
-    path("home/", home, name="home"),
+    # UX Wave 3: the old navigation map is gone; an old bookmark lands on the dashboard (signed out: login, then back here).
+    path("home/", RedirectView.as_view(pattern_name="dashboard_snapshot", permanent=True, query_string=True), name="home"),
     path("dashboard/", dashboard, name="dashboard_snapshot"),
     path("demo/activity/", demo_views.switch_activity, name="demo_activity"),
     path("demo/sample/", demo_views.sample, name="demo_sample"),

@@ -19,10 +19,13 @@ figure can never disagree with the system's own rounding policy — but the
 result is a string and must never re-enter a calculation path.
 """
 
+import re
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django import template
 from django.db import Error as DatabaseError
+from django.utils.html import conditional_escape
+from django.utils.safestring import mark_safe, SafeData
 
 from config.money import COST_QUANT, MONEY_QUANT
 from settings_core.models import ClientProfile
@@ -278,10 +281,11 @@ def percent(value):
 
 
 @register.filter
-def day_text(value, lang="ar"):
+def day_text(value, lang=None):
     """UX Wave 1: one date format for screens: "9 نوفمبر 2026" in Arabic, "9 November 2026" in English.
 
-    The month is named in the page's language, not LANGUAGE_CODE's (there is no LocaleMiddleware).
+    The month is named in the page's language, not LANGUAGE_CODE's (there is no LocaleMiddleware). UX Wave 3: without
+    an explicit ``lang`` it follows the active language, which config.middleware.PageLanguageMiddleware sets on ?lang=en.
     """
 
     if not value or not hasattr(value, "day"):  # a date or datetime only; anything else reads "—", never an error
@@ -289,5 +293,41 @@ def day_text(value, lang="ar"):
     from django.utils import translation
     from django.utils.formats import date_format
 
+    if lang is None:
+        lang = "en" if (translation.get_language() or "").startswith("en") else "ar"
     with translation.override("en" if lang == "en" else "ar"):
         return date_format(value, "j F Y")
+
+
+# UX Wave 3: numbers, codes and ranges keep their left-to-right order inside an Arabic line. A plain <bdi> is not enough
+# for "31–60": digits are not a strong direction, so the range still reads «60–31» in RTL; dir="ltr" pins it.
+_NUMBER_RUN = re.compile(r"[+\-−]?\d(?:[\d\-–/.:,]|\s(?=\+?\d))*(?<![.,:])")
+
+
+@register.filter(needs_autoescape=True)
+def ltr(value, autoescape=True):
+    """The whole value as one left-to-right run: an invoice number, a code, a barcode, a phone number."""
+
+    if value is None or value == "":
+        return ""
+    text = conditional_escape(value) if autoescape else str(value)
+    return mark_safe(f'<bdi dir="ltr">{text}</bdi>')
+
+
+@register.filter(needs_autoescape=True)
+def ltr_numbers(value, autoescape=True):
+    """Only the number runs of a label pinned left-to-right, the words around them untouched: «0–30 يوم» keeps «يوم»
+    outside, and «31–60» stays «31–60» in an Arabic header."""
+
+    if value is None:
+        return ""
+    if isinstance(value, SafeData):
+        return value  # already markup: leave it as its author wrote it rather than escape it twice
+    escape = conditional_escape if autoescape else str
+    text, out, last = str(value), [], 0
+    for match in _NUMBER_RUN.finditer(text):
+        out.append(escape(text[last:match.start()]))
+        out.append(f'<bdi dir="ltr">{escape(match.group())}</bdi>')
+        last = match.end()
+    out.append(escape(text[last:]))
+    return mark_safe("".join(str(part) for part in out))

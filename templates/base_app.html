@@ -16,7 +16,7 @@ not be dropped.
 <title>{% block title %}{{ page_title }}{% endblock %}</title>
 {% include "partials/brand_icons.html" %}
 <link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
-<link rel="stylesheet" href="{% static 'hesba/css/buttons.css' %}?v=ux2-1">
+<link rel="stylesheet" href="{% static 'hesba/css/buttons.css' %}?v=ux3-1">
 {% block styles %}{% endblock %}
 <link rel="stylesheet" href="{% static 'hesba/css/lists.css' %}?v=ux2-2">
 <link rel="stylesheet" href="{% static 'hesba/css/table_cards.css' %}?v=ux2-1">
@@ -24,7 +24,7 @@ not be dropped.
 <link rel="stylesheet" href="{% static 'hesba/css/form_controls.css' %}?v=fb27-1">
 <link rel="stylesheet" href="{% static 'hesba/css/datepicker.css' %}?v=ux2-1">
 <link rel="stylesheet" href="{% static 'hesba/css/pager.css' %}?v=ux2-1">
-{% if report_tools %}<link rel="stylesheet" href="{% static 'hesba/css/report_tools.css' %}?v=ux2-3">{% endif %}
+{% if report_tools %}<link rel="stylesheet" href="{% static 'hesba/css/report_tools.css' %}?v=ux3-1">{% endif %}
 </head>
 <body class="{% block body_class %}{% endblock %}" data-lang="{{ lang|default:'ar' }}">
 {% block content %}{% endblock %}
@@ -64,7 +64,7 @@ not be dropped.
   });
 })();
 </script>
-<script src="{% static 'hesba/js/table_cards.js' %}?v=ux2-1" defer></script>
+<script src="{% static 'hesba/js/table_cards.js' %}?v=ux3-1" defer></script>
 <script src="{% static 'hesba/js/lists.js' %}?v=ux2-1" defer></script>
 <script src="{% static 'hesba/js/datepicker.js' %}?v=date-8" defer></script>
 <script src="{% static 'hesba/js/confirm_danger.js' %}?v=fb27-1" defer></script>

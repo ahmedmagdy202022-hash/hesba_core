@@ -1,0 +1,43 @@
+{% load static %}{% comment %}
+UX Wave 3: the branded "page not found". Standalone (no shell): a visitor who is signed out, or on a showcase,
+reaches it too. One button: the dashboard when signed in, the demo landing on a showcase, the login otherwise.
+The language follows ?lang= like every other page, and a remembered English choice reloads it in English.
+{% endcomment %}{% with en=request.GET.lang|default:''|lower %}<!doctype html>
+<html lang="{% if en == 'en' %}en{% else %}ar{% endif %}" dir="{% if en == 'en' %}ltr{% else %}rtl{% endif %}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>{% if en == 'en' %}Page not found · Hesba{% else %}الصفحة مش موجودة · حِسبة{% endif %}</title>
+{% include "partials/brand_icons.html" %}
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
+<link rel="stylesheet" href="{% static 'hesba/css/buttons.css' %}?v=ux3-1">
+<link rel="stylesheet" href="{% static 'hesba/css/errors.css' %}?v=ux3-1">
+</head>
+<body class="hs-error" data-lang="{% if en == 'en' %}en{% else %}ar{% endif %}" data-error-page="404">
+<header class="hs-error__band"><img src="{% static 'hesba/brand/hesba-logo-reversed.png' %}" alt="{% if en == 'en' %}Hesba{% else %}حِسبة{% endif %}" width="642" height="225"></header>
+<main class="hs-error__main">
+  <section class="hs-error__card">
+    <span class="hs-error__code"><bdi dir="ltr">404</bdi></span>
+    {% if en == 'en' %}
+    <h1>This page doesn't exist</h1>
+    <p>The link may be old or mistyped. Go back and carry on from there.</p>
+    {% else %}
+    <h1>الصفحة دي مش موجودة</h1>
+    <p>يمكن اللينك قديم أو اتكتب غلط. ارجع وكمّل شغلك من هناك.</p>
+    {% endif %}
+    {% if user.is_authenticated %}<a class="op-primary" href="{% url 'dashboard_snapshot' %}?lang={% if en == 'en' %}en{% else %}ar{% endif %}" data-error-home>{% if en == 'en' %}Back to the dashboard{% else %}ارجع للرئيسية{% endif %}</a>
+    {% elif demo_mode %}<a class="op-primary" href="{% url 'demo_landing' %}?lang={% if en == 'en' %}en{% else %}ar{% endif %}" data-error-home>{% if en == 'en' %}Back to the demo{% else %}ارجع لصفحة التجربة{% endif %}</a>
+    {% else %}<a class="op-primary" href="{% url 'login' %}" data-error-home>{% if en == 'en' %}Sign in{% else %}ادخل على حسابك{% endif %}</a>{% endif %}
+  </section>
+</main>
+<script>
+(function(){
+  try {
+    var params = new URLSearchParams(window.location.search);
+    if (!params.get('lang') && localStorage.getItem('hesba_lang') === 'en') { params.set('lang', 'en'); window.location.replace(window.location.pathname + '?' + params.toString()); }
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>{% endwith %}

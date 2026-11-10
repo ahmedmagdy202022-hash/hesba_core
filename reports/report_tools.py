@@ -42,4 +42,19 @@ def report_tools(request):
 
     lang = "en" if request.GET.get("lang") == "en" else "ar"
     profile = ClientProfile.get_active()
-    return {"report_tools": dict(WORDS[lang], company=profile.display_name if profile else "")}
+    context = {"report_tools": dict(WORDS[lang], company=profile.display_name if profile else "")}
+    look = report_look(request.resolver_match)
+    if look:
+        context["report_look"] = look
+    return context
+
+
+def report_look(match):
+    """UX Wave 3: a report page's heading carries the same icon and colour as its card on the reports hub."""
+
+    from .functional_views import CARD_LOOK
+
+    if match is None or not match.url_name:
+        return None
+    look = CARD_LOOK.get(f"{match.namespace}:{match.url_name}" if match.namespace else match.url_name)
+    return {"icon": look[0], "tone": look[1]} if look else None

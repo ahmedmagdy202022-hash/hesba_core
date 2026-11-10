@@ -1,7 +1,7 @@
 {% extends "operations/base.html" %}
 {% load hesba_format %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'education:groups' %}?lang={{ lang }}">← {{ words.back_groups }}</a><h1>{{ group.course.name }} — {{ group.name }}</h1>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'education:groups' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.back_groups }}</a><h1>{{ group.course.name }} — {{ group.name }}</h1>
 <p><bdi>{{ group.code }}</bdi>{% if schedule %} · {{ schedule }}{% endif %}{% if group.teacher %} · {{ group.teacher.name }}{% endif %}{% if group.room %} · {{ words.room }} {{ group.room }}{% endif %}{% if not group.active %} · <span class="op-status op-status-draft">{{ words.status_stopped }}</span>{% endif %}</p></div>
 {% if can_take and group.active and last_class %}<div class="op-form-actions"><a class="op-primary" href="{% url 'education:attendance' group.pk %}?lang={{ lang }}&date={{ last_class|date:'Y-m-d' }}" data-take-attendance>{{ words.take }} · <bdi>{{ last_class|date:"Y-m-d" }}</bdi></a></div>{% endif %}</section>
 {% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}

@@ -53,6 +53,6 @@
 </div>
 </div>
 </form>
-{% if campaign %}<form method="post" action="{% url 'messaging:campaign_delete' campaign.pk %}" class="cp-delete" data-no-confirm onsubmit="return confirm('{{ words.delete|escapejs }}?')">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><button class="op-danger" type="submit" data-delete>{{ words.delete }}</button></form>{% endif %}
+{% if campaign %}<form method="post" action="{% url 'messaging:campaign_delete' campaign.pk %}" class="cp-delete" data-no-confirm onsubmit="return confirm('{{ words.delete_confirm|escapejs }}')">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><button class="op-danger" type="submit" data-delete>{{ words.delete }}</button></form>{% endif %}
 <script src="{% static 'hesba/js/campaign_composer.js' %}?v=s8-1" defer></script>
 {% endblock %}

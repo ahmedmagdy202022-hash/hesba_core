@@ -1,7 +1,7 @@
 {% extends "operations/base.html" %}
 {% load hesba_paging %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'serials:index' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ words.settings }}</h1></div></section>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'serials:index' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.back }}</a><h1>{{ words.settings }}</h1></div></section>
 <form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><input type="search" name="q" value="{{ q }}" placeholder="{{ words.search }}" aria-label="{{ words.search }}"><button type="submit">{{ words.find }}</button></form>
 {% if not can_manage %}<p class="op-muted">{{ words.view_only }}</p>{% endif %}
 <form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="q" value="{{ q }}"><input type="hidden" name="page" value="{{ page.number }}">

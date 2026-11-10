@@ -1,7 +1,7 @@
 {% extends "operations/base.html" %}
 {% load hesba_format %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'projects:list' %}?lang={{ lang }}">← {{ words.title }}</a><h1>{{ rw.report }}</h1><p>{{ rw.intro }}</p></div></section>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'projects:list' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.title }}</a><h1>{{ rw.report }}</h1><p>{{ rw.intro }}</p></div></section>
 <form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><select name="status" aria-label="{{ words.status }}"><option value="all"{% if not status %} selected{% endif %}>{{ rw.all }}</option>{% for value, label in statuses %}<option value="{{ value }}"{% if status == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select><button type="submit">{{ rw.show }}</button></form>
 <section class="op-summary-grid">
 <article><small>{{ rw.contract }}</small><strong data-p-contract>{{ totals.contract|money }}</strong><small>{{ rw.progress }} {{ totals.progress }}%</small></article>

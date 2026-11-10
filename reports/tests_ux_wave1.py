@@ -198,7 +198,7 @@ class DashboardOnceTests(TestCase):
         self.assertLessEqual(cards, shown)  # nothing dropped: no grid repeats them for this role
         if response.context["today_cards"]:
             self.assertContains(response, ">أرقام اليوم<")
-        self.assertNotContains(response, "لا توجد أرقام متاحة لصلاحياتك الحالية.")
+        self.assertNotContains(response, "مفيش أرقام تقدر تشوفها بصلاحياتك دلوقتي.")
 
     def custom(self, username, codes):
         from hesba_testing.factories import grant, make_role
@@ -227,13 +227,13 @@ class DashboardOnceTests(TestCase):
         self.assertEqual(response.context["today_cards"], [])
         self.assertTrue(response.context["hero_any"])
         self.assertContains(response, 'data-kpi="sales_today"', count=1)
-        self.assertNotContains(response, "لا توجد أرقام متاحة لصلاحياتك الحالية.")
+        self.assertNotContains(response, "مفيش أرقام تقدر تشوفها بصلاحياتك دلوقتي.")
         self.assertNotContains(response, ">أرقام اليوم<")
 
     def test_the_empty_note_stays_when_nothing_shows(self):
         response = self.custom("ux_dash_nothing", [])
         self.assertFalse(response.context["hero_any"])
-        self.assertContains(response, "لا توجد أرقام متاحة لصلاحياتك الحالية.")
+        self.assertContains(response, "مفيش أرقام تقدر تشوفها بصلاحياتك دلوقتي.")
 
     def test_the_voice_card_says_whose_figures_it_reads(self):
         from ai.summary import WORDS

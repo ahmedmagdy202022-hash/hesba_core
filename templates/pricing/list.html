@@ -1,6 +1,6 @@
 {% extends "operations/base.html" %}
 {% load l10n %}{% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'master_data:items' %}?lang={{ lang }}">← {% if lang == 'en' %}Items{% else %}الأصناف{% endif %}</a><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div></section>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'master_data:items' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{% if lang == 'en' %}Items{% else %}الأصناف{% endif %}</a><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div></section>
 {% if not can_manage %}<p class="op-message op-message-info">{{ words.view_only }}</p>{% endif %}
 <div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.code }}</th><th>{{ words.name_ar }}</th><th>{{ words.adjust }}</th><th>{{ words.items_count }}</th><th>{{ words.customers_count }}</th><th></th></tr></thead><tbody>
 {% for pl in lists %}<tr><td><bdi>{{ pl.code }}</bdi></td><td class="op-cell-text"><a href="{% url 'pricing:detail' pl.pk %}?lang={{ lang }}"><strong>{{ pl.label }}</strong></a>{% if lang == 'en' %}<br><small class="op-muted">{{ pl.name_ar }}</small>{% endif %}</td><td><bdi dir="ltr">{% if pl.adjust_percent > 0 %}+{% endif %}{{ pl.adjust_percent|unlocalize }}%</bdi></td><td>{{ pl.item_count }}</td><td>{{ pl.customer_count }}</td><td>{% if pl.active %}<span class="op-status op-status-posted">{{ words.active }}</span>{% else %}<span class="op-status op-status-cancelled">{{ words.inactive }}</span>{% endif %}</td></tr>

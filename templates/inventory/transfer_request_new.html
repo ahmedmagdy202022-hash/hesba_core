@@ -1,7 +1,7 @@
 {% extends "operations/base.html" %}
 {% load hesba_format %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'inventory:transfer_requests' %}?lang={{ lang }}">← {% if lang == 'en' %}Transfer requests{% else %}طلبات التحويل{% endif %}</a><h1>{% if lang == 'en' %}Ask another warehouse for stock{% else %}اطلب بضاعة من مخزن تاني{% endif %}</h1><p>{% if lang == 'en' %}Nothing moves until the other warehouse sends it.{% else %}مفيش حاجة بتتحرك لحد ما المخزن التاني يبعت.{% endif %}</p></div></section>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'inventory:transfer_requests' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{% if lang == 'en' %}Transfer requests{% else %}طلبات التحويل{% endif %}</a><h1>{% if lang == 'en' %}Ask another warehouse for stock{% else %}اطلب بضاعة من مخزن تاني{% endif %}</h1><p>{% if lang == 'en' %}Nothing moves until the other warehouse sends it.{% else %}مفيش حاجة بتتحرك لحد ما المخزن التاني يبعت.{% endif %}</p></div></section>
 {% if error %}<p class="op-message op-message-error" data-request-error>{{ error }}</p>{% endif %}
 <form method="post" class="op-form" data-request-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
 <div class="op-form-grid">

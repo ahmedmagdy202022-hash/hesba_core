@@ -1,7 +1,7 @@
 {% extends "operations/base.html" %}
 {% load l10n %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'payroll:list' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ words.salaries }}</h1></div></section>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'payroll:list' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.back }}</a><h1>{{ words.salaries }}</h1></div></section>
 {% if rows %}<form method="post" data-payroll-salary-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
 <div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.employee }}</th><th>{{ words.basic }}</th><th>{{ words.allowances }}</th><th>{{ words.insured_wage }}</th><th>{{ words.insured }}</th><th>{{ words.taxed }}</th></tr></thead><tbody>
 {% for employee, profile in rows %}<tr data-salary-row="{{ employee.pk }}"><td class="op-cell-text">{{ employee.name }}</td>

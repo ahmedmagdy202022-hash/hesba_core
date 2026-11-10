@@ -1,7 +1,7 @@
 {% extends "operations/base.html" %}
 {% load hesba_format %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'inventory:stock' %}?lang={{ lang }}">← {% if lang == 'en' %}Stock{% else %}المخزون{% endif %}</a><h1>{% if lang == 'en' %}Buy soon{% else %}محتاج يتطلب{% endif %}</h1>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'inventory:stock' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{% if lang == 'en' %}Stock{% else %}المخزون{% endif %}</a><h1>{% if lang == 'en' %}Buy soon{% else %}محتاج يتطلب{% endif %}</h1>
 <p>{% if lang == 'en' %}Items at or below their minimum, or that will run out within the target days at the recent sales pace. Quantities are suggestions: review them on the purchase draft.{% else %}أصناف وصلت للحد الأدنى أو هتخلص قبل عدد الأيام المطلوب على حسب سرعة البيع الأخيرة. الكميات اقتراح، وتراجعها في مسودة فاتورة الشراء.{% endif %}</p></div></section>
 <form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}">
 <select name="window" aria-label="window">{% for days in windows %}<option value="{{ days }}"{% if days == window %} selected{% endif %}>{% if lang == 'en' %}Sales pace of the last {{ days }} days{% else %}سرعة البيع آخر {{ days }} يوم{% endif %}</option>{% endfor %}</select>

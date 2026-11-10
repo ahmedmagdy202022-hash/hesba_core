@@ -2,7 +2,7 @@
 {% load static hesba_format %}
 {% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/restaurant.css' %}?v=resto-001">{% endblock %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'restaurant:board' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{% if order.table %}{{ words.table }} {{ order.table.name }}{% else %}{{ kind_label }}{% endif %}</h1><p><span dir="ltr">{{ order.number }}</span> · {{ kind_label }}{% if order.customer %} · {{ order.customer.name }}{% endif %}{% if order.address %} · {{ order.address }}{% endif %}{% if order.phone %} · <span dir="ltr">{{ order.phone }}</span>{% endif %}</p>{% if is_open and can_take %}<a class="op-secondary rs-jump" href="#menu">{{ words.menu }} ↓</a>{% endif %}</div><span class="op-status op-status-{% if order.status == 'paid' %}posted{% elif order.status == 'cancelled' %}cancelled{% else %}open{% endif %}" data-order-status="{{ order.status }}">{{ status_label }}</span></section>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'restaurant:board' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.back }}</a><h1>{% if order.table %}{{ words.table }} {{ order.table.name }}{% else %}{{ kind_label }}{% endif %}</h1><p><span dir="ltr">{{ order.number }}</span> · {{ kind_label }}{% if order.customer %} · {{ order.customer.name }}{% endif %}{% if order.address %} · {{ order.address }}{% endif %}{% if order.phone %} · <span dir="ltr">{{ order.phone|ltr }}</span>{% endif %}</p>{% if is_open and can_take %}<a class="op-secondary rs-jump" href="#menu">{{ words.menu }} ↓</a>{% endif %}</div><span class="op-status op-status-{% if order.status == 'paid' %}posted{% elif order.status == 'cancelled' %}cancelled{% else %}open{% endif %}" data-order-status="{{ order.status }}">{{ status_label }}</span></section>
 <div class="rs-order">
 {% if is_open and can_take %}
 <section class="rs-panel" id="menu" aria-labelledby="rs-menu-title" data-menu>
@@ -37,7 +37,7 @@
   <label class="sr-only" for="dl-fee2">{{ dw.fee }}</label><input id="dl-fee2" name="delivery_fee" inputmode="decimal" value="{{ order.delivery_fee|stringformat:".2f" }}" style="min-height:44px;width:110px">
   <button class="op-secondary" type="submit">{% if order.driver_id %}{{ dw.change_driver }}{% else %}{{ dw.dispatch }}{% endif %}</button></form>{% endif %}{% endif %}
   <p class="rs-total"><span>{{ words.total }}</span><span data-order-total>{{ total|money }}</span></p>
-  {% if order.invoice and can_see_invoices %}<p>{{ words.invoice }}: <a href="{% url 'sales:detail' order.invoice.pk %}?lang={{ lang }}" data-order-invoice>{{ order.invoice.invoice_number }}</a></p>{% endif %}
+  {% if order.invoice and can_see_invoices %}<p>{{ words.invoice }}: <a href="{% url 'sales:detail' order.invoice.pk %}?lang={{ lang }}" data-order-invoice>{{ order.invoice.invoice_number|ltr }}</a></p>{% endif %}
   {% if is_open and can_take %}
   <div class="rs-actions">
     {% if pending %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="send"><button class="op-primary" type="submit" data-send-kitchen>{{ words.send }}</button></form>{% endif %}

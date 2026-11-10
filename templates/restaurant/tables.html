@@ -1,7 +1,7 @@
 {% extends "operations/base.html" %}
 {% load static %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'restaurant:board' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ words.tables_title }}</h1></div></section>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'restaurant:board' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.back }}</a><h1>{{ words.tables_title }}</h1></div></section>
 <div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.name }}</th><th>{{ words.area }}</th><th>{{ words.seats }}</th><th>{{ words.sort }}</th><th>{{ words.active }}</th>{% if can_tables %}<th></th>{% endif %}</tr></thead><tbody>
 {% for table in rows %}<tr data-table-row="{{ table.name }}"><td>{{ table.name }}</td><td>{{ table.area|default:'—' }}</td><td>{{ table.seats }}</td><td>{{ table.sort_order }}</td><td>{% if table.active %}✓{% else %}—{% endif %}</td>{% if can_tables %}<td><a href="?lang={{ lang }}&edit={{ table.pk }}">{{ words.edit }}</a></td>{% endif %}</tr>
 {% empty %}<tr><td colspan="6" class="op-empty">{{ words.no_tables }}</td></tr>{% endfor %}

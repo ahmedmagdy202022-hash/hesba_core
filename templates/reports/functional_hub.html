@@ -1,10 +1,6 @@
 {% extends "operations/base.html" %}
 {% block operation_content %}
-<section class="op-title-row"><div><h1>{{ words.reports }}</h1><p>{% if lang == 'en' %}Reports are read-only and never create invoices, balances, stock, or cash movements.{% else %}اختار التقرير، وكل تقرير تقدر تفلتره وتطبعه أو تنزّله Excel. التقارير بتعرض بس ومش بتغيّر أي رقم.{% endif %}</p></div></section>
-<nav class="op-form-actions">
-  <a href="{% url 'dashboard_snapshot' %}?lang={{ lang }}">{{ words.dashboard }}</a>
-  <span>{{ words.page_title }}</span>
-</nav>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'dashboard_snapshot' %}?lang={{ lang }}" data-report-back>{% include "partials/back_arrow.html" %}{{ words.dashboard }}</a><h1 class="hs-report-title"><span class="hs-report-mark hs-report-mark--navy" aria-hidden="true" data-report-mark><svg class="hs-icon"><use href="#hs-i-reports"></use></svg></span>{{ words.reports }}</h1><p>{% if lang == 'en' %}Reports are read-only and never create invoices, balances, stock, or cash movements.{% else %}اختار التقرير، وكل تقرير تقدر تفلتره وتطبعه أو تنزّله Excel. التقارير بتعرض بس ومش بتغيّر أي رقم.{% endif %}</p></div></section>
 <div class="hs-tiles">
   {% for card in cards %}
     {% if card.allowed %}

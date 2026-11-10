@@ -3,6 +3,7 @@ from decimal import Decimal
 from django import forms
 from django.utils import timezone
 
+from config.form_defaults import choose_labels
 from config.form_sections import Sectioned
 from config.numbering import AutoNumbered
 
@@ -123,6 +124,7 @@ class CashboxOperationForm(Sectioned, AutoNumbered, forms.Form):
             else "بيتعمل لوحده؛ لو عندك رقم إيصال اكتبه هنا."
         )
         self.offer_auto_number(lang)
+        choose_labels(self, lang)  # UX Wave 3: «اختار …», not «---------»
 
     def clean_reference_number(self):
         number = (self.cleaned_data["reference_number"] or "").strip()

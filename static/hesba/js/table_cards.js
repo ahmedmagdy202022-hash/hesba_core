@@ -9,6 +9,19 @@
  * so nothing breaks if it fails to load.
  */
 (function () {
+  // UX Wave 3: a header such as «31–60» is pinned left-to-right with <bdi dir="ltr">. textContent
+  // drops that element, and the card label is drawn by CSS attr(), which cannot hold markup, so the
+  // same pinning is carried as Unicode isolates (U+2066 LRI … U+2069 PDI) inside the label text.
+  function text(node) {
+    if (node.nodeType === 3) return node.nodeValue || '';
+    if (node.nodeType !== 1) return '';
+    var out = '';
+    for (var i = 0; i < node.childNodes.length; i++) out += text(node.childNodes[i]);
+    var dir = (node.getAttribute('dir') || '').toLowerCase();
+    if (dir === 'ltr') return '\u2066' + out + '\u2069';
+    if (dir === 'rtl') return '\u2067' + out + '\u2069';
+    return out;
+  }
   function label(table) {
     var head = table.tHead && table.tHead.rows[0];
     if (!head) return;
@@ -16,7 +29,7 @@
     for (var i = 0; i < head.cells.length; i++) {
       var cell = head.cells[i];
       var span = cell.colSpan || 1;
-      for (var s = 0; s < span; s++) names.push((cell.textContent || '').trim());
+      for (var s = 0; s < span; s++) names.push(text(cell).trim());
     }
     for (var b = 0; b < table.tBodies.length; b++) {
       var rows = table.tBodies[b].rows;

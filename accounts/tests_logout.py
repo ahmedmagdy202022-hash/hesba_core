@@ -98,7 +98,7 @@ class LogoutCsrfTests(TestCase):
         )
         self.assertEqual(response.status_code, 403)
         self.assertNotContains(response, RAW_DJANGO_PAGE, status_code=403)
-        self.assertContains(response, "انتهت صلاحية الصفحة", status_code=403)
+        self.assertContains(response, "الصفحة دي قديمة", status_code=403)
         self.assertContains(response, "This page has expired", status_code=403)
         self.assertContains(response, f'href="{reverse("login")}"', status_code=403)
 

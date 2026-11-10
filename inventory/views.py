@@ -34,7 +34,7 @@ STRINGS = {
         "search": "بحث",
         "all_locations": "كل المواقع",
         "all_types": "كل أنواع الحركة",
-        "empty": "لا توجد نتائج مطابقة.",
+        "empty": "مفيش نتايج بالفلاتر دي.",
         "empty_ops": "مفيش تحويلات أو تسويات لسه.",
         "dashboard": "لوحة القيادة",
         "language": "English",

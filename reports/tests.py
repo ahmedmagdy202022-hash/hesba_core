@@ -110,39 +110,13 @@ class SetupGateWebSmokeTests(AuthenticatedTestCase):
 
 
 class FirstUiNavigationMapTests(AuthenticatedTestCase):
-    def test_home_page_renders_first_ui_navigation_map(self):
+    # UX Wave 3: the first navigation map (/home/) is retired; an old bookmark now lands on the dashboard for good.
+    # The redirect itself is covered in reports.tests_ux_wave3.LegacyHomeTests.
+    def test_home_now_redirects_to_the_dashboard(self):
         response = self.client.get(reverse("home"))
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "093_FOUNDATION_FIRST_UI_NAVIGATION_MAP")
-        self.assertContains(response, "خريطة تشغيل أول شاشة UI")
-        self.assertContains(response, "فتح لوحة Admin")
-        self.assertContains(response, "Dashboard")
-        self.assertContains(response, "Reports")
-        self.assertContains(response, "Status")
-
-    def test_home_page_keeps_full_business_cycle_visible(self):
-        response = self.client.get(reverse("home"))
-
-        required_labels = [
-            "Supplier",
-            "Purchase Invoice",
-            "Inventory by Location",
-            "Sales Invoice",
-            "Customer",
-            "Cashbox",
-            "Reports",
-        ]
-        for label in required_labels:
-            self.assertContains(response, label)
-
-    def test_home_page_documents_protected_rules(self):
-        response = self.client.get(reverse("home"))
-
-        self.assertContains(response, "المبيعات لا تنشئ مستحقات للموردين")
-        self.assertContains(response, "المشتريات لا تنشئ مديونية للعملاء")
-        self.assertContains(response, "الخزن تتحرك بالمبلغ المدفوع فعليًا فقط")
-        self.assertContains(response, "التقارير قراءة فقط")
+        self.assertEqual(response.status_code, 301)
+        self.assertEqual(response["Location"], reverse("dashboard_snapshot"))
 
     # The dashboard is its own screen now rather than another copy of this
     # navigation map, so it is covered in reports.tests_dashboard.
@@ -152,7 +126,8 @@ class FirstUiNavigationMapTests(AuthenticatedTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "096_FOUNDATION_READ_ONLY_REPORT_HUB")
-        self.assertContains(response, "<h1>التقارير</h1>", html=False)  # UI-TRACK F20: the title is just "Reports"
+        # UI-TRACK F20: the title is just "Reports" (UX Wave 3: after the hub's own icon mark)
+        self.assertContains(response, '</svg></span>التقارير</h1>', html=False)
         self.assertContains(response, "Customer Report")
         self.assertContains(response, "Supplier Report")
         self.assertContains(response, "Inventory Report")
@@ -200,7 +175,7 @@ class FirstUiNavigationMapTests(AuthenticatedTestCase):
     def test_shared_top_navigation_separates_dashboard_reports_and_status(self):
         # The dashboard carries the Hesba shell and its own Arabic navigation, so
         # it is excluded here and covered in reports.tests_dashboard.
-        for url_name in ["home", "report_hub", "status_counts_report"]:
+        for url_name in ["report_hub", "status_counts_report"]:  # UX Wave 3: "home" now redirects to the dashboard
             with self.subTest(route=url_name):
                 response = self.client.get(reverse(url_name))
                 self.assertContains(response, "Dashboard")

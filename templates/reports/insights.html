@@ -3,7 +3,7 @@
 {% block styles %}{{ block.super }}
 <link rel="stylesheet" href="{% static 'hesba/css/insights.css' %}?v=an3-1">{% endblock %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'report_hub' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{% if lang == 'en' %}Business insights{% else %}تحليل النشاط{% endif %}</h1><p>{{ data.start|date:"Y-m-d" }} → {{ data.end|date:"Y-m-d" }} · {% if lang == 'en' %}compared with{% else %}مقارنة بـ{% endif %} {{ data.prev_start|date:"Y-m-d" }} → {{ data.prev_end|date:"Y-m-d" }}</p></div></section>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'report_hub' %}?lang={{ lang }}" data-report-back>{% include "partials/back_arrow.html" %}{% if lang == 'en' %}Reports{% else %}التقارير{% endif %}</a><h1 class="hs-report-title">{% include "reports/_report_mark.html" %}{% if lang == 'en' %}Business insights{% else %}تحليل النشاط{% endif %}</h1><p><bdi dir="ltr">{{ data.start|date:"Y-m-d" }}</bdi> – <bdi dir="ltr">{{ data.end|date:"Y-m-d" }}</bdi> · {% if lang == 'en' %}compared with{% else %}مقارنة بـ{% endif %} <bdi dir="ltr">{{ data.prev_start|date:"Y-m-d" }}</bdi> – <bdi dir="ltr">{{ data.prev_end|date:"Y-m-d" }}</bdi></p></div></section>
 
 <section class="ins-read" data-quick-read><h2>{% if lang == 'en' %}Quick read{% else %}قراءة سريعة{% endif %}</h2><ul>{% for line in data.read %}<li>{{ line }}</li>{% endfor %}</ul></section>
 

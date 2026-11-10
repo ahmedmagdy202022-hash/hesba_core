@@ -1,13 +1,13 @@
 {% extends "operations/base.html" %}
 {% load hesba_format %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'education:students' %}?lang={{ lang }}">← {{ words.back_students }}</a><h1>{{ student.name }}</h1>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'education:students' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.back_students }}</a><h1>{{ student.name }}</h1>
 <p><bdi>{{ student.code }}</bdi>{% if student.stage %} · {{ student.stage }}{% endif %}{% if student.school %} · {{ student.school }}{% endif %}{% if student.phone %} · <bdi>{{ student.phone }}</bdi>{% endif %}{% if not student.active %} · <span class="op-status op-status-draft">{{ words.status_stopped }}</span>{% endif %}</p></div>
 <div class="op-form-actions"><a class="op-secondary" href="{% url 'parties:card' 'customer' student.payer.pk %}?lang={{ lang }}" data-payer-account>{{ words.account }}</a></div></section>
 {% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
 <section class="op-summary-grid">
 <article><small>{{ words.payer }}</small><strong>{{ student.payer.name }}</strong>{% if student.relation %}<small>{{ student.relation }}</small>{% endif %}</article>
-<article><small>{{ words.phone }}</small><strong><bdi>{{ student.payer.phone|default:'—' }}</bdi></strong></article>
+<article><small>{{ words.phone }}</small><strong>{% if student.payer.phone %}{{ student.payer.phone|ltr }}{% else %}—{% endif %}</strong></article>
 <article><small>{{ words.groups_count }}</small><strong data-active-groups>{{ active_groups }}</strong></article>
 <article><small>{{ words.rate }}</small><strong data-attendance-rate{% if summary.rate is not None and summary.rate < 75 %} class="edu-low"{% endif %}>{% if summary.rate is not None %}{{ summary.rate }}%{% else %}—{% endif %}</strong></article>
 </section>

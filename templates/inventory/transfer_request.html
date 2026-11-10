@@ -1,7 +1,7 @@
 {% extends "operations/base.html" %}
 {% load hesba_format %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'inventory:transfer_requests' %}?lang={{ lang }}">← {% if lang == 'en' %}Transfer requests{% else %}طلبات التحويل{% endif %}</a><h1 dir="ltr">{{ item.number }}</h1>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'inventory:transfer_requests' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{% if lang == 'en' %}Transfer requests{% else %}طلبات التحويل{% endif %}</a><h1 dir="ltr">{{ item.number }}</h1>
 <p>{% if lang == 'en' %}From {% firstof item.source.name_en item.source.name_ar %} to {% firstof item.destination.name_en item.destination.name_ar %}{% else %}من {{ item.source.name_ar }} إلى {{ item.destination.name_ar }}{% endif %} · <span class="op-status op-status-{% if item.status == 'received' %}posted{% elif item.status == 'cancelled' %}cancelled{% else %}draft{% endif %}" data-request-status="{{ item.status }}">{{ status_label }}</span></p>
 {% if item.note %}<p class="op-muted">{{ item.note }}</p>{% endif %}{% if item.cancel_reason %}<p class="op-muted">{% if lang == 'en' %}Cancelled:{% else %}سبب الإلغاء:{% endif %} {{ item.cancel_reason }}</p>{% endif %}</div></section>
 {% if error %}<p class="op-message op-message-error" data-request-error>{{ error }}</p>{% endif %}

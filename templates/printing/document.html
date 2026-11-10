@@ -6,11 +6,11 @@
 <title>{{ page_title }}</title>
 {% include "partials/brand_icons.html" %}
 <link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
-<link rel="stylesheet" href="{% static 'hesba/css/print.css' %}?v=print-002">
+<link rel="stylesheet" href="{% static 'hesba/css/print.css' %}?v=print-004">
 </head>
 <body class="pr-body pr-{{ format }}" data-format="{{ format }}">
 <nav class="pr-toolbar" aria-label="{{ words.print }}">
-  {% if not public %}<a class="pr-button pr-button--ghost" href="{{ back_url }}">← {{ words.back }}</a>{% endif %}
+  {% if not public %}<a class="pr-button pr-button--ghost" href="{{ back_url }}">{% include "partials/back_arrow.html" %}{{ words.back }}</a>{% endif %}
   <div class="pr-toolbar__formats" role="group">
     <a class="pr-button{% if format == 'a4' %} is-current{% endif %}" href="?lang={{ lang }}&format=a4"{% if format == 'a4' %} aria-current="true"{% endif %}>{{ words.a4 }}</a>
     <a class="pr-button{% if format == 'receipt' %} is-current{% endif %}" href="?lang={{ lang }}&format=receipt"{% if format == 'receipt' %} aria-current="true"{% endif %}>{{ words.receipt }}</a>

@@ -4,7 +4,7 @@ from .two_factor import device_for
 
 
 STRINGS = {
-    "ar": {"page_title": "الملف الشخصي", "dashboard": "لوحة القيادة", "language": "English", "profile": "ملفي الشخصي", "role": "الدور", "permissions": "صلاحياتي", "none": "لا توجد صلاحيات تشغيل مرتبطة بهذا المستخدم."},
+    "ar": {"page_title": "الملف الشخصي", "dashboard": "لوحة القيادة", "language": "English", "profile": "ملفي الشخصي", "role": "الدور", "permissions": "صلاحياتي", "none": "مفيش صلاحيات تشغيل مربوطة بالمستخدم ده."},
     "en": {"page_title": "Profile", "dashboard": "Dashboard", "language": "العربية", "profile": "My profile", "role": "Role", "permissions": "My permissions", "none": "No operational permissions are linked to this user."},
 }
 

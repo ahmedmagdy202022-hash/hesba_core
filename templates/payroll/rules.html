@@ -1,7 +1,7 @@
 {% extends "operations/base.html" %}
 {% load l10n %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'payroll:list' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ words.rules }}</h1><p>{{ words.review }}</p></div></section>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'payroll:list' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.back }}</a><h1>{{ words.rules }}</h1><p>{{ words.review }}</p></div></section>
 <form class="op-form" method="post" data-payroll-rules-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><div class="op-form-grid">
 <div class="op-field"><label for="r-emp">{{ words.emp_pct }}</label><input id="r-emp" name="employee_insurance_percent" inputmode="decimal" dir="ltr" value="{{ rules.employee_insurance_percent|unlocalize }}"{% if not can_manage %} disabled{% endif %}></div>
 <div class="op-field"><label for="r-co">{{ words.co_pct }}</label><input id="r-co" name="company_insurance_percent" inputmode="decimal" dir="ltr" value="{{ rules.company_insurance_percent|unlocalize }}"{% if not can_manage %} disabled{% endif %}></div>

@@ -10,7 +10,7 @@ renders even if a stylesheet or the signed-in shell is what went stale.
 {% include "partials/brand_icons.html" %}
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>انتهت صلاحية الصفحة - حِسبة</title>
+<title>الصفحة دي قديمة - حِسبة</title>
 <style>
 :root{--navy:#05243F;--teal:#16BDC4;--off:#F6FBFB}
 *{box-sizing:border-box}
@@ -30,7 +30,7 @@ button,a.btn{font:inherit;border:0;border-radius:10px;padding:10px 18px;cursor:p
 <main>
   {% if logout_retry %}
     <h1>تأكيد تسجيل الخروج</h1>
-    <p>كانت الصفحة التي ضغطت منها قديمة. اضغط مرة أخرى لإتمام تسجيل الخروج.</p>
+    <p>الصفحة اللي دوست منها كانت قديمة. دوس تاني علشان تخرج.</p>
     <form method="post" action="{% url 'logout' %}">{% csrf_token %}
       <div class="actions">
         <button class="primary" type="submit">تسجيل الخروج · Log out</button>
@@ -42,10 +42,10 @@ button,a.btn{font:inherit;border:0;border-radius:10px;padding:10px 18px;cursor:p
       <p>The page you used was out of date. Press the button once more to finish logging out.</p>
     </div>
   {% else %}
-    <h1>انتهت صلاحية الصفحة</h1>
-    <p>تم فتح هذه الصفحة قبل آخر تسجيل دخول، لذلك لم يتم حفظ الطلب. أعد تحميل الصفحة ثم حاول مرة أخرى.</p>
+    <h1>الصفحة دي قديمة</h1>
+    <p>الصفحة دي اتفتحت قبل آخر مرة دخلت فيها، علشان كده الطلب ماتحفظش. حدّث الصفحة وجرّب تاني.</p>
     <div class="actions">
-      <a class="btn primary" href="{{ reload_url }}">إعادة التحميل · Reload</a>
+      <a class="btn primary" href="{{ reload_url }}">حدّث الصفحة · Reload</a>
       <a class="btn secondary" href="{% url 'after_login' %}">الرئيسية · Home</a>
     </div>
     <div class="en">

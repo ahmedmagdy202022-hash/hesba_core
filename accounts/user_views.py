@@ -6,6 +6,7 @@ from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
 
+from config.form_defaults import choose_labels
 from permissions.decorators import require_permission
 from permissions.models import Role
 
@@ -133,6 +134,7 @@ class UserForm(forms.Form):
             self.fields["username"].disabled = True
         else:
             del self.fields["active"]
+        choose_labels(self, lang)  # UX Wave 3: «اختار …», not «---------»
 
 
 def _error_messages(exc, lang):

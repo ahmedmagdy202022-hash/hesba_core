@@ -3,7 +3,7 @@ from decimal import Decimal
 from django import forms
 from django.utils import timezone
 
-from config.form_defaults import preselect
+from config.form_defaults import choose_labels, preselect
 from config.numbering import AutoNumbered
 from master_data.models import Item, Location
 from settings_core.display_labels import localized_choices
@@ -66,6 +66,7 @@ class StockOperationForm(AutoNumbered, forms.Form):
         preselect(self, "source_location", "location")  # UI-TRACK F13: the default warehouse
         if self.auto_number:
             self.offer_auto_number(lang)
+        choose_labels(self, lang)  # UX Wave 3: «اختار …», not «---------»
 
     def clean_reference_number(self):
         number = (self.cleaned_data["reference_number"] or "").strip()

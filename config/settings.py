@@ -102,6 +102,8 @@ MIDDLEWARE = [
     # of the demo database. A no-op everywhere else; must run before sessions.
     "config.demo_sandbox.DemoSandboxMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    # UX Wave 3: ?lang=en renders dates and decimals in English (display only).
+    "config.middleware.PageLanguageMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",

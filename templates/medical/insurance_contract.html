@@ -1,7 +1,7 @@
 {% extends "operations/base.html" %}
 {% load hesba_format %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'medical:insurance' %}?lang={{ lang }}">← {{ iw.back }}</a><h1>{{ contract.insurer.name }}</h1><p>{{ iw.percent }} <bdi>{{ contract.coverage_percent|qty }}%</bdi> · {{ iw.next_claim }} <bdi>{{ next_claim|date:"Y-m-d" }}</bdi></p></div>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'medical:insurance' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ iw.back }}</a><h1>{{ contract.insurer.name }}</h1><p>{{ iw.percent }} <bdi>{{ contract.coverage_percent|qty }}%</bdi> · {{ iw.next_claim }} <bdi>{{ next_claim|date:"Y-m-d" }}</bdi></p></div>
 <div class="op-form-actions"><a class="op-secondary" href="{% url 'parties:card' 'customer' contract.insurer_id %}?lang={{ lang }}">{{ words.account }}</a></div></section>
 {% if error %}<p class="op-message op-message-error" role="alert" data-insurance-error>{{ error }}</p>{% endif %}
 <section class="op-summary-grid"><article><small>{{ iw.owed }}</small><strong data-insurer-owed>{{ owed|money }}</strong></article><article><small>{{ iw.count }}</small><strong>{{ totals.count }}</strong></article><article><small>{{ iw.claimed }}</small><strong>{{ totals.claimed|money }}</strong></article><article><small>{{ iw.net }}</small><strong data-claim-net>{{ totals.net|money }}</strong></article></section>
