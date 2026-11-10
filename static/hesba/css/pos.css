@@ -91,9 +91,14 @@
   .pos-overflow__menu .op-secondary{width:100%}
   body:has(.pos-paybar:not(.is-empty)) .hs-feedback-fab{bottom:calc(96px + env(safe-area-inset-bottom))}
 }
+/* UX Wave 4: on a phone the pay bar reaches the bottom edge and the floating tab bar rides on its lower part, so
+   nothing scrolls between them; while it shows, the «بيع» circle sits level in the bar instead of standing above it. */
 @media (max-width:700px){
-  .pos-paybar{bottom:calc(var(--hs-tabbar-height) + env(safe-area-inset-bottom));padding-bottom:var(--hs-space-2)}
-  body:has(.pos-paybar:not(.is-empty)) .hs-feedback-fab{bottom:calc(var(--hs-tabbar-height) + 96px + env(safe-area-inset-bottom))}
+  .pos-paybar{bottom:0;padding-bottom:calc(var(--hs-tabbar-space) + var(--hs-space-2) + env(safe-area-inset-bottom))}
+  .pos{padding-bottom:calc(var(--hs-tabbar-space) + 96px)}
+  body:has(.pos-paybar:not(.is-empty)) .hs-tab__orb{width:48px;height:38px;margin-top:0;border-width:0;border-radius:var(--hs-radius-md);box-shadow:none}
+  body:has(.pos-paybar:not(.is-empty)) .hs-main{padding-bottom:var(--hs-space-4)}
+  body:has(.pos-paybar:not(.is-empty)) .hs-feedback-fab{bottom:calc(var(--hs-tabbar-space) + 84px + env(safe-area-inset-bottom))}
 }
 .pos-overflow summary:focus-visible,.hs-pct-switch button:focus-visible,.pos-promos__chip>summary:focus-visible,.pos-details>summary:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
 

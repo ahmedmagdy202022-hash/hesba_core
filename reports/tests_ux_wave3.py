@@ -408,7 +408,7 @@ class SettingsMenuTests(TestCase):
         css = read_static("hesba/css/settings.css")
         self.assertIn(".set-nav__link{position:relative;display:grid;grid-template-columns:22px minmax(0,1fr);align-items:center;column-gap:10px;\n  min-height:var(--hs-control-height)", css)
         self.assertIn("  .set-nav__link{flex:none;display:inline-flex;align-items:center;gap:6px;min-height:var(--hs-control-height)", css)
-        self.assertIn("settings.css' %}?v=st-4", open(get_template("settings_core/base.html").origin.name, encoding="utf-8").read())
+        self.assertIn("settings.css' %}?v=st-5", open(get_template("settings_core/base.html").origin.name, encoding="utf-8").read())
 
 
 class BackArrowTests(SimpleTestCase):

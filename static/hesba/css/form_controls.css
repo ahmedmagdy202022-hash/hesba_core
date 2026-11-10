@@ -33,15 +33,15 @@ select:not([multiple]):not([size]):disabled{cursor:not-allowed;opacity:.7}
 /* AN3 (Ahmed's notes): a form reads in short titled parts — a numbered header, a calm card, two columns that fold to one. */
 .hs-form{padding:0;border:0;background:transparent;box-shadow:none}
 .hs-sections{display:grid;gap:16px}
-.hs-section{background:var(--hs-surface);border:1px solid var(--hs-line);border-radius:var(--hs-radius-xl);box-shadow:var(--hs-shadow-sm);overflow:hidden}
-.hs-section__head{display:flex;align-items:flex-start;gap:12px;padding:16px 20px;border-bottom:1px solid var(--hs-line);background:linear-gradient(180deg,var(--hs-ground),var(--hs-surface))}
+.hs-section{border:var(--hs-card-border);border-radius:var(--hs-card-radius);background:var(--hs-card-bg);box-shadow:var(--hs-card-shadow);overflow:hidden}
+.hs-section__head{display:flex;align-items:flex-start;gap:12px;padding:18px 20px 14px;border-bottom:1px solid var(--hs-line)}
 .hs-section__num{flex:0 0 32px;height:32px;border-radius:50%;display:grid;place-items:center;background:var(--hs-navy);color:var(--hs-surface);font-weight:700;font-size:var(--hs-text-md)}
 .hs-section__head h2{margin:2px 0 0;font-family:var(--hs-font-head);font-size:17px;color:var(--hs-navy);line-height:1.4}
 .hs-section__head p{margin:4px 0 0;color:var(--hs-muted);font-size:var(--hs-text-sm);line-height:1.6}
 .hs-section__grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 18px;padding:18px 20px 20px}
 .hs-section__grid > .hs-field--wide{grid-column:1 / -1}
 .hs-section__grid > div > label{font-weight:700;color:var(--hs-navy);font-size:var(--hs-text-md)}
-.hs-section__grid :is(input:not([type=checkbox]):not([type=radio]),select,textarea){width:100%;min-height:46px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-md);padding:10px 14px;font:inherit;background-color:var(--hs-surface);color:var(--hs-ink);transition:border-color .15s,box-shadow .15s}
+.hs-section__grid :is(input:not([type=checkbox]):not([type=radio]),select,textarea){width:100%;min-height:46px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-input-radius);padding:10px 14px;font:inherit;background-color:var(--hs-surface);color:var(--hs-ink);transition:border-color .15s,box-shadow .15s}
 .hs-section__grid :is(input,select,textarea):hover{border-color:var(--hs-teal)}
 .hs-section__grid :is(input,select,textarea):focus{border-color:var(--hs-teal);box-shadow:var(--hs-focus-ring);outline:0}
 .hs-section__grid :is(input,select,textarea)::placeholder{color:var(--hs-muted);opacity:.8}
@@ -54,18 +54,20 @@ select:not([multiple]):not([size]):disabled{cursor:not-allowed;opacity:.7}
 .hs-check input{width:20px;height:20px;margin-top:2px;accent-color:var(--hs-teal-deep);flex:0 0 auto}
 .hs-check label{display:grid;gap:3px;color:var(--hs-navy);cursor:pointer}
 .hs-check label small{color:var(--hs-muted);font-size:var(--hs-text-sm);line-height:1.5}
-.hs-form > :is(.md-form-actions,.op-form-actions){position:sticky;bottom:0;z-index:2;margin:0;padding:14px 0 calc(14px + env(safe-area-inset-bottom,0px));background:linear-gradient(0deg,var(--hs-ground) 70%,transparent)}
+.hs-form > :is(.md-form-actions,.op-form-actions){position:sticky;bottom:0;z-index:2;margin:0;padding:14px 0 calc(14px + env(safe-area-inset-bottom,0px));background:linear-gradient(0deg,var(--hs-page) 70%,transparent)}
+/* UX Wave 4: on a phone the floating tab bar owns the bottom edge; the sticky save row stops just above it. */
+@media (max-width:700px){.hs-form > :is(.md-form-actions,.op-form-actions){bottom:calc(var(--hs-tabbar-clear) + env(safe-area-inset-bottom,0px));padding-bottom:14px}.hs-form > .hs-sticky-save{padding:var(--hs-space-2);background:var(--hs-surface)}}
 @media (max-width:760px){.hs-section__grid,.hs-checks{grid-template-columns:1fr}.hs-section__head{padding:14px 16px}.hs-section__grid{padding:16px}}
 
 /* AN3: hub cards (reports, master data): the menu's icon on a tinted tile, the title, one line of what is inside. */
 .hs-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:14px}
-.hs-tile{--tone:var(--hs-navy);--tone-wash:var(--hs-ground);position:relative;display:flex;align-items:flex-start;gap:14px;padding:18px;border:1px solid var(--hs-line);border-radius:var(--hs-radius-xl);background:var(--hs-surface);color:var(--hs-navy);text-decoration:none;box-shadow:var(--hs-shadow-sm);transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease}
+.hs-tile{--tone:var(--hs-navy);--tone-wash:var(--hs-neutral-wash);position:relative;display:flex;align-items:flex-start;gap:14px;padding:18px;border:var(--hs-card-border);border-radius:var(--hs-card-radius);background:var(--hs-card-bg);box-shadow:var(--hs-card-shadow);color:var(--hs-navy);text-decoration:none;transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease}
 .hs-tile--teal{--tone:var(--hs-teal-deep);--tone-wash:var(--hs-teal-wash)}
 .hs-tile--gold{--tone:var(--hs-gold);--tone-wash:var(--hs-gold-wash)}
-.hs-tile--navy{--tone:var(--hs-navy);--tone-wash:var(--hs-ground)}
-a.hs-tile:hover{transform:translateY(-2px);box-shadow:var(--hs-shadow-md);border-color:var(--tone)}
-.hs-tile::before{content:"";position:absolute;inset-block:16px;inset-inline-start:0;width:4px;border-radius:0 4px 4px 0;background:var(--tone)}
-.hs-tile__icon{flex:0 0 46px;height:46px;border-radius:14px;display:grid;place-items:center;background:var(--tone-wash);color:var(--tone)}
+.hs-tile--navy{--tone:var(--hs-navy);--tone-wash:var(--hs-neutral-wash)}
+a.hs-tile:hover{transform:translateY(-2px);box-shadow:var(--hs-card-shadow-hover)}
+@media (prefers-reduced-motion: reduce){a.hs-tile:hover{transform:none}}
+.hs-tile__icon{flex:0 0 var(--hs-chip-size);width:var(--hs-chip-size);height:var(--hs-chip-size);border-radius:var(--hs-chip-radius);display:grid;place-items:center;background:var(--tone-wash);color:var(--tone)}
 .hs-tile__icon .hs-icon{width:24px;height:24px}
 .hs-tile__body{display:grid;gap:4px;min-width:0}
 .hs-tile__body strong{font-family:var(--hs-font-head);font-size:17px;line-height:1.4}
@@ -75,6 +77,19 @@ a.hs-tile:hover{transform:translateY(-2px);box-shadow:var(--hs-shadow-md);border
 .hs-tile__go{margin-inline-start:auto;align-self:center;color:var(--hs-muted);font-size:22px;line-height:1}
 .hs-tile--locked{opacity:.7}
 @media (max-width:600px){.hs-tiles{grid-template-columns:1fr}}
+
+/* UX Wave 4: the tinted icon chip. A small squircle in a wash with the icon in the matching deep colour, in place of
+   an outlined box. Hub tiles (.hs-tile__icon) and report headings (.hs-report-mark) share its size, radius and
+   tones; the dashboard's figure icons already use the same washes and move onto it with the dashboard redesign. Use: <span class="hs-ichip hs-ichip--teal"><svg class="hs-icon">…</svg></span> */
+.hs-ichip{--tone:var(--hs-navy);--tone-wash:var(--hs-neutral-wash);flex:0 0 var(--hs-chip-size);display:inline-grid;place-items:center;width:var(--hs-chip-size);height:var(--hs-chip-size);border-radius:var(--hs-chip-radius);background:var(--tone-wash);color:var(--tone)}
+.hs-ichip .hs-icon{width:22px;height:22px}
+.hs-ichip--teal{--tone:var(--hs-teal-deep);--tone-wash:var(--hs-teal-wash)}
+.hs-ichip--gold{--tone:var(--hs-gold);--tone-wash:var(--hs-gold-wash)}
+.hs-ichip--info{--tone:var(--hs-info);--tone-wash:var(--hs-info-wash)}
+.hs-ichip--success{--tone:var(--hs-success);--tone-wash:var(--hs-success-wash)}
+.hs-ichip--danger{--tone:var(--hs-danger);--tone-wash:var(--hs-danger-wash)}
+.hs-ichip--warning{--tone:var(--hs-warning);--tone-wash:var(--hs-warning-wash)}
+.hs-ichip--sm{--hs-chip-size:36px;--hs-chip-radius:12px}
 
 /* AN3: call and WhatsApp carry their sign (customer and supplier card). */
 .hs-contact{gap:8px}
@@ -127,7 +142,7 @@ a.hs-tile:hover{transform:translateY(-2px);box-shadow:var(--hs-shadow-md);border
 .hs-pct-toggle[aria-pressed="true"]{background:var(--hs-teal);border-color:var(--hs-teal);color:var(--hs-on-teal)}
 .hs-pct-amount{flex:1 0 100%;color:var(--hs-muted);font-size:12px}
 /* FB-27: "are you sure?" before a delete, a removal or a cancellation */
-.hs-confirm{width:min(420px,calc(100% - 32px));border:0;border-radius:16px;padding:20px;background:var(--hs-surface);color:var(--hs-ink)}
+.hs-confirm{width:min(420px,calc(100% - 32px));border:0;border-radius:var(--hs-card-radius);padding:20px;background:var(--hs-surface);color:var(--hs-ink)}
 .hs-confirm::backdrop{background:color-mix(in srgb,var(--hs-navy) 45%,transparent)}
 .hs-confirm h2{margin:0 0 8px;color:var(--hs-navy);font-size:20px}
 .hs-confirm p{margin:0 0 18px;color:var(--hs-muted)}

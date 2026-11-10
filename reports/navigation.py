@@ -377,6 +377,25 @@ def current_key(items, path):
     return best
 
 
+#: UX Wave 4: the tab that sells; on the phone tab bar it is the raised teal circle in the middle.
+SELL_TABS = ("operations", "pos")
+
+
+def tab_bar(tabs):
+    """The phone tab bar's display order. ``tabs`` keeps its priority order (the sidebar and the tests read it);
+    here the selling tab moves to the middle of the five slots (four tabs and «المزيد») and is marked ``raised``.
+    The markup follows this order, so reading and keyboard order match what the eye sees. Without a selling tab,
+    or with too few tabs to have a middle, the bar is the plain list."""
+    bar = [dict(tab, raised=False) for tab in tabs]
+    sell = next((i for i, tab in enumerate(bar) if tab["key"] in SELL_TABS), None)
+    if sell is None or len(bar) < 3:
+        return bar
+    middle = (len(bar) + 1) // 2  # slots = tabs + «المزيد»; with four tabs the third slot
+    tab = bar.pop(sell)
+    bar.insert(middle, dict(tab, raised=True))
+    return bar
+
+
 def display_name(user):
     profile = getattr(user, "hesba_profile", None)
     if profile is not None and profile.display_name:
@@ -411,6 +430,7 @@ def app_shell(user, lang, modules, path):
         "items": items,
         "groups": groups,
         "tabs": tabs,
+        "tab_bar": tab_bar(tabs),
         "shortcuts": shortcut_actions(user, lang, modules, set(by_key)),
         # "More" lights up when the current page lives behind it.
         "more_current": tab_current is not None and tab_current not in tab_keys,

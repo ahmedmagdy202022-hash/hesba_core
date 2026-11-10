@@ -18,13 +18,13 @@
 
 /* UX Wave 3: a report's heading wears its hub card's icon and colour (the same tones as .hs-tile). */
 .hs-report-title{display:flex;align-items:center;gap:var(--hs-space-3)}
-.hs-report-mark{--tone:var(--hs-navy);--tone-wash:var(--hs-ground);flex:0 0 44px;width:44px;height:44px;display:grid;place-items:center;border-radius:var(--hs-radius-lg);background:var(--tone-wash);color:var(--tone);box-shadow:inset 0 0 0 1px var(--hs-line)}
+.hs-report-mark{--tone:var(--hs-navy);--tone-wash:var(--hs-neutral-wash);flex:0 0 var(--hs-chip-size);width:var(--hs-chip-size);height:var(--hs-chip-size);display:grid;place-items:center;border-radius:var(--hs-chip-radius);background:var(--tone-wash);color:var(--tone)}
 .hs-report-mark--teal{--tone:var(--hs-teal-deep);--tone-wash:var(--hs-teal-wash)}
 .hs-report-mark--gold{--tone:var(--hs-gold);--tone-wash:var(--hs-gold-wash)}
 .hs-report-mark .hs-icon{width:24px;height:24px}
 /* UX Wave 3: the period chips of a report («النهارده / الأسبوع / الشهر / مخصوص»): each a 44px link. */
 .hs-periods{display:flex;flex-wrap:wrap;gap:var(--hs-space-2);margin:0 0 var(--hs-space-3);padding:0;list-style:none}
-.hs-period{display:inline-flex;align-items:center;justify-content:center;min-height:var(--hs-control-height);min-width:var(--hs-control-height);padding:0 var(--hs-space-4);border:1px solid var(--hs-line);border-radius:var(--hs-radius-pill);background:var(--hs-surface);color:var(--hs-navy);font-weight:var(--hs-weight-semibold);text-decoration:none}
+.hs-period{display:inline-flex;align-items:center;justify-content:center;min-height:var(--hs-control-height);min-width:var(--hs-control-height);padding:0 var(--hs-space-4);border:1px solid transparent;border-radius:var(--hs-radius-pill);background:var(--hs-surface);color:var(--hs-navy);font-weight:var(--hs-weight-semibold);text-decoration:none}
 .hs-period:hover{border-color:var(--hs-teal);background:var(--hs-teal-wash)}
 .hs-period:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
 .hs-period[aria-current="true"]{border-color:var(--hs-navy);background:var(--hs-navy);color:var(--hs-surface)}
