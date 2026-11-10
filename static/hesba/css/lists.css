@@ -37,6 +37,9 @@
 
 /* ---- the compact list row ---- */
 table[data-list-rows] td a{display:inline-flex;align-items:center;min-height:var(--hs-control-height)}
+/* every link in a table row is a 44px target (a document number, «تعديل», «الحساب», «طباعة») */
+.op-table tbody td a,.md-table tbody td a{display:inline-flex;align-items:center;min-height:var(--hs-control-height)}
+.op-row-cancel>summary{min-height:var(--hs-control-height);min-width:var(--hs-control-height)}
 table[data-list-rows] td[data-row="action"] a,.md-actions a,.op-table td.op-row-link a{min-width:var(--hs-control-height);min-height:var(--hs-control-height);display:inline-flex;align-items:center;justify-content:center;padding:0 var(--hs-space-2)}
 table[data-list-rows] tbody tr[data-saved]{background:var(--hs-teal-wash)}
 .hs-row-sub{color:var(--hs-muted);font-size:var(--hs-text-sm);font-weight:var(--hs-weight-regular)}
@@ -118,7 +121,7 @@ table[data-list-rows] tbody tr[data-saved]{background:var(--hs-teal-wash)}
 .hs-icon-row{display:flex;gap:var(--hs-space-2);margin-top:var(--hs-space-3)}
 .hs-icon-row .hs-contact{width:var(--hs-control-height)!important;min-width:var(--hs-control-height);padding:0;flex:0 0 auto}
 .hs-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-@media (max-width:700px){.hs-kpis.op-summary-grid--compact{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:700px){.hs-kpis.op-summary-grid--compact{grid-template-columns:repeat(2,minmax(0,1fr))}.hs-kpis.hs-kpis--three{grid-template-columns:repeat(3,minmax(0,1fr))}.hs-kpis article{padding:var(--hs-space-3)}}
 
 /* ---- the «+ new item» dialog: × at the top, the fields scroll, the buttons stay at the bottom ---- */
 dialog.hs-quick-item[open]{display:flex;flex-direction:column;max-height:calc(100dvh - 32px);overflow:hidden}

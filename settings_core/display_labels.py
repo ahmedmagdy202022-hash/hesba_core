@@ -15,7 +15,10 @@ module does not translate.
 from django.apps import apps
 
 
-DOCUMENT_STATUS = {"draft": "مسودة", "posted": "مُرحّل", "cancelled": "ملغى"}
+# UX Wave 2: plain words for the status pill, not accounting jargon: a posted document is «نهائي» (final), not «مُرحّل».
+# Labels only: the stored values and the posting logic are unchanged. An invoice (فاتورة) takes the feminine form.
+DOCUMENT_STATUS = {"draft": "مسودة", "posted": "نهائي", "cancelled": "ملغى"}
+INVOICE_STATUS = {"draft": "مسودة", "posted": "نهائية", "cancelled": "ملغية"}
 PAYMENT_STATUS = {"credit": "آجل", "partial": "مدفوع جزئيًا", "paid": "مدفوع"}
 FREQUENCY = {
     "monthly": "شهري",
@@ -41,7 +44,7 @@ AR_LABELS = {
     ("projects.projectpurchase", "heading"): {"materials": "خامات", "subcontract": "مقاولو باطن", "labour": "عمالة", "equipment": "معدات", "other": "أخرى"},
     ("projects.projectpayment", "kind"): {"advance": "دفعة مقدمة", "collection": "تحصيل"},
     ("restaurant.order", "kind"): {"dine_in": "صالة", "takeaway": "تيك أواي", "delivery": "دليفري"},
-    ("sales.salesinvoice", "status"): DOCUMENT_STATUS,
+    ("sales.salesinvoice", "status"): INVOICE_STATUS,
     ("sales.salesinvoice", "payment_status"): PAYMENT_STATUS,
     ("sales.salesreturn", "status"): DOCUMENT_STATUS,
     ("sales.customerpayment", "status"): DOCUMENT_STATUS,
@@ -52,7 +55,7 @@ AR_LABELS = {
         "opening_balance": "رصيد افتتاحي",
         "adjustment": "تسوية",
     },
-    ("purchases.purchaseinvoice", "status"): DOCUMENT_STATUS,
+    ("purchases.purchaseinvoice", "status"): INVOICE_STATUS,
     ("purchases.purchaseinvoice", "payment_status"): PAYMENT_STATUS,
     ("purchases.purchasereturn", "status"): DOCUMENT_STATUS,
     ("purchases.supplierpayment", "status"): DOCUMENT_STATUS,

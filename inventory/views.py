@@ -141,6 +141,7 @@ def stock_list(request):
             query=query,
             locations=locations,
             selected_location=selected_location,
+            filter_count=int(bool(query)) + int(selected_location is not None),  # UX Wave 2: the «فلترة» badge
             counts=counts,
             can_view_cost=can_view_cost,
             can_transfer=user_has_permission(request.user, "inventory.transfer_stock"),
@@ -193,7 +194,8 @@ def item_detail(request, pk):
                 "state": _stock_state(quantity, item.min_stock),
             }
         )
-    movements = entity_scope.scope(item.stock_movements.select_related("location"), entity_scope.STOCK_MOVEMENT)[:100]
+    # UX Wave 2: the movements a page at a time (20 by default, the shared pager) instead of the latest 100 in one long table.
+    movements_page = page_of(request, entity_scope.scope(item.stock_movements.select_related("location"), entity_scope.STOCK_MOVEMENT).order_by("-movement_date", "-id"))
     # UI-TRACK grocery G02: what of this item is on the shelf, batch by batch, soonest expiry first.
     from batches.services import DEFAULT_WARN_DAYS, batch_positions, batches_enabled, expiry_state
     from batches.views import WORDS as BATCH_WORDS
@@ -215,7 +217,8 @@ def item_detail(request, pk):
             request,
             item=item,
             location_rows=location_rows,
-            movements=movements,
+            movements=movements_page.object_list,
+            movements_page=movements_page,
             batch_rows=batch_rows,
             batch_words={**BATCH_WORDS["en" if _lang(request) == "en" else "ar"], **expiry_words(_lang(request))},  # AN8
             show_batch_no=not expiry_only(),
