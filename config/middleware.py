@@ -42,7 +42,7 @@ class PageLanguageMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        if request.GET.get("lang") == "en":
+        if (request.GET.get("lang") or "").lower() == "en":
             with translation.override("en"):
                 return self.get_response(request)
         return self.get_response(request)

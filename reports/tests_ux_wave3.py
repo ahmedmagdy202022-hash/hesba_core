@@ -16,7 +16,7 @@ from django.urls import path, reverse
 from django.utils import timezone, translation
 from django.views.defaults import server_error
 
-from hesba_testing.factories import make_cashbox, make_item, make_location, make_seeded_role, make_user, make_user_profile, stock_in
+from hesba_testing.factories import make_cashbox, make_customer, make_item, make_location, make_seeded_role, make_user, make_user_profile, stock_in
 from inventory.services import recalculate_item_average_cost
 from permissions.models import RoleCode
 from reports.analytics import period_bounds
@@ -193,12 +193,71 @@ class EnglishFormatsTests(TestCase):
         self.assertEqual(day_text(date(2026, 11, 9), "en"), "9 November 2026")  # an explicit language still wins
 
 
+class EnglishPostStoresTheSameFiguresTests(TestCase):
+    """Review of PR #346: the page language is display only. The same collection posted to ?lang=ar and
+    ?lang=en must store the same amount and date, and no form field may opt into locale-aware parsing."""
+
+    def setUp(self):
+        prepared_client()
+        user = make_user(username="ux3_post")
+        make_user_profile(user=user, role=make_seeded_role(RoleCode.CASHIER))
+        self.client.force_login(user)
+        self.customer = make_customer()
+        self.cashbox = make_cashbox()
+
+    def collect(self, lang, number):
+        from sales.models import CustomerPayment
+
+        url = reverse("sales:payment_create") + f"?lang={lang}"
+        response = self.client.post(url, {"lang": lang, "payment_number": number, "payment_date": "2026-11-10",
+                                          "customer": self.customer.pk, "cashbox": self.cashbox.pk, "amount": "1234.50",
+                                          "notes": "same figures"})
+        self.assertEqual(response.status_code, 302, response.content[:300])
+        return CustomerPayment.objects.get(payment_number=number)
+
+    def test_the_same_post_stores_the_same_amount_and_date_in_both_languages(self):
+        arabic = self.collect("ar", "CP-UX3-AR")
+        english = self.collect("en", "CP-UX3-EN")
+        self.assertEqual((arabic.amount, arabic.payment_date), (D("1234.50"), date(2026, 11, 10)))
+        self.assertEqual((english.amount, english.payment_date), (arabic.amount, arabic.payment_date))
+
+    def test_no_form_field_parses_by_locale(self):
+        # A localize=True field would read «12,5» differently under en and ar; the project has none, and this
+        # keeps it that way (the middleware switches the locale for English pages).
+        import importlib
+        import pkgutil
+
+        from django import forms
+        from django.apps import apps
+
+        offenders = []
+        for app in apps.get_app_configs():
+            if not app.module.__file__ or "site-packages" in app.module.__file__:
+                continue
+            for mod in pkgutil.iter_modules(app.module.__path__, app.name + "."):
+                if not mod.name.rsplit(".", 1)[-1].startswith("forms"):
+                    continue
+                module = importlib.import_module(mod.name)
+                for name in dir(module):
+                    cls = getattr(module, name)
+                    if isinstance(cls, type) and issubclass(cls, forms.BaseForm) and cls.__module__ == mod.name:
+                        for field_name, field in cls.base_fields.items():
+                            if getattr(field, "localize", False):
+                                offenders.append(f"{mod.name}.{name}.{field_name}")
+        self.assertEqual(offenders, [])
+
+
 class BidiFilterTests(SimpleTestCase):
     def test_a_range_keeps_its_order_and_the_word_stays_outside(self):
         self.assertEqual(ltr_numbers("31–60"), '<bdi dir="ltr">31–60</bdi>')
         self.assertEqual(ltr_numbers("0–30 يوم"), '<bdi dir="ltr">0–30</bdi> يوم')
         self.assertEqual(ltr_numbers("أكتر من 90"), 'أكتر من <bdi dir="ltr">90</bdi>')
         self.assertEqual(ltr_numbers("+20 100 123 4567"), '<bdi dir="ltr">+20 100 123 4567</bdi>')
+        self.assertEqual(ltr_numbers("-30"), '<bdi dir="ltr">-30</bdi>')
+        self.assertEqual(ltr_numbers("رقم 5."), 'رقم <bdi dir="ltr">5</bdi>.')
+        from django.utils.safestring import mark_safe
+
+        self.assertEqual(ltr_numbers(mark_safe("a&nbsp;31")), "a&nbsp;31")
 
     def test_both_filters_escape(self):
         self.assertEqual(ltr("<b>INV-1</b>"), '<bdi dir="ltr">&lt;b&gt;INV-1&lt;/b&gt;</bdi>')
@@ -293,7 +352,7 @@ class ProfitPeriodChipsTests(TestCase):
 
     def test_four_chips_each_44px_link_with_plain_words(self):
         page, chips = self.chips()
-        self.assertEqual([chip["label"] for chip in chips.values()], ["النهارده", "الأسبوع", "الشهر", "مخصوص"])
+        self.assertEqual([chip["label"] for chip in chips.values()], ["النهارده", "آخر 7 أيام", "الشهر", "مخصوص"])
         self.assertTrue(chips["custom"]["current"])  # no dates: the whole history, as before, under «مخصوص»
         self.assertEqual(chips["custom"]["url"], "#report-dates")
         self.assertContains(page, 'id="report-dates"')
@@ -316,7 +375,7 @@ class ProfitPeriodChipsTests(TestCase):
 
     def test_english_chips(self):
         page = self.client.get(reverse("reports:profit") + "?lang=en")
-        self.assertEqual([chip["label"] for chip in _chips_of(page)], ["Today", "This week", "This month", "Custom"])
+        self.assertEqual([chip["label"] for chip in _chips_of(page)], ["Today", "Last 7 days", "This month", "Custom"])
 
 
 def _chips_of(page):

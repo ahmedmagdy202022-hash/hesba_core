@@ -25,7 +25,7 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from django import template
 from django.db import Error as DatabaseError
 from django.utils.html import conditional_escape
-from django.utils.safestring import mark_safe
+from django.utils.safestring import mark_safe, SafeData
 
 from config.money import COST_QUANT, MONEY_QUANT
 from settings_core.models import ClientProfile
@@ -301,7 +301,7 @@ def day_text(value, lang=None):
 
 # UX Wave 3: numbers, codes and ranges keep their left-to-right order inside an Arabic line. A plain <bdi> is not enough
 # for "31–60": digits are not a strong direction, so the range still reads «60–31» in RTL; dir="ltr" pins it.
-_NUMBER_RUN = re.compile(r"\+?\d(?:[\d\-–/.:,]|\s(?=\+?\d))*")
+_NUMBER_RUN = re.compile(r"[+\-−]?\d(?:[\d\-–/.:,]|\s(?=\+?\d))*(?<![.,:])")
 
 
 @register.filter(needs_autoescape=True)
@@ -321,6 +321,8 @@ def ltr_numbers(value, autoescape=True):
 
     if value is None:
         return ""
+    if isinstance(value, SafeData):
+        return value  # already markup: leave it as its author wrote it rather than escape it twice
     escape = conditional_escape if autoescape else str
     text, out, last = str(value), [], 0
     for match in _NUMBER_RUN.finditer(text):
