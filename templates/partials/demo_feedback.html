@@ -33,8 +33,8 @@
     </footer>
   </form>
 </dialog>
-{% if demo_hello %}{# DEMO-TRACK + DEMO-FIRST-RUN (D3): the one-time hello, a bottom banner on the first content page only, never over a form.
-   One line says pages are recorded (docs/DEMO_FEEDBACK.md); the note dialog takes an optional name or phone. #}
+{% if demo_hello %}{% comment %}DEMO-TRACK + DEMO-FIRST-RUN (D3): the one-time hello, a bottom banner on the first content page only, never over a form.
+   One line says pages are recorded (docs/DEMO_FEEDBACK.md); the note dialog takes an optional name or phone.{% endcomment %}
 <aside class="hs-hello" data-hello hidden aria-label="ملاحظاتك / Feedback">
   <p data-demo-notice><span class="t-ar">أهلًا بيك 👋 الصفحات اللي بتفتحها هنا بتتسجل عشان نحسّن البرنامج. لو حبيت تقول رأيك أو تسيب رقمك نكلمك، من هنا. مش لازم.</span><span class="t-en">Welcome 👋 The pages you open here are recorded to help us improve Hesba. If you like, leave a note or your number here. No pressure.</span></p>
   <div class="hs-hello__actions">
