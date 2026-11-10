@@ -49,7 +49,9 @@
   var paybar = form.querySelector('[data-pos-paybar]');
   var barTotal = form.querySelector('[data-pos-bar-total]');
   var wide = window.matchMedia ? window.matchMedia('(min-width: 1024px)') : null;
-  function syncWide() { form.querySelectorAll('[data-wide-open]').forEach(function (node) { node.open = !!(wide && wide.matches); }); }
+  // «تفاصيل» also opens on a phone when the till comes back with a named customer chosen (a refused credit sale, say).
+  function namedCustomer() { return !!(customer && customer.value && customer.value !== customer.getAttribute('data-walk-in')); }
+  function syncWide() { form.querySelectorAll('[data-wide-open]').forEach(function (node) { node.open = !!(wide && wide.matches) || (node.hasAttribute('data-pos-details') && namedCustomer()); }); }
   syncWide();
   if (wide && wide.addEventListener) { wide.addEventListener('change', syncWide); }
   form.querySelectorAll('.pos-overflow').forEach(function (menu) {  // a choice made from the phone's "⋯" menu closes it
