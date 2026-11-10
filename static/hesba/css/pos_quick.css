@@ -8,7 +8,7 @@
 .pos-tile:hover,.pos-tile:focus-visible{border-color:var(--hs-teal);background:var(--hs-teal-wash)}
 .pos-tile.is-added{transform:scale(.97);background:var(--hs-teal-wash);border-color:var(--hs-teal)}
 .pos-cash{display:flex;flex-wrap:wrap;gap:var(--hs-space-2);margin-block:calc(-1 * var(--hs-space-1)) var(--hs-space-3)}
-.pos-cash button{flex:1 1 56px;min-height:40px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-sm);background:var(--hs-surface);color:var(--hs-ink);font:inherit;font-weight:var(--hs-weight-semibold);cursor:pointer}
+.pos-cash button{flex:1 1 56px;min-height:var(--hs-control-height);border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-sm);background:var(--hs-surface);color:var(--hs-ink);font:inherit;font-weight:var(--hs-weight-semibold);cursor:pointer}
 .pos-cash button[data-cash="exact"]{flex-basis:100%;background:var(--hs-teal-wash);border-color:var(--hs-teal);color:var(--hs-teal-deep)}
 .pos-cash button:hover,.pos-cash button:focus-visible{border-color:var(--hs-teal)}
 .pos-more{border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);padding:var(--hs-space-2) var(--hs-space-3);margin-block-end:var(--hs-space-3)}
@@ -18,7 +18,9 @@
 /* AN7 (G07): the shop's own till buttons. */
 .pos-quick__head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:var(--hs-space-2);margin-block-end:var(--hs-space-2)}
 .pos-quick__head h2{margin:0}
-.pos-quick__head a{font-size:var(--hs-text-sm);color:var(--hs-teal-deep)}
+/* UX Wave 1: «اختار الأزرار» and «المزيد (24)» are chip buttons, 44px tall. */
+.pos-quick__head a,.pos-quick__more{display:inline-flex;align-items:center;justify-content:center;min-height:var(--hs-control-height);padding:0 var(--hs-space-4);border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-pill);background:var(--hs-surface);color:var(--hs-teal-deep);font:inherit;font-size:var(--hs-text-sm);font-weight:var(--hs-weight-semibold);text-decoration:none;cursor:pointer}
+.pos-quick__head a:hover,.pos-quick__more:hover,.pos-quick__head a:focus-visible,.pos-quick__more:focus-visible{border-color:var(--hs-teal);background:var(--hs-teal-wash)}
 .pos-tile small{font-size:var(--hs-text-xs);color:var(--hs-muted)}
 .pb-part{display:grid;gap:var(--hs-space-2);margin-block:var(--hs-space-4)}
 .pb-part h2,.pb-part h3{margin:0}
@@ -33,16 +35,16 @@
 .pb-search{display:flex;gap:var(--hs-space-2);max-width:480px}
 .pb-search input{flex:1;min-width:0}
 .pos-quick__grid:not(.is-open) .pos-tile:nth-child(n+9){display:none}
-.pos-quick__more{margin-block-start:var(--hs-space-2);padding:0;border:0;background:none;color:var(--hs-teal-deep);font:inherit;font-size:var(--hs-text-sm);font-weight:var(--hs-weight-semibold);cursor:pointer;text-decoration:underline}
+.pos-quick__more{margin-block-start:var(--hs-space-2)}
 .pos-quick__more--phone{display:none}
 @media (max-width:700px){
   .pos-quick__grid{grid-template-columns:repeat(3,minmax(0,1fr))}
   .pos-quick__grid:not(.is-open) .pos-tile:nth-child(n+7){display:none}
-  .pos-quick__more--phone{display:inline}
+  .pos-quick__more--phone{display:inline-flex}
 }
 /* AN8: cash or card. */
 .pos-method{display:grid;grid-template-columns:1fr 1fr;gap:var(--hs-space-2);margin-block:0 var(--hs-space-2)}
-.pos-method button{min-height:42px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-sm);background:var(--hs-surface);color:var(--hs-ink);font:inherit;font-weight:var(--hs-weight-semibold);cursor:pointer}
+.pos-method button{min-height:var(--hs-control-height);border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-sm);background:var(--hs-surface);color:var(--hs-ink);font:inherit;font-weight:var(--hs-weight-semibold);cursor:pointer}
 .pos-method button.is-on{background:var(--hs-teal);border-color:var(--hs-teal);color:var(--hs-navy)}
 .pos-method-hint{margin:0 0 var(--hs-space-2);font-size:var(--hs-text-sm)}
 .pos-method-hint a{color:var(--hs-teal-deep)}

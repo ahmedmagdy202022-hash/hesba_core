@@ -31,7 +31,9 @@ from config.money import money_round
 from master_data.models import Customer, Item, Location
 from permissions.decorators import require_permission
 from permissions.services import user_has_permission
+from settings_core.currency import currency_label
 from settings_core.module_gate import closed_module
+from settings_core.templatetags.hesba_format import currency_code
 
 from .models import SalesInvoice
 from .services import create_sales_draft, post_sales_invoice
@@ -46,7 +48,8 @@ WORDS = {
         "page_title": "الكاشير",
         "title": "الكاشير",
         "scan": "امسح الباركود أو اكتب الكود",
-        "scan_hint": "Enter للإضافة · F9 للدفع",
+        "scan_hint": "من الكيبورد: Enter يضيف الصنف · F9 يدفع · F2 يرجعك للمسح",
+        "scan_placeholder": "امسح أو اكتب الكود",
         "search": "أو دوّر بالاسم",
         "customer": "العميل",
         "location": "المخزن",
@@ -71,9 +74,9 @@ WORDS = {
         "cash_in": "نقدي",
         "credit_total": "آجل",
         "sold_total": "إجمالي البيع",
-        "done": "تم البيع: فاتورة {number} بمبلغ {total}.",
-        "change_msg": "الباقي للعميل {change}.",
-        "receipt": "طباعة الإيصال",
+        "done": "تم البيع: فاتورة {number} بمبلغ {total}",
+        "change_msg": "الباقي للعميل {change}",
+        "receipt": "اطبع الإيصال",
         "walk_in": "عميل نقدي",
         "err_empty": "السلة فاضية.",
         "err_promo_changed": "العروض اتغيرت من ساعة ما السلة اتحسبت؛ راجع الإجمالي الجديد وادفع تاني.",
@@ -95,7 +98,8 @@ WORDS = {
         "page_title": "Point of sale",
         "title": "Point of sale",
         "scan": "Scan a barcode or type a code",
-        "scan_hint": "Enter to add · F9 to pay",
+        "scan_hint": "Keyboard: Enter adds the item · F9 pays · F2 back to scanning",
+        "scan_placeholder": "Scan or type the code",
         "search": "or search by name",
         "customer": "Customer",
         "location": "Location",
@@ -120,8 +124,8 @@ WORDS = {
         "cash_in": "Cash",
         "credit_total": "Credit",
         "sold_total": "Sold",
-        "done": "Sold: invoice {number} for {total}.",
-        "change_msg": "Change due {change}.",
+        "done": "Sold: invoice {number} for {total}",
+        "change_msg": "Change due {change}",
         "receipt": "Print receipt",
         "walk_in": "Walk-in customer",
         "err_empty": "The cart is empty.",
@@ -518,10 +522,12 @@ def pos(request):
             cart_back = request.POST.get("cart_json", "[]")
             short_box = _short_box(exc, request)
         else:
-            text = words["done"].format(number=invoice.invoice_number, total=f"{invoice.total_amount:,.2f}")
+            unit = currency_label(currency_code(), lang)  # UX Wave 1: amounts read "229.50 ج.م"
+            text = words["done"].format(number=invoice.invoice_number, total=f"{invoice.total_amount:,.2f} {unit}".strip())
+            # UX Wave 1: the till shows these two in its after-sale banner (tagged), the change due on its own line.
+            messages.success(request, text, extra_tags="pos-sale")
             if change:
-                text += " " + words["change_msg"].format(change=f"{change:,.2f}")
-            messages.success(request, text)
+                messages.success(request, words["change_msg"].format(change=f"{change:,.2f} {unit}".strip()), extra_tags="pos-change")
             if request.POST.get("print") == "1" and closed_module("/print/") is None:
                 return redirect(f"/print/sales/{invoice.pk}/?lang={lang}&format=receipt&autoprint=1&next=pos")
             return redirect(f"/sales/pos/?lang={lang}&last={invoice.pk}")
