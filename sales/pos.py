@@ -426,6 +426,23 @@ def _error_text(exc, words):
     return " ".join(parts)
 
 
+def _alternatives_sheet(lang):
+    """R1: (url, words as JSON, drug item ids) of the pharmacy's «بدائل» sheet on a cart line, or ("", "", []) while the
+    drug database is off. The script asks the sheet about those items only (the ids cost one query).
+
+    The sheet only reads; an alternative goes into the cart through pos.js's own add path."""
+
+    from django.urls import reverse
+
+    from settings_core.capabilities import capability_enabled
+
+    if not capability_enabled("drugs"):
+        return "", "", []
+    from pharmacy.till import WORDS as ALTERNATIVE_WORDS, drug_item_ids
+
+    return reverse("pharmacy:till_alternatives"), json.dumps(ALTERNATIVE_WORDS[lang], ensure_ascii=False), drug_item_ids()
+
+
 QUICK_PICKS = 24
 
 
@@ -539,6 +556,7 @@ def pos(request):
     # The internal late-cancellation fee item is billed by the deposits service, never rung up at the till.
     catalog = [row for row in item_catalog(sale_prices=True) if row["code"] != FEE_ITEM_CODE]
     last = request.GET.get("last", "")
+    alternatives_url, alternatives_words, alternatives_drugs = _alternatives_sheet(lang)
     return render(
         request,
         "sales/pos.html",
@@ -575,6 +593,9 @@ def pos(request):
             "refused": refused,
             "summary": today_summary(request.user),
             "last_invoice": entity_scope.scope(SalesInvoice.objects, entity_scope.SALES_INVOICE).filter(pk=last, created_by=request.user).first() if last.isdigit() else None,
+            "alternatives_url": alternatives_url,  # R1: the pharmacy's «بدائل» sheet
+            "alternatives_words": alternatives_words,
+            "alternatives_drugs": alternatives_drugs,
             "js_words": json.dumps({key: words[key] for key in ("not_found", "added", "remove", "empty_cart", "scan_serial", "serial_twice", "promo_wait")}, ensure_ascii=False),
         },
     )

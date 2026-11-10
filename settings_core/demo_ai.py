@@ -19,6 +19,8 @@ posting, a ledger or a cashbox row by hand.
 
 Only when the capability is on (``ai_invoice_photo``, with purchases on, for the A3 records; ``ai_voice_summary`` for the
 collection), and only once: the item ``DEMO-AI-01`` and the payment ``DEMO-CR-AI`` say each part is already there.
+A pharmacy gets no car parts (R1: they showed in its till search and drug lists); its invoice-photo sample is read the
+same way, with every line mapped by hand.
 """
 
 from datetime import timedelta
@@ -56,7 +58,8 @@ def seed(master, owner, modules=()):
     from sales.models import CustomerPayment
     from settings_core.capabilities import capability_enabled
 
-    photo = capability_enabled("ai_invoice_photo") and "purchases" in modules and not Item.objects.filter(item_code=SENTINEL).exists()
+    photo = (capability_enabled("ai_invoice_photo") and "purchases" in modules and not _pharmacy()
+             and not Item.objects.filter(item_code=SENTINEL).exists())
     collection = capability_enabled("ai_voice_summary") and not CustomerPayment.objects.filter(payment_number=COLLECTION_NUMBER).exists()
     if not (photo or collection):
         return False
@@ -66,6 +69,15 @@ def seed(master, owner, modules=()):
         if collection:
             _yesterday_collection(master, owner)
     return True
+
+
+def _pharmacy():
+    """R1: a pharmacy's shelf is drugs; the car parts of the invoice-photo sample stay out of it."""
+
+    from settings_core.models import ClientProfile
+
+    profile = ClientProfile.get_active()
+    return profile is not None and profile.sub_activity_slug == "pharmacy"
 
 
 def _invoice_photo_records(master, owner):
