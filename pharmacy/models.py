@@ -11,6 +11,10 @@ ordinary sales invoice form (``/sales/new/?prescription=<pk>``), so stock,
 expiry batches, the cashbox and posting work exactly as on any sale, and
 ``PrescriptionInvoice`` only remembers which invoice dispensed it. A chronic
 prescription (``refill_days``) is dispensed again every so many days.
+
+R1 (HG-082): ``DrugReference`` is a read-only reference list of drugs loaded
+from a file (``manage.py import_drug_reference``). It is global, linked to no
+item, and nothing reads it to price, stock or post anything.
 """
 
 from decimal import Decimal
@@ -107,3 +111,39 @@ class PrescriptionInvoice(models.Model):
 
     class Meta:
         ordering = ["pk"]
+
+
+class DrugReference(models.Model):
+    """R1 (HG-082): one drug of a reference list loaded from a file, to help enter items. Never an item itself.
+
+    Rows are written only by :mod:`pharmacy.reference` (``manage.py import_drug_reference``), which fills the keys with
+    the same helpers as :class:`DrugInfo`, so a reference row and a pharmacy's own drug match the same way. The table is
+    global (the same for every entity) and has no link to ``Item`` or ``DrugInfo``."""
+
+    source = models.CharField(max_length=60, help_text="Which list the row came from, e.g. “ahmed-file-2026-11”.")
+    source_ref = models.CharField(max_length=120, help_text="The row's stable id inside its source.")
+    source_version = models.CharField(max_length=60, blank=True)
+    imported_at = models.DateTimeField(default=timezone.now)
+    name_en = models.CharField(max_length=255, blank=True)
+    name_ar = models.CharField(max_length=255, blank=True)
+    name_key = models.CharField(max_length=255, db_index=True, help_text="The name reduced for searching.")
+    active_ingredient = models.CharField(max_length=255, blank=True)
+    ingredient_key = models.CharField(max_length=255, blank=True, db_index=True)
+    strength = models.CharField(max_length=60, blank=True)
+    strength_key = models.CharField(max_length=60, blank=True)
+    form = models.CharField(max_length=12, choices=DosageForm.choices, blank=True)
+    pack = models.CharField(max_length=60, blank=True, help_text="As the list gives it, e.g. “20 tabs” or “120 ml”.")
+    manufacturer = models.CharField(max_length=120, blank=True)
+    public_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    price_date = models.DateField(null=True, blank=True, help_text="The date the list's price is from; shown beside every price.")
+    barcode = models.CharField(max_length=14, blank=True, db_index=True)
+    prescription_only = models.BooleanField(null=True, blank=True, default=None, help_text="Empty means unknown; never guessed.")
+    is_drug = models.BooleanField(default=True, help_text="Off for cosmetics, baby milk and the like.")
+    is_active = models.BooleanField(default=True, help_text="Off once a newer import of the same source no longer has it.")
+
+    class Meta:
+        ordering = ["name_key", "pk"]
+        constraints = [models.UniqueConstraint(fields=["source", "source_ref"], name="pharmacy_drugreference_source_ref")]
+
+    def __str__(self):
+        return f"{self.name_en or self.name_ar} {self.strength}".strip()
