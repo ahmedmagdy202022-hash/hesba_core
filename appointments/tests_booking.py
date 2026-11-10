@@ -54,9 +54,11 @@ def open_day(after_days=2):
 
 
 class BookingSetup(TestCase):
+    ACTIVITY = ("services", "maintenance")  # M4: the clinic's tests run the same setup on a medical install
+
     def setUp(self):
         cache.clear()  # the throttle counters live in the cache
-        self.profile = prepared_client("services", "maintenance", MODULES)
+        self.profile = prepared_client(*self.ACTIVITY, MODULES)
         self.owner = person(RoleCode.OWNER, "bk_owner")
         set_capability_enabled(self.profile, "online_booking", True, user=self.owner)
         self.entity = main_entity()
