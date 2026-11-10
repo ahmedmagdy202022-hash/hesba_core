@@ -1,0 +1,31 @@
+{% if attachments %}{% with att=attachments aw=attachments.words %}
+<h2 class="med-heading" id="{{ att.anchor }}-title">{{ aw.title }}</h2>
+<section class="att-card att-med" id="{{ att.anchor }}" data-attachments data-refresh="inline" aria-labelledby="{{ att.anchor }}-title"
+ data-msg-failed="{% if lang == 'en' %}Something went wrong, try again.{% else %}حصلت مشكلة، جرّب تاني.{% endif %}"
+ data-msg-network="{% if lang == 'en' %}No connection right now, try again.{% else %}مفيش اتصال دلوقتي، جرّب تاني.{% endif %}"
+ data-msg-uploading="{% if lang == 'en' %}Uploading…{% else %}جاري الرفع…{% endif %}" data-msg-uploaded="{% if lang == 'en' %}Saved.{% else %}اتحفظ.{% endif %}"
+ data-msg-deleting="{% if lang == 'en' %}Deleting…{% else %}جاري المسح…{% endif %}" data-msg-confirm="{% if lang == 'en' %}Delete this attachment?{% else %}تمسح المرفق ده؟{% endif %}">
+{% csrf_token %}{# delete needs a token even when no add form is shown #}
+<p class="att-help">{{ att.intro }}</p>
+<p class="att-help att-formats" data-att-formats>{{ aw.formats }}</p>
+{% if att.blocked %}<div class="op-message" data-att-blocked>{{ att.blocked }}</div>{% endif %}
+<div class="op-message op-message-error" role="alert" data-att-error hidden></div>
+<p class="att-status" role="status" aria-live="polite" data-att-status></p>
+{% if att.can_add %}
+<form class="att-upload att-med-upload" method="post" enctype="multipart/form-data" action="{{ att.upload_url }}" data-att-upload>{% csrf_token %}
+<input type="hidden" name="kind" value="photo"><input type="hidden" name="lang" value="{{ lang }}">
+<fieldset class="att-cats"><legend>{{ aw.category }}</legend>
+{% for c in att.categories %}<label class="att-chip"><input type="radio" name="stage" value="{{ c.value }}"{% if forloop.first %} checked{% endif %}><span>{{ c.label }}</span></label>{% endfor %}
+</fieldset>
+<div class="att-strip">
+<label class="att-add"><svg class="att-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z"/><circle cx="12" cy="13" r="3.5"/></svg><span>{{ aw.camera }}</span>
+<input class="sr-only" type="file" name="file" accept="image/*" capture="environment" data-att-file></label>
+<label class="att-add att-add-alt"><svg class="att-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="M21 16l-5-5-8 9"/></svg><span>{{ aw.choose }}</span>
+<input class="sr-only" type="file" name="file" accept="image/*,application/pdf" multiple data-att-file></label>
+</div>
+</form>
+{% endif %}
+{% if att.items %}<ul class="att-list" data-att-list>{% for item in att.items %}{% include "medical/_attachment_row.html" with item=item aw=aw %}{% endfor %}</ul>
+{% else %}<p class="att-empty" data-att-empty>{{ aw.none }}</p>{% endif %}
+</section>
+{% endwith %}{% endif %}
