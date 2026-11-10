@@ -55,7 +55,10 @@ MESSAGES = {
            "max_count": "وصلت للحد الأقصى من المرفقات على السجل ده ({count}).", "max_owner_bytes": "مجموع حجم مرفقات السجل ده هيعدّي الحد ({limit}).",
            "global_full": "مساحة المرفقات في قاعدة البيانات امتلت؛ كلّم صاحب الحساب.", "pdf_active": "ملف PDF فيه سكربت أو ملف مدمج أو أمر تشغيل تلقائي، ومش مسموح.",
            "delete_denied": "مسح المرفقات للمدير أو الكاونتر بس.", "signature_kept": "توقيع أمر اتسلّم مينفعش يتمسح.",
-           "purchase_delete_denied": "صورة فاتورة الشراء بتتمسح بس طول ما الفاتورة مسودة، ولصاحب صلاحية إنشاء فواتير الشراء."},
+           "purchase_delete_denied": "صورة فاتورة الشراء بتتمسح بس طول ما الفاتورة مسودة، ولصاحب صلاحية إنشاء فواتير الشراء.",
+           "category": "نوع المرفق لازم يكون أشعة أو تحاليل أو صور أو تقارير.", "medical_kind": "المرفق على الملف الطبي لازم يكون صورة أو ملف PDF.",
+           "medical_read_only": "إضافة المرفقات على الملف الطبي للدكتور أو لصاحب صلاحية تسجيل الكشوفات بس.",
+           "medical_delete_denied": "مسح مرفقات الملف الطبي لصاحب صلاحية تسجيل الكشوفات بس."},
     "en": {"denied": "You may not use attachments on this record.", "not_found": "The attachment or the record was not found.",
            "kind": "The attachment kind must be photo, document or signature.", "stage": "The attachment stage must be receive, deliver or other.",
            "empty": "The file is empty or was not sent.", "size": "The file is larger than allowed ({limit}).",
@@ -68,7 +71,10 @@ MESSAGES = {
            "global_full": "The space for attachments in the database is full; tell the account owner.",
            "pdf_active": "This PDF contains a script, an embedded file or an auto-run action, and is not allowed.",
            "delete_denied": "Only a manager or the counter may delete attachments.", "signature_kept": "The signature of a delivered order cannot be deleted.",
-           "purchase_delete_denied": "A purchase invoice's photo can be deleted only while the invoice is a draft, by someone who may create purchase invoices."},
+           "purchase_delete_denied": "A purchase invoice's photo can be deleted only while the invoice is a draft, by someone who may create purchase invoices.",
+           "category": "The category must be scan, lab report, photo or report.", "medical_kind": "An attachment on a medical file must be an image or a PDF.",
+           "medical_read_only": "Only a doctor, or someone who may record visits, can add attachments to a medical file.",
+           "medical_delete_denied": "Only someone who may record visits can delete a medical file's attachments."},
 }
 
 
@@ -163,13 +169,66 @@ def _purchase_invoice_entity(invoice):
     return invoice.receiving_location.entity
 
 
+# M5 (HG-083): medical owners. A patient's file and a visit are seen as the clinic's own screens show them (the medical
+# view right, or a doctor), changed with its write right, and never closed; no signature is taken on them. Medical
+# records have no entity field, so an attachment is stamped with the entity being worked in when it is uploaded
+# (``entity``), and the existing scope on ``Attachment.entity`` then shows it only there (HG-034).
+
+def _medical_owners(model_name):
+    def visible(user):
+        from medical import services as med
+        from medical.models import ClinicalVisit, PatientFile
+
+        if not med.is_medical_install():
+            return (PatientFile if model_name == "patientfile" else ClinicalVisit).objects.none()
+        if not med.can_view(user):
+            raise PermissionDenied("Patient files need medical.view_records.")
+        if model_name == "patientfile":
+            return PatientFile.objects.exclude(customer__customer_code="WALK-IN")  # as the clinic's own patient list
+        return ClinicalVisit.objects.all()
+
+    return visible
+
+
+def _medical_can_attach(user, record):
+    from medical import services as med
+
+    return med.can_write(user)
+
+
+def _medical_can_delete(user, record):
+    """The role permission, not merely "is linked to an employee": a doctor adds, the records right removes."""
+
+    from medical import services as med
+    from permissions.services import user_has_permission
+
+    return user_has_permission(user, med.WRITE)
+
+
+def _current_entity(record):
+    """Medical records carry no entity: the attachment belongs to the entity it was uploaded in (None: main entity)."""
+
+    return entity_scope.entity()
+
+
+WORK_STAGES = (Stage.RECEIVE, Stage.DELIVER, Stage.OTHER)
+MEDICAL_STAGES = (Stage.SCAN, Stage.LAB, Stage.PHOTO, Stage.REPORT)
+
+_MEDICAL_RULES = {"can_attach": _medical_can_attach, "closed": lambda record: False, "can_delete": _medical_can_delete,
+                  "signature_final": lambda record: False, "entity": _current_entity, "delete_denied": "medical_delete_denied",
+                  "read_only_message": "medical_read_only", "stages": MEDICAL_STAGES, "kinds": (Kind.PHOTO, Kind.DOCUMENT),
+                  "stage_error": "category", "kind_error": "medical_kind", "default_stage": Stage.SCAN}
+
 OWNERS = {"workorders.workorder": {"visible": _work_orders, "can_attach": _work_order_can_attach, "closed": _work_order_closed,
-                                   "can_delete": _work_order_can_delete, "signature_final": _work_order_signature_final},
+                                   "can_delete": _work_order_can_delete, "signature_final": _work_order_signature_final, "stages": WORK_STAGES},
           # A3 (HG-081): the supplier's invoice photo kept on the draft it became. No upload screen of its own yet.
           "purchases.purchaseinvoice": {"visible": _purchase_invoices, "can_attach": _purchase_invoice_can_change,
                                         "closed": _purchase_invoice_closed, "can_delete": _purchase_invoice_can_delete,
                                         "signature_final": lambda invoice: False, "entity": _purchase_invoice_entity,
-                                        "delete_denied": "purchase_delete_denied"}}
+                                        "delete_denied": "purchase_delete_denied", "stages": WORK_STAGES},
+          # M5 (HG-083): what a visit produced (scans, lab reports, photos) and what the patient brings that belongs to no visit.
+          "medical.clinicalvisit": {"visible": _medical_owners("clinicalvisit"), **_MEDICAL_RULES},
+          "medical.patientfile": {"visible": _medical_owners("patientfile"), **_MEDICAL_RULES}}
 
 
 def owner_label(owner_or_model):
@@ -361,11 +420,15 @@ def _read(upload, limit, words, lang):
     return raw, _clean_name(name), declared.split(";")[0].strip().lower()
 
 
-def _check_kind_stage(kind, stage, words):
-    if kind not in Kind.values:
-        raise ValidationError(words["kind"])
-    if stage not in Stage.values:
-        raise ValidationError(words["stage"])
+def _check_kind_stage(kind, stage, words, rules=None):
+    """The kind and the stage must be ones this owner type takes (M5: a work order never takes a clinic category, a patient
+    file never takes receive / deliver or a signature)."""
+
+    rules = rules or {}
+    if kind not in rules.get("kinds", Kind.values):
+        raise ValidationError(words[rules.get("kind_error", "kind")])
+    if stage not in rules.get("stages", WORK_STAGES):
+        raise ValidationError(words[rules.get("stage_error", "stage")])
 
 
 def _setting(name, default):
@@ -443,7 +506,7 @@ def add_attachment(owner, uploaded_file_or_bytes, user, kind=Kind.PHOTO, stage=S
 
     words = _words(lang)
     _check_owner(owner, user, words, write=True)
-    _check_kind_stage(kind, stage, words)
+    _check_kind_stage(kind, stage, words, _rules(owner_label(owner)))
     raw, name, declared = _read(uploaded_file_or_bytes, max_bytes(kind), words, lang)
     if declared in MARKUP_TYPES or name.lower().endswith(MARKUP_EXTENSIONS):
         raise ValidationError(words["markup"])
@@ -455,7 +518,7 @@ def add_signature_png(owner, data_url, user, stage=Stage.OTHER, lang="ar"):
 
     words = _words(lang)
     _check_owner(owner, user, words, write=True)
-    _check_kind_stage(Kind.SIGNATURE, stage, words)
+    _check_kind_stage(Kind.SIGNATURE, stage, words, _rules(owner_label(owner)))
     text = str(data_url or "").strip()
     if not text:
         raise ValidationError(words["no_signature"])
@@ -483,6 +546,20 @@ def attachments_for(owner, user, lang="ar"):
     _check_owner(owner, user, _words(lang))
     rows = Attachment.objects.filter(content_type=ContentType.objects.get_for_model(owner), object_id=owner.pk)
     return entity_scope.scope(rows, "entity").select_related("uploaded_by").defer("data")
+
+
+def attachments_for_many(label, pks, user, limit=60):
+    """M5: the attachments on several owners of one type at once (a patient's visits), newest first, without their bytes.
+
+    The same rules as ``attachments_for``, in one query: the owners must be visible to the user and the rows are narrowed to the
+    entity being worked in. The visibility check is not repeated per owner, so the cost does not grow with the owners."""
+
+    pks = [pk for pk in pks]
+    if not pks:
+        return []
+    visible = visible_owners(label, user).filter(pk__in=pks)
+    rows = Attachment.objects.filter(content_type=ContentType.objects.get_for_model(visible.model), object_id__in=visible.values("pk"))
+    return list(entity_scope.scope(rows, "entity").select_related("uploaded_by").defer("data").order_by("-created_at", "-pk")[:limit])
 
 
 def get_attachment(pk, user, with_data=True):

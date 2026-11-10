@@ -20,6 +20,8 @@ from .handlers import CapUploadHandler, too_big_for_the_cap
 from .models import Kind, Stage
 
 WORK_ORDER = "workorders.workorder"
+VISIT = "medical.clinicalvisit"  # M5 (HG-083)
+PATIENT_FILE = "medical.patientfile"
 
 
 def _lang(request):
@@ -45,20 +47,20 @@ def _denied(exc, lang):
     return _fail(lang, text if text in services.MESSAGES[lang].values() else "denied", 403)
 
 
-def _owner(request, pk, lang):
+def _owner(request, pk, lang, label=WORK_ORDER):
     """(owner, None) or (None, error response)."""
 
     try:
-        return services.get_owner(WORK_ORDER, pk, request.user), None
+        return services.get_owner(label, pk, request.user), None
     except services.OwnerNotFound:
         return None, _fail(lang, "not_found", 404)
     except PermissionDenied:
         return None, _fail(lang, "denied", 403)
 
 
-def _guarded(request, pk, action):
+def _guarded(request, pk, action, label=WORK_ORDER):
     lang = _lang(request)
-    owner, error = _owner(request, pk, lang)
+    owner, error = _owner(request, pk, lang, label)
     if error is not None:
         return error
     try:
@@ -82,16 +84,38 @@ def work_order_upload(request, pk):
 
     An upload larger than ATTACHMENTS_MAX_BYTES is refused (413) from its Content-Length, or stopped while it streams."""
 
+    return _capped_upload(request, pk, WORK_ORDER)
+
+
+def _capped_upload(request, pk, label):
     if too_big_for_the_cap(request.META.get("CONTENT_LENGTH")):
         return _too_big(request)
     handler = CapUploadHandler(request)
     request.upload_handlers.insert(0, handler)
-    return _upload(request, pk, handler)
+    return _upload(request, pk, handler, label)
+
+
+@csrf_exempt  # as ``work_order_upload``: CSRF is checked inside, after the cap handler is installed
+@require_POST
+def visit_upload(request, pk):
+    """M5: a scan, lab report, photo or report on a clinical visit. Fields: ``file``, ``kind`` (photo|document), ``stage`` (the category:
+    scan|lab|photo|report). The same caps and checks as a work order's upload."""
+
+    return _capped_upload(request, pk, VISIT)
+
+
+@csrf_exempt
+@require_POST
+def patient_file_upload(request, pk):
+    """M5: the same, on a patient's file (what the patient brings that belongs to no visit)."""
+
+    return _capped_upload(request, pk, PATIENT_FILE)
 
 
 @csrf_protect
-def _upload(request, pk, handler):
+def _upload(request, pk, handler, label=WORK_ORDER):
     request.POST  # parse the body now, so the cap handler has run before anything is decided
+    rules = services.OWNERS[label]
 
     def action(order, lang):
         if handler.exceeded:
@@ -102,10 +126,12 @@ def _upload(request, pk, handler):
         upload = request.FILES.get("file")
         if upload is None:
             raise ValidationError(services.MESSAGES[lang]["no_file"])
-        attachment = services.add_attachment(order, upload, request.user, kind=kind, stage=request.POST.get("stage") or Stage.RECEIVE, lang=lang)
+        if "read_only_message" in rules and not rules["can_attach"](request.user, order):  # the owner's own wording; the service refuses too
+            raise PermissionDenied(services.MESSAGES[lang][rules["read_only_message"]])
+        attachment = services.add_attachment(order, upload, request.user, kind=kind, stage=request.POST.get("stage") or rules.get("default_stage", Stage.RECEIVE), lang=lang)
         return JsonResponse({"ok": True, "attachment": _describe(attachment)}, status=201)
 
-    return _guarded(request, pk, action)
+    return _guarded(request, pk, action, label)
 
 
 @require_POST
@@ -129,10 +155,24 @@ def work_order_signature(request, pk):
 
 @require_http_methods(["GET", "HEAD"])
 def work_order_list(request, pk):
+    return _list(request, pk, WORK_ORDER)
+
+
+@require_http_methods(["GET", "HEAD"])
+def visit_list(request, pk):
+    return _list(request, pk, VISIT)
+
+
+@require_http_methods(["GET", "HEAD"])
+def patient_file_list(request, pk):
+    return _list(request, pk, PATIENT_FILE)
+
+
+def _list(request, pk, label):
     def action(order, lang):
         return JsonResponse({"ok": True, "attachments": [_describe(row) for row in services.attachments_for(order, request.user, lang)]})
 
-    return _guarded(request, pk, action)
+    return _guarded(request, pk, action, label)
 
 
 @require_http_methods(["GET", "HEAD"])

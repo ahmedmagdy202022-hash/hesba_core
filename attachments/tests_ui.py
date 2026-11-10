@@ -77,8 +77,8 @@ class CardRenderingTests(CardSetup):
 
     def test_the_script_and_style_are_referenced_with_a_cache_buster(self):
         page = self.page()
-        self.assertContains(page, "hesba/js/attachments.js?v=s1-ui-1")
-        self.assertContains(page, "hesba/css/attachments.css?v=s1-ui-1")
+        self.assertContains(page, "hesba/js/attachments.js?v=m5-1")
+        self.assertContains(page, "hesba/css/attachments.css?v=m5-1")
 
     def test_the_default_signature_stage_follows_the_order(self):
         html = self.page().content.decode()
