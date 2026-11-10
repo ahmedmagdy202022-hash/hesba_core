@@ -21,7 +21,7 @@ from .analytics import PERIODS, build_analytics
 from permissions.services import user_has_permission
 from settings_core.models import ClientProfile
 from settings_core.setup_services import usable_modules
-from settings_core.templatetags.hesba_format import money as display_money
+from settings_core.templatetags.hesba_format import day_text, money as display_money
 
 from .dashboard_data import (
     DashboardFigures,
@@ -39,7 +39,7 @@ from .dashboard_kpis import (
     visible_kpis,
 )
 from .activity_panel import build_activity_panel
-from .navigation import display_name, nav_items
+from .navigation import DASHBOARD_SHORTCUTS, display_name, nav_items, shortcut_actions
 from settings_core.currency import currency_label
 
 
@@ -136,6 +136,9 @@ STRINGS = {
         "date_col": "اليوم",
         "value_col": "المبيعات",
         "kpi_title": "أرقام اليوم",
+        "today_more": "أرقام النهارده",
+        "top_actions_title": "اختصارات",
+        "flat": "زي الفترة اللي قبلها",
         "alerts_title": "محتاج انتباهك",
         "alerts_empty": "لا توجد تنبيهات تحتاج متابعة.",
         "actions_title": "ابدأ من هنا",
@@ -205,6 +208,9 @@ STRINGS = {
         "date_col": "Day",
         "value_col": "Sales",
         "kpi_title": "Today's numbers",
+        "today_more": "Today's numbers",
+        "top_actions_title": "Shortcuts",
+        "flat": "same as the previous period",
         "alerts_title": "Needs your attention",
         "alerts_empty": "Nothing needs following up.",
         "actions_title": "Start here",
@@ -278,7 +284,7 @@ def _formatted_now(lang, now):
 
     with translation.override(lang):
         return {
-            "date": date_format(now, "l, d M Y"),
+            "date": date_format(now, "l j F Y"),  # UX Wave 1: one date format on the page ("9 نوفمبر 2026")
             "time": date_format(now, "h:i A"),
         }
 
@@ -486,6 +492,41 @@ def _ask_link(lang, fit, user):
             "hint": "Ask about your sales, stock, cash or customers" if lang == "en" else "اسأل عن مبيعاتك ومخزونك وخزنتك وعملاءك"}
 
 
+#: UX Wave 1: a KPI card that repeats a figure shown higher up on the page, and the analytics metric that shows it.
+REPEATED_BY_METRIC = {"cashbox_balance": "cash", "customer_dues": "receivables", "supplier_dues": "payables"}
+
+
+def _shown_delta(metric):
+    """UX Wave 1, display only: a trend reads "▲ 15%" or "▼ 73%" (the arrow carries the sign, never "▼ -73%"), and a
+    change that rounds to 0% reads "—". A copy: the metric itself (and the analytics behind it) is never changed."""
+
+    if not metric:
+        return metric
+    shown = dict(metric)
+    delta = metric.get("delta")
+    if delta is not None:
+        rounded = round(abs(delta))
+        shown["delta_abs"] = rounded
+        shown["flat"] = rounded == 0
+    return shown
+
+
+def _layout(cards, analytics, headline):
+    """UX Wave 1: each figure once. The hero keeps the period's net sales and today's sales; the analytics grid drops the
+    net sales it would repeat and keeps the cash, receivables and payables it explains; «أرقام اليوم» keeps only what
+    shows nowhere else. Returns new lists; ``cards`` and ``analytics`` (which tests and other code read) stay as they are."""
+
+    metrics = (analytics.get("metrics") or []) if analytics.get("available") else []
+    metric_keys = {metric["key"] for metric in metrics}
+    hero_keys = {card["key"] for card in cards if card["key"] in ("sales_today", "invoice_count_today")}
+    hero_cash = any(card["key"] == "cashbox_balance" for card in cards) and "cash" not in metric_keys
+    if hero_cash:
+        hero_keys.add("cashbox_balance")
+    shown_metrics = [_shown_delta(metric) for metric in metrics if not (headline and metric is headline)]
+    today_cards = [card for card in cards if card["key"] not in hero_keys and REPEATED_BY_METRIC.get(card["key"]) not in metric_keys]
+    return {"hero_shows_cash": hero_cash, "shown_metrics": shown_metrics, "today_cards": today_cards}
+
+
 def dashboard(request):
     """Render whatever this viewer is allowed to see, which may be nothing.
 
@@ -530,6 +571,8 @@ def dashboard(request):
     headline = None
     if analytics.get("available") and analytics["metrics"]:
         headline = analytics["metrics"][0]
+    layout = _layout(cards, analytics, headline)
+    top_actions = shortcut_actions(request.user, lang, modules, sections, DASHBOARD_SHORTCUTS, dashboard=True)
 
     context = {
         "checkpoint_code": CHECKPOINT_CODE,
@@ -553,7 +596,12 @@ def dashboard(request):
         "hero_line": strings["hero_lines"][_day_part(now)],
         "hero_cards": {card["key"]: card for card in cards if card["key"] in ("sales_today", "invoice_count_today", "cashbox_balance")},
         "headline": headline,
-        "previous_range_text": strings["prev_range"].format(start=previous_range[0].strftime("%d/%m"), end=previous_range[1].strftime("%d/%m")) if previous_range else "",
+        "headline_shown": _shown_delta(headline),
+        **layout,
+        # UX Wave 1: the four everyday shortcuts right under the hero; the «ابدأ من هنا» list skips the ones shown there.
+        "top_actions": top_actions,
+        "top_action_urls": [action["url_name"] for action in top_actions],
+        "previous_range_text": strings["prev_range"].format(start=day_text(previous_range[0], lang), end=day_text(previous_range[1], lang)) if previous_range else "",
         # The app shell draws the navigation from the same list; it stays in
         # the context so the section set can be asserted without parsing HTML.
         "nav_items": nav_items(request.user, lang, modules),

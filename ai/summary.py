@@ -37,7 +37,7 @@ SUMMARY_KPIS = (SALES, INVOICES, RECEIPTS, LOW, OUT)
 
 WORDS = {
     "ar": {
-        "title": "ملخص النهارده بالصوت", "play": "شغّل الملخص", "pause": "وقّف الملخص", "loading": "بنجهّز الصوت…",
+        "title": "ملخص امبارح", "play": "شغّل الملخص", "pause": "وقّف الملخص", "loading": "بنجهّز الصوت…",
         "note": "الأرقام من تقارير حسبة نفسها. الصوت بس اللي متولّد.",
         "sales": "مبيعات امبارح", "my_sales": "مبيعاتي امبارح", "invoices": "فواتير امبارح", "my_invoices": "فواتيري امبارح",
         "receipts": "التحصيل", "low": "قربت تخلص", "appointments": "مواعيد النهارده",
@@ -45,7 +45,7 @@ WORDS = {
         "all_collections": "افتح قايمة التحصيلات كلها",
     },
     "en": {
-        "title": "Today's summary, read aloud", "play": "Play the summary", "pause": "Pause the summary", "loading": "Preparing the audio…",
+        "title": "Yesterday's summary", "play": "Play the summary", "pause": "Pause the summary", "loading": "Preparing the audio…",
         "note": "The figures come from Hesba's own reports. Only the voice is generated.",
         "sales": "Yesterday's sales", "my_sales": "My sales yesterday", "invoices": "Invoices yesterday", "my_invoices": "My invoices yesterday",
         "receipts": "Collections", "low": "Running low", "appointments": "Today's appointments",
@@ -172,7 +172,7 @@ def build_summary(user, lang="ar", today=None, shared=None, sections=None):
     present = DashboardFigures(user, today, shared)
 
     with translation.override(lang):
-        day_label = date_format(today, "l j F")
+        day_label = date_format(yesterday, "j F Y")  # UX Wave 1: the figures are yesterday's; one date format
     summary = Summary(lang=lang, day=today, entity=current_entity(), day_label=day_label)
     spoken_currency = _spoken_currency(lang)
     screen_currency = _screen_currency(lang)

@@ -417,7 +417,7 @@ class CardTests(VoiceSummaryBase):
         self.login()
         page = self.client.get("/dashboard/?lang=ar")
         self.assertContains(page, "data-voice-summary")
-        self.assertContains(page, "ملخص النهارده بالصوت")
+        self.assertContains(page, "ملخص امبارح")
         self.assertContains(page, f"«{AR_TEXT}»")
         self.assertContains(page, "الأرقام من تقارير حسبة نفسها. الصوت بس اللي متولّد.")
         self.assertContains(page, 'aria-label="شغّل الملخص"')
