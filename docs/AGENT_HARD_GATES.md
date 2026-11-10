@@ -2834,3 +2834,24 @@ The entries below are the protected-logic decisions in the commercial gate, reco
   3. **The per-person limit:** 10 photos a day. Right?
   4. **Image retention.** A saved photo stays on the invoice for good once it is posted (it can be deleted only while a draft); a waiting one goes after 6 hours at the next pruning. Keep both? Should a saved photo be deleted after some months, or moved to object storage (as HG-072 recommends)?
   5. **Keys on live** (as HG-080 open question 5): live still needs the ElevenLabs key for A0's start-up check.
+
+## HG-082 — R1 reference drug list: the table and its importer (step 1 of 3)
+
+- **Status:** IMPLEMENTED on `claude/maestro-r1-drug-reference`, pending review. T2 (a migration; nothing financial changes). Additive table only, like HG-062.
+- **Protected logic:** the only protected item is the new migration. `Item`, `DrugInfo`, sales and purchase posting, stock movement, the cashbox, the ledgers, average cost, report calculations, closing and the permission core are untouched.
+- **Reason:** R1 in `docs/MARKET_PARITY_ROADMAP.md` («بعدين»): a reference list of drugs inside the program, loaded from a file, so a pharmacist can later pick a drug and fill a new item (PR2) and see alternatives at the till (PR3).
+- **Files:**
+  - `pharmacy/models.py` (new model `DrugReference`) + `pharmacy/migrations/0002_drugreference.py` (new table only);
+  - `pharmacy/reference.py` (new): reading the file, parsing and checking each row, the upsert;
+  - `pharmacy/management/commands/import_drug_reference.py` (new, thin);
+  - `docs/DRUG_REFERENCE_IMPORT.md` (new): the template columns and the command;
+  - tests: `pharmacy/tests_reference.py`, `pharmacy/tests_fixtures/drug_reference_sample.csv` (30 invented rows).
+- **As built:**
+  - Source tracking: `source`, `source_ref` (unique together), `source_version`, `imported_at`. Keys (`name_key`, `ingredient_key`, `strength_key`, `form`) come from the existing `pharmacy.services` helpers, so a reference row matches a `DrugInfo` the same way.
+  - `prescription_only` is empty (unknown) unless the file says so; it is never guessed. The price is kept with its date (`price_date`).
+  - The importer upserts by (`source`, `source_ref`) in one transaction; `--dry-run` writes nothing; `--deactivate-missing` only switches off rows of the same source, and refuses a file with no usable row. A barcode with a wrong check digit is blanked and counted.
+  - The table is global (not entity-scoped). It lands in every backup and on the storage page like any table (`backup_data.EXCLUDE` does not skip it).
+  - No third-party dataset is in the repository: the licence is Ahmed's decision (R1 plan, open question 1).
+- **Risk:** additive table, no data migration, no foreign key to or from an existing table, no admin or screen yet. A wrong file can only change reference rows of the source it names.
+- **Tests** (`pharmacy/tests_reference.py`): the keys equal `DrugInfo`'s for the same drug spelt differently; the three layouts (Hesba CSV, the same in `.xlsx`, a "name, price, barcode" file with strength, form and pack read from the name); a second import creates nothing and updates every row; deactivate-missing scoped to one source; dry run writes nothing; bad check digits blanked and counted; over-long text and an absurd price; and a guard that items, drug data, stock movements, cashbox movements, customer and supplier ledgers and journal rows are identical before and after an import.
+- **Review fixes:** a row without `source_ref` gets an id from its folded name, strength, form and pack (same-name drugs no longer merge; a true duplicate is skipped with its line number); a damaged UTF-8 file is refused instead of read as cp1256, UTF-16 is read; the same header aliases in both layouts, ignored columns printed, repeated headers refused; `1.250` is an ambiguous (bad) price, Excel float noise and numeric barcodes that lost leading zeros are fixed, UPC-A stored as EAN-13; a newer file's bad price or bad date keeps the stored value (`bad dates` counted); `--deactivate-missing` refuses more than half of a source without `--force-deactivate`; harakat folded in `name_key` only; a write `IntegrityError` is a clear refusal. The guard test now snapshots every model in the default database. Still only `DrugReference` is written; no migration.
