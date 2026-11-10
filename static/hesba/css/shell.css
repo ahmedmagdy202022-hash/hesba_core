@@ -159,19 +159,21 @@
 /* UX Wave 4: the phone header band. The page's own head (the first .op-title-row / .md-title-row of the page,
    with its title, back arrow and actions) becomes a navy band that continues the navy top bar, with 28px rounded
    bottom corners; the saved toast or entity bar that a page shows above its head sits inside the navy too.
-   Screen only: printing from a phone never prints navy. Pages with another head keep a dark title on the wash. */
+   Screen only: printing from a phone never prints navy. Pages with another head keep a dark title on the wash.
+   The entity bar is recoloured for navy under exactly the condition that paints it navy (a title row right after it,
+   or after one messages block): on a page with another head (the till) it keeps its own colours. */
 @media screen and (max-width: 700px){
   .op-shell,.md-shell{width:calc(100% - 2 * var(--hs-gutter))}
   :is(.op-shell,.md-shell):has(> :is(.op-title-row,.md-title-row):not(:is(.op-shell,.md-shell) > :not(.op-messages,.md-messages,.hs-entities,.op-subnav,.hs-print-head,[hidden],dialog,script,style,link,svg,template,input) ~ *)){margin-top:0}
   :is(.op-shell,.md-shell) > :is(.op-messages,.md-messages,.hs-entities,.op-subnav):is(:has(+ :is(.op-title-row,.md-title-row)),:has(+ :is(.op-messages,.md-messages) + :is(.op-title-row,.md-title-row))){display:flow-root;margin:0 calc(-1 * var(--hs-gutter));padding:var(--hs-space-2) var(--hs-gutter) 0;border:0;border-radius:0;background:var(--hs-navy);box-shadow:none}
-  :is(.op-shell,.md-shell) > .hs-entities:has(+ :is(.op-title-row,.md-title-row,.op-messages,.md-messages)){display:flex}
+  :is(.op-shell,.md-shell) > .hs-entities:is(:has(+ :is(.op-title-row,.md-title-row)),:has(+ :is(.op-messages,.md-messages) + :is(.op-title-row,.md-title-row))){display:flex}
   .op-shell > .op-subnav:has(+ .op-title-row){display:flex;padding-bottom:var(--hs-space-2)}
   .op-shell > .op-subnav:has(+ .op-title-row) :is(a,.op-subnav__sep,.op-subnav__label){color:var(--hs-on-navy-muted)}
   .op-shell > .op-subnav:has(+ .op-title-row) a[aria-current="page"]{color:var(--hs-on-navy);background:var(--hs-on-navy-wash)}
   .op-shell > .op-subnav:has(+ .op-title-row) a:focus-visible{box-shadow:var(--hs-focus-ring-on-navy)}
-  :is(.op-shell,.md-shell) > .hs-entities:has(+ :is(.op-title-row,.md-title-row,.op-messages,.md-messages)) .hs-entities__label{color:var(--hs-on-navy-muted)}
-  :is(.op-shell,.md-shell) > .hs-entities:has(+ :is(.op-title-row,.md-title-row,.op-messages,.md-messages)) .hs-entities__tab:not(.is-current){color:var(--hs-on-navy)}
-  :is(.op-shell,.md-shell) > .hs-entities:has(+ :is(.op-title-row,.md-title-row,.op-messages,.md-messages)) .hs-entities__tab.is-current{background:var(--hs-teal);color:var(--hs-on-teal)}
+  :is(.op-shell,.md-shell) > .hs-entities:is(:has(+ :is(.op-title-row,.md-title-row)),:has(+ :is(.op-messages,.md-messages) + :is(.op-title-row,.md-title-row))) .hs-entities__label{color:var(--hs-on-navy-muted)}
+  :is(.op-shell,.md-shell) > .hs-entities:is(:has(+ :is(.op-title-row,.md-title-row)),:has(+ :is(.op-messages,.md-messages) + :is(.op-title-row,.md-title-row))) .hs-entities__tab:not(.is-current){color:var(--hs-on-navy)}
+  :is(.op-shell,.md-shell) > .hs-entities:is(:has(+ :is(.op-title-row,.md-title-row)),:has(+ :is(.op-messages,.md-messages) + :is(.op-title-row,.md-title-row))) .hs-entities__tab.is-current{background:var(--hs-teal);color:var(--hs-on-teal)}
 
   :is(.op-shell,.md-shell) > :is(.op-title-row,.md-title-row):not(:is(.op-shell,.md-shell) > :not(.op-messages,.md-messages,.hs-entities,.op-subnav,.hs-print-head,[hidden],dialog,script,style,link,svg,template,input) ~ *){position:relative;margin:0 calc(-1 * var(--hs-gutter)) var(--hs-space-5);padding:var(--hs-space-1) var(--hs-gutter) var(--hs-space-6);border-radius:0 0 var(--hs-band-radius) var(--hs-band-radius);background:var(--hs-navy);color:var(--hs-on-navy)}
   :is(.op-shell,.md-shell) > :is(.op-title-row,.md-title-row):not(:is(.op-shell,.md-shell) > :not(.op-messages,.md-messages,.hs-entities,.op-subnav,.hs-print-head,[hidden],dialog,script,style,link,svg,template,input) ~ *) :is(h1,h2){color:var(--hs-on-navy);font-size:var(--hs-text-xl)}

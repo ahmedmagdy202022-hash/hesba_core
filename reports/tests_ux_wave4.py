@@ -112,6 +112,20 @@ class PhoneHeaderAndTabBarCssTests(SimpleTestCase):
         self.assertIn("margin:0 calc(-1 * var(--hs-gutter))", band)
         self.assertIn("color:var(--hs-on-navy)", band)
 
+    def test_the_entity_bar_goes_white_only_where_it_is_painted_navy(self):
+        """On the till (its head is not a title row) the entity bar keeps its own ground after a sale's message, so its
+        names must keep their own colours too: every recolouring rule carries the navy background's exact condition."""
+
+        css = read_static("hesba/css/shell.css")
+        band = css[css.index("/* UX Wave 4: the phone header band."):]
+        painted = ":is(:has(+ :is(.op-title-row,.md-title-row)),:has(+ :is(.op-messages,.md-messages) + :is(.op-title-row,.md-title-row)))"
+        self.assertIn(f".hs-entities,.op-subnav){painted}" + "{", band)  # where the bar turns navy
+        rules = [line for line in band.splitlines() if "> .hs-entities" in line]
+        self.assertGreaterEqual(len(rules), 4)
+        for rule in rules:
+            self.assertIn(f"> .hs-entities{painted}", rule)
+        self.assertNotIn(".hs-entities:has(+ :is(.op-title-row,.md-title-row,.op-messages,.md-messages))", band)
+
     def test_the_top_bar_is_navy_and_its_controls_are_scoped_past_lists_css(self):
         css = read_static("hesba/css/shell.css")
         self.assertRegex(css, r"\.hs-topbar\{[^}]*background:var\(--hs-navy\)")
