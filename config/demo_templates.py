@@ -318,11 +318,23 @@ def _with_db(path, work):
         _use(original)
 
 
+def demo_reference_list(activity, sub_activity):
+    """R1: the pharmacy demo's reference drug list (illustrative prices), loaded into its template only. Returns the
+    importer's summary, or None for every other business."""
+
+    if (activity, sub_activity) != ("commercial", "pharmacy"):
+        return None
+    from pharmacy.demo import load_demo_reference
+
+    return load_demo_reference()
+
+
 def _populate(activity, sub_activity):
     from django.db import connections
 
     complete_demo_setup(activity, sub_activity)
     seed_sample_business()
+    demo_reference_list(activity, sub_activity)
     with connections["default"].cursor() as cursor:
         cursor.execute("VACUUM")
 
