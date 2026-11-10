@@ -21,6 +21,12 @@ class Stage(models.TextChoices):
     RECEIVE = "receive", "At receiving"
     DELIVER = "deliver", "At delivery"
     OTHER = "other", "Other"
+    # M5 (HG-083): the clinic's categories on a patient file or a visit. Choices only, no column change; an owner type
+    # allows only its own stages (``attachments.services.OWNERS[...]["stages"]``), so a work order never takes these.
+    SCAN = "scan", "Scan / X-ray"
+    LAB = "lab", "Lab report"
+    PHOTO = "photo", "Photo"
+    REPORT = "report", "Report"
 
 
 class Attachment(models.Model):

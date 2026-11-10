@@ -78,3 +78,95 @@ def card(order, user, lang):
         "default_signature_stage": (Stage.DELIVER if order.status == "ready" else Stage.RECEIVE).value,
         "empty_signature": words["no_signature"],
     }
+
+
+# ---- M5 (HG-083): the clinic's attachments card, on a patient's file and on a visit ----
+# The same card look and the same script as the work order's. The categories ride on the ``stage`` column (so a work order keeps its
+# own receive / deliver words); the labels below are shown for medical owners only.
+
+MEDICAL_WORDS = {
+    "ar": {
+        "title": "المرفقات: أشعة وتحاليل وصور",
+        "intro_visit": "ارفع أشعة وتحاليل وصور وتقارير الكشف ده. بتتحفظ على الكشف وبتظهر في ملف المريض.",
+        "intro_file": "ارفع الملفات اللي المريض بيجيبها ومالهاش كشف معين: أشعة وتحاليل وصور وتقارير.",
+        "formats": "صور JPG أو PNG أو WEBP وملفات PDF بس، لحد 5 ميجا للملف. ملفات DICOM مش مدعومة.",
+        "category": "نوع المرفق", "scan": "أشعة", "lab": "تحاليل", "photo": "صور", "report": "تقارير",
+        "camera": "صوّر", "choose": "اختار صور أو PDF", "none": "لسه مفيش مرفقات.", "open": "افتح", "pdf": "PDF",
+        "by": "رفعه", "delete": "امسح", "photo_of": "صورة",
+        "blocked": "إضافة المرفقات للدكتور أو لصاحب صلاحية تسجيل الكشوفات بس.",
+        "visits_title": "مرفقات الكشوفات", "visits_intro": "اللي اتضاف على كشوفات المريض، الأحدث الأول.", "visit_of": "كشف",
+        "visits_more": "ده آخر {n} مرفق. افتح الكشف علشان تشوف الباقي.", "visits_none": "مفيش مرفقات على الكشوفات لسه.",
+    },
+    "en": {
+        "title": "Attachments: scans, lab reports and photos",
+        "intro_visit": "Attach this visit's scans, lab reports, photos and reports. They stay on the visit and show on the patient's file.",
+        "intro_file": "Attach what the patient brings that belongs to no particular visit: scans, lab reports, photos and reports.",
+        "formats": "JPG, PNG or WEBP images and PDF files only, up to 5 MB each. DICOM files are not supported.",
+        "category": "Category", "scan": "Scan / X-ray", "lab": "Lab report", "photo": "Photo", "report": "Report",
+        "camera": "Take photo", "choose": "Choose photos or a PDF", "none": "No attachments yet.", "open": "Open", "pdf": "PDF",
+        "by": "Added by", "delete": "Delete", "photo_of": "Photo",
+        "blocked": "Only a doctor, or someone who may record visits, can add attachments.",
+        "visits_title": "Visit attachments", "visits_intro": "What was added to this patient's visits, newest first.", "visit_of": "Visit",
+        "visits_more": "These are the latest {n} attachments. Open the visit to see the rest.", "visits_none": "No attachments on the visits yet.",
+    },
+}
+
+#: How many visit attachments the patient file lists (one query, newest first).
+PATIENT_VISITS_LIMIT = 30
+
+
+def _who(user):
+    return (user.get_full_name() or user.get_username()) if user is not None else ""
+
+
+def _medical_item(row, lang, can_delete):
+    words = MEDICAL_WORDS[lang]
+    return {"row": row, "url": reverse("attachments:file", args=[row.pk]), "is_image": row.content_type_name.startswith("image/"),
+            "delete_url": f"{reverse('attachments:delete', args=[row.pk])}?lang={lang}", "can_delete": can_delete,
+            "category": words.get(row.stage, row.stage), "who": _who(row.uploaded_by)}
+
+
+def medical_card(owner, user, lang, anchor="med-attachments"):
+    """The card for a visit or a patient's file, or None when this user may not see its attachments (the card is then hidden).
+    Every rule is read from the service layer's own registry, so the card and the endpoints cannot disagree."""
+
+    lang = "en" if lang == "en" else "ar"
+    label = services.owner_label(owner)
+    rules = services.OWNERS[label]
+    try:
+        rows = list(services.attachments_for(owner, user, lang))
+    except (PermissionDenied, services.OwnerNotFound):
+        return None
+    words = MEDICAL_WORDS[lang]
+    can_delete = bool(rules["can_delete"](user, owner))
+    can_add = bool(rules["can_attach"](user, owner)) and not rules["closed"](owner)
+    upload_name = "attachments:visit_upload" if label == "medical.clinicalvisit" else "attachments:patient_file_upload"
+    return {
+        "anchor": anchor, "words": words, "can_add": can_add, "total": len(rows), "blocked": "" if can_add else words["blocked"],
+        "intro": words["intro_visit"] if label == "medical.clinicalvisit" else words["intro_file"],
+        "categories": [{"value": stage.value, "label": words[stage.value]} for stage in services.MEDICAL_STAGES],
+        "items": [_medical_item(row, lang, can_delete) for row in reversed(rows)],  # newest first
+        "upload_url": f"{reverse(upload_name, args=[owner.pk])}?lang={lang}",
+    }
+
+
+def patient_visit_files(patient, user, lang):
+    """The attachments on this patient's visits, newest first, for the patient file: two queries however many visits there are.
+    None when this user may not see visit attachments. Read-only; each row links to the visit it belongs to."""
+
+    from medical.models import ClinicalVisit
+
+    lang = "en" if lang == "en" else "ar"
+    visits = {pk: day for pk, day in ClinicalVisit.objects.filter(patient=patient).values_list("pk", "visit_date")}
+    try:
+        rows = services.attachments_for_many("medical.clinicalvisit", visits, user, limit=PATIENT_VISITS_LIMIT + 1)
+    except (PermissionDenied, services.OwnerNotFound):
+        return None
+    words = MEDICAL_WORDS[lang]
+    more = len(rows) > PATIENT_VISITS_LIMIT
+    items = []
+    for row in rows[:PATIENT_VISITS_LIMIT]:
+        item = _medical_item(row, lang, False)
+        item.update({"visit_pk": row.object_id, "visit_date": visits[row.object_id]})
+        items.append(item)
+    return {"items": items, "words": words, "more": words["visits_more"].format(n=PATIENT_VISITS_LIMIT) if more else ""}
