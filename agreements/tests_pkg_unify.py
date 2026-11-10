@@ -12,6 +12,10 @@ AFTER = [("agreements", "0003_move_physio_packages"), ("medical", "0008_remove_s
 
 
 class MovePhysioPackagesTests(TransactionTestCase):
+    # Every TransactionTestCase in the suite restores the migration seed instead of letting the flush's post_migrate
+    # re-create content types with new ids, which would collide with the serialized copy the next class loads.
+    serialized_rollback = True
+
     def setUp(self):
         executor = MigrationExecutor(connection)
         executor.migrate(BEFORE)
