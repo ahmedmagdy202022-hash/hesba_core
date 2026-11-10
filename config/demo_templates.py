@@ -307,6 +307,8 @@ def _with_db(path, work):
 
     from .demo_sandbox import _use
 
+    if connections["default"].vendor != "sqlite":
+        raise RuntimeError("Demo templates are SQLite files; this database is not SQLite.")
     original = connections["default"].settings_dict["NAME"]
     try:
         _use(str(path))

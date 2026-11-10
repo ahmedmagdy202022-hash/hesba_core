@@ -288,6 +288,12 @@ def start(request):
     return response
 
 
+def _private_copies():
+    from .demo_sandbox import enabled
+
+    return enabled()
+
+
 @login_not_required
 @never_cache
 def preparing(request):
@@ -299,11 +305,9 @@ def preparing(request):
     _demo_only()
     import time
 
-    from .demo_sandbox import enabled as sandboxes_enabled
-
     lang = _lang(request)
     activity, sub = request.GET.get("activity", ""), request.GET.get("sub_activity", "")
-    if not sandboxes_enabled() or not templates.is_known(activity, sub):
+    if not _private_copies() or not templates.is_known(activity, sub):
         return redirect(f"{reverse('demo_landing')}?lang={lang}")
     ready = templates.populated_template(activity, sub).is_file()
     failed, since = False, 0.0

@@ -323,7 +323,9 @@ class PreparingFailureTests(TestCase):
         self.addCleanup(folder.cleanup)
         self.base = Path(folder.name) / "demo.sqlite3"
         for patcher in (mock.patch.object(templates, "base_template", return_value=self.base),
-                        mock.patch("config.demo_sandbox.enabled", return_value=True),
+                        # Only the page's own check: patching demo_sandbox.enabled would switch the middleware's
+                        # connection to a "template" that is the test database (and break PostgreSQL runs).
+                        mock.patch.object(first_run, "_private_copies", return_value=True),
                         mock.patch.object(templates, "builder", templates.BackgroundBuilder())):
             patcher.start()
             self.addCleanup(patcher.stop)
@@ -338,9 +340,11 @@ class PreparingFailureTests(TestCase):
         self.assertContains(page, 'http-equiv="refresh"')
 
     def test_after_three_failed_builds_it_stops_and_offers_the_default_shop(self):
-        with mock.patch.object(templates, "build_template", side_effect=RuntimeError("seeding broke")):
+        with mock.patch.object(templates, "build_template", side_effect=RuntimeError("seeding broke")), \
+                self.assertLogs("hesba.demo", "ERROR") as logged:
             for _ in range(3):
                 templates.builder._run("commercial", "pharmacy")
+        self.assertEqual(len(logged.records), 3)
         self.assertTrue(templates.builder.gave_up("commercial", "pharmacy"))
         self.assertTrue(templates.failed_stamp(populated_template("commercial", "pharmacy")).is_file())
         self.assertTrue(templates.BackgroundBuilder().gave_up("commercial", "pharmacy"))  # the other worker sees it too
