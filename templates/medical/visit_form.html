@@ -1,5 +1,6 @@
 {% extends "operations/base.html" %}
-{% load l10n %}
+{% load l10n static %}
+{% block styles %}{{ block.super }}{% if attachments %}<link rel="stylesheet" href="{% static 'hesba/css/attachments.css' %}?v=m5-1">{% endif %}{% endblock %}
 {% block operation_content %}
 <section class="op-title-row"><div><a class="op-back" href="{% url 'medical:file' patient.pk %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ patient.name }}</a><h1>{% if visit %}{{ words.edit }} — {{ words.visit }}{% else %}{{ words.new_visit|cut:'+ ' }}{% endif %}</h1>{% if appointment %}<p>{{ words.from_appointment }} <bdi>{{ appointment.number }}</bdi></p>{% endif %}</div></section>
 {% if error %}<div class="op-message op-message-error" role="alert" data-visit-error>{{ error }}</div>{% endif %}
@@ -29,4 +30,7 @@
 <div class="op-field"><label for="follow">{{ words.follow_up }}</label><input id="follow" type="date" name="follow_up_date" value="{% if post %}{{ post.follow_up_date }}{% else %}{{ visit.follow_up_date|date:'Y-m-d' }}{% endif %}"></div>
 </div>
 <div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form>
+{% include "medical/_attachments.html" %}
+{% if not visit %}<p class="op-muted" data-att-after-save>{% if lang == 'en' %}Save the visit first, then attach scans, lab reports and photos to it.{% else %}احفظ الكشف الأول، وبعدها ارفع عليه الأشعة والتحاليل والصور.{% endif %}</p>{% endif %}
+{% if attachments %}<script src="{% static 'hesba/js/attachments.js' %}?v=m5-1" defer></script>{% endif %}
 {% endblock %}
