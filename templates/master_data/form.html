@@ -17,6 +17,7 @@
   {% if form.non_field_errors %}<div class="md-form-errors">{{ form.non_field_errors|ui:lang }}</div>{% endif %}
   {# FB2-LOC: a hidden field (the entity, when there is only one) gets no empty label. #}
   {% for field in form.hidden_fields %}{{ field }}{% for error in field.errors %}<div class="md-form-errors">{{ error|ui:lang }}</div>{% endfor %}{% endfor %}
+  {% if drug is not None %}{% include "pharmacy/_item_picker.html" %}{% endif %}{# R1: a pharmacy's new item (drugs capability on) #}
   {% include "partials/form_sections.html" with prefix="md" %}
   <div class="md-form-actions{% if not popup %} hs-sticky-save{% endif %}">
     <button class="md-primary" type="submit">{{ words.save }}</button>

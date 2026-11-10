@@ -1,5 +1,6 @@
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
 from django.db.models import Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
@@ -559,6 +560,26 @@ def _record_name(record, lang):
     return getattr(record, "item_name", None) or _localized_name(record, lang)
 
 
+def _save_with_drug(form, drug, user):
+    """R1: save the item and its drug data in one transaction. Returns the item, or None when ``save_drug`` refused
+    (everything rolled back, the reason on the drug part, the form drawn again as a new item with its values)."""
+
+    record = None
+    try:
+        with transaction.atomic():
+            record = form.save()
+            if drug is not None:
+                drug.save_for(record, user)
+    except ValidationError as exc:
+        if record is None or drug is None:
+            raise
+        add_form_error(drug, exc)
+        form.instance.pk = None
+        form.instance._state.adding = True
+        return None
+    return record
+
+
 def _entity_form(request, entity, config, instance):
     lang = _lang(request)
     words = STRINGS[lang]
@@ -568,19 +589,36 @@ def _entity_form(request, entity, config, instance):
         kwargs["can_view_cost"] = user_has_permission(request.user, "inventory.view_cost")
     if entity == "cashboxes" and instance is None and request.GET.get("kind") == "bank":
         kwargs["initial"] = {"kind": "bank"}  # T3: "new bank account" from the banks page
+    drug = None
+    if entity == "items" and instance is None:
+        # R1: a pharmacy's new item carries its drug data and «اختار من القايمة»; None unless the drugs capability is on.
+        from pharmacy.picker import for_new_item
+
+        drug = for_new_item(request, lang)
+        if drug is not None and drug.item_initial:
+            kwargs["initial"] = drug.item_initial
 
     if request.method == "POST":
         form = config["form"](request.POST, **kwargs)
+        # R1: the drug part (when drawn) is checked and saved in both branches below, inside the same transaction as
+        # the item(s); a refusal from save_drug rolls everything back and shows on the drug part, values kept.
+        drug_ok = drug is None or drug.is_valid()
         if form.is_valid() and getattr(form, "offers_variants", False) and form.cleaned_data.get("has_variants"):
-            try:
-                group, created = form.create_variants(request.user)  # AN5: one item per size and colour
-            except ValidationError as exc:
-                add_form_error(form, exc)
-            else:
-                messages.success(request, VARIANTS_MADE[lang].format(n=len(created)))
-                return redirect(f"{reverse('variants:group', args=[group.pk])}?lang={lang}")
-        elif form.is_valid():
-            record = form.save()
+            if drug_ok:
+                step = form
+                try:
+                    with transaction.atomic():
+                        group, created = form.create_variants(request.user)  # AN5: one item per size and colour
+                        if drug is not None:
+                            step = drug
+                            for item in created:
+                                drug.save_for(item, request.user)
+                except ValidationError as exc:
+                    add_form_error(step, exc)
+                else:
+                    messages.success(request, VARIANTS_MADE[lang].format(n=len(created)))
+                    return redirect(f"{reverse('variants:group', args=[group.pk])}?lang={lang}")
+        elif form.is_valid() and drug_ok and (record := _save_with_drug(form, drug, request.user)) is not None:
             if popup:  # FB-26: hand the new record back to the invoice that opened the box
                 return _popup(render(request, "master_data/popup_done.html", {"lang": lang, "record_id": record.pk, "label": str(record)}))
             from settings_core.saved_toast import say_saved
@@ -590,6 +628,8 @@ def _entity_form(request, entity, config, instance):
             return redirect(f"{reverse('master_data:list', kwargs={'entity': entity})}?lang={lang}&saved={record.pk}")
     else:
         form = config["form"](**kwargs)
+    if drug is not None:
+        drug.attach(form)
 
     target_types = {
         "customers": OpeningBalanceTarget.CUSTOMER,
@@ -619,6 +659,7 @@ def _entity_form(request, entity, config, instance):
             "singular": config["singular"][lang],
             "new_title": new_title(entity, config["singular"][lang], lang),
             "form": form,
+            "drug": drug,
             "editing": instance is not None,
             "opening_balance_locked": opening_balance_locked,
             "can_adjust_opening": can_adjust_opening,

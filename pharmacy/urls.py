@@ -12,4 +12,5 @@ urlpatterns = [
     path("prescriptions/new/", views.new, name="new"),
     path("prescriptions/<int:pk>/", views.detail, name="prescription"),
     path("prescriptions/<int:pk>/print/", views.print_prescription, name="print"),
+    path("reference/search/", views.reference_search, name="reference_search"),
 ]

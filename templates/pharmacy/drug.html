@@ -1,5 +1,5 @@
 {% extends "operations/base.html" %}
-{% load hesba_format %}
+{% load hesba_format hesba_labels pharmacy_reference static %}
 {% block operation_content %}
 <section class="op-title-row"><div><a class="op-back" href="{% url 'pharmacy:lookup' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.back }}</a>
 <h1>{{ item.item_name }}{% if info.prescription_only %} <span class="op-status op-status-draft">{{ words.rx_only }}</span>{% endif %}</h1>
@@ -19,6 +19,21 @@
 <td class="op-cell-text">{{ row.drug.manufacturer|default:"—" }}</td><td>{% if row.on_hand > 0 %}{{ row.on_hand|qty }}{% else %}<span class="op-status op-status-cancelled">{{ words.sold_out }}</span>{% endif %}</td><td>{{ row.price|money }}</td></tr>
 {% empty %}<tr><td colspan="6" class="op-empty">{% if info %}{{ words.no_alt }}{% else %}{{ words.no_alt_data }}{% endif %}</td></tr>{% endfor %}
 </tbody></table></div>
+{% if info %}{% unstocked_alternatives item lang as missing %}{% if missing.rows %}{% with words=missing.words %}{# R1 step 2: reference rows with the same active ingredient that match no item here #}
+<link rel="stylesheet" href="{% static 'hesba/css/drug_picker.css' %}?v=r1-3">
+{% url 'master_data:item_create' as new_item_url %}{% link_ok new_item_url as add_ok %}
+<section class="hs-drug-missing" aria-labelledby="drug-missing-title" data-unstocked>
+<h2 id="drug-missing-title">{{ words.missing_title }} <span class="hs-drug-missing__count">{{ missing.rows|length }}</span></h2>
+<p>{{ words.missing_intro }}</p>
+<ul>{% for row in missing.rows %}<li class="hs-drug-miss" data-ref="{{ row.pk }}" data-match="{% if row.same %}same{% else %}other{% endif %}">
+<div class="hs-drug-miss__main"><span class="hs-drug-row__l1"><strong>{% if lang == 'en' %}{{ row.name_en|default:row.name_ar }}{% else %}{{ row.name_ar|default:row.name_en }}{% endif %}</strong>{% if row.name_ar and row.name_en %}<bdi class="hs-drug-row__en">{% if lang == 'en' %}{{ row.name_ar }}{% else %}{{ row.name_en }}{% endif %}</bdi>{% endif %}</span>
+<span class="hs-drug-row__l2">{% if row.strength %}{{ row.strength|ltr }}{% endif %}{% if row.form %}{% if row.strength %} · {% endif %}{% for key, label in forms.items %}{% if key == row.form %}{{ label }}{% endif %}{% endfor %}{% endif %}{% if row.pack %} · {{ row.pack|ltr }}{% endif %}{% if row.manufacturer %} · <bdi>{{ row.manufacturer }}</bdi>{% endif %}</span>
+<span class="hs-drug-miss__ref">{% if row.public_price is not None %}{{ words.list_price_short }} {{ row.public_price|money|ltr }} {{ words.currency }} · {% if row.price_month %}{{ row.price_month|ltr }}{% else %}{{ words.no_date }}{% endif %}{% if row.stale %} · <span data-stale>{{ words.stale }}</span>{% endif %}{% else %}{{ words.no_price }}{% endif %}</span>
+<span class="hs-drug-chip {% if row.same %}hs-drug-chip--same{% else %}hs-drug-chip--other{% endif %}">{% if row.same %}{{ words.same }}{% else %}{{ words.other }}{% endif %}</span></div>
+{% if can_edit and add_ok %}<a class="hs-drug-add" href="{{ new_item_url }}?lang={{ lang }}&amp;ref={{ row.pk }}" data-add-ref><svg class="hs-drug-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg> {{ words.add }}</a>{% endif %}
+</li>{% endfor %}</ul>
+<p>{{ words.decide }}</p>
+</section>{% endwith %}{% endif %}{% endif %}
 
 {% if can_edit %}<h2>{{ words.drug_data }}</h2>
 <form class="op-form" method="post" data-drug-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><div class="op-form-grid">
