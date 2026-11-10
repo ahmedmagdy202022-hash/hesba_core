@@ -512,7 +512,7 @@ class PickerScriptTests(SimpleTestCase):
 
     def test_an_older_answer_never_draws_over_newer_text(self):
         # Review of PR #348: the search on its way is stopped as soon as the text changes, and any answer for text no
-        # longer in the box is dropped (rows, too short or an error). The browser run is in the PR description.
+        # longer in the box is dropped (rows, too short or an error).
         script = self.read("hesba/js/drug_picker.js")
         handler = script[script.index("input.addEventListener('input'"):script.index("input.addEventListener('keydown'")]
         self.assertIn("controller.abort()", handler)
