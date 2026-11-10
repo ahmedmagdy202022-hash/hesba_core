@@ -23,6 +23,10 @@ from sales.services import post_sales_invoice
 
 @unittest.skipUnless(connection.vendor == "postgresql", "row locks only matter on PostgreSQL")
 class LastUnitRaceTests(TransactionTestCase):
+    # A TransactionTestCase flushes every table when it ends, migration-seeded rows (roles, settings) included, so a
+    # sibling that ran earlier in the same worker leaves this one without them. Restore the seed before each test.
+    serialized_rollback = True
+
     def test_two_invoices_for_the_last_unit_post_one_and_refuse_the_other(self):
         location, item, customer = make_location(), make_item(), make_customer()
         # Open the month first, so the only thing standing between the two postings is the item lock.
@@ -77,6 +81,10 @@ class LastUnitRaceTests(TransactionTestCase):
 
 @unittest.skipUnless(connection.vendor == "postgresql", "row locks only matter on PostgreSQL")
 class FirstEntryOfTheMonthRaceTests(TransactionTestCase):
+    # A TransactionTestCase flushes every table when it ends, migration-seeded rows (roles, settings) included, so a
+    # sibling that ran earlier in the same worker leaves this one without them. Restore the seed before each test.
+    serialized_rollback = True
+
     def test_two_first_entries_share_one_new_period(self):
         from closing.models import Period
         from closing.services import provision_period_for
