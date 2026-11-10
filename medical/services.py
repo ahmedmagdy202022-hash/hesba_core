@@ -10,6 +10,7 @@ from django.utils import timezone
 from audit.models import AuditEventType, AuditLog
 from permissions.services import user_has_permission
 
+from . import prescribing
 from .models import BloodType, ClinicalVisit, Gender, PatientFile
 
 #: Practice-wide (owner and manager): every file, the clinic report, every doctor's follow-ups.
@@ -99,13 +100,13 @@ MESSAGES = {
            "visit_date": "تاريخ الكشف مش صحيح.", "follow_up_date": "تاريخ المتابعة مش صحيح.",
            "pulse": "النبض لازم يكون رقم بين 20 و250.", "temperature": "الحرارة لازم تكون بين 30 و45.",
            "weight": "الوزن لازم يكون بين 0.5 و400 كجم.", "height": "الطول لازم يكون بين 20 و250 سم.",
-           "empty": "اكتب الشكوى أو التشخيص أو العلاج على الأقل.", "follow_before": "ميعاد المتابعة لازم يكون بعد يوم الكشف.",
+           "empty": "اكتب الشكوى أو التشخيص أو العلاج، أو ضيف دوا، على الأقل.", "follow_before": "ميعاد المتابعة لازم يكون بعد يوم الكشف.",
            "not_yours": "الكشف ده سجّله دكتور تاني؛ يعدّله هو أو المالك."},
     "en": {"date_of_birth": "The date of birth is not valid.", "future_birth": "The date of birth cannot be in the future.",
            "visit_date": "The visit date is not valid.", "follow_up_date": "The follow-up date is not valid.",
            "pulse": "Pulse must be a number between 20 and 250.", "temperature": "Temperature must be between 30 and 45.",
            "weight": "Weight must be between 0.5 and 400 kg.", "height": "Height must be between 20 and 250 cm.",
-           "empty": "Write at least the complaint, the diagnosis or the treatment.", "follow_before": "The follow-up must be after the visit.",
+           "empty": "Write at least the complaint, the diagnosis or the treatment, or add a medicine.", "follow_before": "The follow-up must be after the visit.",
            "not_yours": "Another doctor recorded this visit; they or the owner can change it."},
 }
 
@@ -147,7 +148,10 @@ def save_visit(patient, data, user, visit=None, lang="ar"):
                "weight": _decimal(data.get("weight"), words["weight"], errors, *((Decimal("0.005"), 2000) if vet else (Decimal("0.5"), 400))),
                "height": _decimal(data.get("height"), words["height"], errors, *((1, 400) if vet else (20, 250)))}
     texts = {field: (data.get(field) or "").strip()[:5000] for field in ("complaint", "examination", "diagnosis", "treatment")}
-    if not any(texts[f] for f in ("complaint", "diagnosis", "treatment")):
+    # M2 (HG-086): the medicine lines, only when the caller sends them; without the key a visit's lines stay as they are.
+    medicines = prescribing.resolve(data["medicines"], visit, lang, errors) if "medicines" in data else None
+    has_medicines = bool(medicines) if medicines is not None else bool(visit is not None and visit.pk and visit.medicines.exists())
+    if not any(texts[f] for f in ("complaint", "diagnosis", "treatment")) and not has_medicines:
         errors.append(words["empty"])
     animal = data.get("animal")
     from .vet import MESSAGES as VET_MESSAGES
@@ -172,10 +176,15 @@ def save_visit(patient, data, user, visit=None, lang="ar"):
     if data.get("appointment") is not None and visit.appointment_id is None:
         visit.appointment = data.get("appointment")
     creating = visit.pk is None
-    visit.save()
-    file_for(patient)
-    _audit(user, "create_clinical_visit" if creating else "update_clinical_visit", visit,
-           {"patient": patient.pk, "animal": visit.animal_id, "visit_date": visit.visit_date.isoformat(), "diagnosis": visit.diagnosis[:200]})
+    with transaction.atomic():  # the visit, its medicine lines and the audit row land together or not at all
+        visit.save()
+        if medicines is not None:
+            prescribing.write(visit, medicines)
+        file_for(patient)
+        after = {"patient": patient.pk, "animal": visit.animal_id, "visit_date": visit.visit_date.isoformat(), "diagnosis": visit.diagnosis[:200]}
+        if medicines is not None:
+            after["medicines"] = len(medicines)
+        _audit(user, "create_clinical_visit" if creating else "update_clinical_visit", visit, after)
     return visit
 
 
