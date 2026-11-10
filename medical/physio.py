@@ -9,8 +9,8 @@ back. A package whose invoice was cancelled or returned can no longer be used.
 Since PKG-UNIFY these are the same packages a salon sells
 (``agreements.packages``): one table, one set of rules, a number and an
 optional expiry date for each. This module keeps the clinic's own wording and
-its own rule for who records a session: the therapist (a user linked to an
-employee) or anyone with the medical records permission, not only the counter.
+its own rule for who records a session: the therapist (a clinical permission
+by role, HG-084) or anyone with the medical records permission, not only the counter.
 """
 
 from django.utils import timezone

@@ -70,7 +70,7 @@
   --hs-radius-sm:8px; --hs-radius-md:12px; --hs-radius-lg:14px; --hs-radius-xl:20px; --hs-radius-pill:999px;
   --hs-control-height:44px;   /* minimum touch target */
   --hs-control-height-lg:48px;
-  --hs-tabbar-height:60px;     /* UX Wave 1: the phone tab bar (icon over label); fixed bars sit above it */
+  --hs-tabbar-height:68px;     /* UX Wave 1: the phone tab bar (icon over label); UX Wave 4: a floating pill, see --hs-tabbar-space */
 
   /* Elevation */
   --hs-shadow-sm:0 1px 2px rgba(11,31,58,.06);
@@ -89,4 +89,40 @@
   --hs-shadow-fab:0 10px 24px rgba(9,40,81,.25);
   --hs-shadow-up:0 -6px 18px rgba(11,31,58,.10);  /* UX Wave 1: a bar fixed to the bottom edge */
   --hs-focus-ring:0 0 0 3px rgba(2,174,183,.35);
+
+  /* UX Wave 4 (Ahmed's delegation, 10 Nov 2026): the calm interior. The signed-in
+     app stands on the neutral wash instead of near-white, its cards are white
+     with no border, and phones get a navy header band and a floating navy tab
+     bar. Public pages (login, /demo/, customer links, print, errors) keep
+     --hs-ground and never read these. A night theme swaps these values only. */
+  --hs-page:var(--hs-neutral-wash);          /* page ground of the signed-in app */
+  --hs-card-bg:var(--hs-surface);
+  --hs-card-border:1px solid transparent;    /* keeps the box size; still drawn in forced-colours mode */
+  --hs-card-radius:18px;                     /* 22px on a phone, below */
+  --hs-card-radius-sm:14px;                  /* small cards inside a grid (summary figures) */
+  --hs-card-shadow:0 1px 2px rgba(11,31,58,.04),0 4px 14px rgba(11,31,58,.04);
+  --hs-card-shadow-hover:0 6px 20px rgba(11,31,58,.08);
+  --hs-input-radius:var(--hs-radius-lg);     /* 14px */
+  --hs-chip-size:44px; --hs-chip-radius:14px; /* tinted icon squircle (.hs-ichip) */
+  --hs-gutter:16px;                          /* phone page gutter; the band bleeds by exactly this */
+  /* On navy: the header band, the phone top bar and the tab bar */
+  --hs-band-radius:28px;
+  --hs-on-navy:var(--hs-surface);
+  --hs-on-navy-wash:rgba(255,255,255,.10);   /* a quiet control on navy */
+  --hs-on-navy-wash-strong:rgba(255,255,255,.16);
+  --hs-on-navy-line:rgba(255,255,255,.18);
+  --hs-focus-ring-on-navy:0 0 0 3px var(--hs-teal);
+  --hs-tab-active-wash:rgba(2,174,183,.18);  /* the current tab's teal tint */
+  --hs-tabbar-gap:12px;                      /* the floating bar's distance from the bottom edge */
+  --hs-tabbar-radius:24px;
+  --hs-tab-rise:18px;                        /* how far the raised «بيع» circle stands above the bar */
+  --hs-tabbar-space:calc(var(--hs-tabbar-height) + var(--hs-tabbar-gap));   /* a bar docked to the bottom edge clears this */
+  --hs-tabbar-clear:calc(var(--hs-tabbar-space) + var(--hs-tab-rise));      /* ...and this to clear the raised circle too */
+}
+@media (max-width: 700px){
+  :root{--hs-card-radius:22px;--hs-card-radius-sm:16px}
+}
+/* Paper: no card shadows (the page ground is not printed either). */
+@media print{
+  :root{--hs-card-shadow:none;--hs-card-shadow-hover:none}
 }
