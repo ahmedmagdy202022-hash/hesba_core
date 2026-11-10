@@ -46,8 +46,8 @@ user. Styles: hesba/css/shell.css. Behaviour: hesba/js/shell.js.
 </aside>
 <div class="hs-backdrop" data-shell-close hidden></div>
 <nav class="hs-tabbar" aria-label="{{ shell.words.main_nav }}">
-  {% for tab in shell.tabs %}
-    <a class="hs-tab{% if tab.current %} is-current{% endif %}" href="{{ tab.url }}?lang={{ lang }}"{% if tab.current %} aria-current="page"{% endif %}><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-{{ tab.key }}"></use></svg><span class="hs-tab__label">{{ tab.label }}</span></a>
+  {% for tab in shell.tab_bar %}
+    {% if tab.raised %}<a class="hs-tab hs-tab--sell{% if tab.current %} is-current{% endif %}" href="{{ tab.url }}?lang={{ lang }}"{% if tab.current %} aria-current="page"{% endif %} data-tab="{{ tab.key }}"><span class="hs-tab__orb" aria-hidden="true"><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-{{ tab.key }}"></use></svg></span><span class="hs-tab__label">{{ tab.label }}</span></a>{% else %}<a class="hs-tab{% if tab.current %} is-current{% endif %}" href="{{ tab.url }}?lang={{ lang }}"{% if tab.current %} aria-current="page"{% endif %} data-tab="{{ tab.key }}"><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-{{ tab.key }}"></use></svg><span class="hs-tab__label">{{ tab.label }}</span></a>{% endif %}
   {% endfor %}
   <button class="hs-tab{% if shell.more_current %} is-current{% endif %}" type="button" data-shell-open aria-controls="hs-sidebar" aria-expanded="false"><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-more"></use></svg><span class="hs-tab__label">{{ shell.words.more }}</span></button>
 </nav>

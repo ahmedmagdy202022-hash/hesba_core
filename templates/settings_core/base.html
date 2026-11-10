@@ -3,7 +3,7 @@
 {% comment %}SETTINGS-DESIGN: every settings screen inside one frame: the business's card, the map of the settings beside the page.
 UX Wave 3: each destination once. The card no longer repeats «بيانات الشركة» (it is in the menu), and on a phone the
 overview's tiles are its menu, so the pill row is not shown above them.{% endcomment %}
-{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/settings.css' %}?v=st-4">{% endblock %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/settings.css' %}?v=st-5">{% endblock %}
 {% block operation_content %}{% settings_shell as shell %}
 <div class="set-page" data-settings-frame>
   {% if shell.identity %}<header class="set-hero{% if shell.active != 'overview' %} set-hero--compact{% endif %}" data-settings-identity>

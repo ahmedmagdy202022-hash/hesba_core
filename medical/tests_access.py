@@ -7,7 +7,7 @@ to an employee no longer opens them: reception, cashiers and stock keepers are o
 Front desk keeps booking, the agenda, the queue, invoicing and insurance, without clinical text.
 """
 
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -67,7 +67,7 @@ class Clinic(TestCase):
         from appointments.models import Appointment
 
         self.appointment = Appointment.objects.create(number="AP-MX1", customer=self.patient, employee=self.sara, service=self.service, price="300",
-                                                      starts_at=timezone.now() + timedelta(hours=1), created_by=self.owner)
+                                                      starts_at=timezone.make_aware(datetime.combine(today, time(23, 59))), created_by=self.owner)  # today in Cairo whatever the hour: "an hour from now" is tomorrow after 23:00
 
     def status(self, who, url, method="get", data=None):
         self.client.force_login(self.users[who])

@@ -1,6 +1,6 @@
 {% extends "operations/base.html" %}
 {% load static hesba_format hesba_print hesba_labels %}
-{% load hesba_shifts %}{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/pos.css' %}?v=r1-2">{% endblock %}{% block op_messages %}{% if messages %}<div class="op-messages">{% for message in messages %}{% if last_invoice and 'pos-' in message.extra_tags %}{% else %}<div class="op-message op-message-{{ message.level_tag|default:'info' }}"{% if message.extra_tags %} data-message-tag="{{ message.extra_tags }}"{% endif %}>{{ message|ui:lang }}</div>{% endif %}{% endfor %}</div>{% endif %}{% endblock %}
+{% load hesba_shifts %}{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/pos.css' %}?v=w4-1">{% endblock %}{% block op_messages %}{% if messages %}<div class="op-messages">{% for message in messages %}{% if last_invoice and 'pos-' in message.extra_tags %}{% else %}<div class="op-message op-message-{{ message.level_tag|default:'info' }}"{% if message.extra_tags %} data-message-tag="{{ message.extra_tags }}"{% endif %}>{{ message|ui:lang }}</div>{% endif %}{% endfor %}</div>{% endif %}{% endblock %}
 {% block operation_content %}{% printing_enabled as can_print %}{% currency_unit lang as unit %}
 {% shift_gate %}
 {% if short_box %}<div class="op-notice op-short-box" role="alert" data-short-box><strong>{% if lang == 'en' %}Not enough in stock:{% else %}الكمية مش موجودة:{% endif %}</strong>

@@ -31,7 +31,7 @@
 /* ---- the map beside the page ---- */
 .set-layout{display:grid;grid-template-columns:270px minmax(0,1fr);gap:var(--hs-space-5);align-items:start}
 .set-nav{position:sticky;top:var(--hs-space-4);display:grid;gap:var(--hs-space-3);padding:var(--hs-space-3);
-  border:1px solid var(--hs-line);border-radius:var(--hs-radius-xl);background:var(--hs-surface);box-shadow:var(--hs-shadow-sm)}
+  border:var(--hs-card-border);border-radius:var(--hs-card-radius);background:var(--hs-card-bg);box-shadow:var(--hs-card-shadow)}
 .set-nav__group{display:grid;gap:2px}
 .set-nav__title{margin:4px 10px 2px;color:var(--hs-muted);font-size:var(--hs-text-xs);font-weight:var(--hs-weight-semibold)}
 .set-nav__link{position:relative;display:grid;grid-template-columns:22px minmax(0,1fr);align-items:center;column-gap:10px;
@@ -55,7 +55,7 @@
 
 /* ---- a plain card for the forms and tables of the other settings screens ---- */
 .set-main > .op-form,.set-main > .op-summary-grid,.set-main > form.op-form{margin:0}
-.set-card{padding:var(--hs-space-5);border:1px solid var(--hs-line);border-radius:var(--hs-radius-xl);background:var(--hs-surface);box-shadow:var(--hs-shadow-sm)}
+.set-card{padding:var(--hs-space-5);border:var(--hs-card-border);border-radius:var(--hs-card-radius);background:var(--hs-card-bg);box-shadow:var(--hs-card-shadow)}
 .set-card > h2:first-child{margin-top:0}
 
 /* ---- ready for work ---- */
@@ -80,8 +80,8 @@
 .set-section-title{display:flex;align-items:baseline;gap:8px;margin:0;font:var(--hs-weight-bold) var(--hs-text-lg)/var(--hs-leading-tight) var(--hs-font-head);color:var(--hs-navy)}
 .set-section-title small{color:var(--hs-muted);font:var(--hs-weight-regular) var(--hs-text-sm)/1 var(--hs-font-body)}
 .set-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:var(--hs-space-3)}
-.set-tile{display:grid;grid-template-columns:44px minmax(0,1fr) 18px;align-items:center;gap:12px;padding:14px 16px;border:1px solid var(--hs-line);
-  border-radius:var(--hs-radius-lg);background:var(--hs-surface);color:var(--hs-ink);text-decoration:none;
+.set-tile{display:grid;grid-template-columns:44px minmax(0,1fr) 18px;align-items:center;gap:12px;padding:14px 16px;border:var(--hs-card-border);
+  border-radius:var(--hs-card-radius-sm);background:var(--hs-card-bg);box-shadow:var(--hs-card-shadow);color:var(--hs-ink);text-decoration:none;
   transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease}
 .set-tile:hover,.set-tile:focus-visible{transform:translateY(-2px);border-color:rgba(var(--hs-teal-rgb),.55);box-shadow:0 8px 22px rgba(var(--hs-navy-rgb),.08);outline:0}
 .set-tile__icon{display:grid;place-items:center;width:44px;height:44px;border-radius:12px;background:var(--hs-teal-wash);color:var(--hs-teal-deep)}
@@ -95,8 +95,8 @@
 
 /* ---- what is switched on, as chips ---- */
 .set-chips{display:flex;flex-wrap:wrap;gap:8px;margin:0;padding:0;list-style:none}
-.set-chip{display:inline-flex;align-items:center;gap:6px;min-height:var(--hs-control-height);padding:0 12px;border:1px solid var(--hs-line);border-radius:var(--hs-radius-pill);
-  background:var(--hs-surface);color:var(--hs-navy);font-size:var(--hs-text-sm);text-decoration:none}
+.set-chip{display:inline-flex;align-items:center;gap:6px;min-height:var(--hs-control-height);padding:0 12px;border:1px solid transparent;border-radius:var(--hs-radius-pill);
+  background:var(--hs-page);color:var(--hs-navy);font-size:var(--hs-text-sm);text-decoration:none}
 .set-chip .hs-icon{width:16px;height:16px;color:var(--hs-teal-deep)}
 a.set-chip:hover{border-color:var(--hs-teal);background:var(--hs-teal-wash)}
 .set-chip--muted{background:var(--hs-ground);color:var(--hs-muted)}
@@ -105,7 +105,7 @@ a.set-chip:hover{border-color:var(--hs-teal);background:var(--hs-teal-wash)}
 .set-group{display:grid;gap:var(--hs-space-3)}
 .set-group__head{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
 .set-group__head p{margin:0;color:var(--hs-muted);font-size:var(--hs-text-sm)}
-.set-list{display:grid;border:1px solid var(--hs-line);border-radius:var(--hs-radius-xl);background:var(--hs-surface);box-shadow:var(--hs-shadow-sm);overflow:hidden}
+.set-list{display:grid;border:var(--hs-card-border);border-radius:var(--hs-card-radius);background:var(--hs-card-bg);box-shadow:var(--hs-card-shadow);overflow:hidden}
 .set-opt{position:relative;display:grid;grid-template-columns:46px minmax(0,1fr) auto;gap:14px;align-items:start;padding:16px 18px}
 .set-opt + .set-opt{border-top:1px solid var(--hs-line)}
 .set-opt__icon{display:grid;place-items:center;width:46px;height:46px;border-radius:13px;background:var(--hs-ground);color:var(--hs-muted);transition:background .15s ease,color .15s ease}
@@ -194,3 +194,10 @@ a.set-screen:hover{border-color:var(--hs-teal)}
   .set-head h1{font-size:var(--hs-text-xl)}
 }
 @media (prefers-reduced-motion:reduce){.set-tile,.set-switch,.set-switch::after{transition:none}}
+/* UX Wave 4: on a phone the business card at the top of every settings screen is the navy header band: it
+   continues the navy top bar edge to edge and ends in the band's rounded corners. */
+@media screen and (max-width:700px){
+  .op-shell:has(> .set-page > .set-hero){margin-top:0}
+  .op-shell > .op-messages:has(+ .set-page > .set-hero){display:flow-root;margin:0 calc(-1 * var(--hs-gutter));padding:var(--hs-space-2) var(--hs-gutter) 0;background:var(--hs-navy)}
+  .set-page > .set-hero{margin-inline:calc(-1 * var(--hs-gutter));padding-top:var(--hs-space-2);border-radius:0 0 var(--hs-band-radius) var(--hs-band-radius);box-shadow:none}
+}

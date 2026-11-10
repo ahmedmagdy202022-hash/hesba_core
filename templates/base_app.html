@@ -15,16 +15,16 @@ not be dropped.
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}{{ page_title }}{% endblock %}</title>
 {% include "partials/brand_icons.html" %}
-<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
-<link rel="stylesheet" href="{% static 'hesba/css/buttons.css' %}?v=ux3-1">
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}?v=w4-1">
+<link rel="stylesheet" href="{% static 'hesba/css/buttons.css' %}?v=w4-1">
 {% block styles %}{% endblock %}
-<link rel="stylesheet" href="{% static 'hesba/css/lists.css' %}?v=ux2-2">
-<link rel="stylesheet" href="{% static 'hesba/css/table_cards.css' %}?v=ux2-1">
+<link rel="stylesheet" href="{% static 'hesba/css/lists.css' %}?v=w4-1">
+<link rel="stylesheet" href="{% static 'hesba/css/table_cards.css' %}?v=w4-1">
 <link rel="stylesheet" href="{% static 'hesba/css/form_required.css' %}?v=req-2">
-<link rel="stylesheet" href="{% static 'hesba/css/form_controls.css' %}?v=fb27-1">
+<link rel="stylesheet" href="{% static 'hesba/css/form_controls.css' %}?v=w4-1">
 <link rel="stylesheet" href="{% static 'hesba/css/datepicker.css' %}?v=ux2-1">
-<link rel="stylesheet" href="{% static 'hesba/css/pager.css' %}?v=ux2-1">
-{% if report_tools %}<link rel="stylesheet" href="{% static 'hesba/css/report_tools.css' %}?v=ux3-1">{% endif %}
+<link rel="stylesheet" href="{% static 'hesba/css/pager.css' %}?v=w4-1">
+{% if report_tools %}<link rel="stylesheet" href="{% static 'hesba/css/report_tools.css' %}?v=w4-1">{% endif %}
 </head>
 <body class="{% block body_class %}{% endblock %}" data-lang="{{ lang|default:'ar' }}">
 {% block content %}{% endblock %}

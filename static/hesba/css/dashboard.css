@@ -13,7 +13,7 @@
   --gold:var(--hs-gold);
   --muted:var(--hs-muted);
   --surface:var(--hs-surface);
-  --surface-soft:var(--hs-ground);
+  --surface-soft:var(--hs-page);  /* UX Wave 4: inner tiles read on the page wash, without a border */
   --border:var(--hs-line);
   --border-strong:var(--hs-line-strong);
   --risk:var(--hs-danger);
@@ -27,7 +27,7 @@
   --font:var(--hs-font-body);
 
   margin:0;
-  background:var(--hs-ground);
+  background:var(--hs-page);
   color:var(--navy);
   font-family:var(--font);
   line-height:var(--hs-leading);
@@ -43,8 +43,7 @@
 
 /* ---------- header (navigation, language and logout live in the app shell) ---------- */
 .dash-header{
-  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-  box-shadow:var(--shadow);padding:12px 18px;
+  border:var(--hs-card-border);border-radius:var(--hs-card-radius);background:var(--hs-card-bg);box-shadow:var(--hs-card-shadow);padding:12px 18px;
   display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
 }
 .dash-header__lead,.dash-header__trail{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
@@ -145,8 +144,7 @@
 
 /* ---------- sections ---------- */
 .dash-section{
-  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-  box-shadow:var(--shadow);padding:18px 20px;display:flex;flex-direction:column;gap:14px;min-width:0;
+  border:var(--hs-card-border);border-radius:var(--hs-card-radius);background:var(--hs-card-bg);box-shadow:var(--hs-card-shadow);padding:18px 20px;display:flex;flex-direction:column;gap:14px;min-width:0;
 }
 .dash-section__title{margin:0;font-size:15px;font-weight:700;color:var(--navy)}
 .dash-empty-note{margin:0;font-size:13px;color:var(--muted)}
@@ -154,7 +152,7 @@
 /* ---------- KPI ---------- */
 .dash-kpi-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
 .dash-kpi{
-  background:var(--surface-soft);border:1px solid var(--border);border-radius:var(--radius-sm);
+  background:var(--surface-soft);border:1px solid transparent;border-radius:var(--radius-sm);
   padding:14px;display:flex;flex-direction:column;gap:6px;min-width:0;
 }
 .dash-kpi.is-sensitive{border-color:var(--hs-warning-line);background:var(--hs-gold-wash)}
@@ -173,7 +171,7 @@
 .dash-alerts{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
 .dash-alert{
   display:flex;align-items:center;gap:12px;padding:12px 14px;
-  border:1px solid var(--border);border-radius:var(--radius-sm);
+  border:1px solid transparent;border-radius:var(--radius-sm);
   background:var(--surface-soft);border-inline-start-width:4px;
 }
 .dash-alert.is-urgent{border-inline-start-color:var(--risk)}
@@ -196,9 +194,9 @@
 .dash-action{
   display:flex;align-items:center;justify-content:center;text-align:center;
   padding:13px 12px;border-radius:var(--radius-sm);font-size:12.5px;font-weight:700;
-  border:1px solid var(--border);background:var(--surface-soft);color:var(--navy-soft);
+  border:1px solid transparent;background:var(--surface-soft);color:var(--navy-soft);
 }
-.dash-action:hover{border-color:var(--border-strong);background:var(--teal-wash)}
+.dash-action:hover{background:var(--teal-wash)}
 .dash-action.is-primary{
   grid-column:1 / -1;color:var(--hs-on-teal);border-color:transparent;
   background:var(--hs-teal);
@@ -266,7 +264,7 @@
 .dash-period:focus-visible{outline:none;box-shadow:var(--hs-focus-ring)}
 .dash-range{font-family:var(--hs-font-body);font-weight:400;font-size:12px;color:var(--muted)}
 .dash-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
-.dash-metric{display:flex;flex-direction:column;gap:4px;padding:14px;border:1px solid var(--border);border-radius:var(--hs-radius-lg);background:var(--surface);min-width:0}
+.dash-metric{display:flex;flex-direction:column;gap:4px;padding:14px;border:1px solid transparent;border-radius:var(--hs-radius-lg);background:var(--surface-soft);min-width:0}
 .dash-metric__label{font-size:13px;color:var(--muted)}
 .dash-metric__value{font-family:var(--hs-font-head);font-size:22px;font-weight:700;color:var(--navy);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .dash-metric__value small{margin-inline-start:4px;font-family:var(--hs-font-body);font-size:12px;font-weight:400;color:var(--muted)}
@@ -306,7 +304,7 @@
 .dash-hour__count{font-weight:700;font-size:13px}
 .dash-hour__label{font-size:12px}
 .dash-lists{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
-.dash-list{padding:14px;border:1px solid var(--border);border-radius:var(--hs-radius-lg);min-width:0}
+.dash-list{padding:14px;border:1px solid transparent;border-radius:var(--hs-radius-lg);background:var(--surface-soft);min-width:0}
 .dash-list.is-warning{border-color:var(--hs-warning-line);background:var(--hs-warning-wash)}
 .dash-list h3{margin:0 0 6px;font-size:15px;color:var(--navy)}
 .dash-list h3 small{font-weight:400;color:var(--muted)}
@@ -519,3 +517,17 @@ a.dash-atile:hover,a.dash-atile:focus-visible{background:var(--teal-wash)}
 .dash-lang{min-height:var(--hs-control-height)}
 .dash-table-view summary{display:flex;align-items:center;min-height:var(--hs-control-height);cursor:pointer}
 .dash-alert__title{display:flex;align-items:center;min-height:var(--hs-control-height)}
+
+/* UX Wave 4: on a phone the dashboard's header is the navy band under the navy top bar, first in the column
+   (the demo line follows it). The dashboard hero itself is redesigned in its own PR. */
+@media screen and (max-width:700px){
+  .dash-shell{padding:0 var(--hs-gutter) 28px}
+  .dash-header{order:-1;margin:0 calc(-1 * var(--hs-gutter));padding:var(--hs-space-1) var(--hs-gutter) var(--hs-space-5);border:0;border-radius:0 0 var(--hs-band-radius) var(--hs-band-radius);background:var(--hs-navy);box-shadow:none;color:var(--hs-on-navy)}
+  .dash-screen-title{color:var(--hs-on-navy);font-size:var(--hs-text-xl)}
+  .dash-clock,.dash-clock__date{color:var(--hs-on-navy-muted)}
+  .dash-clock__time{color:var(--hs-on-navy)}
+  .dash-header .dash-lang,.dash-header .dash-icon-button{border-color:transparent;background:var(--hs-on-navy-wash);color:var(--hs-on-navy)}
+  .dash-header .dash-bell{border-color:var(--hs-on-navy)}
+  .dash-header .dash-bell-dot{border-color:var(--hs-navy)}
+  .dash-header > div :focus-visible{box-shadow:var(--hs-focus-ring-on-navy)}
+}
