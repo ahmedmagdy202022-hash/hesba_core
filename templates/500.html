@@ -1,0 +1,46 @@
+{% load static %}{% comment %}
+UX Wave 3: the branded "something went wrong". Rendered by Django's server_error with NO context: no request,
+no context processors, no database. So it is plain text in both languages; Arabic shows first, and a small
+script shows the English copy on ?lang=en or a remembered English choice. The one button goes to "/", which
+already sends a signed-in user to the dashboard, a showcase visitor to the demo landing and anyone else to login.
+{% endcomment %}<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>حصلت مشكلة · حِسبة</title>
+{% include "partials/brand_icons.html" %}
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
+<link rel="stylesheet" href="{% static 'hesba/css/buttons.css' %}?v=ux3-1">
+<link rel="stylesheet" href="{% static 'hesba/css/errors.css' %}?v=ux3-1">
+</head>
+<body class="hs-error" data-lang="ar" data-error-page="500">
+<header class="hs-error__band"><img src="{% static 'hesba/brand/hesba-logo-reversed.png' %}" alt="حِسبة · Hesba" width="642" height="225"></header>
+<main class="hs-error__main">
+  <section class="hs-error__card" lang="ar" dir="rtl" data-error-copy="ar">
+    <span class="hs-error__code"><bdi dir="ltr">500</bdi></span>
+    <h1>حصلت مشكلة عندنا</h1>
+    <p>مش غلطتك. جرّب تاني بعد شوية، أو ارجع للرئيسية وكمّل من هناك.</p>
+    <a class="op-primary" href="/" data-error-home>ارجع للرئيسية</a>
+  </section>
+  <section class="hs-error__card" lang="en" dir="ltr" data-error-copy="en" hidden>
+    <span class="hs-error__code">500</span>
+    <h1>Something went wrong on our side</h1>
+    <p>It isn't your fault. Try again in a moment, or go back to the dashboard and carry on from there.</p>
+    <a class="op-primary" href="/?lang=en" data-error-home>Back to the dashboard</a>
+  </section>
+</main>
+<script>
+(function(){
+  var en = false;
+  try { en = new URLSearchParams(window.location.search).get('lang') === 'en' || (!/[?&]lang=ar\b/.test(window.location.search) && localStorage.getItem('hesba_lang') === 'en'); } catch (e) {}
+  if (!en) return;
+  document.querySelector('[data-error-copy="ar"]').hidden = true;
+  document.querySelector('[data-error-copy="en"]').hidden = false;
+  document.documentElement.lang = 'en'; document.documentElement.dir = 'ltr'; document.body.dataset.lang = 'en';
+  document.title = 'Something went wrong · Hesba';
+})();
+</script>
+</body>
+</html>
