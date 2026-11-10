@@ -430,7 +430,7 @@ class CardTests(VoiceSummaryBase):
     def test_the_card_in_english(self):
         self.login()
         page = self.client.get("/dashboard/?lang=en")
-        self.assertContains(page, "Today&#x27;s summary, read aloud")
+        self.assertContains(page, "Yesterday&#x27;s summary")
         self.assertContains(page, EN_TEXT.replace("'", "&#x27;"))
         self.assertContains(page, "The figures come from Hesba&#x27;s own reports. Only the voice is generated.")
         self.assertContains(page, 'aria-label="Play the summary"')
