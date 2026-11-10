@@ -197,6 +197,9 @@ SHORTCUTS = {
     "new_purchase": {"ar": "فاتورة شراء", "en": "Purchase invoice", "url_name": "purchases:create", "icon": "purchases", "module": "purchases",
                      "permission": "purchases.create_purchase_invoice"},
 }
+#: The activity's words for a shortcut (a school's «كورس جديد», a clinic's «تحصيل من مريض»), read through term() exactly
+#: as the dashboard's quick actions read QUICK_ACTION_TERMS, so «ابدأ من هنا» and these rows say the same thing.
+SHORTCUT_TERMS = {"new_sale": "new_sale", "collect": "collect", "new_item": "new_item"}
 DRAWER_SHORTCUTS = ("pos", "new_sale", "collect", "new_item")
 DASHBOARD_SHORTCUTS = ("pos", "collect", "new_item", "new_purchase")
 
@@ -204,6 +207,7 @@ DASHBOARD_SHORTCUTS = ("pos", "collect", "new_item", "new_purchase")
 def shortcut_actions(user, lang, modules, sections, keys=DRAWER_SHORTCUTS, dashboard=False):
     from settings_core.module_gate import closed_module
 
+    words = active_vocabulary()
     rows = []
     for key in keys:
         spec = SHORTCUTS[key]
@@ -216,7 +220,10 @@ def shortcut_actions(user, lang, modules, sections, keys=DRAWER_SHORTCUTS, dashb
         url = reverse(spec["url_name"])
         if closed_module(url) is not None:
             continue
-        label = spec.get(f"dash_{lang}", spec[lang]) if dashboard else spec[lang]
+        if key in SHORTCUT_TERMS:
+            label = term(SHORTCUT_TERMS[key], lang, words)
+        else:
+            label = spec.get(f"dash_{lang}", spec[lang]) if dashboard else spec[lang]
         rows.append({"key": key, "label": label, "url": url, "url_name": spec["url_name"], "icon": spec["icon"]})
     return rows
 

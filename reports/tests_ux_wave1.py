@@ -88,6 +88,41 @@ class GroupedMenuTests(TestCase):
         self.assertEqual([row["key"] for row in owner["shortcuts"]], list(DRAWER_SHORTCUTS))
 
 
+class ShortcutVocabularyTests(TestCase):
+    """The drawer's shortcuts and the dashboard's top row speak the activity's words, as «ابدأ من هنا» does."""
+
+    def labels(self, activity, sub_activity, username):
+        from settings_core.activity_fit import default_modules
+
+        prepared_client(activity, sub_activity, ",".join(default_modules(activity, sub_activity)))
+        owner = sign_in_as(self, RoleCode.OWNER, username)
+        drawer = {row["key"]: row["label"] for row in app_shell(owner, "ar", set(usable_modules()), reverse("dashboard_snapshot"))["shortcuts"]}
+        top = {row["key"]: row["label"] for row in self.client.get(reverse("dashboard_snapshot")).context["top_actions"]}
+        return drawer, top
+
+    def test_a_school_says_course(self):
+        drawer, top = self.labels("education", "tutoring_center", "ux_short_edu")
+        self.assertEqual(drawer["new_item"], "كورس جديد")
+        self.assertEqual(top["new_item"], "كورس جديد")
+        self.assertEqual(drawer["collect"], "تحصيل مصروفات")
+        self.assertEqual(top["collect"], "تحصيل مصروفات")
+        self.assertEqual(drawer["new_sale"], "اشتراك جديد")
+
+    def test_a_clinic_says_patient_and_medical_service(self):
+        drawer, top = self.labels("medical", "clinic", "ux_short_med")
+        self.assertEqual(drawer["collect"], "تحصيل من مريض")
+        self.assertEqual(top["collect"], "تحصيل من مريض")
+        self.assertEqual(drawer["new_item"], "خدمة طبية جديدة")
+        self.assertEqual(top["new_item"], "خدمة طبية جديدة")
+        self.assertEqual(drawer["new_sale"], "كشف / فاتورة جديدة")
+
+    def test_a_shop_reads_the_base_words(self):
+        drawer, top = self.labels("commercial", "retail", "ux_short_shop")
+        self.assertEqual(drawer["collect"], "تحصيل من عميل")
+        self.assertEqual(top["new_item"], "صنف / خدمة جديدة")
+        self.assertEqual(top["pos"], "بيع من الكاشير")  # no activity word for the till: its own label stays
+
+
 class TabBarTests(TestCase):
     def test_the_till_lights_the_sales_tab_and_keeps_its_own_menu_link(self):
         prepared_client()
@@ -151,18 +186,59 @@ class DashboardOnceTests(TestCase):
         response = self.client.get(reverse("dashboard_snapshot"))
         self.assertFalse(response.context["analytics"].get("available"))
         cards = {card["key"] for card in response.context["cards"]}
-        shown = {card["key"] for card in response.context["today_cards"]} | {"sales_today", "invoice_count_today"}
+        shown = {card["key"] for card in response.context["today_cards"]}
+        if "sales_today" in cards:
+            shown |= {"sales_today", "invoice_count_today"}  # the count rides under today's sales in the hero
         if response.context["hero_shows_cash"]:
             shown.add("cashbox_balance")  # in the hero instead
         self.assertTrue(cards)
         self.assertLessEqual(cards, shown)  # nothing dropped: no grid repeats them for this role
-        self.assertContains(response, ">أرقام اليوم<")
+        if response.context["today_cards"]:
+            self.assertContains(response, ">أرقام اليوم<")
+        self.assertNotContains(response, "لا توجد أرقام متاحة لصلاحياتك الحالية.")
+
+    def custom(self, username, codes):
+        from hesba_testing.factories import grant, make_role
+        from permissions.models import Permission
+
+        role = make_role(code=f"UX-{username}")
+        for code in codes:
+            grant(role, Permission.objects.get(code=code))
+        user = make_user(username=username)
+        make_user_profile(user=user, role=role)
+        self.client.force_login(user)
+        return self.client.get(reverse("dashboard_snapshot"))
+
+    def test_the_invoice_count_stays_without_the_sales_card(self):
+        # Codex P2: invoices may be seen without the sales report; the hero shows the count only under today's sales.
+        response = self.custom("ux_dash_invoices", ["sales.view_sales_invoices"])
+        cards = {card["key"] for card in response.context["cards"]}
+        self.assertIn("invoice_count_today", cards)
+        self.assertNotIn("sales_today", cards)
+        self.assertIn("invoice_count_today", {card["key"] for card in response.context["today_cards"]})
+        self.assertContains(response, 'data-kpi="invoice_count_today"', count=1)
+
+    def test_no_empty_note_while_the_hero_shows_figures(self):
+        response = self.custom("ux_dash_hero_only", ["reports.view_sales_report", "sales.view_sales_invoices"])
+        self.assertFalse(response.context["analytics"].get("available"))
+        self.assertEqual(response.context["today_cards"], [])
+        self.assertTrue(response.context["hero_any"])
+        self.assertContains(response, 'data-kpi="sales_today"', count=1)
+        self.assertNotContains(response, "لا توجد أرقام متاحة لصلاحياتك الحالية.")
+        self.assertNotContains(response, ">أرقام اليوم<")
+
+    def test_the_empty_note_stays_when_nothing_shows(self):
+        response = self.custom("ux_dash_nothing", [])
+        self.assertFalse(response.context["hero_any"])
+        self.assertContains(response, "لا توجد أرقام متاحة لصلاحياتك الحالية.")
 
     def test_the_voice_card_says_whose_figures_it_reads(self):
         from ai.summary import WORDS
 
-        self.assertEqual(WORDS["ar"]["title"], "ملخص امبارح")
-        self.assertEqual(WORDS["en"]["title"], "Yesterday's summary")
+        # The text opens on the morning and adds today's stock and appointments to yesterday's trade; the date line under
+        # the title is yesterday's, the figures' date.
+        self.assertEqual(WORDS["ar"]["title"], "ملخص الصبح")
+        self.assertEqual(WORDS["en"]["title"], "Morning summary")
 
 
 class FormattingTests(SimpleTestCase):
@@ -174,6 +250,21 @@ class FormattingTests(SimpleTestCase):
     def test_one_date_format_in_the_page_language(self):
         self.assertEqual(day_text(date(2026, 11, 9), "ar"), "9 نوفمبر 2026")
         self.assertEqual(day_text(date(2026, 11, 9), "en"), "9 November 2026")
+
+    def test_a_date_that_is_not_a_date_reads_missing(self):
+        self.assertEqual(day_text("2026-11-09"), "—")
+        self.assertEqual(day_text(5, "en"), "—")
+        self.assertEqual(day_text(None), "—")
+
+    def test_a_trend_rounds_half_up_like_floatformat(self):
+        from reports.dashboard_views import _shown_delta
+
+        for delta, shown, flat in ((0.5, 1, False), (2.5, 3, False), (-2.5, 3, False), (0.49, 0, True), (D("14.5"), 15, False)):
+            with self.subTest(delta=delta):
+                result = _shown_delta({"key": "net_sales", "delta": delta})
+                self.assertEqual((result["delta_abs"], result["flat"]), (shown, flat))
+        self.assertNotIn("delta_abs", _shown_delta({"key": "net_sales", "delta": None}))
+        self.assertIsNone(_shown_delta(None))
 
 
 class PosPayBarTests(TestCase):
@@ -208,6 +299,51 @@ class PosPayBarTests(TestCase):
         self.assertEqual(page.count("الباقي للعميل 80.00"), 1)
         self.assertIn("data-pos-last-change", page)
         self.assertNotIn("op-message op-message-pos-sale", page)  # the sale's message moved into the banner
+        banner = re.search(r'<div class="pos-last".*?</div></div>', page, re.S).group(0)
+        self.assertIn("الإجمالي", banner)  # paid: the total, not «المطلوب»
+        self.assertNotIn("المطلوب", banner)
+
+    def sale(self, **extra):
+        from settings_core.models import ClientProfile
+        from settings_core.setup_services import set_module_enabled
+
+        set_module_enabled(ClientProfile.get_active(), "pdf_printing", True)
+        data = {"line_count": "1", "item_0": str(self.belt.pk), "qty_0": "1", "price_0": "120.00", "customer": str(walk_in_customer().pk),
+                "location": str(self.location.pk), "cashbox": str(self.cashbox.pk), "discount": "0", "tendered": "200", "print": "1"}
+        data.update(extra)
+        return self.client.post(reverse("sales:pos") + "?lang=ar", data)
+
+    def test_pay_and_print_comes_back_to_the_banner(self):
+        from sales.models import SalesInvoice
+
+        response = self.sale()
+        invoice = SalesInvoice.objects.get()
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response["Location"].startswith(f"/print/sales/{invoice.pk}/"), response["Location"])
+        self.assertIn("next=pos", response["Location"])
+        printed = self.client.get(response["Location"])
+        self.assertEqual(printed.status_code, 200)
+        self.assertEqual(printed.context["back_url"], f"/sales/pos/?lang=ar&last={invoice.pk}")
+        page = self.client.get(printed.context["back_url"]).content.decode()
+        self.assertIn("data-pos-last", page)
+        self.assertEqual(page.count("الباقي للعميل 80.00"), 1)
+        self.assertNotIn("op-message-pos-", page)
+
+    def test_sale_messages_outside_the_banner_read_as_success(self):
+        response = self.sale()
+        self.client.get(response["Location"])  # the receipt page shows no messages: they wait for the till
+        page = self.client.get(reverse("sales:pos"), {"lang": "ar"}).content.decode()  # back without the banner
+        self.assertIn('class="op-message op-message-success" data-message-tag="pos-sale"', page)
+        self.assertIn('class="op-message op-message-success" data-message-tag="pos-change"', page)
+        self.assertNotIn("op-message-pos-", page)
+
+    def test_a_refused_sale_opens_the_details(self):
+        self.assertNotIn("data-pos-refused", self.client.get(reverse("sales:pos"), {"lang": "ar"}).content.decode())
+        page = self.client.post(reverse("sales:pos") + "?lang=ar", {
+            "line_count": "1", "item_0": str(self.belt.pk), "qty_0": "1", "price_0": "120.00", "customer": str(walk_in_customer().pk),
+            "location": "", "cashbox": str(self.cashbox.pk), "discount": "0", "tendered": "200", "print": "0"}).content.decode()
+        self.assertIn('class="op-message op-message-error"', page)
+        self.assertIn("data-pos-details data-wide-open data-pos-refused open", page)
 
 
 class SharedButtonTests(TestCase):

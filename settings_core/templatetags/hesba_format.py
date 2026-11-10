@@ -274,7 +274,7 @@ def day_text(value, lang="ar"):
     The month is named in the page's language, not LANGUAGE_CODE's (there is no LocaleMiddleware).
     """
 
-    if not value:
+    if not value or not hasattr(value, "day"):  # a date or datetime only; anything else reads "—", never an error
         return MISSING
     from django.utils import translation
     from django.utils.formats import date_format

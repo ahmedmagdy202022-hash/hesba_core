@@ -37,7 +37,7 @@ SUMMARY_KPIS = (SALES, INVOICES, RECEIPTS, LOW, OUT)
 
 WORDS = {
     "ar": {
-        "title": "ملخص امبارح", "play": "شغّل الملخص", "pause": "وقّف الملخص", "loading": "بنجهّز الصوت…",
+        "title": "ملخص الصبح", "play": "شغّل الملخص", "pause": "وقّف الملخص", "loading": "بنجهّز الصوت…",
         "note": "الأرقام من تقارير حسبة نفسها. الصوت بس اللي متولّد.",
         "sales": "مبيعات امبارح", "my_sales": "مبيعاتي امبارح", "invoices": "فواتير امبارح", "my_invoices": "فواتيري امبارح",
         "receipts": "التحصيل", "low": "قربت تخلص", "appointments": "مواعيد النهارده",
@@ -45,7 +45,7 @@ WORDS = {
         "all_collections": "افتح قايمة التحصيلات كلها",
     },
     "en": {
-        "title": "Yesterday's summary", "play": "Play the summary", "pause": "Pause the summary", "loading": "Preparing the audio…",
+        "title": "Morning summary", "play": "Play the summary", "pause": "Pause the summary", "loading": "Preparing the audio…",
         "note": "The figures come from Hesba's own reports. Only the voice is generated.",
         "sales": "Yesterday's sales", "my_sales": "My sales yesterday", "invoices": "Invoices yesterday", "my_invoices": "My invoices yesterday",
         "receipts": "Collections", "low": "Running low", "appointments": "Today's appointments",

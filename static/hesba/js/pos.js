@@ -49,9 +49,11 @@
   var paybar = form.querySelector('[data-pos-paybar]');
   var barTotal = form.querySelector('[data-pos-bar-total]');
   var wide = window.matchMedia ? window.matchMedia('(min-width: 1024px)') : null;
-  // «تفاصيل» also opens on a phone when the till comes back with a named customer chosen (a refused credit sale, say).
+  // «تفاصيل» also opens on a phone when the till comes back with a named customer chosen, or after any refused sale
+  // (data-pos-refused): the fix is often inside it (a credit sale's customer, a coupon, a gift card).
   function namedCustomer() { return !!(customer && customer.value && customer.value !== customer.getAttribute('data-walk-in')); }
-  function syncWide() { form.querySelectorAll('[data-wide-open]').forEach(function (node) { node.open = !!(wide && wide.matches) || (node.hasAttribute('data-pos-details') && namedCustomer()); }); }
+  function detailsStayOpen(node) { return node.hasAttribute('data-pos-details') && (node.hasAttribute('data-pos-refused') || namedCustomer()); }
+  function syncWide() { form.querySelectorAll('[data-wide-open]').forEach(function (node) { node.open = !!(wide && wide.matches) || detailsStayOpen(node); }); }
   syncWide();
   if (wide && wide.addEventListener) { wide.addEventListener('change', syncWide); }
   form.querySelectorAll('.pos-overflow').forEach(function (menu) {  // a choice made from the phone's "⋯" menu closes it
@@ -333,6 +335,7 @@
     cart = []; discount.value = '0'; if (pointsBox) { pointsBox.value = ''; } tenderedTouched = false;
     var giftCode = form.querySelector('[data-pos-gift-code]');  // S6: never carry one holder's card into the next sale
     if (giftCode) { giftCode.value = ''; } if (giftAmount) { giftAmount.value = ''; }
+    if (coupon) { coupon.value = ''; }  // nor the last sale's coupon: render() re-quotes the promotion
     customer.value = customer.getAttribute('data-walk-in'); render(); scan.focus();
   });
 

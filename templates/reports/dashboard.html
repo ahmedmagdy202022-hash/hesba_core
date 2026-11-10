@@ -280,7 +280,7 @@
       </section>
       {% endif %}
 
-      {% if not analytics.available %}
+      {% if not analytics.available %}{% if today_cards or not hero_any %}
       <section class="dash-section" aria-label="{{ kpi_title }}">
         <h2 class="dash-section__title">{{ kpi_title }}</h2>
         {% if today_cards %}
@@ -298,7 +298,7 @@
           <p class="dash-empty-note">{{ no_cards }}</p>
         {% endif %}
       </section>
-      {% endif %}
+      {% endif %}{% endif %}
 
       <div class="dash-split">
         <section class="dash-section dash-section--alerts" id="dash-alerts" aria-label="{{ alerts_title }}" tabindex="-1">

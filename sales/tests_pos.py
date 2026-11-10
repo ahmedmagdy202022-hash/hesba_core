@@ -126,7 +126,7 @@ class PosTests(TestCase):
         invoice = SalesInvoice.objects.get()
         self.assertEqual(response.url, f"/print/sales/{invoice.pk}/?lang=ar&format=receipt&autoprint=1&next=pos")
         receipt = self.client.get(response.url)
-        self.assertContains(receipt, 'href="/sales/pos/?lang=ar"')
+        self.assertContains(receipt, f'href="/sales/pos/?lang=ar&amp;last={invoice.pk}"')  # UX Wave 1: back to the after-sale banner
         self.assertContains(receipt, "afterprint")
 
     def test_with_printing_off_the_sale_returns_to_the_till(self):

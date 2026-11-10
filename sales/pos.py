@@ -470,6 +470,7 @@ def pos(request):
     customer_default = walk_in_customer()
     cart_back = "[]"  # raw JSON from the form; cleaned before it is rendered
     short_box = None
+    refused = False  # UX Wave 1: a refused sale comes back with «تفاصيل» open (its fix is often inside: customer, coupon, gift card)
     selected = {
         "customer": str(customer_default.pk),
         "location": str((locations.filter(is_default=True).first() or locations.first() or Location()).pk or ""),
@@ -519,6 +520,7 @@ def pos(request):
                                        gift=gift, lang=lang)
         except ValidationError as exc:
             messages.error(request, _error_text(exc, words))
+            refused = True
             cart_back = request.POST.get("cart_json", "[]")
             short_box = _short_box(exc, request)
         else:
@@ -569,6 +571,7 @@ def pos(request):
             "selected": selected,
             "cart_back": cart_back,
             "short_box": short_box,  # HG-065
+            "refused": refused,
             "summary": today_summary(request.user),
             "last_invoice": entity_scope.scope(SalesInvoice.objects, entity_scope.SALES_INVOICE).filter(pk=last, created_by=request.user).first() if last.isdigit() else None,
             "js_words": json.dumps({key: words[key] for key in ("not_found", "added", "remove", "empty_cart", "scan_serial", "serial_twice", "promo_wait")}, ensure_ascii=False),

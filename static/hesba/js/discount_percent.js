@@ -138,8 +138,19 @@
         if (!percent) { pct.value = ''; box.lastSet = null; }
       };
       box.show = function () { worth.textContent = pct.value.trim() ? '= ' + amount.value : ''; };
+      // In % mode the % box owns the amount: an empty one is no discount, never a hidden amount still sent and posted.
+      box.zero = function () {
+        box.lastSet = null;
+        if (typed(amount.value) !== 0) {
+          amount.value = '0';
+          busy = true;
+          amount.dispatchEvent(new Event('input', { bubbles: true }));
+          busy = false;
+        }
+        box.show();
+      };
       byAmount.addEventListener('click', function () { box.mode(false); amount.focus(); });
-      byPercent.addEventListener('click', function () { box.mode(true); pct.focus(); });
+      byPercent.addEventListener('click', function () { box.mode(true); if (!pct.value.trim()) { box.zero(); } pct.focus(); });
       box.mode(false);
     } else if (compact) {
       var toggle = document.createElement('button');
@@ -168,7 +179,7 @@
     }
     boxes.push(box);
     pct.addEventListener('input', function () {
-      if (!pct.value.trim()) { return; }
+      if (!pct.value.trim()) { if (box.zero) { box.zero(); } return; }  // the till: emptied means no discount
       box.lastSet = amount.value;  // the percent now owns the amount
       set(box);
       refresh();

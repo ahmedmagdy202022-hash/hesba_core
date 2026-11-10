@@ -417,7 +417,7 @@ class CardTests(VoiceSummaryBase):
         self.login()
         page = self.client.get("/dashboard/?lang=ar")
         self.assertContains(page, "data-voice-summary")
-        self.assertContains(page, "ملخص امبارح")
+        self.assertContains(page, "ملخص الصبح")
         self.assertContains(page, f"«{AR_TEXT}»")
         self.assertContains(page, "الأرقام من تقارير حسبة نفسها. الصوت بس اللي متولّد.")
         self.assertContains(page, 'aria-label="شغّل الملخص"')
@@ -430,7 +430,7 @@ class CardTests(VoiceSummaryBase):
     def test_the_card_in_english(self):
         self.login()
         page = self.client.get("/dashboard/?lang=en")
-        self.assertContains(page, "Yesterday&#x27;s summary")
+        self.assertContains(page, "Morning summary")
         self.assertContains(page, EN_TEXT.replace("'", "&#x27;"))
         self.assertContains(page, "The figures come from Hesba&#x27;s own reports. Only the voice is generated.")
         self.assertContains(page, 'aria-label="Play the summary"')

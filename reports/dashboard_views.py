@@ -10,6 +10,7 @@ screen to look like a working business.
 """
 
 import logging
+from decimal import ROUND_HALF_UP, Decimal
 
 from django.shortcuts import render
 from django.utils import timezone, translation
@@ -505,7 +506,7 @@ def _shown_delta(metric):
     shown = dict(metric)
     delta = metric.get("delta")
     if delta is not None:
-        rounded = round(abs(delta))
+        rounded = int(Decimal(str(abs(delta))).quantize(Decimal("1"), ROUND_HALF_UP))  # half up, as floatformat:0 did
         shown["delta_abs"] = rounded
         shown["flat"] = rounded == 0
     return shown
@@ -518,13 +519,17 @@ def _layout(cards, analytics, headline):
 
     metrics = (analytics.get("metrics") or []) if analytics.get("available") else []
     metric_keys = {metric["key"] for metric in metrics}
-    hero_keys = {card["key"] for card in cards if card["key"] in ("sales_today", "invoice_count_today")}
+    keys = {card["key"] for card in cards}
+    # The hero shows today's invoice count only under today's sales: without that card the count stays in «أرقام اليوم».
+    hero_keys = {"sales_today", "invoice_count_today"} & keys if "sales_today" in keys else set()
     hero_cash = any(card["key"] == "cashbox_balance" for card in cards) and "cash" not in metric_keys
     if hero_cash:
         hero_keys.add("cashbox_balance")
     shown_metrics = [_shown_delta(metric) for metric in metrics if not (headline and metric is headline)]
     today_cards = [card for card in cards if card["key"] not in hero_keys and REPEATED_BY_METRIC.get(card["key"]) not in metric_keys]
-    return {"hero_shows_cash": hero_cash, "shown_metrics": shown_metrics, "today_cards": today_cards}
+    # hero_any: the hero already shows a figure, so an empty «أرقام اليوم» says nothing rather than "no figures".
+    return {"hero_shows_cash": hero_cash, "hero_any": "sales_today" in keys or hero_cash, "shown_metrics": shown_metrics,
+            "today_cards": today_cards}
 
 
 def dashboard(request):
