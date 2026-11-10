@@ -10,11 +10,13 @@
 <div class="hs-main">
 <main class="op-shell" id="hs-main" tabindex="-1">
 {% include "partials/entity_bar.html" %}
+{% block op_messages %}
   {% if messages %}
     <div class="op-messages">
-      {% for message in messages %}<div class="op-message op-message-{{ message.tags|default:'info' }}">{{ message|ui:lang }}</div>{% endfor %}
+      {% for message in messages %}<div class="op-message op-message-{{ message.level_tag|default:'info' }}"{% if message.extra_tags %} data-message-tag="{{ message.extra_tags }}"{% endif %}>{{ message|ui:lang }}</div>{% endfor %}
     </div>
   {% endif %}
+  {% endblock %}
   {% block operation_content %}{% endblock %}
 </main>
 </div>

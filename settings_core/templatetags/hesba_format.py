@@ -246,3 +246,38 @@ def choice_text(obj, lang="ar"):
 
     name, code = name_and_code(obj, lang)
     return f"{name} · {code}" if code and code != name else name
+
+
+@register.simple_tag
+def currency_unit(lang="ar"):
+    """UX Wave 1: the unit written after an amount on this screen ("ج.م" on an Arabic page, "EGP" in English), or ""."""
+
+    from settings_core.currency import currency_label
+
+    return currency_label(currency_code(), lang)
+
+
+@register.filter
+def percent(value):
+    """UX Wave 1: a percentage in the same decimal style as money: "31.8%" (period decimal, never the locale's comma)."""
+
+    number = _quantized(value, Decimal("0.1"))
+    if number is None:
+        return MISSING
+    return f"{number:,.1f}%"
+
+
+@register.filter
+def day_text(value, lang="ar"):
+    """UX Wave 1: one date format for screens: "9 نوفمبر 2026" in Arabic, "9 November 2026" in English.
+
+    The month is named in the page's language, not LANGUAGE_CODE's (there is no LocaleMiddleware).
+    """
+
+    if not value or not hasattr(value, "day"):  # a date or datetime only; anything else reads "—", never an error
+        return MISSING
+    from django.utils import translation
+    from django.utils.formats import date_format
+
+    with translation.override("en" if lang == "en" else "ar"):
+        return date_format(value, "j F Y")

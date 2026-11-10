@@ -427,7 +427,7 @@ WHERE = {
     "e_invoice": ("«الفاتورة الإلكترونية» في القايمة، وملف لكل فاتورة مترحّلة", "“E-invoicing” in the menu, and a document for each posted invoice"),
     "e_receipt": ("«الإيصال الإلكتروني» في القايمة، وQR على إيصال الكاشير المطبوع", "“E-receipts” in the menu, and a QR on the printed till receipt"),
     "fixed_assets": ("«الأصول الثابتة» في القايمة، والإهلاك في المصروفات وصافي الربح", "“Fixed assets” in the menu, and depreciation in expenses and net profit"),
-    "ai_voice_summary": ("كارت «ملخص النهارده بالصوت» في لوحة القيادة، تحت الترحيب", "A “Today's summary, read aloud” card on the dashboard, under the greeting"),
+    "ai_voice_summary": ("كارت «ملخص الصبح» بالصوت في لوحة القيادة، تحت الترحيب: أرقام امبارح ومخزون ومواعيد النهارده", "A “Morning summary” card, read aloud, on the dashboard under the greeting: yesterday's figures, today's stock and appointments"),
     "ai_ask": ("زرار «اسأل حسبة» في لوحة القيادة، بيفتح صفحة السؤال", "An “Ask Hesba” button on the dashboard, opening the question page"),
     "ai_invoice_photo": ("زرار «فاتورة من صورة» في قايمة فواتير الشراء، بيفتح صفحة التصوير", "An “Invoice from a photo” button on the purchase invoices list, opening the photo page"),
 }

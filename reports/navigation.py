@@ -12,7 +12,7 @@ from django.utils.module_loading import import_string
 from permissions.services import user_has_permission
 
 from settings_core.capabilities import capability_enabled
-from settings_core.vocabulary import active_vocabulary, term
+from settings_core.vocabulary import BASE as BASE_TERMS, active_vocabulary, term
 
 # ACT-PROFILE-001: sections whose name follows the activity's own words.
 NAV_TERMS = {"operations": "operations", "customers": "customers", "suppliers": "suppliers", "items": "items", "staff": "staff", "appointments": "appointments"}
@@ -147,6 +147,89 @@ NAV_ITEMS = (
     {"key": "settings", "ar": "الإعدادات", "en": "Settings", "url_name": "settings_core:overview", "module": None, "permission": "settings.view_settings"},
 )
 
+# UX Wave 1: the sidebar and the phone's «المزيد» drawer show the sections in groups, in this order. Grouping is only
+# presentation: which sections a user sees is decided by nav_items' filters above, exactly as before. The dashboard and
+# the activity's own lead sections (ACTIVITY_LEAD) stay on top, outside any group. Niche, switch-on modules wait in a
+# final «إضافات» group.
+NAV_GROUPS = (
+    {"key": "sales", "ar": "البيع", "en": "Sales",
+     "keys": ("pos", "operations", "quotes", "restaurant", "workorders", "appointments", "queue", "projects", "contracts", "packages", "hours")},
+    {"key": "stock", "ar": "المخزون", "en": "Stock",
+     "keys": ("items", "inventory", "warehouses", "purchases", "suppliers", "drugs", "manufacturing")},
+    {"key": "people", "ar": "الناس", "en": "People",
+     "keys": ("customers", "education", "classes", "medical", "messages", "staff", "attendance", "my_attendance", "my_day")},
+    {"key": "money", "ar": "الفلوس", "en": "Money",
+     "keys": ("cashboxes", "expenses", "banks", "cheques", "payroll", "assets", "taxes", "ledger", "closing")},
+    {"key": "reports", "ar": "التقارير", "en": "Reports", "keys": ("reports",)},
+    {"key": "settings", "ar": "الإعدادات", "en": "Settings", "keys": ("settings", "profile")},
+    {"key": "extras", "ar": "إضافات", "en": "Add-ons",
+     "keys": ("store", "shipping", "ereceipt", "einvoice", "promotions", "loyalty", "giftcards")},
+)
+NAV_GROUP_OF = {key: group["key"] for group in NAV_GROUPS for key in group["keys"]}
+TOP_GROUP = "top"  # the dashboard and the activity's lead sections: no heading
+
+
+def _grouped(keys, activity):
+    """The order the sidebar shows: the dashboard and the activity's lead sections, then each group in NAV_GROUPS order."""
+
+    lead = ACTIVITY_LEAD.get(activity, ())
+    top = _lead_first([key for key in keys if key == "dashboard" or key in lead], activity)
+    rest = set(keys) - set(top)
+    order = list(top)
+    for group in NAV_GROUPS:
+        order += [key for key in group["keys"] if key in rest]
+    order += [key for key in keys if key not in order]  # a section added without a group still shows, last
+    return order, set(top)
+
+
+#: UX Wave 1: the shortcuts people reach for most. The phone drawer's «الأكثر استخداماً» row and the dashboard's
+#: quick-actions row read them through shortcut_actions(), gated like the dashboard's quick actions (module, permission,
+#: never a door into a switched-off module); the till also needs its own section in this user's menu.
+SHORTCUTS = {
+    "pos": {"ar": "الكاشير", "en": "Point of sale", "dash_ar": "بيع من الكاشير", "dash_en": "Sell at the till", "url_name": "sales:pos",
+            "icon": "pos", "section": "pos"},
+    "new_sale": {"ar": "فاتورة جديدة", "en": "New invoice", "url_name": "sales:create", "icon": "operations", "module": "sales_operations",
+                 "permission": "sales.create_sales_invoice"},
+    "collect": {"ar": "تحصيل", "en": "Collect", "url_name": "sales:payment_create", "icon": "cashboxes", "module": "customers",
+                "permission": "sales.receive_customer_payment"},
+    "new_item": {"ar": "صنف جديد", "en": "New item", "url_name": "master_data:item_create", "icon": "items", "module": "items_services",
+                 "permission": "master_data.manage_items"},
+    "new_purchase": {"ar": "فاتورة شراء", "en": "Purchase invoice", "url_name": "purchases:create", "icon": "purchases", "module": "purchases",
+                     "permission": "purchases.create_purchase_invoice"},
+}
+#: The activity's words for a shortcut (a school's «كورس جديد», a clinic's «تحصيل من مريض»), read through term() as the
+#: dashboard's quick actions read QUICK_ACTION_TERMS, so «ابدأ من هنا» and these rows say the same thing. Only an activity
+#: that has its own word changes a chip: otherwise it keeps its short label («تحصيل», not the base «تحصيل من عميل»).
+SHORTCUT_TERMS = {"new_sale": "new_sale", "collect": "collect", "new_item": "new_item"}
+DRAWER_SHORTCUTS = ("pos", "new_sale", "collect", "new_item")
+DASHBOARD_SHORTCUTS = ("pos", "collect", "new_item", "new_purchase")
+
+
+def shortcut_actions(user, lang, modules, sections, keys=DRAWER_SHORTCUTS, dashboard=False):
+    from settings_core.module_gate import closed_module
+
+    words = active_vocabulary()
+    rows = []
+    for key in keys:
+        spec = SHORTCUTS[key]
+        if spec.get("section") and spec["section"] not in sections:
+            continue
+        if spec.get("module") and spec["module"] not in modules:
+            continue
+        if spec.get("permission") and not user_has_permission(user, spec["permission"]):
+            continue
+        url = reverse(spec["url_name"])
+        if closed_module(url) is not None:
+            continue
+        label = spec.get(f"dash_{lang}", spec[lang]) if dashboard else spec[lang]
+        if key in SHORTCUT_TERMS:
+            word = term(SHORTCUT_TERMS[key], lang, words)
+            if word != BASE_TERMS[SHORTCUT_TERMS[key]]["en" if lang == "en" else "ar"]:  # this activity has its own word
+                label = word
+        rows.append({"key": key, "label": label, "url": url, "url_name": spec["url_name"], "icon": spec["icon"]})
+    return rows
+
+
 # The phone tab bar has room for four short labels plus "More"; these are the
 # sections a counter clerk reaches for first, in order. Whatever a user cannot
 # see is skipped and the next one moves up.
@@ -205,6 +288,7 @@ SHELL_WORDS = {
         "language_short": "EN",
         "search": "بحث",
         "search_placeholder": "بحث… ( / )",
+        "shortcuts": "الأكثر استخداماً",
     },
     "en": {
         "main_nav": "Main navigation",
@@ -220,6 +304,7 @@ SHELL_WORDS = {
         "language_short": "ع",
         "search": "Search",
         "search_placeholder": "Search… ( / )",
+        "shortcuts": "Most used",
     },
 }
 
@@ -267,8 +352,12 @@ def nav_items(user, lang, modules):
         if item.get("allow") and not import_string(item["allow"])(user):
             continue
         label = term(NAV_TERMS[item["key"]], lang, words) if item["key"] in NAV_TERMS else item[lang]
-        items.append({"key": item["key"], "label": label, "url_name": item["url_name"], "also": item.get("also", ())})
-    order = _lead_first([item["key"] for item in items], _activity())
+        items.append({"key": item["key"], "label": label, "url_name": item["url_name"], "also": item.get("also", ()),
+                      "group": NAV_GROUP_OF.get(item["key"], "extras")})
+    order, top = _grouped([item["key"] for item in items], _activity())
+    for item in items:
+        if item["key"] in top:
+            item["group"] = TOP_GROUP
     position = {key: index for index, key in enumerate(order)}
     return sorted(items, key=lambda item: position[item["key"]])
 
@@ -308,11 +397,23 @@ def app_shell(user, lang, modules, path):
     tabs = [dict(by_key[key], label=term(TAB_TERMS[key], lang, words) if key in TAB_TERMS else TAB_LABELS[key][lang])
             for key in priority if key in by_key][:TAB_COUNT]
     tab_keys = {tab["key"] for tab in tabs}
+    # UX Wave 1: the till is selling, so on the tab bar it lights «البيع» (the sidebar still marks «الكاشير»).
+    tab_current = "operations" if current == "pos" and "pos" not in tab_keys and "operations" in tab_keys else current
+    for tab in tabs:
+        tab["current"] = tab["key"] == tab_current
+    groups = []
+    for item in items:
+        if not groups or groups[-1]["key"] != item["group"]:
+            spec = next((group for group in NAV_GROUPS if group["key"] == item["group"]), None)
+            groups.append({"key": item["group"], "label": spec[lang] if spec else "", "items": []})
+        groups[-1]["items"].append(item)
     return {
         "items": items,
+        "groups": groups,
         "tabs": tabs,
+        "shortcuts": shortcut_actions(user, lang, modules, set(by_key)),
         # "More" lights up when the current page lives behind it.
-        "more_current": current is not None and current not in tab_keys,
+        "more_current": tab_current is not None and tab_current not in tab_keys,
         "words": SHELL_WORDS[lang],
         "user_name": display_name(user),
     }

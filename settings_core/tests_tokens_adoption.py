@@ -50,7 +50,8 @@ class TokenAdoptionTests(SimpleTestCase):
 
     def test_primary_buttons_are_teal_with_navy_text(self):
         # White on teal fails contrast (about 2.7:1); navy on teal passes AA.
-        for sheet, selector in zip(ADOPTING_SHEETS, (".op-primary", ".md-primary")):
+        # UX Wave 1: the shared op-* buttons live in buttons.css, loaded on every signed-in screen.
+        for sheet, selector in zip(("hesba/css/buttons.css", "hesba/css/master_data.css"), (".op-primary", ".md-primary")):
             with self.subTest(sheet=sheet):
                 rule = re.search(re.escape(selector) + r"\{([^}]*)\}", read_static(sheet))
                 self.assertIsNotNone(rule)

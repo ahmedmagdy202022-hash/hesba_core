@@ -4,7 +4,7 @@
 {% block master_content %}
 <section class="md-title-row">
   <div>
-    <a class="md-back-link" href="{% url 'master_data:hub' %}?lang={{ lang }}">← {{ words.back }}</a>
+    <a class="md-back-link" href="{% url 'master_data:hub' %}?lang={{ lang }}">{% if lang == 'en' %}←{% else %}→{% endif %} {{ words.back }}</a>
     <h1>{{ entity_title }}</h1>
   </div>
   <div class="md-title-actions">

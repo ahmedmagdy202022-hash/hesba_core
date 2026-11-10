@@ -24,12 +24,17 @@ user. Styles: hesba/css/shell.css. Behaviour: hesba/js/shell.js.
     <button class="hs-icon-button hs-sidebar__close" type="button" data-shell-close aria-label="{{ shell.words.close_menu }}"><span aria-hidden="true">&times;</span></button>
   </div>
   <form class="hs-search" method="get" action="{% url 'search:results' %}" role="search"><input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="go" value="1"><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-search"></use></svg><input type="search" name="q" placeholder="{{ shell.words.search_placeholder }}" aria-label="{{ shell.words.search }}" data-shell-search></form>
+  {% if shell.shortcuts %}<div class="hs-quick" role="group" aria-labelledby="hs-quick-title" data-shell-shortcuts><p class="hs-quick__title" id="hs-quick-title">{{ shell.words.shortcuts }}</p><div class="hs-quick__row">{% for s in shell.shortcuts %}<a class="hs-quick__link" href="{{ s.url }}?lang={{ lang }}" data-shortcut="{{ s.key }}"><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-{{ s.icon }}"></use></svg><span>{{ s.label }}</span></a>{% endfor %}</div></div>{% endif %}
   <nav class="hs-nav" aria-label="{{ shell.words.main_nav }}">
-    <ul>
-      {% for item in shell.items %}
-        <li><a class="hs-nav__link{% if item.current %} is-current{% endif %}" href="{{ item.url }}?lang={{ lang }}" title="{{ item.label }}"{% if item.current %} aria-current="page"{% endif %}><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-{{ item.key }}"></use></svg><span class="hs-nav__label">{{ item.label }}</span></a></li>
-      {% endfor %}
-    </ul>
+    {% for group in shell.groups %}
+    <div class="hs-nav__group hs-nav__group--{{ group.key }}" data-nav-group="{{ group.key }}">
+      {% if group.label and group.items|length > 1 %}<p class="hs-nav__heading" id="hs-nav-{{ group.key }}">{{ group.label }}</p>{% endif %}
+      <ul{% if group.label and group.items|length > 1 %} aria-labelledby="hs-nav-{{ group.key }}"{% endif %}>
+        {% for item in group.items %}
+          <li><a class="hs-nav__link{% if item.current %} is-current{% endif %}" href="{{ item.url }}?lang={{ lang }}" title="{{ item.label }}"{% if item.current %} aria-current="page"{% endif %}><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-{{ item.key }}"></use></svg><span class="hs-nav__label">{{ item.label }}</span></a></li>
+        {% endfor %}
+      </ul>
+    </div>{% endfor %}
   </nav>
   <div class="hs-sidebar__foot">
     <span class="hs-sidebar__user">{{ shell.user_name }}</span>
@@ -42,7 +47,7 @@ user. Styles: hesba/css/shell.css. Behaviour: hesba/js/shell.js.
 <div class="hs-backdrop" data-shell-close hidden></div>
 <nav class="hs-tabbar" aria-label="{{ shell.words.main_nav }}">
   {% for tab in shell.tabs %}
-    <a class="hs-tab{% if tab.current %} is-current{% endif %}" href="{{ tab.url }}?lang={{ lang }}"{% if tab.current %} aria-current="page"{% endif %}>{{ tab.label }}</a>
+    <a class="hs-tab{% if tab.current %} is-current{% endif %}" href="{{ tab.url }}?lang={{ lang }}"{% if tab.current %} aria-current="page"{% endif %}><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-{{ tab.key }}"></use></svg><span class="hs-tab__label">{{ tab.label }}</span></a>
   {% endfor %}
-  <button class="hs-tab{% if shell.more_current %} is-current{% endif %}" type="button" data-shell-open aria-controls="hs-sidebar" aria-expanded="false">{{ shell.words.more }}</button>
+  <button class="hs-tab{% if shell.more_current %} is-current{% endif %}" type="button" data-shell-open aria-controls="hs-sidebar" aria-expanded="false"><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-more"></use></svg><span class="hs-tab__label">{{ shell.words.more }}</span></button>
 </nav>

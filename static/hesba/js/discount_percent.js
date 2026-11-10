@@ -98,7 +98,9 @@
     }
     row.hesbaBound = true;
     // An invoice line has a narrow cell: one box at a time, switched by a small "%" button.
-    var compact = !!amount.closest('.inv-row');
+    // UX Wave 1: the till does the same with a two-way switch, «ج.م | %», the unit in use highlighted.
+    var till = amount.hasAttribute('data-pos-discount');
+    var compact = !!amount.closest('.inv-row') || till;
     row.classList.toggle('hs-pct-row--compact', compact);
     var wrap = document.createElement('span');
     wrap.className = 'hs-pct';
@@ -109,7 +111,48 @@
     pct.setAttribute('data-discount-percent', '');
     row.appendChild(wrap);
     var box = { amount: amount, pct: pct, base: base, line: /line_discount_amount$/.test(amount.name || ''), lastSet: null };
-    if (compact) {
+    if (compact && till) {
+      row.classList.add('hs-pct-row--till');
+      pct.setAttribute('placeholder', '0');
+      var seg = document.createElement('span');
+      seg.className = 'hs-pct-switch';
+      seg.setAttribute('role', 'group');
+      seg.setAttribute('aria-label', en ? 'Discount in' : 'الخصم بـ');
+      var byAmount = document.createElement('button'), byPercent = document.createElement('button');
+      byAmount.type = byPercent.type = 'button';
+      byAmount.textContent = amount.getAttribute('data-unit') || (en ? 'Amount' : 'مبلغ');
+      byPercent.textContent = '%';
+      byAmount.setAttribute('aria-label', en ? 'Discount as an amount' : 'الخصم مبلغ');
+      byPercent.setAttribute('aria-label', en ? 'Discount as a percent' : 'الخصم نسبة %');
+      seg.appendChild(byAmount); seg.appendChild(byPercent);
+      var worth = document.createElement('small');
+      worth.className = 'hs-pct-amount';
+      row.insertBefore(seg, row.firstChild);
+      row.appendChild(worth);
+      box.mode = function (percent) {
+        wrap.hidden = !percent;
+        amount.hidden = percent;  // still sent with the form
+        worth.hidden = !percent;
+        byAmount.setAttribute('aria-pressed', percent ? 'false' : 'true');
+        byPercent.setAttribute('aria-pressed', percent ? 'true' : 'false');
+        if (!percent) { pct.value = ''; box.lastSet = null; }
+      };
+      box.show = function () { worth.textContent = pct.value.trim() ? '= ' + amount.value : ''; };
+      // In % mode the % box owns the amount: an empty one is no discount, never a hidden amount still sent and posted.
+      box.zero = function () {
+        box.lastSet = null;
+        if (typed(amount.value) !== 0) {
+          amount.value = '0';
+          busy = true;
+          amount.dispatchEvent(new Event('input', { bubbles: true }));
+          busy = false;
+        }
+        box.show();
+      };
+      byAmount.addEventListener('click', function () { box.mode(false); amount.focus(); });
+      byPercent.addEventListener('click', function () { box.mode(true); if (!pct.value.trim()) { box.zero(); } pct.focus(); });
+      box.mode(false);
+    } else if (compact) {
       var toggle = document.createElement('button');
       toggle.type = 'button';
       toggle.className = 'hs-pct-toggle';
@@ -136,7 +179,7 @@
     }
     boxes.push(box);
     pct.addEventListener('input', function () {
-      if (!pct.value.trim()) { return; }
+      if (!pct.value.trim()) { if (box.zero) { box.zero(); } return; }  // the till: emptied means no discount
       box.lastSet = amount.value;  // the percent now owns the amount
       set(box);
       refresh();

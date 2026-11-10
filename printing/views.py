@@ -170,6 +170,15 @@ def _watermark(status, words):
     return ""
 
 
+def _pos_back(doc, lang):
+    """Back to the till; after a sales receipt the till shows its after-sale banner for that invoice (UX Wave 1)."""
+
+    url = f"/sales/pos/?lang={lang}"
+    if doc.get("kind") == "sales_invoice" and doc.get("object_pk"):
+        url += f"&last={doc['object_pk']}"
+    return url
+
+
 def _render(request, doc, back_url, public=False):
     lang = _lang(request)
     words = WORDS[lang]
@@ -193,7 +202,7 @@ def _render(request, doc, back_url, public=False):
             "company": company,
             "doc": doc,
             "format": _format(request),
-            "back_url": f"/sales/pos/?lang={lang}" if request.GET.get("next") == "pos" else f"{back_url}?lang={lang}",
+            "back_url": _pos_back(doc, lang) if request.GET.get("next") == "pos" else f"{back_url}?lang={lang}",
             "return_after_print": request.GET.get("next") == "pos" and request.GET.get("autoprint") == "1",
             "page_title": f"{doc['title']} {doc['number']}",
             "printed_by": display_name(request.user) if request.user.is_authenticated else "",

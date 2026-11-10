@@ -45,6 +45,20 @@
   if (pointsBox) { pointsBox.addEventListener('input', function () { totals(); }); }
   if (customer && pointsRow) { customer.addEventListener('change', showPoints); }
   var tenderedTouched = false;
+  // UX Wave 1: the pay bar (fixed at the bottom on phones and tablets) and the panels that stay open on wide screens.
+  var paybar = form.querySelector('[data-pos-paybar]');
+  var barTotal = form.querySelector('[data-pos-bar-total]');
+  var wide = window.matchMedia ? window.matchMedia('(min-width: 1024px)') : null;
+  // «تفاصيل» also opens on a phone when the till comes back with a named customer chosen, or after any refused sale
+  // (data-pos-refused): the fix is often inside it (a credit sale's customer, a coupon, a gift card).
+  function namedCustomer() { return !!(customer && customer.value && customer.value !== customer.getAttribute('data-walk-in')); }
+  function detailsStayOpen(node) { return node.hasAttribute('data-pos-details') && (node.hasAttribute('data-pos-refused') || namedCustomer()); }
+  function syncWide() { form.querySelectorAll('[data-wide-open]').forEach(function (node) { node.open = !!(wide && wide.matches) || detailsStayOpen(node); }); }
+  syncWide();
+  if (wide && wide.addEventListener) { wide.addEventListener('change', syncWide); }
+  form.querySelectorAll('.pos-overflow').forEach(function (menu) {  // a choice made from the phone's "⋯" menu closes it
+    menu.addEventListener('click', function (event) { if (event.target.closest('.pos-overflow__menu button') && !(wide && wide.matches)) { menu.open = false; } });
+  });
   // PRICE-001: price from the chosen customer's list, when the shop uses them.
   var bookNode = document.getElementById('hs-price-book');
   var book = bookNode ? JSON.parse(bookNode.textContent) : null;
@@ -148,6 +162,12 @@
     render();
   }
 
+  // UX Wave 1: a cart line reads as the item's name; its code ("name · CODE") is kept for the tooltip.
+  function shortLabel(row) {
+    var item = byId[String(row.id)];
+    return item && item.code ? row.label.replace(' · ' + item.code, '') : row.label;
+  }
+
   function render() {
     requote();
     body.textContent = '';
@@ -158,7 +178,7 @@
     }
     cart.forEach(function (row, index) {
       var tr = el('tr', { 'data-line': String(index) });
-      tr.appendChild(el('td', { 'class': 'op-cell-text' }, row.label));
+      tr.appendChild(el('td', { 'class': 'op-cell-text', title: row.label }, shortLabel(row)));  // UX Wave 1: the code stays in the tooltip
       var qtyTd = el('td');
       var qtyCell = el('div', { 'class': 'pos-qty' });
       qtyTd.appendChild(qtyCell);
@@ -244,6 +264,8 @@
     var paid = num(tendered.value);
     form.querySelector('[data-pos-subtotal]').textContent = money(subtotal);
     form.querySelector('[data-pos-total]').textContent = money(total);
+    if (barTotal) { barTotal.textContent = money(total); }  // UX Wave 1: the pay bar repeats what is due
+    if (paybar) { paybar.classList.toggle('is-empty', !cart.length); }
     var change = paid - cashDue, credit = cashDue - paid;
     form.querySelector('[data-pos-change-row]').hidden = !(change > 0.004);
     form.querySelector('[data-pos-change]').textContent = money(Math.max(0, change));
@@ -313,6 +335,7 @@
     cart = []; discount.value = '0'; if (pointsBox) { pointsBox.value = ''; } tenderedTouched = false;
     var giftCode = form.querySelector('[data-pos-gift-code]');  // S6: never carry one holder's card into the next sale
     if (giftCode) { giftCode.value = ''; } if (giftAmount) { giftAmount.value = ''; }
+    if (coupon) { coupon.value = ''; }  // nor the last sale's coupon: render() re-quotes the promotion
     customer.value = customer.getAttribute('data-walk-in'); render(); scan.focus();
   });
 
