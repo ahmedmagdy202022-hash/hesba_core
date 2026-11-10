@@ -1,0 +1,12 @@
+/* UX Wave 1: one button look on every signed-in screen, loaded by base_app.html right after the tokens.
+   Primary: teal with navy text. Secondary: white, a line border, navy text. Destructive: the solid danger red.
+   A <button> matches an <a> (font: inherit), one control height and one radius from the tokens. */
+.op-primary,.op-secondary,.op-danger{display:inline-flex;align-items:center;justify-content:center;gap:var(--hs-space-2);min-height:var(--hs-control-height);padding:0 18px;border-radius:var(--hs-radius-md);font:inherit;font-weight:var(--hs-weight-bold);line-height:var(--hs-leading-tight);text-align:center;text-decoration:none;cursor:pointer}
+.op-primary{border:0;background:var(--hs-teal);color:var(--hs-on-teal)}
+.op-secondary{border:1px solid var(--hs-line);background:var(--hs-surface);color:var(--hs-navy)}
+.op-danger{border:0;background:var(--hs-danger-solid);color:var(--hs-surface)}
+.op-secondary:hover{border-color:var(--hs-teal)}
+.op-primary:disabled,.op-secondary:disabled,.op-danger:disabled{opacity:.55;cursor:not-allowed}
+.op-primary:focus-visible,.op-secondary:focus-visible,.op-danger:focus-visible,.op-back:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
+/* The one back link of a page header: a 44px target. */
+.op-back{display:inline-flex;align-items:center;min-height:var(--hs-control-height);font-size:var(--hs-text-sm);color:var(--hs-teal-deep);text-decoration:none;font-weight:var(--hs-weight-semibold)}
