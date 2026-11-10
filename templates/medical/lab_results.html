@@ -19,8 +19,16 @@
 {% else %}<p class="op-notice">{{ lw.no_tests }}</p>{% endif %}
 {% endif %}
 <h2>{{ lw.history }}</h2>
+{% if can_write and days and not shareable %}<p class="op-notice" data-lab-share-blocked>{{ no_factor }}</p>{% endif %}
 {% for day, results in days %}
 <section class="op-detail-meta" data-lab-day="{{ day|date:'Y-m-d' }}"><p><strong><bdi>{{ day|date:"Y-m-d" }}</bdi></strong> · <a href="{% url 'medical:lab_sheet' patient.pk day|date:'Y-m-d' %}?lang={{ lang }}" data-lab-print>{{ lw.print }}</a></p>
+{% if can_write %}{% if shared and shared.day == day %}<div class="op-form" data-lab-share-box>
+<h3>{{ lw.send_h }}</h3><p class="op-muted">{{ share_note }}</p>
+<p><input class="op-cell-text" type="text" readonly dir="ltr" value="{{ shared.url }}" aria-label="{{ lw.send_h }}" style="inline-size:100%;min-block-size:44px" data-lab-share-url></p>
+<div class="op-form-actions"><a class="op-primary" href="{{ shared.whatsapp }}" target="_blank" rel="noopener" data-lab-share-whatsapp>{{ lw.send_whatsapp }}</a><button class="op-secondary" type="button" data-copy-link="{{ shared.url }}">{{ lw.copy }}</button></div>
+<p class="op-muted">{{ lw.send_text_note }}</p></div>
+{% elif shareable %}<form method="post" class="op-form-actions" data-lab-share-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="share"><input type="hidden" name="day" value="{{ day|date:'Y-m-d' }}"><button class="op-secondary" type="submit" data-lab-share="{{ day|date:'Y-m-d' }}">{{ lw.send }}</button></form>
+{% endif %}{% endif %}
 <div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ lw.name }}</th><th>{{ lw.value }}</th><th>{{ lw.range }}</th><th>{{ lw.flag }}</th><th>{{ lw.previous }}</th>{% if can_write %}<th></th>{% endif %}</tr></thead><tbody>
 {% for result in results %}<tr data-lab-result="{{ result.pk }}" data-flag="{{ result.flag }}"><td class="op-cell-text">{{ result.test.name }}</td>
 <td><strong><bdi>{% if result.value is not None %}{{ result.value|qty }}{% endif %}{% if result.text_value %} {{ result.text_value }}{% endif %} {{ result.unit }}</bdi></strong></td>

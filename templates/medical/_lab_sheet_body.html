@@ -1,0 +1,11 @@
+{% load hesba_format %}{# M6 (HG-085): the lab sheet's content, shared by the printed sheet (lab_sheet.html) and the patient's page (lab_link.html) so the two cannot drift. Never add staff-only fields here. #}
+<header><div><h1>{{ company.name }}</h1>{% if company.phone %}<div><bdi>{{ company.phone }}</bdi></div>{% endif %}{% if company.address %}<div>{{ company.address }}</div>{% endif %}</div>{% if company.logo %}<img src="{{ company.logo }}" alt="" style="max-height:64px">{% endif %}</header>
+<h2>{{ lw.sheet }}</h2>
+<section class="meta"><div><b>{{ lw.patient }}:</b> {{ patient.name }}</div><div><b>{{ lw.day }}:</b> <bdi>{{ taken_on|date:"Y-m-d" }}</bdi></div>
+<div><b>{{ lw.file_no }}:</b> <bdi>{{ file.file_number }}</bdi></div><div>{% if age is not None %}<b>{{ lw.age }}:</b> {{ age }} {{ lw.years }}{% endif %}</div></section>
+<table><thead><tr><th>{{ lw.name }}</th><th>{{ lw.value }}</th><th>{{ lw.unit }}</th><th>{{ lw.range }}</th><th>{{ lw.flag }}</th></tr></thead><tbody>
+{% for result in results %}<tr data-sheet-result="{{ result.test.pk }}"{% if result.flag == 'low' or result.flag == 'high' %} data-out{% endif %}><td data-label="{{ lw.name }}">{{ result.test.name }}</td><td data-label="{{ lw.value }}" class="{% if result.flag == 'low' or result.flag == 'high' %}out{% endif %}"><bdi>{% if result.value is not None %}{{ result.value|qty }}{% endif %}{% if result.text_value %} {{ result.text_value }}{% endif %}</bdi></td>
+<td data-label="{{ lw.unit }}"><bdi>{{ result.unit }}</bdi></td><td data-label="{{ lw.range }}">{% if result.low is None and result.high is None %}—{% else %}<span dir="ltr">{% if result.low is not None %}{{ result.low|qty }}{% else %}…{% endif %} – {% if result.high is not None %}{{ result.high|qty }}{% else %}…{% endif %}</span>{% endif %}</td>
+<td data-label="{{ lw.flag }}" class="{% if result.flag == 'low' or result.flag == 'high' %}out{% endif %}">{{ result.flag_label }}{% if result.flag == 'high' %} ↑{% elif result.flag == 'low' %} ↓{% endif %}</td></tr>{% endfor %}
+</tbody></table>
+<footer><div>{{ lw.signature }}: ____________</div></footer>

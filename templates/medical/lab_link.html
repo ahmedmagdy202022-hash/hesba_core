@@ -1,0 +1,27 @@
+{% extends "printing/share_base.html" %}{% load static %}
+{% comment %}M6 (HG-085): the lab patient's page. Before the second factor it shows only the lab's name and the question:
+no patient name, no test, no date. After it, the same content as the printed lab sheet (the shared partial), nothing more.{% endcomment %}
+{% block title %}{{ ww.title }} · {{ company.name }}{% endblock %}
+{% block head_extra %}<link rel="stylesheet" href="{% static 'hesba/css/lab_link.css' %}?v=ll-001">{% endblock %}
+{% block sub %}<div class="cl-shopsub">{{ ww.sub }}</div>{% endblock %}
+{% block content %}<main class="cl-main ll-main" data-lab-link="{% if sheet %}sheet{% else %}ask{% endif %}">
+{% if sheet %}
+<div class="cl-actions ll-tools no-print"><button class="cl-btn cl-btn--primary" type="button" data-print>{{ ww.print }}</button></div>
+<article class="cl-card lab ll-sheet" data-lab-sheet>
+{% include "medical/_lab_sheet_body.html" %}
+</article>
+<script>document.querySelector('[data-print]').addEventListener('click', function(){ window.print(); });</script>
+{% else %}
+<section class="cl-card" aria-labelledby="ll-ask-t" data-lab-ask>
+  <h1 class="cl-h1" id="ll-ask-t">{{ ww.ask_h }}</h1>
+  <p>{{ ww.ask }}</p>
+  {% if message %}<div class="cl-msg cl-msg--danger ll-msg" id="ll-msg" role="alert" data-lab-message>{{ message }}</div>{% endif %}
+  <form class="ll-form" method="post" action="{{ action }}" autocomplete="off">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+    <label class="ll-label" for="ll-answer">{{ ww.label }}</label>
+    <input class="ll-input" id="ll-answer" name="answer" inputmode="numeric" pattern="[0-9٠-٩]*" maxlength="4" autocomplete="off" dir="ltr" required{% if message %} aria-describedby="ll-msg"{% endif %}>
+    <div class="cl-actions"><button class="cl-btn cl-btn--primary" type="submit">{{ ww.open }}</button></div>
+  </form>
+</section>
+{% endif %}
+</main>{% endblock %}
+{% block foot_note %}<p>{{ ww.private }}</p>{% endblock %}
