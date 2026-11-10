@@ -76,7 +76,13 @@
 
 @media (max-width: 1023px){
   .hs-app{display:block}
-  .hs-topbar{position:sticky;top:0;z-index:30;display:flex;align-items:center;justify-content:space-between;gap:var(--hs-space-3);min-height:60px;padding:var(--hs-space-2) var(--hs-space-4);background:var(--hs-surface);border-bottom:1px solid var(--hs-line)}
+  /* UX Wave 4: below the sidebar breakpoint the top bar takes the sidebar's navy; its controls sit on navy.
+     Rules are scoped under .hs-topbar because lists.css (loaded later) also styles .hs-chip. */
+  .hs-topbar{position:sticky;top:0;z-index:30;display:flex;align-items:center;justify-content:space-between;gap:var(--hs-space-3);min-height:60px;padding:var(--hs-space-2) var(--hs-gutter);background:var(--hs-navy);color:var(--hs-on-navy)}
+  .hs-topbar .hs-icon-button,.hs-topbar .hs-chip{border:1px solid transparent;border-radius:var(--hs-radius-lg);background:var(--hs-on-navy-wash);color:var(--hs-on-navy)}
+  .hs-topbar .hs-chip{min-height:var(--hs-control-height);padding:0 var(--hs-space-4)}
+  .hs-topbar .hs-icon-button:hover,.hs-topbar .hs-chip:hover{background:var(--hs-on-navy-wash-strong)}
+  .hs-topbar .hs-icon-button:focus-visible,.hs-topbar .hs-chip:focus-visible,.hs-topbar__brand:focus-visible{box-shadow:var(--hs-focus-ring-on-navy)}
   .hs-topbar__brand{display:inline-grid;place-items:center;min-width:var(--hs-control-height);min-height:var(--hs-control-height);line-height:0;border-radius:var(--hs-radius-md)}
   .hs-sidebar{position:fixed;top:0;bottom:0;inset-inline-start:0;z-index:50;width:min(300px,86vw);height:auto;display:none;box-shadow:var(--hs-shadow-md)}
   .hs-sidebar.is-open{display:flex}
@@ -84,13 +90,30 @@
   body.hs-drawer-open{overflow:hidden}
 }
 
+/* UX Wave 4: the phone tab bar is a navy pill floating above the bottom edge. The selling tab sits in the
+   middle as a raised teal circle (navy icon on teal); the current tab is teal-tinted. Anything docked to the
+   bottom edge clears --hs-tabbar-space (or --hs-tabbar-clear to clear the raised circle as well). */
 @media (max-width: 700px){
-  .hs-tabbar{position:fixed;bottom:0;inset-inline:0;z-index:30;display:grid;grid-auto-flow:column;grid-auto-columns:1fr;background:var(--hs-surface);border-top:1px solid var(--hs-line);padding-bottom:env(safe-area-inset-bottom)}
-  .hs-tab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:var(--hs-tabbar-height);padding:0 var(--hs-space-1);border:0;border-top:3px solid transparent;background:transparent;color:var(--hs-muted);font:inherit;font-size:var(--hs-text-xs);font-weight:600;line-height:var(--hs-leading-tight);text-align:center;text-decoration:none;cursor:pointer}
+  .hs-tabbar{position:fixed;bottom:calc(var(--hs-tabbar-gap) + env(safe-area-inset-bottom));inset-inline:var(--hs-space-3);z-index:30;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);align-items:stretch;height:var(--hs-tabbar-height);padding:0 var(--hs-space-1);border-radius:var(--hs-tabbar-radius);background:var(--hs-navy);box-shadow:var(--hs-shadow-fab)}
+  /* .hs-tabbar .hs-tab: one class more than the dashboard's ".dashboard-page a{color:inherit}" */
+  .hs-tabbar .hs-tab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:0;min-height:var(--hs-tabbar-height);padding:0 2px;border:0;border-radius:var(--hs-tabbar-radius);background:transparent;color:var(--hs-on-navy-muted);font:inherit;font-size:11px;font-weight:600;line-height:var(--hs-leading-tight);text-align:center;text-decoration:none;cursor:pointer}
+  .hs-tab__label{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .hs-tab .hs-icon{width:22px;height:22px}
-  .hs-tab.is-current{background:var(--hs-teal-wash);color:var(--hs-navy);font-weight:700;border-top-color:var(--hs-teal)}
-  .hs-tab.is-current .hs-icon{stroke-width:2.2}
-  .hs-main{padding-bottom:calc(var(--hs-tabbar-height) + 16px + env(safe-area-inset-bottom))}
+  .hs-tabbar .hs-tab:hover{color:var(--hs-on-navy)}
+  .hs-tabbar .hs-tab.is-current{color:var(--hs-on-navy);font-weight:700}
+  .hs-tab.is-current .hs-icon{box-sizing:content-box;padding:3px 13px;border-radius:var(--hs-radius-pill);background:var(--hs-tab-active-wash);color:var(--hs-teal);stroke-width:2.2}
+  .hs-tabbar .hs-tab:focus-visible{outline:0;box-shadow:inset 0 0 0 3px var(--hs-teal)}
+  .hs-tabbar .hs-tab--sell{justify-content:flex-start;color:var(--hs-on-navy);font-weight:700}
+  .hs-tab__orb{display:grid;place-items:center;box-sizing:border-box;width:58px;height:58px;margin-top:calc(-1 * var(--hs-tab-rise));margin-bottom:1px;border:4px solid var(--hs-page);border-radius:20px;background:var(--hs-teal);color:var(--hs-on-teal);box-shadow:var(--hs-shadow-fab)}
+  .hs-tab--sell .hs-icon,.hs-tab--sell.is-current .hs-icon{width:26px;height:26px;padding:0;background:transparent;color:var(--hs-on-teal);stroke-width:2}
+  .hs-tab--sell.is-current .hs-tab__label{color:var(--hs-teal)}
+  .hs-tabbar .hs-tab--sell:focus-visible{box-shadow:none}
+  .hs-tabbar .hs-tab--sell:focus-visible .hs-tab__orb{box-shadow:var(--hs-focus-ring-on-navy)}
+  .hs-main{padding-bottom:calc(var(--hs-tabbar-clear) + var(--hs-space-4) + env(safe-area-inset-bottom))}
+}
+@media (max-width: 700px) and (prefers-reduced-motion: no-preference){
+  .hs-tab__orb{transition:transform .15s ease}
+  .hs-tab--sell:active .hs-tab__orb{transform:scale(.96)}
 }
 
 @media print{
@@ -107,7 +130,7 @@
 .hs-topbar__search{margin-inline-start:auto}
 @media(min-width:1024px){.hs-topbar__search{display:none}body.hs-rail .hs-search input[type=search]{padding:0;width:38px;color:transparent;cursor:pointer}body.hs-rail .hs-search input::placeholder{color:transparent}body.hs-rail .hs-search .hs-icon{inset-inline-start:11px}}
 /* ENT-002: the entity bar — which entity this screen is working in. */
-.hs-entities{display:flex;align-items:center;gap:6px;overflow-x:auto;margin:0 0 14px;padding:6px;border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);background:var(--hs-surface)}
+.hs-entities{display:flex;align-items:center;gap:6px;overflow-x:auto;margin:0 0 14px;padding:6px;border:var(--hs-card-border);border-radius:var(--hs-card-radius-sm);background:var(--hs-card-bg);box-shadow:var(--hs-card-shadow)}
 .hs-entities form{margin:0;flex:0 0 auto}
 .hs-entities__label{flex:0 0 auto;padding:0 6px;font-size:13px;color:var(--hs-muted)}
 .hs-entities__tab{min-height:36px;padding:0 14px;border:0;border-radius:999px;background:transparent;color:var(--hs-ink);font:inherit;font-weight:600;white-space:nowrap;cursor:pointer}
@@ -131,4 +154,35 @@
   .hs-quick__link:hover{background:var(--hs-teal-deep)}
   .hs-quick__link:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
   .hs-quick__link .hs-icon{width:20px;height:20px;color:var(--hs-teal)}
+}
+
+/* UX Wave 4: the phone header band. The page's own head (the first .op-title-row / .md-title-row of the page,
+   with its title, back arrow and actions) becomes a navy band that continues the navy top bar, with 28px rounded
+   bottom corners; the saved toast or entity bar that a page shows above its head sits inside the navy too.
+   Screen only: printing from a phone never prints navy. Pages with another head keep a dark title on the wash. */
+@media screen and (max-width: 700px){
+  .op-shell,.md-shell{width:calc(100% - 2 * var(--hs-gutter))}
+  :is(.op-shell,.md-shell):has(> :is(.op-title-row,.md-title-row):not(:is(.op-shell,.md-shell) > :not(.op-messages,.md-messages,.hs-entities,.op-subnav,.hs-print-head,[hidden],dialog,script,style,link,svg,template,input) ~ *)){margin-top:0}
+  :is(.op-shell,.md-shell) > :is(.op-messages,.md-messages,.hs-entities,.op-subnav):is(:has(+ :is(.op-title-row,.md-title-row)),:has(+ :is(.op-messages,.md-messages) + :is(.op-title-row,.md-title-row))){display:flow-root;margin:0 calc(-1 * var(--hs-gutter));padding:var(--hs-space-2) var(--hs-gutter) 0;border:0;border-radius:0;background:var(--hs-navy);box-shadow:none}
+  :is(.op-shell,.md-shell) > .hs-entities:has(+ :is(.op-title-row,.md-title-row,.op-messages,.md-messages)){display:flex}
+  .op-shell > .op-subnav:has(+ .op-title-row){display:flex;padding-bottom:var(--hs-space-2)}
+  .op-shell > .op-subnav:has(+ .op-title-row) :is(a,.op-subnav__sep,.op-subnav__label){color:var(--hs-on-navy-muted)}
+  .op-shell > .op-subnav:has(+ .op-title-row) a[aria-current="page"]{color:var(--hs-on-navy);background:var(--hs-on-navy-wash)}
+  .op-shell > .op-subnav:has(+ .op-title-row) a:focus-visible{box-shadow:var(--hs-focus-ring-on-navy)}
+  :is(.op-shell,.md-shell) > .hs-entities:has(+ :is(.op-title-row,.md-title-row,.op-messages,.md-messages)) .hs-entities__label{color:var(--hs-on-navy-muted)}
+  :is(.op-shell,.md-shell) > .hs-entities:has(+ :is(.op-title-row,.md-title-row,.op-messages,.md-messages)) .hs-entities__tab:not(.is-current){color:var(--hs-on-navy)}
+  :is(.op-shell,.md-shell) > .hs-entities:has(+ :is(.op-title-row,.md-title-row,.op-messages,.md-messages)) .hs-entities__tab.is-current{background:var(--hs-teal);color:var(--hs-on-teal)}
+
+  :is(.op-shell,.md-shell) > :is(.op-title-row,.md-title-row):not(:is(.op-shell,.md-shell) > :not(.op-messages,.md-messages,.hs-entities,.op-subnav,.hs-print-head,[hidden],dialog,script,style,link,svg,template,input) ~ *){position:relative;margin:0 calc(-1 * var(--hs-gutter)) var(--hs-space-5);padding:var(--hs-space-1) var(--hs-gutter) var(--hs-space-6);border-radius:0 0 var(--hs-band-radius) var(--hs-band-radius);background:var(--hs-navy);color:var(--hs-on-navy)}
+  :is(.op-shell,.md-shell) > :is(.op-title-row,.md-title-row):not(:is(.op-shell,.md-shell) > :not(.op-messages,.md-messages,.hs-entities,.op-subnav,.hs-print-head,[hidden],dialog,script,style,link,svg,template,input) ~ *) :is(h1,h2){color:var(--hs-on-navy);font-size:var(--hs-text-xl)}
+  :is(.op-shell,.md-shell) > :is(.op-title-row,.md-title-row):not(:is(.op-shell,.md-shell) > :not(.op-messages,.md-messages,.hs-entities,.op-subnav,.hs-print-head,[hidden],dialog,script,style,link,svg,template,input) ~ *) :is(p,small,.op-muted,.hs-row-sub):not(:is(.hs-more__menu,.op-card,.hs-totals,.op-summary-grid) *){color:var(--hs-on-navy-muted)}
+  :is(.op-shell,.md-shell) > :is(.op-title-row,.md-title-row):not(:is(.op-shell,.md-shell) > :not(.op-messages,.md-messages,.hs-entities,.op-subnav,.hs-print-head,[hidden],dialog,script,style,link,svg,template,input) ~ *) :is(.op-back,.md-back-link){color:var(--hs-on-navy-muted)}
+  :is(.op-shell,.md-shell) > :is(.op-title-row,.md-title-row):not(:is(.op-shell,.md-shell) > :not(.op-messages,.md-messages,.hs-entities,.op-subnav,.hs-print-head,[hidden],dialog,script,style,link,svg,template,input) ~ *) :is(.op-back,.md-back-link):hover{color:var(--hs-on-navy)}
+  :is(.op-shell,.md-shell) > :is(.op-title-row,.md-title-row):not(:is(.op-shell,.md-shell) > :not(.op-messages,.md-messages,.hs-entities,.op-subnav,.hs-print-head,[hidden],dialog,script,style,link,svg,template,input) ~ *) a:not([class]):not(:is(.hs-more__menu,.op-card,.hs-totals,.op-summary-grid) *){color:var(--hs-on-navy)}
+  :is(.op-shell,.md-shell) > :is(.op-title-row,.md-title-row):not(:is(.op-shell,.md-shell) > :not(.op-messages,.md-messages,.hs-entities,.op-subnav,.hs-print-head,[hidden],dialog,script,style,link,svg,template,input) ~ *) :is(.op-secondary,.md-secondary):not(:is(.hs-more__menu,.op-card,.hs-totals,.op-summary-grid) *),:is(.op-shell,.md-shell) > :is(.op-title-row,.md-title-row):not(:is(.op-shell,.md-shell) > :not(.op-messages,.md-messages,.hs-entities,.op-subnav,.hs-print-head,[hidden],dialog,script,style,link,svg,template,input) ~ *) .hs-more>summary{border-color:transparent;background:var(--hs-on-navy-wash);color:var(--hs-on-navy)}
+  :is(.op-shell,.md-shell) > :is(.op-title-row,.md-title-row):not(:is(.op-shell,.md-shell) > :not(.op-messages,.md-messages,.hs-entities,.op-subnav,.hs-print-head,[hidden],dialog,script,style,link,svg,template,input) ~ *) :is(.op-secondary,.md-secondary):not(:is(.hs-more__menu,.op-card,.hs-totals,.op-summary-grid) *):hover,:is(.op-shell,.md-shell) > :is(.op-title-row,.md-title-row):not(:is(.op-shell,.md-shell) > :not(.op-messages,.md-messages,.hs-entities,.op-subnav,.hs-print-head,[hidden],dialog,script,style,link,svg,template,input) ~ *) .hs-more>summary:hover{background:var(--hs-on-navy-wash-strong)}
+  :is(.op-shell,.md-shell) > :is(.op-title-row,.md-title-row):not(:is(.op-shell,.md-shell) > :not(.op-messages,.md-messages,.hs-entities,.op-subnav,.hs-print-head,[hidden],dialog,script,style,link,svg,template,input) ~ *) .hs-more[open]>summary{border-color:var(--hs-teal);box-shadow:none}
+  :is(.op-shell,.md-shell) > :is(.op-title-row,.md-title-row):not(:is(.op-shell,.md-shell) > :not(.op-messages,.md-messages,.hs-entities,.op-subnav,.hs-print-head,[hidden],dialog,script,style,link,svg,template,input) ~ *) :is(a,button,summary,input,select):not(:is(.hs-more__menu,.op-card,.hs-totals,.op-summary-grid) *):focus-visible{box-shadow:var(--hs-focus-ring-on-navy)}
+  :is(.op-shell,.md-shell) > :is(.op-title-row,.md-title-row):not(:is(.op-shell,.md-shell) > :not(.op-messages,.md-messages,.hs-entities,.op-subnav,.hs-print-head,[hidden],dialog,script,style,link,svg,template,input) ~ *) .hs-more__menu{color:var(--hs-ink)}
+  :is(.op-shell,.md-shell) > :is(.op-title-row,.md-title-row):not(:is(.op-shell,.md-shell) > :not(.op-messages,.md-messages,.hs-entities,.op-subnav,.hs-print-head,[hidden],dialog,script,style,link,svg,template,input) ~ *) .hs-contact .hs-contact__icon{color:var(--hs-on-navy)}
 }
