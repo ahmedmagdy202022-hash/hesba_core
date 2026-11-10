@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -43,6 +43,9 @@ WORDS = {
         "commission": "العمولة", "rate": "النسبة", "total": "الإجمالي", "perf_note": "المبيعات من الفواتير النهائية بس. صرف العمولة بيتسجل كمصروف من شاشة المصروفات.",
         "actions": {"confirmed": "تأكيد", "arrived": "بدأ الشغل", "done": "خلص", "cancelled": "إلغاء", "no_show": "مجاش"},
         "bad_when": "اكتب تاريخ وساعة صحيحين.",
+        # M4: from a booked appointment to the waiting list.
+        "check_in": "سجّل وصوله", "in_queue": "في الدور رقم {number}", "checked_in": "{name} رقم دوره {number}.",
+        "check_in_not_now": "تسجيل الوصول لميعاد النهارده اللي لسه ماخلصش بس.",
         # S5 (HG-069): the deposit box and the cancellation policy.
         "deposit": "العربون", "take_deposit": "خد عربون", "deposit_amount": "مبلغ العربون", "deposit_cashbox": "استلمته في", "deposit_taken": "اتسجل عربون {amount} ({payment}).",
         "deposit_payment": "إيصال", "deposit_invoice": "فاتورته", "deposit_rounding": "فرق تقريب فضل رصيد للعميل", "forfeit": "حوّله لرسوم إلغاء", "refund": "رد العربون",
@@ -65,6 +68,9 @@ WORDS = {
         "commission": "Commission", "rate": "Rate", "total": "Total", "perf_note": "Sales come from posted invoices only. Paying a commission is recorded as an expense from the expenses screen.",
         "actions": {"confirmed": "Confirm", "arrived": "Start", "done": "Done", "cancelled": "Cancel", "no_show": "No show"},
         "bad_when": "Enter a valid date and time.",
+        # M4: from a booked appointment to the waiting list.
+        "check_in": "Check in", "in_queue": "In the queue: no. {number}", "checked_in": "{name} is number {number}.",
+        "check_in_not_now": "Only a live appointment of today can be checked in.",
         # S5 (HG-069): the deposit box and the cancellation policy.
         "deposit": "Deposit", "take_deposit": "Take a deposit", "deposit_amount": "Deposit amount", "deposit_cashbox": "Received in", "deposit_taken": "Deposit {amount} recorded ({payment}).",
         "deposit_payment": "Receipt", "deposit_invoice": "Its invoice", "deposit_rounding": "Rounding left as the customer's credit", "forfeit": "Forfeit as a cancellation fee", "refund": "Refund the deposit",
@@ -147,6 +153,15 @@ def agenda(request):
         else:
             messages.success(request, words["policy_saved"].format(hours=hours))
         return redirect(f"{reverse('appointments:agenda')}?lang={lang}&day={day.isoformat()}")
+    if request.method == "POST" and request.POST.get("action") == "check_in":  # M4: reception checks a booked patient into the waiting list
+        appointment = services.scoped().filter(pk=_pick_id(request.POST.get("appointment"))).select_related("customer", "employee").first()  # HG-074
+        if appointment is None:
+            raise Http404("No such appointment.")
+        try:
+            messages.success(request, words["checked_in"].format(**_check_in(appointment, request.user, lang)))
+        except ValidationError as exc:
+            messages.error(request, " ".join(exc.messages))
+        return redirect(f"{reverse('appointments:agenda')}?lang={lang}&day={day.isoformat()}")
     if request.method == "POST":
         if not user_has_permission(request.user, BOOK):
             raise PermissionDenied("Booking needs sales.create_sales_invoice.")
@@ -161,12 +176,42 @@ def agenda(request):
     agenda_rows = list(services.day_agenda(day, employee))
     deposits_on = deposits.enabled()
     held_deposits = deposits.held_amounts(agenda_rows) if deposits_on else {}
-    rows = [{"appointment": appointment, "status_label": choice_label(appointment, "status", lang), "deposit": held_deposits.get(appointment.pk)} for appointment in agenda_rows]
+    from medical import queue
+
+    numbers = queue.ticket_numbers(agenda_rows) if queue.has_queue() else {}
+    queue_on = queue.has_queue() and queue.is_desk(request.user)
+    rows = [{"appointment": appointment, "status_label": choice_label(appointment, "status", lang), "deposit": held_deposits.get(appointment.pk),
+             "queue_number": numbers.get(appointment.pk), "queue_label": words["in_queue"].format(number=numbers.get(appointment.pk, "")), "can_check_in": queue.can_check_in(appointment, request.user, numbers)} for appointment in agenda_rows]
     return render(request, "appointments/agenda.html", _base(
         request, day=day, prev_day=day - timedelta(days=1), next_day=day + timedelta(days=1), today=timezone.localdate(),
-        rows=rows, employee=employee, form=form, error=error, cancel_hours=deposits.cancel_hours(), deposits_on=deposits_on,
+        rows=rows, queue_on=queue_on, columns=6 + deposits_on + queue_on, employee=employee, form=form, error=error, cancel_hours=deposits.cancel_hours(), deposits_on=deposits_on,
         can_set_policy=deposits_on and is_owner(request.user), can_online_booking=_can_online_booking(request.user), **_choices(lang),
     ))
+
+
+def _pick_id(raw):
+    raw = str(raw or "")
+    return int(raw) if raw.isdigit() and len(raw) < 12 else 0
+
+
+def _check_in(appointment, user, lang):
+    """M4: the waiting list's own service gives the patient today's next number (and marks the appointment arrived).
+    Only for clinics and medical centres, only with the permission the queue desk uses; returns the message's values."""
+
+    from medical import queue
+
+    if not queue.has_queue():
+        raise PermissionDenied("The waiting list is for clinics and medical centres.")
+    if not queue.is_desk(user):
+        raise PermissionDenied("Checking a patient in needs sales.create_sales_invoice.")
+    numbers = queue.ticket_numbers([appointment])
+    words = WORDS[lang]
+    if appointment.pk in numbers:
+        raise ValidationError(words["in_queue"].format(number=numbers[appointment.pk]))
+    if not queue.can_check_in(appointment, user, numbers):  # a live appointment of today only: never a stray turn for another day's
+        raise ValidationError(words["check_in_not_now"])
+    ticket = queue.check_in(appointment.customer, user, appointment=appointment, lang=lang)
+    return {"name": ticket.patient.name, "number": ticket.number}
 
 
 def _can_online_booking(user):
@@ -241,6 +286,8 @@ def detail(request, pk):
                     messages.success(request, words["forfeited"].format(number=invoice.invoice_number, amount=invoice.total_amount))
                 else:
                     _refund(request, deposit, request.POST.get("reason", ""), lang, words, refuse=True)
+            elif action == "check_in":  # M4
+                messages.success(request, words["checked_in"].format(**_check_in(appointment, request.user, lang)))
             elif action == "bill":
                 invoice = services.bill(appointment, request.user, lang)
                 messages.success(request, words["billed"].format(number=invoice.invoice_number))
@@ -271,10 +318,13 @@ def detail(request, pk):
     form = {"day": local.date().isoformat(), "time": local.strftime("%H:%M"), "duration_minutes": appointment.duration_minutes, "customer": str(appointment.customer_id),
             "employee": str(appointment.employee_id or ""), "service": str(appointment.service_id or ""), "price": appointment.price, "kind": appointment.kind,
             "address": appointment.address, "notes": appointment.notes}
+    from medical import queue
+
+    numbers = queue.ticket_numbers([appointment]) if queue.has_queue() else {}
     editable = appointment.status not in (AppointmentStatus.DONE, AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW) and not appointment.invoice_id
     insured = _insured(appointment, lang)
     return render(request, "appointments/detail.html", _base(
-        request, appointment=appointment, **insured, local=local, status_label=choice_label(appointment, "status", lang), reminder=reminder, actions=actions,
+        request, appointment=appointment, **insured, local=local, queue_number=numbers.get(appointment.pk), queue_label=words["in_queue"].format(number=numbers.get(appointment.pk, "")), can_check_in=queue.can_check_in(appointment, request.user, numbers), status_label=choice_label(appointment, "status", lang), reminder=reminder, actions=actions,
         form=form, editable=editable, error=error, medical_file=_medical_file(request.user), can_bill=appointment.status in (AppointmentStatus.ARRIVED, AppointmentStatus.DONE) and not appointment.invoice_id,
         **_deposit_box(request, appointment, lang), **_choices(lang),
     ))
