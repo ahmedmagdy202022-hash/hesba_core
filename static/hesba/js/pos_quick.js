@@ -30,16 +30,18 @@
     // AN7 (G07), AN8 (Ahmed: "قلل عددهم وحط كلمة المزيد"): the first eight (six on a phone) show; the rest
     // wait behind "المزيد", so the basket stays in view.
     if (grid.children.length > 6) {
-      var more = document.createElement('button');
-      more.type = 'button'; more.className = 'pos-quick__more'; more.setAttribute('data-pos-quick-more', '');
+      // Not `more`: that name is the «المخزن والخزنة» block below, and `var` would make the two one variable, so a
+      // tap here would write its label over the warehouse and cashbox pickers and the sale would be refused.
+      var toggle = document.createElement('button');
+      toggle.type = 'button'; toggle.className = 'pos-quick__more'; toggle.setAttribute('data-pos-quick-more', '');
       var all = box.getAttribute('data-all') || 'All buttons', fewer = box.getAttribute('data-fewer') || 'Fewer';
-      more.textContent = all + ' (' + grid.children.length + ')';
-      more.addEventListener('click', function () {
+      toggle.textContent = all + ' (' + grid.children.length + ')';
+      toggle.addEventListener('click', function () {
         var open = grid.classList.toggle('is-open');
-        more.textContent = open ? fewer : all + ' (' + grid.children.length + ')';
+        toggle.textContent = open ? fewer : all + ' (' + grid.children.length + ')';
       });
-      grid.after(more);
-      if (grid.children.length <= 8) more.classList.add('pos-quick__more--phone');
+      grid.after(toggle);
+      if (grid.children.length <= 8) toggle.classList.add('pos-quick__more--phone');
     }
   }
 

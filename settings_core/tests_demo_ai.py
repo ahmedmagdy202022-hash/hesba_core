@@ -7,6 +7,7 @@
 
 import re
 from datetime import timedelta
+from decimal import Decimal
 from io import StringIO
 from pathlib import Path
 
@@ -19,7 +20,7 @@ from django.utils import timezone
 
 from ai import providers
 from ai.no_network import AiTestCase
-from ai.providers.mock import SAMPLE_READING
+from ai.providers.mock import PHARMACY_SAMPLE_READING, SAMPLE_READING
 from ai.summary import build_summary
 from cashboxes.models import CashboxMovement
 from inventory.models import StockMovement
@@ -31,6 +32,7 @@ from settings_core.capabilities import capability_enabled
 
 DEMO = {"DEMO_MODE": True, "DEMO_PASSWORD": "Demo-pass-1", "AI_MODE": "", "DEBUG": False}
 SAMPLE_PHOTO = Path(settings.BASE_DIR) / "static" / "hesba" / "img" / "demo" / "sample-invoice.jpg"
+PHARMACY_PHOTO = SAMPLE_PHOTO.with_name("sample-invoice-pharmacy.jpg")
 
 
 @override_settings(**DEMO)
@@ -117,6 +119,14 @@ class DemoAiTests(AiTestCase):
         self.assertEqual(str(invoice.total_amount), "8440.00")  # computed from the lines, not the 8,540.00 on the paper
         self.assertEqual((StockMovement.objects.count(), CashboxMovement.objects.count(), SupplierLedgerEntry.objects.count()), before)
 
+    def test_every_other_activity_keeps_the_car_parts_sample_and_its_photo(self):
+        reading = providers.get(providers.CLAUDE_INVOICE_READER).read(SAMPLE_PHOTO.read_bytes(), "image/jpeg", system="s", schema={})
+        self.assertEqual(reading.data, SAMPLE_READING)
+        self.client.force_login(self.owner)
+        page = self.client.get("/ai/invoice-photo/?lang=ar")
+        self.assertContains(page, "/static/hesba/img/demo/sample-invoice.jpg")
+        self.assertNotContains(page, "sample-invoice-pharmacy.jpg")
+
     def test_the_parts_are_in_stock_so_they_never_show_as_sold_out(self):
         answer = self.ask("إيه اللي قرب يخلص؟")
         self.assertFalse(any("DEMO-AI" in label for label, _ in answer.lines))
@@ -141,3 +151,69 @@ class DemoAiTests(AiTestCase):
         counts = (Item.objects.count(), PurchaseInvoice.objects.count(), CustomerPayment.objects.count())
         self.assertFalse(demo_ai.seed(Seed()._seed_master_data(), self.owner, {"purchases"}))
         self.assertEqual((Item.objects.count(), PurchaseInvoice.objects.count(), CustomerPayment.objects.count()), counts)
+
+
+@override_settings(**DEMO)
+class PharmacyDemoAiTests(AiTestCase):
+    """A pharmacy reads a medicine distributor's invoice: its supplier and two lines are the demo's own records, by exact name."""
+
+    databases = {"default", "feedback"}
+
+    @classmethod
+    def setUpTestData(cls):
+        from config.demo_restart import restart_demo
+        from config.demo_templates import complete_demo_setup, seed_sample_business
+
+        cls.owner = restart_demo()
+        complete_demo_setup("commercial", "pharmacy")
+        seed_sample_business()
+
+    def read(self):
+        self.client.force_login(self.owner)
+        upload = self.client.post("/ai/invoice-photo/?lang=ar", {"photo": SimpleUploadedFile(
+            "sample-invoice-pharmacy.jpg", PHARMACY_PHOTO.read_bytes(), content_type="image/jpeg")})
+        self.assertEqual(upload.status_code, 302, upload.content[:400])
+        token = re.search(r"/ai/invoice-photo/([^/]+)/", upload["Location"]).group(1)
+        return token, self.client.get(f"/ai/invoice-photo/{token}/?lang=ar")
+
+    def test_the_pharmacy_reads_the_medicine_invoice_not_the_car_parts_one(self):
+        reader = providers.get(providers.CLAUDE_INVOICE_READER)
+        reading = reader.read(PHARMACY_PHOTO.read_bytes(), "image/jpeg", system="s", schema={})
+        self.assertEqual(reading.data, PHARMACY_SAMPLE_READING)
+        self.assertNotEqual(reading.data, SAMPLE_READING)
+
+    def test_the_supplier_and_two_lines_match_by_exact_name_and_the_third_is_left_to_map(self):
+        reading = PHARMACY_SAMPLE_READING
+        self.assertEqual(Supplier.objects.filter(name=reading["supplier_name"]).count(), 1)
+        names = [line["name"] for line in reading["lines"]]
+        self.assertEqual([Item.objects.filter(item_name=name).count() for name in names], [1, 1, 0])
+        self.assertTrue(Item.objects.filter(item_name="شراب كحة للأطفال 100 مل").exists())  # the shop's own name for line 3
+        token, review = self.read()
+        self.assertContains(review, 'data-ai-sample="invoice_photo"')
+        self.assertContains(review, 'data-iph-supplier-chip="matched"')
+        lines = review.context["review"].lines
+        self.assertEqual([line["matched"] for line in lines], [True, True, False])
+        self.assertEqual([line["item_id"] for line in lines[:2]], [Item.objects.get(item_name=name).pk for name in names[:2]])
+        self.assertEqual(review.context["review"].supplier_id, Supplier.objects.get(name=reading["supplier_name"]).pk)
+
+    def test_the_paper_is_100_above_its_lines_and_each_price_is_below_the_shops_sale_price(self):
+        reading = PHARMACY_SAMPLE_READING
+        lines_total = sum(Decimal(line["quantity"]) * Decimal(line["unit_price"]) for line in reading["lines"])
+        self.assertEqual(Decimal(reading["written_total"]) - lines_total, Decimal("100.00"))
+        for line in reading["lines"][:2]:
+            self.assertLess(Decimal(line["unit_price"]), Item.objects.get(item_name=line["name"]).default_sale_price)
+        syrup = Item.objects.get(item_name="شراب كحة للأطفال 100 مل")
+        self.assertLess(Decimal(reading["lines"][2]["unit_price"]), syrup.default_sale_price)
+
+    def test_no_car_parts_in_the_pharmacy_and_the_sample_photo_offered_is_the_pharmacy_one(self):
+        self.assertFalse(Item.objects.filter(item_code__startswith="DEMO-AI-").exists())
+        self.assertFalse(Supplier.objects.filter(supplier_code=demo_ai.SUPPLIER_CODE).exists())
+        self.client.force_login(self.owner)
+        page = self.client.get("/ai/invoice-photo/?lang=ar")
+        self.assertContains(page, "/static/hesba/img/demo/sample-invoice-pharmacy.jpg")
+        self.assertNotContains(page, "/static/hesba/img/demo/sample-invoice.jpg")
+
+    def test_the_sample_photo_is_a_small_jpeg(self):
+        raw = PHARMACY_PHOTO.read_bytes()
+        self.assertEqual(raw[:3], b"\xff\xd8\xff")
+        self.assertLess(len(raw), 200 * 1024)

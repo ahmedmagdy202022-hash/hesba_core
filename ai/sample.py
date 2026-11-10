@@ -7,13 +7,24 @@ label: ``notice`` returns None.
 
 The label says what is sample and what is real on each surface: A1's figures and text come from the reports (only the
 audio is a silent sample), A2's figure comes from the reports (only the routing is by keywords), and A3's reading is a
-fixed sample invoice whatever the photo (``ai.providers.mock.SAMPLE_READING``).
+fixed sample invoice whatever the photo (``ai.providers.mock.SAMPLE_READING``, a medicine distributor's
+``PHARMACY_SAMPLE_READING`` on a pharmacy).
 """
 
 from . import providers
 
-#: The sample invoice photo a tester can upload on the demo (the mock reads the same sample whatever the photo).
+#: The sample invoice photo a tester can upload on the demo (the mock reads the same sample whatever the photo); a
+#: pharmacy's is the medicine distributor's invoice, printed with what ``PHARMACY_SAMPLE_READING`` says.
 SAMPLE_INVOICE_IMAGE = "hesba/img/demo/sample-invoice.jpg"
+PHARMACY_SAMPLE_INVOICE_IMAGE = "hesba/img/demo/sample-invoice-pharmacy.jpg"
+
+
+def sample_invoice_image():
+    """The static path of the sample photo to offer: the pharmacy's on a pharmacy, else the car-parts one."""
+
+    from settings_core.demo_ai import pharmacy
+
+    return PHARMACY_SAMPLE_INVOICE_IMAGE if pharmacy() else SAMPLE_INVOICE_IMAGE
 
 WORDS = {
     "ar": {
@@ -47,5 +58,5 @@ def notice(feature, lang="ar"):
     if feature == "invoice_photo":
         from django.templatetags.static import static
 
-        result.update(image_url=static(SAMPLE_INVOICE_IMAGE), image_label=words["sample_image"])
+        result.update(image_url=static(sample_invoice_image()), image_label=words["sample_image"])
     return result

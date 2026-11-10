@@ -183,9 +183,15 @@ class ShapeTests(TillSetup):
         # R1 has a stocked item's name, R2 a stocked item's barcode, R7 is switched off, R8 is another ingredient.
         self.assertEqual(answer["unstocked"], {"count": 4, "names": ["بيكسول 500 مجم", "زينتول 500 مجم", "كورفاكس 500 مجم"]})
         self.assertEqual(self.ask(self.wanted, lang="en").json()["unstocked"], {"count": 4, "names": ["Bexol 500mg", "Corvax 500mg", "Zentol 500mg"]})
-        rows = list(DrugReference.objects.filter(source="test-list").values("pk", "name_en", "name_ar", "barcode"))
-        known = {row["name_en"] for row in till.known_to_shop(rows, [self.wanted, self.forte, self.big])}
-        self.assertEqual(known, {"Fabrinol Forte 500mg", "Bigfab 1000mg"})
+        # The drug page's «بدائل مش عندك» goes by the same rule: the same rows, so the two screens never disagree.
+        from master_data.models import Item
+
+        from . import picker
+
+        page = picker.unstocked_alternatives(Item.objects.select_related("drug").get(pk=self.wanted.pk))
+        self.assertEqual(len(page), answer["unstocked"]["count"])
+        self.assertEqual({row.name_en for row in page[:3]}, {"Bexol 500mg", "Corvax 500mg", "Zentol 500mg"})
+        self.assertFalse({row.name_en for row in page} & {"Fabrinol Forte 500mg", "Bigfab 1000mg"})
 
     def test_an_item_with_no_drug_data_or_no_alternative(self):
         soap = self.ask(self.soap).json()
