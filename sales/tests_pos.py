@@ -286,6 +286,9 @@ class CalmTillTests(TestCase):
         self.assertLess(enter.index("else if (pick)"), enter.index("words.not_found"))
         self.assertIn("search.dispatchEvent(new Event('change'", enter)  # the name-search path, as the tiles use
         self.assertIn("var FIND_DELAY = 150;", script)  # a scanner's burst never draws the list
+        # Android keyboards compose: every event carries the whole word so far, and that is still a person typing
+        self.assertIn("var composing = event.inputType === 'insertCompositionText';", script)
+        self.assertIn("(!composing && event.data && event.data.length > 1)", script)
         self.assertIn("document.addEventListener('DOMContentLoaded'", script)  # the field gets the focus back after camera_scan.js moves it
 
     def test_the_cart_lines_keep_the_hooks_the_alternatives_sheet_reads(self):
@@ -323,6 +326,19 @@ class CalmTillTests(TestCase):
         form = html[html.index("<form class=\"pos\""):html.index("</form>", html.index("<form class=\"pos\""))]
         self.assertIn('name="location"', form)
         self.assertIn('name="cashbox"', form)
+
+    def test_the_pay_panel_never_lies_over_the_details_on_wide_screens(self):
+        html = self.till()
+        start = html.index('<aside class="pos-side">')
+        side = html[start:html.index("</aside>", start)]
+        region = side.index("data-pos-side-scroll")
+        self.assertLess(region, side.index("data-pos-sheet"))
+        self.assertLess(side.index('class="pos-today"'), side.index("data-pos-paybar"))  # the figures scroll with the details
+        wide = read_static("hesba/css/pos.css")
+        wide = wide[wide.index("/* Wide screens: two columns beside the sidebar."):]
+        self.assertIn(".pos-side__scroll{flex:1 1 auto;min-height:0;", wide)
+        self.assertIn("overflow-y:auto", wide[wide.index(".pos-side__scroll{"):][:400])
+        self.assertIn(".pos-paybar{flex:none;position:static;", wide)  # the last row of the column, not sticky over it
 
     def test_changed_static_files_are_cache_busted(self):
         from django.conf import settings

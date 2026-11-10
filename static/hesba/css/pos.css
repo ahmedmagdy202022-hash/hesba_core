@@ -203,16 +203,20 @@
   .pos-menu__shell{display:none}  /* the sidebar has the app's menu and language on wide screens */
 }
 
-/* Wide screens: two columns beside the sidebar; the payment column scrolls by itself and keeps its pay panel in view. */
+/* Wide screens: two columns beside the sidebar. The payment column is a column of two rows: «تفاصيل» and today's
+   figures scroll in their own region, and the navy pay panel is the last row under them, never laid over them, so
+   every detail field can be reached at 1024x768 as at 1280x800. The panel stays short: the five cash buttons share
+   one row. */
 @media (min-width:1024px){
   .pos{grid-template-columns:minmax(0,1fr) 380px;gap:var(--hs-space-5)}
-  .pos-side{position:sticky;top:16px;max-height:calc(100vh - 32px);overflow-y:auto;overscroll-behavior:contain;gap:var(--hs-space-3);padding:var(--hs-space-4);border:0;background:var(--hs-card-bg);box-shadow:var(--hs-card-shadow)}
-  .pos-paybar{position:sticky;bottom:calc(-1 * var(--hs-space-4));z-index:2;margin-inline:calc(-1 * var(--hs-space-2))}
+  .pos-side{position:sticky;top:16px;display:flex;flex-direction:column;max-height:calc(100vh - 32px);overflow:hidden;gap:var(--hs-space-3);padding:var(--hs-space-4);border:0;background:var(--hs-card-bg);box-shadow:var(--hs-card-shadow)}
+  .pos-side__scroll{flex:1 1 auto;min-height:0;display:grid;align-content:start;gap:var(--hs-space-3);margin:calc(-1 * var(--hs-space-1)) calc(-1 * var(--hs-space-2));padding:var(--hs-space-1) var(--hs-space-2);overflow-y:auto;overscroll-behavior:contain}
+  .pos-paybar{flex:none;position:static;gap:var(--hs-space-2);margin-inline:calc(-1 * var(--hs-space-2));padding:var(--hs-space-3) var(--hs-space-4) var(--hs-space-4)}
   .pos-paybar.is-empty .pos-cashrow{opacity:.55}
-  .pos-cashrow{flex-wrap:wrap}
-  .pos-paybar .pos-cash{flex:1 1 100%;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));overflow:visible}
-  .pos-paybar .pos-cash button{min-width:0;padding:0 var(--hs-space-1)}
-  .pos-paybar .pos-cash button[data-cash="exact"]{grid-column:1 / -1}
+  .pos-cashrow{flex-wrap:wrap;row-gap:var(--hs-space-2)}
+  .pos-paybar .pos-cash{flex:1 1 100%;overflow:visible}
+  .pos-paybar .pos-cash button{flex:1 1 0;min-width:var(--hs-control-height);padding:0 var(--hs-space-1)}
+  .pos-paybar .pos-cash button[data-cash="exact"]{flex-grow:1.6}
   .pos-grand{display:none!important}  /* the pay panel right below says what is due */
   .pos-today{padding:0;box-shadow:none}
 }
@@ -247,7 +251,6 @@
   .pos-paybar{position:fixed;inset:auto 0 0 0;z-index:25;gap:var(--hs-space-3);padding:var(--hs-space-4) var(--hs-gutter) calc(var(--hs-space-4) + env(safe-area-inset-bottom));border-radius:var(--hs-band-radius) var(--hs-band-radius) 0 0;box-shadow:var(--hs-shadow-up)}
   .pos-paybar.is-empty{display:none}
   .pos-today{margin-top:var(--hs-space-4)}
-  body.hs-till:has(.pos) .hs-feedback-fab{bottom:calc(var(--pos-paybar-h, 0px) + var(--hs-space-3) + env(safe-area-inset-bottom))}
   body.pos-layer-open{overflow:hidden}
 }
 @media (max-width:380px){
@@ -302,3 +305,19 @@
 @media (min-width:1024px){.pos-alt{inset:0;max-height:80vh;margin:auto;border-radius:var(--hs-radius-xl)}.pos-alt__grab{display:none}}
 .pos-alt-open:focus-visible,.pos-alt-remove:focus-visible,.pos-alt__close:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
 .pos-alt__row:focus-visible{outline:0;box-shadow:inset var(--hs-focus-ring)}
+
+/* The demo's «ملاحظاتك» button (demo mode only) stays out of the cart's way on the till: a round icon (44px, its name
+   still read out) that sits in the pay sheet's last row beside «⋯», which makes room for it, so it covers no cart line
+   and no control. With nothing to pay it waits in the bottom corner, and the page leaves room under it. On wide screens
+   it sits under the payment column, which ends above it. It hides while a sheet or the «⋯» menu is open. */
+body.hs-till:has(.pos) .hs-feedback-fab{inset-inline-start:auto;inset-inline-end:var(--hs-gutter);bottom:calc(var(--hs-space-4) + 6px + env(safe-area-inset-bottom));width:var(--hs-control-height);height:var(--hs-control-height);padding:0;justify-content:center;gap:0;background:var(--hs-navy-raised)}
+body.hs-till:has(.pos) .hs-feedback-fab span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+body.hs-till.pos-layer-open .hs-feedback-fab{display:none}
+@media (max-width:1023px){
+  body.hs-till:has(.hs-feedback-fab) .pos-actions{padding-inline-end:calc(var(--hs-control-height) + var(--hs-space-2))}
+  body.hs-till:has(.hs-feedback-fab):has(.pos-paybar.is-empty) .pos{padding-bottom:calc(var(--hs-control-height) + var(--hs-space-8))}
+}
+@media (min-width:1024px){
+  body.hs-till:has(.pos) .hs-feedback-fab{inset-inline-end:var(--hs-space-6);bottom:var(--hs-space-3)}
+  body.hs-till:has(.hs-feedback-fab) .pos-side{max-height:calc(100vh - 32px - var(--hs-control-height) - var(--hs-space-3))}
+}

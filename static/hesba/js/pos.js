@@ -475,7 +475,11 @@
   }
   scan.addEventListener('input', function (event) {
     if (!scan.value) { stamps = []; pasted = false; closeList(); return; }
-    if (event.inputType && /^insertFromPaste|^insertReplacementText|^insertFromDrop/.test(event.inputType) || (event.data && event.data.length > 1)) { pasted = true; }
+    // A paste, a drop or a replacement is never a person's typing. Nor is several characters in one event, except an
+    // Android keyboard's composition (Gboard): there every event carries the whole word composed so far. A scanner never
+    // composes: it sends plain keys, and the camera sets the value and sends a synthetic Enter.
+    var composing = event.inputType === 'insertCompositionText';
+    if (event.inputType && /^insertFromPaste|^insertReplacementText|^insertFromDrop/.test(event.inputType) || (!composing && event.data && event.data.length > 1)) { pasted = true; }
     stamps.push(Date.now());
     if (stamps.length === 1 && scan.value.length > 1) { pasted = true; }  // the whole text arrived at once
     navigated = false;
