@@ -36,9 +36,10 @@
 }
 
 /* ---- the compact list row ---- */
-table[data-list-rows] td a{display:inline-flex;align-items:center;min-height:var(--hs-control-height)}
-/* every link in a table row is a 44px target (a document number, «تعديل», «الحساب», «طباعة») */
-.op-table tbody td a,.md-table tbody td a{display:inline-flex;align-items:center;min-height:var(--hs-control-height)}
+/* every link in a table row is a 44px target on screen (a document number, «تعديل», «الحساب», «طباعة»); paper keeps its rows short */
+@media screen{
+  table[data-list-rows] td a,.op-table tbody td a,.md-table tbody td a{display:inline-flex;align-items:center;min-height:var(--hs-control-height)}
+}
 .op-row-cancel>summary{min-height:var(--hs-control-height);min-width:var(--hs-control-height)}
 .op-row-cancel input{min-height:var(--hs-control-height)!important}
 @media (max-width:700px){

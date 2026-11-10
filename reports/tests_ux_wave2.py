@@ -31,6 +31,20 @@ def person(role_code, username):
     return user
 
 
+def granted(username, *codes):
+    """A user whose role allows exactly these permissions (seeded codes), nothing else."""
+
+    from hesba_testing.factories import grant, make_role
+    from permissions.models import Permission
+
+    role = make_role(code=f"UX2-{username}")
+    for code in codes:
+        grant(role, Permission.objects.get(code=code))
+    user = make_user(username=username)
+    make_user_profile(user=user, role=role)
+    return user
+
+
 def read_static(path):
     with open(finders.find(path), encoding="utf-8") as handle:
         return handle.read()
@@ -44,11 +58,13 @@ class SharedLayerTests(TestCase):
         self.assertEqual(sorted(set(re.findall(r"var\((--hs-[\w-]+)", css)) - defined), [])
         # the phone row: two lines, the whole row one tap, every link a 44px target
         self.assertIn('table[data-list-rows] td[data-row="title"] a::after{content:"";position:absolute;inset:0}', css)
-        self.assertIn("table[data-list-rows] td a{display:inline-flex;align-items:center;min-height:var(--hs-control-height)}", css)
+        self.assertIn("table[data-list-rows] td a,.op-table tbody td a,.md-table tbody td a{display:inline-flex;align-items:center;min-height:var(--hs-control-height)}", css)
 
     def test_card_tables_leave_list_rows_alone_and_print_tools_go_into_the_menu(self):
         self.assertIn("table.op-table:not([data-list-rows])", read_static("hesba/js/table_cards.js"))
-        self.assertIn("[data-report-tools-slot]", read_static("hesba/js/report_tools.js"))
+        tools = read_static("hesba/js/report_tools.js")
+        self.assertIn("[data-report-tools-slot]", tools)
+        self.assertIn("querySelectorAll('.hs-phone-only')", tools)  # the Excel file never carries «باقي» / «عليه»
 
 
 class SalesScreensTests(TestCase):
@@ -109,14 +125,18 @@ class SalesScreensTests(TestCase):
         self.assertIn("data-pick-return", html)
         self.assertIn(f'href="{reverse("sales:return_create", args=[invoice.pk])}?lang=ar" data-pick-invoice', html)
         self.assertNotIn("SI-DRAFT-9", html)  # only posted invoices take a return
-        cashier = person(RoleCode.CASHIER, "ux2_cashier_noreturn")
-        from permissions.services import user_has_permission
-
-        if not user_has_permission(cashier, "sales.return_sale"):
-            self.client.force_login(cashier)
-            page = self.client.get(reverse("sales:list"), {"lang": "ar", "pick": "return"}).content.decode()
-            self.assertNotIn("data-pick-return", page)
-            self.assertNotIn("data-more-return", page)
+        # without sales.return_sale: no «مرتجع» anywhere, and ?pick=return is ignored (rows open the invoice)
+        seller = granted("ux2_no_return", "sales.view_sales_invoices", "sales.create_sales_invoice")
+        self.client.force_login(seller)
+        page = self.client.get(reverse("sales:list"), {"lang": "ar", "pick": "return"}).content.decode()
+        self.assertNotIn("data-pick-return", page)
+        self.assertNotIn("data-more-return", page)
+        self.assertNotIn("data-pick-invoice", page)
+        self.assertIn(f'href="{reverse("sales:detail", args=[invoice.pk])}?lang=ar"', page)
+        self.assertIn("SI-DRAFT-9", page)  # no posted-only filter either
+        till = self.client.get(reverse("sales:pos"), {"lang": "ar"})
+        if till.status_code == 200:
+            self.assertNotContains(till, "data-pos-return")
 
     def test_the_till_menu_offers_return(self):
         self.assertContains(self.client.get(reverse("sales:pos"), {"lang": "ar"}), "data-pos-return")
@@ -162,16 +182,18 @@ class CollectionFormTests(TestCase):
         self.assertNotIn("---------", html)
 
     def test_a_reader_who_may_not_see_balances_gets_no_figure(self):
-        from permissions.services import user_has_permission
-
-        for role in (RoleCode.CASHIER, RoleCode.ACCOUNTANT):
-            user = person(role, f"ux2_{role}")
-            if user_has_permission(user, "sales.receive_customer_payment") and not (
-                    user_has_permission(user, "reports.view_customer_report") or user_has_permission(user, "sales.create_sales_invoice")):
-                self.client.force_login(user)
-                html = self.client.get(reverse("sales:payment_create"), {"customer": self.customer.pk}).content.decode()
-                self.assertNotIn("5,234.87", html)
-                self.assertNotIn("data-party-due", html)
+        collector = granted("ux2_collect_only", "sales.receive_customer_payment")
+        self.client.force_login(collector)
+        response = self.client.get(reverse("sales:payment_create"), {"customer": self.customer.pk})
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        self.assertNotIn("5,234.87", html)
+        self.assertNotIn("data-party-due", html)
+        self.assertNotIn("party_due.js", html)
+        self.assertEqual(self.client.get(reverse("parties:balance", args=["customer", self.customer.pk])).status_code, 403)  # the endpoint is not widened
+        reader = granted("ux2_collect_and_report", "sales.receive_customer_payment", "reports.view_customer_report")
+        self.client.force_login(reader)
+        self.assertContains(self.client.get(reverse("sales:payment_create"), {"customer": self.customer.pk}), "5,234.87")
 
     def test_plain_errors_and_a_toast_that_names_the_collection(self):
         page = self.client.post(reverse("sales:payment_create") + "?lang=ar", {"lang": "ar", "customer": "", "amount": "", "cashbox": "", "payment_date": TODAY.isoformat()})
@@ -203,6 +225,15 @@ class ItemsAndPartiesTests(TestCase):
         self.assertNotIn("required", sale)  # empty counts as 0: no asterisk
         self.assertIn('<option value="" selected>اختار …</option>', html)
         self.assertNotIn("---------", html)
+
+    def test_new_titles_follow_the_word_and_its_gender(self):
+        from master_data.views import new_title
+
+        self.assertEqual(new_title("items", "صنف / خدمة", "ar"), "صنف جديد")
+        self.assertEqual(new_title("items", "صنف / خدمة", "en"), "New item")
+        self.assertEqual(new_title("customers", "مريض", "ar"), "مريض جديد")
+        self.assertEqual(new_title("cashboxes", "خزنة", "ar"), "خزنة جديدة")
+        self.assertEqual(new_title("locations", "مخزن", "ar"), "مخزن جديد")
 
     def test_saving_an_item_names_it_and_lands_on_it(self):
         response = self.client.post(reverse("master_data:create", kwargs={"entity": "items"}) + "?lang=ar",

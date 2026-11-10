@@ -275,12 +275,18 @@ def _cells(entity, row, can_view_cost):
 
 
 def new_title(entity, singular, lang):
-    """UX Wave 2: «صنف جديد», «عميل جديد», «خزنة جديدة» (and the activity's own word: «مريض جديد»)."""
+    """UX Wave 2: «صنف جديد», «عميل جديد», «خزنة جديدة», and the activity's own words («مريض جديد», «صنف جديد في المنيو»)."""
 
+    if entity == "items":
+        from settings_core.vocabulary import BASE, active_vocabulary, term
+
+        if active_vocabulary().get("item", BASE["item"]) != BASE["item"]:
+            return term("new_item", lang)  # the activity says it its own way
+        return "New item" if lang == "en" else "صنف جديد"
     word = singular.split(" / ")[0].strip()
     if lang == "en":
         return f"New {word.lower()}"
-    return f"{word} {'جديدة' if entity == 'cashboxes' else 'جديد'}"
+    return f"{word} {'جديدة' if word.endswith('ة') else 'جديد'}"
 
 
 def _balances(entity, objects):

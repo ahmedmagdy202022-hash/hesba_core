@@ -73,7 +73,13 @@
   }
   function cell(el) {
     var input = el.querySelector('input, select, textarea');
-    return quote(input ? (input.value || '') : (el.innerText || el.textContent));
+    if (input) return quote(input.value || '');
+    if (el.querySelector('.hs-phone-only')) {  // UX Wave 2: a word a phone row adds («باقي», «عليه») is not data
+      el = el.cloneNode(true);
+      Array.prototype.forEach.call(el.querySelectorAll('.hs-phone-only'), function (word) { word.remove(); });
+      return quote(el.textContent);
+    }
+    return quote(el.innerText || el.textContent);
   }
   var FIELD_NAMES = en ? { date_from: 'From', date_to: 'To', q: 'Search', status: 'Status', period: 'Period' }
     : { date_from: 'من', date_to: 'إلى', q: 'بحث', status: 'الحالة', period: 'الفترة' };
