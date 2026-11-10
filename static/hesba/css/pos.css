@@ -210,8 +210,9 @@
   .pos-paybar{position:sticky;bottom:calc(-1 * var(--hs-space-4));z-index:2;margin-inline:calc(-1 * var(--hs-space-2))}
   .pos-paybar.is-empty .pos-cashrow{opacity:.55}
   .pos-cashrow{flex-wrap:wrap}
-  .pos-paybar .pos-cash{flex-wrap:wrap;overflow:visible}
-  .pos-paybar .pos-cash button{flex:1 1 52px}
+  .pos-paybar .pos-cash{flex:1 1 100%;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));overflow:visible}
+  .pos-paybar .pos-cash button{min-width:0;padding:0 var(--hs-space-1)}
+  .pos-paybar .pos-cash button[data-cash="exact"]{grid-column:1 / -1}
   .pos-grand{display:none!important}  /* the pay panel right below says what is due */
   .pos-today{padding:0;box-shadow:none}
 }
