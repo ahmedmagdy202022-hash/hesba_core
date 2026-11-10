@@ -116,8 +116,15 @@ class MedicalPrivacyTests(TestCase):
                 self.assertEqual(self.client.get(url).status_code, 403)
         self.assertNotIn(reverse("medical:patients"), sidebar_links(self.client.get(reverse("dashboard_snapshot"))))
 
-        doctor_user = person(RoleCode.CASHIER, "priv_doctor")
+        linked = person(RoleCode.CASHIER, "priv_linked")
         doctor = save_employee({"name": "د. كريم"}, self.owner)
+        doctor.user = linked
+        doctor.save()
+        self.client.force_login(linked)  # HG-084: a cashier on the payroll is linked to an employee too; that is not a doctor
+        self.assertEqual(self.client.get(reverse("medical:file", args=[self.patient.pk])).status_code, 403)
+        doctor.user = None
+        doctor.save()
+        doctor_user = person(RoleCode.DOCTOR, "priv_doctor")
         doctor.user = doctor_user
         doctor.save()
         self.client.force_login(doctor_user)
@@ -260,7 +267,7 @@ class ClinicReportTests(TestCase):
         self.assertContains(self.client.get(reverse("medical:report") + "?from=2026-13-01"), "الفترة مش مظبوطة")
         self.assertEqual(self.client.get(reverse("medical:report") + "?lang=en").status_code, 200)
 
-        doctor_user = person(RoleCode.CASHIER, "rep_doctor")
+        doctor_user = person(RoleCode.DOCTOR, "rep_doctor")  # HG-084: a doctor treats patients but does not hold the practice-wide permission
         self.assertFalse(user_has_permission(doctor_user, services.VIEW))
         self.sara.user = doctor_user
         self.sara.save()
@@ -417,7 +424,7 @@ class DentalChartTests(TestCase):
         cashier = person(RoleCode.CASHIER, "dn_cashier")
         self.client.force_login(cashier)
         self.assertEqual(self.client.get(self.url).status_code, 403)
-        doctor_user = person(RoleCode.STOCK_KEEPER, "dn_doctor")
+        doctor_user = person(RoleCode.DOCTOR, "dn_doctor")
         self.doctor.user = doctor_user
         self.doctor.save()
         self.client.force_login(doctor_user)
@@ -658,7 +665,7 @@ class SessionPackageTests(TestCase):
         package = self.sold("2")
         with self.assertRaisesMessage(ValidationError, "لسه مجاش"):
             self.physio.use(package, self.owner, used_on=timezone.localdate() + timedelta(days=1))
-        therapist_user = person(RoleCode.STOCK_KEEPER, "ph_therapist")
+        therapist_user = person(RoleCode.DOCTOR, "ph_therapist")
         self.therapist.user = therapist_user
         self.therapist.save()
         self.client.force_login(therapist_user)
@@ -824,7 +831,7 @@ class ReceptionQueueTests(TestCase):
         self.assertEqual(self.client.get(self.url + "?lang=en").status_code, 200)
 
     def test_a_doctor_calls_their_own_or_unassigned_patients_in_order(self):
-        doctor_user = person(RoleCode.STOCK_KEEPER, "q_doctor")
+        doctor_user = person(RoleCode.DOCTOR, "q_doctor")
         self.karim.user = doctor_user
         self.karim.save()
         first = self.queue.check_in(self.mona, self.desk, doctor=self.sara)  # Sara's
@@ -869,7 +876,7 @@ class ReceptionQueueTests(TestCase):
         self.assertEqual((ticket.appointment_id, ticket.doctor_id), (arrived.pk, self.sara.pk))
         other = self.queue.check_in(self.ali, self.desk, appointment=cancelled)
         self.assertIsNone(other.appointment_id)  # a cancelled booking is never linked
-        doctor_user = person(RoleCode.STOCK_KEEPER, "q_doctor2")
+        doctor_user = person(RoleCode.DOCTOR, "q_doctor2")
         self.karim.user = doctor_user
         self.karim.save()
         self.client.force_login(doctor_user)
