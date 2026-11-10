@@ -5,7 +5,7 @@ from django.forms import BaseFormSet, formset_factory
 from django.utils import timezone
 
 from cashboxes.models import Cashbox
-from config.form_defaults import ZeroWhenBlank, item_choice_label, preselect
+from config.form_defaults import ZeroWhenBlank, choose_labels, item_choice_label, plain_errors, preselect
 from config.form_sections import Sectioned
 from config.numbering import AutoNumbered
 from master_data.models import Customer, Item, Location
@@ -93,6 +93,7 @@ class SalesDraftForm(ZeroWhenBlank, AutoNumbered, forms.Form):
             self.initial.setdefault("invoice_date", timezone.localdate())
         preselect(self, "selling_location", "cashbox")  # UI-TRACK F13
         self.offer_auto_number(lang)
+        choose_labels(self, lang)  # UX Wave 2: «اختار …», not «---------»
 
     def clean_invoice_number(self):
         # A taken number was a server error (unique constraint); now it is a field message.
@@ -119,6 +120,7 @@ class SalesLineInputForm(forms.Form):
         self.fields["item"].queryset = Item.objects.filter(active=True)
         # UI-TRACK grocery G05: a narrow line shows the start of the choice; let that be the item's name, not its code.
         self.fields["item"].label_from_instance = item_choice_label
+        choose_labels(self, lang)  # UX Wave 2
         # UNITS-001: optional bigger unit (carton, box...) when the shop uses units.
         from units.models import ItemUnit
         from units.services import units_enabled
@@ -198,6 +200,8 @@ class CustomerPaymentForm(Sectioned, AutoNumbered, forms.Form):
         preselect(self, "cashbox")  # UI-TRACK F13
         self.offer_auto_number(lang)
         self.lang = "en" if lang == "en" else "ar"
+        choose_labels(self, lang)  # UX Wave 2: «اختار …» and plain-words errors
+        plain_errors(self, lang)
 
     def clean_payment_number(self):
         number = (self.cleaned_data["payment_number"] or "").strip()

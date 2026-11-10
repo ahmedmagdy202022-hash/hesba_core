@@ -42,6 +42,7 @@ from .services import (
 from config.form_errors import add_form_error
 from config.money import money_round
 from config.paging import page_of
+from settings_core.saved_toast import payment_actions
 
 
 STRINGS = {
@@ -538,6 +539,7 @@ def payment_list(request):
             page=page,
             query=query,
             status_filter=status,
+            saved_actions=payment_actions(request, lang, "customer"),  # UX Wave 2: the receipt and the next one
             title=STRINGS[lang]["collections"],
             new_label=STRINGS[lang]["new_collection"],
             create_url="sales:payment_create",
@@ -554,14 +556,20 @@ def payment_create(request):
         form = CustomerPaymentForm(request.POST, lang=lang)
         if form.is_valid():
             try:
-                form.create_with_fresh_number(lambda: record_customer_payment(user=request.user, **form.cleaned_data))
+                payment = form.create_with_fresh_number(lambda: record_customer_payment(user=request.user, **form.cleaned_data))
             except ValidationError as exc:
                 add_form_error(form, exc)
             else:
-                messages.success(request, STRINGS[lang]["collection_saved"])
-                return redirect(f"/sales/collections/?lang={lang}")
+                from settings_core.saved_toast import amount_text, say_saved
+
+                # UX Wave 2: the toast names what was saved; the list offers the receipt and the next collection.
+                say_saved(request, (f"Collected {amount_text(payment.amount, lang)} from «{payment.customer.name}» ({payment.payment_number})" if lang == "en"
+                                    else f"اتسجل تحصيل {amount_text(payment.amount, lang)} من «{payment.customer.name}» ({payment.payment_number})"))
+                return redirect(f"/sales/collections/?lang={lang}&saved={payment.pk}")
     else:
         form = CustomerPaymentForm(lang=lang, initial=_party_initial(request, "customer"))
+    from parties.views import due_on_form, may_see_balance
+
     return render(
         request,
         "payments/form.html",
@@ -570,6 +578,11 @@ def payment_create(request):
             form=form,
             title=STRINGS[lang]["new_collection"],
             back_url="sales:payments",
+            # UX Wave 2: «مستحق عليه …» with a «المبلغ كله» chip; the figure comes from the party's ledger (read-only).
+            party_kind="customer",
+            show_due=may_see_balance(request.user, "customer"),
+            due=due_on_form(request.user, "customer", form["customer"].value()),
+            submit_label="Record the collection" if lang == "en" else "سجّل التحصيل",
         ),
     )
 

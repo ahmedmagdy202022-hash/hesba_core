@@ -13,7 +13,7 @@
 {% block op_messages %}
   {% if messages %}
     <div class="op-messages">
-      {% for message in messages %}<div class="op-message op-message-{{ message.level_tag|default:'info' }}"{% if message.extra_tags %} data-message-tag="{{ message.extra_tags }}"{% endif %}>{{ message|ui:lang }}</div>{% endfor %}
+      {% for message in messages %}{% if message.extra_tags == 'hs-saved' %}{% include "partials/saved_toast.html" %}{% else %}<div class="op-message op-message-{{ message.level_tag|default:'info' }}"{% if message.extra_tags %} data-message-tag="{{ message.extra_tags }}"{% endif %}>{{ message|ui:lang }}</div>{% endif %}{% endfor %}
     </div>
   {% endif %}
   {% endblock %}

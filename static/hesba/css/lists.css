@@ -63,7 +63,7 @@ table[data-list-rows] tbody tr[data-saved]{background:var(--hs-teal-wash)}
   table[data-list-rows] td[data-row="meta"] .op-status{padding:2px 10px}
   table[data-list-rows] td[data-row="action"]{display:inline-flex;order:3;position:relative;z-index:1;margin-inline-start:auto}
   table[data-list-rows] td[data-row="action"]~td[data-row="action"]{margin-inline-start:0}
-  table[data-list-rows] td[data-row="action"] a{color:var(--hs-teal-deep);font-size:var(--hs-text-sm)}
+  table[data-list-rows] td[data-row="action"] a{color:var(--hs-teal-deep);font-size:var(--hs-text-sm);margin-block:calc(-1 * var(--hs-space-3))}
   table[data-list-rows] td[data-row="empty"]{display:block;flex:1 1 100%;order:1;padding:var(--hs-space-6) 0!important;text-align:center}
 }
 
@@ -88,6 +88,13 @@ table[data-list-rows] tbody tr[data-saved]{background:var(--hs-teal-wash)}
 .hs-chip:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
 .hs-chip[hidden]{display:none}
 
+/* ---- the save bar of a form stays in reach on a phone ---- */
+@media (max-width:700px){
+  .hs-sticky-save{position:sticky;bottom:calc(var(--hs-tabbar-height) + env(safe-area-inset-bottom));z-index:20;margin-inline:calc(-1 * var(--hs-space-4));padding:var(--hs-space-3) var(--hs-space-4);background:var(--hs-surface);border-top:1px solid var(--hs-line);box-shadow:var(--hs-shadow-up);display:flex!important;gap:var(--hs-space-2)}
+  .hs-sticky-save>*{flex:1 1 0;width:auto!important;min-width:0}
+  .hs-sticky-save>.op-primary,.hs-sticky-save>.md-primary{flex:2 1 0}
+}
+
 /* ---- the totals of a document: one card, label and figure side by side ---- */
 .hs-totals{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 var(--hs-space-6);margin:0 0 var(--hs-space-4);padding:var(--hs-space-2) var(--hs-space-4);background:var(--hs-surface);border:1px solid var(--hs-line);border-radius:var(--hs-radius-lg)}
 .hs-totals>div{display:flex;align-items:baseline;justify-content:space-between;gap:var(--hs-space-3);padding:var(--hs-space-2) 0;border-bottom:1px solid var(--hs-line)}
@@ -108,8 +115,19 @@ table[data-list-rows] tbody tr[data-saved]{background:var(--hs-teal-wash)}
 .hs-danger-zone .op-danger{justify-self:start;width:auto}
 
 /* ---- call / WhatsApp as icon buttons on one row ---- */
-.hs-icon-row{display:flex;gap:var(--hs-space-2)}
-.hs-icon-row .hs-contact{width:auto;min-width:var(--hs-control-height);padding:0 var(--hs-space-3)}
+.hs-icon-row{display:flex;gap:var(--hs-space-2);margin-top:var(--hs-space-3)}
+.hs-icon-row .hs-contact{width:var(--hs-control-height)!important;min-width:var(--hs-control-height);padding:0;flex:0 0 auto}
+.hs-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media (max-width:700px){.hs-kpis.op-summary-grid--compact{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* ---- the «+ new item» dialog: × at the top, the fields scroll, the buttons stay at the bottom ---- */
+dialog.hs-quick-item[open]{display:flex;flex-direction:column;max-height:calc(100dvh - 32px);overflow:hidden}
+.hs-quick-item__body{flex:1 1 auto;overflow-y:auto;overscroll-behavior:contain}
+.hs-quick-item__head{display:flex;align-items:center;justify-content:space-between;gap:var(--hs-space-3)}
+.hs-quick-item__head h2{margin:0}
+.hs-quick-item__x{display:grid;place-items:center;flex:0 0 auto;width:var(--hs-control-height);height:var(--hs-control-height);border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);background:var(--hs-surface);color:var(--hs-navy);font:inherit;font-size:var(--hs-text-xl);line-height:1;cursor:pointer}
+.hs-quick-item__x:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
+.hs-quick-item__actions{flex:0 0 auto;margin:0!important;padding:var(--hs-space-3) var(--hs-space-4);border-top:1px solid var(--hs-line);background:var(--hs-surface)}
 
 /* ---- phone: the header keeps the primary and «⋯» on one row ---- */
 @media (max-width:700px){

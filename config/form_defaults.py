@@ -9,6 +9,58 @@
 
 from decimal import Decimal
 
+#: UX Wave 2: an empty choice reads «اختار …», never Django's «---------».
+CHOOSE = {"ar": "اختار …", "en": "Choose …"}
+_DASHES = "---------"
+
+
+def choose_labels(form, lang="ar"):
+    """Give every choice list whose empty option is Django's dashes a plain «اختار …» instead.
+
+    A list that already has its own empty wording (``empty_label`` set by the form) keeps it."""
+
+    from django import forms
+
+    word = CHOOSE["en" if lang == "en" else "ar"]
+    for field in form.fields.values():
+        if isinstance(field, forms.ModelChoiceField):
+            if field.empty_label == _DASHES:
+                field.empty_label = word
+        elif isinstance(field, forms.ChoiceField):
+            choices = list(field.choices)
+            if any(value == "" and label == _DASHES for value, label in choices):
+                field.choices = [(value, word if value == "" and label == _DASHES else label) for value, label in choices]
+    return form
+
+
+#: UX Wave 2: the payment forms say what is missing in plain words.
+PAYMENT_ERRORS = {
+    "ar": {
+        "customer": {"required": "اختار العميل اللي هتحصّل منه.", "invalid_choice": "اختار عميل من القائمة."},
+        "supplier": {"required": "اختار المورد اللي هتدفعله.", "invalid_choice": "اختار مورد من القائمة."},
+        "cashbox": {"required": "اختار الخزنة.", "invalid_choice": "اختار خزنة من القائمة."},
+        "amount": {"required": "اكتب المبلغ.", "invalid": "اكتب المبلغ بالأرقام.", "min_value": "المبلغ لازم يكون أكبر من صفر."},
+        "payment_date": {"required": "اكتب التاريخ.", "invalid": "التاريخ مش مظبوط."},
+    },
+    "en": {
+        "customer": {"required": "Choose the customer you are collecting from.", "invalid_choice": "Choose a customer from the list."},
+        "supplier": {"required": "Choose the supplier you are paying.", "invalid_choice": "Choose a supplier from the list."},
+        "cashbox": {"required": "Choose the cashbox.", "invalid_choice": "Choose a cashbox from the list."},
+        "amount": {"required": "Type the amount.", "invalid": "Type the amount in figures.", "min_value": "The amount must be more than zero."},
+        "payment_date": {"required": "Type the date.", "invalid": "That date is not valid."},
+    },
+}
+
+
+def plain_errors(form, lang="ar", table=None):
+    """Put the plain-words error messages of ``table`` (default: PAYMENT_ERRORS) on the form's fields."""
+
+    for name, messages in (table or PAYMENT_ERRORS)["en" if lang == "en" else "ar"].items():
+        field = form.fields.get(name)
+        if field is not None:
+            field.error_messages.update(messages)
+    return form
+
 
 def preselect(form, *names):
     """Start each named choice on its default record (``is_default``), or on the only record."""

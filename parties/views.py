@@ -131,12 +131,29 @@ def party_statement_print(request, kind, pk):
 INVOICE_PERMISSION = {"customer": "sales.create_sales_invoice", "supplier": "purchases.create_purchase_invoice"}
 
 
+def may_see_balance(user, kind):
+    """Who may read a party's balance: its report, or writing its invoices (AN3). UX Wave 2: the payment forms ask the same."""
+
+    return user_has_permission(user, PERMISSION[kind]) or user_has_permission(user, INVOICE_PERMISSION[kind])
+
+
+def due_on_form(user, kind, party_id):
+    """UX Wave 2: the balance a payment form shows for the party it opened with («مستحق عليه …»), or None.
+
+    Read-only, the same figure as the party card and the balance endpoint; None when the reader may not see it."""
+
+    if kind not in KINDS or not str(party_id or "").isdigit() or not may_see_balance(user, kind):
+        return None
+    party = KINDS[kind]["model"].objects.filter(pk=party_id).first()
+    return balance(kind, party) if party is not None else None
+
+
 def party_balance(request, kind, pk):
     """AN3 (Ahmed: "الملخص محتاج يبين قيمة الفاتورة قبل ما يضفها للاجمالي"): the balance before this invoice, for its summary."""
 
     if kind not in KINDS:
         raise Http404
-    if not (user_has_permission(request.user, PERMISSION[kind]) or user_has_permission(request.user, INVOICE_PERMISSION[kind])):
+    if not may_see_balance(request.user, kind):
         raise PermissionDenied(f"The {kind} balance needs {PERMISSION[kind]}.")
     party = get_object_or_404(KINDS[kind]["model"], pk=pk)
     answer = {"balance": str(balance(kind, party))}

@@ -258,6 +258,16 @@ def currency_unit(lang="ar"):
 
 
 @register.filter
+def money_abs(value):
+    """UX Wave 2: an amount without its sign, for a label that already says which way it goes («ليه عندك 50.00»)."""
+
+    try:
+        return money(abs(Decimal(str(value))))
+    except (ArithmeticError, ValueError, TypeError):
+        return money(value)
+
+
+@register.filter
 def percent(value):
     """UX Wave 1: a percentage in the same decimal style as money: "31.8%" (period decimal, never the locale's comma)."""
 

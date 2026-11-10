@@ -36,6 +36,7 @@ from .services import (
 from config.form_errors import add_form_error
 from config.paging import page_of
 from batches.words import expiry_only
+from settings_core.saved_toast import payment_actions
 
 
 STRINGS = {
@@ -456,6 +457,7 @@ def payment_list(request):
             page=page,
             query=query,
             status_filter=status,
+            saved_actions=payment_actions(request, lang, "supplier"),  # UX Wave 2: the receipt and the next one
             title=STRINGS[lang]["payments"],
             new_label=STRINGS[lang]["new_payment"],
             create_url="purchases:payment_create",
@@ -472,14 +474,19 @@ def payment_create(request):
         form = SupplierPaymentForm(request.POST, lang=lang)
         if form.is_valid():
             try:
-                form.create_with_fresh_number(lambda: record_supplier_payment(user=request.user, **form.cleaned_data))  # UI-TRACK F08
+                payment = form.create_with_fresh_number(lambda: record_supplier_payment(user=request.user, **form.cleaned_data))  # UI-TRACK F08
             except ValidationError as exc:
                 add_form_error(form, exc)
             else:
-                messages.success(request, STRINGS[lang]["payment_saved"])
-                return redirect(f"/purchases/payments/?lang={lang}")
+                from settings_core.saved_toast import amount_text, say_saved
+
+                say_saved(request, (f"Paid {amount_text(payment.amount, lang)} to «{payment.supplier.name}» ({payment.payment_number})" if lang == "en"
+                                    else f"اتسجل دفع {amount_text(payment.amount, lang)} لـ«{payment.supplier.name}» ({payment.payment_number})"))
+                return redirect(f"/purchases/payments/?lang={lang}&saved={payment.pk}")
     else:
         form = SupplierPaymentForm(lang=lang, initial=_party_initial(request, "supplier"))
+    from parties.views import due_on_form, may_see_balance
+
     return render(
         request,
         "payments/form.html",
@@ -488,6 +495,11 @@ def payment_create(request):
             form=form,
             title=STRINGS[lang]["new_payment"],
             back_url="purchases:payments",
+            # UX Wave 2: «مستحق ليه …» with a «المبلغ كله» chip, as on the collection form.
+            party_kind="supplier",
+            show_due=may_see_balance(request.user, "supplier"),
+            due=due_on_form(request.user, "supplier", form["supplier"].value()),
+            submit_label="Record the payment" if lang == "en" else "سجّل الدفعة",
         ),
     )
 
