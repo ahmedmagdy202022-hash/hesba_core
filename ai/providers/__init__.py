@@ -104,6 +104,17 @@ def _claude_router():
     return None
 
 
+def _sample_reading():
+    """The mock invoice reader's answer: a pharmacy reads a medicine distributor's invoice, whatever the photo; every other
+    activity the car-parts one. Looked up when a photo is read, so building the reader touches no database."""
+
+    from settings_core.demo_ai import pharmacy
+
+    from .mock import PHARMACY_SAMPLE_READING, SAMPLE_READING
+
+    return PHARMACY_SAMPLE_READING if pharmacy() else SAMPLE_READING
+
+
 def _claude_invoice_reader():
     """A3 (HG-081). The same rules as the router: live needs the key and a model (a key missing connects nothing, never
     the mock); the mock is built without touching the SDK."""
@@ -119,7 +130,7 @@ def _claude_invoice_reader():
     if current == MOCK:
         from .mock import MockClaudeInvoiceReader
 
-        return MockClaudeInvoiceReader(model=model or "mock-model")
+        return MockClaudeInvoiceReader(model=model or "mock-model", reading=_sample_reading)
     return None
 
 

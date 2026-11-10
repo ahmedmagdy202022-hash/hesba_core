@@ -19,8 +19,11 @@ posting, a ledger or a cashbox row by hand.
 
 Only when the capability is on (``ai_invoice_photo``, with purchases on, for the A3 records; ``ai_voice_summary`` for the
 collection), and only once: the item ``DEMO-AI-01`` and the payment ``DEMO-CR-AI`` say each part is already there.
-A pharmacy gets no car parts (R1: they showed in its till search and drug lists); its invoice-photo sample is read the
-same way, with every line mapped by hand.
+A pharmacy gets no car parts (R1: they showed in its till search and drug lists). Its invoice-photo sample is a medicine
+distributor's (``PHARMACY_SAMPLE_READING``) and needs nothing seeded here: the supplier «الشركة المتحدة لتوزيع الأدوية»
+and two of its lines («باراسيتامول 500 مجم», «فيتامين سي 1000 فوار») are the pharmacy demo's own records, matched by
+exact name; the third line («شراب كحة أطفال 100 مل») matches nothing on purpose, so the visitor maps it by hand to the
+shop's «شراب كحة للأطفال 100 مل» (``settings_core.tests_demo_ai`` pins all of that).
 """
 
 from datetime import timedelta
@@ -58,7 +61,7 @@ def seed(master, owner, modules=()):
     from sales.models import CustomerPayment
     from settings_core.capabilities import capability_enabled
 
-    photo = (capability_enabled("ai_invoice_photo") and "purchases" in modules and not _pharmacy()
+    photo = (capability_enabled("ai_invoice_photo") and "purchases" in modules and not pharmacy()
              and not Item.objects.filter(item_code=SENTINEL).exists())
     collection = capability_enabled("ai_voice_summary") and not CustomerPayment.objects.filter(payment_number=COLLECTION_NUMBER).exists()
     if not (photo or collection):
@@ -71,8 +74,9 @@ def seed(master, owner, modules=()):
     return True
 
 
-def _pharmacy():
-    """R1: a pharmacy's shelf is drugs; the car parts of the invoice-photo sample stay out of it."""
+def pharmacy():
+    """True when the active profile is a pharmacy. R1: its shelf is drugs, so the car parts of the invoice-photo sample
+    stay out of it, and the AI layer's invoice-photo mock reads (and offers) a medicine invoice instead."""
 
     from settings_core.models import ClientProfile
 

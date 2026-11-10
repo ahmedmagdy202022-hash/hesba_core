@@ -7,7 +7,8 @@ A2 (HG-080): ``MockClaudeRouter`` *is* ``ClaudeRouter`` with only ``_create`` sw
 by its words, deterministically, and answers in the Messages API's shape. It never imports or builds the SDK client.
 
 A3 (HG-081): ``MockClaudeInvoiceReader`` *is* ``ClaudeInvoiceReader`` with only ``_create`` swapped: whatever the photo,
-it answers with the approved artboard's sample reading, as a structured-output answer. It never builds the SDK client.
+it answers with a fixed sample reading, as a structured-output answer: the approved artboard's car-parts invoice, or,
+for a pharmacy (the caller picks it), a medicine distributor's. It never builds the SDK client.
 """
 
 import json
@@ -141,6 +142,23 @@ SAMPLE_READING = {
 }
 
 
+#: The same lesson for a pharmacy, in medicines: the distributor and the first two lines are the pharmacy demo's own
+#: records by exact name (``reports.demo_catalogs.PHARMACY``); the third is how the paper writes the shop's
+#: «شراب كحة للأطفال 100 مل» (so it needs mapping); the written total is again 100.00 above the lines' sum (4,068.00).
+PHARMACY_SAMPLE_READING = {
+    "supplier_name": "الشركة المتحدة لتوزيع الأدوية",
+    "supplier_code": "",
+    "invoice_number": "INV-7714",
+    "invoice_date": "2026-11-08",
+    "written_total": "4168.00",
+    "lines": [
+        {"item_code": "", "name": "باراسيتامول 500 مجم", "quantity": "40", "unit_price": "27.00"},
+        {"item_code": "", "name": "فيتامين سي 1000 فوار", "quantity": "24", "unit_price": "72.00"},
+        {"item_code": "", "name": "شراب كحة أطفال 100 مل", "quantity": "30", "unit_price": "42.00"},
+    ],
+}
+
+
 def reading_response(data, stop_reason="end_turn"):
     """A structured-output answer in the Messages API's shape: an (empty) thinking block, then the JSON text."""
 
@@ -149,17 +167,19 @@ def reading_response(data, stop_reason="end_turn"):
 
 
 class MockClaudeInvoiceReader(ClaudeInvoiceReader):
-    """``ClaudeInvoiceReader`` with only ``_create`` swapped: it answers with ``SAMPLE_READING`` whatever the photo.
-    ``answer`` lets a test make the "model" say anything (a response-shaped dict, or a callable taking the request);
-    ``fail_with`` makes it fail. It never imports or builds the SDK client."""
+    """``ClaudeInvoiceReader`` with only ``_create`` swapped: it answers with ``reading`` (a dict, or a function returning
+    one when the photo is read; default ``SAMPLE_READING``) whatever the photo. ``answer`` lets a test make the "model"
+    say anything (a response-shaped dict, or a callable taking the request); ``fail_with`` makes it fail. It never
+    imports or builds the SDK client."""
 
     code = "claude_invoice_reader_mock"
     live = False
 
-    def __init__(self, model="mock-model", answer=None, fail_with=None):
+    def __init__(self, model="mock-model", answer=None, fail_with=None, reading=None):
         super().__init__(api_key="mock-api-key", model=model)
         self.answer = answer
         self.fail_with = fail_with
+        self.reading = reading or SAMPLE_READING
         self.calls = []
 
     def _create(self, request):
@@ -168,4 +188,4 @@ class MockClaudeInvoiceReader(ClaudeInvoiceReader):
             raise ProviderError(self.fail_with)
         if self.answer is not None:
             return self.answer(request) if callable(self.answer) else self.answer
-        return reading_response(SAMPLE_READING)
+        return reading_response(self.reading() if callable(self.reading) else self.reading)
