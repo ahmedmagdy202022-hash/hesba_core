@@ -12,6 +12,8 @@ from master_data.models import Customer
 
 from appointments.services import scoped as scoped_appointments
 
+from attachments import ui as attachments_ui
+
 from . import services
 from .models import BloodType, ClinicalVisit, Gender, InsuranceContract
 
@@ -216,7 +218,9 @@ def patient_file(request, pk):
                                                       is_physio=_is_physio(), physio_label=PHYSIO_WORDS[lang]["title"],
                                                       is_vet=_is_vet(), vw=VET_WORDS[lang], animals=_animals_of(patient, lang) if _is_vet() else [],
                                                       can_write=can_write, error=error, genders=Gender.values, bloods=BloodType.values,
-                                                      user_id=request.user.pk, today=timezone.localdate()))
+                                                      user_id=request.user.pk, today=timezone.localdate(),
+                                                      attachments=attachments_ui.medical_card(file, request.user, lang),  # M5 (HG-083)
+                                                      visit_files=attachments_ui.patient_visit_files(patient, request.user, lang, show_all=request.GET.get("files") == "all")))
 
 
 def _doctors():
@@ -263,7 +267,8 @@ def visit_edit(request, pk=None, visit_pk=None):
     return render(request, "medical/visit_form.html", _base(lang, patient=patient, visit=visit, appointment=appointment, error=error, post=request.POST,
                                                             doctors=_doctors(), default_doctor=default_doctor, animals=animals,
                                                             default_animal=default_animal, animal_label=VET_WORDS[lang]["animal"],
-                                                            default_date=(visit.visit_date if visit else timezone.localdate())))
+                                                            default_date=(visit.visit_date if visit else timezone.localdate()),
+                                                            attachments=attachments_ui.medical_card(visit, request.user, lang) if visit else None))  # M5 (HG-083): a saved visit only
 
 
 def prescription(request, visit_pk):
