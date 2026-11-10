@@ -1,7 +1,7 @@
 {% extends "operations/base.html" %}
 {% load l10n %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'medical:file' patient.pk %}?lang={{ lang }}">← {{ patient.name }}</a><h1>{% if visit %}{{ words.edit }} — {{ words.visit }}{% else %}{{ words.new_visit|cut:'+ ' }}{% endif %}</h1>{% if appointment %}<p>{{ words.from_appointment }} <bdi>{{ appointment.number }}</bdi></p>{% endif %}</div></section>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'medical:file' patient.pk %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ patient.name }}</a><h1>{% if visit %}{{ words.edit }} — {{ words.visit }}{% else %}{{ words.new_visit|cut:'+ ' }}{% endif %}</h1>{% if appointment %}<p>{{ words.from_appointment }} <bdi>{{ appointment.number }}</bdi></p>{% endif %}</div></section>
 {% if error %}<div class="op-message op-message-error" role="alert" data-visit-error>{{ error }}</div>{% endif %}
 <form class="op-form" method="post" data-visit-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">{% if appointment %}<input type="hidden" name="appointment" value="{{ appointment.pk }}">{% endif %}
 <div class="op-form-grid">

@@ -1,7 +1,7 @@
 {% extends "operations/base.html" %}
 {% load hesba_format hesba_labels %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back stk-noprint" href="{% url 'inventory:stock' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ words.title }}</h1><p class="stk-noprint">{{ words.intro }}</p>{% if location %}<p class="stk-print-only"><strong>{{ location.name_ar }}</strong> · {{ count_date }}</p>{% endif %}</div>{% if stage == 'sheet' and sheet %}<div class="op-form-actions stk-noprint"><button type="button" class="op-secondary" onclick="window.print()">{{ words.print }}</button></div>{% endif %}</section>
+<section class="op-title-row"><div><a class="op-back stk-noprint" href="{% url 'inventory:stock' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.back }}</a><h1>{{ words.title }}</h1><p class="stk-noprint">{{ words.intro }}</p>{% if location %}<p class="stk-print-only"><strong>{{ location.name_ar }}</strong> · {{ count_date }}</p>{% endif %}</div>{% if stage == 'sheet' and sheet %}<div class="op-form-actions stk-noprint"><button type="button" class="op-secondary" onclick="window.print()">{{ words.print }}</button></div>{% endif %}</section>
 {% for error in errors %}<div class="op-errors" role="alert">{{ error }}</div>{% endfor %}
 {% if not location %}<p class="op-empty">{{ words.empty }}</p>{% else %}
 {% if stage == 'sheet' %}

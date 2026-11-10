@@ -2,7 +2,7 @@
 {% load hesba_format l10n static hesba_payments %}
 {% block styles %}{{ block.super }}{% if attachments %}<link rel="stylesheet" href="{% static 'hesba/css/attachments.css' %}?v=s1-ui-1">{% endif %}{% endblock %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'workorders:list' %}?lang={{ lang }}">← {{ words.back }}</a>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'workorders:list' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.back }}</a>
 <h1><bdi>{{ order.number }}</bdi> — {{ order.device }}</h1>
 <p>{{ order.customer.name }}{% if order.customer.phone %} · <bdi>{{ order.customer.phone }}</bdi>{% endif %}{% if order.serial %} · {{ words.serial }} <bdi>{{ order.serial }}</bdi>{% endif %}
  · <span class="op-status {% if order.status == 'ready' %}op-status-open{% elif order.status == 'delivered' %}op-status-posted{% elif order.status == 'cancelled' %}op-status-cancelled{% else %}op-status-draft{% endif %}" data-status="{{ order.status }}">{% for key, label in labels.items %}{% if key == order.status %}{{ label }}{% endif %}{% endfor %}</span></p></div>

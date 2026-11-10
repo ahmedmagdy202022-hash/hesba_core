@@ -4,7 +4,7 @@
 {% block styles %}{{ block.super }}
 <link rel="stylesheet" href="{% static 'hesba/css/invoice_form.css' %}?v=an3-1">{% endblock %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'sales:list' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ words.new }}</h1></div></section>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'sales:list' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.back }}</a><h1>{{ words.new }}</h1></div></section>
 {% if from_order %}<div class="op-message" role="status" data-from-order-note>{% if lang == 'en' %}From sales order{% else %}من أمر البيع{% endif %} <a href="{% url 'orders:detail' from_order.pk %}?lang={{ lang }}"><bdi>{{ from_order.display_number }}</bdi></a> — {% if lang == 'en' %}what is left on it is filled in below. Change the quantities to invoice part of it.{% else %}الباقي منه متكتب تحت. غيّر الكميات لو هتفوتر جزء بس.{% endif %}</div>{% endif %}
 {% if from_prescription %}<div class="op-message" role="status" data-from-prescription-note>{% if lang == 'en' %}Dispensing prescription{% else %}صرف الروشتة{% endif %} <a href="{% url 'pharmacy:prescription' from_prescription.pk %}?lang={{ lang }}"><bdi>{{ from_prescription.number }}</bdi></a> — {{ from_prescription.patient_name }}. {% if lang == 'en' %}Its drugs are filled in below at the customer's price.{% else %}أدويتها متكتبة تحت بسعر العميل.{% endif %}</div>{% endif %}
 {% shift_gate %}

@@ -1,7 +1,7 @@
 {% extends "operations/base.html" %}
 {% load hesba_format %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'giftcards:list' %}?lang={{ lang }}">← {{ words.back }}</a><h1><bdi>{{ card.number }}</bdi></h1><p><bdi dir="ltr" data-code>{{ code }}</bdi> · {{ card.holder_name|default:"—" }}</p></div>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'giftcards:list' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.back }}</a><h1><bdi>{{ card.number }}</bdi></h1><p><bdi dir="ltr" data-code>{{ code }}</bdi> · {{ card.holder_name|default:"—" }}</p></div>
 <div class="op-form-actions"><a class="op-secondary" href="{% url 'giftcards:receipt' card.pk %}?lang={{ lang }}">{{ words.receipt }}</a><span class="op-status{% if card.status == 'cancelled' %} op-status-cancelled{% else %} op-status-posted{% endif %}">{{ status }}</span></div></section>
 <div class="op-summary-grid op-summary-grid--compact">
 <article><small>{{ words.face }}</small><strong><bdi>{{ card.face_value|money }}</bdi></strong></article>

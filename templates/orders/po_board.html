@@ -1,7 +1,7 @@
 {% extends "operations/base.html" %}
 {% load hesba_format %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'purchases:list' %}?lang={{ lang }}">← {% if lang == 'en' %}Purchases{% else %}المشتريات{% endif %}</a><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'purchases:list' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{% if lang == 'en' %}Purchases{% else %}المشتريات{% endif %}</a><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div>
 {% if can_manage %}<div class="op-form-actions"><a class="op-primary" href="{% url 'purchase_orders:new' %}?lang={{ lang }}" data-new-po>{{ words.new }}</a></div>{% endif %}</section>
 <section class="op-summary-grid">
 <article><small>{{ words.f_open }}</small><strong data-count-open>{{ counts.open }}</strong></article>

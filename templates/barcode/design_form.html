@@ -2,7 +2,7 @@
 {% load static l10n %}
 {% block operation_content %}
 <link rel="stylesheet" href="{% static 'hesba/css/label_designer.css' %}?v=label-003">
-<section class="op-title-row"><div><a class="op-back" href="{% url 'barcode:designs' %}?lang={{ lang }}">← {{ words.designs }}</a><h1>{% if editing %}{{ design.name }}{% else %}{{ words.new_design }}{% endif %}</h1></div></section>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'barcode:designs' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.designs }}</a><h1>{% if editing %}{{ design.name }}{% else %}{{ words.new_design }}{% endif %}</h1></div></section>
 {% if errors %}<div class="op-message op-message-error" role="alert" data-design-errors>{% for e in errors %}<p>{{ e }}</p>{% endfor %}</div>{% endif %}
 {% localize off %}
 <div class="ld-layout">

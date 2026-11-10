@@ -1,7 +1,7 @@
 {% extends "operations/base.html" %}
 {% load hesba_format %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'restaurant:board' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ iw.report }}</h1><p>{{ iw.report_intro }}</p></div></section>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'restaurant:board' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.back }}</a><h1>{{ iw.report }}</h1><p>{{ iw.report_intro }}</p></div></section>
 {% if note %}<p class="op-notice">{{ note }}</p>{% endif %}
 <form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}">
 <label class="sr-only" for="rr-from">{{ iw.from }}</label><input id="rr-from" type="date" name="from" value="{{ first|date:'Y-m-d' }}" max="{{ today|date:'Y-m-d' }}">

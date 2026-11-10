@@ -1,7 +1,7 @@
 {% extends "operations/base.html" %}
 {% load l10n %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'medical:file' animal.owner.pk %}?lang={{ lang }}">← {{ animal.owner.name }}</a>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'medical:file' animal.owner.pk %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ animal.owner.name }}</a>
 <h1>{{ animal.name }}</h1><p>{{ animal.species_label }}{% if animal.breed %} · {{ animal.breed }}{% endif %}{% if animal.age_text %} · {{ animal.age_text }}{% endif %}{% if animal.sex %} · {% if animal.sex == 'male' %}{{ vw.male }}{% else %}{{ vw.female }}{% endif %}{% endif %}{% if animal.neutered %} · {{ vw.neutered }}{% endif %}</p></div>
 <div class="op-form-actions">{% if can_write %}<a class="op-primary" href="{% url 'medical:visit_new' animal.owner.pk %}?lang={{ lang }}&animal={{ animal.pk }}">{{ vw.new_visit }}</a><a class="op-secondary" href="?lang={{ lang }}&edit=1">{{ vw.edit }}</a>{% endif %}</div></section>
 {% if animal.allergies %}<div class="op-message op-message-error" role="alert" data-animal-allergy><strong>⚠ {{ vw.allergies }}:</strong> {{ animal.allergies|linebreaksbr }}</div>{% endif %}

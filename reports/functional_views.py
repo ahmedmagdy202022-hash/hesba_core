@@ -26,14 +26,14 @@ from config.paging import page_of
 
 
 STRINGS = {
-    "ar": {"page_title": "التقارير", "dashboard": "لوحة القيادة", "language": "English", "reports": "التقارير", "search": "تطبيق الفلاتر", "empty": "لا توجد نتائج مطابقة.", "back": "العودة للتقارير", "all_statuses": "كل الحالات", "all_cashboxes": "كل الخزن"},
+    "ar": {"page_title": "التقارير", "dashboard": "لوحة القيادة", "language": "English", "reports": "التقارير", "search": "تطبيق الفلاتر", "empty": "مفيش نتايج بالفلاتر دي.", "back": "التقارير", "all_statuses": "كل الحالات", "all_cashboxes": "كل الخزن"},
     "en": {"page_title": "Reports", "dashboard": "Dashboard", "language": "العربية", "reports": "Read-only report center", "search": "Apply filters", "empty": "No matching results.", "back": "Back to reports", "all_statuses": "All statuses", "all_cashboxes": "All cashboxes"},
 }
 
 REPORT_CARDS = (
     ("reports:insights", "reports.view_all_sales_report", "Business insights", "تحليل النشاط", "The last 30 days in plain words and charts, with what your kind of business watches", "آخر 30 يوم بالكلام والرسومات، ومعاها اللي نشاطك محتاج يتابعه"),
     ("reports:daily", "reports.view_sales_report", "Daily summary", "ملخص اليوم", "Yesterday's sales, cash, collections and alerts on one page — send it on WhatsApp", "مبيعات وخزن وتحصيلات وتنبيهات امبارح في صفحة واحدة — وابعتها واتساب"),
-    ("reports:sales", "reports.view_sales_report", "Sales Report", "تقرير المبيعات", "Posted, draft, and cancelled sales invoices", "فواتير البيع المرحلة والمسودة والملغاة"),
+    ("reports:sales", "reports.view_sales_report", "Sales Report", "تقرير المبيعات", "Posted, draft, and cancelled sales invoices", "فواتير البيع النهائية والمسودة والملغية"),
     ("reports:purchases", "reports.view_purchase_report", "Purchase Report", "تقرير المشتريات", "Purchase invoice history and due context", "سجل فواتير الشراء والمتبقي"),
     ("reports:inventory", "reports.view_inventory_report", "Inventory Report", "تقرير المخزون", "Stock by item and active location", "المخزون حسب الصنف والموقع"),
     ("reports:customers", "reports.view_customer_report", "Customer Report", "تقرير العملاء", "Balances and customer statement entries", "أرصدة وحركات كشف حساب العملاء"),

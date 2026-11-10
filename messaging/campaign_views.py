@@ -17,7 +17,7 @@ WORDS = {
     "ar": {
         "title": "حملات الولاء والرسائل", "intro": "اكتب رسالة لشريحة من العملاء وحطها في صندوق الرسائل. مفيش حاجة بتتبعت من هنا: كل رسالة بتتبعت من الصندوق بضغطة واتساب، أو أوتوماتيك لما واتساب بيزنس يتوصل.",
         "new": "حملة جديدة", "outbox": "افتح صندوق الرسائل", "campaigns": "الحملات", "none": "مفيش حملات لسه.", "name": "اسم الحملة", "audience": "الشريحة", "day": "اليوم", "status": "الحالة", "count": "الرسائل",
-        "by": "اتعملت بواسطة", "draft": "مسودة", "queued": "في الصندوق", "done": "خلصت", "open": "افتح", "delete": "امسح المسودة",
+        "by": "اتعملت بواسطة", "draft": "مسودة", "queued": "في الصندوق", "done": "خلصت", "open": "افتح", "delete": "امسح المسودة", "delete_confirm": "تمسح المسودة دي؟",
         "step1": "اختار مين هيستلم", "step2": "الرسالة", "text": "نص الرسالة", "insert": "أدرج:", "chars": "حرف", "category": "الفئة", "choose": "اختار...", "when": "اليوم اللي تبدأ فيه",
         "who": "مين هيستلم بالظبط", "reach": "عميل هيستلموا الرسالة", "match": "مطابقين للشريحة", "no_phone": "ناقص: من غير رقم موبايل صالح", "dups": "ناقص: رقم متكرر (بيوصل مرة واحدة)",
         "preview": "معاينة الرسالة", "preview_note": "المعاينة بأول عميل في الشريحة.", "save": "احفظ كمسودة", "saved": "اتحفظت المسودة.",
@@ -45,7 +45,7 @@ WORDS = {
     "en": {
         "title": "Loyalty and message campaigns", "intro": "Write one message to a slice of your customers and put it on the message outbox. Nothing is sent from here: each message goes from the outbox with one WhatsApp click, or by itself once WhatsApp Business is connected.",
         "new": "New campaign", "outbox": "Open the outbox", "campaigns": "Campaigns", "none": "No campaigns yet.", "name": "Campaign name", "audience": "Audience", "day": "Day", "status": "Status", "count": "Messages",
-        "by": "Made by", "draft": "Draft", "queued": "On the outbox", "done": "Done", "open": "Open", "delete": "Delete draft",
+        "by": "Made by", "draft": "Draft", "queued": "On the outbox", "done": "Done", "open": "Open", "delete": "Delete draft", "delete_confirm": "Delete this draft?",
         "step1": "Choose who receives it", "step2": "The message", "text": "Message text", "insert": "Insert:", "chars": "characters", "category": "Category", "choose": "Choose...", "when": "Start on",
         "who": "Exactly who receives it", "reach": "customers will get the message", "match": "Matching the audience", "no_phone": "Minus: no valid mobile number", "dups": "Minus: repeated number (it gets one)",
         "preview": "Message preview", "preview_note": "Previewed with the first customer of the audience.", "save": "Save as draft", "saved": "Draft saved.",

@@ -1,7 +1,7 @@
 {% extends "operations/base.html" %}
 {% load static hesba_format hesba_labels hesba_invoice %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'purchase_orders:list' %}?lang={{ lang }}">← {{ words.back }}</a>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'purchase_orders:list' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.back }}</a>
 <h1><bdi>{{ order.number }}</bdi> — {{ order.supplier.name }}</h1>
 <p>{{ words.date }} <bdi>{{ order.order_date|date:"Y-m-d" }}</bdi>{% if order.expected_on %} · {{ words.expected }} <bdi>{{ order.expected_on|date:"Y-m-d" }}</bdi>{% endif %} · {% include "orders/_po_state.html" %}</p></div>
 <div class="op-form-actions">

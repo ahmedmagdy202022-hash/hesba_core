@@ -6,7 +6,7 @@
 <title>{{ words.receipt }} {{ card.number }}</title>
 {% include "partials/brand_icons.html" %}
 <link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
-<link rel="stylesheet" href="{% static 'hesba/css/print.css' %}?v=print-002">
+<link rel="stylesheet" href="{% static 'hesba/css/print.css' %}?v=print-004">
 </head>
 <body class="pr-body pr-receipt" data-format="receipt">
 <nav class="pr-toolbar" aria-label="{{ words.print }}"><a class="pr-button" href="{% url 'giftcards:detail' card.pk %}?lang={{ lang }}">{{ words.back }}</a>{% if can_reveal and not full %}<a class="pr-button" href="?lang={{ lang }}&amp;reveal=1" data-reveal>{{ words.reveal }}</a>{% endif %}<button class="pr-button pr-button--primary" type="button" data-print>{{ words.print }}</button></nav>

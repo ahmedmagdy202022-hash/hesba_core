@@ -2,7 +2,7 @@
 {% load hesba_paging %}
 {% load hesba_format l10n %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'pricing:list' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ price_list.label }}</h1><p><bdi>{{ price_list.code }}</bdi> · <bdi dir="ltr">{% if price_list.adjust_percent > 0 %}+{% endif %}{{ price_list.adjust_percent|unlocalize }}%</bdi> · {% if price_list.active %}{{ words.active }}{% else %}{{ words.inactive }}{% endif %}</p></div></section>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'pricing:list' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.back }}</a><h1>{{ price_list.label }}</h1><p><bdi>{{ price_list.code }}</bdi> · <bdi dir="ltr">{% if price_list.adjust_percent > 0 %}+{% endif %}{{ price_list.adjust_percent|unlocalize }}%</bdi> · {% if price_list.active %}{{ words.active }}{% else %}{{ words.inactive }}{% endif %}</p></div></section>
 {% if can_manage %}
 <form class="op-form" method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="header">
 <div class="op-form-grid">

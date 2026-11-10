@@ -6,7 +6,7 @@
 {# UX Wave 2: one primary («+ صنف جديد»), the rest in «⋯» with print and Excel; filters behind «فلترة» on a phone; a two-line row per record. #}
 <section class="md-title-row hs-head">
   <div>
-    <a class="md-back-link" href="{% url 'master_data:hub' %}?lang={{ lang }}">{% if lang == 'en' %}←{% else %}→{% endif %} {{ words.back }}</a>
+    <a class="md-back-link" href="{% url 'master_data:hub' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{% if lang == 'en' %}{% else %}{% endif %} {{ words.back }}</a>
     <h1>{{ entity_title }}</h1>
   </div>
   <div class="hs-head__actions">

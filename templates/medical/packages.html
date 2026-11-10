@@ -1,7 +1,7 @@
 {% extends "operations/base.html" %}
 {% load hesba_format %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'medical:file' patient.pk %}?lang={{ lang }}">← {{ pw.back }}</a>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'medical:file' patient.pk %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ pw.back }}</a>
 <h1>{{ pw.title }} — {{ patient.name }}</h1><p>{{ pw.intro }}</p></div></section>
 {% if error %}<p class="op-message op-message-error" role="alert">{{ error }}</p>{% endif %}
 <h2>{{ pw.packages }}</h2>

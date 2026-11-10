@@ -1,6 +1,6 @@
 {% extends "operations/base.html" %}
 {% block operation_content %}
-<section class="op-title-row"><div>{% if employee %}<a class="op-back" href="{% url 'attendance:month' %}?lang={{ lang }}&month={{ first|date:'Y-m' }}">← {{ words.all_staff }}</a>{% endif %}
+<section class="op-title-row"><div>{% if employee %}<a class="op-back" href="{% url 'attendance:month' %}?lang={{ lang }}&month={{ first|date:'Y-m' }}">{% include "partials/back_arrow.html" %}{{ words.all_staff }}</a>{% endif %}
 <h1>{{ words.tab_month }}{% if employee %} — {{ employee.name }}{% endif %}</h1><p>{{ words.payroll_hint }}</p></div></section>
 {% include "attendance/_tabs.html" %}
 {% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}

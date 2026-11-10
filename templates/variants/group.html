@@ -2,7 +2,7 @@
 {% load hesba_format l10n static %}
 {% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/variants.css' %}?v=an5-1">{% endblock %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'variants:index' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ group.name }} <small class="hs-code"><bdi>{{ group.code }}</bdi></small></h1>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'variants:index' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.back }}</a><h1>{{ group.name }} <small class="hs-code"><bdi>{{ group.code }}</bdi></small></h1>
 <p class="vr-facts"><span>{{ words.sale_price }} <b>{{ group.default_sale_price|money }}</b></span><span>{{ words.purchase_price }} <b>{{ group.default_purchase_price|money }}</b></span><span>{% if lang == 'en' %}{{ item_count }} items{% else %}{{ item_count }} صنف{% endif %}</span><span>{% if lang == 'en' %}Stock{% else %}المخزون{% endif %} <b data-variant-total>{{ grid.total|qty }}</b></span></p></div>
 {% if can_labels %}<div class="op-form-actions"><a class="op-secondary" href="{% url 'barcode:labels' %}?q={{ group.code|urlencode }}&amp;lang={{ lang }}" data-variant-labels>{{ words.labels }}</a></div>{% endif %}</section>
 <section class="vr-card"><header><h2>{{ words.stock_grid }}</h2><p class="op-muted">{{ words.grid_hint }}</p></header>

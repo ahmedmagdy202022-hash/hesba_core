@@ -54,6 +54,7 @@ def _boom(request):
 urlpatterns = [path("boom/", _boom)]
 
 
+@override_settings(DEBUG=False)
 class NotFoundPageTests(TestCase):
     """The test runner keeps DEBUG off, so a missing URL renders templates/404.html as production does."""
 
@@ -91,7 +92,7 @@ class NotFoundPageTests(TestCase):
         self.assertIn(f'href="{reverse("demo_landing")}?lang=ar" data-error-home', page.content.decode())
 
 
-@override_settings(ROOT_URLCONF=__name__)
+@override_settings(ROOT_URLCONF=__name__, DEBUG=False)
 class ServerErrorPageTests(TestCase):
     def test_a_failing_view_renders_the_branded_500(self):
         client = Client(raise_request_exception=False)
@@ -171,6 +172,17 @@ class EnglishFormatsTests(TestCase):
     def test_the_language_switch_lasts_only_for_the_request(self):
         self.client.get(reverse("reports:profit") + "?lang=en")
         self.assertEqual(translation.get_language(), "ar")
+
+    def test_a_bare_decimal_follows_the_page_language(self):
+        from django.http import HttpResponse
+        from django.template import Context, Template
+
+        from config.middleware import PageLanguageMiddleware
+
+        view = PageLanguageMiddleware(lambda request: HttpResponse(Template("{{ v }}").render(Context({"v": D("12.5")}))))
+        self.assertEqual(view(RequestFactory().get("/", {"lang": "en"})).content.decode(), "12.5")
+        self.assertEqual(view(RequestFactory().get("/", {"lang": "ar"})).content.decode(), "12,5")  # Arabic as before
+        self.assertEqual(view(RequestFactory().get("/")).content.decode(), "12,5")
 
     def test_day_text_follows_the_active_language_without_an_argument(self):
         with translation.override("en"):
@@ -329,3 +341,71 @@ class SettingsMenuTests(TestCase):
         self.assertIn(".set-nav__link{position:relative;display:grid;grid-template-columns:22px minmax(0,1fr);align-items:center;column-gap:10px;\n  min-height:var(--hs-control-height)", css)
         self.assertIn("  .set-nav__link{flex:none;display:inline-flex;align-items:center;gap:6px;min-height:var(--hs-control-height)", css)
         self.assertIn("settings.css' %}?v=st-4", open(get_template("settings_core/base.html").origin.name, encoding="utf-8").read())
+
+
+class BackArrowTests(SimpleTestCase):
+    """One back arrow: the inline SVG partial inside every back link, never a typed «←»/«→» that points the wrong way."""
+
+    def test_no_back_link_carries_a_typed_arrow(self):
+        import pathlib
+
+        root = pathlib.Path(get_template("base_app.html").origin.name).parent
+        typed, with_svg = [], 0
+        for path_ in root.rglob("*.html"):
+            rel = str(path_.relative_to(root))
+            if rel.startswith(("emails/", "setup/")):
+                continue
+            text = path_.read_text(encoding="utf-8")
+            for match in re.finditer(r'<a\b[^>]*class="(?:op-back|md-back-link|pr-button pr-button--ghost|lb-button)[^"]*"[^>]*>(.*?)</a>', text, re.S):
+                if re.search(r"[←→‹›]", match.group(1)):
+                    typed.append(rel)
+                with_svg += 'partials/back_arrow.html' in match.group(1)
+        self.assertEqual(typed, [])
+        self.assertGreater(with_svg, 100)
+
+    def test_the_print_toolbars_go_back_the_same_way(self):
+        for name in ("barcode/labels_print.html", "parties/statement_print.html", "printing/document.html",
+                     "projects/certificate_print.html", "workorders/receipt.html", "restaurant/ticket.html"):
+            with self.subTest(template=name):
+                text = open(get_template(name).origin.name, encoding="utf-8").read()
+                self.assertNotIn("← ", text)
+                self.assertIn('{% include "partials/back_arrow.html" %}', text)
+        for sheet in ("hesba/css/print.css", "hesba/css/labels.css"):
+            css = read_static(sheet)
+            self.assertIn('[dir="rtl"] .hs-back-arrow{transform:scaleX(-1)}', css)
+            self.assertIn("button{display:inline-flex;align-items:center;min-height:var(--hs-control-height)", css)
+
+    def test_the_arrow_turns_with_the_page(self):
+        svg = open(get_template("partials/back_arrow.html").origin.name, encoding="utf-8").read()
+        self.assertIn('class="hs-back-arrow"', svg)
+        self.assertIn('aria-hidden="true"', svg)
+        css = read_static("hesba/css/buttons.css")
+        self.assertIn('[dir="rtl"] .hs-back-arrow{transform:scaleX(-1)}', css)
+        self.assertIn(".op-back{display:inline-flex;align-items:center;min-height:var(--hs-control-height);min-width:var(--hs-control-height)", css)
+        tokens_only(self, css[css.index("/* UX Wave 3"):])
+
+
+class GlossaryTests(TestCase):
+    def setUp(self):
+        prepared_client()
+        self.client.force_login(person(RoleCode.OWNER, "ux3_words"))
+
+    def test_the_posted_total_reads_final(self):
+        body = self.client.get(reverse("reports:sales") + "?lang=ar").content.decode()
+        self.assertNotIn("المرحّل", body)
+        self.assertNotIn("لا توجد", body)
+
+    def test_the_hub_and_lists_speak_plainly(self):
+        for name in ("report_hub", "reports:profit", "inventory:movements", "cashboxes:list"):
+            with self.subTest(page=name):
+                body = self.client.get(reverse(name) + "?lang=ar").content.decode()
+                for word in ("مرحلة والمسودة", "لا توجد", "يرجى", "العودة للتقارير"):
+                    self.assertNotIn(word, body)
+
+    def test_the_remaining_choice_lists_say_choose(self):
+        for url in (reverse("cashboxes:operation_create"), reverse("inventory:transfer"),
+                    reverse("inventory:adjustment"), reverse("settings_core:user_create")):
+            with self.subTest(url=url):
+                body = self.client.get(url + "?lang=ar").content.decode()
+                self.assertNotIn(">---------<", body)
+                self.assertIn(">اختار …<", body)

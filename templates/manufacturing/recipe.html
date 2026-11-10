@@ -1,7 +1,7 @@
 {% extends "operations/base.html" %}
 {% load hesba_format %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'manufacturing:home' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ recipe.product.item_name }}</h1><p><span dir="ltr">{{ recipe.code|ltr }}</span>{% if recipe.name %} · {{ recipe.name }}{% endif %} · {{ words.output }}: {{ recipe.output_quantity|qty }}</p></div></section>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'manufacturing:home' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.back }}</a><h1>{{ recipe.product.item_name }}</h1><p><span dir="ltr">{{ recipe.code|ltr }}</span>{% if recipe.name %} · {{ recipe.name }}{% endif %} · {{ words.output }}: {{ recipe.output_quantity|qty }}</p></div></section>
 {% if error %}<div class="op-message op-message-error" role="alert" data-recipe-error>{{ error }}</div>{% endif %}
 <h2>{{ words.plan }}</h2>
 <form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><input name="batches" value="{{ batches }}" inputmode="decimal" dir="ltr" aria-label="{{ words.batches }}"><select name="location" aria-label="{{ words.location }}">{% for loc in locations %}<option value="{{ loc.pk }}"{% if location and loc.pk == location.pk %} selected{% endif %}>{{ loc }}</option>{% endfor %}</select><button type="submit">{{ words.check }}</button></form>

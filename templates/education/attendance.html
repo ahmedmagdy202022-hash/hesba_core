@@ -1,6 +1,6 @@
 {% extends "operations/base.html" %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'education:today' %}?lang={{ lang }}&date={{ day|date:'Y-m-d' }}">← {{ words.today }}</a><h1>{{ words.attendance }}: {{ group.course.name }} — {{ group.name }}</h1><p><bdi>{{ day|date:"Y-m-d" }}</bdi>{% if schedule %} · {{ schedule }}{% endif %}{% if group.teacher %} · {{ group.teacher.name }}{% endif %}</p></div></section>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'education:today' %}?lang={{ lang }}&date={{ day|date:'Y-m-d' }}">{% include "partials/back_arrow.html" %}{{ words.today }}</a><h1>{{ words.attendance }}: {{ group.course.name }} — {{ group.name }}</h1><p><bdi>{{ day|date:"Y-m-d" }}</bdi>{% if schedule %} · {{ schedule }}{% endif %}{% if group.teacher %} · {{ group.teacher.name }}{% endif %}</p></div></section>
 {% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
 {% if not scheduled %}<div class="op-message" role="status" data-off-day>{{ words.off_day }}</div>{% endif %}
 {% if saved and notify %}<section class="op-detail-meta" data-notify><h2>{{ words.notify }}</h2>{% for row in notify %}<p>{{ row.student.name }} — <a href="{{ row.notify }}" target="_blank" rel="noopener" data-whatsapp>{{ words.tell_parent }}</a></p>{% endfor %}</section>{% endif %}

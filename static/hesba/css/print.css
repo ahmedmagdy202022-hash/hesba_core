@@ -6,7 +6,7 @@ body.pr-body{margin:0;background:var(--hs-ground);color:var(--hs-ink);font-famil
 .pr-toolbar{position:sticky;top:0;z-index:2;display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:12px 16px;background:var(--hs-surface);border-bottom:1px solid var(--hs-line)}
 .pr-toolbar__formats{display:flex;gap:6px}
 .pr-toolbar__hint{flex-basis:100%;margin:0;color:var(--hs-muted);font-size:12px}
-.pr-button{display:inline-flex;align-items:center;min-height:40px;padding:0 14px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-md);background:var(--hs-surface);color:var(--hs-navy);font:inherit;font-weight:600;text-decoration:none;cursor:pointer}
+.pr-button{display:inline-flex;align-items:center;min-height:var(--hs-control-height);padding:0 14px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-md);background:var(--hs-surface);color:var(--hs-navy);font:inherit;font-weight:600;text-decoration:none;cursor:pointer}
 .pr-button.is-current{border-color:var(--hs-teal-deep);background:var(--hs-teal-wash)}
 .pr-button--primary{border:0;background:var(--hs-teal);color:var(--hs-on-teal);margin-inline-start:auto}
 .pr-button--ghost{border-color:transparent}
@@ -109,3 +109,7 @@ body.pr-body{margin:0;background:var(--hs-ground);color:var(--hs-ink);font-famil
 
 /* CONTRACT-002: three signatures on a progress certificate */
 .pr-signatures.pr-signatures--3{grid-template-columns:repeat(3,minmax(0,1fr))}
+
+/* UX Wave 3: the toolbar's back link carries the one back arrow (partials/back_arrow.html), turned for Arabic. */
+.hs-back-arrow{flex:none;width:18px;height:18px;margin-inline-end:var(--hs-space-2)}
+[dir="rtl"] .hs-back-arrow{transform:scaleX(-1)}

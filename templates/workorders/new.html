@@ -1,6 +1,6 @@
 {% extends "operations/base.html" %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'workorders:list' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ words.new }}</h1>{% if warranty_of %}<p data-warranty-of>{{ words.warranty_of }} <bdi>{{ warranty_of.number }}</bdi> — {{ warranty_of.customer.name }} · {{ words.warranty_until }} <bdi>{{ warranty_of.warranty_until|date:"Y-m-d" }}</bdi></p>{% endif %}</div></section>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'workorders:list' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.back }}</a><h1>{{ words.new }}</h1>{% if warranty_of %}<p data-warranty-of>{{ words.warranty_of }} <bdi>{{ warranty_of.number }}</bdi> — {{ warranty_of.customer.name }} · {{ words.warranty_until }} <bdi>{{ warranty_of.warranty_until|date:"Y-m-d" }}</bdi></p>{% endif %}</div></section>
 {% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
 <form class="op-form" method="post" data-receive>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">{% if warranty_of %}<input type="hidden" name="warranty_of" value="{{ warranty_of.pk }}">{% endif %}
 <div class="op-form-grid">

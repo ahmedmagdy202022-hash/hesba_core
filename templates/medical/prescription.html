@@ -1,7 +1,7 @@
 {% load static %}<!doctype html>
 <html lang="{{ lang }}" dir="{{ dir }}">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{{ words.rx }} — {{ visit.patient.name }}</title>
-<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}"><link rel="stylesheet" href="{% static 'hesba/css/print.css' %}?v=print-002">
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}"><link rel="stylesheet" href="{% static 'hesba/css/print.css' %}?v=print-004">
 <style>.rx{max-width:720px;margin:24px auto;padding:28px;background:var(--hs-surface);border:1px solid var(--hs-line);border-radius:14px;font-family:var(--hs-font-body);color:var(--hs-ink)}.rx header{display:flex;justify-content:space-between;gap:16px;border-bottom:2px solid var(--hs-teal);padding-bottom:12px}.rx h1{margin:0;font-family:var(--hs-font-head);color:var(--hs-navy);font-size:22px}.rx .meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 18px;margin:16px 0}.rx .big{font-size:40px;font-family:serif;color:var(--hs-teal-deep)}.rx .body{min-height:260px;white-space:pre-wrap;font-size:17px;line-height:1.9}.rx footer{display:flex;justify-content:space-between;margin-top:30px;padding-top:12px;border-top:1px solid var(--hs-line)}.rx .alert{color:var(--hs-danger-solid);font-weight:700}@media print{.no-print{display:none}.rx{border:0;margin:0}}</style></head>
 <body style="background:var(--hs-ground)">
 <p class="no-print" style="text-align:center"><button type="button" data-print style="min-height:44px;padding:0 18px;border:0;border-radius:10px;background:var(--hs-teal);color:var(--hs-on-teal);font-weight:700">{{ words.print }}</button></p>
