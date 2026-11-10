@@ -20,10 +20,11 @@
 {% endif %}
 <h2>{{ lw.history }}</h2>
 {% if can_write and days and not shareable %}<p class="op-notice" data-lab-share-blocked>{{ no_factor }}</p>{% endif %}
+{% if days and phone_only %}<p class="op-notice" data-lab-phone-only>{{ phone_only }}</p>{% endif %}
 {% for day, results in days %}
 <section class="op-detail-meta" data-lab-day="{{ day|date:'Y-m-d' }}"><p><strong><bdi>{{ day|date:"Y-m-d" }}</bdi></strong> · <a href="{% url 'medical:lab_sheet' patient.pk day|date:'Y-m-d' %}?lang={{ lang }}" data-lab-print>{{ lw.print }}</a></p>
 {% if can_write %}{% if shared and shared.day == day %}<div class="op-form" data-lab-share-box>
-<h3>{{ lw.send_h }}</h3><p class="op-muted">{{ share_note }}</p>
+<h3>{{ lw.send_h }}</h3>{% if shared.warning %}<p class="op-message op-message-error" data-lab-share-warning>{{ shared.warning }}</p>{% endif %}<p class="op-muted">{{ share_note }}</p>
 <p><input class="op-cell-text" type="text" readonly dir="ltr" value="{{ shared.url }}" aria-label="{{ lw.send_h }}" style="inline-size:100%;min-block-size:44px" data-lab-share-url></p>
 <div class="op-form-actions"><a class="op-primary" href="{{ shared.whatsapp }}" target="_blank" rel="noopener" data-lab-share-whatsapp>{{ lw.send_whatsapp }}</a><button class="op-secondary" type="button" data-copy-link="{{ shared.url }}">{{ lw.copy }}</button></div>
 <p class="op-muted">{{ lw.send_text_note }}</p></div>

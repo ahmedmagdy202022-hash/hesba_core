@@ -395,7 +395,7 @@ LAB_WORDS = {
            "signature": "توقيع المسؤول", "choose": "—", "none": "—", "remove": "امسح (اتسجلت غلط)", "reason": "السبب",
            # M6 (HG-085): the patient's link for one day
            "send": "ابعت النتيجة للمريض", "send_h": "لينك النتيجة للمريض", "send_whatsapp": "ابعته واتساب", "copy": "نسخ اللينك",
-           "send_note": "اللينك شغال {days} أيام، والمريض بيكتب سنة ميلاده أو آخر 4 أرقام من موبايله عشان يفتحه. لو النتيجة اتعدّلت اللينك ده بيبطل؛ ابعت لينك جديد.",
+           "send_note": "اللينك شغال {days} أيام، والمريض بيكتب سنة ميلاده (أو آخر 4 أرقام من موبايله لو مفيش تاريخ ميلاد في الملف) عشان يفتحه. لو النتيجة اتعدّلت اللينك ده بيبطل؛ ابعت لينك جديد.",
            "send_text_note": "رسالة الواتساب فيها اسم المعمل واللينك بس، من غير أسامي التحاليل ولا النتايج."},
     "en": {"title": "Lab results", "intro": "Enter each test's result; the value is checked against the normal range in force when it is entered.",
            "tests": "Tests and ranges", "tests_intro": "Each test with its unit and normal range. Changing a range never changes results already entered.",
@@ -406,7 +406,7 @@ LAB_WORDS = {
            "back": "Patient file", "sheet": "Laboratory report", "patient": "Patient", "file_no": "File no.", "age": "Age", "years": "yrs",
            "signature": "Signed", "choose": "—", "none": "—", "remove": "Remove (entered by mistake)", "reason": "Reason",
            "send": "Send the results to the patient", "send_h": "The patient's results link", "send_whatsapp": "Send on WhatsApp", "copy": "Copy link",
-           "send_note": "The link works for {days} days; the patient types their birth year or the last 4 digits of their phone to open it. If a result is changed this link stops working; send a new one.",
+           "send_note": "The link works for {days} days; the patient types their birth year (or the last 4 digits of their phone when the file has no birth date) to open it. If a result is changed this link stops working; send a new one.",
            "send_text_note": "The WhatsApp message carries the lab's name and the link only, never a test name or a result."},
 }
 
@@ -503,11 +503,13 @@ def lab_results(request, pk):
             result.flag_label = labels[result.flag]
             result.before = lab.previous(result)
     rows = [{"test": test, "value": request.POST.get(f"value_{test.pk}", ""), "text": request.POST.get(f"text_{test.pk}", "")} for test in tests]
-    shareable = can_write and public.can_share(patient)  # M6: with neither a birth year nor a phone the patient could not open it
+    found = public.factor(patient) if can_write else None  # M6: with neither a birth year nor a phone the patient could not open it
+    shareable = found is not None
     return render(request, "medical/lab_results.html", _base(lang, page_title=words["title"], lw=words, patient=patient, rows=rows, days=days,
                                                             can_write=can_write, error=error, today=timezone.localdate(),
                                                             taken_on=request.POST.get("taken_on") or timezone.localdate().isoformat(),
                                                             shareable=shareable, no_factor=public.WORDS[lang]["no_factor"], shared=shared,
+                                                            phone_only=public.WORDS[lang]["phone_only"] if found and found[0] == public.PHONE else "",
                                                             share_note=words["send_note"].format(days=public.days())))
 
 

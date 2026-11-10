@@ -14,10 +14,10 @@ no patient name, no test, no date. After it, the same content as the printed lab
 {% else %}
 <section class="cl-card" aria-labelledby="ll-ask-t" data-lab-ask>
   <h1 class="cl-h1" id="ll-ask-t">{{ ww.ask_h }}</h1>
-  <p>{{ ww.ask }}</p>
+  <p data-lab-factor="{{ kind }}">{{ ask }}</p>
   {% if message %}<div class="cl-msg cl-msg--danger ll-msg" id="ll-msg" role="alert" data-lab-message>{{ message }}</div>{% endif %}
   <form class="ll-form" method="post" action="{{ action }}" autocomplete="off">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
-    <label class="ll-label" for="ll-answer">{{ ww.label }}</label>
+    <label class="ll-label" for="ll-answer">{{ label }}</label>
     <input class="ll-input" id="ll-answer" name="answer" inputmode="numeric" pattern="[0-9٠-٩]*" maxlength="4" autocomplete="off" dir="ltr" required{% if message %} aria-describedby="ll-msg"{% endif %}>
     <div class="cl-actions"><button class="cl-btn cl-btn--primary" type="submit">{{ ww.open }}</button></div>
   </form>

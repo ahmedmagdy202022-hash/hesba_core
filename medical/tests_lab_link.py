@@ -55,12 +55,13 @@ class LabLinkTests(TestCase):
         self.group = lab.save_test({"name": "فصيلة الدم"}, self.owner)
         self.day = timezone.localdate() - timedelta(days=1)
         self.other_day = timezone.localdate() - timedelta(days=20)
-        # three patients, one per second-factor shape, with the same results
+        # one patient per second-factor shape, with the same results (two of the phone-only kind, to compare them)
         self.both = self._patient("LL-1", "منى عبد الله", "01001234567", date(1985, 3, 4))
         self.dob_only = self._patient("LL-2", "سامي فريد", "", date(1990, 7, 1))
         self.phone_only = self._patient("LL-3", "هالة نبيل", "01112223334", None)
+        self.phone_only2 = self._patient("LL-5", "عادل سمير", "01229998888", None)
         self.nothing = self._patient("LL-4", "كريم بلا بيانات", "", None)
-        for patient in (self.both, self.dob_only, self.phone_only, self.nothing):
+        for patient in (self.both, self.dob_only, self.phone_only, self.phone_only2, self.nothing):
             lab.record_results(patient, self.day, {self.hb: ("17.25", ""), self.sugar: ("88.4", ""), self.group: ("", "A+")}, self.owner)
         lab.record_results(self.both, self.other_day, {self.sugar: ("987.654", "")}, self.owner)  # another day: never on this link
         PatientFile.objects.filter(customer=self.both).update(allergies="بنسلين سري", notes="ملاحظة داخلية سرية")
@@ -105,6 +106,24 @@ class LabLinkTests(TestCase):
             self.assertNotContains(response, secret, status_code=status)
 
     # ---- before the factor ----
+
+    def test_ranges_and_values_are_isolated_left_to_right_on_both_sheets(self):
+        """«12 – 16» and «A+» must read left to right inside the RTL sheet: the whole range (dash and spaces included) in one
+        LTR isolate, each value in its own isolate. The browser check (HG-085) measured the glyph order in every layout."""
+
+        client = self._anon()
+        token = self._token(self.both)
+        self._pass(client, token, "1985")
+        staff = self.client.get(reverse("medical:lab_sheet", args=[self.both.pk, self.day.isoformat()]))
+        for lang in ("ar", "en"):
+            for page in (client.get(self._url(token, lang)), self.client.get(reverse("medical:lab_sheet", args=[self.both.pk, self.day.isoformat()]) + f"?lang={lang}")):
+                body = page.content.decode()
+                self.assertIn('<td data-label="{}"><span dir="ltr">12 – 16</span></td>'.format("المعدل الطبيعي" if lang == "ar" else "Normal range"), body)
+                self.assertIn('<span dir="ltr">70 – 100</span>', body)
+                self.assertIn("<bdi> A+</bdi>", body)
+                self.assertIn("<bdi>17.25</bdi>", body)
+                self.assertIn("<bdi>g/dL</bdi>", body)
+        self.assertEqual(staff.status_code, 200)
 
     def test_a_valid_link_shows_only_the_lab_and_the_question(self):
         link = self._link(self.both)
@@ -162,19 +181,31 @@ class LabLinkTests(TestCase):
         staff = self.client.get(reverse("medical:lab_sheet", args=[self.both.pk, self.day.isoformat()]))
         self.assertEqual(re.findall(r'data-sheet-result="(\d+)"', staff.content.decode()), shown)
 
-    def test_the_last_four_digits_open_it_and_arabic_digits_are_read(self):
+    def test_the_last_four_digits_open_it_only_when_the_file_has_no_birth_date(self):
         client = self._anon()
         token = self._token(self.phone_only)
-        self.assertEqual(self._pass(client, token, "٣٣٣٤").status_code, 303)
+        ask = client.get(self._url(token))
+        self.assertContains(ask, 'data-lab-factor="phone"')
+        self.assertContains(ask, "آخر 4 أرقام من رقم الموبايل")
+        self.assertNotContains(ask, "سنة ميلادك")  # one question, no «or»
+        self.assertEqual(self._pass(client, token, "٣٣٣٤").status_code, 303)  # Arabic digits are read
         self.assertContains(client.get(self._url(token)), 'data-lab-link="sheet"')
-        both = self._token(self.both)  # a patient with both: either one opens it
-        self.assertEqual(self._pass(self._anon(), both, "4567").status_code, 303)
+        # a file with a birth date: only the birth year; the phone's last 4 digits are no factor at all (the link goes to that phone)
+        both = self._token(self.both)
+        ask = self._anon().get(self._url(both))
+        self.assertContains(ask, 'data-lab-factor="year"')
+        self.assertContains(ask, "سنة ميلادك")
+        self.assertNotContains(ask, "آخر 4 أرقام")
+        self.assertEqual(self._pass(self._anon(), both, "4567").status_code, 400)
         self.assertEqual(self._pass(self._anon(), both, "1985").status_code, 303)
         self.assertEqual(self._pass(self._anon(), self._token(self.dob_only), "1990").status_code, 303)
+        self.assertEqual(public.factor(self.both), ("year", "1985"))
+        self.assertEqual(public.factor(self.phone_only), ("phone", "3334"))
+        self.assertIsNone(public.factor(self.nothing))
 
-    def test_wrong_answers_never_pass_and_look_the_same_whatever_is_on_file(self):
+    def test_wrong_answers_never_pass_and_look_the_same_within_each_kind_of_factor(self):
         bodies = []
-        for patient in (self.both, self.dob_only, self.phone_only):
+        for patient in (self.both, self.dob_only, self.phone_only, self.phone_only2):
             client = self._anon()
             token = self._token(patient)
             for answer in ("0000", "2000", "1234"):
@@ -186,11 +217,12 @@ class LabLinkTests(TestCase):
                 self.assertPrivate(response)
             self.assertContains(client.get(self._url(token)), 'data-lab-link="ask"')
             bodies.append(normalized(self._pass(client, token, "0000"), token))
-        self.assertEqual(bodies[0], bodies[1])
-        self.assertEqual(bodies[1], bodies[2])
-        # a birth year never opens a phone-only file, nor last-4 a birth-date-only one
+        self.assertEqual(bodies[0], bodies[1])  # birth year: a file with a phone too answers exactly as one without
+        self.assertEqual(bodies[2], bodies[3])  # phone's last 4 digits
+        # a birth year never opens a phone-only file, nor last-4 a birth-date file
         self.assertEqual(self._pass(self._anon(), self._token(self.phone_only), "1985").status_code, 400)
         self.assertEqual(self._pass(self._anon(), self._token(self.dob_only), "4567").status_code, 400)
+        self.assertEqual(self._pass(self._anon(), self._token(self.both), "4567").status_code, 400)
 
     def test_a_badly_typed_answer_is_not_counted(self):
         client = self._anon()
@@ -218,18 +250,86 @@ class LabLinkTests(TestCase):
         with patch("medical.public.timezone.now", return_value=timezone.now() + timedelta(seconds=public.TOKEN_SHORT[2] + 1)):
             self.assertEqual(self._pass(client, token, "1985").status_code, 303)
 
-    def test_the_link_has_a_daily_cap_too(self):
-        token = self._token(self.both)
-        start = timezone.now()
-        tried = 0
-        for window in range(3):
+    def _spend(self, token, wrong, start):
+        """``wrong`` wrong answers, spread over 15-minute windows so the short bucket never refuses them."""
+
+        done = 0
+        window = 0
+        while done < wrong:
             with patch("medical.public.timezone.now", return_value=start + timedelta(seconds=window * public.TOKEN_SHORT[2])):
-                for _ in range(public.TOKEN_SHORT[1]):
-                    if tried < public.TOKEN_DAY[1]:
-                        self._pass(self._anon(), token, "0000")
-                        tried += 1
-        with patch("medical.public.timezone.now", return_value=start + timedelta(seconds=3 * public.TOKEN_SHORT[2])):
-            self.assertEqual(self._pass(self._anon(), token, "1985").status_code, 429)
+                for _ in range(min(public.TOKEN_SHORT[1], wrong - done)):
+                    self.assertEqual(self._pass(self._anon(), token, "0000").status_code, 400)
+                    done += 1
+            window += 1
+        return start + timedelta(seconds=window * public.TOKEN_SHORT[2])
+
+    def test_a_link_has_a_lifetime_of_wrong_answers_then_it_is_dead(self):
+        self.assertEqual(public.TOKEN_LIFE[1], 8)
+        token = self._token(self.both)
+        passed = self._anon()
+        self.assertEqual(self._pass(passed, token, "1985").status_code, 303)  # a right answer is not charged
+        later = self._spend(token, public.TOKEN_LIFE[1], timezone.now())
+        with patch("medical.public.timezone.now", return_value=later):
+            self.assertDead(self._pass(self._anon(), token, "1985"))  # even the right answer, from anywhere
+            self.assertDead(self._pass(self._anon(REMOTE_ADDR="10.7.7.7"), token, "1985"))
+            self.assertDead(self._anon().get(self._url(token)))  # no question left to ask
+            self.assertContains(passed.get(self._url(token)), 'data-lab-link="sheet"')  # a browser that passed keeps its 30 minutes
+            self.assertDead(self._pass(passed, token, "1985"))  # but makes no new answer
+            # «ابعت تاني»: a new token with fresh counters, even within the same second
+            again = self._token(self.both)
+            self.assertNotEqual(again, token)
+            self.assertEqual(self._pass(self._anon(), again, "1985").status_code, 303)
+        self.assertEqual(AuditLog.objects.filter(action="open_lab_result_link").count(), 1)
+
+    def test_answers_take_their_slot_before_they_are_compared(self):
+        """N answers at once cannot compare more than the limit: the slot is taken (atomically) before the compare."""
+
+        import threading
+
+        from django.test import RequestFactory
+
+        token = self._token(self.both)
+        request = RequestFactory().post("/", REMOTE_ADDR="10.3.3.3")
+        # simulate N answers that all reach the counting step before any of them compares
+        outcomes = [public.take(token, request) for _ in range(12)]
+        self.assertEqual(outcomes.count("ok"), public.TOKEN_SHORT[1])
+        self.assertEqual(outcomes.count("busy"), 12 - public.TOKEN_SHORT[1])
+        self.assertEqual(cache.get(public._key(public.TOKEN_LIFE, public._digest(token))), public.TOKEN_SHORT[1])  # refused ones gave theirs back
+        # and with real threads, against the lifetime cap
+        cache.clear()
+        fresh = self._token(self.both)
+        results, barrier = [], threading.Barrier(20)
+
+        def answer():
+            barrier.wait()
+            results.append(public.take(fresh, request))
+
+        with patch.object(public, "TOKEN_SHORT", ("token15", 1000, 900)):
+            threads = [threading.Thread(target=answer) for _ in range(20)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+        self.assertEqual(results.count("ok"), public.TOKEN_LIFE[1])
+        self.assertEqual(results.count("dead"), 20 - public.TOKEN_LIFE[1])
+        self.assertTrue(public.used_up(fresh))
+        # the view itself compares only after its slot is taken
+        cache.clear()
+        seen = []
+        real = public._matches
+
+        def spy(patient, file, answer):
+            seen.append(cache.get(public._key(public.TOKEN_LIFE, public._digest(fresh))))
+            return real(patient, file, answer)
+
+        with patch.object(public, "_matches", side_effect=spy):
+            self.assertEqual(self._pass(self._anon(), fresh, "0000").status_code, 400)
+        self.assertEqual(seen, [1])
+        # a right answer gives its slot back
+        cache.clear()
+        self.assertEqual(public.take(fresh, request), "ok")
+        public.give_back(fresh, request)
+        self.assertEqual(cache.get(public._key(public.TOKEN_LIFE, public._digest(fresh))), 0)
 
     def test_wrong_answers_are_throttled_per_address(self):
         with patch.object(public, "ADDRESS_HOUR", ("ip", 3, 3600)):
@@ -431,8 +531,29 @@ class LabLinkTests(TestCase):
             self.assertIn("Demo Store", text)
             self.assertIn(link["url"], text)
             self.assertIn("سنة ميلادك" if lang == "ar" else "birth year", text)
+            self.assertNotIn("آخر 4" if lang == "ar" else "last 4", text)  # the phone is no factor for a file with a birth date
+            phone = unquote(self._link(self.phone_only, lang=lang)["whatsapp"])
+            self.assertIn("آخر 4 أرقام" if lang == "ar" else "last 4 digits", phone)
+            self.assertNotIn("سنة ميلادك" if lang == "ar" else "birth year", phone)
             for secret in ("هيموجلوبين", "سكر", "فصيلة", "17.25", "88.4", "A+", "g/dL", "مرتفع", "High", "منى", self.day.isoformat()):
                 self.assertNotIn(secret, text)
+
+    def test_the_lab_is_told_when_only_the_phone_protects_the_link(self):
+        url = reverse("medical:lab", args=[self.phone_only.pk])
+        page = self.client.get(url)
+        self.assertContains(page, "data-lab-phone-only")
+        self.assertContains(page, "مفيهوش تاريخ ميلاد")
+        self.assertContains(page, "data-lab-share=")  # advice, not a block
+        response = self.client.post(url, {"action": "share", "day": self.day.isoformat()})
+        self.assertContains(response, "data-lab-share-box")
+        self.assertContains(response, "data-lab-share-warning")
+        self.assertContains(response, "مش بتحمي لو الرقم نفسه غلط")
+        english = self.client.post(url, {"action": "share", "day": self.day.isoformat(), "lang": "en"})
+        self.assertContains(english, "does not help if the number itself is wrong")
+        for patient in (self.both, self.dob_only):  # a birth date on file: no such note
+            url = reverse("medical:lab", args=[patient.pk])
+            self.assertNotContains(self.client.get(url), "data-lab-phone-only")
+            self.assertNotContains(self.client.post(url, {"action": "share", "day": self.day.isoformat()}), "data-lab-share-warning")
 
     def test_a_patient_with_neither_factor_gets_no_link(self):
         url = reverse("medical:lab", args=[self.nothing.pk])
