@@ -235,6 +235,21 @@ class EquivalenceTests(TillSetup):
 
 
 class DemoListTests(TestCase):
+
+    def test_the_sheet_script_retries_after_a_failure_and_counts_bigger_units(self):
+        # Codex on PR #349, both only visible in a browser; these pin the code paths.
+        from django.contrib.staticfiles import finders
+
+        with open(finders.find("hesba/js/pos_alternatives.js"), encoding="utf-8") as handle:
+            script = handle.read()
+        # a network failure is remembered with its time and asked again, at once when the till is back online
+        self.assertIn("failed[key] = Date.now()", script)
+        self.assertIn("window.addEventListener('online'", script)
+        self.assertNotIn(".catch(function () { answers[key] = false; })", script)
+        # a line in a bigger unit takes factor x quantity from the shelf (the till's own #hs-units catalog)
+        self.assertIn("getElementById('hs-units')", script)
+        self.assertIn("num(qty.value) * factor > onHand", script)
+
     def test_the_demo_list_imports_cleanly_and_every_drug_row_has_an_ingredient(self):
         with DEMO_FILE.open(encoding="utf-8") as handle:
             file_rows = list(csv.DictReader(handle))

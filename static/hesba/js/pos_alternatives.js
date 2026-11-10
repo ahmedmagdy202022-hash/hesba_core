@@ -25,8 +25,18 @@
   var content = sheet.querySelector('[data-pos-alt-body]');
   var foot = sheet.querySelector('[data-pos-alt-foot]');
   var lang = document.documentElement.lang === 'en' ? 'en' : 'ar';
-  var answers = {};  // item|location|customer -> the answer, or false once asking failed (offline): not asked again
+  var answers = {};  // item|location|customer -> the answer
+  var failed = {};   // the same key -> when asking last failed (offline): asked again after a pause, or once back online
+  var RETRY_MS = 15000;
   var asking = {};
+  // UNITS-001: a line sold in a bigger unit (a box of 12) takes factor x quantity from the shelf; the units catalog
+  // the till already carries (#hs-units) gives each unit's factor.
+  var factorOf = {};
+  (function () {
+    var node = document.getElementById('hs-units');
+    var units = node ? JSON.parse(node.textContent || '{}') || {} : {};
+    Object.keys(units).forEach(function (itemId) { units[itemId].forEach(function (u) { factorOf[String(u.id)] = num(u.factor) || 1; }); });
+  })();
   var offered = {};  // item id -> an alternative was added for its short line, which now offers «شيله؟»
   var current = null;  // the line the sheet is open for
 
@@ -40,21 +50,28 @@
   function ask(id) {
     var key = keyFor(id);
     if (key in answers || asking[key]) { return; }
+    if (failed[key] && Date.now() - failed[key] < RETRY_MS) { return; }
     asking[key] = true;
     var query = '?item=' + encodeURIComponent(id) + '&location=' + encodeURIComponent(place ? place.value : '') +
                 '&customer=' + encodeURIComponent(customer ? customer.value : '') + '&lang=' + lang;
     fetch(url + query, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
       .then(function (response) { return response.ok ? response.json() : null; })
-      .then(function (answer) { answers[key] = answer && answer.ok ? answer : false; })
-      .catch(function () { answers[key] = false; })
-      .then(function () { delete asking[key]; mark(); });
+      .then(function (answer) {
+        // A refusal the server gave (no permission, not a drug shop) is final for this page; a network failure is not.
+        if (answer && answer.ok) { answers[key] = answer; delete failed[key]; } else { answers[key] = false; }
+      })
+      .catch(function () { failed[key] = Date.now(); })
+      .then(function () { delete asking[key]; if (key in answers) { mark(); } });
   }
 
   function shortText(tr, answer) {
     var onHand = num(answer.item.on_hand);
     if (onHand <= 0) { return words.out; }
     var qty = tr.querySelector('[data-field="qty"]');
-    if (!tr.getAttribute('data-unit') && qty && num(qty.value) > onHand) { return fill(words.only, { n: answer.item.on_hand }); }
+    var unitId = tr.getAttribute('data-unit');
+    var factor = unitId ? factorOf[unitId] : 1;
+    if (!factor) { return ''; }  // a unit this page does not know: say nothing rather than guess
+    if (qty && num(qty.value) * factor > onHand) { return fill(words.only, { n: answer.item.on_hand }); }
     return '';
   }
 
@@ -91,6 +108,9 @@
     });
     Object.keys(offered).forEach(function (id) { if (!present[id]) { delete offered[id]; } });
   }
+
+  // Back online: lines whose question failed are asked again at once.
+  window.addEventListener('online', function () { failed = {}; mark(); });
 
   function focusLine(id) {
     var target = body.querySelector('tr[data-item="' + id + '"] .pos-alt-remove') || body.querySelector('tr[data-item="' + id + '"] [data-pos-alt-open]');
