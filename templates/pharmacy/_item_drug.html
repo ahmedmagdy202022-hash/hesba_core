@@ -1,0 +1,16 @@
+{% load hesba_labels %}{# R1 step 2: the optional drug data of a pharmacy's new item, saved with the item through pharmacy.services.save_drug. #}
+<section class="hs-section hs-drug-part" data-section="drug" data-drug-part>
+  <header class="hs-section__head"><span class="hs-section__num" aria-hidden="true">+</span><div><h2>{{ drug.words.drug_part }}</h2><p>{{ drug.words.drug_part_hint }}</p></div></header>
+  {% if drug.non_field_errors %}<div class="md-form-errors" data-drug-errors>{{ drug.non_field_errors|ui:lang }}</div>{% endif %}
+  {{ drug.reference }}
+  <div class="hs-section__grid">{% for field in drug.text_fields %}
+    <div class="md-field{% if field.errors %} has-error{% endif %}">
+      <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+      {{ field }}
+      {% if field.help_text %}<small class="hs-help">{{ field.help_text }}</small>{% endif %}
+      {% for error in field.errors %}<div class="md-field-error">{{ error|ui:lang }}</div>{% endfor %}
+    </div>{% endfor %}
+  </div>
+  <div class="hs-drug-part__check"><div class="hs-check">{{ drug.prescription_only }}<label for="{{ drug.prescription_only.id_for_label }}"><b>{{ drug.prescription_only.label }}</b><small>{{ drug.prescription_only.help_text }}</small></label></div></div>
+  <datalist id="drug-ingredients">{% for name in drug.ingredients %}<option value="{{ name }}">{% endfor %}</datalist>
+</section>

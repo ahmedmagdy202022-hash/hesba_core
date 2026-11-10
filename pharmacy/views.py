@@ -6,6 +6,7 @@ from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.views.decorators.cache import never_cache
 
 from master_data.models import Customer, Item
 from permissions.decorators import require_permission
@@ -312,3 +313,29 @@ def till_alternatives(request):
     if item is None:
         return JsonResponse({"ok": False, "error": "item"}, status=404)
     return JsonResponse(till.alternatives_for(item, location=request.GET.get("location"), customer=request.GET.get("customer"), lang=_lang(request)))
+
+
+# ---- R1 step 2: the reference drug list on the new-item form ----
+
+@never_cache  # an answer for one signed-in person and one moment: never kept by a browser or a proxy
+def reference_search(request):
+    """GET ``q``: the reference rows for the «اختار من القايمة» picker, as JSON (at most 20).
+
+    Open to whoever may create items (``master_data.manage_items``) while the ``drugs`` capability is on; anyone else
+    gets a JSON 403. A signed-out visitor is sent to the login page first, as on every Hesba route."""
+
+    from django.http import JsonResponse
+
+    from . import picker
+
+    lang = _lang(request)
+    if request.method != "GET":
+        return JsonResponse({"ok": False, "error": "GET only"}, status=405)
+    if not services.enabled() or not services.can_edit(request.user):
+        denied = "Choosing from the list needs the drug database and the manage-items permission." if lang == "en" else "الاختيار من القايمة محتاج قاعدة الأدوية وصلاحية إدارة الأصناف."
+        return JsonResponse({"ok": False, "error": denied}, status=403)
+    query, rows = picker.search_reference(request.GET.get("q"))
+    today = timezone.localdate()
+    return JsonResponse({"ok": True, "query": query, "too_short": len(query) < picker.MIN_QUERY, "limit": picker.SEARCH_LIMIT,
+                         "count": len(rows), "results": [picker.as_json(row, lang, today) for row in rows]},
+                        json_dumps_params={"ensure_ascii": False})

@@ -99,5 +99,11 @@
       lead = 'sale';
       showMargin();
     });
+    // Another script set the price on the person's behalf (a price picked from the reference drug list): it leads
+    // exactly as a price typed by hand does, so entering the cost afterwards shows the margin instead of replacing it.
+    sale.addEventListener('hesba:price-set', function () {
+      lead = 'sale';
+      showMargin();
+    });
   });
 })();
