@@ -164,11 +164,13 @@ def yes_no(value):
 
 
 # ---- reading strength, form and pack from a trade name ----
+# A comma before the digits (“1,000 IU”, “2,500mg”) is a grouped number the reader does not understand: the whole
+# strength stays blank rather than keeping the suffix after the comma.
 
 _MASS = r"mcg|µg|mg|gm|g|iu|%|ميكروجرام|ملجم|مجم|مج|جرام|جم|وحده"
-_STRENGTH = re.compile(rf"(?<![\w.])(\d+(?:\.\d+)?(?:\s*/\s*\d+(?:\.\d+)?)*)\s*({_MASS})(?:\s*/\s*(?:\d+(?:\.\d+)?)?\s*(?:ml|مل))?(?!\w)")
-_VOLUME = re.compile(r"(?<![\w./])\d+(?:\.\d+)?\s*(?:ml|مل)(?!\w)")
-_COUNT = re.compile(r"(?<![\w.])(\d{1,4})\s*(?:['’]s(?!\w)|(?:f\.?c\.?\s*)?(?:tabs?|tablets?|caps?|capsules?|amps?|ampoules?|vials?|sachets?|supp)\.?(?!\w)"
+_STRENGTH = re.compile(rf"(?<![\w.,])(\d+(?:\.\d+)?(?:\s*/\s*\d+(?:\.\d+)?)*)\s*({_MASS})(?:\s*/\s*(?:\d+(?:\.\d+)?)?\s*(?:ml|مل))?(?!\w)")
+_VOLUME = re.compile(r"(?<![\w./,])\d+(?:\.\d+)?\s*(?:ml|مل)(?!\w)")
+_COUNT = re.compile(r"(?<![\w.,])(\d{1,4})\s*(?:['’]s(?!\w)|(?:f\.?c\.?\s*)?(?:tabs?|tablets?|caps?|capsules?|amps?|ampoules?|vials?|sachets?|supp)\.?(?!\w)"
                     r"|(?:اقراص|قرص|كبسوله|كبسول|امبول|اكياس|كيس|لبوس)(?!\w))")
 _GRAMS = ("g", "gm", "جم", "جرام")
 _FORM_NOISE = re.compile(r"^\d+(?:\.\d+)?|^f\.?c\.?|[.,;:()'’\[\]]+")

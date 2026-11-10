@@ -123,6 +123,10 @@ class NameParsingTests(SimpleTestCase):
         self.assertEqual(reference.parse_name("Fizzfab tab sachet")["form"], "")            # two forms
         self.assertEqual(reference.parse_name("Packfab 10's 20's")["pack"], "")              # two packs
         self.assertEqual(reference.parse_name("Hesba Baby Lotion"), {"strength": "", "form": "", "pack": ""})
+        # A grouped number is not understood: the whole strength stays blank, never the suffix after the comma.
+        self.assertEqual(reference.parse_name("Vitafab 1,000 IU caps")["strength"], "")
+        self.assertEqual(reference.parse_name("Drugfab 2,500mg tab")["strength"], "")
+        self.assertEqual(reference.parse_name("Packfab 1,000's")["pack"], "")
         self.assertEqual(reference.parse_name("Hesbatab"), {"strength": "", "form": "", "pack": ""})  # a form word inside a name
 
 
