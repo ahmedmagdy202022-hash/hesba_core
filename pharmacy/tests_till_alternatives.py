@@ -198,7 +198,9 @@ class EquivalenceTests(TillSetup):
     def sale_rows(self, item_id, price):
         data = {"line_count": "1", "customer": str(self.customer.pk), "location": str(self.shop.pk), "cashbox": str(self.cashbox.pk),
                 "discount": "0", "tendered": "10.00", "print": "0", "item_0": str(item_id), "qty_0": "1", "price_0": str(price), "unit_0": "", "serial_0": ""}
-        drop = {"id", "sales_invoice", "sales_line", "created_at", "updated_at"}
+        # Keys and links to the invoice differ between the two sales on PostgreSQL (a sequence does not roll back with
+        # its savepoint), so the rows are compared by content: what was sold, moved, paid and owed.
+        drop = {"id", "invoice", "sales_invoice", "sales_line", "created_at", "updated_at"}
 
         def clean(obj):
             return {key: value for key, value in model_to_dict(obj).items() if key not in drop}
