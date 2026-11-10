@@ -71,5 +71,7 @@
 .att-item-name{color:var(--hs-navy);font-weight:var(--hs-weight-bold);overflow-wrap:anywhere;min-height:24px}
 .att-item-meta{color:var(--hs-muted);font-size:var(--hs-text-sm);line-height:1.5}
 .att-item-meta a{color:var(--hs-teal-deep);font-weight:var(--hs-weight-semibold)}
+.att-item-name,.att-item-meta a{position:relative}
+.att-item-name::after,.att-item-meta a::after{content:"";position:absolute;inset:-10px 0}/* a 44px tap area without a taller row */
 .att-item .att-item-x{position:static;flex:none;align-self:flex-start}
 @media(max-width:700px){.att-item-thumb{width:64px;height:64px}}

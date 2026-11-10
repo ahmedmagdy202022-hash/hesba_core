@@ -347,6 +347,12 @@ class ScreenTests(ClinicSetup):
             self.assertContains(page, "attachments.css?v=m5-1")
             self.assertContains(page, "attachments.js?v=m5-1")
 
+    def test_the_size_in_the_help_text_is_the_servers_live_cap(self):
+        with override_settings(ATTACHMENTS_MAX_BYTES=3 * 1024 * 1024):
+            self.assertContains(self.file_page(lang="en"), "up to 3 MB each")
+            self.assertContains(self.file_page(), "لحد 3 ميجا للملف")
+        self.assertContains(self.file_page(lang="en"), "up to 5 MB each")
+
     def test_the_visit_screen_shows_the_card_only_for_a_saved_visit(self):
         page = self.visit_page(lang="en")
         self.assertContains(page, 'id="med-attachments"')

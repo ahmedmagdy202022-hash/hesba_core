@@ -89,7 +89,7 @@ MEDICAL_WORDS = {
         "title": "المرفقات: أشعة وتحاليل وصور",
         "intro_visit": "ارفع أشعة وتحاليل وصور وتقارير الكشف ده. بتتحفظ على الكشف وبتظهر في ملف المريض.",
         "intro_file": "ارفع الملفات اللي المريض بيجيبها ومالهاش كشف معين: أشعة وتحاليل وصور وتقارير.",
-        "formats": "صور JPG أو PNG أو WEBP وملفات PDF بس، لحد 5 ميجا للملف. ملفات DICOM مش مدعومة.",
+        "formats": "صور JPG أو PNG أو WEBP وملفات PDF بس، لحد {limit} للملف. ملفات DICOM مش مدعومة.",
         "category": "نوع المرفق", "scan": "أشعة", "lab": "تحاليل", "photo": "صور", "report": "تقارير",
         "camera": "صوّر", "choose": "اختار صور أو PDF", "none": "لسه مفيش مرفقات.", "open": "افتح", "pdf": "PDF",
         "by": "رفعه", "delete": "امسح", "photo_of": "صورة",
@@ -101,7 +101,7 @@ MEDICAL_WORDS = {
         "title": "Attachments: scans, lab reports and photos",
         "intro_visit": "Attach this visit's scans, lab reports, photos and reports. They stay on the visit and show on the patient's file.",
         "intro_file": "Attach what the patient brings that belongs to no particular visit: scans, lab reports, photos and reports.",
-        "formats": "JPG, PNG or WEBP images and PDF files only, up to 5 MB each. DICOM files are not supported.",
+        "formats": "JPG, PNG or WEBP images and PDF files only, up to {limit} each. DICOM files are not supported.",
         "category": "Category", "scan": "Scan / X-ray", "lab": "Lab report", "photo": "Photo", "report": "Report",
         "camera": "Take photo", "choose": "Choose photos or a PDF", "none": "No attachments yet.", "open": "Open", "pdf": "PDF",
         "by": "Added by", "delete": "Delete", "photo_of": "Photo",
@@ -137,7 +137,7 @@ def medical_card(owner, user, lang, anchor="med-attachments"):
         rows = list(services.attachments_for(owner, user, lang))
     except (PermissionDenied, services.OwnerNotFound):
         return None
-    words = MEDICAL_WORDS[lang]
+    words = dict(MEDICAL_WORDS[lang], formats=MEDICAL_WORDS[lang]["formats"].format(limit=services._human(services.max_bytes(), lang)))  # the live cap
     can_delete = bool(rules["can_delete"](user, owner))
     can_add = bool(rules["can_attach"](user, owner)) and not rules["closed"](owner)
     upload_name = "attachments:visit_upload" if label == "medical.clinicalvisit" else "attachments:patient_file_upload"
