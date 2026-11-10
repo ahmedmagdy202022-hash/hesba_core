@@ -458,3 +458,19 @@ class ScreenTests(ClinicSetup):
         self.assertContains(page, "data-att-more")
         self.assertContains(page, "n2.jpg")
         self.assertNotContains(page, "n0.jpg")  # the oldest is the one left out
+        self.assertContains(page, "data-att-all")
+
+    def test_a_reader_who_cannot_open_a_visit_still_reaches_every_attachment(self):
+        """A view-only user gets no visit links (the visit screen is for writers), so the patient file itself must list them all."""
+
+        for index in range(3):
+            services.add_attachment(self.visit, upload(JPEG, f"n{index}.jpg", "image/jpeg"), self.owner, stage=Stage.SCAN)
+        with mock.patch.object(ui, "PATIENT_VISITS_LIMIT", 2):
+            short = self.file_page(self.viewer)
+            self.client.force_login(self.viewer)
+            everything = self.client.get(short.request["PATH_INFO"], {"lang": "ar", "files": "all"})
+        self.assertNotContains(short, "n0.jpg")
+        self.assertContains(short, "files=all")
+        for name in ("n0.jpg", "n1.jpg", "n2.jpg"):
+            self.assertContains(everything, name)
+        self.assertNotContains(everything, "data-att-all")  # nothing more to ask for

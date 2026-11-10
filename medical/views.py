@@ -220,7 +220,7 @@ def patient_file(request, pk):
                                                       can_write=can_write, error=error, genders=Gender.values, bloods=BloodType.values,
                                                       user_id=request.user.pk, today=timezone.localdate(),
                                                       attachments=attachments_ui.medical_card(file, request.user, lang),  # M5 (HG-083)
-                                                      visit_files=attachments_ui.patient_visit_files(patient, request.user, lang)))
+                                                      visit_files=attachments_ui.patient_visit_files(patient, request.user, lang, show_all=request.GET.get("files") == "all")))
 
 
 def _doctors():

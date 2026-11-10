@@ -1,9 +1,9 @@
 {% if visit_files %}{% with vf=visit_files aw=visit_files.words %}
 <h2 class="med-heading">{{ aw.visits_title }}</h2>
-<section class="att-card att-visits" data-visit-attachments>
+<section class="att-card att-visits" id="visit-attachments" data-visit-attachments>
 <p class="att-help">{{ aw.visits_intro }}</p>
 {% if vf.items %}<ul class="att-list">{% for item in vf.items %}{% include "medical/_attachment_row.html" with item=item aw=aw visit_link=can_write %}{% endfor %}</ul>
-{% if vf.more %}<p class="att-help" data-att-more>{{ vf.more }}</p>{% endif %}
+{% if vf.more %}<p class="att-help" data-att-more>{{ vf.more }}{% if vf.all_link %} <a class="att-more-link" href="?lang={{ lang }}&amp;files=all#visit-attachments" data-att-all>{{ aw.visits_all }}</a>{% endif %}</p>{% endif %}
 {% else %}<p class="att-empty">{{ aw.visits_none }}</p>{% endif %}
 </section>
 {% endwith %}{% endif %}

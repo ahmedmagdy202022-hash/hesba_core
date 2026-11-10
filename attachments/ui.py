@@ -95,7 +95,7 @@ MEDICAL_WORDS = {
         "by": "رفعه", "delete": "امسح", "photo_of": "صورة",
         "blocked": "إضافة المرفقات للدكتور أو لصاحب صلاحية تسجيل الكشوفات بس.",
         "visits_title": "مرفقات الكشوفات", "visits_intro": "اللي اتضاف على كشوفات المريض، الأحدث الأول.", "visit_of": "كشف",
-        "visits_more": "ده آخر {n} مرفق. افتح الكشف علشان تشوف الباقي.", "visits_none": "مفيش مرفقات على الكشوفات لسه.",
+        "visits_more": "ده آخر {n} مرفق.", "visits_all": "اعرض كل المرفقات", "visits_none": "مفيش مرفقات على الكشوفات لسه.",
     },
     "en": {
         "title": "Attachments: scans, lab reports and photos",
@@ -107,12 +107,14 @@ MEDICAL_WORDS = {
         "by": "Added by", "delete": "Delete", "photo_of": "Photo",
         "blocked": "Only a doctor, or someone who may record visits, can add attachments.",
         "visits_title": "Visit attachments", "visits_intro": "What was added to this patient's visits, newest first.", "visit_of": "Visit",
-        "visits_more": "These are the latest {n} attachments. Open the visit to see the rest.", "visits_none": "No attachments on the visits yet.",
+        "visits_more": "These are the latest {n} attachments.", "visits_all": "Show all attachments", "visits_none": "No attachments on the visits yet.",
     },
 }
 
 #: How many visit attachments the patient file lists (one query, newest first).
 PATIENT_VISITS_LIMIT = 30
+#: «اعرض كل المرفقات» on the patient file (``?files=all``): everything, up to a bound that keeps the page finite.
+PATIENT_VISITS_ALL = 500
 
 
 def _who(user):
@@ -150,23 +152,27 @@ def medical_card(owner, user, lang, anchor="med-attachments"):
     }
 
 
-def patient_visit_files(patient, user, lang):
+def patient_visit_files(patient, user, lang, show_all=False):
     """The attachments on this patient's visits, newest first, for the patient file: two queries however many visits there are.
-    None when this user may not see visit attachments. Read-only; each row links to the visit it belongs to."""
+    None when this user may not see visit attachments. Read-only; each row links to the visit it belongs to.
+
+    The latest ``PATIENT_VISITS_LIMIT`` by default; ``show_all`` lists them all here, because a user who reads the records
+    without writing them cannot open a visit and would otherwise never reach the older files."""
 
     from medical.models import ClinicalVisit
 
     lang = "en" if lang == "en" else "ar"
     visits = {pk: day for pk, day in ClinicalVisit.objects.filter(patient=patient).values_list("pk", "visit_date")}
     try:
-        rows = services.attachments_for_many("medical.clinicalvisit", visits, user, limit=PATIENT_VISITS_LIMIT + 1)
+        cap = PATIENT_VISITS_ALL if show_all else PATIENT_VISITS_LIMIT
+        rows = services.attachments_for_many("medical.clinicalvisit", visits, user, limit=cap + 1)
     except (PermissionDenied, services.OwnerNotFound):
         return None
     words = MEDICAL_WORDS[lang]
-    more = len(rows) > PATIENT_VISITS_LIMIT
+    more = len(rows) > cap
     items = []
-    for row in rows[:PATIENT_VISITS_LIMIT]:
+    for row in rows[:cap]:
         item = _medical_item(row, lang, False)
         item.update({"visit_pk": row.object_id, "visit_date": visits[row.object_id]})
         items.append(item)
-    return {"items": items, "words": words, "more": words["visits_more"].format(n=PATIENT_VISITS_LIMIT) if more else ""}
+    return {"items": items, "words": words, "more": words["visits_more"].format(n=cap) if more else "", "all_link": more and not show_all}
