@@ -444,6 +444,19 @@ class DerivedIdTests(FileCase):
         self.assertIn("متكرر 2 (4, 6)", out)
         self.assertEqual(DrugReference.objects.get(source="dupes", name_key="samefab").public_price, D("10.00"))  # the first row wins
 
+    def test_xlsx_lines_are_the_excel_row_numbers(self):
+        from openpyxl import Workbook
+
+        book = Workbook()
+        sheet = book.active
+        for cell, value in (("A3", "source_ref"), ("B3", "name_en"), ("A4", "A"), ("B4", "Okfab"), ("A6", "A"), ("B6", "Okfab again")):
+            sheet[cell] = value
+        path = self.folder / "start3.xlsx"
+        book.save(path)
+        out = self.run_import(path, "start3")
+        self.assertIn("created 1,", out)
+        self.assertIn("duplicate 1 (6)", out)
+
     def test_only_the_first_three_lines_are_listed(self):
         path = self.write_csv("many.csv", [["source_ref", "name_en"]] + [["A", "Okfab"]] * 6)
         out = self.run_import(path, "many")

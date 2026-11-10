@@ -343,9 +343,8 @@ def _xlsx_rows(path):
         raise ReferenceImportError("ملفات الإكسل محتاجة openpyxl؛ استخدم CSV. | .xlsx needs openpyxl; use a CSV file.") from error
     book = load_workbook(path, read_only=True, data_only=True)
     try:
-        sheet = book.worksheets[0]
-        start = sheet.min_row or 1
-        return [(start + index, list(row)) for index, row in enumerate(sheet.iter_rows(values_only=True))]
+        # iter_rows starts at row 1 (padding the empty rows above the data), so the count is the Excel row number.
+        return [(number, list(row)) for number, row in enumerate(book.worksheets[0].iter_rows(values_only=True), start=1)]
     finally:
         book.close()
 
