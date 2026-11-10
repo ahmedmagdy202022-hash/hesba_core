@@ -288,6 +288,33 @@ def print_prescription(request, pk):
     return _render(request, doc, f"/pharmacy/prescriptions/{pk}/")
 
 
+# ---- R1: alternatives at the till ----
+
+from . import till  # noqa: E402  (R1 block, kept apart for step 2's edits)
+
+
+@require_permission(till.PERMISSION)
+def till_alternatives(request):
+    """R1: the till's «بدائل» sheet for one item (``?item=<id>&location=<id>&customer=<id>``), as JSON.
+
+    Gated like the till's other JSON endpoints (``sales:pos_promotion``, ``parties:balance``): the login middleware
+    sends a signed-out session to the login page and ``require_permission`` refuses anyone without the till's own
+    permission (403). The till's script reads any answer that is not this JSON as "no data" (a login page as a failure
+    it asks again). With the drug database off, the capability gate answers first (403)."""
+
+    from django.http import JsonResponse
+
+    if request.method != "GET":
+        return JsonResponse({"ok": False, "error": "method"}, status=405)
+    if not services.enabled():
+        return JsonResponse({"ok": False, "error": "forbidden"}, status=403)
+    pk = till.as_pk(request.GET.get("item"))
+    item = Item.objects.select_related("drug").filter(pk=pk, active=True).first() if pk is not None else None
+    if item is None:
+        return JsonResponse({"ok": False, "error": "item"}, status=404)
+    return JsonResponse(till.alternatives_for(item, location=request.GET.get("location"), customer=request.GET.get("customer"), lang=_lang(request)))
+
+
 # ---- R1 step 2: the reference drug list on the new-item form ----
 
 @never_cache  # an answer for one signed-in person and one moment: never kept by a browser or a proxy

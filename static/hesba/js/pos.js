@@ -177,7 +177,7 @@
       body.appendChild(empty);
     }
     cart.forEach(function (row, index) {
-      var tr = el('tr', { 'data-line': String(index) });
+      var tr = el('tr', { 'data-line': String(index), 'data-item': String(row.id), 'data-unit': row.unit ? String(row.unit) : '' });  // R1: the line's item, for the «بدائل» sheet
       tr.appendChild(el('td', { 'class': 'op-cell-text', title: row.label }, shortLabel(row)));  // UX Wave 1: the code stays in the tooltip
       var qtyTd = el('td');
       var qtyCell = el('div', { 'class': 'pos-qty' });
@@ -198,6 +198,7 @@
       body.appendChild(tr);
     });
     totals();
+    form.dispatchEvent(new CustomEvent('pos:rendered'));  // R1: pos_alternatives.js marks the drug lines again
   }
 
   // TAX-001: VAT per line at the item's rate, rounded per line like the server.

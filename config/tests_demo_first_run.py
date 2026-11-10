@@ -650,6 +650,7 @@ for activity, sub in DEMO_ACTIVITIES:
             db.execute("select count(*) from shifts_shift s join auth_user u on u.id=s.cashier_id where s.status='open' and u.username='owner'").fetchone()[0],
             db.execute("select display_name from settings_core_clientprofile where is_active").fetchone()[0],
             db.execute("select p.display_name from accounts_userprofile p join auth_user u on u.id=p.user_id where u.username='owner'").fetchone()[0],
+            db.execute("select count(*) from pharmacy_drugreference").fetchone()[0],
         ]
 boxes = os.environ["DEMO_SANDBOX_DIR"]
 copies = lambda: sorted(name for name in os.listdir(boxes) if name.endswith(".sqlite3"))
@@ -726,8 +727,10 @@ class EndToEndTests(SimpleTestCase):
         # Every demo activity has its ready shop: a file of a few MB with a month of posted trade, the owner's shift open,
         # the shop and its owner named.
         self.assertEqual(set(out["templates"]), {f"{a}:{s}" for a, s in DEMO_ACTIVITIES})
-        for key, (exists, size, posted, owner_shift, shop, owner) in out["templates"].items():
+        for key, (exists, size, posted, owner_shift, shop, owner, references) in out["templates"].items():
             with self.subTest(template=key):
+                # R1: the demo reference drug list is in the pharmacy's ready shop only.
+                self.assertEqual(references > 0, key == "commercial:pharmacy", references)
                 self.assertTrue(exists)
                 self.assertLess(size, 12 * 1024 * 1024)
                 self.assertGreater(posted, 10)
