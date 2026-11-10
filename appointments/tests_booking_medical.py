@@ -2,7 +2,7 @@
 patient into the waiting list from the agenda and the appointment's page."""
 
 import re
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 from unittest import mock
 from urllib.parse import urlencode
 
@@ -197,7 +197,8 @@ class CheckInFromTheAgendaTests(BookingSetup):
         self.today = timezone.localdate()
 
     def book(self, customer=None, status=AppointmentStatus.BOOKED, days=0, number=None):
-        moment = timezone.now().replace(hour=12, minute=0, second=0, microsecond=0) + timedelta(days=days)
+        # Noon of the Cairo day, not of the UTC one: between midnight and 02:00 in Cairo the two days differ.
+        moment = timezone.make_aware(datetime.combine(timezone.localdate(), time(12, 0))) + timedelta(days=days)
         return Appointment.objects.create(number=number or f"AP-CI-{Appointment.objects.count() + 1}", customer=customer or self.customer, employee=self.mona,
                                           starts_at=moment, duration_minutes=30, status=status, created_by=self.owner, service=self.item, price=250)
 
