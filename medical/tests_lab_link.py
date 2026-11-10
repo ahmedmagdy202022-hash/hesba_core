@@ -118,7 +118,7 @@ class LabLinkTests(TestCase):
         for lang in ("ar", "en"):
             for page in (client.get(self._url(token, lang)), self.client.get(reverse("medical:lab_sheet", args=[self.both.pk, self.day.isoformat()]) + f"?lang={lang}")):
                 body = page.content.decode()
-                self.assertIn('<td data-label="{}"><span dir="ltr">12 – 16</span></td>'.format("المعدل الطبيعي" if lang == "ar" else "Normal range"), body)
+                self.assertIn('<td data-cell="{}"><span dir="ltr">12 – 16</span></td>'.format("المعدل الطبيعي" if lang == "ar" else "Normal range"), body)
                 self.assertIn('<span dir="ltr">70 – 100</span>', body)
                 self.assertIn("<bdi> A+</bdi>", body)
                 self.assertIn("<bdi>17.25</bdi>", body)
