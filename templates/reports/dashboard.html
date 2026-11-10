@@ -4,7 +4,7 @@
 {% block body_class %}dashboard-page{% endblock %}
 
 {% block styles %}
-<link rel="stylesheet" href="{% static 'hesba/css/dashboard.css' %}?v=w4-1">
+<link rel="stylesheet" href="{% static 'hesba/css/dashboard.css' %}?v=w4-2">
 <link rel="stylesheet" href="{% static 'hesba/css/shell.css' %}?v=w4-1">
 {% if demo_bar or demo_tour %}<link rel="stylesheet" href="{% static 'hesba/css/demo_first_run.css' %}?v=fr-2">{% endif %}
 {% endblock %}
@@ -14,7 +14,6 @@
 {% include "partials/app_shell.html" %}
 <div class="hs-main">
 <div class="dash-shell">
-{% include "partials/demo_bar.html" %}
 <svg width="0" height="0" class="dash-defs" aria-hidden="true" focusable="false">
   <symbol id="dm-net_sales" viewBox="0 0 24 24"><path d="M3 17l5-5 4 4 8-8"/><path d="M14 8h6v6"/></symbol>
   <symbol id="dm-avg_invoice" viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></symbol>
@@ -24,11 +23,19 @@
   <symbol id="dm-cash" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></symbol>
   <symbol id="dm-receivables" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M17 8h4m-2-2v4"/></symbol>
   <symbol id="dm-payables" viewBox="0 0 24 24"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7z"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></symbol>
+  <symbol id="dm-alert-urgent" viewBox="0 0 24 24"><path d="M12 3.5l9.5 16.5h-19z"/><path d="M12 10v4.5M12 17.5h.01"/></symbol>
+  <symbol id="dm-alert-soon" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2.5h6"/></symbol>
+  <symbol id="dm-alert-watch" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.5h.01"/></symbol>
+  <symbol id="dm-chevron" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
 </svg>
 
   <header class="dash-header">
     <div class="dash-header__lead">
       <h1 class="dash-screen-title">{{ screen_title }}</h1>
+      <p class="dash-hello" data-phone-hello>{# UX Wave 4: the phone band's calm greeting; the desktop hero carries its own #}
+        <span class="dash-hello__meta"><span class="dash-hello__date">{{ now_parts.date }}</span>{% if client_name %}<span class="dash-hello__client" title="{{ client_name }}">{{ client_name }}</span>{% endif %}</span>
+        <span class="dash-hello__greet">{{ greeting }}{% if display_name %}{{ name_separator }}{{ display_name }}{% endif %}</span>
+      </p>
     </div>
 
     <div class="dash-header__trail">
@@ -64,6 +71,32 @@
 
   <main class="dash-main" id="hs-main" tabindex="-1">
   {% include "partials/entity_bar.html" %}
+  {% with sale=hero_cards.sales_today count=hero_cards.invoice_count_today cash=hero_cards.cashbox_balance %}{% if sale or headline or cash and hero_shows_cash %}
+  {% comment %}UX Wave 4 (part 2): the phone's money card, inside the navy band. Shown on phones only (the desktop hero below is hidden
+     there), it repeats no figure on the page at the same time: today's sales and their invoice count, today against the
+     average day (analytics.hero.pct) and the period's trend line (analytics.hero), exactly as the desktop hero has them.
+     Without today's sales it shows the period's net sales, or the cash in hand, like the hero. No data-kpi here: those
+     name the one place a figure lives, and tests count them.{% endcomment %}
+  <section class="dash-phero" aria-labelledby="dash-phero-label" data-phone-hero>
+    <div class="dash-phero__card">
+      <div class="dash-phero__top">
+        {% if sale %}{% with shown=sale.value %}<p class="dash-phero__figure"><span class="dash-phero__label" id="dash-phero-label">{{ sale.label }}</span><span class="dash-phero__amount{% if shown|length > 11 %} is-xlong{% elif shown|length > 9 %} is-long{% endif %}{% if sale.is_zero %} is-zero{% endif %}" data-phone-amount><bdi>{{ shown }}</bdi>{% if currency %}<small>{{ currency }}</small>{% endif %}</span></p>{% endwith %}
+        {% elif headline %}{% with shown=headline.value|money %}<p class="dash-phero__figure"><span class="dash-phero__label" id="dash-phero-label">{{ hero_headline_text }}</span><span class="dash-phero__amount{% if shown|length > 11 %} is-xlong{% elif shown|length > 9 %} is-long{% endif %}" data-phone-amount><bdi>{{ shown }}</bdi>{% if currency %}<small>{{ currency }}</small>{% endif %}</span></p>{% endwith %}
+        {% else %}{% with shown=cash.value %}<p class="dash-phero__figure"><span class="dash-phero__label" id="dash-phero-label">{{ cash.label }}</span><span class="dash-phero__amount{% if shown|length > 11 %} is-xlong{% elif shown|length > 9 %} is-long{% endif %}" data-phone-amount><bdi>{{ shown }}</bdi>{% if currency %}<small>{{ currency }}</small>{% endif %}</span></p>{% endwith %}{% endif %}
+        {% if analytics.available and analytics.hero.line and not sale.is_zero %}<svg class="dash-phero__spark" viewBox="0 0 {{ analytics.hero.width }} {{ analytics.hero.height }}" preserveAspectRatio="none" role="img" aria-label="{{ hero_trend }}: {% if analytics.hero.fallback %}{{ hero_last_7_days }}{% else %}{{ hero_headline_text }}{% endif %}"><path class="dash-phero__area" d="{{ analytics.hero.area }}"/><path class="dash-phero__line" d="{{ analytics.hero.line }}"/>{% if analytics.hero.last %}<circle class="dash-phero__dot" cx="{{ analytics.hero.last.0 }}" cy="{{ analytics.hero.last.1 }}" r="5"/>{% endif %}</svg>{% endif %}
+      </div>
+      {% if sale and sale.is_zero %}<p class="dash-phero__note">{{ phero_none }}</p>{% else %}
+      <ul class="dash-phero__chips">
+        {% if sale %}
+          {% if analytics.available and analytics.hero.pct is not None %}<li class="dash-phero__chip is-accent"><bdi>{{ analytics.hero.pct }}%</bdi> {{ hero_vs_avg }}</li>{% endif %}
+          {% if count %}<li class="dash-phero__chip"><bdi>{{ count.value }}</bdi> {{ invoices_word }}</li>{% endif %}
+        {% elif headline %}{% with d=headline_shown %}{% if d.delta is not None %}<li class="dash-phero__chip{% if d.good %} is-good{% elif d.good is False %} is-bad{% endif %}">{% if d.flat %}<span aria-hidden="true">—</span> {{ flat }}{% else %}<span aria-hidden="true">{% if d.trend == 'down' %}▼{% else %}▲{% endif %}</span> <bdi>{{ d.delta_abs }}%</bdi> {{ vs_previous }}{% endif %}</li>{% endif %}{% endwith %}{% endif %}
+        {% if cash and hero_shows_cash %}{% if sale or headline %}<li class="dash-phero__chip">{{ cash.label }} <bdi>{{ cash.value }}</bdi>{% if currency %} {{ currency }}{% endif %}</li>{% endif %}{% endif %}
+      </ul>{% endif %}
+    </div>
+  </section>
+  {% endif %}{% endwith %}
+  {% include "partials/demo_bar.html" %}{# UX Wave 4: under the page head on every screen size; on a phone under the money card and shortcuts #}
   {% include "partials/demo_tour.html" %}{# DEMO-FIRST-RUN (D3): what to try first, before the figures #}
 
       <section class="dash-hero is-{{ day_part }}" aria-label="{{ greeting }}">
@@ -108,7 +141,7 @@
         </div>
       </section>
 
-      {% if top_actions %}<nav class="dash-top-actions" aria-label="{{ top_actions_title }}" data-top-actions>{% for action in top_actions %}<a class="dash-top-action{% if forloop.first %} is-primary{% endif %}" href="{{ action.url }}?lang={{ lang }}" data-top-action="{{ action.key }}"><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-{{ action.icon }}"></use></svg><span>{{ action.label }}</span></a>{% endfor %}</nav>{% endif %}
+      {% if top_actions %}<nav class="dash-top-actions" aria-label="{{ top_actions_title }}" data-top-actions>{% for action in top_actions %}<a class="dash-top-action{% if forloop.first %} is-primary{% endif %}" href="{{ action.url }}?lang={{ lang }}" data-top-action="{{ action.key }}"><span class="hs-ichip dash-top-action__chip hs-ichip--{% if action.key == 'collect' %}gold{% elif action.key == 'new_purchase' %}info{% elif action.key == 'new_item' %}success{% else %}teal{% endif %}" aria-hidden="true"><svg class="hs-icon"><use href="#hs-i-{{ action.icon }}"></use></svg></span><span class="dash-top-action__label">{{ action.label }}</span></a>{% endfor %}</nav>{% endif %}
 
       {% if voice_summary %}{% include "ai/voice_summary_card.html" %}{% endif %}
       {% if ask_link %}<a class="dash-ask" href="{{ ask_link.url }}" data-ask-link><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5M12 16.5h.01"/></svg><span class="dash-ask__text"><strong>{{ ask_link.label }}</strong><small>{{ ask_link.hint }}</small></span></a>{% endif %}
@@ -150,9 +183,18 @@
           </nav>
         </div>
         <div class="dash-metrics">
+          {% if headline and hero_cards.sales_today %}{% with m=headline_shown %}{# UX Wave 4: phones only; the desktop hero shows it #}
+          <article class="dash-metric dash-metric--phone" data-phone-metric="net_sales">
+            <span class="dash-metric__head"><span class="hs-ichip hs-ichip--sm dash-metric__icon hs-ichip--teal" aria-hidden="true"><svg class="hs-icon" viewBox="0 0 24 24"><use href="#dm-net_sales"/></svg></span><span class="dash-metric__label">{{ hero_headline_text }}</span></span>
+            <span class="dash-metric__value">{{ m.value|money }}{% if currency %}<small>{{ currency }}</small>{% endif %}</span>
+            {% if m.delta is not None %}<span class="dash-delta {% if m.flat %}is-flat{% elif m.good %}is-good{% elif m.good is False %}is-bad{% endif %}">{% if m.flat %}<span aria-hidden="true">—</span> <small>{{ flat }}</small>{% else %}<span aria-hidden="true">{% if m.trend == 'down' %}▼{% else %}▲{% endif %}</span> <bdi>{{ m.delta_abs }}%</bdi> <small>{{ vs_previous }}</small>{% endif %}</span>{% endif %}
+            {% if analytics.spark.net_sales %}<svg class="dash-spark" viewBox="0 0 120 32" preserveAspectRatio="none" aria-hidden="true"><polyline points="{{ analytics.spark.net_sales }}"/></svg>{% endif %}
+            <details class="dash-how"><summary>{{ how_label }}</summary><p>{{ m.how }}</p></details>
+          </article>
+          {% endwith %}{% endif %}
           {% for m in shown_metrics %}
           <article class="dash-metric" data-metric="{{ m.key }}">
-            <span class="dash-metric__head"><span class="dash-metric__icon dash-metric__icon--{{ m.key }}" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#dm-{{ m.key }}"/></svg></span><span class="dash-metric__label">{{ m.label }}</span></span>
+            <span class="dash-metric__head"><span class="hs-ichip hs-ichip--sm dash-metric__icon hs-ichip--{% if m.key == 'gross_profit' or m.key == 'net_profit' %}success{% elif m.key == 'expenses' or m.key == 'payables' %}danger{% elif m.key == 'cash' %}gold{% elif m.key == 'receivables' %}info{% else %}teal{% endif %}" aria-hidden="true"><svg class="hs-icon" viewBox="0 0 24 24"><use href="#dm-{{ m.key }}"/></svg></span><span class="dash-metric__label">{{ m.label }}</span></span>
             <span class="dash-metric__value">{{ m.value|money }}{% if currency %}<small>{{ currency }}</small>{% endif %}</span>
             {% if m.delta is not None %}<span class="dash-delta {% if m.flat %}is-flat{% elif m.good %}is-good{% elif m.good is False %}is-bad{% endif %}" title="{{ vs_previous }}">{% if m.flat %}<span aria-hidden="true">—</span> <small>{{ flat }}</small>{% else %}<span aria-hidden="true">{% if m.trend == 'down' %}▼{% else %}▲{% endif %}</span> <bdi>{{ m.delta_abs }}%</bdi> <small>{{ vs_previous }}</small>{% endif %}</span>{% endif %}
             {% if m.margin is not None and m.key == 'gross_profit' %}<span class="dash-metric__sub">{{ margin }} <bdi>{{ m.margin|percent }}</bdi></span>{% endif %}
@@ -306,14 +348,15 @@
           {% if alerts %}
             <ul class="dash-alerts">
               {% for alert in alerts %}
-                <li class="dash-alert is-{{ alert.severity }}" data-alert="{{ alert.key }}">
-                  <span class="dash-alert__badge">{{ alert.severity_label }}</span>
+                <li class="dash-alert is-{{ alert.severity }}" data-alert="{{ alert.key }}">{% if alert.path %}<a class="dash-alert__row" href="{{ alert.path }}?lang={{ lang }}">{% else %}<span class="dash-alert__row">{% endif %}
+                  <span class="hs-ichip hs-ichip--sm dash-alert__icon hs-ichip--{% if alert.severity == 'urgent' %}danger{% else %}warning{% endif %}" aria-hidden="true"><svg class="hs-icon" viewBox="0 0 24 24"><use href="#dm-alert-{{ alert.severity }}"/></svg></span>
                   <span class="dash-alert__body">
-                    {% if alert.path %}<a class="dash-alert__title" href="{{ alert.path }}?lang={{ lang }}">{{ alert.title }}</a>{% else %}<span class="dash-alert__title">{{ alert.title }}</span>{% endif %}
-                    <span class="dash-alert__detail">{{ alert.detail }}</span>
+                    <span class="dash-alert__title">{{ alert.title }}</span>
+                    <span class="dash-alert__detail"><span class="dash-alert__badge">{{ alert.severity_label }}</span> {{ alert.detail }}</span>
                   </span>
                   {% if alert.amount %}<span class="dash-alert__amount">{{ alert.amount }}{% if currency %}<small>{{ currency }}</small>{% endif %}</span>{% endif %}
-                </li>
+                  {% if alert.path %}<svg class="hs-icon dash-alert__go" viewBox="0 0 24 24" aria-hidden="true"><use href="#dm-chevron"/></svg>{% endif %}
+                {% if alert.path %}</a>{% else %}</span>{% endif %}</li>
               {% endfor %}
             </ul>
           {% else %}
