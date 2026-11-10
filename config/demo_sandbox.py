@@ -40,6 +40,13 @@ _SAFE = {"GET", "HEAD", "OPTIONS"}
 _NO_COPY_NEEDED = ("/demo/feedback/",)
 NEW_PER_HOUR = 20
 RESTART_PATH = "/demo/restart/"
+# DEMO-FIRST-RUN: the view itself swaps the visitor onto a copy of the chosen ready shop (request.demo_switch),
+# after CSRF and validation, so a forged or malformed POST never costs a copy.
+START_PATH = "/demo/start/"
+
+
+class TooManyFreshStarts(Exception):
+    """This address started more copies this hour than NEW_PER_HOUR allows."""
 
 
 def enabled():
@@ -76,12 +83,12 @@ class Sandboxes:
     def has_fresh(self):
         return self.fresh.is_file()
 
-    def create(self, fresh=False):
-        """A new copy of the template (or of the emptied one, to start over)."""
+    def create(self, fresh=False, source=None):
+        """A new copy of the template (or of the emptied one, to start over; or of ``source``, a ready shop)."""
 
         self.prune()
         sandbox_id = secrets.token_urlsafe(24)
-        copy_database(self.fresh if fresh else self.template, self.path(sandbox_id))
+        copy_database(source or (self.fresh if fresh else self.template), self.path(sandbox_id))
         return sandbox_id
 
     def remove(self, sandbox_id):
@@ -214,7 +221,10 @@ class DemoSandboxMiddleware:
         if not self.sandboxes.exists(sandbox_id):
             sandbox_id = None
         created = None
-        if request.method == "POST" and request.path == RESTART_PATH and self.sandboxes.has_fresh():
+        if request.method == "POST" and request.path == START_PATH:
+            # DEMO-FIRST-RUN: the start view decides which ready shop to copy; until then the visitor reads the template.
+            request.demo_switch = lambda source: self._switch(request, source)
+        elif request.method == "POST" and request.path == RESTART_PATH and self.sandboxes.has_fresh():
             # Starting over: a copy of the emptied demo replaces theirs.
             if sandbox_id is None and not self.new_copies.allow(client_address(request)):
                 _use(self.sandboxes.template_read_only())
@@ -237,9 +247,24 @@ class DemoSandboxMiddleware:
         else:
             _use(self.sandboxes.template_read_only())
         response = self.get_response(request)
+        created = created or getattr(request, "demo_created", None)
         if created:
             response.set_signed_cookie(
                 COOKIE, created, salt=SALT, max_age=self.sandboxes.ttl,
                 httponly=True, samesite="Lax", secure=not settings.DEBUG,
             )
         return response
+
+    def _switch(self, request, source):
+        """Swap this visitor onto a fresh copy of ``source`` (a ready shop, or the emptied demo), replacing their copy."""
+
+        sandbox_id = request.demo_sandbox
+        if sandbox_id is None and not self.new_copies.allow(client_address(request)):
+            raise TooManyFreshStarts()
+        if sandbox_id is not None:
+            _use(self.sandboxes.template_read_only())
+            self.sandboxes.remove(sandbox_id)
+        sandbox_id = self.sandboxes.create(source=source)
+        request.demo_sandbox = request.demo_created = sandbox_id
+        _use(str(self.sandboxes.path(sandbox_id)))
+        return sandbox_id

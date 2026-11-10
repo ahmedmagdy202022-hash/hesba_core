@@ -32,7 +32,11 @@ class Command(BaseCommand):
         from settings_core.models import ClientProfile
 
         if ClientProfile.get_active() is not None:
-            call_command("seed_demo_business", username="owner", force=True, verbosity=0)
+            # DEMO-FIRST-RUN: the owner's shift is dated today too (a shift from deploy day is closed at its expected
+            # cash, nothing posted), before today's trade goes into it.
+            from config.demo_templates import top_up_current_db
+
+            top_up_current_db()
             from settings_core.setup_services import usable_modules
 
             self._fit_users(set(usable_modules()))  # Codex #233: a demo made before F26 loses its waiter too
@@ -62,6 +66,11 @@ class Command(BaseCommand):
         call_command("seed_demo_business", username="owner", force=True, verbosity=0)
         self._spread_sale_times()
         self._extras()
+        # DEMO-FIRST-RUN: the dashboard greets a person, and the owner's till works on the first tap.
+        from config.demo_templates import name_the_demo_owner, open_owner_shift
+
+        name_the_demo_owner("commercial", "retail")
+        open_owner_shift()
         self.stdout.write(self.style.SUCCESS(f"Demo shop ready. Sign in as owner / {password}"))
 
     #: (days ago, customer index, ((item index, quantity), ...), share paid now)

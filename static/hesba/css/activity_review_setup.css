@@ -75,3 +75,7 @@
   .complete-sample .complete-sample__button{justify-self:stretch}
 }
 .review-features{margin:6px 0 14px;padding-inline-start:20px;color:var(--hs-ink);font-size:var(--hs-text-sm);line-height:1.9}
+
+/* DEMO-FIRST-RUN §7: on a showcase, sample data is the way in; starting empty is a text link. */
+.complete-empty-link{min-height:var(--hs-control-height);display:inline-flex;align-items:center;padding:0 var(--hs-space-3);color:var(--hs-teal-deep);font-weight:600;text-decoration:underline}
+.complete-empty-link:hover{color:var(--hs-navy)}

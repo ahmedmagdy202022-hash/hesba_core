@@ -24,6 +24,8 @@
   {% endif %}{% endfor %}
 </div>
 
+{% if setup_questions_url %}<p class="set-wizard-link"><a href="{{ setup_questions_url }}" data-setup-wizard-link>{% if lang == 'en' %}Adjust how your business works: the setup questions{% else %}عايز تعدّل تفاصيل شغلك؟ أسئلة الإعداد{% endif %}</a></p>{% endif %}
+
 <section class="set-group" data-features>
   <div class="set-group__head"><h2 class="set-section-title">{% if lang == 'en' %}Features at work{% else %}الخصائص الشغّالة عندك{% endif %} <small>{{ features_on }} / {{ features|length }}</small></h2>{% if opens.capabilities %}<a class="set-opt__open" href="{% url 'settings_core:capabilities' %}?lang={{ lang }}">{% if lang == 'en' %}Change{% else %}غيّرها{% endif %} <svg class="hs-icon" aria-hidden="true"><use href="#hs-i-arrow"></use></svg></a>{% endif %}</div>
   <ul class="set-chips">{% for feature in features %}{% if feature.on %}<li data-feature="{{ feature.slug }}">{% if feature.url %}<a class="set-chip" href="{{ feature.url }}?lang={{ lang }}">{{ feature.label }}</a>{% else %}<span class="set-chip">{{ feature.label }}</span>{% endif %}</li>{% endif %}{% empty %}{% endfor %}

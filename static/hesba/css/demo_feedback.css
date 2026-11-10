@@ -54,33 +54,23 @@ body.login-page .hs-feedback-fab{bottom:calc(64px + env(safe-area-inset-bottom))
 .hs-feedback__send:disabled{opacity:.6;cursor:progress}
 .hs-feedback__privacy{margin:0;padding:8px 12px;border-radius:var(--hs-radius-md);background:var(--hs-neutral-wash);color:var(--hs-muted);font-size:var(--hs-text-xs);line-height:1.7}
 
-/* DEMO-TRACK: the one-time welcome card, with an optional name and phone. */
+/* DEMO-TRACK + DEMO-FIRST-RUN (D3): the one-time hello, a non-blocking banner along the bottom of the dashboard. */
 .hs-hello{
-  position:fixed;z-index:61;inset-inline-start:18px;bottom:calc(72px + env(safe-area-inset-bottom));
-  width:min(380px,calc(100vw - 32px));box-sizing:border-box;padding:var(--hs-space-5);
-  border:1px solid var(--hs-line);border-radius:var(--hs-radius-xl);background:var(--hs-surface);color:var(--hs-ink);
-  box-shadow:var(--hs-shadow-lg);font-family:var(--hs-font-body);
+  position:fixed;z-index:61;inset-inline:0;bottom:0;box-sizing:border-box;padding:var(--hs-space-3) var(--hs-space-4) calc(var(--hs-space-3) + env(safe-area-inset-bottom));
+  display:flex;align-items:center;gap:var(--hs-space-3);
+  border-top:1px solid var(--hs-line);background:var(--hs-surface);color:var(--hs-ink);box-shadow:var(--hs-shadow-lg);font-family:var(--hs-font-body);
 }
 .hs-hello[hidden]{display:none}
-.hs-hello form{display:grid;gap:var(--hs-space-3)}
-.hs-hello h2{margin:0;font-family:var(--hs-font-head);font-weight:700;font-size:var(--hs-text-md);color:var(--hs-navy)}
-.hs-hello p{margin:0;color:var(--hs-muted);font-size:var(--hs-text-sm);line-height:1.7}
-.hs-hello__fields{display:grid;grid-template-columns:1fr 1fr;gap:var(--hs-space-2)}
-.hs-hello__fields label{display:grid;gap:4px;color:var(--hs-navy);font-size:var(--hs-text-xs);font-weight:600}
-.hs-hello__fields input{width:100%;box-sizing:border-box;min-height:40px;padding:0 10px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-md);background:var(--hs-surface);color:var(--hs-ink);font:inherit;font-weight:400}
-.hs-hello__fields input:focus{outline:none;border-color:var(--hs-teal);box-shadow:var(--hs-focus-ring)}
-.hs-hello .hs-hello__status{font-size:var(--hs-text-xs)}
-.hs-hello .hs-hello__status:empty{display:none}
-.hs-hello__status.is-ok{color:var(--hs-success)}
-.hs-hello__status.is-error{color:var(--hs-danger)}
-.hs-hello__actions{display:flex;gap:var(--hs-space-2)}
-.hs-hello__send,.hs-hello__skip{min-height:40px;padding:0 16px;border-radius:var(--hs-radius-md);font:inherit;font-weight:700;cursor:pointer}
-.hs-hello__send{border:0;background:var(--hs-teal);color:var(--hs-on-teal)}
-.hs-hello__skip{border:1px solid var(--hs-line-strong);background:var(--hs-surface);color:var(--hs-navy)}
-body.login-page .hs-hello{bottom:calc(118px + env(safe-area-inset-bottom))}
-body.activity-selection-page .hs-hello{bottom:calc(154px + env(safe-area-inset-bottom))}
-@media (max-width:760px){
-  /* A short sheet at the very bottom, clear of the sign-in form above it. */
-  .hs-hello,body.login-page .hs-hello,body.activity-selection-page .hs-hello{inset-inline:12px;width:auto;bottom:calc(12px + env(safe-area-inset-bottom));padding:var(--hs-space-4)}
+.hs-hello p{flex:1;margin:0;color:var(--hs-muted);font-size:var(--hs-text-sm);line-height:1.6}
+.hs-hello__actions{display:flex;align-items:center;gap:var(--hs-space-2);flex-shrink:0}
+.hs-hello__send,.hs-hello__skip{min-height:var(--hs-control-height);border-radius:var(--hs-radius-md);font:inherit;font-weight:700;cursor:pointer}
+.hs-hello__send{padding:0 12px;border:1px solid var(--hs-line-strong);background:var(--hs-surface);color:var(--hs-teal-deep);font-size:var(--hs-text-sm)}
+.hs-hello__send:hover{background:var(--hs-teal-wash)}
+.hs-hello__skip{width:var(--hs-control-height);border:0;background:transparent;color:var(--hs-muted);font-size:20px;line-height:1}
+@media (min-width:1024px){.hs-hello{inset-inline-start:auto;inset-inline-end:18px;bottom:18px;width:min(560px,calc(100vw - 36px));border:1px solid var(--hs-line);border-radius:var(--hs-radius-xl)}}
+/* On a phone the tab bar owns the very bottom; the banner sits just above it, and the floating button moves up. */
+@media (max-width:700px){
+  .hs-hello{bottom:calc(60px + env(safe-area-inset-bottom))}
+  .hs-hello:not([hidden]) ~ .hs-feedback-fab,body:has(.hs-hello:not([hidden])) .hs-feedback-fab{bottom:calc(150px + env(safe-area-inset-bottom))}
 }
 @media print{.hs-feedback-fab,.hs-feedback,.hs-hello{display:none!important}}

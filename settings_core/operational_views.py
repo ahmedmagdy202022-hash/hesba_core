@@ -194,6 +194,10 @@ def settings_overview(request):
             # TRACK-START S04: a showcase has no support corner; Django Admin is closed there (config.urls).
             show_advanced=can_manage and not getattr(django_settings, "DEMO_MODE", False),
             admin_settings_url=reverse("admin:settings_core_clientprofile_changelist") if can_manage else "",
+            # DEMO-FIRST-RUN: the wizard's questions stay reachable here for testers (the demo never asks them up front).
+            setup_questions_url=(f"{reverse('setup_questions')}?lang={lang}&activity={client.activity_slug}&sub_activity={client.sub_activity_slug}"
+                                 if client is not None and client.activity_slug and getattr(django_settings, "DEMO_MODE", False)
+                                 and user_has_permission(request.user, "settings.manage_settings") else ""),
         ),
     )
 

@@ -2,6 +2,7 @@
 
 from io import StringIO
 
+from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import TestCase, override_settings
@@ -38,7 +39,13 @@ class DemoTests(TestCase):
         self.assertFalse(DiningTable.objects.exists())
         self.assertEqual(SalesInvoice.objects.count(), invoices)  # today was already topped up
         self.assertTrue(self.client.login(username="cashier", password="Demo-pass-1"))
-        self.assertContains(self.client.get(reverse("login")), "data-demo-login")
+        self.assertContains(self.client.get(reverse("login")), "data-demo-try")  # DEMO-FIRST-RUN: the way in, not the credentials
+        # DEMO-FIRST-RUN: the ready shop greets its owner by name and the owner's till works at once.
+        from shifts.services import open_shift_for
+
+        owner = get_user_model().objects.get(username="owner")
+        self.assertEqual(owner.hesba_profile.display_name, "أستاذ محمود الشربيني")
+        self.assertIsNotNone(open_shift_for(owner))
 
     @override_settings(DEMO_MODE=True, DEMO_PASSWORD="Demo-pass-1")
     def test_the_showcase_shop_shows_the_market_parity_features(self):
@@ -101,4 +108,6 @@ class DemoTests(TestCase):
         self.assertTrue({"pos", "barcode", "promotions"} <= enabled)
 
     def test_no_demo_banner_on_a_real_install(self):
-        self.assertNotContains(self.client.get(reverse("login")), "data-demo-login")
+        page = self.client.get(reverse("login"))
+        self.assertNotContains(page, "data-demo-login")
+        self.assertNotContains(page, "data-demo-try")

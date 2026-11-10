@@ -428,19 +428,33 @@ def _onboarding(lang):
     ]
 
 
-def _demo_activities(user, lang, profile):
+def _demo_bar(request, lang, profile):
+    """DEMO-FIRST-RUN (D3): the one-line demo bar on a showcase. Everyone signed in sees it (it names the business and
+    offers «غيّر النشاط» and the other login); only the owner gets «ابدأ فاضي» (``demo_bar`` decides, for «ابدأ من هنا» too)."""
+
     from django.conf import settings
 
-    if not getattr(settings, "DEMO_MODE", False) or not user_has_permission(user, "settings.view_settings"):
+    if not getattr(settings, "DEMO_MODE", False):
         return None
-    from settings_core import setup_catalog as catalog
+    from config.demo_first_run import demo_bar
 
-    # TRACK-START S01: the shop's own activity, whatever it is; trying another starts over from choosing it,
+    # TRACK-START S01: the bar names the shop's own activity; «غيّر النشاط» opens a copy of another ready shop,
     # so the words, the menu and the sample data always belong to the same business.
-    activity, sub = (profile.activity_slug, profile.sub_activity_slug) if profile else ("", "")
-    current = " · ".join(part for part in (catalog.activity_label(activity, lang) if activity else "",
-                                           catalog.sub_activity_label(activity, sub, lang) if sub else "") if part)
-    return {"current": current, "label": "Your activity" if lang == "en" else "نشاطك"}
+    return demo_bar(request, lang, profile)
+
+
+def _demo_mode():
+    from django.conf import settings
+
+    return bool(getattr(settings, "DEMO_MODE", False))
+
+
+def _demo_tour(request, lang, profile):
+    if not _demo_mode():
+        return None
+    from config.demo_first_run import tour_card
+
+    return tour_card(request, lang, profile)
 
 
 def _voice_card(user, lang, today, shared, sections, fit):
@@ -486,6 +500,12 @@ def dashboard(request):
     now = timezone.localtime()
     today = now.date()
     profile = ClientProfile.get_active()
+    if profile is not None and not profile.setup_is_complete and (_demo_mode() or request.user.is_superuser):
+        # DEMO-FIRST-RUN §7: no half-set-up dashboard for whoever can finish the setup (the owner, or anyone on a
+        # showcase); the gate sends them to the wizard step they are at. Anyone else keeps the dashboard they may see.
+        from django.shortcuts import redirect
+
+        return redirect("after_login")
     modules = set(usable_modules())
 
     held = permitted_codes(request.user, ALL_KPI_PERMISSIONS)
@@ -546,7 +566,10 @@ def dashboard(request):
         # A1 (HG-079): the voice summary card, only while its capability is on (read from the set already loaded).
         "voice_summary": _voice_card(request.user, lang, today, shared, sections, fit),
         "ask_link": _ask_link(lang, fit, request.user),  # A2 (HG-080)
-        "demo_activities": _demo_activities(request.user, lang, profile),
+        "demo_bar": _demo_bar(request, lang, profile),
+        "demo_tour": _demo_tour(request, lang, profile),
+        # DEMO-FEEDBACK: the one-time hello (pages are recorded; leave a note) shows here, after the first content page.
+        "demo_hello": _demo_mode(),
         "onboarding_steps": _onboarding(lang),
         # Guide someone whose installation has seen no trade yet, and anyone who
         # can see nothing at all. A working business does not need the steps.

@@ -29,12 +29,18 @@ then
     exit 0
 fi
 
-rm -f "$SQLITE_PATH"
+# The base demo and everything built from it (the emptied demo, the ready shop of every
+# activity, half-built files and locks) are rebuilt from scratch on every start, so none
+# can lag behind the code's schema.
+rm -f "$SQLITE_PATH" /tmp/hesba_demo.*.sqlite3 /tmp/hesba_demo.sqlite3.* /tmp/hesba_demo.*.sqlite3.*
 python manage.py migrate --noinput -v0
 python manage.py prepare_demo
 python manage.py prepare_demo_fresh --force -v0
 python manage.py migrate --database feedback --noinput -v0
+# DEMO-FIRST-RUN: the ready shop of every other activity, built in the background once the
+# server is up; a visitor who taps one before it is ready sees "بنجهّز نسختك…" for a moment.
+( (sleep 5 && python manage.py prepare_demo_templates) & )
 echo
-echo "Hesba demo: open the 'Ports' tab, port $PORT (it opens by itself). Sign in as owner / Demo-pass-1."
+echo "Hesba demo: open the 'Ports' tab, port $PORT (it opens by itself). Pick a kind of business to start."
 echo
 exec python manage.py runserver 0.0.0.0:$PORT

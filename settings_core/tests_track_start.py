@@ -25,12 +25,13 @@ class StartAndSettingsTests(TestCase):
         return self.client.get(reverse(name, args=args), {"lang": "ar", **params}).content.decode()
 
     @override_settings(DEMO_MODE=True)
-    def test_s01_the_demo_bar_names_this_shop_and_trying_another_starts_over(self):
+    def test_s01_the_demo_bar_names_this_shop_and_trying_another_opens_another_ready_shop(self):
         html = self.page("dashboard_snapshot")
         self.assertIn("data-demo-activity", html)
-        self.assertIn("تجاري · ملابس وأحذية", html)
-        self.assertNotIn('name="activity"', html)  # no switch that would keep a clothes shop's data in a pharmacy
-        self.assertIn("جرّب نشاط تاني (من الأول)", html)
+        self.assertIn("ديمو · ملابس وأحذية", html)
+        self.assertNotIn('<select name="activity"', html)  # no switch that would keep a clothes shop's data in a pharmacy
+        self.assertIn("غيّر النشاط", html)  # DEMO-FIRST-RUN: back to the tiles; a new copy replaces this one
+        self.assertNotIn("جرّب نشاط تاني (من الأول)", html)
 
     def test_s02_s03_one_name_and_one_meaning_for_on_and_off(self):
         modules = self.page("settings_core:modules")

@@ -5,6 +5,7 @@ from django.contrib.auth.views import LogoutView
 from django.urls import include, path
 
 from config import demo as demo_views
+from config import demo_first_run as first_run
 from django.views.generic import TemplateView
 
 from config.health import healthz
@@ -73,6 +74,13 @@ urlpatterns = [
     path("demo/activity/", demo_views.switch_activity, name="demo_activity"),
     path("demo/sample/", demo_views.sample, name="demo_sample"),
     path("demo/restart/", login_not_required(demo_views.restart), name="demo_restart"),
+    # DEMO-FIRST-RUN: one tap on the kind of business opens a ready shop (config/demo_first_run.py).
+    path("demo/", first_run.landing, name="demo_landing"),
+    path("demo/start/", first_run.start, name="demo_start"),
+    path("demo/preparing/", first_run.preparing, name="demo_preparing"),
+    path("demo/begin/", first_run.begin, name="demo_begin"),
+    path("demo/login-as/", first_run.login_as, name="demo_login_as"),
+    path("demo/<slug:activity>/", first_run.sub_activities, name="demo_sub_activities"),
     path("demo/feedback/", include("feedback.urls")),
     path("master-data/", include("master_data.urls")),
     path("purchases/", include("purchases.urls")),
