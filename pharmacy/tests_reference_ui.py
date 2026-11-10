@@ -6,9 +6,13 @@ through ``services.save_drug``; ``DrugReference`` itself is never written here. 
 import re
 from datetime import timedelta
 from decimal import Decimal as D
+from unittest import mock
 
 from django.contrib.staticfiles import finders
+from django.core.exceptions import ValidationError
 from django.db import connection
+from django.db.models import Case, F, IntegerField, Q, Value, When
+from django.db.models.functions import Lower, Replace, Trim
 from django.test import SimpleTestCase
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
@@ -22,8 +26,9 @@ from settings_core import capabilities as caps
 
 from . import picker, services
 from .models import DrugInfo, DrugReference
-from .reference import fold
+from .reference import _MARKS, fold
 from .tests import PharmacySetup, person
+from variants.models import VariantGroup
 
 TODAY = timezone.localdate()
 SEARCH = reverse("pharmacy:reference_search")
@@ -136,6 +141,19 @@ class SearchEndpointTests(ReferenceSetup):
         self.client.force_login(self.owner)
         self.assertEqual(self.client.post(SEARCH, {"q": "zuba"}).status_code, 405)
 
+    def test_percent_and_underscore_are_plain_characters(self):
+        # Every active row would match an unescaped "%%" or "__" (any name of two letters or more).
+        self.assertGreaterEqual(DrugReference.objects.filter(is_active=True).count(), 4)
+        for q in ("%%", "__", "%_", "zu%", "z_b", "ز%"):
+            with self.subTest(q=q):
+                self.assertEqual(self.search(q).json()["count"], 0)
+        percent = ref("P1", "Pctfab 5%_x cream", ingredient="Hydrocortisone")
+        self.assertEqual([row["id"] for row in self.search("5%_x").json()["results"]], [percent.pk])
+
+    def test_never_kept_in_a_cache(self):
+        self.assertIn("no-store", self.search("zuba")["Cache-Control"])
+        self.assertIn("private", self.search("zuba")["Cache-Control"])
+
     def test_one_query_whatever_the_number_of_rows(self):
         with self.assertNumQueries(1):
             picker.search_reference("zubac")
@@ -148,6 +166,72 @@ class SearchEndpointTests(ReferenceSetup):
                 self.assertEqual(self.client.get(SEARCH, {"q": q}).status_code, 200)
             counts.append(len(queries))
         self.assertEqual(counts[0], counts[1])
+
+
+_OLD_PAIRS = (("أ", "ا"), ("إ", "ا"), ("آ", "ا"), ("ة", "ه"), ("ى", "ي"), *zip("٠١٢٣٤٥٦٧٨٩٫", "0123456789."))
+
+
+def reviewed_search(raw, limit=picker.SEARCH_LIMIT):
+    """The search exactly as first reviewed on PR #348 (the whole fold, four times per row), kept to prove the cheaper
+    query returns the same rows in the same order."""
+
+    def fold_column(expression):
+        folded = Lower(expression)
+        for old, new in _OLD_PAIRS:
+            folded = Replace(folded, Value(old), Value(new))
+        for mark in (chr(code) for code in range(0x0600, 0x0700) if _MARKS.match(chr(code))):
+            folded = Replace(folded, Value(mark), Value(""))
+        return Trim(folded)
+
+    text, folded = picker.clean_query(raw)
+    if len(folded) < picker.MIN_QUERY:
+        return []
+    ingredient = services.ingredient_key(text)
+    codes = picker._barcodes(text)
+    prefix = Q(name_key__startswith=folded) | Q(ar_key__startswith=folded)
+    condition = prefix | Q(name_key__contains=folded) | Q(ar_key__contains=folded)
+    if len(ingredient) >= picker.MIN_QUERY:
+        condition |= Q(ingredient_key__contains=ingredient)
+    rank = [When(prefix, then=Value(1))]
+    if codes:
+        condition |= Q(barcode__in=codes)
+        rank.insert(0, When(barcode__in=codes, then=Value(0)))
+    rows = (DrugReference.objects.filter(is_active=True).annotate(ar_key=fold_column(F("name_ar"))).filter(condition)
+            .annotate(rank=Case(*rank, default=Value(2), output_field=IntegerField())).order_by("rank", "name_key", "pk")[:limit])
+    return [row.pk for row in rows]
+
+
+class SearchCostTests(ReferenceSetup):
+    """Review of PR #348: the cheaper search (the Arabic fold only for Arabic text) returns what the reviewed one did."""
+
+    def setUp(self):
+        super().setUp()
+        self.mixed = [
+            ref("X1", "Banafab 500mg tab", "بانافاب ٥٠٠ مجم", "Paracetamol", "500 mg", barcode="2000000000107"),
+            ref("X2", "", "بانافاب فورت", "Paracetamol"),                       # Arabic only: name_key is Arabic
+            ref("X3", "Banafab", "بانافاب Forte ٥٠٠", "Paracetamol"),            # Latin text and digits only in the Arabic name
+            ref("X4", "Kalfab", "كالْفاب إكسترا", "Ibuprofen"),                  # a haraka and a hamza
+            ref("X5", "Mayfab", "مايفابة الأولى", "Cetirizine"),                 # ة, أ
+            ref("X6", "Rufab 2.5 mg", "روفاب ٢٫٥ مجم", "Rufabine", "2.5 mg"),
+            ref("X7", "FORTEFAB", "", "Loratadine"),
+            ref("X8", "Nofab", "نوفاب", "Banafabine"),                            # matched by its ingredient only
+        ]
+
+    def test_arabic_and_latin_queries_return_the_reviewed_rows(self):
+        queries = ["بانافاب", "بانا", "انافاب فو", "كالفاب", "اكسترا", "مايفابه", "الاولي", "fab", "banafab", "forte", "FORTE", "500",
+                   "٥٠٠", "2.5", "٢٫٥", "2000000000107", "fusidic", "زو", "زوباسيلين", "ابوكوين", "ايبوكوين", "quib", "amoxi"]
+        for q in queries:
+            with self.subTest(q=q):
+                self.assertEqual([row.pk for row in picker.search_reference(q)[1]], reviewed_search(q))
+        x1, x2, x3 = (row.pk for row in self.mixed[:3])
+        self.assertEqual({row.pk for row in picker.search_reference("forte")[1]}, {x3, self.mixed[6].pk})  # Latin inside the Arabic name
+        self.assertIn(x3, [row.pk for row in picker.search_reference("500")[1]])  # Arabic digits only in the Arabic name
+        self.assertEqual({row.pk for row in picker.search_reference("بانافاب")[1]}, {x1, x2, x3})
+
+    def test_still_one_query(self):
+        for q in ("بانافاب", "forte", "500"):
+            with self.subTest(q=q), self.assertNumQueries(1):
+                picker.search_reference(q)
 
 
 class PrefillTests(ReferenceSetup):
@@ -257,6 +341,98 @@ class SaveTests(ReferenceSetup):
         self.assertEqual(response.status_code, 200)
         self.assertEqual((Item.objects.count(), DrugInfo.objects.count()), (before, drugs))
 
+    def test_a_forged_reference_id_is_ignored_never_an_error(self):
+        for number, raw in enumerate(("abc", "1.5", "-1", "9" * 40, "<script>")):
+            with self.subTest(reference=raw):
+                name = f"صنف مزور {number}"
+                response = self.post(**{"drug-reference": raw, "item_name": name, "barcode": ""})
+                self.assertEqual(response.status_code, 302)
+                self.assertTrue(DrugInfo.objects.filter(item__item_name=name, active_ingredient="Amoxicillin").exists())
+
+    def test_drug_fields_are_ignored_without_the_capability(self):
+        caps.set_capability_enabled(self.profile, "drugs", False)
+        drugs = DrugInfo.objects.count()
+        response = self.post()
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(Item.objects.filter(item_name="زوباسيلين معدّل").exists())
+        self.assertEqual(DrugInfo.objects.count(), drugs)
+
+    def test_a_refusal_from_save_drug_rolls_the_item_back_and_keeps_the_values(self):
+        before, drugs, audits = Item.objects.count(), DrugInfo.objects.count(), AuditLog.objects.count()
+        with mock.patch("pharmacy.services.save_drug", side_effect=ValidationError("رفض تجريبي")):
+            response = self.post()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual((Item.objects.count(), DrugInfo.objects.count(), AuditLog.objects.count()), (before, drugs, audits))
+        html = response.content.decode()
+        self.assertIn("رفض تجريبي", html)
+        self.assertIn("data-drug-errors", html)
+        self.assertRegex(html, r'name="item_name"[^>]*value="زوباسيلين معدّل"')
+        self.assertRegex(html, r'name="drug-active_ingredient"[^>]*value="Amoxicillin"')
+        self.assertNotIn("master_data/items/None", html)
+        again = self.post()  # the same form sent again saves normally
+        self.assertEqual(again.status_code, 302)
+        self.assertEqual(Item.objects.count(), before + 1)
+
+
+class VariantsWithDrugTests(ReferenceSetup):
+    """Review of PR #348: «له مقاسات وألوان» and the drug part on together; the drug data is saved on every item made."""
+
+    def setUp(self):
+        super().setUp()
+        caps.set_capability_enabled(self.profile, "variants", True)
+
+    def post(self, **extra):
+        self.client.force_login(self.owner)
+        data = {"lang": "ar", "item_code": "", "item_name": "شاش طبي", "unit": "علبة", "default_sale_price": "30.00", "min_stock": "",
+                "is_stock_tracked": "on", "active": "on", "has_variants": "on", "sizes_std": ["M", "L"],
+                "drug-reference": "", "drug-active_ingredient": "Cotton gauze", "drug-strength": "10 cm", "drug-form": "", "drug-manufacturer": ""}
+        data.update(extra)
+        return self.client.post(NEW_ITEM, data)
+
+    def test_the_form_offers_both(self):
+        self.client.force_login(self.owner)
+        html = self.client.get(NEW_ITEM).content.decode()
+        self.assertIn('name="has_variants"', html)
+        self.assertIn("data-drug-part", html)
+
+    def test_every_size_gets_the_drug_data(self):
+        response = self.post()
+        group = VariantGroup.objects.get()
+        self.assertRedirects(response, f"{reverse('variants:group', args=[group.pk])}?lang=ar", fetch_redirect_response=False)
+        items = list(Item.objects.filter(variant__group=group))
+        self.assertEqual(len(items), 2)
+        infos = DrugInfo.objects.filter(item__in=items)
+        self.assertEqual({(info.item_id, info.active_ingredient, info.strength) for info in infos},
+                         {(item.pk, "Cotton gauze", "10 cm") for item in items})
+        self.assertEqual(AuditLog.objects.filter(module="pharmacy", action="create_drug", object_id__in=[str(item.pk) for item in items]).count(), 2)
+
+    def test_without_drug_data_the_sizes_are_made_as_before(self):
+        self.post(**{"drug-active_ingredient": "", "drug-strength": ""})
+        items = Item.objects.filter(variant__group=VariantGroup.objects.get())
+        self.assertEqual(items.count(), 2)
+        self.assertFalse(DrugInfo.objects.filter(item__in=items).exists())
+
+    def test_invalid_drug_data_makes_nothing_and_keeps_every_value(self):
+        before = Item.objects.count()
+        response = self.post(**{"drug-active_ingredient": ""})  # a strength without an ingredient
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, services.MESSAGES["ar"]["ingredient"])
+        self.assertEqual((VariantGroup.objects.count(), Item.objects.count()), (0, before))
+        html = response.content.decode()
+        self.assertRegex(html, r'name="item_name"[^>]*value="شاش طبي"')
+        self.assertRegex(html, r'name="drug-strength"[^>]*value="10 cm"')
+        self.assertRegex(html, r'name="has_variants"[^>]*checked')
+        self.assertRegex(html, r'name="sizes_std" value="M"[^>]*checked')
+        self.assertRegex(html, r'name="sizes_std" value="L"[^>]*checked')
+
+    def test_a_refusal_from_save_drug_rolls_every_size_back(self):
+        before, drugs = Item.objects.count(), DrugInfo.objects.count()
+        with mock.patch("pharmacy.services.save_drug", side_effect=ValidationError("رفض تجريبي")):
+            response = self.post()
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "رفض تجريبي")
+        self.assertEqual((VariantGroup.objects.count(), Item.objects.count(), DrugInfo.objects.count()), (0, before, drugs))
+
 
 class DrugPageTests(ReferenceSetup):
     """The drug page of «أموكسيسيلين 500 مجم» (Amoxicillin 500 mg, see PharmacySetup)."""
@@ -276,6 +452,7 @@ class DrugPageTests(ReferenceSetup):
         self.assertIn(f'href="{NEW_ITEM}?lang=ar&amp;ref={self.amox.pk}"', html)
         self.assertIn("62.50", html)
         self.assertIn(self.fresh.strftime("%m/%Y"), html)
+        self.assertIn("<bdi>Nowhere Labs</bdi>", html)  # a Latin maker inside an Arabic line keeps its order
         self.assertNotIn(f'data-ref="{self.ibu.pk}"', html)  # another ingredient
         english = self.page(lang="en")
         self.assertIn("Alternatives not in your stock", english)
@@ -333,6 +510,25 @@ class PickerScriptTests(SimpleTestCase):
         markup = self.read("hesba/js/price_markup.js")
         self.assertIn("sale.addEventListener('hesba:price-set'", markup)
 
+    def test_an_older_answer_never_draws_over_newer_text(self):
+        # Review of PR #348: the search on its way is stopped as soon as the text changes, and any answer for text no
+        # longer in the box is dropped (rows, too short or an error). The browser run is in the PR description.
+        script = self.read("hesba/js/drug_picker.js")
+        handler = script[script.index("input.addEventListener('input'"):script.index("input.addEventListener('keydown'")]
+        self.assertIn("controller.abort()", handler)
+        self.assertIn("function current() { return folded(input.value) === query; }", script)
+        self.assertEqual(script.count("!current()"), 2)
+
+    def test_a_second_pick_keeps_what_was_typed_and_a_cleared_name_forgets_the_row(self):
+        script = self.read("hesba/js/drug_picker.js")
+        self.assertIn("if (handTyped(target)) { return; }", script)
+        self.assertIn("if (target === name && picked && !name.value.trim()) { forget(); return; }", script)
+
+    def test_result_count_wording(self):
+        self.assertEqual([picker.UI["ar"][key] for key in ("count_one", "count_two", "count", "count_many")],
+                         ["نتيجة واحدة", "نتيجتين", "{n} نتايج", "{n} نتيجة"])
+        self.assertIn("n <= 10 ? 'count' : 'count_many'", self.read("hesba/js/drug_picker.js"))
+
     def test_rows_hidden_while_typing_come_back_when_the_text_returns(self):
         # A letter typed and deleted inside the debounce window used to leave the loading skeleton up for good.
         script = self.read("hesba/js/drug_picker.js")
@@ -352,3 +548,4 @@ class StylesheetTests(SimpleTestCase):
         self.assertTrue(used)
         self.assertEqual(sorted(used - defined), [])
         self.assertIn("var(--hs-focus-ring)", css)
+        self.assertIn(".hs-drug-sheet:not([open]){display:none}", css)  # no <dialog> support: never dead UI in the form

@@ -37,6 +37,7 @@
 /* the sheet */
 html.hs-drug-locked{overflow:hidden}
 .hs-drug-sheet{box-sizing:border-box;width:100%;max-width:100%;height:min(88dvh,760px);max-height:none;margin:auto 0 0;padding:0;border:0;border-radius:var(--hs-radius-xl) var(--hs-radius-xl) 0 0;background:var(--hs-ground);color:var(--hs-ink);font-family:var(--hs-font-body);box-shadow:var(--hs-shadow-lg);overflow:hidden}
+.hs-drug-sheet:not([open]){display:none}  /* a browser without <dialog> must not draw the sheet inside the form */
 .hs-drug-sheet[open]{display:flex;flex-direction:column}
 .hs-drug-sheet::backdrop{background:var(--hs-scrim)}
 .hs-drug-sheet__grab{flex:none;width:40px;height:4px;margin:10px auto 2px;border-radius:var(--hs-radius-pill);background:var(--hs-line-strong)}

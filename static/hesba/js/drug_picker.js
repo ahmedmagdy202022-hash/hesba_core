@@ -97,8 +97,11 @@
   dialog.addEventListener('keydown', function (event) { if (event.key === 'Escape') { event.preventDefault(); close(); } });
   input.addEventListener('input', function () {
     clearTimeout(timer);
-    // the rows on screen answer the old text: never let them be picked while the new search waits
     var query = folded(input.value);
+    // A search still on its way answers the old text: stop it now, not when the debounced search starts, so its rows
+    // can never land in between. Nothing answers lastQuery any more, so the same text typed again searches again.
+    if (query !== lastQuery && controller) { controller.abort(); controller = null; lastQuery = null; }
+    // the rows on screen answer the old text: never let them be picked while the new search waits
     if (query.length >= 2 && query !== lastQuery) { show('loading'); hiddenForTyping = true; }
     timer = setTimeout(function () { run(false); }, 250);
   });
@@ -117,25 +120,41 @@
   function folded(text) { return (text || '').replace(/\s+/g, ' ').trim(); }
   function run(force) {
     var query = folded(input.value);
-    if (query.length < 2) { lastQuery = null; if (controller) { controller.abort(); } show('short'); return; }
+    if (query.length < 2) { lastQuery = null; if (controller) { controller.abort(); controller = null; } show('short'); return; }
     // The same text as the last search: nothing to do, unless typing hid its rows meanwhile (a letter typed and
     // deleted inside the debounce window), in which case they are fetched again instead of leaving the skeleton up.
     if (!force && query === lastQuery && !hiddenForTyping) { return; }
     hiddenForTyping = false;
     lastQuery = query;
     if (controller) { controller.abort(); }
-    controller = new AbortController();
+    var mine = controller = new AbortController();
+    function settled() { if (controller === mine) { controller = null; } }
+    // An answer for text that is no longer in the box is dropped, whatever it is (rows, too short or an error).
+    function current() { return folded(input.value) === query; }
     show('loading');
-    fetch(url + '?lang=' + lang + '&q=' + encodeURIComponent(query), { headers: { Accept: 'application/json' }, credentials: 'same-origin', signal: controller.signal })
+    fetch(url + '?lang=' + lang + '&q=' + encodeURIComponent(query), { headers: { Accept: 'application/json' }, credentials: 'same-origin', signal: mine.signal })
       .then(function (response) { if (!response.ok) { throw new Error(String(response.status)); } return response.json(); })
       .then(function (data) {
+        settled();
+        if (!current()) { return; }
         if (data.too_short) { show('short'); return; }
         draw(data.results || [], data.limit || 20);
       })
-      .catch(function (error) { if (error && error.name === 'AbortError') { return; } lastQuery = null; show('error'); });
+      .catch(function (error) {
+        settled();
+        if ((error && error.name === 'AbortError') || !current()) { return; }
+        lastQuery = null;
+        show('error');
+      });
   }
 
   function money(value) { return value == null ? '' : value; }
+  // Arabic: نتيجة واحدة، نتيجتين، 3–10 نتايج، 11 نتيجة وأكتر (English: 1 result, n results)
+  function countText(n) {
+    if (n === 1) { return say('count_one'); }
+    if (n === 2) { return say('count_two'); }
+    return say(n <= 10 ? 'count' : 'count_many', { n: n });
+  }
   function draw(rows, limit) {
     list.textContent = '';
     if (!rows.length) { show('empty'); return; }
@@ -168,14 +187,16 @@
       list.appendChild(li);
     });
     show('results');
-    status.textContent = rows.length === 1 ? say('count_one') : rows.length === 2 ? say('count_two') : say('count', { n: rows.length });
+    status.textContent = countText(rows.length);
     if (rows.length >= limit) { cap.textContent = say('cap', { n: limit }); cap.hidden = false; }
     var first = rows[0];
     source.textContent = say('source') + (first.price_month ? ' · ' + say('price_of', { month: first.price_month }) : '');
   }
 
   // ---- filling the form ----
-  var picked = null;
+  // picked: the row the form now follows (null once the name is cleared by hand). everPicked: a row filled the form
+  // before, so a field without the tint and not empty was typed by the person and a later pick leaves it alone.
+  var picked = null, everPicked = false;
   function tint(input, on) {
     if (!input) { return; }
     input.classList.toggle('hs-from-list', !!on);
@@ -185,8 +206,10 @@
     input.value = value == null ? '' : String(value);
     if (input.tagName === 'SELECT' && input.value !== String(value || '')) { input.value = ''; }
   }
+  function handTyped(target) {
+    return everPicked && target !== name && !target.classList.contains('hs-from-list') && String(target.value).trim() !== '';
+  }
   function apply(item, fromServer) {
-    picked = item;
     FILL.forEach(function (pair) {
       var target = field(pair[0]);
       if (!target) { return; }
@@ -195,9 +218,12 @@
         tint(target, value && String(target.value) === String(value));
         return;
       }
+      if (handTyped(target)) { return; }  // a second pick never overwrites what the person typed (the name excepted)
       if (value) { setValue(target, value); tint(target, true); }
       else if (target.classList.contains('hs-from-list')) { setValue(target, ''); tint(target, false); }
     });
+    picked = item;
+    everPicked = true;
     if (reference) { reference.value = item.id; }
     if (banner) {
       banner.hidden = false;
@@ -208,7 +234,15 @@
   function edited(event) {
     var target = event.target;
     if (target && target.classList && target.classList.contains('hs-from-list')) { tint(target, false); }
+    if (target === name && picked && !name.value.trim()) { forget(); return; }
     if (target === price) { priceLine(); }
+  }
+  // The name cleared by hand: the form no longer follows that row (no reference id, no suggested price).
+  function forget() {
+    picked = null;
+    if (reference) { reference.value = ''; }
+    if (bannerPrice) { bannerPrice.textContent = ''; }
+    priceLine();
   }
   form.addEventListener('input', edited);
   form.addEventListener('change', edited);

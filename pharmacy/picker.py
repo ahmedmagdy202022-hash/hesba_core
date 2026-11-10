@@ -49,7 +49,7 @@ UI = {
         "open": "اختار من القايمة", "open_label": "اختار الدوا من القايمة المرجعية", "hint": "صيدلية؟ ابحث في القايمة المرجعية بدل ما تكتب كل حاجة بإيدك.",
         "title": "اختار من القايمة المرجعية", "close": "اقفل", "search": "ابحث في القايمة المرجعية",
         "placeholder": "اكتب أول حروف الدوا أو المادة الفعالة أو الباركود", "short_title": "اكتب حرفين على الأقل",
-        "short_body": "اكتب اسم الدوا أو المادة الفعالة أو الباركود.", "loading": "بدوّر…", "count": "{n} نتايج", "count_one": "نتيجة واحدة", "count_two": "نتيجتين",
+        "short_body": "اكتب اسم الدوا أو المادة الفعالة أو الباركود.", "loading": "بدوّر…", "count": "{n} نتايج", "count_one": "نتيجة واحدة", "count_two": "نتيجتين", "count_many": "{n} نتيجة",
         "cap": "بيظهر أول {n} بس", "empty_title": "مفيش نتيجة", "empty_body": "مفيش نتيجة. اكتب الاسم بشكل تاني أو كمّل يدوي",
         "error_title": "مقدرناش نوصل للقايمة", "error_body": "اتأكد من النت وجرّب تاني، أو كمّل يدوي.", "retry": "جرّب تاني",
         "source": "من القايمة المرجعية", "disclaimer": "السعر مرجعي، راجع تسعيرة الهيئة", "manual": "مش لاقيه؟ كمّل يدوي",
@@ -66,7 +66,7 @@ UI = {
         "open": "Choose from list", "open_label": "Choose the drug from the reference list", "hint": "A pharmacy? Search the reference list instead of typing everything.",
         "title": "Choose from the reference list", "close": "Close", "search": "Search the reference list",
         "placeholder": "Type the first letters of the drug, the ingredient or the barcode", "short_title": "Type at least two letters",
-        "short_body": "Type a drug name, an active ingredient or a barcode.", "loading": "Searching…", "count": "{n} results", "count_one": "1 result", "count_two": "2 results",
+        "short_body": "Type a drug name, an active ingredient or a barcode.", "loading": "Searching…", "count": "{n} results", "count_one": "1 result", "count_two": "2 results", "count_many": "{n} results",
         "cap": "Only the first {n} are shown", "empty_title": "No results", "empty_body": "No results. Try another spelling or continue manually",
         "error_title": "Could not reach the list", "error_body": "Check the connection and try again, or continue manually.", "retry": "Try again",
         "source": "From the reference list", "disclaimer": "Reference price, check the official price list", "manual": "Not there? Continue manually",
@@ -128,25 +128,58 @@ def _barcodes(text):
     return [digits, "0" + digits] if len(digits) == 12 else [digits]
 
 
+def db_digits(expression):
+    """Only the digit part of :func:`db_fold` (Arabic-Indic digits and «٫»): what a query without Arabic letters needs."""
+
+    for old, new in _FOLD_PAIRS[5:]:
+        expression = Replace(expression, Value(old), Value(new))
+    return expression
+
+
+_ARABIC = re.compile("[؀-ۿ]")
+_DIGIT = re.compile(r"[\d.]")
+
+
 def search_reference(raw, limit=SEARCH_LIMIT):
     """(folded query, rows): active reference rows matching a name prefix or part, the Arabic name, the active ingredient,
-    or an exact barcode. Barcode hits first, then name prefixes, then the rest, each by name. One query; [] below 2 letters."""
+    or an exact barcode. Barcode hits first, then name prefixes, then the rest, each by name. One query; [] below 2 letters.
+
+    Cost (no stored Arabic key yet, HG-082): the cheap stored keys are tested first; the Arabic name is folded in SQL
+    only for a query with Arabic letters, once per row with an Arabic name in WHERE and once more per matching row for
+    the rank. A query without Arabic letters (Latin, digits, a barcode) can only match the Arabic name where it holds
+    the same Latin text or digits, so there it is compared case-insensitively with only its Arabic digits folded.
+    ``name_key`` is searched in both cases: it folds ``name_en``, or ``name_ar`` when a row has no English name."""
 
     text, folded = clean_query(raw)
     if len(folded) < MIN_QUERY:
         return folded, []
     ingredient = services.ingredient_key(text)
     codes = _barcodes(text)
-    prefix = Q(name_key__startswith=folded) | Q(ar_key__startswith=folded)
-    condition = prefix | Q(name_key__contains=folded) | Q(ar_key__contains=folded)
+    rows = DrugReference.objects.filter(is_active=True)
+    if _ARABIC.search(folded):
+        rows = rows.alias(ar_key=db_fold(F("name_ar")))
+        # A letter the fold never produces (not ا, ه or ي) is in the stored name as typed: a plain LIKE on it first
+        # skips most rows before the fold runs, without changing which rows match.
+        kept = [char for char in dict.fromkeys(folded) if _ARABIC.match(char) and char not in "اهي"][:2]
+        in_arabic = Q(*(Q(name_ar__contains=char) for char in kept), ar_key__contains=folded)
+        arabic_prefix = Q(ar_key__startswith=folded)
+    else:
+        if _DIGIT.search(folded):
+            rows = rows.alias(ar_key=db_digits(F("name_ar")))
+            in_arabic, arabic_prefix = Q(ar_key__icontains=folded), Q(ar_key__istartswith=folded)
+        else:
+            in_arabic, arabic_prefix = Q(name_ar__icontains=folded), Q(name_ar__istartswith=folded)
+    condition = Q(name_key__contains=folded)
     if len(ingredient) >= MIN_QUERY:
         condition |= Q(ingredient_key__contains=ingredient)
-    rank = [When(prefix, then=Value(1))]
     if codes:
         condition |= Q(barcode__in=codes)
+    condition |= ~Q(name_ar="") & in_arabic  # last: the only part that is not a plain stored column
+    rank = [When(Q(name_key__startswith=folded) | arabic_prefix, then=Value(1))]
+    if codes:
         rank.insert(0, When(barcode__in=codes, then=Value(0)))
-    rows = (DrugReference.objects.filter(is_active=True).annotate(ar_key=db_fold(F("name_ar"))).filter(condition)
-            .annotate(rank=Case(*rank, default=Value(2), output_field=IntegerField())).order_by("rank", "name_key", "pk")[:limit])
+    rows = (rows.filter(condition).alias(rank=Case(*rank, default=Value(2), output_field=IntegerField()))
+            .order_by("rank", "name_key", "pk")[:limit])
     return folded, list(rows)
 
 
@@ -174,16 +207,21 @@ def as_json(row, lang="ar", today=None):
     }
 
 
-def reference_row(raw_pk):
-    """The active reference row ``?ref=`` names, or None for anything else (never an error)."""
+def reference_id(raw_pk):
+    """A reference row id as an int, or None for anything that is not one (never an error)."""
 
     try:
         pk = int(str(raw_pk or "").strip())
     except (TypeError, ValueError):
         return None
-    if pk <= 0 or pk > 2**31 - 1:
-        return None
-    return DrugReference.objects.filter(pk=pk, is_active=True).first()
+    return pk if 0 < pk <= 2**31 - 1 else None
+
+
+def reference_row(raw_pk):
+    """The active reference row ``?ref=`` names, or None for anything else (never an error)."""
+
+    pk = reference_id(raw_pk)
+    return DrugReference.objects.filter(pk=pk, is_active=True).first() if pk is not None else None
 
 
 # ---- the drug part of the new-item form ----
@@ -191,7 +229,8 @@ def reference_row(raw_pk):
 class DrugFields(forms.Form):
     """The optional drug data typed with a new item. Saved with :func:`services.save_drug` once the item is saved."""
 
-    reference = forms.IntegerField(required=False, widget=forms.HiddenInput(attrs={"data-drug-reference": ""}))
+    # Only says which list row filled the form; never an error (a forged or stale value is simply ignored).
+    reference = forms.CharField(required=False, widget=forms.HiddenInput(attrs={"data-drug-reference": ""}))
     active_ingredient = forms.CharField(required=False, max_length=255)
     strength = forms.CharField(required=False, max_length=60)
     form = forms.ChoiceField(required=False, choices=())
@@ -213,6 +252,11 @@ class DrugFields(forms.Form):
         self.fields["prescription_only"].help_text = words["rx_help"]
         self.reference_row = None
         self.item_initial = {}
+
+    def clean_reference(self):
+        """The reference row's id as an int, or None for anything else (as ``?ref=``)."""
+
+        return reference_id(self.cleaned_data.get("reference"))
 
     def clean(self):
         cleaned = super().clean()
@@ -286,7 +330,10 @@ def unstocked_alternatives(item, limit=ALTERNATIVES_LIMIT):
     """Active reference rows with ``item``'s active ingredient that match no item the pharmacy has (by barcode, or by the
     folded English or Arabic name): the same strength first, then the others. One query; [] without drug data.
 
-    Each row carries ``same`` (True for the same strength)."""
+    Each row carries ``same`` (True for the same strength).
+
+    Known limitation (kept on purpose in this step): "the pharmacy has it" means the same barcode or exactly the same
+    folded name, so a stocked product spelt differently (another word order, a pack in the name) still shows here."""
 
     drug = getattr(item, "drug", None) if item is not None else None
     if drug is None or not drug.ingredient_key:

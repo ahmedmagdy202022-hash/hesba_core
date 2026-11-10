@@ -6,6 +6,7 @@ from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.views.decorators.cache import never_cache
 
 from master_data.models import Customer, Item
 from permissions.decorators import require_permission
@@ -289,6 +290,7 @@ def print_prescription(request, pk):
 
 # ---- R1 step 2: the reference drug list on the new-item form ----
 
+@never_cache  # an answer for one signed-in person and one moment: never kept by a browser or a proxy
 def reference_search(request):
     """GET ``q``: the reference rows for the «اختار من القايمة» picker, as JSON (at most 20).
 
