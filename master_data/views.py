@@ -290,23 +290,28 @@ def new_title(entity, singular, lang):
 
 
 def _balances(entity, objects):
-    """UX Wave 2: what each customer on the page owes (or each supplier is owed), from the same ledger read as the
-    account card (parties.services.balance): one aggregate query per row of the page, nothing stored."""
+    """UX Wave 2: what each customer on the page owes (or each supplier is owed), the same figure as the account card
+    (parties.services.balance), read for the whole page in one aggregate query; nothing stored."""
 
-    from parties.services import balance
+    from parties.services import balances
 
     kind = {"customers": "customer", "suppliers": "supplier"}[entity]
-    return {obj.pk: balance(kind, obj) for obj in objects}
+    return balances(kind, objects)
 
 
 def _stock(objects, request):
-    """UX Wave 2: the quantity on hand of each stock item on the page (the same read as the stock screen)."""
+    """UX Wave 2: the quantity on hand of each stock item on the page, in one grouped query. Inside an entity only
+    its own locations count, as on the item's stock page; the whole group (no entity chosen) sees the group total."""
 
     if not user_has_permission(request.user, "inventory.view_stock"):
         return None
-    from inventory.services import get_item_stock_quantity
+    from inventory.models import StockMovement
+    from inventory.services import get_items_stock_quantities
 
-    return {obj.pk: get_item_stock_quantity(obj) for obj in objects if obj.is_stock_tracked}
+    tracked = [obj for obj in objects if obj.is_stock_tracked]
+    if not tracked:
+        return {}
+    return get_items_stock_quantities(tracked, entity_scope.scope(StockMovement.objects.all(), entity_scope.STOCK_MOVEMENT))
 
 
 def _columns(entity, lang, can_view_cost):

@@ -60,6 +60,25 @@ def balance(kind, party, as_of=None):
     return money_round(_opening(party) + inc - dec)
 
 
+def balances(kind, parties):
+    """UX Wave 2: ``balance(kind, party)`` for many parties at once, as {party pk: balance}, from one aggregate query.
+
+    Read-only, the same figure row for row: the entity's ledger rows only (HG-034), opening balance + due increases -
+    due decreases. Used by the customer and supplier lists, a page at a time."""
+
+    spec = KINDS[kind]
+    parties = list(parties)
+    here = entity_scope.customer_entries_q() if kind == "customer" else entity_scope.supplier_entries_q()
+    rows = (spec["entry"].objects.filter(here, **{f"{spec['fk']}__in": [party.pk for party in parties]})
+            .order_by().values(spec["fk"]).annotate(inc=Sum("due_increase"), dec=Sum("due_decrease")))
+    sums = {row[spec["fk"]]: ((row["inc"] or ZERO), (row["dec"] or ZERO)) for row in rows}
+    answer = {}
+    for party in parties:
+        inc, dec = sums.get(party.pk, (ZERO, ZERO))
+        answer[party.pk] = money_round(_opening(party) + inc - dec)
+    return answer
+
+
 def _reference(entry, kind):
     for field, number_attr, url_name in KINDS[kind]["refs"]:
         document = getattr(entry, field, None)
