@@ -95,7 +95,7 @@ def build_document(invoice, lang="ar"):
         if not condition:
             problems.append(text_ar if ar else text_en)
 
-    need(invoice.status == "posted", "الفاتورة لازم تكون مرحّلة.", "The invoice must be posted.")
+    need(invoice.status == "posted", "الفاتورة لازم تكون نهائية.", "The invoice must be posted.")
     company = company_details()
     issuer = issuer_settings()
     need(company["currency"] == "EGP", "عملة الشركة لازم تكون جنيه مصري (الفاتورة بعملة تانية محتاجة سعر صرف، ومش مدعومة لسه).", "The company currency must be EGP (other currencies need an exchange rate and are not supported yet).")
@@ -354,7 +354,7 @@ SEND_WORDS = {
     "ar": {"problems": "البيانات لسه ناقصة؛ كمّلها الأول.", "already": "الفاتورة دي اتبعتت واتقبلت بالفعل.", "pending": "الفاتورة دي اتبعتت ولسه المنظومة بتراجعها.",
            "setup": "الربط مع المنظومة لسه متظبطش على السيرفر ({names}).", "signer": "جهاز التوقيع مش بيرد أو رفض التوقيع؛ اتأكد إن التوكن متركّب والبرنامج شغال.",
            "login": "المنظومة رفضت الدخول؛ راجع Client ID و Client Secret.", "unreachable": "مش قادرين نوصل للمنظومة دلوقتي؛ جرّب كمان شوية.",
-           "refused": "المنظومة رفضت الفاتورة: {reason}", "unknown": "الاتصال اتقطع قبل ما نعرف رد المنظومة، وممكن تكون الفاتورة وصلت. مش هنبعتها تاني قبل ما نسأل المنظومة؛ جرّب الإرسال بعد 10 دقايق وهنتأكد الأول.", "cancel_unknown": "الاتصال اتقطع قبل ما نعرف رد المنظومة على طلب الإلغاء، وممكن يكون وصل. الطلب متسجل؛ دوس تحديث الحالة بعد شوية عشان نعرف النتيجة.", "reason": "اكتب سبب الإلغاء.", "not_valid": "الإلغاء للفواتير المقبولة بس.", "not_posted": "الفاتورة دي مش مرحّلة أو اتلغت؛ مينفعش تتبعت."},
+           "refused": "المنظومة رفضت الفاتورة: {reason}", "unknown": "الاتصال اتقطع قبل ما نعرف رد المنظومة، وممكن تكون الفاتورة وصلت. مش هنبعتها تاني قبل ما نسأل المنظومة؛ جرّب الإرسال بعد 10 دقايق وهنتأكد الأول.", "cancel_unknown": "الاتصال اتقطع قبل ما نعرف رد المنظومة على طلب الإلغاء، وممكن يكون وصل. الطلب متسجل؛ دوس تحديث الحالة بعد شوية عشان نعرف النتيجة.", "reason": "اكتب سبب الإلغاء.", "not_valid": "الإلغاء للفواتير المقبولة بس.", "not_posted": "الفاتورة دي مش نهائية أو اتلغت؛ مينفعش تتبعت."},
     "en": {"problems": "The data is still incomplete; complete it first.", "already": "This invoice was already sent and accepted.", "pending": "This invoice was sent and the portal is still checking it.",
            "setup": "The portal connection is not set up on the server yet ({names}).", "signer": "The signer did not answer or refused; check the token is plugged in and the signer is running.",
            "login": "The portal refused the login; check the client ID and secret.", "unreachable": "The portal cannot be reached right now; try again shortly.",

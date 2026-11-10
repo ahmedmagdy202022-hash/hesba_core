@@ -23,7 +23,13 @@
 
   var title = clean((main.querySelector('h1') || {}).textContent || document.title);
   var row = main.querySelector('.op-title-row, .md-title-row');
-  if (row && row.parentNode) row.parentNode.insertBefore(tools, row.nextSibling);
+  var slot = main.querySelector('[data-report-tools-slot]');  // UX Wave 2: the header's «⋯» menu holds them on a list screen
+  if (slot) {
+    slot.appendChild(tools);
+    var more = slot.closest('[data-more-actions]');
+    if (more) more.hidden = false;  // UX Wave 2: a «⋯» menu with nothing but print and Excel waits hidden until they arrive
+  }
+  else if (row && row.parentNode) row.parentNode.insertBefore(tools, row.nextSibling);
   else main.insertBefore(tools, main.firstChild);
   if (head) {
     main.insertBefore(head, main.firstChild);
@@ -50,11 +56,14 @@
       return Promise.resolve(allRows);
     }
     var collected = [];
+    var pagedOnly = !!main.querySelector('table[data-paged]');
     function fetchPage(n) {
       return fetch(pageUrl(n), { credentials: 'same-origin' }).then(function (response) { return response.text(); }).then(function (html) {
         var doc = new DOMParser().parseFromString(html, 'text/html');
         var root = doc.getElementById('hs-main') || doc.querySelector('main') || doc.body;
         tablesIn(root, false).forEach(function (table, index) {
+          // UX Wave 2: on a page with one paged table (an item's movements) the other tables are whole on every page: once.
+          if (pagedOnly && !table.hasAttribute('data-paged')) return;
           var rows = table.tBodies.length ? table.tBodies[0].rows : table.rows;
           collected[index] = (collected[index] || []).concat(Array.prototype.slice.call(rows));
         });
@@ -71,7 +80,13 @@
   }
   function cell(el) {
     var input = el.querySelector('input, select, textarea');
-    return quote(input ? (input.value || '') : (el.innerText || el.textContent));
+    if (input) return quote(input.value || '');
+    if (el.querySelector('.hs-phone-only')) {  // UX Wave 2: a word a phone row adds («باقي», «عليه») is not data
+      el = el.cloneNode(true);
+      Array.prototype.forEach.call(el.querySelectorAll('.hs-phone-only'), function (word) { word.remove(); });
+      return quote(el.textContent);
+    }
+    return quote(el.innerText || el.textContent);
   }
   var FIELD_NAMES = en ? { date_from: 'From', date_to: 'To', q: 'Search', status: 'Status', period: 'Period' }
     : { date_from: 'من', date_to: 'إلى', q: 'بحث', status: 'الحالة', period: 'الفترة' };

@@ -113,13 +113,16 @@ def cashbox_detail(request, pk):
     can_view_finance = user_has_permission(request.user, "cashboxes.view_finance")
     finance = None
     movements = None
+    movements_page = None
     if can_view_finance:
         rows = cashbox_report(cashbox=cashbox)
         finance = rows[0] if rows else None
-        movements = cashbox.movements.select_related(
+        # UX Wave 2: a page at a time (20 by default, the shared pager) instead of the latest 100 in one long table.
+        movements_page = page_of(request, cashbox.movements.select_related(
             "purchase_invoice", "sales_invoice", "supplier_payment", "customer_payment",
             "cashbox_operation", "purchase_return", "sales_return",
-        )[:100]
+        ).order_by("-movement_date", "-id"))
+        movements = movements_page.object_list
     return render(
         request,
         "cashboxes/detail.html",
@@ -128,6 +131,7 @@ def cashbox_detail(request, pk):
             cashbox=cashbox,
             finance=finance,
             movements=movements,
+            movements_page=movements_page,
             can_view_finance=can_view_finance,
             can_move_cash=user_has_permission(request.user, "cashboxes.move_cash"),
             can_adjust_opening=(

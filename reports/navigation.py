@@ -93,7 +93,7 @@ NAV_ITEMS = (
     {"key": "suppliers", "ar": "الموردون", "en": "Suppliers", "url_name": "master_data:suppliers", "module": "suppliers", "permission": "master_data.view_suppliers"},
     {"key": "items", "ar": "الأصناف والخدمات", "en": "Items & services", "url_name": "master_data:items", "module": "items_services",
      "permission": "master_data.view_master_data"},  # HG-048: a waiter or site engineer does not hold it
-    {"key": "cashboxes", "ar": "الخزائن", "en": "Cashboxes", "url_name": "cashboxes:list", "module": "cashboxes", "permission": "cashboxes.view_cashboxes"},
+    {"key": "cashboxes", "ar": "الخزن", "en": "Cashboxes", "url_name": "cashboxes:list", "module": "cashboxes", "permission": "cashboxes.view_cashboxes"},
     # T3: bank accounts and matching their statements.
     {"key": "banks", "ar": "البنوك", "en": "Banks", "url_name": "banking:list", "module": "cashboxes", "permission": "cashboxes.view_finance"},
     # T4: cheques received and issued, and what falls due.
@@ -243,7 +243,7 @@ TAB_LABELS = {
     "inventory": {"ar": "المخزون", "en": "Stock"},
     "customers": {"ar": "العملاء", "en": "Customers"},
     "items": {"ar": "الأصناف", "en": "Items"},
-    "cashboxes": {"ar": "الخزائن", "en": "Cash"},
+    "cashboxes": {"ar": "الخزن", "en": "Cash"},  # UX Wave 2 glossary: «الخزن» everywhere
     "expenses": {"ar": "المصروفات", "en": "Expenses"},
     "reports": {"ar": "التقارير", "en": "Reports"},
     "restaurant": {"ar": "الطاولات", "en": "Tables"},

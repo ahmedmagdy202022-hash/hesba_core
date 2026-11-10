@@ -14,7 +14,7 @@
 {% include "partials/entity_bar.html" %}
   {% if messages %}
     <div class="md-messages">
-      {% for message in messages %}<div class="md-message">{{ message|ui:lang }}</div>{% endfor %}
+      {% for message in messages %}{% if message.extra_tags == 'hs-saved' %}{% include "partials/saved_toast.html" %}{% else %}<div class="md-message">{{ message|ui:lang }}</div>{% endif %}{% endfor %}
     </div>
   {% endif %}
   {% block master_content %}{% endblock %}

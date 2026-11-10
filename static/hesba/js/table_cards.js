@@ -33,7 +33,8 @@
     table.classList.add('hs-cards');
   }
   function run() {
-    var tables = document.querySelectorAll('table.op-table, table.md-table');
+    // UX Wave 2: a table marked data-list-rows has its own phone layout (lists.css: two lines per record).
+    var tables = document.querySelectorAll('table.op-table:not([data-list-rows]), table.md-table:not([data-list-rows])');
     for (var i = 0; i < tables.length; i++) label(tables[i]);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);

@@ -5,6 +5,8 @@ from django.utils import timezone
 
 from cashboxes.models import Cashbox
 
+from config.form_defaults import choose_labels
+
 from .models import ExpenseCategory
 from entities import scope as entity_scope
 
@@ -49,6 +51,7 @@ class ExpenseForm(forms.Form):
         for name, field in self.fields.items():
             field.label = self.LABELS[lang][name]
         self.fields["amount"].widget.attrs.update({"inputmode": "decimal", "step": "0.01"})
+        choose_labels(self, lang)  # UX Wave 2: «اختار …», not «---------»
         if not self.is_bound:
             self.initial["expense_date"] = timezone.localdate()
             default_cashbox = cashboxes.filter(is_default=True).first() or cashboxes.first()

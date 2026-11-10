@@ -3,8 +3,8 @@
 {% block master_content %}
 <section class="md-title-row">
   <div>
-    {% if not popup %}<a class="md-back-link" href="{% url 'master_data:list' entity=entity %}?lang={{ lang }}">{% if lang == 'en' %}←{% else %}→{% endif %} {{ words.back }}</a>{% endif %}
-    <h1>{% if editing %}{{ words.edit }}{% else %}{{ words.new }}{% endif %} — {{ singular }}</h1>
+    {% if not popup %}<a class="md-back-link" href="{% url 'master_data:list' entity=entity %}?lang={{ lang }}">{% if lang == 'en' %}← Back{% else %}→ رجوع{% endif %}</a>{% endif %}
+    <h1>{% if editing %}{{ words.edit }} — {{ singular }}{% else %}{{ new_title }}{% endif %}</h1>
   </div>
 </section>
 
@@ -18,7 +18,7 @@
   {# FB2-LOC: a hidden field (the entity, when there is only one) gets no empty label. #}
   {% for field in form.hidden_fields %}{{ field }}{% for error in field.errors %}<div class="md-form-errors">{{ error|ui:lang }}</div>{% endfor %}{% endfor %}
   {% include "partials/form_sections.html" with prefix="md" %}
-  <div class="md-form-actions">
+  <div class="md-form-actions{% if not popup %} hs-sticky-save{% endif %}">
     <button class="md-primary" type="submit">{{ words.save }}</button>
     {% if popup %}<button class="md-secondary" type="button" data-popup-cancel>{{ words.cancel }}</button>{% else %}<a class="md-secondary" href="{% url 'master_data:list' entity=entity %}?lang={{ lang }}">{{ words.cancel }}</a>{% endif %}
   </div>

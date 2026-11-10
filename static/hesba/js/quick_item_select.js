@@ -20,7 +20,7 @@
       quick.showModal();
       quick.querySelector('[name="item_name"]').focus();
     });
-    quick.querySelector('[data-quick-item-close]').addEventListener('click', function () { quick.close(); });
+    quick.querySelectorAll('[data-quick-item-close]').forEach(function (button) { button.addEventListener('click', function () { quick.close(); }); });  // UX Wave 2: the × and «إلغاء»
     quick.addEventListener('keydown', function (event) {
       if (event.key === 'Enter' && event.target.tagName === 'INPUT') { event.preventDefault(); save.click(); }
     });
@@ -47,7 +47,7 @@
           select.value = option.value;
           if (price && answer.item.purchase_price && answer.item.purchase_price !== '0.00') { price.value = answer.item.purchase_price; }
           quick.querySelectorAll('input[name]').forEach(function (input) {
-            if (input.type === 'checkbox') { input.checked = true; } else { input.value = /price/.test(input.name) ? '0' : ''; }
+            if (input.type === 'checkbox') { input.checked = true; } else { input.value = ''; }  // UX Wave 2: prices start empty, not 0
           });
           quick.close();
           select.dispatchEvent(new Event('change', { bubbles: true }));

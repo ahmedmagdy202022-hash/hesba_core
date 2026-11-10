@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Q, Sum
 from django.utils import timezone
 
 from audit.models import AuditEventType, AuditLog
@@ -48,6 +48,23 @@ def get_item_stock_quantity(item):
     in_quantity = _movement_quantity_total(item, IN_MOVEMENT_TYPES)
     out_quantity = _movement_quantity_total(item, OUT_MOVEMENT_TYPES)
     return in_quantity - out_quantity
+
+
+def get_items_stock_quantities(items, movements=None):
+    """UX Wave 2: ``get_item_stock_quantity`` for many items at once, as {item pk: quantity}, from one grouped query.
+
+    Read-only, the same figure (in - out over the movement rows); an item with no movement is 0. ``movements``
+    narrows the rows read, e.g. to the locations of the entity being worked in."""
+
+    ids = [getattr(item, "pk", item) for item in items]
+    queryset = StockMovement.objects.all() if movements is None else movements
+    rows = (queryset.filter(item_id__in=ids).order_by().values("item_id")
+            .annotate(in_qty=Sum("quantity", filter=Q(movement_type__in=IN_MOVEMENT_TYPES)),
+                      out_qty=Sum("quantity", filter=Q(movement_type__in=OUT_MOVEMENT_TYPES))))
+    answer = {pk: Decimal("0") for pk in ids}
+    for row in rows:
+        answer[row["item_id"]] = (row["in_qty"] or Decimal("0")) - (row["out_qty"] or Decimal("0"))
+    return answer
 
 
 def get_item_location_stock_quantity(item, location):

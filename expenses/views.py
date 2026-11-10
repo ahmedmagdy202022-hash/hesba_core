@@ -44,7 +44,7 @@ STRINGS = {
         "description": "البيان",
         "amount": "المبلغ",
         "status": "الحالة",
-        "posted": "مرحّل",
+        "posted": "نهائي",  # UX Wave 2: the pill's plain word (label only)
         "cancelled": "ملغي",
         "cancel": "إلغاء",
         "cancel_reason": "سبب الإلغاء",
@@ -187,6 +187,7 @@ def expense_list(request):
             date_to=date_to_raw,
             category_id=category_id,
             cashbox_id=cashbox_id,
+            filter_count=sum(1 for value in (query, date_from_raw, date_to_raw, category_id, cashbox_id) if value),  # UX Wave 2
             categories=ExpenseCategory.objects.all(),
             cashboxes=entity_scope.cashboxes(Cashbox.objects).filter(active=True),
             total=total,

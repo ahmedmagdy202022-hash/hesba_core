@@ -106,7 +106,8 @@ class ArabicScreensTests(TestCase):
         for url in (reverse("purchases:list"), reverse("purchases:payments"), reverse("sales:payments")):
             with self.subTest(url=url):
                 response = self.client.get(url)
-                self.assertContains(response, "مُرحّل")
+                self.assertContains(response, "نهائي")  # UX Wave 2: «نهائي», not «مُرحّل»
+                self.assertNotContains(response, "مُرحّل")
                 self.assertNoEnglish(response, ">Posted<", ">Cancelled<", "All statuses")
 
     def test_cashbox_movements_are_arabic(self):

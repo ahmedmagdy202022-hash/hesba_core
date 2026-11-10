@@ -127,7 +127,7 @@ class DocumentTests(DocumentSetup):
             [{"item": self.a, "quantity": D("1"), "unit_sale_price": D("100.00")}], self.owner,
         )
         _, problems = build_document(draft)
-        self.assertIn("الفاتورة لازم تكون مرحّلة.", problems)
+        self.assertIn("الفاتورة لازم تكون نهائية.", problems)
         ClientProfile.objects.update(default_currency="USD")
         _, problems = build_document(self.invoice())
         self.assertTrue(any("جنيه مصري" in problem for problem in problems))

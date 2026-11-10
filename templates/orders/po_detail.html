@@ -37,7 +37,7 @@
 <div class="op-field"><label for="po-price">{{ words.price }}</label><input id="po-price" name="unit_price" inputmode="decimal" placeholder="{{ words.price_hint }}"></div>
 <div class="op-field"><label for="po-disc">{{ words.discount }}</label><input id="po-disc" name="discount_percent" inputmode="decimal" value="0"></div>
 </div><div class="op-form-actions"><button class="op-secondary" type="submit">{{ words.add }}</button>{% quick_item_dialog order.supplier %}</div></form>
-<script src="{% static 'hesba/js/quick_item_select.js' %}" defer></script>
+<script src="{% static 'hesba/js/quick_item_select.js' %}?v=ux2-1" defer></script>
 
 <h2>{{ words.details }}</h2>
 <form class="op-form" method="post" data-details>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="details"><div class="op-form-grid">

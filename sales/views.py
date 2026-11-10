@@ -42,6 +42,7 @@ from .services import (
 from config.form_errors import add_form_error
 from config.money import money_round
 from config.paging import page_of
+from settings_core.saved_toast import payment_actions
 
 
 STRINGS = {
@@ -142,6 +143,11 @@ def invoice_list(request):
     queryset = entity_scope.scope(SalesInvoice.objects.select_related("customer", "selling_location", "cashbox"), entity_scope.SALES_INVOICE)
     query = request.GET.get("q", "").strip()
     status = request.GET.get("status", "")
+    can_return = user_has_permission(request.user, "sales.return_sale")
+    # UX Wave 2: "Return" from the «⋯» menu (here or at the till) lands here to pick the invoice; a return is always made from one.
+    pick_return = can_return and request.GET.get("pick") == "return"
+    if pick_return and "status" not in request.GET:
+        status = "posted"
     if query:
         queryset = queryset.filter(
             Q(invoice_number__icontains=query) | Q(customer__name__icontains=query)
@@ -156,6 +162,7 @@ def invoice_list(request):
     for invoice in invoices:  # display only: what is still to collect after a deposit / paid link / gift card (HG-069); nothing is stored
         invoice.outstanding = money_round(invoice.remaining_due - settled.get(invoice.pk, 0)) if invoice.status == "posted" else invoice.remaining_due
     return render(request, "sales/list.html", _context(request, page=page, invoices=invoices, query=query, status_filter=status,
+                                                      filter_count=int(bool(query)) + int(bool(status)), pick_return=pick_return, can_return=can_return,
                                                       can_create=user_has_permission(request.user, "sales.create_sales_invoice")))
 
 
@@ -532,6 +539,7 @@ def payment_list(request):
             page=page,
             query=query,
             status_filter=status,
+            saved_actions=payment_actions(request, lang, "customer"),  # UX Wave 2: the receipt and the next one
             title=STRINGS[lang]["collections"],
             new_label=STRINGS[lang]["new_collection"],
             create_url="sales:payment_create",
@@ -548,14 +556,20 @@ def payment_create(request):
         form = CustomerPaymentForm(request.POST, lang=lang)
         if form.is_valid():
             try:
-                form.create_with_fresh_number(lambda: record_customer_payment(user=request.user, **form.cleaned_data))
+                payment = form.create_with_fresh_number(lambda: record_customer_payment(user=request.user, **form.cleaned_data))
             except ValidationError as exc:
                 add_form_error(form, exc)
             else:
-                messages.success(request, STRINGS[lang]["collection_saved"])
-                return redirect(f"/sales/collections/?lang={lang}")
+                from settings_core.saved_toast import amount_text, say_saved
+
+                # UX Wave 2: the toast names what was saved; the list offers the receipt and the next collection.
+                say_saved(request, (f"Collected {amount_text(payment.amount, lang)} from «{payment.customer.name}» ({payment.payment_number})" if lang == "en"
+                                    else f"اتسجل تحصيل {amount_text(payment.amount, lang)} من «{payment.customer.name}» ({payment.payment_number})"))
+                return redirect(f"/sales/collections/?lang={lang}&saved={payment.pk}")
     else:
         form = CustomerPaymentForm(lang=lang, initial=_party_initial(request, "customer"))
+    from parties.views import due_on_form, may_see_balance
+
     return render(
         request,
         "payments/form.html",
@@ -564,6 +578,11 @@ def payment_create(request):
             form=form,
             title=STRINGS[lang]["new_collection"],
             back_url="sales:payments",
+            # UX Wave 2: «مستحق عليه …» with a «المبلغ كله» chip; the figure comes from the party's ledger (read-only).
+            party_kind="customer",
+            show_due=may_see_balance(request.user, "customer"),
+            due=due_on_form(request.user, "customer", form["customer"].value(), form.fields["customer"].queryset),
+            submit_label="Record the collection" if lang == "en" else "سجّل التحصيل",
         ),
     )
 

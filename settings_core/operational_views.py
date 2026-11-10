@@ -205,7 +205,7 @@ def settings_overview(request):
 #: AUDIT-1: the roles screen speaks in sections and plain names, never in permission codes.
 PERMISSION_SECTIONS = {
     "sales": ("المبيعات", "Sales"), "purchases": ("المشتريات", "Purchases"), "inventory": ("المخزون", "Inventory"),
-    "master_data": ("البيانات الأساسية", "Master data"), "cashboxes": ("الخزائن والمصروفات", "Cash and expenses"),
+    "master_data": ("البيانات الأساسية", "Master data"), "cashboxes": ("الخزن والمصروفات", "Cash and expenses"),
     "reports": ("التقارير", "Reports"), "accounting": ("الحسابات العامة", "Accounting"), "closing": ("إقفال الفترات", "Period closing"),
     "settings": ("الإعدادات", "Settings"), "permissions": ("الصلاحيات", "Permissions"), "audit": ("سجل المراجعة", "Audit log"),
     "imports": ("الاستيراد", "Imports"), "medical": ("الملفات الطبية", "Medical records"), "barcode": ("الباركود", "Barcodes"),
