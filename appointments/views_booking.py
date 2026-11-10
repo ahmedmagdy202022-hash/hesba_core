@@ -77,6 +77,134 @@ WORDS = {
 }
 
 
+# ---- M4: the same pages in a clinic's words ---------------------------------------------------------------------------
+#
+# A patient books «كشف» with «الدكتور» at «العيادة», not a «خدمة» with a «موظف» at a «محل». Whole sentences are
+# overlaid (never single words spliced into them: Arabic agreement breaks), only for medical installs; every other
+# activity keeps WORDS exactly as it was. The placeholders in the overlay are filled by `_dress` with the words of the
+# kind of practice: {place}, {Place}, {doctor}, {a_doctor}, {bare}, {doctors}, {patient}. `{n}`, `{hours}` and
+# `{shop}` are left for the existing code to fill.
+
+#: The sub-activities that speak in a doctor's words. A «services / clinic» business has the same vocabulary (settings_core/vocabulary.py).
+MEDICAL_SUBS = ("clinic", "dental", "medical_center", "lab", "physio", "vet")
+KIND_WORDS = {
+    "ar": {
+        "clinic": {"place": "العيادة", "doctor": "الدكتور", "a_doctor": "دكتور", "bare": "دكتور", "doctors": "الدكاترة", "patient": "المريض"},
+        "medical_center": {"place": "المركز"}, "physio": {"place": "المركز"}, "lab": {"place": "المعمل"},
+        "vet": {"place": "العيادة البيطرية", "doctor": "الدكتور البيطري", "a_doctor": "دكتور بيطري", "bare": "دكتور بيطري", "doctors": "الدكاترة البيطريين",
+                "patient": "صاحب الحيوان"},
+    },
+    "en": {
+        "clinic": {"place": "the clinic", "doctor": "the doctor", "a_doctor": "a doctor", "bare": "doctor", "doctors": "doctors", "patient": "patients"},
+        "medical_center": {"place": "the centre"}, "physio": {"place": "the centre"}, "lab": {"place": "the lab"},
+        "vet": {"place": "the vet clinic", "doctor": "the vet", "a_doctor": "a vet", "bare": "vet", "doctors": "vets", "patient": "pet owners"},
+    },
+}
+MEDICAL_WORDS = {
+    "ar": {
+        "lead": "اختار نوع الكشف وبعدها الدكتور واليوم. من غير تسجيل دخول.", "steps": ("الكشف", "الدكتور", "الميعاد", "بياناتك"),
+        "sec_service": "اختار نوع الكشف", "sec_staff": "اختار {doctor}",
+        "head_staff": "اختار {a_doctor} معيّن، أو سيبنا نختارلك أول {a_doctor} فاضي.", "head_details": "محتاجين اسمك ورقمك علشان {place} تقدر تكلمك.",
+        "any": "أي {a_doctor} فاضي", "empty_any": "أو جرّب أي {a_doctor} فاضي في نفس اليوم", "slots_hint": "المواعيد معروضة على مدة الكشف ({n} دقيقة).",
+        "none_left": "مفيش مواعيد فاضية في الفترة الجاية. كلّم {place}.", "phone_hint": "{place} هتكلمك أو تبعتلك على الرقم ده.",
+        "notes": "سبب الزيارة أو ملاحظاتك", "k_service": "الكشف", "nopay": "مفيش دفع هنا: الحساب في {place}.",
+        "deposit": "ممكن {place} تطلب عربون على الحجز. لو لغيت قبل الميعاد بأقل من {hours} ساعة (أو مجيتش) العربون مابيترجعش.",
+        "remind": "لو احتجت تغيّر الميعاد أو تلغيه، كلّم {place}.", "foot": "الحجز بيتسجل مباشرة في {place}.",
+        "no_services": "مفيش كشوفات متاحة للحجز دلوقتي. كلّم {place}.",
+    },
+    "en": {
+        "lead": "Choose the visit, then the doctor and a day. No account needed.", "steps": ("Visit", "Doctor", "Time", "Your details"),
+        "sec_service": "Choose the visit", "sec_staff": "Choose {doctor}",
+        "head_staff": "Pick {a_doctor}, or let us choose whoever is free first.", "head_details": "We need your name and number so {place} can reach you.",
+        "any": "Any available {bare}", "empty_any": "Or try any available {bare} on this day", "slots_hint": "Times are shown for the length of the visit ({n} minutes).",
+        "none_left": "No free times in the coming days. Please contact {place}.", "phone_hint": "{Place} will call or message you on this number.",
+        "notes": "Reason for the visit or notes", "k_service": "Visit", "nopay": "Nothing is paid here: you pay at {place}.",
+        "deposit": "{Place} may ask for a deposit on the booking. Cancelling fewer than {hours} hours before (or not coming) forfeits it.",
+        "remind": "Need to change or cancel? Contact {place}.", "foot": "Bookings go straight to {place}.",
+        "no_services": "No visits can be booked right now. Please contact {place}.",
+    },
+}
+#: A vet's patient is the animal: the owner says which one.
+VET_WORDS = {
+    "ar": {"notes": "اسم الحيوان وسبب الزيارة"},
+    "en": {"notes": "Pet's name and reason for the visit"},
+}
+#: What the patient reads when a choice is missing or the booking fails (the engine's own texts say «خدمة» and «المحل»).
+MEDICAL_MESSAGES = {
+    "ar": {"service": "اختار نوع الكشف من القايمة.", "staff": "اختار {a_doctor} من القايمة.",
+           "failed": "مقدرناش نسجّل الحجز دلوقتي. جرّب تاني أو كلّم {place}."},
+    "en": {"service": "Choose the visit from the list.", "staff": "Choose {a_doctor} from the list.",
+           "failed": "We could not record the booking now. Try again or contact {place}."},
+}
+#: The owner's settings screen, in the same words.
+MEDICAL_SETTINGS_WORDS = {
+    "ar": {
+        "intro": "صفحة عامة {patient} بيحجز منها لوحده من الموبايل، على المواعيد الفاضية فعلاً. حدّد مواعيد العمل والكشوفات والدكاترة.",
+        "services": "الكشوفات اللي بتتحجز أونلاين", "services_note": "الخدمات بس (مش أصناف المخزن). المدة هي مدة الكشف.",
+        "no_items": "مفيش كشوفات لسه. ضيف خدمة (من غير مخزون) من الخدمات الطبية.",
+        "staff": "{doctors} اللي بياخدوا حجوزات", "staff_note": "لكل {a_doctor} مواعيد خاصة (اختياري)؛ لو مفيش بياخد مواعيد {place}.",
+        "no_staff": "مفيش {doctors} لسه. ضيفهم من شاشة الأطباء والطاقم.",
+    },
+    "en": {
+        "intro": "A public page {patient} book on by themselves from their phones, on times that are really free. Set the working hours, visits and {doctors}.",
+        "services": "Visits bookable online", "services_note": "Services only (not stock items). The duration is the visit's length.",
+        "no_items": "No visits yet. Add a service (not stock-tracked) from the medical services screen.",
+        "staff": "{Doctors} who take bookings", "staff_note": "Each can have their own hours (optional); without them they work {place}'s hours.",
+        "no_staff": "No {doctors} yet. Add them from the doctors and staff screen.",
+    },
+}
+
+
+def medical_kind(entity):
+    """The kind of practice this entity is ("clinic", "vet", "lab"...) or "" when it is not a medical business."""
+
+    from entities.services import activity_of
+
+    activity, sub = activity_of(entity)
+    if activity == "medical":
+        return sub if sub in MEDICAL_SUBS else "clinic"
+    return "clinic" if (activity, sub) == ("services", "clinic") else ""
+
+
+def _dress(overlay, lang, kind):
+    values = {**KIND_WORDS[lang]["clinic"], **KIND_WORDS[lang].get(kind, {})}
+    values["Place"] = values["place"][:1].upper() + values["place"][1:]
+    values["Doctors"] = values["doctors"][:1].upper() + values["doctors"][1:]
+
+    def fill(text):
+        for key, value in values.items():
+            text = text.replace("{" + key + "}", value)
+        return text
+
+    return {key: tuple(fill(one) for one in value) if isinstance(value, tuple) else fill(value) for key, value in overlay.items()}
+
+
+def words_for(entity, lang):
+    """The public page's words: the shop's, or a clinic's when the entity is a medical business."""
+
+    kind = medical_kind(entity)
+    if not kind:
+        return WORDS[lang]
+    overlay = {**MEDICAL_WORDS[lang], **(VET_WORDS[lang] if kind == "vet" else {})}
+    return {**WORDS[lang], **_dress(overlay, lang, kind)}
+
+
+def messages_for(entity, lang):
+    """The engine's patient-facing messages, with the clinic's words for the ones that name a service or the shop."""
+
+    kind = medical_kind(entity)
+    if not kind:
+        return engine.MESSAGES[lang]
+    return {**engine.MESSAGES[lang], **_dress(MEDICAL_MESSAGES[lang], lang, kind)}
+
+
+def settings_words_for(entity, lang):
+    kind = medical_kind(entity)
+    if not kind:
+        return SETTINGS_WORDS[lang]
+    return {**SETTINGS_WORDS[lang], **_dress(MEDICAL_SETTINGS_WORDS[lang], lang, kind)}
+
+
 def _lang(request):
     return "en" if request.GET.get("lang") == "en" or request.POST.get("lang") == "en" else "ar"
 
@@ -178,7 +306,7 @@ def _groups(slots, lang, words):
 
 
 def _context(request, booking, lang, choices, error="", form=None):
-    words = WORDS[lang]
+    words = words_for(booking.entity, lang)
     company, phone, whatsapp = _company()
     base = reverse("book_page", args=[booking.public_key])
     now = timezone.now()
@@ -292,7 +420,7 @@ def page(request, key):
 
 
 def _submit(request, booking, lang):
-    words = engine.MESSAGES[lang]
+    words = messages_for(booking.entity, lang)
     choices = _Choices(booking, request.POST)
     form = {"name": request.POST.get("name", "")[:120], "phone": request.POST.get("phone", "")[:30], "notes": request.POST.get("notes", "")[:200]}
     if request.POST.get("website"):  # the honeypot: a person never sees it, a script fills it in
@@ -329,7 +457,7 @@ def done(request, key, token):
     appointment = engine.read_done_token(token, booking)
     if appointment is None:
         raise Http404("No such booking.")
-    words = WORDS[lang]
+    words = words_for(booking.entity, lang)
     company, phone, whatsapp = _company()
     label, suffix = engine.clock_label(appointment.starts_at, lang)
     local_day = timezone.localtime(appointment.starts_at).date()
@@ -414,8 +542,8 @@ def booking_settings(request):
     from staff.models import Employee
 
     lang = _lang(request)
-    words = SETTINGS_WORDS[lang]
     entity, entity_choices = _settings_entity(request)
+    words = settings_words_for(entity, lang)
     booking = engine.settings_for(entity)
     error = ""
     if request.method == "POST":

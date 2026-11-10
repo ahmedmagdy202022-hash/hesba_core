@@ -259,6 +259,7 @@ class Command(BaseCommand):
             self._attendance(owner)  # T11: three weeks of attendance, a leave taken and one waiting
             self._payroll(master, owner)  # DEMO-NEW: last month's payroll, net pay paid
         self._services_showcase(master, staff, owner, catalog, extras)  # DEMO-SVC: after payroll, so the new technicians are not paid by it
+        self._clinic_booking(master, staff, owner, catalog, extras)  # M4: after payroll too, for the same reason (the second doctor)
         from settings_core import demo_ai
 
         demo_ai.seed(master, owner, modules)  # AI demo: the invoice photo's supplier and parts, and yesterday's collection
@@ -275,6 +276,15 @@ class Command(BaseCommand):
 
         if demo_services.applies(catalog):
             demo_services.seed(master, staff, owner, catalog, extras)
+
+    @staticmethod
+    def _clinic_booking(master, staff, owner, catalog, extras):
+        """M4: the clinic's public booking page, set up and open with two doctors. The clinic only; nothing for any other activity."""
+
+        from settings_core import demo_clinic
+
+        if demo_clinic.applies(catalog):
+            demo_clinic.seed(master, staff, owner, catalog, extras)
 
     #: T11: when each demo employee came in, in minutes after their start, by day (a few late, one absent day).
     ARRIVALS = (-5, 3, 25, -10, 0, 40, 8, -2, 12, 55, 1, -8, 6, 30)

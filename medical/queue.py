@@ -47,6 +47,23 @@ def has_queue():
     return activity == "medical" and sub in SUB_ACTIVITIES
 
 
+def ticket_numbers(appointments):
+    """{appointment id: its queue number} for the appointments that already have a turn (one query)."""
+
+    return dict(QueueTicket.objects.filter(appointment__in=list(appointments)).values_list("appointment_id", "number"))
+
+
+def can_check_in(appointment, user, numbers):
+    """M4: whether reception can check this appointment in from the agenda or its page: the same rule ``check_in`` applies
+    (the patient's own live appointment of today, desk permission), and no turn for it yet (``numbers`` from ``ticket_numbers``)."""
+
+    from appointments.models import AppointmentStatus
+
+    return (has_queue() and is_desk(user) and appointment.pk not in numbers
+            and timezone.localtime(appointment.starts_at).date() == timezone.localdate()
+            and appointment.status in (AppointmentStatus.BOOKED, AppointmentStatus.CONFIRMED, AppointmentStatus.ARRIVED))
+
+
 def _doctor_of(user):
     employee = getattr(user, "employee", None) if getattr(user, "is_authenticated", False) else None
     return employee if employee is not None and employee.active else None
