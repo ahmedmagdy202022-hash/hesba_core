@@ -2,7 +2,7 @@
 .hs-date{position:relative;display:block;width:100%}
 .hs-date .hs-date__text{width:100%;padding-inline-end:44px!important}
 [dir="rtl"] .hs-date .hs-date__text{text-align:right}
-.hs-date .hs-date__open{position:absolute;inset-block:0;inset-inline-end:4px;margin:auto 0;width:36px;height:36px;display:grid;place-items:center;border:0;border-radius:var(--hs-radius-sm);background:transparent;color:var(--hs-muted);cursor:pointer}
+.hs-date .hs-date__open{position:absolute;inset-block:0;inset-inline-end:0;margin:auto 0;width:var(--hs-control-height);height:var(--hs-control-height);display:grid;place-items:center;border:0;border-radius:var(--hs-radius-sm);background:transparent;color:var(--hs-muted);cursor:pointer}
 .hs-date .hs-date__open:hover,.hs-date .hs-date__open[aria-expanded="true"]{color:var(--hs-teal-deep);background:var(--hs-teal-wash)}
 .hs-date .hs-date__open:focus-visible{outline:none;box-shadow:var(--hs-focus-ring)}
 .hs-date .hs-date__open:disabled{opacity:.5;cursor:not-allowed}
