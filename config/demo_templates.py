@@ -329,6 +329,25 @@ def demo_reference_list(activity, sub_activity):
     return load_demo_reference()
 
 
+def top_up_demo_reference_list(activity, sub_activity):
+    """R1: a pharmacy template built before the demo list existed gets it on its next top-up. Returns the importer's
+    summary, or None when there is nothing to load (another business, or the list is already in)."""
+
+    if (activity, sub_activity) != ("commercial", "pharmacy"):
+        return None
+    from pharmacy.demo import DEMO_SOURCE
+    from pharmacy.models import DrugReference
+
+    if DrugReference.objects.filter(source=DEMO_SOURCE).exists():
+        return None
+    return demo_reference_list(activity, sub_activity)
+
+
+def _top_up(activity, sub_activity):
+    top_up_current_db()
+    top_up_demo_reference_list(activity, sub_activity)
+
+
 def _populate(activity, sub_activity):
     from django.db import connections
 
@@ -374,7 +393,8 @@ def build_template(activity, sub_activity, force=False):
 
 
 def top_up_template(activity, sub_activity):
-    """Bring a populated template up to today (today's trade, the owner's shift dated today), under its lock.
+    """Bring a populated template up to today (today's trade, the owner's shift dated today), under its lock; a pharmacy
+    template that has no demo reference list yet gets it too (R1).
 
     The server's disk goes back to the build image every time it wakes, so a template built on deploy day would
     otherwise open N days later with nothing «today» and a shift from deploy day. Returns the path, or None when
@@ -391,7 +411,7 @@ def top_up_template(activity, sub_activity):
         if not target.is_file():
             return None
         copy_database(target, work)
-        _with_db(work, top_up_current_db)
+        _with_db(work, lambda: _top_up(activity, sub_activity))
         os.replace(work, target)
         return target
     finally:

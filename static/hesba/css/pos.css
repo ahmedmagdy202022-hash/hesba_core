@@ -111,6 +111,7 @@
 .pos-alt__grab{flex:none;width:40px;height:4px;margin:10px 0 2px;align-self:center;border-radius:var(--hs-radius-pill);background:var(--hs-line-strong)}
 .pos-alt__head{flex:none;display:flex;align-items:center;gap:var(--hs-space-2);padding-inline:var(--hs-space-4) var(--hs-space-2)}
 .pos-alt__head h2{flex:1;margin:0;font-size:var(--hs-text-lg);color:var(--hs-navy)}
+.pos-alt__head h2:focus{outline:0}
 .pos-alt__close{display:grid;place-items:center;width:var(--hs-control-height);height:var(--hs-control-height);border:0;border-radius:var(--hs-radius-md);background:transparent;color:var(--hs-ink);font:inherit;font-size:var(--hs-text-xl);cursor:pointer}
 .pos-alt__body{display:grid;gap:var(--hs-space-3);padding:0 var(--hs-space-4) var(--hs-space-3);overflow-y:auto;overscroll-behavior:contain}
 .pos-alt__intro{margin:0;font-size:var(--hs-text-sm);color:var(--hs-muted)}

@@ -4,11 +4,16 @@ Unit tests use invented drug names; ``demo_data/drug_reference_demo.csv`` is the
 """
 
 import csv
+import re
+import tempfile
+from collections import Counter
 from decimal import Decimal as D
+from pathlib import Path
+from unittest import mock
 
 from django.db import connection, transaction
 from django.forms.models import model_to_dict
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
@@ -91,16 +96,17 @@ class TillSetup(TestCase):
 
 
 class GateTests(TillSetup):
-    def test_the_till_permission_and_the_drug_database_are_both_needed_and_refusals_are_json(self):
+    def test_the_till_permission_and_the_drug_database_are_both_needed(self):
         self.assertEqual(self.ask(self.wanted).status_code, 200)
         keeper = person(RoleCode.STOCK_KEEPER, "till_keeper")
         self.assertFalse(user_has_permission(keeper, till.PERMISSION))
         self.client.force_login(keeper)
-        refused = self.ask(self.wanted)
-        self.assertEqual((refused.status_code, refused["Content-Type"], refused.json()), (403, "application/json", {"ok": False, "error": "forbidden"}))
+        self.assertEqual(self.ask(self.wanted).status_code, 403)  # require_permission, like the till's other JSON endpoints
         self.client.logout()
         anonymous = self.ask(self.wanted)
-        self.assertEqual((anonymous.status_code, anonymous.json()["error"]), (403, "forbidden"))  # never a login redirect
+        # The project's login middleware: the login page, which the till's script reads as a failed request (asked again).
+        self.assertEqual(anonymous.status_code, 302)
+        self.assertTrue(anonymous["Location"].startswith("/login/"), anonymous["Location"])
         self.client.force_login(self.cashier)
         caps.set_capability_enabled(self.profile, "drugs", False)
         closed = self.ask(self.wanted)
@@ -114,16 +120,38 @@ class GateTests(TillSetup):
         self.assertEqual(self.ask("abc").status_code, 404)
         self.assertEqual(self.client.get(URL).status_code, 404)
 
+    def test_a_key_that_is_no_ascii_number_is_no_row_never_a_500(self):
+        # "²" passes str.isdigit() but int() refuses it; "٣" would be read as 3; a long number overflows an integer key.
+        for raw in ("²", "٣", "-1", "0", " 1", "99999999999", "2147483648"):
+            with self.subTest(item=raw):
+                self.assertEqual(self.ask(raw).status_code, 404)
+        for name in ("location", "customer"):
+            with self.subTest(name=name):
+                answer = self.ask(self.wanted, **{name: "²"})
+                self.assertEqual(answer.status_code, 200)
+                self.assertEqual(answer.json()["location"], self.shop.pk)  # the till's default, as with no value
+        self.assertEqual(self.ask(self.wanted, location="99999999999").json()["location"], self.shop.pk)
+        self.assertEqual((till.as_pk("12"), till.as_pk(12), till.as_pk("²"), till.as_pk(None), till.as_pk("2147483647")), (12, 12, None, None, 2147483647))
+
     def test_the_till_carries_the_sheet_only_while_the_drug_database_is_on(self):
         open_test_shift(self.cashier, self.cashbox)
         page = self.client.get(POS)
         self.assertContains(page, 'data-pos-alt data-url="/pharmacy/till/alternatives/"')
         self.assertContains(page, "hesba/js/pos_alternatives.js")
         self.assertContains(page, "بدائل {name}")  # the sheet's words, in Arabic
+        self.assertContains(page, 'data-pos-alt-title tabindex="-1"')  # the sheet opens on its heading, never on a row
+        # The script asks about the items with drug data only: their ids, read in one query.
+        drugs = page.context["alternatives_drugs"]
+        self.assertEqual(drugs, sorted([self.wanted.pk, self.forte.pk, self.big.pk, self.syrup.pk, self.lonely.pk]))  # not the soap, not the inactive one
+        self.assertContains(page, '<script id="hs-alt-drugs" type="application/json">')
+        with CaptureQueriesContext(connection) as captured:
+            self.assertEqual(till.drug_item_ids(), drugs)
+        self.assertEqual(len(captured), 1)
         caps.set_capability_enabled(self.profile, "drugs", False)
         page = self.client.get(POS)
         self.assertNotContains(page, "data-pos-alt")
         self.assertNotContains(page, "pos_alternatives.js")
+        self.assertNotContains(page, "hs-alt-drugs")
 
 
 class ShapeTests(TillSetup):
@@ -236,21 +264,112 @@ class EquivalenceTests(TillSetup):
         self.assertEqual((from_sheet["invoice"]["total_amount"], from_sheet["invoice"]["remaining_due"]), (D("30.00"), D("20.00")))
 
 
-class DemoListTests(TestCase):
+    def test_the_sheet_prices_are_what_the_till_itself_prices_the_item_at(self):
+        """The sheet shows a price; the till adds the item at pos.js's own price (the page's price book, else the catalog)."""
 
-    def test_the_sheet_script_retries_after_a_failure_and_counts_bigger_units(self):
-        # Codex on PR #349, both only visible in a browser; these pin the code paths.
+        from pricing.models import CustomerPriceList, PriceList, PriceListItem
+        from sales.pos import walk_in_customer
+
+        caps.set_capability_enabled(self.profile, "price_lists", True)
+        wholesale = PriceList.objects.create(code="WHOLE", name_ar="جملة", adjust_percent=D("-10"))
+        PriceListItem.objects.create(price_list=wholesale, item=self.forte, price=D("25.50"))  # named on the list
+        CustomerPriceList.objects.create(customer=self.customer, price_list=wholesale)  # the 1000 mg one: 10% off its price
+        plain = make_customer(customer_code="PH-PLAIN", name="عميل من غير قايمة")
+        page = self.client.get(POS).context
+        book, catalog = page["price_book"], {row["id"]: D(row["price"]) for row in page["catalog"]}  # #hs-price-book, #hs-item-catalog
+
+        def sheet(customer):
+            return {row["id"]: D(row["price"]) for row in self.ask(self.wanted, customer=customer, location=self.shop.pk).json()["stocked"]}
+
+        listed = book["lists"][book["customers"][str(self.customer.pk)]]["prices"]
+        self.assertEqual(sheet(self.customer.pk), {self.forte.pk: D(listed[str(self.forte.pk)]), self.big.pk: D(listed[str(self.big.pk)])})
+        self.assertEqual(sheet(self.customer.pk), {self.forte.pk: D("25.50"), self.big.pk: D("18.00")})
+        # No list for this customer, the walk-in, or no customer at all: pos.js takes the catalog price, and so does the sheet.
+        for who in (plain.pk, walk_in_customer().pk, ""):
+            with self.subTest(customer=who):
+                self.assertNotIn(str(who), book["customers"])
+                self.assertEqual(sheet(who), {self.forte.pk: catalog[self.forte.pk], self.big.pk: catalog[self.big.pk]})
+                self.assertEqual(sheet(who), {self.forte.pk: D("30.00"), self.big.pk: D("20.00")})
+
+    def test_every_stocked_alternative_is_found_again_by_its_catalog_label(self):
+        """The sheet adds an alternative by typing its catalog label into the till's name search (pos.js's byLabel)."""
+
+        twin = self.drug("FAB-6", "فابرينول فورت 500 مجم", "31.00", {self.shop: "4"}, "Fabrinol", "500 mg", "tablet")  # forte's very name
+        near = self.drug("FAB-7", "فابرينول فورت 500 مجم شريط", "32.00", {self.shop: "6"}, "Fabrinol", "500 mg", "tablet")
+        catalog = self.client.get(POS).context["catalog"]
+        self.assertEqual([label for label, count in Counter(row["label"] for row in catalog).items() if count > 1], [])  # whole catalog
+        by_label = {row["label"]: row["id"] for row in catalog}
+        label_of = {row["id"]: row["label"] for row in catalog}
+        stocked = [row["id"] for row in self.ask(self.wanted, location=self.shop.pk).json()["stocked"]]
+        self.assertTrue({self.forte.pk, twin.pk, near.pk, self.big.pk} <= set(stocked), stocked)
+        self.assertNotEqual(label_of[self.forte.pk], label_of[twin.pk])  # the item code tells the two apart
+        for item_id in stocked:
+            with self.subTest(item=item_id):
+                self.assertEqual(by_label[label_of[item_id]], item_id)
+
+
+class SheetScriptTests(SimpleTestCase):
+    """What only a browser shows (a USB scanner types then presses Enter), pinned in the script's code paths."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
         from django.contrib.staticfiles import finders
 
         with open(finders.find("hesba/js/pos_alternatives.js"), encoding="utf-8") as handle:
-            script = handle.read()
-        # a network failure is remembered with its time and asked again, at once when the till is back online
-        self.assertIn("failed[key] = Date.now()", script)
-        self.assertIn("window.addEventListener('online'", script)
-        self.assertNotIn(".catch(function () { answers[key] = false; })", script)
+            cls.script = handle.read()
+
+    def block(self, start):
+        """The handler that starts at ``start``, up to its closing ``  });``."""
+
+        at = self.script.index(start)
+        return self.script[at:self.script.index("\n  });", at)]
+
+    def test_the_sheet_retries_after_a_failure_and_counts_bigger_units(self):
+        # Codex on PR #349: a network failure is remembered with its time and asked again, at once when back online
+        self.assertIn("failed[key] = Date.now()", self.script)
+        self.assertIn("window.addEventListener('online'", self.script)
+        self.assertNotIn(".catch(function () { answers[key] = false; })", self.script)
+        # a login page (HTML, after a signed-out redirect) makes .json() reject: caught as a failure that is asked again
+        self.assertIn("return response.ok ? response.json() : null;", self.script)
+        self.assertIn(".catch(function () { failed[key] = Date.now(); })", self.script)
         # a line in a bigger unit takes factor x quantity from the shelf (the till's own #hs-units catalog)
-        self.assertIn("getElementById('hs-units')", script)
-        self.assertIn("num(qty.value) * factor > onHand", script)
+        self.assertIn("json('hs-units'", self.script)
+        self.assertIn("num(qty.value) * factor > onHand", self.script)
+
+    def test_the_focus_never_rests_where_a_scanners_enter_would_act(self):
+        # Only the scan field and the sheet's heading are ever focused: never a row, «بدائل» or «شيله؟» (data-remove).
+        self.assertEqual(set(re.findall(r"([\w.\]\[')]+)\.focus\(\)", self.script)), {"scan", "title"})
+        self.assertNotIn("focusLine", self.script)
+        self.assertIn("title.focus();", self.block("function show("))
+        self.assertIn("focusScan();", self.block("sheet.addEventListener('close'"))  # Esc, the close button, a tap outside
+        add = self.block("content.addEventListener('click'")
+        self.assertTrue(add.rstrip().splitlines()[-1].strip().startswith("focusScan();"), add)  # after an add, the last word
+        self.assertNotIn("data-remove", add)
+
+    def test_no_key_reaches_the_till_behind_the_open_sheet(self):
+        guard = self.block("window.addEventListener('keydown'")
+        self.assertIn("event.stopPropagation();", guard)
+        self.assertIn("event.key === 'F9' || event.key === 'F2'", guard)
+        self.assertIn("}, true);", self.script[self.script.index(guard):][:len(guard) + 20])  # the capture phase, before pos.js's handler
+
+    def test_only_drug_lines_are_asked_and_never_all_at_once(self):
+        self.assertIn("json('hs-alt-drugs'", self.script)
+        self.assertIn("if (!isDrug(id)) { return; }", self.script)
+        self.assertIn("var MAX_IN_FLIGHT = 2;", self.script)
+        self.assertIn("while (inFlight < MAX_IN_FLIGHT && queue.length)", self.script)
+        # the customer's price list (not the customer) is in the key, and only when the page has a price book
+        self.assertIn("function keyFor(id) { return placeKey(id) + '|' + priceList(); }", self.script)
+        self.assertIn("book && book.customers && customer ? book.customers[customer.value] || '' : ''", self.script)
+
+    def test_the_added_message_waits_for_the_cart_to_hold_the_item(self):
+        add = self.block("content.addEventListener('click'")
+        self.assertIn("var before = held(item.id);", add)
+        self.assertIn("if (source.short && held(item.id) > before) {", add)
+        self.assertLess(add.index("held(item.id) > before"), add.index("words.added"))
+
+
+class DemoListTests(TestCase):
 
     def test_the_demo_list_imports_cleanly_and_every_drug_row_has_an_ingredient(self):
         with DEMO_FILE.open(encoding="utf-8") as handle:
@@ -293,6 +412,29 @@ class DemoListTests(TestCase):
                 else:
                     self.assertIsNone(summary)
                     self.assertEqual(count, 0)
+
+
+class DemoTopUpTests(TestCase):
+    def test_a_pharmacy_template_with_no_list_gets_it_on_its_next_top_up_once(self):
+        from config import demo_templates as templates
+
+        with tempfile.TemporaryDirectory() as folder, \
+                mock.patch.object(templates, "base_template", return_value=Path(folder) / "demo.sqlite3"), \
+                mock.patch.object(templates, "copy_database", side_effect=lambda source, work: Path(work).write_bytes(Path(source).read_bytes())), \
+                mock.patch.object(templates, "_with_db", side_effect=lambda path, work: work()), \
+                mock.patch.object(templates, "top_up_current_db") as today:
+            pharmacy, grocery = templates.populated_template("commercial", "pharmacy"), templates.populated_template("commercial", "grocery")
+            pharmacy.write_bytes(b"built before the list")
+            grocery.write_bytes(b"built")
+            self.assertEqual(templates.top_up_template("commercial", "grocery"), grocery)
+            self.assertFalse(DrugReference.objects.exists())  # another business: no list
+            self.assertEqual(templates.top_up_template("commercial", "pharmacy"), pharmacy)
+            loaded = DrugReference.objects.filter(source=DEMO_SOURCE).count()
+            self.assertGreaterEqual(loaded, 90)
+            self.assertEqual(templates.top_up_template("commercial", "pharmacy"), pharmacy)  # idempotent: nothing more
+            self.assertEqual(DrugReference.objects.count(), loaded)
+            self.assertIsNone(templates.top_up_demo_reference_list("commercial", "pharmacy"))
+            self.assertEqual(today.call_count, 3)  # today's trade and shift, on every top-up as before
 
 
 class DemoCarPartsTests(TestCase):

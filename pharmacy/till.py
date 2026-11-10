@@ -13,7 +13,7 @@ from entities import scope as entity_scope
 from master_data.models import Customer, Item, Location
 
 from . import services
-from .models import DrugReference
+from .models import DrugInfo, DrugReference
 from .reference import fold
 
 #: The till's own permission (``sales.pos.pos``): whoever may ring up a sale may see what else is on the shelf.
@@ -30,18 +30,39 @@ WORDS = {
     "ar": {"open": "بدائل", "title": "بدائل {name}", "intro": "بنفس المادة الفعالة ({ingredient}). المس البديل يتضاف للسلة.",
            "have": "في مخزنك", "same": "نفس التركيز", "other": "تركيز أو شكل تاني", "rx": "بروشتة", "stock": "عندك {n}",
            "low": "باقي {n}", "empty": "مفيش بديل بنفس المادة عندك دلوقتي.", "missing": "مش عندك ({n})",
-           "more": "، والباقي", "order": "للطلب من المورد. للإضافة كصنف افتح الصنف من المخزن.", "sep": "، ",
+           "more": "، والباقي", "order": "تقدر تطلبه من المورد وتضيفه كصنف بعدين.", "sep": "، ",
            "foot": "أسعار أصنافك انت، مش سعر القايمة. ده اقتراح والقرار للصيدلي.", "close": "قفل",
            "out": "خلص من المخزن", "only": "الموجود {n} بس", "remove": "شيله؟", "remove_label": "شيل {name} من السلة",
-           "added": "اتضاف {alt}. شيل {name} الخالص؟", "error": "مقدرناش نجيب البدائل دلوقتي."},
+           "added": "اتضاف {alt}. شيل {name} اللي خلص؟", "error": "مقدرناش نجيب البدائل دلوقتي."},
     "en": {"open": "Alternatives", "title": "Alternatives to {name}", "intro": "Same active ingredient ({ingredient}). Tap one to add it to the cart.",
            "have": "In your stock", "same": "Same strength", "other": "Other strength or form", "rx": "Rx", "stock": "{n} in stock",
            "low": "Only {n} left", "empty": "No alternative with the same ingredient in stock right now.", "missing": "Not in your stock ({n})",
-           "more": " and more", "order": "To order from the supplier. To add one as an item, open the item from Inventory.", "sep": ", ",
+           "more": " and more", "order": "You can order it from the supplier and add it as an item later.", "sep": ", ",
            "foot": "Your own item prices, not the list's. A suggestion: the pharmacist decides.", "close": "Close",
            "out": "Out of stock", "only": "Only {n} in stock", "remove": "Remove?", "remove_label": "Remove {name} from the cart",
            "added": "Added {alt}. Remove {name}, which is out of stock?", "error": "Could not load the alternatives right now."},
 }
+
+
+#: The largest key a request may name (an ``integer`` column on PostgreSQL); a longer number is no row, not a 500.
+MAX_PK = 2147483647
+
+
+def as_pk(raw):
+    """``raw`` (a query-string value) as a row key, or None: ASCII digits only, so ``²`` or ``٣`` is no key (``int()``
+    would refuse the first and read the second), and never past :data:`MAX_PK`."""
+
+    text = str(raw or "")
+    if not (text.isascii() and text.isdecimal()) or len(text) > len(str(MAX_PK)):
+        return None
+    value = int(text)
+    return value if 0 < value <= MAX_PK else None
+
+
+def drug_item_ids():
+    """The active items that carry drug data, in one query: the only cart lines the till asks the sheet about."""
+
+    return list(DrugInfo.objects.filter(item__active=True).order_by("item_id").values_list("item_id", flat=True))
 
 
 def selling_locations():
@@ -54,7 +75,8 @@ def till_location(raw):
     """The till's chosen location when it is one of :func:`selling_locations`, else the till's default one."""
 
     locations = selling_locations()
-    chosen = locations.filter(pk=int(raw)).first() if str(raw or "").isdigit() else None
+    pk = as_pk(raw)
+    chosen = locations.filter(pk=pk).first() if pk is not None else None
     return chosen or locations.filter(is_default=True).first() or locations.first()
 
 
@@ -98,7 +120,8 @@ def alternatives_for(item, *, location=None, customer=None, lang="ar"):
 
     lang = "en" if lang == "en" else "ar"
     location = till_location(location)
-    customer = Customer.objects.filter(pk=int(customer), active=True).first() if str(customer or "").isdigit() else None
+    customer_pk = as_pk(customer)
+    customer = Customer.objects.filter(pk=customer_pk, active=True).first() if customer_pk is not None else None
     drug = getattr(item, "drug", None)
     # Asked without a customer, alternatives() reads no price list (one query per row otherwise); the customer's list is
     # applied below in one read, the way the till's own price book prices a line.
