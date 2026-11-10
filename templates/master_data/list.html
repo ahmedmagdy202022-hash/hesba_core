@@ -1,54 +1,59 @@
 {% extends "master_data/base.html" %}
 {% load hesba_paging %}
-{% load hesba_capabilities %}
+{% load hesba_capabilities hesba_format %}
 {% block master_content %}
-<section class="md-title-row">
+{% capability_on 'variants' as variants_on %}{% capability_on 'units' as units_on %}{% capability_on 'vat' as vat_on %}{% capability_on 'price_lists' as prices_on %}{% capability_on 'barcode' as barcode_on %}
+{# UX Wave 2: one primary («+ صنف جديد»), the rest in «⋯» with print and Excel; filters behind «فلترة» on a phone; a two-line row per record. #}
+<section class="md-title-row hs-head">
   <div>
     <a class="md-back-link" href="{% url 'master_data:hub' %}?lang={{ lang }}">{% if lang == 'en' %}←{% else %}→{% endif %} {{ words.back }}</a>
     <h1>{{ entity_title }}</h1>
   </div>
-  <div class="md-title-actions">
-  {% if entity == 'items' %}{% capability_on 'variants' as variants_on %}{% if variants_on %}<a class="md-secondary" href="{% url 'variants:index' %}?lang={{ lang }}">{% if lang == 'en' %}Sizes & colours{% else %}المقاسات والألوان{% endif %}</a>{% endif %}{% capability_on 'units' as units_on %}{% if units_on %}<a class="md-secondary" href="{% url 'units:index' %}?lang={{ lang }}">{% if lang == 'en' %}Units{% else %}وحدات القياس{% endif %}</a>{% endif %}{% capability_on 'vat' as vat_on %}{% if vat_on %}<a class="md-secondary" href="{% url 'taxes:settings' %}?lang={{ lang }}">{% if lang == 'en' %}VAT rates{% else %}نسب الضريبة{% endif %}</a>{% endif %}{% capability_on 'price_lists' as prices_on %}{% if prices_on %}<a class="md-secondary" href="{% url 'pricing:list' %}?lang={{ lang }}">{% if lang == 'en' %}Price lists{% else %}قوائم الأسعار{% endif %}</a>{% endif %}{% endif %}
-  {% if entity == 'items' and perms_print_labels %}
-    {% capability_on 'barcode' as barcode_on %}{% if barcode_on %}<a class="md-secondary" href="{% url 'barcode:labels' %}?lang={{ lang }}">{% if lang == 'en' %}Barcode labels{% else %}ملصقات الباركود{% endif %}</a>{% endif %}
-  {% endif %}
-  {% if can_manage %}
-    <a class="md-primary" href="{% url 'master_data:create' entity=entity %}?lang={{ lang }}">+ {{ words.new }}</a>
-  {% endif %}
+  <div class="hs-head__actions">
+  {% if can_manage %}<a class="op-primary" href="{% url 'master_data:create' entity=entity %}?lang={{ lang }}" data-md-new>+ {{ new_title }}</a>{% endif %}
+  {% if report_tools or entity == 'items' %}<details class="hs-more" data-more-actions><summary aria-label="{% if lang == 'en' %}More actions{% else %}اختيارات تانية{% endif %}" title="{% if lang == 'en' %}More actions{% else %}اختيارات تانية{% endif %}"><span aria-hidden="true">⋯</span></summary><div class="hs-more__menu">
+  {% if entity == 'items' %}{% if perms_print_labels and barcode_on %}<a class="op-secondary" href="{% url 'barcode:labels' %}?lang={{ lang }}">{% if lang == 'en' %}Barcode labels{% else %}ملصقات الباركود{% endif %}</a>{% endif %}{% if variants_on %}<a class="op-secondary" href="{% url 'variants:index' %}?lang={{ lang }}">{% if lang == 'en' %}Sizes & colours{% else %}المقاسات والألوان{% endif %}</a>{% endif %}{% if units_on %}<a class="op-secondary" href="{% url 'units:index' %}?lang={{ lang }}">{% if lang == 'en' %}Units{% else %}وحدات القياس{% endif %}</a>{% endif %}{% if vat_on %}<a class="op-secondary" href="{% url 'taxes:settings' %}?lang={{ lang }}">{% if lang == 'en' %}VAT rates{% else %}نسب الضريبة{% endif %}</a>{% endif %}{% if prices_on %}<a class="op-secondary" href="{% url 'pricing:list' %}?lang={{ lang }}">{% if lang == 'en' %}Price lists{% else %}قوائم الأسعار{% endif %}</a>{% endif %}{% endif %}
+  <div data-report-tools-slot></div></div></details>{% endif %}
   </div>
 </section>
 
-<form class="md-filters" method="get">
+<details class="hs-filter" data-filter-fold><summary>{% if lang == 'en' %}Filter{% else %}فلترة{% endif %}{% if filter_count %} <span class="hs-filter__count" data-filter-count>{{ filter_count }}</span>{% endif %}</summary>
+<form class="md-filters op-filters" method="get">
   <input type="hidden" name="lang" value="{{ lang }}">
-  <input type="search" name="q" value="{{ query }}" placeholder="{{ words.search_placeholder }}">
-  <select name="status">
+  <input type="search" name="q" value="{{ query }}" placeholder="{{ words.search_placeholder }}" aria-label="{{ words.search }}">
+  <select name="status" aria-label="{% if lang == 'en' %}Status{% else %}الحالة{% endif %}">
     <option value="active" {% if status_filter == 'active' %}selected{% endif %}>{{ words.active }}</option>
     <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>{{ words.inactive }}</option>
     <option value="all" {% if status_filter == 'all' %}selected{% endif %}>{{ words.all }}</option>
   </select>
   <button type="submit">{{ words.search }}</button>
 </form>
+</details>
 
 <div class="md-table-wrap">
-  <table class="md-table">
+  <table class="md-table" data-list-rows>
     <thead>
       <tr>
         {% for column in columns %}<th>{{ column }}</th>{% endfor %}
+        {% if show_stock %}<th>{% if lang == 'en' %}In stock{% else %}الرصيد{% endif %}</th>{% endif %}
+        {% if show_balance %}<th>{% if entity == 'customers' %}{% if lang == 'en' %}Owes{% else %}عليه{% endif %}{% else %}{% if lang == 'en' %}Owed{% else %}ليه{% endif %}{% endif %}</th>{% endif %}
         {% if entity == 'customers' or entity == 'suppliers' %}<th></th>{% endif %}
         {% if can_manage %}<th></th>{% endif %}
       </tr>
     </thead>
     <tbody>
       {% for row in rows %}
-        <tr>
-          {% for value in row.values %}<td>{{ value }}</td>{% endfor %}
+        <tr{% if row.saved %} data-saved{% endif %}>
+          {% for cell in row.cells %}<td{% if cell.role %} data-row="{{ cell.role }}"{% endif %}>{% if cell.role == 'title' %}{% if can_party_card and entity == 'customers' %}<a href="{% url 'parties:card' 'customer' row.object.pk %}?lang={{ lang }}" data-row-link>{{ cell.value }}</a>{% elif can_party_card and entity == 'suppliers' %}<a href="{% url 'parties:card' 'supplier' row.object.pk %}?lang={{ lang }}" data-row-link>{{ cell.value }}</a>{% elif can_manage %}<a href="{% url 'master_data:edit' entity=entity pk=row.object.pk %}?lang={{ lang }}" data-row-link>{{ cell.value }}</a>{% else %}{{ cell.value }}{% endif %}{% elif forloop.first %}<bdi>{{ cell.value }}</bdi>{% else %}{{ cell.value }}{% endif %}</td>{% endfor %}
+          {% if show_stock %}<td{% if row.stock is not None %} data-row="meta"{% endif %} data-item-stock>{% if row.stock is not None %}<span class="hs-phone-only">{% if lang == 'en' %}in stock{% else %}الرصيد{% endif %}</span><bdi>{{ row.stock|qty }}</bdi>{% else %}—{% endif %}</td>{% endif %}
+          {% if show_balance %}<td data-row="amount" data-party-balance><span class="hs-phone-only">{% if row.balance > 0 %}{% if entity == 'customers' %}{% if lang == 'en' %}owes{% else %}عليه{% endif %}{% else %}{% if lang == 'en' %}owed{% else %}ليه{% endif %}{% endif %}{% endif %}</span>{{ row.balance|money }}</td>{% endif %}
           {% if entity == 'customers' %}<td class="md-actions">{% if can_party_card %}<a href="{% url 'parties:card' 'customer' row.object.pk %}?lang={{ lang }}" data-party-card>{% if lang == 'en' %}Account{% else %}الحساب{% endif %}</a>{% endif %}</td>{% elif entity == 'suppliers' %}<td class="md-actions">{% if can_party_card %}<a href="{% url 'parties:card' 'supplier' row.object.pk %}?lang={{ lang }}" data-party-card>{% if lang == 'en' %}Account{% else %}الحساب{% endif %}</a>{% endif %}</td>{% endif %}
           {% if can_manage %}
-            <td class="md-actions"><a href="{% url 'master_data:edit' entity=entity pk=row.object.pk %}?lang={{ lang }}">{{ words.edit }}</a></td>
+            <td class="md-actions"{% if can_party_card %} data-row="action"{% endif %}><a href="{% url 'master_data:edit' entity=entity pk=row.object.pk %}?lang={{ lang }}">{{ words.edit }}</a></td>
           {% endif %}
         </tr>
       {% empty %}
-        <tr><td class="md-empty" colspan="12">{{ words.empty }}</td></tr>
+        <tr><td class="md-empty" colspan="12" data-row="empty">{% if query or status_filter != 'active' %}<span class="hs-empty" data-empty-filtered><b>{% if lang == 'en' %}Nothing matches this search{% else %}مفيش نتايج للبحث ده{% endif %}</b><a href="{% url 'master_data:list' entity=entity %}?lang={{ lang }}">{% if lang == 'en' %}Clear the search{% else %}امسح البحث{% endif %}</a></span>{% else %}<span class="hs-empty" data-empty-first><b>{% if lang == 'en' %}Nothing here yet{% else %}لسه مفيش {{ entity_title }}{% endif %}</b>{% if can_manage %}<a href="{% url 'master_data:create' entity=entity %}?lang={{ lang }}">+ {{ new_title }}</a>{% endif %}</span>{% endif %}</td></tr>
       {% endfor %}
     </tbody>
   </table>

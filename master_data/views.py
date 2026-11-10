@@ -250,6 +250,59 @@ def _rows(entity, objects, lang, words, can_view_cost):
     return rows
 
 
+#: UX Wave 2: what each column is on a phone row (lists.css): "title" (the name, a link), "amount" (the figure on the
+#: opposite side), "meta" (the small second line) or "" (desktop only). The status shows only when it is "inactive".
+ROW_ROLES = {
+    "locations": ("meta", "title", "", "", "", "status"),
+    "suppliers": ("meta", "title", "meta", "", "status"),
+    "customers": ("meta", "title", "meta", "", "status"),
+    "categories": ("meta", "title", "meta", "status"),
+    "items": ("meta", "title", "", "", "", "amount", "status"),
+    "cashboxes": ("meta", "title", "", "", "status"),
+}
+
+
+def _cells(entity, row, can_view_cost):
+    roles = list(ROW_ROLES[entity])
+    if entity == "items" and can_view_cost:
+        roles.insert(-1, "")  # the purchase price: desktop only
+    cells = []
+    for value, role in zip(row["values"], roles):
+        if role == "status":
+            role = "" if row["object"].active else "meta"
+        cells.append({"value": value, "role": role})
+    return cells
+
+
+def new_title(entity, singular, lang):
+    """UX Wave 2: «صنف جديد», «عميل جديد», «خزنة جديدة» (and the activity's own word: «مريض جديد»)."""
+
+    word = singular.split(" / ")[0].strip()
+    if lang == "en":
+        return f"New {word.lower()}"
+    return f"{word} {'جديدة' if entity == 'cashboxes' else 'جديد'}"
+
+
+def _balances(entity, objects):
+    """UX Wave 2: what each customer on the page owes (or each supplier is owed), from the same ledger read as the
+    account card (parties.services.balance): one aggregate query per row of the page, nothing stored."""
+
+    from parties.services import balance
+
+    kind = {"customers": "customer", "suppliers": "supplier"}[entity]
+    return {obj.pk: balance(kind, obj) for obj in objects}
+
+
+def _stock(objects, request):
+    """UX Wave 2: the quantity on hand of each stock item on the page (the same read as the stock screen)."""
+
+    if not user_has_permission(request.user, "inventory.view_stock"):
+        return None
+    from inventory.services import get_item_stock_quantity
+
+    return {obj.pk: get_item_stock_quantity(obj) for obj in objects if obj.is_stock_tracked}
+
+
 def _columns(entity, lang, can_view_cost):
     labels = {
         "ar": {
@@ -406,6 +459,31 @@ def entity_list(request, entity):
     can_view_cost = entity == "items" and user_has_permission(
         request.user, "inventory.view_cost"
     )
+    can_party_card = user_has_permission(request.user, {"customers": "reports.view_customer_report",
+                                                        "suppliers": "reports.view_supplier_report"}.get(entity, "")) if entity in ("customers", "suppliers") else False
+    # UX Wave 2: after a save the list opens on the record just saved, first and highlighted (view only).
+    from settings_core.saved_toast import saved_pk
+
+    objects = list(page.object_list)
+    saved = None
+    pk = saved_pk(request)
+    if pk is not None:
+        saved = next((obj for obj in objects if obj.pk == pk), None)
+        if saved is None and not request.GET.get("page"):
+            saved = _scoped_rows(config).filter(pk=pk).first()
+            if saved is not None:
+                objects.insert(0, saved)
+    rows = _rows(entity, objects, lang, words, can_view_cost)
+    balances = _balances(entity, objects) if can_party_card else None
+    stock = _stock(objects, request) if entity == "items" else None
+    for row in rows:
+        row["cells"] = _cells(entity, row, can_view_cost)
+        row["saved"] = saved is not None and row["object"].pk == saved.pk
+        if balances is not None:
+            row["balance"] = balances[row["object"].pk]
+        if stock is not None:
+            row["stock"] = stock.get(row["object"].pk)
+    singular = config["singular"][lang]
 
     return render(
         request,
@@ -418,15 +496,20 @@ def entity_list(request, entity):
             "entity_title": config["title"][lang],
             "singular": config["singular"][lang],
             "columns": _columns(entity, lang, can_view_cost),
-            "rows": _rows(entity, page.object_list, lang, words, can_view_cost),
+            "rows": rows,
             "page": page,
             "query": query,
             "status_filter": status,
+            "filter_count": int(bool(query)) + int(status != "active"),
             "can_manage": can_manage,
+            "new_title": new_title(entity, singular, lang),
+            "show_balance": balances is not None,
+            "show_stock": stock is not None,
+            "saved_actions": [{"url": f"{reverse('master_data:create', kwargs={'entity': entity})}?lang={lang}",
+                               "label": f"+ {new_title(entity, singular, lang)}"}] if saved is not None and can_manage else [],
             "perms_print_labels": user_has_permission(request.user, "barcode.print_labels"),
             # AUDIT-1: the account link shows only to those the card opens for.
-            "can_party_card": user_has_permission(request.user, {"customers": "reports.view_customer_report",
-                                                                  "suppliers": "reports.view_supplier_report"}.get(entity, "")) if entity in ("customers", "suppliers") else False,
+            "can_party_card": can_party_card,
             "page_title": f"{config['title'][lang]} - {'Hesba' if lang == 'en' else 'حِسبة'}",
         },
     )
@@ -461,6 +544,10 @@ def _popup(response):
     return response
 
 
+def _record_name(record, lang):
+    return getattr(record, "item_name", None) or _localized_name(record, lang)
+
+
 def _entity_form(request, entity, config, instance):
     lang = _lang(request)
     words = STRINGS[lang]
@@ -485,8 +572,11 @@ def _entity_form(request, entity, config, instance):
             record = form.save()
             if popup:  # FB-26: hand the new record back to the invoice that opened the box
                 return _popup(render(request, "master_data/popup_done.html", {"lang": lang, "record_id": record.pk, "label": str(record)}))
-            messages.success(request, words["saved"])
-            return redirect(f"{reverse('master_data:list', kwargs={'entity': entity})}?lang={lang}")
+            from settings_core.saved_toast import say_saved
+
+            # UX Wave 2: «اتسجل «اسم الصنف»», and the list opens on it.
+            say_saved(request, f"Saved «{_record_name(record, lang)}»" if lang == "en" else f"اتسجل «{_record_name(record, lang)}»")
+            return redirect(f"{reverse('master_data:list', kwargs={'entity': entity})}?lang={lang}&saved={record.pk}")
     else:
         form = config["form"](**kwargs)
 
@@ -516,6 +606,7 @@ def _entity_form(request, entity, config, instance):
             "entity": entity,
             "entity_title": config["title"][lang],
             "singular": config["singular"][lang],
+            "new_title": new_title(entity, config["singular"][lang], lang),
             "form": form,
             "editing": instance is not None,
             "opening_balance_locked": opening_balance_locked,

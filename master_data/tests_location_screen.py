@@ -22,7 +22,7 @@ class LocationScreenTests(TestCase):
         # One entity only: the entity is a hidden field, with no label left standing over nothing.
         self.assertIn('type="hidden" name="entity"', page)
         self.assertNotIn('for="id_entity"', page)
-        self.assertIn("إضافة جديد — مخزن<", page)
+        self.assertIn("مخزن جديد<", page)  # UX Wave 2: «مخزن جديد», not «إضافة جديد — مخزن»
         for help_text in ("ده اللي بيتختار لوحده في الفواتير والحركات الجديدة.", "ينفع تستلم فيه بضاعة المشتريات والتحويلات.",
                           "ينفع تبيع منه وتخصم من رصيده في فواتير البيع."):
             self.assertIn(help_text, page)

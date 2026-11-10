@@ -1,18 +1,19 @@
 {% if show %}<button class="op-secondary" type="button" data-quick-item-open>+ {% if lang == 'en' %}New item{% else %}صنف جديد{% endif %}</button>
-<dialog class="hs-quick-item" data-quick-item data-url="{% url 'master_data:item_quick_create' %}">
-  <div class="op-form" data-quick-item-form>
-    <h2>{% if lang == 'en' %}New item{% else %}صنف جديد{% endif %}</h2>
+{# UX Wave 2: × at the top, the fields in the full item form's order (name, category, unit, barcode, then the prices), prices empty, the buttons pinned to the bottom. The star comes from form_required.css once. #}
+<dialog class="hs-quick-item" data-quick-item data-url="{% url 'master_data:item_quick_create' %}" aria-labelledby="qi-title">
+  <div class="op-form hs-quick-item__body" data-quick-item-form>
+    <div class="hs-quick-item__head"><h2 id="qi-title">{% if lang == 'en' %}New item{% else %}صنف جديد{% endif %}</h2><button class="hs-quick-item__x" type="button" data-quick-item-close aria-label="{% if lang == 'en' %}Close{% else %}اقفل{% endif %}" title="{% if lang == 'en' %}Close{% else %}اقفل{% endif %}"><span aria-hidden="true">×</span></button></div>
     <p class="op-muted">{% if lang == 'en' %}It is saved with an automatic code and goes straight onto the next empty line.{% else %}بيتحفظ بكود أوتوماتيك وينزل على أول سطر فاضي على طول.{% endif %}</p>
     <div class="op-message op-message-error" role="alert" data-quick-item-error hidden></div>
     <div class="op-form-grid">
-      <div class="op-field op-field--wide"><label for="qi-name">{% if lang == 'en' %}Name{% else %}اسم الصنف{% endif %} <span aria-hidden="true">*</span></label><input form="qi-detached" id="qi-name" name="item_name" maxlength="255" required autocomplete="off"></div>
+      <div class="op-field op-field--wide"><label for="qi-name">{% if lang == 'en' %}Name{% else %}اسم الصنف{% endif %}</label><input form="qi-detached" id="qi-name" name="item_name" maxlength="255" required autocomplete="off"></div>
+      {% if categories %}<div class="op-field"><label for="qi-cat">{% if lang == 'en' %}Category{% else %}التصنيف{% endif %}</label><select form="qi-detached" id="qi-cat" name="category"><option value="">{% if lang == 'en' %}Choose …{% else %}اختار …{% endif %}</option>{% for category in categories %}<option value="{{ category.pk }}">{% if lang == 'en' and category.name_en %}{{ category.name_en }}{% else %}{{ category.name_ar }}{% endif %}</option>{% endfor %}</select></div>{% endif %}
       <div class="op-field"><label for="qi-unit">{% if lang == 'en' %}Unit{% else %}الوحدة{% endif %}</label><input form="qi-detached" id="qi-unit" name="unit" maxlength="50" placeholder="{% if lang == 'en' %}piece, kg, box…{% else %}قطعة، كيلو، علبة…{% endif %}"></div>
-      {% if categories %}<div class="op-field"><label for="qi-cat">{% if lang == 'en' %}Category{% else %}التصنيف{% endif %}</label><select form="qi-detached" id="qi-cat" name="category"><option value="">—</option>{% for category in categories %}<option value="{{ category.pk }}">{% if lang == 'en' and category.name_en %}{{ category.name_en }}{% else %}{{ category.name_ar }}{% endif %}</option>{% endfor %}</select></div>{% endif %}
-      <div class="op-field"><label for="qi-sale">{% if lang == 'en' %}Selling price{% else %}سعر البيع{% endif %}</label><input form="qi-detached" id="qi-sale" name="default_sale_price" inputmode="decimal" dir="ltr" value="0"></div>
-      {% if can_cost %}<div class="op-field"><label for="qi-buy">{% if lang == 'en' %}Purchase price{% else %}سعر الشراء{% endif %}</label><input form="qi-detached" id="qi-buy" name="default_purchase_price" inputmode="decimal" dir="ltr" value="0"></div>{% endif %}
       <div class="op-field"><label for="qi-barcode">{% if lang == 'en' %}Barcode (optional){% else %}الباركود (اختياري){% endif %}</label><input form="qi-detached" id="qi-barcode" name="barcode" maxlength="120" dir="ltr" autocomplete="off"></div>
+      {% if can_cost %}<div class="op-field"><label for="qi-buy">{% if lang == 'en' %}Purchase price{% else %}سعر الشراء{% endif %}</label><input form="qi-detached" id="qi-buy" name="default_purchase_price" inputmode="decimal" dir="ltr" placeholder="0.00"></div>{% endif %}
+      <div class="op-field"><label for="qi-sale">{% if lang == 'en' %}Selling price{% else %}سعر البيع{% endif %}</label><input form="qi-detached" id="qi-sale" name="default_sale_price" inputmode="decimal" dir="ltr" placeholder="0.00"></div>
       <label class="op-check"><input form="qi-detached" type="checkbox" name="is_stock_tracked" checked> {% if lang == 'en' %}Kept in stock (not a service){% else %}صنف مخزني (مش خدمة){% endif %}</label>
     </div>
-    <div class="op-form-actions"><button class="op-primary" type="button" data-quick-item-save>{% if lang == 'en' %}Save and add to the invoice{% else %}احفظ وضيفه للفاتورة{% endif %}</button><button class="op-secondary" type="button" data-quick-item-close>{% if lang == 'en' %}Cancel{% else %}إلغاء{% endif %}</button></div>
   </div>
+  <div class="op-form-actions hs-quick-item__actions"><button class="op-primary" type="button" data-quick-item-save>{% if lang == 'en' %}Save and add to the invoice{% else %}احفظ وضيفه للفاتورة{% endif %}</button><button class="op-secondary" type="button" data-quick-item-close>{% if lang == 'en' %}Cancel{% else %}إلغاء{% endif %}</button></div>
 </dialog>{% endif %}

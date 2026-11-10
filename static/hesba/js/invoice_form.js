@@ -377,7 +377,7 @@
       quick.showModal();
       quick.querySelector('[name="item_name"]').focus();
     });
-    quick.querySelector('[data-quick-item-close]').addEventListener('click', function () { quick.close(); });
+    quick.querySelectorAll('[data-quick-item-close]').forEach(function (button) { button.addEventListener('click', function () { quick.close(); }); });  // UX Wave 2: the × at the top and «إلغاء»
     quick.addEventListener('keydown', function (event) {
       if (event.key === 'Enter' && event.target.tagName === 'INPUT') { event.preventDefault(); quickSave.click(); }
     });
@@ -411,7 +411,7 @@
             select.appendChild(option);
           });
           quick.querySelectorAll('input[name]').forEach(function (input) {
-            if (input.type === 'checkbox') { input.checked = true; } else { input.value = /price/.test(input.name) ? '0' : ''; }
+            if (input.type === 'checkbox') { input.checked = true; } else { input.value = ''; }  // UX Wave 2: prices start empty, not 0
           });
           quick.close();
           addItem(entry, null);

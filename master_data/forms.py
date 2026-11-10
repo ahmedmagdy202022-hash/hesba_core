@@ -2,7 +2,7 @@ from django import forms
 
 from cashboxes.models import Cashbox, CashboxKind, OpeningBalanceTarget
 from cashboxes.services import target_has_operational_use
-from config.form_defaults import ZeroWhenBlank
+from config.form_defaults import ZeroWhenBlank, choose_labels
 from config.form_sections import Sectioned
 from config.numbering import AutoNumbered
 from settings_core.templatetags.hesba_format import DEFAULT_UNITS
@@ -121,6 +121,7 @@ class HesbaModelForm(Sectioned, forms.ModelForm):
                 field.widget.attrs["rows"] = 3
             if not isinstance(field.widget, (forms.CheckboxInput, forms.Select)):
                 field.widget.attrs.setdefault("autocomplete", "off")
+        choose_labels(self, self.lang)  # UX Wave 2: «اختار …», not «---------»
 
 
 class _EntityField:
@@ -364,7 +365,8 @@ class CategoryForm(AutoNumbered, HesbaModelForm):
 
 
 class ItemForm(ZeroWhenBlank, AutoNumbered, HesbaModelForm):
-    zero_when_blank = ("min_stock",)
+    # UX Wave 2: the prices are optional (empty counts as 0, as the model's default) and a new item starts with them empty, not 0.
+    zero_when_blank = ("min_stock", "default_sale_price", "default_purchase_price")
     sections_spec = (
         ("main", "الصنف", "The item", "الاسم والتصنيف. الكود بيتعمل لوحده، والباركود لو موجود.", "Name and category. The code is made for you; add the barcode if it has one.", ("item_name", "category", "unit", "item_code", "barcode")),
         ("variant", "المقاس واللون", "Size and colour", "", "", ("size", "color")),
@@ -394,6 +396,10 @@ class ItemForm(ZeroWhenBlank, AutoNumbered, HesbaModelForm):
     def __init__(self, *args, can_view_cost=False, **kwargs):
         super().__init__(*args, **kwargs)
         self.offer_auto_number(self.lang)
+        if not self.instance.pk and not self.is_bound:
+            for name in self.zero_when_blank:
+                if not self.initial.get(name):
+                    self.initial[name] = None
         if "unit" in self.fields and str(self.initial.get("unit") or "").strip().casefold() in DEFAULT_UNITS:
             self.initial["unit"] = "piece" if self.lang == "en" else "قطعة"  # UI-TRACK F01: not the English "unit"
         if "category" in self.fields:  # FB-TYPES: a new category without leaving the item
