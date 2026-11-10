@@ -11,9 +11,12 @@ import tempfile
 from datetime import date
 from decimal import Decimal as D
 from pathlib import Path
+from unittest import mock
 
+from django.apps import apps
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from django.db import IntegrityError, router
 from django.test import SimpleTestCase, TestCase
 
 from cashboxes.models import CashboxDirection, CashboxMovement
@@ -32,6 +35,12 @@ from .tests import PharmacySetup
 
 FIXTURE = Path(__file__).resolve().parent / "tests_fixtures" / "drug_reference_sample.csv"
 PRICE_DATE = date(2026, 11, 1)
+
+
+def derived_id(name_key, strength_key="", form="", pack=""):
+    """The id a row without a source_ref gets: its folded name, strength, form and pack."""
+
+    return "n:" + hashlib.sha1("|".join((name_key, strength_key, form, pack)).encode()).hexdigest()[:24]
 
 
 class FileCase(TestCase):
@@ -197,7 +206,7 @@ class TemplateImportTests(FileCase):
         path.write_bytes("name_ar;public_price;form\nفابلودول أقراص;35;أقراص\n".encode("cp1256"))
         line = self.run_import(path, "cp1256")
         self.assertIn("created 1,", line)
-        self.assertEqual((self.row("n:" + hashlib.sha1("فابلودول اقراص".encode()).hexdigest()[:24], "cp1256").form), "tablet")
+        self.assertEqual(self.row(derived_id("فابلودول اقراص", form="tablet"), "cp1256").form, "tablet")
 
     def test_over_long_text_and_an_absurd_price_fit_the_table(self):
         path = self.write_csv("long.csv", [["source_ref", "name_en", "manufacturer", "strength", "pack", "public_price", "barcode"],
@@ -234,7 +243,7 @@ class SimpleLayoutTests(FileCase):
         first = rows["Hesbacillin 500mg caps 20's"]
         self.assertEqual((first.strength, first.strength_key, first.form, first.pack, first.public_price, first.barcode),
                          ("500mg", "500mg", "capsule", "20's", D("62.50"), "2000000000015"))
-        self.assertEqual(first.source_ref, "n:" + hashlib.sha1("hesbacillin 500mg caps 20's".encode()).hexdigest()[:24])
+        self.assertEqual(first.source_ref, derived_id("hesbacillin 500mg caps 20's", "500mg", "capsule", "20's"))
         self.assertEqual((first.active_ingredient, first.ingredient_key, first.name_ar), ("", "", ""))
         self.assertIsNone(first.prescription_only)
         syrup = rows["Ibufable 100mg/5ml syrup 120ml"]
@@ -288,7 +297,7 @@ class ReImportTests(FileCase):
         self.run_import(FIXTURE, "other-list")
         self.run_import()
         rows = self.fixture_rows()
-        line = self.run_import(self.write_csv("ten.csv", rows[:11]), "hesba-sample", "2026-12", "--deactivate-missing")
+        line = self.run_import(self.write_csv("ten.csv", rows[:11]), "hesba-sample", "2026-12", "--deactivate-missing", "--force-deactivate")
         self.assertIn("created 0, updated 10, deactivated 20", line)
         self.assertEqual(DrugReference.objects.filter(source="hesba-sample", is_active=True).count(), 10)
         self.assertFalse(self.row("HS-011").is_active)
@@ -322,7 +331,7 @@ class DryRunTests(FileCase):
         before = list(DrugReference.objects.order_by("pk").values_list())
         rows = self.fixture_rows()[:6]
         rows[1][8] = "999.00"
-        line = self.run_import(self.write_csv("dry.csv", rows), "hesba-sample", "2027", "--dry-run", "--deactivate-missing")
+        line = self.run_import(self.write_csv("dry.csv", rows), "hesba-sample", "2027", "--dry-run", "--deactivate-missing", "--force-deactivate")
         self.assertIn("created 0, updated 5, deactivated 25", line)
         self.assertEqual(list(DrugReference.objects.order_by("pk").values_list()), before)
 
@@ -331,7 +340,7 @@ class CommandRefusalTests(FileCase):
     def test_refusals(self):
         with self.assertRaisesMessage(CommandError, "File not found"):
             self.run_import(self.folder / "missing.csv")
-        with self.assertRaisesMessage(CommandError, "must be .csv or .xlsx"):
+        with self.assertRaisesMessage(CommandError, "must be .csv, .txt or .xlsx"):
             self.run_import(self.write_csv("list.ods", [["name"], ["x"]]))
         with self.assertRaisesMessage(CommandError, "No name column"):
             self.run_import(self.write_csv("noname.csv", [["price", "barcode"], ["5", ""]]))
@@ -362,10 +371,24 @@ class ImportTouchesNothingElseTests(FileCase, PharmacySetup):
         for table in self.TABLES:
             self.assertGreater(table.objects.count(), 0, table.__name__)
 
+    #: Not checked: the reference table itself, and Django's own session and content-type bookkeeping.
+    SKIPPED = ("pharmacy.drugreference", "sessions.session", "contenttypes.contenttype")
+
+    @classmethod
+    def every_model(cls):
+        """Every concrete table in the default database except :attr:`SKIPPED`, so a stray write anywhere is caught."""
+
+        return [model for model in apps.get_models()
+                if model._meta.managed and not model._meta.proxy and not model._meta.swapped
+                and model._meta.label_lower not in cls.SKIPPED and router.db_for_read(model) == "default"]
+
     def snapshot(self):
         state = {table.__name__: list(table.objects.order_by("pk").values_list()) for table in self.TABLES}
         digest = hashlib.sha256(repr(sorted(state.items())).encode()).hexdigest()
-        return state, digest, fingerprint()
+        everything = {model._meta.label: (model._default_manager.count(),
+                                          hashlib.sha256(repr(list(model._default_manager.order_by("pk").values_list())).encode()).hexdigest())
+                      for model in self.every_model()}
+        return state, digest, fingerprint(), everything
 
     def test_import_reimport_deactivate_and_dry_run_leave_everything_else_alone(self):
         before = self.snapshot()
@@ -374,7 +397,7 @@ class ImportTouchesNothingElseTests(FileCase, PharmacySetup):
         path = self.write_csv("with-panadol.csv", rows)
         self.run_import(path)
         self.run_import(path, "hesba-sample", "2026-12")
-        self.run_import(self.write_csv("ten.csv", rows[:11]), "hesba-sample", "2027", "--deactivate-missing")
+        self.run_import(self.write_csv("ten.csv", rows[:11]), "hesba-sample", "2027", "--deactivate-missing", "--force-deactivate")
         self.run_import(path, "hesba-sample", "2027", "--dry-run")
         self.run_import(self.write_csv("simple.csv", SimpleLayoutTests.ROWS), "community")
         self.assertEqual(DrugReference.objects.count(), 36)
@@ -382,6 +405,273 @@ class ImportTouchesNothingElseTests(FileCase, PharmacySetup):
         self.assertEqual(after[0], before[0])
         self.assertEqual(after[1], before[1])
         self.assertEqual(after[2], before[2])
+        self.assertGreater(len(after[3]), 50)                       # the loop really covers the whole schema
+        changed = sorted(label for label in before[3] if after[3][label] != before[3][label])
+        self.assertEqual(changed, [])
         self.panadol.refresh_from_db()
         self.assertEqual((self.panadol.default_sale_price, self.panadol.barcode), (D("42.00"), "2000000000039"))
         self.assertEqual(Item.objects.filter(barcode="2000000000039").count(), 1)
+
+
+# ---- review fixes (HG-082) ----
+
+class DerivedIdTests(FileCase):
+    """H1: a row without a source_ref is identified by its folded name, strength, form and pack, not the name alone."""
+
+    def test_same_name_with_different_strengths_and_forms_are_separate_rows(self):
+        path = self.write_csv("samename.csv", [["name_en", "strength", "form", "public_price"],
+                                               ["Samefab", "500 mg", "tab", "10"],
+                                               ["Samefab", "1000 mg", "tab", "18"],
+                                               ["Samefab", "250 mg/5 ml", "syrup", "12"]])
+        line = self.run_import(path, "samename")
+        self.assertIn("created 3, updated 0, deactivated 0, skipped 0", line)
+        rows = {row.source_ref: row for row in DrugReference.objects.filter(source="samename")}
+        self.assertEqual(set(rows), {derived_id("samefab", "500mg", "tablet"), derived_id("samefab", "1000mg", "tablet"),
+                                     derived_id("samefab", "250mg/5ml", "syrup")})
+        self.assertEqual(rows[derived_id("samefab", "1000mg", "tablet")].public_price, D("18.00"))
+        self.assertIn("created 0, updated 3", self.run_import(path, "samename"))
+
+    def test_a_true_duplicate_is_skipped_with_its_line_number(self):
+        path = self.write_csv("dupes.csv", [["name_en", "strength", "form", "public_price"],
+                                            ["Samefab", "500 mg", "tab", "10"],
+                                            ["", "", "", "3"],
+                                            ["SAMEFAB", "500mg", "Tablets", "11"],
+                                            ["Otherfab", "", "", "4"],
+                                            ["samefab ", "500 MG", "TAB", "12"]])
+        out = self.run_import(path, "dupes")
+        self.assertIn("created 2, updated 0, deactivated 0, skipped 3", out)
+        self.assertIn("Skipped rows (line in the file): duplicate 2 (4, 6), no name 1 (3)", out)
+        self.assertIn("متكرر 2 (4, 6)", out)
+        self.assertEqual(DrugReference.objects.get(source="dupes", name_key="samefab").public_price, D("10.00"))  # the first row wins
+
+    def test_only_the_first_three_lines_are_listed(self):
+        path = self.write_csv("many.csv", [["source_ref", "name_en"]] + [["A", "Okfab"]] * 6)
+        out = self.run_import(path, "many")
+        self.assertIn("skipped 5", out)
+        self.assertIn("duplicate 5 (3, 4, 5…)", out)
+
+    def test_harakat_and_tatweel_fold_into_the_same_name(self):
+        self.assertEqual(reference.fold("بَانادولـفاب"), reference.fold("بانادولفاب"))
+        self.assertEqual(reference.fold("دواءٌ"), "دواء")
+        self.assertEqual(services._plain("بَ"), "بَ")  # DrugInfo's keys are built with _plain, which is unchanged
+
+
+class EncodingTests(FileCase):
+    """M1 / L2: UTF-8, UTF-16 with a byte-order mark and Windows Arabic; a damaged UTF-8 file is refused, not garbled."""
+
+    def test_utf8_with_one_bad_byte_is_refused_with_its_offset(self):
+        data = "name,price\nعربيفاب,10\n".encode() + b"x\xe9fab,5\n"
+        offset = data.index(b"\xe9")
+        path = self.folder / "mixed.csv"
+        path.write_bytes(data)
+        with self.assertRaisesMessage(CommandError, f"invalid byte at offset {offset}"):
+            self.run_import(path, "mixed")
+        bom = self.folder / "bom.csv"
+        bom.write_bytes(b"\xef\xbb\xbfname,price\nx\xe9fab,5\n")  # a UTF-8 byte-order mark: always UTF-8
+        with self.assertRaisesMessage(CommandError, "invalid byte at offset"):
+            self.run_import(bom, "mixed")
+        self.assertEqual(DrugReference.objects.count(), 0)
+
+    def test_windows_arabic_with_pairs_that_look_like_utf8_is_still_read(self):
+        # In cp1256 «ب،» and «ك»» are byte pairs that are also valid UTF-8; the file is still Windows Arabic.
+        text = "name_ar;active_ingredient;public_price\n«كافيفاب» أقراص;باراسيتامول،كافيين;20\n"
+        path = self.folder / "cp1256.csv"
+        path.write_bytes(text.encode("cp1256"))
+        self.assertIn("created 1,", self.run_import(path, "cp1256"))
+        row = DrugReference.objects.get(source="cp1256")
+        self.assertEqual((row.name_ar, row.active_ingredient, row.form), ("«كافيفاب» أقراص", "باراسيتامول،كافيين", "tablet"))
+
+    def test_utf16_with_a_byte_order_mark(self):
+        for encoding, bom in (("utf-16-le", "﻿"), ("utf-16-be", "﻿")):
+            path = self.folder / f"{encoding}.txt"
+            path.write_bytes((bom + "name\tprice\nيونيفاب\t10\nUnifab 5mg tab\t12\n").encode(encoding))
+            self.assertIn("created 2,", self.run_import(path, encoding))
+            self.assertEqual(set(DrugReference.objects.filter(source=encoding).values_list("name_ar", "name_en", "public_price")),
+                             {("يونيفاب", "", D("10.00")), ("", "Unifab 5mg tab", D("12.00"))})
+
+
+class HeaderTests(FileCase):
+    """M2 / L7 / L12: the same header aliases in both layouts, the ignored columns named, and repeated headers refused."""
+
+    def test_the_template_reads_the_aliases_too(self):
+        path = self.write_csv("alias.csv", [["Name-EN", "Price (EGP)", "EAN", "Notes"], ["Aliasfab 5mg tab", "25", "2000000000015", "x"]])
+        out = self.run_import(path, "alias")
+        row = DrugReference.objects.get(source="alias")
+        self.assertEqual((row.name_en, row.public_price, row.barcode, row.strength, row.form), ("Aliasfab 5mg tab", D("25.00"), "2000000000015", "5mg", "tablet"))
+        self.assertIn("أعمدة اتجاهلت / ignored columns: Notes", out)
+
+    def test_arabic_header_spellings_fold(self):
+        path = self.write_csv("arabic.csv", [["إسم الدواء", "السعر"], ["فابلودول", "35"]])
+        self.run_import(path, "arabic")
+        self.assertEqual(DrugReference.objects.get(source="arabic").name_ar, "فابلودول")
+
+    def test_a_template_column_beside_a_name_alias_makes_it_the_template(self):
+        headers = ["name", "strength", "source_ref", "price"]
+        self.assertEqual(reference.detect_layout([reference._header(name) for name in headers]), "hesba")
+        self.assertEqual(reference.detect_layout(["name", "price"]), "simple")
+        path = self.write_csv("l7.csv", [headers, ["Templfab 5mg caps 20's", "10 mg", "T-1", "9"]])
+        out = self.run_import(path, "l7")
+        row = self.row("T-1", "l7")
+        # The strength column wins over the name; form and pack have no column, so they are read from the name.
+        self.assertEqual((row.name_en, row.strength, row.form, row.pack, row.public_price), ("Templfab 5mg caps 20's", "10 mg", "capsule", "20's", D("9.00")))
+        self.assertNotIn("ignored columns", out)
+
+    def test_an_empty_template_cell_is_not_filled_from_the_name(self):
+        path = self.write_csv("empty-cell.csv", [["source_ref", "name_en", "strength", "form", "pack"], ["E-1", "Emptyfab 5mg tab 20's", "", "", ""]])
+        self.run_import(path, "empty-cell")
+        row = self.row("E-1", "empty-cell")
+        self.assertEqual((row.strength, row.form, row.pack), ("", "", ""))
+
+    def test_a_simple_file_names_the_columns_it_does_not_read(self):
+        path = self.write_csv("simple.csv", [["name", "price", "price_date"], ["Okfab", "5", "2026-10-01"]])
+        out = self.run_import(path, "simple", "v", "--layout", "simple")
+        self.assertIn("ignored columns: price_date", out)
+
+    def test_two_columns_with_the_same_header_are_refused(self):
+        with self.assertRaisesMessage(CommandError, "Two columns have the same header: price"):
+            self.run_import(self.write_csv("twice.csv", [["name", "Price", "price "], ["Okfab", "5", "6"]]), "twice")
+        self.run_import(self.write_csv("blank-headers.csv", [["name", "", ""], ["Okfab", "a", "b"]]), "blank")  # empty headers are fine
+        self.assertEqual(DrugReference.objects.filter(source="twice").count(), 0)
+        self.assertEqual(DrugReference.objects.filter(source="blank").count(), 1)
+
+
+class NumberCellTests(FileCase):
+    """M3 / M4 / M5: an ambiguous price, Excel float noise and barcodes that lost their leading zeros."""
+
+    def test_a_three_digit_decimal_in_text_is_ambiguous(self):
+        for ambiguous in ("1.250", "12.500", "999.999"):
+            self.assertEqual(reference.price_or_none(ambiguous), (None, True), ambiguous)
+        self.assertEqual(reference.price_or_none("1,250"), (D("1250.00"), False))
+        self.assertEqual(reference.price_or_none("1.25"), (D("1.25"), False))
+        self.assertEqual(reference.price_or_none("0.125"), (D("0.13"), False))  # never a thousands group
+        self.assertEqual(reference.price_or_none(1.255), (D("1.26"), False))    # a number cell is not ambiguous
+
+    def test_float_noise_is_cut(self):
+        self.assertEqual(reference._cell(27.500000000000004), "27.5")
+        self.assertEqual(reference._cell(0.1 + 0.2), "0.3")
+        self.assertEqual(reference._cell(12.0), "12")
+        self.assertEqual(reference._cell(7), "7")
+        self.assertEqual(reference.price_or_none(0.1 + 0.2), (D("0.30"), False))
+
+    def test_an_xlsx_price_with_float_noise(self):
+        import zipfile
+
+        from openpyxl import Workbook
+
+        book = Workbook()
+        sheet = book.active
+        sheet.append(["source_ref", "name_en", "public_price", "barcode"])
+        sheet.append(["X-1", "Xlfab 20mg tab", 27.500000000000004, 36000291452])   # a UPC-A typed as a number: 11 digits left
+        sheet.append(["X-2", "Xlfab 5mg tab", 25, 1234565])                        # an EAN-8 that lost its leading 0
+        plain = self.folder / "plain.xlsx"
+        book.save(plain)
+        # openpyxl writes 16 significant digits; Excel writes 17, so the noise is put into the sheet's XML by hand.
+        path = self.folder / "noise.xlsx"
+        with zipfile.ZipFile(plain) as source, zipfile.ZipFile(path, "w") as target:
+            for item in source.infolist():
+                data = source.read(item.filename)
+                if item.filename == "xl/worksheets/sheet1.xml":
+                    self.assertIn(b"<v>27.5</v>", data)
+                    data = data.replace(b"<v>27.5</v>", b"<v>27.500000000000004</v>")
+                target.writestr(item, data)
+        self.assertEqual(reference.read_table(path)[2][0][1]["public_price"], 27.500000000000004)  # the file really holds the noise
+        out = self.run_import(path, "noise")
+        self.assertIn("bad barcodes 0, bad prices 0", out)
+        self.assertEqual((self.row("X-1", "noise").public_price, self.row("X-1", "noise").barcode), (D("27.50"), "0036000291452"))
+        self.assertEqual(self.row("X-2", "noise").barcode, "01234565")
+
+    def test_upc_a_is_stored_as_ean13(self):
+        for value in (36000291452, 36000291452.0, "036000291452", "0036000291452", 36000291452 * 1):
+            self.assertEqual(reference.barcode_or_blank(value), ("0036000291452", False), value)
+        self.assertEqual(reference.barcode_or_blank("36000291452"), ("", True))   # text is never padded
+        self.assertEqual(reference.barcode_or_blank(36000291453), ("", True))     # padded, the check digit still fails
+        self.assertEqual(reference.barcode_or_blank(True), ("", True))
+
+
+class ReImportSemanticsTests(FileCase):
+    """Item 7: what a newer file does to a stored price, price date and prescription flag."""
+
+    HEADER = ["source_ref", "name_en", "public_price", "price_date", "prescription_only"]
+
+    def first_import(self):
+        self.run_import(self.write_csv("v1.csv", [self.HEADER, ["R-1", "Rfab", "10", "", "1"], ["R-2", "Rfab2", "20", "2026-10-01", ""]]),
+                        "v", "1", "--price-date", "2026-11-01")
+        self.assertEqual((self.row("R-1", "v").price_date, self.row("R-2", "v").price_date), (PRICE_DATE, date(2026, 10, 1)))
+
+    def test_a_bad_price_keeps_the_stored_price_and_date(self):
+        self.first_import()
+        out = self.run_import(self.write_csv("v2.csv", [self.HEADER, ["R-1", "Rfab", "10", "", "1"], ["R-2", "Rfab2", "abc", "", ""]]),
+                              "v", "2", "--price-date", "2026-12-01")
+        self.assertIn("bad prices 1", out)
+        self.assertEqual((self.row("R-2", "v").public_price, self.row("R-2", "v").price_date), (D("20.00"), date(2026, 10, 1)))
+        self.assertEqual(self.row("R-1", "v").price_date, date(2026, 12, 1))   # a row with a price takes the new date
+
+    def test_without_a_date_the_stored_date_is_kept(self):
+        self.first_import()
+        self.run_import(self.write_csv("v2.csv", [self.HEADER, ["R-1", "Rfab", "11", "", "1"], ["R-2", "Rfab2", "21", "2026/12/15", ""]]), "v", "2")
+        self.assertEqual((self.row("R-1", "v").public_price, self.row("R-1", "v").price_date), (D("11.00"), PRICE_DATE))
+        self.assertEqual(self.row("R-2", "v").price_date, date(2026, 12, 15))  # the row's own date, written YYYY/MM/DD
+
+    def test_an_unreadable_date_is_counted_and_changes_nothing(self):
+        self.first_import()
+        out = self.run_import(self.write_csv("v2.csv", [self.HEADER, ["R-1", "Rfab", "10", "", "1"], ["R-2", "Rfab2", "22", "soon", ""],
+                                                        ["R-3", "Rfab3", "30", "31/02/2026", ""]]), "v", "2", "--price-date", "2026-12-01")
+        self.assertIn("bad prices 0, bad dates 2", out)
+        self.assertIn("تاريخ غلط اتساب 2", out)
+        self.assertEqual((self.row("R-2", "v").public_price, self.row("R-2", "v").price_date), (D("22.00"), date(2026, 10, 1)))
+        self.assertIsNone(self.row("R-3", "v").price_date)  # a new row: not given --price-date in place of its own unreadable date
+
+    def test_a_date_is_written_only_with_a_price(self):
+        path = self.write_csv("noprice.csv", [self.HEADER, ["P-1", "Pfab", "", "", ""], ["P-2", "Pfab2", "x", "", ""], ["P-3", "Pfab3", "5", "", ""]])
+        self.run_import(path, "p", "1", "--price-date", "2026-11-01")
+        self.assertEqual([self.row(ref, "p").price_date for ref in ("P-1", "P-2", "P-3")], [None, None, PRICE_DATE])
+
+    def test_an_empty_prescription_cell_resets_to_unknown(self):
+        self.first_import()
+        self.assertIs(self.row("R-1", "v").prescription_only, True)
+        self.run_import(self.write_csv("v2.csv", [self.HEADER, ["R-1", "Rfab", "10", "", ""]]), "v", "2")
+        self.assertIsNone(self.row("R-1", "v").prescription_only)
+
+
+class DeactivateGuardTests(FileCase):
+    """L1: --deactivate-missing refuses to switch off more than half of a source unless --force-deactivate is given."""
+
+    def test_more_than_half_is_refused_without_the_force_flag(self):
+        self.run_import()
+        ten = self.write_csv("ten.csv", self.fixture_rows()[:11])
+        before = list(DrugReference.objects.order_by("pk").values_list())
+        for extra in ((), ("--dry-run",)):
+            with self.assertRaisesMessage(CommandError, "would deactivate 20 of the 30 active rows"):
+                self.run_import(ten, "hesba-sample", "2027", "--deactivate-missing", *extra)
+        self.assertEqual(list(DrugReference.objects.order_by("pk").values_list()), before)
+        self.assertIn("deactivated 20", self.run_import(ten, "hesba-sample", "2027", "--deactivate-missing", "--force-deactivate"))
+
+    def test_exactly_half_is_allowed(self):
+        self.run_import()
+        line = self.run_import(self.write_csv("fifteen.csv", self.fixture_rows()[:16]), "hesba-sample", "2027", "--deactivate-missing")
+        self.assertIn("updated 15, deactivated 15", line)
+
+    def test_inactive_rows_do_not_count(self):
+        self.run_import()
+        self.run_import(self.write_csv("fifteen.csv", self.fixture_rows()[:16]), "hesba-sample", "2027", "--deactivate-missing")
+        # 15 active left: a file with 8 of them switches off 7, under half of the active rows.
+        line = self.run_import(self.write_csv("eight.csv", self.fixture_rows()[:9]), "hesba-sample", "2028", "--deactivate-missing")
+        self.assertIn("deactivated 7", line)
+        line = self.run_import(self.write_csv("other.csv", self.fixture_rows()[:2]), "new-source", "1", "--deactivate-missing")
+        self.assertIn("created 1, updated 0, deactivated 0", line)  # a new source has nothing to switch off
+
+
+class FormAndWriteTests(FileCase):
+    """L5 / L9: film-coated tablets in a form cell; a failed write is a clear refusal."""
+
+    def test_film_coated_tablets(self):
+        for text in ("F.C.Tabs", "f.c.tabs.", "FC TABS", "fc tabs", "F.C. Tablets", "tab", "أقراص"):
+            self.assertEqual(reference.form_or_blank(text), "tablet", text)
+        self.assertEqual(reference.form_or_blank("F.C."), "")
+        self.assertEqual(services.form_from_text("f.c.tabs"), "")  # the shared table used by save_drug is unchanged
+
+    def test_an_integrity_error_is_a_clear_refusal(self):
+        with mock.patch.object(DrugReference.objects, "bulk_create", side_effect=IntegrityError("duplicate key")):
+            with self.assertRaisesMessage(CommandError, "nothing was saved, try again"):
+                self.run_import()
+        self.assertEqual(DrugReference.objects.count(), 0)
