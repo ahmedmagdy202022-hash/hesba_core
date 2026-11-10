@@ -1,7 +1,7 @@
 {% extends "base_app.html" %}
 {% load static %}
 {# FB-26: the full supplier / customer form inside the invoice's box: no menu, no header, just the form. #}
-{% block styles %}<link rel="stylesheet" href="{% static 'hesba/css/master_data.css' %}">{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{% static 'hesba/css/master_data.css' %}?v=w4-1">{% endblock %}
 {% block body_class %}master-data-page hs-popup-page{% endblock %}
 {% block content %}
 <main class="md-shell hs-popup-shell" id="hs-main" tabindex="-1">{% block master_content %}{% endblock %}</main>
