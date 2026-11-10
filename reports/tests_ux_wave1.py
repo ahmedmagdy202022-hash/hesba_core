@@ -292,7 +292,7 @@ class PosPayBarTests(TestCase):
         self.assertIn("data-pos-details", html)
         self.assertIn('<details class="pos-more">', html)
         self.assertIn("pos-keys", html)
-        self.assertIn("امسح أو اكتب الكود", html)
+        self.assertIn("امسح الباركود أو اكتب اسم الصنف", html)  # UX Wave 4: one field for codes and names
 
     def test_after_a_sale_the_banner_shows_the_change_due_once(self):
         data = {"line_count": "1", "item_0": str(self.belt.pk), "qty_0": "1", "price_0": "120.00", "customer": str(walk_in_customer().pk),

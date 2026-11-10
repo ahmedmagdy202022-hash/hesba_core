@@ -1,5 +1,6 @@
 """POS-001: the cashier screen posts real invoices through the sales services."""
 
+import re
 from decimal import Decimal as D
 
 from django.test import TestCase
@@ -184,3 +185,165 @@ class EasierTillTests(TestCase):
         self.assertIn('data-cash="exact"', html)
         self.assertIn('<details class="pos-more">', html)
         self.assertIn('name="cashbox"', html)  # still posted with the sale
+
+
+class CalmTillTests(TestCase):
+    """UX Wave 4, part 2 (Ahmed: «شاشة الكاشير تسهّلها»): the till as a selling mode with one search field, compact cart
+    rows and a navy pay sheet. Nothing the server reads may move out of the form or change order or name."""
+
+    setUp = PosTests.setUp
+
+    # Every control the server reads, in the order the form sends them before and after this change.
+    ORDER = ["csrfmiddlewaretoken", "lang", "line_count", "cart_json", "print", "customer", "coupon", "redeem_points",
+             "points_seen", "gift_code", "gift_amount", "location", "cashbox", "discount", "promotion_seen", "tendered", "pay_method"]
+
+    def till(self, lang="ar"):
+        return self.client.get(POS, {"lang": lang}).content.decode()
+
+    def form_parts(self, html):
+        """The named controls and the buttons inside the till's form, in document order."""
+        from html.parser import HTMLParser
+
+        class Parts(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.depth, self.names, self.buttons = 0, [], []
+
+            def handle_starttag(self, tag, attrs):
+                attrs = dict(attrs)
+                if tag == "form" and "data-pos" in attrs:
+                    self.depth = 1
+                    return
+                if not self.depth:
+                    return
+                if tag == "form":
+                    self.depth += 1
+                if tag in ("input", "select", "textarea") and attrs.get("name") and attrs.get("form") is None:
+                    self.names.append(attrs["name"])
+                if tag == "button":
+                    self.buttons.append(attrs)
+
+            def handle_endtag(self, tag):
+                if tag == "form" and self.depth:
+                    self.depth -= 1
+
+        parser = Parts()
+        parser.feed(html)
+        return parser
+
+    def test_every_field_the_server_reads_is_inside_the_form_in_the_same_order(self):
+        from .pos_buttons import save_card_cashbox
+
+        save_card_cashbox(make_cashbox(cashbox_code="CARD", name_ar="ماكينة الفيزا"))
+        names = self.form_parts(self.till()).names
+        for needed in ("csrfmiddlewaretoken", "lang", "line_count", "cart_json", "print", "customer", "location", "cashbox", "discount", "tendered", "pay_method"):
+            with self.subTest(field=needed):
+                self.assertEqual(names.count(needed), 1)
+        self.assertEqual(names, [name for name in self.ORDER if name in names])  # nothing else is sent, and the order is kept
+
+    def test_the_default_button_is_the_primary_pay_and_every_other_button_says_type_button(self):
+        from settings_core.models import ClientProfile
+        from settings_core.setup_services import set_module_enabled
+
+        only = [b for b in self.form_parts(self.till()).buttons if b.get("type") == "submit"]
+        self.assertEqual([b.get("data-pos-pay") for b in only], ["only"])  # no printing: one pay button, the primary
+        self.assertIn("op-primary", only[0]["class"])
+        set_module_enabled(ClientProfile.get_active(), "pdf_printing", True)
+        buttons = self.form_parts(self.till()).buttons
+        self.assertTrue(all("type" in button for button in buttons), [b for b in buttons if "type" not in b])
+        submits = [button for button in buttons if button["type"] == "submit"]
+        self.assertEqual(submits[0].get("data-pos-pay"), "print")  # Enter in «المدفوع» and F9 take the primary
+        self.assertIn("op-primary", submits[0]["class"])
+        self.assertEqual(sorted(button["data-pos-pay"] for button in submits), ["only", "print"])
+
+    def test_one_field_carries_the_scanner_and_the_name_search(self):
+        html = self.till()
+        scan = re.search(r"<input[^>]*data-pos-scan[^>]*>", html).group(0)
+        for attribute in ('id="pos-scan"', 'role="combobox"', 'aria-controls="pos-find-list"', 'aria-expanded="false"', "autofocus",
+                          'placeholder="امسح الباركود أو اكتب اسم الصنف"'):
+            self.assertIn(attribute, scan)
+        self.assertRegex(html, r'<ul class="pos-find__list" id="pos-find-list" role="listbox"[^>]*data-pos-results hidden>')
+        search = re.search(r"<input[^>]*data-pos-search[^>]*>", html).group(0)  # the tiles' and «بدائل»' add path stays
+        self.assertIn("hidden", search)
+        self.assertNotIn("name=", search)
+        self.assertNotIn('list="pos-items"', html)  # the native datalist is gone
+        self.assertNotIn('id="pos-items"', html)
+        self.assertIn("data-pos-status", html)
+        self.assertIn('id="hs-item-catalog"', html)
+
+    def test_the_single_fields_rules_in_the_script(self):
+        from django.contrib.staticfiles import finders
+
+        with open(finders.find("hesba/js/pos.js"), encoding="utf-8") as handle:
+            script = handle.read()
+        enter = script[script.index("if (event.key !== 'Enter') { return; }"):]
+        enter = enter[:enter.index("});")]
+        # a row is taken only for a person's Enter on a list drawn for this very text, never the camera's synthetic one
+        self.assertIn("event.isTrusted && results && !results.hidden && shownFor === scan.value && found[active] && byHand()", enter)
+        # the exact serial, unit barcode and code come first; then the row; then «not found»
+        self.assertLess(enter.index("bySerial[code]"), enter.index("else if (pick)"))
+        self.assertLess(enter.index("byCode[code]"), enter.index("else if (pick)"))
+        self.assertLess(enter.index("else if (pick)"), enter.index("words.not_found"))
+        self.assertIn("search.dispatchEvent(new Event('change'", enter)  # the name-search path, as the tiles use
+        self.assertIn("var FIND_DELAY = 150;", script)  # a scanner's burst never draws the list
+        self.assertIn("document.addEventListener('DOMContentLoaded'", script)  # the field gets the focus back after camera_scan.js moves it
+
+    def test_the_cart_lines_keep_the_hooks_the_alternatives_sheet_reads(self):
+        from django.contrib.staticfiles import finders
+
+        with open(finders.find("hesba/js/pos.js"), encoding="utf-8") as handle:
+            script = handle.read()
+        render = script[script.index("function render()"):script.index("// TAX-001")]
+        for hook in ("'data-item': String(row.id)", "'data-unit'", "'data-field': 'qty'", "'data-field': 'price'", "'data-remove': '1'", "'data-step': '-1'", "'data-step': '1'"):
+            self.assertIn(hook, render)
+        self.assertLess(render.index("pos-line__name"), render.index("pos-line__qty"))  # the first cell is the name: «بدائل» goes in it
+        self.assertIn('<table class="pos-table">', self.till())  # not op-table: table_cards.js no longer stacks the lines as tall cards
+
+    def test_the_till_hides_the_app_bars_and_no_other_page_does(self):
+        html = self.till()
+        self.assertIn('<body class="operations-page hs-till"', html)
+        css = read_static("hesba/css/pos.css")
+        self.assertIn("body.hs-till .hs-topbar,body.hs-till .hs-tabbar{display:none}", css)
+        self.assertNotIn("hs-till", self.client.get(reverse("sales:list"), {"lang": "ar"}).content.decode())
+        # the way out and the app's menu stay one tap away
+        self.assertIn("data-pos-back", html)
+        self.assertIn('data-shell-open aria-controls="hs-sidebar"', html)
+        self.assertIn("data-lang-toggle", html)
+
+    def test_every_capability_is_still_on_the_page(self):
+        html = self.till()
+        for hook in ("data-pos-customer-find", "data-pos-customer", "data-pos-discount", 'name="location"', 'name="cashbox"', "data-pos-clear",
+                     "data-pos-shift", "data-pos-invoices", "data-pos-open-details=\"customer\"", "data-pos-open-details=\"discount\"",
+                     "data-pos-open-details=\"place\"", "data-pos-tendered", 'data-cash="exact"', "data-pos-offline", "data-pos-paybar",
+                     "data-pos-bar-total", "data-pos-change-row", "data-pos-credit-row", "data-pos-quick", "data-pos-menu"):
+            with self.subTest(hook=hook):
+                self.assertIn(hook, html)
+        self.assertEqual(html.count("data-pos-clear"), 1)  # pos_offline.js and pos_quick.js click the first one
+        # the warehouse and cashbox pickers live inside the till's form (PR #350)
+        form = html[html.index("<form class=\"pos\""):html.index("</form>", html.index("<form class=\"pos\""))]
+        self.assertIn('name="location"', form)
+        self.assertIn('name="cashbox"', form)
+
+    def test_changed_static_files_are_cache_busted(self):
+        from django.conf import settings
+        import pathlib
+
+        templates = pathlib.Path(settings.BASE_DIR) / "templates"
+        till = (templates / "sales/pos.html").read_text(encoding="utf-8")
+        for link in ("pos.css' %}?v=w4-2", "pos.js' %}?v=w4-2", "pos_quick.css' %}?v=w4-2"):
+            self.assertIn(link, till)
+        self.assertIn("pos_quick.css' %}?v=w4-2", (templates / "sales/pos_buttons.html").read_text(encoding="utf-8"))
+
+    def test_no_new_colour_literals(self):
+        for sheet in ("hesba/css/pos.css", "hesba/css/pos_quick.css"):
+            css = re.sub(r"/\*.*?\*/", "", read_static(sheet), flags=re.S)
+            with self.subTest(sheet=sheet):
+                self.assertNotRegex(css, r"#[0-9a-fA-F]{3,8}\b")
+                self.assertNotRegex(css, r"\b(rgba?|hsla?)\(")
+
+
+def read_static(path):
+    from django.contrib.staticfiles import finders
+
+    with open(finders.find(path), encoding="utf-8") as handle:
+        return handle.read()
