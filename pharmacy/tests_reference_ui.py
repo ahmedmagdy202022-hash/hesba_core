@@ -317,6 +317,29 @@ class DrugPageTests(ReferenceSetup):
         self.assertEqual(snapshot(), before)
 
 
+class PickerScriptTests(SimpleTestCase):
+    """Codex on PR #348: two behaviours of the picker script that only a browser shows; these pin the code paths."""
+
+    def read(self, name):
+        from django.contrib.staticfiles import finders
+
+        with open(finders.find(name), encoding="utf-8") as handle:
+            return handle.read()
+
+    def test_a_price_taken_from_the_list_leads_over_the_remembered_margin(self):
+        # price_markup.js ignores untrusted input events, so the picker announces the price with its own event;
+        # without it, typing the cost afterwards replaced a picked 62.50 with cost x remembered margin.
+        self.assertIn("hesba:price-set", self.read("hesba/js/drug_picker.js"))
+        markup = self.read("hesba/js/price_markup.js")
+        self.assertIn("sale.addEventListener('hesba:price-set'", markup)
+
+    def test_rows_hidden_while_typing_come_back_when_the_text_returns(self):
+        # A letter typed and deleted inside the debounce window used to leave the loading skeleton up for good.
+        script = self.read("hesba/js/drug_picker.js")
+        self.assertIn("hiddenForTyping = true", script)
+        self.assertIn("query === lastQuery && !hiddenForTyping", script)
+
+
 class StylesheetTests(SimpleTestCase):
     def test_tokens_only(self):
         with open(finders.find("hesba/css/drug_picker.css"), encoding="utf-8") as handle:

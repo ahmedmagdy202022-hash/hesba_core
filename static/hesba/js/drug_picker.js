@@ -64,7 +64,7 @@
   });
 
   // ---- the sheet ----
-  var timer = null, controller = null, lastQuery = null, returnFocus = null;
+  var timer = null, controller = null, lastQuery = null, returnFocus = null, hiddenForTyping = false;
   function show(state) {
     Object.keys(states).forEach(function (key) { states[key].hidden = key !== state; });
     list.hidden = state !== 'results';
@@ -99,7 +99,7 @@
     clearTimeout(timer);
     // the rows on screen answer the old text: never let them be picked while the new search waits
     var query = folded(input.value);
-    if (query.length >= 2 && query !== lastQuery) { show('loading'); }
+    if (query.length >= 2 && query !== lastQuery) { show('loading'); hiddenForTyping = true; }
     timer = setTimeout(function () { run(false); }, 250);
   });
   input.addEventListener('keydown', function (event) {
@@ -118,7 +118,10 @@
   function run(force) {
     var query = folded(input.value);
     if (query.length < 2) { lastQuery = null; if (controller) { controller.abort(); } show('short'); return; }
-    if (!force && query === lastQuery) { return; }
+    // The same text as the last search: nothing to do, unless typing hid its rows meanwhile (a letter typed and
+    // deleted inside the debounce window), in which case they are fetched again instead of leaving the skeleton up.
+    if (!force && query === lastQuery && !hiddenForTyping) { return; }
+    hiddenForTyping = false;
     lastQuery = query;
     if (controller) { controller.abort(); }
     controller = new AbortController();
@@ -240,7 +243,7 @@
       line.appendChild(head);
       var restore = el('button', 'hs-drug-link', say('restore'));
       restore.type = 'button';
-      restore.addEventListener('click', function () { price.value = picked.public_price; tint(price, true); priceLine(); price.focus(); });
+      restore.addEventListener('click', function () { price.value = picked.public_price; tint(price, true); priceTaken(); priceLine(); price.focus(); });
       line.appendChild(restore);
       return;
     }
@@ -255,8 +258,15 @@
     line.appendChild(el('span', 'hs-drug-price__note', (picked.stale ? say('stale_body') + ' ' : '') + say('disclaimer') + '. ' + (picked.stale ? '' : say('can_change'))));
   }
 
+  // price_markup.js fills the selling price from the cost and a remembered margin until a price is typed by hand.
+  // A price accepted from the list counts as typed by hand: tell the helper, or the next cost entry overwrites it.
+  function priceTaken() {
+    if (price && picked && picked.public_price != null && price.value !== '') { price.dispatchEvent(new CustomEvent('hesba:price-set', { bubbles: true })); }
+  }
+
   function pick(item) {
     apply(item, false);
+    priceTaken();
     returnFocus = name;
     close();
   }
