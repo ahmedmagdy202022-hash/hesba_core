@@ -7,6 +7,7 @@
 .pos .pos-table input{min-height:var(--hs-control-height)}
 .pos-head{flex-wrap:wrap;row-gap:var(--hs-space-1)}
 .pos-head h1{flex:1 1 auto}
+.pos-head .pos-head__return{width:auto;flex:0 0 auto;padding:0 var(--hs-space-3)}
 .pos-head .op-back{display:inline-flex;align-items:center;min-height:var(--hs-control-height);padding-inline:var(--hs-space-2);white-space:nowrap}
 .pos-more>summary{display:flex;align-items:center;gap:var(--hs-space-1);min-height:var(--hs-control-height)}
 

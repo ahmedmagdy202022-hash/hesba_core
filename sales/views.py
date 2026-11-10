@@ -142,6 +142,11 @@ def invoice_list(request):
     queryset = entity_scope.scope(SalesInvoice.objects.select_related("customer", "selling_location", "cashbox"), entity_scope.SALES_INVOICE)
     query = request.GET.get("q", "").strip()
     status = request.GET.get("status", "")
+    can_return = user_has_permission(request.user, "sales.return_sale")
+    # UX Wave 2: "Return" from the «⋯» menu (here or at the till) lands here to pick the invoice; a return is always made from one.
+    pick_return = can_return and request.GET.get("pick") == "return"
+    if pick_return and "status" not in request.GET:
+        status = "posted"
     if query:
         queryset = queryset.filter(
             Q(invoice_number__icontains=query) | Q(customer__name__icontains=query)
@@ -156,6 +161,7 @@ def invoice_list(request):
     for invoice in invoices:  # display only: what is still to collect after a deposit / paid link / gift card (HG-069); nothing is stored
         invoice.outstanding = money_round(invoice.remaining_due - settled.get(invoice.pk, 0)) if invoice.status == "posted" else invoice.remaining_due
     return render(request, "sales/list.html", _context(request, page=page, invoices=invoices, query=query, status_filter=status,
+                                                      filter_count=int(bool(query)) + int(bool(status)), pick_return=pick_return, can_return=can_return,
                                                       can_create=user_has_permission(request.user, "sales.create_sales_invoice")))
 
 

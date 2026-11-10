@@ -23,7 +23,9 @@
 
   var title = clean((main.querySelector('h1') || {}).textContent || document.title);
   var row = main.querySelector('.op-title-row, .md-title-row');
-  if (row && row.parentNode) row.parentNode.insertBefore(tools, row.nextSibling);
+  var slot = main.querySelector('[data-report-tools-slot]');  // UX Wave 2: the header's «⋯» menu holds them on a list screen
+  if (slot) slot.appendChild(tools);
+  else if (row && row.parentNode) row.parentNode.insertBefore(tools, row.nextSibling);
   else main.insertBefore(tools, main.firstChild);
   if (head) {
     main.insertBefore(head, main.firstChild);
