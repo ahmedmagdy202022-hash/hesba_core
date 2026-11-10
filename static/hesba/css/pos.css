@@ -96,3 +96,48 @@
   body:has(.pos-paybar:not(.is-empty)) .hs-feedback-fab{bottom:calc(var(--hs-tabbar-height) + 96px + env(safe-area-inset-bottom))}
 }
 .pos-overflow summary:focus-visible,.hs-pct-switch button:focus-visible,.pos-promos__chip>summary:focus-visible,.pos-details>summary:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
+
+/* R1: alternatives at the till (pharmacy). A short drug line says so and offers «بدائل»; the sheet rises from the
+   bottom on phones and tablets (over the pay bar, which stays under its scrim) and is a centred panel on wide screens. */
+.pos-alt-line{display:flex;flex-wrap:wrap;align-items:center;gap:var(--hs-space-2);margin-top:var(--hs-space-1)}
+.pos-alt-flag{color:var(--hs-danger);font-size:var(--hs-text-sm);font-weight:var(--hs-weight-semibold)}
+.pos-table tr.is-short>td{background:var(--hs-danger-wash)}
+.pos-alt-open,.pos-alt-remove{min-width:var(--hs-control-height);min-height:var(--hs-control-height);padding:0 var(--hs-space-3);border-radius:var(--hs-radius-sm);font:inherit;font-size:var(--hs-text-sm);font-weight:var(--hs-weight-semibold);cursor:pointer}
+.pos-alt-open{border:1px solid var(--hs-teal);background:var(--hs-surface);color:var(--hs-teal-deep)}
+.pos-alt-remove{border:1px solid var(--hs-line-strong);background:var(--hs-surface);color:var(--hs-ink)}
+.pos-alt{position:fixed;inset:auto 0 0 0;width:100%;max-width:560px;max-height:85vh;margin:0 auto;padding:0;border:0;border-radius:var(--hs-radius-xl) var(--hs-radius-xl) 0 0;background:var(--hs-ground);color:var(--hs-ink);box-shadow:var(--hs-shadow-lg);overflow:hidden}
+.pos-alt[open]{display:flex;flex-direction:column}
+.pos-alt::backdrop{background:var(--hs-scrim)}
+.pos-alt__grab{flex:none;width:40px;height:4px;margin:10px 0 2px;align-self:center;border-radius:var(--hs-radius-pill);background:var(--hs-line-strong)}
+.pos-alt__head{flex:none;display:flex;align-items:center;gap:var(--hs-space-2);padding-inline:var(--hs-space-4) var(--hs-space-2)}
+.pos-alt__head h2{flex:1;margin:0;font-size:var(--hs-text-lg);color:var(--hs-navy)}
+.pos-alt__close{display:grid;place-items:center;width:var(--hs-control-height);height:var(--hs-control-height);border:0;border-radius:var(--hs-radius-md);background:transparent;color:var(--hs-ink);font:inherit;font-size:var(--hs-text-xl);cursor:pointer}
+.pos-alt__body{display:grid;gap:var(--hs-space-3);padding:0 var(--hs-space-4) var(--hs-space-3);overflow-y:auto;overscroll-behavior:contain}
+.pos-alt__intro{margin:0;font-size:var(--hs-text-sm);color:var(--hs-muted)}
+.pos-alt__group{display:grid;gap:var(--hs-space-2)}
+.pos-alt__group-h{display:flex;align-items:center;gap:var(--hs-space-2);margin:0;font-size:var(--hs-text-md);color:var(--hs-success)}
+.pos-alt__count{min-width:22px;padding:0 6px;border-radius:var(--hs-radius-pill);background:var(--hs-neutral-wash);color:var(--hs-muted);font-size:var(--hs-text-xs);text-align:center}
+.pos-alt__list{display:grid;border:1px solid var(--hs-line);border-radius:var(--hs-radius-lg);background:var(--hs-surface);overflow:hidden}
+.pos-alt__row{display:flex;align-items:center;gap:var(--hs-space-3);width:100%;min-height:68px;padding:var(--hs-space-2) var(--hs-space-3);border:0;border-bottom:1px solid var(--hs-line);background:var(--hs-surface);color:var(--hs-ink);font:inherit;text-align:start;cursor:pointer}
+.pos-alt__row:last-child{border-bottom:0}
+.pos-alt__row:disabled{cursor:default;opacity:.6}
+.pos-alt__main{flex:1 1 auto;display:grid;gap:2px;min-width:0}
+.pos-alt__name{font-weight:var(--hs-weight-bold)}
+.pos-alt__meta{font-size:var(--hs-text-sm);color:var(--hs-muted)}
+.pos-alt__chips{display:flex;flex-wrap:wrap;gap:var(--hs-space-1);margin-top:2px}
+.pos-alt__side{flex:none;display:grid;justify-items:end;gap:var(--hs-space-1)}
+.pos-alt__price{font-weight:var(--hs-weight-bold);color:var(--hs-navy);white-space:nowrap}
+.pos-alt__plus{flex:none;display:grid;place-items:center;width:var(--hs-control-height);height:var(--hs-control-height);border-radius:var(--hs-radius-md);background:var(--hs-teal);color:var(--hs-on-teal);font-size:var(--hs-text-xl);font-weight:var(--hs-weight-bold)}
+.pos-alt-chip{display:inline-flex;align-items:center;padding:4px 8px;border:1px solid var(--hs-line);border-radius:var(--hs-radius-pill);font-size:var(--hs-text-xs);font-weight:var(--hs-weight-bold);line-height:1;white-space:nowrap}
+.pos-alt-chip--same{border-color:var(--hs-teal);background:var(--hs-teal-wash);color:var(--hs-teal-deep)}
+.pos-alt-chip--other{background:var(--hs-neutral-wash);color:var(--hs-muted)}
+.pos-alt-chip--rx{border-color:var(--hs-danger-line);background:var(--hs-danger-wash);color:var(--hs-danger)}
+.pos-alt-chip--ok{border-color:var(--hs-success-line);background:var(--hs-success-wash);color:var(--hs-success)}
+.pos-alt-chip--low{border-color:var(--hs-warning-line);background:var(--hs-warning-wash);color:var(--hs-warning)}
+.pos-alt__empty{margin:0;padding:var(--hs-space-4);border:1px solid var(--hs-line);border-radius:var(--hs-radius-lg);background:var(--hs-surface);color:var(--hs-muted);text-align:center}
+.pos-alt__fold{display:grid;gap:2px;padding:var(--hs-space-2) var(--hs-space-3);border:1.5px dashed var(--hs-line-strong);border-radius:var(--hs-radius-lg);background:var(--hs-surface);font-size:var(--hs-text-sm);color:var(--hs-muted)}
+.pos-alt__fold b{color:var(--hs-ink);font-size:var(--hs-text-md)}
+.pos-alt__foot{flex:none;margin:0;padding:var(--hs-space-2) var(--hs-space-4) calc(var(--hs-space-3) + env(safe-area-inset-bottom));font-size:var(--hs-text-xs);color:var(--hs-muted)}
+@media (min-width:1024px){.pos-alt{inset:0;max-height:80vh;margin:auto;border-radius:var(--hs-radius-xl)}.pos-alt__grab{display:none}}
+.pos-alt-open:focus-visible,.pos-alt-remove:focus-visible,.pos-alt__close:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
+.pos-alt__row:focus-visible{outline:0;box-shadow:inset var(--hs-focus-ring)}

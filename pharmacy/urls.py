@@ -12,4 +12,5 @@ urlpatterns = [
     path("prescriptions/new/", views.new, name="new"),
     path("prescriptions/<int:pk>/", views.detail, name="prescription"),
     path("prescriptions/<int:pk>/print/", views.print_prescription, name="print"),
+    path("till/alternatives/", views.till_alternatives, name="till_alternatives"),  # R1: the till's «بدائل» sheet
 ]

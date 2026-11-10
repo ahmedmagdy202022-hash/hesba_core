@@ -285,3 +285,32 @@ def print_prescription(request, pk):
            "reference": (own["doctor"], prescription.doctor_name) if prescription.doctor_name else None, "lines": lines, "no_prices": True,
            "notes": prescription.notes}
     return _render(request, doc, f"/pharmacy/prescriptions/{pk}/")
+
+
+# ---- R1: alternatives at the till ----
+
+from django.contrib.auth.decorators import login_not_required  # noqa: E402  (R1 block, kept apart for step 2's edits)
+
+
+@login_not_required  # checked below: a signed-out till gets a 403 in JSON, not the login page
+def till_alternatives(request):
+    """R1: the till's «بدائل» sheet for one item (``?item=<id>&location=<id>&customer=<id>``), as JSON.
+
+    The till's own permission and the drug database switched on; otherwise a 403 in JSON (the till reads it with fetch,
+    so a signed-out session gets no login page). With the drug database off, the capability gate answers first (403)."""
+
+    from django.http import JsonResponse
+
+    from permissions.services import user_has_permission
+
+    from . import till
+
+    if request.method != "GET":
+        return JsonResponse({"ok": False, "error": "method"}, status=405)
+    if not request.user.is_authenticated or not services.enabled() or not user_has_permission(request.user, till.PERMISSION):
+        return JsonResponse({"ok": False, "error": "forbidden"}, status=403)
+    raw = request.GET.get("item", "")
+    item = Item.objects.select_related("drug").filter(pk=int(raw), active=True).first() if raw.isdigit() else None
+    if item is None:
+        return JsonResponse({"ok": False, "error": "item"}, status=404)
+    return JsonResponse(till.alternatives_for(item, location=request.GET.get("location"), customer=request.GET.get("customer"), lang=_lang(request)))
