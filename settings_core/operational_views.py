@@ -221,6 +221,8 @@ ROLE_ABOUT = {
     "waiter": ("الطاولات والطلبات والمطبخ، من غير ما يحاسب أو يشوف الفواتير والخزنة.", "Tables, orders and the kitchen, without billing or seeing invoices and the cashbox."),
     "site_engineer": ("المشاريع والمقايسة، الكميات المنفذة في مستخلص مسودة، وصرف الخامات للموقع.",
                       "Projects and the bill of quantities, quantities done on a draft certificate, materials issued to the site."),
+    "doctor": ("يكشف على المرضى: يقرأ ملفاتهم ويسجّل الكشوفات، ويشوف دوره في قائمة الانتظار؛ من غير الفواتير والخزنة والتقارير.",
+               "Treats patients: reads their files and records visits, and sees their turn in the waiting list; no invoices, cashbox or reports."),
 }
 
 
@@ -268,7 +270,7 @@ ROLE_WORDS = {
 #: A permission section that belongs to one activity or module (UI-TRACK F25): a clothes shop is not offered medical files.
 SECTION_NEEDS = {"medical": ("activity", "medical"), "restaurant": ("module", "tables_orders"), "projects": ("module", "projects")}
 #: TRACK-START S06: a ready-made role whose work is one module's (HG-048) shows only where that module is used.
-ROLE_NEEDS = {"waiter": ("module", "tables_orders"), "site_engineer": ("module", "projects")}
+ROLE_NEEDS = {"waiter": ("module", "tables_orders"), "site_engineer": ("module", "projects"), "doctor": ("activity", "medical")}  # HG-084
 
 
 def _section_fits(module, needs=SECTION_NEEDS):

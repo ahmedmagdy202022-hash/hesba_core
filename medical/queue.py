@@ -48,8 +48,13 @@ def has_queue():
 
 
 def _doctor_of(user):
+    """The doctor this user is: their active employee, when they also hold a clinical permission (HG-084).
+    A receptionist on the payroll is linked to an employee too; that alone does not make her a doctor."""
+
+    from .services import can_view
+
     employee = getattr(user, "employee", None) if getattr(user, "is_authenticated", False) else None
-    return employee if employee is not None and employee.active else None
+    return employee if employee is not None and employee.active and can_view(user) else None
 
 
 def is_desk(user):

@@ -24,6 +24,7 @@ class RoleCode(models.TextChoices):
     SUPPORT = "support", "Support"
     WAITER = "waiter", "Waiter"  # HG-048
     SITE_ENGINEER = "site_engineer", "Site engineer"  # HG-048
+    DOCTOR = "doctor", "Doctor or clinician"  # HG-084 (seeded by medical/0010)
 
 
 class Permission(models.Model):
