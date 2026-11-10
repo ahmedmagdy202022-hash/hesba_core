@@ -36,6 +36,7 @@
 {% if v.blood_pressure or v.pulse or v.temperature or v.weight %}<p class="op-muted"><b>{{ words.vitals }}:</b>{% if v.blood_pressure %} {{ words.bp }} <bdi>{{ v.blood_pressure }}</bdi>{% endif %}{% if v.pulse %} · {{ words.pulse }} {{ v.pulse }}{% endif %}{% if v.temperature %} · {{ words.temp }} {{ v.temperature|unlocalize }}°{% endif %}{% if v.weight %} · {{ words.weight }} {{ v.weight|unlocalize }}{% endif %}{% if v.height %} · {{ words.height }} {{ v.height|unlocalize }}{% endif %}</p>{% endif %}
 {% if v.examination %}<p><b>{{ words.examination }}:</b> {{ v.examination|linebreaksbr }}</p>{% endif %}
 {% if v.diagnosis %}<p><b>{{ words.diagnosis }}:</b> {{ v.diagnosis|linebreaksbr }}</p>{% endif %}
+{% load medical_rx %}{% saved_medicines v lang %}
 {% if v.treatment %}<p><b>{{ words.treatment }}:</b> {{ v.treatment|linebreaksbr }}</p>{% endif %}
 </article>{% empty %}<p class="op-muted">{{ words.no_visits }}</p>{% endfor %}
 {% if not is_vet %}<details class="op-form med-profile"{% if error %} open{% endif %}><summary><h2>{{ words.edit_profile }}</h2></summary>

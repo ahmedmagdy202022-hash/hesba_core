@@ -15,6 +15,6 @@
 {% if edit and can_write %}{% include "medical/_animal_fields.html" %}{% endif %}
 <h2>{{ vw.visits }}</h2>
 {% for v in visits %}<article class="op-detail-meta" data-animal-visit="{{ v.pk }}"><p><strong><bdi>{{ v.visit_date|date:"Y-m-d" }}</bdi></strong>{% if v.doctor %} · {{ v.doctor.name }}{% endif %}{% if v.weight %} · {{ v.weight|unlocalize }} kg{% endif %}{% if v.follow_up_date %} · <bdi>{{ v.follow_up_date|date:"Y-m-d" }}</bdi>{% endif %}</p>
-{% if v.complaint %}<p>{{ v.complaint|linebreaksbr }}</p>{% endif %}{% if v.diagnosis %}<p><b>{{ v.diagnosis|linebreaksbr }}</b></p>{% endif %}{% if v.treatment %}<p>{{ v.treatment|linebreaksbr }}</p>{% endif %}</article>
+{% if v.complaint %}<p>{{ v.complaint|linebreaksbr }}</p>{% endif %}{% if v.diagnosis %}<p><b>{{ v.diagnosis|linebreaksbr }}</b></p>{% endif %}{% load medical_rx %}{% saved_medicines v lang %}{% if v.treatment %}<p>{{ v.treatment|linebreaksbr }}</p>{% endif %}</article>
 {% empty %}<p class="op-muted">{{ vw.no_visits }}</p>{% endfor %}
 {% endblock %}

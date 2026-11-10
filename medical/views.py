@@ -13,6 +13,7 @@ from master_data.models import Customer
 from appointments.services import scoped as scoped_appointments
 
 from . import services
+from . import prescribing
 from .models import BloodType, ClinicalVisit, Gender, InsuranceContract
 
 WORDS = {
@@ -247,12 +248,15 @@ def visit_edit(request, pk=None, visit_pk=None):
             data["vet"] = True
         else:
             data.pop("animal", None)
+        data["medicines"] = prescribing.lines_from_post(request.POST)  # M2: always the form's own lines, never a posted "medicines"
         try:
-            services.save_visit(patient, data, request.user, visit, lang)
+            saved = services.save_visit(patient, data, request.user, visit, lang)
         except ValidationError as exc:
             error = " ".join(exc.messages)
         else:
             messages.success(request, words["visit_saved"])
+            if warning := prescribing.saved_warning(saved, lang):  # advice only: the visit is saved either way
+                messages.warning(request, warning)
             return redirect(f"{reverse('medical:file', args=[patient.pk])}?lang={lang}")
     own_doctor = getattr(request.user, "employee", None)
     default_doctor = visit.doctor_id if visit else (appointment.employee_id if appointment and appointment.employee_id else (own_doctor.pk if own_doctor else None))
@@ -260,7 +264,7 @@ def visit_edit(request, pk=None, visit_pk=None):
     if _is_vet():
         animals = list(patient.animals.filter(active=True) | patient.animals.filter(pk=visit.animal_id if visit else 0))
         default_animal = visit.animal_id if visit else (int(request.GET.get("animal")) if (request.GET.get("animal") or "").isdigit() else None)
-    return render(request, "medical/visit_form.html", _base(lang, patient=patient, visit=visit, appointment=appointment, error=error, post=request.POST,
+    return render(request, "medical/visit_form.html", _base(lang, patient=patient, visit=visit, appointment=appointment, error=error, post=request.POST, **prescribing.form_context(request, patient, visit, lang),
                                                             doctors=_doctors(), default_doctor=default_doctor, animals=animals,
                                                             default_animal=default_animal, animal_label=VET_WORDS[lang]["animal"],
                                                             default_date=(visit.visit_date if visit else timezone.localdate())))
@@ -280,6 +284,7 @@ def prescription(request, visit_pk):
         animal_line = f"{visit.animal.name} ({vet.SPECIES_LABELS[lang].get(visit.animal.species, visit.animal.species)})"
     allergies = visit.animal.allergies if visit.animal_id else ("" if _is_vet() else file.allergies)  # an animal's own, never its owner's
     return render(request, "medical/prescription.html", _base(lang, visit=visit, file=file, age=None if visit.animal_id else services.age(file, visit.visit_date),
+                                                              medicines=prescribing.print_lines(visit, lang), rx_words=prescribing.WORDS[lang],
                                                               company=company_details(), animal_line=animal_line, animal_label=VET_WORDS[lang]["animal"],
                                                               allergies=allergies))
 
