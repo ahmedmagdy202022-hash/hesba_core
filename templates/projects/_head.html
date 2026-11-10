@@ -1,4 +1,4 @@
-{% load hesba_format %}<section class="op-title-row"><div><a class="op-back" href="{% url 'projects:list' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ project.name }}</h1><p><span dir="ltr">{{ project.code }}</span>{% if position %} · {{ project.customer.name }}{% endif %}{% if project.site %} · {{ project.site }}{% endif %}</p></div></section>
+{% load hesba_format %}<section class="op-title-row"><div><a class="op-back" href="{% url 'projects:list' %}?lang={{ lang }}">← {{ words.back }}</a><h1>{{ project.name }}</h1><p><span dir="ltr">{{ project.code|ltr }}</span>{% if position %} · {{ project.customer.name }}{% endif %}{% if project.site %} · {{ project.site }}{% endif %}</p></div></section>
 {% include "projects/_tabs.html" %}
 {% if error %}<div class="op-message op-message-error" role="alert" data-project-error>{{ error }}</div>{% endif %}
 {% if position %}<section class="op-summary-grid op-summary-grid--compact" data-contract-position>

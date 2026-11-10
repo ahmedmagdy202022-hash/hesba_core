@@ -24,10 +24,6 @@
 .set-hero__facts{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 0;padding:0;list-style:none}
 .set-hero__facts li{padding:3px 10px;border:1px solid rgba(var(--hs-white-rgb),.18);border-radius:var(--hs-radius-pill);
   background:rgba(var(--hs-white-rgb),.08);color:var(--hs-surface);font-size:var(--hs-text-xs)}
-.set-hero__edit{position:relative;z-index:1;display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 16px;
-  border:1px solid rgba(var(--hs-white-rgb),.35);border-radius:var(--hs-radius-md);color:var(--hs-surface);text-decoration:none;font-weight:var(--hs-weight-semibold)}
-.set-hero__edit:hover,.set-hero__edit:focus-visible{background:rgba(var(--hs-white-rgb),.12)}
-.set-hero__edit .hs-icon{width:18px;height:18px}
 .set-hero--compact{padding:var(--hs-space-4) var(--hs-space-5)}
 .set-hero--compact .set-hero__mark{width:48px;height:48px;border-radius:14px;font-size:22px}
 .set-hero--compact .set-hero__name{font-size:var(--hs-text-lg)}
@@ -39,7 +35,7 @@
 .set-nav__group{display:grid;gap:2px}
 .set-nav__title{margin:4px 10px 2px;color:var(--hs-muted);font-size:var(--hs-text-xs);font-weight:var(--hs-weight-semibold)}
 .set-nav__link{position:relative;display:grid;grid-template-columns:22px minmax(0,1fr);align-items:center;column-gap:10px;
-  padding:8px 10px;border-radius:var(--hs-radius-md);color:var(--hs-ink);text-decoration:none}
+  min-height:var(--hs-control-height);padding:8px 10px;border-radius:var(--hs-radius-md);color:var(--hs-ink);text-decoration:none}
 .set-nav__link .hs-icon{width:20px;height:20px;color:var(--hs-teal-deep);grid-row:1 / span 2}
 .set-nav__label{font-weight:var(--hs-weight-medium);line-height:1.35}
 .set-nav__status{grid-column:2;color:var(--hs-muted);font-size:var(--hs-text-xs);line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -77,7 +73,7 @@
 .set-steps__dot .hs-icon{width:14px;height:14px;stroke-width:2.6}
 .set-steps li.is-done .set-steps__dot{border-color:var(--hs-success-line);background:var(--hs-success-wash);color:var(--hs-success)}
 .set-steps li.is-done span{color:var(--hs-muted);text-decoration:line-through;text-decoration-color:var(--hs-line-strong)}
-.set-steps a{color:var(--hs-teal-deep);font-weight:var(--hs-weight-semibold);text-decoration:none}
+.set-steps a{display:inline-flex;align-items:center;min-height:var(--hs-control-height);color:var(--hs-teal-deep);font-weight:var(--hs-weight-semibold);text-decoration:none}
 .set-steps a:hover{text-decoration:underline}
 
 /* ---- the sections, as tiles ---- */
@@ -99,7 +95,7 @@
 
 /* ---- what is switched on, as chips ---- */
 .set-chips{display:flex;flex-wrap:wrap;gap:8px;margin:0;padding:0;list-style:none}
-.set-chip{display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:0 12px;border:1px solid var(--hs-line);border-radius:var(--hs-radius-pill);
+.set-chip{display:inline-flex;align-items:center;gap:6px;min-height:var(--hs-control-height);padding:0 12px;border:1px solid var(--hs-line);border-radius:var(--hs-radius-pill);
   background:var(--hs-surface);color:var(--hs-navy);font-size:var(--hs-text-sm);text-decoration:none}
 .set-chip .hs-icon{width:16px;height:16px;color:var(--hs-teal-deep)}
 a.set-chip:hover{border-color:var(--hs-teal);background:var(--hs-teal-wash)}
@@ -135,7 +131,7 @@ a.set-tag:hover{text-decoration:underline}
 .set-opt__side{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
 .set-opt__state{color:var(--hs-muted);font-size:var(--hs-text-xs)}
 .set-opt.is-on .set-opt__state{color:var(--hs-success)}
-.set-opt__open{display:inline-flex;align-items:center;gap:4px;color:var(--hs-teal-deep);font-size:var(--hs-text-sm);font-weight:var(--hs-weight-semibold);text-decoration:none}
+.set-opt__open{display:inline-flex;align-items:center;gap:4px;min-height:var(--hs-control-height);min-width:var(--hs-control-height);color:var(--hs-teal-deep);font-size:var(--hs-text-sm);font-weight:var(--hs-weight-semibold);text-decoration:none}
 .set-opt__open .hs-icon{width:14px;height:14px}
 .set-opt__lock{display:inline-flex;align-items:center;gap:6px;color:var(--hs-muted);font-size:var(--hs-text-xs)}
 .set-opt__lock .hs-icon{width:16px;height:16px}
@@ -178,7 +174,9 @@ a.set-screen:hover{border-color:var(--hs-teal)}
   .set-nav::-webkit-scrollbar{display:none}
   .set-nav__group{display:contents}
   .set-nav__title{display:none}
-  .set-nav__link{flex:none;display:inline-flex;gap:6px;padding:7px 12px;border-radius:var(--hs-radius-pill);white-space:nowrap}
+  .set-nav__link{flex:none;display:inline-flex;align-items:center;gap:6px;min-height:var(--hs-control-height);padding:0 var(--hs-space-4);border-radius:var(--hs-radius-pill);white-space:nowrap}
+  /* UX Wave 3: on the overview the tiles below are the menu; the pill row would list every section a second time. */
+  .set-nav--overview{display:none}
   .set-nav__link .hs-icon{width:16px;height:16px}
   .set-nav__status{display:none}
   .set-nav__link.is-active::before{display:none}
@@ -187,7 +185,6 @@ a.set-screen:hover{border-color:var(--hs-teal)}
 @media (max-width:560px){
   .set-hero{gap:12px}
   .set-hero__mark{width:52px;height:52px;border-radius:15px;font-size:22px}
-  .set-hero__edit{width:100%;justify-content:center}
   .set-ready{grid-template-columns:minmax(0,1fr);justify-items:start}
   .set-ready__ring{width:92px;height:92px}
   .set-ready__ring small{bottom:20px}

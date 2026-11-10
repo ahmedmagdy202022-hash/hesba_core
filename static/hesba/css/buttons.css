@@ -10,3 +10,7 @@
 .op-primary:focus-visible,.op-secondary:focus-visible,.op-danger:focus-visible,.op-back:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
 /* The one back link of a page header: a 44px target. */
 .op-back{display:inline-flex;align-items:center;min-height:var(--hs-control-height);min-width:var(--hs-control-height);font-size:var(--hs-text-sm);color:var(--hs-teal-deep);text-decoration:none;font-weight:var(--hs-weight-semibold)}
+/* UX Wave 3: one back arrow everywhere (templates/partials/back_arrow.html): it points the way back, so it turns with
+   the page: left in English, right in Arabic. The link itself stays a 44px target (.op-back above, .md-back-link). */
+.hs-back-arrow{flex:none;width:18px;height:18px;margin-inline-end:var(--hs-space-2)}
+[dir="rtl"] .hs-back-arrow{transform:scaleX(-1)}

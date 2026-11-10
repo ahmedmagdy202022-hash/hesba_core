@@ -126,7 +126,8 @@ class FirstUiNavigationMapTests(AuthenticatedTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "096_FOUNDATION_READ_ONLY_REPORT_HUB")
-        self.assertContains(response, "<h1>التقارير</h1>", html=False)  # UI-TRACK F20: the title is just "Reports"
+        # UI-TRACK F20: the title is just "Reports" (UX Wave 3: after the hub's own icon mark)
+        self.assertContains(response, '</svg></span>التقارير</h1>', html=False)
         self.assertContains(response, "Customer Report")
         self.assertContains(response, "Supplier Report")
         self.assertContains(response, "Inventory Report")

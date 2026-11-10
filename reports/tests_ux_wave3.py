@@ -192,3 +192,140 @@ class BidiFilterTests(SimpleTestCase):
         self.assertEqual(ltr_numbers("<i>1–2</i>"), '&lt;i&gt;<bdi dir="ltr">1–2</bdi>&lt;/i&gt;')
         self.assertEqual(ltr(None), "")
         self.assertEqual(ltr(""), "")
+
+
+REPORT_PAGES = ("reports:sales", "reports:purchases", "reports:inventory", "reports:customers", "reports:suppliers",
+                "reports:cashboxes", "reports:profit", "reports:aging", "reports:daily", "reports:insights")
+
+
+class ReportHeaderTests(TestCase):
+    def setUp(self):
+        prepared_client()
+        self.client.force_login(person(RoleCode.OWNER, "ux3_reports"))
+
+    def test_every_report_goes_back_to_the_hub_and_wears_its_card_mark(self):
+        hub = reverse("report_hub")
+        for name in REPORT_PAGES:
+            for lang, word in (("ar", "التقارير"), ("en", "Reports")):
+                with self.subTest(report=name, lang=lang):
+                    page = self.client.get(f"{reverse(name)}?lang={lang}")
+                    self.assertEqual(page.status_code, 200)
+                    body = page.content.decode()
+                    self.assertIn(f'<a class="op-back" href="{hub}?lang={lang}" data-report-back><svg class="hs-back-arrow"', body)
+                    self.assertRegex(body, rf'data-report-back><svg class="hs-back-arrow"[^>]*>.*?</svg>{word}</a>')
+                    self.assertIn('<h1 class="hs-report-title"><span class="hs-report-mark hs-report-mark--', body)
+                    self.assertNotIn("← ", body[body.index("<main"):] if "<main" in body else body)
+
+    def test_the_mark_matches_the_hub_card(self):
+        from reports.functional_views import CARD_LOOK
+
+        body = self.client.get(reverse("reports:profit")).content.decode()
+        icon, tone = CARD_LOOK["reports:profit"]
+        self.assertIn(f'hs-report-mark--{tone}" aria-hidden="true" data-report-mark><svg class="hs-icon"><use href="#hs-i-{icon}">', body)
+
+    def test_the_hub_has_a_real_back_link_instead_of_a_raw_one(self):
+        body = self.client.get(reverse("report_hub")).content.decode()
+        self.assertIn(f'<a class="op-back" href="{reverse("dashboard_snapshot")}?lang=ar" data-report-back>', body)
+        self.assertNotIn('<nav class="op-form-actions">', body)
+
+    def test_every_report_table_sits_in_a_card(self):
+        for name in REPORT_PAGES:
+            with self.subTest(report=name):
+                body = self.client.get(reverse(name)).content.decode()
+                for match in re.finditer(r'<table class="op-table', body):
+                    self.assertIn('class="op-table-wrap"', body[max(0, match.start() - 200):match.start()], name)
+
+    def test_the_heading_sheet_uses_tokens_only(self):
+        css = read_static("hesba/css/report_tools.css")
+        tokens_only(self, css[css.index("/* UX Wave 3"):])  # this wave's part (the print sheet above keeps its black ink)
+        self.assertIn(".hs-report-mark--gold{--tone:var(--hs-gold);--tone-wash:var(--hs-gold-wash)}", css)
+        self.assertIn(".hs-period{display:inline-flex;align-items:center;justify-content:center;min-height:var(--hs-control-height)", css)
+
+
+class AgingBidiTests(TestCase):
+    def test_the_age_ranges_keep_their_order_in_arabic(self):
+        prepared_client()
+        self.client.force_login(person(RoleCode.OWNER, "ux3_aging"))
+        body = self.client.get(reverse("reports:aging") + "?lang=ar").content.decode()
+        self.assertIn('<th><bdi dir="ltr">31–60</bdi></th>', body)
+        self.assertIn('<small><bdi dir="ltr">0–30</bdi> يوم</small>', body)
+        self.assertIn('<th>أكتر من <bdi dir="ltr">90</bdi></th>', body)
+
+
+class ProfitPeriodChipsTests(TestCase):
+    def setUp(self):
+        prepared_client()
+        self.owner = person(RoleCode.OWNER, "ux3_chips")
+        self.client.force_login(self.owner)
+        item, location, cashbox = make_item(), make_location(), make_cashbox()
+        stock_in(item, location, "20", "5.00")
+        recalculate_item_average_cost(item)
+        sell(item, location, cashbox, "2", "12.50", "25.00", self.owner, number="SI-UX3-T", when=TODAY)
+        if TODAY.day > 1:
+            sell(item, location, cashbox, "1", "10.00", "10.00", self.owner, number="SI-UX3-M", when=TODAY.replace(day=1))
+        sell(item, location, cashbox, "3", "10.00", "30.00", self.owner, number="SI-UX3-OLD", when=TODAY - timedelta(days=70))
+
+    def chips(self, query=""):
+        page = self.client.get(reverse("reports:profit") + "?lang=ar" + query)
+        self.assertEqual(page.status_code, 200)
+        return page, {chip["key"]: chip for chip in _chips_of(page)}
+
+    def test_four_chips_each_44px_link_with_plain_words(self):
+        page, chips = self.chips()
+        self.assertEqual([chip["label"] for chip in chips.values()], ["النهارده", "الأسبوع", "الشهر", "مخصوص"])
+        self.assertTrue(chips["custom"]["current"])  # no dates: the whole history, as before, under «مخصوص»
+        self.assertEqual(chips["custom"]["url"], "#report-dates")
+        self.assertContains(page, 'id="report-dates"')
+
+    def test_each_chip_fills_the_dates_and_the_totals_are_the_reports_own(self):
+        for key, period in (("today", "today"), ("week", "7d"), ("month", "month")):
+            with self.subTest(chip=key):
+                start, end = period_bounds(period, TODAY)[:2]
+                page, chips = self.chips(f"&date_from={start.isoformat()}&date_to={end.isoformat()}")
+                self.assertTrue(chips[key]["current"])
+                self.assertFalse(chips["custom"]["current"])
+                self.assertIn(f"date_from={start.isoformat()}&date_to={end.isoformat()}", chips[key]["url"])
+                self.assertEqual(page.context["totals"]["sales"], profit_totals(start, end)["sales"])
+                self.assertEqual(page.context["totals"]["profit"], profit_totals(start, end)["profit"])
+
+    def test_no_chip_changes_the_unfiltered_report(self):
+        page, _ = self.chips()
+        self.assertEqual(page.context["totals"]["sales"], profit_totals(None, None)["sales"])
+        self.assertEqual(page.context["totals"]["sales"], D("65.00") if TODAY.day > 1 else D("55.00"))
+
+    def test_english_chips(self):
+        page = self.client.get(reverse("reports:profit") + "?lang=en")
+        self.assertEqual([chip["label"] for chip in _chips_of(page)], ["Today", "This week", "This month", "Custom"])
+
+
+def _chips_of(page):
+    body = page.content.decode()
+    found = re.findall(r'<a class="hs-period" href="([^"]+)" data-period-chip="(\w+)"( aria-current="true")?>([^<]+)</a>', body)
+    return [{"url": url.replace("&amp;", "&"), "key": key, "current": bool(current), "label": label} for url, key, current, label in found]
+
+
+class SettingsMenuTests(TestCase):
+    def setUp(self):
+        prepared_client()
+        self.client.force_login(person(RoleCode.OWNER, "ux3_settings"))
+
+    def test_each_destination_is_listed_once(self):
+        body = self.client.get(reverse("settings_core:currency") + "?lang=ar").content.decode()
+        self.assertNotIn("set-hero__edit", body)  # the card no longer repeats «بيانات الشركة»
+        nav = body[body.index("data-settings-nav>"):body.index("</nav>", body.index("data-settings-nav>"))]
+        hrefs = re.findall(r'href="([^"]+)"', nav)
+        self.assertEqual(len(hrefs), len(set(hrefs)))
+        self.assertNotIn("set-nav--overview", body)
+
+    def test_on_the_overview_the_tiles_are_the_phone_menu(self):
+        body = self.client.get(reverse("settings_core:overview") + "?lang=ar").content.decode()
+        self.assertIn('class="set-nav set-nav--overview"', body)  # kept on a desktop, hidden on a phone by the sheet
+        css = read_static("hesba/css/settings.css")
+        phone = css[css.index("@media (max-width:900px)"):]
+        self.assertIn(".set-nav--overview{display:none}", phone[:phone.index("\n}")])
+
+    def test_every_settings_link_is_a_44px_target(self):
+        css = read_static("hesba/css/settings.css")
+        self.assertIn(".set-nav__link{position:relative;display:grid;grid-template-columns:22px minmax(0,1fr);align-items:center;column-gap:10px;\n  min-height:var(--hs-control-height)", css)
+        self.assertIn("  .set-nav__link{flex:none;display:inline-flex;align-items:center;gap:6px;min-height:var(--hs-control-height)", css)
+        self.assertIn("settings.css' %}?v=st-4", open(get_template("settings_core/base.html").origin.name, encoding="utf-8").read())

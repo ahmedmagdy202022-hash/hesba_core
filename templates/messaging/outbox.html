@@ -1,4 +1,5 @@
 {% extends "operations/base.html" %}
+{% load hesba_format %}
 {% load hesba_labels %}
 {% block operation_content %}
 <section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div>
@@ -13,7 +14,7 @@
 </nav>
 <div class="op-table-wrap"><table class="op-table" data-outbox><thead><tr><th>{{ words.kind }}</th><th>{{ words.to }}</th><th>{{ words.phone }}</th><th>{{ words.text }}</th>{% if show != 'pending' %}<th>{{ words.when }}</th>{% endif %}<th></th></tr></thead><tbody>
 {% for row in rows %}<tr data-message="{{ row.pk }}" data-kind="{{ row.kind }}"><td>{% for key, label in kinds.items %}{% if key == row.kind %}{{ label }}{% endif %}{% endfor %}</td>
-<td class="op-cell-text">{% link_ok row.link as row_ok %}{% if row.can_open and row_ok %}<a href="{{ row.link }}?lang={{ lang }}">{{ row.name }}</a>{% else %}{{ row.name }}{% endif %}</td><td dir="ltr">{{ row.phone }}</td>
+<td class="op-cell-text">{% link_ok row.link as row_ok %}{% if row.can_open and row_ok %}<a href="{{ row.link }}?lang={{ lang }}">{{ row.name }}</a>{% else %}{{ row.name }}{% endif %}</td><td dir="ltr">{{ row.phone|ltr }}</td>
 <td class="op-cell-text"><small>{{ row.text }}</small>{% if row.error %}<br><small class="op-muted" data-send-error>{{ row.error }}</small>{% endif %}</td>
 {% if show != 'pending' %}<td><bdi>{{ row.sent_at|date:"Y-m-d H:i" }}</bdi></td>{% endif %}
 <td>{% if row.status == 'pending' %}<div class="op-form-actions">
