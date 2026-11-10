@@ -9,7 +9,7 @@ clinical permission held by role is needed:
    practice-wide meaning (owner, manager) and get labels that say so;
 2. an upgraded install keeps its clinicians working: a user who used the employee link and is shown by the
    records to be a clinician (the doctor on a visit or a dental step, the therapist on a physiotherapy
-   session, or the one who entered lab results) moves to a copy of their own role plus
+   session sold in a medical entity, or the one who entered lab results) moves to a copy of their own role plus
    ``medical.treat_patients`` («<role> + كشف المرضى», code ``custom_hg084_<role>``): everything they could do,
    they still can. A clinician with no role gets the doctor role. Every move is in the audit log.
    Everyone else linked to an employee (reception, cashiers, stock keepers) loses the clinical screens;
@@ -39,10 +39,29 @@ CLONE_PREFIX = "custom_hg084_"
 LOCKED = ("permissions.manage_roles",)
 
 
-def _medical_somewhere(apps):
+def _medical_session_employees(apps):
+    """The employees on package sessions sold in a medical entity (a physiotherapy centre's sessions).
+
+    A package's session in a salon or a gym is not a patient's, and one installation can hold both (a group with a
+    clinic and a salon): the session counts only when its package's invoice was sold from a location of an entity
+    whose activity is medical. An entity with no activity of its own works as the installation does, and a location
+    with no entity belongs to the main one (ENT-001)."""
+
+    from django.db.models import Q
+
     ClientProfile = apps.get_model("settings_core", "ClientProfile")
     Entity = apps.get_model("entities", "Entity")
-    return ClientProfile.objects.filter(activity_slug="medical").exists() or Entity.objects.filter(activity_slug="medical").exists()
+    install_medical = ClientProfile.objects.filter(activity_slug="medical").exists()
+    medical = set(Entity.objects.filter(activity_slug="medical").values_list("pk", flat=True))
+    if install_medical:
+        medical |= set(Entity.objects.filter(activity_slug="").values_list("pk", flat=True))
+    main = Entity.objects.filter(is_main=True).first()
+    no_entity_is_medical = (main.pk in medical) if main is not None else install_medical
+    sold_in = Q(package__invoice__selling_location__entity_id__in=medical)
+    if no_entity_is_medical:
+        sold_in |= Q(package__invoice__selling_location__entity__isnull=True)
+    uses = apps.get_model("agreements", "PackageUse").objects.exclude(employee=None)
+    return set(uses.filter(sold_in).values_list("employee_id", flat=True))
 
 
 def clinician_user_ids(apps):
@@ -51,8 +70,7 @@ def clinician_user_ids(apps):
     Employee = apps.get_model("staff", "Employee")
     employees = set(apps.get_model("medical", "ClinicalVisit").objects.exclude(doctor=None).values_list("doctor_id", flat=True))
     employees |= set(apps.get_model("medical", "TreatmentStep").objects.exclude(doctor=None).values_list("doctor_id", flat=True))
-    if _medical_somewhere(apps):  # a package's session in a salon or a gym is not a patient's
-        employees |= set(apps.get_model("agreements", "PackageUse").objects.exclude(employee=None).values_list("employee_id", flat=True))
+    employees |= _medical_session_employees(apps)
     users = set(Employee.objects.filter(pk__in=employees, active=True).exclude(user=None).values_list("user_id", flat=True))
     lab = set(apps.get_model("medical", "LabResult").objects.values_list("entered_by_id", flat=True))  # a lab's results name no employee
     users |= set(Employee.objects.filter(active=True, user_id__in=lab).values_list("user_id", flat=True))
@@ -62,7 +80,8 @@ def clinician_user_ids(apps):
 def _unique_name(Role, name):
     candidate, n = name[:255], 2
     while Role.objects.filter(name_ar__iexact=candidate).exists():
-        candidate, n = f"{name} ({n})"[:255], n + 1
+        suffix = f" ({n})"  # room is kept for it, so a 255-character name still gets a new candidate each time
+        candidate, n = name[:255 - len(suffix)] + suffix, n + 1
     return candidate
 
 
@@ -75,7 +94,7 @@ def _clone(apps, source, treat):
         return clone
     clone = Role.objects.create(
         code=code, name_ar=_unique_name(Role, f"{source.name_ar or source.code} + كشف المرضى"),
-        name_en=f"{source.name_en or source.code} + patient care",
+        name_en=f"{(source.name_en or source.code)[:240]} + patient care",
         description=f"اتعمل تلقائيًا (HG-084) للدكاترة اللي كانوا على دور «{source.name_ar or source.code}»: نفس صلاحياته وزيادة الكشف على المرضى.",
         is_system_role=False, active=True)
     for grant in RolePermission.objects.filter(role=source, allow=True).exclude(permission__code__in=LOCKED):

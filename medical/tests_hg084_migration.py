@@ -206,3 +206,67 @@ class FreshInstallTests(MigrationCase):
         old.get_model("agreements", "PackageUse").objects.create(package=package, used_on=date(2026, 10, 2), employee=employee, created_by=owner)
         _migrate(AFTER)
         self.assertEqual(self.profile_role("stylist"), "cashier")
+
+
+class MixedGroupTests(MigrationCase):
+    """A group with a clinic and a salon in one installation: only the clinic's sessions make a clinician."""
+
+    def test_only_sessions_sold_in_the_medical_entity_count(self):
+        old = self.old_apps()
+        User = old.get_model("auth", "User")
+        Role = old.get_model("permissions", "Role")
+        Profile = old.get_model("accounts", "UserProfile")
+        Employee = old.get_model("staff", "Employee")
+        Entity = old.get_model("entities", "Entity")
+        Location = old.get_model("master_data", "Location")
+        old.get_model("settings_core", "ClientProfile").objects.create(client_code="G", legal_name="مجموعة", display_name="مجموعة",
+                                                                       activity_slug="services", sub_activity_slug="beauty")
+        # The main entity has no activity of its own: it works as the installation does (a salon).
+        salon = Entity.objects.filter(is_main=True).first() or Entity.objects.create(code="SAL", name_ar="الصالون", is_main=True)
+        self.assertEqual(salon.activity_slug, "")
+        clinic = Entity.objects.create(code="CLN", name_ar="مركز العلاج الطبيعي", activity_slug="medical", sub_activity_slug="physio")
+        owner = User.objects.create(username="g_owner")
+        customer = old.get_model("master_data", "Customer").objects.create(customer_code="C-1", name="عميلة")
+        service = old.get_model("master_data", "Item").objects.create(item_code="SRV", item_name="جلسة", is_stock_tracked=False)
+
+        def session(username, location, number):
+            account = User.objects.create(username=username)
+            Profile.objects.create(user=account, role=Role.objects.get(code="cashier"))
+            employee = Employee.objects.create(code=f"E-{username}", name=username, user=account)
+            invoice = old.get_model("sales", "SalesInvoice").objects.create(invoice_number=f"SI-{number}", invoice_date=date(2026, 10, 1), customer=customer,
+                                                                            selling_location=location, status="posted", created_by=owner)
+            package = old.get_model("agreements", "Package").objects.create(number=f"PK-{number}", customer=customer, service=service, sessions=10,
+                                                                            price=D("1"), invoice=invoice, created_by=owner)
+            old.get_model("agreements", "PackageUse").objects.create(package=package, used_on=date(2026, 10, 2), employee=employee, created_by=owner)
+
+        session("stylist", Location.objects.create(location_code="SH", name_ar="الصالون", entity=salon), 1)
+        session("old_stylist", Location.objects.create(location_code="OLD", name_ar="فرع قديم"), 2)  # no entity: the main one's, a salon
+        session("therapist", Location.objects.create(location_code="PT", name_ar="المركز", entity=clinic), 3)
+        _migrate(AFTER)
+        self.assertEqual({name: self.profile_role(name) for name in ("stylist", "old_stylist", "therapist")},
+                         {"stylist": "cashier", "old_stylist": "cashier", "therapist": "custom_hg084_cashier"})
+
+
+class LongRoleNameTests(MigrationCase):
+    def test_a_role_name_at_the_length_limit_does_not_hang_the_upgrade(self):
+        old = self.old_apps()
+        User = old.get_model("auth", "User")
+        Role = old.get_model("permissions", "Role")
+        old.get_model("settings_core", "ClientProfile").objects.create(client_code="C", legal_name="عيادة", display_name="عيادة",
+                                                                       activity_slug="medical", sub_activity_slug="clinic")
+        owner = User.objects.create(username="l_owner")
+        long_name = "د" * 255
+        mine = Role.objects.create(code="custom_1", name_ar=long_name, is_system_role=False)
+        Role.objects.create(code="custom_2", name_ar=f"{long_name} + كشف المرضى"[:255], is_system_role=False)  # the first candidate is taken
+        doctor = User.objects.create(username="dr_long")
+        old.get_model("accounts", "UserProfile").objects.create(user=doctor, role=mine)
+        employee = old.get_model("staff", "Employee").objects.create(code="E-1", name="د. طويل", user=doctor)
+        patient = old.get_model("master_data", "Customer").objects.create(customer_code="P-1", name="منى")
+        old.get_model("medical", "ClinicalVisit").objects.create(patient=patient, doctor=employee, visit_date=date(2026, 10, 1), diagnosis="برد", created_by=owner)
+        _migrate(AFTER)
+        from permissions.models import Role as NewRole
+
+        clone = NewRole.objects.get(code="custom_hg084_custom_1")
+        self.assertEqual(self.profile_role("dr_long"), "custom_hg084_custom_1")
+        self.assertTrue(clone.name_ar.endswith(" (2)"))
+        self.assertLessEqual(len(clone.name_ar), 255)
