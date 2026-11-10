@@ -3,6 +3,7 @@ order in Arabic lines, the report pages' shared header, the profit report's peri
 one back arrow. Presentation only; these pin the structure, while the figures, permissions and posting stay covered by
 their own suites."""
 
+import pathlib
 import re
 from datetime import date, timedelta
 from decimal import Decimal as D
@@ -262,6 +263,14 @@ class AgingBidiTests(TestCase):
         self.assertIn('<th><bdi dir="ltr">31–60</bdi></th>', body)
         self.assertIn('<small><bdi dir="ltr">0–30</bdi> يوم</small>', body)
         self.assertIn('<th>أكتر من <bdi dir="ltr">90</bdi></th>', body)
+
+    def test_phone_card_labels_carry_the_pinned_direction(self):
+        # On a phone the header text becomes the card label through CSS attr(), which cannot hold
+        # markup; the script turns dir="ltr" into Unicode isolates so «31–60» still reads in order.
+        script = pathlib.Path(finders.find("hesba/js/table_cards.js")).read_text(encoding="utf-8")
+        self.assertIn("\\u2066", script)
+        self.assertIn("\\u2069", script)
+        self.assertIn("names.push(text(cell).trim())", script)
 
 
 class ProfitPeriodChipsTests(TestCase):
