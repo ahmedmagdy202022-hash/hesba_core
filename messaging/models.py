@@ -21,6 +21,8 @@ class MessageKind(models.TextChoices):
     WORKORDER = "workorder", "Work order status"
     #: M3: a clinic's reminder of the follow-up date the doctor asked for (date and clinic only, never anything clinical).
     FOLLOWUP = "followup", "Follow-up visit"
+    #: M7: a vet clinic's reminder that an animal's next dose is due (the owner's name, the animal, the vaccine, the date and the clinic only).
+    VACCINE = "vaccine", "Vaccination due"
     #: S8: a loyalty / marketing campaign message (see ``Campaign`` and messaging/campaigns.py).
     CAMPAIGN = "campaign", "Campaign"
 
