@@ -144,6 +144,12 @@ CAPABILITIES = {
         "about_en": "The active ingredient and strength of each drug, the alternatives you have in stock, dispensing a prescription on a sales invoice, and chronic refills.",
         "available": True, "paths": ("/pharmacy/",),
     },
+    "inpatient": {
+        "ar": "الإقامة والأسرّة", "en": "Inpatient stays & beds",
+        "about_ar": "عنابر وأسرّة، ودخول وخروج، وخدمات وعمليات ومستلزمات على إقامة المريض. عند الخروج بتطلع فاتورة الإقامة مسودة تراجعها وترحّلها، والمقدم بيتاخد عربون ويتخصم منها.",
+        "about_en": "Wards and beds, admission and discharge, and services, operations and supplies charged to the stay. Discharge makes the stay's bill as a draft invoice you review and post; an advance is taken as a deposit and comes off it.",
+        "available": True, "paths": ("/medical/inpatient/",),
+    },
     "installments": {
         "ar": "البيع بالتقسيط", "en": "Instalment sales",
         "about_ar": "جدول أقساط للعميل، ومواعيد استحقاق، وتذكير بالتحصيل.",
@@ -268,7 +274,7 @@ ACTIVITY_PRESETS = {
     },
     catalog.MEDICAL: {
         "dental": {"installments": SUGGESTED},
-        "medical_center": {"fixed_assets": SUGGESTED, "batches_expiry": SUGGESTED, "drugs": SUGGESTED},
+        "medical_center": {"fixed_assets": SUGGESTED, "batches_expiry": SUGGESTED, "drugs": SUGGESTED, "inpatient": SUGGESTED},  # M8 (HG-088)
         "lab": {"batches_expiry": SUGGESTED, "fixed_assets": SUGGESTED},
         "vet": {"batches_expiry": SUGGESTED, "pos": SUGGESTED},
     },
@@ -365,6 +371,8 @@ NOT_FOR_SUB = {
 #: A drug database is a pharmacy's (or a medical centre's own pharmacy's); a shop or a café never needs one.
 ONLY_FOR = {
     "drugs": {(catalog.COMMERCIAL, "pharmacy"), (catalog.MEDICAL, "*")},
+    # M8 (HG-088): beds are a medical centre's (suggested there); a clinic with a day-care room can switch them on. Never a lab, a dentist, a physio or a vet.
+    "inpatient": {(catalog.MEDICAL, "medical_center"), (catalog.MEDICAL, "clinic"), (catalog.MEDICAL, "other")},
 }
 
 #: SETTINGS-TRACK: a capability that rides on a module works only while that module is on: expiry dates and serial
@@ -394,14 +402,14 @@ WORKS_BEST_WITH = {
 #: SETTINGS-DESIGN: how the features screen groups them, the icon of each, and where each one shows once on.
 #: "Where" is what the settings track saw appear when the feature was switched on.
 GROUPS = (
-    ("selling", ("البيع والكاشير", "Selling and the till"), ("pos", "shift_required", "price_lists", "promotions", "loyalty", "installments", "quotations", "shipping", "online_store", "deposits", "online_booking", "payment_links", "gift_cards")),
+    ("selling", ("البيع والكاشير", "Selling and the till"), ("pos", "shift_required", "price_lists", "promotions", "loyalty", "installments", "quotations", "shipping", "online_store", "deposits", "online_booking", "payment_links", "gift_cards", "inpatient")),
     ("goods", ("الأصناف والمخزون", "Items and stock"), ("barcode", "units", "variants", "batches_expiry", "serials", "drugs")),
     ("money", ("الحسابات والضرايب", "Accounts and tax"), ("vat", "e_invoice", "e_receipt", "fixed_assets")),
     ("ai", ("الذكاء الاصطناعي", "AI"), ("ai_voice_summary", "ai_ask", "ai_invoice_photo")),  # A1 (HG-079), A2 (HG-080), A3 (HG-081): the AI track's features
 )
 ICONS = {"pos": "pos", "shift_required": "shift", "price_lists": "pricetag", "installments": "instalments", "barcode": "barcode",
          "units": "units", "variants": "variants", "batches_expiry": "expiry", "serials": "serial", "vat": "taxes",
-         "e_invoice": "einvoice", "e_receipt": "ereceipt", "fixed_assets": "assets", "quotations": "quotes", "drugs": "drugs", "promotions": "promotions", "shipping": "shipping", "online_store": "store", "loyalty": "loyalty", "deposits": "appointments", "online_booking": "appointments", "payment_links": "banks", "gift_cards": "loyalty", "ai_voice_summary": "dashboard", "ai_ask": "reports", "ai_invoice_photo": "purchases"}
+         "e_invoice": "einvoice", "e_receipt": "ereceipt", "fixed_assets": "assets", "quotations": "quotes", "drugs": "drugs", "inpatient": "beds", "promotions": "promotions", "shipping": "shipping", "online_store": "store", "loyalty": "loyalty", "deposits": "appointments", "online_booking": "appointments", "payment_links": "banks", "gift_cards": "loyalty", "ai_voice_summary": "dashboard", "ai_ask": "reports", "ai_invoice_photo": "purchases"}
 WHERE = {
     "pos": ("«الكاشير» في القايمة، وزرار في لوحة القيادة وفي قايمة الفواتير", "“Till” in the menu, with a button on the dashboard and the invoice list"),
     "shift_required": ("فاتورة البيع والكاشير بيطلبوا فتح وردية الأول", "The sales invoice and the till ask for an open shift first"),
@@ -422,6 +430,7 @@ WHERE = {
                    "“Gift cards” in the menu, a “Gift card” box at the till and on each posted invoice, and “Members only” on a promotion"),
     "online_booking": ("«الحجز أونلاين» في المواعيد: مواعيد العمل والخدمات والموظفين ولينك الصفحة العامة", "“Online booking” on the appointments screen: working hours, services, employees and the public page's link"),
     "deposits": ("خانة «خد عربون» في صفحة الميعاد، وعمود العربون وسياسة الإلغاء في المواعيد", "“Take a deposit” on the appointment page, and the deposit column and cancellation policy on the agenda"),
+    "inpatient": ("«الأسرّة» في القايمة: العنابر والأسرّة، ودخول المريض وخروجه، وفاتورة الإقامة مسودة", "“Beds” in the menu: wards and beds, admitting and discharging a patient, and the stay's bill as a draft"),
     "drugs": ("«الأدوية والبدائل» في القايمة، وزرار «اصرف الروشتة» اللي بيفتح فاتورة البيع", "“Drugs & alternatives” in the menu, and “Dispense” opening the sales invoice"),
     "vat": ("«الضرايب» في القايمة، وضريبة كل صنف، وتقرير ضريبة المبيعات", "“Taxes” in the menu, a rate per item, and the sales VAT report"),
     "e_invoice": ("«الفاتورة الإلكترونية» في القايمة، وملف لكل فاتورة مترحّلة", "“E-invoicing” in the menu, and a document for each posted invoice"),

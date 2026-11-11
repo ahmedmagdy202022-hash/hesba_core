@@ -50,6 +50,7 @@ LIBRARY = {
     "store": ((), ("online_store",), None),
     "shipping": ((), ("shipping",), None),
     "ereceipt": ((), ("e_receipt",), "vat"),
+    "beds": ((), ("inpatient",), None),  # M8 (HG-088): only a medical business that keeps patients in is asked (capabilities.ONLY_FOR)
 }
 
 #: The wording every activity starts from: (question, what it gives), each (ar, en). {customers} and the
@@ -161,6 +162,9 @@ ACTIVITY_QUESTIONS = {
         ("booking", {"ask": ("بتشتغل بحجز مواعيد للكشف؟", "Do patients book appointments?"),
                      "gives": ("جدول الحجوزات، وقايمة انتظار، والحجز بيتحوّل لكشف وفاتورة.", "The booking diary and a waiting list; a booking becomes a visit and an invoice.")}),
         ("team", {"ask": ("فيه أكتر من دكتور، أو طاقم تمريض واستقبال؟", "Is there more than one doctor, or nursing and reception staff?")}),
+        ("beds", {"ask": ("عندك أسرّة إقامة أو عمليات، والمريض بيبات عندك أو بيقعد يوم؟", "Do you have beds or operations, with patients staying overnight or for the day?"),
+                  "gives": ("عنابر وأسرّة، ودخول وخروج، وخدمات وعمليات ومستلزمات على الإقامة، وفاتورة الإقامة مسودة عند الخروج.",
+                            "Wards and beds, admission and discharge, services, operations and supplies charged to the stay, and the stay's bill as a draft at discharge.")}),
         ("stock", {"ask": ("بتصرف أدوية أو مستلزمات من عندك وعايز تعرف رصيدها؟", "Do you dispense medicines or supplies and want to know their balance?"),
                    "gives": ("{inventory}: المستلزمات بتتخصم مع كل كشف، وتنبيه لما حاجة تقرّب تخلص.", "{inventory}: supplies come off with each visit, with a warning when one runs low.")}),
         ("expiry", {"ask": ("الأدوية والمستلزمات ليها تاريخ صلاحية عايز تتابعه؟", "Do medicines and supplies have expiry dates to follow?")}),
