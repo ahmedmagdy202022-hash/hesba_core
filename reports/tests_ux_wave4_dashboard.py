@@ -109,6 +109,29 @@ class PhoneMoneyCardTests(TestCase):
         self.assertNotIn("dash-phero__chips", card)
         self.assertNotIn("dash-phero__spark", card)
 
+    def test_a_quiet_day_keeps_the_cash_in_hand_for_someone_without_the_analytics(self):
+        # Sees sales and the cashboxes, not the all-sales report: no analytics, so the cash balance lives in the hero only
+        # (hero_shows_cash) and, on a phone, in this card only. A day without a sale must not hide it.
+        from hesba_testing.factories import grant, make_role, make_user, make_user_profile
+        from permissions.models import Permission
+
+        role = make_role(code="W4D-CASHVIEW")
+        for code in ("reports.view_sales_report", "cashboxes.view_finance"):
+            grant(role, Permission.objects.get(code=code))
+        user = make_user(username="w4d_cashview")
+        make_user_profile(user=user, role=role)
+        with frozen(MID):
+            self.sell("W4D-8", 3, date(2026, 12, 14))  # nothing today
+            response = self.get(user)
+        context, card = response.context, phone_hero(response.content.decode())
+        self.assertFalse(context["analytics"].get("available"))
+        self.assertTrue(context["hero_shows_cash"])
+        self.assertTrue(context["hero_cards"]["sales_today"]["is_zero"])
+        cash = context["hero_cards"]["cashbox_balance"]
+        self.assertIn(context["phero_none"], card)
+        self.assertIn(f'{cash["label"]} <bdi>{cash["value"]}</bdi>', card)
+        self.assertNotIn(context["invoices_word"] + "</li>", card)  # no invoice count chip on a day without one
+
     def test_english_reads_the_same_figures(self):
         with frozen(MID):
             self.sell("W4D-6", 2, date(2026, 12, 15))

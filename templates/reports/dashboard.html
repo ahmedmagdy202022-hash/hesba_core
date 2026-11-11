@@ -85,9 +85,11 @@
         {% else %}{% with shown=cash.value %}<p class="dash-phero__figure"><span class="dash-phero__label" id="dash-phero-label">{{ cash.label }}</span><span class="dash-phero__amount{% if shown|length > 11 %} is-xlong{% elif shown|length > 9 %} is-long{% endif %}" data-phone-amount><bdi>{{ shown }}</bdi>{% if currency %}<small>{{ currency }}</small>{% endif %}</span></p>{% endwith %}{% endif %}
         {% if analytics.available and analytics.hero.line and not sale.is_zero %}<svg class="dash-phero__spark" viewBox="0 0 {{ analytics.hero.width }} {{ analytics.hero.height }}" preserveAspectRatio="none" role="img" aria-label="{{ hero_trend }}: {% if analytics.hero.fallback %}{{ hero_last_7_days }}{% else %}{{ hero_headline_text }}{% endif %}"><path class="dash-phero__area" d="{{ analytics.hero.area }}"/><path class="dash-phero__line" d="{{ analytics.hero.line }}"/>{% if analytics.hero.last %}<circle class="dash-phero__dot" cx="{{ analytics.hero.last.0 }}" cy="{{ analytics.hero.last.1 }}" r="5"/>{% endif %}</svg>{% endif %}
       </div>
-      {% if sale and sale.is_zero %}<p class="dash-phero__note">{{ phero_none }}</p>{% else %}
+      {% if sale and sale.is_zero %}<p class="dash-phero__note">{{ phero_none }}</p>{% endif %}
+      {% if not sale.is_zero or cash and hero_shows_cash %}{# a quiet day keeps the cash in hand: on a phone this card is the only place it shows #}
       <ul class="dash-phero__chips">
-        {% if sale %}
+        {% if sale.is_zero %}
+        {% elif sale %}
           {% if analytics.available and analytics.hero.pct is not None %}<li class="dash-phero__chip is-accent"><bdi>{{ analytics.hero.pct }}%</bdi> {{ hero_vs_avg }}</li>{% endif %}
           {% if count %}<li class="dash-phero__chip"><bdi>{{ count.value }}</bdi> {{ invoices_word }}</li>{% endif %}
         {% elif headline %}{% with d=headline_shown %}{% if d.delta is not None %}<li class="dash-phero__chip{% if d.good %} is-good{% elif d.good is False %} is-bad{% endif %}">{% if d.flat %}<span aria-hidden="true">—</span> {{ flat }}{% else %}<span aria-hidden="true">{% if d.trend == 'down' %}▼{% else %}▲{% endif %}</span> <bdi>{{ d.delta_abs }}%</bdi> {{ vs_previous }}{% endif %}</li>{% endif %}{% endwith %}{% endif %}
