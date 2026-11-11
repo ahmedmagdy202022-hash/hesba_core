@@ -536,7 +536,7 @@
     var giftCode = form.querySelector('[data-pos-gift-code]');  // S6: never carry one holder's card into the next sale
     if (giftCode) { giftCode.value = ''; } if (giftAmount) { giftAmount.value = ''; }
     if (coupon) { coupon.value = ''; }  // nor the last sale's coupon: render() re-quotes the promotion
-    customer.value = customer.getAttribute('data-walk-in'); render(); scan.focus();
+    customer.value = customer.getAttribute('data-walk-in'); showCustomer(); render(); scan.focus();  // setting .value fires no change: the labels follow by hand
   });
 
   form.addEventListener('submit', function (event) {

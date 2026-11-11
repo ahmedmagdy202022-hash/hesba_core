@@ -290,6 +290,9 @@ class CalmTillTests(TestCase):
         self.assertIn("var composing = event.inputType === 'insertCompositionText';", script)
         self.assertIn("(!composing && event.data && event.data.length > 1)", script)
         self.assertIn("document.addEventListener('DOMContentLoaded'", script)  # the field gets the focus back after camera_scan.js moves it
+        # «سلة جديدة» (and an offline sale, which clicks it) sets the walk-in customer without a change event: the
+        # customer's name on the cart button and the pay sheet must follow, or the next sale shows the last customer
+        self.assertIn("customer.value = customer.getAttribute('data-walk-in'); showCustomer(); render();", script)
 
     def test_the_cart_lines_keep_the_hooks_the_alternatives_sheet_reads(self):
         from django.contrib.staticfiles import finders
