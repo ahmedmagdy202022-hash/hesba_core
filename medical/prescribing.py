@@ -170,6 +170,11 @@ def resolve(raw_lines, visit, lang, errors):
         elif ref_id in rows:
             line = old or VisitMedicine()
             _copy(line, rows[ref_id])
+        elif old is not None and old.reference_id is None and ref_id is not None and (old.active_ingredient or old.strength or old.form):
+            # The list row was deleted while the form was open: the form still posts its id, the stored line already
+            # lost its reference (SET_NULL). It is the same medicine, not a line turned into a hand-written one, so
+            # the copy made when it was prescribed stays.
+            line = old
         else:
             if not text["name"]:
                 errors.append(words["line_name"].format(n=number))

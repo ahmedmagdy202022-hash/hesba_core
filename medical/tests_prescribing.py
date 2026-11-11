@@ -303,6 +303,17 @@ class SnapshotTests(Setup):
         self.assertTrue(prescribing.display(saved, "ar")["from_list"])
         self.assertIn("Amoxicillin", self.printed())
 
+    def test_a_row_deleted_while_the_form_is_open_keeps_the_copy(self):
+        # The form was opened while the row existed, so it still posts the row's id; the stored line already lost its
+        # reference (SET_NULL). Saving must not turn the line into a hand-written one and blank what was prescribed.
+        stale = str(self.zuba.pk)
+        self.zuba.delete()
+        saved = self.resave_through_the_form(reference=stale)
+        self.assertIsNone(saved.reference_id)
+        self.assertEqual((self.snapshot(), saved.duration), (self.before, "7 أيام"))
+        self.assertTrue(prescribing.display(saved, "ar")["from_list"])
+        self.assertIn("Amoxicillin", self.printed())
+
     def test_choosing_another_drug_on_the_line_copies_again(self):
         saved = self.resave_through_the_form(reference=str(self.quil.pk))
         self.assertEqual((saved.pk, saved.reference_id, saved.name_en, saved.form), (self.medicine.pk, self.quil.pk, "Quilodol 500mg tab", "tablet"))
