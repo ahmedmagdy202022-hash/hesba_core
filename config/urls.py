@@ -17,6 +17,7 @@ from reports.functional_views import report_hub
 from accounts.login_guard import GuardedLoginView, login_verify
 from printing import views as printing_views
 from workorders import public as workorders_public
+from medical import public as medical_public
 from payments import views as payments_views
 from appointments import public as appointments_public
 from appointments import views_booking as booking_views
@@ -45,6 +46,8 @@ urlpatterns = [
     # M3: the patient confirms an appointment, or asks to cancel it (a request for reception; nothing is cancelled here), from the same signed link.
     path("share/<str:token>/confirm/", login_not_required(appointments_public.confirm), name="share_appointment_confirm"),
     path("share/<str:token>/cancel-request/", login_not_required(appointments_public.cancel_request), name="share_appointment_cancel_request"),
+    # M6 (HG-085): a lab patient's results of one day, from a signed link plus a second factor (public, CSRF-protected, throttled).
+    path("results/<str:token>/", login_not_required(medical_public.page), name="lab_result_link"),
     # S4 (HG-070): the online payment link. Public, gated by a signed token; only the webhook is CSRF-exempt (HMAC-verified).
     path("pay/webhook/paymob/", login_not_required(payments_views.webhook), name="pay_webhook_paymob"),
     path("pay/return/paymob/", login_not_required(payments_views.pay_return), name="pay_return_paymob"),

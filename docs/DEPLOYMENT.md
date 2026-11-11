@@ -16,6 +16,7 @@ Copy `.env.example` to `.env` on the server and fill it in. Never commit `.env`.
 | `BACKUP_DIR`, `BACKUP_KEEP` | where nightly backups go, and how many to keep (default 14) |
 | `LOG_LEVEL` | `WARNING` by default; logs go to stdout |
 | `SHARE_LINK_DAYS` | days a shared invoice or statement link keeps working (default 60) |
+| `MEDICAL_LINK_DAYS` | days a lab patient's result link keeps working (default 7); the patient also types their birth year, or the phone's last 4 digits when the file has no birth date (HG-085) |
 | `SESSION_IDLE_HOURS` | idle sign-out (default 10 h; each request extends it) |
 | `LOGIN_MAX_FAILURES`, `LOGIN_MAX_FAILURES_PER_IP`, `LOGIN_LOCK_MINUTES` | sign-in lock after wrong passwords (defaults 5 per user, 20 per address, 15 min) |
 
