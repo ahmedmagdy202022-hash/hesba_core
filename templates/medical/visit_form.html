@@ -4,6 +4,7 @@
 {% block operation_content %}
 <section class="op-title-row"><div><a class="op-back" href="{% url 'medical:file' patient.pk %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ patient.name }}</a><h1>{% if visit %}{{ words.edit }} — {{ words.visit }}{% else %}{{ words.new_visit|cut:'+ ' }}{% endif %}</h1>{% if appointment %}<p>{{ words.from_appointment }} <bdi>{{ appointment.number }}</bdi></p>{% endif %}</div></section>
 {% if error %}<div class="op-message op-message-error" role="alert" data-visit-error>{{ error }}</div>{% endif %}
+{% include "medical/_vt_bar.html" %}
 <form class="op-form" method="post" data-visit-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">{% if appointment %}<input type="hidden" name="appointment" value="{{ appointment.pk }}">{% endif %}
 <div class="op-form-grid">
 <div class="op-field"><label for="visit_date">{{ words.date }}</label><input id="visit_date" type="date" name="visit_date" value="{% if post.visit_date %}{{ post.visit_date }}{% else %}{{ default_date|date:'Y-m-d' }}{% endif %}"></div>
@@ -29,7 +30,8 @@
 <div class="op-field"><label for="treatment">{{ rx.words.instructions }}</label><textarea id="treatment" name="treatment" rows="4" aria-describedby="treatment-hint">{% if post %}{{ post.treatment }}{% else %}{{ visit.treatment }}{% endif %}</textarea><small class="rx-hint" id="treatment-hint">{{ rx.words.instructions_hint }}</small></div>
 <div class="op-field"><label for="follow">{{ words.follow_up }}</label><input id="follow" type="date" name="follow_up_date" value="{% if post %}{{ post.follow_up_date }}{% else %}{{ visit.follow_up_date|date:'Y-m-d' }}{% endif %}"></div>
 </div>
-<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button><button class="op-secondary" type="button" data-vt-save-open hidden aria-haspopup="dialog" aria-controls="vt-save" aria-label="{{ vt.words.save_as_label }}">{{ vt.words.save_as }}</button></div></form>
+{% include "medical/_vt_sheets.html" %}
 {% include "medical/_attachments.html" %}
 {% if not visit %}<p class="op-muted" data-att-after-save>{% if lang == 'en' %}Save the visit first, then attach scans, lab reports and photos to it.{% else %}احفظ الكشف الأول، وبعدها ارفع عليه الأشعة والتحاليل والصور.{% endif %}</p>{% endif %}
 {% if attachments %}<script src="{% static 'hesba/js/attachments.js' %}?v=m5-1" defer></script>{% endif %}

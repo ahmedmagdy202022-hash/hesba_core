@@ -2,6 +2,7 @@ from django.urls import path
 
 from . import views
 from . import views_rx
+from . import views_templates
 
 app_name = "medical"
 
@@ -27,4 +28,10 @@ urlpatterns = [
     path("visits/<int:visit_pk>/", views.visit_edit, name="visit_edit"),
     path("visits/<int:visit_pk>/print/", views.prescription, name="prescription"),
     path("drugs/search/", views_rx.drug_search, name="drug_search"),  # M2 (HG-086)
+    path("templates/", views_templates.template_list, name="visit_templates"),  # M1 (HG-089)
+    path("templates/new/", views_templates.template_edit, name="visit_template_new"),
+    path("templates/data/", views_templates.templates_data, name="visit_templates_data"),
+    path("templates/save/", views_templates.template_from_visit, name="visit_template_from_visit"),
+    path("templates/<int:pk>/", views_templates.template_edit, name="visit_template_edit"),
+    path("templates/<int:pk>/<str:action>/", views_templates.template_action, name="visit_template_action"),
 ]

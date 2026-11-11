@@ -1,0 +1,36 @@
+{% load static %}{# M1 (HG-089): the two sheets of the visit form's template control, outside the visit's <form> so nothing in them is ever posted with the visit. The search box is detached (form="vt-detached") and Enter in it never saves anything. #}
+{% with w=vt.words %}
+<dialog class="hs-drug-sheet vt-sheet" id="vt-sheet" aria-labelledby="vt-sheet-title" data-vt-sheet>
+  <div class="hs-drug-sheet__grab" aria-hidden="true"></div>
+  <header class="hs-drug-sheet__head"><h2 id="vt-sheet-title">{{ w.sheet_title }}</h2>
+    <button class="hs-drug-sheet__x" type="button" data-vt-close aria-label="{{ w.close }}" title="{{ w.close }}"><svg class="hs-drug-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></header>
+  <div class="hs-drug-sheet__search">
+    <svg class="hs-drug-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+    <label class="hs-drug-sr" for="vt-q">{{ w.sheet_search }}</label>
+    <input id="vt-q" type="search" form="vt-detached" maxlength="100" autocomplete="off" enterkeyhint="search" dir="auto" placeholder="{{ w.sheet_placeholder }}" aria-describedby="vt-status" aria-controls="vt-list" data-vt-q>
+  </div>
+  <div class="vt-chips" role="group" aria-label="{{ w.specialty }}" data-vt-chips hidden></div>
+  <div class="hs-drug-sheet__meta"><span id="vt-status" role="status" aria-live="polite" data-vt-status></span></div>
+  <div class="hs-drug-sheet__body">
+    <div class="hs-drug-skel" data-vt-state="loading" aria-hidden="true">{% for _ in "123" %}<div class="hs-drug-skel__row"><div><i></i><i></i></div><i></i></div>{% endfor %}</div>
+    <ul class="hs-drug-list" id="vt-list" aria-label="{{ w.sheet_title }}" data-vt-results hidden></ul>
+    <div class="hs-drug-state" data-vt-state="empty" hidden><span class="hs-drug-state__badge" aria-hidden="true"><svg class="hs-drug-ico" viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7z"/><path d="M14 3v5h5"/></svg></span><b>{{ w.empty_title }}</b><p>{{ w.empty_body }}</p></div>
+    <div class="hs-drug-state hs-drug-state--error" data-vt-state="error" hidden><span class="hs-drug-state__badge" aria-hidden="true"><svg class="hs-drug-ico" viewBox="0 0 24 24"><path d="M2 9a15 15 0 0120 0M5 12.5a10 10 0 0114 0M8.5 16a5 5 0 017 0M12 19.5h.01"/><path d="M4 4l16 16"/></svg></span><b>{{ w.error_title }}</b><p>{{ w.error_body }}</p><button class="hs-drug-retry" type="button" data-vt-retry>{{ w.retry }}</button></div>
+  </div>
+  <footer class="hs-drug-sheet__foot"><span>{{ w.footer }}</span><a class="hs-drug-link" href="{% url 'medical:visit_templates' %}?lang={{ lang }}">{{ w.manage }}</a></footer>
+</dialog>
+<dialog class="hs-drug-sheet vt-sheet vt-save" id="vt-save" aria-labelledby="vt-save-title" data-vt-save>
+  <div class="hs-drug-sheet__grab" aria-hidden="true"></div>
+  <header class="hs-drug-sheet__head"><h2 id="vt-save-title">{{ w.save_title }}</h2>
+    <button class="hs-drug-sheet__x" type="button" data-vt-save-close aria-label="{{ w.close }}" title="{{ w.close }}"><svg class="hs-drug-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></header>
+  <form class="vt-save__form" data-vt-save-form novalidate>
+    <div class="vt-field"><label for="vt-save-name">{{ w.save_name }}</label><input id="vt-save-name" name="name" maxlength="120" autocomplete="off" dir="auto" required></div>
+    <div class="vt-field"><label for="vt-save-specialty">{{ w.specialty }}</label><select id="vt-save-specialty" name="specialty">{% for s in vt.specialties %}<option value="{{ s.code }}"{% if s.code == vt.default_specialty %} selected{% endif %}>{{ s.label }}</option>{% endfor %}</select></div>
+    <p class="vt-hint">{{ w.save_hint }}</p>
+    <p class="vt-error" role="alert" data-vt-save-error hidden></p>
+    <div class="vt-save__actions"><button class="op-primary" type="submit" data-vt-save-go>{{ w.save_btn }}</button><button class="op-secondary" type="button" data-vt-save-cancel>{{ w.close }}</button></div>
+  </form>
+</dialog>
+{{ vt.words|json_script:"vt-words" }}
+<script src="{% static 'hesba/js/visit_templates.js' %}?v=m1-1" defer></script>
+{% endwith %}
