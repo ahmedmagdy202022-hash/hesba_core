@@ -1,7 +1,10 @@
 """Watch round 1b on the agenda: the clinic's words (CL-01), who may be chosen as the doctor (CL-06), the empty day (CL-07-like)."""
 
+import re
+
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from permissions.models import RoleCode
 from reports.tests_analytics import person
@@ -59,3 +62,49 @@ class AgendaWordsTests(TestCase):
         self.assertIn("<th>Customer</th><th>Service</th>", en)
         self.assertIn(">At the shop</option>", en)
         self.assertIn(">Visit to the customer</option>", en)
+
+
+class AgendaDoctorsTests(TestCase):
+    """CL-06: the agenda's filter and booking form offer the clinic's staff, not its sales reps."""
+
+    def business(self, activity, sub, username):
+        from staff.services import save_employee
+
+        prepared_client(activity, sub, ",".join(default_modules(activity, sub)))
+        self.owner = person(RoleCode.OWNER, username)
+        self.doctor = save_employee({"name": "د. سارة", "title": "طبيبة"}, self.owner)
+        self.rep = save_employee({"name": "سمير المندوب", "title": "مندوب مبيعات"}, self.owner)
+        self.client.force_login(self.owner)
+
+    def both_lists(self, html):
+        selects = re.findall(r'<select[^>]*name="employee".*?</select>', html, re.S)
+        self.assertEqual(len(selects), 2)  # the filter above the table and the booking form
+        return [re.findall(r"<option value=\"\d+\"[^>]*>(.*?)</option>", select, re.S) for select in selects]
+
+    def test_a_clinic_offers_its_doctors_and_not_its_rep(self):
+        self.business("medical", "clinic", "w1b_ag_clinic")
+        for names in self.both_lists(self.client.get(reverse("appointments:agenda")).content.decode()):
+            self.assertTrue(any("د. سارة" in name for name in names), names)
+            self.assertFalse(any("سمير" in name for name in names), names)
+
+    def test_a_shop_style_business_still_offers_everyone(self):
+        self.business("services", "beauty", "w1b_ag_salon")
+        for names in self.both_lists(self.client.get(reverse("appointments:agenda")).content.decode()):
+            self.assertTrue(any("سمير" in name for name in names), names)  # a rep making a visit at a customer's is a normal use there
+
+    def test_an_appointment_already_booked_with_such_a_person_keeps_them_on_its_page_and_filter(self):
+        from datetime import datetime, time
+
+        from hesba_testing.factories import make_customer, make_item
+
+        from .models import Appointment
+
+        self.business("medical", "clinic", "w1b_ag_old")
+        today = timezone.localdate()
+        old = Appointment.objects.create(number="AP-W1B-1", customer=make_customer(customer_code="W1B-P", name="منى"), employee=self.rep,
+                                         service=make_item(item_code="W1B-SRV", item_name="كشف", is_stock_tracked=False), price="100",
+                                         starts_at=timezone.make_aware(datetime.combine(today, time(23, 58))), created_by=self.owner)
+        page = self.client.get(reverse("appointments:detail", args=[old.pk])).content.decode()
+        self.assertIn(f'<option value="{self.rep.pk}" selected>', page)
+        filtered = self.client.get(reverse("appointments:agenda"), {"employee": self.rep.pk}).content.decode()
+        self.assertIn(f'<option value="{self.rep.pk}" selected>', filtered)

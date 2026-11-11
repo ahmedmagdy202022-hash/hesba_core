@@ -126,9 +126,19 @@ def _kinds(lang):
     return [(AppointmentKind.APPOINTMENT, term("agenda_kind_place", lang)), (AppointmentKind.VISIT, term("agenda_kind_visit", lang))]
 
 
-def _choices(lang):
+def _staff_offered(*keep):
+    """The employees the agenda offers: everyone, except in a clinic (CL-06), where a sales rep is no doctor to book with. Whoever the
+    appointment already has stays offered. A shop keeps the whole list: a rep making a visit at a customer's is its normal use."""
+
+    from medical.services import is_medical_install
+    from staff.services import serving_staff
+
+    return serving_staff(*keep) if is_medical_install() else Employee.objects.filter(active=True)
+
+
+def _choices(lang, *keep):
     return {
-        "customers": Customer.objects.filter(active=True).order_by("name"), "employees": Employee.objects.filter(active=True),
+        "customers": Customer.objects.filter(active=True).order_by("name"), "employees": _staff_offered(*keep),
         "services": Item.objects.filter(active=True).order_by("is_stock_tracked", "item_name"),
         "kinds": _kinds(lang),
     }
@@ -200,7 +210,7 @@ def agenda(request):
     return render(request, "appointments/agenda.html", _base(
         request, day=day, prev_day=day - timedelta(days=1), next_day=day + timedelta(days=1), today=timezone.localdate(),
         rows=rows, queue_on=queue_on, columns=6 + deposits_on + queue_on, employee=employee, form=form, error=error, cancel_hours=deposits.cancel_hours(), deposits_on=deposits_on,
-        can_set_policy=deposits_on and is_owner(request.user), can_online_booking=_can_online_booking(request.user), **_choices(lang),
+        can_set_policy=deposits_on and is_owner(request.user), can_online_booking=_can_online_booking(request.user), **_choices(lang, employee.pk if employee else 0),
     ))
 
 
@@ -344,7 +354,7 @@ def detail(request, pk):
     return render(request, "appointments/detail.html", _base(
         request, appointment=appointment, **insured, local=local, queue_number=numbers.get(appointment.pk), queue_label=words["in_queue"].format(number=numbers.get(appointment.pk, "")), can_check_in=queue.can_check_in(appointment, request.user, numbers), status_label=choice_label(appointment, "status", lang), cancel_asked=appointment.pk in services.pending_cancel_requests([appointment.pk]), reminder=reminder, actions=actions,
         form=form, editable=editable, error=error, medical_file=_medical_file(request.user), can_bill=appointment.status in (AppointmentStatus.ARRIVED, AppointmentStatus.DONE) and not appointment.invoice_id,
-        **_deposit_box(request, appointment, lang), **_choices(lang),
+        **_deposit_box(request, appointment, lang), **_choices(lang, appointment.employee_id),
     ))
 
 
