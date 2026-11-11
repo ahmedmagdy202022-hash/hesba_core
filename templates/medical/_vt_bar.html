@@ -1,5 +1,5 @@
 {% load static %}{# M1 (HG-089): the «اختار قالب» control above the visit form. Hidden until visit_templates.js is ready (without JavaScript the form is exactly as before). Nothing in it posts: the buttons are type="button" and carry no name, so the visit's POST keeps its field names. #}
-<link rel="stylesheet" href="{% static 'hesba/css/visit_templates.css' %}?v=m1-1">
+<link rel="stylesheet" href="{% static 'hesba/css/visit_templates.css' %}?v=m1-2">
 {% with w=vt.words %}
 <section class="vt-bar" data-vt-bar data-url="{% url 'medical:visit_templates_data' %}" data-save-url="{% url 'medical:visit_template_from_visit' %}" data-lang="{{ lang }}" data-patient="{{ patient.pk }}" data-default-specialty="{{ vt.default_specialty }}" aria-label="{{ w.title }}" hidden>
   <div class="vt-bar__row">

@@ -1,6 +1,6 @@
 {% extends "operations/base.html" %}
 {% load static %}
-{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/visit_templates.css' %}?v=m1-1">{% endblock %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/visit_templates.css' %}?v=m1-2">{% endblock %}
 {% block operation_content %}
 {# M1 (HG-089): add or change a template. The medicine lines are the visit form's own section (_rx_lines.html), so they post rx_* and are checked as a visit's lines are. #}
 <section class="op-title-row"><div><a class="op-back" href="{{ back }}">{% include "partials/back_arrow.html" %}{{ tw.back }}</a><h1>{% if template %}{{ tw.edit }}{% else %}{{ tw.new }}{% endif %}</h1><p>{{ tw.no_patient }}</p></div></section>

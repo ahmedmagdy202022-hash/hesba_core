@@ -666,7 +666,7 @@ class VisitFormTests(Setup):
         self.assertIn("data-vt-open", html)
         self.assertIn("data-vt-save-open", html)
         self.assertIn("hesba/js/visit_templates.js?v=m1-1", html)
-        self.assertIn("hesba/css/visit_templates.css?v=m1-1", html)
+        self.assertIn("hesba/css/visit_templates.css?v=m1-2", html)
         self.assertIn("hesba/js/rx_picker.js?v=m1-1", html)
         self.assertLess(html.index('class="op-title-row'), html.index("data-vt-bar"))  # after the page's own head, so the phone band stays on it
         self.assertLess(html.index("data-vt-bar"), html.index("data-visit-form"))
