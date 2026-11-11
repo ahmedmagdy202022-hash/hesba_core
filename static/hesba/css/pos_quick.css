@@ -1,12 +1,20 @@
-/* AN6: tap-to-add tiles, one-tap cash, and the tucked-away warehouse/cashbox on the till. */
-.pos-quick{margin-block:var(--hs-space-3)}
-.pos-quick h2{margin:0 0 var(--hs-space-2);font-size:var(--hs-text-sm);color:var(--hs-muted);font-weight:var(--hs-weight-semibold)}
-.pos-quick__grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:var(--hs-space-2)}
-.pos-tile{display:grid;gap:var(--hs-space-1);align-content:space-between;min-height:54px;padding:var(--hs-space-1) var(--hs-space-2);border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);background:var(--hs-surface);color:var(--hs-ink);font:inherit;text-align:start;cursor:pointer;transition:border-color .12s ease,background .12s ease,transform .12s ease}
-.pos-tile span{font-size:var(--hs-text-xs);line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-.pos-tile b{color:var(--hs-teal-deep);font-size:var(--hs-text-xs)}
-.pos-tile:hover,.pos-tile:focus-visible{border-color:var(--hs-teal);background:var(--hs-teal-wash)}
-.pos-tile.is-added{transform:scale(.97);background:var(--hs-teal-wash);border-color:var(--hs-teal)}
+/* AN6: tap-to-add tiles, one-tap cash, and the tucked-away warehouse/cashbox on the till.
+   UX Wave 4 (part 2): calm borderless tiles (name, price), «المزيد» beside the heading, and once the cart has lines a
+   phone keeps one row of them so the cart stays in view. */
+.pos-quick{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:var(--hs-space-2);margin-block:0 var(--hs-space-3)}
+.pos-quick[hidden]{display:none}
+.pos-quick h2{margin:0;font-family:var(--hs-font-head);font-size:var(--hs-text-base);color:var(--hs-navy);font-weight:var(--hs-weight-bold)}
+.pos-quick__grid{grid-column:1 / -1;display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px}
+.pos-tile{display:flex;flex-direction:column;justify-content:space-between;gap:var(--hs-space-1);min-height:72px;padding:var(--hs-space-2) var(--hs-space-3);border:var(--hs-card-border);border-radius:var(--hs-card-radius-sm);background:var(--hs-card-bg);box-shadow:var(--hs-card-shadow);color:var(--hs-ink);font:inherit;text-align:start;cursor:pointer}
+.pos-tile span{font-size:var(--hs-text-sm);line-height:1.35;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.pos-tile b{color:var(--hs-navy);font-size:var(--hs-text-base);font-weight:var(--hs-weight-bold);font-variant-numeric:tabular-nums}
+.pos-tile:hover{background:var(--hs-teal-wash)}
+.pos-tile:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
+.pos-tile.is-added{background:var(--hs-teal-wash);box-shadow:0 0 0 2px var(--hs-teal)}
+@media (prefers-reduced-motion:no-preference){
+  .pos-tile{transition:background .12s ease,box-shadow .12s ease,transform .12s ease}
+  .pos-tile.is-added{transform:scale(.97)}
+}
 .pos-cash{display:flex;flex-wrap:wrap;gap:var(--hs-space-2);margin-block:calc(-1 * var(--hs-space-1)) var(--hs-space-3)}
 .pos-cash button{flex:1 1 56px;min-height:var(--hs-control-height);border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-sm);background:var(--hs-surface);color:var(--hs-ink);font:inherit;font-weight:var(--hs-weight-semibold);cursor:pointer}
 .pos-cash button[data-cash="exact"]{flex-basis:100%;background:var(--hs-teal-wash);border-color:var(--hs-teal);color:var(--hs-teal-deep)}
@@ -16,11 +24,13 @@
 .pos-more summary span{color:var(--hs-ink)}
 .pos-more[open] summary{margin-block-end:var(--hs-space-2)}
 /* AN7 (G07): the shop's own till buttons. */
-.pos-quick__head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:var(--hs-space-2);margin-block-end:var(--hs-space-2)}
+.pos-quick__head{grid-column:1;grid-row:1;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--hs-space-2);margin-block-end:var(--hs-space-2)}
 .pos-quick__head h2{margin:0}
 /* UX Wave 1: «اختار الأزرار» and «المزيد (24)» are chip buttons, 44px tall. */
-.pos-quick__head a,.pos-quick__more{display:inline-flex;align-items:center;justify-content:center;min-height:var(--hs-control-height);padding:0 var(--hs-space-4);border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-pill);background:var(--hs-surface);color:var(--hs-teal-deep);font:inherit;font-size:var(--hs-text-sm);font-weight:var(--hs-weight-semibold);text-decoration:none;cursor:pointer}
-.pos-quick__head a:hover,.pos-quick__more:hover,.pos-quick__head a:focus-visible,.pos-quick__more:focus-visible{border-color:var(--hs-teal);background:var(--hs-teal-wash)}
+/* UX Wave 4: quiet text buttons; «المزيد» sits in the heading's row (the grid places it there). */
+.pos-quick__head a,.pos-quick__more{display:inline-flex;align-items:center;justify-content:center;min-height:var(--hs-control-height);padding:0 var(--hs-space-3);border:0;border-radius:var(--hs-radius-pill);background:transparent;color:var(--hs-teal-deep);font:inherit;font-size:var(--hs-text-sm);font-weight:var(--hs-weight-bold);text-decoration:none;cursor:pointer}
+.pos-quick__head a:hover,.pos-quick__more:hover{background:var(--hs-teal-wash)}
+.pos-quick__head a:focus-visible,.pos-quick__more:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
 .pos-tile small{font-size:var(--hs-text-xs);color:var(--hs-muted)}
 .pb-part{display:grid;gap:var(--hs-space-2);margin-block:var(--hs-space-4)}
 .pb-part h2,.pb-part h3{margin:0}
@@ -35,12 +45,14 @@
 .pb-search{display:flex;gap:var(--hs-space-2);max-width:480px}
 .pb-search input{flex:1;min-width:0}
 .pos-quick__grid:not(.is-open) .pos-tile:nth-child(n+9){display:none}
-.pos-quick__more{margin-block-start:var(--hs-space-2)}
+.pos-quick__more{grid-column:2;grid-row:1;margin-block-end:var(--hs-space-2)}
 .pos-quick__more--phone{display:none}
 @media (max-width:700px){
   .pos-quick__grid{grid-template-columns:repeat(3,minmax(0,1fr))}
   .pos-quick__grid:not(.is-open) .pos-tile:nth-child(n+7){display:none}
   .pos-quick__more--phone{display:inline-flex}
+  /* the cart has lines: one row of buttons, the rest behind «المزيد» */
+  .pos.has-lines .pos-quick:has(.pos-quick__more) .pos-quick__grid:not(.is-open) .pos-tile:nth-child(n+4){display:none}
 }
 /* AN8: cash or card. */
 .pos-method{display:grid;grid-template-columns:1fr 1fr;gap:var(--hs-space-2);margin-block:0 var(--hs-space-2)}

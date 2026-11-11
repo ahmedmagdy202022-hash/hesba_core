@@ -1,6 +1,7 @@
 from django.urls import path
 
 from . import views, views_inpatient
+from . import views_rx
 
 app_name = "medical"
 
@@ -30,4 +31,5 @@ urlpatterns = [
     path("inpatient/<int:pk>/", views_inpatient.stay, name="stay"),
     path("visits/<int:visit_pk>/", views.visit_edit, name="visit_edit"),
     path("visits/<int:visit_pk>/print/", views.prescription, name="prescription"),
+    path("drugs/search/", views_rx.drug_search, name="drug_search"),  # M2 (HG-086)
 ]

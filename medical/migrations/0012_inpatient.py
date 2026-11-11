@@ -3,8 +3,7 @@
 # M8 (HG-088): inpatient — wards, beds, admissions and their charges. Four new tables, nothing else: no change to
 # an existing table, no data, no posting, stock, cashbox, ledger or permission row.
 #
-# Numbered 0012 because the open M2 branch adds ``0011_visit_medicine`` and lands first; until develop carries it,
-# this depends on 0010. When develop is merged in after M2, the ``medical`` dependency below becomes 0011.
+# It follows M2's ``0011_visit_medicine`` (HG-086).
 
 import django.db.models.deletion
 from django.conf import settings
@@ -16,7 +15,7 @@ class Migration(migrations.Migration):
     dependencies = [
         ("entities", "0001_initial"),
         ("master_data", "0003_sales_rep"),
-        ("medical", "0010_hg084_clinician_access"),
+        ("medical", "0011_visit_medicine"),
         ("sales", "0011_short_sales"),
         ("staff", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),

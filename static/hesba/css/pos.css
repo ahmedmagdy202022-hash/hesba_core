@@ -1,31 +1,125 @@
-/* UX Wave 1: the till. Paying never needs a long scroll: on phones and tablets a bar fixed to the bottom shows what is
-   due and the pay button; on wide screens the payment column scrolls on its own and keeps its pay buttons in view.
-   Customer, coupon and points sit in «تفاصيل». Colours come from tokens.css only. */
+/* The till. UX Wave 1 gave it a pay bar; UX Wave 4 (part 2, Ahmed: «الأبيض الكتير بيزغلل العين»، «شاشة الكاشير تسهّلها»)
+   makes it a calm selling mode. Phones and tablets (below 1024px): a navy head with one search field, the quick
+   buttons, the cart as compact rows and a navy pay sheet fixed at the bottom; the app's top bar and floating tab bar
+   step aside (the cashier leaves by the back arrow or the «⋯» menu, which also opens the app's menu). Wide screens: the
+   same parts in two columns beside the sidebar, the pay panel navy. Colours come from tokens.css only. */
 
-/* Touch targets: every control on the till is at least 44px. */
+/* Shared parts, every width */
 .pos .pos-step,.pos .pos-remove{min-width:var(--hs-control-height);min-height:var(--hs-control-height)}
-.pos .pos-table input{min-height:var(--hs-control-height)}
-.pos-head{flex-wrap:wrap;row-gap:var(--hs-space-1)}
-.pos-head h1{flex:1 1 auto}
-.pos-head .pos-head__return{width:auto;flex:0 0 auto;padding:0 var(--hs-space-3)}
-.pos-head .op-back{display:inline-flex;align-items:center;min-height:var(--hs-control-height);padding-inline:var(--hs-space-2);white-space:nowrap}
-.pos-more>summary{display:flex;align-items:center;gap:var(--hs-space-1);min-height:var(--hs-control-height)}
+.pos-main{min-width:0}
+.pos-band{display:grid;gap:var(--hs-space-3);margin-bottom:var(--hs-space-4)}
+.pos-head{display:flex;align-items:center;gap:var(--hs-space-2);margin:0}
+.pos-head__title{flex:1 1 auto;display:flex;flex-direction:column;min-width:0;line-height:var(--hs-leading-tight)}
+.pos-head h1{margin:0;font-family:var(--hs-font-head);font-size:var(--hs-text-xl);font-weight:var(--hs-weight-bold);color:var(--hs-navy)}
+.pos-head__shift{align-self:flex-start;display:inline-block;padding-block:14px;margin-block:-14px;font-size:var(--hs-text-xs);font-weight:var(--hs-weight-semibold);color:var(--hs-muted);text-decoration:none;border-radius:var(--hs-radius-sm)}
+.pos-head__shift:hover{text-decoration:underline}
+.pos-head__back,.pos-head__btn{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;gap:var(--hs-space-1);min-width:var(--hs-control-height);min-height:var(--hs-control-height);padding:0;border:0;border-radius:var(--hs-radius-lg);background:var(--hs-surface);color:var(--hs-navy);font:inherit;font-size:var(--hs-text-sm);font-weight:var(--hs-weight-semibold);text-decoration:none;cursor:pointer}
+.pos-head__back .hs-back-arrow{margin:0;width:20px;height:20px}
+.pos-head__return{padding:0 var(--hs-space-3)}
+.pos-head__back:focus-visible,.pos-head__btn:focus-visible,.pos-head__shift:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
 
-/* The keyboard keys are a hint for a desk with a keyboard, not for a phone. */
-.pos-keys{grid-column:1 / -1;margin:0;font-size:var(--hs-text-xs);color:var(--hs-muted);display:none}
+/* One search field for the scanner and for names; the camera button sits inside it (camera_scan.js). */
+.pos-scan{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--hs-space-1);margin:0;padding:0;border:0;background:transparent}
+.pos-find{position:relative;display:flex;align-items:center;gap:var(--hs-space-2);min-height:56px;padding-inline:var(--hs-space-4) 6px;border:1px solid var(--hs-line-strong);border-radius:18px;background:var(--hs-surface);color:var(--hs-ink)}
+.pos-find:focus-within{border-color:var(--hs-teal);box-shadow:var(--hs-focus-ring)}
+.pos-find__icon{flex:none;color:var(--hs-muted)}
+.pos-find .hs-cam-wrap{flex:1 1 auto;display:flex;align-items:center;gap:var(--hs-space-2);min-width:0}
+.pos-scan .pos-find input[data-pos-scan]{flex:1 1 auto;min-width:0;min-height:var(--hs-control-height);height:var(--hs-control-height);padding:0;border:0;border-radius:0;background:transparent;color:var(--hs-ink);font:inherit;font-size:16px;box-shadow:none;outline:0}
+.pos-find input[data-pos-scan]::-webkit-search-cancel-button{display:none}
+.pos-find .hs-cam-btn{flex:none;min-width:var(--hs-control-height);width:var(--hs-control-height);min-height:var(--hs-control-height);height:var(--hs-control-height);border:0;border-radius:var(--hs-radius-lg);background:var(--hs-teal);color:var(--hs-on-teal)}
+.pos-find .hs-cam-btn:focus-visible{outline:0;box-shadow:var(--hs-focus-ring-on-navy)}
+.pos-scan output{display:block;min-height:1.4em;font-size:var(--hs-text-sm);line-height:1.4;color:var(--hs-muted)}
+.pos-scan output.is-error{color:var(--hs-danger);font-weight:var(--hs-weight-semibold)}
+.pos-keys{margin:0;font-size:var(--hs-text-xs);color:var(--hs-muted);display:none}
 @media (min-width:1024px){.pos-keys{display:block}}
 
-/* «تفاصيل»: customer, coupon, points, gift card, warehouse and cashbox. */
-.pos-details{border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);padding:0 var(--hs-space-3)}
+/* The names under the field: tap a row, or ↑/↓ then Enter. */
+.pos-find__list{position:absolute;top:calc(100% + 6px);inset-inline:0;z-index:40;max-height:min(360px,52vh);margin:0;padding:6px;overflow-y:auto;overscroll-behavior:contain;list-style:none;border-radius:var(--hs-card-radius-sm);background:var(--hs-surface);color:var(--hs-ink);box-shadow:var(--hs-shadow-lg)}
+.pos-find__list[hidden]{display:none}
+.pos-find__row{display:flex;align-items:center;gap:var(--hs-space-3);min-height:52px;padding:var(--hs-space-2) var(--hs-space-3);border-radius:var(--hs-radius-md);cursor:pointer}
+.pos-find__row.is-active{background:var(--hs-teal-wash)}
+.pos-find__main{flex:1 1 auto;display:grid;min-width:0;line-height:1.35}
+.pos-find__name{font-size:var(--hs-text-md);font-weight:var(--hs-weight-semibold);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.pos-find__code{justify-self:start;font-size:var(--hs-text-xs);color:var(--hs-muted)}
+.pos-find__price{flex:none;font-weight:var(--hs-weight-bold);color:var(--hs-navy);white-space:nowrap}
+
+/* Messages, the offline line and the after-sale banner */
+.pos-main>.op-messages .op-message{margin:0 0 var(--hs-space-3)}
+.pos-offline{margin:0 0 var(--hs-space-3)}
+.pos-last{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--hs-space-3);margin:0 0 var(--hs-space-4);padding:var(--hs-space-4);border:var(--hs-card-border);border-radius:var(--hs-card-radius);background:var(--hs-success-wash);box-shadow:var(--hs-card-shadow)}
+.pos-last__text{display:grid;gap:2px;min-width:0}
+.pos-last p{margin:0}
+.pos-last__title{font-weight:var(--hs-weight-bold);color:var(--hs-success)}
+.pos-last__line{font-size:var(--hs-text-md);color:var(--hs-ink)}
+.pos-last__change{font-size:var(--hs-text-xl);font-weight:var(--hs-weight-bold);color:var(--hs-navy)}
+.pos-last .op-secondary{flex:0 0 auto;background:var(--hs-surface)}
+
+/* The cart: one compact row per line */
+.pos-cart{margin-top:var(--hs-space-2)}
+.pos-cart__head{display:flex;align-items:center;justify-content:space-between;gap:var(--hs-space-2);margin-bottom:var(--hs-space-2)}
+.pos-cart__head h2{display:flex;align-items:center;gap:var(--hs-space-2);margin:0;font-family:var(--hs-font-head);font-size:var(--hs-text-base);font-weight:var(--hs-weight-bold);color:var(--hs-navy)}
+.pos-count{min-width:24px;height:24px;padding:0 7px;box-sizing:border-box;border-radius:var(--hs-radius-pill);background:var(--hs-navy);color:var(--hs-on-navy);font-family:var(--hs-font-body);font-size:var(--hs-text-xs);line-height:24px;text-align:center}
+.pos-cart__customer{display:inline-flex;align-items:center;gap:var(--hs-space-2);max-width:60%;min-height:var(--hs-control-height);padding:0 var(--hs-space-3);border:0;border-radius:var(--hs-radius-pill);background:var(--hs-surface);color:var(--hs-teal-deep);font:inherit;font-size:var(--hs-text-sm);font-weight:var(--hs-weight-semibold);cursor:pointer}
+.pos-cart__customer span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pos-cart__customer svg{flex:none}
+.pos-cart__customer:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
+.pos-cart__card{padding:2px var(--hs-space-4);border:var(--hs-card-border);border-radius:var(--hs-card-radius);background:var(--hs-card-bg);box-shadow:var(--hs-card-shadow)}
+.pos-table{display:block;width:100%;border-collapse:separate}
+.pos-table tbody{display:block}
+.pos-table tr{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;grid-template-areas:"name qty total rm" "price qty total rm";align-items:center;column-gap:var(--hs-space-2);padding:var(--hs-space-2) 0;border-bottom:1px solid var(--hs-neutral-wash)}
+.pos-table tr:last-child{border-bottom:0}
+.pos-table td{display:block;padding:0;border:0;white-space:normal;text-align:start;background:transparent}
+.pos-table .pos-empty{display:block}
+.pos-table .pos-empty td{padding:var(--hs-space-5) var(--hs-space-2)!important;color:var(--hs-muted);text-align:center}
+.pos-table .pos-line__name{grid-area:name;display:flex;flex-wrap:wrap;align-items:center;gap:2px var(--hs-space-2);min-width:0;line-height:1.4}
+.pos-line__name .pos-line__label{flex:1 1 9em;min-width:0}
+/* R1's «بدائل» / «شيله؟» (and the short flag) sit beside the name instead of under it: the row stays compact. */
+.pos-line__name .pos-alt-line{flex:0 0 auto;margin:0;gap:var(--hs-space-1)}
+.pos-line__name .pos-alt-open,.pos-line__name .pos-alt-remove{padding:0 var(--hs-space-3);border-radius:var(--hs-radius-pill)}
+.pos-line__name .pos-alt-open{border-color:transparent;background:var(--hs-teal-wash)}
+.pos-line__label{display:-webkit-box;overflow:hidden;-webkit-line-clamp:2;-webkit-box-orient:vertical;font-size:var(--hs-text-md);font-weight:var(--hs-weight-bold);color:var(--hs-ink)}
+.pos-line__price{grid-area:price;min-width:0}
+.pos-line__each{display:inline-flex;align-items:center;gap:var(--hs-space-1);font-size:var(--hs-text-xs);color:var(--hs-muted);cursor:text}
+.pos .pos-table .pos-line__each input{box-sizing:content-box;width:7ch;field-sizing:content;min-width:3ch;max-width:12ch;min-height:var(--hs-control-height);height:var(--hs-control-height);margin-block:-10px;padding:0 var(--hs-space-1);border:1px solid transparent;border-radius:var(--hs-radius-sm);background:transparent;color:var(--hs-muted);font:inherit;font-size:var(--hs-text-xs);text-align:start}
+.pos .pos-table .pos-line__each input:hover{border-color:var(--hs-line)}
+.pos .pos-table .pos-line__each input:focus{border-color:var(--hs-teal);background:var(--hs-surface);color:var(--hs-ink);font-size:var(--hs-text-md);outline:0;box-shadow:var(--hs-focus-ring)}
+.pos-line__qty{grid-area:qty}
+.pos-qty{display:flex;align-items:center;gap:0;border-radius:var(--hs-radius-lg);background:var(--hs-neutral-wash)}
+[dir="rtl"] .pos-qty{flex-direction:row-reverse}  /* − on the left, + on the right, as in the artboard, both ways */
+.pos .pos-qty .pos-step{width:var(--hs-control-height);height:var(--hs-control-height);padding:0;border:0;border-radius:var(--hs-radius-lg);background:transparent;color:var(--hs-navy);font:inherit;font-size:20px;font-weight:var(--hs-weight-bold);line-height:1;cursor:pointer}
+.pos .pos-qty .pos-step:disabled{color:var(--hs-line-strong);cursor:default}
+.pos .pos-table .pos-qty input{box-sizing:border-box;width:44px;min-width:44px;max-width:7ch;field-sizing:content;min-height:var(--hs-control-height);height:var(--hs-control-height);padding:0 2px;border:0;border-radius:var(--hs-radius-sm);background:transparent;color:var(--hs-ink);font:inherit;font-weight:var(--hs-weight-bold);text-align:center}
+.pos .pos-table .pos-qty input:focus{background:var(--hs-surface);outline:0;box-shadow:var(--hs-focus-ring)}
+.pos-line-total{grid-area:total;min-width:56px;font-size:var(--hs-text-base);font-weight:var(--hs-weight-bold);color:var(--hs-ink);text-align:end!important;white-space:nowrap!important;font-variant-numeric:tabular-nums}
+.pos-line__rm{grid-area:rm}
+.pos .pos-table .pos-remove{width:var(--hs-control-height);height:var(--hs-control-height);padding:0;border:0;border-radius:var(--hs-radius-lg);background:transparent;color:var(--hs-muted);font:inherit;font-size:22px;line-height:1;cursor:pointer}
+.pos .pos-table .pos-remove:hover{background:var(--hs-danger-wash);color:var(--hs-danger)}
+.pos-step:focus-visible,.pos-remove:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
+/* A narrow phone: the name gets the whole first line (× at its end); price, stepper and total share the second. */
+@media (max-width:560px){
+  .pos-table tr{grid-template-columns:minmax(0,1fr) auto auto;grid-template-areas:"name name rm" "price qty total";row-gap:2px}
+  .pos-line__rm{align-self:start;margin-block:-6px}
+}
+
+/* «تفاصيل»: customer, coupon, points, gift card, warehouse and cashbox, then the sums */
+.pos-sheet{display:grid;gap:var(--hs-space-3)}
+.pos-sheet__head{display:none;align-items:center;justify-content:space-between;gap:var(--hs-space-2)}
+.pos-sheet__head h2{margin:0;font-family:var(--hs-font-head);font-size:var(--hs-text-lg);color:var(--hs-navy)}
+.pos-sheet__close{display:grid;place-items:center;width:var(--hs-control-height);height:var(--hs-control-height);border:0;border-radius:var(--hs-radius-lg);background:var(--hs-neutral-wash);color:var(--hs-ink);font:inherit;font-size:var(--hs-text-xl);line-height:1;cursor:pointer}
+.pos-sheet__done{display:none}
+.pos-details{border:0;padding:0}
 .pos-details>summary{display:flex;align-items:center;flex-wrap:wrap;gap:var(--hs-space-2);min-height:var(--hs-control-height);cursor:pointer;list-style:none}
 .pos-details>summary::-webkit-details-marker{display:none}
 .pos-details>summary::after{content:"▾";margin-inline-start:auto;color:var(--hs-muted)}
 .pos-details[open]>summary::after{content:"▴"}
 .pos-details__title{font-weight:var(--hs-weight-bold);color:var(--hs-navy)}
 .pos-details__hint{font-size:var(--hs-text-sm);color:var(--hs-muted)}
-.pos-details__body{display:grid;gap:var(--hs-space-3);padding-block:var(--hs-space-1) var(--hs-space-3)}
+.pos-details__body{display:grid;gap:var(--hs-space-3);padding-block:var(--hs-space-1) var(--hs-space-2)}
 .pos-details .pos-more{margin:0}
+.pos-more>summary{display:flex;align-items:center;gap:var(--hs-space-1);min-height:var(--hs-control-height)}
 .pos-extras{gap:var(--hs-space-2)}
+.pos-sums{padding-top:var(--hs-space-3);border-top:1px solid var(--hs-line)}
+.pos-sheet__close:focus-visible,.pos-details>summary:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
 
 /* Discount: one box, a «ج.م | %» switch beside it, the unit in use highlighted. */
 .pos-discount-row dd{display:flex;justify-content:flex-end;min-width:0}
@@ -47,66 +141,130 @@
 .pos-promos__chip>summary::after{content:"▾"}
 .pos-promos__chip[open]>summary::after{content:"▴"}
 .pos-promos__chip ul{margin:var(--hs-space-2) 0 0;padding-inline-start:var(--hs-space-5);display:grid;gap:var(--hs-space-1);font-size:var(--hs-text-sm);color:var(--hs-ink)}
+.hs-pct-switch button:focus-visible,.pos-promos__chip>summary:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
 
-/* After a sale: what was sold, the change to hand back, and the receipt. */
-.pos-last{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--hs-space-3);margin:0 0 var(--hs-space-4);padding:var(--hs-space-4);border:1px solid var(--hs-success-line);border-radius:var(--hs-radius-lg);background:var(--hs-success-wash)}
-.pos-last__text{display:grid;gap:2px;min-width:0}
-.pos-last p{margin:0}
-.pos-last__title{font-weight:var(--hs-weight-bold);color:var(--hs-success)}
-.pos-last__line{font-size:var(--hs-text-md);color:var(--hs-ink)}
-.pos-last__change{font-size:var(--hs-text-xl);font-weight:var(--hs-weight-bold);color:var(--hs-navy)}
-.pos-last .op-secondary{flex:0 0 auto}
+/* The navy pay sheet / panel: what is due, cash or card, the cash received, one big «دفع» and «⋯». */
+.pos-paybar{display:grid;gap:var(--hs-space-3);padding:var(--hs-space-4);border-radius:var(--hs-card-radius);background:var(--hs-navy);color:var(--hs-on-navy)}
+.pos-paybar__top{display:flex;align-items:center;justify-content:space-between;gap:var(--hs-space-3)}
+.pos-paybar__due{display:flex;flex-direction:column;min-width:0;margin:0;line-height:1.25}
+.pos-paybar__label{font-size:var(--hs-text-xs);color:var(--hs-on-navy-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pos-paybar__amount{font-size:var(--hs-text-sm);color:var(--hs-on-navy-muted);white-space:nowrap}
+.pos-paybar__amount b{font-size:var(--hs-text-num);font-weight:var(--hs-weight-bold);color:var(--hs-on-navy);font-variant-numeric:tabular-nums}
+.pos-paybar__note{font-size:var(--hs-text-xs);color:var(--hs-on-navy-muted)}
+.pos-paybar .pos-change,.pos-paybar .pos-credit{font-size:var(--hs-text-sm);font-weight:var(--hs-weight-bold)}
+.pos-paybar .pos-change{color:var(--hs-teal)}
+.pos-paybar .pos-credit{color:var(--hs-gold-bright)}
+.pos-paybar [hidden]{display:none!important}
+.pos-paybar .pos-method{display:flex;flex:0 0 auto;margin:0;padding:4px;gap:0;border-radius:var(--hs-radius-lg);background:var(--hs-on-navy-wash)}
+.pos-paybar .pos-method button{min-width:64px;min-height:var(--hs-control-height);padding:0 var(--hs-space-4);border:0;border-radius:11px;background:transparent;color:var(--hs-on-navy);font:inherit;font-size:var(--hs-text-sm);font-weight:var(--hs-weight-semibold);cursor:pointer}
+.pos-paybar .pos-method button.is-on{background:var(--hs-surface);color:var(--hs-navy);font-weight:var(--hs-weight-bold)}
+.pos-paybar .pos-method-hint{margin:0;font-size:var(--hs-text-xs)}
+.pos-paybar .pos-method-hint a{display:inline-flex;align-items:center;min-height:var(--hs-control-height);color:var(--hs-on-navy)}
+.pos-cashrow{display:flex;align-items:center;gap:var(--hs-space-2);min-width:0}
+.pos-paybar:has([data-pay="card"].is-on) .pos-cashrow{display:none}  /* a card pays the total: no notes, no change */
+.pos-tender{flex:0 0 auto;display:flex;align-items:center;gap:var(--hs-space-2);font-size:var(--hs-text-xs);color:var(--hs-on-navy-muted)}
+.pos .pos-tender input{width:92px;min-height:var(--hs-control-height);height:var(--hs-control-height);padding:0 var(--hs-space-2);border:1px solid transparent;border-radius:var(--hs-radius-md);background:var(--hs-surface);color:var(--hs-ink);font:inherit;font-size:16px;font-weight:var(--hs-weight-bold);text-align:center;font-variant-numeric:tabular-nums}
+.pos .pos-tender input:focus{outline:0;box-shadow:var(--hs-focus-ring-on-navy)}
+.pos-paybar .pos-cash{flex:1 1 auto;display:flex;flex-wrap:nowrap;gap:6px;min-width:0;margin:0;overflow-x:auto;scrollbar-width:none;overscroll-behavior-x:contain}
+.pos-paybar .pos-cash::-webkit-scrollbar{display:none}
+.pos-paybar .pos-cash button{flex:0 0 auto;min-width:52px;min-height:var(--hs-control-height);padding:0 var(--hs-space-3);border:0;border-radius:var(--hs-radius-md);background:var(--hs-on-navy-wash);color:var(--hs-on-navy);font:inherit;font-size:var(--hs-text-sm);font-weight:var(--hs-weight-semibold);cursor:pointer}
+.pos-paybar .pos-cash button[data-cash="exact"]{flex-basis:auto;border:0;background:var(--hs-on-navy-wash-strong);color:var(--hs-on-navy)}
+.pos-paybar .pos-cash button:hover{background:var(--hs-on-navy-wash-strong)}
+.pos-actions{display:flex;gap:var(--hs-space-2);min-width:0}
+.pos-actions .pos-pay{flex:1 1 auto;width:auto;min-height:56px;padding:0 var(--hs-space-3);border:0;border-radius:18px;background:var(--hs-teal);color:var(--hs-on-teal);font-size:var(--hs-text-lg);font-weight:var(--hs-weight-bold)}
+.pos-actions__more{flex:0 0 auto;display:grid;place-items:center;width:56px;height:56px;padding:0;border:0;border-radius:18px;background:var(--hs-on-navy-wash);color:var(--hs-on-navy);cursor:pointer}
+.pos-actions__more:hover{background:var(--hs-on-navy-wash-strong)}
+.pos-paybar :is(button,input,a):focus-visible{outline:0;box-shadow:var(--hs-focus-ring-on-navy)}
 
-/* The pay bar. Wide screens: the payment column scrolls by itself and its pay buttons stick to its bottom. */
-.pos-actions{display:grid;gap:var(--hs-space-2)}
-.pos-paybar__due{margin:0}
-.pos-overflow>summary{list-style:none}
-.pos-overflow>summary::-webkit-details-marker{display:none}
-.pos-overflow__menu{display:grid;gap:var(--hs-space-2)}
-@media (min-width:1024px){
-  .pos-side{max-height:calc(100vh - 32px);overflow-y:auto;overscroll-behavior:contain}
-  .pos-paybar{position:sticky;bottom:calc(-1 * var(--hs-space-4));z-index:2;display:grid;gap:var(--hs-space-2);margin:0 calc(-1 * var(--hs-space-4));padding:var(--hs-space-3) var(--hs-space-4) var(--hs-space-4);background:var(--hs-surface);border-top:1px solid var(--hs-line);box-shadow:var(--hs-shadow-up)}
-  .pos-paybar__due{display:flex;align-items:baseline;justify-content:space-between;gap:var(--hs-space-2);padding:var(--hs-space-1) var(--hs-space-3);border-radius:var(--hs-radius-md);background:var(--hs-ground);color:var(--hs-navy);font-weight:var(--hs-weight-bold)}
-  .pos-paybar__due b{font-size:var(--hs-text-xl)}
-  .pos-overflow>summary{display:none}
-  .pos-overflow__menu{grid-template-columns:repeat(auto-fit,minmax(120px,1fr))}
-  .pos-paybar~.pos-today{margin-top:var(--hs-space-4)}
-}
+/* Today's sales: quiet figures at the end of the column */
+.pos-today{padding:var(--hs-space-4);border:var(--hs-card-border);border-radius:var(--hs-card-radius);background:var(--hs-card-bg);box-shadow:var(--hs-card-shadow)}
+.pos-today h2{margin:0 0 var(--hs-space-2);font-size:var(--hs-text-md);color:var(--hs-navy)}
+.pos-today dl{margin:0;display:grid;grid-template-columns:1fr 1fr;gap:var(--hs-space-2)}
+.pos-today dl div{display:flex;flex-direction:column;padding:var(--hs-space-2);border-radius:var(--hs-radius-md);background:var(--hs-page)}
+.pos-today dt{font-size:var(--hs-text-xs);color:var(--hs-muted)}
+.pos-today dd{margin:0;font-weight:var(--hs-weight-bold)}
 
-/* Phones and tablets: the bar is fixed to the bottom edge (above the tab bar on a phone). */
+/* The «⋯» menu: a short list of the rare things */
+.pos-menu[hidden],.pos-scrim[hidden]{display:none}
+.pos-menu{position:fixed;z-index:62;display:grid;gap:var(--hs-space-2);padding:var(--hs-space-4) var(--hs-space-4) calc(var(--hs-space-4) + env(safe-area-inset-bottom));background:var(--hs-surface);color:var(--hs-ink);box-shadow:var(--hs-shadow-lg);overflow-y:auto;overscroll-behavior:contain}
+.pos-menu .pos-sheet__head{display:flex}
+.pos-menu__list{display:grid;gap:2px}
+.pos-menu__item{display:flex;align-items:center;width:100%;min-height:52px;padding:0 var(--hs-space-3);border:0;border-radius:var(--hs-radius-md);background:transparent;color:var(--hs-ink);font:inherit;font-weight:var(--hs-weight-semibold);text-align:start;text-decoration:none;cursor:pointer}
+.pos-menu__item:hover{background:var(--hs-page)}
+.pos-menu__item:focus-visible{outline:0;box-shadow:inset var(--hs-focus-ring)}
+.pos-menu__pay{color:var(--hs-teal-deep)}
+.pos:has(.pos-paybar.is-empty) .pos-menu__pay{display:none}  /* nothing to pay for yet */
+.pos-scrim{position:fixed;inset:0;z-index:58;background:var(--hs-scrim)}
 @media (max-width:1023px){
-  .pos{padding-bottom:96px}
-  .pos-paybar{position:fixed;inset-inline:0;bottom:0;z-index:25;display:flex;align-items:center;gap:var(--hs-space-3);padding:var(--hs-space-2) var(--hs-space-4) calc(var(--hs-space-2) + env(safe-area-inset-bottom));background:var(--hs-surface);border-top:1px solid var(--hs-line);box-shadow:var(--hs-shadow-up)}
+  .pos-menu{inset:auto 0 0 0;max-height:85vh;border-radius:24px 24px 0 0}
+}
+@media (min-width:1024px){
+  .pos-menu{top:50%;left:50%;width:min(380px,calc(100vw - 32px));max-height:80vh;border-radius:var(--hs-card-radius);transform:translate(-50%,-50%)}
+  .pos-menu__shell{display:none}  /* the sidebar has the app's menu and language on wide screens */
+}
+
+/* Wide screens: two columns beside the sidebar. The payment column is a column of two rows: «تفاصيل» and today's
+   figures scroll in their own region, and the navy pay panel is the last row under them, never laid over them, so
+   every detail field can be reached at 1024x768 as at 1280x800. The panel stays short: the five cash buttons share
+   one row. */
+@media (min-width:1024px){
+  .pos{grid-template-columns:minmax(0,1fr) 380px;gap:var(--hs-space-5)}
+  .pos-side{position:sticky;top:16px;display:flex;flex-direction:column;max-height:calc(100vh - 32px);overflow:hidden;gap:var(--hs-space-3);padding:var(--hs-space-4);border:0;background:var(--hs-card-bg);box-shadow:var(--hs-card-shadow)}
+  .pos-side__scroll{flex:1 1 auto;min-height:0;display:grid;align-content:start;gap:var(--hs-space-3);margin:calc(-1 * var(--hs-space-1)) calc(-1 * var(--hs-space-2));padding:var(--hs-space-1) var(--hs-space-2);overflow-y:auto;overscroll-behavior:contain}
+  .pos-paybar{flex:none;position:static;gap:var(--hs-space-2);margin-inline:calc(-1 * var(--hs-space-2));padding:var(--hs-space-3) var(--hs-space-4) var(--hs-space-4)}
+  .pos-paybar.is-empty .pos-cashrow{opacity:.55}
+  .pos-cashrow{flex-wrap:wrap;row-gap:var(--hs-space-2)}
+  .pos-paybar .pos-cash{flex:1 1 100%;overflow:visible}
+  .pos-paybar .pos-cash button{flex:1 1 0;min-width:var(--hs-control-height);padding:0 var(--hs-space-1)}
+  .pos-paybar .pos-cash button[data-cash="exact"]{flex-grow:1.6}
+  .pos-grand{display:none!important}  /* the pay panel right below says what is due */
+  .pos-today{padding:0;box-shadow:none}
+}
+@media (min-width:1024px) and (max-width:1280px){.pos{grid-template-columns:minmax(0,1fr) 340px;gap:var(--hs-space-4)}}
+
+/* Phones and tablets: the selling mode. */
+@media (max-width:1023px){
+  body.hs-till .hs-topbar,body.hs-till .hs-tabbar{display:none}
+  body.hs-till .hs-main{padding-bottom:0}
+  body.hs-till .op-shell{width:calc(100% - 2 * var(--hs-gutter));margin-top:0;margin-bottom:0}
+  body.hs-till .op-shell>:first-child:not(.pos){margin-top:var(--hs-space-4)}
+  .pos{display:block;padding-bottom:calc(var(--pos-paybar-h, 0px) + var(--hs-space-4))}
+  .pos-band{margin:0 calc(-1 * var(--hs-gutter)) var(--hs-space-4);padding:var(--hs-space-3) var(--hs-gutter) var(--hs-space-4);border-radius:0 0 var(--hs-band-radius) var(--hs-band-radius);background:var(--hs-navy);color:var(--hs-on-navy);gap:var(--hs-space-3)}
+  .pos-head h1{color:var(--hs-on-navy);font-size:var(--hs-text-xl)}
+  .pos-head__shift{color:var(--hs-on-navy-muted)}
+  .pos-head__back,.pos-head__btn{background:var(--hs-on-navy-wash);color:var(--hs-on-navy)}
+  .pos-head__back:hover,.pos-head__btn:hover{background:var(--hs-on-navy-wash-strong)}
+  .pos-head__back:focus-visible,.pos-head__btn:focus-visible,.pos-head__shift:focus-visible{box-shadow:var(--hs-focus-ring-on-navy)}
+  .pos-find{border-color:transparent}
+  .pos-find:focus-within{border-color:transparent;box-shadow:var(--hs-focus-ring-on-navy)}
+  .pos-scan output{min-height:1.4em;margin-top:-2px;color:var(--hs-on-navy-muted)}
+  .pos-scan output.is-error{color:var(--hs-danger-line)}
+  .pos-side{position:static;display:block;padding:0;border:0;background:transparent;box-shadow:none}
+  /* «تفاصيل الفاتورة»: a sheet that rises from the bottom when the cart's customer button or a «⋯» choice opens it. */
+  .pos-sheet{display:none;position:fixed;inset:auto 0 0 0;z-index:60;max-height:88vh;padding:var(--hs-space-4) var(--hs-gutter) calc(var(--hs-space-4) + env(safe-area-inset-bottom));overflow-y:auto;overscroll-behavior:contain;border-radius:24px 24px 0 0;background:var(--hs-surface);color:var(--hs-ink);box-shadow:var(--hs-shadow-lg)}
+  .pos-sheet.is-open{display:grid}
+  .pos-sheet__head{display:flex}
+  .pos-sheet .pos-details>summary{display:none}
+  .pos-sheet__done{display:block;width:100%;min-height:52px}
+  .pos-two{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  /* The pay sheet: fixed to the bottom edge, its corners rounded upward. */
+  .pos-paybar{position:fixed;inset:auto 0 0 0;z-index:25;gap:var(--hs-space-3);padding:var(--hs-space-4) var(--hs-gutter) calc(var(--hs-space-4) + env(safe-area-inset-bottom));border-radius:var(--hs-band-radius) var(--hs-band-radius) 0 0;box-shadow:var(--hs-shadow-up)}
   .pos-paybar.is-empty{display:none}
-  .pos-paybar__due{display:grid;flex:0 0 auto;line-height:var(--hs-leading-tight)}
-  .pos-paybar__due span{font-size:var(--hs-text-xs);color:var(--hs-muted)}
-  .pos-paybar__due bdi{font-size:var(--hs-text-lg);color:var(--hs-navy);white-space:nowrap}
-  .pos-paybar__due b{font-size:var(--hs-text-xl)}
-  .pos-actions{flex:1 1 auto;display:flex;gap:var(--hs-space-2);min-width:0}
-  .pos-actions .pos-pay{flex:1 1 auto;width:auto;min-height:52px;padding:0 var(--hs-space-3);font-size:var(--hs-text-base)}
-  .pos-overflow{position:relative;flex:0 0 auto}
-  .pos-overflow>summary{display:grid;place-items:center;width:52px;height:52px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-md);background:var(--hs-surface);color:var(--hs-navy);font-size:var(--hs-text-xl);font-weight:var(--hs-weight-bold);cursor:pointer}
-  .pos-overflow[open]>summary{border-color:var(--hs-teal);box-shadow:var(--hs-focus-ring)}
-  .pos-overflow__menu{position:absolute;bottom:calc(100% + var(--hs-space-2));inset-inline-end:0;min-width:220px;padding:var(--hs-space-2);background:var(--hs-surface);border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);box-shadow:var(--hs-shadow-md)}
-  .pos-overflow__menu .op-secondary{width:100%}
-  body:has(.pos-paybar:not(.is-empty)) .hs-feedback-fab{bottom:calc(96px + env(safe-area-inset-bottom))}
+  .pos-today{margin-top:var(--hs-space-4)}
+  body.pos-layer-open{overflow:hidden}
 }
-/* UX Wave 4: on a phone the pay bar reaches the bottom edge and the floating tab bar rides on its lower part, so
-   nothing scrolls between them; while it shows, the «بيع» circle sits level in the bar instead of standing above it. */
-@media (max-width:700px){
-  .pos-paybar{bottom:0;padding-bottom:calc(var(--hs-tabbar-space) + var(--hs-space-2) + env(safe-area-inset-bottom))}
-  .pos{padding-bottom:calc(var(--hs-tabbar-space) + 96px)}
-  body:has(.pos-paybar:not(.is-empty)) .hs-tab__orb{width:48px;height:38px;margin-top:0;border-width:0;border-radius:var(--hs-radius-md);box-shadow:none}
-  body:has(.pos-paybar:not(.is-empty)) .hs-main{padding-bottom:var(--hs-space-4)}
-  body:has(.pos-paybar:not(.is-empty)) .hs-feedback-fab{bottom:calc(var(--hs-tabbar-space) + 84px + env(safe-area-inset-bottom))}
+@media (max-width:380px){
+  .pos-head__return span{display:none}  /* the icon alone, its name read out */
+  .pos-head__return{padding:0}
+  .pos-paybar .pos-method button{min-width:56px;padding:0 var(--hs-space-3)}
+  .pos-paybar__amount b{font-size:var(--hs-text-2xl)}
 }
-.pos-overflow summary:focus-visible,.hs-pct-switch button:focus-visible,.pos-promos__chip>summary:focus-visible,.pos-details>summary:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
 
 /* R1: alternatives at the till (pharmacy). A short drug line says so and offers «بدائل»; the sheet rises from the
    bottom on phones and tablets (over the pay bar, which stays under its scrim) and is a centred panel on wide screens. */
 .pos-alt-line{display:flex;flex-wrap:wrap;align-items:center;gap:var(--hs-space-2);margin-top:var(--hs-space-1)}
 .pos-alt-flag{color:var(--hs-danger);font-size:var(--hs-text-sm);font-weight:var(--hs-weight-semibold)}
-.pos-table tr.is-short>td{background:var(--hs-danger-wash)}
+.pos-table tr.is-short{margin-inline:calc(-1 * var(--hs-space-4));padding-inline:var(--hs-space-4);background:var(--hs-danger-wash)}
 .pos-alt-open,.pos-alt-remove{min-width:var(--hs-control-height);min-height:var(--hs-control-height);padding:0 var(--hs-space-3);border-radius:var(--hs-radius-sm);font:inherit;font-size:var(--hs-text-sm);font-weight:var(--hs-weight-semibold);cursor:pointer}
 .pos-alt-open{border:1px solid var(--hs-teal);background:var(--hs-surface);color:var(--hs-teal-deep)}
 .pos-alt-remove{border:1px solid var(--hs-line-strong);background:var(--hs-surface);color:var(--hs-ink)}
@@ -147,3 +305,19 @@
 @media (min-width:1024px){.pos-alt{inset:0;max-height:80vh;margin:auto;border-radius:var(--hs-radius-xl)}.pos-alt__grab{display:none}}
 .pos-alt-open:focus-visible,.pos-alt-remove:focus-visible,.pos-alt__close:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
 .pos-alt__row:focus-visible{outline:0;box-shadow:inset var(--hs-focus-ring)}
+
+/* The demo's «ملاحظاتك» button (demo mode only) stays out of the cart's way on the till: a round icon (44px, its name
+   still read out) that sits in the pay sheet's last row beside «⋯», which makes room for it, so it covers no cart line
+   and no control. With nothing to pay it waits in the bottom corner, and the page leaves room under it. On wide screens
+   it sits under the payment column, which ends above it. It hides while a sheet or the «⋯» menu is open. */
+body.hs-till:has(.pos) .hs-feedback-fab{inset-inline-start:auto;inset-inline-end:var(--hs-gutter);bottom:calc(var(--hs-space-4) + 6px + env(safe-area-inset-bottom));width:var(--hs-control-height);height:var(--hs-control-height);padding:0;justify-content:center;gap:0;background:var(--hs-navy-raised)}
+body.hs-till:has(.pos) .hs-feedback-fab span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+body.hs-till.pos-layer-open .hs-feedback-fab{display:none}
+@media (max-width:1023px){
+  body.hs-till:has(.hs-feedback-fab) .pos-actions{padding-inline-end:calc(var(--hs-control-height) + var(--hs-space-2))}
+  body.hs-till:has(.hs-feedback-fab):has(.pos-paybar.is-empty) .pos{padding-bottom:calc(var(--hs-control-height) + var(--hs-space-8))}
+}
+@media (min-width:1024px){
+  body.hs-till:has(.pos) .hs-feedback-fab{inset-inline-end:var(--hs-space-6);bottom:var(--hs-space-3)}
+  body.hs-till:has(.hs-feedback-fab) .pos-side{max-height:calc(100vh - 32px - var(--hs-control-height) - var(--hs-space-3))}
+}

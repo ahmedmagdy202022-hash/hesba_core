@@ -142,6 +142,7 @@ STRINGS = {
         "flat": "زي الفترة اللي قبلها",
         "alerts_title": "محتاج انتباهك",
         "alerts_empty": "مفيش تنبيهات محتاجة متابعة.",
+        "phero_none": "لسه مفيش بيع النهارده؛ أول فاتورة هتظهر هنا.",  # UX Wave 4: the phone money card on a quiet day
         "actions_title": "ابدأ من هنا",
         "onboarding_title": "ابدأ تشغيل حِسْبَة في ٤ خطوات",
         "onboarding_note": "اتبع الخطوات لبدء تشغيل نشاطك على حِسْبَة.",
@@ -214,6 +215,7 @@ STRINGS = {
         "flat": "same as the previous period",
         "alerts_title": "Needs your attention",
         "alerts_empty": "Nothing needs following up.",
+        "phero_none": "No sales yet today; the first invoice shows here.",
         "actions_title": "Start here",
         "onboarding_title": "Start using Hesba in 4 steps",
         "onboarding_note": "Follow these steps to get your business running on Hesba.",

@@ -322,22 +322,32 @@ def _with_db(path, work):
         _use(original)
 
 
+#: R1 / M2: the demo templates that carry the hand-written demo reference drug list.
+DEMO_REFERENCE_BUSINESSES = (("commercial", "pharmacy"), ("medical", "clinic"))
+
+
 def demo_reference_list(activity, sub_activity):
-    """R1: the pharmacy demo's reference drug list (illustrative prices), loaded into its template only. Returns the
+    """R1: the pharmacy demo's reference drug list (illustrative prices), loaded into its template only; M2: the clinic's
+    template gets the same list, and two of its sample visits get medicine lines from it (``medical.demo``). Returns the
     importer's summary, or None for every other business."""
 
-    if (activity, sub_activity) != ("commercial", "pharmacy"):
+    if (activity, sub_activity) not in DEMO_REFERENCE_BUSINESSES:
         return None
     from pharmacy.demo import load_demo_reference
 
-    return load_demo_reference()
+    summary = load_demo_reference()
+    if (activity, sub_activity) == ("medical", "clinic"):
+        from medical.demo import prescribe_demo_visits
+
+        prescribe_demo_visits()
+    return summary
 
 
 def top_up_demo_reference_list(activity, sub_activity):
-    """R1: a pharmacy template built before the demo list existed gets it on its next top-up. Returns the importer's
-    summary, or None when there is nothing to load (another business, or the list is already in)."""
+    """R1: a pharmacy (or, M2, a clinic) template built before the demo list existed gets it on its next top-up. Returns
+    the importer's summary, or None when there is nothing to load (another business, or the list is already in)."""
 
-    if (activity, sub_activity) != ("commercial", "pharmacy"):
+    if (activity, sub_activity) not in DEMO_REFERENCE_BUSINESSES:
         return None
     from pharmacy.demo import DEMO_SOURCE
     from pharmacy.models import DrugReference
@@ -398,7 +408,7 @@ def build_template(activity, sub_activity, force=False):
 
 def top_up_template(activity, sub_activity):
     """Bring a populated template up to today (today's trade, the owner's shift dated today), under its lock; a pharmacy
-    template that has no demo reference list yet gets it too (R1).
+    or clinic template that has no demo reference list yet gets it too (R1, M2).
 
     The server's disk goes back to the build image every time it wakes, so a template built on deploy day would
     otherwise open N days later with nothing «today» and a shift from deploy day. Returns the path, or None when

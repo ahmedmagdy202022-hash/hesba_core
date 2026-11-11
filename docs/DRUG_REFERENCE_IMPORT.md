@@ -129,3 +129,21 @@ for every field, with these exceptions so that a mistake in the file does not wi
 - an **unreadable price date** cell is counted under "bad dates" and leaves that row's date as it was (a new row gets
   no date; `--price-date` is not used in its place);
 - an empty `prescription_only` cell sets the row back to unknown: the file is the truth for the flags.
+
+## Clinics: prescribing from the list (M2, HG-086)
+
+العيادات بتحمّل نفس القايمة بنفس الأمر، والدكتور بيدوّر فيها من شاشة الكشف (قسم «الأدوية») ويكتب الجرعة وعدد المرات والمدة لكل دوا.
+القايمة مش بتعمل صنف ولا مخزون ولا فاتورة في العيادة.
+
+A clinic (medical, vet, dental, lab, physio) loads its list with the same command, for example
+`python manage.py import_drug_reference --file clinic-list.xlsx --source clinic-2026-11 --source-version 2026-11`. Nothing
+else is needed: the visit form's «الأدوية» section searches the active rows of every source through `medical:drug_search`
+(the same search as the pharmacy picker, gated by the clinical permission, not by the pharmacy's `drugs` capability or
+`master_data.manage_items`, and without prices). Until a list is loaded the section says so and the doctor types medicines
+by hand.
+
+- A prescribed line copies the row's names, active ingredient, strength and form when it is first saved. Importing a
+  newer file, switching rows off with `--deactivate-missing`, or deleting rows never changes an old prescription: a
+  deleted row only empties the line's link to it.
+- The demo clinic's template loads the hand-written demo list (`pharmacy/demo_data/drug_reference_demo.csv`, source
+  `demo`) and two of its sample visits carry medicine lines. Real installs never load it.

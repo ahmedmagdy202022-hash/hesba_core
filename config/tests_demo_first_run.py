@@ -729,8 +729,8 @@ class EndToEndTests(SimpleTestCase):
         self.assertEqual(set(out["templates"]), {f"{a}:{s}" for a, s in DEMO_ACTIVITIES})
         for key, (exists, size, posted, owner_shift, shop, owner, references) in out["templates"].items():
             with self.subTest(template=key):
-                # R1: the demo reference drug list is in the pharmacy's ready shop only.
-                self.assertEqual(references > 0, key == "commercial:pharmacy", references)
+                # R1: the demo reference drug list is in the pharmacy's ready shop, and (M2) the clinic's, which prescribes from it.
+                self.assertEqual(references > 0, key in ("commercial:pharmacy", "medical:clinic"), references)
                 self.assertTrue(exists)
                 self.assertLess(size, 12 * 1024 * 1024)
                 self.assertGreater(posted, 10)
