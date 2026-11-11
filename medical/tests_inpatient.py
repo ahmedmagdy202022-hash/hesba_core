@@ -835,7 +835,7 @@ class ScreenTests(Hospital):
     def test_admit_charge_move_discharge_and_open_the_draft(self):
         self.client.force_login(self.owner)
         board = self.client.get(reverse("medical:beds"))
-        self.assertContains(board, "inpatient.css?v=m8-1")
+        self.assertContains(board, "inpatient.css?v=m8-2")
         self.assertContains(board, f'data-bed="{self.bed1.pk}" data-state="free"')
         self.assertContains(board, "الدور الأول")
         sheet = self.client.get(reverse("medical:admit") + f"?bed={self.bed1.pk}&q=منى")
@@ -918,7 +918,7 @@ class ScreenTests(Hospital):
             source = Path(settings.BASE_DIR, "templates/medical", f"{name}.html").read_text(encoding="utf-8")
             self.assertNotIn("data-label", source)  # the table-cards script writes them; a template never does
             self.assertNotIn("{#", source)
-            self.assertIn("inpatient.css' %}?v=m8-1", source)
+            self.assertIn("inpatient.css' %}?v=m8-2", source)
         css = Path(settings.BASE_DIR, "static/hesba/css/inpatient.css").read_text(encoding="utf-8")
         self.assertNotRegex(css, r"#[0-9a-fA-F]{3,8}\b")  # tokens only
         self.assertNotRegex(css, r"rgba?\(")
@@ -956,6 +956,17 @@ class EntityScopeTests(Hospital):
             self.assertEqual([row["ward"] for row in inpatient.board()], [self.branch_ward])
             self.assertEqual(list(inpatient.scoped_admissions()), [admission])
         self.assertEqual(len(inpatient.board()), 3)  # the whole group sees every ward
+
+    def test_the_boards_lists_of_ended_stays_keep_to_the_entity(self):
+        from entities.current import working_in
+
+        admission = self.admit(days_ago=1, hour=9, bed=self.branch_bed)
+        inpatient.discharge(admission, self.owner)
+        with working_in(self.main):
+            self.assertEqual((inpatient.needing_action(), inpatient.recent_closed()), ([], []))
+        with working_in(self.branch):
+            self.assertEqual([row["admission"] for row in inpatient.needing_action()], [admission])
+            self.assertEqual(inpatient.recent_closed(), [admission])
 
     def test_the_bill_lands_in_the_admissions_entity_whoever_makes_it(self):
         from entities.current import working_in
@@ -1014,6 +1025,141 @@ class EntityScopeTests(Hospital):
 
 
 # ---- the audit trail ---------------------------------------------------------------
+
+
+# ---- what the independent review found (PR #370) ------------------------------------
+
+
+class AfterTheBedTests(Hospital):
+    """A stay that left its bed must still be reachable, its nights are not erased by a click, and an advance
+    that nothing will use can be handed back."""
+
+    def setUp(self):
+        super().setUp()
+        set_capability_enabled(self.profile, "deposits", True, user=self.owner)
+
+    def board(self, user):
+        self.client.force_login(user)
+        return self.client.get(reverse("medical:beds")).content.decode()
+
+    def test_a_discharged_stay_nobody_billed_is_on_the_board_until_its_bill_posts(self):
+        admission = self.admit(days_ago=2, hour=10, doctor=self.sara)
+        inpatient.add_charge(admission, {"kind": "operation", "item": self.appendix}, self.doctor)
+        self.client.force_login(self.doctor)
+        self.client.post(self.stay_url(admission), {"lang": "ar", "action": "discharge"})  # a doctor makes no invoice
+        link = f'data-attention-stay="{admission.pk}"'
+        board = self.board(self.desk)
+        self.assertIn(link, board)
+        self.assertIn(reverse("medical:stay", args=[admission.pk]), board)
+        self.assertIn("محتاجة فاتورة", board)
+        self.assertEqual([(row["admission"].pk, row["reasons"]) for row in inpatient.needing_action()], [(admission.pk, ["bill"])])
+        invoice = inpatient.bill(admission, self.desk)
+        self.assertEqual([row["reasons"] for row in inpatient.needing_action()], [["draft"]])  # still there: nobody posted it
+        self.assertIn("فاتورتها مسودة", self.board(self.desk))
+        post_sales_invoice(invoice.pk, self.owner)
+        self.assertEqual(inpatient.needing_action(), [])
+        board = self.board(self.desk)
+        self.assertNotIn(link, board)
+        self.assertIn(f'data-recent-stay="{admission.pk}"', board)  # and it stays reachable among the latest that ended
+        cancel_posted_sales_invoice(invoice.pk, self.owner, "اتعملت غلط")
+        self.assertEqual([row["reasons"] for row in inpatient.needing_action()], [["bill"]])  # cancelled: to be billed again
+
+    def test_a_cancelled_admission_whose_advance_is_still_held_is_on_the_board(self):
+        admission = self.admit(advance="500", cashbox=self.cashbox)
+        result = inpatient.cancel(admission, self.doctor)  # a doctor cannot hand money back
+        self.assertEqual(result["outcome"], "refund_not_allowed")
+        self.assertEqual([(row["admission"].pk, row["reasons"]) for row in inpatient.needing_action()], [(admission.pk, ["advance"])])
+        board = self.board(self.desk)
+        self.assertIn(f'data-attention-stay="{admission.pk}"', board)
+        self.assertIn("مقدم لسه محجوز", board)
+        inpatient.refund_advance(admission, self.desk)
+        self.assertEqual(inpatient.needing_action(), [])
+        self.assertEqual((customer_balance(self.patient), cash_balance(self.cashbox)), (D("0.00"), D("0.00")))
+
+    def test_cancelling_a_stay_with_nights_behind_it_is_the_owners_or_a_managers(self):
+        admission = self.admit(days_ago=5, hour=10, advance="2000", cashbox=self.cashbox)
+        self.assertEqual(sum(price for _, price in inpatient.pending_bed_days(admission)), D("2500.00"))  # five nights at 500
+        for user in (self.desk, self.doctor):
+            with self.assertRaisesMessage(PermissionDenied, "عدّى عليها 5 ليلة"):
+                inpatient.cancel(admission, user)
+        self.client.force_login(self.desk)
+        page = self.client.get(self.stay_url(admission))
+        self.assertNotContains(page, "data-cancel")
+        response = self.client.post(self.stay_url(admission), {"lang": "ar", "action": "cancel"})
+        self.assertContains(response, "data-stay-error")
+        admission.refresh_from_db()
+        self.assertEqual((admission.state, Deposit.objects.get().status, cash_balance(self.cashbox)), (AdmissionState.ADMITTED, DepositStatus.HELD, D("2000.00")))
+        self.client.force_login(self.owner)
+        page = self.client.get(self.stay_url(admission, cancel=1))
+        self.assertContains(page, "data-cancel-late")
+        self.assertContains(page, "2,500.00")  # what the cancel waives is said before the click
+        result = inpatient.cancel(admission, self.owner)
+        self.assertEqual((result["admission"].state, result["outcome"]), (AdmissionState.CANCELLED, "refunded"))
+        row = AuditLog.objects.filter(action="cancel_admission").get()
+        self.assertEqual((row.after_data["nights_behind"], row.after_data["bed_days_waived"]), (5, "2500.00"))
+
+    def test_a_same_day_admission_is_still_cancelled_by_the_desk(self):
+        admission = self.admit(user=self.desk)
+        self.client.force_login(self.desk)
+        self.assertContains(self.client.get(self.stay_url(admission)), "data-cancel")
+        self.assertEqual(inpatient.cancel(admission, self.desk)["admission"].state, AdmissionState.CANCELLED)
+        self.assertEqual(AuditLog.objects.filter(action="cancel_admission").get().after_data["bed_days_waived"], "0")
+
+    def test_an_advance_the_bill_did_not_use_is_handed_back_after_discharge(self):
+        free_day = make_item(item_code="BED-FREE", item_name="إقامة ملاحظة", is_stock_tracked=False, default_sale_price="0.00")
+        bed = inpatient.save_bed(self.ward, {"code": "OBS", "daily_service": free_day}, self.owner)
+        admission = self.admit(bed=bed, advance="500", cashbox=self.cashbox)
+        with self.assertRaisesMessage(ValidationError, "المقدم بيترد"):
+            inpatient.refund_advance(admission, self.owner)  # still admitted
+        admission, invoice = inpatient.discharge_and_bill(admission, self.owner)
+        self.assertEqual(invoice.total_amount, D("0.00"))
+        self.assertFalse(inpatient.advance_refundable(admission))  # the draft has not posted yet
+        post_sales_invoice(invoice.pk, self.owner)
+        deposit = Deposit.objects.get()
+        self.assertEqual((deposit.status, InvoiceSettlement.objects.count(), bal("2105")), (DepositStatus.HELD, 0, D("-500.00")))  # nothing to settle
+        self.assertEqual([row["reasons"] for row in inpatient.needing_action()], [["advance"]])
+        self.client.force_login(self.desk)
+        self.assertContains(self.client.get(self.stay_url(admission)), "data-refund-form")
+        self.client.post(self.stay_url(admission), {"lang": "ar", "action": "refund"})
+        deposit.refresh_from_db()
+        self.assertEqual((deposit.status, deposit.payment.status), (DepositStatus.REFUNDED, "cancelled"))
+        self.assertEqual((customer_balance(self.patient), cash_balance(self.cashbox), bal("2105")), (D("0.00"), D("0.00"), D("0.00")))
+        self.assertEqual(inpatient.needing_action(), [])
+
+    def test_an_advance_is_not_handed_back_while_the_stay_still_has_something_to_bill(self):
+        admission = self.admit(days_ago=1, hour=9, advance="300", cashbox=self.cashbox)
+        inpatient.discharge(admission, self.owner)  # discharged, one night of 500 not billed
+        with self.assertRaisesMessage(ValidationError, "المقدم بيترد"):
+            inpatient.refund_advance(admission, self.owner)
+        self.client.force_login(self.owner)
+        self.assertNotContains(self.client.get(self.stay_url(admission)), "data-refund-form")
+        self.assertEqual((Deposit.objects.get().status, cash_balance(self.cashbox)), (DepositStatus.HELD, D("300.00")))
+
+    def test_an_advance_larger_than_the_bill_says_what_it_settled_and_what_is_left(self):
+        admission = self.admit(days_ago=2, hour=10, advance="12000", cashbox=self.cashbox)
+        inpatient.add_charge(admission, {"kind": "operation", "item": self.appendix}, self.owner)
+        admission, invoice = inpatient.discharge_and_bill(admission, self.owner)  # two nights at 500 + 8000 = 9000
+        post_sales_invoice(invoice.pk, self.owner)
+        self.assertEqual((InvoiceSettlement.objects.get().amount, customer_balance(self.patient), bal("2105")), (D("9000.00"), D("-3000.00"), D("-3000.00")))
+        self.client.force_login(self.owner)
+        page = self.client.get(self.stay_url(admission))
+        self.assertContains(page, "data-advance-split")
+        self.assertContains(page, "اتخصم من الفاتورة 9,000.00، والباقي 3,000.00 رصيد للمريض")
+        english = self.client.get(self.stay_url(admission, lang="en"))
+        self.assertContains(english, "9,000.00 came off the invoice; the remaining 3,000.00 is the patient")
+
+    def test_the_running_total_rounds_each_line_as_the_invoice_does(self):
+        gauze = make_item(item_code="SUP-GZ", item_name="شاش", is_stock_tracked=True, default_sale_price="33.33")
+        stock_in(gauze, self.location, 10, "10.00")
+        admission = self.admit()
+        for _ in range(2):
+            inpatient.add_charge(admission, {"kind": "supply", "item": gauze, "quantity": "1.5"}, self.owner)  # 49.995 each: 50.00 on the invoice
+        self.client.force_login(self.owner)
+        page = self.client.get(self.stay_url(admission)).content.decode()
+        self.assertIn("data-running-total>600.00<", page)  # one day at 500 + 50.00 + 50.00, not 599.99
+        self.assertEqual(inpatient.review(admission)["subtotal"], D("600.00"))
+        admission, invoice = inpatient.discharge_and_bill(admission, self.owner)
+        self.assertEqual(invoice.subtotal, D("600.00"))
 
 
 class AuditTests(Hospital):

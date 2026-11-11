@@ -1,6 +1,6 @@
 {% extends "operations/base.html" %}
 {% load static hesba_format %}
-{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/inpatient.css' %}?v=m8-1">{% endblock %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/inpatient.css' %}?v=m8-2">{% endblock %}
 {% block operation_content %}
 <section class="op-title-row"><div><a class="op-back" href="{% url 'medical:beds' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ w.back }}</a><h1>{{ w.admit_title }}</h1><p>{{ w.admit_intro }}</p></div></section>
 {% if error %}<div class="op-message op-message-error" role="alert" data-admit-error>{{ error }}</div>{% endif %}

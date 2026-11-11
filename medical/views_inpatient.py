@@ -18,6 +18,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
+from config.money import money_round
 from entities import scope as entity_scope
 from permissions.services import user_has_permission
 
@@ -61,6 +62,11 @@ WORDS = {
         "invoices": "فاتورة الإقامة", "open_invoice": "افتح الفاتورة", "draft": "مسودة", "posted": "مترحّلة", "cancelled": "ملغية",
         "insured": "المريض ده عليه تأمين ({insurer}). فاتورة الإقامة بتطلع على المريض كاملة، وتقسيمها على شركة التأمين لسه مش مدعوم.",
         "advance_box": "المقدم", "take_advance": "خد مقدم", "advance_taken": "اتاخد مقدم {amount} ({payment}).", "advance_status": "حالة المقدم",
+        "attention": "إقامات محتاجة إجراء", "attention_intro": "مرضى خرجوا أو اتلغى دخولهم ولسه عليهم حاجة تتعمل.",
+        "need_bill": "محتاجة فاتورة", "need_draft": "فاتورتها مسودة لسه ماترحّلتش", "need_advance": "مقدم لسه محجوز",
+        "recent": "آخر الإقامات اللي خلصت", "open_stay": "افتح الإقامة",
+        "advance_split": "اتخصم من الفاتورة {applied}، والباقي {credit} رصيد للمريض على حسابه.",
+        "cancel_late": "الإقامة دي عدّى عليها {nights} ليلة، وأيام الإقامة ({amount}) مش هتتفوتر لو اتلغت. لو المريض أقام فعلاً اعمل خروج وفاتورة.",
         "cancel": "إلغاء الدخول", "cancel_hint": "للدخول اللي اتسجّل غلط ومفيش عليه بنود. السرير بيفضى، والمقدم بيترد.",
         "cancel_confirm": "أكّد إلغاء الدخول", "cancelled_ok": "اتلغى الدخول والسرير فضي.",
         "refund": "رد المقدم", "refunded": "المقدم {payment} اترد.", "refund_pending": "رد المقدم مستني موافقة.",
@@ -107,6 +113,11 @@ WORDS = {
         "invoices": "The stay's invoice", "open_invoice": "Open the invoice", "draft": "Draft", "posted": "Posted", "cancelled": "Cancelled",
         "insured": "This patient is insured ({insurer}). The stay is billed to the patient in full; splitting it with the insurer is not supported yet.",
         "advance_box": "Advance", "take_advance": "Take an advance", "advance_taken": "Advance of {amount} taken ({payment}).", "advance_status": "Advance status",
+        "attention": "Stays that need action", "attention_intro": "Patients who left or whose admission was cancelled, with something still to do.",
+        "need_bill": "Needs its invoice", "need_draft": "Its invoice is a draft, not posted yet", "need_advance": "Advance still held",
+        "recent": "Latest stays that ended", "open_stay": "Open the stay",
+        "advance_split": "{applied} came off the invoice; the remaining {credit} is the patient's credit on account.",
+        "cancel_late": "This stay has {nights} night(s) behind it, and its bed days ({amount}) will not be billed if it is cancelled. If the patient did stay, discharge and bill.",
         "cancel": "Cancel the admission", "cancel_hint": "For an admission entered by mistake with no charges. The bed is freed and the advance refunded.",
         "cancel_confirm": "Confirm cancelling the admission", "cancelled_ok": "The admission was cancelled and the bed is free.",
         "refund": "Refund the advance", "refunded": "Advance {payment} was refunded.", "refund_pending": "The refund is waiting for approval.",
@@ -195,8 +206,15 @@ def beds(request):
         for cell in row["beds"]:
             if cell["admission"] is not None:
                 cell["day_label"] = words["day_n"].format(n=cell["admission"].day_number)
+    # A stay that left its bed is reached from here: the ones that still need someone, then the latest that ended.
+    attention = inpatient.needing_action()
+    for row in attention:
+        row["labels"] = [words[f"need_{reason}"] for reason in row["reasons"]]
+    recent = inpatient.recent_closed()
+    for admission in recent:
+        admission.state_label = inpatient.STATE_LABELS[lang][admission.state]
     return render(request, "medical/beds.html", _base(lang, board=rows, can_admit=inpatient.can_manage_beds(request.user),
-                                                      can_setup=inpatient.can_setup(request.user)))
+                                                      can_setup=inpatient.can_setup(request.user), attention=attention, recent=recent))
 
 
 # ---- the admission sheet -----------------------------------------------------------
@@ -343,7 +361,7 @@ def stay(request, pk):
     labels = inpatient.KIND_LABELS[lang]
     charges = list(admission.charges.select_related("item", "bed__ward", "surgeon", "invoice"))
     lines = [{"pk": c.pk, "day": c.day, "kind": c.kind, "kind_label": labels[c.kind], "name": c.item.item_name, "quantity": c.quantity, "price": c.price,
-              "total": c.quantity * c.price, "bed": c.bed.code if c.bed_id else "", "surgeon": c.surgeon.name if c.surgeon_id else "",
+              "total": money_round(c.quantity * c.price), "bed": c.bed.code if c.bed_id else "", "surgeon": c.surgeon.name if c.surgeon_id else "",
               "note": c.note if reads else "", "billed": c.invoice_id is not None and c.invoice.status != "cancelled", "pending": False,
               "removable": writes and c.kind != ChargeKind.BED_DAY and admission.state != AdmissionState.CANCELLED
                            and not (c.invoice_id is not None and c.invoice.status != "cancelled")} for c in charges]
@@ -361,6 +379,14 @@ def stay(request, pk):
     days.reverse()  # today first: what was just added is on top
     deposit = inpatient.advance_of(admission)
     held = deposit if deposit is not None and deposit.status == "held" else None
+    advance_split = ""
+    if deposit is not None and deposit.status == "applied":  # an advance larger than the bill: say what it settled and what is left
+        from settlements.models import InvoiceSettlement
+
+        settled = InvoiceSettlement.objects.filter(customer_payment_id=deposit.payment_id).first()
+        if settled is not None and settled.amount < deposit.payment.amount:
+            advance_split = words["advance_split"].format(applied=f"{settled.amount:,.2f}", credit=f"{deposit.payment.amount - settled.amount:,.2f}")
+    nights = inpatient.nights_behind(admission) if is_open else 0
     add = request.GET.get("add") if request.GET.get("add") in inpatient.ADDED_KINDS and writes and is_open else ""
     if request.method == "POST" and request.POST.get("action") == "charge" and error:
         add = request.POST.get("kind") if request.POST.get("kind") in inpatient.ADDED_KINDS else ""
@@ -393,8 +419,12 @@ def stay(request, pk):
         insured_note=words["insured"].format(insurer=cover.contract.insurer.name) if cover is not None else "",
         deposits_on=deposits.enabled(), deposit=deposit, deposit_status=deposits.status_label(deposit, lang) if deposit is not None else "",
         can_take_advance=is_open and held is None and _can_advance(user), advance_boxes=inpatient.advance_cashboxes(admission) if is_open and held is None else (),
-        can_refund=admission.state == AdmissionState.CANCELLED and held is not None and user_has_permission(user, inpatient.RECEIVE),
-        can_cancel=is_open and inpatient.can_manage_beds(user) and not charges, cancelling=request.GET.get("cancel") == "1",
+        can_refund=held is not None and inpatient.advance_refundable(admission) and user_has_permission(user, inpatient.RECEIVE),
+        advance_split=advance_split,
+        # A stay with nights behind it is undone by the owner or a manager only: it waives those nights (``inpatient.cancel``).
+        can_cancel=is_open and inpatient.can_manage_beds(user) and not charges and (not nights or inpatient.can_setup(user)),
+        cancel_late=words["cancel_late"].format(nights=nights, amount=f"{sum((price for _, price in inpatient.pending_bed_days(admission)), 0):,.2f}") if nights else "",
+        cancelling=request.GET.get("cancel") == "1",
         shows_file=reads))
 
 

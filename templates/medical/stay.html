@@ -1,6 +1,6 @@
 {% extends "operations/base.html" %}
 {% load static hesba_format %}
-{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/inpatient.css' %}?v=m8-1">{% endblock %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/inpatient.css' %}?v=m8-2">{% endblock %}
 {% block operation_content %}
 <section class="op-title-row"><div><a class="op-back" href="{% url 'medical:beds' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ w.back }}</a>
 <h1>{{ admission.patient.name }}</h1><p><bdi>{{ admission.number }}</bdi> · {{ ward_name }} / <bdi>{{ admission.bed.code }}</bdi> · {{ day_label }}</p></div>
@@ -15,7 +15,7 @@
 <article><small>{{ w.since }}</small><strong><bdi>{{ admission.admitted_at|date:"Y-m-d H:i" }}</bdi></strong></article>
 {% if admission.discharged_at %}<article><small>{{ w.left }}</small><strong><bdi>{{ admission.discharged_at|date:"Y-m-d H:i" }}</bdi></strong></article>{% endif %}
 <article><small>{{ w.doctor }}</small><strong>{{ admission.doctor.name|default:'—' }}</strong></article>
-{% if deposit %}<article data-advance-box><small>{{ w.advance_box }} · {{ deposit_status }}</small><strong><bdi data-advance-amount>{{ deposit.payment.amount|money }}</bdi></strong></article>{% endif %}
+{% if deposit %}<article data-advance-box><small>{{ w.advance_box }} · {{ deposit_status }}</small><strong><bdi data-advance-amount>{{ deposit.payment.amount|money }}</bdi></strong>{% if advance_split %}<small data-advance-split>{{ advance_split }}</small>{% endif %}</article>{% endif %}
 </section>
 {% if insured_note %}<p class="op-message" data-insured-note>{{ insured_note }}</p>{% endif %}
 
@@ -99,6 +99,6 @@
 
 {% if can_refund %}<form method="post" class="op-form-actions" data-refund-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="refund"><button class="op-secondary" type="submit">{{ w.refund }}</button></form>{% endif %}
 
-{% if can_cancel %}<details class="ip-more ip-cancel" data-cancel{% if cancelling %} open{% endif %}><summary>{{ w.cancel }}</summary><p class="ip-hint">{{ w.cancel_hint }}</p>
+{% if can_cancel %}<details class="ip-more ip-cancel" data-cancel{% if cancelling %} open{% endif %}><summary>{{ w.cancel }}</summary><p class="ip-hint">{{ w.cancel_hint }}</p>{% if cancel_late %}<p class="op-message op-message-error" data-cancel-late>{{ cancel_late }}</p>{% endif %}
 <form method="post" class="op-form-actions">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="cancel"><button class="op-danger" type="submit">{{ w.cancel_confirm }}</button></form></details>{% endif %}
 {% endblock %}

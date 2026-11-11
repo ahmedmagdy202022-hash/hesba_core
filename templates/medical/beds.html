@@ -1,10 +1,14 @@
 {% extends "operations/base.html" %}
 {% load static hesba_format %}
-{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/inpatient.css' %}?v=m8-1">{% endblock %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/inpatient.css' %}?v=m8-2">{% endblock %}
 {% block operation_content %}
 <section class="op-title-row"><div><h1>{{ w.title }}</h1><p>{{ w.intro }}</p></div>
 <div class="op-form-actions">{% if can_admit %}<a class="op-primary" href="{% url 'medical:admit' %}?lang={{ lang }}" data-admit>{{ w.admit }}</a>{% endif %}
 {% if can_setup %}<a class="op-secondary" href="{% url 'medical:wards' %}?lang={{ lang }}" data-wards-setup>{{ w.setup }}</a>{% endif %}</div></section>
+{% if attention %}<section class="ip-card ip-attention" data-attention aria-labelledby="ip-attention"><h2 id="ip-attention">{{ w.attention }}</h2><p class="ip-hint">{{ w.attention_intro }}</p>
+<ul class="ip-stays">{% for row in attention %}<li><a class="ip-stay-row" data-attention-stay="{{ row.admission.pk }}" href="{% url 'medical:stay' row.admission.pk %}?lang={{ lang }}">
+<span class="ip-stay-row__who"><strong>{{ row.admission.patient.name }}</strong><small><bdi>{{ row.admission.number }}</bdi> · <bdi>{{ row.admission.bed.code }}</bdi></small></span>
+<span class="ip-stay-row__why">{% for label in row.labels %}<span class="op-status op-status-draft">{{ label }}</span>{% endfor %}</span></a></li>{% endfor %}</ul></section>{% endif %}
 {% for row in board %}
 <section class="ip-ward" data-ward="{{ row.ward.pk }}" aria-labelledby="ip-ward-{{ row.ward.pk }}">
 <header class="ip-ward__head"><h2 id="ip-ward-{{ row.ward.pk }}">{{ row.name }}</h2><p><span>{{ row.free }} {{ w.free_n }}</span><span>{{ row.occupied }} {{ w.occupied_n }}</span></p></header>
@@ -29,4 +33,8 @@
 {% empty %}
 <div class="ip-card ip-empty" data-no-wards><p><strong>{{ w.no_wards }}</strong></p>{% if can_setup %}<p>{{ w.no_wards_setup }}</p><a class="op-primary" href="{% url 'medical:wards' %}?lang={{ lang }}">{{ w.setup }}</a>{% endif %}</div>
 {% endfor %}
+{% if recent %}<details class="ip-more ip-recent" data-recent-stays><summary>{{ w.recent }}</summary>
+<ul class="ip-stays">{% for admission in recent %}<li><a class="ip-stay-row" data-recent-stay="{{ admission.pk }}" href="{% url 'medical:stay' admission.pk %}?lang={{ lang }}">
+<span class="ip-stay-row__who"><strong>{{ admission.patient.name }}</strong><small><bdi>{{ admission.number }}</bdi> · <bdi>{{ admission.bed.code }}</bdi>{% if admission.discharged_at %} · <bdi>{{ admission.discharged_at|date:"Y/m/d" }}</bdi>{% endif %}</small></span>
+<span class="ip-stay-row__why"><span class="op-status {% if admission.state == 'cancelled' %}op-status-cancelled{% else %}op-status-draft{% endif %}">{{ admission.state_label }}</span></span></a></li>{% endfor %}</ul></details>{% endif %}
 {% endblock %}

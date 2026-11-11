@@ -71,7 +71,9 @@ MESSAGES = {
         "not_discharged": "الفاتورة بتتعمل بعد الخروج.", "nothing": "مفيش حاجة جديدة تتفوتر؛ كل بنود الإقامة على فاتورتها.",
         "location": "لازم يكون فيه مخزن بيع نشط.", "has_charges": "الإقامة دي عليها بنود؛ شيلها الأول، أو اعمل خروج.",
         "advance_closed": "المقدم بيتاخد والمريض لسه مقيم.", "advance_box": "اختار الخزنة أو الحساب البنكي اللي استلم المقدم.",
-        "advance_note": "مقدم إقامة {number}", "cancel_reason": "إلغاء الإقامة {number}",
+        "advance_note": "مقدم إقامة {number}", "cancel_reason": "إلغاء الإقامة {number}", "refund_reason": "رد مقدم الإقامة {number}",
+        "cancel_late": "الإقامة دي عدّى عليها {nights} ليلة؛ إلغاؤها للمالك أو المدير بس. لو المريض أقام فعلاً اعمل خروج وفاتورة.",
+        "refund_not_yet": "المقدم بيترد لما الإقامة تتلغي، أو بعد الخروج لما كل بنودها تبقى على فاتورة مترحّلة.",
         "invoice_note": "إقامة {number}: {patient} — من {first} لـ {last}",
         "bed_line": "إقامة — {ward} / سرير {bed} — {days} يوم (من {first} لـ {last})", "bed_line_one": "إقامة — {ward} / سرير {bed} — {first}",
         "line": "{kind}: {item} — {day}", "line_surgeon": "{kind}: {item} — {surgeon} — {day}",
@@ -92,7 +94,9 @@ MESSAGES = {
         "not_discharged": "The invoice is made after discharge.", "nothing": "Nothing new to bill; every charge of this stay is on its invoice.",
         "location": "An active selling location is needed.", "has_charges": "This stay has charges; remove them first, or discharge the patient.",
         "advance_closed": "An advance is taken while the patient is still admitted.", "advance_box": "Choose the cashbox or bank account that received the advance.",
-        "advance_note": "Advance for stay {number}", "cancel_reason": "Stay {number} cancelled",
+        "advance_note": "Advance for stay {number}", "cancel_reason": "Stay {number} cancelled", "refund_reason": "Advance of stay {number} handed back",
+        "cancel_late": "This stay has {nights} night(s) behind it; only the owner or a manager can cancel it. If the patient did stay, discharge and bill.",
+        "refund_not_yet": "An advance is handed back when the admission is cancelled, or after discharge once every charge is on a posted invoice.",
         "invoice_note": "Stay {number}: {patient} — {first} to {last}",
         "bed_line": "Stay — {ward} / bed {bed} — {days} days ({first} to {last})", "bed_line_one": "Stay — {ward} / bed {bed} — {first}",
         "line": "{kind}: {item} — {day}", "line_surgeon": "{kind}: {item} — {surgeon} — {day}",
@@ -258,6 +262,39 @@ def board():
     return rows
 
 
+def needing_action():
+    """Stays that left their bed and still need someone, in the entity being worked in: the bed board shows them,
+    because an occupied bed is the only other way to a stay's page.
+
+    [{"admission", "reasons"}], reasons from "bill" (charges on no live invoice), "draft" (its bill is a draft
+    that nobody posted yet) and "advance" (an advance still held with no draft waiting to use it)."""
+
+    from django.contrib.contenttypes.models import ContentType
+
+    from deposits.models import Deposit, DepositStatus
+
+    closed = scoped_admissions().exclude(state=AdmissionState.ADMITTED)
+    charges = AdmissionCharge.objects.filter(admission__in=closed, admission__state=AdmissionState.DISCHARGED)
+    to_bill = set(charges.filter(Q(invoice__isnull=True) | Q(invoice__status="cancelled")).values_list("admission_id", flat=True))
+    drafts = set(charges.filter(invoice__status="draft").values_list("admission_id", flat=True))
+    held = set(Deposit.objects.filter(content_type=ContentType.objects.get_for_model(Admission), status=DepositStatus.HELD,
+                                      object_id__in=closed.values("pk")).values_list("object_id", flat=True))
+    rows = []
+    for admission in closed.filter(pk__in=to_bill | drafts | held).select_related("patient", "bed__ward").order_by("-discharged_at", "-pk"):
+        reasons = [key for key, ids in (("bill", to_bill), ("draft", drafts - to_bill)) if admission.pk in ids]
+        if admission.pk in held and admission.pk not in drafts:
+            reasons.append("advance")
+        if reasons:
+            rows.append({"admission": admission, "reasons": reasons})
+    return rows
+
+
+def recent_closed(limit=20):
+    """The last stays that ended (discharged or cancelled) in the entity being worked in, newest first."""
+
+    return list(scoped_admissions().exclude(state=AdmissionState.ADMITTED).select_related("patient", "bed__ward").order_by("-discharged_at", "-pk")[:limit])
+
+
 def free_beds():
     """Beds a patient can be given now, in the entity being worked in."""
 
@@ -330,8 +367,11 @@ def _audit(user, action, admission, after, before=None, event=AuditEventType.UPD
 
 
 def _locked(admission):
-    # ``of=self``: PostgreSQL refuses FOR UPDATE on the nullable side of an outer join (the doctor, the entity).
-    return Admission.objects.select_for_update(of=("self",)).select_related("patient", "bed__ward", "bed__daily_service", "doctor", "entity").get(pk=admission.pk)
+    # The bare row is locked first and read with its relations after. One query doing both joins the bed: when a
+    # move commits a new bed while that query waits for the lock, PostgreSQL rechecks the join against the old
+    # bed, finds no row and the action dies with DoesNotExist instead of running on the moved patient.
+    Admission.objects.select_for_update().get(pk=admission.pk)
+    return Admission.objects.select_related("patient", "bed__ward", "bed__daily_service", "doctor", "entity").get(pk=admission.pk)
 
 
 def _open(admission, words, lang):
@@ -450,7 +490,9 @@ def admit(patient, bed, user, *, doctor=None, diagnosis="", when=None, advance=N
         raise PermissionDenied(words["beds"])
     if patient is None or not patients().filter(pk=patient.pk).exists():
         raise ValidationError(words["patient"])
-    Customer.objects.select_for_update().filter(pk=patient.pk).exists()  # two clicks at once admit the patient once
+    # Two clicks at once admit the patient once. NO KEY: a full row lock here, followed by the advance's cashbox
+    # movement, crosses a cash sales return for the same patient (cashbox first, then the patient's ledger row).
+    Customer.objects.select_for_update(no_key=True).filter(pk=patient.pk).exists()
     bed = _free_bed(bed, words)
     when = _moment(when, words)
     current = Admission.objects.filter(patient=patient, state=AdmissionState.ADMITTED).select_related("bed").first()
@@ -529,7 +571,25 @@ def move(admission, bed, user, *, when=None, lang="ar"):
     return admission
 
 
-def _refund_advance(admission, user, lang):
+def nights_behind(admission):
+    """How many Cairo nights the patient has already spent: 0 on the admission day."""
+
+    return max((timezone.localdate() - _local_day(admission.admitted_at)).days, 0)
+
+
+def advance_refundable(admission):
+    """Whether a held advance has nothing left to settle, so it can be handed back: the admission was cancelled;
+    or the stay was discharged, every charge is on a live invoice and none of those invoices is a draft still
+    waiting to post (posting is what applies the advance)."""
+
+    if admission.state == AdmissionState.CANCELLED:
+        return True
+    if admission.state != AdmissionState.DISCHARGED or unbilled(admission).exists():
+        return False
+    return not AdmissionCharge.objects.filter(admission=admission, invoice__status="draft").exists()
+
+
+def _refund_advance(admission, user, lang, reason_key="cancel_reason"):
     """A cancelled admission's advance follows the booking's refund path (``appointments.cancel_with_deposit_policy``):
     the collection permission, the closed-month blocker, HG-068's second person, then ``deposits.refund``.
     Never a forfeit: an admission has no lateness (``deposits.policy`` answers "refund" for it)."""
@@ -541,7 +601,7 @@ def _refund_advance(admission, user, lang):
     result = {"deposit": deposit, "outcome": None, "detail": ""}
     if deposit is None:
         return result
-    reason = _words(lang)["cancel_reason"].format(number=admission.number)
+    reason = _words(lang)[reason_key].format(number=admission.number)
     if not user_has_permission(user, RECEIVE):
         result["outcome"] = "refund_not_allowed"
         return result
@@ -569,20 +629,29 @@ def cancel(admission, user, lang="ar"):
     _open(admission, words, lang)
     if admission.charges.exists():
         raise ValidationError(words["has_charges"])
+    # Bed-days are written at a move or a discharge only, so a patient who stayed in their first bed has no
+    # charges however long they stayed. Undoing such a stay waives its nights: the owner's or a manager's call.
+    nights = nights_behind(admission)
+    if nights and not can_setup(user):
+        raise PermissionDenied(words["cancel_late"].format(nights=nights))
+    waived = pending_bed_days(admission)
     admission.state, admission.discharged_at = AdmissionState.CANCELLED, timezone.now()
     admission.save(update_fields=["state", "discharged_at"])
-    _audit(user, "cancel_admission", admission, {"state": AdmissionState.CANCELLED}, {"state": AdmissionState.ADMITTED, "bed": admission.bed_id})
+    _audit(user, "cancel_admission", admission, {"state": AdmissionState.CANCELLED, "nights_behind": nights,
+                                                 "bed_days_waived": str(sum((price for _, price in waived), ZERO)) if nights else "0"},
+           {"state": AdmissionState.ADMITTED, "bed": admission.bed_id})
     return {"admission": admission, **_refund_advance(admission, user, lang)}
 
 
 @transaction.atomic
 def refund_advance(admission, user, lang="ar"):
-    """The advance still held on a cancelled admission (its refund was refused or waited), tried again."""
+    """Hand back an advance that has nothing left to settle (``advance_refundable``): a cancelled admission's
+    whose refund was refused or waited, or a discharged stay's that its posted bill did not use (a bill of zero)."""
 
     admission = _locked(admission)
-    if admission.state != AdmissionState.CANCELLED:
-        raise ValidationError(_words(lang)["not_open"].format(state=STATE_LABELS[_lang(lang)].get(admission.state, admission.state)))
-    return _refund_advance(admission, user, lang)
+    if not advance_refundable(admission):
+        raise ValidationError(_words(lang)["refund_not_yet"])
+    return _refund_advance(admission, user, lang, "cancel_reason" if admission.state == AdmissionState.CANCELLED else "refund_reason")
 
 
 # ---- charges -----------------------------------------------------------------------

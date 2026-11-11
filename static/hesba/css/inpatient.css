@@ -99,3 +99,16 @@ a.ip-bed:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
   .ip-line__act button{width:100%}
   .ip-charges__head .op-form-actions{width:100%}
 }
+
+/* ---- stays that left their bed: the ones that still need someone, and the latest that ended ---- */
+.ip-attention{margin-bottom:var(--hs-space-6)}
+.ip-stays{display:grid;gap:var(--hs-space-2);margin:0;padding:0;list-style:none}
+.ip-stay-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--hs-space-2) var(--hs-space-3);min-height:56px;padding:var(--hs-space-2) var(--hs-space-3);border-radius:var(--hs-card-radius-sm);background:var(--hs-neutral-wash);color:var(--hs-ink);text-decoration:none}
+.ip-stay-row:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
+.ip-stay-row__who{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ip-stay-row__who strong{color:var(--hs-navy)}
+.ip-stay-row__who small{color:var(--hs-muted);font-size:var(--hs-text-xs)}
+.ip-stay-row__why{display:flex;flex-wrap:wrap;gap:var(--hs-space-1)}
+.ip-recent{margin:0 0 var(--hs-space-6)}
+.ip-recent .ip-stay-row{background:var(--hs-card-bg);box-shadow:var(--hs-card-shadow)}
+.ip-facts article small[data-advance-split]{display:block;margin-top:var(--hs-space-1);color:var(--hs-muted);font-size:var(--hs-text-xs);line-height:var(--hs-leading)}
