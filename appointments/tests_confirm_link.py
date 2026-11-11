@@ -67,8 +67,8 @@ class LinkSetup(TestCase):
         return f"{link}?lang={lang}" if lang else link
 
     def post(self, name, appointment=None, **extra):
-        token = services.patient_token(appointment or self.appointment)
-        return self.client.post(reverse(name, args=[token]), {"lang": "ar"}, **extra)
+        self.sent = services.patient_token(appointment or self.appointment)  # kept: a token made a second later differs
+        return self.client.post(reverse(name, args=[self.sent]), {"lang": "ar"}, **extra)
 
     def audit(self, action):
         return AuditLog.objects.filter(module="appointments", action=action, object_id=str(self.appointment.pk))
@@ -127,7 +127,7 @@ class ConfirmTests(LinkSetup):
     def test_confirming_moves_booked_to_confirmed_once_and_is_idempotent(self):
         first = self.post("share_appointment_confirm")
         self.assertEqual(first.status_code, 303)
-        self.assertEqual(first["Location"], f"{reverse('share_document', args=[services.patient_token(self.appointment)])}?lang=ar")
+        self.assertEqual(first["Location"], f"{reverse('share_document', args=[self.sent])}?lang=ar")
         self.assertEqual(self.refresh(), AppointmentStatus.CONFIRMED)
         rows = self.audit("appointment_status")
         self.assertEqual(rows.count(), 1)
