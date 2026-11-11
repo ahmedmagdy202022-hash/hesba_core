@@ -341,3 +341,123 @@ class InsuredBill(models.Model):
 
     class Meta:
         ordering = ["-created_at", "-pk"]
+
+
+# ---- M8 (HG-088): inpatient: wards and beds, an admission and its charges ----
+
+class Ward(models.Model):
+    """A ward or a floor of rooms. It belongs to an entity like every scoped record (NULL: the main one, HG-034)."""
+
+    name_ar = models.CharField(max_length=120)
+    name_en = models.CharField(max_length=120, blank=True)
+    entity = models.ForeignKey("entities.Entity", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    position = models.PositiveSmallIntegerField(default=0)
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["position", "pk"]
+
+    def display(self, lang="ar"):
+        return (self.name_en or self.name_ar) if lang == "en" else self.name_ar
+
+    def __str__(self):
+        return self.name_ar
+
+
+class Bed(models.Model):
+    """A bed (or a room) in a ward. ``daily_service`` is the service billed for each day in it, at its price on the day
+    the bed-day is written. A bed that is not ``active`` is out of service: nobody is admitted to it."""
+
+    ward = models.ForeignKey(Ward, on_delete=models.PROTECT, related_name="beds")
+    code = models.CharField(max_length=20)
+    daily_service = models.ForeignKey("master_data.Item", on_delete=models.PROTECT, related_name="+")
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["ward__position", "ward_id", "code", "pk"]
+        constraints = [models.UniqueConstraint(fields=["ward", "code"], name="medical_one_bed_code_per_ward")]
+
+    def __str__(self):
+        return self.code
+
+
+class AdmissionState(models.TextChoices):
+    ADMITTED = "admitted", "Admitted"
+    DISCHARGED = "discharged", "Discharged"
+    CANCELLED = "cancelled", "Cancelled"
+
+
+class Admission(models.Model):
+    """A patient's stay in a bed, from admission to discharge.
+
+    It never moves money by itself. Its charges are billed at discharge by an ordinary draft sales invoice
+    (``medical.inpatient.bill``); posting that invoice on the sales page is what touches the patient's account,
+    the stock of the supplies and the cashbox. An advance is a deposit (S5, ``deposits.services.take``) whose
+    target is this row.
+
+    The field is ``state``, not ``status``: the deposit service reads a target's ``status`` as a booking's
+    (it takes a deposit only on "booked" / "confirmed") and a target without one as always open. An admission
+    is not a booking, so it carries no ``status`` and ``medical.inpatient`` decides when an advance may be taken."""
+
+    number = models.CharField(max_length=30, unique=True)
+    patient = models.ForeignKey("master_data.Customer", on_delete=models.PROTECT, related_name="admissions")
+    bed = models.ForeignKey(Bed, on_delete=models.PROTECT, related_name="admissions")
+    #: When the patient took the bed they are in now (the admission, or the last move): its bed-days start here.
+    bed_since = models.DateTimeField()
+    doctor = models.ForeignKey("staff.Employee", on_delete=models.SET_NULL, null=True, blank=True, related_name="admissions")
+    admitted_at = models.DateTimeField(db_index=True)
+    discharged_at = models.DateTimeField(null=True, blank=True)
+    state = models.CharField(max_length=12, choices=AdmissionState.choices, default=AdmissionState.ADMITTED, db_index=True)
+    #: Clinical content: shown only to those who may read patient records (HG-084).
+    diagnosis = models.TextField(blank=True)
+    entity = models.ForeignKey("entities.Entity", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-admitted_at", "-pk"]
+        constraints = [
+            models.UniqueConstraint(fields=["patient"], condition=models.Q(state="admitted"), name="medical_one_open_admission_per_patient"),
+            models.UniqueConstraint(fields=["bed"], condition=models.Q(state="admitted"), name="medical_one_open_admission_per_bed"),
+        ]
+
+    def __str__(self):
+        return self.number
+
+
+class ChargeKind(models.TextChoices):
+    BED_DAY = "bed_day", "Bed day"
+    PROCEDURE = "procedure", "Procedure or service"
+    OPERATION = "operation", "Operation"
+    SUPPLY = "supply", "Supply"
+
+
+class AdmissionCharge(models.Model):
+    """Something the stay is billed for: a day in a bed, a procedure, an operation (with its surgeon) or a supply.
+
+    A charge is billed once: ``invoice`` is the draft it went on, and a charge on a live invoice can no longer be
+    removed. A bed-day is written by the service only (one per calendar day of the stay, never two)."""
+
+    admission = models.ForeignKey(Admission, on_delete=models.PROTECT, related_name="charges")
+    kind = models.CharField(max_length=12, choices=ChargeKind.choices)
+    item = models.ForeignKey("master_data.Item", on_delete=models.PROTECT, related_name="+")
+    quantity = models.DecimalField(max_digits=14, decimal_places=3, default=1)
+    price = models.DecimalField(max_digits=14, decimal_places=2)
+    day = models.DateField(db_index=True)
+    #: The bed a bed-day was spent in.
+    bed = models.ForeignKey(Bed, on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    surgeon = models.ForeignKey("staff.Employee", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    #: Clinical content, like the diagnosis: never copied onto the invoice.
+    note = models.CharField(max_length=255, blank=True)
+    invoice = models.ForeignKey("sales.SalesInvoice", on_delete=models.PROTECT, null=True, blank=True, related_name="admission_charges")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["day", "pk"]
+        constraints = [
+            models.UniqueConstraint(fields=["admission", "day"], condition=models.Q(kind="bed_day"), name="medical_one_bed_day_per_day"),
+        ]
+
+    def __str__(self):
+        return f"{self.admission_id}:{self.kind}:{self.day}"
