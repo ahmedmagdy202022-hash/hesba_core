@@ -108,8 +108,8 @@ class HugeTrendTests(TestCase):
         self.sell("SI-W1", 1, "10.00", 31)   # previous 30 days: 10
         self.sell("SI-W2", 5, "100.00", 0)   # this period: 500, a change of 4900%
         ar, en = self.page("ar"), self.page("en")
-        self.assertIn("أكتر من 3 أضعاف الفترة اللي قبلها", ar)
-        self.assertIn("more than 3× the previous period", en)
+        self.assertIn("زيادة كبيرة جدًا عن الفترة اللي قبلها", ar)
+        self.assertIn("far above the previous period", en)
         self.assertNotIn("4900%", ar)
         self.assertNotIn("4900%", en)
 
@@ -118,7 +118,7 @@ class HugeTrendTests(TestCase):
         self.sell("SI-W2", 5, "100.00", 0)   # this period: 500, +25%
         ar = self.page("ar")
         self.assertIn("<bdi>25%</bdi>", ar)
-        self.assertNotIn("أكتر من 3 أضعاف", ar)
+        self.assertNotIn("زيادة كبيرة جدًا", ar)
 
 
 class HugeTrendRuleTests(TestCase):

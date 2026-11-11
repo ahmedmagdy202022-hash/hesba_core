@@ -115,7 +115,7 @@ STRINGS = {
         "analytics_title": "أداء النشاط",
         "how_label": "اتحسب إزاي؟",
         "vs_previous": "عن الفترة اللي قبلها",
-        "huge_up": "أكتر من 3 أضعاف الفترة اللي قبلها",  # MT-06: «▲ 1396%» says nothing; above HUGE_DELTA_PCT words replace the number
+        "huge_up": "زيادة كبيرة جدًا عن الفترة اللي قبلها",  # MT-06: «▲ 1396%» says nothing; above HUGE_DELTA_PCT words replace the number. No "N times": the change is measured against the size of the previous figure, which may have been a loss
         "huge_down": "هبوط حاد عن الفترة اللي قبلها",
         "daily_title": "المبيعات يوم بيوم",
         "daily_legend_now": "الفترة دي",
@@ -190,7 +190,7 @@ STRINGS = {
         "analytics_title": "Business performance",
         "how_label": "How is this calculated?",
         "vs_previous": "vs the previous period",
-        "huge_up": "more than 3× the previous period",
+        "huge_up": "far above the previous period",
         "huge_down": "a sharp fall vs the previous period",
         "daily_title": "Sales by day",
         "daily_legend_now": "This period",
@@ -503,7 +503,7 @@ def _ask_link(lang, fit, user):
 REPEATED_BY_METRIC = {"cashbox_balance": "cash", "customer_dues": "receivables", "supplier_dues": "payables"}
 
 
-#: MT-06: above this many percent a trend is told in words («أكتر من 3 أضعاف»), not as a number nobody can use.
+#: MT-06: above this many percent a trend is told in words («زيادة كبيرة جدًا»), not as a number nobody can use.
 HUGE_DELTA_PCT = 300
 
 
