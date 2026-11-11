@@ -524,7 +524,7 @@ class EveryActivityTests(TestCase):
                 owner.hesba_profile.refresh_from_db()
                 self.assertEqual(owner.hesba_profile.display_name, owner_name(activity, sub))
                 steps = demo_tour(activity, sub)
-                self.assertEqual(len(steps), 3)
+                self.assertEqual(len(steps), 4 if (activity, sub) == ("medical", "clinic") else 3)  # M8: the clinic's tour also opens the beds
                 for _, _, _, _, url_name in steps:
                     self.assertEqual(self.client.get(f"{reverse(url_name)}?lang=ar").status_code, 200, url_name)
                     self.assertEqual(self.client.get(f"{reverse(url_name)}?lang=en").status_code, 200, url_name)
