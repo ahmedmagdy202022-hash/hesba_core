@@ -147,3 +147,53 @@ class OtherActivitiesKeepTheirShortcutsTests(TestCase):
         keys = self.keys_of("medical", "lab", "w1b_s_lab")
         self.assertIn("new_booking", keys)
         self.assertNotIn("new_visit", keys)
+
+
+class EmptyDailyScreensTests(access.Clinic):
+    """The agenda and the queue, when empty, say what to do next; the follow-ups' empty lines are good news and stay as they are."""
+
+    def setUp(self):
+        super().setUp()
+        from appointments.models import Appointment
+
+        Appointment.objects.all().delete()
+
+    def get(self, who, name, **params):
+        self.client.force_login(self.users[who] if isinstance(who, str) else who)
+        response = self.client.get(reverse(name), params)
+        self.assertEqual(response.status_code, 200)
+        return response.content.decode()
+
+    def test_an_empty_agenda_offers_the_booking_form_to_those_who_may_book(self):
+        ar = self.get("owner", "appointments:agenda")
+        self.assertIn('<span class="hs-empty" data-agenda-empty><b>مفيش مواعيد في اليوم ده.</b><a href="#new-appointment" data-agenda-empty-book>احجز كشف</a></span>', ar)
+        en = self.get("owner", "appointments:agenda", lang="en")
+        self.assertIn('<b>No appointments on this day.</b><a href="#new-appointment" data-agenda-empty-book>Book a visit</a>', en)
+
+    def test_it_offers_no_link_to_a_form_the_user_does_not_have(self):
+        from reports.tests_analytics import person
+        from permissions.models import RoleCode
+
+        ar = self.get(person(RoleCode.ACCOUNTANT, "w1b_empty_acc"), "appointments:agenda")  # may view the agenda, may not book
+        self.assertIn('<span class="hs-empty" data-agenda-empty><b>مفيش مواعيد في اليوم ده.</b></span>', ar)
+        self.assertNotIn("data-agenda-empty-book", ar)
+
+    def test_an_empty_queue_points_reception_to_the_check_in_below(self):
+        ar = self.get("owner", "medical:queue")
+        self.assertIn('<b>مفيش حد في الدور النهارده.</b><a href="#walk-in" data-queue-empty-check-in>سجّل وصول مريض</a>', ar)
+        self.assertIn('<b>مفيش مواعيد مستنية.</b><a href="#walk-in">سجّل وصول مريض من غير ميعاد</a>', ar)
+        self.assertIn('<h2 id="walk-in">', ar)
+        en = self.get("owner", "medical:queue", lang="en")
+        self.assertIn('<b>Nobody in the queue today.</b><a href="#walk-in" data-queue-empty-check-in>Check a patient in</a>', en)
+
+    def test_a_doctor_who_cannot_check_in_is_told_how_the_queue_fills(self):
+        ar = self.get("doctor", "medical:queue")
+        self.assertIn('<b>مفيش حد في الدور النهارده.</b><span>الدور بيتملى لما الاستقبال يسجّل وصول المرضى.</span>', ar)
+        self.assertNotIn("data-queue-empty-check-in", ar)
+        self.assertNotIn('id="walk-in"', ar)  # the desk's part of the screen is not theirs
+
+    def test_the_follow_ups_empty_lines_are_good_news_and_stay_plain(self):
+        ClinicalVisit.objects.all().delete()
+        ar = self.get("owner", "medical:follow_ups")
+        self.assertIn('<td colspan="7" class="op-empty">مفيش متابعات فاتت.</td>', ar)
+        self.assertIn('<td colspan="6" class="op-empty">مفيش متابعات جاية من غير حجز.</td>', ar)

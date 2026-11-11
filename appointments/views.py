@@ -151,7 +151,7 @@ def _base(request, **extra):
     title = term("appointments", lang)  # AUDIT-3: "الحجوزات" in a clinic, "الحصص والمواعيد" in a school
     # WATCH1B (CL-01): a clinic books a patient for a visit, a shop a customer for a service.
     words = dict(WORDS[lang], title=title, page_title=title, intro=term("agenda_intro", lang), customer=term("agenda_customer", lang),
-                 service=term("agenda_service", lang))
+                 service=term("agenda_service", lang), book_first=term("agenda_book", lang))
     context = {"lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": words, "page_title": title,
                "can_book": user_has_permission(request.user, BOOK), "can_report": user_has_permission(request.user, REPORT)}
     context.update(extra)

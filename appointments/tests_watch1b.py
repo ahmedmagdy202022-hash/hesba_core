@@ -108,3 +108,13 @@ class AgendaDoctorsTests(TestCase):
         self.assertIn(f'<option value="{self.rep.pk}" selected>', page)
         filtered = self.client.get(reverse("appointments:agenda"), {"employee": self.rep.pk}).content.decode()
         self.assertIn(f'<option value="{self.rep.pk}" selected>', filtered)
+
+
+class EmptyAgendaWordsTests(TestCase):
+    def test_a_salon_s_empty_day_offers_to_book_an_appointment(self):
+        prepared_client("services", "beauty", ",".join(default_modules("services", "beauty")))
+        self.client.force_login(person(RoleCode.OWNER, "w1b_ag_empty"))
+        ar = self.client.get(reverse("appointments:agenda")).content.decode()
+        self.assertIn('<b>مفيش مواعيد في اليوم ده.</b><a href="#new-appointment" data-agenda-empty-book>احجز ميعاد</a>', ar)
+        en = self.client.get(reverse("appointments:agenda"), {"lang": "en"}).content.decode()
+        self.assertIn('<b>No appointments on this day.</b><a href="#new-appointment" data-agenda-empty-book>Book an appointment</a>', en)

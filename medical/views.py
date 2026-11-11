@@ -766,6 +766,7 @@ QUEUE_WORDS = {
            "find": "بحث", "check_in": "وصل", "queue": "الدور النهارده", "number": "الرقم", "patient": "المريض", "doctor": "الدكتور", "status": "الحالة",
            "arrived": "وصل", "wait": "مستني بقاله", "minutes": "دقيقة", "call_next": "نادي على اللي بعده", "call": "نادي", "done": "خلص", "left": "مشي",
            "back_to_wait": "رجّعه للانتظار", "record_visit": "سجّل الكشف", "none": "مفيش حد في الدور النهارده.", "none_appts": "مفيش مواعيد مستنية.",
+           "none_hint": "الدور بيتملى لما الاستقبال يسجّل وصول المرضى.", "none_act": "سجّل وصول مريض", "none_appts_act": "سجّل وصول مريض من غير ميعاد",
            "now": "اتفضل", "next": "اللي عليه الدور", "waiting_n": "مستنيين", "no_one": "—", "at": "الساعة", "saved": "اتحفظ.",
            "called": "اتنادى على رقم {number}.", "checked": "{name} رقم دوره {number}."},
     "en": {"title": "Waiting list", "intro": "Check a patient in and they get their turn number; the doctor calls the next one in. The waiting screen shows numbers only.",
@@ -773,6 +774,7 @@ QUEUE_WORDS = {
            "find": "Search", "check_in": "Arrived", "queue": "Today's queue", "number": "No.", "patient": "Patient", "doctor": "Doctor", "status": "Status",
            "arrived": "Arrived", "wait": "Waiting for", "minutes": "min", "call_next": "Call the next one", "call": "Call", "done": "Done", "left": "Left",
            "back_to_wait": "Back to waiting", "record_visit": "Record the visit", "none": "Nobody in the queue today.", "none_appts": "No appointments waiting.",
+           "none_hint": "The queue fills up as reception checks patients in.", "none_act": "Check a patient in", "none_appts_act": "Check in a patient without an appointment",
            "now": "Please come in", "next": "Next", "waiting_n": "waiting", "no_one": "—", "at": "at", "saved": "Saved.",
            "called": "Number {number} was called in.", "checked": "{name} is number {number}."},
 }
