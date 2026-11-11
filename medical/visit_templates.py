@@ -420,8 +420,13 @@ def copy(template, user, lang="ar"):
         raise PermissionDenied(words(lang)["not_yours"])
     _room(user, lang)
     name, taken = template.name, VisitTemplate.objects.filter(owner=user, specialty=template.specialty, lang=template.lang)
+    word, number = ("copy" if template.lang == "en" else "نسخة"), 1
     while taken.filter(name=name).exists():
-        name = f"{name} ({'copy' if template.lang == 'en' else 'نسخة'})"[:NAME_LIMIT]
+        # The base is cut to leave room for the suffix, and the suffix changes each round: every candidate differs, so
+        # a name already at the limit (or copied many times) cannot loop for ever.
+        suffix = f" ({word})" if number == 1 else f" ({word} {number})"
+        name = template.name[:NAME_LIMIT - len(suffix)].rstrip() + suffix
+        number += 1
     twin = VisitTemplate.objects.create(name=name, lang=template.lang, specialty=template.specialty, owner=user, complaint=template.complaint,
                                         examination=template.examination, diagnosis=template.diagnosis, treatment=template.treatment,
                                         lines=list(template.lines or []), created_by=user,

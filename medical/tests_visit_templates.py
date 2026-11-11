@@ -601,6 +601,21 @@ class ManagerTests(Setup):
         self.assertContains(page, "data-vt-up")
         self.assertContains(page, "data-vt-down")
 
+    def test_copying_a_name_already_at_the_limit_ends_and_every_copy_differs(self):
+        # The suffix used to be appended and then cut off again, so the candidate never changed and the request never ended.
+        from . import visit_templates as vt
+
+        long = self.make(owner=self.users["doctor"], name="ق" * vt.NAME_LIMIT)
+        names = {long.name}
+        for _ in range(4):
+            twin = vt.copy(long, self.users["doctor"])
+            self.assertLessEqual(len(twin.name), vt.NAME_LIMIT)
+            self.assertNotIn(twin.name, names)
+            names.add(twin.name)
+        self.assertEqual(len(names), 5)
+        short = self.make(owner=self.users["doctor"], name="كشف دوري")
+        self.assertEqual([vt.copy(short, self.users["doctor"]).name for _ in range(3)], ["كشف دوري (نسخة)", "كشف دوري (نسخة 2)", "كشف دوري (نسخة 3)"])
+
     def test_copy_delete_and_the_scopes(self):
         shared = self.make(owner=None, name="قالب جماعي", lines=[{"reference": None, "name": "غسول", "dose": "", "frequency": "", "duration": "", "route": "", "notes": ""}], diagnosis="تشخيص")
         self.assertContains(self.get("doctor", LIST, scope="shared"), "قالب جماعي")
@@ -756,6 +771,8 @@ class StaticTests(TestCase):
         rx = self.read("hesba/js/rx_picker.js")
         self.assertIn("window.HesbaRx = {", rx)
         self.assertIn("if (lines().length >= max) { return null; }", rx)
+        # a template line carries exactly what the template holds: an empty dose stays empty, never the picker's quick default
+        self.assertIn("if (box) { box.value = spec[name] || ''; }", rx)
 
     def test_tokens_only(self):
         css = self.read("hesba/css/visit_templates.css")
