@@ -172,7 +172,7 @@ class PublicPagesUntouchedTests(SimpleTestCase):
 class StylesheetVersionTests(SimpleTestCase):
     def test_changed_sheets_are_cache_busted_where_linked(self):
         expected = {
-            "base_app.html": ("tokens.css' %}?v=w4-1", "buttons.css' %}?v=w4-1", "lists.css' %}?v=w4-1",
+            "base_app.html": ("tokens.css' %}?v=w4-1", "buttons.css' %}?v=w4-1", "lists.css' %}?v=w4-2",
                               "table_cards.css' %}?v=w4-1", "form_controls.css' %}?v=w4-1", "pager.css' %}?v=w4-1",
                               "report_tools.css' %}?v=w4-1"),
             "operations/base.html": ("operations.css' %}?v=w4-1", "shell.css' %}?v=w4-1"),

@@ -151,3 +151,50 @@ dialog.hs-quick-item[open]{display:flex;flex-direction:column;max-height:calc(10
   .hs-head h1{font-size:25px}
   .hs-head p{font-size:var(--hs-text-sm)}
 }
+
+/* ---- UX Wave 4 (lists): easier to scan and to search ----
+   - The search box stays in sight at the top of a list; only the other filters fold behind «فلترة» on a phone
+     (form.op-filters > input[type=search] + details.hs-filter > .hs-filter__body). Same form and field names as before.
+   - A phone row is one tidy card line: the name or number and the figure that matters, then one small muted line;
+     the whole row is the tap target, so the title link itself no longer needs its own 44px box.
+   - The usual state («نهائية», «متاح») reads as quiet text; only a state that needs attention keeps a coloured chip.
+   - A zero balance is muted, so the customers who owe something stand out.
+   - Desktop and tablet keep real tables with a quieter header row.
+   - An empty list offers its next step as a real button. */
+.op-filters:has(>.hs-filter){display:flex;flex-wrap:wrap;align-items:flex-start;gap:var(--hs-space-2) 10px;margin-bottom:var(--hs-space-4)}
+.op-filters:has(>.hs-filter)>input[type=search]{flex:1 1 240px;min-width:0}
+.op-filters>.hs-filter{flex:0 0 auto;max-width:100%;min-width:0;margin:0}
+.hs-filter__body{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.hs-filter__body>select{flex:none;width:200px;max-width:100%}
+@media (min-width:701px){
+  .hs-filter__body{flex-wrap:nowrap}
+  /* expenses: dates, category and cashbox take a row of their own under the search box */
+  .op-expense-filters>.hs-filter{flex:1 1 100%}
+  .op-expense-filters .hs-filter__body{flex-wrap:wrap}
+  .op-expense-filters .hs-filter__body>:is(.op-inline-label,select){flex:1 1 200px;width:auto}
+}
+@media (max-width:700px){
+  .op-filters:has(>.hs-filter)>input[type=search]{flex:1 1 0;min-height:var(--hs-control-height-lg);font-size:16px;border-color:transparent;box-shadow:var(--hs-card-shadow)}
+  .op-filters>.hs-filter>summary{min-height:var(--hs-control-height-lg);box-shadow:var(--hs-card-shadow)}
+  .op-filters>.hs-filter[open]{flex:1 1 100%}
+  .op-filters>.hs-filter[open]>summary{margin-bottom:var(--hs-space-2)}
+  .hs-filter__body{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--hs-space-2);padding:var(--hs-space-3);border:var(--hs-card-border);border-radius:var(--hs-card-radius-sm);background:var(--hs-card-bg);box-shadow:var(--hs-card-shadow)}
+  .hs-filter__body>*{width:100%;min-height:var(--hs-control-height)}
+  .hs-filter__body :is(input,select){font-size:16px}
+
+  table[data-list-rows] tbody tr{min-height:64px;padding:var(--hs-space-3) var(--hs-space-4);row-gap:var(--hs-space-1)}
+  table[data-list-rows] td[data-row="title"] a{min-height:0}
+  /* the first line never pushes the figure down: the name wraps inside its own room and the second name (the customer
+     or supplier) takes what is left and trails off */
+  table[data-list-rows] td[data-row="title"]{max-width:calc(100% - 8em)}
+  table[data-list-rows] td[data-row="sub"]{flex:1 1 0}
+  table[data-list-rows] td[data-row="amount"]{font-size:var(--hs-text-base)}
+  table[data-list-rows] td[data-row="meta"] .op-status:is(.op-status-posted,.op-status-completed){padding:0;background:transparent;color:var(--hs-muted);font-size:inherit;font-weight:var(--hs-weight-medium)}
+}
+table[data-list-rows] td[data-row="amount"][data-zero]{color:var(--hs-muted);font-weight:var(--hs-weight-regular)}
+@media screen and (min-width:701px){
+  :is(.op-table,.md-table) thead th{background:transparent;border-bottom:1px solid var(--hs-line);color:var(--hs-muted);font-size:var(--hs-text-sm);font-weight:var(--hs-weight-semibold)}
+  :is(.op-table,.md-table)[data-list-rows] tbody tr:hover>td{background:var(--hs-ground)}
+}
+.hs-empty b{font-size:var(--hs-text-base)}
+.hs-empty a{display:inline-flex;align-items:center;justify-content:center;min-height:var(--hs-control-height);padding:0 var(--hs-space-4);border-radius:var(--hs-radius-md);background:var(--hs-teal-wash);text-decoration:none}
