@@ -538,3 +538,62 @@ class AdmissionCharge(models.Model):
 
     def __str__(self):
         return f"{self.admission_id}:{self.kind}:{self.day}"
+
+
+# ---- M7 (HG-090): the vet's vaccines and the doses given ----
+
+class Vaccine(models.Model):
+    """A vaccine the clinic gives. A set-up record (owner and manager), like a ward: it belongs to an entity (NULL: the main one, HG-034).
+
+    ``species`` is one of the animal file's own species values (``Species``) or empty for any species. ``interval_days`` is the
+    days until the next dose or booster, empty for a one-off. ``item`` is the stock or service item a dose is billed on, empty
+    when the clinic does not bill it from here (a campaign, a free dose). Never read by posting: it only says what to put on a draft."""
+
+    name_ar = models.CharField(max_length=120)
+    name_en = models.CharField(max_length=120, blank=True)
+    species = models.CharField(max_length=20, choices=Species.choices, blank=True)
+    interval_days = models.PositiveSmallIntegerField(null=True, blank=True)
+    item = models.ForeignKey("master_data.Item", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    active = models.BooleanField(default=True)
+    entity = models.ForeignKey("entities.Entity", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name_ar", "pk"]
+
+    def display(self, lang="ar"):
+        return (self.name_en or self.name_ar) if lang == "en" else (self.name_ar or self.name_en)
+
+    def __str__(self):
+        return self.name_ar
+
+
+class Vaccination(models.Model):
+    """One dose of a vaccine given to an animal.
+
+    ``next_due`` is when the next dose is expected: worked out from the vaccine's interval when the dose is recorded, or typed by
+    the vet; empty for a one-off. A dose is *superseded* when a later dose of the same vaccine was given to the same animal; that
+    is worked out when read (``medical.vaccines.superseded``), never stored, so removing a mistaken later dose brings the earlier
+    due date back. ``note`` is clinical text (HG-084): only those who may read patient records see it, and it is never copied onto
+    an invoice or a message. ``invoice`` is the draft sales invoice the dose was billed on (``medical.vaccines.bill``); a dose on a
+    live invoice cannot be removed. The row is written only by ``medical.vaccines``."""
+
+    animal = models.ForeignKey(Animal, on_delete=models.PROTECT, related_name="vaccinations")
+    vaccine = models.ForeignKey(Vaccine, on_delete=models.PROTECT, related_name="vaccinations")
+    given_on = models.DateField(db_index=True)
+    next_due = models.DateField(null=True, blank=True, db_index=True)
+    batch = models.CharField(max_length=60, blank=True)
+    given_by = models.ForeignKey("staff.Employee", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    visit = models.ForeignKey(ClinicalVisit, on_delete=models.SET_NULL, null=True, blank=True, related_name="vaccinations")
+    note = models.TextField(blank=True)
+    invoice = models.ForeignKey("sales.SalesInvoice", on_delete=models.PROTECT, null=True, blank=True, related_name="vaccinations")
+    entity = models.ForeignKey("entities.Entity", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-given_on", "-pk"]
+
+    def __str__(self):
+        return f"{self.animal_id}:{self.vaccine_id}:{self.given_on}"

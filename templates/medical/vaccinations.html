@@ -1,0 +1,23 @@
+{% extends "operations/base.html" %}
+{% load static %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/vaccines.css' %}?v=m7-1">{% endblock %}
+{% block operation_content %}
+{# M7 (HG-090): the due list. The cells carry no pre-written labels (table_cards.js fills them); the row roles are lists.css's. #}
+<section class="op-title-row hs-head"><div><h1>{{ vx.title }}</h1><p>{{ vx.intro }}</p></div></section>
+{% include "medical/_tabs.html" %}
+<nav class="vx-chips" aria-label="{{ vx.title }}" data-vx-chips>{% for key, text, count in chips %}<a class="vx-chip" href="?lang={{ lang }}&amp;f={{ key }}{% if q %}&amp;q={{ q|urlencode }}{% endif %}"{% if window == key %} aria-current="page"{% endif %} data-vx-filter="{{ key }}">{{ text }}{% if count is not None %} <span class="vx-chip__n" data-vx-count="{{ key }}">{{ count }}</span>{% endif %}</a>{% endfor %}</nav>
+<form class="op-filters vx-search" method="get"><input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="f" value="{{ window }}">
+<input type="search" name="q" value="{{ q }}" placeholder="{{ vx.search }}" aria-label="{{ vx.search }}" enterkeyhint="search"><button type="submit">{{ vx.find }}</button></form>
+<div class="op-table-wrap"><table class="op-table" data-list-rows data-vx-rows><thead><tr><th>{{ vx.animal }}</th><th>{{ vx.owner }}</th><th>{{ vx.vaccine }}</th><th>{{ vx.due }}</th><th>{{ vx.phone }}</th><th></th></tr></thead><tbody>
+{% for row in rows %}<tr data-vx-row="{{ row.dose.pk }}"{% if row.overdue %} data-overdue{% endif %}>
+<td data-row="title"><a href="{% url 'medical:animal' row.animal.pk %}?lang={{ lang }}#vaccinations" data-row-link>{{ row.animal.name }}</a></td>
+<td data-row="sub">{{ row.owner.name }}</td>
+<td data-row="meta">{% if lang == 'en' %}{{ row.vaccine.name_en|default:row.vaccine.name_ar }}{% else %}{{ row.vaccine.name_ar }}{% endif %}</td>
+<td data-row="meta"><span class="op-status {% if row.overdue %}op-status-cancelled{% else %}op-status-draft{% endif %}" data-due><bdi>{{ row.due_text }}</bdi></span> <span class="vx-when">{{ row.status_text }}</span></td>
+<td data-row="meta"><bdi dir="ltr">{{ row.phone|default:"—" }}</bdi></td>
+<td data-row="action">{% if row.call %}<a class="vx-contact" href="tel:{{ row.call }}" data-call>{{ vx.call }}</a>{% endif %}{% if row.wa_url %}<a class="vx-contact" href="{{ row.wa_url }}" target="_blank" rel="noopener" data-whatsapp>{{ vx.whatsapp }}</a>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="6" class="op-empty" data-row="empty">{% if filtered %}<span class="hs-empty" data-empty-filtered><b>{{ vx.none_filtered }}</b><a href="?lang={{ lang }}">{{ vx.clear }}</a></span>
+{% elif not has_vaccines %}<span class="hs-empty" data-empty-first><b>{{ vx.no_vaccines }}</b>{% if can_setup %}<a href="{% url 'medical:vaccine_setup' %}?lang={{ lang }}">{{ vx.setup }}</a>{% endif %}</span>
+{% else %}<span class="hs-empty" data-empty-none><b>{{ vx.none }}</b></span>{% endif %}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}
