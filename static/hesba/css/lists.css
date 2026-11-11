@@ -53,7 +53,7 @@ table[data-list-rows] tbody tr[data-saved]{background:var(--hs-teal-wash)}
 .hs-row-sub{color:var(--hs-muted);font-size:var(--hs-text-sm);font-weight:var(--hs-weight-regular)}
 /* a word shown on a phone row only («باقي 120.00»); the desktop column has its heading */
 .hs-phone-only{display:none}
-@media (max-width:700px){.hs-phone-only{display:inline;margin-inline-end:.25em}}
+@media (max-width:700px){.hs-phone-only{display:inline;margin-inline-end:.25em}.hs-kbd-hint{display:none}}  /* a keyboard shortcut means nothing on a phone */
 @media (max-width:700px){
   .op-table-wrap:has(>table[data-list-rows]),.md-table-wrap:has(>table[data-list-rows]){overflow:visible;border:var(--hs-card-border);border-radius:var(--hs-card-radius);background:var(--hs-card-bg);box-shadow:var(--hs-card-shadow)}
   table[data-list-rows]{display:block;width:100%;min-width:0!important;border-collapse:separate}
