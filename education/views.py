@@ -2,6 +2,7 @@
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
 from django.db.models import Count, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
@@ -54,7 +55,7 @@ WORDS = {
         "report": "تقرير الشهر", "report_intro": "كل مجموعة في الشهر: الطلاب، والحصص، والحضور، والمصروفات اللي اتفوترت، وأجر المدرس، واللي فاضل للمركز.",
         "held": "حصص اتعملت", "left": "فاضل للمركز", "no_report": "مفيش مجموعات شغالة في الشهر ده.", "month_rate": "الحضور",
         "discard": "امسح المسودة", "discarded": "اتمسحت مسودة {number}؛ الشهر ده يتفوتر تاني لأولياء الأمور دول.",
-        "not_scanned": "ما اتمسحش", "unscanned_note": "{n} من الطلاب ما اتمسحوش، فاتعلّموا غايبين. لو حد منهم حضر غيّره قبل ما تحفظ.",
+        "stale": "اتغيّر الحضور بعد ما فتحت الكشف (اتمسح طلاب). راجع الكشف واحفظ تاني.", "not_scanned": "ما اتمسحش", "unscanned_note": "{n} من الطلاب ما اتمسحوش، فاتعلّموا غايبين. لو حد منهم حضر غيّره قبل ما تحفظ.",
         "scan_attendance": "امسح الحضور", "print_card": "اطبع الكارت", "print_cards": "اطبع كروت المجموعة",
     },
     "en": {
@@ -95,7 +96,7 @@ WORDS = {
         "report": "Month report", "report_intro": "Each group in the month: students, classes, attendance, fees billed, the teacher's pay and what is left for the centre.",
         "held": "Classes held", "left": "Left for the centre", "no_report": "No groups ran in this month.", "month_rate": "Attendance",
         "discard": "Discard draft", "discarded": "Draft {number} discarded; this month can be billed again for these parents.",
-        "not_scanned": "Not scanned", "unscanned_note": "{n} students were not scanned, so they are marked absent. If any of them came, change them before you save.",
+        "stale": "Attendance changed after you opened this sheet (students were scanned). Check the sheet and save again.", "not_scanned": "Not scanned", "unscanned_note": "{n} students were not scanned, so they are marked absent. If any of them came, change them before you save.",
         "scan_attendance": "Scan attendance", "print_card": "Print the card", "print_cards": "Print the group's cards",
     },
 }
@@ -422,13 +423,14 @@ def today(request):
     taken = {session.group_id: session for session in ClassSession.objects.filter(date=day, group__in=groups_today).annotate(
         present=Count("marks", filter=Q(marks__presence=Presence.PRESENT)), late=Count("marks", filter=Q(marks__presence=Presence.LATE)),
         absent=Count("marks", filter=Q(marks__presence=Presence.ABSENT)), excused=Count("marks", filter=Q(marks__presence=Presence.EXCUSED)))}
+    scanned = scan.touched(taken[pk].pk for pk in taken)
     rows = []
     for group in groups_today:
         seats = len(register.roster_on(group, day))
         session = taken.get(group.pk)
         marked = sum((session.present, session.late, session.absent, session.excused)) if session else 0
         rows.append({"group": group, "schedule": services.schedule_text(group, lang), "session": session, "seats": seats,
-                     "not_scanned": max(seats - marked, 0) if session and session.status == SessionStatus.HELD else 0,
+                     "not_scanned": max(seats - marked, 0) if session and session.status == SessionStatus.HELD and session.pk in scanned else 0,
                      "can_take": register.can_take(request.user, group)})
     return render(request, "education/today.html", _base(request, lang, "today", rows=rows, day=day, today=timezone.localdate(),
                                                          weekday=services.DAY_LABELS[lang][register.weekday(day)]))
@@ -453,18 +455,26 @@ def take_attendance(request, pk):
         marks = {key[len("p_"):]: value for key, value in request.POST.items() if key.startswith("p_")}
         marks.update({key: value for key, value in request.POST.items() if key.startswith("note_")})
         try:
-            register.take(group, request.user, day, marks, topic=request.POST.get("topic", ""), cancelled=request.POST.get("cancelled") == "1", lang=lang)
+            with transaction.atomic():
+                # E1: a sheet is saved only if the class is still as the page showed it. Under the group lock (the one a scan takes), the digest is
+                # recomputed from the database; a scan that marked someone since the page was opened makes it differ, and the stale form is dropped.
+                register.lock_group(group)
+                current = register.sheet_version(ClassSession.objects.filter(group=group, date=day).first())
+                posted = request.POST.get("sheet_version") or None
+                if (current != "none") if posted is None else (posted != current):  # no digest at all: stale when a class exists, fresh when none does
+                    error = words["stale"]
+                else:
+                    register.take(group, request.user, day, marks, topic=request.POST.get("topic", ""), cancelled=request.POST.get("cancelled") == "1", lang=lang)
+                    messages.success(request, words["attendance_saved"])
+                    return redirect(f"{reverse('education:attendance', args=[group.pk])}?lang={lang}&date={day.isoformat()}&saved=1")
         except ValidationError as exc:
             error = " ".join(exc.messages)
-        else:
-            messages.success(request, words["attendance_saved"])
-            return redirect(f"{reverse('education:attendance', args=[group.pk])}?lang={lang}&date={day.isoformat()}&saved=1")
     session = ClassSession.objects.filter(group=group, date=day).first()
     marks = {mark.student_id: mark for mark in session.marks.select_related("student__payer", "session__group")} if session else {}
     roster = list(register.roster_on(group, day))
-    # E1 (the money edge): per-class fees bill the present and late marks. In a class that already exists and is being held, a student with no
-    # mark was not scanned: they show (and save) as absent, never as present. A class nobody has opened yet keeps the old "everyone present" start.
-    held = session is not None and session.status == SessionStatus.HELD
+    # E1 (the money edge): per-class fees bill the present and late marks. In a class a scan has marked, a student with no mark was not scanned:
+    # they show (and save) as absent, never as present. Any other class, a centre that never scans included, keeps the old "everyone present" start.
+    held = session is not None and session.status == SessionStatus.HELD and session.pk in scan.touched([session.pk])
     for row in roster:
         mark = marks.get(row.student_id)
         row.unscanned = mark is None and held
@@ -475,7 +485,7 @@ def take_attendance(request, pk):
     return render(request, "education/attendance.html", _base(request, lang, "today", group=group, day=day, session=session, roster=roster, choices=choices,
                                                               schedule=services.schedule_text(group, lang), error=error, today=timezone.localdate(),
                                                               saved=bool(request.GET.get("saved")), notify=[row for row in roster if row.notify],
-                                                              unscanned=sum(1 for row in roster if row.unscanned),
+                                                              version=register.sheet_version(session),
                                                               unscanned_note=words["unscanned_note"].format(n=sum(1 for row in roster if row.unscanned)) if any(row.unscanned for row in roster) else "",
                                                               scheduled=bool(session) or (group.active and register.meets_on(group, day))))
 

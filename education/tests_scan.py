@@ -25,6 +25,7 @@ from .tests import EducationSetup, person
 TODAY = timezone.localdate()
 EVERY_DAY = "sun,mon,tue,wed,thu,fri,sat"
 RADIO = re.compile(r'<input type="radio" name="p_(\d+)" value="(\w+)" checked>')
+VERSION = re.compile(r'name="sheet_version" value="([^"]*)"')
 
 
 def at(day, hour, minute, second=0):
@@ -58,12 +59,22 @@ class ScanSetup(EducationSetup):
     def close_from_the_sheet(self, day):
         """What a teacher does: open the sheet, change nothing, press save. Posts exactly what the page showed as chosen."""
 
-        html = self.client.get(self.sheet_url(day)).content.decode()
-        posted = {f"p_{pk}": value for pk, value in RADIO.findall(html)}
-        self.assertEqual(len(posted), 3)
-        response = self.client.post(reverse("education:attendance", args=[self.review.pk]), {"date": day.isoformat(), "lang": "ar", **posted})
+        form = self.open_sheet(day)
+        response = self.client.post(reverse("education:attendance", args=[self.review.pk]), {"date": day.isoformat(), "lang": "ar", **form})
         self.assertEqual(response.status_code, 302)
-        return posted
+        return {key: value for key, value in form.items() if key.startswith("p_")}
+
+    def open_sheet(self, day):
+        """The form fields exactly as the open page holds them: every checked radio and the sheet's version."""
+
+        html = self.client.get(self.sheet_url(day)).content.decode()
+        form = {f"p_{pk}": value for pk, value in RADIO.findall(html)}
+        self.assertEqual(len(form), 3)
+        form["sheet_version"] = VERSION.search(html).group(1)
+        return form
+
+    def save(self, day, form):
+        return self.client.post(reverse("education:attendance", args=[self.review.pk]), {"date": day.isoformat(), "lang": "ar", **form})
 
 
 class ScanRulesTests(ScanSetup):
@@ -259,3 +270,93 @@ class ScanBillingTests(ScanSetup):
         self.assertEqual(by_payer, {self.a.payer_id: D("200.00"), self.b.payer_id: D("100.00")})
         self.assertEqual(len(drafts), 2)
         self.assertNotIn(self.c.payer_id, by_payer)
+
+
+class StaleSheetTests(ScanSetup):
+    """A sheet is saved only if the class is still as the page showed it; otherwise it comes back from the database and nothing is written."""
+
+    def test_a_sheet_opened_before_any_scan_cannot_overwrite_the_scans_and_the_bill_follows_the_scans(self):
+        first = (TODAY.replace(day=1) - timedelta(days=1)).replace(day=1)
+        day = first + timedelta(days=2)
+        for student in (self.a, self.b, self.c):
+            Enrollment.objects.filter(student=student).update(start_date=first)
+        stale = self.open_sheet(day)  # no class yet: everyone shows present, version "none"
+        self.assertEqual((stale["sheet_version"], set(value for key, value in stale.items() if key.startswith("p_"))), ("none", {"present"}))
+        scan.mark(self.a.code, self.owner, at(day, 16, 3))
+        scan.mark(self.b.code, self.owner, at(day, 16, 4))
+        response = self.save(day, stale)  # the teacher saves the old page
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "اتغيّر الحضور بعد ما فتحت الكشف")
+        self.assertEqual(self.marks(day), {"آدم": "present", "بسمة": "present"})  # the two scans survive and nobody else is marked
+        self.assertEqual(AuditLog.objects.filter(action="take_attendance").count(), 0)
+        # The page that came back is the database's: the third student is absent and tagged. Saving that one works.
+        fresh = self.open_sheet(day)
+        self.assertEqual(fresh[f"p_{self.c.pk}"], "absent")
+        self.assertEqual(self.save(day, fresh).status_code, 302)
+        self.assertEqual(self.marks(day), {"آدم": "present", "بسمة": "present", "جاد": "absent"})
+        drafts = billing.bill_month(first, self.owner)
+        self.assertEqual({invoice.customer_id: invoice.total_amount for invoice in drafts}, {self.a.payer_id: D("50.00"), self.b.payer_id: D("50.00")})
+
+    def test_a_scan_after_the_sheet_was_opened_survives_a_stale_save(self):
+        attendance.take(self.review, self.owner, TODAY, {str(self.c.pk): "absent"})  # the teacher marked everyone, c absent
+        stale = self.open_sheet(TODAY)
+        self.assertEqual(stale[f"p_{self.c.pk}"], "absent")
+        self.assertEqual(scan.mark(self.c.code, self.owner, at(TODAY, 16, 30)).presence, "late")  # the late-comer arrives
+        response = self.save(TODAY, stale)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "اتغيّر الحضور")
+        self.assertEqual(self.marks()["جاد"], "late")
+        self.assertEqual(self.save(TODAY, self.open_sheet(TODAY)).status_code, 302)  # the re-rendered sheet saves, late kept
+        self.assertEqual(self.marks()["جاد"], "late")
+
+    def test_an_unchanged_sheet_saves_as_always_and_a_note_changed_meanwhile_is_also_stale(self):
+        scan.mark(self.a.code, self.owner, at(TODAY, 16, 2))
+        form = self.open_sheet(TODAY)
+        self.assertEqual(self.save(TODAY, form).status_code, 302)  # nothing changed between render and save
+        self.assertEqual(self.marks(), {"آدم": "present", "بسمة": "absent", "جاد": "absent"})
+        old = self.open_sheet(TODAY)
+        attendance.take(self.review, self.owner, TODAY, {f"note_{self.a.pk}": "جه بدري", str(self.b.pk): "absent", str(self.c.pk): "absent"})
+        self.assertEqual(self.save(TODAY, old).status_code, 200)  # another save (here a note) since the page was opened
+        self.assertEqual(Attendance.objects.get(student=self.a).note, "جه بدري")
+
+    def test_a_save_with_no_version_is_stale_when_a_class_exists_and_fresh_when_none_does(self):
+        form = self.open_sheet(TODAY)
+        form.pop("sheet_version")
+        self.assertEqual(self.save(TODAY, form).status_code, 302)  # no class yet: saves as it always did
+        self.assertEqual(self.marks(), {"آدم": "present", "بسمة": "present", "جاد": "present"})
+        refused = self.save(TODAY, {**form, f"p_{self.b.pk}": "absent"})  # a class now exists: an old tab or a crafted post is refused
+        self.assertEqual(refused.status_code, 200)
+        self.assertEqual(self.marks()["بسمة"], "present")
+        blank = self.save(TODAY, {**form, "sheet_version": "", f"p_{self.b.pk}": "absent"})
+        self.assertEqual((blank.status_code, self.marks()["بسمة"]), (200, "present"))
+
+    def test_the_message_is_in_both_languages_and_the_page_keeps_nothing_from_the_stale_form(self):
+        stale = self.open_sheet(TODAY)
+        scan.mark(self.a.code, self.owner, at(TODAY, 16, 2))
+        stale[f"p_{self.b.pk}"] = "excused"
+        url = reverse("education:attendance", args=[self.review.pk])
+        en = self.client.post(url, {"date": TODAY.isoformat(), "lang": "en", **stale})
+        self.assertContains(en, "Attendance changed after you opened this sheet (students were scanned). Check the sheet and save again.")
+        html = en.content.decode()
+        self.assertEqual({pk: value for pk, value in RADIO.findall(html)}[str(self.b.pk)], "absent")  # the database's view, not the posted "excused"
+        self.assertEqual(self.marks(), {"آدم": "present"})
+        self.assertContains(self.client.post(url, {"date": TODAY.isoformat(), "lang": "ar", **stale}), "راجع الكشف واحفظ تاني")
+
+
+class OnlyScannedClassesChangeTests(ScanSetup):
+    """The absent fill belongs to classes a scan has touched; a centre that never scans sees no change at all."""
+
+    def test_a_back_dated_enrolment_shows_present_until_a_scan_has_touched_the_class(self):
+        attendance.take(self.review, self.owner, TODAY, {str(self.b.pk): "absent"})  # taken by the teacher, never scanned
+        joiner = self.kid("منضم متأخر", "01010000007")  # enrolled afterwards, back-dated: on the roster, no mark
+        page = self.client.get(self.sheet_url(TODAY))
+        self.assertEqual({pk: value for pk, value in RADIO.findall(page.content.decode())}[str(joiner.pk)], "present")  # as before this branch
+        self.assertNotContains(page, "data-not-scanned")
+        self.assertNotContains(self.client.get(reverse("education:today")), "data-not-scanned-count")
+        # now the late-comer is scanned: the class is a scanned one, and the joiner (no mark, never scanned) shows absent and tagged
+        self.assertEqual(scan.mark(self.b.code, self.owner, at(TODAY, 16, 20)).presence, "late")
+        page = self.client.get(self.sheet_url(TODAY))
+        self.assertEqual({pk: value for pk, value in RADIO.findall(page.content.decode())}[str(joiner.pk)], "absent")
+        self.assertContains(page, "data-not-scanned", count=1)
+        self.assertContains(self.client.get(reverse("education:today")), "data-not-scanned-count")
+        self.assertEqual(scan.touched([ClassSession.objects.get().pk]), {ClassSession.objects.get().pk})

@@ -68,6 +68,21 @@ def lock_group(group):
     return StudyGroup.objects.select_for_update().get(pk=group.pk)
 
 
+def sheet_version(session):
+    """A short digest of everything saving the sheet would overwrite: the class's status and topic and every mark with its note.
+
+    "none" when there is no class yet. The sheet carries it as a hidden field; a save whose digest no longer matches the database
+    was made from a stale page (a scan marked someone meanwhile) and is refused, never merged."""
+
+    import hashlib
+    import json
+
+    if session is None:
+        return "none"
+    marks = sorted(session.marks.values_list("student_id", "presence", "note"))
+    return hashlib.sha256(json.dumps([session.status, session.topic, marks], ensure_ascii=False).encode()).hexdigest()[:16]
+
+
 def teaches_only(user):
     """A teacher who sees the attendance of their own groups and nothing else of the school (the menu offers just that)."""
 

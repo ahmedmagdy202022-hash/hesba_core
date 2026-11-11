@@ -132,6 +132,19 @@ def presence_at(group, now):
     return Presence.LATE if start is not None and now > start + timedelta(minutes=LATE_MINUTES) else Presence.PRESENT
 
 
+def touched(session_ids):
+    """Which of these classes a scan has marked, as a set of ids.
+
+    The signal is the ``scan_attendance`` audit row (written in the same transaction as the mark, append-only, and naming its class):
+    it needs no new column, and a centre that never scans has none, so its sheets keep behaving exactly as before."""
+
+    ids = {str(pk) for pk in session_ids}
+    if not ids:
+        return set()
+    rows = AuditLog.objects.filter(module="education", action="scan_attendance", object_type="education.ClassSession", object_id__in=ids)
+    return {int(pk) for pk in rows.values_list("object_id", flat=True)}
+
+
 @transaction.atomic
 def mark(code, user, now=None, *, group=None, lang="ar"):
     """Mark the student with this code for the class they are at, and say what happened. ``group`` (an id) answers a «which class?» choice."""

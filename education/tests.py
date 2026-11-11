@@ -963,8 +963,11 @@ class AttendanceRoundFourTests(AttendanceRoundThreeTests):
         self.assertContains(page, f'data-take="{self.saturday.pk}"')
         form = self.client.get(reverse("education:attendance", args=[self.saturday.pk]) + f"?date={self.class_day.isoformat()}")
         self.assertEqual(form.status_code, 200)
+        import re
+
+        version = re.search(r'name="sheet_version" value="([^"]*)"', form.content.decode()).group(1)  # E1: a save carries the version of the page it was made on
         self.client.post(reverse("education:attendance", args=[self.saturday.pk]),
-                         {"date": self.class_day.isoformat(), f"p_{self.mariam.pk}": "excused", f"p_{self.yousef.pk}": "present"})
+                         {"date": self.class_day.isoformat(), "sheet_version": version, f"p_{self.mariam.pk}": "excused", f"p_{self.yousef.pk}": "present"})
         self.assertEqual(self.saturday.sessions.get().marks.get(student=self.mariam).presence, "excused")
 
 

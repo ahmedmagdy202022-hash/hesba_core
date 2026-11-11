@@ -5,7 +5,7 @@
 {% if not scheduled %}<div class="op-message" role="status" data-off-day>{{ words.off_day }}</div>{% endif %}
 {% if saved and notify %}<section class="op-detail-meta" data-notify><h2>{{ words.notify }}</h2>{% for row in notify %}<p>{{ row.student.name }} — <a href="{{ row.notify }}" target="_blank" rel="noopener" data-whatsapp>{{ words.tell_parent }}</a></p>{% endfor %}</section>{% endif %}
 {% if unscanned_note %}<div class="op-message" role="status" data-unscanned-note>{{ unscanned_note }}</div>{% endif %}
-<form class="op-form" method="post" data-attendance-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="date" value="{{ day|date:'Y-m-d' }}">
+<form class="op-form" method="post" data-attendance-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="date" value="{{ day|date:'Y-m-d' }}"><input type="hidden" name="sheet_version" value="{{ version }}" data-sheet-version>
 <div class="edu-marks">
 {% for row in roster %}<fieldset class="edu-mark" data-mark="{{ row.student_id }}"{% if row.unscanned %} data-unscanned{% endif %}><legend>{{ row.student.name }}{% if row.unscanned %} <span class="op-status op-status-draft edu-unscanned" data-not-scanned>{{ words.not_scanned }}</span>{% endif %}</legend>
 <div class="edu-mark__choices">{% for value, label in choices %}<label class="edu-chip edu-chip--{{ value }}"><input type="radio" name="p_{{ row.student_id }}" value="{{ value }}"{% if row.presence == value %} checked{% endif %}><span>{{ label }}</span></label>{% endfor %}</div>
