@@ -374,6 +374,26 @@ class AppointmentReminderLinkTests(ClinicSetup):
         self.assertEqual(OutboxMessage.objects.count(), 1)
         self.assertEqual(OutboxMessage.objects.get().text, first)
 
+    def test_a_waiting_message_keeps_its_link_all_day_and_takes_a_fresh_one_the_next_day(self):
+        # A share token is signed with the second it is made in. The outbox page gathers every time it opens, so
+        # without this the waiting row would be rewritten with a new link on every visit.
+        import time
+
+        self.book(day=today() + timedelta(days=2))
+        now = time.time()
+        with mock.patch("django.core.signing.time.time", return_value=now):
+            services.build(today() + timedelta(days=1))
+        first = OutboxMessage.objects.get().text
+        with mock.patch("django.core.signing.time.time", return_value=now + 90):
+            services.build(today() + timedelta(days=1))
+        self.assertEqual(OutboxMessage.objects.get().text, first)
+        OutboxMessage.objects.update(day=today())  # as if it had been queued yesterday and is carried to a new day
+        with mock.patch("django.core.signing.time.time", return_value=now + 180):
+            services.build(today() + timedelta(days=1))
+        carried = OutboxMessage.objects.get().text
+        self.assertNotEqual(carried, first)
+        self.assertIn("/share/", carried)
+
     def test_an_edited_template_with_its_own_link_place_gets_the_bare_link(self):
         self.turn_on(MessageKind.APPOINTMENT)
         services.save_template(MessageKind.APPOINTMENT, {"text": "أهلاً {name} {date} {time} {link}", "active": "1", "every_days": "1"}, self.owner)

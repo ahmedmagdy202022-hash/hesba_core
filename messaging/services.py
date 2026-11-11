@@ -442,6 +442,26 @@ def queue_workorder(order, status, link="", lang=None):
         return None  # queued by another request a moment ago
 
 
+def _link_kept(text, url):
+    """The link a waiting message already carries, when it opens the same thing as ``url``; otherwise ``url``.
+
+    A share token is signed with the second it was made in, so every run would mint a different link and rewrite the
+    waiting row (the outbox page runs the gathering each time it opens). Within a day the message keeps its link; when it
+    is carried to a new day it takes a fresh one, since share links expire."""
+
+    from printing.share import read_token
+
+    head, mark, tail = url.partition("/share/")
+    token, slash, rest = tail.partition("/")
+    wanted = read_token(token) if mark and slash else None
+    if wanted is None:
+        return url
+    for word in text.split():
+        if word.startswith(head + mark) and word.endswith(slash + rest) and read_token(word[len(head + mark):len(word) - len(slash + rest)]) == wanted:
+            return word
+    return url
+
+
 def _gather(kind, source, row, entity, today, company, currency):
     since = today - timedelta(days=row.every_days - 1)
     done = OutboxMessage.objects.filter(kind=kind, day__gte=since).filter(
@@ -459,7 +479,10 @@ def _gather(kind, source, row, entity, today, company, currency):
         base = row.text
         if lang == "en" and candidate.get("localised") and base == DEFAULT_TEXTS[kind]:
             base = DEFAULT_TEXTS_EN.get(kind) or (APPOINTMENT_TEXT_EN if kind == MessageKind.APPOINTMENT else base)
+        earlier = waiting.get(key)
         url = candidate.get("url", "")
+        if url and earlier is not None and earlier.day == today:
+            url = _link_kept(earlier.text, url)  # the same link all day, not a new one every time the outbox opens
         values = {"company": company, **candidate["values"]}
         if url:
             values.setdefault("link", url)  # a template that places {link} itself
@@ -467,7 +490,6 @@ def _gather(kind, source, row, entity, today, company, currency):
         if url and "{link}" not in base:
             text = f"{text} {APPOINTMENT_LINK_TEXTS[lang]} {url}"
         fields = {"name": candidate["name"][:255], "phone": phone[:30], "link": candidate["link"][:255], "entity": entity, "text": text}
-        earlier = waiting.get(key)
         if earlier is not None:
             # Still waiting: it carries today's date and today's figures (a part payment lowers the amount).
             OutboxMessage.objects.filter(pk=earlier.pk, status=OutboxStatus.PENDING).update(day=today, **fields)
