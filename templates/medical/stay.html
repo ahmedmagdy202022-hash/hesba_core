@@ -1,0 +1,104 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/inpatient.css' %}?v=m8-2">{% endblock %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'medical:beds' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ w.back }}</a>
+<h1>{{ admission.patient.name }}</h1><p><bdi>{{ admission.number }}</bdi> · {{ ward_name }} / <bdi>{{ admission.bed.code }}</bdi> · {{ day_label }}</p></div>
+<div class="op-form-actions">{% if is_open and writes %}<a class="op-primary" href="{% url 'medical:stay' admission.pk %}?lang={{ lang }}&review=1#review" data-discharge-open>{% if can_bill %}{{ w.discharge }}{% else %}{{ w.discharge_only }}{% endif %}</a>{% endif %}
+{% if is_open and can_manage %}<a class="op-secondary" href="{% url 'medical:stay' admission.pk %}?lang={{ lang }}&move=1#move" data-move-open>{{ w.move }}</a>{% endif %}
+{% if shows_file %}<a class="op-secondary" href="{% url 'medical:file' admission.patient_id %}?lang={{ lang }}" data-stay-file>{{ w.file }}</a>{% endif %}</div></section>
+{% if error %}<div class="op-message op-message-error" role="alert" data-stay-error>{{ error }}</div>{% endif %}
+
+<section class="ip-facts" data-stay="{{ admission.pk }}" data-stay-state="{{ admission.state }}">
+<article><small>{{ w.state }}</small><strong><span class="op-status {% if admission.state == 'admitted' %}op-status-posted{% elif admission.state == 'cancelled' %}op-status-cancelled{% else %}op-status-draft{% endif %}">{{ state_label }}</span></strong></article>
+<article><small>{{ w.bed }}</small><strong>{{ ward_name }} / <bdi>{{ admission.bed.code }}</bdi></strong></article>
+<article><small>{{ w.since }}</small><strong><bdi>{{ admission.admitted_at|date:"Y-m-d H:i" }}</bdi></strong></article>
+{% if admission.discharged_at %}<article><small>{{ w.left }}</small><strong><bdi>{{ admission.discharged_at|date:"Y-m-d H:i" }}</bdi></strong></article>{% endif %}
+<article><small>{{ w.doctor }}</small><strong>{{ admission.doctor.name|default:'—' }}</strong></article>
+{% if deposit %}<article data-advance-box><small>{{ w.advance_box }} · {{ deposit_status }}</small><strong><bdi data-advance-amount>{{ deposit.payment.amount|money }}</bdi></strong>{% if advance_split %}<small data-advance-split>{{ advance_split }}</small>{% endif %}</article>{% endif %}
+</section>
+{% if insured_note %}<p class="op-message" data-insured-note>{{ insured_note }}</p>{% endif %}
+
+{% if reads %}<section class="ip-card" data-diagnosis><h2>{{ w.diagnosis }}</h2>
+<p class="ip-text">{% if admission.diagnosis %}{{ admission.diagnosis|linebreaksbr }}{% else %}<span class="ip-muted">{{ w.no_diagnosis }}</span>{% endif %}</p>
+{% if writes %}<details class="ip-more"><summary>{{ w.edit_diagnosis }}</summary>
+<form method="post" class="op-form ip-inner-form">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="diagnosis">
+<div class="op-field"><label for="ip-diagnosis">{{ w.diagnosis }}</label><textarea id="ip-diagnosis" name="diagnosis" rows="3">{{ admission.diagnosis }}</textarea></div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ w.save }}</button></div></form></details>{% endif %}
+</section>{% endif %}
+
+{% if moving %}<section class="ip-card" id="move" data-move><h2>{{ w.move }}</h2>
+<form method="post" class="op-form ip-inner-form">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="move">
+<div class="op-form-grid"><div class="op-field"><label for="ip-move-bed">{{ w.move_to }}</label><select id="ip-move-bed" name="bed" required><option value="">{{ w.choose }}</option>{% for bed in free %}<option value="{{ bed.pk }}">{{ bed.ward_name }} — {{ bed.code }} ({{ bed.daily_service.default_sale_price|money }} {{ w.currency_day }})</option>{% endfor %}</select>{% if not free %}<small class="op-field-error">{{ w.no_free }}</small>{% endif %}</div></div>
+<p class="ip-hint">{{ w.move_note }}</p>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ w.move_go }}</button><a class="op-secondary" href="{% url 'medical:stay' admission.pk %}?lang={{ lang }}">{{ w.cancel_link }}</a></div></form></section>{% endif %}
+
+{% if reviewing %}<section class="ip-card ip-review" id="review" data-review><h2>{{ w.review }}</h2><p class="ip-hint">{{ w.review_intro }}</p>
+<ul class="ip-lines" data-review-lines>{% for row in review.rows %}<li><span class="ip-line__name">{{ row.description }}</span>
+<span class="ip-line__qty"><bdi>{{ row.quantity|qty }} × {{ row.unit_sale_price|money }}</bdi></span><strong class="ip-line__total"><bdi>{{ row.total|money }}</bdi></strong></li>{% endfor %}</ul>
+<dl class="ip-totals">
+<div><dt>{{ w.subtotal }}</dt><dd><bdi data-review-subtotal>{{ review.subtotal|money }}</bdi></dd></div>
+{% if review.tax %}<div><dt>{{ w.tax }}</dt><dd><bdi data-review-tax>{{ review.tax|money }}</bdi></dd></div>{% endif %}
+<div class="ip-totals__main"><dt>{{ w.total }}</dt><dd><bdi data-review-total>{{ review.total|money }}</bdi></dd></div>
+{% if review.advance %}<div><dt>{{ w.advance_held }}</dt><dd><bdi data-review-advance>{{ review.advance|money }}</bdi></dd></div>
+{% if review.credit_left %}<div><dt>{{ w.credit_left }}</dt><dd><bdi data-review-credit>{{ review.credit_left|money }}</bdi></dd></div>{% else %}<div><dt>{{ w.after_advance }}</dt><dd><bdi data-review-after>{{ review.after_advance|money }}</bdi></dd></div>{% endif %}{% endif %}
+</dl>
+{% if review.advance %}<p class="ip-hint">{{ w.advance_applies }}</p>{% endif %}
+<p class="ip-hint">{{ w.bed_days_note }}</p>
+{% if not can_bill %}<p class="ip-hint" data-needs-bill>{{ w.discharge_needs_bill }}</p>{% endif %}
+<form method="post" class="op-form-actions" data-discharge-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="discharge">
+<button class="op-primary" type="submit">{% if can_bill %}{{ w.confirm_discharge }}{% else %}{{ w.confirm_discharge_only }}{% endif %}</button><a class="op-secondary" href="{% url 'medical:stay' admission.pk %}?lang={{ lang }}">{{ w.cancel_link }}</a></form>
+</section>{% endif %}
+
+{% if needs_bill %}<section class="ip-card" data-needs-billing><p>{{ w.bill_ready }}</p>
+{% if can_bill %}<form method="post" class="op-form-actions">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="bill"><button class="op-primary" type="submit" data-bill>{{ w.bill }}</button></form>{% endif %}</section>{% endif %}
+
+{% if invoices %}<section class="ip-card" data-stay-invoices><h2>{{ w.invoices }}</h2>
+<ul class="ip-lines">{% for invoice in invoices %}<li data-stay-invoice="{{ invoice.pk }}"><span class="ip-line__name"><bdi>{{ invoice.invoice_number }}</bdi> <span class="op-status {% if invoice.status == 'posted' %}op-status-posted{% elif invoice.status == 'cancelled' %}op-status-cancelled{% else %}op-status-draft{% endif %}">{{ invoice.status_label }}</span></span>
+<strong class="ip-line__total"><bdi>{{ invoice.total_amount|money }}</bdi></strong>
+{% if can_open_invoice %}<a class="op-secondary" href="{% url 'sales:detail' invoice.pk %}?lang={{ lang }}" data-open-invoice>{{ w.open_invoice }}</a>{% endif %}</li>{% endfor %}</ul></section>{% endif %}
+
+<section class="ip-charges" data-charges>
+<header class="ip-charges__head"><div><h2>{{ w.charges }}</h2><p>{{ w.running }} ({{ w.before_tax }}): <strong><bdi data-running-total>{{ running|money }}</bdi></strong></p></div>
+{% if is_open and writes %}<div class="op-form-actions"><a class="op-secondary" href="{% url 'medical:stay' admission.pk %}?lang={{ lang }}&add=procedure#add" data-add="procedure">{{ w.add_procedure }}</a>
+<a class="op-secondary" href="{% url 'medical:stay' admission.pk %}?lang={{ lang }}&add=operation#add" data-add="operation">{{ w.add_operation }}</a>
+{% if stocks %}<a class="op-secondary" href="{% url 'medical:stay' admission.pk %}?lang={{ lang }}&add=supply#add" data-add="supply">{{ w.add_supply }}</a>{% endif %}</div>{% endif %}</header>
+
+{% if add %}<div class="ip-card" id="add" data-add-form="{{ add }}"><h3>{% if add == 'operation' %}{{ w.add_operation }}{% elif add == 'supply' %}{{ w.add_supply }}{% else %}{{ w.add_procedure }}{% endif %}</h3>
+{% if add_items %}<form method="post" class="op-form ip-inner-form" novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="charge"><input type="hidden" name="kind" value="{{ add }}">
+<div class="op-form-grid">
+<div class="op-field"><label for="ip-item">{% if add == 'operation' %}{{ w.operation }}{% elif add == 'supply' %}{{ w.supply }}{% else %}{{ w.service }}{% endif %}</label><select id="ip-item" name="item" required><option value="">{{ w.choose }}</option>{% for item in add_items %}<option value="{{ item.pk }}"{% if post.item == item.pk|stringformat:'s' %} selected{% endif %}>{{ item.item_name }} — {{ item.default_sale_price|money }}</option>{% endfor %}</select></div>
+{% if add == 'operation' %}<div class="op-field"><label for="ip-surgeon">{{ w.surgeon }}</label><select id="ip-surgeon" name="surgeon"><option value="">{{ w.none }}</option>{% for d in doctors %}<option value="{{ d.pk }}"{% if post.surgeon == d.pk|stringformat:'s' or not post and d.pk == admission.doctor_id %} selected{% endif %}>{{ d.name }}</option>{% endfor %}</select></div>{% endif %}
+<div class="op-field"><label for="ip-qty">{{ w.quantity }}</label><input id="ip-qty" name="quantity" inputmode="decimal" dir="ltr" value="{{ post.quantity|default:'1' }}"></div>
+<div class="op-field"><label for="ip-price">{{ w.price }}</label><input id="ip-price" name="price" inputmode="decimal" dir="ltr" value="{{ post.price }}"><small>{{ w.price_hint }}</small></div>
+<div class="op-field"><label for="ip-day">{{ w.day }}</label><input id="ip-day" type="date" name="day" value="{% if post.day %}{{ post.day }}{% else %}{{ today|date:'Y-m-d' }}{% endif %}" min="{{ first_day|date:'Y-m-d' }}" max="{{ today|date:'Y-m-d' }}"></div>
+<div class="op-field"><label for="ip-note">{{ w.note }}</label><input id="ip-note" name="note" maxlength="255" value="{{ post.note }}"></div>
+</div>
+{% if add == 'supply' %}<p class="ip-hint">{{ w.supply_note }}</p>{% endif %}
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ w.add }}</button><a class="op-secondary" href="{% url 'medical:stay' admission.pk %}?lang={{ lang }}">{{ w.cancel_link }}</a></div></form>
+{% else %}<p class="op-empty">{{ w.no_items }}</p>{% endif %}</div>{% endif %}
+
+{% for group in days %}<article class="ip-card ip-day" data-day="{{ group.day|date:'Y-m-d' }}">
+<header><h3><bdi>{{ group.day|date:"Y-m-d" }}</bdi></h3><p><bdi>{{ group.subtotal|money }}</bdi></p></header>
+<ul class="ip-lines">{% for row in group.rows %}<li {% if row.pk %}data-charge="{{ row.pk }}"{% else %}data-pending-bed-day{% endif %} data-kind="{{ row.kind }}">
+<span class="ip-line__name"><span class="ip-kind" data-kind="{{ row.kind }}">{{ row.kind_label }}</span> {{ row.name }}{% if row.bed %} · <bdi>{{ row.bed }}</bdi>{% endif %}{% if row.surgeon %} · {{ row.surgeon }}{% endif %}
+{% if row.billed %}<span class="op-status op-status-posted">{{ w.billed }}</span>{% elif row.pending %}<span class="op-status">{{ w.pending }}</span>{% endif %}
+{% if row.note %}<small class="ip-note">{{ row.note }}</small>{% endif %}</span>
+<span class="ip-line__qty"><bdi>{{ row.quantity|qty }} × {{ row.price|money }}</bdi></span><strong class="ip-line__total"><bdi>{{ row.total|money }}</bdi></strong>
+{% if row.removable %}<form method="post" class="ip-line__act">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="remove_charge"><input type="hidden" name="charge" value="{{ row.pk }}"><button class="op-secondary" type="submit" data-remove-charge>{{ w.remove }}</button></form>{% endif %}</li>{% endfor %}</ul>
+</article>{% empty %}<p class="op-empty">{{ w.no_charges }}</p>{% endfor %}
+{% if has_lines %}<p class="ip-hint">{{ w.bed_days_note }}</p>{% endif %}
+</section>
+
+{% if can_take_advance %}<section class="ip-card" data-advance-form><h2>{{ w.take_advance }}</h2>
+<form method="post" class="op-form ip-inner-form">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="advance">
+<div class="op-form-grid"><div class="op-field"><label for="ip-amount">{{ w.advance_amount }}</label><input id="ip-amount" name="amount" inputmode="decimal" dir="ltr" required></div>
+<div class="op-field"><label for="ip-box">{{ w.cashbox }}</label><select id="ip-box" name="cashbox" required>{% for box in advance_boxes %}<option value="{{ box.pk }}">{% if lang == 'en' and box.name_en %}{{ box.name_en }}{% else %}{{ box.name_ar }}{% endif %}</option>{% endfor %}</select></div></div>
+<p class="ip-hint">{{ w.advance_hint }}</p>
+<div class="op-form-actions"><button class="op-secondary" type="submit">{{ w.take_advance }}</button></div></form></section>{% endif %}
+
+{% if can_refund %}<form method="post" class="op-form-actions" data-refund-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="refund"><button class="op-secondary" type="submit">{{ w.refund }}</button></form>{% endif %}
+
+{% if can_cancel %}<details class="ip-more ip-cancel" data-cancel{% if cancelling %} open{% endif %}><summary>{{ w.cancel }}</summary><p class="ip-hint">{{ w.cancel_hint }}</p>{% if cancel_late %}<p class="op-message op-message-error" data-cancel-late>{{ cancel_late }}</p>{% endif %}
+<form method="post" class="op-form-actions">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="cancel"><button class="op-danger" type="submit">{{ w.cancel_confirm }}</button></form></details>{% endif %}
+{% endblock %}

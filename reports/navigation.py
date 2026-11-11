@@ -120,6 +120,9 @@ NAV_ITEMS = (
     # MED-007: reception's waiting list, for clinics and medical centres.
     {"key": "queue", "ar": "قائمة الانتظار", "en": "Waiting list", "url_name": "medical:queue", "module": "appointments_visits", "activity": "medical",
      "allow": "medical.queue.can_use"},
+    # M8 (HG-088): the bed board, where the business switched «الإقامة والأسرّة» on.
+    {"key": "beds", "ar": "الأسرّة", "en": "Beds", "url_name": "medical:beds", "module": "customers", "activity": "medical", "capability": "inpatient",
+     "allow": "medical.inpatient.can_see_board"},
     {"key": "contracts", "ar": "عقود الخدمة", "en": "Service contracts", "url_name": "agreements:list", "module": None, "allow": "agreements.services.can_view"},
     {"key": "packages", "ar": "باكدجات الجلسات", "en": "Session packages", "url_name": "agreements:packages", "module": None, "allow": "agreements.packages.can_view"},
     {"key": "hours", "ar": "ساعات العمل", "en": "Hours worked", "url_name": "agreements:hours", "module": None, "allow": "agreements.hours.can_view"},
@@ -153,7 +156,7 @@ NAV_ITEMS = (
 # final «إضافات» group.
 NAV_GROUPS = (
     {"key": "sales", "ar": "البيع", "en": "Sales",
-     "keys": ("pos", "operations", "quotes", "restaurant", "workorders", "appointments", "queue", "projects", "contracts", "packages", "hours")},
+     "keys": ("pos", "operations", "quotes", "restaurant", "workorders", "appointments", "queue", "beds", "projects", "contracts", "packages", "hours")},
     {"key": "stock", "ar": "المخزون", "en": "Stock",
      "keys": ("items", "inventory", "warehouses", "purchases", "suppliers", "drugs", "manufacturing")},
     {"key": "people", "ar": "الناس", "en": "People",

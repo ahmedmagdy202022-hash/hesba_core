@@ -5,7 +5,7 @@
     <button class="fr-tour__close" type="button" aria-label="{{ demo_tour.dismiss }}" data-demo-tour-dismiss>&times;</button>
   </div>
   <p class="fr-tour__lead">{{ demo_tour.lead }}</p>
-  <ol class="fr-steps">
+  <ol class="fr-steps{% if demo_tour.steps|length == 4 %} fr-steps--4{% endif %}">
     {% for step in demo_tour.steps %}<li><a class="fr-step" href="{{ step.url }}" data-demo-tour-step="{{ step.n }}"><span class="fr-step__n" aria-hidden="true">{{ step.n }}</span><span class="fr-step__text"><strong>{{ step.title }}</strong><span>{{ step.hint }}</span></span></a></li>{% endfor %}
   </ol>
 </section>

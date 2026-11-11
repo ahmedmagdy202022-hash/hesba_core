@@ -70,7 +70,7 @@ FEATURE_LANDING = {
     "pos": "sales:pos", "shift_required": "shifts:mine", "barcode": "barcode:labels", "price_lists": "pricing:list", "units": "units:index",
     "variants": "variants:index", "batches_expiry": "batches:index", "serials": "serials:index",
     "installments": "installments:list", "vat": "taxes:settings", "e_invoice": "einvoice:issuer", "e_receipt": "ereceipt:board", "fixed_assets": "fixed_assets:list",
-    "quotations": "orders:list", "drugs": "pharmacy:lookup", "shipping": "shipping:board", "promotions": "promotions:list", "online_store": "onlinestore:board", "loyalty": "loyalty:home",
+    "quotations": "orders:list", "drugs": "pharmacy:lookup", "inpatient": "medical:beds", "shipping": "shipping:board", "promotions": "promotions:list", "online_store": "onlinestore:board", "loyalty": "loyalty:home",
     "deposits": "appointments:agenda", "online_booking": "appointments:booking_settings", "payment_links": "payments:gateway", "gift_cards": "giftcards:list",
     "ai_voice_summary": "dashboard_snapshot",  # A1 (HG-079): the card lives on the dashboard
     "ai_ask": "ai:ask",  # A2 (HG-080)
@@ -84,6 +84,9 @@ def _opens_for(user, url):
     from django.urls import resolve
 
     view = resolve(url.split("?")[0]).func
+    own_rule = getattr(view, "opens_for", None)  # a screen whose gate is more than a permission code says so itself (M8's bed board)
+    if own_rule is not None:
+        return bool(own_rule(user))
     needed = getattr(view, "required_permission", None)
     if needed:
         return user_has_permission(user, needed)

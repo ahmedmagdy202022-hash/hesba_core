@@ -77,8 +77,13 @@ class FindableTests(TestCase):
         from settings_core.operational_views import _features
 
         rows = _features("ar", self.owner)
-        self.assertTrue(all(row["url"] for row in rows))
+        profile = ClientProfile.get_active()
         for row in rows:
+            if not row["url"]:
+                # Forced on here, but its screen opens only in the business it belongs to (the bed board is a medical
+                # centre's): no «افتح» is offered, so there is no dead link. Every feature that fits must have one.
+                self.assertFalse(caps.fits(profile.activity_slug, row["slug"], profile.sub_activity_slug), row["slug"])
+                continue
             self.assertContains(page, f'href="{row["url"]}?lang=ar"')
             self.assertEqual(self.client.get(row["url"] + "?lang=ar").status_code, 200, row["slug"])
         self.assertIn(reverse("barcode:labels"), [row["url"] for row in rows])  # not the bare /barcode/ prefix
