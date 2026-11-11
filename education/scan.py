@@ -1,0 +1,228 @@
+"""E1: attendance by scan. A student's card carries the student code (``ST-00012``) as a QR; a scan marks that student for the
+class they are at, and nothing else.
+
+The code is a convenience for staff, never a credential: it opens no page and unlocks nothing. Who may scan is exactly who may
+take attendance for the group today (a manager for any group, a teacher for their own), and a code from another entity is "not
+found", never a different message.
+
+Money: per-class fees bill what ``billing._attended`` counts, the present and late marks. A scan writes one student's mark under
+the same group lock ``attendance.take`` takes, so it never races a teacher's save, and it never touches a sale, a cashbox or a
+ledger. A student who is not scanned gets no mark at all: the sheet shows them absent once the class has started (see the
+attendance view), so closing the class cannot bill a student who never came.
+
+Rules, in order: the student (active, in this entity) → the groups they have today → the ones this user may take → the one whose
+window (30 minutes before the start until the class ends) holds now. Late is strictly more than ``LATE_MINUTES`` after the start.
+A group with no start time is open all day and never late.
+"""
+
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+
+from django.core.exceptions import PermissionDenied
+from django.db import transaction
+from django.db.models import Q
+from django.utils import timezone
+
+from audit.models import AuditEventType, AuditLog
+
+from . import attendance, services
+from .models import Attendance, ClassSession, Enrollment, Presence, SessionStatus, Student, StudyGroup
+
+LATE_MINUTES = 10
+EARLY_MINUTES = 30
+
+MESSAGES = {
+    "ar": {"denied": "تسجيل الحضور بالمسح للإدارة أو المدرّسين بس.", "empty": "امسح كارت الطالب أو اكتب الكود.",
+           "not_found": "الكارت ده مش معروف. اتأكد من الكود.", "inactive": "{student} مش طالب شغال.",
+           "refused": "الطالب ده مش من طلاب مجموعاتك النهارده.", "cancelled": "حصة {group} النهارده اتلغت؛ مفيش حضور بيتسجّل عليها.",
+           "no_today": "{student} مالوش حصص النهارده.", "no_now": "{student} مالوش حصة دلوقتي. حصصه النهارده:",
+           "choose": "{student} في أكتر من حصة دلوقتي. هو حاضر في أنهي؟", "again": "{student} اتسجّل قبل كده.",
+           "present": "حاضر", "late": "متأخر", "absent": "غايب", "excused": "بعذر", "was_absent": "كان متعلّم غايب وبقى متأخر.",
+           "bad_group": "المجموعة دي مش من حصص الطالب النهارده."},
+    "en": {"denied": "Scanning attendance is for the office or the teachers.", "empty": "Scan the student's card or type the code.",
+           "not_found": "This card is not known. Check the code.", "inactive": "{student} is not an active student.",
+           "refused": "This student is not in your groups today.", "cancelled": "Today's {group} class was cancelled; no attendance is taken for it.",
+           "no_today": "{student} has no classes today.", "no_now": "{student} has no class right now. Today's classes:",
+           "choose": "{student} has more than one class right now. Which one are they at?", "again": "{student} was already marked.",
+           "present": "Present", "late": "Late", "absent": "Absent", "excused": "Excused", "was_absent": "Was marked absent; now late.",
+           "bad_group": "That group is not one of the student's classes today."},
+}
+
+
+@dataclass
+class ScanResult:
+    """What a scan did, for the screen: ``status`` is one of ok, again, choose, no_class, not_found, inactive, refused, cancelled."""
+
+    status: str
+    message: str = ""
+    student: Student | None = None
+    group: object = None
+    presence: str = ""
+    at: str = ""
+    changed: bool = False
+    was_absent: bool = False
+    choices: list = field(default_factory=list)
+    groups: list = field(default_factory=list)
+    lang: str = "ar"
+
+    @property
+    def ok(self):
+        return self.status in ("ok", "again")
+
+    def as_json(self):
+        def line(group):
+            return {"id": group.pk, "name": group.name, "course": group.course.name, "time": group.start_time.strftime("%H:%M") if group.start_time else ""}
+
+        words = MESSAGES[self.lang]
+        return {"status": self.status, "message": self.message, "changed": self.changed, "time": self.at, "presence": self.presence,
+                "presence_label": words.get(self.presence, ""), "was_absent": self.was_absent,
+                "student": {"name": self.student.name, "code": self.student.code, "stage": self.student.stage} if self.student else None,
+                "group": line(self.group) if self.group else None, "choices": [line(group) for group in self.choices],
+                "groups": [line(group) for group in self.groups]}
+
+
+def _words(lang):
+    return MESSAGES["en" if lang == "en" else "ar"]
+
+
+def _clean(code):
+    return "".join(str(code or "").split()).upper()[:40]
+
+
+def find_student(code):
+    """The active student with this code in the entity being worked in, else None. An inactive one is returned separately."""
+
+    code = _clean(code)
+    if not code:
+        return None
+    return services.scoped(Student.objects).filter(code__iexact=code).first()
+
+
+def _today_groups(student, day):
+    """The student's groups that meet on ``day``: running enrolments (``roster_on`` semantics), an active group, one of its days."""
+
+    rows = (Enrollment.objects.filter(student=student, start_date__lte=day).filter(Q(end_date__isnull=True) | Q(end_date__gte=day))
+            .filter(group__in=services.scoped(StudyGroup.objects.filter(active=True))).select_related("group__course", "group__teacher")
+            .order_by("group__start_time", "group__name", "-start_date", "-pk"))
+    seen, groups = set(), []
+    for row in rows:
+        if row.group_id not in seen and attendance.meets_on(row.group, day):
+            seen.add(row.group_id)
+            groups.append(row.group)
+    return groups
+
+
+def _start(group, day):
+    return timezone.make_aware(datetime.combine(day, group.start_time)) if group.start_time else None
+
+
+def in_window(group, now):
+    """Whether ``now`` is from ``EARLY_MINUTES`` before the group's start until its class ends (both ends inclusive)."""
+
+    start = _start(group, timezone.localtime(now).date())
+    if start is None:
+        return True
+    return start - timedelta(minutes=EARLY_MINUTES) <= now <= start + timedelta(minutes=group.duration_minutes)
+
+
+def presence_at(group, now):
+    """Present, or late when ``now`` is strictly more than ``LATE_MINUTES`` after the start."""
+
+    start = _start(group, timezone.localtime(now).date())
+    return Presence.LATE if start is not None and now > start + timedelta(minutes=LATE_MINUTES) else Presence.PRESENT
+
+
+@transaction.atomic
+def mark(code, user, now=None, *, group=None, lang="ar"):
+    """Mark the student with this code for the class they are at, and say what happened. ``group`` (an id) answers a «which class?» choice."""
+
+    words = _words(lang)
+    if not attendance.can_scan(user):
+        raise PermissionDenied(words["denied"])
+    now = now or timezone.now()
+    local = timezone.localtime(now)
+    day, at = local.date(), f"{local:%H:%M}"
+    if not _clean(code):
+        return ScanResult("not_found", words["empty"], lang=lang)
+    student = find_student(code)
+    if student is None:
+        return ScanResult("not_found", words["not_found"], lang=lang)
+    if not student.active:
+        return ScanResult("inactive", words["inactive"].format(student=student.name), student=student, lang=lang)
+    today = _today_groups(student, day)
+    allowed = [row for row in today if attendance.can_take(user, row)]
+    if not allowed:
+        if not services.can_manage(user):  # a teacher is told nothing about a student who is not theirs, not even the name
+            return ScanResult("refused", words["refused"], lang=lang)
+        return ScanResult("no_class", words["no_today"].format(student=student.name), student=student, lang=lang)
+    if group not in (None, ""):
+        chosen = [row for row in allowed if str(row.pk) == str(group)]
+        if not chosen:
+            return ScanResult("refused", words["bad_group"], lang=lang)
+    else:
+        chosen = [row for row in allowed if in_window(row, now)]
+        if not chosen:
+            return ScanResult("no_class", words["no_now"].format(student=student.name), student=student, groups=allowed, lang=lang)
+        if len(chosen) > 1:
+            return ScanResult("choose", words["choose"].format(student=student.name), student=student, choices=chosen, lang=lang)
+    target = chosen[0]
+    # The same lock ``take`` holds for this group: a scan during a teacher's save waits for it and is never lost.
+    locked = attendance.lock_group(target)
+    if not any(row.pk == locked.pk for row in _today_groups(student, day)):
+        return ScanResult("no_class", words["no_now"].format(student=student.name), student=student, groups=allowed, lang=lang)
+    session, created = ClassSession.objects.get_or_create(group=locked, date=day, defaults={"taken_by": user})
+    if session.status == SessionStatus.CANCELLED:
+        return ScanResult("cancelled", words["cancelled"].format(group=locked.name), student=student, group=target, lang=lang)
+    wanted = presence_at(locked, now)
+    current = Attendance.objects.filter(session=session, student=student).first()
+    before, was_absent = (current.presence if current else None), False
+    if current is None:
+        Attendance.objects.create(session=session, student=student, presence=wanted)
+        presence, changed = wanted, True
+    elif current.presence == Presence.ABSENT:  # the class was closed before they came: late, never present
+        current.presence = presence = Presence.LATE
+        current.save(update_fields=["presence"])
+        changed, was_absent = True, True
+    else:  # present stays present (a rescan never makes it late), late stays late, and a teacher's «excused» is theirs to change
+        presence, changed = current.presence, False
+    if changed:
+        AuditLog.objects.create(event_type=AuditEventType.CREATE if created else AuditEventType.UPDATE, actor=user, module="education", action="scan_attendance",
+                                object_type="education.ClassSession", object_id=str(session.pk),
+                                before_data={"student": student.code, "presence": before},
+                                after_data={"student": student.code, "group": locked.code, "date": day.isoformat(), "presence": presence, "at": local.isoformat(),
+                                            "session_started": created})
+    message = words["again"].format(student=student.name) if not changed else (words["was_absent"] if was_absent else "")
+    return ScanResult("ok" if changed else "again", message, student=student, group=target, presence=presence, at=at, changed=changed, was_absent=was_absent, lang=lang)
+
+
+NURSERY_MESSAGES = {
+    "ar": {"in": "{student} وصل الساعة {time}.", "inside": "{student} موجود جوه. اختار مين هيستلمه.", "gone": "{student} مشي بالفعل الساعة {time}."},
+    "en": {"in": "{student} arrived at {time}.", "inside": "{student} is inside. Choose who is picking them up.", "gone": "{student} already left at {time}."},
+}
+
+
+def nursery_mark(code, user, now=None, *, lang="ar"):
+    """The nursery's scan: a child not yet in is checked in (``nursery.check_in``, unchanged); one already in is sent to the pick-up choice
+    (status ``inside``, the pick-up rule stays ``nursery.check_out``'s); one already gone is only reported."""
+
+    from . import nursery
+    from .models import DayRecord
+
+    words, nursery_words = _words(lang), NURSERY_MESSAGES["en" if lang == "en" else "ar"]
+    if not nursery.can_desk(user):
+        raise PermissionDenied(nursery._words(lang)["desk"])
+    now = now or timezone.now()
+    student = find_student(code) if _clean(code) else None
+    if student is None:
+        return ScanResult("not_found", words["empty"] if not _clean(code) else words["not_found"], lang=lang)
+    if not student.active:
+        return ScanResult("inactive", words["inactive"].format(student=student.name), student=student, lang=lang)
+    day = timezone.localtime(now).date()
+    record = DayRecord.objects.filter(student=student, day=day).first()
+    if record is None:
+        record = nursery.check_in(student, user, at=now, lang=lang)
+        return ScanResult("checked_in", nursery_words["in"].format(student=student.name, time=f"{timezone.localtime(record.arrived_at):%H:%M}"),
+                          student=student, at=f"{timezone.localtime(record.arrived_at):%H:%M}", changed=True, lang=lang)
+    if record.left_at is None:
+        return ScanResult("inside", nursery_words["inside"].format(student=student.name), student=student, lang=lang)
+    return ScanResult("gone", nursery_words["gone"].format(student=student.name, time=f"{timezone.localtime(record.left_at):%H:%M}"), student=student, lang=lang)
