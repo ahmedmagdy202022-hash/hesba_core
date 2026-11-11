@@ -32,3 +32,39 @@ class DailySummaryTitleTests(TestCase):
         from reports.tests_ux_wave3 import read_static
 
         self.assertIn(".hs-report-title bdi{white-space:nowrap}", read_static("hesba/css/report_tools.css"))
+
+
+class ProfitReportPeriodTests(TestCase):
+    def setUp(self):
+        owner_client(self)
+
+    def line(self, **params):
+        import re
+
+        html = self.client.get(reverse("reports:profit"), params).content.decode()
+        return re.search(r"<p data-period-state>(.*?)</p>", html).group(1)
+
+    def test_the_default_view_says_it_is_all_time(self):
+        self.assertEqual(self.line(), "الفترة المعروضة: كل الفترة")
+        self.assertEqual(self.line(lang="en"), "Showing: all time")
+
+    def test_a_period_is_written_as_dates_in_both_languages(self):
+        self.assertEqual(self.line(date_from="2026-11-01", date_to="2026-11-11"),
+                         "الفترة المعروضة: من <bdi>1 نوفمبر 2026</bdi> لحد <bdi>11 نوفمبر 2026</bdi>")
+        self.assertEqual(self.line(date_from="2026-11-01", date_to="2026-11-11", lang="en"),
+                         "Showing: from <bdi>1 November 2026</bdi> to <bdi>11 November 2026</bdi>")
+
+    def test_one_day_one_open_end_and_an_unreadable_date(self):
+        self.assertEqual(self.line(date_from="2026-11-11", date_to="2026-11-11", lang="en"), "Showing: <bdi>11 November 2026</bdi>")
+        self.assertEqual(self.line(date_from="2026-11-01"), "الفترة المعروضة: من <bdi>1 نوفمبر 2026</bdi> وبعده")
+        self.assertEqual(self.line(date_to="2026-11-11", lang="en"), "Showing: up to <bdi>11 November 2026</bdi>")
+        self.assertEqual(self.line(date_from="garbage"), "الفترة المعروضة: كل الفترة")  # the report ignores it too
+
+    def test_the_month_chip_shows_the_month_it_filled_in(self):
+        from django.utils import timezone
+
+        from reports.analytics import period_bounds
+
+        start, end = period_bounds("month", timezone.localdate())[:2]
+        text = self.line(date_from=start.isoformat(), date_to=end.isoformat(), lang="en")
+        self.assertIn(f"{start.day} {start.strftime('%B %Y')}", text)
