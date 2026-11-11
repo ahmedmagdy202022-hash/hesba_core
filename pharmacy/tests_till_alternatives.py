@@ -403,7 +403,7 @@ class DemoListTests(TestCase):
         with_siblings = [name for name, (ingredient, *_rest) in Prepare.DRUGS.items() if services.ingredient_key(ingredient) in keys]
         self.assertTrue(6 <= len(with_siblings) <= 10, with_siblings)
 
-    def test_only_the_pharmacy_demo_template_gets_the_list(self):
+    def test_only_the_pharmacy_and_clinic_demo_templates_get_the_list(self):
         from config.demo import DEMO_ACTIVITIES
         from config.demo_templates import demo_reference_list
 
@@ -411,7 +411,7 @@ class DemoListTests(TestCase):
             with self.subTest(activity=activity, sub=sub):
                 summary = demo_reference_list(activity, sub)
                 count = DrugReference.objects.count()
-                if (activity, sub) == ("commercial", "pharmacy"):
+                if (activity, sub) in (("commercial", "pharmacy"), ("medical", "clinic")):  # M2: the clinic prescribes from it
                     self.assertGreater(count, 0)
                     self.assertEqual(summary.source, DEMO_SOURCE)
                     DrugReference.objects.all().delete()

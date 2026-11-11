@@ -42,8 +42,8 @@ The approved palette values do not change; what changes is which token is the pa
 - **Inputs** are white with a 1px border and `--hs-input-radius` (14px); the focus ring is teal.
   **Secondary buttons are quiet**: no outline, white on the page ground and the page wash inside a white card.
 - **Tinted icon chips** (`.hs-ichip`, `--hs-chip-size` 44px, `--hs-chip-radius` 14px): a squircle in a wash with the
-  icon in the matching deep colour. Hub tiles and report headings share it; the dashboard's figure icons follow
-  with the dashboard redesign.
+  icon in the matching deep colour. Hub tiles, report headings and (part 2) the dashboard's metric icons, shortcuts
+  and attention rows share it.
 - **Phones (≤700px):** a navy top bar and a **navy header band**: the page's own head (its title, back arrow and
   actions) continues the navy with `--hs-band-radius` (28px) bottom corners and bleeds by `--hs-gutter` (16px).
   Text on navy uses `--hs-on-navy` / `--hs-on-navy-muted`; quiet controls on navy `--hs-on-navy-wash`; focus on navy
@@ -51,6 +51,11 @@ The approved palette values do not change; what changes is which token is the pa
   `--hs-tabbar-radius` 24px, `--hs-tabbar-gap` 12px above the edge) with the selling tab raised as a teal circle
   (`--hs-tab-rise` 18px) and the current tab tinted (`--hs-tab-active-wash`). A bar docked to the bottom edge clears
   `--hs-tabbar-space`, or `--hs-tabbar-clear` to clear the raised circle too.
+- **The dashboard on a phone (part 2, 11 Nov 2026):** the band carries a calm greeting line (date · business, then the
+  greeting) and the bell; a **money card** sits inside the band on `--hs-on-navy-wash` with a `--hs-on-navy-line` edge
+  (today's sales, their invoice count, today as a share of the average day, the period's trend line: figures the view
+  already works out); the shortcuts are a row of 60px tinted chips with the label under each (the first one solid teal);
+  what needs attention is a short list of rows with a small chip and a chevron. No new tokens: it reads the ones above.
 - **Desktop and tablet landscape** keep the navy sidebar and a light page head; only the calmer ground and the
   borderless cards apply there.
 - A night theme swaps these tokens' values; it does not need new rules.

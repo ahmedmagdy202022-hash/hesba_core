@@ -341,3 +341,39 @@ class InsuredBill(models.Model):
 
     class Meta:
         ordering = ["-created_at", "-pk"]
+
+
+# ---- M2: the medicines a doctor prescribes on a visit (HG-086) ----
+
+class VisitMedicine(models.Model):
+    """One medicine line on a visit's prescription: what to take, how much, how often and for how long.
+
+    Clinical text only: no price, no stock, no invoice. A line chosen from the reference drug list
+    (``pharmacy.DrugReference``, HG-082) keeps a copy of the row's names, ingredient, strength and form as they were
+    when it was prescribed, so a later import that renames, switches off or deletes the row never rewrites an old
+    prescription (``reference`` then only says where the copy came from, and goes empty if the row is deleted). A line
+    written by hand has no reference and only the typed name. Written only by ``medical.services.save_visit``."""
+
+    visit = models.ForeignKey(ClinicalVisit, on_delete=models.CASCADE, related_name="medicines")
+    position = models.PositiveSmallIntegerField(default=0)
+    reference = models.ForeignKey("pharmacy.DrugReference", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    name_ar = models.CharField(max_length=255, blank=True)
+    name_en = models.CharField(max_length=255, blank=True)
+    active_ingredient = models.CharField(max_length=255, blank=True)
+    strength = models.CharField(max_length=60, blank=True)
+    #: The dosage form's code as the reference list had it (``pharmacy.models.DosageForm``), shown in the reader's language.
+    form = models.CharField(max_length=12, blank=True)
+    dose = models.CharField(max_length=60, blank=True)
+    frequency = models.CharField(max_length=80, blank=True)
+    duration = models.CharField(max_length=60, blank=True)
+    route = models.CharField(max_length=60, blank=True)
+    notes = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["position", "pk"]
+
+    def __str__(self):
+        return f"{self.visit_id}:{self.position}:{self.name_en or self.name_ar}"
+
+    def name(self, lang="ar"):
+        return (self.name_en or self.name_ar) if lang == "en" else (self.name_ar or self.name_en)
