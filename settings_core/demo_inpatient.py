@@ -46,8 +46,11 @@ def seed(master, doctor, owner, catalog, extras):
     customers = master["customers"]
     if doctor is None or "patients" not in extras or len(customers) < 3 or Item.objects.filter(item_code=SENTINEL).exists():
         return False
+    from settings_core.setup_services import usable_modules
+
     visit = next((item for item in master["items"] if not item.is_stock_tracked), None)
-    supply = next((item for item in master["items"] if item.is_stock_tracked), None)
+    # A supply is offered only where the business keeps stock («المخزون»); elsewhere the second charge is another service.
+    supply = next((item for item in master["items"] if item.is_stock_tracked), None) if "inventory" in set(usable_modules()) else None
     if visit is None:
         return False
     today = timezone.localdate()
@@ -80,4 +83,7 @@ def seed(master, doctor, owner, catalog, extras):
         inpatient.add_charge(current, {"kind": "procedure", "item": visit, "day": today - timedelta(days=2)}, owner)
         if supply is not None:
             inpatient.add_charge(current, {"kind": "supply", "item": supply, "quantity": "2", "day": today - timedelta(days=1)}, owner)
+        else:
+            other = next((item for item in master["items"] if not item.is_stock_tracked and item.pk != visit.pk), visit)
+            inpatient.add_charge(current, {"kind": "procedure", "item": other, "day": today - timedelta(days=1)}, owner)
     return True

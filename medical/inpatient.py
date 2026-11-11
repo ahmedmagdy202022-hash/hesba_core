@@ -177,6 +177,13 @@ def _local_day(moment):
     return timezone.localtime(moment).date()
 
 
+def _written(day):
+    """A date inside a sentence, as it goes on the invoice: 2026/11/09. With slashes the whole date stays one
+    left-to-right number in an Arabic line; a hyphenated ISO date is shown back to front there (09-11-2026)."""
+
+    return f"{day:%Y/%m/%d}"
+
+
 def _bed_day_price(bed):
     return money_round(bed.daily_service.default_sale_price or ZERO)
 
@@ -669,8 +676,8 @@ def _rows(charges, lang):
         first, last, bed = run[0], run[-1], run[0].bed
         ward = bed.ward.display(_lang(lang)) if bed is not None else ""
         code = bed.code if bed is not None else "—"
-        text = (words["bed_line_one"].format(ward=ward, bed=code, first=first.day.isoformat()) if len(run) == 1 else
-                words["bed_line"].format(ward=ward, bed=code, days=len(run), first=first.day.isoformat(), last=last.day.isoformat()))
+        text = (words["bed_line_one"].format(ward=ward, bed=code, first=_written(first.day)) if len(run) == 1 else
+                words["bed_line"].format(ward=ward, bed=code, days=len(run), first=_written(first.day), last=_written(last.day)))
         rows.append({"item": first.item, "quantity": Decimal(len(run)), "unit_sale_price": first.price, "line_discount_amount": ZERO, "description": text[:255]})
         run.clear()
 
@@ -682,7 +689,7 @@ def _rows(charges, lang):
     close_run()
     for charge in sorted((c for c in charges if c.kind != ChargeKind.BED_DAY), key=lambda c: (c.day, c.pk or 0)):
         key = "line_surgeon" if charge.surgeon_id else "line"
-        text = words[key].format(kind=labels[charge.kind], item=charge.item.item_name, day=charge.day.isoformat(),
+        text = words[key].format(kind=labels[charge.kind], item=charge.item.item_name, day=_written(charge.day),
                                  surgeon=charge.surgeon.name if charge.surgeon_id else "")
         rows.append({"item": charge.item, "quantity": charge.quantity, "unit_sale_price": charge.price, "line_discount_amount": ZERO, "description": text[:255]})
     return rows
@@ -714,8 +721,8 @@ def bill(admission, user, lang="ar"):
     location = _selling_location(admission)
     if location is None:
         raise ValidationError(words["location"])
-    notes = words["invoice_note"].format(number=admission.number, patient=admission.patient.name, first=_local_day(admission.admitted_at).isoformat(),
-                                         last=_local_day(admission.discharged_at).isoformat())
+    notes = words["invoice_note"].format(number=admission.number, patient=admission.patient.name, first=_written(_local_day(admission.admitted_at)),
+                                         last=_written(_local_day(admission.discharged_at)))
     invoice = draft_invoice(admission.patient, _rows(charges, lang), notes, user, location)
     AdmissionCharge.objects.filter(pk__in=[charge.pk for charge in charges]).update(invoice=invoice)
     attach(admission, invoice)  # S5 (HG-069): the held advance settles this invoice when it posts

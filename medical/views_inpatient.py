@@ -364,6 +364,9 @@ def stay(request, pk):
     add = request.GET.get("add") if request.GET.get("add") in inpatient.ADDED_KINDS and writes and is_open else ""
     if request.method == "POST" and request.POST.get("action") == "charge" and error:
         add = request.POST.get("kind") if request.POST.get("kind") in inpatient.ADDED_KINDS else ""
+    stocks = _stocks()
+    if add == ChargeKind.SUPPLY and not stocks:  # a supply is a stock item: offered only where the business keeps stock
+        add = ""
     reviewing = is_open and writes and (request.GET.get("review") == "1" or (request.method == "POST" and request.POST.get("action") == "discharge"))
     moving = is_open and inpatient.can_manage_beds(user) and (request.GET.get("move") == "1" or (request.method == "POST" and request.POST.get("action") == "move"))
     free = []
@@ -382,7 +385,7 @@ def stay(request, pk):
         state_label=inpatient.STATE_LABELS[lang][admission.state], is_open=is_open, reads=reads, writes=writes, error=error,
         day_label=words["stay_day"].format(n=inpatient.stay_day(admission)), days=days, running=running, has_lines=bool(lines),
         add=add, add_items=(_supplies() if add == ChargeKind.SUPPLY else _services()) if add else (), doctors=_doctors() if add == ChargeKind.OPERATION else (),
-        today=timezone.localdate(), first_day=timezone.localtime(admission.admitted_at).date(), stocks=_stocks(), post=request.POST if error else {},
+        today=timezone.localdate(), first_day=timezone.localtime(admission.admitted_at).date(), stocks=stocks, post=request.POST if error else {},
         can_manage=inpatient.can_manage_beds(user), moving=moving, free=free,
         reviewing=reviewing, review=inpatient.review(admission, lang) if reviewing else None, can_bill=can_bill,
         needs_bill=admission.state == AdmissionState.DISCHARGED and unbilled_count > 0,
