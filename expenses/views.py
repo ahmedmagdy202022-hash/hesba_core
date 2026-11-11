@@ -175,6 +175,12 @@ def expense_list(request):
         .annotate(total=Sum("amount"), count=Count("id"))
         .order_by("-total")
     ]
+    # SH-03: the dashboard and the profit report count bank fees and payroll cost as expenses (expense_total); this register
+    # lists Expense rows only. The two amounts are read here for one note, never added to the total above.
+    from payroll.services import cost_total
+
+    from .services import bank_fee_total
+
     page = page_of(request, queryset)
     return render(
         request,
@@ -191,6 +197,8 @@ def expense_list(request):
             categories=ExpenseCategory.objects.all(),
             cashboxes=entity_scope.cashboxes(Cashbox.objects).filter(active=True),
             total=total,
+            outside_bank_fees=bank_fee_total(date_from, date_to),
+            outside_payroll=cost_total(date_from, date_to),
             posted_count=posted.count(),
             by_category=by_category,
             top_category=by_category[0] if by_category else None,

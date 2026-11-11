@@ -1,11 +1,11 @@
 {% extends "operations/base.html" %}
 {% load hesba_format %}
 {% block operation_content %}
-<section class="op-title-row"><div><h1>{{ words.report }}: <bdi>{{ first|date:"Y-m" }}</bdi></h1><p>{{ words.report_intro }}</p></div></section>
+<section class="op-title-row"><div><h1>{{ words.report }}: <bdi>{{ first|month_text:lang }}</bdi></h1><p>{{ words.report_intro }}</p></div></section>
 {% with tab="report" %}{% include "workorders/_tabs.html" %}{% endwith %}
 <form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><label class="sr-only" for="wo-month">{{ words.month }}</label><input id="wo-month" type="month" name="month" value="{{ first|date:'Y-m' }}" max="{{ today|date:'Y-m' }}"><button type="submit">{{ words.go }}</button></form>
 <div class="op-table-wrap"><table class="op-table" data-tech-report><thead><tr><th>{{ words.technician }}</th><th>{{ words.count }}</th><th>{{ words.billed }}</th><th>{{ words.avg_days }}</th><th>{{ words.returns }}</th><th>{{ words.net_sales }}</th><th>{{ words.rate }}</th><th>{{ words.commission }}</th></tr></thead><tbody>
-{% for row in rows %}<tr data-tech="{{ row.technician.pk|default:0 }}"><td class="op-cell-text">{{ row.technician.name|default:words.nobody }}</td><td>{{ row.count }}</td><td>{{ row.billed|money }}</td><td>{{ row.avg_days|default:'—' }}</td><td>{% if row.returns %}<span class="wo-low">{{ row.returns }}</span>{% else %}0{% endif %}</td><td data-tech-net>{{ row.net_sales|money }}</td><td dir="ltr">{% if row.rate is not None %}{{ row.rate|floatformat:"2u" }}%{% else %}—{% endif %}</td><td data-tech-commission>{% if row.rate is not None %}{{ row.commission|money }}{% else %}—{% endif %}</td></tr>
+{% for row in rows %}<tr data-tech="{{ row.technician.pk|default:0 }}"><td class="op-cell-text">{{ row.technician.name|default:words.nobody }}</td><td>{{ row.count }}</td><td>{{ row.billed|money }}</td><td data-tech-avg>{% if row.avg_days is None %}—{% else %}{{ row.avg_days|qty }}{% endif %}</td><td>{% if row.returns %}<span class="wo-low">{{ row.returns }}</span>{% else %}0{% endif %}</td><td data-tech-net>{{ row.net_sales|money }}</td><td dir="ltr">{% if row.rate is not None %}{{ row.rate|floatformat:"2u" }}%{% else %}—{% endif %}</td><td data-tech-commission>{% if row.rate is not None %}{{ row.commission|money }}{% else %}—{% endif %}</td></tr>
 {% empty %}<tr><td colspan="8" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
 </tbody></table></div>
 <p><small data-commission-note>{{ words.commission_note }}</small></p>
