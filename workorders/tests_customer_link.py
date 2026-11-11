@@ -284,7 +284,8 @@ class CustomerLinkTests(WorkshopSetup):
         url = services.customer_link(self.order_, "en")
         self.assertTrue(url.startswith(f"{BASE}/share/"), url)
         self.assertTrue(url.endswith("?lang=en"))
-        self.assertEqual(public_url("work_order", self.order_.pk), services.customer_link(self.order_))
+        with patch("django.core.signing.time.time", return_value=time.time()):  # a token is signed with its second: both made in one
+            self.assertEqual(public_url("work_order", self.order_.pk), services.customer_link(self.order_))
         token = url.split("/share/")[1].split("/")[0]
         self.assertEqual(read_token(token), ("work_order", self.order_.pk))
         self.client.force_login(self.owner)
