@@ -117,15 +117,12 @@ STRINGS = {
         "vs_previous": "عن الفترة اللي قبلها",
         "huge_up": "زيادة كبيرة جدًا عن الفترة اللي قبلها",  # MT-06: «▲ 1396%» says nothing; above HUGE_DELTA_PCT words replace the number. No "N times": the change is measured against the size of the previous figure, which may have been a loss
         "huge_down": "هبوط حاد عن الفترة اللي قبلها",
-        "daily_title": "المبيعات يوم بيوم",
         "daily_legend_now": "الفترة دي",
         "daily_legend_prev": "الفترة اللي قبلها",
         "best_day": "أعلى يوم",
         "hours_title": "ساعات الذروة (آخر 30 يوم)",
         "hours_peak": "أكتر ساعة بيع",
         "invoices_word": "فاتورة",
-        "top_title_profit": "أكتر الأصناف ربحًا",
-        "top_title_sales": "أكتر الأصناف مبيعًا",
         "slow_title": "بضاعة راكدة",
         "slow_note": "أصناف في المخزن ما اتباعتش من 60 يوم أو أكتر — فلوس نايمة على الرف.",
         "running_title": "هتخلص قريب",
@@ -134,17 +131,14 @@ STRINGS = {
         "never_sold": "ما اتباعش",
         "margin": "هامش",
         "overdue_word": "منه متأخر",
-        "no_sales_chart": "مفيش مبيعات في الفترة دي لسه.",
         "table_view": "عرض كجدول",
         "date_col": "اليوم",
-        "value_col": "المبيعات",
         "kpi_title": "أرقام اليوم",
         "today_more": "أرقام النهارده",
         "top_actions_title": "اختصارات",
         "flat": "زي الفترة اللي قبلها",
         "alerts_title": "محتاج انتباهك",
         "alerts_empty": "مفيش تنبيهات محتاجة متابعة.",
-        "phero_none": "لسه مفيش بيع النهارده؛ أول فاتورة هتظهر هنا.",  # UX Wave 4: the phone money card on a quiet day
         "actions_title": "ابدأ من هنا",
         "onboarding_title": "ابدأ تشغيل حِسْبَة في ٤ خطوات",
         "onboarding_note": "اتبع الخطوات لبدء تشغيل نشاطك على حِسْبَة.",
@@ -157,7 +151,6 @@ STRINGS = {
         "bell_empty": "مفيش تنبيهات دلوقتي.",
         "bell_all": "كل التنبيهات",
         "insights_title": "تحليلات",
-        "tab_sales": "المبيعات",
         "tab_profit": "الربح",
         "tab_weekdays": "أيام الأسبوع",
         "tab_hours": "ساعات الذروة",
@@ -166,17 +159,13 @@ STRINGS = {
         "weekdays_best": "أقوى يوم",
         "split_title": "اتدفع ولا آجل؟",
         "split_paid": "اتدفع وقت البيع",
-        "split_credit": "آجل على العملاء",
         "split_note": "من فواتير البيع النهائية في الفترة.",
         "split_empty": "مفيش فواتير بيع في الفترة دي.",
         "pause": "إيقاف التقليب",
         "play": "تشغيل التقليب",
         "prev_range": "من {start} لـ {end}",
-        "hero_headline": "صافي مبيعات {period}",
         "hero_live": "شغّال دلوقتي",
-        "hero_trend": "اتجاه المبيعات",
         "hero_last_7_days": "آخر ٧ أيام",
-        "hero_today": "مبيعات النهارده",
         "hero_vs_avg": "من متوسط يومك",
         "hero_avg": "متوسط اليوم",
         "hero_invoices": "فاتورة النهارده",
@@ -192,15 +181,12 @@ STRINGS = {
         "vs_previous": "vs the previous period",
         "huge_up": "far above the previous period",
         "huge_down": "a sharp fall vs the previous period",
-        "daily_title": "Sales by day",
         "daily_legend_now": "This period",
         "daily_legend_prev": "Previous period",
         "best_day": "Best day",
         "hours_title": "Peak hours (last 30 days)",
         "hours_peak": "Busiest hour",
         "invoices_word": "invoices",
-        "top_title_profit": "Most profitable items",
-        "top_title_sales": "Best-selling items",
         "slow_title": "Slow stock",
         "slow_note": "Items on the shelf with no sale for 60 days or more: money tied up.",
         "running_title": "Running out",
@@ -209,17 +195,14 @@ STRINGS = {
         "never_sold": "never sold",
         "margin": "margin",
         "overdue_word": "overdue",
-        "no_sales_chart": "No sales in this period yet.",
         "table_view": "Show as table",
         "date_col": "Day",
-        "value_col": "Sales",
         "kpi_title": "Today's numbers",
         "today_more": "Today's numbers",
         "top_actions_title": "Shortcuts",
         "flat": "same as the previous period",
         "alerts_title": "Needs your attention",
         "alerts_empty": "Nothing needs following up.",
-        "phero_none": "No sales yet today; the first invoice shows here.",
         "actions_title": "Start here",
         "onboarding_title": "Start using Hesba in 4 steps",
         "onboarding_note": "Follow these steps to get your business running on Hesba.",
@@ -232,7 +215,6 @@ STRINGS = {
         "bell_empty": "Nothing needs attention right now.",
         "bell_all": "All alerts",
         "insights_title": "Insights",
-        "tab_sales": "Sales",
         "tab_profit": "Profit",
         "tab_weekdays": "Weekdays",
         "tab_hours": "Peak hours",
@@ -241,17 +223,13 @@ STRINGS = {
         "weekdays_best": "Strongest day",
         "split_title": "Paid or on credit?",
         "split_paid": "Paid at the till",
-        "split_credit": "On customer credit",
         "split_note": "From posted sales invoices in the period.",
         "split_empty": "No sales invoices in this period.",
         "pause": "Pause rotation",
         "play": "Resume rotation",
         "prev_range": "{start} to {end}",
-        "hero_headline": "Net sales · {period}",
         "hero_live": "Live now",
-        "hero_trend": "Sales trend",
         "hero_last_7_days": "Last 7 days",
-        "hero_today": "Sales today",
         "hero_vs_avg": "of your average day",
         "hero_avg": "Average day",
         "hero_invoices": "invoices today",
@@ -259,6 +237,22 @@ STRINGS = {
         "hero_lines": {"morning": "A new day, a fresh start. Let's go.", "afternoon": "Halfway through the day: here's where you are.", "evening": "Nearly closing time: here's the full picture.", "night": "Working late? Everything is right here."},
     },
 }
+
+
+#: WATCH1B (CL-01): the sentences that name the sale or the customer come from the activity's vocabulary
+#: (settings_core/vocabulary.py): a shop and a workshop read exactly what they always did, a clinic says revenue and patients.
+ACTIVITY_STRINGS = {key: vocab_key for key, vocab_key in (
+    ("daily_title", "dash_daily_title"), ("top_title_profit", "dash_top_title_profit"), ("top_title_sales", "dash_top_title_sales"),
+    ("no_sales_chart", "dash_no_sales_chart"), ("value_col", "dash_value_col"), ("phero_none", "dash_phero_none"), ("tab_sales", "dash_tab_sales"),
+    ("split_credit", "dash_split_credit"), ("hero_headline", "dash_hero_headline"), ("hero_trend", "dash_hero_trend"), ("hero_today", "dash_hero_today"),
+)}
+
+
+def _strings(lang):
+    from settings_core.vocabulary import active_vocabulary, term
+
+    words = active_vocabulary()
+    return {**STRINGS[lang], **{key: term(vocab_key, lang, words) for key, vocab_key in ACTIVITY_STRINGS.items()}}
 
 
 def _lang(request):
@@ -310,6 +304,15 @@ def _format_value(kpi, raw, lang):
     return display_money(raw)
 
 
+def _kpi_label(kpi, scope, lang, term):
+    # ACT-PROFILE-001: a clinic owes nothing to "customers"; its patients do. WATCH1B (CL-01): and it takes revenue, not sales.
+    if kpi.key == "customer_dues":
+        return term("customer_dues", lang)
+    if kpi.key == "sales_today":
+        return term("dash_sales_today_own" if scope == SCOPE_OWN else "dash_sales_today", lang)
+    return kpi.label(lang, scope)
+
+
 def _build_cards(user, lang, held, figures):
     cards = []
 
@@ -320,8 +323,7 @@ def _build_cards(user, lang, held, figures):
         cards.append(
             {
                 "key": kpi.key,
-                # ACT-PROFILE-001: a clinic owes nothing to "customers"; its patients do.
-                "label": term("customer_dues", lang) if kpi.key == "customer_dues" else kpi.label(lang, scope),
+                "label": _kpi_label(kpi, scope, lang, term),
                 "value": _format_value(kpi, raw, lang),
                 "raw": raw,
                 "unit": kpi.unit,
@@ -491,12 +493,13 @@ def _ask_link(lang, fit, user):
     from django.urls import reverse
 
     from ai.ask import can_ask
+    from settings_core.vocabulary import term
 
     if not can_ask(user):
         return None
 
     return {"url": f"{reverse('ai:ask')}?lang={lang}", "label": "Ask Hesba" if lang == "en" else "اسأل حسبة",
-            "hint": "Ask about your sales, stock, cash or customers" if lang == "en" else "اسأل عن مبيعاتك ومخزونك وخزنتك وعملاءك"}
+            "hint": term("dash_ask_hint", lang)}  # WATCH1B (CL-01)
 
 
 #: UX Wave 1: a KPI card that repeats a figure shown higher up on the page, and the analytics metric that shows it.
@@ -553,7 +556,7 @@ def dashboard(request):
     """
 
     lang = _lang(request)
-    strings = STRINGS[lang]
+    strings = _strings(lang)
     now = timezone.localtime()
     today = now.date()
     profile = ClientProfile.get_active()

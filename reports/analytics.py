@@ -212,6 +212,10 @@ def stock_health(today, limit=5):
     }
 
 
+#: The metrics whose label and explanation name the sale or the customer, so they follow the activity's vocabulary.
+ACTIVITY_METRICS = ("net_sales", "avg_invoice", "receivables")
+
+
 def build_analytics(held, period_key, today=None, lang="ar"):
     """Everything the analytics section shows, limited to what ``held`` allows."""
 
@@ -226,12 +230,19 @@ def build_analytics(held, period_key, today=None, lang="ar"):
     out["available"] = True
     words = METRIC_WORDS["en" if lang == "en" else "ar"]
 
+    from settings_core.vocabulary import active_vocabulary, term
+
+    activity_words = active_vocabulary()
+
     def metric(key, value, previous=None, unit="currency", good_up=True, extra=None):
         delta = change(value, previous) if previous is not None else None
+        label, how = words[key]["label"], words[key]["how"]
+        if key in ACTIVITY_METRICS:  # WATCH1B (CL-01): a clinic's revenue and patients, a shop's sales and customers
+            label, how = term(f"metric_{key}", lang, activity_words), term(f"metric_{key}_how", lang, activity_words)
         out["metrics"].append({
             "key": key,
-            "label": words[key]["label"],
-            "how": words[key]["how"],
+            "label": label,
+            "how": how,
             "value": value,
             "previous": previous,
             "delta": delta,
@@ -476,25 +487,33 @@ def _hours(rows):
     return {"cells": cells, "peak": peak[0] if peak else None, "busiest": busiest}
 
 
+def _vocab(key, lang):
+    """The general wording of an activity-sensitive metric (settings_core/vocabulary.py keeps the text once)."""
+
+    from settings_core.vocabulary import BASE
+
+    return BASE[key][lang]
+
+
 METRIC_WORDS = {
     "ar": {
-        "net_sales": {"label": "صافي المبيعات", "how": "إجمالي فواتير البيع النهائية في الفترة ناقص مرتجعات البيع النهائية في نفس الفترة. المقارنة بفترة قبلها بنفس عدد الأيام."},
-        "avg_invoice": {"label": "متوسط الفاتورة", "how": "صافي المبيعات ÷ عدد فواتير البيع النهائية في الفترة."},
+        "net_sales": {"label": _vocab("metric_net_sales", "ar"), "how": _vocab("metric_net_sales_how", "ar")},
+        "avg_invoice": {"label": _vocab("metric_avg_invoice", "ar"), "how": _vocab("metric_avg_invoice_how", "ar")},
         "gross_profit": {"label": "مجمل الربح", "how": "المبيعات ناقص تكلفة البضاعة المباعة بتكلفتها الفعلية في المخزن، بعد المرتجعات. الهامش = مجمل الربح ÷ المبيعات."},
         "expenses": {"label": "المصروفات", "how": "مجموع المصروفات النهائية بتاريخ جوّه الفترة. المصروف الملغي مش محسوب."},
         "net_profit": {"label": "صافي الربح", "how": "مجمل الربح ناقص المصروفات في نفس الفترة."},
         "cash": {"label": "السيولة في الخزن", "how": "رصيد كل الخزن النشطة دلوقتي: الرصيد الافتتاحي + كل حركات الدخول − كل حركات الخروج."},
-        "receivables": {"label": "فلوسك برّه (آجل العملاء)", "how": "مجموع أرصدة العملاء المدينة. «متأخر» = اللي عدّى مدة الآجل المسموحة، والأقدم بيتسدد الأول."},
+        "receivables": {"label": _vocab("metric_receivables", "ar"), "how": _vocab("metric_receivables_how", "ar")},
         "payables": {"label": "المستحق للموردين", "how": "مجموع أرصدة الموردين الدائنة دلوقتي."},
     },
     "en": {
-        "net_sales": {"label": "Net sales", "how": "Posted sales invoices in the period minus posted sales returns in the same period, compared with the previous period of the same length."},
-        "avg_invoice": {"label": "Average invoice", "how": "Net sales ÷ number of posted sales invoices in the period."},
+        "net_sales": {"label": _vocab("metric_net_sales", "en"), "how": _vocab("metric_net_sales_how", "en")},
+        "avg_invoice": {"label": _vocab("metric_avg_invoice", "en"), "how": _vocab("metric_avg_invoice_how", "en")},
         "gross_profit": {"label": "Gross profit", "how": "Sales minus the actual stock cost of the goods sold, after returns. Margin = gross profit ÷ sales."},
         "expenses": {"label": "Expenses", "how": "Posted expenses dated in the period. Cancelled expenses are not counted."},
         "net_profit": {"label": "Net profit", "how": "Gross profit minus expenses for the same period."},
         "cash": {"label": "Cash on hand", "how": "Balance of every active cashbox now: opening balance + all money in − all money out."},
-        "receivables": {"label": "Owed to you (customers)", "how": "Sum of customer balances owed to you. Overdue = past the allowed credit days, oldest settled first."},
+        "receivables": {"label": _vocab("metric_receivables", "en"), "how": _vocab("metric_receivables_how", "en")},
         "payables": {"label": "Owed to suppliers", "how": "Sum of what you owe suppliers now."},
     },
 }
