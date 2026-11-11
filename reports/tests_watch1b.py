@@ -138,3 +138,72 @@ class DashboardWordsTests(TestCase):
         self.assertEqual(term("dash_ask_hint", "en", vocabulary("medical", "vet")), "Ask about your revenue, stock, cash or pet owners")
         self.assertEqual(term("dash_ask_hint", "ar", vocabulary("commercial", "retail")), "اسأل عن مبيعاتك ومخزونك وخزنتك وعملاءك")
         self.assertEqual(term("dash_ask_hint", "en", vocabulary("commercial", "retail")), "Ask about your sales, stock, cash or customers")
+
+
+def hub_titles(html):
+    """The report tiles in the order the hub shows them: (title, href, is the activity's own)."""
+
+    return [(title, href, "data-activity-report" in tag) for tag, href, title in
+            re.findall(r'(<a class="hs-tile[^>]*?href="([^"]+)"[^>]*>).*?<strong>(.*?)</strong>', html, re.S)]
+
+
+class ReportsHubActivityReportTests(TestCase):
+    """SH-12 and CL-05: the activity's own report leads the hub, for those who may open it."""
+
+    def hub(self, **params):
+        response = self.client.get(reverse("report_hub"), params)
+        self.assertEqual(response.status_code, 200)
+        return response.content.decode()
+
+    def test_a_clinic_hub_leads_with_the_clinic_report_named_for_what_it_counts(self):
+        a_business(self, "medical", "clinic", "w1b_hub_clinic", sale=False)
+        tiles = hub_titles(self.hub())
+        self.assertEqual(tiles[0], ("تقرير العيادة", f"{reverse('medical:report')}?lang=ar", True))
+        self.assertEqual([title for title, _, own in tiles if own], ["تقرير العيادة"])
+        ar = self.hub()
+        self.assertIn("وإيراد الكشوفات اللي اتفوترت بس — مش كل المبيعات", ar)
+        self.assertNotIn("تقرير المبيعات</strong><p>الكشوفات", ar)  # the sales report keeps its own words below
+        self.assertIn("تقرير المبيعات", [title for title, _, _ in tiles])  # nothing else is removed
+        en = hub_titles(self.hub(lang="en"))
+        self.assertEqual(en[0], ("Clinic report", f"{reverse('medical:report')}?lang=en", True))
+
+    def test_the_tile_never_promises_all_sales(self):
+        a_business(self, "medical", "clinic", "w1b_hub_promise", sale=False)
+        first = re.search(r"<a class=\"hs-tile[^>]*data-activity-report.*?</a>", self.hub(), re.S).group(0)
+        self.assertNotIn("المبيعات</strong>", first)
+        self.assertIn("مش كل المبيعات", first)
+        en = re.search(r"<a class=\"hs-tile[^>]*data-activity-report.*?</a>", self.hub(lang="en"), re.S).group(0)
+        self.assertIn("not every sale", en)
+
+    def test_a_workshop_hub_leads_with_the_technicians_report(self):
+        a_business(self, "services", "maintenance", "w1b_hub_work", sale=False)
+        tiles = hub_titles(self.hub())
+        self.assertEqual(tiles[0], ("تقرير الفنيين", f"{reverse('workorders:report')}?lang=ar", True))
+        self.assertEqual(hub_titles(self.hub(lang="en"))[0][0], "Technicians report")
+
+    def test_a_shop_and_a_salon_hub_has_no_activity_tile(self):
+        for activity, sub, username in (("commercial", "retail", "w1b_hub_shop"),):
+            a_business(self, activity, sub, username, sale=False)
+            tiles = hub_titles(self.hub())
+            self.assertFalse([title for title, _, own in tiles if own])
+            self.assertEqual(tiles[0][0], "تحليل النشاط")  # the hub's first tile as it always was
+
+    def test_a_manager_sees_it_and_those_without_the_records_permission_do_not(self):
+        a_business(self, "medical", "clinic", "w1b_hub_roles", sale=False)
+        for role, username, shown in ((RoleCode.MANAGER, "w1b_hub_mgr", True), (RoleCode.CASHIER, "w1b_hub_cash", False),
+                                      (RoleCode.DOCTOR, "w1b_hub_doc", False), (RoleCode.ACCOUNTANT, "w1b_hub_acc", False)):
+            with self.subTest(role=role):
+                self.client.force_login(person(role, username))
+                response = self.client.get(reverse("report_hub"))
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(any(own for _, _, own in hub_titles(response.content.decode())), shown)
+                self.assertEqual(self.client.get(reverse("medical:report")).status_code, 200 if shown else 403)  # the tile opens exactly when the report does
+
+    def test_in_a_workshop_only_those_who_may_view_invoices_get_the_technicians_tile(self):
+        a_business(self, "services", "maintenance", "w1b_hub_wo_owner", sale=False)
+        for role, username, shown in ((RoleCode.MANAGER, "w1b_hub_wo_mgr", True), (RoleCode.STOCK_KEEPER, "w1b_hub_wo_stock", False)):
+            with self.subTest(role=role):
+                self.client.force_login(person(role, username))
+                response = self.client.get(reverse("report_hub"))
+                self.assertEqual(any(own for _, _, own in hub_titles(response.content.decode())), shown)
+                self.assertEqual(self.client.get(reverse("workorders:report")).status_code, 200 if shown else 403)
