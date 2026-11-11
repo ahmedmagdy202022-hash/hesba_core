@@ -180,7 +180,36 @@ class LocationForm(AutoNumbered, _EntityField, HesbaModelForm):
         self.offer_auto_number(self.lang)
 
 
-class SupplierForm(ZeroWhenBlank, AutoNumbered, HesbaModelForm):
+class PhoneChecked:
+    """SH-02: a phone is digits with an optional leading +, spaces, dashes and brackets, never letters.
+
+    Only a number that was typed or changed is checked, so an old row with an odd phone still opens and saves
+    until someone touches that field. An empty phone stays allowed. Quick-add at the till, online booking,
+    education payers and imports build parties through their own code and do not go through this form.
+    """
+
+    PHONE_ERROR = {
+        "ar": "اكتب رقم تليفون بأرقام بس (ينفع + في الأول ومسافات وشرطات وأقواس).",
+        "en": "Type a phone number in digits only (a leading +, spaces, dashes and brackets are fine).",
+    }
+
+    def _clean_phone_field(self, name):
+        value = (self.cleaned_data.get(name) or "").strip()
+        if not value or name not in self.changed_data:
+            return value
+        body = value[1:] if value.startswith("+") else value
+        if not any(ch.isdecimal() for ch in body) or any(not (ch.isdecimal() or ch in " -()") for ch in body):
+            raise forms.ValidationError(self.PHONE_ERROR[self.lang], code="phone")
+        return value
+
+    def clean_phone(self):
+        return self._clean_phone_field("phone")
+
+    def clean_whatsapp(self):
+        return self._clean_phone_field("whatsapp")
+
+
+class SupplierForm(PhoneChecked, ZeroWhenBlank, AutoNumbered, HesbaModelForm):
     zero_when_blank = ("opening_balance",)
     sections_spec = (
         ("main", "بيانات المورد", "The supplier", "الاسم بس كفاية، والكود بيتعمل لوحده.", "The name is enough; the code is made for you.", ("name", "supplier_code")),
@@ -213,7 +242,7 @@ class SupplierForm(ZeroWhenBlank, AutoNumbered, HesbaModelForm):
             self.fields["opening_balance"].disabled = True
 
 
-class CustomerForm(ZeroWhenBlank, AutoNumbered, HesbaModelForm):
+class CustomerForm(PhoneChecked, ZeroWhenBlank, AutoNumbered, HesbaModelForm):
     zero_when_blank = ("opening_balance", "credit_limit")
     sections_spec = (
         ("main", "بيانات العميل", "The customer", "الاسم بس كفاية، والكود بيتعمل لوحده.", "The name is enough; the code is made for you.", ("name", "customer_code", "sales_rep")),
@@ -434,6 +463,20 @@ class ItemForm(ZeroWhenBlank, AutoNumbered, HesbaModelForm):
             self.fields["size"].widget = SuggestInput("sizes", SIZES + NUMBER_SIZES, self.fields["size"].widget.attrs)
         if "color" in self.fields:
             self.fields["color"].widget = SuggestInput("colors", COLORS["en" if self.lang == "en" else "ar"], self.fields["color"].widget.attrs)
+
+    NEGATIVE_PRICE = {"ar": "السعر مينفعش يبقى بالسالب. اكتب صفر لو الصنف ببلاش.", "en": "The price cannot be negative. Type 0 for a free item."}
+
+    def _price_not_negative(self, name):
+        value = self.cleaned_data.get(name)
+        if value is not None and value < 0:
+            raise forms.ValidationError(self.NEGATIVE_PRICE[self.lang], code="negative_price")
+        return value
+
+    def clean_default_sale_price(self):
+        return self._price_not_negative("default_sale_price")
+
+    def clean_default_purchase_price(self):
+        return self._price_not_negative("default_purchase_price")
 
     def clean_size(self):
         from variants.standard import standard_size
