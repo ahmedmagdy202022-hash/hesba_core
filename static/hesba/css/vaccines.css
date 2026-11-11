@@ -23,6 +23,7 @@
 .vx-dose__due{display:flex;flex-wrap:wrap;align-items:center;gap:var(--hs-space-2)}
 .vx-note{margin:0;color:var(--hs-ink);font-size:var(--hs-text-sm);line-height:var(--hs-leading);overflow-wrap:anywhere}
 .vx-invoice{display:flex;flex-wrap:wrap;align-items:center;gap:var(--hs-space-2);margin:0}
+.vx-invoice a{display:inline-flex;align-items:center;min-height:var(--hs-control-height);color:var(--hs-teal-deep);font-weight:var(--hs-weight-semibold)}
 .vx-dose__acts{display:flex;flex-wrap:wrap;align-items:center;gap:var(--hs-space-2)}
 .vx-dose__acts form{margin:0}
 .vx-del summary{display:inline-flex;align-items:center;justify-content:center;min-height:var(--hs-control-height);padding:0 var(--hs-space-3);color:var(--hs-danger);font-size:var(--hs-text-sm);font-weight:var(--hs-weight-bold);cursor:pointer;list-style:none}
@@ -61,5 +62,7 @@ tr[data-overdue] .vx-when{color:var(--hs-danger);font-weight:var(--hs-weight-sem
   .vx-dose__acts>form,.vx-dose__acts .op-secondary{width:100%}
   .vx-dose__acts .op-secondary{justify-content:center}
   .vx-actions{position:sticky;bottom:calc(var(--hs-tabbar-clear) + var(--hs-space-2));z-index:5;padding:var(--hs-space-2);border-radius:var(--hs-radius-lg);background:var(--hs-card-bg);box-shadow:var(--hs-shadow-up)}
-  .vx-actions .op-primary{flex:1 1 auto}
+  .vx-actions{flex-direction:row;flex-wrap:nowrap;gap:var(--hs-space-2)}
+  .vx-actions .op-primary{flex:1 1 auto;width:auto}
+  .vx-actions .op-secondary{flex:0 0 auto;width:auto}
 }
