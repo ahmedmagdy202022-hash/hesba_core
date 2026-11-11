@@ -204,6 +204,12 @@ class ScanWhoTests(ScanSetup):
         self.assertFalse(ClassSession.objects.filter(group=theirs).exists())
         # The manager scans the same child without trouble.
         self.assertEqual(scan.mark(other_kid.code, self.owner, at(TODAY, 16, 3)).status, "ok")
+        # A stopped student's card: the manager is told who it is, a teacher is told nothing.
+        services.save_student({"name": "غريب", "payer": other_kid.payer, "active_present": "1"}, self.owner, other_kid)
+        self.assertEqual(scan.mark(other_kid.code, self.owner, at(TODAY, 16, 4)).status, "inactive")
+        stopped = scan.mark(other_kid.code, mine, at(TODAY, 16, 4))
+        self.assertEqual((stopped.status, stopped.student), ("refused", None))
+        self.assertNotIn("غريب", stopped.message)
 
     def test_someone_who_may_not_take_attendance_cannot_scan(self):
         cashier = person(RoleCode.CASHIER, "edu_scan_cashier")

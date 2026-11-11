@@ -161,6 +161,8 @@ def mark(code, user, now=None, *, group=None, lang="ar"):
     if student is None:
         return ScanResult("not_found", words["not_found"], lang=lang)
     if not student.active:
+        if not services.can_manage(user):  # a teacher learns nothing about a stopped student who may never have been theirs
+            return ScanResult("refused", words["refused"], lang=lang)
         return ScanResult("inactive", words["inactive"].format(student=student.name), student=student, lang=lang)
     today = _today_groups(student, day)
     allowed = [row for row in today if attendance.can_take(user, row)]
