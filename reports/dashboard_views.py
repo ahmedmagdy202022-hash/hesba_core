@@ -40,7 +40,7 @@ from .dashboard_kpis import (
     visible_kpis,
 )
 from .activity_panel import build_activity_panel
-from .navigation import DASHBOARD_SHORTCUTS, display_name, nav_items, shortcut_actions
+from .navigation import dashboard_shortcut_keys, display_name, nav_items, shortcut_actions
 from settings_core.currency import currency_label
 
 
@@ -591,7 +591,7 @@ def dashboard(request):
     if analytics.get("available") and analytics["metrics"]:
         headline = analytics["metrics"][0]
     layout = _layout(cards, analytics, headline)
-    top_actions = shortcut_actions(request.user, lang, modules, sections, DASHBOARD_SHORTCUTS, dashboard=True)
+    top_actions = shortcut_actions(request.user, lang, modules, sections, dashboard_shortcut_keys(activity, effective_activity()[1] or ""), dashboard=True)
 
     context = {
         "checkpoint_code": CHECKPOINT_CODE,
@@ -619,7 +619,7 @@ def dashboard(request):
         **layout,
         # UX Wave 1: the four everyday shortcuts right under the hero; the «ابدأ من هنا» list skips the ones shown there.
         "top_actions": top_actions,
-        "top_action_urls": [action["url_name"] for action in top_actions],
+        "top_action_urls": [action["url_name"] for action in top_actions if action["dedupe"]],
         "previous_range_text": strings["prev_range"].format(start=day_text(previous_range[0], lang), end=day_text(previous_range[1], lang)) if previous_range else "",
         # The app shell draws the navigation from the same list; it stays in
         # the context so the section set can be asserted without parsing HTML.

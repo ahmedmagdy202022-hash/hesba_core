@@ -199,6 +199,13 @@ SHORTCUTS = {
                  "permission": "master_data.manage_items"},
     "new_purchase": {"ar": "فاتورة شراء", "en": "Purchase invoice", "url_name": "purchases:create", "icon": "purchases", "module": "purchases",
                      "permission": "purchases.create_purchase_invoice"},
+    # WATCH1B (CL-09): a clinic's two daily jobs. Booking opens the agenda at its new-booking form (the same permission and module as the
+    # form); a visit needs a patient, so it opens the patient list, where every file has «+ كشف جديد» (only for those who may record one).
+    # Neither hides the «ابدأ من هنا» row that leads to the same screen (dedupe False): the agenda stays listed there.
+    "new_booking": {"ar": "حجز جديد", "en": "New booking", "url_name": "appointments:agenda", "fragment": "#new-appointment", "icon": "appointments",
+                    "module": "appointments_visits", "section": "appointments", "permission": "sales.create_sales_invoice", "dedupe": False},
+    "new_visit": {"ar": "سجّل كشف", "en": "Record a visit", "url_name": "medical:patients", "icon": "medical", "module": "customers",
+                  "section": "medical", "allow": "medical.services.can_write", "dedupe": False},
 }
 #: The activity's words for a shortcut (a school's «كورس جديد», a clinic's «تحصيل من مريض»), read through term() as the
 #: dashboard's quick actions read QUICK_ACTION_TERMS, so «ابدأ من هنا» and these rows say the same thing. Only an activity
@@ -206,6 +213,15 @@ SHORTCUTS = {
 SHORTCUT_TERMS = {"new_sale": "new_sale", "collect": "collect", "new_item": "new_item"}
 DRAWER_SHORTCUTS = ("pos", "new_sale", "collect", "new_item")
 DASHBOARD_SHORTCUTS = ("pos", "collect", "new_item", "new_purchase")
+#: WATCH1B (CL-09): what an activity does all day leads its row; the shop's chips follow unchanged. A lab books but records no visit.
+ACTIVITY_DASHBOARD_SHORTCUTS = {"medical": ("new_booking", "new_visit")}
+
+
+def dashboard_shortcut_keys(activity, sub_activity=""):
+    lead = ACTIVITY_DASHBOARD_SHORTCUTS.get(activity, ())
+    if activity == "medical" and sub_activity == "lab":
+        lead = ("new_booking",)
+    return lead + DASHBOARD_SHORTCUTS
 
 
 def shortcut_actions(user, lang, modules, sections, keys=DRAWER_SHORTCUTS, dashboard=False):
@@ -221,6 +237,8 @@ def shortcut_actions(user, lang, modules, sections, keys=DRAWER_SHORTCUTS, dashb
             continue
         if spec.get("permission") and not user_has_permission(user, spec["permission"]):
             continue
+        if spec.get("allow") and not import_string(spec["allow"])(user):
+            continue
         url = reverse(spec["url_name"])
         if closed_module(url) is not None:
             continue
@@ -229,7 +247,8 @@ def shortcut_actions(user, lang, modules, sections, keys=DRAWER_SHORTCUTS, dashb
             word = term(SHORTCUT_TERMS[key], lang, words)
             if word != BASE_TERMS[SHORTCUT_TERMS[key]]["en" if lang == "en" else "ar"]:  # this activity has its own word
                 label = word
-        rows.append({"key": key, "label": label, "url": url, "url_name": spec["url_name"], "icon": spec["icon"]})
+        rows.append({"key": key, "label": label, "url": url, "url_name": spec["url_name"], "icon": spec["icon"], "fragment": spec.get("fragment", ""),
+                     "dedupe": spec.get("dedupe", True)})
     return rows
 
 
