@@ -217,6 +217,11 @@ def beds(request):
                                                       can_setup=inpatient.can_setup(request.user), attention=attention, recent=recent))
 
 
+#: Settings offers «افتح» on the feature's row only to someone the board opens for, and only where it opens at all
+#: (a medical business, or a medical entity of a group): ``settings_core.operational_views._opens_for``.
+beds.opens_for = inpatient.can_see_board
+
+
 # ---- the admission sheet -----------------------------------------------------------
 
 

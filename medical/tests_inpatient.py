@@ -810,6 +810,18 @@ class AccessTests(Hospital):
         self.assertFalse(caps.fits("commercial", "inpatient", "pharmacy"))
         self.assertNotIn("inpatient", caps.default_selection("medical", "clinic"))  # a clinic starts without beds
 
+    def test_settings_offers_open_on_the_feature_only_to_whom_the_board_opens_for(self):
+        from settings_core.operational_views import _features
+
+        def link(user):
+            return next(row["url"] for row in _features("ar", user) if row["slug"] == "inpatient")
+
+        self.assertEqual(link(self.owner), reverse("medical:beds"))
+        self.client.force_login(self.owner)
+        self.assertEqual(self.client.get(link(self.owner) + "?lang=ar").status_code, 200)
+        self.assertEqual(link(self.desk), reverse("medical:beds"))
+        self.assertEqual(link(self.keeper), "")  # a stock keeper has no way into the board: no dead link for them
+
     def test_the_setup_interview_asks_about_beds_only_where_patients_stay(self):
         from settings_core import setup_interview as interview
 
