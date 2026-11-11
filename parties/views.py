@@ -69,10 +69,20 @@ def _date(raw):
         return None
 
 
+def _sale_types(lang, kind, party):
+    """The statement's two sale lines in the activity's words (a clinic: «فاتورة آجلة»); an insurer, a customer record, keeps the general ones."""
+
+    from settings_core.vocabulary import BASE, active_vocabulary, term
+
+    table = BASE if kind != "customer" or hasattr(party, "insurance_contract") else active_vocabulary()
+    return {"sales_due": term("party_type_sales_due", lang, table), "sales_return": term("party_type_sales_return", lang, table)}
+
+
 def _statement_context(request, kind, party):
     date_from, date_to = _date(request.GET.get("from")), _date(request.GET.get("to"))
     data = statement(kind, party, date_from, date_to)
-    labels = WORDS[_lang(request)]["types"]
+    lang = _lang(request)
+    labels = dict(WORDS[lang]["types"], **_sale_types(lang, kind, party))
     for row in data["rows"]:
         row["type_label"] = labels.get(row["entry"].entry_type, row["entry"].entry_type)
     return data, date_from, date_to

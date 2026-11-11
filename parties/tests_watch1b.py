@@ -35,6 +35,13 @@ class PatientPageWordsTests(tests_insurance.InsuranceSetup):
         self.assertNotIn("مستحق على المريض", ar)
         self.assertIn("Owed by the customer", self.card(self.insurer, lang="en"))
 
+    def test_the_statement_names_the_sale_lines_as_bills_in_a_clinic_and_keeps_them_for_an_insurer(self):
+        from parties.views import _sale_types
+
+        self.assertEqual(_sale_types("ar", "customer", self.mona), {"sales_due": "فاتورة آجلة", "sales_return": "مرتجع فاتورة"})
+        self.assertEqual(_sale_types("en", "customer", self.mona), {"sales_due": "Credit bill", "sales_return": "Bill return"})
+        self.assertEqual(_sale_types("ar", "customer", self.insurer), {"sales_due": "فاتورة بيع آجل", "sales_return": "مرتجع بيع"})
+
     def test_the_credit_label_follows_the_same_rule(self):
         from parties.views import _words
 
@@ -56,6 +63,14 @@ class OtherActivitiesKeepTheirWordsTests(TestCase):
         ar = self.page("commercial", "retail", "w1b_p_shop")
         self.assertIn("مستحق على العميل", ar)
         self.assertNotIn("المريض", ar)
+
+    def test_a_shops_statement_keeps_its_sale_lines(self):
+        from parties.views import _sale_types
+
+        self.page("commercial", "retail", "w1b_p_shop_types")
+        customer = make_customer(customer_code="W1B-C")
+        self.assertEqual(_sale_types("ar", "customer", customer), {"sales_due": "فاتورة بيع آجل", "sales_return": "مرتجع بيع"})
+        self.assertEqual(_sale_types("en", "customer", customer), {"sales_due": "Credit sale", "sales_return": "Sales return"})
 
     def test_a_shop_in_english(self):
         en = self.page("commercial", "retail", "w1b_p_shop_en", "en")

@@ -34,6 +34,10 @@ def a_business(test, activity, sub_activity, username, sale=True):
     return owner
 
 
+SPLIT_AR_CLINIC = ("اتدفع وقت الكشف", "من الفواتير النهائية في الفترة.", "متوسط الإيراد حسب يوم الأسبوع (آخر 4 أسابيع)", "أكتر ساعة زحمة")
+SPLIT_AR_SHOP = ("اتدفع وقت البيع", "من فواتير البيع النهائية في الفترة.", "متوسط البيع حسب يوم الأسبوع (آخر 4 أسابيع)", "أكتر ساعة بيع")
+
+
 class DashboardWordsTests(TestCase):
     """CL-01: the sentences on the dashboard that name the sale or the customer."""
 
@@ -63,6 +67,31 @@ class DashboardWordsTests(TestCase):
             with self.subTest(shop=shop):
                 self.assertNotIn(shop, ar)
         self.assertRegex(ar, r"<bdi>1</bdi> فاتورة")  # «N فاتورة»: the figure counts invoices, not visits (CL-05), so it keeps its word
+
+    def test_the_chart_notes_and_titles_that_name_the_sale_follow_the_clinic_too(self):
+        a_business(self, "medical", "clinic", "w1b_clinic_notes")
+        response, ar = self.dashboard()
+        for text in SPLIT_AR_CLINIC:
+            with self.subTest(text=text):
+                self.assertIn(text, ar)
+        for shop in SPLIT_AR_SHOP:
+            with self.subTest(shop=shop):
+                self.assertNotIn(shop, ar)
+        self.assertEqual(response.context["split_empty"], "مفيش فواتير في الفترة دي.")
+        en = self.dashboard(lang="en")[0].context
+        self.assertEqual((en["split_note"], en["split_empty"], en["weekdays_title"]),
+                         ("From posted invoices in the period.", "No invoices in this period.", "Average revenue by weekday (last 4 weeks)"))
+
+    def test_the_same_strings_in_a_shop_are_what_they_were(self):
+        a_business(self, "commercial", "retail", "w1b_shop_notes")
+        response, ar = self.dashboard()
+        for text in SPLIT_AR_SHOP:
+            with self.subTest(text=text):
+                self.assertIn(text, ar)
+        self.assertEqual(response.context["split_empty"], "مفيش فواتير بيع في الفترة دي.")
+        en = self.dashboard(lang="en")[0].context
+        self.assertEqual((en["split_note"], en["split_empty"], en["weekdays_title"], en["split_paid"]),
+                         ("From posted sales invoices in the period.", "No sales invoices in this period.", "Average sales by weekday (last 4 weeks)", "Paid at the till"))
 
     def test_a_clinic_says_revenue_and_patients_in_english(self):
         a_business(self, "medical", "clinic", "w1b_clinic_en")
