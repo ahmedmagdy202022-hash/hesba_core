@@ -105,7 +105,18 @@ def _tabs(request, current):
     lang = _lang(request)
     return {"tab": current, "shows_report": user_has_permission(request.user, REPORT_VIEW), "shows_lab": _is_lab(), "lab_tests_label": LAB_WORDS[lang]["tests"],
             "shows_insurance": insurance.can_view(request.user), "insurance_label": INSURANCE_WORDS[lang]["tab"],
-            "shows_templates": services.can_write(request.user), "templates_label": visit_templates.WORDS[lang]["title"]}
+            "shows_templates": services.can_write(request.user), "templates_label": visit_templates.WORDS[lang]["title"],
+            **_vaccine_tabs(request, lang)}
+
+
+def _vaccine_tabs(request, lang):
+    """M7 (HG-090): the vet's two tabs: the due list (those who read patient records) and the vaccines set-up (owner and manager)."""
+
+    from . import vaccines, views_vaccines
+
+    shows = vaccines.shows(request.user)
+    return {"shows_vaccinations": shows, "vaccinations_label": views_vaccines.WORDS[lang]["title"],
+            "shows_vaccine_setup": shows and vaccines.can_setup(request.user), "vaccine_setup_label": views_vaccines.WORDS[lang]["setup"]}
 
 
 def _period(request, words):
@@ -710,7 +721,36 @@ def animal_card(request, pk):
     visits = list(animal.visits.select_related("doctor"))
     return render(request, "medical/animal.html", _base(lang, page_title=animal.name, vw=words, animal=animal, visits=visits, edit=request.GET.get("edit") == "1",
                                                         can_write=services.can_write(request.user), species=_species(lang), today=timezone.localdate(),
-                                                        post=None))
+                                                        post=None, **_vaccination_card(request, animal, lang)))
+
+
+def _vaccination_card(request, animal, lang):
+    """M7 (HG-090): the vaccination card on the animal's page: every dose with its state, and what this person may do with it."""
+
+    from permissions.services import user_has_permission
+    from settings_core.templatetags.hesba_format import day_text
+
+    from . import vaccines, views_vaccines
+
+    words = views_vaccines.WORDS[lang]
+    rows = vaccines.card(animal)
+
+    user = request.user
+    bill_ok, writes = vaccines.can_bill(user), services.can_write(user)
+    can_open_invoice = user_has_permission(user, "sales.view_sales_invoices")
+    for row in rows:
+        dose = row["dose"]
+        row["given_text"] = day_text(dose.given_on, lang)
+        row["due_text"] = day_text(dose.next_due, lang) if dose.next_due else ""
+        row["status_text"] = views_vaccines.status_text(row["days"], lang) if row["days"] is not None and not row["closed"] else ""
+        row["vaccine_name"] = dose.vaccine.display(lang)
+        row["invoice_status"] = words.get(dose.invoice.status, dose.invoice.status) if row["live"] else ""
+        row["can_bill"] = row["billable"] and bill_ok
+        row["can_remove"] = writes and not row["live"] and (dose.created_by_id == user.pk or user_has_permission(user, services.WRITE))
+        row["remove_text"] = words["remove_q"].format(vaccine=row["vaccine_name"], day=row["given_text"])
+    return {"vx": words, "vaccination_rows": rows, "can_vaccinate": writes and vaccines.vaccines_for(animal).exists(),
+            "has_vaccines": vaccines.scoped_vaccines().filter(active=True).exists(), "can_open_invoice": can_open_invoice,
+            "can_setup_vaccines": vaccines.can_setup(user)}
 
 
 def _species(lang):

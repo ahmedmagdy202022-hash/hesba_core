@@ -1,5 +1,6 @@
 {% extends "operations/base.html" %}
-{% load l10n %}
+{% load l10n static %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/vaccines.css' %}?v=m7-1">{% endblock %}
 {% block operation_content %}
 <section class="op-title-row"><div><a class="op-back" href="{% url 'medical:file' animal.owner.pk %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ animal.owner.name }}</a>
 <h1>{{ animal.name }}</h1><p>{{ animal.species_label }}{% if animal.breed %} · {{ animal.breed }}{% endif %}{% if animal.age_text %} · {{ animal.age_text }}{% endif %}{% if animal.sex %} · {% if animal.sex == 'male' %}{{ vw.male }}{% else %}{{ vw.female }}{% endif %}{% endif %}{% if animal.neutered %} · {{ vw.neutered }}{% endif %}</p></div>
@@ -13,6 +14,7 @@
 </section>
 {% if animal.notes %}<section class="op-detail-meta"><p>{{ animal.notes|linebreaksbr }}</p></section>{% endif %}
 {% if edit and can_write %}{% include "medical/_animal_fields.html" %}{% endif %}
+{% include "medical/_vaccination_card.html" %}
 <h2>{{ vw.visits }}</h2>
 {% for v in visits %}<article class="op-detail-meta" data-animal-visit="{{ v.pk }}"><p><strong><bdi>{{ v.visit_date|date:"Y-m-d" }}</bdi></strong>{% if v.doctor %} · {{ v.doctor.name }}{% endif %}{% if v.weight %} · {{ v.weight|unlocalize }} kg{% endif %}{% if v.follow_up_date %} · <bdi>{{ v.follow_up_date|date:"Y-m-d" }}</bdi>{% endif %}</p>
 {% if v.complaint %}<p>{{ v.complaint|linebreaksbr }}</p>{% endif %}{% if v.diagnosis %}<p><b>{{ v.diagnosis|linebreaksbr }}</b></p>{% endif %}{% load medical_rx %}{% saved_medicines v lang %}{% if v.treatment %}<p>{{ v.treatment|linebreaksbr }}</p>{% endif %}</article>

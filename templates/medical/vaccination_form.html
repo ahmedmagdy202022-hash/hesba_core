@@ -1,0 +1,22 @@
+{% extends "operations/base.html" %}
+{% load static %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/vaccines.css' %}?v=m7-1">{% endblock %}
+{% block operation_content %}
+{# M7 (HG-090): record a dose. The next dose is worked out by the service; nothing here moves money or stock. #}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'medical:animal' animal.pk %}?lang={{ lang }}#vaccinations">{% include "partials/back_arrow.html" %}{{ animal.name }}</a>
+<h1>{{ vx.form_title }} — {{ animal.name }}</h1><p>{{ vx.form_intro }}</p></div></section>
+{% if error %}<div class="op-message op-message-error" role="alert" data-form-error>{{ error }}</div>{% endif %}
+{% if vaccines %}<form class="op-form vx-form" method="post" data-vaccination-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+<div class="op-form-grid">
+<div class="op-field vx-wide"><label for="vx-vaccine">{{ vx.vaccine }}</label><select id="vx-vaccine" name="vaccine" required><option value="">{{ vx.choose }}</option>{% for v in vaccines %}<option value="{{ v.pk }}"{% if chosen_vaccine == v.pk %} selected{% endif %}>{% if lang == 'en' %}{{ v.name_en|default:v.name_ar }}{% else %}{{ v.name_ar }}{% endif %} — {{ v.interval_label }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="vx-given">{{ vx.given_on }}</label><input id="vx-given" type="date" name="given_on" max="{{ today|date:'Y-m-d' }}" value="{% if post %}{{ post.given_on }}{% else %}{{ today|date:'Y-m-d' }}{% endif %}"></div>
+<div class="op-field"><label for="vx-next">{{ vx.next_due }}</label><input id="vx-next" type="date" name="next_due" min="{{ today|date:'Y-m-d' }}" value="{{ post.next_due }}"><small>{{ vx.next_hint }}</small></div>
+<label class="op-check vx-wide"><input type="checkbox" name="no_next" value="1"{% if post.no_next == '1' %} checked{% endif %}> {{ vx.no_next_box }}</label>
+<div class="op-field"><label for="vx-batch">{{ vx.batch }}</label><input id="vx-batch" name="batch" maxlength="60" dir="ltr" value="{{ post.batch }}"></div>
+<div class="op-field"><label for="vx-by">{{ vx.doctor }}</label><select id="vx-by" name="given_by"><option value="">{{ vx.doctor_none }}</option>{% for d in doctors %}<option value="{{ d.pk }}"{% if default_doctor == d.pk %} selected{% endif %}>{{ d.name }}</option>{% endfor %}</select></div>
+{% if visits %}<div class="op-field vx-wide"><label for="vx-visit">{{ vx.visit }}</label><select id="vx-visit" name="visit"><option value="">{{ vx.visit_none }}</option>{% for v in visits %}<option value="{{ v.pk }}"{% if chosen_visit == v.pk %} selected{% endif %}>{{ v.visit_date|date:"Y/m/d" }}</option>{% endfor %}</select></div>{% endif %}
+<div class="op-field vx-wide"><label for="vx-note">{{ vx.note }}</label><textarea id="vx-note" name="note" rows="3" maxlength="5000">{{ post.note }}</textarea></div>
+</div>
+<div class="op-form-actions vx-actions"><button class="op-primary" type="submit" data-save>{{ vx.save }}</button><a class="op-secondary" href="{% url 'medical:animal' animal.pk %}?lang={{ lang }}#vaccinations">{{ vx.cancel }}</a></div></form>
+{% else %}<p class="vx-empty" data-no-vaccines>{{ vx.no_vaccines }}</p>{% endif %}
+{% endblock %}

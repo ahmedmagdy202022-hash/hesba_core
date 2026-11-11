@@ -3,6 +3,7 @@ from django.urls import path
 from . import views, views_inpatient
 from . import views_rx
 from . import views_templates
+from . import views_vaccines
 
 app_name = "medical"
 
@@ -21,6 +22,11 @@ urlpatterns = [
     path("patients/<int:pk>/dental/", views.dental_chart, name="dental"),
     path("patients/<int:pk>/animals/new/", views.animal_new, name="animal_new"),
     path("animals/<int:pk>/", views.animal_card, name="animal"),
+    # M7 (HG-090): vet vaccinations; every screen answers 404 outside a vet installation.
+    path("animals/<int:pk>/vaccinate/", views_vaccines.record, name="vaccinate"),
+    path("vaccinations/", views_vaccines.due_list, name="vaccinations"),
+    path("vaccinations/<int:pk>/<str:action>/", views_vaccines.dose_action, name="vaccination_action"),
+    path("vaccines/", views_vaccines.vaccine_setup, name="vaccine_setup"),
     path("patients/<int:pk>/packages/", views.session_packages, name="packages"),
     path("patients/<int:pk>/lab/", views.lab_results, name="lab"),
     path("patients/<int:pk>/lab/<str:day>/print/", views.lab_sheet, name="lab_sheet"),
