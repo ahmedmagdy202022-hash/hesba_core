@@ -414,7 +414,11 @@ def pending_cancel_requests(ids):
                                     action__in=(CANCEL_REQUESTED, *REQUEST_ANSWERED_BY)).order_by("pk").values_list("object_id", "action"))
     for object_id, action in rows:
         pending[object_id] = action == CANCEL_REQUESTED
-    return {int(object_id) for object_id, flag in pending.items() if flag}
+    flagged = {int(object_id) for object_id, flag in pending.items() if flag}
+    if not flagged:
+        return set()
+    # Only an appointment still open shows the flag: a status changed without an audit row (or a past day's request) leaves none behind.
+    return set(Appointment.objects.filter(pk__in=flagged, status__in=(AppointmentStatus.BOOKED, AppointmentStatus.CONFIRMED)).values_list("pk", flat=True))
 
 
 @transaction.atomic

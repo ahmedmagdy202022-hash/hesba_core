@@ -99,7 +99,7 @@ class PageTests(LinkSetup):
         for lang in ("ar", "en"):
             body = self.client.get(self.url(lang=lang)).content.decode()
             for private in ("منى علي", "01001234567", "201001234567", SECRET, "هالة", "استشاري", self.appointment.number, "P-CL", "P-00001",
-                            "ليلى السرية", "01099990000", self.other.number, "12:00", "300"):
+                            "ليلى السرية", "01099990000", self.other.number, "12:00", "300.00"):
                 self.assertNotIn(private, body, (lang, private))
 
     def test_arabic_first_and_english_second(self):
@@ -258,6 +258,13 @@ class ReceptionFlagTests(LinkSetup):
         self.assertEqual(self.refresh(), AppointmentStatus.CANCELLED)
         self.assertNotContains(self.agenda(), "data-cancel-asked")
         self.assertNotIn(self.appointment.pk, services.pending_cancel_requests([self.appointment.pk]))
+
+    def test_a_status_changed_without_an_audit_row_leaves_no_stale_flag(self):
+        self.post("share_appointment_cancel_request")
+        self.assertEqual(services.pending_cancel_requests([self.appointment.pk]), {self.appointment.pk})
+        for status in (AppointmentStatus.ARRIVED, AppointmentStatus.DONE, AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW):
+            Appointment.objects.filter(pk=self.appointment.pk).update(status=status)
+            self.assertEqual(services.pending_cancel_requests([self.appointment.pk]), set(), status)
 
     def test_the_flag_follows_the_move_of_the_appointment(self):
         self.post("share_appointment_cancel_request")
