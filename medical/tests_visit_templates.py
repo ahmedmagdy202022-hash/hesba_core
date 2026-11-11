@@ -104,7 +104,7 @@ class ModelTests(Setup):
 
 
 class MigrationTests(TransactionTestCase):
-    """0013 only adds the table, after 0011 (another open branch holds 0012)."""
+    """0012 only adds the table, after 0011."""
 
     serialized_rollback = True
 
@@ -116,9 +116,8 @@ class MigrationTests(TransactionTestCase):
     def test_it_depends_on_0011_and_adds_one_table(self):
         executor = MigrationExecutor(connection)
         executor.loader.build_graph()
-        node = executor.loader.disk_migrations[("medical", "0013_visit_template")]
+        node = executor.loader.disk_migrations[("medical", "0012_visit_template")]
         self.assertIn(("medical", "0011_visit_medicine"), node.dependencies)
-        self.assertNotIn(("medical", "0012_visit_template"), executor.loader.graph.nodes)
         executor.migrate([("medical", "0011_visit_medicine")])
         old = executor.loader.project_state([n for n in executor.loader.graph.leaf_nodes() if n[0] != "medical"] + [("medical", "0011_visit_medicine")]).apps
         user = old.get_model("auth", "User").objects.create(username="mig_vt")
@@ -127,7 +126,7 @@ class MigrationTests(TransactionTestCase):
         self.assertNotIn("medical_visittemplate", connection.introspection.table_names())
         executor = MigrationExecutor(connection)
         executor.loader.build_graph()
-        executor.migrate([("medical", "0013_visit_template")])
+        executor.migrate([("medical", "0012_visit_template")])
         self.assertIn("medical_visittemplate", connection.introspection.table_names())
         self.assertEqual(list(ClinicalVisit.objects.values_list("diagnosis", "treatment")), [("برد", "راحة")])
         self.assertEqual(VisitTemplate.objects.count(), 0)  # nothing is seeded by the migration: the first use does it
