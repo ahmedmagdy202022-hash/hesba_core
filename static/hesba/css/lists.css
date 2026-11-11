@@ -186,7 +186,7 @@ dialog.hs-quick-item[open]{display:flex;flex-direction:column;max-height:calc(10
   table[data-list-rows] td[data-row="title"] a{min-height:0}
   /* the first line never pushes the figure down: the name wraps inside its own room and the second name (the customer
      or supplier) takes what is left and trails off */
-  table[data-list-rows] td[data-row="title"]{max-width:calc(100% - 8em)}
+  table[data-list-rows] tr:has(>td[data-row="amount"])>td[data-row="title"]{max-width:calc(100% - 8em)}
   table[data-list-rows] td[data-row="sub"]{flex:1 1 0}
   table[data-list-rows] td[data-row="amount"]{font-size:var(--hs-text-base)}
   table[data-list-rows] td[data-row="meta"] .op-status:is(.op-status-posted,.op-status-completed){padding:0;background:transparent;color:var(--hs-muted);font-size:inherit;font-weight:var(--hs-weight-medium)}

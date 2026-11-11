@@ -75,7 +75,8 @@ body.login-page .hs-feedback-fab{bottom:calc(64px + env(safe-area-inset-bottom))
   /* UX Wave 4: on app pages the tab bar floats; the banner and the button clear it and its raised «بيع» circle. */
   body:has(.hs-tabbar) .hs-hello{inset-inline:var(--hs-space-3);bottom:calc(var(--hs-tabbar-clear) + var(--hs-space-2) + env(safe-area-inset-bottom));padding-bottom:var(--hs-space-3);border:0;border-radius:var(--hs-card-radius-sm)}
   body:has(.hs-tabbar) .hs-feedback-fab{bottom:calc(var(--hs-tabbar-clear) + var(--hs-space-3) + env(safe-area-inset-bottom))}
-  body:has(.hs-tabbar):has(.hs-sticky-save) .hs-feedback-fab{bottom:calc(var(--hs-tabbar-clear) + 84px + env(safe-area-inset-bottom))}
+  /* UX Wave 4 (forms): also above an invoice's running total (.inv-dock) */
+  body:has(.hs-tabbar):has(:is(.hs-sticky-save,.inv-dock)) .hs-feedback-fab{bottom:calc(var(--hs-tabbar-clear) + 84px + env(safe-area-inset-bottom))}
   body:has(.hs-tabbar):has(.hs-hello:not([hidden])) .hs-feedback-fab{bottom:calc(var(--hs-tabbar-clear) + 110px + env(safe-area-inset-bottom))}
 }
 @media print{.hs-feedback-fab,.hs-feedback,.hs-hello{display:none!important}}

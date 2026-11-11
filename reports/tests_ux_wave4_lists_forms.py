@@ -136,7 +136,7 @@ class ListSheetTests(SimpleTestCase):
         css = read_static("hesba/css/lists.css")
         self.assertEqual(re.findall(r"#[0-9a-fA-F]{3,8}\b|rgba?\(", css), [])
         for rule in (".op-filters:has(>.hs-filter){display:flex",
-                     'table[data-list-rows] td[data-row="title"]{max-width:calc(100% - 8em)}',
+                     'table[data-list-rows] tr:has(>td[data-row="amount"])>td[data-row="title"]{max-width:calc(100% - 8em)}',
                      'table[data-list-rows] td[data-row="sub"]{flex:1 1 0}',
                      ".op-status:is(.op-status-posted,.op-status-completed){padding:0;background:transparent;color:var(--hs-muted)",
                      'table[data-list-rows] td[data-row="amount"][data-zero]{color:var(--hs-muted)',

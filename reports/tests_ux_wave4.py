@@ -182,7 +182,7 @@ class StylesheetVersionTests(SimpleTestCase):
             "demo/begin.html": ("shell.css' %}?v=w4-1",),
             "sales/pos.html": ("pos.css' %}?v=w4-1",),
             "settings_core/base.html": ("settings.css' %}?v=st-5",),
-            "partials/demo_feedback.html": ("demo_feedback.css' %}?v=demo-feedback-7",),
+            "partials/demo_feedback.html": ("demo_feedback.css' %}?v=demo-feedback-8",),
         }
         for name, links in expected.items():
             text = (TEMPLATES / name).read_text(encoding="utf-8")
