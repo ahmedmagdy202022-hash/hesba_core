@@ -62,9 +62,11 @@ def template_list(request):
         row.lines_text, row.delete_text = tw["lines_n"].format(n=row.lines_count), tw["delete_q"].format(name=row.name)
         row.owner_label = tw["shared"] if row.owner_id is None else (tw["mine"] if row.owner_id == user.pk else (row.owner.get_full_name() or row.owner.get_username()))
     filtered = bool(filters["q"] or filters["specialty"] or filters["tl"])
+    # CL-07: «قوالبي» is empty for a new doctor while the ready ones sit under «المشتركة»: say so, with the way there.
+    shared_waiting = not rows and not filtered and filters["scope"] == "mine" and bool(visit_templates.listing(user, "shared"))
     query = urlencode({"lang": lang, **{key: value for key, value in filters.items() if value}})
     return render(request, "medical/visit_templates.html", _base(
-        lang, page_title=tw["title"], **_tab_context(request, lang), rows=rows, filters=filters, filtered=filtered, text_lang=text_lang, query=query,
+        lang, page_title=tw["title"], **_tab_context(request, lang), rows=rows, filters=filters, filtered=filtered, shared_waiting=shared_waiting, text_lang=text_lang, query=query,
         scopes=[("mine", tw["scope_mine"]), ("shared", tw["scope_shared"])] + ([("others", tw["scope_others"])] if visit_templates.is_manager(user) else []),
         specialties=visit_templates.specialty_options(lang), manager=visit_templates.is_manager(user)))
 

@@ -1,7 +1,7 @@
 {% extends "operations/base.html" %}
 {% load hesba_format %}
 {% block operation_content %}
-<section class="op-title-row"><div><h1>{{ words.report }}</h1><p>{{ words.report_intro }}</p></div></section>
+<section class="op-title-row"><div><h1>{{ words.report }}</h1><p>{{ words.report_intro }}</p>{% if with_money %}<p data-report-scope>{{ words.report_scope }}</p>{% endif %}</div></section>
 {% include "medical/_tabs.html" %}
 {% if note %}<p class="op-notice">{{ note }}</p>{% endif %}
 <form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}">

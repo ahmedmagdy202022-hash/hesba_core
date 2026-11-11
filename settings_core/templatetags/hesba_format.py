@@ -299,6 +299,21 @@ def day_text(value, lang=None):
         return date_format(value, "j F Y")
 
 
+@register.filter
+def month_text(value, lang=None):
+    """A month in words, the way day_text writes a day: "نوفمبر 2026" in Arabic, "November 2026" in English."""
+
+    if not value or not hasattr(value, "month"):
+        return MISSING
+    from django.utils import translation
+    from django.utils.formats import date_format
+
+    if lang is None:
+        lang = "en" if (translation.get_language() or "").startswith("en") else "ar"
+    with translation.override("en" if lang == "en" else "ar"):
+        return date_format(value, "F Y")
+
+
 # UX Wave 3: numbers, codes and ranges keep their left-to-right order inside an Arabic line. A plain <bdi> is not enough
 # for "31–60": digits are not a strong direction, so the range still reads «60–31» in RTL; dir="ltr" pins it.
 _NUMBER_RUN = re.compile(r"[+\-−]?\d(?:[\d\-–/.:,]|\s(?=\+?\d))*(?<![.,:])")

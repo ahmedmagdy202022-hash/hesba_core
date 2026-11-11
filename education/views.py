@@ -2,6 +2,7 @@
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
 from django.db.models import Count, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
@@ -11,7 +12,7 @@ from django.utils import timezone
 from master_data.models import Customer
 from permissions.services import user_has_permission
 
-from . import levels, nursery, attendance as register
+from . import levels, nursery, scan, attendance as register
 from . import services
 from .models import Attendance, ClassSession, Course, Enrollment, EnrollmentStatus, FeeBasis, PickupPerson, Presence, SessionStatus, Student, StudyGroup, Weekday
 
@@ -54,6 +55,8 @@ WORDS = {
         "report": "تقرير الشهر", "report_intro": "كل مجموعة في الشهر: الطلاب، والحصص، والحضور، والمصروفات اللي اتفوترت، وأجر المدرس، واللي فاضل للمركز.",
         "held": "حصص اتعملت", "left": "فاضل للمركز", "no_report": "مفيش مجموعات شغالة في الشهر ده.", "month_rate": "الحضور",
         "discard": "امسح المسودة", "discarded": "اتمسحت مسودة {number}؛ الشهر ده يتفوتر تاني لأولياء الأمور دول.",
+        "stale": "اتغيّر الحضور بعد ما فتحت الكشف (اتمسح طلاب). راجع الكشف واحفظ تاني.", "not_scanned": "ما اتمسحش", "unscanned_note": "{n} من الطلاب ما اتمسحوش، فاتعلّموا غايبين. لو حد منهم حضر غيّره قبل ما تحفظ.",
+        "scan_attendance": "امسح الحضور", "print_card": "اطبع الكارت", "print_cards": "اطبع كروت المجموعة",
     },
     "en": {
         "title": "Students & groups", "students": "Students", "groups": "Groups", "courses": "Courses & subjects",
@@ -93,6 +96,8 @@ WORDS = {
         "report": "Month report", "report_intro": "Each group in the month: students, classes, attendance, fees billed, the teacher's pay and what is left for the centre.",
         "held": "Classes held", "left": "Left for the centre", "no_report": "No groups ran in this month.", "month_rate": "Attendance",
         "discard": "Discard draft", "discarded": "Draft {number} discarded; this month can be billed again for these parents.",
+        "stale": "Attendance changed after you opened this sheet (students were scanned). Check the sheet and save again.", "not_scanned": "Not scanned", "unscanned_note": "{n} students were not scanned, so they are marked absent. If any of them came, change them before you save.",
+        "scan_attendance": "Scan attendance", "print_card": "Print the card", "print_cards": "Print the group's cards",
     },
 }
 
@@ -115,7 +120,7 @@ def _base(request, lang, tab, **extra):
             "tab": tab, "can_manage": services.can_manage(request.user), "can_view": services.can_view(request.user),
             "can_see_fees": user_has_permission(request.user, FEES_VIEW), "can_see_dues": user_has_permission(request.user, DUES_VIEW),
             "can_see_pay": user_has_permission(request.user, PAY_VIEW), "can_see_report": user_has_permission(request.user, REPORT_VIEW),
-            "is_nursery": nursery.is_nursery(), "nursery_tab": NURSERY_WORDS[lang]["tab"], **extra}
+            "can_scan": register.can_scan(request.user), "is_nursery": nursery.is_nursery(), "nursery_tab": NURSERY_WORDS[lang]["tab"], **extra}
 
 
 def _back(name, lang, *args):
@@ -418,10 +423,15 @@ def today(request):
     taken = {session.group_id: session for session in ClassSession.objects.filter(date=day, group__in=groups_today).annotate(
         present=Count("marks", filter=Q(marks__presence=Presence.PRESENT)), late=Count("marks", filter=Q(marks__presence=Presence.LATE)),
         absent=Count("marks", filter=Q(marks__presence=Presence.ABSENT)), excused=Count("marks", filter=Q(marks__presence=Presence.EXCUSED)))}
+    scanned = scan.touched(taken[pk].pk for pk in taken)
     rows = []
     for group in groups_today:
-        rows.append({"group": group, "schedule": services.schedule_text(group, lang), "session": taken.get(group.pk),
-                     "seats": len(register.roster_on(group, day)), "can_take": register.can_take(request.user, group)})
+        seats = len(register.roster_on(group, day))
+        session = taken.get(group.pk)
+        marked = sum((session.present, session.late, session.absent, session.excused)) if session else 0
+        rows.append({"group": group, "schedule": services.schedule_text(group, lang), "session": session, "seats": seats,
+                     "not_scanned": max(seats - marked, 0) if session and session.status == SessionStatus.HELD and session.pk in scanned else 0,
+                     "can_take": register.can_take(request.user, group)})
     return render(request, "education/today.html", _base(request, lang, "today", rows=rows, day=day, today=timezone.localdate(),
                                                          weekday=services.DAY_LABELS[lang][register.weekday(day)]))
 
@@ -445,24 +455,38 @@ def take_attendance(request, pk):
         marks = {key[len("p_"):]: value for key, value in request.POST.items() if key.startswith("p_")}
         marks.update({key: value for key, value in request.POST.items() if key.startswith("note_")})
         try:
-            register.take(group, request.user, day, marks, topic=request.POST.get("topic", ""), cancelled=request.POST.get("cancelled") == "1", lang=lang)
+            with transaction.atomic():
+                # E1: a sheet is saved only if the class is still as the page showed it. Under the group lock (the one a scan takes), the digest is
+                # recomputed from the database; a scan that marked someone since the page was opened makes it differ, and the stale form is dropped.
+                register.lock_group(group)
+                current = register.sheet_version(ClassSession.objects.filter(group=group, date=day).first())
+                posted = request.POST.get("sheet_version") or None
+                if (current != "none") if posted is None else (posted != current):  # no digest at all: stale when a class exists, fresh when none does
+                    error = words["stale"]
+                else:
+                    register.take(group, request.user, day, marks, topic=request.POST.get("topic", ""), cancelled=request.POST.get("cancelled") == "1", lang=lang)
+                    messages.success(request, words["attendance_saved"])
+                    return redirect(f"{reverse('education:attendance', args=[group.pk])}?lang={lang}&date={day.isoformat()}&saved=1")
         except ValidationError as exc:
             error = " ".join(exc.messages)
-        else:
-            messages.success(request, words["attendance_saved"])
-            return redirect(f"{reverse('education:attendance', args=[group.pk])}?lang={lang}&date={day.isoformat()}&saved=1")
     session = ClassSession.objects.filter(group=group, date=day).first()
     marks = {mark.student_id: mark for mark in session.marks.select_related("student__payer", "session__group")} if session else {}
     roster = list(register.roster_on(group, day))
+    # E1 (the money edge): per-class fees bill the present and late marks. In a class a scan has marked, a student with no mark was not scanned:
+    # they show (and save) as absent, never as present. Any other class, a centre that never scans included, keeps the old "everyone present" start.
+    held = session is not None and session.status == SessionStatus.HELD and session.pk in scan.touched([session.pk])
     for row in roster:
         mark = marks.get(row.student_id)
-        row.presence = mark.presence if mark else Presence.PRESENT
+        row.unscanned = mark is None and held
+        row.presence = mark.presence if mark else (Presence.ABSENT if held else Presence.PRESENT)
         row.note = mark.note if mark else ""
         row.notify = register.parent_message(mark, lang) if mark and request.GET.get("saved") else ""
     choices = [(Presence.PRESENT, words["present"]), (Presence.LATE, words["late"]), (Presence.ABSENT, words["absent"]), (Presence.EXCUSED, words["excused"])]
     return render(request, "education/attendance.html", _base(request, lang, "today", group=group, day=day, session=session, roster=roster, choices=choices,
                                                               schedule=services.schedule_text(group, lang), error=error, today=timezone.localdate(),
                                                               saved=bool(request.GET.get("saved")), notify=[row for row in roster if row.notify],
+                                                              version=register.sheet_version(session, marks.values()),  # of the marks shown, not a second read
+                                                              unscanned_note=words["unscanned_note"].format(n=sum(1 for row in roster if row.unscanned)) if any(row.unscanned for row in roster) else "",
                                                               scheduled=bool(session) or (group.active and register.meets_on(group, day))))
 
 
@@ -652,6 +676,12 @@ NURSERY_WORDS = {
 }
 
 
+SCAN_WORDS = {
+    "ar": {"label": "كود الطفل", "placeholder": "امسح كارت الطفل أو اكتب الكود", "go": "وصل بالكارت", "type": "اكتب الكود"},
+    "en": {"label": "Child's code", "placeholder": "Scan the child's card or type the code", "go": "Check in with the card", "type": "Type the code"},
+}
+
+
 def nursery_day(request):
     _see(request)
     if not nursery.is_nursery():
@@ -663,6 +693,19 @@ def nursery_day(request):
     if request.method == "POST":
         if not nursery.can_desk(request.user):
             raise PermissionDenied("Check-in and pick-up need managing students, or working as staff.")
+        if request.POST.get("action") == "scan":  # E1: the card's code checks the child in; a child already inside goes to the pick-up choice
+            try:
+                outcome = scan.nursery_mark(request.POST.get("code"), request.user, lang=lang)
+            except ValidationError as exc:
+                error = " ".join(exc.messages)
+            else:
+                if outcome.status == "checked_in":
+                    messages.success(request, outcome.message)
+                    return redirect(f"{reverse('education:nursery')}?lang={lang}&scanned={outcome.student.pk}")
+                if outcome.status == "inside":
+                    return redirect(f"{reverse('education:nursery')}?lang={lang}&pick={outcome.student.pk}")
+                error = outcome.message
+            return _nursery_page(request, lang, words, error)
         student = get_object_or_404(services.scoped(Student.objects), pk=request.POST.get("student") or 0)
         try:
             if request.POST.get("action") == "in":
@@ -680,13 +723,20 @@ def nursery_day(request):
         else:
             url = f"{reverse('education:nursery')}?lang={lang}"
             return redirect(url + (f"&told={record.pk}" if tell else ""))
+    return _nursery_page(request, lang, words, error)
+
+
+def _nursery_page(request, lang, words, error):
     rows, counts = nursery.board()
-    told = request.GET.get("told")
+    told, pick, scanned = request.GET.get("told"), request.GET.get("pick"), request.GET.get("scanned")
     for row in rows:
         record = row["record"]
         row["tell"] = nursery.left_message(record, lang) if record and told and str(record.pk) == told else ""
+        row["pick"] = bool(pick) and str(row["student"].pk) == pick and bool(record) and not record.left_at
+        row["scanned"] = bool(scanned) and str(row["student"].pk) == scanned
     return render(request, "education/nursery.html", _base(request, lang, "nursery", nw=words, rows=rows, counts=counts, error=error,
-                                                           can_desk=nursery.can_desk(request.user), today=timezone.localdate()))
+                                                           can_desk=nursery.can_desk(request.user), today=timezone.localdate(),
+                                                           scan_words=SCAN_WORDS[lang]))
 
 
 # ---- EDU-006: language levels ----

@@ -20,6 +20,7 @@ from django.contrib.auth.decorators import login_not_required
 from django.http import Http404, HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.crypto import constant_time_compare
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
@@ -470,7 +471,10 @@ def tour_card(request, lang, profile):
         path = reverse(url_name)
         if closed_module(path) or closed_capability(path):  # a screen this business switched off is no step to take
             continue
-        steps.append({"n": len(steps) + 1, "title": ar if lang == "ar" else en, "hint": hint_ar if lang == "ar" else hint_en, "url": f"{path}?lang={lang}"})
+        query = f"?lang={lang}"
+        if url_name == "reports:daily":  # the summary opens on yesterday by default; «اقفل اليوم» means today's
+            query += f"&date={timezone.localdate().isoformat()}"
+        steps.append({"n": len(steps) + 1, "title": ar if lang == "ar" else en, "hint": hint_ar if lang == "ar" else hint_en, "url": f"{path}{query}"})
     if not steps:
         return None
     if lang == "en":

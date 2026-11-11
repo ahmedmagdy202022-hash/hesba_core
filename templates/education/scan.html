@@ -1,0 +1,31 @@
+{% extends "operations/base.html" %}
+{% load static %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/education_scan.css' %}?v=e1-2">{% endblock %}
+{% block operation_content %}
+{# E1: one box for a hardware scanner (it types, then Enter) and the phone camera (camera_scan.js fills the same box). The answer is drawn by edu_scan.js. #}
+<section class="op-title-row hs-head"><div><h1>{{ sw.title }}</h1><p>{{ sw.intro }}</p></div></section>
+{% include "education/_tabs.html" %}
+<section class="es-scan" data-edu-scan data-url="{% url 'education:scan_mark' %}" data-lang="{{ lang }}"
+ data-t-working="{{ sw.working }}" data-t-which="{{ sw.which }}" data-t-offline="{{ sw.offline }}" data-t-failed="{{ sw.failed }}" data-t-none="{{ sw.none }}" data-t-waiting="{{ sw.waiting }}">
+<form class="es-form" method="post" action="{% url 'education:scan_mark' %}" data-scan-form>{% csrf_token %}
+<label class="es-label" for="es-code">{{ sw.label }}</label>
+<div class="es-row"><input id="es-code" class="es-box" name="code" type="text" inputmode="none" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" dir="ltr" enterkeyhint="done" placeholder="{{ sw.placeholder }}" data-camera-scan data-scan-box autofocus></div>
+<div class="es-actions"><button class="op-primary es-go" type="submit" data-scan-go>{{ sw.go }}</button><button class="op-secondary es-type" type="button" data-scan-type>{{ sw.type }}</button></div>
+</form>
+<section class="es-result" data-scan-result data-state="idle" aria-live="assertive" aria-atomic="true">
+<p class="es-result__ready" data-result-ready><strong>{{ sw.ready }}</strong><span>{{ sw.ready_hint }}</span></p>
+<div class="es-result__card" data-result-card hidden>
+<p class="es-result__who" data-result-name></p>
+<p class="es-result__group" data-result-group></p>
+<p class="es-result__mark"><span class="es-chip" data-result-mark></span><bdi class="es-result__time" data-result-time></bdi></p>
+<p class="es-result__note" data-result-note></p>
+<div class="es-choices" data-result-choices></div>
+</div>
+</section>
+<p class="es-waiting" data-scan-waiting role="status" hidden></p>
+<section class="es-recent" data-scan-recent hidden><h2>{{ sw.recent }}</h2><ol data-scan-log></ol></section>
+<p class="es-hint">{{ sw.closed }}</p>
+</section>
+<script src="{% static 'hesba/js/edu_scan.js' %}?v=e1-2" defer></script>
+<script src="{% static 'hesba/js/camera_scan.js' %}?v=cam-001" data-zxing="{% static 'hesba/vendor/zxing/zxing-0.23.0.min.js' %}" defer></script>
+{% endblock %}

@@ -6,10 +6,12 @@ its date boxes send, so the report computes exactly what it computed before. The
 it is the current chip whenever the dates match no preset, including no dates at all (the whole history, as before).
 """
 
+from datetime import date
 from urllib.parse import urlencode
 
 from django import template
 from django.utils import timezone
+from django.utils.html import format_html
 
 from reports.analytics import period_bounds
 
@@ -41,3 +43,32 @@ def period_chips(date_from="", date_to="", lang="ar", today=None):
     # «مخصوص» opens nothing new: it takes you to the report's own date boxes on the same page.
     chips.append({"key": "custom", "label": words["custom"], "current": not matched, "start": None, "end": None, "url": "#report-dates"})
     return chips
+
+
+def _day(raw):
+    try:
+        return date.fromisoformat(raw or "")
+    except ValueError:
+        return None  # the report ignores a date it cannot read, so the line does too
+
+
+@register.simple_tag
+def period_text(date_from="", date_to="", lang="ar"):
+    """The period a report is showing, in words: «كل الفترة», or the from-to dates in the app's date format.
+
+    Reads the same two raw strings the date boxes and chips send, so it can never say anything the report is not doing.
+    """
+
+    from settings_core.templatetags.hesba_format import day_text
+
+    lang = "en" if lang == "en" else "ar"
+    start, end = _day(date_from), _day(date_to)
+    if start is None and end is None:
+        return "Showing: all time" if lang == "en" else "الفترة المعروضة: كل الفترة"
+    if start and end and start == end:
+        return format_html("Showing: <bdi>{}</bdi>" if lang == "en" else "الفترة المعروضة: يوم <bdi>{}</bdi>", day_text(start, lang))
+    if start and end:
+        return format_html("Showing: from <bdi>{}</bdi> to <bdi>{}</bdi>" if lang == "en" else "الفترة المعروضة: من <bdi>{}</bdi> لحد <bdi>{}</bdi>", day_text(start, lang), day_text(end, lang))
+    if start:
+        return format_html("Showing: from <bdi>{}</bdi> onwards" if lang == "en" else "الفترة المعروضة: من <bdi>{}</bdi> وبعده", day_text(start, lang))
+    return format_html("Showing: up to <bdi>{}</bdi>" if lang == "en" else "الفترة المعروضة: لحد <bdi>{}</bdi>", day_text(end, lang))

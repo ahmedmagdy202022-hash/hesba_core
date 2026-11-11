@@ -1,0 +1,78 @@
+/* E1: the scan screen. The answer is large and plain (readable at arm's length); the box and the camera button sit in a dock at the
+   bottom on a phone, where the thumb is. Colours come from the tokens only. */
+.es-scan{display:flex;flex-direction:column;gap:var(--hs-space-4);max-width:760px;margin-inline:auto}
+.es-form{order:2;margin:0}
+.es-label{display:block;margin:0 0 var(--hs-space-2);color:var(--hs-navy);font-weight:var(--hs-weight-semibold)}
+.es-row{display:flex;gap:var(--hs-space-2);align-items:stretch}
+.es-row .hs-cam-wrap{flex:1 1 auto;display:flex;gap:var(--hs-space-2);align-items:stretch;min-width:0}
+.es-box{flex:1 1 auto;min-width:0;min-height:60px;padding:0 var(--hs-space-4);border:2px solid var(--hs-line-strong);border-radius:var(--hs-input-radius);background:var(--hs-surface);color:var(--hs-ink);font:inherit;font-size:var(--hs-text-xl);font-weight:var(--hs-weight-semibold);letter-spacing:.04em;text-align:center}
+.es-box:focus{outline:0;border-color:var(--hs-teal);box-shadow:var(--hs-focus-ring)}
+.es-scan .hs-cam-btn{flex:none;min-width:64px;min-height:60px;border-radius:var(--hs-input-radius);background:var(--hs-teal);border-color:var(--hs-teal);color:var(--hs-on-teal)}
+.es-scan .hs-cam-btn svg{width:28px;height:28px}
+.es-actions{display:flex;gap:var(--hs-space-2);margin-top:var(--hs-space-3)}
+.es-actions>button{flex:1 1 0;min-height:var(--hs-control-height-lg)}
+.es-actions>.es-type[aria-pressed="true"]{border-color:var(--hs-teal);background:var(--hs-teal-wash)}
+
+.es-result{order:1;display:grid;align-content:center;min-height:240px;padding:var(--hs-space-6) var(--hs-space-5);border:var(--hs-card-border);border-radius:var(--hs-card-radius);background:var(--hs-card-bg);box-shadow:var(--hs-card-shadow);text-align:center;color:var(--hs-ink);overflow-wrap:anywhere}
+.es-result>*{margin:0}
+.es-result__ready{display:grid;gap:var(--hs-space-2)}
+.es-result__ready strong{color:var(--hs-navy);font-size:var(--hs-text-2xl);line-height:var(--hs-leading-tight)}
+.es-result__ready span{color:var(--hs-muted);font-size:var(--hs-text-base)}
+.es-result__card{display:grid;gap:var(--hs-space-3);justify-items:center}
+.es-result__card[hidden],.es-result__ready[hidden],.es-result__mark[hidden],.es-chip[hidden],.es-recent[hidden]{display:none}
+.es-result__card>p{margin:0}
+.es-result__who{color:var(--hs-navy);font-family:var(--hs-font-head);font-size:clamp(28px,8vw,44px);font-weight:var(--hs-weight-bold);line-height:var(--hs-leading-tight)}
+.es-result__group{color:var(--hs-ink);font-size:var(--hs-text-xl);line-height:var(--hs-leading-tight)}
+.es-result__mark{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:var(--hs-space-3)}
+.es-chip{display:inline-flex;align-items:center;min-height:var(--hs-control-height-lg);padding:0 var(--hs-space-6);border-radius:var(--hs-radius-pill);background:var(--hs-neutral-wash);color:var(--hs-navy);font-size:clamp(24px,7vw,34px);font-weight:var(--hs-weight-bold)}
+.es-result__time{color:var(--hs-ink);font-size:clamp(24px,7vw,34px);font-weight:var(--hs-weight-semibold)}
+.es-result__note{color:var(--hs-muted);font-size:var(--hs-text-lg);line-height:var(--hs-leading)}
+.es-result__note:empty,.es-result__group:empty,.es-result__time:empty{display:none}
+.es-choices{display:grid;gap:var(--hs-space-2);width:100%}
+.es-choice{min-height:64px;padding:var(--hs-space-2) var(--hs-space-4);border:2px solid var(--hs-teal);border-radius:var(--hs-input-radius);background:var(--hs-surface);color:var(--hs-navy);font:inherit;font-size:var(--hs-text-lg);font-weight:var(--hs-weight-semibold);cursor:pointer}
+.es-choice:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
+.es-groupline{padding:var(--hs-space-2) var(--hs-space-3);border-radius:var(--hs-radius-md);background:var(--hs-neutral-wash);color:var(--hs-ink);font-size:var(--hs-text-lg)}
+
+.es-result[data-state="present"]{background:var(--hs-success-wash);border-color:var(--hs-success-line)}
+.es-result[data-state="present"] .es-chip{background:var(--hs-success);color:var(--hs-success-wash)}
+.es-result[data-state="late"]{background:var(--hs-warning-wash);border-color:var(--hs-warning-line)}
+.es-result[data-state="late"] .es-chip{background:var(--hs-warning);color:var(--hs-warning-wash)}
+.es-result[data-state="again"]{background:var(--hs-info-wash)}
+.es-result[data-state="again"] .es-chip{background:var(--hs-info);color:var(--hs-info-wash)}
+.es-result[data-state="choose"]{background:var(--hs-teal-wash)}
+.es-result[data-state="bad"]{background:var(--hs-danger-wash);border-color:var(--hs-danger-line)}
+.es-result[data-state="bad"] .es-result__who{color:var(--hs-danger);font-size:clamp(24px,6.5vw,34px)}
+.es-result[data-state="working"]{opacity:.6}
+
+.es-recent{order:3;padding:var(--hs-space-4) var(--hs-space-5);border-radius:var(--hs-card-radius);background:var(--hs-card-bg);box-shadow:var(--hs-card-shadow)}
+.es-recent h2{margin:0 0 var(--hs-space-2);color:var(--hs-navy);font-family:var(--hs-font-head);font-size:var(--hs-text-base)}
+.es-recent ol{display:grid;gap:var(--hs-space-1);margin:0;padding:0;list-style:none}
+.es-recent li{padding:var(--hs-space-2) 0;border-top:1px solid var(--hs-line);font-size:var(--hs-text-md)}
+.es-recent li:first-child{border-top:0}
+.es-log--late{color:var(--hs-warning)}
+.es-log--present{color:var(--hs-success)}
+.es-waiting{order:3;margin:0;color:var(--hs-navy);font-weight:var(--hs-weight-semibold);font-size:var(--hs-text-sm)}
+.es-hint{order:4;margin:0;color:var(--hs-muted);font-size:var(--hs-text-sm);line-height:var(--hs-leading)}
+
+/* the camera's own bar says what was read; while scanning with it open, it also says who it was and what they were marked */
+.hs-cam[data-scan-state] .hs-cam__status{padding:var(--hs-space-4);font-size:var(--hs-text-xl);line-height:var(--hs-leading-tight)}
+.hs-cam[data-scan-state="present"] .hs-cam__status{background:var(--hs-success-wash);color:var(--hs-success)}
+.hs-cam[data-scan-state="late"] .hs-cam__status{background:var(--hs-warning-wash);color:var(--hs-warning)}
+.hs-cam[data-scan-state="again"] .hs-cam__status{background:var(--hs-info-wash);color:var(--hs-info)}
+.hs-cam[data-scan-state="choose"] .hs-cam__status,.hs-cam[data-scan-state="bad"] .hs-cam__status{background:var(--hs-danger-wash);color:var(--hs-danger)}
+
+@media (max-width:700px){
+  .es-scan{padding-bottom:calc(210px + env(safe-area-inset-bottom))}
+  .es-form{position:fixed;inset-inline:var(--hs-space-2);bottom:calc(var(--hs-tabbar-clear) + env(safe-area-inset-bottom));z-index:30;padding:var(--hs-space-3);border-radius:var(--hs-card-radius);background:var(--hs-surface);box-shadow:var(--hs-shadow-up)}
+  .es-label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .es-actions{margin-top:var(--hs-space-2)}
+  .es-result{min-height:300px;padding-inline:var(--hs-space-4)}
+  /* the demo's feedback button floats above the dock, not over its buttons */
+  body:has(.es-form):has(.hs-tabbar) .hs-feedback-fab{bottom:calc(var(--hs-tabbar-clear) + 160px + env(safe-area-inset-bottom))}
+}
+
+/* the nursery's board: the same box, above the counts */
+.es-nursery{display:grid;gap:var(--hs-space-2);max-width:560px;margin:0 0 var(--hs-space-4)}
+.es-nursery .es-actions{margin-top:0}
+tr[data-pick]{background:var(--hs-teal-wash)}
+tr[data-scanned]{background:var(--hs-success-wash)}

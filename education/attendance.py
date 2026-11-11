@@ -56,6 +56,37 @@ def can_take(user, group):
     return teacher is not None and group.teacher_id == teacher.pk
 
 
+def can_scan(user):
+    """E1: whoever may take attendance for some group: a manager, or a teacher (their own groups only, see ``can_take``)."""
+
+    return services.can_manage(user) or teacher_of(user) is not None
+
+
+def lock_group(group):
+    """The row lock every writer of a class's marks takes first (``take`` and a scan), so a scan during a teacher's save is never lost."""
+
+    return StudyGroup.objects.select_for_update().get(pk=group.pk)
+
+
+def sheet_version(session, marks=None):
+    """A short digest of everything saving the sheet would overwrite: the class's status and topic and every mark with its note.
+
+    "none" when there is no class yet. The sheet carries it as a hidden field; a save whose digest no longer matches the database
+    was made from a stale page (a scan marked someone meanwhile) and is refused, never merged.
+
+    ``marks``: the mark rows the page is being drawn from. The page must pass them, so the digest describes exactly what it shows:
+    reading the marks a second time here would let a scan slip in between the two reads, and the page would show the old marks
+    under the new digest. The save passes nothing and reads the database, under the group lock."""
+
+    import hashlib
+    import json
+
+    if session is None:
+        return "none"
+    marks = sorted(session.marks.values_list("student_id", "presence", "note") if marks is None else ((m.student_id, m.presence, m.note) for m in marks))
+    return hashlib.sha256(json.dumps([session.status, session.topic, marks], ensure_ascii=False).encode()).hexdigest()[:16]
+
+
 def teaches_only(user):
     """A teacher who sees the attendance of their own groups and nothing else of the school (the menu offers just that)."""
 
@@ -138,7 +169,7 @@ def take(group, user, day, marks, *, topic="", cancelled=False, lang="ar"):
     day = _date(day, words)
     if day > timezone.localdate():
         raise ValidationError(words["future"])
-    group = StudyGroup.objects.select_for_update().get(pk=group.pk)
+    group = lock_group(group)
     # A class already recorded can always be corrected, even after its group was closed or its days changed;
     # only a new one must be on a running group's own schedule.
     if not ClassSession.objects.filter(group=group, date=day).exists():

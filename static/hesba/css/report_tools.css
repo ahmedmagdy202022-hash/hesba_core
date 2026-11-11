@@ -18,6 +18,8 @@
 
 /* UX Wave 3: a report's heading wears its hub card's icon and colour (the same tones as .hs-tile). */
 .hs-report-title{display:flex;align-items:center;gap:var(--hs-space-3)}
+.hs-report-title{flex-wrap:wrap}  /* so a date kept in one piece drops to its own line on a phone instead of pushing the page sideways */
+.hs-report-title bdi{white-space:nowrap}  /* a date or number in a title never breaks in the middle («2026-11-/10») */
 .hs-report-mark{--tone:var(--hs-navy);--tone-wash:var(--hs-neutral-wash);flex:0 0 var(--hs-chip-size);width:var(--hs-chip-size);height:var(--hs-chip-size);display:grid;place-items:center;border-radius:var(--hs-chip-radius);background:var(--tone-wash);color:var(--tone)}
 .hs-report-mark--teal{--tone:var(--hs-teal-deep);--tone-wash:var(--hs-teal-wash)}
 .hs-report-mark--gold{--tone:var(--hs-gold);--tone-wash:var(--hs-gold-wash)}
