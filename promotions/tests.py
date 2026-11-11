@@ -376,7 +376,7 @@ class PayItAllTests(PromotionSetup):
 
         page = self.client.get(reverse("sales:create") + "?lang=ar")
         self.assertContains(page, 'name="pay_full"')
-        self.assertContains(page, "hesba/js/invoice_form.js?v=ux2-1")  # UX Wave 2 bumped it (quick item dialog)
+        self.assertContains(page, "hesba/js/invoice_form.js?v=w4-2")  # UX Wave 4 bumped it (the running total under the lines)
         js = open(finders.find("hesba/js/invoice_form.js"), encoding="utf-8").read()
         for needed in ("if (payAllOn) {", "event.isTrusted", "payAll(false)", "quotePromotion();  // ask for the promotion now"):
             self.assertIn(needed, js)
