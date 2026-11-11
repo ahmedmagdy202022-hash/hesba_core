@@ -9,7 +9,7 @@ from config import demo_first_run as first_run
 from django.views.generic import RedirectView, TemplateView
 
 from config.health import healthz
-from config.nightly import digest, nightly
+from config.nightly import digest, messages_run, nightly
 
 from reports.dashboard_views import dashboard
 from reports.status_views import status_counts_report
@@ -18,6 +18,7 @@ from accounts.login_guard import GuardedLoginView, login_verify
 from printing import views as printing_views
 from workorders import public as workorders_public
 from payments import views as payments_views
+from appointments import public as appointments_public
 from appointments import views_booking as booking_views
 from settings_core.setup_views import after_login, root_redirect, setup_complete, setup_modules, setup_questions, setup_review, sub_activity_step
 
@@ -28,6 +29,7 @@ urlpatterns = [
     # BACKUP-003: token-guarded daily backup trigger for hosts without cron.
     path("ops/nightly/", nightly, name="ops_nightly"),
     path("ops/digest/", digest, name="ops_digest"),
+    path("ops/messages/", messages_run, name="ops_messages"),  # M3: hourly; gathers the customer messages and sends the approved ones
     path("login/", GuardedLoginView.as_view(template_name="registration/login.html", next_page="/start/"), name="login"),
     # SEC-002: the authenticator-app code after the password, for users who switched it on.
     path("login/verify/", login_verify, name="login_verify"),
@@ -40,6 +42,9 @@ urlpatterns = [
     # S2: the customer approves or refuses a work order's quote from the same signed link (public, CSRF-protected).
     path("share/<str:token>/approve/", login_not_required(workorders_public.decide), {"action": "approve"}, name="share_work_order_approve"),
     path("share/<str:token>/refuse/", login_not_required(workorders_public.decide), {"action": "refuse"}, name="share_work_order_refuse"),
+    # M3: the patient confirms an appointment, or asks to cancel it (a request for reception; nothing is cancelled here), from the same signed link.
+    path("share/<str:token>/confirm/", login_not_required(appointments_public.confirm), name="share_appointment_confirm"),
+    path("share/<str:token>/cancel-request/", login_not_required(appointments_public.cancel_request), name="share_appointment_cancel_request"),
     # S4 (HG-070): the online payment link. Public, gated by a signed token; only the webhook is CSRF-exempt (HMAC-verified).
     path("pay/webhook/paymob/", login_not_required(payments_views.webhook), name="pay_webhook_paymob"),
     path("pay/return/paymob/", login_not_required(payments_views.pay_return), name="pay_return_paymob"),
