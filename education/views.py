@@ -485,7 +485,7 @@ def take_attendance(request, pk):
     return render(request, "education/attendance.html", _base(request, lang, "today", group=group, day=day, session=session, roster=roster, choices=choices,
                                                               schedule=services.schedule_text(group, lang), error=error, today=timezone.localdate(),
                                                               saved=bool(request.GET.get("saved")), notify=[row for row in roster if row.notify],
-                                                              version=register.sheet_version(session),
+                                                              version=register.sheet_version(session, marks.values()),  # of the marks shown, not a second read
                                                               unscanned_note=words["unscanned_note"].format(n=sum(1 for row in roster if row.unscanned)) if any(row.unscanned for row in roster) else "",
                                                               scheduled=bool(session) or (group.active and register.meets_on(group, day))))
 

@@ -315,6 +315,33 @@ class StaleSheetTests(ScanSetup):
         self.assertEqual(self.save(TODAY, self.open_sheet(TODAY)).status_code, 302)  # the re-rendered sheet saves, late kept
         self.assertEqual(self.marks()["جاد"], "late")
 
+    def test_a_scan_that_lands_while_the_sheet_is_being_drawn_makes_that_sheet_stale(self):
+        """The page's version is the digest of the marks it shows. A scan that commits after the marks were read (here: just as
+        the view asks whether the class was scanned, its next read) is not on the page, so saving that page is refused."""
+
+        from unittest import mock
+
+        scan.mark(self.a.code, self.owner, at(TODAY, 16, 2))  # the class exists, a is present
+        real, slipped = scan.touched, []
+
+        def touched_after_a_scan(ids):
+            if not slipped:  # only while the first page is drawn
+                slipped.append(scan.mark(self.b.code, self.owner, at(TODAY, 16, 5)).presence)
+            return real(ids)
+
+        with mock.patch.object(scan, "touched", side_effect=touched_after_a_scan):
+            stale = self.open_sheet(TODAY)
+        self.assertEqual(slipped, ["present"])
+        self.assertEqual(stale[f"p_{self.b.pk}"], "absent")  # the page was drawn from the marks before b's scan
+        session = ClassSession.objects.get(group=self.review, date=TODAY)
+        self.assertNotEqual(stale["sheet_version"], attendance.sheet_version(session))  # and its version says so
+        response = self.save(TODAY, stale)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "اتغيّر الحضور")
+        self.assertEqual(self.marks()["بسمة"], "present")  # b's scan was not overwritten as absent
+        drawn = [mark for mark in session.marks.all() if mark.student_id == self.a.pk]
+        self.assertEqual(attendance.sheet_version(session, drawn), stale["sheet_version"])  # the digest of exactly the marks shown
+
     def test_an_unchanged_sheet_saves_as_always_and_a_note_changed_meanwhile_is_also_stale(self):
         scan.mark(self.a.code, self.owner, at(TODAY, 16, 2))
         form = self.open_sheet(TODAY)

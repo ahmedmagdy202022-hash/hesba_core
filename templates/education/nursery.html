@@ -1,6 +1,6 @@
 {% extends "operations/base.html" %}
 {% load static %}
-{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/education_scan.css' %}?v=e1-1">{% endblock %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/education_scan.css' %}?v=e1-2">{% endblock %}
 {% block operation_content %}
 <section class="op-title-row"><div><h1>{{ nw.title }}</h1><p>{{ nw.intro }}</p></div></section>
 {% include "education/_tabs.html" %}
@@ -27,5 +27,5 @@
 </tr>{% endwith %}
 {% empty %}<tr><td colspan="4" class="op-empty">{{ nw.no_children }}</td></tr>{% endfor %}
 </tbody></table></div>
-<script src="{% static 'hesba/js/edu_scan.js' %}?v=e1-1" defer></script>{% if can_desk %}<script src="{% static 'hesba/js/camera_scan.js' %}?v=cam-001" data-zxing="{% static 'hesba/vendor/zxing/zxing-0.23.0.min.js' %}" defer></script>{% endif %}
+<script src="{% static 'hesba/js/edu_scan.js' %}?v=e1-2" defer></script>{% if can_desk %}<script src="{% static 'hesba/js/camera_scan.js' %}?v=cam-001" data-zxing="{% static 'hesba/vendor/zxing/zxing-0.23.0.min.js' %}" defer></script>{% endif %}
 {% endblock %}

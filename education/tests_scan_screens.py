@@ -61,6 +61,26 @@ class ScanScreenTests(ScanSetup):
         self.client.force_login(teacher)
         self.assertContains(self.client.get(reverse("education:scan")), "data-scan-tab")
 
+    def test_a_card_scanned_while_another_is_on_its_way_is_kept_in_line(self):
+        """The script sends one code at a time and queues the rest (checked in a browser with a slow server: three cards before
+        the first answer go out in order, and one scanned while a «which class?» choice waits goes after the choice). Pinned here:
+        the page carries the waiting line and its words, and the script no longer drops a code because a request is in flight."""
+
+        from pathlib import Path
+
+        from django.conf import settings
+
+        self.client.force_login(self.owner)
+        for lang, words in (("ar", "كروت مستنية دورها: {n}"), ("en", "Cards waiting their turn: {n}")):
+            page = self.client.get(reverse("education:scan") + f"?lang={lang}")
+            self.assertContains(page, "data-scan-waiting")
+            self.assertContains(page, f'data-t-waiting="{words}"')
+            self.assertContains(page, "edu_scan.js?v=e1-2")
+        script = (Path(settings.BASE_DIR) / "static/hesba/js/edu_scan.js").read_text(encoding="utf-8")
+        self.assertIn("queue.push(code)", script)
+        self.assertNotIn("if (!code || busy) { return; }", script)
+        self.assertNotIn("busy = false; box.value = ''", script)  # an answer never wipes what is being typed for the next card
+
     def test_scanning_never_touches_money(self):
         from cashboxes.models import CashboxMovement
         from ledger.models import JournalEntry

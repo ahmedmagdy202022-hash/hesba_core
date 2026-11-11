@@ -27,7 +27,8 @@
   var choices = result.querySelector('[data-result-choices]');
   var T = function (key) { return root.getAttribute('data-t-' + key) || ''; };
   var lang = root.getAttribute('data-lang') || 'ar';
-  var busy = false, pending = '';
+  var busy = false, pending = '', queue = [];
+  var waiting = root.querySelector('[data-scan-waiting]');
 
   function el(id) { return result.querySelector('[data-result-' + id + ']'); }
   function camera() { return document.querySelector('.hs-cam:not([hidden])'); }
@@ -89,9 +90,18 @@
     render({ status: 'error', message: text });
   }
 
+  function showWaiting() {
+    if (!waiting) { return; }
+    waiting.hidden = !queue.length;
+    waiting.textContent = queue.length ? T('waiting').replace('{n}', queue.length) : '';
+  }
+
+  // One request at a time, in the order the cards were shown. A card scanned while the last one is still on its way, or while a
+  // «which class?» choice is waiting for a tap, is kept in line and sent after it: a scan is never dropped.
   function send(code, group) {
     code = String(code || '').trim();
-    if (!code || busy) { return; }
+    if (!code) { return; }
+    if (busy || (pending && !group)) { queue.push(code); showWaiting(); return; }
     busy = true; pending = code;
     result.setAttribute('data-state', 'working');
     var body = new FormData(form);
@@ -100,13 +110,23 @@
     fetch(form.getAttribute('action'), { method: 'POST', body: body, credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' } })
       .then(function (response) { return response.json().then(function (data) { return data; }, function () { return { status: 'error', message: T('failed') }; }); })
       .then(function (data) { render(data); }, function () { fail(T('offline')); })
-      .then(function () { busy = false; box.value = ''; focusBox(); });
+      .then(function () { busy = false; focusBox(); next(); });
   }
 
+  function next() {
+    if (busy || pending || !queue.length) { showWaiting(); return; }   // a choice still waiting for its tap goes first
+    var code = queue.shift();
+    showWaiting();
+    send(code);
+  }
+
+  // The code leaves the box the moment Enter arrives, so the next card types into an empty box and nothing typed meanwhile is wiped later.
+  function take() { var code = box.value; box.value = ''; send(code); }
+
   box.addEventListener('keydown', function (event) {
-    if (event.key === 'Enter' || event.keyCode === 13) { event.preventDefault(); send(box.value); }
+    if (event.key === 'Enter' || event.keyCode === 13) { event.preventDefault(); take(); }
   });
-  form.addEventListener('submit', function (event) { event.preventDefault(); send(box.value); });
+  form.addEventListener('submit', function (event) { event.preventDefault(); take(); });
 
   // The box stays focused for a hardware scanner; no on-screen keyboard unless «اكتب الكود» is tapped.
   var typeButton = root.querySelector('[data-scan-type]');

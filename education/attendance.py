@@ -68,18 +68,22 @@ def lock_group(group):
     return StudyGroup.objects.select_for_update().get(pk=group.pk)
 
 
-def sheet_version(session):
+def sheet_version(session, marks=None):
     """A short digest of everything saving the sheet would overwrite: the class's status and topic and every mark with its note.
 
     "none" when there is no class yet. The sheet carries it as a hidden field; a save whose digest no longer matches the database
-    was made from a stale page (a scan marked someone meanwhile) and is refused, never merged."""
+    was made from a stale page (a scan marked someone meanwhile) and is refused, never merged.
+
+    ``marks``: the mark rows the page is being drawn from. The page must pass them, so the digest describes exactly what it shows:
+    reading the marks a second time here would let a scan slip in between the two reads, and the page would show the old marks
+    under the new digest. The save passes nothing and reads the database, under the group lock."""
 
     import hashlib
     import json
 
     if session is None:
         return "none"
-    marks = sorted(session.marks.values_list("student_id", "presence", "note"))
+    marks = sorted(session.marks.values_list("student_id", "presence", "note") if marks is None else ((m.student_id, m.presence, m.note) for m in marks))
     return hashlib.sha256(json.dumps([session.status, session.topic, marks], ensure_ascii=False).encode()).hexdigest()[:16]
 
 

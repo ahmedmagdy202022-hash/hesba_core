@@ -51,6 +51,7 @@
 .es-recent li:first-child{border-top:0}
 .es-log--late{color:var(--hs-warning)}
 .es-log--present{color:var(--hs-success)}
+.es-waiting{order:3;margin:0;color:var(--hs-navy);font-weight:var(--hs-weight-semibold);font-size:var(--hs-text-sm)}
 .es-hint{order:4;margin:0;color:var(--hs-muted);font-size:var(--hs-text-sm);line-height:var(--hs-leading)}
 
 /* the camera's own bar says what was read; while scanning with it open, it also says who it was and what they were marked */
