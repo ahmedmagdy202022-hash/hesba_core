@@ -68,3 +68,63 @@ class ProfitReportPeriodTests(TestCase):
         start, end = period_bounds("month", timezone.localdate())[:2]
         text = self.line(date_from=start.isoformat(), date_to=end.isoformat(), lang="en")
         self.assertIn(f"{start.day} {start.strftime('%B %Y')}", text)
+
+
+class HugeTrendTests(TestCase):
+    """MT-06: «▲ 4900%» is arithmetically right and useless; above 300% the dashboard says it in words."""
+
+    def setUp(self):
+        from datetime import timedelta
+        from decimal import Decimal
+
+        from closing.models import Period
+        from hesba_testing.factories import make_cashbox, make_item, make_location, stock_in
+        from inventory.services import recalculate_item_average_cost
+        from django.utils import timezone
+
+        self.today = timezone.localdate()
+        self.owner = owner_client(self)
+        Period.objects.create(period_code="W1", name="w1", start_date=self.today - timedelta(days=90), end_date=self.today + timedelta(days=5))
+        self.location, self.cashbox = make_location(), make_cashbox()
+        self.item = make_item(item_code="TEA", item_name="Tea", default_sale_price=Decimal("100.00"))
+        stock_in(self.item, self.location, 500, "10.00", movement_date=self.today - timedelta(days=80))
+        recalculate_item_average_cost(self.item)
+
+    def sell(self, number, quantity, price, days_ago):
+        from datetime import timedelta
+        from decimal import Decimal
+
+        from .tests_dashboard import sell
+
+        paid = Decimal(quantity) * Decimal(price)
+        sell(self.item, self.location, self.cashbox, quantity, price, str(paid), self.owner, number=number, when=self.today - timedelta(days=days_ago))
+
+    def page(self, lang):
+        return self.client.get("/dashboard/", {"period": "30d", "lang": lang}).content.decode()
+
+    def test_a_rise_above_three_times_is_told_in_words(self):
+        self.sell("SI-W1", 1, "10.00", 31)   # previous 30 days: 10
+        self.sell("SI-W2", 5, "100.00", 0)   # this period: 500, a change of 4900%
+        ar, en = self.page("ar"), self.page("en")
+        self.assertIn("أكتر من 3 أضعاف الفترة اللي قبلها", ar)
+        self.assertIn("more than 3× the previous period", en)
+        self.assertNotIn("4900%", ar)
+        self.assertNotIn("4900%", en)
+
+    def test_a_normal_change_keeps_its_number(self):
+        self.sell("SI-W1", 4, "100.00", 31)  # previous 30 days: 400
+        self.sell("SI-W2", 5, "100.00", 0)   # this period: 500, +25%
+        ar = self.page("ar")
+        self.assertIn("<bdi>25%</bdi>", ar)
+        self.assertNotIn("أكتر من 3 أضعاف", ar)
+
+
+class HugeTrendRuleTests(TestCase):
+    def test_the_bound_is_three_hundred_percent_and_a_fall_has_its_own_words(self):
+        from reports.dashboard_views import STRINGS, _shown_delta
+
+        for delta, huge in ((300.0, False), (300.4, False), (300.5, True), (1396.0, True), (-300.0, False), (-650.0, True), (50.0, False)):
+            with self.subTest(delta=delta):
+                self.assertEqual(_shown_delta({"key": "net_profit", "delta": delta})["huge"], huge)
+        self.assertEqual(STRINGS["ar"]["huge_down"], "هبوط حاد عن الفترة اللي قبلها")
+        self.assertEqual(STRINGS["en"]["huge_down"], "a sharp fall vs the previous period")

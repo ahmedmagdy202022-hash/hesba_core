@@ -115,6 +115,8 @@ STRINGS = {
         "analytics_title": "أداء النشاط",
         "how_label": "اتحسب إزاي؟",
         "vs_previous": "عن الفترة اللي قبلها",
+        "huge_up": "أكتر من 3 أضعاف الفترة اللي قبلها",  # MT-06: «▲ 1396%» says nothing; above HUGE_DELTA_PCT words replace the number
+        "huge_down": "هبوط حاد عن الفترة اللي قبلها",
         "daily_title": "المبيعات يوم بيوم",
         "daily_legend_now": "الفترة دي",
         "daily_legend_prev": "الفترة اللي قبلها",
@@ -188,6 +190,8 @@ STRINGS = {
         "analytics_title": "Business performance",
         "how_label": "How is this calculated?",
         "vs_previous": "vs the previous period",
+        "huge_up": "more than 3× the previous period",
+        "huge_down": "a sharp fall vs the previous period",
         "daily_title": "Sales by day",
         "daily_legend_now": "This period",
         "daily_legend_prev": "Previous period",
@@ -499,6 +503,10 @@ def _ask_link(lang, fit, user):
 REPEATED_BY_METRIC = {"cashbox_balance": "cash", "customer_dues": "receivables", "supplier_dues": "payables"}
 
 
+#: MT-06: above this many percent a trend is told in words («أكتر من 3 أضعاف»), not as a number nobody can use.
+HUGE_DELTA_PCT = 300
+
+
 def _shown_delta(metric):
     """UX Wave 1, display only: a trend reads "▲ 15%" or "▼ 73%" (the arrow carries the sign, never "▼ -73%"), and a
     change that rounds to 0% reads "—". A copy: the metric itself (and the analytics behind it) is never changed."""
@@ -511,6 +519,7 @@ def _shown_delta(metric):
         rounded = int(Decimal(str(abs(delta))).quantize(Decimal("1"), ROUND_HALF_UP))  # half up, as floatformat:0 did
         shown["delta_abs"] = rounded
         shown["flat"] = rounded == 0
+        shown["huge"] = rounded > HUGE_DELTA_PCT
     return shown
 
 
