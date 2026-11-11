@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import views, views_scan
 
 app_name = "education"
 
@@ -14,6 +14,9 @@ urlpatterns = [
     path("courses/", views.courses, name="courses"),
     path("today/", views.today, name="today"),
     path("nursery/", views.nursery_day, name="nursery"),
+    path("scan/", views_scan.scan_page, name="scan"),
+    path("scan/mark/", views_scan.scan_mark, name="scan_mark"),
+    path("cards/", views_scan.card_sheet, name="cards"),
     path("groups/<int:pk>/attendance/", views.take_attendance, name="attendance"),
     path("fees/", views.fees, name="fees"),
     path("dues/", views.dues, name="dues"),

@@ -224,6 +224,11 @@ class DemoDataTests(TestCase):
         self.assertTrue(dues())  # and some parents still owe
         self.assertTrue(self.client.login(username="owner", password="Demo-pass-1"))
         self.assertContains(self.client.get(reverse("education:groups")), "مجموعة السبت والتلات")
+        # E1: the demo's students have printable cards (the code alone in the QR), and the scan entry is there for the owner.
+        sheet = self.client.get(reverse("education:cards") + f"?group={StudyGroup.objects.get(name='مجموعة السبت والتلات').pk}")
+        self.assertEqual(sheet.status_code, 200)
+        self.assertContains(sheet, 'data-qr-text="ST-')
+        self.assertContains(self.client.get(reverse("education:today")), "data-scan-entry")
 
 
 class AttendanceTests(EducationSetup):

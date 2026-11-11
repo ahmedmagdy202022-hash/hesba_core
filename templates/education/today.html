@@ -2,6 +2,7 @@
 {% block operation_content %}
 <section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.classes_on }} {{ weekday }} <bdi>{{ day|date:"Y-m-d" }}</bdi></p></div></section>
 {% include "education/_tabs.html" %}
+{% if can_scan and day == today %}<div class="op-form-actions edu-scan-entry"><a class="op-primary" href="{% url 'education:scan' %}?lang={{ lang }}" data-scan-entry>{{ words.scan_attendance }}</a></div>{% endif %}
 <form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><label class="sr-only" for="edu-day">{{ words.date }}</label><input id="edu-day" type="date" name="date" value="{{ day|date:'Y-m-d' }}" max="{{ today|date:'Y-m-d' }}"><button type="submit">{{ words.go }}</button></form>
 <div class="edu-classes" data-today>
 {% for row in rows %}<article class="op-detail-meta edu-class" data-class="{{ row.group.pk }}">
