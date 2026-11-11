@@ -36,7 +36,7 @@ from permissions.models import RoleCode
 from reports.tests_dashboard import prepared_client
 from reports.tests_shell import sidebar_links
 from sales.models import CustomerLedgerEntry, CustomerPayment, SalesInvoice
-from sales.services import post_sales_invoice
+from sales.services import cancel_posted_sales_invoice, post_sales_invoice
 from settings_core.capabilities import set_capability_enabled
 from settlements.models import InvoiceSettlement
 from staff.services import save_employee
@@ -588,6 +588,23 @@ class AdvanceTests(Hospital):
         self.assertEqual(InvoiceSettlement.objects.get().amount, D("9000.00"))
         self.assertEqual(customer_balance(self.patient), D("-3000.00"))  # 3000 stays the patient's
 
+    def test_cancelling_the_posted_bill_holds_the_advance_again_and_the_stay_is_billed_again(self):
+        admission, invoice = inpatient.discharge_and_bill(self.stay("2000"), self.owner)
+        post_sales_invoice(invoice.pk, self.owner)
+        cancel_posted_sales_invoice(invoice.pk, self.owner, "فاتورة غلط")  # the ordinary cancel; the existing hook releases the advance
+        deposit = Deposit.objects.get()
+        self.assertEqual((deposit.status, deposit.invoice, InvoiceSettlement.objects.count()), (DepositStatus.HELD, None, 0))
+        self.assertEqual((customer_balance(self.patient), cash_balance(self.cashbox), bal("2105")), (D("-2000.00"), D("2000.00"), D("-2000.00")))
+        again = inpatient.bill(admission, self.owner)  # the cancelled bill freed its charges: one new draft, the same lines
+        deposit.refresh_from_db()
+        self.assertEqual((again.status, again.total_amount, self.lines(again), deposit.invoice), ("draft", D("9000.00"), self.lines(invoice), again))
+        with self.assertRaises(ValidationError):
+            inpatient.bill(admission, self.owner)
+        post_sales_invoice(again.pk, self.owner)
+        deposit.refresh_from_db()
+        self.assertEqual((deposit.status, customer_balance(self.patient), cash_balance(self.cashbox), bal("2105")),
+                         (DepositStatus.APPLIED, D("7000.00"), D("2000.00"), D("0.00")))
+
     def test_one_advance_per_stay_while_it_is_held_and_none_after_discharge(self):
         admission = self.stay("2000")
         with self.assertRaisesMessage(ValidationError, "عربون بالفعل"):
@@ -792,6 +809,23 @@ class AccessTests(Hospital):
                          [True, True, True, False, False, False, False])
         self.assertFalse(caps.fits("commercial", "inpatient", "pharmacy"))
         self.assertNotIn("inpatient", caps.default_selection("medical", "clinic"))  # a clinic starts without beds
+
+    def test_the_setup_interview_asks_about_beds_only_where_patients_stay(self):
+        from settings_core import setup_interview as interview
+
+        def asked(sub, lang="ar"):
+            return {row["key"]: row for row in interview.questions("medical", sub, lang)}
+
+        centre, clinic = asked("medical_center")["beds"], asked("clinic")["beds"]
+        self.assertEqual((centre["default"], clinic["default"], centre["features"]), (True, False, "inpatient"))  # suggested for a centre only
+        self.assertIn("أسرّة", clinic["ask"])
+        self.assertIn("beds", asked("clinic", "en")["beds"]["ask"])
+        for sub in ("dental", "lab", "physio", "vet"):
+            self.assertNotIn("beds", asked(sub))
+        self.assertNotIn("beds", {row["key"] for row in interview.questions("commercial", "retail", "ar")})
+        modules, features = interview.resolve("medical", "clinic", {"beds"})
+        self.assertIn("inpatient", features)
+        self.assertNotIn("inpatient", interview.resolve("medical", "clinic", set())[1])
 
 
 # ---- the screens -------------------------------------------------------------------
