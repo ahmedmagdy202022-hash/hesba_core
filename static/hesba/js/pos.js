@@ -4,6 +4,8 @@
   var form = document.querySelector('[data-pos]');
   if (!form) { return; }
   var words = JSON.parse(form.getAttribute('data-words') || '{}');
+  // UX Wave 4: the line's button names and the pay sheet's note, in the page's language (sales/pos.html).
+  var labels = JSON.parse((document.getElementById('hs-pos-labels') || { textContent: '{}' }).textContent || '{}');
   var catalog = JSON.parse(document.getElementById('hs-item-catalog').textContent);
   var restored = JSON.parse((document.getElementById('pos-cart-back') || { textContent: '[]' }).textContent || '[]');
   var byId = {}, byCode = {}, byLabel = {};
@@ -49,15 +51,73 @@
   var paybar = form.querySelector('[data-pos-paybar]');
   var barTotal = form.querySelector('[data-pos-bar-total]');
   var wide = window.matchMedia ? window.matchMedia('(min-width: 1024px)') : null;
-  // «تفاصيل» also opens on a phone when the till comes back with a named customer chosen, or after any refused sale
-  // (data-pos-refused): the fix is often inside it (a credit sale's customer, a coupon, a gift card).
-  function namedCustomer() { return !!(customer && customer.value && customer.value !== customer.getAttribute('data-walk-in')); }
-  function detailsStayOpen(node) { return node.hasAttribute('data-pos-details') && (node.hasAttribute('data-pos-refused') || namedCustomer()); }
-  function syncWide() { form.querySelectorAll('[data-wide-open]').forEach(function (node) { node.open = !!(wide && wide.matches) || detailsStayOpen(node); }); }
-  syncWide();
-  if (wide && wide.addEventListener) { wide.addEventListener('change', syncWide); }
-  form.querySelectorAll('.pos-overflow').forEach(function (menu) {  // a choice made from the phone's "⋯" menu closes it
-    menu.addEventListener('click', function (event) { if (event.target.closest('.pos-overflow__menu button') && !(wide && wide.matches)) { menu.open = false; } });
+  function isWide() { return !!(wide && wide.matches); }
+  // UX Wave 4: «تفاصيل» is always unfolded. On wide screens it stands in the payment column; on a phone it lives in the
+  // «تفاصيل الفاتورة» sheet (opened from the cart's customer button or the «⋯» menu), so folding it there would only hide it.
+  function syncWide() {
+    form.querySelectorAll('[data-wide-open]').forEach(function (node) { node.open = true; });
+    if (isWide() && layer === sheet) { closeLayer(true); }  // the sheet is a column on wide screens, never a layer
+  }
+
+  // UX Wave 4: two layers on a phone, the «تفاصيل الفاتورة» sheet and the «⋯» menu. One at a time, over a scrim; Esc, the
+  // scrim or a close button shuts it, and the focus goes back to the scan field, as after any cart action (a scanner's
+  // Enter must never land on a menu button). On wide screens the sheet is the payment column and only focuses its field.
+  var sheet = form.querySelector('[data-pos-sheet]');
+  var menu = form.querySelector('[data-pos-menu]');
+  var scrim = form.querySelector('[data-pos-scrim]');
+  var layer = null;
+  function focusables(node) { return Array.prototype.filter.call(node.querySelectorAll('a[href],button:not([disabled]),input:not([type=hidden]):not([disabled]),select,textarea,summary'), function (el) { return el.offsetParent !== null; }); }
+  function openLayer(node, target) {
+    closeLayer(true);
+    layer = node;
+    if (node === menu) { menu.hidden = false; } else { node.classList.add('is-open'); }
+    if (scrim) { scrim.hidden = false; }
+    document.body.classList.add('pos-layer-open');
+    var first = target && target.offsetParent !== null ? target : focusables(node)[0];
+    if (first) { first.focus(); }
+  }
+  function closeLayer(quiet) {
+    if (!layer) { return; }
+    if (layer === menu) { menu.hidden = true; } else { layer.classList.remove('is-open'); }
+    layer = null;
+    if (scrim) { scrim.hidden = true; }
+    document.body.classList.remove('pos-layer-open');
+    if (!quiet && scan) { scan.focus(); }
+  }
+  function detailsTarget(which) {
+    if (which === 'discount') {
+      var amount = form.querySelector('[data-pos-discount]');
+      return amount && amount.hidden ? form.querySelector('[data-discount-percent]') || amount : amount;  // the % box when % is chosen
+    }
+    if (which === 'place') { var place = form.querySelector('.pos-more'); if (place) { place.open = true; } return form.querySelector('#pos-location'); }
+    return form.querySelector('[data-pos-customer-find]') || form.querySelector('[data-pos-customer]');
+  }
+  function openDetails(which) {
+    form.querySelectorAll('[data-wide-open]').forEach(function (node) { node.open = true; });
+    var target = detailsTarget(which);
+    if (isWide()) { closeLayer(true); if (target) { target.scrollIntoView({ block: 'center' }); target.focus(); } }
+    else { openLayer(sheet, target); }
+    if (target && which === 'discount' && target.select) { target.select(); }  // typing replaces the 0
+  }
+  form.addEventListener('click', function (event) {
+    var opener = event.target.closest('[data-pos-menu-open]');
+    if (opener) { if (layer === menu) { closeLayer(); } else { openLayer(menu); } return; }
+    var details = event.target.closest('[data-pos-open-details]');
+    if (details) { openDetails(details.getAttribute('data-pos-open-details')); return; }
+    if (event.target.closest('[data-pos-layer-close]') || event.target === scrim) { closeLayer(); return; }
+    // A choice in the menu (a link, «سلة جديدة», the drawer, the language) closes the menu first.
+    if (layer === menu && event.target.closest('.pos-menu__item') && !event.target.closest('[type=submit]')) { closeLayer(true); }
+  });
+  document.addEventListener('keydown', function (event) {
+    if (!layer) { return; }
+    if (event.key === 'Escape') { event.preventDefault(); closeLayer(); return; }
+    if (event.key === 'Tab') {  // the focus stays inside the open layer
+      var items = focusables(layer);
+      if (!items.length) { return; }
+      var first = items[0], last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
   });
   // PRICE-001: price from the chosen customer's list, when the shop uses them.
   var bookNode = document.getElementById('hs-price-book');
@@ -178,22 +238,31 @@
     }
     cart.forEach(function (row, index) {
       var tr = el('tr', { 'data-line': String(index), 'data-item': String(row.id), 'data-unit': row.unit ? String(row.unit) : '' });  // R1: the line's item, for the «بدائل» sheet
-      tr.appendChild(el('td', { 'class': 'op-cell-text', title: row.label }, shortLabel(row)));  // UX Wave 1: the code stays in the tooltip
-      var qtyTd = el('td');
+      // UX Wave 4: one compact row per line: the name (two lines at most), the unit price small under it (still a box
+      // that takes a typed price), a − qty + stepper, the line total and ×. The buttons hold text only: the clicks below
+      // read event.target, so an icon inside a button would swallow the tap.
+      var name = shortLabel(row);
+      var nameCell = el('td', { 'class': 'pos-line__name op-cell-text', title: row.label });
+      nameCell.appendChild(el('span', { 'class': 'pos-line__label' }, name));
+      tr.appendChild(nameCell);
+      var qtyTd = el('td', { 'class': 'pos-line__qty' });
       var qtyCell = el('div', { 'class': 'pos-qty' });
       qtyTd.appendChild(qtyCell);
-      var minus = el('button', { type: 'button', 'class': 'pos-step', 'data-step': '-1', 'aria-label': '−' }, '−');
-      var qty = el('input', { inputmode: 'decimal', 'data-field': 'qty', value: String(row.qty), 'aria-label': 'qty' });
-      var plus = el('button', { type: 'button', 'class': 'pos-step', 'data-step': '1', 'aria-label': '+' }, '+');
+      var minus = el('button', { type: 'button', 'class': 'pos-step', 'data-step': '-1', 'aria-label': (labels.dec || '−') + ': ' + name }, '−');
+      var qty = el('input', { inputmode: 'decimal', autocomplete: 'off', 'data-field': 'qty', value: String(row.qty), 'aria-label': (labels.qty || 'qty') + ': ' + name });
+      var plus = el('button', { type: 'button', 'class': 'pos-step', 'data-step': '1', 'aria-label': (labels.inc || '+') + ': ' + name }, '+');
       if (row.serial) { qty.readOnly = true; minus.disabled = true; plus.disabled = true; }
       qtyCell.appendChild(minus); qtyCell.appendChild(qty); qtyCell.appendChild(plus);
       tr.appendChild(qtyTd);
-      var priceCell = el('td');
-      priceCell.appendChild(el('input', { inputmode: 'decimal', 'data-field': 'price', value: String(row.price), 'aria-label': 'price' }));
+      var priceCell = el('td', { 'class': 'pos-line__price' });
+      var priceLabel = el('label', { 'class': 'pos-line__each' });
+      priceLabel.appendChild(el('input', { inputmode: 'decimal', autocomplete: 'off', 'data-field': 'price', value: String(row.price), 'aria-label': (labels.price || 'price') + ': ' + name }));
+      priceLabel.appendChild(el('span', { 'aria-hidden': 'true' }, labels.each || ''));
+      priceCell.appendChild(priceLabel);
       tr.appendChild(priceCell);
       tr.appendChild(el('td', { 'class': 'pos-line-total' }, money(num(row.qty) * num(row.price))));
-      var removeCell = el('td');
-      removeCell.appendChild(el('button', { type: 'button', 'class': 'pos-remove', 'data-remove': '1', 'aria-label': words.remove || 'x' }, '×'));
+      var removeCell = el('td', { 'class': 'pos-line__rm' });
+      removeCell.appendChild(el('button', { type: 'button', 'class': 'pos-remove', 'data-remove': '1', 'aria-label': (words.remove || 'x') + ': ' + name, title: words.remove || '' }, '×'));
       tr.appendChild(removeCell);
       body.appendChild(tr);
     });
@@ -267,6 +336,22 @@
     form.querySelector('[data-pos-total]').textContent = money(total);
     if (barTotal) { barTotal.textContent = money(total); }  // UX Wave 1: the pay bar repeats what is due
     if (paybar) { paybar.classList.toggle('is-empty', !cart.length); }
+    // UX Wave 4: the cart's count, and under the amount due one quiet line of what changed it (the full sums are in
+    // «تفاصيل الفاتورة»). Display only: the numbers are the ones worked out above.
+    form.classList.toggle('has-lines', cart.length > 0);
+    var count = form.querySelector('[data-pos-count]');
+    if (count) { count.textContent = String(cart.length); }
+    var note = form.querySelector('[data-pos-bar-note]');
+    if (note) {
+      var parts = [];
+      if (num(discount.value)) { parts.push((labels.discount || '') + ' ' + money(num(discount.value))); }
+      if (promo.off) { parts.push((labels.promo || '') + ' ' + money(promo.off)); }
+      var pointsMoney = pointsBox ? Math.round(num(pointsBox.value) * num(pointsBox.getAttribute('data-point-value')) * 100) / 100 : 0;
+      if (pointsMoney) { parts.push((labels.points || '') + ' ' + money(pointsMoney)); }
+      if (tax) { parts.push((labels.tax || '') + ' ' + money(tax)); }
+      note.textContent = parts.join(' · ');
+      note.hidden = !parts.length;
+    }
     var change = paid - cashDue, credit = cashDue - paid;
     form.querySelector('[data-pos-change-row]').hidden = !(change > 0.004);
     form.querySelector('[data-pos-change]').textContent = money(Math.max(0, change));
@@ -298,6 +383,13 @@
     requote();  // Codex #268: a typed quantity or price changes the promotion too
     totals();
   });
+  function showCustomer() {  // UX Wave 4: the chosen customer's name on the cart's button and the pay sheet
+    var option = customer.options[customer.selectedIndex];
+    var text = option ? option.textContent.trim() : '';
+    form.querySelectorAll('[data-pos-customer-name],[data-pos-bar-customer]').forEach(function (node) { node.textContent = text; });
+  }
+  customer.addEventListener('change', showCustomer);
+  showCustomer();
   customer.addEventListener('change', function () {
     // Re-price lines still on an automatic price; typed prices stay.
     cart.forEach(function (row) {
@@ -311,16 +403,123 @@
   if (giftAmount) { giftAmount.addEventListener('input', totals); }
   tendered.addEventListener('input', function () { tenderedTouched = tendered.value !== ''; totals(); });
 
+  // UX Wave 4: one field for the scanner and for names. A scanner (USB, Bluetooth or the camera) types a code and Enter;
+  // a person types a few letters of a name and the till lists the items under the field. What Enter does:
+  //   1. the text is exactly a serial, a unit's barcode, a barcode or an item code: that item, as before, always first;
+  //   2. otherwise, a row of the list, only when the list was drawn for exactly this text and the text was typed by hand
+  //      (keys at a person's pace, or a row chosen with ↑/↓), never on a synthetic Enter (the camera's);
+  //   3. otherwise «مفيش صنف بالكود ده», as before: a mis-scan never adds a look-alike.
+  // A row taken goes through the name-search path (data-pos-search), the one the quick buttons and «بدائل» use.
+  var results = form.querySelector('[data-pos-results]');
+  var found = [], active = -1, shownFor = null, navigated = false, findTimer = null, stamps = [], pasted = false;
+  var BURST_MS = 35;     // a scanner sends a key every few milliseconds; a person needs far more than this between keys
+  var FIND_DELAY = 150;  // the list waits for a pause, so a scanner's burst never draws it
+  var MIN_CHARS = 2;
+  function fold(text) {  // Arabic letters that people type either way, Arabic-Indic digits, case
+    return String(text || '').toLowerCase().replace(/[\u064B-\u0652\u0670\u0640]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي')
+      .replace(/[٠-٩]/g, function (d) { return String(d.charCodeAt(0) - 1632); });
+  }
+  var folded = catalog.map(function (item) { return { item: item, text: fold(item.label + ' ' + (item.barcode || '')), name: fold(item.label) }; });
+  function matches(query) {
+    var parts = fold(query).trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) { return []; }
+    var hits = folded.filter(function (row) { return parts.every(function (part) { return row.text.indexOf(part) !== -1; }); });
+    function rank(row) { return row.name.indexOf(parts[0]) === 0 ? 0 : (row.name.indexOf(' ' + parts[0]) !== -1 ? 1 : 2); }
+    hits.sort(function (a, b) { return rank(a) - rank(b) || a.name.localeCompare(b.name); });
+    return hits.slice(0, 8).map(function (row) { return row.item; });
+  }
+  function byHand() {
+    if (navigated) { return true; }
+    if (pasted || stamps.length < 2) { return false; }
+    return (stamps[stamps.length - 1] - stamps[0]) / (stamps.length - 1) >= BURST_MS;
+  }
+  function closeList() {
+    clearTimeout(findTimer);
+    if (!results) { return; }
+    results.hidden = true; results.textContent = '';
+    found = []; active = -1; shownFor = null; navigated = false;
+    scan.setAttribute('aria-expanded', 'false'); scan.removeAttribute('aria-activedescendant');
+  }
+  function highlight(index) {
+    active = index;
+    Array.prototype.forEach.call(results.children, function (li, i) { li.setAttribute('aria-selected', i === index ? 'true' : 'false'); li.classList.toggle('is-active', i === index); });
+    var li = results.children[index];
+    if (li) { scan.setAttribute('aria-activedescendant', li.id); li.scrollIntoView({ block: 'nearest' }); } else { scan.removeAttribute('aria-activedescendant'); }
+  }
+  function showList() {
+    if (!results) { return; }
+    var query = scan.value;
+    if (query.trim().length < MIN_CHARS) { closeList(); return; }
+    found = matches(query);
+    results.textContent = '';
+    if (!found.length) { closeList(); return; }
+    found.forEach(function (item, index) {
+      var li = el('li', { id: 'pos-find-' + index, role: 'option', 'aria-selected': 'false', 'data-index': String(index), 'class': 'pos-find__row' });
+      var main = el('span', { 'class': 'pos-find__main' });
+      main.appendChild(el('span', { 'class': 'pos-find__name' }, item.code ? item.label.replace(' · ' + item.code, '') : item.label));
+      if (item.code) { main.appendChild(el('bdi', { 'class': 'pos-find__code', dir: 'ltr' }, item.code)); }
+      li.appendChild(main);
+      li.appendChild(el('bdi', { 'class': 'pos-find__price' }, money(priceFor(item))));
+      results.appendChild(li);
+    });
+    results.hidden = false;
+    shownFor = query;
+    scan.setAttribute('aria-expanded', 'true');
+    highlight(0);  // shown, never taken by itself: Enter takes it only under rule 2 above
+  }
+  function take(item) {
+    scan.value = ''; stamps = []; pasted = false;
+    closeList();
+    search.value = item.label;
+    search.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  scan.addEventListener('input', function (event) {
+    if (!scan.value) { stamps = []; pasted = false; closeList(); return; }
+    // A paste, a drop or a replacement is never a person's typing. Nor is several characters in one event, except an
+    // Android keyboard's composition (Gboard): there every event carries the whole word composed so far. A scanner never
+    // composes: it sends plain keys, and the camera sets the value and sends a synthetic Enter.
+    var composing = event.inputType === 'insertCompositionText';
+    if (event.inputType && /^insertFromPaste|^insertReplacementText|^insertFromDrop/.test(event.inputType) || (!composing && event.data && event.data.length > 1)) { pasted = true; }
+    stamps.push(Date.now());
+    if (stamps.length === 1 && scan.value.length > 1) { pasted = true; }  // the whole text arrived at once
+    navigated = false;
+    clearTimeout(findTimer);
+    if (scan.value.trim().length < MIN_CHARS) { closeList(); return; }
+    findTimer = setTimeout(showList, FIND_DELAY);
+  });
+  scan.addEventListener('blur', function () { setTimeout(function () { if (document.activeElement !== scan) { closeList(); } }, 0); });
+  scan.addEventListener('focus', function () { if (scan.value.trim().length >= MIN_CHARS && byHand()) { showList(); } });
+  if (results) {
+    results.addEventListener('mousedown', function (event) { event.preventDefault(); });  // the field keeps the focus
+    results.addEventListener('mousemove', function (event) { var li = event.target.closest('[data-index]'); if (li && +li.getAttribute('data-index') !== active) { highlight(+li.getAttribute('data-index')); } });
+    results.addEventListener('click', function (event) {
+      var li = event.target.closest('[data-index]');
+      var item = li && found[+li.getAttribute('data-index')];
+      if (item) { take(item); scan.focus(); }
+    });
+  }
   scan.addEventListener('keydown', function (event) {
+    if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && results) {
+      if (results.hidden) { if (scan.value.trim().length >= MIN_CHARS) { event.preventDefault(); showList(); navigated = true; } return; }
+      event.preventDefault();
+      navigated = true;
+      highlight((active + (event.key === 'ArrowDown' ? 1 : found.length - 1)) % found.length);
+      return;
+    }
+    if (event.key === 'Escape' && results && !results.hidden) { event.preventDefault(); event.stopPropagation(); closeList(); return; }
     if (event.key !== 'Enter') { return; }
     event.preventDefault();
+    var pick = event.isTrusted && results && !results.hidden && shownFor === scan.value && found[active] && byHand() ? found[active] : null;
     var code = scan.value.trim().toLowerCase();
-    scan.value = '';
+    scan.value = ''; stamps = []; pasted = false;
+    closeList();
     if (!code) { return; }
     if (bySerial[code] && addSerial(bySerial[code])) { return; }
     var unitHit = unitByCode[code];
     var item = unitHit ? byId[unitHit.itemId] : byCode[code];
-    if (item) { add(item, undefined, undefined, unitHit || null); } else { say((words.not_found || '') + code, true); }
+    if (item) { add(item, undefined, undefined, unitHit || null); }
+    else if (pick) { search.value = pick.label; search.dispatchEvent(new Event('change', { bubbles: true })); }
+    else { say((words.not_found || '') + code, true); }
   });
   search.addEventListener('change', function () {
     var item = byLabel[search.value];
@@ -337,7 +536,7 @@
     var giftCode = form.querySelector('[data-pos-gift-code]');  // S6: never carry one holder's card into the next sale
     if (giftCode) { giftCode.value = ''; } if (giftAmount) { giftAmount.value = ''; }
     if (coupon) { coupon.value = ''; }  // nor the last sale's coupon: render() re-quotes the promotion
-    customer.value = customer.getAttribute('data-walk-in'); render(); scan.focus();
+    customer.value = customer.getAttribute('data-walk-in'); showCustomer(); render(); scan.focus();  // setting .value fires no change: the labels follow by hand
   });
 
   form.addEventListener('submit', function (event) {
@@ -359,6 +558,16 @@
     form.querySelector('[data-cart-json]').value = JSON.stringify(cart.map(function (row) { return { id: row.id, qty: row.qty, price: row.price, unit: row.unit || null, serial: row.serial || null }; }));
   });
 
+  syncWide();
+  if (wide && wide.addEventListener) { wide.addEventListener('change', syncWide); }
+  // UX Wave 4: the page leaves room under the cart for the pay sheet fixed at the bottom of a phone, whatever its height.
+  if (paybar && window.ResizeObserver) {
+    new ResizeObserver(function () {
+      var fixed = getComputedStyle(paybar).position === 'fixed' && !paybar.classList.contains('is-empty');
+      document.documentElement.style.setProperty('--pos-paybar-h', fixed ? paybar.offsetHeight + 'px' : '0px');
+    }).observe(paybar);
+  }
+
   restored.forEach(function (row) {
     var item = byId[String(row.id)];
     var unit = row.unit ? unitById[String(row.unit)] : null;
@@ -367,4 +576,9 @@
   });
   render();
   scan.focus();
+  // camera_scan.js (deferred, after this file) moves the field into its wrapper, and a moved field loses the focus:
+  // once every deferred script has run, the field takes it back, so the next customer's first scan lands in it.
+  document.addEventListener('DOMContentLoaded', function () {
+    if (!layer && (!document.activeElement || document.activeElement === document.body)) { scan.focus(); }
+  });
 })();

@@ -22,5 +22,5 @@
     <span class="pb-actions">{% if not full %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="q" value="{{ query }}"><input type="hidden" name="item" value="{{ item.pk }}"><button class="op-primary" type="submit" name="action" value="add" data-pos-button-add="{{ item.pk }}">{{ words.add }}</button></form>{% endif %}</span></li>{% endfor %}</ul>
   {% else %}<p class="op-empty">{{ words.nothing }}</p>{% endif %}
 </section>
-<link rel="stylesheet" href="{% static 'hesba/css/pos_quick.css' %}?v=an8-1">
+<link rel="stylesheet" href="{% static 'hesba/css/pos_quick.css' %}?v=w4-2">
 {% endblock %}

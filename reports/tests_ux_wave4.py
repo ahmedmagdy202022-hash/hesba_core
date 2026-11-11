@@ -139,11 +139,14 @@ class PhoneHeaderAndTabBarCssTests(SimpleTestCase):
         self.assertIn("border-radius:var(--hs-tabbar-radius);background:var(--hs-navy)", phone)
         self.assertIn(".hs-main{padding-bottom:calc(var(--hs-tabbar-clear)", phone)
         self.assertIn("(prefers-reduced-motion: no-preference)", phone)
-        # the till's pay bar reaches the bottom edge and the bar rides on it; forms' save rows stop above it
-        self.assertIn(".pos-paybar{bottom:0;padding-bottom:calc(var(--hs-tabbar-space)", read_static("hesba/css/pos.css"))
+        # the till (UX Wave 4, part 2) is a selling mode with no tab bar: its pay sheet sits on the bottom edge itself;
+        # forms' save rows stop above the bar
+        till = read_static("hesba/css/pos.css")
+        self.assertIn("body.hs-till .hs-topbar,body.hs-till .hs-tabbar{display:none}", till)
+        self.assertIn("calc(var(--hs-space-4) + env(safe-area-inset-bottom))", till[till.index("/* The pay sheet: fixed to the bottom edge"):])
         self.assertIn("bottom:calc(var(--hs-tabbar-clear) + env(safe-area-inset-bottom))", read_static("hesba/css/lists.css"))
         self.assertIn("bottom:calc(var(--hs-tabbar-clear) + env(safe-area-inset-bottom,0px))", read_static("hesba/css/form_controls.css"))
-        self.assertNotIn("--hs-tabbar-height) + env", read_static("hesba/css/pos.css"))
+        self.assertNotIn("--hs-tabbar-height) + env", till)
 
     def test_demo_feedback_moves_only_on_app_pages(self):
         css = read_static("hesba/css/demo_feedback.css")
@@ -180,7 +183,7 @@ class StylesheetVersionTests(SimpleTestCase):
             "master_data/popup_base.html": ("master_data.css' %}?v=w4-1",),
             "reports/dashboard.html": ("dashboard.css' %}?v=w4-2", "shell.css' %}?v=w4-1"),
             "demo/begin.html": ("shell.css' %}?v=w4-1",),
-            "sales/pos.html": ("pos.css' %}?v=w4-1",),
+            "sales/pos.html": ("pos.css' %}?v=w4-2",),
             "settings_core/base.html": ("settings.css' %}?v=st-5",),
             "partials/demo_feedback.html": ("demo_feedback.css' %}?v=demo-feedback-7",),
         }
