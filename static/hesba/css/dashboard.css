@@ -168,25 +168,25 @@
 /* ---------- alerts + actions ---------- */
 .dash-split{display:grid;grid-template-columns:minmax(0,57fr) minmax(0,43fr);gap:18px;align-items:start}
 
-.dash-alerts{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
-.dash-alert{
-  display:flex;align-items:center;gap:12px;padding:12px 14px;
-  border:1px solid transparent;border-radius:var(--radius-sm);
-  background:var(--surface-soft);border-inline-start-width:4px;
-}
-.dash-alert.is-urgent{border-inline-start-color:var(--risk)}
-.dash-alert.is-soon{border-inline-start-color:var(--due-soon)}
-.dash-alert.is-watch{border-inline-start-color:var(--watch)}
-.dash-alert__badge{
-  font-size:12px;font-weight:700;padding:4px 9px;border-radius:999px;white-space:nowrap;
-  background:var(--surface);border:1px solid var(--border);color:var(--navy-soft);
-}
-.dash-alert.is-urgent .dash-alert__badge{color:var(--risk);border-color:var(--hs-danger-line)}
-.dash-alert.is-soon .dash-alert__badge{color:var(--due-soon);border-color:var(--hs-caution-line)}
-.dash-alert.is-watch .dash-alert__badge{color:var(--watch);border-color:var(--hs-warning-line)}
+/* UX Wave 4: what needs attention reads as a short list: a tinted chip carries the severity's colour, the words say it,
+   and a row that leads somewhere is one link with a chevron. No coloured boxes. */
+.dash-alerts{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.dash-alert + .dash-alert{border-top:1px solid var(--hs-line)}
+.dash-alert__row{display:flex;align-items:center;gap:12px;min-height:60px;padding:8px 0;color:inherit;text-decoration:none}
+.dash-alert__icon .hs-icon{width:19px;height:19px}
+.dash-alert.is-soon .dash-alert__icon{--tone:var(--hs-caution);--tone-wash:var(--hs-gold-wash)}
+.dash-alert__badge{font-size:12px;font-weight:700;white-space:nowrap}
+.dash-alert__badge::after{content:" ·";color:var(--muted);font-weight:400}
+.dash-alert.is-urgent .dash-alert__badge{color:var(--risk)}
+.dash-alert.is-soon .dash-alert__badge{color:var(--due-soon)}
+.dash-alert.is-watch .dash-alert__badge{color:var(--watch)}
 .dash-alert__body{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
-.dash-alert__title{font-size:13.5px;font-weight:700;color:var(--navy)}
-.dash-alert__detail{font-size:12px;color:var(--muted)}
+.dash-alert__title{font-size:14px;font-weight:700;color:var(--navy);line-height:1.45}
+.dash-alert__detail{font-size:12px;color:var(--muted);line-height:1.5}
+.dash-alert__go{width:18px;height:18px;flex:none;color:var(--muted)}
+html[dir="ltr"] .dash-alert__go{transform:scaleX(-1)}
+a.dash-alert__row:hover .dash-alert__title{color:var(--teal-deep)}
+a.dash-alert__row:focus-visible{border-radius:var(--hs-radius-md)}
 .dash-alert__amount{font-size:14px;font-weight:700;color:var(--navy);font-variant-numeric:tabular-nums;white-space:nowrap}
 .dash-alert__amount small{font-size:12px;color:var(--muted);font-weight:400;margin-inline-start:3px}
 
@@ -243,7 +243,6 @@
   .dash-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .dash-split{grid-template-columns:minmax(0,1fr)}
   .dash-steps{grid-template-columns:minmax(0,1fr)}
-  .dash-alert{flex-wrap:wrap}
 }
 
 @media(max-width:370px){
@@ -351,12 +350,8 @@
 .dash-metric:hover{border-color:var(--border-strong);box-shadow:var(--shadow)}
 .dash-metric__head{display:flex;align-items:center;gap:8px;min-width:0}
 .dash-metric__label{min-width:0}
-.dash-metric__icon{flex:none;width:32px;height:32px;border-radius:10px;display:grid;place-items:center;background:var(--teal-wash);color:var(--teal-deep)}
-.dash-metric__icon svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.dash-metric__icon--gross_profit,.dash-metric__icon--net_profit{background:var(--hs-success-wash);color:var(--hs-success)}
-.dash-metric__icon--expenses,.dash-metric__icon--payables{background:var(--hs-danger-wash);color:var(--hs-danger)}
-.dash-metric__icon--cash{background:var(--hs-gold-wash);color:var(--hs-gold)}
-.dash-metric__icon--receivables{background:var(--hs-info-wash);color:var(--hs-info)}
+/* UX Wave 4: the metric icon is the shared tinted chip (.hs-ichip--sm); its tone is picked in the template. */
+.dash-metric__icon .hs-icon{width:18px;height:18px}
 .dash-metric__value{font-size:clamp(17px,13cqi,26px);white-space:nowrap;overflow-wrap:normal;line-height:1.2}
 .dash-spark{display:block;width:100%;height:32px;margin-top:2px}
 .dash-spark polyline{fill:none;stroke:var(--hs-chart-1);stroke-width:2;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke}
@@ -426,8 +421,6 @@
 /* ---------- quick actions ---------- */
 .dash-action{flex-direction:column;gap:4px}
 .dash-action__hint{font-size:12px;font-weight:400;line-height:1.5;opacity:.9}
-.dash-alert__title{color:var(--navy)}
-a.dash-alert__title:hover{color:var(--teal-deep);text-decoration:underline}
 .dash-section--alerts:focus{outline:none;box-shadow:var(--hs-focus-ring)}
 
 @media (max-width:1100px){
@@ -451,16 +444,18 @@ a.dash-alert__title:hover{color:var(--teal-deep);text-decoration:underline}
 /* ---------- ACT-PROFILE-002: the activity's own panel ---------- */
 .dash-activity__open{font-size:13px;font-weight:700;color:var(--teal-deep)}
 .dash-activity__tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
-.dash-atile{container-type:inline-size;display:flex;flex-direction:column;gap:4px;min-width:0;padding:14px 16px;border:1px solid var(--border);border-radius:var(--hs-radius-lg);background:var(--surface-soft);border-inline-start:4px solid var(--border-strong)}
-.dash-atile.is-lead{background:var(--teal-wash);border-inline-start-color:var(--hs-teal)}
-.dash-atile.is-good{border-inline-start-color:var(--hs-success)}
-.dash-atile.is-bad{border-inline-start-color:var(--risk);background:var(--hs-danger-wash)}
+/* UX Wave 4: calm tiles on the card's wash, no coloured edge or box: the tone colours the figure and a small dot. */
+.dash-atile{--tone:var(--navy);container-type:inline-size;display:flex;flex-direction:column;gap:4px;min-width:0;padding:14px 16px;border:1px solid transparent;border-radius:var(--hs-radius-lg);background:var(--surface-soft)}
+.dash-atile.is-lead{--tone:var(--teal-deep)}
+.dash-atile.is-good{--tone:var(--hs-success)}
+.dash-atile.is-bad{--tone:var(--risk)}
 /* DASH-FIT: the options chosen in setup, each tile a link to its screen */
-.dash-atile.is-warn{border-inline-start-color:var(--due-soon)}
+.dash-atile.is-warn{--tone:var(--due-soon)}
+.dash-atile:is(.is-lead,.is-good,.is-bad,.is-warn) .dash-atile__label::before{content:"";display:inline-block;width:8px;height:8px;margin-inline-end:6px;border-radius:50%;background:var(--tone);vertical-align:middle}
 a.dash-atile{color:inherit;text-decoration:none}
 a.dash-atile:hover,a.dash-atile:focus-visible{background:var(--teal-wash)}
 .dash-atile__label{font-size:12.5px;color:var(--muted)}
-.dash-atile__value{font-family:var(--hs-font-head);font-size:clamp(16px,12cqi,24px);font-weight:700;color:var(--navy);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.dash-atile__value{font-family:var(--hs-font-head);font-size:clamp(16px,12cqi,24px);font-weight:700;color:var(--tone);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .dash-atile__value small{margin-inline-start:4px;font-family:var(--hs-font-body);font-size:12px;font-weight:400;color:var(--muted)}
 .dash-atile__sub{font-size:12px;color:var(--navy-soft);line-height:1.5}
 .dash-demo{display:flex;align-items:center;gap:6px;padding:4px 6px 4px 10px;border:1px dashed var(--hs-gold);border-radius:12px;background:var(--hs-gold-wash)}
@@ -498,11 +493,14 @@ a.dash-atile:hover,a.dash-atile:focus-visible{background:var(--teal-wash)}
 /* UX Wave 1: the everyday shortcuts under the hero, today's numbers inside the period section, a calm trend,
    no text under 12px and every control 44px. */
 .dash-top-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--hs-space-3);margin:0 0 var(--hs-space-5)}
-.dash-top-action{display:flex;align-items:center;justify-content:center;gap:var(--hs-space-2);min-height:var(--hs-control-height-lg);padding:var(--hs-space-2) var(--hs-space-4);border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);background:var(--hs-surface);color:var(--hs-navy);font-weight:var(--hs-weight-bold);text-decoration:none;text-align:center}
-.dash-top-action .hs-icon{width:20px;height:20px;color:var(--hs-teal-deep)}
+/* UX Wave 4: each shortcut leads with the shared tinted chip; the first stays the teal one. */
+.dash-top-action{display:flex;align-items:center;justify-content:flex-start;gap:var(--hs-space-3);min-height:var(--hs-control-height-lg);padding:var(--hs-space-2) var(--hs-space-3);border:var(--hs-card-border);border-radius:var(--hs-card-radius-sm);background:var(--hs-card-bg);box-shadow:var(--hs-card-shadow);color:var(--hs-navy);font-weight:var(--hs-weight-bold);text-decoration:none;text-align:start}
+.dash-top-action__chip{--hs-chip-size:36px;--hs-chip-radius:12px}
+.dash-top-action__chip .hs-icon{width:20px;height:20px}
+.dash-top-action__label{min-width:0}
 .dash-top-action.is-primary{border-color:var(--hs-teal);background:var(--hs-teal);color:var(--hs-on-teal)}
-.dash-top-action.is-primary .hs-icon{color:var(--hs-on-teal)}
-.dash-top-action:hover{border-color:var(--hs-teal)}
+.dash-top-action.is-primary .dash-top-action__chip{--tone:var(--hs-on-teal);--tone-wash:color-mix(in srgb,var(--hs-surface) 28%,transparent)}
+.dash-top-action:hover{box-shadow:var(--hs-card-shadow-hover)}
 .dash-top-action:focus-visible{outline:none;box-shadow:var(--hs-focus-ring)}
 @media (max-width:767px){.dash-top-actions{grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--hs-space-2)}}
 .dash-today{margin:var(--hs-space-4) 0}
@@ -516,18 +514,103 @@ a.dash-atile:hover,a.dash-atile:focus-visible{background:var(--teal-wash)}
 .dash-delta small,.dash-hstat__delta small,.dash-range,.dash-glass__title small,.dash-hstat__label,.dash-ring__label,.dash-donut__legend small,.dash-list h3 small{font-size:12px}
 .dash-lang{min-height:var(--hs-control-height)}
 .dash-table-view summary{display:flex;align-items:center;min-height:var(--hs-control-height);cursor:pointer}
-.dash-alert__title{display:flex;align-items:center;min-height:var(--hs-control-height)}
 
-/* UX Wave 4: on a phone the dashboard's header is the navy band under the navy top bar, first in the column
-   (the demo line follows it). The dashboard hero itself is redesigned in its own PR. */
+/* UX Wave 4 (part 2): the dashboard on a phone, the first screen everyone sees. Top to bottom: the navy band with a calm
+   greeting line and the bell; the money card inside the band (.dash-phero, phones only: the desktop hero is hidden there);
+   the shortcuts as tinted chips; the demo line and «جرّب دلوقتي» (demo only, compact); the activity's own tiles; what needs
+   attention; then the period's figures as two small cards a row. Wider screens keep their layout; these blocks are hidden
+   there. Screen only: a printed dashboard is the desktop one. Every value comes from a token. */
+.dash-defs{position:absolute}
+.dash-hello,.dash-phero,.dash-metric--phone{display:none}
+.dash-main > .fr-tour{border:var(--hs-card-border);border-radius:var(--hs-card-radius);background:var(--hs-card-bg);box-shadow:var(--hs-card-shadow)}
+.dash-main > .fr-tour .fr-step{border-color:transparent;background:var(--hs-page)}
+
 @media screen and (max-width:700px){
-  .dash-shell{padding:0 var(--hs-gutter) 28px}
-  .dash-header{order:-1;margin:0 calc(-1 * var(--hs-gutter));padding:var(--hs-space-1) var(--hs-gutter) var(--hs-space-5);border:0;border-radius:0 0 var(--hs-band-radius) var(--hs-band-radius);background:var(--hs-navy);box-shadow:none;color:var(--hs-on-navy)}
-  .dash-screen-title{color:var(--hs-on-navy);font-size:var(--hs-text-xl)}
-  .dash-clock,.dash-clock__date{color:var(--hs-on-navy-muted)}
-  .dash-clock__time{color:var(--hs-on-navy)}
-  .dash-header .dash-lang,.dash-header .dash-icon-button{border-color:transparent;background:var(--hs-on-navy-wash);color:var(--hs-on-navy)}
-  .dash-header .dash-bell{border-color:var(--hs-on-navy)}
-  .dash-header .dash-bell-dot{border-color:var(--hs-navy)}
+  .dash-shell{padding:0 var(--hs-gutter) 28px;gap:var(--hs-space-3)}
+  .dash-main{gap:var(--hs-space-5)}
+
+  /* The band: date · business on one muted line, the greeting under it, the bell at the edge. No clock row. */
+  .dash-header{order:-1;flex-wrap:nowrap;align-items:flex-start;gap:var(--hs-space-3);margin:0 calc(-1 * var(--hs-gutter));padding:var(--hs-space-1) var(--hs-gutter) var(--hs-space-5);border:0;border-radius:0 0 var(--hs-band-radius) var(--hs-band-radius);background:var(--hs-navy);box-shadow:none;color:var(--hs-on-navy)}
+  .dash-header__lead{flex:1;min-width:0;display:block}
+  .dash-header__trail{flex:none;flex-wrap:nowrap}
+  .dash-screen-title{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+  .dash-clock{display:none}
+  .dash-hello{display:flex;flex-direction:column;gap:2px;margin:0;min-width:0}
+  .dash-hello__meta{display:flex;min-width:0;font-size:var(--hs-text-sm);line-height:1.5;color:var(--hs-on-navy-muted);white-space:nowrap}
+  .dash-hello__date{flex:none}
+  .dash-hello__client{min-width:0;overflow:hidden;text-overflow:ellipsis}
+  .dash-hello__client::before{content:"·";margin-inline:6px}
+  .dash-hello__greet{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;font-family:var(--hs-font-head);font-size:var(--hs-text-xl);font-weight:var(--hs-weight-bold);line-height:1.4;color:var(--hs-on-navy);overflow-wrap:anywhere}
+  .dash-header .dash-icon-button{width:var(--hs-control-height);height:var(--hs-control-height);border-color:transparent;border-radius:var(--hs-radius-lg);background:var(--hs-on-navy-wash);color:var(--hs-on-navy)}
+  .dash-header .dash-icon-button[aria-expanded="true"]{background:var(--hs-on-navy-wash-strong)}
+  .dash-header .dash-bell-icon{stroke:currentColor}
+  .dash-header .dash-bell-count{top:-4px;inset-inline-end:-4px;border-color:var(--hs-navy)}
   .dash-header > div :focus-visible{box-shadow:var(--hs-focus-ring-on-navy)}
+  .dash-header .dash-bell-panel{color:var(--hs-ink);text-align:start}  /* white on navy must not leak into the white panel */
+
+  /* The band continues under the head (an entity bar, then the money card) and its rounded foot moves to the last part. */
+  .dash-shell:has(> .dash-main > :is(.dash-phero,.hs-entities)) .dash-header{border-radius:0;padding-bottom:var(--hs-space-3)}
+  .dash-main > .hs-entities{order:-6;margin:calc(-1 * var(--hs-space-3)) calc(-1 * var(--hs-gutter)) 0;padding:var(--hs-space-1) var(--hs-gutter) var(--hs-space-3);border:0;border-radius:0;background:var(--hs-navy);box-shadow:none}
+  .dash-main:not(:has(> .dash-phero)) > .hs-entities{border-radius:0 0 var(--hs-band-radius) var(--hs-band-radius);padding-bottom:var(--hs-space-5)}
+  .dash-main > .hs-entities .hs-entities__label{color:var(--hs-on-navy-muted)}
+  .dash-main > .hs-entities .hs-entities__tab:not(.is-current){color:var(--hs-on-navy)}
+  .dash-main > .hs-entities .hs-entities__tab.is-current{background:var(--hs-teal);color:var(--hs-on-teal)}
+  .dash-main > .hs-entities .hs-entities__tab:hover{background:var(--hs-on-navy-wash)}
+  .dash-main > .hs-entities :focus-visible{box-shadow:var(--hs-focus-ring-on-navy)}
+
+  /* The money card: a translucent white surface on the navy, the amount large, a small trend line, chips under it. */
+  .dash-hero{display:none}
+  .dash-phero{display:block;order:-5;margin:calc(-1 * var(--hs-space-3)) calc(-1 * var(--hs-gutter)) 0;padding:0 var(--hs-gutter) var(--hs-space-6);border-radius:0 0 var(--hs-band-radius) var(--hs-band-radius);background:var(--hs-navy);color:var(--hs-on-navy)}
+  .dash-main > .hs-entities + .dash-phero{margin-top:calc(-1 * var(--hs-space-5))}
+  .dash-phero__card{display:flex;flex-direction:column;gap:var(--hs-space-3);padding:var(--hs-space-4);border:1px solid var(--hs-on-navy-line);border-radius:var(--hs-card-radius);background:var(--hs-on-navy-wash)}
+  .dash-phero__top{display:flex;align-items:flex-end;justify-content:space-between;gap:var(--hs-space-3)}
+  .dash-phero__figure{flex:1 0 auto;max-width:calc(100% - 64px - var(--hs-space-3));min-width:0;display:flex;flex-direction:column;margin:0;line-height:1.25}
+  .dash-phero__label{font-size:var(--hs-text-sm);color:var(--hs-on-navy-muted)}
+  .dash-phero__amount{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:6px;font-size:clamp(30px,9.5vw,38px);font-weight:var(--hs-weight-bold);font-variant-numeric:tabular-nums;letter-spacing:-.5px;line-height:1.2;color:var(--hs-on-navy)}
+  .dash-phero__amount.is-long{font-size:clamp(26px,8vw,32px)}
+  .dash-phero__amount.is-xlong{font-size:24px}
+  .dash-phero__amount.is-zero{color:var(--hs-on-navy-muted)}
+  .dash-phero__amount bdi{white-space:nowrap}
+  .dash-phero__amount small{font-size:var(--hs-text-md);font-weight:var(--hs-weight-regular);letter-spacing:0;color:var(--hs-on-navy-muted)}
+  .dash-phero__spark{flex:0 1 112px;min-width:64px;height:50px;overflow:visible}
+  .dash-phero__area{fill:color-mix(in srgb,var(--hs-teal) 20%,transparent)}
+  .dash-phero__line{fill:none;stroke:var(--hs-teal);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+  .dash-phero__dot{fill:var(--hs-gold-bright);stroke:var(--hs-navy);stroke-width:2;vector-effect:non-scaling-stroke}
+  .dash-phero__chips{display:flex;flex-wrap:wrap;gap:var(--hs-space-2);margin:0;padding:0;list-style:none}
+  .dash-phero__chip{padding:4px 10px;border-radius:var(--hs-radius-pill);background:var(--hs-on-navy-wash);color:var(--hs-on-navy);font-size:var(--hs-text-xs);font-weight:var(--hs-weight-semibold);line-height:1.5}
+  .dash-phero__chip.is-accent{background:color-mix(in srgb,var(--hs-gold-bright) 16%,transparent);color:var(--hs-gold-bright);font-weight:var(--hs-weight-bold)}
+  .dash-phero__chip.is-good{color:var(--hs-success-line)}
+  .dash-phero__chip.is-bad{color:var(--hs-danger-line)}
+  .dash-phero__note{margin:0;font-size:var(--hs-text-sm);color:var(--hs-on-navy-muted)}
+
+  /* Shortcuts: a row of tinted squircles with the label under each; the first (selling) is the solid teal one. */
+  .dash-top-actions{order:-4;display:flex;gap:var(--hs-space-2);margin:0}
+  .dash-top-action{flex:1 1 0;min-width:0;flex-direction:column;justify-content:flex-start;align-items:center;gap:var(--hs-space-2);min-height:0;padding:0;border:0;border-radius:var(--hs-radius-lg);background:none;box-shadow:none;color:var(--hs-ink);font-size:var(--hs-text-sm);font-weight:var(--hs-weight-semibold);line-height:1.35;text-align:center}
+  .dash-top-action:hover{box-shadow:none}
+  .dash-top-action.is-primary{background:none;color:var(--hs-ink)}
+  .dash-top-action__chip{--hs-chip-size:60px;--hs-chip-radius:20px}
+  .dash-top-action__chip .hs-icon{width:26px;height:26px}
+  .dash-top-action.is-primary .dash-top-action__chip{--tone:var(--hs-on-teal);--tone-wash:var(--hs-teal)}
+  .dash-top-action__label{overflow-wrap:anywhere}
+
+  /* Demo only, after the money and the shortcuts: the demo line, then a compact «جرّب دلوقتي». */
+  .dash-main > .fr-demobar{order:-3}
+  .dash-main > .fr-tour{order:-3;gap:var(--hs-space-2);padding:var(--hs-space-3) var(--hs-space-4) var(--hs-space-4)}
+  .dash-main > .fr-tour .fr-tour__lead{font-size:var(--hs-text-sm)}
+  .dash-main > .fr-tour .fr-steps{gap:var(--hs-space-2)}
+  .dash-main > .fr-tour .fr-step{min-height:var(--hs-control-height-lg);padding:var(--hs-space-2) var(--hs-space-3)}
+
+  /* The day: the activity's tiles two a row, then what needs attention (a short list), then the period's cards. */
+  .dash-main > .dash-activity{order:-2}
+  .dash-split{display:contents}
+  .dash-section--alerts{order:-1}
+  .dash-activity__tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--hs-space-3)}
+  .dash-atile{padding:var(--hs-space-3)}
+  .dash-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .dash-metric{padding:var(--hs-space-3)}
+  .dash-metric__head{flex-direction:column;align-items:flex-start;gap:6px}
+  .dash-metric__value{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:4px;font-size:clamp(16px,12cqi,22px)}
+  .dash-metric__value small{margin-inline-start:0}
+  .dash-metric--phone{display:flex;grid-column:1 / -1}
+  .dash-section{padding:var(--hs-space-4)}
 }

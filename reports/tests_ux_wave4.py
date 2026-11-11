@@ -178,7 +178,7 @@ class StylesheetVersionTests(SimpleTestCase):
             "operations/base.html": ("operations.css' %}?v=w4-1", "shell.css' %}?v=w4-1"),
             "master_data/base.html": ("master_data.css' %}?v=w4-1", "shell.css' %}?v=w4-1"),
             "master_data/popup_base.html": ("master_data.css' %}?v=w4-1",),
-            "reports/dashboard.html": ("dashboard.css' %}?v=w4-1", "shell.css' %}?v=w4-1"),
+            "reports/dashboard.html": ("dashboard.css' %}?v=w4-2", "shell.css' %}?v=w4-1"),
             "demo/begin.html": ("shell.css' %}?v=w4-1",),
             "sales/pos.html": ("pos.css' %}?v=w4-1",),
             "settings_core/base.html": ("settings.css' %}?v=st-5",),
