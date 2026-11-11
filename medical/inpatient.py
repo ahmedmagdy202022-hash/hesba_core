@@ -144,12 +144,6 @@ def can_setup(user):
     return user_has_permission(user, WRITE)
 
 
-def sees_board(user):
-    """For the menu."""
-
-    return can_see_board(user)
-
-
 # ---- the bed-day rule --------------------------------------------------------------
 
 
