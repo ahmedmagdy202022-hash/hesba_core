@@ -371,7 +371,7 @@ def stay(request, pk):
     moving = is_open and inpatient.can_manage_beds(user) and (request.GET.get("move") == "1" or (request.method == "POST" and request.POST.get("action") == "move"))
     free = []
     if moving:
-        free = [bed for bed in inpatient.free_beds() if bed.ward.entity_id == admission.entity_id]
+        free = [bed for bed in inpatient.free_beds() if inpatient.same_entity(bed.ward.entity_id, admission.entity_id)]
         for bed in free:
             bed.ward_name = bed.ward.display(lang)
     can_bill = user_has_permission(user, inpatient.BILL)

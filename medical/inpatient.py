@@ -310,6 +310,17 @@ def _selling_location(admission):
         return entity_scope.locations(Location.objects).filter(active=True, is_selling_location=True).order_by("-is_default", "pk").first()
 
 
+def same_entity(one, other):
+    """Whether two entity ids name the same entity: a record with none belongs to the main one (HG-034)."""
+
+    if one == other:
+        return True
+    from entities.services import main_entity
+
+    main = main_entity().pk
+    return (one or main) == (other or main)
+
+
 # ---- helpers -----------------------------------------------------------------------
 
 
@@ -506,7 +517,7 @@ def move(admission, bed, user, *, when=None, lang="ar"):
     if bed is not None and bed.pk == admission.bed_id:
         raise ValidationError(words["same_bed"])
     bed = _free_bed(bed, words, exclude=admission)
-    if bed.ward.entity_id != admission.entity_id:
+    if not same_entity(bed.ward.entity_id, admission.entity_id):
         raise ValidationError(words["other_entity"])
     when = _moment(when, words, floor=admission.bed_since)
     written = _write_bed_days(admission, when, closing=False, user=user)

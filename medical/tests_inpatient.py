@@ -975,6 +975,22 @@ class EntityScopeTests(Hospital):
         deposit = inpatient.take_advance(admission, self.branch_cash, "300", self.owner)
         self.assertEqual((deposit.payment.cashbox, cash_balance(self.branch_cash), cash_balance(self.cashbox)), (self.branch_cash, D("300.00"), D("0")))
 
+    def test_a_ward_made_before_entities_is_the_main_entitys(self):
+        from entities.current import working_in
+
+        from .models import Ward
+
+        self.assertIsNone(self.ward.entity)  # made in the whole-group view: no entity, so the main one's (HG-034)
+        with working_in(self.main):
+            main_ward = inpatient.save_ward({"name_ar": "جناح جديد"}, self.owner)
+            main_bed = inpatient.save_bed(main_ward, {"code": "M-1", "daily_service": self.room_day}, self.owner)
+            self.assertEqual(set(inpatient.scoped_wards()), {self.ward, self.icu, main_ward})
+        self.assertEqual(Ward.objects.get(pk=main_ward.pk).entity, self.main)
+        admission = self.admit()  # in bed 101, whose ward has no entity
+        inpatient.move(admission, main_bed, self.owner)  # both are the main entity: the move goes through
+        admission.refresh_from_db()
+        self.assertEqual(admission.bed, main_bed)
+
     def test_another_entitys_stay_answers_404(self):
         from entities.current import SESSION_KEY
         from entities.models import EntityMembership
