@@ -391,11 +391,21 @@ CANCEL_REQUEST_HANDLED = "appointment_cancel_request_handled"
 REQUEST_ANSWERED_BY = ("move_appointment", "change_appointment", "appointment_status", CANCEL_REQUEST_HANDLED)
 
 
-def link_alive(appointment, now=None):
-    """The patient's link works while the appointment is still ahead and open (booked or confirmed). Anything else
-    (cancelled, no-show, arrived, done, already past, or gone) is a dead link."""
+def patient_token(appointment):
+    """The signed token of the patient's link: the appointment, bound to the patient it is booked for now."""
 
-    return (appointment is not None and appointment.status in (AppointmentStatus.BOOKED, AppointmentStatus.CONFIRMED)
+    from printing.share import make_token
+
+    return make_token("appointment", appointment.pk, owner=appointment.customer_id)
+
+
+def link_alive(appointment, owner, now=None):
+    """The patient's link works while the appointment is still ahead and open (booked or confirmed) and still belongs
+    to the patient the link was made for (``owner``, from the token). Anything else (cancelled, no-show, arrived, done,
+    already past, gone, or moved to another patient since the link went out) is a dead link."""
+
+    return (appointment is not None and owner is not None and appointment.customer_id == owner
+            and appointment.status in (AppointmentStatus.BOOKED, AppointmentStatus.CONFIRMED)
             and appointment.starts_at > (now or timezone.now()))
 
 
@@ -422,7 +432,7 @@ def pending_cancel_requests(ids):
 
 
 @transaction.atomic
-def patient_confirm(pk):
+def patient_confirm(pk, owner):
     """The patient taps «confirm». Returns (appointment, changed), or None for a dead link. Booked becomes confirmed
     through the ordinary status step (one audit row, nobody's account); an appointment already confirmed, or with a cancellation
     request waiting, changes nothing. No money, stock or deposit is touched."""
@@ -430,7 +440,7 @@ def patient_confirm(pk):
     from .booking import system_user
 
     appointment = Appointment.objects.select_for_update().filter(pk=pk).first()
-    if not link_alive(appointment):
+    if not link_alive(appointment, owner):
         return None
     if appointment.status != AppointmentStatus.BOOKED or pk in pending_cancel_requests([pk]):
         return appointment, False
@@ -438,12 +448,12 @@ def patient_confirm(pk):
 
 
 @transaction.atomic
-def patient_request_cancel(pk):
+def patient_request_cancel(pk, owner):
     """The patient taps «ask to cancel». Records one request for reception and returns (appointment, changed), or None
     for a dead link. The appointment keeps its status, its time and its deposit; reception decides. Asking twice records once."""
 
     appointment = Appointment.objects.select_for_update().filter(pk=pk).first()
-    if not link_alive(appointment):
+    if not link_alive(appointment, owner):
         return None
     if pk in pending_cancel_requests([pk]):
         return appointment, False

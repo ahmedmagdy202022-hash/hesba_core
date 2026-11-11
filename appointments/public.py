@@ -42,11 +42,17 @@ def _expired(request):
     return expired_page(request, _lang(request))
 
 
-def _pk_of(token):
-    from printing.share import read_token
+def _target(token):
+    """(the appointment's id, the patient the link was made for), or None when the token is not an appointment's or
+    names no patient. The patient is checked against the appointment on every request (``services.link_alive``): an
+    appointment moved to someone else must not open for the person who held the old link."""
 
-    found = read_token(token)
-    return found[1] if found is not None and found[0] == "appointment" else None
+    from printing.share import read_token_data
+
+    data = read_token_data(token)
+    if data is None or data["k"] != "appointment" or not isinstance(data.get("o"), int):
+        return None
+    return data["id"], data["o"]
 
 
 WORDS = {
@@ -106,15 +112,16 @@ def _context(request, appointment, lang):
 def page(request, pk):
     """GET (called by the share dispatcher): the patient's page, or the expired page for a dead link."""
 
+    target = _target(request.resolver_match.kwargs.get("token", "") if request.resolver_match else "")
     appointment = Appointment.objects.select_related("service", "entity").filter(pk=pk).first()
-    if not services.link_alive(appointment):
+    if target is None or target[0] != pk or not services.link_alive(appointment, target[1]):
         return _expired(request)
     return _private(render(request, "appointments/confirm_public.html", _context(request, appointment, _lang(request))))
 
 
 def _answer(request, token, action):
-    pk = _pk_of(token)
-    result = action(pk) if pk is not None else None
+    target = _target(token)
+    result = action(*target) if target is not None else None
     if result is None:
         return _expired(request)
     return _private(HttpResponseRedirect(f"{reverse('share_document', args=[token])}?lang={_lang(request)}", status=303))

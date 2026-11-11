@@ -394,6 +394,23 @@ class AppointmentReminderLinkTests(ClinicSetup):
         self.assertNotEqual(carried, first)
         self.assertIn("/share/", carried)
 
+    def test_the_link_is_bound_to_the_patient_and_follows_the_appointment_to_a_new_one(self):
+        from printing.share import read_token_data
+
+        def token_of(text):
+            link = next(word for word in text.split() if word.startswith("http"))
+            return read_token_data(link.split("/share/")[1].split("/")[0])
+
+        appointment = self.book()
+        services.build()
+        first = token_of(OutboxMessage.objects.get().text)
+        self.assertEqual((first["k"], first["id"], first["o"]), ("appointment", appointment.pk, appointment.customer_id))
+        other = make_customer(customer_code="M3-OTHER", name="مريض تاني", phone="01055550000")
+        Appointment.objects.filter(pk=appointment.pk).update(customer=other)
+        services.build()  # still waiting, the same day: the old patient's link must not be kept
+        message = OutboxMessage.objects.get()
+        self.assertEqual((token_of(message.text)["o"], message.name), (other.pk, other.name))
+
     def test_an_edited_template_with_its_own_link_place_gets_the_bare_link(self):
         self.turn_on(MessageKind.APPOINTMENT)
         services.save_template(MessageKind.APPOINTMENT, {"text": "أهلاً {name} {date} {time} {link}", "active": "1", "every_days": "1"}, self.owner)

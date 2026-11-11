@@ -222,7 +222,7 @@ def _appointments(today, company, currency):
             from printing.share import public_url
 
             found["localised"] = True
-            found["url"] = public_url("appointment", appointment.pk, lang) or ""  # no PUBLIC_BASE_URL: no link, the plain reminder
+            found["url"] = public_url("appointment", appointment.pk, lang, owner=appointment.customer_id) or ""  # no PUBLIC_BASE_URL: no link, the plain reminder
         yield found
 
 
@@ -449,7 +449,7 @@ def _link_kept(text, url):
     waiting row (the outbox page runs the gathering each time it opens). Within a day the message keeps its link; when it
     is carried to a new day it takes a fresh one, since share links expire."""
 
-    from printing.share import read_token
+    from printing.share import read_token_data as read_token  # the whole content: the object and the person it is bound to
 
     head, mark, tail = url.partition("/share/")
     token, slash, rest = tail.partition("/")

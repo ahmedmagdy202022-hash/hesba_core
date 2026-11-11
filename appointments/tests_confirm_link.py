@@ -63,11 +63,11 @@ class LinkSetup(TestCase):
             starts_at=at(day or today() + timedelta(days=1), hour), status=status, created_by=self.owner, **extra)
 
     def url(self, appointment=None, lang=None):
-        link = reverse("share_document", args=[make_token("appointment", (appointment or self.appointment).pk)])
+        link = reverse("share_document", args=[services.patient_token(appointment or self.appointment)])
         return f"{link}?lang={lang}" if lang else link
 
     def post(self, name, appointment=None, **extra):
-        token = make_token("appointment", (appointment or self.appointment).pk)
+        token = services.patient_token(appointment or self.appointment)
         return self.client.post(reverse(name, args=[token]), {"lang": "ar"}, **extra)
 
     def audit(self, action):
@@ -127,7 +127,7 @@ class ConfirmTests(LinkSetup):
     def test_confirming_moves_booked_to_confirmed_once_and_is_idempotent(self):
         first = self.post("share_appointment_confirm")
         self.assertEqual(first.status_code, 303)
-        self.assertEqual(first["Location"], f"{reverse('share_document', args=[make_token('appointment', self.appointment.pk)])}?lang=ar")
+        self.assertEqual(first["Location"], f"{reverse('share_document', args=[services.patient_token(self.appointment)])}?lang=ar")
         self.assertEqual(self.refresh(), AppointmentStatus.CONFIRMED)
         rows = self.audit("appointment_status")
         self.assertEqual(rows.count(), 1)
@@ -142,14 +142,14 @@ class ConfirmTests(LinkSetup):
         self.assertNotContains(page, "data-confirm-appointment")  # nothing left to confirm
 
     def test_confirm_is_post_only_so_a_link_preview_cannot_confirm(self):
-        token = make_token("appointment", self.appointment.pk)
+        token = services.patient_token(self.appointment)
         self.assertEqual(self.client.get(reverse("share_appointment_confirm", args=[token])).status_code, 405)
         self.assertEqual(self.client.get(reverse("share_appointment_cancel_request", args=[token])).status_code, 405)
         self.assertEqual(self.refresh(), AppointmentStatus.BOOKED)
 
     def test_the_posts_are_csrf_protected(self):
         strict = Client(enforce_csrf_checks=True)
-        token = make_token("appointment", self.appointment.pk)
+        token = services.patient_token(self.appointment)
         for name in ("share_appointment_confirm", "share_appointment_cancel_request"):
             self.assertEqual(strict.post(reverse(name, args=[token])).status_code, 403)
         page = strict.get(self.url())  # the page sets the cookie and carries the token the forms post with
@@ -298,13 +298,20 @@ class ReceptionFlagTests(LinkSetup):
 class DeadLinkTests(LinkSetup):
     def dead_tokens(self):
         yield "forged", "not-a-token"
-        yield "altered", make_token("appointment", self.appointment.pk)[:-3] + "xyz"
-        yield "missing appointment", make_token("appointment", 999999)
+        yield "altered", services.patient_token(self.appointment)[:-3] + "xyz"
+        yield "missing appointment", make_token("appointment", 999999, owner=self.appointment.customer_id)
         for status in (AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW, AppointmentStatus.ARRIVED, AppointmentStatus.DONE):
             gone = self.make(self.patient, 9, day=today() + timedelta(days=2), status=status)
-            yield status, make_token("appointment", gone.pk)
+            yield status, services.patient_token(gone)
         past = self.make(self.patient, 9, day=today() - timedelta(days=1))
-        yield "past", make_token("appointment", past.pk)
+        yield "past", services.patient_token(past)
+        # The link is bound to the patient it was sent to: it never opens an appointment that is someone else's now.
+        yield "no patient in the token", make_token("appointment", self.appointment.pk)
+        yield "another patient's token", make_token("appointment", self.appointment.pk, owner=self.other_patient.pk)
+        moved = self.make(self.patient, 10, day=today() + timedelta(days=2))
+        sent = services.patient_token(moved)  # sent to the first patient, then reception gave the slot to another
+        Appointment.objects.filter(pk=moved.pk).update(customer=self.other_patient)
+        yield "moved to another patient", sent
 
     def test_every_failure_is_the_same_expired_page_with_the_same_status_on_get_and_post(self):
         seen = set()
