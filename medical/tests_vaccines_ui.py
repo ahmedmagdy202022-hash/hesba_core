@@ -9,6 +9,7 @@ from decimal import Decimal as D
 from pathlib import Path
 
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 from django.test import TestCase, TransactionTestCase
@@ -576,3 +577,23 @@ class MakeMigrationsCleanTests(TestCase):
         from django.core.management import call_command
 
         call_command("makemigrations", "--check", "--dry-run", verbosity=0)
+
+
+class DemoSeedTests(TestCase):
+    """A vet demo built the way ``prepare_demo_templates`` builds one: two vaccines, four doses, one overdue and one due this week.
+    (No vet demo template exists yet; this pins what its data will hold.)"""
+
+    def test_the_vet_demo_has_vaccines_and_doses_with_one_overdue_and_one_due_this_week(self):
+        from settings_core.tests_demo_clinic import DemoClinicBookingTests
+
+        DemoClinicBookingTests("fill").fill("medical", "vet")
+        owner = get_user_model().objects.get(username="owner")
+        self.assertEqual(sorted(Vaccine.objects.values_list("name_ar", flat=True)), ["ثلاثي القطط", "سعار"])
+        self.assertEqual(Vaccination.objects.count(), 4)
+        result = vaccines.due_list(owner)
+        late = [row for row in result["rows"] if row["overdue"]]
+        week = [row for row in result["rows"] if 0 <= row["days"] <= vaccines.WEEK_DAYS]
+        self.assertEqual([(row["animal"].name, row["vaccine"].name_ar) for row in late], [("ريكس", "سعار")])
+        self.assertEqual([(row["animal"].name, row["vaccine"].name_ar) for row in week], [("بيلا", "ثلاثي القطط")])
+        self.assertEqual(SalesInvoice.objects.filter(vaccinations__isnull=False).count(), 0)  # nothing was billed
+        self.assertTrue(Vaccination.objects.filter(visit__isnull=False).exists())

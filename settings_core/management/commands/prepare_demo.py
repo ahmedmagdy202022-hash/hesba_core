@@ -1150,13 +1150,31 @@ class Command(BaseCommand):
         dog = vet.save_animal(owner_customer, {"name": "روكي", "species": "dog", "breed": "جيرمن شيبرد", "sex": "male",
                                                "date_of_birth": (today - timedelta(days=3 * 365)).isoformat(), "colour": "أسود وبني",
                                                "microchip": "956000012345678", "neutered": True}, owner)
-        vet.save_animal(owner_customer, {"name": "مشمش", "species": "cat", "breed": "شيرازي", "sex": "female",
+        cat = vet.save_animal(owner_customer, {"name": "مشمش", "species": "cat", "breed": "شيرازي", "sex": "female",
                                          "date_of_birth": (today - timedelta(days=300)).isoformat(), "allergies": "بنسلين"}, owner)
-        save_visit(owner_customer, {"animal": dog, "doctor": doctor, "visit_date": (today - timedelta(days=60)).isoformat(), "complaint": "تطعيم سنوي",
-                                    "weight": "31", "diagnosis": "حالة عامة جيدة", "treatment": "تطعيم سعار + تطعيم خماسي"}, owner)
+        yearly = save_visit(owner_customer, {"animal": dog, "doctor": doctor, "visit_date": (today - timedelta(days=60)).isoformat(), "complaint": "تطعيم سنوي",
+                                             "weight": "31", "diagnosis": "حالة عامة جيدة", "treatment": "تطعيم سعار + تطعيم خماسي"}, owner)
         save_visit(owner_customer, {"animal": dog, "doctor": doctor, "visit_date": (today - timedelta(days=5)).isoformat(), "complaint": "عرج في الرجل الشمال",
                                     "weight": "32", "diagnosis": "التواء بسيط", "treatment": "راحة 5 أيام ومسكن",
                                     "follow_up_date": (today + timedelta(days=5)).isoformat()}, owner)
+        self._vaccinations(master, doctor, owner, today, dog, cat, yearly)
+
+    def _vaccinations(self, master, doctor, owner, today, dog, cat, yearly):
+        """M7 (HG-090): two vaccines and four doses: the dog's rabies shot of the yearly visit, the kitten's first FVRCP, a second owner's
+        dog a week overdue for rabies and her cat due this week. Nothing is billed or posted."""
+
+        from master_data.models import Item
+        from medical import vaccines, vet
+
+        item = Item.objects.filter(item_name="تطعيم سنوي", is_stock_tracked=False).first()
+        rabies = vaccines.save_vaccine({"name_ar": "سعار", "name_en": "Rabies", "interval_days": "365", "item": item}, owner)
+        trio = vaccines.save_vaccine({"name_ar": "ثلاثي القطط", "name_en": "FVRCP", "species": "cat", "interval_days": "365"}, owner)
+        second = master["customers"][1]
+        rex = vet.save_animal(second, {"name": "ريكس", "species": "dog", "breed": "روت وايلر", "sex": "male", "date_of_birth": (today - timedelta(days=5 * 365)).isoformat()}, owner)
+        bella = vet.save_animal(second, {"name": "بيلا", "species": "cat", "breed": "سيامي", "sex": "female", "date_of_birth": (today - timedelta(days=4 * 365)).isoformat()}, owner)
+        for animal, vaccine, days_ago, visit in ((dog, rabies, 60, yearly), (cat, trio, 30, None), (rex, rabies, 372, None), (bella, trio, 361, None)):
+            vaccines.record(animal, {"vaccine": vaccine, "given_on": today - timedelta(days=days_ago), "given_by": doctor, "visit": visit,
+                                     "batch": f"LOT-{vaccine.pk}{days_ago}"}, owner)
 
     def _physio(self, master, therapist, owner, today):
         """MED-005: a physiotherapy centre's first patient bought ten sessions and used three."""
