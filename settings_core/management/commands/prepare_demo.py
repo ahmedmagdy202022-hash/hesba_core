@@ -260,6 +260,7 @@ class Command(BaseCommand):
             self._payroll(master, owner)  # DEMO-NEW: last month's payroll, net pay paid
         self._services_showcase(master, staff, owner, catalog, extras)  # DEMO-SVC: after payroll, so the new technicians are not paid by it
         self._clinic_booking(master, staff, owner, catalog, extras)  # M4: after payroll too, for the same reason (the second doctor)
+        self._inpatient(master, staff, owner, catalog, extras)  # M8 (HG-088): beds, a patient in one and a stay with its draft bill
         from settings_core import demo_ai
 
         demo_ai.seed(master, owner, modules)  # AI demo: the invoice photo's supplier and parts, and yesterday's collection
@@ -285,6 +286,15 @@ class Command(BaseCommand):
 
         if demo_clinic.applies(catalog):
             demo_clinic.seed(master, staff, owner, catalog, extras)
+
+    @staticmethod
+    def _inpatient(master, staff, owner, catalog, extras):
+        """M8 (HG-088): two wards, a patient in a bed and a discharged stay with its draft bill, where «الإقامة والأسرّة» is on."""
+
+        from settings_core import demo_inpatient
+
+        if demo_inpatient.applies(catalog):
+            demo_inpatient.seed(master, staff, owner, catalog, extras)
 
     #: T11: when each demo employee came in, in minutes after their start, by day (a few late, one absent day).
     ARRIVALS = (-5, 3, 25, -10, 0, 40, 8, -2, 12, 55, 1, -8, 6, 30)

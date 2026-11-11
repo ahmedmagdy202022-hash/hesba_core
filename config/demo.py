@@ -67,7 +67,7 @@ def demo_subs(activity):
     return [sub for act, sub in DEMO_ACTIVITIES if act == activity]
 
 
-#: DEMO-FIRST-RUN: «جرّب دلوقتي», three steps in the trade's own words: (title_ar, title_en, hint_ar, hint_en, url name).
+#: DEMO-FIRST-RUN: «جرّب دلوقتي», three steps in the trade's own words (four for the clinic, M8): (title_ar, title_en, hint_ar, hint_en, url name).
 #: Keyed by (activity, sub) with the activity as the fallback; every link is a real screen the owner may open.
 DEMO_TOURS = {
     "commercial": (
@@ -131,6 +131,11 @@ DEMO_TOURS = {
         ("مشتريات الموقع", "Site purchases", "خامات اتشترت على المشروع", "Materials bought for the project", "purchases:list"),
     ),
 }
+
+# M8 (HG-088): the clinic's demo has the beds on, so its tour has a fourth step; the tour card drops it wherever beds are off.
+DEMO_TOURS[("medical", "clinic")] = DEMO_TOURS["medical"] + (
+    ("الأسرّة والإقامة", "Beds and stays", "مين على أنهي سرير، وفاتورة الإقامة مسودة عند الخروج", "Who is in which bed, and the stay's draft bill at discharge", "medical:beds"),
+)
 
 
 def demo_tour(activity, sub_activity):

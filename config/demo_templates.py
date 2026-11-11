@@ -188,7 +188,8 @@ def name_the_demo_owner(activity=None, sub_activity=None):
 
 def demo_capabilities(activity, sub_activity, features):
     """The features a demo of this business switches on: the interview's suggestions, plus the AI showcase
-    wherever its sections exist (HG-078 dev. 7), plus what prepare_demo turns on for the retail shop, plus the clinic's online booking."""
+    wherever its sections exist (HG-078 dev. 7), plus what prepare_demo turns on for the retail shop, plus the clinic's online booking
+    and beds (M8)."""
 
     from settings_core import capabilities as caps
 
@@ -197,6 +198,7 @@ def demo_capabilities(activity, sub_activity, features):
         chosen += ["promotions", "loyalty", "shipping", "online_store", "quotations", "e_invoice", "e_receipt"]
     if (activity, sub_activity) == ("medical", "clinic"):  # M4: the clinic's public booking page answers on the demo (settings_core/demo_clinic.py)
         chosen += ["online_booking"]
+        chosen += ["inpatient"]  # M8 (HG-088): the landing page offers the clinic, so its demo shows the beds (settings_core/demo_inpatient.py)
     return tuple(dict.fromkeys(slug for slug in chosen if caps.is_available(slug)))
 
 
