@@ -381,3 +381,94 @@ def performance(date_from, date_to):
         rows.append({"employee": employee, "done": count, "sales": money_round(sales),
                      "commission": money_round(sales * employee.commission_percent / Decimal("100"))})
     return rows
+
+
+# ---- M3: the patient's own link: confirm, or ask for a cancellation (a request for reception, never a cancellation) ----
+
+CANCEL_REQUESTED = "appointment_cancel_requested"
+CANCEL_REQUEST_HANDLED = "appointment_cancel_request_handled"
+#: What reception does to an appointment that answers a patient's request: it moves, changes, changes status or is marked as seen.
+REQUEST_ANSWERED_BY = ("move_appointment", "change_appointment", "appointment_status", CANCEL_REQUEST_HANDLED)
+
+
+def patient_token(appointment):
+    """The signed token of the patient's link: the appointment, bound to the patient it is booked for now."""
+
+    from printing.share import make_token
+
+    return make_token("appointment", appointment.pk, owner=appointment.customer_id)
+
+
+def link_alive(appointment, owner, now=None):
+    """The patient's link works while the appointment is still ahead and open (booked or confirmed) and still belongs
+    to the patient the link was made for (``owner``, from the token). Anything else (cancelled, no-show, arrived, done,
+    already past, gone, or moved to another patient since the link went out) is a dead link."""
+
+    return (appointment is not None and owner is not None and appointment.customer_id == owner
+            and appointment.status in (AppointmentStatus.BOOKED, AppointmentStatus.CONFIRMED)
+            and appointment.starts_at > (now or timezone.now()))
+
+
+def pending_cancel_requests(ids):
+    """The ids (of ``ids``) with a patient's cancellation request that reception has not answered yet.
+
+    The request is an append-only audit row (no column: nothing here may cancel, and a cancellation can forfeit a held
+    deposit). It stays pending until a later row says reception moved, changed or cancelled the appointment, or marked
+    the request as seen."""
+
+    ids = [str(pk) for pk in ids]
+    if not ids:
+        return set()
+    pending = {}
+    rows = (AuditLog.objects.filter(module="appointments", object_type="appointments.Appointment", object_id__in=ids,
+                                    action__in=(CANCEL_REQUESTED, *REQUEST_ANSWERED_BY)).order_by("pk").values_list("object_id", "action"))
+    for object_id, action in rows:
+        pending[object_id] = action == CANCEL_REQUESTED
+    flagged = {int(object_id) for object_id, flag in pending.items() if flag}
+    if not flagged:
+        return set()
+    # Only an appointment still open shows the flag: a status changed without an audit row (or a past day's request) leaves none behind.
+    return set(Appointment.objects.filter(pk__in=flagged, status__in=(AppointmentStatus.BOOKED, AppointmentStatus.CONFIRMED)).values_list("pk", flat=True))
+
+
+@transaction.atomic
+def patient_confirm(pk, owner):
+    """The patient taps «confirm». Returns (appointment, changed), or None for a dead link. Booked becomes confirmed
+    through the ordinary status step (one audit row, nobody's account); an appointment already confirmed, or with a cancellation
+    request waiting, changes nothing. No money, stock or deposit is touched."""
+
+    from .booking import system_user
+
+    appointment = Appointment.objects.select_for_update().filter(pk=pk).first()
+    if not link_alive(appointment, owner):
+        return None
+    if appointment.status != AppointmentStatus.BOOKED or pk in pending_cancel_requests([pk]):
+        return appointment, False
+    return set_status(appointment, AppointmentStatus.CONFIRMED, system_user()), True
+
+
+@transaction.atomic
+def patient_request_cancel(pk, owner):
+    """The patient taps «ask to cancel». Records one request for reception and returns (appointment, changed), or None
+    for a dead link. The appointment keeps its status, its time and its deposit; reception decides. Asking twice records once."""
+
+    appointment = Appointment.objects.select_for_update().filter(pk=pk).first()
+    if not link_alive(appointment, owner):
+        return None
+    if pk in pending_cancel_requests([pk]):
+        return appointment, False
+    AuditLog.objects.create(event_type=AuditEventType.UPDATE, actor=None, module="appointments", action=CANCEL_REQUESTED,
+                            object_type="appointments.Appointment", object_id=str(appointment.pk), before_data={},
+                            after_data={"number": appointment.number, "status": appointment.status})  # no personal data
+    return appointment, True
+
+
+@transaction.atomic
+def mark_cancel_request_seen(appointment, user):
+    """Reception has dealt with the patient's request without changing the appointment (it calls the patient and keeps it)."""
+
+    appointment = Appointment.objects.select_for_update().get(pk=appointment.pk)
+    if appointment.pk not in pending_cancel_requests([appointment.pk]):
+        return False
+    _audit(appointment, user, CANCEL_REQUEST_HANDLED, {"status": appointment.status})
+    return True

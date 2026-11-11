@@ -40,12 +40,22 @@ DEFAULT_TEXTS = {
     MessageKind.REFILL: "أهلاً {name}، روشتة حضرتك {number} ميعاد تجديدها {date}. تحب نجهزهالك؟ — {company}",
     MessageKind.WORKORDER: "أهلاً {name}، من {company}: أمر الشغل {number} {status} {link}",
     MessageKind.CAMPAIGN: "أهلاً {name}، وحشتنا في {company}! عندنا ليك جديد، ننتظرك قريب.",  # S8: only the starting text of a new campaign
+    # M3: the clinic and the date, nothing else. Never the diagnosis, the specialty or any clinical detail (the placeholders cannot carry one).
+    MessageKind.FOLLOWUP: "أهلاً {name}، تذكير من {company}: ميعاد المتابعة يوم {date}. تحب نحجزلك ميعاد؟ كلّمنا أو ابعتلنا هنا.",
 }
 #: S7: the same wording in English, used when the business's default language is English and the text was never edited.
 DEFAULT_TEXTS_EN = {MessageKind.WORKORDER: "Hello {name}, from {company}: work order {number} {status} {link}",
-                    MessageKind.CAMPAIGN: "Hello {name}, we miss you at {company}! We have something new for you; see you soon."}
+                    MessageKind.CAMPAIGN: "Hello {name}, we miss you at {company}! We have something new for you; see you soon.",
+                    MessageKind.FOLLOWUP: "Hello {name}, a reminder from {company}: your follow-up is due on {date}. Would you like us to book it? Contact us here."}
 #: ``every_days`` is unused for work-order messages (one per order per status, whatever the day).
-DEFAULT_EVERY = {MessageKind.DUE: 7, MessageKind.INSTALMENT: 3, MessageKind.APPOINTMENT: 1, MessageKind.REFILL: 3, MessageKind.WORKORDER: 1, MessageKind.CAMPAIGN: 1}
+DEFAULT_EVERY = {MessageKind.DUE: 7, MessageKind.INSTALMENT: 3, MessageKind.APPOINTMENT: 1, MessageKind.REFILL: 3, MessageKind.WORKORDER: 1, MessageKind.CAMPAIGN: 1, MessageKind.FOLLOWUP: 7}
+#: M3: a kind that is off until the owner switches it on (a new kind has no saved row, and no row means "on" for the older kinds).
+DEFAULT_OFF = (MessageKind.FOLLOWUP,)
+#: M3: a clinic's appointment reminder carries the patient's own link; the sentence in front of it, per language.
+APPOINTMENT_LINK_TEXTS = {"ar": "لتأكيد الحضور أو طلب تغيير الميعاد:", "en": "To confirm or ask to change the appointment:"}
+APPOINTMENT_TEXT_EN = "Hello {name}, a reminder from {company} of your appointment tomorrow {date} at {time}."
+#: M3: a follow-up is reminded this many days ahead of its date (and never again once it was sent or skipped).
+FOLLOWUP_AHEAD_DAYS = 2
 PLACEHOLDERS = ("{name}", "{company}", "{amount}", "{date}", "{time}", "{number}", "{status}", "{link}")
 #: S7: what each key status says to the customer ({days} is the order's warranty days).
 WORKORDER_STATUSES = ("quoted", "ready", "delivered")
@@ -59,8 +69,8 @@ WORKORDER_STATUS_TEXTS = {
 }
 
 KIND_LABELS = {
-    "ar": {"due": "مبلغ مستحق", "instalment": "قسط", "appointment": "ميعاد بكرة", "refill": "تجديد روشتة", "workorder": "حالة أمر الشغل", "campaign": "حملة"},
-    "en": {"due": "Amount due", "instalment": "Instalment", "appointment": "Appointment tomorrow", "refill": "Prescription refill", "workorder": "Work order status", "campaign": "Campaign"},
+    "ar": {"due": "مبلغ مستحق", "instalment": "قسط", "appointment": "ميعاد بكرة", "refill": "تجديد روشتة", "workorder": "حالة أمر الشغل", "campaign": "حملة", "followup": "متابعة"},
+    "en": {"due": "Amount due", "instalment": "Instalment", "appointment": "Appointment tomorrow", "refill": "Prescription refill", "workorder": "Work order status", "campaign": "Campaign", "followup": "Follow-up visit"},
 }
 MESSAGES = {
     "ar": {"text": "نص الرسالة فاضي.", "placeholder": "النص فيه {bad} ومش معروف؛ المسموح: {allowed}.", "every": "التكرار من 1 لـ 90 يوم.",
@@ -94,14 +104,16 @@ def api_connected():
 
 def template(kind):
     row = MessageTemplate.objects.filter(kind=kind).first()
-    return row or MessageTemplate(kind=kind, text=DEFAULT_TEXTS[kind], every_days=DEFAULT_EVERY[kind])
+    return row or MessageTemplate(kind=kind, text=DEFAULT_TEXTS[kind], every_days=DEFAULT_EVERY[kind], active=kind not in DEFAULT_OFF)
 
 
 def templates():
     """The wording the outbox lets an owner edit. A campaign's words belong to the campaign itself (S8), so its kind is
-    not listed here; its on/off switch and WhatsApp template are on the campaigns screen."""
+    not listed here; its on/off switch and WhatsApp template are on the campaigns screen. The follow-up reminder (M3) is a
+    clinic's, so it is listed only when some entity is a medical business."""
 
-    return [template(kind) for kind in MessageKind.values if kind != MessageKind.CAMPAIGN]
+    hidden = {MessageKind.CAMPAIGN} | (set() if _medical_entities() else {MessageKind.FOLLOWUP})
+    return [template(kind) for kind in MessageKind.values if kind not in hidden]
 
 
 @transaction.atomic
@@ -195,13 +207,23 @@ def _appointments(today, company, currency):
     from appointments.models import AppointmentStatus
     from appointments.services import day_agenda
 
+    from medical.services import is_medical_install
+
     tomorrow = today + timedelta(days=1)
+    medical = is_medical_install()  # M3: only a clinic's reminder carries the patient's own confirm link
+    lang = workorder_language()
     for appointment in day_agenda(tomorrow).filter(status__in=(AppointmentStatus.BOOKED, AppointmentStatus.CONFIRMED)):
         phone = appointment.customer.whatsapp or appointment.customer.phone
         if not phone:
             continue
-        yield {"key": f"appointment:{appointment.pk}", "name": appointment.customer.name, "phone": phone, "link": f"/appointments/{appointment.pk}/",
-               "values": {"date": tomorrow.isoformat(), "time": timezone.localtime(appointment.starts_at).strftime("%H:%M")}}
+        found = {"key": f"appointment:{appointment.pk}", "name": appointment.customer.name, "phone": phone, "link": f"/appointments/{appointment.pk}/",
+                 "values": {"date": tomorrow.isoformat(), "time": timezone.localtime(appointment.starts_at).strftime("%H:%M")}}
+        if medical:
+            from printing.share import public_url
+
+            found["localised"] = True
+            found["url"] = public_url("appointment", appointment.pk, lang, owner=appointment.customer_id) or ""  # no PUBLIC_BASE_URL: no link, the plain reminder
+        yield found
 
 
 def _refills(today, company, currency):
@@ -218,7 +240,63 @@ def _refills(today, company, currency):
                "values": {"number": prescription.number, "date": next_date.isoformat() if next_date else ""}}
 
 
-SOURCES = {MessageKind.DUE: _due, MessageKind.INSTALMENT: _instalments, MessageKind.APPOINTMENT: _appointments, MessageKind.REFILL: _refills}
+def _medical_entities():
+    """The active entities that are medical businesses, main first (an installation with no second entity: its one entity)."""
+
+    from entities.services import activity_of
+
+    return [entity for entity in _entities() if activity_of(entity)[0] == "medical"]
+
+
+def _owner_entity(visit, medical, main):
+    """M3: the entity a follow-up is gathered in. Visits carry no entity (patients are group-wide, HG-084), so it is the
+    entity of the visit's own appointment (none: the main entity, HG-034) when that is a medical one, else the first medical entity.
+    One owner means a patient in a group of two clinics is reminded once, not once per entity."""
+
+    appointment = visit.appointment
+    chosen = appointment.entity if appointment is not None and appointment.entity_id else main
+    return chosen if any(chosen.pk == entity.pk for entity in medical) else medical[0]
+
+
+def _followups(today, company, currency):
+    """M3: patients whose latest visit asked for a follow-up in the next ``FOLLOWUP_AHEAD_DAYS`` days and who have nothing
+    booked (in any entity). The message names the clinic and the date, never anything clinical; each follow-up is reminded
+    once (``key`` holds the visit and the date, and a sent or skipped one is never queued again, whatever the day)."""
+
+    from entities.services import main_entity, is_multi_entity
+    from medical import insights
+    from medical.services import is_medical_install
+
+    current = entity_scope.entity()
+    if current is None or not is_medical_install():
+        return
+    from appointments.models import Appointment, AppointmentStatus
+
+    start = timezone.make_aware(timezone.datetime.combine(today, timezone.datetime.min.time()))
+    booked = set(Appointment.objects.filter(starts_at__gte=start, status__in=[AppointmentStatus.BOOKED, AppointmentStatus.CONFIRMED, AppointmentStatus.ARRIVED])
+                 .values_list("customer_id", flat=True))  # group-wide: a patient booked in another entity is not nagged
+    medical, main = _medical_entities(), main_entity()
+    closed = {key.split("@")[0] for key in OutboxMessage.objects.filter(kind=MessageKind.FOLLOWUP, status__in=(OutboxStatus.SENT, OutboxStatus.SKIPPED))
+              .values_list("key", flat=True)}
+    clinic = current.display(workorder_language()) if is_multi_entity() else ""
+    horizon = today + timedelta(days=FOLLOWUP_AHEAD_DAYS)
+    for row in insights.coming_follow_ups(today, booked=booked):
+        if row["due"] > horizon:
+            continue
+        visit = row["visit"]
+        if _owner_entity(visit, medical, main).pk != current.pk:
+            continue
+        key = f"followup:{visit.pk}:{row['due'].isoformat()}"
+        patient = visit.patient
+        phone = patient.whatsapp or patient.phone
+        if key in closed or not phone:
+            continue
+        yield {"key": key, "name": patient.name, "phone": phone, "link": f"/appointments/?day={row['due'].isoformat()}", "localised": True,
+               "values": {"date": row["due"].isoformat(), **({"company": clinic} if clinic else {})}}
+
+
+SOURCES = {MessageKind.DUE: _due, MessageKind.INSTALMENT: _instalments, MessageKind.APPOINTMENT: _appointments, MessageKind.REFILL: _refills,
+           MessageKind.FOLLOWUP: _followups}
 #: Kinds whose records carry no entity; gathered for the main entity only. Empty since HG-074 gave appointments
 #: their entity: each entity's appointments are gathered as its own, and the main entity's keys are unchanged.
 UNSCOPED = set()
@@ -364,6 +442,26 @@ def queue_workorder(order, status, link="", lang=None):
         return None  # queued by another request a moment ago
 
 
+def _link_kept(text, url):
+    """The link a waiting message already carries, when it opens the same thing as ``url``; otherwise ``url``.
+
+    A share token is signed with the second it was made in, so every run would mint a different link and rewrite the
+    waiting row (the outbox page runs the gathering each time it opens). Within a day the message keeps its link; when it
+    is carried to a new day it takes a fresh one, since share links expire."""
+
+    from printing.share import read_token_data as read_token  # the whole content: the object and the person it is bound to
+
+    head, mark, tail = url.partition("/share/")
+    token, slash, rest = tail.partition("/")
+    wanted = read_token(token) if mark and slash else None
+    if wanted is None:
+        return url
+    for word in text.split():
+        if word.startswith(head + mark) and word.endswith(slash + rest) and read_token(word[len(head + mark):len(word) - len(slash + rest)]) == wanted:
+            return word
+    return url
+
+
 def _gather(kind, source, row, entity, today, company, currency):
     since = today - timedelta(days=row.every_days - 1)
     done = OutboxMessage.objects.filter(kind=kind, day__gte=since).filter(
@@ -371,15 +469,27 @@ def _gather(kind, source, row, entity, today, company, currency):
     recent = set(done.values_list("key", flat=True))
     waiting = {message.key: message for message in _waiting(kind, entity)}
     seen, added = set(), 0
+    lang = workorder_language()
     for candidate in source(today, company, currency):
         key = candidate["key"] if entity.is_main else f"{candidate['key']}@{entity.pk}"
         phone = _number(candidate["phone"])
         if key in recent or not phone:
             continue
         seen.add(key)
-        fields = {"name": candidate["name"][:255], "phone": phone[:30], "link": candidate["link"][:255], "entity": entity,
-                  "text": render(row.text, name=candidate["name"], company=company, **candidate["values"])}
+        base = row.text
+        if lang == "en" and candidate.get("localised") and base == DEFAULT_TEXTS[kind]:
+            base = DEFAULT_TEXTS_EN.get(kind) or (APPOINTMENT_TEXT_EN if kind == MessageKind.APPOINTMENT else base)
         earlier = waiting.get(key)
+        url = candidate.get("url", "")
+        if url and earlier is not None and earlier.day == today:
+            url = _link_kept(earlier.text, url)  # the same link all day, not a new one every time the outbox opens
+        values = {"company": company, **candidate["values"]}
+        if url:
+            values.setdefault("link", url)  # a template that places {link} itself
+        text = render(base, name=candidate["name"], **values)
+        if url and "{link}" not in base:
+            text = f"{text} {APPOINTMENT_LINK_TEXTS[lang]} {url}"
+        fields = {"name": candidate["name"][:255], "phone": phone[:30], "link": candidate["link"][:255], "entity": entity, "text": text}
         if earlier is not None:
             # Still waiting: it carries today's date and today's figures (a part payment lowers the amount).
             OutboxMessage.objects.filter(pk=earlier.pk, status=OutboxStatus.PENDING).update(day=today, **fields)
@@ -417,33 +527,43 @@ LINK_MARKS = ("http://", "https://")
 LINK_MASK = {"ar": "[لينك العميل]", "en": "[customer link]"}
 
 
-def may_hold_link(user):
-    """Whoever holds a work-order message with the S2 link can approve the quote as the customer, so only the people
-    who may get the link by hand (``workorders.services.customer_link``) see or send it."""
+#: The kinds whose text can carry a customer's own link (S7 work orders, M3 a clinic's appointment).
+LINK_KINDS = (MessageKind.WORKORDER, MessageKind.APPOINTMENT)
+#: M3: the people who may handle a patient's appointment link: those who book and change appointments.
+APPOINTMENT_LINK_PERMISSION = "sales.create_sales_invoice"
 
+
+def may_hold_link(user, kind=MessageKind.WORKORDER):
+    """Whoever holds a work-order message with the S2 link can approve the quote as the customer, so only the people
+    who may get the link by hand (``workorders.services.customer_link``) see or send it. An appointment link (M3) lets its
+    holder confirm or ask to cancel as the patient, so it is held by those who book appointments (reception)."""
+
+    if kind == MessageKind.APPOINTMENT:
+        return user_has_permission(user, APPOINTMENT_LINK_PERMISSION)
     from workorders.services import can_hold_customer_link
 
     return can_hold_customer_link(user)
 
 
 def holds_link(message):
-    return message.kind == MessageKind.WORKORDER and any(mark in message.text for mark in LINK_MARKS)
+    return message.kind in LINK_KINDS and any(mark in message.text for mark in LINK_MARKS)
 
 
 def shown_text(message, user, lang="ar"):
     """The text this user sees: the customer link is replaced by a placeholder unless they may hold it."""
 
-    if holds_link(message) and not may_hold_link(user):
+    if holds_link(message) and not may_hold_link(user, message.kind):
         return LINK.sub(LINK_MASK[lang], message.text)
     return message.text
 
 
 def sendable(user, messages):
-    """``messages`` without the link-bearing work-order ones when ``user`` may not hold the link."""
+    """``messages`` without the link-bearing ones (work orders, clinic appointments) of a kind ``user`` may not hold the link of."""
 
-    if may_hold_link(user):
-        return messages
-    return messages.exclude(Q(text__contains=LINK_MARKS[0]) | Q(text__contains=LINK_MARKS[1]), kind=MessageKind.WORKORDER)
+    for kind in LINK_KINDS:
+        if not may_hold_link(user, kind):
+            messages = messages.exclude(Q(text__contains=LINK_MARKS[0]) | Q(text__contains=LINK_MARKS[1]), kind=kind)
+    return messages
 
 
 # ---- sending ----
@@ -466,7 +586,7 @@ def mark(message, status, user, lang="ar"):
     if status == OutboxStatus.SENT and message.kind == MessageKind.CAMPAIGN and message.day > timezone.localdate():
         # S8: a campaign message deferred by the daily cap (or moved forward by build() since the page opened) waits for its day
         raise ValidationError(MESSAGES[lang]["later"].format(day=message.day.isoformat()))
-    if status == OutboxStatus.SENT and holds_link(message) and not may_hold_link(user):
+    if status == OutboxStatus.SENT and holds_link(message) and not may_hold_link(user, message.kind):
         raise PermissionDenied("This message carries the customer's link; only counter staff may send it.")
     message.status = status
     message.channel = "link" if status == OutboxStatus.SENT else ""
@@ -526,6 +646,29 @@ def send_by_api(user=None, messages=None, limit=None, seconds=None):
                                     after_data={"kind": message.kind, "key": message.key, "day": str(message.day), "provider_id": provider_id})
             sent += 1
     return {"sent": sent, "failed": failed, "left": len(ids) - done}
+
+
+#: M3: the hours (Cairo) the scheduled run may send in, so a reminder never reaches a patient at night.
+SEND_FROM_HOUR, SEND_UNTIL_HOUR = 8, 21
+#: One scheduled run stops sending after this long, well inside the web server's timeout; the next hourly run continues.
+SCHEDULED_SECONDS = 40
+
+
+def run_scheduled(now=None):
+    """M3: what an external scheduler does every hour: gather the day's messages, then send those with an approved
+    template through the shop's WhatsApp Business account, inside the sending hours. Returns {"status", "added", "sent",
+    "failed", "left"}; ``status`` is ``gathered`` (no WhatsApp keys: the messages wait in the outbox for a click),
+    ``outside_hours`` or ``sent``."""
+
+    now = timezone.localtime(now or timezone.now())
+    added = build()
+    result = {"status": "gathered", "added": added, "sent": 0, "failed": 0, "left": 0}
+    if not api_connected():
+        return result
+    if not SEND_FROM_HOUR <= now.hour < SEND_UNTIL_HOUR:
+        return {**result, "status": "outside_hours"}
+    sent = send_by_api(seconds=SCHEDULED_SECONDS)
+    return {**result, **sent, "status": "sent"}
 
 
 def counts(user, today=None):
