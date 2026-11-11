@@ -140,7 +140,7 @@ class ListSheetTests(SimpleTestCase):
                      'table[data-list-rows] td[data-row="sub"]{flex:1 1 0}',
                      ".op-status:is(.op-status-posted,.op-status-completed){padding:0;background:transparent;color:var(--hs-muted)",
                      'table[data-list-rows] td[data-row="amount"][data-zero]{color:var(--hs-muted)',
-                     ":is(.op-table,.md-table) thead th{background:transparent"):
+                     ":is(.op-table,.md-table):not(.pos-table) thead th{background:transparent"):
             with self.subTest(rule=rule):
                 self.assertIn(rule, css)
         # the phone row is still one tap: the title link's ::after covers the row

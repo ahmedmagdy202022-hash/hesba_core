@@ -159,7 +159,7 @@ dialog.hs-quick-item[open]{display:flex;flex-direction:column;max-height:calc(10
      the whole row is the tap target, so the title link itself no longer needs its own 44px box.
    - The usual state («نهائية», «متاح») reads as quiet text; only a state that needs attention keeps a coloured chip.
    - A zero balance is muted, so the customers who owe something stand out.
-   - Desktop and tablet keep real tables with a quieter header row.
+   - Desktop and tablet keep real tables with a quieter header row (not the till's cart, which has its own look).
    - An empty list offers its next step as a real button. */
 .op-filters:has(>.hs-filter){display:flex;flex-wrap:wrap;align-items:flex-start;gap:var(--hs-space-2) 10px;margin-bottom:var(--hs-space-4)}
 .op-filters:has(>.hs-filter)>input[type=search]{flex:1 1 240px;min-width:0}
@@ -193,7 +193,7 @@ dialog.hs-quick-item[open]{display:flex;flex-direction:column;max-height:calc(10
 }
 table[data-list-rows] td[data-row="amount"][data-zero]{color:var(--hs-muted);font-weight:var(--hs-weight-regular)}
 @media screen and (min-width:701px){
-  :is(.op-table,.md-table) thead th{background:transparent;border-bottom:1px solid var(--hs-line);color:var(--hs-muted);font-size:var(--hs-text-sm);font-weight:var(--hs-weight-semibold)}
+  :is(.op-table,.md-table):not(.pos-table) thead th{background:transparent;border-bottom:1px solid var(--hs-line);color:var(--hs-muted);font-size:var(--hs-text-sm);font-weight:var(--hs-weight-semibold)}
   :is(.op-table,.md-table)[data-list-rows] tbody tr:hover>td{background:var(--hs-ground)}
 }
 .hs-empty b{font-size:var(--hs-text-base)}
