@@ -17,37 +17,50 @@ from reports.aging import whatsapp_number
 
 
 SALT = "hesba.share.v1"
-KINDS = ("sales_invoice", "sales_return", "customer_payment", "customer_statement", "sales_quote", "work_order")
+KINDS = ("sales_invoice", "sales_return", "customer_payment", "customer_statement", "sales_quote", "work_order", "appointment")
 
 
 def max_age():
     return getattr(settings, "SHARE_LINK_DAYS", 60) * 86400
 
 
-def make_token(kind, pk):
+def make_token(kind, pk, owner=None):
+    """``owner`` (a customer's id) binds the link to one person: a page whose object can change hands (M3: an
+    appointment moved to another patient) reads it back with ``read_token_data`` and refuses anyone else's link."""
+
     if kind not in KINDS:
         raise ValueError(kind)
-    return signing.dumps({"k": kind, "id": int(pk)}, salt=SALT, compress=True)
+    data = {"k": kind, "id": int(pk)}
+    if owner is not None:
+        data["o"] = int(owner)
+    return signing.dumps(data, salt=SALT, compress=True)
 
 
-def read_token(token):
-    """(kind, pk) or None for a forged, altered or expired token."""
+def read_token_data(token):
+    """The token's content (``k``, ``id``, and ``o`` when it was bound to a person), or None for a forged, altered or
+    expired token."""
 
     try:
         data = signing.loads(token, salt=SALT, max_age=max_age())
     except signing.BadSignature:
         return None
-    kind, pk = data.get("k"), data.get("id")
-    if kind not in KINDS or not isinstance(pk, int):
+    if not isinstance(data, dict) or data.get("k") not in KINDS or not isinstance(data.get("id"), int):
         return None
-    return kind, pk
+    return data
+
+
+def read_token(token):
+    """(kind, pk) or None for a forged, altered or expired token."""
+
+    data = read_token_data(token)
+    return (data["k"], data["id"]) if data is not None else None
 
 
 def share_url(request, kind, pk, lang="ar"):
     return request.build_absolute_uri(f"{reverse('share_document', args=[make_token(kind, pk)])}?lang={lang}")
 
 
-def public_url(kind, pk, lang="ar"):
+def public_url(kind, pk, lang="ar", owner=None):
     """The link built from settings.PUBLIC_BASE_URL (Ahmed's standing rule), never from the request's host.
 
     ``None`` when PUBLIC_BASE_URL is not set: a link with no address is not one to send."""
@@ -55,7 +68,7 @@ def public_url(kind, pk, lang="ar"):
     base = getattr(settings, "PUBLIC_BASE_URL", "")
     if not base:
         return None
-    return f"{base.rstrip('/')}{reverse('share_document', args=[make_token(kind, pk)])}?lang={lang}"
+    return f"{base.rstrip('/')}{reverse('share_document', args=[make_token(kind, pk, owner)])}?lang={lang}"
 
 
 def whatsapp_link(phone, text):

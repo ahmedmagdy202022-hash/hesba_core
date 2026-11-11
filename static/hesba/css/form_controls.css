@@ -150,3 +150,25 @@ a.hs-tile:hover{transform:translateY(-2px);box-shadow:var(--hs-card-shadow-hover
 .hs-confirm__actions button{min-height:44px;border-radius:11px;padding:0 18px;font:inherit;font-weight:700;cursor:pointer}
 .hs-confirm .op-danger{border:0;background:var(--hs-danger-solid);color:var(--hs-surface)}
 .hs-confirm .op-secondary{border:1px solid var(--hs-line);background:var(--hs-surface);color:var(--hs-navy)}
+
+/* UX Wave 4 (forms): easier to fill in on a phone.
+   - A part's head is a short title, not a banded header: the number sits on a quiet teal chip and no rule runs under it.
+   - Inputs are 48px tall with 16px text on a phone (16px also stops iOS from zooming into the field).
+   - A focused field scrolls clear of the sticky save bar and the floating tab bar (scroll-padding-bottom), and a link
+     from the error summary lands below the sticky 60px top bar (scroll-padding-top; .hs-topbar in shell.css).
+   - What needs fixing is listed at the top (partials/form_error_summary.html), each entry a link to its field. */
+.hs-section__head{padding-bottom:4px;border-bottom:0}
+.hs-section__num{flex-basis:28px;width:28px;height:28px;margin-top:2px;background:var(--hs-teal-wash);color:var(--hs-teal-deep);font-size:var(--hs-text-sm)}
+.hs-section__grid{padding-top:12px}
+.hs-error-summary{margin:0 0 var(--hs-space-4);padding:var(--hs-space-3) var(--hs-space-4);border:1px solid var(--hs-danger-line);border-radius:var(--hs-card-radius-sm);background:var(--hs-danger-wash);color:var(--hs-danger)}
+.hs-error-summary b{display:block;margin-bottom:var(--hs-space-1)}
+.hs-error-summary ul{margin:0;padding-inline-start:var(--hs-space-5);display:grid;gap:2px}
+.hs-error-summary a{display:inline-flex;align-items:center;min-height:var(--hs-control-height);color:var(--hs-danger);font-weight:var(--hs-weight-bold)}
+.hs-section__grid .has-error > label{color:var(--hs-danger)}
+/* the red edge of a field with an error: AN3's rule lost to master_data.css's ".md-field input:not([type=checkbox])" */
+.hs-section__grid .has-error :is(input:not([type=checkbox]):not([type=radio]),select,textarea){border-color:var(--hs-danger)}
+@media (max-width:700px){
+  html:has(:is(.hs-form,.inv-form)){scroll-padding-bottom:calc(var(--hs-tabbar-clear) + 96px + env(safe-area-inset-bottom));scroll-padding-top:calc(60px + var(--hs-space-4))}
+  .hs-section__grid :is(input:not([type=checkbox]):not([type=radio]),select,textarea){min-height:var(--hs-control-height-lg);font-size:16px}
+  .hs-section__head{padding-bottom:0}
+}

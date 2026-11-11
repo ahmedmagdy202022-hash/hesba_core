@@ -19,6 +19,8 @@ class MessageKind(models.TextChoices):
     APPOINTMENT = "appointment", "Appointment tomorrow"
     REFILL = "refill", "Prescription refill"
     WORKORDER = "workorder", "Work order status"
+    #: M3: a clinic's reminder of the follow-up date the doctor asked for (date and clinic only, never anything clinical).
+    FOLLOWUP = "followup", "Follow-up visit"
     #: S8: a loyalty / marketing campaign message (see ``Campaign`` and messaging/campaigns.py).
     CAMPAIGN = "campaign", "Campaign"
 

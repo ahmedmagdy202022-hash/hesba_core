@@ -100,7 +100,8 @@ class SalesScreensTests(TestCase):
         self.assertNotIn("مُرحّل", html)
 
     def test_one_primary_the_rest_in_the_menu_and_filters_folded(self):
-        html = self.client.get(reverse("sales:list"), {"lang": "ar", "q": "SI"}).content.decode()
+        # UX Wave 4 (lists): the search box sits outside the fold, so the badge counts only what is folded (the status)
+        html = self.client.get(reverse("sales:list"), {"lang": "ar", "q": "SI", "status": "posted"}).content.decode()
         head = re.search(r'<section class="op-title-row hs-head">.*?</section>', html, re.S).group(0)
         self.assertEqual(head.count('class="op-primary"'), 1)
         self.assertIn("data-sales-new", head)
