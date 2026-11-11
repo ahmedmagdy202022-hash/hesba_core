@@ -315,6 +315,21 @@ class DueListScreenTests(Screens):
         self.assertContains(doctor, "data-tab-vaccinations")
         self.assertNotContains(doctor, "data-tab-vaccine-setup")  # set-up is the owner's and the manager's
 
+    def test_on_a_phone_the_section_tabs_are_one_row_that_scrolls(self):
+        """Six stacked full-width buttons pushed the list under the first screen. The tabs carry ``med-tabs`` and the shared
+        sheet makes them one sideways-scrolling row at phone width, each still a 44 px target."""
+
+        from django.contrib.staticfiles import finders
+
+        page = self.client.get(f"{self.URL}?lang=ar")
+        self.assertContains(page, 'class="op-form-actions med-tabs"')
+        self.assertContains(page, "operations.css?v=w4-3")
+        with open(finders.find("hesba/css/operations.css"), encoding="utf-8") as handle:
+            css = handle.read()
+        phone = css[css.index("@media (max-width:700px){\n  .op-form-actions.edu-tabs"):]
+        self.assertIn(".op-form-actions.med-tabs{display:flex;flex-wrap:nowrap;overflow-x:auto", phone.split("}\n}")[0].replace(".op-form-actions.edu-tabs,", ""))
+        self.assertIn(".med-tabs .op-primary,.med-tabs .op-secondary{flex:0 0 auto;width:auto;min-height:44px", phone)
+
 
 class SetupScreenTests(Screens):
     URL = property(lambda self: reverse("medical:vaccine_setup"))

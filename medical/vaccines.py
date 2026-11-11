@@ -233,7 +233,10 @@ def record(animal, data, user, lang="ar"):
         raise ValidationError(words["vet_only"])
     if animal is None:
         raise ValidationError(words["animal"])
-    animal = Animal.objects.select_for_update().select_related("owner").get(pk=animal.pk)  # two clicks at once never record a dose twice
+    # Two clicks at once never record a dose twice. Only the animal row is locked: a join here would also lock the owner's
+    # customer row, which posting and collections lock in their own order.
+    Animal.objects.select_for_update().get(pk=animal.pk)
+    animal = Animal.objects.select_related("owner").get(pk=animal.pk)
     vaccine = data.get("vaccine")
     if vaccine is None:
         raise ValidationError(words["vaccine"])
