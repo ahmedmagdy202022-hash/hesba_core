@@ -17,7 +17,7 @@ from reports.aging import whatsapp_number
 
 
 SALT = "hesba.share.v1"
-KINDS = ("sales_invoice", "sales_return", "customer_payment", "customer_statement", "sales_quote", "work_order")
+KINDS = ("sales_invoice", "sales_return", "customer_payment", "customer_statement", "sales_quote", "work_order", "appointment")
 
 
 def max_age():
