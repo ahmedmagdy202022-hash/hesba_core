@@ -1,0 +1,43 @@
+{% load static %}{# M2 (HG-086): «الأدوية» inside the visit form. Every line posts rx_id, rx_reference, rx_name, rx_dose, rx_frequency, rx_duration, rx_route and rx_notes, in order; services.save_visit checks and writes them with the visit. The sheet is the R1 picker's look (drug_picker.css, unchanged) driven by rx_picker.js; without JavaScript the saved lines still show and save, and the add buttons stay hidden. #}
+<link rel="stylesheet" href="{% static 'hesba/css/drug_picker.css' %}?v=r1-3">
+<link rel="stylesheet" href="{% static 'hesba/css/rx_lines.css' %}?v=m2-1">
+{% with w=rx.words %}
+<section class="rx" aria-labelledby="rx-title" data-rx data-url="{% url 'medical:drug_search' %}" data-lang="{{ lang }}" data-patient="{{ patient.pk }}" data-max="{{ rx.max_lines }}">
+  <header class="rx__head"><h2 id="rx-title">{{ w.section }}</h2><span class="rx__count" data-rx-count{% if not rx.lines %} hidden{% endif %}>{{ rx.lines|length }}</span></header>
+  <ol class="rx-list" data-rx-list>{% for m in rx.lines %}{% include "medical/_rx_line.html" %}{% endfor %}</ol>
+  <p class="rx__empty" data-rx-empty{% if rx.lines %} hidden{% endif %}>{{ w.empty }} {% if rx.list_loaded %}{{ w.intro }}{% endif %}</p>
+  {% if not rx.list_loaded %}<p class="rx__nolist" data-rx-nolist>{{ w.no_list }}</p>{% endif %}
+  <div class="rx__add">
+    {% if rx.list_loaded %}<button class="rx-add" type="button" data-rx-add hidden aria-haspopup="dialog" aria-controls="rx-picker" aria-label="{{ w.add_label }}"><svg class="hs-drug-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><span>{{ w.add }}</span></button>{% endif %}
+    <button class="rx-hand" type="button" data-rx-hand hidden><svg class="hs-drug-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M14 6l4 4"/></svg><span>{{ w.hand }}</span></button>
+  </div>
+  <template data-rx-template>{% with m=rx.blank %}{% include "medical/_rx_line.html" %}{% endwith %}</template>
+  {% if rx.list_loaded %}
+  <dialog class="hs-drug-sheet" id="rx-picker" aria-labelledby="rx-picker-title" data-rx-picker>
+    <div class="hs-drug-sheet__grab" aria-hidden="true"></div>
+    <header class="hs-drug-sheet__head"><h2 id="rx-picker-title">{{ w.title }}</h2>
+      <button class="hs-drug-sheet__x" type="button" data-rx-close aria-label="{{ w.close }}" title="{{ w.close }}"><svg class="hs-drug-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></header>
+    <div class="hs-drug-sheet__search">
+      <svg class="hs-drug-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <label class="hs-drug-sr" for="rx-picker-q">{{ w.search }}</label>
+      {# form=…: a separate (missing) form, so the search text is never posted with the visit and Enter never saves it #}
+      <input id="rx-picker-q" type="search" form="rx-picker-detached" maxlength="100" autocomplete="off" enterkeyhint="search" dir="auto" placeholder="{{ w.placeholder }}" aria-describedby="rx-picker-status" aria-controls="rx-picker-list" data-rx-q>
+    </div>
+    <div class="hs-drug-sheet__meta"><span id="rx-picker-status" role="status" aria-live="polite" data-rx-status></span><span data-rx-cap hidden></span></div>
+    <div class="hs-drug-sheet__body">
+      <div class="hs-drug-state" data-rx-state="short"><span class="hs-drug-state__badge" aria-hidden="true"><svg class="hs-drug-ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span><b>{{ w.short_title }}</b><p>{{ w.short_body }}</p></div>
+      <div class="hs-drug-skel" data-rx-state="loading" aria-hidden="true" hidden>{% for _ in "123" %}<div class="hs-drug-skel__row"><div><i></i><i></i></div><i></i></div>{% endfor %}</div>
+      <ul class="hs-drug-list" id="rx-picker-list" aria-label="{{ w.title }}" data-rx-results hidden></ul>
+      <div class="hs-drug-state" data-rx-state="empty" hidden><span class="hs-drug-state__badge" aria-hidden="true"><svg class="hs-drug-ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span><b>{{ w.empty_title }}</b><p>{{ w.empty_body }}</p></div>
+      <div class="hs-drug-state" data-rx-state="nolist" hidden><span class="hs-drug-state__badge" aria-hidden="true"><svg class="hs-drug-ico" viewBox="0 0 24 24"><path d="M5 4h11a3 3 0 013 3v13H8a3 3 0 01-3-3V4z"/><path d="M5 17a3 3 0 013-3h11"/></svg></span><b>{{ w.nolist_title }}</b><p>{{ w.nolist_body }}</p></div>
+      <div class="hs-drug-state hs-drug-state--error" data-rx-state="error" hidden><span class="hs-drug-state__badge" aria-hidden="true"><svg class="hs-drug-ico" viewBox="0 0 24 24"><path d="M2 9a15 15 0 0120 0M5 12.5a10 10 0 0114 0M8.5 16a5 5 0 017 0M12 19.5h.01"/><path d="M4 4l16 16"/></svg></span><b>{{ w.error_title }}</b><p>{{ w.error_body }}</p><button class="hs-drug-retry" type="button" data-rx-retry>{{ w.retry }}</button></div>
+    </div>
+    <footer class="hs-drug-sheet__foot"><span>{{ w.source }} · {{ w.disclaimer }}</span>
+      <button class="hs-drug-link" type="button" data-rx-manual>{{ w.manual }}</button></footer>
+  </dialog>
+  {% endif %}
+</section>
+{% endwith %}
+{{ rx.words|json_script:"rx-words" }}
+{{ rx.chips|json_script:"rx-chips" }}
+<script src="{% static 'hesba/js/rx_picker.js' %}?v=m2-1" defer></script>

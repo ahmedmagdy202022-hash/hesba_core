@@ -4,9 +4,10 @@
 # Demo reference drug list
 
 `drug_reference_demo.csv` is a short reference list (122 rows) in Hesba's template layout
-(`docs/DRUG_REFERENCE_IMPORT.md`). It is loaded **only into the pharmacy demo template** while
-`prepare_demo_templates` builds it (`config/demo_templates.py` calls `pharmacy.demo.load_demo_reference`), with
-`source = demo` and `source_version = demo-2026-11`. Real installs never load it.
+(`docs/DRUG_REFERENCE_IMPORT.md`). It is loaded **only into the pharmacy and the clinic demo templates** while
+`prepare_demo_templates` builds them (`config/demo_templates.py` calls `pharmacy.demo.load_demo_reference`), with
+`source = demo` and `source_version = demo-2026-11`. Real installs never load it. In the clinic (M2, HG-086) two sample
+visits are given medicine lines from it (`medical/demo.py`); a prescription never shows the prices.
 
 - Written by hand from general knowledge of products commonly sold in Egyptian pharmacies. No row is copied from any
   dataset or price file.
