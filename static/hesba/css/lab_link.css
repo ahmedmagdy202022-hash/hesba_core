@@ -1,0 +1,53 @@
+/*
+ * M6 (HG-085): the lab patient's page, on top of customer_link.css (the approved customer-link look).
+ * The sheet's content is the printed lab sheet's partial; on a phone its table reads as one card per test.
+ * Colours from tokens.css only; a value out of range is marked by its label and arrow too, never by colour alone.
+ */
+.ll-form{margin-block-start:var(--hs-space-4)}
+.ll-label{display:block;font-weight:var(--hs-weight-semibold);color:var(--hs-navy);margin-block-end:var(--hs-space-2)}
+.ll-input{box-sizing:border-box;inline-size:100%;min-block-size:var(--hs-control-height-lg);padding-inline:var(--hs-space-4);border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-md);background:var(--hs-surface);color:var(--hs-ink);font:inherit;font-size:var(--hs-text-xl);letter-spacing:.3em;text-align:center}
+.ll-input:focus-visible{outline:none;box-shadow:var(--hs-focus-ring);border-color:var(--hs-teal-deep)}
+.ll-msg{margin-block-start:var(--hs-space-4)}
+.ll-tools{margin-block-start:0}
+
+/* The sheet (the printed sheet's partial) */
+.ll-sheet{overflow-wrap:anywhere}
+.ll-sheet header{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--hs-space-4);border-block-end:2px solid var(--hs-teal);padding-block-end:var(--hs-space-3)}
+.ll-sheet header h1{font-size:var(--hs-text-lg);color:var(--hs-navy)}
+.ll-sheet header img{max-inline-size:96px;block-size:auto}
+.ll-sheet h2{font-size:var(--hs-text-lg);color:var(--hs-navy);margin-block:var(--hs-space-4) var(--hs-space-2)}
+.ll-sheet .meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--hs-space-2) var(--hs-space-4);margin-block:var(--hs-space-3)}
+.ll-sheet table{inline-size:100%;border-collapse:collapse}
+.ll-sheet th,.ll-sheet td{padding:var(--hs-space-2) var(--hs-space-3);border-block-end:1px solid var(--hs-line);text-align:start;vertical-align:top}
+.ll-sheet th{color:var(--hs-muted);font-size:var(--hs-text-sm);font-weight:var(--hs-weight-medium)}
+.ll-sheet .out{font-weight:var(--hs-weight-bold);color:var(--hs-danger)}
+.ll-sheet footer{display:flex;justify-content:flex-end;margin-block-start:var(--hs-space-6);padding-block-start:var(--hs-space-3);border-block-start:1px solid var(--hs-line)}
+
+/* A phone: one card per test, each value under its own label */
+@media (max-width:599px){
+  .ll-sheet .meta{grid-template-columns:minmax(0,1fr)}
+  .ll-sheet thead{position:absolute;inline-size:1px;block-size:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .ll-sheet table,.ll-sheet tbody,.ll-sheet tr,.ll-sheet td{display:block}
+  .ll-sheet tr{margin-block-end:var(--hs-space-3);padding:var(--hs-space-2) var(--hs-space-3);border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);background:var(--hs-surface)}
+  .ll-sheet tr[data-out]{border-color:var(--hs-danger-line);background:var(--hs-danger-wash)}
+  .ll-sheet td{display:flex;justify-content:space-between;align-items:baseline;gap:var(--hs-space-3);padding:var(--hs-space-1) 0;border:0}
+  .ll-sheet td::before{content:attr(data-cell);flex:none;color:var(--hs-muted);font-size:var(--hs-text-sm);font-weight:var(--hs-weight-medium)}
+  .ll-sheet td:first-child{font-weight:var(--hs-weight-bold);color:var(--hs-navy);font-size:var(--hs-text-md);padding-block-end:var(--hs-space-2)}
+  .ll-sheet td:first-child::before{content:none}
+  .ll-sheet td:empty,.ll-sheet td:has(> bdi:only-child:empty){display:none}  /* a text result with no unit or flag: no empty label */
+}
+
+@media print{
+  .cl-head,.cl-foot,.no-print{display:none!important}
+  .cl-body{background:var(--hs-surface)}
+  .cl-wrap{max-inline-size:none;padding:0}
+  .cl-main{padding:0}
+  .ll-sheet{border:0;box-shadow:none;padding:0}
+  .ll-sheet thead{position:static;inline-size:auto;block-size:auto;clip:auto}
+  .ll-sheet table{display:table}.ll-sheet thead{display:table-header-group}.ll-sheet tbody{display:table-row-group}
+  .ll-sheet tr{display:table-row;border:0;background:none}
+  .ll-sheet td{display:table-cell;border-block-end:1px solid var(--hs-line);padding:var(--hs-space-2) var(--hs-space-3)}
+  .ll-sheet td::before{content:none}
+  .ll-sheet td:first-child{font-weight:inherit;color:inherit;font-size:inherit}
+  .ll-sheet .meta{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
