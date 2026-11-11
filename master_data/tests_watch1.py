@@ -118,3 +118,40 @@ class PhoneLettersTests(TestCase):
         self.assertEqual((old.name, old.phone), ("عميل قديم معدّل", "abc123"))
         data["phone"] = "abc1234"  # touching the phone checks it
         self.assertContains(self.client.post(url, data), PHONE_AR)
+
+
+class CreditBalanceDisplayTests(TestCase):
+    """PH-01: a credit reads «له 13.22», never «13.22-»; debtors keep reading «عليه»."""
+
+    def setUp(self):
+        from hesba_testing.factories import make_customer, make_supplier
+
+        owner_client(self)
+        self.credit = make_customer(customer_code="CR", name="Credit Co", opening_balance=Decimal("-13.22"))
+        self.debt = make_customer(customer_code="DB", name="Debt Co", opening_balance=Decimal("553.75"))
+        self.supplier = make_supplier(supplier_code="SP", name="Prepaid Ltd", opening_balance=Decimal("-40.00"))
+
+    def row(self, html, name):
+        import re
+
+        return re.search(rf"{name}.*?(<td data-row=\"amount\" data-party-balance[^>]*>.*?</td>)", html, re.S).group(1)
+
+    def test_the_customer_list_says_in_credit_in_both_languages(self):
+        ar = self.client.get(reverse("master_data:customers"), {"lang": "ar"}).content.decode()
+        self.assertEqual(self.row(ar, "Credit Co"), '<td data-row="amount" data-party-balance data-credit><span class="hs-phone-only"></span>له <bdi>13.22</bdi></td>')
+        self.assertEqual(self.row(ar, "Debt Co"), '<td data-row="amount" data-party-balance><span class="hs-phone-only">عليه</span>553.75</td>')
+        en = self.client.get(reverse("master_data:customers"), {"lang": "en"}).content.decode()
+        self.assertEqual(self.row(en, "Credit Co"), '<td data-row="amount" data-party-balance data-credit><span class="hs-phone-only"></span>In credit <bdi>13.22</bdi></td>')
+
+    def test_a_supplier_we_overpaid_says_who_holds_the_money(self):
+        ar = self.client.get(reverse("master_data:suppliers"), {"lang": "ar"}).content.decode()
+        self.assertIn("عنده <bdi>40.00</bdi>", self.row(ar, "Prepaid Ltd"))
+        en = self.client.get(reverse("master_data:suppliers"), {"lang": "en"}).content.decode()
+        self.assertIn("Owes you <bdi>40.00</bdi>", self.row(en, "Prepaid Ltd"))
+
+    def test_the_statement_card_drops_the_minus_its_label_already_says_credit(self):
+        for lang, label in (("ar", "رصيد دائن للعميل"), ("en", "Customer in credit")):
+            html = self.client.get(reverse("parties:card", args=["customer", self.credit.pk]), {"lang": lang}).content.decode()
+            self.assertIn(f"<article data-party-balance><small>{label}</small><strong>13.22</strong></article>", html)
+        debt = self.client.get(reverse("parties:card", args=["customer", self.debt.pk]), {"lang": "ar"}).content.decode()
+        self.assertIn("<strong>553.75</strong>", debt)
