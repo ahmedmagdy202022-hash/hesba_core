@@ -16,6 +16,7 @@ from attachments import ui as attachments_ui
 
 from . import services
 from . import prescribing
+from . import visit_templates
 from .models import BloodType, ClinicalVisit, Gender, InsuranceContract
 
 WORDS = {
@@ -103,7 +104,8 @@ def _tabs(request, current):
 
     lang = _lang(request)
     return {"tab": current, "shows_report": user_has_permission(request.user, REPORT_VIEW), "shows_lab": _is_lab(), "lab_tests_label": LAB_WORDS[lang]["tests"],
-            "shows_insurance": insurance.can_view(request.user), "insurance_label": INSURANCE_WORDS[lang]["tab"]}
+            "shows_insurance": insurance.can_view(request.user), "insurance_label": INSURANCE_WORDS[lang]["tab"],
+            "shows_templates": services.can_write(request.user), "templates_label": visit_templates.WORDS[lang]["title"]}
 
 
 def _period(request, words):
@@ -268,7 +270,7 @@ def visit_edit(request, pk=None, visit_pk=None):
     if _is_vet():
         animals = list(patient.animals.filter(active=True) | patient.animals.filter(pk=visit.animal_id if visit else 0))
         default_animal = visit.animal_id if visit else (int(request.GET.get("animal")) if (request.GET.get("animal") or "").isdigit() else None)
-    return render(request, "medical/visit_form.html", _base(lang, patient=patient, visit=visit, appointment=appointment, error=error, post=request.POST, **prescribing.form_context(request, patient, visit, lang),
+    return render(request, "medical/visit_form.html", _base(lang, patient=patient, visit=visit, appointment=appointment, error=error, post=request.POST, **prescribing.form_context(request, patient, visit, lang), **visit_templates.form_context(lang),
                                                             doctors=_doctors(), default_doctor=default_doctor, animals=animals,
                                                             default_animal=default_animal, animal_label=VET_WORDS[lang]["animal"],
                                                             default_date=(visit.visit_date if visit else timezone.localdate()),

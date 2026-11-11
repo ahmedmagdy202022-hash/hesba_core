@@ -1,0 +1,37 @@
+{% extends "operations/base.html" %}
+{% load static %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/visit_templates.css' %}?v=m1-2">{% endblock %}
+{% block operation_content %}
+{# M1 (HG-089): the template manager. Cells carry no data-label (table_cards.js fills it); the row roles are lists.css's. #}
+<section class="op-title-row hs-head"><div><h1>{{ tw.title }}</h1><p>{{ tw.intro }}</p></div>
+<div class="hs-head__actions"><a class="op-primary" href="{% url 'medical:visit_template_new' %}?lang={{ lang }}" data-vt-new>+ {{ tw.new }}</a></div></section>
+{% include "medical/_tabs.html" %}
+<nav class="vt-scopes" aria-label="{{ tw.title }}" data-vt-scopes>{% for key, text in scopes %}<a class="vt-scope" href="?lang={{ lang }}&amp;scope={{ key }}"{% if filters.scope == key %} aria-current="page"{% endif %} data-vt-scope="{{ key }}">{{ text }}</a>{% endfor %}</nav>
+{# UX Wave 4 (lists): the search box stays in sight; only the other filters fold behind «فلترة» on a phone. #}
+<form class="op-filters vt-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="scope" value="{{ filters.scope }}">
+<input type="search" name="q" value="{{ filters.q }}" placeholder="{{ tw.search }}" aria-label="{{ tw.search }}" enterkeyhint="search">
+<details class="hs-filter" data-filter-fold{% if filters.specialty or filters.tl %} data-filter-active{% endif %}><summary>{{ tw.filter }}{% if filters.specialty or filters.tl %} <span class="hs-filter__count" data-filter-count>{% if filters.specialty and filters.tl %}2{% else %}1{% endif %}</span>{% endif %}</summary>
+<div class="hs-filter__body">
+<select name="specialty" aria-label="{{ tw.specialty }}"><option value="">{{ tw.all_specialties }}</option>{% for s in specialties %}<option value="{{ s.code }}"{% if filters.specialty == s.code %} selected{% endif %}>{{ s.label }}</option>{% endfor %}</select>
+<select name="tl" aria-label="{{ tw.text_lang }}"><option value=""{% if not filters.tl %} selected{% endif %}>{{ tw.text_lang }}: {% if lang == 'en' %}{{ tw.lang_en }}{% else %}{{ tw.lang_ar }}{% endif %}</option><option value="ar"{% if filters.tl == 'ar' %} selected{% endif %}>{{ tw.lang_ar }}</option><option value="en"{% if filters.tl == 'en' %} selected{% endif %}>{{ tw.lang_en }}</option><option value="all"{% if filters.tl == 'all' %} selected{% endif %}>{{ tw.all_langs }}</option></select>
+<button type="submit">{{ tw.find }}</button>
+</div></details></form>
+<div class="op-table-wrap"><table class="op-table" data-list-rows data-vt-rows><thead><tr><th>{{ tw.name }}</th><th>{{ tw.specialty }}</th><th>{{ tw.text_lang }}</th><th>{{ tw.owner }}</th><th>{{ tw.status }}</th><th></th></tr></thead><tbody>
+{% for t in rows %}<tr data-vt-row="{{ t.pk }}"{% if not t.active %} class="vt-off" data-vt-off{% endif %}>
+<td data-row="title"><a href="{% url 'medical:visit_template_edit' t.pk %}?lang={{ lang }}" data-row-link>{{ t.name }}</a></td>
+<td data-row="sub">{{ t.specialty_label }}</td>
+<td data-row="meta"><span class="vt-lang"><bdi>{{ t.lang|upper }}</bdi></span>{% if t.lines_count %} · {{ t.lines_text }}{% endif %}</td>
+<td data-row="meta">{{ t.owner_label }}{% if t.seed_key %} · {{ tw.starter }}{% endif %}</td>
+<td data-row="meta"><span class="op-status {% if t.active %}op-status-posted{% else %}op-status-draft{% endif %}">{% if t.active %}{{ tw.on }}{% else %}{{ tw.off }}{% endif %}</span></td>
+<td data-row="action" class="vt-cell"><div class="vt-actions">
+{% if t.can_edit %}
+<form method="post" action="{% url 'medical:visit_template_action' t.pk 'up' %}?lang={{ lang }}">{% csrf_token %}{% include "medical/_vt_filter_fields.html" %}<button class="vt-act" type="submit" data-vt-up aria-label="{{ tw.up }}" title="{{ tw.up }}"{% if t.first or filters.q %} disabled{% endif %}><svg class="hs-drug-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button></form>
+<form method="post" action="{% url 'medical:visit_template_action' t.pk 'down' %}?lang={{ lang }}">{% csrf_token %}{% include "medical/_vt_filter_fields.html" %}<button class="vt-act" type="submit" data-vt-down aria-label="{{ tw.down }}" title="{{ tw.down }}"{% if t.last or filters.q %} disabled{% endif %}><svg class="hs-drug-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg></button></form>
+<form method="post" action="{% url 'medical:visit_template_action' t.pk t.active|yesno:'off,on' %}?lang={{ lang }}">{% csrf_token %}{% include "medical/_vt_filter_fields.html" %}<button class="vt-act" type="submit" {% if t.active %}data-vt-off{% else %}data-vt-on{% endif %}>{% if t.active %}{{ tw.turn_off }}{% else %}{{ tw.turn_on }}{% endif %}</button></form>
+{% endif %}
+<form method="post" action="{% url 'medical:visit_template_action' t.pk 'copy' %}?lang={{ lang }}">{% csrf_token %}{% include "medical/_vt_filter_fields.html" %}<button class="vt-act" type="submit" data-vt-copy>{{ tw.copy }}</button></form>
+{% if t.can_edit %}<details class="vt-del" data-vt-delete><summary>{{ tw.delete }}</summary><form class="vt-del__box" method="post" action="{% url 'medical:visit_template_action' t.pk 'delete' %}?lang={{ lang }}">{% csrf_token %}{% include "medical/_vt_filter_fields.html" %}<p>{{ t.delete_text }}</p><button class="op-danger" type="submit" data-vt-delete-yes>{{ tw.delete_yes }}</button></form></details>{% endif %}
+</div></td></tr>
+{% empty %}<tr><td colspan="6" class="op-empty" data-row="empty">{% if filtered %}<span class="hs-empty" data-empty-filtered><b>{{ tw.none_filtered }}</b><a href="?lang={{ lang }}&amp;scope={{ filters.scope }}">{{ tw.clear }}</a></span>{% else %}<span class="hs-empty" data-empty-first><b>{{ tw.none }}</b><a href="{% url 'medical:visit_template_new' %}?lang={{ lang }}">+ {{ tw.new }}</a></span>{% endif %}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

@@ -379,6 +379,47 @@ class VisitMedicine(models.Model):
         return (self.name_en or self.name_ar) if lang == "en" else (self.name_ar or self.name_en)
 
 
+# ---- M1: visit templates per specialty (HG-089) ----
+
+class VisitTemplate(models.Model):
+    """A starting text for a visit: what the doctor usually writes for a common complaint, so the form opens half-filled.
+
+    Clinical wording only. A template never holds a patient, an animal, vitals, a date or an appointment; it is never
+    linked from a visit (a visit keeps only the text and lines the doctor chose to apply, as ordinary visit text). The
+    four texts are the visit form's own fields and take the same limits. ``lines`` is a small JSON list of medicine lines
+    (``reference`` of a ``pharmacy.DrugReference`` or empty, ``name``, ``dose``, ``frequency``, ``duration``, ``route``,
+    ``notes``): applying the template puts them on the form as ordinary lines, and ``prescribing.resolve`` checks and
+    snapshots them when the visit is saved, as for a line the doctor added by hand. Written only by
+    ``medical.visit_templates``.
+
+    ``owner`` empty means shared with every clinician; otherwise the template is that user's own (an employee link is not
+    used: it grants nothing, HG-084). ``specialty`` is a code from ``visit_templates.SPECIALTIES`` (kept out of the column's
+    choices so the list can grow without a migration); ``lang`` is the language its texts are written in.
+    ``seed_key`` names the built-in starting template a row came from ("" for one a person wrote)."""
+
+    name = models.CharField(max_length=120)
+    lang = models.CharField(max_length=2, default="ar")
+    specialty = models.CharField(max_length=20, default="general")
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    complaint = models.TextField(blank=True)
+    examination = models.TextField(blank=True)
+    diagnosis = models.TextField(blank=True)
+    treatment = models.TextField(blank=True)
+    lines = models.JSONField(default=list, blank=True)
+    active = models.BooleanField(default=True)
+    position = models.PositiveIntegerField(default=0)
+    seed_key = models.CharField(max_length=60, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["position", "pk"]
+
+    def __str__(self):
+        return self.name
+
+
 # ---- M8 (HG-088): inpatient: wards and beds, an admission and its charges ----
 
 class Ward(models.Model):

@@ -3,7 +3,7 @@
 # M8 (HG-088): inpatient — wards, beds, admissions and their charges. Four new tables, nothing else: no change to
 # an existing table, no data, no posting, stock, cashbox, ledger or permission row.
 #
-# It follows M2's ``0011_visit_medicine`` (HG-086).
+# It follows M1's ``0012_visit_template`` (HG-089).
 
 import django.db.models.deletion
 from django.conf import settings
@@ -15,7 +15,7 @@ class Migration(migrations.Migration):
     dependencies = [
         ("entities", "0001_initial"),
         ("master_data", "0003_sales_rep"),
-        ("medical", "0011_visit_medicine"),
+        ("medical", "0012_visit_template"),
         ("sales", "0011_short_sales"),
         ("staff", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),

@@ -1,4 +1,5 @@
 {% load hesba_labels hesba_forms %}{# AN3: a form in short titled parts; `prefix` keeps each app's field class (md / op) so the required star still works. #}
+{% include "partials/form_error_summary.html" with line_formset=None %}
 <div class="hs-sections">
 {% for part in form.sections %}<section class="hs-section" data-section="{{ part.key }}">
   {% if part.title %}<header class="hs-section__head"><span class="hs-section__num" aria-hidden="true">{{ forloop.counter }}</span><div><h2>{{ part.title }}</h2>{% if part.hint %}<p>{{ part.hint }}</p>{% endif %}</div></header>{% endif %}

@@ -508,7 +508,7 @@ class FormTests(Setup):
         self.assertIn(f'data-url="{SEARCH}"', html)
         self.assertIn(f'data-patient="{self.patient.pk}"', html)
         self.assertIn("hesba/css/drug_picker.css?v=r1-3", html)  # the R1 sheet's stylesheet, unchanged
-        self.assertIn("hesba/js/rx_picker.js?v=m2-1", html)
+        self.assertIn("hesba/js/rx_picker.js?v=m1-1", html)
         self.assertIn("hesba/css/rx_lines.css?v=m2-1", html)
         self.assertNotIn("drug_picker.js", html)  # the pharmacy's item form script is not loaded here
         self.assertRegex(html, r'<button class="rx-add" type="button" data-rx-add hidden')  # without JavaScript the buttons stay hidden

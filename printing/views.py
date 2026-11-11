@@ -441,6 +441,10 @@ def shared_document(request, token):
         return expired_page(request, _lang(request))
     kind, pk = found
     lang = _lang(request)
+    if kind == "appointment":  # M3: the patient's confirm page; a dead link of any kind is the one expired page
+        from appointments.public import page as appointment_page
+
+        return appointment_page(request, pk)
     if kind == "work_order":  # S2: status and quote of a work order; approve / refuse have their own endpoints
         from workorders.models import WorkOrder
         from workorders.public import page

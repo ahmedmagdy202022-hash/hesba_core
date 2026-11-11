@@ -248,6 +248,28 @@
   handButton.hidden = false;
   handButton.addEventListener('click', function () { var line = byHand(''); input(line, 'name').focus(); });
 
+  // M1 (HG-089): visit_templates.js puts a template's medicine lines on the form through this. A line is an ordinary one, still
+  // editable and still checked and copied by the server when the visit is saved. spec = {row (a picker row, when the drug is
+  // still on the list) or name, dose, frequency, duration, route, notes}. The line carries exactly what the template holds: a
+  // box the template left empty stays empty, it never takes the quick default a freshly picked row gets (a dose nobody chose).
+  window.HesbaRx = {
+    max: max,
+    room: function () { return Math.max(0, max - lines().length); },
+    add: function (spec) {
+      if (lines().length >= max) { return null; }
+      var line = spec.row ? fromRow(spec.row) : byHand(spec.name || '');
+      ['dose', 'frequency', 'duration', 'route', 'notes'].forEach(function (name) {
+        var box = input(line, name);
+        if (box) { box.value = spec[name] || ''; }
+      });
+      var more = line.querySelector('.rx-more');
+      if (more && (spec.route || spec.notes)) { more.open = true; }
+      changed(line);
+      if (nameOf(line) && input(line, 'dose').value.trim() && input(line, 'frequency').value.trim()) { setOpen(line, false); }
+      return line;
+    }
+  };
+
   // ---- the sheet ----
   var dialog = root.querySelector('[data-rx-picker]');
   if (!addButton || !dialog || typeof dialog.showModal !== 'function' || !window.fetch) { return; }
