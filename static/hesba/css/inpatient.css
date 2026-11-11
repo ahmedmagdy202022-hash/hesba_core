@@ -1,0 +1,97 @@
+/* M8 (HG-088): the bed board, the admission sheet and the stay's page. Colours come from the tokens only. */
+
+/* ---- cards: borderless on the page ground, as the rest of UX Wave 4 ---- */
+.ip-card{margin:0 0 var(--hs-space-4);padding:var(--hs-space-5);border:var(--hs-card-border);border-radius:var(--hs-card-radius);background:var(--hs-card-bg);box-shadow:var(--hs-card-shadow)}
+.ip-card h2,.ip-card h3{margin:0 0 var(--hs-space-3);color:var(--hs-navy);font-family:var(--hs-font-head);font-size:var(--hs-text-lg);line-height:var(--hs-leading-tight)}
+.ip-card h3{font-size:var(--hs-text-base)}
+.ip-card>p{margin:0 0 var(--hs-space-3)}
+.ip-card>:last-child{margin-bottom:0}
+.ip-empty{text-align:center}
+.ip-hint,.ip-muted{color:var(--hs-muted);font-size:var(--hs-text-sm);line-height:var(--hs-leading)}
+.ip-hint{margin:var(--hs-space-2) 0}
+.ip-text{margin:0;color:var(--hs-ink);line-height:var(--hs-leading);overflow-wrap:anywhere}
+.ip-wide{grid-column:1/-1}
+/* a form inside a card is the card's own content, not a second card */
+.ip-inner-form.op-form{margin:0;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none}
+.ip-inner-form .op-form-actions{margin-top:var(--hs-space-4)}
+.ip-more{margin-top:var(--hs-space-3)}
+.ip-more>summary{display:inline-flex;align-items:center;min-height:var(--hs-control-height);color:var(--hs-teal-deep);font-weight:var(--hs-weight-semibold);cursor:pointer}
+.ip-more>summary:focus-visible{outline:0;box-shadow:var(--hs-focus-ring);border-radius:var(--hs-radius-sm)}
+.ip-more[open]>summary{margin-bottom:var(--hs-space-2)}
+.ip-cancel{margin:var(--hs-space-5) 0 0}
+.ip-cancel>summary{color:var(--hs-danger)}
+
+/* ---- the bed board ---- */
+.ip-ward{margin:0 0 var(--hs-space-6)}
+.ip-ward__head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:var(--hs-space-2);margin:0 0 var(--hs-space-3)}
+.ip-ward__head h2{margin:0;color:var(--hs-navy);font-family:var(--hs-font-head);font-size:var(--hs-text-lg)}
+.ip-ward__head p{display:flex;gap:var(--hs-space-3);margin:0;color:var(--hs-muted);font-size:var(--hs-text-sm)}
+.ip-beds{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:var(--hs-space-3)}
+.ip-bed{display:flex;align-items:center;gap:var(--hs-space-3);min-width:0;min-height:76px;padding:var(--hs-space-3) var(--hs-space-4);border:var(--hs-card-border);border-radius:var(--hs-card-radius-sm);background:var(--hs-card-bg);box-shadow:var(--hs-card-shadow);color:var(--hs-ink);text-decoration:none}
+a.ip-bed:hover{box-shadow:var(--hs-card-shadow-hover)}
+a.ip-bed:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
+.ip-bed__text{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ip-bed__text strong{color:var(--hs-navy);font-size:var(--hs-text-base);line-height:var(--hs-leading-tight)}
+.ip-bed__who{font-weight:var(--hs-weight-semibold);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ip-bed__state{font-weight:var(--hs-weight-semibold);color:var(--hs-success)}
+.ip-bed small{color:var(--hs-muted);font-size:var(--hs-text-xs);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ip-bed[data-state="out"]{background:transparent;box-shadow:none;border:1px dashed var(--hs-line-strong);color:var(--hs-muted)}
+.ip-bed[data-state="out"] strong,.ip-bed[data-state="out"] .ip-bed__state{color:var(--hs-muted)}
+
+/* ---- picking the patient ---- */
+.ip-pick{display:grid;gap:var(--hs-space-2);margin:0 0 var(--hs-space-4);padding:0;list-style:none}
+.ip-pick a,.ip-chosen{display:flex;align-items:center;gap:var(--hs-space-3);min-height:60px;padding:var(--hs-space-2) var(--hs-space-4);border:var(--hs-card-border);border-radius:var(--hs-card-radius-sm);background:var(--hs-card-bg);box-shadow:var(--hs-card-shadow);color:var(--hs-ink);text-decoration:none}
+.ip-pick a:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
+.ip-pick__text{display:flex;flex:1;flex-direction:column;gap:2px;min-width:0}
+.ip-pick__text strong{color:var(--hs-navy);overflow-wrap:anywhere}
+.ip-pick__text small{color:var(--hs-muted);font-size:var(--hs-text-sm)}
+.ip-pick__go{color:var(--hs-teal-deep);font-weight:var(--hs-weight-semibold)}
+.ip-chosen{margin:0 0 var(--hs-space-4);padding:var(--hs-space-3);background:var(--hs-neutral-wash);box-shadow:none}
+
+/* ---- the stay ---- */
+.ip-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:var(--hs-space-3);margin:0 0 var(--hs-space-4)}
+.ip-facts article{display:flex;flex-direction:column;gap:var(--hs-space-1);min-width:0;padding:var(--hs-space-4);border:var(--hs-card-border);border-radius:var(--hs-card-radius-sm);background:var(--hs-card-bg);box-shadow:var(--hs-card-shadow)}
+.ip-facts small{color:var(--hs-muted);font-size:var(--hs-text-sm)}
+.ip-facts strong{color:var(--hs-navy);font-size:var(--hs-text-base);overflow-wrap:anywhere}
+.ip-charges{margin:var(--hs-space-5) 0 0}
+.ip-charges__head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:var(--hs-space-3);margin:0 0 var(--hs-space-4)}
+.ip-charges__head h2{margin:0 0 var(--hs-space-1);color:var(--hs-navy);font-family:var(--hs-font-head);font-size:var(--hs-text-lg)}
+.ip-charges__head p{margin:0;color:var(--hs-muted)}
+.ip-charges__head p strong{color:var(--hs-navy);font-size:var(--hs-text-lg)}
+.ip-day>header{display:flex;align-items:baseline;justify-content:space-between;gap:var(--hs-space-3);margin:0 0 var(--hs-space-2)}
+.ip-day>header h3{margin:0}
+.ip-day>header p{margin:0;color:var(--hs-muted);font-weight:var(--hs-weight-semibold)}
+.ip-lines{margin:0;padding:0;list-style:none}
+.ip-lines li{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;align-items:center;gap:var(--hs-space-2) var(--hs-space-4);padding:var(--hs-space-3) 0;border-top:1px solid var(--hs-line)}
+.ip-lines li:first-child{border-top:0}
+.ip-line__name{min-width:0;overflow-wrap:anywhere;line-height:var(--hs-leading)}
+.ip-line__qty{color:var(--hs-muted);font-size:var(--hs-text-sm);white-space:nowrap}
+.ip-line__total{color:var(--hs-navy);white-space:nowrap}
+.ip-line__act{margin:0}
+.ip-note{display:block;color:var(--hs-muted);font-size:var(--hs-text-sm)}
+.ip-kind{display:inline-flex;margin-inline-end:var(--hs-space-1);padding:2px var(--hs-space-2);border-radius:var(--hs-radius-pill);background:var(--hs-neutral-wash);color:var(--hs-navy);font-size:var(--hs-text-xs);font-weight:var(--hs-weight-bold)}
+.ip-kind[data-kind="bed_day"]{background:var(--hs-teal-wash);color:var(--hs-teal-deep)}
+.ip-kind[data-kind="operation"]{background:var(--hs-info-wash);color:var(--hs-info)}
+.ip-kind[data-kind="supply"]{background:var(--hs-gold-wash);color:var(--hs-gold)}
+
+/* ---- the discharge review ---- */
+.ip-review{box-shadow:var(--hs-card-shadow),inset 0 0 0 2px var(--hs-teal)}
+.ip-totals{display:grid;gap:var(--hs-space-2);margin:var(--hs-space-4) 0 var(--hs-space-3);padding:var(--hs-space-4);border-radius:var(--hs-card-radius-sm);background:var(--hs-neutral-wash)}
+.ip-totals>div{display:flex;align-items:baseline;justify-content:space-between;gap:var(--hs-space-4)}
+.ip-totals dt{color:var(--hs-muted)}
+.ip-totals dd{margin:0;color:var(--hs-navy);font-weight:var(--hs-weight-semibold)}
+.ip-totals__main dt,.ip-totals__main dd{color:var(--hs-navy);font-size:var(--hs-text-lg);font-weight:var(--hs-weight-bold)}
+
+@media(max-width:640px){
+  .ip-card{padding:var(--hs-space-4)}
+  .ip-beds{grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--hs-space-2)}
+  .ip-bed{flex-direction:column;align-items:flex-start;gap:var(--hs-space-2);padding:var(--hs-space-3)}
+  .ip-bed__text{width:100%}
+  .ip-facts{grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--hs-space-2)}
+  .ip-facts article{padding:var(--hs-space-3)}
+  .ip-lines li{grid-template-columns:minmax(0,1fr) auto}
+  .ip-line__name{grid-column:1/-1}
+  .ip-line__act{grid-column:1/-1}
+  .ip-line__act button{width:100%}
+  .ip-charges__head .op-form-actions{width:100%}
+}

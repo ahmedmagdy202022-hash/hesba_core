@@ -1,0 +1,35 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/inpatient.css' %}?v=m8-1">{% endblock %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'medical:beds' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ w.back }}</a><h1>{{ w.admit_title }}</h1><p>{{ w.admit_intro }}</p></div></section>
+{% if error %}<div class="op-message op-message-error" role="alert" data-admit-error>{{ error }}</div>{% endif %}
+{% if not patient %}
+<form class="op-filters" method="get" data-patient-search><input type="hidden" name="lang" value="{{ lang }}">{% if chosen_bed %}<input type="hidden" name="bed" value="{{ chosen_bed }}">{% endif %}
+<input type="search" name="q" value="{{ query }}" placeholder="{{ w.search }}" aria-label="{{ w.search }}" autofocus><button type="submit">{{ w.find }}</button></form>
+{% if found %}<ul class="ip-pick" data-found>
+{% for p in found %}<li><a href="{% url 'medical:admit' %}?lang={{ lang }}&patient={{ p.pk }}{% if chosen_bed %}&bed={{ chosen_bed }}{% endif %}" data-found-patient="{{ p.pk }}">
+<span class="hs-ichip hs-ichip--info hs-ichip--sm"><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-customers"></use></svg></span>
+<span class="ip-pick__text"><strong>{{ p.name }}</strong><small><bdi>{{ p.phone|default:'—' }}</bdi>{% if p.patient_file %} · <bdi>{{ p.patient_file.file_number }}</bdi>{% endif %}</small></span>
+<span class="ip-pick__go">{{ w.choose }}</span></a></li>{% endfor %}
+</ul>{% elif searched %}<p class="op-empty" data-no-match>{{ w.no_match }}</p>{% else %}<p class="ip-hint">{{ w.pick_patient }}</p>{% endif %}
+{% else %}
+<form class="op-form" method="post" data-admit-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="patient" value="{{ patient.pk }}">
+<div class="ip-chosen" data-chosen-patient="{{ patient.pk }}"><span class="hs-ichip hs-ichip--info"><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-customers"></use></svg></span>
+<span class="ip-pick__text"><strong>{{ patient.name }}</strong><small><bdi>{{ patient.phone|default:'—' }}</bdi></small></span>
+<a class="op-secondary" href="{% url 'medical:admit' %}?lang={{ lang }}{% if chosen_bed %}&bed={{ chosen_bed }}{% endif %}">{{ w.change }}</a></div>
+<div class="op-form-grid">
+<div class="op-field"><label for="ip-bed">{{ w.bed }}</label><select id="ip-bed" name="bed" required><option value="">{{ w.choose }}</option>{% for bed in free %}<option value="{{ bed.pk }}"{% if bed.pk == chosen_bed %} selected{% endif %}>{{ bed.ward_name }} — {{ bed.code }} ({{ bed.daily_service.default_sale_price|money }} {{ w.currency_day }})</option>{% endfor %}</select>{% if not free %}<small class="op-field-error">{{ w.no_free }}</small>{% endif %}</div>
+<div class="op-field"><label for="ip-doctor">{{ w.doctor }}</label><select id="ip-doctor" name="doctor"><option value="">{{ w.none }}</option>{% for d in doctors %}<option value="{{ d.pk }}"{% if d.pk == default_doctor %} selected{% endif %}>{{ d.name }}</option>{% endfor %}</select></div>
+{% if clinical %}<div class="op-field ip-wide"><label for="ip-diagnosis">{{ w.diagnosis }}</label><textarea id="ip-diagnosis" name="diagnosis" rows="3">{{ post.diagnosis }}</textarea><small>{{ w.diagnosis_hint }}</small></div>{% endif %}
+</div>
+{% if can_advance %}<h2>{{ w.advance }}</h2>
+<div class="op-form-grid" data-advance-fields>
+<div class="op-field"><label for="ip-advance">{{ w.advance_amount }}</label><input id="ip-advance" name="advance" inputmode="decimal" dir="ltr" value="{{ post.advance }}"></div>
+<div class="op-field"><label for="ip-cashbox">{{ w.cashbox }}</label><select id="ip-cashbox" name="cashbox">{% for box in cashboxes %}<option value="{{ box.pk }}"{% if post.cashbox == box.pk|stringformat:'s' %} selected{% endif %}>{% if lang == 'en' and box.name_en %}{{ box.name_en }}{% else %}{{ box.name_ar }}{% endif %}</option>{% endfor %}</select></div>
+</div><p class="ip-hint">{{ w.advance_hint }}</p>
+{% elif not deposits_on %}<p class="ip-hint" data-advance-off>{{ w.advance_off }}</p>{% endif %}
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ w.save_admit }}</button><a class="op-secondary" href="{% url 'medical:beds' %}?lang={{ lang }}">{{ w.cancel_link }}</a></div>
+</form>
+{% endif %}
+{% endblock %}

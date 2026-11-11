@@ -1,0 +1,23 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/inpatient.css' %}?v=m8-1">{% endblock %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'medical:beds' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ w.back }}</a><h1>{{ w.wards_title }}</h1><p>{{ w.wards_intro }}</p></div></section>
+{% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
+{% if not services %}<p class="op-message" data-no-services>{{ w.no_services }}</p>{% endif %}
+{% for row in rows %}<section class="ip-card" data-ward-setup="{{ row.ward.pk }}"><h2>{{ row.name }}</h2>
+{% if row.beds %}<ul class="ip-lines">{% for bed in row.beds %}<li data-bed-setup="{{ bed.pk }}"><span class="ip-line__name"><strong><bdi>{{ bed.code }}</bdi></strong> · {{ bed.daily_service.item_name }}{% if not bed.active %} <span class="op-status">{{ w.out }}</span>{% endif %}</span>
+<span class="ip-line__qty"><bdi>{{ bed.daily_service.default_sale_price|money }}</bdi> {{ w.currency_day }}</span>
+<form method="post" class="ip-line__act">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="bed_active"><input type="hidden" name="bed" value="{{ bed.pk }}"><input type="hidden" name="active" value="{% if bed.active %}0{% else %}1{% endif %}"><button class="op-secondary" type="submit">{% if bed.active %}{{ w.put_out }}{% else %}{{ w.put_in }}{% endif %}</button></form></li>{% endfor %}</ul>{% else %}<p class="ip-muted">{{ w.no_beds }}</p>{% endif %}
+{% if services %}<details class="ip-more"><summary>{{ w.new_bed }}</summary>
+<form method="post" class="op-form ip-inner-form">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="bed"><input type="hidden" name="ward" value="{{ row.ward.pk }}">
+<div class="op-form-grid"><div class="op-field"><label for="ip-code-{{ row.ward.pk }}">{{ w.bed_code }}</label><input id="ip-code-{{ row.ward.pk }}" name="code" maxlength="20" required></div>
+<div class="op-field"><label for="ip-svc-{{ row.ward.pk }}">{{ w.daily_service }}</label><select id="ip-svc-{{ row.ward.pk }}" name="daily_service" required><option value="">{{ w.choose }}</option>{% for item in services %}<option value="{{ item.pk }}">{{ item.item_name }} — {{ item.default_sale_price|money }}</option>{% endfor %}</select></div></div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ w.add_bed }}</button></div></form></details>{% endif %}
+</section>{% endfor %}
+<section class="ip-card" data-new-ward><h2>{{ w.new_ward }}</h2>
+<form method="post" class="op-form ip-inner-form">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="ward">
+<div class="op-form-grid"><div class="op-field"><label for="ip-ward-ar">{{ w.ward_name }}</label><input id="ip-ward-ar" name="name_ar" maxlength="120" required></div>
+<div class="op-field"><label for="ip-ward-en">{{ w.ward_name_en }}</label><input id="ip-ward-en" name="name_en" maxlength="120" dir="ltr"></div></div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ w.add_ward }}</button></div></form></section>
+{% endblock %}

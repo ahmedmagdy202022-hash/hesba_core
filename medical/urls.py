@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import views, views_inpatient
 
 app_name = "medical"
 
@@ -23,6 +23,11 @@ urlpatterns = [
     path("patients/<int:pk>/lab/", views.lab_results, name="lab"),
     path("patients/<int:pk>/lab/<str:day>/print/", views.lab_sheet, name="lab_sheet"),
     path("lab/tests/", views.lab_tests, name="lab_tests"),
+    # M8 (HG-088): everything under inpatient/ closes with the «الإقامة والأسرّة» capability.
+    path("inpatient/", views_inpatient.beds, name="beds"),
+    path("inpatient/admit/", views_inpatient.admit, name="admit"),
+    path("inpatient/setup/", views_inpatient.wards, name="wards"),
+    path("inpatient/<int:pk>/", views_inpatient.stay, name="stay"),
     path("visits/<int:visit_pk>/", views.visit_edit, name="visit_edit"),
     path("visits/<int:visit_pk>/print/", views.prescription, name="prescription"),
 ]
