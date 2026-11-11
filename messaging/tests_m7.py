@@ -89,8 +89,20 @@ class GatheringTests(Reminders):
             self.assertIn(expected, message.text)
         for forbidden in ("ZZNOTE", "خمول", "LOT-77", "كريم", "http", "/medical/"):
             self.assertNotIn(forbidden, message.text)
-        self.assertEqual(message.link, f"/medical/animals/{dose.animal_id}/")  # the screen's own link, never in the text
+        self.assertEqual(message.link, f"/appointments/?day={dose.next_due.isoformat()}")  # reception's agenda, never a clinical page, never in the text
         self.assertEqual(message.entity, Entity.objects.get(is_main=True))
+
+    def test_a_cashier_opening_the_outbox_is_never_led_to_a_clinical_page(self):
+        from django.urls import reverse
+
+        self.turn_on()
+        self.due_in(2)
+        self.client.force_login(self.desk)
+        page = self.client.get(reverse("messaging:outbox") + "?lang=ar")
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, 'data-kind="vaccine"')
+        self.assertNotContains(page, "/medical/animals/")
+        self.assertNotContains(page, "ZZNOTE")
 
     def test_the_date_is_written_in_words_not_iso(self):
         self.turn_on()

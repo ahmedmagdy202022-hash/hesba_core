@@ -406,12 +406,20 @@ class AccessTests(Screens):
         self.assertEqual(Vaccination.objects.count(), 3)
 
     def test_billing_needs_the_invoice_permission_even_for_a_doctor(self):
+        from permissions.services import user_has_permission
+
         dose = self.dose()
+        self.assertFalse(user_has_permission(self.doctor, "sales.create_sales_invoice"))  # the seeded doctor role holds no sales permission
+        self.assertTrue(user_has_permission(self.manager, "sales.create_sales_invoice"))
         self.client.force_login(self.doctor)
         response = self.client.post(f"{reverse('medical:vaccination_action', args=[dose.pk, 'bill'])}?lang=ar", {"lang": "ar"})
-        # the seeded doctor role holds no sales permission; if it ever does, this assertion names the change
-        self.assertEqual(response.status_code, 403 if not vaccines.can_bill(self.doctor) else 302)
-        self.assertEqual(SalesInvoice.objects.count(), 1 if vaccines.can_bill(self.doctor) else 0)
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(SalesInvoice.objects.count(), 0)
+        page = self.client.get(f"{reverse('medical:animal', args=[self.rocky.pk])}?lang=ar")
+        self.assertNotContains(page, "data-bill")  # the button is not offered to someone who may not use it
+        self.client.force_login(self.manager)
+        self.assertEqual(self.client.post(f"{reverse('medical:vaccination_action', args=[dose.pk, 'bill'])}?lang=ar", {"lang": "ar"}).status_code, 302)
+        self.assertEqual(SalesInvoice.objects.count(), 1)
 
     def test_a_doctor_removes_only_their_own_dose(self):
         theirs = self.dose(user=self.owner)

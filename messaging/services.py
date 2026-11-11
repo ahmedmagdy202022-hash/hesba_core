@@ -337,7 +337,7 @@ def _vaccines(today, company, currency):
         phone = owner.whatsapp or owner.phone
         if key in closed or not phone:
             continue
-        yield {"key": key, "name": owner.name, "phone": phone, "link": f"/medical/animals/{dose.animal_id}/", "localised": True,
+        yield {"key": key, "name": owner.name, "phone": phone, "link": f"/appointments/?day={dose.next_due.isoformat()}", "localised": True,
                "values": {"date": day_text(dose.next_due, lang), "animal": dose.animal.name, "vaccine": dose.vaccine.display(lang), **({"company": clinic} if clinic else {})}}
 
 
