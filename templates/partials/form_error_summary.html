@@ -1,0 +1,8 @@
+{% load hesba_forms hesba_labels %}{% comment %}
+UX Wave 4 (forms): what needs fixing, at the top of a form that came back with errors. Each entry jumps to its field;
+the message itself stays next to the field. Expects `form`; `line_formset` (an invoice's lines) is optional.
+Draws nothing on a fresh form or when only the form-wide message (non_field_errors, shown above it) is set.
+{% endcomment %}{% with fields=form|error_fields lines=line_formset|line_errors %}{% if fields or lines %}<div class="hs-error-summary" role="alert" data-error-summary>
+  <b>{% if lang == 'en' %}A few things need fixing before saving:{% else %}فيه حاجات محتاجة تتصلح قبل الحفظ:{% endif %}</b>
+  <ul>{% for field in fields %}<li><a href="#{{ field.id_for_label }}">{{ field.label }}</a> — {{ field.errors.0|ui:lang }}</li>{% endfor %}{% for line in lines %}<li><a href="#{{ line.field.id_for_label }}">{% if lang == 'en' %}Line {{ line.number }}: {{ line.field.label }}{% else %}سطر {{ line.number }}: {{ line.field.label }}{% endif %}</a> — {{ line.field.errors.0|ui:lang }}</li>{% endfor %}</ul>
+</div>{% endif %}{% endwith %}

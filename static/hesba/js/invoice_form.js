@@ -144,6 +144,7 @@
   function money(value) { return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
   function header(name) { return form.querySelector('[name="' + name + '"]'); }
   var sumTotal = form.querySelector('[data-sum-total]');
+  var dockTotal = form.querySelector('[data-dock-total]');  // UX Wave 4: the phone's running total under the lines
   var sumRemaining = form.querySelector('[data-sum-remaining]');
   var payFull = form.querySelector('[data-pay-full]');  // sales only: sent as pay_full=1, so the server takes paid now from its own total
   var payAllOn = !!payFull && payFull.value === '1';  // a form shown again after a failed save keeps "pay all" on
@@ -232,6 +233,7 @@
     liveTotal.textContent = money(sum);
     var totalValue = invoiceTotal(sum);
     if (sumTotal) { sumTotal.textContent = money(totalValue); }
+    if (dockTotal) { dockTotal.textContent = money(totalValue); }
     // "Pay all" stays on until paid now is typed by hand: a promotion quote that lands later moves it to the new total.
     if (payAllOn) { var paidField = header('paid_now'); if (paidField) { paidField.value = totalValue.toFixed(2); } }
     if (sumRemaining) { sumRemaining.textContent = money(Math.max(totalValue - num(header('paid_now')), 0)); }
@@ -280,6 +282,11 @@
       // A date picker is cleared through its own API, so an earlier "not a date" complaint goes too.
       row.querySelectorAll('.hs-date').forEach(function (wrap) { if (wrap.hsPicker) { wrap.hsPicker.set(null); } });
       recalc();
+      return;
+    }
+    if (event.target.closest('[data-dock-review]')) {  // UX Wave 4: scroll to the summary; never submits
+      var summary = form.querySelector('.inv-summary');
+      if (summary) { summary.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
       return;
     }
     if (event.target.closest('[data-pay-all]')) {

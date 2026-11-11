@@ -4,11 +4,16 @@ price_field, list_url, party ("customer" / "supplier"), can_post and tax_rates.
 {% endcomment %}
 <form class="op-form inv-form" method="post" novalidate data-invoice-form data-price-field="{{ price_field }}" data-words="{{ scan_words }}">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">{% if from_order %}<input type="hidden" name="order" value="{{ from_order.pk }}" data-from-order>{% endif %}{% if from_prescription %}<input type="hidden" name="prescription" value="{{ from_prescription.pk }}" data-from-prescription>{% endif %}
 {% if form.non_field_errors %}<div class="op-form-errors">{{ form.non_field_errors|ui:lang }}</div>{% endif %}
+{% include "partials/form_error_summary.html" %}
 <div class="inv-layout">
 <div class="inv-main">
+  {# UX Wave 4 (forms): the form reads as titled parts: the invoice itself, then its lines, then the summary. #}
+  <section class="inv-part" data-inv-part="head"><h2 class="inv-part__title">{% if lang == 'en' %}Invoice details{% else %}بيانات الفاتورة{% endif %}</h2>
   <div class="inv-head" data-inv-head>{% for field in form|head_main %}{% include "operations/_inv_field.html" with wide=False %}{% endfor %}</div>
   {% with more=form|head_more %}{% if more %}<details class="inv-more"{% if more|has_errors or more|has_values %} open{% endif %}><summary>{% if lang == 'en' %}More details{% else %}تفاصيل أكتر{% endif %} <small>({% for field in more %}{{ field.label }}{% if not forloop.last %}، {% endif %}{% endfor %})</small></summary><div class="inv-head">{% for field in more %}{% include "operations/_inv_field.html" with wide=True %}{% endfor %}</div></details>{% endif %}{% endwith %}
+  </section>
 
+  <section class="inv-part" data-inv-part="lines"><h2 class="inv-part__title">{% if lang == 'en' %}Items{% else %}الأصناف{% endif %}</h2>
   <div class="op-scan"><label for="hs-scan">{% if lang == 'en' %}Scan or type a barcode / item code{% else %}امسح الباركود أو اكتب كود الصنف{% endif %}</label><input id="hs-scan" type="search" inputmode="search" autocomplete="off" data-scan-input placeholder="{% if lang == 'en' %}Scan, then Enter{% else %}امسح واضغط Enter{% endif %}"><output data-scan-status aria-live="polite"></output></div>
   {{ line_formset.management_form }}
   {% if line_formset.non_form_errors %}<div class="op-form-errors">{{ line_formset.non_form_errors|ui:lang }}</div>{% endif %}
@@ -23,6 +28,9 @@ price_field, list_url, party ("customer" / "supplier"), can_post and tax_rates.
   </div>
   {% endwith %}
   <div class="op-form-actions inv-add"><button class="op-secondary" type="button" data-add-line>+ {% if lang == 'en' %}Add line{% else %}سطر جديد{% endif %}</button>{% quick_item_dialog party %}</div>
+  </section>
+  {# Phone and tablet: the running total stays in sight; the button only scrolls to the summary, where the real save buttons are (never a submit: Enter must keep saving a draft). #}
+  <div class="inv-dock" data-inv-dock><span>{% if lang == 'en' %}Total{% else %}الإجمالي{% endif %} <strong data-dock-total>0.00</strong></span><button class="op-primary" type="button" data-dock-review>{% if lang == 'en' %}Review and save{% else %}راجع واحفظ{% endif %}</button></div>
 </div>
 
 <aside class="inv-summary" aria-label="{% if lang == 'en' %}Invoice summary{% else %}ملخص الفاتورة{% endif %}">
