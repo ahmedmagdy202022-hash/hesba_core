@@ -1,0 +1,42 @@
+/* E1: the student's card sheet. Credit-card size (85.6 x 54 mm), two across and five down on A4. Colours come from the tokens only. */
+*{box-sizing:border-box}
+body.ec-body{margin:0;background:var(--hs-ground);color:var(--hs-ink);font-family:var(--hs-font-body)}
+.ec-toolbar{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;align-items:center;gap:var(--hs-space-3);padding:var(--hs-space-3) var(--hs-gutter);background:var(--hs-surface);border-bottom:1px solid var(--hs-line)}
+.ec-toolbar h1{flex:1 1 auto;min-width:0;margin:0;color:var(--hs-navy);font-family:var(--hs-font-head);font-size:var(--hs-text-lg);line-height:var(--hs-leading-tight);overflow-wrap:anywhere}
+.ec-toolbar p{flex-basis:100%;margin:0;color:var(--hs-muted);font-size:var(--hs-text-sm)}
+.ec-button{display:inline-flex;align-items:center;justify-content:center;min-height:var(--hs-control-height);padding:0 var(--hs-space-4);border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-md);background:var(--hs-surface);color:var(--hs-navy);font:inherit;font-weight:var(--hs-weight-semibold);text-decoration:none;cursor:pointer}
+.ec-button--primary{border-color:var(--hs-teal);background:var(--hs-teal);color:var(--hs-on-teal)}
+.ec-button:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
+.hs-back-arrow{flex:none;width:18px;height:18px;margin-inline-end:var(--hs-space-2)}
+[dir="rtl"] .hs-back-arrow{transform:scaleX(-1)}
+.ec-empty{margin:var(--hs-space-6) var(--hs-gutter);text-align:center;color:var(--hs-muted)}
+
+.ec-sheets{display:grid;gap:var(--hs-space-4);justify-items:center;padding:var(--hs-space-4) var(--hs-gutter) var(--hs-space-6)}
+/* a page: 2 x 5 cards at their real size; on a phone the whole sheet is scaled down to fit the screen */
+.ec-page{display:grid;grid-template-columns:repeat(2,85.6mm);grid-auto-rows:54mm;justify-content:center;align-content:start;width:210mm;height:297mm;padding:13.5mm 0;background:var(--hs-surface);box-shadow:var(--hs-card-shadow);transform-origin:top center}
+.ec-card{display:flex;flex-direction:column;overflow:hidden;width:85.6mm;height:54mm;background:var(--hs-surface);border:.2mm solid var(--hs-line-strong);break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.ec-card__head{display:flex;align-items:center;gap:2.5mm;flex:none;height:11mm;padding:0 4mm;background:var(--hs-navy);color:var(--hs-on-navy)}
+.ec-card__logo{flex:none;max-width:16mm;max-height:8mm;object-fit:contain}
+.ec-card__centre{min-width:0;font-weight:var(--hs-weight-semibold);font-size:10pt;line-height:1.15;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.ec-card__body{display:flex;flex:1 1 auto;align-items:center;justify-content:space-between;gap:3mm;min-height:0;padding:3mm 4mm}
+.ec-card__who{display:flex;flex-direction:column;gap:1.2mm;min-width:0}
+.ec-card__name{color:var(--hs-navy);font-size:13pt;line-height:1.2;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.ec-card__line{color:var(--hs-muted);font-size:8.5pt;line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.ec-card__qr{display:flex;flex:none;flex-direction:column;align-items:center;gap:.8mm}
+.ec-qr{width:25mm;height:25mm}
+.ec-qr svg{display:block;width:100%;height:100%}
+.ec-card__code{color:var(--hs-ink);font-size:8pt;font-weight:var(--hs-weight-semibold);letter-spacing:.04em}
+
+@media screen and (max-width:900px){
+  .ec-sheets{padding-inline:0;overflow:hidden}
+  .ec-page{zoom:.45}
+}
+@media screen and (max-width:520px){.ec-page{zoom:.4}}
+@page{size:A4;margin:0}
+@media print{
+  body.ec-body{background:var(--hs-surface)}
+  .ec-toolbar,.ec-empty{display:none}
+  .ec-sheets{display:block;padding:0}
+  .ec-page{zoom:1;box-shadow:none;break-after:page;margin:0}
+  .ec-page:last-child{break-after:auto}
+}
