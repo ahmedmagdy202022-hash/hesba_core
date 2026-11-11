@@ -31,7 +31,9 @@ class DailySummaryTitleTests(TestCase):
     def test_a_title_date_stays_in_one_piece_in_the_stylesheet(self):
         from reports.tests_ux_wave3 import read_static
 
-        self.assertIn(".hs-report-title bdi{white-space:nowrap}", read_static("hesba/css/report_tools.css"))
+        css = read_static("hesba/css/report_tools.css")
+        self.assertIn(".hs-report-title bdi{white-space:nowrap}", css)
+        self.assertIn(".hs-report-title{flex-wrap:wrap}", css)  # an unbreakable date must wrap as a whole, not overflow the phone
 
 
 class ProfitReportPeriodTests(TestCase):
