@@ -388,6 +388,22 @@ class DueListTests(Clinic):
         self.assertEqual([row["dose"] for row in self.due_rows(window="nonsense")], [late, today, week, month])  # an unknown filter is "all"
         self.assertEqual(result["counts"], {"overdue": 1, "week": 2, "month": 3})  # the chips do not change with the filter
 
+    def test_a_long_overdue_backlog_does_not_hide_what_is_due_soon(self):
+        """The page shows at most ``ROW_CAP`` rows. With more overdue doses than that, «الأسبوع ده» still lists this week's doses
+        and every chip counts the whole list, because the window narrows the query before the cap."""
+
+        from unittest import mock
+
+        late = [self.given(self.rabies, self.rocky, -9), self.given(self.fvrcp, self.mishmish, -5), self.given(self.deworm, self.rocky, -2)]
+        soon = self.given(self.deworm, self.mishmish, 3)
+        with mock.patch.object(vaccines, "ROW_CAP", 2):
+            everything = vaccines.due_list(self.owner, today=self.today)
+            self.assertEqual([row["dose"] for row in everything["rows"]], late[:2])  # the cap, oldest first
+            self.assertEqual(everything["counts"], {"overdue": 3, "week": 1, "month": 1})  # counted past the cap
+            this_week = vaccines.due_list(self.owner, today=self.today, window="week")
+            self.assertEqual([row["dose"] for row in this_week["rows"]], [soon])  # not crowded out by the overdue ones
+            self.assertEqual(this_week["counts"], everything["counts"])
+
     def test_a_superseded_dose_is_absent_and_so_is_a_one_off(self):
         old = self.given(self.rabies, self.rocky, -5)
         vaccines.record(self.rocky, {"vaccine": self.rabies, "given_on": self.today}, self.owner)  # a year ahead now

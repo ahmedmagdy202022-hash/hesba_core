@@ -370,6 +370,8 @@ def bill(dose, user, lang="ar"):
 # ---- the due list ---------------------------------------------------------------------------
 
 FILTERS = ("all", "overdue", "week", "month")
+#: The most rows one page of the due list shows (it has no pager; search and the chips narrow it).
+ROW_CAP = 500
 
 
 def due_list(user, today=None, window="all", q="", lang="ar"):
@@ -395,23 +397,23 @@ def due_list(user, today=None, window="all", q="", lang="ar"):
     if query:
         doses = doses.filter(Q(animal__name__icontains=query) | Q(animal__owner__name__icontains=query) | Q(animal__owner__phone__icontains=query)
                              | Q(animal__owner__whatsapp__icontains=query) | Q(vaccine__name_ar__icontains=query) | Q(vaccine__name_en__icontains=query))
+    # The chips count the whole matching list, and the chosen window narrows the query before the page's cap: a clinic with a long
+    # overdue backlog still sees what is due this week (taking the oldest 500 first would have hidden it and counted it as none).
+    week = Q(next_due__gte=today, next_due__lte=today + timedelta(days=WEEK_DAYS))
+    month = Q(next_due__gte=today, next_due__lte=today + timedelta(days=WINDOW_DAYS))
+    late = Q(next_due__lt=today)
+    counts = {"overdue": doses.filter(late).count(), "week": doses.filter(week).count(), "month": doses.filter(month).count()}
+    window = window if window in FILTERS else "all"
+    if window != "all":
+        doses = doses.filter({"overdue": late, "week": week, "month": month}[window])
     rows = []
-    for dose in doses.select_related("animal__owner", "vaccine").order_by("next_due", "animal__name", "pk")[:500]:
+    for dose in doses.select_related("animal__owner", "vaccine").order_by("next_due", "animal__name", "pk")[:ROW_CAP]:
         owner = dose.animal.owner
         phone = (owner.whatsapp or owner.phone or "").strip()
         days = (dose.next_due - today).days
         rows.append({"dose": dose, "animal": dose.animal, "owner": owner, "vaccine": dose.vaccine, "due": dose.next_due, "days": days, "late": -days if days < 0 else 0,
                      "overdue": days < 0, "phone": phone, "call": "".join(ch for ch in (owner.phone or owner.whatsapp or "") if ch.isdigit() or ch == "+"),
                      "whatsapp": whatsapp_number(phone)})
-    counts = {"overdue": sum(1 for row in rows if row["overdue"]), "week": sum(1 for row in rows if 0 <= row["days"] <= WEEK_DAYS),
-              "month": sum(1 for row in rows if 0 <= row["days"] <= WINDOW_DAYS)}
-    window = window if window in FILTERS else "all"
-    if window == "overdue":
-        rows = [row for row in rows if row["overdue"]]
-    elif window == "week":
-        rows = [row for row in rows if 0 <= row["days"] <= WEEK_DAYS]
-    elif window == "month":
-        rows = [row for row in rows if 0 <= row["days"] <= WINDOW_DAYS]
     return {"rows": rows, "counts": counts}
 
 
