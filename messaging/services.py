@@ -42,21 +42,28 @@ DEFAULT_TEXTS = {
     MessageKind.CAMPAIGN: "أهلاً {name}، وحشتنا في {company}! عندنا ليك جديد، ننتظرك قريب.",  # S8: only the starting text of a new campaign
     # M3: the clinic and the date, nothing else. Never the diagnosis, the specialty or any clinical detail (the placeholders cannot carry one).
     MessageKind.FOLLOWUP: "أهلاً {name}، تذكير من {company}: ميعاد المتابعة يوم {date}. تحب نحجزلك ميعاد؟ كلّمنا أو ابعتلنا هنا.",
+    # M7: the owner, the animal, the vaccine, the date and the clinic. Never a note or a diagnosis (the placeholders cannot carry one) and no link.
+    MessageKind.VACCINE: "أهلاً {name}، تذكير من {company}: ميعاد جرعة {vaccine} لـ {animal} يوم {date}. تحب نحجزلك ميعاد؟ كلّمنا أو ابعتلنا هنا.",
 }
 #: S7: the same wording in English, used when the business's default language is English and the text was never edited.
 DEFAULT_TEXTS_EN = {MessageKind.WORKORDER: "Hello {name}, from {company}: work order {number} {status} {link}",
                     MessageKind.CAMPAIGN: "Hello {name}, we miss you at {company}! We have something new for you; see you soon.",
-                    MessageKind.FOLLOWUP: "Hello {name}, a reminder from {company}: your follow-up is due on {date}. Would you like us to book it? Contact us here."}
+                    MessageKind.FOLLOWUP: "Hello {name}, a reminder from {company}: your follow-up is due on {date}. Would you like us to book it? Contact us here.",
+                    MessageKind.VACCINE: "Hello {name}, a reminder from {company}: {animal}'s {vaccine} dose is due on {date}. Would you like us to book it? Contact us here."}
 #: ``every_days`` is unused for work-order messages (one per order per status, whatever the day).
-DEFAULT_EVERY = {MessageKind.DUE: 7, MessageKind.INSTALMENT: 3, MessageKind.APPOINTMENT: 1, MessageKind.REFILL: 3, MessageKind.WORKORDER: 1, MessageKind.CAMPAIGN: 1, MessageKind.FOLLOWUP: 7}
+DEFAULT_EVERY = {MessageKind.DUE: 7, MessageKind.INSTALMENT: 3, MessageKind.APPOINTMENT: 1, MessageKind.REFILL: 3, MessageKind.WORKORDER: 1, MessageKind.CAMPAIGN: 1, MessageKind.FOLLOWUP: 7,
+                 MessageKind.VACCINE: 7}
 #: M3: a kind that is off until the owner switches it on (a new kind has no saved row, and no row means "on" for the older kinds).
-DEFAULT_OFF = (MessageKind.FOLLOWUP,)
+DEFAULT_OFF = (MessageKind.FOLLOWUP, MessageKind.VACCINE)
 #: M3: a clinic's appointment reminder carries the patient's own link; the sentence in front of it, per language.
 APPOINTMENT_LINK_TEXTS = {"ar": "لتأكيد الحضور أو طلب تغيير الميعاد:", "en": "To confirm or ask to change the appointment:"}
 APPOINTMENT_TEXT_EN = "Hello {name}, a reminder from {company} of your appointment tomorrow {date} at {time}."
 #: M3: a follow-up is reminded this many days ahead of its date (and never again once it was sent or skipped).
 FOLLOWUP_AHEAD_DAYS = 2
-PLACEHOLDERS = ("{name}", "{company}", "{amount}", "{date}", "{time}", "{number}", "{status}", "{link}")
+#: M7: a vaccination is reminded this many days ahead of its due date (and never again once it was sent or skipped). No lead-time column
+#: exists on the template (adding one is a schema change), so it is a constant, as the follow-up's is.
+VACCINE_AHEAD_DAYS = 3
+PLACEHOLDERS = ("{name}", "{company}", "{amount}", "{date}", "{time}", "{number}", "{status}", "{link}", "{animal}", "{vaccine}")
 #: S7: what each key status says to the customer ({days} is the order's warranty days).
 WORKORDER_STATUSES = ("quoted", "ready", "delivered")
 WORKORDER_STATUS_TEXTS = {
@@ -69,8 +76,8 @@ WORKORDER_STATUS_TEXTS = {
 }
 
 KIND_LABELS = {
-    "ar": {"due": "مبلغ مستحق", "instalment": "قسط", "appointment": "ميعاد بكرة", "refill": "تجديد روشتة", "workorder": "حالة أمر الشغل", "campaign": "حملة", "followup": "متابعة"},
-    "en": {"due": "Amount due", "instalment": "Instalment", "appointment": "Appointment tomorrow", "refill": "Prescription refill", "workorder": "Work order status", "campaign": "Campaign", "followup": "Follow-up visit"},
+    "ar": {"due": "مبلغ مستحق", "instalment": "قسط", "appointment": "ميعاد بكرة", "refill": "تجديد روشتة", "workorder": "حالة أمر الشغل", "campaign": "حملة", "followup": "متابعة", "vaccine": "تطعيم"},
+    "en": {"due": "Amount due", "instalment": "Instalment", "appointment": "Appointment tomorrow", "refill": "Prescription refill", "workorder": "Work order status", "campaign": "Campaign", "followup": "Follow-up visit", "vaccine": "Vaccination due"},
 }
 MESSAGES = {
     "ar": {"text": "نص الرسالة فاضي.", "placeholder": "النص فيه {bad} ومش معروف؛ المسموح: {allowed}.", "every": "التكرار من 1 لـ 90 يوم.",
@@ -110,9 +117,9 @@ def template(kind):
 def templates():
     """The wording the outbox lets an owner edit. A campaign's words belong to the campaign itself (S8), so its kind is
     not listed here; its on/off switch and WhatsApp template are on the campaigns screen. The follow-up reminder (M3) is a
-    clinic's, so it is listed only when some entity is a medical business."""
+    clinic's, so it is listed only when some entity is a medical business; the vaccination reminder (M7) only when one is a vet's."""
 
-    hidden = {MessageKind.CAMPAIGN} | (set() if _medical_entities() else {MessageKind.FOLLOWUP})
+    hidden = {MessageKind.CAMPAIGN} | (set() if _medical_entities() else {MessageKind.FOLLOWUP}) | (set() if _vet_entities() else {MessageKind.VACCINE})
     return [template(kind) for kind in MessageKind.values if kind not in hidden]
 
 
@@ -144,7 +151,7 @@ def save_template(kind, data, user, lang="ar"):
 
 
 def render(text, **values):
-    for key in ("name", "company", "amount", "date", "time", "number", "status", "link"):
+    for key in ("name", "company", "amount", "date", "time", "number", "status", "link", "animal", "vaccine"):
         text = text.replace("{" + key + "}", str(values.get(key, "")))
     return text
 
@@ -248,6 +255,14 @@ def _medical_entities():
     return [entity for entity in _entities() if activity_of(entity)[0] == "medical"]
 
 
+def _vet_entities():
+    """The active entities that are vet clinics (M7), main first."""
+
+    from entities.services import activity_of
+
+    return [entity for entity in _entities() if activity_of(entity) == ("medical", "vet")]
+
+
 def _owner_entity(visit, medical, main):
     """M3: the entity a follow-up is gathered in. Visits carry no entity (patients are group-wide, HG-084), so it is the
     entity of the visit's own appointment (none: the main entity, HG-034) when that is a medical one, else the first medical entity.
@@ -295,8 +310,39 @@ def _followups(today, company, currency):
                "values": {"date": row["due"].isoformat(), **({"company": clinic} if clinic else {})}}
 
 
+def _vaccines(today, company, currency):
+    """M7: animals whose last dose of a vaccine is due in the next ``VACCINE_AHEAD_DAYS`` days (today included), in the entity being
+    gathered, one message per dose (``key`` holds the dose; a sent or skipped one is never queued again, whatever the day). The text
+    names the owner, the animal, the vaccine, the date and the clinic: never the dose's note, a diagnosis or a link. A dose recorded
+    before the message goes out closes this one (``open_doses`` stops yielding it), and ``_gather`` withdraws the waiting message.
+    A dose already overdue is not messaged (turning the kind on must not send a year of old reminders); it stays on the due list."""
+
+    from entities.services import is_multi_entity
+    from medical import vaccines, vet
+    from settings_core.templatetags.hesba_format import day_text
+
+    current = entity_scope.entity()
+    if current is None or not vet.is_vet():
+        return
+    lang = workorder_language()
+    closed = {key.split("@")[0] for key in OutboxMessage.objects.filter(kind=MessageKind.VACCINE, status__in=(OutboxStatus.SENT, OutboxStatus.SKIPPED))
+              .values_list("key", flat=True)}
+    clinic = current.display(lang) if is_multi_entity() else ""
+    doses = (vaccines.open_doses(vaccines.scoped_vaccinations())
+             .filter(next_due__gte=today, next_due__lte=today + timedelta(days=VACCINE_AHEAD_DAYS), animal__active=True, animal__owner__active=True)
+             .exclude(animal__owner__customer_code="WALK-IN").select_related("animal__owner", "vaccine").order_by("next_due", "pk"))
+    for dose in doses:
+        key = f"vaccine:{dose.pk}"
+        owner = dose.animal.owner
+        phone = owner.whatsapp or owner.phone
+        if key in closed or not phone:
+            continue
+        yield {"key": key, "name": owner.name, "phone": phone, "link": f"/appointments/?day={dose.next_due.isoformat()}", "localised": True,
+               "values": {"date": day_text(dose.next_due, lang), "animal": dose.animal.name, "vaccine": dose.vaccine.display(lang), **({"company": clinic} if clinic else {})}}
+
+
 SOURCES = {MessageKind.DUE: _due, MessageKind.INSTALMENT: _instalments, MessageKind.APPOINTMENT: _appointments, MessageKind.REFILL: _refills,
-           MessageKind.FOLLOWUP: _followups}
+           MessageKind.FOLLOWUP: _followups, MessageKind.VACCINE: _vaccines}
 #: Kinds whose records carry no entity; gathered for the main entity only. Empty since HG-074 gave appointments
 #: their entity: each entity's appointments are gathered as its own, and the main entity's keys are unchanged.
 UNSCOPED = set()

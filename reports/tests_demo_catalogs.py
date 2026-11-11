@@ -348,7 +348,8 @@ class SampleBusinessPerActivityTests(TestCase):
 
         catalog = self.fill("medical", "vet")
         self.assert_a_working_business(catalog)
-        self.assertEqual(sorted(Animal.objects.values_list("name", "species")), [("روكي", "dog"), ("مشمش", "cat")])
+        # M7 (HG-090): the first owner's two animals, and a second owner's two (the dog a week overdue for rabies, the cat due this week)
+        self.assertEqual(sorted(Animal.objects.values_list("name", "species")), sorted([("روكي", "dog"), ("مشمش", "cat"), ("ريكس", "dog"), ("بيلا", "cat")]))
         self.assertEqual(ClinicalVisit.objects.filter(animal__name="روكي").count(), 2)
         self.assertFalse(ClinicalVisit.objects.filter(animal__isnull=True).exists())
 
