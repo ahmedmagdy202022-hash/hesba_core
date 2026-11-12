@@ -9,7 +9,7 @@
 {% if figures.over %}<article><small>{{ words.over }}</small><strong data-figure="over">{{ figures.over|money }}</strong></article>{% else %}<article><small>{{ words.remaining }}</small><strong data-figure="remaining">{{ figures.remaining|money }}</strong></article>{% endif %}
 {% if position %}<article><small>{{ cwords.collections }}</small><strong data-figure="collected">{{ position.collections|money }}</strong></article>{% endif %}
 {% if can_profit %}<article><small>{{ words.cost }}</small><strong data-figure="cost">{{ figures.cost|money }}</strong><small>{{ words.materials }} {{ figures.materials|money }} · {{ words.expenses }} {{ figures.expenses|money }}{% if figures.purchases %} · {{ cwords.tab_subcontracts }} {{ figures.purchases|money }}{% endif %}</small></article>
-<article><small>{{ words.profit }} ({{ words.margin }} {{ figures.margin }}%)</small><strong data-figure="profit">{{ figures.profit|money }}</strong></article>{% endif %}
+<article><small>{{ words.profit }} ({{ words.margin }} {{ figures.margin }}%)</small><strong data-figure="profit">{% include "projects/_profit.html" with value=figures.profit loss=words.loss %}</strong></article>{% endif %}
 <article><small>{{ words.status }}</small><strong><span class="op-status op-status-{% if project.status == 'done' %}posted{% elif project.status == 'cancelled' %}cancelled{% else %}open{% endif %}" data-project-status="{{ project.status }}">{{ status_label }}</span></strong></article>
 </section>
 {% if figures.drafts %}<p class="op-muted">{{ words.drafts }}: {{ figures.drafts|money }}</p>{% endif %}

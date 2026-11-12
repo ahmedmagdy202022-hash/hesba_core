@@ -44,7 +44,7 @@ ATTEMPTS = 5
 MESSAGES = {
     "ar": {
         "off": "كروت الهدايا مقفولة؛ شغّلها من الإعدادات ← الخصائص («كروت الهدايا والعضويات»).",
-        "amount": "مبلغ الكارت مش صحيح.", "cashbox": "اختار الخزنة أو الحساب البنكي اللي استلم تمن الكارت.",
+        "amount": "اكتب مبلغ الكارت رقم أكبر من صفر.", "cashbox": "اختار الخزنة أو الحساب البنكي اللي استلم تمن الكارت.",
         "expiry": "تاريخ انتهاء الكارت لازم يكون بعد النهارده.",
         "not_found": "مفيش كارت هدية بالكود ده.", "cancelled": "بيع الكارت ده اتلغى؛ مينفعش يتصرف.",
         "other_entity": "الكارت ده اتباع في فرع تاني؛ بيتصرف في نفس الفرع اللي اتباع فيه بس.",
@@ -64,7 +64,7 @@ MESSAGES = {
     },
     "en": {
         "off": "Gift cards are switched off; switch them on from Settings → Features (“Gift cards & memberships”).",
-        "amount": "Invalid card amount.", "cashbox": "Choose the cashbox or bank account that took the card's money.",
+        "amount": "Type the card amount as a number above zero.", "cashbox": "Choose the cashbox or bank account that took the card's money.",
         "expiry": "The card's expiry date must be after today.",
         "not_found": "No gift card has this code.", "cancelled": "This card's sale was cancelled; it cannot be spent.",
         "other_entity": "This card was sold in another entity; it is spent only in the entity it was sold in.",

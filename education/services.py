@@ -15,6 +15,8 @@ from django.utils import timezone
 from audit.models import AuditEventType, AuditLog
 from permissions.services import user_has_permission
 
+from master_data.phones import PHONE_ERROR, is_plain_phone
+
 from .models import Course, Enrollment, EnrollmentStatus, FeeBasis, Student, StudyGroup, Weekday
 
 VIEW = "master_data.view_master_data"
@@ -226,7 +228,14 @@ def _create_numbered(model, field, prefix, **values):
 
 # ---- students ----
 
-def _payer(data, name, phone, user, words):
+def _check_phone(phone, lang):
+    """ED-01: the rule the customer and supplier forms use (``master_data.phones``), for a phone typed into an education form."""
+
+    if phone and not is_plain_phone(phone):
+        raise ValidationError(PHONE_ERROR[lang])
+
+
+def _payer(data, name, phone, user, words, lang="ar"):
     """The account the student's fees go on: a chosen customer, a new parent, or the student themselves."""
 
     from sales.pos_customers import quick_add_customer
@@ -244,7 +253,9 @@ def _payer(data, name, phone, user, words):
         return add(name, phone)
     parent = _text(data, "payer_name", 255)
     if parent:
-        return add(parent, _text(data, "payer_phone", 50))
+        parent_phone = _text(data, "payer_phone", 50)
+        _check_phone(parent_phone, lang)  # a new parent is always new, so the phone is always checked
+        return add(parent, parent_phone)
     raise ValidationError(words["payer"])
 
 
@@ -262,12 +273,14 @@ def save_student(data, user, student=None, lang="ar"):
     if not name:
         raise ValidationError(words["name"])
     phone = _text(data, "phone", 50)
+    if student is None or phone != student.phone:  # an old row with an odd phone still saves while the phone is untouched
+        _check_phone(phone, lang)
     values = {
         "name": name, "phone": phone, "date_of_birth": _birth_date(data.get("date_of_birth"), words), "stage": _text(data, "stage", 80),
         "school": _text(data, "school", 120), "relation": _text(data, "relation", 40), "notes": (data.get("notes") or "").strip(),
     }
     if student is None:
-        values["payer"] = _payer(data, name, phone, user, words)
+        values["payer"] = _payer(data, name, phone, user, words, lang)
         student = _create_numbered(Student, "code", "ST-", created_by=user, entity=owner_entity(), **values)
         _audit(user, "create_student", student, {"code": student.code, "name": name, "payer": student.payer.customer_code})
         return student

@@ -9,6 +9,7 @@ from settings_core.templatetags.hesba_format import DEFAULT_UNITS
 from settings_core.display_labels import localized_choices
 from settings_core.models import ClientProfile
 
+from . import phones
 from .models import Category, Customer, Item, Location, Supplier
 
 
@@ -188,17 +189,13 @@ class PhoneChecked:
     education payers and imports build parties through their own code and do not go through this form.
     """
 
-    PHONE_ERROR = {
-        "ar": "اكتب رقم تليفون بأرقام بس (ينفع + في الأول ومسافات وشرطات وأقواس).",
-        "en": "Type a phone number in digits only (a leading +, spaces, dashes and brackets are fine).",
-    }
+    PHONE_ERROR = phones.PHONE_ERROR
 
     def _clean_phone_field(self, name):
         value = (self.cleaned_data.get(name) or "").strip()
         if not value or name not in self.changed_data:
             return value
-        body = value[1:] if value.startswith("+") else value
-        if not any(ch.isdecimal() for ch in body) or any(not (ch.isdecimal() or ch in " -()") for ch in body):
+        if not phones.is_plain_phone(value):
             raise forms.ValidationError(self.PHONE_ERROR[self.lang], code="phone")
         return value
 

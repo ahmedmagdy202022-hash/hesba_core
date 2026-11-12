@@ -1,0 +1,20 @@
+{% extends "operations/base.html" %}
+{% load static %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/lab_sample.css' %}?v=m9-1">{% endblock %}
+{% block operation_content %}
+{# M9 (HG-092): one box takes a hardware scanner (it types the code, then Enter) and the phone camera. The code is looked up on the server. #}
+<section class="op-title-row hs-head"><div><h1>{{ sw.sample_title }}</h1><p>{{ sw.sample_intro }}</p></div></section>
+{% include "medical/_tabs.html" %}
+<section class="ls-card{% if error %} ls-card--error{% endif %}" data-lab-sample>
+<form class="ls-inline" method="get" action="{% url 'medical:lab_sample' %}"><input type="hidden" name="lang" value="{{ lang }}">
+<div class="op-field ls-box"><label for="ls-code">{{ sw.code }}</label><input id="ls-code" name="code" type="text" value="{{ code }}" inputmode="text" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" dir="ltr" enterkeyhint="go" placeholder="{{ sw.placeholder }}" data-lab-sample-box data-camera-scan autofocus></div>
+<button class="op-primary" type="submit">{{ sw.open }}</button></form>
+{% if error %}<p class="op-message op-message-error" role="alert" data-lab-sample-error>{{ error }}</p>{% endif %}
+<p class="ls-hint">{{ sw.camera_hint }}</p>
+</section>
+<section class="ls-card"><h2>{{ sw.label_h }}</h2><p>{{ sw.code_help }}</p></section>
+{% if can_import %}<section class="ls-card"><h2>{{ sw.import_h }}</h2><p>{{ sw.import_p }}</p>
+<div class="op-form-actions"><a class="op-secondary" href="{% url 'medical:lab_import' %}?lang={{ lang }}" data-lab-import-link>{{ sw.import_go }}</a></div></section>{% endif %}
+<script src="{% static 'hesba/js/lab_sample.js' %}?v=m9-1" defer></script>
+<script src="{% static 'hesba/js/camera_scan.js' %}?v=cam-001" data-zxing="{% static 'hesba/vendor/zxing/zxing-0.23.0.min.js' %}" defer></script>
+{% endblock %}

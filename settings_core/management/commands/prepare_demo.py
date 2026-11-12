@@ -1077,8 +1077,15 @@ class Command(BaseCommand):
             for pick in picks:
                 floor.add_item(order, dishes[pick % len(dishes)], owner)
             floor.pay(order, owner, cashbox=cashbox, tendered=Decimal("100000"))  # paid in cash
-            closed = timezone.make_aware(_dt.combine(today - timedelta(days=days), time(hour, 15)))
+            closed = self._closing_moment(today, days, hour, timezone.now())
             Order.objects.filter(pk=order.pk).update(opened_at=closed - timedelta(minutes=40 + 5 * guests), closed_at=closed)
+        # RS-05: the demo opens with a table in service: an open order, one part already with the kitchen and one still to send.
+        live = floor.open_order(owner, table=tables[3], guests=3, waiter=waiter)
+        floor.add_item(live, dishes[0], owner)
+        floor.add_item(live, dishes[1 % len(dishes)], owner, 2)
+        floor.send_to_kitchen(live, owner)
+        floor.add_item(live, dishes[2 % len(dishes)], owner)
+        Order.objects.filter(pk=live.pk).update(opened_at=timezone.now() - timedelta(minutes=25))
         adjust_stock(f"DEMO-WASTE-{today:%m%d}", today - timedelta(days=2), raw[0], master["location"], "out", "1", "هالك — باظت في التلاجة", owner)
         driver = save_employee({"name": "محمود الطيار", "title": "طيار دليفري"}, owner)  # RESTO-003: a delivery out with its driver and fee
         order = floor.open_order(owner, kind="delivery", customer=master["customers"][0], address="شارع النصر 12، مدينة نصر", delivery_fee="20")
@@ -1087,6 +1094,19 @@ class Command(BaseCommand):
         floor.pay(order, owner, cashbox=cashbox, tendered=Decimal("100000"))
         closed = timezone.make_aware(_dt.combine(today - timedelta(days=1), time(21, 40)))
         Order.objects.filter(pk=order.pk).update(opened_at=closed - timedelta(minutes=55), dispatched_at=closed - timedelta(minutes=30), closed_at=closed)
+
+    @staticmethod
+    def _closing_moment(today, days, hour, now):
+        """RS-04: when a seeded order was closed: ``days`` ago at ``hour``:15. Today's is never later than half an hour before
+        ``now`` (the demo is prepared at any hour); if that falls before midnight it is dated yesterday at its own hour."""
+
+        planned = timezone.make_aware(datetime.combine(today - timedelta(days=days), time(hour, 15)))
+        if planned <= now - timedelta(minutes=30):
+            return planned
+        latest = now - timedelta(minutes=30)
+        if timezone.localtime(latest).date() < today:
+            return timezone.make_aware(datetime.combine(today - timedelta(days=1), time(hour, 15)))
+        return latest
 
     def _appointments(self, master, staff, owner):
         from appointments.services import book
@@ -1201,10 +1221,11 @@ class Command(BaseCommand):
             return
         services = {item.item_name: item for item in master["items"] if not item.is_stock_tracked}
         tests = {}
+        codes = {"هيموجلوبين": "HB", "سكر صايم": "GLU"}  # M9 (HG-092): two tests carry the analyzer's code, so the sample label shows them short
         for position, (name, unit, low, high, service) in enumerate((
                 ("هيموجلوبين", "g/dL", "12", "16", "صورة دم كاملة"), ("كرات دم بيضاء", "×10³/µL", "4", "11", "صورة دم كاملة"),
                 ("سكر صايم", "mg/dL", "70", "100", ""), ("إنزيم ALT", "U/L", "7", "56", "وظائف كبد"), ("فصيلة الدم", "", "", "", ""))):
-            tests[name] = lab.save_test({"name": name, "unit": unit, "low": low, "high": high, "service": services.get(service), "position": position}, owner)
+            tests[name] = lab.save_test({"name": name, "code": codes.get(name, ""), "unit": unit, "low": low, "high": high, "service": services.get(service), "position": position}, owner)
         patient = master["customers"][0]
         lab.record_results(patient, today - timedelta(days=30), {tests["هيموجلوبين"]: ("11.2", ""), tests["سكر صايم"]: ("132", "")}, owner)
         lab.record_results(patient, today - timedelta(days=1), {tests["هيموجلوبين"]: ("12.8", ""), tests["كرات دم بيضاء"]: ("7.5", ""),
@@ -1340,6 +1361,16 @@ class Command(BaseCommand):
             edu.enroll(student, groups[n % 2], owner, start_date=today - timedelta(days=35), discount_percent="10" if sibling else "0")
             if n < 4:
                 edu.enroll(student, groups[2], owner, start_date=today - timedelta(days=20))
+        # ED-02: the scan screen only accepts a student from 30 minutes before their class until it ends, and the three classes
+        # above meet at 16:00 to 18:00 on certain days, so a visitor at any other time only ever saw «ما لوش حصة دلوقتي». A group
+        # with no start time is open all day and never late (``education.scan.in_window``), so a study hall like that, open every
+        # day with every student enrolled, gives any card a class to scan into at any hour, whenever the demo is built or visited.
+        # It is free (fee 0: billing skips it) and has no teacher or room, so nothing clashes with it. While one of the three
+        # classes is on, a scan asks which of the two the student is at.
+        hall = edu.save_group({"course": courses[0], "name": "قاعة المذاكرة (مفتوحة طوال اليوم)", "days": "sat,sun,mon,tue,wed,thu,fri", "capacity": "0",
+                               "fee": "0", "starts_on": today - timedelta(days=40)}, owner)
+        for student in students:
+            edu.enroll(student, hall, owner, start_date=today - timedelta(days=35))
         # EDU-002: four weeks of attendance, with a few absences and late arrivals.
         from education import attendance
 
