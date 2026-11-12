@@ -229,6 +229,34 @@ def _lock_booking(appointment):
     return Appointment.objects.select_for_update().get(pk=appointment.pk)
 
 
+DEPOSIT_TOO_BIG = {
+    "ar": "العربون مينفعش يزيد عن سعر الحجز. أقصى عربون ممكن {most}.",
+    "en": "The deposit cannot be more than the booking price. The most you can take is {most}.",
+}
+
+
+def check_deposit_within_price(appointment, amount, lang="ar"):
+    """BE-01: a deposit is the customer's money on account for *this* booking, so it may not exceed the booking's price.
+
+    Called by the booking's «خد عربون» action *before* ``deposits.services.take`` (which stays untouched). A booking with
+    no price (zero) keeps today's behaviour: nothing to compare with, so any positive amount is still accepted. An amount
+    that cannot be read is left to ``take`` to refuse with its own message. The inpatient advance does not call this: a
+    stay's bill is not known at admission.
+    """
+
+    from settings_core.templatetags.hesba_format import money
+
+    price = appointment.price or Decimal("0")
+    if price <= 0:
+        return
+    try:
+        value = Decimal(str(amount if amount not in (None, "") else "0").strip().replace(",", ""))
+    except InvalidOperation:
+        return
+    if value.is_finite() and money_round(value) > price:
+        raise ValidationError(DEPOSIT_TOO_BIG[lang if lang in DEPOSIT_TOO_BIG else "ar"].format(most=money(price)))
+
+
 @transaction.atomic
 def cancel_with_deposit_policy(appointment, status, user, lang="ar"):
     """S5 (HG-069): cancel (or mark a no-show) and run the cancellation policy on the booking's deposit, in one transaction.
