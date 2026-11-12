@@ -1,5 +1,6 @@
 {% extends "operations/base.html" %}
-{% load hesba_format %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/restaurant.css' %}?v=resto-001">{% endblock %}
 {% block operation_content %}
 <section class="op-title-row"><div><a class="op-back" href="{% url 'restaurant:costing' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ iw.back }}</a><h1>{{ dish.item_name }}</h1>
 <p>{{ iw.price }}: {{ dish.default_sale_price|money }} · {{ iw.cost }}: <strong data-plate-cost>{% if cost is not None %}{{ cost|money }}{% else %}—{% endif %}</strong></p></div></section>
