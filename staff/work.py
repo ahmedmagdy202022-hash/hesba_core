@@ -5,6 +5,8 @@ form. This gathers, read-only, what the existing reports already count:
 - appointments and visits marked done, the sales billed for them and the
   commission on it (appointments.services.performance);
 - as a sales rep: net sales and the commission on it (reports.reps);
+- as the technician of work orders: the ones delivered and the commission on them, read through
+  workorders.services.technician_report, the very service of the technicians' report, so the two always agree;
 - the groups they teach (education), the orders they served and the
   deliveries they took (restaurants).
 Only sources that hold something for this person are shown, so a shop
@@ -37,18 +39,28 @@ def _reps(date_from, date_to):
     return {row["rep"].pk: row for row in rows if row["rep"] is not None}
 
 
+def _work_orders(date_from, date_to):
+    """{employee pk: the technicians' report row} for the month; empty unless this is a workshop."""
+
+    from workorders import services as wo
+
+    if not wo.is_workshop():
+        return {}
+    return {row["technician"].pk: row for row in wo.technician_report(date_from, date_to) if row["technician"] is not None}
+
+
 def team_month(employees, today=None):
     """{employee pk: {"done", "sales", "commission"}} for the list's "this month" columns."""
 
     date_from, date_to = month_range(today)
-    booked, sold = _appointments(date_from, date_to), _reps(date_from, date_to)
+    booked, sold, repaired = _appointments(date_from, date_to), _reps(date_from, date_to), _work_orders(date_from, date_to)
     result = {}
     for employee in employees:
-        visit, rep = booked.get(employee.pk), sold.get(employee.pk)
+        visit, rep, order = booked.get(employee.pk), sold.get(employee.pk), repaired.get(employee.pk)
         result[employee.pk] = {
-            "done": visit["done"] if visit else 0,
-            "sales": (visit["sales"] if visit else ZERO) + (rep["net_sales"] if rep else ZERO),
-            "commission": (visit["commission"] if visit else ZERO) + (rep["commission"] if rep else ZERO),
+            "done": (visit["done"] if visit else 0) + (order["count"] if order else 0),
+            "sales": (visit["sales"] if visit else ZERO) + (rep["net_sales"] if rep else ZERO) + (order["net_sales"] if order else ZERO),
+            "commission": (visit["commission"] if visit else ZERO) + (rep["commission"] if rep else ZERO) + (order["commission"] if order else ZERO),
         }
     return result
 
@@ -61,6 +73,9 @@ def employee_month(employee, today=None):
     visit = _appointments(date_from, date_to).get(employee.pk)
     if visit and (visit["done"] or visit["sales"]):
         blocks.append({"key": "appointments", "done": visit["done"], "sales": visit["sales"], "commission": visit["commission"]})
+    order = _work_orders(date_from, date_to).get(employee.pk)
+    if order and order["count"]:
+        blocks.append({"key": "work_orders", "delivered": order["count"], "sales": order["net_sales"], "commission": order["commission"]})
     rep = _reps(date_from, date_to).get(employee.pk)
     if rep and (rep["invoices"] or rep["customers"]):
         blocks.append({"key": "rep", "invoices": rep["invoices"], "sales": rep["net_sales"], "commission": rep["commission"],

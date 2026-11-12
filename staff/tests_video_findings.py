@@ -50,3 +50,52 @@ class OwnerOnMyDaySalonTests(MyDaySetup):
     def test_in_a_salon_the_owner_is_sent_to_the_agenda(self):
         response = self.get(self.owner)
         self.assertRedirects(response, f"{reverse('appointments:agenda')}?lang=ar", fetch_redirect_response=False)
+
+
+class EmployeePageAgreesWithTheTechniciansReportTests(MyDaySetup):
+    """f03: the page said «مفيش شغل» while the technicians' report listed his delivered orders, because the page had no work-orders source."""
+
+    def deliver_two(self):
+        from decimal import Decimal
+
+        from django.utils import timezone
+
+        from cashboxes.models import Cashbox
+        from hesba_testing.factories import make_cashbox, make_item
+        from workorders import services
+
+        self.tech.commission_percent = Decimal("10.00")
+        self.tech.save(update_fields=["commission_percent"])
+        make_cashbox(cashbox_code="VF-CB", name_ar="خزنة", is_default=True)
+        labour = make_item(item_code="VF-LAB", item_name="مصنعية", default_sale_price=Decimal("300.00"), is_stock_tracked=False)
+        for _ in range(2):
+            order = self.order()
+            services.add_line(order, labour, self.owner)
+            for status in ("diagnosed", "in_repair", "ready"):
+                order = services.move(order, status, self.owner)
+            services.deliver(order, self.owner, paid_now=str(services.totals(order)["total"]), cashbox=Cashbox.objects.get(cashbox_code="VF-CB"))
+        return (timezone.localdate().replace(day=1), timezone.localdate())
+
+    def test_the_employee_page_shows_what_the_report_shows_for_the_same_month(self):
+        from workorders import services
+
+        month = self.deliver_two()
+        row = next(row for row in services.technician_report(*month) if row["technician"] == self.tech)
+        self.assertEqual((row["count"], str(row["commission"])), (2, "60.00"))
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("staff:detail", args=[self.tech.pk]), {"lang": "ar"})
+        self.assertContains(page, f'data-work-wo-count>{row["count"]}<')
+        self.assertContains(page, "60.00</strong>")  # the commission cell, from the report's own row
+        self.assertNotContains(page, "data-work-none")
+        self.assertContains(page, f'href="{reverse("workorders:report")}?lang=ar"')
+
+    def test_the_team_list_counts_the_delivered_orders_too(self):
+        from staff.work import team_month
+
+        self.deliver_two()
+        done = team_month([self.tech])[self.tech.pk]
+        self.assertEqual((done["done"], str(done["commission"])), (2, "60.00"))
+
+    def test_an_employee_with_no_delivered_order_still_says_there_is_no_work(self):
+        self.client.force_login(self.owner)
+        self.assertContains(self.client.get(reverse("staff:detail", args=[self.other.pk])), "data-work-none")
