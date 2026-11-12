@@ -159,10 +159,10 @@ DEMO_OWNERS = {
     ("restaurants", "restaurant"): "الشيف كريم عادل", ("restaurants", "cafe"): "أستاذ عمر فاروق",
     ("medical", "clinic"): "د. سارة حسين", ("medical", "dental"): "د. هشام عبد الله", ("medical", "vet"): "د. كريم البيطري",
     ("education", "training"): "أ. منى عبد الرحمن", ("education", "nursery"): "ميس دينا شوقي",
-    ("services", "maintenance"): "الأسطى محمد رمضان", ("services", "beauty"): "مدام هالة سمير",
+    ("services", "maintenance"): "م. محمد رمضان", ("services", "beauty"): "مدام هالة سمير",
     ("manufacturing", "food"): "الحاج سيد عبد الفتاح", ("contracting", "general"): "م. طارق الجندي",
     "commercial": "أستاذ محمود الشربيني", "restaurants": "الشيف كريم عادل", "medical": "د. سارة حسين", "education": "أ. منى عبد الرحمن",
-    "services": "الأسطى محمد رمضان", "manufacturing": "الحاج سيد عبد الفتاح", "contracting": "م. طارق الجندي",
+    "services": "م. محمد رمضان", "manufacturing": "الحاج سيد عبد الفتاح", "contracting": "م. طارق الجندي",
 }
 ROLE_NAME = "المالك"  # what seed_demo_users calls the owner; only that is ever replaced
 
