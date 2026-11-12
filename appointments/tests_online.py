@@ -642,6 +642,37 @@ class PrepaidTests(OnlineSetup):
 
 @override_settings(PUBLIC_BASE_URL=BASE)
 class ReminderTests(OnlineSetup):
+    def staff_message(self, appointment=None):
+        """The text of the booking page's one «تذكير واتساب» link, as the patient would receive it."""
+
+        from urllib.parse import unquote
+
+        self.client.force_login(self.owner)
+        links = re.findall(r'href="https://wa\.me/[^"?]*\?text=([^"]+)"', self.client.get(self.detail(appointment)).content.decode())
+        self.assertEqual(len(links), 1)
+        return unquote(links[0])
+
+    def test_the_reminder_staff_send_by_hand_carries_the_patients_own_page_so_a_same_day_booking_can_join(self):
+        text = self.staff_message()  # booked for today: tomorrow's reminder batch never reaches it
+        self.assertIn(messaging.ONLINE_NOTES["ar"], text)
+        self.assertNotIn(CALL, text)  # the call's own link is never in a message
+        path = re.search(re.escape(BASE) + r"(/\S+)", text).group(1)
+        with mock.patch("appointments.online.now", return_value=self.online.starts_at - timedelta(minutes=5)):
+            sent = self.client.__class__().get(path)
+        self.assertEqual(sent.status_code, 200)
+        self.assertIn(f'href="{CALL}"', sent.content.decode())  # the link in the message opens the page with the join button
+
+    def test_the_hand_sent_reminder_promises_no_link_without_a_public_address_and_is_unchanged_for_a_visit_in_the_clinic(self):
+        with override_settings(PUBLIC_BASE_URL=""):
+            text = self.staff_message()
+        self.assertIn(messaging.ONLINE_NOTES_NOLINK["ar"], text)
+        self.assertNotIn("http", text)
+        in_clinic = Appointment.objects.create(number="AP-IN-1", customer=self.patient, employee=self.doctor, service=self.service, price=D("300.00"),
+                                               starts_at=at(today(), 23, 30), status=AppointmentStatus.CONFIRMED, created_by=self.owner)
+        plain = self.staff_message(in_clinic)
+        self.assertNotIn(messaging.ONLINE_NOTES["ar"], plain)
+        self.assertNotIn("http", plain)
+
     def reminders(self):
         messaging.build()
         return {row.key: row for row in OutboxMessage.objects.filter(kind=MessageKind.APPOINTMENT)}

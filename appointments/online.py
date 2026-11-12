@@ -359,6 +359,23 @@ PAGE_WORDS = {
 
 
 #: The public booking page's words for the online choice (a patient reads them before anything is booked).
+def staff_reminder(appointment, text, lang="ar"):
+    """The booking page's «تذكير واتساب» for an online booking: the plain reminder, plus the patient's own page.
+
+    The automatic reminder goes out the day before, so a visit booked for today never got the link of its confirm page,
+    which is the only place the patient's join button lives. The message the staff send by hand therefore carries that
+    page's link (the M3 signed link, never the call's own link); with no public address it says to contact the clinic.
+    """
+
+    from messaging.services import ONLINE_LINK_TEXTS, ONLINE_NOTES, ONLINE_NOTES_NOLINK
+    from printing.share import public_url
+
+    url = public_url("appointment", appointment.pk, lang, owner=appointment.customer_id)
+    if not url:
+        return f"{text} {ONLINE_NOTES_NOLINK[lang]}"
+    return f"{text} {ONLINE_NOTES[lang]} {ONLINE_LINK_TEXTS[lang]} {url}"
+
+
 PUBLIC_WORDS = {
     "ar": {"mode": "الكشف فين؟", "clinic": "في العيادة", "online": "أونلاين (مكالمة فيديو)", "k_kind": "النوع", "kind_online": "كشف أونلاين",
            "note": "الكشف الأونلاين بيتم بمكالمة فيديو. العيادة هتجهّز رابط المكالمة، وتدخلها من صفحة تأكيد الميعاد."},

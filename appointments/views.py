@@ -364,9 +364,12 @@ def detail(request, pk):
         appointment.refresh_from_db()
     local = timezone.localtime(appointment.starts_at)
     company = company_details()
-    reminder = whatsapp_link(appointment.customer.phone, words["reminder"].format(
+    reminder_text = words["reminder"].format(
         customer=appointment.customer.name, service=f"({appointment.service.item_name}) " if appointment.service else "",
-        date=local.strftime("%Y-%m-%d"), time=local.strftime("%H:%M"), company=company["name"]))
+        date=local.strftime("%Y-%m-%d"), time=local.strftime("%H:%M"), company=company["name"])
+    if appointment.kind == AppointmentKind.ONLINE:  # M10: it carries the patient's own page, where the join button shows
+        reminder_text = online.staff_reminder(appointment, reminder_text, lang)
+    reminder = whatsapp_link(appointment.customer.phone, reminder_text)
     actions = [(status, words["actions"][status]) for status in services.NEXT.get(appointment.status, ())]
     form = {"day": local.date().isoformat(), "time": local.strftime("%H:%M"), "duration_minutes": appointment.duration_minutes, "customer": str(appointment.customer_id),
             "employee": str(appointment.employee_id or ""), "service": str(appointment.service_id or ""), "price": appointment.price, "kind": appointment.kind,
