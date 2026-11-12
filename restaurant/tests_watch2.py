@@ -14,6 +14,7 @@ from django.urls import reverse
 from hesba_testing.factories import make_item
 
 from . import kitchen
+from . import services as floor
 from .insights import save_ingredients
 from .tests import RestaurantSetup
 from .tests_kitchen import KitchenSetup
@@ -84,3 +85,36 @@ class IngredientQuantityFormat(KitchenSetup):
             self.assertIn('name="quantity" inputmode="decimal" value="0.1"', page)
             self.assertNotIn('value="0,2', page)
             self.assertNotIn('value="0,1', page)
+
+
+class WaitersMenuTests(KitchenSetup):
+    """RS-02: raw ingredients (rice, lentils) are not on the waiter's menu; dishes, drinks and anything sold before are."""
+
+    def codes_on_menu(self, lang="ar"):
+        self.client.force_login(self.owner)
+        order = self.order(self.tea)
+        page = self.client.get(reverse("restaurant:order", args=[order.pk]), {"lang": lang})
+        return {item.item_code for item in page.context["items"]}
+
+    def test_ingredients_are_left_off_and_the_dishes_and_drinks_stay(self):
+        codes = self.codes_on_menu()
+        self.assertTrue({"D-KOSH", "D-TEA", "B-COLA"} <= codes)
+        self.assertFalse({"R-RICE", "R-LENT"} & codes)
+
+    def test_an_ingredient_that_was_sold_as_it_is_stays_on_the_menu(self):
+        order = floor.open_order(self.owner, table=self.t2, guests=1)
+        floor.add_item(order, self.rice, self.owner)  # sold on its own once
+        self.assertIn("R-RICE", self.codes_on_menu())
+
+    def test_a_sub_recipe_that_is_a_dish_and_an_ingredient_stays(self):
+        sauce = make_item(item_code="D-SAUCE", item_name="صلصة", default_sale_price="5.00", is_stock_tracked=True)
+        save_ingredients(sauce, [(self.lentil, "0.050")], self.owner)
+        save_ingredients(self.tea, [(sauce, "1")], self.owner)
+        codes = self.codes_on_menu()
+        self.assertIn("D-SAUCE", codes)
+        self.assertNotIn("R-LENT", codes)
+
+    def test_the_item_list_is_not_filtered(self):
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("master_data:items"))
+        self.assertContains(page, "أرز")

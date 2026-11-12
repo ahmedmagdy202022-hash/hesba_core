@@ -144,9 +144,25 @@ def board(request):
     ))
 
 
+def _raw_ingredient_ids():
+    """RS-02: items the waiter's menu leaves out: an ingredient of some dish that is not itself a dish (no recipe of its own) and
+    has never been put on an order. The recipe link is the only existing signal that tells rice from a dish; an item sold on its
+    own as well (milk, a sauce) stays on the menu once it has been ordered, or when it has a recipe. A flag on the item would do
+    this exactly (the planned restaurants task); until then this is a rule, not a guarantee."""
+
+    from .models import DishIngredient
+
+    ingredients = set(DishIngredient.objects.values_list("ingredient_id", flat=True))
+    if not ingredients:
+        return set()
+    dishes = set(DishIngredient.objects.values_list("dish_id", flat=True))
+    ordered = set(OrderLine.objects.filter(item_id__in=ingredients).values_list("item_id", flat=True))
+    return ingredients - dishes - ordered
+
+
 def _menu():
-    items = (Item.objects.filter(active=True).exclude(item_code=services.FEE_ITEM_CODE).select_related("category")
-             .order_by("category__category_code", "item_name"))
+    items = (Item.objects.filter(active=True).exclude(item_code=services.FEE_ITEM_CODE).exclude(pk__in=_raw_ingredient_ids())
+             .select_related("category").order_by("category__category_code", "item_name"))
     categories, seen = [], set()
     for item in items:
         if item.category_id and item.category_id not in seen:
