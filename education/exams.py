@@ -247,7 +247,7 @@ def record_marks(exam, entries, user, *, version=None, lang="ar"):
     if version is not None:
         current = sheet_version(exam, existing.values())
         if (current != sheet_version(exam, [])) if not version else (version != current):
-            raise ValidationError(words["stale"])
+            raise ValidationError(words["stale"], code="stale")
     roster = {row.student_id: row.student for row in roster_of(exam)}
     plan = []
     for raw_id, entry in entries.items():
@@ -318,7 +318,8 @@ def _student_rows(student, user, first=None, last=None):
         mark = marks.get(exam.pk)
         exact = _exact(mark.score, exam.out_of) if mark is not None else None
         rows.append({"exam": exam, "mark": mark, "status": _status(mark), "score": mark.score if mark is not None else None,
-                     "percent": None if exact is None else exact.quantize(Decimal("0.1"), ROUND_HALF_UP), "exact": exact})
+                     "percent": None if exact is None else exact.quantize(Decimal("0.1"), ROUND_HALF_UP), "exact": exact,
+                     "score_text": "" if mark is None or mark.score is None else f"{mark.score.normalize():f}", "out_text": f"{exam.out_of.normalize():f}"})
     return rows
 
 
