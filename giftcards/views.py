@@ -1,6 +1,8 @@
 """HG-071 (S6) screens: the cards (sell one), a card's page (its entries, write off, reverse), its receipt, and
 paying a posted invoice with a card."""
 
+from decimal import Decimal, InvalidOperation
+
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import Http404
@@ -22,10 +24,14 @@ from . import services
 from .models import EntryKind, GiftCard, GiftCardEntry
 
 RECEIPT_ONCE = "giftcards.receipt_once"
+#: BE-02: the most one card may hold. The app's other typed money fields (service contracts, packages, dental and inpatient
+#: prices) stop at 10 million, and nothing sold from this screen comes near it; "99,999,999,999" was a slip of the finger.
+FACE_VALUE_LIMIT = Decimal("10000000")
 
 WORDS = {
     "ar": {
         "title": "كروت الهدايا", "intro": "فلوس الكارت بتدخل الخزنة يوم البيع، بس متتحسبش مبيعات: بتفضل التزام لحامل الكارت ({account}) لحد ما يدفع بيه فاتورة أو في الكاشير. الكارت اللي ميعاده عدّى بيفضل شغال لحد ما مدير يشطب باقيه بسبب.",
+        "too_big": "قيمة الكارت كبيرة أوي. أقصى قيمة للكارت الواحد {limit}.",
         "sell": "بيع كارت هدية", "value": "قيمة الكارت", "cashbox": "الخزنة اللي استلمت الفلوس", "holder": "اسم حامل الكارت (اختياري)", "phone": "موبايل حامل الكارت (اختياري)",
         "buyer": "العميل اللي اشترى (اختياري)", "nobody": "—", "expires": "ينتهي يوم (اختياري)", "save_sell": "بيع واطبع الإيصال",
         "number": "رقم الكارت", "code": "كود الصرف", "balance": "الرصيد", "status": "الحالة", "sold_on": "اتباع يوم", "none": "مفيش كروت لسه.",
@@ -38,6 +44,7 @@ WORDS = {
     },
     "en": {
         "title": "Gift cards", "intro": "A card's money reaches the cashbox the day it is sold but is not counted as sales: it stays owed to the holder ({account}) until they pay an invoice or at the till with it. An expired card keeps working until a manager writes its rest off with a reason.",
+        "too_big": "The card value is too large. The most one card can hold is {limit}.",
         "sell": "Sell a gift card", "value": "Card value", "cashbox": "Cashbox that took the money", "holder": "Holder's name (optional)", "phone": "Holder's mobile (optional)",
         "buyer": "Customer who bought it (optional)", "nobody": "—", "expires": "Expires on (optional)", "save_sell": "Sell and print the receipt",
         "number": "Card number", "code": "Code to spend", "balance": "Balance", "status": "Status", "sold_on": "Sold on", "none": "No cards yet.",
@@ -77,6 +84,17 @@ def _error(request, exc, lang):
     messages.error(request, " ".join(translate(message, lang) for message in getattr(exc, "messages", [str(exc)])))
 
 
+def _check_face_value(value, words):
+    """BE-02: refuse an absurd card value before the service runs; zero, negative and letters are the service's own refusals."""
+
+    try:
+        number = Decimal(str(value if value not in (None, "") else "0").strip().replace(",", ""))
+    except (InvalidOperation, ValueError):
+        return
+    if number.is_finite() and number > FACE_VALUE_LIMIT:
+        raise ValidationError(words["too_big"].format(limit=f"{FACE_VALUE_LIMIT:,.2f}"))
+
+
 def _cards():
     return entity_scope.scope(GiftCard.objects.select_related("buyer", "entity"), entity_scope.GIFT_CARD)
 
@@ -104,6 +122,7 @@ def card_list(request):
         buyer = Customer.objects.filter(pk=request.POST.get("buyer"), active=True).first() if (request.POST.get("buyer") or "").isdigit() else None
         expires = parse_date(request.POST.get("expires_on") or "") if request.POST.get("expires_on") else None
         try:
+            _check_face_value(request.POST.get("face_value"), words)
             card = services.sell(request.POST.get("face_value"), cashbox, request.user, request.POST.get("holder_name", ""),
                                  request.POST.get("holder_phone", ""), buyer, expires, lang)
         except (ValidationError, PermissionDenied) as exc:
