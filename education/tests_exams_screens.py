@@ -125,6 +125,33 @@ class WhoSeesTests(ScreenSetup):
         self.assertFalse(Exam.objects.get(pk=self.quiz.pk).published)
         self.assertEqual(self.client.get(reverse("education:report_card", args=[self.adam.pk])).status_code, 200)  # a teacher of Adam's group
 
+    def test_a_teacher_with_no_student_file_permission_works_from_todays_classes(self):
+        from hesba_testing.factories import make_role, make_user, make_user_profile
+
+        bare = make_user(username="exam_bare_teacher")
+        make_user_profile(user=bare, role=make_role(code="EMPTY-TEACHER"))  # no permission at all: only the employee link
+        self.teacher.user = bare
+        self.teacher.save()
+        self.as_user(bare)
+        self.assertFalse(exams.services.can_view(bare))
+        today = self.client.get(reverse("education:today"))
+        self.assertEqual(today.status_code, 200)
+        self.assertContains(today, f'data-exams="{self.a.pk}"')
+        self.assertNotContains(today, f'data-exams="{self.b.pk}"')
+        listing = self.client.get(reverse("education:exams", args=[self.a.pk]))
+        self.assertContains(listing, "كويز الأسبوع")
+        self.assertContains(listing, f'href="{reverse("education:today")}?lang=ar"')  # back goes to today, not to a page they cannot open
+        self.assertEqual(self.sheet().status_code, 200)
+        self.assertEqual(self.save({**self.open_form(), f"s_{self.gad.pk}": "11"}).status_code, 302)
+        self.assertEqual(self.marks()["جاد"], (D("11.00"), False))
+        self.assertEqual(self.client.get(reverse("education:exam", args=[self.secret.pk])).status_code, 403)  # another group's paper
+        for url in (reverse("education:group", args=[self.a.pk]), reverse("education:student", args=[self.adam.pk])):
+            self.assertEqual(self.client.get(url).status_code, 403, url)  # the school's lists stay closed to them
+        card = self.client.get(reverse("education:report_card", args=[self.adam.pk]))
+        self.assertEqual(card.status_code, 200)
+        self.assertContains(card, f'href="{reverse("education:today")}?lang=ar"')
+        self.assertContains(card, "18 / 20")
+
     def test_the_student_without_a_group_of_the_viewers_has_no_report_card(self):
         self.as_user(self.other_user)
         self.assertEqual(self.client.get(reverse("education:report_card", args=[self.hana.pk])).status_code, 200)  # B's own student
