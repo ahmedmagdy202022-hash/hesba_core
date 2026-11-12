@@ -26,7 +26,7 @@ class DemoTests(TestCase):
         call_command("prepare_demo", stdout=StringIO())
         self.assertTrue(SalesInvoice.objects.filter(status="posted").exists())
         # R2-5: the ready-made demo is a household-goods shop; tables are a restaurant's.
-        self.assertEqual(Item.objects.get(item_code="DEMO-ITEM-01").item_name, "طقم كوبايات زجاج (6)")
+        self.assertEqual(Item.objects.get(item_code="DEMO-ITEM-01").item_name, "طقم أكواب زجاج (6)")
         self.assertFalse(DiningTable.objects.exists())
         # DEMO-FEEDBACK: a month of history, at shop hours rather than all "now".
         past = SalesInvoice.objects.filter(invoice_date__lt=timezone.localdate())
