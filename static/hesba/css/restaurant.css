@@ -53,3 +53,12 @@ details.rs-more summary{cursor:pointer;font-weight:700;color:var(--hs-navy);padd
 [data-dish-ingredients] select,[data-dish-ingredients] input{min-width:0;max-width:100%;text-overflow:ellipsis}
 [data-dish-ingredients] td{min-width:0}
 [data-dish-ingredients] select{width:100%}
+
+/* Restaurants R4: a table with food the kitchen marked ready, a ready line, and the kitchen stations' category picker. */
+.rs-ready{display:inline-flex;align-self:flex-start;border-radius:var(--hs-radius-pill);padding:3px 10px;font-size:var(--hs-text-sm);font-weight:var(--hs-weight-bold);background:var(--hs-success-wash);color:var(--hs-success)}
+.rs-tag--ready{background:var(--hs-success-wash);color:var(--hs-success)}
+.rs-checks{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0;padding:0;border:0}
+.rs-checks legend{padding:0;margin-bottom:8px;font-weight:var(--hs-weight-bold);color:var(--hs-navy)}
+.rs-check-chip{display:inline-flex;align-items:center;gap:8px;min-height:var(--hs-control-height);padding:0 14px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-md);background:var(--hs-surface);cursor:pointer}
+.rs-check-chip input{width:20px;height:20px;margin:0}
+.rs-check-chip small{display:block;color:var(--hs-muted)}
