@@ -1,0 +1,38 @@
+{% extends "operations/base.html" %}
+{% load static %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/lab_sample.css' %}?v=m9-1">{% endblock %}
+{% block operation_content %}
+{# M9 (HG-092): upload, then a preview that writes nothing, then the apply. The rows travel in a signed field; every line is judged again when it is applied. #}
+<section class="op-title-row hs-head"><div><h1>{{ sw.title }}</h1><p>{{ sw.intro }}</p></div>
+<div class="op-form-actions"><a class="op-secondary" href="{% url 'medical:lab_tests' %}?lang={{ lang }}">{{ sw.back }}</a></div></section>
+{% include "medical/_tabs.html" %}
+{% if error %}<p class="op-message op-message-error" role="alert" data-lab-import-error>{{ error }}</p>{% endif %}
+{% if state == 'upload' %}
+<section class="ls-card ls-file" data-lab-import="upload"><form class="op-form" method="post" enctype="multipart/form-data" data-lab-import-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="preview">
+<div class="op-field"><label for="li-file">{{ sw.file }}</label><input id="li-file" type="file" name="file" accept=".csv,text/csv" required></div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ sw.preview }}</button></div></form></section>
+<section class="ls-card"><h2>{{ sw.format_h }}</h2><p>{{ sw.format_p }}</p><p><span class="ls-code-example" dir="ltr">L12-20261112,GLU,5.4</span></p><p>{{ sw.format_note }}</p></section>
+{% else %}
+<section class="ls-card" data-lab-import="{{ state }}">
+{% if state == 'preview' %}<h2>{{ sw.preview_h }}</h2><p>{{ sw.preview_p }}</p>
+{% else %}<p class="ls-result-h" data-lab-import-written="{{ written }}">{% if written %}{{ t.result_h }}{% else %}{{ sw.result_zero }}{% endif %}</p>{% if left %}<p>{{ t.result_left }}</p>{% endif %}<p>{{ sw.result_p }}</p>{% endif %}
+<p class="ls-hint">{{ sw.file_name }}: <bdi dir="ltr">{{ name }}</bdi> · {{ t.rows }}</p>
+<div class="ls-chips" data-lab-import-counts>{% for status, text, count, chip in statuses %}<span class="ls-chip" data-lab-status-count="{{ status }}">{{ text }} <span class="ls-chip__n">{{ count }}</span></span>{% endfor %}</div>
+{% if state == 'preview' %}<div class="ls-apply">
+{% if good %}<form method="post" data-lab-import-apply>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="apply"><input type="hidden" name="payload" value="{{ payload }}"><button class="op-primary" type="submit">{{ t.apply }}</button></form><p>{{ sw.left_note }}</p>
+{% else %}<p data-lab-import-nothing>{{ sw.apply_none }}</p>{% endif %}
+<a class="op-secondary" href="{% url 'medical:lab_import' %}?lang={{ lang }}">{{ sw.again }}</a></div>
+{% else %}<p class="ls-note">{{ sw.m6_note }}</p><div class="op-form-actions"><a class="op-secondary" href="{% url 'medical:lab_import' %}?lang={{ lang }}" data-lab-import-again>{{ sw.again }}</a></div>{% endif %}
+</section>
+{% if capped %}<p class="ls-note" data-lab-import-capped>{{ t.shown }}</p>{% endif %}
+<div class="op-table-wrap"><table class="op-table" data-list-rows data-lab-import-rows><thead><tr><th>{{ sw.c_sample }}</th><th>{{ sw.c_patient }}</th><th>{{ sw.c_test }}</th><th>{{ sw.c_value }}</th><th>{{ sw.c_status }}</th></tr></thead><tbody>
+{% for row in rows %}<tr data-lab-line="{{ row.line.row.line }}" data-lab-line-status="{{ row.status }}">
+<td data-row="title"><bdi dir="ltr">{{ row.line.row.sample }}</bdi> <span class="ls-line">· {{ sw.c_line }} {{ row.line.row.line }}</span></td>
+<td data-row="sub">{% if row.line.patient %}{{ row.line.patient.name }}{% else %}—{% endif %}</td>
+<td data-row="meta"><bdi dir="ltr">{{ row.line.row.test }}</bdi>{% if row.line.test %} · {{ row.line.test.name }}{% endif %}</td>
+<td data-row="meta"><bdi dir="ltr">{{ row.line.row.value }}</bdi></td>
+<td data-row="meta"><span class="op-status op-status-{{ row.chip }}">{{ row.text }}</span>{% if row.detail %} <span class="ls-detail">{{ row.detail }}</span>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="5" class="op-empty" data-row="empty">—</td></tr>{% endfor %}
+</tbody></table></div>
+{% endif %}
+{% endblock %}

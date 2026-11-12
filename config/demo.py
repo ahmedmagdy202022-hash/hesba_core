@@ -26,7 +26,7 @@ DEMO_DEFAULT = ("commercial", "retail")
 #: DEMO-FIRST-RUN: the landing page's tiles, in order: (activity, Arabic hint, English hint). "other" opens the default shop.
 DEMO_TILES = (
     ("commercial", "تجزئة، صيدلية، سوبر ماركت", "Retail, pharmacy, supermarket"),
-    ("services", "ورشة صيانة، صالون", "Repair workshop, salon"),
+    ("services", "مركز صيانة، صالون", "Service centre, salon"),
     ("medical", "عيادة بمواعيد وملفات", "A clinic with appointments and files"),
     ("education", "كورسات وطلبة ومصاريف", "Courses, students and fees"),
     ("restaurants", "طاولات ومطبخ وأوردرات", "Tables, kitchen and orders"),
