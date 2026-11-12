@@ -1360,17 +1360,16 @@ class Command(BaseCommand):
             edu.enroll(student, groups[n % 2], owner, start_date=today - timedelta(days=35), discount_percent="10" if sibling else "0")
             if n < 4:
                 edu.enroll(student, groups[2], owner, start_date=today - timedelta(days=20))
-        # ED-02: the scan screen only accepts a student from 30 minutes before their class until it ends, and the three
-        # classes above meet at 16:00 to 18:00 on certain days, so a visitor at any other time only ever saw «ما لوش حصة دلوقتي».
-        # A study hall open every day in three 8-hour periods (00:00, 08:00, 16:00) means a hall student has a class to scan into
-        # at every hour of any day, whenever the demo is built or visited (a class cannot last more than 8 hours). The hall is free
-        # (fee 0: billing skips it), has no teacher or room (nothing to clash with), and takes every student.
-        hall = [edu.save_group({"course": courses[0], "name": f"قاعة المذاكرة — الفترة {number}", "days": "sat,sun,mon,tue,wed,thu,fri", "start_time": time(hour),
-                                "duration_minutes": "480", "capacity": "0", "fee": "0", "starts_on": today - timedelta(days=40)}, owner)
-                for number, hour in ((1, 0), (2, 8), (3, 16))]
-        for student in students:  # every student, so any card a visitor scans works
-            for period in hall:
-                edu.enroll(student, period, owner, start_date=today - timedelta(days=35))
+        # ED-02: the scan screen only accepts a student from 30 minutes before their class until it ends, and the three classes
+        # above meet at 16:00 to 18:00 on certain days, so a visitor at any other time only ever saw «ما لوش حصة دلوقتي». A group
+        # with no start time is open all day and never late (``education.scan.in_window``), so a study hall like that, open every
+        # day with every student enrolled, gives any card a class to scan into at any hour, whenever the demo is built or visited.
+        # It is free (fee 0: billing skips it) and has no teacher or room, so nothing clashes with it. While one of the three
+        # classes is on, a scan asks which of the two the student is at.
+        hall = edu.save_group({"course": courses[0], "name": "قاعة المذاكرة (مفتوحة طول اليوم)", "days": "sat,sun,mon,tue,wed,thu,fri", "capacity": "0",
+                               "fee": "0", "starts_on": today - timedelta(days=40)}, owner)
+        for student in students:
+            edu.enroll(student, hall, owner, start_date=today - timedelta(days=35))
         # EDU-002: four weeks of attendance, with a few absences and late arrivals.
         from education import attendance
 

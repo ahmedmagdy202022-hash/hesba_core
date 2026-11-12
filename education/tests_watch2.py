@@ -87,7 +87,7 @@ class TillQuickAddTests(EducationSetup):
 
 class DemoScanWorksAtAnyHourTests(TestCase):
     """The training centre's three classes meet at 16:00 to 18:00 on certain days, so the scan screen only ever answered «no class
-    now». The demo also has a study hall open every day in three 8-hour periods; a hall student has a class to scan into at any hour."""
+    now». The demo also has a study hall with no start time (open all day, never late) that every student is enrolled in."""
 
     @classmethod
     def setUpTestData(cls):
@@ -104,29 +104,38 @@ class DemoScanWorksAtAnyHourTests(TestCase):
         call_command("seed_demo_business", username="owner", force=True, verbosity=0)
         prepare._extras()
         cls.owner = get_user_model().objects.get(username="owner")
-        cls.hall = list(StudyGroup.objects.filter(name__startswith="قاعة المذاكرة").order_by("start_time"))
+        cls.hall = StudyGroup.objects.get(name__startswith="قاعة المذاكرة")
 
-    def test_the_hall_is_three_free_periods_that_tile_the_day(self):
-        self.assertEqual([(group.start_time, group.duration_minutes, group.days, group.effective_fee) for group in self.hall],
-                         [(time(h), 480, "sat,sun,mon,tue,wed,thu,fri", 0) for h in (0, 8, 16)])
-        self.assertEqual([group.teacher_id for group in self.hall], [None, None, None])
+    def test_the_hall_is_one_free_group_open_every_day_with_no_start_time_and_every_student_in_it(self):
+        hall = self.hall
+        self.assertEqual((hall.start_time, hall.days, hall.effective_fee, hall.teacher_id), (None, "sat,sun,mon,tue,wed,thu,fri", 0, None))
+        self.assertEqual(hall.enrollments.filter(status="active").count(), Student.objects.count())
 
-    def test_a_hall_student_has_a_class_in_the_window_at_every_half_hour_of_the_day(self):
+    def test_a_student_has_a_class_in_the_window_at_every_half_hour_of_the_day(self):
         today = timezone.localdate()
-        student = Student.objects.get(code="ST-00001")
-        groups = scan._today_groups(student, today)
-        self.assertTrue(set(self.hall) <= set(groups))
+        groups = scan._today_groups(Student.objects.get(code="ST-00006"), today)  # the one student with no other class on a Thursday
+        self.assertIn(self.hall, groups)
         for hour in range(24):
             for minute in (0, 30):
-                now = at(today, hour, minute)
-                self.assertTrue([group for group in groups if scan.in_window(group, now)], f"no class at {hour:02d}:{minute:02d}")
+                self.assertTrue([group for group in groups if scan.in_window(group, at(today, hour, minute))], f"no class at {hour:02d}:{minute:02d}")
 
-    def test_a_scan_at_nine_in_the_morning_and_at_night_marks_the_student(self):
+    def test_a_scan_in_the_morning_and_at_night_marks_present_never_late(self):
         today = timezone.localdate()
-        for code, hour, minute in (("ST-00001", 9, 5), ("ST-00002", 3, 10), ("ST-00003", 23, 50)):
-            result = scan.mark(code, self.owner, at(today, hour, minute))
-            self.assertEqual(result.status, "ok", (code, hour, result.message))
-            self.assertTrue(Attendance.objects.filter(student=Student.objects.get(code=code), session__date=today).exists())
+        for code, hour, minute in (("ST-00005", 9, 5), ("ST-00006", 3, 10), ("ST-00007", 23, 50)):
+            student = Student.objects.get(code=code)
+            allowed = scan._today_groups(student, today)
+            result = scan.mark(code, self.owner, at(today, hour, minute), group=self.hall.pk)
+            self.assertEqual((result.status, result.presence), ("ok", "present"), (code, hour, result.message))
+            self.assertIn(self.hall, allowed)
+            self.assertTrue(Attendance.objects.filter(student=student, session__group=self.hall, session__date=today).exists())
+
+    def test_the_screens_that_list_groups_render_a_group_with_no_time(self):
+        self.client.login(username="owner", password="Demo-pass-1")
+        for name, args in (("education:groups", ()), ("education:group", (self.hall.pk,)), ("education:today", ()),
+                           ("education:student", (Student.objects.get(code="ST-00001").pk,)), ("education:attendance", (self.hall.pk,))):
+            page = self.client.get(reverse(name, args=args))
+            self.assertEqual(page.status_code, 200, name)
+        self.assertContains(self.client.get(reverse("education:groups")), "قاعة المذاكرة")
 
 
 class ScanWordingTests(ScanSetup):
