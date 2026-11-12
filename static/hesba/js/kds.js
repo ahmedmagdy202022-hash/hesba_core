@@ -104,8 +104,10 @@
   }
 
   function sign(tickets) {
+    // Everything a card prints except its age: a table move, a changed note or quantity redraws the card like a new line does.
     return JSON.stringify(tickets.map(function (card) {
-      return [card.id, card.done, card.cancelled, card.lines.map(function (line) { return [line.id, line.ready, line.void, line.seen]; })];
+      return [card.id, card.where, card.station, card.waiter, card.notes, card.done, card.cancelled,
+              card.lines.map(function (line) { return [line.id, line.name, line.quantity, line.note, line.ready, line.void, line.reason, line.seen]; })];
     }));
   }
 

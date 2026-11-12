@@ -215,7 +215,8 @@ def mark_line(line, now=None):
     A line on a finished ticket can only be a void being seen."""
 
     now = now or timezone.now()
-    line = OrderLine.objects.select_for_update().select_related("ticket").get(pk=line.pk)
+    # ``of=("self",)``: the ticket is a nullable join, and PostgreSQL refuses to lock the nullable side of an outer join
+    line = OrderLine.objects.select_for_update(of=("self",)).select_related("ticket").get(pk=line.pk)
     if line.ticket_id is None:
         return line
     if line.voided:
