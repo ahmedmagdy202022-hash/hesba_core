@@ -1,0 +1,23 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ pl.result }}{% if data %}: {{ label }}{% endif %}</h1></div></section>
+{% include "education/_tabs.html" %}
+{% if not data %}<p class="op-muted" data-pay-result-empty>{{ pl.nothing }}</p>
+{% else %}
+<section class="op-summary-grid" data-pay-result>
+<article><small>{{ pl.made_n }}</small><strong data-pay-made>{{ made|length }}</strong></article>
+<article><small>{{ pl.skipped_n }}</small><strong data-pay-skipped>{{ skipped_count }}</strong></article>
+<article><small>{{ pl.failed_n }}</small><strong data-pay-failed-count>{{ failed|length }}</strong></article>
+</section>
+<p class="op-message" data-pay-no-send>{{ pl.no_send }}</p>
+{% if left %}<form class="op-form-actions" method="post" action="{% url 'education:paylinks_bulk' %}" data-pay-left>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="month" value="{{ first|date:'Y-m' }}"><strong data-pay-left-count>{{ left_text }}</strong> <button class="op-secondary" type="submit">{{ pl.bulk }}</button></form>{% endif %}
+{% if made %}<h2>{{ pl.made_n }}</h2><div class="op-table-wrap"><table class="op-table" data-pay-made-table><thead><tr><th>{{ pl.invoice }}</th><th>{{ pl.payer }}</th><th>{{ pl.students }}</th><th>{{ pl.amount }}</th><th></th></tr></thead><tbody>
+{% for row in made %}<tr><td><a href="{% url 'sales:detail' row.invoice.pk %}?lang={{ lang }}"><bdi>{{ row.invoice.invoice_number }}</bdi></a></td><td class="op-cell-text">{{ row.invoice.customer.name }}</td><td class="op-cell-text">{{ row.students }}</td><td>{% if row.state %}{{ row.state.live.amount|money }}{% else %}—{% endif %}</td>
+<td>{% if row.state and row.state.url %}<div class="edu-pay__actions"><button class="op-secondary" type="button" data-copy-link="{{ row.state.url }}">{{ pl.copy }}</button>{% if row.state.whatsapp %}<a class="op-secondary" href="{{ row.state.whatsapp }}" target="_blank" rel="noopener" data-pay-whatsapp>{{ pl.wa }}</a>{% else %}<small class="op-muted">{{ pl.no_phone }}</small>{% endif %}</div>{% endif %}</td></tr>{% endfor %}
+</tbody></table></div>{% endif %}
+{% if skipped %}<h2>{{ pl.skipped_n }}</h2><ul class="op-cell-text" data-pay-skipped-list>{% for group in skipped %}<li><strong>{{ group.label }}</strong> ({{ group.count }}): {% for row in group.rows %}{{ row.students }} (<bdi>{{ row.invoice.invoice_number }}</bdi>){% if not forloop.last %}، {% endif %}{% endfor %}</li>{% endfor %}</ul>{% endif %}
+{% if failed %}<h2>{{ pl.failed_n }}</h2><ul class="op-cell-text" data-pay-failed-list>{% for row in failed %}<li><strong>{{ row.students }}</strong> (<bdi>{{ row.invoice.invoice_number }}</bdi>): {{ row.extra }}</li>{% endfor %}</ul>{% endif %}
+{% endif %}
+<p class="op-form-actions"><a class="op-secondary" href="{% url 'education:fees' %}?lang={{ lang }}{% if first %}&month={{ first|date:'Y-m' }}{% endif %}">{{ pl.back }}</a></p>
+{% endblock %}
