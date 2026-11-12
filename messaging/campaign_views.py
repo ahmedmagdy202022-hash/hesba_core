@@ -30,6 +30,8 @@ WORDS = {
         "cap_over": "الحد اليومي للحملات {cap} رسالة. هنحط {first} في الصندوق يوم {day} والباقي ({rest}) على الأيام اللي بعده.",
         "queued_title": "اتحطت {n} رسالة في صندوق الرسائل", "queued_note": "لسه ماتبعتش ولا رسالة. كل رسالة بتتبعت من الصندوق بضغطة واتساب، أو أوتوماتيك لما واتساب بيزنس يتوصل.",
         "schedule": "هتظهر في الصندوق إمتى", "details": "تفاصيل الحملة", "today": "النهاردة", "tomorrow": "بكرة", "sent": "اتبعت", "waiting": "مستني", "text_k": "الرسالة",
+        "seg_all": "{n} عميل ليهم موبايل", "seg_points": "{n} عميل عندهم نقاط", "seg_inactive": "{n} عميل اشتروا قبل كده",
+        "seg_category": "الرقم بيظهر بعد ما تختار الفئة", "seg_none": "مفيش عميل يناسب الشريحة دي دلوقتي.", "seg_off": "مقفولة دلوقتي:",
         "settings": "إعدادات رسائل الحملات", "on": "رسائل الحملات شغالة", "wa_template": "اسم القالب المتوافق عليه عند Meta (فاضي: بضغطة بس)",
         "cap_k": "الحد اليومي", "cap_hint": "الحد اليومي ({cap} رسالة) بيتظبط من إعداد الخادم MESSAGING_CAMPAIGN_DAILY_CAP، ومشترك بين كل حملات الكيان.",
         "save_settings": "حفظ الإعدادات", "deleted": "اتمسحت المسودة.", "loyalty_off": "الولاء مقفول في الإعدادات.", "no_cat": "مفيش فئات لسه.", "off_note": "رسائل الحملات مقفولة، ومفيش حاجة هتتحط في الصندوق.",
@@ -58,6 +60,8 @@ WORDS = {
         "cap_over": "The daily cap for campaigns is {cap} messages. {first} reach the outbox on {day} and the rest ({rest}) on the days after.",
         "queued_title": "{n} messages are on the outbox", "queued_note": "No message has gone yet. Each goes from the outbox with one WhatsApp click, or by itself once WhatsApp Business is connected.",
         "schedule": "When they reach the outbox", "details": "Campaign details", "today": "Today", "tomorrow": "Tomorrow", "sent": "Sent", "waiting": "Waiting", "text_k": "Message",
+        "seg_all": "{n} customers with a mobile", "seg_points": "{n} customers have points", "seg_inactive": "{n} customers have bought before",
+        "seg_category": "The number shows once you pick the category", "seg_none": "No customer fits this audience right now.", "seg_off": "Off right now:",
         "settings": "Campaign message settings", "on": "Campaign messages are on", "wa_template": "The template Meta approved (blank: by a click only)",
         "cap_k": "Daily cap", "cap_hint": "The daily cap ({cap} messages) is the server setting MESSAGING_CAMPAIGN_DAILY_CAP, shared by all the entity's campaigns.",
         "save_settings": "Save settings", "deleted": "Draft deleted.", "loyalty_off": "Loyalty is off in Settings.", "no_cat": "No categories yet.", "off_note": "Campaign messages are switched off; nothing will reach the outbox.",
@@ -181,9 +185,36 @@ def campaign_list(request):
         "new_url": _url("messaging:campaign_new", lang), "cap_hint": words["cap_hint"].format(cap=campaigns.daily_cap())})
 
 
-def _segments(words, selected):
+def _segment_notes(words, selected, entity, today):
+    """What each audience option says about itself before anything is sent: ``{value: (sentence, usable)}``.
+
+    The number is the most the audience can ever reach (loyalty: anyone with a point; the lapsed kinds: anyone who ever
+    bought), with the valid-mobile check of the real audience; the live count beside the form then narrows it by the
+    number the user types. An audience that can reach nobody is explained and cannot be picked, unless it is the one
+    already chosen (an old draft keeps working); the server-side refusals in ``campaigns.clean`` and ``queue`` stay."""
+
+    from loyalty import services as loyalty
+    from master_data.models import Category
+
+    def reach(audience):
+        return campaigns.audience(Campaign(entity=entity, audience=audience, threshold=1), today).count
+
+    notes = {}
+    for value in AUDIENCE_ORDER:
+        if value in campaigns.CATEGORY_AUDIENCES:
+            notes[value] = (words["seg_category"], True) if Category.objects.exists() else (words["no_cat"], False)
+        elif value == CampaignAudience.POINTS and not loyalty.enabled():
+            notes[value] = (words["loyalty_off"], False)
+        else:
+            n = reach(value)
+            notes[value] = (words["seg_" + value].format(n=n), True) if n else (words["seg_none"], False)
+    return {value: (text, usable or value == selected) for value, (text, usable) in notes.items()}
+
+
+def _segments(words, selected, notes=None):
+    notes = notes or {}
     return [{"value": value, "title": words["aud"][value][0], "desc": words["aud"][value][1], "label": words["aud"][value][2], "chips": words["aud"][value][3],
-             "selected": value == selected} for value in AUDIENCE_ORDER]
+             "selected": value == selected, "note": notes.get(value, ("", True))[0], "usable": notes.get(value, ("", True))[1]} for value in AUDIENCE_ORDER]
 
 
 def _composer(request, campaign=None):
@@ -228,7 +259,7 @@ def _composer(request, campaign=None):
     summary = _summary(draft, entity, lang, today) if draft is not None else {"count": 0, "match": 0, "no_phone": 0, "duplicates": 0, "preview": "", "cap_note": "", "cap_over": False}
     return render(request, "messaging/campaign_composer.html", {
         "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": words, "page_title": words["new"] if campaign is None else campaign.name, "campaign": campaign,
-        "form": form, "segments": _segments(words, selected), "selected": selected, "categories": list(Category.objects.order_by("category_code")), "summary": summary,
+        "form": form, "segments": _segments(words, selected, _segment_notes(words, selected, entity, today)), "selected": selected, "categories": list(Category.objects.order_by("category_code")), "summary": summary,
         "cta": words["cta"].format(n=summary["count"]), "confirm": words["confirm"].format(n=summary["count"]), "error": error, "can_edit": campaigns.can_edit(user),
         "kind_on": campaigns.active(), "placeholders": campaigns.PLACEHOLDERS, "audience_url": reverse("messaging:campaign_audience"), "list_url": _url("messaging:campaigns", lang),
         "needs_param": selected != CampaignAudience.ALL, "needs_category": selected in campaigns.CATEGORY_AUDIENCES,

@@ -40,10 +40,12 @@ ACTION_LABELS = {
 MESSAGES = {
     "ar": {"not_linked": "الحساب ده مش مربوط بفني؛ شاشة «شغلي النهارده» للفنيين بس.", "forbidden": "تعديل المواعيد لصاحب الصلاحية بس.",
            "moved": "اتحدّثت حالة {ref}.", "bad_move": "الحالة دي مش متاحة من الموبايل.", "bad_kind": "طلب غلط.",
-           "module_off": "المواعيد والزيارات مش شغّالة في الإعداد الحالي."},
+           "module_off": "المواعيد والزيارات مش شغّالة في الإعداد الحالي.",
+           "overview": "حسابك مش مربوط بموظف، فبنوريك شغل الفريق كله هنا بدل «شغلي النهارده»."},
     "en": {"not_linked": "This account is not linked to a technician; “My jobs today” is for technicians.", "forbidden": "Only users with the permission can change appointments.",
            "moved": "{ref} was updated.", "bad_move": "That status is not available from the phone.", "bad_kind": "Invalid request.",
-           "module_off": "Appointments and visits are not switched on."},
+           "module_off": "Appointments and visits are not switched on.",
+           "overview": "Your account is not linked to an employee, so here is the whole team's work instead of “My jobs today”."},
 }
 
 
@@ -102,6 +104,21 @@ def sees_my_day(user):
     from workorders.services import can_view
 
     return employee_of(user) is not None and not can_view(user)
+
+
+def overview_url(user):
+    """Where someone who may see everyone's work, but has no technician record of their own, finds the day's work instead:
+    the work-orders board in a workshop, otherwise the appointments agenda. ``""`` when they may see neither."""
+
+    from django.urls import reverse
+
+    from workorders.services import can_view, is_workshop
+
+    if is_workshop() and can_view(user):
+        return reverse("workorders:list")
+    if _appointments_on() and user_has_permission(user, VIEW_APPOINTMENTS):
+        return reverse("appointments:agenda")
+    return ""
 
 
 def can_change_appointments(user):

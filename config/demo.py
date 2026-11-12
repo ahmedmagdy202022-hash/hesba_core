@@ -206,7 +206,9 @@ def switch_activity(request):
         # each only where the activity already has the sections it needs (a clinic gets no purchases for the invoice photo).
         modules = activity_fit.default_modules(activity, sub)
         ai = tuple(slug for slug in AI_CAPABILITIES if set(caps.needs(slug)) <= set(modules))
-        chosen = tuple(dict.fromkeys(caps.default_selection(activity, sub) + ai))
+        from .demo_templates import services_demo_extras
+
+        chosen = tuple(dict.fromkeys(caps.default_selection(activity, sub) + ai + tuple(slug for slug in services_demo_extras(activity, sub) if caps.is_available(slug))))
         complete_setup(profile, activity, sub, ",".join(modules), user=request.user, capabilities_raw=",".join(chosen))
     lang = "en" if request.POST.get("lang") == "en" else "ar"
     return redirect(f"/dashboard/?lang={lang}")

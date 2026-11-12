@@ -9,8 +9,10 @@ Idempotent: ``DEMO-SVC-01`` (the first extra service item) is the sentinel, crea
 rest, so a run either adds the whole showcase or finds it there and adds nothing. Only for the services activity, and only
 for the sub-activities that have these screens (maintenance and beauty): any other business gets none of it.
 
-Not seeded: online booking (S3, not on develop yet), gift cards (S6, not built), photo and signature files (S1, a real file
-cannot be a sample), deposits (S5, off until the owner switches it on) and the pay link (S4, mock mode only).
+Not seeded: photo and signature files (S1, a real file cannot be a sample). Online booking (S3) is seeded below; gift cards (S6),
+deposits (S5) and online booking are switched on for this showcase by ``config.demo_templates.services_demo_extras``, but no
+deposit, gift card or booking is created for the visitor: they take the first one themselves. The pay link (S4) stays off:
+its only gateway without a real account is the mock, which the server refuses while DEBUG is off (payments.E001).
 """
 
 from datetime import datetime, time, timedelta

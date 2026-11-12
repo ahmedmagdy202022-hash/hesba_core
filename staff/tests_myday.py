@@ -129,8 +129,10 @@ class OwnJobsOnlyTests(MyDaySetup):
         self.assertNotContains(page, f'data-job="work_order-{not_mine.pk}"')
 
     def test_who_may_open_the_screen(self):
-        self.assertEqual(self.get(self.owner).status_code, 403)  # not linked to an employee
-        self.assertEqual(self.get(person(RoleCode.CASHIER, "md_cashier")).status_code, 403)
+        # Not linked to an employee: an owner who may see everyone's work is sent to the screen that shows it (tests_video_findings),
+        # and a login with no right to any of it still gets the 403.
+        self.assertEqual(self.get(self.owner).status_code, 302)
+        self.assertEqual(self.get(plain("md_nobody")).status_code, 403)
         self.client.logout()
         response = self.client.get(reverse("staff:my_day"))
         self.assertEqual(response.status_code, 302)
