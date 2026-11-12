@@ -299,7 +299,7 @@ class EntityTests(C2Setup):
 
     def test_only_the_two_project_owner_types_are_group_wide_every_other_owner_keeps_the_entity_scope(self):
         flagged = sorted(label for label, rules in attachments.OWNERS.items() if rules.get("group_wide"))
-        self.assertEqual(flagged, ["projects.project"])
+        self.assertEqual(flagged, ["projects.project", "projects.sitereport"])
         self.assertTrue({"workorders.workorder", "purchases.purchaseinvoice", "medical.clinicalvisit", "medical.patientfile"} <= set(attachments.OWNERS))
 
 

@@ -1,5 +1,6 @@
 {% load static hesba_labels %}<nav class="op-subnav" aria-label="{{ project.name }}" data-project-tabs>
 <a href="{% url 'projects:detail' project.pk %}?lang={{ lang }}"{% if tab == 'overview' %} aria-current="page"{% endif %}>{{ cwords.tab_overview }}</a>
+<a href="{% url 'projects:diary' project.pk %}?lang={{ lang }}"{% if tab == 'reports' %} aria-current="page"{% endif %} data-tab="reports">{{ cwords.tab_reports }}</a>
 <a href="{% url 'projects:documents' project.pk %}?lang={{ lang }}"{% if tab == 'documents' %} aria-current="page"{% endif %} data-tab="documents">{{ cwords.tab_documents }}</a>
 <a href="{% url 'projects:boq' project.pk %}?lang={{ lang }}"{% if tab == 'boq' %} aria-current="page"{% endif %}>{{ cwords.tab_boq }}</a>
 <a href="{% url 'projects:certificates' project.pk %}?lang={{ lang }}"{% if tab == 'certificates' %} aria-current="page"{% endif %}>{{ cwords.tab_certificates }}</a>

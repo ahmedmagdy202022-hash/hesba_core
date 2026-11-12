@@ -29,12 +29,14 @@ def documents_tab(request, pk):
 
     if not access.can_view(request.user):
         raise PermissionDenied("Projects need projects.view_projects or sales.view_sales_invoices.")
+    from .views_reports import cta
+
     lang = _lang(request)
     project = get_object_or_404(Project.objects.select_related("customer"), pk=pk)
     card = documents.card(project, request.user, lang)
     if card is None:
         raise PermissionDenied("Projects need projects.view_projects or sales.view_sales_invoices.")
-    return render(request, "projects/documents.html", _context(request, project, "documents", att=card, dw=card["words"]))
+    return render(request, "projects/documents.html", _context(request, project, "documents", att=card, dw=card["words"], site_cta=cta(project, request.user, lang)))
 
 
 @csrf_exempt  # CSRF is checked inside, after the upload cap handler is installed (the attachments views' own rule)

@@ -115,7 +115,7 @@ def attachment_belongs(project, attachment_pk):
 
     from django.contrib.contenttypes.models import ContentType
 
-    from .models import Project
+    from .models import Project, SiteReport
 
     raw = str(attachment_pk or "")
     if not raw.isdigit():
@@ -125,4 +125,6 @@ def attachment_belongs(project, attachment_pk):
         return None
     if row.content_type_id == ContentType.objects.get_for_model(Project).pk:
         return row if row.object_id == project.pk else None
+    if row.content_type_id == ContentType.objects.get_for_model(SiteReport).pk:
+        return row if SiteReport.objects.filter(pk=row.object_id, project=project).exists() else None
     return None

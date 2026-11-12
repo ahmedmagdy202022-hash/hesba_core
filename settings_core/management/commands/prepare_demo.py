@@ -1446,9 +1446,11 @@ class Command(BaseCommand):
             (3, "عمارة سكنية - التجمع", "التجمع الخامس، القاهرة الجديدة", "2500000", 60),
             (2, "مبنى مدرسة - المرحلة الأولى", "مدينة نصر", "1200000", 25),
         )
+        made = []
         for n, (customer, name, site, value, started) in enumerate(rows):
             project = save_project({"name": name, "customer": master["customers"][customer], "site": site, "contract_value": value,
                                     "start_date": today - timedelta(days=started), "end_date": today + timedelta(days=180)}, owner)
+            made.append(project)
             if stocked:
                 issue_materials(project, owner, item=stocked[0], location=master["location"], quantity=5 - 2 * n,
                                 operation_date=today - timedelta(days=3))
@@ -1484,6 +1486,15 @@ class Command(BaseCommand):
             invoice = bill_progress(project, owner, amount=Decimal(value) * Decimal("0.2"), description="مستخلص رقم 1")
             if n == 0:
                 post_sales_invoice(invoice.id, user=owner)
+        self._project_files(made, owner)
+
+    @staticmethod
+    def _project_files(projects, owner):
+        """Contracting C2a / C2b (HG-095): three documents and four days of daily reports on each project, so «المستندات» and «اليوميات» are not empty."""
+
+        from projects import demo
+
+        demo.seed(projects, owner)
 
     def _contracts(self, master, owner):
         """SVC-002: a monthly contract billed for its past months (two posted, one still a draft) and a

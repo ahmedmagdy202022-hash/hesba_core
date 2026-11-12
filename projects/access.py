@@ -49,3 +49,10 @@ def visible_projects(user):
         raise PermissionDenied("Projects need projects.view_projects or sales.view_sales_invoices.")
     return Project.objects.all() if module_open() else Project.objects.none()
 
+
+def visible_reports(user):
+    from .models import SiteReport
+
+    if not can_view(user):
+        raise PermissionDenied("Projects need projects.view_projects or sales.view_sales_invoices.")
+    return SiteReport.objects.select_related("project") if module_open() else SiteReport.objects.none()

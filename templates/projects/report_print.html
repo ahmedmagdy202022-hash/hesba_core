@@ -1,0 +1,55 @@
+{% load static %}<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ rw.p_title }} — {{ project.name }}</title>
+{% include "partials/brand_icons.html" %}
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
+<link rel="stylesheet" href="{% static 'hesba/css/print.css' %}?v=print-004">
+<link rel="stylesheet" href="{% static 'hesba/css/projects.css' %}?v=c2-1">
+</head>
+<body class="pr-body pr-a4" data-format="a4">
+{# Contracting C2b (HG-095): the day's report on A4, in the page's language, the photos as thumbnails. No internal numbers on the paper. #}
+<nav class="pr-toolbar" aria-label="{{ rw.p_print }}">
+  <a class="pr-button pr-button--ghost" href="{% url 'projects:diary_day' project.pk report.pk %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ rw.p_back }}</a>
+  <button class="pr-button pr-button--primary" type="button" data-print>{{ rw.p_print }}</button>
+  <p class="pr-toolbar__hint">{{ rw.p_hint }}</p>
+</nav>
+<article class="pr-sheet" data-kind="site_report">
+  <header class="pr-head">
+    <div class="pr-company">
+      {% if company.logo %}<img class="pr-company__logo" src="{{ company.logo }}" alt="{{ company.name }}">{% endif %}
+      <h1 class="pr-company__name">{{ company.name }}</h1>
+      {% if company.address %}<p>{{ company.address|linebreaksbr }}</p>{% endif %}
+    </div>
+    <div class="pr-doc">
+      <h2 class="pr-doc__title">{{ rw.p_title }}</h2>
+      <dl class="pr-meta">
+        <div><dt>{{ rw.p_date }}</dt><dd data-print-day>{{ day }}</dd></div>
+        <div><dt>{{ rw.p_project }}</dt><dd><bdi>{{ project.code }}</bdi> — {{ project.name }}</dd></div>
+        {% if project.site %}<div><dt>{{ rw.p_site }}</dt><dd>{{ project.site }}</dd></div>{% endif %}
+        <div><dt>{{ rw.p_weather }}</dt><dd>{{ weather|default:rw.ph }}</dd></div>
+      </dl>
+    </div>
+  </header>
+  <section class="pr-party"><span class="pr-party__label">{{ rw.p_owner }}</span><strong class="pr-party__name">{{ project.customer.name }}</strong></section>
+  <div class="sr-p-cols">
+    <section class="sr-p-box" data-print-crew><h3>{{ rw.crew }}</h3>
+      {% if crew %}<table class="pr-lines"><thead><tr><th>{{ rw.p_trade }}</th><th class="pr-num">{{ rw.count }}</th></tr></thead><tbody>{% for row in crew %}<tr><td><bdi>{{ row.label }}</bdi></td><td class="pr-num">{{ row.count }}</td></tr>{% endfor %}</tbody>
+      <tfoot><tr><th>{{ rw.p_workers }}</th><th class="pr-num" data-print-workers>{{ workers }}</th></tr></tfoot></table>{% else %}<p class="sr-p-none">{{ rw.none_rows }}</p>{% endif %}</section>
+    <section class="sr-p-box" data-print-equipment><h3>{{ rw.equipment }}</h3>
+      {% if equipment %}<table class="pr-lines"><thead><tr><th>{{ rw.p_equipment_name }}</th><th class="pr-num">{{ rw.count }}</th></tr></thead><tbody>{% for row in equipment %}<tr><td><bdi>{{ row.label }}</bdi></td><td class="pr-num">{{ row.count }}</td></tr>{% endfor %}</tbody></table>{% else %}<p class="sr-p-none">{{ rw.none_rows }}</p>{% endif %}</section>
+  </div>
+  {% if report.work_done %}<section class="sr-p-text" data-print-text="work"><h3>{{ rw.work }}</h3><p>{{ report.work_done|linebreaksbr }}</p></section>{% endif %}
+  {% if report.delayed %}<section class="sr-p-text" data-print-text="delayed"><h3>{{ rw.delayed }}</h3><p>{{ report.delayed|linebreaksbr }}</p></section>{% endif %}
+  {% if report.materials %}<section class="sr-p-text" data-print-text="materials"><h3>{{ rw.materials }}</h3><p>{{ report.materials|linebreaksbr }}</p></section>{% endif %}
+  {% if report.visitors %}<section class="sr-p-text" data-print-text="visitors"><h3>{{ rw.visitors }}</h3><p>{{ report.visitors|linebreaksbr }}</p></section>{% endif %}
+  {% if photos %}<section class="sr-p-photos" data-print-photos><h3>{{ rw.p_photos }}</h3><div class="sr-p-grid">{% for photo in photos %}<figure><img src="{{ photo.url }}" alt="{{ rw.photo_of }}" loading="eager"></figure>{% endfor %}</div></section>{% endif %}
+  <p class="sr-p-author">{{ rw.p_written }}: <bdi>{{ who }}</bdi></p>
+  <section class="pr-signatures pr-signatures--3"><div>{{ rw.p_engineer }}</div><div>{{ rw.p_consultant }}</div><div>{{ rw.p_contractor }}</div></section>
+  <footer class="pr-foot"><p class="pr-foot__meta">{{ printed }}</p>{% if company.show_hesba_brand %}<p class="pr-foot__brand"><img src="{% static 'hesba/brand/hesba-logo.png' %}" alt="Hesba"></p>{% endif %}</footer>
+</article>
+<script>document.querySelector('[data-print]').addEventListener('click', function(){ window.print(); });</script>
+</body>
+</html>

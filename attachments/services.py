@@ -63,7 +63,10 @@ MESSAGES = {
            "project_read_only": "إضافة مستندات المشروع لمهندس الموقع أو لصاحب صلاحية الفواتير بس.",
            "project_delete_denied": "مسح مستندات المشروع لصاحب صلاحية الفواتير بس.",
            "project_stage": "نوع المستند لازم يكون عقد أو رسم أو مراسلة أو تصريح أو صورة أو أخرى.",
-           "project_kind": "المستند لازم يكون صورة أو ملف PDF."},
+           "project_kind": "المستند لازم يكون صورة أو ملف PDF.",
+           "report_read_only": "إضافة صور التقرير اليومي لمهندس الموقع أو لصاحب صلاحية الفواتير بس.",
+           "report_delete_denied": "مسح صور التقرير اليومي لمهندس الموقع أو لصاحب صلاحية الفواتير بس.",
+           "report_stage": "صور التقرير اليومي بتبقى صور موقع بس.", "report_closed": "المشروع ده اتقفل؛ مينفعش يتضاف صور على تقاريره."},
     "en": {"denied": "You may not use attachments on this record.", "not_found": "The attachment or the record was not found.",
            "kind": "The attachment kind must be photo, document or signature.", "stage": "The attachment stage must be receive, deliver or other.",
            "empty": "The file is empty or was not sent.", "size": "The file is larger than allowed ({limit}).",
@@ -83,7 +86,10 @@ MESSAGES = {
            "project_read_only": "Only the site engineer, or someone who may create invoices, can add project documents.",
            "project_delete_denied": "Only someone who may create invoices can delete project documents.",
            "project_stage": "The document type must be contract, drawing, letter, permit, photo or other.",
-           "project_kind": "A document must be an image or a PDF."},
+           "project_kind": "A document must be an image or a PDF.",
+           "report_read_only": "Only the site engineer, or someone who may create invoices, can add photos to a daily report.",
+           "report_delete_denied": "Only the site engineer, or someone who may create invoices, can delete a daily report's photos.",
+           "report_stage": "A daily report takes site photos only.", "report_closed": "This project is closed; photos can no longer be added to its reports."},
 }
 
 
@@ -220,7 +226,7 @@ def _current_entity(record):
     return entity_scope.entity()
 
 
-# Contracting C2a (HG-095): a project's documents. They are seen as the project
+# Contracting C2a / C2b (HG-095): a project's documents and a daily site report's photos. Both are seen as the project
 # screens themselves are (``projects.access``): the projects view right, or the sales view right. A project has no entity
 # of its own (its money fixes one later), so these attachments are ``group_wide``: the entity scope on ``Attachment.entity``
 # is not applied, exactly as the project page itself is not narrowed to an entity. The document kinds ride on ``stage``
@@ -244,6 +250,18 @@ def _project_can_delete(user, project):
     return access.can_delete_documents(user)
 
 
+def _site_reports(user):
+    from projects import access
+
+    return access.visible_reports(user)
+
+
+def _site_report_closed(report):
+    from projects.models import ProjectStatus, SiteReport
+
+    return SiteReport.objects.filter(pk=report.pk).exclude(project__status__in=(ProjectStatus.PLANNED, ProjectStatus.ACTIVE, ProjectStatus.ON_HOLD)).exists()
+
+
 def _no_entity(record):
     return None
 
@@ -252,9 +270,10 @@ WORK_STAGES = (Stage.RECEIVE, Stage.DELIVER, Stage.OTHER)
 MEDICAL_STAGES = (Stage.SCAN, Stage.LAB, Stage.PHOTO, Stage.REPORT)
 #: the six document kinds of a project, stored on the six stages they are mapped to (see ``projects.documents``)
 PROJECT_STAGES = (Stage.RECEIVE, Stage.DELIVER, Stage.SCAN, Stage.REPORT, Stage.PHOTO, Stage.OTHER)
-#: per-record limit of a project's documents (a drawing set grows); it sits well under the
+#: per-record limits of a project (a drawing set grows) and of a daily report (a few phone photos); both sit well under the
 #: global share (ATTACHMENTS_GLOBAL_SHARE of the database), which still applies on top
 PROJECT_MAX_COUNT, PROJECT_MAX_BYTES = 40, 40 * 1024 * 1024
+REPORT_MAX_COUNT, REPORT_MAX_BYTES = 12, 12 * 1024 * 1024
 
 _MEDICAL_RULES = {"can_attach": _medical_can_attach, "closed": lambda record: False, "can_delete": _medical_can_delete,
                   "signature_final": lambda record: False, "entity": _current_entity, "delete_denied": "medical_delete_denied",
@@ -276,7 +295,13 @@ OWNERS = {"workorders.workorder": {"visible": _work_orders, "can_attach": _work_
                                "signature_final": lambda project: False, "entity": _no_entity, "group_wide": True, "titled": True,
                                "delete_denied": "project_delete_denied", "read_only_message": "project_read_only", "stages": PROJECT_STAGES,
                                "kinds": (Kind.PHOTO, Kind.DOCUMENT), "stage_error": "project_stage", "kind_error": "project_kind",
-                               "default_stage": Stage.OTHER, "max_count": PROJECT_MAX_COUNT, "max_owner_bytes": PROJECT_MAX_BYTES}}
+                               "default_stage": Stage.OTHER, "max_count": PROJECT_MAX_COUNT, "max_owner_bytes": PROJECT_MAX_BYTES},
+          # Contracting C2b (HG-095): the photos of a day's report. Closed with the project; deleted by those who may write the report.
+          "projects.sitereport": {"visible": _site_reports, "can_attach": _project_can_attach, "closed": _site_report_closed, "can_delete": _project_can_attach,
+                                  "signature_final": lambda report: False, "entity": _no_entity, "group_wide": True,
+                                  "delete_denied": "report_delete_denied", "read_only_message": "report_read_only", "closed_error": "report_closed",
+                                  "stages": (Stage.PHOTO,), "kinds": (Kind.PHOTO,), "stage_error": "report_stage", "kind_error": "photo",
+                                  "default_stage": Stage.PHOTO, "max_count": REPORT_MAX_COUNT, "max_owner_bytes": REPORT_MAX_BYTES}}
 
 
 def owner_label(owner_or_model):
