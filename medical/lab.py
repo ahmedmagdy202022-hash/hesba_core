@@ -31,11 +31,15 @@ FLAG_LABELS = {
 MESSAGES = {
     "ar": {"name": "اكتب اسم التحليل.", "taken": "اسم التحليل ده موجود.", "number": "«{value}» مش رقم.", "range": "الحد الأدنى أكبر من الحد الأعلى.",
            "date": "تاريخ العينة مش مظبوط.", "future": "تاريخ العينة لسه مجاش.", "nothing": "اكتب نتيجة تحليل واحد على الأقل.", "reason": "اكتب سبب المسح (مثلًا: مريض تاني).",
-           "result": "نتيجة «{test}»: «{value}» مش رقم؛ لو النتيجة كلام (زي سلبي) اكتبها في خانة الوصف."},
+           "result": "نتيجة «{test}»: «{value}» مش رقم؛ لو النتيجة كلام (زي سلبي) اكتبها في خانة الوصف.",
+           # M9 (HG-092): the analyzer's code for a test
+           "code": "كود الجهاز حروف إنجليزي وأرقام بس (ومعاهم . - _ / +) من غير مسافة، وأقصاه 20 حرف.", "code_taken": "كود الجهاز ده مستخدم في تحليل «{test}»."},
     "en": {"name": "Enter the test's name.", "taken": "A test with this name exists.", "number": "“{value}” is not a number.",
            "range": "The low limit is above the high limit.", "date": "The sample date is not valid.", "future": "The sample date is still to come.",
            "nothing": "Enter at least one test's result.", "reason": "Give the reason for removing it (for example: another patient).",
-           "result": "Result of “{test}”: “{value}” is not a number; if the result is a word (like negative), put it in the text box."},
+           "result": "Result of “{test}”: “{value}” is not a number; if the result is a word (like negative), put it in the text box.",
+           "code": "The analyzer code takes English letters and digits only (and . - _ / +), no spaces, up to 20 characters.",
+           "code_taken": "This analyzer code is already used by “{test}”."},
 }
 
 
@@ -47,6 +51,18 @@ def is_lab():
 
 def _words(lang):
     return MESSAGES["en" if lang == "en" else "ar"]
+
+
+CODE_FORM = re.compile(r"[A-Z0-9][A-Z0-9._/+-]{0,19}")
+
+
+def clean_code(raw):
+    """M9 (HG-092): an analyzer code as stored and as matched: trimmed and upper case ('' = none). None when it is not a valid code."""
+
+    text = str(raw if raw is not None else "").strip().upper()
+    if not text:
+        return ""
+    return text if CODE_FORM.fullmatch(text) else None
 
 
 THOUSANDS = re.compile(r"-?\d{1,3}(,\d{3})+(\.\d+)?")
@@ -102,7 +118,7 @@ def _test_snapshot(test):
     def text(value):
         return "" if value is None else str(value)  # a limit of 0 is a limit
 
-    return {"name": test.name, "unit": test.unit, "low": text(test.low), "high": text(test.high), "active": test.active,
+    return {"name": test.name, "code": test.code, "unit": test.unit, "low": text(test.low), "high": text(test.high), "active": test.active,
             "service": test.service_id, "position": test.position}
 
 
@@ -118,8 +134,18 @@ def save_test(data, user, test=None, lang="ar"):
     if low is not None and high is not None and low > high:
         raise ValidationError(words["range"])
     creating = test is None
+    code = None  # M9: left as it is unless the caller sends one (the demo and older callers never wipe a test's code)
+    if "code" in data:
+        code = clean_code(data.get("code"))
+        if code is None:
+            raise ValidationError(words["code"])
+        other = LabTest.objects.filter(code=code).exclude(pk=getattr(test, "pk", None)).first() if code else None
+        if other is not None:
+            raise ValidationError(words["code_taken"].format(test=other.name))
     before = {} if creating else _test_snapshot(test)
     test = test or LabTest()
+    if code is not None:
+        test.code = code
     test.name, test.unit, test.low, test.high = name, (data.get("unit") or "").strip()[:30], low, high
     test.service = data.get("service")
     try:
@@ -127,7 +153,14 @@ def save_test(data, user, test=None, lang="ar"):
     except ValueError:
         test.position = 0
     test.active = bool(data.get("active", True))
-    test.save()
+    try:
+        with transaction.atomic():
+            test.save()
+    except IntegrityError:  # two people gave the same code at once: the database's uniqueness (HG-092) decides
+        other = LabTest.objects.filter(code=test.code).exclude(pk=test.pk).first() if test.code else None
+        if other is None:
+            raise
+        raise ValidationError(words["code_taken"].format(test=other.name))
     AuditLog.objects.create(event_type=AuditEventType.CREATE if creating else AuditEventType.UPDATE, actor=user, module="medical",
                             action="save_lab_test", object_type="medical.LabTest", object_id=str(test.pk), before_data=before,
                             after_data=_test_snapshot(test))

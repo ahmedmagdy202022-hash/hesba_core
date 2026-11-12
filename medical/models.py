@@ -144,6 +144,8 @@ class LabTest(models.Model):
     """A test the lab runs: its unit and normal range. A result is checked against the range it had when it was entered."""
 
     name = models.CharField(max_length=120, unique=True)
+    # M9 (HG-092): the analyzer's own short name for the test (GLU, HB), upper case; empty = none. Unique among the lab's tests when set.
+    code = models.CharField(max_length=20, blank=True, default="")
     unit = models.CharField(max_length=30, blank=True)
     low = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True)
     high = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True)
@@ -153,6 +155,7 @@ class LabTest(models.Model):
 
     class Meta:
         ordering = ["position", "name"]
+        constraints = [models.UniqueConstraint(fields=["code"], condition=~models.Q(code=""), name="medical_lab_test_code_unique_when_set")]
 
     def __str__(self):
         return self.name
