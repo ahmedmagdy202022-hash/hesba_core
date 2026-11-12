@@ -130,7 +130,39 @@ class DemoScanWorksAtAnyHourTests(TestCase):
 
 
 class ScanWordingTests(ScanSetup):
-    """ED-02: an empty submit says what to do."""
+    """ED-10: the scan answers speak to a boy and a girl alike. ED-02: an empty submit says what to do."""
+
+    def test_the_answers_use_no_masculine_form_for_the_student(self):
+        outside = scan.mark(self.a.code, self.owner, at(TODAY, 10, 0))
+        self.assertEqual((outside.status, outside.message), ("no_class", "مفيش حصة دلوقتي لـآدم. حصص النهارده:"))
+        english = scan.mark(self.a.code, self.owner, at(TODAY, 10, 0), lang="en")
+        self.assertEqual(english.message, "آدم has no class right now. Today's classes:")
+        first = scan.mark(self.a.code, self.owner, at(TODAY, 16, 5))
+        again = scan.mark(self.a.code, self.owner, at(TODAY, 16, 6))
+        self.assertEqual((first.presence, again.status, again.message), ("present", "again", "حضور آدم اتسجّل قبل كده."))
+        self.assertEqual(scan.mark(self.b.code, self.owner, at(TODAY, 10, 0)).message, "مفيش حصة دلوقتي لـبسمة. حصص النهارده:")
+
+    def test_no_class_today_and_inactive_and_choose_and_the_labels(self):
+        loner = services.save_student({"name": "سلمى", "payer_name": "ولي أمر سلمى", "payer_phone": "01010000009"}, self.owner)
+        none_today = scan.mark(loner.code, self.owner, at(TODAY, 10, 0))
+        self.assertEqual((none_today.status, none_today.message), ("no_class", "مفيش حصص النهارده لـسلمى."))
+        services.save_student({"name": "سلمى", "payer": loner.payer, "active_present": "1"}, self.owner, loner)
+        self.assertEqual(scan.mark(loner.code, self.owner, at(TODAY, 10, 0)).message, "تسجيل سلمى موقوف.")
+        second = services.save_group({"course": self.review.course, "name": "مراجعة تانية", "days": "sun,mon,tue,wed,thu,fri,sat", "start_time": time(16, 30),
+                                      "duration_minutes": "60"}, self.owner)
+        services.enroll(self.a, second, self.owner, start_date=TODAY - timedelta(days=30))
+        choose = scan.mark(self.a.code, self.owner, at(TODAY, 16, 35))
+        self.assertEqual((choose.status, choose.message), ("choose", "آدم في أكتر من حصة دلوقتي. الحضور لأنهي حصة؟"))
+        late = scan.mark(self.b.code, self.owner, at(TODAY, 16, 40), group=self.review.pk)
+        self.assertEqual(late.as_json()["presence_label"], "تأخير")
+        self.assertEqual(scan.mark(self.c.code, self.owner, at(TODAY, 16, 2)).as_json()["presence_label"], "حضور")
+        self.assertEqual(scan.mark(self.c.code, self.owner, at(TODAY, 16, 2), lang="en").as_json()["presence_label"], "Present")
+        self.assertFalse(Enrollment.objects.filter(student=loner).exists())
+
+    def test_every_arabic_scan_message_is_free_of_the_masculine_forms_the_audit_found(self):
+        for key, text in scan.MESSAGES["ar"].items():
+            for word in ("مالوش", "حصصه", "هو حاضر", "كان متعلّم", "مش طالب", "الطالب ده"):
+                self.assertNotIn(word, text, key)
 
     def test_the_screen_carries_the_empty_submit_message_in_both_languages_and_the_script_shows_it(self):
         self.assertContains(self.client.get(reverse("education:scan")), 'data-t-empty="امسح الكارت أو اكتب الكود"')
@@ -138,3 +170,12 @@ class ScanWordingTests(ScanSetup):
         script = (Path(settings.BASE_DIR) / "static" / "hesba" / "js" / "edu_scan.js").read_text()
         self.assertIn("render({ status: 'empty', message: T('empty') })", script)
         self.assertEqual(scan.mark("  ", self.owner).message, "امسح الكارت أو اكتب الكود.")
+
+    def test_the_card_sheets_title_does_not_say_group_twice(self):
+        for lang, title in (("ar", "كروت طلاب مراجعة يومية"), ("en", "Cards for مراجعة يومية")):
+            page = self.client.get(reverse("education:cards") + f"?group={self.review.pk}&lang={lang}")
+            self.assertEqual(page.context["title"], title)
+        named = services.save_group({"course": self.review.course, "name": "مجموعة السبت والتلات", "days": "sat,tue"}, self.owner)
+        page = self.client.get(reverse("education:cards") + f"?group={named.pk}&lang=ar")
+        self.assertEqual(page.context["title"], "كروت طلاب مجموعة السبت والتلات")
+        self.assertNotContains(page, "مجموعة مجموعة")

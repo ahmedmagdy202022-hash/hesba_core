@@ -19,7 +19,7 @@ WORDS = {
            "ready_hint": "وجّه الكاميرا على الكارت أو استخدم جهاز المسح.", "working": "ثانية واحدة…", "which": "اختار الحصة", "empty": "امسح الكارت أو اكتب الكود",
            "recent": "آخر اللي اتمسحوا", "offline": "مفيش اتصال. جرّب تاني.", "failed": "حصل خطأ. جرّب تاني.", "waiting": "كروت مستنية دورها: {n}", "none": "لسه محدش اتمسح.",
            "closed": "الحصة اتقفلت؟ اللي ما اتمسحوش بيتعلّموا غايبين، ومن يمسح بعد كده بيتسجّل متأخر.", "today": "حصص النهارده",
-           "card_title": "كروت الطلاب", "card_for": "كارت {name}", "cards_for": "كروت مجموعة {name}", "print": "اطبع", "back": "رجوع",
+           "card_title": "كروت الطلاب", "card_for": "كارت {name}", "cards_for": "كروت طلاب {name}", "print": "اطبع", "back": "رجوع",
            "code": "الكود", "tip": "قصّ الكروت على الخطوط. الـ QR فيه الكود بس.", "no_cards": "مفيش طلاب نشطين في المجموعة دي.",
            "pdf_hint": "من نافذة الطباعة تقدر تحفظها PDF.", "n_title": "امسح الحضور والانصراف", "n_go": "سجّل وصول"},
     "en": {"title": "Scan attendance", "intro": "Scan a student's card with the camera or a barcode scanner and attendance is recorded at once.",
