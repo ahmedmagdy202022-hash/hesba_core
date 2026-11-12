@@ -490,7 +490,7 @@ def lab_tests(request):
                                                           editing=editing, services=services_, can_write=can_write, error=error, post=request.POST))
 
 
-def _sample_day(request, patient, days):
+def _sample_day(request, patient, days, lang):
     """M9 (HG-092): the day a sample code opened this page on (``?day=``): its code and whether the day has results yet. None otherwise."""
 
     from datetime import date
@@ -503,7 +503,14 @@ def _sample_day(request, patient, days):
         return None
     if day > timezone.localdate():
         return None
-    return {"day": day, "code": samples.sample_code(patient, day), "has_results": any(found == day for found, _ in days)}
+    from settings_core.templatetags.hesba_format import day_text
+
+    code = samples.sample_code(patient, day)
+    from . import views_lab
+
+    # the code is isolated left-to-right (LRI ... PDI) so an Arabic sentence that holds it still reads from its own start
+    text = views_lab.WORDS[lang]["opened"].format(code=f"\u2066{code}\u2069", day=day_text(day, lang))
+    return {"day": day, "code": code, "text": text, "has_results": any(found == day for found, _ in days)}
 
 
 def lab_results(request, pk):
@@ -553,7 +560,7 @@ def lab_results(request, pk):
     rows = [{"test": test, "value": request.POST.get(f"value_{test.pk}", ""), "text": request.POST.get(f"text_{test.pk}", "")} for test in tests]
     found = public.factor(patient) if can_write else None  # M6: with neither a birth year nor a phone the patient could not open it
     shareable = found is not None
-    sample = _sample_day(request, patient, days)  # M9 (HG-092): opened from a sample code: that day, and its label
+    sample = _sample_day(request, patient, days, lang)  # M9 (HG-092): opened from a sample code: that day, and its label
     return render(request, "medical/lab_results.html", _base(lang, page_title=words["title"], lw=words, patient=patient, rows=rows, days=days,
                                                             can_write=can_write, error=error, today=timezone.localdate(),
                                                             taken_on=request.POST.get("taken_on") or (sample["day"].isoformat() if sample else timezone.localdate().isoformat()),

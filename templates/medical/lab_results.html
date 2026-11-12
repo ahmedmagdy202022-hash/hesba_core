@@ -7,7 +7,7 @@
 <div class="op-form-actions"><a class="op-secondary" href="{% url 'medical:lab_tests' %}?lang={{ lang }}">{{ lw.tests }}</a></div></section>
 {% if error %}<p class="op-message op-message-error" role="alert">{{ error }}</p>{% endif %}
 {# M9 (HG-092): a sample code opened this page on one day; and the sample label, printable before any result exists #}
-{% if sample %}<p class="op-notice ls-opened" data-lab-sample-opened="{{ sample.code }}"><strong><bdi dir="ltr">{{ sample.code }}</bdi></strong> · {{ sample.day|day_text:lang }}{% if not sample.has_results %} · {{ sw.no_results_day }}{% endif %}</p>{% endif %}
+{% if sample %}<p class="op-notice ls-opened" data-lab-sample-opened="{{ sample.code }}"><strong>{{ sample.text }}</strong>{% if not sample.has_results %} · {{ sw.no_results_day }}{% endif %}</p>{% endif %}
 <section class="ls-card" data-lab-label-card><div><h2>{{ sw.label_h }}</h2><p>{{ sw.label_p }}</p></div>
 <form class="ls-inline" method="get" action="{% url 'medical:lab_label' patient.pk %}" data-lab-label-form><input type="hidden" name="lang" value="{{ lang }}">
 <div class="op-field"><label for="ls-day">{{ sw.label_day }}</label><input id="ls-day" type="date" name="day" value="{% if sample %}{{ sample.day|date:'Y-m-d' }}{% else %}{{ today|date:'Y-m-d' }}{% endif %}" max="{{ today|date:'Y-m-d' }}" required></div>

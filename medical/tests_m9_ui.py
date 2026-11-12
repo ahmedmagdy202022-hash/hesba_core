@@ -17,13 +17,12 @@ from audit.models import AuditLog
 from barcode.symbology import code128_modules
 from barcode.tests import decode_code128
 from hesba_testing.factories import grant, make_customer, make_role, make_user, make_user_profile
-from permissions.models import Permission, RoleCode
+from permissions.models import Permission
 from sales.models import SalesInvoice
 from settings_core.templatetags.hesba_format import day_text
 
 from . import lab, lab_import, public, samples, services
 from .models import LabResult, LabTest
-from .tests import person
 from .tests_inpatient import footprint
 from .tests_m9 import LabBench, modules_of
 
@@ -207,12 +206,13 @@ class LabelTests(Screens):
         ClientProfile.objects.update(sub_activity_slug="clinic")
         self.assertEqual(self.client.get(url).status_code, 404)
 
-    def test_printing_moves_no_money(self):
+    def test_printing_and_scanning_move_no_money(self):
         before = footprint()
         self.order(self.mona, self.cbc)
         invoices = SalesInvoice.objects.count()
         self.page()
         self.page(size="a4")
+        self.client.get(self.url("medical:lab_sample", code=self.code(self.mona)), follow=True)  # the scan, and the page it opens
         self.assertEqual((footprint(), SalesInvoice.objects.count(), AuditLog.objects.filter(module="medical", action__icontains="label").count()), (before, invoices, 0))
 
 
@@ -232,7 +232,7 @@ class SampleBoxTests(Screens):
             self.assertEqual(response["Location"], f"{reverse('medical:lab', args=[self.mona.pk])}?lang=ar&day={self.day.isoformat()}#lab-day-{self.day.isoformat()}")
         page = self.client.get(self.open(code)["Location"])
         self.assertContains(page, f'data-lab-sample-opened="{code}"')
-        self.assertContains(page, day_text(self.day, "ar"))
+        self.assertContains(page, f"عيّنة \u2066{code}\u2069 · {day_text(self.day, 'ar')}")  # an Arabic sentence that starts in Arabic
         self.assertContains(page, f'name="taken_on" value="{self.day.isoformat()}"')  # the entry form is on that day
         self.assertContains(page, "data-lab-focus")
         self.assertNotContains(page, "مفيش نتايج متسجّلة في اليوم ده")
@@ -287,7 +287,6 @@ class SampleBoxTests(Screens):
 
     def test_another_entitys_lab_data_is_not_opened_from_a_non_lab_entity(self):
         from entities.current import SESSION_KEY
-        from entities.models import EntityMembership
         from entities.services import save_entity
 
         branch = save_entity({"code": "CL2", "name_ar": "عيادة المعادي", "activity_slug": "medical", "sub_activity_slug": "clinic"}, self.owner)
@@ -302,7 +301,6 @@ class SampleBoxTests(Screens):
         self.assertEqual(self.file_post(self.good_file()).status_code, 404)
         self.assertEqual(self.post("medical:lab_import", {"action": "apply", "payload": "x"}).status_code, 404)
         self.assertEqual(LabResult.objects.count(), 1)
-        assert EntityMembership  # imported for the readers of this test: a member of the branch only would see the same
 
 
 # ---- the label and the box on the patient's page and the tests set-up -------------------------------

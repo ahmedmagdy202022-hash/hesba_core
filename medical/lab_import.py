@@ -21,7 +21,6 @@ import csv
 import hashlib
 import io
 from collections import defaultdict
-from datetime import date
 from decimal import InvalidOperation
 
 from django.core import signing

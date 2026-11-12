@@ -9,7 +9,6 @@ was not ordered; who may do what; the lab entity; and that nothing financial mov
 "Today" is ``timezone.localdate()`` and every other day is built from it.
 """
 
-import io
 import re
 from datetime import date, timedelta
 from decimal import Decimal as D
@@ -19,7 +18,6 @@ from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
 from django.test import SimpleTestCase, TestCase, override_settings
-from django.urls import reverse
 from django.utils import timezone
 
 from audit.models import AuditLog
@@ -33,7 +31,6 @@ from master_data.models import Customer
 from permissions.models import RoleCode
 from reports.tests_dashboard import prepared_client
 from sales.models import SalesInvoice
-from settings_core.templatetags.hesba_format import day_text
 
 from . import lab, lab_import, public, samples, services
 from .lab_import import BAD_ROW, DIFFERS, DUPLICATE, NOT_NUMBER, NOT_ORDERED, SAME, UNKNOWN_SAMPLE, UNKNOWN_TEST, WRITE
