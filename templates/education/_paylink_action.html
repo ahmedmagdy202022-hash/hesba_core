@@ -2,7 +2,7 @@
 {% if s.kind == 'draft' %}<a class="op-muted" href="{% url 'sales:detail' s.invoice.pk %}?lang={{ lang }}" data-pay-post-first>{{ pl.post_first }}</a>
 {% elif s.kind == 'ready' %}<form method="post" action="{% url 'education:paylink_make' s.invoice.pk %}" data-pay-make-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="next" value="{{ next }}"><button class="op-secondary" type="submit" data-pay-make>{{ pl.make }}</button></form>
 {% elif s.kind == 'live' %}<div class="edu-pay__live" data-pay-live>
-<span>{{ pl.link_for }} <strong data-pay-amount>{{ s.live.amount|money }}</strong> · <span data-pay-expiry>{{ s.expires }}</span> <small class="op-muted"><bdi>{{ s.expires_at|date:"Y-m-d H:i" }}</bdi></small></span>
+<span>{{ pl.link_for }} <strong data-pay-amount>{{ s.live.amount|money }}</strong> · <span data-pay-expiry>{{ s.expires }}</span> <small class="op-muted edu-pay__when" data-pay-expires-at>{{ s.expires_at|date:"Y-m-d H:i" }}</small></span>
 {% if s.stale %}<span class="op-muted" data-pay-stale>{{ pl.stale }}</span>
 <form method="post" action="{% url 'payments:cancel' s.live.pk %}">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="next" value="{{ next }}"><button class="op-danger" type="submit" data-pay-cancel>{{ pl.cancel }}</button></form>
 {% else %}<div class="edu-pay__actions">{% if s.url %}<button class="op-secondary" type="button" data-copy-link="{{ s.url }}" data-pay-copy>{{ pl.copy }}</button>{% endif %}{% if s.whatsapp %}<a class="op-secondary" href="{{ s.whatsapp }}" target="_blank" rel="noopener" data-pay-whatsapp>{{ pl.wa }}</a>{% else %}<small class="op-muted" data-pay-no-phone>{{ pl.no_phone }}</small>{% endif %}</div>{% endif %}
