@@ -10,7 +10,7 @@
 <h2>{{ words_online.box_title }}</h2>
 <p class="op-muted"><span class="op-status op-status-draft" data-appointment-online>{{ words_online.kind_online }}</span></p>
 {% if prepaid_note %}<p class="op-message" data-prepaid-pending>{{ words_online.prepaid_pending }}</p>{% endif %}
-{% if join_url %}<p class="op-form-actions"><a class="op-primary" href="{{ join_url }}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" data-join-call>{{ words_online.join }}</a></p>{% elif not has_call_link %}<p class="op-muted" data-call-none>{{ words_online.box_none }}</p>{% endif %}
+{% if join_url %}<p class="op-form-actions"><a class="op-primary" href="{{ join_url }}" target="_blank" rel="noopener noreferrer" referrerpolicy="same-origin" data-join-call>{{ words_online.join }}</a></p>{% elif not has_call_link %}<p class="op-muted" data-call-none>{{ words_online.box_none }}</p>{% endif %}
 {% if can_book and can_call_link %}<div class="op-form-actions" data-call-controls>
 <form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="call_generate"><button class="op-secondary" type="submit" data-call-generate>{% if has_call_link %}{{ words_online.regenerate }}{% else %}{{ words_online.generate }}{% endif %}</button></form>
 <form method="post" class="op-form-actions">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="call_paste"><div class="op-field"><label for="id_call_url">{{ words_online.paste_label }}</label><input id="id_call_url" name="call_url" type="url" dir="ltr" maxlength="600" autocomplete="off" required></div><button class="op-secondary" type="submit" data-call-paste>{{ words_online.paste }}</button></form>

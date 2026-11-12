@@ -259,7 +259,7 @@ class StaffVisibilityTests(OnlineSetup):
                     page = self.client.get(url)
                     self.assertContains(page, f'href="{CALL}"')
                     self.assertContains(page, 'rel="noopener noreferrer"')
-                    self.assertContains(page, 'referrerpolicy="no-referrer"')
+                    self.assertContains(page, 'referrerpolicy="same-origin"')
                     self.assertContains(page, 'target="_blank"')
                     self.assertContains(page, "data-join-call")
         self.assertContains(self.client.get(self.agenda("en")), "Join the call")
@@ -416,7 +416,7 @@ class PatientWindowTests(OnlineSetup):
 
     def test_the_button_opens_in_a_new_page_with_no_referrer_and_the_page_keeps_its_private_headers(self):
         page = self.join(-10)
-        self.assertContains(page, 'target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" data-join-call')
+        self.assertContains(page, 'target="_blank" rel="noopener noreferrer" referrerpolicy="same-origin" data-join-call')
         self.assertEqual(page["X-Robots-Tag"], "noindex, nofollow")
         self.assertIn("no-store", page["Cache-Control"])
         self.assertEqual(page["Referrer-Policy"], "same-origin")

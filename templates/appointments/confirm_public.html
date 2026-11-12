@@ -22,7 +22,7 @@
 {% if call %}<section class="cl-card cl-ask" data-call-box data-call-state="{{ call.state }}" aria-labelledby="ap-call">
   <div class="cl-eyebrow" id="ap-call">{{ call_words.title }}</div>
   {% if call.state == 'open' %}<p data-call-note>{{ call_words.open_p }}</p>
-  <div class="cl-actions"><a class="cl-btn cl-btn--primary" href="{{ call.url }}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" data-join-call>{{ call_words.join }}</a></div>
+  <div class="cl-actions"><a class="cl-btn cl-btn--primary" href="{{ call.url }}" target="_blank" rel="noopener noreferrer" referrerpolicy="same-origin" data-join-call>{{ call_words.join }}</a></div>
   {% else %}<p data-call-note>{{ call.note }}</p>{% if call.pay_url %}<div class="cl-actions"><a class="cl-btn cl-btn--primary" href="{{ call.pay_url }}" data-call-pay>{{ call_words.pay }}</a></div>{% endif %}{% endif %}
 </section>{% endif %}
 
