@@ -18,7 +18,7 @@ from django.utils.cache import patch_vary_headers
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
 
-from . import booking, services
+from . import booking, online, services
 from .models import Appointment, AppointmentStatus
 
 
@@ -83,7 +83,7 @@ def _many_entities():
     return is_multi_entity()
 
 
-def _context(request, appointment, lang):
+def _context(request, appointment, lang, at=None):
     from printing.company import company_details
     from reports.aging import whatsapp_number
 
@@ -95,7 +95,11 @@ def _context(request, appointment, lang):
     requested = appointment.pk in services.pending_cancel_requests([appointment.pk])
     entity = appointment.entity
     other = "ar" if lang == "en" else "en"
+    at = at or online.now()
     return {
+        "call": online.page_box(appointment, lang, at), "call_words": online.PAGE_WORDS[lang],  # M10 (HG-096): the link is in the box only inside the window
+        "can_act": appointment.status in (AppointmentStatus.BOOKED, AppointmentStatus.CONFIRMED) and appointment.starts_at > at,
+        "arrived": appointment.status == AppointmentStatus.ARRIVED,
         "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": WORDS[lang], "company": company, "phone": company["phone"],
         "whatsapp": whatsapp_number(company["phone"]),
         "clinic": entity.display(lang) if entity is not None and _many_entities() else company["name"],
@@ -113,10 +117,12 @@ def page(request, pk):
     """GET (called by the share dispatcher): the patient's page, or the expired page for a dead link."""
 
     target = _target(request.resolver_match.kwargs.get("token", "") if request.resolver_match else "")
-    appointment = Appointment.objects.select_related("service", "entity").filter(pk=pk).first()
-    if target is None or target[0] != pk or not services.link_alive(appointment, target[1]):
+    appointment = Appointment.objects.select_related("service", "entity", "invoice").filter(pk=pk).first()
+    at = online.now()
+    # M10: an online booking's page also lives through its call window (after the start), which the confirm and cancel posts never do
+    if target is None or target[0] != pk or not (services.link_alive(appointment, target[1], at) or online.join_page_alive(appointment, target[1], at)):
         return _expired(request)
-    return _private(render(request, "appointments/confirm_public.html", _context(request, appointment, _lang(request))))
+    return _private(render(request, "appointments/confirm_public.html", _context(request, appointment, _lang(request), at)))
 
 
 def _answer(request, token, action):

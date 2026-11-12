@@ -12,7 +12,7 @@ from django.utils import timezone
 from master_data.models import Customer
 from permissions.services import user_has_permission
 
-from . import levels, nursery, scan, attendance as register
+from . import exams, levels, nursery, scan, attendance as register
 from . import services
 from .models import Attendance, ClassSession, Course, Enrollment, EnrollmentStatus, FeeBasis, PickupPerson, Presence, SessionStatus, Student, StudyGroup, Weekday
 
@@ -36,7 +36,7 @@ WORDS = {
         "saved": "اتحفظ.", "enrolled_ok": "اتسجل الطالب.", "stopped_ok": "اتوقف التسجيل.", "per": "/", "no_teacher": "—",
         "add_course_first": "اعمل كورس الأول من «الكورسات والمواد».", "group_title": "مجموعة", "item": "صنف الفاتورة",
         "free_seats": "متاح", "total_monthly": "إجمالي المصروفات الشهرية للمجموعة",
-        "today": "حصص النهارده", "classes_on": "الحصص يوم", "no_classes": "مفيش حصص في اليوم ده.", "take": "سجّل الحضور", "taken": "اتسجّل",
+        "today": "حصص النهارده", "exams": "الامتحانات", "classes_on": "الحصص يوم", "no_classes": "مفيش حصص في اليوم ده.", "take": "سجّل الحضور", "taken": "اتسجّل",
         "change": "تعديل الحضور", "present": "حاضر", "late": "متأخر", "absent": "غايب", "excused": "بعذر", "topic": "اتشرح إيه (اختياري)",
         "cancelled_class": "الحصة اتلغت", "save_attendance": "حفظ الحضور", "attendance_saved": "اتسجّل الحضور.", "attendance": "الحضور",
         "rate": "نسبة الحضور (30 يوم)", "recent_absences": "آخر غياب", "no_absences": "مفيش غياب في آخر 30 يوم.", "sessions": "آخر الحصص",
@@ -77,7 +77,7 @@ WORDS = {
         "saved": "Saved.", "enrolled_ok": "Student enrolled.", "stopped_ok": "Enrolment stopped.", "per": "/", "no_teacher": "—",
         "add_course_first": "Add a course first under “Courses & subjects”.", "group_title": "Group", "item": "Invoice item",
         "free_seats": "free", "total_monthly": "Monthly fees of the group",
-        "today": "Today's classes", "classes_on": "Classes on", "no_classes": "No classes on that day.", "take": "Take attendance", "taken": "Taken",
+        "today": "Today's classes", "exams": "Exams", "classes_on": "Classes on", "no_classes": "No classes on that day.", "take": "Take attendance", "taken": "Taken",
         "change": "Change attendance", "present": "Present", "late": "Late", "absent": "Absent", "excused": "Excused", "topic": "What was covered (optional)",
         "cancelled_class": "Class cancelled", "save_attendance": "Save attendance", "attendance_saved": "Attendance saved.", "attendance": "Attendance",
         "rate": "Attendance (30 days)", "recent_absences": "Recent absences", "no_absences": "No absences in the last 30 days.", "sessions": "Recent classes",
@@ -233,6 +233,7 @@ def student_detail(request, pk):
                                                            active_groups=active_groups, nw=NURSERY_WORDS[lang],
                                                            pickup_people=list(student.pickup_people.all()) if nursery.is_nursery() else [],
                                                            day_history=nursery.history(student, 10) if nursery.is_nursery() else [],
+                                                           **views_exams.student_card(request, student, lang),
                                                            **_placement_context(student, lang)))
 
 
@@ -356,7 +357,7 @@ def group_detail(request, pk):
         chosen_days=failed_edit.getlist("days") if failed_edit else group.weekdays, total=total, basis_label=services.BASIS_LABELS[lang][group.course.basis],
         free=(group.capacity - len(roster)) if group.capacity else None, today=timezone.localdate(),
         sessions=sessions, can_take=register.can_take(request.user, group), last_class=register.last_class_day(group),
-        next_groups=levels.next_groups(group) if levels.is_levels_install() else [], next_first=_next_first()))
+        next_groups=levels.next_groups(group) if levels.is_levels_install() else [], next_first=_next_first(), **views_exams.group_card(request, group, lang)))
 
 
 def _next_first():
@@ -431,7 +432,7 @@ def today(request):
         marked = sum((session.present, session.late, session.absent, session.excused)) if session else 0
         rows.append({"group": group, "schedule": services.schedule_text(group, lang), "session": session, "seats": seats,
                      "not_scanned": max(seats - marked, 0) if session and session.status == SessionStatus.HELD and session.pk in scanned else 0,
-                     "can_take": register.can_take(request.user, group)})
+                     "can_take": register.can_take(request.user, group), "can_exams": exams.can_see(request.user, group)})
     return render(request, "education/today.html", _base(request, lang, "today", rows=rows, day=day, today=timezone.localdate(),
                                                          weekday=services.DAY_LABELS[lang][register.weekday(day)]))
 
@@ -759,3 +760,6 @@ LEVEL_WORDS = {
            "target": "Next level's group", "on_date": "From", "move": "Move them up", "moved": "{n} students moved to {group}.",
            "all": "All", "no_next": "There is no higher-level group in this course; create it first.", "monthly_note": "A monthly course moves up on the first of a month."},
 }
+
+
+from . import views_exams  # noqa: E402  (E2: its pages build on the helpers above, so it is imported last)

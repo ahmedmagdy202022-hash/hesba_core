@@ -8,6 +8,8 @@ from django.db import models
 class AppointmentKind(models.TextChoices):
     APPOINTMENT = "appointment", "At the shop"
     VISIT = "visit", "Visit to the customer"
+    #: M10 (HG-096): a consultation over a video call; the call itself runs on a meeting service outside Hesba.
+    ONLINE = "online", "Online visit"
 
 
 class AppointmentStatus(models.TextChoices):
@@ -40,6 +42,9 @@ class Appointment(models.Model):
     starts_at = models.DateTimeField(db_index=True)
     duration_minutes = models.PositiveIntegerField(default=30)
     address = models.CharField(max_length=255, blank=True)
+    #: M10 (HG-096): the https link of an online visit's video call (made by Hesba from the clinic's meeting server, or pasted).
+    #: Only the staff who may see the booking and, inside its window, the patient's own confirm page ever show it.
+    call_url = models.URLField(max_length=600, blank=True, default="")
     status = models.CharField(max_length=20, choices=AppointmentStatus.choices, default=AppointmentStatus.BOOKED, db_index=True)
     notes = models.CharField(max_length=255, blank=True)
     invoice = models.OneToOneField("sales.SalesInvoice", on_delete=models.PROTECT, null=True, blank=True, related_name="appointment")

@@ -1,0 +1,7 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row hs-head"><div><a class="op-back" href="{% if can_view %}{% url 'education:group' group.pk %}{% else %}{% url 'education:today' %}{% endif %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{% if can_view %}{{ xw.back_group }}{% else %}{{ words.today }}{% endif %}</a><h1>{{ xw.exams }}</h1><p>{{ group.course.name }} — {{ group.name }}{% if group.teacher %} · {{ group.teacher.name }}{% endif %}</p></div>
+<div class="op-form-actions">{% if group.active %}<a class="op-primary" href="{% url 'education:exam_new' group.pk %}?lang={{ lang }}" data-new-exam>{{ xw.new_exam }}</a>{% endif %}</div></section>
+{% include "education/_exam_list.html" %}
+{% endblock %}

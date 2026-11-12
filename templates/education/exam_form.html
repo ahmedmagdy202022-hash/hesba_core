@@ -1,0 +1,8 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'education:exams' group.pk %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ xw.back_exams }}</a><h1>{{ xw.new_exam }}</h1><p>{{ group.course.name }} — {{ group.name }}</p></div></section>
+{% if error %}<div class="op-message op-message-error" role="alert" data-form-error>{{ error }}</div>{% endif %}
+<form class="op-form" method="post" data-exam-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+<div class="op-form-grid">{% include "education/_exam_fields.html" %}</div>
+<div class="op-form-actions"><button class="op-primary" type="submit" data-save-exam>{{ xw.save_exam }}</button></div></form>
+{% endblock %}

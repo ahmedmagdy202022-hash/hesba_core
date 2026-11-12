@@ -31,7 +31,7 @@ from django.utils import timezone
 from audit.models import AuditEventType, AuditLog
 
 from . import services
-from .models import HOLDS_TIME, Appointment, BookableService, BookingSettings, BookingStaff, WorkingHours, Weekday
+from .models import HOLDS_TIME, Appointment, AppointmentKind, BookableService, BookingSettings, BookingStaff, WorkingHours, Weekday
 
 CAPABILITY = "online_booking"
 MODULE = "appointments_visits"
@@ -321,11 +321,12 @@ def _customer(name, phone, user, words):
     raise ValidationError(words["failed"], code="failed")
 
 
-def book_online(booking, service, employee, starts_at, name, phone, notes="", lang="ar", now=None):
+def book_online(booking, service, employee, starts_at, name, phone, notes="", lang="ar", now=None, online=False):
     """Book ``service`` at ``starts_at`` for the customer with this name and phone. Returns the appointment.
 
     Refuses with a neutral message (``code="taken"``) a time that is not one of the free slots right now, and a slot
-    taken between the page and the submit (the employee-row lock in ``_check_overlap`` serialises the last two)."""
+    taken between the page and the submit (the employee-row lock in ``_check_overlap`` serialises the last two).
+    M10: ``online`` books it as an online visit (no call link until the staff make one); the caller has checked the clinic allows it."""
 
     words = MESSAGES[lang]
     name = " ".join(str(name or "").split())[:120]
@@ -354,7 +355,7 @@ def book_online(booking, service, employee, starts_at, name, phone, notes="", la
                 try:
                     appointment = services.book({"customer": customer, "employee": person, "service": service.item, "price": None,
                                                  "starts_at": starts_at, "duration_minutes": service.duration_minutes,
-                                                 "notes": notes}, user, lang)
+                                                 "notes": notes, **({"kind": AppointmentKind.ONLINE} if online else {})}, user, lang)
                 except ValidationError as exc:
                     if getattr(exc, "code", None) == "overlap":
                         continue  # taken a moment ago: the next free employee, if any
