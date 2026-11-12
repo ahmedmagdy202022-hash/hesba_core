@@ -508,9 +508,12 @@ class ApplyTests(LabBench):
         self.assertEqual(summary.after_data["written"], 3)
         self.assertEqual(summary.after_data["file"], "results.csv")
         self.assertEqual(summary.after_data["left"], {"not_ordered": 1, "unknown_sample": 1, "unknown_test": 1, "not_number": 1})
-        text = str(summary.after_data) + summary.object_id
+        text = str(summary.after_data)
         for value in ("17.5", "88", "120", self.mona.name, self.mona_code):
             self.assertNotIn(value, text)
+        # The row's id is a digest of the file's rows: 16 hex characters that hold no value. It is checked by its shape, not
+        # searched for "88": a digest holds those two characters by chance about once in seventeen runs (the CI failure on #386).
+        self.assertRegex(summary.object_id, r"^[0-9a-f]{16}$")
         rows = AuditLog.objects.filter(action="record_lab_result")
         self.assertEqual(rows.count(), 3)  # the typed path's own row per result
         self.assertEqual(AuditLog.objects.count(), audit + 4)
