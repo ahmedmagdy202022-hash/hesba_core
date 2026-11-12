@@ -96,6 +96,22 @@ class EmployeePageAgreesWithTheTechniciansReportTests(MyDaySetup):
         done = team_month([self.tech])[self.tech.pk]
         self.assertEqual((done["done"], str(done["commission"])), (2, "60.00"))
 
+    def test_a_delivery_whose_invoice_was_cancelled_is_not_counted_even_before_the_report_is_opened(self):
+        from sales.services import cancel_posted_sales_invoice
+        from staff.work import team_month
+        from workorders.models import WorkOrder
+
+        self.deliver_two()
+        cancelled = WorkOrder.objects.filter(technician=self.tech, status="delivered").first()
+        cancel_posted_sales_invoice(cancelled.invoice.pk, self.owner, "خطأ في الفاتورة")
+        done = team_month([self.tech], user=self.owner)[self.tech.pk]
+        self.assertEqual((done["done"], str(done["commission"])), (1, "30.00"))
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("staff:detail", args=[self.tech.pk]), {"lang": "ar"})
+        self.assertContains(page, "data-work-wo-count>1<")
+        cancelled.refresh_from_db()
+        self.assertEqual(cancelled.status, "ready")  # reopened, exactly as the technicians' report screen does
+
     def test_an_employee_with_no_delivered_order_still_says_there_is_no_work(self):
         self.client.force_login(self.owner)
         self.assertContains(self.client.get(reverse("staff:detail", args=[self.other.pk])), "data-work-none")

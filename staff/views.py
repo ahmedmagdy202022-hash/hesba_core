@@ -93,7 +93,7 @@ def employee_list(request):
     elif status == "off":
         employees = employees.filter(active=False)
     employees = list(employees)
-    month = team_month(employees)
+    month = team_month(employees, user=request.user)
     rows = [{"employee": employee, "month": month.get(employee.pk)} for employee in employees]
     active_count = Employee.objects.filter(active=True).count()
     return render(request, "staff/list.html", _context(
@@ -120,4 +120,4 @@ def employee_detail(request, pk):
             "user": str(employee.user_id or ""), "active": employee.active, "notes": employee.notes}
     from .work import employee_month
 
-    return render(request, "staff/detail.html", _context(request, employee=employee, form=form, error=error, work=employee_month(employee)))
+    return render(request, "staff/detail.html", _context(request, employee=employee, form=form, error=error, work=employee_month(employee, user=request.user)))

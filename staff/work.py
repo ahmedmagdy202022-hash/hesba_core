@@ -39,21 +39,26 @@ def _reps(date_from, date_to):
     return {row["rep"].pk: row for row in rows if row["rep"] is not None}
 
 
-def _work_orders(date_from, date_to):
-    """{employee pk: the technicians' report row} for the month; empty unless this is a workshop."""
+def _work_orders(date_from, date_to, user=None):
+    """{employee pk: the technicians' report row} for the month; empty unless this is a workshop.
+
+    Like the technicians' report screen, it first brings back to «ready» any order whose delivery invoice was cancelled on
+    the sales page (``sync_cancelled``), so a cancelled delivery is not counted here until someone opens that report.
+    """
 
     from workorders import services as wo
 
     if not wo.is_workshop():
         return {}
+    wo.sync_cancelled(user)
     return {row["technician"].pk: row for row in wo.technician_report(date_from, date_to) if row["technician"] is not None}
 
 
-def team_month(employees, today=None):
+def team_month(employees, today=None, user=None):
     """{employee pk: {"done", "sales", "commission"}} for the list's "this month" columns."""
 
     date_from, date_to = month_range(today)
-    booked, sold, repaired = _appointments(date_from, date_to), _reps(date_from, date_to), _work_orders(date_from, date_to)
+    booked, sold, repaired = _appointments(date_from, date_to), _reps(date_from, date_to), _work_orders(date_from, date_to, user)
     result = {}
     for employee in employees:
         visit, rep, order = booked.get(employee.pk), sold.get(employee.pk), repaired.get(employee.pk)
@@ -65,7 +70,7 @@ def team_month(employees, today=None):
     return result
 
 
-def employee_month(employee, today=None):
+def employee_month(employee, today=None, user=None):
     """The blocks of one person's page: only the ones with something in them."""
 
     date_from, date_to = month_range(today)
@@ -73,7 +78,7 @@ def employee_month(employee, today=None):
     visit = _appointments(date_from, date_to).get(employee.pk)
     if visit and (visit["done"] or visit["sales"]):
         blocks.append({"key": "appointments", "done": visit["done"], "sales": visit["sales"], "commission": visit["commission"]})
-    order = _work_orders(date_from, date_to).get(employee.pk)
+    order = _work_orders(date_from, date_to, user).get(employee.pk)
     if order and order["count"]:
         blocks.append({"key": "work_orders", "delivered": order["count"], "sales": order["net_sales"], "commission": order["commission"]})
     rep = _reps(date_from, date_to).get(employee.pk)
