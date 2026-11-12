@@ -10,6 +10,7 @@ from django.views.decorators.http import require_POST
 
 from audit.models import AuditEventType, AuditLog
 from master_data.models import Customer
+from master_data.phones import is_plain_phone
 from permissions.decorators import require_permission
 from permissions.services import user_has_permission
 
@@ -36,7 +37,7 @@ def quick_add_customer(name, phone, user):
     name, phone = (name or "").strip()[:255], (phone or "").strip()[:50]
     if not name:
         raise ValidationError("name")
-    if phone and len(digits(phone)) < 7:
+    if phone and (len(digits(phone)) < 7 or not is_plain_phone(phone)):  # ED-01: letters are no phone number (the customer form's rule)
         raise ValidationError("phone")
     if phone:
         existing = next((row for row in customer_directory() if row["phone"] and row["phone"] == digits(phone)), None)
