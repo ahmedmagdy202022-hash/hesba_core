@@ -79,6 +79,13 @@ def _pick(model, raw, **filters):
     return model.objects.filter(pk=raw, **filters).first() if raw.isdigit() else None
 
 
+def _own_cashbox(raw):
+    """The cashbox a bill is paid into: only one the pay form itself lists (this entity's, active, never a held kind)."""
+
+    raw = str(raw or "")
+    return entity_scope.cashboxes(Cashbox.objects).filter(pk=raw, active=True).first() if raw.isdigit() else None
+
+
 def _money(raw, words):
     try:
         value = Decimal(str(raw or "0").strip().replace(",", ""))
@@ -198,7 +205,7 @@ def order_detail(request, pk):
             elif action == "pay":
                 require_open_shift(request.user, lang)  # Restaurants R13: the till's own rule (AN4), before anything is made or posted
                 invoice, change = services.pay(
-                    order, request.user, cashbox=_pick(Cashbox, request.POST.get("cashbox"), active=True),
+                    order, request.user, cashbox=_own_cashbox(request.POST.get("cashbox")),
                     discount=_money(request.POST.get("discount"), words), tendered=_money(request.POST.get("tendered"), words),
                     customer=_pick(Customer, request.POST.get("customer"), active=True), lang=lang,
                 )

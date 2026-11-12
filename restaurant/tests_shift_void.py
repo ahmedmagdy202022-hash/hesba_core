@@ -186,6 +186,25 @@ class ShiftRuleTests(RestaurantSetup):
         self.assertEqual(self.pay_from_screen(order).status_code, 403)  # still the selling right's 403, not the shift message
 
 
+    def test_a_crafted_pay_cannot_put_the_cash_in_another_entitys_cashbox(self):
+        from entities.current import SESSION_KEY
+        from entities.models import Entity
+        from entities.services import main_entity
+        from hesba_testing.factories import make_cashbox
+
+        foreign = make_cashbox(cashbox_code="FAR", entity=Entity.objects.create(code="E2", name_ar="فرع تاني"))
+        open_shift(self.cashier, self.cashbox, opening_float=D("0"))
+        order = self.order((self.grill, 1))
+        session = self.client.session
+        session[SESSION_KEY] = main_entity().pk  # working in the main entity
+        session.save()
+        page = self.pay_from_screen(order, cashbox=foreign.pk)
+        self.assertContains(page, "لازم يكون فيه مخزن بيع نشط")  # the form never lists it, so it is as if no cashbox was sent
+        order.refresh_from_db()
+        self.assertEqual(order.status, OrderStatus.OPEN)
+        self.assertFalse(CashboxMovement.objects.filter(cashbox=foreign).exists())
+        self.assertFalse(SalesInvoice.objects.exists())
+
 class VoidTests(RestaurantSetup):
     """A line not sent yet goes freely; one the kitchen has needs the selling right and a reason, and is audited."""
 
