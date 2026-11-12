@@ -124,6 +124,7 @@
   function render(next) {
     data = next;
     fetchedAt = Date.now();
+    showClock();
     var now = sign(data.tickets);
     if (now !== signature) {
       signature = now;
@@ -188,9 +189,16 @@
   });
   recall.addEventListener('click', function () { if (data && data.recall) { act('recall', data.recall.id); } });
 
+  function showClock() {
+    // The feed's own clock (the business's time of day) plus the minutes since it arrived: the tablet's clock is never read for the hour.
+    if (!data || !data.clock) { return; }
+    var parts = data.clock.split(':');
+    var minutes = (parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10) + Math.floor((Date.now() - fetchedAt) / 60000)) % 1440;
+    clock.textContent = ('0' + Math.floor(minutes / 60)).slice(-2) + ':' + ('0' + (minutes % 60)).slice(-2);
+  }
+
   function tick() {
-    var now = new Date();
-    clock.textContent = ('0' + now.getHours()).slice(-2) + ':' + ('0' + now.getMinutes()).slice(-2);
+    showClock();
     refreshAges();
   }
   document.addEventListener('visibilitychange', function () { if (!document.hidden) { poll(); } });

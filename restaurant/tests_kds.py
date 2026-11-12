@@ -188,6 +188,12 @@ class ScreenTests(ScreenSetup):
                          ("الطاولة 1", self.order_a.number, "المطبخ", "fresh", False, False))
         self.assertEqual(card["lines"], [{"id": card["lines"][0]["id"], "name": "برجر", "quantity": "2", "note": "", "ready": False, "void": False, "reason": "", "seen": True}])
         self.assertIsNone(data["recall"])
+        from datetime import datetime
+
+        from django.utils import timezone
+
+        # the business's own time of day, in the same local time the tickets are stamped in (never UTC beside local)
+        self.assertEqual(data["clock"], timezone.localtime(datetime.fromisoformat(data["now"])).strftime("%H:%M"))
         english = self.feed(self.kitchen, lang="en").json()["tickets"][0]
         self.assertEqual((english["where"], english["station"]), ("Table 1", "Kitchen"))
         self.assertContains(self.client.get(reverse("restaurant:kds") + "?lang=en"), "Kitchen screen")

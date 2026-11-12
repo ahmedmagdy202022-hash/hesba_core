@@ -1100,7 +1100,7 @@ class Command(BaseCommand):
             floor.add_item(second, drink, owner, 2)
             floor.send_to_kitchen(second, owner)
             kitchen_demo.mark_ready(second, drink)
-            kitchen_demo.void_after_firing(second, dishes[2 % len(dishes)], owner, "الزبون غيّر رأيه")
+            kitchen_demo.void_after_firing(second, dishes[2 % len(dishes)], owner, "العميل غيّر الطلب")
             kitchen_demo.age_tickets(second, {"المطبخ": 17, "المشروبات": 7})
             Order.objects.filter(pk=second.pk).update(opened_at=timezone.now() - timedelta(minutes=30))
         adjust_stock(f"DEMO-WASTE-{today:%m%d}", today - timedelta(days=2), raw[0], master["location"], "out", "1", "هالك — باظت في التلاجة", owner)

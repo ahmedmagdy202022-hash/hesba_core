@@ -27,9 +27,9 @@ KDS_WORDS = {
     "ar": {
         "title": "شاشة المطبخ", "all": "كل المحطات", "back": "الطاولات", "recall": "رجّع", "recall_hint": "رجّع آخر تذكرة خلصت",
         "empty": "مفيش طلبات دلوقتي.", "empty_hint": "أي طلب يتبعت من الصالة بيظهر هنا لوحده.", "done": "التذكرة خلصت",
-        "hint": "دوس على الصنف لما يجهز، ودوس على التذكرة لما تخلص.", "voided": "اتلغى بعد الإرسال", "seen": "تمام، شفته", "cancelled": "الطلب اتلغى",
+        "hint": "اضغط على الصنف لما يجهز، واضغط «التذكرة خلصت» لما كل أصنافها تجهز.", "voided": "اتلغى بعد الإرسال", "seen": "تمام، شفته", "cancelled": "الطلب اتلغى",
         "offline": "الاتصال اتقطع، بنحاول تاني.", "signed_out": "الجلسة خلصت؛ سجّل الدخول تاني.", "min": "د", "ticket": "تذكرة", "waiter": "الويتر",
-        "no_station": "من غير محطة", "setup": "جهّز المحطات", "no_stations": "مفيش محطات متظبطة؛ كل التذاكر بتظهر هنا.",
+        "no_station": "من غير محطة", "setup": "جهّز المحطات", "no_stations": "لسه مفيش محطات؛ كل التذاكر بتظهر هنا.",
     },
     "en": {
         "title": "Kitchen screen", "all": "All stations", "back": "Tables", "recall": "Recall", "recall_hint": "Bring back the last finished ticket",
@@ -71,7 +71,8 @@ def _feed(station, lang):
     cards = [stations.ticket_card(ticket, now, _kind_label(ticket.order, lang), words["table"], lang) for ticket in stations.shown_tickets(station, now)]
     back = stations.last_done(station, now)
     recall = {"id": back.pk, "where": f"{words['table']} {back.order.table.name}" if back.order.table_id else _kind_label(back.order, lang)} if back else None
-    return {"now": now.isoformat(), "tickets": cards, "recall": recall}
+    # ``clock`` is the business's own time of day: the screen shows it beside tickets stamped the same way, whatever the tablet's clock says
+    return {"now": now.isoformat(), "clock": timezone.localtime(now).strftime("%H:%M"), "tickets": cards, "recall": recall}
 
 
 def _json(payload, status=200):
