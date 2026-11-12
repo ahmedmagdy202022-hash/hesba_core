@@ -555,6 +555,22 @@ class ScreenTests(PayFeesSetup):
         self.make(invoice)
         self.assertEqual(self.live(invoice).amount, D("750.00"))
 
+    def test_the_bulk_result_screen_does_not_offer_a_stale_link_either(self):
+        """Codex on #381: after a desk payment, refreshing the result screen still offered «انسخ اللينك» for the old amount."""
+
+        invoice = self.fee_invoice("يوسف محمد", "1250")
+        self.client.post(reverse("education:paylinks_bulk"), {"lang": "ar", "month": f"{self.month:%Y-%m}"}, follow=True)
+        result = reverse("education:paylinks_result")
+        fresh = self.client.get(result, {"lang": "ar"})
+        self.assertContains(fresh, "data-copy-link")
+        self.assertNotContains(fresh, "data-pay-stale")
+        self.pay_off(invoice, "500", settled=False)  # paid at the desk after the links were made
+        stale = self.client.get(result, {"lang": "ar"})
+        self.assertContains(stale, "data-pay-stale")
+        self.assertContains(stale, "data-pay-cancel")
+        self.assertNotContains(stale, "data-copy-link")
+        self.assertNotContains(stale, "data-pay-whatsapp")
+
     def test_an_expired_link_is_not_shown_as_live(self):
         invoice = self.fee_invoice("يوسف محمد", "1250")
         self.make(invoice)
