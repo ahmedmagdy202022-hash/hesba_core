@@ -183,6 +183,9 @@ def reschedule(appointment, data, user, lang="ar"):
         setattr(appointment, key, value)
     appointment.save()
     _audit(appointment, user, "change_appointment", _snapshot(values), before)
+    from . import online
+
+    online.drop_if_not_online(appointment, user)  # M10: a booking no longer online keeps no call link
     return appointment
 
 

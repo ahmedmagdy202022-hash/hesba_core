@@ -84,6 +84,7 @@ BASE = {
     "agenda_service": {"ar": "الخدمة", "en": "Service"},
     "agenda_kind_place": {"ar": "في المحل", "en": "At the shop"},
     "agenda_kind_visit": {"ar": "زيارة عند العميل", "en": "Visit to the customer"},
+    "agenda_kind_online": {"ar": "كشف أونلاين", "en": "Online visit"},  # M10 (HG-096): offered in a medical installation only
 }
 
 # Activity-wide words. Only what differs from BASE is listed.
