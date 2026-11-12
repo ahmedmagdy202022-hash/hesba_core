@@ -102,6 +102,8 @@ class ProductionOrder(models.Model):
     location = models.ForeignKey("master_data.Location", on_delete=models.PROTECT, related_name="production_orders")
     customer = models.ForeignKey("master_data.Customer", on_delete=models.PROTECT, null=True, blank=True, related_name="production_orders")
     due_date = models.DateField(null=True, blank=True)
+    # F1 (HG-098): the sales order line this order is made for (make to order); NULL for stock production.
+    sales_order_line = models.ForeignKey("orders.SalesOrderLine", on_delete=models.PROTECT, null=True, blank=True, related_name="production_orders")
     status = models.CharField(max_length=20, choices=OrderStatus.choices, default=OrderStatus.PLANNED, db_index=True)
     stages = models.JSONField(default=list)  # [[key, name_ar, name_en], ...] fixed when the order is opened
     stage_index = models.PositiveSmallIntegerField(default=0)
