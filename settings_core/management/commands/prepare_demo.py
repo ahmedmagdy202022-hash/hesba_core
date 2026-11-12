@@ -260,6 +260,7 @@ class Command(BaseCommand):
             self._payroll(master, owner)  # DEMO-NEW: last month's payroll, net pay paid
         self._services_showcase(master, staff, owner, catalog, extras)  # DEMO-SVC: after payroll, so the new technicians are not paid by it
         self._clinic_booking(master, staff, owner, catalog, extras)  # M4: after payroll too, for the same reason (the second doctor)
+        self._online_consult(master, staff, owner, catalog, extras)  # M10 (HG-096): two online bookings today, after the second doctor exists
         self._inpatient(master, staff, owner, catalog, extras)  # M8 (HG-088): beds, a patient in one and a stay with its draft bill
         from settings_core import demo_ai
 
@@ -286,6 +287,15 @@ class Command(BaseCommand):
 
         if demo_clinic.applies(catalog):
             demo_clinic.seed(master, staff, owner, catalog, extras)
+
+    @staticmethod
+    def _online_consult(master, staff, owner, catalog, extras):
+        """M10 (HG-096): two online bookings today (one with a call link inside its window, one without a link yet). The clinic only."""
+
+        from settings_core import demo_online
+
+        if demo_online.applies(catalog):
+            demo_online.seed(master, staff, owner, catalog, extras)
 
     @staticmethod
     def _inpatient(master, staff, owner, catalog, extras):

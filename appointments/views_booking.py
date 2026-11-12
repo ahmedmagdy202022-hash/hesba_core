@@ -25,6 +25,7 @@ from permissions.decorators import require_permission
 from permissions.services import user_has_permission
 
 from . import booking as engine
+from . import online
 from .views import BOOK
 
 SETTINGS_PERMISSION = "settings.view_settings"  # with BOOK: owners and managers, not the till staff
@@ -378,6 +379,9 @@ def _context(request, booking, lang, choices, error="", form=None):
         label, suffix = engine.clock_label(choices.start, lang)
         context["when"] = f"{engine.day_label(choices.day, lang)} · {label} {suffix}"
         context["deposit_text"] = _deposit_text(words)
+        context["choose_mode"] = _offers_online(booking.entity)  # M10: «in the clinic / online»
+        context["online_words"] = online.PUBLIC_WORDS[lang]
+        context["mode"] = (form or {}).get("mode", "clinic")
     context["step"] = step
     context["steps"] = [{"label": label, "state": "done" if index + 1 < step else "now" if index + 1 == step else ""} for index, label in enumerate(words["steps"])]
     context["step_of"] = words["step_of"].format(n=step)
@@ -401,6 +405,13 @@ def _many_entities():
     return is_multi_entity()
 
 
+def _offers_online(entity):
+    """M10 (HG-096): whether this page asks «in the clinic or online»: the clinic switched «اسمح بحجز كشف أونلاين» on and the entity is a
+    medical business. It offers every visit (a visit cannot be marked one by one: that would need a new column)."""
+
+    return bool(medical_kind(entity)) and online.public_choice()
+
+
 def _render(request, booking, lang, choices, error="", form=None, status=200):
     return _private(render(request, "appointments/book_public.html", _context(request, booking, lang, choices, error, form), status=status))
 
@@ -422,7 +433,8 @@ def page(request, key):
 def _submit(request, booking, lang):
     words = messages_for(booking.entity, lang)
     choices = _Choices(booking, request.POST)
-    form = {"name": request.POST.get("name", "")[:120], "phone": request.POST.get("phone", "")[:30], "notes": request.POST.get("notes", "")[:200]}
+    form = {"name": request.POST.get("name", "")[:120], "phone": request.POST.get("phone", "")[:30], "notes": request.POST.get("notes", "")[:200],
+            "mode": "online" if request.POST.get("mode") == "online" and _offers_online(booking.entity) else "clinic"}
     if request.POST.get("website"):  # the honeypot: a person never sees it, a script fills it in
         return _render(request, booking, lang, choices, words["failed"], form, status=400)
     if _throttled("book_ip", _address(request), BOOK_IP_LIMIT, BOOK_WINDOW):
@@ -434,7 +446,7 @@ def _submit(request, booking, lang):
         return _render(request, booking, lang, choices, words["service" if choices.service is None else "staff"], form, status=400)
     try:
         appointment = engine.book_online(booking, choices.service, choices.employee if not choices.any else None, choices.start,
-                                         form["name"], form["phone"], form["notes"], lang)
+                                         form["name"], form["phone"], form["notes"], lang, online=form["mode"] == "online")
     except ValidationError as exc:
         code = getattr(exc, "code", None)
         if code in ("taken", "when"):
@@ -468,7 +480,9 @@ def done(request, key, token):
             (words["k_dur"], f"{appointment.duration_minutes} {words['min']}")]
     if service is not None and booking.show_prices:
         rows.append((words["k_price"], _price(service, booking, lang, amount=appointment.price)))
-    if company.get("address"):
+    if appointment.kind == "online":  # M10: the patient chose an online visit; the clinic sends the way in, the call link is never shown here
+        rows.append((online.PUBLIC_WORDS[lang]["k_kind"], online.PUBLIC_WORDS[lang]["kind_online"]))
+    elif company.get("address"):
         rows.append((words["k_addr"], company["address"]))
     other = "en" if lang == "ar" else "ar"
     base = reverse("book_page", args=[booking.public_key])
