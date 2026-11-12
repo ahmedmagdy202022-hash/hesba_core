@@ -1077,8 +1077,15 @@ class Command(BaseCommand):
             for pick in picks:
                 floor.add_item(order, dishes[pick % len(dishes)], owner)
             floor.pay(order, owner, cashbox=cashbox, tendered=Decimal("100000"))  # paid in cash
-            closed = timezone.make_aware(_dt.combine(today - timedelta(days=days), time(hour, 15)))
+            closed = self._closing_moment(today, days, hour, timezone.now())
             Order.objects.filter(pk=order.pk).update(opened_at=closed - timedelta(minutes=40 + 5 * guests), closed_at=closed)
+        # RS-05: the demo opens with a table in service: an open order, one part already with the kitchen and one still to send.
+        live = floor.open_order(owner, table=tables[3], guests=3, waiter=waiter)
+        floor.add_item(live, dishes[0], owner)
+        floor.add_item(live, dishes[1 % len(dishes)], owner, 2)
+        floor.send_to_kitchen(live, owner)
+        floor.add_item(live, dishes[2 % len(dishes)], owner)
+        Order.objects.filter(pk=live.pk).update(opened_at=timezone.now() - timedelta(minutes=25))
         adjust_stock(f"DEMO-WASTE-{today:%m%d}", today - timedelta(days=2), raw[0], master["location"], "out", "1", "هالك — باظت في التلاجة", owner)
         driver = save_employee({"name": "محمود الطيار", "title": "طيار دليفري"}, owner)  # RESTO-003: a delivery out with its driver and fee
         order = floor.open_order(owner, kind="delivery", customer=master["customers"][0], address="شارع النصر 12، مدينة نصر", delivery_fee="20")
@@ -1087,6 +1094,19 @@ class Command(BaseCommand):
         floor.pay(order, owner, cashbox=cashbox, tendered=Decimal("100000"))
         closed = timezone.make_aware(_dt.combine(today - timedelta(days=1), time(21, 40)))
         Order.objects.filter(pk=order.pk).update(opened_at=closed - timedelta(minutes=55), dispatched_at=closed - timedelta(minutes=30), closed_at=closed)
+
+    @staticmethod
+    def _closing_moment(today, days, hour, now):
+        """RS-04: when a seeded order was closed: ``days`` ago at ``hour``:15. Today's is never later than half an hour before
+        ``now`` (the demo is prepared at any hour); if that falls before midnight it is dated yesterday at its own hour."""
+
+        planned = timezone.make_aware(datetime.combine(today - timedelta(days=days), time(hour, 15)))
+        if planned <= now - timedelta(minutes=30):
+            return planned
+        latest = now - timedelta(minutes=30)
+        if timezone.localtime(latest).date() < today:
+            return timezone.make_aware(datetime.combine(today - timedelta(days=1), time(hour, 15)))
+        return latest
 
     def _appointments(self, master, staff, owner):
         from appointments.services import book
