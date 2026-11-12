@@ -21,6 +21,7 @@ from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import connection, transaction
+from django.db.models import Q
 
 from audit.models import AuditEventType, AuditLog
 from entities import scope as entity_scope
@@ -58,7 +59,11 @@ MESSAGES = {
            "purchase_delete_denied": "صورة فاتورة الشراء بتتمسح بس طول ما الفاتورة مسودة، ولصاحب صلاحية إنشاء فواتير الشراء.",
            "category": "نوع المرفق لازم يكون أشعة أو تحاليل أو صور أو تقارير.", "medical_kind": "المرفق على الملف الطبي لازم يكون صورة أو ملف PDF.",
            "medical_read_only": "إضافة المرفقات على الملف الطبي للدكتور أو لصاحب صلاحية تسجيل الكشوفات بس.",
-           "medical_delete_denied": "مسح مرفقات الملف الطبي لصاحب صلاحية تسجيل الكشوفات بس."},
+           "medical_delete_denied": "مسح مرفقات الملف الطبي لصاحب صلاحية تسجيل الكشوفات بس.",
+           "project_read_only": "إضافة مستندات المشروع لمهندس الموقع أو لصاحب صلاحية الفواتير بس.",
+           "project_delete_denied": "مسح مستندات المشروع لصاحب صلاحية الفواتير بس.",
+           "project_stage": "نوع المستند لازم يكون عقد أو رسم أو مراسلة أو تصريح أو صورة أو أخرى.",
+           "project_kind": "المستند لازم يكون صورة أو ملف PDF."},
     "en": {"denied": "You may not use attachments on this record.", "not_found": "The attachment or the record was not found.",
            "kind": "The attachment kind must be photo, document or signature.", "stage": "The attachment stage must be receive, deliver or other.",
            "empty": "The file is empty or was not sent.", "size": "The file is larger than allowed ({limit}).",
@@ -74,7 +79,11 @@ MESSAGES = {
            "purchase_delete_denied": "A purchase invoice's photo can be deleted only while the invoice is a draft, by someone who may create purchase invoices.",
            "category": "The category must be scan, lab report, photo or report.", "medical_kind": "An attachment on a medical file must be an image or a PDF.",
            "medical_read_only": "Only a doctor, or someone who may record visits, can add attachments to a medical file.",
-           "medical_delete_denied": "Only someone who may record visits can delete a medical file's attachments."},
+           "medical_delete_denied": "Only someone who may record visits can delete a medical file's attachments.",
+           "project_read_only": "Only the site engineer, or someone who may create invoices, can add project documents.",
+           "project_delete_denied": "Only someone who may create invoices can delete project documents.",
+           "project_stage": "The document type must be contract, drawing, letter, permit, photo or other.",
+           "project_kind": "A document must be an image or a PDF."},
 }
 
 
@@ -211,8 +220,41 @@ def _current_entity(record):
     return entity_scope.entity()
 
 
+# Contracting C2a (HG-095): a project's documents. They are seen as the project
+# screens themselves are (``projects.access``): the projects view right, or the sales view right. A project has no entity
+# of its own (its money fixes one later), so these attachments are ``group_wide``: the entity scope on ``Attachment.entity``
+# is not applied, exactly as the project page itself is not narrowed to an entity. The document kinds ride on ``stage``
+# (``projects.documents.KIND_STAGE``): no attachments migration.
+
+def _projects(user):
+    from projects import access
+
+    return access.visible_projects(user)
+
+
+def _project_can_attach(user, project):
+    from projects import access
+
+    return access.can_write(user)
+
+
+def _project_can_delete(user, project):
+    from projects import access
+
+    return access.can_delete_documents(user)
+
+
+def _no_entity(record):
+    return None
+
+
 WORK_STAGES = (Stage.RECEIVE, Stage.DELIVER, Stage.OTHER)
 MEDICAL_STAGES = (Stage.SCAN, Stage.LAB, Stage.PHOTO, Stage.REPORT)
+#: the six document kinds of a project, stored on the six stages they are mapped to (see ``projects.documents``)
+PROJECT_STAGES = (Stage.RECEIVE, Stage.DELIVER, Stage.SCAN, Stage.REPORT, Stage.PHOTO, Stage.OTHER)
+#: per-record limit of a project's documents (a drawing set grows); it sits well under the
+#: global share (ATTACHMENTS_GLOBAL_SHARE of the database), which still applies on top
+PROJECT_MAX_COUNT, PROJECT_MAX_BYTES = 40, 40 * 1024 * 1024
 
 _MEDICAL_RULES = {"can_attach": _medical_can_attach, "closed": lambda record: False, "can_delete": _medical_can_delete,
                   "signature_final": lambda record: False, "entity": _current_entity, "delete_denied": "medical_delete_denied",
@@ -228,7 +270,13 @@ OWNERS = {"workorders.workorder": {"visible": _work_orders, "can_attach": _work_
                                         "delete_denied": "purchase_delete_denied", "stages": WORK_STAGES},
           # M5 (HG-083): what a visit produced (scans, lab reports, photos) and what the patient brings that belongs to no visit.
           "medical.clinicalvisit": {"visible": _medical_owners("clinicalvisit"), **_MEDICAL_RULES},
-          "medical.patientfile": {"visible": _medical_owners("patientfile"), **_MEDICAL_RULES}}
+          "medical.patientfile": {"visible": _medical_owners("patientfile"), **_MEDICAL_RULES},
+          # Contracting C2a (HG-095): a project's documents: contract, drawing, letter, permit, photo, other. Never closed.
+          "projects.project": {"visible": _projects, "can_attach": _project_can_attach, "closed": lambda project: False, "can_delete": _project_can_delete,
+                               "signature_final": lambda project: False, "entity": _no_entity, "group_wide": True, "titled": True,
+                               "delete_denied": "project_delete_denied", "read_only_message": "project_read_only", "stages": PROJECT_STAGES,
+                               "kinds": (Kind.PHOTO, Kind.DOCUMENT), "stage_error": "project_stage", "kind_error": "project_kind",
+                               "default_stage": Stage.OTHER, "max_count": PROJECT_MAX_COUNT, "max_owner_bytes": PROJECT_MAX_BYTES}}
 
 
 def owner_label(owner_or_model):
@@ -449,16 +497,47 @@ def _serialize_global_check():
             cursor.execute("SELECT pg_advisory_xact_lock(%s)", [GLOBAL_LOCK_KEY])
 
 
+def owner_limits(owner):
+    """(most files, most bytes) one record of this owner type may hold: the owner's own limits (Contracting C2a: a project's
+    documents allow more than a work order's photos), else the settings' defaults."""
+
+    rules = _rules(owner_label(owner))
+    return (int(rules.get("max_count") or _setting("ATTACHMENTS_MAX_PER_OWNER", 20)),
+            int(rules.get("max_owner_bytes") or _setting("ATTACHMENTS_MAX_BYTES_PER_OWNER", 25 * 1024 * 1024)))
+
+
+def room(owner, lang="ar"):
+    """What is left on this record, for the page to show (Contracting C2a, trap 13: files live in the database).
+
+    ``files`` and ``bytes`` are the record's own room; ``global_bytes`` is what is left of the share of the database all
+    attachments together may take (None when that guard is off). ``bytes_left`` is the lower of the two."""
+
+    from django.db.models import Count, Sum
+
+    max_count, max_owner = owner_limits(owner)
+    mine = Attachment.objects.filter(content_type=ContentType.objects.get_for_model(owner), object_id=owner.pk).aggregate(n=Count("id"), total=Sum("size"))
+    used = mine["total"] or 0
+    left = max(0, max_owner - used)
+    limit_mb, share = _setting("DATABASE_SIZE_LIMIT_MB", None), float(_setting("ATTACHMENTS_GLOBAL_SHARE", 0.2))
+    global_left = None
+    if limit_mb and share > 0:
+        everything = Attachment.objects.aggregate(total=Sum("size"))["total"] or 0
+        global_left = max(0, int(int(limit_mb) * 1024 * 1024 * share) - everything)
+    bytes_left = left if global_left is None else min(left, global_left)
+    return {"files": mine["n"], "max_files": max_count, "files_left": max(0, max_count - mine["n"]), "bytes": used, "max_bytes": max_owner,
+            "bytes_left": bytes_left, "global_bytes": global_left, "used_text": _human(used, lang) if used else "0", "max_text": _human(max_owner, lang),
+            "left_text": _human(bytes_left, lang) if bytes_left else "0", "global_limited": global_left is not None and global_left < left}
+
+
 def _check_room(owner, size, words, lang):
     """Per-record count and bytes, then the share of the database plan all attachments together may take."""
 
     from django.db.models import Count, Sum
 
     mine = Attachment.objects.filter(content_type=ContentType.objects.get_for_model(owner), object_id=owner.pk).aggregate(n=Count("id"), total=Sum("size"))
-    max_count = int(_setting("ATTACHMENTS_MAX_PER_OWNER", 20))
+    max_count, max_owner = owner_limits(owner)
     if mine["n"] >= max_count:
         raise ValidationError(words["max_count"].format(count=max_count))
-    max_owner = int(_setting("ATTACHMENTS_MAX_BYTES_PER_OWNER", 25 * 1024 * 1024))
     if (mine["total"] or 0) + size > max_owner:
         raise ValidationError(words["max_owner_bytes"].format(limit=_human(max_owner, lang)))
     limit_mb, share = _setting("DATABASE_SIZE_LIMIT_MB", None), float(_setting("ATTACHMENTS_GLOBAL_SHARE", 0.2))
@@ -482,7 +561,7 @@ def _store(owner, raw, name, user, kind, stage, words, lang="ar"):
     with transaction.atomic():
         type(owner).objects.select_for_update().filter(pk=owner.pk).first()  # one upload at a time per record, so the caps hold
         if _rules(owner_label(owner))["closed"](owner):
-            raise ValidationError(words["closed"])
+            raise ValidationError(words[_rules(owner_label(owner)).get("closed_error", "closed")])
         _serialize_global_check()
         _check_room(owner, len(raw), words, lang)
         # A3 (HG-081): an owner without an ``entity`` field names it through its rules (a purchase invoice: its location's).
@@ -540,12 +619,29 @@ def add_signature_png(owner, data_url, user, stage=Stage.OTHER, lang="ar"):
     return _store(owner, raw, "", user, Kind.SIGNATURE, stage, words, lang)
 
 
+def _group_wide_types():
+    """The content types whose attachments are not narrowed to the entity worked in (a project's: it has no entity of its own)."""
+
+    from django.apps import apps
+
+    return [ContentType.objects.get_for_model(apps.get_model(label)) for label, rules in OWNERS.items() if rules.get("group_wide")]
+
+
+def _scoped(rows):
+    """The entity data scope (HG-034) on ``Attachment.entity``, except for the owner types that are group-wide."""
+
+    types = _group_wide_types()
+    if not types or not entity_scope.is_scoped():
+        return entity_scope.scope(rows, "entity")
+    return rows.filter(entity_scope.q("entity") | Q(content_type__in=types))
+
+
 def attachments_for(owner, user, lang="ar"):
     """The owner's attachments, oldest first, without their bytes (``data`` is deferred)."""
 
     _check_owner(owner, user, _words(lang))
     rows = Attachment.objects.filter(content_type=ContentType.objects.get_for_model(owner), object_id=owner.pk)
-    return entity_scope.scope(rows, "entity").select_related("uploaded_by").defer("data")
+    return _scoped(rows).select_related("uploaded_by").defer("data")
 
 
 def attachments_for_many(label, pks, user, limit=60):
@@ -559,14 +655,14 @@ def attachments_for_many(label, pks, user, limit=60):
         return []
     visible = visible_owners(label, user).filter(pk__in=pks)
     rows = Attachment.objects.filter(content_type=ContentType.objects.get_for_model(visible.model), object_id__in=visible.values("pk"))
-    return list(entity_scope.scope(rows, "entity").select_related("uploaded_by").defer("data").order_by("-created_at", "-pk")[:limit])
+    return list(_scoped(rows).select_related("uploaded_by").defer("data").order_by("-created_at", "-pk")[:limit])
 
 
 def get_attachment(pk, user, with_data=True):
     """One attachment (with its bytes unless ``with_data`` is False), only if the user may see its owner and its entity.
     Else OwnerNotFound / PermissionDenied."""
 
-    rows = entity_scope.scope(Attachment.objects.filter(pk=pk), "entity").select_related("content_type")
+    rows = _scoped(Attachment.objects.filter(pk=pk)).select_related("content_type")
     attachment = (rows if with_data else rows.defer("data")).first()
     if attachment is None:
         raise OwnerNotFound(f"attachment {pk}")

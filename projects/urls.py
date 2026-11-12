@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import contract_views, views
+from . import contract_views, views, views_documents
 
 
 app_name = "projects"
@@ -17,4 +17,9 @@ urlpatterns = [
     path("<int:pk>/payments/", contract_views.payments, name="payments"),
     path("<int:pk>/subcontracts/", contract_views.subcontracts, name="subcontracts"),
     path("<int:pk>/budget/", contract_views.budget, name="budget"),
+    # Contracting C2a / C2b (HG-095): the project's documents
+    path("<int:pk>/documents/", views_documents.documents_tab, name="documents"),
+    path("<int:pk>/documents/upload/", views_documents.document_upload, name="document_upload"),
+    path("<int:pk>/files/<int:attachment_pk>/", views_documents.file, name="file"),
+    path("<int:pk>/files/<int:attachment_pk>/delete/", views_documents.file_delete, name="file_delete"),
 ]

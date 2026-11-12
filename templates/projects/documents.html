@@ -1,0 +1,41 @@
+{% extends "operations/base.html" %}
+{% load static %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/attachments.css' %}?v=c2-1"><link rel="stylesheet" href="{% static 'hesba/css/projects.css' %}?v=c2-1">{% endblock %}
+{% block operation_content %}
+{# Contracting C2a (HG-095): the project's documents. Files are ordinary attachments owned by the project; the kinds ride on the stage. #}
+{% include "projects/_head.html" %}
+<section class="att-card prj-card prj-docs" id="prj-docs" data-attachments data-refresh="inline" data-project-documents aria-labelledby="prj-docs-title"
+ data-msg-failed="{% if lang == 'en' %}Something went wrong, try again.{% else %}حصلت مشكلة، جرّب تاني.{% endif %}"
+ data-msg-network="{% if lang == 'en' %}No connection right now, try again.{% else %}مفيش اتصال دلوقتي، جرّب تاني.{% endif %}"
+ data-msg-uploading="{% if lang == 'en' %}Uploading…{% else %}جاري الرفع…{% endif %}" data-msg-uploaded="{% if lang == 'en' %}Saved.{% else %}اتحفظ.{% endif %}"
+ data-msg-deleting="{% if lang == 'en' %}Deleting…{% else %}جاري المسح…{% endif %}" data-msg-confirm="{% if lang == 'en' %}Delete this document?{% else %}تمسح المستند ده؟{% endif %}">
+{% csrf_token %}{# a delete needs a token even when no add form is shown #}
+<h2 class="prj-h" id="prj-docs-title">{{ dw.title }}</h2>
+<p class="att-help">{{ dw.intro }}</p>
+<p class="att-help att-formats" data-att-formats>{{ dw.formats }}</p>
+<p class="att-help prj-space" data-doc-space>{{ att.space }}</p>
+{% if att.space_note %}<div class="op-message" role="status" data-doc-space-note>{{ att.space_note }}</div>{% endif %}
+{% if att.blocked %}<div class="op-message" data-att-blocked>{{ att.blocked }}</div>{% endif %}
+<div class="op-message op-message-error" role="alert" data-att-error hidden></div>
+<p class="att-status" role="status" aria-live="polite" data-att-status></p>
+{% if att.can_add %}
+<form class="att-upload att-med-upload prj-upload" method="post" enctype="multipart/form-data" action="{{ att.upload_url }}" data-att-upload data-doc-upload>{% csrf_token %}
+<input type="hidden" name="lang" value="{{ lang }}">
+<fieldset class="att-cats"><legend>{{ dw.kind }}</legend>
+{% for k in att.kinds %}<label class="att-chip"><input type="radio" name="stage" value="{{ k.value }}"{% if k.value == 'scan' %} checked{% endif %}><span>{{ k.label }}</span></label>{% endfor %}
+</fieldset>
+<div class="op-field prj-title-field"><label for="prj-doc-title">{{ dw.doc_title }}</label><input id="prj-doc-title" name="title" maxlength="120" placeholder="{{ dw.title_ph }}" autocomplete="off"><small>{{ dw.title_hint }}</small></div>
+<div class="att-strip">
+<label class="att-add"><svg class="att-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z"/><circle cx="12" cy="13" r="3.5"/></svg><span>{{ dw.camera }}</span>
+<input class="sr-only" type="file" name="file" accept="image/*" capture="environment" data-att-file></label>
+<label class="att-add att-add-alt"><svg class="att-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h8l4 4v14H7z"/><path d="M15 3v4h4"/></svg><span>{{ dw.choose }}</span>
+<input class="sr-only" type="file" name="file" accept="image/*,application/pdf" multiple data-att-file></label>
+</div>
+</form>
+{% endif %}
+{% for g in att.groups %}<section class="prj-group" data-doc-group="{{ g.kind }}" aria-labelledby="prj-g-{{ g.kind }}"><h3 id="prj-g-{{ g.kind }}">{{ g.label }} <span class="att-count">{{ g.items|length }}</span></h3>
+<ul class="att-list" data-att-list>{% for item in g.items %}{% include "projects/_file_row.html" with item=item aw=dw %}{% endfor %}</ul></section>
+{% empty %}<p class="att-empty" data-att-empty>{{ dw.none }}</p>{% endfor %}
+</section>
+<script src="{% static 'hesba/js/attachments.js' %}?v=c2-1" defer></script>
+{% endblock %}
