@@ -88,31 +88,50 @@ class IngredientQuantityFormat(KitchenSetup):
 
 
 class WaitersMenuTests(KitchenSetup):
-    """RS-02: raw ingredients (rice, lentils) are not on the waiter's menu; dishes, drinks and anything sold before are."""
+    """RS-02: raw ingredients (rice, lentils) are tucked out of the waiter's «الكل» view, never removed: they stay in the list
+    (reachable under their category and by search), marked ``data-raw`` for the page's filter. Dishes, drinks and anything
+    sold before are not marked."""
 
-    def codes_on_menu(self, lang="ar"):
+    def menu(self, lang="ar"):
         self.client.force_login(self.owner)
         order = self.order(self.tea)
         page = self.client.get(reverse("restaurant:order", args=[order.pk]), {"lang": lang})
-        return {item.item_code for item in page.context["items"]}
+        html = page.content.decode()
+        codes = {item.item_code for item in page.context["items"]}
+        tucked = {code for code in codes if f'data-dish="{code}"' in html and "data-raw" in html.split(f'data-dish="{code}"', 1)[1].split(">", 1)[0]}
+        return codes, tucked
 
-    def test_ingredients_are_left_off_and_the_dishes_and_drinks_stay(self):
-        codes = self.codes_on_menu()
-        self.assertTrue({"D-KOSH", "D-TEA", "B-COLA"} <= codes)
-        self.assertFalse({"R-RICE", "R-LENT"} & codes)
+    def test_ingredients_are_tucked_away_and_the_dishes_and_drinks_are_not(self):
+        codes, tucked = self.menu()
+        self.assertTrue({"D-KOSH", "D-TEA", "B-COLA", "R-RICE", "R-LENT"} <= codes)  # nothing is removed: an ingredient can still be ordered
+        self.assertEqual(tucked, {"R-RICE", "R-LENT"})
 
-    def test_an_ingredient_that_was_sold_as_it_is_stays_on_the_menu(self):
+    def test_an_ingredient_that_was_sold_as_it_is_is_not_tucked_away(self):
         order = floor.open_order(self.owner, table=self.t2, guests=1)
         floor.add_item(order, self.rice, self.owner)  # sold on its own once
-        self.assertIn("R-RICE", self.codes_on_menu())
+        self.assertEqual(self.menu()[1], {"R-LENT"})
 
-    def test_a_sub_recipe_that_is_a_dish_and_an_ingredient_stays(self):
+    def test_a_tucked_ingredient_can_still_be_ordered(self):
+        self.client.force_login(self.owner)
+        order = self.order(self.tea)
+        self.client.post(reverse("restaurant:order", args=[order.pk]), {"lang": "ar", "action": "add", "item": self.rice.pk, "quantity": "1"})
+        self.assertTrue(order.lines.filter(item=self.rice).exists())
+
+    def test_a_sub_recipe_that_is_a_dish_and_an_ingredient_is_not_tucked_away(self):
         sauce = make_item(item_code="D-SAUCE", item_name="صلصة", default_sale_price="5.00", is_stock_tracked=True)
         save_ingredients(sauce, [(self.lentil, "0.050")], self.owner)
         save_ingredients(self.tea, [(sauce, "1")], self.owner)
-        codes = self.codes_on_menu()
+        codes, tucked = self.menu()
         self.assertIn("D-SAUCE", codes)
-        self.assertNotIn("R-LENT", codes)
+        self.assertEqual(tucked, {"R-RICE", "R-LENT"})
+
+    def test_the_page_filter_keeps_them_out_of_the_all_view_only(self):
+        from pathlib import Path
+
+        from django.conf import settings
+
+        script = (Path(settings.BASE_DIR) / "static/hesba/js/restaurant.js").read_text(encoding="utf-8")
+        self.assertIn("!dish.hasAttribute('data-raw') || !!current || !!text", script)
 
     def test_the_item_list_is_not_filtered(self):
         self.client.force_login(self.owner)
