@@ -152,9 +152,25 @@ def board(request):
     ))
 
 
+def _raw_ingredient_ids():
+    """RS-02: items the waiter's menu keeps out of the way: an ingredient of some dish that is not itself a dish (no recipe of
+    its own) and has never been put on an order. The recipe link is the only existing signal that tells rice from a dish, and it
+    is a guess, so these are never removed: the order page leaves them off the «الكل» view and still shows them under their own
+    category and in the search, so an ingredient that is also sold as it is (bread, milk) can always be ordered. A flag on the
+    item would do this exactly (the planned restaurants task)."""
+
+    from .models import DishIngredient
+
+    ingredients = set(DishIngredient.objects.values_list("ingredient_id", flat=True))
+    if not ingredients:
+        return set()
+    dishes = set(DishIngredient.objects.values_list("dish_id", flat=True))
+    ordered = set(OrderLine.objects.filter(item_id__in=ingredients).values_list("item_id", flat=True))
+    return ingredients - dishes - ordered
+
+
 def _menu():
-    items = (Item.objects.filter(active=True).exclude(item_code=services.FEE_ITEM_CODE).select_related("category")
-             .order_by("category__category_code", "item_name"))
+    items = Item.objects.filter(active=True).exclude(item_code=services.FEE_ITEM_CODE).select_related("category").order_by("category__category_code", "item_name")
     categories, seen = [], set()
     for item in items:
         if item.category_id and item.category_id not in seen:
@@ -220,12 +236,13 @@ def order_detail(request, pk):
             messages.error(request, _error(exc, lang))
         return redirect(_order_url(order, lang) + ("#menu" if action == "add" else ""))
     items, categories = _menu()
+    raw_ids = _raw_ingredient_ids()
     lines = list(order.lines.select_related("item", "ticket"))
     cashboxes = entity_scope.cashboxes(Cashbox.objects).filter(active=True)
     shift = open_shift_for(request.user)
     free_tables = DiningTable.objects.filter(active=True).exclude(orders__status=OrderStatus.OPEN)
     return render(request, "restaurant/order.html", _base(
-        request, order=order, lines=lines, total=order.total, items=items, categories=categories, kind_label=_kind_label(order, lang),
+        request, order=order, lines=lines, total=order.total, items=items, raw_ids=raw_ids, categories=categories, kind_label=_kind_label(order, lang),
         drivers=Employee.objects.filter(active=True) if order.kind == OrderKind.DELIVERY else [], dw=DELIVERY_WORDS[lang],
         status_label=choice_label(order, "status", lang), is_open=order.status == OrderStatus.OPEN,
         pending=any(not line.ticket_id and not line.voided for line in lines), tickets=order.tickets.all(),

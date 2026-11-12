@@ -177,9 +177,9 @@ class SellTests(GiftSetup):
         self.assertEqual(GiftCard.objects.count(), 1)
 
     def test_bad_input_is_refused_in_both_languages(self):
-        with self.assertRaisesMessage(ValidationError, "مبلغ الكارت مش صحيح"):
+        with self.assertRaisesMessage(ValidationError, "اكتب مبلغ الكارت رقم أكبر من صفر"):
             self.sell("0")
-        with self.assertRaisesMessage(ValidationError, "Invalid card amount"):
+        with self.assertRaisesMessage(ValidationError, "Type the card amount as a number above zero"):
             services.sell("abc", self.cash, self.owner, lang="en")
         with self.assertRaisesMessage(ValidationError, "after today"):
             services.sell(D("10"), self.cash, self.owner, expires_on=TODAY, lang="en")
@@ -565,7 +565,7 @@ class ScreenTests(GiftSetup):
         self.assertContains(listing, card.number)
         self.assertContains(listing, "Held on all cards")
         bad = self.client.post(reverse("giftcards:list"), {"lang": "en", "face_value": "0", "cashbox": str(self.cash.pk)}, follow=True)
-        self.assertContains(bad, "Invalid card amount")
+        self.assertContains(bad, "Type the card amount as a number above zero")
         self.client.force_login(self.keeper)
         self.assertEqual(self.client.get(reverse("giftcards:list")).status_code, 403)
 

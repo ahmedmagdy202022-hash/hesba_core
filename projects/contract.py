@@ -58,7 +58,7 @@ QTY = Decimal("0.001")
 
 MESSAGES = {
     "ar": {
-        "rate": "النسبة لازم تكون من 0 لـ 100.", "description": "اكتب وصف البند.", "qty": "الكمية لازم أكبر من صفر.", "price": "الفئة مش صحيحة.",
+        "rate": "النسبة لازم تكون من 0 لـ 100.", "description": "اكتب وصف البند.", "qty": "الكمية لازم أكبر من صفر.", "price": "اكتب فئة البند (سعر الوحدة) رقم صفر أو أكبر.",
         "rate_locked": "البند ده اتعمل عليه مستخلص، فالفئة بتاعته ثابتة.", "below_certified": "مينفعش كمية البند تقل عن اللي اتعمل بيه مستخلصات ({qty}).",
         "boq_used": "البند ده اتعمل عليه مستخلص ومينفعش يتمسح.", "one_draft": "فيه مستخلص لسه مسودة ({number}): رحّله أو اسحبه الأول.",
         "below_previous": "الكمية حتى تاريخه للبند {code} أقل من اللي اتعمل بيه مستخلصات قبل كده ({qty}).", "no_work": "مفيش كميات جديدة في المستخلص ده.",
@@ -72,7 +72,7 @@ MESSAGES = {
         "reversed": "الإفراج ده اتلغى بالفعل.", "rates_total": "مجموع نسبة ضمان الأعمال ونسبة استرداد الدفعة المقدمة لازم ميزيدش عن 100%.", "instalment": "التحصيل ده قسط على خطة تقسيط؛ يتربط بالمشروع كتحصيل بس، ولو فاتورته مربوطة بالمشروع ده.", "entity": "مستخلصات المشروع ده بتتعمل من كيان تاني؛ اشتغل من الكيان ده عشان ضمان الأعمال والدفعة المقدمة يفضلوا في مكان واحد.",
     },
     "en": {
-        "rate": "The rate must be between 0 and 100.", "description": "Describe the item.", "qty": "The quantity must be above zero.", "price": "Invalid rate.",
+        "rate": "The rate must be between 0 and 100.", "description": "Describe the item.", "qty": "The quantity must be above zero.", "price": "Type the item's rate (price per unit) as a number, 0 or more.",
         "rate_locked": "This item is already on a certificate, so its rate is fixed.", "below_certified": "The quantity cannot drop below what is already certified ({qty}).",
         "boq_used": "This item is on a certificate and cannot be deleted.", "one_draft": "Certificate {number} is still a draft: post or withdraw it first.",
         "below_previous": "The quantity to date for item {code} is below what earlier certificates billed ({qty}).", "no_work": "No new quantities on this certificate.",

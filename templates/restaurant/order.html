@@ -10,7 +10,7 @@
   <input class="rs-search" type="search" placeholder="{{ words.search }}" aria-label="{{ words.search }}" data-menu-search>
   {% if categories %}<div class="rs-cats" role="group" aria-label="{{ words.menu }}"><button type="button" aria-pressed="true" data-menu-cat="">{{ words.all }}</button>{% for category in categories %}<button type="button" aria-pressed="false" data-menu-cat="{{ category.pk }}">{% if lang == 'en' and category.name_en %}{{ category.name_en }}{% else %}{{ category.name_ar }}{% endif %}</button>{% endfor %}</div>{% endif %}
   <div class="rs-menu">
-  {% for item in items %}<form method="post" data-dish="{{ item.item_code }}" data-cat="{{ item.category_id|default:'' }}" data-name="{{ item.item_name|lower }} {{ item.item_code|lower }}">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="add"><input type="hidden" name="item" value="{{ item.pk }}"><button class="rs-dish" type="submit"><span>{{ item.item_name }}</span><small>{{ item.default_sale_price|money }}</small></button></form>
+  {% for item in items %}<form method="post" data-dish="{{ item.item_code }}" data-cat="{{ item.category_id|default:'' }}" data-name="{{ item.item_name|lower }} {{ item.item_code|lower }}"{% if item.pk in raw_ids %} data-raw{% endif %}>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="add"><input type="hidden" name="item" value="{{ item.pk }}"><button class="rs-dish" type="submit"><span>{{ item.item_name }}</span><small>{{ item.default_sale_price|money }}</small></button></form>
   {% empty %}<p class="op-muted">{{ words.no_items }}</p>{% endfor %}
   </div>
 </section>
@@ -56,5 +56,5 @@
   {% if tickets %}<h2>{{ words.tickets }}</h2><p class="op-form-actions">{% for ticket in tickets %}<a class="op-secondary" href="{% url 'restaurant:ticket' ticket.pk %}?lang={{ lang }}" data-ticket="{{ ticket.sequence }}">{{ words.ticket }} {{ ticket.sequence }} · <span dir="ltr">{{ ticket.sent_at|time:"H:i" }}</span></a>{% endfor %}</p>{% endif %}
 </section>
 </div>
-<script src="{% static 'hesba/js/restaurant.js' %}?v=resto-001" defer></script>
+<script src="{% static 'hesba/js/restaurant.js' %}?v=resto-002" defer></script>
 {% endblock %}

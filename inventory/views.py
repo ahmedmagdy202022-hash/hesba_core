@@ -117,13 +117,16 @@ def stock_list(request):
     can_view_cost = user_has_permission(request.user, "inventory.view_cost")
     rows = []
     counts = {"healthy": 0, "low": 0, "out": 0}
+    from reports.selectors import made_to_order_ids
+
+    cooked = made_to_order_ids()  # RS-03: the dashboard's rule: a dish cooked to order with no plates ready is not "out of stock"
     for item in page.object_list:
         quantity = (
             get_item_location_stock_quantity(item, selected_location)
             if selected_location
             else get_item_stock_quantity(item)
         )
-        state = _stock_state(quantity, item.min_stock)
+        state = "healthy" if quantity <= 0 and item.pk in cooked else _stock_state(quantity, item.min_stock)
         counts[state] += 1
         rows.append({"item": item, "quantity": quantity, "state": state})
     if can_view_cost:

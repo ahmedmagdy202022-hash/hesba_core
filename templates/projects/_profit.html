@@ -1,0 +1,1 @@
+{% load hesba_format %}{% if value < 0 %}{{ loss }} <bdi>{{ value|money_abs }}</bdi>{% else %}{{ value|money }}{% endif %}

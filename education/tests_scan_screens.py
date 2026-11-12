@@ -35,7 +35,7 @@ class ScanScreenTests(ScanSetup):
         self.assertIn(data["presence_label"], ("Present", "Late"))
         self.assertRegex(data["time"], r"^\d\d:\d\d$")
         arabic = self.client.post(url, {"code": self.b.code, "group": self.review.pk, "lang": "ar"}).json()
-        self.assertIn(arabic["presence_label"], ("حاضر", "متأخر"))
+        self.assertIn(arabic["presence_label"], ("حضور", "تأخير"))
         self.assertEqual(self.client.post(url, {"code": self.b.code, "group": 999999}).status_code, 403)
 
     def test_who_sees_the_entries_and_the_screen(self):
