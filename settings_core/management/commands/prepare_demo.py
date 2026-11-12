@@ -1221,10 +1221,11 @@ class Command(BaseCommand):
             return
         services = {item.item_name: item for item in master["items"] if not item.is_stock_tracked}
         tests = {}
+        codes = {"هيموجلوبين": "HB", "سكر صايم": "GLU"}  # M9 (HG-092): two tests carry the analyzer's code, so the sample label shows them short
         for position, (name, unit, low, high, service) in enumerate((
                 ("هيموجلوبين", "g/dL", "12", "16", "صورة دم كاملة"), ("كرات دم بيضاء", "×10³/µL", "4", "11", "صورة دم كاملة"),
                 ("سكر صايم", "mg/dL", "70", "100", ""), ("إنزيم ALT", "U/L", "7", "56", "وظائف كبد"), ("فصيلة الدم", "", "", "", ""))):
-            tests[name] = lab.save_test({"name": name, "unit": unit, "low": low, "high": high, "service": services.get(service), "position": position}, owner)
+            tests[name] = lab.save_test({"name": name, "code": codes.get(name, ""), "unit": unit, "low": low, "high": high, "service": services.get(service), "position": position}, owner)
         patient = master["customers"][0]
         lab.record_results(patient, today - timedelta(days=30), {tests["هيموجلوبين"]: ("11.2", ""), tests["سكر صايم"]: ("132", "")}, owner)
         lab.record_results(patient, today - timedelta(days=1), {tests["هيموجلوبين"]: ("12.8", ""), tests["كرات دم بيضاء"]: ("7.5", ""),
