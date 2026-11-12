@@ -1417,6 +1417,9 @@ class Command(BaseCommand):
                         pass  # the cashbox cannot cover it: the demo shows it owed
         self._nursery_day(students, owner)
         self._levels(groups, students, owner)
+        from education import demo as education_demo
+
+        education_demo.seed_exams(groups, owner)  # E2: two exams with marks, in their own module
 
     def _levels(self, groups, students, owner):
         """EDU-006: a language centre's groups teach levels 1 and 2 of the first course, and two students sat a placement test."""
