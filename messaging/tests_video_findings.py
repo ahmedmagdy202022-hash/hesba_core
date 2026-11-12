@@ -73,3 +73,15 @@ class AudienceOptionsTests(CampaignSetup):
         response = self.client.post(reverse("messaging:campaign_new"), self.form(audience="points", threshold=""))
         self.assertContains(response, "اكتب أقل عدد نقاط (1 أو أكتر).")
         self.assertEqual(Campaign.objects.count(), 0)
+
+
+class OutboxRecipientColumnTests(CampaignSetup):
+    """f10: the label was «لـ»: a lone prefix that the card layout draws as a bare lam. The column now has a word. (The seeded work-order
+    messages do carry the customer's link when PUBLIC_BASE_URL is set; settings_core.tests_demo_services pins that.)"""
+
+    def test_the_recipient_column_is_a_word_in_both_languages(self):
+        self.client.force_login(self.owner)
+        ar = self.client.get(reverse("messaging:outbox"), {"lang": "ar"}).content.decode()
+        self.assertIn("<th>المستلم</th>", ar)
+        self.assertNotIn("<th>لـ</th>", ar)
+        self.assertIn("<th>To</th>", self.client.get(reverse("messaging:outbox"), {"lang": "en"}).content.decode())
