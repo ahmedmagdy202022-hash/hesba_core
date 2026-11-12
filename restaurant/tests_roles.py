@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from django.urls import reverse
 
-from hesba_testing.factories import make_customer
+from hesba_testing.factories import make_customer, open_test_shift
 from permissions.models import RoleCode
 from permissions.services import user_has_permission
 
@@ -76,6 +76,7 @@ class WaiterTests(RestaurantSetup):
 
     def test_a_cashier_still_lands_on_the_dashboard_and_bills(self):
         cashier = person(RoleCode.CASHIER, "floor_cashier")
+        open_test_shift(cashier, self.cashbox)  # Restaurants R13: the table bill sells inside an open shift, as the till does
         self.client.force_login(cashier)
         self.assertRedirects(self.client.get(reverse("after_login")), reverse("dashboard_snapshot"), fetch_redirect_response=False)
         order = floor.open_order(cashier, table=self.t1, guests=2)
