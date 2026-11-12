@@ -530,11 +530,11 @@ class LabLinkTests(TestCase):
             text = unquote(link["whatsapp"])
             self.assertIn("Demo Store", text)
             self.assertIn(link["url"], text)
-            self.assertIn("سنة ميلادك" if lang == "ar" else "birth year", text)
+            self.assertIn("سنة ميلاد حضرتك" if lang == "ar" else "birth year", text)
             self.assertNotIn("آخر 4" if lang == "ar" else "last 4", text)  # the phone is no factor for a file with a birth date
             phone = unquote(self._link(self.phone_only, lang=lang)["whatsapp"])
             self.assertIn("آخر 4 أرقام" if lang == "ar" else "last 4 digits", phone)
-            self.assertNotIn("سنة ميلادك" if lang == "ar" else "birth year", phone)
+            self.assertNotIn("سنة ميلاد حضرتك" if lang == "ar" else "birth year", phone)
             for secret in ("هيموجلوبين", "سكر", "فصيلة", "17.25", "88.4", "A+", "g/dL", "مرتفع", "High", "منى", self.day.isoformat()):
                 self.assertNotIn(secret, text)
 
