@@ -445,6 +445,16 @@ class SampleBusinessPerActivityTests(TestCase):
         self.assert_a_working_business(catalog)
         self.assertFalse(Item.objects.get(item_code="DEMO-ITEM-01").is_stock_tracked)
 
+    def test_a_tutoring_center_has_two_exams_with_marks_one_published_and_one_student_absent(self):
+        from education.models import Exam, ExamMark
+
+        self.fill("education", "tutoring_center")
+        monthly, quiz = Exam.objects.get(kind="monthly"), Exam.objects.get(kind="quiz")
+        self.assertEqual((Exam.objects.count(), monthly.published, quiz.published, monthly.group, quiz.group), (2, True, False, monthly.group, monthly.group))
+        self.assertEqual(sorted(ExamMark.objects.filter(exam=monthly).values_list("score", flat=True)), [Decimal("33.00"), Decimal("38.00"), Decimal("41.00"), Decimal("46.00")])
+        self.assertEqual(sorted(ExamMark.objects.filter(exam=quiz, absent=True).values_list("note", flat=True)), ["غايب بعذر"])
+        self.assertEqual(ExamMark.objects.filter(exam=quiz, score__isnull=False).count(), 3)
+
     def test_a_language_centre_teaches_in_levels(self):
         from education.models import PlacementTest, StudyGroup
 
@@ -459,6 +469,9 @@ class SampleBusinessPerActivityTests(TestCase):
 
         catalog = self.fill("education", "nursery")
         self.assert_a_working_business(catalog)
+        from education.models import Exam
+
+        self.assertFalse(Exam.objects.exists())  # a nursery has no exams
         children = Student.objects.count()
         self.assertEqual(PickupPerson.objects.count(), 2 * children)  # a parent and one more for every child
         rows, counts = nursery.board()
