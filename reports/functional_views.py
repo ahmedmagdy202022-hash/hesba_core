@@ -76,6 +76,40 @@ CARD_LOOK = {
 }
 
 
+#: WATCH1B (SH-12): the report an activity works from leads its hub, for those who may open it (no locked tile: the others' permission
+#: already shows as locked below; this one is a shortcut, so it is only there when it opens). Each ``allow`` is the report's own gate.
+#: The clinic's tile says what its revenue counts (CL-05): the visits that were billed, not every sale.
+ACTIVITY_REPORT_CARDS = (
+    {"url_name": "medical:report", "allow": "medical.services.can_see_report", "icon": "medical", "tone": "teal",
+     "title_en": "Clinic report", "title_ar": "تقرير العيادة",
+     "description_en": "Visits, follow-ups and new patients per doctor, and the revenue of the visits that were billed — not every sale",
+     "description_ar": "الكشوفات والمتابعات والمرضى الجداد لكل دكتور، وإيراد الكشوفات اللي اتفوترت بس — مش كل المبيعات"},
+    {"url_name": "workorders:report", "allow": "workorders.services.can_see_report", "icon": "workorders", "tone": "teal",
+     "title_en": "Technicians report", "title_ar": "تقرير الفنيين",
+     "description_en": "Orders delivered in the month per technician: how many, revenue before VAT, average days in the shop, and warranty returns",
+     "description_ar": "الأوامر اللي اتسلمت في الشهر لكل فني: عددها، وإيرادها قبل الضريبة، ومتوسط الأيام في المحل، واللي رجع في الضمان"},
+)
+
+
+def activity_report_cards(user, lang):
+    from django.urls import reverse
+    from django.utils.module_loading import import_string
+
+    from settings_core.capabilities import closed_capability
+    from settings_core.module_gate import closed_module
+
+    rows = []
+    for spec in ACTIVITY_REPORT_CARDS:
+        if not import_string(spec["allow"])(user):
+            continue
+        path = reverse(spec["url_name"])
+        if closed_module(path) is not None or closed_capability(path) is not None:  # never a tile into a switched-off module
+            continue
+        rows.append({"url_name": spec["url_name"], "allowed": True, "icon": spec["icon"], "tone": spec["tone"], "activity": True,
+                     "title": spec[f"title_{lang}"], "title_alt": spec["title_en" if lang == "ar" else "title_ar"], "description": spec[f"description_{lang}"]})
+    return rows
+
+
 def report_hub(request):
     from sales.models import SalesInvoice
     from staff.services import reps_in_use
@@ -92,6 +126,7 @@ def report_hub(request):
     ]
     for card in cards:
         card["icon"], card["tone"] = CARD_LOOK.get(card["url_name"], ("reports", "navy"))
+    cards = activity_report_cards(request.user, lang) + cards  # WATCH1B (SH-12): the activity's own report first
     return render(request, "reports/functional_hub.html", _context(request, cards=cards, checkpoint_code="096_FOUNDATION_READ_ONLY_REPORT_HUB"))
 
 

@@ -130,7 +130,7 @@ def _context(request, **extra):
         "lang": lang,
         "dir": "ltr" if lang == "en" else "rtl",
         # AUDIT-3: "new order" in a restaurant, "new visit bill" in a clinic...
-        "words": dict(STRINGS[lang], new=term("new_sale", lang), **_activity_invoices(lang)),
+        "words": dict(STRINGS[lang], new=term("new_sale", lang), back_list=term("back_to_sales", lang), **_activity_invoices(lang)),
         "section": "sales",
         "page_title": STRINGS[lang]["page_title"],
     }

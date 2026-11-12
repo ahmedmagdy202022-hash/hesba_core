@@ -379,7 +379,9 @@ class MigrationTests(SimpleTestCase):
             self.assertEqual(len(new.choices), len(old.choices) + 1)
             self.assertEqual([c for c in new.choices if c[0] != "vaccine"], list(old.choices))
             self.assertIn(("vaccine", "Vaccination due"), new.choices)
-            self.assertEqual(list(new.choices), [(value, label) for value, label in MessageKind.choices])
+            # 0006's own list, frozen: later kinds (E5's absence and fees, 0007) come after it and do not rewrite it.
+            self.assertEqual([value for value, _label in new.choices],
+                             ["due", "instalment", "appointment", "refill", "workorder", "followup", "vaccine", "campaign"])
 
     def test_the_kind_fits_the_column(self):
         self.assertLessEqual(len(MessageKind.VACCINE.value), 12)

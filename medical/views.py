@@ -245,6 +245,22 @@ def _doctors():
     return Employee.objects.filter(active=True).order_by("name")
 
 
+def _visit_doctors(*keep):
+    """CL-06: the visit form's doctors are the clinic's staff without its sales reps, and whoever the record already has (a visit
+    saved with such a doctor, or an appointment booked with one, keeps them). The other screens' lists are unchanged."""
+
+    from staff.services import serving_staff
+
+    return serving_staff(*keep)
+
+
+def _appointment_employee(patient, raw):
+    """The employee of the appointment a visit form is posted against (it must be this patient's), else 0."""
+
+    row = scoped_appointments(patient.appointments).filter(pk=_id(raw)).values_list("employee_id", flat=True).first() if raw else None
+    return row or 0
+
+
 def visit_edit(request, pk=None, visit_pk=None):
     _guard(request, write=True)
     lang = _lang(request)
@@ -255,9 +271,11 @@ def visit_edit(request, pk=None, visit_pk=None):
     if not visit and request.GET.get("appointment"):
         appointment = scoped_appointments(patient.appointments).filter(pk=request.GET.get("appointment")).select_related("employee").first()
     error = ""
+    doctors_here = _visit_doctors(visit.doctor_id if visit else 0, appointment.employee_id if appointment else 0,
+                                  _appointment_employee(patient, request.POST.get("appointment")) if not visit and request.method == "POST" else 0)
     if request.method == "POST":
         data = request.POST.dict()
-        data["doctor"] = _doctors().filter(pk=_id(request.POST.get("doctor"))).first()
+        data["doctor"] = doctors_here.filter(pk=_id(request.POST.get("doctor"))).first()
         if not visit and request.POST.get("appointment"):
             data["appointment"] = scoped_appointments(patient.appointments).filter(pk=_id(request.POST.get("appointment"))).first()  # HG-074
         if _is_vet():
@@ -284,7 +302,7 @@ def visit_edit(request, pk=None, visit_pk=None):
         animals = list(patient.animals.filter(active=True) | patient.animals.filter(pk=visit.animal_id if visit else 0))
         default_animal = visit.animal_id if visit else (int(request.GET.get("animal")) if (request.GET.get("animal") or "").isdigit() else None)
     return render(request, "medical/visit_form.html", _base(lang, patient=patient, visit=visit, appointment=appointment, error=error, post=request.POST, **prescribing.form_context(request, patient, visit, lang), **visit_templates.form_context(lang),
-                                                            doctors=_doctors(), default_doctor=default_doctor, animals=animals,
+                                                            doctors=doctors_here, default_doctor=default_doctor if doctors_here.filter(pk=default_doctor or 0).exists() else None, animals=animals,
                                                             default_animal=default_animal, animal_label=VET_WORDS[lang]["animal"],
                                                             default_date=(visit.visit_date if visit else timezone.localdate()),
                                                             attachments=attachments_ui.medical_card(visit, request.user, lang) if visit else None))  # M5 (HG-083): a saved visit only
@@ -788,6 +806,7 @@ QUEUE_WORDS = {
            "find": "بحث", "check_in": "وصل", "queue": "الدور النهارده", "number": "الرقم", "patient": "المريض", "doctor": "الدكتور", "status": "الحالة",
            "arrived": "وصل", "wait": "مستني بقاله", "minutes": "دقيقة", "call_next": "نادي على اللي بعده", "call": "نادي", "done": "خلص", "left": "مشي",
            "back_to_wait": "رجّعه للانتظار", "record_visit": "سجّل الكشف", "none": "مفيش حد في الدور النهارده.", "none_appts": "مفيش مواعيد مستنية.",
+           "none_hint": "الدور بيتملى لما الاستقبال يسجّل وصول المرضى.", "none_act": "سجّل وصول مريض", "none_appts_act": "سجّل وصول مريض من غير ميعاد",
            "now": "اتفضل", "next": "اللي عليه الدور", "waiting_n": "مستنيين", "no_one": "—", "at": "الساعة", "saved": "اتحفظ.",
            "called": "اتنادى على رقم {number}.", "checked": "{name} رقم دوره {number}."},
     "en": {"title": "Waiting list", "intro": "Check a patient in and they get their turn number; the doctor calls the next one in. The waiting screen shows numbers only.",
@@ -795,6 +814,7 @@ QUEUE_WORDS = {
            "find": "Search", "check_in": "Arrived", "queue": "Today's queue", "number": "No.", "patient": "Patient", "doctor": "Doctor", "status": "Status",
            "arrived": "Arrived", "wait": "Waiting for", "minutes": "min", "call_next": "Call the next one", "call": "Call", "done": "Done", "left": "Left",
            "back_to_wait": "Back to waiting", "record_visit": "Record the visit", "none": "Nobody in the queue today.", "none_appts": "No appointments waiting.",
+           "none_hint": "The queue fills up as reception checks patients in.", "none_act": "Check a patient in", "none_appts_act": "Check in a patient without an appointment",
            "now": "Please come in", "next": "Next", "waiting_n": "waiting", "no_one": "—", "at": "at", "saved": "Saved.",
            "called": "Number {number} was called in.", "checked": "{name} is number {number}."},
 }
