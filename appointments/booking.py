@@ -58,9 +58,9 @@ MONTH_NAMES = {
 
 MESSAGES = {
     "ar": {
-        "name": "اكتب اسمك.", "phone": "اكتب رقم موبايل صحيح.", "service": "اختار خدمة من القايمة.", "staff": "اختار حد من القايمة.",
+        "name": "اكتب اسمك.", "phone": "اكتب رقم موبايل صحيح.", "service": "اختار خدمة من القايمة.", "staff": "اختار موظف من القايمة.",
         "when": "اختار يوم وميعاد من المواعيد الفاضية.", "taken": "الميعاد ده لسه اتحجز. اختار ميعاد تاني من المواعيد الفاضية.",
-        "failed": "مقدرناش نسجّل الحجز دلوقتي. جرّب تاني أو كلّم المحل.", "customer_note": "اتضاف من صفحة الحجز الأونلاين.",
+        "failed": "مقدرناش نسجّل الحجز دلوقتي. جرّب تاني أو تواصل معانا.", "customer_note": "اتضاف من صفحة الحجز الأونلاين.",
         "slot": "مدة الخانة لازم تكون واحدة من {choices} دقيقة.", "notice": "أقل وقت قبل الميعاد لازم من 0 لـ {max} دقيقة.",
         "ahead": "أقصى عدد أيام قدام لازم من 1 لـ {max}.", "hours": "مواعيد {day} مش صحيحة: الفتح لازم قبل القفل في نفس اليوم.",
         "duration": "مدة «{name}» لازم من {a} لـ {b} دقيقة.", "no_hours": "حدّد مواعيد الفتح ليوم واحد على الأقل قبل ما تفتح الحجز.",
@@ -70,7 +70,7 @@ MESSAGES = {
     "en": {
         "name": "Enter your name.", "phone": "Enter a valid mobile number.", "service": "Choose a service from the list.", "staff": "Choose someone from the list.",
         "when": "Choose a day and one of the free times.", "taken": "That time was just taken. Please choose another free time.",
-        "failed": "We could not record the booking now. Try again or contact the shop.", "customer_note": "Added by the online booking page.",
+        "failed": "We could not record the booking now. Try again or contact us.", "customer_note": "Added by the online booking page.",
         "slot": "The slot length must be one of {choices} minutes.", "notice": "The minimum notice must be 0 to {max} minutes.",
         "ahead": "The days ahead must be 1 to {max}.", "hours": "The hours for {day} are not valid: opening must come before closing on the same day.",
         "duration": "The duration of “{name}” must be {a} to {b} minutes.", "no_hours": "Set the opening hours for at least one day before opening bookings.",
