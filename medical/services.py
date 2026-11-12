@@ -38,6 +38,12 @@ def can_view(user):
     return user_has_permission(user, VIEW) or user_has_permission(user, TREAT)
 
 
+def can_see_report(user):
+    """WATCH1B (SH-12): the reports hub offers the clinic report to those it opens for: a medical installation and the records permission."""
+
+    return is_medical_install() and user_has_permission(user, VIEW)
+
+
 def can_write(user):
     return user_has_permission(user, WRITE) or user_has_permission(user, TREAT)
 
