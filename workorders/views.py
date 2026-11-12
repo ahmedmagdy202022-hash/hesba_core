@@ -21,8 +21,8 @@ WORDS = {
         "new": "+ استلام جهاز / طلب جديد", "search": "دوّر برقم الأمر أو العميل أو التليفون أو السيريال", "find": "بحث",
         "f_open": "المفتوحة", "f_ready": "جاهزة للتسليم", "f_late": "متأخرة", "f_delivered": "اتسلّمت", "f_all": "الكل",
         "number": "رقم الأمر", "customer": "العميل", "device": "الجهاز / الخدمة", "serial": "السيريال / IMEI", "status": "الحالة", "technician": "الفني",
-        "received": "اتستلم", "promised": "ميعاد التسليم", "open": "افتح", "none": "مفيش أوامر هنا.", "late": "متأخر",
-        "accessories": "اتسلّم معاه (شاحن، جراب…)", "problem": "العطل / المطلوب", "warranty_days": "ضمان بعد التسليم (يوم)", "notes": "ملاحظات",
+        "received": "تاريخ الاستلام", "promised": "ميعاد التسليم", "open": "افتح", "none": "مفيش أوامر هنا.", "late": "متأخر",
+        "accessories": "المرفقات (شاحن، جراب…)", "problem": "العطل / المطلوب", "warranty_days": "ضمان بعد التسليم (يوم)", "notes": "ملاحظات",
         "customer_existing": "عميل موجود", "choose": "اختار", "customer_new": "أو عميل جديد: الاسم", "customer_phone": "تليفون العميل", "save": "حفظ",
         "receive_btn": "استلام وطباعة الإيصال", "back": "أوامر الشغل", "timeline": "اللي حصل", "diagnosis": "التشخيص / اللي اتعمل",
         "details": "بيانات الشغل", "lines": "قطع الغيار والمصنعية", "item": "الصنف / الخدمة", "qty": "الكمية", "price": "السعر", "amount": "القيمة",
@@ -34,7 +34,7 @@ WORDS = {
         "report": "تقرير الفنيين", "report_intro": "الأوامر اللي اتسلمت في الشهر لكل فني: عددها، وإيرادها قبل الضريبة، ومتوسط الأيام في المحل، واللي رجع في الضمان.",
         "month": "الشهر", "go": "عرض", "count": "اتسلّم", "billed": "الإيراد", "avg_days": "متوسط الأيام", "returns": "رجع في الضمان",
         "net_sales": "صافي الإيراد", "rate": "النسبة", "commission": "العمولة", "commission_note": "العمولة = صافي إيراد الأوامر المتسلّمة (قبل الضريبة وبعد المرتجع) × نسبة الفني، زي المواعيد بالظبط.",
-        "late_list": "متأخر عن ميعاده", "nobody": "من غير فني", "terms": "الجهاز بيتسلّم بالإيصال ده. الأجهزة اللي متستلمش خلال 90 يوم من «جاهز» المحل مش مسؤول عنها.",
+        "late_list": "متأخر عن ميعاده", "nobody": "من غير فني", "terms": "الجهاز بيتسلّم بموجب الإيصال ده. ولا نتحمّل مسؤولية الأجهزة اللي ماتستلمتش خلال 90 يوم من إشعار «جاهز للتسليم».",
         "signature": "توقيع العميل", "note": "ملاحظة", "via_link": "العميل من اللينك", "view_only": "تقدر تشوف الأمر بس.",
     },
     "en": {
@@ -55,7 +55,7 @@ WORDS = {
         "report": "Technicians", "report_intro": "Orders delivered in the month per technician: how many, revenue before VAT, average days in the shop, and warranty returns.",
         "month": "Month", "go": "Show", "count": "Delivered", "billed": "Revenue", "avg_days": "Avg. days", "returns": "Warranty returns",
         "net_sales": "Net revenue", "rate": "Rate", "commission": "Commission", "commission_note": "Commission = net revenue of the delivered orders (before VAT, after returns) × the technician's rate, as appointments take it.",
-        "late_list": "Past the promised date", "nobody": "No technician", "terms": "The device is collected with this receipt. The shop is not responsible for devices left more than 90 days after they are ready.",
+        "late_list": "Past the promised date", "nobody": "No technician", "terms": "The device is collected with this receipt. We are not responsible for devices left more than 90 days after they are ready.",
         "signature": "Customer's signature", "note": "Note", "via_link": "Customer (via link)", "view_only": "You can view this order only.",
     },
 }
