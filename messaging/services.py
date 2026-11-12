@@ -68,8 +68,8 @@ APPOINTMENT_LINK_TEXTS = {"ar": "لتأكيد الحضور أو طلب تغيي�
 APPOINTMENT_TEXT_EN = "Hello {name}, a reminder from {company} of your appointment tomorrow {date} at {time}."
 #: M10 (HG-096): the reminder of an online visit says so, and that the call opens from the same confirm link. The call's own link is
 #: never written here: this text is stored in the outbox, which reception reads, and goes to WhatsApp.
-ONLINE_NOTES = {"ar": "الكشف ده أونلاين: هتدخل المكالمة بزرار من نفس اللينك قبل الميعاد بشوية.", "en": "This is an online visit: you will join the call with a button on the same link, shortly before the appointment."}
-ONLINE_NOTES_NOLINK = {"ar": "الكشف ده أونلاين. كلّم العيادة لو محتاج طريقة الدخول.", "en": "This is an online visit. Contact the clinic if you need to know how to join."}
+ONLINE_NOTES = {"ar": "الكشف ده أونلاين: هتدخل المكالمة بزر من نفس الرابط قبل الميعاد بقليل.", "en": "This is an online visit: you will join the call with a button on the same link, shortly before the appointment."}
+ONLINE_NOTES_NOLINK = {"ar": "الكشف ده أونلاين. تواصل مع العيادة لو محتاج طريقة الدخول.", "en": "This is an online visit. Contact the clinic if you need to know how to join."}
 ONLINE_LINK_TEXTS = {"ar": "لتأكيد الحضور ودخول المكالمة:", "en": "To confirm and join the call:"}
 #: M3: a follow-up is reminded this many days ahead of its date (and never again once it was sent or skipped).
 FOLLOWUP_AHEAD_DAYS = 2
