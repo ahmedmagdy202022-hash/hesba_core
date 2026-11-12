@@ -9,11 +9,11 @@
 {% if future %}<div class="op-message" role="status" data-future>{{ xw.future }}</div>{% endif %}
 <form class="op-form ex-sheet" method="post" data-marks-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="marks"><input type="hidden" name="sheet_version" value="{{ version }}" data-sheet-version>
 <div class="ex-rows">
-{% for row in roster %}<fieldset class="ex-row" data-mark-row="{{ row.student_id }}"><legend>{{ row.student.name }}</legend>
+{% for row in roster %}<div class="ex-row" role="group" aria-labelledby="ex-n-{{ row.student_id }}" data-mark-row="{{ row.student_id }}"><strong class="ex-name" id="ex-n-{{ row.student_id }}">{{ row.student.name }}</strong>
 <div class="ex-score"><input class="ex-box" id="ex-s-{{ row.student_id }}" name="s_{{ row.student_id }}" type="text" inputmode="decimal" dir="ltr" autocomplete="off" enterkeyhint="next" maxlength="10" value="{{ row.score_text }}" aria-label="{{ xw.score }}: {{ row.student.name }}" data-score{% if future %} disabled{% endif %}><span class="ex-of" dir="ltr">/ {{ out_text }}</span></div>
 <label class="ex-absent"><input type="checkbox" name="a_{{ row.student_id }}" value="1"{% if row.absent %} checked{% endif %}{% if future %} disabled{% endif %} data-absent><span>{{ xw.absent }}</span></label>
 <input class="ex-note" name="n_{{ row.student_id }}" value="{{ row.note }}" maxlength="255" aria-label="{{ xw.note }}: {{ row.student.name }}" placeholder="{{ xw.note }}"{% if future %} disabled{% endif %}>
-</fieldset>{% empty %}<p class="op-empty" data-no-roster>{{ xw.no_roster }}</p>{% endfor %}
+</div>{% empty %}<p class="op-empty" data-no-roster>{{ xw.no_roster }}</p>{% endfor %}
 </div>
 {% if roster and not future %}<div class="ex-bar" data-save-bar><span class="ex-count" data-entered-count data-template="{{ xw.entered_of }}" role="status">{{ count_text }}</span><button class="op-primary" type="submit" data-save-marks>{{ xw.save_marks }}</button></div>{% endif %}
 </form>
