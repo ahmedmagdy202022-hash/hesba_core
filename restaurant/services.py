@@ -307,14 +307,11 @@ def _fee_item(words):
     return item
 
 
-@transaction.atomic
-def pay(order, user, *, cashbox, discount=Decimal("0"), tendered=Decimal("0"), customer=None, lang="ar"):
-    """Post the order as one sales invoice through the cashier's checkout. Returns (invoice, change)."""
+def _payable(order, cashbox, words):
+    """Paying, step 1 (validate): the order is still open (and now locked), has live lines, and there is a store and a cashbox."""
 
     from master_data.models import Location
-    from sales.pos import checkout, walk_in_customer
 
-    words = MESSAGES[lang]
     order = _locked_open(order, words)
     lines = [line for line in order.lines.select_related("item").filter(voided=False)]
     if not lines:
@@ -322,29 +319,66 @@ def pay(order, user, *, cashbox, discount=Decimal("0"), tendered=Decimal("0"), c
     location = entity_scope.locations(Location.objects).filter(active=True, is_selling_location=True).order_by("-is_default", "pk").first()
     if location is None or cashbox is None:
         raise ValidationError(words["setup"])
-    from . import kitchen
+    return order, lines, location
 
-    kitchen.prepare_shortfall(lines, location, user, lang)  # RESTO-004: a kitchen dish is made from its ingredients before it is sold
-    customer = customer or order.customer or walk_in_customer()
-    from settings_core.display_labels import choice_label
 
-    where = order.table.name if order.table else choice_label(order, "kind", lang)
+def bill_rows(order, lines, lang="ar"):
+    """Paying, step 2 (draft): the invoice rows of the order's live lines, plus the delivery fee as its own line.
+
+    Later restaurant tasks (add-ons, service charge, offers) add their rows here, so ``pay()`` stays one call per step."""
+
+    words = MESSAGES[lang]
     rows = [{"item": line.item, "quantity": line.quantity, "unit_sale_price": line.unit_price, "line_discount_amount": Decimal("0"),
              "description": line.note} for line in lines]
     if order.kind == OrderKind.DELIVERY and order.delivery_fee > 0:  # RESTO-003: the fee is its own line on the same invoice
         rows.append({"item": _fee_item(words), "quantity": Decimal("1"), "unit_sale_price": order.delivery_fee, "line_discount_amount": Decimal("0"),
                      "description": words["fee_line"]})
-    invoice, change = checkout(
-        lines=rows,
-        customer=customer, location=location, cashbox=cashbox, discount=discount, tendered=tendered, user=user,
-        notes=(f"Restaurant {order.number} ({where})" if lang == "en" else f"طلب مطعم {order.number} ({where})"),  # TRACK-ACTS W11
-    )
+    return rows
+
+
+def _bill_notes(order, lang):
+    from settings_core.display_labels import choice_label
+
+    where = order.table.name if order.table else choice_label(order, "kind", lang)
+    return f"Restaurant {order.number} ({where})" if lang == "en" else f"طلب مطعم {order.number} ({where})"  # TRACK-ACTS W11
+
+
+def _settle_and_post(order, rows, *, customer, location, cashbox, discount, tendered, user, lang):
+    """Paying, steps 3 and 4 (settle, post): the cashier's own ``checkout``, unchanged. It drafts, takes the payment and posts in one go."""
+
+    from sales.pos import checkout
+
+    return checkout(lines=rows, customer=customer, location=location, cashbox=cashbox, discount=discount, tendered=tendered, user=user,
+                    notes=_bill_notes(order, lang))
+
+
+def _close(order, invoice, customer, user):
+    """Paying, step 5 (close): the order keeps its invoice and the table is free again."""
+
     order.invoice = invoice
     order.customer = customer
     order.status = OrderStatus.PAID
     order.closed_at = timezone.now()
     order.save(update_fields=["invoice", "customer", "status", "closed_at"])
     _audit(order, user, "pay_order", {"invoice": invoice.invoice_number, "total": str(invoice.total_amount)})
+
+
+@transaction.atomic
+def pay(order, user, *, cashbox, discount=Decimal("0"), tendered=Decimal("0"), customer=None, lang="ar"):
+    """Post the order as one sales invoice through the cashier's checkout. Returns (invoice, change)."""
+
+    from sales.pos import walk_in_customer
+
+    from . import kitchen
+
+    words = MESSAGES[lang]
+    order, lines, location = _payable(order, cashbox, words)
+    kitchen.prepare_shortfall(lines, location, user, lang)  # RESTO-004: a kitchen dish is made from its ingredients before it is sold
+    customer = customer or order.customer or walk_in_customer()
+    rows = bill_rows(order, lines, lang)
+    invoice, change = _settle_and_post(order, rows, customer=customer, location=location, cashbox=cashbox, discount=discount, tendered=tendered,
+                                       user=user, lang=lang)
+    _close(order, invoice, customer, user)
     return invoice, change
 
 
