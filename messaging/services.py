@@ -66,6 +66,11 @@ DEFAULT_OFF = (MessageKind.FOLLOWUP, MessageKind.VACCINE, MessageKind.ABSENCE, M
 #: M3: a clinic's appointment reminder carries the patient's own link; the sentence in front of it, per language.
 APPOINTMENT_LINK_TEXTS = {"ar": "لتأكيد الحضور أو طلب تغيير الميعاد:", "en": "To confirm or ask to change the appointment:"}
 APPOINTMENT_TEXT_EN = "Hello {name}, a reminder from {company} of your appointment tomorrow {date} at {time}."
+#: M10 (HG-096): the reminder of an online visit says so, and that the call opens from the same confirm link. The call's own link is
+#: never written here: this text is stored in the outbox, which reception reads, and goes to WhatsApp.
+ONLINE_NOTES = {"ar": "الكشف ده أونلاين: هتدخل المكالمة بزرار من نفس اللينك قبل الميعاد بشوية.", "en": "This is an online visit: you will join the call with a button on the same link, shortly before the appointment."}
+ONLINE_NOTES_NOLINK = {"ar": "الكشف ده أونلاين. كلّم العيادة لو محتاج طريقة الدخول.", "en": "This is an online visit. Contact the clinic if you need to know how to join."}
+ONLINE_LINK_TEXTS = {"ar": "لتأكيد الحضور ودخول المكالمة:", "en": "To confirm and join the call:"}
 #: M3: a follow-up is reminded this many days ahead of its date (and never again once it was sent or skipped).
 FOLLOWUP_AHEAD_DAYS = 2
 #: M7: a vaccination is reminded this many days ahead of its due date (and never again once it was sent or skipped). No lead-time column
@@ -265,6 +270,7 @@ def _appointments(today, company, currency):
         if medical:
             from printing.share import public_url
 
+            found["online"] = appointment.kind == "online"  # M10: a clinic only; a shop's reminder is byte for byte what it was
             found["localised"] = True
             found["url"] = public_url("appointment", appointment.pk, lang, owner=appointment.customer_id) or ""  # no PUBLIC_BASE_URL: no link, the plain reminder
         yield found
@@ -595,8 +601,10 @@ def _gather(kind, source, row, entity, today, company, currency):
         if url:
             values.setdefault("link", url)  # a template that places {link} itself
         text = render(base, name=candidate["name"], **values)
+        if candidate.get("online"):
+            text = f"{text} {(ONLINE_NOTES if url else ONLINE_NOTES_NOLINK)[lang]}"
         if url and "{link}" not in base:
-            text = f"{text} {APPOINTMENT_LINK_TEXTS[lang]} {url}"
+            text = f"{text} {(ONLINE_LINK_TEXTS if candidate.get('online') else APPOINTMENT_LINK_TEXTS)[lang]} {url}"
         fields = {"name": candidate["name"][:255], "phone": phone[:30], "link": candidate["link"][:255], "entity": entity, "text": text}
         if earlier is not None:
             # Still waiting: it carries today's date and today's figures (a part payment lowers the amount).
