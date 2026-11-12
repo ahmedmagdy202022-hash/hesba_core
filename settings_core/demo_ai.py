@@ -19,6 +19,7 @@ posting, a ledger or a cashbox row by hand.
 
 Only when the capability is on (``ai_invoice_photo``, with purchases on, for the A3 records; ``ai_voice_summary`` for the
 collection), and only once: the item ``DEMO-AI-01`` and the payment ``DEMO-CR-AI`` say each part is already there.
+A restaurant, a contractor and a factory get the supplier but no car parts (S2-01), and their three lines are mapped by hand.
 A pharmacy gets no car parts (R1: they showed in its till search and drug lists). Its invoice-photo sample is a medicine
 distributor's (``PHARMACY_SAMPLE_READING``) and needs nothing seeded here: the supplier «الشركة المتحدة لتوزيع الأدوية»
 and two of its lines («باراسيتامول 500 مجم», «فيتامين سي 1000 فوار») are the pharmacy demo's own records, matched by
@@ -51,6 +52,9 @@ ITEMS = (
 EARLIER_PURCHASE = "DEMO-PI-AI"
 BOUGHT_DAYS_AGO = 20
 COLLECTION_NUMBER = "DEMO-CR-AI"
+#: S2-01 / RS-02: activities whose stock is not spare parts. A waiter's menu, a contractor's item list and a factory's stock
+#: must not show brake pads, so they get the sample's supplier only; its three lines are all left to map by hand.
+NO_CAR_PARTS_ACTIVITIES = ("restaurants", "contracting", "manufacturing")
 
 
 def seed(master, owner, modules=()):
@@ -61,8 +65,11 @@ def seed(master, owner, modules=()):
     from sales.models import CustomerPayment
     from settings_core.capabilities import capability_enabled
 
-    photo = (capability_enabled("ai_invoice_photo") and "purchases" in modules and not pharmacy()
-             and not Item.objects.filter(item_code=SENTINEL).exists())
+    from master_data.models import Supplier
+
+    parts = not Item.objects.filter(item_code=SENTINEL).exists() and not no_car_parts()
+    supplier_only = no_car_parts() and not Supplier.objects.filter(supplier_code=SUPPLIER_CODE).exists()
+    photo = capability_enabled("ai_invoice_photo") and "purchases" in modules and not pharmacy() and (parts or supplier_only)
     collection = capability_enabled("ai_voice_summary") and not CustomerPayment.objects.filter(payment_number=COLLECTION_NUMBER).exists()
     if not (photo or collection):
         return False
@@ -72,6 +79,16 @@ def seed(master, owner, modules=()):
         if collection:
             _yesterday_collection(master, owner)
     return True
+
+
+def no_car_parts():
+    """True when the active profile is an activity whose shelf has no place for the sample's spare parts (a restaurant, a
+    contractor, a factory). Its photo sample still finds the supplier; the three lines are mapped to the business's own items."""
+
+    from settings_core.models import ClientProfile
+
+    profile = ClientProfile.get_active()
+    return profile is not None and profile.activity_slug in NO_CAR_PARTS_ACTIVITIES
 
 
 def pharmacy():
@@ -88,6 +105,9 @@ def _invoice_photo_records(master, owner):
     from master_data.models import Category, Item, Supplier
     from reports.management.commands.seed_demo_business import Command as Seed
 
+    if no_car_parts():
+        Supplier.objects.get_or_create(supplier_code=SUPPLIER_CODE, defaults={"name": SUPPLIER_NAME, "active": True, "import_batch_id": "DEMO-BUSINESS"})
+        return
     code, name_ar, name_en = CATEGORY
     category = Category.objects.update_or_create(category_code=code, defaults={"name_ar": name_ar, "name_en": name_en, "active": True})[0]
     supplier = Supplier.objects.get_or_create(supplier_code=SUPPLIER_CODE, defaults={

@@ -316,6 +316,7 @@ def detail(request, pk):
                 if not user_has_permission(request.user, RECEIVE):
                     raise PermissionDenied("Taking a deposit needs sales.receive_customer_payment.")
                 cashbox = _deposit_cashboxes(appointment).filter(pk=request.POST.get("cashbox")).first() if str(request.POST.get("cashbox") or "").isdigit() else None
+                services.check_deposit_within_price(appointment, request.POST.get("amount", ""), lang)  # BE-01: before the (untouched) service
                 deposit = deposits.take(appointment, appointment.customer, cashbox, request.POST.get("amount", ""), request.user, lang)
                 messages.success(request, words["deposit_taken"].format(amount=deposit.payment.amount, payment=deposit.payment.payment_number))
             elif action in ("deposit_forfeit", "deposit_refund"):

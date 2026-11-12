@@ -217,9 +217,9 @@ def _overdue_tile(words, today):
     rows, total, _ = overdue_certificates(today, status=ProjectStatus.ACTIVE)  # the active projects, as the tiles beside it
     return _tile("overdue_certs", words["overdue_certs"], len(rows), tone="bad" if rows else "good", sub=money(total) if rows else "")
 WORKSHOP_WORDS = {
-    "ar": {"title": "الورشة دلوقتي", "open": "أوامر مفتوحة", "ready": "جاهزة للتسليم", "late": "متأخرة عن ميعادها", "delivered": "اتسلّمت الشهر ده",
+    "ar": {"title": "مركز الصيانة دلوقتي", "open": "أوامر مفتوحة", "ready": "جاهزة للتسليم", "late": "متأخرة عن ميعادها", "delivered": "اتسلّمت الشهر ده",
            "returns": "رجعت في الضمان (الشهر)", "late_none": "مفيش تأخير"},
-    "en": {"title": "The workshop now", "open": "Open orders", "ready": "Ready for pickup", "late": "Past the promised date", "delivered": "Delivered this month",
+    "en": {"title": "The service centre now", "open": "Open orders", "ready": "Ready for pickup", "late": "Past the promised date", "delivered": "Delivered this month",
            "returns": "Warranty returns (month)", "late_none": "nothing late"},
 }
 
