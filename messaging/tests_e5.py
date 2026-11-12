@@ -205,7 +205,7 @@ class AbsenceTests(Centre):
         services.build()
         message = self.messages(MessageKind.ABSENCE).get()
         self.assertEqual((message.phone, message.status, message.name, message.channel), ("201010000001", OutboxStatus.PENDING, "ولي أمر آدم", ""))
-        self.assertEqual(message.text, f"أهلاً ولي أمر آدم، آدم كان غايب يوم {day_text(TODAY, 'ar')} عن مجموعة يومية في Demo Store.")
+        self.assertEqual(message.text, f"أهلاً ولي أمر آدم، بنبلّغ حضرتك بغياب آدم عن مجموعة يومية يوم {day_text(TODAY, 'ar')}. — Demo Store")
         for forbidden in ("ZZNOTE", "خاصة", "تالتة", "http", "/education", "%", "درجة", "{"):
             self.assertNotIn(forbidden, message.text)
         self.assertFalse(message.text.startswith(("Demo", "ST-")))  # an Arabic sentence never starts with a Latin word
@@ -316,7 +316,7 @@ class FeesAmountTests(Fees):
         self.assertEqual(services.build(), 1)
         message = self.fees().get()
         self.assertEqual((message.key, message.name, message.phone, message.status), (f"fees:{invoice.customer_id}", "ولي أمر يوسف", "201001234501", OutboxStatus.PENDING))
-        self.assertEqual(message.text, "أهلاً ولي أمر يوسف، تذكير ودّي من Demo Store: المتبقي من مصروفات الدراسة على حضرتك 600.00 EGP. لو حضرتك دفعت خلاص، اعتبر الرسالة دي كأنها ماوصلتش. شكرًا لحضرتك.")
+        self.assertEqual(message.text, "أهلاً ولي أمر يوسف، تذكير ودّي من Demo Store: المتبقي من مصروفات الدراسة على حضرتك 600.00 EGP. ولو حضرتك دفعت بالفعل، تقدر تتجاهل الرسالة دي. شكرًا لحضرتك.")
         for forbidden in ("غ900", "900", "300", "http", "{"):
             self.assertNotIn(forbidden, message.text)  # the guardian's balance, never the group, the invoice total or a link
 
@@ -506,7 +506,7 @@ class TemplateTests(Centre):
             self.assertNotIn(kind, services.LINK_KINDS)
             self.assertFalse(services.DEFAULT_TEXTS[kind].startswith("{"))
             self.assertFalse(re.match(r"[A-Za-z]", services.DEFAULT_TEXTS[kind]))  # an Arabic sentence never starts with a Latin word
-        self.assertEqual(services.DEFAULT_TEXTS[MessageKind.ABSENCE], "أهلاً {name}، {student} كان غايب يوم {date} عن {group} في {company}.")
+        self.assertEqual(services.DEFAULT_TEXTS[MessageKind.ABSENCE], "أهلاً {name}، بنبلّغ حضرتك بغياب {student} عن {group} يوم {date}. — {company}")
         self.assertEqual((services.DEFAULT_EVERY[MessageKind.ABSENCE], services.DEFAULT_EVERY[MessageKind.FEES]), (1, 7))
         self.assertEqual(set(services.KIND_LABELS["ar"]), set(MessageKind.values))
         self.assertEqual(set(services.KIND_LABELS["en"]), set(MessageKind.values))
