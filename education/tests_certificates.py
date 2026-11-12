@@ -449,6 +449,16 @@ class TokenTests(CertSetup):
 
 # ---- the public page ----
 
+def frozen_minute():
+    """The throttle counts per wall-clock minute and hour: hold the clock it reads still, so a test that crosses a boundary cannot fail by chance."""
+
+    class Instant:
+        def timestamp(self):
+            return 1_800_000_000.0
+
+    return mock.patch("education.public.timezone", mock.Mock(now=lambda: Instant()))
+
+
 HEADERS = {"Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow", "Referrer-Policy": "same-origin"}
 
 
@@ -545,6 +555,10 @@ class PublicPageTests(CertSetup):
             self.assertPrivate(response)
 
     def test_a_flood_from_one_address_gets_the_plain_page_with_429_and_another_address_is_unaffected(self):
+        with frozen_minute():
+            self.flood()
+
+    def flood(self):
         for _ in range(60):
             self.assertEqual(self.client.get(self.url, REMOTE_ADDR="10.0.0.9").status_code, 200)
         flooded = self.client.get(self.url, REMOTE_ADDR="10.0.0.9")
@@ -555,6 +569,10 @@ class PublicPageTests(CertSetup):
         self.assertEqual(self.client.get(self.url, REMOTE_ADDR="10.0.0.10").status_code, 200)
 
     def test_a_guesser_is_stopped_after_thirty_misses_in_an_hour(self):
+        with frozen_minute():
+            self.guess()
+
+    def guess(self):
         miss = reverse("certificate_verify", args=["nothing-here"])
         for _ in range(30):
             self.assertEqual(self.client.get(miss, REMOTE_ADDR="10.0.0.20").status_code, 404)
@@ -853,7 +871,7 @@ class AssetTests(SimpleTestCase):
         for words in (pathlib.Path(settings.BASE_DIR) / "education/views_certificates.py", pathlib.Path(settings.BASE_DIR) / "education/public.py"):
             source = words.read_text(encoding="utf-8")
             for line in re.findall(r'"[^"\n]*[؀-ۿ][^"\n]*"', source):
-                inner = line.strip('"').strip()
+                inner = line.strip('"').strip().rstrip(".،؛:!؟)»«( ")  # a full stop or a bracket after a Latin word is still the word at the end
                 self.assertFalse(re.match(r"^[A-Za-z]", inner), line)  # an Arabic string never starts with a Latin letter
                 self.assertFalse(re.search(r"[A-Za-z]$", inner), line)  # ...nor ends with one
 
