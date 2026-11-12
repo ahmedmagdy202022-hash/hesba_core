@@ -122,7 +122,7 @@ SUB_ACTIVITY_LABELS = {
         "furniture": {"ar": "أثاث ونجارة", "en": "Furniture & carpentry"},
         "printing": {"ar": "طباعة وتغليف", "en": "Printing & packaging"},
         "chemicals": {"ar": "منظفات وكيماويات", "en": "Detergents & chemicals"},
-        "workshop": {"ar": "ورشة / حرفة", "en": "Workshop / Craft"},
+        "workshop": {"ar": "تصنيع حسب الطلب", "en": "Made-to-order fabrication"},
         "other": {"ar": "تصنيع آخر", "en": "Other manufacturing"},
     },
 }

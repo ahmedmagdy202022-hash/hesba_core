@@ -35,7 +35,7 @@ INSTALMENT_AHEAD_DAYS = 2
 
 DEFAULT_TEXTS = {
     MessageKind.DUE: "أهلاً {name}، ده تذكير ودّي من {company} بالمبلغ المستحق على حضرتك: {amount}. شكرًا لحضرتك.",
-    MessageKind.INSTALMENT: "أهلاً {name}، تذكير من {company}: القسط بتاع فاتورة {number} بمبلغ {amount} ميعاده {date}. شكرًا لحضرتك.",
+    MessageKind.INSTALMENT: "أهلاً {name}، تذكير من {company}: قسط فاتورة {number} بمبلغ {amount} ميعاده {date}. شكرًا لحضرتك.",
     MessageKind.APPOINTMENT: "أهلاً {name}، تذكير من {company} بميعاد حضرتك بكرة {date} الساعة {time}. لو محتاج تغيّر الميعاد ابعتلنا.",
     MessageKind.REFILL: "أهلاً {name}، روشتة حضرتك {number} ميعاد تجديدها {date}. تحب نجهزهالك؟ — {company}",
     MessageKind.WORKORDER: "أهلاً {name}، من {company}: أمر الشغل {number} {status} {link}",
