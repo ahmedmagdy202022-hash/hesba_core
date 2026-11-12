@@ -1,0 +1,5 @@
+{% load hesba_format %}{# E2: a group's exams as a list that reads as two lines a record on a phone. ``rows``: exams with entered, seats and kind_label. #}
+<div class="op-table-wrap"><table class="op-table" data-list-rows data-exams><thead><tr><th>{{ xw.exam }}</th><th>{{ xw.date }}</th><th>{{ xw.kind }}</th><th>{{ xw.marks }}</th><th></th></tr></thead><tbody>
+{% for e in rows %}<tr data-exam="{{ e.pk }}"><td data-row="title" class="op-cell-text"><a href="{% url 'education:exam' e.pk %}?lang={{ lang }}">{{ e.title }}</a></td><td data-row="meta"><bdi>{{ e.held_on|day_text:lang }}</bdi></td><td data-row="meta">{{ e.kind_label }}</td><td data-row="amount" data-entered>{{ e.entered }} {{ xw.of_roster }} {{ e.seats }}</td><td data-row="meta"><span class="op-status {% if e.published %}op-status-open{% else %}op-status-draft{% endif %}" data-published="{{ e.published|yesno:'1,0' }}">{% if e.published %}{{ xw.published }}{% else %}{{ xw.draft }}{% endif %}</span></td></tr>
+{% empty %}<tr><td colspan="5" class="op-empty" data-row="empty">{{ xw.no_exams }}</td></tr>{% endfor %}
+</tbody></table></div>
