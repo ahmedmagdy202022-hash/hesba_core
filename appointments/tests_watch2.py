@@ -1,12 +1,17 @@
 """Watch round 2 fixes for the salon: BE-01 (a deposit may not exceed the booking's price)."""
 
+from datetime import timedelta
 from decimal import Decimal as D
 
+from django.core.exceptions import ValidationError
 from django.urls import reverse
+from django.utils import timezone
 
 from deposits.models import Deposit
 from deposits.tests import DepositSetup, cash_balance, customer_balance
 from sales.models import CustomerPayment
+
+from . import services as appointments
 
 
 TOO_BIG_AR = "العربون مينفعش يزيد عن سعر الحجز. أقصى عربون ممكن 300.00."
@@ -62,3 +67,16 @@ class DepositCeilingTests(DepositSetup):
         self.assertContains(self.post_deposit(appointment, "0"), "مبلغ العربون مش صحيح")
         self.assertContains(self.post_deposit(appointment, "abc", lang="en"), "Invalid deposit amount.")
         self.assert_nothing_taken(appointment)
+
+
+class BookingPriceMessageTests(DepositSetup):
+    """BE-08: a bad booking price says what is valid."""
+
+    def test_a_negative_or_unreadable_price_says_to_type_zero_or_more_in_both_languages(self):
+        for lang, text in (("ar", "اكتب السعر رقم صفر أو أكبر (صفر لو ببلاش)."), ("en", "Type the price as a number, 0 or more (0 for free).")):
+            for bad in ("-5", "abc"):
+                data = {"customer": self.customer, "employee": self.tech, "service": self.service, "starts_at": timezone.now() + timedelta(days=3),
+                        "duration_minutes": 60, "price": bad}
+                with self.assertRaises(ValidationError) as caught:
+                    appointments.book(data, self.owner, lang)
+                self.assertEqual(caught.exception.messages, [text], (lang, bad))

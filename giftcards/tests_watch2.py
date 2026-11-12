@@ -34,5 +34,20 @@ class FaceValueLimitTests(GiftSetup):
 
     def test_zero_negative_and_letters_are_still_refused(self):
         for value in ("0", "-5", "abc"):
-            self.assertContains(self.sell_from_screen(value, lang="en"), "Invalid card amount")
+            self.assertContains(self.sell_from_screen(value, lang="en"), "Type the card amount as a number above zero.")
         self.assertFalse(GiftCard.objects.exists())
+
+
+class AmountMessageTests(GiftSetup):
+    """BE-08 / S2-06: a bad card amount says what is valid."""
+
+    def test_zero_negative_and_letters_say_to_type_a_number_above_zero(self):
+        from django.core.exceptions import ValidationError
+
+        from . import services
+
+        for lang, text in (("ar", "اكتب مبلغ الكارت رقم أكبر من صفر."), ("en", "Type the card amount as a number above zero.")):
+            for bad in ("0", "-5", "abc"):
+                with self.assertRaises(ValidationError) as caught:
+                    services.sell(bad, self.cash, self.owner, lang=lang)
+                self.assertEqual(caught.exception.messages, [text], (lang, bad))

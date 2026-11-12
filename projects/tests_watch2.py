@@ -42,3 +42,35 @@ class LossInWordsTests(ProjectSetup):
         other = services.save_project({"name": "شقة المعادي", "customer": self.customer, "contract_value": "50000"}, self.owner)
         post_sales_invoice(services.bill_progress(other, self.owner, amount="4000", description="مستخلص").pk, self.owner)
         self.assertIn('<strong data-figure="profit">4,000.00</strong>', self.page("projects:detail", "ar", other.pk))
+
+
+class VagueMessageTests(ProjectSetup):
+    """CN-07 / S2-06: the contract value, the item's rate and a subcontract's value say what is valid."""
+
+    def check(self, call, ar, en):
+        from django.core.exceptions import ValidationError
+
+        for lang, text in (("ar", ar), ("en", en)):
+            for bad in ("-1", "abc"):
+                with self.assertRaises(ValidationError) as caught:
+                    call(bad, lang)
+                self.assertEqual(caught.exception.messages, [text], (lang, bad))
+
+    def test_the_contract_value(self):
+        self.check(lambda bad, lang: services.save_project({"name": "x", "customer": self.customer, "contract_value": bad}, self.owner, lang=lang),
+                   "اكتب قيمة العقد رقم صفر أو أكبر.", "Type the contract value as a number, 0 or more.")
+
+    def test_a_bill_of_quantities_rate(self):
+        from . import contract
+
+        self.check(lambda bad, lang: contract.save_boq_line(self.project, self.owner, {"description": "خرسانة", "quantity": "1", "rate": bad}, lang=lang),
+                   "اكتب فئة البند (سعر الوحدة) رقم صفر أو أكبر.", "Type the item's rate (price per unit) as a number, 0 or more.")
+
+    def test_a_subcontract_value(self):
+        from hesba_testing.factories import make_supplier
+
+        from . import costs
+
+        supplier = make_supplier(supplier_code="SUB-1", name="مقاول باطن")
+        self.check(lambda bad, lang: costs.save_subcontract(self.project, self.owner, {"supplier": supplier, "scope": "أعمال كهرباء", "value": bad}, lang=lang),
+                   "اكتب القيمة رقم صفر أو أكبر.", "Type the value as a number, 0 or more.")
