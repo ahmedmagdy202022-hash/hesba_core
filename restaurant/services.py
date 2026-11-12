@@ -8,8 +8,9 @@ Rules, stated once:
   kitchen can be changed or removed freely; one already sent can only be
   voided, by someone who may sell and with a reason (Restaurants R13), which
   is audited, so the kitchen's work never disappears silently;
-* "send to kitchen" gathers every unsent line into one numbered ticket to
-  print; nothing new means no ticket;
+* "send to kitchen" gathers every unsent line into numbered tickets to
+  print, one per kitchen station (Restaurants R4; one ticket when no station
+  is set up); nothing new means no ticket;
 * paying an order calls the cashier screen's own ``checkout`` (the same call
   POS-001 makes), so VAT, stock, cashbox, customer ledger and period rules are
   the sales engine's, unchanged. The order only keeps a link to the posted
@@ -29,6 +30,7 @@ from config.money import money_round
 from master_data.models import Item
 from permissions.services import user_has_permission
 
+from . import stations
 from .models import DiningTable, KitchenTicket, Order, OrderKind, OrderLine, OrderStatus
 from entities import scope as entity_scope
 
@@ -235,7 +237,9 @@ def void_line(line, user, lang="ar", *, reason=""):
     if not reason:
         raise ValidationError(words["void_reason"])
     line.voided = True
-    line.save(update_fields=["voided"])
+    line.void_reason = reason  # R4: the kitchen's card and the order page show it
+    line.ready_at = None  # R4: on a voided line this stamp means "the kitchen has seen it"; a void that arrives after the dish was ready is unseen
+    line.save(update_fields=["voided", "void_reason", "ready_at"])
     _audit(order, user, "void_order_line", {"line": line.pk, "item": line.item.item_code, "item_name": line.item.item_name, "quantity": str(line.quantity),
                                             "amount": str(line.amount), "ticket": line.ticket.sequence, "reason": reason})
     return line
@@ -243,15 +247,23 @@ def void_line(line, user, lang="ar", *, reason=""):
 
 @transaction.atomic
 def send_to_kitchen(order, user, lang="ar"):
-    """One ticket with every line not yet sent; None when there is nothing new."""
+    """Send every line not yet sent: one ticket per kitchen station (Restaurants R4), or one ticket when no station is set up.
+
+    Returns the first ticket (its ``batch`` holds every ticket this send made, in station order), or None when there is nothing new."""
 
     order = _locked_open(order, MESSAGES[lang])
-    pending = order.lines.filter(ticket__isnull=True, voided=False)
-    if not pending.exists():
+    pending = list(order.lines.filter(ticket__isnull=True, voided=False).select_related("item"))
+    if not pending:
         return None
-    ticket = KitchenTicket.objects.create(order=order, sequence=order.tickets.count() + 1, sent_by=user)
-    pending.update(ticket=ticket)
-    return ticket
+    sequence = max(order.tickets.values_list("sequence", flat=True), default=0)
+    batch = []
+    for station, lines in stations.route(pending):
+        sequence += 1
+        ticket = KitchenTicket.objects.create(order=order, sequence=sequence, sent_by=user, station=station)
+        OrderLine.objects.filter(pk__in=[line.pk for line in lines]).update(ticket=ticket)
+        batch.append(ticket)
+    batch[0].batch = batch
+    return batch[0]
 
 
 @transaction.atomic
