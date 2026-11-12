@@ -1,16 +1,22 @@
-"""Watch round 2 fixes for the restaurant: RS-01 and RS-07 (a long option text must not widen a phone page).
+"""Watch round 2 fixes for the restaurant: RS-01 and RS-07 (a long option text must not widen a phone page) and RS-03.
 
 The real check is a browser at 390 px (`document.documentElement.scrollWidth === 390`); these tests pin the rules that make it
 true so a later stylesheet edit cannot undo them without a test failing.
 """
 
 import re
+from decimal import Decimal as D
 from pathlib import Path
 
 from django.conf import settings
 from django.urls import reverse
 
+from hesba_testing.factories import make_item
+
+from . import kitchen
+from .insights import save_ingredients
 from .tests import RestaurantSetup
+from .tests_kitchen import KitchenSetup
 
 CSS = Path(settings.BASE_DIR) / "static" / "hesba" / "css" / "restaurant.css"
 
@@ -42,3 +48,26 @@ class PhoneWidthRules(RestaurantSetup):
             page = self.client.get(reverse("restaurant:dish", args=[dish.pk]), {"lang": lang})
             self.assertContains(page, "hesba/css/restaurant.css")
             self.assertContains(page, "data-dish-ingredients")
+
+
+class OutOfStockCountsAgree(KitchenSetup):
+    """RS-03: the dashboard said 1 out of stock and the inventory screen 4: the other three were dishes cooked to order, which
+    carry stock 0 and are not 'out'. Both now use the dashboard's rule (``reports.selectors.made_to_order_ids``)."""
+
+    def test_the_dashboard_and_the_inventory_screen_count_the_same_items_out_of_stock(self):
+        from reports.selectors import stock_alert_counts
+
+        kitchen.make_in_kitchen(self.koshary, self.owner)
+        kebab = make_item(item_code="D-KEBAB", item_name="كباب", default_sale_price="90.00", is_stock_tracked=False)
+        save_ingredients(kebab, [(self.rice, "0.100")], self.owner)
+        kitchen.make_in_kitchen(kebab, self.owner)
+        make_item(item_code="R-OIL", item_name="زيت", unit="لتر", is_stock_tracked=True)  # a real raw material, none on hand
+        self.assertLessEqual({self.koshary.pk, kebab.pk}, kitchen.kitchen_dish_ids())
+        self.assertEqual((self.stock(self.koshary), self.stock(kebab)), (D("0.000"), D("0.000")))
+
+        self.assertEqual(stock_alert_counts()["out_of_stock"], 1)
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("inventory:stock"))
+        self.assertEqual(page.context["counts"]["out"], 1)
+        rows = {row["item"].item_code: row["state"] for row in page.context["rows"]}
+        self.assertEqual((rows["R-OIL"], rows["D-KOSH"], rows["D-KEBAB"]), ("out", "healthy", "healthy"))
