@@ -6,7 +6,7 @@
 {% if st.uncovered_text %}<div class="op-muted" data-uncovered>{{ st.uncovered_text }}</div>{% endif %}
 {% if st.can_make %}<details class="mfg-sale-make" data-make-production><summary class="op-secondary">{{ pw.make }}</summary>
 <form method="post" action="{% url 'manufacturing:make_for_sale' row.line.pk %}" data-make-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
-<p class="op-muted">{{ pw.recipe }}: {{ st.recipe.product.item_name }} (<bdi>{{ st.recipe.code }}</bdi>)</p>
+<p class="op-muted">{{ pw.recipe }}: <bdi>{{ st.recipe.code }}</bdi> · {{ st.recipe.product.item_name }}</p>
 <div class="op-field"><label for="mk-qty-{{ row.line.pk }}">{{ pw.quantity }}</label><input id="mk-qty-{{ row.line.pk }}" name="quantity" inputmode="decimal" dir="ltr" value="{{ st.free_plain }}"></div>
 <div class="op-field"><label for="mk-loc-{{ row.line.pk }}">{{ pw.location }}</label><select id="mk-loc-{{ row.line.pk }}" name="location">{% for place in production.locations %}<option value="{{ place.pk }}">{{ place.name_ar }}</option>{% endfor %}</select></div>
 <div class="op-field"><label for="mk-labor-{{ row.line.pk }}">{{ pw.labor }}</label><input id="mk-labor-{{ row.line.pk }}" name="labor_cost" inputmode="decimal" dir="ltr" placeholder="0"></div>
