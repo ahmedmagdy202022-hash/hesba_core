@@ -23,6 +23,10 @@ class MessageKind(models.TextChoices):
     FOLLOWUP = "followup", "Follow-up visit"
     #: M7: a vet clinic's reminder that an animal's next dose is due (the owner's name, the animal, the vaccine, the date and the clinic only).
     VACCINE = "vaccine", "Vaccination due"
+    #: E5: a school or centre's message to the guardian that a student was absent (the student, the group, the day and the centre only).
+    ABSENCE = "absence", "Student absence"
+    #: E5: a school or centre's reminder to the guardian of the fees still due (the amount and the centre only; one message per guardian).
+    FEES = "fees", "Fees due"
     #: S8: a loyalty / marketing campaign message (see ``Campaign`` and messaging/campaigns.py).
     CAMPAIGN = "campaign", "Campaign"
 

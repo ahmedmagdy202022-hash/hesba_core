@@ -12,7 +12,9 @@
       dishes.forEach(function (dish) {
         var okCat = !current || dish.getAttribute('data-cat') === current;
         var okText = !text || (dish.getAttribute('data-name') || '').indexOf(text) !== -1;
-        dish.hidden = !(okCat && okText);
+        /* RS-02: a raw ingredient stays out of the «الكل» view; its own category and the search still show it. */
+        var okRaw = !dish.hasAttribute('data-raw') || !!current || !!text;
+        dish.hidden = !(okCat && okText && okRaw);
       });
     };
     cats.forEach(function (button) {
@@ -23,6 +25,7 @@
       });
     });
     if (search) { search.addEventListener('input', apply); }
+    apply();
   }
   Array.prototype.forEach.call(document.querySelectorAll('form[data-confirm]'), function (form) {
     form.addEventListener('submit', function (event) {

@@ -82,10 +82,12 @@ def _back(lang, order=None):
     return redirect(f"{url}?lang={lang}")
 
 
-def _technicians():
-    from staff.models import Employee
+def _technicians(*keep):
+    """MT-05: the employees an order may name as its technician: the shop's staff without its sales reps, and whoever the order has already."""
 
-    return Employee.objects.filter(active=True).order_by("name")
+    from staff.services import serving_staff
+
+    return serving_staff(*keep)
 
 
 def _error(exc, lang):
@@ -167,7 +169,7 @@ def detail(request, pk):
             elif action == "details":
                 data = {key: request.POST.get(key) for key in request.POST}
                 if "technician" in request.POST:
-                    data["technician"] = _technicians().filter(pk=request.POST.get("technician") or 0).first()
+                    data["technician"] = _technicians(order.technician_id).filter(pk=request.POST.get("technician") or 0).first()
                 services.update_details(order, data, request.user, lang)
                 message = words["saved"]
             elif action == "add_line":
@@ -214,7 +216,7 @@ def detail(request, pk):
     return render(request, "workorders/detail.html", _base(
         request, lang, order=order, numbers=numbers, next_moves=next_moves, items=items, error=error, today=today,
         events=order.events.select_related("user"), reserved={line.pk: reserved.get(line.item_id) for line in numbers["lines"]},
-        cashboxes=entity_scope.cashboxes(Cashbox.objects).filter(active=True), technicians=_technicians(),
+        cashboxes=entity_scope.cashboxes(Cashbox.objects).filter(active=True), technicians=_technicians(order.technician_id),
         can_work=services.can_manage(request.user) or is_own,
         under_warranty=order.status == Status.DELIVERED and order.warranty_until and order.warranty_until >= today,
         returns=order.warranty_returns.all(), attachments=attachments_ui.card(order, request.user, lang)))

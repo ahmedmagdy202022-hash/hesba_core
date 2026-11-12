@@ -180,7 +180,7 @@ class WorkOrderScreenTests(WorkshopSetup):
         self.client.force_login(self.owner)
         page = self.client.get(reverse("dashboard_snapshot"))
         self.assertContains(page, f'href="{reverse("workorders:list")}?lang=ar"')
-        self.assertContains(page, "الورشة دلوقتي")
+        self.assertContains(page, "مركز الصيانة دلوقتي")
         self.assertContains(page, f'href="{reverse("workorders:new")}?lang=ar" data-action="workorders"')
 
     def test_who_may_open_the_screens(self):

@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views, views_inpatient
+from . import views, views_inpatient, views_lab
 from . import views_rx
 from . import views_templates
 from . import views_vaccines
@@ -31,6 +31,11 @@ urlpatterns = [
     path("patients/<int:pk>/lab/", views.lab_results, name="lab"),
     path("patients/<int:pk>/lab/<str:day>/print/", views.lab_sheet, name="lab_sheet"),
     path("lab/tests/", views.lab_tests, name="lab_tests"),
+    # M9 (HG-092): the sample's label and code, and importing results from the analyzer's file; lab only.
+    path("patients/<int:pk>/lab/label/", views_lab.lab_label, name="lab_label"),
+    path("patients/<int:pk>/lab/<str:day>/label/", views_lab.lab_label, name="lab_label_day"),
+    path("lab/sample/", views_lab.lab_sample, name="lab_sample"),
+    path("lab/import/", views_lab.lab_import_results, name="lab_import"),
     # M8 (HG-088): everything under inpatient/ closes with the «الإقامة والأسرّة» capability.
     path("inpatient/", views_inpatient.beds, name="beds"),
     path("inpatient/admit/", views_inpatient.admit, name="admit"),

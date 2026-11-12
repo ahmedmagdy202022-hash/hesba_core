@@ -35,7 +35,7 @@ INSTALMENT_AHEAD_DAYS = 2
 
 DEFAULT_TEXTS = {
     MessageKind.DUE: "أهلاً {name}، ده تذكير ودّي من {company} بالمبلغ المستحق على حضرتك: {amount}. شكرًا لحضرتك.",
-    MessageKind.INSTALMENT: "أهلاً {name}، تذكير من {company}: القسط بتاع فاتورة {number} بمبلغ {amount} ميعاده {date}. شكرًا لحضرتك.",
+    MessageKind.INSTALMENT: "أهلاً {name}، تذكير من {company}: قسط فاتورة {number} بمبلغ {amount} ميعاده {date}. شكرًا لحضرتك.",
     MessageKind.APPOINTMENT: "أهلاً {name}، تذكير من {company} بميعاد حضرتك بكرة {date} الساعة {time}. لو محتاج تغيّر الميعاد ابعتلنا.",
     MessageKind.REFILL: "أهلاً {name}، روشتة حضرتك {number} ميعاد تجديدها {date}. تحب نجهزهالك؟ — {company}",
     MessageKind.WORKORDER: "أهلاً {name}، من {company}: أمر الشغل {number} {status} {link}",
@@ -44,17 +44,25 @@ DEFAULT_TEXTS = {
     MessageKind.FOLLOWUP: "أهلاً {name}، تذكير من {company}: ميعاد المتابعة يوم {date}. تحب نحجزلك ميعاد؟ كلّمنا أو ابعتلنا هنا.",
     # M7: the owner, the animal, the vaccine, the date and the clinic. Never a note or a diagnosis (the placeholders cannot carry one) and no link.
     MessageKind.VACCINE: "أهلاً {name}، تذكير من {company}: ميعاد جرعة {vaccine} لـ {animal} يوم {date}. تحب نحجزلك ميعاد؟ كلّمنا أو ابعتلنا هنا.",
+    # E5: the guardian, the student, the group, the day and the centre. Never a reason, a note, a rate, a grade or a link (students are often minors).
+    MessageKind.ABSENCE: "أهلاً {name}، {student} كان غايب يوم {date} عن {group} في {company}.",
+    # E5: the guardian, the amount still due and the centre; one message per guardian, not per child or per invoice.
+    MessageKind.FEES: "أهلاً {name}، تذكير ودّي من {company}: المتبقي من مصروفات الدراسة على حضرتك {amount}. لو حضرتك دفعت خلاص، اعتبر الرسالة دي كأنها ماوصلتش. شكرًا لحضرتك.",
 }
 #: S7: the same wording in English, used when the business's default language is English and the text was never edited.
 DEFAULT_TEXTS_EN = {MessageKind.WORKORDER: "Hello {name}, from {company}: work order {number} {status} {link}",
                     MessageKind.CAMPAIGN: "Hello {name}, we miss you at {company}! We have something new for you; see you soon.",
                     MessageKind.FOLLOWUP: "Hello {name}, a reminder from {company}: your follow-up is due on {date}. Would you like us to book it? Contact us here.",
-                    MessageKind.VACCINE: "Hello {name}, a reminder from {company}: {animal}'s {vaccine} dose is due on {date}. Would you like us to book it? Contact us here."}
+                    MessageKind.VACCINE: "Hello {name}, a reminder from {company}: {animal}'s {vaccine} dose is due on {date}. Would you like us to book it? Contact us here.",
+                    MessageKind.ABSENCE: "Hello {name}, {student} was absent on {date} from {group} at {company}.",
+                    MessageKind.FEES: "Hello {name}, a friendly reminder from {company}: the remaining tuition on your account is {amount}. If you have already paid, please disregard this message. Thank you."}
 #: ``every_days`` is unused for work-order messages (one per order per status, whatever the day).
 DEFAULT_EVERY = {MessageKind.DUE: 7, MessageKind.INSTALMENT: 3, MessageKind.APPOINTMENT: 1, MessageKind.REFILL: 3, MessageKind.WORKORDER: 1, MessageKind.CAMPAIGN: 1, MessageKind.FOLLOWUP: 7,
-                 MessageKind.VACCINE: 7}
+                 MessageKind.VACCINE: 7, MessageKind.ABSENCE: 1, MessageKind.FEES: 7}
 #: M3: a kind that is off until the owner switches it on (a new kind has no saved row, and no row means "on" for the older kinds).
-DEFAULT_OFF = (MessageKind.FOLLOWUP, MessageKind.VACCINE)
+#: E5: the absence message and the fees reminder are off too: an absence message cannot be taken back once sent, and the fees reminder changes
+#: who the general amount-due reminder reaches.
+DEFAULT_OFF = (MessageKind.FOLLOWUP, MessageKind.VACCINE, MessageKind.ABSENCE, MessageKind.FEES)
 #: M3: a clinic's appointment reminder carries the patient's own link; the sentence in front of it, per language.
 APPOINTMENT_LINK_TEXTS = {"ar": "لتأكيد الحضور أو طلب تغيير الميعاد:", "en": "To confirm or ask to change the appointment:"}
 APPOINTMENT_TEXT_EN = "Hello {name}, a reminder from {company} of your appointment tomorrow {date} at {time}."
@@ -63,7 +71,9 @@ FOLLOWUP_AHEAD_DAYS = 2
 #: M7: a vaccination is reminded this many days ahead of its due date (and never again once it was sent or skipped). No lead-time column
 #: exists on the template (adding one is a schema change), so it is a constant, as the follow-up's is.
 VACCINE_AHEAD_DAYS = 3
-PLACEHOLDERS = ("{name}", "{company}", "{amount}", "{date}", "{time}", "{number}", "{status}", "{link}", "{animal}", "{vaccine}")
+PLACEHOLDERS = ("{name}", "{company}", "{amount}", "{date}", "{time}", "{number}", "{status}", "{link}", "{animal}", "{vaccine}", "{student}", "{group}")
+#: E5: what a student's absence is messaged for: a mark of today or yesterday only, so switching the kind on never sends a term of old absences.
+ABSENCE_DAYS = 2
 #: S7: what each key status says to the customer ({days} is the order's warranty days).
 WORKORDER_STATUSES = ("quoted", "ready", "delivered")
 WORKORDER_STATUS_TEXTS = {
@@ -76,8 +86,15 @@ WORKORDER_STATUS_TEXTS = {
 }
 
 KIND_LABELS = {
-    "ar": {"due": "مبلغ مستحق", "instalment": "قسط", "appointment": "ميعاد بكرة", "refill": "تجديد روشتة", "workorder": "حالة أمر الشغل", "campaign": "حملة", "followup": "متابعة", "vaccine": "تطعيم"},
-    "en": {"due": "Amount due", "instalment": "Instalment", "appointment": "Appointment tomorrow", "refill": "Prescription refill", "workorder": "Work order status", "campaign": "Campaign", "followup": "Follow-up visit", "vaccine": "Vaccination due"},
+    "ar": {"due": "مبلغ مستحق", "instalment": "قسط", "appointment": "ميعاد بكرة", "refill": "تجديد روشتة", "workorder": "حالة أمر الشغل", "campaign": "حملة", "followup": "متابعة", "vaccine": "تطعيم", "absence": "غياب طالب", "fees": "مصروفات مستحقة"},
+    "en": {"due": "Amount due", "instalment": "Instalment", "appointment": "Appointment tomorrow", "refill": "Prescription refill", "workorder": "Work order status", "campaign": "Campaign", "followup": "Follow-up visit", "vaccine": "Vaccination due", "absence": "Student absence", "fees": "Fees due"},
+}
+#: E5: a line under the wording of a kind on the outbox page, for the kinds that need one.
+KIND_HINTS = {
+    "ar": {"absence": "بتتبعت لولي الأمر عن غياب النهارده أو إمبارح بس. لو الغياب اتصحّح لحاضر قبل ما الرسالة تتبعت، بتتشال لوحدها؛ لكن اللي اتبعتت خلاص مينفعش تترجّع.",
+           "fees": "رسالة واحدة لكل ولي أمر بإجمالي اللي عليه بعد 3 أيام من الفاتورة، وبتتكرر كل 7 أيام لحد ما يدفع. وهي شغالة، تذكير «مبلغ مستحق» العام مبيبعتش لنفس ولي الأمر."},
+    "en": {"absence": "Sent to the guardian for today's or yesterday's absence only. If the mark is corrected to present before the message goes out, it is withdrawn by itself; one already sent cannot be taken back.",
+           "fees": "One message per guardian with the total still due, from 3 days after the invoice, repeated every 7 days until it is paid. While it is on, the general «Amount due» reminder does not message the same guardian."},
 }
 MESSAGES = {
     "ar": {"text": "نص الرسالة فاضي.", "placeholder": "النص فيه {bad} ومش معروف؛ المسموح: {allowed}.", "every": "التكرار من 1 لـ 90 يوم.",
@@ -117,9 +134,11 @@ def template(kind):
 def templates():
     """The wording the outbox lets an owner edit. A campaign's words belong to the campaign itself (S8), so its kind is
     not listed here; its on/off switch and WhatsApp template are on the campaigns screen. The follow-up reminder (M3) is a
-    clinic's, so it is listed only when some entity is a medical business; the vaccination reminder (M7) only when one is a vet's."""
+    clinic's, so it is listed only when some entity is a medical business; the vaccination reminder (M7) only when one is a vet's; the
+    absence message and the fees reminder (E5) only when one is a school or a centre."""
 
-    hidden = {MessageKind.CAMPAIGN} | (set() if _medical_entities() else {MessageKind.FOLLOWUP}) | (set() if _vet_entities() else {MessageKind.VACCINE})
+    education = set() if _education_entities() else {MessageKind.ABSENCE, MessageKind.FEES}
+    hidden = {MessageKind.CAMPAIGN} | (set() if _medical_entities() else {MessageKind.FOLLOWUP}) | (set() if _vet_entities() else {MessageKind.VACCINE}) | education
     return [template(kind) for kind in MessageKind.values if kind not in hidden]
 
 
@@ -151,7 +170,7 @@ def save_template(kind, data, user, lang="ar"):
 
 
 def render(text, **values):
-    for key in ("name", "company", "amount", "date", "time", "number", "status", "link", "animal", "vaccine"):
+    for key in ("name", "company", "amount", "date", "time", "number", "status", "link", "animal", "vaccine", "student", "group"):
         text = text.replace("{" + key + "}", str(values.get(key, "")))
     return text
 
@@ -178,10 +197,28 @@ def _due(today, company, currency):
         return
     from reports.aging import aging_rows
 
+    covered = _fee_covered(today)  # E5: a guardian the fees reminder covers is not also sent the general one for the same money
     for row in aging_rows("customers", today):
-        if row["overdue"] > 0 and row["whatsapp"]:
+        if row["overdue"] > 0 and row["whatsapp"] and row["party"].pk not in covered:
             yield {"key": f"due:customer:{row['party'].pk}", "name": row["name"], "phone": row["whatsapp"], "link": f"/parties/customer/{row['party'].pk}/",
                    "values": {"amount": f"{row['overdue']:,.2f} {currency}".strip()}}
+
+
+def _fee_covered(today):
+    """E5: the customers the fees reminder covers in the entity being gathered, so the general amount-due reminder skips them.
+
+    Empty unless the fees kind is on and the entity is a school or a centre: any other business never reaches education code,
+    and its amount-due reminder is exactly what it was."""
+
+    if not template(MessageKind.FEES).active:
+        return set()
+    from education.services import is_education_install
+
+    if not is_education_install():
+        return set()
+    from education import messages as education_messages
+
+    return {payer for payer, _total in education_messages.fee_payers(today)}
 
 
 def _instalments(today, company, currency):
@@ -341,8 +378,33 @@ def _vaccines(today, company, currency):
                "values": {"date": day_text(dose.next_due, lang), "animal": dose.animal.name, "vaccine": dose.vaccine.display(lang), **({"company": clinic} if clinic else {})}}
 
 
+def _education_entities():
+    """The active entities that are schools or centres (E5), main first."""
+
+    from entities.services import activity_of
+
+    return [entity for entity in _entities() if activity_of(entity)[0] == "education"]
+
+
+def _absences(today, company, currency):
+    """E5: a student's absence, messaged to the guardian. The source is ``education.messages`` (imported here, not at the top: that
+    module reads this one)."""
+
+    from education import messages as education_messages
+
+    yield from education_messages.absences(today, company, currency)
+
+
+def _fees(today, company, currency):
+    """E5: the fees still due, one message per guardian. The source is ``education.messages``."""
+
+    from education import messages as education_messages
+
+    yield from education_messages.fees(today, company, currency)
+
+
 SOURCES = {MessageKind.DUE: _due, MessageKind.INSTALMENT: _instalments, MessageKind.APPOINTMENT: _appointments, MessageKind.REFILL: _refills,
-           MessageKind.FOLLOWUP: _followups, MessageKind.VACCINE: _vaccines}
+           MessageKind.FOLLOWUP: _followups, MessageKind.VACCINE: _vaccines, MessageKind.ABSENCE: _absences, MessageKind.FEES: _fees}
 #: Kinds whose records carry no entity; gathered for the main entity only. Empty since HG-074 gave appointments
 #: their entity: each entity's appointments are gathered as its own, and the main entity's keys are unchanged.
 UNSCOPED = set()

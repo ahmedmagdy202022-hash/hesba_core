@@ -105,6 +105,12 @@ def is_workshop():
     return activity == "services" and (sub or "") in WORK_SUBS
 
 
+def can_see_report(user):
+    """WATCH1B (SH-12): the reports hub offers the technicians' report to those it opens for: a workshop and the view-invoices permission."""
+
+    return is_workshop() and can_view(user)
+
+
 def sees_work_orders(user):
     """The menu entry: a workshop's counter, or a technician who has orders."""
 

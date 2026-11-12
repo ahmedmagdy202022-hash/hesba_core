@@ -105,7 +105,11 @@ def _tabs(request, current):
     from . import insurance
 
     lang = _lang(request)
+    from . import views_lab
+
     return {"tab": current, "shows_report": user_has_permission(request.user, REPORT_VIEW), "shows_lab": _is_lab(), "lab_tests_label": LAB_WORDS[lang]["tests"],
+            "lab_sample_label": views_lab.WORDS[lang]["tab_sample"], "lab_import_label": views_lab.WORDS[lang]["tab_import"],
+            "shows_lab_import": _is_lab() and services.can_write(request.user),
             "shows_insurance": insurance.can_view(request.user), "insurance_label": INSURANCE_WORDS[lang]["tab"],
             "shows_templates": services.can_write(request.user), "templates_label": visit_templates.WORDS[lang]["title"],
             **_vaccine_tabs(request, lang)}
@@ -245,6 +249,22 @@ def _doctors():
     return Employee.objects.filter(active=True).order_by("name")
 
 
+def _visit_doctors(*keep):
+    """CL-06: the visit form's doctors are the clinic's staff without its sales reps, and whoever the record already has (a visit
+    saved with such a doctor, or an appointment booked with one, keeps them). The other screens' lists are unchanged."""
+
+    from staff.services import serving_staff
+
+    return serving_staff(*keep)
+
+
+def _appointment_employee(patient, raw):
+    """The employee of the appointment a visit form is posted against (it must be this patient's), else 0."""
+
+    row = scoped_appointments(patient.appointments).filter(pk=_id(raw)).values_list("employee_id", flat=True).first() if raw else None
+    return row or 0
+
+
 def visit_edit(request, pk=None, visit_pk=None):
     _guard(request, write=True)
     lang = _lang(request)
@@ -255,9 +275,11 @@ def visit_edit(request, pk=None, visit_pk=None):
     if not visit and request.GET.get("appointment"):
         appointment = scoped_appointments(patient.appointments).filter(pk=request.GET.get("appointment")).select_related("employee").first()
     error = ""
+    doctors_here = _visit_doctors(visit.doctor_id if visit else 0, appointment.employee_id if appointment else 0,
+                                  _appointment_employee(patient, request.POST.get("appointment")) if not visit and request.method == "POST" else 0)
     if request.method == "POST":
         data = request.POST.dict()
-        data["doctor"] = _doctors().filter(pk=_id(request.POST.get("doctor"))).first()
+        data["doctor"] = doctors_here.filter(pk=_id(request.POST.get("doctor"))).first()
         if not visit and request.POST.get("appointment"):
             data["appointment"] = scoped_appointments(patient.appointments).filter(pk=_id(request.POST.get("appointment"))).first()  # HG-074
         if _is_vet():
@@ -284,7 +306,7 @@ def visit_edit(request, pk=None, visit_pk=None):
         animals = list(patient.animals.filter(active=True) | patient.animals.filter(pk=visit.animal_id if visit else 0))
         default_animal = visit.animal_id if visit else (int(request.GET.get("animal")) if (request.GET.get("animal") or "").isdigit() else None)
     return render(request, "medical/visit_form.html", _base(lang, patient=patient, visit=visit, appointment=appointment, error=error, post=request.POST, **prescribing.form_context(request, patient, visit, lang), **visit_templates.form_context(lang),
-                                                            doctors=_doctors(), default_doctor=default_doctor, animals=animals,
+                                                            doctors=doctors_here, default_doctor=default_doctor if doctors_here.filter(pk=default_doctor or 0).exists() else None, animals=animals,
                                                             default_animal=default_animal, animal_label=VET_WORDS[lang]["animal"],
                                                             default_date=(visit.visit_date if visit else timezone.localdate()),
                                                             attachments=attachments_ui.medical_card(visit, request.user, lang) if visit else None))  # M5 (HG-083): a saved visit only
@@ -421,7 +443,9 @@ LAB_WORDS = {
            # M6 (HG-085): the patient's link for one day
            "send": "ابعت النتيجة للمريض", "send_h": "لينك النتيجة للمريض", "send_whatsapp": "ابعته واتساب", "copy": "نسخ اللينك",
            "send_note": "اللينك شغال {days} أيام، والمريض بيكتب سنة ميلاده (أو آخر 4 أرقام من موبايله لو مفيش تاريخ ميلاد في الملف) عشان يفتحه. لو النتيجة اتعدّلت اللينك ده بيبطل؛ ابعت لينك جديد.",
-           "send_text_note": "رسالة الواتساب فيها اسم المعمل واللينك بس، من غير أسامي التحاليل ولا النتايج."},
+           "send_text_note": "رسالة الواتساب فيها اسم المعمل واللينك بس، من غير أسامي التحاليل ولا النتايج.",
+           # M9 (HG-092): the analyzer's code for a test
+           "code": "كود الجهاز", "code_hint": "اختياري: الاسم القصير اللي الجهاز بيكتبه للتحليل (زي GLU). بيتكتب على ملصق العيّنة وبيربط ملف الجهاز بالتحليل."},
     "en": {"title": "Lab results", "intro": "Enter each test's result; the value is checked against the normal range in force when it is entered.",
            "tests": "Tests and ranges", "tests_intro": "Each test with its unit and normal range. Changing a range never changes results already entered.",
            "name": "Test", "unit": "Unit", "low": "Low limit", "high": "High limit", "range": "Normal range", "service": "Service (for the invoice)",
@@ -432,7 +456,8 @@ LAB_WORDS = {
            "signature": "Signed", "choose": "—", "none": "—", "remove": "Remove (entered by mistake)", "reason": "Reason",
            "send": "Send the results to the patient", "send_h": "The patient's results link", "send_whatsapp": "Send on WhatsApp", "copy": "Copy link",
            "send_note": "The link works for {days} days; the patient types their birth year (or the last 4 digits of their phone when the file has no birth date) to open it. If a result is changed this link stops working; send a new one.",
-           "send_text_note": "The WhatsApp message carries the lab's name and the link only, never a test name or a result."},
+           "send_text_note": "The WhatsApp message carries the lab's name and the link only, never a test name or a result.",
+           "code": "Analyzer code", "code_hint": "Optional: the short name the analyzer writes for the test (like GLU). It is printed on the sample label and ties the analyzer's file to the test."},
 }
 
 
@@ -483,8 +508,31 @@ def lab_tests(request):
                                                           editing=editing, services=services_, can_write=can_write, error=error, post=request.POST))
 
 
+def _sample_day(request, patient, days, lang):
+    """M9 (HG-092): the day a sample code opened this page on (``?day=``): its code and whether the day has results yet. None otherwise."""
+
+    from datetime import date
+
+    from . import samples
+
+    try:
+        day = date.fromisoformat(request.GET.get("day") or "")
+    except ValueError:
+        return None
+    if day > timezone.localdate():
+        return None
+    from settings_core.templatetags.hesba_format import day_text
+
+    code = samples.sample_code(patient, day)
+    from . import views_lab
+
+    # the code is isolated left-to-right (LRI ... PDI) so an Arabic sentence that holds it still reads from its own start
+    text = views_lab.WORDS[lang]["opened"].format(code=f"\u2066{code}\u2069", day=day_text(day, lang))
+    return {"day": day, "code": code, "text": text, "has_results": any(found == day for found, _ in days)}
+
+
 def lab_results(request, pk):
-    from . import lab, public
+    from . import lab, public, views_lab
     from .models import LabTest
 
     _lab_guard(request)
@@ -530,9 +578,11 @@ def lab_results(request, pk):
     rows = [{"test": test, "value": request.POST.get(f"value_{test.pk}", ""), "text": request.POST.get(f"text_{test.pk}", "")} for test in tests]
     found = public.factor(patient) if can_write else None  # M6: with neither a birth year nor a phone the patient could not open it
     shareable = found is not None
+    sample = _sample_day(request, patient, days, lang)  # M9 (HG-092): opened from a sample code: that day, and its label
     return render(request, "medical/lab_results.html", _base(lang, page_title=words["title"], lw=words, patient=patient, rows=rows, days=days,
                                                             can_write=can_write, error=error, today=timezone.localdate(),
-                                                            taken_on=request.POST.get("taken_on") or timezone.localdate().isoformat(),
+                                                            taken_on=request.POST.get("taken_on") or (sample["day"].isoformat() if sample else timezone.localdate().isoformat()),
+                                                            sample=sample, sw=views_lab.WORDS[lang],
                                                             shareable=shareable, no_factor=public.WORDS[lang]["no_factor"], shared=shared,
                                                             phone_only=public.WORDS[lang]["phone_only"] if found and found[0] == public.PHONE else "",
                                                             share_note=words["send_note"].format(days=public.days())))
@@ -788,6 +838,7 @@ QUEUE_WORDS = {
            "find": "بحث", "check_in": "وصل", "queue": "الدور النهارده", "number": "الرقم", "patient": "المريض", "doctor": "الدكتور", "status": "الحالة",
            "arrived": "وصل", "wait": "مستني بقاله", "minutes": "دقيقة", "call_next": "نادي على اللي بعده", "call": "نادي", "done": "خلص", "left": "مشي",
            "back_to_wait": "رجّعه للانتظار", "record_visit": "سجّل الكشف", "none": "مفيش حد في الدور النهارده.", "none_appts": "مفيش مواعيد مستنية.",
+           "none_hint": "الدور بيتملى لما الاستقبال يسجّل وصول المرضى.", "none_act": "سجّل وصول مريض", "none_appts_act": "سجّل وصول مريض من غير ميعاد",
            "now": "اتفضل", "next": "اللي عليه الدور", "waiting_n": "مستنيين", "no_one": "—", "at": "الساعة", "saved": "اتحفظ.",
            "called": "اتنادى على رقم {number}.", "checked": "{name} رقم دوره {number}."},
     "en": {"title": "Waiting list", "intro": "Check a patient in and they get their turn number; the doctor calls the next one in. The waiting screen shows numbers only.",
@@ -795,6 +846,7 @@ QUEUE_WORDS = {
            "find": "Search", "check_in": "Arrived", "queue": "Today's queue", "number": "No.", "patient": "Patient", "doctor": "Doctor", "status": "Status",
            "arrived": "Arrived", "wait": "Waiting for", "minutes": "min", "call_next": "Call the next one", "call": "Call", "done": "Done", "left": "Left",
            "back_to_wait": "Back to waiting", "record_visit": "Record the visit", "none": "Nobody in the queue today.", "none_appts": "No appointments waiting.",
+           "none_hint": "The queue fills up as reception checks patients in.", "none_act": "Check a patient in", "none_appts_act": "Check in a patient without an appointment",
            "now": "Please come in", "next": "Next", "waiting_n": "waiting", "no_one": "—", "at": "at", "saved": "Saved.",
            "called": "Number {number} was called in.", "checked": "{name} is number {number}."},
 }

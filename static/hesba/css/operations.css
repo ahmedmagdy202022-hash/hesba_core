@@ -264,3 +264,16 @@ html.hs-cam-open,html.hs-cam-open body{overflow:hidden}
 
 /* Video findings f06: a link inside a summary card (the booking's invoice, the deposit's invoice) is a Hesba link, not the browser's blue underline */
 .op-summary-grid strong a{color:var(--hs-teal-deep);font-weight:var(--hs-weight-bold);text-decoration:none;overflow-wrap:anywhere}.op-summary-grid strong a:hover{text-decoration:underline}.op-summary-grid strong a:focus-visible{outline:2px solid var(--hs-teal-deep);outline-offset:2px;border-radius:var(--hs-radius-sm)}
+/* E4a: pay fees by link (education fees and dues) */
+.edu-pay{display:grid;gap:var(--hs-space-1);justify-items:start}
+.edu-pay form{margin:0}
+.edu-pay__live{display:grid;gap:var(--hs-space-2);justify-items:start}
+.edu-pay__actions{display:flex;flex-wrap:wrap;gap:var(--hs-space-2);align-items:center}
+.edu-pay-list{list-style:none;margin:var(--hs-space-2) 0 0;padding:0;display:grid;gap:var(--hs-space-3)}
+.edu-due-actions{display:grid;gap:var(--hs-space-2);width:100%;justify-items:start}
+.edu-pay-list{width:100%}
+.edu-pay__when{direction:ltr;unicode-bidi:isolate;white-space:nowrap}
+.edu-pay-list>li{display:grid;gap:var(--hs-space-2);border-top:1px solid var(--hs-line);padding-top:var(--hs-space-2)}
+.edu-pay-list__what{font-size:var(--hs-text-sm)}
+.edu-pay-note{margin:0 0 var(--hs-space-3)}
+.edu-bulk{margin-top:var(--hs-space-4)}

@@ -40,13 +40,13 @@ BILLING_ITEM_CODE = "PRJ-BILL"
 OPEN = (ProjectStatus.PLANNED, ProjectStatus.ACTIVE, ProjectStatus.ON_HOLD)
 MESSAGES = {
     "ar": {
-        "name": "اكتب اسم المشروع.", "customer": "اختار العميل.", "value": "قيمة العقد مش صحيحة.", "dates": "تاريخ النهاية قبل البداية.",
+        "name": "اكتب اسم المشروع.", "customer": "اختار العميل.", "value": "اكتب قيمة العقد رقم صفر أو أكبر.", "dates": "تاريخ النهاية قبل البداية.",
         "closed": "المشروع ده خلص أو اتلغى.", "certificate_link": "دي فاتورة مستخلص؛ مينفعش تتفك من المشروع. اسحب المسودة من شاشة المستخلصات أو اعمل مرتجع.", "instalments_linked": "أقساط الفاتورة دي متربطة بالمشروع كتحصيلات؛ فكّها من «التحصيلات» الأول.", "amount": "المبلغ لازم أكبر من صفر.", "description": "اكتب وصف المستخلص.", "setup": "لازم يكون فيه مخزن بيع نشط.",
         "other_customer": "الفاتورة دي لعميل تاني.", "linked": "ده مربوط بمشروع بالفعل.", "not_posted": "اربط الفواتير أو المصروفات النهائية بس.",
         "qty": "الكمية لازم أكبر من صفر.", "item": "اختار الصنف.", "customer_locked": "المشروع عليه فواتير أو تحصيلات؛ مينفعش يتغير صاحبه.", "location": "اختار المخزن.", "stock_item": "الصنف ده مش متتبع في المخزون.",
     },
     "en": {
-        "name": "Enter the project name.", "customer": "Choose the customer.", "value": "Invalid contract value.", "dates": "The end date is before the start.",
+        "name": "Enter the project name.", "customer": "Choose the customer.", "value": "Type the contract value as a number, 0 or more.", "dates": "The end date is before the start.",
         "closed": "This project is done or cancelled.", "certificate_link": "This is a certificate's invoice; it cannot be unlinked from the project. Withdraw the draft on the certificates tab, or make a return.", "instalments_linked": "Instalments of this invoice are linked to the project as collections; unlink them under collections first.", "amount": "The amount must be above zero.", "description": "Describe the progress bill.", "setup": "An active selling location is needed.",
         "other_customer": "This invoice is for another customer.", "linked": "This is already linked to a project.", "not_posted": "Only posted invoices or expenses can be linked.",
         "qty": "The quantity must be above zero.", "item": "Choose the item.", "customer_locked": "The project has invoices or payments; its owner cannot change.", "location": "Choose the location.", "stock_item": "This item is not stock-tracked.",

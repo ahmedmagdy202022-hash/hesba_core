@@ -121,7 +121,12 @@
   }
 
   // The code leaves the box the moment Enter arrives, so the next card types into an empty box and nothing typed meanwhile is wiped later.
-  function take() { var code = box.value; box.value = ''; send(code); }
+  // ED-02: pressing «سجّل» (or Enter) on an empty box says what to do in the result area instead of doing nothing.
+  function take() {
+    var code = box.value; box.value = '';
+    if (!String(code).trim()) { if (!busy && !pending) { render({ status: 'empty', message: T('empty') }); } return; }  // never over a waiting «which class?» choice
+    send(code);
+  }
 
   box.addEventListener('keydown', function (event) {
     if (event.key === 'Enter' || event.keyCode === 13) { event.preventDefault(); take(); }
