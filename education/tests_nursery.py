@@ -1,6 +1,7 @@
 """EDU-005: the nursery's day — check-in, and pick-up only by someone on the child's list."""
 
 from datetime import timedelta
+from unittest import mock
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.test import TestCase
@@ -20,6 +21,12 @@ class NurserySetup(TestCase):
     sub = "nursery"
 
     def setUp(self):
+        # The nursery's rules are about "today". The clock stands at noon for the whole test, so a pick-up "a minute
+        # later" is the same day whenever the test runs (at 23:59 Cairo time it used to land on tomorrow and fail).
+        noon = timezone.localtime().replace(hour=12, minute=0, second=0, microsecond=0)
+        clock = mock.patch("django.utils.timezone.now", return_value=noon)
+        clock.start()
+        self.addCleanup(clock.stop)
         prepared_client("education", self.sub, CENTER)
         self.owner = person(RoleCode.OWNER, "nur_owner")
         self.child = services.save_student({"name": "ليلى أحمد", "payer_name": "أحمد سمير", "payer_phone": "01001234501"}, self.owner)
