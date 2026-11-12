@@ -173,6 +173,37 @@ class FinishAndSellTests(MakeToOrderSetup):
         self.make(quantity="10")
         self.assertEqual(make_to_order.uncovered(self.line()), D("0"))
 
+    def test_units_lost_to_defects_are_still_owed_and_can_be_made_again(self):
+        # 30 planned, 5 fail at the first stage: the run puts 25 in stock, so 5 are still to make.
+        order = self.make()
+        first, *rest = order.stages
+        orders.advance(order, self.owner, good="25", defect="5")
+        for _ in rest:
+            orders.advance(order, self.owner)
+        orders.finish(order, self.owner)
+        order.refresh_from_db()
+        self.assertEqual(order.run.output_quantity, D("25.000"))
+        self.assertEqual(make_to_order.uncovered(self.line()), D("5"))
+        state = make_to_order.line_states(self.order, sales.quantities(self.order), "ar", can_make=True)[self.line().pk]
+        self.assertEqual((state["free"], state["can_make"], state["made"]), (D("5.000"), True, D("25.000")))
+        self.assertEqual(self.make().quantity, D("5.000"))  # the replacement order, for exactly what was lost
+
+    def test_a_finished_order_whose_run_was_reversed_no_longer_covers_the_line(self):
+        from manufacturing.services import cancel_run
+
+        order = self.make()
+        self.walk(order)
+        orders.finish(order, self.owner)
+        self.assertEqual(make_to_order.uncovered(self.line()), D("0"))
+        order.refresh_from_db()
+        cancel_run(order.run, self.owner, reason="تشغيلة اتسجلت بالخطأ")
+        order.refresh_from_db()
+        self.assertEqual(order.status, "done")  # cancel_run leaves the order as it was; only its run is reversed
+        self.assertEqual(make_to_order.uncovered(self.line()), D("30"))
+        state = make_to_order.line_states(self.order, sales.quantities(self.order), "ar", can_make=True)[self.line().pk]
+        self.assertEqual((state["orders"], state["has_made"], state["can_make"]), ([], False, True))
+        self.assertEqual(self.make().quantity, D("30.000"))
+
     def test_the_line_says_what_was_made_and_warns_when_the_till_sold_it_first(self):
         order = self.make()
         self.walk(order)

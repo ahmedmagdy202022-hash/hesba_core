@@ -30,7 +30,7 @@ from settings_core.templatetags.hesba_format import qty as fmt_qty
 
 from . import orders as production
 from . import services
-from .models import OrderStatus, ProductionOrder, Recipe
+from .models import OrderStatus, ProductionOrder, Recipe, RunStatus
 
 ZERO = Decimal("0")
 #: A production order that still counts against what a line needs: planned, on the floor or done. A cancelled one frees it.
@@ -90,17 +90,28 @@ def recipe_for(item):
 
 
 def _live_links(order):
-    """Every live production order linked to a line of ``order``, inside the entity being worked in."""
+    """Every live production order linked to a line of ``order``, inside the entity being worked in.
 
-    return entity_scope.scope(ProductionOrder.objects, "location__entity").filter(sales_order_line__order=order, status__in=LIVE)
+    A finished order whose run was reversed (``services.cancel_run`` takes the goods back out of stock and leaves the
+    order «done») made nothing: it is not live, so its quantity is free to be made again."""
+
+    return (entity_scope.scope(ProductionOrder.objects, "location__entity").filter(sales_order_line__order=order, status__in=LIVE)
+            .exclude(status=OrderStatus.DONE, run__status=RunStatus.CANCELLED).select_related("run"))
+
+
+def _counts_for(link):
+    """What a live production order covers of its line: what it plans while it is planned or on the floor, and the good
+    units it really made once it is done (a run that lost five to defects covers five fewer)."""
+
+    return link.run.output_quantity if link.status == OrderStatus.DONE and link.run_id else link.quantity
 
 
 def made(order):
-    """Per line pk: the quantity of live production orders linked to it (planned, on the floor and done)."""
+    """Per line pk: what the live production orders linked to it cover (planned, on the floor and done)."""
 
     total = {}
     for link in _live_links(order):
-        total[link.sales_order_line_id] = total.get(link.sales_order_line_id, ZERO) + link.quantity
+        total[link.sales_order_line_id] = total.get(link.sales_order_line_id, ZERO) + _counts_for(link)
     return total
 
 
@@ -224,7 +235,7 @@ def line_states(order, rows, lang, *, can_make):
     for row in rows:
         line = row["line"]
         mine = links.get(line.pk, [])
-        in_production = sum((link.quantity for link in mine), ZERO)
+        in_production = sum((_counts_for(link) for link in mine), ZERO)
         free = _uncovered(row, in_production) if confirmed else ZERO
         recipe = recipes.get(line.item_id)
         done = [link for link in mine if link.status == OrderStatus.DONE]
