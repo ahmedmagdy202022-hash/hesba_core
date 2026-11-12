@@ -364,7 +364,7 @@ class ScreenAndActionTests(MrpSetup):
         html = page.content.decode()
         flour_row = re.search(r'<tr data-material="RM-FLOUR".*?</tr>', html, re.S).group(0)
         self.assertIn("data-draft-note", flour_row)
-        self.assertRegex(flour_row, r'<td data-to-buy><b class="mfg-short">4</b>')  # still 4 to buy: drafts are not counted
+        self.assertRegex(flour_row, r'<td data-to-buy><span><b class="mfg-short">4</b>')  # still 4 to buy: drafts are not counted
         self.assertNotRegex(flour_row, r'name="pick"[^>]* checked')  # and not ticked again by default, so nobody orders it twice
         self.assertEqual(self.row(self.flour)["to_buy"], D("4.000"))
 
@@ -427,7 +427,7 @@ class ScreenAndActionTests(MrpSetup):
         page = self.client.get(reverse("manufacturing:home"), {"lang": "ar"})
         html = page.content.decode()
         self.assertContains(page, "data-shortages")
-        link = re.search(r'<a href="([^"]+)"[^>]*data-mrp-link', html)
+        link = re.search(r'<a [^>]*href="([^"]+)"[^>]*data-mrp-link', html)
         self.assertIsNotNone(link)
         self.assertEqual(link.group(1), reverse("manufacturing:mrp") + "?lang=ar")
         shortage_paragraph = html[html.index("data-shortages"):html.index("data-products")]
