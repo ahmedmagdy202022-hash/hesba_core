@@ -2,7 +2,7 @@
 {% load l10n static %}
 {% block styles %}{{ block.super }}{% if attachments %}<link rel="stylesheet" href="{% static 'hesba/css/attachments.css' %}?v=m5-1">{% endif %}{% endblock %}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'medical:file' patient.pk %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ patient.name }}</a><h1>{% if visit %}{{ words.edit }} — {{ words.visit }}{% else %}{{ words.new_visit|cut:'+ ' }}{% endif %}</h1>{% if appointment %}<p>{{ words.from_appointment }} <bdi>{{ appointment.number }}</bdi></p>{% endif %}</div></section>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'medical:file' patient.pk %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ patient.name }}</a><h1>{% if visit %}{{ words.edit }} — {{ words.visit }}{% else %}{{ words.new_visit|cut:'+ ' }}{% endif %}</h1>{% if appointment %}<p>{{ words.from_appointment }} <bdi>{{ appointment.number }}</bdi></p>{% endif %}{% if call_online %}<p class="op-form-actions" data-visit-online-box><span class="op-status op-status-draft" data-visit-online>{{ words_online.kind_online }}</span>{% if join_url %}<a class="op-primary" href="{{ join_url }}" target="_blank" rel="noopener noreferrer" referrerpolicy="same-origin" data-join-call>{{ words_online.join }}</a>{% endif %}</p>{% endif %}</div></section>
 {% if error %}<div class="op-message op-message-error" role="alert" data-visit-error>{{ error }}</div>{% endif %}
 {% include "medical/_vt_bar.html" %}
 <form class="op-form" method="post" data-visit-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">{% if appointment %}<input type="hidden" name="appointment" value="{{ appointment.pk }}">{% endif %}
