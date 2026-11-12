@@ -158,9 +158,10 @@ def board(request):
             row["minutes"] = int((now - row["order"].opened_at).total_seconds() // 60)
             row["ready"] = _ready_count(row["order"])
             row["ready_label"] = words["ready_n"].format(n=row["ready"])
+    ready = {order.pk: _ready_count(order) for order in others}
     return render(request, "restaurant/board.html", _base(
-        request, tables=tables, others=[{"order": order, "kind_label": _kind_label(order, lang), "ready": _ready_count(order),
-                                         "ready_label": words["ready_n"].format(n=_ready_count(order))} for order in others],
+        request, tables=tables, others=[{"order": order, "kind_label": _kind_label(order, lang), "ready": ready[order.pk],
+                                         "ready_label": words["ready_n"].format(n=ready[order.pk])} for order in others],
         customers=Customer.objects.filter(active=True).order_by("name"), waiters=Employee.objects.filter(active=True),
     ))
 

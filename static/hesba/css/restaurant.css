@@ -62,3 +62,4 @@ details.rs-more summary{cursor:pointer;font-weight:700;color:var(--hs-navy);padd
 .rs-check-chip{display:inline-flex;align-items:center;gap:8px;min-height:var(--hs-control-height);padding:0 14px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-md);background:var(--hs-surface);cursor:pointer}
 .rs-check-chip input{width:20px;height:20px;margin:0}
 .rs-check-chip small{display:block;color:var(--hs-muted)}
+.rs-check-chip span{text-align:start}

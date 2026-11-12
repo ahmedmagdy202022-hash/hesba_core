@@ -19,9 +19,9 @@
 {% for category in categories %}<label class="rs-check-chip"><input type="checkbox" name="categories" value="{{ category.pk }}"{% if category.pk in form.categories %} checked{% endif %}><span>{{ category.label }}</span></label>
 {% empty %}<p class="op-muted">{{ sw.no_categories }}</p>{% endfor %}
 </fieldset>
-<div class="op-form-grid">
-<label class="op-field rs-check-chip"><input type="checkbox" name="is_default"{% if form.is_default %} checked{% endif %}><span>{{ sw.default }} <small>{{ sw.default_hint }}</small></span></label>
-<label class="op-field rs-check-chip"><input type="checkbox" name="active"{% if form.active %} checked{% endif %}><span>{{ sw.active }}</span></label>
+<div class="rs-checks">
+<label class="rs-check-chip"><input type="checkbox" name="is_default"{% if form.is_default %} checked{% endif %}><span>{{ sw.default }} <small>{{ sw.default_hint }}</small></span></label>
+<label class="rs-check-chip"><input type="checkbox" name="active"{% if form.active %} checked{% endif %}><span>{{ sw.active }}</span></label>
 </div>
 <div class="op-form-actions"><button class="op-primary" type="submit">{{ sw.save }}</button>{% if editing %}<a class="op-secondary" href="?lang={{ lang }}">{{ sw.new }}</a>{% endif %}</div></form>{% endif %}
 {% endblock %}
