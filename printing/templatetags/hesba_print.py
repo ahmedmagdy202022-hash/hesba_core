@@ -38,7 +38,7 @@ def share_links(context, kind, obj, party=None):
         text += f": {url}"
     else:
         what = {"sales_invoice": "فاتورتك", "sales_return": "إشعار المرتجع", "customer_payment": "إيصال الدفع", "customer_statement": "كشف حسابك"}[kind]
-        text = f"أهلاً {name}، دي {what} {number} من {company['name']}".replace("  ", " ")
+        text = f"أهلاً {name}، مرفق {what}{f' رقم {number}' if number else ''} من {company['name']}".replace("  ", " ")
         if amount is not None:
             text += f" بإجمالي {money(amount)} {company['currency']}"
         text += f": {url}"
