@@ -97,10 +97,13 @@ class ShiftRuleTests(RestaurantSetup):
         opened = self.client.post(reverse("shifts:mine"), {"lang": "ar", "action": "open", "cashbox": self.cashbox.pk, "opening_float": "0",
                                                            "next": f"{url}?lang=ar"})
         self.assertRedirects(opened, f"{url}?lang=ar", fetch_redirect_response=False)
-        page = self.client.get(url).content.decode()
-        self.assertIn("data-pay-form", page)
-        self.assertNotIn("data-shift-gate", page)
-        self.assertIn(f'<option value="{self.cashbox.pk}" selected>', page)  # the bill goes to the shift's own cashbox
+        for lang, button in (("ar", "ادفع واقفل الطلب"), ("en", "Pay and close")):
+            with self.subTest(lang=lang, shift="open"):
+                page = self.client.get(url, {"lang": lang}).content.decode()
+                self.assertIn("data-pay-form", page)
+                self.assertIn(button, page)
+                self.assertNotIn("data-shift-gate", page)
+                self.assertIn(f'<option value="{self.cashbox.pk}" selected>', page)  # the bill goes to the shift's own cashbox
 
     def test_inside_an_open_shift_the_cash_belongs_to_that_shift(self):
         set_capability_enabled(ClientProfile.get_active(), "vat", True, user=self.owner)
@@ -174,9 +177,12 @@ class ShiftRuleTests(RestaurantSetup):
         waiter = person(RoleCode.WAITER, "shift_waiter")
         self.client.force_login(waiter)
         order = self.order((self.grill, 1))
-        page = self.client.get(reverse("restaurant:order", args=[order.pk])).content.decode()
-        self.assertNotIn("data-shift-gate", page)  # opening a shift needs the selling right a waiter does not hold
-        self.assertNotIn("data-pay-form", page)
+        for lang in ("ar", "en"):
+            with self.subTest(lang=lang):
+                page = self.client.get(reverse("restaurant:order", args=[order.pk]), {"lang": lang}).content.decode()
+                self.assertNotIn("data-shift-gate", page)  # opening a shift needs the selling right a waiter does not hold
+                self.assertNotIn("data-pay-form", page)
+                self.assertIn("data-send-kitchen", page)  # the floor's own actions stay
         self.assertEqual(self.pay_from_screen(order).status_code, 403)  # still the selling right's 403, not the shift message
 
 
