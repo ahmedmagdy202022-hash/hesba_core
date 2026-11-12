@@ -12,6 +12,7 @@
 <article><small>{{ words.rate }}</small><strong data-attendance-rate{% if summary.rate is not None and summary.rate < 75 %} class="edu-low"{% endif %}>{% if summary.rate is not None %}{{ summary.rate }}%{% else %}—{% endif %}</strong></article>
 </section>
 {% if summary.absences %}<section class="op-detail-meta" data-absences><h2>{{ words.recent_absences }}</h2>{% for a in summary.absences %}<p><bdi>{{ a.session.date|date:"Y-m-d" }}</bdi> · {{ a.session.group.course.name }} — {{ a.session.group.name }}{% if a.note %} · {{ a.note }}{% endif %}</p>{% endfor %}</section>{% endif %}
+{% if marks_card %}{% include "education/_marks_card.html" %}{% endif %}
 {% if uses_levels %}<section class="op-detail-meta" data-placement><h2>{{ lw.placement }}</h2><p class="op-muted">{{ lw.placement_intro }}</p>
 {% for s in suggestions %}<h3>{% with n=s.test.level %}{{ s.test.course.name }} — {{ lw.level }} {{ n }}{% endwith %}</h3>
 {% if s.groups %}<ul data-suggested-groups>{% for g in s.groups %}<li><a href="{% url 'education:group' g.pk %}?lang={{ lang }}">{{ g.name }}</a>{% if g.teacher %} · {{ g.teacher.name }}{% endif %} · {% if g.free is not None %}{{ g.free }} {{ lw.open }}{% else %}{{ lw.open }}{% endif %}</li>{% endfor %}</ul>
