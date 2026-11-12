@@ -36,6 +36,8 @@ ZERO = D("0.00")
 #: R2-5: what the items, customers and suppliers are called, their units and
 #: prices, come from the activity's catalog (reports.demo_catalogs). Their
 #: codes and roles are the same in every business.
+#: Restaurants R4: where a restaurant demo's drinks sit (the catalog's ``bar`` items).
+BAR_CATEGORY_CODE = "DEMO-CAT-BAR"
 ITEM_CODES = tuple(f"DEMO-ITEM-{n:02d}" for n in range(1, 6))
 MIN_STOCK = (D("10"), D("8"), D("15"), D("5"), D("20"))
 
@@ -151,6 +153,9 @@ class Command(BaseCommand):
             category_code="DEMO-CAT-01",
             defaults={"name_ar": catalog.category[0], "name_en": catalog.category[1], "active": True},
         )
+        bar_category = None
+        if catalog.bar:  # Restaurants R4: the drinks sit in their own category, so the bar station can hold them
+            bar_category, _ = Category.objects.update_or_create(category_code=BAR_CATEGORY_CODE, defaults={"name_ar": "المشروبات", "name_en": "Drinks", "active": True})
         location, _ = Location.objects.update_or_create(
             location_code="DEMO-LOC-01",
             defaults={
@@ -168,7 +173,7 @@ class Command(BaseCommand):
         for index, (code, product) in enumerate(zip(ITEM_CODES, catalog.items)):
             values = {
                 "item_name": product.name,
-                "category": category,
+                "category": bar_category if index in catalog.bar else category,
                 "unit": product.unit,
                 "default_sale_price": product.sale,
                 "default_purchase_price": self._stocking_cost(catalog, index),
