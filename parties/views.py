@@ -20,8 +20,8 @@ from reports.navigation import display_name
 PERMISSION = {"customer": "reports.view_customer_report", "supplier": "reports.view_supplier_report"}
 WORDS = {
     "ar": {
-        "customer": "عميل", "supplier": "مورد", "balance": "الرصيد الحالي", "balance_customer": "مستحق على العميل", "balance_supplier": "مستحق للمورد",
-        "credit_customer": "رصيد دائن للعميل", "credit_supplier": "رصيد مدين عند المورد", "year_total": "إجمالي فواتيره السنة دي", "year_total_supplier": "مشترياتك منه السنة دي",
+        "customer": "عميل", "supplier": "مورد", "balance": "الرصيد الحالي", "balance_supplier": "مستحق للمورد",
+        "credit_supplier": "رصيد مدين عند المورد", "year_total_supplier": "مشترياتك منه السنة دي",
         "invoices": "الفواتير", "last_invoice": "آخر فاتورة", "last_payment": "آخر دفعة", "none": "—", "recent_invoices": "آخر الفواتير", "recent_payments": "آخر الدفعات",
         "statement": "كشف الحساب", "from": "من", "to": "إلى", "show": "عرض", "print": "طباعة الكشف", "opening": "رصيد أول المدة", "closing": "رصيد آخر المدة",
         "date": "التاريخ", "type": "البيان", "ref": "المستند", "debit": "مدين (عليه)", "credit": "دائن (له)", "running": "الرصيد", "totals": "الإجماليات",
@@ -34,8 +34,8 @@ WORDS = {
         "printed": "طُبع", "period": "الفترة", "all_time": "من البداية",
     },
     "en": {
-        "customer": "Customer", "supplier": "Supplier", "balance": "Current balance", "balance_customer": "Owed by the customer", "balance_supplier": "Owed to the supplier",
-        "credit_customer": "Customer in credit", "credit_supplier": "Supplier owes you", "year_total": "Sales to them this year", "year_total_supplier": "Bought from them this year",
+        "customer": "Customer", "supplier": "Supplier", "balance": "Current balance", "balance_supplier": "Owed to the supplier",
+        "credit_supplier": "Supplier owes you", "year_total_supplier": "Bought from them this year",
         "invoices": "Invoices", "last_invoice": "Last invoice", "last_payment": "Last payment", "none": "—", "recent_invoices": "Recent invoices", "recent_payments": "Recent payments",
         "statement": "Account statement", "from": "From", "to": "To", "show": "Show", "print": "Print statement", "opening": "Balance brought forward", "closing": "Closing balance",
         "date": "Date", "type": "Details", "ref": "Document", "debit": "Debit (owes)", "credit": "Credit (paid)", "running": "Balance", "totals": "Totals",
@@ -69,10 +69,20 @@ def _date(raw):
         return None
 
 
+def _sale_types(lang, kind, party):
+    """The statement's two sale lines in the activity's words (a clinic: «فاتورة آجلة»); an insurer, a customer record, keeps the general ones."""
+
+    from settings_core.vocabulary import BASE, active_vocabulary, term
+
+    table = BASE if kind != "customer" or hasattr(party, "insurance_contract") else active_vocabulary()
+    return {"sales_due": term("party_type_sales_due", lang, table), "sales_return": term("party_type_sales_return", lang, table)}
+
+
 def _statement_context(request, kind, party):
     date_from, date_to = _date(request.GET.get("from")), _date(request.GET.get("to"))
     data = statement(kind, party, date_from, date_to)
-    labels = WORDS[_lang(request)]["types"]
+    lang = _lang(request)
+    labels = dict(WORDS[lang]["types"], **_sale_types(lang, kind, party))
     for row in data["rows"]:
         row["type_label"] = labels.get(row["entry"].entry_type, row["entry"].entry_type)
     return data, date_from, date_to
@@ -84,10 +94,23 @@ def _medical_file(user):
     return shows_files(user)
 
 
+def _words(lang, kind, party):
+    """The card's words. WATCH1B (CL-01): what a customer owes is «مستحق على المريض» in a clinic, the pet owner's in a vet's, the
+    customer's in a shop. An insurance company is a customer record too (MED-008), so it keeps the general wording."""
+
+    from settings_core.vocabulary import BASE, active_vocabulary, term
+
+    words = dict(WORDS[lang])
+    table = BASE if kind != "customer" or hasattr(party, "insurance_contract") else active_vocabulary()
+    words.update(balance_customer=term("party_owes", lang, table), credit_customer=term("party_in_credit", lang, table),
+                 year_total=term("party_year_total", lang, table))
+    return words
+
+
 def party_card(request, kind, pk):
     party = _party(request, kind, pk)
     lang = _lang(request)
-    words = WORDS[lang]
+    words = _words(lang, kind, party)
     info = card(kind, party, timezone.localdate())
     data, date_from, date_to = _statement_context(request, kind, party)
     number = whatsapp_number(getattr(party, "whatsapp", "") or party.phone)

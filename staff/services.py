@@ -40,6 +40,31 @@ def reps_offered():
     return Employee.objects.filter(active=True)
 
 
+#: A job title that says the person sells: «مندوب مبيعات», «مندوبة», "Sales rep". The title is free text, so this is the
+#: one thing it can say for certain: someone who calls themselves a rep is not offered as the doctor or the technician.
+REP_TITLE_WORDS = ("مندوب", "sales rep", "salesman", "salesperson", "sales agent")
+
+
+def is_sales_rep(employee):
+    title = (employee.title or "").lower()
+    return any(word in title for word in REP_TITLE_WORDS)
+
+
+def serving_staff(*keep):
+    """WATCH1B (CL-06, MT-05): the active employees to offer as the doctor of a visit or the technician of an order.
+
+    Whoever the record already has stays offered (``keep``: employee ids), so changing an old record never drops its
+    doctor or technician. A narrowing of the choice only: nobody is deactivated, and no report changes."""
+
+    from django.db.models import Q
+
+    is_rep = Q()
+    for word in REP_TITLE_WORDS:
+        is_rep |= Q(title__icontains=word)
+    kept = [pk for pk in keep if pk]
+    return Employee.objects.filter(active=True).filter(~is_rep | Q(pk__in=kept)).order_by("name")
+
+
 def clean_phone(value):
     return "".join(ch for ch in (value or "").translate(_DIGITS) if ch.isdigit() or ch == "+")[:50]
 
