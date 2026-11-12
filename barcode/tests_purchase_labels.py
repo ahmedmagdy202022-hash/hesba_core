@@ -22,7 +22,7 @@ class PurchaseLabelsTests(TestCase):
         self.client.force_login(self.owner)
         self.invoice, self.item, _, _ = purchase_ready(quantity=4)
         add_purchase_line(self.invoice, self.item, quantity="2.5", unit_purchase_price="25.00")  # same item again: 6.5 in all
-        self.other = make_item(item_code="ITEM-002", item_name="كوباية")
+        self.other = make_item(item_code="ITEM-002", item_name="كوب")
         add_purchase_line(self.invoice, self.other, quantity=3, unit_purchase_price="10.00")
         self.labels = f"{reverse('barcode:labels')}?purchase={self.invoice.pk}"
 

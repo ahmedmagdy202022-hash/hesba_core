@@ -332,7 +332,7 @@ class SampleBusinessPerActivityTests(TestCase):
         self.assertEqual(LabTest.objects.count(), 5)
         self.assertEqual(LabResult.objects.count(), 7)
         self.assertEqual(sorted(LabResult.objects.exclude(flag="normal").values_list("test__name", "flag")),
-                         [("سكر صايم", "high"), ("سكر صايم", "high"), ("فصيلة الدم", ""), ("هيموجلوبين", "low")])
+                         [("سكر صائم", "high"), ("سكر صائم", "high"), ("فصيلة الدم", ""), ("هيموجلوبين", "low")])
 
     def test_a_physio_centre_has_a_package_in_use(self):
         from medical import physio

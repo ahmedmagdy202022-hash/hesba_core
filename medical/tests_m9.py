@@ -58,10 +58,10 @@ class LabBench(TestCase):
         self.desk = person(RoleCode.CASHIER, "m9_desk")
         self.keeper = person(RoleCode.STOCK_KEEPER, "m9_keeper")
         self.cbc = make_item(item_code="SRV-CBC", item_name="صورة دم كاملة", is_stock_tracked=False, default_sale_price="150.00")
-        self.sugar_item = make_item(item_code="SRV-GLU", item_name="سكر صايم", is_stock_tracked=False, default_sale_price="60.00")
+        self.sugar_item = make_item(item_code="SRV-GLU", item_name="سكر صائم", is_stock_tracked=False, default_sale_price="60.00")
         self.hb = lab.save_test({"name": "هيموجلوبين", "code": "hb", "unit": "g/dL", "low": "12", "high": "16", "service": self.cbc}, self.owner)
         self.wbc = lab.save_test({"name": "كرات دم بيضاء", "code": "WBC", "unit": "×10³/µL", "low": "4", "high": "11", "service": self.cbc}, self.owner)
-        self.glu = lab.save_test({"name": "سكر صايم", "code": "GLU", "unit": "mg/dL", "low": "70", "high": "100", "service": self.sugar_item}, self.owner)
+        self.glu = lab.save_test({"name": "سكر صائم", "code": "GLU", "unit": "mg/dL", "low": "70", "high": "100", "service": self.sugar_item}, self.owner)
         self.bg = lab.save_test({"name": "فصيلة الدم", "code": "BG"}, self.owner)  # a word: no range, no service
         self.noshort = lab.save_test({"name": "كوليسترول الدم الكلي", "unit": "mg/dL", "low": "0", "high": "200"}, self.owner)  # no analyzer code
         self.mona = self.patient("M9-1", "منى عبد الله", "01001234567")

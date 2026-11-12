@@ -191,7 +191,7 @@ class SellTests(GiftSetup):
 
 class RedeemTests(GiftSetup):
     def test_partial_redemption_at_the_till_for_a_named_customer_of_a_rep(self):
-        rep = save_employee({"name": "سمير المندوب", "commission_percent": "5"}, self.owner)
+        rep = save_employee({"name": "سمير عادل", "commission_percent": "5"}, self.owner)
         self.customer.sales_rep = rep
         self.customer.save()
         card = self.sell("500.00")

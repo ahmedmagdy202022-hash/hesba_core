@@ -54,7 +54,7 @@ class MyDaySetup(TestCase):
         self.customer.save(update_fields=["address"])
         self.service = make_item(item_code="SRV-AC", item_name="صيانة تكييف", default_sale_price="300.00", is_stock_tracked=False)
         self.me = plain("md_tech")
-        self.tech = save_employee({"name": "أحمد الفني", "user": str(self.me.pk)}, self.owner)
+        self.tech = save_employee({"name": "أحمد سامي", "user": str(self.me.pk)}, self.owner)
         self.other_user = plain("md_other")
         self.other = save_employee({"name": "فني تاني", "user": str(self.other_user.pk)}, self.owner)
 

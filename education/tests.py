@@ -35,7 +35,7 @@ class EducationSetup(TestCase):
         from staff.services import save_employee
 
         self.teacher = save_employee({"name": "أ. محمود"}, self.owner)
-        self.maths = services.save_course({"name": "رياضيات تالتة إعدادي", "fee": "400", "basis": "monthly"}, self.owner)
+        self.maths = services.save_course({"name": "رياضيات الصف الثالث الإعدادي", "fee": "400", "basis": "monthly"}, self.owner)
 
     def group(self, name="مجموعة السبت", days="sat,tue", start=time(16), teacher=None, room="قاعة 1", capacity="0", fee=""):
         return services.save_group({"course": self.maths, "name": name, "teacher": teacher if teacher is not None else self.teacher, "room": room,
@@ -47,7 +47,7 @@ class EducationSetup(TestCase):
 
 class StudentTests(EducationSetup):
     def test_a_parent_holds_the_account_and_a_second_child_shares_it(self):
-        first = self.student(relation="الأب", stage="تالتة إعدادي")
+        first = self.student(relation="الأب", stage="الصف الثالث الإعدادي")
         self.assertEqual((first.code, first.payer.name, first.payer.phone), ("ST-00001", "محمد السيد", "01001234501"))
         # The same phone finds the same parent: brothers and sisters share one account and one statement.
         second = self.student("مريم محمد")
@@ -223,9 +223,9 @@ class DemoDataTests(TestCase):
         self.assertTrue(FeeCharge.objects.filter(month=timezone.localdate().replace(day=1)).exists())  # this month is billed
         self.assertTrue(dues())  # and some parents still owe
         self.assertTrue(self.client.login(username="owner", password="Demo-pass-1"))
-        self.assertContains(self.client.get(reverse("education:groups")), "مجموعة السبت والتلات")
+        self.assertContains(self.client.get(reverse("education:groups")), "مجموعة السبت والثلاثاء")
         # E1: the demo's students have printable cards (the code alone in the QR), and the scan entry is there for the owner.
-        sheet = self.client.get(reverse("education:cards") + f"?group={StudyGroup.objects.get(name='مجموعة السبت والتلات').pk}")
+        sheet = self.client.get(reverse("education:cards") + f"?group={StudyGroup.objects.get(name='مجموعة السبت والثلاثاء').pk}")
         self.assertEqual(sheet.status_code, 200)
         self.assertContains(sheet, 'data-qr-text="ST-')
         self.assertContains(self.client.get(reverse("education:today")), "data-scan-entry")
@@ -285,7 +285,7 @@ class AttendanceTests(EducationSetup):
         self.assertTrue(self.register.can_take(teacher_user, self.saturday))
         from staff.services import save_employee
 
-        other = self.group("مجموعة تانية", days="sun", teacher=save_employee({"name": "أ. نادية"}, self.owner))
+        other = self.group("مجموعة تانية", days="sun", teacher=save_employee({"name": "أ. نادية فوزي"}, self.owner))
         self.assertFalse(self.register.can_take(teacher_user, other))
         with self.assertRaises(PermissionDenied):
             self.register.take(other, teacher_user, self.class_day, {})

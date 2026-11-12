@@ -201,7 +201,7 @@ class AbsenceTests(Centre):
 
     def test_the_text_carries_the_student_the_group_the_day_and_the_centre_and_nothing_else(self):
         self.absent(self.a, note=SECRET)
-        education.save_student({"name": "آدم", "payer_name": "ولي أمر آدم", "payer_phone": "01010000001", "notes": SECRET, "stage": "تالتة إعدادي"}, self.owner, self.a)
+        education.save_student({"name": "آدم", "payer_name": "ولي أمر آدم", "payer_phone": "01010000001", "notes": SECRET, "stage": "الصف الثالث الإعدادي"}, self.owner, self.a)
         services.build()
         message = self.messages(MessageKind.ABSENCE).get()
         self.assertEqual((message.phone, message.status, message.name, message.channel), ("201010000001", OutboxStatus.PENDING, "ولي أمر آدم", ""))

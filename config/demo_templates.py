@@ -153,15 +153,15 @@ def clean_leftovers(now=None):
 
 #: The owner's name per kind of business: the dashboard greets a person, not a role.
 DEMO_OWNERS = {
-    ("commercial", "retail"): "أستاذ محمود الشربيني", ("commercial", "pharmacy"): "د. أحمد الشاذلي",
-    ("commercial", "grocery"): "أ. سعيد عبد العال", ("commercial", "fashion"): "مدام نهى فؤاد",
-    ("commercial", "electronics"): "أستاذ كريم حمدي", ("commercial", "wholesale"): "أ. رمضان عبد الحميد",
-    ("restaurants", "restaurant"): "الشيف كريم عادل", ("restaurants", "cafe"): "أستاذ عمر فاروق",
-    ("medical", "clinic"): "د. سارة حسين", ("medical", "dental"): "د. هشام عبد الله", ("medical", "vet"): "د. كريم البيطري",
-    ("education", "training"): "أ. منى عبد الرحمن", ("education", "nursery"): "ميس دينا شوقي",
-    ("services", "maintenance"): "م. محمد رمضان", ("services", "beauty"): "مدام هالة سمير",
+    ("commercial", "retail"): "أ. محمود الشربيني", ("commercial", "pharmacy"): "د. أحمد الشاذلي",
+    ("commercial", "grocery"): "أ. سعيد عبد العال", ("commercial", "fashion"): "أ. نهى فؤاد",
+    ("commercial", "electronics"): "أ. كريم حمدي", ("commercial", "wholesale"): "أ. رمضان عبد الحميد",
+    ("restaurants", "restaurant"): "الشيف كريم عادل", ("restaurants", "cafe"): "أ. عمر فاروق",
+    ("medical", "clinic"): "د. سارة حسين", ("medical", "dental"): "د. هشام عبد الله", ("medical", "vet"): "د. كريم منصور",
+    ("education", "training"): "أ. منى عبد الرحمن", ("education", "nursery"): "أ. دينا شوقي",
+    ("services", "maintenance"): "م. محمد رمضان", ("services", "beauty"): "أ. هالة سمير",
     ("manufacturing", "food"): "م. سيد عبد الفتاح", ("contracting", "general"): "م. طارق الجندي",
-    "commercial": "أستاذ محمود الشربيني", "restaurants": "الشيف كريم عادل", "medical": "د. سارة حسين", "education": "أ. منى عبد الرحمن",
+    "commercial": "أ. محمود الشربيني", "restaurants": "الشيف كريم عادل", "medical": "د. سارة حسين", "education": "أ. منى عبد الرحمن",
     "services": "م. محمد رمضان", "manufacturing": "م. سيد عبد الفتاح", "contracting": "م. طارق الجندي",
 }
 ROLE_NAME = "المالك"  # what seed_demo_users calls the owner; only that is ever replaced

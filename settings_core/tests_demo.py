@@ -44,7 +44,7 @@ class DemoTests(TestCase):
         from shifts.services import open_shift_for
 
         owner = get_user_model().objects.get(username="owner")
-        self.assertEqual(owner.hesba_profile.display_name, "أستاذ محمود الشربيني")
+        self.assertEqual(owner.hesba_profile.display_name, "أ. محمود الشربيني")
         self.assertIsNotNone(open_shift_for(owner))
 
     @override_settings(DEMO_MODE=True, DEMO_PASSWORD="Demo-pass-1")
