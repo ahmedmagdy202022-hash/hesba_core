@@ -297,7 +297,8 @@ class SampleBusinessPerActivityTests(TestCase):
         self.assert_a_working_business(catalog)
         self.assertEqual(PatientFile.objects.count(), 4)
         self.assertEqual(ClinicalVisit.objects.filter(doctor__name="د. أحمد سالم").count(), 5)
-        self.assertEqual(Appointment.objects.filter(service__item_name="كشف").count(), 8)  # MED-008: one of them insured
+        self.assertEqual(Appointment.objects.filter(service__item_name="كشف").count(), 10)  # MED-008: one of them insured; M10 (HG-096): and two online visits today
+        self.assertEqual(Appointment.objects.filter(kind="online").count(), 2)
         from medical.models import InsuredBill
 
         bill = InsuredBill.objects.get()
