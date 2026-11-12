@@ -1,10 +1,17 @@
 {% extends "operations/base.html" %}
-{% load hesba_format %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/lab_sample.css' %}?v=m9-1">{% endblock %}
 {% block operation_content %}
 <section class="op-title-row"><div><a class="op-back" href="{% url 'medical:file' patient.pk %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ lw.back }}</a>
 <h1>{{ lw.title }} — {{ patient.name }}</h1><p>{{ lw.intro }}</p></div>
 <div class="op-form-actions"><a class="op-secondary" href="{% url 'medical:lab_tests' %}?lang={{ lang }}">{{ lw.tests }}</a></div></section>
 {% if error %}<p class="op-message op-message-error" role="alert">{{ error }}</p>{% endif %}
+{# M9 (HG-092): a sample code opened this page on one day; and the sample label, printable before any result exists #}
+{% if sample %}<p class="op-notice ls-opened" data-lab-sample-opened="{{ sample.code }}"><strong>{{ sample.text }}</strong>{% if not sample.has_results %} · {{ sw.no_results_day }}{% endif %}</p>{% endif %}
+<section class="ls-card" data-lab-label-card><div><h2>{{ sw.label_h }}</h2><p>{{ sw.label_p }}</p></div>
+<form class="ls-inline" method="get" action="{% url 'medical:lab_label' patient.pk %}" data-lab-label-form><input type="hidden" name="lang" value="{{ lang }}">
+<div class="op-field"><label for="ls-day">{{ sw.label_day }}</label><input id="ls-day" type="date" name="day" value="{% if sample %}{{ sample.day|date:'Y-m-d' }}{% else %}{{ today|date:'Y-m-d' }}{% endif %}" max="{{ today|date:'Y-m-d' }}" required></div>
+<button class="op-secondary" type="submit" data-lab-label-print>{{ sw.label_print }}</button></form></section>
 {% if can_write %}
 {% if rows %}
 <form class="op-form" method="post" data-lab-entry>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
@@ -22,7 +29,7 @@
 {% if can_write and days and not shareable %}<p class="op-notice" data-lab-share-blocked>{{ no_factor }}</p>{% endif %}
 {% if days and phone_only %}<p class="op-notice" data-lab-phone-only>{{ phone_only }}</p>{% endif %}
 {% for day, results in days %}
-<section class="op-detail-meta" data-lab-day="{{ day|date:'Y-m-d' }}"><p><strong><bdi>{{ day|date:"Y-m-d" }}</bdi></strong> · <a href="{% url 'medical:lab_sheet' patient.pk day|date:'Y-m-d' %}?lang={{ lang }}" data-lab-print>{{ lw.print }}</a></p>
+<section class="op-detail-meta" id="lab-day-{{ day|date:'Y-m-d' }}" data-lab-day="{{ day|date:'Y-m-d' }}"{% if sample and sample.day == day %} data-lab-focus{% endif %}><p><strong><bdi>{{ day|date:"Y-m-d" }}</bdi></strong> · <a href="{% url 'medical:lab_sheet' patient.pk day|date:'Y-m-d' %}?lang={{ lang }}" data-lab-print>{{ lw.print }}</a> · <a href="{% url 'medical:lab_label_day' patient.pk day|date:'Y-m-d' %}?lang={{ lang }}" data-lab-label>{{ sw.label_link }}</a></p>
 {% if can_write %}{% if shared and shared.day == day %}<div class="op-form" data-lab-share-box>
 <h3>{{ lw.send_h }}</h3>{% if shared.warning %}<p class="op-message op-message-error" data-lab-share-warning>{{ shared.warning }}</p>{% endif %}<p class="op-muted">{{ share_note }}</p>
 <p><input class="op-cell-text" type="text" readonly dir="ltr" value="{{ shared.url }}" aria-label="{{ lw.send_h }}" style="inline-size:100%;min-block-size:44px" data-lab-share-url></p>
