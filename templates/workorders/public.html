@@ -5,28 +5,28 @@
 
 {% if message %}<div class="cl-msg cl-msg--danger" role="alert" data-link-message>{{ message }}</div>{% endif %}
 
-{% if state.status == 'quoted' %}<div class="cl-msg cl-msg--info" data-banner="quoted">{% if lang == 'en' %}Your quote is ready and waiting for your approval.{% else %}العرض جاهز ومستني موافقتك.{% endif %}</div>
+{% if state.status == 'quoted' %}<div class="cl-msg cl-msg--info" data-banner="quoted">{% if lang == 'en' %}Your quote is ready and waiting for your approval.{% else %}العرض جاهز وفي انتظار موافقة حضرتك.{% endif %}</div>
 {% elif state.status == 'approved' %}<div class="cl-msg cl-msg--ok" data-banner="approved">{% if decided_at %}{% if lang == 'en' %}Your approval reached us on{% else %}وصلت موافقتك يوم{% endif %} <bdi>{{ decided_at }}</bdi>{% else %}{{ state.status_label }}{% endif %}</div>
-{% elif state.status == 'refused' %}<div class="cl-msg" data-banner="refused">{% if decided_at %}{% if lang == 'en' %}You declined the quote on{% else %}اتسجّل إنك رفضت العرض يوم{% endif %} <bdi>{{ decided_at }}</bdi>{% else %}{{ state.status_label }}{% endif %}</div>
+{% elif state.status == 'refused' %}<div class="cl-msg" data-banner="refused">{% if decided_at %}{% if lang == 'en' %}You declined the quote on{% else %}تم تسجيل رفض حضرتك للعرض يوم{% endif %} <bdi>{{ decided_at }}</bdi>{% else %}{{ state.status_label }}{% endif %}</div>
 {% elif state.status == 'ready' or state.status == 'delivered' %}<div class="cl-msg cl-msg--ok" data-banner="{{ state.status }}">{{ state.status_label }}{% if status_at %} · <bdi>{{ status_at }}</bdi>{% endif %}</div>{% endif %}
 
 {% if pay_url %}<section class="cl-card cl-ask" data-pay-online>
   <h2 class="cl-h">{% if lang == 'en' %}Pay online{% else %}ادفع أونلاين{% endif %}</h2>
-  <p>{% if lang == 'en' %}The shop sent you a link to pay this order's invoice by card or wallet.{% else %}المحل بعتلك لينك تدفع بيه فاتورة الأمر ده بالكارت أو المحفظة.{% endif %}</p>
+  <p>{% if lang == 'en' %}{{ company.name }} sent you a link to pay this order's invoice by card or wallet.{% else %}من {{ company.name }}: رابط لدفع فاتورة الطلب ده بالكارت أو المحفظة.{% endif %}</p>
   <div class="cl-actions"><a class="cl-btn cl-btn--primary" href="{{ pay_url }}" rel="nofollow">{% if lang == 'en' %}Pay online{% else %}ادفع أونلاين{% endif %}</a></div>
 </section>{% endif %}
 
 <section class="cl-card" aria-labelledby="cl-order-t">
   <div class="cl-orderhead">
-    <div><div class="cl-eyebrow" id="cl-order-t">{% if lang == 'en' %}Work order{% else %}أمر شغل رقم{% endif %}</div><div class="cl-number"><bdi>{{ state.number }}</bdi></div></div>
+    <div><div class="cl-eyebrow" id="cl-order-t">{% if lang == 'en' %}Work order{% else %}طلب صيانة رقم{% endif %}</div><div class="cl-number"><bdi>{{ state.number }}</bdi></div></div>
     <span class="cl-badge cl-badge--{{ state.status }}">{{ state.status_label }}</span>
   </div>
   <div class="cl-device"><bdi>{{ state.device }}</bdi></div>
-  {% if received_at %}<dl class="cl-dl"><div><dt>{% if lang == 'en' %}Received{% else %}اتستلم{% endif %}</dt><dd><bdi>{{ received_at }}</bdi></dd></div></dl>{% endif %}
+  {% if received_at %}<dl class="cl-dl"><div><dt>{% if lang == 'en' %}Received{% else %}تاريخ الاستلام{% endif %}</dt><dd><bdi>{{ received_at }}</bdi></dd></div></dl>{% endif %}
 </section>
 
 <section class="cl-card" aria-labelledby="cl-tl-t">
-  <h2 class="cl-h" id="cl-tl-t">{% if lang == 'en' %}What happened to your device{% else %}اللي حصل لجهازك{% endif %}</h2>
+  <h2 class="cl-h" id="cl-tl-t">{% if lang == 'en' %}What happened to your device{% else %}مراحل جهازك{% endif %}</h2>
   <ol class="cl-tl" data-timeline>
     {% for step in steps %}<li class="cl-step{% if step.now %} is-now{% endif %}{% if step.branch %} is-branch{% endif %}"{% if step.now %} aria-current="step"{% endif %}>
       <span class="cl-dot" aria-hidden="true"></span>
@@ -38,7 +38,7 @@
 
 {% if state.status == 'refused' %}<section class="cl-card" data-quote-closed>
   <h2 class="cl-h">{% if lang == 'en' %}The quote is closed{% else %}العرض اتقفل{% endif %}</h2>
-  <p>{% if lang == 'en' %}The quote lines were removed and no repair will be done on this quote. Contact the shop for anything else.{% else %}بنود العرض اتشالت ومفيش إصلاح هيتعمل على العرض ده. كلّم المحل لو محتاج أي حاجة.{% endif %}</p>
+  <p>{% if lang == 'en' %}The quote lines were removed and no repair will be done on this quote. Contact us for anything else.{% else %}بنود العرض اتشالت ومفيش إصلاح هيتعمل على العرض ده. لأي استفسار، تواصل معانا.{% endif %}</p>
 </section>{% endif %}
 
 {% if shows_quote or state.can_decide %}<section class="cl-card" id="ask" aria-labelledby="cl-q-t" data-quote>
@@ -59,12 +59,12 @@
 
   {% if state.can_decide %}<div class="cl-ask" data-decision>
     <h2 class="cl-h">{% if lang == 'en' %}Approve the quote?{% else %}موافق على العرض؟{% endif %}</h2>
-    <p>{% if lang == 'en' %}The total includes VAT. Your answer is recorded at the shop with its date and time.{% else %}الإجمالي شامل الضريبة. ردّك بيتسجّل عند المحل بتاريخه ووقته.{% endif %}</p>
+    <p>{% if lang == 'en' %}The total includes VAT. Your answer is recorded with its date and time.{% else %}الإجمالي شامل الضريبة. رد حضرتك بيتسجّل عندنا بتاريخه ووقته.{% endif %}</p>
     <div class="cl-actions">
       <a class="cl-btn cl-btn--primary" href="#confirm-approve" data-open-approve>{% if lang == 'en' %}Approve the quote{% else %}موافق على العرض{% endif %}</a>
-      <a class="cl-btn" href="#confirm-refuse" data-open-refuse>{% if lang == 'en' %}Decline{% else %}مش موافق{% endif %}</a>
+      <a class="cl-btn" href="#confirm-refuse" data-open-refuse>{% if lang == 'en' %}Decline{% else %}رفض العرض{% endif %}</a>
     </div>
-    <p class="cl-note">{% if lang == 'en' %}You will be asked to confirm before your answer is recorded.{% else %}هتتأكد مرة تانية قبل ما ردّك يتسجّل.{% endif %}</p>
+    <p class="cl-note">{% if lang == 'en' %}You will be asked to confirm before your answer is recorded.{% else %}هنطلب من حضرتك التأكيد قبل تسجيل الرد.{% endif %}</p>
   </div>{% endif %}
 </section>{% endif %}
 
@@ -74,9 +74,9 @@
   <form class="cl-sheet" method="post" action="{{ approve_url }}">{% csrf_token %}
     <input type="hidden" name="fingerprint" value="{{ state.fingerprint }}"><input type="hidden" name="lang" value="{{ lang }}">
     <h2 id="cl-ca-t">{% if lang == 'en' %}Confirm your approval{% else %}تأكيد الموافقة{% endif %}</h2>
-    <p>{% if lang == 'en' %}You are approving this repair quote. If you change your mind afterwards, contact the shop.{% else %}هتوافق على عرض الإصلاح ده. لو غيّرت رأيك بعد كده كلّم المحل.{% endif %}</p>
+    <p>{% if lang == 'en' %}You are approving this repair quote. If you change your mind afterwards, contact us.{% else %}حضرتك بتوافق على عرض الإصلاح ده. ولأي تعديل بعد كده، تواصل معانا.{% endif %}</p>
     <div class="cl-sum"><span>{% if lang == 'en' %}Quote total{% else %}إجمالي العرض{% endif %}</span><strong><bdi>{{ total }}</bdi> {{ currency }}</strong></div>
-    <div class="cl-actions"><button class="cl-btn cl-btn--primary" type="submit">{% if lang == 'en' %}Yes, approve{% else %}أيوه، موافق{% endif %}</button>
+    <div class="cl-actions"><button class="cl-btn cl-btn--primary" type="submit">{% if lang == 'en' %}Yes, approve{% else %}تأكيد الموافقة{% endif %}</button>
     <a class="cl-btn" href="#ask">{% if lang == 'en' %}Back{% else %}رجوع{% endif %}</a></div>
   </form>
 </div>
@@ -85,9 +85,9 @@
   <form class="cl-sheet" method="post" action="{{ refuse_url }}">{% csrf_token %}
     <input type="hidden" name="fingerprint" value="{{ state.fingerprint }}"><input type="hidden" name="lang" value="{{ lang }}">
     <h2 id="cl-cr-t">{% if lang == 'en' %}Confirm declining{% else %}تأكيد الرفض{% endif %}</h2>
-    <p>{% if lang == 'en' %}The quote will close and the device will not be repaired on this quote. This cannot be undone from this page.{% else %}العرض هيتقفل ومش هيتصلّح الجهاز على العرض ده. مينفعش ترجع في القرار من الصفحة دي.{% endif %}</p>
+    <p>{% if lang == 'en' %}The quote will close and the device will not be repaired on this quote. This cannot be undone from this page.{% else %}العرض هيتقفل ومش هيتصلّح الجهاز على العرض ده. مش هتقدر تتراجع عن القرار من الصفحة دي.{% endif %}</p>
     <div class="cl-sum"><span>{% if lang == 'en' %}Quote total{% else %}إجمالي العرض{% endif %}</span><strong><bdi>{{ total }}</bdi> {{ currency }}</strong></div>
-    <div class="cl-actions"><button class="cl-btn cl-btn--danger" type="submit">{% if lang == 'en' %}Yes, decline{% else %}أيوه، مش موافق{% endif %}</button>
+    <div class="cl-actions"><button class="cl-btn cl-btn--danger" type="submit">{% if lang == 'en' %}Yes, decline{% else %}تأكيد الرفض{% endif %}</button>
     <a class="cl-btn" href="#ask">{% if lang == 'en' %}Back to the quote{% else %}رجوع للعرض{% endif %}</a></div>
   </form>
 </div>

@@ -51,6 +51,15 @@ STATUS_LABELS = {
            "ready": "Ready for pickup", "refused": "Quote refused", "delivered": "Delivered", "cancelled": "Cancelled"},
 }
 
+#: The words the customer's own page and its JSON show. The staff labels above speak about "the customer" in the third person
+#: ("waiting for the customer's approval"), which reads wrongly to the customer, so the public page has its own set. Same keys,
+#: same statuses: only the wording differs, and nothing here decides anything.
+CUSTOMER_STATUS_LABELS = {
+    "ar": {"received": "تم الاستلام", "diagnosed": "تم الفحص", "quoted": "في انتظار موافقة حضرتك", "approved": "تمت الموافقة", "in_repair": "جاري الإصلاح",
+           "ready": "جاهز للتسليم", "refused": "تم رفض العرض", "delivered": "تم التسليم", "cancelled": "ملغي"},
+    "en": STATUS_LABELS["en"],
+}
+
 MESSAGES = {
     "ar": {"customer": "اختار العميل أو اكتب اسمه.", "device": "اكتب الجهاز أو الخدمة المطلوبة.", "problem": "اكتب العطل أو المطلوب.",
            "date": "التاريخ مش مظبوط.", "days": "أيام الضمان لازم تكون رقم من 0 لـ 3650.", "move": "مينفعش تنقل الأمر من «{from_}» لـ «{to}».",
@@ -62,8 +71,8 @@ MESSAGES = {
            "serial": "«{item}» بيتباع بالسيريال؛ بيعه من فاتورة البيع عشان يتسجّل السيريال.",
            "refused": "العميل رفض العرض؛ اتشالت بنود العرض. لو فيه رسم كشف، ضيفه كبند.",
            "link_approved": "العميل وافق على العرض من اللينك", "link_refused": "العميل رفض العرض من اللينك",
-           "link_closed": "العرض ده مبقاش مستني ردّك.", "link_changed": "العرض اتغيّر، افتح اللينك تاني.", "link_decision": "الرد لازم يكون موافقة أو رفض.",
-           "link_done_approved": "تمام، موافقتك اتسجّلت.", "link_done_refused": "تمام، رفضك اتسجّل.", "link_same": "ردّك متسجّل قبل كده.",
+           "link_closed": "العرض ده مبقاش محتاج رد من حضرتك.", "link_changed": "العرض اتغيّر، افتح الرابط تاني.", "link_decision": "الرد لازم يكون موافقة أو رفض.",
+           "link_done_approved": "شكرًا لحضرتك، تم تسجيل موافقتك.", "link_done_refused": "تم تسجيل رد حضرتك بعدم الموافقة على العرض.", "link_same": "تم تسجيل رد حضرتك من قبل.",
            "no_base_url": "عنوان الموقع مش متظبط (PUBLIC_BASE_URL)؛ ظبّطه الأول عشان اللينك يتبعت."},
     "en": {"customer": "Choose the customer or type their name.", "device": "Enter the device or the service asked for.", "problem": "Enter the fault or what is needed.",
            "date": "The date is not valid.", "days": "Warranty days must be a number from 0 to 3650.", "move": "The order cannot go from “{from_}” to “{to}”.",
@@ -513,7 +522,7 @@ def public_state(order, lang="ar"):
 
     from printing.company import company_details
 
-    labels = STATUS_LABELS[lang]
+    labels = CUSTOMER_STATUS_LABELS[lang]
     timeline = []
     for event in order.events.all():
         if timeline and timeline[-1]["status"] == event.status:  # a refused quote writes two entries in a row
