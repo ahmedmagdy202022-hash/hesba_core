@@ -47,7 +47,7 @@ DEFAULT_TEXTS = {
     # E5: the guardian, the student, the group, the day and the centre. Never a reason, a note, a rate, a grade or a link (students are often minors).
     MessageKind.ABSENCE: "أهلاً {name}، {student} كان غايب يوم {date} عن {group} في {company}.",
     # E5: the guardian, the amount still due and the centre; one message per guardian, not per child or per invoice.
-    MessageKind.FEES: "أهلاً {name}، تذكير ودّي من {company}: المتبقي من مصروفات الدراسة على حضرتك {amount}. لو سدّدت خلاص، متاخدش بالك من الرسالة. شكرًا لحضرتك.",
+    MessageKind.FEES: "أهلاً {name}، تذكير ودّي من {company}: المتبقي من مصروفات الدراسة على حضرتك {amount}. لو حضرتك دفعت خلاص، اعتبر الرسالة دي كأنها ماوصلتش. شكرًا لحضرتك.",
 }
 #: S7: the same wording in English, used when the business's default language is English and the text was never edited.
 DEFAULT_TEXTS_EN = {MessageKind.WORKORDER: "Hello {name}, from {company}: work order {number} {status} {link}",

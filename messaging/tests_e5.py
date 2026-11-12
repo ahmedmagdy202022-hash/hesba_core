@@ -23,7 +23,7 @@ from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from education import attendance, billing
+from education import attendance, billing, scan
 from education import messages as education_messages
 from education import services as education
 from education.models import ClassSession, Student
@@ -228,6 +228,19 @@ class AbsenceTests(Centre):
         services.build()
         self.assertEqual(self.messages(MessageKind.ABSENCE).get().text, f"Hello ولي أمر آدم, آدم was absent on {day_text(TODAY, 'en')} from مجموعة يومية at Demo Store.")
 
+    def test_a_class_closed_after_a_scan_messages_the_unscanned_and_a_late_scan_withdraws_it(self):
+        scan.mark(self.a.code, self.owner, at(TODAY, 16, 5))  # آدم is scanned present; nothing is written for the others
+        self.assertEqual(services.build(), 0)
+        session = ClassSession.objects.get(group=self.daily, date=TODAY)
+        self.assertEqual(dict(session.marks.values_list("student__name", "presence")), {"آدم": "present"})
+        # The teacher closes the class: whoever was not scanned is written absent, and only now are they messaged.
+        attendance.take(self.daily, self.owner, TODAY, {str(self.a.pk): "present", str(self.b.pk): "absent", str(self.c.pk): "absent"})
+        self.assertEqual(services.build(), 2)
+        self.assertEqual(sorted(self.messages(MessageKind.ABSENCE).values_list("name", flat=True)), ["ولي أمر بسمة", "ولي أمر جاد"])
+        scan.mark(self.b.code, self.owner, at(TODAY, 16, 40))  # بسمة arrives after the class was closed: absent becomes late
+        self.assertEqual(services.build(), 0)
+        self.assertEqual(list(self.messages(MessageKind.ABSENCE).values_list("name", flat=True)), ["ولي أمر جاد"])  # her waiting message is gone
+
     def test_the_date_is_in_words_not_iso(self):
         self.absent(self.a)
         services.build()
@@ -271,7 +284,7 @@ class FeesAmountTests(Fees):
         self.assertEqual(services.build(), 1)
         message = self.fees().get()
         self.assertEqual((message.key, message.name, message.phone, message.status), (f"fees:{invoice.customer_id}", "ولي أمر يوسف", "201001234501", OutboxStatus.PENDING))
-        self.assertEqual(message.text, "أهلاً ولي أمر يوسف، تذكير ودّي من Demo Store: المتبقي من مصروفات الدراسة على حضرتك 600.00 EGP. لو سدّدت خلاص، متاخدش بالك من الرسالة. شكرًا لحضرتك.")
+        self.assertEqual(message.text, "أهلاً ولي أمر يوسف، تذكير ودّي من Demo Store: المتبقي من مصروفات الدراسة على حضرتك 600.00 EGP. لو حضرتك دفعت خلاص، اعتبر الرسالة دي كأنها ماوصلتش. شكرًا لحضرتك.")
         for forbidden in ("غ900", "900", "300", "http", "{"):
             self.assertNotIn(forbidden, message.text)  # the guardian's balance, never the group, the invoice total or a link
 
@@ -626,7 +639,9 @@ class MigrationTests(SimpleTestCase):
             self.assertEqual([c for c in new.choices if c[0] not in ("absence", "fees")], list(old.choices))
             self.assertIn(("absence", "Student absence"), new.choices)
             self.assertIn(("fees", "Fees due"), new.choices)
-            self.assertEqual(list(new.choices), [(value, label) for value, label in MessageKind.choices])
+            # 0007's own list, frozen: a later kind (a later migration) comes after it and does not rewrite it.
+            self.assertEqual([value for value, _label in new.choices],
+                             ["due", "instalment", "appointment", "refill", "workorder", "followup", "vaccine", "absence", "fees", "campaign"])
 
     def test_the_kinds_fit_the_column(self):
         self.assertLessEqual(len(MessageKind.ABSENCE.value), 12)
