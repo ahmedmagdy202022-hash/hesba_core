@@ -1,0 +1,19 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+{# E6: the issued certificates, newest first. Managers only (the grade is shown). #}
+<section class="op-title-row hs-head"><div><h1>{{ cw.title }}</h1><p>{{ cw.intro }}</p></div>
+<div class="op-form-actions"><a class="op-primary" href="{% url 'education:certificate_issue' %}?lang={{ lang }}" data-issue-certificate>{{ cw.issue }}</a></div></section>
+{% include "education/_tabs.html" %}
+{% if ready_count %}<div class="op-message" role="status" data-ready-count><a href="{% url 'education:certificate_issue' %}?lang={{ lang }}">{{ cw.ready_h }}: {{ ready_count }}</a></div>{% endif %}
+<form class="op-form hs-search" method="get" role="search" data-certificate-search><input type="hidden" name="lang" value="{{ lang }}">
+<div class="op-form-grid"><div class="op-field"><label for="cf-q">{{ cw.search }}</label><input id="cf-q" type="search" name="q" value="{{ query }}" maxlength="80"></div>
+<div class="op-field"><label for="cf-status">{{ cw.status }}</label><select id="cf-status" name="status"><option value="">{{ cw.all }}</option><option value="live"{% if status == 'live' %} selected{% endif %}>{{ cw.live }}</option><option value="revoked"{% if status == 'revoked' %} selected{% endif %}>{{ cw.revoked }}</option></select></div></div>
+<div class="op-form-actions"><button class="op-secondary" type="submit">{{ cw.find }}</button></div></form>
+<div class="op-table-wrap"><table class="op-table" data-list-rows data-certificates><thead><tr><th>{{ cw.number }}</th><th>{{ cw.student }}</th><th>{{ cw.course }}</th><th>{{ cw.issued }}</th><th>{{ cw.grade }}</th><th>{{ cw.status }}</th></tr></thead><tbody>
+{% for c in rows %}<tr data-certificate="{{ c.pk }}" data-state="{% if c.revoked %}revoked{% else %}live{% endif %}"><td data-row="title" class="op-cell-text"><a href="{% url 'education:certificate' c.pk %}?lang={{ lang }}"><bdi dir="ltr">{{ c.number }}</bdi></a></td>
+<td data-row="sub">{{ c.student.name }}</td><td data-row="meta">{{ c.course_name }}{% if c.level %} · {{ cw.level }} <bdi>{{ c.level }}</bdi>{% endif %}</td><td data-row="meta"><bdi>{{ c.issued_on|day_text:lang }}</bdi></td>{% if c.grade_text %}<td data-row="meta"><bdi>{{ c.grade_text }}</bdi></td>{% else %}<td data-row="meta" hidden></td>{% endif %}
+<td data-row="meta"><span class="op-status {% if c.revoked %}op-status-cancelled{% else %}op-status-open{% endif %}">{% if c.revoked %}{{ cw.revoked }}{% else %}{{ cw.live }}{% endif %}</span></td></tr>
+{% empty %}<tr><td colspan="6" class="op-empty" data-row="empty">{{ cw.no_certs }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}
