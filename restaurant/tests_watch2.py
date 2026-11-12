@@ -71,3 +71,16 @@ class OutOfStockCountsAgree(KitchenSetup):
         self.assertEqual(page.context["counts"]["out"], 1)
         rows = {row["item"].item_code: row["state"] for row in page.context["rows"]}
         self.assertEqual((rows["R-OIL"], rows["D-KOSH"], rows["D-KEBAB"]), ("out", "healthy", "healthy"))
+
+
+class IngredientQuantityFormat(KitchenSetup):
+    """RS-07 / S2-08: a plate's quantity reads 0.2 and 0.1, as everywhere else in the app, never «0,200»."""
+
+    def test_the_ingredient_boxes_show_period_decimals_without_trailing_zeros(self):
+        self.client.force_login(self.owner)
+        for lang in ("ar", "en"):
+            page = self.client.get(reverse("restaurant:dish", args=[self.koshary.pk]), {"lang": lang}).content.decode()
+            self.assertIn('name="quantity" inputmode="decimal" value="0.2"', page)
+            self.assertIn('name="quantity" inputmode="decimal" value="0.1"', page)
+            self.assertNotIn('value="0,2', page)
+            self.assertNotIn('value="0,1', page)
