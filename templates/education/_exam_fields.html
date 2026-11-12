@@ -1,0 +1,6 @@
+{# E2: the exam's own fields. ``post``: what was typed on a refused save; else ``exam``; else a new quiz held today. #}
+<div class="op-field"><label for="ex-title">{{ xw.title }}</label><input id="ex-title" name="title" maxlength="160" required value="{% if post %}{{ post.title }}{% else %}{{ exam.title }}{% endif %}"></div>
+<div class="op-field"><label for="ex-kind">{{ xw.kind }}</label><select id="ex-kind" name="kind">{% for value, label in kinds %}<option value="{{ value }}"{% if post %}{% if post.kind == value %} selected{% endif %}{% elif exam.kind == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="ex-day">{{ xw.held_on }}</label><input id="ex-day" type="date" name="held_on" required value="{% if post %}{{ post.held_on }}{% elif exam %}{{ exam.held_on|date:'Y-m-d' }}{% else %}{{ today|date:'Y-m-d' }}{% endif %}"></div>
+<div class="op-field"><label for="ex-out">{{ xw.out_of }}</label><input id="ex-out" name="out_of" type="text" inputmode="decimal" dir="ltr" autocomplete="off" required value="{% if post %}{{ post.out_of }}{% elif exam %}{{ out_text }}{% endif %}"></div>
+<div class="op-field"><label for="ex-notes">{{ xw.notes }}</label><input id="ex-notes" name="notes" maxlength="255" value="{% if post %}{{ post.notes }}{% else %}{{ exam.notes }}{% endif %}"></div>
