@@ -159,6 +159,17 @@ html.hs-cam-open,html.hs-cam-open body{overflow:hidden}
 .mfg-cancel{margin-top:12px}
 .mfg-cancel summary{cursor:pointer;color:var(--op-danger)}
 .mfg-cost{margin-top:16px}
+/* F1: a production order made for a sales order. */
+.mfg-sale-for{margin:0 0 14px;color:var(--op-navy);font-weight:700}
+.mfg-sale-cell{display:flex;flex-direction:column;gap:6px;align-items:flex-start;white-space:normal!important;min-width:200px}
+.mfg-sale-link,.mfg-sale-stock{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.mfg-sale-short{margin:0!important;padding:8px 10px!important;font-size:13px}
+.mfg-sale-make{width:100%}
+.mfg-sale-make summary{display:flex;align-items:center;justify-content:center;min-height:var(--hs-control-height,44px);padding:0 14px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-input-radius);cursor:pointer;font-weight:700;list-style:none}
+.mfg-sale-make[open] summary{margin-bottom:10px}
+.mfg-sale-make form{display:grid;gap:10px}
+.mfg-sale-make .op-form-actions{margin-top:2px}
+.mfg-sale-deliver{margin:0 0 18px}
 /* MED-001: the patient file. */
 .med-summary{grid-template-columns:repeat(4,minmax(0,1fr))}
 .med-heading{color:var(--op-navy);margin:22px 0 10px}

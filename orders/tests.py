@@ -220,6 +220,16 @@ class ScreensTests(OrdersSetup):
         self.assertContains(note, "إذن تسليم")
         self.assertNotContains(note, "data-print-total")  # a delivery note carries no prices
 
+    def test_a_trade_shop_has_no_production_column_and_keeps_the_delivery_date(self):
+        # F1 (HG-098): the column belongs to a shop with the manufacturing module; the delivery date belongs to every order.
+        self.client.force_login(self.owner)
+        order = services.move(self.quote(), Status.CONFIRMED, self.owner)
+        page = self.client.get(reverse("orders:detail", args=[order.pk]) + "?lang=ar")
+        self.assertNotContains(page, "data-production-cell")
+        self.assertContains(page, "data-deliver-form")
+        services.set_deliver_by(order, (TODAY + timezone.timedelta(days=5)).isoformat(), self.owner)
+        self.assertContains(self.client.get(reverse("orders:detail", args=[order.pk]) + "?lang=ar"), "data-deliver-by")
+
     def test_the_menu_and_the_screens_follow_the_feature_switch(self):
         self.client.force_login(self.owner)
         self.assertContains(self.client.get(reverse("dashboard_snapshot") + "?lang=ar"), 'href="/orders/')

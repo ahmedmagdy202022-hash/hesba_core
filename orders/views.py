@@ -9,8 +9,10 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
+from manufacturing import make_to_order
 from master_data.models import Customer, Item
 from permissions.decorators import require_permission
+from permissions.services import user_has_permission
 
 from . import services
 from .models import OFFERED, SalesOrderLine, Status
@@ -34,6 +36,8 @@ WORDS = {
         "saved": "اتحفظ.", "moved": "«{number}» بقى «{status}».", "created": "اتعمل عرض السعر {number}.", "order_number": "رقم الأمر",
         "quote_number": "رقم العرض", "view_only": "تقدر تشوف العرض بس.", "share_text": "عرض سعر {number} من {company}: {url}",
         "expired_hint": "صلاحية العرض انتهت يوم {date}. تقدر تعدّل التاريخ وتبعته تاني.", "doc_quote": "عرض سعر", "doc_order": "أمر بيع", "storekeeper": "توقيع أمين المخزن",
+        "deliver_by": "تسليم للعميل يوم", "deliver_hint": "الميعاد اللي وعدت بيه العميل. بيتنقل لأمر الإنتاج المربوط بالأمر ده.",
+        "deliver_none": "لسه ما اتحددش ميعاد تسليم", "deliver_save": "احفظ الميعاد",
     },
     "en": {
         "title": "Quotations & orders", "intro": "A quotation goes to the customer; once they accept, it becomes a sales order you invoice in one go or in parts.",
@@ -53,6 +57,8 @@ WORDS = {
         "saved": "Saved.", "moved": "“{number}” is now “{status}”.", "created": "Quotation {number} created.", "order_number": "Order no.",
         "quote_number": "Quotation no.", "view_only": "You can view this quotation only.", "share_text": "Quotation {number} from {company}: {url}",
         "expired_hint": "This quotation expired on {date}. Change the date and send it again.", "doc_quote": "Quotation", "doc_order": "Sales order", "storekeeper": "Storekeeper's signature",
+        "deliver_by": "Delivery to the customer on", "deliver_hint": "The date promised to the customer. A production order linked to this order takes it too.",
+        "deliver_none": "No delivery date set yet", "deliver_save": "Save the date",
     },
 }
 
@@ -83,6 +89,16 @@ def _salespeople():
     from staff.services import reps_offered
 
     return reps_offered()
+
+
+def _warn_open_production(request, order, lang):
+    """F1: cancelling a sales order does not cancel the production orders made for it; say which are still running."""
+
+    if not make_to_order.manufacturing_on():
+        return
+    open_orders = make_to_order.open_for(order)
+    if open_orders:
+        messages.warning(request, make_to_order.WORDS[lang]["cancelled_warn"].format(numbers=" ، ".join(o.number for o in open_orders)))
 
 
 @require_permission(services.VIEW)
@@ -155,6 +171,11 @@ def detail(request, pk):
                 to = request.POST.get("to") or ""
                 order = services.move(order, to, request.user, lang)
                 message = words["moved"].format(number=order.display_number, status=services.STATUS_LABELS[lang].get(to, to))
+                if to == Status.CANCELLED:
+                    _warn_open_production(request, order, lang)
+            elif action == "deliver_by":
+                services.set_deliver_by(order, request.POST.get("deliver_by"), request.user, lang)
+                message = words["saved"]
             elif action == "details":
                 data = {key: request.POST.get(key) for key in request.POST}
                 data["salesperson"] = _salespeople().filter(pk=request.POST.get("salesperson") or 0).first()
@@ -197,9 +218,19 @@ def detail(request, pk):
         url = share_url(request, "sales_quote", order.pk, lang)
         share = {"url": url, "whatsapp": whatsapp_link(order.customer.phone, words["share_text"].format(
             number=order.display_number, company=company_details()["name"], url=url))}
+    production = None
+    if order.is_order and make_to_order.manufacturing_on():  # F1: the «الإنتاج» column
+        can_make = user_has_permission(request.user, "inventory.adjust_stock")
+        production = {"words": make_to_order.WORDS[lang], "states": make_to_order.line_states(order, rows, lang, can_make=can_make),
+                      "can_open": user_has_permission(request.user, "inventory.view_stock"),
+                      "open_orders": make_to_order.open_for(order) if order.status == Status.CONFIRMED else [],
+                      "locations": make_to_order.locations_for(order) if can_make and order.status == Status.CONFIRMED else []}
+    if production:
+        for row in rows:
+            row["production"] = production["states"][row["line"].pk]
     return render(request, "orders/detail.html", _base(
-        request, lang, order=order, rows=rows, numbers=numbers, moves=moves, items=items, error=error, today=today,
-        state=state, editable=can_manage and order.status in OFFERED, share=share,
+        request, lang, order=order, rows=rows, numbers=numbers, moves=moves, items=items, error=error, today=today, production=production,
+        state=state, editable=can_manage and order.status in OFFERED, share=share, can_deliver=can_manage and order.status == Status.CONFIRMED,
         can_invoice=can_manage and order.status == Status.CONFIRMED and any(row["left"] > 0 for row in rows),
         invoices=services.invoices(order), salespeople=_salespeople() if can_manage else [],
         expired_hint=words["expired_hint"].format(date=order.valid_until.strftime("%Y-%m-%d")) if order.valid_until else ""))
