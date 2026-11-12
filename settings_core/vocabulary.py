@@ -15,6 +15,7 @@ from functools import lru_cache
 
 BASE = {
     "customers": {"ar": "العملاء", "en": "Customers"},
+    "customers_short": {"ar": "العملاء", "en": "Customers"},  # the phone tab bar's label; follows "customers" unless an activity gives its own
     "customer": {"ar": "عميل", "en": "Customer"},
     "the_customer": {"ar": "العميل", "en": "Customer"},
     "new_customer": {"ar": "عميل جديد", "en": "New customer"},
@@ -298,12 +299,14 @@ SUB_ACTIVITY = {
     # Adults mostly pay for themselves.
     ("education", "training"): {
         "customers": {"ar": "حسابات المتدربين", "en": "Trainee accounts"},
+        "customers_short": {"ar": "المتدربين", "en": "Trainees"},  # ED-09: the tab bar's label; the page keeps the full name
         "customer": {"ar": "متدرب", "en": "Trainee"},
         "the_customer": {"ar": "المتدرب", "en": "Trainee"},
         "new_customer": {"ar": "حساب متدرب جديد", "en": "New trainee account"},
     },
     ("education", "languages"): {
         "customers": {"ar": "حسابات الدارسين", "en": "Learner accounts"},
+        "customers_short": {"ar": "الدارسين", "en": "Learners"},
         "customer": {"ar": "دارس", "en": "Learner"},
         "the_customer": {"ar": "الدارس", "en": "Learner"},
         "new_customer": {"ar": "حساب دارس جديد", "en": "New learner account"},
@@ -316,9 +319,12 @@ def vocabulary(activity, sub_activity):
     """The merged term table for one (activity, sub-activity)."""
 
     merged = {key: dict(value) for key, value in BASE.items()}
-    for layer in (ACTIVITY.get(activity, {}), SUB_ACTIVITY.get((activity, sub_activity), {})):
+    layers = (ACTIVITY.get(activity, {}), SUB_ACTIVITY.get((activity, sub_activity), {}))
+    for layer in layers:
         for key, value in layer.items():
             merged[key] = dict(value)
+    if not any("customers_short" in layer for layer in layers):  # ED-09: no short label of its own: the tab uses the full word
+        merged["customers_short"] = dict(merged["customers"])
     return merged
 
 

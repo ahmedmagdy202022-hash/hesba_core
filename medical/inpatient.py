@@ -531,6 +531,7 @@ def take_advance(admission, cashbox, amount, user, lang="ar"):
         raise ValidationError(words["advance_closed"])
     if cashbox is None or not advance_cashboxes(admission).filter(pk=cashbox.pk).exists():
         raise ValidationError(words["advance_box"])
+    # No ceiling here on purpose (BE-01 caps a booking's deposit at its price): a stay's bill is not known at admission.
     return deposits.take(admission, admission.patient, cashbox, amount, user, _lang(lang), notes=words["advance_note"].format(number=admission.number))
 
 

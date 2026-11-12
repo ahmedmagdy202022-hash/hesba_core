@@ -36,7 +36,7 @@ SUBCONTRACT_ITEM_CODE = "PRJ-SUB"
 
 MESSAGES = {
     "ar": {
-        "supplier": "اختار مقاول الباطن (من الموردين).", "scope": "اكتب الأعمال المسندة.", "value": "القيمة مش صحيحة.", "rate": "النسبة لازم تكون من 0 لـ 100.",
+        "supplier": "اختار مقاول الباطن (من الموردين).", "scope": "اكتب الأعمال المسندة.", "value": "اكتب القيمة رقم صفر أو أكبر.", "rate": "النسبة لازم تكون من 0 لـ 100.",
         "amount": "المبلغ لازم أكبر من صفر.", "description": "اكتب وصف المستخلص.", "setup": "لازم يكون فيه مخزن استلام نشط.",
         "stock_lines": "الفاتورة دي فيها أصناف مخزنية: اصرفها للمشروع من المخزن بدل ما تربطها.", "linked": "الفاتورة دي مربوطة بمشروع بالفعل.",
         "cancelled": "الفاتورة دي ملغية.", "not_draft": "المستخلص ده اترحّل؛ لو فيه غلط اعمل مرتجع أو إلغاء من شاشة المشتريات.",
@@ -46,7 +46,7 @@ MESSAGES = {
         "entity": "مستخلصات مقاول الباطن ده بتتعمل من كيان تاني؛ اشتغل من الكيان ده.",
     },
     "en": {
-        "supplier": "Choose the subcontractor (a supplier).", "scope": "Describe the work given.", "value": "Invalid value.", "rate": "The rate must be between 0 and 100.",
+        "supplier": "Choose the subcontractor (a supplier).", "scope": "Describe the work given.", "value": "Type the value as a number, 0 or more.", "rate": "The rate must be between 0 and 100.",
         "amount": "The amount must be above zero.", "description": "Describe the bill.", "setup": "An active receiving location is needed.",
         "stock_lines": "This invoice has stock items: issue them to the project from stock instead of linking it.", "linked": "This invoice is already linked to a project.",
         "cancelled": "This invoice is cancelled.", "not_draft": "This bill is posted; correct it with a return or a cancellation on the purchases screen.",
