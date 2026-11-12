@@ -232,6 +232,14 @@ class ReadFileTests(LabBench):
         self.assertEqual([(row[1], row[2], row[3]) for row in rows], [("L5-20261112", "GLU", "12,5"), ("L5-20261112", "HB", "13,25")])
         self.assertEqual(self.rows('L5-20261112,GLU,"12,5"\n')[0][3], "12,5")  # a comma file quotes it
 
+    def test_a_headerless_semicolon_file_with_grouped_thousands_is_still_semicolon_separated(self):
+        # two semicolons and two commas in the first line: counting punctuation would pick the comma
+        rows = self.rows("L12-20261112;PLT;1,250,000\r\nL12-20261112;HB;13,5\r\n")
+        self.assertEqual([(row[1], row[2], row[3], row[4]) for row in rows], [("L12-20261112", "PLT", "1,250,000", ""), ("L12-20261112", "HB", "13,5", "")])
+        self.assertEqual(self.rows("Sample;Test;Result\r\nL12-20261112;PLT;1,250,000\r\n")[0][1:4], ("L12-20261112", "PLT", "1,250,000"))
+        # and a comma file whose text value carries semicolons stays comma-separated
+        self.assertEqual(self.rows('L12-20261112,BG,"A+; rechecked; ok"\n')[0][1:4], ("L12-20261112", "BG", "A+; rechecked; ok"))
+
     def test_a_byte_order_mark_windows_line_ends_blank_lines_and_extra_columns(self):
         text = "﻿sample code,test code,value,unit\r\n\r\nL1-20261112,GLU,5.4,mmol/L\r\n,,\r\nL1-20261112,HB,13,g/dL\r\n"
         self.assertEqual(self.rows(text), [(3, "L1-20261112", "GLU", "5.4", ""), (5, "L1-20261112", "HB", "13", "")])
@@ -435,6 +443,35 @@ class ApplyTests(LabBench):
         self.assertEqual((typed.value, typed.flag), (D("13.5"), "normal"))
         self.assertEqual(LabResult.objects.filter(patient=self.mona).count(), 2)  # HB typed + GLU imported
 
+    def test_a_result_entered_between_the_judging_and_the_write_is_not_overwritten(self):
+        """The race Codex found: ``apply`` judges, a clinician saves, ``apply`` writes. The write is insert-only."""
+
+        judged = lab_import.classify(self.rows)  # before anyone typed: three good lines
+        self.assertEqual(lab_import.counts(judged)[WRITE], 3)
+        lab.record_results(self.mona, self.day, {self.hb: ("13.5", "")}, self.doctor)  # typed in between, another value
+        lab.record_results(self.sami, self.day, {self.glu: ("120", "")}, self.doctor)  # typed in between, the same value
+        audit = AuditLog.objects.filter(action="record_lab_result").count()
+        with patch.object(lab_import, "classify", return_value=judged):
+            lines, totals = self.apply()
+        hb, glu = LabResult.objects.get(patient=self.mona, test=self.hb), LabResult.objects.get(patient=self.sami, test=self.glu)
+        self.assertEqual((hb.value, hb.flag, hb.entered_by), (D("13.5"), "normal", self.doctor))  # not 17.5, not the importer
+        self.assertEqual((glu.value, glu.entered_by), (D("120"), self.doctor))
+        # the file's lines: 0 Mona's HB, 1 Mona's sugar, 5 Sami's sugar
+        self.assertEqual([(lines[i].status, lines[i].written) for i in (0, 1, 5)], [(DIFFERS, False), (WRITE, True), (SAME, False)])
+        self.assertEqual((lines[0].existing, lines[0].new), ("13.5", "17.5"))
+        self.assertEqual((totals[WRITE], totals[DIFFERS], totals[SAME]), (1, 1, 1))
+        self.assertEqual(AuditLog.objects.filter(action="record_lab_result").count(), audit + 1)  # only Mona's sugar was written
+        self.assertEqual(AuditLog.objects.get(action="import_lab_results").after_data["written"], 1)
+
+    def test_only_new_leaves_an_entered_result_exactly_as_it_is(self):
+        lab.record_results(self.mona, self.day, {self.hb: ("13.5", "")}, self.doctor)
+        before = LabResult.objects.get(patient=self.mona, test=self.hb)
+        saved = lab.record_results(self.mona, self.day, {self.hb: ("17.5", ""), self.glu: ("88", "")}, self.owner, only_new=True)
+        self.assertEqual([result.test for result in saved], [self.glu])
+        after = LabResult.objects.get(patient=self.mona, test=self.hb)
+        self.assertEqual((after.value, after.flag, after.entered_by, after.updated_at), (D("13.5"), "normal", self.doctor, before.updated_at))
+        self.assertEqual(lab.record_results(self.mona, self.day, {self.hb: ("17.5", "")}, self.owner)[0].value, D("17.5"))  # typing still corrects
+
     def test_a_stale_preview_is_judged_again_when_applied(self):
         stale = lab_import.classify(self.rows)
         self.assertEqual(lab_import.counts(stale)[WRITE], 3)
@@ -450,11 +487,12 @@ class ApplyTests(LabBench):
         real = lab.record_results
         calls = []
 
-        def failing(patient, day, entries, user, lang="ar"):
+        def failing(patient, day, entries, user, lang="ar", **kwargs):
             calls.append(patient.pk)
+            self.assertEqual(kwargs, {"only_new": True})  # the import always writes insert-only
             if len(calls) == 2:
                 raise ValidationError("boom")
-            return real(patient, day, entries, user, lang)
+            return real(patient, day, entries, user, lang, **kwargs)
 
         audit = AuditLog.objects.count()
         with patch.object(lab, "record_results", failing), self.assertRaises(ValidationError):

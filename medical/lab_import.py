@@ -111,9 +111,7 @@ def read_file(uploaded, lang="ar"):
             continue
     else:
         raise ValidationError(_message("file_unreadable", lang))
-    first = next((line for line in text.splitlines() if line.strip()), "")
-    delimiter = ";" if first.count(";") > first.count(",") else ","  # never csv.Sniffer: 'L5-20261112;GLU;12,5' is semicolon-separated
-    reader = csv.reader(io.StringIO(text, newline=""), delimiter=delimiter)
+    reader = csv.reader(io.StringIO(text, newline=""), delimiter=_delimiter(text))
     rows = []
     try:
         for cells in reader:
@@ -132,6 +130,28 @@ def read_file(uploaded, lang="ar"):
     if not rows:
         raise ValidationError(_message("file_empty", lang))
     return rows
+
+
+def _delimiter(text):
+    """A comma or a semicolon, by which one makes the first lines look like rows: three cells or more, the first a sample code
+    or the sample column's name. Never ``csv.Sniffer`` and never a count of punctuation: ``L5-20261112;GLU;12,5`` and
+    ``L12-20261112;PLT;1,250,000`` are semicolon-separated however many commas their numbers carry."""
+
+    lines = [line for line in text.splitlines() if line.strip()][:20]
+
+    def fits(delimiter):
+        good = 0
+        for line in lines:
+            cells = [cell.replace("\ufeff", "").strip().strip('"') for cell in line.split(delimiter)]
+            if len(cells) >= 3 and (samples.parse(cells[0]) is not None or _key(cells[0]) in SAMPLE_HEADERS):
+                good += 1
+        return good
+
+    semicolon, comma = fits(";"), fits(",")
+    if semicolon != comma:
+        return ";" if semicolon > comma else ","
+    first = lines[0] if lines else ""  # nothing looks like a row either way: the old rule, and the lines are reported as they read
+    return ";" if first.count(";") > first.count(",") else ","
 
 
 def _is_header(cells):
@@ -343,11 +363,21 @@ def apply(user, name, rows, lang="ar"):
             batches[(line.patient.pk, line.day)][line.test] = line.entry
             patients[line.patient.pk] = line.patient
     written = 0
+    saved = set()
     for (pk, day), entries in batches.items():
-        lab.record_results(patients[pk], day, entries, user, lang)
-        written += len(entries)
+        # insert-only: a result typed (or imported) between the judging above and this write is left as it is
+        for result in lab.record_results(patients[pk], day, entries, user, lang, only_new=True):
+            saved.add((pk, day, result.test_id))
+            written += 1
     for line in lines:
-        line.written = line.status == WRITE
+        if line.status != WRITE:
+            continue
+        if (line.patient.pk, line.day, line.test.pk) in saved:
+            line.written = True
+            continue
+        there = LabResult.objects.filter(patient=line.patient, test=line.test, taken_on=line.day).first()  # it arrived in between
+        line.existing = _display(there.value, there.text_value) if there is not None else ""
+        line.status = SAME if there is not None and line.existing == line.new else DIFFERS
     totals = counts(lines)
     if not written:  # nothing changed (the same file again, or nothing good in it): nothing to audit
         return lines, totals

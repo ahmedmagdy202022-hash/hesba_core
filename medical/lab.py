@@ -182,10 +182,13 @@ def _day(raw, words):
 
 
 @transaction.atomic
-def record_results(patient, taken_on, entries, user, lang="ar"):
+def record_results(patient, taken_on, entries, user, lang="ar", *, only_new=False):
     """Record (or correct) the patient's results for a day.
 
-    ``entries``: {test: (raw value, text)}; a test with both blank is skipped. Returns the saved results."""
+    ``entries``: {test: (raw value, text)}; a test with both blank is skipped. Returns the saved results.
+
+    ``only_new`` (M9, the analyzer import): a test that already has a result that day is left exactly as it is and is not in
+    the returned list, also when the other result arrives at the same moment. A file never corrects what a person entered."""
 
     words = _words(lang)
     day = _day(taken_on, words)
@@ -204,6 +207,8 @@ def record_results(patient, taken_on, entries, user, lang="ar"):
     saved = []
     for test, value, text in rows:
         result = LabResult.objects.select_for_update().filter(patient=patient, test=test, taken_on=day).first()
+        if result is not None and only_new:
+            continue
         before = {"value": str(result.value if result.value is not None else ""), "text": result.text_value, "flag": result.flag} if result else {}
         # a correction keeps the range and unit that were on the result that day; a new result takes the test's current ones
         unit, low, high = (result.unit, result.low, result.high) if result else (test.unit, test.low, test.high)
@@ -212,7 +217,9 @@ def record_results(patient, taken_on, entries, user, lang="ar"):
             try:
                 with transaction.atomic():
                     result = LabResult.objects.create(patient=patient, test=test, taken_on=day, **fields)
-            except IntegrityError:  # entered twice at once: the second corrects the first
+            except IntegrityError:  # entered twice at once: the second corrects the first (an import leaves it alone)
+                if only_new:
+                    continue
                 result = LabResult.objects.select_for_update().get(patient=patient, test=test, taken_on=day)
                 before = {"value": str(result.value if result.value is not None else ""), "text": result.text_value, "flag": result.flag}
         for key, val in fields.items():
