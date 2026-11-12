@@ -299,13 +299,18 @@ def visit_edit(request, pk=None, visit_pk=None):
             if warning := prescribing.saved_warning(saved, lang):  # advice only: the visit is saved either way
                 messages.warning(request, warning)
             return redirect(f"{reverse('medical:file', args=[patient.pk])}?lang={lang}")
+    from appointments import online  # M10 (HG-096): an online booking's visit shows the mark and the doctor's join button while the booking is open
+
+    booked = appointment or (scoped_appointments(patient.appointments).filter(pk=visit.appointment_id).first() if visit and visit.appointment_id else None)
+    call = {"call_online": booked is not None and booked.kind == "online", "join_url": online.Viewer(request.user).url(booked) if booked is not None else "",
+            "words_online": online.PAGE_WORDS[lang]}
     own_doctor = getattr(request.user, "employee", None)
     default_doctor = visit.doctor_id if visit else (appointment.employee_id if appointment and appointment.employee_id else (own_doctor.pk if own_doctor else None))
     animals, default_animal = [], None
     if _is_vet():
         animals = list(patient.animals.filter(active=True) | patient.animals.filter(pk=visit.animal_id if visit else 0))
         default_animal = visit.animal_id if visit else (int(request.GET.get("animal")) if (request.GET.get("animal") or "").isdigit() else None)
-    return render(request, "medical/visit_form.html", _base(lang, patient=patient, visit=visit, appointment=appointment, error=error, post=request.POST, **prescribing.form_context(request, patient, visit, lang), **visit_templates.form_context(lang),
+    return render(request, "medical/visit_form.html", _base(lang, patient=patient, visit=visit, appointment=appointment, error=error, post=request.POST, **call, **prescribing.form_context(request, patient, visit, lang), **visit_templates.form_context(lang),
                                                             doctors=doctors_here, default_doctor=default_doctor if doctors_here.filter(pk=default_doctor or 0).exists() else None, animals=animals,
                                                             default_animal=default_animal, animal_label=VET_WORDS[lang]["animal"],
                                                             default_date=(visit.visit_date if visit else timezone.localdate()),
@@ -908,10 +913,24 @@ def queue_desk(request):
     appointments = [a for a in scoped_appointments().filter(starts_at__gte=start, starts_at__lt=start + timedelta(days=1),  # HG-074
                                                             status__in=(AppointmentStatus.BOOKED, AppointmentStatus.CONFIRMED, AppointmentStatus.ARRIVED))
                     .select_related("customer", "employee").order_by("starts_at") if a.pk not in in_queue]
+    from appointments import online  # M10 (HG-096): the call button of an online booking, for the doctor of that booking and reception
+
+    mine = {a.pk: a for a in scoped_appointments().filter(pk__in={t.appointment_id for t in tickets if t.appointment_id})}
+    doctor = queue._doctor_of(request.user)  # a doctor sees their own online visits of today here, with or without a check-in
+    my_online = list(scoped_appointments().filter(starts_at__gte=start, starts_at__lt=start + timedelta(days=1), kind="online", status__in=online.LIVE, employee=doctor)
+                     .select_related("customer").order_by("starts_at")) if doctor is not None else []
+    joins = online.join_urls(request.user, [*appointments, *mine.values(), *my_online])
+    for appointment in my_online:
+        appointment.join_url = joins.get(appointment.pk, "")
+    for ticket in tickets:
+        ticket.join_url = joins.get(ticket.appointment_id, "")
+        ticket.online = bool(ticket.appointment_id in mine and mine[ticket.appointment_id].kind == "online")
+    for appointment in appointments:
+        appointment.join_url = joins.get(appointment.pk, "")
     query = (request.GET.get("q") or "").strip()
     found = list(_patients().filter(active=True).filter(Q(name__icontains=query) | Q(phone__icontains=query))[:20]) if query else []
     return render(request, "medical/queue.html", _base(lang, page_title=words["title"], qw=words, tickets=tickets, appointments=appointments, found=found,
-                                                      query=query, doctors=_doctors(), error=error, is_desk=queue.is_desk(request.user),
+                                                      query=query, doctors=_doctors(), error=error, is_desk=queue.is_desk(request.user), words_online=online.PAGE_WORDS[lang], my_online=my_online,
                                                       shows_files=services.can_write(request.user), waiting=TicketStatus.WAITING, called=TicketStatus.CALLED))
 
 

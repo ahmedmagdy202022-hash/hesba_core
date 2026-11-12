@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views, views_booking, views_week
+from . import views, views_booking, views_online, views_week
 
 
 app_name = "appointments"
@@ -9,6 +9,7 @@ urlpatterns = [
     path("", views.agenda, name="agenda"),
     path("week/", views_week.week, name="week"),
     path("booking/", views_booking.booking_settings, name="booking_settings"),  # S3 (HG-077)
+    path("online/", views_online.online_settings, name="online_settings"),  # M10 (HG-096)
     path("week.json", views.week_json, name="week_json"),
     path("performance/", views.performance, name="performance"),
     path("<int:pk>/", views.detail, name="detail"),

@@ -32,7 +32,7 @@ AR_LABELS = {
     ("appointments.appointment", "status"): {
         "booked": "محجوز", "confirmed": "مؤكَّد", "arrived": "جاري", "done": "خلص", "cancelled": "ملغى", "no_show": "مجاش",
     },
-    ("appointments.appointment", "kind"): {"appointment": "في المحل", "visit": "زيارة عند العميل"},
+    ("appointments.appointment", "kind"): {"appointment": "في المحل", "visit": "زيارة عند العميل", "online": "كشف أونلاين"},
     ("restaurant.order", "status"): {"open": "مفتوح", "paid": "اتدفع", "cancelled": "ملغي"},
     ("manufacturing.productionrun", "status"): {"posted": "نهائية", "cancelled": "ملغية"},
     ("manufacturing.productionorder", "status"): {"planned": "لسه مبدأش", "in_progress": "شغال", "done": "خلص", "cancelled": "ملغي"},

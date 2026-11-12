@@ -7,21 +7,25 @@
 <h2>{{ qw.queue }}</h2>
 <div class="op-table-wrap"><table class="op-table" data-queue><thead><tr><th>{{ qw.number }}</th><th>{{ qw.patient }}</th><th>{{ qw.doctor }}</th><th>{{ qw.arrived }}</th><th>{{ qw.status }}</th><th></th></tr></thead><tbody>
 {% for t in tickets %}<tr data-ticket="{{ t.pk }}" data-ticket-status="{{ t.status }}"><td><strong>{{ t.number }}</strong></td>
-<td class="op-cell-text">{% if shows_files %}<a href="{% url 'medical:file' t.patient.pk %}?lang={{ lang }}">{{ t.patient.name }}</a>{% else %}{{ t.patient.name }}{% endif %}</td>
+<td class="op-cell-text">{% if shows_files %}<a href="{% url 'medical:file' t.patient.pk %}?lang={{ lang }}">{{ t.patient.name }}</a>{% else %}{{ t.patient.name }}{% endif %}{% if t.online %} <small data-queue-online>{{ words_online.kind_online }}</small>{% endif %}</td>
 <td class="op-cell-text">{{ t.doctor.name|default:'—' }}</td><td><bdi>{{ t.arrived_at|time:"H:i" }}</bdi>{% if t.waited is not None %} · {{ t.waited }} {{ qw.minutes }}{% endif %}</td>
 <td><span class="op-status {% if t.status == 'called' %}op-status-posted{% elif t.status == 'waiting' %}op-status-draft{% elif t.status == 'left' %}op-status-cancelled{% endif %}">{{ t.status_label }}</span></td>
 <td><form method="post" class="op-form-actions">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="ticket" value="{{ t.pk }}">
-{% if t.status == waiting %}<button class="op-secondary" type="submit" name="action" value="called">{{ qw.call }}</button><button class="op-secondary" type="submit" name="action" value="left">{{ qw.left }}</button>{% endif %}
+{% if t.join_url %}<a class="op-primary" href="{{ t.join_url }}" target="_blank" rel="noopener noreferrer" referrerpolicy="same-origin" data-join-call>{{ words_online.join }}</a>{% endif %}{% if t.status == waiting %}<button class="op-secondary" type="submit" name="action" value="called">{{ qw.call }}</button><button class="op-secondary" type="submit" name="action" value="left">{{ qw.left }}</button>{% endif %}
 {% if t.status == called %}<button class="op-secondary" type="submit" name="action" value="done">{{ qw.done }}</button><button class="op-secondary" type="submit" name="action" value="waiting">{{ qw.back_to_wait }}</button>
 {% if shows_files %}<a class="op-secondary" href="{% url 'medical:visit_new' t.patient.pk %}?lang={{ lang }}{% if t.appointment_id %}&appointment={{ t.appointment_id }}{% endif %}">{{ qw.record_visit }}</a>{% endif %}{% endif %}
 </form></td></tr>
 {% empty %}<tr><td colspan="6" class="op-empty"><span class="hs-empty" data-queue-empty><b>{{ qw.none }}</b>{% if is_desk %}<a href="#walk-in" data-queue-empty-check-in>{{ qw.none_act }}</a>{% else %}<span>{{ qw.none_hint }}</span>{% endif %}</span></td></tr>{% endfor %}
 </tbody></table></div>
+{% if my_online %}<h2 data-my-online-title>{{ words_online.my_title }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-my-online><thead><tr><th>{{ qw.at }}</th><th>{{ qw.patient }}</th><th></th></tr></thead><tbody>
+{% for a in my_online %}<tr data-my-online-row="{{ a.pk }}"><td><bdi>{{ a.starts_at|time:"H:i" }}</bdi></td><td class="op-cell-text">{{ a.customer.name }}</td><td>{% if a.join_url %}<a class="op-primary" href="{{ a.join_url }}" target="_blank" rel="noopener noreferrer" referrerpolicy="same-origin" data-join-call>{{ words_online.join }}</a>{% else %}<small class="op-muted">{{ words_online.box_none }}</small>{% endif %}</td></tr>{% endfor %}
+</tbody></table></div>{% endif %}
 {% if is_desk %}
 <h2>{{ qw.appointments }}</h2>
 <div class="op-table-wrap"><table class="op-table" data-queue-appointments><thead><tr><th>{{ qw.at }}</th><th>{{ qw.patient }}</th><th>{{ qw.doctor }}</th><th></th></tr></thead><tbody>
-{% for a in appointments %}<tr data-queue-appointment="{{ a.pk }}"><td><bdi>{{ a.starts_at|time:"H:i" }}</bdi></td><td class="op-cell-text">{{ a.customer.name }}</td><td class="op-cell-text">{{ a.employee.name|default:'—' }}</td>
-<td><form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="check_in"><input type="hidden" name="appointment" value="{{ a.pk }}"><button class="op-primary" type="submit">{{ qw.check_in }}</button></form></td></tr>
+{% for a in appointments %}<tr data-queue-appointment="{{ a.pk }}"><td><bdi>{{ a.starts_at|time:"H:i" }}</bdi></td><td class="op-cell-text">{{ a.customer.name }}{% if a.kind == 'online' %} <small data-queue-online>{{ words_online.kind_online }}</small>{% endif %}</td><td class="op-cell-text">{{ a.employee.name|default:'—' }}</td>
+<td>{% if a.join_url %}<a class="op-primary" href="{{ a.join_url }}" target="_blank" rel="noopener noreferrer" referrerpolicy="same-origin" data-join-call>{{ words_online.join }}</a> {% endif %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="check_in"><input type="hidden" name="appointment" value="{{ a.pk }}"><button class="op-primary" type="submit">{{ qw.check_in }}</button></form></td></tr>
 {% empty %}<tr><td colspan="4" class="op-empty"><span class="hs-empty" data-queue-appointments-empty><b>{{ qw.none_appts }}</b><a href="#walk-in">{{ qw.none_appts_act }}</a></span></td></tr>{% endfor %}
 </tbody></table></div>
 <h2 id="walk-in">{{ qw.walk_in }}</h2>
