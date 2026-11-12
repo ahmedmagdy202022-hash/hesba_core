@@ -106,7 +106,7 @@ def save_station(data, user, station=None, lang="ar"):
     if not raw_sort.isdigit():
         raise ValidationError(words["sort"])
     active = data.get("active", True) not in (False, "", "0", "off", None)
-    if station is not None and station.active and not active and station.tickets.filter(done_at__isnull=True).exists():
+    if station is not None and station.active and not active and shown_tickets(station).filter(done_at__isnull=True).exists():  # what its screen still shows
         raise ValidationError(words["has_open"])
     wanted = [int(raw) for raw in data.get("categories", []) if str(raw).isdigit()]
     categories = list(Category.objects.filter(pk__in=wanted, active=True).order_by("category_code"))

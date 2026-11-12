@@ -101,6 +101,9 @@ class RoutingTests(ScreenSetup):
         order = self.order((self.burger, 1), (self.juice, 1))
         sent = self.client.post(reverse("restaurant:order", args=[order.pk]), {"lang": "ar", "action": "send"})
         first = order.tickets.get(sequence=1)
+        from django.contrib.messages import get_messages
+
+        self.assertEqual([str(m) for m in get_messages(sent.wsgi_request)], ["اتبعتت تذكرتين للمطبخ (المطبخ، المشروبات)."])
         self.assertRedirects(sent, f"{reverse('restaurant:ticket', args=[first.pk])}?lang=ar&autoprint=1&upto=2", fetch_redirect_response=False)
         page = self.client.get(f"{reverse('restaurant:ticket', args=[first.pk])}?lang=ar&upto=2")
         self.assertContains(page, 'data-kitchen-ticket="%s-1"' % order.number)
@@ -158,6 +161,8 @@ class RoutingTests(ScreenSetup):
         services.send_to_kitchen(self.order((self.juice, 1)), self.owner)
         with self.assertRaisesMessage(ValidationError, "لسه ما خلصتش"):
             stations.save_station({"name_ar": "المشروبات", "active": False}, self.owner, self.bar)  # a station with tickets on its screen stays on
+        KitchenTicket.objects.filter(station=self.bar).update(sent_at=timezone.now() - timezone.timedelta(hours=30))  # nobody can see it any more
+        self.assertFalse(stations.save_station({"name_ar": "المشروبات", "active": False}, self.owner, self.bar).active)  # so it does not hold the station on
         self.assertTrue(AuditLog.objects.filter(action="create_station").exists() and AuditLog.objects.filter(action="change_station").exists())
 
 

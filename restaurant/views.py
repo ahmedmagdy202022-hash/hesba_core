@@ -50,7 +50,7 @@ WORDS = {
         "kitchen": "المطبخ", "ticket": "تذكرة", "tables_title": "طاولات الصالة", "name": "الاسم / الرقم", "area": "المكان", "sort": "الترتيب", "active": "شغالة",
         "save": "حفظ", "saved": "اتحفظت الطاولة.", "new_table": "طاولة جديدة", "edit": "تعديل", "bad_number": "اكتب رقم صحيح.",
         "ready": "جاهز", "ready_n": "جاهز {n}", "void_why": "السبب", "kitchen_screen": "شاشة المطبخ", "stations_title": "محطات المطبخ",
-        "sent_many": "اتبعتت {count} تذاكر للمطبخ ({stations}).",
+        "sent_many": "اتبعتت {count} للمطبخ ({stations}).",
     },
     "en": {
         "page_title": "Tables & orders", "title": "Tables & orders", "intro": "Tap a free table to open an order, or a busy one to carry on with its order.",
@@ -68,7 +68,7 @@ WORDS = {
         "kitchen": "Kitchen", "ticket": "Ticket", "tables_title": "Hall tables", "name": "Name / number", "area": "Area", "sort": "Order", "active": "Active",
         "save": "Save", "saved": "Table saved.", "new_table": "New table", "edit": "Edit", "bad_number": "Enter a valid number.",
         "ready": "Ready", "ready_n": "{n} ready", "void_why": "Reason", "kitchen_screen": "Kitchen screen", "stations_title": "Kitchen stations",
-        "sent_many": "{count} kitchen tickets sent ({stations}).",
+        "sent_many": "{count} sent to the kitchen ({stations}).",
     },
 }
 KIND_AR = {OrderKind.DINE_IN: "صالة", OrderKind.TAKEAWAY: "تيك أواي", OrderKind.DELIVERY: "دليفري"}
@@ -223,7 +223,8 @@ def order_detail(request, pk):
                         messages.success(request, words["sent_ok"].format(n=ticket.sequence))
                     else:  # R4: one ticket per station, each printed on its own page
                         names = ("، " if lang == "ar" else ", ").join(dict.fromkeys(t.station.label(lang) if t.station_id else words["kitchen"] for t in batch))
-                        messages.success(request, words["sent_many"].format(count=len(batch), stations=names))
+                        count = ("تذكرتين" if len(batch) == 2 else f"{len(batch)} تذاكر") if lang == "ar" else f"{len(batch)} tickets"
+                        messages.success(request, words["sent_many"].format(count=count, stations=names))
                     if request.POST.get("print", "1") == "1":
                         upto = f"&upto={batch[-1].sequence}" if len(batch) > 1 else ""
                         return redirect(f"{reverse('restaurant:ticket', args=[ticket.pk])}?lang={lang}&autoprint=1{upto}")
