@@ -118,3 +118,8 @@ class WaitersMenuTests(KitchenSetup):
         self.client.force_login(self.owner)
         page = self.client.get(reverse("master_data:items"))
         self.assertContains(page, "أرز")
+
+    def test_a_refused_save_still_echoes_what_was_typed(self):
+        self.client.force_login(self.owner)
+        response = self.client.post(reverse("restaurant:dish", args=[self.koshary.pk]), {"ingredient": [self.rice.pk], "quantity": ["x"]})
+        self.assertContains(response, 'name="quantity" inputmode="decimal" value="x"')
