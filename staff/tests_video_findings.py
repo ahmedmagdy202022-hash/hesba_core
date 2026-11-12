@@ -29,7 +29,7 @@ class OwnerOnMyDayTests(MyDaySetup):
         self.assertEqual(page.status_code, 403)
         body = page.content.decode()
         self.assertIn('data-error-page="403"', body)
-        self.assertIn("مش مسموح لك تفتح الصفحة دي", body)
+        self.assertIn("الصفحة دي مش متاحة لحسابك", body)
         self.assertNotIn("<h1>403 Forbidden</h1>", body)
         self.assertIn('dir="rtl"', body)
 
@@ -37,7 +37,7 @@ class OwnerOnMyDayTests(MyDaySetup):
         self.client.force_login(plain("vf_nobody_en"))
         body = self.client.get(reverse("staff:my_day"), {"lang": "en"}).content.decode()
         self.assertIn('<html lang="en" dir="ltr">', body)
-        self.assertIn("You are not allowed to open this page", body)
+        self.assertIn("This page is not available to your account", body)
         self.assertNotIn("This account is not linked to a technician", body)  # the PermissionDenied text stays in the log
 
     def test_a_post_by_someone_with_no_employee_record_is_still_refused(self):

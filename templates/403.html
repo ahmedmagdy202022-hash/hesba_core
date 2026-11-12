@@ -20,11 +20,11 @@ The sentence is fixed copy in both languages: the exception's own message is a d
   <section class="hs-error__card">
     <span class="hs-error__code"><bdi dir="ltr">403</bdi></span>
     {% if en == 'en' %}
-    <h1>You are not allowed to open this page</h1>
-    <p>Your account does not have the right for it. If you need it, ask the owner to give you the permission.</p>
+    <h1>This page is not available to your account</h1>
+    <p>Your account does not have permission to open it. If you need it, ask the account owner for access.</p>
     {% else %}
-    <h1>مش مسموح لك تفتح الصفحة دي</h1>
-    <p>حسابك ملوش صلاحية عليها. لو محتاجها اطلب من صاحب الحساب يديك الصلاحية.</p>
+    <h1>الصفحة دي مش متاحة لحسابك</h1>
+    <p>حسابك ماعندوش صلاحية يفتحها. لو محتاجها، اطلبها من صاحب الحساب.</p>
     {% endif %}
     {% if user.is_authenticated %}<a class="op-primary" href="{% url 'dashboard_snapshot' %}?lang={% if en == 'en' %}en{% else %}ar{% endif %}" data-error-home>{% if en == 'en' %}Back to the dashboard{% else %}ارجع للرئيسية{% endif %}</a>
     {% elif demo_mode %}<a class="op-primary" href="{% url 'demo_landing' %}?lang={% if en == 'en' %}en{% else %}ar{% endif %}" data-error-home>{% if en == 'en' %}Back to the demo{% else %}ارجع لصفحة التجربة{% endif %}</a>
