@@ -154,15 +154,15 @@ def clean_leftovers(now=None):
 #: The owner's name per kind of business: the dashboard greets a person, not a role.
 DEMO_OWNERS = {
     ("commercial", "retail"): "أستاذ محمود الشربيني", ("commercial", "pharmacy"): "د. أحمد الشاذلي",
-    ("commercial", "grocery"): "الحاج سعيد عبد العال", ("commercial", "fashion"): "مدام نهى فؤاد",
-    ("commercial", "electronics"): "أستاذ كريم حمدي", ("commercial", "wholesale"): "الحاج رمضان عبد الحميد",
+    ("commercial", "grocery"): "أ. سعيد عبد العال", ("commercial", "fashion"): "مدام نهى فؤاد",
+    ("commercial", "electronics"): "أستاذ كريم حمدي", ("commercial", "wholesale"): "أ. رمضان عبد الحميد",
     ("restaurants", "restaurant"): "الشيف كريم عادل", ("restaurants", "cafe"): "أستاذ عمر فاروق",
     ("medical", "clinic"): "د. سارة حسين", ("medical", "dental"): "د. هشام عبد الله", ("medical", "vet"): "د. كريم البيطري",
     ("education", "training"): "أ. منى عبد الرحمن", ("education", "nursery"): "ميس دينا شوقي",
-    ("services", "maintenance"): "الأسطى محمد رمضان", ("services", "beauty"): "مدام هالة سمير",
-    ("manufacturing", "food"): "الحاج سيد عبد الفتاح", ("contracting", "general"): "م. طارق الجندي",
+    ("services", "maintenance"): "م. محمد رمضان", ("services", "beauty"): "مدام هالة سمير",
+    ("manufacturing", "food"): "م. سيد عبد الفتاح", ("contracting", "general"): "م. طارق الجندي",
     "commercial": "أستاذ محمود الشربيني", "restaurants": "الشيف كريم عادل", "medical": "د. سارة حسين", "education": "أ. منى عبد الرحمن",
-    "services": "الأسطى محمد رمضان", "manufacturing": "الحاج سيد عبد الفتاح", "contracting": "م. طارق الجندي",
+    "services": "م. محمد رمضان", "manufacturing": "م. سيد عبد الفتاح", "contracting": "م. طارق الجندي",
 }
 ROLE_NAME = "المالك"  # what seed_demo_users calls the owner; only that is ever replaced
 
