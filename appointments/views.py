@@ -24,7 +24,7 @@ from sales.short_sales import is_owner
 from settings_core.display_labels import choice_label
 from staff.models import Employee
 
-from . import services
+from . import online, services
 from .models import Appointment, AppointmentKind, AppointmentStatus
 
 
@@ -118,12 +118,17 @@ def _form_data(request, words):
     }
 
 
-def _kinds(lang):
-    """WATCH1B (CL-01): the two kinds in the activity's words («في العيادة» / «زيارة عند المريض» in a clinic)."""
+def _kinds(lang, current=""):
+    """WATCH1B (CL-01): the two kinds in the activity's words («في العيادة» / «زيارة عند المريض» in a clinic).
+    M10: a medical installation also offers «كشف أونلاين» (and a booking already online keeps the choice anywhere)."""
 
+    from medical.services import is_medical_install
     from settings_core.vocabulary import term
 
-    return [(AppointmentKind.APPOINTMENT, term("agenda_kind_place", lang)), (AppointmentKind.VISIT, term("agenda_kind_visit", lang))]
+    kinds = [(AppointmentKind.APPOINTMENT, term("agenda_kind_place", lang)), (AppointmentKind.VISIT, term("agenda_kind_visit", lang))]
+    if is_medical_install() or current == AppointmentKind.ONLINE:
+        kinds.append((AppointmentKind.ONLINE, term("agenda_kind_online", lang)))
+    return kinds
 
 
 def _staff_offered(*keep):
@@ -136,11 +141,11 @@ def _staff_offered(*keep):
     return serving_staff(*keep) if is_medical_install() else Employee.objects.filter(active=True)
 
 
-def _choices(lang, *keep):
+def _choices(lang, *keep, kind=""):
     return {
         "customers": Customer.objects.filter(active=True).order_by("name"), "employees": _staff_offered(*keep),
         "services": Item.objects.filter(active=True).order_by("is_stock_tracked", "item_name"),
-        "kinds": _kinds(lang),
+        "kinds": _kinds(lang, kind),
     }
 
 
@@ -205,12 +210,13 @@ def agenda(request):
     numbers = queue.ticket_numbers(agenda_rows) if queue.has_queue() else {}
     queue_on = queue.has_queue() and queue.is_desk(request.user)
     asked = services.pending_cancel_requests([appointment.pk for appointment in agenda_rows])  # M3: the patient's requests, one query
-    rows = [{"appointment": appointment, "cancel_asked": appointment.pk in asked, "status_label": choice_label(appointment, "status", lang), "deposit": held_deposits.get(appointment.pk),
+    joins = online.join_urls(request.user, agenda_rows)  # M10: the call links this user may open, one permission check for the page
+    rows = [{"appointment": appointment, "join_url": joins.get(appointment.pk, ""), "cancel_asked": appointment.pk in asked, "status_label": choice_label(appointment, "status", lang), "deposit": held_deposits.get(appointment.pk),
              "queue_number": numbers.get(appointment.pk), "queue_label": words["in_queue"].format(number=numbers.get(appointment.pk, "")), "can_check_in": queue.can_check_in(appointment, request.user, numbers)} for appointment in agenda_rows]
     return render(request, "appointments/agenda.html", _base(
         request, day=day, prev_day=day - timedelta(days=1), next_day=day + timedelta(days=1), today=timezone.localdate(),
         rows=rows, queue_on=queue_on, columns=6 + deposits_on + queue_on, employee=employee, form=form, error=error, cancel_hours=deposits.cancel_hours(), deposits_on=deposits_on,
-        can_set_policy=deposits_on and is_owner(request.user), can_online_booking=_can_online_booking(request.user), **_choices(lang, employee.pk if employee else 0),
+        can_set_policy=deposits_on and is_owner(request.user), can_online_booking=_can_online_booking(request.user), can_online_settings=_can_online_settings(request.user), words_online=online.PAGE_WORDS[lang], **_choices(lang, employee.pk if employee else 0),
     ))
 
 
@@ -245,6 +251,16 @@ def _can_online_booking(user):
     from . import booking, views_booking
 
     return booking.enabled() and views_booking.can_manage(user)
+
+
+def _can_online_settings(user):
+    """M10 (HG-096): the online-consultation settings are offered, from the agenda, in a medical installation to who may manage them."""
+
+    from medical.services import is_medical_install
+
+    from . import views_booking
+
+    return is_medical_install() and views_booking.can_manage(user)
 
 
 def _medical_file(user):
@@ -314,6 +330,14 @@ def detail(request, pk):
                     _refund(request, deposit, request.POST.get("reason", ""), lang, words, refuse=True)
             elif action == "check_in":  # M4
                 messages.success(request, words["checked_in"].format(**_check_in(appointment, request.user, lang)))
+            elif action in ("call_generate", "call_paste", "call_remove"):  # M10 (HG-096): the online booking's call link; the booking permission above guards it
+                if action == "call_remove":
+                    online.remove_link(appointment, request.user, lang)
+                    messages.success(request, online.WORDS[lang]["removed"])
+                else:
+                    had = bool(appointment.call_url)
+                    online.set_link(appointment, request.user, "generate" if action == "call_generate" else "paste", request.POST.get("call_url", ""), lang)
+                    messages.success(request, online.WORDS[lang]["replaced" if had else "set"])
             elif action == "cancel_seen":  # M3: reception answered the patient's request without changing the appointment
                 services.mark_cancel_request_seen(appointment, request.user)
                 messages.success(request, words["cancel_seen_done"])
@@ -340,9 +364,12 @@ def detail(request, pk):
         appointment.refresh_from_db()
     local = timezone.localtime(appointment.starts_at)
     company = company_details()
-    reminder = whatsapp_link(appointment.customer.phone, words["reminder"].format(
+    reminder_text = words["reminder"].format(
         customer=appointment.customer.name, service=f"({appointment.service.item_name}) " if appointment.service else "",
-        date=local.strftime("%Y-%m-%d"), time=local.strftime("%H:%M"), company=company["name"]))
+        date=local.strftime("%Y-%m-%d"), time=local.strftime("%H:%M"), company=company["name"])
+    if appointment.kind == AppointmentKind.ONLINE:  # M10: it carries the patient's own page, where the join button shows
+        reminder_text = online.staff_reminder(appointment, reminder_text, lang)
+    reminder = whatsapp_link(appointment.customer.phone, reminder_text)
     actions = [(status, words["actions"][status]) for status in services.NEXT.get(appointment.status, ())]
     form = {"day": local.date().isoformat(), "time": local.strftime("%H:%M"), "duration_minutes": appointment.duration_minutes, "customer": str(appointment.customer_id),
             "employee": str(appointment.employee_id or ""), "service": str(appointment.service_id or ""), "price": appointment.price, "kind": appointment.kind,
@@ -354,9 +381,21 @@ def detail(request, pk):
     insured = _insured(appointment, lang)
     return render(request, "appointments/detail.html", _base(
         request, appointment=appointment, **insured, local=local, queue_number=numbers.get(appointment.pk), queue_label=words["in_queue"].format(number=numbers.get(appointment.pk, "")), can_check_in=queue.can_check_in(appointment, request.user, numbers), status_label=choice_label(appointment, "status", lang), cancel_asked=appointment.pk in services.pending_cancel_requests([appointment.pk]), reminder=reminder, actions=actions,
-        form=form, editable=editable, error=error, medical_file=_medical_file(request.user), can_bill=appointment.status in (AppointmentStatus.ARRIVED, AppointmentStatus.DONE) and not appointment.invoice_id,
-        **_deposit_box(request, appointment, lang), **_choices(lang, appointment.employee_id),
+        form=form, editable=editable, error=error, medical_file=_medical_file(request.user), **_online_box(request.user, appointment, lang), can_bill=appointment.status in (AppointmentStatus.ARRIVED, AppointmentStatus.DONE) and not appointment.invoice_id,
+        **_deposit_box(request, appointment, lang), **_choices(lang, appointment.employee_id, kind=appointment.kind),
     ))
+
+
+def _online_box(user, appointment, lang):
+    """M10 (HG-096): what the booking's page shows of the call: the join button for who may open it, and the link controls for who
+    may manage the booking (the page itself needs the booking permission to post)."""
+
+    if appointment.kind != AppointmentKind.ONLINE:
+        return {"online": False}
+    live = appointment.status in online.LIVE
+    return {"online": True, "join_url": online.Viewer(user).url(appointment), "has_call_link": bool(appointment.call_url), "can_call_link": live,
+            "words_online": online.PAGE_WORDS[lang],
+            "prepaid_note": online.prepaid_required() and live and not online.covered(appointment)}
 
 
 # ---- S5 (HG-069): the deposit box and the cancellation policy -------------------------------------------------------

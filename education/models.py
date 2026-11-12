@@ -305,3 +305,53 @@ class PlacementTest(models.Model):
 
     class Meta:
         ordering = ["-taken_on", "-pk"]
+
+
+class ExamKind(models.TextChoices):
+    QUIZ = "quiz", "Quiz"
+    MONTHLY = "monthly", "Monthly exam"
+    MIDTERM = "midterm", "Midterm"
+    FINAL = "final", "Final"
+    OTHER = "other", "Other"
+
+
+class Exam(models.Model):
+    """E2: one paper sat by a study group on one day, out of a fixed mark. Its entity is the group's, as a class session's is.
+
+    ``published`` is off until the centre releases it: a guardian (once a portal exists) sees published exams only."""
+
+    group = models.ForeignKey(StudyGroup, on_delete=models.PROTECT, related_name="exams")
+    title = models.CharField(max_length=160)
+    kind = models.CharField(max_length=10, choices=ExamKind.choices, default=ExamKind.QUIZ)
+    held_on = models.DateField(db_index=True)
+    out_of = models.DecimalField(max_digits=7, decimal_places=2, validators=[MinValueValidator(Decimal("0.01"))])
+    published = models.BooleanField(default=False)
+    notes = models.CharField(max_length=255, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-held_on", "-pk"]
+        constraints = [models.CheckConstraint(condition=models.Q(out_of__gt=0), name="education_exam_out_of_positive")]
+
+    def __str__(self):
+        return f"{self.group} {self.title}"
+
+
+class ExamMark(models.Model):
+    """E2: what one student scored on one exam. A student with no row has not been entered yet; ``absent`` and a score never go together."""
+
+    exam = models.ForeignKey(Exam, on_delete=models.CASCADE, related_name="marks")
+    student = models.ForeignKey(Student, on_delete=models.PROTECT, related_name="exam_marks")
+    score = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(Decimal("0"))])
+    absent = models.BooleanField(default=False)
+    note = models.CharField(max_length=255, blank=True)
+    entered_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    entered_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["student__name", "pk"]
+        constraints = [
+            models.UniqueConstraint(fields=["exam", "student"], name="education_one_mark_per_student_exam"),
+            models.CheckConstraint(condition=models.Q(absent=False) | models.Q(score__isnull=True), name="education_exam_mark_absent_has_no_score"),
+        ]

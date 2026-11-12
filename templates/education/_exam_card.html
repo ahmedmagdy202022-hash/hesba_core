@@ -1,0 +1,5 @@
+{# E2: the exams card on the group page. Drawn only for whoever may take this group's attendance (a manager, or its own teacher). #}
+{% load hesba_format %}
+<section class="op-detail-meta" data-exams-card><h2>{{ xw.exams }}</h2>
+{% include "education/_exam_list.html" with rows=exam_rows %}
+<div class="op-form-actions">{% if group.active %}<a class="op-primary" href="{% url 'education:exam_new' group.pk %}?lang={{ lang }}" data-new-exam>{{ xw.new_exam }}</a>{% endif %}<a class="op-secondary" href="{% url 'education:exams' group.pk %}?lang={{ lang }}" data-all-exams>{{ xw.all_exams }}</a></div></section>

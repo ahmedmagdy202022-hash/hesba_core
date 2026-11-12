@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views, views_paylinks, views_scan
+from . import views, views_exams, views_paylinks, views_scan
 
 app_name = "education"
 
@@ -18,6 +18,10 @@ urlpatterns = [
     path("scan/mark/", views_scan.scan_mark, name="scan_mark"),
     path("cards/", views_scan.card_sheet, name="cards"),
     path("groups/<int:pk>/attendance/", views.take_attendance, name="attendance"),
+    path("groups/<int:pk>/exams/", views_exams.group_exams, name="exams"),
+    path("groups/<int:pk>/exams/new/", views_exams.exam_new, name="exam_new"),
+    path("exams/<int:pk>/", views_exams.exam_sheet, name="exam"),
+    path("students/<int:pk>/report-card/", views_exams.report_card, name="report_card"),
     path("fees/", views.fees, name="fees"),
     path("fees/paylink/<int:invoice_pk>/", views_paylinks.make, name="paylink_make"),
     path("fees/paylinks/", views_paylinks.bulk, name="paylinks_bulk"),
