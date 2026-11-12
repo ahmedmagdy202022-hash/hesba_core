@@ -1,6 +1,7 @@
 """E5 (HG-093): the automatic messages to a guardian, an absence and fees still due.
 
-"Today" comes from ``timezone.localdate()`` and every other day is built from it; no clock is patched. What these pin: both kinds are off until
+"Today" comes from ``timezone.localdate()`` and every other day is built from it. An absence waits for its class to end, so the
+fixture reads the clock as the end of today (every class of today is over); one test moves it to show the wait. What these pin: both kinds are off until
 the owner switches them on and exist only for a school or a centre; an absence is messaged once per student per class, for today and
 yesterday only, never for a cancelled class or a late mark, never again once it was sent or skipped (even after the sheet is saved again,
 which rewrites every mark), and withdrawn when the mark is corrected before it goes out; the text carries the student, the group, the
@@ -12,7 +13,7 @@ business that is not a school is untouched; and nothing here moves money.
 import importlib
 import os
 import re
-from datetime import time, timedelta
+from datetime import datetime, time, timedelta
 from decimal import Decimal as D
 from unittest import mock
 
@@ -57,6 +58,10 @@ class Centre(EducationSetup):
 
     def setUp(self):
         super().setUp()
+        # An absence is messaged once its class has ended (education.messages.class_over). The day is over here unless a test says otherwise.
+        clock = mock.patch.object(education_messages, "_now", return_value=timezone.make_aware(datetime.combine(TODAY, time(23, 59))))
+        clock.start()
+        self.addCleanup(clock.stop)
         make_location(location_code="CENTER", is_default=True)  # where the fee invoices are recorded, as every install has
         self.cashbox = make_cashbox()
         self.daily = self.group("مجموعة يومية", days=EVERY_DAY, fee="0")  # a free group: only the fee groups bill
@@ -99,6 +104,33 @@ class AbsenceTests(Centre):
         self.assertEqual(services.build(), 1)
         self.assertTrue(MessageKind.ABSENCE in services.DEFAULT_OFF and MessageKind.FEES in services.DEFAULT_OFF)
         self.assertFalse(services.template(MessageKind.FEES).active)
+
+    def test_an_absence_waits_for_the_class_to_end(self):
+        """A teacher who saves the sheet mid-class must not alarm a guardian whose child is ten minutes late: today's class is
+        messaged once its start plus its length has passed. Yesterday's class is over whatever the hour."""
+
+        def clock_at(hour, minute):
+            return mock.patch.object(education_messages, "_now", return_value=timezone.make_aware(datetime.combine(TODAY, time(hour, minute))))
+
+        self.daily.start_time, self.daily.duration_minutes = time(16, 0), 90
+        self.daily.save(update_fields=["start_time", "duration_minutes"])
+        self.absent(self.a)
+        with clock_at(16, 20):  # the class is running
+            self.assertEqual(services.build(), 0)
+        with clock_at(17, 29):  # one minute before it ends
+            self.assertEqual(services.build(), 0)
+        self.absent(self.b, days_ago(1))
+        with clock_at(8, 0):  # this morning, before today's class: only yesterday's absence
+            self.assertEqual(services.build(), 1)
+            self.assertEqual([row.name for row in self.messages(MessageKind.ABSENCE)], ["ولي أمر بسمة"])
+        with clock_at(17, 30):  # today's class has ended
+            self.assertEqual(services.build(), 1)
+            self.assertEqual(sorted(row.name for row in self.messages(MessageKind.ABSENCE)), ["ولي أمر آدم", "ولي أمر بسمة"])
+        self.daily.start_time = None  # a group with no time has no end to wait for
+        self.daily.save(update_fields=["start_time"])
+        self.absent(self.c)
+        with clock_at(0, 5):
+            self.assertEqual(services.build(), 1)
 
     def test_last_weeks_absence_is_not_queued_and_todays_and_yesterdays_are_once_each(self):
         self.absent(self.a, days_ago(7))

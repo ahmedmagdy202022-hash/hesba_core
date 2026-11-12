@@ -8,6 +8,7 @@ attendance rate, a grade or a link.
 * **Absence.** A mark that says absent, in a class that was held, dated today or yesterday only (``messaging.services.ABSENCE_DAYS``),
   for an active student of the entity being gathered. One message per student per class: the key holds the class and the student, not the
   mark, because saving the attendance sheet deletes and rewrites every mark (``attendance.take``) and a mark's id changes each time.
+  Today's class is messaged only once it has ended (``class_over``): a student marked absent mid-class may still arrive.
   A sent or skipped message is never queued again. A mark corrected to present before the message goes out stops being yielded, and the
   gathering (``messaging.services._gather``) withdraws the waiting message; one already sent cannot be taken back.
 * **Fees.** A guardian with a posted fee invoice (one a ``FeeCharge`` points at, not cancelled) dated at least ``FEES_AFTER_DAYS`` days
@@ -15,7 +16,7 @@ attendance rate, a grade or a link.
   second way to work one out. One message per guardian, repeated at most every ``every_days`` (7) while it is still due.
 """
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 from django.db.models import Sum
@@ -43,6 +44,23 @@ def _centre(lang):
     return entity_scope.entity().display(lang) if is_multi_entity() else ""
 
 
+def _now():
+    return timezone.now()
+
+
+def class_over(session, now=None):
+    """Whether the class has ended, so its absences are final enough to tell a guardian. A class on an earlier day is over; today's is
+    over once its group's start time plus its length has passed; a group with no start time has no end to wait for. Until then an
+    «absent» mark may still be a student on the way (a late scan turns it into «late»), and a guardian must not be alarmed for that."""
+
+    now = timezone.localtime(now or _now())
+    group = session.group
+    if session.date < now.date() or group.start_time is None:
+        return True
+    ends = timezone.make_aware(datetime.combine(session.date, group.start_time)) + timedelta(minutes=group.duration_minutes or 0)
+    return now >= ends
+
+
 def absences(today, company, currency):
     """Today's and yesterday's absences in the entity being gathered, one message per student per class (see the module note)."""
 
@@ -64,7 +82,7 @@ def absences(today, company, currency):
         key = f"absence:{mark.session_id}:{mark.student_id}"
         payer = mark.student.payer
         phone = payer.whatsapp or payer.phone
-        if key in closed or not phone:
+        if key in closed or not phone or not class_over(mark.session):
             continue
         yield {"key": key, "name": payer.name, "phone": phone, "link": f"/education/students/{mark.student_id}/", "localised": True,
                "values": {"student": mark.student.name, "group": mark.session.group.name, "date": day_text(mark.session.date, lang), **({"company": centre} if centre else {})}}
