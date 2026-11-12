@@ -312,6 +312,32 @@ class ScreenFlowTests(ReportSetup):
         self.assertEqual(refused_photo.status_code, 400)
         self.assertEqual(refused_photo.json()["error"], attachments.MESSAGES["ar"]["report_closed"])
 
+    def test_a_closed_project_keeps_the_photos_of_its_reports(self):
+        self.write()
+        report = SiteReport.objects.get()
+        self.client.force_login(self.engineer)
+        self.assertEqual(self.add_photo(report).status_code, 201)
+        photo = Attachment.objects.get()
+        delete = reverse("projects:file_delete", args=[self.project.pk, photo.pk])
+        self.assertContains(self.client.get(self.url("diary_day", report.pk)), delete)  # open project: the engineer may delete
+        Project.objects.filter(pk=self.project.pk).update(status="done")
+        self.assertNotContains(self.client.get(self.url("diary_day", report.pk)), delete)  # closed: no delete control ...
+        refused = self.client.post(delete)  # ... and a crafted request is refused by the service
+        self.assertEqual(refused.status_code, 400)
+        self.assertEqual(refused.json()["error"], attachments.MESSAGES["ar"]["report_kept"])
+        self.assertTrue(Attachment.objects.filter(pk=photo.pk).exists())
+
+    def test_the_list_reaches_every_day_of_a_long_project_a_page_at_a_time(self):
+        for n in range(25):
+            self.write(day=TODAY() - timedelta(days=n))
+        self.client.force_login(self.viewer)
+        first = self.client.get(self.url("diary"), {"per": "20"}).content.decode()
+        self.assertEqual(len(re.findall(r'<tr data-site-report="', first)), 20)
+        self.assertIn("page=2", first)
+        second = self.client.get(self.url("diary"), {"per": "20", "page": "2"}).content.decode()
+        days = re.findall(r'<tr data-site-report="([\d-]+)"', second)
+        self.assertEqual(days, [(TODAY() - timedelta(days=n)).isoformat() for n in range(20, 25)])  # the oldest five
+
     def test_the_list_shows_the_day_in_words_the_head_count_and_a_mark_only_where_something_was_delayed(self):
         self.write(day=TODAY() - timedelta(days=2), delayed="تأخر توريد الحديد يومين")
         self.write(day=TODAY() - timedelta(days=1))

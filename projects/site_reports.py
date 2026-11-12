@@ -183,13 +183,16 @@ def get_report(project, pk):
     return SiteReport.objects.select_related("project", "created_by", "updated_by").filter(project=project, pk=raw).first() if raw.isdigit() else None
 
 
-def reports_for(project, limit=200):
-    """The project's reports, newest day first, with the head count, the number of equipment rows and a delayed flag."""
+def reports_for(project):
+    """The project's reports, newest day first, with the head count and the number of equipment rows.
 
-    rows = (SiteReport.objects.filter(project=project)
+    A queryset of the whole diary, never cut here: the list screen shows it a page at a time (``config.paging``), so a
+    project that runs for years still reaches its first day.
+    """
+
+    return (SiteReport.objects.filter(project=project)
             .annotate(workers=Sum("rows__count", filter=Q(rows__kind=SiteReportRowKind.CREW)), equipment_rows=Count("rows", filter=Q(rows__kind=SiteReportRowKind.EQUIPMENT)))
-            .select_related("created_by").order_by("-report_date", "-pk")[:limit])
-    return list(rows)
+            .select_related("created_by").order_by("-report_date", "-pk"))
 
 
 def photo_counts(reports):

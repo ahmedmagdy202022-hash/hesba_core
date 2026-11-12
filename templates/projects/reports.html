@@ -1,5 +1,5 @@
 {% extends "operations/base.html" %}
-{% load static %}
+{% load static hesba_paging %}
 {% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/projects.css' %}?v=c2-1">{% endblock %}
 {% block operation_content %}
 {# Contracting C2b (HG-095): the project's daily reports, newest first. A record only: nothing here changes a quantity, a certificate or a cost. #}
@@ -17,5 +17,6 @@
 <td data-row="action"><a class="sr-print-link" href="{{ row.print_url }}" target="_blank" rel="noopener" data-report-print>{{ rw.print }}</a></td></tr>
 {% empty %}<tr><td colspan="6" class="op-empty" data-row="empty"><span class="hs-empty" data-empty-none><b>{{ rw.none }}</b></span></td></tr>{% endfor %}
 </tbody></table></div>
+{% pager page %}
 {% include "projects/_site_cta.html" with at="bar" %}
 {% endblock %}

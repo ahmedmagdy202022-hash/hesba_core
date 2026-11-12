@@ -15,6 +15,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from attachments import services, views as attachment_views
+from config.paging import page_of
 from settings_core.templatetags.hesba_format import day_text
 
 from . import access, documents, site_reports
@@ -124,7 +125,8 @@ def reports_list(request, pk):
     _need_view(request)
     lang = _lang(request)
     project = _project(pk)
-    reports = site_reports.reports_for(project)
+    page = page_of(request, site_reports.reports_for(project))  # the whole diary, a page at a time
+    reports = list(page)
     photos = site_reports.photo_counts(reports)
     words = WORDS[lang]
     rows = [{"report": report, "day": day_text(report.report_date, lang), "weather": site_reports.weather_label(report.weather, lang), "workers": report.workers or 0,
@@ -132,7 +134,7 @@ def reports_list(request, pk):
              "workers_text": words["workers_n"].format(n=report.workers or 0), "photos_text": words["photos_n"].format(n=photos.get(report.pk, 0)),
              "url": f"{reverse('projects:diary_day', args=[project.pk, report.pk])}?lang={lang}",
              "print_url": f"{reverse('projects:diary_print', args=[project.pk, report.pk])}?lang={lang}"} for report in reports]
-    return render(request, "projects/reports.html", _context_for(request, project, "reports", rows=rows, today=day_text(timezone.localdate(), lang), page_title=f"{project.name} — {words['page_title']}"))
+    return render(request, "projects/reports.html", _context_for(request, project, "reports", rows=rows, page=page, today=day_text(timezone.localdate(), lang), page_title=f"{project.name} — {words['page_title']}"))
 
 
 # ---- the form ----
@@ -203,7 +205,7 @@ def report_form(request, pk, rid=None):
 
 def _photo_items(project, report, user, lang):
     rules = services.OWNERS[REPORT]
-    can_delete = bool(rules["can_delete"](user, report))
+    can_delete = bool(rules["can_delete"](user, report)) and not rules["closed"](report)  # a closed project's photos are kept
     rows = list(services.attachments_for(report, user, lang))
     return [{"row": row, "url": documents.file_url(project, row, lang), "delete_url": documents.delete_url(project, row, lang), "can_delete": can_delete,
              "who": _who(row.uploaded_by), "when": documents.when_text(row.created_at, lang)} for row in rows]

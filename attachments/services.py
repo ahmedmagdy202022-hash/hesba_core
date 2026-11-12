@@ -66,7 +66,8 @@ MESSAGES = {
            "project_kind": "المستند لازم يكون صورة أو ملف PDF.",
            "report_read_only": "إضافة صور التقرير اليومي لمهندس الموقع أو لصاحب صلاحية الفواتير بس.",
            "report_delete_denied": "مسح صور التقرير اليومي لمهندس الموقع أو لصاحب صلاحية الفواتير بس.",
-           "report_stage": "صور التقرير اليومي بتبقى صور موقع بس.", "report_closed": "المشروع ده اتقفل؛ مينفعش يتضاف صور على تقاريره."},
+           "report_stage": "صور التقرير اليومي بتبقى صور موقع بس.", "report_closed": "المشروع ده اتقفل؛ مينفعش يتضاف صور على تقاريره.",
+           "report_kept": "المشروع ده اتقفل؛ صور تقاريره بتفضل زي ما هي ومينفعش تتمسح."},
     "en": {"denied": "You may not use attachments on this record.", "not_found": "The attachment or the record was not found.",
            "kind": "The attachment kind must be photo, document or signature.", "stage": "The attachment stage must be receive, deliver or other.",
            "empty": "The file is empty or was not sent.", "size": "The file is larger than allowed ({limit}).",
@@ -89,7 +90,8 @@ MESSAGES = {
            "project_kind": "A document must be an image or a PDF.",
            "report_read_only": "Only the site engineer, or someone who may create invoices, can add photos to a daily report.",
            "report_delete_denied": "Only the site engineer, or someone who may create invoices, can delete a daily report's photos.",
-           "report_stage": "A daily report takes site photos only.", "report_closed": "This project is closed; photos can no longer be added to its reports."},
+           "report_stage": "A daily report takes site photos only.", "report_closed": "This project is closed; photos can no longer be added to its reports.",
+           "report_kept": "This project is closed; the photos of its reports are kept and cannot be deleted."},
 }
 
 
@@ -300,6 +302,7 @@ OWNERS = {"workorders.workorder": {"visible": _work_orders, "can_attach": _work_
           "projects.sitereport": {"visible": _site_reports, "can_attach": _project_can_attach, "closed": _site_report_closed, "can_delete": _project_can_attach,
                                   "signature_final": lambda report: False, "entity": _no_entity, "group_wide": True,
                                   "delete_denied": "report_delete_denied", "read_only_message": "report_read_only", "closed_error": "report_closed",
+                                  "kept_when_closed": "report_kept",
                                   "stages": (Stage.PHOTO,), "kinds": (Kind.PHOTO,), "stage_error": "report_stage", "kind_error": "photo",
                                   "default_stage": Stage.PHOTO, "max_count": REPORT_MAX_COUNT, "max_owner_bytes": REPORT_MAX_BYTES}}
 
@@ -712,6 +715,8 @@ def delete_attachment(pk, user, lang="ar"):
         owner = model.objects.select_for_update().get(pk=owner.pk)  # a delivery committing now is seen before the check
         if attachment.kind == Kind.SIGNATURE and rules["signature_final"](owner):
             raise ValidationError(words["signature_kept"])
+        if rules.get("kept_when_closed") and rules["closed"](owner):  # a closed project's diary is a record: its photos stay
+            raise ValidationError(words[rules["kept_when_closed"]])
         before = {"owner": owner_label(model), "owner_id": owner.pk, "kind": attachment.kind, "stage": attachment.stage,
                   "filename": attachment.original_filename, "content_type": attachment.content_type_name, "size": attachment.size,
                   "sha256": attachment.sha256}
