@@ -1,5 +1,5 @@
 {% extends "operations/base.html" %}
-{% load static hesba_format %}
+{% load static hesba_format hesba_shifts %}
 {% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/restaurant.css' %}?v=resto-001">{% endblock %}
 {% block operation_content %}
 <section class="op-title-row"><div><a class="op-back" href="{% url 'restaurant:board' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.back }}</a><h1>{% if order.table %}{{ words.table }} {{ order.table.name }}{% else %}{{ kind_label }}{% endif %}</h1><p><span dir="ltr">{{ order.number }}</span> · {{ kind_label }}{% if order.customer %} · {{ order.customer.name }}{% endif %}{% if order.address %} · {{ order.address }}{% endif %}{% if order.phone %} · <span dir="ltr">{{ order.phone|ltr }}</span>{% endif %}</p>{% if is_open and can_take %}<a class="op-secondary rs-jump" href="#menu">{{ words.menu }} ↓</a>{% endif %}</div><span class="op-status op-status-{% if order.status == 'paid' %}posted{% elif order.status == 'cancelled' %}cancelled{% else %}open{% endif %}" data-order-status="{{ order.status }}">{{ status_label }}</span></section>
@@ -41,7 +41,7 @@
   {% if is_open and can_take %}
   <div class="rs-actions">
     {% if pending %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="send"><button class="op-primary" type="submit" data-send-kitchen>{{ words.send }}</button></form>{% endif %}
-    {% if lines and can_sell %}<form method="post" data-pay-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="pay"><h2>{{ words.pay }}</h2>
+    {% if lines and can_sell and shift_missing %}<div data-pay-needs-shift>{% shift_gate %}</div>{% elif lines and can_sell %}<form method="post" data-pay-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="pay"><h2>{{ words.pay }}</h2>
       <div class="rs-row"><label>{{ words.cashbox }}<select name="cashbox">{% for box in cashboxes %}<option value="{{ box.pk }}"{% if default_cashbox and box.pk == default_cashbox.pk %} selected{% endif %}>{% if lang == "en" and box.name_en %}{{ box.name_en }}{% else %}{{ box.name_ar }}{% endif %}</option>{% endfor %}</select></label>
       <label>{{ words.customer }}<select name="customer"><option value="">{% if order.customer %}{{ order.customer.name }}{% else %}{{ words.walk_in }}{% endif %}</option>{% for customer in customers %}{% if customer.pk != order.customer_id %}<option value="{{ customer.pk }}">{{ customer.name }}</option>{% endif %}{% endfor %}</select></label></div>
       <div class="rs-row"><label>{{ words.discount }}<input name="discount" value="0" inputmode="decimal" dir="ltr"></label><label>{{ words.tendered }}<input name="tendered" value="{{ total|stringformat:"s" }}" inputmode="decimal" dir="ltr" data-tendered></label></div>

@@ -15,6 +15,7 @@ from permissions.services import user_has_permission
 from printing.company import company_details
 from settings_core.display_labels import choice_label
 from settings_core.module_gate import closed_module
+from shifts.gate import require_open_shift, shift_missing
 from shifts.services import open_shift_for
 from staff.models import Employee
 
@@ -195,6 +196,7 @@ def order_detail(request, pk):
                 messages.success(request, words["cancelled"])
                 return redirect(f"{reverse('restaurant:board')}?lang={lang}")
             elif action == "pay":
+                require_open_shift(request.user, lang)  # Restaurants R13: the till's own rule (AN4), before anything is made or posted
                 invoice, change = services.pay(
                     order, request.user, cashbox=_pick(Cashbox, request.POST.get("cashbox"), active=True),
                     discount=_money(request.POST.get("discount"), words), tendered=_money(request.POST.get("tendered"), words),
@@ -221,6 +223,7 @@ def order_detail(request, pk):
         status_label=choice_label(order, "status", lang), is_open=order.status == OrderStatus.OPEN,
         pending=any(not line.ticket_id and not line.voided for line in lines), tickets=order.tickets.all(),
         cashboxes=cashboxes, default_cashbox=(shift.cashbox if shift else None) or cashboxes.filter(is_default=True).first() or cashboxes.first(),
+        shift_missing=shift_missing(request.user),
         customers=Customer.objects.filter(active=True).order_by("name"), free_tables=free_tables,
     ))
 
