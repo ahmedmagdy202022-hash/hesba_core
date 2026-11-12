@@ -8,7 +8,7 @@ from .models import GiftCard
 from .tests import GiftSetup, box_balance
 
 
-TOO_BIG_AR = "قيمة الكارت كبيرة أوي. أقصى قيمة للكارت الواحد 10,000,000.00."
+TOO_BIG_AR = "قيمة الكارت أكبر من الحد المسموح. أقصى قيمة للكارت الواحد 10,000,000.00."
 TOO_BIG_EN = "The card value is too large. The most one card can hold is 10,000,000.00."
 
 

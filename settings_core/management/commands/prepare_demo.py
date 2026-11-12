@@ -1366,7 +1366,7 @@ class Command(BaseCommand):
         # day with every student enrolled, gives any card a class to scan into at any hour, whenever the demo is built or visited.
         # It is free (fee 0: billing skips it) and has no teacher or room, so nothing clashes with it. While one of the three
         # classes is on, a scan asks which of the two the student is at.
-        hall = edu.save_group({"course": courses[0], "name": "قاعة المذاكرة (مفتوحة طول اليوم)", "days": "sat,sun,mon,tue,wed,thu,fri", "capacity": "0",
+        hall = edu.save_group({"course": courses[0], "name": "قاعة المذاكرة (مفتوحة طوال اليوم)", "days": "sat,sun,mon,tue,wed,thu,fri", "capacity": "0",
                                "fee": "0", "starts_on": today - timedelta(days=40)}, owner)
         for student in students:
             edu.enroll(student, hall, owner, start_date=today - timedelta(days=35))
