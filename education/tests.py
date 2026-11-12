@@ -209,7 +209,7 @@ class DemoDataTests(TestCase):
         prepare._history()
         call_command("seed_demo_business", username="owner", force=True, verbosity=0)
         prepare._extras()
-        self.assertEqual(StudyGroup.objects.count(), 3)
+        self.assertEqual(StudyGroup.objects.count(), 6)  # the three classes and the study hall's three periods (ED-02)
         self.assertEqual(Student.objects.count(), 7)
         self.assertEqual(Student.objects.values("payer").distinct().count(), 5)  # brothers and sisters share a parent
         self.assertEqual(Enrollment.objects.filter(discount_percent=D("10")).count(), 4)

@@ -16,7 +16,7 @@ from .views import _base, _lang
 WORDS = {
     "ar": {"title": "امسح الحضور", "intro": "امسح كارت الطالب بالكاميرا أو بجهاز الباركود، والحضور بيتسجّل على طول.",
            "label": "كود الطالب", "placeholder": "امسح أو اكتب الكود", "go": "سجّل", "type": "اكتب الكود", "ready": "جاهز للمسح",
-           "ready_hint": "وجّه الكاميرا على الكارت أو استخدم جهاز المسح.", "working": "ثانية واحدة…", "which": "اختار الحصة",
+           "ready_hint": "وجّه الكاميرا على الكارت أو استخدم جهاز المسح.", "working": "ثانية واحدة…", "which": "اختار الحصة", "empty": "امسح الكارت أو اكتب الكود",
            "recent": "آخر اللي اتمسحوا", "offline": "مفيش اتصال. جرّب تاني.", "failed": "حصل خطأ. جرّب تاني.", "waiting": "كروت مستنية دورها: {n}", "none": "لسه محدش اتمسح.",
            "closed": "الحصة اتقفلت؟ اللي ما اتمسحوش بيتعلّموا غايبين، ومن يمسح بعد كده بيتسجّل متأخر.", "today": "حصص النهارده",
            "card_title": "كروت الطلاب", "card_for": "كارت {name}", "cards_for": "كروت مجموعة {name}", "print": "اطبع", "back": "رجوع",
@@ -24,7 +24,7 @@ WORDS = {
            "pdf_hint": "من نافذة الطباعة تقدر تحفظها PDF.", "n_title": "امسح الحضور والانصراف", "n_go": "سجّل وصول"},
     "en": {"title": "Scan attendance", "intro": "Scan a student's card with the camera or a barcode scanner and attendance is recorded at once.",
            "label": "Student code", "placeholder": "Scan or type the code", "go": "Record", "type": "Type the code", "ready": "Ready to scan",
-           "ready_hint": "Point the camera at the card, or use the scanner.", "working": "One moment…", "which": "Choose the class",
+           "ready_hint": "Point the camera at the card, or use the scanner.", "working": "One moment…", "which": "Choose the class", "empty": "Scan the card or type the code",
            "recent": "Scanned lately", "offline": "No connection. Try again.", "failed": "Something went wrong. Try again.", "waiting": "Cards waiting their turn: {n}", "none": "Nobody scanned yet.",
            "closed": "Class already closed? Students not scanned are marked absent, and anyone who scans after that is marked late.", "today": "Today's classes",
            "card_title": "Student cards", "card_for": "{name}'s card", "cards_for": "Cards for {name}", "print": "Print", "back": "Back",

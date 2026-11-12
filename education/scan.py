@@ -32,14 +32,14 @@ LATE_MINUTES = 10
 EARLY_MINUTES = 30
 
 MESSAGES = {
-    "ar": {"denied": "تسجيل الحضور بالمسح للإدارة أو المدرّسين بس.", "empty": "امسح كارت الطالب أو اكتب الكود.",
+    "ar": {"denied": "تسجيل الحضور بالمسح للإدارة أو المدرّسين بس.", "empty": "امسح الكارت أو اكتب الكود.",
            "not_found": "الكارت ده مش معروف. اتأكد من الكود.", "inactive": "{student} مش طالب شغال.",
            "refused": "الطالب ده مش من طلاب مجموعاتك النهارده.", "cancelled": "حصة {group} النهارده اتلغت؛ مفيش حضور بيتسجّل عليها.",
            "no_today": "{student} مالوش حصص النهارده.", "no_now": "{student} مالوش حصة دلوقتي. حصصه النهارده:",
            "choose": "{student} في أكتر من حصة دلوقتي. هو حاضر في أنهي؟", "again": "{student} اتسجّل قبل كده.",
            "present": "حاضر", "late": "متأخر", "absent": "غايب", "excused": "بعذر", "was_absent": "كان متعلّم غايب وبقى متأخر.",
            "bad_group": "المجموعة دي مش من حصص الطالب النهارده."},
-    "en": {"denied": "Scanning attendance is for the office or the teachers.", "empty": "Scan the student's card or type the code.",
+    "en": {"denied": "Scanning attendance is for the office or the teachers.", "empty": "Scan the card or type the code.",
            "not_found": "This card is not known. Check the code.", "inactive": "{student} is not an active student.",
            "refused": "This student is not in your groups today.", "cancelled": "Today's {group} class was cancelled; no attendance is taken for it.",
            "no_today": "{student} has no classes today.", "no_now": "{student} has no class right now. Today's classes:",
