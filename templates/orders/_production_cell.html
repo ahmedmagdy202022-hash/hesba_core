@@ -1,6 +1,6 @@
 {% load hesba_format %}
-{% with st=row.production pw=production.words %}<td class="op-cell-text mfg-sale-cell" data-production-cell="{{ row.line.pk }}">
-{% for link in st.orders %}<div class="mfg-sale-link" data-production-order="{{ link.order.number }}">{% if production.can_open %}<a href="{% url 'manufacturing:order' link.order.pk %}?lang={{ lang }}">{{ pw.order_word }} <bdi>{{ link.order.number }}</bdi></a>{% else %}{{ pw.order_word }} <bdi>{{ link.order.number }}</bdi>{% endif %} · {{ link.order.quantity|qty }} · <span class="op-status {% if link.state == 'done' %}op-status-posted{% else %}op-status-draft{% endif %}" data-production-state="{{ link.state }}">{{ link.label }}</span></div>{% endfor %}
+{% with st=row.production pw=production.words %}<td class="op-cell-text" data-production-cell="{{ row.line.pk }}"><div class="mfg-sale-cell">
+{% for link in st.orders %}<div class="mfg-sale-link" data-production-order="{{ link.order.number }}">{% if production.can_open %}<a href="{% url 'manufacturing:order' link.order.pk %}?lang={{ lang }}"><span>{{ pw.order_word }} <bdi>{{ link.order.number }}</bdi></span></a>{% else %}{{ pw.order_word }} <bdi>{{ link.order.number }}</bdi>{% endif %} · {{ link.order.quantity|qty }} · <span class="op-status {% if link.state == 'done' %}op-status-posted{% else %}op-status-draft{% endif %}" data-production-state="{{ link.state }}">{{ link.label }}</span></div>{% endfor %}
 {% if st.made_text %}<div class="mfg-sale-stock" data-made-stock>{{ st.made_text }}</div>{% endif %}
 {% if st.short_text %}<div class="op-message op-message-error mfg-sale-short" role="alert" data-stock-short>{{ st.short_text }} {{ pw.no_stock_hint }}</div>{% endif %}
 {% if st.uncovered_text %}<div class="op-muted" data-uncovered>{{ st.uncovered_text }}</div>{% endif %}
@@ -13,4 +13,4 @@
 <div class="op-field"><label for="mk-over-{{ row.line.pk }}">{{ pw.overhead }}</label><input id="mk-over-{{ row.line.pk }}" name="overhead_cost" inputmode="decimal" dir="ltr" placeholder="0"></div>
 <div class="op-form-actions"><button class="op-primary" type="submit">{{ pw.open }}</button></div></form></details>
 {% elif st.no_recipe %}<span class="op-muted" data-no-recipe>{{ pw.no_recipe }}</span>
-{% elif not st.orders %}<span class="op-muted">—</span>{% endif %}</td>{% endwith %}
+{% elif not st.orders %}<span class="op-muted">—</span>{% endif %}</div></td>{% endwith %}

@@ -64,7 +64,7 @@ WORDS = {
     "en": {"column": "Production", "make": "Make a production order", "quantity": "Quantity", "location": "Made at", "labor": "Labour cost",
            "overhead": "Overhead", "recipe": "Recipe", "open": "Open the order", "order_word": "Production order",
            "made_ok": "Production order {number} opened for this order.", "for_sale": "For order", "delivery": "Delivery to the customer",
-           "none": "Not made yet", "planned": "Not started", "ready": "Ready to finish", "done": "Done", "at_stage": "At {stage}",
+           "none": "Not made yet", "planned": "Not started", "ready": "Ready to finish", "done": "Done", "at_stage": "Stage: {stage}",
            "uncovered": "Not covered yet: {qty}", "made_stock": "Made {made} · in stock {stock}",
            "short": "Stock is short: {stock} available, and {waiting} made but not invoiced yet.",
            "no_recipe": "No recipe for this item", "cancel_warn": "An open production order is linked to this order. Cancelling the sales order does not cancel it.",

@@ -161,7 +161,8 @@ html.hs-cam-open,html.hs-cam-open body{overflow:hidden}
 .mfg-cost{margin-top:16px}
 /* F1: a production order made for a sales order. */
 .mfg-sale-for{margin:0 0 14px;color:var(--op-navy);font-weight:700}
-.mfg-sale-cell{display:flex;flex-direction:column;gap:6px;align-items:flex-start;white-space:normal!important;min-width:200px}
+.mfg-sale-for a{color:var(--op-teal);text-decoration:none;display:inline-flex;align-items:center;min-height:var(--hs-control-height,44px)}
+.mfg-sale-cell{display:flex;flex-direction:column;gap:6px;align-items:flex-start;white-space:normal;min-width:200px}
 .mfg-sale-link,.mfg-sale-stock{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
 .mfg-sale-short{margin:0!important;padding:8px 10px!important;font-size:13px}
 .mfg-sale-make{width:100%}
