@@ -23,10 +23,10 @@
       <span class="rs-line__name">{{ line.quantity|qty }} × {{ line.item.item_name }} {% if line.voided %}<span class="rs-tag">{{ words.voided }}</span>{% elif line.ticket_id %}<span class="rs-tag">{{ words.sent }}</span>{% else %}<span class="rs-tag rs-tag--new">{{ words.new }}</span>{% endif %}</span>
       <span class="rs-line__amount">{{ line.amount|money }}</span>
       {% if line.note %}<span class="rs-line__note">{{ line.note }}</span>{% endif %}
-      {% if is_open and can_take and not line.voided %}<span class="rs-line__tools">
+      {% if is_open and can_take and not line.voided %}{% if not line.ticket_id or can_sell %}<span class="rs-line__tools">
         {% if not line.ticket_id %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="qty"><input type="hidden" name="line" value="{{ line.pk }}"><input name="quantity" value="{{ line.quantity|qty }}" inputmode="decimal" aria-label="{{ words.qty }}"><input name="note" value="{{ line.note }}" placeholder="{{ words.note }}" aria-label="{{ words.note }}"><button type="submit">{{ words.save }}</button></form>{% endif %}
-        <form method="post"{% if line.ticket_id %} data-confirm="{{ words.void_confirm }}"{% endif %}>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="void"><input type="hidden" name="line" value="{{ line.pk }}"><button type="submit" data-line-void>{% if line.ticket_id %}{{ words.void }}{% else %}{{ words.remove }}{% endif %}</button></form>
-      </span>{% endif %}
+        <form method="post"{% if line.ticket_id %} data-confirm="{{ words.void_confirm }}" data-void-sent{% endif %}>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="void"><input type="hidden" name="line" value="{{ line.pk }}">{% if line.ticket_id %}<input name="reason" required maxlength="255" placeholder="{{ words.void_reason }}" aria-label="{{ words.void_reason }}">{% endif %}<button type="submit" data-line-void>{% if line.ticket_id %}{{ words.void }}{% else %}{{ words.remove }}{% endif %}</button></form>
+      </span>{% endif %}{% endif %}
     </li>
   {% empty %}<li class="op-muted">{{ words.empty }}</li>{% endfor %}
   </ul>

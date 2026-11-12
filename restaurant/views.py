@@ -41,7 +41,7 @@ WORDS = {
         "customer": "العميل", "walk_in": "— عميل نقدي —", "phone": "الموبايل", "address": "العنوان", "notes": "ملاحظات", "guests": "عدد الأفراد", "waiter": "الويتر",
         "back": "الطاولات", "menu": "المنيو", "search": "دوّر في المنيو", "all": "الكل", "no_items": "مفيش أصناف. ضيف أصناف المنيو من شاشة الأصناف.",
         "add": "ضيف", "qty": "الكمية", "note": "ملاحظة للمطبخ", "item": "الصنف", "price": "السعر", "amount": "القيمة", "total": "الإجمالي", "empty": "الطلب فاضي؛ اختار من المنيو.",
-        "sent": "راح المطبخ", "new": "جديد", "voided": "ملغي", "remove": "شيل", "void": "إلغاء السطر", "void_confirm": "السطر ده راح المطبخ. تلغيه؟",
+        "sent": "راح المطبخ", "new": "جديد", "voided": "ملغي", "remove": "شيل", "void": "إلغاء السطر", "void_confirm": "السطر ده راح المطبخ. تلغيه؟", "void_reason": "سبب الإلغاء",
         "send": "ابعت للمطبخ", "sent_ok": "اتبعتت تذكرة المطبخ رقم {n}.", "nothing_new": "مفيش أصناف جديدة تتبعت.", "tickets": "تذاكر المطبخ", "reprint": "اطبع تاني",
         "move": "انقل لطاولة", "moved": "اتنقل الطلب.", "dispatched": "الطلب خرج مع الطيار.", "cancel": "إلغاء الطلب", "cancel_confirm": "تلغي الطلب كله؟", "cancelled": "اتلغى الطلب.", "reason": "السبب",
         "pay": "الحساب", "cashbox": "الخزنة", "discount": "خصم", "tendered": "المدفوع", "print": "اطبع الإيصال", "pay_btn": "ادفع واقفل الطلب",
@@ -57,7 +57,7 @@ WORDS = {
         "customer": "Customer", "walk_in": "— walk-in —", "phone": "Mobile", "address": "Address", "notes": "Notes", "guests": "Guests", "waiter": "Waiter",
         "back": "Tables", "menu": "Menu", "search": "Search the menu", "all": "All", "no_items": "No items. Add the menu items from the items screen.",
         "add": "Add", "qty": "Qty", "note": "Note for the kitchen", "item": "Item", "price": "Price", "amount": "Amount", "total": "Total", "empty": "The order is empty; pick from the menu.",
-        "sent": "Sent", "new": "New", "voided": "Void", "remove": "Remove", "void": "Void line", "void_confirm": "This line went to the kitchen. Void it?",
+        "sent": "Sent", "new": "New", "voided": "Void", "remove": "Remove", "void": "Void line", "void_confirm": "This line went to the kitchen. Void it?", "void_reason": "Why it is voided",
         "send": "Send to kitchen", "sent_ok": "Kitchen ticket {n} sent.", "nothing_new": "Nothing new to send.", "tickets": "Kitchen tickets", "reprint": "Print again",
         "move": "Move to table", "moved": "Order moved.", "dispatched": "The order is out with the driver.", "cancel": "Cancel order", "cancel_confirm": "Cancel the whole order?", "cancelled": "Order cancelled.", "reason": "Reason",
         "pay": "Bill", "cashbox": "Cashbox", "discount": "Discount", "tendered": "Paid", "print": "Print the receipt", "pay_btn": "Pay and close",
@@ -175,7 +175,7 @@ def order_detail(request, pk):
             elif action == "qty" and line:
                 services.change_line(line, request.user, quantity=request.POST.get("quantity"), note=request.POST.get("note"), lang=lang)
             elif action == "void" and line:
-                services.void_line(line, request.user, lang)
+                services.void_line(line, request.user, lang, reason=request.POST.get("reason", ""))
             elif action == "send":
                 ticket = services.send_to_kitchen(order, request.user, lang)
                 if ticket is None:

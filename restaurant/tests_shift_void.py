@@ -1,7 +1,8 @@
-"""Restaurants R13 (HG-094): the table bill takes the till's shift rule."""
+"""Restaurants R13 (HG-094): the table bill takes the till's shift rule, and voiding a line the kitchen already has is controlled."""
 
 from decimal import Decimal as D
 
+from django.core.exceptions import PermissionDenied
 from django.urls import reverse
 from django.utils import timezone
 
@@ -23,7 +24,7 @@ from shifts.services import close_shift, open_shift, summary
 from . import kitchen
 from . import services
 from .insights import save_ingredients
-from .models import Order, OrderStatus
+from .models import Order, OrderLine, OrderStatus
 from .tests import RestaurantSetup, person
 
 
@@ -178,3 +179,90 @@ class ShiftRuleTests(RestaurantSetup):
         self.assertNotIn("data-pay-form", page)
         self.assertEqual(self.pay_from_screen(order).status_code, 403)  # still the selling right's 403, not the shift message
 
+
+class VoidTests(RestaurantSetup):
+    """A line not sent yet goes freely; one the kitchen has needs the selling right and a reason, and is audited."""
+
+    def setUp(self):
+        super().setUp()
+        self.waiter = person(RoleCode.WAITER, "void_waiter")
+        self.cashier = person(RoleCode.CASHIER, "void_cashier")
+        self.order = services.open_order(self.owner, table=self.t1, guests=2)
+        self.sent = services.add_item(self.order, self.koshary, self.owner, 2)  # 2 × 60.00
+        services.send_to_kitchen(self.order, self.owner)
+        self.new = services.add_item(self.order, self.tea, self.owner, 1)  # 15.00, not sent
+        self.url = reverse("restaurant:order", args=[self.order.pk])
+
+    def void(self, user, line, lang="ar", **extra):
+        self.client.force_login(user)
+        return self.client.post(self.url, {"lang": lang, "action": "void", "line": line.pk, **extra}, follow=True)
+
+    def total(self):
+        return Order.objects.get(pk=self.order.pk).total
+
+    def test_a_waiter_removes_a_line_the_kitchen_has_not_seen(self):
+        self.assertEqual(self.total(), D("135.00"))
+        self.void(self.waiter, self.new)
+        self.assertFalse(OrderLine.objects.filter(pk=self.new.pk).exists())
+        self.assertEqual(self.total(), D("120.00"))
+        self.assertFalse(AuditLog.objects.filter(action="void_order_line").exists())  # nothing the kitchen made disappears
+
+    def test_a_waiter_cannot_void_a_sent_line_even_with_a_reason_or_by_hand(self):
+        self.assertEqual(self.void(self.waiter, self.sent, reason="الزبون مشي").status_code, 403)
+        with self.assertRaises(PermissionDenied):
+            services.void_line(self.sent, self.waiter, reason="الزبون مشي")
+        self.sent.refresh_from_db()
+        self.assertFalse(self.sent.voided)
+        self.assertEqual(self.total(), D("135.00"))
+        self.assertFalse(AuditLog.objects.filter(action="void_order_line").exists())
+
+    def test_the_selling_right_still_needs_a_reason(self):
+        for lang, words in (("ar", "اكتب سبب إلغاء السطر"), ("en", "Write why the line is voided")):
+            with self.subTest(lang=lang):
+                self.assertContains(self.void(self.cashier, self.sent, lang, reason="   "), words)
+        self.sent.refresh_from_db()
+        self.assertFalse(self.sent.voided)
+        self.assertEqual(self.total(), D("135.00"))
+
+    def test_with_the_right_and_a_reason_the_line_is_voided_and_audited(self):
+        self.void(self.cashier, self.sent, reason="الطبق اتأخر والزبون رفضه")
+        self.sent.refresh_from_db()
+        self.assertTrue(self.sent.voided)
+        self.assertEqual(self.total(), D("15.00"))  # only the tea is left
+        log = AuditLog.objects.get(action="void_order_line")
+        self.assertEqual((log.actor, log.module, log.object_id), (self.cashier, "restaurant", str(self.order.pk)))
+        self.assertEqual(log.after_data, {"line": self.sent.pk, "item": "D-KOSH", "item_name": "كشري كبير", "quantity": "2.000", "amount": "120.00",
+                                          "ticket": 1, "reason": "الطبق اتأخر والزبون رفضه"})
+        self.assertEqual(timezone.localtime(log.created_at).date(), timezone.localdate())
+        self.void(self.cashier, self.sent, reason="مرة تانية")  # voiding again changes nothing and audits nothing
+        self.assertEqual(AuditLog.objects.filter(action="void_order_line").count(), 1)
+        self.assertEqual(StockMovement.objects.filter(item=self.koshary).count(), 0)  # no write-off in this task
+        invoice, _ = services.pay(self.order, self.owner, cashbox=self.cashbox, tendered=D("15"))
+        self.assertEqual((invoice.total_amount, invoice.lines.count()), (D("15.00"), 1))  # the void never reaches the bill
+
+    def test_crafted_posts_cannot_reach_another_order_or_a_closed_one(self):
+        other = services.open_order(self.owner, table=self.t2)
+        theirs = services.add_item(other, self.koshary, self.owner)
+        services.send_to_kitchen(other, self.owner)
+        self.void(self.cashier, theirs, reason="غلط")  # the line id belongs to table 2, the URL to table 1
+        theirs.refresh_from_db()
+        self.assertFalse(theirs.voided)
+        self.assertEqual((self.total(), Order.objects.get(pk=other.pk).total), (D("135.00"), D("60.00")))
+        services.pay(other, self.owner, cashbox=self.cashbox, tendered=D("60"))
+        self.client.force_login(self.cashier)
+        page = self.client.post(reverse("restaurant:order", args=[other.pk]), {"lang": "ar", "action": "void", "line": theirs.pk, "reason": "غلط"}, follow=True)
+        self.assertContains(page, "الطلب ده اتقفل")
+        theirs.refresh_from_db()
+        self.assertFalse(theirs.voided)
+        self.assertFalse(AuditLog.objects.filter(action="void_order_line").exists())
+
+    def test_the_order_screen_offers_each_void_only_to_who_may_use_it(self):
+        for user, may_void_sent in ((self.waiter, False), (self.cashier, True)):
+            for lang, remove, void, reason in (("ar", "شيل", "إلغاء السطر", "سبب الإلغاء"), ("en", "Remove", "Void line", "Why it is voided")):
+                with self.subTest(user=user.username, lang=lang):
+                    self.client.force_login(user)
+                    page = self.client.get(self.url, {"lang": lang}).content.decode()
+                    self.assertIn(f">{remove}</button>", page)  # the unsent tea
+                    self.assertEqual("data-void-sent" in page, may_void_sent)
+                    self.assertEqual(f">{void}</button>" in page, may_void_sent)
+                    self.assertEqual(f'name="reason" required maxlength="255" placeholder="{reason}"' in page, may_void_sent)

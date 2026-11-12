@@ -94,7 +94,7 @@ class OrderTests(RestaurantSetup):
         self.assertIsNone(services.send_to_kitchen(order, self.owner))  # nothing new
         with self.assertRaisesMessage(ValidationError, "راح المطبخ"):
             services.change_line(spicy, self.owner, quantity="5")
-        services.void_line(spicy, self.owner)
+        services.void_line(spicy, self.owner, reason="الزبون غيّر رأيه")
         spicy.refresh_from_db()
         self.assertTrue(spicy.voided)
         self.assertTrue(AuditLog.objects.filter(action="void_order_line").exists())
@@ -132,7 +132,7 @@ class PaymentTests(RestaurantSetup):
         services.add_item(order, self.cola, self.owner, 3)
         voided = services.add_item(order, self.tea, self.owner)
         services.send_to_kitchen(order, self.owner)
-        services.void_line(voided, self.owner)
+        services.void_line(voided, self.owner, reason="اتأخر")
         invoice, change = services.pay(order, self.owner, cashbox=self.cashbox, discount=D("10"), tendered=D("200"))
         order.refresh_from_db()
         self.assertEqual((invoice.status, invoice.total_amount, invoice.paid_now, change), ("posted", D("170.00"), D("170.00"), D("30.00")))

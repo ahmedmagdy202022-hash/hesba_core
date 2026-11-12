@@ -6,7 +6,8 @@ Rules, stated once:
   the table row); opening an occupied table joins the order already there;
 * lines can be added while the order is open. A line not yet sent to the
   kitchen can be changed or removed freely; one already sent can only be
-  voided, which is audited, so the kitchen's work never disappears silently;
+  voided, by someone who may sell and with a reason (Restaurants R13), which
+  is audited, so the kitchen's work never disappears silently;
 * "send to kitchen" gathers every unsent line into one numbered ticket to
   print; nothing new means no ticket;
 * paying an order calls the cashier screen's own ``checkout`` (the same call
@@ -18,7 +19,7 @@ Rules, stated once:
 
 from decimal import Decimal, InvalidOperation
 
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
@@ -26,6 +27,7 @@ from audit.models import AuditEventType, AuditLog
 from config.money import money_round
 
 from master_data.models import Item
+from permissions.services import user_has_permission
 
 from .models import DiningTable, KitchenTicket, Order, OrderKind, OrderLine, OrderStatus
 from entities import scope as entity_scope
@@ -37,7 +39,7 @@ MESSAGES = {
         "table_name": "اكتب اسم أو رقم الطاولة.", "table_taken": "فيه طاولة بنفس الاسم.", "seats": "عدد الكراسي لازم من 1 لـ 99.",
         "table_needed": "اختار الطاولة.", "table_off": "الطاولة دي مش شغالة.", "busy": "الطاولة {table} عليها طلب مفتوح.",
         "closed": "الطلب ده اتقفل؛ مينفعش يتعدّل.", "item": "اختار صنف من المنيو.", "qty": "الكمية لازم أكبر من صفر ولحد {max}.",
-        "sent": "السطر ده راح المطبخ؛ تقدر تلغيه بس.", "empty": "الطلب فاضي.", "address": "الدليفري محتاج عنوان.",
+        "sent": "السطر ده راح المطبخ؛ تقدر تلغيه بس.", "void_reason": "اكتب سبب إلغاء السطر؛ الطبق ده راح المطبخ.", "empty": "الطلب فاضي.", "address": "الدليفري محتاج عنوان.",
         "setup": "لازم يكون فيه مخزن بيع نشط.", "dine_in_only": "النقل للطاولات بس لطلبات الصالة.", "has_open": "الطاولة دي عليها طلبات مفتوحة؛ اقفلها الأول.",
         "fee": "رسوم التوصيل لازم تكون رقم صفر أو أكبر.", "not_delivery": "ده مش طلب دليفري.", "driver": "اختار الطيار.",
         "fee_line": "رسوم توصيل", "fee_item": "رسوم توصيل",
@@ -47,7 +49,7 @@ MESSAGES = {
         "table_name": "Enter the table name or number.", "table_taken": "A table with this name exists.", "seats": "Seats must be 1 to 99.",
         "table_needed": "Choose the table.", "table_off": "This table is not active.", "busy": "Table {table} has an open order.",
         "closed": "This order is closed; it cannot be changed.", "item": "Choose an item from the menu.", "qty": "The quantity must be above zero and up to {max}.",
-        "sent": "This line went to the kitchen; it can only be voided.", "empty": "The order is empty.", "address": "A delivery needs an address.",
+        "sent": "This line went to the kitchen; it can only be voided.", "void_reason": "Write why the line is voided; this dish went to the kitchen.", "empty": "The order is empty.", "address": "A delivery needs an address.",
         "setup": "An active selling location is needed.", "dine_in_only": "Only dine-in orders move between tables.", "has_open": "This table has open orders; close them first.",
         "fee": "The delivery fee must be zero or more.", "not_delivery": "This is not a delivery order.", "driver": "Choose the driver.",
         "fee_line": "Delivery fee", "fee_item": "رسوم توصيل",
@@ -211,20 +213,31 @@ def change_line(line, user, quantity=None, note=None, lang="ar"):
     return line
 
 
+#: Restaurants R13 (HG-094): voiding a line the kitchen already has needs the selling right, as cancelling the order does.
+VOID_SENT_RIGHT = "sales.create_sales_invoice"
+
+
 @transaction.atomic
-def void_line(line, user, lang="ar"):
-    """Remove a line: an unsent one just goes; a sent one is kept, marked void, and audited."""
+def void_line(line, user, lang="ar", *, reason=""):
+    """Remove a line: an unsent one just goes; a sent one needs the selling right and a reason, is kept, marked void, and audited."""
 
     words = MESSAGES[lang]
     order = _locked_open(line.order, words)
-    line = OrderLine.objects.select_related("item").get(pk=line.pk)
+    line = OrderLine.objects.select_related("item", "ticket").get(pk=line.pk)
     if not line.ticket_id:
         line.delete()
         return None
-    if not line.voided:
-        line.voided = True
-        line.save(update_fields=["voided"])
-        _audit(order, user, "void_order_line", {"item": line.item.item_code, "quantity": str(line.quantity), "amount": str(line.amount)})
+    if line.voided:
+        return line
+    if not user_has_permission(user, VOID_SENT_RIGHT):  # checked under the order's lock: the line may have been sent a moment ago
+        raise PermissionDenied("Voiding a line already sent to the kitchen needs sales.create_sales_invoice.")
+    reason = (reason or "").strip()[:255]
+    if not reason:
+        raise ValidationError(words["void_reason"])
+    line.voided = True
+    line.save(update_fields=["voided"])
+    _audit(order, user, "void_order_line", {"line": line.pk, "item": line.item.item_code, "item_name": line.item.item_name, "quantity": str(line.quantity),
+                                            "amount": str(line.amount), "ticket": line.ticket.sequence, "reason": reason})
     return line
 
 
