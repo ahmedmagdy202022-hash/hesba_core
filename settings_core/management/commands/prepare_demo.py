@@ -1142,19 +1142,23 @@ class Command(BaseCommand):
     def _appointments(self, master, staff, owner):
         from appointments.services import book
         from master_data.models import Item
+        from medical import queue
 
         service = next((item for item in master["items"] if not item.is_stock_tracked), None)
         if service is None:
             service, _ = Item.objects.get_or_create(item_code="SRV-01", defaults={"item_name": "خدمة تركيب", "default_sale_price": 150, "is_stock_tracked": False})
         today, now = timezone.localdate(), timezone.localtime()
-        # Video finding 8: the day's own appointment started a while ago, so the reception desk checking it in says
-        # «جاري» truthfully (it used to sit at 17:00 and still read «جاري» at nine in the morning). The clock, not a
-        # fixed hour, decides, and before the working day begins it stays where the day opens.
+        # Video finding 8: where reception works a queue, the day's own appointment started a while ago, so checking it
+        # in says «جاري» truthfully (it used to sit at 17:00 and still read «جاري» at nine in the morning). The clock,
+        # not a fixed hour, decides, and before the working day opens it waits at the opening hour. Everywhere else
+        # (a dentist, a lab, a vet, a centre, a school) nothing checks it in, so it stays the afternoon booking it was.
         started = now - timedelta(minutes=self.TODAY_APPOINTMENT_STARTED_MINUTES)
         if timezone.localtime(started).date() != today or started.hour < self.WORKING_DAY_OPENS:
             started = timezone.make_aware(datetime.combine(today, time(self.WORKING_DAY_OPENS)))
-        for days, hour, customer in ((0, None, 0), (1, 10, 1), (1, 13, 2), (2, 11, 3)):
-            starts = started if hour is None else timezone.make_aware(datetime.combine(today + timedelta(days=days), time(hour)))
+        for days, hour, customer in ((0, 17, 0), (1, 10, 1), (1, 13, 2), (2, 11, 3)):
+            starts = timezone.make_aware(datetime.combine(today + timedelta(days=days), time(hour)))
+            if days == 0 and queue.has_queue():
+                starts = started
             book({"customer": master["customers"][customer], "employee": staff, "service": service,
                   "starts_at": starts, "duration_minutes": 60}, owner)
 
