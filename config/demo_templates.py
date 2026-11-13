@@ -166,13 +166,29 @@ DEMO_OWNERS = {
 }
 ROLE_NAME = "المالك"  # what seed_demo_users calls the owner; only that is ever replaced
 
+#: Video finding 6: the other demo logins are greeted by name too. «صباح الخير، الكاشير» is not how a business greets
+#: its reception desk. {activity: {username: name}}: a login with no name here keeps the role word ``seed_demo_users``
+#: gave it, and a name a visitor typed is never replaced (the same guard as the owner's).
+DEMO_LOGINS = {
+    "medical": {"manager": "أ. ياسمين طلعت", "cashier": "أ. مروة عبد اللطيف", "accountant": "أ. عمرو زكريا",
+                "stock_keeper": "أ. طارق عبد المنعم"},
+}
+#: What ``seed_demo_users`` calls each of them, and so the only words replaced.
+LOGIN_ROLE_NAMES = {"manager": "المدير", "cashier": "الكاشير", "accountant": "المحاسب", "stock_keeper": "أمين المخزن"}
+
 
 def owner_name(activity, sub_activity):
     return DEMO_OWNERS.get((activity, sub_activity)) or DEMO_OWNERS.get(activity) or DEMO_OWNERS["commercial"]
 
 
+def login_names(activity):
+    """{username: name} for this activity's demo logins (empty where they keep their role word)."""
+
+    return DEMO_LOGINS.get(activity, {})
+
+
 def name_the_demo_owner(activity=None, sub_activity=None):
-    """Give the demo owner a realistic name for this kind of business (never a name a visitor typed)."""
+    """Give the demo logins realistic names for this kind of business (never a name a visitor typed)."""
 
     from accounts.models import UserProfile
     from settings_core.models import ClientProfile
@@ -184,6 +200,14 @@ def name_the_demo_owner(activity=None, sub_activity=None):
     if owner is not None and owner.display_name in ("", ROLE_NAME, *DEMO_OWNERS.values()):
         owner.display_name = owner_name(activity, sub_activity)
         owner.save(update_fields=["display_name", "updated_at"])
+    known = {name for names in DEMO_LOGINS.values() for name in names.values()}
+    wanted = login_names(activity)
+    for username, role_word in LOGIN_ROLE_NAMES.items():
+        name = wanted.get(username, role_word)  # switching back to a business with no names restores the role word
+        profile = UserProfile.objects.filter(user__username=username).first()
+        if profile is not None and profile.display_name != name and profile.display_name in ("", role_word, *known):
+            profile.display_name = name
+            profile.save(update_fields=["display_name", "updated_at"])
 
 
 #: DEMO-SVC-CAPS: what a visitor to the services showcase (a workshop or a salon) is walked through, switched on for the demo

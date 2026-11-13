@@ -551,8 +551,9 @@ class ScannerTests(TestCase):
         self.assertIn("data-list-rows", source)
         for role in ("title", "sub", "meta", "empty"):
             self.assertIn(f'data-row="{role}"', source)
-        for name, sheet in (("lab_import.html", "lab_sample.css"), ("lab_sample.html", "lab_sample.css"), ("lab_results.html", "lab_sample.css"), ("lab_label.html", "lab_label.css")):
-            self.assertIn(f"{sheet}' %}}?v=m9-1", Path(settings.BASE_DIR, "templates/medical", name).read_text(encoding="utf-8"), name)
+        for name, sheet, tag in (("lab_import.html", "lab_sample.css", "m9-2"), ("lab_sample.html", "lab_sample.css", "m9-2"),
+                                 ("lab_results.html", "lab_sample.css", "m9-2"), ("lab_label.html", "lab_label.css", "m9-1")):
+            self.assertIn(f"{sheet}' %}}?v={tag}", Path(settings.BASE_DIR, "templates/medical", name).read_text(encoding="utf-8"), name)
 
     def test_the_stylesheets_use_tokens_only_and_every_token_is_defined(self):
         defined = set(re.findall(r"(--hs-[\w-]+)\s*:", Path(settings.BASE_DIR, "static/hesba/css/tokens.css").read_text(encoding="utf-8")))

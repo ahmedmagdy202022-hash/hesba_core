@@ -500,8 +500,8 @@ def done(request, key, token):
 SETTINGS_WORDS = {
     "ar": {
         "title": "الحجز أونلاين", "intro": "صفحة عامة العميل بيحجز منها لوحده من الموبايل، على المواعيد الفاضية فعلاً. حدّد مواعيد العمل والخدمات والموظفين.",
-        "entity": "الفرع", "show": "عرض", "accepting": "الصفحة العامة بتاخد حجوزات", "link": "لينك الصفحة العامة", "copy": "انسخ اللينك",
-        "no_base": "اللينك بيتعمل من عنوان الموقع الرسمي (PUBLIC_BASE_URL)، ولسه مش متحدد. اطلبه من الدعم.", "new_link": "اعمل لينك جديد (اللينك القديم يبطّل)",
+        "entity": "الفرع", "show": "عرض", "accepting": "الصفحة العامة بتاخد حجوزات", "link": "رابط الصفحة العامة", "copy": "انسخ الرابط",
+        "no_base": "الرابط بيتعمل من عنوان الموقع الرسمي (PUBLIC_BASE_URL)، ولسه مش متحدد. اطلبه من الدعم.", "new_link": "اعمل رابط جديد (الرابط القديم يبطّل)",
         "rules": "قواعد المواعيد", "slot": "المواعيد كل (دقيقة)", "notice": "أقل وقت قبل الميعاد (دقيقة)", "ahead": "الحجز لحد كام يوم قدام",
         "show_prices": "اعرض سعر الخدمة في الصفحة العامة", "prices_note": "مقفول لحد ما تفعّله.",
         "hours": "مواعيد العمل", "hours_note": "اليوم اللي مش متعلّم عليه إجازة. من غير مواعيد بعد نص الليل.", "open": "شغال", "opens": "من", "closes": "لحد",
@@ -548,6 +548,22 @@ def can_manage(user):
     return user_has_permission(user, BOOK) and user_has_permission(user, SETTINGS_PERMISSION)
 
 
+def _bookable_staff(chosen):
+    """WATCH1B (CL-06) / video finding 9: «الدكاترة اللي بياخدوا حجوزات» is not a list of sales reps.
+
+    In a medical installation the choice narrows the same way the visit form and the agenda do (``staff.serving_staff``);
+    anyone already taking bookings stays on the list, so saving the screen never drops them. Every other activity keeps
+    the full list: a shop's rep taking a booking is that screen's normal use."""
+
+    from medical.services import is_medical_install
+    from staff.models import Employee
+    from staff.services import serving_staff
+
+    if not is_medical_install():
+        return Employee.objects.filter(active=True).order_by("name")
+    return serving_staff(*chosen)
+
+
 @require_permission(BOOK)
 def booking_settings(request):
     if not user_has_permission(request.user, SETTINGS_PERMISSION):
@@ -589,7 +605,7 @@ def booking_settings(request):
               "duration": posted.get(f"duration_{item.pk}", "30") if posted is not None else chosen_services.get(item.pk, 30)}
              for item in Item.objects.filter(active=True, is_stock_tracked=False).order_by("item_name")]
     people = [{"employee": person, "on": bool(posted.get(f"staff_{person.pk}")) if posted is not None else person.pk in chosen_staff,
-               "own": any(key[0] == person.pk for key in hours), "days": day_rows(person)} for person in Employee.objects.filter(active=True)]
+               "own": any(key[0] == person.pk for key in hours), "days": day_rows(person)} for person in _bookable_staff(chosen_staff)]
     values = posted if posted is not None else {"slot_minutes": booking.slot_minutes, "min_notice_minutes": booking.min_notice_minutes,
                                                 "max_days_ahead": booking.max_days_ahead, "accepting": booking.accepting, "show_prices": booking.show_prices}
     from .views import _base
