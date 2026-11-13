@@ -1,0 +1,65 @@
+/* Restaurants R4: the kitchen screen. A calm light board; the age of a ticket is its colour. Identity tokens only. */
+.kds{margin:0;background:var(--hs-ground);color:var(--hs-ink);font-family:var(--hs-font-body);line-height:var(--hs-leading-tight);min-height:100vh}
+.kds *{box-sizing:border-box}
+.hs-back-arrow{flex:none;width:18px;height:18px}
+[dir="rtl"] .hs-back-arrow{transform:scaleX(-1)}
+.kds-bar{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;padding:10px 16px;background:var(--hs-navy);color:var(--hs-on-navy)}
+.kds-bar h1{margin:0;font-family:var(--hs-font-head);font-size:var(--hs-text-lg);font-weight:var(--hs-weight-bold)}
+.kds-back{display:inline-flex;align-items:center;gap:8px;min-height:var(--hs-control-height);padding:0 12px;border-radius:var(--hs-radius-md);background:var(--hs-on-navy-wash);color:var(--hs-on-navy);text-decoration:none;font-weight:var(--hs-weight-semibold)}
+.kds-tabs{display:flex;flex-wrap:wrap;gap:8px;margin-inline-start:auto}
+.kds-tabs a{display:inline-flex;align-items:center;min-height:var(--hs-control-height);padding:0 16px;border-radius:var(--hs-radius-pill);border:1px solid var(--hs-on-navy-line);color:var(--hs-on-navy);text-decoration:none;font-weight:var(--hs-weight-semibold)}
+.kds-tabs a[aria-current="page"]{background:var(--hs-teal);border-color:var(--hs-teal);color:var(--hs-on-teal)}
+.kds-clock{font-variant-numeric:tabular-nums;font-weight:var(--hs-weight-bold);font-size:var(--hs-text-lg)}
+.kds-status{font-size:var(--hs-text-sm);color:var(--hs-gold-bright)}
+.kds-status:empty{display:none}
+.kds-recall{min-height:var(--hs-control-height);min-width:84px;padding:0 18px;border-radius:var(--hs-radius-md);border:1px solid var(--hs-on-navy-line);background:var(--hs-on-navy-wash);color:var(--hs-on-navy);font:inherit;font-weight:var(--hs-weight-bold);cursor:pointer}
+.kds-recall:disabled{opacity:.45;cursor:default}
+.kds-recall:focus-visible,.kds-tabs a:focus-visible,.kds-back:focus-visible{outline:none;box-shadow:var(--hs-focus-ring-on-navy)}
+.kds-note,.kds-hint{margin:10px 16px 0;color:var(--hs-muted);font-size:var(--hs-text-md)}
+.kds-note a{color:var(--hs-teal-deep);font-weight:var(--hs-weight-semibold)}
+.kds-board{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;padding:14px 16px 28px;align-items:start}
+.kds-card{background:var(--hs-surface);border:1px solid var(--hs-line);border-top:8px solid var(--hs-teal);border-radius:var(--hs-radius-lg);box-shadow:var(--hs-shadow-sm);overflow:hidden;cursor:pointer}
+.kds-card--warn{border-top-color:var(--hs-gold);background:var(--hs-warning-wash)}
+.kds-card--late{border-top-color:var(--hs-danger-solid);background:var(--hs-danger-wash)}
+.kds-card--cancelled{border-top-color:var(--hs-danger-solid)}
+.kds-card--new{animation:kds-in .5s ease-out}
+.kds-card__head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:12px 14px 4px}
+.kds-card__where{margin:0;font-family:var(--hs-font-head);font-size:var(--hs-text-xl);font-weight:var(--hs-weight-bold);color:var(--hs-navy)}
+.kds-card__age{flex:none;min-width:58px;padding:4px 10px;border-radius:var(--hs-radius-pill);background:var(--hs-teal-wash);color:var(--hs-navy);font-size:var(--hs-text-lg);font-weight:var(--hs-weight-bold);text-align:center;font-variant-numeric:tabular-nums}
+.kds-card--warn .kds-card__age{background:var(--hs-gold-wash);color:var(--hs-warning)}
+.kds-card--late .kds-card__age{background:var(--hs-danger-solid);color:#fff}
+.kds-card__meta{margin:0;padding:0 14px 10px;color:var(--hs-muted);font-size:var(--hs-text-sm);display:flex;flex-wrap:wrap;gap:2px 10px}
+.kds-banner{margin:0;padding:8px 14px;background:var(--hs-danger-solid);color:#fff;font-weight:var(--hs-weight-bold)}
+.kds-lines{list-style:none;margin:0;padding:0;border-top:1px solid var(--hs-line)}
+.kds-lines li{border-bottom:1px solid var(--hs-line)}
+.kds-line{display:flex;flex-direction:column;gap:2px;width:100%;min-height:56px;padding:10px 14px;border:0;background:transparent;color:var(--hs-ink);font:inherit;text-align:start;cursor:pointer}
+.kds-line__name{font-size:var(--hs-text-lg);font-weight:var(--hs-weight-semibold)}
+.kds-line__qty{display:inline-block;min-width:2.2em;color:var(--hs-navy);font-weight:var(--hs-weight-bold)}
+.kds-line__note{font-size:var(--hs-text-md);font-weight:var(--hs-weight-semibold);color:var(--hs-warning)}
+.kds-line:focus-visible{outline:none;box-shadow:inset var(--hs-focus-ring)}
+.kds-line--ready{background:var(--hs-success-wash)}
+.kds-line--ready .kds-line__name::after{content:" \2713";color:var(--hs-success);font-weight:var(--hs-weight-bold)}
+.kds-line--void{background:var(--hs-danger-wash);animation:kds-pulse 1.4s ease-in-out infinite}
+.kds-line--void .kds-line__name{text-decoration:line-through;color:var(--hs-danger)}
+.kds-line--void .kds-line__note{color:var(--hs-danger);text-decoration:none}
+.kds-line--seen{animation:none;background:var(--hs-neutral-wash)}
+.kds-line--seen .kds-line__name{color:var(--hs-muted)}
+.kds-line__tag{font-size:var(--hs-text-sm);font-weight:var(--hs-weight-bold);color:var(--hs-danger)}
+.kds-line--seen .kds-line__tag{color:var(--hs-muted)}
+.kds-card__foot{padding:10px 14px 12px}
+.kds-done{width:100%;min-height:var(--hs-control-height-lg);border:0;border-radius:var(--hs-radius-md);background:var(--hs-teal);color:var(--hs-on-teal);font:inherit;font-weight:var(--hs-weight-bold);font-size:var(--hs-text-base);cursor:pointer}
+.kds-done:focus-visible{outline:none;box-shadow:var(--hs-focus-ring)}
+.kds-empty{display:flex;flex-direction:column;align-items:center;gap:6px;margin:12vh 16px 0;text-align:center;color:var(--hs-muted)}
+.kds-empty strong{font-family:var(--hs-font-head);font-size:var(--hs-text-xl);color:var(--hs-navy)}
+.kds-empty[hidden]{display:none}
+@keyframes kds-in{from{transform:translateY(8px);opacity:.2}to{transform:none;opacity:1}}
+@keyframes kds-pulse{50%{background:var(--hs-danger-line)}}
+@media (prefers-reduced-motion:reduce){.kds-card--new,.kds-line--void{animation:none}}
+@media (max-width:700px){
+  .kds-bar{padding:10px 12px;gap:8px}
+  .kds-bar h1{order:-1;flex:1 1 auto}
+  .kds-tabs{margin-inline-start:0;order:5;width:100%;flex-wrap:nowrap;overflow-x:auto}
+  .kds-tabs a{flex:none}
+  .kds-board{grid-template-columns:minmax(0,1fr);padding:12px}
+  .kds-card__where{font-size:var(--hs-text-xl)}
+}

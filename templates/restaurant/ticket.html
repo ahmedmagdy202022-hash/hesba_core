@@ -23,19 +23,21 @@ body{margin:0;background:var(--hs-ground);color:#000;font-family:var(--hs-font-b
 .kt li b{font-size:20px}
 .kt li small{display:block;font-size:14px;font-weight:700}
 .kt .kt-notes{font-size:14px;font-weight:700}
-@media print{.kt-bar{display:none}body{background:#fff}.kt{margin:0;width:auto;padding:0}}
+.kt .kt-station{font-size:18px;font-weight:800;text-align:center;margin:2px 0;border:2px solid #000;border-radius:6px;padding:2px 0}
+@media print{.kt-bar{display:none}body{background:#fff}.kt{margin:0;width:auto;padding:0;break-after:page;page-break-after:always}.kt:last-of-type{break-after:auto;page-break-after:auto}}
 </style>
 </head>
 <body>
 <nav class="kt-bar"><a href="{% url 'restaurant:order' order.pk %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ order.number }}</a><button type="button" data-print>{{ words.reprint }}</button></nav>
-<article class="kt" data-kitchen-ticket="{{ order.number }}-{{ ticket.sequence }}">
-  <h1>{{ words.kitchen }} · {{ words.ticket }} {{ ticket.sequence }}</h1>
+{% for card in cards %}<article class="kt" data-kitchen-ticket="{{ order.number }}-{{ card.ticket.sequence }}">
+  <h1>{{ words.kitchen }} · {{ words.ticket }} {{ card.ticket.sequence }}</h1>
+  {% if card.station %}<p class="kt-station" data-ticket-station>{{ card.station }}</p>{% endif %}
   <p class="kt-where">{% if order.table %}{{ words.table }} {{ order.table.name }}{% else %}{{ kind_label }}{% endif %}</p>
-  <p class="kt-meta"><span dir="ltr">{{ order.number }}</span><span dir="ltr">{{ sent_at|date:"H:i" }}</span></p>
-  <p class="kt-meta"><span>{{ ticket.sent_by|person }}</span><span>{% if order.waiter %}{{ order.waiter.name }}{% endif %}{% if order.guests > 1 %} · {{ order.guests }} {{ words.guests }}{% endif %}</span></p>
-  <ul>{% for line in lines %}<li data-ticket-line="{{ line.item.item_code }}"{% if line.voided %} style="text-decoration:line-through"{% endif %}><b>{{ line.quantity|qty }} ×</b> {{ line.item.item_name }}{% if line.voided %} ({{ words.voided }}){% endif %}{% if line.note %}<small>{{ line.note }}</small>{% endif %}</li>{% endfor %}</ul>
+  <p class="kt-meta"><span dir="ltr">{{ order.number }}</span><span dir="ltr">{{ card.sent_at|date:"H:i" }}</span></p>
+  <p class="kt-meta"><span>{{ card.ticket.sent_by|person }}</span><span>{% if order.waiter %}{{ order.waiter.name }}{% endif %}{% if order.guests > 1 %} · {{ order.guests }} {{ words.guests }}{% endif %}</span></p>
+  <ul>{% for line in card.lines %}<li data-ticket-line="{{ line.item.item_code }}"{% if line.voided %} style="text-decoration:line-through"{% endif %}><b>{{ line.quantity|qty }} ×</b> {{ line.item.item_name }}{% if line.voided %} ({{ words.voided }}){% endif %}{% if line.note %}<small>{{ line.note }}</small>{% endif %}{% if line.void_reason %}<small>{{ line.void_reason }}</small>{% endif %}</li>{% endfor %}</ul>
   {% if order.notes %}<p class="kt-notes">{{ order.notes }}</p>{% endif %}
-</article>
+</article>{% endfor %}
 <script>document.querySelector("[data-print]").addEventListener("click", function(){ window.print(); });
 if (new URLSearchParams(window.location.search).get('autoprint') === '1') { window.addEventListener('load', function(){ window.print(); }); }</script>
 </body>
