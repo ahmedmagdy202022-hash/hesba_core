@@ -585,6 +585,8 @@ def _fees(found, lang):
             continue
         info = charges.get(invoice.pk, {"students": [], "month": None})
         link = live.get(invoice.pk)
+        if link is not None and Decimal(link.amount) > ask:
+            link = None  # stale, as on the pay-link board: it asks for more than this invoice still owes after a desk payment
         rows.append({"number": invoice.invoice_number, "date": invoice.invoice_date, "remaining": ask, "month_text": billing.month_label(info["month"], lang) if info["month"] else "", "students": info["students"],
                      "pay_url": f"{reverse('pay_page', args=[pay.sign_token(link)])}?lang={lang}" if link is not None else "", "pay_amount": link.amount if link is not None else None})
     rows.reverse()  # oldest first, the order the aging reads

@@ -1075,6 +1075,27 @@ class FeesTests(PortalSetup):
         set_capability_enabled(self.profile, "payment_links", False, user=self.owner)
         self.assertNotContains(client.get(self.url(token)), "data-pay-go")
 
+    def test_a_link_that_asks_for_more_than_is_still_owed_shows_no_pay_button(self):
+        """A pay link made before a desk payment asks for the old amount. The pay-link board calls it stale and withholds it
+        (``paylinks.Board.load``); the portal must not offer it either, or the guardian could pay the desk money twice."""
+
+        for invoice in (self.inv450, self.inv600):
+            paylinks.make_or_show(invoice, self.owner, "ar")
+        client, token, page = self.open_portal()
+        self.assertEqual(page.content.decode().count("data-pay-go"), 2)
+        self.pay_desk(self.inv600, "200")  # on the account, tied to no invoice: 850 is owed, so one invoice asks for less than its link
+        page = client.get(self.url(token))
+        self.assertEqual(self.owed(page), D("850.00"))
+        self.assertEqual(page.content.decode().count("data-pay-go"), 1)
+        rows = portal.content(portal.read_token(token), "ar")["fees"]["rows"]
+        self.assertEqual(sum(row["remaining"] for row in rows), D("850.00"))
+        offered = [row for row in rows if row["pay_url"]]
+        self.assertEqual(len(offered), 1)
+        self.assertEqual(offered[0]["pay_amount"], offered[0]["remaining"])  # the one left asks for exactly what its invoice owes
+        withheld = next(row for row in rows if not row["pay_url"])
+        self.assertLess(withheld["remaining"], PaymentLink.objects.get(invoice__invoice_number=withheld["number"]).amount)
+        self.assertEqual(PaymentLink.objects.filter(status=LinkStatus.NEW).count(), 2)  # nothing was cancelled or swept from a public page
+
     def test_a_multi_entity_install_reads_the_links_entity_alone(self):
         Entity.objects.create(code="E-FEES", name_ar="فرع المصروفات", activity_slug="education", sub_activity_slug="tutoring_center")
         self.pay_desk(self.inv600, "200")
