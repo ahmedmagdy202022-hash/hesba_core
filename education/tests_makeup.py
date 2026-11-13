@@ -39,6 +39,7 @@ from sales.models import SalesInvoice
 from . import attendance, billing, insights, makeup, pay, scan, services
 from .models import Attendance, ClassSession, Enrollment, FeeCharge, GroupPayTerm, MakeupSeat, SeatStatus, Student, StudyGroup, TeacherPayment
 from .tests import EducationSetup, person
+from .tests_portal import MARIAM, YOUSEF, PortalSetup, day, normalized
 
 FIXED = datetime(2026, 11, 11, 12, 0, tzinfo=timezone.get_current_timezone())  # a Wednesday, at noon
 EVERY_DAY = "sun,mon,tue,wed,thu,fri,sat"
@@ -105,6 +106,25 @@ class MakeupSetup(EducationSetup):
 
     def seats(self, **filters):
         return list(MakeupSeat.objects.filter(**filters).order_by("pk"))
+
+    def classes(self):
+        """Some regular classes: Sara and Tala at home (Sara absent on the 4th, the class she makes up), Nour at the other group."""
+
+        for n, marks in ((2, {}), (3, {}), (4, {self.sara.pk: "absent"})):
+            attendance.take(self.home, self.owner, MONTH + timedelta(days=n), {str(pk): v for pk, v in marks.items()})
+            attendance.take(self.other, self.owner, MONTH + timedelta(days=n), {})
+
+    def figures(self):
+        due = [(l["enrollment"].student.name, l["enrollment"].group.name, l["quantity"], l["price"], l["discount"], l["amount"]) for l in billing.due_lines(MONTH)]
+        preview = [(r["payer"].pk, [(l["enrollment"].pk, l["amount"]) for l in r["lines"]], r["net"], r["tax"], r["total"]) for r in billing.preview(MONTH)]
+        teachers = [(r["teacher"].pk, r["due"], r["paid"], r["remaining"], [(g["group"].pk, g["units"], g["due"]) for g in r["groups"]]) for r in pay.teacher_rows(MONTH)]
+        rows, totals = insights.group_report(MONTH)
+        report = ([(r["group"].pk, r["students"], r["held"], r["rate"], r["billed"], r["teacher"], r["left"]) for r in rows], totals)
+        people = {s.pk: (attendance.student_summary(s)["rate"], len(attendance.student_summary(s)["absences"])) for s in (self.sara, self.tala, self.nour)}
+        rates = {g.pk: attendance.group_rates(g) for g in (self.home, self.other)}
+        billed = [(row["invoice"].pk, row["students"]) for row in billing.billed(MONTH)]
+        return {"due": due, "preview": preview, "teachers": teachers, "report": report, "people": people, "rates": rates, "billed": billed, "counts": self.counts(),
+                "dues": [(row["party"].pk, row["total"]) for row in billing.dues(FIXED.date())]}
 
     def counts(self):
         return {model.__name__: model.objects.count() for model in (Attendance, ClassSession, FeeCharge, SalesInvoice, CashboxMovement, JournalEntry, TeacherPayment,
@@ -324,25 +344,6 @@ class StatusTests(MakeupSetup):
 class MoneyLineTests(MakeupSetup):
     """A seat is not attendance: nothing billing, pay or insights compute, and no row count, moves when seats are booked, marked or cancelled."""
 
-    def classes(self):
-        """Some regular classes: Sara and Tala at home (Sara absent on the 4th, the class she makes up), Nour at the other group."""
-
-        for n, marks in ((2, {}), (3, {}), (4, {self.sara.pk: "absent"})):
-            attendance.take(self.home, self.owner, MONTH + timedelta(days=n), {str(pk): v for pk, v in marks.items()})
-            attendance.take(self.other, self.owner, MONTH + timedelta(days=n), {})
-
-    def figures(self):
-        due = [(l["enrollment"].student.name, l["enrollment"].group.name, l["quantity"], l["price"], l["discount"], l["amount"]) for l in billing.due_lines(MONTH)]
-        preview = [(r["payer"].pk, [(l["enrollment"].pk, l["amount"]) for l in r["lines"]], r["net"], r["tax"], r["total"]) for r in billing.preview(MONTH)]
-        teachers = [(r["teacher"].pk, r["due"], r["paid"], r["remaining"], [(g["group"].pk, g["units"], g["due"]) for g in r["groups"]]) for r in pay.teacher_rows(MONTH)]
-        rows, totals = insights.group_report(MONTH)
-        report = ([(r["group"].pk, r["students"], r["held"], r["rate"], r["billed"], r["teacher"], r["left"]) for r in rows], totals)
-        people = {s.pk: (attendance.student_summary(s)["rate"], len(attendance.student_summary(s)["absences"])) for s in (self.sara, self.tala, self.nour)}
-        rates = {g.pk: attendance.group_rates(g) for g in (self.home, self.other)}
-        billed = [(row["invoice"].pk, row["students"]) for row in billing.billed(MONTH)]
-        return {"due": due, "preview": preview, "teachers": teachers, "report": report, "people": people, "rates": rates, "billed": billed, "counts": self.counts(),
-                "dues": [(row["party"].pk, row["total"]) for row in billing.dues(FIXED.date())]}
-
     def makeup_operations(self):
         """Book, attend, miss, correct and cancel, on days where ``other`` has no class recorded at all (so a wrongly created class would show)."""
 
@@ -421,6 +422,705 @@ class MoneyLineTests(MakeupSetup):
         self.assertEqual(after, counts)
         self.assertEqual(OutboxMessage.objects.count(), outbox)
         self.assertEqual(AuditLog.objects.exclude(module="education").count(), others)
+
+
+
+# ---- the screens ----
+
+class ScreenSetup(MakeupSetup):
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.owner)
+
+    def as_(self, user):
+        client = Client()
+        client.force_login(user)
+        return client
+
+    def get(self, name, *args, lang="ar", client=None, query=""):
+        return (client or self.client).get(reverse(f"education:{name}", args=args) + f"?lang={lang}{query}")
+
+    def post(self, name, *args, client=None, **data):
+        return (client or self.client).post(reverse(f"education:{name}", args=args), {"lang": "ar", **data})
+
+    def section(self, response, marker):
+        """The one element a test reads: from ``marker`` to the end of its ``<section>``."""
+
+        html = response.content.decode()
+        found = re.search(rf"<section[^>]*{marker}.*?</section>", html, re.S)
+        self.assertIsNotNone(found, marker)
+        return found.group(0)
+
+    def row(self, html, attr, pk):
+        found = re.search(rf'<li[^>]*{attr}="{pk}".*?</li>', html, re.S)
+        self.assertIsNotNone(found, f"{attr} {pk}")
+        return found.group(0)
+
+    def flashes(self, response):
+        return [str(m) for m in get_messages(response.wsgi_request)]
+
+
+class StudentCardTests(ScreenSetup):
+    def test_the_card_lists_the_seats_and_a_booked_one_can_be_cancelled(self):
+        booked = self.book(day=ahead(2), missed_on=ahead(-1), note="ملاحظة الحجز الأولى")
+        attended = self.book(day=ahead(0))
+        makeup.mark(attended, "attended", self.owner)
+        gone = self.book(day=ahead(3))
+        makeup.cancel(gone, self.owner)
+        page = self.get("student", self.sara.pk)
+        card = self.section(page, "data-makeup-card")
+        self.assertIn("حصص تعويضية", card)
+        self.assertEqual(re.findall(r'data-makeup="(\d+)"', card), [str(gone.pk), str(booked.pk), str(attended.pk)])  # newest class first
+        first = self.row(card, "data-makeup", booked.pk)
+        self.assertIn("محجوز", first)
+        self.assertIn("مجموعة المراجعة الثانية", first)
+        self.assertIn("مجموعة المراجعة الأولى", first)
+        self.assertIn("ملاحظة الحجز الأولى", first)
+        self.assertIn(reverse("education:makeup_cancel", args=[booked.pk]), first)
+        self.assertIn("حضر", self.row(card, "data-makeup", attended.pk))
+        self.assertNotIn("data-makeup-cancel", self.row(card, "data-makeup", attended.pk))  # a marked seat cannot be cancelled
+        self.assertNotIn("data-makeup-cancel", self.row(card, "data-makeup", gone.pk))
+        self.assertIn("اتلغى", self.row(card, "data-makeup", gone.pk))
+        self.assertIn(reverse("education:makeup_new", args=[self.sara.pk]), card)
+
+    def test_the_date_and_the_time_of_a_seat_are_joined_by_a_comma_not_a_dot(self):
+        seat = self.book(day=ahead(2))
+        row = self.row(self.section(self.get("student", self.sara.pk), "data-makeup-card"), "data-makeup", seat.pk)
+        self.assertRegex(row, r"</bdi>، <bdi dir=\"ltr\">18:00</bdi>")
+        self.assertNotIn(" · ", row)
+        english = self.row(self.section(self.get("student", self.sara.pk, lang="en"), "data-makeup-card"), "data-makeup", seat.pk)
+        self.assertRegex(english, r"</bdi>, <bdi dir=\"ltr\">18:00</bdi>")
+        self.assertIn("Booked", english)
+
+    def test_the_note_is_escaped(self):
+        seat = self.book(day=ahead(2), note="<script>alert(1)</script>")
+        row = self.row(self.section(self.get("student", self.sara.pk), "data-makeup-card"), "data-makeup", seat.pk)
+        self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", row)
+        self.assertNotIn("<script>", row)
+
+    def test_a_student_with_no_seats_shows_the_card_with_the_book_link_and_a_stopped_student_has_no_book_link(self):
+        card = self.section(self.get("student", self.tala.pk), "data-makeup-card")
+        self.assertIn("data-makeup-none", card)
+        self.assertIn("data-makeup-book", card)
+        Student.objects.filter(pk=self.tala.pk).update(active=False)
+        stopped = self.get("student", self.tala.pk)
+        self.assertNotContains(stopped, "data-makeup-card")  # nothing to show and nobody to book for
+
+
+class BookingPageTests(ScreenSetup):
+    def options(self, response):
+        return re.findall(r'<label class="mk-option[^"]*" data-class-option data-free="([^"]*)">(.*?)</label>', response.content.decode(), re.S)
+
+    def test_the_page_lists_the_other_groups_classes_with_their_free_seats(self):
+        self.book(self.tala, day=ahead(1))
+        self.book(self.enrolled("هدى", self.home), day=ahead(1))
+        page = self.get("makeup_new", self.sara.pk, query=f"&home={self.home.pk}")
+        self.assertEqual(page.status_code, 200)
+        options = self.options(page)
+        self.assertEqual(len(options), 14)  # one class of the other group on each of the next 14 days
+        today, tomorrow, after = options[0], options[1], options[2]
+        self.assertEqual((today[0], tomorrow[0], after[0]), ("2", "0", "2"))
+        self.assertIn("فاضل مقعدين", today[1])
+        self.assertIn("مكتمل", tomorrow[1])
+        self.assertIn("disabled", tomorrow[1])  # a full class cannot be chosen
+        self.assertNotIn("disabled", today[1])
+        self.assertIn("18:00", today[1])
+        self.assertIn("مجموعة المراجعة الثانية", today[1])
+        self.assertRegex(today[1], r"</bdi>، <bdi dir=\"ltr\">18:00</bdi>")
+        self.assertNotIn("مجموعة المراجعة الأولى", "".join(text for _, text in options))  # the student's own group is not offered
+
+    def test_one_seat_left_and_a_class_the_student_already_holds(self):
+        self.book(self.tala, day=ahead(0))
+        held = self.book(self.sara, day=ahead(1))
+        options = self.options(self.get("makeup_new", self.sara.pk, query=f"&home={self.home.pk}"))
+        self.assertIn("فاضل مقعد واحد", options[0][1])
+        self.assertIn("محجوزة بالفعل", options[1][1])
+        self.assertIn("disabled", options[1][1])
+        self.assertEqual(held.status, "booked")
+
+    def test_an_unlimited_group_says_open_and_the_english_page_reads_in_english(self):
+        StudyGroup.objects.filter(pk=self.other.pk).update(capacity=0)
+        page = self.get("makeup_new", self.sara.pk, lang="en", query=f"&home={self.home.pk}")
+        options = self.options(page)
+        self.assertEqual(options[0][0], "open")
+        self.assertIn("Open", options[0][1])
+        self.assertIn("Book a makeup class", page.content.decode())
+        StudyGroup.objects.filter(pk=self.other.pk).update(capacity=3)
+        self.book(self.tala, day=ahead(0))
+        english = self.options(self.get("makeup_new", self.sara.pk, lang="en", query=f"&home={self.home.pk}"))
+        self.assertIn("1 seat left", english[0][1])
+
+    def test_the_only_home_group_is_chosen_for_you_and_with_two_you_choose(self):
+        self.assertTrue(self.options(self.get("makeup_new", self.sara.pk)))  # one running group: no choice to make
+        services.enroll(self.sara, self.make_group("مجموعة المراجعة الثالثة", self.stranger_teacher, time(9), "قاعة ج", "0"), self.owner, start_date=ahead(-60))
+        page = self.get("makeup_new", self.sara.pk)
+        self.assertEqual(self.options(page), [])
+        self.assertContains(page, "data-choose-home")
+
+    def test_a_student_in_no_running_group_has_nothing_to_make_up(self):
+        loner = services.save_student({"name": "وحيد", "payer_name": "ولي أمر وحيد", "payer_phone": "01009990000"}, self.owner)
+        self.assertContains(self.get("makeup_new", loner.pk), "data-no-home")
+
+    def test_booking_by_the_form_makes_the_seat_and_goes_back_to_the_student(self):
+        response = self.post("makeup_book", self.sara.pk, home=self.home.pk, missed=ahead(-1).isoformat(), slot=f"{self.other.pk}|{ahead(2).isoformat()}", note=NOTE)
+        self.assertRedirects(response, f"{reverse('education:student', args=[self.sara.pk])}?lang=ar#makeup", fetch_redirect_response=False)
+        (seat,) = self.seats()
+        self.assertEqual((seat.student, seat.home_group, seat.group, seat.day, seat.missed_on, seat.note), (self.sara, self.home, self.other, ahead(2), ahead(-1), NOTE))
+        self.assertEqual(self.flashes(response), ["المقعد اتحجز في الحصة التعويضية."])
+
+    def test_a_refused_booking_goes_back_to_the_page_with_the_reason_and_writes_nothing(self):
+        self.book(self.tala, day=ahead(1))
+        self.book(self.enrolled("هدى", self.home), day=ahead(1))
+        response = self.post("makeup_book", self.sara.pk, home=self.home.pk, slot=f"{self.other.pk}|{ahead(1).isoformat()}")
+        self.assertRedirects(response, f"{reverse('education:makeup_new', args=[self.sara.pk])}?lang=ar&home={self.home.pk}&missed=", fetch_redirect_response=False)
+        self.assertEqual(self.flashes(response), ["الحصة دي مكتملة (3 مكان)."])
+        self.assertEqual(MakeupSeat.objects.filter(student=self.sara).count(), 0)
+        for slot in ("", "x|2026-11-12", f"{self.other.pk}|not-a-date"):
+            refused = self.post("makeup_book", self.sara.pk, home=self.home.pk, slot=slot)
+            self.assertEqual(refused.status_code, 302, slot)
+        self.assertEqual(MakeupSeat.objects.filter(student=self.sara).count(), 0)
+
+    def test_a_missed_day_with_odd_characters_cannot_add_parameters_to_the_way_back(self):
+        response = self.post("makeup_book", self.sara.pk, home=self.home.pk, missed="2026-11-01&home=9999", slot="")
+        self.assertNotIn("&home=9999", response["Location"])
+
+
+class RegisterGuestTests(ScreenSetup):
+    def sheet(self, day=None, group=None, lang="ar", client=None):
+        return self.get("attendance", (group or self.other).pk, lang=lang, client=client, query=f"&date={(day or ahead(0)).isoformat()}")
+
+    def test_the_guest_section_lists_the_booked_guests_with_their_two_buttons(self):
+        seat = self.book(day=ahead(0), note=NOTE)
+        page = self.sheet()
+        guests = self.section(page, "data-makeup-guests")
+        self.assertIn("ضيوف الحصة (تعويضي)", guests)
+        row = self.row(guests, "data-guest", seat.pk)
+        self.assertIn("سارة", row)
+        self.assertIn("مجموعة المراجعة الأولى", row)
+        self.assertIn(NOTE, row)
+        self.assertIn(reverse("education:makeup_attended", args=[seat.pk]), row)
+        self.assertIn(reverse("education:makeup_missed", args=[seat.pk]), row)
+        self.assertRegex(row, r">حضر</button>")
+        self.assertRegex(row, r">ماحضرش</button>")
+
+    def test_the_guest_is_not_a_roster_row_and_the_section_sits_outside_the_registers_form(self):
+        self.book(day=ahead(0))
+        html = self.sheet().content.decode()
+        self.assertEqual(re.findall(r'data-mark="(\d+)"', html), [str(self.nour.pk)])  # the roster: the group's own student only
+        form = re.search(r"<form[^>]*data-attendance-form.*?</form>", html, re.S).group(0)
+        self.assertNotIn("data-makeup-guests", form)
+        self.assertNotIn(f"p_{self.sara.pk}", html)
+        self.assertEqual(html.count("<form"), html.count("</form>"))
+        self.assertGreater(html.index("data-makeup-guests"), html.index("</form>", html.index("data-attendance-form")))  # after the register's form, not nested in it
+
+    def test_a_group_with_no_guests_has_no_section_at_all(self):
+        self.assertNotContains(self.sheet(), "data-makeup-guests")
+        self.assertNotContains(self.sheet(group=self.home), "data-makeup-guests")  # and a seat is on the target's sheet only
+        self.book(day=ahead(0))
+        self.assertNotContains(self.sheet(group=self.home), "data-makeup-guests")
+
+    def test_the_registers_digest_and_save_do_not_change_with_a_booking(self):
+        attendance.take(self.other, self.owner, ahead(-1), {})
+        before = re.search(r'name="sheet_version" value="([^"]*)"', self.sheet(ahead(-1)).content.decode()).group(1)
+        today_before = re.search(r'name="sheet_version" value="([^"]*)"', self.sheet().content.decode()).group(1)
+        seat = self.book(day=ahead(0))
+        makeup.mark(seat, "attended", self.owner)
+        self.assertEqual(re.search(r'name="sheet_version" value="([^"]*)"', self.sheet(ahead(-1)).content.decode()).group(1), before)
+        self.assertEqual(re.search(r'name="sheet_version" value="([^"]*)"', self.sheet().content.decode()).group(1), today_before)
+        saved = self.post("attendance", self.other.pk, date=ahead(0).isoformat(), sheet_version=today_before, **{f"p_{self.nour.pk}": "present"})
+        self.assertEqual(saved.status_code, 302)
+        session = ClassSession.objects.get(group=self.other, date=ahead(0))
+        self.assertEqual(list(session.marks.values_list("student__name", "presence")), [("نور", "present")])  # the register saved its own roster only
+        self.assertEqual(MakeupSeat.objects.get(pk=seat.pk).status, "attended")
+
+    def test_the_two_buttons_mark_the_guest_and_come_back_to_the_sheet(self):
+        seat = self.book(day=ahead(0))
+        response = self.post("makeup_attended", seat.pk, back="attendance")
+        self.assertRedirects(response, f"{reverse('education:attendance', args=[self.other.pk])}?lang=ar&date={ahead(0).isoformat()}", fetch_redirect_response=False)
+        self.assertEqual(self.flashes(response), ["اتسجّل حضور الضيف."])
+        self.assertEqual(MakeupSeat.objects.get(pk=seat.pk).status, "attended")
+        self.assertIn("data-guest-status=\"attended\"", self.sheet().content.decode())
+        self.post("makeup_missed", seat.pk, back="attendance")
+        self.assertEqual(MakeupSeat.objects.get(pk=seat.pk).status, "missed")
+        self.assertEqual((Attendance.objects.count(), ClassSession.objects.count()), (0, 0))
+
+    def test_the_target_teacher_marks_from_the_sheet_and_the_home_teacher_cannot(self):
+        seat = self.book(day=ahead(0))
+        self.assertEqual(self.sheet(client=self.as_(self.teacher_b_user)).status_code, 200)
+        self.assertEqual(self.post("makeup_attended", seat.pk, back="attendance", client=self.as_(self.teacher_b_user)).status_code, 302)
+        self.assertEqual(MakeupSeat.objects.get(pk=seat.pk).status, "attended")
+        for who in (self.teacher_user, self.cashier, self.stranger_user):
+            with self.subTest(user=who.username):
+                self.assertEqual(self.post("makeup_missed", seat.pk, client=self.as_(who)).status_code, 403)
+        self.assertEqual(MakeupSeat.objects.get(pk=seat.pk).status, "attended")
+
+    def test_a_class_cancelled_on_the_register_shows_the_guest_without_buttons(self):
+        seat = self.book(day=ahead(0))
+        attendance.take(self.other, self.owner, ahead(0), {}, cancelled=True)
+        guests = self.section(self.sheet(), "data-makeup-guests")
+        row = self.row(guests, "data-guest", seat.pk)
+        self.assertIn("data-guest-cancelled-class", row)
+        self.assertNotIn("data-guest-attended", row)
+        self.assertEqual(self.post("makeup_attended", seat.pk, back="attendance").status_code, 302)
+        self.assertEqual(MakeupSeat.objects.get(pk=seat.pk).status, "booked")  # refused with a message; the seat stays as it was
+
+    def test_today_lists_each_classs_guests_for_who_may_mark_them(self):
+        seat = self.book(day=ahead(0))
+        home_seat = self.book(self.nour, group=self.home, home=self.other, day=ahead(0))
+        page = self.get("today", query=f"&date={ahead(0).isoformat()}")
+        html = page.content.decode()
+        other_card = re.search(rf'<article[^>]*data-class="{self.other.pk}".*?</article>', html, re.S).group(0)
+        home_card = re.search(rf'<article[^>]*data-class="{self.home.pk}".*?</article>', html, re.S).group(0)
+        self.assertEqual(re.findall(r'data-guest="(\d+)"', other_card), [str(seat.pk)])
+        self.assertEqual(re.findall(r'data-guest="(\d+)"', home_card), [str(home_seat.pk)])
+        self.assertIn("ضيوف الحصة (تعويضي)", other_card)
+        teacher = self.get("today", client=self.as_(self.teacher_b_user), query=f"&date={ahead(0).isoformat()}").content.decode()
+        self.assertEqual(re.findall(r'data-guest="(\d+)"', teacher), [str(seat.pk)])  # teacher B sees the guest of their class only
+        marked = self.post("makeup_attended", seat.pk, back="today")
+        self.assertRedirects(marked, f"{reverse('education:today')}?lang=ar&date={ahead(0).isoformat()}", fetch_redirect_response=False)
+
+    def test_the_english_sheet_reads_in_english_and_the_note_is_escaped(self):
+        self.book(day=ahead(0), note="<b>x</b>")
+        guests = self.section(self.sheet(lang="en"), "data-makeup-guests")
+        self.assertIn("Class guests (makeup)", guests)
+        self.assertIn(">Attended</button>", guests)
+        self.assertIn("&lt;b&gt;x&lt;/b&gt;", guests)
+        self.assertNotIn("<b>x</b>", guests)
+
+
+class GuardTests(ScreenSetup):
+    """The exam and content screens' order: not an education install (404), the record in the entity being worked in (404), then the permission (403)."""
+
+    def urls(self, seat):
+        return [("get", reverse("education:makeup_new", args=[self.sara.pk])), ("post", reverse("education:makeup_book", args=[self.sara.pk])),
+                ("post", reverse("education:makeup_cancel", args=[seat.pk])), ("post", reverse("education:makeup_attended", args=[seat.pk])),
+                ("post", reverse("education:makeup_missed", args=[seat.pk]))]
+
+    def call(self, client, method, url):
+        form = {"lang": "ar", "home": self.home.pk, "slot": f"{self.other.pk}|{ahead(5).isoformat()}"}
+        return client.get(url) if method == "get" else client.post(url, form)
+
+    def test_not_an_education_install_is_a_404_before_anything_else(self):
+        from settings_core.models import ClientProfile
+
+        seat = self.book(day=ahead(0))
+        profile = ClientProfile.get_active()
+        profile.activity_slug = "commercial"
+        profile.save()
+        for user in (self.owner, self.cashier):  # the cashier would be a 403 on an education install
+            client = self.as_(user)
+            for method, url in self.urls(seat):
+                with self.subTest(user=user.username, url=url):
+                    self.assertEqual(self.call(client, method, url).status_code, 404)
+        self.assertEqual(MakeupSeat.objects.get(pk=seat.pk).status, "booked")
+
+    def test_a_record_of_another_entity_is_a_404_even_for_who_would_get_a_403(self):
+        from entities.services import main_entity
+
+        seat = self.book(day=ahead(0))
+        branch = Entity.objects.create(code="E-MKG", name_ar="فرع الحجز", activity_slug="education", sub_activity_slug="tutoring_center")
+        for user in (self.owner, self.cashier):
+            client = self.as_(user)
+            session = client.session
+            session["hesba_entity"] = branch.pk
+            session.save()
+            for method, url in self.urls(seat):  # from the branch the main entity's student, group and seat do not exist
+                with self.subTest(user=user.username, url=url):
+                    self.assertEqual(self.call(client, method, url).status_code, 404)
+        foreign_student = services.save_student({"name": "طالب الفرع", "payer_name": "ولي أمر الفرع", "payer_phone": "01005551111"}, self.owner)
+        Student.objects.filter(pk=foreign_student.pk).update(entity=branch)
+        client = self.as_(self.owner)
+        session = client.session
+        session["hesba_entity"] = main_entity().pk
+        session.save()
+        self.assertEqual(client.get(reverse("education:makeup_new", args=[foreign_student.pk])).status_code, 404)  # and the other way round
+        elsewhere = self.make_group("مجموعة الفرع التاني", self.teacher_b, time(8), "قاعة ك", "0")
+        StudyGroup.objects.filter(pk=elsewhere.pk).update(entity=branch)
+        refused = client.post(reverse("education:makeup_book", args=[self.sara.pk]), {"lang": "ar", "home": self.home.pk, "slot": f"{elsewhere.pk}|{ahead(1).isoformat()}"})
+        self.assertEqual(refused.status_code, 404)
+        self.assertEqual(MakeupSeat.objects.count(), 1)
+
+    def test_a_person_who_may_not_is_a_403_on_every_screen_and_nothing_changes(self):
+        seat = self.book(day=ahead(0))
+        for user in (self.cashier, self.stranger_user):  # a cashier; the teacher of another course's group
+            client = self.as_(user)
+            for method, url in self.urls(seat):
+                with self.subTest(user=user.username, url=url, method=method):
+                    self.assertEqual(self.call(client, method, url).status_code, 403)
+        self.assertEqual((MakeupSeat.objects.count(), MakeupSeat.objects.get(pk=seat.pk).status), (1, "booked"))
+
+    def test_the_home_teacher_may_cancel_but_not_mark_and_the_target_teacher_may_do_both(self):
+        seat = self.book(day=ahead(0))
+        self.assertEqual(self.post("makeup_attended", seat.pk, client=self.as_(self.teacher_user)).status_code, 403)
+        self.assertEqual(self.post("makeup_cancel", seat.pk, client=self.as_(self.teacher_user)).status_code, 302)
+        self.assertEqual(MakeupSeat.objects.get(pk=seat.pk).status, "cancelled")
+        again = self.book(day=ahead(0))
+        self.assertEqual(self.post("makeup_cancel", again.pk, client=self.as_(self.teacher_b_user)).status_code, 302)
+        self.assertEqual(MakeupSeat.objects.get(pk=again.pk).status, "cancelled")
+
+    def test_every_change_is_post_only_and_csrf_protected(self):
+        seat = self.book(day=ahead(0))
+        for name, args in (("makeup_book", [self.sara.pk]), ("makeup_cancel", [seat.pk]), ("makeup_attended", [seat.pk]), ("makeup_missed", [seat.pk])):
+            url = reverse(f"education:{name}", args=args)
+            for verb in ("get", "put", "delete", "patch"):
+                with self.subTest(name=name, verb=verb):
+                    self.assertEqual(getattr(self.client, verb)(url).status_code, 405)
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(self.owner)
+        for name, args in (("makeup_book", [self.sara.pk]), ("makeup_cancel", [seat.pk]), ("makeup_attended", [seat.pk]), ("makeup_missed", [seat.pk])):
+            with self.subTest(csrf=name):
+                self.assertEqual(client.post(reverse(f"education:{name}", args=args), {"lang": "ar", "home": self.home.pk}).status_code, 403)
+        self.assertEqual(MakeupSeat.objects.get(pk=seat.pk).status, "booked")
+
+    def test_an_unknown_record_is_a_404(self):
+        self.assertEqual(self.client.get(reverse("education:makeup_new", args=[999999])).status_code, 404)
+        for name in ("makeup_cancel", "makeup_attended", "makeup_missed"):
+            self.assertEqual(self.client.post(reverse(f"education:{name}", args=[999999]), {"lang": "ar"}).status_code, 404)
+
+
+# ---- the card scan at the door ----
+
+class ScanTests(MakeupSetup):
+    """Teacher B (or a manager) scans the card of a student with a booked seat in B's class today. 18:05 is inside the class's window (17:30 to 19:30)."""
+
+    NOW = at(ahead(0), 18, 5)
+
+    def test_a_scan_with_a_booked_seat_answers_makeup_and_marks_the_seat_attended(self):
+        seat = self.book(day=ahead(0))
+        result = scan.mark(self.sara.code, self.teacher_b_user, self.NOW)
+        self.assertEqual((result.status, result.presence, result.at, result.changed, result.student, result.group), ("ok", "makeup", "18:05", True, self.sara, self.other))
+        self.assertEqual(result.as_json()["presence_label"], "حصة تعويضية")
+        self.assertIn("حضور سارة", result.message)
+        self.assertEqual(MakeupSeat.objects.get(pk=seat.pk).status, "attended")
+        log = AuditLog.objects.get(action="scan_makeup_seat")
+        self.assertEqual((log.object_type, log.object_id, log.actor, log.before_data["status"], log.after_data["status"]), ("education.MakeupSeat", str(seat.pk), self.teacher_b_user, "booked", "attended"))
+
+    def test_the_scan_writes_no_mark_opens_no_class_and_does_not_flip_the_register_into_scanned_mode(self):
+        self.book(day=ahead(0))
+        scan.mark(self.sara.code, self.teacher_b_user, self.NOW)
+        self.assertEqual((Attendance.objects.count(), ClassSession.objects.count()), (0, 0))
+        self.assertFalse(AuditLog.objects.filter(action="scan_attendance").exists())
+        self.assertEqual(scan.touched([1, 2, 3]), set())
+        self.assertEqual(AuditLog.objects.filter(object_type="education.ClassSession").count(), 0)
+
+    def test_a_rescan_says_again_and_writes_nothing(self):
+        self.book(day=ahead(0))
+        scan.mark(self.sara.code, self.teacher_b_user, self.NOW)
+        logs = AuditLog.objects.count()
+        again = scan.mark(self.sara.code, self.teacher_b_user, at(ahead(0), 18, 40))
+        self.assertEqual((again.status, again.presence, again.changed), ("again", "makeup", False))
+        self.assertEqual(AuditLog.objects.count(), logs)
+
+    def test_a_missed_mark_is_corrected_by_the_scan(self):
+        seat = self.book(day=ahead(0))
+        makeup.mark(seat, "missed", self.owner)
+        result = scan.mark(self.sara.code, self.owner, self.NOW)
+        self.assertEqual((result.status, result.changed), ("ok", True))
+        self.assertIn("اتصحّح لحضور", result.message)
+        self.assertEqual(MakeupSeat.objects.get(pk=seat.pk).status, "attended")
+
+    def test_without_a_seat_the_scan_is_refused_as_before_and_so_are_the_other_days_and_cancelled_seats(self):
+        self.assertEqual(scan.mark(self.sara.code, self.teacher_b_user, self.NOW).status, "refused")  # the old answer, word for word
+        self.assertEqual(scan.mark(self.sara.code, self.teacher_b_user, self.NOW).message, scan.MESSAGES["ar"]["refused"])
+        self.book(day=ahead(1))
+        self.assertEqual(scan.mark(self.sara.code, self.teacher_b_user, self.NOW).status, "refused")  # a seat for tomorrow is not a seat today
+        gone = self.book(self.tala, day=ahead(0))
+        makeup.cancel(gone, self.owner)
+        self.assertEqual(scan.mark(self.tala.code, self.teacher_b_user, self.NOW).status, "refused")
+        self.assertEqual(MakeupSeat.objects.filter(status="attended").count(), 0)
+
+    def test_a_seat_opens_only_its_own_group_to_the_teacher_who_may_take_it(self):
+        self.book(day=ahead(0))
+        self.assertEqual(scan.mark(self.sara.code, self.stranger_user, self.NOW).status, "refused")  # a teacher of neither group
+        self.assertEqual(scan.mark(self.sara.code, self.teacher_user, self.NOW).status, "no_class")  # the home teacher runs the 16:00 class, not that one
+        with self.assertRaises(PermissionDenied):
+            scan.mark(self.sara.code, self.cashier, self.NOW)  # not someone who scans at all
+        self.assertEqual(MakeupSeat.objects.get().status, "booked")
+
+    def test_outside_the_window_it_says_there_is_no_class_now_and_lists_the_classes(self):
+        self.book(day=ahead(0))
+        early = scan.mark(self.sara.code, self.owner, at(ahead(0), 12, 0))
+        self.assertEqual(early.status, "no_class")
+        self.assertEqual({group.pk for group in early.groups}, {self.home.pk, self.other.pk})
+        self.assertEqual(MakeupSeat.objects.get().status, "booked")
+
+    def test_a_student_with_a_class_of_their_own_and_a_seat_is_marked_in_whichever_window_holds_the_time(self):
+        seat = self.book(day=ahead(0))
+        own = scan.mark(self.sara.code, self.owner, at(ahead(0), 16, 5))  # her own group's class: the old path, a real mark
+        self.assertEqual((own.status, own.presence, own.group), ("ok", "present", self.home))
+        self.assertEqual(Attendance.objects.filter(student=self.sara, session__group=self.home).count(), 1)
+        guest = scan.mark(self.sara.code, self.owner, self.NOW)
+        self.assertEqual((guest.status, guest.presence, guest.group), ("ok", "makeup", self.other))
+        self.assertEqual(MakeupSeat.objects.get(pk=seat.pk).status, "attended")
+        self.assertEqual(Attendance.objects.filter(student=self.sara).count(), 1)  # the guest visit added no mark
+        self.assertEqual(ClassSession.objects.filter(group=self.other).count(), 0)
+
+    def test_two_classes_at_once_ask_which_one_and_the_answer_picks_the_seat(self):
+        late = self.make_group("مجموعة المراجعة المتأخرة", self.stranger_teacher, time(17), "قاعة ص", "0")
+        services.enroll(self.sara, late, self.owner, start_date=ahead(-60))
+        self.book(day=ahead(0))
+        choose = scan.mark(self.sara.code, self.owner, at(ahead(0), 17, 40))  # her 17:00 class (to 18:30) and the guest class (from 17:30)
+        self.assertEqual(choose.status, "choose")
+        self.assertEqual({group.pk for group in choose.choices}, {late.pk, self.other.pk})
+        picked = scan.mark(self.sara.code, self.owner, at(ahead(0), 17, 40), group=self.other.pk)
+        self.assertEqual((picked.status, picked.presence), ("ok", "makeup"))
+
+    def test_a_cancelled_class_is_answered_as_cancelled_and_the_seat_stays_booked(self):
+        self.book(day=ahead(0))
+        ClassSession.objects.create(group=self.other, date=ahead(0), status="cancelled", taken_by=self.owner)
+        result = scan.mark(self.sara.code, self.teacher_b_user, self.NOW)
+        self.assertEqual(result.status, "cancelled")
+        self.assertEqual(MakeupSeat.objects.get().status, "booked")
+        self.assertFalse(AuditLog.objects.filter(action="scan_makeup_seat").exists())
+
+    def test_a_scan_into_a_class_whose_register_is_already_saved_leaves_the_registers_digest_alone(self):
+        attendance.take(self.other, self.owner, ahead(0), {str(self.nour.pk): "present"})
+        session = ClassSession.objects.get(group=self.other, date=ahead(0))
+        digest = attendance.sheet_version(session)
+        self.book(day=ahead(0))
+        scan.mark(self.sara.code, self.teacher_b_user, self.NOW)
+        self.assertEqual(attendance.sheet_version(ClassSession.objects.get(pk=session.pk)), digest)
+        self.assertEqual(session.marks.count(), 1)
+
+    def test_a_scan_of_a_guest_first_creates_no_class_so_the_teachers_pay_does_not_move(self):
+        self.classes()
+        before = self.figures()
+        self.book(day=ahead(0))
+        self.book(self.tala, day=ahead(0))
+        scan.mark(self.sara.code, self.teacher_b_user, self.NOW)
+        scan.mark(self.tala.code, self.teacher_b_user, at(ahead(0), 18, 30))
+        scan.mark(self.sara.code, self.teacher_b_user, at(ahead(0), 18, 40))
+        self.assertEqual(MakeupSeat.objects.filter(status="attended").count(), 2)
+        self.assertEqual(self.figures(), before)
+
+    def test_the_scan_screen_answers_in_json_in_both_languages(self):
+        self.book(day=ahead(0))
+        self.client.force_login(self.teacher_b_user)
+        with mock.patch("django.utils.timezone.now", return_value=self.NOW):
+            arabic = self.client.post(reverse("education:scan_mark"), {"code": self.sara.code, "lang": "ar"})
+        data = arabic.json()
+        self.assertEqual((arabic.status_code, data["status"], data["presence"], data["presence_label"], data["group"]["name"]), (200, "ok", "makeup", "حصة تعويضية", self.other.name))
+        self.assertEqual(data["student"]["name"], "سارة")
+        with mock.patch("django.utils.timezone.now", return_value=self.NOW):
+            english = self.client.post(reverse("education:scan_mark"), {"code": self.sara.code, "lang": "en"}).json()
+        self.assertEqual((english["status"], english["presence_label"]), ("again", "Makeup class"))
+
+    def test_the_scan_pages_script_needs_no_change_to_draw_the_answer(self):
+        script = pathlib.Path(settings.BASE_DIR, "static", "hesba", "js", "edu_scan.js").read_text(encoding="utf-8")
+        self.assertIn("data.presence_label", script)  # the chip is drawn from the label the server sends
+        template = pathlib.Path(settings.BASE_DIR, "templates", "education", "scan.html").read_text(encoding="utf-8")
+        self.assertIn("education_scan.css' %}?v=e1-2", template)
+
+
+# ---- the guardian portal ----
+
+class PortalSeatTests(PortalSetup):
+    """Each child's block lists their own seats (E8). The portal only reads: a visit still writes exactly two rows."""
+
+    SECRET_NOTE = "ملاحظة حجز داخلية سرية جدًا"
+    THIRD = "مجموعة الرياضيات الثانية الخاصة"
+    SCIENCE2 = "مجموعة العلوم الثانية الخاصة"
+
+    def setUp(self):
+        super().setUp()
+        self.group_a2 = self.make_group(self.THIRD, self.course_a, self.teacher_b, EVERY_DAY, "none", "0", "19:00", "قاعة رياضيات 2")
+        self.group_b2 = self.make_group(self.SCIENCE2, self.course_b, self.teacher_a, EVERY_DAY, "none", "0", "13:00", "قاعة علوم 2")
+
+    def seat(self, student, home, group, ahead_days, status="booked", note=""):
+        seat = makeup.book(student, home, group, FIXED.date() + timedelta(days=max(ahead_days, 0)), self.owner, note=note)
+        if ahead_days < 0 or status != "booked":
+            MakeupSeat.objects.filter(pk=seat.pk).update(day=FIXED.date() + timedelta(days=ahead_days), status=status)
+        return MakeupSeat.objects.get(pk=seat.pk)
+
+    def child_block(self, html, name):
+        for found in re.finditer(r'<article class="gp-child".*?</article>', html, re.S):
+            if name in found.group(0).split("</h2>")[0]:
+                return found.group(0)
+        self.fail(f"no block for {name}")
+
+    def makeup_of(self, html, name):
+        found = re.search(r'<section[^>]*data-section="makeup".*?</section>', self.child_block(html, name), re.S)
+        return found.group(0) if found else ""
+
+    def items(self, section):
+        return re.findall(r'data-makeup-item data-status="(\w+)".*?<strong><bdi>([^<]*)</bdi>', section, re.S)
+
+    def test_a_childs_block_lists_the_coming_seats_first_and_the_last_month_of_attended_and_missed(self):
+        self.seat(self.yousef, self.group_a, self.group_a2, 3, note=self.SECRET_NOTE)
+        self.seat(self.yousef, self.group_a, self.group_a2, 1)
+        self.seat(self.yousef, self.group_a, self.group_a2, -5, "attended")
+        self.seat(self.yousef, self.group_a, self.group_a2, -29, "missed")
+        client, token, page = self.open_portal()
+        section = self.makeup_of(page.content.decode(), YOUSEF)
+        self.assertIn("حصص تعويضية", section)
+        statuses = [status for status, _ in self.items(section)]
+        self.assertEqual(statuses, ["booked", "booked", "attended", "missed"])  # coming ones soonest first, then the past, newest first
+        days = [text for _, text in self.items(section)]
+        self.assertEqual(days, ["12 نوفمبر 2026", "14 نوفمبر 2026", "6 نوفمبر 2026", "13 أكتوبر 2026"])
+        self.assertEqual(section.count(self.THIRD), 4)
+        self.assertRegex(section, r"</bdi>، <bdi dir=\"ltr\">19:00</bdi>")
+        self.assertNotIn(" · ", section)
+
+    def test_what_is_not_shown(self):
+        self.seat(self.yousef, self.group_a, self.group_a2, 2, "cancelled")
+        self.seat(self.yousef, self.group_a, self.group_a2, -30, "attended")  # 31 days ago is outside the last 30 days: only 29 days back counts as day one
+        self.seat(self.yousef, self.group_a, self.group_a2, -3, "booked")  # a past seat nobody marked: not listed, and not turned into «missed» by being looked at
+        self.seat(self.yousef, self.group_a, self.group_a2, 4, note=self.SECRET_NOTE)
+        client, token, page = self.open_portal()
+        html = page.content.decode()
+        section = self.makeup_of(html, YOUSEF)
+        self.assertEqual([status for status, _ in self.items(section)], ["booked"])
+        self.assertEqual(MakeupSeat.objects.filter(status="booked", day=day(3)).count(), 1)
+        self.assertNotIn(self.SECRET_NOTE, normalized(page, token))  # a seat's note is the centre's own
+        self.assertNotIn("البيانات الداخلية", section)
+
+    def test_a_childs_block_has_no_makeup_section_when_there_is_nothing_to_show(self):
+        client, token, page = self.open_portal()
+        self.assertEqual(self.makeup_of(page.content.decode(), YOUSEF), "")
+
+    def test_each_seat_is_under_its_own_child_and_another_payers_child_never_appears(self):
+        self.seat(self.yousef, self.group_a, self.group_a2, 2)
+        self.seat(self.stranger, self.group_a, self.group_a2, 2)  # another family, in the same group
+        mine = makeup.book(self.mariam, self.group_b, self.group_b2, FIXED.date() + timedelta(days=3), self.owner)
+        client, token, page = self.open_portal()
+        html = page.content.decode()
+        self.assertEqual([status for status, _ in self.items(self.makeup_of(html, YOUSEF))], ["booked"])
+        self.assertEqual(self.items(self.makeup_of(html, MARIAM)), [("booked", "14 نوفمبر 2026")])
+        self.assertIn(self.SCIENCE2, self.makeup_of(html, MARIAM))
+        self.assertNotIn(self.SCIENCE2, self.makeup_of(html, YOUSEF))
+        self.assertEqual(html.count("data-makeup-item"), 2)  # the stranger's seat is nowhere on the page
+        self.assertEqual(mine.status, "booked")
+        client2, token2, page2 = self.open_portal(self.stranger, answer="9/9/2009")
+        self.assertEqual(page2.content.decode().count("data-makeup-item"), 1)
+
+    def test_a_coming_seat_whose_class_was_cancelled_says_so(self):
+        seat = self.seat(self.yousef, self.group_a, self.group_a2, 2)
+        ClassSession.objects.create(group=self.group_a2, date=seat.day, status="cancelled", taken_by=self.owner)
+        client, token, page = self.open_portal()
+        section = self.makeup_of(page.content.decode(), YOUSEF)
+        self.assertIn("الحصة اتلغت", section)
+        self.assertIn("gp-chip--late", section)
+
+    def test_a_seat_of_another_entity_is_never_shown(self):
+        seat = self.seat(self.yousef, self.group_a, self.group_a2, 2)
+        branch = Entity.objects.create(code="E-MKP", name_ar="فرع البوابة", activity_slug="education", sub_activity_slug="tutoring_center")
+        StudyGroup.objects.filter(pk=self.group_a2.pk).update(entity=branch)
+        client, token, page = self.open_portal()
+        self.assertEqual(self.makeup_of(page.content.decode(), YOUSEF), "")
+        self.assertEqual(MakeupSeat.objects.get(pk=seat.pk).status, "booked")
+
+    def test_nothing_is_shown_before_the_second_factor(self):
+        self.seat(self.yousef, self.group_a, self.group_a2, 2, note=self.SECRET_NOTE)
+        token = self.token()
+        asked = self.anon().get(self.url(token))
+        body = normalized(asked, token)
+        self.assertContains(asked, 'data-guardian-portal="ask"')
+        self.assertNotContains(asked, "data-section")
+        self.assertNotContains(asked, "data-makeup-item")
+        for secret in (self.THIRD, self.SECRET_NOTE, "حصص تعويضية", YOUSEF):
+            self.assertNotIn(secret, body)
+        wrong = self.post(self.anon(), token, WRONG_ANSWER)
+        self.assertNotContains(wrong, "data-makeup-item", status_code=400)
+        self.assertNotIn(self.THIRD, normalized(wrong, token))
+
+    def test_the_visit_still_writes_exactly_two_rows_and_reads_the_seats_once(self):
+        self.seat(self.yousef, self.group_a, self.group_a2, 2)
+        self.seat(self.yousef, self.group_a, self.group_a2, 3)
+        client, token, page = self.open_portal()
+        client.get(self.url(token))
+        from django.test.utils import CaptureQueriesContext
+
+        with CaptureQueriesContext(connection) as queries:
+            self.assertContains(client.get(self.url(token)), "data-makeup-item")
+        statements = [q["sql"] for q in queries]
+        writes = [sql for sql in statements if sql.split()[0].upper() in ("INSERT", "UPDATE", "DELETE")]
+        self.assertEqual(len(writes), 2, writes)  # last_opened_at and the audit row, as before
+        self.assertFalse(any("makeupseat" in sql for sql in writes))
+        reads = [sql for sql in statements if "education_makeupseat" in sql]
+        self.assertEqual(len(reads), 1, reads)  # one read for every child together
+
+    def test_the_visit_changes_no_seat_and_no_number(self):
+        self.seat(self.yousef, self.group_a, self.group_a2, -3, "booked")
+        before = (self.counts(), list(MakeupSeat.objects.order_by("pk").values_list("pk", "status", "updated_at")))
+        client, token, page = self.open_portal()
+        client.get(self.url(token, "en"))
+        self.assertEqual((self.counts(), list(MakeupSeat.objects.order_by("pk").values_list("pk", "status", "updated_at"))), before)
+
+    def test_the_english_portal_reads_in_english(self):
+        self.seat(self.yousef, self.group_a, self.group_a2, 2)
+        self.seat(self.yousef, self.group_a, self.group_a2, -4, "missed")
+        client, token, page = self.open_portal(lang="en")
+        section = self.makeup_of(page.content.decode(), YOUSEF)
+        self.assertIn("Makeup classes", section)
+        self.assertIn(">Booked<", section)
+        self.assertIn(">Absent<", section)
+        self.assertRegex(section, r"</bdi>, <bdi dir=\"ltr\">19:00</bdi>")
+
+
+WRONG_ANSWER = "1/1/2000"
+
+
+# ---- words and the stylesheet ----
+
+class WordingTests(SimpleTestCase):
+    def flat(self, value):
+        return [text for item in value.values() for text in self.flat(item)] if isinstance(value, dict) else [value]
+
+    def test_every_new_arabic_line_is_plain_premium_and_gender_neutral_where_it_names_a_child(self):
+        from reports.tests_customer_voice import GENDERED, _problems
+
+        from . import portal, scan, views_makeup
+
+        sources = {"views_makeup": views_makeup.WORDS["ar"], "makeup": makeup.MESSAGES["ar"], "portal": {k: v for k, v in portal.WORDS["ar"].items() if k.startswith("makeup")},
+                   "scan": {k: v for k, v in scan.MESSAGES["ar"].items() if k.startswith("makeup")}}
+        for where, words in sources.items():
+            for text in self.flat(words):
+                with self.subTest(where=where, text=text):
+                    for banned in ("ورشة", "الأسطى", "بتاع", "دوس", "لينك"):
+                        self.assertNotIn(banned, text)
+                    self.assertEqual(_problems(text), [])
+                    for gendered in GENDERED + ("الابن", "ابنك", "ابنة", "بنتك"):
+                        self.assertNotIn(gendered, text)
+                    stripped = re.sub(r"[\s.،:؛!؟?()«»\-–—{}]+", " ", re.sub(r"\{\w+\}", "", text)).strip()
+                    if stripped:
+                        self.assertNotRegex(stripped[:1], r"[A-Za-z]")
+                        self.assertNotRegex(stripped[-1:], r"[A-Za-z]")
+
+    def test_the_two_languages_have_the_same_words(self):
+        from . import portal, scan, views_makeup
+
+        self.assertEqual(set(views_makeup.WORDS["ar"]), set(views_makeup.WORDS["en"]))
+        self.assertEqual(set(views_makeup.WORDS["ar"]["status"]), set(views_makeup.WORDS["en"]["status"]))
+        for key in ("makeup_h", "makeup_note", "makeup_status", "makeup_cancelled"):
+            self.assertIn(key, portal.WORDS["ar"])
+            self.assertIn(key, portal.WORDS["en"])
+        self.assertEqual(set(portal.WORDS["ar"]["makeup_status"]), set(portal.WORDS["en"]["makeup_status"]))
+        for key in ("makeup", "makeup_note", "makeup_was_missed"):
+            self.assertIn(key, scan.MESSAGES["en"])
+        self.assertEqual(views_makeup.WORDS["ar"]["guests_h"], "ضيوف الحصة (تعويضي)")
+
+    def test_no_template_joins_a_date_and_a_time_with_a_dot_and_the_guests_section_is_not_in_the_registers_form(self):
+        base = pathlib.Path(settings.BASE_DIR, "templates", "education")
+        for name in ("_makeup_card.html", "_makeup_guests.html", "makeup_new.html"):
+            self.assertNotIn("·", (base / name).read_text(encoding="utf-8"), name)
+        portal = (base / "portal.html").read_text(encoding="utf-8")
+        section = portal[portal.index('data-section="makeup"'):portal.index('data-section="attendance"')]
+        self.assertNotIn("·", section)
+        attendance = (base / "attendance.html").read_text(encoding="utf-8")
+        self.assertGreater(attendance.index("_makeup_guests.html"), attendance.index("</form>"))
+
+
+class StylesheetTests(SimpleTestCase):
+    def test_the_stylesheet_takes_its_colours_from_the_tokens_and_keeps_every_tap_target_at_44px(self):
+        css = pathlib.Path(settings.BASE_DIR, "static", "hesba", "css", "education_makeup.css").read_text(encoding="utf-8")
+        self.assertEqual(re.findall(r"#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(", css), [])
+        self.assertRegex(css, r"\.mk-btn\{[^}]*min-height:44px")
+        self.assertRegex(css, r"\.mk-option\{[^}]*min-height:56px")
+        for name in ("student.html", "attendance.html", "today.html", "makeup_new.html"):
+            template = pathlib.Path(settings.BASE_DIR, "templates", "education", name).read_text(encoding="utf-8")
+            self.assertIn("education_makeup.css' %}?v=e8-1", template, name)
+        portal = pathlib.Path(settings.BASE_DIR, "static", "hesba", "css", "education_portal.css").read_text(encoding="utf-8")
+        self.assertEqual(re.findall(r"#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(", portal), [])
 
 
 # ---- two bookings at once ----
