@@ -280,6 +280,12 @@ def operation_list(request):
         "item", "source_location", "destination_location", "created_by", "cancelled_by"
     ), entity_scope.STOCK_OPERATION).distinct()
     page = page_of(request, operations)
+    from manufacturing.guards import guarded
+
+    # F11b (HG-102): an operation of a production run or order shows a link to that document instead of «عكس».
+    owned = guarded([operation.pk for operation in page.object_list])
+    for operation in page.object_list:
+        operation.owner = owned.get(operation.pk)
     return render(
         request,
         "inventory/operations.html",
@@ -343,6 +349,15 @@ def operation_cancel(request, pk):
     lang = _lang(request)
     operation = entity_scope.get_or_404(StockOperation.objects.distinct(), entity_scope.STOCK_OPERATION, pk=pk)
     form = StockOperationReversalForm(request.POST, lang=lang)
+    from manufacturing.guards import before_stock_operation_reversal
+
+    try:
+        # F11b (HG-102): a production run's or order's operation is reversed from that document's page, with all of
+        # its other operations and under its own rules; it is not sent for approval from here either.
+        before_stock_operation_reversal(operation.pk)
+    except ValidationError as exc:
+        messages.error(request, "; ".join(exc.messages))  # shown in the page's language (settings_core.ui_messages)
+        return redirect(f"/inventory/operations/?lang={lang}")
     if form.is_valid() and held(request, "inventory.reverse_operation", pk, form.cleaned_data, operation.reference_number):  # FB-27
         return redirect(f"/inventory/operations/?lang={lang}")
     if form.is_valid():

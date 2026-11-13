@@ -250,3 +250,93 @@ class MadeToOrderAlertTests(KitchenSetup):
         adjust_stock("WASTE-1", today, self.rice, self.location, "out", "1", "هالك", self.owner)
         rows, total = waste(today, today)
         self.assertEqual(([row["movement"].item for row in rows], total), ([self.rice], D("30.00")))
+
+
+class KitchenRunOperationTests(KitchenSetup):
+    """Manufacturing F11b (HG-102): what the stock operations screen does with the operations of a kitchen run.
+
+    A plate prepared in the kitchen is an ordinary production run. The screen leaves a run's operations to the run's
+    own page wherever that page can open. In a restaurant the manufacturing module is off: the run's page is closed
+    and nothing else cancels a preparation, so there the screen keeps reversing its operations one by one, as before
+    (HG-102, question 1). With the module on, a preparation is cancelled whole from its run's page, like any run.
+
+    The clock stands still on a Wednesday at noon."""
+
+    def setUp(self):
+        from datetime import date, datetime, timezone as dt_timezone
+        from unittest import mock
+
+        clock = mock.patch("django.utils.timezone.now", return_value=datetime(2026, 11, 11, 10, 0, tzinfo=dt_timezone.utc))
+        clock.start()
+        self.addCleanup(clock.stop)
+        self.day = date(2026, 11, 11)
+        super().setUp()
+        self.dish = kitchen.make_in_kitchen(self.koshary, self.owner)
+        self.client.force_login(self.owner)
+
+    def position(self):
+        from config.money import money_round
+        from inventory.services import get_item_authoritative_average_cost, get_item_stock_value
+
+        return (self.stock(self.dish), money_round(get_item_stock_value(self.dish)), get_item_authoritative_average_cost(self.dish))
+
+    def reverse_from_the_stock_screen(self, operation, lang="ar"):
+        return self.client.post(reverse("inventory:operation_cancel", args=[operation.pk]),
+                                {"lang": lang, "reversal_date": self.day.isoformat(), "reason": "اتحضّر بالغلط"}, follow=True)
+
+    def operations(self, run):
+        return [run.output_operation] + [row.operation for row in run.consumptions.select_related("operation").order_by("pk")]
+
+    def test_with_manufacturing_off_a_preparation_is_still_reversed_from_the_stock_screen(self):
+        from manufacturing import guards
+
+        run = kitchen.prepare(self.dish, "5", self.owner)
+        self.assertEqual((self.position(), self.stock(self.rice), self.stock(self.lentil)), ((D("5.000"), D("55.00"), D("11.0000")), D("19.000"), D("9.500")))
+        self.assertFalse(guards.pages_open())
+        self.assertEqual(self.client.get(reverse("manufacturing:run", args=[run.pk])).status_code, 403)   # closed: the module is off
+        listed = self.client.get(reverse("inventory:operations"))
+        self.assertEqual([row.owner for row in listed.context["page"].object_list], [None, None, None])
+        for operation in self.operations(run):                # the plates out, then each ingredient back
+            self.assertContains(self.reverse_from_the_stock_screen(operation), "تم عكس حركة المخزون.")
+        self.assertEqual((self.position(), self.stock(self.rice), self.stock(self.lentil)), ((D("0.000"), D("0.00"), D("0")), D("20.000"), D("10.000")))
+        run.refresh_from_db()
+        self.assertEqual(run.status, "posted")                # as before: the screen knows nothing of the run
+        ledger_ok(self)
+
+    def test_with_manufacturing_off_the_wrong_average_is_still_possible(self):
+        # The gap HG-100 described, left open here for a kitchen with the module off (HG-102, question 1), pinned:
+        # 3 plates at 11.00, 2 sold, the recipe grows (14.00 a plate), 3 more made: 4 plates worth 53.00, 13.25 each.
+        first = kitchen.prepare(self.dish, "3", self.owner)
+        self.pay(self.order(self.dish, 2))
+        save_ingredients(self.dish, [(self.rice, "0.300"), (self.lentil, "0.100")], self.owner)
+        kitchen.prepare(self.dish, "3", self.owner)
+        self.assertEqual(self.position(), (D("4.000"), D("53.00"), D("13.2500")))
+        self.reverse_from_the_stock_screen(first.output_operation)
+        self.assertEqual(self.position(), (D("1.000"), D("20.00"), D("20.0000")))   # one plate at 20.00, for plates that cost 11.00 and 14.00
+
+    def test_with_manufacturing_on_a_preparation_is_cancelled_from_its_run_page(self):
+        from manufacturing import guards
+        from settings_core.setup_services import set_module_enabled
+
+        set_module_enabled(self.profile, "manufacturing", True, self.owner)
+        run = kitchen.prepare(self.dish, "5", self.owner)
+        self.assertTrue(guards.pages_open())
+        target = reverse("manufacturing:run", args=[run.pk])
+        for lang, text, link in (
+            ("ar", f"الحركة دي تابعة لتشغيلة الإنتاج {run.number}، ومينفعش تتعكس من شاشة التحويلات والتسويات. "
+                   "ألغِ التشغيلة من صفحتها، والمنتج بيخرج من المخزن وكل خاماته بترجع مع بعض.", "افتح صفحة التشغيلة"),
+            ("en", f"This operation belongs to production run {run.number} and cannot be reversed from the transfers and adjustments screen. "
+                   "Cancel the run from its own page: its product leaves stock and all of its materials come back, together.", "Open the run"),
+        ):
+            for operation in self.operations(run):
+                with self.subTest(lang=lang, operation=operation.reference_number):
+                    page = self.reverse_from_the_stock_screen(operation, lang)
+                    self.assertContains(page, text)
+                    self.assertContains(page, f'<a href="{target}?lang={lang}" data-owner-link>{link}</a>', count=3)
+        self.assertEqual((self.position(), self.stock(self.rice), self.stock(self.lentil)), ((D("5.000"), D("55.00"), D("11.0000")), D("19.000"), D("9.500")))
+        self.assertEqual(StockMovement.objects.filter(reversal_of__isnull=False).count(), 0)
+        self.client.post(target, {"lang": "ar", "reason": "اتحضّر بالغلط"})       # the run's own page: everything together
+        run.refresh_from_db()
+        self.assertEqual(run.status, "cancelled")
+        self.assertEqual((self.position(), self.stock(self.rice), self.stock(self.lentil)), ((D("0.000"), D("0.00"), D("0")), D("20.000"), D("10.000")))
+        ledger_ok(self)
