@@ -1,0 +1,45 @@
+{% load static hesba_format %}<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ page_title }}</title>
+{% include "partials/brand_icons.html" %}
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
+<link rel="stylesheet" href="{% static 'hesba/css/education_certificate.css' %}?v=e6-1">
+</head>
+<body class="cr-body">
+{# E6: the certificate. The toolbar and the staff block are for the screen and never print; the sheet is A4 landscape. It prints only what the verify page shows, plus the hours. #}
+<nav class="cr-toolbar" data-cert-toolbar><a class="cr-button" href="{{ back_url }}">{% include "partials/back_arrow.html" %}{{ cw.back }}</a><h1>{{ cw.for_student }}</h1>
+<a class="cr-button" href="{{ switch_url }}" hreflang="{% if lang == 'en' %}ar{% else %}en{% endif %}" data-lang-switch>{{ cw.other_lang }}</a><button class="cr-button cr-button--primary" type="button" data-print>{{ cw.print }}</button></nav>
+<section class="cr-staff" data-cert-staff>
+{% for message in messages %}<p class="cr-note cr-note--{{ message.level_tag }}" role="status" data-message>{{ message }}</p>{% endfor %}
+<div class="cr-summary"><span class="cr-chip {% if certificate.revoked %}cr-chip--revoked{% else %}cr-chip--live{% endif %}" data-cert-status>{% if certificate.revoked %}{{ cw.revoked }}{% else %}{{ cw.live }}{% endif %}</span>
+<dl class="cr-list"><div><dt>{{ cw.number }}</dt><dd><bdi dir="ltr">{{ certificate.number }}</bdi></dd></div><div><dt>{{ cw.student }}</dt><dd>{{ student.name }}</dd></div><div><dt>{{ cw.group }}</dt><dd>{{ group.name }}</dd></div>
+<div><dt>{{ cw.hours }}</dt><dd><bdi dir="ltr">{{ certificate.hours|floatformat:"-2" }}</bdi></dd></div><div><dt>{{ cw.attendance }}</dt><dd>{% if certificate.attendance_rate is not None %}<bdi dir="ltr">{{ certificate.attendance_rate }}%</bdi>{% else %}—{% endif %}</dd></div>
+<div><dt>{{ cw.issued_by }}</dt><dd>{{ certificate.issued_by.get_full_name|default:certificate.issued_by.get_username }}</dd></div></dl></div>
+{% if not verify_url %}<p class="cr-note cr-note--warning" data-no-base-url>{{ cw.no_base }}</p>{% else %}<p class="cr-verify-link"><span>{{ cw.verify }}</span><a href="{{ verify_url }}" dir="ltr" data-verify-link>{{ verify_url }}</a></p>{% endif %}
+{% if certificate.revoked %}<p class="cr-note cr-note--error" data-revoked-note>{{ cw.revoked_note }}</p>
+<dl class="cr-list"><div><dt>{{ cw.revoked_on }}</dt><dd><bdi>{{ certificate.revoked_at|day_text:lang }}</bdi></dd></div><div><dt>{{ cw.reason }}</dt><dd data-revoke-reason>{{ certificate.revoke_reason }}</dd></div></dl>
+{% else %}<details class="cr-revoke" data-revoke><summary>{{ cw.revoke_h }}</summary><form method="post" action="{% url 'education:certificate_revoke' certificate.pk %}">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+<label for="cr-reason">{{ cw.revoke_reason }}</label><input id="cr-reason" name="reason" maxlength="255" required data-reason><p class="cr-hint">{{ cw.revoke_hint }}</p><button class="cr-button cr-button--danger" type="submit" data-revoke-btn>{{ cw.revoke_btn }}</button></form></details>{% endif %}
+<p class="cr-hint">{{ cw.pdf_hint }}</p>
+</section>
+<div class="cr-stage"><main class="cr-sheet" data-certificate data-state="{% if certificate.revoked %}revoked{% else %}live{% endif %}" aria-label="{{ cw.sheet_title }}">
+<div class="cr-frame"><div class="cr-inner">
+<header class="cr-head">{% if company.logo %}<img class="cr-logo" src="{{ company.logo }}" alt="" data-company-logo>{% endif %}<p class="cr-centre" data-cert-business>{{ business }}</p></header>
+<div class="cr-body-text"><h2 class="cr-title" data-cert-title>{{ cw.sheet_title }}</h2><div class="cr-rule" aria-hidden="true"><span></span></div>
+<p class="cr-lead">{{ cw.lead }}</p><p class="cr-name" data-cert-name>{{ student.name }}</p><p class="cr-lead">{{ cw.for }}</p><p class="cr-course" data-cert-course>{{ course }}</p>{% if level %}<p class="cr-level" data-cert-level>{{ cw.level }} <bdi>{{ level }}</bdi></p>{% endif %}</div>
+<dl class="cr-facts"><div><dt>{{ cw.period }}</dt><dd data-cert-period>{{ cw.from }} <bdi>{{ first|day_text:lang }}</bdi> {{ cw.to }} <bdi>{{ last|day_text:lang }}</bdi></dd></div>
+<div><dt>{{ cw.sheet_hours }}</dt><dd data-cert-hours><bdi dir="ltr">{{ certificate.hours|floatformat:"-2" }}</bdi> {{ cw.hours_unit }}</dd></div>
+{% if certificate.grade_text %}<div><dt>{{ cw.grade }}</dt><dd data-cert-grade><bdi>{{ certificate.grade_text }}</bdi></dd></div>{% endif %}</dl>
+<footer class="cr-foot"><div class="cr-sign"><span class="cr-sign-line"></span><span class="cr-sign-label">{{ cw.sign }}</span></div>
+<dl class="cr-meta"><div><dt>{{ cw.sheet_number }}</dt><dd data-cert-number><bdi dir="ltr">{{ certificate.number }}</bdi></dd></div><div><dt>{{ cw.sheet_issued }}</dt><dd data-cert-issued><bdi>{{ certificate.issued_on|day_text:lang }}</bdi></dd></div></dl>
+{% if verify_url %}<div class="cr-verify" data-cert-verify><div class="cr-qr" data-qr-text="{{ verify_url }}" role="img" aria-label="{{ cw.scan }}"></div><p>{{ cw.scan }}</p></div>{% endif %}</footer>
+</div></div>
+{% if certificate.revoked %}<div class="cr-void" data-cert-void>{{ cw.void }}</div>{% endif %}
+</main></div>
+<script src="{% static 'hesba/vendor/qrcode/qrcode-1.4.4.js' %}"></script>
+<script>(function () { document.querySelectorAll('[data-qr-text]').forEach(function (box) { if (!window.qrcode) { return; } var qr = window.qrcode(0, 'M'); qr.addData(box.getAttribute('data-qr-text')); qr.make(); box.innerHTML = qr.createSvgTag({ cellSize: 3, margin: 0, scalable: true }); }); var print = document.querySelector('[data-print]'); if (print) { print.addEventListener('click', function () { window.print(); }); } }());</script>
+</body>
+</html>
