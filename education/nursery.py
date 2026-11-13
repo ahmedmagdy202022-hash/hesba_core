@@ -27,7 +27,7 @@ MESSAGES = {
            "not_in": "{student} لسه ماتسجلش حضوره النهارده.", "out": "{student} مشي بالفعل الساعة {time} مع {person}.",
            "who": "اختار الشخص اللي هيستلم الطفل.", "not_allowed": "{person} مش في قايمة اللي مسموح لهم يستلموا {student}؛ مينفعش الطفل يمشي معاه.",
            "none_allowed": "مفيش حد مسموح له يستلم {student}؛ ضيف الأب أو الأم الأول من ملف الطفل.", "inactive": "{student} مش طالب شغال.",
-           "left_msg": "أهلًا {parent}، {student} مشي من {company} الساعة {time} مع {person}."},
+           "left_msg": "أهلاً {parent}، تم تسليم {student} إلى {person} الساعة {time}. — {company}"},
     "en": {"manage": "Changing who may pick a child up needs the manage-students permission.", "desk": "Check-in and pick-up are for the office or the teachers.",
            "name": "Enter the person's name.", "phone": "Enter their phone, to check who they are.", "in": "{student} was already checked in today at {time}.",
            "not_in": "{student} has not been checked in today.", "out": "{student} already left at {time} with {person}.",

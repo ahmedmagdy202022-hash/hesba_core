@@ -43,7 +43,7 @@ WORDS = {
            "follow_title": "المتابعات", "follow_intro": "اللي ميعاد متابعته فات ومجاش ومفيش له حجز، واللي ميعاده جاي في الأسبوع ده ولسه ماحجزش.",
            "missed": "متابعات فاتت", "coming": "متابعات جاية (7 أيام)", "due": "ميعاد المتابعة", "late": "متأخر", "days": "يوم",
            "last_seen": "آخر كشف", "remind": "فكّره على واتساب", "book": "احجز", "no_missed": "مفيش متابعات فاتت.", "no_coming": "مفيش متابعات جاية من غير حجز.",
-           "wa_text": "أهلًا {name}، معاد متابعتك كان {date}. تحب نحجزلك ميعاد؟"},
+           "wa_text": "أهلاً {name}، ميعاد متابعة حضرتك كان يوم {date}. تحب نحجزلك ميعاد جديد؟ — {company}"},
     "en": {"title": "Patient files", "intro": "One file per patient: their details, allergies and chronic conditions, and every visit with its complaint, diagnosis and treatment.",
            "search": "Search by name, phone or file number", "find": "Search", "file_no": "File no.", "patient": "Patient", "phone": "Phone",
            "age": "Age", "last_visit": "Last visit", "open": "Open file", "none": "No patients yet. A patient is added from Patients or when booking.",
@@ -163,6 +163,7 @@ def report(request):
 
 def follow_ups(request):
     from permissions.services import user_has_permission
+    from printing.company import company_details
     from printing.share import whatsapp_link
 
     from . import insights
@@ -171,6 +172,7 @@ def follow_ups(request):
     lang = _lang(request)
     words = WORDS[lang]
     today = timezone.localdate()
+    company = company_details()["name"]
     booked = insights._booked_patients(today)  # read once for both lists
     missed, coming = insights.missed_follow_ups(today, booked), insights.coming_follow_ups(today, booked)
     if not user_has_permission(request.user, REPORT_VIEW):  # a doctor sees the patients they asked to come back
@@ -178,7 +180,7 @@ def follow_ups(request):
         missed = [row for row in missed if own is not None and row["visit"].doctor_id == own.pk]
         coming = [row for row in coming if own is not None and row["visit"].doctor_id == own.pk]
     for row in missed:  # the reminder text says the date has passed, so only the missed ones get a link
-        row["whatsapp"] = whatsapp_link(row["patient"].phone, words["wa_text"].format(name=row["patient"].name, date=row["due"].isoformat()))
+        row["whatsapp"] = whatsapp_link(row["patient"].phone, words["wa_text"].format(name=row["patient"].name, date=row["due"].isoformat(), company=company))
     return render(request, "medical/follow_ups.html", _base(lang, missed=missed, coming=coming, today=today, **_tabs(request, "follow")))
 
 

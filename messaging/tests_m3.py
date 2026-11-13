@@ -447,7 +447,7 @@ class LinkMaskingTests(ClinicSetup):
         self.assertTrue(services.may_hold_link(self.owner, MessageKind.APPOINTMENT))
         url = reverse("messaging:outbox")
         self.client.force_login(viewer)
-        for lang, mask in (("ar", "[لينك العميل]"), ("en", "[customer link]")):
+        for lang, mask in (("ar", "[رابط العميل]"), ("en", "[customer link]")):
             page = self.client.get(url + f"?lang={lang}")
             self.assertNotContains(page, self.link)
             self.assertContains(page, mask)

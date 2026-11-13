@@ -449,7 +449,7 @@ class StatusMessageTests(WorkshopSetup):
         link = self.link_in(message.text)
         url = reverse("messaging:outbox")
         self.client.force_login(viewer)
-        for lang, mask in (("ar", "[لينك العميل]"), ("en", "[customer link]")):
+        for lang, mask in (("ar", "[رابط العميل]"), ("en", "[customer link]")):
             page = self.client.get(url + f"?lang={lang}")
             self.assertEqual(page.status_code, 200)
             self.assertNotContains(page, link)
@@ -461,7 +461,7 @@ class StatusMessageTests(WorkshopSetup):
         OutboxMessage.objects.filter(pk=message.pk).update(status=OutboxStatus.SENT)
         history = self.client.get(url + "?lang=ar&show=sent")
         self.assertNotContains(history, link)
-        self.assertContains(history, "[لينك العميل]")
+        self.assertContains(history, "[رابط العميل]")
         # Counter staff still read it whole and send it.
         self.client.force_login(self.owner)
         self.assertContains(self.client.get(url + "?lang=ar&show=sent"), link)

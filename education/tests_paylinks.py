@@ -266,7 +266,7 @@ class WhatsAppTests(PayFeesSetup):
         self.pay_off(invoice, "500")
         link, page, href, url = self.link_and_text(invoice, "ar")
         self.assertEqual(pay.read_token(url.split("/pay/")[1].split("/")[0]), link)  # the address in the message opens this very link
-        expected = f"أهلاً محمد السيد، باقي 750.00 ج.م من مصروفات يوسف محمد عن {billing.month_label(self.month, 'ar')}. تقدر تدفعها أونلاين من هنا: {url}"
+        expected = f"أهلاً محمد السيد، المتبقي من مصروفات يوسف محمد عن {billing.month_label(self.month, 'ar')}: 750.00 ج.م. تقدر تدفع أونلاين من الرابط ده: {url}"
         self.assertEqual(href, f"https://wa.me/201001234567?text={quote(expected)}")
         self.assertEqual(unquote(href.split("?text=")[1]), expected)
         self.assertContains(page, "ابعته واتساب")
@@ -289,7 +289,7 @@ class WhatsAppTests(PayFeesSetup):
         link, page, href, url = self.link_and_text(invoice, "ar")
         text = unquote(href.split("?text=")[1])
         self.assertTrue("من مصروفات يوسف محمد، مريم محمد عن" in text or "من مصروفات مريم محمد، يوسف محمد عن" in text)
-        self.assertIn("باقي 1,050.00 ج.م", text)
+        self.assertIn("1,050.00 ج.م", text)
 
     def test_no_phone_means_no_whatsapp_link_but_the_copy_button_still_works(self):
         invoice = self.fee_invoice("يوسف محمد", "1250", payer=make_customer(customer_code="C-NOPHONE", name="ولي بلا رقم", phone=""))

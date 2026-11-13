@@ -24,7 +24,7 @@ The language follows ?lang= like every other page, and a remembered English choi
     <p>The link may be old or mistyped. Go back and carry on from there.</p>
     {% else %}
     <h1>الصفحة دي مش موجودة</h1>
-    <p>يمكن اللينك قديم أو اتكتب غلط. ارجع وكمّل شغلك من هناك.</p>
+    <p>ممكن يكون الرابط قديم أو فيه خطأ في الكتابة. ارجع وكمّل شغلك من هناك.</p>
     {% endif %}
     {% if user.is_authenticated %}<a class="op-primary" href="{% url 'dashboard_snapshot' %}?lang={% if en == 'en' %}en{% else %}ar{% endif %}" data-error-home>{% if en == 'en' %}Back to the dashboard{% else %}ارجع للرئيسية{% endif %}</a>
     {% elif demo_mode %}<a class="op-primary" href="{% url 'demo_landing' %}?lang={% if en == 'en' %}en{% else %}ar{% endif %}" data-error-home>{% if en == 'en' %}Back to the demo{% else %}ارجع لصفحة التجربة{% endif %}</a>
