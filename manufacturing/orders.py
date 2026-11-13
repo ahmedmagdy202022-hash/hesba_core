@@ -9,7 +9,9 @@ HG-036 (approved):
   those issued materials, with labour and overhead absorbed into the
   product's stock cost;
 * units recorded as defective at any stage are scrap: only the good units
-  enter stock, and they carry the whole cost;
+  enter stock, and they carry the whole cost. The finish puts exactly those
+  good units into stock (F11, HG-100), never the recipe's output times the
+  rounded batches;
 * cancelling an order on the floor returns every issued material.
 
 Orders started before HG-036 have no issued materials; they consume at finish
@@ -150,11 +152,14 @@ def finish(order, user, lang="ar"):
     issued = [issue.operation for issue in order.issues.select_related("operation")]
     if any(operation.status != StockOperationStatus.POSTED for operation in issued):
         raise ValidationError(words["reversed"])
-    planned = (order.recipe.output_quantity * _batches(order)).quantize(Decimal("0.001"))
+    # F11 (HG-100): the order's own good units enter stock, and the rest of the order is its scrap. The batches
+    # (quantity over the recipe's output, kept to three decimals) only say how much material the order takes:
+    # 100 units with a batch of 3 are 33.333 batches, and 3 x 33.333 would put 99.999 into stock.
+    good = good_units(order)
     run = services.produce(order.recipe, user, batches=_batches(order), location=order.location,
                            notes=f"{order.number}{' · ' + order.notes if order.notes else ''}"[:255], lang=lang,
-                           conversion_cost=order.labor_cost + order.overhead_cost, scrap=max(planned - good_units(order), Decimal("0")),
-                           issued=issued or None)
+                           conversion_cost=order.labor_cost + order.overhead_cost, scrap=max(order.quantity - good, Decimal("0")),
+                           issued=issued or None, output=good)
     order.run, order.status, order.finished_at = run, OrderStatus.DONE, timezone.now()
     order.save(update_fields=["run", "status", "finished_at"])
     _audit(order, user, "finish_production_order", {"run": run.number, "output": str(run.output_quantity), "material_cost": str(run.total_cost)})
