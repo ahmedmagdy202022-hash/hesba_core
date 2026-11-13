@@ -1,0 +1,50 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/projects.css' %}?v=c1-vo1">{% endblock %}
+{% block operation_content %}
+{# Contracting C1 (HG-103): write or edit a draft variation order. A draft changes nothing: the bill of quantities moves only at approval. #}
+{% include "projects/_head.html" %}
+<section class="prj-card sr-formhead"><h2 class="prj-h">{{ form_title }}</h2><p class="sr-hint">{{ vw.form_intro }}</p></section>
+{% if closed %}<div class="op-message" data-project-closed>{{ vw.closed }}</div>
+{% else %}
+{% if form_error %}<div class="op-message op-message-error" role="alert" data-form-error>{{ form_error }}</div>{% endif %}
+<form class="op-form hs-form sr-form vo-form" method="post" data-variation-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+<div class="prj-card sr-block">
+<div class="op-field"><label for="vo-title">{{ vw.f_title }}</label><input id="vo-title" name="title" maxlength="160" value="{{ form.title }}" placeholder="{{ vw.f_title_ph }}" autocomplete="off" required></div>
+<div class="op-field"><label for="vo-date">{{ vw.f_date }}</label><input id="vo-date" type="date" name="order_date" max="{{ today|date:'Y-m-d' }}" value="{{ form.date }}" required></div>
+<div class="op-field"><label for="vo-reason">{{ vw.f_reason }}</label><textarea id="vo-reason" name="reason" rows="3" maxlength="3000" placeholder="{{ vw.f_reason_ph }}">{{ form.reason }}</textarea></div>
+<div class="op-field"><label for="vo-days">{{ vw.f_days }}</label><input id="vo-days" name="extension_days" inputmode="numeric" maxlength="4" dir="ltr" value="{{ form.days }}"><small>{{ vw.f_days_hint }}</small></div>
+</div>
+{% if boq_rows %}
+<div class="prj-card sr-block">
+<fieldset class="vo-set" data-variation-changes><legend>{{ vw.changes_title }}</legend><p class="sr-hint">{{ vw.changes_hint }}</p>
+{% for row in boq_rows %}{% with boq=row.boq %}<div class="vo-change" data-change-row="{{ boq.line_number }}">
+<div class="vo-change__what"><b><bdi dir="ltr">{{ boq.code|default:boq.line_number }}</bdi> {{ boq.description }}</b>
+<small>{{ vw.now }} <span dir="ltr">{{ boq.quantity|qty }}</span> <bdi>{{ boq.unit }}</bdi> · {{ vw.rate }} <span dir="ltr">{{ boq.rate|money }}</span>{% if row.certified %} · {{ vw.certified }} <span dir="ltr">{{ row.certified|qty }}</span>{% endif %}</small></div>
+<select name="d_{{ boq.pk }}" aria-label="{{ vw.direction }} — {{ boq.description }}"><option value="up"{% if row.direction != 'down' %} selected{% endif %}>{{ vw.up }}</option><option value="down"{% if row.direction == 'down' %} selected{% endif %}>{{ vw.down }}</option></select>
+<input name="c_{{ boq.pk }}" value="{{ row.value }}" inputmode="decimal" dir="ltr" autocomplete="off" placeholder="{{ vw.change_qty }}" aria-label="{{ vw.change_qty }} — {{ boq.description }}">
+</div>{% endwith %}{% endfor %}
+</fieldset>
+</div>
+<div class="prj-card sr-block">
+<fieldset class="vo-set" data-sr-rows="item" data-variation-new><legend>{{ vw.new_title }}</legend><p class="sr-hint">{{ vw.new_hint }}</p>
+{% for row in form.new %}<div class="vo-new" data-sr-row><input class="vo-new__desc" name="new_description" maxlength="255" value="{{ row.description }}" placeholder="{{ vw.description }}" aria-label="{{ vw.description }}" autocomplete="off"><input name="new_code" maxlength="20" dir="ltr" value="{{ row.code }}" placeholder="{{ vw.code }}" aria-label="{{ vw.code }}" autocomplete="off"><input name="new_unit" maxlength="30" value="{{ row.unit }}" placeholder="{{ vw.unit }}" aria-label="{{ vw.unit }}" list="vo-units" autocomplete="off"><input name="new_quantity" inputmode="decimal" dir="ltr" value="{{ row.quantity }}" placeholder="{{ vw.qty }}" aria-label="{{ vw.qty }}" autocomplete="off"><input name="new_rate" inputmode="decimal" dir="ltr" value="{{ row.rate }}" placeholder="{{ vw.rate }}" aria-label="{{ vw.rate }}" autocomplete="off"></div>{% endfor %}
+<button class="op-secondary sr-add" type="button" data-sr-add="item">{{ vw.add_row }}</button>
+<template data-sr-template="item"><div class="vo-new" data-sr-row><input class="vo-new__desc" name="new_description" maxlength="255" placeholder="{{ vw.description }}" aria-label="{{ vw.description }}" autocomplete="off"><input name="new_code" maxlength="20" dir="ltr" placeholder="{{ vw.code }}" aria-label="{{ vw.code }}" autocomplete="off"><input name="new_unit" maxlength="30" placeholder="{{ vw.unit }}" aria-label="{{ vw.unit }}" list="vo-units" autocomplete="off"><input name="new_quantity" inputmode="decimal" dir="ltr" placeholder="{{ vw.qty }}" aria-label="{{ vw.qty }}" autocomplete="off"><input name="new_rate" inputmode="decimal" dir="ltr" placeholder="{{ vw.rate }}" aria-label="{{ vw.rate }}" autocomplete="off"></div></template>
+<datalist id="vo-units"><option value="م³"><option value="م²"><option value="م.ط"><option value="طن"><option value="عدد"><option value="مقطوعية"></datalist>
+</fieldset>
+</div>
+{% else %}
+<div class="prj-card sr-block">
+<fieldset class="vo-set" data-variation-lump><legend>{{ vw.lump_title }}</legend><p class="sr-hint">{{ vw.lump_hint }}</p>
+<div class="vo-change vo-change--lump"><div class="vo-change__what"><label for="vo-amount"><b>{{ vw.lump_amount }}</b></label></div>
+<select name="amount_direction" aria-label="{{ vw.direction }}"><option value="up"{% if form.amount_direction != 'down' %} selected{% endif %}>{{ vw.up }}</option><option value="down"{% if form.amount_direction == 'down' %} selected{% endif %}>{{ vw.down }}</option></select>
+<input id="vo-amount" name="amount" value="{{ form.amount }}" inputmode="decimal" dir="ltr" autocomplete="off"></div>
+</fieldset>
+</div>
+{% endif %}
+<div class="op-form-actions hs-sticky-save"><button class="op-primary" type="submit" data-save>{{ vw.save }}</button><a class="op-secondary" href="{{ back_url }}">{{ vw.cancel }}</a></div>
+</form>
+<script src="{% static 'hesba/js/site_report.js' %}?v=c2-1" defer></script>
+{% endif %}
+{% endblock %}

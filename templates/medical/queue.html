@@ -1,4 +1,6 @@
 {% extends "operations/base.html" %}
+{% load static %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/queue.css' %}?v=q-1">{% endblock %}
 {% block operation_content %}
 <section class="op-title-row"><div><h1>{{ qw.title }}</h1><p>{{ qw.intro }}</p></div>
 <div class="op-form-actions"><a class="op-secondary" href="{% url 'medical:queue_screen' %}?lang={{ lang }}" target="_blank" rel="noopener" data-queue-screen>{{ qw.screen }}</a>

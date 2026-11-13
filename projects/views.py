@@ -205,7 +205,10 @@ def project_detail(request, pk):
 
     from .views_reports import cta
 
+    from . import variations
+
     context.update(tab="overview", cwords=CONTRACT_WORDS[lang], site_cta=cta(project, request.user, lang), position=position(project) if context["can_view_sales"] else None,
+                   variation=variations.figures(project) if context["can_view_sales"] and variations.in_reach(project) else None,  # Contracting C1 (HG-103)
                    expense_headings=localized_choices(ProjectExpense, "heading", lang))
     return render(request, "projects/detail.html", context)
 

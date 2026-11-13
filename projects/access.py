@@ -56,3 +56,13 @@ def visible_reports(user):
     if not can_view(user):
         raise PermissionDenied("Projects need projects.view_projects or sales.view_sales_invoices.")
     return SiteReport.objects.select_related("project") if module_open() else SiteReport.objects.none()
+
+
+def visible_variation_orders(user):
+    """Contracting C1 (HG-103): a project's variation orders are seen as the project itself is."""
+
+    from .models import VariationOrder
+
+    if not can_view(user):
+        raise PermissionDenied("Projects need projects.view_projects or sales.view_sales_invoices.")
+    return VariationOrder.objects.select_related("project") if module_open() else VariationOrder.objects.none()

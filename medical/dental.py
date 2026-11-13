@@ -42,6 +42,16 @@ CONDITION_LABELS = {
     "en": {"healthy": "Healthy", "caries": "Caries", "filled": "Filled", "root_canal": "Root canal", "crown": "Crown", "bridge": "Bridge",
            "implant": "Implant", "fractured": "Fractured", "missing": "Missing"},
 }
+#: Video finding 21: a tooth's cell is as narrow as the tooth, so the chart says the short word; the legend, the edit
+#: form and the cell's tooltip keep the full wording of ``CONDITION_LABELS``. Only what differs is listed.
+SHORT_CONDITION_LABELS = {"ar": {"missing": "مفقودة"}, "en": {}}
+
+
+def short_condition_label(condition, lang):
+    """What the chart's tooth cell says for ``condition`` (the full label unless it is too long for the cell)."""
+
+    lang = "en" if lang == "en" else "ar"
+    return SHORT_CONDITION_LABELS[lang].get(condition) or CONDITION_LABELS[lang][condition]
 STATUS_LABELS = {
     "ar": {"planned": "مخطط", "done": "اتعمل", "cancelled": "اتلغى"},
     "en": {"planned": "Planned", "done": "Done", "cancelled": "Cancelled"},

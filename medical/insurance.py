@@ -40,7 +40,7 @@ MANAGE = "sales.create_sales_invoice"
 
 MESSAGES = {
     "ar": {"manage": "التأمين محتاج صلاحية إنشاء فاتورة بيع.", "insurer": "اختار شركة التأمين أو اكتب اسمها.",
-           "percent": "نسبة التحمّل لازم تكون رقم أكبر من صفر ولحد 100.", "service_percent": "نسبة الخدمة لازم تكون رقم من 0 لـ 100.",
+           "percent": "نسبة تغطية الشركة لازم تكون رقم أكبر من صفر ولحد 100.", "service_percent": "نسبة الخدمة لازم تكون رقم من 0 لـ 100.",
            "claim_day": "يوم المطالبة من 1 لـ 28.", "taken": "الشركة دي ليها عقد بالفعل.", "patient_insurer": "شركة التأمين مينفعش تكون نفس المريض.",
            "service": "اختار الخدمة.", "contract": "اختار شركة تأمين شغالة.", "date": "التاريخ مش مظبوط.",
            "no_cover": "المريض ده مش عليه تأمين شغال؛ اعمل الفاتورة العادية.", "expired": "تأمين المريض انتهى يوم {date}.",
@@ -50,7 +50,7 @@ MESSAGES = {
            "patient_note": "ميعاد {number}: نصيب المريض", "insurer_note": "مطالبة تأمين — ميعاد {number}", "member": " — رقم {member}",
            "month": "الشهر مش مظبوط.", "insurer_note_of": "مطالبة تأمين — {what}", "patient_note_of": "{what}: نصيب المريض"},
     "en": {"manage": "Insurance needs the create-sales-invoice permission.", "insurer": "Choose the insurance company or type its name.",
-           "percent": "The covered share must be a number above zero and up to 100.", "service_percent": "A service's share must be a number from 0 to 100.",
+           "percent": "The company cover must be a number above zero and up to 100.", "service_percent": "A service's share must be a number from 0 to 100.",
            "claim_day": "The claim day is from 1 to 28.", "taken": "This company already has a contract.", "patient_insurer": "The insurer cannot be the patient.",
            "service": "Choose the service.", "contract": "Choose an active insurance company.", "date": "The date is not valid.",
            "no_cover": "This patient has no active insurance; make the ordinary invoice.", "expired": "The patient's insurance expired on {date}.",

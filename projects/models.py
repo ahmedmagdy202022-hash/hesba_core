@@ -32,6 +32,9 @@ class Project(models.Model):
     # handover, and the share of each certificate that pays back the advance.
     retention_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     advance_recovery_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    # Contracting C1 (HG-103): the contract value as it stood before the first approved variation order, written once at that
+    # approval and never again. NULL: no variation order was approved, so the contract value is still the original one.
+    original_value = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="projects")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -105,6 +108,8 @@ class BoqLine(models.Model):
     unit = models.CharField(max_length=30, blank=True)
     quantity = models.DecimalField(max_digits=14, decimal_places=3)
     rate = models.DecimalField(max_digits=14, decimal_places=2)
+    # Contracting C1 (HG-103): the approved variation order that added this item. NULL: an item of the original bill of quantities.
+    variation = models.ForeignKey("projects.VariationOrder", on_delete=models.PROTECT, null=True, blank=True, related_name="boq_lines")
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -316,3 +321,71 @@ class SiteReportRow(models.Model):
 
     class Meta:
         ordering = ["kind", "position", "pk"]
+
+
+# ---- Contracting C1 (HG-103): variation orders and extra works. A variation order is a document: it holds no money and no
+# stock. A draft changes nothing. Approving it writes into the bill of quantities (or, on a project without one, raises the
+# contract value by an amount), and from then on certificates bill the new work through the unchanged certificate engine.
+
+
+class VariationStatus(models.TextChoices):
+    DRAFT = "draft", "Draft"
+    APPROVED = "approved", "Approved"
+    REJECTED = "rejected", "Rejected"
+    CANCELLED = "cancelled", "Cancelled"
+
+
+class VariationOrder(models.Model):
+    """A change to the contract the owner is asked to approve (أمر تغيير): more or less of an item of the bill of quantities,
+    new items (extra works), and an optional extension of time. Once approved it is never edited or deleted: a mistake is
+    corrected by another order."""
+
+    project = models.ForeignKey(Project, on_delete=models.PROTECT, related_name="variation_orders")
+    number = models.PositiveIntegerField()
+    order_date = models.DateField()
+    title = models.CharField(max_length=160)
+    reason = models.TextField(blank=True)
+    status = models.CharField(max_length=10, choices=VariationStatus.choices, default=VariationStatus.DRAFT)
+    extension_days = models.PositiveSmallIntegerField(default=0)
+    # A project without a bill of quantities (billed as a lump sum): the order is one amount, added or taken off (−).
+    lump_amount = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    # What the order added to the contract value, fixed when it was approved (0 until then).
+    value = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    # The approval, as staff record it: the date the owner approved and the owner's letter or reference. The signed copy is an
+    # attachment on the order (``attachments.services.OWNERS["projects.variationorder"]``).
+    approved_on = models.DateField(null=True, blank=True)
+    owner_reference = models.CharField(max_length=80, blank=True)
+    decided_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    decided_at = models.DateTimeField(null=True, blank=True)
+    decision_note = models.CharField(max_length=255, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["number"]
+        constraints = [models.UniqueConstraint(fields=["project", "number"], name="projects_variation_number_unique")]
+
+    def __str__(self):
+        return f"{self.project.code} VO-{self.number:02d}"
+
+
+class VariationLine(models.Model):
+    """One line of a variation order: a change (+ or −) to the quantity of an existing item, or a new item with its own rate.
+    The item's code, description and unit are copied onto the line, so the order reads the same whatever happens to the item."""
+
+    order = models.ForeignKey(VariationOrder, on_delete=models.CASCADE, related_name="lines")
+    position = models.PositiveSmallIntegerField(default=0)
+    # The existing item this line changes. NULL: a new item (the approval creates it, marked with ``BoqLine.variation``).
+    boq_line = models.ForeignKey(BoqLine, on_delete=models.PROTECT, null=True, blank=True, related_name="variation_lines")
+    code = models.CharField(max_length=20, blank=True)
+    description = models.CharField(max_length=255)
+    unit = models.CharField(max_length=30, blank=True)
+    quantity_change = models.DecimalField(max_digits=14, decimal_places=3)
+    rate = models.DecimalField(max_digits=14, decimal_places=2)
+    # What the line adds to the contract value; for a draft it is refreshed when the order is saved, and fixed at approval.
+    amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+
+    class Meta:
+        ordering = ["position", "pk"]
