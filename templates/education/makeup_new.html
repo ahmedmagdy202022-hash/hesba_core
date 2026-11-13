@@ -1,0 +1,22 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/education_makeup.css' %}?v=e8-1">{% endblock %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'education:student' student.pk %}?lang={{ lang }}#makeup">{% include "partials/back_arrow.html" %}{{ mw.back }}</a><h1>{{ mw.book }}</h1><p><bdi>{{ student.name }}</bdi></p></div></section>
+<p class="op-muted">{{ mw.intro }}</p>
+{% if not homes %}<p class="op-empty" data-no-home>{{ mw.no_home }}</p>{% else %}
+<form class="op-form mk-pick" method="get" data-makeup-pick><input type="hidden" name="lang" value="{{ lang }}"><div class="op-form-grid">
+<div class="op-field"><label for="mk-home">{{ mw.home }}</label><select id="mk-home" name="home"><option value=""{% if not home %} selected{% endif %}>{{ words.choose }}</option>{% for g in homes %}<option value="{{ g.pk }}"{% if home and g.pk == home.pk %} selected{% endif %}>{{ g.course.name }} — {{ g.name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="mk-missed">{{ mw.missed_on }}</label><input id="mk-missed" type="date" name="missed" value="{{ missed }}"></div>
+</div><div class="op-form-actions"><button class="op-secondary mk-btn" type="submit">{{ mw.show }}</button></div></form>
+{% if not home %}<p class="op-muted" data-choose-home>{{ mw.choose_home }}</p>{% else %}
+<form class="op-form mk-classes" method="post" action="{% url 'education:makeup_book' student.pk %}" data-makeup-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="home" value="{{ home.pk }}"><input type="hidden" name="missed" value="{{ missed }}">
+<h2>{{ mw.pick_h }}</h2>
+{% if rows %}<div class="mk-options" role="radiogroup" aria-label="{{ mw.pick_h }}">{% for row in rows %}<label class="mk-option{% if not row.bookable %} is-off{% endif %}" data-class-option data-free="{% if row.free is None %}open{% else %}{{ row.free }}{% endif %}"><input type="radio" name="slot" value="{{ row.group.pk }}|{{ row.day|date:'Y-m-d' }}"{% if not row.bookable %} disabled{% endif %} required>
+<span class="mk-text"><strong><bdi>{{ row.day|day_text:lang }}</bdi>{% if row.time %}{% if lang == 'en' %}, {% else %}، {% endif %}<bdi dir="ltr">{{ row.time }}</bdi>{% endif %}</strong>
+<span class="mk-sub"><bdi>{{ row.group.name }}</bdi>{% if row.group.teacher %}{% if lang == 'en' %}, {% else %}، {% endif %}<bdi>{{ row.group.teacher.name }}</bdi>{% endif %}</span></span>
+<span class="mk-chip {% if row.held %}mk-chip--booked{% elif row.free == 0 %}mk-chip--missed{% else %}mk-chip--open{% endif %}" data-free-label>{% if row.held %}{{ mw.held }}{% else %}{{ row.free_text }}{% endif %}</span></label>{% endfor %}</div>
+<div class="op-field"><label for="mk-note">{{ mw.note }}</label><input id="mk-note" name="note" maxlength="255"></div>
+<div class="op-form-actions"><button class="op-primary mk-btn" type="submit" data-makeup-save>{{ mw.save }}</button></div>
+{% else %}<p class="op-empty" data-no-classes>{{ mw.none_classes }}</p>{% endif %}</form>{% endif %}{% endif %}
+{% endblock %}

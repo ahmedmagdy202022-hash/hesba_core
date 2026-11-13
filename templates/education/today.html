@@ -1,4 +1,6 @@
 {% extends "operations/base.html" %}
+{% load static %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/education_makeup.css' %}?v=e8-1">{% endblock %}
 {% block operation_content %}
 <section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.classes_on }} {{ weekday }} <bdi>{{ day|date:"Y-m-d" }}</bdi></p></div></section>
 {% include "education/_tabs.html" %}
@@ -11,6 +13,7 @@
 {% if row.can_take %}<a class="{% if row.session %}op-secondary{% else %}op-primary{% endif %}" href="{% url 'education:attendance' row.group.pk %}?lang={{ lang }}&date={{ day|date:'Y-m-d' }}" data-take="{{ row.group.pk }}">{% if row.session %}{{ words.change }}{% else %}{{ words.take }}{% endif %}</a>{% endif %}
 {% if row.can_exams %}<a class="op-secondary" href="{% url 'education:exams' row.group.pk %}?lang={{ lang }}" data-exams="{{ row.group.pk }}">{{ words.exams }}</a>{% endif %}
 {% if row.can_content %}<a class="op-secondary" href="{% url 'education:content' row.group.pk %}?lang={{ lang }}" data-content="{{ row.group.pk }}">{{ words.content }}</a>{% endif %}
+{% include "education/_makeup_guests.html" with guests=row.guests guests_open=row.guests_open back="today" %}
 </article>{% empty %}<p class="op-empty">{{ words.no_classes }}</p>{% endfor %}
 </div>
 {% endblock %}

@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views, views_certificates, views_content, views_exams, views_paylinks, views_portal, views_scan
+from . import views, views_certificates, views_content, views_exams, views_makeup, views_paylinks, views_portal, views_scan
 
 app_name = "education"
 
@@ -27,6 +27,11 @@ urlpatterns = [
     path("content/<int:pk>/hide/", views_content.content_hide, name="content_hide"),
     path("content/<int:pk>/show/", views_content.content_show, name="content_show"),
     path("content/<int:pk>/remove/", views_content.content_remove, name="content_remove"),
+    path("students/<int:pk>/makeup/", views_makeup.makeup_new, name="makeup_new"),
+    path("students/<int:pk>/makeup/book/", views_makeup.makeup_book, name="makeup_book"),
+    path("makeup/<int:pk>/cancel/", views_makeup.makeup_cancel, name="makeup_cancel"),
+    path("makeup/<int:pk>/attended/", views_makeup.makeup_attended, name="makeup_attended"),
+    path("makeup/<int:pk>/missed/", views_makeup.makeup_missed, name="makeup_missed"),
     path("students/<int:pk>/report-card/", views_exams.report_card, name="report_card"),
     path("students/<int:pk>/portal/", views_portal.student_portal_make, name="portal_make"),
     path("students/<int:pk>/portal/revoke/", views_portal.student_portal_revoke, name="portal_revoke"),
