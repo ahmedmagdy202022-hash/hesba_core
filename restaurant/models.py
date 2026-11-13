@@ -75,13 +75,50 @@ class Order(models.Model):
         return money_round(sum((line.amount for line in self.live_lines()), Decimal("0.00")) + (self.delivery_fee or Decimal("0")))
 
 
+class KitchenStation(models.Model):
+    """Restaurants R4 (HG-097): a place that cooks or pours part of the menu (the kitchen, the bar, the sweets counter).
+
+    Sending an order to the kitchen makes one ticket per station; an item goes to the station that holds its category, and
+    whatever no station holds goes to the default one. It belongs to one entity (a record made without one belongs to the main
+    entity, as a cashbox does), so a branch's screen only ever shows that branch's stations."""
+
+    name_ar = models.CharField(max_length=60)
+    name_en = models.CharField(max_length=60, blank=True)
+    sort = models.PositiveIntegerField(default=0)
+    active = models.BooleanField(default=True)
+    is_default = models.BooleanField(default=False, help_text="Takes every item whose category no station holds.")
+    entity = models.ForeignKey("entities.Entity", on_delete=models.PROTECT, null=True, blank=True, related_name="kitchen_stations")
+    categories = models.ManyToManyField("master_data.Category", blank=True, related_name="kitchen_stations")
+
+    class Meta:
+        ordering = ["sort", "pk"]
+
+    def __str__(self):
+        return self.name_ar
+
+    def label(self, lang="ar"):
+        return (self.name_en if lang == "en" and self.name_en else self.name_ar)
+
+    def save(self, *args, **kwargs):
+        if self.entity_id is None:  # as Cashbox.save: a record made without an entity belongs to the main one
+            from entities.services import main_entity
+
+            self.entity = main_entity()
+        super().save(*args, **kwargs)
+
+
 class KitchenTicket(models.Model):
-    """What was sent to the kitchen in one go; printed once on the kitchen printer."""
+    """What was sent to a kitchen station in one go; printed on that station's printer and shown on its screen.
+
+    ``station`` is empty for a ticket made with no station set up (and for every ticket made before stations existed): it then
+    holds the whole send, exactly as before, and belongs to the main entity."""
 
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="tickets")
     sequence = models.PositiveSmallIntegerField()
     sent_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="kitchen_tickets")
     sent_at = models.DateTimeField(auto_now_add=True)
+    station = models.ForeignKey(KitchenStation, on_delete=models.PROTECT, null=True, blank=True, related_name="tickets")
+    done_at = models.DateTimeField(null=True, blank=True, help_text="When the station finished the whole ticket (tap the card).")
 
     class Meta:
         ordering = ["order", "sequence"]
@@ -97,6 +134,11 @@ class OrderLine(models.Model):
     ticket = models.ForeignKey(KitchenTicket, on_delete=models.SET_NULL, null=True, blank=True, related_name="lines")
     voided = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+    #: R4: when the station marked this line ready. On a voided line the same stamp means "the kitchen has seen the void":
+    #: voiding clears it, and the kitchen's tap on the struck-through line sets it again.
+    ready_at = models.DateTimeField(null=True, blank=True)
+    #: R4 (from R13's audit-only reason): why a line that had gone to the kitchen was voided, shown on the order and on the card.
+    void_reason = models.CharField(max_length=255, blank=True)
 
     class Meta:
         ordering = ["pk"]

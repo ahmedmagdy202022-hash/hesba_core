@@ -78,6 +78,9 @@ class Catalog:
     extras: frozenset = frozenset()
     #: AN7 (G06): ((category code or None for ``category``, name_ar, name_en, (ShelfItem, ...)), ...)
     shelf: tuple = ()
+    #: Restaurants R4: indexes of the items the bar makes (the drinks). They sit in their own menu category, so a kitchen station
+    #: can hold them and the kitchen takes the rest. Empty: one place makes everything (no stations in that demo).
+    bar: tuple = ()
 
 
 def _p(name, unit, sale, purchase="0", stock=True):
@@ -564,11 +567,12 @@ RESTAURANT = Catalog(
     raw=_kitchen(("فراخ طازجة", "كجم", "95.00", "40"), ("لحم مفروم", "كجم", "380.00", "15"), ("أرز", "كجم", "31.00", "25")),
     staff=("كريم مجدي", "ويتر"),
     extras=frozenset({"tables"}),
+    bar=(3, 4),
 )
 
 CAFE = Catalog(
     key="restaurants.cafe",
-    category=("المشروبات", "Drinks"),
+    category=("المأكولات", "Food"),
     items=(
         _s("قهوة تركي", "فنجان", "45.00"),
         _s("كابتشينو", "كوب", "70.00"),
@@ -581,6 +585,7 @@ CAFE = Catalog(
     raw=_kitchen(("بن محوج", "كجم", "450.00", "6"), ("لبن كامل الدسم", "لتر", "38.00", "30"), ("سكر", "كجم", "30.00", "15")),
     staff=("يوسف نبيل", "باريستا"),
     extras=frozenset({"tables"}),
+    bar=(0, 1, 2, 4),
 )
 
 FAST_FOOD = Catalog(
@@ -598,6 +603,7 @@ FAST_FOOD = Catalog(
     raw=_kitchen(("برجر مجمد", "قطعة", "28.00", "120"), ("صدور فراخ", "كجم", "160.00", "15"), ("بطاطس مجمدة", "كجم", "45.00", "40")),
     staff=("عمر حسام", "كاشير"),
     extras=frozenset({"tables"}),
+    bar=(3, 4),
 )
 
 BAKERY = Catalog(
