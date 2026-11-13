@@ -13,6 +13,12 @@ attendance view), so closing the class cannot bill a student who never came.
 Rules, in order: the student (active, in this entity) → the groups they have today → the ones this user may take → the one whose
 window (30 minutes before the start until the class ends) holds now. Late is strictly more than ``LATE_MINUTES`` after the start.
 A group with no start time is open all day and never late.
+
+E8 (HG-105), the makeup class: a student with a booked makeup seat (``makeup.MakeupSeat``) for a group this user may take today is, for that
+group only, treated as its guest. The answer is «حصة تعويضية» and the seat is marked attended, and that is all it writes: no ``Attendance``
+row, no ``ClassSession`` (a held class is what per-class teacher pay counts, so a guest scanned first must not open one) and an audit row that
+is not ``scan_attendance`` (which ``touched`` reads to flip a register into its «not scanned is absent» mode and so change per-class billing).
+A student with no seat gets every answer above unchanged.
 """
 
 from dataclasses import dataclass, field
