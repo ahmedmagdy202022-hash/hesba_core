@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import contract_views, views, views_documents, views_reports
+from . import contract_views, views, views_documents, views_reports, views_variations
 
 
 app_name = "projects"
@@ -28,4 +28,11 @@ urlpatterns = [
     path("<int:pk>/reports/<int:rid>/edit/", views_reports.report_form, name="diary_edit"),
     path("<int:pk>/reports/<int:rid>/photos/", views_reports.report_photos, name="diary_photos"),
     path("<int:pk>/reports/<int:rid>/print/", views_reports.report_print, name="diary_print"),
+    # Contracting C1 (HG-103): variation orders and extra works
+    path("<int:pk>/variations/", views_variations.variations_list, name="variations"),
+    path("<int:pk>/variations/new/", views_variations.variation_form, name="variation_new"),
+    path("<int:pk>/variations/<int:oid>/", views_variations.variation_detail, name="variation"),
+    path("<int:pk>/variations/<int:oid>/edit/", views_variations.variation_form, name="variation_edit"),
+    path("<int:pk>/variations/<int:oid>/files/", views_variations.variation_files, name="variation_files"),
+    path("<int:pk>/variations/<int:oid>/print/", views_variations.variation_print, name="variation_print"),
 ]

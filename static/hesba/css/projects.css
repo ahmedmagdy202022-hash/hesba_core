@@ -1,4 +1,5 @@
 /* Contracting C2a / C2b (HG-095): a project's documents, its daily site reports and the print of a report.
+   Contracting C1 (HG-103): its variation orders (the vo- rules at the end).
    Tokens only: no colour literals. Cards are borderless on the page ground, as the rest of UX Wave 4. */
 
 /* ---- cards ---- */
@@ -86,3 +87,45 @@ tr[data-delayed] [data-delay-mark]{white-space:nowrap}
 .sr-p-grid img{display:block;width:100%;height:150px;object-fit:cover;border:1px solid var(--hs-line);border-radius:4px}
 .sr-p-author{margin:14px 0 0;color:var(--hs-muted);font-size:13px}
 @media print{.sr-p-grid img{height:46mm}.sr-p-box .pr-lines tfoot th{background:var(--hs-neutral-wash);-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+
+/* ---- Contracting C1 (HG-103): variation orders ---- */
+.vo-chip{display:inline-flex;align-items:center;padding:2px var(--hs-space-2);border-radius:var(--hs-radius-md);background:var(--hs-teal-wash);color:var(--hs-teal-deep);font-size:var(--hs-text-xs);font-weight:var(--hs-weight-bold);white-space:nowrap}
+.vo-summary strong{unicode-bidi:isolate}
+.vo-sub{margin:var(--hs-space-1) 0 0;color:var(--hs-ink);font-size:var(--hs-text-base);overflow-wrap:anywhere}
+.vo-set{display:grid;gap:var(--hs-space-3);margin:0;padding:0;border:0;min-width:0}
+.vo-set legend{padding:0;margin:0 0 var(--hs-space-1);color:var(--hs-navy);font-family:var(--hs-font-head);font-weight:var(--hs-weight-bold)}
+.vo-set .sr-hint{margin:0}
+.vo-change{display:grid;grid-template-columns:minmax(0,1fr) 120px 140px;align-items:center;gap:var(--hs-space-2);padding:var(--hs-space-2) 0;border-bottom:1px solid var(--hs-line)}
+.vo-change:last-of-type{border-bottom:0}
+.vo-change__what{display:grid;gap:2px;min-width:0}
+.vo-change__what b{color:var(--hs-navy);overflow-wrap:anywhere}
+.vo-change__what small{color:var(--hs-muted);font-size:var(--hs-text-sm);line-height:var(--hs-leading)}
+.vo-change select,.vo-change input,.vo-new input{width:100%;min-width:0;min-height:var(--hs-control-height);padding:0 var(--hs-space-3);border:1px solid var(--hs-line-strong);border-radius:var(--hs-input-radius);background:var(--hs-surface);color:var(--hs-ink);font:inherit}
+.vo-change select:focus-visible,.vo-change input:focus-visible,.vo-new input:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
+.vo-new{display:grid;grid-template-columns:minmax(0,1fr) 110px 100px 110px 120px;gap:var(--hs-space-2);padding:var(--hs-space-2) 0;border-bottom:1px solid var(--hs-line)}
+.vo-lines{list-style:none;margin:0;padding:0;display:grid;gap:0}
+.vo-lines li{display:grid;gap:var(--hs-space-1);padding:var(--hs-space-3) 0;border-bottom:1px solid var(--hs-line)}
+.vo-lines li:last-child{border-bottom:0}
+.vo-line__what{color:var(--hs-ink);overflow-wrap:anywhere}
+.vo-line__what b{color:var(--hs-navy)}
+.vo-line__math{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:var(--hs-space-3);color:var(--hs-muted)}
+.vo-line__math b{color:var(--hs-navy);font-size:var(--hs-text-md);white-space:nowrap}
+.vo-line__after{color:var(--hs-muted);font-size:var(--hs-text-sm)}
+.vo-totals{display:grid;gap:0;margin:var(--hs-space-4) 0 0;padding:var(--hs-space-2) var(--hs-space-4);border-radius:var(--hs-radius-md);background:var(--hs-neutral-wash)}
+.vo-totals div{display:flex;align-items:center;justify-content:space-between;gap:var(--hs-space-3);min-height:var(--hs-control-height);border-bottom:1px solid var(--hs-line)}
+.vo-totals div:last-child{border-bottom:0}
+.vo-totals dt{color:var(--hs-muted)}
+.vo-totals dd{margin:0;color:var(--hs-navy);font-weight:var(--hs-weight-bold);white-space:nowrap}
+.vo-totals__grand dt{color:var(--hs-navy);font-weight:var(--hs-weight-bold)}
+.vo-totals__grand dd{font-size:var(--hs-text-lg)}
+.vo-approval{margin-top:var(--hs-space-4)}
+.vo-decide{margin:0 0 var(--hs-space-4)}
+.vo-decide h2{margin-top:0}
+.vo-decide .op-form-actions{flex-wrap:wrap}
+.vo-p-title{margin:12px 0 8px;color:var(--hs-navy);font-size:15px;font-weight:var(--hs-weight-bold)}
+@media (max-width:640px){
+  .vo-change{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .vo-change__what{grid-column:1 / -1}
+  .vo-new{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .vo-new__desc{grid-column:1 / -1}
+}

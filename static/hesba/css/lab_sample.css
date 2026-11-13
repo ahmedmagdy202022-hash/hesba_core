@@ -15,6 +15,11 @@
 .ls-inline .op-secondary,.ls-inline .op-primary{flex:0 0 auto}
 .ls-box{flex:1 1 260px}
 .ls-box input{width:100%;min-height:var(--hs-control-height-lg);font-size:var(--hs-text-lg);letter-spacing:.04em}
+/* Video finding 13: the camera button (camera_scan.js) wraps the box in .hs-cam-wrap, whose `flex:1 1 240px` is read as
+   a height inside the column-flex .op-field: the one-line code box grew to about 240px with the button stretched beside
+   it. Here the wrap is a plain row again, so the field is one line and the button sits next to it at its own size. */
+.ls-box .hs-cam-wrap{flex:0 0 auto;align-items:center}
+.ls-box .hs-cam-btn{min-height:var(--hs-control-height-lg);height:var(--hs-control-height-lg)}
 .ls-hint{color:var(--hs-muted);font-size:var(--hs-text-sm);line-height:var(--hs-leading)}
 .ls-code-example{display:inline-block;padding:2px var(--hs-space-2);border-radius:var(--hs-radius-sm);background:var(--hs-neutral-wash);color:var(--hs-navy);font-family:monospace}
 

@@ -103,7 +103,7 @@ KIND_HINTS = {
 }
 MESSAGES = {
     "ar": {"text": "نص الرسالة فاضي.", "placeholder": "النص فيه {bad} ومش معروف؛ المسموح: {allowed}.", "every": "التكرار من 1 لـ 90 يوم.",
-           "done": "الرسالة دي اتبعتت أو اتشالت قبل كده.", "later": "الرسالة دي معادها يوم {day}؛ مينفعش تتبعت قبله.", "wa_template": "اسم قالب واتساب: حروف إنجليزي صغيرة وأرقام و _ بس، زي ما اتسجل عند Meta."},
+           "done": "الرسالة دي اتبعتت أو اتشالت قبل كده.", "later": "الرسالة دي معادها يوم {day}؛ مينفعش تتبعت قبله.", "wa_template": "اسم قالب واتساب: حروف إنجليزي صغيرة وأرقام و _ بس، زي ما اتسجل عند ميتا."},
     "en": {"text": "The message is empty.", "placeholder": "The text has {bad}, which is unknown; allowed: {allowed}.", "every": "Repeat after 1 to 90 days.",
            "done": "This message was already sent or skipped.", "later": "This message is for {day}; it cannot be sent before then.", "wa_template": "The WhatsApp template name: lower-case letters, digits and _ only, as registered with Meta."},
 }

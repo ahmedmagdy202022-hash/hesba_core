@@ -8,5 +8,5 @@
 {% if shows_vaccinations %}<a class="{% if tab == 'vaccinations' %}op-primary{% else %}op-secondary{% endif %}" href="{% url 'medical:vaccinations' %}?lang={{ lang }}"{% if tab == 'vaccinations' %} aria-current="page"{% endif %} data-tab-vaccinations>{{ vaccinations_label }}</a>{% endif %}
 {% if shows_vaccine_setup %}<a class="{% if tab == 'vaccine_setup' %}op-primary{% else %}op-secondary{% endif %}" href="{% url 'medical:vaccine_setup' %}?lang={{ lang }}"{% if tab == 'vaccine_setup' %} aria-current="page"{% endif %} data-tab-vaccine-setup>{{ vaccine_setup_label }}</a>{% endif %}
 {% if shows_templates %}<a class="{% if tab == 'templates' %}op-primary{% else %}op-secondary{% endif %}" href="{% url 'medical:visit_templates' %}?lang={{ lang }}"{% if tab == 'templates' %} aria-current="page"{% endif %} data-tab-templates>{{ templates_label }}</a>{% endif %}
-{% if shows_report %}<a class="{% if tab == 'report' %}op-primary{% else %}op-secondary{% endif %}" href="{% url 'medical:report' %}?lang={{ lang }}"{% if tab == 'report' %} aria-current="page"{% endif %}>{{ words.tab_report }}</a>{% endif %}
+{% if shows_report %}<a class="{% if tab == 'report' %}op-primary{% else %}op-secondary{% endif %}" href="{% url 'medical:report' %}?lang={{ lang }}"{% if tab == 'report' %} aria-current="page"{% endif %} data-tab-report>{{ report_label }}</a>{% endif %}
 </nav>

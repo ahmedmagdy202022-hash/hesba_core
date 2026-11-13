@@ -19,7 +19,8 @@ posting, a ledger or a cashbox row by hand.
 
 Only when the capability is on (``ai_invoice_photo``, with purchases on, for the A3 records; ``ai_voice_summary`` for the
 collection), and only once: the item ``DEMO-AI-01`` and the payment ``DEMO-CR-AI`` say each part is already there.
-A restaurant, a contractor and a factory get the supplier but no car parts (S2-01), and their three lines are mapped by hand.
+A restaurant, a contractor, a factory and any medical business get the supplier but no car parts (S2-01, video finding 10),
+and their three lines are mapped by hand.
 A pharmacy gets no car parts (R1: they showed in its till search and drug lists). Its invoice-photo sample is a medicine
 distributor's (``PHARMACY_SAMPLE_READING``) and needs nothing seeded here: the supplier «الشركة المتحدة لتوزيع الأدوية»
 and two of its lines («باراسيتامول 500 مجم», «فيتامين سي 1000 فوار») are the pharmacy demo's own records, matched by
@@ -54,7 +55,9 @@ BOUGHT_DAYS_AGO = 20
 COLLECTION_NUMBER = "DEMO-CR-AI"
 #: S2-01 / RS-02: activities whose stock is not spare parts. A waiter's menu, a contractor's item list and a factory's stock
 #: must not show brake pads, so they get the sample's supplier only; its three lines are all left to map by hand.
-NO_CAR_PARTS_ACTIVITIES = ("restaurants", "contracting", "manufacturing")
+#: Video finding 10: a clinic, a lab and a vet are the same case — «زيت محرك 4 لتر» and «تيل فرامل أمامي» were in the
+#: lab's invoice form and in the vet's vaccine item list.
+NO_CAR_PARTS_ACTIVITIES = ("restaurants", "contracting", "manufacturing", "medical")
 
 
 def seed(master, owner, modules=()):
