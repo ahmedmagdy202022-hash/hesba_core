@@ -40,7 +40,7 @@ MESSAGES = {
            "kind": "اختار نوع المحتوى.", "note_long": "الملاحظة أطول من اللازم (255 حرف على الأكتر).", "closed": "المجموعة دي مقفولة.",
            "starts_at": "ميعاد الحصة مش مظبوط.", "gone": "المحتوى ده اتشال.",
            "url_empty": "اكتب الرابط.", "url_long": "الرابط أطول من اللازم (500 حرف على الأكتر).",
-           "url_bad": "الرابط لازم يبدأ بـ https:// ويكون عنوان موقع حقيقي، من غير مسافات ولا اسم مستخدم."},
+           "url_bad": "الرابط لازم يبدأ بـ https ويكون عنوان موقع حقيقي، من غير مسافات ولا اسم مستخدم."},
     "en": {"forbidden": "Group content is for the centre's managers and the group's own teacher only.", "title": "Enter the content's title.",
            "title_long": "The title is too long (160 characters at most).", "kind": "Choose the kind of content.",
            "note_long": "The note is too long (255 characters at most).", "closed": "This group is closed.",

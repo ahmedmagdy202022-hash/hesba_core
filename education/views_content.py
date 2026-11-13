@@ -20,7 +20,7 @@ from .views import _base, _lang
 
 WORDS = {
     "ar": {"content": "محتوى المجموعة", "add": "ضيف محتوى", "all": "كل المحتوى", "none": "لسه مفيش محتوى للمجموعة دي.", "title": "العنوان", "kind": "النوع",
-           "url": "الرابط", "url_hint": "رابط https:// من يوتيوب أو درايف أو زوم أو ميت أو أي موقع تاني.", "note": "ملاحظة (اختياري)", "starts_at": "ميعاد الحصة",
+           "url": "الرابط", "url_hint": "رابط آمن يبدأ بـ https من يوتيوب أو درايف أو زوم أو ميت أو أي موقع تاني.", "note": "ملاحظة (اختياري)", "starts_at": "ميعاد الحصة",
            "starts_hint": "ميعاد بداية الحصة الأونلاين. بتختفي من عند ولي الأمر بعد يوم من ميعادها.", "save": "احفظ", "saved": "المحتوى اتحفظ.",
            "edit": "تعديل", "hide": "إخفاء", "show": "إظهار", "remove": "إزالة", "confirm_remove": "تأكيد الإزالة", "hidden_ok": "المحتوى اتخفى عن أولياء الأمور.",
            "shown_ok": "المحتوى ظهر لأولياء الأمور.", "removed_ok": "المحتوى اتشال.", "visible": "ظاهر لأولياء الأمور", "hidden": "مخفي",
@@ -69,7 +69,9 @@ def _page(request, lang, **extra):
 def _labelled(rows, lang):
     for row in rows:
         row.kind_label = WORDS[lang]["kinds"][row.kind]
-        row.day, row.time = content.local_parts(row.starts_at)
+        row.when, row.time = content.local_parts(row.starts_at)  # an online class shows its own day and time; any other row, the day it was added
+        if row.when is None:
+            row.when = timezone.localtime(row.created_at).date()
     return rows
 
 

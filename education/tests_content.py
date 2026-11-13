@@ -86,7 +86,7 @@ class CleanUrlTests(SimpleTestCase):
             content.clean_url("http://example.com", "ar")
         with self.assertRaises(ValidationError) as english:
             content.clean_url("http://example.com", "en")
-        self.assertIn("https://", arabic.exception.messages[0])
+        self.assertIn("https", arabic.exception.messages[0])
         self.assertEqual(english.exception.messages, [content.MESSAGES["en"]["url_bad"]])
         self.assertNotEqual(arabic.exception.messages, english.exception.messages)
 
@@ -152,7 +152,7 @@ class RulesTests(StaffSetup):
     def test_bad_input_is_refused_and_nothing_is_saved(self):
         base = {"title": "x", "kind": "video", "url": GOOD}
         for patch, message in (({"title": "  "}, "عنوان المحتوى"), ({"title": "ع" * 161}, "العنوان أطول"), ({"kind": "audio"}, "نوع المحتوى"),
-                               ({"url": ""}, "اكتب الرابط"), ({"url": "http://example.com"}, "https://"), ({"url": "javascript:alert(1)"}, "https://"),
+                               ({"url": ""}, "اكتب الرابط"), ({"url": "http://example.com"}, "يبدأ بـ https"), ({"url": "javascript:alert(1)"}, "يبدأ بـ https"),
                                ({"note": "ن" * 256}, "الملاحظة أطول"), ({"kind": "online", "starts_at": "غدا الساعة خمسة"}, "ميعاد الحصة")):
             with self.subTest(patch=patch), self.assertRaisesMessage(ValidationError, message):
                 content.save_content(self.a, {**base, **patch}, self.owner)
@@ -270,6 +270,17 @@ class ScreenTests(StaffSetup):
         self.assertRegex(row, r'<a href="https://zoom.us/j/1" target="_blank" rel="noopener noreferrer" data-content-link>')
         self.assertIn("ظاهر لأولياء الأمور", row)
 
+    def test_a_row_that_is_not_a_class_shows_the_day_it_was_added_and_no_time(self):
+        with mock.patch("django.utils.timezone.now", return_value=FIXED):
+            video = self.add(note=NOTE_TEXT)
+        row = self.row(self.get("content", self.a.pk).content.decode(), video)
+        when = re.search(r"<td data-row=\"meta\" data-when>(.*?)</td>", row, re.S).group(1)
+        self.assertEqual(re.sub(r"<[^>]+>", "", when).strip(), "11 نوفمبر 2026")  # a day only: no time, no dash
+        self.assertNotIn("—", when)
+        title = re.search(r'<td data-row="title".*?</td>', row, re.S).group(0)
+        self.assertEqual(re.findall(r"<a ", title), ["<a "])  # the title cell holds the address once; the note sits under it, not beside it
+        self.assertRegex(title, r"<div><a [^>]*data-content-link>[^<]*</a><div class=\"hs-row-sub\" data-content-note>" + NOTE_TEXT)
+
     def test_a_title_note_and_address_are_escaped_never_trusted(self):
         item = self.add(title="<script>alert(1)</script>", note="<img src=x onerror=alert(2)>", url='https://example.com/?q="onmouseover="x&r=<b>')
         row = self.row(self.get("content", self.a.pk).content.decode(), item)
@@ -303,7 +314,7 @@ class ScreenTests(StaffSetup):
         self.assertEqual(page.status_code, 200)
         html = page.content.decode()
         error = re.search(r'data-form-error>(.*?)</div>', html, re.S).group(1)
-        self.assertIn("https://", error)
+        self.assertIn("يبدأ بـ https", error)
         self.assertRegex(html, r'<input id="ct-url"[^>]*value="http://example.com/live"')
         self.assertRegex(html, rf'<input id="ct-title"[^>]*value="{ONLINE_A}"')
         self.assertRegex(html, r'<input id="ct-start"[^>]*value="2026-11-20T18:30"')
