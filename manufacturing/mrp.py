@@ -379,9 +379,10 @@ def make_production_order(item_pk, user, data, lang="ar"):
         raise ValidationError(words["make_gone"].format(item=item.item_name if item else "—"))
     available = places()
     raw = data.get("location")
-    location = available.filter(pk=raw).first() if raw not in (None, "") else available.first()
+    chosen = raw not in (None, "")
+    location = (available.filter(pk=raw).first() if str(raw).isdigit() else None) if chosen else available.first()
     if location is None:
-        raise ValidationError(words["place"] if raw not in (None, "") else words["no_place"])
+        raise ValidationError(words["place"] if chosen else words["no_place"])
     return production.create_order({"recipe": row["recipe"], "location": location, "quantity": _typed(data.get("quantity"), row["make"]),
                                     "labor_cost": data.get("labor_cost"), "overhead_cost": data.get("overhead_cost"), "notes": words["note"]}, user, lang)
 

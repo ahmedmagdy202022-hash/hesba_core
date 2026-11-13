@@ -123,7 +123,9 @@ def screen(request):
     for row in result["semis"]:
         row["qty_plain"] = mrp.plain(row["make"]) if row["make"] > 0 else ""
         row["making_text"] = words["making_note"].format(qty=mrp.text(row["making"])) if row["making"] > 0 else ""
-    bought = [order for order in po.scoped().filter(pk__in=_ids(request.GET.get("bought"))).select_related("supplier").order_by("pk")]
+    # what was just made is shown only to someone who may make or open purchase orders (the screen itself needs only stock view)
+    bought = ([order for order in po.scoped().filter(pk__in=_ids(request.GET.get("bought"))).select_related("supplier").order_by("pk")]
+              if (can_buy or open_po) else [])
     for order in bought:
         order.mrp_lines = list(order.lines.select_related("item").order_by("pk"))
         order.mrp_total = po.totals(order)["total"]

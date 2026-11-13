@@ -260,7 +260,7 @@ class TwoLevelsTests(Money, TestCase):
             mrp.make_production_order(self.dough.pk, self.owner, {})
 
     def test_a_typed_quantity_place_and_conversion_cost_go_into_the_order(self):
-        for data, text in (({"quantity": "0"}, "أكبر من صفر"), ({"quantity": "abc"}, "أكبر من صفر"), ({"location": 99999}, "اختار مكان الإنتاج")):
+        for data, text in (({"quantity": "0"}, "أكبر من صفر"), ({"quantity": "abc"}, "أكبر من صفر"), ({"location": 99999}, "اختار مكان الإنتاج"), ({"location": "abc"}, "اختار مكان الإنتاج")):
             with self.subTest(data=data), self.assertRaisesMessage(ValidationError, text):
                 mrp.make_production_order(self.dough.pk, self.owner, data)
         self.assertEqual(ProductionOrder.objects.count(), 1)  # only the cakes' order
@@ -475,10 +475,14 @@ class PermissionAndEntityTests(MrpSetup):
         self.assertNotIn("data-buy-button", html)
         self.assertIn("data-no-buy", html)
         self.assertNotIn("data-last-price", html)  # a purchase price is for those who may see cost or buy
+        shown = self.client.get(reverse("manufacturing:mrp"), {"lang": "ar", "bought": self.confirmed.pk}).content.decode()
+        self.assertNotIn("data-bought-order", shown)  # a purchase order is not listed to someone who has no purchase right
         buyer = self.role("buyer", "purchases.create_purchase_invoice")
         self.client.force_login(buyer)
         html = self.client.get(reverse("manufacturing:mrp"), {"lang": "ar"}).content.decode()
         self.assertIn('name="pick"', html)
+        shown = self.client.get(reverse("manufacturing:mrp"), {"lang": "ar", "bought": self.confirmed.pk}).content.decode()
+        self.assertIn(f'data-bought-order="{self.confirmed.number}"', shown)
         self.assertIn("data-last-price", html)
 
     def test_a_switched_off_purchases_module_closes_the_purchase_action(self):
