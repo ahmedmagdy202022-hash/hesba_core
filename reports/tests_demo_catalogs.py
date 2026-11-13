@@ -461,7 +461,7 @@ class SampleBusinessPerActivityTests(TestCase):
 
         catalog = self.fill("education", "languages")
         self.assert_a_working_business(catalog)
-        self.assertEqual(sorted(StudyGroup.objects.exclude(name__startswith="قاعة المذاكرة").values_list("level", flat=True)), [1, 1, 2])  # the open study hall (ED-02) has no level
+        self.assertEqual(sorted(StudyGroup.objects.exclude(name__startswith="قاعة المذاكرة").values_list("level", flat=True)), [1, 1, 1, 2])  # the open study hall (ED-02) has no level; E0's finished scholarship batch taught level 1
         self.assertEqual(sorted(PlacementTest.objects.values_list("level", flat=True)), [1, 2])
 
     def test_a_nursery_has_its_door_this_morning(self):
