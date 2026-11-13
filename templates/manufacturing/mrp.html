@@ -1,0 +1,59 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'manufacturing:home' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.back }}</a><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div></section>
+
+{% if bought %}<div class="op-message op-message-success mfg-mrp-done" role="status" data-mrp-bought><strong>{{ words.bought }}</strong>
+<ul>{% for order in bought %}<li data-bought-order="{{ order.number }}"><span>{{ words.po_word }} {% if open_po %}<a href="{% url 'purchase_orders:detail' order.pk %}?lang={{ lang }}" data-po-link><bdi>{{ order.number }}</bdi></a>{% else %}<bdi>{{ order.number }}</bdi>{% endif %} · {{ order.supplier.name }}</span><small class="mfg-mrp-note">{% for line in order.mrp_lines %}{{ line.item.item_name }} × {{ line.quantity|qty }}{% if not forloop.last %} · {% endif %}{% endfor %}{% if can_price %} · {{ order.mrp_total|money }}{% endif %}</small></li>{% endfor %}</ul></div>{% endif %}
+{% if made %}<div class="op-message op-message-success mfg-mrp-done" role="status" data-mrp-made><strong>{{ words.made }}</strong>
+<ul>{% for order in made %}<li data-made-order="{{ order.number }}">{{ words.order_word }} <a href="{% url 'manufacturing:order' order.pk %}?lang={{ lang }}"><bdi>{{ order.number }}</bdi></a> · {{ order.recipe.product.item_name }} × {{ order.quantity|qty }}</li>{% endfor %}</ul></div>{% endif %}
+{% for warning in result.warnings %}<div class="op-message op-message-error" role="alert" data-mrp-warning="{{ warning.kind }}">{{ warning.text }}</div>{% endfor %}
+
+{% if not result.materials and not result.semis and not result.sources %}<p class="op-notice op-message-success" data-mrp-empty>{{ words.empty }}</p>{% else %}
+<section class="op-summary-grid mfg-mrp-tiles" data-mrp-tiles>
+  <article><small>{{ words.tile_sources }}</small><strong data-count-sources>{{ result.sources|length }}</strong></article>
+  <article><small>{{ words.tile_buy }}</small><strong data-count-buy{% if result.counts.to_buy %} style="color:var(--hs-danger)"{% endif %}>{{ result.counts.to_buy }}</strong></article>
+  <article><small>{{ words.tile_make }}</small><strong data-count-make>{{ result.counts.to_make }}</strong></article>
+</section>
+
+{% if result.sources %}<details class="mfg-mrp-sources" data-mrp-sources><summary>{{ words.sources }}</summary>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.source }}</th><th>{{ words.product }}</th><th>{{ words.to_make }}</th><th>{{ words.stock_covers }}</th><th>{{ words.date }}</th></tr></thead><tbody>
+{% for source in result.sources %}<tr data-source="{{ source.kind }}"><td>{% if source.kind == 'order' %}<a href="{% url 'manufacturing:order' source.pk %}?lang={{ lang }}"><bdi>{{ source.number }}</bdi></a> <small>{{ words.planned }}</small>{% else %}<bdi>{{ source.number }}</bdi> <small>{{ words.sale }}{% if source.party %} · {{ source.party }}{% endif %}</small>{% endif %}</td><td>{{ source.item.item_name }}</td><td>{{ source.quantity|qty }}</td><td>{% if source.kind == 'sale' %}{{ source.from_stock|qty }}{% else %}—{% endif %}</td><td>{% if source.date %}<bdi>{{ source.date|date:"Y-m-d" }}</bdi>{% else %}—{% endif %}</td></tr>{% endfor %}
+</tbody></table></div></details>{% endif %}
+
+<h2>{{ words.materials }}</h2>
+{% if result.materials %}
+<form method="post" data-mrp-buy novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="purchase">
+<div class="op-table-wrap"><table class="op-table mfg-mrp-table" data-mrp-materials><thead><tr><th>{{ words.material }}</th><th>{{ words.need }}</th><th>{{ words.on_hand }}</th><th>{{ words.incoming }}</th><th>{{ words.minimum }}</th><th>{{ words.to_buy }}</th>{% if can_price %}<th>{{ words.last_price }}</th>{% endif %}<th>{{ words.supplier }}</th>{% if can_buy %}<th>{{ words.buy_qty }}</th>{% endif %}</tr></thead><tbody>
+{% for row in result.materials %}<tr data-material="{{ row.item.item_code }}"{% if row.to_buy <= 0 %} class="is-covered"{% endif %}>
+<td><div class="mfg-title">{% if can_buy and row.to_buy > 0 %}<label class="mfg-pick"><input type="checkbox" name="pick" value="{{ row.item.pk }}"{% if not row.drafts %} checked{% endif %}><span>{{ row.item.item_name }}</span></label>{% else %}<span class="mfg-name">{{ row.item.item_name }}</span>{% endif %}
+{% if row.draft_text %}<small class="mfg-mrp-note" data-draft-note>{{ row.draft_text }}</small>{% endif %}{% if row.sent_text %}<small class="mfg-mrp-note" data-sent-note>{{ row.sent_text }}</small>{% endif %}</div></td>
+<td data-need>{{ row.need|qty }}</td><td data-on-hand><div class="mfg-title">{{ row.on_hand|qty }}{% if row.reserved_text %}<small class="mfg-mrp-note" data-reserved-note>{{ row.reserved_text }}</small>{% endif %}</div></td><td data-incoming>{{ row.incoming|qty }}</td><td data-minimum>{{ row.minimum|qty }}</td>
+<td data-to-buy>{% if row.to_buy > 0 %}<span><b class="mfg-short">{{ row.to_buy|qty }}</b> {{ row.item.unit|unit_label:lang }}</span>{% else %}<span class="op-status op-status-posted">{{ words.enough }}</span>{% endif %}</td>
+{% if can_price %}<td data-last-price{% if row.to_buy <= 0 %} class="mfg-na"{% endif %}>{% if row.to_buy > 0 and row.last_price is not None %}{{ row.last_price|money }}{% else %}—{% endif %}</td>{% endif %}
+<td{% if row.to_buy <= 0 %} class="mfg-na"{% endif %}>{% if row.to_buy > 0 %}{% if can_buy %}<select name="supplier_{{ row.item.pk }}" class="mfg-mrp-input" aria-label="{{ words.supplier }}: {{ row.item.item_name }}" data-supplier>{% if not row.supplier %}<option value="">{{ words.pick_supplier }}</option>{% endif %}{% for s in suppliers %}<option value="{{ s.pk }}"{% if row.supplier and s.pk == row.supplier.pk %} selected{% endif %}>{{ s.name }}</option>{% endfor %}</select>{% else %}{% if row.supplier %}{{ row.supplier.name }}{% else %}—{% endif %}{% endif %}{% else %}—{% endif %}</td>
+{% if can_buy %}<td{% if row.to_buy <= 0 %} class="mfg-na"{% endif %}>{% if row.to_buy > 0 %}<input name="qty_{{ row.item.pk }}" class="mfg-mrp-input" inputmode="decimal" dir="ltr" value="{{ row.qty_plain }}" aria-label="{{ words.buy_qty }}: {{ row.item.item_name }}" data-buy-qty>{% else %}—{% endif %}</td>{% endif %}</tr>
+{% endfor %}</tbody></table></div>
+{% if can_buy and result.counts.to_buy %}<div class="op-form-actions"><button class="op-primary" type="submit" data-buy-button>{{ words.buy }}</button></div><p class="op-muted">{{ words.buy_hint }}</p>
+{% elif not purchases_on %}<p class="op-muted" data-no-buy>{{ words.purchases_off }}</p>
+{% elif not can_buy %}<p class="op-muted" data-no-buy>{{ words.no_buy_right }}</p>{% endif %}
+</form>
+{% else %}<p class="op-muted">—</p>{% endif %}
+
+{% if result.semis %}<h2>{{ words.semis }}</h2><p class="op-muted">{{ words.semis_hint }}</p>
+<div class="op-table-wrap"><table class="op-table mfg-mrp-table" data-mrp-semis><thead><tr><th>{{ words.item }}</th><th>{{ words.need }}</th><th>{{ words.on_hand }}</th><th>{{ words.incoming }}</th><th>{{ words.minimum }}</th><th>{{ words.net }}</th><th>{{ words.make_qty }}</th><th></th></tr></thead><tbody>
+{% for row in result.semis %}<tr data-semi="{{ row.item.item_code }}"{% if row.make <= 0 %} class="is-covered"{% endif %}>
+<td><div class="mfg-title"><span class="mfg-name">{{ row.item.item_name }}</span><small class="mfg-mrp-note">{{ words.recipe }} <bdi>{{ row.recipe.code }}</bdi></small></div></td>
+<td data-need>{{ row.need|qty }}</td><td data-on-hand><div class="mfg-title">{{ row.on_hand|qty }}{% if row.reserved_text %}<small class="mfg-mrp-note" data-reserved-note>{{ row.reserved_text }}</small>{% endif %}</div></td><td data-incoming><div class="mfg-title">{{ row.incoming|qty }}{% if row.making_text %}<small class="mfg-mrp-note" data-making-note>{{ row.making_text }}</small>{% endif %}</div></td><td data-minimum>{{ row.minimum|qty }}</td>
+<td data-net>{{ row.net|qty }}</td>
+<td data-make>{% if row.make > 0 %}<div class="mfg-title"><span><b class="mfg-short">{{ row.make|qty }}</b> {{ row.item.unit|unit_label:lang }}</span><small class="mfg-mrp-note">{{ row.batches|qty }} {{ words.batches }}</small></div>{% else %}<span class="op-status op-status-posted">{{ words.enough }}</span>{% endif %}</td>
+<td class="op-cell-text{% if row.make <= 0 %} mfg-na{% endif %}"><div class="mfg-sale-cell">{% if row.make > 0 %}{% if can_make %}<details class="mfg-sale-make" data-make-production><summary class="op-secondary">{{ words.make }}</summary>
+<form method="post" data-make-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="produce"><input type="hidden" name="item" value="{{ row.item.pk }}">
+<div class="op-field"><label for="mk-qty-{{ row.item.pk }}">{{ words.quantity }}</label><input id="mk-qty-{{ row.item.pk }}" name="quantity" inputmode="decimal" dir="ltr" value="{{ row.qty_plain }}"></div>
+<div class="op-field"><label for="mk-loc-{{ row.item.pk }}">{{ words.location }}</label><select id="mk-loc-{{ row.item.pk }}" name="location">{% for place in locations %}<option value="{{ place.pk }}"{% if place.pk == default_location.pk %} selected{% endif %}>{{ place.name_ar }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="mk-labor-{{ row.item.pk }}">{{ words.labor }}</label><input id="mk-labor-{{ row.item.pk }}" name="labor_cost" inputmode="decimal" dir="ltr" placeholder="0"></div>
+<div class="op-field"><label for="mk-over-{{ row.item.pk }}">{{ words.overhead }}</label><input id="mk-over-{{ row.item.pk }}" name="overhead_cost" inputmode="decimal" dir="ltr" placeholder="0"></div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.make }}</button></div></form></details>{% else %}<span class="op-muted" data-no-make>{{ words.no_make_right }}</span>{% endif %}{% else %}—{% endif %}</div></td></tr>
+{% endfor %}</tbody></table></div>{% endif %}
+{% endif %}
+{% endblock %}

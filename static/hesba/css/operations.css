@@ -171,6 +171,29 @@ html.hs-cam-open,html.hs-cam-open body{overflow:hidden}
 .mfg-sale-make form{display:grid;gap:10px}
 .mfg-sale-make .op-form-actions{margin-top:2px}
 .mfg-sale-deliver{margin:0 0 18px}
+/* F2: material requirements. */
+.mfg-mrp-tiles{grid-template-columns:repeat(3,minmax(0,1fr))}
+.mfg-mrp-done{margin:0 0 16px}
+.mfg-mrp-done ul{margin:8px 0 0;padding-inline-start:20px}
+.mfg-mrp-done li{margin:6px 0}
+.mfg-mrp-done .mfg-mrp-note{max-width:none;color:inherit;opacity:.8}
+.mfg-mrp-done a{color:var(--op-teal);font-weight:700;text-decoration:none}
+.mfg-mrp-done a:hover{text-decoration:underline}
+.mfg-mrp-sources{margin:0 0 18px}
+.mfg-mrp-sources summary{display:flex;align-items:center;gap:8px;min-height:var(--hs-control-height,44px);cursor:pointer;font-weight:700;color:var(--op-navy)}
+.mfg-mrp-sources summary::after{content:"▾";color:var(--op-muted)}
+.mfg-mrp-sources[open] summary::after{content:"▴"}
+.mfg-mrp-table tr.is-covered td{color:var(--op-muted)}
+.mfg-title{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:start}
+.mfg-pick{display:flex;align-items:center;gap:10px;min-height:var(--hs-control-height,44px);cursor:pointer;font-weight:700}
+.mfg-pick input[type=checkbox]{width:22px;height:22px;flex:none;accent-color:var(--hs-teal-deep)}
+.mfg-mrp-note{display:block;max-width:18rem;color:var(--op-muted);white-space:normal;font-size:var(--hs-text-sm,13px)}
+.mfg-short{color:var(--hs-danger)}
+.mfg-link{display:inline-flex;align-items:center;min-height:var(--hs-control-height,44px);color:var(--op-teal);font-weight:700;text-decoration:none}
+.mfg-link:hover{text-decoration:underline}
+.mfg-mrp-input{min-height:var(--hs-control-height,44px);width:100%;min-width:9rem;border:1px solid var(--hs-line-strong);border-radius:var(--hs-input-radius);padding:8px 10px;font:inherit;background:var(--hs-surface);color:var(--op-text)}
+input.mfg-mrp-input{max-width:8rem}
+@media(max-width:700px){.mfg-mrp-tiles{gap:8px}.mfg-mrp-tiles article{padding:12px}.mfg-mrp-tiles strong{font-size:18px}.mfg-mrp-table .mfg-mrp-input{width:auto;min-width:0;flex:1;max-width:60%}.mfg-mrp-table .mfg-sale-cell{width:100%}.mfg-mrp-table td.mfg-na{display:none!important}}
 /* MED-001: the patient file. */
 .med-summary{grid-template-columns:repeat(4,minmax(0,1fr))}
 .med-heading{color:var(--op-navy);margin:22px 0 10px}
