@@ -12,19 +12,19 @@ class TechnicianListTests(base.WorkshopSetup):
         super().setUp()
         from staff.services import save_employee
 
-        self.sameer = save_employee({"name": "سمير المندوب", "title": "مندوب مبيعات"}, self.owner)
-        self.hala = save_employee({"name": "هالة المندوبة", "title": "مندوبة"}, self.owner)
+        self.sameer = save_employee({"name": "سمير عادل", "title": "مندوب مبيعات"}, self.owner)
+        self.hala = save_employee({"name": "هالة مصطفى", "title": "مندوبة"}, self.owner)
         self.client.force_login(self.owner)
 
     def test_the_receiving_form_and_an_order_offer_technicians_and_no_sales_rep(self):
         names = select_options(self.client.get(reverse("workorders:new")).content.decode(), "technician")
-        self.assertIn("أحمد الفني", names)
-        self.assertNotIn("سمير المندوب", names)
-        self.assertNotIn("هالة المندوبة", names)
+        self.assertIn("أحمد سامي", names)
+        self.assertNotIn("سمير عادل", names)
+        self.assertNotIn("هالة مصطفى", names)
         order = self.order()
         names = select_options(self.client.get(reverse("workorders:detail", args=[order.pk])).content.decode(), "technician")
-        self.assertIn("أحمد الفني", names)
-        self.assertNotIn("هالة المندوبة", names)
+        self.assertIn("أحمد سامي", names)
+        self.assertNotIn("هالة مصطفى", names)
 
     def test_a_new_order_cannot_be_given_to_a_rep(self):
         from .models import WorkOrder
@@ -36,9 +36,9 @@ class TechnicianListTests(base.WorkshopSetup):
         order = self.order(technician=self.sameer)
         url = reverse("workorders:detail", args=[order.pk])
         html = self.client.get(url).content.decode()
-        self.assertIn("سمير المندوب", select_options(html, "technician"))
+        self.assertIn("سمير عادل", select_options(html, "technician"))
         self.assertIn(f'<option value="{self.sameer.pk}" selected>', html)
-        self.assertNotIn("هالة المندوبة", select_options(html, "technician"))
+        self.assertNotIn("هالة مصطفى", select_options(html, "technician"))
         self.client.post(url, {"action": "details", "technician": self.sameer.pk, "diagnosis": "المروحة مكسورة"})
         order.refresh_from_db()
         self.assertEqual((order.technician_id, order.diagnosis), (self.sameer.pk, "المروحة مكسورة"))

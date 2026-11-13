@@ -52,7 +52,7 @@ class PlacementTests(LevelSetup):
     def test_a_placement_points_to_the_groups_at_its_level_with_a_seat(self):
         self.assertEqual((self.one.level, self.two.level), (1, 2))
         services.enroll(self.omar, self.two_full, self.owner)  # the Monday level-2 group is now full
-        test = levels.record_placement(self.sara, {"course": self.english, "level": "٢", "score": "34", "out_of": "50", "notes": "محادثة كويسة"}, self.owner)
+        test = levels.record_placement(self.sara, {"course": self.english, "level": "٢", "score": "34", "out_of": "50", "notes": "مستوى محادثة جيد"}, self.owner)
         self.assertEqual((test.level, test.score, test.out_of, test.taken_on), (2, D("34"), D("50"), TODAY))
         self.assertEqual([group.pk for group in levels.groups_at(self.english, test.level, self.sara)], [self.two.pk])
         self.assertTrue(AuditLog.objects.filter(action="placement_test").exists())

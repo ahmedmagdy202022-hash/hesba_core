@@ -17,8 +17,8 @@ class VisitFormDoctorsTests(access.Clinic):
         super().setUp()
         from staff.services import save_employee
 
-        self.sameer = save_employee({"name": "سمير المندوب", "title": "مندوب مبيعات"}, self.owner)
-        self.hala = save_employee({"name": "هالة المندوبة", "title": "مندوبة"}, self.owner)
+        self.sameer = save_employee({"name": "سمير عادل", "title": "مندوب مبيعات"}, self.owner)
+        self.hala = save_employee({"name": "هالة مصطفى", "title": "مندوبة"}, self.owner)
 
     def form(self, **params):
         self.client.force_login(self.owner)
@@ -28,8 +28,8 @@ class VisitFormDoctorsTests(access.Clinic):
         names = select_options(self.form(), "doctor")
         self.assertIn("د. سارة", names)
         self.assertIn("منى الاستقبال", names)  # only a rep's own title takes someone out: nobody else disappears
-        self.assertNotIn("سمير المندوب", names)
-        self.assertNotIn("هالة المندوبة", names)
+        self.assertNotIn("سمير عادل", names)
+        self.assertNotIn("هالة مصطفى", names)
 
     def test_a_visit_already_recorded_with_such_a_doctor_keeps_them_on_its_form_and_on_save(self):
         from . import services
@@ -38,9 +38,9 @@ class VisitFormDoctorsTests(access.Clinic):
         self.client.force_login(self.owner)
         url = reverse("medical:visit_edit", args=[visit.pk])
         html = self.client.get(url).content.decode()
-        self.assertIn("سمير المندوب", select_options(html, "doctor"))
+        self.assertIn("سمير عادل", select_options(html, "doctor"))
         self.assertIn(f'<option value="{self.sameer.pk}" selected>', html)
-        self.assertNotIn("هالة المندوبة", select_options(html, "doctor"))  # only the one the record has
+        self.assertNotIn("هالة مصطفى", select_options(html, "doctor"))  # only the one the record has
         self.client.post(url, {"complaint": "y", "doctor": self.sameer.pk, "visit_date": timezone.localdate().isoformat()})
         visit.refresh_from_db()
         self.assertEqual((visit.complaint, visit.doctor_id), ("y", self.sameer.pk))
@@ -57,7 +57,7 @@ class VisitFormDoctorsTests(access.Clinic):
         booked = Appointment.objects.create(number="AP-W1B", customer=self.patient, employee=self.sameer, service=self.service, price="300",
                                             starts_at=timezone.make_aware(datetime.combine(timezone.localdate(), time(23, 58))), created_by=self.owner)
         html = self.form(appointment=booked.pk)
-        self.assertIn("سمير المندوب", select_options(html, "doctor"))
+        self.assertIn("سمير عادل", select_options(html, "doctor"))
         self.assertIn(f'<option value="{self.sameer.pk}" selected>', html)
         self.client.post(reverse("medical:visit_new", args=[self.patient.pk]),
                          {"complaint": "من الميعاد", "doctor": self.sameer.pk, "appointment": booked.pk, "visit_date": timezone.localdate().isoformat()})

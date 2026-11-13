@@ -43,7 +43,7 @@ class Command(BaseCommand):
             self.stdout.write("Demo data already present; today's trade topped up.")
             return
         password = settings.DEMO_PASSWORD
-        call_command("bootstrap_client", display_name="محل حِسبة التجريبي", client_code="DEMO", password=password, verbosity=0)
+        call_command("bootstrap_client", display_name="حِسبة للتجارة (تجريبي)", client_code="DEMO", password=password, verbosity=0)
         from settings_core import setup_catalog as catalog
         from settings_core.setup_services import complete_setup
 
@@ -362,7 +362,7 @@ class Command(BaseCommand):
             attendance.request_leave(employees[0], {"kind": "casual", "start_date": wanted, "end_date": wanted, "reason": "ظرف عائلي"}, owner)
 
     #: DM2 (W06): the month's running costs, as a share of the month's sales, and how many days ago each was paid.
-    MONTH_EXPENSES = (("rent", "0.08", 17, "إيجار المحل — الشهر ده"), ("utilities", "0.03", 9, "فاتورة الكهربا والمية"),
+    MONTH_EXPENSES = (("rent", "0.08", 17, "إيجار المقر — الشهر الحالي"), ("utilities", "0.03", 9, "فاتورة الكهرباء والمياه"),
                       ("internet_phone", "0.015", 12, "باقة الإنترنت والتليفون"), ("supplies", "0.02", 5, "أدوات نظافة وتغليف"))
 
     def _expenses(self, master, owner):
@@ -564,7 +564,7 @@ class Command(BaseCommand):
         category = items[0].category
         window = {"starts_on": (today - timedelta(days=12)).isoformat(), "ends_on": (today + timedelta(days=18)).isoformat(), "active": "1"}
         promos.save({"name": f"خصم 10% على {category.name_ar}", "kind": "percent", "percent": "10", "category": str(category.pk), **window}, owner)
-        promos.save({"name": f"اشتري 2 {items[2].item_name} وخد واحدة هدية", "kind": "buy_get", "buy_quantity": "2", "get_quantity": "1",
+        promos.save({"name": f"اشتري 2 {items[2].item_name} والثالثة هدية", "kind": "buy_get", "buy_quantity": "2", "get_quantity": "1",
                      "item": str(items[2].pk), **window}, owner)
         floor = max(Decimal("500"), (items[1].default_sale_price * 2).quantize(Decimal("1")))
         off = (floor * Decimal("0.15")).quantize(Decimal("10"))  # more than the section's 10%, so the coupon is the best offer
@@ -817,7 +817,7 @@ class Command(BaseCommand):
     #: sub-activity -> (code, name, sizes, colours, unit) of the one demo model
     VARIANT_MODELS = {
         "": ("TSHIRT", "تيشيرت قطن بياقة", ["S", "M", "L"], ["أسود", "كحلي"], "unit"),
-        "cafe": ("LATTE", "لاتيه", ["صغير", "وسط", "كبير"], ["سخن", "ساقع"], "كوباية"),
+        "cafe": ("LATTE", "لاتيه", ["صغير", "وسط", "كبير"], ["ساخن", "مثلج"], "كوب"),
     }
 
     def _variants(self, master, goods, owner, modules):
@@ -994,8 +994,8 @@ class Command(BaseCommand):
         pharmacy.add_line(waiting, {"item": amoxicillin, "quantity": min(short, Decimal("10")), "dosage": "كبسولة كل 8 ساعات لمدة 5 أيام"}, owner)
         pharmacy.add_line(waiting, {"item": paracetamol, "quantity": "1", "dosage": "قرص عند اللزوم، بحد أقصى 4 في اليوم"}, owner)
         chronic = pharmacy.create_prescription({"patient_name": "محمود عبد الله", "patient_phone": "01112345678", "doctor_name": "د. هالة سمير",
-                                                "issued_on": today - timedelta(days=13), "refill_days": "15", "notes": "قلب، بيتصرف كل 15 يوم"}, owner)
-        pharmacy.add_line(chronic, {"item": aspirin, "quantity": "1", "dosage": "قرص يوميًا بعد الغدا"}, owner)
+                                                "issued_on": today - timedelta(days=13), "refill_days": "15", "notes": "مريض قلب — تُصرف كل 15 يوم"}, owner)
+        pharmacy.add_line(chronic, {"item": aspirin, "quantity": "1", "dosage": "قرص يوميًا بعد الغداء"}, owner)
         pharmacy.add_line(chronic, {"item": omega, "quantity": "1", "dosage": "كبسولة يوميًا"}, owner)
         customer = walk_in_customer()
         lines = [{"item": line.item, "quantity": line.quantity, "unit_sale_price": Decimal(line.item.default_sale_price)} for line in chronic.lines.all()]
@@ -1031,7 +1031,7 @@ class Command(BaseCommand):
         plan = (
             ("غسالة توشيبا 7 كيلو", "مش بتعصر وبتعمل صوت عالي", None, 0, ()),
             ("تكييف شارب 1.5 حصان", "مش بيبرّد", (Status.DIAGNOSED, Status.QUOTED), 3, ((labour[0], 1), (parts[0], 1))),
-            ("ثلاجة كريازي", "الفريزر بيعمل تلج زيادة", (Status.IN_REPAIR,), 7, ((labour[-1], 1),)),
+            ("ثلاجة كريازي", "الفريزر بيعمل ثلج زيادة", (Status.IN_REPAIR,), 7, ((labour[-1], 1),)),
             ("غسالة أطباق بوش", "مش بتسحب مياه", (Status.DIAGNOSED, Status.APPROVED, Status.IN_REPAIR, Status.READY), 2, ((labour[-1], 1), (parts[-1], 1))),
             ("ميكروويف شارب", "مش بيسخّن", (Status.IN_REPAIR, Status.READY), 10, ((labour[0], 1), (parts[0], 1))),
         )
@@ -1096,8 +1096,8 @@ class Command(BaseCommand):
         floor.send_to_kitchen(live, owner)
         floor.add_item(live, dishes[2 % len(dishes)], owner)
         Order.objects.filter(pk=live.pk).update(opened_at=timezone.now() - timedelta(minutes=25))
-        adjust_stock(f"DEMO-WASTE-{today:%m%d}", today - timedelta(days=2), raw[0], master["location"], "out", "1", "هالك — باظت في التلاجة", owner)
-        driver = save_employee({"name": "محمود الطيار", "title": "طيار دليفري"}, owner)  # RESTO-003: a delivery out with its driver and fee
+        adjust_stock(f"DEMO-WASTE-{today:%m%d}", today - timedelta(days=2), raw[0], master["location"], "out", "1", "هالك — تلف في الثلاجة", owner)
+        driver = save_employee({"name": "محمود سعيد", "title": "مندوب توصيل"}, owner)  # RESTO-003: a delivery out with its driver and fee
         order = floor.open_order(owner, kind="delivery", customer=master["customers"][0], address="شارع النصر 12، مدينة نصر", delivery_fee="20")
         floor.add_item(order, dishes[0], owner, 2)
         floor.dispatch(order, driver, owner)
@@ -1231,15 +1231,15 @@ class Command(BaseCommand):
             return
         services = {item.item_name: item for item in master["items"] if not item.is_stock_tracked}
         tests = {}
-        codes = {"هيموجلوبين": "HB", "سكر صايم": "GLU"}  # M9 (HG-092): two tests carry the analyzer's code, so the sample label shows them short
+        codes = {"هيموجلوبين": "HB", "سكر صائم": "GLU"}  # M9 (HG-092): two tests carry the analyzer's code, so the sample label shows them short
         for position, (name, unit, low, high, service) in enumerate((
                 ("هيموجلوبين", "g/dL", "12", "16", "صورة دم كاملة"), ("كرات دم بيضاء", "×10³/µL", "4", "11", "صورة دم كاملة"),
-                ("سكر صايم", "mg/dL", "70", "100", ""), ("إنزيم ALT", "U/L", "7", "56", "وظائف كبد"), ("فصيلة الدم", "", "", "", ""))):
+                ("سكر صائم", "mg/dL", "70", "100", ""), ("إنزيم ALT", "U/L", "7", "56", "وظائف كبد"), ("فصيلة الدم", "", "", "", ""))):
             tests[name] = lab.save_test({"name": name, "code": codes.get(name, ""), "unit": unit, "low": low, "high": high, "service": services.get(service), "position": position}, owner)
         patient = master["customers"][0]
-        lab.record_results(patient, today - timedelta(days=30), {tests["هيموجلوبين"]: ("11.2", ""), tests["سكر صايم"]: ("132", "")}, owner)
+        lab.record_results(patient, today - timedelta(days=30), {tests["هيموجلوبين"]: ("11.2", ""), tests["سكر صائم"]: ("132", "")}, owner)
         lab.record_results(patient, today - timedelta(days=1), {tests["هيموجلوبين"]: ("12.8", ""), tests["كرات دم بيضاء"]: ("7.5", ""),
-                                                                tests["سكر صايم"]: ("118", ""), tests["إنزيم ALT"]: ("31", ""),
+                                                                tests["سكر صائم"]: ("118", ""), tests["إنزيم ALT"]: ("31", ""),
                                                                 tests["فصيلة الدم"]: ("", "A+")}, owner)
 
     def _dental(self, master, doctor, owner, today):
@@ -1254,7 +1254,7 @@ class Command(BaseCommand):
             return
         checkup, root_canal, cleaning = services[:3]
         patient = master["customers"][0]
-        for tooth, condition, notes in ((16, "caries", "تسوّس عميق"), (26, "filled", ""), (36, "root_canal", ""), (46, "missing", "اتخلعت 2024"),
+        for tooth, condition, notes in ((16, "caries", "تسوّس عميق"), (26, "filled", ""), (36, "root_canal", ""), (46, "missing", "خُلعت 2024"),
                                         (11, "crown", "")):
             dental.set_tooth(patient, tooth, condition, owner, notes)
         first = dental.plan_step(patient, {"service": cleaning, "stage": 1, "doctor": doctor}, owner)
@@ -1319,7 +1319,7 @@ class Command(BaseCommand):
                                        ("3", "رصف أسفلت", "م²", "9000", "140"), ("4", "توريد وتركيب بلدورة", "م.ط", "1800", "190")),
     }
     #: TRACK-ACTS W19: the children's stage fits the place (a nursery has no prep-school pupils).
-    STAGES = {"nursery": "كي جي 1", "languages": "مستوى مبتدئ", "training": "خريجين", "tutoring_center": "تالتة إعدادي", "private_tutor": "تالتة إعدادي"}
+    STAGES = {"nursery": "كي جي 1", "languages": "مستوى مبتدئ", "training": "خريجين", "tutoring_center": "الصف الثالث الإعدادي", "private_tutor": "الصف الثالث الإعدادي"}
 
     def _students(self, master, teacher, owner):
         """EDU-001: courses from the catalog's services, three groups, parents with their children enrolled."""
@@ -1335,12 +1335,12 @@ class Command(BaseCommand):
                    for item in master["items"] if not item.is_stock_tracked][:2]
         if not courses:
             return
-        second = save_employee({"name": "أ. نادية", "title": teacher.title or "مدرسة"}, owner)
+        second = save_employee({"name": "أ. نادية فوزي", "title": teacher.title or "مدرسة"}, owner)
         # EDU-004: each group says how its teacher is paid: per class, a share of the fees, or a fixed month.
         plan = (
-            (courses[0], "مجموعة السبت والتلات", teacher, "قاعة 1", "sat,tue", time(16), 12, "percent", "40"),
-            (courses[0], "مجموعة الأحد والأربع", second, "قاعة 2", "sun,wed", time(18), 12, "session", "120"),
-            (courses[-1], "مجموعة الاتنين والخميس", teacher, "قاعة 1", "mon,thu", time(17), 10, "monthly", "800"),
+            (courses[0], "مجموعة السبت والثلاثاء", teacher, "قاعة 1", "sat,tue", time(16), 12, "percent", "40"),
+            (courses[0], "مجموعة الأحد والأربعاء", second, "قاعة 2", "sun,wed", time(18), 12, "session", "120"),
+            (courses[-1], "مجموعة الاثنين والخميس", teacher, "قاعة 1", "mon,thu", time(17), 10, "monthly", "800"),
         )
         groups = [edu.save_group({"course": course, "name": name, "teacher": who, "room": room, "days": days, "start_time": start,
                                   "duration_minutes": "90", "capacity": str(capacity), "starts_on": today - timedelta(days=40),
@@ -1355,7 +1355,7 @@ class Command(BaseCommand):
         )
         from settings_core.models import ClientProfile
 
-        stage = self.STAGES.get(getattr(ClientProfile.get_active(), "sub_activity_slug", ""), "تالتة إعدادي")
+        stage = self.STAGES.get(getattr(ClientProfile.get_active(), "sub_activity_slug", ""), "الصف الثالث الإعدادي")
         students = []
         for parent, phone, relation, children in families:
             payer = Customer.objects.filter(phone=phone).first()
@@ -1444,7 +1444,7 @@ class Command(BaseCommand):
         StudyGroup.objects.filter(pk=groups[2].pk).update(level=1)
         course = groups[0].course
         levels.record_placement(students[0], {"course": course, "level": "1", "score": "18", "out_of": "50", "notes": "مبتدئ"}, owner)
-        levels.record_placement(students[1], {"course": course, "level": "2", "score": "36", "out_of": "50", "notes": "محادثة كويسة"}, owner)
+        levels.record_placement(students[1], {"course": course, "level": "2", "score": "36", "out_of": "50", "notes": "مستوى محادثة جيد"}, owner)
 
     def _nursery_day(self, students, owner):
         """EDU-005: a nursery's door this morning — who may pick each child up, most children in, one already gone home."""
@@ -1511,10 +1511,10 @@ class Command(BaseCommand):
                 contract.receive_payment(project, owner, kind=ProjectPaymentKind.COLLECTION, cashbox=master["cashboxes"][0],
                                          amount=contract.net_payable(first), payment_date=today - timedelta(days=started - 10))
                 # CONTRACT-003: the second certificate is posted and still unpaid past the credit days, so it shows as overdue.
-                second = contract.create_certificate(project, owner, certificate_date=today - timedelta(days=40), description="أعمال الشهر التاني",
+                second = contract.create_certificate(project, owner, certificate_date=today - timedelta(days=40), description="أعمال الشهر الثاني",
                                                      quantities={line.pk: (line.quantity * Decimal("0.45")).quantize(Decimal("1")) for line in lines[:3]})
                 post_sales_invoice(second.invoice_id, user=owner)
-                contract.create_certificate(project, owner, certificate_date=today, description="أعمال الشهر التالت",
+                contract.create_certificate(project, owner, certificate_date=today, description="أعمال الشهر الثالث",
                                             quantities={line.pk: (line.quantity * Decimal("0.60")).quantize(Decimal("1")) for line in lines[:3]})
                 if master["suppliers"]:
                     subcontract = costs.save_subcontract(project, owner, {"supplier": master["suppliers"][-1], "scope": f"مقاولة باطن: {lines[-1].description}",
@@ -1558,7 +1558,7 @@ class Command(BaseCommand):
             post_sales_invoice(bill.invoice.id, user=owner)
         visited = master["customers"][2]
         if not visited.address:  # SVC-004: its visits are booked at the customer's address
-            visited.address = "١٤ شارع مصدق، الدقي، الجيزة"
+            visited.address = "14 شارع مصدق، الدقي، الجيزة"
             visited.save(update_fields=["address"])
         save_contract({"customer": visited, "service": services[0], "amount": Decimal(services[0].default_sale_price) * 2,
                        "every": "quarter", "visits_per_period": 1, "description": "عقد زيارات دورية",
@@ -1578,7 +1578,7 @@ class Command(BaseCommand):
         staff = Employee.objects.filter(active=True).order_by("pk").first()
         first = sell_package({"customer": master["customers"][0], "service": services[0], "sessions": 6,
                               "price": (Decimal(services[0].default_sale_price) * 6 * Decimal("0.85")).quantize(Decimal("0.01")),
-                              "expires_on": today + timedelta(days=90), "notes": "خصم 15% على الباكدج"}, owner)
+                              "expires_on": today + timedelta(days=90), "notes": "خصم 15% على الباقة"}, owner)
         post_sales_invoice(first.invoice.id, user=owner)
         for days in (9, 2):
             use_session(first, owner, used_on=today - timedelta(days=days), employee=staff)

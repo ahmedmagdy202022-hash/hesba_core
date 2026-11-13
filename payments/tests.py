@@ -712,7 +712,7 @@ class RepTests(PayLinkSetup):
         from reports.reps import rep_performance
         from staff.services import save_employee
 
-        rep = save_employee({"name": "سمير المندوب", "commission_percent": "5"}, self.owner)
+        rep = save_employee({"name": "سمير عادل", "commission_percent": "5"}, self.owner)
         self.customer.sales_rep = rep
         self.customer.save()
         day_one = TODAY - timedelta(days=2)

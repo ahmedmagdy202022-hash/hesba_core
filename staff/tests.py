@@ -27,12 +27,12 @@ class StaffTests(TestCase):
         self.client.force_login(self.owner)
 
     def test_add_list_edit_and_audit(self):
-        page = self.client.post(reverse("staff:list"), {"name": "أحمد الفني", "title": "فني تكييف", "phone": "٠١٠٠ ١٢٣ ٤٥٦٧", "commission_percent": "12.5", "active": "1"})
+        page = self.client.post(reverse("staff:list"), {"name": "أحمد سامي", "title": "فني تكييف", "phone": "٠١٠٠ ١٢٣ ٤٥٦٧", "commission_percent": "12.5", "active": "1"})
         employee = Employee.objects.get()
         self.assertRedirects(page, f"{reverse('staff:list')}?lang=ar", fetch_redirect_response=False)
         self.assertEqual((employee.code, employee.phone, employee.commission_percent, employee.active), ("E-0001", "01001234567", D("12.50"), True))
         self.assertContains(self.client.get(reverse("staff:list")), 'data-employee-row="E-0001"')
-        self.client.post(reverse("staff:detail", args=[employee.pk]), {"name": "أحمد الفني", "title": "كبير الفنيين", "phone": "01001234567", "commission_percent": "15", "user": str(self.owner.pk)})
+        self.client.post(reverse("staff:detail", args=[employee.pk]), {"name": "أحمد سامي", "title": "كبير الفنيين", "phone": "01001234567", "commission_percent": "15", "user": str(self.owner.pk)})
         employee.refresh_from_db()
         self.assertEqual((employee.title, employee.commission_percent, employee.user, employee.active), ("كبير الفنيين", D("15.00"), self.owner, False))
         self.assertEqual(list(AuditLog.objects.filter(module="staff").values_list("action", flat=True).order_by("id")), ["create_employee", "update_employee"])

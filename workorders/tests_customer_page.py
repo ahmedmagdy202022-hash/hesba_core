@@ -16,7 +16,7 @@ from .tests import WorkshopSetup
 from .tests_customer_link import SECRET_NOTE
 
 HTML = {"HTTP_ACCEPT": "text/html,application/xhtml+xml"}
-HIDDEN = (SECRET_NOTE, "1350", "average_cost", "cost", "أحمد الفني", "commission", "OTHER-DEVICE-XYZ", "عميل تاني خالص", "محمد علي", "01001234567", "wo_owner")
+HIDDEN = (SECRET_NOTE, "1350", "average_cost", "cost", "أحمد سامي", "commission", "OTHER-DEVICE-XYZ", "عميل تاني خالص", "محمد علي", "01001234567", "wo_owner")
 STAFF = ("/staff/", "/workorders/", "sidebar", "logout", "href=\"/login")
 
 

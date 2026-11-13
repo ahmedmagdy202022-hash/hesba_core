@@ -51,7 +51,7 @@ class LabLinkTests(TestCase):
         prepared_client("medical", "lab", CLINIC)
         self.owner = person(RoleCode.OWNER, "ll_owner")
         self.hb = lab.save_test({"name": "هيموجلوبين", "unit": "g/dL", "low": "12", "high": "16"}, self.owner)
-        self.sugar = lab.save_test({"name": "سكر صايم", "unit": "mg/dL", "low": "70", "high": "100"}, self.owner)
+        self.sugar = lab.save_test({"name": "سكر صائم", "unit": "mg/dL", "low": "70", "high": "100"}, self.owner)
         self.group = lab.save_test({"name": "فصيلة الدم"}, self.owner)
         self.day = timezone.localdate() - timedelta(days=1)
         self.other_day = timezone.localdate() - timedelta(days=20)
@@ -101,7 +101,7 @@ class LabLinkTests(TestCase):
 
     def assertNothingOfThePatient(self, response, patient):
         status = response.status_code
-        for secret in (patient.name, "هيموجلوبين", "سكر صايم", "فصيلة الدم", "17.25", "88.4", "A+", self.day.isoformat(),
+        for secret in (patient.name, "هيموجلوبين", "سكر صائم", "فصيلة الدم", "17.25", "88.4", "A+", self.day.isoformat(),
                        self.other_day.isoformat(), "987.654", "P-0", "بنسلين", "داخلية"):
             self.assertNotContains(response, secret, status_code=status)
 

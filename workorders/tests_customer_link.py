@@ -124,7 +124,7 @@ class CustomerLinkTests(WorkshopSetup):
         self.assertEqual([(line["description"], line["amount"]) for line in data["lines"]], [("موتور غسالة", "1800.00"), ("مصنعية إصلاح", "300.00")])
         self.assertEqual(data["total"], "2100.00")
         body = response.content.decode()
-        for hidden in (SECRET_NOTE, "1350", "average_cost", "cost", "أحمد الفني", "commission", "OTHER-DEVICE-XYZ", "عميل تاني خالص", "محمد علي", "01001234567", "wo_owner"):
+        for hidden in (SECRET_NOTE, "1350", "average_cost", "cost", "أحمد سامي", "commission", "OTHER-DEVICE-XYZ", "عميل تاني خالص", "محمد علي", "01001234567", "wo_owner"):
             with self.subTest(hidden=hidden):
                 self.assertNotIn(hidden, body)
 

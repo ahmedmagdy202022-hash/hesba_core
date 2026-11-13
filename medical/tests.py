@@ -459,7 +459,7 @@ class LabResultTests(TestCase):
 
         self.lab = lab
         self.hb = lab.save_test({"name": "هيموجلوبين", "unit": "g/dL", "low": "12", "high": "16"}, self.owner)
-        self.sugar = lab.save_test({"name": "سكر صايم", "unit": "mg/dL", "low": "70", "high": "100"}, self.owner)
+        self.sugar = lab.save_test({"name": "سكر صائم", "unit": "mg/dL", "low": "70", "high": "100"}, self.owner)
         self.group = lab.save_test({"name": "فصيلة الدم"}, self.owner)
         self.url = reverse("medical:lab", args=[self.patient.pk])
 
@@ -478,7 +478,7 @@ class LabResultTests(TestCase):
                 self.lab.number(raw)
         yesterday = timezone.localdate() - timedelta(days=1)
         self.lab.record_results(self.patient, yesterday, {self.sugar: ("105", "")}, self.owner)
-        self.lab.save_test({"name": "سكر صايم", "unit": "mg/dL", "low": "70", "high": "110"}, self.owner, self.sugar)
+        self.lab.save_test({"name": "سكر صائم", "unit": "mg/dL", "low": "70", "high": "110"}, self.owner, self.sugar)
         self.lab.record_results(self.patient, yesterday, {self.sugar: ("105", "")}, self.owner)  # a correction of that day
         result = LabResult.objects.get(test=self.sugar)
         self.assertEqual((result.high, result.flag), (Decimal("100.000"), "high"))  # judged by that day's range, not today's
@@ -511,7 +511,7 @@ class LabResultTests(TestCase):
                                                f"text_{self.group.pk}": "A+"})
         self.assertRedirects(response, self.url + "?lang=ar", fetch_redirect_response=False)
         flags = dict(LabResult.objects.values_list("test__name", "flag"))
-        self.assertEqual(flags, {"هيموجلوبين": "low", "سكر صايم": "normal", "فصيلة الدم": ""})
+        self.assertEqual(flags, {"هيموجلوبين": "low", "سكر صائم": "normal", "فصيلة الدم": ""})
         self.client.post(self.url, {"taken_on": day, f"value_{self.hb.pk}": "12.4"})  # a correction of the same day
         hb = LabResult.objects.get(test=self.hb)
         self.assertEqual((LabResult.objects.count(), hb.value, hb.flag), (3, Decimal("12.400"), "normal"))
@@ -531,7 +531,7 @@ class LabResultTests(TestCase):
 
         old = timezone.localdate() - timedelta(days=10)
         self.lab.record_results(self.patient, old, {self.sugar: ("105", "")}, self.owner)
-        self.client.post(reverse("medical:lab_tests"), {"test": self.sugar.pk, "name": "سكر صايم", "unit": "mg/dL", "low": "70", "high": "110", "active": "1"})
+        self.client.post(reverse("medical:lab_tests"), {"test": self.sugar.pk, "name": "سكر صائم", "unit": "mg/dL", "low": "70", "high": "110", "active": "1"})
         self.sugar.refresh_from_db()
         self.assertEqual(self.sugar.high, Decimal("110.000"))
         first = LabResult.objects.get()

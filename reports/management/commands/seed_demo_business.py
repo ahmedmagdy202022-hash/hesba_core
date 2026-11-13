@@ -196,7 +196,7 @@ class Command(BaseCommand):
         # PERF-001: two sales reps share the customers, so the rep report has something to show.
         reps = [
             Employee.objects.update_or_create(code=code, defaults={"name": name, "title": "مندوب مبيعات", "commission_percent": rate, "active": True})[0]
-            for code, name, rate in (("DEMO-REP-1", "سمير المندوب", D("3.00")), ("DEMO-REP-2", "هالة المندوبة", D("2.50")))
+            for code, name, rate in (("DEMO-REP-1", "سمير عادل", D("3.00")), ("DEMO-REP-2", "هالة مصطفى", D("2.50")))
         ]
         sales_scale = self._ratio(catalog, STOCKING, "sale")
         customers = []

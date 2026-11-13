@@ -388,7 +388,7 @@ class DeliveryTests(RestaurantSetup):
         super().setUp()
         from staff.services import save_employee
 
-        self.driver = save_employee({"name": "محمود الطيار"}, self.owner)
+        self.driver = save_employee({"name": "محمود سعيد"}, self.owner)
         self.client.force_login(self.owner)
 
     def test_a_delivery_carries_its_fee_and_driver_to_one_invoice(self):
