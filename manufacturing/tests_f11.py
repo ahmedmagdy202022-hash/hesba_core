@@ -391,13 +391,19 @@ class CancelAfterSaleTests(F11Setup):
         cancel_posted_sales_invoice(invoice.pk, self.owner, "غلطة")
         self.assert_refused(first, (D("10.000"), D("95.00"), D("9.5000")))
 
-    def test_the_stock_screens_own_reversal_is_not_covered_yet(self):
-        # A known gap, pinned (HG-100, open question 1): the rule lives in ``cancel_run``. Reversing the run's output
-        # adjustment itself, as the stock operations screen can, still goes through the engine alone.
+    def test_the_stock_screens_own_reversal_is_refused_and_names_the_run(self):
+        # The gap HG-100 left open (its question 1), closed by Manufacturing F11b (HG-102). Reversing the run's output
+        # adjustment itself from the stock operations screen went through the engine alone and left 5 cakes worth
+        # 102.50, 20.50 each, with the run still posted. The screen now refuses an operation that belongs to a run and
+        # names the run, whose own page applies the rule above (``tests_f11b`` has the whole of it).
         first, _ = self.two_runs()
-        cancel_stock_operation(first.output_operation_id, TODAY, "من شاشة عمليات المخزون", self.owner)
+        self.client.force_login(self.owner)
+        page = self.client.post(reverse("inventory:operation_cancel", args=[first.output_operation_id]),
+                                {"reversal_date": TODAY.isoformat(), "reason": "من شاشة عمليات المخزون"}, follow=True)
+        self.assertContains(page, f"الحركة دي تابعة لتشغيلة الإنتاج {first.number}، ومينفعش تتعكس من شاشة التحويلات والتسويات.")
         first.refresh_from_db()
-        self.assertEqual((first.status, self.position()), (RunStatus.POSTED, (D("5.000"), D("102.50"), D("20.5000"))))
+        self.assertEqual((first.status, self.position()), (RunStatus.POSTED, (D("25.000"), D("392.50"), D("15.7000"))))
+        self.assertEqual(StockOperation.objects.filter(status="cancelled").count(), 0)
 
     def test_the_run_page_says_why_in_both_languages(self):
         first, _ = self.two_runs()

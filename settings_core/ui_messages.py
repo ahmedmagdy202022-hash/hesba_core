@@ -181,6 +181,13 @@ PATTERNS = (
     (r"^Return quantity exceeds the remaining quantity for line (?P<line>\d+)\.$", "كمية المرتجع أكبر من الباقي في السطر {line}."),
     (r"^Payment status must be (?P<status>\w+)\.$", "حالة السداد مش متطابقة مع المبالغ."),
     (r"^This screen needs the (?P<perm>[\w.]+) permission\.$", "الشاشة دي محتاجة صلاحية مش عندك."),
+    # Manufacturing F11b (HG-102): a production run's or order's operation is not reversed from the stock operations screen.
+    (r"^This operation belongs to production run (?P<number>\S+) and cannot be reversed from the transfers and adjustments screen\. "
+     r"Cancel the run from its own page: its product leaves stock and all of its materials come back, together\.$",
+     "الحركة دي تابعة لتشغيلة الإنتاج {number}، ومينفعش تتعكس من شاشة التحويلات والتسويات. ألغِ التشغيلة من صفحتها، والمنتج بيخرج من المخزن وكل خاماته بترجع مع بعض."),
+    (r"^This operation is a material issue of production order (?P<number>\S+) and cannot be reversed from the transfers and adjustments screen\. "
+     r"Cancel the order from its own page: all of its materials come back together\.$",
+     "الحركة دي صرف خامات لأمر الإنتاج {number}، ومينفعش تتعكس من شاشة التحويلات والتسويات. ألغِ الأمر من صفحته، وكل خاماته بترجع المخزن مع بعض."),
     # A0 (HG-078): the AI layer's daily cap and text size.
     (r"^Today's AI call limit is reached \((?P<cap>\d+) calls\)\. Try again tomorrow\.$", "وصلت لحد مكالمات الذكاء الاصطناعي النهارده ({cap} مكالمة). جرّب تاني بكرة."),
     # A1 (HG-079): one person's daily voicings of the summary.

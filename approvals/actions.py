@@ -94,7 +94,11 @@ def _cancel_expense(request):
 
 def _reverse_stock_operation(request):
     from inventory.services import cancel_stock_operation
+    from manufacturing.guards import before_stock_operation_reversal
 
+    # F11b (HG-102): the stock screen no longer sends a production run's or order's operation here; a request that
+    # was already waiting for one fails with the reason, and nothing moves.
+    before_stock_operation_reversal(request.object_id)
     cancel_stock_operation(request.object_id, reversal_date=_day(request.data), reason=request.data.get("reason", ""), user=request.requested_by)
 
 
