@@ -1056,14 +1056,17 @@ class StaffTests(PortalSetup):
             self.assertIn("Demo Store", text)
             self.assertTrue(text.endswith(made["url"]))
             self.assertIn("\n" + made["url"], text)  # the link on its own line
+            words = text.replace(made["url"], "")  # the address holds a base64 token and its timestamp: digits and letters by chance, so it is taken out first
             for secret in (YOUSEF, MARIAM, PAYER_NAME, "2011", "2014", GROUP_A, "درجة", "17", "850", "Mark", "owe"):
-                self.assertNotIn(secret, text)
-        year = unquote(self.make(self.stranger)["whatsapp"].split("?text=", 1)[1])
+                self.assertNotIn(secret, words)
+        stranger = self.make(self.stranger)
+        year = unquote(stranger["whatsapp"].split("?text=", 1)[1]).replace(stranger["url"], "")
         self.assertIn("سنة ميلاد أحد الأبناء", year)
         self.assertNotIn("آخر 4 أرقام", year)
         self.stranger.date_of_birth = None
         self.stranger.save()
-        phone = unquote(self.make(self.stranger)["whatsapp"].split("?text=", 1)[1])  # no birth date: the question is the phone's last 4 digits, still no name or number
+        again = self.make(self.stranger)
+        phone = unquote(again["whatsapp"].split("?text=", 1)[1]).replace(again["url"], "")  # no birth date: the question is the phone's last 4 digits, still no name or number
         self.assertIn("آخر 4 أرقام", phone)
         self.assertNotIn("سنة ميلاد", phone)
         for secret in (STRANGER, STRANGER_PAYER, "01555666777", "6777"):
