@@ -2,7 +2,7 @@
 {% include "projects/_tabs.html" %}
 {% if error %}<div class="op-message op-message-error" role="alert" data-project-error>{{ error }}</div>{% endif %}
 {% if position %}<section class="op-summary-grid op-summary-grid--compact" data-contract-position>
-<article><small>{{ cwords.contract }}</small><strong data-position="contract">{{ position.contract|money }}</strong></article>
+<article><small>{{ cwords.contract }}</small><strong data-position="contract">{{ position.contract|money }}</strong>{% if variation and variation.approved_count %}<small data-position="original">{{ cwords.original_short }} <span dir="ltr">{{ variation.original|money }}</span> · {{ cwords.variations_short }} <span dir="ltr">{% if variation.approved < 0 %}−{% else %}+{% endif %}{{ variation.approved|money_abs }}</span></small>{% endif %}</article>
 <article><small>{{ cwords.certified }}</small><strong data-position="certified">{{ position.certified|money }}</strong><small>{{ position.certified_progress }}%</small></article>
 <article><small>{{ cwords.due_now }}</small><strong data-position="due_now">{{ position.due_now|money }}</strong></article>
 <article><small>{{ cwords.retention_held }}</small><strong data-position="retention_held">{{ position.retention_held|money }}</strong></article>

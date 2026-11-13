@@ -59,7 +59,7 @@ QTY = Decimal("0.001")
 MESSAGES = {
     "ar": {
         "rate": "النسبة لازم تكون من 0 لـ 100.", "description": "اكتب وصف البند.", "qty": "الكمية لازم أكبر من صفر.", "price": "اكتب فئة البند (سعر الوحدة) رقم صفر أو أكبر.",
-        "rate_locked": "البند ده اتعمل عليه مستخلص، فالفئة بتاعته ثابتة.", "below_certified": "مينفعش كمية البند تقل عن اللي اتعمل بيه مستخلصات ({qty}).",
+        "rate_locked": "البند ده اتعمل عليه مستخلص، ففئته ثابتة.", "below_certified": "مينفعش كمية البند تقل عن اللي اتعمل بيه مستخلصات ({qty}).",
         "boq_used": "البند ده اتعمل عليه مستخلص ومينفعش يتمسح.", "one_draft": "فيه مستخلص لسه مسودة ({number}): رحّله أو اسحبه الأول.",
         "below_previous": "الكمية حتى تاريخه للبند {code} أقل من اللي اتعمل بيه مستخلصات قبل كده ({qty}).", "no_work": "مفيش كميات جديدة في المستخلص ده.",
         "boq_needed": "المشروع ده ليه مقايسة: اعمل المستخلص بالكميات.", "amount": "المبلغ لازم أكبر من صفر.", "lump_description": "اكتب وصف المستخلص.",
@@ -69,6 +69,8 @@ MESSAGES = {
         "payment_linked": "التحصيل ده مربوط بمشروع بالفعل.", "payment_status": "اربط التحصيلات النهائية بس.", "date": "التاريخ مش صحيح.",
         "advance_used": "المستخلصات خصمت من الدفعة المقدمة دي بالفعل، فمينفعش يتفك ربطها.",
         "boq_after_lump": "المشروع ده اتعمل عليه مستخلص مقطوعية؛ مينفعش تضيف مقايسة بعده عشان الأعمال اللي اتفوترت متتفوترش تاني.", "date_order": "تاريخ المستخلص لازم ميكونش قبل آخر مستخلص ({date}).",
+        "boq_locked": "المشروع عليه مستخلصات أو أوامر تغيير معتمدة؛ تعديل الكميات والفئات وإضافة البنود ومسحها يتم بأمر تغيير من «أوامر التغيير».",
+        "boq_in_order": "البند ده مذكور في أمر تغيير؛ مينفعش يتمسح.",
         "reversed": "الإفراج ده اتلغى بالفعل.", "rates_total": "مجموع نسبة ضمان الأعمال ونسبة استرداد الدفعة المقدمة لازم ميزيدش عن 100%.", "instalment": "التحصيل ده قسط على خطة تقسيط؛ يتربط بالمشروع كتحصيل بس، ولو فاتورته مربوطة بالمشروع ده.", "entity": "مستخلصات المشروع ده بتتعمل من كيان تاني؛ اشتغل من الكيان ده عشان ضمان الأعمال والدفعة المقدمة يفضلوا في مكان واحد.",
     },
     "en": {
@@ -83,6 +85,8 @@ MESSAGES = {
         "payment_linked": "This collection is already linked to a project.", "payment_status": "Only posted collections can be linked.", "date": "Invalid date.",
         "advance_used": "Certificates already recovered this advance, so it cannot be unlinked.",
         "boq_after_lump": "This project already has a lump-sum certificate; a bill of quantities cannot be added after it, so billed work is never billed twice.", "date_order": "A certificate cannot be dated before the latest one ({date}).",
+        "boq_locked": "This project has certificates or approved variation orders; quantities, rates, new items and deletions go through a variation order (the Variation orders tab).",
+        "boq_in_order": "This item is on a variation order and cannot be deleted.",
         "reversed": "This release is already reversed.", "rates_total": "Retention and advance recovery together cannot exceed 100%.", "instalment": "This collection pays an instalment plan; it can be linked only as a collection, and only when its invoice is on this project.", "entity": "This project's certificates are billed from another entity; work in that entity so its retention and advance stay in one place.",
     },
 }
@@ -244,6 +248,14 @@ def contract_value(project):
     return boq_total(project) if project.boq.exists() else Decimal(project.contract_value)
 
 
+def under_way(project):
+    """Contracting C1 (HG-103): the contract is under way once it has a live certificate (a draft or a posted one) or an
+    approved variation order. From then on the value of the bill of quantities changes only through a variation order, so the
+    original contract value plus the approved orders is always the contract value."""
+
+    return live_certificates(project).exists() or project.variation_orders.filter(status="approved").exists()
+
+
 @transaction.atomic
 def save_boq_line(project, user, data, line=None, lang="ar"):
     words = MESSAGES[lang]
@@ -271,6 +283,10 @@ def save_boq_line(project, user, data, line=None, lang="ar"):
             raise ValidationError(words["rate_locked"])
         if quantity < certified:
             raise ValidationError(words["below_certified"].format(qty=certified.normalize()))
+    # Contracting C1 (HG-103): a new item, another quantity or another rate is a variation order once the contract is under way.
+    # The code, the description and the unit are words, not value: they stay editable.
+    if under_way(project) and (created or quantity != line.quantity or rate != line.rate):
+        raise ValidationError(words["boq_locked"])
     for key, value in values.items():
         setattr(line, key, value)
     line.save()
@@ -286,6 +302,10 @@ def delete_boq_line(project, line, user, lang="ar"):
     line = BoqLine.objects.select_for_update().get(pk=line.pk, project=project)
     if line.certificate_lines.exists():
         raise ValidationError(words["boq_used"])
+    if under_way(project):  # Contracting C1 (HG-103): dropping an item is an omission, and an omission is a variation order
+        raise ValidationError(words["boq_locked"])
+    if line.variation_lines.exists():  # a variation order (a draft, or one kept as a record) names this item
+        raise ValidationError(words["boq_in_order"])
     _audit(project, user, "delete_boq_line", {"line": line.line_number, "description": line.description}, AuditEventType.DELETE)
     line.delete()
 

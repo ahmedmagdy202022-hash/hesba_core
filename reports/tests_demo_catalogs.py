@@ -367,7 +367,7 @@ class SampleBusinessPerActivityTests(TestCase):
         from ledger.reports import reconciliation
         from projects import contract
 
-        self.assertEqual(project.boq.count(), 5)
+        self.assertEqual(project.boq.count(), 6)  # the five of the contract and the one an approved variation order added (Contracting C1)
         self.assertEqual(list(project.certificates.values_list("invoice__status", flat=True)), ["posted", "posted", "draft"])
         figures = contract.position(project)
         self.assertGreater(figures["retention_held"], 0)

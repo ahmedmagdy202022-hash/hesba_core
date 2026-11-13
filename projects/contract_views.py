@@ -20,7 +20,7 @@ from sales.models import CustomerPayment
 from settings_core.display_labels import choice_label, localized_choices
 from settings_core.ui_messages import translate
 
-from . import contract, costs
+from . import contract, costs, variations
 from .models import (
     BudgetLine, Certificate, CostHeading, Project, ProjectPayment, ProjectPurchase, RetentionRelease, Subcontract, SubcontractBill, SubcontractRelease,
 )
@@ -34,7 +34,10 @@ COLLECT, BUY, BUY_VIEW = "sales.receive_customer_payment", "purchases.create_pur
 WORDS = {
     "ar": {
         "tab_overview": "نظرة عامة", "tab_boq": "المقايسة", "tab_certificates": "المستخلصات", "tab_payments": "الدفعات وضمان الأعمال",
-        "tab_subcontracts": "مقاولو الباطن", "tab_budget": "الموازنة والتكلفة", "tab_reports": "اليوميات", "tab_documents": "المستندات",
+        "tab_subcontracts": "مقاولو الباطن", "tab_budget": "الموازنة والتكلفة", "tab_reports": "اليوميات", "tab_documents": "المستندات", "tab_variations": "أوامر التغيير",
+        "original_short": "الأصلية", "variations_short": "أوامر التغيير", "variation_chip": "أمر تغيير {n}",
+        "boq_locked_note": "المشروع عليه مستخلصات أو أوامر تغيير معتمدة، فتعديل الكميات والفئات وإضافة البنود ومسحها بيتم بأمر تغيير.",
+        "new_variation": "أمر تغيير جديد", "words_only": "الكمية والفئة ثابتين هنا، وتعديلهم بأمر تغيير.",
         "contract": "قيمة العقد", "certified": "اتعمل بيه مستخلصات (نهائية)", "due_now": "مستحق الآن على صاحب المشروع", "retention_held": "ضمان أعمال محتجز",
         "advance_left": "دفعة مقدمة لسه ما اتخصمتش", "collections": "اتحصّل على المستخلصات",
         "boq_intro": "بنود المقايسة بالكمية والفئة. إجمالي المقايسة هو قيمة العقد، والمستخلصات بتتعمل بالكميات المنفذة حتى تاريخه.",
@@ -69,7 +72,10 @@ WORDS = {
     },
     "en": {
         "tab_overview": "Overview", "tab_boq": "Bill of quantities", "tab_certificates": "Certificates", "tab_payments": "Payments & retention",
-        "tab_subcontracts": "Subcontractors", "tab_budget": "Budget & cost", "tab_reports": "Daily reports", "tab_documents": "Documents",
+        "tab_subcontracts": "Subcontractors", "tab_budget": "Budget & cost", "tab_reports": "Daily reports", "tab_documents": "Documents", "tab_variations": "Variation orders",
+        "original_short": "Original", "variations_short": "Variation orders", "variation_chip": "Variation order {n}",
+        "boq_locked_note": "This project has certificates or approved variation orders, so quantities, rates, new items and deletions go through a variation order.",
+        "new_variation": "New variation order", "words_only": "The quantity and the rate are fixed here; a variation order changes them.",
         "contract": "Contract value", "certified": "Certified (posted)", "due_now": "Due now from the owner", "retention_held": "Retention held",
         "advance_left": "Advance not yet recovered", "collections": "Collected on certificates",
         "boq_intro": "The bill of quantities, by quantity and rate. Its total is the contract value; certificates bill the quantities done to date.",
@@ -121,6 +127,8 @@ def _context(request, project, tab, **extra):
                     can_collect=user_has_permission(request.user, COLLECT), can_buy=user_has_permission(request.user, BUY),
                     can_view_purchases=user_has_permission(request.user, BUY_VIEW))
     context["page_title"] = f"{project.name} — {WORDS[lang]['tab_' + tab]}"
+    # Contracting C1 (HG-103): the original value and the approved variation orders, under the contract value, once there are any.
+    context["variation"] = variations.figures(project) if can_view_sales and variations.in_reach(project) else None
     context.update(extra)
     return context
 
@@ -180,11 +188,15 @@ def boq(request, pk):
             messages.success(request, words["saved"])
             return _back(project, "projects:boq", lang)
     rows = []
+    added_by = variations.order_numbers(project)  # Contracting C1 (HG-103): the items an approved variation order added
     for line in project.boq.all():
         certified = contract.certified_quantity(line)
+        number = added_by.get(line.pk)
         rows.append({"line": line, "amount": contract.line_amount(line), "certified": certified,
-                     "done": int(min(certified / line.quantity * 100, Decimal("999"))) if line.quantity else 0})
-    return render(request, "projects/boq.html", _context(request, project, "boq", rows=rows, total=contract.boq_total(project), error=error))
+                     "done": int(min(certified / line.quantity * 100, Decimal("999"))) if line.quantity else 0,
+                     "variation_chip": words["variation_chip"].format(n=number) if number else ""})
+    return render(request, "projects/boq.html", _context(request, project, "boq", rows=rows, total=contract.boq_total(project), error=error,
+                                                         boq_locked=contract.under_way(project)))
 
 
 # ---- certificates ----
