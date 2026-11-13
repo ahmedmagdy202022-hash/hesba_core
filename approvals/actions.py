@@ -119,6 +119,14 @@ def _gift_card_reverse(request):
     reverse(entry, _day(request.data), request.data.get("reason", ""), request.requested_by)
 
 
+def _cancel_production_run(request):
+    from manufacturing.models import ProductionRun
+    from manufacturing.services import cancel_run
+
+    lang = "en" if request.data.get("lang") == "en" else "ar"  # a refusal is kept in the language the requester worked in
+    cancel_run(ProductionRun.objects.get(pk=request.object_id), request.requested_by, reason=request.data.get("reason", ""), lang=lang)
+
+
 ACTIONS = {action.code: action for action in (
     Action("sales.cancel_invoice", "إلغاء فاتورة بيع مترحّلة", "Cancel a posted sales invoice", lambda pk: f"/sales/{pk}/", _cancel_sales_invoice, "sales.SalesInvoice", "SALES_INVOICE", ("sales.return_sale",)),
     Action("sales.reverse_return", "عكس مرتجع مبيعات", "Reverse a sales return", lambda pk: f"/sales/returns/{pk}/", _reverse_sales_return, "sales.SalesReturn", "SALES_RETURN", ("sales.return_sale",)),
@@ -132,6 +140,8 @@ ACTIONS = {action.code: action for action in (
     # S6 (HG-071): writing off a gift card's unspent rest, and reversing a card's sale or write-off.
     Action("giftcards.breakage", "شطب باقي كارت هدية (إيراد متنوع)", "Write off a gift card's rest (sundry income)", lambda pk: f"/giftcards/{pk}/", _gift_card_breakage, "giftcards.GiftCard", "GIFT_CARD", ("giftcards.breakage",)),
     Action("giftcards.reverse", "عكس بيع كارت هدية أو شطبه", "Reverse a gift card's sale or write-off", lambda pk: f"/giftcards/entry/{pk}/", _gift_card_reverse, "giftcards.GiftCardEntry", "GIFT_CARD_ENTRY", ("giftcards.breakage",)),
+    # Manufacturing F11 (HG-100): cancelling a production run reverses its stock adjustments, so it can be held like them.
+    Action("manufacturing.cancel_run", "إلغاء تشغيلة إنتاج", "Cancel a production run", lambda pk: f"/manufacturing/runs/{pk}/", _cancel_production_run, "manufacturing.ProductionRun", "PRODUCTION_RUN", ("inventory.adjust_stock",)),
 )}
 
 

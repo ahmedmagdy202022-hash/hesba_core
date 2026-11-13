@@ -33,6 +33,8 @@ EXPENSE = "cashbox__entity"
 #: S6 (HG-071): a gift card belongs to the entity it was sold in, and so does its money.
 GIFT_CARD = "entity"
 GIFT_CARD_ENTRY = "card__entity"
+#: Manufacturing F11 (HG-100): a production run belongs to the entity of the place it was made in.
+PRODUCTION_RUN = "location__entity"
 #: Two-sided documents belong to every entity they touch.
 CASHBOX_OPERATION = ("source_cashbox__entity", "destination_cashbox__entity")
 STOCK_OPERATION = ("source_location__entity", "destination_location__entity")
