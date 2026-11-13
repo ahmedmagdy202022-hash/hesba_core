@@ -79,10 +79,13 @@ class BillOfQuantitiesTests(ContractSetup):
             contract.save_boq_line(self.project, self.owner, {"description": "خرسانة", "quantity": "30", "rate": "1000"}, self.concrete)
         with self.assertRaisesMessage(ValidationError, "مينفعش يتمسح"):
             contract.delete_boq_line(self.project, self.concrete, self.owner)
-        # More quantity (a variation) is fine; an uncertified item can go.
-        contract.save_boq_line(self.project, self.owner, {"description": "خرسانة", "quantity": "120", "rate": "1000"}, self.concrete)
-        contract.delete_boq_line(self.project, self.masonry, self.owner)
-        self.assertEqual(contract.boq_total(self.project), D("120000.00"))
+        # Contracting C1 (HG-103): once a certificate exists, more quantity or dropping an uncertified item is a variation order,
+        # not an edit of the bill of quantities (before C1 both were allowed here and the total became 120,000.00).
+        with self.assertRaisesMessage(ValidationError, "يتم بأمر تغيير"):
+            contract.save_boq_line(self.project, self.owner, {"description": "خرسانة", "quantity": "120", "rate": "1000"}, self.concrete)
+        with self.assertRaisesMessage(ValidationError, "يتم بأمر تغيير"):
+            contract.delete_boq_line(self.project, self.masonry, self.owner)
+        self.assertEqual(contract.boq_total(self.project), D("200000.00"))
 
 
 class CertificateTests(ContractSetup):

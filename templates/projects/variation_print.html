@@ -1,0 +1,60 @@
+{% load static hesba_format %}<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ heading }} — {{ project.name }}</title>
+{% include "partials/brand_icons.html" %}
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
+<link rel="stylesheet" href="{% static 'hesba/css/print.css' %}?v=print-004">
+<link rel="stylesheet" href="{% static 'hesba/css/projects.css' %}?v=c1-vo1">
+</head>
+<body class="pr-body pr-a4" data-format="a4">
+{# Contracting C1 (HG-103): the variation order on A4, to be signed by the owner. A draft is printed with its status across it. #}
+<nav class="pr-toolbar" aria-label="{{ vw.p_print }}">
+  <a class="pr-button pr-button--ghost" href="{{ back_url }}">{% include "partials/back_arrow.html" %}{{ vw.p_back }}</a>
+  <button class="pr-button pr-button--primary" type="button" data-print>{{ vw.p_print }}</button>
+  <p class="pr-toolbar__hint">{{ vw.p_hint }}</p>
+</nav>
+<article class="pr-sheet" data-kind="variation_order">
+  {% if order.status != 'approved' %}<div class="pr-watermark pr-watermark--status" aria-hidden="true">{{ status_label }}</div>{% endif %}
+  <header class="pr-head">
+    <div class="pr-company">
+      {% if company.logo %}<img class="pr-company__logo" src="{{ company.logo }}" alt="{{ company.name }}">{% endif %}
+      <h1 class="pr-company__name">{{ company.name }}</h1>
+      {% if company.address %}<p>{{ company.address|linebreaksbr }}</p>{% endif %}
+    </div>
+    <div class="pr-doc">
+      <h2 class="pr-doc__title" data-print-heading>{{ heading }}</h2>
+      <dl class="pr-meta">
+        <div><dt>{{ vw.date }}</dt><dd data-print-day>{{ day }}</dd></div>
+        <div><dt>{{ vw.p_project }}</dt><dd><bdi>{{ project.code }}</bdi> — {{ project.name }}</dd></div>
+        {% if project.site %}<div><dt>{{ vw.p_site }}</dt><dd>{{ project.site }}</dd></div>{% endif %}
+        <div><dt>{{ vw.status }}</dt><dd data-print-status>{{ status_label }}</dd></div>
+      </dl>
+    </div>
+  </header>
+  <section class="pr-party"><span class="pr-party__label">{{ vw.p_owner }}</span><strong class="pr-party__name">{{ project.customer.name }}</strong></section>
+  <p class="vo-p-title" data-print-title>{{ order.title }}</p>
+  {% if rows %}
+  <table class="pr-lines" data-print-lines>
+    <thead><tr><th>{{ vw.p_item }}</th><th>{{ vw.description }}</th><th>{{ vw.p_kind }}</th><th>{{ vw.unit }}</th><th class="pr-num">{{ vw.p_change }}</th><th class="pr-num">{{ vw.rate }}</th><th class="pr-num">{{ vw.amount }}</th></tr></thead>
+    <tbody>{% for row in rows %}<tr><td><bdi>{{ row.line.code }}</bdi></td><td class="pr-item">{{ row.line.description }}</td><td>{{ row.kind }}</td><td><bdi>{{ row.line.unit }}</bdi></td><td class="pr-num" dir="ltr">{{ row.change_text }}</td><td class="pr-num">{{ row.rate|money }}</td><td class="pr-num" dir="ltr">{{ row.amount_text }}</td></tr>{% endfor %}</tbody>
+  </table>
+  {% endif %}
+  <section class="pr-totals">
+    <dl>
+      {% if contract_before is not None %}<div><dt>{{ vw.contract_before }}</dt><dd>{{ contract_before|money }}</dd></div>{% endif %}
+      <div><dt>{{ vw.total }}</dt><dd dir="ltr" data-print-value>{{ value_text }}</dd></div>
+      {% if contract_after is not None %}<div class="pr-totals__grand"><dt>{{ vw.contract_after }}</dt><dd data-print-total>{{ contract_after|money }} <small>{{ company.currency }}</small></dd></div>{% endif %}
+      <div><dt>{{ vw.p_extension }}</dt><dd data-print-extension>{% if days_text %}{{ days_text }}{% else %}{{ vw.p_no_extension }}{% endif %}</dd></div>
+    </dl>
+  </section>
+  {% if order.reason %}<section class="sr-p-text" data-print-text="reason"><h3>{{ vw.reason }}</h3><p>{{ order.reason|linebreaksbr }}</p></section>{% endif %}
+  {% if order.status == 'approved' %}<p class="sr-p-author" data-print-approval>{{ vw.owner_approved_on }}: {{ approved_day }}{% if order.owner_reference %} · {{ vw.owner_ref }}: <bdi>{{ order.owner_reference }}</bdi>{% endif %}</p>{% endif %}
+  <section class="pr-signatures pr-signatures--3"><div>{{ vw.p_contractor }}</div><div>{{ vw.p_consultant }}</div><div>{{ vw.p_owner_sign }}</div></section>
+  <footer class="pr-foot"><p class="pr-foot__meta">{{ printed }}</p>{% if company.show_hesba_brand %}<p class="pr-foot__brand"><img src="{% static 'hesba/brand/hesba-logo.png' %}" alt="Hesba"></p>{% endif %}</footer>
+</article>
+<script>document.querySelector('[data-print]').addEventListener('click', function(){ window.print(); });</script>
+</body>
+</html>

@@ -30,11 +30,15 @@ BEHIND_POINTS = 15
 def time_share(project, today=None):
     """Percent of the planned span gone (0–100), or None without both dates."""
 
+    from .variations import planned_end
+
     today = today or timezone.localdate()
-    if not project.start_date or not project.end_date or project.end_date <= project.start_date:
+    # Contracting C1 (HG-103): the planned end moves with the days approved variation orders added; without any it is the end date.
+    end = planned_end(project)
+    if not project.start_date or not end or end <= project.start_date:
         return None
-    span = (project.end_date - project.start_date).days
-    gone = (min(max(today, project.start_date), project.end_date) - project.start_date).days
+    span = (end - project.start_date).days
+    gone = (min(max(today, project.start_date), end) - project.start_date).days
     return round(gone / span * 100)
 
 

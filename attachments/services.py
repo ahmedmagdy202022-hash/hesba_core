@@ -67,7 +67,10 @@ MESSAGES = {
            "report_read_only": "إضافة صور التقرير اليومي لمهندس الموقع أو لصاحب صلاحية الفواتير بس.",
            "report_delete_denied": "مسح صور التقرير اليومي لمهندس الموقع أو لصاحب صلاحية الفواتير بس.",
            "report_stage": "صور التقرير اليومي بتبقى صور موقع بس.", "report_closed": "المشروع ده اتقفل؛ مينفعش يتضاف صور على تقاريره.",
-           "report_kept": "المشروع ده اتقفل؛ صور تقاريره بتفضل زي ما هي ومينفعش تتمسح."},
+           "report_kept": "المشروع ده اتقفل؛ صور تقاريره بتفضل زي ما هي ومينفعش تتمسح.",
+           "variation_read_only": "إضافة مرفقات أمر التغيير لمهندس الموقع أو لصاحب صلاحية الفواتير بس.",
+           "variation_stage": "مرفق أمر التغيير بيتسجّل كنسخة موقّعة بس.", "variation_closed": "أمر التغيير ده اتقفل؛ مينفعش يتضاف عليه مرفقات.",
+           "variation_kept": "أمر التغيير ده اتقفل؛ مرفقاته بتفضل زي ما هي ومينفعش تتمسح."},
     "en": {"denied": "You may not use attachments on this record.", "not_found": "The attachment or the record was not found.",
            "kind": "The attachment kind must be photo, document or signature.", "stage": "The attachment stage must be receive, deliver or other.",
            "empty": "The file is empty or was not sent.", "size": "The file is larger than allowed ({limit}).",
@@ -91,7 +94,10 @@ MESSAGES = {
            "report_read_only": "Only the site engineer, or someone who may create invoices, can add photos to a daily report.",
            "report_delete_denied": "Only the site engineer, or someone who may create invoices, can delete a daily report's photos.",
            "report_stage": "A daily report takes site photos only.", "report_closed": "This project is closed; photos can no longer be added to its reports.",
-           "report_kept": "This project is closed; the photos of its reports are kept and cannot be deleted."},
+           "report_kept": "This project is closed; the photos of its reports are kept and cannot be deleted.",
+           "variation_read_only": "Only the site engineer, or someone who may create invoices, can add files to a variation order.",
+           "variation_stage": "A file on a variation order is kept as its signed copy only.", "variation_closed": "This variation order is closed; files can no longer be added to it.",
+           "variation_kept": "This variation order is closed; its files are kept and cannot be deleted."},
 }
 
 
@@ -264,6 +270,21 @@ def _site_report_closed(report):
     return SiteReport.objects.filter(pk=report.pk).exclude(project__status__in=(ProjectStatus.PLANNED, ProjectStatus.ACTIVE, ProjectStatus.ON_HOLD)).exists()
 
 
+def _variation_orders(user):
+    from projects import access
+
+    return access.visible_variation_orders(user)
+
+
+def _variation_order_closed(order):
+    """Contracting C1 (HG-103): files are added and removed while the order is a draft; once it is approved, rejected or
+    cancelled the signed copy is the record and stays as it is."""
+
+    from projects.models import VariationOrder, VariationStatus
+
+    return VariationOrder.objects.filter(pk=order.pk).exclude(status=VariationStatus.DRAFT).exists()
+
+
 def _no_entity(record):
     return None
 
@@ -276,6 +297,8 @@ PROJECT_STAGES = (Stage.RECEIVE, Stage.DELIVER, Stage.SCAN, Stage.REPORT, Stage.
 #: global share (ATTACHMENTS_GLOBAL_SHARE of the database), which still applies on top
 PROJECT_MAX_COUNT, PROJECT_MAX_BYTES = 40, 40 * 1024 * 1024
 REPORT_MAX_COUNT, REPORT_MAX_BYTES = 12, 12 * 1024 * 1024
+#: a variation order's signed copy: a scan of a few pages, or a few phone photos of them
+VARIATION_MAX_COUNT, VARIATION_MAX_BYTES = 6, 12 * 1024 * 1024
 
 _MEDICAL_RULES = {"can_attach": _medical_can_attach, "closed": lambda record: False, "can_delete": _medical_can_delete,
                   "signature_final": lambda record: False, "entity": _current_entity, "delete_denied": "medical_delete_denied",
@@ -304,7 +327,15 @@ OWNERS = {"workorders.workorder": {"visible": _work_orders, "can_attach": _work_
                                   "delete_denied": "report_delete_denied", "read_only_message": "report_read_only", "closed_error": "report_closed",
                                   "kept_when_closed": "report_kept",
                                   "stages": (Stage.PHOTO,), "kinds": (Kind.PHOTO,), "stage_error": "report_stage", "kind_error": "photo",
-                                  "default_stage": Stage.PHOTO, "max_count": REPORT_MAX_COUNT, "max_owner_bytes": REPORT_MAX_BYTES}}
+                                  "default_stage": Stage.PHOTO, "max_count": REPORT_MAX_COUNT, "max_owner_bytes": REPORT_MAX_BYTES},
+          # Contracting C1 (HG-103): the copy of a variation order the owner signed. Added and removed while the order is a draft
+          # (by those who may draft it); kept for good once the order is approved, rejected or cancelled.
+          "projects.variationorder": {"visible": _variation_orders, "can_attach": _project_can_attach, "closed": _variation_order_closed,
+                                      "can_delete": _project_can_attach, "signature_final": lambda order: False, "entity": _no_entity, "group_wide": True,
+                                      "delete_denied": "variation_read_only", "read_only_message": "variation_read_only", "closed_error": "variation_closed",
+                                      "kept_when_closed": "variation_kept", "stages": (Stage.OTHER,), "kinds": (Kind.PHOTO, Kind.DOCUMENT),
+                                      "stage_error": "variation_stage", "kind_error": "project_kind", "default_stage": Stage.OTHER,
+                                      "max_count": VARIATION_MAX_COUNT, "max_owner_bytes": VARIATION_MAX_BYTES}}
 
 
 def owner_label(owner_or_model):

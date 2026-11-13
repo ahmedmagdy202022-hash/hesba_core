@@ -1,0 +1,28 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/projects.css' %}?v=c1-vo1">{% endblock %}
+{% block operation_content %}
+{# Contracting C1 (HG-103): the register of a project's variation orders. A draft changes nothing; an approved one is already in the bill of quantities. #}
+{% include "projects/_head.html" %}
+<section class="sr-intro"><h2 class="prj-h">{{ vw.page_title }}</h2><p>{{ vw.intro }}</p></section>
+{% if new_url %}<div class="sr-cta sr-cta--top vo-cta" data-variation-cta><a class="op-primary" href="{{ new_url }}" data-new-variation>{{ vw.new }}</a></div>
+{% elif not is_open %}<p class="op-message" data-project-closed>{{ vw.closed }}</p>
+{% elif not can_draft %}<p class="op-muted" data-view-only>{{ vw.view_only }}</p>{% endif %}
+<section class="op-summary-grid op-summary-grid--compact vo-summary" data-variation-summary>
+<article><small>{{ vw.original }}</small><strong dir="ltr" data-summary="original">{{ summary.original }}</strong></article>
+<article><small>{{ vw.approved }}</small><strong dir="ltr" data-summary="approved">{{ summary.approved }}</strong><small>{{ summary.approved_n }}</small></article>
+<article><small>{{ vw.revised }}</small><strong dir="ltr" data-summary="revised">{{ summary.revised }}</strong></article>
+<article><small>{{ vw.pending }}</small><strong dir="ltr" data-summary="pending">{{ summary.pending }}</strong><small>{{ summary.pending_n }}</small></article>
+{% if summary.extension %}<article><small>{{ vw.extension }}</small><strong data-summary="extension">{{ summary.extension }}</strong>{% if summary.planned_end %}<small>{{ vw.planned_end }}: {{ summary.planned_end }}</small>{% endif %}</article>{% endif %}
+</section>
+<div class="op-table-wrap"><table class="op-table" data-list-rows data-variation-orders><thead><tr><th>{{ vw.number }}</th><th>{{ vw.date }}</th><th>{{ vw.value }}</th><th>{{ vw.status }}</th><th>{{ vw.extension }}</th></tr></thead><tbody>
+{% for row in rows %}<tr data-variation-order="{{ row.order.number }}" data-status="{{ row.order.status }}">
+<td data-row="title"><a href="{{ row.url }}" data-row-link>{{ row.heading }}</a></td>
+<td data-row="sub">{{ row.order.title }} · {{ row.day }}</td>
+<td data-row="amount" dir="ltr" data-order-value>{{ row.value_text }}</td>
+<td data-row="meta"><span class="op-status op-status-{{ row.status_class }}" data-order-status>{{ row.status_label }}</span></td>
+<td data-row="meta">{% if row.days_text %}{{ vw.extension }} {{ row.days_text }}{% else %}{{ vw.ph }}{% endif %}</td></tr>
+{% empty %}<tr><td colspan="5" class="op-empty" data-row="empty"><span class="hs-empty" data-empty-none><b>{{ vw.none }}</b></span></td></tr>{% endfor %}
+</tbody></table></div>
+{% if new_url %}<div class="sr-cta sr-cta--bar vo-cta" data-variation-cta="bar"><a class="op-primary" href="{{ new_url }}">{{ vw.new }}</a></div>{% endif %}
+{% endblock %}
