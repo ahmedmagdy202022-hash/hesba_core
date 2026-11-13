@@ -199,10 +199,12 @@ def issue(recipe, user, *, batches, location, reference, issue_date=None, lang="
 
 @transaction.atomic
 def produce(recipe, user, *, batches, location, run_date=None, notes="", lang="ar", conversion_cost=Decimal("0"), scrap=Decimal("0"), issued=None,
-            stand_in=None):
+            stand_in=None, output=None):
     """Post a run. ``issued`` are the operations an order already issued at
     its start; without them the components are consumed now, as before.
-    ``stand_in``: HG-048, the narrower permission the caller's flow allows in place of inventory.adjust_stock."""
+    ``stand_in``: HG-048, the narrower permission the caller's flow allows in place of inventory.adjust_stock.
+    ``output`` (F11, HG-100): the good units that enter stock, said by the caller (an order's finish says its good
+    units). Without it the run makes the recipe's output times its batches, less the scrap, as before."""
 
     from inventory.models import StockAdjustmentDirection
     from inventory.services import adjust_stock
@@ -212,8 +214,8 @@ def produce(recipe, user, *, batches, location, run_date=None, notes="", lang="a
     run_date = run_date or timezone.localdate()
     conversion_cost = money_round(Decimal(conversion_cost or 0))
     scrap = (Decimal(scrap or 0)).quantize(Decimal("0.001"))
-    output = (recipe.output_quantity * batches).quantize(Decimal("0.001")) - scrap
-    if output <= 0:
+    output = (recipe.output_quantity * batches).quantize(Decimal("0.001")) - scrap if output is None else _decimal(output)
+    if output is None or output <= 0:
         raise ValidationError(words["no_good"])
     number = _next(ProductionRun, "number", f"MO-{run_date:%Y%m%d}-", 3)
     reason = f"تصنيع {number} / Production {number}"

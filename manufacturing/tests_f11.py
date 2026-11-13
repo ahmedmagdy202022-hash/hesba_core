@@ -173,7 +173,6 @@ class RoundingTests(F11Setup):
         self.by_three = services.save_recipe({"product": self.rusk, "output_quantity": "3"}, [(self.flour, "3")], self.owner)
         self.by_tray = services.save_recipe({"product": self.bun, "output_quantity": "12"}, [(self.flour, "6")], self.owner)
 
-    @expectedFailure  # until the fix (HG-100)
     def test_an_order_for_100_with_a_batch_of_3_puts_100_units_in_stock(self):
         # 100 / 3 = 33.333 batches; flour issued 3 x 33.333 = 99.999 kg at 20.00 = 1,999.98.
         run = self.make(self.by_three, quantity="100", labor="0", overhead="0")
@@ -186,7 +185,6 @@ class RoundingTests(F11Setup):
         self.assertEqual(self.journal(run.output_operation), (D("1999.98"), D("1999.98")))
         self.books(finished="1999.98", raw="2850.02")                                   # 4,850.00 - 1,999.98
 
-    @expectedFailure  # until the fix (HG-100)
     def test_an_order_for_100_with_a_tray_of_12_puts_100_units_in_stock(self):
         # 100 / 12 = 8.333 trays; flour issued 6 x 8.333 = 49.998 kg = 999.96; labour 60.04 + overhead 40.00.
         run = self.make(self.by_tray, quantity="100", labor="60.04", overhead="40")
@@ -198,7 +196,6 @@ class RoundingTests(F11Setup):
         self.assertEqual(self.journal(run.output_operation), (D("1100.00"), D("1100.00")))
         self.books(finished="1100.00", raw="3850.04", absorbed="100.04")
 
-    @expectedFailure  # until the fix (HG-100)
     def test_an_order_with_defects_puts_exactly_its_good_units_in_stock(self):
         # 4 of the 100 fail a stage: 96 good units carry the 1,999.98 (20.833125 each, kept as 20.8331).
         run = self.make(self.by_three, quantity="100", labor="0", overhead="0", defects="4")
@@ -207,7 +204,6 @@ class RoundingTests(F11Setup):
         self.assertEqual(self.position(self.rusk), (D("96.000"), D("1999.98"), D("20.8331")))
         self.books(finished="1999.98", raw="2850.02")
 
-    @expectedFailure  # until the fix (HG-100)
     def test_an_order_smaller_than_a_batch_records_no_scrap_that_never_was(self):
         # 2 / 3 = 0.667 of a batch; flour issued 3 x 0.667 = 2.001 kg = 40.02. Nothing failed, so nothing is scrap.
         run = self.make(self.by_three, quantity="2", labor="0", overhead="0")
@@ -244,6 +240,25 @@ class RoundingTests(F11Setup):
 
 class RoundingOnARestaurantChartTests(BakeryChart, RoundingTests):
     pass
+
+
+class ExplicitOutputTests(F11Setup):
+    """``produce(output=...)``: the units that enter stock, said by the caller."""
+
+    def test_the_units_said_enter_stock_and_carry_the_whole_cost(self):
+        run = services.produce(self.recipe, self.owner, batches="1", location=self.plant, output="9.5", scrap="0.5")
+        self.assertEqual((run.batches, run.output_quantity, run.scrap_quantity, run.total_cost), (D("1.000"), D("9.500"), D("0.500"), D("95.00")))
+        self.assertEqual(run.output_operation.unit_cost, D("10.0000"))
+        self.assertEqual(self.position(), (D("9.500"), D("95.00"), D("10.0000")))
+        self.assertEqual(AuditLog.objects.get(action="produce").after_data["output"], "9.500")
+
+    def test_no_units_is_refused_and_nothing_moves(self):
+        before = StockMovement.objects.count()
+        for output in ("0", "-1"):
+            with self.subTest(output=output), self.assertRaisesMessage(ValidationError, "مفيش ولا وحدة سليمة"):
+                services.produce(self.recipe, self.owner, batches="1", location=self.plant, output=output)
+        self.assertEqual(StockMovement.objects.count(), before)
+        self.assertEqual(self.on_hand(self.flour, self.cake), (D("200.000"), D("0")))
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -438,13 +453,11 @@ class MakeToOrderTests(MakeToOrderSetup):
     def rusks(self):
         return get_item_location_stock_quantity(self.rusk, self.plant)
 
-    @expectedFailure  # until the fix (HG-100)
     def test_a_finished_order_covers_the_whole_line(self):
         run = self.finish()
         self.assertEqual((run.output_quantity, run.scrap_quantity, self.rusks()), (D("100.000"), D("0.000"), D("100.000")))
         self.assertEqual(make_to_order.uncovered(self.sold), D("0.000"))                  # 99.999 in stock left 0.001 to make
 
-    @expectedFailure  # until the fix (HG-100)
     def test_an_order_with_defects_leaves_exactly_the_units_lost_to_make(self):
         run = self.finish(defects="4")
         self.assertEqual((run.output_quantity, run.scrap_quantity, self.rusks()), (D("96.000"), D("4.000"), D("96.000")))
