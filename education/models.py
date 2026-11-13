@@ -355,3 +355,35 @@ class ExamMark(models.Model):
             models.UniqueConstraint(fields=["exam", "student"], name="education_one_mark_per_student_exam"),
             models.CheckConstraint(condition=models.Q(absent=False) | models.Q(score__isnull=True), name="education_exam_mark_absent_has_no_score"),
         ]
+
+
+class Certificate(models.Model):
+    """E6: a completion certificate for one enrolment: its number, what it measured when issued, and whether it still stands.
+
+    What a printed sheet says is kept here (``hours``, ``attendance_rate`` and ``grade_text`` are frozen at issue, so a later correction
+    of attendance never changes a certificate already handed out). A revoked certificate keeps its row, so its number still answers the
+    verify page with «revoked». It has no entity of its own: it is its enrolment's group's, as an exam is."""
+
+    enrollment = models.ForeignKey(Enrollment, on_delete=models.PROTECT, related_name="certificates")
+    number = models.CharField(max_length=24, unique=True, help_text="CRT-<year>-<running number>, shown on the sheet.")
+    issued_on = models.DateField()
+    hours = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal("0"),
+                                help_text="Classes held while the student was enrolled × the group's class length ÷ 60.")
+    attendance_rate = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Whole percent, as the attendance screens show it.")
+    grade_text = models.CharField(max_length=40, blank=True, help_text="Printed as the grade; blank prints none.")
+    issued_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    revoked_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    revoke_reason = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["-issued_on", "-pk"]
+        constraints = [models.UniqueConstraint(fields=["enrollment"], condition=models.Q(revoked_at__isnull=True),
+                                               name="education_one_live_certificate_per_enrollment")]
+
+    def __str__(self):
+        return self.number
+
+    @property
+    def revoked(self):
+        return self.revoked_at is not None

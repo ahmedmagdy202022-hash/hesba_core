@@ -56,7 +56,7 @@ WORDS = {
         "held": "حصص اتعملت", "left": "فاضل للمركز", "no_report": "مفيش مجموعات شغالة في الشهر ده.", "month_rate": "الحضور",
         "discard": "امسح المسودة", "discarded": "اتمسحت مسودة {number}؛ الشهر ده يتفوتر تاني لأولياء الأمور دول.",
         "stale": "اتغيّر الحضور بعد ما فتحت الكشف (اتمسح طلاب). راجع الكشف واحفظ تاني.", "not_scanned": "ما اتمسحش", "unscanned_note": "{n} من الطلاب ما اتمسحوش، فاتعلّموا غايبين. لو حد منهم حضر غيّره قبل ما تحفظ.",
-        "scan_attendance": "امسح الحضور", "print_card": "اطبع الكارت", "print_cards": "اطبع كروت المجموعة",
+        "scan_attendance": "امسح الحضور", "certificates": "الشهادات", "print_card": "اطبع الكارت", "print_cards": "اطبع كروت المجموعة",
     },
     "en": {
         "title": "Students & groups", "students": "Students", "groups": "Groups", "courses": "Courses & subjects",
@@ -97,7 +97,7 @@ WORDS = {
         "held": "Classes held", "left": "Left for the centre", "no_report": "No groups ran in this month.", "month_rate": "Attendance",
         "discard": "Discard draft", "discarded": "Draft {number} discarded; this month can be billed again for these parents.",
         "stale": "Attendance changed after you opened this sheet (students were scanned). Check the sheet and save again.", "not_scanned": "Not scanned", "unscanned_note": "{n} students were not scanned, so they are marked absent. If any of them came, change them before you save.",
-        "scan_attendance": "Scan attendance", "print_card": "Print the card", "print_cards": "Print the group's cards",
+        "scan_attendance": "Scan attendance", "certificates": "Certificates", "print_card": "Print the card", "print_cards": "Print the group's cards",
     },
 }
 
@@ -120,7 +120,7 @@ def _base(request, lang, tab, **extra):
             "tab": tab, "can_manage": services.can_manage(request.user), "can_view": services.can_view(request.user),
             "can_see_fees": user_has_permission(request.user, FEES_VIEW), "can_see_dues": user_has_permission(request.user, DUES_VIEW),
             "can_see_pay": user_has_permission(request.user, PAY_VIEW), "can_see_report": user_has_permission(request.user, REPORT_VIEW),
-            "can_scan": register.can_scan(request.user), "is_nursery": nursery.is_nursery(), "nursery_tab": NURSERY_WORDS[lang]["tab"], **extra}
+            "can_scan": register.can_scan(request.user), "can_certify": levels.is_levels_install() and services.can_manage(request.user), "is_nursery": nursery.is_nursery(), "nursery_tab": NURSERY_WORDS[lang]["tab"], **extra}
 
 
 def _back(name, lang, *args):

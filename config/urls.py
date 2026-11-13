@@ -18,6 +18,7 @@ from accounts.login_guard import GuardedLoginView, login_verify
 from printing import views as printing_views
 from workorders import public as workorders_public
 from medical import public as medical_public
+from education import public as education_public
 from payments import views as payments_views
 from appointments import public as appointments_public
 from appointments import views_booking as booking_views
@@ -48,6 +49,8 @@ urlpatterns = [
     path("share/<str:token>/cancel-request/", login_not_required(appointments_public.cancel_request), name="share_appointment_cancel_request"),
     # M6 (HG-085): a lab patient's results of one day, from a signed link plus a second factor (public, CSRF-protected, throttled).
     path("results/<str:token>/", login_not_required(medical_public.page), name="lab_result_link"),
+    # E6 (HG-099): is this completion certificate genuine? The sheet's QR opens it. Signed token with its own salt, GET only, throttled, no-store.
+    path("verify/c/<str:token>/", login_not_required(education_public.page), name="certificate_verify"),
     # S4 (HG-070): the online payment link. Public, gated by a signed token; only the webhook is CSRF-exempt (HMAC-verified).
     path("pay/webhook/paymob/", login_not_required(payments_views.webhook), name="pay_webhook_paymob"),
     path("pay/return/paymob/", login_not_required(payments_views.pay_return), name="pay_return_paymob"),
