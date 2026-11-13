@@ -1,0 +1,72 @@
+{% extends "printing/share_base.html" %}{% load static hesba_format %}
+{% comment %}E3 (HG-101): the guardian's page. Before the second factor it shows only the centre's name and the question: no child, no group, no date. After it, one card per active child of this payer (groups, attendance, published marks, nursery days) and the payer's fees. Nothing else is in the context, so nothing else can be drawn.{% endcomment %}
+{% block title %}{{ ww.title }} · {{ company.name }}{% endblock %}
+{% block head_extra %}<link rel="stylesheet" href="{% static 'hesba/css/education_portal.css' %}?v=e3-1">{% endblock %}
+{% block sub %}<div class="cl-shopsub">{{ ww.sub }}</div>{% endblock %}
+{% block content %}<main class="cl-main gp-main" data-guardian-portal="{% if sheet %}sheet{% else %}ask{% endif %}">
+{% if sheet %}
+<section class="cl-card gp-hello"><h1 class="cl-h1">{{ ww.hello }}</h1><p>{{ ww.hello_p }}</p>
+<div class="cl-actions no-print"><button class="cl-btn" type="button" data-print>{{ ww.print }}</button></div></section>
+{% for block in children %}<article class="gp-child" data-child aria-labelledby="gp-c{{ forloop.counter }}">
+<h2 class="gp-name" id="gp-c{{ forloop.counter }}"><bdi>{{ block.student.name }}</bdi></h2>
+
+<section class="cl-card" data-section="groups"><h3 class="cl-h">{{ ww.groups_h }}</h3>
+{% for g in block.groups %}<div class="gp-row" data-group><div class="gp-main-text"><strong><bdi>{{ g.course }}</bdi> <span class="gp-sep">·</span> <bdi>{{ g.name }}</bdi></strong>
+{% if g.schedule %}<div class="gp-sub"><bdi>{{ g.schedule }}</bdi></div>{% endif %}</div>
+{% if g.teacher %}<div class="gp-aside"><span class="gp-label">{{ ww.teacher }}</span> <bdi>{{ g.teacher }}</bdi></div>{% endif %}</div>
+{% empty %}<p class="gp-empty">{{ ww.no_groups }}</p>{% endfor %}</section>
+
+<section class="cl-card" data-section="attendance"><h3 class="cl-h">{{ ww.attendance_h }}</h3>
+{% with a=block.attendance %}{% if a.held %}
+<div class="gp-stats"><div class="gp-stat"><span class="gp-label">{{ ww.rate }}</span><strong class="gp-big" data-attendance-rate><bdi dir="ltr">{{ a.rate }}%</bdi></strong></div>
+<div class="gp-stat"><span class="gp-label">{{ ww.held }}</span><strong class="gp-big"><bdi>{{ a.held }}</bdi></strong></div></div>
+{% if a.absent or a.late %}
+{% if a.absent %}<div class="gp-days" data-absent-days><span class="gp-label">{{ ww.absent_days }}</span><ul>{% for d in a.absent %}<li class="gp-chip gp-chip--absent"><bdi>{{ d.date|day_text:lang }}</bdi></li>{% endfor %}</ul></div>{% endif %}
+{% if a.late %}<div class="gp-days" data-late-days><span class="gp-label">{{ ww.late_days }}</span><ul>{% for d in a.late %}<li class="gp-chip gp-chip--late"><bdi>{{ d.date|day_text:lang }}</bdi></li>{% endfor %}</ul></div>{% endif %}
+{% else %}<p class="gp-good">{{ ww.none_absent }}</p>{% endif %}
+{% else %}<p class="gp-empty">{{ ww.no_classes }}</p>{% endif %}{% endwith %}</section>
+
+<section class="cl-card" data-section="marks"><h3 class="cl-h">{{ ww.marks_h }}</h3><p class="gp-note">{{ ww.marks_note }}</p>
+{% with m=block.marks %}{% for row in m.rows %}<div class="gp-row" data-exam><div class="gp-main-text"><strong><bdi>{{ row.title }}</bdi></strong>
+<div class="gp-sub">{{ row.kind }} <span class="gp-sep">·</span> <bdi>{{ row.date|day_text:lang }}</bdi></div></div>
+<div class="gp-aside gp-score">{% if row.absent %}<span class="gp-chip gp-chip--late">{{ ww.exam_absent }}</span>{% else %}<strong><bdi dir="ltr">{{ row.score }} / {{ row.out_of }}</bdi></strong><span class="gp-sub"><bdi dir="ltr">{{ row.percent|percent }}</bdi></span>{% endif %}</div></div>
+{% empty %}<p class="gp-empty">{{ ww.no_marks }}</p>{% endfor %}
+{% if m.average is not None %}<div class="gp-total"><span>{{ ww.average }}</span><strong data-marks-average><bdi dir="ltr">{{ m.average|percent }}</bdi></strong></div>{% endif %}{% endwith %}</section>
+
+{% if block.nursery %}<section class="cl-card" data-section="nursery"><h3 class="cl-h">{{ ww.nursery_h }}</h3>
+{% for r in block.nursery %}<div class="gp-row" data-nursery-day><div class="gp-main-text"><strong><bdi>{{ r.day|day_text:lang }}</bdi></strong>
+<div class="gp-sub">{{ ww.arrived }} <bdi dir="ltr">{{ r.arrived }}</bdi>{% if r.left %} <span class="gp-sep">·</span> {{ ww.left }} <bdi dir="ltr">{{ r.left }}</bdi>{% endif %}</div></div>
+{% if r.picked_by %}<div class="gp-aside"><span class="gp-label">{{ ww.picked }}</span> <bdi>{{ r.picked_by }}</bdi></div>{% endif %}</div>{% endfor %}</section>{% endif %}
+</article>{% endfor %}
+
+<section class="cl-card gp-fees" data-section="fees" aria-labelledby="gp-fees-t"><h2 class="cl-h" id="gp-fees-t">{{ ww.fees_h }}</h2>
+{% with f=fees %}{% if f.owed > 0 %}
+<div class="gp-owed"><span>{{ ww.owed }}</span><strong data-fees-owed><bdi dir="ltr">{{ f.owed|money }}</bdi> <small>{{ f.currency }}</small></strong></div>
+{% if f.rows %}<h3 class="gp-sub-h">{{ ww.open_invoices }}</h3>
+{% for r in f.rows %}<div class="gp-row gp-invoice" data-invoice>
+<div class="gp-main-text"><strong>{{ ww.invoice }} <bdi dir="ltr">{{ r.number }}</bdi></strong>
+<div class="gp-sub">{% if r.month_text %}{{ ww.month }} <bdi>{{ r.month_text }}</bdi>{% endif %}{% if r.students %} {% if r.month_text %}<span class="gp-sep">·</span> {% endif %}{{ ww.for_students }} {% for n in r.students %}<bdi>{{ n }}</bdi>{% if not forloop.last %}{% if lang == 'en' %}, {% else %}، {% endif %}{% endif %}{% endfor %}{% endif %}</div></div>
+<div class="gp-aside gp-score"><span class="gp-label">{{ ww.remaining }}</span><strong><bdi dir="ltr">{{ r.remaining|money }}</bdi> <small>{{ f.currency }}</small></strong></div>
+{% if r.pay_url %}<a class="cl-btn cl-btn--primary gp-pay" href="{{ r.pay_url }}" rel="nofollow noreferrer" data-pay-go>{{ ww.pay }} <bdi dir="ltr">{{ r.pay_amount|money }}</bdi> {{ f.currency }}</a>{% endif %}</div>{% endfor %}
+{% if f.has_pay %}<p class="gp-note">{{ ww.pay_hint }}</p>{% endif %}{% endif %}
+{% if f.other %}<p class="gp-note" data-other-dues>{{ ww.other_dues }}</p>{% endif %}
+{% else %}<p class="gp-good" data-fees-none>{{ ww.none_owed }}</p>{% endif %}{% endwith %}</section>
+
+<section class="cl-card gp-contact" data-section="contact"><h2 class="cl-h">{{ ww.contact_h }}</h2><p>{{ ww.contact_p }}</p>
+{% if phone %}<div class="cl-actions"><a class="cl-btn cl-btn--primary" href="tel:{{ phone }}" data-contact-call>{{ ww.call }}</a>
+{% if whatsapp %}<a class="cl-btn" href="https://wa.me/{{ whatsapp }}" data-contact-whatsapp>{{ ww.whatsapp }}</a>{% endif %}</div>{% endif %}</section>
+<script>document.querySelector('[data-print]').addEventListener('click', function(){ window.print(); });</script>
+{% else %}
+<section class="cl-card" aria-labelledby="gp-ask-t" data-portal-ask>
+  <h1 class="cl-h1" id="gp-ask-t">{{ ww.ask_h }}</h1>
+  <p data-portal-factor="{{ kind }}">{{ ask }}</p>
+  {% if message %}<div class="cl-msg cl-msg--danger gp-msg" id="gp-msg" role="alert" data-portal-message>{{ message }}</div>{% endif %}
+  <form class="gp-form" method="post" action="{{ action }}" autocomplete="off">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+    <label class="gp-label-block" for="gp-answer">{{ label }}</label>
+    <input class="gp-input" id="gp-answer" name="answer" inputmode="numeric" pattern="[0-9٠-٩]*" maxlength="4" autocomplete="off" dir="ltr" required{% if message %} aria-describedby="gp-msg"{% endif %}>
+    <div class="cl-actions"><button class="cl-btn cl-btn--primary" type="submit">{{ ww.open }}</button></div>
+  </form>
+</section>
+{% endif %}
+</main>{% endblock %}
+{% block foot_note %}<p>{{ ww.private }}</p>{% endblock %}
