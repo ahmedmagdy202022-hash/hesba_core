@@ -81,7 +81,8 @@ CARD_LOOK = {
 #: The clinic's tile says what its revenue counts (CL-05): the visits that were billed, not every sale.
 ACTIVITY_REPORT_CARDS = (
     {"url_name": "medical:report", "allow": "medical.services.can_see_report", "icon": "medical", "tone": "teal",
-     "title_en": "Clinic report", "title_ar": "تقرير العيادة",
+     # Video finding 5: a lab's tile says «تقرير المعمل», from the activity vocabulary's "clinic_report".
+     "term": "clinic_report", "title_en": "Clinic report", "title_ar": "تقرير العيادة",
      "description_en": "Visits, follow-ups and new patients per doctor, and the revenue of the visits that were billed — not every sale",
      "description_ar": "الكشوفات والمتابعات والمرضى الجداد لكل دكتور، وإيراد الكشوفات اللي اتفوترت بس — مش كل المبيعات"},
     {"url_name": "workorders:report", "allow": "workorders.services.can_see_report", "icon": "workorders", "tone": "teal",
@@ -105,8 +106,13 @@ def activity_report_cards(user, lang):
         path = reverse(spec["url_name"])
         if closed_module(path) is not None or closed_capability(path) is not None:  # never a tile into a switched-off module
             continue
+        title, alt = spec[f"title_{lang}"], spec["title_en" if lang == "ar" else "title_ar"]
+        if spec.get("term"):  # the activity's own name for its report (a lab's «تقرير المعمل»)
+            from settings_core.vocabulary import term
+
+            title, alt = term(spec["term"], lang), term(spec["term"], "en" if lang == "ar" else "ar")
         rows.append({"url_name": spec["url_name"], "allowed": True, "icon": spec["icon"], "tone": spec["tone"], "activity": True,
-                     "title": spec[f"title_{lang}"], "title_alt": spec["title_en" if lang == "ar" else "title_ar"], "description": spec[f"description_{lang}"]})
+                     "title": title, "title_alt": alt, "description": spec[f"description_{lang}"]})
     return rows
 
 

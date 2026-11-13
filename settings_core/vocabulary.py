@@ -77,7 +77,7 @@ BASE = {
     "party_in_credit": {"ar": "رصيد دائن للعميل", "en": "Customer in credit"},
     "party_year_total": {"ar": "إجمالي فواتيره السنة دي", "en": "Sales to them this year"},
     "agenda_intro": {
-        "ar": "احجز ميعاد في المحل أو زيارة عند العميل، واربطه بالخدمة والموظف. لما الشغل يخلص، اعمل فاتورته بدوسة.",
+        "ar": "احجز ميعاد في المحل أو زيارة عند العميل، واربطه بالخدمة والموظف. لما الشغل يخلص، اعمل فاتورته بضغطة.",
         "en": "Book a slot at the shop or a visit at the customer's, with the service and the employee. When the work is done, bill it in one click.",
     },
     "agenda_book": {"ar": "احجز ميعاد", "en": "Book an appointment"},
@@ -86,6 +86,9 @@ BASE = {
     "agenda_kind_place": {"ar": "في المحل", "en": "At the shop"},
     "agenda_kind_visit": {"ar": "زيارة عند العميل", "en": "Visit to the customer"},
     "agenda_kind_online": {"ar": "كشف أونلاين", "en": "Online visit"},  # M10 (HG-096): offered in a medical installation only
+    # Video finding 5: a lab must not read a clinic's words. BASE keeps today's text, so only a sub-activity that
+    # lists the key says anything different.
+    "clinic_report": {"ar": "تقرير العيادة", "en": "Clinic report"},
 }
 
 # Activity-wide words. Only what differs from BASE is listed.
@@ -148,7 +151,7 @@ ACTIVITY = {
         "party_in_credit": {"ar": "رصيد دائن للمريض", "en": "Patient in credit"},
         "party_year_total": {"ar": "إجمالي فواتيره السنة دي", "en": "Billed to them this year"},
         "agenda_intro": {
-            "ar": "احجز كشف للمريض مع الدكتور، أو زيارة عند المريض. لما الكشف يخلص، اعمل فاتورته بدوسة.",
+            "ar": "احجز كشف للمريض مع الدكتور، أو زيارة عند المريض. لما الكشف يخلص، اعمل فاتورته بضغطة.",
             "en": "Book a visit for a patient with the doctor, or a visit at the patient's home. When the visit is done, bill it in one click.",
         },
         "agenda_book": {"ar": "احجز كشف", "en": "Book a visit"},
@@ -279,7 +282,7 @@ SUB_ACTIVITY = {
         "party_owes": {"ar": "مستحق على صاحب الحيوان", "en": "Owed by the pet owner"},
         "party_in_credit": {"ar": "رصيد دائن لصاحب الحيوان", "en": "Pet owner in credit"},
         "agenda_intro": {
-            "ar": "احجز كشف لحيوان مع الدكتور البيطري، أو زيارة عند صاحب الحيوان. لما الكشف يخلص، اعمل فاتورته بدوسة.",
+            "ar": "احجز كشف لحيوان مع الدكتور البيطري، أو زيارة عند صاحب الحيوان. لما الكشف يخلص، اعمل فاتورته بضغطة.",
             "en": "Book a visit for a pet with the vet, or a visit at the pet owner's. When the visit is done, bill it in one click.",
         },
         "agenda_customer": {"ar": "صاحب الحيوان", "en": "Pet owner"},
@@ -290,7 +293,12 @@ SUB_ACTIVITY = {
         "operations": {"ar": "طلبات التحاليل والفواتير", "en": "Test orders & bills"},
         "operations_short": {"ar": "التحاليل", "en": "Tests"},
         "record_sale": {"ar": "تسجيل طلب تحليل", "en": "Record a test order"},
+        "new_sale": {"ar": "طلب تحليل / فاتورة جديدة", "en": "New test order"},
         "agenda_kind_place": {"ar": "في المعمل", "en": "At the lab"},
+        # Video finding 5: a lab's own report, and its own word for the booking it takes.
+        "clinic_report": {"ar": "تقرير المعمل", "en": "Lab report"},
+        "agenda_book": {"ar": "احجز طلب تحليل", "en": "Book a test"},
+        "agenda_service": {"ar": "التحليل", "en": "Test"},
     },
     ("medical", "medical_center"): {"agenda_kind_place": {"ar": "في المركز", "en": "At the centre"}},
     ("medical", "physio"): {"agenda_kind_place": {"ar": "في المركز", "en": "At the centre"}},

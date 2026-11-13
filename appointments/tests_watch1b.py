@@ -22,7 +22,7 @@ class AgendaWordsTests(TestCase):
 
     def test_a_clinic_books_a_patient_for_a_visit(self):
         ar = self.agenda("medical", "clinic", "w1b_a_clinic")
-        self.assertIn("احجز كشف للمريض مع الدكتور، أو زيارة عند المريض. لما الكشف يخلص، اعمل فاتورته بدوسة.", ar)
+        self.assertIn("احجز كشف للمريض مع الدكتور، أو زيارة عند المريض. لما الكشف يخلص، اعمل فاتورته بضغطة.", ar)
         self.assertIn("<th>المريض</th><th>الكشف</th>", ar)
         self.assertIn('<label for="id_customer">المريض</label>', ar)
         self.assertIn('<label for="id_service">الكشف</label>', ar)
@@ -51,7 +51,7 @@ class AgendaWordsTests(TestCase):
 
     def test_a_shop_style_business_reads_exactly_what_it_always_did(self):
         ar = self.agenda("services", "beauty", "w1b_a_salon_ar")
-        self.assertIn("احجز ميعاد في المحل أو زيارة عند العميل، واربطه بالخدمة والموظف. لما الشغل يخلص، اعمل فاتورته بدوسة.", ar)
+        self.assertIn("احجز ميعاد في المحل أو زيارة عند العميل، واربطه بالخدمة والموظف. لما الشغل يخلص، اعمل فاتورته بضغطة.", ar)
         self.assertIn("<th>العميل</th><th>الخدمة</th>", ar)
         self.assertIn(">في المحل</option>", ar)
         self.assertIn(">زيارة عند العميل</option>", ar)
