@@ -39,6 +39,16 @@ from .tests_variation_baseline import DAY, ReferenceContract, certificate_figure
 NEW_C = {"code": "C", "description": "عزل مائي للسطح", "unit": "م²", "quantity": "1000", "rate": "80"}
 
 
+def footprint():
+    """``money_footprint`` with the ledger projected first: the projector is lazy, so journal rows only appear once it has run.
+    Without this the journal counts on both sides would be the same zero and would prove nothing."""
+
+    from ledger.projector import ensure_fresh
+
+    ensure_fresh()
+    return money_footprint()
+
+
 def boq_state(project):
     return [(line.code, line.quantity, line.rate, contract.line_amount(line), line.variation_id) for line in project.boq.all()]
 
@@ -76,7 +86,7 @@ class VariationSetup(ReferenceContract):
 class DraftTests(VariationSetup):
     def test_a_draft_holds_its_figures_and_changes_nothing(self):
         first, second = self.two_certificates()
-        before = (money_footprint(), boq_state(self.project), contract.position(self.project), customer_balance(self.customer),
+        before = (footprint(), boq_state(self.project), contract.position(self.project), customer_balance(self.customer),
                   certificate_figures(first), certificate_figures(second))
         order = self.draft()
         self.assertEqual((order.number, order.status, order.order_date, order.extension_days, order.lump_amount), (1, "draft", DAY, 0, None))
@@ -84,7 +94,7 @@ class DraftTests(VariationSetup):
                          [("A", self.a.pk, D("20.000"), D("1500.00"), D("30000.00")), ("B", self.b.pk, D("-100.000"), D("200.00"), D("-20000.00")),
                           ("C", None, D("1000.000"), D("80.00"), D("80000.00"))])
         self.assertEqual(variations.order_value(order), D("90000.00"))
-        after = (money_footprint(), boq_state(self.project), contract.position(self.project), customer_balance(self.customer),
+        after = (footprint(), boq_state(self.project), contract.position(self.project), customer_balance(self.customer),
                  certificate_figures(first), certificate_figures(second))
         self.assertEqual(after, before)
         self.project.refresh_from_db()
@@ -175,8 +185,9 @@ class ApprovalTests(VariationSetup):
     def test_approval_writes_into_the_bill_of_quantities_and_keeps_the_original_value(self):
         first, second = self.two_certificates()
         one, two = certificate_figures(first), certificate_figures(second)
-        ledger = {control: gl(control) for control in ("receivable", "retention_receivable", "customer_advances", "sales", "vat_out", "cash")}  # the ledger is projected here
-        money, owner_account = money_footprint(), customer_balance(self.customer)
+        ledger = {control: gl(control) for control in ("receivable", "retention_receivable", "customer_advances", "sales", "vat_out", "cash")}
+        money, owner_account = footprint(), customer_balance(self.customer)  # the journal rows of the two posted certificates are in it
+        self.assertGreater(money["journal_lines"], 0)  # so comparing them after the approval means something
         order = self.draft()
         approved = self.approve(order, approved_on=DAY, owner_reference="خطاب 114")
         self.assertEqual((approved.status, approved.value, approved.approved_on, approved.owner_reference, approved.decided_by), ("approved", D("90000.00"), DAY, "خطاب 114", self.owner))
@@ -193,7 +204,7 @@ class ApprovalTests(VariationSetup):
         self.assertEqual((certificate_figures(first), certificate_figures(second)), (one, two))
         self.assertEqual((one["gross"], two["gross"]), (D("200000.00"), D("250000.00")))
         # No money moved: the same rows everywhere, the same account, the same ledger.
-        self.assertEqual(money_footprint(), money)
+        self.assertEqual(footprint(), money)
         self.assertEqual(customer_balance(self.customer), owner_account)
         self.assertEqual({control: gl(control) for control in ledger}, ledger)
         figures = contract.position(self.project)
@@ -271,14 +282,14 @@ class ApprovalTests(VariationSetup):
         order = self.draft(changes=[(self.b.pk, "-1200")], new_items=[dict(NEW_C)])  # would leave 800: fine while 750 is certified
         self.certify(b="850")  # a certificate made in between
         self.sign(order)
-        state, money = boq_state(self.project), money_footprint()
+        state, money = boq_state(self.project), footprint()
         with self.assertRaises(ValidationError) as caught:
             variations.approve(self.project, order, self.owner)
         self.assertEqual(caught.exception.messages, [variations.MESSAGES["ar"]["below_certified"].format(code="B", after="800", qty="850")])
         order.refresh_from_db()
         self.project.refresh_from_db()
         self.assertEqual((order.status, order.value, self.project.original_value), ("draft", D("0.00"), None))
-        self.assertEqual((boq_state(self.project), money_footprint()), (state, money))  # the new item was not created either
+        self.assertEqual((boq_state(self.project), footprint()), (state, money))  # the new item was not created either
 
     def test_a_rate_is_never_changed_work_at_another_rate_is_a_new_item(self):
         first, _ = self.two_certificates()
@@ -364,12 +375,12 @@ class ApprovalTests(VariationSetup):
 
     def test_a_rejected_order_stays_on_the_register_and_changes_nothing(self):
         self.two_certificates()
-        state, money = boq_state(self.project), money_footprint()
+        state, money = boq_state(self.project), footprint()
         order = variations.close(self.project, self.draft(), self.owner, status=VariationStatus.REJECTED, note="المالك اعتذر عن البند")
         self.assertEqual((order.status, order.value, variations.order_value(order)), ("rejected", D("0.00"), D("90000.00")))  # what it asked for is kept
         figures = variations.figures(self.project)
         self.assertEqual((figures["count"], figures["approved"], figures["pending"], figures["revised"]), (1, D("0.00"), D("0.00"), D("1000000.00")))
-        self.assertEqual((boq_state(self.project), money_footprint()), (state, money))
+        self.assertEqual((boq_state(self.project), footprint()), (state, money))
         self.assertEqual(self.draft().number, 2)  # its number is not reused
         row = AuditLog.objects.get(module="projects", action="reject_variation_order")
         self.assertEqual((row.object_id, row.after_data["status"]), (str(order.pk), "rejected"))
@@ -404,12 +415,23 @@ class ApprovalTests(VariationSetup):
         state = boq_state(self.project)
         with working_in(branch):
             for attempt in (lambda: self.draft(title="من فرع تاني"), lambda: self.draft(order=order, title="تعديل من فرع تاني"),
-                            lambda: variations.approve(self.project, order, self.owner)):
+                            lambda: variations.approve(self.project, order, self.owner),
+                            lambda: variations.close(self.project, order, self.owner, status=VariationStatus.REJECTED),
+                            lambda: variations.close(self.project, order, self.owner, status=VariationStatus.CANCELLED)):
                 with self.assertRaises(ValidationError) as caught:
                     attempt()
                 self.assertEqual(caught.exception.messages, [contract.MESSAGES["ar"]["entity"]])
+            # The signed copy of a draft follows the order: another entity neither adds one nor takes one away.
+            rules = attachments.OWNERS["projects.variationorder"]
+            self.assertFalse(rules["can_attach"](self.owner, order))
+            self.assertFalse(rules["can_delete"](self.owner, order))
+            with self.assertRaises(PermissionDenied):
+                attachments.add_attachment(order, upload(PDF, "b.pdf", "application/pdf"), self.owner, kind=Kind.DOCUMENT, stage=Stage.OTHER)
+            with self.assertRaises(PermissionDenied):
+                attachments.delete_attachment(Attachment.objects.get(object_id=order.pk, content_type=ContentType.objects.get_for_model(VariationOrder)).pk, self.owner)
         order.refresh_from_db()
         self.assertEqual((VariationOrder.objects.count(), order.status, order.title, boq_state(self.project)), (1, "draft", "تعديلات الدور الأخير", state))
+        self.assertEqual(Attachment.objects.filter(object_id=order.pk, content_type=ContentType.objects.get_for_model(VariationOrder)).count(), 1)
 
 
 class ApprovalWithVatTests(VariationSetup):

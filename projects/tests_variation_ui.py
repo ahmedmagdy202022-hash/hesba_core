@@ -350,6 +350,16 @@ class AccessTests(ScreenSetup):
         self.assertContains(register, "data-empty-none")
         self.assertNotContains(register, "data-new-variation")
         self.assertNotContains(self.client.get(self.url("detail")), 'data-position="original"')
+        # The signed copy follows the order: not opened, not uploaded and not deleted from here.
+        from attachments.models import Attachment
+
+        self.sign(self.order)
+        row = Attachment.objects.get(object_id=self.order.pk, content_type__model="variationorder")
+        self.client.force_login(manager)
+        self.assertEqual(self.client.get(self.url("file", row.pk)).status_code, 404)
+        self.assertEqual(self.client.post(self.url("file_delete", row.pk)).status_code, 404)
+        self.assertEqual(self.client.post(self.url("variation_files", self.order.pk), {"file": upload(PDF, "b.pdf", "application/pdf"), "kind": "document"}).status_code, 404)
+        self.assertEqual(Attachment.objects.filter(object_id=self.order.pk, content_type__model="variationorder").count(), 1)
         self.order.refresh_from_db()
         self.assertEqual(self.order.status, "draft")
 

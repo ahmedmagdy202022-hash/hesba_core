@@ -276,6 +276,15 @@ def _variation_orders(user):
     return access.visible_variation_orders(user)
 
 
+def _variation_can_change(user, order):
+    """Add or remove the signed copy: whoever may record progress, and only from the entity that holds the project's money
+    (the order itself is a 404 from anywhere else)."""
+
+    from projects import access, variations
+
+    return access.can_write(user) and variations.in_reach(order.project)
+
+
 def _variation_order_closed(order):
     """Contracting C1 (HG-103): files are added and removed while the order is a draft; once it is approved, rejected or
     cancelled the signed copy is the record and stays as it is."""
@@ -330,8 +339,8 @@ OWNERS = {"workorders.workorder": {"visible": _work_orders, "can_attach": _work_
                                   "default_stage": Stage.PHOTO, "max_count": REPORT_MAX_COUNT, "max_owner_bytes": REPORT_MAX_BYTES},
           # Contracting C1 (HG-103): the copy of a variation order the owner signed. Added and removed while the order is a draft
           # (by those who may draft it); kept for good once the order is approved, rejected or cancelled.
-          "projects.variationorder": {"visible": _variation_orders, "can_attach": _project_can_attach, "closed": _variation_order_closed,
-                                      "can_delete": _project_can_attach, "signature_final": lambda order: False, "entity": _no_entity, "group_wide": True,
+          "projects.variationorder": {"visible": _variation_orders, "can_attach": _variation_can_change, "closed": _variation_order_closed,
+                                      "can_delete": _variation_can_change, "signature_final": lambda order: False, "entity": _no_entity, "group_wide": True,
                                       "delete_denied": "variation_read_only", "read_only_message": "variation_read_only", "closed_error": "variation_closed",
                                       "kept_when_closed": "variation_kept", "stages": (Stage.OTHER,), "kinds": (Kind.PHOTO, Kind.DOCUMENT),
                                       "stage_error": "variation_stage", "kind_error": "project_kind", "default_stage": Stage.OTHER,

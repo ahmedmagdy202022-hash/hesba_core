@@ -129,5 +129,9 @@ def attachment_belongs(project, attachment_pk):
     if row.content_type_id == ContentType.objects.get_for_model(SiteReport).pk:
         return row if SiteReport.objects.filter(pk=row.object_id, project=project).exists() else None
     if row.content_type_id == ContentType.objects.get_for_model(VariationOrder).pk:  # Contracting C1 (HG-103): the signed copy
+        from . import variations
+
+        if not variations.in_reach(project):  # as the order itself: another entity reaches neither it nor its files
+            return None
         return row if VariationOrder.objects.filter(pk=row.object_id, project=project).exists() else None
     return None
