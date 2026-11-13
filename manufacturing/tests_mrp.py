@@ -24,14 +24,16 @@ from inventory.models import StockMovement, StockOperation
 from ledger.models import JournalEntry, JournalLine
 from orders import purchasing as po
 from orders import services as sales
-from orders.models import OrderReceiptLine, PurchaseOrder, PurchaseStatus, Status
+from orders.models import OrderReceiptLine, PurchaseOrder, PurchaseStatus, SalesOrder, Status
 from permissions.models import RoleCode
 from permissions.role_services import create_role
 from purchases.models import PurchaseInvoice
 from purchases.services import post_purchase_invoice
 from reports.tests_dashboard import prepared_client
+from sales.models import SalesInvoice
+from sales.services import post_sales_invoice
 from settings_core import capabilities as caps
-from taxes.services import create_purchase_draft_with_tax, vat_enabled
+from taxes.services import create_purchase_draft_with_tax, create_sales_draft_with_tax, vat_enabled
 
 from . import make_to_order, mrp, orders, services
 from . import tests_make_to_order as f1
@@ -267,6 +269,18 @@ class TwoLevelsTests(Money, TestCase):
         other = make_location(location_code="PLANT2")
         made = mrp.make_production_order(self.dough.pk, self.owner, {"quantity": "9", "location": other.pk, "labor_cost": "30", "overhead_cost": "12.50"})
         self.assertEqual((made.quantity, made.location, made.labor_cost, made.overhead_cost), (D("9.000"), other, D("30.00"), D("12.50")))
+
+    def test_an_order_on_the_floor_supplies_only_the_good_units_it_will_put_into_stock(self):
+        stock_in(self.flour, self.plant, 20, "20.00", movement_date=TODAY)
+        stock_in(self.sugar, self.plant, 10, "30.00", movement_date=TODAY)
+        orders.cancel(self.order, self.owner, "bigger one")
+        orders.create_order({"recipe": self.cake_recipe, "location": self.plant, "quantity": "40"}, self.owner)  # 4 batches: 12 kg of dough
+        floor = orders.create_order({"recipe": self.dough_recipe, "location": self.plant, "quantity": "10"}, self.owner)
+        orders.advance(floor, self.owner, defect="4")  # started: 4 of the 10 are defective
+        self.assertEqual(orders.good_units(floor), D("6"))
+        dough = self.row(self.dough, "semis")
+        # only 6 kg will reach stock, not 10: 12 wanted - 1 on hand - 6 coming = 5 short, 2 batches = 6 kg
+        self.assertEqual((dough["making"], dough["incoming"], dough["net"], dough["batches"], dough["make"]), (D("6"), D("6"), D("5"), D("2"), D("6")))
 
     def test_a_minimum_on_the_semi_finished_item_itself_asks_for_whole_batches_too(self):
         self.dough.min_stock = D("4")
@@ -564,6 +578,77 @@ class MadeForALineIsNotFreeTests(f1.MakeToOrderSetup):
         sources = [s for s in mrp.calculate()["sources"] if s["kind"] == "sale"]
         self.assertEqual([(s["number"], s["uncovered"], s["from_stock"], s["quantity"]) for s in sources], [(second.display_number, D("5"), D("0"), D("5"))])
         self.assertEqual(make_to_order.uncovered(self.line()), D("0"))
+
+
+class SharedStockTests(f1.MakeToOrderSetup):
+    """Review findings on the stock a sale holds: the same units are never handed out twice."""
+
+    def setUp(self):
+        super().setUp()
+        SalesOrder.objects.filter(pk=self.order.pk).update(status=Status.CANCELLED)  # the base class's 30-cake order is out of these cases
+
+    def draft_invoice(self, order, quantity):
+        line = self.line(order)
+        invoice = create_sales_draft_with_tax(
+            {"invoice_number": f"SI-MRP-{SalesInvoice.objects.count() + 1}", "invoice_date": TODAY, "customer": order.customer,
+             "selling_location": self.plant, "paid_now": D("0")},
+            [{"item": line.item, "quantity": D(quantity), "unit_sale_price": line.unit_price, "line_discount_amount": line.discount_for(D(quantity))}],
+            self.owner)
+        sales.link_invoice(order, invoice, self.owner)
+        return invoice
+
+    def sale_sources(self):
+        return [(s["number"], s["uncovered"], s["from_stock"], s["quantity"]) for s in mrp.calculate()["sources"] if s["kind"] == "sale"]
+
+    def test_stock_sold_directly_is_not_also_counted_for_the_recipe_that_uses_it(self):
+        # dough (2 flour + 1 sugar -> 3 kg) is sold on its own and is also the pie's component (5 kg dough + 10 boxes -> 10 pies)
+        dough = make_item(item_code="SF-DOUGH", item_name="عجينة", is_stock_tracked=True, default_sale_price="40")
+        pie = make_item(item_code="FG-PIE", item_name="فطيرة", is_stock_tracked=True)
+        services.save_recipe({"product": dough, "output_quantity": "3"}, [(self.flour, "2"), (self.sugar, "1")], self.owner)
+        services.save_recipe({"product": pie, "output_quantity": "10"}, [(dough, "5"), (self.box, "10")], self.owner)
+        stock_in(dough, self.plant, 5, "12.00", movement_date=TODAY)  # 5 kg on hand
+        far = self.sale("5", item=dough)  # a confirmed sale of 5 kg dough: the 5 kg are spoken for
+        orders.create_order({"recipe": Recipe.objects.get(product=pie), "location": self.plant, "quantity": "10"}, self.owner)  # 1 batch: 5 kg more
+        result = mrp.calculate()
+        row = next(r for r in result["semis"] if r["item"].pk == dough.pk)
+        # 10 kg wanted (5 sold + 5 for the pies), 5 on hand: 5 short, so 2 batches of 3 kg = 6 kg, flour 4, sugar 2
+        self.assertEqual((row["need"], row["on_hand"], row["net"], row["batches"], row["make"]), (D("5"), D("5"), D("5"), D("2"), D("6")))
+        self.assertEqual(row["reserved"], D("5"))  # the stock a confirmed sale will take
+        self.assertEqual((self.row_of(result, self.flour)["need"], self.row_of(result, self.sugar)["need"]), (D("4"), D("2")))
+        self.assertEqual(self.sale_sources(), [])  # the sale itself is covered by the stock
+        self.assertEqual(far.status, Status.CONFIRMED)
+        self.client.force_login(self.owner)  # and the screen says why the 5 kg on hand are not all free
+        self.assertContains(self.client.get(reverse("manufacturing:mrp"), {"lang": "ar"}), "محجوز لأوامر بيع: 5")
+
+    def row_of(self, result, item, key="materials"):
+        return next(r for r in result[key] if r["item"].pk == item.pk)
+
+    def test_units_on_a_draft_invoice_still_need_the_stock_when_it_is_posted(self):
+        stock_in(self.cake, self.plant, 5, "9.50", movement_date=TODAY)
+        first = self.sale("5", deliver_by=TODAY + timedelta(days=2))
+        second = self.sale("5", deliver_by=TODAY + timedelta(days=5))
+        self.draft_invoice(first, "5")  # the whole first order is on a draft invoice: stock has not moved yet
+        self.assertEqual(make_to_order.uncovered(self.line(first)), D("0"))
+        # 5 cakes on hand are spoken for by the draft, so the second order has to be made
+        self.assertEqual(self.sale_sources(), [(second.display_number, D("5"), D("0"), D("5"))])
+        self.assertEqual(self.row_of(mrp.calculate(), self.flour)["need"], D("1"))  # half a batch: 1 kg of flour
+        # posting the draft changes nothing about the answer
+        invoice = sales.quantities(first) and self.line(first).invoiced.get().sales_line.invoice
+        post_sales_invoice(invoice.pk, self.owner)
+        self.assertEqual(get_stock(self.cake, self.plant), D("0"))
+        self.assertEqual(self.sale_sources(), [(second.display_number, D("5"), D("0"), D("5"))])
+        self.assertEqual(self.row_of(mrp.calculate(), self.flour)["need"], D("1"))
+
+    def test_a_draft_covered_by_goods_made_for_it_does_not_take_stock_a_second_time(self):
+        SalesOrder.objects.filter(pk=self.order.pk).update(status=Status.CONFIRMED)
+        production_order = self.make()
+        self.walk(production_order)
+        orders.finish(production_order, self.owner)
+        self.assertEqual(get_stock(self.cake, self.plant), D("30"))
+        self.draft_invoice(self.order, "30")  # the 30 made cakes are on a draft invoice
+        second = self.sale("5", deliver_by=None)
+        # the 30 in stock are the first order's (drafted, made for it); none is free for the second
+        self.assertEqual(self.sale_sources(), [(second.display_number, D("5"), D("0"), D("5"))])
 
 
 def get_stock(item, location):

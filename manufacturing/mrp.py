@@ -129,11 +129,16 @@ def _incoming(item_ids):
 
 
 def _making(item_ids):
-    """Per item, what the entity's own production orders (planned or on the floor) will still bring into stock."""
+    """Per item, what the entity's own production orders (planned or on the floor) will still bring into stock.
 
-    rows = (entity_scope.scope(ProductionOrder.objects, "location__entity").filter(status__in=OPEN, recipe__product_id__in=item_ids)
-            .values("recipe__product_id").annotate(total=Sum("quantity")))
-    return {row["recipe__product_id"]: row["total"] or ZERO for row in rows}
+    ``orders.finish`` puts only the good units into stock, so an order on the floor with recorded defects supplies less than
+    its quantity."""
+
+    total = defaultdict(lambda: ZERO)
+    for order in (entity_scope.scope(ProductionOrder.objects, "location__entity").filter(status__in=OPEN, recipe__product_id__in=item_ids)
+                  .select_related("recipe").prefetch_related("stage_logs")):
+        total[order.recipe.product_id] += production.good_units(order)
+    return dict(total)
 
 
 def _drafts(item_ids):
@@ -165,38 +170,51 @@ def _last_purchases(item_ids):
 # ---- demand ----
 
 def _sales_demand(recipes, on_hand_of):
-    """Confirmed sales order lines that still need making, after the product's free stock: a list of source dicts.
+    """Confirmed sales order lines that still need making, after the product's free stock.
+
+    Returns ``(sources, reserved)``: the source dicts, and per item the stock the confirmed sales will take, which the
+    component netting must not count a second time.
+
+    What leaves stock when a sale is posted: the units made for a line and not yet invoiced, the units on a draft invoice, and
+    the uncovered units the stock covers. A draft invoice has not taken its stock yet, so its units are asked of the stock
+    (or of making) like any other uncovered unit, unless goods made for them already cover them.
 
     ``on_hand_of`` reads stock for the products named (a callable, so the products are known before the query)."""
 
     if not sales.enabled():
-        return []
+        return [], {}
     lines = []
     for order in sales.scoped().filter(status=SalesStatus.CONFIRMED).select_related("customer").order_by("pk"):
         rows = sales.quantities(order)
+        in_production = make_to_order.made(order)
         states = make_to_order.line_states(order, rows, "en", can_make=False)
         for row in rows:
-            state = states[row["line"].pk]
-            lines.append({"order": order, "line": row["line"], "free": state["free"], "waiting": state["waiting"]})
+            line, state = row["line"], states[row["line"].pk]
+            # F1's uncovered leaves out what sits on a draft invoice; the stock is still there until it is posted
+            free = max(min(row["left"] + row["drafted"], line.quantity - in_production.get(line.pk, ZERO)), ZERO)
+            made_cover = row["drafted"] - (free - state["free"])  # drafted units that goods already made for the line cover
+            lines.append({"order": order, "line": line, "free": free, "taken": state["waiting"] + made_cover})
     products = {entry["line"].item_id for entry in lines}
     stock = on_hand_of(products)
-    earmarked = defaultdict(lambda: ZERO)  # made for a line and not invoiced yet: not free for another one
+    earmarked = defaultdict(lambda: ZERO)  # made for a line (or on a draft invoice) and not posted yet: not free for another one
     for entry in lines:
-        earmarked[entry["line"].item_id] += entry["waiting"]
+        earmarked[entry["line"].item_id] += entry["taken"]
     left = {pk: max(stock.get(pk, ZERO) - earmarked[pk], ZERO) for pk in products}
+    reserved = {pk: min(stock.get(pk, ZERO), earmarked[pk]) for pk in products}
     found = []
     for entry in sorted(lines, key=lambda e: (e["order"].deliver_by is None, e["order"].deliver_by or 0, e["order"].pk, e["line"].pk)):
         item_id, free = entry["line"].item_id, entry["free"]
-        recipe = recipes.get(item_id)
-        if recipe is None or free <= 0:
+        if free <= 0:
             continue
         from_stock = min(free, left[item_id])
         left[item_id] -= from_stock
-        if free - from_stock > 0:
+        reserved[item_id] += from_stock
+        recipe = recipes.get(item_id)  # an item with no recipe holds its stock but asks nothing to be made
+        if recipe is not None and free - from_stock > 0:
             found.append({"kind": "sale", "number": entry["order"].display_number, "pk": entry["order"].pk, "item": entry["line"].item,
                           "recipe": recipe, "uncovered": free, "from_stock": from_stock, "quantity": free - from_stock,
                           "date": entry["order"].deliver_by, "party": entry["order"].customer.name})
-    return found
+    return found, reserved
 
 
 def _planned_demand():
@@ -234,7 +252,8 @@ def calculate():
     recipes = active_recipes()
     uses = {line.component_id for recipe in recipes.values() for line in recipe.lines.all()}
     sources = _planned_demand()
-    sources += _sales_demand(recipes, _on_hand)
+    sale_sources, reserved = _sales_demand(recipes, _on_hand)
+    sources += sale_sources
     need = defaultdict(lambda: ZERO)
     for source in sources:
         for component, quantity in _need_of(source["recipe"], source["quantity"]):
@@ -251,6 +270,14 @@ def calculate():
         item = items.get(pk)
         return item.min_stock if item is not None and item.active and item.is_stock_tracked else ZERO
 
+    def reserved_of(pk):
+        """Stock a confirmed sale will take: on hand, but not free for what the recipes use."""
+
+        return min(on_hand.get(pk, ZERO), reserved.get(pk, ZERO))
+
+    def free_of(pk):
+        return on_hand.get(pk, ZERO) - reserved_of(pk)
+
     warnings, semis = [], []
     # level by level from the top: an item is netted once, after every item that uses it
     waiting_on = {pk: len(parents[pk]) for pk in members}
@@ -263,13 +290,13 @@ def calculate():
         recipe = recipes[pk]
         gross = need[pk]
         arriving = coming[pk] + making.get(pk, ZERO)
-        net = max(gross + minimum(pk) - on_hand.get(pk, ZERO) - arriving, ZERO)
+        net = max(gross + minimum(pk) - free_of(pk) - arriving, ZERO)
         batches = (net / recipe.output_quantity).to_integral_value(rounding=ROUND_CEILING)
         if level[pk] >= MAX_DEPTH and batches > 0:
             warnings.append({"kind": "depth", "item": items[pk]})
             batches = ZERO
-        semis.append({"item": items[pk], "recipe": recipe, "level": level[pk], "need": gross, "on_hand": on_hand.get(pk, ZERO), "coming": coming[pk],
-                      "making": making.get(pk, ZERO), "incoming": arriving, "minimum": minimum(pk), "net": net, "batches": batches,
+        semis.append({"item": items[pk], "recipe": recipe, "level": level[pk], "need": gross, "on_hand": on_hand.get(pk, ZERO), "reserved": reserved_of(pk),
+                      "coming": coming[pk], "making": making.get(pk, ZERO), "incoming": arriving, "minimum": minimum(pk), "net": net, "batches": batches,
                       "make": batches * recipe.output_quantity, "drafts": []})
         for line in recipe.lines.all():
             need[line.component_id] += line.quantity * batches
@@ -287,10 +314,10 @@ def calculate():
             continue
         item = items[pk]
         gross, held, arriving = need[pk], on_hand.get(pk, ZERO), coming[pk]
-        to_buy = max(gross + minimum(pk) - held - arriving, ZERO)
+        to_buy = max(gross + minimum(pk) - free_of(pk) - arriving, ZERO)
         if gross <= 0 and to_buy <= 0:
             continue
-        materials.append({"item": item, "need": gross, "on_hand": held, "incoming": arriving, "minimum": minimum(pk), "to_buy": to_buy,
+        materials.append({"item": item, "need": gross, "on_hand": held, "reserved": reserved_of(pk), "incoming": arriving, "minimum": minimum(pk), "to_buy": to_buy,
                           "supplier": None, "last_price": None, "last_date": None, "drafts": []})
     semis = [row for row in semis if row["need"] > 0 or row["minimum"] > 0 or row["make"] > 0]
     buying = [row["item"].pk for row in materials if row["to_buy"] > 0]

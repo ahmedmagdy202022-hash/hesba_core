@@ -35,7 +35,7 @@ WORDS = {
         "no_buy_right": "عشان تعمل أمر شراء محتاج صلاحية فواتير الشراء.", "purchases_off": "وحدة المشتريات مقفولة، فمفيش أوامر شراء.",
         "bought": "اتعملت أوامر الشراء المسودة:", "semis": "الأصناف نصف المصنّعة", "semis_hint": "كل صنف بيتحسب مرة واحدة على مخزونه، وبعدين بيتقرّب لأقرب دفعة كاملة من وصفته وبيتفتح لمكوّناته.",
         "recipe": "الوصفة", "net": "ناقص", "batches": "دفعات", "make_qty": "هيتصنع", "make": "اعمل أمر إنتاج", "location": "مكان الإنتاج", "labor": "تكلفة العمالة",
-        "overhead": "مصاريف تشغيل", "made": "اتفتحت أوامر الإنتاج:", "making_note": "أمر إنتاج شغال: {qty}", "no_make_right": "عشان تعمل أمر إنتاج محتاج صلاحية تسوية المخزون.",
+        "overhead": "مصاريف تشغيل", "made": "اتفتحت أوامر الإنتاج:", "making_note": "أمر إنتاج شغال: {qty}", "reserved_note": "محجوز لأوامر بيع: {qty}", "no_make_right": "عشان تعمل أمر إنتاج محتاج صلاحية تسوية المخزون.",
         "warn_loop": "وصفة «{item}» بتدور على نفسها، فمفتحناش مكوّناتها. صلّح الوصفة.", "warn_depth": "«{item}» عمقه فوق الحد (10 مستويات)، فمفتحناش مكوّناته.",
         "open_order": "افتح", "open_po": "افتح أمر الشراء", "back": "التصنيع",
     },
@@ -52,7 +52,7 @@ WORDS = {
         "no_buy_right": "Making a purchase order needs the purchase invoices permission.", "purchases_off": "The purchases module is off, so there are no purchase orders.",
         "bought": "Draft purchase orders made:", "semis": "Semi-finished items", "semis_hint": "Each item is netted once against its own stock, then rounded up to whole batches of its recipe and opened into its components.",
         "recipe": "Recipe", "net": "Short", "batches": "Batches", "make_qty": "To make", "make": "Make a production order", "location": "Made at", "labor": "Labour cost",
-        "overhead": "Overhead", "made": "Production orders opened:", "making_note": "A production order is open: {qty}", "no_make_right": "Making a production order needs the adjust-stock permission.",
+        "overhead": "Overhead", "made": "Production orders opened:", "making_note": "A production order is open: {qty}", "reserved_note": "Held for sales orders: {qty}", "no_make_right": "Making a production order needs the adjust-stock permission.",
         "warn_loop": "The recipe of “{item}” goes round in a circle, so its components were not opened. Fix the recipe.", "warn_depth": "“{item}” is deeper than the limit (10 levels), so its components were not opened.",
         "open_order": "Open", "open_po": "Open the purchase order", "back": "Manufacturing",
     },
@@ -114,6 +114,8 @@ def screen(request):
     open_po = po.can_view(request.user)
     for warning in result["warnings"]:
         warning["text"] = words["warn_loop" if warning["kind"] == "loop" else "warn_depth"].format(item=warning["item"].item_name)
+    for row in result["materials"] + result["semis"]:
+        row["reserved_text"] = words["reserved_note"].format(qty=mrp.text(row["reserved"])) if row["reserved"] > 0 else ""
     for row in result["materials"]:
         drafts = ", ".join(d["number"] for d in row["drafts"] if d["status"] == "draft")
         sent = ", ".join(d["number"] for d in row["drafts"] if d["status"] == "sent")
