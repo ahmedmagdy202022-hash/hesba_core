@@ -455,3 +455,41 @@ class GroupContent(models.Model):
 
     def __str__(self):
         return f"{self.group} {self.title}"
+
+
+class SeatStatus(models.TextChoices):
+    BOOKED = "booked", "Booked"
+    ATTENDED = "attended", "Attended"
+    MISSED = "missed", "Missed"
+    CANCELLED = "cancelled", "Cancelled"
+
+
+#: The seats that still hold a place: a cancelled one frees it. One definition for the unique rule, the capacity count and every list.
+LIVE_SEATS = (SeatStatus.BOOKED, SeatStatus.ATTENDED, SeatStatus.MISSED)
+
+
+class MakeupSeat(models.Model):
+    """E8 (HG-105): a seat booked for one student in ONE class of another group of the same course, in place of a class of their own group.
+
+    It is not attendance: no ``Attendance`` row, no ``ClassSession``, no fee and no pay figure ever reads this table. Its entity is the
+    target group's, as an exam's is (no entity column that could drift). Nothing is deleted: «cancelled» frees the seat."""
+
+    student = models.ForeignKey(Student, on_delete=models.PROTECT, related_name="makeup_seats")
+    home_group = models.ForeignKey(StudyGroup, on_delete=models.PROTECT, related_name="+", help_text="The group the student is enrolled in and missed.")
+    missed_on = models.DateField(null=True, blank=True, help_text="The class day of the home group being made up.")
+    group = models.ForeignKey(StudyGroup, on_delete=models.PROTECT, related_name="makeup_seats", help_text="The group whose class they attend.")
+    day = models.DateField(db_index=True, help_text="The day of that class.")
+    status = models.CharField(max_length=10, choices=SeatStatus.choices, default=SeatStatus.BOOKED)
+    note = models.CharField(max_length=255, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-day", "-pk"]
+        constraints = [models.UniqueConstraint(fields=["student", "group", "day"], condition=models.Q(status__in=[s.value for s in LIVE_SEATS]),
+                                               name="education_one_live_makeup_seat_per_class")]
+        indexes = [models.Index(fields=["group", "day"], name="edu_makeup_group_day_idx")]
+
+    def __str__(self):
+        return f"{self.student} @ {self.group} {self.day}"
