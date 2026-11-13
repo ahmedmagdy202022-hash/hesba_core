@@ -162,9 +162,9 @@ class ScannerTests(TestCase):
         self.assertNotRegex(css, r"font-weight:\s*[89]00")
 
     def test_the_templates_are_versioned_and_load_the_shared_layers(self):
-        for name, needles in (("documents.html", ("projects.css' %}?v=c2-1", "attachments.css' %}?v=c2-1", "attachments.js' %}?v=c2-1")),
-                              ("reports.html", ("projects.css' %}?v=c2-1",)), ("report_form.html", ("projects.css' %}?v=c2-1", "attachments.css' %}?v=c2-1", "site_report.js' %}?v=c2-1")),
-                              ("report_day.html", ("projects.css' %}?v=c2-1", "attachments.js' %}?v=c2-1")), ("report_print.html", ("print.css' %}?v=print-004", "projects.css' %}?v=c2-1"))):
+        for name, needles in (("documents.html", ("projects.css' %}?v=c1-vo1", "attachments.css' %}?v=c2-1", "attachments.js' %}?v=c2-1")),
+                              ("reports.html", ("projects.css' %}?v=c1-vo1",)), ("report_form.html", ("projects.css' %}?v=c1-vo1", "attachments.css' %}?v=c2-1", "site_report.js' %}?v=c2-1")),
+                              ("report_day.html", ("projects.css' %}?v=c1-vo1", "attachments.js' %}?v=c2-1")), ("report_print.html", ("print.css' %}?v=print-004", "projects.css' %}?v=c1-vo1"))):
             source = Path(settings.BASE_DIR, "templates/projects", name).read_text(encoding="utf-8")
             for needle in needles:
                 with self.subTest(template=name, needle=needle):
@@ -206,9 +206,13 @@ class MigrationTests(TransactionTestCase):
         names = connection.introspection.table_names()
         self.assertIn("projects_sitereport", names)
         self.assertIn("projects_sitereportrow", names)
-        self.assertEqual(list(Project.objects.values_list("code", "name")), [("P-0001", "عمارة")])
-        self.assertEqual([(line.line_number, str(line.quantity), str(line.rate)) for line in Project.objects.get().boq.all()], [(1, "10.000", "1000.00")])
-        self.assertEqual(SiteReport.objects.count(), 0)  # nothing is seeded by the migration
+        # Read through the models as they stood at 0003: today's models carry the columns of later migrations (Contracting C1's 0004).
+        at_0003 = executor.loader.project_state([n for n in executor.loader.graph.leaf_nodes() if n[0] != "projects"] + [("projects", "0003_site_reports")]).apps
+        projects_then, reports_then = at_0003.get_model("projects", "Project"), at_0003.get_model("projects", "SiteReport")
+        self.assertEqual(list(projects_then.objects.values_list("code", "name")), [("P-0001", "عمارة")])
+        self.assertEqual([(line.line_number, str(line.quantity), str(line.rate)) for line in at_0003.get_model("projects", "BoqLine").objects.filter(project=projects_then.objects.get())],
+                         [(1, "10.000", "1000.00")])
+        self.assertEqual(reports_then.objects.count(), 0)  # nothing is seeded by the migration
 
 
 class MakeMigrationsCleanTests(TestCase):

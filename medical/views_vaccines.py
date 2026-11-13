@@ -217,7 +217,8 @@ def record(request, pk):
         post = request.POST
         vaccine = get_object_or_404(vaccines.scoped_vaccines(), pk=_id(post.get("vaccine"))) if post.get("vaccine") else None  # another entity's: 404
         visit = get_object_or_404(animal.visits, pk=_id(post.get("visit"))) if post.get("visit") else None
-        doctor = _doctors().filter(pk=_id(post.get("given_by"))).first() if post.get("given_by") else None
+        doctor = _doctors(_id(post.get("given_by")), own.pk if own is not None else 0).filter(
+            pk=_id(post.get("given_by"))).first() if post.get("given_by") else None
         try:
             dose = vaccines.record(animal, {"vaccine": vaccine, "given_on": post.get("given_on") or None, "next_due": post.get("next_due") or None,
                                             "no_next": post.get("no_next") == "1", "batch": post.get("batch"), "given_by": doctor, "visit": visit,
@@ -229,15 +230,21 @@ def record(request, pk):
             return redirect(f"{reverse('medical:animal', args=[animal.pk])}?lang={lang}#vaccinations")
     wanted_visit = _id((post or request.GET).get("visit"))
     return render(request, "medical/vaccination_form.html", _base(
-        lang, page_title=words["form_title"], vx=words, animal=animal, vaccines=choices, visits=visits, doctors=_doctors(), error=error, post=post,
+        lang, page_title=words["form_title"], vx=words, animal=animal, vaccines=choices, visits=visits, error=error, post=post,
+        doctors=_doctors(_id(post.get("given_by")) if post else 0, own.pk if own is not None else 0),
         today=timezone.localdate(), default_doctor=_id(post.get("given_by")) if post else (own.pk if own is not None else 0),
         chosen_visit=wanted_visit, chosen_vaccine=_id(post.get("vaccine")) if post else _id(request.GET.get("vaccine"))))
 
 
-def _doctors():
-    from staff.models import Employee
+def _doctors(*keep):
+    """WATCH1B (CL-06) / video finding 9: the vaccine form's «الدكتور» is not a list of sales reps.
 
-    return Employee.objects.filter(active=True).order_by("name")
+    The same rule as the visit form and the agenda (``staff.serving_staff``); whoever the form already points at (the
+    logged-in employee, or what was posted) stays offered, so nothing a user picked is silently dropped."""
+
+    from staff.services import serving_staff
+
+    return serving_staff(*keep)
 
 
 # ---- bill and remove -------------------------------------------------------------------

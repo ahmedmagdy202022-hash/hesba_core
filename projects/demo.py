@@ -7,6 +7,10 @@ certificate, a cost or any money. The files are made here, from nothing: a one-p
 photograph of anyone, no real plan).
 
 Idempotent: a project that already has a report is left as it is.
+
+Contracting C1 (HG-103): ``seed_variations`` adds one approved variation order to the project that has a bill of
+quantities (more of one item, one new item of extra works and two weeks more time, with a signed copy attached), so
+«أوامر التغيير» does not open empty. It goes through ``projects.variations`` like the screens and moves no money.
 """
 
 import struct
@@ -21,7 +25,7 @@ from attachments import services as attachments
 from attachments.models import Kind, Stage
 
 from . import documents, site_reports
-from .models import SiteReport
+from .models import SiteReport, VariationOrder
 
 #: per project: four days, oldest first: (weather, work, delay, materials, visitors, crew, equipment, photos)
 DAYS = (
@@ -109,3 +113,27 @@ def seed(projects, owner):
                 _add(report, owner, _scene(2 + step + shot + 3 * index), f"صورة اليوم {shot + 1}.png", "image/png", Kind.PHOTO, Stage.PHOTO)
         filled += 1
     return filled
+
+
+def seed_variations(projects, owner):
+    """One approved variation order on the first of ``projects`` that has a bill of quantities, as ``owner``. Returns the
+    order, or None when there is nothing to put one on (no bill of quantities, or an order is already there)."""
+
+    from decimal import Decimal
+
+    from . import variations
+
+    today = timezone.localdate()
+    for project in projects:
+        items = list(project.boq.all())
+        if not items or VariationOrder.objects.filter(project=project).exists():
+            continue
+        raised = items[min(1, len(items) - 1)]
+        order = variations.save_order(
+            project, owner, order_date=today - timedelta(days=6), title="زيادة كميات وأعمال إضافية بطلب المالك",
+            reason="طلب المالك في محضر اجتماع الموقع، بعد مراجعة الاستشاري للرسومات المعدّلة.", extension_days="14",
+            changes=[(raised.pk, str((Decimal(raised.quantity) * Decimal("0.10")).quantize(Decimal("1"))))],
+            new_items=[{"code": "إ-1", "description": "تجهيزات إضافية للموقع العام", "unit": "مقطوعية", "quantity": "1", "rate": "65000"}])
+        _add(order, owner, _pdf("Variation order 1 - signed copy"), "النسخة الموقعة من المالك.pdf", "application/pdf", Kind.DOCUMENT, Stage.OTHER)
+        return variations.approve(project, order, owner, approved_on=today - timedelta(days=2), owner_reference="محضر اجتماع رقم 7")
+    return None

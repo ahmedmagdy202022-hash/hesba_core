@@ -151,7 +151,7 @@ class MakingTheLinkTests(OnlineSetup):
         self.assertEqual(online.base_url(), "https://meet.jit.si")
 
     def test_the_base_is_checked_like_a_pasted_link(self):
-        for bad, message in (("http://meet.example.org", "اللينك لازم يبدأ بـ https:// بس"), ("https://u:p@meet.example.org", "اللينك فيه اسم مستخدم"),
+        for bad, message in (("http://meet.example.org", "الرابط لازم يبدأ بـ https:// بس"), ("https://u:p@meet.example.org", "الرابط فيه اسم مستخدم"),
                              ("https://meet.example.org/?a=1", "عنوان السيرفر لازم يكون من غير علامة ? ولا #"), ("https://meet.example.org/#x", "من غير علامة ?")):
             with self.subTest(bad=bad), self.assertRaisesMessage(ValidationError, message):
                 online.save_settings({"base_url": bad}, self.owner)
@@ -188,21 +188,21 @@ class MakingTheLinkTests(OnlineSetup):
                          [("set_call_link", {"call_link": "replaced", "source": "pasted"}), ("set_call_link", {"call_link": "replaced", "source": "pasted"}),
                           ("remove_call_link", {"call_link": "none"})])
         self.assertNotIn("zoom.example.com", json.dumps(list(AuditLog.objects.values_list("before_data", "after_data"))))
-        self.assertContains(self.post("call_remove"), "مفيش لينك مكالمة عشان يتشال")  # nothing left to remove
+        self.assertContains(self.post("call_remove"), "مفيش رابط مكالمة عشان يتشال")  # nothing left to remove
 
     def test_a_pasted_link_that_is_not_plain_https_is_refused_with_the_exact_message(self):
-        cases = (("http://meet.example.org/room", "اللينك لازم يبدأ بـ https:// بس (http وjavascript وأي نوع تاني مرفوض).",
+        cases = (("http://meet.example.org/room", "الرابط لازم يبدأ بـ https:// بس (http وjavascript وأي نوع تاني مرفوض).",
                   "The link must start with https:// only (http, javascript and every other kind is refused)."),
-                 ("javascript:alert(1)", "اللينك لازم يبدأ بـ https:// بس (http وjavascript وأي نوع تاني مرفوض).",
+                 ("javascript:alert(1)", "الرابط لازم يبدأ بـ https:// بس (http وjavascript وأي نوع تاني مرفوض).",
                   "The link must start with https:// only (http, javascript and every other kind is refused)."),
-                 ("meet.example.org/room", "اللينك لازم يبدأ بـ https:// بس (http وjavascript وأي نوع تاني مرفوض).",
+                 ("meet.example.org/room", "الرابط لازم يبدأ بـ https:// بس (http وjavascript وأي نوع تاني مرفوض).",
                   "The link must start with https:// only (http, javascript and every other kind is refused)."),
-                 ("https://user:secret@meet.example.org/room", "اللينك فيه اسم مستخدم أو كلمة سر قبل اسم الموقع؛ ده مينفعش. استخدم لينك من غيرهم.",
+                 ("https://user:secret@meet.example.org/room", "الرابط فيه اسم مستخدم أو كلمة سر قبل اسم الموقع؛ ده مينفعش. استخدم رابط من غيرهم.",
                   "The link has a user name or password in front of the site's name, which is not allowed. Use a link without them."),
-                 ("https://meet.example.org/" + "a" * 600, "اللينك طويل أوي؛ الحد الأقصى 600 حرف.", "The link is too long; the maximum is 600 characters."),
-                 ("https://meet.example.org/a b", "اللينك فيه مسافة أو حرف مش مسموح بيه.", "The link has a space or a character that is not allowed."),
-                 ('https://meet.example.org/"x', "اللينك فيه مسافة أو حرف مش مسموح بيه.", "The link has a space or a character that is not allowed."),
-                 ("https://", "اللينك مش مظبوط.", "The link is not valid."), ("", "اكتب اللينك.", "Enter the link."))
+                 ("https://meet.example.org/" + "a" * 600, "الرابط طويل أوي؛ الحد الأقصى 600 حرف.", "The link is too long; the maximum is 600 characters."),
+                 ("https://meet.example.org/a b", "الرابط فيه مسافة أو حرف مش مسموح بيه.", "The link has a space or a character that is not allowed."),
+                 ('https://meet.example.org/"x', "الرابط فيه مسافة أو حرف مش مسموح بيه.", "The link has a space or a character that is not allowed."),
+                 ("https://", "الرابط مش مظبوط.", "The link is not valid."), ("", "اكتب الرابط.", "Enter the link."))
         self.client.force_login(self.manager)
         for bad, arabic, english in cases:
             for lang, message in (("ar", arabic), ("en", english)):
@@ -221,7 +221,7 @@ class MakingTheLinkTests(OnlineSetup):
             for action in ("call_generate", "call_remove"):
                 with self.subTest(status=status, action=action):
                     page = self.post(action, booking)
-                    self.assertContains(page, "الميعاد ده خلص أو اتلغى؛ مينفعش تغيّر لينك المكالمة")
+                    self.assertContains(page, "الميعاد ده خلص أو اتلغى؛ مينفعش تغيّر رابط المكالمة")
             self.assertEqual(Appointment.objects.get(pk=booking.pk).call_url, CALL)
             self.assertNotContains(self.client.get(self.detail(booking)), "data-call-controls")
         plain = self.make(self.patient, 15)
@@ -786,10 +786,10 @@ class ScreenTests(OnlineSetup):
                     self.assertEqual(page.status_code, 200)
                     self.assertNotRegex(page.content.decode(), r"<td\b[^>]*\bdata-label\b")
                     self.assertContains(page, 'dir="rtl"' if lang == "ar" else 'dir="ltr"')
-        self.assertContains(self.client.get(self.detail()), "اعمل لينك مكالمة" if not self.online.call_url else "اعمل لينك جديد")
+        self.assertContains(self.client.get(self.detail()), "اعمل رابط مكالمة" if not self.online.call_url else "اعمل رابط جديد")
         self.assertContains(self.client.get(self.detail(lang="en")), "Make a new link")
-        self.assertContains(self.client.get(self.detail()), "حط لينك")
-        self.assertContains(self.client.get(self.detail()), "شيل اللينك")
+        self.assertContains(self.client.get(self.detail()), "حط رابط")
+        self.assertContains(self.client.get(self.detail()), "شيل الرابط")
         self.assertContains(self.client.get(self.agenda()), "كشف أونلاين")  # the kind in the agenda row
 
     def test_the_booking_form_offers_online_in_a_clinic_and_keeps_an_online_booking_online(self):
@@ -818,7 +818,7 @@ class ScreenTests(OnlineSetup):
         url = reverse("appointments:online_settings")
         bad = self.client.post(url, {"lang": "ar", "base_url": "http://meet.example.org"})
         self.assertContains(bad, "data-online-settings-error")
-        self.assertContains(bad, "اللينك لازم يبدأ بـ https:// بس")
+        self.assertContains(bad, "الرابط لازم يبدأ بـ https:// بس")
         self.assertEqual(online.base_url(), "https://meet.jit.si")
         ok = self.client.post(url, {"lang": "ar", "base_url": "https://meet.clinic.example", "prepaid": "1", "public_booking": "1"})
         self.assertEqual(ok.status_code, 302)

@@ -38,13 +38,15 @@ def _at(day, hour, minute=0):
 
 
 def seed(master, doctor, owner, catalog, extras):
-    """Set the beds up once. ``doctor`` is the catalog's own; the patients are the sample's second and third customers."""
+    """Set the beds up once. ``doctor`` is the catalog's own; the stay that ended is the sample's third customer and the
+    patient still in a bed its fourth (video finding 8: the second customer was in a bed, in the queue and in an
+    appointment marked «جاري» at the same time)."""
 
     from master_data.models import Item
     from medical import inpatient
 
     customers = master["customers"]
-    if doctor is None or "patients" not in extras or len(customers) < 3 or Item.objects.filter(item_code=SENTINEL).exists():
+    if doctor is None or "patients" not in extras or len(customers) < 4 or Item.objects.filter(item_code=SENTINEL).exists():
         return False
     from settings_core.setup_services import usable_modules
 
@@ -78,7 +80,7 @@ def seed(master, doctor, owner, catalog, extras):
         inpatient.discharge_and_bill(ended, owner, when=_at(today - timedelta(days=2), 13))
 
         # A patient in bed 101 since the day before yesterday, with a couple of charges so far.
-        current = inpatient.admit(customers[1], beds["101"], owner, doctor=doctor, diagnosis="التهاب رئوي — ملاحظة ومضاد حيوي بالوريد",
+        current = inpatient.admit(customers[3], beds["101"], owner, doctor=doctor, diagnosis="التهاب رئوي — ملاحظة ومضاد حيوي بالوريد",
                                   when=_at(today - timedelta(days=2), 9, 30))
         inpatient.add_charge(current, {"kind": "procedure", "item": visit, "day": today - timedelta(days=2)}, owner)
         if supply is not None:

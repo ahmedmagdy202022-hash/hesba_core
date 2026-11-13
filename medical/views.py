@@ -89,8 +89,22 @@ def _guard(request, write=False):
         raise PermissionDenied("Patient files need a clinical permission (medical.treat_patients or medical.view_records).")
 
 
+#: Video finding 5 (the same layer as CL-01): screen words a sub-activity names for itself, read from the activity
+#: vocabulary. A lab's report is «تقرير المعمل», not «تقرير العيادة»; every other medical business keeps BASE's word.
+ACTIVITY_WORDS = {"report": "clinic_report", "tab_report": "clinic_report"}
+
+
+def _words(lang):
+    """WORDS[lang] with the keys this activity renames for itself."""
+
+    from settings_core.vocabulary import term
+
+    return {**WORDS[lang], **{key: term(source, lang) for key, source in ACTIVITY_WORDS.items()}}
+
+
 def _base(lang, **extra):
-    return {"lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": WORDS[lang], "page_title": WORDS[lang]["title"], "section": "medical", **extra}
+    words = _words(lang)
+    return {"lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": words, "page_title": words["title"], "section": "medical", **extra}
 
 
 #: The clinic's whole picture is for those who hold the records permission by role, not for a doctor reading their own patients.
@@ -107,7 +121,8 @@ def _tabs(request, current):
     lang = _lang(request)
     from . import views_lab
 
-    return {"tab": current, "shows_report": user_has_permission(request.user, REPORT_VIEW), "shows_lab": _is_lab(), "lab_tests_label": LAB_WORDS[lang]["tests"],
+    return {"tab": current, "shows_report": user_has_permission(request.user, REPORT_VIEW), "report_label": _words(lang)["tab_report"],
+            "shows_lab": _is_lab(), "lab_tests_label": LAB_WORDS[lang]["tests"],
             "lab_sample_label": views_lab.WORDS[lang]["tab_sample"], "lab_import_label": views_lab.WORDS[lang]["tab_import"],
             "shows_lab_import": _is_lab() and services.can_write(request.user),
             "shows_insurance": insurance.can_view(request.user), "insurance_label": INSURANCE_WORDS[lang]["tab"],
@@ -153,7 +168,7 @@ def report(request):
     if not user_has_permission(request.user, REPORT_VIEW):
         raise PermissionDenied("The clinic report needs medical.view_records.")
     lang = _lang(request)
-    words = WORDS[lang]
+    words = _words(lang)
     first, last, note = _period(request, words)
     with_money = user_has_permission(request.user, MONEY_VIEW)
     data = insights.period_report(first, last, with_money=with_money)
@@ -422,6 +437,7 @@ def dental_chart(request, pk):
     def cells(row):
         return [{"tooth": tooth, "condition": records[tooth].condition if tooth in records else "healthy",
                  "label": labels[records[tooth].condition if tooth in records else "healthy"],
+                 "short": dental.short_condition_label(records[tooth].condition if tooth in records else "healthy", lang),
                  "notes": records[tooth].notes if tooth in records else ""} for tooth in row]
 
     rows = {"upper_right": cells(layout[0]), "upper_left": cells(layout[1]), "lower_right": cells(layout[2]), "lower_left": cells(layout[3])}
@@ -448,9 +464,9 @@ LAB_WORDS = {
            "back": "ملف المريض", "sheet": "تقرير نتيجة تحاليل", "patient": "المريض", "file_no": "رقم الملف", "age": "السن", "years": "سنة",
            "signature": "توقيع المسؤول", "choose": "—", "none": "—", "remove": "امسح (اتسجلت غلط)", "reason": "السبب",
            # M6 (HG-085): the patient's link for one day
-           "send": "ابعت النتيجة للمريض", "send_h": "لينك النتيجة للمريض", "send_whatsapp": "ابعته واتساب", "copy": "نسخ اللينك",
-           "send_note": "اللينك شغال {days} أيام، والمريض بيكتب سنة ميلاده (أو آخر 4 أرقام من موبايله لو مفيش تاريخ ميلاد في الملف) عشان يفتحه. لو النتيجة اتعدّلت اللينك ده بيبطل؛ ابعت لينك جديد.",
-           "send_text_note": "رسالة الواتساب فيها اسم المعمل واللينك بس، من غير أسامي التحاليل ولا النتايج.",
+           "send": "ابعت النتيجة للمريض", "send_h": "رابط النتيجة للمريض", "send_whatsapp": "ابعته واتساب", "copy": "نسخ الرابط",
+           "send_note": "الرابط شغال {days} أيام، والمريض بيكتب سنة ميلاده (أو آخر 4 أرقام من موبايله لو مفيش تاريخ ميلاد في الملف) عشان يفتحه. لو النتيجة اتعدّلت الرابط ده بيبطل؛ ابعت رابط جديد.",
+           "send_text_note": "رسالة الواتساب فيها اسم المعمل والرابط بس، من غير أسامي التحاليل ولا النتايج.",
            # M9 (HG-092): the analyzer's code for a test
            "code": "كود الجهاز", "code_hint": "اختياري: الاسم القصير اللي الجهاز بيكتبه للتحليل (زي GLU). بيتكتب على ملصق العيّنة وبيربط ملف الجهاز بالتحليل."},
     "en": {"title": "Lab results", "intro": "Enter each test's result; the value is checked against the normal range in force when it is entered.",
@@ -951,7 +967,7 @@ def queue_screen(request):
 
 INSURANCE_WORDS = {
     "ar": {"title": "التأمين الطبي", "tab": "التأمين", "intro": "كل شركة تأمين عميل عادي عليها عقد: نسبة بتتحمّلها من الكشف (ونسبة مختلفة لأي خدمة لو حبيت) ويوم المطالبة. الكشف المؤمَّن عليه بيطلع فاتورتين عاديتين: واحدة على المريض بنصيبه، وواحدة على الشركة بالباقي. المطالبة الشهرية هي فواتير الشركة المترحّلة في الشهر، والشركة بتدفع بتحصيل عادي.",
-           "insurer": "شركة التأمين", "existing": "شركة موجودة في العملاء", "or_new": "أو اسم شركة جديدة", "phone": "التليفون", "percent": "نسبة التحمّل %",
+           "insurer": "شركة التأمين", "existing": "شركة موجودة في العملاء", "or_new": "أو اسم شركة جديدة", "phone": "التليفون", "percent": "نسبة تغطية الشركة %",
            "claim_day": "يوم المطالبة في الشهر", "notes": "ملاحظات", "active": "شغالة", "save": "حفظ", "add": "ضيف شركة تأمين", "none": "مفيش شركات تأمين لسه.",
            "members": "مرضى عليها", "owed": "عليها دلوقتي", "next_claim": "المطالبة الجاية", "open": "افتح", "saved": "اتحفظ.", "back": "التأمين الطبي",
            "contract": "العقد", "services": "خدمات بنسبة مختلفة", "services_hint": "اكتب 0 لخدمة مش مغطاة؛ امسح النسبة عشان ترجع لنسبة العقد.",
@@ -965,7 +981,7 @@ INSURANCE_WORDS = {
            "view_only": "إضافة الشركات وتعديلها للي عنده صلاحية إنشاء فاتورة بيع بس.",
            "claim_title": "مطالبة تأمين", "period": "الفترة", "signature": "الختم والتوقيع"},
     "en": {"title": "Medical insurance", "tab": "Insurance", "intro": "Each insurance company is an ordinary customer with a contract: the share of a visit it covers (with an own share for any service if you like) and its claim day. An insured visit makes two ordinary invoices: the patient's for their share and the insurer's for the rest. The monthly claim is the insurer's posted invoices in the month, and it pays through an ordinary collection.",
-           "insurer": "Insurance company", "existing": "A company already in customers", "or_new": "or a new company's name", "phone": "Phone", "percent": "Covered share %",
+           "insurer": "Insurance company", "existing": "A company already in customers", "or_new": "or a new company's name", "phone": "Phone", "percent": "Company cover %",
            "claim_day": "Claim day of the month", "notes": "Notes", "active": "Active", "save": "Save", "add": "Add an insurance company", "none": "No insurance companies yet.",
            "members": "Patients covered", "owed": "Owes now", "next_claim": "Next claim", "open": "Open", "saved": "Saved.", "back": "Medical insurance",
            "contract": "Contract", "services": "Services at another share", "services_hint": "Type 0 for a service not covered; clear the share to go back to the contract's.",
