@@ -62,8 +62,15 @@
   <p data-portal-factor="{{ kind }}">{{ ask }}</p>
   {% if message %}<div class="cl-msg cl-msg--danger gp-msg" id="gp-msg" role="alert" data-portal-message>{{ message }}</div>{% endif %}
   <form class="gp-form" method="post" action="{{ action }}" autocomplete="off">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
-    <label class="gp-label-block" for="gp-answer">{{ label }}</label>
+{% if kind == 'date' %}<fieldset class="gp-fieldset" aria-describedby="gp-hint"><legend class="gp-label-block" id="gp-hint">{{ label }}</legend>
+    <div class="gp-date" dir="ltr">
+      <div class="gp-datebox"><label class="gp-label" for="gp-day">{{ ww.label_day }}</label><input class="gp-input gp-input--part" id="gp-day" name="day" inputmode="numeric" pattern="[0-9٠-٩۰-۹]*" maxlength="2" autocomplete="off" required placeholder="{% if lang == 'en' %}DD{% else %}٠١{% endif %}"{% if message %} aria-describedby="gp-msg"{% endif %}></div>
+      <div class="gp-datebox"><label class="gp-label" for="gp-month">{{ ww.label_month }}</label><input class="gp-input gp-input--part" id="gp-month" name="month" inputmode="numeric" pattern="[0-9٠-٩۰-۹]*" maxlength="2" autocomplete="off" required placeholder="{% if lang == 'en' %}MM{% else %}٠١{% endif %}"></div>
+      <div class="gp-datebox gp-datebox--year"><label class="gp-label" for="gp-year">{{ ww.label_year }}</label><input class="gp-input gp-input--part" id="gp-year" name="year" inputmode="numeric" pattern="[0-9٠-٩۰-۹]*" maxlength="4" autocomplete="off" required placeholder="{% if lang == 'en' %}YYYY{% else %}٢٠١٠{% endif %}"></div>
+    </div></fieldset>
+{% else %}    <label class="gp-label-block" for="gp-answer">{{ label }}</label>
     <input class="gp-input" id="gp-answer" name="answer" inputmode="numeric" pattern="[0-9٠-٩]*" maxlength="4" autocomplete="off" dir="ltr" required{% if message %} aria-describedby="gp-msg"{% endif %}>
+{% endif %}
     <div class="cl-actions"><button class="cl-btn cl-btn--primary" type="submit">{{ ww.open }}</button></div>
   </form>
 </section>

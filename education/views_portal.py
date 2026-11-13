@@ -21,24 +21,26 @@ from .models import Student
 from .views import _back, _base, _lang
 
 STAFF_WORDS = {
-    "ar": {"h": "بوابة ولي الأمر", "intro": "ولي الأمر يفتح رابط واحد ويكتب سنة ميلاد أحد الأبناء، ويشوف المواعيد والحضور والدرجات المنشورة والمصروفات، من غير حساب.",
+    "ar": {"h": "بوابة ولي الأمر", "intro": "ولي الأمر يفتح رابط واحد ويكتب تاريخ ميلاد أحد الأبناء، ويشوف المواعيد والحضور والدرجات المنشورة والمصروفات، من غير حساب.",
            "send": "ابعت بوابة ولي الأمر", "send_again": "ابعت رابط جديد", "revoke": "إلغاء الرابط", "none": "مفيش رابط شغال لولي الأمر ده.",
            "live": "فيه رابط شغال", "made": "اتعمل يوم", "until": "صالح لحد", "opened": "آخر فتح", "never_opened": "لسه ماتفتحش",
            "again_hint": "الرابط بيظهر مرة واحدة بس وقت عمله. «ابعت رابط جديد» بيوقّف القديم.",
-           "kind_year": "السؤال: سنة ميلاد أحد الأبناء.", "kind_phone": "السؤال: آخر 4 أرقام من موبايل ولي الأمر.", "kind_none": "مينفعش تبعت البوابة دلوقتي: ضيف تاريخ ميلاد لأحد الأبناء أو رقم موبايل لولي الأمر.",
+           "kind_date": "السؤال: تاريخ ميلاد أحد الأبناء (اليوم والشهر والسنة).", "kind_phone": "السؤال: آخر 4 أرقام من موبايل ولي الأمر.", "kind_none": "مينفعش تبعت البوابة دلوقتي: ضيف تاريخ ميلاد لأحد الأبناء أو رقم موبايل لولي الأمر.",
            "children": "الأبناء اللي هتظهر", "made_h": "الرابط جاهز", "made_p": "الرابط ده بيظهر هنا مرة واحدة بس، وبيوقّف أي رابط قبله لنفس ولي الأمر.",
            "copy": "انسخ الرابط", "whatsapp": "ابعته واتساب", "back": "رجوع لملف الطالب", "link_made": "اتعمل الرابط.", "link_revoked": "الرابط اتلغى، ومبقاش بيفتح حاجة.",
            "revoke_hint": "إلغاء الرابط بيقفله فورًا، وتقدر تبعت رابط جديد بعد كده.", "warn_h": "تنبيه", "expired": "انتهى",
-           "no_phone": "ولي الأمر ده مالوش رقم واتساب أو موبايل، فانسخ الرابط وابعته بنفسك."},
-    "en": {"h": "Guardian portal", "intro": "The guardian opens one link, types the birth year of one of the children, and sees schedules, attendance, published marks and fees, with no account.",
+           "no_phone": "ولي الأمر ده مالوش رقم واتساب أو موبايل، فانسخ الرابط وابعته بنفسك.",
+           "spent": "الرابط اتقفل بعد محاولات غلط كتير. ابعت رابط جديد.", "tries_left": "محاولات غلط باقية"},
+    "en": {"h": "Guardian portal", "intro": "The guardian opens one link, types the birth date of one of the children, and sees schedules, attendance, published marks and fees, with no account.",
            "send": "Send the guardian portal", "send_again": "Send a new link", "revoke": "Revoke the link", "none": "This guardian has no live link.",
            "live": "A link is live", "made": "Made on", "until": "Valid until", "opened": "Last opened", "never_opened": "Not opened yet",
            "again_hint": "The link is shown only once, when it is made. “Send a new link” stops the old one.",
-           "kind_year": "The question: the birth year of one of the children.", "kind_phone": "The question: the last 4 digits of the guardian's mobile.", "kind_none": "The portal cannot be sent now: add a child's birth date or the guardian's mobile number.",
+           "kind_date": "The question: the birth date of one of the children (day, month and year).", "kind_phone": "The question: the last 4 digits of the guardian's mobile.", "kind_none": "The portal cannot be sent now: add a child's birth date or the guardian's mobile number.",
            "children": "Children it will show", "made_h": "The link is ready", "made_p": "This link is shown here once only, and it stops any earlier link for the same guardian.",
            "copy": "Copy the link", "whatsapp": "Send on WhatsApp", "back": "Back to the student", "link_made": "The link was made.", "link_revoked": "The link was revoked and opens nothing now.",
            "revoke_hint": "Revoking closes the link at once, and you can send a new one afterwards.", "warn_h": "Note", "expired": "Expired",
-           "no_phone": "This guardian has no WhatsApp or mobile number, so copy the link and send it yourself."},
+           "no_phone": "This guardian has no WhatsApp or mobile number, so copy the link and send it yourself.",
+           "spent": "The link closed after too many wrong answers. Send a new link.", "tries_left": "wrong answers left"},
 }
 
 
@@ -85,8 +87,12 @@ def _page(request, token, found, lang, message="", status=200, sheet=None):
 
 def _answer(request, token, found, lang):
     words = portal._words(lang)
-    answer = portal._digits(request.POST.get("answer"))
-    if len(answer) != 4:  # not counted: a typo in the length proves nothing either way
+    if found.kind == portal.DATE:
+        answer = portal.parse_date(request.POST)  # an ISO date, or None: not a real date, or a year outside 1900 to now
+    else:
+        answer = portal._digits(request.POST.get("answer"))
+        answer = answer if len(answer) == 4 else None
+    if answer is None:  # a format error is not counted: a typo proves nothing either way
         return _page(request, token, found, lang, words[f"format_{found.kind}"], status=400)
     outcome = portal.take(found, request)  # the slot is taken before comparing
     if outcome == "dead":
@@ -148,9 +154,10 @@ def student_card(request, student, lang):
     if not portal.can_manage(request.user):
         return {}
     link = portal.live_link_of(student.payer)
+    spent = None if link else portal.spent_link_of(student.payer)
     info = portal.preview(student)
     staff = portal.messages(lang)
-    return {"portal_card": True, "gp": STAFF_WORDS[lang], "portal_link": link, "portal_until": portal.expires_at(link) if link else None,
+    return {"portal_card": True, "gp": STAFF_WORDS[lang], "portal_link": link, "portal_spent": spent, "portal_until": portal.expires_at(link) if link else None,
             "portal_kind": info["kind"], "portal_children": info["children"], "portal_warning": staff["phone_only"] if info["kind"] == portal.PHONE else ""}
 
 

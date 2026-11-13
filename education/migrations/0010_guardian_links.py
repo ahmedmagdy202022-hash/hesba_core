@@ -31,6 +31,7 @@ class Migration(migrations.Migration):
                 ("created_at", models.DateTimeField(auto_now_add=True)),
                 ("revoked_at", models.DateTimeField(blank=True, null=True)),
                 ("last_opened_at", models.DateTimeField(blank=True, null=True)),
+                ("wrong_answers", models.PositiveSmallIntegerField(default=0)),
                 (
                     "created_by",
                     models.ForeignKey(

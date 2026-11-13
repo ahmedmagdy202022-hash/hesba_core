@@ -9,15 +9,17 @@ centre must be able to switch it off at once (a custody dispute, a wrong number,
   decides: revoked, past ``EDU_PORTAL_DAYS`` (from the row's ``created_at``, not only from the token's own timestamp), a wrong nonce,
   an archived payer, a changed phone, or no child left to show all give the one plain page. A new link revokes the payer's older ones
   (and the database allows one live link per payer), so «ابعت تاني» replaces, and one tap on «إلغاء الرابط» ends it.
-- The second factor is the birth year of any of the payer's active children in the link's entity; only when none of them has a birth
-  date, the last 4 digits of the payer's phone (which protect nothing if the link went to a wrong number: the centre is told so).
-  Before the answer the page names only the centre.
+- The second factor is the full birth date (day, month, year) of any of the payer's active children in the link's entity; only when none
+  of them has a birth date, the last 4 digits of the payer's phone (which protect nothing if the link went to a wrong number: the centre
+  is told so). Before the answer the page names only the centre. A birth year alone (about 15 plausible values) was judged too weak.
 - A passed factor is remembered in this browser by a short signed cookie bound to this link (never the Django session). Answers are
-  counted per link, per address and per window in Django's default cache before they are compared (so N parallel answers cannot slip
-  past the limit) and a right answer gives its slot back: 8 wrong answers in the link's whole life, 5 per 15 minutes, 50 per hour per
-  address; any request to the page is 60 per minute per address.
+  counted before they are compared (so N parallel answers cannot slip past the limit) and a right answer gives its slot back. The
+  lifetime limit, 8 wrong answers in the link's whole life, is a column on the row (``wrong_answers``, raised by one atomic guarded
+  UPDATE), so it survives a restart and is shared by every worker; the short windows, 5 per 15 minutes per link and 50 per hour per
+  address, and the 60 page loads per minute per address are in Django's default cache (per process, as the booking and lab pages).
 - Every failure shows the same page with the same status. Every response is ``no-store``, ``noindex`` and ``same-origin``.
-- The portal only reads. Its one write is ``last_opened_at`` and an audit row with no actor and no address.
+- The portal only reads. A visit writes ``last_opened_at`` and an audit row with no actor and no address; an answer writes only the
+  ``wrong_answers`` counter.
 
 Entity: an anonymous request has no current entity, so every read below runs inside ``working_in(link.entity)``; the children, groups,
 exams, invoices and the dues figure are then the link's entity's alone.
@@ -31,7 +33,7 @@ import hashlib
 import hmac
 import json
 import secrets
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 from django.conf import settings
@@ -63,22 +65,24 @@ NURSERY_DAYS = 14
 ZERO = Decimal("0.00")
 
 # Wrong answers: per link is the real limit; per address is generous because behind the host's proxy many visitors can share one
-# address (HG-070). (name, limit, window in seconds; None = the link's whole life, kept for its max age)
+# address (HG-070). (name, limit, window in seconds). TOKEN_LIFE lives in the row (``wrong_answers``), not in the cache: its window is None.
 TOKEN_LIFE = ("tokenlife", 8, None)  # then the link is dead: «the centre sends a new one»
 TOKEN_SHORT = ("token15", 5, 15 * 60)
 ADDRESS_HOUR = ("ip", 50, 3600)
 PAGE_MINUTE = ("page", 60, 60)  # any request to the page, per address: blunts a flood
-YEAR, PHONE = "year", "phone"
+DATE, PHONE = "date", "phone"
+FIRST_YEAR = 1900  # a birth date older than this is a typo, not a date
 
 # What a guardian reads. Everything here is held to the customer-voice rules (reports/tests_customer_voice.py): «رابط», «حضرتك»,
 # «تواصل مع المركز», nouns for attendance (a boy and a girl read the same line), no Arabic line starts or ends with an English word.
 WORDS = {
     "ar": {
         "sub": "بوابة ولي الأمر", "title": "بوابة ولي الأمر", "ask_h": "أهلاً بحضرتك",
-        "ask_year": "عشان نتأكد إن حضرتك ولي الأمر، اكتب سنة ميلاد أحد الأبناء المسجّلين عندنا (4 أرقام).", "label_year": "سنة الميلاد",
+        "ask_date": "عشان نتأكد إن حضرتك ولي الأمر، اكتب تاريخ ميلاد أحد الأبناء المسجّلين عندنا (اليوم والشهر والسنة بالأرقام).", "label_date": "تاريخ الميلاد",
+        "label_day": "اليوم", "label_month": "الشهر", "label_year": "السنة",
         "ask_phone": "عشان نتأكد إن حضرتك ولي الأمر، اكتب آخر 4 أرقام من رقم الموبايل المسجّل عندنا.", "label_phone": "آخر 4 أرقام من الموبايل",
         "open": "افتح البوابة", "wrong": "البيانات دي مش مطابقة للي عندنا. اتأكد وجرّب تاني، أو تواصل مع المركز.",
-        "format_year": "اكتب سنة الميلاد 4 أرقام.", "format_phone": "اكتب آخر 4 أرقام من الموبايل.",
+        "format_date": "اكتب تاريخ ميلاد حقيقي: اليوم والشهر والسنة بالأرقام.", "format_phone": "اكتب آخر 4 أرقام من الموبايل.",
         "busy": "محاولات كتير متتالية. جرّب تاني بعد دقايق، أو تواصل مع المركز.",
         "private": "الصفحة دي خاصة بحضرتك وفيها بيانات الأبناء، فياريت ماتشاركش الرابط مع حد.",
         "dead_h": "الرابط ده مبقاش شغال", "dead": "ممكن تكون صلاحيته انتهت أو المركز وقّفه. تواصل مع المركز عشان نبعت لحضرتك رابط جديد.",
@@ -94,15 +98,16 @@ WORDS = {
         "fees_h": "المصروفات", "owed": "إجمالي المستحق على الحساب", "open_invoices": "الفواتير المفتوحة", "invoice": "فاتورة رقم", "remaining": "الباقي",
         "pay": "ادفع", "none_owed": "مفيش مستحقات على الحساب. شكرًا لحضرتك.", "other_dues": "فيه كمان مستحقات تانية على الحساب. تواصل مع المركز لو حضرتك محتاج التفاصيل.",
         "pay_hint": "هتدفع على صفحة الدفع الآمنة، وبنسجّل الدفع أول ما يتأكد.", "for_students": "عن", "month": "شهر",
-        "wa_text_year": "أهلاً بحضرتك، دي بوابة ولي الأمر من {company}. افتح الرابط واكتب سنة ميلاد أحد الأبناء. الرابط صالح لمدة {days} يوم:\n{url}",
+        "wa_text_date": "أهلاً بحضرتك، دي بوابة ولي الأمر من {company}. افتح الرابط واكتب تاريخ ميلاد أحد الأبناء. الرابط صالح لمدة {days} يوم:\n{url}",
         "wa_text_phone": "أهلاً بحضرتك، دي بوابة ولي الأمر من {company}. افتح الرابط واكتب آخر 4 أرقام من الموبايل المسجّل عندنا. الرابط صالح لمدة {days} يوم:\n{url}",
     },
     "en": {
         "sub": "Guardian portal", "title": "Guardian portal", "ask_h": "Welcome",
-        "ask_year": "To make sure you are the guardian, type the birth year of one of the children registered with us (4 digits).", "label_year": "Birth year",
+        "ask_date": "To make sure you are the guardian, type the birth date of one of the children registered with us (day, month and year, in digits).", "label_date": "Birth date",
+        "label_day": "Day", "label_month": "Month", "label_year": "Year",
         "ask_phone": "To make sure you are the guardian, type the last 4 digits of the mobile number we have on file.", "label_phone": "The mobile's last 4 digits",
         "open": "Open the portal", "wrong": "That does not match the details we have. Check and try again, or contact the centre.",
-        "format_year": "Type the birth year as 4 digits.", "format_phone": "Type the last 4 digits of the mobile.",
+        "format_date": "Type a real birth date: the day, the month and the year, in digits.", "format_phone": "Type the last 4 digits of the mobile.",
         "busy": "Too many tries in a row. Please wait a few minutes and try again, or contact the centre.",
         "private": "This page is private to you and shows your children's details. Please do not share the link.",
         "dead_h": "This link no longer works", "dead": "It may have expired or the centre switched it off. Contact the centre and we will send you a new link.",
@@ -118,7 +123,7 @@ WORDS = {
         "fees_h": "Fees", "owed": "Total due on the account", "open_invoices": "Open invoices", "invoice": "Invoice", "remaining": "Remaining",
         "pay": "Pay", "none_owed": "Nothing is due on the account. Thank you.", "other_dues": "There are other amounts due on the account. Contact the centre for the details.",
         "pay_hint": "You pay on the secure payment page, and we record the payment as soon as it is confirmed.", "for_students": "for", "month": "Month",
-        "wa_text_year": "Hello, this is the guardian portal from {company}. Open the link and type the birth year of one of the children. The link works for {days} days:\n{url}",
+        "wa_text_date": "Hello, this is the guardian portal from {company}. Open the link and type the birth date of one of the children. The link works for {days} days:\n{url}",
         "wa_text_phone": "Hello, this is the guardian portal from {company}. Open the link and type the last 4 digits of the mobile number we have on file. The link works for {days} days:\n{url}",
     },
 }
@@ -170,21 +175,35 @@ def children(payer):
 
 
 def factor(payer, kids):
-    """(kind, [accepted answers]) or None. The birth years of the children that have a birth date; only when none has one, the last 4
-    digits of the payer's phone. A mix (one child with a date, one without) uses the years alone: the phone is the weaker factor."""
+    """(kind, [accepted answers]) or None. The full birth dates (ISO, ``YYYY-MM-DD``) of the children that have one; only when none has
+    one, the last 4 digits of the payer's phone. A mix (one child with a date, one without) uses the dates alone: the phone is the weaker factor."""
 
-    years = sorted({kid.date_of_birth.year for kid in kids if kid.date_of_birth})
-    if years:
-        return YEAR, [f"{year:04d}" for year in years]
+    dates = sorted({kid.date_of_birth.isoformat() for kid in kids if kid.date_of_birth})
+    if dates:
+        return DATE, dates
     phone = _digits(payer.phone)
     if len(phone) >= MIN_PHONE_DIGITS:
         return PHONE, [phone[-4:]]
     return None
 
 
+def parse_date(post):
+    """The birth date typed in the three boxes (``day``, ``month``, ``year``; Arabic-Indic and Persian digits read) as an ISO string, or
+    None when it is not a real calendar date or its year is outside 1900 to this year: a format error, never counted as a wrong answer."""
+
+    day, month, year = (_digits(post.get(name)) for name in ("day", "month", "year"))
+    if not (1 <= len(day) <= 2 and 1 <= len(month) <= 2 and len(year) == 4):
+        return None
+    try:
+        found = date(int(year), int(month), int(day))
+    except ValueError:
+        return None
+    return found.isoformat() if FIRST_YEAR <= found.year <= timezone.localdate().year else None
+
+
 def _matches(found, answer):
     ok = False
-    for wanted in found.answers:  # every candidate is compared: no early exit tells which one was close
+    for wanted in found.answers:  # every candidate (every child's date) is compared: no early exit tells which one was close
         ok |= hmac.compare_digest(wanted, answer)
     return ok
 
@@ -271,14 +290,11 @@ def _address(request):
 
 def _key(bucket, who):
     name, limit, window = bucket
-    if window is None:  # the link's whole life
-        return f"education-portal:{name}:{who}"
     return f"education-portal:{name}:{who}:{int(timezone.now().timestamp()) // window}"
 
 
 def _ttl(bucket):
-    window = bucket[2]
-    return max_age() + 60 if window is None else window * 2
+    return bucket[2] * 2
 
 
 def count(bucket, who):
@@ -303,22 +319,34 @@ def _give_back(bucket, who):
 
 def _slots(found, request):
     who = ident(found.link)
-    return ((TOKEN_LIFE, who), (TOKEN_SHORT, who), (ADDRESS_HOUR, _address(request)))
+    return ((TOKEN_SHORT, who), (ADDRESS_HOUR, _address(request)))
 
 
 def used_up(found):
-    """True once the link had its lifetime of wrong answers (TOKEN_LIFE): it is dead for any new answer."""
+    """True once the link had its lifetime of wrong answers (TOKEN_LIFE): it is dead for any new answer. Read from the row."""
 
-    return (cache.get(_key(TOKEN_LIFE, ident(found.link))) or 0) >= TOKEN_LIFE[1]
+    return GuardianLink.objects.filter(pk=found.link.pk, wrong_answers__gte=TOKEN_LIFE[1]).exists()
+
+
+def _life_take(link):
+    """One atomic guarded UPDATE: the answer's slot in the link's lifetime, or False when the limit is already reached. Shared by every worker."""
+
+    return GuardianLink.objects.filter(pk=link.pk, wrong_answers__lt=TOKEN_LIFE[1]).update(wrong_answers=F("wrong_answers") + 1) == 1
+
+
+def _life_give_back(link):
+    GuardianLink.objects.filter(pk=link.pk, wrong_answers__gt=0).update(wrong_answers=F("wrong_answers") - 1)
 
 
 def take(found, request):
-    """Count before comparing: take a slot in every bucket, then refuse if any is over its limit.
+    """Count before comparing: take a slot in the row's lifetime counter, then in every cache window, then refuse if any is over its limit.
 
     Returns "ok" (the slots are held: keep them for a wrong answer, ``give_back`` them for a right one), "dead" (the link's lifetime of
     wrong answers is used up) or "busy" (a window is full). A refused answer gives its slots back, so only answers that were actually
     compared are counted, and N answers at once can never compare more than the limit."""
 
+    if not _life_take(found.link):
+        return "dead"
     taken = []
     for bucket, who in _slots(found, request):
         number = count(bucket, who)
@@ -326,11 +354,13 @@ def take(found, request):
         if number > bucket[1]:
             for held in taken:
                 _give_back(*held)
-            return "dead" if bucket is TOKEN_LIFE else "busy"
+            _life_give_back(found.link)
+            return "busy"
     return "ok"
 
 
 def give_back(found, request):
+    _life_give_back(found.link)
     for bucket, who in _slots(found, request):
         _give_back(bucket, who)
 
@@ -437,11 +467,21 @@ def revoke(link, user, lang="ar"):
     return row
 
 
-def live_link_of(payer):
-    """The payer's one link that still opens (not revoked, not past its days) in the entity being worked in, or None."""
-
+def _open_links(payer):
     now = timezone.now()
-    return next((link for link in scoped_links().filter(payer=payer, revoked_at__isnull=True).select_related("entity") if is_live(link, now)), None)
+    return [link for link in scoped_links().filter(payer=payer, revoked_at__isnull=True).select_related("entity") if is_live(link, now)]
+
+
+def live_link_of(payer):
+    """The payer's one link that still opens (not revoked, not past its days, answers left) in the entity being worked in, or None."""
+
+    return next((link for link in _open_links(payer) if link.wrong_answers < TOKEN_LIFE[1]), None)
+
+
+def spent_link_of(payer):
+    """The payer's link that is not revoked or expired but has used all its wrong answers: it opens for nobody new. Or None."""
+
+    return next((link for link in _open_links(payer) if link.wrong_answers >= TOKEN_LIFE[1]), None)
 
 
 def record_open(found):

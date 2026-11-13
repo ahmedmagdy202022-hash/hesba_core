@@ -75,6 +75,8 @@ GROUP_A, GROUP_B = "مجموعة الرياضيات المسائية", "مجمو
 TEACHER_A, TEACHER_B = "أ. منى الشاذلي الكبرى", "أ. هاني درويش الصغير"
 PICKER = "الجد عبد الرحمن الفقي"
 BORN_YOUSEF, BORN_MARIAM, BORN_STRANGER = date(2011, 3, 17), date(2014, 6, 2), date(2009, 9, 9)
+# what a guardian types in the day / month / year boxes (the helper splits on "/"); WRONG is a real date nobody in the fixtures was born on
+RIGHT, MARIAM_BORN, STRANGER_BORN, BRANCH_BORN, WRONG = "17/3/2011", "2/6/2014", "9/9/2009", "5/1/2016", "1/1/2000"
 
 
 def day(n):
@@ -200,9 +202,18 @@ class PortalSetup(PayFeesSetup):
         return Client(**extra)
 
     def post(self, client, token, answer, lang="ar"):
-        return client.post(self.url(token, lang), {"answer": answer, "lang": lang})
+        """Answer a link: ``"17/3/2011"`` fills the day, month and year boxes; a dict is posted as it is; other text is the phone's single box."""
 
-    def open_portal(self, student=None, answer="2011", lang="ar", client=None):
+        data = {"lang": lang}
+        if isinstance(answer, dict):
+            data.update(answer)
+        elif "/" in answer:
+            data.update(dict(zip(("day", "month", "year"), answer.split("/"))))
+        else:
+            data["answer"] = answer
+        return client.post(self.url(token, lang), data)
+
+    def open_portal(self, student=None, answer=RIGHT, lang="ar", client=None):
         """(client, token, the portal page) of a fresh link, the factor answered."""
 
         client = client or self.anon()
@@ -257,9 +268,9 @@ class TokenTests(PortalSetup):
         response = self.anon().get(self.url(token))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'data-guardian-portal="ask"')
-        self.assertContains(response, 'data-portal-factor="year"')
+        self.assertContains(response, 'data-portal-factor="date"')
         self.assertContains(response, "Demo Store")
-        self.assertContains(response, "سنة الميلاد")
+        self.assertContains(response, "تاريخ الميلاد")
         self.assertNotContains(response, "data-section")
         body = normalized(response, token)
         for secret in (YOUSEF, MARIAM, STRANGER, GROUP_A, GROUP_B, TEACHER_A, "2011", "2014", "2009", PAYER_PHONE, PAYER_NAME, "رياضيات", "17"):
@@ -296,7 +307,7 @@ class TokenTests(PortalSetup):
             with self.subTest(label):
                 for method in ("get", "post"):
                     client = self.anon()
-                    response = client.get(self.url(bad)) if method == "get" else self.post(client, bad, "2011")
+                    response = client.get(self.url(bad)) if method == "get" else self.post(client, bad, RIGHT)
                     self.assertDead(response)
                     body = normalized(response, bad)
                     reference = reference or body
@@ -308,16 +319,16 @@ class TokenTests(PortalSetup):
         first = self.make()
         old = token_of(first["url"])
         client = self.anon()
-        self.assertEqual(self.post(client, old, "2011").status_code, 303)
+        self.assertEqual(self.post(client, old, RIGHT).status_code, 303)
         self.assertContains(client.get(self.url(old)), 'data-guardian-portal="sheet"')
         second = self.make()  # «ابعت تاني»: the old one stops, even for a browser that had passed
         new = token_of(second["url"])
         self.assertNotEqual(old, new)
         forged = self.anon().get(self.url("forged-token-xyz"))
         self.assertDead(client.get(self.url(old)))
-        self.assertDead(self.post(self.anon(), old, "2011"))
+        self.assertDead(self.post(self.anon(), old, RIGHT))
         self.assertEqual(normalized(client.get(self.url(old)), old), normalized(forged, "forged-token-xyz"))
-        self.assertEqual(self.post(self.anon(), new, "2011").status_code, 303)
+        self.assertEqual(self.post(self.anon(), new, RIGHT).status_code, 303)
         first["link"].refresh_from_db()
         self.assertIsNotNone(first["link"].revoked_at)
         portal.revoke(second["link"], self.owner)
@@ -349,7 +360,7 @@ class TokenTests(PortalSetup):
         with override_settings(EDU_PORTAL_DAYS=1), self.clock(days=2):
             self.assertDead(self.anon().get(self.url(token)))
         client = self.anon()
-        self.post(client, token, "2011")
+        self.post(client, token, RIGHT)
         with self.clock(days=31):
             self.assertDead(client.get(self.url(token)))  # a passed browser does not outlive the link either
 
@@ -362,24 +373,24 @@ class TokenTests(PortalSetup):
                 self.payer.refresh_from_db()
                 token = self.token()
                 client = self.anon()
-                self.post(client, token, "2011")
+                self.post(client, token, RIGHT)
                 self.assertContains(client.get(self.url(token)), 'data-guardian-portal="sheet"')
                 change()
                 self.assertDead(client.get(self.url(token)))
-                self.assertDead(self.post(self.anon(), token, "2011"))
+                self.assertDead(self.post(self.anon(), token, RIGHT))
 
     def test_a_child_moved_to_another_payer_disappears_and_an_empty_portal_is_dead(self):
         token = self.token()
         client = self.anon()
-        self.post(client, token, "2011")
+        self.post(client, token, RIGHT)
         Student.objects.filter(pk=self.mariam.pk).update(payer=self.stranger.payer)  # custody changed
         page = client.get(self.url(token))
         self.assertContains(page, YOUSEF)
         self.assertNotContains(page, MARIAM)
-        self.assertEqual(self.post(self.anon(), token, "2014").status_code, 400)  # her birth year no longer opens it
+        self.assertEqual(self.post(self.anon(), token, MARIAM_BORN).status_code, 400)  # her birth year no longer opens it
         Student.objects.filter(pk=self.yousef.pk).update(active=False)  # nobody left to show
         self.assertDead(client.get(self.url(token)))
-        self.assertDead(self.post(self.anon(), token, "2011"))
+        self.assertDead(self.post(self.anon(), token, RIGHT))
 
     def test_the_links_of_another_entity_show_that_entitys_children_only(self):
         branch = Entity.objects.create(code="E-E3", name_ar="فرع الاختبار", activity_slug="education", sub_activity_slug="tutoring_center")
@@ -394,8 +405,8 @@ class TokenTests(PortalSetup):
         self.assertTrue(main_link.entity.is_main)
         client = self.anon()
         token = token_of(main["url"])
-        self.assertEqual(self.post(client, token, "2016").status_code, 400)  # the branch child's year is no factor on the main link
-        self.assertEqual(self.post(client, token, "2011").status_code, 303)
+        self.assertEqual(self.post(client, token, BRANCH_BORN).status_code, 400)  # the branch child's year is no factor on the main link
+        self.assertEqual(self.post(client, token, RIGHT).status_code, 303)
         page = client.get(self.url(token))
         self.assertContains(page, YOUSEF)
         self.assertNotContains(page, BRANCH_CHILD)
@@ -405,8 +416,8 @@ class TokenTests(PortalSetup):
         self.assertEqual(branch_made["link"].entity, branch)
         branch_token = token_of(branch_made["url"])
         other = self.anon()
-        self.assertEqual(self.post(other, branch_token, "2011").status_code, 400)  # the main children's years are no factor on the branch link
-        self.assertEqual(self.post(other, branch_token, "2016").status_code, 303)
+        self.assertEqual(self.post(other, branch_token, RIGHT).status_code, 400)  # the main children's years are no factor on the branch link
+        self.assertEqual(self.post(other, branch_token, BRANCH_BORN).status_code, 303)
         shown = other.get(self.url(branch_token))
         self.assertContains(shown, BRANCH_CHILD)
         for name in (YOUSEF, MARIAM, GROUP_A, "كورس الفرع x"):
@@ -421,35 +432,48 @@ class TokenTests(PortalSetup):
 
 
 class FactorTests(PortalSetup):
-    def test_any_childs_birth_year_opens_it_and_nothing_else_does(self):
+    def test_any_childs_full_birth_date_opens_it_and_nothing_else_does(self):
         token = self.token()
         ask = self.anon().get(self.url(token))
-        self.assertContains(ask, 'data-portal-factor="year"')
+        self.assertContains(ask, 'data-portal-factor="date"')
         self.assertNotContains(ask, "آخر 4 أرقام")  # one question, no «or»
-        for answer in ("2011", "2014", "٢٠١٤"):  # either child's year, Arabic digits read
+        body = ask.content.decode()
+        for name in ("day", "month", "year"):  # three numeric boxes, no date picker
+            self.assertRegex(body, rf'<input class="gp-input gp-input--part" id="gp-{name}" name="{name}" inputmode="numeric" [^>]*autocomplete="off"')
+        self.assertEqual([body.index(f'name="{name}"') for name in ("day", "month", "year")], sorted(body.index(f'name="{name}"') for name in ("day", "month", "year")))  # day, month, year
+        self.assertIn('class="gp-date" dir="ltr"', body)  # the same visual order in Arabic and in English
+        self.assertNotIn('type="date"', body)
+        for word in ("اليوم", "الشهر", "السنة", "تاريخ الميلاد"):
+            self.assertIn(word, body)
+        english = self.anon().get(self.url(token, "en")).content.decode()
+        self.assertIn('class="gp-date" dir="ltr"', english)
+        for word in ("Day", "Month", "Year", "Birth date"):
+            self.assertIn(word, english)
+        for answer in (RIGHT, MARIAM_BORN, "٢/٦/٢٠١٤", "۱۷/۰۳/۲۰۱۱", "17/03/2011", " 17 / 3 / 2011 "):  # either child's date, Arabic-Indic and Persian digits, a leading zero
             client = self.anon()
             response = self.post(client, token, answer)
-            self.assertEqual(response.status_code, 303)
+            self.assertEqual(response.status_code, 303, answer)
             self.assertEqual(response["Location"], self.url(token))
             self.assertPrivate(response)
             self.assertNotIn("sessionid", response.cookies)
-        for answer in ("2009", "2012", "4567", "0000", "1234"):  # another family's child's year, a stranger's guess, the phone's last 4
+        for answer in (STRANGER_BORN, "17/3/2012", "18/3/2011", "3/17/2011", WRONG, "2/6/2011"):  # another family's child, one field off, day and month swapped, a stranger's guess
             client = self.anon()
             response = self.post(client, token, answer)
-            self.assertEqual(response.status_code, 400)
+            self.assertEqual(response.status_code, 400, answer)
             self.assertContains(response, "data-portal-message", status_code=400)
             self.assertNotIn(portal.cookie_name(portal.read_token(token)), response.cookies)
             self.assertContains(client.get(self.url(token)), 'data-guardian-portal="ask"')
+        self.assertEqual(self.post(self.anon(), token, {"answer": "4567"}).status_code, 400)  # the phone's last 4 digits are no answer to a date question
 
     def test_wrong_answers_look_the_same_whoever_the_family(self):
         bodies = []
         for student, secret in ((self.yousef, MARIAM), (self.stranger, YOUSEF)):
             client = self.anon()
             token = self.token(student)
-            response = self.post(client, token, "1000")
+            response = self.post(client, token, WRONG)
             self.assertEqual(response.status_code, 400)
             body = normalized(response, token)
-            for hidden in (YOUSEF, MARIAM, STRANGER, "2011", "2014", "2009", secret):
+            for hidden in (YOUSEF, MARIAM, STRANGER, "2011", "2014", "2009", "2011-03-17", secret):
                 self.assertNotIn(hidden, body)
             bodies.append(body)
         self.assertEqual(bodies[0], bodies[1])
@@ -461,19 +485,20 @@ class FactorTests(PortalSetup):
         ask = self.anon().get(self.url(token))
         self.assertContains(ask, 'data-portal-factor="phone"')
         self.assertContains(ask, "آخر 4 أرقام")
-        self.assertNotContains(ask, "سنة الميلاد")
-        self.assertEqual(self.post(self.anon(), token, "2009").status_code, 400)  # a birth year is no factor now
+        self.assertNotContains(ask, "تاريخ الميلاد")
+        self.assertNotContains(ask, 'name="day"')
+        self.assertEqual(self.post(self.anon(), token, STRANGER_BORN).status_code, 400)  # a birth date is no answer now: the box is the phone's
         self.assertEqual(self.post(self.anon(), token, "6777").status_code, 303)
         self.assertEqual(self.post(self.anon(), token, "٦٧٧٧").status_code, 303)
         self.assertEqual(portal.factor(self.stranger.payer, [self.stranger]), ("phone", ["6777"]))
 
-    def test_a_child_with_a_birth_date_among_children_without_one_makes_the_years_the_only_factor(self):
+    def test_a_child_with_a_birth_date_among_children_without_one_makes_the_dates_the_only_factor(self):
         self.mariam.date_of_birth = None
         self.mariam.save()
         token = self.token()
-        self.assertEqual(self.post(self.anon(), token, "4567").status_code, 400)  # the phone is the weaker factor: not offered while a year exists
-        self.assertEqual(self.post(self.anon(), token, "2014").status_code, 400)
-        self.assertEqual(self.post(self.anon(), token, "2011").status_code, 303)
+        self.assertEqual(self.post(self.anon(), token, {"answer": "4567"}).status_code, 400)  # the phone is the weaker factor: not offered while a date exists
+        self.assertEqual(self.post(self.anon(), token, MARIAM_BORN).status_code, 400)
+        self.assertEqual(self.post(self.anon(), token, RIGHT).status_code, 303)
 
     def test_with_neither_factor_no_link_is_made(self):
         self.stranger.date_of_birth = None
@@ -485,22 +510,31 @@ class FactorTests(PortalSetup):
         self.assertFalse(AuditLog.objects.filter(action="create_guardian_link").exists())
         self.assertEqual(portal.preview(Student.objects.get(pk=self.stranger.pk))["kind"], None)
 
-    def test_a_badly_typed_answer_is_not_counted(self):
+    def test_a_badly_typed_answer_is_a_format_error_and_is_not_counted(self):
         client = self.anon()
         token = self.token()
-        for answer in ("", "12", "12345", "abcd"):
+        link = portal.read_token(token).link
+        nothing = lambda **extra: {"day": "17", "month": "3", "year": "2011", **extra}  # noqa: E731
+        for answer in ({}, nothing(day="31", month="2"), nothing(day="0"), nothing(month="13"), nothing(year="1899"), nothing(year=str(FIXED.year + 1)), nothing(year="11"),
+                       nothing(day="ab"), nothing(day=""), nothing(day="123"), {"answer": "2011"}):
             response = self.post(client, token, answer)
-            self.assertEqual(response.status_code, 400)
-            self.assertContains(response, "4 أرقام", status_code=400)
-        for _ in range(portal.TOKEN_SHORT[1]):  # all five real tries are still there
-            self.assertEqual(self.post(client, token, "0000").status_code, 400)
-        self.assertEqual(self.post(client, token, "2011").status_code, 429)
+            self.assertEqual(response.status_code, 400, answer)
+            self.assertContains(response, "اكتب تاريخ ميلاد حقيقي", status_code=400)
+        self.assertEqual(self.post(client, token, "1/1/1900").status_code, 400)  # 1900 is a real date: a wrong answer, counted
+        self.assertEqual(GuardianLink.objects.get(pk=link.pk).wrong_answers, 1)  # only that one
+        self.post(client, token, f"1/1/{FIXED.year}")
+        self.assertEqual(GuardianLink.objects.get(pk=link.pk).wrong_answers, 2)  # this year is allowed: a real date, wrong, counted
+        for _ in range(portal.TOKEN_SHORT[1] - 2):  # five real tries in all: the format errors took none
+            self.assertEqual(self.post(client, token, WRONG).status_code, 400)
+        self.assertEqual(self.post(client, token, RIGHT).status_code, 429)
+        self.assertEqual(portal.parse_date({"day": "٣١", "month": "١٢", "year": "٢٠٠٠"}), "2000-12-31")
 
-    def test_the_comparison_is_constant_time_and_checks_every_year(self):
+    def test_the_comparison_is_constant_time_and_checks_every_date(self):
         found = portal.read_token(self.token())
         with mock.patch.object(portal.hmac, "compare_digest", wraps=portal.hmac.compare_digest) as spy:
-            self.assertTrue(portal._matches(found, "2011"))  # the first year matches, the second is still compared
+            self.assertTrue(portal._matches(found, "2011-03-17"))  # the first date matches, the second is still compared
         self.assertEqual(spy.call_count, 2)
+        self.assertEqual(found.answers, ["2011-03-17", "2014-06-02"])
 
 
 # ---- throttles ----
@@ -514,41 +548,41 @@ class ThrottleTests(PortalSetup):
         client = self.anon()
         token = self.token()
         for _ in range(portal.TOKEN_SHORT[1]):
-            self.assertEqual(self.post(client, token, "0000").status_code, 400)
-        locked = self.post(client, token, "2011")
+            self.assertEqual(self.post(client, token, WRONG).status_code, 400)
+        locked = self.post(client, token, RIGHT)
         self.assertEqual(locked.status_code, 429)
         self.assertContains(locked, "محاولات كتير", status_code=429)
         self.assertPrivate(locked)
-        self.assertEqual(self.post(self.anon(REMOTE_ADDR="10.9.9.9"), token, "2011").status_code, 429)  # per link, whatever the address
-        self.assertEqual(self.post(client, self.token(self.stranger), "2009").status_code, 303)  # another link from the same address still works
+        self.assertEqual(self.post(self.anon(REMOTE_ADDR="10.9.9.9"), token, RIGHT).status_code, 429)  # per link, whatever the address
+        self.assertEqual(self.post(client, self.token(self.stranger), STRANGER_BORN).status_code, 303)  # another link from the same address still works
         with self.clock(seconds=portal.TOKEN_SHORT[2] + 1):  # the window passed
-            self.assertEqual(self.post(client, token, "2011").status_code, 303)
+            self.assertEqual(self.post(client, token, RIGHT).status_code, 303)
 
     def _spend(self, token, wrong, start_seconds=0):
-        """``wrong`` wrong answers spread over fifteen-minute windows so the short bucket never refuses them; the clock the last one ran at."""
+        """``wrong`` wrong answers spread over fifteen-minute windows so the short bucket never refuses them; the clock a second after the last one."""
 
         done, window = 0, 0
         while done < wrong:
             with self.clock(seconds=start_seconds + window * portal.TOKEN_SHORT[2]):
                 for _ in range(min(portal.TOKEN_SHORT[1], wrong - done)):
-                    self.assertEqual(self.post(self.anon(), token, "0000").status_code, 400)
+                    self.assertEqual(self.post(self.anon(), token, WRONG).status_code, 400)
                     done += 1
             window += 1
-        return start_seconds + window * portal.TOKEN_SHORT[2]
+        return start_seconds + (window - 1) * portal.TOKEN_SHORT[2] + 1  # a second after the last wrong answer, well inside the pass's 30 minutes
 
     def test_a_link_has_eight_wrong_answers_in_its_whole_life_then_it_is_dead(self):
         token = self.token()
         passed = self.anon()
-        self.assertEqual(self.post(passed, token, "2011").status_code, 303)  # a right answer is not charged
+        self.assertEqual(self.post(passed, token, RIGHT).status_code, 303)  # a right answer is not charged
         later = self._spend(token, portal.TOKEN_LIFE[1])
         with self.clock(seconds=later):
-            self.assertDead(self.post(self.anon(), token, "2011"))  # even the right answer, from anywhere
-            self.assertDead(self.post(self.anon(REMOTE_ADDR="10.7.7.7"), token, "2011"))
+            self.assertDead(self.post(self.anon(), token, RIGHT))  # even the right answer, from anywhere
+            self.assertDead(self.post(self.anon(REMOTE_ADDR="10.7.7.7"), token, RIGHT))
             self.assertDead(self.anon().get(self.url(token)))  # no question left to ask
             self.assertContains(passed.get(self.url(token)), 'data-guardian-portal="sheet"')  # a browser that passed keeps its 30 minutes
-            self.assertDead(self.post(passed, token, "2011"))  # but makes no new answer
+            self.assertDead(self.post(passed, token, RIGHT))  # but makes no new answer
             self.assertEqual(normalized(self.anon().get(self.url(token)), token), normalized(self.anon().get(self.url("forged-xyz")), "forged-xyz"))
-            self.assertEqual(self.post(self.anon(), self.token(), "2011").status_code, 303)  # «ابعت تاني»: a new link, clean counters
+            self.assertEqual(self.post(self.anon(), self.token(), RIGHT).status_code, 303)  # «ابعت تاني»: a new link, clean counters
 
     def test_a_re_signed_token_of_the_same_link_shares_its_counters_and_its_pass(self):
         made = self.make()
@@ -558,18 +592,18 @@ class ThrottleTests(PortalSetup):
         first = token_of(made["url"])
         self.assertNotEqual(first, again)
         for _ in range(portal.TOKEN_SHORT[1]):
-            self.assertEqual(self.post(self.anon(), first, "0000").status_code, 400)
-        self.assertEqual(self.post(self.anon(), again, "2011").status_code, 429)  # the counters belong to the link, not to the token's text
+            self.assertEqual(self.post(self.anon(), first, WRONG).status_code, 400)
+        self.assertEqual(self.post(self.anon(), again, RIGHT).status_code, 429)  # the counters belong to the link, not to the token's text
 
     def test_the_address_limit_counts_wrong_answers_from_one_address(self):
         with mock.patch.object(portal, "ADDRESS_HOUR", ("ip", 3, 3600)):
             client = self.anon(REMOTE_ADDR="10.0.0.7")
             for student in (self.yousef, self.stranger):
-                self.assertEqual(self.post(client, self.token(student), "0000").status_code, 400)
-            self.assertEqual(self.post(client, self.token(self.yousef), "0000").status_code, 400)
+                self.assertEqual(self.post(client, self.token(student), WRONG).status_code, 400)
+            self.assertEqual(self.post(client, self.token(self.yousef), WRONG).status_code, 400)
             fresh = self.token(self.yousef)
-            self.assertEqual(self.post(client, fresh, "2011").status_code, 429)
-            self.assertEqual(self.post(self.anon(REMOTE_ADDR="10.0.0.8"), fresh, "2011").status_code, 303)
+            self.assertEqual(self.post(client, fresh, RIGHT).status_code, 429)
+            self.assertEqual(self.post(self.anon(REMOTE_ADDR="10.0.0.8"), fresh, RIGHT).status_code, 303)
 
     def test_sixty_page_loads_a_minute_then_the_plain_page_with_429(self):
         token = self.token()
@@ -584,45 +618,129 @@ class ThrottleTests(PortalSetup):
         with self.clock(seconds=61):
             self.assertEqual(client.get(self.url(token)).status_code, 200)
 
+    def row(self, link):
+        return GuardianLink.objects.get(pk=link.pk).wrong_answers
+
     def test_answers_take_their_slot_before_they_are_compared(self):
         request = RequestFactory().post("/", REMOTE_ADDR="10.3.3.3")
         found = portal.read_token(self.token())
         outcomes = [portal.take(found, request) for _ in range(12)]  # twelve answers that all reach the counting step before any compares
         self.assertEqual(outcomes.count("ok"), portal.TOKEN_SHORT[1])
         self.assertEqual(outcomes.count("busy"), 12 - portal.TOKEN_SHORT[1])
-        self.assertEqual(cache.get(portal._key(portal.TOKEN_LIFE, portal.ident(found.link))), portal.TOKEN_SHORT[1])  # refused ones gave theirs back
+        self.assertEqual(self.row(found.link), portal.TOKEN_SHORT[1])  # refused ones gave their lifetime slot back
+        # with nothing else in the way, the lifetime limit alone stops the ninth: eight slots, then dead (sequential here; the threads' version is below)
         cache.clear()
-        results, barrier = [], threading.Barrier(20, timeout=20)
+        with mock.patch.object(portal, "TOKEN_SHORT", ("token15", 1000, 900)), mock.patch.object(portal, "ADDRESS_HOUR", ("ip", 1000, 3600)):
+            fresh = portal.read_token(self.token())
+            results = [portal.take(fresh, request) for _ in range(20)]
+        self.assertEqual((results.count("ok"), results.count("dead")), (portal.TOKEN_LIFE[1], 20 - portal.TOKEN_LIFE[1]))
+        self.assertEqual(self.row(fresh.link), portal.TOKEN_LIFE[1])  # the counter stops at the limit, never beyond
+        self.assertTrue(portal.used_up(fresh))
+        seen, real = [], portal._matches
+
+        def spy(found_, answer_):
+            seen.append(self.row(found_.link))
+            return real(found_, answer_)
+
+        latest = self.token()  # made now: its row is the one the spy reads
+        found = portal.read_token(latest)
+        with mock.patch.object(portal, "_matches", side_effect=spy):
+            self.assertEqual(self.post(self.anon(), latest, WRONG).status_code, 400)
+        self.assertEqual(seen, [1])  # the view compares only after its slot is in the row
+        self.assertEqual(self.row(found.link), 1)  # and a wrong answer leaves it raised
+        self.assertEqual(portal.take(found, request), "ok")
+        portal.give_back(found, request)
+        self.assertEqual(self.row(found.link), 1)  # a right answer gives its slot back: one up, one down
+        for _ in range(3):
+            portal.give_back(found, request)
+        self.assertEqual(self.row(found.link), 0)  # and the guarded decrement never goes below zero
+        portal.give_back(found, request)
+        self.assertEqual(self.row(found.link), 0)
+
+    def test_the_lifetime_limit_is_in_the_row_so_a_restart_or_another_worker_does_not_reset_it(self):
+        made = self.make()
+        token = token_of(made["url"])
+        later = self._spend(token, portal.TOKEN_LIFE[1])
+        self.assertEqual(self.row(made["link"]), portal.TOKEN_LIFE[1])
+        cache.clear()  # a deploy, a restart, or a request landing on another worker: the cache is empty
+        with self.clock(seconds=later + 3600):
+            self.assertDead(self.post(self.anon(), token, RIGHT))
+            self.assertDead(self.anon().get(self.url(token)))
+        self.assertEqual(self.row(made["link"]), portal.TOKEN_LIFE[1])
+        # a replaced or revoked link is a dead row that keeps its count; the new link is a new row at zero
+        again = self.make()
+        made["link"].refresh_from_db()
+        self.assertEqual((made["link"].wrong_answers, again["link"].wrong_answers), (portal.TOKEN_LIFE[1], 0))
+        portal.revoke(again["link"], self.owner)
+        self.post(self.anon(), token_of(self.make()["url"]), WRONG)
+        self.assertEqual(self.row(made["link"]), portal.TOKEN_LIFE[1])  # nothing resets an old row
+        self.assertEqual(self.row(again["link"]), 0)
+
+    def test_an_answer_writes_only_the_counter_and_a_visit_writes_the_open(self):
+        from django.test.utils import CaptureQueriesContext
+
+        client, token = self.anon(), self.token()
+        link = portal.read_token(token).link
+
+        def writes(call):
+            with CaptureQueriesContext(connection) as queries:
+                call()
+            return [q["sql"] for q in queries if q["sql"].split()[0].upper() in ("INSERT", "UPDATE", "DELETE")]
+
+        wrong = writes(lambda: self.post(client, token, WRONG))
+        self.assertEqual(len(wrong), 1, wrong)  # one guarded UPDATE of the row's counter, left raised
+        self.assertIn("guardianlink", wrong[0])
+        self.assertEqual(self.row(link), 1)
+        right = writes(lambda: self.post(client, token, RIGHT))
+        self.assertEqual(len(right), 2, right)  # the slot taken and given back: the same counter, net zero
+        self.assertTrue(all("guardianlink" in sql and sql.startswith("UPDATE") for sql in right))
+        self.assertEqual(self.row(link), 1)
+        self.assertEqual(AuditLog.objects.filter(action="open_guardian_portal").count(), 0)  # answering opens nothing
+        self.assertEqual(writes(lambda: self.post(client, token, {"day": "31", "month": "2", "year": "2011"})), [])  # a format error writes nothing
+        self.assertEqual(writes(lambda: self.anon().get(self.url("forged-token"))), [])
+        self.assertEqual(writes(lambda: self.anon().get(self.url(token))), [])  # the question page: nothing
+
+
+class LifetimeRaceTests(TransactionTestCase):
+    """N answers at once never compare more than the lifetime limit: the counter is one atomic guarded UPDATE in the row.
+
+    A TransactionTestCase, because threads cannot see a TestCase's uncommitted rows. Run on PostgreSQL (real concurrent connections) and on SQLite
+    (where writers take turns): both must give exactly eight."""
+
+    serialized_rollback = True  # the content types and permissions come back after the flush, so the migration tests after this class still start clean
+
+    def setUp(self):
+        from entities.services import main_entity
+        from hesba_testing.factories import make_customer, make_user
+
+        cache.clear()
+        self.link = GuardianLink.objects.create(payer=make_customer(customer_code="RACE-1", name="ولي أمر السباق"), entity=main_entity(), created_by=make_user(username="race_user"),
+                                                nonce="r" * 40)
+        self.found = portal.Found(self.link, [], portal.DATE, [])
+
+    def test_twenty_answers_at_once_compare_exactly_eight(self):
+        request = RequestFactory().post("/", REMOTE_ADDR="10.4.4.4")
+        results, errors, barrier = [], [], threading.Barrier(20, timeout=30)
 
         def answer():
-            barrier.wait()
-            results.append(portal.take(found, request))
+            try:
+                barrier.wait()
+                results.append(portal.take(self.found, request))
+            except Exception as error:  # noqa: BLE001  (reported below, never swallowed)
+                errors.append(repr(error))
+            finally:
+                connection.close()
 
-        with mock.patch.object(portal, "TOKEN_SHORT", ("token15", 1000, 900)):
+        with mock.patch.object(portal, "TOKEN_SHORT", ("token15", 1000, 900)), mock.patch.object(portal, "ADDRESS_HOUR", ("ip", 1000, 3600)):
             threads = [threading.Thread(target=answer) for _ in range(20)]
             for thread in threads:
                 thread.start()
             for thread in threads:
                 thread.join()
-        self.assertEqual(results.count("ok"), portal.TOKEN_LIFE[1])  # twenty at once: eight compared, no more
-        self.assertEqual(results.count("dead"), 20 - portal.TOKEN_LIFE[1])
-        self.assertTrue(portal.used_up(found))
-        cache.clear()
-        seen, real = [], portal._matches
-
-        def spy(found_, answer_):
-            seen.append(cache.get(portal._key(portal.TOKEN_LIFE, portal.ident(found.link))))
-            return real(found_, answer_)
-
-        fresh = self.token()  # made now: its slot counters are the ones the spy reads
-        found = portal.read_token(fresh)
-        with mock.patch.object(portal, "_matches", side_effect=spy):
-            self.assertEqual(self.post(self.anon(), fresh, "0000").status_code, 400)
-        self.assertEqual(seen, [1])  # the view compares only after its slot is taken
-        cache.clear()
-        self.assertEqual(portal.take(found, request), "ok")
-        portal.give_back(found, request)
-        self.assertEqual(cache.get(portal._key(portal.TOKEN_LIFE, portal.ident(found.link))), 0)  # a right answer gives its slot back
+        self.assertEqual(errors, [])
+        self.assertEqual((results.count("ok"), results.count("dead")), (portal.TOKEN_LIFE[1], 20 - portal.TOKEN_LIFE[1]), results)
+        self.assertEqual(GuardianLink.objects.get(pk=self.link.pk).wrong_answers, portal.TOKEN_LIFE[1])
+        self.assertTrue(portal.used_up(self.found))
 
 
 # ---- the pass cookie ----
@@ -632,7 +750,7 @@ class CookieTests(PortalSetup):
         client = self.anon()
         token = self.token()
         self.assertContains(client.get(self.url(token)), 'data-guardian-portal="ask"')
-        response = self.post(client, token, "2011")
+        response = self.post(client, token, RIGHT)
         found = portal.read_token(token)
         cookie = response.cookies[portal.cookie_name(found)]
         self.assertEqual(cookie["path"], reverse("guardian_portal", args=[token]))
@@ -655,7 +773,7 @@ class CookieTests(PortalSetup):
         client = self.anon()
         first = self.token(self.yousef)
         second = self.token(self.stranger)
-        self.post(client, first, "2011")
+        self.post(client, first, RIGHT)
         self.assertContains(client.get(self.url(first)), 'data-guardian-portal="sheet"')
         response = client.get(self.url(second))
         self.assertContains(response, 'data-guardian-portal="ask"')
@@ -684,7 +802,7 @@ class CookieTests(PortalSetup):
         staff.force_login(self.owner)
         before = (staff.session.session_key, staff.session.get("_auth_user_id"))
         self.assertContains(staff.get(self.url(token)), 'data-guardian-portal="ask"')
-        self.post(staff, token, "2011")
+        self.post(staff, token, RIGHT)
         self.assertContains(staff.get(self.url(token)), 'data-guardian-portal="sheet"')
         self.assertEqual((staff.session.session_key, staff.session.get("_auth_user_id")), before)
         self.assertEqual(staff.get(reverse("education:student", args=[self.yousef.pk])).status_code, 200)  # still signed in
@@ -697,9 +815,9 @@ class HeaderTests(PortalSetup):
     def test_every_response_carries_the_private_headers_and_failures_share_a_status(self):
         token = self.token()
         client = self.anon()
-        responses = [client.get(self.url(token)), self.post(client, token, "0000"), self.post(client, token, "bad"), client.put(self.url(token)),
-                     client.get(self.url("forged")), self.post(client, "forged", "2011"), client.delete(self.url("forged")), client.get(self.url(token, "en")),
-                     self.post(self.anon(), token, "2011"), client.get(self.url(token))]
+        responses = [client.get(self.url(token)), self.post(client, token, WRONG), self.post(client, token, "bad"), client.put(self.url(token)),
+                     client.get(self.url("forged")), self.post(client, "forged", RIGHT), client.delete(self.url("forged")), client.get(self.url(token, "en")),
+                     self.post(self.anon(), token, RIGHT), client.get(self.url(token))]
         for response in responses:
             self.assertPrivate(response)
         statuses = [response.status_code for response in responses]
@@ -707,10 +825,10 @@ class HeaderTests(PortalSetup):
         with mock.patch.object(portal, "PAGE_MINUTE", ("page", 1, 60)):
             client.get(self.url(token))
             self.assertPrivate(client.get(self.url(token)))  # even the flood page
-        self.assertPrivate(self.post(self.anon(), token, "2011"))
+        self.assertPrivate(self.post(self.anon(), token, RIGHT))
         for _ in range(portal.TOKEN_SHORT[1]):
-            self.assertPrivate(self.post(client, token, "0000"))
-        self.assertPrivate(self.post(client, token, "0000"))  # a locked link
+            self.assertPrivate(self.post(client, token, WRONG))
+        self.assertPrivate(self.post(client, token, WRONG))  # a locked link
 
     def test_the_pages_embed_nothing_from_another_site_and_set_no_cookie_but_the_pass(self):
         client, token, page = self.open_portal()
@@ -718,17 +836,17 @@ class HeaderTests(PortalSetup):
             body = response.content.decode()
             self.assertEqual(re.findall(r'<(?:script|link|img|iframe|source|video|audio)\b[^>]*(?:src|href)="(?:https?:)?//', body), [])
         token = self.token(self.stranger)
-        response = self.post(self.anon(), token, "2009")
+        response = self.post(self.anon(), token, STRANGER_BORN)
         self.assertEqual(sorted(response.cookies.keys()), [portal.cookie_name(portal.read_token(token))])  # the pass, and nothing else (no session)
-        self.assertNotIn(portal.cookie_name(portal.read_token(token)), self.post(self.anon(), token, "1000").cookies)  # a wrong answer sets no pass
+        self.assertNotIn(portal.cookie_name(portal.read_token(token)), self.post(self.anon(), token, WRONG).cookies)  # a wrong answer sets no pass
 
     def test_csrf_is_enforced_on_the_answer(self):
         token = self.token()
         strict = self.anon(enforce_csrf_checks=True)
-        self.assertEqual(strict.post(self.url(token), {"answer": "2011"}).status_code, 403)
+        self.assertEqual(strict.post(self.url(token), {"day": "17", "month": "3", "year": "2011"}).status_code, 403)
         page = strict.get(self.url(token))
         csrf = re.search(r'name="csrfmiddlewaretoken" value="([^"]+)"', page.content.decode()).group(1)
-        self.assertEqual(strict.post(self.url(token), {"answer": "2011", "csrfmiddlewaretoken": csrf}).status_code, 303)
+        self.assertEqual(strict.post(self.url(token), {"day": "17", "month": "3", "year": "2011", "csrfmiddlewaretoken": csrf}).status_code, 303)
 
     def test_the_route_is_public_and_a_bad_token_is_the_plain_page_not_the_login(self):
         response = self.anon().get("/p/edu/x/")
@@ -765,12 +883,14 @@ class ContentTests(PortalSetup):
         client, token, page = self.open_portal()
         body = normalized(page, token)
         for marker in (NOTES, SCHOOL, STAGE, PAYER_PHONE, "1234567", "+201001234567", "2011", "2014", "2009", "2011-03-17", "17 مارس", "March 17", "2014-06-02", "2 يونيو",
+                       "17/3/2011", "17/03/2011", "17-03-2011", "03/17/2011", "2011/03/17", "17.03.2011", "17 March 2011", "March 17, 2011", "17 مارس 2011", "١٧/٣/٢٠١١", "٢٠١١",
+                       "2/6/2014", "02/06/2014", "2 June 2014", "June 2, 2014", "2 يونيو 2014", "9/9/2009", "09/09/2009", "9 سبتمبر",
                        PICKUP_ID, PICKUP_PHONE, ESCORT, TEACHER_RATE, "987,654", "قاعة سرية", ATT_NOTE, SESSION_TOPIC, EXAM_NOTES, MARK_NOTE, DAY_NOTE, ENROLL_NOTE,
                        HIDDEN_EXAM, "11.25", STRANGER, STRANGER_PAYER, "01555666777", self.inv_stranger.invoice_number, "ST-0", PAYER_NAME, RELATION,
                        "student", "/education/", "/admin/", "teacher_pay", "ledger", "cost"):
             self.assertNotIn(marker, body, marker)
         english = normalized(client.get(self.url(token, "en")), token)
-        for marker in (NOTES, SCHOOL, PAYER_PHONE, PICKUP_ID, TEACHER_RATE, ATT_NOTE, HIDDEN_EXAM, STRANGER, "2011-03-17", "March 17"):
+        for marker in (NOTES, SCHOOL, PAYER_PHONE, PICKUP_ID, TEACHER_RATE, ATT_NOTE, HIDDEN_EXAM, STRANGER, "2011-03-17", "March 17", "17 March 2011", "17/3/2011", "2 June 2014"):
             self.assertNotIn(marker, english, marker)
         self.assertNotIn(PICKUP_ID, body)
 
@@ -867,9 +987,9 @@ class ContentTests(PortalSetup):
         self.assertContains(client.get(self.url(token, "ar")), "المجموعات والمواعيد")  # the pass survives the language switch
         fresh = self.token()  # a new link replaces the one above
         ask = self.anon().get(self.url(fresh, "en"))
-        self.assertContains(ask, "Birth year")
+        self.assertContains(ask, "Birth date")
         self.assertContains(ask, "To make sure you are the guardian")
-        wrong = self.post(self.anon(), fresh, "0000", "en")
+        wrong = self.post(self.anon(), fresh, WRONG, "en")
         self.assertContains(wrong, "does not match", status_code=400)
         dead = self.anon().get(self.url("x", "en"))
         self.assertContains(dead, "This link no longer works", status_code=404)
@@ -945,7 +1065,7 @@ class FeesTests(PortalSetup):
         before_logs = AuditLog.objects.exclude(action="open_guardian_portal").count()
         with self.clock(hours=73):
             gone = self.anon()
-            self.post(gone, token, "2011")
+            self.post(gone, token, RIGHT)
             self.assertNotContains(gone.get(self.url(token)), "data-pay-go")
         link.refresh_from_db()
         self.assertEqual(link.status, LinkStatus.NEW)  # no expiry sweep from a public page
@@ -977,8 +1097,8 @@ class NothingMovesTests(PortalSetup):
         made = self.make()
         token = token_of(made["url"])
         client = self.anon()
-        self.post(client, token, "0000")
-        self.post(client, token, "2011")
+        self.post(client, token, WRONG)
+        self.post(client, token, RIGHT)
         for _ in range(3):
             client.get(self.url(token))
         client.get(self.url(token, "en"))
@@ -1026,7 +1146,7 @@ class StaffTests(PortalSetup):
         self.assertContains(page, "data-portal-card")
         self.assertContains(page, "data-portal-make")
         self.assertContains(page, "ابعت بوابة ولي الأمر")
-        self.assertContains(page, 'data-portal-kind="year"')
+        self.assertContains(page, 'data-portal-kind="date"')
         self.assertNotContains(page, "data-portal-live")
         self.assertNotContains(page, "data-portal-revoke")
         self.assertNotContains(page, "data-portal-phone-only")
@@ -1061,14 +1181,14 @@ class StaffTests(PortalSetup):
                 self.assertNotIn(secret, words)
         stranger = self.make(self.stranger)
         year = unquote(stranger["whatsapp"].split("?text=", 1)[1]).replace(stranger["url"], "")
-        self.assertIn("سنة ميلاد أحد الأبناء", year)
+        self.assertIn("تاريخ ميلاد أحد الأبناء", year)
         self.assertNotIn("آخر 4 أرقام", year)
         self.stranger.date_of_birth = None
         self.stranger.save()
         again = self.make(self.stranger)
         phone = unquote(again["whatsapp"].split("?text=", 1)[1]).replace(again["url"], "")  # no birth date: the question is the phone's last 4 digits, still no name or number
         self.assertIn("آخر 4 أرقام", phone)
-        self.assertNotIn("سنة ميلاد", phone)
+        self.assertNotIn("تاريخ ميلاد", phone)
         for secret in (STRANGER, STRANGER_PAYER, "01555666777", "6777"):
             self.assertNotIn(secret, phone)
 
@@ -1095,7 +1215,7 @@ class StaffTests(PortalSetup):
         made = self.make()
         token = token_of(made["url"])
         client = self.anon()
-        self.post(client, token, "2011")
+        self.post(client, token, RIGHT)
         response = owner.post(self.revoke_url(), {"link": made["link"].pk, "lang": "ar"}, follow=True)
         self.assertContains(response, "الرابط اتلغى")
         self.assertDead(client.get(self.url(token)))
@@ -1110,9 +1230,9 @@ class StaffTests(PortalSetup):
         made = self.make()
         token = token_of(made["url"])
         client = self.anon(REMOTE_ADDR="10.2.3.4", HTTP_USER_AGENT="PhoneBrowser/1.0")
-        self.post(client, token, "0000")
+        self.post(client, token, WRONG)
         self.assertFalse(AuditLog.objects.filter(action="open_guardian_portal").exists())  # failed tries are throttled, not audited
-        self.post(client, token, "2011")
+        self.post(client, token, RIGHT)
         client.get(self.url(token))
         again = self.make()  # replaces the first
         for row in AuditLog.objects.filter(module="education", action__contains="guardian"):
@@ -1120,12 +1240,31 @@ class StaffTests(PortalSetup):
             for secret in (token, made["link"].nonce, again["link"].nonce, made["url"], "p/edu"):
                 self.assertNotIn(secret, text)
         created = AuditLog.objects.get(action="create_guardian_link", object_id=str(made["link"].pk))
-        self.assertEqual((created.actor, created.after_data), (self.owner, {"payer": self.payer.pk, "entity": made["link"].entity_id, "children": 2, "factor": "year", "days": 30}))
+        self.assertEqual((created.actor, created.after_data), (self.owner, {"payer": self.payer.pk, "entity": made["link"].entity_id, "children": 2, "factor": "date", "days": 30}))
         replaced = AuditLog.objects.get(action="revoke_guardian_link", object_id=str(made["link"].pk))
         self.assertEqual(replaced.after_data["why"], "replaced")
         opened = AuditLog.objects.get(action="open_guardian_portal")
         self.assertEqual((opened.actor, opened.ip_address, opened.user_agent, opened.object_id), (None, None, "", str(made["link"].pk)))
         self.assertEqual(opened.after_data, {"link": made["link"].pk, "payer": self.payer.pk})
+
+    def test_a_link_that_used_all_its_answers_is_called_closed_on_the_student_card(self):
+        owner = self.as_(self.owner)
+        made = self.make()
+        self.assertContains(owner.get(self.student_url()), "data-portal-live")
+        GuardianLink.objects.filter(pk=made["link"].pk).update(wrong_answers=portal.TOKEN_LIFE[1])
+        card = owner.get(self.student_url())
+        self.assertContains(card, "data-portal-spent")
+        self.assertContains(card, "الرابط اتقفل بعد محاولات غلط كتير. ابعت رابط جديد.")
+        self.assertNotContains(card, "data-portal-live")
+        self.assertNotContains(card, "data-portal-revoke")
+        self.assertContains(card, "ابعت رابط جديد")  # the button still offers a new link, which replaces this one
+        self.assertIn("The link closed after too many wrong answers. Send a new link.", owner.get(self.student_url() + "?lang=en").content.decode())
+        self.assertIsNone(portal.live_link_of(self.payer))
+        self.assertEqual(portal.spent_link_of(self.payer).pk, made["link"].pk)
+        again = self.make()
+        self.assertContains(owner.get(self.student_url()), "data-portal-live")
+        self.assertNotContains(owner.get(self.student_url()), "data-portal-spent")
+        self.assertEqual(portal.live_link_of(self.payer).pk, again["link"].pk)
 
     def test_the_centre_is_warned_when_only_the_phone_protects_the_link(self):
         self.stranger.date_of_birth = None
@@ -1236,7 +1375,7 @@ class WordsTests(PortalSetup):
                     if re.search(r"[؀-ۿ]", stripped):
                         self.assertNotRegex(stripped[:1], r"[A-Za-z]", f"{key}: {line}")
                         self.assertNotRegex(stripped[-1:], r"[A-Za-z]", f"{key}: {line}")
-        self.assertIn("حضرتك", portal.WORDS["ar"]["dead"] + portal.WORDS["ar"]["private"] + portal.WORDS["ar"]["hello"] + portal.WORDS["ar"]["ask_year"])
+        self.assertIn("حضرتك", portal.WORDS["ar"]["dead"] + portal.WORDS["ar"]["private"] + portal.WORDS["ar"]["hello"] + portal.WORDS["ar"]["ask_date"])
         self.assertIn("رابط", portal.WORDS["ar"]["dead_h"])
         self.assertIn("تواصل مع المركز", portal.WORDS["ar"]["wrong"])
         for text in self.flatten(portal.WORDS["ar"]):
@@ -1327,6 +1466,6 @@ class SchemaTests(PortalSetup):
 
     def test_the_table_has_exactly_the_planned_columns(self):
         self.assertEqual(sorted(field.name for field in GuardianLink._meta.get_fields()),
-                         sorted(["id", "payer", "nonce", "entity", "created_by", "created_at", "revoked_at", "last_opened_at"]))
+                         sorted(["id", "payer", "nonce", "entity", "created_by", "created_at", "revoked_at", "last_opened_at", "wrong_answers"]))
         self.assertTrue(GuardianLink._meta.get_field("nonce").unique)
         self.assertEqual(GuardianLink._meta.get_field("payer").remote_field.on_delete.__name__, "PROTECT")

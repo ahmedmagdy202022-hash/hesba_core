@@ -395,7 +395,7 @@ class GuardianLink(models.Model):
     The address carries a signed token (``education.portal.SALT``) holding this row's id and ``nonce``; the row decides whether it still
     opens anything. A new link for the same payer revokes the older ones (at most one live link per payer, enforced by the database), so a
     lost message or a change of custody is cured by sending again, or by revoking. The token and the nonce are never written anywhere else
-    (not in an audit row, not in a message outbox). ``last_opened_at`` is the only thing a guardian's visit writes.
+    (not in an audit row, not in a message outbox). ``last_opened_at`` is the only thing a guardian's visit writes (an answer writes ``wrong_answers``).
     """
 
     payer = models.ForeignKey("master_data.Customer", on_delete=models.PROTECT, related_name="guardian_links")
@@ -406,6 +406,9 @@ class GuardianLink(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     revoked_at = models.DateTimeField(null=True, blank=True)
     last_opened_at = models.DateTimeField(null=True, blank=True)
+    #: Wrong answers given in this link's whole life (the limit is ``portal.TOKEN_LIFE``): counted in the row, atomically, so it survives
+    #: a restart and every worker sees it. Revoking or replacing a link never resets it; a new link is a new row and starts at 0.
+    wrong_answers = models.PositiveSmallIntegerField(default=0)
 
     class Meta:
         ordering = ["-created_at", "-pk"]
