@@ -234,6 +234,7 @@ def student_detail(request, pk):
                                                            pickup_people=list(student.pickup_people.all()) if nursery.is_nursery() else [],
                                                            day_history=nursery.history(student, 10) if nursery.is_nursery() else [],
                                                            **views_exams.student_card(request, student, lang),
+                                                           **views_portal.student_card(request, student, lang),
                                                            **_placement_context(student, lang)))
 
 
@@ -763,3 +764,4 @@ LEVEL_WORDS = {
 
 
 from . import views_exams  # noqa: E402  (E2: its pages build on the helpers above, so it is imported last)
+from . import views_portal  # noqa: E402  (E3: the student file's portal card, same reason)
