@@ -8,6 +8,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
+from approvals.gate import held
 from master_data.models import Item, Location
 from permissions.decorators import require_permission
 from permissions.services import user_has_permission
@@ -20,6 +21,7 @@ from entities import scope as entity_scope
 
 
 VIEW, RECIPES, PRODUCE, COST = "inventory.view_stock", "master_data.manage_items", "inventory.adjust_stock", "inventory.view_cost"
+CANCEL_RUN = "manufacturing.cancel_run"  # FB-27: the action the owner may hold for a second person's approval
 LINE_ROWS = 12
 WORDS = {
     "ar": {
@@ -270,15 +272,20 @@ def run_detail(request, pk):
     if request.method == "POST":
         if not user_has_permission(request.user, PRODUCE):
             raise PermissionDenied("Cancelling a run needs inventory.adjust_stock.")
+        back = redirect(f"{reverse('manufacturing:run', args=[run.pk])}?lang={lang}")
         try:
-            services.cancel_run(run, request.user, reason=request.POST.get("reason", ""), lang=lang)
+            # F11 (HG-100): what the service would refuse is said now, before anything is sent for approval (FB-27).
+            reason = services.check_cancellable(run, request.POST.get("reason", ""), lang)
+            if held(request, CANCEL_RUN, run.pk, {"reason": reason, "lang": lang}, run.number):
+                return back
+            services.cancel_run(run, request.user, reason=reason, lang=lang)
         except ValidationError as exc:
             from settings_core.ui_messages import translate
 
             error = translate(" ".join(exc.messages), lang)
         else:
             messages.success(request, words["cancelled"])
-            return redirect(f"{reverse('manufacturing:run', args=[run.pk])}?lang={lang}")
+            return back
     return render(request, "manufacturing/run.html", _base(
         request, run=run, status_label=choice_label(run, "status", lang), error=error,
         consumed=[c.operation for c in run.consumptions.select_related("operation", "operation__item")],

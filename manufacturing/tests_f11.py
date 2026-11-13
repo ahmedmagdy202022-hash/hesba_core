@@ -38,7 +38,7 @@ from inventory.services import (
     transfer_stock,
 )
 from ledger import reports as gl
-from ledger.models import JournalLine
+from ledger.models import JournalEntry, JournalLine
 from ledger.projector import Projector
 from permissions.models import RoleCode
 from reports.tests_dashboard import prepared_client
@@ -415,6 +415,140 @@ class CancelAfterSaleTests(F11Setup):
 
 class CancelAfterSaleOnARestaurantChartTests(BakeryChart, CancelAfterSaleTests):
     pass
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# A second person's approval (FB-27)
+# ---------------------------------------------------------------------------------------------------------------
+
+
+class ApprovalTests(F11Setup):
+    ACTION = "manufacturing.cancel_run"
+
+    def setUp(self):
+        super().setUp()
+        from approvals.tests import clerk_with
+
+        self.manager = person(RoleCode.MANAGER, "f11_manager")
+        self.clerk = clerk_with("inventory.adjust_stock", "inventory.view_stock", username="f11_clerk")
+        self.run_ = services.produce(self.recipe, self.owner, batches="1", location=self.plant)
+        self.url = reverse("manufacturing:run", args=[self.run_.pk])
+
+    def hold(self):
+        from approvals.services import set_held_actions
+
+        set_held_actions([self.ACTION], self.owner)
+
+    def ask(self, user=None, reason="خبزة باظت"):
+        self.client.force_login(user or self.clerk)
+        return self.client.post(self.url, {"reason": reason, "lang": "ar"}, follow=True)
+
+    def snapshot(self):
+        """Everything a cancellation would change: stock rows, operations, the product's cost, the journal, the run."""
+
+        Projector().rebuild()
+        totals = JournalLine.objects.aggregate(d=Sum("debit"), c=Sum("credit"))
+        self.run_.refresh_from_db()
+        return {"movements": StockMovement.objects.count(), "cancelled_operations": StockOperation.objects.filter(status="cancelled").count(),
+                "position": self.position(), "materials": self.on_hand(self.flour, self.sugar, self.box),
+                "entries": JournalEntry.objects.count(), "debit": totals["d"], "credit": totals["c"], "run": self.run_.status,
+                "audit": AuditLog.objects.filter(action="cancel_production").count()}
+
+    def test_the_action_is_one_the_owner_can_tick(self):
+        from approvals.actions import ACTIONS, label
+
+        action = ACTIONS[self.ACTION]
+        self.assertEqual((label(self.ACTION, "ar"), label(self.ACTION, "en")), ("إلغاء تشغيلة إنتاج", "Cancel a production run"))
+        self.assertEqual((action.url(self.run_.pk), action.permissions), (self.url, ("inventory.adjust_stock",)))
+        self.assertTrue(action.visible(self.run_.pk))
+        self.client.force_login(self.owner)
+        self.assertContains(self.client.get("/approvals/"), f'value="{self.ACTION}"')
+
+    def test_nothing_is_held_until_the_owner_says_so(self):
+        from approvals.models import ApprovalRequest
+
+        self.ask()
+        self.run_.refresh_from_db()
+        self.assertEqual(self.run_.status, RunStatus.CANCELLED)
+        self.assertFalse(ApprovalRequest.objects.exists())
+
+    def test_a_held_cancel_waits_and_nothing_moves_then_applies_once(self):
+        from approvals import services as approvals
+        from approvals.models import ApprovalRequest
+
+        self.hold()
+        before = self.snapshot()
+        self.assertEqual((before["position"], before["run"], before["cancelled_operations"]), ((D("10.000"), D("95.00"), D("9.5000")), "posted", 0))
+        page = self.ask()
+        self.assertContains(page, "محتاجة موافقة")
+        self.assertEqual(self.snapshot(), before)
+        request = ApprovalRequest.objects.get()
+        self.assertEqual((request.action, request.object_id, request.object_label, request.data, request.requested_by, request.status),
+                         (self.ACTION, self.run_.pk, self.run_.number, {"reason": "خبزة باظت", "lang": "ar"}, self.clerk, "pending"))
+        self.ask()                                            # asking again does not ask twice
+        self.assertEqual(ApprovalRequest.objects.count(), 1)
+        self.assertEqual(self.snapshot(), before)
+
+        self.client.force_login(self.manager)
+        self.assertContains(self.client.get("/approvals/"), f'data-approval="{request.pk}"')
+        self.client.post("/approvals/", {"do": "approve", "request": request.pk})
+        request.refresh_from_db()
+        self.assertEqual((request.status, request.decided_by), ("done", self.manager))
+        after = self.snapshot()
+        self.assertEqual((after["run"], after["position"], after["materials"]),
+                         ("cancelled", (D("0.000"), D("0.00"), D("0")), (D("200.000"), D("20.000"), D("100.000"))))
+        self.assertEqual((after["movements"] - before["movements"], after["cancelled_operations"], after["audit"]), (4, 4, 1))
+        self.assertEqual(AuditLog.objects.get(action="cancel_production").actor, self.clerk)   # in the requester's name
+        self.run_.refresh_from_db()
+        self.assertEqual(self.run_.cancellation_reason, "خبزة باظت")
+        with self.assertRaisesMessage(ValidationError, "approval_not_waiting"):               # and only once
+            approvals.approve(request.pk, self.manager)
+        self.assertEqual(self.snapshot(), after)
+        self.books(finished="0.00", raw="4850.00")
+
+    def test_those_who_may_approve_cancel_directly(self):
+        from approvals.models import ApprovalRequest
+
+        self.hold()
+        self.ask(self.manager)
+        self.run_.refresh_from_db()
+        self.assertEqual(self.run_.status, RunStatus.CANCELLED)
+        self.assertFalse(ApprovalRequest.objects.exists())
+
+    def test_a_cancel_that_would_be_refused_is_not_sent_for_approval(self):
+        from approvals.models import ApprovalRequest
+
+        self.hold()
+        self.assertContains(self.ask(reason="  "), "اكتب سبب الإلغاء")
+        self.sell("4")
+        services.produce(self.recipe, self.owner, batches="1", location=self.plant)
+        page = self.ask()
+        self.assertEqual(page.context["error"], REFUSED_AR)
+        self.assertFalse(ApprovalRequest.objects.exists())
+
+    def test_goods_sold_while_the_request_waited_stop_it_at_the_approval(self):
+        from approvals import services as approvals
+        from approvals.models import ApprovalRequest
+
+        self.hold()
+        self.ask()
+        self.sell("4")
+        services.produce(self.recipe, self.owner, batches="1", location=self.plant)
+        before = self.snapshot()
+        request = approvals.approve(ApprovalRequest.objects.get().pk, self.manager)
+        self.assertEqual((request.status, request.note), ("failed", REFUSED_AR))
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(before["position"], (D("16.000"), D("152.00"), D("9.5000")))
+
+    def test_rejecting_leaves_the_run_as_it_was(self):
+        from approvals import services as approvals
+        from approvals.models import ApprovalRequest
+
+        self.hold()
+        before = self.snapshot()
+        self.ask()
+        approvals.reject(ApprovalRequest.objects.get().pk, self.manager, "خليها")
+        self.assertEqual(self.snapshot(), before)
 
 
 # ---------------------------------------------------------------------------------------------------------------
