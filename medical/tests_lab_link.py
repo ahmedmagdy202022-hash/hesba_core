@@ -44,6 +44,13 @@ def normalized(response, *tokens):
     return re.sub(r'name="csrfmiddlewaretoken" value="[^"]+"', 'name="csrfmiddlewaretoken" value="X"', body)
 
 
+def _without_random_text(page):
+    """The page without its signed link address (wherever it is written) and without the CSRF token's value."""
+
+    page = re.sub(r"/results/[^/\s\"'<>?]+/", "/results/-/", page)
+    return re.sub(r'(name="csrfmiddlewaretoken" value=")[^"]*', r"\1", page)
+
+
 @override_settings(PUBLIC_BASE_URL=BASE, MEDICAL_LINK_DAYS=7)
 class LabLinkTests(TestCase):
     def setUp(self):
@@ -100,10 +107,19 @@ class LabLinkTests(TestCase):
         self.assertPrivate(response)
 
     def assertNothingOfThePatient(self, response, patient):
-        status = response.status_code
+        """Nothing of the patient is on the page. The link's own address and the form's token are random text and are taken out
+        first: a short marker such as «P-0» can turn up inside them by chance (it did, once, on the PostgreSQL job of #399)."""
+
+        text = _without_random_text(response.content.decode())
         for secret in (patient.name, "هيموجلوبين", "سكر صائم", "فصيلة الدم", "17.25", "88.4", "A+", self.day.isoformat(),
                        self.other_day.isoformat(), "987.654", "P-0", "بنسلين", "داخلية"):
-            self.assertNotContains(response, secret, status_code=status)
+            self.assertNotIn(secret, text)
+
+    def test_the_leak_check_skips_the_links_own_random_text_and_still_sees_a_real_leak(self):
+        page = ('<a href="/results/abP-0cd:1x:zz/?lang=en">English</a><form action="/results/abP-0cd:1x:zz/?lang=ar">'
+                '<input type="hidden" name="csrfmiddlewaretoken" value="qP-0q"><p>P-0007</p></form>')
+        self.assertEqual(page.count("P-0"), 4)
+        self.assertEqual(_without_random_text(page).count("P-0"), 1)  # only the file number that is really printed
 
     # ---- before the factor ----
 
