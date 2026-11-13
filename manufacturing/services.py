@@ -56,6 +56,7 @@ MESSAGES = {
         "reversed": "الخامات المصروفة للأمر ده اترجعت من شاشة المخزون؛ ألغِ الأمر وافتح أمر جديد.",
         "on_floor": "في أمر إنتاج شغال في المصنع بالوصفة دي وخاماته اتصرفت؛ خلّصه أو ألغيه الأول قبل ما تعدّل الوصفة.",
         "no_good": "مفيش ولا وحدة سليمة تدخل المخزن؛ لو الكمية كلها باظت ألغِ الأمر أو سجّل الهالك كتسوية.",
+        "cycle": "مينفعش تضيف «{component}» لوصفة «{product}»: «{component}» نفسه بيتصنع من «{product}» (مباشرة أو من خلال صنف تاني)، فالوصفتين هيبقوا في دايرة مقفولة.",
     },
     "en": {
         "product": "Choose the product.", "product_stock": "The product must be a stock-tracked item.", "output": "The output per batch must be above zero.",
@@ -67,6 +68,7 @@ MESSAGES = {
         "reversed": "The materials issued for this order were reversed from the inventory screen; cancel the order and open a new one.",
         "on_floor": "An order on the floor was issued from this recipe; finish or cancel it before changing the recipe.",
         "no_good": "No good units are left to put into stock; if the whole lot was lost, cancel the order or record the loss as an adjustment.",
+        "cycle": "“{component}” cannot go into the recipe of “{product}”: “{component}” is itself made from “{product}” (directly or through another item), so the two recipes would go in a closed circle.",
     },
 }
 
@@ -89,6 +91,25 @@ def _next(model, field, prefix, width):
     while model.objects.filter(**{field: f"{prefix}{number:0{width}d}"}).exists():
         number += 1
     return f"{prefix}{number:0{width}d}"
+
+
+def _makes(component_pk, target_pk, skip):
+    """F2: whether ``component_pk`` is itself made, at any depth, from ``target_pk`` by an active recipe (``skip``, the
+    recipe being replaced, does not count)."""
+
+    seen, stack = set(), [component_pk]
+    while stack:
+        pk = stack.pop()
+        if pk == target_pk:
+            return True
+        if pk in seen:
+            continue
+        seen.add(pk)
+        lines = RecipeLine.objects.filter(recipe__product_id=pk, recipe__active=True)
+        if skip is not None:
+            lines = lines.exclude(recipe=skip)
+        stack.extend(lines.values_list("component_id", flat=True))
+    return False
 
 
 @transaction.atomic
@@ -125,6 +146,12 @@ def save_recipe(data, lines, user, recipe=None, lang="ar"):
         clean.append((component, quantity))
     if not clean:
         raise ValidationError(words["lines"])
+    if data.get("active", True) not in (False, "", "0", None):
+        # F2: A uses B and B uses A, at any depth, would send the requirements calculation round in a circle. An inactive
+        # recipe is out of every calculation, so only an active one is checked (and again when it is switched on).
+        for component, _quantity in clean:
+            if _makes(component.pk, product.pk, recipe):
+                raise ValidationError(words["cycle"].format(component=component.item_name, product=product.item_name))
     created = recipe is None
     recipe = recipe or Recipe(code=_next(Recipe, "code", "BOM-", 4), created_by=user)
     recipe.product = product
