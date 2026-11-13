@@ -1,6 +1,6 @@
 """T11 (MARKET-PARITY): who came in, who was late, leave and its balance, and the fingerprint file (HG-063)."""
 
-from datetime import date, time, timedelta
+from datetime import date, datetime, time, timedelta
 from unittest import mock
 
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -85,6 +85,15 @@ class DayStateTests(AttendanceSetup):
 
 
 class CheckInTests(AttendanceSetup):
+    def setUp(self):
+        # These tests are about "today". For them today is a working Wednesday at 10:00: on a Friday (the default day
+        # off) the page rightly offers no check-in button, and the first test failed every Friday.
+        working_day = timezone.make_aware(datetime.combine(WEDNESDAY, time(10, 0)))
+        clock = mock.patch("django.utils.timezone.now", return_value=working_day)
+        clock.start()
+        self.addCleanup(clock.stop)
+        super().setUp()
+
     def test_an_employee_checks_in_and_out_from_their_own_page(self):
         self.client.force_login(self.cashier)
         page = self.client.get(reverse("attendance:me") + "?lang=ar")
