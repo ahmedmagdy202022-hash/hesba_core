@@ -6,6 +6,7 @@
 .mk-text{display:grid;gap:2px;min-width:0;overflow-wrap:anywhere}
 .mk-text strong{color:var(--hs-navy)}
 .mk-sub{color:var(--hs-muted);font-size:var(--hs-text-sm)}
+.mk-sub a{color:var(--hs-teal-deep);font-weight:var(--hs-weight-medium)}
 .mk-empty{padding:var(--hs-space-3);color:var(--hs-muted)}
 .mk-actions{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:var(--hs-space-2)}
 .mk-actions form{flex:1 1 8rem;margin:0}
