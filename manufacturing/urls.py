@@ -12,4 +12,5 @@ urlpatterns = [
     path("runs/<int:pk>/", views.run_detail, name="run"),
     path("orders/", order_views.board, name="orders"),
     path("orders/<int:pk>/", order_views.order_detail, name="order"),
+    path("orders/for-sale/<int:line_pk>/", order_views.make_for_sale, name="make_for_sale"),
 ]

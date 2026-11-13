@@ -1,0 +1,16 @@
+{% load hesba_format %}
+{% with st=row.production pw=production.words %}<td class="op-cell-text" data-production-cell="{{ row.line.pk }}"><div class="mfg-sale-cell">
+{% for link in st.orders %}<div class="mfg-sale-link" data-production-order="{{ link.order.number }}">{% if production.can_open %}<a href="{% url 'manufacturing:order' link.order.pk %}?lang={{ lang }}"><span>{{ pw.order_word }} <bdi>{{ link.order.number }}</bdi></span></a>{% else %}{{ pw.order_word }} <bdi>{{ link.order.number }}</bdi>{% endif %} · {{ link.order.quantity|qty }} · <span class="op-status {% if link.state == 'done' %}op-status-posted{% else %}op-status-draft{% endif %}" data-production-state="{{ link.state }}">{{ link.label }}</span></div>{% endfor %}
+{% if st.made_text %}<div class="mfg-sale-stock" data-made-stock>{{ st.made_text }}</div>{% endif %}
+{% if st.short_text %}<div class="op-message op-message-error mfg-sale-short" role="alert" data-stock-short>{{ st.short_text }} {{ pw.no_stock_hint }}</div>{% endif %}
+{% if st.uncovered_text %}<div class="op-muted" data-uncovered>{{ st.uncovered_text }}</div>{% endif %}
+{% if st.can_make %}<details class="mfg-sale-make" data-make-production><summary class="op-secondary">{{ pw.make }}</summary>
+<form method="post" action="{% url 'manufacturing:make_for_sale' row.line.pk %}" data-make-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+<p class="op-muted">{{ pw.recipe }}: <bdi>{{ st.recipe.code }}</bdi> · {{ st.recipe.product.item_name }}</p>
+<div class="op-field"><label for="mk-qty-{{ row.line.pk }}">{{ pw.quantity }}</label><input id="mk-qty-{{ row.line.pk }}" name="quantity" inputmode="decimal" dir="ltr" value="{{ st.free_plain }}"></div>
+<div class="op-field"><label for="mk-loc-{{ row.line.pk }}">{{ pw.location }}</label><select id="mk-loc-{{ row.line.pk }}" name="location">{% for place in production.locations %}<option value="{{ place.pk }}">{{ place.name_ar }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="mk-labor-{{ row.line.pk }}">{{ pw.labor }}</label><input id="mk-labor-{{ row.line.pk }}" name="labor_cost" inputmode="decimal" dir="ltr" placeholder="0"></div>
+<div class="op-field"><label for="mk-over-{{ row.line.pk }}">{{ pw.overhead }}</label><input id="mk-over-{{ row.line.pk }}" name="overhead_cost" inputmode="decimal" dir="ltr" placeholder="0"></div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ pw.open }}</button></div></form></details>
+{% elif st.no_recipe %}<span class="op-muted" data-no-recipe>{{ pw.no_recipe }}</span>
+{% elif not st.orders %}<span class="op-muted">—</span>{% endif %}</div></td>{% endwith %}

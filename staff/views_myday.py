@@ -50,6 +50,13 @@ def my_day(request):
         else:
             messages.success(request, myday.MESSAGES[lang]["moved"].format(ref=ref))
         return redirect(f"{reverse('staff:my_day')}?lang={lang}")
+    if myday.employee_of(request.user) is None:
+        # An owner or a manager has no employee record of their own: send them to the screen that shows everyone's day.
+        # Someone with no right to either screen still gets the 403 from ``my_day`` below.
+        target = myday.overview_url(request.user)
+        if target:
+            messages.info(request, myday.MESSAGES[lang]["overview"])
+            return redirect(f"{target}?lang={lang}")
     day = myday.my_day(request.user, lang, timezone.localdate())
     words = WORDS[lang]
     return render(request, "staff/my_day.html", {

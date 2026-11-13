@@ -119,12 +119,12 @@ class CustomerLinkTests(WorkshopSetup):
         data = response.json()
         self.assertEqual((data["number"], data["device"], data["status"], data["can_decide"]), (self.order_.number, "غسالة توشيبا", "quoted", True))
         self.assertEqual(data["shop"], "Demo Store")
-        self.assertEqual(data["status_label"], "مستني موافقة العميل")
+        self.assertEqual(data["status_label"], "في انتظار موافقة حضرتك")
         self.assertEqual([step["status"] for step in data["timeline"]], ["received", "diagnosed", "quoted"])
         self.assertEqual([(line["description"], line["amount"]) for line in data["lines"]], [("موتور غسالة", "1800.00"), ("مصنعية إصلاح", "300.00")])
         self.assertEqual(data["total"], "2100.00")
         body = response.content.decode()
-        for hidden in (SECRET_NOTE, "1350", "average_cost", "cost", "أحمد الفني", "commission", "OTHER-DEVICE-XYZ", "عميل تاني خالص", "محمد علي", "01001234567", "wo_owner"):
+        for hidden in (SECRET_NOTE, "1350", "average_cost", "cost", "أحمد سامي", "commission", "OTHER-DEVICE-XYZ", "عميل تاني خالص", "محمد علي", "01001234567", "wo_owner"):
             with self.subTest(hidden=hidden):
                 self.assertNotIn(hidden, body)
 
@@ -139,12 +139,12 @@ class CustomerLinkTests(WorkshopSetup):
         first = self.decide("approve")
         self.assertEqual(first.status_code, 200)
         self.assertEqual((first.json()["ok"], first.json()["changed"], first.json()["status"]), (True, True, "approved"))
-        self.assertEqual(first.json()["message"], "تمام، موافقتك اتسجّلت.")
+        self.assertEqual(first.json()["message"], "شكرًا لحضرتك، تم تسجيل موافقتك.")
         events, audits = WorkOrderEvent.objects.count(), AuditLog.objects.count()
         second = self.decide("approve")
         self.assertEqual(second.status_code, 200)
         self.assertEqual((second.json()["ok"], second.json()["changed"], second.json()["status"]), (True, False, "approved"))
-        self.assertEqual(second.json()["message"], "ردّك متسجّل قبل كده.")
+        self.assertEqual(second.json()["message"], "تم تسجيل رد حضرتك من قبل.")
         self.assertEqual((WorkOrderEvent.objects.count(), AuditLog.objects.count()), (events, audits))  # nothing written the second time
         self.assertEqual(self.status(), Status.APPROVED)
 
@@ -153,7 +153,7 @@ class CustomerLinkTests(WorkshopSetup):
         response = self.decide("refuse")
         self.assertEqual(response.status_code, 409)
         self.assertEqual((response.json()["ok"], response.json()["status"]), (False, "approved"))
-        self.assertEqual(response.json()["message"], "العرض ده مبقاش مستني ردّك.")
+        self.assertEqual(response.json()["message"], "العرض ده مبقاش محتاج رد من حضرتك.")
         self.assertEqual(self.status(), Status.APPROVED)
         self.assertTrue(self.order_.lines.exists())
 
@@ -361,7 +361,7 @@ class CustomerLinkTests(WorkshopSetup):
         seen = self.page().json()["fingerprint"]
         services.add_line(self.order_, self.labour, self.owner, quantity="2")  # staff edit the quote meanwhile
         events, audits = WorkOrderEvent.objects.count(), AuditLog.objects.count()
-        for action, lang, message in (("approve", "ar", "العرض اتغيّر، افتح اللينك تاني."), ("refuse", "en", "The quote changed; open the link again.")):
+        for action, lang, message in (("approve", "ar", "العرض اتغيّر، افتح الرابط تاني."), ("refuse", "en", "The quote changed; open the link again.")):
             response = self.decide(action, lang=lang, fingerprint=seen)
             self.assertEqual((response.status_code, response.json()["message"]), (409, message))
             self.assertNotEqual(response.json()["fingerprint"], seen)  # the new one, for the reopened page
@@ -405,7 +405,7 @@ class CustomerLinkTests(WorkshopSetup):
         line.save()
         self.assertNotEqual(self.page().json()["fingerprint"], seen)
         response = self.decide("approve", fingerprint=seen)
-        self.assertEqual((response.status_code, response.json()["message"]), (409, "العرض اتغيّر، افتح اللينك تاني."))
+        self.assertEqual((response.status_code, response.json()["message"]), (409, "العرض اتغيّر، افتح الرابط تاني."))
         self.assertEqual(self.status(), Status.QUOTED)
 
     def test_the_same_fingerprint_approves(self):
@@ -419,8 +419,8 @@ class CustomerLinkTests(WorkshopSetup):
         services.move(self.order_, Status.APPROVED, self.owner)  # the counter approved it
         response = self.decide("approve")
         self.assertEqual((response.status_code, response.json()["ok"]), (409, False))
-        self.assertEqual(response.json()["message"], "العرض ده مبقاش مستني ردّك.")
-        self.assertNotEqual(response.json().get("message"), "ردّك متسجّل قبل كده.")
+        self.assertEqual(response.json()["message"], "العرض ده مبقاش محتاج رد من حضرتك.")
+        self.assertNotEqual(response.json().get("message"), "تم تسجيل رد حضرتك من قبل.")
         self.assertFalse(self.order_.events.filter(by_customer=True).exists())
         # Same for a quote staff refused.
         other = self.order()

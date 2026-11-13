@@ -7,13 +7,14 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from master_data.models import Customer, Location
 from permissions.decorators import require_permission
 from permissions.services import user_has_permission
 from settings_core.display_labels import choice_label
 
-from . import orders
+from . import make_to_order, orders
 from .models import OrderStatus, ProductionOrder, Recipe
 from .stages import current_stages
 from .views import COST, PRODUCE, VIEW, _lang, _pick
@@ -30,7 +31,8 @@ WORDS = {
            "history": "سجل المراحل", "by": "بواسطة", "defects": "إجمالي المعيب", "rate": "نسبة العيوب", "back": "أوامر الإنتاج", "run": "التشغيلة",
            "created": "اتفتح أمر الإنتاج.", "advanced": "المرحلة اتسجلت.", "finished": "الأمر خلص والمنتج دخل المخزن.", "cancelled_msg": "الأمر اتلغى.",
            "empty": "مفيش أوامر هنا.", "all_done": "كل المراحل خلصت — جاهز للإنهاء.", "for": "لـ", "materials_short": "الخامات مش كفاية حاليًا",
-           "recipes_link": "الوصفات والتشغيلات", "no_recipes": "لازم تعمل وصفة للمنتج الأول من صفحة التصنيع."},
+           "recipes_link": "الوصفات والتشغيلات", "no_recipes": "لازم تعمل وصفة للمنتج الأول من صفحة التصنيع.",
+           "for_sale": "لطلب", "delivery": "تسليم للعميل", "delivery_short": "تسليم", "open_sale": "افتح أمر البيع"},
     "en": {"title": "Production orders", "intro": "Each production order moves through the factory's stages: the first stage issues the materials from stock to work in progress, and when the order finishes the good units go into stock at the cost of materials, labour and overhead.",
            "new": "New production order", "recipe": "Product (recipe)", "quantity": "Quantity", "location": "Made at", "customer": "For customer (optional)",
            "due": "Due on", "labor": "Labour cost", "overhead": "Overhead (power, rent...)", "notes": "Notes", "save": "Open order",
@@ -41,7 +43,8 @@ WORDS = {
            "history": "Stage history", "by": "By", "defects": "Total defects", "rate": "Defect rate", "back": "Production orders", "run": "Run",
            "created": "Production order opened.", "advanced": "Stage recorded.", "finished": "Order finished and the product is in stock.", "cancelled_msg": "Order cancelled.",
            "empty": "No orders here.", "all_done": "All stages done — ready to finish.", "for": "for", "materials_short": "Not enough materials right now",
-           "recipes_link": "Recipes and runs", "no_recipes": "Make a recipe for the product first on the manufacturing page."},
+           "recipes_link": "Recipes and runs", "no_recipes": "Make a recipe for the product first on the manufacturing page.",
+           "for_sale": "For order", "delivery": "Delivery to the customer", "delivery_short": "Delivery", "open_sale": "Open the sales order"},
 }
 
 
@@ -49,6 +52,14 @@ def _ctx(request, **extra):
     lang = _lang(request)
     return {"lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": WORDS[lang], "page_title": WORDS[lang]["title"],
             "can_produce": user_has_permission(request.user, PRODUCE), "can_cost": user_has_permission(request.user, COST), **extra}
+
+
+def _can_open_sale(user):
+    """F1: the link to a production order's sales order, for someone who may see sales orders (and only while they are switched on)."""
+
+    from orders import services as sales
+
+    return sales.enabled() and sales.can_view(user)
 
 
 def _date(value):
@@ -82,7 +93,7 @@ def board(request):
             return redirect(f"{reverse('manufacturing:order', args=[order.pk])}?lang={lang}")
     today = timezone.localdate()
     active = list(entity_scope.scope(ProductionOrder.objects, "location__entity").filter(status__in=(OrderStatus.PLANNED, OrderStatus.IN_PROGRESS))
-                  .select_related("recipe__product", "customer").order_by("due_date", "pk"))
+                  .select_related("recipe__product", "customer", "sales_order_line__order").order_by("due_date", "pk"))
     stage_list = [list(s) for s in current_stages()]
     columns = [{"key": "planned", "label": words["planned"], "orders": []}]
     columns += [{"key": s[0], "label": _stage_name(s, lang), "orders": []} for s in stage_list]
@@ -102,7 +113,7 @@ def board(request):
     return render(request, "manufacturing/orders.html", _ctx(
         request, columns=columns, recent=[{"order": o, "label": choice_label(o, "status", lang)} for o in recent], error=error, post=request.POST,
         recipes=Recipe.objects.filter(active=True).select_related("product"), locations=locations,
-        default_location=(locations.filter(is_default=True).first() or locations.first()),
+        default_location=(locations.filter(is_default=True).first() or locations.first()), can_open_sale=_can_open_sale(request.user),
         customers=Customer.objects.filter(active=True).exclude(customer_code="WALK-IN").order_by("name")[:300],
         late_count=sum(1 for o in active if o.late)))
 
@@ -111,7 +122,7 @@ def board(request):
 def order_detail(request, pk):
     lang = _lang(request)
     words = WORDS[lang]
-    order = get_object_or_404(entity_scope.scope(ProductionOrder.objects, "location__entity").select_related("recipe__product", "location", "customer", "run"), pk=pk)
+    order = get_object_or_404(entity_scope.scope(ProductionOrder.objects, "location__entity").select_related("recipe__product", "location", "customer", "run", "sales_order_line__order__customer"), pk=pk)
     error = ""
     if request.method == "POST":
         if not user_has_permission(request.user, PRODUCE):
@@ -149,7 +160,40 @@ def order_detail(request, pk):
     return render(request, "manufacturing/order.html", _ctx(
         request, order=order, status_label=choice_label(order, "status", lang), stages=stage_rows, logs=logs, error=error,
         cost=orders.cost_card(order), quality=orders.quality(order), plan=plan,
+        sale=order.sales_order_line.order if order.sales_order_line_id else None, can_open_sale=_can_open_sale(request.user),
         short=bool(plan and any(row["short"] for row in plan["rows"])),
         current_label=stage_rows[order.stage_index]["label"] if order.stage_index < len(stage_rows) else "",
         ready=order.status == OrderStatus.IN_PROGRESS and order.stage_index >= len(order.stages),
         open=order.status in (OrderStatus.PLANNED, OrderStatus.IN_PROGRESS), late=bool(order.due_date and order.due_date < timezone.localdate() and order.status != OrderStatus.DONE)))
+
+
+@require_permission(PRODUCE)
+@require_POST
+def make_for_sale(request, line_pk):
+    """F1 (HG-098): «اعمل أمر إنتاج» on one line of a confirmed sales order. Opens the production order and posts nothing."""
+
+    from django.http import Http404
+
+    from orders import services as sales
+    from orders.models import SalesOrderLine
+
+    lang = _lang(request)
+    if not sales.enabled():
+        raise Http404("Quotations are switched off.")
+    if not sales.can_view(request.user):
+        raise PermissionDenied("Making an order for a sale needs sales.view_sales_invoices.")
+    line = get_object_or_404(SalesOrderLine.objects.select_related("order__customer", "item").filter(order__in=sales.scoped()), pk=line_pk)
+    back = f"{reverse('orders:detail', args=[line.order_id])}?lang={lang}"
+    location = _pick(Location, request.POST.get("location"), active=True)
+    if request.POST.get("location") and location is None:  # a place that does not exist is refused, never swapped for the default
+        messages.error(request, make_to_order.MESSAGES[lang]["location"])
+        return redirect(back)
+    data = {"quantity": request.POST.get("quantity"), "labor_cost": request.POST.get("labor_cost"), "overhead_cost": request.POST.get("overhead_cost"),
+            "location": location}
+    try:
+        order = make_to_order.make(line, request.user, data, lang)
+    except ValidationError as exc:
+        messages.error(request, " ".join(exc.messages))
+    else:
+        messages.success(request, make_to_order.WORDS[lang]["made_ok"].format(number=order.number))
+    return redirect(back)

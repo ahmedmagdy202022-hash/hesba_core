@@ -102,14 +102,14 @@ class ScanScreenTests(ScanSetup):
 class CardTests(ScanSetup):
     def setUp(self):
         super().setUp()
-        Student.objects.filter(pk=self.a.pk).update(phone="01299988877", date_of_birth=date(2012, 3, 4), stage="تالتة إعدادي")
+        Student.objects.filter(pk=self.a.pk).update(phone="01299988877", date_of_birth=date(2012, 3, 4), stage="الصف الثالث الإعدادي")
         self.a.refresh_from_db()
 
     def test_the_card_has_the_name_code_stage_group_and_nothing_private(self):
         page = self.client.get(reverse("education:cards") + f"?student={self.a.pk}")
         self.assertEqual(page.status_code, 200)
         html = page.content.decode()
-        for shown in ("آدم", "ST-00001", "تالتة إعدادي", "مراجعة يومية"):
+        for shown in ("آدم", "ST-00001", "الصف الثالث الإعدادي", "مراجعة يومية"):
             self.assertIn(shown, html)
         # no phone (the child's or the parent's), no date of birth, no payer
         for private in ("01299988877", "01010000001", "2012", "03-04", "ولي أمر آدم", "ولي أمر"):

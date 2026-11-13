@@ -36,18 +36,18 @@ INSTALMENT_AHEAD_DAYS = 2
 DEFAULT_TEXTS = {
     MessageKind.DUE: "أهلاً {name}، ده تذكير ودّي من {company} بالمبلغ المستحق على حضرتك: {amount}. شكرًا لحضرتك.",
     MessageKind.INSTALMENT: "أهلاً {name}، تذكير من {company}: قسط فاتورة {number} بمبلغ {amount} ميعاده {date}. شكرًا لحضرتك.",
-    MessageKind.APPOINTMENT: "أهلاً {name}، تذكير من {company} بميعاد حضرتك بكرة {date} الساعة {time}. لو محتاج تغيّر الميعاد ابعتلنا.",
-    MessageKind.REFILL: "أهلاً {name}، روشتة حضرتك {number} ميعاد تجديدها {date}. تحب نجهزهالك؟ — {company}",
-    MessageKind.WORKORDER: "أهلاً {name}، من {company}: أمر الشغل {number} {status} {link}",
-    MessageKind.CAMPAIGN: "أهلاً {name}، وحشتنا في {company}! عندنا ليك جديد، ننتظرك قريب.",  # S8: only the starting text of a new campaign
+    MessageKind.APPOINTMENT: "أهلاً {name}، تذكير من {company} بميعاد حضرتك بكرة {date} الساعة {time}. ولأي تغيير في الميعاد، ابعتلنا رسالة.",
+    MessageKind.REFILL: "أهلاً {name}، روشتة حضرتك رقم {number} ميعاد تجديدها {date}. تحب نجهّزها لحضرتك؟ — {company}",
+    MessageKind.WORKORDER: "أهلاً {name}، من {company}: طلب الصيانة رقم {number}: {status} {link}",
+    MessageKind.CAMPAIGN: "أهلاً {name}، وحشتنا في {company}! عندنا جديد يهمّ حضرتك، ومستنيينك قريب.",  # S8: only the starting text of a new campaign
     # M3: the clinic and the date, nothing else. Never the diagnosis, the specialty or any clinical detail (the placeholders cannot carry one).
     MessageKind.FOLLOWUP: "أهلاً {name}، تذكير من {company}: ميعاد المتابعة يوم {date}. تحب نحجزلك ميعاد؟ كلّمنا أو ابعتلنا هنا.",
     # M7: the owner, the animal, the vaccine, the date and the clinic. Never a note or a diagnosis (the placeholders cannot carry one) and no link.
     MessageKind.VACCINE: "أهلاً {name}، تذكير من {company}: ميعاد جرعة {vaccine} لـ {animal} يوم {date}. تحب نحجزلك ميعاد؟ كلّمنا أو ابعتلنا هنا.",
     # E5: the guardian, the student, the group, the day and the centre. Never a reason, a note, a rate, a grade or a link (students are often minors).
-    MessageKind.ABSENCE: "أهلاً {name}، {student} كان غايب يوم {date} عن {group} في {company}.",
+    MessageKind.ABSENCE: "أهلاً {name}، بنبلّغ حضرتك بغياب {student} عن {group} يوم {date}. — {company}",
     # E5: the guardian, the amount still due and the centre; one message per guardian, not per child or per invoice.
-    MessageKind.FEES: "أهلاً {name}، تذكير ودّي من {company}: المتبقي من مصروفات الدراسة على حضرتك {amount}. لو حضرتك دفعت خلاص، اعتبر الرسالة دي كأنها ماوصلتش. شكرًا لحضرتك.",
+    MessageKind.FEES: "أهلاً {name}، تذكير ودّي من {company}: المتبقي من مصروفات الدراسة على حضرتك {amount}. ولو حضرتك دفعت بالفعل، تقدر تتجاهل الرسالة دي. شكرًا لحضرتك.",
 }
 #: S7: the same wording in English, used when the business's default language is English and the text was never edited.
 DEFAULT_TEXTS_EN = {MessageKind.WORKORDER: "Hello {name}, from {company}: work order {number} {status} {link}",
@@ -82,9 +82,9 @@ ABSENCE_DAYS = 2
 #: S7: what each key status says to the customer ({days} is the order's warranty days).
 WORKORDER_STATUSES = ("quoted", "ready", "delivered")
 WORKORDER_STATUS_TEXTS = {
-    "ar": {"quoted": "عرض السعر جاهز. تقدر توافق عليه أو ترفضه من اللينك ده:", "quoted_nolink": "عرض السعر جاهز. كلمنا عشان توافق عليه.",
+    "ar": {"quoted": "عرض السعر جاهز. تقدر توافق عليه أو ترفضه من الرابط ده:", "quoted_nolink": "عرض السعر جاهز. تواصل معانا للموافقة عليه.",
            "ready": "جاهز للاستلام. تابع حالته من هنا:", "ready_nolink": "جاهز للاستلام.",
-           "delivered": "اتسلّم. شكرًا لثقة حضرتك.", "delivered_warranty": "اتسلّم. شكرًا لثقة حضرتك، والضمان {days} يوم."},
+           "delivered": "تم التسليم. شكرًا لثقة حضرتك.", "delivered_warranty": "تم التسليم. شكرًا لثقة حضرتك، والضمان {days} يوم."},
     "en": {"quoted": "the quote is ready. You can approve or refuse it from this link:", "quoted_nolink": "the quote is ready. Contact us to approve it.",
            "ready": "is ready for pickup. Follow it here:", "ready_nolink": "is ready for pickup.",
            "delivered": "was delivered. Thank you for your trust.", "delivered_warranty": "was delivered. Thank you for your trust; the warranty is {days} days."},
@@ -640,7 +640,7 @@ def visible(user):
 
 LINK = re.compile(r"https?://\S+")
 LINK_MARKS = ("http://", "https://")
-LINK_MASK = {"ar": "[لينك العميل]", "en": "[customer link]"}
+LINK_MASK = {"ar": "[رابط العميل]", "en": "[customer link]"}
 
 
 #: The kinds whose text can carry a customer's own link (S7 work orders, M3 a clinic's appointment).

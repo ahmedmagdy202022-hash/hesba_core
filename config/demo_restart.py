@@ -50,6 +50,6 @@ def restart_demo():
     with transaction.atomic():
         replay_seed_migrations()
         password = settings.DEMO_PASSWORD
-        call_command("bootstrap_client", display_name="محل حِسبة التجريبي", client_code="DEMO", password=password, verbosity=0)
+        call_command("bootstrap_client", display_name="حِسبة للتجارة (تجريبي)", client_code="DEMO", password=password, verbosity=0)
         call_command("seed_demo_users", password=password, force=True, verbosity=0)
     return get_user_model().objects.get(username="owner")

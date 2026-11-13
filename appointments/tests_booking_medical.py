@@ -67,10 +67,10 @@ class ClinicWordsTests(ClinicBooking):
         one, two, three, four = self.steps("ar", open_day())
         self.assertContains(one, "اختار نوع الكشف")
         self.assertContains(two, "اختار الدكتور")
-        self.assertContains(two, "أي دكتور فاضي")
+        self.assertContains(two, "أي دكتور متاح")
         self.assertContains(three, "المواعيد معروضة على مدة الكشف (45 دقيقة)")
-        self.assertContains(four, "علشان العيادة تقدر تكلمك")
-        self.assertContains(four, "مفيش دفع هنا: الحساب في العيادة.")
+        self.assertContains(four, "علشان العيادة تقدر تتواصل مع حضرتك")
+        self.assertContains(four, "مفيش دفع هنا؛ الحساب بيكون عند الحضور.")
         self.assertContains(four, "سبب الزيارة أو ملاحظاتك")
         for page in (one, two, three, four):
             for shop_word in ("اختار الخدمة", "اختار الموظف", "المحل", "أي حد فاضي"):
@@ -93,7 +93,7 @@ class ClinicWordsTests(ClinicBooking):
         self.assertContains(response, "اختار نوع الكشف من القايمة.", status_code=400)
         response = self.post(day, staff="nobody", lang="en")
         self.assertContains(response, "Choose a doctor from the list.", status_code=400)
-        self.assertContains(self.post(day, website="x"), "كلّم العيادة", status_code=400)
+        self.assertContains(self.post(day, website="x"), "تواصل مع العيادة", status_code=400)
 
     def test_the_settings_screen_speaks_in_the_clinics_words(self):
         self.client.force_login(self.owner)
@@ -121,8 +121,8 @@ class VetWordsTests(ClinicBooking):
     def test_a_vet_clinic_speaks_to_the_animals_owner(self):
         one, two, three, four = self.steps("ar", open_day())
         self.assertContains(two, "اختار الدكتور البيطري")
-        self.assertContains(two, "أي دكتور بيطري فاضي")
-        self.assertContains(four, "علشان العيادة البيطرية تقدر تكلمك")
+        self.assertContains(two, "أي دكتور بيطري متاح")
+        self.assertContains(four, "علشان العيادة البيطرية تقدر تتواصل مع حضرتك")
         self.assertContains(four, "اسم الحيوان وسبب الزيارة")
         english = self.steps("en", open_day())
         self.assertContains(english[1], "Choose the vet")

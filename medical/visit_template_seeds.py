@@ -13,7 +13,7 @@ SEEDS = (
     # ---- general / internal ----
     ("general", "cold", {
         "ar": ("برد وإنفلونزا", "الشكوى: رشح / عطس / كحة / وجع حلق / سخونية\nبدأت من: ... يوم\nفيه حد قريب منه عنده نفس الأعراض؟",
-               "الحلق: ...\nالصدر: ...\nالأنف والودان: ...", "راحة وسوائل دافية كتير.\nارجع للدكتور لو الأعراض زادت أو طولت أو ظهر عَرَض جديد."),
+               "الحلق: ...\nالصدر: ...\nالأنف والودان: ...", "راحة وسوائل دافئة بكثرة.\nارجع للدكتور لو الأعراض زادت أو طولت أو ظهر عَرَض جديد."),
         "en": ("Cold and flu", "Complaint: runny nose / sneezing / cough / sore throat / fever\nStarted: ... days ago\nAnyone close with the same symptoms?",
                "Throat: ...\nChest: ...\nNose and ears: ...", "Rest and plenty of warm fluids.\nCome back if the symptoms get worse, last longer, or something new appears."),
     }),

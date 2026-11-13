@@ -618,7 +618,7 @@ class SeedDemoBusinessTests(TestCase):
         self.seed()
         rows, totals = rep_performance(date(2000, 1, 1), timezone.localdate())
         names = {row["rep"].name for row in rows if row["rep"] and row["net_sales"] > 0}
-        self.assertEqual(names, {"سمير المندوب", "هالة المندوبة"})
+        self.assertEqual(names, {"سمير عادل", "هالة مصطفى"})
         self.assertGreater(totals["commission"], 0)
 
     def test_it_posts_real_trade_rather_than_writing_figures(self):

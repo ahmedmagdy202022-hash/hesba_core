@@ -16,7 +16,7 @@ from .tests import WorkshopSetup
 from .tests_customer_link import SECRET_NOTE
 
 HTML = {"HTTP_ACCEPT": "text/html,application/xhtml+xml"}
-HIDDEN = (SECRET_NOTE, "1350", "average_cost", "cost", "أحمد الفني", "commission", "OTHER-DEVICE-XYZ", "عميل تاني خالص", "محمد علي", "01001234567", "wo_owner")
+HIDDEN = (SECRET_NOTE, "1350", "average_cost", "cost", "أحمد سامي", "commission", "OTHER-DEVICE-XYZ", "عميل تاني خالص", "محمد علي", "01001234567", "wo_owner")
 STAFF = ("/staff/", "/workorders/", "sidebar", "logout", "href=\"/login")
 
 
@@ -66,7 +66,7 @@ class CustomerPageTests(WorkshopSetup):
         self.assertEqual((response.status_code, response["Content-Type"].split(";")[0]), (200, "text/html"))
         body = response.content.decode()
         self.assertIn('lang="ar" dir="rtl"', body)
-        for shown in (self.order_.number, "غسالة توشيبا", "مستني موافقة العميل", "موتور غسالة", "مصنعية إصلاح", "1,800.00", "300.00", "2,100.00", "موافق على العرض", "مش موافق"):
+        for shown in (self.order_.number, "غسالة توشيبا", "في انتظار موافقة حضرتك", "موتور غسالة", "مصنعية إصلاح", "1,800.00", "300.00", "2,100.00", "موافق على العرض", "رفض العرض"):
             with self.subTest(shown=shown):
                 self.assertContains(response, shown)
         self.assertContains(response, 'data-status="quoted"')
@@ -142,7 +142,7 @@ class CustomerPageTests(WorkshopSetup):
 
     def test_refused_page_shows_the_outcome_closed_quote_and_no_lines(self):
         self.post("refuse", lang="en")
-        for lang, banner, closed in (("en", "You declined the quote on", "The quote is closed"), ("ar", "اتسجّل إنك رفضت العرض يوم", "العرض اتقفل")):
+        for lang, banner, closed in (("en", "You declined the quote on", "The quote is closed"), ("ar", "تم تسجيل رفض حضرتك للعرض يوم", "العرض اتقفل")):
             response = self.get(lang)
             with self.subTest(lang=lang):
                 self.assertContains(response, 'data-status="refused"')

@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="{% static 'hesba/css/print.css' %}?v=print-004">
 </head>
 <body class="pr-body pr-receipt" data-format="receipt">
-<nav class="pr-toolbar" aria-label="{{ words.receipt }}">
+<nav class="pr-toolbar" aria-label="{{ words.receipt_title }}">
   <a class="pr-button pr-button--ghost" href="{% url 'workorders:detail' order.pk %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ order.number }}</a>
   <button class="pr-button pr-button--primary" type="button" data-print>{{ words.receipt }}</button>
 </nav>
@@ -22,7 +22,7 @@
       {% if company.phone %}<p><bdi>{{ company.phone }}</bdi></p>{% endif %}
     </div>
     <div class="pr-doc">
-      <h2 class="pr-doc__title">{{ words.receipt }}</h2>
+      <h2 class="pr-doc__title">{{ words.receipt_title }}</h2>
       <dl class="pr-meta">
         <div><dt>{{ words.number }}</dt><dd><bdi data-receipt-number>{{ order.number }}</bdi></dd></div>
         <div><dt>{{ words.received }}</dt><dd><bdi>{{ order.received_at|date:"Y-m-d H:i" }}</bdi></dd></div>
