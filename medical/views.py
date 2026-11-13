@@ -465,7 +465,7 @@ LAB_WORDS = {
            "signature": "توقيع المسؤول", "choose": "—", "none": "—", "remove": "امسح (اتسجلت غلط)", "reason": "السبب",
            # M6 (HG-085): the patient's link for one day
            "send": "ابعت النتيجة للمريض", "send_h": "رابط النتيجة للمريض", "send_whatsapp": "ابعته واتساب", "copy": "نسخ الرابط",
-           "send_note": "الرابط شغال {days} أيام، والمريض بيكتب سنة ميلاده (أو آخر 4 أرقام من موبايله لو مفيش تاريخ ميلاد في الملف) عشان يفتحه. لو النتيجة اتعدّلت الرابط ده بيبطل؛ ابعت رابط جديد.",
+           "send_note": "الرابط شغال {days} أيام، والمريض بيكتب تاريخ ميلاده كامل (اليوم والشهر والسنة) عشان يفتحه، أو آخر 4 أرقام من موبايله لو مفيش تاريخ ميلاد في الملف. لو النتيجة اتعدّلت الرابط ده بيبطل، ولو المريض غلط {tries} مرات في عمر الرابط بيتقفل؛ وفي الحالتين ابعت رابط جديد.",
            "send_text_note": "رسالة الواتساب فيها اسم المعمل والرابط بس، من غير أسامي التحاليل ولا النتايج.",
            # M9 (HG-092): the analyzer's code for a test
            "code": "كود الجهاز", "code_hint": "اختياري: الاسم القصير اللي الجهاز بيكتبه للتحليل (زي GLU). بيتكتب على ملصق العيّنة وبيربط ملف الجهاز بالتحليل."},
@@ -478,7 +478,7 @@ LAB_WORDS = {
            "back": "Patient file", "sheet": "Laboratory report", "patient": "Patient", "file_no": "File no.", "age": "Age", "years": "yrs",
            "signature": "Signed", "choose": "—", "none": "—", "remove": "Remove (entered by mistake)", "reason": "Reason",
            "send": "Send the results to the patient", "send_h": "The patient's results link", "send_whatsapp": "Send on WhatsApp", "copy": "Copy link",
-           "send_note": "The link works for {days} days; the patient types their birth year (or the last 4 digits of their phone when the file has no birth date) to open it. If a result is changed this link stops working; send a new one.",
+           "send_note": "The link works for {days} days; the patient types their full birth date (day, month and year) to open it, or the last 4 digits of their phone when the file has no birth date. If a result is changed this link stops working, and if the patient answers wrongly {tries} times in the link's life it closes; either way send a new one.",
            "send_text_note": "The WhatsApp message carries the lab's name and the link only, never a test name or a result.",
            "code": "Analyzer code", "code_hint": "Optional: the short name the analyzer writes for the test (like GLU). It is printed on the sample label and ties the analyzer's file to the test."},
 }
@@ -599,7 +599,7 @@ def lab_results(request, pk):
             result.flag_label = labels[result.flag]
             result.before = lab.previous(result)
     rows = [{"test": test, "value": request.POST.get(f"value_{test.pk}", ""), "text": request.POST.get(f"text_{test.pk}", "")} for test in tests]
-    found = public.factor(patient) if can_write else None  # M6: with neither a birth year nor a phone the patient could not open it
+    found = public.factor(patient) if can_write else None  # M6: with neither a birth date nor a phone the patient could not open it
     shareable = found is not None
     sample = _sample_day(request, patient, days, lang)  # M9 (HG-092): opened from a sample code: that day, and its label
     return render(request, "medical/lab_results.html", _base(lang, page_title=words["title"], lw=words, patient=patient, rows=rows, days=days,
@@ -608,7 +608,7 @@ def lab_results(request, pk):
                                                             sample=sample, sw=views_lab.WORDS[lang],
                                                             shareable=shareable, no_factor=public.WORDS[lang]["no_factor"], shared=shared,
                                                             phone_only=public.WORDS[lang]["phone_only"] if found and found[0] == public.PHONE else "",
-                                                            share_note=words["send_note"].format(days=public.days())))
+                                                            share_note=words["send_note"].format(days=public.days(), tries=public.TOKEN_LIFE[1])))
 
 
 def lab_sheet(request, pk, day):

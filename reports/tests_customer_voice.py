@@ -60,8 +60,8 @@ def _builders():
     out.append(("education.paylinks[wa_text]", paylinks.WORDS["ar"]["wa_text"]))
     out.append(("parties[reminder]", parties_views.WORDS["ar"]["reminder"]))
     out.append(("medical.views[wa_text]", medical_views.WORDS["ar"]["wa_text"]))
-    customer_keys = ("ask_h", "ask_year", "label_year", "ask_phone", "label_phone", "open", "wrong", "format_year", "format_phone", "busy", "print",
-                     "private", "dead_h", "dead", "call", "whatsapp", "wa_text_year", "wa_text_phone")
+    customer_keys = ("ask_h", "ask_date", "label_date", "label_day", "label_month", "label_year", "ask_phone", "label_phone", "open", "wrong", "format_date",
+                     "format_phone", "busy", "print", "private", "dead_h", "dead", "call", "whatsapp", "wa_text_date", "wa_text_phone")
     out += [(f"medical.public[{key}]", lab_public.WORDS["ar"][key]) for key in customer_keys]
     out += [(f"appointments.public[{key}]", text) for key, text in appointment_public.WORDS["ar"].items()]
     out += [(f"appointments.views_booking.WORDS[{key}]", text) for key, text in views_booking.WORDS["ar"].items() if isinstance(text, str)]

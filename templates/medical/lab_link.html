@@ -2,7 +2,7 @@
 {% comment %}M6 (HG-085): the lab patient's page. Before the second factor it shows only the lab's name and the question:
 no patient name, no test, no date. After it, the same content as the printed lab sheet (the shared partial), nothing more.{% endcomment %}
 {% block title %}{{ ww.title }} · {{ company.name }}{% endblock %}
-{% block head_extra %}<link rel="stylesheet" href="{% static 'hesba/css/lab_link.css' %}?v=ll-001">{% endblock %}
+{% block head_extra %}<link rel="stylesheet" href="{% static 'hesba/css/lab_link.css' %}?v=ll-002">{% endblock %}
 {% block sub %}<div class="cl-shopsub">{{ ww.sub }}</div>{% endblock %}
 {% block content %}<main class="cl-main ll-main" data-lab-link="{% if sheet %}sheet{% else %}ask{% endif %}">
 {% if sheet %}
@@ -17,8 +17,15 @@ no patient name, no test, no date. After it, the same content as the printed lab
   <p data-lab-factor="{{ kind }}">{{ ask }}</p>
   {% if message %}<div class="cl-msg cl-msg--danger ll-msg" id="ll-msg" role="alert" data-lab-message>{{ message }}</div>{% endif %}
   <form class="ll-form" method="post" action="{{ action }}" autocomplete="off">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
-    <label class="ll-label" for="ll-answer">{{ label }}</label>
+{% if kind == 'date' %}<fieldset class="ll-fieldset"><legend class="ll-label">{{ label }}</legend>
+    <div class="ll-date" dir="ltr">
+      <div class="ll-datebox"><label class="ll-label" for="ll-day">{{ ww.label_day }}</label><input class="ll-input ll-input--part" id="ll-day" name="day" inputmode="numeric" pattern="[0-9٠-٩۰-۹]*" maxlength="2" autocomplete="off" required{% if message %} aria-describedby="ll-msg"{% endif %}></div>
+      <div class="ll-datebox"><label class="ll-label" for="ll-month">{{ ww.label_month }}</label><input class="ll-input ll-input--part" id="ll-month" name="month" inputmode="numeric" pattern="[0-9٠-٩۰-۹]*" maxlength="2" autocomplete="off" required></div>
+      <div class="ll-datebox ll-datebox--year"><label class="ll-label" for="ll-year">{{ ww.label_year }}</label><input class="ll-input ll-input--part" id="ll-year" name="year" inputmode="numeric" pattern="[0-9٠-٩۰-۹]*" maxlength="4" autocomplete="off" required></div>
+    </div></fieldset>
+{% else %}    <label class="ll-label" for="ll-answer">{{ label }}</label>
     <input class="ll-input" id="ll-answer" name="answer" inputmode="numeric" pattern="[0-9٠-٩]*" maxlength="4" autocomplete="off" dir="ltr" required{% if message %} aria-describedby="ll-msg"{% endif %}>
+{% endif %}
     <div class="cl-actions"><button class="cl-btn cl-btn--primary" type="submit">{{ ww.open }}</button></div>
   </form>
 </section>
