@@ -347,8 +347,13 @@ class AccessTests(ScreenSetup):
                 self.assertEqual(self.client.get(self.url(name, self.order.pk)).status_code, 404)
         self.assertEqual(self.client.get(self.url("variation_new")).status_code, 404)
         register = self.client.get(self.url("variations"))
-        self.assertContains(register, "data-empty-none")
-        self.assertNotContains(register, "data-new-variation")
+        self.assertContains(register, "data-other-entity")
+        # neither the orders nor their totals: no summary of amounts, counts or days, no table, no button
+        for hidden in ("data-variation-summary", "data-summary=", "data-variation-orders", "data-empty-none", "data-new-variation", "data-project-closed"):
+            with self.subTest(hidden=hidden):
+                self.assertNotContains(register, hidden)
+        with working_in(branch):
+            self.assertTrue(variations.figures(self.project)["count"])  # the figures exist; the screen does not ask for them
         self.assertNotContains(self.client.get(self.url("detail")), 'data-position="original"')
         # The signed copy follows the order: not opened, not uploaded and not deleted from here.
         from attachments.models import Attachment

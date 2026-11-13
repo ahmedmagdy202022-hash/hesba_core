@@ -6,8 +6,9 @@
 {% include "projects/_head.html" %}
 <section class="sr-intro"><h2 class="prj-h">{{ vw.page_title }}</h2><p>{{ vw.intro }}</p></section>
 {% if new_url %}<div class="sr-cta sr-cta--top vo-cta" data-variation-cta><a class="op-primary" href="{{ new_url }}" data-new-variation>{{ vw.new }}</a></div>
-{% elif not is_open %}<p class="op-message" data-project-closed>{{ vw.closed }}</p>
+{% elif other_entity %}{% elif not is_open %}<p class="op-message" data-project-closed>{{ vw.closed }}</p>
 {% elif not can_draft %}<p class="op-muted" data-view-only>{{ vw.view_only }}</p>{% endif %}
+{% if other_entity %}<p class="op-message" data-other-entity>{{ vw.other_entity }}</p>{% else %}
 <section class="op-summary-grid op-summary-grid--compact vo-summary" data-variation-summary>
 <article><small>{{ vw.original }}</small><strong dir="ltr" data-summary="original">{{ summary.original }}</strong></article>
 <article><small>{{ vw.approved }}</small><strong dir="ltr" data-summary="approved">{{ summary.approved }}</strong><small>{{ summary.approved_n }}</small></article>
@@ -23,6 +24,6 @@
 <td data-row="meta"><span class="op-status op-status-{{ row.status_class }}" data-order-status>{{ row.status_label }}</span></td>
 <td data-row="meta">{% if row.days_text %}{{ vw.extension }} {{ row.days_text }}{% else %}{{ vw.ph }}{% endif %}</td></tr>
 {% empty %}<tr><td colspan="5" class="op-empty" data-row="empty"><span class="hs-empty" data-empty-none><b>{{ vw.none }}</b></span></td></tr>{% endfor %}
-</tbody></table></div>
+</tbody></table></div>{% endif %}
 {% if new_url %}<div class="sr-cta sr-cta--bar vo-cta" data-variation-cta="bar"><a class="op-primary" href="{{ new_url }}">{{ vw.new }}</a></div>{% endif %}
 {% endblock %}

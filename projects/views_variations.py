@@ -37,7 +37,7 @@ WORDS = {
         "new": "أمر تغيير جديد", "original": "قيمة العقد الأصلية", "approved": "أوامر تغيير معتمدة", "revised": "قيمة العقد بعد التعديل",
         "pending": "في انتظار اعتماد المالك", "extension": "تمديد المدة", "days_n": "{n} يوم", "planned_end": "نهاية التنفيذ بعد التمديد", "orders_n": "{n} أمر",
         "number": "الأمر", "date": "التاريخ", "status": "الحالة", "value": "القيمة", "ph": "—",
-        "none": "لسه مفيش أوامر تغيير على المشروع ده.", "view_only": "تسجيل أمر التغيير لمهندس الموقع أو لصاحب صلاحية الفواتير بس.",
+        "none": "لسه مفيش أوامر تغيير على المشروع ده.", "other_entity": "أوامر التغيير محفوظة في الكيان اللي بتتعمل منه مستخلصات المشروع ده؛ اشتغل من الكيان ده عشان تشوفها.", "view_only": "تسجيل أمر التغيير لمهندس الموقع أو لصاحب صلاحية الفواتير بس.",
         "closed": "المشروع اتقفل أو اتلغى؛ أوامر التغيير للقراءة بس.", "order_n": "أمر تغيير رقم {n}",
         "form_new": "أمر تغيير جديد", "form_edit": "تعديل أمر تغيير رقم {n}",
         "form_intro": "الأمر بيتحفظ مسودة: المقايسة وقيمة العقد ما بيتغيّروش لحد ما يتسجّل اعتماد المالك.",
@@ -81,7 +81,7 @@ WORDS = {
         "new": "New variation order", "original": "Original contract value", "approved": "Approved variation orders", "revised": "Revised contract value",
         "pending": "Awaiting the owner's approval", "extension": "Extension of time", "days_n": "{n} days", "planned_end": "Planned end with the extension", "orders_n": "{n} orders",
         "number": "Order", "date": "Date", "status": "Status", "value": "Value", "ph": "—",
-        "none": "No variation orders on this project yet.", "view_only": "Only the site engineer, or someone who may create invoices, can record a variation order.",
+        "none": "No variation orders on this project yet.", "other_entity": "Variation orders are kept in the entity that bills this project's certificates; work in that entity to see them.", "view_only": "Only the site engineer, or someone who may create invoices, can record a variation order.",
         "closed": "This project is closed or cancelled; its variation orders are read-only.", "order_n": "Variation order {n}",
         "form_new": "New variation order", "form_edit": "Edit variation order {n}",
         "form_intro": "The order is saved as a draft: the bill of quantities and the contract value do not change until the owner's approval is recorded.",
@@ -196,21 +196,24 @@ def variations_list(request, pk):
     lang = _lang(request)
     words = WORDS[lang]
     project = _project(pk)
-    figures = variations.figures(project)
+    # Another entity reaches neither the orders nor their totals: the register says where they are kept and shows nothing else.
+    reach = variations.in_reach(project)
+    figures = variations.figures(project) if reach else None
     rows = []
     for order in variations.orders_for(project):
         rows.append({"order": order, "heading": words["order_n"].format(n=order.number), "day": day_text(order.order_date, lang),
                      "status_label": variations.status_label(order.status, lang), "status_class": STATUS_CLASS[order.status],
                      "value_text": signed_money(variations.order_value(order)), "days_text": _days_text(order.extension_days, lang) if order.extension_days else "",
                      "url": _url("variation", project, order, lang)})
-    summary = {"original": money(figures["original"]), "approved": signed_money(figures["approved"]), "revised": money(figures["revised"]),
-               "pending": signed_money(figures["pending"]), "approved_n": words["orders_n"].format(n=figures["approved_count"]),
-               "pending_n": words["orders_n"].format(n=figures["pending_count"]),
-               "extension": _days_text(figures["extension_days"], lang) if figures["extension_days"] else "",
-               "planned_end": day_text(figures["planned_end"], lang) if figures["extension_days"] and figures["planned_end"] else ""}
-    is_open = project.status in OPEN and variations.in_reach(project)
+    summary = None if figures is None else {
+        "original": money(figures["original"]), "approved": signed_money(figures["approved"]), "revised": money(figures["revised"]),
+        "pending": signed_money(figures["pending"]), "approved_n": words["orders_n"].format(n=figures["approved_count"]),
+        "pending_n": words["orders_n"].format(n=figures["pending_count"]),
+        "extension": _days_text(figures["extension_days"], lang) if figures["extension_days"] else "",
+        "planned_end": day_text(figures["planned_end"], lang) if figures["extension_days"] and figures["planned_end"] else ""}
+    is_open = project.status in OPEN and reach
     return render(request, "projects/variations.html", _context_for(
-        request, project, rows=rows, figures=figures, summary=summary, new_url=_url("variation_new", project, lang=lang) if is_open and variations.can_draft(request.user) else "",
+        request, project, rows=rows, figures=figures, summary=summary, other_entity=not reach, new_url=_url("variation_new", project, lang=lang) if is_open and variations.can_draft(request.user) else "",
         page_title=f"{project.name} — {words['page_title']}"))
 
 
