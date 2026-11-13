@@ -18,6 +18,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from . import attendance as register
 from . import makeup, services
 from .models import Enrollment, EnrollmentStatus, SeatStatus, Student, StudyGroup
 from .views import _base, _lang
@@ -29,7 +30,7 @@ WORDS = {
            "no_home": "الطالب مش مسجّل في أي مجموعة شغالة، فمفيش حصة يتعوّضها.", "choose_home": "اختار المجموعة الأصلية الأول عشان تظهر الحصص.",
            "note": "ملاحظة (اختياري)", "save": "احجز المقعد", "booked_ok": "المقعد اتحجز في الحصة التعويضية.", "cancelled_ok": "الحجز اتلغى.", "attended_ok": "اتسجّل الحضور.",
            "missed_ok": "اتسجّل الغياب.", "cancel": "إلغاء الحجز", "attended": "حضر", "missed": "ماحضرش", "guests_h": "ضيوف الحصة (تعويضي)",
-           "from_group": "المجموعة الأصلية:", "class_cancelled": "حصة المجموعة اتلغت.", "held": "محجوزة بالفعل", "full": "مكتمل", "open": "مفتوحة", "back": "رجوع للطالب",
+           "from_group": "المجموعة الأصلية:", "class_cancelled": "حصة المجموعة اتلغت.", "held": "محجوزة بالفعل", "full": "مكتمل", "open": "مفتوحة", "back": "رجوع للطالب", "back_register": "رجوع لكشف الحضور", "entry": "احجز حصة تعويضية لطالب من المجموعة",
            "status": {"booked": "محجوز", "attended": "حضور", "missed": "غياب", "cancelled": "اتلغى"}, "seats_n": "فاضل {n} مقاعد", "seats_1": "فاضل مقعد واحد",
            "seats_2": "فاضل مقعدين", "for": "حصة تعويضية"},
     "en": {"title": "Makeup classes", "book": "Book a makeup class", "none": "No makeup bookings yet.",
@@ -39,7 +40,7 @@ WORDS = {
            "choose_home": "Choose the home group first so the classes appear.", "note": "Note (optional)", "save": "Book the seat", "booked_ok": "The seat was booked in the makeup class.",
            "cancelled_ok": "The booking was cancelled.", "attended_ok": "The guest was marked attended.", "missed_ok": "The guest was marked absent.", "cancel": "Cancel the booking",
            "attended": "Attended", "missed": "Absent", "guests_h": "Class guests (makeup)", "from_group": "Home group:", "class_cancelled": "This group's class was cancelled.",
-           "held": "Already booked", "full": "Full", "open": "Open", "back": "Back to the student",
+           "held": "Already booked", "full": "Full", "open": "Open", "back": "Back to the student", "back_register": "Back to the register", "entry": "Book a makeup class for a student of this group",
            "status": {"booked": "Booked", "attended": "Attended", "missed": "Absent", "cancelled": "Cancelled"}, "seats_n": "{n} seats left", "seats_1": "1 seat left",
            "seats_2": "2 seats left", "for": "Makeup class"},
 }
@@ -106,12 +107,25 @@ def label_guests(seats, lang):
     return seats
 
 
-def _back(seat, lang, where):
+def _student_side(request, student_id, lang, home=None):
+    """(url, is the student page) for whoever just booked, cancelled or opened the booking page.
+
+    The student page for whoever may open it. A teacher who takes attendance but has no access to the student file (review finding) goes to
+    the register of the home group when it is theirs, else to today's classes: never to a page that answers 403."""
+
+    if services.can_view(request.user):
+        return f"{reverse('education:student', args=[student_id])}?lang={lang}#makeup", True
+    if home is not None and register.can_take(request.user, home):
+        return f"{reverse('education:attendance', args=[home.pk])}?lang={lang}#makeup-entry", False
+    return f"{reverse('education:today')}?lang={lang}", False
+
+
+def _back(request, seat, lang, where):
     if where == "attendance":
         return redirect(f"{reverse('education:attendance', args=[seat.group_id])}?lang={lang}&date={seat.day.isoformat()}")
     if where == "today":
         return redirect(f"{reverse('education:today')}?lang={lang}&date={seat.day.isoformat()}")
-    return redirect(f"{reverse('education:student', args=[seat.student_id])}?lang={lang}#makeup")
+    return redirect(_student_side(request, seat.student_id, lang, seat.home_group)[0])
 
 
 def _lines(student, lang):
@@ -137,8 +151,9 @@ def makeup_new(request, pk):
     rows = makeup.classes_for(student, chosen, request.user) if chosen is not None else []
     for row in rows:
         row["free_text"] = free_text(row["free"], lang)
+    back_url, to_student = _student_side(request, student.pk, lang, chosen or next((group for group in homes if register.can_take(request.user, group)), None))
     return render(request, "education/makeup_new.html", _page(request, lang, student=student, homes=homes, home=chosen, missed=missed, rows=rows, today=timezone.localdate(),
-                                                              page_title=WORDS[lang]["book"]))
+                                                              page_title=WORDS[lang]["book"], back_url=back_url, back_label=WORDS[lang]["back" if to_student else "back_register"]))
 
 
 @require_POST
@@ -157,7 +172,7 @@ def makeup_book(request, pk):
         messages.error(request, " ".join(exc.messages))
         return redirect(where)
     messages.success(request, WORDS[lang]["booked_ok"])
-    return redirect(f"{reverse('education:student', args=[student.pk])}?lang={lang}#makeup")
+    return redirect(_student_side(request, student.pk, lang, home)[0])
 
 
 def _change(request, pk, do, done, marking=False):
@@ -170,7 +185,7 @@ def _change(request, pk, do, done, marking=False):
     else:
         messages.success(request, WORDS[lang][done])
     where = request.POST.get("back")
-    return _back(seat, lang, where if where in ("attendance", "today") else "student")
+    return _back(request, seat, lang, where if where in ("attendance", "today") else "student")
 
 
 @require_POST

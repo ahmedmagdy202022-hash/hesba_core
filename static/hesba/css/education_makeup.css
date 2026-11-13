@@ -32,3 +32,8 @@
   .mk-btn{width:auto}
   .mk-row>form{grid-column:auto}
 }
+/* the register's way into the booking page, for a teacher with no access to the student file (outside the register's own form) */
+.mk-entry{margin-block-start:var(--hs-space-4);padding:0 var(--hs-space-4);border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);background:var(--hs-surface)}
+.mk-entry summary{display:flex;align-items:center;min-height:44px;cursor:pointer;color:var(--hs-navy);font-weight:var(--hs-weight-semibold)}
+.mk-entry .mk-list{padding-block-end:var(--hs-space-3)}
+.mk-entry__link{display:flex;align-items:center;min-height:44px;color:var(--hs-teal-deep);text-decoration:none}

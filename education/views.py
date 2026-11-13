@@ -490,7 +490,7 @@ def take_attendance(request, pk):
     choices = [(Presence.PRESENT, words["present"]), (Presence.LATE, words["late"]), (Presence.ABSENT, words["absent"]), (Presence.EXCUSED, words["excused"])]
     guests = views_makeup.label_guests(makeup.guests_of([group], day).get(group.pk, []), lang)  # E8: outside the register's own form and rows, never saved with it
     return render(request, "education/attendance.html", _base(request, lang, "today", group=group, day=day, session=session, roster=roster, choices=choices,
-                                                              mw=views_makeup.WORDS[lang], guests=guests, guests_open=not (session and session.status == SessionStatus.CANCELLED),
+                                                              mw=views_makeup.WORDS[lang], guests=guests, guests_open=not (session and session.status == SessionStatus.CANCELLED), makeup_entry=group.active,
                                                               schedule=services.schedule_text(group, lang), error=error, today=timezone.localdate(),
                                                               saved=bool(request.GET.get("saved")), notify=[row for row in roster if row.notify],
                                                               version=register.sheet_version(session, marks.values()),  # of the marks shown, not a second read

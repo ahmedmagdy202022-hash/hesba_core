@@ -1,6 +1,6 @@
 {% extends "operations/base.html" %}
 {% load static %}
-{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/education_makeup.css' %}?v=e8-1">{% endblock %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/education_makeup.css' %}?v=e8-2">{% endblock %}
 {% block operation_content %}
 <section class="op-title-row"><div><a class="op-back" href="{% url 'education:today' %}?lang={{ lang }}&date={{ day|date:'Y-m-d' }}">{% include "partials/back_arrow.html" %}{{ words.today }}</a><h1>{{ words.attendance }}: {{ group.course.name }} — {{ group.name }}</h1><p><bdi>{{ day|date:"Y-m-d" }}</bdi>{% if schedule %} · {{ schedule }}{% endif %}{% if group.teacher %} · {{ group.teacher.name }}{% endif %}</p></div></section>
 {% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
@@ -18,4 +18,5 @@
 <label class="op-check"><input type="checkbox" name="cancelled" value="1"{% if session.status == 'cancelled' %} checked{% endif %}> {{ words.cancelled_class }}</label></div>
 {% if scheduled %}<div class="op-form-actions"><button class="op-primary" type="submit" data-save-attendance>{{ words.save_attendance }}</button></div>{% endif %}</form>
 {% include "education/_makeup_guests.html" with back="attendance" %}
+{% if makeup_entry and roster %}<details class="mk-entry" id="makeup-entry" data-makeup-entry><summary>{{ mw.entry }}</summary><ul class="mk-list">{% for row in roster %}<li><a class="mk-entry__link" href="{% url 'education:makeup_new' row.student_id %}?lang={{ lang }}&amp;home={{ group.pk }}"><bdi>{{ row.student.name }}</bdi></a></li>{% endfor %}</ul></details>{% endif %}
 {% endblock %}
