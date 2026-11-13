@@ -98,15 +98,15 @@ def tiles(lang):
 
 WORDS = {
     "ar": {
-        "page_title": "جرّب حِسبة على نشاطك - حِسْبَة", "title": "جرّب حِسبة على نشاطك",
-        "lead": "اختار نوع شغلك، وهتلاقي قدامك محل جاهز وشغال ببياناته. نسختك لوحدك، ومفيش تسجيل.",
+        "page_title": "جرّب حِسبة على نشاطك - حِسبة", "title": "جرّب حِسبة على نشاطك",
+        "lead": "اختار نوع شغلك، وهتلاقي قدامك نشاط جاهز وشغال ببياناته. نسختك لوحدك، ومفيش تسجيل.",
         "foot": "كل الأرقام تجريبية. اللي تعمله هنا مش بيأثر على حد.", "have_account": "عندك حساب في حِسبة؟ ادخل من هنا",
         "language": "English", "sub_title": "{activity}، إيه نوعه؟", "back": "رجوع", "not_sure": "مش متأكد؟ افتح {default}",
         "change_later": "تقدر تغيّر النشاط في أي وقت من شريط الديمو.",
         "preparing_title": "بنجهّز نسختك…", "preparing": "أول مرة حد يفتح {label} على السيرفر ده؛ بنجهّز نسخته، وده بياخد لحظات. الصفحة هتتحدث لوحدها.",
-        "ready": "نسختك جاهزة.", "open": "افتح {label}", "too_many": "جرّبت كتير الساعة دي. استنى شوية وجرّب تاني، أو كمّل في تجربتك الحالية.",
-        "failed_title": "معرفناش نجهّز النسخة دي", "failed": "حصلت مشكلة وإحنا بنجهّز {label}. جرّب المحل الجاهز، أو اختار نشاط تاني.",
-        "default_shop": "افتح محل التجزئة الجاهز", "choose_other": "اختار نشاط تاني", "opened": "النسخة دي اتفتحت قبل كده.",
+        "ready": "نسختك جاهزة.", "open": "افتح {label}", "too_many": "عدد المحاولات كبير خلال الساعة دي. جرّب تاني بعد شوية، أو كمّل في تجربتك الحالية.",
+        "failed_title": "معرفناش نجهّز النسخة دي", "failed": "حصلت مشكلة وإحنا بنجهّز {label}. جرّب النسخة الجاهزة، أو اختار نشاط تاني.",
+        "default_shop": "افتح نسخة التجزئة الجاهزة", "choose_other": "اختار نشاط تاني", "opened": "النسخة دي اتفتحت قبل كده.",
         "to_dashboard": "افتح لوحة التحكم", "not_built": "الديمو الفاضي لسه بيتجهّز. جرّب كمان دقيقة.",
     },
     "en": {
@@ -360,7 +360,7 @@ def login_as(request):
 
 BEGIN_WORDS = {
     "ar": {
-        "page_title": "ابدأ من هنا - حِسْبَة", "title": "ابدأ من هنا", "lead": "أربع خطوات وتبقى بتبيع. كل خطوة دقيقة.",
+        "page_title": "ابدأ من هنا - حِسبة", "title": "ابدأ من هنا", "lead": "أربع خطوات وتبقى بتبيع. كل خطوة دقيقة.",
         "empty_line": "لسه مفيش حركة. ابدأ من هنا.", "fill_title": "عايز تشوفه مليان الأول؟",
         "fill_lead": "نملاه لك بشهر شغل تجريبي لـ{label}، في أقل من ثانية.", "fill": "املاه ببيانات تجريبية",
         "details": "عايز تعدّل تفاصيل شغلك؟ من الإعدادات", "done": "تم",
@@ -376,9 +376,9 @@ BEGIN_WORDS = {
 #: (key, title_ar, title_en, hint_ar, hint_en, url name, module it needs or "")
 BEGIN_STEPS = (
     ("item", "ضيف أول صنف", "Add your first item", "اسم وسعر، والباقي اختياري", "A name and a price; the rest is optional", "master_data:item_create", "items_services"),
-    ("cashbox", "حط رصيد الخزنة", "Set the cash in the drawer", "الكاش اللي معاك دلوقتي", "The cash you have right now", "cashboxes:list", "cashboxes"),
-    ("purchase", "سجّل أول شرا", "Record your first purchase", "علشان المخزن يبقى فيه بضاعة", "So there is stock to sell", "purchases:create", "purchases"),
-    ("sale", "بيع أول بيعة", "Make your first sale", "من الكاشير، والوردية هتتفتح لوحدها", "From the till; the shift opens by itself", "sales:pos", "sales_operations"),
+    ("cashbox", "سجّل رصيد الخزنة", "Set the cash in the drawer", "الكاش اللي معاك دلوقتي", "The cash you have right now", "cashboxes:list", "cashboxes"),
+    ("purchase", "سجّل أول فاتورة شراء", "Record your first purchase", "علشان المخزن يبقى فيه بضاعة", "So there is stock to sell", "purchases:create", "purchases"),
+    ("sale", "سجّل أول عملية بيع", "Make your first sale", "من الكاشير، والوردية هتتفتح لوحدها", "From the till; the shift opens by itself", "sales:pos", "sales_operations"),
 )
 
 

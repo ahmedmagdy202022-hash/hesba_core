@@ -188,13 +188,13 @@ class ExpenseScreenTests(TestCase):
                 "cashbox": self.cashbox.pk,
                 "amount": "120.50",
                 "payee": "",
-                "description": "إيجار المحل",
+                "description": "إيجار المقر",
             },
         )
         self.assertRedirects(response, "/expenses/?lang=ar", fetch_redirect_response=False)
         self.assertEqual(get_cashbox_balance(self.cashbox), D("379.50"))
         page = self.client.get(reverse("expenses:list"))
-        self.assertContains(page, "إيجار المحل")
+        self.assertContains(page, "إيجار المقر")
         self.assertContains(page, "120.50")
         self.assertContains(page, "إجمالي المصروفات")
 

@@ -29,23 +29,23 @@ DEMO_TILES = (
     ("services", "مركز صيانة، صالون", "Service centre, salon"),
     ("medical", "عيادة بمواعيد وملفات", "A clinic with appointments and files"),
     ("education", "كورسات وطلبة ومصاريف", "Courses, students and fees"),
-    ("restaurants", "طاولات ومطبخ وأوردرات", "Tables, kitchen and orders"),
+    ("restaurants", "طاولات وطلبات ومطبخ", "Tables, kitchen and orders"),
     ("contracting", "مشاريع ومستخلصات", "Projects and progress bills"),
     ("manufacturing", "وصفات وأوامر إنتاج", "Recipes and production orders"),
-    ("other", "محل عام ببيع وشرا ومخزن", "A general shop that buys, sells and stocks"),
+    ("other", "نشاط تجاري عام: بيع وشراء ومخزون", "A general shop that buys, sells and stocks"),
 )
 #: One line under each sub-activity on the second screen.
 DEMO_HINTS = {
-    ("commercial", "retail"): ("أي محل بيبيع قطاعي", "Any shop that sells retail"),
+    ("commercial", "retail"): ("أي نشاط بيبيع قطاعي", "Any shop that sells retail"),
     ("commercial", "pharmacy"): ("صلاحيات وبدائل وروشتات", "Expiry dates, alternatives, prescriptions"),
     ("commercial", "grocery"): ("باركود وميزان وكرتونة", "Barcodes, scale and cartons"),
     ("commercial", "fashion"): ("مقاسات وألوان", "Sizes and colours"),
     ("commercial", "electronics"): ("سيريال وضمان", "Serial numbers and warranty"),
-    ("restaurants", "restaurant"): ("طاولات وأوردرات ومطبخ", "Tables, orders and the kitchen"),
+    ("restaurants", "restaurant"): ("طاولات وطلبات ومطبخ", "Tables, orders and the kitchen"),
     ("medical", "clinic"): ("مواعيد وكشوفات وملفات", "Appointments, visits and patient files"),
     ("education", "training"): ("مجموعات وحضور ومصاريف", "Groups, attendance and fees"),
     ("services", "maintenance"): ("أوامر شغل وفنيين", "Work orders and technicians"),
-    ("services", "beauty"): ("مواعيد وباكدجات جلسات", "Appointments and session packages"),
+    ("services", "beauty"): ("مواعيد وباقات جلسات", "Appointments and session packages"),
     ("manufacturing", "food"): ("وصفات وتشغيلات وصلاحية", "Recipes, batches and expiry"),
     ("contracting", "general"): ("مقايسات ومستخلصات", "Bills of quantities and progress bills"),
 }
@@ -71,34 +71,34 @@ def demo_subs(activity):
 #: Keyed by (activity, sub) with the activity as the fallback; every link is a real screen the owner may open.
 DEMO_TOURS = {
     "commercial": (
-        ("سجّل بيعة من الكاشير", "Ring up a sale at the till", "اكتب اسم صنف أو امسح الباركود؛ الوردية مفتوحة", "Type an item or scan a barcode; the shift is open", "sales:pos"),
+        ("سجّل عملية بيع من الكاشير", "Ring up a sale at the till", "اكتب اسم صنف أو امسح الباركود؛ الوردية مفتوحة", "Type an item or scan a barcode; the shift is open", "sales:pos"),
         ("شوف اللي قرب يخلص من المخزن", "See what is running low", "صنف خلص وصنف قرب، وتنبيه عليهم", "One item is out and one is low, with an alert", "reports:inventory"),
         ("اقفل اليوم وشوف الربح", "Close the day and see the profit", "تقرير اليوم والخزنة في دقيقة", "The day's report and the cash in a minute", "reports:daily"),
     ),
     ("commercial", "pharmacy"): (
-        ("سجّل بيعة من الكاشير", "Ring up a sale at the till", "اكتب اسم دوا أو امسح الباركود؛ الوردية مفتوحة", "Type a medicine or scan a barcode; the shift is open", "sales:pos"),
+        ("سجّل عملية بيع من الكاشير", "Ring up a sale at the till", "اكتب اسم دوا أو امسح الباركود؛ الوردية مفتوحة", "Type a medicine or scan a barcode; the shift is open", "sales:pos"),
         ("شوف الأدوية اللي قربت تنتهي صلاحيتها", "See the medicines about to expire", "تشغيلات بتاريخ صلاحية، وفيها اللي محتاج قرار", "Batches with expiry dates, and what needs a decision", "batches:index"),
         ("اقفل اليوم وشوف الربح", "Close the day and see the profit", "تقرير اليوم والخزنة في دقيقة", "The day's report and the cash in a minute", "reports:daily"),
     ),
     ("commercial", "grocery"): (
-        ("سجّل بيعة من الكاشير", "Ring up a sale at the till", "امسح الباركود أو اكتب الوزن", "Scan a barcode or type the weight", "sales:pos"),
+        ("سجّل عملية بيع من الكاشير", "Ring up a sale at the till", "امسح الباركود أو اكتب الوزن", "Scan a barcode or type the weight", "sales:pos"),
         ("الأصناف بالكرتونة وبالوزن", "Items by the carton and by weight", "الرف كله بوحداته وصلاحيته", "The whole shelf with its units and expiry", "master_data:items"),
         ("اقفل اليوم وشوف الربح", "Close the day and see the profit", "تقرير اليوم والخزنة في دقيقة", "The day's report and the cash in a minute", "reports:daily"),
     ),
     ("commercial", "fashion"): (
-        ("سجّل بيعة من الكاشير", "Ring up a sale at the till", "اختار المقاس واللون وانت بتبيع", "Pick the size and colour as you sell", "sales:pos"),
+        ("سجّل عملية بيع من الكاشير", "Ring up a sale at the till", "اختار المقاس واللون وإنت بتبيع", "Pick the size and colour as you sell", "sales:pos"),
         ("المقاسات والألوان في المخزن", "Sizes and colours in stock", "كل موديل بمقاساته وألوانه", "Each style with its sizes and colours", "variants:index"),
         ("اقفل اليوم وشوف الربح", "Close the day and see the profit", "تقرير اليوم والخزنة في دقيقة", "The day's report and the cash in a minute", "reports:daily"),
     ),
     ("commercial", "electronics"): (
-        ("سجّل بيعة بالسيريال", "Sell a device by its serial", "الكاشير بيسأل عن السيريال وبيسجّل الضمان", "The till asks for the serial and records the warranty", "sales:pos"),
+        ("سجّل عملية بيع بالسيريال", "Sell a device by its serial", "الكاشير بيسأل عن السيريال وبيسجّل الضمان", "The till asks for the serial and records the warranty", "sales:pos"),
         ("الأجهزة اللي عندك بسيريالاتها", "Your devices by serial number", "كل جهاز بسيرياله وضمانه", "Every device with its serial and warranty", "serials:index"),
         ("اقفل اليوم وشوف الربح", "Close the day and see the profit", "تقرير اليوم والخزنة في دقيقة", "The day's report and the cash in a minute", "reports:daily"),
     ),
     "restaurants": (
-        ("افتح طاولة وخد أوردر", "Open a table and take an order", "الصالة قدامك: دوس على طاولة وضيف الأطباق", "The floor is in front of you: tap a table, add dishes", "restaurant:board"),
+        ("افتح طاولة وسجّل طلب", "Open a table and take an order", "الصالة قدامك: اضغط على طاولة وضيف الأطباق", "The floor is in front of you: tap a table, add dishes", "restaurant:board"),
         ("شوف تكلفة الطبق", "See what a dish costs", "كل طبق بمكوناته من المطبخ وهامشه", "Each dish with its kitchen ingredients and margin", "restaurant:costing"),
-        ("تقرير المطعم النهارده", "Today's restaurant report", "الأطباق الأكتر، ساعات الذروة، والويترز", "Top dishes, peak hours and the waiters", "restaurant:report"),
+        ("تقرير المطعم النهارده", "Today's restaurant report", "الأطباق الأكثر طلبًا، وساعات الذروة، وأداء فريق الخدمة", "Top dishes, peak hours and the waiters", "restaurant:report"),
     ),
     "medical": (
         ("افتح أجندة النهارده وسجّل كشف", "Open today's agenda and record a visit", "مواعيد النهارده، ومن الموعد تسجّل الكشف", "Today's appointments; record the visit from the appointment", "appointments:agenda"),
@@ -117,8 +117,8 @@ DEMO_TOURS = {
     ),
     ("services", "beauty"): (
         ("احجز ميعاد", "Book an appointment", "الأجندة بمواعيد النهارده", "The agenda with today's appointments", "appointments:agenda"),
-        ("باكدجات الجلسات", "Session packages", "باكدج مدفوع وجلساته اللي اتخصمت", "A paid package and the sessions used", "agreements:packages"),
-        ("سجّل بيعة من الكاشير", "Ring up a sale at the till", "منتجات وخدمات، كاش أو فيزا", "Products and services, cash or card", "sales:pos"),
+        ("باقات الجلسات", "Session packages", "باقة مدفوعة وجلساتها اللي اتخصمت", "A paid package and the sessions used", "agreements:packages"),
+        ("سجّل عملية بيع من الكاشير", "Ring up a sale at the till", "منتجات وخدمات، كاش أو فيزا", "Products and services, cash or card", "sales:pos"),
     ),
     "manufacturing": (
         ("أوامر الإنتاج", "Production orders", "تشغيلة شغالة وتشغيلة خلصت", "A run in progress and a finished one", "manufacturing:orders"),
@@ -143,7 +143,7 @@ def demo_tour(activity, sub_activity):
 
 
 # TRACK-ACTS W02: the sample shop is called what it is ("صيدلية" for a pharmacy, not "محل").
-DEMO_NAME = "محل حِسبة التجريبي"
+DEMO_NAME = "حِسبة للتجارة (تجريبي)"
 DEMO_NAMES = {
     ("commercial", "grocery"): "سوبر ماركت حِسبة التجريبي", ("commercial", "pharmacy"): "صيدلية حِسبة التجريبية",
     ("commercial", "wholesale"): "حِسبة لتجارة الجملة (تجريبي)", ("commercial", "online"): "متجر حِسبة أونلاين (تجريبي)",
@@ -206,7 +206,9 @@ def switch_activity(request):
         # each only where the activity already has the sections it needs (a clinic gets no purchases for the invoice photo).
         modules = activity_fit.default_modules(activity, sub)
         ai = tuple(slug for slug in AI_CAPABILITIES if set(caps.needs(slug)) <= set(modules))
-        chosen = tuple(dict.fromkeys(caps.default_selection(activity, sub) + ai))
+        from .demo_templates import services_demo_extras
+
+        chosen = tuple(dict.fromkeys(caps.default_selection(activity, sub) + ai + tuple(slug for slug in services_demo_extras(activity, sub) if caps.is_available(slug))))
         complete_setup(profile, activity, sub, ",".join(modules), user=request.user, capabilities_raw=",".join(chosen))
     lang = "en" if request.POST.get("lang") == "en" else "ar"
     return redirect(f"/dashboard/?lang={lang}")

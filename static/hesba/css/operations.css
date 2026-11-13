@@ -296,6 +296,9 @@ input.mfg-mrp-input{max-width:8rem}
 .hs-quick-form iframe{display:block;width:100%;height:100%;border:0;border-radius:16px;background:var(--hs-surface)}
 /* HG-065: stock below zero, and the box that asks to sell what is not there */
 .op-below-zero{color:var(--op-danger);font-weight:700}.op-short-box ul{margin:8px 0;padding-inline-start:20px}.op-short-box form{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
+
+/* Video findings f06: a link inside a summary card (the booking's invoice, the deposit's invoice) is a Hesba link, not the browser's blue underline */
+.op-summary-grid strong a{color:var(--hs-teal-deep);font-weight:var(--hs-weight-bold);text-decoration:none;overflow-wrap:anywhere}.op-summary-grid strong a:hover{text-decoration:underline}.op-summary-grid strong a:focus-visible{outline:2px solid var(--hs-teal-deep);outline-offset:2px;border-radius:var(--hs-radius-sm)}
 /* E4a: pay fees by link (education fees and dues) */
 .edu-pay{display:grid;gap:var(--hs-space-1);justify-items:start}
 .edu-pay form{margin:0}

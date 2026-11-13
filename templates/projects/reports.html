@@ -1,0 +1,22 @@
+{% extends "operations/base.html" %}
+{% load static hesba_paging %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/projects.css' %}?v=c2-1">{% endblock %}
+{% block operation_content %}
+{# Contracting C2b (HG-095): the project's daily reports, newest first. A record only: nothing here changes a quantity, a certificate or a cost. #}
+{% include "projects/_head.html" %}
+<section class="sr-intro"><h2 class="prj-h">{{ rw.page_title }}</h2><p>{{ rw.intro }}</p></section>
+{% include "projects/_site_cta.html" with at="top" %}
+{% if not site_cta and not can_record %}<p class="op-muted" data-view-only>{{ rw.view_only }}</p>{% endif %}
+<div class="op-table-wrap"><table class="op-table" data-list-rows data-site-reports><thead><tr><th>{{ rw.day }}</th><th>{{ rw.weather }}</th><th>{{ rw.workers }}</th><th>{{ rw.delay }}</th><th>{{ rw.photos }}</th><th></th></tr></thead><tbody>
+{% for row in rows %}<tr data-site-report="{{ row.report.report_date|date:'Y-m-d' }}"{% if row.delayed %} data-delayed{% endif %}>
+<td data-row="title"><a href="{{ row.url }}" data-row-link>{{ row.day }}</a></td>
+<td data-row="sub">{{ row.weather|default:rw.ph }}{% if row.who %} · {{ row.who }}{% endif %}</td>
+<td data-row="meta" data-workers>{% if row.workers %}{{ row.workers_text }}{% else %}{{ rw.ph }}{% endif %}</td>
+<td data-row="meta">{% if row.delayed %}<span class="op-status op-status-cancelled" data-delay-mark>{{ rw.has_delay }}</span>{% else %}{{ rw.no_delay }}{% endif %}</td>
+<td data-row="meta">{% if row.photos %}{{ row.photos_text }}{% else %}{{ rw.ph }}{% endif %}</td>
+<td data-row="action"><a class="sr-print-link" href="{{ row.print_url }}" target="_blank" rel="noopener" data-report-print>{{ rw.print }}</a></td></tr>
+{% empty %}<tr><td colspan="6" class="op-empty" data-row="empty"><span class="hs-empty" data-empty-none><b>{{ rw.none }}</b></span></td></tr>{% endfor %}
+</tbody></table></div>
+{% pager page %}
+{% include "projects/_site_cta.html" with at="bar" %}
+{% endblock %}

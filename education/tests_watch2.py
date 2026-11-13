@@ -184,7 +184,7 @@ class ScanWordingTests(ScanSetup):
         for lang, title in (("ar", "كروت طلاب مراجعة يومية"), ("en", "Cards for مراجعة يومية")):
             page = self.client.get(reverse("education:cards") + f"?group={self.review.pk}&lang={lang}")
             self.assertEqual(page.context["title"], title)
-        named = services.save_group({"course": self.review.course, "name": "مجموعة السبت والتلات", "days": "sat,tue"}, self.owner)
+        named = services.save_group({"course": self.review.course, "name": "مجموعة السبت والثلاثاء", "days": "sat,tue"}, self.owner)
         page = self.client.get(reverse("education:cards") + f"?group={named.pk}&lang=ar")
-        self.assertEqual(page.context["title"], "كروت طلاب مجموعة السبت والتلات")
+        self.assertEqual(page.context["title"], "كروت طلاب مجموعة السبت والثلاثاء")
         self.assertNotContains(page, "مجموعة مجموعة")

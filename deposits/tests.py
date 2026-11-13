@@ -84,7 +84,7 @@ class DepositSetup(TestCase):
         self.cashbox = make_cashbox(cashbox_code="DEP-CASH", is_default=True)
         self.customer = make_customer(customer_code="C-DEP", name="مدام سعاد", phone="01001234567")
         self.service = make_item(item_code="SRV-AC", item_name="صيانة تكييف", default_sale_price="300.00", is_stock_tracked=False)
-        self.tech = save_employee({"name": "أحمد الفني", "commission_percent": "10"}, self.owner)
+        self.tech = save_employee({"name": "أحمد سامي", "commission_percent": "10"}, self.owner)
         set_capability_enabled(self.profile, "deposits", True, user=self.owner)  # the «العربون» capability is off by default
 
     def book(self, starts_in=timedelta(days=3), customer=None, **extra):
@@ -195,7 +195,7 @@ class ApplyTests(DepositSetup):
         self.assertEqual(printed.context["doc"]["to_collect"], D("200.00"))
 
     def test_rep_report_and_digest_count_the_deposit_once(self):
-        rep = save_employee({"name": "سمير المندوب", "commission_percent": "5"}, self.owner)
+        rep = save_employee({"name": "سمير عادل", "commission_percent": "5"}, self.owner)
         self.customer.sales_rep = rep
         self.customer.save()
         day_one = TODAY - timedelta(days=2)

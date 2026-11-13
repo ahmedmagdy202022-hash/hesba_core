@@ -51,7 +51,7 @@ def link_hours():
 MESSAGES = {
     "ar": {
         "off": "لينك الدفع مقفول؛ شغّله من الإعدادات ← الخصائص («لينك الدفع أونلاين»).",
-        "not_connected": "بوابة الدفع غير موصّلة على السيرفر، فمينفعش يتعمل لينك.",
+        "not_connected": "بوابة الدفع غير موصّلة على السيرفر، ولينك الدفع أونلاين محتاج حساب بوابة دفع خاص بالمحل (Paymob)، فمينفعش يتعمل لينك دلوقتي.",
         "no_base": "عنوان السيستم العام (PUBLIC_BASE_URL) مش متظبط، فمينفعش يطلع لينك يتبعت.",
         "not_posted": "اللينك بيتعمل لفاتورة مترحّلة بس.",
         "walk_in": "العميل النقدي مينفعش ياخد لينك دفع؛ الفاتورة لازم تكون باسم عميل.",
@@ -71,7 +71,7 @@ MESSAGES = {
     },
     "en": {
         "off": "Payment links are switched off; switch them on from Settings → Features (“Online payment link”).",
-        "not_connected": "The payment gateway is not connected on the server, so no link can be made.",
+        "not_connected": "The payment gateway is not connected on the server: online payment links need the shop's own payment-gateway account (Paymob), so no link can be made yet.",
         "no_base": "The public address (PUBLIC_BASE_URL) is not set, so no link can be sent.",
         "not_posted": "A link is made for a posted invoice only.",
         "walk_in": "The walk-in customer cannot get a payment link; the invoice must name a customer.",

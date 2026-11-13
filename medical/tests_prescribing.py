@@ -655,7 +655,7 @@ class DemoClinicTests(TestCase):
         self.assertEqual(list(throat.medicines.values_list("reference__source_ref", "name_ar", "dose", "frequency", "duration")),
                          [("DEMO-026", "زيثروماكس 500 مجم", "قرص", "مرة يوميًا قبل الأكل", "3 أيام"),
                           ("DEMO-001", "بنادول 500 مجم", "قرص", "كل 8 ساعات", "عند اللزوم")])
-        self.assertEqual((throat.complaint, throat.temperature, throat.treatment), ("كحة وسخونية", D("38.2"), "راحة وسوائل دافية كتير"))
+        self.assertEqual((throat.complaint, throat.temperature, throat.treatment), ("كحة وسخونية", D("38.2"), "راحة وسوائل دافئة بكثرة"))
         pressure = prescribed.get(diagnosis="ارتفاع ضغط الدم")
         self.assertEqual((pressure.blood_pressure, pressure.pulse, pressure.medicines.get().reference.source_ref), ("150/95", 84, "DEMO-061"))
         after = {row["pk"]: row for row in ClinicalVisit.objects.values("pk", *next(iter(before.values())).keys() - {"pk"})}

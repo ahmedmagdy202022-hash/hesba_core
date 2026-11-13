@@ -128,6 +128,9 @@ def _upload(request, pk, handler, label=WORK_ORDER):
             raise ValidationError(services.MESSAGES[lang]["no_file"])
         if "read_only_message" in rules and not rules["can_attach"](request.user, order):  # the owner's own wording; the service refuses too
             raise PermissionDenied(services.MESSAGES[lang][rules["read_only_message"]])
+        title = services._clean_name(request.POST.get("title")) if rules.get("titled") else ""
+        if title:  # Contracting C2a: a typed title becomes the stored name; the extension is still the real type's
+            upload.name = title
         attachment = services.add_attachment(order, upload, request.user, kind=kind, stage=request.POST.get("stage") or rules.get("default_stage", Stage.RECEIVE), lang=lang)
         return JsonResponse({"ok": True, "attachment": _describe(attachment)}, status=201)
 

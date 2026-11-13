@@ -30,7 +30,7 @@ class LoginGuardTests(TestCase):
             self.assertNotContains(self.attempt("wrong"), "data-login-locked")
         page = self.attempt("wrong")
         self.assertContains(page, "data-login-locked")
-        self.assertContains(page, "استنى 15 دقيقة")
+        self.assertContains(page, "جرّب تاني بعد 15 دقيقة")
         blocked = self.attempt("service-tests-only")
         self.assertEqual(blocked.status_code, 200)
         self.assertContains(blocked, "data-login-locked")

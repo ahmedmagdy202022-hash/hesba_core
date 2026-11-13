@@ -73,7 +73,7 @@ class AgendaDoctorsTests(TestCase):
         prepared_client(activity, sub, ",".join(default_modules(activity, sub)))
         self.owner = person(RoleCode.OWNER, username)
         self.doctor = save_employee({"name": "د. سارة", "title": "طبيبة"}, self.owner)
-        self.rep = save_employee({"name": "سمير المندوب", "title": "مندوب مبيعات"}, self.owner)
+        self.rep = save_employee({"name": "سمير عادل", "title": "مندوب مبيعات"}, self.owner)
         self.client.force_login(self.owner)
 
     def both_lists(self, html):

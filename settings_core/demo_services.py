@@ -9,8 +9,10 @@ Idempotent: ``DEMO-SVC-01`` (the first extra service item) is the sentinel, crea
 rest, so a run either adds the whole showcase or finds it there and adds nothing. Only for the services activity, and only
 for the sub-activities that have these screens (maintenance and beauty): any other business gets none of it.
 
-Not seeded: online booking (S3, not on develop yet), gift cards (S6, not built), photo and signature files (S1, a real file
-cannot be a sample), deposits (S5, off until the owner switches it on) and the pay link (S4, mock mode only).
+Not seeded: photo and signature files (S1, a real file cannot be a sample). Online booking (S3) is seeded below; gift cards (S6),
+deposits (S5) and online booking are switched on for this showcase by ``config.demo_templates.services_demo_extras``, but no
+deposit, gift card or booking is created for the visitor: they take the first one themselves. The pay link (S4) stays off:
+its only gateway without a real account is the mock, which the server refuses while DEBUG is off (payments.E001).
 """
 
 from datetime import datetime, time, timedelta
@@ -26,7 +28,7 @@ SHOWCASE_CATALOGS = ("services.maintenance", "services.beauty")
 #: (name, title, commission %): the technicians who share the work, each on their own rate (S9 reads it).
 CREW = {
     "services.maintenance": (("كريم محمود", "فني تكييف", "8"), ("حسام الدسوقي", "فني غسالات وثلاجات", "10"), ("عمرو السيد", "فني كهرباء وسباكة", "7")),
-    "services.beauty": (("نهى سمير", "خبيرة مكياج", "12"), ("دينا فتحي", "أخصائية أظافر", "10"), ("ياسمين طارق", "كوافيرة", "10")),
+    "services.beauty": (("نهى سمير", "خبيرة مكياج", "12"), ("دينا فتحي", "أخصائية أظافر", "10"), ("ياسمين طارق", "خبيرة تصفيف شعر", "10")),
 }
 
 #: (code, name, unit, price): non-stock services, beside the catalog's own.
@@ -46,9 +48,9 @@ ADDRESSES = ("15 شارع مصطفى النحاس، مدينة نصر", "برج 
 APPOINTMENTS = {
     "services.maintenance": (
         (0, 10, 0, 0, 0, 60, "done", "confirmed", "كشف على تكييف الريسبشن"), (0, 13, 1, 1, 1, 90, "done", "confirmed", "الغسالة بتفصل في النص"),
-        (1, 11, 2, 3, 2, 60, "done", "confirmed", "ماس كهربا في المطبخ"), (2, 9, 3, 2, 0, 60, "no_show", "booked", "العميل مردش"),
+        (1, 11, 2, 3, 2, 60, "done", "confirmed", "ماس كهربائي في المطبخ"), (2, 9, 3, 2, 0, 60, "no_show", "booked", "العميل ماردّش على الاتصال"),
         (2, 15, 0, 1, 1, 60, "done", "confirmed", "صيانة دورية لتكييفين"), (3, 12, 1, 0, 3, 120, "done", "booked", "تركيب ديب فريزر"),
-        (4, 10, 2, 2, 0, 60, "cancelled", "booked", "العميل لغى"), (5, 14, 0, 3, 2, 60, "done", "booked", "زيارة طوارئ لمحل"),
+        (4, 10, 2, 2, 0, 60, "cancelled", "booked", "العميل ألغى الحجز"), (5, 14, 0, 3, 2, 60, "done", "booked", "زيارة طوارئ لمطعم"),
         (7, 10, 1, 0, 0, 60, "done", "confirmed", "كشف ثلاجة"), (7, 13, 2, 1, 1, 90, "done", "booked", "تغيير مواسير حمام"),
         (8, 11, 0, 3, 3, 60, "done", "confirmed", "تركيب تكييف جديد"), (9, 9, 3, 2, 2, 60, "done", "booked", "طوارئ تسريب مياه"),
         (9, 15, 1, 0, 0, 60, "done", "booked", "كشف غسالة أطباق"), (10, 12, 2, 1, 1, 60, "done", "confirmed", "فحص لوحة كهرباء"),
@@ -56,19 +58,19 @@ APPOINTMENTS = {
     ),
     "services.beauty": (
         (0, 10, 0, 0, 0, 90, "done", "confirmed", "ميك أب خطوبة"), (0, 12, 1, 1, 2, 60, "done", "confirmed", "مانيكير وباديكير"),
-        (1, 11, 2, 3, 1, 120, "done", "confirmed", "بروتين شعر"), (2, 13, 3, 2, 0, 45, "no_show", "booked", "العميلة مجتش"),
+        (1, 11, 2, 3, 1, 120, "done", "confirmed", "بروتين شعر"), (2, 13, 3, 2, 0, 45, "no_show", "booked", "العميلة ماحضرتش"),
         (2, 17, 0, 1, 3, 60, "done", "confirmed", "تنظيف بشرة"), (3, 12, 1, 0, 0, 90, "done", "booked", "قص وتصفيف"),
-        (4, 15, 2, 2, 2, 60, "cancelled", "booked", "العميلة لغت"), (5, 11, 3, 3, 1, 150, "done", "booked", "صبغة كاملة"),
+        (4, 15, 2, 2, 2, 60, "cancelled", "booked", "العميلة ألغت الحجز"), (5, 11, 3, 3, 1, 150, "done", "booked", "صبغة كاملة"),
         (7, 11, 0, 0, 0, 120, "done", "confirmed", "ميك أب سواريه"), (7, 14, 1, 1, 2, 60, "done", "booked", "مانيكير"),
         (8, 12, 2, 3, 1, 120, "done", "confirmed", "صبغة وقص"), (9, 10, 3, 2, 3, 45, "done", "booked", "حمام زيت"),
         (9, 16, 0, 0, 4, 90, "done", "booked", "ميك أب تصوير"), (10, 13, 1, 1, 0, 60, "done", "confirmed", "باديكير"),
-        (12, 15, 2, 2, 1, 60, "done", "booked", "تنضيف شعر"),
+        (12, 15, 2, 2, 1, 60, "done", "booked", "تنظيف شعر"),
     ),
 }
 
 CAMPAIGNS = {
-    "services.maintenance": ("صيانة دورية قبل الصيف", "أهلاً {name}، من {company}: اقترب الصيف، احجز صيانة دورية لتكييفك واستلم كشف مجاني مع أي إصلاح.", "inactive", 90),
-    "services.beauty": ("عرض الويك إند", "أهلاً {name}، من {company}: وحشتينا! خصم على الباديكير والمانيكير يوم الخميس والجمعة، احجزي ميعادك.", "inactive", 45),
+    "services.maintenance": ("صيانة دورية قبل الصيف", "أهلاً {name}، من {company}: الصيف قرّب، احجز صيانة دورية لتكييفك واحصل على كشف مجاني مع أي إصلاح.", "inactive", 90),
+    "services.beauty": ("عرض نهاية الأسبوع", "أهلاً {name}، من {company}: وحشتينا! خصم على الباديكير والمانيكير يوم الخميس والجمعة، احجزي ميعادك.", "inactive", 45),
 }
 
 
@@ -175,8 +177,8 @@ def _work_orders(master, crew, customers, owner):
     except ValidationError:
         pass  # the order stays ready for pickup
     # Cancelled by the customer before anyone touched it.
-    cancelled = receive(4, "ميكروويف سامسونج", "العميل لغى الصيانة", 3, (), ())
-    wo.move(cancelled, Status.CANCELLED, owner, note="العميل لغى")
+    cancelled = receive(4, "ميكروويف سامسونج", "العميل ألغى الصيانة", 3, (), ())
+    wo.move(cancelled, Status.CANCELLED, owner, note="العميل ألغى الطلب")
 
 
 # ---- appointments (S10) and their commission (S9) ----

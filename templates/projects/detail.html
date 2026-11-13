@@ -1,7 +1,9 @@
 {% extends "operations/base.html" %}
-{% load hesba_format %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/projects.css' %}?v=c2-1">{% endblock %}
 {% block operation_content %}
 {% include "projects/_head.html" %}
+{% include "projects/_site_cta.html" with at="top" %}
 <section class="op-summary-grid" data-project-figures>
 <article><small>{{ words.billed }}</small><strong data-figure="billed">{{ figures.billed|money }}</strong><small>{{ figures.progress }}%</small></article>
 {% if figures.over %}<article><small>{{ words.over }}</small><strong data-figure="over">{{ figures.over|money }}</strong></article>{% else %}<article><small>{{ words.remaining }}</small><strong data-figure="remaining">{{ figures.remaining|money }}</strong></article>{% endif %}
@@ -48,4 +50,5 @@
 <form class="op-form" method="post" data-project-edit novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="edit"><h2>{{ words.edit }}</h2>{% include "projects/_form.html" %}<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form>
 {% endif %}
 {% endif %}
+{% include "projects/_site_cta.html" with at="bar" %}
 {% endblock %}
