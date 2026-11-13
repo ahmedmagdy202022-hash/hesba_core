@@ -263,3 +263,56 @@ class BudgetLine(models.Model):
     class Meta:
         ordering = ["pk"]
         constraints = [models.UniqueConstraint(fields=["project", "heading"], name="projects_budget_heading_unique")]
+
+
+class Weather(models.TextChoices):
+    CLEAR = "clear", "Clear"
+    HOT = "hot", "Hot"
+    CLOUDY = "cloudy", "Cloudy"
+    RAIN = "rain", "Rain"
+    WIND = "wind", "Windy"
+    DUST = "dust", "Dust"
+    COLD = "cold", "Cold"
+
+
+class SiteReport(models.Model):
+    """Contracting C2b (HG-095): what happened on one site on one day. A record only: it changes no quantity of the bill
+    of quantities, no cost and no certificate (the quantities executed are never taken from here). Photos are attachments
+    on the report (``attachments.services.OWNERS["projects.sitereport"]``); the head count is the sum of the crew rows."""
+
+    project = models.ForeignKey(Project, on_delete=models.PROTECT, related_name="site_reports")
+    report_date = models.DateField()
+    weather = models.CharField(max_length=10, choices=Weather.choices, blank=True)
+    work_done = models.TextField(blank=True)
+    delayed = models.TextField(blank=True)
+    materials = models.TextField(blank=True)
+    visitors = models.TextField(blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-report_date", "-pk"]
+        constraints = [models.UniqueConstraint(fields=["project", "report_date"], name="projects_site_report_day_unique")]
+
+    def __str__(self):
+        return f"{self.project.code} {self.report_date}"
+
+
+class SiteReportRowKind(models.TextChoices):
+    CREW = "crew", "Workers by trade"
+    EQUIPMENT = "equipment", "Equipment"
+
+
+class SiteReportRow(models.Model):
+    """One free row of a day's report: a trade and its head count, or a piece of equipment and how many were on site."""
+
+    report = models.ForeignKey(SiteReport, on_delete=models.CASCADE, related_name="rows")
+    kind = models.CharField(max_length=10, choices=SiteReportRowKind.choices)
+    label = models.CharField(max_length=80)
+    count = models.PositiveSmallIntegerField(default=1)
+    position = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["kind", "position", "pk"]

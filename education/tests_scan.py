@@ -192,7 +192,7 @@ class ScanWhoTests(ScanSetup):
         from staff.services import save_employee
 
         mine = self.teacher_user()
-        outsider = save_employee({"name": "أ. نادية"}, self.owner)
+        outsider = save_employee({"name": "أ. نادية فوزي"}, self.owner)
         theirs = services.save_group({"course": self.review.course, "name": "مجموعة نادية", "teacher": outsider, "days": EVERY_DAY, "start_time": time(16), "room": "قاعة 9"},
                                      self.owner)
         other_kid = self.kid("غريب", "01010000006", theirs)

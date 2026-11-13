@@ -2,7 +2,7 @@
 {% block title %}{% if lang == 'en' %}Link expired{% else %}الرابط انتهى{% endif %} · {{ company.name }}{% endblock %}
 {% block content %}<main class="cl-card cl-center" data-share-expired>
 <h1 class="cl-h1">{% if lang == 'en' %}This link is no longer valid{% else %}الرابط ده مبقاش شغال{% endif %}</h1>
-<p>{% if lang == 'en' %}It may have expired. Ask the shop to send it again.{% else %}ممكن تكون مدته خلصت. اطلب من المحل يبعته تاني.{% endif %}</p>
-{% if phone %}<div class="cl-actions"><a class="cl-btn cl-btn--primary" href="tel:{{ phone }}">{% if lang == 'en' %}Call the shop{% else %}كلّم المحل{% endif %}</a>
+<p>{% if lang == 'en' %}It may have expired. Ask us to send it again.{% else %}ممكن تكون صلاحيته انتهت. اطلب مننا نبعته تاني.{% endif %}</p>
+{% if phone %}<div class="cl-actions"><a class="cl-btn cl-btn--primary" href="tel:{{ phone }}">{% if lang == 'en' %}Call us{% else %}اتصل بنا{% endif %}</a>
 {% if whatsapp %}<a class="cl-btn" href="https://wa.me/{{ whatsapp }}">{% if lang == 'en' %}WhatsApp{% else %}واتساب{% endif %}</a>{% endif %}</div>{% endif %}
 </main>{% endblock %}

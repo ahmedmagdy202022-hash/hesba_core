@@ -43,7 +43,7 @@ class WorkshopSetup(TestCase):
         stock_in(self.part, self.location, "5", "1350.00")
         self.labour = make_item(item_code="LAB-1", item_name="مصنعية إصلاح", default_sale_price=D("300.00"), is_stock_tracked=False)
         self.customer = make_customer(customer_code="CUS-WO", name="محمد علي", phone="01001234567")
-        self.tech = save_employee({"name": "أحمد الفني", "title": "فني"}, self.owner)
+        self.tech = save_employee({"name": "أحمد سامي", "title": "فني"}, self.owner)
 
     def order(self, **extra):
         return services.receive({"customer": self.customer, "device": "غسالة توشيبا", "problem": "مش بتعصر", "technician": self.tech,

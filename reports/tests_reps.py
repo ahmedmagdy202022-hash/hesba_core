@@ -32,7 +32,7 @@ class RepsTests(TestCase):
         cls.today = timezone.localdate()
         cls.owner = person(RoleCode.OWNER, "rep_owner")
         cls.cashier = person(RoleCode.CASHIER, "rep_cashier")
-        cls.samir = save_employee({"name": "سمير المندوب", "commission_percent": "10"}, cls.owner)
+        cls.samir = save_employee({"name": "سمير عادل", "commission_percent": "10"}, cls.owner)
         cls.mona = save_employee({"name": "منى البائعة", "commission_percent": "5", "user": str(cls.cashier.pk)}, cls.owner)
         cls.distributor = make_customer(customer_code="C-DIST", name="موزع الجيزة", sales_rep=cls.samir)
         cls.walk_in = make_customer(customer_code="C-WALK", name="عميل نقدي")
@@ -91,7 +91,7 @@ class RepsTests(TestCase):
         self.sell(self.distributor, self.owner, 1, "20", "0", "R-20")
         self.client.force_login(self.owner)
         page = self.client.get(reverse("reports:reps"))
-        self.assertContains(page, "سمير المندوب")
+        self.assertContains(page, "سمير عادل")
         self.assertContains(page, "data-rep-profit")
         self.assertContains(self.client.get(reverse("report_hub")), reverse("reports:reps"))
         self.client.force_login(person(RoleCode.MANAGER, "rep_manager"))
@@ -107,8 +107,8 @@ class RepsTests(TestCase):
         self.assertIn(self.samir, form.fields["salesperson"].queryset)
         invoice = self.sell(self.distributor, self.owner, 1, "20", "0", "R-30")
         self.client.force_login(self.owner)
-        self.assertContains(self.client.get(reverse("sales:detail", args=[invoice.pk])), "سمير المندوب")
-        self.assertContains(self.client.get(reverse("printing:sales_invoice", args=[invoice.pk])), "سمير المندوب")
+        self.assertContains(self.client.get(reverse("sales:detail", args=[invoice.pk])), "سمير عادل")
+        self.assertContains(self.client.get(reverse("printing:sales_invoice", args=[invoice.pk])), "سمير عادل")
 
     def test_no_employees_means_no_rep_field(self):
         from staff.models import Employee

@@ -22,7 +22,7 @@ class StaffScreenTests(TestCase):
                         modules="customers,items_services,sales_operations,inventory,cashboxes,reports,employees_technicians")
         self.owner = person(RoleCode.OWNER, "fs_owner")
         self.client.force_login(self.owner)
-        self.rep = save_employee({"name": "سمير المندوب", "title": "مندوب", "commission_percent": "3", "phone": "01001234567"}, self.owner)
+        self.rep = save_employee({"name": "سمير عادل", "title": "مندوب", "commission_percent": "3", "phone": "01001234567"}, self.owner)
         self.tech = save_employee({"name": "منى الفنية", "title": "فنية", "commission_percent": "2.50"}, self.owner)
         self.left = save_employee({"name": "قديم", "active": False}, self.owner)
 
@@ -37,7 +37,7 @@ class StaffScreenTests(TestCase):
         self.assertContains(self.client.get(reverse("staff:list"), {"status": "off"}), "قديم")
         found = self.client.get(reverse("staff:list"), {"q": "فنية"})
         self.assertContains(found, "منى الفنية")
-        self.assertNotContains(found, "سمير المندوب")
+        self.assertNotContains(found, "سمير عادل")
         self.assertContains(page, "data-employee-new")  # the form folds away under "+ new employee"
         self.assertNotContains(page, 'data-employee-new open')
 
