@@ -11,9 +11,11 @@ Rules, stated once:
   (direction in) at the consumed cost divided by the units made. Setting that
   cost needs ``inventory.view_cost``, which the engine checks. All of it is
   one transaction: a missing component leaves nothing behind;
-* cancelling a run reverses the product first (the engine refuses when the
-  product has already been sold), then every component, again through the
-  engine's ``cancel_stock_operation``;
+* cancelling a run reverses the product first, then every component, again
+  through the engine's ``cancel_stock_operation``. The engine refuses only
+  when the place holds fewer units than the run made, so this module refuses
+  first when any of the product has left the place since the run (F11,
+  HG-100, ``_left_since``);
 * no stock, cost or accounting rule is changed here (see HG-030).
 
 HG-036 (approved) adds three things on top, still only through the engine:
@@ -48,6 +50,7 @@ MESSAGES = {
         "qty": "كمية «{item}» لازم أكبر من صفر.", "twice": "«{item}» متكرر؛ اجمع كميته في سطر واحد.", "inactive": "الوصفة دي متوقفة.",
         "batches": "عدد الدفعات لازم أكبر من صفر.", "location": "اختار المخزن.", "short": "«{item}» مش كفاية: محتاج {need} والموجود {have}.",
         "cancelled": "التشغيلة دي اتلغت بالفعل.", "reason": "اكتب سبب الإلغاء.",
+        "moved_out": "مينفعش تلغي التشغيلة دي، عشان في كمية من «{item}» خرجت من المخزن بعد ما التشغيلة اتسجلت (بيع أو تحويل أو تسوية أو استخدام في تشغيلة تانية). لو الرصيد محتاج تصحيح، اعمل تسوية مخزون عادية.",
         "reversed": "الخامات المصروفة للأمر ده اترجعت من شاشة المخزون؛ ألغِ الأمر وافتح أمر جديد.",
         "on_floor": "في أمر إنتاج شغال في المصنع بالوصفة دي وخاماته اتصرفت؛ خلّصه أو ألغيه الأول قبل ما تعدّل الوصفة.",
         "no_good": "مفيش ولا وحدة سليمة تدخل المخزن؛ لو الكمية كلها باظت ألغِ الأمر أو سجّل الهالك كتسوية.",
@@ -58,6 +61,7 @@ MESSAGES = {
         "qty": "The quantity of “{item}” must be above zero.", "twice": "“{item}” is listed twice; put its quantity on one line.", "inactive": "This recipe is inactive.",
         "batches": "The number of batches must be above zero.", "location": "Choose the location.", "short": "Not enough “{item}”: {need} needed, {have} available.",
         "cancelled": "This run is already cancelled.", "reason": "Enter the reason for cancelling.",
+        "moved_out": "This run cannot be cancelled: some “{item}” has left the location since the run was recorded (a sale, a transfer, an adjustment or use in another run). To correct the stock, record an ordinary stock adjustment.",
         "reversed": "The materials issued for this order were reversed from the inventory screen; cancel the order and open a new one.",
         "on_floor": "An order on the floor was issued from this recipe; finish or cancel it before changing the recipe.",
         "no_good": "No good units are left to put into stock; if the whole lot was lost, cancel the order or record the loss as an adjustment.",
@@ -238,19 +242,56 @@ def produce(recipe, user, *, batches, location, run_date=None, notes="", lang="a
     return run
 
 
-@transaction.atomic
-def cancel_run(run, user, *, reason, reversal_date=None, lang="ar"):
-    from inventory.services import cancel_stock_operation
+def _left_since(run):
+    """F11 (HG-100): whether any of the product left the run's location after the run put it there.
+
+    The engine reverses the output at the run's own unit cost and refuses only when the place holds fewer units than
+    the run made. If some were sold (at an average that included this run) and a later run refilled the place, that
+    reversal goes through and leaves the units that remain at a cost nobody paid. So a run is cancelled only while
+    its units have not moved.
+
+    "After" is the order the movements were written in (the movement's pk), not their dates: cakes sold this morning
+    do not stop the noon run being cancelled, and a sale typed in later with yesterday's date does.
+
+    Two kinds of outgoing rows are not the product leaving: a reversal row (it takes back what one incoming operation
+    put in, at that operation's own cost, as when a later run is cancelled), and the row of an adjustment or transfer
+    that has itself been reversed since (the units came back whole, at the cost they left at)."""
+
+    from inventory.models import StockMovement, StockOperationStatus
+    from inventory.services import OUT_MOVEMENT_TYPES
+
+    made = run.output_operation.movements.filter(reversal_of__isnull=True).order_by("pk").first()
+    if made is None:
+        return False
+    return (StockMovement.objects.filter(item_id=made.item_id, location_id=made.location_id, movement_type__in=OUT_MOVEMENT_TYPES,
+                                         pk__gt=made.pk, reversal_of__isnull=True)
+            .exclude(stock_operation__status=StockOperationStatus.CANCELLED).exists())
+
+
+def check_cancellable(run, reason, lang="ar"):
+    """What ``cancel_run`` refuses before anything moves. The run page asks this first, so a cancel that cannot
+    happen is not sent for a second person's approval either. Returns the reason as it will be kept."""
 
     words = MESSAGES[lang]
-    run = ProductionRun.objects.select_for_update().get(pk=run.pk)
     if run.status != RunStatus.POSTED:
         raise ValidationError(words["cancelled"])
     reason = (reason or "").strip()[:255]
     if not reason:
         raise ValidationError(words["reason"])
+    if _left_since(run):
+        raise ValidationError(words["moved_out"].format(item=run.output_operation.item.item_name))
+    return reason
+
+
+@transaction.atomic
+def cancel_run(run, user, *, reason, reversal_date=None, lang="ar"):
+    from inventory.services import cancel_stock_operation, lock_items_for_stock_check
+
+    run = ProductionRun.objects.select_for_update().get(pk=run.pk)
+    lock_items_for_stock_check([run.output_operation.item_id])  # nothing of it leaves between the check and the reversal
+    reason = check_cancellable(run, reason, lang)
     reversal_date = reversal_date or timezone.localdate()
-    cancel_stock_operation(run.output_operation_id, reversal_date, reason, user)  # refuses when the product is gone
+    cancel_stock_operation(run.output_operation_id, reversal_date, reason, user)  # the engine: refuses when the place is short
     for consumption in run.consumptions.all():
         cancel_stock_operation(consumption.operation_id, reversal_date, reason, user)
     run.status = RunStatus.CANCELLED

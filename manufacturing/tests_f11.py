@@ -18,7 +18,6 @@ account and both work in progress and absorbed cost fall back to the cost of sal
 
 from datetime import timedelta
 from decimal import Decimal as D
-from unittest import expectedFailure
 
 from django.core.exceptions import ValidationError
 from django.db.models import Sum
@@ -278,7 +277,6 @@ class CancelAfterSaleTests(F11Setup):
         self.assertEqual(self.position(), (D("25.000"), D("392.50"), D("15.7000")))
         return first, second
 
-    @expectedFailure  # until the fix (HG-100)
     def test_cancelling_the_run_whose_cakes_were_sold_is_refused_and_nothing_moves(self):
         first, _ = self.two_runs()
         movements = StockMovement.objects.count()
@@ -331,20 +329,17 @@ class CancelAfterSaleTests(F11Setup):
         run.refresh_from_db()
         self.assertEqual((run.status, StockMovement.objects.count(), self.position()), (RunStatus.POSTED, movements, position))
 
-    @expectedFailure  # until the fix (HG-100)
     def test_a_transfer_out_blocks(self):
         shop = make_location(location_code="SHOP", name_ar="المحل", name_en="Shop")
         first = self.refilled(lambda: transfer_stock("TR-F11", TODAY, self.cake, self.plant, shop, D("4"), self.owner, reason="للمحل"))
         self.assert_refused(first, (D("16.000"), D("190.00"), D("9.5000")))               # 20 cakes in the group, 16 at the plant
         self.books(finished="190.00", raw="4660.00")
 
-    @expectedFailure  # until the fix (HG-100)
     def test_an_adjustment_out_blocks(self):
         first = self.refilled(lambda: adjust_stock("ADJ-F11", TODAY, self.cake, self.plant, StockAdjustmentDirection.OUT, D("4"), "تالف", self.owner))
         self.assert_refused(first, (D("16.000"), D("152.00"), D("9.5000")))
         self.books(finished="152.00", raw="4660.00")
 
-    @expectedFailure  # until the fix (HG-100)
     def test_use_in_another_run_blocks(self):
         gift = make_item(item_code="FG-GIFT", item_name="علبة هدايا", is_stock_tracked=True)
         boxed = services.save_recipe({"product": gift, "output_quantity": "1"}, [(self.cake, "4")], self.owner)
@@ -361,7 +356,6 @@ class CancelAfterSaleTests(F11Setup):
         self.assertIsNone(self.cancel(run))                   # creation order, not dates: the run is dated before the sale
         self.assertEqual(self.position(), (D("5.000"), D("47.50"), D("9.5000")))
 
-    @expectedFailure  # until the fix (HG-100)
     def test_a_back_dated_sale_typed_in_after_the_run_blocks(self):
         first = self.refilled(lambda: self.sell("4", sale_date=TODAY - timedelta(days=1)))
         self.assert_refused(first, (D("16.000"), D("152.00"), D("9.5000")))
@@ -377,7 +371,6 @@ class CancelAfterSaleTests(F11Setup):
                 self.assertEqual(self.position(), (D("0.000"), D("0.00"), D("0")))
         self.books(finished="0.00", raw="4850.00")
 
-    @expectedFailure  # until the fix (HG-100)
     def test_an_outgoing_operation_reversed_since_does_not_block(self):
         # The four cakes went out by mistake and came back whole, at the cost they left at.
         first = services.produce(self.recipe, self.owner, batches="1", location=self.plant)
@@ -388,7 +381,6 @@ class CancelAfterSaleTests(F11Setup):
         self.assertEqual(self.position(), (D("0.000"), D("0.00"), D("0")))
         self.books(finished="0.00", raw="4850.00")
 
-    @expectedFailure  # until the fix (HG-100)
     def test_a_sale_cancelled_since_still_blocks(self):
         # The default (HG-100, question 3): a cancelled invoice brings the cakes back as a return, and that is
         # not read as the sale never having happened.
@@ -407,7 +399,6 @@ class CancelAfterSaleTests(F11Setup):
         first.refresh_from_db()
         self.assertEqual((first.status, self.position()), (RunStatus.POSTED, (D("5.000"), D("102.50"), D("20.5000"))))
 
-    @expectedFailure  # until the fix (HG-100)
     def test_the_run_page_says_why_in_both_languages(self):
         first, _ = self.two_runs()
         self.client.force_login(self.owner)
@@ -472,7 +463,6 @@ class MakeToOrderTests(MakeToOrderSetup):
         self.assertEqual((self.rusks(), get_item_location_stock_quantity(self.flour, self.plant)), (D("0.000"), D("200.000")))
         self.assertEqual(make_to_order.uncovered(self.sold), D("100.000"))
 
-    @expectedFailure  # until the fix (HG-100)
     def test_once_the_customer_was_invoiced_the_run_stays_and_so_does_what_it_covers(self):
         run = self.finish(defects="4")
         self.invoice(self.sold.order, "96")
