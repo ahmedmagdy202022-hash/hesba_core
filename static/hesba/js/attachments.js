@@ -119,11 +119,12 @@
     }).catch(function () { return file; });
   }
 
-  Card.prototype.uploadOne = function (form, file) {
+  Card.prototype.uploadOne = function (form, file, many) {
     var self = this;
     return prepare(file).then(function (ready) {
       var body = new FormData(form);
       body.delete('file');
+      if (many) { body.delete('title'); } // one typed title names one file; several files keep their own names
       body.set('kind', ready.type === 'application/pdf' ? 'document' : 'photo');
       body.append('file', ready, ready.name || file.name);
       return self.send(form.getAttribute('action'), { body: body });
@@ -141,7 +142,7 @@
     var saved = 0, failures = [];
     files.reduce(function (chain, file) {
       return chain.then(function () {
-        return self.uploadOne(form, file).then(function () { saved += 1; }, function (err) { failures.push(err.message); });
+        return self.uploadOne(form, file, files.length > 1).then(function () { saved += 1; }, function (err) { failures.push(err.message); });
       });
     }, Promise.resolve()).then(function () {
       var unique = failures.filter(function (text, i) { return failures.indexOf(text) === i; }).join(' ');
