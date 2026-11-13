@@ -159,6 +159,18 @@ html.hs-cam-open,html.hs-cam-open body{overflow:hidden}
 .mfg-cancel{margin-top:12px}
 .mfg-cancel summary{cursor:pointer;color:var(--op-danger)}
 .mfg-cost{margin-top:16px}
+/* F1: a production order made for a sales order. */
+.mfg-sale-for{margin:0 0 14px;color:var(--op-navy);font-weight:700}
+.mfg-sale-for a{color:var(--op-teal);text-decoration:none;display:inline-flex;align-items:center;min-height:var(--hs-control-height,44px)}
+.mfg-sale-cell{display:flex;flex-direction:column;gap:6px;align-items:flex-start;white-space:normal;min-width:200px}
+.mfg-sale-link,.mfg-sale-stock{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.mfg-sale-short{margin:0!important;padding:8px 10px!important;font-size:13px}
+.mfg-sale-make{width:100%}
+.mfg-sale-make summary{display:flex;align-items:center;justify-content:center;min-height:var(--hs-control-height,44px);padding:0 14px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-input-radius);cursor:pointer;font-weight:700;list-style:none}
+.mfg-sale-make[open] summary{margin-bottom:10px}
+.mfg-sale-make form{display:grid;gap:10px}
+.mfg-sale-make .op-form-actions{margin-top:2px}
+.mfg-sale-deliver{margin:0 0 18px}
 /* MED-001: the patient file. */
 .med-summary{grid-template-columns:repeat(4,minmax(0,1fr))}
 .med-heading{color:var(--op-navy);margin:22px 0 10px}
@@ -261,6 +273,9 @@ html.hs-cam-open,html.hs-cam-open body{overflow:hidden}
 .hs-quick-form iframe{display:block;width:100%;height:100%;border:0;border-radius:16px;background:var(--hs-surface)}
 /* HG-065: stock below zero, and the box that asks to sell what is not there */
 .op-below-zero{color:var(--op-danger);font-weight:700}.op-short-box ul{margin:8px 0;padding-inline-start:20px}.op-short-box form{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
+
+/* Video findings f06: a link inside a summary card (the booking's invoice, the deposit's invoice) is a Hesba link, not the browser's blue underline */
+.op-summary-grid strong a{color:var(--hs-teal-deep);font-weight:var(--hs-weight-bold);text-decoration:none;overflow-wrap:anywhere}.op-summary-grid strong a:hover{text-decoration:underline}.op-summary-grid strong a:focus-visible{outline:2px solid var(--hs-teal-deep);outline-offset:2px;border-radius:var(--hs-radius-sm)}
 /* E4a: pay fees by link (education fees and dues) */
 .edu-pay{display:grid;gap:var(--hs-space-1);justify-items:start}
 .edu-pay form{margin:0}

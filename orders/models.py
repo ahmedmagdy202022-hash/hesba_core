@@ -38,6 +38,7 @@ class SalesOrder(models.Model):
     customer = models.ForeignKey("master_data.Customer", on_delete=models.PROTECT, related_name="sales_orders")
     quote_date = models.DateField(default=timezone.localdate)
     valid_until = models.DateField(null=True, blank=True)
+    deliver_by = models.DateField(null=True, blank=True, help_text="F1 (HG-098): the delivery date promised to the customer; valid_until is only the quotation's validity.")
     salesperson = models.ForeignKey("staff.Employee", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.DRAFT, db_index=True)
     notes = models.CharField(max_length=255, blank=True)

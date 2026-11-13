@@ -341,7 +341,7 @@ class PatientPageTests(Screens):
     def test_a_taken_code_is_refused_with_the_other_tests_name_and_the_typed_values_stay(self):
         response = self.post("medical:lab_tests", {"name": "تحليل جديد", "code": "glu", "unit": "UNITX", "active": "1"})
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "سكر صايم")
+        self.assertContains(response, "سكر صائم")
         self.assertContains(response, 'value="UNITX"')
         self.assertFalse(LabTest.objects.filter(name="تحليل جديد").exists())
         english = self.post("medical:lab_tests", {"name": "تحليل جديد", "code": "glu", "active": "1"}, lang="en")
@@ -590,7 +590,7 @@ class MigrationTests(TransactionTestCase):
         old = executor.loader.project_state([n for n in executor.loader.graph.leaf_nodes() if n[0] != "medical"] + [("medical", "0014_vaccinations")]).apps
         user = old.get_model("auth", "User").objects.create(username="mig_m9")
         customer = old.get_model("master_data", "Customer").objects.create(customer_code="P-1", name="منى")
-        test = old.get_model("medical", "LabTest").objects.create(name="سكر صايم", unit="mg/dL", low=70, high=100)
+        test = old.get_model("medical", "LabTest").objects.create(name="سكر صائم", unit="mg/dL", low=70, high=100)
         old.get_model("medical", "LabTest").objects.create(name="فصيلة الدم")
         old.get_model("medical", "LabResult").objects.create(patient=customer, test=test, taken_on=timezone_today(), value=88, flag="normal", entered_by=user)
         columns = [column.name for column in connection.introspection.get_table_description(connection.cursor(), "medical_labtest")]
@@ -598,7 +598,7 @@ class MigrationTests(TransactionTestCase):
         executor = MigrationExecutor(connection)
         executor.loader.build_graph()
         executor.migrate([("medical", "0015_lab_test_code")])
-        self.assertEqual(sorted(LabTest.objects.values_list("name", "code", "unit")), [("سكر صايم", "", "mg/dL"), ("فصيلة الدم", "", "")])  # every old test: no code
+        self.assertEqual(sorted(LabTest.objects.values_list("name", "code", "unit")), [("سكر صائم", "", "mg/dL"), ("فصيلة الدم", "", "")])  # every old test: no code
         self.assertEqual(LabResult.objects.get().value, 88)
         LabTest.objects.create(name="بلا كود جديد")  # many empty codes
         LabTest.objects.create(name="GLU", code="GLU")
@@ -628,7 +628,7 @@ class DemoSeedTests(TestCase):
         from settings_core.tests_demo_clinic import DemoClinicBookingTests
 
         DemoClinicBookingTests("fill").fill("medical", "lab")
-        self.assertEqual(sorted(LabTest.objects.exclude(code="").values_list("name", "code")), [("سكر صايم", "GLU"), ("هيموجلوبين", "HB")])
+        self.assertEqual(sorted(LabTest.objects.exclude(code="").values_list("name", "code")), [("سكر صائم", "GLU"), ("هيموجلوبين", "HB")])
         owner = get_user_model().objects.get(username="owner")
         result = LabResult.objects.order_by("-taken_on").first()
         self.client.force_login(owner)

@@ -203,7 +203,9 @@ def project_detail(request, pk):
     from .contract import position
     from .contract_views import WORDS as CONTRACT_WORDS
 
-    context.update(tab="overview", cwords=CONTRACT_WORDS[lang], position=position(project) if context["can_view_sales"] else None,
+    from .views_reports import cta
+
+    context.update(tab="overview", cwords=CONTRACT_WORDS[lang], site_cta=cta(project, request.user, lang), position=position(project) if context["can_view_sales"] else None,
                    expense_headings=localized_choices(ProjectExpense, "heading", lang))
     return render(request, "projects/detail.html", context)
 

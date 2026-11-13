@@ -1,0 +1,49 @@
+{% extends "operations/base.html" %}
+{% load static %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/attachments.css' %}?v=c2-1"><link rel="stylesheet" href="{% static 'hesba/css/projects.css' %}?v=c2-1">{% endblock %}
+{% block operation_content %}
+{# Contracting C2b (HG-095): one day's report. It records; it moves no quantity, certificate or cost. #}
+{% include "projects/_head.html" %}
+<section class="prj-card sr-sheet" data-site-report-page>
+<header class="sr-sheet__head"><div><a class="op-back" href="{% url 'projects:diary' project.pk %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ rw.back }}</a><h2 class="prj-h" data-report-day>{{ day }}</h2></div>
+<div class="sr-sheet__acts">{% if can_edit %}<a class="op-secondary" href="{% url 'projects:diary_edit' project.pk report.pk %}?lang={{ lang }}" data-report-edit>{{ rw.edit }}</a>{% endif %}<a class="op-secondary" href="{% url 'projects:diary_print' project.pk report.pk %}?lang={{ lang }}" target="_blank" rel="noopener" data-report-print>{{ rw.print }}</a></div></header>
+<p class="sr-facts"><span class="sr-fact" data-fact="weather"><small>{{ rw.weather }}</small><b>{{ weather|default:rw.ph }}</b></span><span class="sr-fact" data-fact="workers"><small>{{ rw.total_workers }}</small><b data-workers>{{ workers }}</b></span>{% if delayed %}<span class="op-status op-status-cancelled" data-delay-mark>{{ rw.has_delay }}</span>{% endif %}</p>
+<h3 class="sr-sub">{{ rw.crew }}</h3>
+{% if crew %}<ul class="sr-lines" data-crew>{% for row in crew %}<li><span><bdi>{{ row.label }}</bdi></span><b dir="ltr">{{ row.count }}</b></li>{% endfor %}</ul>{% else %}<p class="sr-none">{{ rw.none_rows }}</p>{% endif %}
+<h3 class="sr-sub">{{ rw.equipment }}</h3>
+{% if equipment %}<ul class="sr-lines" data-equipment>{% for row in equipment %}<li><span><bdi>{{ row.label }}</bdi></span><b dir="ltr">{{ row.count }}</b></li>{% endfor %}</ul>{% else %}<p class="sr-none">{{ rw.none_rows }}</p>{% endif %}
+{% if report.work_done %}<h3 class="sr-sub">{{ rw.work }}</h3><p class="sr-text" data-text="work">{{ report.work_done|linebreaksbr }}</p>{% endif %}
+{% if report.delayed %}<h3 class="sr-sub">{{ rw.delayed }}</h3><p class="sr-text sr-text--delay" data-text="delayed">{{ report.delayed|linebreaksbr }}</p>{% endif %}
+{% if report.materials %}<h3 class="sr-sub">{{ rw.materials }}</h3><p class="sr-text" data-text="materials">{{ report.materials|linebreaksbr }}</p>{% endif %}
+{% if report.visitors %}<h3 class="sr-sub">{{ rw.visitors }}</h3><p class="sr-text" data-text="visitors">{{ report.visitors|linebreaksbr }}</p>{% endif %}
+<p class="sr-meta" data-report-author>{{ written }}{% if edited %}<br>{{ edited }}{% endif %}</p>
+</section>
+<section class="att-card prj-card prj-docs" id="sr-photos" data-attachments data-refresh="inline" data-report-photos aria-labelledby="sr-photos-title"
+ data-msg-failed="{% if lang == 'en' %}Something went wrong, try again.{% else %}حصلت مشكلة، جرّب تاني.{% endif %}"
+ data-msg-network="{% if lang == 'en' %}No connection right now, try again.{% else %}مفيش اتصال دلوقتي، جرّب تاني.{% endif %}"
+ data-msg-uploading="{% if lang == 'en' %}Uploading…{% else %}جاري الرفع…{% endif %}" data-msg-uploaded="{% if lang == 'en' %}Saved.{% else %}اتحفظ.{% endif %}"
+ data-msg-deleting="{% if lang == 'en' %}Deleting…{% else %}جاري المسح…{% endif %}" data-msg-confirm="{% if lang == 'en' %}Delete this photo?{% else %}تمسح الصورة دي؟{% endif %}">
+{% csrf_token %}
+<h2 class="prj-h" id="sr-photos-title">{{ rw.photos_title }}</h2>
+<p class="att-help">{{ rw.photos_intro }}</p>
+<p class="att-help att-formats" data-att-formats>{{ aw.formats }}</p>
+<p class="att-help prj-space" data-photo-space>{{ att.space }}</p>
+{% if att.blocked and not can_edit %}<div class="op-message" data-att-blocked>{{ att.blocked }}</div>{% endif %}
+<div class="op-message op-message-error" role="alert" data-att-error hidden></div>
+<p class="att-status" role="status" aria-live="polite" data-att-status></p>
+{% if att.can_add %}
+<form class="att-upload att-med-upload prj-upload" method="post" enctype="multipart/form-data" action="{{ att.upload_url }}" data-att-upload>{% csrf_token %}
+<input type="hidden" name="kind" value="photo"><input type="hidden" name="stage" value="photo"><input type="hidden" name="lang" value="{{ lang }}">
+<div class="att-strip">
+<label class="att-add"><svg class="att-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z"/><circle cx="12" cy="13" r="3.5"/></svg><span>{{ aw.camera }}</span>
+<input class="sr-only" type="file" name="file" accept="image/*" capture="environment" data-att-file></label>
+<label class="att-add att-add-alt"><svg class="att-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="M21 16l-5-5-8 9"/></svg><span>{{ aw.choose }}</span>
+<input class="sr-only" type="file" name="file" accept="image/*" multiple data-att-file></label>
+</div>
+</form>
+{% endif %}
+{% if att.items %}<ul class="att-list" data-att-list>{% for item in att.items %}{% include "projects/_file_row.html" with item=item aw=aw %}{% endfor %}</ul>
+{% else %}<p class="att-empty" data-att-empty>{{ aw.photos_none }}</p>{% endif %}
+</section>
+<script src="{% static 'hesba/js/attachments.js' %}?v=c2-1" defer></script>
+{% endblock %}

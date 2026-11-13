@@ -13,7 +13,7 @@
 <div class="cp-sech"><span class="cp-no">1</span><h2 id="cp-h1">{{ words.step1 }}</h2></div>
 <div class="op-field"><label for="cp-name">{{ words.name }}</label><input id="cp-name" name="name" maxlength="120" required value="{{ form.name }}"></div>
 <div class="cp-segs" role="radiogroup" aria-label="{{ words.audience }}">
-{% for seg in segments %}<label class="cp-seg{% if seg.selected %} is-sel{% endif %}" data-segment="{{ seg.value }}"><input type="radio" name="audience" value="{{ seg.value }}"{% if seg.selected %} checked{% endif %} data-label="{{ seg.label }}" data-chips="{{ seg.chips|join:',' }}" data-param="{% if seg.value != 'all' %}1{% endif %}" data-category="{% if seg.value == 'category' or seg.value == 'lapsed' %}1{% endif %}"><span class="cp-seg__main"><b>{{ seg.title }}</b><small>{{ seg.desc }}</small></span></label>{% endfor %}
+{% for seg in segments %}<label class="cp-seg{% if seg.selected %} is-sel{% endif %}{% if not seg.usable %} is-off{% endif %}" data-segment="{{ seg.value }}"><input type="radio" name="audience" value="{{ seg.value }}"{% if seg.selected %} checked{% endif %}{% if not seg.usable %} disabled{% endif %} data-label="{{ seg.label }}" data-chips="{{ seg.chips|join:',' }}" data-param="{% if seg.value != 'all' %}1{% endif %}" data-category="{% if seg.value == 'category' or seg.value == 'lapsed' %}1{% endif %}"><span class="cp-seg__main"><b>{{ seg.title }}</b><small>{{ seg.desc }}</small>{% if seg.note %}<small class="cp-seg__note" data-segment-note>{{ seg.note }}</small>{% endif %}</span></label>{% endfor %}
 </div>
 <div class="cp-param" data-param-box{% if not needs_param %} hidden{% endif %}>
 <div class="op-field"><label for="cp-threshold" data-param-label>{{ param_label }}</label>

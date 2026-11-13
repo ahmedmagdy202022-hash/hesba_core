@@ -153,15 +153,15 @@ def clean_leftovers(now=None):
 
 #: The owner's name per kind of business: the dashboard greets a person, not a role.
 DEMO_OWNERS = {
-    ("commercial", "retail"): "أستاذ محمود الشربيني", ("commercial", "pharmacy"): "د. أحمد الشاذلي",
-    ("commercial", "grocery"): "أ. سعيد عبد العال", ("commercial", "fashion"): "مدام نهى فؤاد",
-    ("commercial", "electronics"): "أستاذ كريم حمدي", ("commercial", "wholesale"): "أ. رمضان عبد الحميد",
-    ("restaurants", "restaurant"): "الشيف كريم عادل", ("restaurants", "cafe"): "أستاذ عمر فاروق",
-    ("medical", "clinic"): "د. سارة حسين", ("medical", "dental"): "د. هشام عبد الله", ("medical", "vet"): "د. كريم البيطري",
-    ("education", "training"): "أ. منى عبد الرحمن", ("education", "nursery"): "ميس دينا شوقي",
-    ("services", "maintenance"): "م. محمد رمضان", ("services", "beauty"): "مدام هالة سمير",
+    ("commercial", "retail"): "أ. محمود الشربيني", ("commercial", "pharmacy"): "د. أحمد الشاذلي",
+    ("commercial", "grocery"): "أ. سعيد عبد العال", ("commercial", "fashion"): "أ. نهى فؤاد",
+    ("commercial", "electronics"): "أ. كريم حمدي", ("commercial", "wholesale"): "أ. رمضان عبد الحميد",
+    ("restaurants", "restaurant"): "الشيف كريم عادل", ("restaurants", "cafe"): "أ. عمر فاروق",
+    ("medical", "clinic"): "د. سارة حسين", ("medical", "dental"): "د. هشام عبد الله", ("medical", "vet"): "د. كريم منصور",
+    ("education", "training"): "أ. منى عبد الرحمن", ("education", "nursery"): "أ. دينا شوقي",
+    ("services", "maintenance"): "م. محمد رمضان", ("services", "beauty"): "أ. هالة سمير",
     ("manufacturing", "food"): "م. سيد عبد الفتاح", ("contracting", "general"): "م. طارق الجندي",
-    "commercial": "أستاذ محمود الشربيني", "restaurants": "الشيف كريم عادل", "medical": "د. سارة حسين", "education": "أ. منى عبد الرحمن",
+    "commercial": "أ. محمود الشربيني", "restaurants": "الشيف كريم عادل", "medical": "د. سارة حسين", "education": "أ. منى عبد الرحمن",
     "services": "م. محمد رمضان", "manufacturing": "م. سيد عبد الفتاح", "contracting": "م. طارق الجندي",
 }
 ROLE_NAME = "المالك"  # what seed_demo_users calls the owner; only that is ever replaced
@@ -186,6 +186,20 @@ def name_the_demo_owner(activity=None, sub_activity=None):
         owner.save(update_fields=["display_name", "updated_at"])
 
 
+#: DEMO-SVC-CAPS: what a visitor to the services showcase (a workshop or a salon) is walked through, switched on for the demo
+#: only: gift cards, deposits on a booking, the public booking page, and loyalty (the points campaign needs it; the salon
+#: already has it). The online payment link stays OFF on purpose: its only gateway without a real Paymob account is the mock,
+#: and the server refuses to start with the mock while DEBUG is off (payments.E001), so a public demo cannot offer it.
+SERVICES_DEMO_CAPABILITIES = ("gift_cards", "deposits", "online_booking", "loyalty")
+SERVICES_DEMO_SUBS = ("maintenance", "beauty")
+
+
+def services_demo_extras(activity, sub_activity):
+    """The extra capabilities the services showcase switches on (none for any other business; real installs never call this)."""
+
+    return SERVICES_DEMO_CAPABILITIES if activity == "services" and sub_activity in SERVICES_DEMO_SUBS else ()
+
+
 def demo_capabilities(activity, sub_activity, features):
     """The features a demo of this business switches on: the interview's suggestions, plus the AI showcase
     wherever its sections exist (HG-078 dev. 7), plus what prepare_demo turns on for the retail shop, plus the clinic's online booking
@@ -199,6 +213,7 @@ def demo_capabilities(activity, sub_activity, features):
     if (activity, sub_activity) == ("medical", "clinic"):  # M4: the clinic's public booking page answers on the demo (settings_core/demo_clinic.py)
         chosen += ["online_booking"]
         chosen += ["inpatient"]  # M8 (HG-088): the landing page offers the clinic, so its demo shows the beds (settings_core/demo_inpatient.py)
+    chosen += services_demo_extras(activity, sub_activity)
     return tuple(dict.fromkeys(slug for slug in chosen if caps.is_available(slug)))
 
 

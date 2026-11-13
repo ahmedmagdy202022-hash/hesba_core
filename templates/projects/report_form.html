@@ -1,0 +1,42 @@
+{% extends "operations/base.html" %}
+{% load static %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/attachments.css' %}?v=c2-1"><link rel="stylesheet" href="{% static 'hesba/css/projects.css' %}?v=c2-1">{% endblock %}
+{% block operation_content %}
+{# Contracting C2b (HG-095): write or edit the day's report. One report per project per day: saving a day that has one edits it. #}
+{% include "projects/_head.html" %}
+<section class="prj-card sr-formhead"><h2 class="prj-h">{{ form_title }}</h2><p class="sr-hint">{{ rw.form_intro }}</p></section>
+{% if closed %}<div class="op-message" data-project-closed>{{ rw.closed }}</div>
+{% else %}
+{% if error %}<div class="op-message op-message-error" role="alert" data-form-error>{{ error }}</div>{% endif %}
+<form class="op-form hs-form sr-form" method="post" data-report-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+<div class="prj-card sr-block">
+{% if report %}<p class="sr-day" data-report-day><strong>{{ form_title }}</strong></p>
+{% else %}<div class="op-field"><label for="sr-date">{{ rw.date }}</label><input id="sr-date" type="date" name="report_date" max="{{ today|date:'Y-m-d' }}" value="{{ form.date }}" required><small>{{ rw.date_hint }}</small></div>{% endif %}
+<fieldset class="att-cats sr-weather" data-weather><legend>{{ rw.weather_q }}</legend>
+<label class="att-chip"><input type="radio" name="weather" value=""{% if not form.weather %} checked{% endif %}><span>{{ rw.weather_none }}</span></label>
+{% for value, label in weather %}<label class="att-chip"><input type="radio" name="weather" value="{{ value }}"{% if form.weather == value %} checked{% endif %}><span>{{ label }}</span></label>{% endfor %}
+</fieldset>
+</div>
+<div class="prj-card sr-block">
+<fieldset class="sr-rows" data-sr-rows="crew"><legend>{{ rw.crew }}</legend>
+{% for label, count in form.crew %}<div class="sr-row" data-sr-row><input name="crew_label" maxlength="80" value="{{ label }}" placeholder="{{ rw.crew_ph }}" aria-label="{{ rw.crew }}" autocomplete="off"><input name="crew_count" inputmode="numeric" maxlength="3" dir="ltr" value="{{ count }}" placeholder="{{ rw.count }}" aria-label="{{ rw.count }}"></div>{% endfor %}
+<button class="op-secondary sr-add" type="button" data-sr-add="crew">{{ rw.add_row }}</button>
+<template data-sr-template="crew"><div class="sr-row" data-sr-row><input name="crew_label" maxlength="80" placeholder="{{ rw.crew_ph }}" aria-label="{{ rw.crew }}" autocomplete="off"><input name="crew_count" inputmode="numeric" maxlength="3" dir="ltr" placeholder="{{ rw.count }}" aria-label="{{ rw.count }}"></div></template>
+</fieldset>
+<fieldset class="sr-rows" data-sr-rows="equipment"><legend>{{ rw.equipment }}</legend>
+{% for label, count in form.equipment %}<div class="sr-row" data-sr-row><input name="equipment_label" maxlength="80" value="{{ label }}" placeholder="{{ rw.equipment_ph }}" aria-label="{{ rw.equipment }}" autocomplete="off"><input name="equipment_count" inputmode="numeric" maxlength="3" dir="ltr" value="{{ count }}" placeholder="{{ rw.count }}" aria-label="{{ rw.count }}"></div>{% endfor %}
+<button class="op-secondary sr-add" type="button" data-sr-add="equipment">{{ rw.add_row }}</button>
+<template data-sr-template="equipment"><div class="sr-row" data-sr-row><input name="equipment_label" maxlength="80" placeholder="{{ rw.equipment_ph }}" aria-label="{{ rw.equipment }}" autocomplete="off"><input name="equipment_count" inputmode="numeric" maxlength="3" dir="ltr" placeholder="{{ rw.count }}" aria-label="{{ rw.count }}"></div></template>
+</fieldset>
+</div>
+<div class="prj-card sr-block">
+<div class="op-field"><label for="sr-work">{{ rw.work }}</label><textarea id="sr-work" name="work_done" rows="4" maxlength="3000" placeholder="{{ rw.work_ph }}">{{ form.work_done }}</textarea></div>
+<div class="op-field"><label for="sr-delayed">{{ rw.delayed }}</label><textarea id="sr-delayed" name="delayed" rows="3" maxlength="3000" placeholder="{{ rw.delayed_ph }}">{{ form.delayed }}</textarea></div>
+<div class="op-field"><label for="sr-materials">{{ rw.materials }}</label><textarea id="sr-materials" name="materials" rows="3" maxlength="3000" placeholder="{{ rw.materials_ph }}">{{ form.materials }}</textarea></div>
+<div class="op-field"><label for="sr-visitors">{{ rw.visitors }}</label><textarea id="sr-visitors" name="visitors" rows="3" maxlength="3000" placeholder="{{ rw.visitors_ph }}">{{ form.visitors }}</textarea></div>
+</div>
+<div class="op-form-actions hs-sticky-save"><button class="op-primary" type="submit" data-save>{{ rw.save }}</button><a class="op-secondary" href="{% if report %}{% url 'projects:diary_day' project.pk report.pk %}{% else %}{% url 'projects:diary' project.pk %}{% endif %}?lang={{ lang }}">{{ rw.cancel }}</a></div>
+</form>
+<script src="{% static 'hesba/js/site_report.js' %}?v=c2-1" defer></script>
+{% endif %}
+{% endblock %}

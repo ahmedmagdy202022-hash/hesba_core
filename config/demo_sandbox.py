@@ -187,7 +187,7 @@ def client_address(request):
 
 TOO_MANY = (
     "<!doctype html><meta charset=utf-8><title>Hesba</title>"
-    "<p dir=rtl>جرّبت كتير الساعة دي. استنى شوية وجرّب تاني، أو كمّل في تجربتك الحالية.</p>"
+    "<p dir=rtl>عدد المحاولات كبير خلال الساعة دي. جرّب تاني بعد شوية، أو كمّل في تجربتك الحالية.</p>"
     "<p dir=ltr>Too many fresh starts from here this hour. Please wait a little, or carry on in your current demo.</p>"
 )
 

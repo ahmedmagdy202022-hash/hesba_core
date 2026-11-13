@@ -42,7 +42,7 @@ class Setup(TestCase):
         make_location(location_code="SHOP", is_default=True)
         self.customer = make_customer(customer_code="C-1", name="منى عبد الله")
         self.service = make_item(item_code="SRV-1", item_name="سشوار", default_sale_price="200.00", is_stock_tracked=False)
-        self.staff = save_employee({"name": "منى الكوافيرة"}, self.owner)
+        self.staff = save_employee({"name": "منى رشاد"}, self.owner)
 
 
 class PackageTests(Setup):
@@ -210,7 +210,7 @@ class HoursTests(Setup):
         self.assertEqual(invoice.status, "draft")
         lines = list(invoice.lines.order_by("line_number"))
         self.assertEqual([(line.quantity, line.unit_sale_price) for line in lines], [(D("1.500"), D("200.00")), (D("2.000"), D("300.00"))])
-        self.assertIn("منى الكوافيرة", lines[0].description)
+        self.assertIn("منى رشاد", lines[0].description)
         self.assertEqual(invoice.total_amount, D("900.00"))
         self.assertEqual(TimeEntry.objects.filter(invoice=invoice).count(), 2)
         self.assertEqual([row["customer"] for row in hours.by_customer()], [other])  # the other customer still waits

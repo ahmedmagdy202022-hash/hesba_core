@@ -475,7 +475,7 @@ class CallbackTests(PayLinkSetup):
         self.assertContains(public.get(reverse("pay_return_paymob"), {"merchant_order_id": "HSB-unknown"}), 'data-banner="waiting"')
         self.assertFalse(CustomerPayment.objects.exists())
         self.callback(link)
-        self.assertContains(public.get(reverse("pay_done", args=[services.sign_token(link)]), {"lang": "en"}), "Your payment reached the shop")
+        self.assertContains(public.get(reverse("pay_done", args=[services.sign_token(link)]), {"lang": "en"}), "Your payment reached us")
 
     def test_the_pay_page_sends_the_customer_to_the_gateway_and_blocks_a_changed_amount(self):
         invoice = self.invoice("300.00")
@@ -712,7 +712,7 @@ class RepTests(PayLinkSetup):
         from reports.reps import rep_performance
         from staff.services import save_employee
 
-        rep = save_employee({"name": "سمير المندوب", "commission_percent": "5"}, self.owner)
+        rep = save_employee({"name": "سمير عادل", "commission_percent": "5"}, self.owner)
         self.customer.sales_rep = rep
         self.customer.save()
         day_one = TODAY - timedelta(days=2)

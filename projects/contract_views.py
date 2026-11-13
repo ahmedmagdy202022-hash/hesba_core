@@ -34,7 +34,7 @@ COLLECT, BUY, BUY_VIEW = "sales.receive_customer_payment", "purchases.create_pur
 WORDS = {
     "ar": {
         "tab_overview": "نظرة عامة", "tab_boq": "المقايسة", "tab_certificates": "المستخلصات", "tab_payments": "الدفعات وضمان الأعمال",
-        "tab_subcontracts": "مقاولو الباطن", "tab_budget": "الموازنة والتكلفة",
+        "tab_subcontracts": "مقاولو الباطن", "tab_budget": "الموازنة والتكلفة", "tab_reports": "اليوميات", "tab_documents": "المستندات",
         "contract": "قيمة العقد", "certified": "اتعمل بيه مستخلصات (نهائية)", "due_now": "مستحق الآن على صاحب المشروع", "retention_held": "ضمان أعمال محتجز",
         "advance_left": "دفعة مقدمة لسه ما اتخصمتش", "collections": "اتحصّل على المستخلصات",
         "boq_intro": "بنود المقايسة بالكمية والفئة. إجمالي المقايسة هو قيمة العقد، والمستخلصات بتتعمل بالكميات المنفذة حتى تاريخه.",
@@ -69,7 +69,7 @@ WORDS = {
     },
     "en": {
         "tab_overview": "Overview", "tab_boq": "Bill of quantities", "tab_certificates": "Certificates", "tab_payments": "Payments & retention",
-        "tab_subcontracts": "Subcontractors", "tab_budget": "Budget & cost",
+        "tab_subcontracts": "Subcontractors", "tab_budget": "Budget & cost", "tab_reports": "Daily reports", "tab_documents": "Documents",
         "contract": "Contract value", "certified": "Certified (posted)", "due_now": "Due now from the owner", "retention_held": "Retention held",
         "advance_left": "Advance not yet recovered", "collections": "Collected on certificates",
         "boq_intro": "The bill of quantities, by quantity and rate. Its total is the contract value; certificates bill the quantities done to date.",

@@ -19,6 +19,8 @@
 .cp-seg__main{display:grid;gap:2px;min-width:0}
 .cp-seg__main b{color:var(--hs-navy)}
 .cp-seg__main small{color:var(--hs-muted);font-size:var(--hs-text-sm)}
+.cp-seg__note{color:var(--hs-teal-deep)!important;font-weight:var(--hs-weight-semibold)}
+.cp-seg.is-off{cursor:not-allowed;background:var(--hs-ground)}.cp-seg.is-off .cp-seg__main b{color:var(--hs-muted)}.cp-seg.is-off .cp-seg__note{color:var(--hs-warning)!important}
 .cp-param{display:grid;gap:10px;padding:14px;border-radius:var(--hs-radius-lg);background:var(--hs-ground);border:1px solid var(--hs-line)}
 .cp-param[hidden],[data-category-box][hidden],[data-live-error][hidden]{display:none}
 .cp-param label{font-weight:700;color:var(--hs-navy)}

@@ -43,7 +43,7 @@ class WeekPageTests(AppointmentSetup):
     def test_the_active_employees_are_offered_as_move_targets(self):
         self.client.force_login(self.owner)
         staff = self.client.get(reverse("appointments:week")).context["staff"]
-        self.assertEqual([row["name"] for row in staff], ["أحمد الفني"])
+        self.assertEqual([row["name"] for row in staff], ["أحمد سامي"])
         self.assertContains(self.client.get(reverse("appointments:week")), 'id="cal-staff"')
 
     def test_the_week_starts_on_saturday(self):

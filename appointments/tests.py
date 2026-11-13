@@ -45,7 +45,7 @@ class AppointmentSetup(TestCase):
         make_location(location_code="SHOP", is_default=True)
         self.customer = make_customer(customer_code="C-1", name="مدام سعاد", phone="01001234567")
         self.service = make_item(item_code="SRV-AC", item_name="صيانة تكييف", default_sale_price="300.00", is_stock_tracked=False)
-        self.tech = save_employee({"name": "أحمد الفني", "commission_percent": "10"}, self.owner)
+        self.tech = save_employee({"name": "أحمد سامي", "commission_percent": "10"}, self.owner)
 
     def book(self, hour=10, minutes=60, employee="tech", **extra):
         data = {"customer": self.customer, "employee": self.tech if employee == "tech" else employee, "service": self.service,
@@ -203,7 +203,7 @@ class EntityScopeTests(TestCase):
         cls.part = make_item(item_code="PART-1", item_name="فلتر تكييف", default_sale_price="120.00", is_stock_tracked=True)
         stock_in(cls.part, cls.branch_store, 5, "40.00")
         recalculate_item_average_cost(cls.part)
-        cls.tech = save_employee({"name": "أحمد الفني", "commission_percent": "10"}, cls.owner)
+        cls.tech = save_employee({"name": "أحمد سامي", "commission_percent": "10"}, cls.owner)
         cls.manager = person(RoleCode.MANAGER, "scope_branch_manager")
         EntityMembership.objects.create(user=cls.manager, entity=cls.branch, is_default=True)
 
