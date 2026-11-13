@@ -64,7 +64,8 @@ MESSAGES = {
            "nothing_left": "الأمر ده اتفوتر بالكامل.", "line_invoiced": "البند ده عليه فواتير؛ مينفعش يتشال.",
            "note_invoice": "أمر بيع {number}", "no_capability": "عروض الأسعار مقفولة في الإعدادات.",
            "same_item": "«{item}» موجود في العرض؛ عدّل الكمية بإنك تشيله وتضيفه تاني.",
-           "other_customer": "الفاتورة دي لعميل تاني غير عميل الأمر {number}؛ رجّع العميل أو اعمل الفاتورة من غير الأمر."},
+           "other_customer": "الفاتورة دي لعميل تاني غير عميل الأمر {number}؛ رجّع العميل أو اعمل الفاتورة من غير الأمر.",
+           "deliver": "تاريخ التسليم لازم يكون في يوم العرض أو بعده.", "deliver_locked": "تاريخ التسليم بيتغير على العرض أو الأمر المفتوح بس."},
     "en": {"customer": "Choose the customer.", "date": "The date is not valid.", "valid": "“Valid until” must be after the quotation date.",
            "item": "Choose the item or service.", "quantity": "The quantity must be more than zero.", "price": "The price must be zero or more.",
            "discount": "The discount is a percentage from 0 to 100.", "locked": "This quotation is no longer a draft or sent, so it cannot change.",
@@ -73,7 +74,8 @@ MESSAGES = {
            "nothing_left": "This order is fully invoiced.", "line_invoiced": "This line has invoices and cannot be removed.",
            "note_invoice": "Sales order {number}", "no_capability": "Quotations are switched off in Settings.",
            "same_item": "“{item}” is already on the quotation; remove it and add it again to change the quantity.",
-           "other_customer": "This invoice is for another customer than order {number}; put the customer back or make the invoice without the order."},
+           "other_customer": "This invoice is for another customer than order {number}; put the customer back or make the invoice without the order.",
+           "deliver": "The delivery date must be on or after the quotation date.", "deliver_locked": "The delivery date can only change on an open quotation or order."},
 }
 
 
@@ -150,8 +152,20 @@ def _header(data, words, *, quote_date):
     if valid_until < quote_date:
         raise ValidationError(words["valid"])
     salesperson = data.get("salesperson") if hasattr(data.get("salesperson"), "pk") else None
-    return {"valid_until": valid_until, "salesperson": salesperson, "notes": (data.get("notes") or "").strip()[:255],
-            "terms": (data.get("terms") or "").strip()[:4000]}
+    values = {"valid_until": valid_until, "salesperson": salesperson, "notes": (data.get("notes") or "").strip()[:255],
+              "terms": (data.get("terms") or "").strip()[:4000]}
+    if "deliver_by" in data:  # F1: a caller that does not send it leaves the date as it was
+        values["deliver_by"] = _delivery(data.get("deliver_by"), words, quote_date)
+    return values
+
+
+def _delivery(raw, words, quote_date):
+    """F1: the promised delivery date, or None; never before the quotation's own date."""
+
+    day = _date(raw, words)
+    if day is not None and day < quote_date:
+        raise ValidationError(words["deliver"])
+    return day
 
 
 @transaction.atomic
@@ -195,6 +209,29 @@ def update_header(order, data, user, lang="ar"):
         setattr(order, key, value)
     order.save(update_fields=["quote_date", *values])
     _audit(user, "update_quote", order, {"valid_until": str(order.valid_until or ""), "notes": order.notes}, before=before)
+    return order
+
+
+@transaction.atomic
+def set_deliver_by(order, raw, user, lang="ar"):
+    """F1 (HG-098): the delivery date promised to the customer. It may change on a quotation that is still offered and on an open
+    sales order, because the date is often agreed after the customer accepts. Nothing is posted; a production order still on the
+    floor for this order takes the new date (manufacturing.make_to_order.sync_due)."""
+
+    words = MESSAGES[lang]
+    _require(user, words)
+    order = _locked(order, words, offered=False)
+    if order.status not in (*OFFERED, Status.CONFIRMED):
+        raise ValidationError(words["deliver_locked"])
+    day = _delivery(raw, words, order.quote_date)
+    before = order.deliver_by
+    order.deliver_by = day
+    order.save(update_fields=["deliver_by"])
+    if order.status == Status.CONFIRMED:
+        from manufacturing import make_to_order
+
+        make_to_order.sync_due(order)
+    _audit(user, "set_deliver_by", order, {"deliver_by": str(day or "")}, before={"deliver_by": str(before or "")})
     return order
 
 
