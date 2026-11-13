@@ -73,7 +73,7 @@ class BillOfQuantitiesTests(ContractSetup):
 
     def test_a_certified_item_keeps_its_rate_and_cannot_shrink_below_or_be_deleted(self):
         post_sales_invoice(self.certify(concrete="40").invoice_id, self.owner)
-        with self.assertRaisesMessage(ValidationError, "الفئة بتاعته ثابتة"):
+        with self.assertRaisesMessage(ValidationError, "فئته ثابتة"):
             contract.save_boq_line(self.project, self.owner, {"description": "خرسانة", "quantity": "100", "rate": "1100"}, self.concrete)
         with self.assertRaisesMessage(ValidationError, "تقل عن"):
             contract.save_boq_line(self.project, self.owner, {"description": "خرسانة", "quantity": "30", "rate": "1000"}, self.concrete)

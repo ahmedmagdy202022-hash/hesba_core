@@ -127,7 +127,11 @@ def _lang(request):
 
 
 def _who(user):
-    return (user.get_full_name() or user.get_username()) if user is not None else ""
+    """The person by the name the business gave them, as every other screen shows it (never the login name)."""
+
+    from reports.navigation import display_name
+
+    return display_name(user) if user is not None else ""
 
 
 def signed_money(value):
