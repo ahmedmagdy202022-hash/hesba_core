@@ -47,7 +47,7 @@
 <div class="gp-main-text"><strong>{{ ww.invoice }} <bdi dir="ltr">{{ r.number }}</bdi></strong>
 <div class="gp-sub">{% if r.month_text %}{{ ww.month }} <bdi>{{ r.month_text }}</bdi>{% endif %}{% if r.students %} {% if r.month_text %}<span class="gp-sep">·</span> {% endif %}{{ ww.for_students }} {% for n in r.students %}<bdi>{{ n }}</bdi>{% if not forloop.last %}{% if lang == 'en' %}, {% else %}، {% endif %}{% endif %}{% endfor %}{% endif %}</div></div>
 <div class="gp-aside gp-score"><span class="gp-label">{{ ww.remaining }}</span><strong><bdi dir="ltr">{{ r.remaining|money }}</bdi> <small>{{ f.currency }}</small></strong></div>
-{% if r.pay_url %}<a class="cl-btn cl-btn--primary gp-pay" href="{{ r.pay_url }}" rel="nofollow noreferrer" data-pay-go>{{ ww.pay }} <bdi dir="ltr">{{ r.pay_amount|money }}</bdi> {{ f.currency }}</a>{% endif %}</div>{% endfor %}
+{% if r.pay_url %}<a class="cl-btn cl-btn--primary gp-pay" href="{{ r.pay_url }}" rel="nofollow noreferrer" data-pay-go><span>{{ ww.pay }} <bdi dir="ltr">{{ r.pay_amount|money }}</bdi> {{ f.currency }}</span></a>{% endif %}</div>{% endfor %}
 {% if f.has_pay %}<p class="gp-note">{{ ww.pay_hint }}</p>{% endif %}{% endif %}
 {% if f.other %}<p class="gp-note" data-other-dues>{{ ww.other_dues }}</p>{% endif %}
 {% else %}<p class="gp-good" data-fees-none>{{ ww.none_owed }}</p>{% endif %}{% endwith %}</section>

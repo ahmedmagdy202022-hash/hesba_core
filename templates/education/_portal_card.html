@@ -1,7 +1,9 @@
 {# E3 (HG-101): the guardian portal card on the student file. Drawn only for whoever manages parties. The live link's address is never kept, so it is not shown here: «ابعت» makes a new one. #}
 {% load hesba_format %}
 <section class="op-detail-meta" data-portal-card><h2>{{ gp.h }}</h2><p class="op-muted">{{ gp.intro }}</p>
-{% if portal_link %}<p data-portal-live><span class="op-status op-status-open">{{ gp.live }}</span> {{ gp.made }} <bdi>{{ portal_link.created_at|date:"Y-m-d" }}</bdi> · {{ gp.until }} <bdi>{{ portal_until|date:"Y-m-d" }}</bdi> · {{ gp.opened }}: {% if portal_link.last_opened_at %}<bdi>{{ portal_link.last_opened_at|date:"Y-m-d H:i" }}</bdi>{% else %}{{ gp.never_opened }}{% endif %}</p>
+{% if portal_link %}<div data-portal-live><p><span class="op-status op-status-open">{{ gp.live }}</span></p>
+<p>{{ gp.made }}: <bdi>{{ portal_link.created_at|date:"Y-m-d" }}</bdi></p><p>{{ gp.until }}: <bdi>{{ portal_until|date:"Y-m-d" }}</bdi></p>
+<p>{{ gp.opened }}: {% if portal_link.last_opened_at %}<bdi>{{ portal_link.last_opened_at|date:"Y-m-d H:i" }}</bdi>{% else %}{{ gp.never_opened }}{% endif %}</p></div>
 {% else %}<p class="op-muted" data-portal-none>{{ gp.none }}</p>{% endif %}
 {% if portal_kind == 'year' %}<p data-portal-kind="year">{{ gp.kind_year }} · {{ gp.children }}: <bdi>{{ portal_children }}</bdi></p>
 {% elif portal_kind == 'phone' %}<p data-portal-kind="phone">{{ gp.kind_phone }} · {{ gp.children }}: <bdi>{{ portal_children }}</bdi></p>

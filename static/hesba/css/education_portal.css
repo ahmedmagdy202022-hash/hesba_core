@@ -9,6 +9,7 @@
 .gp-name{font-family:var(--hs-font-head);font-size:var(--hs-text-xl);color:var(--hs-navy);padding-block-start:var(--hs-space-3);padding-inline:var(--hs-space-1);border-block-start:3px solid var(--hs-teal);overflow-wrap:anywhere}
 .gp-child:first-of-type .gp-name{border-block-start:0;padding-block-start:0}
 .gp-child .cl-card{padding:var(--hs-space-4)}
+.gp-child .cl-h,.gp-fees .cl-h{margin-block-start:0}
 .gp-row{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:var(--hs-space-2) var(--hs-space-4);padding-block:var(--hs-space-3);border-block-start:1px solid var(--hs-line)}
 .gp-row:first-of-type{border-block-start:0}
 .gp-main-text{flex:1 1 200px;min-inline-size:0;overflow-wrap:anywhere}
