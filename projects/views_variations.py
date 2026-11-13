@@ -288,7 +288,7 @@ def variation_form(request, pk, oid=None):
     boq_rows = []
     for item in boq:
         direction, typed = form["changes"].get(item.pk, ("up", ""))
-        boq_rows.append({"item": item, "certified": contract.certified_quantity(item), "direction": direction, "value": typed})
+        boq_rows.append({"boq": item, "certified": contract.certified_quantity(item), "direction": direction, "value": typed})
     title = words["form_edit"].format(n=order.number) if order is not None else words["form_new"]
     return render(request, "projects/variation_form.html", _context_for(
         request, project, form=form, order=order, boq_rows=boq_rows, form_error=error, today=today, form_title=title, closed=project.status not in OPEN,

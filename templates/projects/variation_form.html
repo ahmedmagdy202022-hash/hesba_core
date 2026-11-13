@@ -18,11 +18,11 @@
 {% if boq_rows %}
 <div class="prj-card sr-block">
 <fieldset class="vo-set" data-variation-changes><legend>{{ vw.changes_title }}</legend><p class="sr-hint">{{ vw.changes_hint }}</p>
-{% for row in boq_rows %}{% with item=row.item %}<div class="vo-change" data-change-row="{{ item.line_number }}">
-<div class="vo-change__what"><b><bdi dir="ltr">{{ item.code|default:item.line_number }}</bdi> {{ item.description }}</b>
-<small>{{ vw.now }} <span dir="ltr">{{ item.quantity|qty }}</span> <bdi>{{ item.unit }}</bdi> · {{ vw.rate }} <span dir="ltr">{{ item.rate|money }}</span>{% if row.certified %} · {{ vw.certified }} <span dir="ltr">{{ row.certified|qty }}</span>{% endif %}</small></div>
-<select name="d_{{ item.pk }}" aria-label="{{ vw.direction }} — {{ item.description }}"><option value="up"{% if row.direction != 'down' %} selected{% endif %}>{{ vw.up }}</option><option value="down"{% if row.direction == 'down' %} selected{% endif %}>{{ vw.down }}</option></select>
-<input name="c_{{ item.pk }}" value="{{ row.value }}" inputmode="decimal" dir="ltr" autocomplete="off" placeholder="{{ vw.change_qty }}" aria-label="{{ vw.change_qty }} — {{ item.description }}">
+{% for row in boq_rows %}{% with boq=row.boq %}<div class="vo-change" data-change-row="{{ boq.line_number }}">
+<div class="vo-change__what"><b><bdi dir="ltr">{{ boq.code|default:boq.line_number }}</bdi> {{ boq.description }}</b>
+<small>{{ vw.now }} <span dir="ltr">{{ boq.quantity|qty }}</span> <bdi>{{ boq.unit }}</bdi> · {{ vw.rate }} <span dir="ltr">{{ boq.rate|money }}</span>{% if row.certified %} · {{ vw.certified }} <span dir="ltr">{{ row.certified|qty }}</span>{% endif %}</small></div>
+<select name="d_{{ boq.pk }}" aria-label="{{ vw.direction }} — {{ boq.description }}"><option value="up"{% if row.direction != 'down' %} selected{% endif %}>{{ vw.up }}</option><option value="down"{% if row.direction == 'down' %} selected{% endif %}>{{ vw.down }}</option></select>
+<input name="c_{{ boq.pk }}" value="{{ row.value }}" inputmode="decimal" dir="ltr" autocomplete="off" placeholder="{{ vw.change_qty }}" aria-label="{{ vw.change_qty }} — {{ boq.description }}">
 </div>{% endwith %}{% endfor %}
 </fieldset>
 </div>

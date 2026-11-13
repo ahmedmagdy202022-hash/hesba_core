@@ -55,8 +55,9 @@ class InsightsTests(TestCase):
         self.assertEqual(section["kind"], "projects")
         first = next(row for row in section["rows"] if row["project"].name.startswith("عمارة"))
         # CONTRACT-003: two posted certificates; the second brings the first three bill-of-quantities
-        # items to 45%, so 35% of the contract is billed (the third, today's, is still a draft).
-        self.assertEqual(first["progress"], 35)
+        # items to 45%. Contracting C1 (HG-103): the demo's approved variation order raised the contract
+        # value, and the share billed is read against the revised value, so it is 32% and not the 35% of before.
+        self.assertEqual(first["progress"], 32)
 
     def test_a_factory_sees_cost_per_unit(self):
         self.fill("manufacturing", "garments")
