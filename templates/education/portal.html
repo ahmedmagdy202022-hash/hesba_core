@@ -25,6 +25,11 @@
 <a class="cl-btn cl-btn--primary gp-open" href="{{ r.url }}" target="_blank" rel="noopener noreferrer" data-content-open>{{ r.button }}</a></div>
 {% empty %}<p class="gp-empty">{{ ww.no_content }}</p>{% endfor %}</section>
 
+{% if block.makeup %}<section class="cl-card" data-section="makeup"><h3 class="cl-h">{{ ww.makeup_h }}</h3><p class="gp-note">{{ ww.makeup_note }}</p>
+{% for r in block.makeup %}<div class="gp-row" data-makeup-item data-status="{{ r.status }}"><div class="gp-main-text"><strong><bdi>{{ r.day|day_text:lang }}</bdi>{% if r.time %}{% if lang == 'en' %}, {% else %}، {% endif %}<bdi dir="ltr">{{ r.time }}</bdi>{% endif %}</strong>
+<div class="gp-sub"><bdi>{{ r.group }}</bdi></div></div>
+<div class="gp-aside"><span class="gp-chip{% if r.cancelled %} gp-chip--late{% elif r.status == 'booked' %} gp-chip--online{% elif r.status == 'missed' %} gp-chip--absent{% endif %}" data-makeup-status>{{ r.label }}</span></div></div>{% endfor %}</section>{% endif %}
+
 <section class="cl-card" data-section="attendance"><h3 class="cl-h">{{ ww.attendance_h }}</h3>
 {% with a=block.attendance %}{% if a.held %}
 <div class="gp-stats"><div class="gp-stat"><span class="gp-label">{{ ww.rate }}</span><strong class="gp-big" data-attendance-rate><bdi dir="ltr">{{ a.rate }}%</bdi></strong></div>
