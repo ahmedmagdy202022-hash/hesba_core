@@ -287,10 +287,14 @@ def check_cancellable(run, reason, lang="ar"):
 
 @transaction.atomic
 def cancel_run(run, user, *, reason, reversal_date=None, lang="ar"):
+    from inventory.models import StockOperation
     from inventory.services import cancel_stock_operation, lock_items_for_stock_check
 
     run = ProductionRun.objects.select_for_update().get(pk=run.pk)
-    lock_items_for_stock_check([run.output_operation.item_id])  # nothing of it leaves between the check and the reversal
+    # The engine's own reversal locks the operation and then its item. The same order here: a reversal of this very
+    # operation from the stock screen, running at the same moment, then waits its turn instead of deadlocking.
+    output = StockOperation.objects.select_for_update().get(pk=run.output_operation_id)
+    lock_items_for_stock_check([output.item_id])  # nothing of it leaves between the check and the reversal
     reason = check_cancellable(run, reason, lang)
     reversal_date = reversal_date or timezone.localdate()
     cancel_stock_operation(run.output_operation_id, reversal_date, reason, user)  # the engine: refuses when the place is short
