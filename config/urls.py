@@ -19,6 +19,7 @@ from printing import views as printing_views
 from workorders import public as workorders_public
 from medical import public as medical_public
 from education import public as education_public
+from education import views_portal as education_portal
 from payments import views as payments_views
 from appointments import public as appointments_public
 from appointments import views_booking as booking_views
@@ -51,6 +52,8 @@ urlpatterns = [
     path("results/<str:token>/", login_not_required(medical_public.page), name="lab_result_link"),
     # E6 (HG-099): is this completion certificate genuine? The sheet's QR opens it. Signed token with its own salt, GET only, throttled, no-store.
     path("verify/c/<str:token>/", login_not_required(education_public.page), name="certificate_verify"),
+    # E3 (HG-101): the guardian portal. Signed token with its own salt and a row that can be revoked, a second factor, throttles, no-store.
+    path("p/edu/<str:token>/", login_not_required(education_portal.page), name="guardian_portal"),
     # S4 (HG-070): the online payment link. Public, gated by a signed token; only the webhook is CSRF-exempt (HMAC-verified).
     path("pay/webhook/paymob/", login_not_required(payments_views.webhook), name="pay_webhook_paymob"),
     path("pay/return/paymob/", login_not_required(payments_views.pay_return), name="pay_return_paymob"),
