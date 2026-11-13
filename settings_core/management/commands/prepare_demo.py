@@ -1551,11 +1551,13 @@ class Command(BaseCommand):
 
     @staticmethod
     def _project_files(projects, owner):
-        """Contracting C2a / C2b (HG-095): three documents and four days of daily reports on each project, so «المستندات» and «اليوميات» are not empty."""
+        """Contracting C2a / C2b (HG-095) and C1 (HG-103): three documents, four days of daily reports and one approved
+        variation order on the demo's projects, so «المستندات» و«اليوميات» و«أوامر التغيير» are not empty."""
 
         from projects import demo
 
         demo.seed(projects, owner)
+        demo.seed_variations(projects, owner)  # Contracting C1 (HG-103): one approved variation order on the project with a bill of quantities
 
     def _contracts(self, master, owner):
         """SVC-002: a monthly contract billed for its past months (two posted, one still a draft) and a
