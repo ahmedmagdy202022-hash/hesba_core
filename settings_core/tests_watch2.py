@@ -85,10 +85,10 @@ class RestaurantDemoTests(NoCarPartsDemo, AiTestCase):
         from restaurant.models import DiningTable, KitchenTicket, Order, OrderStatus
 
         busy = [table for table in DiningTable.objects.all() if Order.objects.filter(table=table, status=OrderStatus.OPEN).exists()]
-        self.assertEqual(len(busy), 1)
-        order = Order.objects.get(table=busy[0], status=OrderStatus.OPEN)
-        self.assertEqual(order.lines.filter(voided=False).count(), 3)
-        self.assertEqual(KitchenTicket.objects.filter(order=order).count(), 1)
+        self.assertEqual(len(busy), 2)  # R4: a second table is in service too, so the kitchen screen has an older card and a void to show
+        order = Order.objects.filter(status=OrderStatus.OPEN, lines__ticket__isnull=True, lines__voided=False).distinct().get()  # the one with a line still to send
+        self.assertEqual(order.lines.filter(voided=False).count(), 4)  # three dishes and a drinks line (R4)
+        self.assertEqual(KitchenTicket.objects.filter(order=order).count(), 2)  # R4: one ticket for the kitchen and one for the bar
         self.assertEqual(order.lines.filter(voided=False, ticket__isnull=True).count(), 1)  # one line still to send
         self.client.force_login(self.owner)
         self.assertContains(self.client.get(f"/restaurant/orders/{order.pk}/?lang=ar"), "data-send-kitchen")

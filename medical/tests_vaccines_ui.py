@@ -323,7 +323,7 @@ class DueListScreenTests(Screens):
 
         page = self.client.get(f"{self.URL}?lang=ar")
         self.assertContains(page, 'class="op-form-actions med-tabs"')
-        self.assertContains(page, "operations.css?v=w4-3")
+        self.assertContains(page, "operations.css?v=w4-4")
         with open(finders.find("hesba/css/operations.css"), encoding="utf-8") as handle:
             css = handle.read()
         phone = css[css.index("@media (max-width:700px){\n  .op-form-actions.edu-tabs"):]

@@ -49,6 +49,8 @@ WORDS = {
         "closed_order": "الطلب ده مقفول.", "invoice": "الفاتورة", "table": "الطاولة", "kind": "النوع", "status": "الحالة", "opened": "اتفتح",
         "kitchen": "المطبخ", "ticket": "تذكرة", "tables_title": "طاولات الصالة", "name": "الاسم / الرقم", "area": "المكان", "sort": "الترتيب", "active": "شغالة",
         "save": "حفظ", "saved": "اتحفظت الطاولة.", "new_table": "طاولة جديدة", "edit": "تعديل", "bad_number": "اكتب رقم صحيح.",
+        "ready": "جاهز", "ready_n": "جاهز {n}", "void_why": "السبب", "kitchen_screen": "شاشة المطبخ", "stations_title": "محطات المطبخ",
+        "sent_many": "اتبعتت {count} للمطبخ ({stations}).",
     },
     "en": {
         "page_title": "Tables & orders", "title": "Tables & orders", "intro": "Tap a free table to open an order, or a busy one to carry on with its order.",
@@ -65,6 +67,8 @@ WORDS = {
         "closed_order": "This order is closed.", "invoice": "Invoice", "table": "Table", "kind": "Type", "status": "Status", "opened": "Opened",
         "kitchen": "Kitchen", "ticket": "Ticket", "tables_title": "Hall tables", "name": "Name / number", "area": "Area", "sort": "Order", "active": "Active",
         "save": "Save", "saved": "Table saved.", "new_table": "New table", "edit": "Edit", "bad_number": "Enter a valid number.",
+        "ready": "Ready", "ready_n": "{n} ready", "void_why": "Reason", "kitchen_screen": "Kitchen screen", "stations_title": "Kitchen stations",
+        "sent_many": "{count} sent to the kitchen ({stations}).",
     },
 }
 KIND_AR = {OrderKind.DINE_IN: "صالة", OrderKind.TAKEAWAY: "تيك أواي", OrderKind.DELIVERY: "دليفري"}
@@ -106,7 +110,7 @@ def _base(request, **extra):
                "can_take": _takes_orders(request.user), "can_sell": user_has_permission(request.user, TAKE),
                "can_see_invoices": user_has_permission(request.user, VIEW), "can_tables": user_has_permission(request.user, TABLES),
                "can_report": user_has_permission(request.user, REPORT_VIEW), "can_costing": user_has_permission(request.user, COST_VIEW),
-               "links": INSIGHT_WORDS[lang]}
+               "can_kds": user_has_permission(request.user, TAKE_ORDERS), "links": INSIGHT_WORDS[lang]}
     context.update(extra)
     return context
 
@@ -120,6 +124,12 @@ def _error(exc, lang):
     from settings_core.ui_messages import translate  # I18N-001: engine refusals in the screen's language
 
     return translate(_error_text(exc, POS_WORDS[lang]), lang)
+
+
+def _ready_count(order):
+    """R4: how many of an order's live lines the kitchen marked ready (there is no «served» step yet, so this stays until the bill)."""
+
+    return sum(1 for line in order.lines.all() if line.ready_at and not line.voided)
 
 
 @require_any_permission(*FLOOR)
@@ -146,8 +156,12 @@ def board(request):
     for row in tables:
         if row["order"]:
             row["minutes"] = int((now - row["order"].opened_at).total_seconds() // 60)
+            row["ready"] = _ready_count(row["order"])
+            row["ready_label"] = words["ready_n"].format(n=row["ready"])
+    ready = {order.pk: _ready_count(order) for order in others}
     return render(request, "restaurant/board.html", _base(
-        request, tables=tables, others=[{"order": order, "kind_label": _kind_label(order, lang)} for order in others],
+        request, tables=tables, others=[{"order": order, "kind_label": _kind_label(order, lang), "ready": ready[order.pk],
+                                         "ready_label": words["ready_n"].format(n=ready[order.pk])} for order in others],
         customers=Customer.objects.filter(active=True).order_by("name"), waiters=Employee.objects.filter(active=True),
     ))
 
@@ -204,9 +218,16 @@ def order_detail(request, pk):
                 if ticket is None:
                     messages.info(request, words["nothing_new"])
                 else:
-                    messages.success(request, words["sent_ok"].format(n=ticket.sequence))
+                    batch = ticket.batch
+                    if len(batch) == 1:
+                        messages.success(request, words["sent_ok"].format(n=ticket.sequence))
+                    else:  # R4: one ticket per station, each printed on its own page
+                        names = ("، " if lang == "ar" else ", ").join(dict.fromkeys(t.station.label(lang) if t.station_id else words["kitchen"] for t in batch))
+                        count = ("تذكرتين" if len(batch) == 2 else f"{len(batch)} تذاكر") if lang == "ar" else f"{len(batch)} tickets"
+                        messages.success(request, words["sent_many"].format(count=count, stations=names))
                     if request.POST.get("print", "1") == "1":
-                        return redirect(f"{reverse('restaurant:ticket', args=[ticket.pk])}?lang={lang}&autoprint=1")
+                        upto = f"&upto={batch[-1].sequence}" if len(batch) > 1 else ""
+                        return redirect(f"{reverse('restaurant:ticket', args=[ticket.pk])}?lang={lang}&autoprint=1{upto}")
             elif action == "move":
                 services.move_table(order, _pick(DiningTable, request.POST.get("table")), request.user, lang)
                 messages.success(request, words["moved"])
@@ -245,7 +266,7 @@ def order_detail(request, pk):
         request, order=order, lines=lines, total=order.total, items=items, raw_ids=raw_ids, categories=categories, kind_label=_kind_label(order, lang),
         drivers=Employee.objects.filter(active=True) if order.kind == OrderKind.DELIVERY else [], dw=DELIVERY_WORDS[lang],
         status_label=choice_label(order, "status", lang), is_open=order.status == OrderStatus.OPEN,
-        pending=any(not line.ticket_id and not line.voided for line in lines), tickets=order.tickets.all(),
+        pending=any(not line.ticket_id and not line.voided for line in lines), tickets=order.tickets.select_related("station"),
         cashboxes=cashboxes, default_cashbox=(shift.cashbox if shift else None) or cashboxes.filter(is_default=True).first() or cashboxes.first(),
         shift_missing=shift_missing(request.user),
         customers=Customer.objects.filter(active=True).order_by("name"), free_tables=free_tables,
@@ -258,11 +279,20 @@ SELLING_ACTIONS = frozenset({"pay", "dispatch", "cancel"})
 
 @require_any_permission(*FLOOR)
 def ticket(request, pk):
+    """The kitchen ticket to print. ``upto`` (from a send that made several, one per station) adds the tickets up to that
+    sequence: each is its own page, so each station's printer takes its own."""
+
     lang = _lang(request)
-    ticket = get_object_or_404(KitchenTicket.objects.select_related("order", "order__table", "order__waiter", "sent_by"), pk=pk)
+    first = get_object_or_404(KitchenTicket.objects.select_related("order", "order__table", "order__waiter", "sent_by", "station"), pk=pk)
+    upto = request.GET.get("upto", "")
+    tickets = [first]
+    if upto.isdigit() and int(upto) > first.sequence:
+        tickets += list(first.order.tickets.select_related("order", "order__table", "order__waiter", "sent_by", "station")
+                        .filter(sequence__gt=first.sequence, sequence__lte=int(upto)))
+    cards = [{"ticket": one, "lines": one.lines.select_related("item"), "sent_at": timezone.localtime(one.sent_at),
+              "station": one.station.label(lang) if one.station_id else ""} for one in tickets]
     return render(request, "restaurant/ticket.html", _base(
-        request, ticket=ticket, order=ticket.order, lines=ticket.lines.select_related("item"), kind_label=_kind_label(ticket.order, lang),
-        company=company_details(), sent_at=timezone.localtime(ticket.sent_at),
+        request, ticket=first, order=first.order, cards=cards, kind_label=_kind_label(first.order, lang), company=company_details(),
     ))
 
 
