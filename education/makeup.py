@@ -105,16 +105,17 @@ def taken(group, day):
     return live_seats().filter(group=group, day=day).count()
 
 
-def free_seats(group, day, seats=None):
+def free_seats(group, day, seats=None, enrolled=None):
     """Places still free in this group's class on ``day``: its capacity less its active enrolments and the live seats. ``None`` when it has no
     capacity (0 means no limit). One function, used by the booking form and by the booking itself, so what the page shows is what is enforced.
 
-    ``seats``: the live seats of that day when the caller already counted them (the form counts every candidate at once)."""
+    ``seats`` and ``enrolled``: the live seats of that day and the group's active enrolments when the caller already counted them (the form
+    counts every candidate at once); the formula is this one either way."""
 
     if not group.capacity:
         return None
     used = taken(group, day) if seats is None else seats
-    return max(group.capacity - services.active_count(group) - used, 0)
+    return max(group.capacity - (services.active_count(group) if enrolled is None else enrolled) - used, 0)
 
 
 def _date(raw, words):
@@ -166,7 +167,7 @@ def classes_for(student, home, user, today=None, days=WINDOW_DAYS):
         for group in groups:
             if not register.meets_on(group, day) or (group.pk, day) in cancelled:
                 continue
-            free = None if not group.capacity else max(group.capacity - enrolled[group.pk] - counts.get((group.pk, day), 0), 0)
+            free = free_seats(group, day, counts.get((group.pk, day), 0), enrolled.get(group.pk))
             rows.append({"group": group, "day": day, "time": group.start_time.strftime("%H:%M") if group.start_time else "", "free": free,
                          "held": (group.pk, day) in held, "bookable": free != 0 and (group.pk, day) not in held})
     rows.sort(key=lambda row: (row["day"], row["group"].start_time is None, row["group"].start_time, row["group"].name, row["group"].pk))

@@ -477,7 +477,7 @@ class StudentCardTests(ScreenSetup):
         self.assertIn("مجموعة المراجعة الأولى", first)
         self.assertIn("ملاحظة الحجز الأولى", first)
         self.assertIn(reverse("education:makeup_cancel", args=[booked.pk]), first)
-        self.assertIn("حضر", self.row(card, "data-makeup", attended.pk))
+        self.assertIn("حضور", self.row(card, "data-makeup", attended.pk))  # a noun, so it reads the same beside a boy's and a girl's name
         self.assertNotIn("data-makeup-cancel", self.row(card, "data-makeup", attended.pk))  # a marked seat cannot be cancelled
         self.assertNotIn("data-makeup-cancel", self.row(card, "data-makeup", gone.pk))
         self.assertIn("اتلغى", self.row(card, "data-makeup", gone.pk))
@@ -609,7 +609,7 @@ class RegisterGuestTests(ScreenSetup):
         self.assertEqual(re.findall(r'data-mark="(\d+)"', html), [str(self.nour.pk)])  # the roster: the group's own student only
         form = re.search(r"<form[^>]*data-attendance-form.*?</form>", html, re.S).group(0)
         self.assertNotIn("data-makeup-guests", form)
-        self.assertNotIn(f"p_{self.sara.pk}", html)
+        self.assertEqual(sorted(set(re.findall(r'name="p_(\d+)"', form))), [str(self.nour.pk)])  # the register's own fields: the group's student, never the guest
         self.assertEqual(html.count("<form"), html.count("</form>"))
         self.assertGreater(html.index("data-makeup-guests"), html.index("</form>", html.index("data-attendance-form")))  # after the register's form, not nested in it
 
@@ -637,7 +637,7 @@ class RegisterGuestTests(ScreenSetup):
         seat = self.book(day=ahead(0))
         response = self.post("makeup_attended", seat.pk, back="attendance")
         self.assertRedirects(response, f"{reverse('education:attendance', args=[self.other.pk])}?lang=ar&date={ahead(0).isoformat()}", fetch_redirect_response=False)
-        self.assertEqual(self.flashes(response), ["اتسجّل حضور الضيف."])
+        self.assertEqual(self.flashes(response), ["اتسجّل الحضور."])
         self.assertEqual(MakeupSeat.objects.get(pk=seat.pk).status, "attended")
         self.assertIn("data-guest-status=\"attended\"", self.sheet().content.decode())
         self.post("makeup_missed", seat.pk, back="attendance")
@@ -1085,6 +1085,16 @@ class WordingTests(SimpleTestCase):
                     if stripped:
                         self.assertNotRegex(stripped[:1], r"[A-Za-z]")
                         self.assertNotRegex(stripped[-1:], r"[A-Za-z]")
+
+    def test_the_status_chips_beside_a_childs_name_are_nouns_and_only_the_buttons_use_the_verbs(self):
+        from . import views_makeup
+
+        chips = views_makeup.WORDS["ar"]["status"]
+        self.assertEqual((chips["attended"], chips["missed"]), ("حضور", "غياب"))
+        self.assertEqual((views_makeup.WORDS["ar"]["attended"], views_makeup.WORDS["ar"]["missed"]), ("حضر", "ماحضرش"))  # the two buttons, as the plan words them
+        for text in self.flat(chips) + [views_makeup.WORDS["ar"]["attended_ok"], views_makeup.WORDS["ar"]["missed_ok"]]:
+            self.assertNotIn("حضر ", text + " ")
+            self.assertNotIn("ماحضرش", text)
 
     def test_the_two_languages_have_the_same_words(self):
         from . import portal, scan, views_makeup
