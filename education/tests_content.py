@@ -289,7 +289,8 @@ class ScreenTests(StaffSetup):
         self.assertTrue(GroupContent.objects.get(pk=item.pk).published)
         self.assertEqual(self.post("content_remove", item.pk).status_code, 302)
         self.assertFalse(GroupContent.objects.get(pk=item.pk).active)
-        self.assertNotIn("data-content=", self.get("content", self.a.pk).content.decode().replace('data-content-card', ''))
+        listing = self.get("content", self.a.pk).content.decode()
+        self.assertEqual(re.findall(r'<tr data-content="(\d+)"', listing), [])  # no row left in the list
         self.assertEqual(self.get("content_edit", item.pk).status_code, 404)  # a removed row is not edited
         again = self.post("content_hide", item.pk)  # a hide on a removed row says so and changes nothing
         self.assertEqual(again.status_code, 302)
@@ -636,6 +637,27 @@ class PageTests(ContentPortalSetup):
                          ["Join the class", "Open the file", "Watch the video"])
         self.assertIn("Class time", mine)
         self.assertIn("11 November 2026", mine)
+
+    def test_the_new_words_read_the_same_for_a_boy_and_a_girl_and_follow_the_voice_rules(self):
+        from reports.tests_customer_voice import _problems
+
+        def flat(value):
+            return [text for part in (value.values() if isinstance(value, dict) else [value]) for text in flat(part)] if isinstance(value, dict) else [value]
+
+        for lang in ("ar", "en"):
+            for key in ("content_h", "content_note", "no_content", "content_kinds", "watch", "open_file", "join", "class_at"):
+                for text in flat(portal.WORDS[lang][key]):
+                    if lang == "ar":
+                        self.assertEqual(_problems(text), [], text)
+                        for gendered in ("الابن", "ابنك", "البنت", "بنتك", "ابنكم", "ابنة"):
+                            self.assertNotIn(gendered, text, key)
+                        self.assertNotRegex(re.sub(r"[\s.،:؛!؟?()«»\-–—]+", " ", text).strip()[:1], r"[A-Za-z]", text)
+                        self.assertNotRegex(re.sub(r"[\s.،:؛!؟?()«»\-–—]+", " ", text).strip()[-1:], r"[A-Za-z]", text)
+                    else:
+                        self.assertNotRegex(text, r"\b(son|daughter)\b")
+        self.assertEqual(set(portal.WORDS["ar"]["content_kinds"]), set(portal.WORDS["en"]["content_kinds"]))
+        self.assertIn("حصة أونلاين", portal.WORDS["ar"]["content_kinds"]["online"])
+        self.assertIn("ادخل الحصة", portal.WORDS["ar"]["join"])
 
     def test_the_visit_still_writes_exactly_two_rows_and_reads_the_content_in_one_query(self):
         client, token, page = self.open_portal()
