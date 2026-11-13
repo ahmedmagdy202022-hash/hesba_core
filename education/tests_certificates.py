@@ -863,6 +863,25 @@ class AssetTests(SimpleTestCase):
             for word in ("لينك", "بتاع", "ورشة", "الورشة", "أسطى", "اسطى", "صنايعي"):
                 self.assertNotIn(word, text)
 
+    def test_what_a_student_or_a_parent_reads_passes_the_customer_voice_rules(self):
+        """The verify page, its messages and the printed sheet keep to the rules of ``reports.tests_customer_voice``: never «المحل», «لينك», «بتاع»,
+        «ليك / بيك / معاك», or the misspelt «معاد». That test lists the templates it scans; these are scanned here with the same patterns."""
+
+        from reports.tests_customer_voice import _problems
+
+        from . import public, views_certificates
+
+        sheet = ("sheet_title", "lead", "for", "sheet_hours", "hours_unit", "sheet_number", "sheet_issued", "scan", "sign", "void", "period", "grade", "level", "from", "to")
+        texts = [(f"public.WORDS[{key}]", text) for key, text in public.WORDS["ar"].items()]
+        texts += [(f"views_certificates.WORDS[{key}]", views_certificates.WORDS["ar"][key]) for key in sheet]
+        root = pathlib.Path(settings.BASE_DIR) / "templates/education"
+        texts += [(name, (root / name).read_text(encoding="utf-8")) for name in ("certificate_verify.html", "certificate.html")]
+        for where, text in texts:
+            with self.subTest(where=where):
+                self.assertEqual(_problems(text), [])
+        for key in ("dead_p", "busy_p", "revoked_p"):
+            self.assertIn("حضرتك", public.WORDS["ar"][key])  # what a parent reads when the link does not open speaks to «حضرتك»
+
     def test_no_arabic_line_of_the_sheet_starts_or_ends_with_a_latin_word(self):
         """The number and every name sit in their own element (a ``dd`` or ``bdi``); no Arabic sentence is built around a Latin token."""
 
