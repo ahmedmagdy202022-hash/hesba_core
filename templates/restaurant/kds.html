@@ -1,0 +1,30 @@
+{% load static %}<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ page_title }}</title>
+{% include "partials/brand_icons.html" %}
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
+<link rel="stylesheet" href="{% static 'hesba/css/kds.css' %}?v=r4-1">
+</head>
+<body class="kds" data-kds data-feed="{% url 'restaurant:kds_feed' %}" data-act="{% url 'restaurant:kds_act' %}" data-station="{{ station.pk|default:'' }}" data-lang="{{ lang }}" data-csrf="{{ csrf_token }}">
+<header class="kds-bar">
+  <a class="kds-back" href="{% url 'restaurant:board' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}<span>{{ words.back }}</span></a>
+  <h1>{{ words.title }}</h1>
+  <nav class="kds-tabs" aria-label="{{ words.title }}">
+    <a href="{% url 'restaurant:kds' %}?lang={{ lang }}"{% if not station %} aria-current="page"{% endif %} data-station-tab="">{{ words.all }}</a>
+    {% for tab in tabs %}<a href="{% url 'restaurant:kds' %}?lang={{ lang }}&amp;station={{ tab.pk }}"{% if station and station.pk == tab.pk %} aria-current="page"{% endif %} data-station-tab="{{ tab.pk }}">{{ tab.label }}</a>{% endfor %}
+  </nav>
+  <span class="kds-status" data-live role="status"></span>
+  <span class="kds-clock" data-clock dir="ltr"></span>
+  <button class="kds-recall" type="button" data-recall disabled title="{{ words.recall_hint }}">{{ words.recall }}</button>
+</header>
+{% if not tabs %}<p class="kds-note">{{ words.no_stations }}{% if can_setup %} <a href="{% url 'restaurant:stations' %}?lang={{ lang }}">{{ words.setup }}</a>{% endif %}</p>{% endif %}
+<p class="kds-hint">{{ words.hint }}</p>
+<main class="kds-board" data-board></main>
+<section class="kds-empty" data-empty hidden><strong>{{ words.empty }}</strong><span>{{ words.empty_hint }}</span></section>
+{{ js_words|json_script:"kds-words" }}
+<script src="{% static 'hesba/js/kds.js' %}?v=r4-3" defer></script>
+</body>
+</html>

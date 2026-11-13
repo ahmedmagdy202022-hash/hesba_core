@@ -1,18 +1,20 @@
 """AN8 (Ahmed: "ضيف طرق دفع زي دفع كاش او فيزا"): a card payment at the till lands in the card machine's
 cashbox, pays the total exactly, and is never counted as cash in the drawer or the shift."""
 
+import re
 from decimal import Decimal as D
 
 from django.test import TestCase
 from django.urls import reverse
 
 from cashboxes.services import get_cashbox_balance
-from hesba_testing.factories import make_cashbox
+from hesba_testing.factories import make_cashbox, make_location
+from permissions.models import RoleCode
 from sales.models import SalesInvoice
 from shifts.services import open_shift_for, summary
 
 from .pos_buttons import card_cashbox, save_card_cashbox
-from .tests_pos import POS, PosTests
+from .tests_pos import POS, PosTests, person
 
 
 class CardAtTheTillTests(TestCase):
@@ -92,13 +94,30 @@ class CardMachineAlertTests(TestCase):
         self.assertNotIn(f"cashbox_low_{machine.pk}", keys)
 
 
+def _cashbox_picker(page):
+    """The cashbox <select> of a page, and nothing else on it."""
+    picker = re.search(r'<select[^>]*name="cashbox".*?</select>', page, re.S)
+    assert picker, "the page has no cashbox picker"
+    return picker.group(0)
+
+
 class CardMachineIsNoDrawerTests(TestCase):
     setUp = PosTests.setUp
 
     def test_the_till_and_the_shift_never_offer_the_card_machine(self):
         machine = make_cashbox(cashbox_code="CARD", name_ar="ماكينة الفيزا")
         save_card_cashbox(machine)
-        till = self.client.get(POS, {"lang": "ar"}).content.decode()
-        self.assertNotIn(f'<option value="{machine.pk}"', till)
-        shifts = self.client.get(reverse("shifts:mine"), {"lang": "ar"}).content.decode()
+        # Only the cashbox picker is read: a customer or a warehouse may carry the same id as the machine,
+        # and here a warehouse does.
+        if not type(self.location).objects.filter(pk=machine.pk).exists():
+            make_location(pk=machine.pk, location_code="SAMEID")
+        page = self.client.get(POS, {"lang": "ar"}).content.decode()
+        self.assertIn(f'<option value="{machine.pk}"', page)
+        till = _cashbox_picker(page)
+        self.assertNotIn(f'value="{machine.pk}"', till)
+        self.assertIn(f'value="{self.cashbox.pk}"', till)
+        # The shift page offers a cashbox only to someone with no open shift, so a second cashier opens it.
+        self.client.force_login(person(RoleCode.CASHIER, "pos_cashier_2"))
+        shifts = _cashbox_picker(self.client.get(reverse("shifts:mine"), {"lang": "ar"}).content.decode())
         self.assertNotIn(f'value="{machine.pk}"', shifts)
+        self.assertIn(f'value="{self.cashbox.pk}"', shifts)

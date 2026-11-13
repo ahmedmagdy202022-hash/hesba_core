@@ -1090,12 +1090,29 @@ class Command(BaseCommand):
             closed = self._closing_moment(today, days, hour, timezone.now())
             Order.objects.filter(pk=order.pk).update(opened_at=closed - timedelta(minutes=40 + 5 * guests), closed_at=closed)
         # RS-05: the demo opens with a table in service: an open order, one part already with the kitchen and one still to send.
+        from restaurant import demo as kitchen_demo
+
+        kitchen_demo.seed_stations(catalog, owner)  # R4: the kitchen and the bar, so the kitchen screen has cards to show
+        drink = master["items"][catalog.bar[0]] if catalog.bar else None
         live = floor.open_order(owner, table=tables[3], guests=3, waiter=waiter)
         floor.add_item(live, dishes[0], owner)
         floor.add_item(live, dishes[1 % len(dishes)], owner, 2)
+        if drink is not None:
+            floor.add_item(live, drink, owner, 3)
         floor.send_to_kitchen(live, owner)
         floor.add_item(live, dishes[2 % len(dishes)], owner)
         Order.objects.filter(pk=live.pk).update(opened_at=timezone.now() - timedelta(minutes=25))
+        if drink is not None:  # a second table in service: older, so its card is red, with a dish voided after it went to the kitchen
+            kitchen_demo.age_tickets(live, {"المطبخ": 11, "المشروبات": 4})
+            second = floor.open_order(owner, table=tables[1], guests=2, waiter=waiter)
+            floor.add_item(second, dishes[0], owner)
+            floor.add_item(second, dishes[2 % len(dishes)], owner)
+            floor.add_item(second, drink, owner, 2)
+            floor.send_to_kitchen(second, owner)
+            kitchen_demo.mark_ready(second, drink)
+            kitchen_demo.void_after_firing(second, dishes[2 % len(dishes)], owner, "العميل غيّر الطلب")
+            kitchen_demo.age_tickets(second, {"المطبخ": 17, "المشروبات": 7})
+            Order.objects.filter(pk=second.pk).update(opened_at=timezone.now() - timedelta(minutes=30))
         adjust_stock(f"DEMO-WASTE-{today:%m%d}", today - timedelta(days=2), raw[0], master["location"], "out", "1", "هالك — تلف في الثلاجة", owner)
         driver = save_employee({"name": "محمود سعيد", "title": "مندوب توصيل"}, owner)  # RESTO-003: a delivery out with its driver and fee
         order = floor.open_order(owner, kind="delivery", customer=master["customers"][0], address="شارع النصر 12، مدينة نصر", delivery_fee="20")
