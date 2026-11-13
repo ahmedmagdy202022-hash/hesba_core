@@ -1143,25 +1143,20 @@ class Command(BaseCommand):
         from appointments.services import book
         from master_data.models import Item
 
-        from appointments.models import AppointmentStatus
-        from appointments.services import set_status
-
         service = next((item for item in master["items"] if not item.is_stock_tracked), None)
         if service is None:
             service, _ = Item.objects.get_or_create(item_code="SRV-01", defaults={"item_name": "خدمة تركيب", "default_sale_price": 150, "is_stock_tracked": False})
         today, now = timezone.localdate(), timezone.localtime()
-        # Video finding 8: the day's own appointment started a while ago, so marking it «جاري» is true whatever the hour
-        # the demo is built at (it used to sit at 17:00 and still read «جاري» at nine in the morning). The clock, not a
-        # fixed hour, decides: before the working day begins there is nothing to arrive at, and it stays «محجوز».
+        # Video finding 8: the day's own appointment started a while ago, so the reception desk checking it in says
+        # «جاري» truthfully (it used to sit at 17:00 and still read «جاري» at nine in the morning). The clock, not a
+        # fixed hour, decides, and before the working day begins it stays where the day opens.
         started = now - timedelta(minutes=self.TODAY_APPOINTMENT_STARTED_MINUTES)
         if timezone.localtime(started).date() != today or started.hour < self.WORKING_DAY_OPENS:
             started = timezone.make_aware(datetime.combine(today, time(self.WORKING_DAY_OPENS)))
         for days, hour, customer in ((0, None, 0), (1, 10, 1), (1, 13, 2), (2, 11, 3)):
             starts = started if hour is None else timezone.make_aware(datetime.combine(today + timedelta(days=days), time(hour)))
-            appointment = book({"customer": master["customers"][customer], "employee": staff, "service": service,
-                                "starts_at": starts, "duration_minutes": 60}, owner)
-            if starts <= now:
-                set_status(appointment, AppointmentStatus.ARRIVED, owner)
+            book({"customer": master["customers"][customer], "employee": staff, "service": service,
+                  "starts_at": starts, "duration_minutes": 60}, owner)
 
     def _patients(self, master, doctor, owner):
         from medical.services import file_for, save_profile, save_visit
@@ -1189,18 +1184,23 @@ class Command(BaseCommand):
         self._queue(master, doctor, owner, today)
 
     def _queue(self, master, doctor, owner, today):
-        """MED-007: a clinic's waiting list has two walk-ins, one called in and one waiting.
+        """MED-007: a clinic's waiting list has today's booked patient in, one called and one waiting.
 
-        Video finding 8: each situation of the day belongs to its own patient. The third customer is with the doctor,
-        the second is waiting, the first owns today's appointment («جاري» on the agenda, still to be checked in from
-        the queue's own list) and the fourth is the one in a bed, so nobody is in three places at once."""
+        Video finding 8: each situation of the day belongs to its own patient. The third customer is the walk-in with
+        the doctor; the first is waiting, checked in for the appointment of his that already started (so the agenda's
+        «جاري» is true); and the fourth is the one in a bed. Nobody is in three places at once."""
 
+        from appointments.models import Appointment
         from medical import queue
 
         if not queue.has_queue():
             return
+        # Only an appointment that has already started: a demo built before the day opens leaves it «محجوز» rather
+        # than marking it «جاري» hours early (video finding 8).
+        booked = Appointment.objects.filter(starts_at__date=today, starts_at__lte=timezone.now(),
+                                            customer=master["customers"][0]).first()
         first = queue.check_in(master["customers"][2], owner, doctor=doctor)
-        queue.check_in(master["customers"][1], owner)
+        queue.check_in(master["customers"][0], owner, appointment=booked)
         queue.move(first, "called", owner)
 
     def _vet(self, master, doctor, owner, today):
