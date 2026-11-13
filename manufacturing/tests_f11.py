@@ -413,6 +413,30 @@ class CancelAfterSaleTests(F11Setup):
         self.assertEqual((first.status, self.position()), (RunStatus.POSTED, (D("25.000"), D("392.50"), D("15.7000"))))
 
 
+class LockOrderTests(F11Setup):
+    def test_the_cancel_locks_the_output_operation_before_its_item_as_the_engine_does(self):
+        """``cancel_stock_operation`` locks the operation and then the item. ``cancel_run`` used to lock the item first, so
+        a reversal of the same operation from the stock screen at the same moment could deadlock on PostgreSQL. Row locks
+        only exist there: on SQLite the statements carry no FOR UPDATE and the order is read from the tables instead."""
+
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        run = self.make()
+        with CaptureQueriesContext(connection) as queries:
+            services.cancel_run(run, self.owner, reason="غلطة في التسجيل")
+        statements = [query["sql"] for query in queries]
+        if connection.vendor == "postgresql":
+            statements = [sql for sql in statements if "FOR UPDATE" in sql]
+
+        def first(table):
+            return next(index for index, sql in enumerate(statements) if f'FROM "{table}"' in sql)
+
+        self.assertLess(first("inventory_stockoperation"), first("master_data_item"))
+        if connection.vendor == "postgresql":
+            self.assertLess(first("manufacturing_productionrun"), first("inventory_stockoperation"))
+
+
 class CancelAfterSaleOnARestaurantChartTests(BakeryChart, CancelAfterSaleTests):
     pass
 
