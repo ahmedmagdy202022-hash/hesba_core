@@ -1,0 +1,15 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'education:content' group.pk %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ cw.back_content }}</a><h1>{% if item %}{{ cw.edit_title }}{% else %}{{ cw.new_title }}{% endif %}</h1><p>{{ group.course.name }} — {{ group.name }}</p></div></section>
+{% if error %}<div class="op-message op-message-error" role="alert" data-form-error>{{ error }}</div>{% endif %}
+<p class="op-muted" data-content-hint>{{ cw.hint }}</p>
+<form class="op-form" method="post" data-content-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+<div class="op-form-grid">
+<div class="op-field"><label for="ct-kind">{{ cw.kind }}</label><select id="ct-kind" name="kind">{% for value, label in kinds %}<option value="{{ value }}"{% if post %}{% if post.kind == value %} selected{% endif %}{% elif item.kind == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="ct-title">{{ cw.title }}</label><input id="ct-title" name="title" maxlength="160" required value="{% if post %}{{ post.title }}{% else %}{{ item.title }}{% endif %}"></div>
+<div class="op-field"><label for="ct-url">{{ cw.url }}</label><input id="ct-url" name="url" type="url" inputmode="url" dir="ltr" maxlength="500" placeholder="https://" autocomplete="off" required aria-describedby="ct-url-hint" value="{% if post %}{{ post.url }}{% else %}{{ item.url }}{% endif %}"><small class="op-muted" id="ct-url-hint">{{ cw.url_hint }}</small></div>
+<div class="op-field"><label for="ct-start">{{ cw.starts_at }}</label><input id="ct-start" name="starts_at" type="datetime-local" dir="ltr" value="{% if post %}{{ post.starts_at }}{% else %}{{ starts_value }}{% endif %}"><small class="op-muted">{{ cw.starts_hint }}</small></div>
+<div class="op-field"><label for="ct-note">{{ cw.note }}</label><input id="ct-note" name="note" maxlength="255" value="{% if post %}{{ post.note }}{% else %}{{ item.note }}{% endif %}"></div>
+</div>
+<div class="op-form-actions"><button class="op-primary" type="submit" data-save-content>{{ cw.save }}</button></div></form>
+{% endblock %}
