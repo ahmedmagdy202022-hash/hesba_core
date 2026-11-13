@@ -420,3 +420,38 @@ class GuardianLink(models.Model):
     @property
     def revoked(self):
         return self.revoked_at is not None
+
+
+class ContentKind(models.TextChoices):
+    VIDEO = "video", "Recorded video"
+    FILE = "file", "File"
+    ONLINE = "online", "Online class"
+
+
+class GroupContent(models.Model):
+    """E9 (HG-104): one thing a centre shares with one study group: a recorded video, a file, or the link of an online class.
+
+    Hesba stores a title and an https address and nothing else: no file, no video, no player. The address is checked by
+    ``education.content.clean_url`` (the only place that decides what is acceptable). Its entity is the group's, as an exam's is, so
+    there is no entity column that could drift from the group's. ``published`` decides whether a guardian may see it; ``active`` is the
+    soft removal: nothing here is ever deleted. ``starts_at`` is used by an online class only (when it starts)."""
+
+    group = models.ForeignKey(StudyGroup, on_delete=models.PROTECT, related_name="contents")
+    kind = models.CharField(max_length=10, choices=ContentKind.choices, default=ContentKind.VIDEO)
+    title = models.CharField(max_length=160)
+    url = models.CharField(max_length=500, help_text="An https address; see education.content.clean_url.")
+    note = models.CharField(max_length=255, blank=True)
+    starts_at = models.DateTimeField(null=True, blank=True)
+    published = models.BooleanField(default=True)
+    active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+        # the staff list and the guardian's list both filter a group's rows by active (and published)
+        indexes = [models.Index(fields=["group", "active", "published"], name="edu_content_group_idx")]
+
+    def __str__(self):
+        return f"{self.group} {self.title}"
