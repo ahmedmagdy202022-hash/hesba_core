@@ -89,6 +89,9 @@ BASE = {
     # Video finding 5: a lab must not read a clinic's words. BASE keeps today's text, so only a sub-activity that
     # lists the key says anything different.
     "clinic_report": {"ar": "تقرير العيادة", "en": "Clinic report"},
+    # Video finding 6: what the till role is called where it is a desk, not a till. Display only: the role's own
+    # name is seeded by a permissions migration and is never touched.
+    "role_cashier": {"ar": "الكاشير", "en": "Cashier"},
 }
 
 # Activity-wide words. Only what differs from BASE is listed.
@@ -159,6 +162,7 @@ ACTIVITY = {
         "agenda_service": {"ar": "الكشف", "en": "Visit"},
         "agenda_kind_place": {"ar": "في العيادة", "en": "At the clinic"},
         "agenda_kind_visit": {"ar": "زيارة عند المريض", "en": "Visit to the patient"},
+        "role_cashier": {"ar": "موظف الاستقبال", "en": "Receptionist"},
     },
     # EDU-001: the student has their own file (Students & groups); the account,
     # its invoices and its payments belong to whoever pays: the parent.
