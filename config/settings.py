@@ -399,6 +399,8 @@ TWO_FACTOR_ISSUER = "Hesba"
 SHARE_LINK_DAYS = config("SHARE_LINK_DAYS", default=60, cast=int)
 # M6 (HG-085): how long a lab patient's result link keeps working (health data: kept short).
 MEDICAL_LINK_DAYS = config("MEDICAL_LINK_DAYS", default=7, cast=int)
+# E3 (HG-101): how long a guardian portal link keeps working (a revoked one stops at once).
+EDU_PORTAL_DAYS = config("EDU_PORTAL_DAYS", default=30, cast=int)
 CSRF_COOKIE_SECURE = config("CSRF_COOKIE_SECURE", default=not DEBUG, cast=bool)
 SECURE_HSTS_SECONDS = config(
     "SECURE_HSTS_SECONDS", default=0 if DEBUG else 31536000, cast=int

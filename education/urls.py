@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views, views_certificates, views_exams, views_paylinks, views_scan
+from . import views, views_certificates, views_exams, views_paylinks, views_portal, views_scan
 
 app_name = "education"
 
@@ -22,6 +22,8 @@ urlpatterns = [
     path("groups/<int:pk>/exams/new/", views_exams.exam_new, name="exam_new"),
     path("exams/<int:pk>/", views_exams.exam_sheet, name="exam"),
     path("students/<int:pk>/report-card/", views_exams.report_card, name="report_card"),
+    path("students/<int:pk>/portal/", views_portal.student_portal_make, name="portal_make"),
+    path("students/<int:pk>/portal/revoke/", views_portal.student_portal_revoke, name="portal_revoke"),
     path("certificates/", views_certificates.certificate_list, name="certificates"),
     path("certificates/issue/", views_certificates.certificate_issue, name="certificate_issue"),
     path("certificates/<int:pk>/", views_certificates.certificate_print, name="certificate"),

@@ -387,3 +387,36 @@ class Certificate(models.Model):
     @property
     def revoked(self):
         return self.revoked_at is not None
+
+
+class GuardianLink(models.Model):
+    """E3: the guardian portal's key: one link for one paying guardian, in one entity, that the centre can switch off at once.
+
+    The address carries a signed token (``education.portal.SALT``) holding this row's id and ``nonce``; the row decides whether it still
+    opens anything. A new link for the same payer revokes the older ones (at most one live link per payer, enforced by the database), so a
+    lost message or a change of custody is cured by sending again, or by revoking. The token and the nonce are never written anywhere else
+    (not in an audit row, not in a message outbox). ``last_opened_at`` is the only thing a guardian's visit writes (an answer writes ``wrong_answers``).
+    """
+
+    payer = models.ForeignKey("master_data.Customer", on_delete=models.PROTECT, related_name="guardian_links")
+    nonce = models.CharField(max_length=64, unique=True)
+    entity = models.ForeignKey("entities.Entity", on_delete=models.PROTECT, related_name="+",
+                               help_text="The portal shows this entity's children of the payer only.")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    last_opened_at = models.DateTimeField(null=True, blank=True)
+    #: Wrong answers given in this link's whole life (the limit is ``portal.TOKEN_LIFE``): counted in the row, atomically, so it survives
+    #: a restart and every worker sees it. Revoking or replacing a link never resets it; a new link is a new row and starts at 0.
+    wrong_answers = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+        constraints = [models.UniqueConstraint(fields=["payer"], condition=models.Q(revoked_at__isnull=True), name="education_one_live_guardian_link_per_payer")]
+
+    def __str__(self):
+        return f"guardian link {self.pk} for {self.payer_id}"
+
+    @property
+    def revoked(self):
+        return self.revoked_at is not None
