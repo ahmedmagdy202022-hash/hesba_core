@@ -15,7 +15,9 @@ Rules, stated once:
   through the engine's ``cancel_stock_operation``. The engine refuses only
   when the place holds fewer units than the run made, so this module refuses
   first when any of the product has left the place since the run (F11,
-  HG-100, ``_left_since``);
+  HG-100, ``_left_since``). The stock operations screen does not reverse a
+  run's operations one by one: it sends the person here (F11b, HG-102,
+  ``guards``);
 * no stock, cost or accounting rule is changed here (see HG-030).
 
 HG-036 (approved) adds three things on top, still only through the engine:
