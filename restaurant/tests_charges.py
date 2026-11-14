@@ -434,7 +434,8 @@ class SplitPaymentTests(SplitBillSetup):
         charges.save_settings({"percent": "12", "kinds": ["dine_in"], "minimum": ""}, self.owner)
         order = self.burgers()  # 270.00; service 32.40; VAT 33.60 + 4.20 + 4.54 = 42.34; total 344.74
         self.assertEqual(services.bill_total(order, list(order.lines.all())), D("344.74"))
-        self.assertIn('data-bill="344.74"', self.page(order))
+        self.client.force_login(self.owner)
+        self.assertIn('data-bill="344.74"', self.client.get(reverse("restaurant:order", args=[order.pk])).content.decode())
         response = self.split_from_screen(order, [(self.cashbox, "200.00"), (self.card, "107.80")])  # the old total without service
         order.refresh_from_db()
         self.assertEqual(order.status, OrderStatus.OPEN)
@@ -454,7 +455,7 @@ class BranchChargeTests(BranchSetup):
         self.tables_t1()
         charges.save_settings({"percent": "12", "kinds": ["dine_in"], "minimum": ""}, self.owner)
         order = self.bill(services.open_order(self.owner, table=self.b_t1, guests=2))  # 2 × 60.00 + 20.00 = 140.00
-        invoice = services.pay(order, self.manager_b, cashbox=self.b_cashbox, tendered=D("1000"))[0]
+        invoice = services.pay(order, self.owner, cashbox=self.b_cashbox, tendered=D("1000"))[0]
         self.assertEqual((invoice.selling_location, invoice.cashbox, invoice.total_amount), (self.b_location, self.b_cashbox, D("156.80")))
         self.assertEqual(invoice.lines.get(item__item_code="SERVICE-CHARGE").line_total_amount, D("16.80"))
         self.assertEqual(get_cashbox_balance(self.b_cashbox), D("156.80"))

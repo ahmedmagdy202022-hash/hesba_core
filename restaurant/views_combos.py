@@ -54,7 +54,7 @@ def _choice_items():
     from .models import ComboChoice
 
     used = ComboChoice.objects.values("item")
-    return Item.objects.filter(Q(active=True) | Q(pk__in=used), combo__isnull=True).exclude(item_code=services.FEE_ITEM_CODE).order_by("item_name")
+    return Item.objects.filter(Q(active=True) | Q(pk__in=used), combo__isnull=True).exclude(item_code__in=services.OFF_MENU_CODES).order_by("item_name")
 
 
 def _posted(post):

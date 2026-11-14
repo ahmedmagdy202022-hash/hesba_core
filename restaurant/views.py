@@ -258,7 +258,7 @@ def _raw_ingredient_ids():
 
 
 def _menu():
-    items = Item.objects.filter(active=True).exclude(item_code=services.FEE_ITEM_CODE).select_related("category").order_by("category__category_code", "item_name")
+    items = Item.objects.filter(active=True).exclude(item_code__in=services.OFF_MENU_CODES).select_related("category").order_by("category__category_code", "item_name")
     categories, seen = [], set()
     for item in items:
         if item.category_id and item.category_id not in seen:
@@ -558,7 +558,7 @@ def _dishes():
     from . import kitchen
 
     return (Item.objects.filter(Q(is_stock_tracked=False) | Q(pk__in=kitchen.kitchen_dish_ids()), active=True)
-            .exclude(item_code=services.FEE_ITEM_CODE).order_by("item_name"))
+            .exclude(item_code__in=services.OFF_MENU_CODES).order_by("item_name"))
 
 
 KITCHEN_WORDS = {
