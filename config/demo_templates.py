@@ -172,6 +172,9 @@ ROLE_NAME = "المالك"  # what seed_demo_users calls the owner; only that is
 DEMO_LOGINS = {
     "medical": {"manager": "أ. ياسمين طلعت", "cashier": "أ. مروة عبد اللطيف", "accountant": "أ. عمرو زكريا",
                 "stock_keeper": "أ. طارق عبد المنعم"},
+    # Education video finding 7: the centre's reception, accounts and teachers' logins are greeted by name as well.
+    "education": {"manager": "أ. إيمان عبد الغني", "cashier": "أ. رحاب سمير", "accountant": "أ. وائل عبد الباسط",
+                  "stock_keeper": "أ. نادر فؤاد"},
 }
 #: What ``seed_demo_users`` calls each of them, and so the only words replaced.
 LOGIN_ROLE_NAMES = {"manager": "المدير", "cashier": "الكاشير", "accountant": "المحاسب", "stock_keeper": "أمين المخزن"}

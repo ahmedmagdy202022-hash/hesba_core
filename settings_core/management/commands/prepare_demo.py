@@ -223,8 +223,8 @@ class Command(BaseCommand):
         staff = None
         if extras & {"appointments", "patients", "orders", "projects", "workorders"}:
             staff = save_employee({"name": catalog.staff[0], "title": catalog.staff[1], "commission_percent": "10"}, owner)
-        if "appointments" in extras:
-            self._appointments(master, staff, owner)
+        if "appointments" in extras and not self._is_education():
+            self._appointments(master, staff, owner)  # an education demo's teachers have classes, not the shop customers' bookings
         if "patients" in extras:
             self._patients(master, staff, owner)
         if "students" in extras:
@@ -1358,7 +1358,16 @@ class Command(BaseCommand):
                                        ("3", "رصف أسفلت", "م²", "9000", "140"), ("4", "توريد وتركيب بلدورة", "م.ط", "1800", "190")),
     }
     #: TRACK-ACTS W19: the children's stage fits the place (a nursery has no prep-school pupils).
-    STAGES = {"nursery": "كي جي 1", "languages": "مستوى مبتدئ", "training": "خريجين", "tutoring_center": "الصف الثالث الإعدادي", "private_tutor": "الصف الثالث الإعدادي"}
+    STAGES = {"nursery": "كي جي 1", "tutoring_center": "الصف الثالث الإعدادي", "private_tutor": "الصف الثالث الإعدادي"}
+    #: Education video finding 9: a training or language centre's students are at the level of their group, not «خريجين» (graduates) in a current group.
+    LEVEL_STAGES = ("المستوى الأول", "المستوى الثاني")
+    LEVEL_STAGES_FOR = ("training", "languages")
+
+    @staticmethod
+    def _is_education():
+        from education import services as edu
+
+        return edu.is_education_install()
 
     def _students(self, master, teacher, owner):
         """EDU-001: courses from the catalog's services, three groups, parents with their children enrolled."""
@@ -1370,8 +1379,10 @@ class Command(BaseCommand):
         if not edu.is_education_install():
             return  # the same catalog also serves a services business, which has no student files
         today = timezone.localdate()
+        # Two courses, the ones that have groups. The catalog's third service (a placement test, a short course, a single class) stays an item:
+        # it used to be made a monthly course too, with no group, and a language centre listed its 200-pound placement test as a monthly course.
         courses = [edu.save_course({"name": item.item_name, "fee": item.default_sale_price, "basis": "monthly", "item": item}, owner)
-                   for item in master["items"] if not item.is_stock_tracked][:2]
+                   for item in [item for item in master["items"] if not item.is_stock_tracked][:2]]
         if not courses:
             return
         second = save_employee({"name": "أ. نادية فوزي", "title": teacher.title or "مدرسة"}, owner)
@@ -1392,14 +1403,19 @@ class Command(BaseCommand):
             ("نجلاء حسن (ولية أمر)", "01501234504", "الأم", ("ليلى أحمد",)),
             ("إبراهيم سالم (ولي أمر)", "01001234505", "الأب", ("حمزة إبراهيم",)),
         )
+        from education import demo as education_demo
         from settings_core.models import ClientProfile
 
-        stage = self.STAGES.get(getattr(ClientProfile.get_active(), "sub_activity_slug", ""), "الصف الثالث الإعدادي")
+        sub = getattr(ClientProfile.get_active(), "sub_activity_slug", "")
+        stage = self.STAGES.get(sub, "الصف الثالث الإعدادي")
         students = []
         for parent, phone, relation, children in families:
             payer = Customer.objects.filter(phone=phone).first()
             for child in children:
-                data = {"name": child, "stage": stage, "relation": relation}
+                # A training or language centre's students sit at the level of the group they start in (groups[n % 2]: levels 1 and 2, set by
+                # ``_levels`` below); everywhere else the kind of centre has one stage. Every student has a birth date that fits the centre.
+                data = {"name": child, "stage": self.LEVEL_STAGES[len(students) % 2] if sub in self.LEVEL_STAGES_FOR else stage, "relation": relation,
+                        "date_of_birth": education_demo.birth_date(sub, len(students), today)}
                 data.update({"payer": payer} if payer else {"payer_name": parent, "payer_phone": phone})
                 student = edu.save_student(data, owner)
                 payer = student.payer
@@ -1487,26 +1503,25 @@ class Command(BaseCommand):
         levels.record_placement(students[1], {"course": course, "level": "2", "score": "36", "out_of": "50", "notes": "مستوى محادثة جيد"}, owner)
 
     def _nursery_day(self, students, owner):
-        """EDU-005: a nursery's door this morning — who may pick each child up, most children in, one already gone home."""
+        """EDU-005: a nursery's door this morning — who may pick each child up, most children in, one already gone home.
 
+        Each pickup person has a real full name and the relation in the relation field; the other parent is of the other gender. The
+        arrivals are spread over the morning (``education_demo.arrival_time``) and never in the future."""
+
+        from education import demo as education_demo
         from education import nursery
 
         if not nursery.is_nursery():
             return
-        relations = {"الأب": "الأم", "الأم": "الأب"}
         now = timezone.now()
         for n, student in enumerate(students):
             parent = student.payer
             nursery.save_person(student, {"name": parent.name.split(" (")[0], "relation": student.relation or "ولي الأمر", "phone": parent.phone}, owner)
-            nursery.save_person(student, {"name": f"{relations.get(student.relation, 'الجدة')} — {student.name.split()[-1]}",
-                                          "relation": relations.get(student.relation, "الجدة"), "phone": f"0122{n:07d}"}, owner)
+            other_name, other_relation = education_demo.other_pickup_person(student, n)
+            nursery.save_person(student, {"name": other_name, "relation": other_relation, "phone": f"0122{n:07d}"}, owner)
             if n == len(students) - 1:
                 continue  # one child is not here yet
-            arrived = timezone.localtime(now).replace(hour=8, minute=n * 5 % 60, second=0, microsecond=0)
-            if arrived > now:
-                # Before 8 a.m.: an hour ago, but never before midnight, or "this morning" would be yesterday.
-                midnight = timezone.localtime(now).replace(hour=0, minute=0, second=0, microsecond=0)
-                arrived = max(now - timedelta(hours=1), midnight)
+            arrived = education_demo.arrival_time(n, len(students) - 1, now)
             nursery.check_in(student, owner, brought_by=student.relation, at=arrived)
             if n == 0 and now - arrived > timedelta(hours=2):
                 nursery.check_out(student, nursery.allowed(student).first(), owner, at=arrived + timedelta(hours=2))

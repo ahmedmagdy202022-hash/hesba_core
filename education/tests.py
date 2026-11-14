@@ -331,6 +331,24 @@ class MonthlyFeesTests(EducationSetup):
 
         return balance("customer", customer)
 
+    def test_siblings_on_one_invoice_are_listed_in_one_order_whatever_was_edited_since(self):
+        # PostgreSQL returns rows that tie in an ORDER BY in any order. The list of a family's children on the month's invoices
+        # must not depend on that: it follows the charges, which are made in the order the fees are listed (student name).
+        # Seen in CI on PostgreSQL (two names swapped places after the demo seed edited students); that swap depends on the
+        # query plan and did not happen here on a small table, so this pins the rule rather than reproducing the swap.
+        from .models import FeeCharge
+
+        self.billing.bill_month(self.month, self.owner, post=True)
+        charges = list(FeeCharge.objects.order_by("pk").select_related("enrollment__student"))
+        in_charge_order = [[charge.enrollment.student.name for charge in charges]]
+        self.assertEqual(sorted(in_charge_order[0]), ["مريم محمد", "يوسف محمد"])
+        self.assertEqual([row["students"] for row in self.billing.billed(self.month)], in_charge_order)
+        # Each of these rewrites a row, and on PostgreSQL a rewritten row is read last from its table.
+        FeeCharge.objects.filter(pk=charges[0].pk).update(month=charges[0].month)
+        Enrollment.objects.filter(pk=charges[0].enrollment_id).update(start_date=charges[0].enrollment.start_date)
+        Student.objects.filter(pk=charges[0].enrollment.student_id).update(name=charges[0].enrollment.student.name)
+        self.assertEqual([row["students"] for row in self.billing.billed(self.month)], in_charge_order)
+
     def test_one_invoice_per_parent_through_the_sales_engine(self):
         parent = self.yousef.payer
         made = self.billing.bill_month(self.month, self.owner, post=True)

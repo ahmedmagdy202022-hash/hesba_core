@@ -17,7 +17,7 @@
 <div class="cr-summary"><span class="cr-chip {% if certificate.revoked %}cr-chip--revoked{% else %}cr-chip--live{% endif %}" data-cert-status>{% if certificate.revoked %}{{ cw.revoked }}{% else %}{{ cw.live }}{% endif %}</span>
 <dl class="cr-list"><div><dt>{{ cw.number }}</dt><dd><bdi dir="ltr">{{ certificate.number }}</bdi></dd></div><div><dt>{{ cw.student }}</dt><dd>{{ student.name }}</dd></div><div><dt>{{ cw.group }}</dt><dd>{{ group.name }}</dd></div>
 <div><dt>{{ cw.hours }}</dt><dd><bdi dir="ltr">{{ certificate.hours|floatformat:"-2" }}</bdi></dd></div><div><dt>{{ cw.attendance }}</dt><dd>{% if certificate.attendance_rate is not None %}<bdi dir="ltr">{{ certificate.attendance_rate }}%</bdi>{% else %}—{% endif %}</dd></div>
-<div><dt>{{ cw.issued_by }}</dt><dd>{{ certificate.issued_by.get_full_name|default:certificate.issued_by.get_username }}</dd></div></dl></div>
+<div><dt>{{ cw.issued_by }}</dt><dd>{{ issued_by_name|default:'—' }}</dd></div></dl></div>
 {% if not verify_url %}<p class="cr-note cr-note--warning" data-no-base-url>{{ cw.no_base }}</p>{% else %}<p class="cr-verify-link"><span>{{ cw.verify }}</span><a href="{{ verify_url }}" dir="ltr" data-verify-link>{{ verify_url }}</a></p>{% endif %}
 {% if certificate.revoked %}<p class="cr-note cr-note--error" data-revoked-note>{{ cw.revoked_note }}</p>
 <dl class="cr-list"><div><dt>{{ cw.revoked_on }}</dt><dd><bdi>{{ certificate.revoked_at|day_text:lang }}</bdi></dd></div><div><dt>{{ cw.reason }}</dt><dd data-revoke-reason>{{ certificate.revoke_reason }}</dd></div></dl>
