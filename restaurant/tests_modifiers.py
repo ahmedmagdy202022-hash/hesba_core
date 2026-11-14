@@ -435,7 +435,7 @@ class ScreenTests(ModifierSetup):
         self.assertIn(f'data-choice-sheet="{self.burger.pk}"', page)
         self.assertIn(f'data-opens-sheet="sheet-{self.burger.pk}"', page)
         self.assertNotIn(f'data-opens-sheet="sheet-{self.koshary.pk}"', page)
-        self.assertIn('name="option" value="%d" required' % self.medium.pk, page)  # one required choice: radios
+        self.assertIn('type="radio" name="option-g%d" value="%d" required' % (self.doneness.pk, self.medium.pk), page)  # one required choice: radios
         self.assertIn('type="checkbox" name="option" value="%d"' % self.cheese_opt.pk, page)
         self.assertIn("+15.00", page)
         self.assertIn("اختيار واحد", page)

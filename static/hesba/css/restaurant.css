@@ -68,3 +68,42 @@ details.rs-more summary{cursor:pointer;font-weight:700;color:var(--hs-navy);padd
    preparation instead of inside a table cell (a form in a cell outgrows its card at 390 px, HG-102 risk 5). */
 .rs-preps .rs-actions{grid-column:1/-1}
 .rs-preps .rs-actions button{min-height:44px}
+
+/* R1a (HG-109): add-ons and choices. The order page's choice sheet (a bottom sheet on a phone, a centred dialog from
+   720px, as the pharmacy's drug picker), a dish's add-ons under it, and the set-up page's option rows. Tokens only. */
+html.rs-sheet-open{overflow:hidden}
+.rs-sheet{box-sizing:border-box;width:100%;max-width:100%;max-height:min(88dvh,760px);margin:auto 0 0;padding:0;border:0;border-radius:var(--hs-radius-xl) var(--hs-radius-xl) 0 0;background:var(--hs-ground);color:var(--hs-ink);font-family:var(--hs-font-body);box-shadow:var(--hs-shadow-lg);overflow:hidden}
+.rs-sheet:not([open]){display:none}
+.rs-sheet[open]{display:flex;flex-direction:column}
+.rs-sheet::backdrop{background:var(--hs-scrim)}
+.rs-sheet__form{display:flex;flex-direction:column;min-height:0;max-height:inherit;margin:0}
+.rs-sheet__head{flex:none;display:flex;align-items:center;gap:var(--hs-space-2);padding:12px 8px 6px;padding-inline:16px 8px;border-bottom:1px solid var(--hs-line)}
+.rs-sheet__head h2{flex:1;min-width:0;margin:0;font-size:var(--hs-text-lg);color:var(--hs-navy);line-height:1.4}
+.rs-sheet__head h2 small{display:block;font-size:var(--hs-text-sm);color:var(--hs-muted);font-weight:var(--hs-weight-semibold)}
+.rs-sheet__x{flex:none;display:inline-grid;place-items:center;width:var(--hs-control-height);height:var(--hs-control-height);border:0;border-radius:var(--hs-radius-md);background:transparent;color:var(--hs-ink);font:inherit;font-size:24px;cursor:pointer}
+.rs-sheet__body{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:8px 16px 12px}
+.rs-sheet__group{margin:0 0 12px;padding:0;border:0;min-width:0}
+.rs-sheet__group legend{padding:0;margin:0 0 6px;font-weight:var(--hs-weight-bold);color:var(--hs-navy)}
+.rs-sheet__group legend small{font-weight:var(--hs-weight-semibold);color:var(--hs-muted)}
+.rs-choice{display:flex;align-items:center;gap:10px;min-height:var(--hs-control-height);padding:6px 12px;margin:0 0 6px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-md);background:var(--hs-surface);cursor:pointer}
+.rs-choice input{flex:none;width:22px;height:22px;margin:0;accent-color:var(--hs-teal-deep)}
+.rs-choice span{flex:1;min-width:0;font-weight:var(--hs-weight-semibold);color:var(--hs-ink)}
+.rs-choice small{flex:none;color:var(--hs-muted)}
+.rs-choice:has(input:checked){border-color:var(--hs-teal-deep);background:var(--hs-teal-wash)}
+.rs-choice:has(input:disabled){opacity:.55;cursor:not-allowed}
+.rs-choice:has(input:focus-visible){box-shadow:var(--hs-focus-ring)}
+.rs-sheet__error{margin:4px 0 0;color:var(--hs-danger);font-size:var(--hs-text-sm);font-weight:var(--hs-weight-bold)}
+.rs-sheet__field{display:grid;gap:4px;min-width:0;font-weight:var(--hs-weight-bold);color:var(--hs-navy);font-size:var(--hs-text-sm)}
+.rs-sheet__field input{min-width:0;min-height:var(--hs-control-height);border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-md);padding:0 12px;font:inherit;background:var(--hs-surface)}
+.rs-sheet__foot{flex:none;padding:10px 16px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--hs-line);background:var(--hs-ground)}
+.rs-sheet__foot .op-primary{width:100%;min-height:var(--hs-control-height)}
+@media (min-width:720px){.rs-sheet{width:min(560px,calc(100% - 48px));margin:auto;border-radius:var(--hs-radius-xl)}}
+.rs-line__addon{grid-column:1/-1;display:flex;justify-content:space-between;gap:10px;padding-inline-start:18px;color:var(--hs-navy);font-size:var(--hs-text-sm);font-weight:var(--hs-weight-semibold)}
+.rs-line__addon--void{text-decoration:line-through;color:var(--hs-muted)}
+.rs-chip{display:inline-flex;gap:4px;align-items:baseline;margin:2px;padding:2px 10px;border-radius:var(--hs-radius-pill);background:var(--hs-neutral-wash);color:var(--hs-ink)}
+.rs-chip--off{text-decoration:line-through;color:var(--hs-muted)}
+.rs-edit{min-height:var(--hs-control-height);display:inline-flex;align-items:center}
+.rs-option-rows{margin:14px 0;padding:0;border:0;min-width:0}
+.rs-option-rows legend{padding:0;margin-bottom:6px;font-weight:var(--hs-weight-bold);color:var(--hs-navy)}
+.rs-option-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr));gap:8px;align-items:end;padding:10px 0;border-bottom:1px solid var(--hs-line)}
+.rs-option-row select{min-width:0;max-width:100%;width:100%;text-overflow:ellipsis}

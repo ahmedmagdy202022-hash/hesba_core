@@ -49,6 +49,7 @@ WORDS = {
         "kitchen": "المطبخ", "ticket": "تذكرة", "tables_title": "طاولات الصالة", "name": "الاسم / الرقم", "area": "المكان", "sort": "الترتيب", "active": "شغالة",
         "save": "حفظ", "saved": "اتحفظت الطاولة.", "new_table": "طاولة جديدة", "edit": "تعديل", "bad_number": "اكتب رقم صحيح.",
         "ready": "جاهز", "ready_n": "جاهز {n}", "void_why": "السبب", "kitchen_screen": "شاشة المطبخ", "stations_title": "محطات المطبخ",
+        "modifiers_title": "الإضافات والاختيارات",
         "sent_many": "اتبعتت {count} للمطبخ ({stations}).",
         "branch": "الفرع", "choose_branch": "اختار الفرع", "no_branch_tables": "لسه مفيش طاولات في الفرع ده.",
     },
@@ -68,6 +69,7 @@ WORDS = {
         "kitchen": "Kitchen", "ticket": "Ticket", "tables_title": "Hall tables", "name": "Name / number", "area": "Area", "sort": "Order", "active": "Active",
         "save": "Save", "saved": "Table saved.", "new_table": "New table", "edit": "Edit", "bad_number": "Enter a valid number.",
         "ready": "Ready", "ready_n": "{n} ready", "void_why": "Reason", "kitchen_screen": "Kitchen screen", "stations_title": "Kitchen stations",
+        "modifiers_title": "Add-ons and choices",
         "sent_many": "{count} sent to the kitchen ({stations}).",
         "branch": "Branch", "choose_branch": "Choose the branch", "no_branch_tables": "No tables in this branch yet.",
     },
@@ -225,8 +227,10 @@ def order_detail(request, pk):
         line = _pick(OrderLine, request.POST.get("line"), order=order)
         try:
             if action == "add":
+                from .views_modifiers import posted_options
+
                 services.add_item(order, _pick(Item, request.POST.get("item"), active=True), request.user, request.POST.get("quantity") or 1,
-                                  request.POST.get("note", ""), lang)
+                                  request.POST.get("note", ""), lang, options=posted_options(request.POST))  # R1a: the sheet's choices
             elif action == "qty" and line:
                 services.change_line(line, request.user, quantity=request.POST.get("quantity"), note=request.POST.get("note"), lang=lang)
             elif action == "void" and line:
@@ -274,15 +278,21 @@ def order_detail(request, pk):
         except ValidationError as exc:
             messages.error(request, _error(exc, lang))
         return redirect(_order_url(order, lang) + ("#menu" if action == "add" else ""))
+    from . import modifiers
+    from .views_modifiers import MODIFIER_WORDS, sheets
+
     items, categories = _menu()
     raw_ids = _raw_ingredient_ids()
     lines = list(order.lines.select_related("item", "ticket"))
+    choice_sheets = sheets(items, lang) if order.status == OrderStatus.OPEN and _takes_orders(request.user) else []  # R1a
     cashboxes = branches.cashboxes(order)  # R12: the order's branch's, whatever entity the biller works in
     shift = open_shift_for(request.user)
     shift_box = shift.cashbox if shift and cashboxes.filter(pk=shift.cashbox_id).exists() else None
     free_tables = DiningTable.objects.filter(active=True, entity_id=order.entity_id).exclude(orders__status=OrderStatus.OPEN)
     return render(request, "restaurant/order.html", _base(
         request, order=order, lines=lines, total=order.total, items=items, raw_ids=raw_ids, categories=categories, kind_label=_kind_label(order, lang),
+        families=[{"line": line, "addons": addons} for line, addons in modifiers.grouped(lines)], sheets=choice_sheets,
+        sheet_items={sheet["item"].pk for sheet in choice_sheets}, mw=MODIFIER_WORDS[lang],
         drivers=Employee.objects.filter(active=True) if order.kind == OrderKind.DELIVERY else [], dw=DELIVERY_WORDS[lang],
         status_label=choice_label(order, "status", lang), is_open=order.status == OrderStatus.OPEN,
         pending=any(not line.ticket_id and not line.voided for line in lines), tickets=order.tickets.select_related("station"),
@@ -458,6 +468,12 @@ def dish_ingredients(request, pk, run=None):
     error = ""
     if request.method == "POST" and request.POST.get("action") == "cancel_preparation":  # HG-107
         return _cancel_preparation(request, dish, lang)
+    if request.method == "POST" and request.POST.get("action") == "groups":  # R1a: its own form; never reaches the ingredients' save below
+        if not user_has_permission(request.user, TABLES):
+            raise PermissionDenied("Changing a dish's add-ons and choices needs master_data.manage_items.")
+        from .views_modifiers import save_dish_groups
+
+        return save_dish_groups(request, dish, lang)
     if request.method == "POST" and request.POST.get("action") in ("kitchen", "prepare"):
         try:
             if request.POST["action"] == "kitchen":  # RESTO-004
@@ -484,6 +500,8 @@ def dish_ingredients(request, pk, run=None):
         else:
             messages.success(request, words["saved"])
             return redirect(f"{reverse('restaurant:costing')}?lang={lang}")
+    from .views_modifiers import dish_groups_context
+
     current = list(dish.dish_ingredients.select_related("ingredient"))
     rows = [{"ingredient": row.ingredient_id, "quantity": row.quantity} for row in current] + [{"ingredient": None, "quantity": ""}] * 3
     if request.method == "POST":
@@ -493,7 +511,8 @@ def dish_ingredients(request, pk, run=None):
                                                                    ingredients=ingredients, cost=insights.plate_cost(dish, current), error=error,
                                                                    can_edit=user_has_permission(request.user, TABLES), kw=kw,
                                                                    kitchen_made=kitchen.is_kitchen_made(dish), in_stock=_in_stock(dish),
-                                                                   preparations=_preparations(dish, lang, run), can_cancel=kitchen.may_cancel(request.user)))
+                                                                   preparations=_preparations(dish, lang, run), can_cancel=kitchen.may_cancel(request.user),
+                                                                   **dish_groups_context(dish, lang)))
 
 
 def _preparations(dish, lang, asked=None):
