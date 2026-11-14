@@ -17,7 +17,7 @@ from django.utils import timezone
 from printing.company import company_details
 
 from . import attendance as register
-from . import exams, services
+from . import exams, nursery, services
 from .models import ExamKind, Student, StudyGroup
 from .views import _base, _lang
 
@@ -107,7 +107,7 @@ def group_card(request, group, lang, limit=5):
 def student_card(request, student, lang, limit=5):
     """The context the student page adds for its marks card: nothing (no card) unless a manager, or a teacher of one of the student's groups."""
 
-    if not exams.can_see_student(request.user, student):
+    if nursery.is_nursery() or not exams.can_see_student(request.user, student):  # a nursery has no exams: no marks card on a child's file
         return {}
     return {"xw": WORDS[lang], "marks_rows": exams.student_marks(student, request.user, limit), "marks_card": True}
 

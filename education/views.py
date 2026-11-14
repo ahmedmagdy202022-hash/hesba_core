@@ -22,7 +22,7 @@ WORDS = {
         "intro": "كل طالب له ملف، ومين بيدفع عنه (ولي أمر أو هو نفسه)، والمجموعات اللي مسجّل فيها.",
         "search": "دوّر بالاسم أو التليفون أو الكود", "find": "بحث", "code": "الكود", "name": "الاسم", "phone": "التليفون", "stage": "السنة / المستوى",
         "school": "المدرسة", "payer": "بيدفع عنه", "relation": "صلة القرابة", "groups_count": "المجموعات", "open": "افتح", "new_student": "+ طالب جديد",
-        "no_students": "مفيش طلاب لسه. ابدأ بـ «طالب جديد».", "dob": "تاريخ الميلاد", "notes": "ملاحظات", "save": "حفظ", "active": "نشط",
+        "no_students": "مفيش طلاب لسه. ابدأ بـ «طالب جديد».", "no_match": "مفيش نتيجة للبحث ده.", "clear_search": "امسح البحث", "dob": "تاريخ الميلاد", "notes": "ملاحظات", "save": "حفظ", "active": "نشط",
         "payer_existing": "ولي أمر موجود", "choose": "اختار", "payer_new": "أو ولي أمر جديد", "payer_name": "اسم ولي الأمر", "payer_phone": "تليفون ولي الأمر",
         "self_pays": "الطالب بيدفع لنفسه (كورسات الكبار)", "back_students": "الطلاب", "edit": "تعديل البيانات", "account": "حساب ولي الأمر والفواتير",
         "enrollments": "المجموعات المسجّل فيها", "group": "المجموعة", "course": "الكورس", "schedule": "المواعيد", "teacher": "المدرس",
@@ -63,7 +63,7 @@ WORDS = {
         "intro": "Each student has a file, who pays for them (a parent or themselves), and the groups they are enrolled in.",
         "search": "Search by name, phone or code", "find": "Search", "code": "Code", "name": "Name", "phone": "Phone", "stage": "Year / level",
         "school": "School", "payer": "Paid by", "relation": "Relation", "groups_count": "Groups", "open": "Open", "new_student": "+ New student",
-        "no_students": "No students yet. Start with “New student”.", "dob": "Date of birth", "notes": "Notes", "save": "Save", "active": "Active",
+        "no_students": "No students yet. Start with “New student”.", "no_match": "No results for that search.", "clear_search": "Clear the search", "dob": "Date of birth", "notes": "Notes", "save": "Save", "active": "Active",
         "payer_existing": "Existing parent", "choose": "Choose", "payer_new": "or a new parent", "payer_name": "Parent's name", "payer_phone": "Parent's phone",
         "self_pays": "The student pays for themselves (adult courses)", "back_students": "Students", "edit": "Edit details", "account": "Parent's account & invoices",
         "enrollments": "Enrolled groups", "group": "Group", "course": "Course", "schedule": "Schedule", "teacher": "Teacher",
@@ -147,6 +147,9 @@ def _status_label(status, words):
 
 # ---- students ----
 
+_ASCII_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
+
+
 def students(request):
     _guard(request)
     lang = _lang(request)
@@ -154,7 +157,9 @@ def students(request):
     rows = services.scoped(Student.objects).select_related("payer").annotate(
         groups_count=Count("enrollments", filter=Q(enrollments__status=EnrollmentStatus.ACTIVE)))
     if query:
-        rows = rows.filter(Q(name__icontains=query) | Q(phone__icontains=query) | Q(code__icontains=query) | Q(payer__name__icontains=query))
+        number = query.translate(_ASCII_DIGITS)  # a number typed with Arabic-Indic digits finds the same rows
+        rows = rows.filter(Q(name__icontains=query) | Q(phone__icontains=number) | Q(code__icontains=number) | Q(payer__name__icontains=query)
+                           | Q(payer__phone__icontains=number))  # the guardian is who the list shows and who pays: their name and phone find the child
     return render(request, "education/students.html", _base(request, lang, "students", rows=rows[:300], query=query))
 
 
@@ -332,7 +337,9 @@ def group_detail(request, pk):
                 except ValueError:
                     on_date = None
                 moved = levels.move_up(group, students, target, request.user, on_date=on_date, lang=lang)
-                message = LEVEL_WORDS[lang]["moved"].format(n=len(moved), group=target.name)
+                # a group already named «مجموعة …» is not announced as «لمجموعة مجموعة …»
+                key = "moved_named" if lang == "ar" and target.name.strip().startswith("مجموعة") else "moved"
+                message = LEVEL_WORDS[lang][key].format(n=len(moved), group=target.name)
             else:
                 raise Http404("Unknown action.")
         except ValidationError as exc:
@@ -756,7 +763,7 @@ LEVEL_WORDS = {
            "placed": "اتسجل امتحان تحديد المستوى.", "no_tests": "لسه مااتعملش امتحان تحديد مستوى.", "groups_for": "مجموعات {course} — المستوى {n}",
            "no_groups": "مفيش مجموعة في المستوى ده فيها مكان دلوقتي.", "free": "{n} مكان فاضي", "open": "مفتوحة",
            "move_up": "طلّع الطلاب للمستوى الجاي", "move_intro": "علّم على اللي نجحوا، واختار مجموعة المستوى الجاي. اشتراكهم هنا بيقف يوم قبل، وبيبدأ هناك بنفس الخصم.",
-           "target": "مجموعة المستوى الجاي", "on_date": "من يوم", "move": "طلّعهم", "moved": "اتنقل {n} طالب لمجموعة {group}.",
+           "target": "مجموعة المستوى الجاي", "on_date": "من يوم", "move": "طلّعهم", "moved": "اتنقل {n} طالب لمجموعة {group}.", "moved_named": "اتنقل {n} طالب إلى {group}.",
            "all": "الكل", "no_next": "مفيش مجموعة في مستوى أعلى من نفس الكورس؛ اعملها الأول.", "monthly_note": "الكورس بالشهر: النقل بيبدأ أول الشهر."},
     "en": {"level": "Level", "level_hint": "The level within the course (1, 2, 3…); leave blank when the course has no levels.", "level_n": "Level {n}",
            "placement": "Placement test", "placement_intro": "Record the test's mark and the level it gives; the groups at that level with a free seat show here.",

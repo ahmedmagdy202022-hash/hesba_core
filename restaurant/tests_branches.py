@@ -9,9 +9,10 @@ The clock stands still on a Wednesday at noon in Cairo: nothing here depends on 
 write their old rows with that fixed date).
 """
 
+import threading
 from datetime import datetime, timezone as dt_timezone
 from decimal import Decimal as D
-from unittest import mock
+from unittest import mock, skipUnless
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, connection, transaction
@@ -405,6 +406,65 @@ class DemoRestartFillTests(BranchSetup):
         self.assertEqual(list(DiningTable.objects.order_by("pk").values_list("pk", "name", "entity_id")), before)
         DiningTable.objects.all().delete()
         fill(live_apps, editor)  # and with nothing to fill it does nothing
+
+
+@skipUnless(connection.vendor == "postgresql", "row locks are PostgreSQL's: SQLite's writers already take turns")
+class TableMoveLockTests(TransactionTestCase):
+    """A table is not moved to another branch (nor switched off) while an order is being opened on it (review finding).
+
+    ``open_order`` locks the table's row. The table's own save has to wait on that same lock before it looks for open
+    orders; otherwise it sees none (the order is not committed yet), waits only at its UPDATE, and moves the table once
+    the order commits: an open order in branch A on a table of branch B, on neither branch's board."""
+
+    serialized_rollback = True
+
+    def setUp(self):
+        from reports.tests_dashboard import prepared_client
+
+        prepared_client(activity="restaurants", sub_activity="cafe",
+                        modules="items_services,sales_operations,cashboxes,reports,inventory,pdf_printing,tables_orders")
+        self.owner = person(RoleCode.OWNER, "lock_owner")
+        make_location(location_code="HALL", is_default=True)
+        make_cashbox(cashbox_code="TILL", is_default=True)
+        self.branch = save_entity({"code": "BR2", "name_ar": "فرع المعادي", "name_en": "Maadi branch"}, self.owner)
+        self.table = services.save_table({"name": "T1", "seats": 4}, self.owner)
+
+    def change_while_an_order_opens(self, data, **extra):
+        outcome = {}
+
+        def change():
+            try:
+                services.save_table(data, self.owner, table=DiningTable.objects.get(pk=self.table.pk), **extra)
+                outcome["saved"] = True
+            except ValidationError as error:
+                outcome["refused"] = error.messages
+            except Exception as error:  # noqa: BLE001  (reported below, never swallowed)
+                outcome["error"] = repr(error)
+            finally:
+                connection.close()
+
+        with transaction.atomic():
+            order = services.open_order(self.owner, table=self.table)  # holds the table's row; not committed yet
+            thread = threading.Thread(target=change)
+            thread.start()
+            thread.join(timeout=3)
+            self.assertTrue(thread.is_alive(), outcome)  # it waits for the order's transaction
+        thread.join(timeout=30)
+        self.assertFalse(thread.is_alive())
+        return order, outcome
+
+    def test_a_table_is_not_moved_to_another_branch_while_an_order_is_being_opened_on_it(self):
+        order, outcome = self.change_while_an_order_opens({"name": "T1", "seats": 4}, entity=self.branch)
+        self.assertEqual(outcome, {"refused": ["الطاولة دي عليها طلبات مفتوحة؛ اقفلها الأول."]})
+        self.table.refresh_from_db()
+        order.refresh_from_db()
+        self.assertEqual((self.table.entity_id, order.entity_id, order.status), (main_entity().pk, main_entity().pk, OrderStatus.OPEN))
+
+    def test_a_table_is_not_switched_off_while_an_order_is_being_opened_on_it(self):
+        _, outcome = self.change_while_an_order_opens({"name": "T1", "seats": 4, "active": ""})
+        self.assertEqual(outcome, {"refused": ["الطاولة دي عليها طلبات مفتوحة؛ اقفلها الأول."]})
+        self.table.refresh_from_db()
+        self.assertTrue(self.table.active)
 
 
 class MigrationTests(TransactionTestCase):

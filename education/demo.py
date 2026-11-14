@@ -8,7 +8,7 @@ No seed here makes a guardian link, a pay link, a scan card or a message: a port
 Days are always picked from a group's own class days and from the clock, never fixed, so the demo builds at any hour of any day.
 """
 
-from datetime import timedelta
+from datetime import date, datetime, timedelta
 
 from django.utils import timezone
 
@@ -187,3 +187,62 @@ def seed_certificate(groups, students, owner):
     services.save_group({**data, "active_present": "1"}, owner, batch)  # a finished batch is closed: nobody can be enrolled in it any more
     certificate, created = certificates.issue(rows[best], owner, grade_text="امتياز", acknowledged=True)
     return certificate if created else None
+
+
+# ---- education video findings: a believable demo (names, ages, mornings and finished classes) ----
+
+#: Ages (years) of the seven demo students, in the order the seed creates them, by kind of centre: a nursery's children are 3 to 5, a tutoring
+#: centre's pupils are of the third preparatory year (14 to 15), and training and language centres teach adults. Brothers and sisters differ.
+AGES = {
+    "nursery": (4, 3, 5, 4, 3, 5, 4),
+    "tutoring_center": (15, 14, 14, 15, 14, 15, 14),
+    "private_tutor": (15, 14, 14, 15, 14, 15, 14),
+    "training": (24, 21, 27, 22, 30, 25, 28),
+    "languages": (24, 21, 27, 22, 30, 25, 28),
+}
+#: Birthdays (month, day), never the 29th of February, so the age is exact on every day of the year.
+BIRTHDAYS = ((3, 14), (9, 2), (6, 21), (11, 5), (1, 17), (7, 30), (12, 9))
+
+
+def birth_date(sub_activity, n, today):
+    """The birth date of the n-th demo student of a centre: a whole number of years old today, as old as the centre's students are."""
+
+    ages = AGES.get(sub_activity) or AGES["tutoring_center"]
+    month, day = BIRTHDAYS[n % len(BIRTHDAYS)]
+    years = ages[n % len(ages)] + (1 if (month, day) > (today.month, today.day) else 0)
+    return date(today.year - years, month, day)
+
+
+#: The other parent of each nursery family, by the payer's phone: a person with their own full name (the child's second name is the father's).
+OTHER_PARENT = {
+    "01001234501": ("سمر إبراهيم", "الأم"),
+    "01101234502": ("خالد عبد الغفار", "الأب"),
+    "01201234503": ("داليا حسين", "الأم"),
+    "01501234504": ("أحمد صلاح", "الأب"),
+    "01001234505": ("رانيا عبد الحليم", "الأم"),
+}
+FALLBACK_PICKUP = ("فاطمة السيد", "الجدة")
+
+
+def other_pickup_person(student, n):
+    """(full name, relation) of the second person allowed to pick the child up."""
+
+    return OTHER_PARENT.get(student.payer.phone, FALLBACK_PICKUP)
+
+
+#: Local arrival times of the morning's children, in order (07:20 to 08:40).
+ARRIVALS = ((7, 20), (7, 35), (7, 50), (8, 5), (8, 20), (8, 40))
+
+
+def arrival_time(n, count, now):
+    """When the n-th of ``count`` arriving children was checked in this morning: the n-th slot of 07:20 to 08:40 once the whole morning has passed.
+    Built earlier than that, the arrivals are spread evenly over the stretch up to now (the last 80 minutes, never before today's midnight), so
+    they are always in the past, always today, and still not one minute for everybody."""
+
+    local = timezone.localtime(now)
+    midnight = local.replace(hour=0, minute=0, second=0, microsecond=0)
+    slots = [midnight.replace(hour=hour, minute=minute) for hour, minute in ARRIVALS]
+    if len(slots) >= count and slots[count - 1] <= now:
+        return slots[n]
+    first = max(midnight, min(slots[0], now - timedelta(minutes=80)))
+    return (first + (now - first) * n / max(count - 1, 1)).replace(second=0, microsecond=0)
