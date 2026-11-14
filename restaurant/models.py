@@ -163,6 +163,12 @@ class OrderLine(models.Model):
     ready_at = models.DateTimeField(null=True, blank=True)
     #: R4 (from R13's audit-only reason): why a line that had gone to the kitchen was voided, shown on the order and on the card.
     void_reason = models.CharField(max_length=255, blank=True)
+    #: R1a (HG-109): a priced add-on is its own line under its dish (``restaurant.modifiers``): the dish's quantity, its own
+    #: item's price. It moves with its dish and never on its own. Empty on every dish and on every line made before R1a.
+    parent = models.ForeignKey("self", on_delete=models.CASCADE, null=True, blank=True, related_name="children")
+    #: R1a: what was chosen, as printed: on a dish, its free choices («ميديم · من غير بصل»); on an add-on, its option's name
+    #: («جبنة زيادة»), which the bill row and the kitchen ticket print. Empty on a plain line.
+    options = models.CharField(max_length=255, blank=True, default="")
 
     class Meta:
         ordering = ["pk"]
@@ -188,3 +194,64 @@ class DishIngredient(models.Model):
 
     def __str__(self):
         return f"{self.dish_id}:{self.ingredient_id}"
+
+
+class ModifierGroup(models.Model):
+    """Restaurants R1a (HG-109): a question a dish asks when it is ordered: «درجة الاستواء» (choose 1, required), «إضافات»
+    (up to 3, optional). The rules live in ``restaurant.modifiers``.
+
+    Company-wide, like the menu itself: the dishes (``master_data.Item``), their recipes (``DishIngredient``) and their sizes
+    (``variants.VariantGroup``) carry no entity, so a dish asks the same questions in every branch."""
+
+    name_ar = models.CharField(max_length=80)
+    name_en = models.CharField(max_length=80, blank=True)
+    min_choices = models.PositiveSmallIntegerField(default=0, help_text="0 means the group is optional.")
+    max_choices = models.PositiveSmallIntegerField(default=1)
+    sort = models.PositiveIntegerField(default=0)
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["sort", "pk"]
+        constraints = [
+            models.CheckConstraint(condition=Q(max_choices__gte=1) & Q(min_choices__lte=models.F("max_choices")), name="restaurant_modifier_group_min_max"),
+        ]
+
+    def __str__(self):
+        return self.name_ar
+
+    def label(self, lang="ar"):
+        return self.name_en if lang == "en" and self.name_en else self.name_ar
+
+
+class ModifierOption(models.Model):
+    """One answer in a group. With an ``item`` it is a priced add-on: its price, VAT rate, e-receipt code and stock are that
+    item's, and it becomes its own order line under the dish. Without one it is a free choice: it costs nothing and is
+    printed with the dish."""
+
+    group = models.ForeignKey(ModifierGroup, on_delete=models.CASCADE, related_name="options")
+    name_ar = models.CharField(max_length=80)
+    name_en = models.CharField(max_length=80, blank=True)
+    item = models.ForeignKey("master_data.Item", on_delete=models.PROTECT, null=True, blank=True, related_name="modifier_options")
+    sort = models.PositiveIntegerField(default=0)
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["group", "sort", "pk"]
+
+    def __str__(self):
+        return self.name_ar
+
+    def label(self, lang="ar"):
+        return self.name_en if lang == "en" and self.name_en else self.name_ar
+
+
+class MenuItemModifierGroup(models.Model):
+    """Which dishes ask which questions, in which order."""
+
+    item = models.ForeignKey("master_data.Item", on_delete=models.CASCADE, related_name="modifier_links")
+    group = models.ForeignKey(ModifierGroup, on_delete=models.CASCADE, related_name="dish_links")
+    sort = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["item", "sort", "pk"]
+        constraints = [models.UniqueConstraint(fields=["item", "group"], name="restaurant_one_link_per_dish_group")]

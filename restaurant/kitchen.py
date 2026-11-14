@@ -152,6 +152,9 @@ def _copy_as_stock_item(dish):
     if code is not None:
         ItemCode.objects.create(item=new, code_type=code.code_type, code=code.code, unit_type=code.unit_type)
     DishIngredient.objects.filter(dish=dish).update(dish=new)
+    from .modifiers import move_dish
+
+    move_dish(dish, new)  # R1a (HG-109): the new item asks the dish's questions, and an add-on option follows its item
     dish.active = False
     dish.barcode = ""  # the scanner now finds the new item
     dish.save(update_fields=["active", "barcode"])

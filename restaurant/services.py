@@ -204,39 +204,63 @@ def _locked_open(order, words):
 
 
 @transaction.atomic
-def add_item(order, item, user, quantity=1, note="", lang="ar"):
+def add_item(order, item, user, quantity=1, note="", lang="ar", options=None):
+    """Add a dish. R1a (HG-109): ``options`` are the option pks chosen on the sheet, checked by ``modifiers.choose`` before
+    anything is written; a priced add-on becomes its own line under the dish, a free choice is printed with it. A dish with
+    nothing chosen (no groups, or optional ones left empty) merges with an identical plain unsent line, as before."""
+
+    from . import modifiers
+
     words = MESSAGES[lang]
     order = _locked_open(order, words)
     if item is None or not item.active:
         raise ValidationError(words["item"])
     quantity = _quantity(quantity, words)
     note = (note or "").strip()[:120]
-    line = order.lines.filter(item=item, note=note, ticket__isnull=True, voided=False).first()
-    if line:
-        line.quantity = _quantity(line.quantity + quantity, words)
-        line.save(update_fields=["quantity"])
-    else:
-        line = OrderLine.objects.create(order=order, item=item, quantity=quantity, unit_price=money_round(item.default_sale_price), note=note)
+    chosen = modifiers.choose(item, options, lang)
+    if not chosen:
+        line = (order.lines.filter(item=item, note=note, ticket__isnull=True, voided=False, parent__isnull=True, options="", children__isnull=True)
+                .order_by("pk").first())
+        if line:
+            line.quantity = _quantity(line.quantity + quantity, words)
+            line.save(update_fields=["quantity"])
+            return line
+    line = OrderLine.objects.create(order=order, item=item, quantity=quantity, unit_price=money_round(item.default_sale_price), note=note,
+                                    options=modifiers.free_text(chosen, lang))
+    for option in modifiers.priced(chosen):  # never merged: each plate keeps its own add-ons
+        OrderLine.objects.create(order=order, item=option.item, quantity=quantity, unit_price=money_round(option.item.default_sale_price), parent=line,
+                                 options=option.label(lang)[:255])
+    return line
+
+
+def _dish_line(line, lang):
+    """R1a: an add-on moves only with its dish."""
+
+    if line.parent_id:
+        from . import modifiers
+
+        raise ValidationError(modifiers.MESSAGES["en" if lang == "en" else "ar"]["addon_alone"])
     return line
 
 
 @transaction.atomic
 def change_line(line, user, quantity=None, note=None, lang="ar"):
-    """Change an unsent line; quantity 0 removes it."""
+    """Change an unsent line; quantity 0 removes it. R1a: a dish's add-ons take its new quantity (and go with it)."""
 
     words = MESSAGES[lang]
     _locked_open(line.order, words)
-    line = OrderLine.objects.get(pk=line.pk)
+    line = _dish_line(OrderLine.objects.get(pk=line.pk), lang)
     if line.ticket_id or line.voided:
         raise ValidationError(words["sent"])
     if quantity is not None and str(quantity).strip() in ("0", "0.0", "0.000"):
-        line.delete()
+        line.delete()  # its add-ons go with it (CASCADE)
         return None
     if quantity is not None:
         line.quantity = _quantity(quantity, words)
     if note is not None:
         line.note = note.strip()[:120]
     line.save(update_fields=["quantity", "note"])
+    line.children.update(quantity=line.quantity)
     return line
 
 
@@ -250,9 +274,9 @@ def void_line(line, user, lang="ar", *, reason=""):
 
     words = MESSAGES[lang]
     order = _locked_open(line.order, words)
-    line = OrderLine.objects.select_related("item", "ticket").get(pk=line.pk)
+    line = _dish_line(OrderLine.objects.select_related("item", "ticket").get(pk=line.pk), lang)
     if not line.ticket_id:
-        line.delete()
+        line.delete()  # R1a: its add-ons go with it (CASCADE)
         return None
     if line.voided:
         return line
@@ -265,8 +289,13 @@ def void_line(line, user, lang="ar", *, reason=""):
     line.void_reason = reason  # R4: the kitchen's card and the order page show it
     line.ready_at = None  # R4: on a voided line this stamp means "the kitchen has seen it"; a void that arrives after the dish was ready is unseen
     line.save(update_fields=["voided", "void_reason", "ready_at"])
-    _audit(order, user, "void_order_line", {"line": line.pk, "item": line.item.item_code, "item_name": line.item.item_name, "quantity": str(line.quantity),
-                                            "amount": str(line.amount), "ticket": line.ticket.sequence, "reason": reason})
+    addons = list(line.children.select_related("item"))  # R1a: the add-ons are voided with their dish, for the same reason
+    line.children.update(voided=True, void_reason=reason, ready_at=None)
+    after = {"line": line.pk, "item": line.item.item_code, "item_name": line.item.item_name, "quantity": str(line.quantity),
+             "amount": str(line.amount), "ticket": line.ticket.sequence, "reason": reason}
+    if addons:
+        after["addons"] = [{"line": addon.pk, "item": addon.item.item_code, "amount": str(addon.amount)} for addon in addons]
+    _audit(order, user, "void_order_line", after)
     return line
 
 
@@ -278,14 +307,17 @@ def send_to_kitchen(order, user, lang="ar"):
 
     order = _locked_open(order, MESSAGES[lang])
     pending = list(order.lines.filter(ticket__isnull=True, voided=False).select_related("item"))
-    if not pending:
+    dishes = [line for line in pending if not line.parent_id]  # R1a: an add-on goes on its dish's ticket, never routed on its own
+    if not dishes:
         return None
     sequence = max(order.tickets.values_list("sequence", flat=True), default=0)
     batch = []
-    for station, lines in stations.route(pending, entity=order.entity):  # R12: the order's branch's stations
+    for station, lines in stations.route(dishes, entity=order.entity):  # R12: the order's branch's stations
         sequence += 1
         ticket = KitchenTicket.objects.create(order=order, sequence=sequence, sent_by=user, station=station)
-        OrderLine.objects.filter(pk__in=[line.pk for line in lines]).update(ticket=ticket)
+        dish_ids = [line.pk for line in lines]
+        OrderLine.objects.filter(pk__in=dish_ids).update(ticket=ticket)
+        OrderLine.objects.filter(parent_id__in=dish_ids, ticket__isnull=True).update(ticket=ticket)
         batch.append(ticket)
     batch[0].batch = batch
     return batch[0]
@@ -382,9 +414,15 @@ def bill_rows(order, lines, lang="ar"):
 
     Later restaurant tasks (add-ons, service charge, offers) add their rows here, so ``pay()`` stays one call per step."""
 
+    from . import modifiers
+
     words = MESSAGES[lang]
+    by_pk = {line.pk: line for line in lines}
+    # R1a (HG-109): a priced add-on is an ordinary row right after its dish, «+ جبنة زيادة (برجر)»; a dish's row is as before
+    # (its description is its note: the e-receipt prints a description in place of the item's name, so free choices stay off it).
     rows = [{"item": line.item, "quantity": line.quantity, "unit_sale_price": line.unit_price, "line_discount_amount": Decimal("0"),
-             "description": line.note} for line in lines]
+             "description": modifiers.bill_description(line, by_pk[line.parent_id]) if line.parent_id in by_pk else line.note}
+            for line in modifiers.families(lines)]
     if order.kind == OrderKind.DELIVERY and order.delivery_fee > 0:  # RESTO-003: the fee is its own line on the same invoice
         rows.append({"item": _fee_item(words), "quantity": Decimal("1"), "unit_sale_price": order.delivery_fee, "line_discount_amount": Decimal("0"),
                      "description": words["fee_line"]})
