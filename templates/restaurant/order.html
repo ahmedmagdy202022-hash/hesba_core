@@ -32,7 +32,7 @@
 <div class="rs-sheet__head"><h2 id="sheet-{{ sheet.item.pk }}-title">{{ sheet.item.item_name }} <small>{{ sheet.item.default_sale_price|money }}</small></h2><button type="button" class="rs-sheet__x" data-sheet-close aria-label="{{ mw.close }}">×</button></div>
 <div class="rs-sheet__body">
 {% for group in sheet.groups %}<fieldset class="rs-sheet__group" data-group-min="{{ group.min }}" data-group-max="{{ group.max }}" data-group-message="{{ group.message }}"><legend>{{ group.label }} <small>{{ group.rule }} · {% if group.required %}{{ mw.required }}{% else %}{{ mw.optional }}{% endif %}</small></legend>
-{% for row in group.options %}<label class="rs-choice"><input {% if group.radio %}type="radio" name="option-g{{ group.group.pk }}" value="{{ row.option.pk }}" required{% else %}type="checkbox" name="option" value="{{ row.option.pk }}"{% endif %}><span>{{ row.label }}</span><small>{% if row.price is not None %}+{{ row.price|money }}{% else %}{{ mw.free_tag }}{% endif %}</small></label>
+{% for row in group.options %}<label class="rs-choice"><input {% if group.radio %}type="radio" name="option-g{{ group.group.pk }}" value="{{ row.option.pk }}" required{% else %}type="checkbox" name="option" value="{{ row.option.pk }}"{% endif %}><span>{{ row.label }}</span><small>{% if row.price is not None %}<bdi dir="ltr">+{{ row.price|money }}</bdi>{% else %}{{ mw.free_tag }}{% endif %}</small></label>
 {% endfor %}<p class="rs-sheet__error" role="alert" data-group-error hidden></p></fieldset>
 {% endfor %}
 <div class="rs-row"><label class="rs-sheet__field">{{ words.qty }}<input name="quantity" value="1" inputmode="decimal" dir="ltr"></label><label class="rs-sheet__field">{{ words.note }}<input name="note" maxlength="120"></label></div>

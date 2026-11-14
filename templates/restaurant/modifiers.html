@@ -11,7 +11,7 @@
 <span class="rs-line__name">{{ row.label }}{% if not row.group.active %} <span class="rs-tag">{{ mw.off }}</span>{% endif %}</span>
 <span class="rs-line__amount"><a class="op-secondary rs-edit" href="?lang={{ lang }}&amp;edit={{ row.group.pk }}">{{ mw.edit }}</a></span>
 <span class="rs-line__note">{{ row.rule }} · {% if row.group.min_choices %}{{ mw.required }}{% else %}{{ mw.optional }}{% endif %}</span>
-<span class="rs-line__note">{% for option in row.options %}<span class="rs-chip{% if not option.active %} rs-chip--off{% endif %}">{{ option.label }} <small>{% if option.price is not None %}+{{ option.price|money }}{% else %}{{ mw.free_tag }}{% endif %}</small></span>{% endfor %}</span>
+<span class="rs-line__note">{% for option in row.options %}<span class="rs-chip{% if not option.active %} rs-chip--off{% endif %}">{{ option.label }} <small>{% if option.price is not None %}<bdi dir="ltr">+{{ option.price|money }}</bdi>{% else %}{{ mw.free_tag }}{% endif %}</small></span>{% endfor %}</span>
 <span class="rs-line__note">{{ mw.dishes }}: {% if row.dishes %}{{ row.dishes|join:"، " }}{% else %}{{ mw.no_dishes }}{% endif %}</span>
 </li>
 {% empty %}<li class="op-muted">{{ mw.none }}</li>{% endfor %}
