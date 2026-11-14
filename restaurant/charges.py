@@ -11,7 +11,8 @@ Rules, stated once:
   reduces the service line;
 * a table paid in parts (R2a): each part pays service on its own food and never a top-up. The minimum is the whole table's:
   it is settled on the table's own bill, which is always paid last (an open part blocks it), against the table's guests
-  and the food of the table's bill plus that of its parts already paid on a posted invoice;
+  and the food of the table's bill plus that of its parts already paid on a posted invoice (and, while one is still open,
+  of that part too, so the bill box and the check show what will post);
 * service and the top-up are ordinary invoice lines of two non-stock service items, ``SERVICE-CHARGE`` and ``MIN-CHARGE``,
   made once at the first bill that needs them (like ``DELIVERY-FEE``) and refused if someone makes them stock-tracked.
 
@@ -203,12 +204,16 @@ def _food(lines):
     return money_round(sum((line.amount for line in lines if not line.voided), ZERO))
 
 
-def _paid_parts_food(order):
-    """R2a: the food of ``order``'s parts already paid on a posted invoice (a cancelled invoice no longer counts)."""
+def _parts_food(order):
+    """R2a: the food of ``order``'s parts already paid on a posted invoice (a cancelled invoice no longer counts) and of its
+    parts still open. An open part never exists when the table's bill is paid (``_no_open_part``); counting it keeps the
+    bill box and the printed check right meanwhile, since the part is either paid later or put back onto this bill."""
+
+    from django.db.models import Q
 
     if order.split_from_id:
         return ZERO
-    parts = order.splits.filter(status=OrderStatus.PAID, invoice__status="posted").prefetch_related("lines")
+    parts = order.splits.filter(Q(status=OrderStatus.OPEN) | Q(status=OrderStatus.PAID, invoice__status="posted")).prefetch_related("lines")
     return money_round(sum((_food(list(part.lines.all())) for part in parts), ZERO))
 
 
@@ -220,7 +225,7 @@ def amounts(order, lines, config=None):
     topup = service = ZERO
     if config.minimum is not None and order.kind == OrderKind.DINE_IN and not order.split_from_id and any(not line.voided for line in lines):
         floor = money_round(Decimal(order.guests) * config.minimum)
-        topup = max(floor - food - _paid_parts_food(order), ZERO)
+        topup = max(floor - food - _parts_food(order), ZERO)
     if config.percent is not None and order.kind in config.kinds:
         service = money_round((food + topup) * config.percent / HUNDRED)
     return {"food": food, "topup": topup, "service": service, "percent": config.percent, "minimum": config.minimum}

@@ -558,6 +558,8 @@ def _split_merge_context(order, families, user, lang):
         merge_choices = list(branches.orders(Order.objects.filter(status=OrderStatus.OPEN, kind=OrderKind.DINE_IN, entity_id=order.entity_id, split_from=None))
                              .exclude(pk=order.pk).exclude(table=None).select_related("table").order_by("table__sort_order", "table__name"))
     parts = list(order.splits.exclude(status=OrderStatus.MERGED).select_related("invoice").prefetch_related("lines").order_by("pk"))
+    for part in parts:  # R3 (HG-113): a part at what its bill asks (open) or asked (paid), service included; Order.total with the settings off
+        part.bill = _charge_context(part, list(part.lines.all()), lang)["total"]
     words = WORDS[lang]
     heading = ""
     if order.split_from_id:

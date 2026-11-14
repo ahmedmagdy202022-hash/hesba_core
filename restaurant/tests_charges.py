@@ -395,6 +395,25 @@ class PartTests(ChargeSetup):
         self.assertEqual(rest.total_amount, D("504.00"))
         self.assertEqual(part_invoice.total_amount + rest.total_amount, D("672.00"))  # the same as the table paid whole
 
+    def test_while_a_part_is_open_the_tables_check_already_shows_what_its_bill_will_post(self):
+        self.configure(minimum="300")
+        order = self.order()
+        part = services.split_order(order, {order.lines.get(item=self.fatta).pk: 1}, self.owner)
+        expected = self.preview_rows(order)
+        self.assertEqual([row[0] for row in expected][1:], ["MIN-CHARGE", "SERVICE-CHARGE"])
+        self.assertEqual([row[4] for row in expected][1:], [D("200.00"), D("54.00")])  # the open part's 150.00 counts already
+        self.client.force_login(self.waiter)
+        self.assertIn('data-check-total="504.00"', self.client.get(reverse("restaurant:check", args=[order.pk])).content.decode())
+        self.pay(part)
+        self.assertEqual(self.invoice_rows(self.pay(order)), expected)
+
+    def test_a_part_put_back_leaves_the_bill_as_if_never_split(self):
+        self.configure(minimum="300")
+        order = self.order()
+        part = services.split_order(order, {order.lines.get(item=self.fatta).pk: 1}, self.owner)
+        services.put_back(part, self.owner)
+        self.assertEqual(self.pay(order).total_amount, D("672.00"))
+
     def test_paying_a_token_part_first_does_not_escape_the_minimum(self):
         self.configure(minimum="300")
         order = self.order()
@@ -612,6 +631,30 @@ class SetupScreenTests(ChargeSetup):
         self.assertContains(response, "نسبة الخدمة")
         self.assertIsNone(charges.settings().percent)
         self.assertEqual(DiningTable.objects.count(), 2)  # the settings form never reaches the table save
+
+    def test_someone_who_may_see_but_not_change_tables_sees_the_values_only(self):
+        from permissions.services import user_has_permission
+
+        self.configure(minimum="300")
+        viewer = person(RoleCode.ACCOUNTANT, "charge_viewer")
+        self.assertTrue(user_has_permission(viewer, "sales.view_sales_invoices"))
+        self.assertFalse(user_has_permission(viewer, "master_data.manage_items"))
+        self.client.force_login(viewer)
+        html = self.client.get(reverse("restaurant:tables")).content.decode()
+        self.assertIn("data-charges-view", html)
+        self.assertNotIn("data-charges-form", html)
+        self.assertIn("300.00", html)
+
+    def test_the_parent_lists_its_paid_part_at_what_its_invoice_took(self):
+        self.configure()
+        order = self.order()
+        part = services.split_order(order, {order.lines.get(item=self.fatta).pk: 1}, self.owner)
+        self.client.force_login(self.owner)
+        html = self.client.get(reverse("restaurant:order", args=[order.pk])).content.decode()
+        self.assertIn('<span class="rs-part__amount">168.00</span>', html.replace("٫", "."))
+        self.pay(part)
+        html = self.client.get(reverse("restaurant:order", args=[order.pk])).content.decode()
+        self.assertIn('<span class="rs-part__amount">168.00</span>', html.replace("٫", "."))
 
     def test_a_waiter_cannot_change_them(self):
         response = self.post(self.waiter, percent="12", kinds=["dine_in"])
