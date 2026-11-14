@@ -5,7 +5,8 @@ named «T1». The café kitchen of ``tests_kitchen``: a large koshary made in th
 0.100 kg of lentils (50.00), 11.00 a plate, sold at 60.00; a can of cola at 20.00 that costs 9.00. Rice, lentils and cola
 are in stock in both halls. VAT is off, so a bill of two koshary and a cola is 140.00 exactly.
 
-The clock stands still on a Wednesday at noon in Cairo: nothing here depends on the day or the hour.
+The clock stands still on a Wednesday at noon in Cairo: nothing here depends on the day or the hour (the migration tests
+write their old rows with that fixed date).
 """
 
 from datetime import datetime, timezone as dt_timezone
@@ -370,6 +371,12 @@ class ScopeTests(BranchSetup):
 
 
 class SingleBranchTests(RestaurantSetup):
+    def setUp(self):
+        clock = mock.patch("django.utils.timezone.now", return_value=NOW)
+        clock.start()
+        self.addCleanup(clock.stop)
+        super().setUp()
+
     def test_a_single_branch_restaurant_looks_as_before(self):
         self.client.force_login(self.owner)
         board = self.client.get(reverse("restaurant:board"), {"lang": "ar"}).content.decode()
