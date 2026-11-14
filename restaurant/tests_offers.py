@@ -300,8 +300,8 @@ class CouponTests(OfferSetup):
 
 
 class ComboAndChargeTests(OfferSetup):
-    def combo(self, price="150.00"):
-        burger = make_item(item_code="C-BURG", item_name="برجر الوجبة", default_sale_price="120.00", is_stock_tracked=False)
+    def combo(self, price="150.00", burger=None, addons=None):
+        burger = burger or make_item(item_code="C-BURG", item_name="برجر الوجبة", default_sale_price="120.00", is_stock_tracked=False)
         fries = make_item(item_code="C-FRIES", item_name="بطاطس", default_sale_price="40.00", is_stock_tracked=False)
         large = make_item(item_code="C-FRIES-L", item_name="بطاطس كبيرة", default_sale_price="50.00", is_stock_tracked=False)
         pepsi = make_item(item_code="C-PEPSI", item_name="بيبسي", default_sale_price="25.00", is_stock_tracked=True)
@@ -310,7 +310,7 @@ class ComboAndChargeTests(OfferSetup):
         sandwich, side, drink = combo.slots.order_by("sort", "pk")
         picks = {sandwich.pk: sandwich.choices.get().pk, side.pk: side.choices.order_by("sort", "pk").first().pk, drink.pk: drink.choices.get().pk}
         order = services.open_order(self.owner, table=self.a_t1, guests=2)
-        services.add_combo(order, combo, self.owner, picks)
+        services.add_combo(order, combo, self.owner, picks, options={sandwich.pk: addons} if addons else None)
         return order
 
     def test_a_combo_takes_no_offer_and_a_dish_beside_it_does(self):
@@ -332,6 +332,17 @@ class ComboAndChargeTests(OfferSetup):
         self.assertEqual([row[3] for row in self.invoice_rows(invoice)], [D("0.01"), D("0.00"), D("0.00")])
         self.assertEqual(invoice.total_amount, D("184.99"))
         self.assertFalse(InvoicePromotion.objects.exists())
+
+    def test_an_add_on_of_a_combo_component_takes_no_offer_and_a_dishs_add_on_does(self):
+        self.vat(False)
+        Promotion.objects.create(name="عشرة في المية", kind=PromotionKind.PERCENT, percent=D("10"))
+        order = self.combo(burger=self.burger, addons=[self.medium.pk, self.cheese_opt.pk])
+        services.add_item(order, self.burger, self.owner, 1, options=[self.medium.pk, self.cheese_opt.pk])
+        invoice = self.pay(order)
+        self.assertEqual([(row[0], row[3]) for row in self.invoice_rows(invoice)],
+                         [("D-BURG", D("22.70")), ("A-CHEESE", D("0.00")), ("C-FRIES", D("7.57")), ("C-PEPSI", D("4.73")),
+                          ("D-BURG", D("12.00")), ("A-CHEESE", D("1.50"))])
+        self.assertEqual(InvoicePromotion.objects.get(invoice=invoice).discount, D("13.50"))
 
     def test_the_service_is_on_the_food_after_the_offer_and_never_discounted(self):
         self.vat(False)
@@ -529,7 +540,7 @@ class CheckAndScreenTests(OfferSetup):
     def test_with_nothing_typed_the_box_is_closed_and_the_figures_are_as_before(self):
         order = self.burgers()
         page = self.page(order)
-        self.assertContains(page, "<details class=\"rs-more\" data-offer-box><summary>خصم أو نقاط أو كارت هدية</summary>")
+        self.assertContains(page, "<details class=\"rs-more\" data-offer-box><summary style=\"min-height:44px;line-height:28px\">خصم أو نقاط أو كارت هدية</summary>")
         self.assertNotContains(page, "data-offer-row")
         self.assertNotContains(page, "data-offer-summary")
         self.assertContains(page, "data-order-total>270.00")
