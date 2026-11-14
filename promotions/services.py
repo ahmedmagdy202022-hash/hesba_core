@@ -77,12 +77,27 @@ def running(now=None):
     return [promo for promo in rows.select_related("item", "category") if _in_hours(promo, clock)]
 
 
+def _dated(now):
+    """R6 (HG-114): promotions switched on and inside their dates at ``now`` (local time), whatever their hours."""
+
+    day = (timezone.localtime(now) if now is not None else timezone.localtime()).date()
+    rows = Promotion.objects.filter(active=True).filter(Q(starts_on__isnull=True) | Q(starts_on__lte=day)).filter(Q(ends_on__isnull=True) | Q(ends_on__gte=day))
+    return rows.select_related("item", "category")
+
+
 def _in_hours(promo, clock):
     if promo.from_time is None or promo.to_time is None:
         return True
     if promo.from_time <= promo.to_time:
         return promo.from_time <= clock <= promo.to_time
     return clock >= promo.from_time or clock <= promo.to_time  # an evening that runs past midnight
+
+
+def _line_in_hours(promo, line):
+    """R6 (HG-114): a line that carries its own time ``at`` (a table bill's dish: when it was ordered) takes a timed
+    promotion only if that time is inside its hours. A line without ``at`` (every other caller) is not looked at here."""
+
+    return line.get("at") is None or _in_hours(promo, timezone.localtime(line["at"]).time())
 
 
 def _covers(promo, item):
@@ -118,7 +133,7 @@ def discounts(promo, lines):
     """What ``promo`` takes off each line (zero where it does not apply)."""
 
     result = [ZERO for _ in lines]
-    eligible = [index for index, line in enumerate(lines) if _open(line) and _covers(promo, line["item"]) and _gross(line) > 0]
+    eligible = [index for index, line in enumerate(lines) if _open(line) and _covers(promo, line["item"]) and _gross(line) > 0 and _line_in_hours(promo, line)]
     if promo.kind == PromotionKind.PERCENT and promo.percent:
         for index in eligible:
             result[index] = money_round(_gross(lines[index]) * promo.percent / HUNDRED)
@@ -171,12 +186,23 @@ def apply(lines, now=None, coupon="", lang="ar", customer=None):
     Returns ``(lines, promotion, discount)``; ``promotion`` is None when nothing applies. An unknown or stopped
     coupon is refused, so the cashier knows it did not count. S6 (HG-071): a members-only promotion counts only for
     ``customer``'s active contract on its service.
+
+    R6 (HG-114): a line may carry ``at``, the moment it was ordered (the table bill's dishes). Such a line takes a timed
+    promotion if its own time is inside the promotion's hours, whatever the hour ``now`` is; the dates are still judged
+    at ``now``. Once any line carries ``at``, a line without one is judged at ``now``. ``at`` is only read: the lines come
+    back as given, with only their discount filled. A call where no line carries ``at`` runs exactly as before.
     """
 
     if not enabled():
         return lines, None, ZERO
     code = str(coupon or "").strip()
     running_now = running(now)
+    judged = lines
+    if any(line.get("at") is not None for line in lines):  # R6 (HG-114): a table bill's dishes, each judged by when it was ordered
+        clock = timezone.localtime(now) if now is not None else timezone.localtime()
+        judged = [line if line.get("at") is not None else dict(line, at=clock) for line in lines]
+        times = {timezone.localtime(line["at"]).time() for line in judged}
+        running_now += [promo for promo in _dated(now) if promo not in running_now and any(_in_hours(promo, moment) for moment in times)]
     if any(promo.membership_service_id for promo in running_now):
         memberships = member_services(customer, timezone.localtime(now).date() if now is not None else None)
         running_now = [promo for promo in running_now if not promo.membership_service_id or promo.membership_service_id in memberships]
@@ -185,7 +211,7 @@ def apply(lines, now=None, coupon="", lang="ar", customer=None):
         raise ValidationError(MESSAGES[lang]["coupon"].format(code=code))
     best, best_off, best_total = None, None, ZERO
     for promo in candidates:
-        off = discounts(promo, lines)
+        off = discounts(promo, judged)
         total = sum(off, ZERO)
         if total > best_total:
             best, best_off, best_total = promo, off, total
