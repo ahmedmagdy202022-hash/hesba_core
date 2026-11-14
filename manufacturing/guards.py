@@ -107,7 +107,7 @@ def guarded(operation_ids):
     dishes = _kitchen_dishes(set(runs.values()))
     from restaurant.kitchen import dish_page
 
-    return {operation: Owner("dish", owner.number, dish_page(dishes[runs[operation]]), dishes[runs[operation]].item_name)
+    return {operation: Owner("dish", owner.number, dish_page(dishes[runs[operation]], runs[operation]), dishes[runs[operation]].item_name)
             for operation, owner in found.items() if runs.get(operation) in dishes}
 
 
@@ -123,7 +123,7 @@ def run_page(run_id):
         return own
     from restaurant.kitchen import dish_page
 
-    return dish_page(dish)
+    return dish_page(dish, run_id)
 
 
 def before_stock_operation_reversal(operation_id):

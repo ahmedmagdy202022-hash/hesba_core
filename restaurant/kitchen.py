@@ -288,10 +288,15 @@ def preparation_dishes(run_ids):
     return {run.pk: run.recipe.product for run in runs if run.recipe.code == _recipe_code(run.recipe.product_id)}
 
 
-def dish_page(dish):
+def dish_page(dish, run_id=None):
+    """The dish's page; with ``run_id``, the same page with that preparation listed first, however old it is (the
+    list holds the last ``RECENT`` only, and the stock screen sends a person here to cancel a particular one)."""
+
     from django.urls import reverse
 
-    return reverse("restaurant:dish", args=[dish.pk])
+    if run_id is None:
+        return reverse("restaurant:dish", args=[dish.pk])
+    return reverse("restaurant:dish_preparation", args=[dish.pk, int(run_id)])
 
 
 def dish_pages_open():

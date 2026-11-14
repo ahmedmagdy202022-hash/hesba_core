@@ -438,7 +438,7 @@ def menu_costing(request):
 
 
 @require_permission(COST_VIEW)
-def dish_ingredients(request, pk):
+def dish_ingredients(request, pk, run=None):
     from . import insights
 
     lang = _lang(request)
@@ -489,17 +489,27 @@ def dish_ingredients(request, pk):
                                                                    ingredients=ingredients, cost=insights.plate_cost(dish, current), error=error,
                                                                    can_edit=user_has_permission(request.user, TABLES), kw=kw,
                                                                    kitchen_made=kitchen.is_kitchen_made(dish), in_stock=_in_stock(dish),
-                                                                   preparations=_preparations(dish, lang), can_cancel=kitchen.may_cancel(request.user)))
+                                                                   preparations=_preparations(dish, lang, run), can_cancel=kitchen.may_cancel(request.user)))
 
 
-def _preparations(dish, lang):
-    """HG-107: the dish's recent preparations, each with why it cannot be cancelled now and whether a request waits."""
+def _preparations(dish, lang, asked=None):
+    """HG-107: the dish's recent preparations, each with why it cannot be cancelled now and whether a request waits.
+
+    ``asked``: a preparation the person was sent here for (from the stock screen or the approvals inbox). It is listed
+    first even when it is older than the recent ones, so a preparation that can still be cancelled is never out of reach;
+    one that is not this dish's here is a 404."""
 
     from approvals.models import ApprovalRequest, ApprovalStatus
+    from django.http import Http404
 
     from . import kitchen
 
     runs = kitchen.preparations(dish)
+    if asked is not None:
+        found = kitchen.preparation_of(dish, asked)
+        if found is None:
+            raise Http404("Not one of this dish's preparations here.")
+        runs = [found] + [run for run in runs if run.pk != found.pk]
     waiting = set(ApprovalRequest.objects.filter(action=kitchen.CANCEL_RUN, status=ApprovalStatus.PENDING, object_id__in=[run.pk for run in runs])
                   .values_list("object_id", flat=True))
     return [{"run": run, "posted": run.status == "posted", "why_not": kitchen.why_not(run, lang), "waiting": run.pk in waiting} for run in runs]
