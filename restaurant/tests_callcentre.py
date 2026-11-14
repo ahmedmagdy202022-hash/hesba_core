@@ -77,6 +77,9 @@ class CallSetup(SplitBillSetup):
     def money(self):
         """Every money row the call screen must never write before a bill is paid."""
 
+        from ledger.projector import Projector
+
+        Projector().rebuild()  # the journal is projected from the documents; count what it holds now
         return {"invoices": SalesInvoice.objects.count(), "journal": JournalLine.objects.count(), "customer_ledger": CustomerLedgerEntry.objects.count(),
                 **{key: value for key, value in self.moved().items() if key in ("cash", "stock", "invoices")}}
 
