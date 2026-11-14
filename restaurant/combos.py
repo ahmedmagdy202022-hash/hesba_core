@@ -266,9 +266,12 @@ def save_combo(data, user, combo=None, lang="ar"):
         slot.name_ar, slot.name_en, slot.sort = values["name_ar"], values["name_en"], position
         slot.save()
         removed = [choice.pk for choice, values_ in rows if choice is not None and values_ is None]
-        ComboChoice.objects.filter(pk__in=removed).delete()
+        # A choice whose item changes is replaced by a new row: two choices swapping their items would otherwise meet the
+        # one-item-per-slot rule halfway through the saves (nothing points at a choice, so a new row loses nothing).
+        replaced = {choice.pk for choice, values_ in rows if choice is not None and values_ is not None and choice.item_id != values_["item"].pk}
+        ComboChoice.objects.filter(pk__in=[*removed, *replaced]).delete()
         for index, (choice, values_) in enumerate((row for row in rows if row[1] is not None), start=1):
-            choice = choice or ComboChoice(slot=slot)
+            choice = choice if choice is not None and choice.pk not in replaced else ComboChoice(slot=slot)
             choice.item, choice.upcharge, choice.active, choice.sort = values_["item"], values_["upcharge"], values_["active"], index
             choice.save()
     combo = Combo.objects.select_related("item").get(pk=combo.pk)
