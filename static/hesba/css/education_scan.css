@@ -84,6 +84,7 @@ tr[data-scanned]{background:var(--hs-success-wash)}
 .es-nursery{grid-template-columns:minmax(0,1fr);max-width:min(560px,100%)}
 .es-nursery .es-row{min-width:0}
 .es-nursery .es-box{inline-size:100%;min-width:0}
+.es-nursery .es-box::placeholder{font-size:var(--hs-text-md)}  /* the hint is a sentence, the code is a few letters: at 390 px the sentence must not be cut */
 [data-nursery-board] .edu-inline{display:grid;gap:var(--hs-space-2);width:100%;min-width:0}
 [data-nursery-board] .edu-inline input,[data-nursery-board] .edu-inline select,[data-nursery-board] .edu-inline button{box-sizing:border-box;inline-size:100%;min-width:0;min-height:var(--hs-control-height)}
 [data-nursery-board] .edu-inline input,[data-nursery-board] .edu-inline select{padding:0 var(--hs-space-3);border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-sm);background:var(--hs-surface);color:var(--hs-ink);font:inherit}
