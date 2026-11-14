@@ -140,7 +140,7 @@ def certificate_issue(request):
 
 def _person(user):
     """A person's display name, never the login name: a user with no name on the profile shows a dash."""
-    name = display_name(user) if user is not None else ""
+    name = display_name(user)
     return "" if name == user.get_username() else name
 
 
