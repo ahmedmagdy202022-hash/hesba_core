@@ -245,7 +245,7 @@ class SetUpTests(ComboSetup):
         self.assertEqual(combos.cheapest_saving(self.combo), D("35.00"))
 
     def test_a_combo_priced_above_its_cheapest_parts_is_refused(self):
-        self.assert_refused(lambda: combos.save_combo(meal(self.burger, self.fries, self.large, self.pepsi, price="185.01"), self.owner), "185.00")
+        self.assert_refused(lambda: combos.save_combo({**meal(self.burger, self.fries, self.large, self.pepsi, price="185.01"), "name_ar": "وجبة غالية"}, self.owner), "185.00")
         at_parts = combos.save_combo(dict(meal(self.burger, self.fries, self.large, self.pepsi, price="185.00"), name_ar="وجبة كاملة"), self.owner)
         self.assertEqual(combos.cheapest_saving(at_parts), D("0.00"))
         # changing the price of a saved combo is checked the same way
@@ -258,7 +258,7 @@ class SetUpTests(ComboSetup):
         self.assert_refused(lambda: combos.save_combo(data, self.owner), "كومبو")
 
     def test_bad_set_ups_are_refused(self):
-        base = lambda **change: dict(meal(self.burger, self.fries, self.large, self.pepsi), name_ar="وجبة تانية", **change)
+        base = lambda **change: {**meal(self.burger, self.fries, self.large, self.pepsi), "name_ar": "وجبة تانية", **change}
         cases = [
             (base(name_ar=""), "اسم"), (base(price="0"), "السعر"), (base(price="abc"), "السعر"), (base(name_ar="وجبة برجر"), "نفس الاسم"),
             (base(slots=[]), "خانة"),
@@ -347,7 +347,7 @@ class FamilyTests(ComboSetup):
         self.assert_refused(lambda: services.void_line(head, self.waiter, reason="غلط"), "", error=PermissionDenied)
         self.assert_refused(lambda: services.void_line(head, self.owner, reason=""), "سبب")
         services.void_line(head, self.owner, reason="العميل غيّر رأيه")
-        self.assertEqual(list(order.lines.values_list("voided", "void_reason").distinct()), [(True, "العميل غيّر رأيه")])
+        self.assertEqual(set(order.lines.values_list("voided", "void_reason")), {(True, "العميل غيّر رأيه")})
         self.assertEqual(Order.objects.get(pk=order.pk).total, D("0.00"))
         from audit.models import AuditLog
 
@@ -360,12 +360,12 @@ class CraftedTests(ComboSetup):
     def test_crafted_choices_are_refused_and_nothing_changes(self):
         order = services.open_order(self.owner, table=self.t1)
         add = lambda picks, combo=None: services.add_combo(order, combo or self.combo, self.owner, picks)
-        wrong_slot = dict(self.picks(), **{self.side.pk: self.c_pepsi.pk})
+        wrong_slot = {**self.picks(), self.side.pk: self.c_pepsi.pk}
         self.assert_refused(lambda: add(wrong_slot), "مش من اختيارات")
         missing = {self.sandwich.pk: self.c_burger.pk, self.side.pk: self.c_fries.pk}
         self.assert_refused(lambda: add(missing), "المشروب")
-        self.assert_refused(lambda: add(dict(self.picks(), **{self.side.pk: "x"})), "مش من اختيارات")
-        self.assert_refused(lambda: add(dict(self.picks(), **{999999: self.c_fries.pk})), "مش من اختيارات")
+        self.assert_refused(lambda: add({**self.picks(), self.side.pk: "x"}), "مش من اختيارات")
+        self.assert_refused(lambda: add({**self.picks(), 999999: self.c_fries.pk}), "مش من اختيارات")
         ComboChoice.objects.filter(pk=self.c_large.pk).update(active=False)
         self.assert_refused(lambda: add(self.picks(large=True)), "مش متاح")
         ComboChoice.objects.filter(pk=self.c_large.pk).update(active=True)
@@ -376,7 +376,7 @@ class CraftedTests(ComboSetup):
         self.assert_refused(lambda: add(self.picks()), "مش متاح")
 
     def test_a_combo_whose_parts_got_cheaper_than_its_price_is_refused_when_taken(self):
-        self.fries.default_sale_price = D("10.00")
+        self.fries.default_sale_price = D("4.00")  # 120.00 + 4.00 + 25.00 = 149.00, below the combo's 150.00
         self.fries.save(update_fields=["default_sale_price"])
         order = services.open_order(self.owner, table=self.t1)
         self.assert_refused(lambda: services.add_combo(order, self.combo, self.owner, self.picks()), "أغلى")
@@ -447,7 +447,7 @@ class SplitMergeTests(ComboSetup):
         services.add_combo(Order.objects.get(pk=order.pk), self.combo, self.owner, self.picks(large=True))  # takes bundle 1 again meanwhile
         services.put_back(part, self.owner)
         after = Order.objects.get(pk=order.pk)
-        self.assertEqual(sorted(after.lines.values_list("bundle", flat=True).distinct()), [None, 1, 2])
+        self.assertEqual(set(after.lines.values_list("bundle", flat=True)), {None, 1, 2})
         returned = sorted(after.lines.filter(pk__in=[line[0] for line in before["lines"]]).values_list("pk", "item_id", "quantity", "unit_price", "discount",
                                                                                                        "combo_id", "parent_id", "ticket_id", "voided"))
         self.assertEqual(returned, sorted((pk, item, qty, price, discount, combo, parent, ticket, voided)
