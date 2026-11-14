@@ -549,3 +549,29 @@ class SizeTests(ModifierSetup):
         page = self.client.get(reverse("restaurant:order", args=[order.pk])).content.decode()
         self.assertNotIn('data-size-tile="LATTE"', page)
         self.assertIn(f'data-opens-sheet="sheet-{self.small.pk}"', page)
+
+
+class DemoTests(RestaurantSetup):
+    """From an empty set-up, as the demo runs it."""
+
+    def test_the_demo_seeds_one_add_on_group_and_one_required_choice_and_runs_twice(self):
+        from types import SimpleNamespace
+
+        from . import demo
+
+        catalog = SimpleNamespace(key="restaurants.restaurant")
+        grill, kofta = (make_item(item_code=f"D-DEMO{n}", item_name=name, default_sale_price="180.00", is_stock_tracked=False)
+                        for n, name in ((1, "نصف فرخة مشوية"), (2, "كفتة مشوية")))
+        demo.seed_modifiers(catalog, [grill, kofta, self.koshary], self.owner)
+        demo.seed_modifiers(catalog, [grill, kofta, self.koshary], self.owner)  # safe to run twice
+        self.assertEqual(ModifierGroup.objects.filter(name_ar__in=["إضافات", "درجة التسوية"]).count(), 2)
+        self.assertEqual([group.name_ar for group in modifiers.groups_of(kofta)], ["درجة التسوية", "إضافات"])
+        self.assertEqual([group.name_ar for group in modifiers.groups_of(grill)], ["إضافات"])
+        self.assertEqual(modifiers.groups_of(self.koshary), [])
+        order = services.open_order(self.owner, table=self.t2)
+        with self.assertRaisesMessage(ValidationError, "درجة التسوية"):
+            services.add_item(order, kofta, self.owner)
+        cheese = ModifierOption.objects.get(name_ar="جبنة زيادة", group__name_ar="إضافات")
+        line = services.add_item(order, kofta, self.owner, 1, options=[ModifierOption.objects.get(name_ar="ميديم").pk, cheese.pk])
+        self.assertEqual((line.options, order.total), ("ميديم", D("195.00")))
+        self.assertEqual(order.lines.get(parent=line).item.item_code, demo.ADDON_CODE)
