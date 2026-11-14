@@ -27,7 +27,7 @@ COMBO_WORDS = {
         "saving": "بيوفّر", "at_cheapest": "بأرخص اختيارات", "included": "ضمن السعر",
         # the order page
         "sheet_rule": "اختيار واحد · لازم", "pick": "اختار من «{slot}».", "add_to_order": "ضيف الكومبو للطلب", "count": "عدد الكومبو",
-        "saves": "بيوفّر {saving}", "saved_tag": "وفّرت", "tile": "كومبو", "close": "إغلاق",
+        "saves": "بيوفّر {saving}", "saved_tag": "توفير الكومبو", "tile": "كومبو", "close": "إغلاق",
     },
     "en": {
         "title": "Combos", "back": "Tables",
@@ -38,11 +38,11 @@ COMBO_WORDS = {
         "save": "Save", "saved": "Combo saved.", "new": "New combo", "edit": "Edit", "none": "No combos yet.", "off": "Off",
         "saving": "Saves", "at_cheapest": "at the cheapest choices", "included": "Included",
         "sheet_rule": "one choice · required", "pick": "Choose from “{slot}”.", "add_to_order": "Add the combo to the order", "count": "Combos",
-        "saves": "Saves {saving}", "saved_tag": "Saved", "tile": "Combo", "close": "Close",
+        "saves": "Saves {saving}", "saved_tag": "Combo saving", "tile": "Combo", "close": "Close",
     },
 }
-SLOT_ROWS = 4
-CHOICE_ROWS = 4
+SLOT_ROWS = 3
+CHOICE_ROWS = 3
 
 
 def _choice_items():
