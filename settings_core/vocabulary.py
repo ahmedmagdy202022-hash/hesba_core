@@ -34,6 +34,7 @@ BASE = {
     "new_sale": {"ar": "فاتورة بيع جديدة", "en": "New sales invoice"},
     "staff": {"ar": "الموظفون", "en": "Employees"},
     "appointments": {"ar": "المواعيد", "en": "Appointments"},
+    "students_short": {"ar": "الطلاب", "en": "Students"},  # the phone tab bar's label for the student list (an education activity's own word for the person it teaches)
     # WATCH1B (CL-01): the sentences that name the sale or the customer on the dashboard, the invoice form, the customer
     # page and the agenda. Each key holds one whole phrase (never a noun to splice into a sentence), and BASE keeps
     # today's wording exactly: only an activity that lists the key says anything different.
@@ -312,14 +313,16 @@ SUB_ACTIVITY = {
     # Adults mostly pay for themselves.
     ("education", "training"): {
         "customers": {"ar": "حسابات المتدربين", "en": "Trainee accounts"},
-        "customers_short": {"ar": "المتدربين", "en": "Trainees"},  # ED-09: the tab bar's label; the page keeps the full name
+        "customers_short": {"ar": "الحسابات", "en": "Accounts"},  # the tab bar's label for the payers' accounts; the page keeps the full name
+        "students_short": {"ar": "المتدربين", "en": "Trainees"},  # the one word the bar uses for the people who attend
         "customer": {"ar": "متدرب", "en": "Trainee"},
         "the_customer": {"ar": "المتدرب", "en": "Trainee"},
         "new_customer": {"ar": "حساب متدرب جديد", "en": "New trainee account"},
     },
     ("education", "languages"): {
         "customers": {"ar": "حسابات الدارسين", "en": "Learner accounts"},
-        "customers_short": {"ar": "الدارسين", "en": "Learners"},
+        "customers_short": {"ar": "الحسابات", "en": "Accounts"},
+        "students_short": {"ar": "الدارسين", "en": "Learners"},
         "customer": {"ar": "دارس", "en": "Learner"},
         "the_customer": {"ar": "الدارس", "en": "Learner"},
         "new_customer": {"ar": "حساب دارس جديد", "en": "New learner account"},

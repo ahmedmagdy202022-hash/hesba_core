@@ -3,7 +3,7 @@
 {% block operation_content %}
 <section class="op-title-row"><div><a class="op-back" href="{% url 'staff:list' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.back }}</a><h1>{{ employee.name }}</h1><p><bdi>{{ employee.code }}</bdi>{% if employee.title %} · {{ employee.title }}{% endif %}{% if employee.phone %} · <a href="tel:{{ employee.phone }}" dir="ltr">{{ employee.phone|ltr }}</a>{% endif %} · {{ words.commission }} <bdi>{{ employee.commission_percent|stringformat:"g" }}%</bdi>{% if not employee.active %} · <span class="op-status op-status-cancelled">{{ words.off }}</span>{% endif %}</p></div></section>
 {% block employee_extra %}
-<h2>{{ words.work_title }} <small class="op-muted">(<bdi>{{ work.from|date:"Y-m-d" }}</bdi> – <bdi>{{ work.to|date:"Y-m-d" }}</bdi>)</small></h2>
+<h2>{{ words.work_title }} <small class="op-muted">(<bdi dir="ltr" data-work-range>{{ work.from|date:"Y-m-d" }} – {{ work.to|date:"Y-m-d" }}</bdi>)</small></h2>
 {% for block in work.blocks %}
 {% if block.key == 'appointments' %}<section class="op-summary-grid" data-work="appointments"><article><small>{{ words.appointments }}: {{ words.done }}</small><strong>{{ block.done }}</strong></article><article><small>{{ words.sales }}</small><strong>{{ block.sales|money }}</strong></article><article><small>{{ words.earned }}</small><strong data-work-commission>{{ block.commission|money }}</strong></article></section>
 {% url 'appointments:performance' as perf_url %}{% link_ok perf_url as perf_ok %}{% if perf_ok %}<p><a href="{{ perf_url }}?lang={{ lang }}">{{ words.performance }} →</a></p>{% endif %}
