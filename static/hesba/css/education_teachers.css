@@ -1,0 +1,8 @@
+/* Education video finding 20: on a phone the teacher-pay row (the amount, the cashbox and «ادفع») stacks, so the amount box and the cashbox
+   list take the row's width instead of a few characters each, and every control is a full touch target. Tokens only; wide screens keep the
+   one-line row from operations.css. */
+@media (max-width:700px){
+  .edu-inline-form[data-pay-form]{display:grid;gap:var(--hs-space-2);width:100%;min-width:0}
+  .edu-inline-form[data-pay-form] input,.edu-inline-form[data-pay-form] select,.edu-inline-form[data-pay-form] button{box-sizing:border-box;inline-size:100%;max-width:none;min-width:0;min-height:var(--hs-control-height)}
+  .edu-inline-form[data-pay-form] input,.edu-inline-form[data-pay-form] select{padding:0 var(--hs-space-3);border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-sm);background:var(--hs-surface);color:var(--hs-ink);font:inherit}
+}

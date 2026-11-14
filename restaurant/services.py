@@ -117,11 +117,16 @@ def _quantity(value, words):
 # --- tables -----------------------------------------------------------------
 
 @transaction.atomic
+@transaction.atomic
 def save_table(data, user, table=None, lang="ar", entity=None):
     """Create or change a table. R12: a new table lands in ``entity`` (else the working entity, else the main one); a free
     table may move to another branch from the whole group; its name is unique within its branch."""
 
     words = MESSAGES[lang]
+    if table is not None:
+        # The lock ``open_order`` and ``move_table`` take: an order being opened on this table right now is seen by the
+        # open-orders check below, so the table is not moved to another branch or switched off under it.
+        table = DiningTable.objects.select_for_update().get(pk=table.pk)
     name = (data.get("name") or "").strip()[:40]
     if not name:
         raise ValidationError(words["table_name"])
