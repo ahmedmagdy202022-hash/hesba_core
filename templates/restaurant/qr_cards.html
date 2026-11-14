@@ -20,7 +20,9 @@
 {% if card.url %}<div class="qc-qr" data-qr-text="{{ card.url }}" role="img" aria-label="{{ words.table }} {{ card.table.name }}"></div>{% else %}<div class="qc-noqr">{{ words.no_base }}</div>{% endif %}
 <p class="qc-card__scan">{{ words.scan_ar }}<small>{{ words.scan_en }}</small></p></div>
 </article>
-<div class="qc-tools"><form method="post" action="{% url 'restaurant:qr_rotate' card.table.pk %}" data-rotate-form data-confirm="{{ words.rotate_confirm }}">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><button class="qc-button" type="submit" data-rotate>{{ words.rotate }}</button></form></div></div>{% endfor %}</section>{% endfor %}</main>
+</div>{% endfor %}</section>{% endfor %}</main>
+{% if count %}<section class="qc-manage" aria-labelledby="qc-manage-title" data-qr-manage><h2 id="qc-manage-title">{{ words.manage }}</h2>
+<ul>{% for page in pages %}{% for card in page %}<li data-qr-row="{{ card.table.pk }}"><span>{{ words.table }} {{ card.table.name }}{% if card.branch %} · <small>{{ card.branch }}</small>{% endif %}</span><form method="post" action="{% url 'restaurant:qr_rotate' card.table.pk %}" data-rotate-form data-confirm="{{ words.rotate_confirm }}">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><button class="qc-button" type="submit" data-rotate>{{ words.rotate }}</button></form></li>{% endfor %}{% endfor %}</ul></section>{% endif %}
 <script src="{% static 'hesba/vendor/qrcode/qrcode-1.4.4.js' %}"></script>
 <script>(function () { document.querySelectorAll('[data-qr-text]').forEach(function (box) { if (!window.qrcode) { return; } var qr = window.qrcode(0, 'M'); qr.addData(box.getAttribute('data-qr-text')); qr.make(); box.innerHTML = qr.createSvgTag({ cellSize: 3, margin: 0, scalable: true }); }); var print = document.querySelector('[data-print]'); if (print) { print.addEventListener('click', function () { window.print(); }); } document.querySelectorAll('[data-confirm]').forEach(function (form) { form.addEventListener('submit', function (event) { if (!window.confirm(form.getAttribute('data-confirm'))) { event.preventDefault(); } }); }); }());</script>
 </body>

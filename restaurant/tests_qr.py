@@ -702,6 +702,7 @@ class QrCardTests(QrSetup):
         for table in tables:
             self.assertContains(page, f'data-qr-text="{BASE}/t/{table.qr_key}/"', count=1)
         self.assertContains(page, "امسح المنيو واطلب من مكانك")
+        self.assertContains(page, "data-rotate-form", count=tables.count())  # «غيّر الكود» per table, outside the printed sheet
         self.assertContains(page, "qrcode-1.4.4.js")
         self.assertNotContains(page, self.b_t1.qr_key)  # the branch's tables are the branch's cards
 

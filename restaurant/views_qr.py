@@ -47,7 +47,7 @@ WORDS = {
         "title": "المنيو", "lead": "اختار اللي يعجبك واطلب من مكانك. الجرسون هيأكد طلبك ويجيبه لحد الطاولة.", "table": "طاولة {name}",
         "vat_note": "الأسعار شاملة ضريبة القيمة المضافة.", "service_note": "بتضاف نسبة خدمة {percent}% على الحساب.",
         "minimum_note": "الحد الأدنى للفرد {amount}.", "pay_note": "الدفع بيتم عند الحساب مع الجرسون.",
-        "all": "المنيو", "from": "من", "size": "الحجم", "choose_size": "اختار الحجم", "sizes": "أحجام",
+        "all": "المنيو", "other": "أصناف تانية", "from": "من", "size": "الحجم", "choose_size": "اختار الحجم", "sizes": "أحجام",
         "qty": "الكمية", "plus": "زوّد", "minus": "قلّل", "details": "الاختيارات والملاحظات", "required": "لازم", "optional": "اختياري",
         "line_note": "ملاحظة للمطبخ", "line_note_hint": "مثلًا: من غير بصل", "order_note": "ملاحظة للجرسون (اختياري)",
         "order": "اطلب", "order_n": "اطلب ({n})", "call": "نادي الجرسون", "bill": "الحساب", "none": "المنيو مفيهوش أصناف دلوقتي.",
@@ -65,7 +65,7 @@ WORDS = {
         "title": "Menu", "lead": "Choose what you like and order from your seat. Your waiter confirms the order and brings it to the table.", "table": "Table {name}",
         "vat_note": "Prices include VAT.", "service_note": "A {percent}% service charge is added to the bill.",
         "minimum_note": "Minimum charge per guest: {amount}.", "pay_note": "You pay at the bill, with your waiter.",
-        "all": "Menu", "from": "from", "size": "Size", "choose_size": "Choose the size", "sizes": "sizes",
+        "all": "Menu", "other": "Other", "from": "from", "size": "Size", "choose_size": "Choose the size", "sizes": "sizes",
         "qty": "Quantity", "plus": "More", "minus": "Less", "details": "Choices and notes", "required": "Required", "optional": "Optional",
         "line_note": "Note for the kitchen", "line_note_hint": "For example: no onions", "order_note": "Note for the waiter (optional)",
         "order": "Order", "order_n": "Order ({n})", "call": "Call the waiter", "bill": "Bill", "none": "The menu has no items right now.",
@@ -210,7 +210,7 @@ def menu(lang, posted=None):
             section(entry["item"].category_id)["entries"].append({"dish": dish(entry["item"])})
     sections.sort(key=lambda found: found["key"] == 0)  # items with no category last
     for found in sections:
-        found["name"] = found["name"] or WORDS[lang]["all"]
+        found["name"] = found["name"] or WORDS[lang]["other"]
     return sections
 
 
@@ -297,7 +297,7 @@ QR_WORDS = {
         "cards_title": "كروت QR للطاولات", "cards_link": "اطبع كروت QR", "print": "اطبع الكروت", "tip": "كل طاولة ليها كارت بكودها. اطبع على ورق A4، أو احفظ PDF من نافذة الطباعة.",
         "back": "الطاولات", "scan_ar": "امسح المنيو واطلب من مكانك", "scan_en": "Scan the menu and order from your seat", "table": "طاولة",
         "no_cards": "لسه مفيش طاولات شغالة. ضيف طاولات الصالة الأول.", "no_base": "عنوان الموقع (PUBLIC_BASE_URL) مش متظبط، فالكروت هتتطبع من غير QR. ظبّطه الأول.",
-        "rotate": "غيّر الكود", "rotate_confirm": "الكارت المطبوع ليه هيبطّل يشتغل فورًا. تكمّل؟", "rotated": "اتغيّر كود الطاولة {table}. الكارت القديم بطّل يشتغل، اطبع الجديد.",
+        "manage": "كود كل طاولة", "rotate": "غيّر الكود", "rotate_confirm": "الكارت المطبوع ليه هيبطّل يشتغل فورًا. تكمّل؟", "rotated": "اتغيّر كود الطاولة {table}. الكارت القديم بطّل يشتغل، اطبع الجديد.",
         "branch": "الفرع",
         "badge": "طلب جديد", "requests": "طلبات من الطاولات", "request_n": "{n} طلب", "kind_order": "طلب", "kind_call_waiter": "نداء جرسون", "kind_bill": "طلب الحساب",
         "accept": "قبول", "decline": "رفض", "done": "تمام", "from_table": "من الطاولة {table}", "at": "الساعة {time}", "note": "ملاحظة", "gone": "غير متاح",
@@ -308,7 +308,7 @@ QR_WORDS = {
         "cards_title": "Table QR cards", "cards_link": "Print QR cards", "print": "Print the cards", "tip": "Each table has a card with its own code. Print on A4, or save a PDF from the print window.",
         "back": "Tables", "scan_ar": "امسح المنيو واطلب من مكانك", "scan_en": "Scan the menu and order from your seat", "table": "Table",
         "no_cards": "No active tables yet. Add the hall's tables first.", "no_base": "The site address (PUBLIC_BASE_URL) is not set, so the cards print without a QR. Set it first.",
-        "rotate": "Change the code", "rotate_confirm": "The printed card will stop working at once. Continue?", "rotated": "Table {table}'s code was changed. The old card no longer works; print the new one.",
+        "manage": "Each table's code", "rotate": "Change the code", "rotate_confirm": "The printed card will stop working at once. Continue?", "rotated": "Table {table}'s code was changed. The old card no longer works; print the new one.",
         "branch": "Branch",
         "badge": "new", "requests": "Requests from the tables", "request_n": "{n} requests", "kind_order": "Order", "kind_call_waiter": "Waiter call", "kind_bill": "Bill request",
         "accept": "Accept", "decline": "Decline", "done": "Done", "from_table": "From table {table}", "at": "At {time}", "note": "Note", "gone": "unavailable",
