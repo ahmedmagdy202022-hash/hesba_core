@@ -213,6 +213,7 @@ PERMISSION_SECTIONS = {
     "settings": ("الإعدادات", "Settings"), "permissions": ("الصلاحيات", "Permissions"), "audit": ("سجل المراجعة", "Audit log"),
     "imports": ("الاستيراد", "Imports"), "medical": ("الملفات الطبية", "Medical records"), "barcode": ("الباركود", "Barcodes"),
     "restaurant": ("الطاولات والطلبات", "Tables & orders"), "projects": ("المشاريع", "Projects"),
+    "giftcards": ("كروت الهدايا", "Gift cards"),
 }
 ROLE_ABOUT = {
     "owner": ("كل حاجة: الأرقام والإعدادات والصلاحيات والإقفال.", "Everything: figures, settings, permissions and closing."),

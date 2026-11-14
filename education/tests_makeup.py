@@ -977,7 +977,7 @@ class ScanTests(MakeupSetup):
         script = pathlib.Path(settings.BASE_DIR, "static", "hesba", "js", "edu_scan.js").read_text(encoding="utf-8")
         self.assertIn("data.presence_label", script)  # the chip is drawn from the label the server sends
         template = pathlib.Path(settings.BASE_DIR, "templates", "education", "scan.html").read_text(encoding="utf-8")
-        self.assertIn("education_scan.css' %}?v=e1-2", template)
+        self.assertIn("education_scan.css' %}?v=e1-3", template)
 
 
 # ---- the guardian portal ----

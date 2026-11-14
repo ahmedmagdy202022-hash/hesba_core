@@ -15,6 +15,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_http_methods, require_POST
 
 from printing.company import company_details
+from reports.navigation import display_name
 
 from . import certificates, services
 from .models import StudyGroup
@@ -137,6 +138,12 @@ def certificate_issue(request):
                                                                        course=enrollment.group.course.name, level=enrollment.group.level))
 
 
+def _person(user):
+    """A person's display name, never the login name: a user with no name on the profile shows a dash."""
+    name = display_name(user)
+    return "" if name == user.get_username() else name
+
+
 @require_http_methods(["GET", "HEAD"])
 def certificate_print(request, pk):
     certificate = _certificate(request, pk)
@@ -150,6 +157,7 @@ def certificate_print(request, pk):
     context = {"lang": lang, "dir": "ltr" if lang == "en" else "rtl", "cw": words, "page_title": f"{words['sheet_title']}: {enrollment.student.name}", "certificate": certificate,
                "student": enrollment.student, "group": enrollment.group, "course": name, "level": level, "first": first, "last": last, "verify_url": verify,
                "verify_path": certificates.verify_path(certificate), "company": company_details(), "business": certificates.business(certificate, lang),
+               "issued_by_name": _person(certificate.issued_by),
                "back_url": f"{reverse('education:certificates')}?lang={lang}", "switch_url": f"{reverse('education:certificate', args=[certificate.pk])}?lang={other}"}
     return render(request, "education/certificate.html", context)
 

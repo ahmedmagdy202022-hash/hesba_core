@@ -175,6 +175,15 @@ class EducationDemoCase(TestCase):
 
 # ---- the hard line: no money, stock or pay figure moves ----
 
+def guardian_answer(student):
+    """What a guardian types to open the portal: the child's birth date (the demo's students all have one), else the last 4 digits of the phone."""
+
+    born = student.date_of_birth
+    if born is not None:
+        return {"day": str(born.day), "month": str(born.month), "year": str(born.year)}
+    return {"answer": re.sub(r"\D", "", student.payer.phone)[-4:]}
+
+
 def own_article(page, name):
     """One child's block of the guardian's page (the page holds every child of the family)."""
 
@@ -298,8 +307,7 @@ class ContentChecks:
             made = portal.make_link(student, self.owner)
         path = made["url"].split("https://demo.example.test", 1)[1]
         guardian = Client()
-        digits = re.sub(r"\D", "", student.payer.phone)[-4:]
-        guardian.post(path, {"answer": digits, "lang": "ar"})
+        guardian.post(path, {**guardian_answer(student), "lang": "ar"})
         page = guardian.get(path).content.decode()
         card = element(own_article(page, student.name), r'<section class="cl-card" data-section="content">.*?</section>')
         titles = CONTENT_TITLES[self.titles_key]
@@ -375,7 +383,7 @@ class MakeupChecks:
             made = portal.make_link(ahead.student, self.owner)
         path = made["url"].split("https://demo.example.test", 1)[1]
         guardian = Client()
-        guardian.post(path, {"answer": re.sub(r"\D", "", ahead.student.payer.phone)[-4:], "lang": "ar"})
+        guardian.post(path, {**guardian_answer(ahead.student), "lang": "ar"})
         page = guardian.get(path).content.decode()
         card = element(own_article(page, ahead.student.name), r'<section[^>]*data-section="makeup".*?</section>')
         self.assertIn(ahead.group.name, card)
