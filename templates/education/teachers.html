@@ -1,5 +1,6 @@
 {% extends "operations/base.html" %}
-{% load hesba_format l10n %}
+{% load hesba_format l10n static %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/education_teachers.css' %}?v=ev-1">{% endblock %}
 {% block operation_content %}
 <section class="op-title-row"><div><h1>{{ words.teachers }}: {{ label }}</h1><p>{{ words.teachers_intro }}</p></div></section>
 {% include "education/_tabs.html" %}

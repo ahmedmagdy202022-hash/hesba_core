@@ -16,7 +16,8 @@ from settings_core.vocabulary import BASE as BASE_TERMS, active_vocabulary, term
 
 # ACT-PROFILE-001: sections whose name follows the activity's own words.
 NAV_TERMS = {"operations": "operations", "customers": "customers", "suppliers": "suppliers", "items": "items", "staff": "staff", "appointments": "appointments"}
-TAB_TERMS = {"operations": "operations_short", "customers": "customers_short", "items": "items_short", "appointments": "appointments"}
+TAB_TERMS = {"operations": "operations_short", "customers": "customers_short", "items": "items_short", "appointments": "appointments",
+             "education": "students_short"}
 
 # ACT-PROFILE-002: the section an activity works from comes right after the
 # dashboard, in the sidebar and on the phone tab bar.

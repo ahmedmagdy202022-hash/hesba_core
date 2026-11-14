@@ -147,7 +147,7 @@ class FeesScreenTests(PayFeesSetup):
         self.assertContains(page, 'data-pay-state="live"')
         self.assertContains(page, "750.00")
         self.assertNotContains(page, "1,250.00 ·")  # the link is not for the invoice's total
-        self.assertEqual(page.context["messages"] and [str(m) for m in page.context["messages"]], ["اتعمل لينك الدفع؛ ابعته لولي الأمر."])
+        self.assertEqual(page.context["messages"] and [str(m) for m in page.context["messages"]], ["اتعمل رابط الدفع؛ ابعته لولي الأمر."])
         self.assertContains(page, "data-copy-link=")
         self.assertContains(page, "بينتهي بعد 3 أيام")  # the expiry in words (72 hours), and the exact time beside it
         self.assertContains(page, f"{timezone.localtime(link.expires_at):%Y-%m-%d %H:%M}")
@@ -210,7 +210,7 @@ class FeesScreenTests(PayFeesSetup):
         self.make(invoice)
         first = self.live(invoice)
         response = self.make(invoice)
-        self.assertEqual(self.message_texts(response), ["فيه لينك دفع شغال للفاتورة دي بالفعل؛ ده هو."])
+        self.assertEqual(self.message_texts(response), ["فيه رابط دفع شغال للفاتورة دي بالفعل؛ ده هو."])
         self.assertEqual([link.pk for link in PaymentLink.objects.filter(invoice=invoice)], [first.pk])  # reused: same row, no new gateway order
         with self.assertRaisesMessage(ValidationError, pay.MESSAGES["ar"]["live"]):  # what create_link does today: refuse, never replace
             pay.create_link(invoice, self.owner)
@@ -336,7 +336,7 @@ class BulkTests(PayFeesSetup):
         # Running it again skips the two that now have a live link.
         again = self.run_bulk()
         self.assertEqual(PaymentLink.objects.count(), 2)
-        self.assertContains(again, "عليها لينك شغال بالفعل")
+        self.assertContains(again, "عليها رابط شغال بالفعل")
         self.assertContains(again, 'data-pay-made>0<')
 
     def test_bulk_stops_at_the_cap_and_says_how_many_are_left(self):
@@ -524,8 +524,8 @@ class ScreenTests(PayFeesSetup):
     def test_the_fees_screen_in_arabic_and_english_with_the_bulk_form(self):
         self.fee_invoice("يوسف محمد", "1250")
         ar = self.client.get(self.fees_url("ar"))
-        self.assertContains(ar, "لينك دفع")
-        self.assertContains(ar, "اعمل لينكات دفع للشهر")
+        self.assertContains(ar, "رابط دفع")
+        self.assertContains(ar, "اعمل روابط دفع للشهر")
         self.assertContains(ar, f"لحد {paylinks.BULK_CAP} في المرة")
         self.assertContains(ar, "مبيبعتش حاجة")
         self.assertContains(ar, 'data-pay-bulk-ready="1"')

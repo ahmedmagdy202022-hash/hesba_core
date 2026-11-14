@@ -103,7 +103,7 @@ CAPABILITIES = {
         "available": True, "paths": ("/appointments/booking/",),
     },
     "payment_links": {
-        "ar": "لينك الدفع أونلاين", "en": "Online payment link",
+        "ar": "رابط الدفع أونلاين", "en": "Online payment link",
         "about_ar": "ابعت للعميل لينك يدفع بيه الفاتورة بالكارت أو المحفظة (Paymob). الفلوس بتتسجل بس لما البوابة تأكد الدفع، وبتنزل في حساب بنكي اسمه «بوابة الدفع» لحد ما البوابة تحوّلها.",
         "about_en": "Send the customer a link to pay the invoice by card or wallet (Paymob). The money is recorded only when the gateway confirms it, into a bank account named “بوابة الدفع” until the gateway pays out.",
         "available": True, "paths": ("/payments/",),
