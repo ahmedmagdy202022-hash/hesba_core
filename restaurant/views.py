@@ -624,8 +624,15 @@ def check(request, pk):
                                                          "total": f"{bill['total']:.2f}", "service": f"{bill['service']:.2f}", "topup": f"{bill['topup']:.2f}",
                                                          "rows": len(rows), **({"offer": f"{bill['offer']:.2f}"} if bill["offer"] else {})})
     summary = offer_box["summary"] if offer_box is not None else None
+    saved_text = ""
+    if bill["offer"]:  # R6: the offer is already in the rows above (each «− …»); the guest is told what it saved, not shown it twice
+        from settings_core.templatetags.hesba_format import money
+
+        from . import offers
+
+        saved_text = offers.words(lang)["saved"].format(amount=money(bill["offer"]), name=bill["promotion"].name)
     return render(request, "restaurant/check.html", _base(request, order=order, bill=bill, rows=rows, chw=CHARGE_WORDS[lang], kind_label=_kind_label(order, lang),
-                                                        company=company_details(), now=timezone.localtime(), summary=summary,
+                                                        company=company_details(), now=timezone.localtime(), summary=summary, saved_text=saved_text,
                                                         ow=offer_box["words"] if offer_box is not None else None))
 
 
