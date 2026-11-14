@@ -2,14 +2,15 @@
 {% load static %}
 {% block operation_content %}
 <section class="op-title-row"><div><a class="op-back" href="{% url 'restaurant:board' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.back }}</a><h1>{{ words.tables_title }}</h1></div></section>
-<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.name }}</th><th>{{ words.area }}</th><th>{{ words.seats }}</th><th>{{ words.sort }}</th><th>{{ words.active }}</th>{% if can_tables %}<th></th>{% endif %}</tr></thead><tbody>
-{% for table in rows %}<tr data-table-row="{{ table.name }}"><td>{{ table.name }}</td><td>{{ table.area|default:'—' }}</td><td>{{ table.seats }}</td><td>{{ table.sort_order }}</td><td>{% if table.active %}✓{% else %}—{% endif %}</td>{% if can_tables %}<td><a href="?lang={{ lang }}&edit={{ table.pk }}">{{ words.edit }}</a></td>{% endif %}</tr>
-{% empty %}<tr><td colspan="6" class="op-empty">{{ words.no_tables }}</td></tr>{% endfor %}
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.name }}</th>{% if branch_choices %}<th>{{ words.branch }}</th>{% endif %}<th>{{ words.area }}</th><th>{{ words.seats }}</th><th>{{ words.sort }}</th><th>{{ words.active }}</th>{% if can_tables %}<th></th>{% endif %}</tr></thead><tbody>
+{% for table in rows %}<tr data-table-row="{{ table.name }}"><td>{{ table.name }}</td>{% if branch_choices %}<td data-table-branch>{% if lang == 'en' and table.entity.name_en %}{{ table.entity.name_en }}{% else %}{{ table.entity.name_ar }}{% endif %}</td>{% endif %}<td>{{ table.area|default:'—' }}</td><td>{{ table.seats }}</td><td>{{ table.sort_order }}</td><td>{% if table.active %}✓{% else %}—{% endif %}</td>{% if can_tables %}<td><a href="?lang={{ lang }}&edit={{ table.pk }}">{{ words.edit }}</a></td>{% endif %}</tr>
+{% empty %}<tr><td colspan="{% if branch_choices %}7{% else %}6{% endif %}" class="op-empty">{{ words.no_tables }}</td></tr>{% endfor %}
 </tbody></table></div>
 {% if can_tables %}<form class="op-form" method="post" data-table-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">{% if editing %}<input type="hidden" name="pk" value="{{ editing.pk }}">{% endif %}
 <h2>{% if editing %}{{ words.edit }} · {{ editing.name }}{% else %}{{ words.new_table }}{% endif %}</h2>
 {% if error %}<div class="op-message op-message-error" role="alert" data-table-error>{{ error }}</div>{% endif %}
 <div class="op-form-grid">
+{% if branch_choices %}<div class="op-field"><label for="tb-entity">{{ words.branch }}</label><select id="tb-entity" name="entity"{% if not editing %} required{% endif %}><option value="">{{ words.choose_branch }}</option>{% for branch in branch_choices %}<option value="{{ branch.pk }}"{% if chosen_branch == branch.pk|stringformat:'s' %} selected{% endif %}>{{ branch.label }}</option>{% endfor %}</select></div>{% endif %}
 <div class="op-field"><label for="tb-name">{{ words.name }}</label><input id="tb-name" name="name" value="{{ form.name|default:'' }}" required maxlength="40"></div>
 <div class="op-field"><label for="tb-area">{{ words.area }}</label><input id="tb-area" name="area" value="{{ form.area|default:'' }}" maxlength="60"></div>
 <div class="op-field"><label for="tb-seats">{{ words.seats }}</label><input id="tb-seats" name="seats" value="{{ form.seats|default:'4' }}" inputmode="numeric"></div>

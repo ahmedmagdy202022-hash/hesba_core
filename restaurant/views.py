@@ -8,7 +8,6 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
-from cashboxes.models import Cashbox
 from master_data.models import Customer, Item
 from permissions.decorators import require_any_permission, require_permission
 from permissions.services import user_has_permission
@@ -19,9 +18,9 @@ from shifts.gate import require_open_shift, shift_missing
 from shifts.services import open_shift_for
 from staff.models import Employee
 
-from . import services
+from . import branches, services
 from .models import DiningTable, KitchenTicket, Order, OrderKind, OrderLine, OrderStatus
-from entities import scope as entity_scope
+from entities.services import is_multi_entity
 
 
 VIEW, TAKE, TABLES = "sales.view_sales_invoices", "sales.create_sales_invoice", "master_data.manage_items"
@@ -51,6 +50,7 @@ WORDS = {
         "save": "حفظ", "saved": "اتحفظت الطاولة.", "new_table": "طاولة جديدة", "edit": "تعديل", "bad_number": "اكتب رقم صحيح.",
         "ready": "جاهز", "ready_n": "جاهز {n}", "void_why": "السبب", "kitchen_screen": "شاشة المطبخ", "stations_title": "محطات المطبخ",
         "sent_many": "اتبعتت {count} للمطبخ ({stations}).",
+        "branch": "الفرع", "choose_branch": "اختار الفرع", "no_branch_tables": "لسه مفيش طاولات في الفرع ده.",
     },
     "en": {
         "page_title": "Tables & orders", "title": "Tables & orders", "intro": "Tap a free table to open an order, or a busy one to carry on with its order.",
@@ -69,6 +69,7 @@ WORDS = {
         "save": "Save", "saved": "Table saved.", "new_table": "New table", "edit": "Edit", "bad_number": "Enter a valid number.",
         "ready": "Ready", "ready_n": "{n} ready", "void_why": "Reason", "kitchen_screen": "Kitchen screen", "stations_title": "Kitchen stations",
         "sent_many": "{count} sent to the kitchen ({stations}).",
+        "branch": "Branch", "choose_branch": "Choose the branch", "no_branch_tables": "No tables in this branch yet.",
     },
 }
 KIND_AR = {OrderKind.DINE_IN: "صالة", OrderKind.TAKEAWAY: "تيك أواي", OrderKind.DELIVERY: "دليفري"}
@@ -83,11 +84,18 @@ def _pick(model, raw, **filters):
     return model.objects.filter(pk=raw, **filters).first() if raw.isdigit() else None
 
 
-def _own_cashbox(raw):
-    """The cashbox a bill is paid into: only one the pay form itself lists (this entity's, active, never a held kind)."""
+def _own_cashbox(raw, order):
+    """The cashbox a bill is paid into: only one the pay form itself lists (the order's entity's, active, never a held kind; R12)."""
 
     raw = str(raw or "")
-    return entity_scope.cashboxes(Cashbox.objects).filter(pk=raw, active=True).first() if raw.isdigit() else None
+    return branches.cashboxes(order).filter(pk=raw).first() if raw.isdigit() else None
+
+
+def _table(raw):
+    """A table by a pk as a form sends it, in the entity being worked in only (R12): another branch's is as if none was sent."""
+
+    raw = str(raw or "")
+    return branches.tables().filter(pk=raw).first() if raw.isdigit() else None
 
 
 def _money(raw, words):
@@ -140,9 +148,15 @@ def board(request):
         if not _takes_orders(request.user):
             raise PermissionDenied("Taking orders needs sales.create_sales_invoice or restaurant.take_orders.")
         kind = request.POST.get("kind", OrderKind.DINE_IN)
+        entity = None
+        if kind != OrderKind.DINE_IN and branches.group_mode():  # R12: across the group, a takeaway or a delivery names its branch
+            entity = branches.pick(request.user, request.POST.get("entity"))
+            if entity is None:
+                messages.error(request, services.MESSAGES[lang]["branch"])
+                return redirect(f"{reverse('restaurant:board')}?lang={lang}")
         try:
             order = services.open_order(
-                request.user, kind=kind, table=_pick(DiningTable, request.POST.get("table")), guests=request.POST.get("guests") or 1,
+                request.user, kind=kind, table=_table(request.POST.get("table")), guests=request.POST.get("guests") or 1, entity=entity,
                 customer=_pick(Customer, request.POST.get("customer"), active=True), waiter=_pick(Employee, request.POST.get("waiter"), active=True),
                 address=request.POST.get("address", ""), phone=request.POST.get("phone", ""), notes=request.POST.get("notes", ""), lang=lang,
                 delivery_fee=request.POST.get("delivery_fee"),
@@ -159,10 +173,14 @@ def board(request):
             row["ready"] = _ready_count(row["order"])
             row["ready_label"] = words["ready_n"].format(n=row["ready"])
     ready = {order.pk: _ready_count(order) for order in others}
+    grouped = branches.group_mode()
+    groups = [{**choice, "tables": [row for row in tables if row["table"].entity_id == choice["pk"]]} for choice in branches.choices(request.user, lang)] if grouped else []
     return render(request, "restaurant/board.html", _base(
         request, tables=tables, others=[{"order": order, "kind_label": _kind_label(order, lang), "ready": ready[order.pk],
-                                         "ready_label": words["ready_n"].format(n=ready[order.pk])} for order in others],
+                                         "ready_label": words["ready_n"].format(n=ready[order.pk]),
+                                         "branch": order.entity.display(lang) if grouped else ""} for order in others],
         customers=Customer.objects.filter(active=True).order_by("name"), waiters=Employee.objects.filter(active=True),
+        branch_groups=groups, branch_choices=branches.choices(request.user, lang) if grouped else [],
     ))
 
 
@@ -197,7 +215,7 @@ def _menu():
 def order_detail(request, pk):
     lang = _lang(request)
     words = WORDS[lang]
-    order = get_object_or_404(Order.objects.select_related("table", "customer", "waiter", "invoice"), pk=pk)
+    order = get_object_or_404(branches.orders(Order.objects.select_related("table", "customer", "waiter", "invoice", "entity")), pk=pk)  # R12: another branch's is a 404
     if request.method == "POST":
         if not _takes_orders(request.user):
             raise PermissionDenied("Taking orders needs sales.create_sales_invoice or restaurant.take_orders.")
@@ -229,7 +247,7 @@ def order_detail(request, pk):
                         upto = f"&upto={batch[-1].sequence}" if len(batch) > 1 else ""
                         return redirect(f"{reverse('restaurant:ticket', args=[ticket.pk])}?lang={lang}&autoprint=1{upto}")
             elif action == "move":
-                services.move_table(order, _pick(DiningTable, request.POST.get("table")), request.user, lang)
+                services.move_table(order, _table(request.POST.get("table")), request.user, lang)
                 messages.success(request, words["moved"])
             elif action == "dispatch":
                 services.dispatch(order, _pick(Employee, request.POST.get("driver"), active=True), request.user,
@@ -242,7 +260,7 @@ def order_detail(request, pk):
             elif action == "pay":
                 require_open_shift(request.user, lang)  # Restaurants R13: the till's own rule (AN4), before anything is made or posted
                 invoice, change = services.pay(
-                    order, request.user, cashbox=_own_cashbox(request.POST.get("cashbox")),
+                    order, request.user, cashbox=_own_cashbox(request.POST.get("cashbox"), order),
                     discount=_money(request.POST.get("discount"), words), tendered=_money(request.POST.get("tendered"), words),
                     customer=_pick(Customer, request.POST.get("customer"), active=True), lang=lang,
                 )
@@ -259,15 +277,17 @@ def order_detail(request, pk):
     items, categories = _menu()
     raw_ids = _raw_ingredient_ids()
     lines = list(order.lines.select_related("item", "ticket"))
-    cashboxes = entity_scope.cashboxes(Cashbox.objects).filter(active=True)
+    cashboxes = branches.cashboxes(order)  # R12: the order's branch's, whatever entity the biller works in
     shift = open_shift_for(request.user)
-    free_tables = DiningTable.objects.filter(active=True).exclude(orders__status=OrderStatus.OPEN)
+    shift_box = shift.cashbox if shift and cashboxes.filter(pk=shift.cashbox_id).exists() else None
+    free_tables = DiningTable.objects.filter(active=True, entity_id=order.entity_id).exclude(orders__status=OrderStatus.OPEN)
     return render(request, "restaurant/order.html", _base(
         request, order=order, lines=lines, total=order.total, items=items, raw_ids=raw_ids, categories=categories, kind_label=_kind_label(order, lang),
         drivers=Employee.objects.filter(active=True) if order.kind == OrderKind.DELIVERY else [], dw=DELIVERY_WORDS[lang],
         status_label=choice_label(order, "status", lang), is_open=order.status == OrderStatus.OPEN,
         pending=any(not line.ticket_id and not line.voided for line in lines), tickets=order.tickets.select_related("station"),
-        cashboxes=cashboxes, default_cashbox=(shift.cashbox if shift else None) or cashboxes.filter(is_default=True).first() or cashboxes.first(),
+        cashboxes=cashboxes, default_cashbox=shift_box or cashboxes.filter(is_default=True).first() or cashboxes.first(),
+        branch_label=order.entity.display(lang) if is_multi_entity() else "",
         shift_missing=shift_missing(request.user),
         customers=Customer.objects.filter(active=True).order_by("name"), free_tables=free_tables,
     ))
@@ -283,7 +303,7 @@ def ticket(request, pk):
     sequence: each is its own page, so each station's printer takes its own."""
 
     lang = _lang(request)
-    first = get_object_or_404(KitchenTicket.objects.select_related("order", "order__table", "order__waiter", "sent_by", "station"), pk=pk)
+    first = get_object_or_404(branches.tickets(KitchenTicket.objects.select_related("order", "order__table", "order__waiter", "sent_by", "station")), pk=pk)
     upto = request.GET.get("upto", "")
     tickets = [first]
     if upto.isdigit() and int(upto) > first.sequence:
@@ -302,7 +322,9 @@ def tables(request):
     words = WORDS[lang]
     error = ""
     form = {"seats": 4, "active": True}
-    editing = _pick(DiningTable, request.GET.get("edit") or request.POST.get("pk"))
+    raw = str(request.GET.get("edit") or request.POST.get("pk") or "")
+    editing = get_object_or_404(branches.tables(), pk=int(raw)) if raw.isdigit() else None  # R12: another branch's table is a 404
+    grouped = branches.group_mode()
     if request.method == "POST":
         if not user_has_permission(request.user, TABLES):
             raise PermissionDenied("Changing tables needs master_data.manage_items.")
@@ -310,15 +332,21 @@ def tables(request):
         data = {key: request.POST.get(key, "") for key in ("name", "area", "seats", "sort_order")}
         data["active"] = request.POST.get("active") == "on"
         try:
-            services.save_table(data, request.user, editing, lang)
+            entity = branches.pick(request.user, request.POST.get("entity")) if grouped else None  # a branch works in its own
+            if grouped and entity is None and editing is None:
+                raise ValidationError(services.MESSAGES[lang]["branch"])
+            services.save_table(data, request.user, editing, lang, entity=entity)
         except ValidationError as exc:
             error = " ".join(exc.messages)
         else:
             messages.success(request, words["saved"])
             return redirect(f"{reverse('restaurant:tables')}?lang={lang}")
     elif editing:
-        form = {"name": editing.name, "area": editing.area, "seats": editing.seats, "sort_order": editing.sort_order, "active": editing.active}
-    return render(request, "restaurant/tables.html", _base(request, rows=DiningTable.objects.all(), form=form, editing=editing, error=error))
+        form = {"name": editing.name, "area": editing.area, "seats": editing.seats, "sort_order": editing.sort_order, "active": editing.active,
+                "entity": editing.entity_id}
+    chosen = str(form.get("entity") or "")
+    return render(request, "restaurant/tables.html", _base(request, rows=branches.tables(DiningTable.objects.select_related("entity")), form=form, editing=editing,
+                                                         error=error, branch_choices=branches.choices(request.user, lang) if grouped else [], chosen_branch=chosen))
 
 
 REPORT_VIEW, COST_VIEW = "reports.view_all_sales_report", "inventory.view_cost"
