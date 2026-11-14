@@ -226,7 +226,7 @@ class SplitBoxScreenTests(SplitBillSetup):
         self.assertIn(f'<option value="{self.card.pk}" selected>', rows[1][1])  # then the card machine
         self.assertFalse(any(f'<option value="{self.b_card.pk}"' in options for _index, options in rows))  # never another branch's
         self.assertIn("الباقي", page)
-        self.assertIn("?v=resto-r2b", page)
+        self.assertIn("?v=resto-r2a", page)  # R2a (HG-111) bumped the version: the stylesheet and script changed again
         english = self.page(order, "en")
         self.assertIn("Pay several ways", english)
         self.assertIn("Left", english)

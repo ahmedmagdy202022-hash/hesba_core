@@ -118,3 +118,23 @@ html.rs-sheet-open{overflow:hidden}
 .rs-split-figure{display:flex;justify-content:space-between;gap:8px;margin:0;font-weight:var(--hs-weight-bold);color:var(--hs-navy)}
 .rs-split-left{padding:var(--hs-space-2) var(--hs-space-3);border-radius:var(--hs-radius-sm);background:var(--hs-warning-wash);color:var(--hs-warning)}
 .rs-split-left.is-zero{background:var(--hs-teal-wash);color:var(--hs-teal-deep)}
+/* R2a (HG-111): «ادفع جزء» (a bottom sheet with a stepper per line), the parts of a bill, and an open part on the board. Tokens only. */
+.rs-table__part{display:inline-flex;align-self:flex-start;border-radius:var(--hs-radius-pill);padding:3px 10px;font-size:var(--hs-text-sm);font-weight:var(--hs-weight-bold);background:var(--hs-teal-wash);color:var(--hs-navy);text-decoration:none}
+.rs-part-open{min-height:44px}
+.rs-parts{margin:12px 0;padding:var(--hs-space-3);border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);background:var(--hs-ground)}
+.rs-parts h3{margin:0 0 8px;font-size:var(--hs-text-md);color:var(--hs-navy)}
+.rs-parts ul{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.rs-part{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-height:44px}
+.rs-part a{display:inline-flex;align-items:center;min-height:44px;font-weight:var(--hs-weight-bold);color:var(--hs-navy)}
+.rs-part small{color:var(--hs-muted)}
+.rs-part__amount{margin-inline-start:auto;font-weight:var(--hs-weight-bold);color:var(--hs-navy)}
+.rs-part-hint{margin:0 0 10px;font-size:var(--hs-text-sm)}
+.rs-part-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--hs-line)}
+.rs-part-row__name{display:grid;gap:2px;min-width:0}
+.rs-part-row__name span{font-weight:var(--hs-weight-bold);color:var(--hs-navy)}
+.rs-part-row__name small{color:var(--hs-muted)}
+.rs-stepper{display:inline-flex;align-items:center;gap:4px}
+.rs-stepper button{width:44px;height:44px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-md);background:var(--hs-surface);color:var(--hs-navy);font:inherit;font-size:22px;cursor:pointer}
+.rs-stepper input{width:52px;min-height:44px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-md);text-align:center;font:inherit;background:var(--hs-surface)}
+.rs-part-row.is-chosen{background:var(--hs-teal-wash)}
+.rs-part-figure{margin:0 0 8px}

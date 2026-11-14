@@ -22,6 +22,7 @@ from decimal import Decimal, InvalidOperation
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from audit.models import AuditEventType, AuditLog
@@ -52,6 +53,20 @@ MESSAGES = {
         "split_rows": "الدفع بأكتر من طريقة محتاج مبلغين على الأقل، كل مبلغ في خزنة.",
         "split_cashbox": "اختار لكل مبلغ خزنة من خزن فرع الطلب.",
         "split_total": "مجموع طرق الدفع لازم يساوي الحساب بالظبط: {total}.",
+        # R2a (HG-111): «ادفع جزء» and «ادمج مع طاولة»
+        "part_empty": "اختار صنف واحد على الأقل للجزء.", "part_line": "السطر ده مش من الطلب ده أو اتلغى.",
+        "part_qty": "كمية «{item}» لازم تكون عدد صحيح من 1 لحد {max}.",
+        "part_fraction": "كمية «{item}» لازم تكون عدد صحيح من 1 لحد {max}: الأصناف بتتقسم بالعدد، مش بالفلوس. لو هتقسموا الحساب بالتساوي، ادفعوه مرة واحدة بـ«ادفع بأكتر من طريقة».",
+        "part_all": "كده الحساب كله اتختار؛ ادفع حساب الطاولة نفسه.",
+        "part_of_part": "ده جزء من حساب؛ قسّم من حساب الطاولة نفسه.",
+        "part_delivery": "الدليفري بيتدفع فاتورة واحدة؛ لو هيتقسم، استخدم «ادفع بأكتر من طريقة» على نفس الحساب.",
+        "part_open": "فيه جزء من الحساب لسه مفتوح ({number})؛ ادفعه أو رجّعه للحساب الأول.",
+        "part_move": "الجزء بيتبع طاولة حسابه؛ انقل حساب الطاولة نفسه.",
+        "part_cancel": "الجزء مبيتلغيش؛ رجّعه للحساب، والإلغاء يبقى من حساب الطاولة نفسه.",
+        "not_part": "ده مش جزء من حساب.",
+        "merge_pick": "اختار الطاولة اللي هتتدمج.", "merge_self": "مينفعش تدمج الطاولة في نفسها.",
+        "merge_kind": "الدمج لطلبات الصالة المفتوحة بس.", "merge_closed": "طلب الطاولة التانية اتقفل؛ مينفعش يتدمج.",
+        "merge_part": "الجزء من حساب مينفعش يتدمج؛ ادمج حساب الطاولة نفسه.",
     },
     "en": {
         "table_name": "Enter the table name or number.", "table_taken": "A table with this name exists.", "seats": "Seats must be 1 to 99.",
@@ -67,6 +82,19 @@ MESSAGES = {
         "split_rows": "Paying several ways needs at least two amounts, each into a cashbox.",
         "split_cashbox": "Choose one of the order's branch's cashboxes for each amount.",
         "split_total": "The ways of paying must add up to the bill exactly: {total}.",
+        "part_empty": "Choose at least one item for the part.", "part_line": "This line is not on this order, or it was voided.",
+        "part_qty": "The quantity of “{item}” must be a whole number from 1 to {max}.",
+        "part_fraction": "The quantity of “{item}” must be a whole number from 1 to {max}: items are split by count, not by money. To share the bill equally, pay it once with “Pay several ways”.",
+        "part_all": "That is the whole bill; pay the table's bill itself.",
+        "part_of_part": "This is a part of a bill; split from the table's bill itself.",
+        "part_delivery": "A delivery is paid as one invoice; to share it, use “Pay several ways” on the same bill.",
+        "part_open": "A part of the bill is still open ({number}); pay it or put it back first.",
+        "part_move": "A part follows its bill's table; move the table's bill itself.",
+        "part_cancel": "A part is not cancelled; put it back, and cancel from the table's bill itself.",
+        "not_part": "This is not a part of a bill.",
+        "merge_pick": "Choose the table to merge.", "merge_self": "A table cannot be merged into itself.",
+        "merge_kind": "Only open dine-in orders can be merged.", "merge_closed": "The other table's order is closed; it cannot be merged.",
+        "merge_part": "A part of a bill cannot be merged; merge the table's bill itself.",
     },
 }
 
@@ -338,6 +366,8 @@ def send_to_kitchen(order, user, lang="ar"):
 def move_table(order, table, user, lang="ar"):
     words = MESSAGES[lang]
     order = _locked_open(order, words)
+    if order.split_from_id:  # R2a: a part has no table of its own while open; it follows its parent's
+        raise ValidationError(words["part_move"])
     if order.kind != OrderKind.DINE_IN:
         raise ValidationError(words["dine_in_only"])
     if table is None:
@@ -360,7 +390,11 @@ def move_table(order, table, user, lang="ar"):
 
 @transaction.atomic
 def cancel_order(order, user, reason="", lang="ar"):
-    order = _locked_open(order, MESSAGES[lang])
+    words = MESSAGES[lang]
+    order = _locked_open(order, words)
+    if order.split_from_id:  # R2a: a part's lines go back to the bill, never away with it
+        raise ValidationError(words["part_cancel"])
+    _no_open_part(order, words)
     order.status = OrderStatus.CANCELLED
     order.closed_at = timezone.now()
     order.save(update_fields=["status", "closed_at"])
@@ -409,6 +443,7 @@ def _payable(order, cashbox, words):
     whatever entity the biller works in."""
 
     order = _locked_open(order, words)
+    _no_open_part(order, words)  # R2a: the rest of a split bill is paid after its open parts (or once they are put back)
     lines = [line for line in order.lines.select_related("item").filter(voided=False)]
     if not lines:
         raise ValidationError(words["empty"])
@@ -443,7 +478,8 @@ def bill_rows(order, lines, lang="ar"):
 def _bill_notes(order, lang):
     from settings_core.display_labels import choice_label
 
-    where = order.table.name if order.table else choice_label(order, "kind", lang)
+    table = order.home_table  # R2a: a part's invoice names its table's, as the table's own bill does
+    where = table.name if table else choice_label(order, "kind", lang)
     return f"Restaurant {order.number} ({where})" if lang == "en" else f"طلب مطعم {order.number} ({where})"  # TRACK-ACTS W11
 
 
@@ -503,7 +539,11 @@ def _close(order, invoice, customer, user):
     order.customer = customer
     order.status = OrderStatus.PAID
     order.closed_at = timezone.now()
-    order.save(update_fields=["invoice", "customer", "status", "closed_at"])
+    fields = ["invoice", "customer", "status", "closed_at"]
+    if order.split_from_id and not order.table_id:  # R2a: a paid part takes its table's (the constraint covers open orders only)
+        order.table_id = Order.objects.filter(pk=order.split_from_id).values_list("table_id", flat=True).first()
+        fields.append("table")
+    order.save(update_fields=fields)
     _audit(order, user, "pay_order", {"invoice": invoice.invoice_number, "total": str(invoice.total_amount)})
 
 
@@ -536,8 +576,254 @@ def pay(order, user, *, cashbox, discount=Decimal("0"), tendered=Decimal("0"), c
 def board():
     """Every active table with its open order (if any), plus open takeaway and delivery orders: the entity being worked in only (R12)."""
 
-    open_orders = branches.orders(Order.objects.filter(status=OrderStatus.OPEN)).select_related("table", "customer", "waiter", "entity").prefetch_related("lines")
+    open_orders = list(branches.orders(Order.objects.filter(status=OrderStatus.OPEN)).select_related("table", "customer", "waiter", "entity").prefetch_related("lines"))
+    parts = {}  # R2a: an open part is money still to collect at its table: shown under its parent, never as a stray takeaway
+    for order in open_orders:
+        if order.split_from_id:
+            parts.setdefault(order.split_from_id, []).append(order)
     by_table = {order.table_id: order for order in open_orders if order.table_id}
-    tables = [{"table": table, "order": by_table.get(table.pk)} for table in branches.tables(DiningTable.objects.filter(active=True)).select_related("entity")]
-    others = [order for order in open_orders if not order.table_id]
+    tables = []
+    for table in branches.tables(DiningTable.objects.filter(active=True)).select_related("entity"):
+        order = by_table.get(table.pk)
+        tables.append({"table": table, "order": order, "parts": parts.get(order.pk, []) if order else []})
+    others = [order for order in open_orders if not order.table_id and not order.split_from_id]
+    for order in others:
+        order.open_parts = parts.get(order.pk, [])
     return tables, others
+
+
+# --- R2a (HG-111): «ادفع جزء» (split by items), «رجّع للحساب» (put a part back), «ادمج مع طاولة» (merge two tables) ---------
+#
+# Rules, stated once:
+#
+# * a part is an ordinary order opened with some of a bill's lines, paid by the unchanged ``pay()`` on its own invoice. A
+#   line is split by whole plates and cups (2 of 3 teas), never by money: VAT is rounded per line, so a third of a line
+#   would put a piastre on one bill and not the other (trap 1); equal shares are R2b's tenders on one bill. A dish's add-ons
+#   follow it in the same count, its free choices are copied, and the moved lines keep their kitchen ticket and ready state;
+# * a part has no table while open (the database allows one open order per table) and takes its parent's once paid. It
+#   cannot be split again, moved, merged or cancelled; while it is open the parent is not paid or cancelled. Choosing every
+#   live line is refused: that is the bill itself. A part put back before it is paid returns its lines (a split line folds
+#   back into the line it came from) and its own tickets, and becomes MERGED into its parent;
+# * merging takes two open dine-in orders of one branch. The receiving order keeps its table and waiter and takes the
+#   other's lines, tickets (numbered after its own), guests and parts; the other becomes MERGED and its table is free.
+#   Both orders are locked in pk order, so two people merging the same two tables either way round never deadlock.
+
+
+def _lock_one(pk):
+    return Order.objects.select_for_update(of=("self",)).select_related("table").get(pk=pk)
+
+
+def _lock_pair(first, second):
+    """Both orders locked, the lower pk first; returned as (first, second)."""
+
+    low, high = sorted((first.pk, second.pk))
+    locked = {}
+    locked[low] = _lock_one(low)
+    locked[high] = _lock_one(high)
+    return locked[first.pk], locked[second.pk]
+
+
+def _no_open_part(order, words):
+    if order.split_from_id:
+        return
+    part = order.splits.filter(status=OrderStatus.OPEN).order_by("pk").first()
+    if part is not None:
+        raise ValidationError(words["part_open"].format(number=part.number))
+
+
+def _shown(quantity):
+    return f"{quantity.normalize():f}" if quantity % 1 else str(int(quantity))
+
+
+def _part_quantity(raw, line, words):
+    """How many of ``line`` go to the part: a whole number up to the line's quantity (or the line's whole quantity, even if
+    that is a fraction such as 1.5 kg). 0 or blank means none of it. Anything else is refused."""
+
+    try:
+        number = Decimal(str(raw if raw not in (None, "") else "0").strip().replace(",", "."))
+    except (InvalidOperation, ValueError):
+        number = None
+    shown = {"item": line.item.item_name, "max": _shown(line.quantity)}
+    if number is None or not number.is_finite() or number < 0 or number > MAX_QUANTITY:
+        raise ValidationError(words["part_qty"].format(**shown))
+    if number == 0:
+        return None
+    if number > line.quantity:
+        raise ValidationError(words["part_qty"].format(**shown))
+    if number != line.quantity and number % 1:
+        raise ValidationError(words["part_fraction"].format(**shown))
+    return number.quantize(Decimal("0.001"))
+
+
+def _open_part(order, user, words):
+    for _attempt in range(5):
+        try:
+            with transaction.atomic():
+                return Order.objects.create(number=_next_number(timezone.localdate()), kind=order.kind, table=None, guests=0, customer=order.customer,
+                                            waiter=order.waiter, opened_by=user, entity_id=order.entity_id, split_from=order)
+        except IntegrityError:
+            continue  # the same number was taken a moment ago
+    raise ValidationError(words["busy"].format(table=order.home_table.name if order.home_table else order.number))
+
+
+def _copy_line(line, order, quantity, parent=None):
+    copy = OrderLine.objects.create(order=order, item_id=line.item_id, quantity=quantity, unit_price=line.unit_price, note=line.note, ticket_id=line.ticket_id,
+                                    ready_at=line.ready_at, voided=line.voided, void_reason=line.void_reason, options=line.options, parent=parent)
+    OrderLine.objects.filter(pk=copy.pk).update(created_at=line.created_at)  # when it was ordered stays the line's (R6's happy hour reads it)
+    return copy
+
+
+def _move_part(line, quantity, part):
+    """Move ``quantity`` of a dish (and its add-ons, in the same count) to ``part``: the line itself when it all goes, else a
+    copy, the dish first so the invoice keeps family order."""
+
+    addons = list(line.children.order_by("pk"))
+    if quantity == line.quantity:
+        OrderLine.objects.filter(pk__in=[line.pk] + [addon.pk for addon in addons]).update(order=part)
+        return line
+    rest = line.quantity - quantity
+    copy = _copy_line(line, part, quantity)
+    for addon in addons:
+        _copy_line(addon, part, quantity, parent=copy)
+    line.quantity = rest
+    line.save(update_fields=["quantity"])
+    line.children.update(quantity=rest)
+    return copy
+
+
+def _line_audit(line, quantity):
+    return {"line": line.pk, "item": line.item.item_code, "quantity": str(quantity), "amount": str(money_round(quantity * line.unit_price))}
+
+
+@transaction.atomic
+def split_order(order, parts, user, lang="ar"):
+    """«ادفع جزء»: open a part of ``order``'s bill with ``parts`` {line or line pk: quantity}. Returns the part (an open order).
+
+    Every quantity is checked under the order's lock before anything is written; a refusal changes nothing."""
+
+    words = MESSAGES[lang]
+    order = _locked_open(order, words)
+    if order.split_from_id:
+        raise ValidationError(words["part_of_part"])
+    if order.kind == OrderKind.DELIVERY:
+        raise ValidationError(words["part_delivery"])
+    lines = {line.pk: line for line in order.lines.select_related("item")}
+    chosen = []
+    for raw, quantity in (parts or {}).items():
+        raw = raw.pk if isinstance(raw, OrderLine) else str(raw).strip()
+        line = lines.get(int(raw)) if str(raw).isdigit() else None
+        if line is None or line.voided:
+            raise ValidationError(words["part_line"])
+        _dish_line(line, lang)
+        quantity = _part_quantity(quantity, line, words)
+        if quantity:
+            chosen.append((line, quantity))
+    if not chosen:
+        raise ValidationError(words["part_empty"])
+    taken = {line.pk: quantity for line, quantity in chosen}
+    if all(taken.get(line.pk) == line.quantity for line in lines.values() if not line.voided and not line.parent_id):
+        raise ValidationError(words["part_all"])
+    part = _open_part(order, user, words)
+    for line, quantity in sorted(chosen, key=lambda pair: pair[0].pk):
+        _move_part(line, quantity, part)
+    moved = [_line_audit(line, quantity) for line, quantity in chosen]
+    _audit(order, user, "split_order", {"part": part.number, "lines": moved, "amount": str(part.total)})
+    _audit(part, user, "open_part", {"number": part.number, "from": order.number, "table": order.table.name if order.table else "", "lines": moved},
+           event=AuditEventType.CREATE)
+    return part
+
+
+def _move_tickets(source, target):
+    """``source``'s kitchen tickets become ``target``'s, numbered after its last (the numbering is unique per order).
+    Returns [(old sequence, new sequence)]."""
+
+    last = max(target.tickets.values_list("sequence", flat=True), default=0)
+    moved = []
+    for ticket in source.tickets.order_by("sequence"):
+        last += 1
+        KitchenTicket.objects.filter(pk=ticket.pk).update(order=target, sequence=last)
+        moved.append((ticket.sequence, last))
+    return moved
+
+
+def _addons_of(line):
+    return sorted((addon.item_id, addon.unit_price, addon.options, addon.note, addon.voided) for addon in line.children.all())
+
+
+def _origin(order, line):
+    """The live line of ``order`` that ``line`` was split from: the same dish, price, note, choices, ticket, ready state and add-ons."""
+
+    candidates = order.lines.filter(item_id=line.item_id, unit_price=line.unit_price, note=line.note, options=line.options, ticket_id=line.ticket_id,
+                                    voided=False, parent__isnull=True, ready_at__isnull=line.ready_at is None).order_by("pk")
+    signature = _addons_of(line)
+    return next((candidate for candidate in candidates if _addons_of(candidate) == signature), None)
+
+
+@transaction.atomic
+def put_back(part, user, lang="ar"):
+    """«رجّع للحساب»: an open part's lines and tickets go back to its parent; the part becomes MERGED into it. Returns the parent."""
+
+    words = MESSAGES[lang]
+    current = Order.objects.get(pk=part.pk)
+    if not current.split_from_id:
+        raise ValidationError(words["not_part"])
+    order, part = _lock_pair(Order(pk=current.split_from_id), current)
+    if part.status != OrderStatus.OPEN or order.status != OrderStatus.OPEN:
+        raise ValidationError(words["closed"])
+    tickets = _move_tickets(part, order)
+    returned = []
+    for line in part.lines.filter(parent__isnull=True).select_related("item").order_by("pk"):
+        returned.append(_line_audit(line, line.quantity))
+        origin = None if line.voided else _origin(order, line)
+        if origin is None:
+            OrderLine.objects.filter(Q(pk=line.pk) | Q(parent_id=line.pk)).update(order=order)
+            continue
+        origin.quantity = _quantity(origin.quantity + line.quantity, words)
+        origin.save(update_fields=["quantity"])
+        origin.children.update(quantity=origin.quantity)
+        line.delete()  # its add-on copies go with it (CASCADE)
+    part.status = OrderStatus.MERGED
+    part.merged_into = order
+    part.closed_at = timezone.now()
+    part.save(update_fields=["status", "merged_into", "closed_at"])
+    _audit(order, user, "put_back_part", {"part": part.number, "lines": returned, "tickets": tickets, "total": str(order.total)})
+    _audit(part, user, "merged_into", {"into": order.number, "put_back": True})
+    return order
+
+
+@transaction.atomic
+def merge_orders(order, other, user, lang="ar"):
+    """«ادمج مع طاولة»: ``other``'s table comes to ``order``'s. Returns ``order``, which keeps its table, waiter and customer."""
+
+    words = MESSAGES[lang]
+    if other is None:
+        raise ValidationError(words["merge_pick"])
+    if order.pk == other.pk:
+        raise ValidationError(words["merge_self"])
+    order, other = _lock_pair(order, other)
+    if order.status != OrderStatus.OPEN:
+        raise ValidationError(words["closed"])
+    if other.status != OrderStatus.OPEN:
+        raise ValidationError(words["merge_closed"])
+    if order.split_from_id or other.split_from_id:
+        raise ValidationError(words["merge_part"])
+    if order.kind != OrderKind.DINE_IN or other.kind != OrderKind.DINE_IN:
+        raise ValidationError(words["merge_kind"])
+    if order.entity_id != other.entity_id:  # R12: an order stays in its branch
+        raise ValidationError(words["other_branch"])
+    before = {"guests": order.guests, "total": str(order.total)}
+    lines = [_line_audit(line, line.quantity) for line in other.lines.select_related("item").filter(parent__isnull=True).order_by("pk")]
+    tickets = _move_tickets(other, order)
+    OrderLine.objects.filter(order=other).update(order=order)
+    parts = list(other.splits.order_by("pk").values_list("number", flat=True))
+    Order.objects.filter(split_from=other).update(split_from=order)  # its parts, open and paid, are this bill's now (its guests come too)
+    order.guests = min(order.guests + other.guests, 999)
+    order.save(update_fields=["guests"])
+    other.status = OrderStatus.MERGED
+    other.merged_into = order
+    other.closed_at = timezone.now()
+    other.save(update_fields=["status", "merged_into", "closed_at"])
+    _audit(order, user, "merge_orders", {"from": other.number, "table": other.table.name if other.table else "", "guests": order.guests, "lines": lines,
+                                         "tickets": tickets, "parts": parts, "total": str(order.total)}, before)
+    _audit(other, user, "merged_into", {"into": order.number, "table": order.table.name if order.table else "", "guests": other.guests})
+    return order

@@ -1,5 +1,5 @@
 /* RESTO-001: filter the menu by category and search, and confirm voids/cancels. R1a: the dish's choice sheet and the size sheet.
-   R2b: the bill's «ادفع بأكتر من طريقة» box. */
+   R2b: the bill's «ادفع بأكتر من طريقة» box. R2a: the «ادفع جزء» sheet's steppers and running amount. */
 (function () {
   'use strict';
   var menu = document.querySelector('[data-menu]');
@@ -45,7 +45,7 @@
       if (first) { first.focus(); }
     });
   });
-  Array.prototype.forEach.call(document.querySelectorAll('[data-choice-sheet], [data-size-sheet]'), function (sheet) {
+  Array.prototype.forEach.call(document.querySelectorAll('[data-choice-sheet], [data-size-sheet], [data-part-sheet]'), function (sheet) {
     var groups = Array.prototype.slice.call(sheet.querySelectorAll('[data-group-max]'));
     var limit = function (group) {
       var boxes = Array.prototype.slice.call(group.querySelectorAll('input[type=checkbox]'));
@@ -135,6 +135,41 @@
     if (discount) { discount.addEventListener('input', update); }
     form.addEventListener('submit', function (event) {
       if (toggle.checked && remaining() !== 0) { event.preventDefault(); update(); }
+    });
+    update();
+  });
+  /* R2a (HG-111): «ادفع جزء». Each line's stepper goes from 0 to the line's quantity by whole plates (a line of 1.5 kg goes
+     whole or not at all); the sheet shows the part's amount before VAT and opens it only when something is chosen. The
+     server checks every quantity again. */
+  Array.prototype.forEach.call(document.querySelectorAll('[data-part-form]'), function (form) {
+    var rows = Array.prototype.slice.call(form.querySelectorAll('[data-part-row]'));
+    var amount = form.querySelector('[data-part-amount]');
+    var submit = form.querySelector('[data-part-submit]');
+    var cents = function (text) { var value = parseFloat(String(text || '').replace(/,/g, '')); return isFinite(value) ? Math.round(value * 100) : 0; };
+    var count = function (row) { var value = parseFloat(row.querySelector('[data-part-qty]').value); return isFinite(value) && value > 0 ? value : 0; };
+    var update = function () {
+      var total = 0;
+      rows.forEach(function (row) {
+        var chosen = count(row);
+        total += Math.round(chosen * cents(row.getAttribute('data-each')));
+        row.classList.toggle('is-chosen', chosen > 0);
+      });
+      if (amount) { amount.textContent = Math.floor(total / 100) + '.' + ('0' + (total % 100)).slice(-2); }
+      if (submit) { submit.disabled = total === 0 && !rows.some(function (row) { return count(row) > 0; }); }
+    };
+    rows.forEach(function (row) {
+      var input = row.querySelector('[data-part-qty]');
+      var max = parseFloat(row.getAttribute('data-max')) || 0;
+      Array.prototype.forEach.call(row.querySelectorAll('[data-step]'), function (button) {
+        button.addEventListener('click', function () {
+          var step = parseInt(button.getAttribute('data-step'), 10);
+          var next = count(row) + step;
+          if (max % 1) { next = step > 0 ? max : 0; }
+          input.value = String(Math.max(0, Math.min(max, next)));
+          update();
+        });
+      });
+      input.addEventListener('input', update);
     });
     update();
   });
