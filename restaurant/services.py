@@ -30,9 +30,10 @@ from config.money import money_round
 from master_data.models import Item
 from permissions.services import user_has_permission
 
-from . import stations
+from . import branches, stations
 from .models import DiningTable, KitchenTicket, Order, OrderKind, OrderLine, OrderStatus
-from entities import scope as entity_scope
+from entities.current import current_entity
+from entities.services import main_entity
 
 
 MAX_QUANTITY = Decimal("999")
@@ -46,6 +47,8 @@ MESSAGES = {
         "fee": "رسوم التوصيل لازم تكون رقم صفر أو أكبر.", "not_delivery": "ده مش طلب دليفري.", "driver": "اختار الطيار.",
         "fee_line": "رسوم توصيل", "fee_item": "رسوم توصيل",
         "fee_stocked": "الصنف {code} متسجل صنف مخزني؛ رسوم التوصيل لازم تكون خدمة. عدّله من الأصناف وشيل «يتتبع في المخزن».",
+        "other_branch": "الطاولة دي تبع فرع تاني.", "branch": "اختار الفرع.", "not_this_branch": "الفرع ده مش الفرع اللي شغال فيه دلوقتي.",
+        "cashbox_branch": "الخزنة دي تبع فرع تاني؛ اختار خزنة من خزن فرع الطلب.",
     },
     "en": {
         "table_name": "Enter the table name or number.", "table_taken": "A table with this name exists.", "seats": "Seats must be 1 to 99.",
@@ -56,6 +59,8 @@ MESSAGES = {
         "fee": "The delivery fee must be zero or more.", "not_delivery": "This is not a delivery order.", "driver": "Choose the driver.",
         "fee_line": "Delivery fee", "fee_item": "رسوم توصيل",
         "fee_stocked": "Item {code} is a stocked item; the delivery fee must be a service. Edit it under Items and untick stock tracking.",
+        "other_branch": "This table belongs to another branch.", "branch": "Choose the branch.", "not_this_branch": "This is not the branch you are working in.",
+        "cashbox_branch": "This cashbox belongs to another branch; choose one of the order's branch's cashboxes.",
     },
 }
 
@@ -78,12 +83,19 @@ def _quantity(value, words):
 # --- tables -----------------------------------------------------------------
 
 @transaction.atomic
-def save_table(data, user, table=None, lang="ar"):
+def save_table(data, user, table=None, lang="ar", entity=None):
+    """Create or change a table. R12: a new table lands in ``entity`` (else the working entity, else the main one); a free
+    table may move to another branch from the whole group; its name is unique within its branch."""
+
     words = MESSAGES[lang]
     name = (data.get("name") or "").strip()[:40]
     if not name:
         raise ValidationError(words["table_name"])
-    if DiningTable.objects.filter(name__iexact=name).exclude(pk=getattr(table, "pk", None)).exists():
+    working = current_entity()
+    target = entity or (table.entity if table is not None else None) or working or main_entity()
+    if working is not None and target.pk != working.pk:
+        raise ValidationError(words["not_this_branch"])
+    if DiningTable.objects.filter(entity=target, name__iexact=name).exclude(pk=getattr(table, "pk", None)).exists():
         raise ValidationError(words["table_taken"])
     try:
         seats = int(data.get("seats") or 4)
@@ -92,10 +104,11 @@ def save_table(data, user, table=None, lang="ar"):
     if not 1 <= seats <= 99:
         raise ValidationError(words["seats"])
     active = data.get("active", True) not in (False, "", "0", "off", None)
-    if table is not None and not active and table.orders.filter(status=OrderStatus.OPEN).exists():
+    moving = table is not None and target.pk != table.entity_id
+    if table is not None and (not active or moving) and table.orders.filter(status=OrderStatus.OPEN).exists():
         raise ValidationError(words["has_open"])
     values = {"name": name, "area": (data.get("area") or "").strip()[:60], "seats": seats, "active": active,
-              "sort_order": int(data.get("sort_order") or 0) if str(data.get("sort_order") or "0").isdigit() else 0}
+              "sort_order": int(data.get("sort_order") or 0) if str(data.get("sort_order") or "0").isdigit() else 0, "entity_id": target.pk}
     created = table is None
     before = {} if created else {key: getattr(table, key) for key in values}
     table = table or DiningTable()
@@ -131,16 +144,24 @@ def _fee(raw, words):
 
 
 def open_order(user, *, kind=OrderKind.DINE_IN, table=None, guests=1, customer=None, waiter=None, address="", phone="", notes="", lang="ar",
-               delivery_fee=None):
-    """A new order, or, for a table already taken, the order already open there."""
+               delivery_fee=None, entity=None):
+    """A new order, or, for a table already taken, the order already open there.
+
+    R12: a dine-in order belongs to its table's entity; a takeaway or a delivery to ``entity``, else the working entity,
+    else the main one. Neither may land outside the entity being worked in."""
 
     words = MESSAGES[lang]
+    working = current_entity()
     kind = kind if kind in OrderKind.values else OrderKind.DINE_IN
     if kind == OrderKind.DINE_IN:
         if table is None:
             raise ValidationError(words["table_needed"])
+        target = None  # the table's, read under its lock below
     else:
         table = None
+        target = entity or working or main_entity()
+        if working is not None and target.pk != working.pk:
+            raise ValidationError(words["not_this_branch"])
     address = (address or (getattr(customer, "address", "") if customer else "") or "").strip()[:255]
     if kind == OrderKind.DELIVERY and not address:
         raise ValidationError(words["address"])
@@ -154,17 +175,21 @@ def open_order(user, *, kind=OrderKind.DINE_IN, table=None, guests=1, customer=N
             with transaction.atomic():
                 if table is not None:
                     table = DiningTable.objects.select_for_update().get(pk=table.pk)
+                    if (working is not None and table.entity_id != working.pk) or (entity is not None and table.entity_id != entity.pk):
+                        raise ValidationError(words["other_branch"])
                     if not table.active:
                         raise ValidationError(words["table_off"])
+                    target = table.entity
                     existing = Order.objects.filter(table=table, status=OrderStatus.OPEN).first()
                     if existing:
                         return existing
                 order = Order.objects.create(
                     number=_next_number(timezone.localdate()), kind=kind, table=table, guests=guests, customer=customer, waiter=waiter,
                     address=address if kind == OrderKind.DELIVERY else "", phone=(phone or (getattr(customer, "phone", "") if customer else "") or "").strip()[:50],
-                    notes=(notes or "").strip()[:255], opened_by=user, delivery_fee=fee,
+                    notes=(notes or "").strip()[:255], opened_by=user, delivery_fee=fee, entity=target,
                 )
-                _audit(order, user, "open_order", {"number": order.number, "kind": kind, "table": table.name if table else ""}, event=AuditEventType.CREATE)
+                _audit(order, user, "open_order", {"number": order.number, "kind": kind, "table": table.name if table else "",
+                                                     "entity": target.pk}, event=AuditEventType.CREATE)
                 return order
         except IntegrityError:
             continue  # the same number, or the table, was taken a moment ago; look again
@@ -257,7 +282,7 @@ def send_to_kitchen(order, user, lang="ar"):
         return None
     sequence = max(order.tickets.values_list("sequence", flat=True), default=0)
     batch = []
-    for station, lines in stations.route(pending):
+    for station, lines in stations.route(pending, entity=order.entity):  # R12: the order's branch's stations
         sequence += 1
         ticket = KitchenTicket.objects.create(order=order, sequence=sequence, sent_by=user, station=station)
         OrderLine.objects.filter(pk__in=[line.pk for line in lines]).update(ticket=ticket)
@@ -275,6 +300,8 @@ def move_table(order, table, user, lang="ar"):
     if table is None:
         raise ValidationError(words["table_needed"])
     table = DiningTable.objects.select_for_update().get(pk=table.pk)
+    if table.entity_id != order.entity_id:  # R12: an order stays in its branch
+        raise ValidationError(words["other_branch"])
     if not table.active:
         raise ValidationError(words["table_off"])
     if table.pk == order.table_id:
@@ -333,17 +360,20 @@ def _fee_item(words):
 
 
 def _payable(order, cashbox, words):
-    """Paying, step 1 (validate): the order is still open (and now locked), has live lines, and there is a store and a cashbox."""
+    """Paying, step 1 (validate): the order is still open (and now locked), has live lines, and there is a store and a cashbox.
 
-    from master_data.models import Location
+    R12 (HG-108): the store is the order's own entity's default selling store, and the cashbox must be one of that entity's,
+    whatever entity the biller works in."""
 
     order = _locked_open(order, words)
     lines = [line for line in order.lines.select_related("item").filter(voided=False)]
     if not lines:
         raise ValidationError(words["empty"])
-    location = entity_scope.locations(Location.objects).filter(active=True, is_selling_location=True).order_by("-is_default", "pk").first()
+    location = branches.selling_location(order)
     if location is None or cashbox is None:
         raise ValidationError(words["setup"])
+    if not branches.owns_cashbox(order, cashbox):
+        raise ValidationError(words["cashbox_branch"])
     return order, lines, location
 
 
@@ -408,10 +438,10 @@ def pay(order, user, *, cashbox, discount=Decimal("0"), tendered=Decimal("0"), c
 
 
 def board():
-    """Every active table with its open order (if any), plus open takeaway and delivery orders."""
+    """Every active table with its open order (if any), plus open takeaway and delivery orders: the entity being worked in only (R12)."""
 
-    open_orders = Order.objects.filter(status=OrderStatus.OPEN).select_related("table", "customer", "waiter").prefetch_related("lines")
+    open_orders = branches.orders(Order.objects.filter(status=OrderStatus.OPEN)).select_related("table", "customer", "waiter", "entity").prefetch_related("lines")
     by_table = {order.table_id: order for order in open_orders if order.table_id}
-    tables = [{"table": table, "order": by_table.get(table.pk)} for table in DiningTable.objects.filter(active=True)]
+    tables = [{"table": table, "order": by_table.get(table.pk)} for table in branches.tables(DiningTable.objects.filter(active=True)).select_related("entity")]
     others = [order for order in open_orders if not order.table_id]
     return tables, others

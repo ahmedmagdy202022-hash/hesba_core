@@ -70,10 +70,11 @@ def _tile(key, label, value, kind="count", tone="", sub=""):
 def _kitchen(words, today):
     from restaurant.models import DiningTable, Order, OrderLine, OrderStatus
 
-    open_orders = Order.objects.filter(status=OrderStatus.OPEN)
-    value = OrderLine.objects.filter(order__status=OrderStatus.OPEN, voided=False).aggregate(
+    # Restaurants R12 (HG-108): tables and orders carry their branch, so the floor's counts are the entity being worked in.
+    open_orders = entity_scope.scope(Order.objects, "entity").filter(status=OrderStatus.OPEN)
+    value = entity_scope.scope(OrderLine.objects, "order__entity").filter(order__status=OrderStatus.OPEN, voided=False).aggregate(
         v=Sum(ExpressionWrapper(F("quantity") * F("unit_price"), output_field=DecimalField(max_digits=18, decimal_places=4))))["v"] or ZERO
-    tables = DiningTable.objects.filter(active=True).count()
+    tables = entity_scope.scope(DiningTable.objects, "entity").filter(active=True).count()
     busy = open_orders.exclude(table=None).values("table").distinct().count()
     paid = entity_scope.scope(Order.objects, "invoice__" + entity_scope.SALES_INVOICE).filter(status=OrderStatus.PAID, closed_at__date=today, invoice__status="posted")
     paid_count = paid.count()

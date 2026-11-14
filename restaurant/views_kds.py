@@ -112,10 +112,10 @@ def kds_act(request):
     if op not in ("ready", "done", "recall") or not raw.isdigit():
         return _json({"error": "bad request"}, status=400)
     if op == "ready":
-        line = get_object_or_404(entity_scope.scope(OrderLine.objects.filter(ticket__isnull=False), "ticket__station__entity"), pk=int(raw))
+        line = get_object_or_404(entity_scope.scope(OrderLine.objects.filter(ticket__isnull=False), "ticket__order__entity"), pk=int(raw))
         stations.mark_line(line)
     else:
-        ticket = get_object_or_404(entity_scope.scope(KitchenTicket.objects.all(), "station__entity"), pk=int(raw))
+        ticket = get_object_or_404(entity_scope.scope(KitchenTicket.objects.all(), "order__entity"), pk=int(raw))
         (stations.finish_ticket if op == "done" else stations.recall_ticket)(ticket)
     return _json({"ok": True, **_feed(station, lang)})
 

@@ -7,20 +7,38 @@ from django.db.models import Q
 from config.money import money_round
 
 
-class DiningTable(models.Model):
-    """RESTO-001: a table in the hall (or a seat at the bar)."""
+def _main_entity():
+    from entities.services import main_entity
 
-    name = models.CharField(max_length=40, unique=True)
+    return main_entity()
+
+
+class DiningTable(models.Model):
+    """RESTO-001: a table in the hall (or a seat at the bar).
+
+    Restaurants R12 (HG-108): a table belongs to one entity (branch), and its name is unique within that entity, so every
+    branch can have its «T1». The column is NOT NULL, unlike the older entity columns where an empty entity means the main
+    one (HG-034): a unique constraint treats NULLs as different, so with NULL rows two main-entity «T1» would pass the
+    database. A table made without an entity gets the main one in ``save()``, as a location does."""
+
+    name = models.CharField(max_length=40)
     area = models.CharField(max_length=60, blank=True, help_text="Hall, terrace, family section…")
     seats = models.PositiveSmallIntegerField(default=4)
     sort_order = models.PositiveIntegerField(default=0)
     active = models.BooleanField(default=True)
+    entity = models.ForeignKey("entities.Entity", on_delete=models.PROTECT, related_name="dining_tables")
 
     class Meta:
         ordering = ["sort_order", "name"]
+        constraints = [models.UniqueConstraint(fields=["entity", "name"], name="restaurant_table_name_per_entity")]
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        if self.entity_id is None:
+            self.entity = _main_entity()
+        super().save(*args, **kwargs)
 
 
 class OrderKind(models.TextChoices):
@@ -56,6 +74,9 @@ class Order(models.Model):
     opened_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="restaurant_orders")
     opened_at = models.DateTimeField(auto_now_add=True)
     closed_at = models.DateTimeField(null=True, blank=True)
+    #: R12 (HG-108): the branch the order belongs to, set when it is opened: the table's for dine-in, the working entity's for
+    #: takeaway and delivery. Its bill posts to this entity's selling store and cashbox, whatever entity the biller works in.
+    entity = models.ForeignKey("entities.Entity", on_delete=models.PROTECT, related_name="restaurant_orders")
 
     class Meta:
         ordering = ["-opened_at"]
@@ -66,6 +87,11 @@ class Order(models.Model):
 
     def __str__(self):
         return self.number
+
+    def save(self, *args, **kwargs):
+        if self.entity_id is None:  # the services always say; a caller written before R12 gets the table's, else the main one
+            self.entity_id = self.table.entity_id if self.table_id else _main_entity().pk
+        super().save(*args, **kwargs)
 
     def live_lines(self):
         return [line for line in self.lines.all() if not line.voided]
@@ -101,9 +127,7 @@ class KitchenStation(models.Model):
 
     def save(self, *args, **kwargs):
         if self.entity_id is None:  # as Cashbox.save: a record made without an entity belongs to the main one
-            from entities.services import main_entity
-
-            self.entity = main_entity()
+            self.entity = _main_entity()
         super().save(*args, **kwargs)
 
 

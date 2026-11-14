@@ -365,7 +365,7 @@ class AccessTests(ScreenSetup):
 
 
 class EntityTests(ScreenSetup):
-    """Orders carry no entity yet, so stations do: the feed, the taps and the setup never cross entities."""
+    """The feed, the taps and the setup never cross entities (R12: a ticket follows its order's entity, and the order its table's)."""
 
     def setUp(self):
         super().setUp()
@@ -376,7 +376,8 @@ class EntityTests(ScreenSetup):
         self.order_main = self.order((self.burger, 1))
         services.send_to_kitchen(self.order_main, self.owner)  # sent while working across the group: routed to the main entity's stations
         with working_in(self.branch):
-            self.order_far = self.order((self.burger, 1), table=self.t2)
+            self.far_table = services.save_table({"name": "1"}, self.owner)  # R12: the branch's own table (the hall's «2» is the main entity's)
+            self.order_far = self.order((self.burger, 1), table=self.far_table)
             services.send_to_kitchen(self.order_far, self.owner)
 
     def work_in(self, entity):

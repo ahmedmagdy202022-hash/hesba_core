@@ -6,9 +6,9 @@ Rules, stated once:
   holds goes to the default station; with no station set up at all, the whole send is one ticket with no station, exactly as
   before stations existed;
 * a category belongs to one station, so where an item goes never depends on which was added first;
-* routing and the screen follow the entity being worked in (whole group = the main entity), so a branch's food never reaches
-  another branch's screen. Orders carry no entity yet (Restaurants R12), so the station is the only thing that does: a ticket with
-  no station belongs to the main entity (HG-034: "no entity means main");
+* a send is routed to the stations of the order's own entity, and a screen shows the tickets of the orders of the entity being
+  worked in (Restaurants R12, HG-108: an order carries its branch), so a branch's food never reaches another branch's screen,
+  whoever sent it and from wherever; a ticket with no station follows its order too;
 * the screen's actions only move the station's own marks (a line ready, a ticket done, the kitchen having seen a void). They
   never touch the bill, stock, a cashbox or a ledger.
 """
@@ -69,10 +69,10 @@ def scoped_stations():
     return entity_scope.scope(KitchenStation.objects.all(), "entity")
 
 
-def routing_stations():
-    """Active stations a send is routed to: only the working entity's, never another branch's."""
+def routing_stations(entity=None):
+    """Active stations a send is routed to: only ``entity``'s (the order's; the working entity's when none is said), never another branch's."""
 
-    entity = working_entity()
+    entity = entity or working_entity()
     condition = Q(entity=entity)
     if entity.is_main:
         condition |= Q(entity__isnull=True)
@@ -141,13 +141,13 @@ def _category_chain(category_id, parents):
     return seen
 
 
-def route(lines):
+def route(lines, entity=None):
     """Split the lines of one send by station: ``[(station or None, [lines])]``, in station order, the unassigned group last.
 
     No station set up: one group, no station (the send is one ticket, as it always was)."""
 
     lines = list(lines)
-    stations = list(routing_stations().prefetch_related("categories"))
+    stations = list(routing_stations(entity).prefetch_related("categories"))
     if not stations:
         return [(None, lines)]
     holder, default = {}, None
@@ -168,10 +168,10 @@ def route(lines):
 
 def shown_tickets(station=None, now=None):
     """Tickets on a station's screen (all of the entity's stations when ``station`` is None): the ones not finished, and a finished
-    one that still carries a void the kitchen has not seen. Entity-scoped; oldest first."""
+    one that still carries a void the kitchen has not seen. Scoped by the order's entity (R12); oldest first."""
 
     now = now or timezone.now()
-    tickets = entity_scope.scope(KitchenTicket.objects.all(), "station__entity").filter(sent_at__gte=now - SHOWN_FOR)
+    tickets = entity_scope.scope(KitchenTicket.objects.all(), "order__entity").filter(sent_at__gte=now - SHOWN_FOR)
     if station is not None:
         tickets = tickets.filter(station=station)
     tickets = tickets.filter(Q(done_at__isnull=True) | Q(lines__voided=True, lines__ready_at__isnull=True)).distinct()
@@ -183,7 +183,7 @@ def last_done(station=None, now=None):
     """The ticket finished most recently (within ``RECALL_WITHIN``), which «رجّع» brings back."""
 
     now = now or timezone.now()
-    tickets = entity_scope.scope(KitchenTicket.objects.all(), "station__entity").filter(done_at__gte=now - RECALL_WITHIN)
+    tickets = entity_scope.scope(KitchenTicket.objects.all(), "order__entity").filter(done_at__gte=now - RECALL_WITHIN)
     if station is not None:
         tickets = tickets.filter(station=station)
     return tickets.select_related("order", "order__table", "station").order_by("-done_at", "-pk").first()
