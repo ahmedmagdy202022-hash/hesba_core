@@ -250,15 +250,22 @@ def add_item(order, item, user, quantity=1, note="", lang="ar", options=None):
 
     from . import modifiers
 
+    from .models import Combo
+
     words = MESSAGES[lang]
     order = _locked_open(order, words)
     if item is None or not item.active:
         raise ValidationError(words["item"])
+    if Combo.objects.filter(item=item).exists():  # R1b (HG-112): a combo's own item is never a line; its components are (trap 7)
+        from . import combos
+
+        raise ValidationError(combos.words(lang)["combo_item"].format(item=item.item_name))
     quantity = _quantity(quantity, words)
     note = (note or "").strip()[:120]
     chosen = modifiers.choose(item, options, lang)
     if not chosen:
-        line = (order.lines.filter(item=item, note=note, ticket__isnull=True, voided=False, parent__isnull=True, options="", children__isnull=True)
+        line = (order.lines.filter(item=item, note=note, ticket__isnull=True, voided=False, parent__isnull=True, options="", children__isnull=True,
+                                   bundle__isnull=True)  # R1b: never into a combo's component
                 .order_by("pk").first())
         if line:
             line.quantity = _quantity(line.quantity + quantity, words)
@@ -270,6 +277,54 @@ def add_item(order, item, user, quantity=1, note="", lang="ar", options=None):
         OrderLine.objects.create(order=order, item=option.item, quantity=quantity, unit_price=money_round(option.item.default_sale_price), parent=line,
                                  options=option.label(lang)[:255])
     return line
+
+
+@transaction.atomic
+def add_combo(order, combo, user, choices, quantity=1, note="", lang="ar", options=None):
+    """R1b (HG-112): take ``quantity`` combos, each its own bundle of quantity-1 component lines at their menu prices with
+    the saving spread over them as discounts (``restaurant.combos``). ``choices`` is {slot pk: choice pk} (one per slot);
+    ``options`` is {slot pk: [option pks]}: the R1a add-ons and choices of that slot's item, checked as a dish's are.
+    Everything is checked before anything is written. Returns the first combo's first line (its head)."""
+
+    from . import combos, modifiers
+    from .models import ComboSlot
+
+    words = MESSAGES[lang]
+    order = _locked_open(order, words)
+    if combo is None:
+        raise ValidationError(combos.words(lang)["off"])
+    count = combos.whole_count(quantity, lang)
+    priced = combos.priced(combo, combos.choose(combo, choices, lang), lang)
+    asked = {}
+    for key, values in (options or {}).items():
+        key = str(key.pk if isinstance(key, ComboSlot) else key).strip()
+        if key not in {str(slot.pk) for slot, *_rest in priced}:
+            raise ValidationError(combos.words(lang)["foreign"].format(slot=combo.label(lang)))
+        asked[key] = values
+    extras = {slot.pk: modifiers.choose(choice.item, asked.get(str(slot.pk)), lang) for slot, choice, _price, _share in priced}
+    note = (note or "").strip()[:120]
+    first = None
+    for _taken in range(count):
+        bundle = combos.next_bundle(order)
+        for position, (slot, choice, price, share) in enumerate(priced):
+            picked = extras[slot.pk]
+            line = OrderLine.objects.create(order=order, item=choice.item, quantity=Decimal("1"), unit_price=price, discount=share, combo=combo, bundle=bundle,
+                                            note=note if position == 0 else "", options=modifiers.free_text(picked, lang))
+            for option in modifiers.priced(picked):  # an add-on is billed at its own price and never discounted
+                OrderLine.objects.create(order=order, item=option.item, quantity=Decimal("1"), unit_price=money_round(option.item.default_sale_price), parent=line,
+                                         options=option.label(lang)[:255])
+            first = first or line
+    return first
+
+
+def _bundle_head(line, lang):
+    """R1b: a combo's component moves only with its combo, through the combo's first line (its head)."""
+
+    from . import combos
+
+    if line.bundle and not combos.is_head(line):
+        raise ValidationError(combos.words(lang)["component"])
+    return combos.bundle_lines(line)
 
 
 def _dish_line(line, lang):
@@ -291,6 +346,8 @@ def change_line(line, user, quantity=None, note=None, lang="ar"):
     line = _dish_line(OrderLine.objects.get(pk=line.pk), lang)
     if line.ticket_id or line.voided:
         raise ValidationError(words["sent"])
+    if line.bundle:  # R1b: a combo is removed whole from its head; its quantity is always 1; a component keeps its own kitchen note
+        return _change_component(line, quantity, note, words, lang)
     if quantity is not None and str(quantity).strip() in ("0", "0.0", "0.000"):
         line.delete()  # its add-ons go with it (CASCADE)
         return None
@@ -300,6 +357,22 @@ def change_line(line, user, quantity=None, note=None, lang="ar"):
         line.note = note.strip()[:120]
     line.save(update_fields=["quantity", "note"])
     line.children.update(quantity=line.quantity)
+    return line
+
+
+def _change_component(line, quantity, note, words, lang):
+    from . import combos
+
+    if quantity is not None:
+        members = _bundle_head(line, lang)
+        if str(quantity).strip() in ("0", "0.0", "0.000"):
+            OrderLine.objects.filter(pk__in=[member.pk for member in members]).delete()  # their add-ons go with them (CASCADE)
+            return None
+        if _quantity(quantity, words) != line.quantity:
+            raise ValidationError(combos.words(lang)["one_each"])
+    if note is not None:
+        line.note = note.strip()[:120]
+        line.save(update_fields=["note"])
     return line
 
 
@@ -313,9 +386,10 @@ def void_line(line, user, lang="ar", *, reason=""):
 
     words = MESSAGES[lang]
     order = _locked_open(line.order, words)
-    line = _dish_line(OrderLine.objects.select_related("item", "ticket").get(pk=line.pk), lang)
+    line = _dish_line(OrderLine.objects.select_related("item", "ticket", "combo__item").get(pk=line.pk), lang)
+    members = _bundle_head(line, lang)  # R1b: a combo goes whole, from its head
     if not line.ticket_id:
-        line.delete()  # R1a: its add-ons go with it (CASCADE)
+        OrderLine.objects.filter(pk__in=[member.pk for member in members]).delete()  # R1a: its add-ons go with it (CASCADE)
         return None
     if line.voided:
         return line
@@ -330,10 +404,17 @@ def void_line(line, user, lang="ar", *, reason=""):
     line.save(update_fields=["voided", "void_reason", "ready_at"])
     addons = list(line.children.select_related("item"))  # R1a: the add-ons are voided with their dish, for the same reason
     line.children.update(voided=True, void_reason=reason, ready_at=None)
+    others = [member for member in members if member.pk != line.pk]  # R1b: the combo's other components, for the same reason
+    if others:
+        OrderLine.objects.filter(Q(pk__in=[member.pk for member in others]) | Q(parent_id__in=[member.pk for member in others])).update(
+            voided=True, void_reason=reason, ready_at=None)
     after = {"line": line.pk, "item": line.item.item_code, "item_name": line.item.item_name, "quantity": str(line.quantity),
              "amount": str(line.amount), "ticket": line.ticket.sequence, "reason": reason}
     if addons:
         after["addons"] = [{"line": addon.pk, "item": addon.item.item_code, "amount": str(addon.amount)} for addon in addons]
+    if line.bundle:
+        after["combo"] = line.combo.item.item_name
+        after["components"] = [{"line": member.pk, "item": member.item.item_code, "amount": str(member.amount)} for member in others]
     _audit(order, user, "void_order_line", after)
     return line
 
@@ -466,13 +547,21 @@ def bill_rows(order, lines, lang="ar"):
     by_pk = {line.pk: line for line in lines}
     # R1a (HG-109): a priced add-on is an ordinary row right after its dish, «+ جبنة زيادة (برجر)»; a dish's row is as before
     # (its description is its note: the e-receipt prints a description in place of the item's name, so free choices stay off it).
-    rows = [{"item": line.item, "quantity": line.quantity, "unit_sale_price": line.unit_price, "line_discount_amount": Decimal("0"),
-             "description": modifiers.bill_description(line, by_pk[line.parent_id]) if line.parent_id in by_pk else line.note}
+    # R1b (HG-112): a combo's component carries its share of the saving as its row's line discount, exactly (its quantity is 1),
+    # and says which combo it came in: «برجر — وجبة برجر».
+    rows = [{"item": line.item, "quantity": line.quantity, "unit_sale_price": line.unit_price, "line_discount_amount": line.line_discount,
+             "description": modifiers.bill_description(line, by_pk[line.parent_id]) if line.parent_id in by_pk else _row_description(line, lang)}
             for line in modifiers.families(lines)]
     if order.kind == OrderKind.DELIVERY and order.delivery_fee > 0:  # RESTO-003: the fee is its own line on the same invoice
         rows.append({"item": _fee_item(words), "quantity": Decimal("1"), "unit_sale_price": order.delivery_fee, "line_discount_amount": Decimal("0"),
                      "description": words["fee_line"]})
     return rows
+
+
+def _row_description(line, lang):
+    if not line.combo_id:
+        return line.note
+    return " · ".join(part for part in (f"{line.item.item_name} — {line.combo.label(lang)}", line.note) if part)[:255]
 
 
 def _bill_notes(order, lang):
@@ -518,9 +607,10 @@ def bill_total(order, lines):
 
     from taxes.services import compute_lines, default_rate, rate_for, vat_enabled
 
-    rows = [{"item": line.item, "quantity": line.quantity, "unit_sale_price": line.unit_price, "line_discount_amount": Decimal("0")}
-            for line in lines if not line.voided]
-    total = sum((money_round(row["quantity"] * row["unit_sale_price"]) for row in rows), Decimal("0"))
+    live = [line for line in lines if not line.voided]
+    rows = [{"item": line.item, "quantity": line.quantity, "unit_sale_price": line.unit_price, "line_discount_amount": line.line_discount}
+            for line in live]  # R1b: a combo's components with their discounts, as the bill sends them
+    total = sum((line.amount for line in live), Decimal("0"))
     fee = order.delivery_fee if order.kind == OrderKind.DELIVERY and order.delivery_fee > 0 else Decimal("0")
     total += fee
     if vat_enabled():
@@ -668,7 +758,8 @@ def _open_part(order, user, words):
 
 def _copy_line(line, order, quantity, parent=None):
     copy = OrderLine.objects.create(order=order, item_id=line.item_id, quantity=quantity, unit_price=line.unit_price, note=line.note, ticket_id=line.ticket_id,
-                                    ready_at=line.ready_at, voided=line.voided, void_reason=line.void_reason, options=line.options, parent=parent)
+                                    ready_at=line.ready_at, voided=line.voided, void_reason=line.void_reason, options=line.options, parent=parent,
+                                    discount=line.discount, combo_id=line.combo_id, bundle=line.bundle)
     OrderLine.objects.filter(pk=copy.pk).update(created_at=line.created_at)  # when it was ordered stays the line's (R6's happy hour reads it)
     return copy
 
@@ -715,17 +806,24 @@ def split_order(order, parts, user, lang="ar"):
         if line is None or line.voided:
             raise ValidationError(words["part_line"])
         _dish_line(line, lang)
+        members = _bundle_head(line, lang)  # R1b: a combo is split whole, named by its head; a component alone is refused
         quantity = _part_quantity(quantity, line, words)
         if quantity:
-            chosen.append((line, quantity))
+            chosen.append((line, quantity, members))
     if not chosen:
         raise ValidationError(words["part_empty"])
-    taken = {line.pk: quantity for line, quantity in chosen}
+    taken = {member.pk: member.quantity for line, quantity, members in chosen if line.bundle for member in members}
+    taken.update({line.pk: quantity for line, quantity, _members in chosen if not line.bundle})
     if all(taken.get(line.pk) == line.quantity for line in lines.values() if not line.voided and not line.parent_id):
         raise ValidationError(words["part_all"])
     part = _open_part(order, user, words)
-    for line, quantity in sorted(chosen, key=lambda pair: pair[0].pk):
+    for line, quantity, members in sorted(chosen, key=lambda entry: entry[0].pk):
+        if line.bundle:  # each combo taken is one, so its bundle goes whole, add-ons and all (its number is free in a new part)
+            ids = [member.pk for member in members]
+            OrderLine.objects.filter(Q(pk__in=ids) | Q(parent_id__in=ids)).update(order=part)
+            continue
         _move_part(line, quantity, part)
+    chosen = [(line, quantity) for line, quantity, _members in chosen]
     moved = [_line_audit(line, quantity) for line, quantity in chosen]
     _audit(order, user, "split_order", {"part": part.number, "lines": moved, "amount": str(part.total)})
     _audit(part, user, "open_part", {"number": part.number, "from": order.number, "table": order.table.name if order.table else "", "lines": moved},
@@ -754,7 +852,7 @@ def _origin(order, line):
     """The live line of ``order`` that ``line`` was split from: the same dish, price, note, choices, ticket, ready state and add-ons."""
 
     candidates = order.lines.filter(item_id=line.item_id, unit_price=line.unit_price, note=line.note, options=line.options, ticket_id=line.ticket_id,
-                                    voided=False, parent__isnull=True, ready_at__isnull=line.ready_at is None).order_by("pk")
+                                    voided=False, parent__isnull=True, bundle__isnull=True, ready_at__isnull=line.ready_at is None).order_by("pk")
     signature = _addons_of(line)
     return next((candidate for candidate in candidates if _addons_of(candidate) == signature), None)
 
@@ -772,7 +870,18 @@ def put_back(part, user, lang="ar"):
         raise ValidationError(words["closed"])
     tickets = _move_tickets(part, order)
     returned = []
-    for line in part.lines.filter(parent__isnull=True).select_related("item").order_by("pk"):
+    # R1b: a combo comes back whole, as the bundle it was; a number the bill has given to another combo since takes the next free one
+    coming = sorted(set(part.lines.filter(bundle__isnull=False).values_list("bundle", flat=True)))
+    used = set(order.lines.filter(bundle__isnull=False).values_list("bundle", flat=True))
+    for number in coming:
+        members = list(part.lines.filter(bundle=number).select_related("item").order_by("pk"))
+        returned.extend(_line_audit(member, member.quantity) for member in members)
+        ids = [member.pk for member in members]
+        OrderLine.objects.filter(Q(pk__in=ids) | Q(parent_id__in=ids)).update(order=order)
+        if number in used:
+            OrderLine.objects.filter(pk__in=ids).update(bundle=max(used | set(coming)) + 1)
+        used.add(OrderLine.objects.get(pk=ids[0]).bundle)
+    for line in part.lines.filter(parent__isnull=True, bundle__isnull=True).select_related("item").order_by("pk"):
         returned.append(_line_audit(line, line.quantity))
         origin = None if line.voided else _origin(order, line)
         if origin is None:
@@ -789,6 +898,22 @@ def put_back(part, user, lang="ar"):
     _audit(order, user, "put_back_part", {"part": part.number, "lines": returned, "tickets": tickets, "total": str(order.total)})
     _audit(part, user, "merged_into", {"into": order.number, "put_back": True})
     return order
+
+
+def _free_bundles(source, target):
+    """R1b: ``source``'s combos keep their identity in ``target``: a bundle number ``target`` already has is renumbered after
+    both orders' highest. Returns [(old, new)]."""
+
+    used = set(target.lines.filter(bundle__isnull=False).values_list("bundle", flat=True))
+    theirs = sorted(set(source.lines.filter(bundle__isnull=False).values_list("bundle", flat=True)))
+    top = max(used | set(theirs), default=0)
+    moved = []
+    for number in theirs:
+        if number in used:
+            top += 1
+            OrderLine.objects.filter(order=source, bundle=number).update(bundle=top)
+            moved.append((number, top))
+    return moved
 
 
 @transaction.atomic
@@ -814,6 +939,7 @@ def merge_orders(order, other, user, lang="ar"):
     before = {"guests": order.guests, "total": str(order.total)}
     lines = [_line_audit(line, line.quantity) for line in other.lines.select_related("item").filter(parent__isnull=True).order_by("pk")]
     tickets = _move_tickets(other, order)
+    bundles = _free_bundles(other, order)
     OrderLine.objects.filter(order=other).update(order=order)
     parts = list(other.splits.order_by("pk").values_list("number", flat=True))
     Order.objects.filter(split_from=other).update(split_from=order)  # its parts, open and paid, are this bill's now (its guests come too)
@@ -824,6 +950,6 @@ def merge_orders(order, other, user, lang="ar"):
     other.closed_at = timezone.now()
     other.save(update_fields=["status", "merged_into", "closed_at"])
     _audit(order, user, "merge_orders", {"from": other.number, "table": other.table.name if other.table else "", "guests": order.guests, "lines": lines,
-                                         "tickets": tickets, "parts": parts, "total": str(order.total)}, before)
+                                         "tickets": tickets, "parts": parts, "bundles": bundles, "total": str(order.total)}, before)
     _audit(other, user, "merged_into", {"into": order.number, "table": order.table.name if order.table else "", "guests": other.guests})
     return order

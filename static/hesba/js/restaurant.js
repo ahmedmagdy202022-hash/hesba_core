@@ -1,5 +1,6 @@
 /* RESTO-001: filter the menu by category and search, and confirm voids/cancels. R1a: the dish's choice sheet and the size sheet.
-   R2b: the bill's «ادفع بأكتر من طريقة» box. R2a: the «ادفع جزء» sheet's steppers and running amount. */
+   R2b: the bill's «ادفع بأكتر من طريقة» box. R2a: the «ادفع جزء» sheet's steppers and running amount. R1b: the combo sheet
+   shows a chosen dish's own add-ons and asks them only while that dish is chosen. */
 (function () {
   'use strict';
   var menu = document.querySelector('[data-menu]');
@@ -47,13 +48,16 @@
   });
   Array.prototype.forEach.call(document.querySelectorAll('[data-choice-sheet], [data-size-sheet], [data-part-sheet]'), function (sheet) {
     var groups = Array.prototype.slice.call(sheet.querySelectorAll('[data-group-max]'));
+    var own = function (group, selector) {  /* R1b: a combo slot's own inputs, not the add-ons nested under its dishes */
+      return Array.prototype.slice.call(group.querySelectorAll(selector)).filter(function (input) { return input.closest('[data-group-max]') === group; });
+    };
     var limit = function (group) {
-      var boxes = Array.prototype.slice.call(group.querySelectorAll('input[type=checkbox]'));
+      var boxes = own(group, 'input[type=checkbox]');
       var max = parseInt(group.getAttribute('data-group-max'), 10) || 0;
       var ticked = boxes.filter(function (box) { return box.checked; }).length;
       boxes.forEach(function (box) { box.disabled = !box.checked && max > 0 && ticked >= max; });
       if (ticked >= (parseInt(group.getAttribute('data-group-min'), 10) || 0)) {
-        var error = group.querySelector('[data-group-error]');
+        var error = own(group, '[data-group-error]')[0];
         if (error) { error.hidden = true; error.textContent = ''; }
       }
     };
@@ -66,9 +70,10 @@
       form.addEventListener('submit', function (event) {
         var missing = null;
         groups.forEach(function (group) {
+          if (group.closest('fieldset[disabled]')) { return; }  /* R1b: a dish not chosen in its combo slot asks nothing */
           var min = parseInt(group.getAttribute('data-group-min'), 10) || 0;
-          var ticked = group.querySelectorAll('input:checked').length;
-          var error = group.querySelector('[data-group-error]');
+          var ticked = own(group, 'input:checked').length;
+          var error = own(group, '[data-group-error]')[0];
           if (ticked < min) {
             if (error) { error.textContent = group.getAttribute('data-group-message') || ''; error.hidden = false; }
             missing = missing || group;
@@ -81,6 +86,17 @@
         }
       });
     }
+    /* R1b: choosing a dish in a combo slot shows its own add-ons and hides (and stops sending) the others' of that slot */
+    Array.prototype.forEach.call(sheet.querySelectorAll('[data-combo-slot]'), function (slot) {
+      var sync = function () {
+        Array.prototype.forEach.call(slot.querySelectorAll('[data-combo-extras]'), function (extras) {
+          var radio = slot.querySelector('[data-combo-choice="' + extras.getAttribute('data-combo-extras') + '"]');
+          extras.disabled = !(radio && radio.checked);
+        });
+      };
+      slot.addEventListener('change', function (event) { if (event.target.hasAttribute('data-combo-choice')) { sync(); } });
+      sync();
+    });
     var close = sheet.querySelector('[data-sheet-close]');
     if (close) { close.addEventListener('click', function () { sheet.close(); }); }
     sheet.addEventListener('close', function () {
