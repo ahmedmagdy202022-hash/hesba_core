@@ -1,0 +1,52 @@
+{% load static hesba_format %}<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ chw.check_title }} · {{ order.number }}</title>
+{% include "partials/brand_icons.html" %}
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
+<style>
+@page{size:80mm auto;margin:3mm}
+body{margin:0;background:var(--hs-ground);color:var(--hs-ink);font-family:var(--hs-font-body)}
+.ck-bar{display:flex;gap:8px;justify-content:center;padding:10px}
+.hs-back-arrow{flex:none;width:18px;height:18px;margin-inline-end:8px}
+[dir="rtl"] .hs-back-arrow{transform:scaleX(-1)}
+.ck-bar a,.ck-bar button{min-height:44px;padding:0 14px;border-radius:10px;border:1px solid var(--hs-line);background:var(--hs-surface);color:var(--hs-navy);font:inherit;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;cursor:pointer}
+.ck{width:72mm;max-width:calc(100vw - 32px);margin:0 auto 20px;background:var(--hs-surface);padding:4mm;box-sizing:border-box}
+.ck h1{font-size:20px;margin:0;text-align:center}
+.ck .ck-company{font-size:15px;font-weight:800;text-align:center;margin:0 0 2px}
+.ck .ck-where{font-size:22px;font-weight:800;text-align:center;margin:4px 0}
+.ck .ck-meta{display:flex;justify-content:space-between;gap:8px;font-size:12px;border-bottom:1px dashed var(--hs-ink);padding-bottom:4px;margin:4px 0}
+.ck ul{list-style:none;margin:6px 0;padding:0}
+.ck li{display:flex;justify-content:space-between;gap:8px;padding:4px 0;font-size:14px}
+.ck li .ck-name{flex:1}
+.ck li small{display:block;font-size:12px}
+.ck li.ck-combo{font-weight:800;padding-bottom:0}
+.ck li.ck-in-combo,.ck li.ck-addon{padding-inline-start:12px}
+.ck li.ck-charge{border-top:1px dashed var(--hs-line-strong);font-weight:700}
+.ck .ck-sum{display:flex;justify-content:space-between;font-size:14px;margin:2px 0}
+.ck .ck-total{display:flex;justify-content:space-between;font-size:19px;font-weight:800;border-top:1px solid var(--hs-ink);padding-top:4px;margin-top:4px}
+.ck .ck-note{font-size:12px;text-align:center;margin-top:8px}
+@media print{.ck-bar{display:none}body{background:var(--hs-surface)}.ck{margin:0;width:auto;max-width:none;padding:0}}
+</style>
+</head>
+<body>
+<nav class="ck-bar"><a href="{% url 'restaurant:order' order.pk %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ order.number }}</a><button type="button" data-print>{{ chw.print }}</button></nav>
+<article class="ck" data-check="{{ order.number }}">
+  {% if company.name %}<p class="ck-company">{{ company.name }}</p>{% endif %}
+  <h1>{{ chw.check_title }}</h1>
+  <p class="ck-where">{% if order.home_table %}{{ words.table }} {{ order.home_table.name }}{% else %}{{ kind_label }}{% endif %}</p>
+  <p class="ck-meta"><bdi dir="ltr">{{ order.number }}</bdi><bdi dir="ltr">{{ now|date:"Y-m-d H:i" }}</bdi></p>
+  {% if order.waiter or order.guests > 1 %}<p class="ck-meta"><span>{% if order.waiter %}{{ order.waiter.name }}{% endif %}</span><span>{% if order.guests > 1 %}{{ order.guests }} {{ chw.guests }}{% endif %}</span></p>{% endif %}
+  <ul>{% for entry in rows %}{% with row=entry.row %}{% if entry.combo %}<li class="ck-combo" data-check-combo="{{ entry.bundle }}"><span class="ck-name">{{ entry.combo }}</span></li>{% endif %}
+    <li class="{% if row.kind == 'addon' %}ck-addon{% elif entry.bundle %}ck-in-combo{% elif row.kind == 'min' or row.kind == 'service' %}ck-charge{% endif %}" data-check-row="{{ row.code }}" data-check-net="{{ row.net|stringformat:'.2f' }}" data-check-tax="{{ row.tax|stringformat:'.2f' }}"><span class="ck-name">{% if row.kind == 'food' or row.kind == 'addon' %}{{ row.quantity|qty }} × {% endif %}{{ entry.name }}{% if row.kind == 'food' and row.line.options %}<small>{{ row.line.options }}</small>{% endif %}{% if row.line_discount_amount %}<small><bdi dir="ltr">{{ row.quantity|qty }} × {{ row.unit_sale_price|money }} − {{ row.line_discount_amount|money }}</bdi></small>{% endif %}</span><bdi dir="ltr">{{ row.net|money }}</bdi></li>{% endwith %}{% endfor %}</ul>
+  <p class="ck-sum"><span>{{ chw.subtotal }}</span><bdi dir="ltr" data-check-subtotal="{{ bill.subtotal|stringformat:'.2f' }}">{{ bill.subtotal|money }}</bdi></p>
+  {% if bill.tax %}<p class="ck-sum"><span>{{ chw.vat }}</span><bdi dir="ltr" data-check-tax-total="{{ bill.tax|stringformat:'.2f' }}">{{ bill.tax|money }}</bdi></p>{% endif %}
+  <p class="ck-total"><span>{{ chw.total }}</span><bdi dir="ltr" data-check-total="{{ bill.total|stringformat:'.2f' }}">{{ bill.total|money }}</bdi></p>
+  <p class="ck-note">{{ chw.check_note }}</p>
+</article>
+<script>document.querySelector("[data-print]").addEventListener("click", function(){ window.print(); });
+if (new URLSearchParams(window.location.search).get('autoprint') === '1') { window.addEventListener('load', function(){ window.print(); }); }</script>
+</body>
+</html>

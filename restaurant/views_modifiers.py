@@ -50,14 +50,14 @@ BLANK_ROWS = 3
 
 
 def _menu_items():
-    """The items a priced add-on may be: every active item but the delivery fee (the menu's own list)."""
+    """The items a priced add-on may be: every active item but the ones a bill adds by itself (the menu's own list)."""
 
     from django.db.models import Q
 
     from .models import ModifierOption
 
     used = ModifierOption.objects.filter(item__isnull=False).values("item")  # one made inactive since still shows, so the page saves
-    return Item.objects.filter(Q(active=True) | Q(pk__in=used)).exclude(item_code=services.FEE_ITEM_CODE).order_by("item_name")
+    return Item.objects.filter(Q(active=True) | Q(pk__in=used)).exclude(item_code__in=services.OFF_MENU_CODES).order_by("item_name")
 
 
 def _posted_options(post):
