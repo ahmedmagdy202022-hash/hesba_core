@@ -107,3 +107,14 @@ html.rs-sheet-open{overflow:hidden}
 .rs-option-rows legend{padding:0;margin-bottom:6px;font-weight:var(--hs-weight-bold);color:var(--hs-navy)}
 .rs-option-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr));gap:8px;align-items:end;padding:10px 0;border-bottom:1px solid var(--hs-line)}
 .rs-option-row select{min-width:0;max-width:100%;width:100%;text-overflow:ellipsis}
+/* R2b (HG-110): «ادفع بأكتر من طريقة» on the bill box. The rows show only while it is ticked; the one-cashbox fields hide then. */
+.rs-split{display:grid;gap:8px;padding:var(--hs-space-3);border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);background:var(--hs-ground)}
+.rs-split-toggle{min-height:44px}
+.rs-split-toggle input{width:20px;height:20px;margin:0}
+.rs-split-rows{display:none;gap:8px;margin:0;padding:0;border:0;min-width:0}
+.rs-split-rows .op-muted{margin:0;font-size:13px}
+.is-split .rs-split-rows,[data-pay-form]:has([data-split-toggle]:checked) .rs-split-rows{display:grid}
+.is-split [data-single-pay],[data-pay-form]:has([data-split-toggle]:checked) [data-single-pay]{display:none}
+.rs-split-figure{display:flex;justify-content:space-between;gap:8px;margin:0;font-weight:var(--hs-weight-bold);color:var(--hs-navy)}
+.rs-split-left{padding:var(--hs-space-2) var(--hs-space-3);border-radius:var(--hs-radius-sm);background:var(--hs-warning-wash);color:var(--hs-warning)}
+.rs-split-left.is-zero{background:var(--hs-teal-wash);color:var(--hs-teal-deep)}

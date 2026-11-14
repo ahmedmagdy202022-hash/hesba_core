@@ -589,6 +589,9 @@ def create_sales_return(
     from giftcards.guards import before_sales_return
 
     before_sales_return(invoice)  # HG-071 D7: no return-to-card path yet; a card-paid invoice is not returned here
+    from .tenders import before_sales_return as before_split_return
+
+    before_split_return(invoice)  # R2b (HG-110): a walk-in invoice paid several ways is cancelled whole, not returned
     source_lines = list(
         SalesLine.objects.select_for_update()
         .filter(invoice=invoice)
@@ -863,6 +866,9 @@ def cancel_customer_payment(payment_id, user=None, reason=""):
     from giftcards.guards import before_customer_payment_cancel
 
     before_customer_payment_cancel(payment)  # HG-071: a walk-in's card payment goes only with its invoice
+    from .tenders import before_customer_payment_cancel as before_split_payment_cancel
+
+    before_split_payment_cancel(payment)  # R2b (HG-110): so does a walk-in's split payment
 
     CustomerLedgerEntry.objects.create(
         customer=payment.customer,

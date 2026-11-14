@@ -52,6 +52,8 @@ WORDS = {
         "modifiers_title": "الإضافات والاختيارات",
         "sent_many": "اتبعتت {count} للمطبخ ({stations}).",
         "branch": "الفرع", "choose_branch": "اختار الفرع", "no_branch_tables": "لسه مفيش طاولات في الفرع ده.",
+        "split": "ادفع بأكتر من طريقة", "split_hint": "وزّع الحساب على أكتر من خزنة، زي كاش وفيزا. المجموع لازم يساوي المطلوب بالظبط.",
+        "split_due": "المطلوب بالضريبة", "split_left": "الباقي", "split_row": "طريقة",
     },
     "en": {
         "page_title": "Tables & orders", "title": "Tables & orders", "intro": "Tap a free table to open an order, or a busy one to carry on with its order.",
@@ -72,6 +74,8 @@ WORDS = {
         "modifiers_title": "Add-ons and choices",
         "sent_many": "{count} sent to the kitchen ({stations}).",
         "branch": "Branch", "choose_branch": "Choose the branch", "no_branch_tables": "No tables in this branch yet.",
+        "split": "Pay several ways", "split_hint": "Spread the bill over several cashboxes, such as cash and card. Together they must equal the amount to pay exactly.",
+        "split_due": "To pay, VAT included", "split_left": "Left", "split_row": "Way",
     },
 }
 KIND_AR = {OrderKind.DINE_IN: "صالة", OrderKind.TAKEAWAY: "تيك أواي", OrderKind.DELIVERY: "دليفري"}
@@ -91,6 +95,35 @@ def _own_cashbox(raw, order):
 
     raw = str(raw or "")
     return branches.cashboxes(order).filter(pk=raw).first() if raw.isdigit() else None
+
+
+#: R2b (HG-110): how many (cashbox, amount) rows the bill's «ادفع بأكتر من طريقة» box offers at most.
+SPLIT_ROWS = 4
+
+
+def _tenders(post, order, words):
+    """R2b (HG-110): the bill's split rows as [(cashbox, amount), ...]. A row with no amount is skipped; a row whose cashbox
+    is not one the form lists (another branch's, inactive, a held kind) keeps ``None`` so the bill is refused, not shortened."""
+
+    rows = []
+    for index in range(SPLIT_ROWS):
+        raw = (post.get(f"tender_amount_{index}") or "").strip()
+        if raw:
+            rows.append((_own_cashbox(post.get(f"tender_cashbox_{index}"), order), _money(raw, words)))
+    return rows
+
+
+def _split_defaults(cashboxes, first):
+    """R2b: the cashbox each split row starts on: the bill's own default first, then the card machine, then the rest."""
+
+    from sales.pos_buttons import card_cashbox
+
+    boxes = list(cashboxes)
+    machine = card_cashbox(cashboxes)
+    ordered = [box for box in (first, machine) if box is not None]
+    ordered += [box for box in boxes if box not in ordered]
+    count = min(SPLIT_ROWS, max(2, len(boxes)))
+    return [ordered[index] if index < len(ordered) else None for index in range(count)]
 
 
 def _table(raw):
@@ -263,10 +296,12 @@ def order_detail(request, pk):
                 return redirect(f"{reverse('restaurant:board')}?lang={lang}")
             elif action == "pay":
                 require_open_shift(request.user, lang)  # Restaurants R13: the till's own rule (AN4), before anything is made or posted
+                split = request.POST.get("split") == "1"  # R2b (HG-110): with it off, the split rows are not read at all
                 invoice, change = services.pay(
                     order, request.user, cashbox=_own_cashbox(request.POST.get("cashbox"), order),
                     discount=_money(request.POST.get("discount"), words), tendered=_money(request.POST.get("tendered"), words),
                     customer=_pick(Customer, request.POST.get("customer"), active=True), lang=lang,
+                    **({"tenders": _tenders(request.POST, order, words)} if split else {}),
                 )
                 text = words["paid"].format(number=order.number, invoice=invoice.invoice_number, total=f"{invoice.total_amount:,.2f}")
                 if change:
@@ -288,6 +323,7 @@ def order_detail(request, pk):
     cashboxes = branches.cashboxes(order)  # R12: the order's branch's, whatever entity the biller works in
     shift = open_shift_for(request.user)
     shift_box = shift.cashbox if shift and cashboxes.filter(pk=shift.cashbox_id).exists() else None
+    default_cashbox = shift_box or cashboxes.filter(is_default=True).first() or cashboxes.first()
     free_tables = DiningTable.objects.filter(active=True, entity_id=order.entity_id).exclude(orders__status=OrderStatus.OPEN)
     return render(request, "restaurant/order.html", _base(
         request, order=order, lines=lines, total=order.total, items=items, raw_ids=raw_ids, categories=categories, kind_label=_kind_label(order, lang),
@@ -297,7 +333,9 @@ def order_detail(request, pk):
         drivers=Employee.objects.filter(active=True) if order.kind == OrderKind.DELIVERY else [], dw=DELIVERY_WORDS[lang],
         status_label=choice_label(order, "status", lang), is_open=order.status == OrderStatus.OPEN,
         pending=any(not line.ticket_id and not line.voided for line in lines), tickets=order.tickets.select_related("station"),
-        cashboxes=cashboxes, default_cashbox=shift_box or cashboxes.filter(is_default=True).first() or cashboxes.first(),
+        cashboxes=cashboxes, default_cashbox=default_cashbox,
+        split_rows=_split_defaults(cashboxes, default_cashbox) if order.status == OrderStatus.OPEN and len(cashboxes) > 1 else [],  # R2b
+        bill_total=services.bill_total(order, lines) if order.status == OrderStatus.OPEN else None,
         branch_label=order.entity.display(lang) if is_multi_entity() else "",
         shift_missing=shift_missing(request.user),
         customers=Customer.objects.filter(active=True).order_by("name"), free_tables=free_tables,
