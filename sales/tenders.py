@@ -143,7 +143,10 @@ def _on_audit(sender, instance, created, **kwargs):
 
     from .services import cancel_customer_payment
 
-    invoice = SalesInvoice.objects.get(pk=int(instance.object_id))
+    object_id = str(instance.object_id or "")
+    invoice = SalesInvoice.objects.filter(pk=int(object_id)).first() if object_id.isdigit() else None
+    if invoice is None:  # an audit row whose document is not there (an import, a test fixture) is not a cancellation to follow
+        return
     for payment_id in list(live_payments(invoice).order_by("pk").values_list("customer_payment_id", flat=True)):
         cancel_customer_payment(payment_id, instance.actor, CANCEL_REASON.format(invoice=invoice.invoice_number))
 

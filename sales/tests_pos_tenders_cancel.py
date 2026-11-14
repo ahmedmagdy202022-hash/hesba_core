@@ -97,6 +97,20 @@ class CancelTests(TenderSetup):
         self.assertEqual((balance(customer), applied_to(invoice), get_cashbox_balance(self.card)), (D("107.80"), ZERO, ZERO))
 
 
+class StrayAuditRowTests(TenderSetup):
+    def test_an_audit_row_without_its_invoice_is_not_followed(self):
+        # The listener hears every audit row. One that names an invoice that is not there is not a
+        # cancellation to follow (found by loyalty's own test of the same case: the listener raised DoesNotExist).
+        from audit.models import AuditEventType
+
+        before = counts()
+        AuditLog.objects.create(event_type=AuditEventType.UPDATE, actor=self.owner, module="sales", action="cancel_posted_sales_invoice",
+                                object_type="sales.SalesInvoice", object_id="999999", before_data={}, after_data={})
+        after = counts()
+        self.assertEqual(after.pop("audit.AuditLog") - before.pop("audit.AuditLog"), 1)
+        self.assertEqual(after, before)  # nothing else was written
+
+
 class ReturnTests(TenderSetup):
     def ret(self, invoice, quantity="1"):
         line = invoice.lines.get(item=self.service)
