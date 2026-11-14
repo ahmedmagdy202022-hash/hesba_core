@@ -14,15 +14,18 @@ def fill_entities(apps, schema_editor):
 
     The main entity is the one ``entities/0001`` seeded; if it is missing and rows need it, it is made the same way."""
 
-    if schema_editor.connection.vendor == "postgresql":
-        # The updates below queue deferred foreign-key checks; checked at once, the ALTERs that follow in this same
-        # migration do not meet "pending trigger events".
-        schema_editor.execute("SET CONSTRAINTS ALL IMMEDIATE")
     Entity = apps.get_model("entities", "Entity")
     Table = apps.get_model("restaurant", "DiningTable")
     Order = apps.get_model("restaurant", "Order")
     if not Table.objects.exists() and not Order.objects.exists():
         return
+    connection = schema_editor.connection
+    if connection.vendor == "postgresql":
+        # The updates below queue deferred foreign-key checks; checked at once, the ALTERs that follow in this same
+        # migration do not meet "pending trigger events". Through the connection, not ``schema_editor.execute``: the demo
+        # restart replays every data step with a stand-in editor that carries only ``connection`` (``config.demo_restart``).
+        with connection.cursor() as cursor:
+            cursor.execute("SET CONSTRAINTS ALL IMMEDIATE")
     main = Entity.objects.filter(is_main=True).first()
     if main is None:
         ClientProfile = apps.get_model("settings_core", "ClientProfile")

@@ -388,6 +388,25 @@ class SingleBranchTests(RestaurantSetup):
         self.assertEqual(Order.objects.get().entity, main_entity())
 
 
+class DemoRestartFillTests(BranchSetup):
+    def test_the_data_fill_runs_with_the_demo_restarts_stand_in_editor(self):
+        # ``config.demo_restart`` replays every migration's data step with an editor that carries only ``connection``.
+        # With rows to look at, PostgreSQL takes the fill's SET CONSTRAINTS step: it must not need a real schema editor
+        # (seen in CI: every demo restart failed on PostgreSQL with "'SeedEditor' object has no attribute 'execute'").
+        from importlib import import_module
+
+        from django.apps import apps as live_apps
+
+        fill = import_module("restaurant.migrations.0005_branches").fill_entities
+        editor = type("SeedEditor", (), {"connection": connection})()
+        before = list(DiningTable.objects.order_by("pk").values_list("pk", "name", "entity_id"))
+        self.assertTrue(before)
+        fill(live_apps, editor)
+        self.assertEqual(list(DiningTable.objects.order_by("pk").values_list("pk", "name", "entity_id")), before)
+        DiningTable.objects.all().delete()
+        fill(live_apps, editor)  # and with nothing to fill it does nothing
+
+
 class MigrationTests(TransactionTestCase):
     """0005 on a database that already holds tables and orders: every row gets an entity, and no amount changes."""
 
