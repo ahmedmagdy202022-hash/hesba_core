@@ -1469,6 +1469,7 @@ class Command(BaseCommand):
         from education import demo as education_demo
 
         education_demo.seed_exams(groups, owner)  # E2: two exams with marks, in their own module
+        education_demo.seed_showcase(groups, students, owner)  # E0: a certificate, group content and makeup seats (same module; never money)
 
     def _levels(self, groups, students, owner):
         """EDU-006: a language centre's groups teach levels 1 and 2 of the first course, and two students sat a placement test."""
