@@ -1,13 +1,16 @@
-"""Restaurants R4: what the restaurant demos show of the kitchen screen. Called from ``prepare_demo._floor``; safe to run twice."""
+"""Restaurants R4: what the restaurant demos show of the kitchen screen; R1a: one add-on group and one required choice.
+Called from ``prepare_demo._floor``; safe to run twice."""
 
 from datetime import timedelta
 
 from django.utils import timezone
 
-from master_data.models import Category
+from decimal import Decimal
 
-from . import services, stations
-from .models import KitchenStation, KitchenTicket
+from master_data.models import Category, Item
+
+from . import modifiers, services, stations
+from .models import KitchenStation, KitchenTicket, ModifierGroup
 
 
 def seed_stations(catalog, owner):
@@ -51,3 +54,37 @@ def void_after_firing(order, item, owner, reason):
     if line is not None:
         services.void_line(line, owner, reason=reason)
     return line
+
+
+#: R1a: the required question each restaurant demo asks of one dish: (catalog key, dish index, group ar, group en, options).
+REQUIRED_CHOICE = {
+    "restaurants.restaurant": (1, "درجة التسوية", "Doneness", (("ميديم", "Medium"), ("ويل دن", "Well done"))),
+    "restaurants.cafe": (0, "السكر", "Sugar", (("سادة", "No sugar"), ("مظبوط", "Medium"), ("زيادة", "Sweet"))),
+}
+DEFAULT_CHOICE = (1, "طريقة التقديم", "How it is served", (("عادي", "Regular"), ("حار", "Spicy")))
+ADDON_CODE = "DEMO-ADDON-01"
+
+
+def seed_modifiers(catalog, dishes, owner):
+    """R1a (HG-109): «إضافات» (optional, up to 2: a priced extra cheese at 15.00 and a free «من غير بصل») on the first two
+    dishes, and one required choice on one dish, through the real services. Run after the demo's orders are placed, so no
+    seeded figure moves. Returns the two groups."""
+
+    if not dishes:
+        return []
+    index, name_ar, name_en, choices = REQUIRED_CHOICE.get(catalog.key, DEFAULT_CHOICE)
+    dish = dishes[index % len(dishes)]
+    cheese, _ = Item.objects.get_or_create(item_code=ADDON_CODE, defaults={"item_name": "جبنة زيادة", "category": dish.category, "unit": dish.unit,
+                                                                          "default_sale_price": Decimal("15.00"), "is_stock_tracked": False,
+                                                                          "import_batch_id": "DEMO-BUSINESS"})
+    extras = ModifierGroup.objects.filter(name_ar="إضافات").first() or modifiers.save_group(
+        {"name_ar": "إضافات", "name_en": "Extras", "min_choices": "0", "max_choices": "2", "sort": "2",
+         "options": [{"name_ar": "جبنة زيادة", "name_en": "Extra cheese", "item": cheese}, {"name_ar": "من غير بصل", "name_en": "No onions"}]}, owner)
+    required = ModifierGroup.objects.filter(name_ar=name_ar).first() or modifiers.save_group(
+        {"name_ar": name_ar, "name_en": name_en, "min_choices": "1", "max_choices": "1", "sort": "1",
+         "options": [{"name_ar": ar, "name_en": en} for ar, en in choices]}, owner)
+    for target in dict.fromkeys(dishes[:2] + [dish]):
+        wanted = ([required] if target.pk == dish.pk else []) + ([extras] if target in dishes[:2] else [])
+        if not modifiers.groups_of(target):
+            modifiers.set_dish_groups(target, wanted, owner)
+    return [extras, required]

@@ -1,6 +1,6 @@
 {% extends "operations/base.html" %}
 {% load static hesba_format %}
-{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/restaurant.css' %}?v=resto-hg107">{% endblock %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/restaurant.css' %}?v=resto-r1a">{% endblock %}
 {# a saved quantity is a Decimal (shown by qty: 0.2, never 0,200); after a refused save the box echoes what was typed #}
 {% block operation_content %}
 <section class="op-title-row"><div><a class="op-back" href="{% url 'restaurant:costing' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ iw.back }}</a><h1>{{ dish.item_name }}</h1>
@@ -12,6 +12,16 @@
 <td><label class="sr-only" for="qty-{{ forloop.counter }}">{{ iw.quantity }}</label><input id="qty-{{ forloop.counter }}" name="quantity" inputmode="decimal" value="{% if row.quantity.as_tuple %}{{ row.quantity|qty }}{% elif row.quantity is not None %}{{ row.quantity }}{% endif %}" style="min-height:44px;width:120px"{% if not can_edit %} disabled{% endif %}></td></tr>{% endfor %}
 </tbody></table></div>
 {% if can_edit %}<div class="op-form-actions"><button class="op-primary" type="submit">{{ iw.save }}</button></div>{% endif %}</form>
+{# R1a (HG-109): the questions the dish asks when it is ordered. Its own form (action=groups), so saving it never touches the ingredients. #}
+<section class="op-detail-meta" data-dish-groups aria-labelledby="dish-groups-title">
+<h2 id="dish-groups-title">{{ mw.box_title }}</h2>
+{% if dish_groups %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="groups">
+<fieldset class="rs-checks"><legend>{{ mw.box_intro }}</legend>
+{% for row in dish_groups %}<label class="rs-check-chip"><input type="checkbox" name="group" value="{{ row.group.pk }}"{% if row.on %} checked{% endif %}{% if not can_edit %} disabled{% endif %}><span>{{ row.label }} <small>{{ row.rule }} · {% if row.group.min_choices %}{{ mw.required }}{% else %}{{ mw.optional }}{% endif %}{% if not row.group.active %} · {{ mw.off }}{% endif %}</small></span></label>
+{% endfor %}</fieldset>
+{% if can_edit %}<div class="op-form-actions"><button class="op-secondary" type="submit">{{ mw.box_save }}</button><a class="op-secondary" href="{% url 'restaurant:modifiers' %}?lang={{ lang }}">{{ mw.title }}</a></div>{% endif %}</form>
+{% else %}<p class="op-muted">{{ mw.box_none }}{% if can_edit %} <a href="{% url 'restaurant:modifiers' %}?lang={{ lang }}">{{ mw.box_setup }}</a>{% endif %}</p>{% endif %}
+</section>
 <section class="op-detail-meta" data-kitchen>
 <h2>{{ kw.title }}</h2>
 {% if kitchen_made %}<p data-kitchen-on>{{ kw.on }}</p><p class="op-muted">{{ kw.auto }}</p>

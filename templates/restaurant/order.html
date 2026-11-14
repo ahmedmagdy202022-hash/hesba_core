@@ -1,6 +1,6 @@
 {% extends "operations/base.html" %}
 {% load static hesba_format hesba_shifts %}
-{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/restaurant.css' %}?v=resto-hg107">{% endblock %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/restaurant.css' %}?v=resto-r1a">{% endblock %}
 {% block operation_content %}
 <section class="op-title-row"><div><a class="op-back" href="{% url 'restaurant:board' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.back }}</a><h1>{% if order.table %}{{ words.table }} {{ order.table.name }}{% else %}{{ kind_label }}{% endif %}</h1><p><span dir="ltr">{{ order.number }}</span> · {{ kind_label }}{% if branch_label %} · <span data-order-branch>{{ branch_label }}</span>{% endif %}{% if order.customer %} · {{ order.customer.name }}{% endif %}{% if order.address %} · {{ order.address }}{% endif %}{% if order.phone %} · <span dir="ltr">{{ order.phone|ltr }}</span>{% endif %}</p>{% if is_open and can_take %}<a class="op-secondary rs-jump" href="#menu">{{ words.menu }} ↓</a>{% endif %}</div><span class="op-status op-status-{% if order.status == 'paid' %}posted{% elif order.status == 'cancelled' %}cancelled{% else %}open{% endif %}" data-order-status="{{ order.status }}">{{ status_label }}</span></section>
 <div class="rs-order">
@@ -10,18 +10,45 @@
   <input class="rs-search" type="search" placeholder="{{ words.search }}" aria-label="{{ words.search }}" data-menu-search>
   {% if categories %}<div class="rs-cats" role="group" aria-label="{{ words.menu }}"><button type="button" aria-pressed="true" data-menu-cat="">{{ words.all }}</button>{% for category in categories %}<button type="button" aria-pressed="false" data-menu-cat="{{ category.pk }}">{% if lang == 'en' and category.name_en %}{{ category.name_en }}{% else %}{{ category.name_ar }}{% endif %}</button>{% endfor %}</div>{% endif %}
   <div class="rs-menu">
-  {% for item in items %}<form method="post" data-dish="{{ item.item_code }}" data-cat="{{ item.category_id|default:'' }}" data-name="{{ item.item_name|lower }} {{ item.item_code|lower }}"{% if item.pk in raw_ids %} data-raw{% endif %}>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="add"><input type="hidden" name="item" value="{{ item.pk }}"><button class="rs-dish" type="submit"><span>{{ item.item_name }}</span><small>{{ item.default_sale_price|money }}</small></button></form>
+  {% for entry in menu %}{% if entry.sizes %}{% with family=entry.sizes %}<form method="post" data-size-tile="{{ family.group.code }}" data-dish="{{ family.group.code }}" data-cat="{{ family.category_id }}" data-name="{{ family.name|lower }} {{ family.search }}">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="add"><button class="rs-dish" type="submit" data-opens-sheet="size-{{ family.group.pk }}" aria-haspopup="dialog"><span>{{ family.name }}</span><small>{% if not family.same_price %}{{ mw.from }} {% endif %}{{ family.low|money }} · {{ family.sizes|length }} × {{ mw.sizes }}</small></button></form>{% endwith %}{% else %}{% with item=entry.item %}<form method="post" data-dish="{{ item.item_code }}" data-cat="{{ item.category_id|default:'' }}" data-name="{{ item.item_name|lower }} {{ item.item_code|lower }}"{% if item.pk in raw_ids %} data-raw{% endif %}>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="add"><input type="hidden" name="item" value="{{ item.pk }}"><button class="rs-dish" type="submit"{% if item.pk in sheet_items %} data-opens-sheet="sheet-{{ item.pk }}" aria-haspopup="dialog"{% endif %}><span>{{ item.item_name }}</span><small>{{ item.default_sale_price|money }}{% if item.pk in sheet_items %} · {{ mw.has_choices }}{% endif %}</small></button></form>{% endwith %}{% endif %}
   {% empty %}<p class="op-muted">{{ words.no_items }}</p>{% endfor %}
   </div>
 </section>
+{# R1a (HG-109): a dish that asks questions opens its sheet; without JavaScript its tile adds it plainly and the server says what is missing. #}
+{# R1a step 5: a size family under one tile; the size picked is the line's item (variants, no schema). #}
+{% for family in size_sheets %}<dialog class="rs-sheet" id="size-{{ family.group.pk }}" data-size-sheet="{{ family.group.code }}" aria-labelledby="size-{{ family.group.pk }}-title">
+<form method="post" class="rs-sheet__form" data-sheet-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="add">
+<div class="rs-sheet__head"><h2 id="size-{{ family.group.pk }}-title">{{ family.name }}</h2><button type="button" class="rs-sheet__x" data-sheet-close aria-label="{{ mw.close }}">×</button></div>
+<div class="rs-sheet__body">
+<fieldset class="rs-sheet__group"><legend>{{ mw.choose_size }} <small>{{ mw.required }}</small></legend>
+{% for size in family.sizes %}<label class="rs-choice"><input type="radio" name="item" value="{{ size.item.pk }}" required><span>{{ size.label }}</span><small>{{ size.price|money }}</small></label>
+{% endfor %}</fieldset>
+<div class="rs-row"><label class="rs-sheet__field">{{ words.qty }}<input name="quantity" value="1" inputmode="decimal" dir="ltr"></label><label class="rs-sheet__field">{{ words.note }}<input name="note" maxlength="120"></label></div>
+</div>
+<div class="rs-sheet__foot"><button class="op-primary" type="submit" data-sheet-add>{{ mw.add_to_order }}</button></div>
+</form></dialog>{% endfor %}
+{% for sheet in sheets %}<dialog class="rs-sheet" id="sheet-{{ sheet.item.pk }}" data-choice-sheet="{{ sheet.item.pk }}" aria-labelledby="sheet-{{ sheet.item.pk }}-title">
+<form method="post" class="rs-sheet__form" data-sheet-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="add"><input type="hidden" name="item" value="{{ sheet.item.pk }}">
+<div class="rs-sheet__head"><h2 id="sheet-{{ sheet.item.pk }}-title">{{ sheet.item.item_name }} <small>{{ sheet.item.default_sale_price|money }}</small></h2><button type="button" class="rs-sheet__x" data-sheet-close aria-label="{{ mw.close }}">×</button></div>
+<div class="rs-sheet__body">
+{% for group in sheet.groups %}<fieldset class="rs-sheet__group" data-group-min="{{ group.min }}" data-group-max="{{ group.max }}" data-group-message="{{ group.message }}"><legend>{{ group.label }} <small>{{ group.rule }} · {% if group.required %}{{ mw.required }}{% else %}{{ mw.optional }}{% endif %}</small></legend>
+{% for row in group.options %}<label class="rs-choice"><input {% if group.radio %}type="radio" name="option-g{{ group.group.pk }}" value="{{ row.option.pk }}" required{% else %}type="checkbox" name="option" value="{{ row.option.pk }}"{% endif %}><span>{{ row.label }}</span><small>{% if row.price is not None %}<bdi dir="ltr">+{{ row.price|money }}</bdi>{% else %}{{ mw.free_tag }}{% endif %}</small></label>
+{% endfor %}<p class="rs-sheet__error" role="alert" data-group-error hidden></p></fieldset>
+{% endfor %}
+<div class="rs-row"><label class="rs-sheet__field">{{ words.qty }}<input name="quantity" value="1" inputmode="decimal" dir="ltr"></label><label class="rs-sheet__field">{{ words.note }}<input name="note" maxlength="120"></label></div>
+</div>
+<div class="rs-sheet__foot"><button class="op-primary" type="submit" data-sheet-add>{{ mw.add_to_order }}</button></div>
+</form></dialog>{% endfor %}
 {% endif %}
 <section class="rs-panel rs-bill" aria-labelledby="rs-lines-title">
   <h2 id="rs-lines-title">{% if order.table %}{{ words.table }} {{ order.table.name }}{% else %}{{ order.number }}{% endif %}</h2>
   <ul class="rs-lines">
-  {% for line in lines %}
+  {% for family in families %}{% with line=family.line %}
     <li class="rs-line{% if line.voided %} rs-line--void{% endif %}" data-order-line="{{ line.item.item_code }}" data-line-state="{% if line.voided %}void{% elif line.ticket_id %}sent{% else %}new{% endif %}">
       <span class="rs-line__name">{{ line.quantity|qty }} × {{ line.item.item_name }} {% if line.voided %}<span class="rs-tag">{{ words.voided }}</span>{% elif line.ready_at %}<span class="rs-tag rs-tag--ready" data-line-ready>{{ words.ready }}</span>{% elif line.ticket_id %}<span class="rs-tag">{{ words.sent }}</span>{% else %}<span class="rs-tag rs-tag--new">{{ words.new }}</span>{% endif %}</span>
       <span class="rs-line__amount">{{ line.amount|money }}</span>
+      {% if line.options %}<span class="rs-line__note" data-line-options>{{ line.options }}</span>{% endif %}
+      {% for addon in family.addons %}<span class="rs-line__addon{% if addon.voided %} rs-line__addon--void{% endif %}" data-addon-line="{{ addon.item.item_code }}"><span>+ {{ addon.options|default:addon.item.item_name }}</span><span>{{ addon.amount|money }}</span></span>{% endfor %}
       {% if line.note %}<span class="rs-line__note">{{ line.note }}</span>{% endif %}
       {% if line.voided and line.void_reason %}<span class="rs-line__note" data-void-reason>{{ words.void_why }}: {{ line.void_reason }}</span>{% endif %}
       {% if is_open and can_take and not line.voided %}{% if not line.ticket_id or can_sell %}<span class="rs-line__tools">
@@ -29,7 +56,7 @@
         <form method="post"{% if line.ticket_id %} data-confirm="{{ words.void_confirm }}" data-void-sent{% endif %}>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="void"><input type="hidden" name="line" value="{{ line.pk }}">{% if line.ticket_id %}<input name="reason" required maxlength="255" placeholder="{{ words.void_reason }}" aria-label="{{ words.void_reason }}">{% endif %}<button type="submit" data-line-void>{% if line.ticket_id %}{{ words.void }}{% else %}{{ words.remove }}{% endif %}</button></form>
       </span>{% endif %}{% endif %}
     </li>
-  {% empty %}<li class="op-muted">{{ words.empty }}</li>{% endfor %}
+  {% endwith %}{% empty %}<li class="op-muted">{{ words.empty }}</li>{% endfor %}
   </ul>
   {% if order.kind == 'delivery' %}<p class="rs-total" data-delivery-fee-line><span>{{ dw.fee }}</span><span>{{ order.delivery_fee|money }}</span></p>
   <p class="op-muted" data-delivery-driver>{{ dw.driver }}: {{ order.driver.name|default:'—' }}{% if order.dispatched_at %} · {{ dw.out }} {{ dw.at }} <bdi>{{ order.dispatched_at|time:"H:i" }}</bdi>{% endif %}</p>
@@ -57,5 +84,5 @@
   {% if tickets %}<h2>{{ words.tickets }}</h2><p class="op-form-actions">{% for ticket in tickets %}<a class="op-secondary" href="{% url 'restaurant:ticket' ticket.pk %}?lang={{ lang }}" data-ticket="{{ ticket.sequence }}">{{ words.ticket }} {{ ticket.sequence }}{% if ticket.station %} · {% if lang == 'en' and ticket.station.name_en %}{{ ticket.station.name_en }}{% else %}{{ ticket.station.name_ar }}{% endif %}{% endif %} · <span dir="ltr">{{ ticket.sent_at|time:"H:i" }}</span></a>{% endfor %}</p>{% endif %}
 </section>
 </div>
-<script src="{% static 'hesba/js/restaurant.js' %}?v=resto-002" defer></script>
+<script src="{% static 'hesba/js/restaurant.js' %}?v=resto-r1a" defer></script>
 {% endblock %}

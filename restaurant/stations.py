@@ -196,12 +196,21 @@ def level(age_seconds):
 def ticket_card(ticket, now, kind_label, table_word, lang="ar"):
     """One ticket as the screen's feed carries it. ``now`` is the server's, so ages never depend on the tablet's clock."""
 
+    from .modifiers import addon_label, grouped
+
     order = ticket.order
     age = max(0, int((now - ticket.sent_at).total_seconds()))
-    lines = [{"id": line.pk, "name": line.item.item_name, "quantity": str(line.quantity.normalize() if line.quantity % 1 else int(line.quantity)),
-              "note": line.note, "ready": bool(line.ready_at) and not line.voided, "void": line.voided, "reason": line.void_reason,
-              "seen": bool(line.ready_at) if line.voided else True}
-             for line in ticket.lines.all()]
+    lines = []
+    for line, addons in grouped(ticket.lines.all()):
+        row = {"id": line.pk, "name": line.item.item_name, "quantity": str(line.quantity.normalize() if line.quantity % 1 else int(line.quantity)),
+               "note": line.note, "ready": bool(line.ready_at) and not line.voided, "void": line.voided, "reason": line.void_reason,
+               "seen": bool(line.ready_at) if line.voided else True}
+        # R1a (HG-109): a dish carries its free choices and its add-ons as ``extras`` under it (only when it has any, so a
+        # plain dish's entry is as before); an add-on is never a line of its own
+        extras = ([line.options] if line.options else []) + [addon_label(addon) for addon in addons]
+        if extras:
+            row["extras"] = extras
+        lines.append(row)
     return {"id": ticket.pk, "sequence": ticket.sequence, "number": order.number, "age": age, "level": level(age),
             "where": f"{table_word} {order.table.name}" if order.table_id else kind_label,
             "waiter": order.waiter.name if order.waiter_id else "", "station": ticket.station.label(lang) if ticket.station_id else "",
@@ -217,15 +226,17 @@ def mark_line(line, now=None):
     now = now or timezone.now()
     # ``of=("self",)``: the ticket is a nullable join, and PostgreSQL refuses to lock the nullable side of an outer join
     line = OrderLine.objects.select_for_update(of=("self",)).select_related("ticket").get(pk=line.pk)
-    if line.ticket_id is None:
+    if line.ticket_id is None or line.parent_id:  # R1a: an add-on is tapped with its dish, never on its own
         return line
     if line.voided:
         if line.ready_at is None:
             line.ready_at = now
             line.save(update_fields=["ready_at"])
+            line.children.filter(voided=True, ready_at__isnull=True).update(ready_at=now)  # its add-ons' void is seen with it
     elif line.ticket.done_at is None:
         line.ready_at = None if line.ready_at else now
         line.save(update_fields=["ready_at"])
+        line.children.update(ready_at=line.ready_at)  # its add-ons are ready with it
     return line
 
 

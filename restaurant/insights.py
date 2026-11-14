@@ -8,7 +8,7 @@ Sales figures come from paid orders whose invoice is posted, in the entity
 being worked in (HG-034):
 
 - dish figures are the order lines at their menu price, before the order's
-  discount;
+  discount; a priced add-on (R1a) counts in its dish's money, never as a dish;
 - order totals are the invoice's net sales (before tax, after posted returns).
 
 Waste is what was taken out of stock by an adjustment in the period, with its
@@ -141,11 +141,14 @@ def period_report(first, last):
         hour = timezone.localtime(order.closed_at).hour
         hours[hour]["orders"] += 1
         hours[hour]["sales"] += sales
-        for line in order.lines.all():
-            if line.voided:
-                continue
-            row = dishes.setdefault(line.item_id, {"item": line.item, "quantity": ZERO, "sales": ZERO})
-            row["quantity"] += line.quantity
+        lines = [line for line in order.lines.all() if not line.voided]
+        by_pk = {line.pk: line for line in lines}
+        for line in lines:
+            # R1a (HG-109): an add-on is not a dish; its money counts in its dish's row, so the table's money is as before
+            dish = by_pk.get(line.parent_id, line)
+            row = dishes.setdefault(dish.item_id, {"item": dish.item, "quantity": ZERO, "sales": ZERO})
+            if dish is line:
+                row["quantity"] += line.quantity
             row["sales"] += money_round(line.quantity * line.unit_price)
         kind = kinds.setdefault(order.kind, {"kind": order.kind, "orders": 0, "sales": ZERO})
         kind["orders"] += 1

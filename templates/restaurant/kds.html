@@ -6,7 +6,7 @@
 <title>{{ page_title }}</title>
 {% include "partials/brand_icons.html" %}
 <link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
-<link rel="stylesheet" href="{% static 'hesba/css/kds.css' %}?v=r4-1">
+<link rel="stylesheet" href="{% static 'hesba/css/kds.css' %}?v=r1a-1">
 </head>
 <body class="kds" data-kds data-feed="{% url 'restaurant:kds_feed' %}" data-act="{% url 'restaurant:kds_act' %}" data-station="{{ station.pk|default:'' }}" data-lang="{{ lang }}" data-csrf="{{ csrf_token }}">
 <header class="kds-bar">
@@ -25,6 +25,6 @@
 <main class="kds-board" data-board></main>
 <section class="kds-empty" data-empty hidden><strong>{{ words.empty }}</strong><span>{{ words.empty_hint }}</span></section>
 {{ js_words|json_script:"kds-words" }}
-<script src="{% static 'hesba/js/kds.js' %}?v=r4-3" defer></script>
+<script src="{% static 'hesba/js/kds.js' %}?v=r1a-1" defer></script>
 </body>
 </html>

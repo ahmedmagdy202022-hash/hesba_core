@@ -57,6 +57,8 @@
     name.appendChild(el('span', 'kds-line__qty', line.quantity + ' ×'));
     name.appendChild(document.createTextNode(' ' + line.name));
     button.appendChild(name);
+    /* R1a: the dish's free choices and its add-ons, each on its own row under it (never a dish of their own) */
+    (line.extras || []).forEach(function (extra) { button.appendChild(el('span', 'kds-line__extra', extra)); });
     if (line.note) { button.appendChild(el('span', 'kds-line__note', line.note)); }
     if (line.void) {
       button.className += ' kds-line--void' + (line.seen ? ' kds-line--seen' : '');
@@ -107,7 +109,7 @@
     // Everything a card prints except its age: a table move, a changed note or quantity redraws the card like a new line does.
     return JSON.stringify(tickets.map(function (card) {
       return [card.id, card.where, card.station, card.waiter, card.notes, card.done, card.cancelled,
-              card.lines.map(function (line) { return [line.id, line.name, line.quantity, line.note, line.ready, line.void, line.reason, line.seen]; })];
+              card.lines.map(function (line) { return [line.id, line.name, line.quantity, line.note, line.ready, line.void, line.reason, line.seen, line.extras || []]; })];
     }));
   }
 

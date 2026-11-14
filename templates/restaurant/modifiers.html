@@ -1,0 +1,42 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/restaurant.css' %}?v=resto-r1a">{% endblock %}
+{# R1a (HG-109): «الإضافات والاختيارات». Each group is one stacked block (no table), so nothing outgrows a 390 px screen. #}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'restaurant:board' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ mw.back }}</a><h1>{{ mw.title }}</h1><p>{{ mw.intro }}</p></div>{% if can_costing %}<div class="op-form-actions"><a class="op-secondary" href="{% url 'restaurant:costing' %}?lang={{ lang }}">{{ links.costing }}</a></div>{% endif %}</section>
+<section class="rs-panel" aria-labelledby="mod-list-title">
+<h2 id="mod-list-title">{{ mw.title }}</h2>
+<ul class="rs-lines" data-modifier-groups>
+{% for row in rows %}<li class="rs-line" data-modifier-group="{{ row.group.name_ar }}">
+<span class="rs-line__name">{{ row.label }}{% if not row.group.active %} <span class="rs-tag">{{ mw.off }}</span>{% endif %}</span>
+<span class="rs-line__amount"><a class="op-secondary rs-edit" href="?lang={{ lang }}&amp;edit={{ row.group.pk }}">{{ mw.edit }}</a></span>
+<span class="rs-line__note">{{ row.rule }} · {% if row.group.min_choices %}{{ mw.required }}{% else %}{{ mw.optional }}{% endif %}</span>
+<span class="rs-line__note">{% for option in row.options %}<span class="rs-chip{% if not option.active %} rs-chip--off{% endif %}">{{ option.label }} <small>{% if option.price is not None %}<bdi dir="ltr">+{{ option.price|money }}</bdi>{% else %}{{ mw.free_tag }}{% endif %}</small></span>{% endfor %}</span>
+<span class="rs-line__note">{{ mw.dishes }}: {% if row.dishes %}{{ row.dishes|join:"، " }}{% else %}{{ mw.no_dishes }}{% endif %}</span>
+</li>
+{% empty %}<li class="op-muted">{{ mw.none }}</li>{% endfor %}
+</ul>
+</section>
+<form class="op-form rs-panel" method="post" data-modifier-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">{% if editing %}<input type="hidden" name="pk" value="{{ editing.pk }}">{% endif %}
+<h2>{% if editing %}{{ mw.edit }} · {{ editing.name_ar }}{% else %}{{ mw.new }}{% endif %}</h2>
+{% if error %}<div class="op-message op-message-error" role="alert" data-modifier-error>{{ error }}</div>{% endif %}
+<div class="op-form-grid">
+<div class="op-field"><label for="mg-name-ar">{{ mw.name_ar }}</label><input id="mg-name-ar" name="name_ar" value="{{ form.name_ar|default:'' }}" required maxlength="80"></div>
+<div class="op-field"><label for="mg-name-en">{{ mw.name_en }}</label><input id="mg-name-en" name="name_en" value="{{ form.name_en|default:'' }}" maxlength="80" dir="ltr"></div>
+<div class="op-field"><label for="mg-min">{{ mw.min }}</label><input id="mg-min" name="min_choices" value="{{ form.min_choices }}" inputmode="numeric" aria-describedby="mg-min-hint"><small id="mg-min-hint" class="op-muted">{{ mw.min_hint }}</small></div>
+<div class="op-field"><label for="mg-max">{{ mw.max }}</label><input id="mg-max" name="max_choices" value="{{ form.max_choices }}" inputmode="numeric"></div>
+<div class="op-field"><label for="mg-sort">{{ mw.sort }}</label><input id="mg-sort" name="sort" value="{{ form.sort|default:'0' }}" inputmode="numeric"></div>
+</div>
+<div class="rs-checks"><label class="rs-check-chip"><input type="checkbox" name="active"{% if form.active %} checked{% endif %}><span>{{ mw.active }}</span></label></div>
+<fieldset class="rs-option-rows"><legend>{{ mw.options }}</legend>
+<p class="op-muted">{{ mw.options_hint }}</p>
+{% for row in option_rows %}<div class="rs-option-row" data-option-row>{% if row.pk %}<input type="hidden" name="opt-{{ forloop.counter0 }}-pk" value="{{ row.pk }}">{% endif %}
+<div class="op-field"><label for="opt-{{ forloop.counter0 }}-ar">{{ mw.option }} {{ forloop.counter }}</label><input id="opt-{{ forloop.counter0 }}-ar" name="opt-{{ forloop.counter0 }}-name_ar" value="{{ row.name_ar }}" maxlength="80"></div>
+<div class="op-field"><label for="opt-{{ forloop.counter0 }}-en">{{ mw.option_en }}</label><input id="opt-{{ forloop.counter0 }}-en" name="opt-{{ forloop.counter0 }}-name_en" value="{{ row.name_en }}" maxlength="80" dir="ltr"></div>
+<div class="op-field"><label for="opt-{{ forloop.counter0 }}-item">{{ mw.item }}</label><select id="opt-{{ forloop.counter0 }}-item" name="opt-{{ forloop.counter0 }}-item"><option value="">{{ mw.free }}</option>{% for item in items %}<option value="{{ item.pk }}"{% if row.item == item.pk|stringformat:"s" %} selected{% endif %}>{{ item.item_name }} — {{ item.default_sale_price|money }}</option>{% endfor %}</select></div>
+<label class="rs-check-chip"><input type="checkbox" name="opt-{{ forloop.counter0 }}-active"{% if row.active %} checked{% endif %}><span>{{ mw.available }}</span></label>
+</div>{% endfor %}
+</fieldset>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ mw.save }}</button>{% if editing %}<a class="op-secondary" href="?lang={{ lang }}">{{ mw.new }}</a>{% endif %}</div>
+</form>
+{% endblock %}
