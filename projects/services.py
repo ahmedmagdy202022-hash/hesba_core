@@ -44,12 +44,14 @@ MESSAGES = {
         "closed": "المشروع ده خلص أو اتلغى.", "certificate_link": "دي فاتورة مستخلص؛ مينفعش تتفك من المشروع. اسحب المسودة من شاشة المستخلصات أو اعمل مرتجع.", "instalments_linked": "أقساط الفاتورة دي متربطة بالمشروع كتحصيلات؛ فكّها من «التحصيلات» الأول.", "amount": "المبلغ لازم أكبر من صفر.", "description": "اكتب وصف المستخلص.", "setup": "لازم يكون فيه مخزن بيع نشط.",
         "other_customer": "الفاتورة دي لعميل تاني.", "linked": "ده مربوط بمشروع بالفعل.", "not_posted": "اربط الفواتير أو المصروفات النهائية بس.",
         "qty": "الكمية لازم أكبر من صفر.", "item": "اختار الصنف.", "customer_locked": "المشروع عليه فواتير أو تحصيلات؛ مينفعش يتغير صاحبه.", "location": "اختار المخزن.", "stock_item": "الصنف ده مش متتبع في المخزون.",
+        "value_locked": "قيمة العقد اتعدّلت بأوامر تغيير معتمدة؛ أي تعديل جديد في القيمة يتم بأمر تغيير.",
     },
     "en": {
         "name": "Enter the project name.", "customer": "Choose the customer.", "value": "Type the contract value as a number, 0 or more.", "dates": "The end date is before the start.",
         "closed": "This project is done or cancelled.", "certificate_link": "This is a certificate's invoice; it cannot be unlinked from the project. Withdraw the draft on the certificates tab, or make a return.", "instalments_linked": "Instalments of this invoice are linked to the project as collections; unlink them under collections first.", "amount": "The amount must be above zero.", "description": "Describe the progress bill.", "setup": "An active selling location is needed.",
         "other_customer": "This invoice is for another customer.", "linked": "This is already linked to a project.", "not_posted": "Only posted invoices or expenses can be linked.",
         "qty": "The quantity must be above zero.", "item": "Choose the item.", "customer_locked": "The project has invoices or payments; its owner cannot change.", "location": "Choose the location.", "stock_item": "This item is not stock-tracked.",
+        "value_locked": "Approved variation orders changed the contract value; any further change in value goes through a variation order.",
     },
 }
 
@@ -100,6 +102,10 @@ def save_project(data, user, project=None, lang="ar"):
         if values["customer"].pk != project.customer_id and (project.invoices.exists() or project.payments.exists()
                                                               or project.certificates.exists() or project.retention_releases.exists()):
             raise ValidationError(words["customer_locked"])
+        # Contracting C1 (HG-103): once a variation order is approved, the typed value moves only through another order,
+        # so the original value plus the approved orders stays the contract value.
+        if values["contract_value"] != project.contract_value and project.variation_orders.filter(status="approved").exists():
+            raise ValidationError(words["value_locked"])
     before = {} if created else {key: str(getattr(project, key)) for key in values}
     project = project or Project(code=_next_code(), created_by=user)
     for key, value in values.items():

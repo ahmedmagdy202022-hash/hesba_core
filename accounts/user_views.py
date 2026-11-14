@@ -108,7 +108,16 @@ def _context(request, **extra):
     return context
 
 
+#: Video finding 6: roles an activity has its own word for. A clinic's till role is «موظف الاستقبال», not «الكاشير».
+#: Display only: ``Role.name_ar`` is seeded by a permissions migration and is never written here.
+ROLE_TERMS = {"cashier": "role_cashier"}
+
+
 def _role_label(role, lang):
+    from settings_core.vocabulary import term
+
+    if role.code in ROLE_TERMS:
+        return term(ROLE_TERMS[role.code], lang)
     return (role.name_en or role.name_ar) if lang == "en" else (role.name_ar or role.code)
 
 

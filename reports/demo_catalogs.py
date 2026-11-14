@@ -100,6 +100,12 @@ def _raw(code, name, unit, price, quantity):
 
 
 PEOPLE = ("أحمد عبد الله", "سارة محمود", "محمد إبراهيم")
+#: Video finding 7: a medical business keeps people in its customer list. «شركة النور للتجارة» was a patient with a
+#: file, an online booking, a queue turn and the dashboard's next appointment, and the vet's fourth "pet owner" was a
+#: company too. A fourth person takes that place, so the clinic's queue, beds and bookings have four people to use
+#: (video finding 8) and no screen shows a company where a patient belongs.
+FOURTH_PATIENT = "ليلى عبد الرحمن"
+FOURTH_PET_OWNER = "هدى شعبان"
 
 #: The shop every demo had before R2-5; still the one used without a profile.
 BASE = Catalog(
@@ -643,7 +649,7 @@ CLOUD_KITCHEN = Catalog(
 def _medical(key, category, services, goods, staff, suppliers=("الشركة المتحدة للمستلزمات الطبية", "مخزن الشفاء")):
     return Catalog(
         key=key, category=category, items=tuple(_s(*s) for s in services) + tuple(_p(*g) for g in goods),
-        customers=PEOPLE + ("شركة النور للتجارة (تأمين موظفين)",), suppliers=suppliers, staff=staff,
+        customers=PEOPLE + (FOURTH_PATIENT,), suppliers=suppliers, staff=staff,
         raw=(_raw("DEMO-RAW-01", "قفازات طبية (علبة)", "علبة", "90.00", "20"), _raw("DEMO-RAW-02", "سرنجات (علبة 100)", "علبة", "150.00", "10")),
         extras=frozenset({"appointments", "patients"}),
     )
@@ -694,7 +700,7 @@ VET = Catalog(
         _p("أكل قطط 2 كجم", "كيس", "380.00", "290.00"),
         _p("شامبو حيوانات", "زجاجة", "160.00", "100.00"),
     ),
-    customers=PEOPLE + ("شركة النور للتجارة (كلاب حراسة)",),
+    customers=PEOPLE + (FOURTH_PET_OWNER,),
     suppliers=("الشركة المصرية للأدوية البيطرية", "مخزن أغذية الحيوانات"),
     raw=(_raw("DEMO-RAW-01", "تطعيمات (علبة 10)", "علبة", "2200.00", "2"),),
     staff=("د. كريم منصور", "طبيب بيطري"),

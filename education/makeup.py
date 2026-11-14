@@ -248,10 +248,14 @@ def book(student, home, group, day, user, *, missed_on=None, note="", today=None
 
 
 def _locked(seat):
-    """The seat's row, under the lock of its target group (taken first, as a booking does, so the two never wait on each other)."""
+    """The seat's row, under the lock of its target group (taken first, as a booking does, so the two never wait on each other).
+
+    ``of=("self",)``: on PostgreSQL a plain ``select_for_update`` also locks the joined rows (the student and both groups). Two seats with
+    opposite home and target groups (A to B, B to A) would then each hold their target group and wait for the other's home group: a
+    deadlock. Only the seat row is locked here; the target group already is."""
 
     register.lock_group(seat.group)
-    return MakeupSeat.objects.select_for_update().select_related("student", "home_group", "group").get(pk=seat.pk)
+    return MakeupSeat.objects.select_for_update(of=("self",)).select_related("student", "home_group", "group").get(pk=seat.pk)
 
 
 @transaction.atomic
@@ -318,7 +322,7 @@ def attend_by_scan(seat, user, local, at_iso, lang="ar"):
     action is ``scan_makeup_seat`` on a ``MakeupSeat``: never ``scan_attendance`` on a ``ClassSession``, which would flip the register into
     its «not scanned» mode, and never a ``ClassSession`` (a held one is what per-class teacher pay counts)."""
 
-    seat = MakeupSeat.objects.select_for_update().select_related("student", "home_group", "group").get(pk=seat.pk)
+    seat = MakeupSeat.objects.select_for_update(of=("self",)).select_related("student", "home_group", "group").get(pk=seat.pk)  # the seat only, as ``_locked``
     seat.was_missed = False
     if seat.status == SeatStatus.CANCELLED or seat.day != local.date():
         return "cancelled", seat

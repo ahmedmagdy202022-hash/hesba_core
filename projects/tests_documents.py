@@ -297,9 +297,9 @@ class EntityTests(C2Setup):
         self.assertContains(self.client.get(self.url("documents")), "رسم قبل المستخلص")
         self.assertEqual(self.client.get(self.url("detail")).status_code, 200)  # as the project page itself, which is not narrowed
 
-    def test_only_the_two_project_owner_types_are_group_wide_every_other_owner_keeps_the_entity_scope(self):
+    def test_only_the_project_owner_types_are_group_wide_every_other_owner_keeps_the_entity_scope(self):
         flagged = sorted(label for label, rules in attachments.OWNERS.items() if rules.get("group_wide"))
-        self.assertEqual(flagged, ["projects.project", "projects.sitereport"])
+        self.assertEqual(flagged, ["projects.project", "projects.sitereport", "projects.variationorder"])  # the third is Contracting C1 (HG-103)
         self.assertTrue({"workorders.workorder", "purchases.purchaseinvoice", "medical.clinicalvisit", "medical.patientfile"} <= set(attachments.OWNERS))
 
 

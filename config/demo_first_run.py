@@ -471,6 +471,8 @@ def tour_card(request, lang, profile):
         path = reverse(url_name)
         if closed_module(path) or closed_capability(path):  # a screen this business switched off is no step to take
             continue
+        if not _step_is_there(url_name):  # video finding 20: never a step into a screen this sub-activity does not have
+            continue
         query = f"?lang={lang}"
         if url_name == "reports:daily":  # the summary opens on yesterday by default; «اقفل اليوم» means today's
             query += f"&date={timezone.localdate().isoformat()}"
@@ -489,6 +491,15 @@ def tour_card(request, lang, profile):
         "lead": lead,
         "dismiss": "Hide" if lang == "en" else "إخفاء",
     }
+
+
+def _step_is_there(url_name):
+    """Whether this business has the step's screen at all (``showcase.STEP_IS_THERE``); True when nothing says otherwise."""
+
+    from django.utils.module_loading import import_string
+
+    check = showcase.STEP_IS_THERE.get(url_name)
+    return True if check is None else bool(import_string(check)())
 
 
 def _can_sell_now(user):

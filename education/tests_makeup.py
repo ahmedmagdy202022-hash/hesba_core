@@ -778,6 +778,74 @@ class GuardTests(ScreenSetup):
             self.assertEqual(self.client.post(reverse(f"education:{name}", args=[999999]), {"lang": "ar"}).status_code, 404)
 
 
+class TeacherPathTests(ScreenSetup):
+    """A teacher with no access to the student file (review finding): the booking page is reachable from the register of their own group,
+    and a booking or a cancellation returns to a page they may open, never to a 403."""
+
+    def setUp(self):
+        super().setUp()
+        self.plain = person(RoleCode.WAITER, "mk_teacher_plain")  # a role with no master-data view, linked to the home group's teacher
+        self.teacher.user = self.plain
+        self.teacher.save()
+        self.t = self.as_(self.plain)
+        self.assertEqual(self.get("student", self.sara.pk, client=self.t).status_code, 403)  # the premise: no student file for this teacher
+        self.assertTrue(attendance.can_take(self.plain, self.home))
+
+    def test_the_register_of_the_home_group_offers_the_booking_page_for_each_student(self):
+        page = self.get("attendance", self.home.pk, client=self.t)
+        self.assertEqual(page.status_code, 200)
+        entry = re.search(r"<details[^>]*data-makeup-entry.*?</details>", page.content.decode(), re.S)
+        self.assertIsNotNone(entry)
+        self.assertIn(reverse("education:makeup_new", args=[self.sara.pk]) + f"?lang=ar&amp;home={self.home.pk}", entry.group(0))
+        self.assertGreater(page.content.decode().index("data-makeup-entry"), page.content.decode().index("</form>"))  # outside the register's own form
+
+    def test_the_booking_page_goes_back_to_the_register_not_to_the_student_file(self):
+        page = self.get("makeup_new", self.sara.pk, client=self.t, query=f"&home={self.home.pk}")
+        self.assertEqual(page.status_code, 200)
+        back = re.search(r'<a class="op-back" href="([^"]+)"', page.content.decode()).group(1).replace("&amp;", "&")
+        self.assertNotIn(reverse("education:student", args=[self.sara.pk]), back)
+        self.assertEqual(self.t.get(back).status_code, 200)
+
+    def test_a_booking_and_a_cancellation_return_to_a_page_the_teacher_may_open(self):
+        response = self.post("makeup_book", self.sara.pk, client=self.t, home=self.home.pk, slot=f"{self.other.pk}|{ahead(5).isoformat()}")
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(self.t.get(response["Location"]).status_code, 200)
+        seat = MakeupSeat.objects.get()
+        response = self.post("makeup_cancel", seat.pk, client=self.t)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(self.t.get(response["Location"]).status_code, 200)
+        self.assertEqual(MakeupSeat.objects.get(pk=seat.pk).status, "cancelled")
+
+    def test_whoever_may_open_the_student_file_still_returns_to_it(self):
+        response = self.post("makeup_book", self.sara.pk, home=self.home.pk, slot=f"{self.other.pk}|{ahead(5).isoformat()}")
+        self.assertEqual(response["Location"], reverse("education:student", args=[self.sara.pk]) + "?lang=ar#makeup")
+
+
+@skipUnless(connection.vendor == "postgresql", "FOR UPDATE OF is PostgreSQL's: SQLite has no row locks")
+class SeatLockTests(MakeupSetup):
+    """Review finding: a seat's change locks the seat row only. With the joined rows locked too, two seats with opposite home and target
+    groups (A to B, B to A) could each hold their target group and wait for the other's home group: a deadlock."""
+
+    def test_a_change_locks_the_seat_row_and_never_the_joined_groups_or_student(self):
+        from django.test.utils import CaptureQueriesContext
+
+        seat = self.book(day=ahead(0))
+        with CaptureQueriesContext(connection) as queries:
+            makeup.mark(seat, SeatStatus.MISSED, self.owner)
+            scan.mark(self.sara.code, self.teacher_b_user, at(ahead(0), 18, 5))
+            makeup.mark(seat, SeatStatus.ATTENDED, self.owner)
+        locks = [q["sql"] for q in queries if "FOR UPDATE" in q["sql"] and 'FROM "education_makeupseat"' in q["sql"]]
+        self.assertGreaterEqual(len(locks), 3)
+        for sql in locks:
+            self.assertTrue(sql.rstrip().endswith('FOR UPDATE OF "education_makeupseat"'), sql)
+        other = self.book(day=ahead(5))
+        with CaptureQueriesContext(connection) as queries:
+            makeup.cancel(other, self.owner)
+        locks = [q["sql"] for q in queries if "FOR UPDATE" in q["sql"] and 'FROM "education_makeupseat"' in q["sql"]]
+        self.assertEqual(len(locks), 1)
+        self.assertTrue(locks[0].rstrip().endswith('FOR UPDATE OF "education_makeupseat"'), locks[0])
+
+
 # ---- the card scan at the door ----
 
 class ScanTests(MakeupSetup):
@@ -1128,7 +1196,7 @@ class StylesheetTests(SimpleTestCase):
         self.assertRegex(css, r"\.mk-option\{[^}]*min-height:56px")
         for name in ("student.html", "attendance.html", "today.html", "makeup_new.html"):
             template = pathlib.Path(settings.BASE_DIR, "templates", "education", name).read_text(encoding="utf-8")
-            self.assertIn("education_makeup.css' %}?v=e8-1", template, name)
+            self.assertIn("education_makeup.css' %}?v=e8-2", template, name)
         portal = pathlib.Path(settings.BASE_DIR, "static", "hesba", "css", "education_portal.css").read_text(encoding="utf-8")
         self.assertEqual(re.findall(r"#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(", portal), [])
 

@@ -111,11 +111,12 @@ def card(project, user, lang):
 
 
 def attachment_belongs(project, attachment_pk):
-    """The attachment, if it is on this project or on one of its daily reports, else None (another project's file id finds nothing)."""
+    """The attachment, if it is on this project, on one of its daily reports or on one of its variation orders, else None
+    (another project's file id finds nothing)."""
 
     from django.contrib.contenttypes.models import ContentType
 
-    from .models import Project, SiteReport
+    from .models import Project, SiteReport, VariationOrder
 
     raw = str(attachment_pk or "")
     if not raw.isdigit():
@@ -127,4 +128,10 @@ def attachment_belongs(project, attachment_pk):
         return row if row.object_id == project.pk else None
     if row.content_type_id == ContentType.objects.get_for_model(SiteReport).pk:
         return row if SiteReport.objects.filter(pk=row.object_id, project=project).exists() else None
+    if row.content_type_id == ContentType.objects.get_for_model(VariationOrder).pk:  # Contracting C1 (HG-103): the signed copy
+        from . import variations
+
+        if not variations.in_reach(project):  # as the order itself: another entity reaches neither it nor its files
+            return None
+        return row if VariationOrder.objects.filter(pk=row.object_id, project=project).exists() else None
     return None

@@ -132,7 +132,19 @@ DEMO_TOURS = {
     ),
 }
 
+#: Video finding 20: a step whose screen only some sub-activities have. The dentist's tour offered «قائمة الانتظار»,
+#: which answers 404 in a dentist (and in a lab, a vet and a physiotherapy centre): the queue is a clinic's and a
+#: medical centre's screen. ``demo_first_run.tour_card`` drops a step whose predicate says this business has no such
+#: screen, the same way it already drops one into a switched-off module or capability.
+STEP_IS_THERE = {"medical:queue": "medical.queue.has_queue"}
+
 # M8 (HG-088): the clinic's demo has the beds on, so its tour has a fourth step; the tour card drops it wherever beds are off.
+# Video finding 20: a dentist has no reception queue, so the step above is dropped there; the day's report takes its
+# place, and the card keeps its three steps.
+DEMO_TOURS[("medical", "dental")] = DEMO_TOURS["medical"][:2] + (
+    ("اقفل اليوم وشوف الربح", "Close the day and see the profit", "تقرير اليوم والخزنة في دقيقة", "The day's report and the cash in a minute", "reports:daily"),
+)
+
 DEMO_TOURS[("medical", "clinic")] = DEMO_TOURS["medical"] + (
     ("الأسرّة والإقامة", "Beds and stays", "مين على أنهي سرير، وفاتورة الإقامة مسودة عند الخروج", "Who is in which bed, and the stay's draft bill at discharge", "medical:beds"),
 )
