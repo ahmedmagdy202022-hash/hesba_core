@@ -9,7 +9,11 @@ being worked in (HG-034):
 
 - dish figures are the order lines at their menu price, before the order's
   discount; a priced add-on (R1a) counts in its dish's money, never as a dish;
-- order totals are the invoice's net sales (before tax, after posted returns).
+- order totals are the invoice's net sales (before tax, after posted returns);
+- R2a (HG-111): a bill paid in parts is one order. A part (``Order.split_from``) adds its sales, but it is counted in its
+  parent's order, table, waiter, kind, guests and stay: the order is counted once, at the first of its invoices in the
+  period (the parent's when it is there), with the parent's table and guests, and its stay runs from the parent's opening.
+  A merged order (MERGED) is never paid, so it is never counted: its lines are the receiving order's.
 
 Waste is what was taken out of stock by an adjustment in the period, with its
 reason, at movement cost.
@@ -109,7 +113,7 @@ def _paid(first, last):
     start, end = _span(first, last)
     return (entity_scope.scope(Order.objects, "invoice__" + entity_scope.SALES_INVOICE)
             .filter(status=OrderStatus.PAID, invoice__status="posted", closed_at__gte=start, closed_at__lt=end)
-            .select_related("invoice", "table", "waiter").prefetch_related("lines__item"))
+            .select_related("invoice", "table", "waiter", "split_from__table").prefetch_related("lines__item"))
 
 
 def period_report(first, last):
@@ -131,6 +135,14 @@ def period_report(first, last):
         back = Decimal(returned.get(invoice.pk) or 0)
         return money_round(max(before_tax - back * before_tax / total, Decimal("0")))
 
+    # R2a: which of the period's paid orders stands for its bill (the parent if it is there, else its first part)
+    present = {order.pk for order in orders}
+    counted, standing = set(), set()
+    for order in sorted(orders, key=lambda one: (one.split_from_id is not None, one.closed_at, one.pk)):
+        root = order.split_from_id or order.pk
+        if root not in counted and (order.split_from_id is None or order.split_from_id not in present):
+            counted.add(root)
+            standing.add(order.pk)
     days = (last - first).days + 1
     hours = OrderedDict((hour, {"hour": hour, "orders": 0, "sales": ZERO}) for hour in range(24))
     dishes, tables, waiters, kinds = {}, {}, {}, {}
@@ -138,8 +150,10 @@ def period_report(first, last):
     for order in orders:
         sales = net_sales(order.invoice)
         total += sales
+        root = order.split_from if order.split_from_id else order  # R2a: a part is counted in its parent's order
+        stands = order.pk in standing
         hour = timezone.localtime(order.closed_at).hour
-        hours[hour]["orders"] += 1
+        hours[hour]["orders"] += 1 if stands else 0
         hours[hour]["sales"] += sales
         lines = [line for line in order.lines.all() if not line.voided]
         by_pk = {line.pk: line for line in lines}
@@ -151,27 +165,30 @@ def period_report(first, last):
                 row["quantity"] += line.quantity
             row["sales"] += money_round(line.quantity * line.unit_price)
         kind = kinds.setdefault(order.kind, {"kind": order.kind, "orders": 0, "sales": ZERO})
-        kind["orders"] += 1
+        kind["orders"] += 1 if stands else 0
         kind["sales"] += sales
-        if order.kind == OrderKind.DINE_IN and order.table_id:
-            table = tables.setdefault(order.table_id, {"table": order.table, "orders": 0, "sales": ZERO, "guests": 0, "minutes": []})
-            table["orders"] += 1
+        if order.kind == OrderKind.DINE_IN and root.table_id:
+            table = tables.setdefault(root.table_id, {"table": root.table, "orders": 0, "sales": ZERO, "guests": 0, "minutes": []})
             table["sales"] += sales
-            table["guests"] += order.guests
-            table["minutes"].append((order.closed_at - order.opened_at).total_seconds() / 60)
-            guests += order.guests
-            minutes.append((order.closed_at - order.opened_at).total_seconds() / 60)
-        waiter = waiters.setdefault(order.waiter_id, {"waiter": order.waiter, "orders": 0, "sales": ZERO})
-        waiter["orders"] += 1
+            if stands:
+                stay = (order.closed_at - root.opened_at).total_seconds() / 60
+                table["orders"] += 1
+                table["guests"] += root.guests
+                table["minutes"].append(stay)
+                guests += root.guests
+                minutes.append(stay)
+        # R2a: a part's sales belong to its bill's waiter (after a merge, the receiving order's), with the bill's one order
+        waiter = waiters.setdefault(root.waiter_id, {"waiter": root.waiter, "orders": 0, "sales": ZERO})
+        waiter["orders"] += 1 if stands else 0
         waiter["sales"] += sales
     for row in tables.values():
         row["per_day"] = round(row["orders"] / days, 1)
-        row["average"] = money_round(row["sales"] / row["orders"])
-        row["minutes"] = round(sum(row["minutes"]) / len(row["minutes"]))
+        row["average"] = money_round(row["sales"] / row["orders"]) if row["orders"] else row["sales"]
+        row["minutes"] = round(sum(row["minutes"]) / len(row["minutes"])) if row["minutes"] else None
     for row in list(waiters.values()) + list(kinds.values()):
         row["average"] = money_round(row["sales"] / row["orders"]) if row["orders"] else ZERO
-    busy = [row for row in hours.values() if row["orders"]]
-    count = len(orders)
+    busy = [row for row in hours.values() if row["orders"] or row["sales"]]
+    count = len(standing)
     return {
         "hours": busy,
         "peak": max(busy, key=lambda row: row["orders"]) if busy else None,

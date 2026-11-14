@@ -51,6 +51,8 @@ class OrderStatus(models.TextChoices):
     OPEN = "open", "Open"
     PAID = "paid", "Paid"
     CANCELLED = "cancelled", "Cancelled"
+    #: R2a (HG-111): folded into another open order: two tables merged, or a part of a bill put back. Its lines are that order's now.
+    MERGED = "merged", "Merged"
 
 
 class Order(models.Model):
@@ -77,6 +79,11 @@ class Order(models.Model):
     #: R12 (HG-108): the branch the order belongs to, set when it is opened: the table's for dine-in, the working entity's for
     #: takeaway and delivery. Its bill posts to this entity's selling store and cashbox, whatever entity the biller works in.
     entity = models.ForeignKey("entities.Entity", on_delete=models.PROTECT, related_name="restaurant_orders")
+    #: R2a (HG-111): «ادفع جزء»: a part of this order's bill, opened with some of its lines to be paid on its own invoice. It has
+    #: no table while open (one open order per table), takes the table's once paid, and is counted in its parent's order.
+    split_from = models.ForeignKey("self", on_delete=models.PROTECT, null=True, blank=True, related_name="splits")
+    #: R2a (HG-111): the order this one was folded into (status MERGED): the receiving table, or the parent of a part put back.
+    merged_into = models.ForeignKey("self", on_delete=models.PROTECT, null=True, blank=True, related_name="merged_orders")
 
     class Meta:
         ordering = ["-opened_at"]
@@ -92,6 +99,14 @@ class Order(models.Model):
         if self.entity_id is None:  # the services always say; a caller written before R12 gets the table's, else the main one
             self.entity_id = self.table.entity_id if self.table_id else _main_entity().pk
         super().save(*args, **kwargs)
+
+    @property
+    def home_table(self):
+        """R2a: the table the order is served at: its own, or for a part of a bill its parent's (a part has none while open)."""
+
+        if self.table_id:
+            return self.table
+        return self.split_from.table if self.split_from_id else None
 
     def live_lines(self):
         return [line for line in self.lines.all() if not line.voided]
