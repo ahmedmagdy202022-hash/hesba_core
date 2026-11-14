@@ -3,27 +3,30 @@
 {% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/restaurant.css' %}?v=resto-hg107">{% endblock %}
 {% block operation_content %}
 <section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div><div class="op-form-actions">{% if can_report %}<a class="op-secondary" href="{% url 'restaurant:report' %}?lang={{ lang }}" data-resto-report>{{ links.report }}</a>{% endif %}{% if can_costing %}<a class="op-secondary" href="{% url 'restaurant:costing' %}?lang={{ lang }}" data-resto-costing>{{ links.costing }}</a>{% endif %}{% if can_kds %}<a class="op-secondary" href="{% url 'restaurant:kds' %}?lang={{ lang }}" data-kds-link>{{ words.kitchen_screen }}</a>{% endif %}{% if can_tables %}<a class="op-secondary" href="{% url 'restaurant:stations' %}?lang={{ lang }}" data-stations-link>{{ words.stations_title }}</a><a class="op-secondary" href="{% url 'restaurant:tables' %}?lang={{ lang }}">{{ words.tables_title }}</a>{% endif %}</div></section>
-{% if tables %}
+{% if branch_groups %}
+{% for group in branch_groups %}<section aria-labelledby="rs-branch-{{ group.pk }}" data-branch-group="{{ group.code }}"><h2 id="rs-branch-{{ group.pk }}">{{ group.label }}</h2>
+{% if group.tables %}<div class="rs-tables" role="list">
+{% for row in group.tables %}{% include "restaurant/_table_card.html" %}{% endfor %}
+</div>{% else %}<p class="op-muted">{{ words.no_branch_tables }}{% if can_tables %} <a href="{% url 'restaurant:tables' %}?lang={{ lang }}">{{ words.add_tables }}</a>{% endif %}</p>{% endif %}</section>
+{% endfor %}
+{% elif tables %}
 <div class="rs-tables" role="list">
-{% for row in tables %}{% with table=row.table order=row.order %}
-{% if order %}<a class="rs-table rs-table--busy" role="listitem" href="{% url 'restaurant:order' order.pk %}?lang={{ lang }}" data-table="{{ table.name }}" data-table-state="busy"><strong>{{ table.name }}</strong><small>{{ words.busy }} · {{ row.minutes }} {{ words.minutes }}{% if order.waiter %} · {{ order.waiter.name }}{% endif %}</small>{% if row.ready %}<span class="rs-ready" data-table-ready="{{ row.ready }}">{{ row.ready_label }}</span>{% endif %}<span class="rs-table__total">{{ order.total|money }}</span></a>
-{% elif can_take %}<form method="post" role="listitem">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="kind" value="dine_in"><input type="hidden" name="table" value="{{ table.pk }}"><button class="rs-table rs-table--free" type="submit" data-table="{{ table.name }}" data-table-state="free"><strong>{{ table.name }}</strong><small>{{ words.free }} · {{ table.seats }} {{ words.seats }}{% if table.area %} · {{ table.area }}{% endif %}</small><span class="rs-table__total">{{ words.open }} +</span></button></form>
-{% else %}<div class="rs-table rs-table--free" role="listitem" data-table="{{ table.name }}" data-table-state="free"><strong>{{ table.name }}</strong><small>{{ words.free }}</small></div>{% endif %}
-{% endwith %}{% endfor %}
+{% for row in tables %}{% include "restaurant/_table_card.html" %}{% endfor %}
 </div>
 {% else %}<p class="op-message">{{ words.no_tables }}{% if can_tables %} <a href="{% url 'restaurant:tables' %}?lang={{ lang }}">{{ words.add_tables }}</a>{% endif %}</p>{% endif %}
 <h2>{{ words.others }}</h2>
-<div class="op-table-wrap"><table class="op-table"><thead><tr><th>#</th><th>{{ words.kind }}</th><th>{{ words.customer }}</th><th>{{ words.opened }}</th><th>{{ words.total }}</th></tr></thead><tbody>
-{% for row in others %}<tr data-open-order="{{ row.order.number }}"><td dir="ltr"><a href="{% url 'restaurant:order' row.order.pk %}?lang={{ lang }}">{{ row.order.number }}</a>{% if row.ready %} <span class="rs-ready" data-table-ready="{{ row.ready }}">{{ row.ready_label }}</span>{% endif %}</td><td>{{ row.kind_label }}</td><td>{{ row.order.customer.name|default:'—' }}{% if row.order.address %} · <small>{{ row.order.address }}</small>{% endif %}</td><td dir="ltr">{{ row.order.opened_at|time:"H:i" }}</td><td>{{ row.order.total|money }}</td></tr>
-{% empty %}<tr><td colspan="5" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>#</th>{% if branch_groups %}<th>{{ words.branch }}</th>{% endif %}<th>{{ words.kind }}</th><th>{{ words.customer }}</th><th>{{ words.opened }}</th><th>{{ words.total }}</th></tr></thead><tbody>
+{% for row in others %}<tr data-open-order="{{ row.order.number }}"><td dir="ltr"><a href="{% url 'restaurant:order' row.order.pk %}?lang={{ lang }}">{{ row.order.number }}</a>{% if row.ready %} <span class="rs-ready" data-table-ready="{{ row.ready }}">{{ row.ready_label }}</span>{% endif %}</td>{% if branch_groups %}<td data-order-branch>{{ row.branch }}</td>{% endif %}<td>{{ row.kind_label }}</td><td>{{ row.order.customer.name|default:'—' }}{% if row.order.address %} · <small>{{ row.order.address }}</small>{% endif %}</td><td dir="ltr">{{ row.order.opened_at|time:"H:i" }}</td><td>{{ row.order.total|money }}</td></tr>
+{% empty %}<tr><td colspan="{% if branch_groups %}6{% else %}5{% endif %}" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
 </tbody></table></div>
 {% if can_take %}
 <div class="rs-quick">
 <form class="op-form" method="post" data-new-order="takeaway">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="kind" value="takeaway"><h2>{{ words.new_takeaway }}</h2>
+{% if branch_choices %}<div class="op-field"><label for="tk-entity">{{ words.branch }}</label><select id="tk-entity" name="entity" required data-order-branch-pick><option value="">{{ words.choose_branch }}</option>{% for branch in branch_choices %}<option value="{{ branch.pk }}">{{ branch.label }}</option>{% endfor %}</select></div>{% endif %}
 <div class="op-field"><label for="tk-customer">{{ words.customer }}</label><select id="tk-customer" name="customer"><option value="">{{ words.walk_in }}</option>{% for customer in customers %}<option value="{{ customer.pk }}">{{ customer.name }}</option>{% endfor %}</select></div>
 <div class="op-form-actions"><button class="op-primary" type="submit">{{ words.new_takeaway }}</button></div></form>
 <form class="op-form" method="post" data-new-order="delivery">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="kind" value="delivery"><h2>{{ words.new_delivery }}</h2>
-<div class="op-form-grid"><div class="op-field"><label for="dl-customer">{{ words.customer }}</label><select id="dl-customer" name="customer"><option value="">{{ words.walk_in }}</option>{% for customer in customers %}<option value="{{ customer.pk }}">{{ customer.name }}</option>{% endfor %}</select></div>
+<div class="op-form-grid">{% if branch_choices %}<div class="op-field"><label for="dl-entity">{{ words.branch }}</label><select id="dl-entity" name="entity" required data-order-branch-pick><option value="">{{ words.choose_branch }}</option>{% for branch in branch_choices %}<option value="{{ branch.pk }}">{{ branch.label }}</option>{% endfor %}</select></div>{% endif %}<div class="op-field"><label for="dl-customer">{{ words.customer }}</label><select id="dl-customer" name="customer"><option value="">{{ words.walk_in }}</option>{% for customer in customers %}<option value="{{ customer.pk }}">{{ customer.name }}</option>{% endfor %}</select></div>
 <div class="op-field"><label for="dl-phone">{{ words.phone }}</label><input id="dl-phone" name="phone" inputmode="tel" dir="ltr"></div>
 <div class="op-field"><label for="dl-address">{{ words.address }}</label><input id="dl-address" name="address"></div>
 <div class="op-field"><label for="dl-fee">{{ links.delivery_fee }}</label><input id="dl-fee" name="delivery_fee" inputmode="decimal" placeholder="0" data-delivery-fee></div>
