@@ -1122,6 +1122,7 @@ class Command(BaseCommand):
         closed = timezone.make_aware(_dt.combine(today - timedelta(days=1), time(21, 40)))
         Order.objects.filter(pk=order.pk).update(opened_at=closed - timedelta(minutes=55), dispatched_at=closed - timedelta(minutes=30), closed_at=closed)
         kitchen_demo.seed_modifiers(catalog, dishes, owner)  # R1a: last, so every order above is placed exactly as before
+        kitchen_demo.seed_combo(catalog, dishes, master["items"], owner)  # R1b: after every order too, so no seeded figure moves
 
     @staticmethod
     def _closing_moment(today, days, hour, now):

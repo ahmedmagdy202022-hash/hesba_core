@@ -15,6 +15,7 @@ from decimal import Decimal as D
 from unittest import mock
 
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from cashboxes.models import CashboxMovement
@@ -583,3 +584,29 @@ class BranchComboTests(BranchSetup):
         invoice, _change = services.pay(Order.objects.get(pk=order.pk), self.owner, cashbox=self.b_cashbox, tendered=D("150"))
         self.assertEqual((invoice.selling_location, invoice.cashbox, invoice.total_amount), (self.b_location, self.b_cashbox, D("150.00")))
         self.assertEqual(Order.objects.get(pk=order.pk).status, OrderStatus.PAID)
+
+
+@override_settings(DEMO_MODE=True, DEMO_PASSWORD="Demo-pass-1", DEBUG=True)
+class DemoComboTests(TestCase):
+    def test_the_restaurant_demo_has_one_combo_set_up_and_its_orders_unchanged(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from reports.tests_demo_catalogs import SampleBusinessPerActivityTests
+
+        from . import demo
+
+        SampleBusinessPerActivityTests.fill(self, "restaurants", "restaurant")
+        combo = Combo.objects.get(item__item_name="وجبة التوفير")
+        # «الطبق»: the grilled half chicken (180.00) or the kofta (220.00) for 20.00 more; «المشروب»: the water (15.00) or the can (25.00);
+        # 10% under the cheapest (195.00), rounded down to 5
+        self.assertEqual((combo.price, combo.name_en, combo.item.is_stock_tracked), (D("175.00"), "Saver combo", False))
+        self.assertEqual([[(choice.item.item_code, choice.upcharge) for choice in slot.choices.order_by("sort", "pk")] for slot in combo.slots.order_by("sort", "pk")],
+                         [[("DEMO-ITEM-01", D("0.00")), ("DEMO-ITEM-02", D("20.00"))], [("DEMO-ITEM-04", D("0.00")), ("DEMO-ITEM-05", D("0.00"))]])
+        self.assertEqual(combos.cheapest_saving(combo), D("20.00"))
+        self.assertFalse(OrderLine.objects.filter(combo__isnull=False).exists())  # nothing ordered with it: every seeded figure is as before
+        today = timezone.localdate()
+        self.assertEqual(period_report(today - timedelta(days=7), today)["totals"]["combo_discount"], D("0.00"))
+        self.assertEqual(Order.objects.filter(status="paid", invoice__status="posted").count(), 9)
+        self.assertEqual(demo.seed_combo(None, [], [], None), combo)  # safe to run twice
