@@ -54,6 +54,17 @@ WORDS = {
         "branch": "الفرع", "choose_branch": "اختار الفرع", "no_branch_tables": "لسه مفيش طاولات في الفرع ده.",
         "split": "ادفع بأكتر من طريقة", "split_hint": "وزّع الحساب على أكتر من خزنة، زي كاش وفيزا. المجموع لازم يساوي المطلوب بالظبط.",
         "split_due": "المطلوب بالضريبة", "split_left": "الباقي", "split_row": "طريقة",
+        # R2a (HG-111): «ادفع جزء» and «ادمج مع طاولة»
+        "part_pay": "ادفع جزء", "part_title": "ادفع جزء من الحساب",
+        "part_hint": "اختار الأصناف والكميات اللي هتتدفع دلوقتي. الجزء بيتدفع بفاتورة لوحده، والباقي يفضل على الطاولة.",
+        "part_rule": "الأصناف بتتقسم بالعدد، مش بالفلوس. لو هتقسموا الحساب بالتساوي، استخدموا «ادفع بأكتر من طريقة».",
+        "part_amount": "قيمة الجزء قبل الضريبة", "part_open": "افتح حساب الجزء", "part_less": "أقل", "part_more": "أكتر", "part_each": "للواحد",
+        "part_made": "اتفتح حساب الجزء {number} بـ {amount}. ادفعه من هنا.", "part_of": "جزء من حساب الطاولة {table}",
+        "part_of_order": "جزء من حساب {number}", "part_back": "حساب الطاولة", "put_back": "رجّع للحساب",
+        "put_back_confirm": "ترجّع أصناف الجزء ده لحساب الطاولة؟", "put_back_ok": "رجعت أصناف الجزء لحساب الطاولة.",
+        "parts": "أجزاء الحساب", "part_open_tag": "لسه ما اتدفعش", "part_paid_tag": "اتدفع", "part_short": "جزء مفتوح",
+        "merge": "ادمج مع طاولة", "merge_hint": "حساب الطاولة اللي تختارها هيتنقل هنا بكل أصنافه وتذاكره وأفراده، وطاولتها تفضى.",
+        "merge_btn": "ادمج هنا", "merged_ok": "اتدمج حساب الطاولة {table} في الحساب ده.", "merged_into": "الطلب ده اتدمج في {number}.",
     },
     "en": {
         "page_title": "Tables & orders", "title": "Tables & orders", "intro": "Tap a free table to open an order, or a busy one to carry on with its order.",
@@ -76,6 +87,16 @@ WORDS = {
         "branch": "Branch", "choose_branch": "Choose the branch", "no_branch_tables": "No tables in this branch yet.",
         "split": "Pay several ways", "split_hint": "Spread the bill over several cashboxes, such as cash and card. Together they must equal the amount to pay exactly.",
         "split_due": "To pay, VAT included", "split_left": "Left", "split_row": "Way",
+        "part_pay": "Pay a part", "part_title": "Pay a part of the bill",
+        "part_hint": "Choose the items and quantities paid now. The part is paid on its own invoice; the rest stays on the table.",
+        "part_rule": "Items are split by count, not by money. To share the bill equally, use “Pay several ways”.",
+        "part_amount": "The part before VAT", "part_open": "Open the part's bill", "part_less": "Less", "part_more": "More", "part_each": "each",
+        "part_made": "Part {number} opened for {amount}. Pay it here.", "part_of": "Part of the bill of table {table}",
+        "part_of_order": "Part of the bill of {number}", "part_back": "The table's bill", "put_back": "Put back on the bill",
+        "put_back_confirm": "Put this part's items back on the table's bill?", "put_back_ok": "The part's items are back on the table's bill.",
+        "parts": "Parts of the bill", "part_open_tag": "Not paid yet", "part_paid_tag": "Paid", "part_short": "Open part",
+        "merge": "Merge with a table", "merge_hint": "The bill of the table you choose comes here with all its items, tickets and guests, and its table is free.",
+        "merge_btn": "Merge here", "merged_ok": "Table {table}'s bill is merged into this one.", "merged_into": "This order was merged into {number}.",
     },
 }
 KIND_AR = {OrderKind.DINE_IN: "صالة", OrderKind.TAKEAWAY: "تيك أواي", OrderKind.DELIVERY: "دليفري"}
@@ -250,7 +271,8 @@ def _menu():
 def order_detail(request, pk):
     lang = _lang(request)
     words = WORDS[lang]
-    order = get_object_or_404(branches.orders(Order.objects.select_related("table", "customer", "waiter", "invoice", "entity")), pk=pk)  # R12: another branch's is a 404
+    order = get_object_or_404(branches.orders(Order.objects.select_related("table", "customer", "waiter", "invoice", "entity", "split_from__table", "merged_into")),
+                              pk=pk)  # R12: another branch's is a 404
     if request.method == "POST":
         if not _takes_orders(request.user):
             raise PermissionDenied("Taking orders needs sales.create_sales_invoice or restaurant.take_orders.")
@@ -286,6 +308,19 @@ def order_detail(request, pk):
             elif action == "move":
                 services.move_table(order, _table(request.POST.get("table")), request.user, lang)
                 messages.success(request, words["moved"])
+            elif action == "split":  # R2a (HG-111): «ادفع جزء»
+                parts = {key[len("part_"):]: value for key, value in request.POST.items() if key.startswith("part_")}
+                part = services.split_order(order, parts, request.user, lang)
+                messages.success(request, words["part_made"].format(number=part.number, amount=f"{part.total:,.2f}"))
+                return redirect(_order_url(part, lang))
+            elif action == "put_back":
+                parent = services.put_back(order, request.user, lang)
+                messages.success(request, words["put_back_ok"])
+                return redirect(_order_url(parent, lang))
+            elif action == "merge":
+                other = _open_order(request.POST.get("other"))
+                services.merge_orders(order, other, request.user, lang)
+                messages.success(request, words["merged_ok"].format(table=other.table.name if other.table else other.number))
             elif action == "dispatch":
                 services.dispatch(order, _pick(Employee, request.POST.get("driver"), active=True), request.user,
                                   delivery_fee=request.POST.get("delivery_fee"), lang=lang)
@@ -309,6 +344,8 @@ def order_detail(request, pk):
                 messages.success(request, text)
                 if request.POST.get("print") == "1" and closed_module("/print/") is None:
                     return redirect(f"/print/sales/{invoice.pk}/?lang={lang}&format=receipt&autoprint=1")
+                if order.split_from_id:  # R2a: a part paid, back to the rest of its table's bill
+                    return redirect(_order_url(order.split_from, lang))
                 return redirect(f"{reverse('restaurant:board')}?lang={lang}")
         except ValidationError as exc:
             messages.error(request, _error(exc, lang))
@@ -325,9 +362,10 @@ def order_detail(request, pk):
     shift_box = shift.cashbox if shift and cashboxes.filter(pk=shift.cashbox_id).exists() else None
     default_cashbox = shift_box or cashboxes.filter(is_default=True).first() or cashboxes.first()
     free_tables = DiningTable.objects.filter(active=True, entity_id=order.entity_id).exclude(orders__status=OrderStatus.OPEN)
+    families = [{"line": line, "addons": addons} for line, addons in modifiers.grouped(lines)]
     return render(request, "restaurant/order.html", _base(
         request, order=order, lines=lines, total=order.total, items=items, raw_ids=raw_ids, categories=categories, kind_label=_kind_label(order, lang),
-        families=[{"line": line, "addons": addons} for line, addons in modifiers.grouped(lines)], sheets=choice_sheets,
+        families=families, sheets=choice_sheets, **_split_merge_context(order, families, request.user, lang),
         sheet_items={sheet["item"].pk for sheet in choice_sheets}, mw=MODIFIER_WORDS[lang],
         **dict(zip(("menu", "size_sheets"), menu_entries(items, {sheet["item"].pk for sheet in choice_sheets}, lang))),
         drivers=Employee.objects.filter(active=True) if order.kind == OrderKind.DELIVERY else [], dw=DELIVERY_WORDS[lang],
@@ -340,6 +378,43 @@ def order_detail(request, pk):
         shift_missing=shift_missing(request.user),
         customers=Customer.objects.filter(active=True).order_by("name"), free_tables=free_tables,
     ))
+
+
+def _open_order(raw):
+    """R2a: another open order by a pk as the merge form sends it, in the entity being worked in only (R12)."""
+
+    raw = str(raw or "")
+    return branches.orders(Order.objects.filter(status=OrderStatus.OPEN)).select_related("table").filter(pk=raw).first() if raw.isdigit() else None
+
+
+def _split_merge_context(order, families, user, lang):
+    """R2a (HG-111): what the order page shows for «ادفع جزء» and «ادمج مع طاولة». An order that never splits or merges gets
+    nothing that changes the page: no parts, and the two tools only where they can do something."""
+
+    is_open = order.status == OrderStatus.OPEN
+    may = is_open and _takes_orders(user) and not order.split_from_id
+    rows = []
+    if may and order.kind != OrderKind.DELIVERY:
+        for family in families:
+            line = family["line"]
+            if line.voided:
+                continue
+            each = line.unit_price + sum((addon.unit_price for addon in family["addons"]), Decimal("0"))
+            rows.append({"line": line, "addons": family["addons"], "each": each, "whole": line.quantity % 1 == 0})
+    splittable = len(rows) > 1 or any(row["line"].quantity >= 2 for row in rows)
+    merge_choices = []
+    if may and order.kind == OrderKind.DINE_IN:
+        merge_choices = list(branches.orders(Order.objects.filter(status=OrderStatus.OPEN, kind=OrderKind.DINE_IN, entity_id=order.entity_id, split_from=None))
+                             .exclude(pk=order.pk).exclude(table=None).select_related("table").order_by("table__sort_order", "table__name"))
+    parts = list(order.splits.exclude(status=OrderStatus.MERGED).select_related("invoice").prefetch_related("lines").order_by("pk"))
+    words = WORDS[lang]
+    heading = ""
+    if order.split_from_id:
+        table = order.home_table
+        heading = words["part_of"].format(table=table.name) if table else words["part_of_order"].format(number=order.split_from.number)
+    return {"part_heading": heading, "merged_text": words["merged_into"].format(number=order.merged_into.number) if order.merged_into_id else "","part_rows": rows if splittable else [], "merge_choices": merge_choices, "parts": parts,
+            "parent": order.split_from if order.split_from_id else None,
+            "merged_into": order.merged_into if order.merged_into_id else None}
 
 
 #: What only someone who sells may do on an order: take the money, send it out with a driver (it carries a fee), cancel it.

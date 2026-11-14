@@ -242,6 +242,7 @@ class SplitRuleTests(SplitSetup):
         self.assert_refused(lambda: self.pay(order), part.number)
         self.assert_refused(lambda: services.cancel_order(order, self.owner, "مشيوا"), "لسه مفتوح")
         self.assert_refused(lambda: services.move_table(part, self.t2, self.owner), "انقل حساب الطاولة نفسه")
+        self.assert_refused(lambda: services.cancel_order(part, self.owner), "رجّعه للحساب")  # its lines go back, never away
         other = self.table_order(table=self.a_t1)
         self.assert_refused(lambda: services.merge_orders(other, part, self.owner), "ادمج حساب الطاولة نفسه")
         self.assert_refused(lambda: services.merge_orders(part, other, self.owner), "ادمج حساب الطاولة نفسه")
@@ -481,6 +482,7 @@ class ScreenTests(SplitSetup):
 
     def test_english_words(self):
         order = self.table_order()
+        self.table_order(table=self.t2)  # another open table to merge with
         self.client.force_login(self.owner)
         page = self.client.get(reverse("restaurant:order", args=[order.pk]) + "?lang=en")
         self.assertContains(page, "Pay a part")
