@@ -24,7 +24,7 @@
 {% for row in preparations %}<li class="rs-line" data-preparation="{{ row.run.pk }}" data-status="{{ row.run.status }}">
 <span class="rs-line__name"><bdi dir="ltr">{{ row.run.number }}</bdi></span>
 <span class="rs-line__amount">{{ row.run.output_quantity|qty }} {{ kw.plates }}</span>
-<span class="rs-line__note">{{ row.run.run_date|date:"Y-m-d" }} · {{ kw.per_plate }}: {{ row.run.output_operation.unit_cost|unit_cost }} · {{ kw.by }}: {{ row.run.created_by.get_full_name|default:row.run.created_by.username }}</span>
+<span class="rs-line__note">{{ row.run.run_date|date:"Y-m-d" }} · {{ kw.per_plate }}: {{ row.run.output_operation.unit_cost|unit_cost }} · {{ kw.by }}: <bdi>{{ row.run.created_by.get_full_name|default:row.run.created_by.username }}</bdi></span>
 {% if not row.posted %}<span class="rs-line__note" data-cancelled-reason><span class="op-status op-status-cancelled">{{ kw.cancelled_state }}</span> {{ kw.why }}: {{ row.run.cancellation_reason }}</span>
 {% elif row.waiting %}<span class="rs-line__note" data-awaiting-approval>{{ kw.waiting }}</span>
 {% elif row.why_not %}<span class="rs-line__note op-muted" data-cannot-cancel>{{ row.why_not }}</span>
