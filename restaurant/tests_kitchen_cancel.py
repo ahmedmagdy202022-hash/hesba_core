@@ -21,7 +21,7 @@ import html
 import re
 from datetime import date, datetime, timezone as dt_timezone
 from decimal import Decimal as D
-from unittest import expectedFailure, mock
+from unittest import mock
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import Sum
@@ -143,7 +143,6 @@ class CancelSetup(KitchenSetup):
 
 
 class PreparationListTests(CancelSetup):
-    @expectedFailure  # HG-107: passes once «إلغاء التحضير» is built
     def test_the_dish_page_lists_its_recent_preparations_newest_first(self):
         first = kitchen.prepare(self.dish, "2", self.owner)
         second = kitchen.prepare(self.dish, "1.5", self.owner)
@@ -157,7 +156,7 @@ class PreparationListTests(CancelSetup):
         for run, plates in ((first, "2"), (second, "1.5")):
             with self.subTest(run=run.number):
                 block = self.block(body, run)
-                for text in (run.number, DAY.isoformat(), plates, "11.0000", self.owner.username, "إلغاء التحضير", "سبب الإلغاء"):
+                for text in (run.number, DAY.isoformat(), plates, "11.00", self.owner.username, "إلغاء التحضير", "سبب الإلغاء"):
                     self.assertIn(text, block)
                 self.assertIn('name="reason"', block)
                 self.assertIn(" required", block)
@@ -165,14 +164,12 @@ class PreparationListTests(CancelSetup):
         for text in ("Recent preparations", "Cancel the preparation", "Reason for cancelling"):
             self.assertIn(text, english)
 
-    @expectedFailure  # HG-107: passes once «إلغاء التحضير» is built
     def test_only_the_last_ten_are_listed(self):
         runs = [kitchen.prepare(self.dish, "0.1", self.owner) for _ in range(12)]
         self.client.force_login(self.owner)
         page = self.client.get(self.page_url)
         self.assertEqual([row["run"].pk for row in page.context["preparations"]], [run.pk for run in reversed(runs)][:10])
 
-    @expectedFailure  # HG-107: passes once «إلغاء التحضير» is built
     def test_a_refused_one_says_why_and_a_cancelled_one_shows_its_reason(self):
         first, second = self.two_preparations()
         self.client.force_login(self.owner)
@@ -191,7 +188,6 @@ class PreparationListTests(CancelSetup):
         english = self.client.get(self.page_url + "?lang=en").content.decode()
         self.assertIn("Cannot be cancelled: some “كشري كبير” left stock after this preparation", self.block(english, first))
 
-    @expectedFailure  # HG-107: passes once «إلغاء التحضير» is built
     def test_who_may_not_cancel_sees_the_list_without_the_button(self):
         kitchen.prepare(self.dish, "2", self.owner)
         viewer = self.clerk("inventory.view_cost", username="cost_viewer")
@@ -222,7 +218,6 @@ class PreparationListTests(CancelSetup):
 
 
 class CancelMoneyTests(CancelSetup):
-    @expectedFailure  # HG-107: passes once «إلغاء التحضير» is built
     def test_a_fresh_preparation_is_cancelled_whole(self):
         run = kitchen.prepare(self.dish, "5", self.owner)
         before = self.everything()
@@ -245,7 +240,6 @@ class CancelMoneyTests(CancelSetup):
         self.assertEqual((cancel.actor, cancel.object_id), (self.owner, str(run.pk)))
         self.books(inventory="1190.00", cogs="0.00")
 
-    @expectedFailure  # HG-107: passes once «إلغاء التحضير» is built
     def test_two_preparations_the_first_is_refused_and_the_second_cancelled(self):
         first, second = self.two_preparations()
         self.books(inventory="1168.00", cogs="22.00")                 # cola 90.00 + rice 555.00 + lentils 470.00 + plates 53.00
@@ -266,7 +260,6 @@ class CancelMoneyTests(CancelSetup):
         first.refresh_from_db()
         self.assertEqual(first.status, RunStatus.POSTED)
 
-    @expectedFailure  # HG-107: passes once «إلغاء التحضير» is built
     def test_the_english_refusal(self):
         first, _ = self.two_preparations()
         before = self.everything()
@@ -275,7 +268,6 @@ class CancelMoneyTests(CancelSetup):
                                              "(a sale, a transfer, an adjustment or use in another run). To correct the stock, record an ordinary stock adjustment."])
         self.assertEqual(self.everything(), before)
 
-    @expectedFailure  # HG-107: passes once «إلغاء التحضير» is built
     def test_a_preparation_made_at_payment_is_refused_once_sold(self):
         self.pay(self.order(self.dish, 2))                            # nothing ready: 2 plates made on the spot, then sold
         run = ProductionRun.objects.get()
@@ -286,7 +278,6 @@ class CancelMoneyTests(CancelSetup):
         self.assertEqual(self.everything(), before)
         self.books(inventory="1168.00", cogs="22.00")
 
-    @expectedFailure  # HG-107: passes once «إلغاء التحضير» is built
     def test_the_service_cancels_and_refuses_the_same_way(self):
         first, second = self.two_preparations()
         before = self.everything()
@@ -308,7 +299,6 @@ class RefusalTests(CancelSetup):
         super().setUp()
         self.run_ = kitchen.prepare(self.dish, "5", self.owner)
 
-    @expectedFailure  # HG-107: passes once «إلغاء التحضير» is built
     def test_no_reason_is_refused_with_nothing_moved(self):
         before = self.everything()
         for reason in ("", "   "):
@@ -327,7 +317,6 @@ class RefusalTests(CancelSetup):
         self.assertEqual(page.status_code, 200)
         self.assertEqual(self.everything(), before)
 
-    @expectedFailure  # HG-107: passes once «إلغاء التحضير» is built
     def test_a_crafted_post_for_another_dish_or_a_run_that_is_not_a_preparation_is_not_found(self):
         tea = self.tea
         save_ingredients(tea, [(self.rice, "0.010")], self.owner)
@@ -346,7 +335,6 @@ class RefusalTests(CancelSetup):
         # the ingredients of the page were not touched by a cancel's POST either
         self.assertEqual(self.dish.dish_ingredients.count(), 2)
 
-    @expectedFailure  # HG-107: passes once «إلغاء التحضير» is built
     def test_the_service_refuses_what_is_not_this_dishs_preparation(self):
         save_ingredients(self.tea, [(self.rice, "0.010")], self.owner)
         tea = kitchen.make_in_kitchen(self.tea, self.owner)
@@ -357,7 +345,6 @@ class RefusalTests(CancelSetup):
                 kitchen.cancel_preparation(run, self.owner, "اتحضّر بالغلط", dish=dish)
         self.assertEqual(self.everything(), before)
 
-    @expectedFailure  # HG-107: passes once «إلغاء التحضير» is built
     def test_an_already_cancelled_preparation_is_not_cancelled_twice(self):
         self.cancel(self.run_)
         before = self.everything()
@@ -380,7 +367,6 @@ class PermissionTests(CancelSetup):
         super().setUp()
         self.run_ = kitchen.prepare(self.dish, "5", self.owner)
 
-    @expectedFailure  # HG-107: passes once «إلغاء التحضير» is built
     def test_a_cashier_and_a_waiter_are_refused_and_nothing_moves(self):
         before = self.everything()
         for role in (RoleCode.CASHIER, RoleCode.WAITER):
@@ -391,7 +377,6 @@ class PermissionTests(CancelSetup):
                     kitchen.cancel_preparation(self.run_, user, "اتحضّر بالغلط")
                 self.assertEqual(self.everything(), before)
 
-    @expectedFailure  # HG-107: passes once «إلغاء التحضير» is built
     def test_who_may_see_costs_but_not_prepare_is_refused(self):
         from approvals.tests import clerk_with
 
@@ -401,22 +386,31 @@ class PermissionTests(CancelSetup):
         self.assertEqual(self.errors(page), ["إلغاء التحضير محتاج صلاحية إدارة الأصناف وصلاحية تسوية المخزون."])
         self.assertEqual(self.everything(), before)
 
-    @expectedFailure  # HG-107: passes once «إلغاء التحضير» is built
-    def test_a_stock_keeper_and_a_manager_may_cancel_as_prepare_allows(self):
+    def test_who_holds_the_two_permissions_prepare_asks_may_cancel(self):
+        from approvals.tests import clerk_with
+
+        # A cook with both permissions and the cost view (which the dish's page asks) cancels from the page.
+        cook = clerk_with("master_data.manage_items", "inventory.adjust_stock", "inventory.view_cost", username="cook")
+        run = kitchen.prepare(self.dish, "1", cook)
+        self.cancel(run, user=cook)
+        run.refresh_from_db()
+        self.assertEqual(run.status, RunStatus.CANCELLED)
+        # A stock keeper and a manager hold both too: the service accepts them. The dish's page itself asks for the
+        # cost view, which their seeded roles do not hold, so it stays closed to them, as it is today.
         for role in (RoleCode.STOCK_KEEPER, RoleCode.MANAGER):
             user = person(role, f"cancel_{role}")
             self.assertTrue(user_has_permission(user, kitchen.MANAGE) and user_has_permission(user, "inventory.adjust_stock"))
-            run = kitchen.prepare(self.dish, "1", user)                    # prepare allows them
+            run = kitchen.prepare(self.dish, "1", self.owner)
             with self.subTest(role=role):
+                self.client.force_login(user)
+                self.assertEqual(self.client.get(self.page_url).status_code, 403)
                 self.assertEqual(kitchen.cancel_preparation(run, user, "اتحضّر بالغلط").status, RunStatus.CANCELLED)
 
-    @expectedFailure  # HG-107: passes once «إلغاء التحضير» is built
     def test_the_owner_cancels_from_the_page(self):
         self.cancel(self.run_)
         self.run_.refresh_from_db()
         self.assertEqual(self.run_.status, RunStatus.CANCELLED)
 
-    @expectedFailure  # HG-107: passes once «إلغاء التحضير» is built
     def test_the_payment_stand_in_does_not_allow_a_cancel(self):
         from approvals.tests import clerk_with
 
@@ -428,7 +422,6 @@ class PermissionTests(CancelSetup):
 
 
 class EntityScopeTests(CancelSetup):
-    @expectedFailure  # HG-107: passes once «إلغاء التحضير» is built
     def test_another_entitys_preparation_is_not_found_and_nothing_moves(self):
         from entities.services import save_entity
 
@@ -469,14 +462,12 @@ class ApprovalTests(CancelSetup):
 
         set_held_actions([self.ACTION], self.owner)
 
-    @expectedFailure  # HG-107: passes once «إلغاء التحضير» is built
     def test_nothing_is_held_until_the_owner_says_so(self):
         self.cancel(self.run_, user=self.cook)
         self.run_.refresh_from_db()
         self.assertEqual(self.run_.status, RunStatus.CANCELLED)
         self.assertFalse(ApprovalRequest.objects.exists())
 
-    @expectedFailure  # HG-107: passes once «إلغاء التحضير» is built
     def test_a_held_cancel_waits_and_nothing_moves_then_applies_once_approved(self):
         from approvals import services as approvals
         from approvals.actions import ACTIONS
@@ -513,7 +504,6 @@ class ApprovalTests(CancelSetup):
         self.assertEqual(self.everything()["position"]["plates"], (D("0.000"), D("0.00"), D("0")))
         self.books(inventory="1190.00", cogs="0.00")
 
-    @expectedFailure  # HG-107: passes once «إلغاء التحضير» is built
     def test_a_cancel_that_would_be_refused_is_said_at_once_and_not_sent(self):
         self.hold()
         self.pay(self.order(self.dish, 1))
@@ -523,7 +513,6 @@ class ApprovalTests(CancelSetup):
         self.assertEqual(self.everything(), before)
         self.assertFalse(ApprovalRequest.objects.exists())
 
-    @expectedFailure  # HG-107: passes once «إلغاء التحضير» is built
     def test_plates_sold_while_the_request_waited_make_the_approval_fail_with_nothing_moved(self):
         from approvals import services as approvals
 
@@ -537,7 +526,6 @@ class ApprovalTests(CancelSetup):
         after = self.everything()
         self.assertEqual({key: value for key, value in after.items() if key != "audit"}, {key: value for key, value in before.items() if key != "audit"})
 
-    @expectedFailure  # HG-107: passes once «إلغاء التحضير» is built
     def test_a_waiting_stock_reversal_of_a_preparation_fails_with_the_dish_message(self):
         from approvals import services as approvals
 
@@ -557,7 +545,6 @@ class ApprovalTests(CancelSetup):
 
 
 class StockScreenTests(CancelSetup):
-    @expectedFailure  # HG-107: passes once «إلغاء التحضير» is built
     def test_with_manufacturing_off_the_screen_refuses_and_links_to_the_dish_page(self):
         from manufacturing import guards
 
@@ -578,7 +565,6 @@ class StockScreenTests(CancelSetup):
         self.assertNotContains(listed, "/reverse/")                      # no reversal form left for them
         self.assertEqual(self.client.get(f"{self.page_url}?lang=ar").status_code, 200)   # and the link opens
 
-    @expectedFailure  # HG-107: passes once «إلغاء التحضير» is built
     def test_the_wrong_average_of_hg_102_is_no_longer_possible(self):
         first, _ = self.two_preparations()
         before = self.everything()

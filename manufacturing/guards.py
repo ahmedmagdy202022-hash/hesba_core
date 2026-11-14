@@ -14,7 +14,9 @@ run's and an order's own cancellation, which call it directly, do not pass throu
 
 The rule holds where the owning page can open. In a business with the manufacturing module switched off (a
 restaurant whose kitchen makes its dishes through ``restaurant.kitchen``), the run's page is closed by the module
-gate and nothing else cancels a preparation: there the screen keeps working as before (HG-102, question 1).
+gate. Since HG-107 a kitchen preparation is cancelled whole from its dish's page («إلغاء التحضير»), so there the screen
+refuses a preparation's operations too and sends the person to the dish's page. Only where neither page can open (both
+modules off after use) does the screen keep reversing them as before, so nobody is sent to a closed page.
 """
 
 from dataclasses import dataclass
@@ -27,18 +29,23 @@ RUN_MESSAGE = ("This operation belongs to production run {number} and cannot be 
                "Cancel the run from its own page: its product leaves stock and all of its materials come back, together.")
 ORDER_MESSAGE = ("This operation is a material issue of production order {number} and cannot be reversed from the transfers and adjustments screen. "
                  "Cancel the order from its own page: all of its materials come back together.")
+DISH_MESSAGE = ("This operation belongs to the kitchen preparation {number} of “{dish}” and cannot be reversed from the transfers and adjustments screen. "
+                "Cancel the preparation from the dish's page: its plates leave stock and all of their ingredients come back, together.")
 
 
 @dataclass(frozen=True)
 class Owner:
     """The document a stock operation belongs to, and its own page."""
 
-    kind: str  # "run" or "order"
+    kind: str  # "run", "order" or (HG-107) "dish": a kitchen preparation, cancelled from its dish's page
     number: str
     url: str
+    dish: str = ""  # the dish's name, for a kitchen preparation
 
     @property
     def refusal(self):
+        if self.kind == "dish":
+            return DISH_MESSAGE.format(number=self.number, dish=self.dish)
         return (RUN_MESSAGE if self.kind == "run" else ORDER_MESSAGE).format(number=self.number)
 
 
@@ -48,19 +55,25 @@ def owners(operation_ids):
     A finished order's materials are its run's materials too (``produce`` uses the operations the order issued), so
     they belong to the run, where they are reversed from then on."""
 
+    return _owners(operation_ids)[0]
+
+
+def _owners(operation_ids):
+    """(``owners``, {operation pk: run pk} for those that belong to a run)."""
+
     from .models import OrderMaterialIssue, ProductionConsumption, ProductionRun
 
     ids = [int(pk) for pk in operation_ids]
-    found = {}
+    found, runs = {}, {}
     if not ids:
-        return found
+        return found, runs
     for operation, order, number in OrderMaterialIssue.objects.filter(operation_id__in=ids).values_list("operation_id", "order_id", "order__number"):
         found[operation] = Owner("order", number, reverse("manufacturing:order", args=[order]))
     for operation, run, number in ProductionConsumption.objects.filter(operation_id__in=ids).values_list("operation_id", "run_id", "run__number"):
-        found[operation] = Owner("run", number, reverse("manufacturing:run", args=[run]))
+        found[operation], runs[operation] = Owner("run", number, reverse("manufacturing:run", args=[run])), run
     for operation, run, number in ProductionRun.objects.filter(output_operation_id__in=ids).values_list("output_operation_id", "pk", "number"):
-        found[operation] = Owner("run", number, reverse("manufacturing:run", args=[run]))
-    return found
+        found[operation], runs[operation] = Owner("run", number, reverse("manufacturing:run", args=[run])), run
+    return found, runs
 
 
 def pages_open():
@@ -71,11 +84,46 @@ def pages_open():
     return closed_module(reverse("manufacturing:home")) is None
 
 
-def guarded(operation_ids):
-    """``owners`` of the operations the stock screen must leave to their own document: none where its page is closed."""
+def _kitchen_dishes(run_ids):
+    """HG-107: {run pk: dish} for the runs that are kitchen preparations whose dish's page can open here."""
 
-    found = owners(operation_ids)
-    return found if found and pages_open() else {}
+    from restaurant import kitchen
+
+    if not run_ids or not kitchen.dish_pages_open():
+        return {}
+    return kitchen.preparation_dishes(run_ids)
+
+
+def guarded(operation_ids):
+    """``owners`` of the operations the stock screen must leave to their own document: where the manufacturing pages
+    are open, the run or the order; where they are closed, a kitchen preparation whose dish's page can open (HG-107),
+    sent to that page; none where no page that cancels it can open."""
+
+    found, runs = _owners(operation_ids)
+    if not found:
+        return {}
+    if pages_open():
+        return found
+    dishes = _kitchen_dishes(set(runs.values()))
+    from restaurant.kitchen import dish_page
+
+    return {operation: Owner("dish", owner.number, dish_page(dishes[runs[operation]]), dishes[runs[operation]].item_name)
+            for operation, owner in found.items() if runs.get(operation) in dishes}
+
+
+def run_page(run_id):
+    """The page that cancels a run (FB-27's link and module check for «إلغاء تشغيلة إنتاج»): the run's own page, or,
+    where the manufacturing pages are closed, its dish's page for a kitchen preparation (HG-107)."""
+
+    own = reverse("manufacturing:run", args=[run_id])
+    if pages_open():
+        return own
+    dish = _kitchen_dishes([run_id]).get(int(run_id))
+    if dish is None:
+        return own
+    from restaurant.kitchen import dish_page
+
+    return dish_page(dish)
 
 
 def before_stock_operation_reversal(operation_id):

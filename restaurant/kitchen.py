@@ -44,13 +44,21 @@ MESSAGES = {
            "already": "الطبق ده بيتحضّر في المطبخ بالفعل.", "not_kitchen": "الطبق ده مش متحضّر في المطبخ؛ حوّله الأول.",
            "quantity": "الكمية لازم تكون رقم أكبر من صفر ولحد 10000.", "setup": "لازم يكون فيه مخزن بيع نشط.",
            "short": "مينفعش نحضّر «{dish}»: {detail}", "recipe": "طبق {dish}", "prepared": "تحضير «{dish}»",
-           "not_ready": "«{dish}» مش جاهز: المطلوب {need} والجاهز {have}. المطبخ يحضّره من صفحة الطبق الأول."},
+           "not_ready": "«{dish}» مش جاهز: المطلوب {need} والجاهز {have}. المطبخ يحضّره من صفحة الطبق الأول.",
+           "cancel_manage": "إلغاء التحضير محتاج صلاحية إدارة الأصناف وصلاحية تسوية المخزون.",
+           "not_preparation": "التحضير ده مش من تحضيرات الطبق ده.",
+           "cannot": "مينفعش يتلغي: في أطباق من «{dish}» خرجت من المخزن بعد التحضير ده (بيع أو تسوية أو تحويل). لو الرصيد محتاج تصحيح، اعمل تسوية مخزون عادية."},
     "en": {"manage": "Switching a dish needs the manage-items permission; preparing it also needs the adjust-stock permission.", "no_ingredients": "Add the dish's ingredients first.",
            "already": "This dish is already made in the kitchen.", "not_kitchen": "This dish is not made in the kitchen; switch it first.",
            "quantity": "The quantity must be a number above zero and up to 10000.", "setup": "An active selling location is needed.",
            "short": "“{dish}” cannot be prepared: {detail}", "recipe": "Dish {dish}", "prepared": "Preparing “{dish}”",
-           "not_ready": "“{dish}” is not ready: {need} needed, {have} ready. The kitchen prepares it from the dish's page first."},
+           "not_ready": "“{dish}” is not ready: {need} needed, {have} ready. The kitchen prepares it from the dish's page first.",
+           "cancel_manage": "Cancelling a preparation needs the manage-items and the adjust-stock permissions.",
+           "not_preparation": "This is not one of this dish's preparations.",
+           "cannot": "Cannot be cancelled: some “{dish}” left stock after this preparation (a sale, an adjustment or a transfer). To correct the stock, record an ordinary stock adjustment."},
 }
+CANCEL_RUN = "manufacturing.cancel_run"  # FB-27: the same held action as the run's own page (HG-107)
+RECENT = 10  # preparations listed on the dish's page
 MAX_QUANTITY = Decimal("10000")
 
 
@@ -222,6 +230,126 @@ def prepare(dish, raw_quantity, user, lang="ar", location=None):
     if location is None:
         raise ValidationError(words["setup"])
     return _produce(dish, _quantity(raw_quantity, words), location, user, lang)
+
+
+# ---- HG-107: «إلغاء التحضير», a preparation cancelled whole from the dish's page ---------------------------------
+#
+# A preparation is an ordinary production run, and a restaurant has the manufacturing module off, so the run's own
+# page is closed. The dish's page lists the dish's recent preparations and cancels one through
+# ``manufacturing.services.cancel_run``, unchanged: the plates leave stock and every ingredient comes back at the cost
+# it left at, and once some plates have left since (HG-100's rule) it is refused.
+
+
+def _recipe_code(dish_id):
+    return f"{RECIPE_PREFIX}{dish_id}"
+
+
+def _scoped_runs():
+    """Production runs in the entity being worked in (the run page's own scope)."""
+
+    from entities import scope as entity_scope
+    from manufacturing.models import ProductionRun
+
+    return entity_scope.scope(ProductionRun.objects, entity_scope.PRODUCTION_RUN)
+
+
+def preparations(dish, limit=RECENT):
+    """The dish's recent preparations here, newest first."""
+
+    return list(_scoped_runs().filter(recipe__code=_recipe_code(dish.pk), recipe__product=dish)
+                .select_related("recipe__product", "output_operation", "created_by").order_by("-pk")[:limit])
+
+
+def preparation_of(dish, raw_run_id):
+    """One of the dish's preparations here, by a pk as a form sends it, or None."""
+
+    raw = str(raw_run_id or "").strip()
+    if not raw.isdigit():
+        return None
+    return (_scoped_runs().filter(pk=int(raw), recipe__code=_recipe_code(dish.pk), recipe__product=dish)
+            .select_related("recipe__product", "output_operation").first())
+
+
+def on_menu(dish):
+    """Whether the dish's page lists it (``restaurant.views._dishes``): an active dish made in the kitchen."""
+
+    return bool(dish.active and is_kitchen_made(dish))
+
+
+def preparation_dishes(run_ids):
+    """{run pk: dish} for those runs that are preparations of a kitchen dish still on the menu (no entity filter: the
+    caller has already found the run in its own scope)."""
+
+    from manufacturing.models import ProductionRun
+
+    runs = (ProductionRun.objects.filter(pk__in=[int(pk) for pk in run_ids], recipe__code__startswith=RECIPE_PREFIX, recipe__active=True,
+                                         recipe__product__active=True, recipe__product__is_stock_tracked=True)
+            .select_related("recipe__product"))
+    return {run.pk: run.recipe.product for run in runs if run.recipe.code == _recipe_code(run.recipe.product_id)}
+
+
+def dish_page(dish):
+    from django.urls import reverse
+
+    return reverse("restaurant:dish", args=[dish.pk])
+
+
+def dish_pages_open():
+    """Whether the dish's page can open here (the module gate, ``settings_core.module_gate``)."""
+
+    from django.urls import reverse
+
+    from settings_core.module_gate import closed_module
+
+    return closed_module(reverse("restaurant:costing")) is None
+
+
+def may_cancel(user):
+    """The two permissions ``prepare`` asks; never the payment's stand-in (HG-048)."""
+
+    return user_has_permission(user, MANAGE) and user_has_permission(user, "inventory.adjust_stock")
+
+
+def why_not(run, lang="ar"):
+    """Why a posted preparation cannot be cancelled now (HG-100's rule), or "" when it can."""
+
+    from manufacturing.models import RunStatus
+    from manufacturing.services import check_cancellable
+
+    if run.status != RunStatus.POSTED:
+        return ""
+    try:
+        check_cancellable(run, "-", lang)
+    except ValidationError:
+        return _words(lang)["cannot"].format(dish=run.recipe.product.item_name)
+    return ""
+
+
+def checked_preparation(run, user, lang="ar", dish=None):
+    """The run, found again here, when ``user`` may cancel it and it is a preparation of ``dish`` (of its own dish when
+    none is said) in the entity being worked in. Refuses otherwise; nothing is read from the request but the run."""
+
+    words = _words(lang)
+    if not may_cancel(user):
+        raise PermissionDenied(words["cancel_manage"])
+    run_id = str(getattr(run, "pk", run) or "")
+    if dish is None and run_id.isdigit():
+        dish = preparation_dishes([run_id]).get(int(run_id))
+    found = preparation_of(dish, run_id) if dish is not None and on_menu(dish) else None
+    if found is None:
+        raise ValidationError(words["not_preparation"])
+    return found
+
+
+@transaction.atomic
+def cancel_preparation(run, user, reason, lang="ar", dish=None):
+    """Cancel a preparation whole: its plates leave stock and every ingredient comes back, through ``cancel_run``
+    unchanged (which refuses once some plates have left since, HG-100). Returns the run."""
+
+    from manufacturing.services import cancel_run
+
+    found = checked_preparation(run, user, lang, dish)
+    return cancel_run(found, user, reason=reason, lang=lang)
 
 
 def prepare_shortfall(lines, location, user, lang="ar"):

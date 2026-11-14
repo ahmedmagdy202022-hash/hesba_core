@@ -123,6 +123,14 @@ def _gift_card_reverse(request):
     reverse(entry, _day(request.data), request.data.get("reason", ""), request.requested_by)
 
 
+def _production_run_page(pk):
+    # HG-107: in a restaurant (manufacturing pages closed) a kitchen preparation is cancelled from its dish's page; the
+    # approvals screen links there, and the module check on approval asks that page, not the closed run page.
+    from manufacturing.guards import run_page
+
+    return run_page(pk)
+
+
 def _cancel_production_run(request):
     from manufacturing.models import ProductionRun
     from manufacturing.services import cancel_run
@@ -145,7 +153,7 @@ ACTIONS = {action.code: action for action in (
     Action("giftcards.breakage", "شطب باقي كارت هدية (إيراد متنوع)", "Write off a gift card's rest (sundry income)", lambda pk: f"/giftcards/{pk}/", _gift_card_breakage, "giftcards.GiftCard", "GIFT_CARD", ("giftcards.breakage",)),
     Action("giftcards.reverse", "عكس بيع كارت هدية أو شطبه", "Reverse a gift card's sale or write-off", lambda pk: f"/giftcards/entry/{pk}/", _gift_card_reverse, "giftcards.GiftCardEntry", "GIFT_CARD_ENTRY", ("giftcards.breakage",)),
     # Manufacturing F11 (HG-100): cancelling a production run reverses its stock adjustments, so it can be held like them.
-    Action("manufacturing.cancel_run", "إلغاء تشغيلة إنتاج", "Cancel a production run", lambda pk: f"/manufacturing/runs/{pk}/", _cancel_production_run, "manufacturing.ProductionRun", "PRODUCTION_RUN", ("inventory.adjust_stock",)),
+    Action("manufacturing.cancel_run", "إلغاء تشغيلة إنتاج", "Cancel a production run", _production_run_page, _cancel_production_run, "manufacturing.ProductionRun", "PRODUCTION_RUN", ("inventory.adjust_stock",)),
 )}
 
 

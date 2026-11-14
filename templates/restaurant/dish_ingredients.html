@@ -1,6 +1,6 @@
 {% extends "operations/base.html" %}
 {% load static hesba_format %}
-{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/restaurant.css' %}?v=resto-001">{% endblock %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/restaurant.css' %}?v=resto-hg107">{% endblock %}
 {# a saved quantity is a Decimal (shown by qty: 0.2, never 0,200); after a refused save the box echoes what was typed #}
 {% block operation_content %}
 <section class="op-title-row"><div><a class="op-back" href="{% url 'restaurant:costing' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ iw.back }}</a><h1>{{ dish.item_name }}</h1>
@@ -17,6 +17,21 @@
 {% if kitchen_made %}<p data-kitchen-on>{{ kw.on }}</p><p class="op-muted">{{ kw.auto }}</p>
 <p>{{ kw.in_stock }}: <strong data-kitchen-stock>{{ in_stock|qty|default:"0" }}</strong></p>
 {% if can_edit %}<form class="op-form-actions" method="post" data-kitchen-prepare>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="prepare"><label for="prep-qty">{{ kw.quantity }}</label><input id="prep-qty" name="quantity" inputmode="decimal" required style="min-height:44px;width:110px"><button class="op-primary" type="submit">{{ kw.prepare }}</button></form>{% endif %}
+{# HG-107: «إلغاء التحضير». A preparation is a production run; the manufacturing pages are closed in a restaurant, so it is cancelled whole here. #}
+<h3>{{ kw.preps }}</h3>
+{% if preparations %}<p class="op-muted">{{ kw.cancel_note }}</p>
+<ul class="rs-lines rs-preps" data-preparations>
+{% for row in preparations %}<li class="rs-line" data-preparation="{{ row.run.pk }}" data-status="{{ row.run.status }}">
+<span class="rs-line__name"><bdi dir="ltr">{{ row.run.number }}</bdi></span>
+<span class="rs-line__amount">{{ row.run.output_quantity|qty }} {{ kw.plates }}</span>
+<span class="rs-line__note">{{ row.run.run_date|date:"Y-m-d" }} · {{ kw.per_plate }}: {{ row.run.output_operation.unit_cost|unit_cost }} · {{ kw.by }}: {{ row.run.created_by.get_full_name|default:row.run.created_by.username }}</span>
+{% if not row.posted %}<span class="rs-line__note" data-cancelled-reason><span class="op-status op-status-cancelled">{{ kw.cancelled_state }}</span> {{ kw.why }}: {{ row.run.cancellation_reason }}</span>
+{% elif row.waiting %}<span class="rs-line__note" data-awaiting-approval>{{ kw.waiting }}</span>
+{% elif row.why_not %}<span class="rs-line__note op-muted" data-cannot-cancel>{{ row.why_not }}</span>
+{% elif can_cancel %}<div class="rs-actions"><form method="post" data-cancel-preparation>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="cancel_preparation"><input type="hidden" name="run" value="{{ row.run.pk }}"><label for="why-{{ row.run.pk }}">{{ kw.reason }}<input id="why-{{ row.run.pk }}" name="reason" maxlength="255" required></label><button class="op-secondary" type="submit">{{ kw.cancel }}</button></form></div>
+{% endif %}</li>{% endfor %}
+</ul>
+{% else %}<p class="op-muted" data-no-preparations>{{ kw.no_preps }}</p>{% endif %}
 {% else %}<p data-kitchen-off>{{ kw.off }}</p>
 {% if can_edit %}<form method="post" data-kitchen-switch>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="kitchen"><p class="op-muted">{{ kw.switch_hint }}</p><div class="op-form-actions"><button class="op-secondary" type="submit">{{ kw.switch }}</button></div></form>{% endif %}
 {% endif %}

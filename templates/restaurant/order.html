@@ -1,6 +1,6 @@
 {% extends "operations/base.html" %}
 {% load static hesba_format hesba_shifts %}
-{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/restaurant.css' %}?v=resto-r4">{% endblock %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/restaurant.css' %}?v=resto-hg107">{% endblock %}
 {% block operation_content %}
 <section class="op-title-row"><div><a class="op-back" href="{% url 'restaurant:board' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.back }}</a><h1>{% if order.table %}{{ words.table }} {{ order.table.name }}{% else %}{{ kind_label }}{% endif %}</h1><p><span dir="ltr">{{ order.number }}</span> · {{ kind_label }}{% if order.customer %} · {{ order.customer.name }}{% endif %}{% if order.address %} · {{ order.address }}{% endif %}{% if order.phone %} · <span dir="ltr">{{ order.phone|ltr }}</span>{% endif %}</p>{% if is_open and can_take %}<a class="op-secondary rs-jump" href="#menu">{{ words.menu }} ↓</a>{% endif %}</div><span class="op-status op-status-{% if order.status == 'paid' %}posted{% elif order.status == 'cancelled' %}cancelled{% else %}open{% endif %}" data-order-status="{{ order.status }}">{{ status_label }}</span></section>
 <div class="rs-order">

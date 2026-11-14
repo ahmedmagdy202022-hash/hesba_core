@@ -375,13 +375,22 @@ KITCHEN_WORDS = {
            "switch": "اخصم الخامات لما الطبق يتباع", "switch_hint": "لو الطبق اتباع قبل كده، هيتعمل له صنف مخزني جديد بنفس الاسم والسعر يحل محله في المنيو، والقديم يفضل لفواتيره.",
            "switched": "اتحوّل الطبق: من دلوقتي بيتحضّر من مكوّناته قبل ما يتباع.", "prepare": "حضّر كمية دلوقتي", "quantity": "عدد الأطباق",
            "prepared": "اتحضّر {quantity} طبق.", "in_stock": "جاهز في المخزن", "auto": "لو الجاهز مش كفاية وقت الحساب: اللي عنده صلاحية تسوية المخزون الناقص بيتحضّر له لوحده، والكاشير بيبيع من الجاهز بس. ولو خامة ناقصة، الحساب بيقف ويقول هي إيه.",
-           "badge": "بيتخصم من المخزن"},
+           "badge": "بيتخصم من المخزن",
+           # HG-107: «إلغاء التحضير»
+           "preps": "آخر التحضيرات", "no_preps": "لسه مفيش تحضيرات للطبق ده.", "plates": "طبق", "per_plate": "تكلفة الطبق", "by": "سجّله",
+           "cancel": "إلغاء التحضير", "reason": "سبب الإلغاء", "cancelled_state": "اتلغى", "why": "السبب",
+           "cancel_note": "الإلغاء بيخرّج أطباق التحضير من المخزن ويرجّع كل مكوّناتها بنفس التكلفة اللي خرجت بيها. لو في أطباق منه خرجت من المخزن بعده، مينفعش يتلغي.",
+           "cancelled": "اتلغى التحضير: الأطباق خرجت من المخزن وكل المكوّنات رجعت بتكلفتها.", "waiting": "طلب إلغاء التحضير ده مستني موافقة."},
     "en": {"title": "Taking it out of stock", "off": "This dish is a service: selling it takes no ingredients out of stock, and the cost above is an estimate.",
            "on": "This dish is made in the kitchen: each plate is made from its ingredients (taken out of stock at their cost) before it is sold, and its real cost goes into the cost of sales.",
            "switch": "Take the ingredients out of stock when it sells", "switch_hint": "If the dish was sold before, a new stock item with the same name and price takes its place on the menu; the old one stays for its invoices.",
            "switched": "Switched: from now on the dish is made from its ingredients before it is sold.", "prepare": "Prepare a quantity now", "quantity": "Plates",
            "prepared": "{quantity} plates prepared.", "in_stock": "Ready in stock", "auto": "If not enough is ready at the bill: for someone who may adjust stock the rest is made on the spot; a cashier sells only what is ready. If an ingredient is short, the bill stops and says which.",
-           "badge": "Taken from stock"},
+           "badge": "Taken from stock",
+           "preps": "Recent preparations", "no_preps": "No preparations of this dish yet.", "plates": "plates", "per_plate": "Cost a plate", "by": "By",
+           "cancel": "Cancel the preparation", "reason": "Reason for cancelling", "cancelled_state": "Cancelled", "why": "Reason",
+           "cancel_note": "Cancelling takes the preparation's plates out of stock and brings every ingredient back at the cost it left at. Once some of its plates have left stock since, it cannot be cancelled.",
+           "cancelled": "Preparation cancelled: the plates left stock and every ingredient came back at its cost.", "waiting": "Cancelling this preparation is waiting for approval."},
 }
 
 
@@ -415,6 +424,8 @@ def dish_ingredients(request, pk):
 
     kw = KITCHEN_WORDS[lang]
     error = ""
+    if request.method == "POST" and request.POST.get("action") == "cancel_preparation":  # HG-107
+        return _cancel_preparation(request, dish, lang)
     if request.method == "POST" and request.POST.get("action") in ("kitchen", "prepare"):
         try:
             if request.POST["action"] == "kitchen":  # RESTO-004
@@ -449,7 +460,54 @@ def dish_ingredients(request, pk):
     return render(request, "restaurant/dish_ingredients.html", _base(request, page_title=dish.item_name, iw=words, dish=dish, rows=rows,
                                                                    ingredients=ingredients, cost=insights.plate_cost(dish, current), error=error,
                                                                    can_edit=user_has_permission(request.user, TABLES), kw=kw,
-                                                                   kitchen_made=kitchen.is_kitchen_made(dish), in_stock=_in_stock(dish)))
+                                                                   kitchen_made=kitchen.is_kitchen_made(dish), in_stock=_in_stock(dish),
+                                                                   preparations=_preparations(dish, lang), can_cancel=kitchen.may_cancel(request.user)))
+
+
+def _preparations(dish, lang):
+    """HG-107: the dish's recent preparations, each with why it cannot be cancelled now and whether a request waits."""
+
+    from approvals.models import ApprovalRequest, ApprovalStatus
+
+    from . import kitchen
+
+    runs = kitchen.preparations(dish)
+    waiting = set(ApprovalRequest.objects.filter(action=kitchen.CANCEL_RUN, status=ApprovalStatus.PENDING, object_id__in=[run.pk for run in runs])
+                  .values_list("object_id", flat=True))
+    return [{"run": run, "posted": run.status == "posted", "why_not": kitchen.why_not(run, lang), "waiting": run.pk in waiting} for run in runs]
+
+
+def _cancel_preparation(request, dish, lang):
+    """HG-107: «إلغاء التحضير». The order is the run page's (``manufacturing.views.run_detail``): who may, the run in
+    this entity and of this dish, what ``cancel_run`` would refuse said now, then the approval hold, then the cancel."""
+
+    from approvals.gate import held
+    from django.http import Http404
+    from manufacturing.services import check_cancellable
+    from settings_core.ui_messages import translate
+
+    from . import kitchen
+
+    back = redirect(f"{reverse('restaurant:dish', args=[dish.pk])}?lang={lang}")
+    words = kitchen._words(lang)
+    if not kitchen.may_cancel(request.user):
+        messages.error(request, words["cancel_manage"])
+        return back
+    run = kitchen.preparation_of(dish, request.POST.get("run")) if kitchen.on_menu(dish) else None
+    if run is None:
+        raise Http404("Not one of this dish's preparations here.")
+    try:
+        reason = check_cancellable(run, request.POST.get("reason", ""), lang)
+        if held(request, kitchen.CANCEL_RUN, run.pk, {"reason": reason, "lang": lang}, run.number):
+            return back
+        kitchen.cancel_preparation(run, request.user, reason, lang, dish=dish)
+    except ValidationError as exc:
+        messages.error(request, translate(" ".join(exc.messages), lang))
+    except PermissionDenied as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(request, KITCHEN_WORDS[lang]["cancelled"])
+    return back
 
 
 def _in_stock(dish):
