@@ -192,6 +192,25 @@ class LabResult(models.Model):
         return f"{self.patient_id}:{self.test_id}:{self.taken_on}"
 
 
+class LabLinkCounter(models.Model):
+    """HG-106: the wrong answers given to one patient result link in its whole life, counted in the database.
+
+    The link itself is a stateless signed token (``medical.public``) and has no row of its own, so this is the only table the page owns. It holds
+    nothing about the patient: ``link_hash`` is a keyed hash of the token (never the token, and not the plain hash the cache and the cookie use),
+    and a link made again is a new token, so a new row that starts at zero. The row is made by the link's first counted answer
+    (``public._life_take``) and the counter is raised only by one guarded atomic UPDATE, so every worker sees it, a deploy cannot reset it, and
+    N answers at once never exceed ``public.TOKEN_LIFE``. Rows are small and are not purged (see HG-106).
+    """
+
+    link_hash = models.CharField(max_length=64, unique=True)
+    wrong_answers = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"lab link {self.link_hash[:8]}: {self.wrong_answers}"
+
+
 # ---- MED-005: physiotherapy session packages: since PKG-UNIFY they are agreements.Package (see medical.physio) ----
 
 
