@@ -93,6 +93,8 @@
   <label class="sr-only" for="dl-driver">{{ dw.driver }}</label><select id="dl-driver" name="driver" required style="min-height:44px"><option value="">{{ dw.driver }}</option>{% for person in drivers %}<option value="{{ person.pk }}"{% if person.pk == order.driver_id %} selected{% endif %}>{{ person.name }}</option>{% endfor %}</select>
   <label class="sr-only" for="dl-fee2">{{ dw.fee }}</label><input id="dl-fee2" name="delivery_fee" inputmode="decimal" value="{{ order.delivery_fee|stringformat:".2f" }}" style="min-height:44px;width:110px">
   <button class="op-secondary" type="submit">{% if order.driver_id %}{{ dw.change_driver }}{% else %}{{ dw.dispatch }}{% endif %}</button></form>{% endif %}{% endif %}
+  {% for row in charge_rows %}<p class="rs-total" data-charge-row="{{ row.kind }}" data-charge-amount="{{ row.amount|stringformat:'.2f' }}"><span>{{ row.description }}</span><span>{{ row.amount|money }}</span></p>{% endfor %}
+  {% if charge_note %}<p class="op-muted" data-charge-note>{{ charge_note }}</p>{% endif %}
   <p class="rs-total"><span>{{ words.total }}</span><span data-order-total>{{ total|money }}</span></p>
   {% if order.invoice and can_see_invoices %}<p>{{ words.invoice }}: <a href="{% url 'sales:detail' order.invoice.pk %}?lang={{ lang }}" data-order-invoice>{{ order.invoice.invoice_number|ltr }}</a></p>{% endif %}
   {% if merged_into %}<p class="op-message" data-merged-into><a href="{% url 'restaurant:order' merged_into.pk %}?lang={{ lang }}">{{ merged_text }}</a></p>{% endif %}
@@ -102,6 +104,7 @@
   {% if is_open and can_take %}
   <div class="rs-actions">
     {% if pending %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="send"><button class="op-primary" type="submit" data-send-kitchen>{{ words.send }}</button></form>{% endif %}
+    {% if can_check %}<a class="op-secondary" href="{% url 'restaurant:check' order.pk %}?lang={{ lang }}&autoprint=1" data-print-check>{{ chw.check }}</a>{% endif %}
     {% if part_rows %}<button class="op-secondary rs-part-open" type="button" data-opens-sheet="part-sheet" aria-haspopup="dialog" data-part-pay>{{ words.part_pay }}</button>{% endif %}
     {% if parent %}<form method="post" data-confirm="{{ words.put_back_confirm }}" data-put-back>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="put_back"><button class="op-secondary" type="submit">{{ words.put_back }}</button></form>{% endif %}
     {% if lines and can_sell and shift_missing %}<div data-pay-needs-shift>{% shift_gate %}</div>{% elif lines and can_sell %}<form method="post" data-pay-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="pay"><h2>{{ words.pay }}</h2>

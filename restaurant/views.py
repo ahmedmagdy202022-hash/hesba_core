@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
+from config.money import money_round
 from master_data.models import Customer, Item
 from permissions.decorators import require_any_permission, require_permission
 from permissions.services import user_has_permission
@@ -382,7 +383,7 @@ def order_detail(request, pk):
     free_tables = DiningTable.objects.filter(active=True, entity_id=order.entity_id).exclude(orders__status=OrderStatus.OPEN)
     families = combos.blocks(modifiers.grouped(lines))  # R1b: each combo taken is one block of its components
     return render(request, "restaurant/order.html", _base(
-        request, order=order, lines=lines, total=order.total, items=items, raw_ids=raw_ids, categories=categories, kind_label=_kind_label(order, lang),
+        request, order=order, lines=lines, items=items, **_charge_context(order, lines, lang), raw_ids=raw_ids, categories=categories, kind_label=_kind_label(order, lang),
         families=families, sheets=choice_sheets, **_split_merge_context(order, families, request.user, lang),
         sheet_items={sheet["item"].pk for sheet in choice_sheets}, mw=MODIFIER_WORDS[lang],
         combo_sheets=combo_choice_sheets, cw=COMBO_WORDS[lang],
@@ -397,6 +398,125 @@ def order_detail(request, pk):
         shift_missing=shift_missing(request.user),
         customers=Customer.objects.filter(active=True).order_by("name"), free_tables=free_tables,
     ))
+
+
+CHARGE_WORDS = {
+    "ar": {"title": "الخدمة والحد الأدنى", "percent": "نسبة الخدمة (%)", "kinds": "الخدمة بتتحسب على", "minimum": "الحد الأدنى للفرد (صالة بس)",
+           "intro": "الخدمة بتتحسب على الأكل بعد خصومات الكومبو، والحد الأدنى للفرد على طلبات الصالة بس. سيب الخانة فاضية لو مش مستخدمها.",
+           "rules": "خصم الحساب بيتخصم بعد الضريبة ومش بيقلّل الخدمة، ورسوم التوصيل مش بتدخل في الخدمة. لو الطاولة دفعت على أجزاء، كل جزء عليه خدمة أكله بس، وفرق الحد الأدنى بيتحسب مرة واحدة على حساب الطاولة نفسه على أكل الطاولة كله.",
+           "save": "احفظ الخدمة والحد الأدنى", "saved": "اتحفظت الخدمة والحد الأدنى.", "off": "مش مستخدمة",
+           "codes": "الإيصال الإلكتروني: الصنف {codes} محتاج كود EGS أو GS1 من شاشة الأصناف. لحد ما يتسجل، إيصال الحساب اللي فيه خدمة أو فرق حد أدنى بيتحجز «ما اتصدرش»، وبعد التسجيل تصدره تاني.",
+           "check": "اطبع الشيك", "check_title": "الشيك", "check_note": "ده مش فاتورة: الحساب بيتقفل عند الكاشير، وأي خصم بيتخصم وقت الدفع.",
+           "subtotal": "قبل الضريبة", "vat": "الضريبة", "total": "الإجمالي", "print": "اطبع", "guests": "أفراد",
+           "part_note": "الحد الأدنى بيتحسب على حساب الطاولة نفسه، مش على الجزء.",
+           "parent_note": "فرق الحد الأدنى هنا محسوب على أكل الطاولة كله، ومنه الأجزاء اللي اتدفعت.",
+           "kind_dine_in": "صالة", "kind_takeaway": "تيك أواي", "kind_delivery": "دليفري"},
+    "en": {"title": "Service charge and minimum", "percent": "Service charge (%)", "kinds": "The service charge applies to", "minimum": "Minimum per guest (dine-in only)",
+           "intro": "The service charge is worked out on the food after combo discounts; the minimum per guest applies to dine-in bills only. Leave a box empty to switch it off.",
+           "rules": "The bill discount comes after VAT and does not reduce the service charge, and the delivery fee is never in it. When a table pays in parts, each part pays service on its own food, and the minimum's top-up is settled once, on the table's own bill, against all the table's food.",
+           "save": "Save the service charge and minimum", "saved": "Service charge and minimum saved.", "off": "Not used",
+           "codes": "E-receipt: item {codes} needs an EGS or GS1 code from the items screen. Until it has one, the receipt of a bill with a service charge or a top-up is held as “not issued”; issue it again once the code is in.",
+           "check": "Print the check", "check_title": "Check", "check_note": "This is not an invoice: the bill is closed at the till, and any discount is taken when paying.",
+           "subtotal": "Before VAT", "vat": "VAT", "total": "Total", "print": "Print", "guests": "guests",
+           "part_note": "The minimum is settled on the table's own bill, never on a part.",
+           "parent_note": "The top-up here counts all the table's food, the paid parts included.",
+           "kind_dine_in": "Dine in", "kind_takeaway": "Takeaway", "kind_delivery": "Delivery"},
+}
+
+
+def _charge_context(order, lines, lang):
+    """R3 (HG-113): the bill box's top-up and service rows and its total before VAT, from the same preview that ``pay`` posts.
+    A closed order shows the charge lines its invoice really has. With both settings off and no charge line, the page is as
+    before: ``total`` is ``Order.total`` and nothing else is added."""
+
+    from . import charges
+
+    words = CHARGE_WORDS[lang]
+    config = charges.settings()
+    rows, note = [], ""
+    if order.status == OrderStatus.OPEN:
+        if config.on:
+            bill = charges.preview(order, lines, lang, config)
+            rows = [{"kind": row["kind"], "description": row["description"], "amount": row["net"]} for row in bill["rows"] if row["kind"] in ("min", "service")]
+            if config.minimum is not None and order.kind == OrderKind.DINE_IN:
+                if order.split_from_id:
+                    note = words["part_note"]
+                elif order.splits.filter(status=OrderStatus.PAID).exists():
+                    note = words["parent_note"]
+    elif order.invoice_id:
+        kinds = {charges.MIN_ITEM_CODE: "min", charges.SERVICE_ITEM_CODE: "service"}
+        rows = [{"kind": kinds[line.item.item_code], "description": line.description or line.item.item_name, "amount": line.line_total_amount}
+                for line in order.invoice.lines.select_related("item").filter(item__item_code__in=charges.CHARGE_CODES).order_by("line_number")]
+    total = money_round(order.total + sum((row["amount"] for row in rows), Decimal("0")))
+    return {"total": total, "charge_rows": rows, "charge_note": note, "chw": words,
+            "can_check": config.on and order.status == OrderStatus.OPEN and any(not line.voided for line in lines)}
+
+
+@require_any_permission(*FLOOR)
+def check(request, pk):
+    """R3 (HG-113): «اطبع الشيك»: the bill before paying, row by row as ``pay`` will post it (``charges.preview``). It closes
+    and posts nothing; printing it is audited. The floor's own permission, as the kitchen ticket's."""
+
+    from django.http import Http404
+
+    from . import charges
+
+    lang = _lang(request)
+    order = get_object_or_404(branches.orders(Order.objects.select_related("table", "waiter", "split_from__table")), pk=pk)  # R12
+    if order.status != OrderStatus.OPEN:
+        raise Http404("Only an open order has a check to print.")
+    bill = charges.preview(order, lang=lang)
+    rows, seen = [], set()
+    for row in bill["rows"]:
+        line = row["line"]
+        head = ""
+        if line is not None and line.bundle and line.bundle not in seen:
+            seen.add(line.bundle)
+            head = line.combo.label(lang)
+        if row["kind"] == "food":
+            name = line.item.item_name
+        elif row["kind"] == "addon":
+            name = "+ " + (line.options or line.item.item_name)
+        else:
+            name = row["description"]
+        rows.append({"row": row, "name": name, "combo": head, "bundle": line.bundle if line is not None else None})
+    services._audit(order, request.user, "print_check", {"number": order.number, "subtotal": f"{bill['subtotal']:.2f}", "tax": f"{bill['tax']:.2f}",
+                                                         "total": f"{bill['total']:.2f}", "service": f"{bill['service']:.2f}", "topup": f"{bill['topup']:.2f}",
+                                                         "rows": len(rows)})
+    return render(request, "restaurant/check.html", _base(request, order=order, bill=bill, rows=rows, chw=CHARGE_WORDS[lang], kind_label=_kind_label(order, lang),
+                                                        company=company_details(), now=timezone.localtime()))
+
+
+def _save_charges(request, lang):
+    """R3 (HG-113): the tables page's «الخدمة والحد الأدنى» form, with the page's own permission to change things."""
+
+    from . import charges
+
+    if not user_has_permission(request.user, TABLES):
+        raise PermissionDenied("Changing the service charge and minimum needs master_data.manage_items.")
+    try:
+        charges.save_settings({"percent": request.POST.get("percent", ""), "kinds": request.POST.getlist("kinds"), "minimum": request.POST.get("minimum", "")},
+                              request.user, lang)
+    except ValidationError as exc:
+        return " ".join(exc.messages)
+    messages.success(request, CHARGE_WORDS[lang]["saved"])
+    return ""
+
+
+def _charges_form(lang, posted=None):
+    from . import charges
+
+    words = CHARGE_WORDS[lang]
+    config = charges.settings()
+    if posted is not None:
+        values = {"percent": posted.get("percent", ""), "minimum": posted.get("minimum", ""), "kinds": posted.getlist("kinds")}
+    else:
+        values = {"percent": f"{config.percent.normalize():f}" if config.percent is not None else "",
+                  "minimum": f"{config.minimum:.2f}" if config.minimum is not None else "", "kinds": list(config.kinds)}
+    kinds = [{"value": kind, "label": words[f"kind_{kind}"], "checked": kind in values["kinds"]} for kind in OrderKind.values]
+    uncoded = charges.uncoded_items() if config.on else []
+    return {"charges_form": values, "charge_kinds": kinds, "chw": words,
+            "charge_codes": words["codes"].format(codes=" و ".join(uncoded) if lang == "ar" else " and ".join(uncoded)) if uncoded else ""}
 
 
 def _open_order(raw):
@@ -487,7 +607,13 @@ def tables(request):
     raw = str(request.GET.get("edit") or request.POST.get("pk") or "")
     editing = get_object_or_404(branches.tables(), pk=int(raw)) if raw.isdigit() else None  # R12: another branch's table is a 404
     grouped = branches.group_mode()
-    if request.method == "POST":
+    charges_error, posted = "", None
+    if request.method == "POST" and request.POST.get("action") == "charges":  # R3 (HG-113): its own form; never a table save
+        charges_error = _save_charges(request, lang)
+        if not charges_error:
+            return redirect(f"{reverse('restaurant:tables')}?lang={lang}")
+        posted = request.POST
+    elif request.method == "POST":
         if not user_has_permission(request.user, TABLES):
             raise PermissionDenied("Changing tables needs master_data.manage_items.")
         form = request.POST
@@ -508,7 +634,8 @@ def tables(request):
                 "entity": editing.entity_id}
     chosen = str(form.get("entity") or "")
     return render(request, "restaurant/tables.html", _base(request, rows=branches.tables(DiningTable.objects.select_related("entity")), form=form, editing=editing,
-                                                         error=error, branch_choices=branches.choices(request.user, lang) if grouped else [], chosen_branch=chosen))
+                                                         error=error, branch_choices=branches.choices(request.user, lang) if grouped else [], chosen_branch=chosen,
+                                                         charges_error=charges_error, **_charges_form(lang, posted)))
 
 
 REPORT_VIEW, COST_VIEW = "reports.view_all_sales_report", "inventory.view_cost"
@@ -533,7 +660,9 @@ INSIGHT_WORDS = {
            "no_waiter": "من غير ويتر", "kinds": "نوع الطلب", "kind": "النوع", "waste": "الهالك والفاقد", "waste_intro": "اللي اتشال من المخزن بتسوية في الفترة دي، بسببها.",
            "item": "الصنف", "date": "التاريخ", "reason": "السبب", "value": "القيمة", "no_waste": "مفيش هالك متسجّل في الفترة دي.", "nothing": "مفيش طلبات مدفوعة في الفترة دي.",
            "bad_period": "الفترة مش مظبوطة؛ اتعرض الشهر ده.", "delivery_fee": "رسوم التوصيل", "dine_in": "صالة", "takeaway": "تيك أواي", "delivery": "دليفري", "total": "الإجمالي",
-           "combo_discount": "خصم الكومبو", "combo_discount_note": "الأطباق فوق بسعر المنيو؛ ده اللي الكومبو وفّره على العملاء منها، فالأطباق ناقص الرقم ده بتساوي صافي سطورها."},
+           "combo_discount": "خصم الكومبو", "combo_discount_note": "الأطباق فوق بسعر المنيو؛ ده اللي الكومبو وفّره على العملاء منها، فالأطباق ناقص الرقم ده بتساوي صافي سطورها.",
+           "service": "الخدمة", "min_topup": "فرق الحد الأدنى",
+           "charges_note": "الخدمة وفرق الحد الأدنى سطور على الفواتير، مش أطباق، فمش داخلين في الأكثر مبيعًا. الأطباق ناقص خصم الكومبو زائد الخدمة وفرق الحد الأدنى بتساوي مبيعات الطلبات قبل الضريبة (من غير رسوم التوصيل والمرتجعات)."},
     "en": {"costing": "Dish costs", "costing_intro": "What one plate uses and what it costs at today's average ingredient cost, against its price. An estimate for pricing. A dish marked “Taken from stock” is made from its ingredients before it sells; selling any other dish takes nothing out of stock.",
            "dish": "Dish", "price": "Price", "cost": "Plate cost", "margin": "Margin", "margin_pct": "Margin %", "ingredients": "Ingredients",
            "no_recipe": "No ingredients yet", "edit": "Ingredients", "ingredient": "Ingredient", "quantity": "Quantity per plate", "save": "Save", "saved": "Ingredients saved.",
@@ -546,7 +675,9 @@ INSIGHT_WORDS = {
            "no_waiter": "No waiter", "kinds": "Order type", "kind": "Type", "waste": "Waste and losses", "waste_intro": "What was taken out of stock by adjustment in this period, with its reason.",
            "item": "Item", "date": "Date", "reason": "Reason", "value": "Value", "no_waste": "No waste recorded in this period.", "nothing": "No paid orders in this period.",
            "bad_period": "The period was not valid; showing this month.", "delivery_fee": "Delivery fee", "dine_in": "Dine in", "takeaway": "Takeaway", "delivery": "Delivery", "total": "Total",
-           "combo_discount": "Combo discount", "combo_discount_note": "The dishes above are at menu price; this is what combos saved customers on them, so the dishes less this figure come to their lines' net value."},
+           "combo_discount": "Combo discount", "combo_discount_note": "The dishes above are at menu price; this is what combos saved customers on them, so the dishes less this figure come to their lines' net value.",
+           "service": "Service charge", "min_topup": "Minimum charge top-up",
+           "charges_note": "The service charge and the minimum's top-up are invoice lines, not dishes, so they are not among the best sellers. The dishes less the combo discount plus the service charge and the top-up come to the orders' sales before VAT (delivery fees and returns aside)."},
 }
 
 

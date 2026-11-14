@@ -18,4 +18,19 @@
 <label class="op-field"><span><input type="checkbox" name="active"{% if form.active %} checked{% endif %}> {{ words.active }}</span></label>
 </div>
 <div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button>{% if editing %}<a class="op-secondary" href="?lang={{ lang }}">{{ words.new_table }}</a>{% endif %}</div></form>{% endif %}
+<section class="op-form" aria-labelledby="ch-title" data-charges>
+<h2 id="ch-title">{{ chw.title }}</h2>
+<p class="op-muted">{{ chw.intro }}</p>
+{% if charges_error %}<div class="op-message op-message-error" role="alert" data-charges-error>{{ charges_error }}</div>{% endif %}
+{% if charge_codes %}<div class="op-message" data-charge-codes>{{ charge_codes }}</div>{% endif %}
+{% if can_tables %}<form method="post" data-charges-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="charges">
+<div class="op-form-grid">
+<div class="op-field"><label for="ch-percent">{{ chw.percent }}</label><input id="ch-percent" name="percent" value="{{ charges_form.percent }}" inputmode="decimal" dir="ltr" placeholder="12" autocomplete="off"></div>
+<div class="op-field"><label for="ch-minimum">{{ chw.minimum }}</label><input id="ch-minimum" name="minimum" value="{{ charges_form.minimum }}" inputmode="decimal" dir="ltr" autocomplete="off"></div>
+<fieldset class="op-field"><legend>{{ chw.kinds }}</legend>{% for kind in charge_kinds %}<label><input type="checkbox" name="kinds" value="{{ kind.value }}"{% if kind.checked %} checked{% endif %} data-charge-kind="{{ kind.value }}"> {{ kind.label }}</label> {% endfor %}</fieldset>
+</div>
+<p class="op-muted">{{ chw.rules }}</p>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ chw.save }}</button></div></form>
+{% else %}<p data-charges-view>{{ chw.percent }}: <bdi dir="ltr">{{ charges_form.percent|default:chw.off }}</bdi> · {{ chw.minimum }}: <bdi dir="ltr">{{ charges_form.minimum|default:chw.off }}</bdi></p>{% endif %}
+</section>
 {% endblock %}

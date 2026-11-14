@@ -14,6 +14,7 @@ urlpatterns = [
     path("costs/<int:pk>/preparations/<int:run>/", views.dish_ingredients, name="dish_preparation"),
     path("report/", views.report, name="report"),
     path("orders/<int:pk>/", views.order_detail, name="order"),
+    path("orders/<int:pk>/check/", views.check, name="check"),  # R3 (HG-113): «اطبع الشيك»
     path("tickets/<int:pk>/", views.ticket, name="ticket"),
     path("kitchen/", views_kds.kds, name="kds"),
     path("kitchen/feed/", views_kds.kds_feed, name="kds_feed"),

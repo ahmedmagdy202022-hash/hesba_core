@@ -475,8 +475,9 @@ class CheckTests(ChargeSetup):
         self.vat(True)
         order = self.order()
         expected = self.preview_rows(order)
+        self.client.force_login(self.waiter)  # the login's own session row is written before counting
         before = _counts()
-        page = self.check_page(order)
+        page = self.client.get(reverse("restaurant:check", args=[order.pk]), {"lang": "ar"})
         self.assertEqual(page.status_code, 200)
         after = _counts()
         self.assertEqual({label: after[label] - before[label] for label in after if after[label] != before[label]}, {"audit.AuditLog": 1})
