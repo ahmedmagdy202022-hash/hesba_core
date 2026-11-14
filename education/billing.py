@@ -270,7 +270,7 @@ def billed(first):
     from .services import scoped
 
     charges = (_live(FeeCharge.objects.filter(month=first, enrollment__student__in=scoped(Student.objects))).select_related("invoice__customer", "enrollment__student")
-               .order_by("invoice__customer__name", "invoice_id"))
+               .order_by("invoice__customer__name", "invoice_id", "pk"))  # pk: siblings on one invoice keep one order (PostgreSQL returns ties in any order)
     rows = OrderedDict()
     for charge in charges:
         row = rows.setdefault(charge.invoice_id, {"invoice": charge.invoice, "students": []})
