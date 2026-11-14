@@ -63,3 +63,8 @@ details.rs-more summary{cursor:pointer;font-weight:700;color:var(--hs-navy);padd
 .rs-check-chip input{width:20px;height:20px;margin:0}
 .rs-check-chip small{display:block;color:var(--hs-muted)}
 .rs-check-chip span{text-align:start}
+
+/* HG-107: a dish's recent preparations, one stacked block each, so the reason box and the cancel button sit under the
+   preparation instead of inside a table cell (a form in a cell outgrows its card at 390 px, HG-102 risk 5). */
+.rs-preps .rs-actions{grid-column:1/-1}
+.rs-preps .rs-actions button{min-height:44px}

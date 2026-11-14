@@ -188,6 +188,10 @@ PATTERNS = (
     (r"^This operation is a material issue of production order (?P<number>\S+) and cannot be reversed from the transfers and adjustments screen\. "
      r"Cancel the order from its own page: all of its materials come back together\.$",
      "الحركة دي صرف خامات لأمر الإنتاج {number}، ومينفعش تتعكس من شاشة التحويلات والتسويات. ألغِ الأمر من صفحته، وكل خاماته بترجع المخزن مع بعض."),
+    # HG-107: a kitchen preparation's operation is cancelled from the dish's page.
+    (r"^This operation belongs to the kitchen preparation (?P<number>\S+) of “(?P<dish>.+?)” and cannot be reversed from the transfers and adjustments screen\. "
+     r"Cancel the preparation from the dish's page: its plates leave stock and all of their ingredients come back, together\.$",
+     "الحركة دي تابعة لتحضير «{dish}» رقم {number}، ومينفعش تتعكس من شاشة التحويلات والتسويات. ألغِ التحضير من صفحة الطبق، والأطباق بتخرج من المخزن وكل مكوّناتها بترجع مع بعض."),
     # A0 (HG-078): the AI layer's daily cap and text size.
     (r"^Today's AI call limit is reached \((?P<cap>\d+) calls\)\. Try again tomorrow\.$", "وصلت لحد مكالمات الذكاء الاصطناعي النهارده ({cap} مكالمة). جرّب تاني بكرة."),
     # A1 (HG-079): one person's daily voicings of the summary.

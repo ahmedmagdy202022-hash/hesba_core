@@ -253,12 +253,13 @@ class MadeToOrderAlertTests(KitchenSetup):
 
 
 class KitchenRunOperationTests(KitchenSetup):
-    """Manufacturing F11b (HG-102): what the stock operations screen does with the operations of a kitchen run.
+    """Manufacturing F11b (HG-102) and HG-107: what the stock operations screen does with the operations of a kitchen run.
 
     A plate prepared in the kitchen is an ordinary production run. The screen leaves a run's operations to the run's
-    own page wherever that page can open. In a restaurant the manufacturing module is off: the run's page is closed
-    and nothing else cancels a preparation, so there the screen keeps reversing its operations one by one, as before
-    (HG-102, question 1). With the module on, a preparation is cancelled whole from its run's page, like any run.
+    own page wherever that page can open. In a restaurant the manufacturing module is off and the run's page is closed:
+    since HG-107 the screen leaves a preparation's operations to the dish's page («إلغاء التحضير»), and only where
+    neither page can open (both modules off after use) does it keep reversing them one by one, as before. With the
+    module on, a preparation is cancelled whole from its run's page, like any run. More in ``tests_kitchen_cancel``.
 
     The clock stands still on a Wednesday at noon."""
 
@@ -287,13 +288,20 @@ class KitchenRunOperationTests(KitchenSetup):
     def operations(self, run):
         return [run.output_operation] + [row.operation for row in run.consumptions.select_related("operation").order_by("pk")]
 
-    def test_with_manufacturing_off_a_preparation_is_still_reversed_from_the_stock_screen(self):
+    def test_with_neither_page_open_a_preparation_is_still_reversed_from_the_stock_screen(self):
+        # HG-107 (edited): this test pinned the screen reversing a preparation with the manufacturing module off. That
+        # is now refused while the dish's page can open (``tests_kitchen_cancel``); the old behaviour is kept, and
+        # pinned here, only where the dish's page is closed too, so nobody is sent to a closed page.
         from manufacturing import guards
+        from settings_core.models import FeatureFlag
+        from settings_core.setup_services import module_flag_code
 
         run = kitchen.prepare(self.dish, "5", self.owner)
         self.assertEqual((self.position(), self.stock(self.rice), self.stock(self.lentil)), ((D("5.000"), D("55.00"), D("11.0000")), D("19.000"), D("9.500")))
+        FeatureFlag.objects.filter(code=module_flag_code("tables_orders")).update(enabled=False)   # both modules off after use
         self.assertFalse(guards.pages_open())
         self.assertEqual(self.client.get(reverse("manufacturing:run", args=[run.pk])).status_code, 403)   # closed: the module is off
+        self.assertEqual(self.client.get(reverse("restaurant:dish", args=[self.dish.pk])).status_code, 403)
         listed = self.client.get(reverse("inventory:operations"))
         self.assertEqual([row.owner for row in listed.context["page"].object_list], [None, None, None])
         for operation in self.operations(run):                # the plates out, then each ingredient back
@@ -303,16 +311,20 @@ class KitchenRunOperationTests(KitchenSetup):
         self.assertEqual(run.status, "posted")                # as before: the screen knows nothing of the run
         ledger_ok(self)
 
-    def test_with_manufacturing_off_the_wrong_average_is_still_possible(self):
-        # The gap HG-100 described, left open here for a kitchen with the module off (HG-102, question 1), pinned:
-        # 3 plates at 11.00, 2 sold, the recipe grows (14.00 a plate), 3 more made: 4 plates worth 53.00, 13.25 each.
+    def test_with_manufacturing_off_the_wrong_average_is_refused(self):
+        # HG-107 (edited): this test pinned the gap HG-100 described, left open for a kitchen with the module off
+        # (HG-102, question 1): 3 plates at 11.00, 2 sold, the recipe grows (14.00 a plate), 3 more made: 4 plates
+        # worth 53.00, 13.25 each; reversing the first preparation's output from the screen left one plate at 20.00.
+        # The screen now refuses it and sends the person to the dish's page; nothing moves.
         first = kitchen.prepare(self.dish, "3", self.owner)
         self.pay(self.order(self.dish, 2))
         save_ingredients(self.dish, [(self.rice, "0.300"), (self.lentil, "0.100")], self.owner)
         kitchen.prepare(self.dish, "3", self.owner)
         self.assertEqual(self.position(), (D("4.000"), D("53.00"), D("13.2500")))
-        self.reverse_from_the_stock_screen(first.output_operation)
-        self.assertEqual(self.position(), (D("1.000"), D("20.00"), D("20.0000")))   # one plate at 20.00, for plates that cost 11.00 and 14.00
+        rows = StockMovement.objects.count()
+        page = self.reverse_from_the_stock_screen(first.output_operation)
+        self.assertContains(page, f"الحركة دي تابعة لتحضير «{self.dish.item_name}» رقم {first.number}، ومينفعش تتعكس من شاشة التحويلات والتسويات.")
+        self.assertEqual((self.position(), StockMovement.objects.count()), ((D("4.000"), D("53.00"), D("13.2500")), rows))
 
     def test_with_manufacturing_on_a_preparation_is_cancelled_from_its_run_page(self):
         from manufacturing import guards
