@@ -1,5 +1,6 @@
 """E3 (HG-101): the guardian portal. A paying guardian opens one link, answers one question, and reads what the centre keeps about
-their children: groups and times, attendance, the exam marks the centre **published**, nursery days, and the fees still owed.
+their children: groups and times, the content the centre shared with those groups (E9, HG-104), the makeup classes booked for them (E8, HG-105), attendance, the exam marks the centre **published**, nursery days,
+and the fees still owed.
 
 This is the education twin of ``medical.public`` (HG-085), defence for defence, with one table because a portal lives for weeks and the
 centre must be able to switch it off at once (a custody dispute, a wrong number, a lost phone):
@@ -22,10 +23,11 @@ centre must be able to switch it off at once (a custody dispute, a wrong number,
   ``wrong_answers`` counter.
 
 Entity: an anonymous request has no current entity, so every read below runs inside ``working_in(link.entity)``; the children, groups,
-exams, invoices and the dues figure are then the link's entity's alone.
+exams, shared group content, invoices and the dues figure are then the link's entity's alone.
 
 What the portal never shows: the student's notes, school or birth date; the payer's phone; a pick-up person's ID number or phone; any
-note on an attendance mark, an exam, a mark or a day record; teacher pay; another payer's child; an unpublished exam; the QR code
+note on an attendance mark, an exam, a mark or a day record; teacher pay; another payer's child; an unpublished exam; a hidden or removed piece of group content, an old online class, and content of a group the child has left; a makeup seat's note, a cancelled seat, a seat older than 30 days, and a seat
+of a group of another entity; the QR code
 (a student code opens nothing here).
 """
 
@@ -50,6 +52,8 @@ from audit.models import AuditEventType, AuditLog
 from entities.current import working_in
 
 from . import attendance as register
+from . import content as shared_content
+from . import makeup
 from . import exams, services
 from .models import Attendance, DayRecord, Enrollment, EnrollmentStatus, Exam, ExamMark, GuardianLink, Presence, SessionStatus, Student, StudyGroup
 
@@ -94,6 +98,11 @@ WORDS = {
         "none_absent": "مفيش غياب ولا تأخير في الفترة دي.", "no_classes": "لسه مفيش حصص متسجّلة في الفترة دي.",
         "marks_h": "الدرجات وتقرير الأداء", "marks_note": "هنا الدرجات اللي المركز نشرها بس.", "mark": "الدرجة", "percent": "النسبة", "average": "المتوسط",
         "exam_absent": "غياب عن الامتحان", "no_marks": "لسه مفيش درجات منشورة.", "exam_kinds": {"quiz": "اختبار قصير", "monthly": "امتحان شهري", "midterm": "امتحان نصف الترم", "final": "امتحان نهائي", "other": "امتحان"},
+        "content_h": "محتوى المجموعة", "content_note": "الروابط اللي المركز شاركها مع المجموعة. بتفتح في صفحة تانية، ولو رابط مش شغال تواصل مع المركز.",
+        "no_content": "لسه مفيش محتوى مشترك.", "content_kinds": {"video": "فيديو مسجّل", "file": "ملف", "online": "حصة أونلاين"},
+        "watch": "شاهد الفيديو", "open_file": "افتح الملف", "join": "ادخل الحصة", "class_at": "ميعاد الحصة",
+        "makeup_h": "حصص تعويضية", "makeup_note": "الحصص اللي المركز حجزها بدل حصص المجموعة الأصلية.",
+        "makeup_status": {"booked": "حصة محجوزة", "attended": "حضور", "missed": "غياب"}, "makeup_cancelled": "الحصة اتلغت. تواصل مع المركز.",
         "nursery_h": "أيام الحضانة", "arrived": "وقت الوصول", "left": "وقت المغادرة", "picked": "الاستلام", "not_left": "—",
         "fees_h": "المصروفات", "owed": "إجمالي المستحق على الحساب", "open_invoices": "الفواتير المفتوحة", "invoice": "فاتورة رقم", "remaining": "الباقي",
         "pay": "ادفع", "none_owed": "مفيش مستحقات على الحساب. شكرًا لحضرتك.", "other_dues": "فيه كمان مستحقات تانية على الحساب. تواصل مع المركز لو حضرتك محتاج التفاصيل.",
@@ -119,6 +128,11 @@ WORDS = {
         "none_absent": "No absence or late arrival in this period.", "no_classes": "No classes recorded in this period yet.",
         "marks_h": "Marks and progress report", "marks_note": "Only the marks the centre has published are shown here.", "mark": "Mark", "percent": "Percent", "average": "Average",
         "exam_absent": "Did not sit the exam", "no_marks": "No published marks yet.", "exam_kinds": {"quiz": "Quiz", "monthly": "Monthly exam", "midterm": "Midterm", "final": "Final exam", "other": "Exam"},
+        "content_h": "Group content", "content_note": "The links the centre shared with your child's groups. They open in another page; if a link does not work, contact the centre.",
+        "no_content": "Nothing has been shared yet.", "content_kinds": {"video": "Recorded video", "file": "File", "online": "Online class"},
+        "watch": "Watch the video", "open_file": "Open the file", "join": "Join the class", "class_at": "Class time",
+        "makeup_h": "Makeup classes", "makeup_note": "The classes the centre booked in place of the home group's classes.",
+        "makeup_status": {"booked": "Booked", "attended": "Attended", "missed": "Absent"}, "makeup_cancelled": "The class was cancelled. Contact the centre.",
         "nursery_h": "Nursery days", "arrived": "Arrived", "left": "Left", "picked": "Picked up by", "not_left": "—",
         "fees_h": "Fees", "owed": "Total due on the account", "open_invoices": "Open invoices", "invoice": "Invoice", "remaining": "Remaining",
         "pay": "Pay", "none_owed": "Nothing is due on the account. Thank you.", "other_dues": "There are other amounts due on the account. Contact the centre for the details.",
@@ -594,12 +608,29 @@ def _fees(found, lang):
     return {"owed": owed, "rows": rows, "has_pay": any(row["pay_url"] for row in rows), "other": owed > sum((row["remaining"] for row in rows), ZERO), "currency": CURRENCY_WORDS.get(currency, {}).get(lang, currency)}
 
 
-def content(found, lang="ar", today=None):
+def _shared(rows, lang):
+    """The group content a child may read (``content.for_children`` decides what), with the words for its kind."""
+
+    words = _words(lang)
+    kinds = words["content_kinds"]
+    return [{**row, "kind_label": kinds[row["kind"]], "button": words["join"] if row["kind"] == "online" else words["open_file"] if row["kind"] == "file" else words["watch"]} for row in rows]
+
+
+def _seats(rows, lang):
+    """The makeup seats a child's block lists, with the words of each status (a cancelled class says so instead of the status)."""
+
+    words = _words(lang)
+    return [{**row, "label": words["makeup_cancelled"] if row["cancelled"] else words["makeup_status"][row["status"]]} for row in rows]
+
+
+def content(found, lang="ar", today=None, now=None):
     """Everything the guardian reads once the factor is passed: one block per active child, and the payer's fees."""
 
     today = today or timezone.localdate()
     with working_in(found.link.entity):
         scope = services.scoped(StudyGroup.objects)
+        shared = shared_content.for_children(found.children, scope, now or timezone.now())  # reads only: two queries for every child together
+        seats = makeup.for_children(found.children, scope, today)  # reads only: the seats of every child at once (E8); a seat is never changed by being shown
         blocks = [{"student": kid, "groups": _groups(kid, scope, lang), "attendance": _attendance(kid, scope, today), "marks": _marks(kid, scope, today, lang),
-                   "nursery": _nursery(kid, today)} for kid in found.children]
+                   "nursery": _nursery(kid, today), "content": _shared(shared[kid.pk], lang), "makeup": _seats(seats[kid.pk], lang)} for kid in found.children]
         return {"children": blocks, "fees": _fees(found, lang)}

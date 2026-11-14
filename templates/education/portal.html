@@ -1,7 +1,7 @@
 {% extends "printing/share_base.html" %}{% load static hesba_format %}
 {% comment %}E3 (HG-101): the guardian's page. Before the second factor it shows only the centre's name and the question: no child, no group, no date. After it, one card per active child of this payer (groups, attendance, published marks, nursery days) and the payer's fees. Nothing else is in the context, so nothing else can be drawn.{% endcomment %}
 {% block title %}{{ ww.title }} · {{ company.name }}{% endblock %}
-{% block head_extra %}<link rel="stylesheet" href="{% static 'hesba/css/education_portal.css' %}?v=e3-1">{% endblock %}
+{% block head_extra %}<link rel="stylesheet" href="{% static 'hesba/css/education_portal.css' %}?v=e8-1">{% endblock %}
 {% block sub %}<div class="cl-shopsub">{{ ww.sub }}</div>{% endblock %}
 {% block content %}<main class="cl-main gp-main" data-guardian-portal="{% if sheet %}sheet{% else %}ask{% endif %}">
 {% if sheet %}
@@ -15,6 +15,20 @@
 {% if g.schedule %}<div class="gp-sub"><bdi>{{ g.schedule }}</bdi></div>{% endif %}</div>
 {% if g.teacher %}<div class="gp-aside"><span class="gp-label">{{ ww.teacher }}</span> <bdi>{{ g.teacher }}</bdi></div>{% endif %}</div>
 {% empty %}<p class="gp-empty">{{ ww.no_groups }}</p>{% endfor %}</section>
+
+<section class="cl-card" data-section="content"><h3 class="cl-h">{{ ww.content_h }}</h3>
+{% if block.content %}<p class="gp-note">{{ ww.content_note }}</p>{% endif %}
+{% for r in block.content %}<div class="gp-row gp-content" data-content-item data-kind="{{ r.kind }}"><div class="gp-main-text"><strong><bdi>{{ r.title }}</bdi></strong>
+<div class="gp-sub">{% if r.kind == 'online' %}<span class="gp-chip gp-chip--online" data-online-label>{{ r.kind_label }}</span>{% else %}{{ r.kind_label }}{% endif %} <span class="gp-sep">·</span> <bdi>{{ r.group }}</bdi></div>
+{% if r.day %}<div class="gp-sub" data-content-when>{{ ww.class_at }} <bdi>{{ r.day|day_text:lang }}</bdi> <bdi dir="ltr">{{ r.time }}</bdi></div>{% endif %}
+{% if r.note %}<div class="gp-sub" data-content-note><bdi>{{ r.note }}</bdi></div>{% endif %}</div>
+<a class="cl-btn cl-btn--primary gp-open" href="{{ r.url }}" target="_blank" rel="noopener noreferrer" data-content-open>{{ r.button }}</a></div>
+{% empty %}<p class="gp-empty">{{ ww.no_content }}</p>{% endfor %}</section>
+
+{% if block.makeup %}<section class="cl-card" data-section="makeup"><h3 class="cl-h">{{ ww.makeup_h }}</h3><p class="gp-note">{{ ww.makeup_note }}</p>
+{% for r in block.makeup %}<div class="gp-row" data-makeup-item data-status="{{ r.status }}"><div class="gp-main-text"><strong><bdi>{{ r.day|day_text:lang }}</bdi>{% if r.time %}{% if lang == 'en' %}, {% else %}، {% endif %}<bdi dir="ltr">{{ r.time }}</bdi>{% endif %}</strong>
+<div class="gp-sub"><bdi>{{ r.group }}</bdi></div></div>
+<div class="gp-aside"><span class="gp-chip{% if r.cancelled %} gp-chip--late{% elif r.status == 'booked' %} gp-chip--online{% elif r.status == 'missed' %} gp-chip--absent{% elif r.status == 'attended' %} gp-chip--present{% endif %}" data-makeup-status>{{ r.label }}</span></div></div>{% endfor %}</section>{% endif %}
 
 <section class="cl-card" data-section="attendance"><h3 class="cl-h">{{ ww.attendance_h }}</h3>
 {% with a=block.attendance %}{% if a.held %}

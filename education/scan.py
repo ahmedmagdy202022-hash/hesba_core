@@ -13,6 +13,12 @@ attendance view), so closing the class cannot bill a student who never came.
 Rules, in order: the student (active, in this entity) → the groups they have today → the ones this user may take → the one whose
 window (30 minutes before the start until the class ends) holds now. Late is strictly more than ``LATE_MINUTES`` after the start.
 A group with no start time is open all day and never late.
+
+E8 (HG-105), the makeup class: a student with a booked makeup seat (``makeup.MakeupSeat``) for a group this user may take today is, for that
+group only, treated as its guest. The answer is «حصة تعويضية» and the seat is marked attended, and that is all it writes: no ``Attendance``
+row, no ``ClassSession`` (a held class is what per-class teacher pay counts, so a guest scanned first must not open one) and an audit row that
+is not ``scan_attendance`` (which ``touched`` reads to flip a register into its «not scanned is absent» mode and so change per-class billing).
+A student with no seat gets every answer above unchanged.
 """
 
 from dataclasses import dataclass, field
@@ -25,7 +31,7 @@ from django.utils import timezone
 
 from audit.models import AuditEventType, AuditLog
 
-from . import attendance, services
+from . import attendance, makeup, services
 from .models import Attendance, ClassSession, Enrollment, Presence, SessionStatus, Student, StudyGroup
 
 LATE_MINUTES = 10
@@ -38,14 +44,16 @@ MESSAGES = {
            "no_today": "مفيش حصص النهارده لـ{student}.", "no_now": "مفيش حصة دلوقتي لـ{student}. حصص النهارده:",
            "choose": "{student} في أكتر من حصة دلوقتي. الحضور لأنهي حصة؟", "again": "حضور {student} اتسجّل قبل كده.",
            "present": "حضور", "late": "تأخير", "absent": "غياب", "excused": "بعذر", "was_absent": "كان متسجّل غياب واتحوّل لتأخير.",
-           "bad_group": "المجموعة دي مش من حصص الطالب النهارده."},
+           "bad_group": "المجموعة دي مش من حصص الطالب النهارده.", "makeup": "حصة تعويضية", "makeup_note": "حصة تعويضية: حضور {student} اتسجّل.",
+           "makeup_was_missed": "الحجز كان متسجّل غياب واتصحّح لحضور."},
     "en": {"denied": "Scanning attendance is for the office or the teachers.", "empty": "Scan the card or type the code.",
            "not_found": "This card is not known. Check the code.", "inactive": "{student} is not an active student.",
            "refused": "This student is not in your groups today.", "cancelled": "Today's {group} class was cancelled; no attendance is taken for it.",
            "no_today": "{student} has no classes today.", "no_now": "{student} has no class right now. Today's classes:",
            "choose": "{student} has more than one class right now. Which one are they at?", "again": "{student} was already marked.",
            "present": "Present", "late": "Late", "absent": "Absent", "excused": "Excused", "was_absent": "Was marked absent; now late.",
-           "bad_group": "That group is not one of the student's classes today."},
+           "bad_group": "That group is not one of the student's classes today.", "makeup": "Makeup class", "makeup_note": "Makeup class: {student}'s attendance was recorded.",
+           "makeup_was_missed": "The booking was marked absent; now corrected to attended."},
 }
 
 
@@ -166,6 +174,9 @@ def mark(code, user, now=None, *, group=None, lang="ar"):
         return ScanResult("inactive", words["inactive"].format(student=student.name), student=student, lang=lang)
     today = _today_groups(student, day)
     allowed = [row for row in today if attendance.can_take(user, row)]
+    # E8: a booked makeup seat for a group of theirs that this user may take opens that group to the scan, as a guest (never a roster row).
+    guest_seats = {seat.group_id: seat for seat in makeup.seats_today(student, day, user) if seat.group_id not in {row.pk for row in allowed}}
+    allowed = allowed + [seat.group for seat in guest_seats.values()]
     if not allowed:
         if not services.can_manage(user):  # a teacher is told nothing about a student who is not theirs, not even the name
             return ScanResult("refused", words["refused"], lang=lang)
@@ -181,6 +192,8 @@ def mark(code, user, now=None, *, group=None, lang="ar"):
         if len(chosen) > 1:
             return ScanResult("choose", words["choose"].format(student=student.name), student=student, choices=chosen, lang=lang)
     target = chosen[0]
+    if target.pk in guest_seats:
+        return _guest(guest_seats[target.pk], student, user, local, day, at, allowed, words, lang)
     # The same lock ``take`` holds for this group: a scan during a teacher's save waits for it and is never lost.
     locked = attendance.lock_group(target)
     if not any(row.pk == locked.pk for row in _today_groups(student, day)):
@@ -208,6 +221,22 @@ def mark(code, user, now=None, *, group=None, lang="ar"):
                                             "session_started": created})
     message = words["again"].format(student=student.name) if not changed else (words["was_absent"] if was_absent else "")
     return ScanResult("ok" if changed else "again", message, student=student, group=target, presence=presence, at=at, changed=changed, was_absent=was_absent, lang=lang)
+
+
+def _guest(seat, student, user, local, day, at, allowed, words, lang):
+    """E8: the card of a student with a booked makeup seat for this class: the seat is marked attended and nothing else is written (no mark in the
+    class's own register, no class opened: see ``makeup.attend_by_scan``). Under the same group lock a teacher's save takes."""
+
+    locked = attendance.lock_group(seat.group)
+    if not locked.active or not attendance.meets_on(locked, day):
+        return ScanResult("no_class", words["no_now"].format(student=student.name), student=student, groups=allowed, lang=lang)
+    state, seat = makeup.attend_by_scan(seat, user, local, local.isoformat())
+    if state == "cancelled":
+        return ScanResult("cancelled", words["cancelled"].format(group=locked.name), student=student, group=locked, lang=lang)
+    if state == "again":
+        return ScanResult("again", words["again"].format(student=student.name), student=student, group=locked, presence="makeup", at=at, lang=lang)
+    return ScanResult("ok", words["makeup_was_missed"] if seat.was_missed else words["makeup_note"].format(student=student.name), student=student, group=locked,
+                      presence="makeup", at=at, changed=True, lang=lang)
 
 
 NURSERY_MESSAGES = {

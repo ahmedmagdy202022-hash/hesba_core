@@ -25,6 +25,10 @@
 .gp-empty{color:var(--hs-muted)}
 .gp-good{margin:0;padding:var(--hs-space-3) var(--hs-space-4);border-radius:var(--hs-radius-md);background:var(--hs-success-wash);color:var(--hs-success);font-weight:var(--hs-weight-medium)}
 
+/* shared content: a video, a file or an online class, one tap to open (44px at least) */
+.gp-content .gp-open{flex:1 1 100%;margin-block-start:var(--hs-space-2);min-block-size:var(--hs-control-height)}
+.gp-chip--online{background:var(--hs-teal-wash);color:var(--hs-navy);border:1px solid var(--hs-teal)}
+
 /* attendance */
 .gp-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--hs-space-3);margin-block-end:var(--hs-space-3)}
 .gp-stat{display:flex;flex-direction:column;gap:var(--hs-space-1);padding:var(--hs-space-3) var(--hs-space-4);border-radius:var(--hs-radius-md);background:var(--hs-teal-wash)}
@@ -34,6 +38,7 @@
 .gp-chip{display:inline-flex;align-items:center;min-block-size:32px;padding-inline:var(--hs-space-3);border-radius:var(--hs-radius-pill);font-size:var(--hs-text-md);font-weight:var(--hs-weight-medium)}
 .gp-chip--absent{background:var(--hs-danger-wash);color:var(--hs-danger);border:1px solid var(--hs-danger-line)}
 .gp-chip--late{background:var(--hs-warning-wash);color:var(--hs-warning);border:1px solid var(--hs-warning-line)}
+.gp-chip--present{background:var(--hs-success-wash);color:var(--hs-success);border:1px solid var(--hs-success-line)}
 
 /* marks */
 .gp-total{display:flex;justify-content:space-between;align-items:center;gap:var(--hs-space-3);margin-block-start:var(--hs-space-3);padding:var(--hs-space-3) var(--hs-space-4);border-radius:var(--hs-radius-md);background:var(--hs-teal-wash);color:var(--hs-navy);font-weight:var(--hs-weight-semibold)}

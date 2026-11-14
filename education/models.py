@@ -420,3 +420,76 @@ class GuardianLink(models.Model):
     @property
     def revoked(self):
         return self.revoked_at is not None
+
+
+class ContentKind(models.TextChoices):
+    VIDEO = "video", "Recorded video"
+    FILE = "file", "File"
+    ONLINE = "online", "Online class"
+
+
+class GroupContent(models.Model):
+    """E9 (HG-104): one thing a centre shares with one study group: a recorded video, a file, or the link of an online class.
+
+    Hesba stores a title and an https address and nothing else: no file, no video, no player. The address is checked by
+    ``education.content.clean_url`` (the only place that decides what is acceptable). Its entity is the group's, as an exam's is, so
+    there is no entity column that could drift from the group's. ``published`` decides whether a guardian may see it; ``active`` is the
+    soft removal: nothing here is ever deleted. ``starts_at`` is used by an online class only (when it starts)."""
+
+    group = models.ForeignKey(StudyGroup, on_delete=models.PROTECT, related_name="contents")
+    kind = models.CharField(max_length=10, choices=ContentKind.choices, default=ContentKind.VIDEO)
+    title = models.CharField(max_length=160)
+    url = models.CharField(max_length=500, help_text="An https address; see education.content.clean_url.")
+    note = models.CharField(max_length=255, blank=True)
+    starts_at = models.DateTimeField(null=True, blank=True)
+    published = models.BooleanField(default=True)
+    active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+        # the staff list and the guardian's list both filter a group's rows by active (and published)
+        indexes = [models.Index(fields=["group", "active", "published"], name="edu_content_group_idx")]
+
+    def __str__(self):
+        return f"{self.group} {self.title}"
+
+
+class SeatStatus(models.TextChoices):
+    BOOKED = "booked", "Booked"
+    ATTENDED = "attended", "Attended"
+    MISSED = "missed", "Missed"
+    CANCELLED = "cancelled", "Cancelled"
+
+
+#: The seats that still hold a place: a cancelled one frees it. One definition for the unique rule, the capacity count and every list.
+LIVE_SEATS = (SeatStatus.BOOKED, SeatStatus.ATTENDED, SeatStatus.MISSED)
+
+
+class MakeupSeat(models.Model):
+    """E8 (HG-105): a seat booked for one student in ONE class of another group of the same course, in place of a class of their own group.
+
+    It is not attendance: no ``Attendance`` row, no ``ClassSession``, no fee and no pay figure ever reads this table. Its entity is the
+    target group's, as an exam's is (no entity column that could drift). Nothing is deleted: «cancelled» frees the seat."""
+
+    student = models.ForeignKey(Student, on_delete=models.PROTECT, related_name="makeup_seats")
+    home_group = models.ForeignKey(StudyGroup, on_delete=models.PROTECT, related_name="+", help_text="The group the student is enrolled in and missed.")
+    missed_on = models.DateField(null=True, blank=True, help_text="The class day of the home group being made up.")
+    group = models.ForeignKey(StudyGroup, on_delete=models.PROTECT, related_name="makeup_seats", help_text="The group whose class they attend.")
+    day = models.DateField(db_index=True, help_text="The day of that class.")
+    status = models.CharField(max_length=10, choices=SeatStatus.choices, default=SeatStatus.BOOKED)
+    note = models.CharField(max_length=255, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-day", "-pk"]
+        constraints = [models.UniqueConstraint(fields=["student", "group", "day"], condition=models.Q(status__in=[s.value for s in LIVE_SEATS]),
+                                               name="education_one_live_makeup_seat_per_class")]
+        indexes = [models.Index(fields=["group", "day"], name="edu_makeup_group_day_idx")]
+
+    def __str__(self):
+        return f"{self.student} @ {self.group} {self.day}"

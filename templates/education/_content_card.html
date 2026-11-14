@@ -1,0 +1,4 @@
+{# E9 (HG-104): the content card on the group page. Drawn only for whoever may take this group's attendance (a manager, or its own teacher). #}
+<section class="op-detail-meta" data-content-card><h2>{{ cw.content }}</h2>
+{% include "education/_content_list.html" %}
+<div class="op-form-actions">{% if group.active %}<a class="op-primary" href="{% url 'education:content_new' group.pk %}?lang={{ lang }}" data-new-content>{{ cw.add }}</a>{% endif %}<a class="op-secondary" href="{% url 'education:content' group.pk %}?lang={{ lang }}" data-all-content>{{ cw.all }}</a></div></section>
