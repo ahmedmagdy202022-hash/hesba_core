@@ -47,6 +47,7 @@ MESSAGES = {
         # the rule, as the sheet and the refusals say it
         "rule_one": "اختيار واحد", "rule_exact": "{n} اختيارات", "rule_range": "من {min} لحد {max}", "rule_upto": "لحد {max}",
         "rule_upto_one": "اختيار واحد بالكتير",
+        "too_long": "اختيارات «{dish}» المجانية أطول من اللي يتكتب على التذكرة ({max} حرف). قلّل الاختيارات أو قصّر أسماءها من صفحة الإضافات.",
     },
     "en": {
         "missing": "“{dish}” needs a choice from “{group}”: {rule}.", "too_many": "“{group}” takes {rule}.",
@@ -59,6 +60,7 @@ MESSAGES = {
         "min_options": "The minimum ({min}) is more than the active choices ({count}).", "unknown_option": "This choice is not in this group.",
         "rule_one": "one choice", "rule_exact": "{n} choices", "rule_range": "{min} to {max}", "rule_upto": "up to {max}",
         "rule_upto_one": "one choice at most",
+        "too_long": "The free choices for “{dish}” are longer than the kitchen ticket holds ({max} characters). Pick fewer, or shorten their names on the add-ons page.",
     },
 }
 
@@ -285,13 +287,20 @@ def choose(dish, raw_options, lang="ar"):
             raise ValidationError(words["too_many"].format(group=group.label(lang), rule=rule(group, lang)))
         if picked:
             result.append((group, picked))
+    # The free choices are kept as one printed text on the dish's line (255 characters): never cut the guest's words
+    # short, refuse instead (an add-on is its own line and is not counted here).
+    if len(free_text(result, lang)) > FREE_TEXT_MAX:
+        raise ValidationError(words["too_long"].format(dish=dish.item_name, max=FREE_TEXT_MAX))
     return result
+
+
+FREE_TEXT_MAX = 255  # ``OrderLine.options``
 
 
 def free_text(chosen, lang="ar"):
     """The free choices as printed with the dish: «ميديم · من غير بصل»."""
 
-    return SEPARATOR.join(option.label(lang) for _group, options in chosen for option in options if not option.item_id)[:255]
+    return SEPARATOR.join(option.label(lang) for _group, options in chosen for option in options if not option.item_id)
 
 
 def priced(chosen):
