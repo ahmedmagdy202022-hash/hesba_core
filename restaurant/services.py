@@ -542,14 +542,23 @@ def _payable(order, cashbox, words):
     return order, lines, location
 
 
-def bill_rows(order, lines, lang="ar"):
+def bill_rows(order, lines, lang="ar", offer=None):
     """Paying, step 2 (draft): the invoice rows of the order's live lines, plus the delivery fee as its own line.
 
     Later restaurant tasks (add-ons, service charge, offers) add their rows here, so ``pay()`` stays one call per step.
     R3 (HG-113): then the minimum's top-up and the service charge, each its own line (``restaurant.charges``); with both
-    settings off nothing is added and no item is made."""
+    settings off nothing is added and no item is made.
 
-    from . import charges, modifiers
+    R6 (HG-114): with an ``offer`` (``pay`` always passes one), the running promotion and its coupon are filled into the food
+    rows before the charges are worked out (``offers.promote``). ``offer=None`` gives the rows before any offer."""
+
+    return _bill(order, lines, lang, offer)[0]
+
+
+def _bill(order, lines, lang, offer):
+    """``bill_rows``'s work: ``(rows, promotion, discount)``, the promotion that filled the rows and what it took off (None, 0.00)."""
+
+    from . import charges, modifiers, offers
 
     words = MESSAGES[lang]
     by_pk = {line.pk: line for line in lines}
@@ -558,14 +567,15 @@ def bill_rows(order, lines, lang="ar"):
     # R1b (HG-112): a combo's component carries its share of the saving as its row's line discount, exactly (its quantity is 1),
     # and says which combo it came in: «برجر — وجبة برجر».
     rows = [{"item": line.item, "quantity": line.quantity, "unit_sale_price": line.unit_price, "line_discount_amount": line.line_discount,
-             "description": modifiers.bill_description(line, by_pk[line.parent_id]) if line.parent_id in by_pk else _row_description(line, lang)}
+             "description": modifiers.bill_description(line, by_pk[line.parent_id]) if line.parent_id in by_pk else _row_description(line, lang), "line": line}
             for line in modifiers.families(lines)]
+    promotion, off = offers.promote(rows, offer, lang) if offer is not None else (None, Decimal("0.00"))
+    rows = offers.clean_rows(rows)
     if order.kind == OrderKind.DELIVERY and order.delivery_fee > 0:  # RESTO-003: the fee is its own line on the same invoice
         rows.append({"item": _fee_item(words), "quantity": Decimal("1"), "unit_sale_price": order.delivery_fee, "line_discount_amount": Decimal("0"),
                      "description": words["fee_line"]})
-    rows.extend({key: row[key] for key in ("item", "quantity", "unit_sale_price", "line_discount_amount", "description")}
-                for row in charges.charge_rows(order, lines, lang, make=True))
-    return rows
+    rows.extend(offers.clean_rows(charges.charge_rows(order, lines, lang, make=True, offer=off)))
+    return rows, promotion, off
 
 
 def _row_description(line, lang):
@@ -582,18 +592,21 @@ def _bill_notes(order, lang):
     return f"Restaurant {order.number} ({where})" if lang == "en" else f"طلب مطعم {order.number} ({where})"  # TRACK-ACTS W11
 
 
-def _settle_and_post(order, rows, *, customer, location, cashbox, discount, tendered, user, lang, tenders=None):
+def _settle_and_post(order, rows, *, customer, location, cashbox, discount, tendered, user, lang, tenders=None, promotion=None, points=None, gift=None):
     """Paying, steps 3 and 4 (settle, post): the cashier's own ``checkout``, unchanged. It drafts, takes the payment and posts in one go.
 
-    R2b (HG-110): ``tenders`` (only when the bill is paid several ways) goes to ``checkout`` as it is."""
+    R2b (HG-110): ``tenders`` (only when the bill is paid several ways) goes to ``checkout`` as it is. R6 (HG-114): so do
+    ``promotion`` (promotion, discount, coupon), ``points`` (points, amount) and ``gift`` (card, amount), each only when there
+    is one, exactly as the till passes them; a bill with none of the four is the plain call it always was."""
 
     from sales.pos import checkout
 
-    if tenders is None:
+    extra = {key: value for key, value in (("tenders", tenders), ("promotion", promotion), ("points", points), ("gift", gift)) if value is not None}
+    if not extra:
         return checkout(lines=rows, customer=customer, location=location, cashbox=cashbox, discount=discount, tendered=tendered, user=user,
                         notes=_bill_notes(order, lang))
     return checkout(lines=rows, customer=customer, location=location, cashbox=cashbox, discount=discount, tendered=tendered, user=user,
-                    notes=_bill_notes(order, lang), tenders=tenders, lang=lang)
+                    notes=_bill_notes(order, lang), lang=lang, **extra)
 
 
 def _split_cashboxes(order, tenders, words):
@@ -639,15 +652,22 @@ def _close(order, invoice, customer, user):
 
 
 @transaction.atomic
-def pay(order, user, *, cashbox, discount=Decimal("0"), tendered=Decimal("0"), customer=None, lang="ar", tenders=None):
+def pay(order, user, *, cashbox, discount=Decimal("0"), tendered=Decimal("0"), customer=None, lang="ar", tenders=None, coupon="", points="",
+        gift=None, promotion_seen=None, points_seen=None):
     """Post the order as one sales invoice through the cashier's checkout. Returns (invoice, change).
 
     R2b (HG-110): ``tenders`` [(cashbox, amount), ...] pays the bill several ways (``cashbox`` and ``tendered`` are then
-    unused): every cashbox the order's branch's, and the amounts adding up to the invoice's total exactly, or nothing is kept."""
+    unused): every cashbox the order's branch's, and the amounts adding up to the invoice's total exactly, or nothing is kept.
+
+    R6 (HG-114), as the till does it (``restaurant.offers``): the running promotion, and ``coupon`` when typed, fill the food
+    rows; ``points`` (as typed) are the customer's, checked by ``loyalty.redeem`` and added to ``discount``; ``gift`` is
+    (card, amount) from the bill's «كارت هدية», redeemed by ``checkout`` in the same transaction (with ``tenders``, the
+    tenders and the card together equal the total). ``promotion_seen`` / ``points_seen``: what the bill box showed; a
+    payment for other figures is refused. Anything refused keeps nothing."""
 
     from sales.pos import walk_in_customer
 
-    from . import kitchen
+    from . import kitchen, offers
 
     words = MESSAGES[lang]
     if tenders is not None:
@@ -655,11 +675,19 @@ def pay(order, user, *, cashbox, discount=Decimal("0"), tendered=Decimal("0"), c
     order, lines, location = _payable(order, cashbox, words)
     kitchen.prepare_shortfall(lines, location, user, lang)  # RESTO-004: a kitchen dish is made from its ingredients before it is sold
     customer = customer or order.customer or walk_in_customer()
-    rows = bill_rows(order, lines, lang)
-    invoice, change = _settle_and_post(order, rows, customer=customer, location=location, cashbox=cashbox, discount=discount, tendered=tendered,
-                                       user=user, lang=lang, tenders=tenders)
-    if tenders is not None and money_round(sum((amount for _box, amount in tenders), Decimal("0"))) != invoice.total_amount:
-        raise ValidationError(words["split_total"].format(total=f"{invoice.total_amount:,.2f}"))  # the whole payment is undone
+    coupon = str(coupon or "").strip()
+    rows, promotion, promotion_off = _bill(order, lines, lang, offers.Offer(coupon=coupon, customer=customer))
+    offers.check_seen(promotion_seen, promotion_off)
+    spent, points_off = offers.points_part(customer, points, rows, lang)
+    if spent:
+        offers.check_seen(points_seen, points_off)
+    invoice, change = _settle_and_post(order, rows, customer=customer, location=location, cashbox=cashbox, discount=discount + points_off if spent else discount,
+                                       tendered=tendered, user=user, lang=lang, tenders=tenders,
+                                       promotion=(promotion, promotion_off, coupon) if promotion is not None else None,
+                                       points=(spent, points_off) if spent else None, gift=gift)
+    gift_part = money_round(gift[1]) if gift is not None else Decimal("0.00")
+    if tenders is not None and money_round(sum((amount for _box, amount in tenders), Decimal("0"))) + gift_part != invoice.total_amount:
+        raise ValidationError(words["split_total"].format(total=f"{invoice.total_amount - gift_part:,.2f}"))  # the whole payment is undone
     _close(order, invoice, customer, user)
     return invoice, change
 
@@ -686,13 +714,17 @@ def board():
 
 def _bill_figures(orders):
     """R3 (HG-113): each open order's ``bill`` (before VAT, as the order page shows it): its lines and fee, plus the top-up and
-    the service the bill will add. With both settings off it is ``Order.total`` and nothing more is read."""
+    the service the bill will add. With both settings off it is ``Order.total`` and nothing more is read.
 
-    from . import charges
+    R6 (HG-114): with promotions on, the running offer (a happy hour by each dish's order time) is taken off too, as the bill
+    will take it."""
+
+    from . import charges, offers
 
     config = charges.settings()
+    read = config.on or offers.promotions_on()
     for order in orders:
-        order.bill = charges.preview(order, list(order.lines.all()), config=config)["subtotal"] if config.on else order.total
+        order.bill = charges.preview(order, list(order.lines.all()), config=config)["subtotal"] if read else order.total
 
 
 # --- R2a (HG-111): «ادفع جزء» (split by items), «رجّع للحساب» (put a part back), «ادمج مع طاولة» (merge two tables) ---------

@@ -217,8 +217,11 @@ def _parts_food(order):
     return money_round(sum((_food(list(part.lines.all())) for part in parts), ZERO))
 
 
-def amounts(order, lines, config=None):
-    """{"food", "topup", "service", "percent", "minimum"} for ``order``'s live ``lines``. Reads the parts only when a minimum is on."""
+def amounts(order, lines, config=None, offer=ZERO):
+    """{"food", "topup", "service", "percent", "minimum"} for ``order``'s live ``lines``. Reads the parts only when a minimum is on.
+
+    R6 (HG-114): ``offer`` is what the bill's promotion takes off the food. The service is worked out on the food after it;
+    the minimum's top-up is measured on the food before it (an offer never becomes a top-up). 0.00 = as before R6."""
 
     config = config or settings()
     food = _food(lines)
@@ -227,13 +230,13 @@ def amounts(order, lines, config=None):
         floor = money_round(Decimal(order.guests) * config.minimum)
         topup = max(floor - food - _parts_food(order), ZERO)
     if config.percent is not None and order.kind in config.kinds:
-        service = money_round((food + topup) * config.percent / HUNDRED)
+        service = money_round((food - offer + topup) * config.percent / HUNDRED)
     return {"food": food, "topup": topup, "service": service, "percent": config.percent, "minimum": config.minimum}
 
 
-def charge_rows(order, lines, lang="ar", config=None, make=False):
+def charge_rows(order, lines, lang="ar", config=None, make=False, offer=ZERO):
     """The top-up and the service as invoice rows (in that order), only those above 0.00. ``make`` gets or makes their items
-    (paying); without it the item is the one that exists, or None (a preview writes nothing)."""
+    (paying); without it the item is the one that exists, or None (a preview writes nothing). R6: ``offer`` as in ``amounts``."""
 
     from master_data.models import Item
 
@@ -241,7 +244,7 @@ def charge_rows(order, lines, lang="ar", config=None, make=False):
     if not config.on:
         return []
     text = words(lang)
-    figures = amounts(order, lines, config)
+    figures = amounts(order, lines, config, offer)
     rows = []
     for kind, code, amount, description in (
             ("min", MIN_ITEM_CODE, figures["topup"], text["min_line"].format(guests=order.guests, minimum=f"{config.minimum:.2f}" if config.minimum else "")),
@@ -264,17 +267,22 @@ def _row_tax(item, net, rate_cache):
     return money_round(net * (rate.rate if rate is not None else ZERO) / HUNDRED)
 
 
-def preview(order, lines=None, lang="ar", config=None):
+def preview(order, lines=None, lang="ar", config=None, offer=None):
     """The whole bill as ``pay`` would post it, before the cashier's discount, writing nothing:
 
     {"rows": [{"kind", "code", "item", "quantity", "unit_sale_price", "line_discount_amount", "description", "net", "tax",
-    "line"}], "food", "fee", "topup", "service", "percent", "minimum", "subtotal", "tax", "total"}. ``kind`` is "food",
-    "addon", "fee", "min" or "service"; ``line`` is the order line behind a food row. VAT is per row as ``checkout`` works
-    it (the item's rate; for a fee or charge item not made yet, the default rate it will take), and only when VAT is on."""
+    "line", "offer"}], "food", "fee", "topup", "service", "percent", "minimum", "subtotal", "tax", "total", "promotion",
+    "offer"}. ``kind`` is "food", "addon", "fee", "min" or "service"; ``line`` is the order line behind a food row. VAT is per
+    row as ``checkout`` works it (the item's rate; for a fee or charge item not made yet, the default rate it will take), and
+    only when VAT is on.
+
+    R6 (HG-114): the running promotion (and ``offer``'s coupon, for ``offer``'s customer) is filled into the food rows first,
+    exactly as ``pay`` does (``offers.promote``); each food row's ``offer`` is its part and ``offer`` the total. ``offer=None``
+    is the bill with no coupon and no customer: a running offer still counts, as it will when the bill is paid."""
 
     from taxes.services import vat_enabled
 
-    from . import modifiers
+    from . import modifiers, offers
     from .services import FEE_ITEM_CODE, MESSAGES, _row_description
 
     from master_data.models import Item
@@ -290,19 +298,21 @@ def preview(order, lines=None, lang="ar", config=None):
         rows.append({"kind": "addon" if addon else "food", "code": line.item.item_code, "item": line.item, "quantity": line.quantity,
                      "unit_sale_price": line.unit_price, "line_discount_amount": line.line_discount,
                      "description": modifiers.bill_description(line, by_pk[line.parent_id]) if addon else _row_description(line, lang), "line": line})
+    promotion, offer_off = offers.promote(rows, offer if offer is not None else offers.Offer(), lang)
     fee = order.delivery_fee if order.kind == OrderKind.DELIVERY and order.delivery_fee > 0 else ZERO
     if fee:
         rows.append({"kind": "fee", "code": FEE_ITEM_CODE, "item": Item.objects.filter(item_code=FEE_ITEM_CODE).first(), "quantity": Decimal("1"),
                      "unit_sale_price": fee, "line_discount_amount": ZERO, "description": MESSAGES[lang]["fee_line"]})
-    rows.extend(charge_rows(order, live, lang, config))
+    rows.extend(charge_rows(order, live, lang, config, offer=offer_off))
     vat = vat_enabled()
     cache = {}
     for row in rows:
         row.setdefault("line", None)
+        row.setdefault("offer", ZERO)
         row["net"] = money_round(row["quantity"] * row["unit_sale_price"] - row["line_discount_amount"])
         row["tax"] = _row_tax(row["item"], row["net"], cache) if vat else ZERO
     figures = {kind: money_round(sum((row["net"] for row in rows if row["kind"] == kind), ZERO)) for kind in ("min", "service")}
     subtotal = money_round(sum((row["net"] for row in rows), ZERO))
     tax = money_round(sum((row["tax"] for row in rows), ZERO))
     return {"rows": rows, "food": _food(live), "fee": fee, "topup": figures["min"], "service": figures["service"], "percent": config.percent,
-            "minimum": config.minimum, "subtotal": subtotal, "tax": tax, "total": money_round(subtotal + tax)}
+            "minimum": config.minimum, "subtotal": subtotal, "tax": tax, "total": money_round(subtotal + tax), "promotion": promotion, "offer": offer_off}
