@@ -180,7 +180,8 @@ def period_report(first, last):
                 table["minutes"].append(stay)
                 guests += root.guests
                 minutes.append(stay)
-        waiter = waiters.setdefault(order.waiter_id, {"waiter": order.waiter, "orders": 0, "sales": ZERO})
+        # R2a: a part's sales belong to its bill's waiter (after a merge, the receiving order's), with the bill's one order
+        waiter = waiters.setdefault(root.waiter_id, {"waiter": root.waiter, "orders": 0, "sales": ZERO})
         waiter["orders"] += 1 if stands else 0
         waiter["sales"] += sales
     for row in tables.values():
