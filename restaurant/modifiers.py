@@ -150,6 +150,10 @@ def save_group(data, user, group=None, lang="ar"):
         item = _item(raw.get("item"))
         if item is False or (item is not None and not item.active and (option is None or option.item_id != item.pk)):
             raise ValidationError(words["option_item"])
+        if item is not None and hasattr(item, "combo"):  # R1b (HG-112): a combo is sold through its sheet, never as an add-on
+            from .combos import words as combo_words
+
+            raise ValidationError(combo_words(lang)["addon_combo"].format(item=item.item_name))
         name = (raw.get("name_ar") or "").strip()[:80] or (item.item_name[:80] if item else "")
         if not name:
             if option is not None:  # an emptied row turns its option off
