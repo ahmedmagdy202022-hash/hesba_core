@@ -56,9 +56,21 @@ def _context(request, **extra):
     lang = _lang(request)
     context = {"lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": WORDS[lang], "page_title": WORDS[lang]["page_title"],
                "can_manage": user_has_permission(request.user, MANAGE),
-               "users": get_user_model().objects.filter(is_active=True, is_superuser=False).order_by("username")}
+               "users": _accounts()}
     context.update(extra)
     return context
+
+
+def _accounts():
+    """The login picker: the person's name first, the login name after it (isolated so it keeps its own direction inside Arabic text)."""
+    from reports.navigation import display_name
+
+    accounts = list(get_user_model().objects.filter(is_active=True, is_superuser=False).select_related("hesba_profile").order_by("username"))
+    for account in accounts:
+        login = account.get_username()
+        name = display_name(account)
+        account.pick_label = f"{name} (\u2066{login}\u2069)" if name != login else f"\u2066{login}\u2069"
+    return accounts
 
 
 def _post_data(request):

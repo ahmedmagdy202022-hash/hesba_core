@@ -27,16 +27,17 @@ def tab_label(test, lang):
 
 
 class TabLabelTests(TestCase):
-    def test_a_training_centre_tab_says_trainees_while_the_page_keeps_the_full_name(self):
+    def test_a_training_centre_accounts_tab_is_short_while_the_page_keeps_the_full_name(self):
+        # education video findings, item 6: «المتدربين» is the one word of the student tab; the payers' accounts tab says «الحسابات».
         owner_client(self, "education", "training")
-        self.assertEqual(tab_label(self, "ar"), "المتدربين")
-        self.assertEqual(tab_label(self, "en"), "Trainees")
+        self.assertEqual(tab_label(self, "ar"), "الحسابات")
+        self.assertEqual(tab_label(self, "en"), "Accounts")
         self.assertContains(self.client.get(reverse("master_data:customers")), "حسابات المتدربين")
         self.assertContains(self.client.get(reverse("master_data:customers"), {"lang": "en"}), "Trainee accounts")
 
     def test_a_language_centre_is_shortened_the_same_way(self):
         owner_client(self, "education", "languages")
-        self.assertEqual((tab_label(self, "ar"), tab_label(self, "en")), ("الدارسين", "Learners"))
+        self.assertEqual((tab_label(self, "ar"), tab_label(self, "en")), ("الحسابات", "Accounts"))
 
     def test_other_activities_keep_their_own_full_words(self):
         owner_client(self, "education", "tutoring_center")
