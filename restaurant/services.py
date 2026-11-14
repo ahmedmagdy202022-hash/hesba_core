@@ -32,6 +32,7 @@ from master_data.models import Item
 from permissions.services import user_has_permission
 
 from . import branches, stations
+from .charges import CHARGE_CODES
 from .models import DiningTable, KitchenTicket, Order, OrderKind, OrderLine, OrderStatus
 from entities.current import current_entity
 from entities.services import main_entity
@@ -256,6 +257,9 @@ def add_item(order, item, user, quantity=1, note="", lang="ar", options=None):
     order = _locked_open(order, words)
     if item is None or not item.active:
         raise ValidationError(words["item"])
+    from . import charges
+
+    charges.refuse_charge_item(item, lang)  # R3 (HG-113): service and the top-up are worked out on the bill, never ordered
     if Combo.objects.filter(item=item).exists():  # R1b (HG-112): a combo's own item is never a line; its components are (trap 7)
         from . import combos
 
@@ -505,6 +509,8 @@ def dispatch(order, driver, user, *, delivery_fee=None, lang="ar"):
 
 
 FEE_ITEM_CODE = "DELIVERY-FEE"
+#: R3 (HG-113): the items a bill adds by itself, never on the menu or in a picker: the delivery fee, the service and the top-up.
+OFF_MENU_CODES = (FEE_ITEM_CODE,) + CHARGE_CODES
 
 
 def _fee_item(words):
@@ -539,9 +545,11 @@ def _payable(order, cashbox, words):
 def bill_rows(order, lines, lang="ar"):
     """Paying, step 2 (draft): the invoice rows of the order's live lines, plus the delivery fee as its own line.
 
-    Later restaurant tasks (add-ons, service charge, offers) add their rows here, so ``pay()`` stays one call per step."""
+    Later restaurant tasks (add-ons, service charge, offers) add their rows here, so ``pay()`` stays one call per step.
+    R3 (HG-113): then the minimum's top-up and the service charge, each its own line (``restaurant.charges``); with both
+    settings off nothing is added and no item is made."""
 
-    from . import modifiers
+    from . import charges, modifiers
 
     words = MESSAGES[lang]
     by_pk = {line.pk: line for line in lines}
@@ -555,6 +563,8 @@ def bill_rows(order, lines, lang="ar"):
     if order.kind == OrderKind.DELIVERY and order.delivery_fee > 0:  # RESTO-003: the fee is its own line on the same invoice
         rows.append({"item": _fee_item(words), "quantity": Decimal("1"), "unit_sale_price": order.delivery_fee, "line_discount_amount": Decimal("0"),
                      "description": words["fee_line"]})
+    rows.extend({key: row[key] for key in ("item", "quantity", "unit_sale_price", "line_discount_amount", "description")}
+                for row in charges.charge_rows(order, lines, lang, make=True))
     return rows
 
 
@@ -603,23 +613,14 @@ def _split_cashboxes(order, tenders, words):
 def bill_total(order, lines):
     """R2b (HG-110): what the bill asks before its discount, VAT included, worked out as ``checkout`` does, for the bill
     box's running «الباقي». Writes nothing (the delivery fee's VAT is at its item's rate, or the default rate before that
-    item exists). The server checks the real total again when the bill is paid."""
+    item exists). The server checks the real total again when the bill is paid.
 
-    from taxes.services import compute_lines, default_rate, rate_for, vat_enabled
+    R3 (HG-113): it is ``charges.preview``'s total, so the minimum's top-up and the service charge are in it, worked out
+    by the same function that makes the invoice rows."""
 
-    live = [line for line in lines if not line.voided]
-    rows = [{"item": line.item, "quantity": line.quantity, "unit_sale_price": line.unit_price, "line_discount_amount": line.line_discount}
-            for line in live]  # R1b: a combo's components with their discounts, as the bill sends them
-    total = sum((line.amount for line in live), Decimal("0"))
-    fee = order.delivery_fee if order.kind == OrderKind.DELIVERY and order.delivery_fee > 0 else Decimal("0")
-    total += fee
-    if vat_enabled():
-        total += sum((tax for *_, tax in compute_lines(rows)), Decimal("0"))
-        if fee:
-            fee_item = Item.objects.filter(item_code=FEE_ITEM_CODE).first()
-            rate = rate_for(fee_item) if fee_item is not None else default_rate()
-            total += money_round(fee * (rate.rate if rate is not None else Decimal("0")) / Decimal("100"))
-    return money_round(total)
+    from . import charges
+
+    return charges.preview(order, lines)["total"]
 
 
 def _close(order, invoice, customer, user):
@@ -671,15 +672,27 @@ def board():
     for order in open_orders:
         if order.split_from_id:
             parts.setdefault(order.split_from_id, []).append(order)
+    _bill_figures(open_orders)
     by_table = {order.table_id: order for order in open_orders if order.table_id}
     tables = []
     for table in branches.tables(DiningTable.objects.filter(active=True)).select_related("entity"):
         order = by_table.get(table.pk)
-        tables.append({"table": table, "order": order, "parts": parts.get(order.pk, []) if order else []})
+        tables.append({"table": table, "order": order, "parts": parts.get(order.pk, []) if order else [], "bill": order.bill if order else None})
     others = [order for order in open_orders if not order.table_id and not order.split_from_id]
     for order in others:
         order.open_parts = parts.get(order.pk, [])
     return tables, others
+
+
+def _bill_figures(orders):
+    """R3 (HG-113): each open order's ``bill`` (before VAT, as the order page shows it): its lines and fee, plus the top-up and
+    the service the bill will add. With both settings off it is ``Order.total`` and nothing more is read."""
+
+    from . import charges
+
+    config = charges.settings()
+    for order in orders:
+        order.bill = charges.preview(order, list(order.lines.all()), config=config)["subtotal"] if config.on else order.total
 
 
 # --- R2a (HG-111): «ادفع جزء» (split by items), «رجّع للحساب» (put a part back), «ادمج مع طاولة» (merge two tables) ---------
