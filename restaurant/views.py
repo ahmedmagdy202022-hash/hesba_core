@@ -370,6 +370,11 @@ def order_detail(request, pk):
     on_sheet = {sheet["combo"].item_id: sheet["combo"].pk for sheet in combo_choice_sheets}
     for item in items:  # R1b: a combo's tile opens its sheet (the same objects the menu's tiles show)
         item.combo_sheet = on_sheet.get(item.pk)
+    from .models import Combo
+
+    hidden = set(Combo.objects.values_list("item_id", flat=True)) - set(on_sheet)  # a combo with nothing to choose now is not a dish
+    if hidden:
+        items = [item for item in items if item.pk not in hidden]
     cashboxes = branches.cashboxes(order)  # R12: the order's branch's, whatever entity the biller works in
     shift = open_shift_for(request.user)
     shift_box = shift.cashbox if shift and cashboxes.filter(pk=shift.cashbox_id).exists() else None

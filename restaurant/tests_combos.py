@@ -519,6 +519,52 @@ class ReportAndKitchenTests(ComboSetup):
         self.assertNotIn("combo", next(line for line in card["lines"] if line["name"] == "كشري كبير"))
 
 
+class OpenValueAndSwitchTests(ComboSetup):
+    def test_the_floor_tile_counts_an_open_combo_at_what_it_charges(self):
+        self.take()
+        self.client.force_login(self.owner)
+        panel = self.client.get(reverse("dashboard_snapshot")).context["activity_panel"]
+        self.assertEqual({tile["key"]: tile["value"] for tile in panel["tiles"]}["open_value"], D("150.00"))  # was 185.00 at menu prices
+
+    def test_a_combo_switched_off_switches_its_item_off_and_leaves_the_menu(self):
+        data = meal(self.burger, self.fries, self.large, self.pepsi)
+        combos.save_combo({**data, "active": False}, self.owner, self.combo)
+        self.combo.item.refresh_from_db()
+        self.assertFalse(self.combo.item.active)
+        self.client.force_login(self.owner)
+        order = services.open_order(self.owner, table=self.t1)
+        page = self.client.get(reverse("restaurant:order", args=[order.pk])).content.decode()
+        self.assertNotIn(f'data-combo-sheet="{self.combo.pk}"', page)
+        self.assertNotIn(f'value="{self.combo.item.pk}"', page)
+
+    def test_a_combo_whose_slot_has_nothing_available_has_no_tile(self):
+        Item = type(self.pepsi)
+        Item.objects.filter(pk=self.pepsi.pk).update(active=False)
+        self.client.force_login(self.owner)
+        order = services.open_order(self.owner, table=self.t1)
+        page = self.client.get(reverse("restaurant:order", args=[order.pk])).content.decode()
+        self.assertNotIn(f'name="item" value="{self.combo.item.pk}"', page)
+
+    def test_editing_a_combo_keeps_a_choice_whose_item_was_switched_off(self):
+        self.fries.active = False
+        self.fries.save(update_fields=["active"])
+        self.client.force_login(self.owner)
+        url = reverse("restaurant:combos")
+        page = self.client.get(url + f"?edit={self.combo.pk}").content.decode()
+        self.assertIn(f'<option value="{self.fries.pk}" selected>', page)
+        slots = list(self.combo.slots.order_by("sort", "pk"))
+        post = {"pk": self.combo.pk, "name_ar": "وجبة برجر", "price": "155.00", "active": "on"}
+        for s, slot in enumerate(slots):
+            post[f"slot-{s}-pk"], post[f"slot-{s}-name_ar"] = slot.pk, slot.name_ar
+            for c, choice in enumerate(slot.choices.order_by("sort", "pk")):
+                post.update({f"slot-{s}-choice-{c}-pk": choice.pk, f"slot-{s}-choice-{c}-item": choice.item_id,
+                             f"slot-{s}-choice-{c}-upcharge": f"{choice.upcharge:.2f}", f"slot-{s}-choice-{c}-active": "on"})
+        self.assertEqual(self.client.post(url, post).status_code, 302)
+        self.assertTrue(ComboChoice.objects.filter(pk=self.c_fries.pk, item=self.fries).exists())
+        self.combo.refresh_from_db()
+        self.assertEqual(self.combo.price, D("155.00"))  # cheapest now: 120.00 + (50.00 − 10.00) + 25.00 = 185.00
+
+
 class ScreenTests(ComboSetup):
     def test_the_set_up_page_lists_combos_with_their_saving_and_creates_one(self):
         self.client.force_login(self.owner)

@@ -46,9 +46,15 @@ CHOICE_ROWS = 3
 
 
 def _choice_items():
-    """What a slot may offer: every active menu item but a combo's own and the delivery fee."""
+    """What a slot may offer: every active menu item but a combo's own and the delivery fee; one a choice uses that was
+    switched off since still shows, so editing the combo keeps that choice (as R1a's add-on items)."""
 
-    return Item.objects.filter(active=True, combo__isnull=True).exclude(item_code=services.FEE_ITEM_CODE).order_by("item_name")
+    from django.db.models import Q
+
+    from .models import ComboChoice
+
+    used = ComboChoice.objects.values("item")
+    return Item.objects.filter(Q(active=True) | Q(pk__in=used), combo__isnull=True).exclude(item_code=services.FEE_ITEM_CODE).order_by("item_name")
 
 
 def _posted(post):

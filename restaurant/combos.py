@@ -113,7 +113,7 @@ def _cheapest(slot_choices):
 def cheapest_saving(combo):
     """What the combo saves at its cheapest choices (the set-up page shows it)."""
 
-    slots = [[choice for choice in slot.choices.all() if choice.active] for slot in combo.slots.all()]
+    slots = [[choice for choice in slot.choices.all() if choice.active and choice.item.active] for slot in combo.slots.all()]
     if not slots or not all(slots):
         return ZERO
     return money_round(_cheapest(slots) - combo.price)
@@ -209,7 +209,7 @@ def save_combo(data, user, combo=None, lang="ar"):
                 if choice is not None:
                     rows.append((choice, None))  # an emptied row removes its choice
                 continue
-            if item is False or not item.active:
+            if item is False or (not item.active and (choice is None or choice.item_id != item.pk)):  # a saved choice keeps an item switched off since
                 raise ValidationError(words_["choice_item"])
             if item.pk in combos:
                 raise ValidationError(words_["choice_combo"].format(item=item.item_name))
@@ -226,7 +226,7 @@ def save_combo(data, user, combo=None, lang="ar"):
         if name.casefold() in seen_slots:
             raise ValidationError(words_["slot_twice"].format(name=name))
         seen_slots.add(name.casefold())
-        live = [values for _choice, values in rows if values and values["active"]]
+        live = [values for _choice, values in rows if values and values["active"] and values["item"].active]
         if not live:
             raise ValidationError(words_["no_choices"].format(slot=name))
         if len([values for _choice, values in rows if values]) > MAX_CHOICES:
@@ -242,17 +242,17 @@ def save_combo(data, user, combo=None, lang="ar"):
         def __init__(self, values):
             self.item, self.upcharge = values["item"], values["upcharge"]
 
-    cheapest = _cheapest([[_Pick(values) for _choice, values in rows if values and values["active"]] for _slot, _values, rows in kept])
+    cheapest = _cheapest([[_Pick(values) for _choice, values in rows if values and values["active"] and values["item"].active] for _slot, _values, rows in kept])
     if price > cheapest:
         raise ValidationError(words_["above"].format(price=f"{price:,.2f}", cheapest=f"{cheapest:,.2f}"))
     created = combo is None
     before = {} if created else _snapshot(combo)
     if created:
-        item = Item.objects.create(item_code=_next_code(), item_name=name_ar, default_sale_price=price, is_stock_tracked=False)
+        item = Item.objects.create(item_code=_next_code(), item_name=name_ar, default_sale_price=price, is_stock_tracked=False, active=active)
         combo = Combo.objects.create(item=item, name_en=(data.get("name_en") or "").strip()[:80], sort=sort, active=active)
     else:
         item = combo.item
-        item.item_name, item.default_sale_price, item.active = name_ar, price, True
+        item.item_name, item.default_sale_price, item.active = name_ar, price, active
         item.save(update_fields=["item_name", "default_sale_price", "active", "updated_at"])
         combo.name_en, combo.sort, combo.active = (data.get("name_en") or "").strip()[:80], sort, active
         combo.save(update_fields=["name_en", "sort", "active"])
