@@ -279,7 +279,7 @@ def order_detail(request, pk):
             messages.error(request, _error(exc, lang))
         return redirect(_order_url(order, lang) + ("#menu" if action == "add" else ""))
     from . import modifiers
-    from .views_modifiers import MODIFIER_WORDS, sheets
+    from .views_modifiers import MODIFIER_WORDS, menu_entries, sheets
 
     items, categories = _menu()
     raw_ids = _raw_ingredient_ids()
@@ -293,6 +293,7 @@ def order_detail(request, pk):
         request, order=order, lines=lines, total=order.total, items=items, raw_ids=raw_ids, categories=categories, kind_label=_kind_label(order, lang),
         families=[{"line": line, "addons": addons} for line, addons in modifiers.grouped(lines)], sheets=choice_sheets,
         sheet_items={sheet["item"].pk for sheet in choice_sheets}, mw=MODIFIER_WORDS[lang],
+        **dict(zip(("menu", "size_sheets"), menu_entries(items, {sheet["item"].pk for sheet in choice_sheets}, lang))),
         drivers=Employee.objects.filter(active=True) if order.kind == OrderKind.DELIVERY else [], dw=DELIVERY_WORDS[lang],
         status_label=choice_label(order, "status", lang), is_open=order.status == OrderStatus.OPEN,
         pending=any(not line.ticket_id and not line.voided for line in lines), tickets=order.tickets.select_related("station"),

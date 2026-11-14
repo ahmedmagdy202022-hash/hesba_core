@@ -514,3 +514,38 @@ class ScreenTests(ModifierSetup):
         self.assertNotIn("innerHTML", script)
         for word in ("دوس", "لينك", "بتاع", "الأسطى", "ورشة"):
             self.assertNotIn(word, str(modifiers.MESSAGES))
+
+
+class SizeTests(ModifierSetup):
+    """Step 5: a size family (``variants``) is one tile on the menu; the size picked is the line's item. No schema."""
+
+    def setUp(self):
+        super().setUp()
+        from variants.services import create_group
+
+        self.group, made = create_group(code="LATTE", name="لاتيه", sizes=["صغير", "كبير"], colors=[], sale_price=D("45.00"), purchase_price=D("0"),
+                                        user=self.owner, barcodes=False)
+        self.small, self.large = sorted(made, key=lambda item: item.pk)
+        self.large.default_sale_price = D("60.00")
+        self.large.save(update_fields=["default_sale_price"])
+        self.client.force_login(self.owner)
+
+    def test_the_sizes_share_one_tile_that_asks_the_size(self):
+        order = services.open_order(self.owner, table=self.t1)
+        url = reverse("restaurant:order", args=[order.pk])
+        page = self.client.get(url).content.decode()
+        self.assertEqual(page.count('data-size-tile="LATTE"'), 1)
+        self.assertNotIn(f'name="item" value="{self.small.pk}"><button', page)  # no tile of its own per size
+        self.assertIn(f'type="radio" name="item" value="{self.small.pk}" required', page)
+        self.assertIn(f'type="radio" name="item" value="{self.large.pk}" required', page)
+        self.assertIn("من 45.00", page)
+        self.assertIn(f'name="item" value="{self.koshary.pk}"', page)  # a plain dish keeps its one-tap tile
+        self.client.post(url, {"action": "add", "item": str(self.large.pk), "quantity": "2"})
+        self.assertEqual(list(order.lines.values_list("item__item_code", "quantity", "unit_price")), [(self.large.item_code, D("2.000"), D("60.00"))])
+
+    def test_a_size_that_asks_questions_keeps_its_own_tile(self):
+        modifiers.set_dish_groups(self.small, [self.extras], self.owner)
+        order = services.open_order(self.owner, table=self.t1)
+        page = self.client.get(reverse("restaurant:order", args=[order.pk])).content.decode()
+        self.assertNotIn('data-size-tile="LATTE"', page)
+        self.assertIn(f'data-opens-sheet="sheet-{self.small.pk}"', page)

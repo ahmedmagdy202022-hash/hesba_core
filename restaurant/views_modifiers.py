@@ -30,6 +30,7 @@ MODIFIER_WORDS = {
         # the order page's sheet
         "required": "لازم", "optional": "اختياري", "add_to_order": "ضيف للطلب", "close": "إغلاق", "has_choices": "فيه اختيارات",
         "pick_more": "اختار من «{group}»: {rule}.",
+        "sizes": "الحجم", "choose_size": "اختار الحجم", "from": "من",
     },
     "en": {
         "title": "Add-ons and choices", "back": "Tables",
@@ -42,6 +43,7 @@ MODIFIER_WORDS = {
         "box_saved": "The dish's choices are saved.", "box_none": "No groups yet.", "box_setup": "Set up the groups",
         "required": "Required", "optional": "Optional", "add_to_order": "Add to the order", "close": "Close", "has_choices": "Has choices",
         "pick_more": "Choose from “{group}”: {rule}.",
+        "sizes": "Size", "choose_size": "Choose the size", "from": "from",
     },
 }
 BLANK_ROWS = 3
@@ -156,3 +158,35 @@ def posted_options(post):
         if key.startswith("option-g"):
             values.extend(post.getlist(key))
     return values
+
+
+def menu_entries(items, sheet_items, lang):
+    """R1a step 5: the menu with each size family (``variants.VariantGroup``) under one tile that asks the size.
+
+    [{"item": item}] for a plain tile, [{"sizes": {...}}] for a family, at the place of its first size. A family needs two
+    active sizes on the menu; one whose size asks questions of its own keeps a tile per size, as before. No schema."""
+
+    from variants.models import Variant
+
+    families = {}
+    for variant in Variant.objects.filter(item__in=items, group__active=True).select_related("group", "item").order_by("group_id", "pk"):
+        families.setdefault(variant.group_id, []).append(variant)
+    first, grouped_ids = {}, set()
+    for variants in families.values():
+        if len(variants) < 2 or any(variant.item_id in sheet_items for variant in variants):
+            continue
+        group = variants[0].group
+        sizes = [{"item": variant.item, "label": " · ".join(part for part in (variant.size, variant.color) if part) or variant.item.item_name,
+                  "price": variant.item.default_sale_price} for variant in variants]
+        prices = [size["price"] for size in sizes]
+        first[variants[0].item_id] = {"group": group, "name": group.name, "sizes": sizes, "low": min(prices), "same_price": len(set(prices)) == 1,
+                                      "category_id": variants[0].item.category_id or "",
+                                      "search": " ".join(f"{variant.item.item_name} {variant.item.item_code}" for variant in variants).lower()}
+        grouped_ids.update(variant.item_id for variant in variants)
+    entries = []
+    for item in items:
+        if item.pk in first:
+            entries.append({"sizes": first[item.pk]})
+        elif item.pk not in grouped_ids:
+            entries.append({"item": item})
+    return entries, [entry["sizes"] for entry in entries if "sizes" in entry]

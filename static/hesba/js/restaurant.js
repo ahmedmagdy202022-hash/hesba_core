@@ -1,4 +1,4 @@
-/* RESTO-001: filter the menu by category and search, and confirm voids/cancels. R1a: the dish's choice sheet. */
+/* RESTO-001: filter the menu by category and search, and confirm voids/cancels. R1a: the dish's choice sheet and the size sheet. */
 (function () {
   'use strict';
   var menu = document.querySelector('[data-menu]');
@@ -40,11 +40,11 @@
       opener = button;
       sheet.showModal();
       lock(true);
-      var first = sheet.querySelector('input[name^="option"]');
+      var first = sheet.querySelector('.rs-sheet__body input');
       if (first) { first.focus(); }
     });
   });
-  Array.prototype.forEach.call(document.querySelectorAll('[data-choice-sheet]'), function (sheet) {
+  Array.prototype.forEach.call(document.querySelectorAll('[data-choice-sheet], [data-size-sheet]'), function (sheet) {
     var groups = Array.prototype.slice.call(sheet.querySelectorAll('[data-group-max]'));
     var limit = function (group) {
       var boxes = Array.prototype.slice.call(group.querySelectorAll('input[type=checkbox]'));
